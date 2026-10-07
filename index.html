@@ -9,7 +9,7 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
-    <!-- one flag glyph, reused by the header and the end-of-game panel -->
+    <!-- glyphs, reused across the shell and the board -->
     <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
       <symbol id="i-flag" viewBox="0 0 24 24">
         <defs><clipPath id="i-flag-clip"><rect x="6.6" y="3.2" width="14.6" height="10.6" rx="1.8" /></clipPath></defs>
@@ -26,6 +26,73 @@
           </g>
         </g>
       </symbol>
+      <symbol id="i-play" viewBox="0 0 24 24">
+        <path d="M8.2 5.3 18.7 12 8.2 18.7Z" fill="currentColor" />
+      </symbol>
+      <symbol id="i-back" viewBox="0 0 24 24">
+        <path d="M14.8 5.4 8.2 12l6.6 6.6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" />
+      </symbol>
+      <symbol id="i-next" viewBox="0 0 24 24">
+        <path d="M9.2 5.4 15.8 12l-6.6 6.6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" />
+      </symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24">
+        <path d="M4.6 7.4h14.8M4.6 12h14.8M4.6 16.6h14.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      </symbol>
+      <symbol id="i-restart" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19.6 12a7.6 7.6 0 1 1-2.5-5.7" />
+          <path d="M19.8 4.2v4.6h-4.6" />
+        </g>
+      </symbol>
+      <symbol id="i-bot" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3.8" y="7.6" width="16.4" height="12" rx="3.6" />
+          <path d="M12 4.2v3.4" />
+          <path d="M9.2 12.6v1.8M14.8 12.6v1.8" stroke-width="2.2" />
+        </g>
+        <circle cx="12" cy="3.2" r="1.5" fill="currentColor" />
+      </symbol>
+      <symbol id="i-duo" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="9" cy="8.4" r="3.2" />
+          <path d="M3.6 19.6c0-3.1 2.4-5.1 5.4-5.1s5.4 2 5.4 5.1" />
+          <circle cx="17" cy="9.4" r="2.4" />
+          <path d="M15.6 14.6c2.7.2 4.8 2.1 4.8 4.7" />
+        </g>
+      </symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <circle cx="12" cy="12" r="8.4" />
+          <path d="M3.8 12h16.4" />
+          <path d="M12 3.6c2.5 2.6 2.5 14.2 0 16.8M12 3.6c-2.5 2.6-2.5 14.2 0 16.8" />
+        </g>
+      </symbol>
+      <symbol id="i-tune" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+          <path d="M4 8h5.2M19 8h1M4 16h1.6M10.8 16H20" />
+          <circle cx="16.4" cy="8" r="2.6" />
+          <circle cx="8.2" cy="16" r="2.6" />
+        </g>
+      </symbol>
+      <symbol id="i-bag" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5.2 8.6h13.6l-1 10.1a1.7 1.7 0 0 1-1.7 1.5H7.9a1.7 1.7 0 0 1-1.7-1.5Z" />
+          <path d="M9.2 8.6V7a2.8 2.8 0 0 1 5.6 0v1.6" />
+        </g>
+      </symbol>
+      <symbol id="i-user" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="8.4" r="3.7" />
+          <path d="M4.9 20.2c0-3.6 3.1-5.9 7.1-5.9s7.1 2.3 7.1 5.9" />
+        </g>
+      </symbol>
+      <symbol id="i-help" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="8.6" />
+          <path d="M9.6 9.6a2.5 2.5 0 1 1 3.7 2.3c-.8.5-1.3 1-1.3 2" />
+        </g>
+        <circle cx="12" cy="16.9" r="1.05" fill="currentColor" />
+      </symbol>
     </svg>
 
     <div class="bg" aria-hidden="true">
@@ -37,55 +104,300 @@
     </div>
 
     <div id="app">
-      <main class="card">
-        <div class="board-slot">
-          <div class="board-wrap" id="board-wrap">
-            <canvas id="board" role="img" aria-label="Race board: red and blue tokens race to the checkered finish strip along the top row"></canvas>
+      <div class="screens" id="screens">
 
-            <!-- the finish lives in the board; this is its only label -->
-            <span class="finish-pill">
-              <svg class="ico" aria-hidden="true"><use href="#i-flag" /></svg><span class="label">FINISH</span>
-            </span>
+        <!-- ---------------- home ---------------- -->
+        <section class="screen menu" id="s-home" data-screen="home" tabindex="-1" aria-labelledby="home-title">
+          <header class="p-card">
+            <span class="avatar" id="avatar" aria-hidden="true">Y</span>
+            <div class="p-id">
+              <p class="p-name" id="p-name">Player</p>
+              <p class="p-sub">Level <span id="p-level">7</span></p>
+            </div>
+            <dl class="p-stats">
+              <div class="stat"><dt>Coins</dt><dd id="p-coins">1,850</dd></div>
+              <div class="stat"><dt>Streak</dt><dd id="p-streak">0</dd></div>
+            </dl>
+          </header>
 
-            <!-- why a slot was refused, or the "tap again" prompt -->
-            <p class="note" id="note" aria-live="polite"></p>
+          <div class="hero">
+            <div class="balls" aria-hidden="true">
+              <span class="hero-ball red"></span>
+              <span class="hero-ball blue"></span>
+            </div>
+            <h1 class="brand" id="home-title"><span class="brand-a">Finish</span><span class="brand-b">Race</span></h1>
+            <p class="tag">First ball to the checkered line wins.</p>
+          </div>
 
-            <!-- one-time hint -->
-            <div class="hint" id="hint" hidden>
-              <span class="hint-text">Tap a grid line to place a wall</span>
-              <button class="hint-x" id="hint-x" type="button" aria-label="Dismiss hint">&times;</button>
+          <div class="home-cta">
+            <button class="btn btn-primary big" id="home-play" type="button" data-go="modes">
+              <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg><span>Play</span>
+            </button>
+            <div class="sub-cards">
+              <button class="mini" type="button" data-start="local">
+                <svg class="ico" aria-hidden="true"><use href="#i-duo" /></svg>
+                <span class="mini-t">Pass &amp; Play</span>
+                <span class="mini-s">Two players, one device</span>
+              </button>
+              <button class="mini" type="button" id="help-btn" aria-haspopup="dialog">
+                <svg class="ico" aria-hidden="true"><use href="#i-help" /></svg>
+                <span class="mini-t">How to play</span>
+                <span class="mini-s">Moves, walls, win</span>
+              </button>
             </div>
           </div>
-        </div>
+        </section>
 
-        <footer class="chips">
-          <div class="chip red" id="chip-0">
-            <span class="ball" aria-hidden="true"></span>
-            <span class="who" id="name-0">YOU</span>
-            <span class="steps" id="steps-0">11 steps</span>
+        <!-- ---------------- mode select ---------------- -->
+        <section class="screen menu" id="s-modes" data-screen="modes" tabindex="-1" hidden aria-labelledby="modes-title">
+          <div class="m-head">
+            <button class="icon-btn" type="button" data-back aria-label="Back to home">
+              <svg class="ico" aria-hidden="true"><use href="#i-back" /></svg>
+            </button>
+            <h1 class="m-title" id="modes-title">Game mode</h1>
+            <span class="m-head-pad" aria-hidden="true"></span>
           </div>
-          <div class="chip blue" id="chip-1">
-            <span class="ball" aria-hidden="true"></span>
-            <span class="who" id="name-1">BOT</span>
-            <span class="steps" id="steps-1">11 steps</span>
+
+          <div class="m-list">
+            <article class="m-card">
+              <div class="m-row">
+                <span class="m-ico red" aria-hidden="true"><svg class="ico"><use href="#i-bot" /></svg></span>
+                <div class="m-txt">
+                  <h2>vs Bot</h2>
+                  <p>Race the machine. Pick how sharp it plays.</p>
+                </div>
+              </div>
+              <div class="seg" role="group" aria-label="Bot difficulty">
+                <button class="seg-b" type="button" data-diff="easy" aria-pressed="false">Easy</button>
+                <button class="seg-b" type="button" data-diff="normal" aria-pressed="true">Normal</button>
+                <button class="seg-b" type="button" data-diff="hard" aria-pressed="false">Hard</button>
+              </div>
+              <button class="btn btn-primary" type="button" data-start="bot">Start race</button>
+            </article>
+
+            <button class="m-card flat" type="button" data-start="local">
+              <span class="m-ico blue" aria-hidden="true"><svg class="ico"><use href="#i-duo" /></svg></span>
+              <span class="m-txt">
+                <span class="m-h">Pass &amp; Play</span>
+                <span class="m-p">Two humans, one device. The turn label flips each move.</span>
+              </span>
+              <svg class="ico chev" aria-hidden="true"><use href="#i-next" /></svg>
+            </button>
+
+            <button class="m-card flat off" type="button" data-start="online" aria-disabled="true">
+              <span class="m-ico sky" aria-hidden="true"><svg class="ico"><use href="#i-globe" /></svg></span>
+              <span class="m-txt">
+                <span class="m-h">Online</span>
+                <span class="m-p">Race a friend on another phone.</span>
+              </span>
+              <span class="badge">Coming soon</span>
+            </button>
           </div>
-        </footer>
-      </main>
+          <div class="spacer" aria-hidden="true"></div>
+        </section>
 
-      <p class="status" id="status" role="status" aria-live="polite">
-        <span id="status-text"></span><span class="dots" id="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-      </p>
+        <!-- ---------------- settings ---------------- -->
+        <section class="screen menu" id="s-settings" data-screen="settings" tabindex="-1" hidden aria-labelledby="settings-title">
+          <div class="m-head">
+            <button class="icon-btn" type="button" data-back aria-label="Back to home">
+              <svg class="ico" aria-hidden="true"><use href="#i-back" /></svg>
+            </button>
+            <h1 class="m-title" id="settings-title">Settings</h1>
+            <span class="m-head-pad" aria-hidden="true"></span>
+          </div>
 
-      <canvas class="confetti" id="confetti" aria-hidden="true"></canvas>
+          <div class="rows">
+            <button class="row" type="button" role="switch" aria-checked="true" data-set="sound">
+              <span class="row-txt">
+                <span class="row-t">Sound</span>
+                <span class="row-s">Kept for you — the game has no audio yet</span>
+              </span>
+              <span class="switch" aria-hidden="true"></span>
+            </button>
+            <button class="row" type="button" role="switch" aria-checked="true" data-set="haptics">
+              <span class="row-txt">
+                <span class="row-t">Haptics</span>
+                <span class="row-s">Buzz on walls, moves and the result</span>
+              </span>
+              <span class="switch" aria-hidden="true"></span>
+            </button>
+            <button class="row" type="button" role="switch" aria-checked="false" data-set="reducedMotion">
+              <span class="row-txt">
+                <span class="row-t">Reduced motion</span>
+                <span class="row-s">No floating, sliding or pulsing</span>
+              </span>
+              <span class="switch" aria-hidden="true"></span>
+            </button>
+          </div>
+          <p class="fine">Saved on this device only. Nothing else is stored.</p>
+          <div class="spacer" aria-hidden="true"></div>
+        </section>
 
-      <div class="overlay" id="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="verdict">
-        <div class="panel">
-          <svg class="flag" aria-hidden="true"><use href="#i-flag" /></svg>
-          <p class="verdict" id="verdict">You win</p>
-          <p class="sub" id="sub">You reached the finish first.</p>
-          <button class="cta" id="again" type="button">Play again</button>
-        </div>
+        <!-- ---------------- placeholders ---------------- -->
+        <section class="screen menu" id="s-shop" data-screen="shop" tabindex="-1" hidden aria-labelledby="shop-title">
+          <div class="m-head">
+            <button class="icon-btn" type="button" data-back aria-label="Back to home">
+              <svg class="ico" aria-hidden="true"><use href="#i-back" /></svg>
+            </button>
+            <h1 class="m-title" id="shop-title">Shop</h1>
+            <span class="m-head-pad" aria-hidden="true"></span>
+          </div>
+          <div class="spacer" aria-hidden="true"></div>
+          <div class="soon">
+            <span class="soon-ico" aria-hidden="true"><svg class="ico"><use href="#i-bag" /></svg></span>
+            <h2>Nothing on the shelves yet</h2>
+            <p>Skins, boosts and coin packs arrive with a later update.</p>
+            <button class="btn btn-ghost" type="button" data-go="modes">Back to play</button>
+          </div>
+          <div class="spacer" aria-hidden="true"></div>
+        </section>
+
+        <section class="screen menu" id="s-profile" data-screen="profile" tabindex="-1" hidden aria-labelledby="profile-title">
+          <div class="m-head">
+            <button class="icon-btn" type="button" data-back aria-label="Back to home">
+              <svg class="ico" aria-hidden="true"><use href="#i-back" /></svg>
+            </button>
+            <h1 class="m-title" id="profile-title">Profile</h1>
+            <span class="m-head-pad" aria-hidden="true"></span>
+          </div>
+          <div class="p-card wide">
+            <span class="avatar big" id="pf-avatar" aria-hidden="true">Y</span>
+            <div class="p-id">
+              <p class="p-name" id="pf-name">Player</p>
+              <p class="p-sub">Level <span id="pf-level">7</span></p>
+            </div>
+          </div>
+          <dl class="p-stats triple">
+            <div class="stat"><dt>Coins</dt><dd id="pf-coins">1,850</dd></div>
+            <div class="stat"><dt>Streak</dt><dd id="pf-streak">0</dd></div>
+            <div class="stat"><dt>Wins</dt><dd id="pf-wins">0</dd></div>
+          </dl>
+          <div class="spacer" aria-hidden="true"></div>
+          <div class="soon small">
+            <span class="soon-ico" aria-hidden="true"><svg class="ico"><use href="#i-user" /></svg></span>
+            <h2>Race history soon</h2>
+            <p>Match logs and league tables land with the online mode.</p>
+          </div>
+          <div class="spacer" aria-hidden="true"></div>
+        </section>
+
+        <!-- ---------------- game ---------------- -->
+        <section class="screen game" id="s-game" data-screen="game" tabindex="-1" hidden aria-label="Race">
+          <div class="g-head">
+            <button class="icon-btn" type="button" id="menu-btn" aria-label="Game menu" aria-haspopup="dialog">
+              <svg class="ico" aria-hidden="true"><use href="#i-menu" /></svg>
+            </button>
+            <p class="g-mode" id="mode-label">vs Bot · Normal</p>
+            <span class="m-head-pad" aria-hidden="true"></span>
+          </div>
+
+          <main class="card">
+            <div class="board-slot">
+              <div class="board-wrap" id="board-wrap">
+                <canvas id="board" role="img" aria-label="Race board: red and blue tokens race to the checkered finish strip along the top row"></canvas>
+
+                <!-- the finish lives in the board; this is its only label -->
+                <span class="finish-pill">
+                  <svg class="ico" aria-hidden="true"><use href="#i-flag" /></svg><span class="label">FINISH</span>
+                </span>
+
+                <!-- why a slot was refused, or the "tap again" prompt -->
+                <p class="note" id="note" aria-live="polite"></p>
+
+                <!-- one-time hint -->
+                <div class="hint" id="hint" hidden>
+                  <span class="hint-text">Tap a grid line to place a wall</span>
+                  <button class="hint-x" id="hint-x" type="button" aria-label="Dismiss hint">&times;</button>
+                </div>
+              </div>
+            </div>
+
+            <footer class="chips">
+              <div class="chip red" id="chip-0">
+                <span class="ball" aria-hidden="true"></span>
+                <span class="who" id="name-0">YOU</span>
+                <span class="steps" id="steps-0">11 steps</span>
+              </div>
+              <div class="chip blue" id="chip-1">
+                <span class="ball" aria-hidden="true"></span>
+                <span class="who" id="name-1">BOT</span>
+                <span class="steps" id="steps-1">11 steps</span>
+              </div>
+            </footer>
+          </main>
+
+          <p class="status" id="status" role="status" aria-live="polite">
+            <span id="status-text"></span><span class="dots" id="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          </p>
+
+          <canvas class="confetti" id="confetti" aria-hidden="true"></canvas>
+
+          <div class="overlay" id="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="verdict">
+            <div class="panel">
+              <svg class="flag" aria-hidden="true"><use href="#i-flag" /></svg>
+              <p class="verdict" id="verdict">You win</p>
+              <p class="sub" id="sub">You reached the finish first.</p>
+              <div class="end-actions">
+                <button class="cta" id="again" type="button">Play again</button>
+                <button class="cta ghost" id="to-menu" type="button">Menu</button>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
+
+      <nav class="tabs" id="tabs" aria-label="Main">
+        <button class="tab" type="button" data-tab="modes">
+          <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg><span>Play</span>
+        </button>
+        <button class="tab" type="button" data-tab="shop">
+          <svg class="ico" aria-hidden="true"><use href="#i-bag" /></svg><span>Shop</span>
+        </button>
+        <button class="tab" type="button" data-tab="profile">
+          <svg class="ico" aria-hidden="true"><use href="#i-user" /></svg><span>Profile</span>
+        </button>
+        <button class="tab" type="button" data-tab="settings">
+          <svg class="ico" aria-hidden="true"><use href="#i-tune" /></svg><span>Settings</span>
+        </button>
+      </nav>
+
+      <div class="scrim" id="scrim" hidden></div>
+
+      <!-- pause sheet -->
+      <section class="sheet" id="sheet-pause" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
+        <h2 class="sheet-t" id="pause-title">Paused</h2>
+        <div class="sheet-actions">
+          <button class="btn btn-primary" type="button" id="pause-resume" data-autofocus>
+            <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg><span>Resume</span>
+          </button>
+          <button class="btn btn-ghost" type="button" id="pause-restart">
+            <svg class="ico" aria-hidden="true"><use href="#i-restart" /></svg><span>Restart race</span>
+          </button>
+          <button class="btn btn-ghost warn" type="button" id="pause-quit">Quit to menu</button>
+        </div>
+      </section>
+
+      <!-- quit confirmation -->
+      <section class="sheet" id="sheet-quit" hidden role="dialog" aria-modal="true" aria-labelledby="quit-title">
+        <h2 class="sheet-t" id="quit-title">Leave the race?</h2>
+        <p class="sheet-p">The board resets and both balls go back to the start.</p>
+        <div class="sheet-actions split">
+          <button class="btn btn-ghost" type="button" data-sheet-close data-autofocus>Stay</button>
+          <button class="btn btn-danger" type="button" id="quit-yes">Quit</button>
+        </div>
+      </section>
+
+      <!-- how to play -->
+      <section class="sheet" id="sheet-help" hidden role="dialog" aria-modal="true" aria-labelledby="help-title">
+        <h2 class="sheet-t" id="help-title">How to play</h2>
+        <ol class="help">
+          <li><b>Move</b> — tap a glowing dot beside your ball. One step per turn.</li>
+          <li><b>Wall</b> — tap a grid line, then tap the ghost wall again to place it. Every turn, no limit.</li>
+          <li><b>Legal only</b> — a wall must leave both balls a path to the line, and can’t share a stretch of line.</li>
+          <li><b>Finish</b> — the first ball onto the checkered row wins.</li>
+        </ol>
+        <button class="btn btn-primary" type="button" data-sheet-close data-autofocus>Got it</button>
+      </section>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

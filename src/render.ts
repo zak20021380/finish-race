@@ -3,11 +3,12 @@
  * All sizes derive from `cell`, so the look scales to any phone.
  */
 import { COLS, ROWS, type GameState, type Player, type Pos, type WallSpec } from './rules';
+import { motionReduced } from './settings';
 
 export interface Vec { x: number; y: number }
 
 /** Wall ghost under construction. `armed` = already tapped once, waiting for a confirm tap. */
-export interface Ghost { spec: WallSpec; ok: boolean; armed: boolean }
+export interface Ghost { spec: WallSpec; ok: boolean; armed: boolean; p: Player }
 
 /** What a player did last, so both sides' moves stay readable. */
 export type Mark = { kind: 'step'; from: Pos; to: Pos } | { kind: 'wall'; spec: WallSpec };
@@ -100,16 +101,17 @@ export function hitTest(L: Layout, px: number, py: number, o: {
 interface Pal {
   light: string; mid: string; dark: string; glow: string; shade: string;
   wl: string; wd: string; edge: string;
+  /** ghost outlines: a quiet preview and a loud armed one */
+  ol: string; os: string;
 }
-/** 0 = you (red), 1 = opponent (blue), 2 = refusal. The opponent's walls carry cross-bands so
+/** 0 = red, 1 = blue, 2 = refusal. The opponent's walls carry cross-bands so
  *  ownership is readable without colour. */
 const PALS: [Pal, Pal, Pal] = [
-  { light: '#ffa3b7', mid: '#e0264f', dark: '#80092a', glow: 'rgba(224,38,79,.55)', shade: '90,20,50', wl: '#ff6f8d', wd: '#b4113b', edge: 'rgba(90,20,50,.28)' },
-  { light: '#a6bbff', mid: '#3057db', dark: '#122770', glow: 'rgba(48,87,219,.55)', shade: '20,30,100', wl: '#7794ff', wd: '#2142b0', edge: 'rgba(20,30,100,.28)' },
-  { light: '#ffc2c2', mid: '#ff2d55', dark: '#8d0a24', glow: 'rgba(255,45,85,.6)', shade: '120,10,30', wl: '#ff9a9a', wd: '#d6173f', edge: 'rgba(120,10,30,.28)' },
+  { light: '#ffa3b7', mid: '#e0264f', dark: '#80092a', glow: 'rgba(224,38,79,.55)', shade: '90,20,50', wl: '#ff6f8d', wd: '#b4113b', edge: 'rgba(90,20,50,.28)', ol: 'rgba(224,38,79,.5)', os: 'rgba(224,38,79,.95)' },
+  { light: '#a6bbff', mid: '#3057db', dark: '#122770', glow: 'rgba(48,87,219,.55)', shade: '20,30,100', wl: '#7794ff', wd: '#2142b0', edge: 'rgba(20,30,100,.28)', ol: 'rgba(48,87,219,.5)', os: 'rgba(48,87,219,.95)' },
+  { light: '#ffc2c2', mid: '#ff2d55', dark: '#8d0a24', glow: 'rgba(255,45,85,.6)', shade: '120,10,30', wl: '#ff9a9a', wd: '#d6173f', edge: 'rgba(120,10,30,.28)', ol: 'rgba(255,45,85,.5)', os: 'rgba(255,45,85,.95)' },
 ];
 const ERR = 2;
-const DOT = 'rgb(224,38,79)';
 const SOLID: number[] = [];
 const CORNER = 0.4;              // board corner radius, in cells
 const FIN_GREEN = '#28a06a';     // checker strip, two tones only so it reads at a glance
@@ -137,7 +139,6 @@ function computeLayout(w: number, h: number, dpr: number): Layout {
 
 export function createRenderer(canvas: HTMLCanvasElement) {
   const ctx = canvas.getContext('2d')!;
-  const rmq = matchMedia('(prefers-reduced-motion: reduce)');
   let L = computeLayout(1, 1, 1);
   const born = new Map<number, number>();                    // wall key → first-seen time (pop-in)
   const pulses: { x: number; y: number; t0: number; p: Player }[] = []; // wall landing rings
@@ -420,7 +421,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
 
   function draw(v: View, now: number) {
     const { cell: c, ox, oy } = L;
-    const still = rmq.matches;
+    const still = motionReduced();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (bg) ctx.drawImage(bg, 0, 0);
@@ -463,13 +464,14 @@ export function createRenderer(canvas: HTMLCanvasElement) {
       }
     }
 
-    // legal-move dots: big, high contrast, at least a 44px target
+    // legal-move dots: big, high contrast, at least a 44px target, tinted with the side to move
+    const side = PALS[v.state.turn];
     const pulse = still ? 0.5 : 0.5 + 0.5 * Math.sin(now / 380);
     const dotR = Math.max(6, c * 0.17 + c * 0.014 * pulse);
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,.9)';
     ctx.lineWidth = Math.max(1.5, c * 0.035);
-    ctx.fillStyle = DOT;
+    ctx.fillStyle = side.mid;
     for (let i = 0; i < v.hints.length; i++) {
       const h = v.hints[i];
       const x = ox + (h.c + 0.5) * c, y = oy + (h.r + 0.5) * c;
@@ -482,9 +484,10 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     ctx.restore();
 
     if (v.ghost) {
+      const gp = PALS[v.ghost.p];
       if (v.ghost.ok) {
-        drawBar(v.ghost.spec, 0, v.ghost.armed ? 0.85 : 0.42, 1, false);
-        outline(v.ghost.spec, v.ghost.armed ? 'rgba(224,38,79,.95)' : 'rgba(224,38,79,.5)',
+        drawBar(v.ghost.spec, v.ghost.p, v.ghost.armed ? 0.85 : 0.42, 1, false);
+        outline(v.ghost.spec, v.ghost.armed ? gp.os : gp.ol,
           Math.max(1.5, c * 0.045), v.ghost.armed ? dash.armed : dash.ghost, still ? 0 : -now / 26);
       } else {
         // solid ring + cross: unmistakably "not here", unlike the dashed ghost above
