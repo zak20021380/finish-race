@@ -1,16 +1,50 @@
-/* Mobile-first: 360x640 is the reference size, everything else scales up from it. */
+/* finish-race — mobile first: 360x640 is the reference, everything scales up from it.
+   Type + spacing live in the token blocks below; components only ever use var(--*). */
 
 :root {
   --app-h: 100vh;
+
+  /* ---- identity palette ---- */
   --bg: #e7e6ef;
+  --card-a: #f1f0f8;
+  --card-b: #dddbea;
   --red: #e0264f;
   --blue: #3057db;
   --green: #2fa86f;
+  /* Same hues, darkened for text: every pair below clears 4.5:1 on the card gradient. */
+  --red-ink: #b3123c;
+  --blue-ink: #2340a8;
+  --green-ink: #0f6b45;
   --ink: #43435a;
-  --ink-soft: #6c6b85;
-  --danger: #ff2d55;
+  --ink-soft: #5b5a72;
+  --danger: #a90b2f;
   --red-glow: rgba(224, 38, 79, .38);
   --blue-glow: rgba(48, 87, 219, .38);
+  --pill: rgba(36, 36, 52, .94);
+
+  /* ---- type scale: three reading levels (status > header > chips) ---- */
+  --t-1: clamp(0.9375rem, 0.885rem + .55vw, 1.0625rem);   /* status pill */
+  --t-2: clamp(0.8125rem, 0.78rem + .35vw, 0.9375rem);    /* FINISH header */
+  --t-3: clamp(0.6875rem, 0.665rem + .28vw, 0.8125rem);   /* player chips */
+  --t-micro: clamp(0.625rem, 0.61rem + .2vw, 0.75rem);    /* hint, pips caption */
+  --t-title: clamp(1.5rem, 1.32rem + 1.4vw, 1.875rem);    /* win / lose verdict */
+  --w-1: 700; --w-2: 800; --w-3: 800;
+  --ls-2: .3em; --ls-3: .08em;
+
+  /* ---- spacing scale ---- */
+  --s1: clamp(2px, .5vw, 4px);
+  --s2: clamp(4px, 1vw, 7px);
+  --s3: clamp(6px, 1.5vw, 10px);
+  --s4: clamp(8px, 2vw, 14px);
+  --s5: clamp(12px, 3vw, 20px);
+  --gap: clamp(4px, 1.1vh, 10px);                 /* card -> status pill */
+  --pad-app-x: clamp(8px, 2.2vw, 18px);
+  --pad-card-x: clamp(6px, 1.7vw, 14px);          /* tight, so the board owns the width */
+  --pad-card-t: clamp(9px, 1.8vh, 16px);
+  --pad-card-b: clamp(7px, 1.4vh, 12px);
+  --r-card: clamp(26px, 8vw, 40px);
+  --r-chip: clamp(13px, 3.6vw, 18px);
+
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 @supports (height: 100dvh) { :root { --app-h: 100dvh; } }
@@ -33,30 +67,33 @@ html, body {
 }
 
 #app {
-  position: relative;                 /* anchor for the win/lose overlay */
+  position: relative;                 /* anchor for the overlay + confetti */
   height: var(--app-h);
   width: 100%;
-  max-width: 480px;
+  max-width: min(480px, 62vh);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  align-items: stretch;
+  justify-content: center;            /* the card hugs the board, so keep the pair centred */
+  gap: var(--gap);
   padding:
-    max(12px, env(safe-area-inset-top))
-    max(14px, env(safe-area-inset-right))
-    max(12px, env(safe-area-inset-bottom))
-    max(14px, env(safe-area-inset-left));
+    max(var(--s4), env(safe-area-inset-top))
+    max(var(--pad-app-x), env(safe-area-inset-right))
+    max(var(--s3), env(safe-area-inset-bottom))
+    max(var(--pad-app-x), env(safe-area-inset-left));
 }
 
-/* ---- outer card ---- */
+/* ---- card: header + board + chips ---- */
 .card {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
+  max-height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 16px 14px 14px;
-  border-radius: 38px;
-  background: linear-gradient(180deg, #f1f0f8 0%, #dddbea 100%);
+  padding: var(--pad-card-t) var(--pad-card-x) var(--pad-card-b);
+  border-radius: var(--r-card);
+  background: linear-gradient(180deg, var(--card-a) 0%, var(--card-b) 100%);
   box-shadow:
     inset 0 2px 0 rgba(255, 255, 255, .95),
     inset 0 0 0 1px rgba(255, 255, 255, .4),
@@ -64,33 +101,55 @@ html, body {
     0 8px 18px -8px rgba(66, 62, 118, .18);
 }
 
-/* ---- FINISH header ---- */
+/* ---- level 2: FINISH header ---- */
 .finish {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 0 10px 8px;
+  gap: var(--s3);
+  padding: 0 var(--s2) var(--s2);
+  font-size: var(--t-2);
+  line-height: 1.25;
 }
 .finish .line {
   flex: 1;
-  max-width: 96px;
+  max-width: 22%;
   height: 3px;
   border-radius: 3px;
-  background: var(--green);
-  opacity: .9;
+  background: linear-gradient(90deg, rgba(47, 168, 111, .15), var(--green));
+}
+.finish .line:last-child { background: linear-gradient(90deg, var(--green), rgba(47, 168, 111, .15)); }
+.finish .flag {
+  flex: none;
+  width: 1.5em;
+  height: 1.5em;
+  color: var(--green-ink);
 }
 .finish .label {
-  color: var(--green);
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: .28em;
-  text-indent: .28em;
+  color: var(--green-ink);
+  font-weight: var(--w-2);
+  letter-spacing: var(--ls-2);
+  text-indent: var(--ls-2);          /* balances the trailing letter-space */
   white-space: nowrap;
 }
 
 /* ---- board ---- */
-.board-wrap { position: relative; flex: 1; min-height: 0; }
+/* The slot asks for exactly the board's 2:3 box and only shrinks when the screen runs out of
+   height; the wrap then takes the largest 8x12 box inside it, so the header, chips and banners
+   stay glued to the board instead of drifting apart on tall screens. */
+.board-slot {
+  flex: 0 1 auto;
+  min-height: 0;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  display: grid;
+  place-items: center;
+  container-type: size;
+}
+.board-wrap { position: relative; width: 100%; height: 100%; }
+@supports (width: 1cqw) {
+  .board-wrap { width: min(100cqw, 66.667cqh); height: min(100cqh, 150cqw); }
+}
 .board-wrap canvas {
   position: absolute;
   inset: 0;
@@ -104,18 +163,19 @@ html, body {
 .hint {
   position: absolute;
   left: 50%;
-  top: 6px;
+  top: var(--s1);
   transform: translateX(-50%);
   z-index: 3;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--s1);
+  width: max-content;                 /* left:50% would otherwise halve the shrink-to-fit box */
   max-width: calc(100% - 8px);
   padding: 7px 7px 7px 13px;
   border-radius: 999px;
-  background: rgba(42, 42, 58, .92);
+  background: var(--pill);
   color: #fff;
-  font-size: 12.5px;
+  font-size: var(--t-micro);
   font-weight: 600;
   line-height: 1.2;
   box-shadow: 0 10px 22px -10px rgba(20, 20, 40, .7);
@@ -137,22 +197,24 @@ html, body {
 }
 .hint-x::after { content: ""; position: absolute; inset: -9px; }
 .hint-x:active { background: rgba(255, 255, 255, .32); }
+.hint-x:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 
 /* ---- floating message over the board: reason or confirm prompt ---- */
 /* stays in the DOM (only opacity changes) so its aria-live region announces */
 .note {
   position: absolute;
   left: 50%;
-  top: 6px;
+  top: var(--s1);
   transform: translate(-50%, 6px);
   z-index: 4;
+  width: max-content;
   max-width: calc(100% - 8px);
   margin: 0;
   padding: 7px 14px;
   border-radius: 999px;
-  background: rgba(42, 42, 58, .92);
+  background: var(--pill);
   color: #fff;
-  font-size: 13px;
+  font-size: var(--t-3);
   font-weight: 700;
   letter-spacing: .01em;
   box-shadow: 0 10px 22px -10px rgba(20, 20, 40, .65);
@@ -160,29 +222,29 @@ html, body {
   pointer-events: none;
   transition: opacity .18s ease, transform .18s ease;
 }
-.note.error { background: var(--danger); box-shadow: 0 10px 22px -10px rgba(255, 45, 85, .8); }
+.note.error { background: var(--danger); box-shadow: 0 10px 22px -10px rgba(169, 11, 47, .8); }
 .note.show { opacity: 1; transform: translate(-50%, 0); }
 
-/* ---- player chips ---- */
-.chips { display: flex; gap: 8px; padding-top: 10px; }
+/* ---- level 3: player chips ---- */
+.chips { display: flex; gap: var(--s2); padding-top: var(--s2); }
 .chip {
   position: relative;
   flex: 1 1 0;
   min-width: 0;
-  min-height: 44px;
+  min-height: 40px;
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 9px;
-  border-radius: 16px;
+  gap: var(--s2);
+  padding: 5px var(--s3);
+  border-radius: var(--r-chip);
   background: rgba(255, 255, 255, .5);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, .75),
     0 4px 10px -6px rgba(66, 62, 118, .25);
   transition: background .2s ease, box-shadow .2s ease, transform .2s ease;
 }
-.chip.red { --tint: var(--red); --glow: var(--red-glow); }
-.chip.blue { --tint: var(--blue); --glow: var(--blue-glow); }
+.chip.red { --tint: var(--red); --ink-t: var(--red-ink); --glow: var(--red-glow); }
+.chip.blue { --tint: var(--blue); --ink-t: var(--blue-ink); --glow: var(--blue-glow); }
 .chip::after {
   content: "";
   position: absolute;
@@ -208,10 +270,10 @@ html, body {
 .chip .who {
   flex: 1 1 auto;
   min-width: 0;
-  color: var(--tint);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: .06em;
+  color: var(--ink-t);
+  font-size: var(--t-3);
+  font-weight: var(--w-3);
+  letter-spacing: var(--ls-3);
   text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
@@ -220,25 +282,37 @@ html, body {
 .chip .pips { flex: none; display: flex; gap: 3px; }
 .chip .pips i {
   width: 5px;
-  height: 12px;
+  height: 13px;
   border-radius: 2px;
   background: var(--tint);
   transition: opacity .25s ease, transform .25s ease;
 }
-.chip .pips i.off { opacity: .2; transform: scaleY(.55); }
+.chip .pips i.off { opacity: .22; transform: scaleY(.55); }
 
-/* ---- status line ---- */
+/* ---- level 1: status pill, tucked under the card ---- */
 .status {
   flex: none;
-  min-height: 22px;
+  align-self: center;
+  max-width: 100%;
+  min-height: 32px;
   margin: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  font-size: 15px;
-  font-weight: 600;
+  gap: 6px;
+  padding: 5px 16px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow:
+    inset 0 0 0 1px rgba(67, 67, 90, .12),
+    0 8px 18px -12px rgba(66, 62, 118, .55);
+  font-size: var(--t-1);
+  font-weight: var(--w-1);
+  line-height: 1.25;
   color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .dots { display: none; align-items: center; gap: 3px; }
 .dots.on { display: inline-flex; }
@@ -252,6 +326,16 @@ html, body {
 .dots i:nth-child(2) { animation-delay: .18s; }
 .dots i:nth-child(3) { animation-delay: .36s; }
 
+/* ---- win confetti: above everything, never interactive ---- */
+.confetti {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
 /* ---- win / lose overlay ---- */
 .overlay {
   position: absolute;
@@ -260,7 +344,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: var(--s5);
   background: rgba(231, 230, 239, .55);
   backdrop-filter: blur(10px) saturate(1.2);
   -webkit-backdrop-filter: blur(10px) saturate(1.2);
@@ -269,7 +353,7 @@ html, body {
 .panel {
   width: 100%;
   max-width: 320px;
-  padding: 24px 20px 20px;
+  padding: var(--s5) var(--s5) var(--s4);
   border-radius: 30px;
   background: linear-gradient(180deg, #ffffff 0%, #f2f1f9 100%);
   text-align: center;
@@ -278,9 +362,11 @@ html, body {
     0 30px 60px -20px rgba(66, 62, 118, .5);
   animation: pop .3s cubic-bezier(.2, 1.3, .5, 1);
 }
-.verdict { margin: 0; font-size: 27px; font-weight: 800; letter-spacing: -.01em; color: var(--green); }
-.lose .verdict { color: var(--blue); }
-.sub { margin: 8px 0 20px; font-size: 14px; line-height: 1.45; color: var(--ink-soft); }
+.panel .flag { display: block; margin: 0 auto var(--s1); width: 40px; height: 40px; color: var(--green-ink); }
+.lose .panel .flag { color: var(--blue-ink); }
+.verdict { margin: 0; font-size: var(--t-title); font-weight: 800; letter-spacing: -.01em; color: var(--green-ink); }
+.lose .verdict { color: var(--blue-ink); }
+.sub { margin: var(--s2) 0 var(--s5); font-size: var(--t-3); line-height: 1.45; color: var(--ink-soft); }
 .cta {
   appearance: none;
   border: 0;
@@ -288,34 +374,25 @@ html, body {
   min-height: 48px;
   padding: 13px 26px;
   border-radius: 999px;
-  background: var(--green);
+  background: linear-gradient(180deg, #17805a, var(--green-ink));
   color: #fff;
   font: inherit;
-  font-size: 16px;
+  font-size: var(--t-1);
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 12px 24px -10px rgba(47, 168, 111, .8);
+  box-shadow: 0 12px 24px -10px rgba(15, 107, 69, .8);
   transition: transform .12s ease, filter .12s ease;
 }
 .cta:active { transform: scale(.97); filter: brightness(.94); }
-.cta:focus-visible { outline: 3px solid rgba(47, 168, 111, .45); outline-offset: 3px; }
-.lose .cta { background: var(--blue); box-shadow: 0 12px 24px -10px rgba(48, 87, 219, .8); }
-.lose .cta:focus-visible { outline-color: rgba(48, 87, 219, .45); }
+.cta:focus-visible { outline: 3px solid rgba(23, 128, 90, .5); outline-offset: 3px; }
+.lose .cta { background: linear-gradient(180deg, #3a5fd8, var(--blue-ink)); box-shadow: 0 12px 24px -10px rgba(35, 64, 168, .8); }
+.lose .cta:focus-visible { outline-color: rgba(58, 95, 216, .5); }
 
-/* ---- roomier type once there is room ---- */
-@media (min-width: 420px) {
-  .finish .label { font-size: 15px; }
-  .chip .who { font-size: 13px; }
-  .chip .pips i { width: 6px; }
-  .status { font-size: 16px; }
-}
-
-/* short screens: hand every spare pixel to the board */
-@media (max-height: 700px) {
-  #app { gap: 6px; }
-  .card { padding: 12px 12px 10px; border-radius: 30px; }
-  .finish { padding-bottom: 6px; }
-  .chips { padding-top: 8px; }
+/* very short screens: hand every spare pixel to the board */
+@media (max-height: 600px) {
+  .chips { padding-top: var(--s1); }
+  .chip { min-height: 36px; }
+  .status { min-height: 28px; padding: 3px 14px; }
 }
 
 @keyframes rise { from { opacity: 0; transform: translate(-50%, 8px); } }

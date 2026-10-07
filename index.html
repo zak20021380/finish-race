@@ -9,24 +9,46 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
+    <!-- one flag glyph, reused by the header and the end-of-game panel -->
+    <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+      <symbol id="i-flag" viewBox="0 0 24 24">
+        <defs><clipPath id="i-flag-clip"><rect x="6.6" y="3.2" width="14.6" height="10.6" rx="1.8" /></clipPath></defs>
+        <path d="M5 2.6v18.8" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" />
+        <g clip-path="url(#i-flag-clip)">
+          <rect x="6.6" y="3.2" width="14.6" height="10.6" rx="1.8" fill="currentColor" opacity=".22" />
+          <g fill="currentColor">
+            <rect x="6.6" y="3.2" width="3.65" height="3.53" />
+            <rect x="13.9" y="3.2" width="3.65" height="3.53" />
+            <rect x="10.25" y="6.73" width="3.65" height="3.53" />
+            <rect x="17.55" y="6.73" width="3.65" height="3.53" />
+            <rect x="6.6" y="10.27" width="3.65" height="3.53" />
+            <rect x="13.9" y="10.27" width="3.65" height="3.53" />
+          </g>
+        </g>
+      </symbol>
+    </svg>
+
     <div id="app">
       <main class="card">
         <header class="finish">
           <span class="line"></span>
-          <span class="label">🏁 FINISH</span>
+          <svg class="flag" aria-hidden="true"><use href="#i-flag" /></svg>
+          <span class="label">FINISH</span>
           <span class="line"></span>
         </header>
 
-        <div class="board-wrap" id="board-wrap">
-          <canvas id="board" role="img" aria-label="Race board: red and blue tokens race to the finish line"></canvas>
+        <div class="board-slot">
+          <div class="board-wrap" id="board-wrap">
+            <canvas id="board" role="img" aria-label="Race board: red and blue tokens race to the finish line"></canvas>
 
-          <!-- why a slot was refused, or the "tap again" prompt -->
-          <p class="note" id="note" aria-live="polite"></p>
+            <!-- why a slot was refused, or the "tap again" prompt -->
+            <p class="note" id="note" aria-live="polite"></p>
 
-          <!-- one-time hint -->
-          <div class="hint" id="hint" hidden>
-            <span class="hint-text">Tap a grid line to place a wall</span>
-            <button class="hint-x" id="hint-x" type="button" aria-label="Dismiss hint">&times;</button>
+            <!-- one-time hint -->
+            <div class="hint" id="hint" hidden>
+              <span class="hint-text">Tap a grid line to place a wall</span>
+              <button class="hint-x" id="hint-x" type="button" aria-label="Dismiss hint">&times;</button>
+            </div>
           </div>
         </div>
 
@@ -48,8 +70,11 @@
         <span id="status-text"></span><span class="dots" id="dots" aria-hidden="true"><i></i><i></i><i></i></span>
       </p>
 
+      <canvas class="confetti" id="confetti" aria-hidden="true"></canvas>
+
       <div class="overlay" id="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="verdict">
         <div class="panel">
+          <svg class="flag" aria-hidden="true"><use href="#i-flag" /></svg>
           <p class="verdict" id="verdict">You win</p>
           <p class="sub" id="sub">You reached the finish first.</p>
           <button class="cta" id="again" type="button">Play again</button>

@@ -4,7 +4,8 @@ import {
   type Action, type GameState, type Player, type Pos, type Wall, type WallSpec,
 } from './rules';
 import { botAction } from './bot';
-import { createRenderer, hitTest, type Ghost, type Mark, type Vec } from './render';
+import { createRenderer, hitTest, type Ghost, type Mark, type Vec, type View } from './render';
+import { createConfetti } from './confetti';
 
 /* ---------- Telegram (optional) ---------- */
 
@@ -68,6 +69,7 @@ const sub = $<HTMLParagraphElement>('sub');
 const again = $<HTMLButtonElement>('again');
 const noteEl = $<HTMLParagraphElement>('note');
 const hintEl = $<HTMLDivElement>('hint');
+const confettiEl = $<HTMLCanvasElement>('confetti');
 const chips = [$<HTMLDivElement>('chip-0'), $<HTMLDivElement>('chip-1')];
 const pips = [$<HTMLSpanElement>('pips-0'), $<HTMLSpanElement>('pips-1')];
 
@@ -118,13 +120,16 @@ function wallIssue(s: GameState, w: Wall): keyof typeof REASON {
 }
 
 const renderer = createRenderer(canvas);
+const confetti = createConfetti(confettiEl);
 const toVec = (p: Pos): Vec => ({ x: p.c + 0.5, y: p.r + 0.5 });
 
 let state: GameState = newGame();
 let balls: [Vec, Vec] = [toVec(state.pawns[0]), toVec(state.pawns[1])];
 let hints: Pos[] = [];
 let ghost: Ghost | null = null;                 // wall preview; armed = waiting for a confirm tap
-let marks: [Mark | null, Mark | null] = [null, null];
+const marks: [Mark | null, Mark | null] = [null, null];
+/** Reused every frame: the loop must not allocate. */
+const view: View = { state, balls, hints, ghost, last: marks, thinking: false };
 let gen = 0; // bumps on restart so stale bot replies are dropped
 
 const canAct = () => state.winner === null && state.turn === HUMAN;
@@ -149,11 +154,12 @@ function showOverlay() {
   const spare = state.wallsLeft[HUMAN];
   overlay.classList.toggle('win', won);
   overlay.classList.toggle('lose', !won);
-  verdict.textContent = won ? 'You win! 🏁' : 'Bot wins';
+  verdict.textContent = won ? 'You win!' : 'Bot wins';
   sub.textContent = won
     ? `You crossed the line first with ${spare} wall${spare === 1 ? '' : 's'} unused.`
     : `The bot reached FINISH first. You still had ${spare} wall${spare === 1 ? '' : 's'} in hand.`;
   overlay.hidden = false;
+  if (won && !reduced.matches) confetti.burst();
   again.focus({ preventScroll: true });
 }
 
@@ -211,10 +217,11 @@ function restart() {
   state = newGame();
   balls = [toVec(state.pawns[0]), toVec(state.pawns[1])];
   ghost = null;
-  marks = [null, null];
+  marks[0] = null; marks[1] = null;
   overlayOpen = false;
   overlay.hidden = true;
   clearNote();
+  confetti.stop();
   renderer.resetFx();
   ui();
 }
@@ -294,9 +301,10 @@ again.addEventListener('click', () => { impact('light'); restart(); });
 
 /* ---------- loop ---------- */
 
-new ResizeObserver(() => renderer.resize()).observe(wrap);
-window.addEventListener('resize', () => renderer.resize());
+new ResizeObserver(() => { renderer.resize(); confetti.resize(); }).observe(wrap);
+window.addEventListener('resize', () => { renderer.resize(); confetti.resize(); });
 renderer.resize();
+confetti.resize();
 ui();
 
 let last = performance.now();
@@ -304,14 +312,27 @@ function frame(now: number) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   const k = reduced.matches ? 1 : 1 - Math.exp(-dt * 14); // frame-rate independent lerp
-  for (const i of [0, 1] as const) {
+  for (let i = 0; i < 2; i++) {
     const tx = state.pawns[i].c + 0.5, ty = state.pawns[i].r + 0.5, b = balls[i];
     b.x += (tx - b.x) * k;
     b.y += (ty - b.y) * k;
     if (Math.abs(tx - b.x) < 0.002) b.x = tx;
     if (Math.abs(ty - b.y) < 0.002) b.y = ty;
   }
-  renderer.draw({ state, balls, hints, ghost, last: marks, thinking: state.turn === BOT && state.winner === null }, now);
-  requestAnimationFrame(frame);
+  view.state = state;
+  view.balls = balls;
+  view.hints = hints;
+  view.ghost = ghost;
+  view.thinking = state.turn === BOT && state.winner === null;
+  renderer.draw(view, now);
+  confetti.tick(dt, now);
+  raf = requestAnimationFrame(frame);
 }
-requestAnimationFrame(frame);
+
+/* The webview keeps a hidden Mini App running: stop burning frames when nobody can see it. */
+let raf = 0;
+const resume = () => { if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); } };
+const pause = () => { if (raf) { cancelAnimationFrame(raf); raf = 0; } };
+document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); else resume(); });
+
+resume();

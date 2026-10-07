@@ -37,6 +37,7 @@ Telegram only loads **HTTPS** URLs.
 | `src/rules.ts` | Pure game logic: `GameState`, `doMove`, `doWall`, `reachable`, `wallOk`, `apply(state, action)` |
 | `src/bot.ts` | Local opponent (shortest path + occasional blocking wall) |
 | `src/render.ts` | Canvas drawing (board, walls, ghosts, balls) and `hitTest()` tap-target resolution |
+| `src/confetti.ts` | Win burst: a fixed particle pool on its own canvas, no per-frame allocation |
 | `src/main.ts` | Telegram init, input (tap-to-arm / confirm, mouse hover + click), animation loop, chips, status, overlay |
 | `src/style.css` | Card frame, header/footer, status, button |
 
@@ -52,5 +53,7 @@ Replace `localBot` with an implementation that sends your own moves over a socke
 
 ## Tweaking the look
 
-- Ball and wall colours: `PAL` at the top of `src/render.ts`.
-- Card, header, footer, status: `src/style.css`.
+- Colours plus the type and spacing scales: the `:root` token block at the top of `src/style.css`.
+  Text uses the `*-ink` variants of the brand hues so every pair clears 4.5:1 on the card.
+- Ball and wall colours: `PALS` at the top of `src/render.ts`.
+- Board geometry (cell margin, wall thickness): `computeLayout` and `drawBar` in `src/render.ts`.
