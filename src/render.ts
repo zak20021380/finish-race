@@ -1,9 +1,18 @@
 /**
  * render.ts — Canvas 2D drawing + pointer → board hit-testing.
  * All sizes derive from `cell`, so the look scales to any phone.
+ *
+ * Nothing here owns a colour: balls, walls and the board itself are drawn from the `Theme` data in
+ * `themes.ts` (see `setTheme`). The renderer also paints the shop's miniature boards — pass `cols`
+ * and `rows` and it lays out that patch of board instead of a whole race, so a preview card shows
+ * the same code path the race uses rather than a picture of it.
  */
-import { COLS, ROWS, type GameState, type Player, type Pos, type WallSpec } from './rules';
+import { COLS, ROWS, type GameState, type Player, type Pos, type Wall, type WallSpec } from './rules';
 import { motionReduced } from './settings';
+import {
+  BOT_RAMP, CLASSIC_BALL, CLASSIC_WALL, DEFAULT_THEME, ERR_RAMP,
+  type BallSkin, type CosKind, type Ramp, type Stop, type Theme, type WallStyle,
+} from './themes';
 
 export interface Vec { x: number; y: number }
 
@@ -22,7 +31,18 @@ export interface View {
   thinking: boolean;        // opponent is deciding
 }
 
-export interface Layout { w: number; h: number; cell: number; ox: number; oy: number; dpr: number }
+export interface Layout {
+  w: number; h: number; cell: number; ox: number; oy: number; dpr: number;
+  cols: number; rows: number;
+}
+
+export interface RendererOptions {
+  /** board patch to paint — the race uses the whole 8x12 */
+  cols?: number;
+  rows?: number;
+  /** asked for on `setTheme`; never polled per frame */
+  theme?: () => Theme;
+}
 
 export type Hit =
   | { kind: 'confirm'; spec: WallSpec }
@@ -32,20 +52,28 @@ export type Hit =
 const TAU = Math.PI * 2;
 const LINE_ZONE = 0.3;  // cells from a grid line that still read as "aiming at that line"
 const MIN_TOUCH = 44;   // css px: smallest legal-move tap target we allow
+const ERR = 2;          // third side: an illegal slot
+const SOLID: number[] = [];
+
+/** A stop's colour may name a ramp slot ("mid") or be literal; board stops are always literal. */
+const resolve = (ramp: Ramp | null, list: Stop[]): Stop[] => {
+  const slots = ramp as unknown as Record<string, string> | null;
+  return list.map(([t, ref]) => [t, slots?.[ref] ?? ref]);
+};
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /* ---------- hit-testing ---------- */
 
 /** Nearest valid wall slot when (bx, by) aims at a grid line, else null. Board coords. */
-function slotNear(bx: number, by: number): WallSpec | null {
-  const hY = clamp(Math.round(by), 1, ROWS - 1);
-  const vX = clamp(Math.round(bx), 1, COLS - 1);
+function slotNear(bx: number, by: number, cols: number, rows: number): WallSpec | null {
+  const hY = clamp(Math.round(by), 1, rows - 1);
+  const vX = clamp(Math.round(bx), 1, cols - 1);
   const dh = Math.abs(by - hY), dv = Math.abs(bx - vX);
   if (Math.min(dh, dv) > LINE_ZONE) return null;
   return dh <= dv
-    ? { o: 'h', x: clamp(Math.round(bx) - 1, 0, COLS - 2), y: hY }
-    : { o: 'v', x: vX, y: clamp(Math.round(by) - 1, 0, ROWS - 2) };
+    ? { o: 'h', x: clamp(Math.round(bx) - 1, 0, cols - 2), y: hY }
+    : { o: 'v', x: vX, y: clamp(Math.round(by) - 1, 0, rows - 2) };
 }
 
 /** Perpendicular distance (cells) from a board point to a wall's line; Infinity past its ends. */
@@ -70,7 +98,7 @@ export function hitTest(L: Layout, px: number, py: number, o: {
   const c = L.cell;
   if (c <= 0) return null;
   const bx = (px - L.ox) / c, by = (py - L.oy) / c;
-  if (bx < -0.5 || by < -0.5 || bx > COLS + 0.5 || by > ROWS + 0.5) return null;
+  if (bx < -0.5 || by < -0.5 || bx > L.cols + 0.5 || by > L.rows + 0.5) return null;
 
   const cand: { hit: Hit; pri: number; d: number }[] = [];
   const reach = Math.max(0.5, MIN_TOUCH / 2 / c);   // 44px target, in cells
@@ -89,7 +117,7 @@ export function hitTest(L: Layout, px: number, py: number, o: {
     const d = distToWall(bx, by, o.armed, 0.5);
     if (d <= Math.min(0.42, Math.max(LINE_ZONE, 18 / c))) cand.push({ hit: { kind: 'confirm', spec: o.armed }, pri: 0, d });
   }
-  const s = slotNear(bx, by);
+  const s = slotNear(bx, by, L.cols, L.rows);
   if (s) cand.push({ hit: { kind: 'wall', spec: s }, pri: 2, d: distToWall(bx, by, s, 1.25) });
 
   cand.sort((a, b) => a.pri - b.pri || a.d - b.d);
@@ -98,24 +126,10 @@ export function hitTest(L: Layout, px: number, py: number, o: {
 
 /* ---------- drawing ---------- */
 
-interface Pal {
-  light: string; mid: string; dark: string; glow: string; shade: string;
-  wl: string; wd: string; edge: string;
-  /** ghost outlines: a quiet preview and a loud armed one */
-  ol: string; os: string;
-}
-/** 0 = red, 1 = blue, 2 = refusal. The opponent's walls carry cross-bands so
- *  ownership is readable without colour. */
-const PALS: [Pal, Pal, Pal] = [
-  { light: '#ffa3b7', mid: '#e0264f', dark: '#80092a', glow: 'rgba(224,38,79,.55)', shade: '90,20,50', wl: '#ff6f8d', wd: '#b4113b', edge: 'rgba(90,20,50,.28)', ol: 'rgba(224,38,79,.5)', os: 'rgba(224,38,79,.95)' },
-  { light: '#a6bbff', mid: '#3057db', dark: '#122770', glow: 'rgba(48,87,219,.55)', shade: '20,30,100', wl: '#7794ff', wd: '#2142b0', edge: 'rgba(20,30,100,.28)', ol: 'rgba(48,87,219,.5)', os: 'rgba(48,87,219,.95)' },
-  { light: '#ffc2c2', mid: '#ff2d55', dark: '#8d0a24', glow: 'rgba(255,45,85,.6)', shade: '120,10,30', wl: '#ff9a9a', wd: '#d6173f', edge: 'rgba(120,10,30,.28)', ol: 'rgba(255,45,85,.5)', os: 'rgba(255,45,85,.95)' },
-];
-const ERR = 2;
-const SOLID: number[] = [];
+/** One seat: its colours, its ball material, its wall material. Seats 0/1 play, seat 2 refuses. */
+interface Side { ramp: Ramp; ball: BallSkin; wall: WallStyle }
+
 const CORNER = 0.4;              // board corner radius, in cells
-const FIN_GREEN = '#28a06a';     // checker strip, two tones only so it reads at a glance
-const FIN_WHITE = '#f4fbf7';
 
 function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   const k = Math.min(r, w / 2, h / 2); // capsule-thin outlines must not self-overlap
@@ -128,18 +142,22 @@ function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: n
   ctx.closePath();
 }
 
-function computeLayout(w: number, h: number, dpr: number): Layout {
+function computeLayout(w: number, h: number, dpr: number, cols: number, rows: number): Layout {
   const m = 3;
-  const raw = Math.min((w - 2 * m) / COLS, (h - 2 * m) / ROWS);
+  const raw = Math.min((w - 2 * m) / cols, (h - 2 * m) / rows);
   const cell = Math.max(8, Math.floor(raw * dpr) / dpr); // whole device pixels → crisp grid
-  const ox = Math.round(((w - COLS * cell) / 2) * dpr) / dpr;
-  const oy = Math.round(((h - ROWS * cell) / 2) * dpr) / dpr;
-  return { w, h, cell, ox, oy, dpr };
+  const ox = Math.round(((w - cols * cell) / 2) * dpr) / dpr;
+  const oy = Math.round(((h - rows * cell) / 2) * dpr) / dpr;
+  return { w, h, cell, ox, oy, dpr, cols, rows };
 }
 
-export function createRenderer(canvas: HTMLCanvasElement) {
+export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions = {}) {
   const ctx = canvas.getContext('2d')!;
-  let L = computeLayout(1, 1, 1);
+  const cols = opts.cols ?? COLS, rows = opts.rows ?? ROWS;
+  let L = computeLayout(1, 1, 1, cols, rows);
+  let th: Theme = opts.theme ? opts.theme() : DEFAULT_THEME;
+  /** seat 0 wears the equipped skin and style; seat 1 is the opponent and never does. */
+  let sides: [Side, Side, Side] = seats(th);
   const born = new Map<number, number>();                    // wall key → first-seen time (pop-in)
   const pulses: { x: number; y: number; t0: number; p: Player }[] = []; // wall landing rings
   let bg: HTMLCanvasElement | null = null;                   // static board layer, rebuilt on resize
@@ -151,6 +169,13 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   /** Light sweep over the finish strip: one gradient per resize, moved with the canvas transform. */
   const sweep = { grad: null as CanvasGradient | null, band: 0 };
 
+  /** The two seats plus the refusal palette, from one theme. */
+  function seats(t: Theme): [Side, Side, Side] {
+    const you: Side = { ramp: t.ball.ramp, ball: t.ball, wall: t.wall };
+    const foe: Side = { ramp: BOT_RAMP, ball: CLASSIC_BALL, wall: CLASSIC_WALL };
+    return [you, foe, { ramp: ERR_RAMP, ball: CLASSIC_BALL, wall: CLASSIC_WALL }];
+  }
+
   function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
     const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -158,28 +183,29 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     lastW = w; lastH = h; lastDpr = dpr;
     canvas.width = Math.max(1, Math.round(w * dpr));
     canvas.height = Math.max(1, Math.round(h * dpr));
-    L = computeLayout(w, h, dpr);
+    L = computeLayout(w, h, dpr, cols, rows);
     buildStatic();
   }
 
-  /** Everything that only depends on the layout: the board layer + every paint server. */
+  /** Everything that only depends on the layout or the theme: the board layer + every paint server. */
   function buildStatic() {
     const { w, h, cell: c, ox, oy, dpr } = L;
+    const b = th.board;
     const cv = bg || (bg = document.createElement('canvas'));
     cv.width = Math.max(1, Math.round(w * dpr));
     cv.height = Math.max(1, Math.round(h * dpr));
     const g = cv.getContext('2d')!;
-    const bw = COLS * c, bh = ROWS * c, R = CORNER * c;
+    const bw = cols * c, bh = rows * c, R = CORNER * c;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, cv.width, cv.height);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     g.save();
-    g.shadowColor = 'rgba(88,84,140,.20)';
+    g.shadowColor = b.drop;
     g.shadowBlur = 14 * dpr;
     g.shadowOffsetY = 4 * dpr;
     rr(g, ox, oy, bw, bh, R);
-    g.fillStyle = '#f7f7fc';
+    g.fillStyle = b.surface;
     g.fill();
     g.restore();
 
@@ -190,55 +216,48 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     // device-pixel snapping keeps the finish checker crisp at any dpr (no half-pixel seams)
     const px = (n: number) => Math.round(n * dpr) / dpr;
 
-    // soft green glow under the line, fading out roughly three rows down
+    // soft glow under the line, fading out roughly three rows down
     const fg = g.createLinearGradient(0, oy, 0, oy + 3 * c);
-    fg.addColorStop(0, 'rgba(47,168,111,.30)');
-    fg.addColorStop(0.45, 'rgba(47,168,111,.10)');
-    fg.addColorStop(1, 'rgba(47,168,111,0)');
+    for (const [t, col] of resolve(null, b.glow)) fg.addColorStop(t, col);
     g.fillStyle = fg;
     g.fillRect(ox, oy, bw, 3 * c);
 
     // checkered finish strip across row 0: the line is readable without colour and without a label
     const q = c / 2;
-    for (let i = 0; i < COLS * 2; i++) {
+    for (let i = 0; i < cols * 2; i++) {
       for (let j = 0; j < 2; j++) {
         const x0 = px(ox + i * q), x1 = px(ox + (i + 1) * q);
         const y0 = px(oy + j * q), y1 = px(oy + (j + 1) * q);
-        g.fillStyle = (i + j) % 2 === 0 ? FIN_WHITE : FIN_GREEN;
+        g.fillStyle = (i + j) % 2 === 0 ? b.checker[0] : b.checker[1];
         g.fillRect(x0, y0, x1 - x0, y1 - y0);
       }
     }
-    g.strokeStyle = 'rgba(15,107,69,.32)';
+    g.strokeStyle = b.rule;
     g.lineWidth = Math.max(1, c * 0.02);
     g.beginPath(); g.moveTo(ox, px(oy + c)); g.lineTo(ox + bw, px(oy + c)); g.stroke();
 
     const lwDev = Math.max(1, Math.round(dpr));
     const half = (lwDev % 2) / 2;
     const snap = (n: number) => (Math.round(n * dpr - half) + half) / dpr;
-    g.strokeStyle = '#d0d0de';
+    g.strokeStyle = b.grid;
     g.lineWidth = lwDev / dpr;
     g.beginPath();
-    for (let i = 1; i < COLS; i++) { const x = snap(ox + i * c); g.moveTo(x, oy); g.lineTo(x, oy + bh); }
-    for (let i = 1; i < ROWS; i++) { const y = snap(oy + i * c); g.moveTo(ox, y); g.lineTo(ox + bw, y); }
+    for (let i = 1; i < cols; i++) { const x = snap(ox + i * c); g.moveTo(x, oy); g.lineTo(x, oy + bh); }
+    for (let i = 1; i < rows; i++) { const y = snap(oy + i * c); g.moveTo(ox, y); g.lineTo(ox + bw, y); }
     g.stroke();
     g.restore();
 
-    // border ring: green at the finish, easing into a soft neutral for the rest of the board
+    // border ring: green at the finish, easing into the board's own trim
     const rw = 0.075 * c;
     const ring = g.createLinearGradient(0, oy, 0, oy + bh);
-    ring.addColorStop(0, '#2fa86f');
-    ring.addColorStop(0.06, '#48bb8c');
-    ring.addColorStop(0.16, '#8acbb0');
-    ring.addColorStop(0.34, '#cbccdd');
-    ring.addColorStop(0.62, '#d5d4e4');
-    ring.addColorStop(1, '#dbdae9');
+    for (const [t, col] of resolve(null, b.ring)) ring.addColorStop(t, col);
     rr(g, ox + rw / 2, oy + rw / 2, bw - rw, bh - rw, R - rw / 2);
     g.lineWidth = rw;
     g.strokeStyle = ring;
     g.stroke();
     rr(g, ox - 0.5, oy - 0.5, bw + 1, bh + 1, R + 0.5);
     g.lineWidth = 1;
-    g.strokeStyle = 'rgba(255,255,255,.75)';
+    g.strokeStyle = b.edge;
     g.stroke();
 
     // paint servers sized to this layout, then reused by every frame
@@ -251,25 +270,26 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     glowG.length = 0;
     sweep.band = c * 2.4;
     const sg = ctx.createLinearGradient(0, 0, sweep.band, 0);
-    sg.addColorStop(0, 'rgba(255,255,255,0)');
-    sg.addColorStop(0.44, 'rgba(255,255,255,.55)');
-    sg.addColorStop(0.56, 'rgba(255,255,255,.55)');
-    sg.addColorStop(1, 'rgba(255,255,255,0)');
+    sg.addColorStop(0, `rgba(255,255,255,0)`);
+    sg.addColorStop(0.44, `rgba(255,255,255,${b.sweep})`);
+    sg.addColorStop(0.56, `rgba(255,255,255,${b.sweep})`);
+    sg.addColorStop(1, `rgba(255,255,255,0)`);
     sweep.grad = sg;
     const br = c * 0.34;
     for (let i = 0; i < 2; i++) {
-      const p = PALS[i];
+      const s = sides[i];
       const shadow = ctx.createRadialGradient(0, 0, 0, 0, 0, br * 1.1);
-      shadow.addColorStop(0, `rgba(${p.shade},.42)`);
-      shadow.addColorStop(0.55, `rgba(${p.shade},.18)`);
-      shadow.addColorStop(1, `rgba(${p.shade},0)`);
+      shadow.addColorStop(0, `rgba(${s.ramp.shade},.42)`);
+      shadow.addColorStop(0.55, `rgba(${s.ramp.shade},.18)`);
+      shadow.addColorStop(1, `rgba(${s.ramp.shade},0)`);
       const body = ctx.createRadialGradient(-0.34 * br, -0.4 * br, br * 0.06, -0.08 * br, -0.08 * br, br * 1.12);
-      body.addColorStop(0, p.light); body.addColorStop(0.4, p.mid); body.addColorStop(1, p.dark);
+      for (const [t, col] of resolve(s.ramp, s.ball.stops)) body.addColorStop(t, col);
       const bounce = ctx.createRadialGradient(0.3 * br, 0.62 * br, 0, 0.3 * br, 0.62 * br, br * 0.8);
-      bounce.addColorStop(0, 'rgba(255,255,255,.28)'); bounce.addColorStop(1, 'rgba(255,255,255,0)');
+      bounce.addColorStop(0, `rgba(255,255,255,${s.ball.bounce})`);
+      bounce.addColorStop(1, 'rgba(255,255,255,0)');
       ballFx.push({ shadow, body, bounce });
       const glow = ctx.createRadialGradient(0, 0, br * 0.8, 0, 0, br * 2.3);
-      glow.addColorStop(0, p.glow);
+      glow.addColorStop(0, s.ramp.glow);
       glow.addColorStop(1, 'rgba(255,255,255,0)');
       glowG.push(glow);
     }
@@ -284,11 +304,9 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     const cache = barG[pi];
     let g = cache.get(key);
     if (!g) {
-      const p = PALS[pi];
+      const s = sides[pi];
       g = ctx.createLinearGradient(0, -t / 2, 0, t / 2);
-      g.addColorStop(0, p.wl);
-      g.addColorStop(0.5, p.mid);
-      g.addColorStop(1, p.wd);
+      for (const [o, col] of resolve(s.ramp, s.wall.stops)) g.addColorStop(o, col);
       cache.set(key, g);
     }
     return g;
@@ -301,25 +319,38 @@ export function createRenderer(canvas: HTMLCanvasElement) {
    */
   function drawBar(w: WallSpec, pi: number, alpha: number, grow: number, glow: boolean) {
     const { cell: c, ox, oy, dpr } = L;
-    const t = c * 0.13 * (0.62 + 0.38 * grow);
-    const cap = t / 2, len = 2 * c - t;
+    const s = sides[pi];
+    const st = s.wall;
+    const t = c * 0.13 * st.thick * (0.62 + 0.38 * grow);
+    // round caps hang t/2 past each end, butt caps do not: either way the bar spans exactly 2 cells
+    const cap = st.caps === 'butt' ? 0 : t / 2, len = 2 * c - 2 * cap;
     ctx.save();
     ctx.translate(ox + w.x * c, oy + w.y * c);
     if (w.o === 'v') { ctx.translate(0, 2 * c); ctx.rotate(-Math.PI / 2); }
-    ctx.lineCap = 'round';
-    ctx.globalAlpha = alpha;
+    ctx.lineCap = st.caps;
+    ctx.globalAlpha = alpha * st.alpha;
     ctx.lineWidth = t;
     ctx.strokeStyle = barGrad(pi, t);
-    if (glow) { ctx.shadowColor = PALS[pi].glow; ctx.shadowBlur = c * 0.16 * dpr; }
+    if (glow && st.glow > 0) { ctx.shadowColor = s.ramp.glow; ctx.shadowBlur = c * 0.16 * st.glow * dpr; }
     ctx.beginPath(); ctx.moveTo(cap, 0); ctx.lineTo(cap + len, 0); ctx.stroke();
 
     ctx.shadowBlur = 0;
     ctx.shadowColor = 'transparent';
-    ctx.strokeStyle = 'rgba(255,255,255,.38)';                 // gloss, on the lit (upper-left) side
-    ctx.lineWidth = t * 0.26;
-    ctx.beginPath();
-    ctx.moveTo(cap + t * 0.2, -t * 0.18); ctx.lineTo(cap + len - t * 0.2, -t * 0.18);
-    ctx.stroke();
+    if (st.gloss > 0) {                                       // highlight, by default on the lit (upper) side
+      ctx.strokeStyle = `rgba(255,255,255,${st.gloss})`;
+      ctx.lineWidth = Math.max(1, t * (st.glossAt === 0 ? 0.34 : 0.26));
+      ctx.beginPath();
+      ctx.moveTo(cap + t * 0.2, t * st.glossAt); ctx.lineTo(cap + len - t * 0.2, t * st.glossAt);
+      ctx.stroke();
+    }
+    if (st.rim > 0) {                                         // a pane reads through its edge
+      ctx.globalAlpha = alpha * st.rim;
+      ctx.strokeStyle = s.ramp.light;
+      ctx.lineWidth = Math.max(1, t * 0.12);
+      rr(ctx, 0, -t / 2, 2 * c, t, t / 2);
+      ctx.stroke();
+      ctx.globalAlpha = alpha * st.alpha;
+    }
     if (pi === 1) {                                            // cross-bands: ownership without colour
       ctx.strokeStyle = 'rgba(255,255,255,.52)';
       ctx.lineWidth = Math.max(1, t * 0.26);
@@ -350,7 +381,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   /** Marching-ants outline hugging a wall — "this is the slot you are about to use". */
   function outline(w: WallSpec, color: string, width: number, dashes: number[], phase = 0) {
     const c = L.cell;
-    const t = c * 0.3;
+    const t = c * 0.3 * sides[0].wall.thick;
     const b = box(w);
     ctx.save();
     ctx.strokeStyle = color;
@@ -376,8 +407,34 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     ctx.restore();
   }
 
+  /** The specular stack, which is what tells these materials apart at 34px. */
+  function shine(s: Side, r: number) {
+    const g = s.ball.gloss;
+    const alpha = (a: number) => Math.min(1, a * g);
+    const blob = (x: number, y: number, rot: number, w: number, h: number, a: number) => {
+      ctx.save();
+      ctx.translate(x, y); ctx.rotate(rot);
+      ctx.fillStyle = `rgba(255,255,255,${alpha(a)})`;
+      ctx.beginPath(); ctx.ellipse(0, 0, r * w, r * h, 0, 0, TAU); ctx.fill();
+      ctx.restore();
+    };
+    if (s.ball.shine === 'metal') {
+      blob(-0.3 * r, -0.44 * r, -0.5, 0.58, 0.13, 0.3);   // brushed band
+      blob(-0.05 * r, -0.5 * r, 0, 0.2, 0.1, 0.95);       // hard sparkle
+      blob(0.25 * r, 0.55 * r, 0.3, 0.5, 0.1, 0.2);       // reflected floor
+      return;
+    }
+    if (s.ball.shine === 'glass') {
+      blob(-0.3 * r, -0.35 * r, -0.6, 0.46, 0.3, 0.16);   // wide dim sheen
+      blob(-0.38 * r, -0.45 * r, 0, 0.15, 0.11, 1);       // pin-point
+      return;
+    }
+    blob(-0.36 * r, -0.42 * r, -0.72, 0.4, 0.24, 0.22);
+    blob(-0.36 * r, -0.42 * r, -0.72, 0.26, 0.14, 0.92);
+  }
+
   function drawBall(cx: number, cy: number, r: number, i: number) {
-    const fx = ballFx[i];
+    const s = sides[i], fx = ballFx[i];
     ctx.save();
     ctx.translate(cx, cy);
 
@@ -397,15 +454,19 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     ctx.fillRect(-r, -r, 2 * r, 2 * r);
     ctx.restore();
 
-    ctx.beginPath(); ctx.arc(0, 0, r - 0.5, 0, TAU);   // crisp edge
-    ctx.strokeStyle = PALS[i].edge; ctx.lineWidth = 1; ctx.stroke();
+    if (s.ball.ring > 0) {             // inner rim light (Neon, Obsidian)
+      ctx.save();
+      ctx.globalAlpha = s.ball.ring;
+      ctx.strokeStyle = s.ramp.light;
+      ctx.lineWidth = r * 0.22;
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.86, 0, TAU); ctx.stroke();
+      ctx.restore();
+    }
 
-    ctx.translate(-0.36 * r, -0.42 * r);               // specular
-    ctx.rotate(-0.72);
-    ctx.fillStyle = 'rgba(255,255,255,.22)';
-    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.4, r * 0.24, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.92)';
-    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.26, r * 0.14, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, r - 0.5, 0, TAU);   // crisp edge
+    ctx.strokeStyle = s.ramp.edge; ctx.lineWidth = 1; ctx.stroke();
+
+    shine(s, r);
     ctx.restore();
   }
 
@@ -413,7 +474,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   function drawGlow(cx: number, cy: number, r: number, i: number, k: number) {
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.globalAlpha = 0.34 + 0.3 * k;
+    ctx.globalAlpha = Math.min(1, (0.34 + 0.3 * k) * sides[i].ball.halo);
     ctx.fillStyle = glowG[i];
     ctx.beginPath(); ctx.arc(0, 0, r * 2.3, 0, TAU); ctx.fill();
     ctx.restore();
@@ -429,9 +490,9 @@ export function createRenderer(canvas: HTMLCanvasElement) {
 
     // slow light sweep across the finish strip (clipped to the strip and the rounded corners)
     if (!still && sweep.grad) {
-      const bw = COLS * c;
+      const bw = cols * c;
       ctx.save();
-      rr(ctx, ox, oy, bw, ROWS * c, CORNER * c);
+      rr(ctx, ox, oy, bw, rows * c, CORNER * c);
       ctx.clip();
       ctx.beginPath(); ctx.rect(ox, oy, bw, c); ctx.clip();
       ctx.translate(ox - sweep.band + ((now % 5200) / 5200) * (bw + sweep.band), 0);
@@ -444,13 +505,13 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     for (let pi = 0; pi < 2; pi++) {
       const m = v.last[pi];
       if (!m) continue;
-      const pal = PALS[pi];
+      const ramp = sides[pi].ramp;
       if (m.kind === 'step') {
         const ax = ox + (m.from.c + 0.5) * c, ay = oy + (m.from.r + 0.5) * c;
         const bx = ox + (m.to.c + 0.5) * c, by = oy + (m.to.r + 0.5) * c;
         ctx.save();
         ctx.lineCap = 'round';
-        ctx.strokeStyle = pal.mid;
+        ctx.strokeStyle = ramp.mid;
         ctx.globalAlpha = 0.26;
         ctx.lineWidth = c * 0.18;
         ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
@@ -460,18 +521,18 @@ export function createRenderer(canvas: HTMLCanvasElement) {
         ctx.beginPath(); ctx.arc(ax, ay, c * 0.25, 0, TAU); ctx.stroke();
         ctx.restore();
       } else {
-        outline(m.spec, pal.glow, Math.max(1.5, c * 0.035), dash.last);
+        outline(m.spec, ramp.glow, Math.max(1.5, c * 0.035), dash.last);
       }
     }
 
     // legal-move dots: big, high contrast, at least a 44px target, tinted with the side to move
-    const side = PALS[v.state.turn];
+    const side = sides[v.state.turn];
     const pulse = still ? 0.5 : 0.5 + 0.5 * Math.sin(now / 380);
     const dotR = Math.max(6, c * 0.17 + c * 0.014 * pulse);
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,.9)';
     ctx.lineWidth = Math.max(1.5, c * 0.035);
-    ctx.fillStyle = side.mid;
+    ctx.fillStyle = side.ramp.mid;
     for (let i = 0; i < v.hints.length; i++) {
       const h = v.hints[i];
       const x = ox + (h.c + 0.5) * c, y = oy + (h.r + 0.5) * c;
@@ -484,7 +545,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     ctx.restore();
 
     if (v.ghost) {
-      const gp = PALS[v.ghost.p];
+      const gp = sides[v.ghost.p].ramp;
       if (v.ghost.ok) {
         drawBar(v.ghost.spec, v.ghost.p, v.ghost.armed ? 0.85 : 0.42, 1, false);
         outline(v.ghost.spec, v.ghost.armed ? gp.os : gp.ol,
@@ -500,7 +561,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     // placed walls (pop-in + landing pulse); walls are never removed mid-game
     for (let i = 0; i < v.state.walls.length; i++) {
       const w = v.state.walls[i];
-      const key = 2 * (w.y * COLS + w.x) + (w.o === 'h' ? 0 : 1);
+      const key = 2 * (w.y * cols + w.x) + (w.o === 'h' ? 0 : 1);
       let t0 = born.get(key);
       if (t0 === undefined) {
         t0 = now;
@@ -517,7 +578,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
       if (t >= 1) { pulses.splice(i, 1); continue; }
       ctx.save();
       ctx.globalAlpha = 0.5 * (1 - t);
-      ctx.strokeStyle = PALS[f.p].mid;
+      ctx.strokeStyle = sides[f.p].ramp.mid;
       ctx.lineWidth = Math.max(1.5, c * 0.07 * (1 - t));
       ctx.beginPath(); ctx.arc(f.x, f.y, c * (0.5 + 1.5 * t), 0, TAU); ctx.stroke();
       ctx.restore();
@@ -534,7 +595,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
         drawGlow(cx, cy, r, i, still ? 0.6 : 0.5 + 0.5 * Math.sin(now / 260));
         if (active) {
           ctx.save();
-          ctx.strokeStyle = PALS[i].mid;
+          ctx.strokeStyle = sides[i].ramp.mid;
           ctx.globalAlpha = 0.55;
           ctx.lineWidth = Math.max(1.5, c * 0.04);
           ctx.beginPath(); ctx.arc(cx, cy, r * 1.42, 0, TAU); ctx.stroke();
@@ -549,7 +610,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
       const b = v.balls[1];
       const x0 = ox + b.x * c, y0 = oy + b.y * c - c * 0.78;
       ctx.save();
-      ctx.fillStyle = PALS[1].mid;
+      ctx.fillStyle = BOT_RAMP.mid;
       for (let i = 0; i < 3; i++) {
         const ph = still ? 0.6 : 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(now / 260 - i * 1.1));
         ctx.globalAlpha = Math.min(1, ph);
@@ -559,5 +620,91 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     }
   }
 
-  return { resize, draw, layout: () => L, resetFx: () => { born.clear(); pulses.length = 0; } };
+  return {
+    resize,
+    draw,
+    layout: () => L,
+    resetFx: () => { born.clear(); pulses.length = 0; },
+    /** Equipping repaints the board and every cached gradient once; never per frame. */
+    setTheme(t: Theme) {
+      if (t.ball === th.ball && t.wall === th.wall && t.board === th.board) return;
+      th = t;
+      sides = seats(t);
+      buildStatic();
+    },
+  };
+}
+
+/* ---------- shop and profile previews ---------- */
+
+export type PreviewKind = CosKind;
+
+export interface Preview {
+  resize(): void;
+  draw(now: number): void;
+  /** One settled frame: the wall pop-in clocks past, so a still preview never shows half a bar. */
+  settle(): void;
+  setTheme(t: Theme): void;
+}
+
+/** A `Theme` without the board fields the previews do not use. */
+type Scene = { cols: number; rows: number; balls: [Vec, Vec]; hints: Pos[]; walls: Wall[] };
+
+/** 6x4 patches: room for a real wall layout, and a finish strip that is not the whole picture. */
+const SCENES: Record<PreviewKind, Scene> = {
+  // your ball on the move, theirs beside it: the pair is the thing being judged
+  ball: {
+    cols: 6, rows: 4,
+    balls: [{ x: 2.5, y: 3.5 }, { x: 3.5, y: 3.5 }],
+    hints: [{ c: 1, r: 2 }, { c: 2, r: 2 }, { c: 3, r: 2 }, { c: 4, r: 2 }],
+    walls: [],
+  },
+  // two of yours and one of theirs, so a style reads in both orientations and against the fixed one
+  wall: {
+    cols: 6, rows: 4,
+    balls: [{ x: 0.5, y: 3.5 }, { x: 5.5, y: 3.5 }],
+    hints: [],
+    walls: [{ o: 'h', x: 0, y: 2, owner: 0 }, { o: 'v', x: 3, y: 0, owner: 0 }, { o: 'h', x: 2, y: 3, owner: 1 }],
+  },
+  board: {
+    cols: 6, rows: 4,
+    balls: [{ x: 2.5, y: 3.5 }, { x: 4.5, y: 3.5 }],
+    hints: [],
+    walls: [{ o: 'h', x: 0, y: 2, owner: 0 }, { o: 'v', x: 5, y: 1, owner: 1 }],
+  },
+};
+
+const sceneView = (s: Scene): View => ({
+  state: {
+    pawns: [{ c: 0, r: s.rows - 1 }, { c: s.cols - 1, r: s.rows - 1 }],
+    walls: s.walls,
+    turn: 0,
+    winner: null,
+  },
+  balls: s.balls,
+  hints: s.hints,
+  ghost: null,
+  last: [null, null],
+  thinking: false,
+});
+
+/**
+ * The real renderer, pointed at a patch of board instead of a race. Every shop card and the
+ * profile's equipped row use this, so a preview cannot disagree with the game it came from.
+ */
+export function createPreview(canvas: HTMLCanvasElement, kind: PreviewKind, theme: Theme): Preview {
+  const s = SCENES[kind];
+  let th = theme;
+  const view = sceneView(s);
+  const r = createRenderer(canvas, { cols: s.cols, rows: s.rows, theme: () => th });
+  return {
+    resize: r.resize,
+    draw: (now: number) => r.draw(view, now),
+    settle() {
+      const t = performance.now();
+      r.draw(view, t);
+      r.draw(view, t + 500);
+    },
+    setTheme(t: Theme) { th = t; r.setTheme(t); },
+  };
 }

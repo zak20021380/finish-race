@@ -9,7 +9,9 @@ import { createConfetti } from './confetti';
 import { createRouter } from './router';
 import { createSheets } from './sheets';
 import { createMenu, type Menu } from './menu';
+import { createShop } from './shop';
 import { menuState, motionReduced, type Mode } from './settings';
+import { onChange, recordGame, theme } from './storage';
 import { impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 
 initTelegram();
@@ -43,6 +45,8 @@ const chips = [$<HTMLDivElement>('chip-0'), $<HTMLDivElement>('chip-1')];
 const steps = [$<HTMLSpanElement>('steps-0'), $<HTMLSpanElement>('steps-1')];
 const sheetPause = $<HTMLElement>('sheet-pause');
 const sheetQuit = $<HTMLElement>('sheet-quit');
+const reward = $<HTMLParagraphElement>('reward');
+const rewardN = $<HTMLSpanElement>('reward-n');
 
 /* steps-to-FINISH readout on each chip: repaints only when the number changes */
 const shownSteps: [number, number] = [-1, -1];
@@ -75,6 +79,7 @@ const sheetById = (id: string) => document.getElementById(id);
 
 const router = createRouter($('screens'), (id) => {
   menu.setRoute(id);
+  shop.setRoute(id);
   setBackButton(id !== 'home' && router.canGoBack);
   if (id !== 'game') pauseGame();     // the board only ticks while it is on screen
   syncLoop();
@@ -129,7 +134,7 @@ function wallIssue(s: GameState, w: Wall): keyof typeof REASON {
   return s.pawns.some((p) => d[p.r * COLS + p.c] < 0) ? 'blocked' : 'overlap';
 }
 
-const renderer = createRenderer(canvas);
+const renderer = createRenderer(canvas, { theme });
 const confetti = createConfetti(confettiEl);
 const toVec = (p: Pos): Vec => ({ x: p.c + 0.5, y: p.r + 0.5 });
 
@@ -143,10 +148,6 @@ const view: View = { state, balls, hints, ghost, last: marks, thinking: false };
 let gen = 0; // bumps on restart so stale bot replies are dropped
 let paused = false;
 const waiting: (() => void)[] = [];            // bot thinks parked by the pause sheet
-
-/* session-only results, shown on the home and profile cards */
-let streak = 0;
-let wins = 0;
 
 const canAct = () => state.winner === null && isHuman(state.turn) && !paused;
 const clearGhost = () => { ghost = null; clearNote(); };
@@ -180,10 +181,10 @@ function showOverlay() {
   }
   overlay.hidden = false;
   if ((mode === 'local' || won) && !motionReduced()) confetti.burst();
-  if (mode === 'bot') {
-    if (won) { streak++; wins++; } else streak = 0;
-    menu.setStats({ streak, wins });
-  }
+  /* one credit per finished race: showOverlay only runs once per game over */
+  const earned = recordGame({ mode, difficulty, won });
+  rewardN.textContent = `+${earned} coins`;
+  reward.hidden = false;
   menuBtn.disabled = true;              // the panel already offers Play again and Menu
   again.focus({ preventScroll: true });
 }
@@ -256,6 +257,7 @@ function restart() {
   shownSteps[0] = -1; shownSteps[1] = -1;
   overlayOpen = false;
   overlay.hidden = true;
+  reward.hidden = true;
   menuBtn.disabled = false;
   clearNote();
   confetti.stop();
@@ -429,8 +431,18 @@ document.addEventListener('visibilitychange', syncLoop);
 /* ---------- boot ---------- */
 
 menu = createMenu({ router, sheets, sheet: sheetById, start: startGame, onBack });
-menu.setStats({ streak, wins });
+const shop = createShop({ sheets, sheet: sheetById });
 paintNames();
 ui();
 router.start('home');
 setBackButton(false);
+
+/* equipping repaints the board, and the chip dot that stands for your ball */
+const paintTheme = () => {
+  const t = theme();
+  renderer.setTheme(t);
+  chips[0].style.setProperty('--tint', t.ball.ramp.mid);
+  chips[0].style.setProperty('--glow', t.ball.ramp.glow);
+};
+onChange(paintTheme);
+paintTheme();

@@ -1,9 +1,9 @@
 /**
- * settings.ts — the only door to storage in the app. Preferences and menu state are persisted;
- * game state never is. Every access is wrapped: a Telegram webview can refuse localStorage
- * outright (private mode, disabled cookies), and the app must still run.
+ * settings.ts — the switches and the last menu choice. Storage itself is `storage.ts`'s door:
+ * every access there is wrapped, so a webview that refuses localStorage still gets a working app.
  */
 import type { Difficulty } from './bot';
+import { readJson, writeJson } from './storage';
 
 export type Mode = 'bot' | 'local' | 'online';
 
@@ -24,25 +24,12 @@ const M_KEY = 'finish-race.menu.v1';
 const DEFAULT_SETTINGS: Settings = { sound: true, haptics: true, reducedMotion: false };
 const DEFAULT_MENU: MenuState = { mode: 'bot', difficulty: 'normal' };
 
-function read<T>(key: string): Partial<T> | null {
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as Partial<T>) : null;
-  } catch {
-    return null;
-  }
-}
-
-function write(key: string, value: unknown) {
-  try { window.localStorage.setItem(key, JSON.stringify(value)); } catch { /* stay in memory */ }
-}
-
 const motion = matchMedia('(prefers-reduced-motion: reduce)');
 let systemReduce = motion.matches;
 try { motion.addEventListener('change', (e) => { systemReduce = e.matches; }); } catch { /* fixed at load */ }
 
-export const settings: Settings = { ...DEFAULT_SETTINGS, ...read<Settings>(S_KEY) };
-export const menuState: MenuState = { ...DEFAULT_MENU, ...read<MenuState>(M_KEY) };
+export const settings: Settings = { ...DEFAULT_SETTINGS, ...readJson<Settings>(S_KEY) };
+export const menuState: MenuState = { ...DEFAULT_MENU, ...readJson<MenuState>(M_KEY) };
 if (menuState.difficulty !== 'easy' && menuState.difficulty !== 'hard') menuState.difficulty = 'normal';
 if (menuState.mode !== 'bot' && menuState.mode !== 'local') menuState.mode = 'bot';
 
@@ -57,7 +44,7 @@ export function applyMotion() {
 
 export function setSetting<K extends keyof Settings>(key: K, value: Settings[K]) {
   settings[key] = value;
-  write(S_KEY, settings);
+  writeJson(S_KEY, settings);
   applyMotion();
   for (const w of watchers) w(settings);
 }
@@ -66,7 +53,7 @@ export function onSettings(w: (s: Settings) => void) { watchers.push(w); }
 
 export function saveMenu(patch: Partial<MenuState>) {
   Object.assign(menuState, patch);
-  write(M_KEY, menuState);
+  writeJson(M_KEY, menuState);
 }
 
 applyMotion();

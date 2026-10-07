@@ -4,6 +4,9 @@
  */
 import { DIFFICULTIES, type Difficulty } from './bot';
 import { menuState, saveMenu, settings, setSetting, onSettings, type Mode, type Settings } from './settings';
+import { favouriteMode, KINDS, onChange, profile, theme } from './storage';
+import { createPreview, type Preview } from './render';
+import type { CosKind } from './themes';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
 import { impact, tgUser } from './telegram';
@@ -19,12 +22,11 @@ export interface MenuApi {
 
 export interface Menu {
   setRoute(id: string): void;
-  setStats(s: { streak: number; wins: number }): void;
 }
 
-/* mock profile numbers: the backend that owns them does not exist yet */
+/** Level is still a mock: there is no XP curve behind it yet. Coins and results are not — they come
+ *  from the save, so the wallet on Home and the one in the Shop can never disagree. */
 const LEVEL = 7;
-const COINS = 1850;
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const en = (n: number) => n.toLocaleString('en-US');
@@ -47,8 +49,39 @@ export function createMenu(api: MenuApi): Menu {
   }
   $('p-level').textContent = String(LEVEL);
   $('pf-level').textContent = String(LEVEL);
-  $('p-coins').textContent = en(COINS);
-  $('pf-coins').textContent = en(COINS);
+
+  /* ---- the record, and what is worn: re-painted whenever the save changes ---- */
+  const pfScreen = $<HTMLElement>('s-profile');
+  const eqPv = new Map<CosKind, Preview>();
+  const paintProfile = () => {
+    const s = profile.stats;
+    $('p-coins').textContent = en(profile.coins);
+    $('p-streak').textContent = en(s.streak);
+    $('pf-coins').textContent = en(profile.coins);
+    $('pf-games').textContent = en(s.games);
+    $('pf-wins').textContent = en(s.wins);
+    $('pf-losses').textContent = en(s.losses);
+    $('pf-best').textContent = en(s.best);
+    $('pf-streak').textContent = en(s.streak);
+    const fav = favouriteMode();
+    $('pf-fav').textContent = fav === 'local' ? 'Pass & Play' : fav === 'bot' ? 'vs Bot' : '—';
+    $('pf-fav-sub').textContent = s.games ? `${en(s.modes.bot ?? 0)} bot · ${en(s.modes.local ?? 0)} duo` : 'No races yet';
+    if (pfScreen.hidden) return;                        // a hidden canvas has no width to lay out
+    const t = theme();
+    for (const k of KINDS) {
+      let pv = eqPv.get(k);
+      if (!pv) {
+        pv = createPreview(document.querySelector<HTMLCanvasElement>(`canvas[data-eq=${JSON.stringify(k)}]`)!, k, t);
+        eqPv.set(k, pv);
+      } else pv.setTheme(t);
+      pv.resize();
+      pv.settle();
+      $(`eq-${k}`).textContent = t[k].name;
+    }
+  };
+  onChange(paintProfile);
+  paintProfile();
+  new ResizeObserver(() => { if (!pfScreen.hidden) paintProfile(); }).observe(pfScreen);
 
   /* ---- difficulty ---- */
   let difficulty: Difficulty = menuState.difficulty;
@@ -111,17 +144,13 @@ export function createMenu(api: MenuApi): Menu {
   return {
     setRoute(id) {
       tabbar.hidden = id === 'game';
+      if (id === 'profile') paintProfile();       // the equipped row is only laid out once it is showing
       const active = id === 'home' || id === 'modes' ? 'modes' : id;
       for (const t of tabs) {
         const on = t.dataset.tab === active;
         if (on) t.setAttribute('aria-current', 'page');
         else t.removeAttribute('aria-current');
       }
-    },
-    setStats(s) {
-      $('p-streak').textContent = en(s.streak);
-      $('pf-streak').textContent = en(s.streak);
-      $('pf-wins').textContent = en(s.wins);
     },
   };
 }
