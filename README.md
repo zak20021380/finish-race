@@ -14,7 +14,8 @@ Works in a normal browser too (the Telegram SDK is optional).
 
 ## Controls
 
-- **Move**: tap a highlighted dot.
+- **Move**: tap a highlighted dot. The chips show each side's shortest path to FINISH in steps.
+- **Walls are unlimited.** Each side may wall every turn; a wall only has to stay in bounds, not overlap another wall on the same line, and keep both pawns' path to FINISH open.
 - **Wall (touch)**: tap a grid line — a ghost wall appears — tap the ghost again to place it, or tap anywhere else to cancel. An illegal slot shows a red ghost, a warning buzz and the reason ("Blocks the path" / "Overlaps a wall").
 - **Wall (mouse)**: hover a grid line to preview, click once to place.
 
@@ -35,7 +36,7 @@ Telegram only loads **HTTPS** URLs.
 | File | Role |
 | --- | --- |
 | `src/rules.ts` | Pure game logic: `GameState`, `doMove`, `doWall`, `reachable`, `wallOk`, `apply(state, action)` |
-| `src/bot.ts` | Local opponent (shortest path + occasional blocking wall) |
+| `src/bot.ts` | Local opponent (shortest path; walls only when it is level or behind and the wall costs 2+ steps) |
 | `src/render.ts` | Canvas drawing (board, walls, ghosts, balls) and `hitTest()` tap-target resolution |
 | `src/confetti.ts` | Win burst: a fixed particle pool on its own canvas, no per-frame allocation |
 | `src/main.ts` | Telegram init, input (tap-to-arm / confirm, mouse hover + click), animation loop, chips, status, overlay |

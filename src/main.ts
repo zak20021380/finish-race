@@ -1,6 +1,6 @@
 import './style.css';
 import {
-  COLS, WALLS_PER_PLAYER, apply, distField, newGame, reachable, wallOk,
+  COLS, apply, distField, newGame, pathLen, reachable, wallOk,
   type Action, type GameState, type Player, type Pos, type Wall, type WallSpec,
 } from './rules';
 import { botAction } from './bot';
@@ -30,8 +30,8 @@ try {
   tg?.ready();
   tg?.expand();
   tg?.disableVerticalSwipes?.();
-  tg?.setHeaderColor?.('#e7e6ef');
-  tg?.setBackgroundColor?.('#e7e6ef');
+  tg?.setHeaderColor?.('#eeeaf8');
+  tg?.setBackgroundColor?.('#eeeaf8');
 } catch { /* running outside Telegram */ }
 
 const setViewport = () => {
@@ -71,15 +71,24 @@ const noteEl = $<HTMLParagraphElement>('note');
 const hintEl = $<HTMLDivElement>('hint');
 const confettiEl = $<HTMLCanvasElement>('confetti');
 const chips = [$<HTMLDivElement>('chip-0'), $<HTMLDivElement>('chip-1')];
-const pips = [$<HTMLSpanElement>('pips-0'), $<HTMLSpanElement>('pips-1')];
+const steps = [$<HTMLSpanElement>('steps-0'), $<HTMLSpanElement>('steps-1')];
 
 const user = tg?.initDataUnsafe?.user;
 $('name-0').textContent = (user?.first_name || user?.username || 'YOU').toUpperCase().slice(0, 14);
 $('name-1').textContent = 'BOT';
 
 const PLAYERS: Player[] = [0, 1];
-for (const box of pips) {
-  for (let i = 0; i < WALLS_PER_PLAYER; i++) box.appendChild(document.createElement('i'));
+
+/* steps-to-FINISH readout on each chip: repaints only when the number changes */
+const shownSteps: [number, number] = [-1, -1];
+function setSteps(p: Player, d: number) {
+  if (shownSteps[p] === d) return;
+  shownSteps[p] = d;
+  const el = steps[p];
+  el.textContent = Number.isFinite(d) ? `${d} step${d === 1 ? '' : 's'}` : 'no path';
+  el.classList.remove('pop');
+  void el.offsetWidth;   // restarting the animation needs a reflow between the two class changes
+  el.classList.add('pop');
 }
 
 /* floating message over the board: why a slot was refused, or "tap again to place" */
@@ -108,8 +117,8 @@ const opponent: Opponent = localBot;
 const REASON = { overlap: 'Overlaps a wall', blocked: 'Blocks the path' };
 
 /**
- * Why a slot was refused. `wallOk` only answers yes/no, so the reason is re-derived here
- * (rules.ts stays untouched): an overlap on the same line, or a sealed path.
+ * Why a slot was refused: an overlap on the same line, or a sealed path. `wallOk` only answers
+ * yes/no, so the reason stays a UI-layer concern.
  */
 function wallIssue(s: GameState, w: Wall): keyof typeof REASON {
   const clash = s.walls.some((o) => o.o === w.o
@@ -140,7 +149,7 @@ let hintClosed = false;
 let hintTimer = 0;
 function closeHint() { hintClosed = true; clearTimeout(hintTimer); hintEl.hidden = true; }
 function maybeShowHint() {
-  if (hintClosed || !canAct() || state.wallsLeft[HUMAN] === 0 || !hintEl.hidden) return;
+  if (hintClosed || !canAct() || !hintEl.hidden) return;
   hintEl.hidden = false;
   clearTimeout(hintTimer);
   hintTimer = setTimeout(closeHint, 12000);
@@ -151,13 +160,12 @@ function showOverlay() {
   if (overlayOpen) return;
   overlayOpen = true;
   const won = state.winner === HUMAN;
-  const spare = state.wallsLeft[HUMAN];
+  const built = state.walls.length;
   overlay.classList.toggle('win', won);
   overlay.classList.toggle('lose', !won);
   verdict.textContent = won ? 'You win!' : 'Bot wins';
-  sub.textContent = won
-    ? `You crossed the line first with ${spare} wall${spare === 1 ? '' : 's'} unused.`
-    : `The bot reached FINISH first. You still had ${spare} wall${spare === 1 ? '' : 's'} in hand.`;
+  sub.textContent = (won ? 'You crossed the line first.' : 'The bot reached FINISH first.')
+    + (built ? ` ${built} wall${built === 1 ? '' : 's'} went up along the way.` : '');
   overlay.hidden = false;
   if (won && !reduced.matches) confetti.burst();
   again.focus({ preventScroll: true });
@@ -170,8 +178,7 @@ function ui() {
   if (state.winner !== null) {
     statusText.textContent = state.winner === HUMAN ? 'You win!' : 'Opponent wins';
   } else if (state.turn === HUMAN) {
-    const n = state.wallsLeft[HUMAN];
-    statusText.textContent = `Your move · ${n} wall${n === 1 ? '' : 's'} left`;
+    statusText.textContent = 'Your move';
   } else {
     statusText.textContent = 'Opponent is thinking';
   }
@@ -180,8 +187,7 @@ function ui() {
   for (const p of PLAYERS) {
     chips[p].classList.toggle('active', state.winner === null && state.turn === p);
     chips[p].classList.toggle('thinking', thinking && p === BOT);
-    const kids = pips[p].children;
-    for (let i = 0; i < kids.length; i++) kids[i].classList.toggle('off', i >= state.wallsLeft[p]);
+    setSteps(p, pathLen(state, p));
   }
 
   if (state.winner === null && overlayOpen) { overlayOpen = false; overlay.hidden = true; }
@@ -218,6 +224,7 @@ function restart() {
   balls = [toVec(state.pawns[0]), toVec(state.pawns[1])];
   ghost = null;
   marks[0] = null; marks[1] = null;
+  shownSteps[0] = -1; shownSteps[1] = -1;
   overlayOpen = false;
   overlay.hidden = true;
   clearNote();
@@ -243,7 +250,6 @@ function refuse(w: Wall) {
 function onTouch(p: Vec) {
   const hit = hitTest(renderer.layout(), p.x, p.y, {
     hints,
-    walls: state.wallsLeft[HUMAN] > 0,
     armed: ghost?.armed ? ghost.spec : null,
   });
   if (!hit) { clearGhost(); return; }
@@ -268,7 +274,6 @@ function onMouse(p: Vec, click: boolean) {
   if (!canAct()) { ghost = null; return; }
   const hit = hitTest(renderer.layout(), p.x, p.y, {
     hints,
-    walls: state.wallsLeft[HUMAN] > 0,
     armed: null,
   });
   const spec: WallSpec | null = hit && hit.kind !== 'move' ? hit.spec : null;

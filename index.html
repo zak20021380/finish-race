@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#e7e6ef" />
+    <meta name="theme-color" content="#eeeaf8" />
     <meta name="color-scheme" content="light" />
     <title>Finish Race</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -28,18 +28,24 @@
       </symbol>
     </svg>
 
+    <div class="bg" aria-hidden="true">
+      <div class="blob a"></div>
+      <div class="blob b"></div>
+      <div class="blob c"></div>
+      <div class="grain"></div>
+      <div class="vignette"></div>
+    </div>
+
     <div id="app">
       <main class="card">
-        <header class="finish">
-          <span class="line"></span>
-          <svg class="flag" aria-hidden="true"><use href="#i-flag" /></svg>
-          <span class="label">FINISH</span>
-          <span class="line"></span>
-        </header>
-
         <div class="board-slot">
           <div class="board-wrap" id="board-wrap">
-            <canvas id="board" role="img" aria-label="Race board: red and blue tokens race to the finish line"></canvas>
+            <canvas id="board" role="img" aria-label="Race board: red and blue tokens race to the checkered finish strip along the top row"></canvas>
+
+            <!-- the finish lives in the board; this is its only label -->
+            <span class="finish-pill">
+              <svg class="ico" aria-hidden="true"><use href="#i-flag" /></svg><span class="label">FINISH</span>
+            </span>
 
             <!-- why a slot was refused, or the "tap again" prompt -->
             <p class="note" id="note" aria-live="polite"></p>
@@ -56,12 +62,12 @@
           <div class="chip red" id="chip-0">
             <span class="ball" aria-hidden="true"></span>
             <span class="who" id="name-0">YOU</span>
-            <span class="pips" id="pips-0" aria-hidden="true"></span>
+            <span class="steps" id="steps-0">11 steps</span>
           </div>
           <div class="chip blue" id="chip-1">
             <span class="ball" aria-hidden="true"></span>
             <span class="who" id="name-1">BOT</span>
-            <span class="pips" id="pips-1" aria-hidden="true"></span>
+            <span class="steps" id="steps-1">11 steps</span>
           </div>
         </footer>
       </main>

@@ -64,7 +64,7 @@ function distToWall(bx: number, by: number, w: WallSpec, along: number): number 
  * cannot both fit in a 37px cell, so the cell the dot sits in always wins for the dot.
  */
 export function hitTest(L: Layout, px: number, py: number, o: {
-  hints: Pos[]; walls: boolean; armed: WallSpec | null;
+  hints: Pos[]; armed: WallSpec | null;
 }): Hit | null {
   const c = L.cell;
   if (c <= 0) return null;
@@ -88,10 +88,8 @@ export function hitTest(L: Layout, px: number, py: number, o: {
     const d = distToWall(bx, by, o.armed, 0.5);
     if (d <= Math.min(0.42, Math.max(LINE_ZONE, 18 / c))) cand.push({ hit: { kind: 'confirm', spec: o.armed }, pri: 0, d });
   }
-  if (o.walls) {
-    const s = slotNear(bx, by);
-    if (s) cand.push({ hit: { kind: 'wall', spec: s }, pri: 2, d: distToWall(bx, by, s, 1.25) });
-  }
+  const s = slotNear(bx, by);
+  if (s) cand.push({ hit: { kind: 'wall', spec: s }, pri: 2, d: distToWall(bx, by, s, 1.25) });
 
   cand.sort((a, b) => a.pri - b.pri || a.d - b.d);
   return cand.length ? cand[0].hit : null;
@@ -113,6 +111,9 @@ const PALS: [Pal, Pal, Pal] = [
 const ERR = 2;
 const DOT = 'rgb(224,38,79)';
 const SOLID: number[] = [];
+const CORNER = 0.4;              // board corner radius, in cells
+const FIN_GREEN = '#28a06a';     // checker strip, two tones only so it reads at a glance
+const FIN_WHITE = '#f4fbf7';
 
 function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   const k = Math.min(r, w / 2, h / 2); // capsule-thin outlines must not self-overlap
@@ -146,6 +147,8 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   const dash = { trail: [] as number[], last: [] as number[], ghost: [] as number[], armed: [] as number[] };
   const ballFx: { shadow: CanvasGradient; body: CanvasGradient; bounce: CanvasGradient }[] = [];
   const glowG: CanvasGradient[] = [];
+  /** Light sweep over the finish strip: one gradient per resize, moved with the canvas transform. */
+  const sweep = { grad: null as CanvasGradient | null, band: 0 };
 
   function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
@@ -165,7 +168,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     cv.width = Math.max(1, Math.round(w * dpr));
     cv.height = Math.max(1, Math.round(h * dpr));
     const g = cv.getContext('2d')!;
-    const bw = COLS * c, bh = ROWS * c, R = 0.4 * c;
+    const bw = COLS * c, bh = ROWS * c, R = CORNER * c;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, cv.width, cv.height);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -183,25 +186,30 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     rr(g, ox, oy, bw, bh, R);
     g.clip();
 
-    // FINISH wash: the top three rows
+    // device-pixel snapping keeps the finish checker crisp at any dpr (no half-pixel seams)
+    const px = (n: number) => Math.round(n * dpr) / dpr;
+
+    // soft green glow under the line, fading out roughly three rows down
     const fg = g.createLinearGradient(0, oy, 0, oy + 3 * c);
-    fg.addColorStop(0, 'rgba(47,168,111,.36)');
-    fg.addColorStop(0.42, 'rgba(47,168,111,.17)');
+    fg.addColorStop(0, 'rgba(47,168,111,.30)');
+    fg.addColorStop(0.45, 'rgba(47,168,111,.10)');
     fg.addColorStop(1, 'rgba(47,168,111,0)');
     g.fillStyle = fg;
     g.fillRect(ox, oy, bw, 3 * c);
 
-    // checker strip across row 0: "finish" also reads without colour
+    // checkered finish strip across row 0: the line is readable without colour and without a label
     const q = c / 2;
     for (let i = 0; i < COLS * 2; i++) {
       for (let j = 0; j < 2; j++) {
-        g.fillStyle = (i + j) % 2 === 0 ? 'rgba(255,255,255,.55)' : 'rgba(15,107,69,.26)';
-        g.fillRect(ox + i * q, oy + j * q, q, q);
+        const x0 = px(ox + i * q), x1 = px(ox + (i + 1) * q);
+        const y0 = px(oy + j * q), y1 = px(oy + (j + 1) * q);
+        g.fillStyle = (i + j) % 2 === 0 ? FIN_WHITE : FIN_GREEN;
+        g.fillRect(x0, y0, x1 - x0, y1 - y0);
       }
     }
-    g.strokeStyle = 'rgba(15,107,69,.30)';
+    g.strokeStyle = 'rgba(15,107,69,.32)';
     g.lineWidth = Math.max(1, c * 0.02);
-    g.beginPath(); g.moveTo(ox, oy + c); g.lineTo(ox + bw, oy + c); g.stroke();
+    g.beginPath(); g.moveTo(ox, px(oy + c)); g.lineTo(ox + bw, px(oy + c)); g.stroke();
 
     const lwDev = Math.max(1, Math.round(dpr));
     const half = (lwDev % 2) / 2;
@@ -214,13 +222,15 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     g.stroke();
     g.restore();
 
-    // border ring: green at the finish, fading to grey-lavender
+    // border ring: green at the finish, easing into a soft neutral for the rest of the board
     const rw = 0.075 * c;
     const ring = g.createLinearGradient(0, oy, 0, oy + bh);
     ring.addColorStop(0, '#2fa86f');
-    ring.addColorStop(0.09, '#43b585');
-    ring.addColorStop(0.28, '#cfd0e0');
-    ring.addColorStop(1, '#d6d5e5');
+    ring.addColorStop(0.06, '#48bb8c');
+    ring.addColorStop(0.16, '#8acbb0');
+    ring.addColorStop(0.34, '#cbccdd');
+    ring.addColorStop(0.62, '#d5d4e4');
+    ring.addColorStop(1, '#dbdae9');
     rr(g, ox + rw / 2, oy + rw / 2, bw - rw, bh - rw, R - rw / 2);
     g.lineWidth = rw;
     g.strokeStyle = ring;
@@ -238,6 +248,13 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     barG[0].clear(); barG[1].clear(); barG[2].clear();
     ballFx.length = 0;
     glowG.length = 0;
+    sweep.band = c * 2.4;
+    const sg = ctx.createLinearGradient(0, 0, sweep.band, 0);
+    sg.addColorStop(0, 'rgba(255,255,255,0)');
+    sg.addColorStop(0.44, 'rgba(255,255,255,.55)');
+    sg.addColorStop(0.56, 'rgba(255,255,255,.55)');
+    sg.addColorStop(1, 'rgba(255,255,255,0)');
+    sweep.grad = sg;
     const br = c * 0.34;
     for (let i = 0; i < 2; i++) {
       const p = PALS[i];
@@ -408,6 +425,19 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (bg) ctx.drawImage(bg, 0, 0);
     ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
+
+    // slow light sweep across the finish strip (clipped to the strip and the rounded corners)
+    if (!still && sweep.grad) {
+      const bw = COLS * c;
+      ctx.save();
+      rr(ctx, ox, oy, bw, ROWS * c, CORNER * c);
+      ctx.clip();
+      ctx.beginPath(); ctx.rect(ox, oy, bw, c); ctx.clip();
+      ctx.translate(ox - sweep.band + ((now % 5200) / 5200) * (bw + sweep.band), 0);
+      ctx.fillStyle = sweep.grad;
+      ctx.fillRect(0, oy, sweep.band, c);
+      ctx.restore();
+    }
 
     // last move of each player: trail out of the old cell, ants around the old wall
     for (let pi = 0; pi < 2; pi++) {

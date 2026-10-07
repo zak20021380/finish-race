@@ -14,7 +14,6 @@
 
 export const COLS = 8;
 export const ROWS = 12;
-export const WALLS_PER_PLAYER = 6;
 
 export type Player = 0 | 1; // 0 = red (you), 1 = blue (opponent)
 export interface Pos { c: number; r: number }
@@ -29,7 +28,6 @@ export type Action =
 export interface GameState {
   pawns: [Pos, Pos];
   walls: Wall[];
-  wallsLeft: [number, number];
   turn: Player;
   winner: Player | null;
 }
@@ -41,7 +39,6 @@ export function newGame(): GameState {
     // "column 4 / column 5" (1-based) = the two centre columns
     pawns: [{ c: 3, r: ROWS - 1 }, { c: 4, r: ROWS - 1 }],
     walls: [],
-    wallsLeft: [WALLS_PER_PLAYER, WALLS_PER_PLAYER],
     turn: 0,
     winner: null,
   };
@@ -113,9 +110,9 @@ export function reachable(s: GameState, p: Player = s.turn): Pos[] {
   return out;
 }
 
-/** Is this wall legal? In bounds, no overlap, walls left, and both pawns keep a path to FINISH. */
+/** Is this wall legal? In bounds, no overlap, and both pawns keep a path to FINISH. */
 export function wallOk(s: GameState, w: Wall): boolean {
-  if (s.winner !== null || s.wallsLeft[w.owner] <= 0) return false;
+  if (s.winner !== null) return false;
   if (w.o === 'h') {
     if (w.x < 0 || w.x > COLS - 2 || w.y < 1 || w.y > ROWS - 1) return false;
   } else if (w.x < 1 || w.x > COLS - 1 || w.y < 0 || w.y > ROWS - 2) return false;
@@ -141,7 +138,7 @@ export function allWalls(owner: Player): Wall[] {
 function endTurn(s: GameState, played: Player): GameState {
   if (s.winner !== null) return s;
   const next = other(played);
-  const canAct = (p: Player) => s.wallsLeft[p] > 0 || reachable(s, p).length > 0;
+  const canAct = (p: Player) => reachable(s, p).length > 0;
   return { ...s, turn: !canAct(next) && canAct(played) ? played : next };
 }
 
@@ -155,9 +152,7 @@ export function doMove(s: GameState, to: Pos): GameState | null {
 
 export function doWall(s: GameState, w: Wall): GameState | null {
   if (w.owner !== s.turn || !wallOk(s, w)) return null;
-  const wallsLeft: [number, number] = [s.wallsLeft[0], s.wallsLeft[1]];
-  wallsLeft[w.owner] -= 1;
-  return endTurn({ ...s, walls: [...s.walls, { ...w }], wallsLeft }, w.owner);
+  return endTurn({ ...s, walls: [...s.walls, { ...w }] }, w.owner);
 }
 
 /** Single entry point for local input, the bot, or (later) messages from the network. */
