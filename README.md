@@ -10,7 +10,13 @@ npm run dev        # http://localhost:5173 (also on your LAN)
 npm run build      # type-check + production build in dist/
 ```
 
-Works in a normal browser too (the Telegram SDK is optional). On desktop, hover near a grid line to preview a wall.
+Works in a normal browser too (the Telegram SDK is optional).
+
+## Controls
+
+- **Move**: tap a highlighted dot.
+- **Wall (touch)**: tap a grid line — a ghost wall appears — tap the ghost again to place it, or tap anywhere else to cancel. An illegal slot shows a red ghost, a warning buzz and the reason ("Blocks the path" / "Overlaps a wall").
+- **Wall (mouse)**: hover a grid line to preview, click once to place.
 
 ## Open it as a Telegram Mini App
 
@@ -30,8 +36,8 @@ Telegram only loads **HTTPS** URLs.
 | --- | --- |
 | `src/rules.ts` | Pure game logic: `GameState`, `doMove`, `doWall`, `reachable`, `wallOk`, `apply(state, action)` |
 | `src/bot.ts` | Local opponent (shortest path + occasional blocking wall) |
-| `src/render.ts` | Canvas drawing (board, walls, balls) and `pick()` hit-testing |
-| `src/main.ts` | Telegram init, input, animation loop, status UI |
+| `src/render.ts` | Canvas drawing (board, walls, ghosts, balls) and `hitTest()` tap-target resolution |
+| `src/main.ts` | Telegram init, input (tap-to-arm / confirm, mouse hover + click), animation loop, chips, status, overlay |
 | `src/style.css` | Card frame, header/footer, status, button |
 
 ## Going multiplayer later
