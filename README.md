@@ -1,4 +1,4 @@
-# Finish Race — Telegram Mini App (frontend only)
+# Detour — Telegram Mini App (frontend only)
 
 Vite + TypeScript + Canvas 2D. No backend: the opponent is a local bot, coins are mock and every
 save lives in the browser. Shop and Profile are real screens; Online is still a placeholder.
@@ -15,11 +15,15 @@ Works in a normal browser too (the Telegram SDK is optional).
 
 ## Screens
 
-`Home → Game mode → Race`, with `Shop`, `Profile` and `Settings` on the bottom tab bar.
+`Home → Game mode → Race`, with `Shop`, `Profile` and `Settings` on the floating bottom tab bar.
 Navigation is a hand-rolled back stack (`src/router.ts`): slides use transform/opacity only and
 swap instantly under `prefers-reduced-motion`. The Telegram `BackButton` is wired when the client
 provides one; every screen also has a visible Back button, and the race screen's top-left menu
 button opens the same pause sheet.
+
+**Home** is the identity card (avatar, name, country, team, level progress, coins), the drawn
+DETOUR wordmark and the way to play: a big Play button into mode select, then three shortcuts —
+vs Bot (starts with the saved difficulty), Pass & Play, and Online as a badge rather than a button.
 
 - **vs Bot** — Easy / Normal / Hard: how often the bot walls, how far it looks ahead and how much
   it wanders (`src/bot.ts`).
@@ -29,8 +33,39 @@ button opens the same pause sheet.
 - **Shop** — Balls / Walls / Boards. Every card carries a live miniature board painted by the race
   renderer itself, so a preview cannot disagree with the game. Buying spends coins, takes ownership
   and puts the item on in one tap.
-- **Profile** — games, wins, losses, best run, coins, win streak, favourite mode, and the three
-  equipped items as live previews.
+- **Profile** — games, wins, losses, best run, coins, win streak, favourite mode, the country and
+  team rows (both open the same sheets Home does), and the three equipped items as live previews.
+
+## Country
+
+Telegram hands over a `language_code`, never a country, so the app asks once: a bottom sheet with a
+searchable list (`src/countries.ts`), pre-scrolled to the country that language usually means. The
+answer is a two-letter ISO code in the save, editable from Profile, and dismissed with "Not now" if
+the player would rather not say — the question then never interrupts a launch again.
+
+Flags are regional-indicator pairs, which **Windows does not draw at all**. The app measures once
+and falls back to a two-letter code chip in the same slot, so the row reads on every platform.
+
+## Teams
+
+A team is a name, a five-character join code, a roster and a rank in the standings. There is no
+server yet, so the registry lives in the save and ships with a handful of demo clubs you can join to
+see the flow — the sheet says "local mock" rather than pretending otherwise.
+
+The shape is what makes the future cheap: every team carries `startParam` and a reserved `chatId`,
+so `t.me/<bot>/detour?startapp=team-<code>` is already a link the app understands — opening Detour
+from one pre-fills the join field. Binding a team to a real Telegram group is a server change, not a
+schema change.
+
+## Theme
+
+`themeParams` from Telegram decide the palette: `bg_color`, `text_color` and `hint_color` are handed
+to CSS as `--tg-*`, and the light or dark token set in `src/style.css` fills in the rest. Outside a
+client the SDK claims `colorScheme: "light"` even in a plain tab, so the app only trusts a declared
+scheme when the platform says it is really Telegram and otherwise follows
+`prefers-color-scheme`. Safe-area insets, `viewportStableHeight`, the BackButton and haptics are all
+wired; every control is at least 44px and the page itself never scrolls (only sheet lists and the
+profile pane do).
 
 ## Cosmetics
 
@@ -59,10 +94,11 @@ on Home and in the Shop. Coins are mock — nothing here touches a payment provi
 
 ## What is stored
 
-One module owns persistence: `src/storage.ts`, with a versioned schema (`v: 1`) covering coins,
-owned items, equipped items and the record. `src/settings.ts` keeps the switches and the last
-chosen mode/difficulty. Both go through the same wrapped door, so a webview that refuses
-`localStorage` (private mode, cookies off) still plays; the app then just runs on defaults.
+One module owns persistence: `src/storage.ts`, with a versioned schema (`v: 2`) covering coins,
+owned items, equipped items, the record, the country and the team registry. `src/settings.ts` keeps
+the switches and the last chosen mode/difficulty. Both go through the same wrapped door, so a
+webview that refuses `localStorage` (private mode, cookies off) still plays; the app then just runs
+on defaults.
 
 Swapping in Telegram CloudStorage means replacing the `backend` pair with an async get/set and
 handing the fetched JSON to `hydrate()` — no screen or module reads storage directly.
@@ -77,7 +113,7 @@ Telegram only loads **HTTPS** URLs.
    - Quick test: `npx cloudflared tunnel --url http://localhost:5173` (or `ngrok http 5173`), or
    - Deploy `dist/` to any static host (Netlify, Vercel, Cloudflare Pages, GitHub Pages).
 2. In Telegram, open [@BotFather](https://t.me/BotFather) → `/newapp`.
-3. Pick your bot, then send: title, description, a 640×360 photo, (optional GIF, `/empty` to skip), and your **HTTPS URL**, then a short name.
+3. Pick your bot, then send: title (`Detour`), description, a 640×360 photo, (optional GIF, `/empty` to skip), and your **HTTPS URL**, then a short name.
 4. BotFather replies with a link like `https://t.me/<bot>/<short_name>`. Open it to play.
    - Alternative: `/mybots` → your bot → Bot Settings → Menu Button → set the URL.
 
@@ -91,11 +127,13 @@ Telegram only loads **HTTPS** URLs.
 | `src/render.ts` | Canvas drawing (board, walls, ghosts, balls) from a `Theme`, `hitTest()` tap-target resolution, and `createPreview()` for the shop's miniature boards |
 | `src/confetti.ts` | Win burst: a fixed particle pool on its own canvas, no per-frame allocation |
 | `src/router.ts` | Screen stack + slide/fade transitions, back handling |
-| `src/sheets.ts` | Bottom sheets over a dimming scrim (pause, quit confirm, buy confirm, how to play) |
-| `src/storage.ts` | The save: versioned schema, the wrapped storage door, coins/owned/equipped/record and the per-race payout |
+| `src/sheets.ts` | Bottom sheets over a dimming scrim (pause, quit confirm, buy confirm, how to play, country, team) |
+| `src/storage.ts` | The save: versioned schema, the wrapped storage door, coins/owned/equipped/record, country, teams and the per-race payout |
+| `src/countries.ts` | ISO alpha-2 list, the picker's search, flag emoji + the Windows fallback, language → country preselect |
+| `src/teams.ts` | Team/roster shape (`code`, `startParam`, `chatId`), the seeded demo clubs, join by code and the standings |
 | `src/settings.ts` | The switches and the last mode/difficulty, on top of `storage.ts`; `motionReduced()` for CSS and canvas |
-| `src/telegram.ts` | Optional Telegram init: viewport, haptics, BackButton |
-| `src/menu.ts` | Home, mode select, settings, the profile card and the tab bar — it only asks `main.ts` to start a race |
+| `src/telegram.ts` | Optional Telegram init: viewport, themeParams light/dark, haptics, BackButton, language and `start_param` |
+| `src/menu.ts` | Home, mode select, settings, the identity card, the country and team sheets and the tab bar — it only asks `main.ts` to start a race |
 | `src/shop.ts` | The shop: tabs, cards with live previews, equip, and the buy confirm flow |
 | `src/main.ts` | Game wiring: input (tap-to-arm / confirm, mouse hover + click), loop, chips, status, payout, overlay, pause |
 | `src/style.css` | Tokens, mesh background, frosted cards, board frame, menu shell, shop and profile |
@@ -115,9 +153,13 @@ plugs in. Everything goes through `apply(state, action)`, so the server can run 
 
 ## Tweaking the look
 
-- Colours plus the type and spacing scales: the `:root` token block at the top of `src/style.css`.
-  Text uses the `*-ink` variants of the brand hues so every pair clears 4.5:1 on the card.
-- Menu shell (hero balls, mode cards, shop cards, tabs, sheets): the `SHELL` block further down the same file.
+- Colours plus the type and spacing scales: the `:root` token block at the top of `src/style.css`,
+  and the `html.dark` block under it that restates the same names. Text uses the `*-ink` variants of
+  the brand hues so every pair clears 4.5:1 on the card.
+- The wordmark: the inline `<svg class="logo-mark">` in `index.html` — the letters are stroke paths
+  and the `O` is the route bending round the wall bar, ending at the ball. Its idle motion is
+  `logo-float` / `logo-bloom` in `src/style.css`.
+- Menu shell (identity card, mode cards, shop cards, tabs, sheets): the `SHELL` block further down the same file.
 - Ball, wall and board looks, and the prices: the catalog arrays in `src/themes.ts`.
 - How a theme is painted (specular shape, bar highlight, finish glow): `drawBall`, `drawBar` and
   `buildStatic` in `src/render.ts`.

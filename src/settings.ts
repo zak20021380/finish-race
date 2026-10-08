@@ -19,8 +19,8 @@ export interface MenuState {
   difficulty: Difficulty;
 }
 
-const S_KEY = 'finish-race.settings.v1';
-const M_KEY = 'finish-race.menu.v1';
+const S_KEY = 'detour.settings.v1';
+const M_KEY = 'detour.menu.v1';
 const DEFAULT_SETTINGS: Settings = { sound: true, haptics: true, reducedMotion: false };
 const DEFAULT_MENU: MenuState = { mode: 'bot', difficulty: 'normal' };
 

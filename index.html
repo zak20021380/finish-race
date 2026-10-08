@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#eeeaf8" />
     <meta name="color-scheme" content="light" />
-    <title>Finish Race</title>
+    <title>Detour</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
@@ -91,6 +91,28 @@
         <circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.9" />
         <circle cx="12" cy="12" r="4.4" fill="none" stroke="currentColor" stroke-width="1.7" />
       </symbol>
+      <symbol id="i-search" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="10.6" cy="10.6" r="6.4" />
+          <path d="M15.4 15.4 20 20" />
+        </g>
+      </symbol>
+      <symbol id="i-check" viewBox="0 0 24 24">
+        <path d="M5.4 12.6 10 17.2l8.6-9.4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+      </symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24">
+        <path d="M12 5.4v13.2M5.4 12h13.2" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" />
+      </symbol>
+      <symbol id="i-users" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="8" r="3.1" />
+          <path d="M6.2 19.4c0-2.9 2.5-4.7 5.8-4.7s5.8 1.8 5.8 4.7" />
+          <circle cx="5.4" cy="9.6" r="2.3" />
+          <path d="M2.2 16.6c0-2 1.3-3.3 3.2-3.7" />
+          <circle cx="18.6" cy="9.6" r="2.3" />
+          <path d="M21.8 16.6c0-2-1.3-3.3-3.2-3.7" />
+        </g>
+      </symbol>
       <symbol id="i-help" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="8.6" />
@@ -113,41 +135,99 @@
 
         <!-- ---------------- home ---------------- -->
         <section class="screen menu" id="s-home" data-screen="home" tabindex="-1" aria-labelledby="home-title">
-          <header class="p-card">
-            <span class="avatar" id="avatar" aria-hidden="true">Y</span>
-            <div class="p-id">
-              <p class="p-name" id="p-name">Player</p>
-              <p class="p-sub">Level <span id="p-level">7</span></p>
+          <header class="id-card">
+            <span class="avatar" id="avatar" aria-hidden="true">
+              <img id="avatar-img" alt="" hidden />
+              <span id="avatar-t">P</span>
+            </span>
+            <div class="id-body">
+              <div class="id-top">
+                <p class="id-name" id="p-name">Player</p>
+                <p class="id-coins"><svg class="ico" aria-hidden="true"><use href="#i-coin" /></svg><span id="p-coins">0</span></p>
+              </div>
+              <div class="id-chips">
+                <button class="tag-chip" type="button" id="country-chip" aria-haspopup="dialog">
+                  <span class="flag" id="country-flag" aria-hidden="true"></span>
+                  <span class="flag-code" id="country-code" aria-hidden="true"></span>
+                  <span class="tag-chip-t" id="country-name">Add country</span>
+                </button>
+                <button class="tag-chip" type="button" id="team-chip" aria-haspopup="dialog">
+                  <svg class="ico" aria-hidden="true"><use href="#i-users" /></svg>
+                  <span class="tag-chip-t" id="team-name">Find a team</span>
+                  <span class="tag-chip-n" id="team-count"></span>
+                </button>
+              </div>
+              <p class="lvl">
+                <span class="lvl-l">Level <b id="p-level">1</b></span>
+                <span class="bar" role="progressbar" id="p-bar" aria-label="Progress to the next level" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><i id="p-fill"></i></span>
+                <span class="lvl-r" id="p-xp">0/10 XP</span>
+              </p>
             </div>
-            <dl class="p-stats">
-              <div class="stat"><dt>Coins</dt><dd id="p-coins">1,850</dd></div>
-              <div class="stat"><dt>Streak</dt><dd id="p-streak">0</dd></div>
-            </dl>
           </header>
 
           <div class="hero">
-            <div class="balls" aria-hidden="true">
-              <span class="hero-ball red"></span>
-              <span class="hero-ball blue"></span>
-            </div>
-            <h1 class="brand" id="home-title"><span class="brand-a">Finish</span><span class="brand-b">Race</span></h1>
-            <p class="tag">First ball to the checkered line wins.</p>
+            <!-- the wordmark is drawn, not set: the route bends around a wall and the ball ends it -->
+            <h1 class="logo" id="home-title">
+              <svg class="logo-mark" viewBox="-3 12 344 80" role="img" aria-labelledby="logo-title">
+                <title id="logo-title">Detour</title>
+                <defs>
+                  <linearGradient id="lg-ink" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#4f46e5" />
+                    <stop offset=".5" stop-color="#7c3aed" />
+                    <stop offset="1" stop-color="#a855f7" />
+                  </linearGradient>
+                  <linearGradient id="lg-wall" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#ddd0ff" />
+                    <stop offset=".5" stop-color="#8b5cf6" />
+                    <stop offset="1" stop-color="#4c1d95" />
+                  </linearGradient>
+                  <radialGradient id="lg-ball" cx="34%" cy="27%" r="78%">
+                    <stop offset="0" stop-color="#f3edff" />
+                    <stop offset=".42" stop-color="#8b5cf6" />
+                    <stop offset="1" stop-color="#312e81" />
+                  </radialGradient>
+                </defs>
+                <g class="lg-letters" fill="none" stroke="url(#lg-ink)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M8 26V78M8 26H18A26 26 0 0 1 18 78H8" />
+                  <path d="M105 26H71V78H105M71 52H98" />
+                  <path d="M125 26H159M142 26V78" />
+                  <path d="M247 26V56A17 22 0 0 0 281 56V26" />
+                  <path d="M301 78V26H313A13 13 0 0 1 313 52H301M311 52L329 78" />
+                </g>
+                <!-- the O is the route: it leaves the baseline, bends round the wall and ends at the ball -->
+                <g class="lg-o">
+                  <rect class="lg-halo2" x="189" y="27" width="28" height="50" rx="14" fill="#8b5cf6" opacity=".1" />
+                  <rect class="lg-halo" x="193" y="30" width="20" height="44" rx="10" fill="#8b5cf6" opacity=".2" />
+                  <path class="lg-route" d="M179 52C179 37 190 26 203 26C216 26 227 38 227 52C227 66 216 78 203 78C192 78 184 75 182 68"
+                    fill="none" stroke="url(#lg-ink)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" />
+                  <rect class="lg-wall" x="198.5" y="36" width="9" height="32" rx="4.5" fill="url(#lg-wall)" />
+                  <circle class="lg-ball" cx="182" cy="68" r="10.5" fill="url(#lg-ball)" />
+                  <ellipse cx="178.6" cy="63.6" rx="3.3" ry="2.1" fill="#fff" opacity=".7" transform="rotate(-28 178.6 63.6)" />
+                </g>
+              </svg>
+            </h1>
+            <p class="tag">Block. Bend. Win.</p>
           </div>
 
           <div class="home-cta">
-            <button class="btn btn-primary big" id="home-play" type="button" data-go="modes">
+            <button class="btn btn-hero" id="home-play" type="button" data-go="modes">
               <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg><span>Play</span>
             </button>
-            <div class="sub-cards">
-              <button class="mini" type="button" data-start="local">
-                <svg class="ico" aria-hidden="true"><use href="#i-duo" /></svg>
-                <span class="mini-t">Pass &amp; Play</span>
-                <span class="mini-s">Two players, one device</span>
+            <div class="mode-row" role="group" aria-label="Jump straight into a mode">
+              <button class="mode" type="button" data-start="bot">
+                <svg class="ico" aria-hidden="true"><use href="#i-bot" /></svg>
+                <span class="mode-t">vs Bot</span>
+                <span class="mode-s" id="mode-bot-sub">Normal</span>
               </button>
-              <button class="mini" type="button" id="help-btn" aria-haspopup="dialog">
-                <svg class="ico" aria-hidden="true"><use href="#i-help" /></svg>
-                <span class="mini-t">How to play</span>
-                <span class="mini-s">Moves, walls, win</span>
+              <button class="mode" type="button" data-start="local">
+                <svg class="ico" aria-hidden="true"><use href="#i-duo" /></svg>
+                <span class="mode-t">Pass &amp; Play</span>
+                <span class="mode-s">One device</span>
+              </button>
+              <button class="mode off" type="button" data-start="online" aria-disabled="true">
+                <svg class="ico" aria-hidden="true"><use href="#i-globe" /></svg>
+                <span class="mode-t">Online</span>
+                <span class="mode-s">Soon</span>
               </button>
             </div>
           </div>
@@ -199,6 +279,9 @@
             </button>
           </div>
           <div class="spacer" aria-hidden="true"></div>
+          <button class="link link-row" type="button" id="help-btn" aria-haspopup="dialog">
+            <svg class="ico" aria-hidden="true"><use href="#i-help" /></svg><span>How to play</span>
+          </button>
         </section>
 
         <!-- ---------------- settings ---------------- -->
@@ -256,7 +339,7 @@
             <button class="seg-b" type="button" role="tab" id="tab-board" data-shop="board" aria-selected="false" aria-controls="shop-grid">Boards</button>
           </div>
 
-          <div class="shop-grid" id="shop-grid" role="tabpanel" aria-labelledby="tab-ball"></div>
+          <div class="shop-grid" id="shop-grid" role="tabpanel" aria-labelledby="tab-ball" data-scroll></div>
         </section>
 
         <section class="screen menu" id="s-profile" data-screen="profile" tabindex="-1" hidden aria-labelledby="profile-title">
@@ -267,20 +350,44 @@
             <h1 class="m-title" id="profile-title">Profile</h1>
             <span class="m-head-pad" aria-hidden="true"></span>
           </div>
-          <div class="p-card wide">
-            <span class="avatar big" id="pf-avatar" aria-hidden="true">Y</span>
-            <div class="p-id">
-              <p class="p-name" id="pf-name">Player</p>
-              <p class="p-sub">Level <span id="pf-level">7</span></p>
+          <div class="pane" data-scroll>
+            <div class="p-card wide">
+              <span class="avatar big" id="pf-avatar" aria-hidden="true">
+                <img id="pf-avatar-img" alt="" hidden />
+                <span id="pf-avatar-t">P</span>
+              </span>
+              <div class="p-id">
+                <p class="p-name" id="pf-name">Player</p>
+                <p class="p-sub">Level <span id="pf-level">1</span> · <span id="pf-xp">0/10 XP</span></p>
+              </div>
             </div>
-          </div>
-          <dl class="p-stats quad">
-            <div class="stat"><dt>Games</dt><dd id="pf-games">0</dd></div>
-            <div class="stat"><dt>Wins</dt><dd id="pf-wins">0</dd></div>
-            <div class="stat"><dt>Losses</dt><dd id="pf-losses">0</dd></div>
-            <div class="stat"><dt>Best run</dt><dd id="pf-best">0</dd></div>
-          </dl>
-          <div class="rows tight">
+            <dl class="p-stats quad">
+              <div class="stat"><dt>Games</dt><dd id="pf-games">0</dd></div>
+              <div class="stat"><dt>Wins</dt><dd id="pf-wins">0</dd></div>
+              <div class="stat"><dt>Losses</dt><dd id="pf-losses">0</dd></div>
+              <div class="stat"><dt>Best run</dt><dd id="pf-best">0</dd></div>
+            </dl>
+            <div class="rows tight">
+            <button class="row edit" type="button" id="pf-country" aria-haspopup="dialog">
+              <span class="row-txt">
+                <span class="row-t">Country</span>
+                <span class="row-s">Your flag, for when leaderboards arrive</span>
+              </span>
+              <span class="row-v pick-v">
+                <span class="flag" id="pf-flag" aria-hidden="true"></span>
+                <span class="flag-code" id="pf-code" aria-hidden="true"></span>
+                <span id="pf-country-v">Not set</span>
+              </span>
+              <svg class="ico chev" aria-hidden="true"><use href="#i-next" /></svg>
+            </button>
+            <button class="row edit" type="button" id="pf-team" aria-haspopup="dialog">
+              <span class="row-txt">
+                <span class="row-t">Team</span>
+                <span class="row-s">Create one or join with a code</span>
+              </span>
+              <span class="row-v" id="pf-team-v">No team</span>
+              <svg class="ico chev" aria-hidden="true"><use href="#i-next" /></svg>
+            </button>
             <div class="row">
               <span class="row-txt"><span class="row-t">Coins</span><span class="row-s">Mock balance, won on the board</span></span>
               <span class="row-v" id="pf-coins">0</span>
@@ -293,13 +400,14 @@
               <span class="row-txt"><span class="row-t">Favourite mode</span><span class="row-s" id="pf-fav-sub">No races yet</span></span>
               <span class="row-v" id="pf-fav">—</span>
             </div>
-          </div>
-          <div class="equips">
-            <h2 class="eq-h">Equipped</h2>
-            <div class="eq-row">
-              <figure class="eq"><canvas class="cos-pv" data-eq="ball" aria-hidden="true"></canvas><figcaption id="eq-ball">Classic</figcaption></figure>
-              <figure class="eq"><canvas class="cos-pv" data-eq="wall" aria-hidden="true"></canvas><figcaption id="eq-wall">Classic</figcaption></figure>
-              <figure class="eq"><canvas class="cos-pv" data-eq="board" aria-hidden="true"></canvas><figcaption id="eq-board">Lavender</figcaption></figure>
+            </div>
+            <div class="equips">
+              <h2 class="eq-h">Equipped</h2>
+              <div class="eq-row">
+                <figure class="eq"><canvas class="cos-pv" data-eq="ball" aria-hidden="true"></canvas><figcaption id="eq-ball">Classic</figcaption></figure>
+                <figure class="eq"><canvas class="cos-pv" data-eq="wall" aria-hidden="true"></canvas><figcaption id="eq-wall">Classic</figcaption></figure>
+                <figure class="eq"><canvas class="cos-pv" data-eq="board" aria-hidden="true"></canvas><figcaption id="eq-board">Lavender</figcaption></figure>
+              </div>
             </div>
           </div>
         </section>
@@ -443,6 +551,63 @@
           <li><b>Finish</b> — the first ball onto the checkered row wins.</li>
         </ol>
         <button class="btn btn-primary" type="button" data-sheet-close data-autofocus>Got it</button>
+      </section>
+
+      <!-- country: Telegram never tells us, so the app asks once and the sheet is the answer -->
+      <section class="sheet tall" id="sheet-country" hidden tabindex="-1" data-autofocus role="dialog" aria-modal="true" aria-labelledby="country-title">
+        <h2 class="sheet-t" id="country-title">Where do you race from?</h2>
+        <p class="sheet-p">Telegram does not share your country, so we ask on the first launch. You can change it in Profile.</p>
+        <label class="field">
+          <svg class="ico" aria-hidden="true"><use href="#i-search" /></svg>
+          <input id="country-q" class="input" type="search" placeholder="Search countries" autocomplete="off"
+            spellcheck="false" enterkeyhint="search" aria-label="Search for a country" data-input />
+        </label>
+        <ul class="pick" id="country-list" role="listbox" aria-label="Countries" data-scroll tabindex="0"></ul>
+        <p class="pick-empty" id="country-empty" hidden role="status">No country matches that.</p>
+        <div class="sheet-actions">
+          <button class="btn btn-ghost" type="button" data-sheet-close>Not now</button>
+        </div>
+      </section>
+
+      <!-- team: a local mock of a club, shaped so a Telegram group can own it later -->
+      <section class="sheet tall" id="sheet-team" hidden role="dialog" aria-modal="true" aria-labelledby="team-title">
+        <h2 class="sheet-t" id="team-title">Your team</h2>
+
+        <div class="sheet-body" id="team-none" data-scroll>
+          <p class="sheet-p">Race for a club. Teams live on this device until online play arrives.</p>
+          <label class="field block">
+            <span class="field-l">Create a team</span>
+            <input id="team-new" class="input" type="text" maxlength="20" placeholder="Team name"
+              autocomplete="off" spellcheck="false" enterkeyhint="done" data-input />
+          </label>
+          <button class="btn btn-primary" type="button" id="team-create">
+            <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg><span>Create</span>
+          </button>
+          <p class="or" aria-hidden="true">or join one</p>
+          <label class="field block">
+            <span class="field-l">Join with a code</span>
+            <input id="team-code" class="input code" type="text" maxlength="5" placeholder="NIGHT"
+              autocomplete="off" spellcheck="false" autocapitalize="characters" enterkeyhint="done" data-input />
+          </label>
+          <button class="btn btn-ghost" type="button" id="team-join">Join team</button>
+          <p class="pick-empty" id="team-err" role="status" hidden></p>
+        </div>
+
+        <div class="sheet-body" id="team-in" data-scroll hidden>
+          <p class="team-head">
+            <b id="team-h-name">Team</b>
+            <span class="code-chip" id="team-h-code">CODE</span>
+          </p>
+          <p class="sheet-p left" id="team-h-note"></p>
+          <h3 class="sec-t">Members <span id="team-h-size"></span></h3>
+          <ul class="roster" id="team-roster" data-scroll></ul>
+          <h3 class="sec-t">Team leaderboard</h3>
+          <ol class="roster rank" id="team-board" data-scroll></ol>
+          <p class="fine">
+            Local mock standings — real club tables arrive with online play.
+            <button class="link" type="button" id="team-leave">Leave team</button>
+          </p>
+        </div>
       </section>
     </div>
 

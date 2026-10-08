@@ -13,15 +13,25 @@ import { createShop } from './shop';
 import { menuState, motionReduced, type Mode } from './settings';
 import { onChange, recordGame, theme } from './storage';
 import { impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
+import { applyFlagSupport } from './countries';
 
 initTelegram();
+applyFlagSupport();
 
 /* ---------- no zoom / no scroll ---------- */
 
 for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) {
   document.addEventListener(ev, (e) => e.preventDefault());
 }
-document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+/**
+ * The app never scrolls — but a sheet's list does. Anything marked `data-scroll` keeps its own
+ * gesture, so a country picker can be dragged on a phone while the page behind it stays put.
+ */
+document.addEventListener('touchmove', (e) => {
+  const t = e.target as HTMLElement | null;
+  if (t?.closest('[data-scroll]')) return;
+  e.preventDefault();
+}, { passive: false });
 document.addEventListener('dblclick', (e) => e.preventDefault());
 
 /* ---------- DOM ---------- */
@@ -436,6 +446,7 @@ paintNames();
 ui();
 router.start('home');
 setBackButton(false);
+menu.afterStart();
 
 /* equipping repaints the board, and the chip dot that stands for your ball */
 const paintTheme = () => {

@@ -1,5 +1,6 @@
 /**
- * storage.ts — the app's save: coins, what you own, what you are wearing, and how you have played.
+ * storage.ts — the app's save: who you are, where you are from, your team, coins, what you own, what
+ * you are wearing, and how you have played.
  *
  * One module owns the schema and the only door to the device. Every read and write is wrapped,
  * because a Telegram webview can refuse storage outright (private mode, cookies off) and the race
@@ -12,6 +13,10 @@
 import type { Difficulty } from './bot';
 import type { Mode } from './settings';
 import { CLASSIC_BALL, CLASSIC_BOARD, CLASSIC_WALL, known, themeOf, type CosKind, type Theme } from './themes';
+import { knownCountry } from './countries';
+import {
+  addMember, cleanCode, cleanName, dropMember, inTeam, makeTeam, seedTeams, YOU, type Team,
+} from './teams';
 
 /* ---------- the door ---------- */
 
@@ -40,8 +45,8 @@ export function writeJson(key: string, value: unknown) {
 
 /* ---------- the schema ---------- */
 
-const KEY = 'finish-race.save.v1';
-const V = 1;
+const KEY = 'detour.save.v2';
+const V = 2;
 
 export const KINDS: CosKind[] = ['ball', 'wall', 'board'];
 
@@ -61,6 +66,13 @@ export interface Save {
   owned: Record<CosKind, string[]>;
   equipped: Record<CosKind, string>;
   stats: Stats;
+  /** ISO 3166-1 alpha-2, or null until the player answers the first-launch question */
+  country: string | null;
+  /** the country sheet only interrupts the first launch, ever */
+  countryAsked: boolean;
+  teamId: string | null;
+  /** every team this device knows about: the seeded clubs plus any you created or joined */
+  teams: Team[];
 }
 
 /** The three starter items are owned before the first race; the wallet starts stocked for the demo. */
@@ -74,13 +86,32 @@ function fresh(): Save {
     owned: { ball: [STARTERS.ball], wall: [STARTERS.wall], board: [STARTERS.board] },
     equipped: { ...STARTERS },
     stats: { games: 0, wins: 0, losses: 0, streak: 0, best: 0, modes: {} },
+    country: null,
+    countryAsked: false,
+    teamId: null,
+    teams: seedTeams(),
   };
 }
 
 const whole = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
+const text = (s: unknown, max: number): s is string => typeof s === 'string' && s.length > 0 && s.length <= max;
+
+const memberOk = (m: unknown): boolean => {
+  const x = m as Partial<Team['members'][number]> | undefined;
+  return !!x && text(x.id, 24) && text(x.name, 24) && whole(x.wins) && whole(x.games) && x.wins >= 0 && x.games >= x.wins;
+};
+
+/** A hand-edited or half-written team is dropped, never trusted: every field has to hold. */
+function teamOk(t: unknown): t is Team {
+  const x = t as Partial<Team> | undefined;
+  return !!x && text(x.id, 40) && text(x.name, 20) && /^[A-Z0-9]{5}$/.test(x.code ?? '')
+    && text(x.startParam, 40) && (x.chatId === null || text(x.chatId, 32))
+    && typeof x.seed === 'boolean' && Array.isArray(x.members) && x.members.length > 0
+    && x.members.length <= 64 && x.members.every(memberOk);
+}
 
 /**
- * Anything that is not a recognised version starts clean; a v1 blob is folded field by field so a
+ * Anything that is not a recognised version starts clean; a v2 blob is folded field by field so a
  * half-written or hand-edited save can never smuggle an unknown item into `owned`.
  */
 function migrate(raw: Partial<Save> | null): Save {
@@ -106,6 +137,15 @@ function migrate(raw: Partial<Save> | null): Save {
     }
   }
   s.stats.best = Math.max(s.stats.best, s.stats.streak);
+
+  if (knownCountry(raw.country ?? '')) s.country = (raw.country as string).toUpperCase();
+  if (typeof raw.countryAsked === 'boolean') s.countryAsked = raw.countryAsked;
+
+  const teams = Array.isArray(raw.teams) ? raw.teams.filter(teamOk).slice(0, 40) : [];
+  if (teams.length) s.teams = teams;
+  const id = raw.teamId;
+  if (typeof id === 'string' && s.teams.some((t) => t.id === id && inTeam(t))) s.teamId = id;
+  else s.teamId = null;
   return s;
 }
 
@@ -201,4 +241,65 @@ export function recordGame(r: { mode: Mode; difficulty: Difficulty; won: boolean
 export function favouriteMode(): Mode | null {
   const bot = profile.stats.modes.bot ?? 0, local = profile.stats.modes.local ?? 0;
   return bot === local ? (bot ? 'bot' : null) : bot > local ? 'bot' : 'local';
+}
+
+/* ---------- identity: level, country, team ---------- */
+
+/**
+ * Level is the record seen another way, so the bar on Home answers to races that actually happened:
+ * a win is worth more than a game, and each step asks for a little more than the last.
+ */
+export function levelInfo() {
+  let x = profile.stats.wins * 4 + profile.stats.games, n = 1, need = 10;
+  while (x >= need) { x -= need; n++; need = 10 + 6 * (n - 1); }
+  return { n, got: x, need };
+}
+
+export function setCountry(code: string | null) {
+  profile.country = code ? code.toUpperCase() : null;
+  profile.countryAsked = true;
+  flush();
+}
+
+export const myTeam = (): Team | null => profile.teams.find((t) => t.id === profile.teamId) ?? null;
+
+export type TeamResult = 'created' | 'joined' | 'left' | 'short-name' | 'no-code' | 'already-in' | 'full';
+
+const swap = (id: string, next: Team) => { profile.teams = profile.teams.map((t) => (t.id === id ? next : t)); };
+
+/** Teams are local for now: this is the one place that mutates the registry, so the server can own it later. */
+export function createTeam(rawName: string, you: string): TeamResult {
+  if (profile.teamId) return 'already-in';
+  const name = cleanName(rawName);
+  if (name.length < 2) return 'short-name';
+  const taken = new Set(profile.teams.map((t) => t.code));
+  const team = makeTeam(name, you || 'You', taken);
+  if (!team) return 'full';
+  profile.teams = [...profile.teams, team];
+  profile.teamId = team.id;
+  flush();
+  return 'created';
+}
+
+export function joinTeam(rawCode: string, you: string): TeamResult {
+  if (profile.teamId) return 'already-in';
+  const code = cleanCode(rawCode);
+  const team = profile.teams.find((t) => t.code === code);
+  if (!team) return 'no-code';
+  if (inTeam(team)) { profile.teamId = team.id; flush(); return 'joined'; }
+  swap(team.id, addMember(team, cleanName(you).slice(0, 24) || 'You'));
+  profile.teamId = team.id;
+  flush();
+  return 'joined';
+}
+
+/** Walking out: a seeded club keeps its roster, a team you made dissolves with you in it. */
+export function leaveTeam(): TeamResult {
+  const team = myTeam();
+  if (!team) return 'no-code';
+  if (team.seed) swap(team.id, dropMember(team));
+  else profile.teams = profile.teams.filter((t) => t.id !== team.id);
+  profile.teamId = null;
+  flush();
+  return 'left';
 }

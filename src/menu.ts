@@ -1,15 +1,24 @@
 /**
  * menu.ts — everything around the board: home, mode select, settings and the two placeholders.
  * It holds no game logic; the only thing it decides is which race to ask main.ts to start.
+ *
+ * Home is the identity card, the wordmark and three ways to play — nothing else. Country and team
+ * are asked for, not assumed: Telegram hands over a language, never a country, and there is no team
+ * server yet, so both live in the save and both are editable from Profile as well as from Home.
  */
 import { DIFFICULTIES, type Difficulty } from './bot';
 import { menuState, saveMenu, settings, setSetting, onSettings, type Mode, type Settings } from './settings';
-import { favouriteMode, KINDS, onChange, profile, theme } from './storage';
+import {
+  createTeam, favouriteMode, joinTeam, KINDS, leaveTeam, levelInfo, myTeam, onChange, profile,
+  setCountry, theme,
+} from './storage';
 import { createPreview, type Preview } from './render';
+import { flagOf, guessCountry, nameOf, search } from './countries';
+import { cleanCode, standings, YOU } from './teams';
 import type { CosKind } from './themes';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
-import { impact, tgUser } from './telegram';
+import { impact, languageCode, notify, startParam, tgUser } from './telegram';
 
 export interface MenuApi {
   router: Router;
@@ -22,14 +31,23 @@ export interface MenuApi {
 
 export interface Menu {
   setRoute(id: string): void;
+  /** first launch: ask for the country once, or land on the team a `startapp=` invite named */
+  afterStart(): void;
 }
-
-/** Level is still a mock: there is no XP curve behind it yet. Coins and results are not — they come
- *  from the save, so the wallet on Home and the one in the Shop can never disagree. */
-const LEVEL = 7;
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const en = (n: number) => n.toLocaleString('en-US');
+
+const PICK_ROW = '<span class="flag" aria-hidden="true"></span><span class="flag-code" aria-hidden="true"></span>'
+  + '<span class="pick-n"></span>'
+  + '<svg class="ico tick" aria-hidden="true"><use href="#i-check" /></svg>';
+
+const make = (cls: string, html: string) => {
+  const el = document.createElement('li');
+  el.className = cls;
+  el.innerHTML = html;
+  return el;
+};
 
 export function createMenu(api: MenuApi): Menu {
   const tabs = [...document.querySelectorAll<HTMLElement>('.tab[data-tab]')];
@@ -43,21 +61,233 @@ export function createMenu(api: MenuApi): Menu {
   const name = (full || u?.username || 'Player').slice(0, 18);
   const initials = (full ? full.split(/\s+/).map((w) => w[0]).join('') : name.slice(0, 2))
     .replace(/[^0-9A-Za-z]/g, '').toUpperCase().slice(0, 2) || 'PL';
-  for (const [av, nm] of [['avatar', 'p-name'], ['pf-avatar', 'pf-name']] as const) {
-    $(av).textContent = initials;
+  for (const [av, img, t, nm] of [
+    ['avatar', 'avatar-img', 'avatar-t', 'p-name'],
+    ['pf-avatar', 'pf-avatar-img', 'pf-avatar-t', 'pf-name'],
+  ] as const) {
     $(nm).textContent = name;
+    $(t).textContent = initials;
+    const photo = $(img) as unknown as HTMLImageElement;
+    if (u?.photo_url) { photo.src = u.photo_url; photo.hidden = false; $(av).style.background = 'none'; }
+    /* a photo that fails to load must not leave a blank disc behind */
+    photo.addEventListener('error', () => { photo.hidden = true; $(av).style.background = ''; });
   }
-  $('p-level').textContent = String(LEVEL);
-  $('pf-level').textContent = String(LEVEL);
+
+  /* ---------- country ---------- */
+  const countrySheet = api.sheet('sheet-country');
+  const countryList = $<HTMLElement>('country-list');
+  const countryEmpty = $<HTMLElement>('country-empty');
+  const countryQ = <HTMLInputElement>$('country-q');
+  let pickIdx = 0;
+
+  function paintCountryList(q: string) {
+    const hits = search(q);
+    countryList.textContent = '';
+    for (const c of hits) {
+      const li = make('pick-row', PICK_ROW);
+      li.dataset.code = c.code;
+      li.setAttribute('role', 'option');
+      li.tabIndex = -1;
+      li.setAttribute('aria-selected', String(c.code === profile.country));
+      const kids = li.children;
+      kids[0].textContent = flagOf(c.code);
+      kids[1].textContent = c.code;
+      kids[2].textContent = c.name;
+      countryList.append(li);
+    }
+    countryEmpty.hidden = hits.length > 0;
+    pickIdx = Math.max(0, hits.findIndex((c) => c.code === (profile.country ?? guessCountry(languageCode()))));
+  }
+
+  /** The row the picker would answer with, moved by the arrow keys. */
+  function focusPick(move: number) {
+    const items = [...countryList.querySelectorAll<HTMLElement>('.pick-row')];
+    if (!items.length) return;
+    pickIdx = Math.min(items.length - 1, Math.max(0, pickIdx + move));
+    items[pickIdx].focus({ preventScroll: true });
+    items[pickIdx].scrollIntoView({ block: 'nearest' });
+  }
+
+  function chooseCountry(code: string) {
+    setCountry(code);
+    notify('success');
+    api.sheets.close();
+  }
+
+  countryQ.addEventListener('input', () => paintCountryList(countryQ.value));
+  countryQ.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { const f = countryList.querySelector<HTMLElement>('.pick-row'); if (f) chooseCountry(f.dataset.code!); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); focusPick(1); }
+  });
+  countryList.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); focusPick(1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); focusPick(-1); }
+    else if (e.key === 'Enter') { const r = document.activeElement as HTMLElement | null; const c = r?.dataset.code; if (c) chooseCountry(c); }
+  });
+  countryList.addEventListener('click', (e) => {
+    const row = (e.target as HTMLElement | null)?.closest<HTMLElement>('.pick-row');
+    if (!row) return;
+    impact('light');
+    chooseCountry(row.dataset.code!);
+  });
+
+  function openCountry() {
+    if (!countrySheet) return;
+    const seed = profile.country || guessCountry(languageCode());
+    countryQ.value = '';
+    paintCountryList('');
+    api.sheets.open(countrySheet);
+    /* land the list on the guess, so the common case is one tap */
+    const want = seed ? countryList.querySelector<HTMLElement>(`[data-code=${JSON.stringify(seed)}]`) : null;
+    if (want) { want.scrollIntoView({ block: 'center' }); want.focus({ preventScroll: true }); }
+    impact('light');
+  }
+
+  /* ---------- team ---------- */
+  const teamSheet = api.sheet('sheet-team');
+
+  function paintTeam() {
+    const t = myTeam();
+    const none = $<HTMLElement>('team-none');
+    const inTeam = $<HTMLElement>('team-in');
+    none.hidden = !!t;
+    inTeam.hidden = !t;
+    if (!t) { $<HTMLElement>('team-err').hidden = true; return; }
+
+    $<HTMLElement>('team-h-name').textContent = t.name;
+    $<HTMLElement>('team-h-code').textContent = t.code;
+    // the code is what a `startapp=team-<code>` link will one day carry; today it only joins locally
+    $<HTMLElement>('team-h-note').textContent = t.seed
+      ? 'A demo club on this device. Rosters become real with online play.'
+      : `Invite code ${t.code} · link value ${t.startParam}`;
+    $<HTMLElement>('team-h-size').textContent = String(t.members.length);
+
+    const roster = $<HTMLElement>('team-roster');
+    roster.textContent = '';
+    for (const m of [...t.members].sort((a, b) => Number(b.captain) - Number(a.captain) || b.wins - a.wins)) {
+      const li = document.createElement('li');
+      const who = document.createElement('span');
+      who.className = 'who';
+      who.textContent = m.name;
+      if (m.id === YOU) who.classList.add('you-tag');
+      const tag = document.createElement('span');
+      tag.className = 'capt';
+      tag.textContent = m.captain ? 'Captain' : '';
+      const wins = document.createElement('span');
+      wins.className = 'n';
+      wins.textContent = `${en(m.wins)}W / ${en(m.games)}`;
+      li.append(who, tag, wins);
+      roster.append(li);
+    }
+
+    const board = $<HTMLElement>('team-board');
+    board.textContent = '';
+    for (const s of standings(profile.teams).slice(0, 8)) {
+      const li = document.createElement('li');
+      const rank = document.createElement('span');
+      rank.className = 'rank-n';
+      rank.textContent = String(s.rank);
+      const nm = document.createElement('span');
+      nm.className = 'who';
+      nm.textContent = s.team.name;
+      const w = document.createElement('span');
+      w.className = 'n';
+      w.textContent = en(s.wins);
+      li.append(rank, nm, w);
+      if (s.team.id === profile.teamId) li.classList.add('me');
+      board.append(li);
+    }
+  }
+
+  function teamError(msg: string) {
+    const el = $<HTMLElement>('team-err');
+    el.textContent = msg;
+    el.hidden = false;
+    notify('warning');
+  }
+
+  $('team-create').addEventListener('click', () => {
+    const raw = $<HTMLInputElement>('team-new').value;
+    const r = createTeam(raw, name);
+    if (r === 'short-name') return teamError('Give the team at least two characters.');
+    if (r === 'already-in') return teamError('You are already in a team — leave it first.');
+    if (r === 'full') return teamError('Could not mint a join code. Try again.');
+    $<HTMLInputElement>('team-new').value = '';
+    $<HTMLElement>('team-err').hidden = true;
+    notify('success');
+    paintTeam();
+  });
+
+  $('team-join').addEventListener('click', () => {
+    const raw = $<HTMLInputElement>('team-code').value;
+    const r = joinTeam(raw, name);
+    if (r === 'no-code') return teamError(`No team on this device answers to ${cleanCode(raw) || 'that code'}.`);
+    if (r === 'already-in') return teamError('You are already in a team — leave it first.');
+    $<HTMLInputElement>('team-code').value = '';
+    $<HTMLElement>('team-err').hidden = true;
+    notify('success');
+    paintTeam();
+  });
+
+  $('team-leave').addEventListener('click', () => {
+    leaveTeam();
+    impact('medium');
+    paintTeam();
+  });
+
+  for (const el of [$<HTMLElement>('team-new'), $<HTMLInputElement>('team-code')]) {
+    el.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      ($('team-new') === document.activeElement ? $('team-create') : $('team-join')).click();
+    });
+  }
+
+  function openTeam() {
+    if (!teamSheet) return;
+    paintTeam();
+    api.sheets.open(teamSheet);
+    impact('light');
+  }
+
+  /* ---- the two entry points: Home chips and the matching Profile rows ---- */
+  for (const id of ['country-chip', 'pf-country']) $(id).addEventListener('click', openCountry);
+  for (const id of ['team-chip', 'pf-team']) $(id).addEventListener('click', openTeam);
 
   /* ---- the record, and what is worn: re-painted whenever the save changes ---- */
   const pfScreen = $<HTMLElement>('s-profile');
   const eqPv = new Map<CosKind, Preview>();
+  const setFlag = (flagId: string, codeId: string, code: string) => {
+    $(flagId).textContent = code ? flagOf(code) : '';
+    $(codeId).textContent = code;
+  };
+  const paintIdentity = () => {
+    const lv = levelInfo();
+    const t = myTeam();
+    $('p-coins').textContent = en(profile.coins);
+    $('pf-coins').textContent = en(profile.coins);
+    for (const id of ['p-level', 'pf-level']) $(id).textContent = String(lv.n);
+    $('p-xp').textContent = `${lv.got}/${lv.need} XP`;
+    $('pf-xp').textContent = `${lv.got}/${lv.need} XP`;
+    const bar = $<HTMLElement>('p-bar');
+    $('p-fill').style.setProperty('--p', `${Math.round((lv.got / lv.need) * 100)}%`);
+    bar.setAttribute('aria-valuenow', String(lv.got));
+    bar.setAttribute('aria-valuemax', String(lv.need));
+    bar.setAttribute('aria-valuetext', `Level ${lv.n}, ${lv.got} of ${lv.need} XP`);
+
+    const c = profile.country;
+    $('country-name').textContent = c ? nameOf(c) : 'Add country';
+    setFlag('country-flag', 'country-code', c ?? '');
+    $('pf-country-v').textContent = c ? nameOf(c) : 'Not set';
+    setFlag('pf-flag', 'pf-code', c ?? '');
+
+    $('team-name').textContent = t ? t.name : 'Find a team';
+    $('team-count').textContent = t ? String(t.members.length) : '';
+    $('pf-team-v').textContent = t ? `${t.name} · ${t.members.length}` : 'No team';
+  };
   const paintProfile = () => {
     const s = profile.stats;
-    $('p-coins').textContent = en(profile.coins);
-    $('p-streak').textContent = en(s.streak);
-    $('pf-coins').textContent = en(profile.coins);
+    paintIdentity();
     $('pf-games').textContent = en(s.games);
     $('pf-wins').textContent = en(s.wins);
     $('pf-losses').textContent = en(s.losses);
@@ -83,10 +313,11 @@ export function createMenu(api: MenuApi): Menu {
   paintProfile();
   new ResizeObserver(() => { if (!pfScreen.hidden) paintProfile(); }).observe(pfScreen);
 
-  /* ---- difficulty ---- */
+  /* ---- difficulty: Home's vs Bot card says what Play will start with ---- */
   let difficulty: Difficulty = menuState.difficulty;
   const paintDiff = () => {
     for (const b of segs) b.setAttribute('aria-pressed', String(b.dataset.diff === difficulty));
+    $('mode-bot-sub').textContent = difficulty[0].toUpperCase() + difficulty.slice(1);
   };
   for (const b of segs) {
     b.addEventListener('click', () => {
@@ -141,6 +372,13 @@ export function createMenu(api: MenuApi): Menu {
   paintDiff();
   paintSettings();
 
+  /** A `startapp=team-XXXX` link pre-fills the join field, so an invite lands somewhere useful. */
+  const invite = /^team-([a-z0-9]{1,5})$/i.exec(startParam());
+  if (invite && !profile.teamId) {
+    const f = $<HTMLInputElement>('team-code');
+    f.value = cleanCode(invite[1]);
+  }
+
   return {
     setRoute(id) {
       tabbar.hidden = id === 'game';
@@ -151,6 +389,10 @@ export function createMenu(api: MenuApi): Menu {
         if (on) t.setAttribute('aria-current', 'page');
         else t.removeAttribute('aria-current');
       }
+    },
+    afterStart() {
+      if (!profile.countryAsked && !profile.country) { openCountry(); return; }
+      if (invite && !profile.teamId) openTeam();
     },
   };
 }

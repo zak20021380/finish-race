@@ -43,7 +43,10 @@ export function createSheets(scrim: HTMLElement): Sheets {
       void el.offsetWidth;                  // lay the sheet out at its closed position first
       el.classList.add('open');
       scrim.classList.add('open');
-      el.querySelector<HTMLElement>('[data-autofocus]')?.focus({ preventScroll: true });
+      /* the panel itself can hold the initial focus, so a sheet that opens on its own never
+         paints a focus ring on a button the player has not reached for yet */
+      const first = el.querySelector<HTMLElement>('[data-autofocus]') ?? (el.matches('[data-autofocus]') ? el : null);
+      first?.focus({ preventScroll: true });
     },
     close() {
       if (!panel) return;
