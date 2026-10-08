@@ -1,6 +1,6 @@
 import './style.css';
 import {
-  COLS, apply, distField, newGame, pathLen, reachable, wallOk,
+  COLS, apply, ballById, ballOf, distField, newGame, pathLen, reachable, steps as teamSteps, wallOk,
   type Action, type GameState, type Player, type Pos, type Wall, type WallSpec,
 } from './rules';
 import { botAction, botThinkMs, type Difficulty } from './bot';
@@ -10,7 +10,8 @@ import { createRouter } from './router';
 import { createSheets } from './sheets';
 import { createMenu, type Menu } from './menu';
 import { createShop } from './shop';
-import { menuState, motionReduced, type Mode } from './settings';
+import { mountCoins, setBalance } from './coin';
+import { menuState, motionReduced } from './settings';
 import { onChange, recordGame, theme } from './storage';
 import { impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
@@ -122,13 +123,10 @@ const makeBot = (d: Difficulty): Opponent => ({
   think: (s) => new Promise((res) => setTimeout(() => res(botAction(s, d)), botThinkMs(d))),
 });
 
-let mode: Mode = menuState.mode === 'local' ? 'local' : 'bot';
 let difficulty: Difficulty = menuState.difficulty;
 let opponent: Opponent = makeBot(difficulty);
 
-/** Pass & Play hands both seats to humans, so the opponent is simply never asked. */
-const isHuman = (p: Player) => mode === 'local' || p === HUMAN;
-const wantsOpponent = () => mode === 'bot' && state.turn === BOT && state.winner === null;
+const wantsOpponent = () => state.turn === BOT && state.winner === null;
 
 const REASON = { overlap: 'Overlaps a wall', blocked: 'Blocks the path' };
 
@@ -141,7 +139,7 @@ function wallIssue(s: GameState, w: Wall): keyof typeof REASON {
     && (w.o === 'h' ? o.y === w.y && Math.abs(o.x - w.x) < 2 : o.x === w.x && Math.abs(o.y - w.y) < 2));
   if (clash) return 'overlap';
   const d = distField([...s.walls, w]);
-  return s.pawns.some((p) => d[p.r * COLS + p.c] < 0) ? 'blocked' : 'overlap';
+  return s.balls.some((b) => d[b.pos.r * COLS + b.pos.c] < 0) ? 'blocked' : 'overlap';
 }
 
 const renderer = createRenderer(canvas, { theme });
@@ -149,7 +147,9 @@ const confetti = createConfetti(confettiEl);
 const toVec = (p: Pos): Vec => ({ x: p.c + 0.5, y: p.r + 0.5 });
 
 let state: GameState = newGame();
-let balls: [Vec, Vec] = [toVec(state.pawns[0]), toVec(state.pawns[1])];
+/** Animated centres of each side's leading ball, in cell units — the UI still draws one per side. */
+const startVecs = (s: GameState): [Vec, Vec] => [toVec(ballOf(s, 0).pos), toVec(ballOf(s, 1).pos)];
+let balls: [Vec, Vec] = startVecs(state);
 let hints: Pos[] = [];
 let ghost: Ghost | null = null;                 // wall preview; armed = waiting for a confirm tap
 const marks: [Mark | null, Mark | null] = [null, null];
@@ -159,7 +159,7 @@ let gen = 0; // bumps on restart so stale bot replies are dropped
 let paused = false;
 const waiting: (() => void)[] = [];            // bot thinks parked by the pause sheet
 
-const canAct = () => state.winner === null && isHuman(state.turn) && !paused;
+const canAct = () => state.winner === null && state.turn === HUMAN && !paused;
 const clearGhost = () => { ghost = null; clearNote(); };
 
 /* one-time hint: lives in memory only, this app never persists game state */
@@ -182,18 +182,14 @@ function showOverlay() {
   const wallsNote = built ? ` ${built} wall${built === 1 ? '' : 's'} went up along the way.` : '';
   overlay.classList.toggle('win', won);
   overlay.classList.toggle('lose', !won);
-  if (mode === 'local') {
-    verdict.textContent = won ? 'Red wins!' : 'Blue wins!';
-    sub.textContent = (won ? 'Red' : 'Blue') + ' crossed the line first.' + wallsNote;
-  } else {
-    verdict.textContent = won ? 'You win!' : 'Bot wins';
-    sub.textContent = (won ? 'You crossed the line first.' : 'The bot reached FINISH first.') + wallsNote;
-  }
+  verdict.textContent = won ? 'You win!' : 'Bot wins';
+  sub.textContent = (won ? 'You crossed the line first.' : 'The bot reached FINISH first.') + wallsNote;
   overlay.hidden = false;
-  if ((mode === 'local' || won) && !motionReduced()) confetti.burst();
+  if (won && !motionReduced()) confetti.burst();
   /* one credit per finished race: showOverlay only runs once per game over */
-  const earned = recordGame({ mode, difficulty, won });
-  rewardN.textContent = `+${earned} coins`;
+  const earned = recordGame({ difficulty, won });
+  setBalance(rewardN, 0);                 // every payout counts up from zero
+  setBalance(rewardN, earned);
   reward.hidden = false;
   menuBtn.disabled = true;              // the panel already offers Play again and Menu
   again.focus({ preventScroll: true });
@@ -204,13 +200,9 @@ function ui() {
   const thinking = wantsOpponent() && !paused;
 
   if (state.winner !== null) {
-    statusText.textContent = mode === 'local'
-      ? (state.winner === HUMAN ? 'Red wins!' : 'Blue wins!')
-      : (state.winner === HUMAN ? 'You win!' : 'Opponent wins');
+    statusText.textContent = state.winner === HUMAN ? 'You win!' : 'Opponent wins';
   } else if (paused) {
     statusText.textContent = 'Paused';
-  } else if (mode === 'local') {
-    statusText.textContent = state.turn === HUMAN ? 'Red to move' : 'Blue to move';
   } else if (state.turn === HUMAN) {
     statusText.textContent = 'Your move';
   } else {
@@ -245,15 +237,22 @@ async function runOpponent() {
 
 function play(a: Action): boolean {
   const by = state.turn;
+  /* which ball is about to move, so the trail can start under it */
+  let from: Pos | null = null;
+  if (a.kind === 'move') {
+    const st = teamSteps(state, by).find((x) => x.to.c === a.to.c && x.to.r === a.to.r
+      && (a.ball === undefined || x.ball === a.ball));
+    from = st ? ballById(state, st.ball)?.pos ?? null : null;
+  }
   const next = apply(state, a);
   if (!next) return false;
-  if (a.kind === 'move') marks[by] = { kind: 'step', from: state.pawns[by], to: a.to };
+  if (a.kind === 'move' && from) marks[by] = { kind: 'step', from, to: a.to };
   else if (a.kind === 'wall') { marks[by] = { kind: 'wall', spec: a.wall }; impact('medium'); }
   state = next;
   ghost = null;
   clearNote();
   ui();
-  if (state.winner !== null) notify(mode === 'local' || state.winner === HUMAN ? 'success' : 'error');
+  if (state.winner !== null) notify(state.winner === HUMAN ? 'success' : 'error');
   else if (wantsOpponent()) void runOpponent();
   return true;
 }
@@ -261,7 +260,7 @@ function play(a: Action): boolean {
 function restart() {
   gen++;
   state = newGame();
-  balls = [toVec(state.pawns[0]), toVec(state.pawns[1])];
+  balls = startVecs(state);
   ghost = null;
   marks[0] = null; marks[1] = null;
   shownSteps[0] = -1; shownSteps[1] = -1;
@@ -277,15 +276,14 @@ function restart() {
 
 function paintNames() {
   const u = tgUser();
-  $('name-0').textContent = mode === 'local' ? 'RED' : (u?.first_name || u?.username || 'YOU').toUpperCase().slice(0, 14);
-  $('name-1').textContent = mode === 'local' ? 'BLUE' : 'BOT';
-  modeLabel.textContent = mode === 'local' ? 'Pass & Play' : `vs Bot · ${difficulty[0].toUpperCase()}${difficulty.slice(1)}`;
+  $('name-0').textContent = (u?.first_name || u?.username || 'YOU').toUpperCase().slice(0, 14);
+  $('name-1').textContent = 'BOT';
+  modeLabel.textContent = `vs Bot · ${difficulty[0].toUpperCase()}${difficulty.slice(1)}`;
 }
 
-function startGame(m: Mode, d: Difficulty) {
-  mode = m === 'local' ? 'local' : 'bot';
+function startGame(d: Difficulty) {
   difficulty = d;
-  if (mode === 'bot') opponent = makeBot(d);
+  opponent = makeBot(d);
   paused = false;
   restart();
   paintNames();
@@ -412,7 +410,8 @@ function frame(now: number) {
   last = now;
   const k = motionReduced() ? 1 : 1 - Math.exp(-dt * 14); // frame-rate independent lerp
   for (let i = 0; i < 2; i++) {
-    const tx = state.pawns[i].c + 0.5, ty = state.pawns[i].r + 0.5, b = balls[i];
+    const p = ballOf(state, i).pos;
+    const tx = p.c + 0.5, ty = p.r + 0.5, b = balls[i];
     b.x += (tx - b.x) * k;
     b.y += (ty - b.y) * k;
     if (Math.abs(tx - b.x) < 0.002) b.x = tx;
@@ -440,6 +439,7 @@ document.addEventListener('visibilitychange', syncLoop);
 
 /* ---------- boot ---------- */
 
+mountCoins();                              // every [data-coin] slot gets the shared gold coin
 menu = createMenu({ router, sheets, sheet: sheetById, start: startGame, onBack });
 const shop = createShop({ sheets, sheet: sheetById });
 paintNames();

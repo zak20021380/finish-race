@@ -2,17 +2,18 @@
  * menu.ts — everything around the board: home, mode select, settings and the two placeholders.
  * It holds no game logic; the only thing it decides is which race to ask main.ts to start.
  *
- * Home is the identity card, the wordmark and three ways to play — nothing else. Country and team
- * are asked for, not assumed: Telegram hands over a language, never a country, and there is no team
- * server yet, so both live in the save and both are editable from Profile as well as from Home.
+ * Home is the identity card, the wordmark and the ways to play — nothing else. Country and team
+ * live in the save: the country is picked only in Profile (the language may suggest a row, nothing
+ * is forced), and the team sheet is reachable from Home and Profile alike.
  */
 import { DIFFICULTIES, type Difficulty } from './bot';
-import { menuState, saveMenu, settings, setSetting, onSettings, type Mode, type Settings } from './settings';
+import { menuState, saveMenu, settings, setSetting, onSettings, type Settings } from './settings';
 import {
   createTeam, favouriteMode, joinTeam, KINDS, leaveTeam, levelInfo, myTeam, onChange, profile,
   setCountry, theme,
 } from './storage';
 import { createPreview, type Preview } from './render';
+import { setBalance } from './coin';
 import { flagOf, guessCountry, nameOf, search } from './countries';
 import { cleanCode, standings, YOU } from './teams';
 import type { CosKind } from './themes';
@@ -25,13 +26,13 @@ export interface MenuApi {
   sheets: Sheets;
   /** sheet ids come from the DOM so markup stays the single source of truth */
   sheet(id: string): HTMLElement | null;
-  start(mode: Mode, difficulty: Difficulty): void;
+  start(difficulty: Difficulty): void;
   onBack(): void;
 }
 
 export interface Menu {
   setRoute(id: string): void;
-  /** first launch: ask for the country once, or land on the team a `startapp=` invite named */
+  /** first launch: land on the team a `startapp=` invite named */
   afterStart(): void;
 }
 
@@ -250,8 +251,9 @@ export function createMenu(api: MenuApi): Menu {
     impact('light');
   }
 
-  /* ---- the two entry points: Home chips and the matching Profile rows ---- */
-  for (const id of ['country-chip', 'pf-country']) $(id).addEventListener('click', openCountry);
+  /* ---- the entry points: the Home country chip jumps to Profile, where the picker lives ---- */
+  $('country-chip').addEventListener('click', () => { impact('light'); api.router.go('profile'); });
+  $('pf-country').addEventListener('click', openCountry);
   for (const id of ['team-chip', 'pf-team']) $(id).addEventListener('click', openTeam);
 
   /* ---- the record, and what is worn: re-painted whenever the save changes ---- */
@@ -264,8 +266,8 @@ export function createMenu(api: MenuApi): Menu {
   const paintIdentity = () => {
     const lv = levelInfo();
     const t = myTeam();
-    $('p-coins').textContent = en(profile.coins);
-    $('pf-coins').textContent = en(profile.coins);
+    setBalance($('p-coins'), profile.coins);
+    setBalance($('pf-coins'), profile.coins);
     for (const id of ['p-level', 'pf-level']) $(id).textContent = String(lv.n);
     $('p-xp').textContent = `${lv.got}/${lv.need} XP`;
     $('pf-xp').textContent = `${lv.got}/${lv.need} XP`;
@@ -276,6 +278,7 @@ export function createMenu(api: MenuApi): Menu {
     bar.setAttribute('aria-valuetext', `Level ${lv.n}, ${lv.got} of ${lv.need} XP`);
 
     const c = profile.country;
+    $('country-chip').classList.toggle('unset', !c);
     $('country-name').textContent = c ? nameOf(c) : 'Add country';
     setFlag('country-flag', 'country-code', c ?? '');
     $('pf-country-v').textContent = c ? nameOf(c) : 'Not set';
@@ -294,8 +297,8 @@ export function createMenu(api: MenuApi): Menu {
     $('pf-best').textContent = en(s.best);
     $('pf-streak').textContent = en(s.streak);
     const fav = favouriteMode();
-    $('pf-fav').textContent = fav === 'local' ? 'Pass & Play' : fav === 'bot' ? 'vs Bot' : '—';
-    $('pf-fav-sub').textContent = s.games ? `${en(s.modes.bot ?? 0)} bot · ${en(s.modes.local ?? 0)} duo` : 'No races yet';
+    $('pf-fav').textContent = fav === 'bot' ? 'vs Bot' : '—';
+    $('pf-fav-sub').textContent = s.games ? `${en(s.modes.bot ?? 0)} bot races` : 'No races yet';
     if (pfScreen.hidden) return;                        // a hidden canvas has no width to lay out
     const t = theme();
     for (const k of KINDS) {
@@ -347,10 +350,10 @@ export function createMenu(api: MenuApi): Menu {
   for (const el of document.querySelectorAll<HTMLElement>('[data-start]')) {
     el.addEventListener('click', () => {
       if (el.getAttribute('aria-disabled') === 'true') return;   // Online: the badge is the answer
-      const mode = el.dataset.start as Mode;
+      if (el.dataset.start !== 'bot') return;                    // vs Bot is the only race that starts
       impact('light');
-      saveMenu({ mode });
-      api.start(mode, difficulty);
+      saveMenu({ mode: 'bot' });
+      api.start(difficulty);
     });
   }
   for (const el of document.querySelectorAll<HTMLElement>('[data-go]')) {
@@ -391,7 +394,6 @@ export function createMenu(api: MenuApi): Menu {
       }
     },
     afterStart() {
-      if (!profile.countryAsked && !profile.country) { openCountry(); return; }
       if (invite && !profile.teamId) openTeam();
     },
   };

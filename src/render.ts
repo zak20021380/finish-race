@@ -676,7 +676,11 @@ const SCENES: Record<PreviewKind, Scene> = {
 
 const sceneView = (s: Scene): View => ({
   state: {
-    pawns: [{ c: 0, r: s.rows - 1 }, { c: s.cols - 1, r: s.rows - 1 }],
+    teams: [{ balls: 1 }, { balls: 1 }],
+    balls: [
+      { id: 0, team: 0, owner: 0, pos: { c: 0, r: s.rows - 1 } },
+      { id: 1, team: 1, owner: 1, pos: { c: s.cols - 1, r: s.rows - 1 } },
+    ],
     walls: s.walls,
     turn: 0,
     winner: null,

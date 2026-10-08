@@ -75,7 +75,6 @@
   --coin: rgba(226, 166, 23, .16);
   --coin-line: rgba(160, 108, 8, .3);
   --coin-ink: #6b4704;
-  --coin-glyph: #8a5c06;
 
   /* ---- type scale: two reading levels (status > chips); the finish label is board furniture ---- */
   --t-1: clamp(0.9375rem, 0.885rem + .55vw, 1.0625rem);   /* status pill, card titles */
@@ -149,7 +148,6 @@ html.dark {
   --coin: rgba(234, 179, 8, .16);
   --coin-line: rgba(234, 179, 8, .34);
   --coin-ink: #f2c96e;
-  --coin-glyph: #e3b25a;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -564,7 +562,7 @@ html, body {
   font-variant-numeric: tabular-nums;
   animation: coin-pop .42s cubic-bezier(.2, 1.3, .5, 1);
 }
-.reward .ico { width: 1.2em; height: 1.2em; color: var(--coin-glyph); }
+.reward .coin { width: 1.2em; height: 1.2em; }
 .cta {
   appearance: none;
   border: 0;
@@ -593,6 +591,17 @@ html, body {
    ========================================================================== */
 
 .ico { width: 1.25em; height: 1.25em; flex: none; display: block; }
+/* the one coin: inline SVG from coin.ts, sized in ems so it tracks its host text */
+.coin { width: 1.15em; height: 1.15em; flex: none; display: block; }
+.coin .coin-sweep { opacity: 0; }
+.coin.sweep .coin-sweep { animation: coin-sweep .7s ease-out; }
+@keyframes coin-sweep {
+  0% { transform: translateX(0); opacity: 0; }
+  12% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: translateX(46px); opacity: 0; }
+}
+html.rm .coin.sweep .coin-sweep { animation: none; }
 
 /* ---- shared surfaces ---- */
 .p-card, .id-card, .m-card, .rows, .tabs, .mode, .tag-chip {
@@ -789,7 +798,7 @@ html, body {
   color: var(--coin-ink);
   font-variant-numeric: tabular-nums;
 }
-.id-coins .ico { width: 1.1em; height: 1.1em; color: var(--coin-glyph); }
+.id-coins .coin { width: 1.15em; height: 1.15em; }
 .id-chips { display: flex; gap: var(--s2); flex-wrap: nowrap; }
 .tag-chip {
   appearance: none;
@@ -829,6 +838,13 @@ html, body {
   font-weight: 800;
   color: var(--brand-ink);
   font-variant-numeric: tabular-nums;
+}
+/* no country yet: the chip is a quiet link into Profile, not a filled badge */
+.tag-chip.unset { color: var(--ink-soft); box-shadow: none; }
+.tag-chip.unset .tag-chip-t {
+  font-weight: 700;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
 }
 .flag, .flag-code { flex: none; line-height: 1; }
 .flag { font-size: 14px; }
@@ -1211,7 +1227,7 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.balance .ico { width: 1.15em; height: 1.15em; color: var(--coin-glyph); }
+.balance .coin { width: 1.15em; height: 1.15em; }
 .balance-l { font-size: var(--t-micro); font-weight: 700; letter-spacing: .02em; }
 .balance.bump { animation: coin-pop .4s cubic-bezier(.2, 1.3, .5, 1); }
 
@@ -1256,9 +1272,9 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   display: inline-flex; align-items: center; gap: 4px; min-width: 0;
   font-size: var(--t-3); font-weight: 800; color: var(--coin-ink); font-variant-numeric: tabular-nums;
 }
-.cos-price .ico { width: 1.15em; height: 1.15em; color: var(--coin-glyph); }
+.cos-price .coin { width: 1.15em; height: 1.15em; }
 .cos-price.free { color: var(--ink-soft); }
-.cos-price.free .ico { display: none; }
+.cos-price.free .coin { display: none; }
 .cos-btn {
   appearance: none;
   border: 0;
@@ -1296,7 +1312,7 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   box-shadow: inset 0 0 0 1px var(--hair-off);
   cursor: not-allowed;
 }
-.cos[data-state="short"] .cos-price, .cos[data-state="short"] .cos-price .ico { color: var(--danger); }
+.cos[data-state="short"] .cos-price { color: var(--danger); }
 .cos-note { margin: 0; font-size: var(--t-micro); font-weight: 700; color: var(--danger); }
 /* an odd last card takes the row and lies on its side, so the grid never leaves a hole */
 .cos.wide { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: var(--s3); }

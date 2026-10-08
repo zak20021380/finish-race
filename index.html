@@ -52,14 +52,6 @@
         </g>
         <circle cx="12" cy="3.2" r="1.5" fill="currentColor" />
       </symbol>
-      <symbol id="i-duo" viewBox="0 0 24 24">
-        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="9" cy="8.4" r="3.2" />
-          <path d="M3.6 19.6c0-3.1 2.4-5.1 5.4-5.1s5.4 2 5.4 5.1" />
-          <circle cx="17" cy="9.4" r="2.4" />
-          <path d="M15.6 14.6c2.7.2 4.8 2.1 4.8 4.7" />
-        </g>
-      </symbol>
       <symbol id="i-globe" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
           <circle cx="12" cy="12" r="8.4" />
@@ -85,11 +77,6 @@
           <circle cx="12" cy="8.4" r="3.7" />
           <path d="M4.9 20.2c0-3.6 3.1-5.9 7.1-5.9s7.1 2.3 7.1 5.9" />
         </g>
-      </symbol>
-      <symbol id="i-coin" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="8.6" fill="currentColor" opacity=".18" />
-        <circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.9" />
-        <circle cx="12" cy="12" r="4.4" fill="none" stroke="currentColor" stroke-width="1.7" />
       </symbol>
       <symbol id="i-search" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -143,7 +130,7 @@
             <div class="id-body">
               <div class="id-top">
                 <p class="id-name" id="p-name">Player</p>
-                <p class="id-coins"><svg class="ico" aria-hidden="true"><use href="#i-coin" /></svg><span id="p-coins">0</span></p>
+                <p class="id-coins"><span class="coin" data-coin aria-hidden="true"></span><span id="p-coins">0</span></p>
               </div>
               <div class="id-chips">
                 <button class="tag-chip" type="button" id="country-chip" aria-haspopup="dialog">
@@ -219,11 +206,6 @@
                 <span class="mode-t">vs Bot</span>
                 <span class="mode-s" id="mode-bot-sub">Normal</span>
               </button>
-              <button class="mode" type="button" data-start="local">
-                <svg class="ico" aria-hidden="true"><use href="#i-duo" /></svg>
-                <span class="mode-t">Pass &amp; Play</span>
-                <span class="mode-s">One device</span>
-              </button>
               <button class="mode off" type="button" data-start="online" aria-disabled="true">
                 <svg class="ico" aria-hidden="true"><use href="#i-globe" /></svg>
                 <span class="mode-t">Online</span>
@@ -259,15 +241,6 @@
               </div>
               <button class="btn btn-primary" type="button" data-start="bot">Start race</button>
             </article>
-
-            <button class="m-card flat" type="button" data-start="local">
-              <span class="m-ico blue" aria-hidden="true"><svg class="ico"><use href="#i-duo" /></svg></span>
-              <span class="m-txt">
-                <span class="m-h">Pass &amp; Play</span>
-                <span class="m-p">Two humans, one device. The turn label flips each move.</span>
-              </span>
-              <svg class="ico chev" aria-hidden="true"><use href="#i-next" /></svg>
-            </button>
 
             <button class="m-card flat off" type="button" data-start="online" aria-disabled="true">
               <span class="m-ico sky" aria-hidden="true"><svg class="ico"><use href="#i-globe" /></svg></span>
@@ -329,7 +302,7 @@
             </button>
             <h1 class="m-title" id="shop-title">Shop</h1>
             <p class="balance" id="shop-balance">
-              <svg class="ico" aria-hidden="true"><use href="#i-coin" /></svg><span id="shop-coins">0</span><span class="balance-l">coins</span>
+              <span class="coin" data-coin aria-hidden="true"></span><span id="shop-coins">0</span><span class="balance-l">coins</span>
             </p>
           </div>
 
@@ -390,7 +363,7 @@
             </button>
             <div class="row">
               <span class="row-txt"><span class="row-t">Coins</span><span class="row-s">Mock balance, won on the board</span></span>
-              <span class="row-v" id="pf-coins">0</span>
+              <span class="row-v pick-v"><span class="coin" data-coin aria-hidden="true"></span><span id="pf-coins">0</span></span>
             </div>
             <div class="row">
               <span class="row-txt"><span class="row-t">Win streak</span><span class="row-s">Bot races only</span></span>
@@ -469,7 +442,7 @@
               <p class="verdict" id="verdict">You win</p>
               <p class="sub" id="sub">You reached the finish first.</p>
               <p class="reward" id="reward" hidden>
-                <svg class="ico" aria-hidden="true"><use href="#i-coin" /></svg><span id="reward-n">+0 coins</span>
+                <span class="coin" data-coin aria-hidden="true"></span><span id="reward-n">0</span><span>coins</span>
               </p>
               <div class="end-actions">
                 <button class="cta" id="again" type="button">Play again</button>
@@ -514,7 +487,7 @@
       <!-- quit confirmation -->
       <section class="sheet" id="sheet-quit" hidden role="dialog" aria-modal="true" aria-labelledby="quit-title">
         <h2 class="sheet-t" id="quit-title">Leave the race?</h2>
-        <p class="sheet-p">The board resets and both balls go back to the start.</p>
+        <p class="sheet-p">The board resets and every ball goes back to the start.</p>
         <div class="sheet-actions split">
           <button class="btn btn-ghost" type="button" data-sheet-close data-autofocus>Stay</button>
           <button class="btn btn-danger" type="button" id="quit-yes">Quit</button>
@@ -545,18 +518,18 @@
       <!-- how to play -->
       <section class="sheet" id="sheet-help" hidden role="dialog" aria-modal="true" aria-labelledby="help-title">        <h2 class="sheet-t" id="help-title">How to play</h2>
         <ol class="help">
-          <li><b>Move</b> — tap a glowing dot beside your ball. One step per turn.</li>
+          <li><b>Move</b> — tap a glowing dot beside your ball. One step per turn; teams alternate and each may move any one of their balls.</li>
           <li><b>Wall</b> — tap a grid line, then tap the ghost wall again to place it. Every turn, no limit.</li>
-          <li><b>Legal only</b> — a wall must leave both balls a path to the line, and can’t share a stretch of line.</li>
-          <li><b>Finish</b> — the first ball onto the checkered row wins.</li>
+          <li><b>Legal only</b> — a wall must leave every ball a path to the line, and can’t share a stretch of line.</li>
+          <li><b>Finish</b> — the first ball of any team onto the checkered row wins.</li>
         </ol>
         <button class="btn btn-primary" type="button" data-sheet-close data-autofocus>Got it</button>
       </section>
 
-      <!-- country: Telegram never tells us, so the app asks once and the sheet is the answer -->
+      <!-- country: Profile owns the picker; the language may suggest a row, nothing is forced -->
       <section class="sheet tall" id="sheet-country" hidden tabindex="-1" data-autofocus role="dialog" aria-modal="true" aria-labelledby="country-title">
-        <h2 class="sheet-t" id="country-title">Where do you race from?</h2>
-        <p class="sheet-p">Telegram does not share your country, so we ask on the first launch. You can change it in Profile.</p>
+        <h2 class="sheet-t" id="country-title">Choose your country</h2>
+        <p class="sheet-p">Telegram never shares a country. Your language suggests a starting row — you make the pick, and you can change it any time.</p>
         <label class="field">
           <svg class="ico" aria-hidden="true"><use href="#i-search" /></svg>
           <input id="country-q" class="input" type="search" placeholder="Search countries" autocomplete="off"
@@ -565,7 +538,7 @@
         <ul class="pick" id="country-list" role="listbox" aria-label="Countries" data-scroll tabindex="0"></ul>
         <p class="pick-empty" id="country-empty" hidden role="status">No country matches that.</p>
         <div class="sheet-actions">
-          <button class="btn btn-ghost" type="button" data-sheet-close>Not now</button>
+          <button class="btn btn-ghost" type="button" data-sheet-close>Cancel</button>
         </div>
       </section>
 

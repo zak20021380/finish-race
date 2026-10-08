@@ -5,7 +5,7 @@
 import type { Difficulty } from './bot';
 import { readJson, writeJson } from './storage';
 
-export type Mode = 'bot' | 'local' | 'online';
+export type Mode = 'bot' | 'online';
 
 export interface Settings {
   /** placeholder until the app actually has audio */
@@ -31,7 +31,7 @@ try { motion.addEventListener('change', (e) => { systemReduce = e.matches; }); }
 export const settings: Settings = { ...DEFAULT_SETTINGS, ...readJson<Settings>(S_KEY) };
 export const menuState: MenuState = { ...DEFAULT_MENU, ...readJson<MenuState>(M_KEY) };
 if (menuState.difficulty !== 'easy' && menuState.difficulty !== 'hard') menuState.difficulty = 'normal';
-if (menuState.mode !== 'bot' && menuState.mode !== 'local') menuState.mode = 'bot';
+if (menuState.mode !== 'bot') menuState.mode = 'bot';
 
 const watchers: ((s: Settings) => void)[] = [];
 

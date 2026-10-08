@@ -2,9 +2,10 @@
  * countries.ts — the country picker's data, with no dependency and no network call.
  *
  * Telegram never tells us where a player is (`initData` has a `language_code`, not a country), so the
- * app asks once and remembers. Two details matter on real devices: flag emojis are not drawn on
- * Windows, so every flag has a two-letter code fallback; and the language hint is only a *preselect*,
- * never a silent answer — `pt` may be Brazil or Portugal, and the player is the one who decides.
+ * app lets the player pick one in Profile and remembers. Two details matter on real devices: flag
+ * emojis are not drawn on Windows, so every flag has a two-letter code fallback; and the language
+ * hint is only a *preselect*, never a silent answer — `pt` may be Brazil or Portugal, and the player
+ * is the one who decides.
  */
 
 /** ISO 3166-1 alpha-2 + English name. The code is also the flag: regional indicators are derived. */

@@ -9,6 +9,7 @@
 import { ITEMS, themeOf, type CosKind, type Item, type Theme } from './themes';
 import { createPreview, type Preview } from './render';
 import { buy, equip, isEquipped, onChange, owns, profile } from './storage';
+import { coinText, mountCoins, setBalance } from './coin';
 import { motionReduced, onSettings } from './settings';
 import { impact, notify } from './telegram';
 import type { Sheets } from './sheets';
@@ -24,12 +25,11 @@ export interface Shop {
 }
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-const en = (n: number) => n.toLocaleString('en-US');
 
 /** One card: preview, name, price, and the single button whose label carries the state. */
 const CARD = `<article class="cos"><canvas class="cos-pv" aria-hidden="true"></canvas>`
   + `<div class="cos-txt"><h3 class="cos-n"></h3><p class="cos-d"></p>`
-  + `<div class="cos-foot"><span class="cos-price"><svg class="ico" aria-hidden="true"><use href="#i-coin" /></svg><b></b></span>`
+  + `<div class="cos-foot"><span class="cos-price"><span class="coin" data-coin aria-hidden="true"></span><b></b></span>`
   + `<button class="cos-btn" type="button"></button></div>`
   + `<p class="cos-note" hidden></p></div></article>`;
 
@@ -107,7 +107,8 @@ export function createShop(api: ShopApi): Shop {
       // a starter item has no price to show, so it says what it is instead of "0"
       const price = el.querySelector<HTMLElement>('.cos-price')!;
       price.classList.toggle('free', item.price === 0);
-      price.querySelector('b')!.textContent = item.price ? en(item.price) : 'Starter';
+      price.querySelector('b')!.textContent = item.price ? coinText(item.price) : 'Starter';
+      mountCoins(el);
       btn.addEventListener('click', () => act(item));
       return { el, btn, note, item, pv: createPreview(canvas, item.kind, themeFor(item)) };
     });
@@ -130,10 +131,10 @@ export function createShop(api: ShopApi): Shop {
       if (s === 'equipped') c.btn.setAttribute('aria-current', 'true');
       else c.btn.removeAttribute('aria-current');
       c.note.hidden = s !== 'short';
-      if (s === 'short') c.note.textContent = `${en(c.item.price - profile.coins)} coins short`;
+      if (s === 'short') c.note.textContent = `${coinText(c.item.price - profile.coins)} coins short`;
       c.pv.setTheme(themeFor(c.item));
     }
-    coins.textContent = en(profile.coins);
+    setBalance(coins, profile.coins);
   }
 
   function celebrate() {
@@ -153,10 +154,10 @@ export function createShop(api: ShopApi): Shop {
     pending = it;
     $<HTMLElement>('buy-title').textContent = it.name;
     $<HTMLElement>('buy-desc').textContent = it.desc;
-    $<HTMLElement>('buy-price').textContent = en(it.price);
-    $<HTMLElement>('buy-have').textContent = en(profile.coins);
-    $<HTMLElement>('buy-after').textContent = en(profile.coins - it.price);
-    yes.textContent = `Buy for ${en(it.price)}`;
+    $<HTMLElement>('buy-price').textContent = coinText(it.price);
+    $<HTMLElement>('buy-have').textContent = coinText(profile.coins);
+    $<HTMLElement>('buy-after').textContent = coinText(profile.coins - it.price);
+    yes.textContent = `Buy for ${coinText(it.price)}`;
     const t = themeFor(it);
     if (!pvBuy) pvBuy = createPreview($<HTMLCanvasElement>('buy-pv'), it.kind, t);
     else pvBuy.setTheme(t);

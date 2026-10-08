@@ -22,13 +22,11 @@ provides one; every screen also has a visible Back button, and the race screen's
 button opens the same pause sheet.
 
 **Home** is the identity card (avatar, name, country, team, level progress, coins), the drawn
-DETOUR wordmark and the way to play: a big Play button into mode select, then three shortcuts —
-vs Bot (starts with the saved difficulty), Pass & Play, and Online as a badge rather than a button.
+DETOUR wordmark and the way to play: a big Play button into mode select, then shortcuts —
+vs Bot (starts with the saved difficulty) and Online as a badge rather than a button.
 
 - **vs Bot** — Easy / Normal / Hard: how often the bot walls, how far it looks ahead and how much
   it wanders (`src/bot.ts`).
-- **Pass & Play** — two humans on one device. Both seats are local, the turn label flips each move
-  and no opponent is ever asked.
 - **Online** — disabled, "Coming soon".
 - **Shop** — Balls / Walls / Boards. Every card carries a live miniature board painted by the race
   renderer itself, so a preview cannot disagree with the game. Buying spends coins, takes ownership
@@ -38,10 +36,10 @@ vs Bot (starts with the saved difficulty), Pass & Play, and Online as a badge ra
 
 ## Country
 
-Telegram hands over a `language_code`, never a country, so the app asks once: a bottom sheet with a
-searchable list (`src/countries.ts`), pre-scrolled to the country that language usually means. The
-answer is a two-letter ISO code in the save, editable from Profile, and dismissed with "Not now" if
-the player would rather not say — the question then never interrupts a launch again.
+Telegram hands over a `language_code`, never a country, so Profile owns the question: a bottom
+sheet with a searchable list (`src/countries.ts`), pre-scrolled to the country that language usually
+means — a suggestion only, nothing is forced. The answer is a two-letter ISO code in the save; while
+it is unset, the home chip is a quiet "Add country" link that jumps to Profile.
 
 Flags are regional-indicator pairs, which **Windows does not draw at all**. The app measures once
 and falls back to a two-letter code chip in the same slot, so the row reads on every platform.
@@ -81,7 +79,8 @@ authored later — can make the two sides look alike.
 ## Controls
 
 - **Move**: tap a highlighted dot. The chips show each side's shortest path to FINISH in steps.
-- **Walls are unlimited.** Each side may wall every turn; a wall only has to stay in bounds, not overlap another wall on the same line, and keep both pawns' path to FINISH open.
+- **Teams on the board**: every side races 1 to 3 balls (up to 3v3) and alternates turns; on its turn a team moves any ONE of its balls one cell, or places a wall. Balls — friendly or hostile — block, nothing jumps, and the first ball to the top row wins.
+- **Walls are unlimited.** Each team may wall every turn; a wall only has to stay in bounds, not overlap another wall on the same line, and keep every ball's path to FINISH open.
 - **Wall (touch)**: tap a grid line — a ghost wall appears — tap the ghost again to place it, or tap anywhere else to cancel. An illegal slot shows a red ghost, a warning buzz and the reason ("Blocks the path" / "Overlaps a wall").
 - **Wall (mouse)**: hover a grid line to preview, click once to place.
 - **Pause**: the menu button (or the Telegram BackButton) opens Resume / Restart / Quit to menu, with a confirm before quitting. The end-of-game panel offers Play again and Menu.
@@ -90,7 +89,10 @@ authored later — can make the two sides look alike.
 
 Every finished race pays: a win pays most, a loss still pays something, and a sharper bot pays more
 (`payout` in `src/storage.ts`). The amount is shown on the game-over panel and lands in the balance
-on Home and in the Shop. Coins are mock — nothing here touches a payment provider.
+on Home and in the Shop. Every coin mark is the same inline SVG from `src/coin.ts` — gold gradient,
+embossed rim, stamped "D" — and a balance change counts up with a shine sweep (both off under
+`prefers-reduced-motion`). Amounts use thousands separators and tabular numerals. Coins are mock —
+nothing here touches a payment provider.
 
 ## What is stored
 
@@ -121,14 +123,15 @@ Telegram only loads **HTTPS** URLs.
 
 | File | Role |
 | --- | --- |
-| `src/rules.ts` | Pure game logic: `GameState`, `doMove`, `doWall`, `reachable`, `wallOk`, `apply(state, action)` |
-| `src/bot.ts` | Local opponent (shortest path; walls only when it is level or behind and the wall costs 2+ steps) plus the Easy/Normal/Hard profiles |
+| `src/rules.ts` | Pure game logic: `GameState` (`teams`, `balls`, `turn`, `winner`), `newGame(sizes)` for 1–3 balls per team, `reachable`, `wallOk`, `apply(state, action)` |
+| `src/bot.ts` | Local opponent: moves the ball closest to FINISH, walls only when it is level or behind and the wall costs 2+ steps, plus the Easy/Normal/Hard profiles |
 | `src/themes.ts` | Every cosmetic as data: ball skins, wall styles, board themes, the fixed bot ramp and the red/blue guarantee |
 | `src/render.ts` | Canvas drawing (board, walls, ghosts, balls) from a `Theme`, `hitTest()` tap-target resolution, and `createPreview()` for the shop's miniature boards |
 | `src/confetti.ts` | Win burst: a fixed particle pool on its own canvas, no per-frame allocation |
 | `src/router.ts` | Screen stack + slide/fade transitions, back handling |
 | `src/sheets.ts` | Bottom sheets over a dimming scrim (pause, quit confirm, buy confirm, how to play, country, team) |
 | `src/storage.ts` | The save: versioned schema, the wrapped storage door, coins/owned/equipped/record, country, teams and the per-race payout |
+| `src/coin.ts` | The one gold coin SVG (gradient body, embossed rim, stamped D) and `setBalance()` — count-up + shine sweep, thousands separators |
 | `src/countries.ts` | ISO alpha-2 list, the picker's search, flag emoji + the Windows fallback, language → country preselect |
 | `src/teams.ts` | Team/roster shape (`code`, `startParam`, `chatId`), the seeded demo clubs, join by code and the standings |
 | `src/settings.ts` | The switches and the last mode/difficulty, on top of `storage.ts`; `motionReduced()` for CSS and canvas |

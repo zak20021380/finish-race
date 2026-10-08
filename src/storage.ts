@@ -66,10 +66,8 @@ export interface Save {
   owned: Record<CosKind, string[]>;
   equipped: Record<CosKind, string>;
   stats: Stats;
-  /** ISO 3166-1 alpha-2, or null until the player answers the first-launch question */
+  /** ISO 3166-1 alpha-2, or null until the player picks one in Profile */
   country: string | null;
-  /** the country sheet only interrupts the first launch, ever */
-  countryAsked: boolean;
   teamId: string | null;
   /** every team this device knows about: the seeded clubs plus any you created or joined */
   teams: Team[];
@@ -87,7 +85,6 @@ function fresh(): Save {
     equipped: { ...STARTERS },
     stats: { games: 0, wins: 0, losses: 0, streak: 0, best: 0, modes: {} },
     country: null,
-    countryAsked: false,
     teamId: null,
     teams: seedTeams(),
   };
@@ -132,14 +129,13 @@ function migrate(raw: Partial<Save> | null): Save {
     for (const key of ['games', 'wins', 'losses', 'streak', 'best'] as const) {
       if (whole(st[key])) s.stats[key] = Math.max(0, Math.floor(st[key] as number));
     }
-    for (const m of ['bot', 'local', 'online'] as const) {
+    for (const m of ['bot', 'online'] as const) {
       if (whole(st.modes?.[m])) s.stats.modes[m] = Math.max(0, Math.floor(st.modes![m] as number));
     }
   }
   s.stats.best = Math.max(s.stats.best, s.stats.streak);
 
   if (knownCountry(raw.country ?? '')) s.country = (raw.country as string).toUpperCase();
-  if (typeof raw.countryAsked === 'boolean') s.countryAsked = raw.countryAsked;
 
   const teams = Array.isArray(raw.teams) ? raw.teams.filter(teamOk).slice(0, 40) : [];
   if (teams.length) s.teams = teams;
@@ -206,30 +202,23 @@ export function buy(kind: CosKind, id: string, price: number): BuyResult {
 /** A sharper bot is worth more because beating it says more. A loss still pays something. */
 const WIN: Record<Difficulty, number> = { easy: 40, normal: 65, hard: 100 };
 const LOSS: Record<Difficulty, number> = { easy: 12, normal: 18, hard: 25 };
-const PASS_PLAY = 20;
 
-export function payout(r: { mode: Mode; difficulty: Difficulty; won: boolean }): number {
-  if (r.mode === 'local') return PASS_PLAY;
+export function payout(r: { difficulty: Difficulty; won: boolean }): number {
   return (r.won ? WIN : LOSS)[r.difficulty];
 }
 
-/**
- * Settles one finished race: the tally, the streak and the wallet. Pass & Play has no "you", so it
- * counts the game and pays, but wins and losses stay the bot races' business.
- */
-export function recordGame(r: { mode: Mode; difficulty: Difficulty; won: boolean }): number {
+/** Settles one finished race: the tally, the streak and the wallet. */
+export function recordGame(r: { difficulty: Difficulty; won: boolean }): number {
   const s = profile.stats;
   s.games++;
-  s.modes[r.mode] = (s.modes[r.mode] ?? 0) + 1;
-  if (r.mode !== 'local') {
-    if (r.won) {
-      s.wins++;
-      s.streak++;
-      s.best = Math.max(s.best, s.streak);
-    } else {
-      s.losses++;
-      s.streak = 0;
-    }
+  s.modes.bot = (s.modes.bot ?? 0) + 1;
+  if (r.won) {
+    s.wins++;
+    s.streak++;
+    s.best = Math.max(s.best, s.streak);
+  } else {
+    s.losses++;
+    s.streak = 0;
   }
   const coins = payout(r);
   profile.coins += coins;
@@ -239,8 +228,7 @@ export function recordGame(r: { mode: Mode; difficulty: Difficulty; won: boolean
 
 /** The mode raced most, for the profile card. */
 export function favouriteMode(): Mode | null {
-  const bot = profile.stats.modes.bot ?? 0, local = profile.stats.modes.local ?? 0;
-  return bot === local ? (bot ? 'bot' : null) : bot > local ? 'bot' : 'local';
+  return (profile.stats.modes.bot ?? 0) > 0 ? 'bot' : null;
 }
 
 /* ---------- identity: level, country, team ---------- */
@@ -257,7 +245,6 @@ export function levelInfo() {
 
 export function setCountry(code: string | null) {
   profile.country = code ? code.toUpperCase() : null;
-  profile.countryAsked = true;
   flush();
 }
 

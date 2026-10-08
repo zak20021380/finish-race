@@ -1,11 +1,11 @@
 /**
  * bot.ts — local stand-in for a remote opponent.
- * Walks the shortest path to FINISH and walls only when it is worth the wait.
- * Difficulty decides how often it walls, how far it looks ahead and how much it wanders —
+ * Works for any team size: it moves the ball closest to FINISH and walls only when it is worth
+ * the wait. Difficulty decides how often it walls, how far it looks ahead and how much it wanders —
  * never the anti-stalemate invariant below, which every level obeys.
  */
 import {
-  COLS, allWalls, distField, doWall, other, pathLen, reachable,
+  COLS, allWalls, ballById, ballPath, distField, doWall, nextTeam, pathLen, steps,
   type Action, type GameState, type Pos, type Wall,
 } from './rules';
 
@@ -41,7 +41,7 @@ export function botThinkMs(d: Difficulty): number {
  */
 export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Action {
   const p = PROFILES[difficulty];
-  const me = s.turn, foe = other(me);
+  const me = s.turn, foe = nextTeam(s, me);
   const myD = pathLen(s, me), foeD = pathLen(s, foe);
 
   if (foeD <= myD && Math.random() < p.wallRate) {
@@ -62,14 +62,27 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
     if (best) return { kind: 'wall', wall: best };
   }
 
-  const moves = reachable(s, me);
-  if (moves.length) {
-    if (p.noise > 0 && Math.random() < p.noise) return { kind: 'move', to: moves[(Math.random() * moves.length) | 0] };
+  const mySteps = steps(s, me);
+  if (mySteps.length) {
+    if (p.noise > 0 && Math.random() < p.noise) {
+      const st = mySteps[(Math.random() * mySteps.length) | 0];
+      return { kind: 'move', ball: st.ball, to: st.to };
+    }
     const d = distField(s.walls);
     const score = (q: Pos) => { const v = d[q.r * COLS + q.c]; return v < 0 ? 999 : v; };
-    const min = Math.min(...moves.map(score));
-    const pool = moves.filter((m) => score(m) === min);
-    return { kind: 'move', to: pool[(Math.random() * pool.length) | 0] };
+    const min = Math.min(...mySteps.map((st) => score(st.to)));
+    // among the cells that gain the most ground, play the ball that is already closest to the line
+    const pool = mySteps.filter((st) => score(st.to) === min);
+    const near = new Map<number, number>();
+    for (const st of pool) {
+      if (near.has(st.ball)) continue;
+      const b = ballById(s, st.ball);
+      if (b) near.set(st.ball, ballPath(s, b));
+    }
+    const lead = Math.min(...near.values());
+    const leadPool = pool.filter((st) => near.get(st.ball) === lead);
+    const pick = leadPool[(Math.random() * leadPool.length) | 0];
+    return { kind: 'move', ball: pick.ball, to: pick.to };
   }
 
   for (const w of allWalls(me)) if (doWall(s, w)) return { kind: 'wall', wall: w };
