@@ -90,6 +90,9 @@
       <symbol id="i-plus" viewBox="0 0 24 24">
         <path d="M12 5.4v13.2M5.4 12h13.2" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" />
       </symbol>
+      <symbol id="i-minus" viewBox="0 0 24 24">
+        <path d="M5.4 12h13.2" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" />
+      </symbol>
       <symbol id="i-users" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="8" r="3.1" />
@@ -242,6 +245,24 @@
               <button class="btn btn-primary" type="button" data-start="bot">Start race</button>
             </article>
 
+            <article class="m-card">
+              <div class="m-row">
+                <span class="m-ico" aria-hidden="true"><svg class="ico"><use href="#i-users" /></svg></span>
+                <div class="m-txt">
+                  <h2>Teams</h2>
+                  <p>Two sides, up to three balls each. Any one of your balls may move on your turn.</p>
+                </div>
+              </div>
+              <div class="preset-row" role="group" aria-label="Team presets">
+                <button class="preset" type="button" data-preset="2,2"><b>2v2</b><span>Two each</span></button>
+                <button class="preset" type="button" data-preset="3,3"><b>3v3</b><span>Three each</span></button>
+                <button class="preset" type="button" data-preset="2,1"><b>2v1</b><span>You up one</span></button>
+              </div>
+              <button class="btn btn-ghost" type="button" data-go="custom">
+                <svg class="ico" aria-hidden="true"><use href="#i-tune" /></svg><span>Custom teams</span>
+              </button>
+            </article>
+
             <button class="m-card flat off" type="button" data-start="online" aria-disabled="true">
               <span class="m-ico sky" aria-hidden="true"><svg class="ico"><use href="#i-globe" /></svg></span>
               <span class="m-txt">
@@ -255,6 +276,63 @@
           <button class="link link-row" type="button" id="help-btn" aria-haspopup="dialog">
             <svg class="ico" aria-hidden="true"><use href="#i-help" /></svg><span>How to play</span>
           </button>
+        </section>
+
+        <!-- ---------------- custom teams ---------------- -->
+        <section class="screen menu" id="s-custom" data-screen="custom" tabindex="-1" hidden aria-labelledby="custom-title">
+          <div class="m-head">
+            <button class="icon-btn" type="button" data-back aria-label="Back to game mode">
+              <svg class="ico" aria-hidden="true"><use href="#i-back" /></svg>
+            </button>
+            <h1 class="m-title" id="custom-title">Custom teams</h1>
+            <span class="m-head-pad" aria-hidden="true"></span>
+          </div>
+
+          <div class="c-list">
+            <div class="stepper">
+              <span class="stepper-t">
+                <i class="swatch" id="swatch-0" aria-hidden="true"></i>
+                <span class="stepper-l">Your balls</span>
+              </span>
+              <span class="stepper-c">
+                <button class="step-b" type="button" data-team="0" data-step="-1" aria-label="One fewer of your balls">
+                  <svg class="ico" aria-hidden="true"><use href="#i-minus" /></svg>
+                </button>
+                <output class="step-n" id="step-0">2</output>
+                <button class="step-b" type="button" data-team="0" data-step="1" aria-label="One more of your balls">
+                  <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>
+                </button>
+              </span>
+            </div>
+
+            <div class="stepper">
+              <span class="stepper-t">
+                <i class="swatch" id="swatch-1" aria-hidden="true"></i>
+                <span class="stepper-l">Bot balls</span>
+              </span>
+              <span class="stepper-c">
+                <button class="step-b" type="button" data-team="1" data-step="-1" aria-label="One fewer of the bot's balls">
+                  <svg class="ico" aria-hidden="true"><use href="#i-minus" /></svg>
+                </button>
+                <output class="step-n" id="step-1">2</output>
+                <button class="step-b" type="button" data-team="1" data-step="1" aria-label="One more of the bot's balls">
+                  <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>
+                </button>
+              </span>
+            </div>
+
+            <div class="seg" role="group" aria-label="Bot difficulty">
+              <button class="seg-b" type="button" data-diff="easy" aria-pressed="false">Easy</button>
+              <button class="seg-b" type="button" data-diff="normal" aria-pressed="true">Normal</button>
+              <button class="seg-b" type="button" data-diff="hard" aria-pressed="false">Hard</button>
+            </div>
+          </div>
+
+          <div class="team-pv">
+            <canvas id="custom-pv" role="img" aria-label="Board preview: where each side's balls start"></canvas>
+          </div>
+          <p class="team-pv-t" id="custom-tip"></p>
+          <button class="btn btn-primary" type="button" id="custom-start">Start race</button>
         </section>
 
         <!-- ---------------- settings ---------------- -->
@@ -410,7 +488,7 @@
 
                 <!-- one-time hint -->
                 <div class="hint" id="hint" hidden>
-                  <span class="hint-text">Tap a grid line to place a wall</span>
+                  <span class="hint-text">Tap one of your balls, then a dot to move it</span>
                   <button class="hint-x" id="hint-x" type="button" aria-label="Dismiss hint">&times;</button>
                 </div>
               </div>
@@ -517,12 +595,12 @@
 
       <!-- how to play -->
       <section class="sheet" id="sheet-help" hidden role="dialog" aria-modal="true" aria-labelledby="help-title">        <h2 class="sheet-t" id="help-title">How to play</h2>
-        <ol class="help">
-          <li><b>Move</b> — tap a glowing dot beside your ball. One step per turn; teams alternate and each may move any one of their balls.</li>
-          <li><b>Wall</b> — tap a grid line, then tap the ghost wall again to place it. Every turn, no limit.</li>
-          <li><b>Legal only</b> — a wall must leave every ball a path to the line, and can’t share a stretch of line.</li>
-          <li><b>Finish</b> — the first ball of any team onto the checkered row wins.</li>
-        </ol>
+          <ol class="help">
+            <li><b>Move</b> — tap one of your balls, then tap a glowing dot beside it. One step per turn; teams alternate and each may move any one of their balls.</li>
+            <li><b>Wall</b> — tap a grid line, then tap the ghost wall again to place it. Every turn, no limit.</li>
+            <li><b>Legal only</b> — a wall must leave every ball a path to the line, and can't share a stretch of line.</li>
+            <li><b>Finish</b> — the first ball of any team onto the checkered row wins.</li>
+          </ol>
         <button class="btn btn-primary" type="button" data-sheet-close data-autofocus>Got it</button>
       </section>
 

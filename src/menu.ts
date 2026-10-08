@@ -12,11 +12,12 @@ import {
   createTeam, favouriteMode, joinTeam, KINDS, leaveTeam, levelInfo, myTeam, onChange, profile,
   setCountry, theme,
 } from './storage';
-import { createPreview, type Preview } from './render';
+import { MAX_BALLS, newGame } from './rules';
+import { createPreview, createRenderer, type Preview, type View } from './render';
 import { setBalance } from './coin';
 import { flagOf, guessCountry, nameOf, search } from './countries';
 import { cleanCode, standings, YOU } from './teams';
-import type { CosKind } from './themes';
+import { BOT_RAMP, type CosKind } from './themes';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
 import { impact, languageCode, notify, startParam, tgUser } from './telegram';
@@ -26,7 +27,7 @@ export interface MenuApi {
   sheets: Sheets;
   /** sheet ids come from the DOM so markup stays the single source of truth */
   sheet(id: string): HTMLElement | null;
-  start(difficulty: Difficulty): void;
+  start(setup: RaceSetup): void;
   onBack(): void;
 }
 
@@ -35,6 +36,9 @@ export interface Menu {
   /** first launch: land on the team a `startapp=` invite named */
   afterStart(): void;
 }
+
+/** A race to start: how sharp the opponent is, and how many balls each side fields. */
+export interface RaceSetup { difficulty: Difficulty; sizes: [number, number] }
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const en = (n: number) => n.toLocaleString('en-US');
@@ -318,9 +322,13 @@ export function createMenu(api: MenuApi): Menu {
 
   /* ---- difficulty: Home's vs Bot card says what Play will start with ---- */
   let difficulty: Difficulty = menuState.difficulty;
+  const paintBotSub = () => {
+    const cap = difficulty[0].toUpperCase() + difficulty.slice(1);
+    $('mode-bot-sub').textContent = `${cap} · ${menuState.sizes[0]}v${menuState.sizes[1]}`;
+  };
   const paintDiff = () => {
     for (const b of segs) b.setAttribute('aria-pressed', String(b.dataset.diff === difficulty));
-    $('mode-bot-sub').textContent = difficulty[0].toUpperCase() + difficulty.slice(1);
+    paintBotSub();
   };
   for (const b of segs) {
     b.addEventListener('click', () => {
@@ -332,6 +340,79 @@ export function createMenu(api: MenuApi): Menu {
       impact('light');
     });
   }
+
+  /* ---- custom teams: two steppers, the same difficulty, a live board preview, Start ---- */
+  const customScreen = $<HTMLElement>('s-custom');
+  const customSteps = [$<HTMLElement>('step-0'), $<HTMLElement>('step-1')];
+  const customBtns = [...document.querySelectorAll<HTMLButtonElement>('.step-b')];
+  const customPv = $<HTMLCanvasElement>('custom-pv');
+  const customTip = $<HTMLElement>('custom-tip');
+  const customSwatch = [$<HTMLElement>('swatch-0'), $<HTMLElement>('swatch-1')];
+  let custom: [number, number] = [...menuState.sizes];
+  let teamPv: ReturnType<typeof createRenderer> | null = null;
+  let customDrawn = false;
+
+  /**
+   * The starting positions, painted by the race's own renderer rather than a picture of one —
+   * the same board the race will draw, with the balls already spread where they will start.
+   */
+  function paintCustomPv() {
+    if (customScreen.hidden || !customDrawn) return;      // a hidden canvas has no width to lay out
+    if (!teamPv) teamPv = createRenderer(customPv, { theme });
+    teamPv.setTheme(theme());
+    teamPv.resize();
+    const s = newGame(custom);
+    const v: View = {
+      state: s,
+      balls: s.balls.map((b) => ({ pos: { x: b.pos.c + 0.5, y: b.pos.r + 0.5 }, team: b.team, id: b.id, sel: false })),
+      hints: [], ghost: null, last: [null, null], thinking: null,
+    };
+    const t = performance.now();
+    teamPv.draw(v, t);
+    teamPv.draw(v, t + 600);             // settle the pop-in clocks past their first frame
+  }
+
+  /** Each side's colour family, taken from the same data the board draws with. */
+  const paintSwatches = () => {
+    customSwatch[0].style.setProperty('--tint', theme().ball.ramp.mid);
+    customSwatch[1].style.setProperty('--tint', BOT_RAMP.mid);
+  };
+
+  function paintCustom() {
+    for (const t of [0, 1] as const) {
+      customSteps[t].textContent = String(custom[t]);
+      for (const b of customBtns) {
+        if (Number(b.dataset.team) !== t) continue;
+        b.disabled = Number(b.dataset.step) < 0 ? custom[t] <= 1 : custom[t] >= MAX_BALLS;
+      }
+    }
+    const n = custom[0] + custom[1];
+    customTip.textContent = `${custom[0]}v${custom[1]} · ${n} ball${n === 1 ? '' : 's'} on the board, first to the top row wins`;
+    paintCustomPv();
+  }
+
+  function nudge(team: 0 | 1, step: number) {
+    const next = Math.max(1, Math.min(MAX_BALLS, custom[team] + step));
+    if (next === custom[team]) return;
+    custom[team] = next;
+    saveMenu({ sizes: [...custom] });
+    paintBotSub();
+    impact('light');
+    paintCustom();
+  }
+
+  for (const b of customBtns) {
+    b.addEventListener('click', () => nudge(Number(b.dataset.team) as 0 | 1, Number(b.dataset.step)));
+  }
+
+  $('custom-start').addEventListener('click', () => {
+    impact('light');
+    saveMenu({ mode: 'bot', sizes: [...custom] });
+    api.start({ difficulty, sizes: [...custom] });
+  });
+
+  new ResizeObserver(() => paintCustomPv()).observe(customScreen);
+  onChange(paintSwatches);
 
   /* ---- settings switches ---- */
   const paintSettings = () => {
@@ -347,13 +428,23 @@ export function createMenu(api: MenuApi): Menu {
   onSettings(paintSettings);
 
   /* ---- mode cards ---- */
+  /** vs Bot races the last configuration saved; the Teams row and the presets pick their own sizes. */
   for (const el of document.querySelectorAll<HTMLElement>('[data-start]')) {
     el.addEventListener('click', () => {
       if (el.getAttribute('aria-disabled') === 'true') return;   // Online: the badge is the answer
       if (el.dataset.start !== 'bot') return;                    // vs Bot is the only race that starts
       impact('light');
       saveMenu({ mode: 'bot' });
-      api.start(difficulty);
+      api.start({ difficulty, sizes: [...menuState.sizes] });
+    });
+  }
+  for (const el of document.querySelectorAll<HTMLElement>('[data-preset]')) {
+    el.addEventListener('click', () => {
+      const [a, b] = (el.dataset.preset ?? '').split(',').map(Number);
+      if (!a || !b) return;
+      impact('light');
+      saveMenu({ mode: 'bot', sizes: [a, b] });
+      api.start({ difficulty, sizes: [a, b] });
     });
   }
   for (const el of document.querySelectorAll<HTMLElement>('[data-go]')) {
@@ -374,6 +465,8 @@ export function createMenu(api: MenuApi): Menu {
 
   paintDiff();
   paintSettings();
+  paintSwatches();
+  paintCustom();
 
   /** A `startapp=team-XXXX` link pre-fills the join field, so an invite lands somewhere useful. */
   const invite = /^team-([a-z0-9]{1,5})$/i.exec(startParam());
@@ -386,7 +479,12 @@ export function createMenu(api: MenuApi): Menu {
     setRoute(id) {
       tabbar.hidden = id === 'game';
       if (id === 'profile') paintProfile();       // the equipped row is only laid out once it is showing
-      const active = id === 'home' || id === 'modes' ? 'modes' : id;
+      if (id === 'custom') {                      // the preview is the same board, smaller
+        custom = [...menuState.sizes];
+        customDrawn = true;
+        paintCustom();
+      }
+      const active = id === 'home' || id === 'modes' || id === 'custom' ? 'modes' : id;
       for (const t of tabs) {
         const on = t.dataset.tab === active;
         if (on) t.setAttribute('aria-current', 'page');

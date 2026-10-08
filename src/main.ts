@@ -1,10 +1,10 @@
 import './style.css';
 import {
-  COLS, apply, ballById, ballOf, distField, newGame, pathLen, reachable, steps as teamSteps, wallOk,
+  COLS, apply, ballById, distField, newGame, pathLen, reachableBall, steps as teamSteps, wallOk,
   type Action, type GameState, type Player, type Pos, type Wall, type WallSpec,
 } from './rules';
 import { botAction, botThinkMs, type Difficulty } from './bot';
-import { createRenderer, hitTest, type Ghost, type Mark, type Vec, type View } from './render';
+import { createRenderer, hitTest, type BallView, type Ghost, type Mark, type Vec, type View } from './render';
 import { createConfetti } from './confetti';
 import { createRouter } from './router';
 import { createSheets } from './sheets';
@@ -113,9 +113,12 @@ function onBack() {
 
 /* ---------- game ---------- */
 
+/** You are seat 0; every other seat is the machine. */
 const HUMAN = 0 as const;
 const BOT = 1 as const;
-const PLAYERS: Player[] = [0, 1];
+/** The two seats that race, and the two seats the footer shows. */
+const SEATS: Player[] = [HUMAN, BOT];
+const TEAM_NAME: Record<number, string> = { [HUMAN]: 'You', [BOT]: 'Bot' };
 
 /** Swap this for a network-backed implementation to go multiplayer. */
 interface Opponent { think(s: GameState): Promise<Action> }
@@ -124,9 +127,10 @@ const makeBot = (d: Difficulty): Opponent => ({
 });
 
 let difficulty: Difficulty = menuState.difficulty;
+let sizes: [number, number] = [...menuState.sizes];
 let opponent: Opponent = makeBot(difficulty);
 
-const wantsOpponent = () => state.turn === BOT && state.winner === null;
+const wantsOpponent = () => state.turn !== HUMAN && state.winner === null;
 
 const REASON = { overlap: 'Overlaps a wall', blocked: 'Blocks the path' };
 
@@ -146,21 +150,43 @@ const renderer = createRenderer(canvas, { theme });
 const confetti = createConfetti(confettiEl);
 const toVec = (p: Pos): Vec => ({ x: p.c + 0.5, y: p.r + 0.5 });
 
-let state: GameState = newGame();
-/** Animated centres of each side's leading ball, in cell units — the UI still draws one per side. */
-const startVecs = (s: GameState): [Vec, Vec] => [toVec(ballOf(s, 0).pos), toVec(ballOf(s, 1).pos)];
-let balls: [Vec, Vec] = startVecs(state);
+let state: GameState = newGame(sizes);
+/**
+ * Every ball the renderer draws, in state order, with the animated centre under it. The entries
+ * survive across frames and restarts reset them, so the frame loop never allocates.
+ */
+const ballViews: BallView[] = [];
+/** The ball the player picked up, by id — only its legal cells are drawn as dots. */
+let selected: number | null = null;
 let hints: Pos[] = [];
 let ghost: Ghost | null = null;                 // wall preview; armed = waiting for a confirm tap
-const marks: [Mark | null, Mark | null] = [null, null];
+const marks: (Mark | null)[] = [null, null];
 /** Reused every frame: the loop must not allocate. */
-const view: View = { state, balls, hints, ghost, last: marks, thinking: false };
+const view: View = { state, balls: ballViews, hints, ghost, last: marks, thinking: null };
 let gen = 0; // bumps on restart so stale bot replies are dropped
 let paused = false;
 const waiting: (() => void)[] = [];            // bot thinks parked by the pause sheet
 
 const canAct = () => state.winner === null && state.turn === HUMAN && !paused;
 const clearGhost = () => { ghost = null; clearNote(); };
+
+/** Brings the drawn ball list into step with the state; existing entries are reused as they are. */
+function syncBalls() {
+  while (ballViews.length > state.balls.length) ballViews.pop();
+  for (let i = 0; i < state.balls.length; i++) {
+    const b = state.balls[i];
+    const v = ballViews[i];
+    if (v) { v.team = b.team; v.id = b.id; }
+    else ballViews.push({ pos: toVec(b.pos), team: b.team, id: b.id, sel: false });
+  }
+}
+
+/** Picks up one of your balls — or puts it back down, if it was already the chosen one. */
+function pick(id: number | null) {
+  selected = id;
+  clearGhost();
+  ui();                     // the status says what to do next, and only that ball's dots light up
+}
 
 /* one-time hint: lives in memory only, this app never persists game state */
 let hintClosed = false;
@@ -182,8 +208,8 @@ function showOverlay() {
   const wallsNote = built ? ` ${built} wall${built === 1 ? '' : 's'} went up along the way.` : '';
   overlay.classList.toggle('win', won);
   overlay.classList.toggle('lose', !won);
-  verdict.textContent = won ? 'You win!' : 'Bot wins';
-  sub.textContent = (won ? 'You crossed the line first.' : 'The bot reached FINISH first.') + wallsNote;
+  verdict.textContent = `${TEAM_NAME[state.winner ?? HUMAN]} win${won ? '' : 's'}`;
+  sub.textContent = (won ? 'Your team crossed the line first.' : 'The bot reached FINISH first.') + wallsNote;
   overlay.hidden = false;
   if (won && !motionReduced()) confetti.burst();
   /* one credit per finished race: showOverlay only runs once per game over */
@@ -196,23 +222,26 @@ function showOverlay() {
 }
 
 function ui() {
-  hints = canAct() ? reachable(state, state.turn) : [];
+  /* a pick that no longer belongs to you, or to a ball that is gone, is dropped here */
+  if (selected !== null && (state.winner !== null || state.turn !== HUMAN
+    || !state.balls.some((b) => b.id === selected))) selected = null;
+  hints = canAct() && selected !== null ? reachableBall(state, selected) : [];
   const thinking = wantsOpponent() && !paused;
 
   if (state.winner !== null) {
-    statusText.textContent = state.winner === HUMAN ? 'You win!' : 'Opponent wins';
+    statusText.textContent = `${TEAM_NAME[state.winner]} win${state.winner === HUMAN ? '' : 's'}`;
   } else if (paused) {
     statusText.textContent = 'Paused';
   } else if (state.turn === HUMAN) {
-    statusText.textContent = 'Your move';
+    statusText.textContent = selected === null ? 'Pick one of your balls' : 'Your move';
   } else {
-    statusText.textContent = 'Opponent is thinking';
+    statusText.textContent = `${TEAM_NAME[state.turn]} is thinking`;
   }
   dots.classList.toggle('on', thinking);
 
-  for (const p of PLAYERS) {
+  for (const p of SEATS) {
     chips[p].classList.toggle('active', state.winner === null && state.turn === p && !paused);
-    chips[p].classList.toggle('thinking', thinking && p === BOT);
+    chips[p].classList.toggle('thinking', thinking && p === state.turn);
     setSteps(p, pathLen(state, p));
   }
 
@@ -250,6 +279,7 @@ function play(a: Action): boolean {
   else if (a.kind === 'wall') { marks[by] = { kind: 'wall', spec: a.wall }; impact('medium'); }
   state = next;
   ghost = null;
+  selected = null;         // the turn is over: the next pick is a fresh one
   clearNote();
   ui();
   if (state.winner !== null) notify(state.winner === HUMAN ? 'success' : 'error');
@@ -259,8 +289,10 @@ function play(a: Action): boolean {
 
 function restart() {
   gen++;
-  state = newGame();
-  balls = startVecs(state);
+  state = newGame(sizes);
+  ballViews.length = 0;
+  syncBalls();
+  selected = null;
   ghost = null;
   marks[0] = null; marks[1] = null;
   shownSteps[0] = -1; shownSteps[1] = -1;
@@ -278,12 +310,13 @@ function paintNames() {
   const u = tgUser();
   $('name-0').textContent = (u?.first_name || u?.username || 'YOU').toUpperCase().slice(0, 14);
   $('name-1').textContent = 'BOT';
-  modeLabel.textContent = `vs Bot · ${difficulty[0].toUpperCase()}${difficulty.slice(1)}`;
+  modeLabel.textContent = `vs Bot · ${sizes[0]}v${sizes[1]} · ${difficulty[0].toUpperCase()}${difficulty.slice(1)}`;
 }
 
-function startGame(d: Difficulty) {
-  difficulty = d;
-  opponent = makeBot(d);
+function startGame(setup: { difficulty: Difficulty; sizes: [number, number] }) {
+  difficulty = setup.difficulty;
+  sizes = setup.sizes;
+  opponent = makeBot(difficulty);
   paused = false;
   restart();
   paintNames();
@@ -325,15 +358,25 @@ function refuse(w: Wall) {
   notify('warning');
 }
 
-/** Touch: tap a grid line to arm a ghost, tap the ghost again to place it. */
+/** Every ball on the board, in cell coordinates, for the hit-test. */
+const cells = () => state.balls.map((b) => ({ id: b.id, team: b.team, c: b.pos.c, r: b.pos.r }));
+
+/** Touch: tap one of your balls to pick it up, then a dot to move it; wall lines stay two-tap. */
 function onTouch(p: Vec) {
   const hit = hitTest(renderer.layout(), p.x, p.y, {
     hints,
     armed: ghost?.armed ? ghost.spec : null,
+    balls: cells(),
+    mine: state.turn,
   });
-  if (!hit) { clearGhost(); return; }
+  if (!hit) { pick(null); clearGhost(); return; }
 
-  if (hit.kind === 'move') { impact('light'); play({ kind: 'move', to: hit.to }); return; }
+  if (hit.kind === 'ball') { impact('light'); pick(hit.id === selected ? null : hit.id); return; }
+  if (hit.kind === 'move') {
+    impact('light');
+    play({ kind: 'move', ball: selected ?? undefined, to: hit.to });
+    return;
+  }
 
   const spec = hit.spec;
   const wall: Wall = { ...spec, owner: state.turn };
@@ -348,21 +391,24 @@ function onTouch(p: Vec) {
   if (ok) { impact('light'); showNote('Tap again to place', false, 0); } else refuse(wall);
 }
 
-/** Mouse: hover previews, one click commits. */
+/** Mouse: hover previews walls, one click picks a ball, a second click moves it. */
 function onMouse(p: Vec, click: boolean) {
   if (!canAct()) { ghost = null; return; }
   const hit = hitTest(renderer.layout(), p.x, p.y, {
     hints,
     armed: null,
+    balls: cells(),
+    mine: state.turn,
   });
-  const spec: WallSpec | null = hit && hit.kind !== 'move' ? hit.spec : null;
+  const spec: WallSpec | null = hit && hit.kind === 'wall' ? hit.spec : null;
   const by = state.turn;
   const wall: Wall | null = spec ? { ...spec, owner: by } : null;
   const ok = wall ? wallOk(state, wall) : false;
   ghost = wall ? { spec: wall, ok, armed: false, p: by } : null;
 
   if (!click) return;
-  if (hit?.kind === 'move') { impact('light'); play({ kind: 'move', to: hit.to }); return; }
+  if (hit?.kind === 'ball') { impact('light'); pick(hit.id === selected ? null : hit.id); return; }
+  if (hit?.kind === 'move') { impact('light'); play({ kind: 'move', ball: selected ?? undefined, to: hit.to }); return; }
   if (wall && ok) { closeHint(); play({ kind: 'wall', wall }); return; }
   if (wall) refuse(wall);
   else clearGhost();
@@ -409,19 +455,22 @@ function frame(now: number) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   const k = motionReduced() ? 1 : 1 - Math.exp(-dt * 14); // frame-rate independent lerp
-  for (let i = 0; i < 2; i++) {
-    const p = ballOf(state, i).pos;
-    const tx = p.c + 0.5, ty = p.r + 0.5, b = balls[i];
-    b.x += (tx - b.x) * k;
-    b.y += (ty - b.y) * k;
-    if (Math.abs(tx - b.x) < 0.002) b.x = tx;
-    if (Math.abs(ty - b.y) < 0.002) b.y = ty;
+  if (ballViews.length !== state.balls.length) syncBalls();
+  for (let i = 0; i < state.balls.length; i++) {
+    const b = state.balls[i], v = ballViews[i];
+    const tx = b.pos.c + 0.5, ty = b.pos.r + 0.5;
+    v.pos.x += (tx - v.pos.x) * k;
+    v.pos.y += (ty - v.pos.y) * k;
+    if (Math.abs(tx - v.pos.x) < 0.002) v.pos.x = tx;
+    if (Math.abs(ty - v.pos.y) < 0.002) v.pos.y = ty;
+    v.sel = selected !== null && v.id === selected;
   }
   view.state = state;
-  view.balls = balls;
+  view.balls = ballViews;
   view.hints = hints;
   view.ghost = ghost;
-  view.thinking = wantsOpponent() && !paused;
+  view.last = marks;
+  view.thinking = wantsOpponent() && !paused ? state.turn : null;
   renderer.draw(view, now);
   confetti.tick(dt, now);
   raf = requestAnimationFrame(frame);

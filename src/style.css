@@ -1105,6 +1105,107 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
 .m-card.off { cursor: default; background: var(--tint-glass); }
 .m-card.off .m-h, .m-card.off .m-p { color: var(--ink-soft); }
 
+/* ---- team presets: three sizes, one tap ---- */
+.preset-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2); }
+.preset {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-height: 56px;
+  padding: var(--s2) 4px;
+  border-radius: 16px;
+  background: var(--field);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+  transition: transform .12s ease, background .18s ease;
+}
+.preset b { font-size: var(--t-2); font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+.preset span { font-size: var(--t-micro); font-weight: 700; color: var(--ink-soft); }
+.preset:active { transform: scale(.97); }
+.preset:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+/* ---- custom teams: two steppers, the difficulty, the starting layout ---- */
+.c-list { flex: none; display: flex; flex-direction: column; gap: var(--s2); }
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 64px;
+  padding: var(--s2) var(--s3) var(--s2) var(--s4);
+  border-radius: 20px;
+  background: linear-gradient(180deg, var(--glass-a), var(--glass-b));
+  backdrop-filter: blur(13px) saturate(1.3);
+  -webkit-backdrop-filter: blur(13px) saturate(1.3);
+  box-shadow: inset 0 0 0 1px var(--hair), inset 0 1px 0 var(--hair-lit);
+}
+@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+  .stepper { background: linear-gradient(180deg, var(--card-a), var(--card-b)); }
+}
+.stepper-t { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: var(--s2); }
+.stepper-l { font-size: var(--t-2); font-weight: 800; color: var(--ink); }
+.swatch {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #fff6 0%, var(--tint, var(--brand-2)) 58%, #0003 100%);
+  box-shadow: 0 1px 3px -1px var(--tint, var(--brand-glow));
+}
+.stepper-c { flex: none; display: flex; align-items: center; gap: var(--s2); }
+.step-b {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--solid-a);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--hair-off), 0 6px 12px -10px var(--shadow);
+  transition: transform .12s ease;
+}
+.step-b .ico { width: 20px; height: 20px; }
+.step-b:active { transform: scale(.94); }
+.step-b:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.step-b[disabled] { opacity: .4; cursor: default; }
+.step-n {
+  min-width: 2ch;
+  text-align: center;
+  font-size: var(--t-1);
+  font-weight: 800;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+/* the preview is the race renderer pointed at the starting layout, so it needs no frame */
+.team-pv {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  container-type: size;
+}
+.team-pv canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+@supports (width: 1cqw) {
+  .team-pv canvas { width: min(100cqw, 66.667cqh); height: min(100cqh, 150cqw); }
+}
+.team-pv-t {
+  flex: none;
+  margin: 0;
+  text-align: center;
+  font-size: var(--t-micro);
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
 .seg {
   display: flex;
   gap: 4px;

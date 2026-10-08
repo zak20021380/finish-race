@@ -6,10 +6,10 @@
  * so an item can only look in the shop how it looks in play.
  *
  * Two rules the types make impossible to break:
- *  - the opponent's side is never themed. It is fixed to BOT_RAMP + the Classic material, so the
- *    two seats always stay tellable apart whatever you equip;
- *  - a skin's `ramp` is pushed out of bot blue by `separate()` before anything reads it, so no
- *    entry — however it is authored later — can make your ball and theirs look alike.
+ *  - the other sides are never themed. They are fixed to their own ramps + the Classic material,
+ *    so every seat always stays tellable apart whatever you equip;
+ *  - a skin's `ramp` is pushed out of both opponent hues by `separate()` before anything reads it,
+ *    so no entry — however it is authored later — can make two sides look alike.
  */
 
 /** [offset 0..1, colour]. A colour is a Ramp key ("mid") or any literal CSS colour. */
@@ -119,6 +119,12 @@ const RED: Ramp = {
 export const BOT_RAMP: Ramp = {
   light: '#a6bbff', mid: '#3057db', dark: '#122770', glow: 'rgba(48,87,219,.55)', shade: '20,30,100',
   wl: '#7794ff', wd: '#2142b0', edge: 'rgba(20,30,100,.28)', ol: 'rgba(48,87,219,.5)', os: 'rgba(48,87,219,.95)',
+};
+
+/** The rules allow a third team, so a third fixed family exists for it. Also never for sale. */
+export const TEAM2_RAMP: Ramp = {
+  light: '#8fe3b4', mid: '#17915c', dark: '#0a4d30', glow: 'rgba(23,145,92,.55)', shade: '10,70,50',
+  wl: '#4fc98d', wd: '#0c6b41', edge: 'rgba(10,70,50,.28)', ol: 'rgba(23,145,92,.5)', os: 'rgba(23,145,92,.95)',
 };
 
 /** An illegal slot. Owns no side, so it keeps the same "no" everywhere. */
@@ -246,8 +252,11 @@ export const themeOf = (ball: string, wall: string, board: string): Theme =>
 /* ---------- the red / blue guarantee ---------- */
 
 const BOT_HUE = 224;         // BOT_RAMP.mid
-const MIN_GAP = 68;          // degrees of hue that count as "clearly not the opponent"
+const TEAM2_HUE = 154;       // TEAM2_RAMP.mid
+const MIN_GAP = 68;          // degrees of hue that count as "clearly not another side"
 const MIN_CHROMA = 0.22;     // below this a colour is a grey, and a grey never reads as blue
+/** Every seat a skin can never be mistaken for: the opponent and the third team. */
+const FOE_HUES = [BOT_HUE, TEAM2_HUE];
 
 interface Col {
   r: number; g: number; b: number;
@@ -313,18 +322,24 @@ function shift(c: Col, deg: number): Col {
 const gap = (a: number, b: number) => Math.min(Math.abs(a - b), 360 - Math.abs(a - b));
 
 /**
- * Shift a ramp far enough that its `mid` clears bot blue by exactly MIN_GAP, on whichever side is
- * closer. Pale and achromatic ramps pass through untouched: charcoal or ivory cannot be mistaken for
- * a saturated blue wherever their hue sits, and shifting them only muddies them.
+ * Shift a ramp far enough that its `mid` clears every fixed seat by exactly MIN_GAP, on whichever
+ * side is closer. Pale and achromatic ramps pass through untouched: charcoal or ivory cannot be
+ * mistaken for a saturated blue or green wherever their hue sits, and shifting them only muddies them.
  */
 function separate(ramp: Ramp): Ramp {
   const mid = parse(ramp.mid);
   if (!mid || chroma(mid) < MIN_CHROMA || light(mid) < 0.14 || light(mid) > 0.86) return ramp;
-  const d = gap(hue(mid), BOT_HUE);
-  if (d >= MIN_GAP) return ramp;
-  const cw = (hue(mid) - BOT_HUE + 360) % 360;
-  const edge = cw < 180 ? (BOT_HUE + MIN_GAP) % 360 : (BOT_HUE - MIN_GAP + 360) % 360;
-  const delta = ((edge - hue(mid) + 540) % 360) - 180;
+  const h = hue(mid);
+  const clear = (x: number) => FOE_HUES.every((f) => gap(x, f) >= MIN_GAP);
+  if (clear(h)) return ramp;
+  let delta = 0, best = Infinity;
+  for (const f of FOE_HUES) for (const s of [MIN_GAP, -MIN_GAP]) {
+    const edge = f + s;
+    if (!clear(edge)) continue;
+    const d = ((edge - h + 540) % 360) - 180;   // shortest rotation onto that edge
+    if (Math.abs(d) < best) { best = Math.abs(d); delta = d; }
+  }
+  if (!Number.isFinite(best)) return ramp;
   const out = {} as Record<keyof Ramp, string>;
   for (const k of Object.keys(ramp) as (keyof Ramp)[]) {
     const c = parse(ramp[k]);

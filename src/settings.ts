@@ -17,12 +17,14 @@ export interface Settings {
 export interface MenuState {
   mode: Mode;
   difficulty: Difficulty;
+  /** balls per side for a team race, 1 to 3 each */
+  sizes: [number, number];
 }
 
 const S_KEY = 'detour.settings.v1';
 const M_KEY = 'detour.menu.v1';
 const DEFAULT_SETTINGS: Settings = { sound: true, haptics: true, reducedMotion: false };
-const DEFAULT_MENU: MenuState = { mode: 'bot', difficulty: 'normal' };
+const DEFAULT_MENU: MenuState = { mode: 'bot', difficulty: 'normal', sizes: [1, 1] };
 
 const motion = matchMedia('(prefers-reduced-motion: reduce)');
 let systemReduce = motion.matches;
@@ -32,6 +34,12 @@ export const settings: Settings = { ...DEFAULT_SETTINGS, ...readJson<Settings>(S
 export const menuState: MenuState = { ...DEFAULT_MENU, ...readJson<MenuState>(M_KEY) };
 if (menuState.difficulty !== 'easy' && menuState.difficulty !== 'hard') menuState.difficulty = 'normal';
 if (menuState.mode !== 'bot') menuState.mode = 'bot';
+
+/** Two sides of 1 to 3 balls: the mode select writes this, the race reads it. */
+const clampSize = (n: unknown) => Math.max(1, Math.min(3, typeof n === 'number' && Number.isFinite(n) ? Math.floor(n) : 1));
+menuState.sizes = Array.isArray(menuState.sizes) && menuState.sizes.length === 2
+  ? [clampSize(menuState.sizes[0]), clampSize(menuState.sizes[1])]
+  : [...DEFAULT_MENU.sizes];
 
 const watchers: ((s: Settings) => void)[] = [];
 

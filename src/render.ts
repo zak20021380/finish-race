@@ -6,11 +6,16 @@
  * `themes.ts` (see `setTheme`). The renderer also paints the shop's miniature boards — pass `cols`
  * and `rows` and it lays out that patch of board instead of a whole race, so a preview card shows
  * the same code path the race uses rather than a picture of it.
+ *
+ * Seats, not sides: `view.balls` carries every ball on the board with the team it belongs to, so a
+ * race of three balls a side draws the same code path a 1v1 does. Balls of one team share a colour
+ * family and are told apart by a number badge; the chosen ball wears a ring and only its legal
+ * cells are drawn as dots.
  */
-import { COLS, ROWS, type GameState, type Player, type Pos, type Wall, type WallSpec } from './rules';
+import { COLS, MAX_TEAMS, ROWS, type GameState, type Player, type Pos, type Wall, type WallSpec } from './rules';
 import { motionReduced } from './settings';
 import {
-  BOT_RAMP, CLASSIC_BALL, CLASSIC_WALL, DEFAULT_THEME, ERR_RAMP,
+  BOT_RAMP, CLASSIC_BALL, CLASSIC_WALL, DEFAULT_THEME, ERR_RAMP, TEAM2_RAMP,
   type BallSkin, type CosKind, type Ramp, type Stop, type Theme, type WallStyle,
 } from './themes';
 
@@ -22,13 +27,26 @@ export interface Ghost { spec: WallSpec; ok: boolean; armed: boolean; p: Player 
 /** What a player did last, so both sides' moves stay readable. */
 export type Mark = { kind: 'step'; from: Pos; to: Pos } | { kind: 'wall'; spec: WallSpec };
 
+/** One ball as drawn: where it is now, whose it is, and whether the player has picked it up. */
+export interface BallView {
+  /** animated centre, in cell units (col + .5, row + .5) */
+  pos: Vec;
+  team: Player;
+  id: number;
+  /** the selection ring: this ball is the one a move dot would move */
+  sel: boolean;
+}
+
 export interface View {
   state: GameState;
-  balls: [Vec, Vec];        // animated centres, in cell units (col + .5, row + .5)
-  hints: Pos[];             // legal move cells
+  /** every ball on the board, in state order */
+  balls: BallView[];
+  /** legal move cells — the chosen ball's only */
+  hints: Pos[];
   ghost: Ghost | null;      // wall preview / armed ghost
-  last: [Mark | null, Mark | null];
-  thinking: boolean;        // opponent is deciding
+  /** one entry per seat: what that seat did last */
+  last: (Mark | null)[];
+  thinking: Player | null;  // the seat deciding, when it is not the player's
 }
 
 export interface Layout {
@@ -45,14 +63,15 @@ export interface RendererOptions {
 }
 
 export type Hit =
+  | { kind: 'ball'; id: number }
   | { kind: 'confirm'; spec: WallSpec }
   | { kind: 'wall'; spec: WallSpec }
   | { kind: 'move'; to: Pos };
 
 const TAU = Math.PI * 2;
 const LINE_ZONE = 0.3;  // cells from a grid line that still read as "aiming at that line"
-const MIN_TOUCH = 44;   // css px: smallest legal-move tap target we allow
-const ERR = 2;          // third side: an illegal slot
+const MIN_TOUCH = 44;   // css px: smallest legal tap target we allow
+const BADGE_FROM = 28;  // cell size below which a number badge would be unreadable
 const SOLID: number[] = [];
 
 /** A stop's colour may name a ramp slot ("mid") or be literal; board stops are always literal. */
@@ -88,12 +107,17 @@ function distToWall(bx: number, by: number, w: WallSpec, along: number): number 
 
 /**
  * Pointer (CSS px, canvas-local) → the thing to act on.
- * Priority, not raw distance: an armed ghost confirms, a tap inside a legal cell moves,
- * a tap that lands on a grid line arms a wall. A 44px dot target and a 0.3-cell line band
- * cannot both fit in a 37px cell, so the cell the dot sits in always wins for the dot.
+ * Priority, not raw distance: one of your balls picks up, an armed ghost confirms, a tap inside a
+ * legal cell moves, a tap that lands on a grid line arms a wall. A 44px target and a 0.3-cell line
+ * band cannot both fit in a 37px cell, so the cell the target sits in always wins for the target.
  */
 export function hitTest(L: Layout, px: number, py: number, o: {
-  hints: Pos[]; armed: WallSpec | null;
+  hints: Pos[];
+  armed: WallSpec | null;
+  /** every ball on the board, in cell coordinates */
+  balls: readonly { id: number; team: Player; c: number; r: number }[];
+  /** the seat whose balls answer to a tap */
+  mine: Player;
 }): Hit | null {
   const c = L.cell;
   if (c <= 0) return null;
@@ -103,6 +127,14 @@ export function hitTest(L: Layout, px: number, py: number, o: {
   const cand: { hit: Hit; pri: number; d: number }[] = [];
   const reach = Math.max(0.5, MIN_TOUCH / 2 / c);   // 44px target, in cells
 
+  let ballId: number | null = null, db = Infinity;
+  for (const b of o.balls) {
+    if (b.team !== o.mine) continue;
+    const d = Math.hypot(bx - b.c - 0.5, by - b.r - 0.5);
+    if (d < db) { db = d; ballId = b.id; }
+  }
+  if (ballId !== null && db <= reach) cand.push({ hit: { kind: 'ball', id: ballId }, pri: 0, d: db });
+
   let dot: Pos | null = null, dd = Infinity;
   for (const h of o.hints) {
     const d = Math.hypot(bx - h.c - 0.5, by - h.r - 0.5);
@@ -110,15 +142,15 @@ export function hitTest(L: Layout, px: number, py: number, o: {
   }
   if (dot && dd <= reach) {
     const own = Math.max(Math.abs(bx - dot.c - 0.5), Math.abs(by - dot.r - 0.5)) <= 0.5;
-    cand.push({ hit: { kind: 'move', to: dot }, pri: own ? 1 : 3, d: dd });
+    cand.push({ hit: { kind: 'move', to: dot }, pri: own ? 2 : 4, d: dd });
   }
 
   if (o.armed) {
     const d = distToWall(bx, by, o.armed, 0.5);
-    if (d <= Math.min(0.42, Math.max(LINE_ZONE, 18 / c))) cand.push({ hit: { kind: 'confirm', spec: o.armed }, pri: 0, d });
+    if (d <= Math.min(0.42, Math.max(LINE_ZONE, 18 / c))) cand.push({ hit: { kind: 'confirm', spec: o.armed }, pri: 1, d });
   }
   const s = slotNear(bx, by, L.cols, L.rows);
-  if (s) cand.push({ hit: { kind: 'wall', spec: s }, pri: 2, d: distToWall(bx, by, s, 1.25) });
+  if (s) cand.push({ hit: { kind: 'wall', spec: s }, pri: 3, d: distToWall(bx, by, s, 1.25) });
 
   cand.sort((a, b) => a.pri - b.pri || a.d - b.d);
   return cand.length ? cand[0].hit : null;
@@ -126,10 +158,20 @@ export function hitTest(L: Layout, px: number, py: number, o: {
 
 /* ---------- drawing ---------- */
 
-/** One seat: its colours, its ball material, its wall material. Seats 0/1 play, seat 2 refuses. */
+/** One seat: its colours, its ball material, its wall material. Seats 0..2 play, seat 3 refuses. */
 interface Side { ramp: Ramp; ball: BallSkin; wall: WallStyle }
 
+/** Every seat the rules allow, plus the refusal palette that owns no side. */
+const SEAT_COUNT = MAX_TEAMS + 1;
+const ERR = MAX_TEAMS;
+/** Fixed families for the seats that are never themed: the opponent, the third team, and "no". */
+const FIXED: Ramp[] = [BOT_RAMP, TEAM2_RAMP, ERR_RAMP];
+
 const CORNER = 0.4;              // board corner radius, in cells
+/** How many balls each seat fields: filled at the top of every frame, reused, never reallocated. */
+const SEATS_N = new Int16Array(SEAT_COUNT);
+/** Draw order of the balls, nearest last: likewise. */
+const ORDER: number[] = [];
 
 function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   const k = Math.min(r, w / 2, h / 2); // capsule-thin outlines must not self-overlap
@@ -156,8 +198,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   const cols = opts.cols ?? COLS, rows = opts.rows ?? ROWS;
   let L = computeLayout(1, 1, 1, cols, rows);
   let th: Theme = opts.theme ? opts.theme() : DEFAULT_THEME;
-  /** seat 0 wears the equipped skin and style; seat 1 is the opponent and never does. */
-  let sides: [Side, Side, Side] = seats(th);
+  /** seat 0 wears the equipped skin and style; every other seat keeps its fixed family. */
+  let sides: Side[] = seats(th);
   const born = new Map<number, number>();                    // wall key → first-seen time (pop-in)
   const pulses: { x: number; y: number; t0: number; p: Player }[] = []; // wall landing rings
   let bg: HTMLCanvasElement | null = null;                   // static board layer, rebuilt on resize
@@ -169,11 +211,13 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   /** Light sweep over the finish strip: one gradient per resize, moved with the canvas transform. */
   const sweep = { grad: null as CanvasGradient | null, band: 0 };
 
-  /** The two seats plus the refusal palette, from one theme. */
-  function seats(t: Theme): [Side, Side, Side] {
-    const you: Side = { ramp: t.ball.ramp, ball: t.ball, wall: t.wall };
-    const foe: Side = { ramp: BOT_RAMP, ball: CLASSIC_BALL, wall: CLASSIC_WALL };
-    return [you, foe, { ramp: ERR_RAMP, ball: CLASSIC_BALL, wall: CLASSIC_WALL }];
+  /** The player's seat plus every fixed one, from one theme. */
+  function seats(t: Theme): Side[] {
+    const out: Side[] = [{ ramp: t.ball.ramp, ball: t.ball, wall: t.wall }];
+    for (let i = 1; i < SEAT_COUNT; i++) {
+      out.push({ ramp: FIXED[i - 1] ?? ERR_RAMP, ball: CLASSIC_BALL, wall: CLASSIC_WALL });
+    }
+    return out;
   }
 
   function resize() {
@@ -265,7 +309,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     dash.last[0] = dash.last[1] = c * 0.1;
     dash.ghost[0] = dash.ghost[1] = c * 0.11;
     dash.armed[0] = dash.armed[1] = c * 0.16;
-    barG[0].clear(); barG[1].clear(); barG[2].clear();
+    for (const m of barG) m.clear();
     ballFx.length = 0;
     glowG.length = 0;
     sweep.band = c * 2.4;
@@ -276,7 +320,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     sg.addColorStop(1, `rgba(255,255,255,0)`);
     sweep.grad = sg;
     const br = c * 0.34;
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < MAX_TEAMS; i++) {
       const s = sides[i];
       const shadow = ctx.createRadialGradient(0, 0, 0, 0, 0, br * 1.1);
       shadow.addColorStop(0, `rgba(${s.ramp.shade},.42)`);
@@ -296,8 +340,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   }
 
   /** Wall-body gradients, bucketed by thickness: built once per size, never per frame. */
-  const barG: [Map<number, CanvasGradient>, Map<number, CanvasGradient>, Map<number, CanvasGradient>] =
-    [new Map(), new Map(), new Map()];
+  const barG: Map<number, CanvasGradient>[] = Array.from({ length: SEAT_COUNT }, () => new Map());
 
   function barGrad(pi: number, t: number): CanvasGradient {
     const key = Math.round(t * 50);
@@ -379,9 +422,9 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   }
 
   /** Marching-ants outline hugging a wall — "this is the slot you are about to use". */
-  function outline(w: WallSpec, color: string, width: number, dashes: number[], phase = 0) {
+  function outline(w: WallSpec, color: string, width: number, dashes: number[], phase = 0, pi = 0) {
     const c = L.cell;
-    const t = c * 0.3 * sides[0].wall.thick;
+    const t = c * 0.3 * sides[pi].wall.thick;
     const b = box(w);
     ctx.save();
     ctx.strokeStyle = color;
@@ -433,7 +476,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     blob(-0.36 * r, -0.42 * r, -0.72, 0.26, 0.14, 0.92);
   }
 
-  function drawBall(cx: number, cy: number, r: number, i: number) {
+  function drawBall(cx: number, cy: number, r: number, i: number, badge = 0) {
     const s = sides[i], fx = ballFx[i];
     ctx.save();
     ctx.translate(cx, cy);
@@ -467,16 +510,58 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.strokeStyle = s.ramp.edge; ctx.lineWidth = 1; ctx.stroke();
 
     shine(s, r);
+    if (badge > 0) drawBadge(r, badge);
     ctx.restore();
   }
 
-  /** Halo under the ball whose turn it is (or the winner). */
+  /** Halo under the balls of the seat to move (or of the winner). */
   function drawGlow(cx: number, cy: number, r: number, i: number, k: number) {
     ctx.save();
     ctx.translate(cx, cy);
     ctx.globalAlpha = Math.min(1, (0.34 + 0.3 * k) * sides[i].ball.halo);
     ctx.fillStyle = glowG[i];
     ctx.beginPath(); ctx.arc(0, 0, r * 2.3, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+
+  /**
+   * A same-team ball's number: a white disc on its lower-right rim, dark ink on top. It is what
+   * tells the three balls of one colour family apart, so a race can have 3v3 and still be readable.
+   * Called inside `drawBall`'s transform, so the ball itself sits at the origin.
+   */
+  function drawBadge(r: number, n: number) {
+    const c = L.cell;
+    if (c < BADGE_FROM) return;                       // no room for a legible digit: skip it
+    const s = c * 0.19;
+    const x = r * 0.68, y = r * 0.68;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(x, y, s, 0, TAU);
+    ctx.fillStyle = 'rgba(255,255,255,.95)';
+    ctx.fill();
+    ctx.lineWidth = Math.max(1, c * 0.026);
+    ctx.strokeStyle = 'rgba(20,20,32,.5)';
+    ctx.stroke();
+    ctx.fillStyle = '#1b1b29';
+    ctx.font = `800 ${Math.round(s * 1.5)}px -apple-system, "Segoe UI", Roboto, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(n), x, y + s * 0.06);
+    ctx.restore();
+  }
+
+  /** The chosen ball: a white ring plus a dashed team-coloured one, so it reads on any skin. */
+  function drawSel(cx: number, cy: number, r: number, i: number, now: number, still: boolean) {
+    const c = L.cell;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(255,255,255,.92)';
+    ctx.lineWidth = Math.max(2, c * 0.075);
+    ctx.beginPath(); ctx.arc(cx, cy, r * 1.34, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = sides[i].ramp.mid;
+    ctx.lineWidth = Math.max(1.5, c * 0.045);
+    ctx.setLineDash([c * 0.15, c * 0.12]);
+    ctx.lineDashOffset = still ? 0 : -now / 40;
+    ctx.beginPath(); ctx.arc(cx, cy, r * 1.62, 0, TAU); ctx.stroke();
     ctx.restore();
   }
 
@@ -501,8 +586,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.restore();
     }
 
-    // last move of each player: trail out of the old cell, ants around the old wall
-    for (let pi = 0; pi < 2; pi++) {
+    // last move of each seat: trail out of the old cell, ants around the old wall
+    for (let pi = 0; pi < v.last.length; pi++) {
       const m = v.last[pi];
       if (!m) continue;
       const ramp = sides[pi].ramp;
@@ -525,7 +610,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       }
     }
 
-    // legal-move dots: big, high contrast, at least a 44px target, tinted with the side to move
+    // legal-move dots: big, high contrast, at least a 44px target, tinted with the chosen ball's side
     const side = sides[v.state.turn];
     const pulse = still ? 0.5 : 0.5 + 0.5 * Math.sin(now / 380);
     const dotR = Math.max(6, c * 0.17 + c * 0.014 * pulse);
@@ -549,11 +634,11 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       if (v.ghost.ok) {
         drawBar(v.ghost.spec, v.ghost.p, v.ghost.armed ? 0.85 : 0.42, 1, false);
         outline(v.ghost.spec, v.ghost.armed ? gp.os : gp.ol,
-          Math.max(1.5, c * 0.045), v.ghost.armed ? dash.armed : dash.ghost, still ? 0 : -now / 26);
+          Math.max(1.5, c * 0.045), v.ghost.armed ? dash.armed : dash.ghost, still ? 0 : -now / 26, v.ghost.p);
       } else {
         // solid ring + cross: unmistakably "not here", unlike the dashed ghost above
         drawBar(v.ghost.spec, ERR, 0.3, 1, false);
-        outline(v.ghost.spec, 'rgba(255,45,85,.95)', Math.max(2, c * 0.06), SOLID, 0);
+        outline(v.ghost.spec, 'rgba(255,45,85,.95)', Math.max(2, c * 0.06), SOLID, 0, ERR);
         cross(v.ghost.spec, '#fff', c * 0.19);
       }
     }
@@ -584,39 +669,45 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.restore();
     }
 
-    // balls, lower one on top
-    const first: number = v.balls[0].y <= v.balls[1].y ? 0 : 1;
-    for (let n = 0; n < 2; n++) {
-      const i = n === 0 ? first : 1 - first;
+    // every ball on the board, the nearer one (further down) drawn last so it sits on top
+    SEATS_N.fill(0);
+    for (const b of v.balls) if (b.team < SEAT_COUNT) SEATS_N[b.team]++;
+    ORDER.length = 0;
+    for (let i = 0; i < v.balls.length; i++) ORDER.push(i);
+    ORDER.sort((a, b) => v.balls[a].pos.y - v.balls[b].pos.y);
+    for (const i of ORDER) {
       const b = v.balls[i];
-      const cx = ox + b.x * c, cy = oy + b.y * c, r = c * 0.34;
-      const active = v.state.winner === null && v.state.turn === i;
-      if (active || v.state.winner === i) {
-        drawGlow(cx, cy, r, i, still ? 0.6 : 0.5 + 0.5 * Math.sin(now / 260));
-        if (active) {
-          ctx.save();
-          ctx.strokeStyle = sides[i].ramp.mid;
-          ctx.globalAlpha = 0.55;
-          ctx.lineWidth = Math.max(1.5, c * 0.04);
-          ctx.beginPath(); ctx.arc(cx, cy, r * 1.42, 0, TAU); ctx.stroke();
-          ctx.restore();
-        }
+      const seat = b.team;
+      const cx = ox + b.pos.x * c, cy = oy + b.pos.y * c, r = c * 0.34;
+      const active = v.state.winner === null && v.state.turn === seat;
+      if (active || v.state.winner === seat) {
+        drawGlow(cx, cy, r, seat, still ? 0.6 : 0.5 + 0.5 * Math.sin(now / 260));
       }
-      drawBall(cx, cy, r, i);
+      // the chosen one stands out further than its side's turn halo does
+      if (b.sel) drawSel(cx, cy, r, seat, now, still);
+      let n = 1;
+      for (let j = 0; j < i; j++) if (v.balls[j].team === seat) n++;
+      drawBall(cx, cy, r, seat, SEATS_N[seat] > 1 ? n : 0);
     }
 
-    // "opponent is thinking" pips above the bot's ball
-    if (v.thinking) {
-      const b = v.balls[1];
-      const x0 = ox + b.x * c, y0 = oy + b.y * c - c * 0.78;
-      ctx.save();
-      ctx.fillStyle = BOT_RAMP.mid;
-      for (let i = 0; i < 3; i++) {
-        const ph = still ? 0.6 : 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(now / 260 - i * 1.1));
-        ctx.globalAlpha = Math.min(1, ph);
-        ctx.beginPath(); ctx.arc(x0 + (i - 1) * c * 0.22, y0, c * 0.06, 0, TAU); ctx.fill();
+    // "<side> is thinking" pips above that side's leading ball
+    if (v.thinking !== null) {
+      let lead: BallView | null = null;
+      for (const b of v.balls) {
+        if (b.team !== v.thinking) continue;
+        if (!lead || b.pos.y < lead.pos.y) lead = b;
       }
-      ctx.restore();
+      if (lead) {
+        const x0 = ox + lead.pos.x * c, y0 = oy + lead.pos.y * c - c * 0.78;
+        ctx.save();
+        ctx.fillStyle = sides[v.thinking].ramp.mid;
+        for (let i = 0; i < 3; i++) {
+          const ph = still ? 0.6 : 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(now / 260 - i * 1.1));
+          ctx.globalAlpha = Math.min(1, ph);
+          ctx.beginPath(); ctx.arc(x0 + (i - 1) * c * 0.22, y0, c * 0.06, 0, TAU); ctx.fill();
+        }
+        ctx.restore();
+      }
     }
   }
 
@@ -648,49 +739,49 @@ export interface Preview {
 }
 
 /** A `Theme` without the board fields the previews do not use. */
-type Scene = { cols: number; rows: number; balls: [Vec, Vec]; hints: Pos[]; walls: Wall[] };
+type Scene = { cols: number; rows: number; balls: { team: Player; at: Vec; sel?: boolean }[]; hints: Pos[]; walls: Wall[] };
 
 /** 6x4 patches: room for a real wall layout, and a finish strip that is not the whole picture. */
 const SCENES: Record<PreviewKind, Scene> = {
   // your ball on the move, theirs beside it: the pair is the thing being judged
   ball: {
     cols: 6, rows: 4,
-    balls: [{ x: 2.5, y: 3.5 }, { x: 3.5, y: 3.5 }],
+    balls: [{ team: 0, at: { x: 2.5, y: 3.5 }, sel: true }, { team: 1, at: { x: 3.5, y: 3.5 } }],
     hints: [{ c: 1, r: 2 }, { c: 2, r: 2 }, { c: 3, r: 2 }, { c: 4, r: 2 }],
     walls: [],
   },
   // two of yours and one of theirs, so a style reads in both orientations and against the fixed one
   wall: {
     cols: 6, rows: 4,
-    balls: [{ x: 0.5, y: 3.5 }, { x: 5.5, y: 3.5 }],
+    balls: [{ team: 0, at: { x: 0.5, y: 3.5 } }, { team: 1, at: { x: 5.5, y: 3.5 } }],
     hints: [],
     walls: [{ o: 'h', x: 0, y: 2, owner: 0 }, { o: 'v', x: 3, y: 0, owner: 0 }, { o: 'h', x: 2, y: 3, owner: 1 }],
   },
   board: {
     cols: 6, rows: 4,
-    balls: [{ x: 2.5, y: 3.5 }, { x: 4.5, y: 3.5 }],
+    balls: [{ team: 0, at: { x: 2.5, y: 3.5 } }, { team: 1, at: { x: 4.5, y: 3.5 } }],
     hints: [],
     walls: [{ o: 'h', x: 0, y: 2, owner: 0 }, { o: 'v', x: 5, y: 1, owner: 1 }],
   },
 };
 
-const sceneView = (s: Scene): View => ({
-  state: {
-    teams: [{ balls: 1 }, { balls: 1 }],
-    balls: [
-      { id: 0, team: 0, owner: 0, pos: { c: 0, r: s.rows - 1 } },
-      { id: 1, team: 1, owner: 1, pos: { c: s.cols - 1, r: s.rows - 1 } },
-    ],
-    walls: s.walls,
-    turn: 0,
-    winner: null,
-  },
-  balls: s.balls,
-  hints: s.hints,
-  ghost: null,
-  last: [null, null],
-  thinking: false,
-});
+const sceneView = (s: Scene): View => {
+  const teams = Math.max(2, ...s.balls.map((b) => b.team + 1));
+  return {
+    state: {
+      teams: Array.from({ length: teams }, () => ({ balls: 1 })),
+      balls: s.balls.map((b, i) => ({ id: i, team: b.team, owner: b.team, pos: { c: 0, r: s.rows - 1 } })),
+      walls: s.walls,
+      turn: 0,
+      winner: null,
+    },
+    balls: s.balls.map((b, i) => ({ pos: b.at, team: b.team, id: i, sel: Boolean(b.sel) })),
+    hints: s.hints,
+    ghost: null,
+    last: Array.from({ length: teams }, () => null),
+    thinking: null,
+  };
+};
 
 /**
  * The real renderer, pointed at a patch of board instead of a race. Every shop card and the

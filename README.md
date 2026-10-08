@@ -16,6 +16,9 @@ Works in a normal browser too (the Telegram SDK is optional).
 ## Screens
 
 `Home → Game mode → Race`, with `Shop`, `Profile` and `Settings` on the floating bottom tab bar.
+Game mode holds the difficulty and a Teams row — 2v2 / 3v3 / 2v1 presets plus a Custom screen with a
+stepper for each side's ball count, the difficulty, a live board preview of the starting layout and
+Start.
 Navigation is a hand-rolled back stack (`src/router.ts`): slides use transform/opacity only and
 swap instantly under `prefers-reduced-motion`. The Telegram `BackButton` is wired when the client
 provides one; every screen also has a visible Back button, and the race screen's top-left menu
@@ -73,13 +76,14 @@ finish glow). Defaults are the Classic ball, Classic wall and Lavender board —
 shipped with.
 
 **The opponent is never themed.** Their ball and walls stay on the built-in blue ramp, and a skin's
-ramp is pushed out of that blue before anything reads it (`separate()`), so no item — however it is
-authored later — can make the two sides look alike.
+ramp is pushed out of both opponent hues before anything reads it (`separate()`), so no item — however
+it is authored later — can make two sides look alike. Balls of one side also carry number badges, so
+coloured jargon alone never has to tell them apart.
 
 ## Controls
 
-- **Move**: tap a highlighted dot. The chips show each side's shortest path to FINISH in steps.
-- **Teams on the board**: every side races 1 to 3 balls (up to 3v3) and alternates turns; on its turn a team moves any ONE of its balls one cell, or places a wall. Balls — friendly or hostile — block, nothing jumps, and the first ball to the top row wins.
+- **Move**: tap one of your balls, then one of the dots that light up beside it — the chosen ball wears a ring and only its legal cells are shown. The chips show each side's shortest path to FINISH in steps.
+- **Teams on the board**: every side races 1 to 3 balls (up to 3v3) and alternates turns; on its turn a team moves any ONE of its balls one cell, or places a wall. Each side owns a colour family and its balls carry number badges, so a 3v3 stays readable. Balls — friendly or hostile — block, nothing jumps, and the first ball to the top row wins.
 - **Walls are unlimited.** Each team may wall every turn; a wall only has to stay in bounds, not overlap another wall on the same line, and keep every ball's path to FINISH open.
 - **Wall (touch)**: tap a grid line — a ghost wall appears — tap the ghost again to place it, or tap anywhere else to cancel. An illegal slot shows a red ghost, a warning buzz and the reason ("Blocks the path" / "Overlaps a wall").
 - **Wall (mouse)**: hover a grid line to preview, click once to place.
@@ -126,7 +130,7 @@ Telegram only loads **HTTPS** URLs.
 | `src/rules.ts` | Pure game logic: `GameState` (`teams`, `balls`, `turn`, `winner`), `newGame(sizes)` for 1–3 balls per team, `reachable`, `wallOk`, `apply(state, action)` |
 | `src/bot.ts` | Local opponent: moves the ball closest to FINISH, walls only when it is level or behind and the wall costs 2+ steps, plus the Easy/Normal/Hard profiles |
 | `src/themes.ts` | Every cosmetic as data: ball skins, wall styles, board themes, the fixed bot ramp and the red/blue guarantee |
-| `src/render.ts` | Canvas drawing (board, walls, ghosts, balls) from a `Theme`, `hitTest()` tap-target resolution, and `createPreview()` for the shop's miniature boards |
+| `src/render.ts` | Canvas drawing (board, walls, ghosts, every ball of every seat, number badges, the selection ring) from a `Theme`, `hitTest()` tap-target resolution, and `createPreview()` for the shop's miniature boards |
 | `src/confetti.ts` | Win burst: a fixed particle pool on its own canvas, no per-frame allocation |
 | `src/router.ts` | Screen stack + slide/fade transitions, back handling |
 | `src/sheets.ts` | Bottom sheets over a dimming scrim (pause, quit confirm, buy confirm, how to play, country, team) |
