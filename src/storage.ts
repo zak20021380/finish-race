@@ -226,6 +226,22 @@ export function recordGame(r: { difficulty: Difficulty; won: boolean }): number 
   return coins;
 }
 
+/** Tournament entries and daily rewards move the same wallet the shop reads. */
+export function spendCoins(n: number): boolean {
+  const cost = Math.max(0, Math.floor(n));
+  if (profile.coins < cost) return false;
+  profile.coins -= cost;
+  flush();
+  return true;
+}
+
+export function earnCoins(n: number): number {
+  const gain = Math.max(0, Math.floor(n));
+  profile.coins += gain;
+  flush();
+  return gain;
+}
+
 /** The mode raced most, for the profile card. */
 export function favouriteMode(): Mode | null {
   return (profile.stats.modes.bot ?? 0) > 0 ? 'bot' : null;

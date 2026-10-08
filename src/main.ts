@@ -9,6 +9,8 @@ import { createConfetti } from './confetti';
 import { createRouter } from './router';
 import { createSheets } from './sheets';
 import { createMenu, type Menu } from './menu';
+import { createHome } from './home';
+import { createCompete } from './compete';
 import { createShop } from './shop';
 import { mountCoins, setBalance } from './coin';
 import { menuState, motionReduced } from './settings';
@@ -25,12 +27,13 @@ for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) {
   document.addEventListener(ev, (e) => e.preventDefault());
 }
 /**
- * The app never scrolls — but a sheet's list does. Anything marked `data-scroll` keeps its own
- * gesture, so a country picker can be dragged on a phone while the page behind it stays put.
+ * The app never scrolls vertically — but a sheet's list, the compete body and
+ * the home carousel keep their own gestures. `data-scroll` is vertical,
+ * `data-carousel` is the one horizontal pan (touch-action: pan-x).
  */
 document.addEventListener('touchmove', (e) => {
   const t = e.target as HTMLElement | null;
-  if (t?.closest('[data-scroll]')) return;
+  if (t?.closest('[data-scroll],[data-carousel]')) return;
   e.preventDefault();
 }, { passive: false });
 document.addEventListener('dblclick', (e) => e.preventDefault());
@@ -88,9 +91,14 @@ let menu: Menu;
 const sheets = createSheets($('scrim'));
 const sheetById = (id: string) => document.getElementById(id);
 
+let home: { setRoute(id: string): void } | null = null;
+let compete: { setRoute(id: string): void } | null = null;
+
 const router = createRouter($('screens'), (id) => {
   menu.setRoute(id);
   shop.setRoute(id);
+  home?.setRoute(id);
+  compete?.setRoute(id);
   setBackButton(id !== 'home' && router.canGoBack);
   if (id !== 'game') pauseGame();     // the board only ticks while it is on screen
   syncLoop();
@@ -491,6 +499,8 @@ document.addEventListener('visibilitychange', syncLoop);
 mountCoins();                              // every [data-coin] slot gets the shared gold coin
 menu = createMenu({ router, sheets, sheet: sheetById, start: startGame, onBack });
 const shop = createShop({ sheets, sheet: sheetById });
+home = createHome({ router, start: startGame });
+compete = createCompete({ router, sheets, sheet: sheetById });
 paintNames();
 ui();
 router.start('home');

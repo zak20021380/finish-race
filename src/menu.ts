@@ -320,11 +320,11 @@ export function createMenu(api: MenuApi): Menu {
   paintProfile();
   new ResizeObserver(() => { if (!pfScreen.hidden) paintProfile(); }).observe(pfScreen);
 
-  /* ---- difficulty: Home's vs Bot card says what Play will start with ---- */
+  /* ---- difficulty: mode select owns the segmented control; Home shows fixed labels ---- */
   let difficulty: Difficulty = menuState.difficulty;
   const paintBotSub = () => {
-    const cap = difficulty[0].toUpperCase() + difficulty.slice(1);
-    $('mode-bot-sub').textContent = `${cap} · ${menuState.sizes[0]}v${menuState.sizes[1]}`;
+    const el = document.getElementById('mode-bot-sub');
+    if (el) el.textContent = 'vs Bot';
   };
   const paintDiff = () => {
     for (const b of segs) b.setAttribute('aria-pressed', String(b.dataset.diff === difficulty));
@@ -484,7 +484,7 @@ export function createMenu(api: MenuApi): Menu {
         customDrawn = true;
         paintCustom();
       }
-      const active = id === 'home' || id === 'modes' || id === 'custom' ? 'modes' : id;
+      const active = id === 'home' || id === 'modes' || id === 'custom' || id === 'game' ? 'home' : id;
       for (const t of tabs) {
         const on = t.dataset.tab === active;
         if (on) t.setAttribute('aria-current', 'page');
