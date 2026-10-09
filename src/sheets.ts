@@ -4,6 +4,7 @@
  * only animates transform/opacity.
  */
 import { motionReduced } from './settings';
+import { impact } from './telegram';
 
 export interface Sheets {
   open(el: HTMLElement): void;
@@ -58,10 +59,10 @@ export function createSheets(scrim: HTMLElement): Sheets {
     get isOpen() { return panel !== null; },
   };
 
-  scrim.addEventListener('click', () => api.close());
+  scrim.addEventListener('click', () => { impact('light'); api.close(); });
   document.addEventListener('click', (e) => {
     const t = e.target as HTMLElement | null;
-    if (t && t.closest('[data-sheet-close]')) api.close();
+    if (t && t.closest('[data-sheet-close]')) { impact('light'); api.close(); }
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') api.close(); });
 

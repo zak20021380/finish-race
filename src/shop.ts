@@ -126,6 +126,7 @@ export function createShop(api: ShopApi): Shop {
       const s = stateOf(c.item);
       c.el.dataset.state = s;
       c.btn.textContent = s === 'equipped' ? 'Equipped' : s === 'owned' ? 'Equip' : 'Buy';
+      c.btn.setAttribute('aria-label', `${c.btn.textContent}: ${c.item.name} ${c.item.kind}`);
       c.btn.disabled = s === 'short' || s === 'equipped';
       c.btn.setAttribute('aria-disabled', String(c.btn.disabled));
       if (s === 'equipped') c.btn.setAttribute('aria-current', 'true');
@@ -173,8 +174,9 @@ export function createShop(api: ShopApi): Shop {
     const it = pending;
     pending = null;
     api.sheets.close();
-    if (buy(it.kind, it.id, it.price) !== 'bought') return;
+    if (buy(it.kind, it.id, it.price) !== 'bought') { notify('warning'); return; }
     notify('success');
+    impact('medium');
     flash = it.id;
     celebrate();
     setTimeout(() => { flash = ''; celebrate(); }, 1200);

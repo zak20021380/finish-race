@@ -116,9 +116,10 @@ const inTelegram = !!tg && !!tg.platform && tg.platform !== 'unknown';
 export let isDark = false;
 
 /**
- * themeParams decide the palette; the browser's own preference decides it when Telegram is absent.
- * Only the three surface colours Telegram actually describes are handed to CSS — brand hues stay
- * the app's, so a client with an odd accent still reads as Detour.
+ * themeParams decide the palette in both light and dark; the browser's own
+ * preference decides it when Telegram is absent. Surfaces (--tg-bg/ink/soft)
+ * always win when present; the client's accent (button/link) tints the brand
+ * tokens so a custom Telegram theme still reads as Detour.
  */
 export function applyTheme() {
   const p: TgThemeParams = tg?.themeParams ?? {};
@@ -128,16 +129,32 @@ export function applyTheme() {
 
   const r = document.documentElement;
   r.classList.toggle('dark', isDark);
+  r.style.colorScheme = isDark ? 'dark' : 'light';
   const set = (k: string, v: string) => { if (v) r.style.setProperty(k, v); else r.style.removeProperty(k); };
   set('--tg-bg', bg || hex(p.bg_color));
   set('--tg-ink', hex(p.text_color));
   set('--tg-soft', hex(p.hint_color));
+  // Telegram accent tints the primary fill only (white text on it is Telegram's
+  // own contrast pair). Body/link ink stays the app's verified 4.5:1 pair.
+  const accent = hex(p.button_color);
+  const link = hex(p.link_color);
+  set('--tg-button', accent);
+  set('--tg-link', link);
+  if (accent) {
+    set('--brand-1', accent);
+    set('--brand-2', accent);
+  } else {
+    r.style.removeProperty('--brand-1');
+    r.style.removeProperty('--brand-2');
+  }
 
   const chrome = isDark ? '#17171f' : '#eeeaf8';
   try { tg?.setHeaderColor?.(chrome); tg?.setBackgroundColor?.(chrome); tg?.setColorScheme?.(isDark ? 'dark' : 'light'); } catch { /* outside Telegram */ }
   try {
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', isDark ? '#12121a' : '#eeeaf8');
+    const cs = document.querySelector('meta[name="color-scheme"]');
+    if (cs) cs.setAttribute('content', 'light dark');
   } catch { /* no head */ }
 }
 

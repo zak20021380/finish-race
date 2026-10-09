@@ -6,7 +6,7 @@
  * global touchmove guard in main.ts). Auto-advance is slow and pauses on touch.
  */
 import type { Difficulty } from './bot';
-import { menuState, saveMenu } from './settings';
+import { menuState, motionReduced, onSettings, saveMenu } from './settings';
 import { flagOf, nameOf } from './countries';
 import {
   formatCountdown,
@@ -71,7 +71,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   const goSlide = (i: number): void => {
     const w = carousel.clientWidth;
-    carousel.scrollTo({ left: i * w, behavior: 'smooth' });
+    carousel.scrollTo({ left: i * w, behavior: motionReduced() ? 'auto' : 'smooth' });
   };
 
   for (const d of dots) {
@@ -92,14 +92,22 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     idleTimer = window.setTimeout(armAuto, 8000);
   };
   const armAuto = (): void => {
-    if (autoTimer || document.hidden) return;
+    // Reduced motion: no auto-advance; the carousel only moves on direct input.
+    if (autoTimer || document.hidden || motionReduced()) return;
     autoTimer = window.setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || motionReduced()) return;
       const s = $('s-home');
       if (s.hidden) return;
       goSlide((activeSlide() + 1) % 3);
     }, 6000);
   };
+  onSettings(() => {
+    if (motionReduced()) {
+      window.clearInterval(autoTimer);
+      autoTimer = 0;
+      window.clearTimeout(idleTimer);
+    } else poke();
+  });
   for (const ev of ['pointerdown', 'touchstart', 'wheel'] as const) {
     carousel.addEventListener(ev, poke, { passive: true });
   }
@@ -125,6 +133,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const join = $('feat-join') as HTMLButtonElement;
     join.disabled = featured.status === 'ended';
     join.textContent = featured.status === 'live' ? 'Join live' : featured.status === 'upcoming' ? 'Join' : 'Ended';
+    join.setAttribute('aria-label', `${join.textContent}: ${featured.name}`);
     mountCoins(carousel);
   };
 

@@ -167,6 +167,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       const isJoined = joined.has(t.id);
       join.disabled = t.status === 'ended' || isJoined;
       join.textContent = isJoined ? 'Joined' : t.status === 'ended' ? 'Ended' : 'Join';
+      join.setAttribute('aria-label', `${join.textContent}: ${t.name}`);
       join.addEventListener('click', () => askJoin(t));
       foot.append(players, join);
 
@@ -312,10 +313,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       meRow.append(rk, fl, nm, pt);
       pinned(el, meRow);
     } else {
-      const hint = document.createElement('div');
+      const hint = document.createElement('button');
       hint.className = 'rank-row rank-pinned hint';
+      hint.type = 'button';
       hint.textContent = 'Pick your country in Profile to appear here.';
-      hint.addEventListener('click', () => api.router.go('profile'));
+      hint.setAttribute('aria-label', 'Pick your country in Profile');
+      hint.addEventListener('click', () => { impact('light'); api.router.go('profile'); });
       el.append(hint);
     }
   }
@@ -403,9 +406,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       meRow.append(rk, fl, nm, pt);
       pinned(el, meRow);
     } else {
-      const hint = document.createElement('div');
+      const hint = document.createElement('button');
       hint.className = 'rank-row rank-pinned hint';
+      hint.type = 'button';
       hint.textContent = 'Find a team on Home to appear here.';
+      hint.setAttribute('aria-label', 'Find a team on Home');
+      hint.addEventListener('click', () => { impact('light'); api.router.go('home'); });
       el.append(hint);
     }
   }

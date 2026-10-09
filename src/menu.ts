@@ -451,7 +451,7 @@ export function createMenu(api: MenuApi): Menu {
     el.addEventListener('click', () => { impact('light'); api.router.go(el.dataset.go as string); });
   }
   for (const el of document.querySelectorAll<HTMLElement>('[data-back]')) {
-    el.addEventListener('click', () => api.onBack());
+    el.addEventListener('click', () => { impact('light'); api.onBack(); });
   }
   $('help-btn').addEventListener('click', () => {
     const sheet = api.sheet('sheet-help');

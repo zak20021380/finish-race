@@ -99,7 +99,8 @@ const router = createRouter($('screens'), (id) => {
   shop.setRoute(id);
   home?.setRoute(id);
   compete?.setRoute(id);
-  setBackButton(id !== 'home' && router.canGoBack);
+  // Telegram BackButton on every screen except Home; always functional via onBack fallback.
+  setBackButton(id !== 'home');
   if (id !== 'game') pauseGame();     // the board only ticks while it is on screen
   syncLoop();
 });
@@ -108,6 +109,7 @@ const router = createRouter($('screens'), (id) => {
 const setBackButton = onBackPress(() => onBack());
 
 function onBack() {
+  impact('light');
   if (sheets.isOpen) { sheets.close(); return; }
   if (router.current === 'game') {
     if (state.winner !== null) { quitToMenu(); return; }
@@ -116,7 +118,8 @@ function onBack() {
     ui();
     return;
   }
-  router.back();
+  // Tabs push, so back normally unwinds; if already at root, land on Home.
+  if (!router.back() && router.current !== 'home') router.popTo('home');
 }
 
 /* ---------- game ---------- */
@@ -446,9 +449,9 @@ menuBtn.addEventListener('click', () => {
   sheets.open(sheetPause);
   ui();
 });
-$('pause-resume').addEventListener('click', () => { sheets.close(); resumeGame(); });
-$('pause-restart').addEventListener('click', () => { sheets.close(); resumeGame(); restart(); });
-$('pause-quit').addEventListener('click', () => sheets.open(sheetQuit));
+$('pause-resume').addEventListener('click', () => { impact('light'); sheets.close(); resumeGame(); });
+$('pause-restart').addEventListener('click', () => { impact('light'); sheets.close(); resumeGame(); restart(); });
+$('pause-quit').addEventListener('click', () => { impact('light'); sheets.open(sheetQuit); });
 $('quit-yes').addEventListener('click', () => { impact('light'); quitToMenu(); });
 
 /* ---------- loop ---------- */
