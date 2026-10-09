@@ -4,8 +4,9 @@
  * Home never scrolls vertically; the carousel is the one horizontal gesture
  * (CSS scroll-snap + `touch-action: pan-x`, `data-carousel` opts out of the
  * global touchmove guard in main.ts). Auto-advance is slow and pauses on touch.
- * The active slide gets `.is-active` so CSS can hold it full size while the
- * peeking cards recede.
+ * Each slide is 100% of the viewport width inside an overflow-hidden wrap, so
+ * only the active slide shows cleanly between the paging dots. `.is-active`
+ * marks the slide in focus (state binding preserved, no visual peek).
  */
 import type { Difficulty } from './bot';
 import { menuState, motionReduced, onSettings, saveMenu, type ModeTab } from './settings';
@@ -92,11 +93,12 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   /* ---------- carousel: dots + slow auto-advance that pauses on touch ---------- */
 
-  /* One card step is the distance between two slides, not the viewport width:
-     the cards peek, so a viewport holds a card plus a sliver of the next. */
+  /* One card step is the distance between two slides. Slides are 100% of the
+     viewport width with no gap/peek, so step === viewport width and exactly
+     one active card fills the wrap between the paging dots. */
   const step = (): number => {
     if (slides.length < 2) return carousel.clientWidth || 1;
-    return slides[1].offsetLeft - slides[0].offsetLeft || 1;
+    return slides[1].offsetLeft - slides[0].offsetLeft || carousel.clientWidth || 1;
   };
 
   const activeSlide = (): number =>
@@ -109,7 +111,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       d.classList.toggle('on', on);
       d.setAttribute('aria-selected', String(on));
     }
-    // only the card in focus sits at full size; the rest recede behind it
+    // contained slider: only the active slide is visible; mark it for state/CSS
     for (const c of slides) c.classList.toggle('is-active', Number(c.dataset.slide) === a);
   };
 
@@ -316,6 +318,8 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       const on = p !== null && p[0] === menuState.sizes[0] && p[1] === menuState.sizes[1];
       b.setAttribute('aria-pressed', String(on));
     }
+    // Hero PLAY is icon + PLAY only (sub-pill removed by design).
+    // Binding preserved: if a sub element exists (legacy/tests), keep it in sync.
     const sub = document.getElementById('home-play-sub');
     if (sub) sub.textContent = lastModeLabel();
   };

@@ -11,32 +11,33 @@
   --brand-1: #0284c7;
   --brand-2: #0ea5e9;
   --brand-3: #38bdf8;
-  --brand-ink: #0369a6;               /* sky dark enough to be body text on a clay card (5.9:1) */
+  --brand-ink: #7DD3FC;               /* light sky for body text on dark clay #1C2433 */
   --brand-glow: rgba(2, 132, 199, .4);
-  --brand-soft: rgba(14, 165, 233, .12);
+  --brand-soft: rgba(14, 165, 233, .16);
   /* The ramp every filled control uses. It stops deep enough that --on-brand
      clears 4.5:1 at both ends — a lighter top stop is what made white-on-sky fail. */
   --brand-fill: linear-gradient(180deg, #0477b8 0%, #0369a6 100%);
   --brand-lip: #025170;
   --brand-shadow: 0 10px 20px -12px rgba(2, 132, 199, .6);
 
-  /* ---- the single primary action: coral face, dark extrusion lip ---- */
-  --cta: #ff5a36;
-  --cta-hi: #ff8163;
-  --cta-lip: #c93b18;
-  --cta-shadow: 0 14px 26px -12px rgba(201, 59, 24, .62);
+  /* ---- the single primary action: vibrant Coral face, dark extrusion lip ----
+     Dark Clay spec: #FF522B face on #1C2433 slate, #B83010 lip for max contrast. */
+  --cta: #FF522B;
+  --cta-hi: #FF7A4D;
+  --cta-lip: #B83010;
+  --cta-shadow: 0 14px 26px -12px rgba(255, 82, 43, .5);
 
   /* ---- secondary accents: mint and honey, each with the lip its extrusion needs ----
-     --*-ink is the text pair; every one clears 4.5:1 on white clay. */
+     --*-ink is the light text pair for dark clay #1C2433. */
   --mint: #10b981;
   --mint-deep: #059669;
   --mint-lip: #047857;
-  --mint-ink: #047857;
-  --mint-soft: rgba(16, 185, 129, .14);
+  --mint-ink: #6EE7B7;
+  --mint-soft: rgba(16, 185, 129, .16);
   --honey: #f59e0b;
   --honey-lip: #b45309;
-  --honey-ink: #7c3d03;
-  --honey-soft: rgba(245, 158, 11, .16);
+  --honey-ink: #FCD34D;
+  --honey-soft: rgba(245, 158, 11, .18);
 
   /* Result fills keep their deep hues in both themes: the type on them is always white. */
   --win-1: #17805a;
@@ -49,56 +50,54 @@
   --bad-2: #b3123c;
   --bad-shadow: 0 12px 24px -10px rgba(179, 18, 60, .75);
 
-  /* ---- surfaces: light-mode clay ----
-     One palette, one theme. A card is elevated white lit from above: an ambient
-     drop shadow, a specular line along the top edge and a soft bevel underneath.
-     The canvas is milky cloud white, so the blobs are pastel washes, not glow. */
-  --bg: #f1f5f9;
-  --bg-a: #f8fafc;                     /* mesh base wash */
-  --bg-m: #eef3fa;
-  --bg-b: #e4ecf6;
-  --vig: rgba(100, 111, 139, .1);      /* the vignette that grounds the mesh */
-  --lav: rgba(186, 215, 250, .55);     /* the drifting blobs */
-  --sky: rgba(214, 236, 250, .6);
-  --blush: rgba(255, 216, 204, .5);
-  --clay-face: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
-  --glass-a: #ffffff;                  /* kept as names: the shell still references them */
-  --glass-b: #fbfdff;
-  --card-a: #ffffff;                   /* solid card fallback where backdrop-filter is missing */
-  --card-b: #f7fafd;
-  --solid-a: #ffffff;                  /* sheet, panel, the raised chip */
-  --solid-b: #f1f5f9;
-  --hair: rgba(255, 255, 255, .9);     /* 1px inner border on a clay surface */
-  --hair-lit: #ffffff;                 /* lit top edge */
-  --hair-off: rgba(15, 23, 42, .08);   /* hairline on a plain surface */
-  --field: #e2e8f0;                    /* recessed track, inset groove, icon chips */
-  --sep: rgba(15, 23, 42, .08);        /* row dividers */
-  --tint-glass: #f6f9fc;
-  --veil: rgba(100, 116, 139, .45);    /* the dimming layer behind a sheet */
-  --shadow: rgba(100, 116, 139, .34);
-  --shadow-soft: rgba(100, 116, 139, .18);
+  /* ---- surfaces: Dark Clay / Slate ----
+     One palette, one theme. Canvas #10141D deep matte slate; cards #1C2433
+     lit from above: ambient drop · top inner highlight · bottom extrusion bevel.
+     Blobs are faint glows, not pastel washes, so nothing glares. */
+  --bg: #10141D;
+  --bg-a: #10141D;                     /* mesh base wash */
+  --bg-m: #141B2A;
+  --bg-b: #0B0E14;
+  --vig: rgba(0, 0, 0, .45);           /* the vignette that grounds the mesh */
+  --lav: rgba(56, 189, 248, .07);      /* the drifting blobs: faint glow on slate */
+  --sky: rgba(56, 189, 248, .05);
+  --blush: rgba(255, 82, 43, .05);
+  --clay-face: linear-gradient(180deg, #202A3E 0%, #1C2433 100%);
+  --glass-a: #1C2433;                  /* kept as names: the shell still references them */
+  --glass-b: #1C2433;
+  --card-a: #1C2433;                   /* solid card fallback where backdrop-filter is missing */
+  --card-b: #1A2232;
+  --solid-a: #232E44;                  /* sheet, panel, the raised chip */
+  --solid-b: #1C2433;
+  --hair: rgba(255, 255, 255, .08);    /* 1px inner border on a dark clay surface */
+  --hair-lit: rgba(255, 255, 255, .12);/* lit top edge */
+  --hair-off: rgba(255, 255, 255, .08);/* hairline on a plain surface */
+  --field: #0E1526;                    /* recessed track, inset groove, icon chips */
+  --sep: rgba(255, 255, 255, .08);     /* row dividers */
+  --tint-glass: #1C2433;
+  --veil: rgba(0, 0, 0, .6);           /* the dimming layer behind a sheet */
+  --shadow: rgba(0, 0, 0, .45);
+  --shadow-soft: rgba(0, 0, 0, .3);
   --red: #e0264f;
   --blue: #3057db;
   --green: #10b981;
-  /* Same hues, darkened for text: every pair below clears 4.5:1 on white clay. */
-  --red-ink: #be123c;
-  --blue-ink: #2340a8;
-  --green-ink: #047857;
-  --ink: #0f172a;                      /* midnight navy */
-  /* Slate for labels. The spec's #64748b measures 4.3:1 on white and only 3.9:1 on the
-     recessed slab, so the ramp is pulled two steps darker: 4.9:1 on --field, 6.1:1 on clay. */
-  --ink-soft: #56637a;
-  --chip-ink: #475569;
+  /* Light inks for dark clay #1C2433: crisp white titles, slate-silver secondary. */
+  --red-ink: #FDA4AF;
+  --blue-ink: #93C5FD;
+  --green-ink: #6EE7B7;
+  --ink: #F8FAFC;                      /* crisp clean white */
+  --ink-soft: #94A3B8;                 /* slate silver secondary */
+  --chip-ink: #CBD5E1;
   --badge-bg: var(--brand-soft);       /* the two-letter code chip and the team code */
   --badge-ink: var(--brand-ink);
   --on-brand: #ffffff;                 /* text on the coral / deep-sky fills */
-  --danger: #be123c;
-  --red-glow: rgba(224, 38, 79, .14);
-  --blue-glow: rgba(48, 87, 219, .14);
-  /* mock coins: a chunky gold pill, so the ink on it is navy, not brown-on-brown */
+  --danger: #FDA4AF;
+  --red-glow: rgba(224, 38, 79, .25);
+  --blue-glow: rgba(48, 87, 219, .25);
+  /* mock coins: gold on slate — light gold ink for translucent trays */
   --coin: rgba(245, 158, 11, .16);
-  --coin-line: rgba(180, 83, 9, .38);
-  --coin-ink: #7c3d03;
+  --coin-line: rgba(245, 158, 11, .35);
+  --coin-ink: #FCD34D;
   --gold-face: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
   --gold-lip: #b45309;
   /* the board's status banner stays deep in every screen: its type is always white */
@@ -147,15 +146,16 @@
   --r-panel: 26px;                    /* the cards that stack a screen: identity, highlights, launcher */
   --r-chip: var(--radius-md);         /* interactive sub-surfaces inside a panel: tiles, chips */
 
-  /* ---- elevation: a clay tile is lit from above, so every card carries the same three layers ----
-     ambient drop · top specular · bottom bevel. Compose them, never re-invent them. */
-  --clay-drop: 0 12px 24px rgba(100, 116, 139, .12), 0 2px 6px rgba(100, 116, 139, .07);
-  --clay-spec: inset 0 2px 3px rgba(255, 255, 255, .9);
-  --clay-bevel: inset 0 -3px 3px rgba(0, 0, 0, .04);
-  --clay-ring: inset 0 0 0 1px var(--hair-off);
+  /* ---- elevation: Dark Clay slab — ambient drop · top highlight · bottom bevel ----
+     Spec: 0 14px 28px rgba(0,0,0,.45) · inset 0 2px 2px rgba(255,255,255,.08) ·
+     inset 0 -3px 3px rgba(0,0,0,.35). Compose them, never re-invent them. */
+  --clay-drop: 0 14px 28px rgba(0, 0, 0, .45);
+  --clay-spec: inset 0 2px 2px rgba(255, 255, 255, .08);
+  --clay-bevel: inset 0 -3px 3px rgba(0, 0, 0, .35);
+  --clay-ring: inset 0 0 0 1px rgba(255, 255, 255, .06);
   --clay: var(--clay-drop), var(--clay-spec), var(--clay-bevel);
   /* pressed into the slab rather than lifted off it */
-  --inset: inset 0 2px 5px rgba(100, 116, 139, .22), inset 0 -1px 0 rgba(255, 255, 255, .7);
+  --inset: inset 0 2px 5px rgba(0, 0, 0, .5), inset 0 -1px 0 rgba(255, 255, 255, .06);
   --elev-1: 0 8px 18px -12px var(--shadow);
   --elev-2: 0 16px 32px -18px var(--shadow);
   --elev-3: 0 26px 50px -18px var(--shadow);
@@ -171,8 +171,8 @@
   /* ---- unified clay face: one background, one hairline, no live blur ---- */
   --glass-bg: var(--clay-face);
   --glass-blur: none;
-  --glass-border: inset 0 0 0 1px var(--hair-off);
-  --glass-border-top: inset 0 2px 3px rgba(255, 255, 255, .9);
+  --glass-border: inset 0 0 0 1px rgba(255, 255, 255, .06);
+  --glass-border-top: inset 0 2px 2px rgba(255, 255, 255, .08);
 
   /* ---- motion: transform/opacity only, one curve, one duration ---- */
   --motion-fast: .16s ease;
@@ -766,7 +766,7 @@ html.rm .coin.sweep .coin-sweep { animation: none; }
     inset 0 -2px 3px rgba(0, 0, 0, .16);
 }
 .btn-ghost {
-  --btn-lip: #cbd5e1;
+  --btn-lip: #080C14;
   background: var(--clay-face);
   color: var(--ink);
   box-shadow:
@@ -802,7 +802,7 @@ html.rm .coin.sweep .coin-sweep { animation: none; }
   color: var(--ink);
   cursor: pointer;
   box-shadow:
-    0 var(--d) 0 #cbd5e1,
+    0 var(--d) 0 #080C14,
     0 calc(var(--d) + 5px) 12px -8px var(--shadow-soft),
     var(--clay-spec), var(--clay-bevel), var(--clay-ring);
 }
@@ -850,9 +850,9 @@ html.rm .coin.sweep .coin-sweep { animation: none; }
   border-radius: 34%;
   background: var(--clay-face);
   box-shadow:
-    0 var(--d) 0 #cbd5e1,
+    0 var(--d) 0 #080C14,
     inset 0 0 0 2px var(--brand-soft),
-    inset 0 2px 3px rgba(255, 255, 255, .9),
+    inset 0 2px 2px rgba(255, 255, 255, .08),
     var(--clay-bevel);
   color: var(--ink);
   font-size: var(--t-1);
@@ -909,7 +909,7 @@ html.no-flags .flag-code { display: inline-block; }
   height: 10px;
   border-radius: var(--radius-pill);
   background: var(--field);
-  box-shadow: inset 0 2px 4px rgba(100, 116, 139, .3), inset 0 -1px 0 rgba(255, 255, 255, .8);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .5), inset 0 -1px 0 rgba(255, 255, 255, .06);
   overflow: hidden;
 }
 .bar i {
@@ -1244,8 +1244,8 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: var(--solid-a);
-  box-shadow: 0 2px 6px var(--shadow);
+  background: #F8FAFC;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .5);
   transition: transform var(--motion-med), opacity var(--motion-fast);
 }
 .row[aria-checked="true"] .switch { background: var(--brand-fill); }
@@ -1454,7 +1454,7 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   padding: 6px;
   border-radius: var(--radius-pill);
   box-shadow:
-    0 var(--d) 0 #cbd5e1,
+    0 var(--d) 0 #080C14,
     var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
 }
 .tab {
@@ -1916,12 +1916,12 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   gap: 2px;
   padding: 3px var(--s2);
   border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #f0fdfa 0%, var(--mint-soft) 100%);
+  background: linear-gradient(180deg, rgba(16, 185, 129, .22) 0%, var(--mint-soft) 100%);
   color: var(--mint-ink);
   box-shadow:
-    0 var(--d) 0 rgba(4, 120, 87, .35),
-    inset 0 1px 0 rgba(255, 255, 255, .9),
-    inset 0 0 0 1px rgba(4, 120, 87, .28);
+    0 var(--d) 0 rgba(0, 0, 0, .5),
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    inset 0 0 0 1px rgba(110, 231, 183, .28);
   font-size: var(--t-micro);
   font-weight: 800;
   line-height: 1.3;
@@ -1940,7 +1940,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   padding: 0 var(--s2) 1px;
   border-radius: var(--radius-pill);
   background: var(--gold-face);
-  color: var(--ink);
+  color: #10141D;
   font-size: var(--t-3);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -1960,7 +1960,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   background: var(--clay-face);
   color: var(--chip-ink);
   box-shadow:
-    0 var(--d) 0 #cbd5e1,
+    0 var(--d) 0 #080C14,
     var(--clay-spec), var(--clay-bevel), var(--clay-ring);
 }
 .icon-btn.xs::after { inset: -8px; }
@@ -1985,12 +1985,12 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   padding: 0 var(--s2);
   min-height: 30px;
   border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
+  background: linear-gradient(180deg, #232E44 0%, #1C2433 100%);
   color: var(--chip-ink);
   cursor: pointer;
   box-shadow:
-    0 var(--d) 0 #cbd5e1,
-    inset 0 1px 0 rgba(255, 255, 255, .9),
+    0 var(--d) 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .08),
     var(--clay-ring);
   transition: transform var(--motion-fast), box-shadow var(--motion-fast);
 }
@@ -2022,7 +2022,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 .tag-chip.unset {
   background: none;
   color: var(--ink-soft);
-  box-shadow: inset 0 0 0 1.5px rgba(100, 116, 139, .28);
+  box-shadow: inset 0 0 0 1.5px rgba(148, 163, 184, .35);
 }
 .tag-chip.unset .tag-chip-t { text-decoration: underline dotted; text-underline-offset: 3px; }
 
@@ -2037,7 +2037,10 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   white-space: nowrap;
 }
 
-/* ---- highlights: the one horizontal gesture, with a deliberate peek ---- */
+/* ---- highlights: single contained slide, no peek ----
+   The wrap clips any off-screen card (overflow:hidden); the track is a
+   100%-width scroll-snap slider so exactly one active card fills the
+   viewport between the paging dots. No adjacent slivers, no edge cut-off. */
 .carousel-wrap {
   flex: 1 1 auto;
   min-height: 0;
@@ -2045,6 +2048,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   flex-direction: column;
   justify-content: center;
   gap: var(--s2);
+  overflow: hidden;
 }
 .carousel {
   flex: 1 1 auto;
@@ -2052,14 +2056,14 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   max-height: 248px;
   display: flex;
   align-items: stretch;
-  gap: var(--s3);
-  padding-inline: var(--s4);
-  padding-block: 2px;                 /* lets an active tile's drop shadow breathe */
-  margin-inline: calc(-1 * var(--pad-r));
+  gap: 0;
+  padding-inline: 0;
+  padding-block: 4px;                 /* lets the active tile's drop shadow breathe */
+  margin-inline: 0;
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
-  scroll-padding-inline: var(--s4);
+  scroll-padding-inline: 0;
   scroll-snap-stop: always;
   touch-action: pan-x;
   overscroll-behavior-x: contain;
@@ -2068,17 +2072,16 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 }
 .carousel::-webkit-scrollbar { display: none; }
 .carousel:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
-/* The card behind is not faded — a translucent white tile on a white canvas is
-   invisible. It recedes by becoming the slab instead of the tile: grey face,
-   no lift, 7% smaller. Only transform and paint change; nothing re-layouts. */
-/* Children never shrink: a card that is too short for its own lines overflows
-   visibly, which is what the layout check can measure. Left flexible, flex would
-   compress the title to a sliver and scrollHeight would keep reporting "fits". */
+/* Contained slider: every card is exactly the viewport width, centred on snap.
+   Off-screen cards stay fully off-screen — nothing peeks at the edges.
+   Children never shrink: a card that is too short for its own lines overflows
+   visibly, which is what the layout check can measure. */
 .car-card {
-  flex: 0 0 84%;
+  flex: 0 0 100%;
+  max-width: 100%;
   min-width: 0;
   min-height: 0;
-  scroll-snap-align: start;
+  scroll-snap-align: center;
   display: flex;
   flex-direction: column;
   justify-content: space-between;   /* a taller card spreads its lines instead of opening one hole */
@@ -2086,11 +2089,11 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   padding: var(--s4);
   overflow: hidden;
   border-radius: var(--r-panel);
-  background: linear-gradient(180deg, #f8fafc 0%, #eef3f9 100%);
+  background: linear-gradient(180deg, #161E30 0%, #141B2B 100%);
   box-shadow: inset 0 0 0 1px var(--hair-off);
-  transform: scale(.93);
+  transform: none;
   transform-origin: center;
-  transition: transform var(--motion-med), box-shadow var(--motion-med), background var(--motion-med);
+  transition: box-shadow var(--motion-med), background var(--motion-med);
 }
 .car-card > * { flex: none; }
 .car-card.is-active {
@@ -2176,9 +2179,9 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   font-weight: 800;
   letter-spacing: .04em;
   text-transform: uppercase;
-  background: linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
+  background: linear-gradient(180deg, #232E44 0%, #1C2433 100%);
   color: var(--chip-ink);
-  box-shadow: 0 var(--d) 0 #cbd5e1, inset 0 1px 0 rgba(255, 255, 255, .9), var(--clay-ring);
+  box-shadow: 0 var(--d) 0 #080C14, inset 0 1px 0 rgba(255, 255, 255, .08), var(--clay-ring);
   white-space: nowrap;
 }
 .pill.live {
@@ -2187,11 +2190,11 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   box-shadow: 0 var(--d) 0 #8f0e2e, inset 0 1px 0 rgba(255, 255, 255, .3);
 }
 .pill.upcoming {
-  background: linear-gradient(180deg, #f0f9ff 0%, var(--brand-soft) 100%);
+  background: linear-gradient(180deg, rgba(14, 165, 233, .22) 0%, var(--brand-soft) 100%);
   color: var(--brand-ink);
-  box-shadow: 0 var(--d) 0 rgba(3, 105, 166, .3), inset 0 1px 0 rgba(255, 255, 255, .9), inset 0 0 0 1px rgba(3, 105, 166, .25);
+  box-shadow: 0 var(--d) 0 rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .08), inset 0 0 0 1px rgba(125, 211, 252, .25);
 }
-.pill.ended { background: var(--field); color: var(--ink-soft); box-shadow: 0 var(--d) 0 #cbd5e1; }
+.pill.ended { background: var(--field); color: var(--ink-soft); box-shadow: 0 var(--d) 0 #080C14; }
 .preview-badge {
   flex: none;
   padding: 3px var(--s2) 4px;
@@ -2232,7 +2235,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
-.mini-rank li + li { box-shadow: inset 0 1px 0 rgba(100, 116, 139, .14); }
+.mini-rank li + li { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
 .mini-rank li.me { background: var(--acc-soft, var(--brand-soft)); color: var(--acc-ink, var(--brand-ink)); }
 .mini-rank .rk { flex: none; width: 1.5em; color: var(--ink-soft); font-weight: 800; }
 .mini-rank li.me .rk { color: inherit; }
@@ -2273,8 +2276,8 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   width: 10px;
   height: 10px;
   border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
-  box-shadow: 0 2px 0 #cbd5e1, var(--clay-ring);
+  background: linear-gradient(180deg, #2A354C 0%, #1C2433 100%);
+  box-shadow: 0 2px 0 #080C14, var(--clay-ring);
   transition: width var(--motion-med), background var(--motion-fast), box-shadow var(--motion-fast);
 }
 .dot.on::before {
@@ -2309,7 +2312,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   border-radius: var(--radius-pill);
   background: var(--clay-face);
   box-shadow:
-    0 4px 0 #cbd5e1,
+    0 4px 0 #080C14,
     0 8px 16px -8px var(--shadow),
     var(--clay-spec), var(--clay-bevel), var(--clay-ring);
   transition: transform var(--motion-med);
@@ -2414,7 +2417,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 .mode-chip.go {
   flex: 0 1 auto;
   background: var(--clay-face);
-  box-shadow: 0 var(--d) 0 #cbd5e1, var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+  box-shadow: 0 var(--d) 0 #080C14, var(--clay-spec), var(--clay-bevel), var(--clay-ring);
   color: var(--ink);
 }
 .mode-chip.go .ico { color: var(--brand-ink); }
@@ -2448,9 +2451,9 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   text-transform: uppercase;
 }
 
-/* ---- the one loud element: the arcade button this whole screen exists to reach ----
-   6px of solid coral lip under a lit face. A press travels 4px down and the lip
-   collapses to 2px, which is exactly what a real switch does at the bottom. */
+/* ---- the one loud element: clean bold PLAY on vibrant Coral ----
+   #FF522B face + #B83010 lip for max contrast on the slate container.
+   Icon + PLAY only — no sub-pill. Press travels 4px down, lip collapses to 2px. */
 .btn-hero {
   --d: 6px;
   position: relative;
@@ -2458,17 +2461,20 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   width: 100%;
   min-height: 68px;
   padding: var(--s2) var(--s4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   gap: var(--s2);
   border-radius: 24px;
   font-weight: 800;
   background:
-    linear-gradient(180deg, var(--cta-hi) 0%, var(--cta) 46%, #f2481f 100%);
-  color: var(--on-brand);
+    linear-gradient(180deg, var(--cta-hi) 0%, var(--cta) 46%, #E8441F 100%);
+  color: #fff;
   box-shadow:
     0 var(--d) 0 var(--cta-lip),
-    0 calc(var(--d) + 10px) 22px -10px rgba(201, 59, 24, .6),
+    0 calc(var(--d) + 10px) 22px -10px rgba(184, 48, 16, .55),
     inset 0 3px 4px rgba(255, 255, 255, .42),
-    inset 0 -4px 6px rgba(153, 36, 8, .35);
+    inset 0 -4px 6px rgba(120, 25, 5, .4);
 }
 .btn-hero:hover:not(:active) { transform: translateY(-1px); }
 .btn-hero:active { transform: translateY(var(--press-y-lg)); --d: 2px; }
@@ -2483,24 +2489,9 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   background: linear-gradient(180deg, rgba(255, 255, 255, .34), rgba(255, 255, 255, 0));
   pointer-events: none;
 }
-.btn-hero .ico { width: 1.15em; height: 1.15em; }
-.hero-txt { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; line-height: 1.1; }
-/* 21px/900 is large text, so white on coral clears the 3:1 bar with room to spare */
-.hero-t { font-size: 21px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
-/* the mode line is small type, so it gets an engraved plate: #C93B18 under white is 5.1:1 */
-.hero-sub {
-  max-width: 100%;
-  padding: 2px var(--s2) 3px;
-  border-radius: var(--radius-pill);
-  background: var(--cta-lip);
-  box-shadow: inset 0 1px 2px rgba(92, 22, 3, .5);
-  font-size: var(--t-micro);
-  font-weight: 800;
-  letter-spacing: .02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.btn-hero .ico { width: 1.25em; height: 1.25em; }
+/* single-line wordmark: bold white PLAY, punchy and centred */
+.hero-t { font-size: 22px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; color: #fff; line-height: 1; }
 
 /* ---- the dock on Home: full width, so every tab is a wide, easy thumb target ---- */
 .tabs {
