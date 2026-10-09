@@ -2076,3 +2076,392 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 .skel.w60 { width: 60%; }
 .skel-row { display: flex; gap: var(--s2); align-items: center; padding: var(--s2) var(--s3); }
 @keyframes skel { to { background-position: -200% 0; } }
+
+/* ==========================================================================
+   HOME FIX — 360x640 budget: no vertical scroll, nothing behind the tab bar.
+   Flex column: id (fixed) + xp (fixed) + carousel (flex leftover, 150-200)
+   + cta (fixed). Dots overlay inside the card. Compact <620px.
+   ========================================================================== */
+
+/* Reserve tab height in flow + explicit 64px bar */
+.tabs {
+  padding: 4px;
+  min-height: 64px;
+  box-sizing: border-box;
+}
+.tab { min-height: 56px; }
+
+/* Home column owns the budget */
+.screen.home {
+  gap: 8px;
+  overflow: hidden;
+  justify-content: flex-start;
+  padding-bottom: 2px; /* reserves 2px above tabs so nothing kisses the bar */
+  min-height: 0;
+}
+
+/* ---- identity: one compact row (~56px) + thin XP line (~16px) = ~76px ---- */
+.id-card {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 56px;
+  max-height: 64px;
+  padding: 8px 10px;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.avatar-btn {
+  min-width: 36px;
+  min-height: 36px;
+  width: 36px;
+  height: 36px;
+}
+.avatar-btn .avatar { width: 32px; height: 32px; font-size: 13px; }
+.id-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.id-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.id-name-btn { min-height: 0; flex: 0 1 auto; }
+.id-name {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+.lvl-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.lvl-pill b { font-weight: 800; }
+.id-chips { display: flex; gap: 6px; min-width: 0; }
+.id-side {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* unified glass chips: same surface, 1px inner highlight, same elev */
+.tag-chip,
+.coin-pill {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow:
+    inset 0 0 0 1px var(--hair),
+    inset 0 1px 0 var(--hair-lit),
+    var(--elev-1);
+  border-radius: 999px;
+}
+.tag-chip {
+  min-height: 28px;
+  max-height: 28px;
+  padding: 4px 6px;
+  flex: 1 1 0;
+  gap: 3px;
+}
+.tag-chip::after {
+  content: "";
+  position: absolute;
+  inset: -8px -4px;
+}
+.tag-chip .chip-ico { width: 13px; height: 13px; flex: none; color: var(--brand-ink); }
+.tag-chip-t {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.tag-chip-n { font-size: 11px; font-weight: 700; }
+#country-globe { display: none; }
+.tag-chip.unset #country-globe { display: block; }
+.tag-chip.unset .flag { display: none; }
+.tag-chip:not(.unset) #country-globe { display: none; }
+.coin-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 28px;
+  max-height: 28px;
+  padding: 4px 8px;
+  color: var(--coin-ink);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.coin-pill .coin { width: 14px; height: 14px; }
+.icon-btn.xs {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  border-radius: 10px;
+}
+.icon-btn.xs::after { content: ""; position: absolute; inset: -6px; }
+.icon-btn.xs .ico { width: 18px; height: 18px; }
+
+.xp-row {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 14px;
+  max-height: 14px;
+  padding: 0 2px;
+}
+.xp-row .bar.thin {
+  flex: 1 1 auto;
+  height: 4px;
+  min-height: 4px;
+}
+.xp-row .lvl-r {
+  flex: none;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* hide legacy lvl block if any remains */
+.lvl { display: none; }
+.id-coins { display: none; }
+.id-body { display: none; }
+.id-top, .id-top-r { display: none; }
+
+/* ---- carousel: flexible, takes leftover, 150-200px ---- */
+.carousel-wrap {
+  flex: 1 1 auto;
+  min-height: 150px;
+  max-height: 200px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.carousel {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  height: 100%;
+  gap: 8px;
+  padding: 2px 2px 2px;
+  margin: 0;
+  scroll-padding: 0 8px;
+}
+.car-card {
+  flex: 0 0 88%;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  gap: 6px;
+  padding: 10px 14px 28px;
+  border-radius: 16px;
+  overflow: hidden;
+  min-width: 0;
+}
+.car-head { min-height: 0; }
+.car-kicker { font-size: 11px; font-weight: 700; }
+.car-title {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  min-width: 0;
+}
+.car-title.sm { font-size: 14px; font-weight: 700; }
+.car-sub {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+.car-meta { gap: 8px; row-gap: 2px; min-height: 0; }
+.car-prize { font-size: 13px; font-weight: 700; }
+.car-fee, .car-count, .car-players { font-size: 11px; font-weight: 500; }
+.car-count { font-weight: 700; }
+.car-foot { gap: 8px; min-height: 0; }
+.car-foot .btn.sm { min-height: 36px; height: 36px; padding: 6px 14px; font-size: 13px; }
+.car-note { font-size: 11px; font-weight: 500; }
+.mini-rank { gap: 3px; overflow: hidden; }
+.mini-rank li { min-height: 20px; max-height: 22px; font-size: 13px; font-weight: 600; overflow: hidden; }
+.mini-rank li.me { font-weight: 700; }
+/* dots overlaid inside bottom of card */
+.car-dots {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  min-height: 0;
+  height: 20px;
+  padding: 4px 10px;
+  gap: 6px;
+  border-radius: 999px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow:
+    inset 0 0 0 1px var(--hair),
+    var(--elev-1);
+  z-index: 2;
+  pointer-events: auto;
+}
+.dot { width: 16px; height: 6px; }
+.dot::after { content: ""; position: absolute; inset: -12px -8px; }
+
+/* ---- play (56px) + 4 tiles (72px) ---- */
+.home-cta { gap: 8px; }
+.btn-hero {
+  min-height: 56px;
+  max-height: 56px;
+  height: 56px;
+  padding: 6px 16px;
+  gap: 10px;
+}
+.hero-txt { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2; min-width: 0; }
+.btn-hero .hero-txt { align-items: center; }
+.hero-t { font-size: 16px; font-weight: 800; line-height: 1.2; }
+.hero-sub { font-size: 11px; font-weight: 500; line-height: 1.3; opacity: 0.88; white-space: nowrap; }
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.mode-tile {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 72px;
+  min-height: 72px;
+  max-height: 72px;
+  min-width: 0;
+  padding: 8px 4px;
+  border-radius: 16px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow:
+    inset 0 0 0 1px var(--hair),
+    inset 0 1px 0 var(--hair-lit),
+    var(--elev-1);
+  transition: transform var(--motion-fast), opacity var(--motion-fast), box-shadow var(--motion-fast);
+}
+.mode-tile:active { transform: scale(0.96); }
+.mode-tile:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.mode-badge {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--brand-fill);
+  color: var(--on-brand);
+  box-shadow: var(--brand-shadow), inset 0 1px 0 rgba(255,255,255,0.35);
+}
+.mode-badge .ico { width: 18px; height: 18px; }
+.mode-tile .mode-t {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ink);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mode-tile[aria-pressed="true"] {
+  box-shadow:
+    inset 0 0 0 2px var(--brand-2),
+    inset 0 1px 0 var(--hair-lit),
+    var(--elev-1);
+  background: linear-gradient(180deg, var(--glass-a) 0%, var(--brand-soft) 100%);
+}
+.mode-tile[aria-pressed="true"] .mode-t { color: var(--brand-ink); font-weight: 600; }
+.mode-tile.off {
+  opacity: 0.72;
+  cursor: default;
+}
+.mode-tile.off .mode-badge { background: var(--field); color: var(--ink-soft); box-shadow: inset 0 0 0 1px var(--hair-off); }
+.tile-soon {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+/* legacy .mode kept for modes screen? hide home legacy */
+.mode-grid .mode { display: none; }
+
+/* quick sheets share preset/seg rhythm */
+#sheet-quick-bot .seg, #sheet-quick-teams .seg { margin-bottom: 8px; }
+#qt-presets { margin-top: 8px; }
+.preset[aria-pressed="true"] {
+  background: var(--brand-soft);
+  box-shadow: inset 0 0 0 2px var(--brand-2);
+}
+.preset[aria-pressed="true"] b { color: var(--brand-ink); }
+
+/* tall phones: spend extra pixels on gaps, sizes stay in budget (150-200 / 56 / 72) */
+@media (min-height: 700px) {
+  .screen.home { gap: 12px; }
+  .carousel-wrap { min-height: 180px; max-height: 200px; }
+  .car-card { padding: 12px 16px 30px; }
+  .btn-hero { min-height: 56px; max-height: 56px; height: 56px; }
+  .mode-tile { height: 72px; min-height: 72px; max-height: 72px; }
+}
+
+/* compact density below 620px: smaller paddings, 150px carousel (tab stays 64px) */
+@media (max-height: 619px) {
+  #app { --pad-t: 12px; --pad-b: 8px; gap: 6px; }
+  .screen.home { gap: 6px; }
+  .id-card { padding: 6px 10px; min-height: 52px; gap: 6px; }
+  .avatar-btn { width: 36px; height: 36px; min-width: 36px; min-height: 36px; }
+  .avatar-btn .avatar { width: 32px; height: 32px; }
+  .carousel-wrap { min-height: 140px; max-height: 150px; }
+  .car-card { padding: 8px 12px 26px; gap: 4px; }
+  .home-cta { gap: 6px; }
+  .mode-grid { gap: 6px; }
+}
+
+/* text never overflows cards */
+.car-card *, .id-card *, .mode-tile * { min-width: 0; }
+.car-title, .car-sub, .car-note, .id-name, .tag-chip-t, .mode-t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

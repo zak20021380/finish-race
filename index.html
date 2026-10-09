@@ -134,37 +134,38 @@
                 <span id="avatar-t">P</span>
               </span>
             </button>
-            <div class="id-body">
-              <div class="id-top">
+            <div class="id-main">
+              <div class="id-name-row">
                 <button class="id-name-btn" type="button" id="home-profile-btn" aria-label="Open profile">
                   <span class="id-name" id="p-name">Player</span>
                 </button>
-                <span class="id-top-r">
-                  <span class="id-coins"><span class="coin" data-coin aria-hidden="true"></span><span id="p-coins">0</span></span>
-                  <button class="icon-btn xs" type="button" id="home-settings" aria-label="Open settings">
-                    <svg class="ico" aria-hidden="true"><use href="#i-tune" /></svg>
-                  </button>
-                </span>
+                <span class="lvl-pill" aria-label="Level 1">Lv <b id="p-level">1</b></span>
               </div>
               <div class="id-chips">
                 <button class="tag-chip" type="button" id="country-chip" aria-label="Country — open profile">
+                  <svg class="ico chip-ico" id="country-globe" aria-hidden="true"><use href="#i-globe" /></svg>
                   <span class="flag" id="country-flag" aria-hidden="true"></span>
                   <span class="flag-code" id="country-code" aria-hidden="true"></span>
                   <span class="tag-chip-t" id="country-name">Add country</span>
                 </button>
                 <button class="tag-chip" type="button" id="team-chip" aria-haspopup="dialog">
-                  <svg class="ico" aria-hidden="true"><use href="#i-users" /></svg>
+                  <svg class="ico chip-ico" aria-hidden="true"><use href="#i-users" /></svg>
                   <span class="tag-chip-t" id="team-name">Find a team</span>
                   <span class="tag-chip-n" id="team-count"></span>
                 </button>
               </div>
-              <p class="lvl">
-                <span class="lvl-l">Level <b id="p-level">1</b></span>
-                <span class="bar" role="progressbar" id="p-bar" aria-label="Progress to the next level" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><i id="p-fill"></i></span>
-                <span class="lvl-r" id="p-xp">0/10 XP</span>
-              </p>
+            </div>
+            <div class="id-side">
+              <span class="coin-pill"><span class="coin" data-coin aria-hidden="true"></span><span id="p-coins">0</span></span>
+              <button class="icon-btn xs" type="button" id="home-settings" aria-label="Open settings">
+                <svg class="ico" aria-hidden="true"><use href="#i-tune" /></svg>
+              </button>
             </div>
           </header>
+          <div class="xp-row">
+            <span class="bar thin" role="progressbar" id="p-bar" aria-label="Progress to the next level" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><i id="p-fill"></i></span>
+            <span class="lvl-r" id="p-xp">0/10 XP</span>
+          </div>
 
           <div class="carousel-wrap">
             <div class="carousel" id="home-carousel" data-carousel tabindex="0" aria-roledescription="carousel" aria-label="Highlights">
@@ -217,39 +218,30 @@
           </div>
 
           <div class="home-cta">
-            <button class="btn btn-hero" id="home-play" type="button" data-go="modes">
-              <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg><span>Play</span>
+            <button class="btn btn-hero" id="home-play" type="button" aria-describedby="home-play-sub">
+              <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg>
+              <span class="hero-txt">
+                <span class="hero-t">Play</span>
+                <span class="hero-sub" id="home-play-sub">vs Bot · Normal</span>
+              </span>
             </button>
             <div class="mode-grid" role="group" aria-label="Jump straight into a mode">
-              <button class="mode" type="button" data-bot-diff="easy">
-                <svg class="ico" aria-hidden="true"><use href="#i-bot" /></svg>
-                <span class="mode-t">Easy</span>
-                <span class="mode-s">vs Bot</span>
+              <button class="mode-tile" type="button" data-mode="bot" id="tile-bot" aria-pressed="true" aria-label="vs Bot — choose difficulty">
+                <span class="mode-badge" aria-hidden="true"><svg class="ico"><use href="#i-bot" /></svg></span>
+                <span class="mode-t">vs Bot</span>
               </button>
-              <button class="mode" type="button" data-bot-diff="normal">
-                <svg class="ico" aria-hidden="true"><use href="#i-bot" /></svg>
-                <span class="mode-t">Normal</span>
-                <span class="mode-s" id="mode-bot-sub">vs Bot</span>
-              </button>
-              <button class="mode" type="button" data-bot-diff="hard">
-                <svg class="ico" aria-hidden="true"><use href="#i-bot" /></svg>
-                <span class="mode-t">Hard</span>
-                <span class="mode-s">vs Bot</span>
-              </button>
-              <button class="mode" type="button" data-go="modes">
-                <svg class="ico" aria-hidden="true"><use href="#i-users" /></svg>
+              <button class="mode-tile" type="button" data-mode="teams" id="tile-teams" aria-pressed="false" aria-label="Teams — choose size and difficulty">
+                <span class="mode-badge" aria-hidden="true"><svg class="ico"><use href="#i-users" /></svg></span>
                 <span class="mode-t">Teams</span>
-                <span class="mode-s">2v2 · 3v3</span>
               </button>
-              <button class="mode" type="button" data-go="custom">
-                <svg class="ico" aria-hidden="true"><use href="#i-tune" /></svg>
+              <button class="mode-tile" type="button" data-mode="custom" id="tile-custom" aria-pressed="false" aria-label="Custom teams">
+                <span class="mode-badge" aria-hidden="true"><svg class="ico"><use href="#i-tune" /></svg></span>
                 <span class="mode-t">Custom</span>
-                <span class="mode-s">1–3 each</span>
               </button>
-              <button class="mode off" type="button" data-start="online" aria-disabled="true" disabled aria-label="Online play, coming soon">
-                <svg class="ico" aria-hidden="true"><use href="#i-globe" /></svg>
+              <button class="mode-tile off" type="button" data-mode="online" disabled aria-disabled="true" aria-label="Online play, coming soon">
+                <span class="mode-badge" aria-hidden="true"><svg class="ico"><use href="#i-globe" /></svg></span>
                 <span class="mode-t">Online</span>
-                <span class="mode-s">Soon</span>
+                <span class="tile-soon">Soon</span>
               </button>
             </div>
           </div>
@@ -731,6 +723,41 @@
             Local mock standings — real club tables arrive with online play.
             <button class="link" type="button" id="team-leave">Leave team</button>
           </p>
+        </div>
+      </section>
+
+      <!-- quick start: vs Bot difficulty picker -->
+      <section class="sheet" id="sheet-quick-bot" hidden role="dialog" aria-modal="true" aria-labelledby="qb-title">
+        <h2 class="sheet-t" id="qb-title">vs Bot</h2>
+        <p class="sheet-p">Pick how sharp it plays, then start.</p>
+        <div class="seg" role="group" aria-label="Bot difficulty" id="qb-seg">
+          <button class="seg-b" type="button" data-qb-diff="easy" aria-pressed="false">Easy</button>
+          <button class="seg-b" type="button" data-qb-diff="normal" aria-pressed="true">Normal</button>
+          <button class="seg-b" type="button" data-qb-diff="hard" aria-pressed="false">Hard</button>
+        </div>
+        <div class="sheet-actions">
+          <button class="btn btn-primary" type="button" id="qb-start" data-autofocus>Start race</button>
+          <button class="btn btn-ghost" type="button" data-sheet-close>Cancel</button>
+        </div>
+      </section>
+
+      <!-- quick start: Teams size + difficulty picker -->
+      <section class="sheet" id="sheet-quick-teams" hidden role="dialog" aria-modal="true" aria-labelledby="qt-title">
+        <h2 class="sheet-t" id="qt-title">Teams</h2>
+        <p class="sheet-p">Pick a size and how sharp the bot plays.</p>
+        <div class="seg" role="group" aria-label="Bot difficulty" id="qt-seg">
+          <button class="seg-b" type="button" data-qt-diff="easy" aria-pressed="false">Easy</button>
+          <button class="seg-b" type="button" data-qt-diff="normal" aria-pressed="true">Normal</button>
+          <button class="seg-b" type="button" data-qt-diff="hard" aria-pressed="false">Hard</button>
+        </div>
+        <div class="preset-row" role="group" aria-label="Team presets" id="qt-presets">
+          <button class="preset" type="button" data-qt-preset="2,2" aria-pressed="true"><b>2v2</b><span>Two each</span></button>
+          <button class="preset" type="button" data-qt-preset="3,3" aria-pressed="false"><b>3v3</b><span>Three each</span></button>
+          <button class="preset" type="button" data-qt-preset="2,1" aria-pressed="false"><b>2v1</b><span>You up one</span></button>
+        </div>
+        <div class="sheet-actions">
+          <button class="btn btn-primary" type="button" id="qt-start" data-autofocus>Start race</button>
+          <button class="btn btn-ghost" type="button" data-sheet-close>Cancel</button>
         </div>
       </section>
     </div>

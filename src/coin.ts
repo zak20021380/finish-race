@@ -84,7 +84,7 @@ export function setBalance(el: HTMLElement, value: number): void {
   const to = Math.max(0, Math.round(value));
   const from = shown.get(el) ?? to;
   shown.set(el, to);
-  const host = el.closest('.id-coins, .balance, .reward, .cos-price, .row-v') ?? el.parentElement;
+  const host = el.closest('.id-coins, .coin-pill, .balance, .reward, .cos-price, .row-v') ?? el.parentElement;
   const coin = host?.querySelector<SVGSVGElement>('.coin') ?? null;
   const finish = () => { el.textContent = coinText(to); };
   if (from === to || motionReduced()) { finish(); return; }

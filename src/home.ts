@@ -1,29 +1,34 @@
 /**
- * home.ts — the redesigned Home: identity card, swipeable highlights, Play + mode grid.
+ * home.ts — Home: compact identity row, flexible highlights, Play + 4 mode tiles.
  *
  * Home never scrolls vertically; the carousel is the one horizontal gesture
  * (CSS scroll-snap + `touch-action: pan-x`, `data-carousel` opts out of the
  * global touchmove guard in main.ts). Auto-advance is slow and pauses on touch.
+ * Dots are overlaid inside the card (absolute), so they cost no column height.
  */
 import type { Difficulty } from './bot';
 import { menuState, motionReduced, onSettings, saveMenu } from './settings';
 import { flagOf, nameOf } from './countries';
 import {
   formatCountdown,
+  getCountryRanking,
   getDailyChallenge,
   getFeaturedTournament,
-  getTopCountries,
   trendArrow,
+  type CountryRow,
   type Tournament,
 } from './data';
 import { coinText, mountCoins } from './coin';
 import { earnCoins, onChange, profile } from './storage';
 import { impact, notify } from './telegram';
 import type { Router } from './router';
+import type { Sheets } from './sheets';
 import type { RaceSetup } from './menu';
 
 export interface HomeApi {
   router: Router;
+  sheets: Sheets;
+  sheet(id: string): HTMLElement | null;
   start(setup: RaceSetup): void;
 }
 
@@ -47,11 +52,53 @@ function markClaimed(): void {
   }
 }
 
+const cap = (d: Difficulty): string => d.charAt(0).toUpperCase() + d.slice(1);
+
+type ModeKind = 'bot' | 'teams' | 'custom';
+
+function kindOfSizes(sizes: readonly [number, number] | readonly number[]): ModeKind {
+  const a = sizes[0];
+  const b = sizes[1];
+  if (a === 1 && b === 1) return 'bot';
+  if ((a === 2 && b === 2) || (a === 3 && b === 3) || (a === 2 && b === 1)) return 'teams';
+  return 'custom';
+}
+
+/** "vs Bot · Normal" / "Teams 2v2 · Hard" / "Custom 2v1 · Easy" — the Play subtitle. */
+export function lastModeLabel(): string {
+  const d = cap(menuState.difficulty);
+  const [a, b] = menuState.sizes;
+  const kind = kindOfSizes(menuState.sizes);
+  if (kind === 'bot') return `vs Bot · ${d}`;
+  if (kind === 'teams') return `Teams ${a}v${b} · ${d}`;
+  return `Custom ${a}v${b} · ${d}`;
+}
+
+function isDiff(v: string | undefined): v is Difficulty {
+  return v === 'easy' || v === 'normal' || v === 'hard';
+}
+
+function parsePreset(v: string | undefined): [number, number] | null {
+  if (!v) return null;
+  const [a, b] = v.split(',').map(Number);
+  if (!Number.isInteger(a) || !Number.isInteger(b)) return null;
+  if (a < 1 || a > 3 || b < 1 || b > 3) return null;
+  return [a, b];
+}
+
 export function createHome(api: HomeApi): { setRoute(id: string): void } {
   const carousel = $('home-carousel') as HTMLElement;
   const dots = [...document.querySelectorAll<HTMLButtonElement>('#home-dots .dot')];
   let featured: Tournament | null = null;
   let tick = 0;
+
+  /* ---------- quick-start local picks (committed on Start) ---------- */
+  let qbDiff: Difficulty = menuState.difficulty;
+  let qtDiff: Difficulty = menuState.difficulty;
+  let qtSizes: [number, number] = (() => {
+    const k = kindOfSizes(menuState.sizes);
+    return k === 'teams' ? [...menuState.sizes] as [number, number] : [2, 2];
+  })();
 
   /* ---------- carousel: dots + slow auto-advance that pauses on touch ---------- */
 
@@ -156,41 +203,52 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     api.router.go('compete');
   });
 
-  /* ---------- top countries mini list ---------- */
+  /* ---------- top countries: 3 rows + the user's row ---------- */
+
+  const rowEl = (c: CountryRow, me: boolean): HTMLLIElement => {
+    const li = document.createElement('li');
+    if (me) li.classList.add('me');
+    const rk = document.createElement('span');
+    rk.className = 'rk';
+    rk.textContent = String(c.rank);
+    const fl = document.createElement('span');
+    fl.className = 'fl';
+    fl.textContent = flagOf(c.code);
+    fl.setAttribute('aria-hidden', 'true');
+    const nm = document.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = c.name;
+    nm.title = c.name;
+    const pt = document.createElement('span');
+    pt.className = 'pt';
+    pt.textContent = c.points.toLocaleString('en-US');
+    const tr = document.createElement('span');
+    tr.className = `tr ${c.trend}`;
+    tr.textContent = trendArrow(c.trend);
+    tr.setAttribute('aria-hidden', 'true');
+    li.append(rk, fl, nm, pt, tr);
+    return li;
+  };
 
   const loadCountries = async (): Promise<void> => {
     const list = $('home-countries');
     try {
-      const top = await getTopCountries(5);
+      const all = await getCountryRanking();
+      const top3 = all.slice(0, 3);
+      const mine = profile.country ? all.find((c) => c.code === profile.country) : undefined;
       list.textContent = '';
-      for (const c of top) {
-        const li = document.createElement('li');
-        if (profile.country === c.code) li.classList.add('me');
-        const rk = document.createElement('span');
-        rk.className = 'rk';
-        rk.textContent = String(c.rank);
-        const fl = document.createElement('span');
-        fl.className = 'fl';
-        fl.textContent = flagOf(c.code);
-        fl.setAttribute('aria-hidden', 'true');
-        const nm = document.createElement('span');
-        nm.className = 'nm';
-        nm.textContent = c.name;
-        const pt = document.createElement('span');
-        pt.className = 'pt';
-        pt.textContent = c.points.toLocaleString('en-US');
-        const tr = document.createElement('span');
-        tr.className = `tr ${c.trend}`;
-        tr.textContent = trendArrow(c.trend);
-        li.append(rk, fl, nm, pt, tr);
-        list.append(li);
+      for (const c of top3) {
+        list.append(rowEl(c, profile.country === c.code));
+      }
+      if (mine && !top3.some((c) => c.code === mine.code)) {
+        list.append(rowEl(mine, true));
       }
       const note = $('home-country-note');
-      const mine = profile.country;
-      if (mine) {
-        const hit = top.find((c) => c.code === mine);
+      if (profile.country) {
         note.hidden = false;
-        note.textContent = hit ? `You are cheering for ${nameOf(mine)} (#${hit.rank})` : `Your country: ${nameOf(mine)} — keep climbing`;
+        note.textContent = mine
+          ? `You cheer for ${nameOf(profile.country)} (#${mine.rank})`
+          : `Your country: ${nameOf(profile.country)}`;
       } else {
         note.hidden = false;
         note.textContent = 'Pick your country in Profile';
@@ -238,7 +296,45 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     void loadDaily();
   });
 
-  /* ---------- identity shortcuts + mode grid ---------- */
+  /* ---------- Play subtitle + tile selection ---------- */
+
+  const paintPlay = (): void => {
+    const sub = document.getElementById('home-play-sub');
+    if (sub) sub.textContent = lastModeLabel();
+    const kind = kindOfSizes(menuState.sizes);
+    const bot = document.getElementById('tile-bot');
+    const teams = document.getElementById('tile-teams');
+    const custom = document.getElementById('tile-custom');
+    if (bot) bot.setAttribute('aria-pressed', String(kind === 'bot'));
+    if (teams) teams.setAttribute('aria-pressed', String(kind === 'teams'));
+    if (custom) custom.setAttribute('aria-pressed', String(kind === 'custom'));
+  };
+
+  const paintQuickSegs = (): void => {
+    for (const b of document.querySelectorAll<HTMLButtonElement>('[data-qb-diff]')) {
+      b.setAttribute('aria-pressed', String(b.dataset.qbDiff === qbDiff));
+    }
+    for (const b of document.querySelectorAll<HTMLButtonElement>('[data-qt-diff]')) {
+      b.setAttribute('aria-pressed', String(b.dataset.qtDiff === qtDiff));
+    }
+    for (const b of document.querySelectorAll<HTMLButtonElement>('[data-qt-preset]')) {
+      const p = parsePreset(b.dataset.qtPreset);
+      const on = p !== null && p[0] === qtSizes[0] && p[1] === qtSizes[1];
+      b.setAttribute('aria-pressed', String(on));
+    }
+  };
+
+  const syncQuickFromMenu = (): void => {
+    qbDiff = menuState.difficulty;
+    qtDiff = menuState.difficulty;
+    qtSizes = kindOfSizes(menuState.sizes) === 'teams'
+      ? [...menuState.sizes] as [number, number]
+      : [2, 2];
+    paintQuickSegs();
+    paintPlay();
+  };
+
+  /* ---------- identity shortcuts ---------- */
 
   const goProfile = (): void => {
     impact('light');
@@ -251,15 +347,94 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     api.router.go('settings');
   });
 
-  for (const el of document.querySelectorAll<HTMLButtonElement>('[data-bot-diff]')) {
+  /* ---------- mode tiles + quick sheets + Play ---------- */
+
+  for (const el of document.querySelectorAll<HTMLButtonElement>('[data-mode]')) {
     el.addEventListener('click', () => {
-      const d = el.dataset.botDiff as Difficulty;
-      if (d !== 'easy' && d !== 'normal' && d !== 'hard') return;
+      const m = el.dataset.mode;
+      if (m === 'online') return;
       impact('light');
-      saveMenu({ mode: 'bot', difficulty: d });
-      api.start({ difficulty: d, sizes: [...menuState.sizes] });
+      if (m === 'bot') {
+        qbDiff = menuState.difficulty;
+        paintQuickSegs();
+        const sh = api.sheet('sheet-quick-bot');
+        if (sh) api.sheets.open(sh);
+        return;
+      }
+      if (m === 'teams') {
+        qtDiff = menuState.difficulty;
+        qtSizes = kindOfSizes(menuState.sizes) === 'teams'
+          ? [...menuState.sizes] as [number, number]
+          : [2, 2];
+        paintQuickSegs();
+        const sh = api.sheet('sheet-quick-teams');
+        if (sh) api.sheets.open(sh);
+        return;
+      }
+      if (m === 'custom') {
+        api.router.go('custom');
+        return;
+      }
     });
   }
+
+  for (const b of document.querySelectorAll<HTMLButtonElement>('[data-qb-diff]')) {
+    b.addEventListener('click', () => {
+      const d = b.dataset.qbDiff;
+      if (!isDiff(d)) return;
+      qbDiff = d;
+      paintQuickSegs();
+      impact('light');
+    });
+  }
+
+  for (const b of document.querySelectorAll<HTMLButtonElement>('[data-qt-diff]')) {
+    b.addEventListener('click', () => {
+      const d = b.dataset.qtDiff;
+      if (!isDiff(d)) return;
+      qtDiff = d;
+      paintQuickSegs();
+      impact('light');
+    });
+  }
+
+  for (const b of document.querySelectorAll<HTMLButtonElement>('[data-qt-preset]')) {
+    b.addEventListener('click', () => {
+      const p = parsePreset(b.dataset.qtPreset);
+      if (!p) return;
+      qtSizes = p;
+      paintQuickSegs();
+      impact('light');
+    });
+  }
+
+  const qbStart = document.getElementById('qb-start');
+  qbStart?.addEventListener('click', () => {
+    impact('light');
+    saveMenu({ mode: 'bot', difficulty: qbDiff, sizes: [1, 1] });
+    paintPlay();
+    api.sheets.close();
+    // Close is animated; start on next frame so the sheet never covers the board.
+    window.setTimeout(() => api.start({ difficulty: qbDiff, sizes: [1, 1] }), 60);
+  });
+
+  const qtStart = document.getElementById('qt-start');
+  qtStart?.addEventListener('click', () => {
+    impact('light');
+    const sizes: [number, number] = [...qtSizes] as [number, number];
+    saveMenu({ mode: 'bot', difficulty: qtDiff, sizes });
+    paintPlay();
+    api.sheets.close();
+    window.setTimeout(() => api.start({ difficulty: qtDiff, sizes }), 60);
+  });
+
+  $('home-play').addEventListener('click', () => {
+    impact('light');
+    const d = menuState.difficulty;
+    const sizes: [number, number] = [...menuState.sizes] as [number, number];
+    saveMenu({ mode: 'bot' });
+    api.start({ difficulty: d, sizes });
+  });
 
   /* ---------- countdown ticker ---------- */
 
@@ -274,12 +449,14 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   onChange(() => {
     void loadCountries();
     void loadDaily();
+    paintPlay();
   });
 
   void loadFeatured();
   void loadCountries();
   void loadDaily();
   paintDots();
+  syncQuickFromMenu();
   armAuto();
   startTick();
   mountCoins(carousel);
@@ -289,6 +466,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       if (id === 'home') {
         paintDots();
         poke();
+        syncQuickFromMenu();
         void loadCountries();
       }
     },
