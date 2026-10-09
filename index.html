@@ -94,6 +94,12 @@
       <symbol id="i-minus" viewBox="0 0 24 24">
         <path d="M5.4 12h13.2" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" />
       </symbol>
+      <symbol id="i-wall" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3.4" y="6.4" width="17.2" height="4.8" rx="1.7" />
+          <rect x="3.4" y="12.8" width="17.2" height="4.8" rx="1.7" />
+        </g>
+      </symbol>
       <symbol id="i-users" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="8" r="3.1" />
@@ -546,14 +552,31 @@
 
             <footer class="chips">
               <div class="chip red" id="chip-0">
-                <span class="ball" aria-hidden="true"></span>
-                <span class="who" id="name-0">YOU</span>
-                <span class="steps" id="steps-0">11 steps</span>
+                <span class="chip-row">
+                  <span class="ball" aria-hidden="true"></span>
+                  <span class="who" id="name-0">YOU</span>
+                  <span class="steps" id="steps-0">11 steps</span>
+                </span>
+                <!-- wall budget: the dashes are built from WALL_LIMIT, the count is rewritten -->
+                <span class="chip-row walls" id="walls-0" role="img" aria-label="Walls left: 8 of 8">
+                  <span class="wall-segs" aria-hidden="true"></span>
+                  <span class="wall-count" aria-hidden="true">
+                    <svg class="ico"><use href="#i-wall" /></svg><span class="wall-n">8/8</span>
+                  </span>
+                </span>
               </div>
               <div class="chip blue" id="chip-1">
-                <span class="ball" aria-hidden="true"></span>
-                <span class="who" id="name-1">BOT</span>
-                <span class="steps" id="steps-1">11 steps</span>
+                <span class="chip-row">
+                  <span class="ball" aria-hidden="true"></span>
+                  <span class="who" id="name-1">BOT</span>
+                  <span class="steps" id="steps-1">11 steps</span>
+                </span>
+                <span class="chip-row walls" id="walls-1" role="img" aria-label="Walls left: 8 of 8">
+                  <span class="wall-segs" aria-hidden="true"></span>
+                  <span class="wall-count" aria-hidden="true">
+                    <svg class="ico"><use href="#i-wall" /></svg><span class="wall-n">8/8</span>
+                  </span>
+                </span>
               </div>
             </footer>
           </main>
@@ -647,7 +670,7 @@
       <section class="sheet" id="sheet-help" hidden role="dialog" aria-modal="true" aria-labelledby="help-title">        <h2 class="sheet-t" id="help-title">How to play</h2>
           <ol class="help">
             <li><b>Move</b> — tap one of your balls, then tap a glowing dot beside it. One step per turn; teams alternate and each may move any one of their balls.</li>
-            <li><b>Wall</b> — tap a grid line, then tap the ghost wall again to place it. Every turn, no limit.</li>
+            <li><b>Wall</b> — tap a grid line, then tap the ghost wall again to place it. Each side brings 8 walls to a race; the counters under the board show what is left.</li>
             <li><b>Legal only</b> — a wall must leave every ball a path to the line, and can't share a stretch of line.</li>
             <li><b>Finish</b> — the first ball of any team onto the checkered row wins.</li>
           </ol>

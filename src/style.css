@@ -135,6 +135,9 @@
   --motion-press: scale(.97);
   /* banners sit one row down so the checkered strip is never covered */
   --banner-top: calc(100% / 12 + var(--s2));
+  /* lane the board slot keeps above the board: the FINISH pill straddles that edge, so its
+     upper half needs room inside the slot's own padding box — nothing gets cropped */
+  --finish-lane: 16px;
 
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
@@ -359,6 +362,10 @@ html, body {
   place-items: center;
   container-type: size;
   overflow: hidden;
+  /* the finish lane: the pill straddles the board's top edge, so the slot spends a strip of its
+     own padding box on the pill's upper half. The board still sizes itself from the content box,
+     which keeps the 2:3 ratio intact and the finish row clear of the card's rounded corner. */
+  padding-top: var(--finish-lane);
 }
 .board-wrap { position: relative; width: 100%; height: 100%; }
 @supports (width: 1cqw) {
@@ -439,7 +446,7 @@ html, body {
 .note.error { background: var(--bad-2); color: #fff; box-shadow: 0 10px 22px -10px var(--bad-shadow); }
 .note.show { opacity: 1; transform: translate(-50%, 0); }
 
-/* ---- level 3: player chips ---- */
+/* ---- level 3: player chips — seat + steps on top, the wall budget underneath ---- */
 .chips { flex: none; display: flex; gap: var(--s2); padding-top: var(--s2); }
 .chip {
   position: relative;
@@ -447,8 +454,9 @@ html, body {
   min-width: 0;
   min-height: 40px;
   display: flex;
-  align-items: center;
-  gap: var(--s2);
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
   padding: var(--s1) var(--s3);
   border-radius: var(--r-chip);
   background: var(--tint-glass);
@@ -457,6 +465,7 @@ html, body {
     0 4px 10px -6px var(--shadow-soft);
   transition: transform var(--motion-fast), opacity var(--motion-fast);
 }
+.chip-row { display: flex; align-items: center; gap: var(--s2); width: 100%; min-width: 0; }
 .chip.red { --tint: var(--red); --ink-t: var(--red-ink); --glow: var(--red-glow); }
 .chip.blue { --tint: var(--blue); --ink-t: var(--blue-ink); --glow: var(--blue-glow); }
 .chip::after {
@@ -504,6 +513,56 @@ html, body {
   white-space: nowrap;
 }
 .chip .steps.pop { animation: step-pop .34s cubic-bezier(.2, 1.3, .5, 1); }
+
+/* ---- the wall budget: one dash per wall in the seat's own colour, plus a compact count ---- */
+.wall-segs {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;   /* dashes span the row and shrink together on narrow chips */
+  gap: 2px;
+}
+.wall-segs i {
+  flex: 0 1 11px;
+  min-width: 3px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--tint);
+  opacity: .2;                     /* spent: the same dash, dimmed down to a track */
+  transition: opacity var(--motion-fast), box-shadow var(--motion-fast);
+}
+.wall-segs i.on {
+  opacity: 1;
+  box-shadow: 0 0 6px -1px var(--glow);
+}
+.wall-count {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  color: var(--ink-t);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition: background var(--motion-fast), box-shadow var(--motion-fast), color var(--motion-fast);
+}
+.wall-count .ico { width: 1.2em; height: 1.2em; }
+.wall-n.pop { animation: step-pop .34s cubic-bezier(.2, 1.3, .5, 1); }
+/* this seat is to move and still has walls: the counter answers, quietly */
+.chip.active .walls:not(.dry) .wall-segs i.on { animation: wall-throb 1.7s ease-in-out infinite; }
+.chip.active .walls:not(.dry) .wall-count {
+  background: var(--tint-glass);
+  box-shadow: inset 0 0 0 1.5px var(--tint);
+}
+/* nothing left to spend: the dashes go out and the count stops claiming a colour */
+.walls.dry .wall-segs i { opacity: .14; box-shadow: none; }
+.walls.dry .wall-count { color: var(--ink-soft); box-shadow: inset 0 0 0 1px var(--hair-off); }
 
 /* ---- level 1: status pill, tucked under the card ---- */
 .status {
@@ -1581,6 +1640,7 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
 @keyframes fade { from { opacity: 0; } }
 @keyframes pop { from { opacity: 0; transform: scale(.9); } }
 @keyframes step-pop { 0% { transform: scale(1); } 38% { transform: scale(1.25); } 100% { transform: scale(1); } }
+@keyframes wall-throb { 0%, 100% { opacity: .72; } 50% { opacity: 1; } }
 @keyframes coin-pop { 0% { transform: scale(.72); opacity: 0; } 62% { transform: scale(1.07); opacity: 1; } 100% { transform: scale(1); } }
 @keyframes cos-pop { 0% { transform: scale(.97); } 40% { transform: scale(1.025); } 100% { transform: scale(1); } }
 @keyframes cos-halo { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }

@@ -34,10 +34,10 @@ export function botThinkMs(d: Difficulty): number {
 }
 
 /**
- * Walls are unlimited, so the bot self-limits or the board fills up and nobody races:
- * it only walls while the opponent is level or ahead, and only with a wall that costs the
- * opponent 2+ steps. Such a wall always grows the opponent's distance, so the bot is ahead
- * afterwards and stops walling — no wall-spam stalemate is possible.
+ * The bot spends its `WALL_LIMIT` walls only where they pay for themselves: it walls while the
+ * opponent is level or ahead, and only with a wall that costs the opponent 2+ steps. Such a wall
+ * always grows the opponent's distance, so the bot is ahead afterwards and stops walling — and the
+ * budget runs out before the board could ever fill, so no wall-spam stalemate is possible.
  */
 export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Action {
   const p = PROFILES[difficulty];

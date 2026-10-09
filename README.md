@@ -84,8 +84,8 @@ coloured jargon alone never has to tell them apart.
 
 - **Move**: tap one of your balls, then one of the dots that light up beside it — the chosen ball wears a ring and only its legal cells are shown. The chips show each side's shortest path to FINISH in steps.
 - **Teams on the board**: every side races 1 to 3 balls (up to 3v3) and alternates turns; on its turn a team moves any ONE of its balls one cell, or places a wall. Each side owns a colour family and its balls carry number badges, so a 3v3 stays readable. Balls — friendly or hostile — block, nothing jumps, and the first ball to the top row wins.
-- **Walls are unlimited.** Each team may wall every turn; a wall only has to stay in bounds, not overlap another wall on the same line, and keep every ball's path to FINISH open.
-- **Wall (touch)**: tap a grid line — a ghost wall appears — tap the ghost again to place it, or tap anywhere else to cancel. An illegal slot shows a red ghost, a warning buzz and the reason ("Blocks the path" / "Overlaps a wall").
+- **Walls are rationed: 8 per side.** Each team brings `WALL_LIMIT` walls to a race. The chip under the board counts them down — one glowing dash per wall in that side's colour, plus an icon and an `8/8` readout — dims every dash it spends, highlights the counter while the seat is to move, and refuses placement outright at `0/8`. A wall still only has to stay in bounds, not overlap another wall on the same line, and keep every ball's path to FINISH open.
+- **Wall (touch)**: tap a grid line — a ghost wall appears — tap the ghost again to place it, or tap anywhere else to cancel. An illegal or unaffordable slot shows a red ghost, a warning buzz and the reason ("Blocks the path" / "Overlaps a wall" / "No walls left").
 - **Wall (mouse)**: hover a grid line to preview, click once to place.
 - **Pause**: the menu button (or the Telegram BackButton) opens Resume / Restart / Quit to menu, with a confirm before quitting. The end-of-game panel offers Play again and Menu.
 
@@ -127,7 +127,7 @@ Telegram only loads **HTTPS** URLs.
 
 | File | Role |
 | --- | --- |
-| `src/rules.ts` | Pure game logic: `GameState` (`teams`, `balls`, `turn`, `winner`), `newGame(sizes)` for 1–3 balls per team, `reachable`, `wallOk`, `apply(state, action)` |
+| `src/rules.ts` | Pure game logic: `GameState` (`teams`, `balls`, `walls`, `turn`, `winner`), `newGame(sizes)` for 1–3 balls per team, `reachable`, `wallOk` / `wallsLeft` (`WALL_LIMIT` = 8), `apply(state, action)` |
 | `src/bot.ts` | Local opponent: moves the ball closest to FINISH, walls only when it is level or behind and the wall costs 2+ steps, plus the Easy/Normal/Hard profiles |
 | `src/themes.ts` | Every cosmetic as data: ball skins, wall styles, board themes, the fixed bot ramp and the red/blue guarantee |
 | `src/render.ts` | Canvas drawing (board, walls, ghosts, every ball of every seat, number badges, the selection ring) from a `Theme`, `hitTest()` tap-target resolution, and `createPreview()` for the shop's miniature boards |
@@ -171,3 +171,6 @@ plugs in. Everything goes through `apply(state, action)`, so the server can run 
 - How a theme is painted (specular shape, bar highlight, finish glow): `drawBall`, `drawBar` and
   `buildStatic` in `src/render.ts`.
 - Board geometry (cell margin, wall thickness): `computeLayout` and `drawBar` in `src/render.ts`.
+- The FINISH pill's breathing room above the board (the lane that keeps it out of the card's rounded
+  corner): `--finish-lane` in `src/style.css`. The wall counter's dashes, count pill and turn
+  highlight live in the `.wall-*` rules under the chips, same file.

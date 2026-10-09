@@ -6,7 +6,8 @@
  *
  * Teams: 1 to 3 teams of 1 to 3 balls each (max 3v3). Every team starts spread across the bottom
  * two rows and races any one of its balls to the top. Teams alternate turns; on its turn a team
- * moves ANY ONE of its balls one cell, or places a wall. Walls are unlimited.
+ * moves ANY ONE of its balls one cell, or places a wall from its budget of `WALL_LIMIT` per race
+ * (the wall counter in the status cards counts that budget down).
  *
  * Walls sit ON grid lines and are 2 cells long:
  *   'h' wall {x, y}: horizontal, on the line above row y (y = 1..ROWS-1), covers columns x and x+1.
@@ -21,6 +22,8 @@ export const ROWS = 12;
 /** Team and ball counts the rules accept; the start-layout helper fills the bottom two rows. */
 export const MAX_TEAMS = 3;
 export const MAX_BALLS = 3;
+/** Walls each side brings to a race: what the counter in the status cards counts down from. */
+export const WALL_LIMIT = 8;
 
 /** A team index — the seat a ball, wall, turn or win belongs to. */
 export type Player = number;
@@ -204,9 +207,17 @@ export function reachableBall(s: GameState, ballId: number): Pos[] {
   return steps(s, ball.team).filter((st) => st.ball === ballId).map((st) => st.to);
 }
 
-/** Is this wall legal? In bounds, no overlap, and every ball keeps a path to FINISH. */
+/** Walls a side still has to place: the budget minus what it already built, never below zero. */
+export function wallsLeft(s: GameState, team: Player): number {
+  let used = 0;
+  for (const w of s.walls) if (w.owner === team) used++;
+  return Math.max(0, WALL_LIMIT - used);
+}
+
+/** Is this wall legal? Within the owner's budget, in bounds, no overlap, every ball keeps a path. */
 export function wallOk(s: GameState, w: Wall): boolean {
   if (s.winner !== null) return false;
+  if (wallsLeft(s, w.owner) <= 0) return false;
   if (w.o === 'h') {
     if (w.x < 0 || w.x > COLS - 2 || w.y < 1 || w.y > ROWS - 1) return false;
   } else if (w.x < 1 || w.x > COLS - 1 || w.y < 0 || w.y > ROWS - 2) return false;

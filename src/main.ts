@@ -1,6 +1,7 @@
 import './style.css';
 import {
   COLS, apply, ballById, distField, newGame, pathLen, reachableBall, steps as teamSteps, wallOk,
+  wallsLeft, WALL_LIMIT,
   type Action, type GameState, type Player, type Pos, type Wall, type WallSpec,
 } from './rules';
 import { botAction, botThinkMs, type Difficulty } from './bot';
@@ -74,6 +75,30 @@ function setSteps(p: Player, d: number) {
   el.classList.add('pop');
 }
 
+/* wall budget readout: one dash per wall, built once from WALL_LIMIT, then only classes change */
+const wallRows = [$<HTMLSpanElement>('walls-0'), $<HTMLSpanElement>('walls-1')];
+const wallSegs: HTMLElement[][] = wallRows.map((row) => {
+  const box = row.querySelector<HTMLElement>('.wall-segs')!;
+  return Array.from({ length: WALL_LIMIT }, () => {
+    const seg = document.createElement('i');
+    box.appendChild(seg);
+    return seg;
+  });
+});
+const wallNums = wallRows.map((row) => row.querySelector<HTMLElement>('.wall-n')!);
+const shownWalls: [number, number] = [-1, -1];
+function setWalls(p: Player, left: number) {
+  if (shownWalls[p] === left) return;
+  shownWalls[p] = left;
+  wallNums[p].textContent = `${left}/${WALL_LIMIT}`;
+  wallRows[p].classList.toggle('dry', left === 0);
+  for (let i = 0; i < WALL_LIMIT; i++) wallSegs[p][i].classList.toggle('on', i < left);
+  wallRows[p].setAttribute('aria-label', `Walls left: ${left} of ${WALL_LIMIT}`);
+  wallNums[p].classList.remove('pop');
+  void wallNums[p].offsetWidth;
+  wallNums[p].classList.add('pop');
+}
+
 /* floating message over the board: why a slot was refused, or "tap again to place" */
 let noteTimer = 0;
 function showNote(msg: string, error: boolean, ttl: number) {
@@ -143,13 +168,14 @@ let opponent: Opponent = makeBot(difficulty);
 
 const wantsOpponent = () => state.turn !== HUMAN && state.winner === null;
 
-const REASON = { overlap: 'Overlaps a wall', blocked: 'Blocks the path' };
+const REASON = { empty: 'No walls left', overlap: 'Overlaps a wall', blocked: 'Blocks the path' };
 
 /**
- * Why a slot was refused: an overlap on the same line, or a sealed path. `wallOk` only answers
- * yes/no, so the reason stays a UI-layer concern.
+ * Why a slot was refused: an empty budget, an overlap on the same line, or a sealed path.
+ * `wallOk` only answers yes/no, so the reason stays a UI-layer concern.
  */
 function wallIssue(s: GameState, w: Wall): keyof typeof REASON {
+  if (wallsLeft(s, w.owner) <= 0) return 'empty';
   const clash = s.walls.some((o) => o.o === w.o
     && (w.o === 'h' ? o.y === w.y && Math.abs(o.x - w.x) < 2 : o.x === w.x && Math.abs(o.y - w.y) < 2));
   if (clash) return 'overlap';
@@ -254,6 +280,7 @@ function ui() {
     chips[p].classList.toggle('active', state.winner === null && state.turn === p && !paused);
     chips[p].classList.toggle('thinking', thinking && p === state.turn);
     setSteps(p, pathLen(state, p));
+    setWalls(p, wallsLeft(state, p));
   }
 
   if (state.winner === null && overlayOpen) {
@@ -307,6 +334,7 @@ function restart() {
   ghost = null;
   marks[0] = null; marks[1] = null;
   shownSteps[0] = -1; shownSteps[1] = -1;
+  shownWalls[0] = -1; shownWalls[1] = -1;
   overlayOpen = false;
   overlay.hidden = true;
   reward.hidden = true;
@@ -391,6 +419,8 @@ function onTouch(p: Vec) {
 
   const spec = hit.spec;
   const wall: Wall = { ...spec, owner: state.turn };
+  /* an empty budget never arms a ghost: the tap only reports why nothing will happen */
+  if (wallsLeft(state, wall.owner) <= 0) { refuse(wall); return; }
   if (hit.kind === 'confirm') {
     if (!wallOk(state, wall)) { refuse(wall); return; }
     play({ kind: 'wall', wall });
@@ -413,13 +443,16 @@ function onMouse(p: Vec, click: boolean) {
   });
   const spec: WallSpec | null = hit && hit.kind === 'wall' ? hit.spec : null;
   const by = state.turn;
-  const wall: Wall | null = spec ? { ...spec, owner: by } : null;
+  /* out of walls: no preview ghost at all, so the line stops reading as a live slot */
+  const budget = wallsLeft(state, by) > 0;
+  const wall: Wall | null = spec && budget ? { ...spec, owner: by } : null;
   const ok = wall ? wallOk(state, wall) : false;
   ghost = wall ? { spec: wall, ok, armed: false, p: by } : null;
 
   if (!click) return;
   if (hit?.kind === 'ball') { impact('light'); pick(hit.id === selected ? null : hit.id); return; }
   if (hit?.kind === 'move') { impact('light'); play({ kind: 'move', ball: selected ?? undefined, to: hit.to }); return; }
+  if (spec && !budget) { refuse({ ...spec, owner: by }); return; }
   if (wall && ok) { closeHint(); play({ kind: 'wall', wall }); return; }
   if (wall) refuse(wall);
   else clearGhost();
