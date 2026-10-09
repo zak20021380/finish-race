@@ -224,17 +224,28 @@
             <div class="mode-tabs" role="tablist" aria-label="Play mode">
               <span class="mode-thumb" aria-hidden="true"></span>
               <button class="mode-tab" type="button" role="tab" id="mtab-solo" data-mode-tab="solo"
-                      aria-selected="true" aria-controls="mctx-size"
+                      aria-selected="true" aria-controls="mctx-diff mctx-size"
                       aria-label="Solo / Bot Match — one ball each, against the machine">
                 <svg class="ico" aria-hidden="true"><use href="#i-bot" /></svg>
                 <span class="mode-tab-t">Solo / Bot</span>
               </button>
               <button class="mode-tab" type="button" role="tab" id="mtab-party" data-mode-tab="party"
-                      aria-selected="false" aria-controls="mctx-size" tabindex="-1"
+                      aria-selected="false" aria-controls="mctx-diff mctx-size" tabindex="-1"
                       aria-label="Party and Teams — two sides, up to three balls each">
                 <svg class="ico" aria-hidden="true"><use href="#i-users" /></svg>
                 <span class="mode-tab-t">Party &amp; Teams</span>
               </button>
+            </div>
+
+            <!-- Row 2 (contextual): exactly one of these is open at a time, never both. -->
+            <div class="mode-context is-open" id="mctx-diff" role="group" aria-label="Bot difficulty">
+              <div class="mode-context-in">
+                <div class="chip-row">
+                  <button class="mode-chip" type="button" data-diff="easy" aria-pressed="false">Easy</button>
+                  <button class="mode-chip" type="button" data-diff="normal" aria-pressed="true">Normal</button>
+                  <button class="mode-chip" type="button" data-diff="hard" aria-pressed="false">Hard</button>
+                </div>
+              </div>
             </div>
 
             <div class="mode-context" id="mctx-size" role="group" aria-label="Team size">
@@ -252,22 +263,10 @@
               </div>
             </div>
 
-            <div class="chip-row" role="group" aria-label="Bot difficulty">
-              <button class="mode-chip" type="button" data-diff="easy" aria-pressed="false">Easy</button>
-              <button class="mode-chip" type="button" data-diff="normal" aria-pressed="true">Normal</button>
-              <button class="mode-chip" type="button" data-diff="hard" aria-pressed="false">Hard</button>
-            </div>
-
             <button class="btn btn-hero" id="home-play" type="button" aria-label="Play">
               <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg>
               <span class="hero-t">PLAY</span>
             </button>
-
-            <p class="mode-teaser">
-              <svg class="ico" aria-hidden="true"><use href="#i-globe" /></svg>
-              <span class="teaser-t">Online play</span>
-              <span class="teaser-tag">Soon</span>
-            </p>
           </div>
         </section>
 

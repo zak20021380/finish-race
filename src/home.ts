@@ -299,17 +299,22 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   const tabTrack = document.querySelector<HTMLElement>('.mode-tabs');
   const sizeRow = document.getElementById('mctx-size');
+  const diffRow = document.getElementById('mctx-diff');
   const tabBtns = [...document.querySelectorAll<HTMLButtonElement>('[data-mode-tab]')];
 
   const paintLauncher = (): void => {
     const tab = menuState.tab;
+    const isSolo = tab === 'solo';
     if (tabTrack) tabTrack.dataset.tab = tab;
     for (const b of tabBtns) {
       const on = b.dataset.modeTab === tab;
       b.setAttribute('aria-selected', String(on));
       b.tabIndex = on ? 0 : -1;
     }
-    if (sizeRow) sizeRow.classList.toggle('is-open', tab === 'party');
+    // Strict conditional: exactly one contextual row is open, never both.
+    // Solo → difficulty only · Party → team size only.
+    if (sizeRow) sizeRow.classList.toggle('is-open', !isSolo);
+    if (diffRow) diffRow.classList.toggle('is-open', isSolo);
     for (const b of document.querySelectorAll<HTMLButtonElement>('.mode-chip[data-diff]')) {
       b.setAttribute('aria-pressed', String(b.dataset.diff === menuState.difficulty));
     }
