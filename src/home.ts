@@ -1,10 +1,11 @@
 /**
- * home.ts — Home: compact identity row, flexible highlights, Play + 4 mode tiles.
+ * home.ts — Home: identity card, flexible highlights, then the mode launcher.
  *
  * Home never scrolls vertically; the carousel is the one horizontal gesture
  * (CSS scroll-snap + `touch-action: pan-x`, `data-carousel` opts out of the
  * global touchmove guard in main.ts). Auto-advance is slow and pauses on touch.
- * Dots are overlaid inside the card (absolute), so they cost no column height.
+ * The active slide gets `.is-active` so CSS can hold it full size while the
+ * peeking cards recede.
  */
 import type { Difficulty } from './bot';
 import { menuState, motionReduced, onSettings, saveMenu } from './settings';
@@ -89,6 +90,7 @@ function parsePreset(v: string | undefined): [number, number] | null {
 export function createHome(api: HomeApi): { setRoute(id: string): void } {
   const carousel = $('home-carousel') as HTMLElement;
   const dots = [...document.querySelectorAll<HTMLButtonElement>('#home-dots .dot')];
+  const slides = [...carousel.querySelectorAll<HTMLElement>('.car-card')];
   let featured: Tournament | null = null;
   let tick = 0;
 
@@ -102,10 +104,15 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   /* ---------- carousel: dots + slow auto-advance that pauses on touch ---------- */
 
-  const activeSlide = (): number => {
-    const w = carousel.clientWidth || 1;
-    return Math.min(2, Math.max(0, Math.round(carousel.scrollLeft / w)));
+  /* One card step is the distance between two slides, not the viewport width:
+     the cards peek, so a viewport holds a card plus a sliver of the next. */
+  const step = (): number => {
+    if (slides.length < 2) return carousel.clientWidth || 1;
+    return slides[1].offsetLeft - slides[0].offsetLeft || 1;
   };
+
+  const activeSlide = (): number =>
+    Math.min(slides.length - 1, Math.max(0, Math.round(carousel.scrollLeft / step())));
 
   const paintDots = (): void => {
     const a = activeSlide();
@@ -114,11 +121,13 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       d.classList.toggle('on', on);
       d.setAttribute('aria-selected', String(on));
     }
+    // only the card in focus sits at full size; the rest recede behind it
+    for (const c of slides) c.classList.toggle('is-active', Number(c.dataset.slide) === a);
   };
 
   const goSlide = (i: number): void => {
-    const w = carousel.clientWidth;
-    carousel.scrollTo({ left: i * w, behavior: motionReduced() ? 'auto' : 'smooth' });
+    const left = slides[i] ? slides[i].offsetLeft - slides[0].offsetLeft : 0;
+    carousel.scrollTo({ left, behavior: motionReduced() ? 'auto' : 'smooth' });
   };
 
   for (const d of dots) {

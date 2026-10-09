@@ -128,44 +128,42 @@
         <section class="screen home" id="s-home" data-screen="home" tabindex="-1" aria-labelledby="home-title">
           <h1 id="home-title" hidden>Play</h1>
           <header class="id-card">
-            <button class="avatar-btn" type="button" id="avatar-btn" aria-label="Open profile">
-              <span class="avatar" id="avatar" aria-hidden="true">
-                <img id="avatar-img" alt="" hidden />
-                <span id="avatar-t">P</span>
-              </span>
-            </button>
-            <div class="id-main">
-              <div class="id-name-row">
-                <button class="id-name-btn" type="button" id="home-profile-btn" aria-label="Open profile">
-                  <span class="id-name" id="p-name">Player</span>
-                </button>
+            <div class="id-row">
+              <button class="avatar-btn" type="button" id="avatar-btn" aria-label="Open profile">
+                <span class="avatar" id="avatar" aria-hidden="true">
+                  <img id="avatar-img" alt="" hidden />
+                  <span id="avatar-t">P</span>
+                </span>
+              </button>
+              <button class="id-name-btn" type="button" id="home-profile-btn" aria-label="Open profile">
+                <span class="id-name" id="p-name">Player</span>
                 <span class="lvl-pill" aria-label="Level 1">Lv <b id="p-level">1</b></span>
-              </div>
-              <div class="id-chips">
-                <button class="tag-chip" type="button" id="country-chip" aria-label="Country — open profile">
-                  <svg class="ico chip-ico" id="country-globe" aria-hidden="true"><use href="#i-globe" /></svg>
-                  <span class="flag" id="country-flag" aria-hidden="true"></span>
-                  <span class="flag-code" id="country-code" aria-hidden="true"></span>
-                  <span class="tag-chip-t" id="country-name">Add country</span>
-                </button>
-                <button class="tag-chip" type="button" id="team-chip" aria-haspopup="dialog">
-                  <svg class="ico chip-ico" aria-hidden="true"><use href="#i-users" /></svg>
-                  <span class="tag-chip-t" id="team-name">Find a team</span>
-                  <span class="tag-chip-n" id="team-count"></span>
+              </button>
+              <div class="id-side">
+                <span class="coin-pill"><span class="coin" data-coin aria-hidden="true"></span><span id="p-coins">0</span></span>
+                <button class="icon-btn xs" type="button" id="home-settings" aria-label="Open settings">
+                  <svg class="ico" aria-hidden="true"><use href="#i-tune" /></svg>
                 </button>
               </div>
             </div>
-            <div class="id-side">
-              <span class="coin-pill"><span class="coin" data-coin aria-hidden="true"></span><span id="p-coins">0</span></span>
-              <button class="icon-btn xs" type="button" id="home-settings" aria-label="Open settings">
-                <svg class="ico" aria-hidden="true"><use href="#i-tune" /></svg>
+            <div class="id-row id-chips">
+              <button class="tag-chip" type="button" id="country-chip" aria-label="Country — open profile">
+                <svg class="ico chip-ico" id="country-globe" aria-hidden="true"><use href="#i-globe" /></svg>
+                <span class="flag" id="country-flag" aria-hidden="true"></span>
+                <span class="flag-code" id="country-code" aria-hidden="true"></span>
+                <span class="tag-chip-t" id="country-name">Add country</span>
+              </button>
+              <button class="tag-chip" type="button" id="team-chip" aria-haspopup="dialog">
+                <svg class="ico chip-ico" aria-hidden="true"><use href="#i-users" /></svg>
+                <span class="tag-chip-t" id="team-name">Find a team</span>
+                <span class="tag-chip-n" id="team-count"></span>
               </button>
             </div>
+            <div class="id-row id-xp">
+              <span class="bar thin" role="progressbar" id="p-bar" aria-label="Progress to the next level" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><i id="p-fill"></i></span>
+              <span class="lvl-r" id="p-xp">0/10 XP</span>
+            </div>
           </header>
-          <div class="xp-row">
-            <span class="bar thin" role="progressbar" id="p-bar" aria-label="Progress to the next level" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><i id="p-fill"></i></span>
-            <span class="lvl-r" id="p-xp">0/10 XP</span>
-          </div>
 
           <div class="carousel-wrap">
             <div class="carousel" id="home-carousel" data-carousel tabindex="0" aria-roledescription="carousel" aria-label="Highlights">
@@ -217,14 +215,11 @@
             </div>
           </div>
 
-          <div class="home-cta">
-            <button class="btn btn-hero" id="home-play" type="button" aria-describedby="home-play-sub">
-              <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg>
-              <span class="hero-txt">
-                <span class="hero-t">Play</span>
-                <span class="hero-sub" id="home-play-sub">vs Bot · Normal</span>
-              </span>
-            </button>
+          <div class="launcher">
+            <div class="launcher-head">
+              <span class="launcher-kicker">Play mode</span>
+              <span class="launcher-hint">Tap to set up</span>
+            </div>
             <div class="mode-grid" role="group" aria-label="Jump straight into a mode">
               <button class="mode-tile" type="button" data-mode="bot" id="tile-bot" aria-pressed="true" aria-label="vs Bot — choose difficulty">
                 <span class="mode-badge" aria-hidden="true"><svg class="ico"><use href="#i-bot" /></svg></span>
@@ -244,6 +239,13 @@
                 <span class="tile-soon">Soon</span>
               </button>
             </div>
+            <button class="btn btn-hero" id="home-play" type="button" aria-describedby="home-play-sub">
+              <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg>
+              <span class="hero-txt">
+                <span class="hero-t">Play</span>
+                <span class="hero-sub" id="home-play-sub">vs Bot · Normal</span>
+              </span>
+            </button>
           </div>
         </section>
 
