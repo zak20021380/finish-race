@@ -7,7 +7,7 @@
  *  - document scrollHeight > innerHeight (page scrolls),
  *  - #s-home scrollHeight > clientHeight (column overflows),
  *  - any element's bottom edge goes past the tab bar's top edge,
- *  - any .car-card / .id-card / .mode-tile / .btn-hero clips (scroll > client),
+ *  - any .car-card / .id-card / .mode-tab / .mode-chip / .btn-hero clips (scroll > client),
  *  - any leaf text overflows its box without ellipsis truncation.
  *
  * Returns { pass, fails[] }. Throws when pasted with `?assert` (console).
@@ -44,14 +44,17 @@ function checkHomeLayout() {
   }
 
   for (const el of document.querySelectorAll(
-    '#s-home .car-card, #s-home .id-card, #s-home .mode-tile, #s-home .btn-hero',
+    '#s-home .car-card, #s-home .id-card, #s-home .mode-tab, #s-home .mode-chip, #s-home .btn-hero',
   )) {
-    if (el.scrollHeight > el.clientHeight + 3) {
+    /* a deliberate ::after tap band hangs outside the box and grows scrollHeight — not clipping */
+    const band = getComputedStyle(el, '::after');
+    const over = band.position === 'absolute' ? Math.max(0, -(parseFloat(band.bottom) || 0)) : 0;
+    if (el.scrollHeight > el.clientHeight + 3 + over) {
       fails.push(
         `clipped vertically: .${el.className.toString().split(' ')[0]} scrollH ${el.scrollHeight} > clientH ${el.clientHeight}`,
       );
     }
-    if (el.scrollWidth > el.clientWidth + 3) {
+    if (el.scrollWidth > el.clientWidth + 3 + (band.position === 'absolute' ? Math.max(0, -(parseFloat(band.right) || 0)) : 0)) {
       fails.push(
         `clipped horizontally: .${el.className.toString().split(' ')[0]} scrollW ${el.scrollWidth} > clientW ${el.clientWidth}`,
       );

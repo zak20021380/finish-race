@@ -479,6 +479,11 @@ export function createMenu(api: MenuApi): Menu {
     setRoute(id) {
       tabbar.hidden = id === 'game';
       if (id === 'profile') paintProfile();       // the equipped row is only laid out once it is showing
+      /* Home now commits the strength live, so re-read it whenever these screens come forward */
+      if (id === 'modes' || id === 'custom') {
+        difficulty = menuState.difficulty;
+        paintDiff();
+      }
       if (id === 'custom') {                      // the preview is the same board, smaller
         custom = [...menuState.sizes];
         customDrawn = true;

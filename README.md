@@ -24,13 +24,15 @@ swap instantly under `prefers-reduced-motion`. The Telegram `BackButton` is wire
 provides one; every screen also has a visible Back button, and the race screen's top-left menu
 button opens the same pause sheet.
 
-**Home** is the identity card (avatar, name, country, team, level progress, coins), the drawn
-DETOUR wordmark and the way to play: a big Play button into mode select, then shortcuts —
-vs Bot (starts with the saved difficulty) and Online as a badge rather than a button.
+**Home** is the identity card (avatar, name, country, team, level progress, coins), the highlights
+carousel and the mode launcher: a two-tier selector — **Solo / Bot** and **Party & Teams** on a
+sliding pill, with only the choice that tier needs underneath it (the size row opens for Party, the
+Easy / Normal / Hard row is always there) — and one Play button that names what it will start.
 
-- **vs Bot** — Easy / Normal / Hard: how often the bot walls, how far it looks ahead and how much
-  it wanders (`src/bot.ts`).
-- **Online** — disabled, "Coming soon".
+- **Solo / Bot** — one ball each against the machine. Easy / Normal / Hard: how often the bot walls,
+  how far it looks ahead and how much it wanders (`src/bot.ts`).
+- **Party & Teams** — 1v1 / 2v2 / 3v3, plus Custom, which opens the team builder.
+- **Online** — not a mode you can pick: it sits under Play as a "Soon" footnote until the server exists.
 - **Shop** — Balls / Walls / Boards. Every card carries a live miniature board painted by the race
   renderer itself, so a preview cannot disagree with the game. Buying spends coins, takes ownership
   and puts the item on in one tap.

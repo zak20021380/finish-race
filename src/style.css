@@ -2107,101 +2107,149 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 .dot.on { background: var(--brand-2); box-shadow: none; transform: scaleX(1.25); }
 .dot:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 4px; }
 
-/* ---- launcher: pick a mode, then go — one panel, one gesture, one CTA ---- */
+/* ---- launcher: two tiers. A mode pill picks the tier, the chips below are its settings. ---- */
 .launcher {
+  --lgap: var(--s2);
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
+  gap: var(--lgap);
 }
-.launcher-head {
+
+/* tier 1 — one track, one thumb that slides between two labels */
+.mode-tabs {
+  position: relative;
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s2);
-  min-width: 0;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
 }
-.launcher-kicker {
-  font-size: var(--t-micro);
+.mode-thumb {
+  position: absolute;
+  z-index: 0;
+  inset: 4px auto 4px 4px;
+  width: calc(50% - 4px);
+  border-radius: var(--radius-pill);
+  background: var(--brand-fill);
+  box-shadow: var(--brand-shadow), inset 0 0 0 1px rgba(255, 255, 255, .22);
+  transition: transform var(--motion-med);
+}
+.mode-tabs[data-tab="party"] .mode-thumb { transform: translateX(100%); }
+.mode-tab {
+  position: relative;
+  z-index: 1;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 var(--s2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s1);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--chip-ink);
+  font-size: var(--t-3);
   font-weight: 800;
-  letter-spacing: var(--ls-3);
-  text-transform: uppercase;
-  color: var(--ink-soft);
+  transition: color var(--motion-fast), opacity var(--motion-fast);
 }
-.launcher-hint {
-  min-width: 0;
-  font-size: var(--t-micro);
-  font-weight: 600;
-  color: var(--ink-soft);
-  opacity: .8;
-  white-space: nowrap;
+/* 44px band, vertical only: the two tabs can never steal each other's tap */
+.mode-tab::after { content: ""; position: absolute; inset: -4px 0; }
+.mode-tab .ico { flex: none; width: 17px; height: 17px; }
+.mode-tab-t { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mode-tab[aria-selected="true"] { color: var(--on-brand); }
+.mode-tab:not([aria-selected="true"]):active { color: var(--ink); opacity: .8; }
+.mode-tab:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+
+/* tier 2a — the choice that only exists for one tier: it opens and closes with the tab */
+.mode-context {
+  display: grid;
+  grid-template-rows: 0fr;
+  /* the negative margins cancel the launcher's own gaps, so a closed row costs nothing */
+  margin: calc(-1 * var(--lgap)) 0;
+  transition: grid-template-rows var(--motion-med), margin var(--motion-med);
+}
+.mode-context.is-open { grid-template-rows: 1fr; margin: 0; }
+.mode-context-in {
   overflow: hidden;
-  text-overflow: ellipsis;
+  min-height: 0;
+  /* stays visible while it expands, only hides once it has finished collapsing */
+  visibility: hidden;
+  transition: visibility var(--motion-med);
 }
-.mode-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s2); }
-.mode-tile {
+.mode-context.is-open .mode-context-in { visibility: visible; }
+
+/* tier 2b — the chips themselves */
+.chip-row { display: flex; gap: var(--s1); }
+.mode-chip {
   appearance: none;
   border: 0;
   font: inherit;
   cursor: pointer;
   position: relative;
-  display: flex;
-  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 var(--s1);
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--s1);
-  min-width: 0;
-  min-height: 62px;
-  padding: var(--s1) 2px;
-  border-radius: var(--r-chip);
+  border-radius: var(--radius-pill);
   background: var(--tint-glass);
   box-shadow: inset 0 0 0 1px var(--hair-off);
-  transition: transform var(--motion-fast), background var(--motion-fast), box-shadow var(--motion-fast);
-}
-.mode-tile:active { transform: var(--motion-press); }
-.mode-tile:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-.mode-badge {
-  flex: none;
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-sm);
-  background: var(--field);
-  color: var(--ink-soft);
-  transition: background var(--motion-fast), color var(--motion-fast);
-}
-.mode-badge .ico { width: 17px; height: 17px; }
-.mode-tile .mode-t {
-  max-width: 100%;
-  font-size: var(--t-micro);
-  font-weight: 700;
-  line-height: 1.2;
   color: var(--ink);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  transition: transform var(--motion-fast), background var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
 }
-.mode-tile[aria-pressed="true"] {
+.mode-chip::after { content: ""; position: absolute; inset: -6px 0; }
+.mode-chip > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mode-chip .ico { flex: none; width: 14px; height: 14px; }
+.mode-chip:active { transform: var(--motion-press); }
+.mode-chip:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.mode-chip[aria-pressed="true"] {
   background: var(--brand-soft);
   box-shadow: inset 0 0 0 1.5px var(--brand-2);
+  color: var(--brand-ink);
 }
-.mode-tile[aria-pressed="true"] .mode-badge { background: var(--brand-fill); color: var(--on-brand); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3); }
-.mode-tile[aria-pressed="true"] .mode-t { color: var(--brand-ink); font-weight: 800; }
-.mode-tile.off { opacity: .55; cursor: default; }
-.mode-tile.off:active { transform: none; }
-.tile-soon {
-  position: absolute;
-  top: var(--s1);
-  right: var(--s1);
-  padding: 1px 5px;
+/* the team builder is a way out, not a fourth size: it does not take a pressed state */
+.mode-chip.go { flex: 0 1 auto; color: var(--ink-soft); }
+.mode-chip.go:active { color: var(--ink); }
+
+/* the footnote: online play is not a mode you can pick, so it sits below everything */
+.mode-teaser {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s1);
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--t-micro);
+  font-weight: 700;
+  line-height: 1.4;
+}
+.mode-teaser .ico { flex: none; width: 13px; height: 13px; opacity: .75; }
+.teaser-t { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.teaser-tag {
+  flex: none;
+  padding: 1px 6px;
   border-radius: var(--radius-pill);
   background: var(--field);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
   color: var(--ink-soft);
   font-size: 10px;
   font-weight: 800;
-  line-height: 1.4;
-  letter-spacing: .02em;
+  letter-spacing: .04em;
+  text-transform: uppercase;
 }
 
 /* the one loud element on Home: it confirms what the tiles selected */
@@ -2264,17 +2312,16 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 .tab .ico { width: 21px; height: 21px; }
 .tab[aria-current="page"] { box-shadow: 0 10px 20px -12px var(--brand-glow); }
 
-/* short phones: the column compresses through the spacing tokens, then the carousel */
-@media (max-height: 660px) {
-  .id-card, .launcher { gap: var(--s1); }
+/* Short columns — phones and a 720-high landscape: the column compresses through the
+   spacing tokens first, then the carousel, so the launcher never eats the highlight card. */
+@media (max-height: 760px) {
+  .id-card { gap: var(--s1); }
+  .launcher { --lgap: var(--s1); }
   .car-card { padding: var(--s3) var(--s4); gap: var(--s1); }
-  .mode-tile { min-height: 56px; }
   .btn-hero { min-height: 50px; }
 }
 
-/* quick sheets reuse the launcher's selected-state language */
-#sheet-quick-bot .seg, #sheet-quick-teams .seg { margin-bottom: var(--s2); }
-#qt-presets { margin-top: var(--s2); }
+/* the launcher's pressed language, reused by the presets on the mode screen */
 .preset[aria-pressed="true"] { background: var(--brand-soft); box-shadow: inset 0 0 0 1.5px var(--brand-2); }
 .preset[aria-pressed="true"] b { color: var(--brand-ink); }
 

@@ -535,7 +535,7 @@ document.addEventListener('visibilitychange', syncLoop);
 mountCoins();                              // every [data-coin] slot gets the shared gold coin
 menu = createMenu({ router, sheets, sheet: sheetById, start: startGame, onBack });
 const shop = createShop({ sheets, sheet: sheetById });
-home = createHome({ router, sheets, sheet: sheetById, start: startGame });
+home = createHome({ router, start: startGame });
 compete = createCompete({ router, sheets, sheet: sheetById });
 paintNames();
 ui();

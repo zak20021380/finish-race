@@ -8,7 +8,7 @@
  * peeking cards recede.
  */
 import type { Difficulty } from './bot';
-import { menuState, motionReduced, onSettings, saveMenu } from './settings';
+import { menuState, motionReduced, onSettings, saveMenu, type ModeTab } from './settings';
 import { flagOf, nameOf } from './countries';
 import {
   formatCountdown,
@@ -23,13 +23,10 @@ import { coinText, mountCoins } from './coin';
 import { earnCoins, onChange, profile } from './storage';
 import { impact, notify } from './telegram';
 import type { Router } from './router';
-import type { Sheets } from './sheets';
 import type { RaceSetup } from './menu';
 
 export interface HomeApi {
   router: Router;
-  sheets: Sheets;
-  sheet(id: string): HTMLElement | null;
   start(setup: RaceSetup): void;
 }
 
@@ -69,17 +66,16 @@ function kindOfSizes(sizes: readonly [number, number] | readonly number[]): Mode
 export function lastModeLabel(): string {
   const d = cap(menuState.difficulty);
   const [a, b] = menuState.sizes;
-  const kind = kindOfSizes(menuState.sizes);
-  if (kind === 'bot') return `vs Bot · ${d}`;
-  if (kind === 'teams') return `Teams ${a}v${b} · ${d}`;
-  return `Custom ${a}v${b} · ${d}`;
+  if (menuState.tab === 'solo') return `vs Bot · ${d}`;
+  if (kindOfSizes(menuState.sizes) === 'custom') return `Custom ${a}v${b} · ${d}`;
+  return `Teams ${a}v${b} · ${d}`;
 }
 
 function isDiff(v: string | undefined): v is Difficulty {
   return v === 'easy' || v === 'normal' || v === 'hard';
 }
 
-function parsePreset(v: string | undefined): [number, number] | null {
+function parseSize(v: string | undefined): [number, number] | null {
   if (!v) return null;
   const [a, b] = v.split(',').map(Number);
   if (!Number.isInteger(a) || !Number.isInteger(b)) return null;
@@ -93,14 +89,6 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   const slides = [...carousel.querySelectorAll<HTMLElement>('.car-card')];
   let featured: Tournament | null = null;
   let tick = 0;
-
-  /* ---------- quick-start local picks (committed on Start) ---------- */
-  let qbDiff: Difficulty = menuState.difficulty;
-  let qtDiff: Difficulty = menuState.difficulty;
-  let qtSizes: [number, number] = (() => {
-    const k = kindOfSizes(menuState.sizes);
-    return k === 'teams' ? [...menuState.sizes] as [number, number] : [2, 2];
-  })();
 
   /* ---------- carousel: dots + slow auto-advance that pauses on touch ---------- */
 
@@ -305,42 +293,41 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     void loadDaily();
   });
 
-  /* ---------- Play subtitle + tile selection ---------- */
+  /* ---------- launcher: one tier at a time, every pick lands in menuState ---------- */
 
-  const paintPlay = (): void => {
-    const sub = document.getElementById('home-play-sub');
-    if (sub) sub.textContent = lastModeLabel();
-    const kind = kindOfSizes(menuState.sizes);
-    const bot = document.getElementById('tile-bot');
-    const teams = document.getElementById('tile-teams');
-    const custom = document.getElementById('tile-custom');
-    if (bot) bot.setAttribute('aria-pressed', String(kind === 'bot'));
-    if (teams) teams.setAttribute('aria-pressed', String(kind === 'teams'));
-    if (custom) custom.setAttribute('aria-pressed', String(kind === 'custom'));
-  };
+  const tabTrack = document.querySelector<HTMLElement>('.mode-tabs');
+  const sizeRow = document.getElementById('mctx-size');
+  const tabBtns = [...document.querySelectorAll<HTMLButtonElement>('[data-mode-tab]')];
 
-  const paintQuickSegs = (): void => {
-    for (const b of document.querySelectorAll<HTMLButtonElement>('[data-qb-diff]')) {
-      b.setAttribute('aria-pressed', String(b.dataset.qbDiff === qbDiff));
+  const paintLauncher = (): void => {
+    const tab = menuState.tab;
+    if (tabTrack) tabTrack.dataset.tab = tab;
+    for (const b of tabBtns) {
+      const on = b.dataset.modeTab === tab;
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;
     }
-    for (const b of document.querySelectorAll<HTMLButtonElement>('[data-qt-diff]')) {
-      b.setAttribute('aria-pressed', String(b.dataset.qtDiff === qtDiff));
+    if (sizeRow) sizeRow.classList.toggle('is-open', tab === 'party');
+    for (const b of document.querySelectorAll<HTMLButtonElement>('.mode-chip[data-diff]')) {
+      b.setAttribute('aria-pressed', String(b.dataset.diff === menuState.difficulty));
     }
-    for (const b of document.querySelectorAll<HTMLButtonElement>('[data-qt-preset]')) {
-      const p = parsePreset(b.dataset.qtPreset);
-      const on = p !== null && p[0] === qtSizes[0] && p[1] === qtSizes[1];
+    for (const b of document.querySelectorAll<HTMLButtonElement>('.mode-chip[data-size]')) {
+      const p = parseSize(b.dataset.size);
+      const on = p !== null && p[0] === menuState.sizes[0] && p[1] === menuState.sizes[1];
       b.setAttribute('aria-pressed', String(on));
     }
+    const sub = document.getElementById('home-play-sub');
+    if (sub) sub.textContent = lastModeLabel();
   };
 
-  const syncQuickFromMenu = (): void => {
-    qbDiff = menuState.difficulty;
-    qtDiff = menuState.difficulty;
-    qtSizes = kindOfSizes(menuState.sizes) === 'teams'
-      ? [...menuState.sizes] as [number, number]
-      : [2, 2];
-    paintQuickSegs();
-    paintPlay();
+  /** Solo is always one ball each, so the tier swap rewrites the size the race will use. */
+  const setTab = (tab: ModeTab): void => {
+    if (menuState.tab === tab) return;
+    impact('light');
+    saveMenu(tab === 'solo'
+      ? { tab, sizes: [1, 1] }
+      : { tab, sizes: kindOfSizes(menuState.sizes) === 'bot' ? [2, 2] : [...menuState.sizes] });
+    paintLauncher();
   };
 
   /* ---------- identity shortcuts ---------- */
@@ -356,93 +343,53 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     api.router.go('settings');
   });
 
-  /* ---------- mode tiles + quick sheets + Play ---------- */
+  /* ---------- launcher input ---------- */
 
-  for (const el of document.querySelectorAll<HTMLButtonElement>('[data-mode]')) {
-    el.addEventListener('click', () => {
-      const m = el.dataset.mode;
-      if (m === 'online') return;
-      impact('light');
-      if (m === 'bot') {
-        qbDiff = menuState.difficulty;
-        paintQuickSegs();
-        const sh = api.sheet('sheet-quick-bot');
-        if (sh) api.sheets.open(sh);
-        return;
-      }
-      if (m === 'teams') {
-        qtDiff = menuState.difficulty;
-        qtSizes = kindOfSizes(menuState.sizes) === 'teams'
-          ? [...menuState.sizes] as [number, number]
-          : [2, 2];
-        paintQuickSegs();
-        const sh = api.sheet('sheet-quick-teams');
-        if (sh) api.sheets.open(sh);
-        return;
-      }
-      if (m === 'custom') {
-        api.router.go('custom');
-        return;
-      }
-    });
-  }
-
-  for (const b of document.querySelectorAll<HTMLButtonElement>('[data-qb-diff]')) {
+  for (const b of tabBtns) {
     b.addEventListener('click', () => {
-      const d = b.dataset.qbDiff;
-      if (!isDiff(d)) return;
-      qbDiff = d;
-      paintQuickSegs();
-      impact('light');
+      const t = b.dataset.modeTab;
+      if (t === 'solo' || t === 'party') setTab(t);
     });
   }
-
-  for (const b of document.querySelectorAll<HTMLButtonElement>('[data-qt-diff]')) {
-    b.addEventListener('click', () => {
-      const d = b.dataset.qtDiff;
-      if (!isDiff(d)) return;
-      qtDiff = d;
-      paintQuickSegs();
-      impact('light');
-    });
-  }
-
-  for (const b of document.querySelectorAll<HTMLButtonElement>('[data-qt-preset]')) {
-    b.addEventListener('click', () => {
-      const p = parsePreset(b.dataset.qtPreset);
-      if (!p) return;
-      qtSizes = p;
-      paintQuickSegs();
-      impact('light');
-    });
-  }
-
-  const qbStart = document.getElementById('qb-start');
-  qbStart?.addEventListener('click', () => {
-    impact('light');
-    saveMenu({ mode: 'bot', difficulty: qbDiff, sizes: [1, 1] });
-    paintPlay();
-    api.sheets.close();
-    // Close is animated; start on next frame so the sheet never covers the board.
-    window.setTimeout(() => api.start({ difficulty: qbDiff, sizes: [1, 1] }), 60);
+  /* the pill is a tablist, so the arrows walk it like a segmented control */
+  tabTrack?.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    const next: ModeTab = menuState.tab === 'solo' ? 'party' : 'solo';
+    setTab(next);
+    tabBtns.find((b) => b.dataset.modeTab === next)?.focus();
   });
 
-  const qtStart = document.getElementById('qt-start');
-  qtStart?.addEventListener('click', () => {
-    impact('light');
-    const sizes: [number, number] = [...qtSizes] as [number, number];
-    saveMenu({ mode: 'bot', difficulty: qtDiff, sizes });
-    paintPlay();
-    api.sheets.close();
-    window.setTimeout(() => api.start({ difficulty: qtDiff, sizes }), 60);
+  for (const b of document.querySelectorAll<HTMLButtonElement>('.mode-chip[data-diff]')) {
+    b.addEventListener('click', () => {
+      const d = b.dataset.diff;
+      if (!isDiff(d)) return;
+      impact('light');
+      saveMenu({ difficulty: d });
+      paintLauncher();
+    });
+  }
+
+  for (const b of document.querySelectorAll<HTMLButtonElement>('.mode-chip[data-size]')) {
+    b.addEventListener('click', () => {
+      const p = parseSize(b.dataset.size);
+      if (!p) return;
+      impact('light');
+      saveMenu({ sizes: p });
+      paintLauncher();
+    });
+  }
+
+  /* the team builder is its own screen — a way out of the launcher, not a fourth size */
+  $('tile-custom').addEventListener('click', () => {
+    impact('medium');
+    api.router.go('custom');
   });
 
   $('home-play').addEventListener('click', () => {
     impact('light');
-    const d = menuState.difficulty;
-    const sizes: [number, number] = [...menuState.sizes] as [number, number];
     saveMenu({ mode: 'bot' });
-    api.start({ difficulty: d, sizes });
+    api.start({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] });
   });
 
   /* ---------- countdown ticker ---------- */
@@ -458,26 +405,29 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   onChange(() => {
     void loadCountries();
     void loadDaily();
-    paintPlay();
+    paintLauncher();
   });
 
   void loadFeatured();
   void loadCountries();
   void loadDaily();
   paintDots();
-  syncQuickFromMenu();
+  paintLauncher();
   armAuto();
   startTick();
   mountCoins(carousel);
 
   return {
     setRoute(id: string) {
-      if (id === 'home') {
-        paintDots();
-        poke();
-        syncQuickFromMenu();
-        void loadCountries();
+      if (id !== 'home') return;
+      /* the team builder can leave a multi-ball size behind a solo tier — it is a party race */
+      if (menuState.tab === 'solo' && kindOfSizes(menuState.sizes) !== 'bot') {
+        saveMenu({ tab: 'party' });
       }
+      paintDots();
+      poke();
+      paintLauncher();
+      void loadCountries();
     },
   };
 }
