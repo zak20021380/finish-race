@@ -62,13 +62,16 @@ schema change.
 
 ## Theme
 
-`themeParams` from Telegram decide the palette: `bg_color`, `text_color` and `hint_color` are handed
-to CSS as `--tg-*`, and the light or dark token set in `src/style.css` fills in the rest. Outside a
-client the SDK claims `colorScheme: "light"` even in a plain tab, so the app only trusts a declared
-scheme when the platform says it is really Telegram and otherwise follows
-`prefers-color-scheme`. Safe-area insets, `viewportStableHeight`, the BackButton and haptics are all
-wired; every control is at least 44px and the page itself never scrolls (only sheet lists and the
-profile pane do).
+The app ships **one light-clay palette**: a `#f1f5f9` canvas, elevated white tiles lit from above
+(ambient drop · top specular · bottom bevel), coral `#ff5a36` reserved for the single primary action
+and electric sky / mint / honey as the secondaries. There is no dark token set any more — a client in
+night mode gets the same surfaces as one in day mode. `applyTheme()` in `src/telegram.ts` reports
+`light` to Telegram and reads only `themeParams.button_color`, which tints the secondary brand ramp;
+no white type sits on a fill that ramp can reach.
+
+Safe-area insets, `viewportStableHeight`, the BackButton and haptics are all wired; every control is
+at least 48px, depth is a 0-blur `box-shadow` so a press animates `transform` alone, and the page
+itself never scrolls (only sheet lists and the profile pane do).
 
 ## Cosmetics
 
@@ -145,7 +148,7 @@ Telegram only loads **HTTPS** URLs.
 | `src/menu.ts` | Home, mode select, settings, the identity card, the country and team sheets and the tab bar — it only asks `main.ts` to start a race |
 | `src/shop.ts` | The shop: tabs, cards with live previews, equip, and the buy confirm flow |
 | `src/main.ts` | Game wiring: input (tap-to-arm / confirm, mouse hover + click), loop, chips, status, payout, overlay, pause |
-| `src/style.css` | Tokens, mesh background, frosted cards, board frame, menu shell, shop and profile |
+| `src/style.css` | Tokens, mesh background, clay panels, board frame, menu shell, shop and profile |
 
 ## Going multiplayer later
 
@@ -162,9 +165,11 @@ plugs in. Everything goes through `apply(state, action)`, so the server can run 
 
 ## Tweaking the look
 
-- Colours plus the type and spacing scales: the `:root` token block at the top of `src/style.css`,
-  and the `html.dark` block under it that restates the same names. Text uses the `*-ink` variants of
-  the brand hues so every pair clears 4.5:1 on the card.
+- Colours plus the type, spacing, radius and elevation scales: the `:root` token block at the top of
+  `src/style.css`. There is one theme, so that block is the whole palette. Text uses the `*-ink`
+  variants of the brand hues so every pair clears 4.5:1 on the card.
+- The clay tile: `--clay-drop` / `--clay-spec` / `--clay-bevel` / `--clay-ring`, composed once in the
+  shared panel recipe. The pressed key: `--lip`, `--press-y` and a `0 var(--d) 0 <lip>` shadow.
 - The wordmark: the inline `<svg class="logo-mark">` in `index.html` — the letters are stroke paths
   and the `O` is the route bending round the wall bar, ending at the ball. Its idle motion is
   `logo-float` / `logo-bloom` in `src/style.css`.

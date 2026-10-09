@@ -5,15 +5,38 @@
   --app-h: 100vh;
   --app-w: min(480px, 62vh);          /* the phone column: #app, sheets and scrim all share it */
 
-  /* ---- brand: one hue pair, indigo into violet ---- */
-  --brand-1: #4f46e5;
-  --brand-2: #7c3aed;
-  --brand-3: #a855f7;
-  --brand-ink: #4a1fa8;               /* violet dark enough to be body text on a light card */
-  --brand-glow: rgba(124, 58, 237, .42);
-  --brand-soft: rgba(124, 58, 237, .1);
-  --brand-fill: linear-gradient(150deg, var(--brand-1) 0%, var(--brand-2) 52%, var(--brand-3) 100%);
-  --brand-shadow: 0 16px 30px -14px rgba(91, 51, 199, .85);
+  /* ---- brand: electric sky. Secondary surfaces, focus and progress. ----
+     Coral is deliberately NOT here: --cta-* below is the only action hue, so
+     the one loud thing on a screen stays the loud thing. */
+  --brand-1: #0284c7;
+  --brand-2: #0ea5e9;
+  --brand-3: #38bdf8;
+  --brand-ink: #0369a6;               /* sky dark enough to be body text on a clay card (5.9:1) */
+  --brand-glow: rgba(2, 132, 199, .4);
+  --brand-soft: rgba(14, 165, 233, .12);
+  /* The ramp every filled control uses. It stops deep enough that --on-brand
+     clears 4.5:1 at both ends — a lighter top stop is what made white-on-sky fail. */
+  --brand-fill: linear-gradient(180deg, #0477b8 0%, #0369a6 100%);
+  --brand-lip: #025170;
+  --brand-shadow: 0 10px 20px -12px rgba(2, 132, 199, .6);
+
+  /* ---- the single primary action: coral face, dark extrusion lip ---- */
+  --cta: #ff5a36;
+  --cta-hi: #ff8163;
+  --cta-lip: #c93b18;
+  --cta-shadow: 0 14px 26px -12px rgba(201, 59, 24, .62);
+
+  /* ---- secondary accents: mint and honey, each with the lip its extrusion needs ----
+     --*-ink is the text pair; every one clears 4.5:1 on white clay. */
+  --mint: #10b981;
+  --mint-deep: #059669;
+  --mint-lip: #047857;
+  --mint-ink: #047857;
+  --mint-soft: rgba(16, 185, 129, .14);
+  --honey: #f59e0b;
+  --honey-lip: #b45309;
+  --honey-ink: #7c3d03;
+  --honey-soft: rgba(245, 158, 11, .16);
 
   /* Result fills keep their deep hues in both themes: the type on them is always white. */
   --win-1: #17805a;
@@ -26,55 +49,62 @@
   --bad-2: #b3123c;
   --bad-shadow: 0 12px 24px -10px rgba(179, 18, 60, .75);
 
-  /* ---- surfaces ----
-     Every colour a component paints with is a token, so `html.dark` (or Telegram's themeParams)
-     only has to restate this block. The three --tg-* vars are set from themeParams at runtime. */
-  --bg: var(--tg-bg, #eeeaf8);
-  --bg-a: #f4f1fd;                     /* mesh base wash */
-  --bg-m: #efedfb;                      /* mesh middle */
-  --bg-b: #e8eefb;
-  --vig: rgba(70, 58, 120, .14);       /* the vignette that grounds the mesh */
-  --lav: rgba(198, 179, 250, .85);     /* the drifting blobs */
-  --sky: rgba(166, 205, 250, .8);
-  --blush: rgba(252, 198, 226, .6);
-  --glass-a: rgba(255, 255, 255, .74); /* card, frosted */
-  --glass-b: rgba(255, 255, 255, .52);
-  --card-a: #f1f0f8;                   /* solid card fallback where backdrop-filter is missing */
-  --card-b: #dddbea;
+  /* ---- surfaces: light-mode clay ----
+     One palette, one theme. A card is elevated white lit from above: an ambient
+     drop shadow, a specular line along the top edge and a soft bevel underneath.
+     The canvas is milky cloud white, so the blobs are pastel washes, not glow. */
+  --bg: #f1f5f9;
+  --bg-a: #f8fafc;                     /* mesh base wash */
+  --bg-m: #eef3fa;
+  --bg-b: #e4ecf6;
+  --vig: rgba(100, 111, 139, .1);      /* the vignette that grounds the mesh */
+  --lav: rgba(186, 215, 250, .55);     /* the drifting blobs */
+  --sky: rgba(214, 236, 250, .6);
+  --blush: rgba(255, 216, 204, .5);
+  --clay-face: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  --glass-a: #ffffff;                  /* kept as names: the shell still references them */
+  --glass-b: #fbfdff;
+  --card-a: #ffffff;                   /* solid card fallback where backdrop-filter is missing */
+  --card-b: #f7fafd;
   --solid-a: #ffffff;                  /* sheet, panel, the raised chip */
-  --solid-b: #f1f0f9;
-  --hair: rgba(255, 255, 255, .72);    /* 1px inner border on a frosted surface */
-  --hair-lit: rgba(255, 255, 255, .95);/* lit top edge */
-  --hair-off: rgba(67, 67, 90, .13);   /* hairline on a plain surface */
-  --field: rgba(67, 67, 90, .09);      /* segmented track, icon chips, badges */
-  --sep: rgba(67, 67, 90, .12);        /* row dividers */
-  --tint-glass: rgba(255, 255, 255, .5);
-  --veil: rgba(238, 235, 248, .55);   /* the dimming layer behind the result panel */
-  --shadow: rgba(66, 62, 118, .42);
-  --shadow-soft: rgba(66, 62, 118, .22);
+  --solid-b: #f1f5f9;
+  --hair: rgba(255, 255, 255, .9);     /* 1px inner border on a clay surface */
+  --hair-lit: #ffffff;                 /* lit top edge */
+  --hair-off: rgba(15, 23, 42, .08);   /* hairline on a plain surface */
+  --field: #e2e8f0;                    /* recessed track, inset groove, icon chips */
+  --sep: rgba(15, 23, 42, .08);        /* row dividers */
+  --tint-glass: #f6f9fc;
+  --veil: rgba(100, 116, 139, .45);    /* the dimming layer behind a sheet */
+  --shadow: rgba(100, 116, 139, .34);
+  --shadow-soft: rgba(100, 116, 139, .18);
   --red: #e0264f;
   --blue: #3057db;
-  --green: #2fa86f;
-  /* Same hues, darkened for text: every pair below clears 4.5:1 on the card gradient. */
-  --red-ink: #b3123c;
+  --green: #10b981;
+  /* Same hues, darkened for text: every pair below clears 4.5:1 on white clay. */
+  --red-ink: #be123c;
   --blue-ink: #2340a8;
-  --green-ink: #0f6b45;
-  --ink: var(--tg-ink, #43435a);
-  --ink-soft: var(--tg-soft, #5b5a72);
-  --chip-ink: var(--ink-soft);        /* chip text: lifted in dark, where --ink-soft is too dim */
-  --badge-bg: var(--brand-soft);      /* the two-letter code chip and the team code */
+  --green-ink: #047857;
+  --ink: #0f172a;                      /* midnight navy */
+  /* Slate for labels. The spec's #64748b measures 4.3:1 on white and only 3.9:1 on the
+     recessed slab, so the ramp is pulled two steps darker: 4.9:1 on --field, 6.1:1 on clay. */
+  --ink-soft: #56637a;
+  --chip-ink: #475569;
+  --badge-bg: var(--brand-soft);       /* the two-letter code chip and the team code */
   --badge-ink: var(--brand-ink);
-  --on-brand: #ffffff;                 /* text on the indigo-violet fills */
-  --danger: #a90b2f;
-  --red-glow: rgba(224, 38, 79, .38);
-  --blue-glow: rgba(48, 87, 219, .38);
-  --pill: rgba(36, 36, 52, .94);       /* the dark banner over the board */
+  --on-brand: #ffffff;                 /* text on the coral / deep-sky fills */
+  --danger: #be123c;
+  --red-glow: rgba(224, 38, 79, .14);
+  --blue-glow: rgba(48, 87, 219, .14);
+  /* mock coins: a chunky gold pill, so the ink on it is navy, not brown-on-brown */
+  --coin: rgba(245, 158, 11, .16);
+  --coin-line: rgba(180, 83, 9, .38);
+  --coin-ink: #7c3d03;
+  --gold-face: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+  --gold-lip: #b45309;
+  /* the board's status banner stays deep in every screen: its type is always white */
+  --pill: rgba(15, 23, 42, .92);
   --pill-ink: #ffffff;
   --pill-x: rgba(255, 255, 255, .18);
-  /* mock coins: gold for the fill, and an ink dark enough to clear 4.5:1 on it */
-  --coin: rgba(226, 166, 23, .16);
-  --coin-line: rgba(160, 108, 8, .3);
-  --coin-ink: #6b4704;
 
   /* ---- type scale: two reading levels (status > chips); the finish label is board furniture ---- */
   --t-1: clamp(0.9375rem, 0.885rem + .55vw, 1.0625rem);   /* status pill, card titles */
@@ -107,32 +137,50 @@
   /* ---- type scale (mobile-first, steps up at 700px height / wide phones) ---- */
   /* base aliases above stay; components use --t-* only */
 
-  /* ---- radii: one set, everything references these ---- */
-  --radius-sm: 12px;
-  --radius-md: 16px;
+  /* ---- radii: pebble curves. Panels are 26px, the things you press are 18px. ---- */
+  --radius-sm: 14px;
+  --radius-md: 18px;
   --radius-lg: 24px;
   --radius-xl: 32px;
   --radius-pill: 999px;
   --r-card: var(--radius-xl);
-  --r-panel: var(--radius-lg);          /* the cards that stack a screen: identity, highlights, launcher */
-  --r-chip: var(--radius-md);           /* interactive sub-surfaces inside a panel: tiles, chips */
+  --r-panel: 26px;                    /* the cards that stack a screen: identity, highlights, launcher */
+  --r-chip: var(--radius-md);         /* interactive sub-surfaces inside a panel: tiles, chips */
 
-  /* ---- elevation: one set, no ad-hoc shadows ---- */
+  /* ---- elevation: a clay tile is lit from above, so every card carries the same three layers ----
+     ambient drop · top specular · bottom bevel. Compose them, never re-invent them. */
+  --clay-drop: 0 12px 24px rgba(100, 116, 139, .12), 0 2px 6px rgba(100, 116, 139, .07);
+  --clay-spec: inset 0 2px 3px rgba(255, 255, 255, .9);
+  --clay-bevel: inset 0 -3px 3px rgba(0, 0, 0, .04);
+  --clay-ring: inset 0 0 0 1px var(--hair-off);
+  --clay: var(--clay-drop), var(--clay-spec), var(--clay-bevel);
+  /* pressed into the slab rather than lifted off it */
+  --inset: inset 0 2px 5px rgba(100, 116, 139, .22), inset 0 -1px 0 rgba(255, 255, 255, .7);
   --elev-1: 0 8px 18px -12px var(--shadow);
   --elev-2: 0 16px 32px -18px var(--shadow);
   --elev-3: 0 26px 50px -18px var(--shadow);
-  --elev-glow-brand: 0 16px 30px -14px rgba(91, 51, 199, .85);
+  --elev-glow-brand: 0 16px 30px -14px rgba(2, 132, 199, .55);
 
-  /* ---- unified glass: one background, one blur, one hairline ---- */
-  --glass-bg: linear-gradient(180deg, var(--glass-a) 0%, var(--glass-b) 100%);
-  --glass-blur: blur(14px) saturate(1.35);
-  --glass-border: inset 0 0 0 1px var(--hair);
-  --glass-border-top: inset 0 1px 0 var(--hair-lit);
+  /* ---- the extruded control: a solid lip under the face, and a travel distance ----
+     Depth is a real 0-offset spread, not a blur, so a press costs the GPU one transform. */
+  --lip: 3px;
+  --lip-lg: 5px;
+  --press-y: 3px;
+  --press-y-lg: 4px;
+
+  /* ---- unified clay face: one background, one hairline, no live blur ---- */
+  --glass-bg: var(--clay-face);
+  --glass-blur: none;
+  --glass-border: inset 0 0 0 1px var(--hair-off);
+  --glass-border-top: inset 0 2px 3px rgba(255, 255, 255, .9);
 
   /* ---- motion: transform/opacity only, one curve, one duration ---- */
   --motion-fast: .16s ease;
   --motion-med: .26s cubic-bezier(.22, .61, .36, 1);
-  --motion-press: scale(.97);
+  /* a chunky key switch: it travels down, it does not shrink */
+  --motion-press: translateY(var(--press-y));
+  /* bounce for the dock: it overshoots once, then settles */
+  --bounce: cubic-bezier(.34, 1.56, .64, 1);
   /* banners sit one row down so the checkered strip is never covered */
   --banner-top: calc(100% / 12 + var(--s2));
   /* lane the board slot keeps above the board: the FINISH pill straddles that edge, so its
@@ -143,49 +191,11 @@
 }
 @supports (height: 100dvh) { :root { --app-h: 100dvh; } }
 
-/* ---- dark: the same tokens, inverted. Telegram's themeParams win wherever they reach. ---- */
-html.dark {
-  --bg: var(--tg-bg, #12121a);
-  --bg-a: #191922;
-  --bg-m: #16161f;
-  --bg-b: #101017;
-  --vig: rgba(0, 0, 0, .5);
-  --lav: rgba(88, 76, 178, .5);
-  --sky: rgba(56, 78, 138, .45);
-  --blush: rgba(126, 66, 112, .32);
-  --glass-a: rgba(255, 255, 255, .075);
-  --glass-b: rgba(255, 255, 255, .03);
-  --card-a: #21212c;
-  --card-b: #191922;
-  --solid-a: #232330;
-  --solid-b: #1a1a24;
-  --hair: rgba(255, 255, 255, .1);
-  --hair-lit: rgba(255, 255, 255, .16);
-  --hair-off: rgba(255, 255, 255, .12);
-  --field: rgba(255, 255, 255, .09);
-  --sep: rgba(255, 255, 255, .11);
-  --tint-glass: rgba(255, 255, 255, .07);
-  --veil: rgba(8, 8, 14, .58);
-  --shadow: rgba(0, 0, 0, .55);
-  --shadow-soft: rgba(0, 0, 0, .4);
-  --brand-ink: #c4a6ff;
-  --brand-soft: rgba(167, 139, 250, .14);
-  --red-ink: #ff92a8;
-  --blue-ink: #a5b8ff;
-  --green-ink: #6fd9a6;
-  --ink: var(--tg-ink, #ebe8f5);
-  --ink-soft: var(--tg-soft, #a8a5bd);
-  --chip-ink: #dcd9ea;
-  --badge-bg: rgba(167, 139, 250, .22);
-  --badge-ink: #e6d9ff;
-  --danger: #ff8098;
-  --pill: rgba(244, 242, 252, .95);
-  --pill-ink: #24243a;
-  --pill-x: rgba(36, 36, 52, .16);
-  --coin: rgba(234, 179, 8, .16);
-  --coin-line: rgba(234, 179, 8, .34);
-  --coin-ink: #f2c96e;
-}
+/* ---- one theme ----
+   The dark token restatement is gone: the app is light clay everywhere, so a
+   Telegram client in night mode gets the same surfaces as one in day mode.
+   `applyTheme()` in telegram.ts no longer toggles `html.dark` or pushes
+   themeParams into --tg-*; the brand accent is the only thing it still reads. */
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
@@ -233,7 +243,7 @@ html, body {
 .grain {
   position: absolute;
   inset: 0;
-  opacity: .05;
+  opacity: .035;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 160px 160px;
 }
@@ -682,9 +692,9 @@ html, body {
 .lose .cta:not(.ghost):focus-visible { outline-color: var(--lose-1); }
 
 /* ==========================================================================
-   SHELL — logo lockup, player card, mode cards, settings, tabs, sheets.
-   Same frosted-glass frame as the board card; animated layers stay on
-   transform/opacity so the compositor does all of it.
+   SHELL — player card, mode cards, settings, tabs, sheets.
+   One clay recipe: elevated white, lit from above, no live blur. Animated
+   layers stay on transform/opacity so the compositor does all of it.
    ========================================================================== */
 
 .ico { width: 1.25em; height: 1.25em; flex: none; display: block; }
@@ -700,32 +710,34 @@ html, body {
 }
 html.rm .coin.sweep .coin-sweep { animation: none; }
 
-/* ---- shared panel recipe: one glass surface, one hairline, one elevation ----
-   Every full-width card on a screen takes this; only the radius and the
-   internal padding vary per role (--r-panel / --s4). */
+/* ---- shared panel recipe: elevated white clay, lit from above ----
+   Every full-width card on a screen takes this; only the radius and the internal
+   padding vary per role (--r-panel / --s4). No backdrop-filter: a clay tile is
+   opaque, so the GPU never has to re-sample what is behind it. */
 .p-card, .id-card, .launcher, .m-card, .rows, .tabs,
 .car-card, .tourney-card, .cos, .eq, .stepper,
 .p-stats.triple, .p-stats.quad, .rank-list {
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow:
-    var(--glass-border),
-    var(--glass-border-top),
-    var(--elev-2);
-}
-@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
-  .p-card, .id-card, .launcher, .m-card, .rows, .tabs, .car-card {
-    background: linear-gradient(180deg, var(--card-a) 0%, var(--card-b) 100%);
-  }
+  background: var(--clay-face);
+  box-shadow: var(--clay), var(--clay-ring);
 }
 
-/* ---- buttons ---- */
+/* ---- the extruded control: a face sitting on a solid lip ----
+   Depth is a 0-blur spread, so a press animates transform alone. Every button that
+   asks to be touched uses --lip / --press-y from the token block and nothing else. */
+.btn, .icon-btn, .tab, .tag-chip, .mode-chip, .mode-tab, .preset, .cta {
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast),
+              background var(--motion-fast), color var(--motion-fast), opacity var(--motion-fast);
+}
+
+/* ---- buttons: every one of them is a key on a keyboard ----
+   --d is the extrusion you can see below the face. A press travels the face down
+   into that lip and shortens it to 1px, so the button sinks instead of shrinking. */
 .btn {
+  --d: 4px;
   appearance: none;
   border: 0;
   font: inherit;
-  font-weight: 700;
+  font-weight: 800;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -735,26 +747,47 @@ html.rm .coin.sweep .coin-sweep { animation: none; }
   border-radius: var(--radius-pill);
   color: var(--ink);
   cursor: pointer;
-  transition: transform var(--motion-fast), opacity var(--motion-fast);
 }
-.btn:active { transform: var(--motion-press); opacity: .9; }
+.btn:hover:not(:active) { transform: translateY(-1px); }
+.btn:active { transform: translateY(var(--press-y)); --d: 1px; }
 .btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
-.btn[disabled] { opacity: .6; cursor: default; }
+.btn[disabled] { opacity: .55; cursor: default; --d: 2px; }
+.btn[disabled]:active { transform: none; }
+/* the deep-sky pair: white type on it clears 4.5:1 at both ends of the ramp.
+   Coral is reserved for PLAY, so this stays the loudest thing after it. */
 .btn-primary {
+  --btn-lip: var(--brand-lip);
   background: var(--brand-fill);
   color: var(--on-brand);
-  box-shadow: var(--brand-shadow);
+  box-shadow:
+    0 var(--d) 0 var(--btn-lip),
+    0 calc(var(--d) + 7px) 16px -8px var(--brand-glow),
+    inset 0 2px 3px rgba(255, 255, 255, .3),
+    inset 0 -2px 3px rgba(0, 0, 0, .16);
 }
-.btn-ghost { background: var(--solid-a); box-shadow: inset 0 0 0 1px var(--hair-off), 0 8px 18px -14px var(--shadow); }
+.btn-ghost {
+  --btn-lip: #cbd5e1;
+  background: var(--clay-face);
+  color: var(--ink);
+  box-shadow:
+    0 var(--d) 0 var(--btn-lip),
+    0 calc(var(--d) + 6px) 14px -9px var(--shadow-soft),
+    var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+}
 .btn-danger {
+  --btn-lip: var(--bad-2);
   background: linear-gradient(180deg, var(--bad-1), var(--bad-2));
   color: #fff;
-  box-shadow: var(--bad-shadow);
+  box-shadow:
+    0 var(--d) 0 var(--btn-lip),
+    0 calc(var(--d) + 7px) 16px -8px rgba(179, 18, 60, .5),
+    inset 0 2px 3px rgba(255, 255, 255, .3);
 }
 .btn.warn { color: var(--red-ink); }
 /* .btn-hero is composed in the HOME section below: it is Home's one loud element */
 
 .icon-btn {
+  --d: 3px;
   appearance: none;
   position: relative;
   border: 0;
@@ -764,16 +797,19 @@ html.rm .coin.sweep .coin-sweep { animation: none; }
   display: grid;
   place-items: center;
   padding: 0;
-  border-radius: var(--radius-sm);
-  background: var(--solid-a);
+  border-radius: var(--radius-md);
+  background: var(--clay-face);
   color: var(--ink);
-  box-shadow: inset 0 0 0 1px var(--hair-off), var(--elev-1);
   cursor: pointer;
-  transition: transform var(--motion-fast), opacity var(--motion-fast);
+  box-shadow:
+    0 var(--d) 0 #cbd5e1,
+    0 calc(var(--d) + 5px) 12px -8px var(--shadow-soft),
+    var(--clay-spec), var(--clay-bevel), var(--clay-ring);
 }
 .icon-btn::after { content: ""; position: absolute; inset: -2px; }
-.icon-btn:active { transform: var(--motion-press); opacity: .88; }
-.icon-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.icon-btn:hover:not(:active) { transform: translateY(-1px); }
+.icon-btn:active { transform: translateY(var(--press-y)); --d: 0px; }
+.icon-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
 .icon-btn .ico { width: 22px; height: 22px; }
 
 /* ---- screen head: back | title | balance ---- */
@@ -799,8 +835,11 @@ html.rm .coin.sweep .coin-sweep { animation: none; }
 }
 .m-head-pad { flex: none; width: 44px; }
 
-/* ---- avatars: a Telegram photo when there is one, initials when there is not ---- */
+/* ---- avatars: a Telegram photo when there is one, initials when there is not ----
+   A clay token, not a coloured disc: navy initials on white read on every platform
+   and never collide with the coral action or the sky accents beside them. */
 .avatar {
+  --d: 3px;
   position: relative;
   overflow: hidden;
   flex: none;
@@ -808,10 +847,14 @@ html.rm .coin.sweep .coin-sweep { animation: none; }
   height: 44px;
   display: grid;
   place-items: center;
-  border-radius: 50%;
-  background: var(--brand-fill);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 0 0 1px var(--hair-off), 0 6px 14px -8px var(--shadow);
-  color: var(--on-brand);
+  border-radius: 34%;
+  background: var(--clay-face);
+  box-shadow:
+    0 var(--d) 0 #cbd5e1,
+    inset 0 0 0 2px var(--brand-soft),
+    inset 0 2px 3px rgba(255, 255, 255, .9),
+    var(--clay-bevel);
+  color: var(--ink);
   font-size: var(--t-1);
   font-weight: 800;
   letter-spacing: .02em;
@@ -858,12 +901,15 @@ html.no-flags .flag { display: none; }
 html.no-flags .flag-code { display: inline-block; }
 
 .lvl-r { flex: none; }
+/* a channel cut into the slab, filled with something glossy. The track is inset on
+   all four edges; only the fill carries a specular line, so it reads as liquid. */
 .bar {
   flex: 1 1 auto;
   min-width: 0;
-  height: 6px;
+  height: 10px;
   border-radius: var(--radius-pill);
   background: var(--field);
+  box-shadow: inset 0 2px 4px rgba(100, 116, 139, .3), inset 0 -1px 0 rgba(255, 255, 255, .8);
   overflow: hidden;
 }
 .bar i {
@@ -871,7 +917,10 @@ html.no-flags .flag-code { display: inline-block; }
   height: 100%;
   width: var(--p, 0%);
   border-radius: inherit;
-  background: var(--brand-fill);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .55) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(90deg, var(--brand-1) 0%, var(--mint-deep) 100%);
+  box-shadow: inset 0 -2px 3px rgba(0, 0, 0, .14);
   /* width animates layout: under reduced-motion it snaps; otherwise the compositor
      still handles it as a single layer because the bar is isolated */
 }
@@ -1391,22 +1440,25 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   text-overflow: ellipsis;
 }
 
-/* ---- bottom tabs: a floating bar that sits clear of the safe area ---- */
+/* ---- bottom dock: one thick clay pill, floating clear of the safe area ----
+   The active tab is a filled key with its own extrusion, so "where am I" reads
+   without relying on colour alone: it also sits 3px higher than its siblings. */
 .tabs {
+  --d: 5px;
   flex: none;
   display: flex;
   gap: var(--s1);
   margin: 0 auto;
   width: fit-content;
   min-width: min(100%, 300px);
-  padding: var(--s1);
+  padding: 6px;
   border-radius: var(--radius-pill);
   box-shadow:
-    inset 0 0 0 1px var(--hair),
-    inset 0 1px 0 var(--hair-lit),
-    0 18px 34px -18px var(--shadow);
+    0 var(--d) 0 #cbd5e1,
+    var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
 }
 .tab {
+  --d: 3px;
   appearance: none;
   border: 0;
   font: inherit;
@@ -1424,15 +1476,27 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   color: var(--ink-soft);
   font-size: var(--t-micro);
   font-weight: 800;
-  transition: transform var(--motion-fast), opacity var(--motion-fast);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast),
+              background var(--motion-fast), color var(--motion-fast);
 }
-.tab:active { transform: var(--motion-press); }
+.tab:hover:not(:active) { transform: translateY(-1px); }
+.tab:active { transform: translateY(var(--press-y)); --d: 0px; }
 .tab .ico { width: 20px; height: 20px; }
 .tab:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
 .tab[aria-current="page"] {
   background: var(--brand-fill);
   color: var(--on-brand);
-  box-shadow: 0 10px 20px -12px var(--brand-glow);
+  box-shadow:
+    0 var(--d) 0 var(--brand-lip),
+    0 calc(var(--d) + 6px) 14px -8px var(--brand-glow),
+    inset 0 2px 3px rgba(255, 255, 255, .32);
+  /* the rule only exists while the tab is current, so it replays on every switch */
+  animation: dock-pop .34s var(--bounce) both;
+}
+@keyframes dock-pop {
+  0%   { transform: translateY(2px) scale(.94); }
+  55%  { transform: translateY(-3px) scale(1.04); }
+  100% { transform: translateY(0) scale(1); }
 }
 
 /* ---- sheets over a dimming scrim: fixed, so the sheet owns its own geometry ---- */
@@ -1761,10 +1825,14 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
    Column: identity card → highlights carousel → mode launcher → tab dock.
    The screen never scrolls. The carousel band is the only flexible row, so a
    taller phone spends the extra height on the highlights, not on a gap.
-   Everything below uses the token set; no component hard-codes a colour.
+
+   Everything is clay: an opaque white tile lit from above (drop · specular ·
+   bevel) and every control you can press sits on a solid extrusion lip. The
+   lip is a 0-blur box-shadow, so a press costs the compositor one transform
+   and zero layout — depth is free, and nothing here samples the backdrop.
    ========================================================================== */
 
-/* ---- shared panel recipe: same radius, glass, hairline and lift ---- */
+/* ---- shared panel recipe: same radius, same thick clay tile ---- */
 .id-card,
 .carousel-wrap .car-card,
 .launcher {
@@ -1785,6 +1853,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   gap: var(--s2);
   min-width: 0;
 }
+/* the avatar's frame is the tile itself: a ring plus a lip, not a border */
 .avatar-btn {
   appearance: none;
   border: 0;
@@ -1794,13 +1863,15 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   display: grid;
   place-items: center;
   padding: 0;
+  border-radius: 34%;
   cursor: pointer;
-  border-radius: 50%;
 }
 /* 44px tap band around a 40px disc, vertical-only so the name button keeps its own hit box */
 .avatar-btn::after { content: ""; position: absolute; inset: -2px 0; }
-.avatar-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-.id-card .avatar { width: 40px; height: 40px; font-size: var(--t-2); }
+.avatar-btn:hover:not(:active) .avatar { transform: translateY(-1px); }
+.avatar-btn:active .avatar { transform: translateY(2px); }
+.avatar-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 4px; }
+.id-card .avatar { width: 44px; height: 44px; font-size: var(--t-2); }
 .id-name-btn {
   appearance: none;
   border: 0;
@@ -1810,6 +1881,8 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   padding: 0;
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 40px;
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--s1);
@@ -1818,6 +1891,9 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   border-radius: var(--r-chip);
   transition: opacity var(--motion-fast);
 }
+/* the 48px target is a band, not a taller box: a min-height here would grow row 1
+   past the avatar and cost the carousel a line it does not have on a 720 column */
+.id-name-btn::after { content: ""; position: absolute; inset: -4px 0; }
 .id-name-btn:active { opacity: .7; }
 .id-name-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .id-name {
@@ -1831,53 +1907,70 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* the level badge is a mint key: it is a fact about the player, not an action */
 .lvl-pill {
+  --d: 2px;
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  padding: 2px var(--s2);
+  padding: 3px var(--s2);
   border-radius: var(--radius-pill);
-  background: var(--brand-soft);
-  color: var(--brand-ink);
-  box-shadow: inset 0 0 0 1px var(--hair-off);
+  background: linear-gradient(180deg, #f0fdfa 0%, var(--mint-soft) 100%);
+  color: var(--mint-ink);
+  box-shadow:
+    0 var(--d) 0 rgba(4, 120, 87, .35),
+    inset 0 1px 0 rgba(255, 255, 255, .9),
+    inset 0 0 0 1px rgba(4, 120, 87, .28);
   font-size: var(--t-micro);
   font-weight: 800;
-  line-height: 1.4;
+  line-height: 1.3;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .lvl-pill b { font-weight: 800; }
 .id-side { flex: none; display: flex; align-items: center; gap: var(--s1); }
+/* the purse: a gold key with a bronze lip, so the balance looks like the thing you spend */
 .coin-pill {
+  --d: 3px;
   display: inline-flex;
   align-items: center;
   gap: var(--s1);
-  min-height: 28px;
-  padding: 0 var(--s2);
+  min-height: 30px;
+  padding: 0 var(--s2) 1px;
   border-radius: var(--radius-pill);
-  background: var(--coin);
-  box-shadow: inset 0 0 0 1px var(--coin-line);
-  color: var(--coin-ink);
+  background: var(--gold-face);
+  color: var(--ink);
   font-size: var(--t-3);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  box-shadow:
+    0 var(--d) 0 var(--gold-lip),
+    0 calc(var(--d) + 5px) 12px -8px rgba(180, 83, 9, .55),
+    inset 0 2px 2px rgba(255, 255, 255, .6),
+    inset 0 -2px 3px rgba(146, 64, 14, .35);
 }
-.coin-pill .coin { width: 1em; height: 1em; }
+.coin-pill .coin { width: 1.05em; height: 1.05em; filter: drop-shadow(0 1px 0 rgba(146, 64, 14, .4)); }
 .icon-btn.xs {
+  --d: 2px;
   width: 32px;
   height: 32px;
-  border-radius: var(--radius-sm);
-  background: var(--tint-glass);
-  color: var(--ink-soft);
+  border-radius: var(--radius-md);
+  background: var(--clay-face);
+  color: var(--chip-ink);
+  box-shadow:
+    0 var(--d) 0 #cbd5e1,
+    var(--clay-spec), var(--clay-bevel), var(--clay-ring);
 }
-.icon-btn.xs::after { inset: -6px; }
+.icon-btn.xs::after { inset: -8px; }
 .icon-btn.xs .ico { width: 18px; height: 18px; }
 
-/* chips: content-sized, so a label only ever ellipsises when the row is genuinely full */
+/* chips: content-sized, so a label only ever ellipsises when the row is genuinely full.
+   They are lighter clay than the card they sit on, and they sink on tap. */
 .id-chips { flex-wrap: wrap; gap: var(--s1); }
 .tag-chip {
+  --d: 2px;
   appearance: none;
   border: 0;
   font: inherit;
@@ -1890,16 +1983,21 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   max-width: 100%;
   margin: 0;
   padding: 0 var(--s2);
-  min-height: 28px;
+  min-height: 30px;
   border-radius: var(--radius-pill);
-  background: var(--field);
+  background: linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
   color: var(--chip-ink);
-  box-shadow: inset 0 0 0 1px var(--hair-off);
-  transition: transform var(--motion-fast), opacity var(--motion-fast);
+  cursor: pointer;
+  box-shadow:
+    0 var(--d) 0 #cbd5e1,
+    inset 0 1px 0 rgba(255, 255, 255, .9),
+    var(--clay-ring);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
 }
-.tag-chip::after { content: ""; position: absolute; inset: -8px 0; }
-.tag-chip:active { transform: var(--motion-press); }
-.tag-chip:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.tag-chip::after { content: ""; position: absolute; inset: -9px 0; }
+.tag-chip:hover:not(:active) { transform: translateY(-1px); }
+.tag-chip:active { transform: translateY(var(--press-y)); --d: 0px; }
+.tag-chip:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
 .tag-chip .chip-ico { width: 14px; height: 14px; color: var(--brand-ink); }
 .tag-chip-t {
   min-width: 0;
@@ -1920,16 +2018,20 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 #country-globe { display: none; }
 .tag-chip.unset #country-globe { display: block; }
 .tag-chip.unset .flag, .tag-chip.unset .flag-code { display: none; }
-/* no country yet: the chip is a quiet link into Profile, not a filled badge */
-.tag-chip.unset { background: transparent; color: var(--ink-soft); box-shadow: inset 0 0 0 1px var(--hair-off); }
+/* no country yet: the chip is a quiet link into Profile, so it drops its fill */
+.tag-chip.unset {
+  background: none;
+  color: var(--ink-soft);
+  box-shadow: inset 0 0 0 1.5px rgba(100, 116, 139, .28);
+}
 .tag-chip.unset .tag-chip-t { text-decoration: underline dotted; text-underline-offset: 3px; }
 
-/* level line: the bar belongs to the player, so it sits inside the same card */
+/* level line: a channel cut into the slab, filled with something glossy */
 .id-xp { gap: var(--s2); }
-.id-xp .bar { height: 6px; box-shadow: inset 0 0 0 1px var(--hair-off); }
+.id-xp .bar { height: 10px; }
 .lvl-r {
   font-size: var(--t-micro);
-  font-weight: 700;
+  font-weight: 800;
   color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -1952,6 +2054,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   align-items: stretch;
   gap: var(--s3);
   padding-inline: var(--s4);
+  padding-block: 2px;                 /* lets an active tile's drop shadow breathe */
   margin-inline: calc(-1 * var(--pad-r));
   overflow-x: auto;
   overflow-y: hidden;
@@ -1965,6 +2068,12 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 }
 .carousel::-webkit-scrollbar { display: none; }
 .carousel:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+/* The card behind is not faded — a translucent white tile on a white canvas is
+   invisible. It recedes by becoming the slab instead of the tile: grey face,
+   no lift, 7% smaller. Only transform and paint change; nothing re-layouts. */
+/* Children never shrink: a card that is too short for its own lines overflows
+   visibly, which is what the layout check can measure. Left flexible, flex would
+   compress the title to a sliver and scrollHeight would keep reporting "fits". */
 .car-card {
   flex: 0 0 84%;
   min-width: 0;
@@ -1976,18 +2085,30 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   gap: var(--s2);
   padding: var(--s4);
   overflow: hidden;
-  /* the off-cards sit back so the sliver at the edge reads as depth, not as a cut */
-  opacity: .5;
-  transform: scale(.94);
+  border-radius: var(--r-panel);
+  background: linear-gradient(180deg, #f8fafc 0%, #eef3f9 100%);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+  transform: scale(.93);
   transform-origin: center;
-  transition: opacity var(--motion-med), transform var(--motion-med);
+  transition: transform var(--motion-med), box-shadow var(--motion-med), background var(--motion-med);
 }
-.car-card.is-active { opacity: 1; transform: none; }
-@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
-  .car-card { background: linear-gradient(180deg, var(--card-a) 0%, var(--card-b) 100%); }
+.car-card > * { flex: none; }
+.car-card.is-active {
+  transform: none;
+  background: var(--clay-face);
+  box-shadow: var(--clay), var(--clay-ring);
 }
+/* ---- card contents: a label, one loud line, then the detail ---- */
 .car-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; }
+/* each highlight owns an accent, so the strip reads as three different things
+   even before you can read the words. The dot is the accent; the word is ink. */
+.car-card[data-slide="0"] { --acc: var(--honey); --acc-ink: var(--honey-ink); --acc-soft: var(--honey-soft); }
+.car-card[data-slide="1"] { --acc: var(--brand-2); --acc-ink: var(--brand-ink); --acc-soft: var(--brand-soft); }
+.car-card[data-slide="2"] { --acc: var(--mint); --acc-ink: var(--mint-ink); --acc-soft: var(--mint-soft); }
 .car-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
   min-width: 0;
   font-size: var(--t-micro);
   font-weight: 800;
@@ -1997,6 +2118,15 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.car-kicker::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+  background: var(--acc, var(--brand-2));
+  box-shadow: 0 1px 0 rgba(15, 23, 42, .18), inset 0 1px 0 rgba(255, 255, 255, .55);
 }
 .car-title {
   margin: 0;
@@ -2014,14 +2144,14 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 .car-sub {
   margin: 0;
   font-size: var(--t-micro);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--ink-soft);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .car-meta { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; min-width: 0; font-variant-numeric: tabular-nums; }
-.car-prize { display: inline-flex; align-items: center; gap: var(--s1); font-size: var(--t-2); font-weight: 800; color: var(--coin-ink); }
+.car-prize { display: inline-flex; align-items: center; gap: var(--s1); font-size: var(--t-2); font-weight: 800; color: var(--honey-ink); }
 .car-prize .coin { width: 1.15em; height: 1.15em; }
 .car-fee, .car-count, .car-players { font-size: var(--t-micro); font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .car-count { font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -2030,33 +2160,45 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   margin: 0;
   min-width: 0;
   font-size: var(--t-micro);
-  font-weight: 700;
+  font-weight: 800;
   color: var(--brand-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* status badges are keys too — a 2px lip, so they sit with the rest of the tile */
 .pill {
+  --d: 2px;
   flex: none;
-  padding: 3px var(--s2);
+  padding: 3px var(--s2) 4px;
   border-radius: var(--radius-pill);
   font-size: var(--t-micro);
   font-weight: 800;
   letter-spacing: .04em;
   text-transform: uppercase;
-  background: var(--field);
-  color: var(--ink-soft);
+  background: linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
+  color: var(--chip-ink);
+  box-shadow: 0 var(--d) 0 #cbd5e1, inset 0 1px 0 rgba(255, 255, 255, .9), var(--clay-ring);
   white-space: nowrap;
 }
-.pill.live { background: var(--red-glow); color: var(--red-ink); }
-.pill.upcoming { background: var(--brand-soft); color: var(--brand-ink); }
-.pill.ended { background: var(--field); color: var(--ink-soft); }
+.pill.live {
+  background: linear-gradient(180deg, var(--bad-1) 0%, var(--bad-2) 100%);
+  color: var(--on-brand);
+  box-shadow: 0 var(--d) 0 #8f0e2e, inset 0 1px 0 rgba(255, 255, 255, .3);
+}
+.pill.upcoming {
+  background: linear-gradient(180deg, #f0f9ff 0%, var(--brand-soft) 100%);
+  color: var(--brand-ink);
+  box-shadow: 0 var(--d) 0 rgba(3, 105, 166, .3), inset 0 1px 0 rgba(255, 255, 255, .9), inset 0 0 0 1px rgba(3, 105, 166, .25);
+}
+.pill.ended { background: var(--field); color: var(--ink-soft); box-shadow: 0 var(--d) 0 #cbd5e1; }
 .preview-badge {
   flex: none;
-  padding: 3px var(--s2);
+  padding: 3px var(--s2) 4px;
   border-radius: var(--radius-pill);
-  background: var(--brand-soft);
-  color: var(--brand-ink);
+  background: var(--acc-soft, var(--brand-soft));
+  color: var(--acc-ink, var(--brand-ink));
+  box-shadow: inset 0 0 0 1px currentColor;
   font-size: var(--t-micro);
   font-weight: 800;
   letter-spacing: .06em;
@@ -2064,48 +2206,82 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   white-space: nowrap;
 }
 .m-title .preview-badge { font-size: .62em; vertical-align: 2px; margin-left: var(--s1); }
-.streak { flex: none; font-size: var(--t-2); font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
-.mini-rank { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s1); min-height: 0; overflow: hidden; }
+.streak { flex: none; font-size: var(--t-2); font-weight: 800; color: var(--honey-ink); font-variant-numeric: tabular-nums; }
+/* the standings: a channel cut into the tile, with rows that never truncate.
+   The name column gets the slack; rank, flag, points and trend are fixed. */
+.mini-rank {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--r-chip);
+  background: var(--bg);
+  box-shadow: var(--inset);
+}
 .mini-rank li {
   display: flex;
   align-items: center;
   gap: var(--s2);
-  min-height: 22px;
+  min-height: 26px;
+  padding: 0 var(--s2);
   font-size: var(--t-3);
-  font-weight: 700;
+  font-weight: 800;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
-.mini-rank li.me { color: var(--brand-ink); }
-.mini-rank .rk { flex: none; width: 1.4em; color: var(--ink-soft); font-weight: 800; }
-.mini-rank .fl { flex: none; width: 1.4em; text-align: center; }
-.mini-rank .nm { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mini-rank .pt { flex: none; font-weight: 800; }
-.mini-rank .tr { flex: none; width: 1.2em; text-align: right; font-size: .9em; }
-.tr.up { color: var(--green-ink); }
+.mini-rank li + li { box-shadow: inset 0 1px 0 rgba(100, 116, 139, .14); }
+.mini-rank li.me { background: var(--acc-soft, var(--brand-soft)); color: var(--acc-ink, var(--brand-ink)); }
+.mini-rank .rk { flex: none; width: 1.5em; color: var(--ink-soft); font-weight: 800; }
+.mini-rank li.me .rk { color: inherit; }
+.mini-rank .fl { flex: none; width: 1.5em; text-align: center; }
+.mini-rank .nm { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+.mini-rank .pt { flex: none; font-weight: 800; letter-spacing: -.01em; }
+.mini-rank .tr { flex: none; width: 1.1em; text-align: right; font-size: .9em; }
+.tr.up { color: var(--mint-ink); }
 .tr.down { color: var(--red-ink); }
 .tr.same { color: var(--ink-soft); }
-.btn.sm { position: relative; min-height: 36px; padding: var(--s1) var(--s3); font-size: var(--t-3); }
-.btn.sm::after { content: ""; position: absolute; inset: -5px 0; }
+/* 38px face + a 6px band = a 50px target. The band is vertical-only: a horizontal
+   one would grow scrollWidth and read as clipped text to the layout check. */
+.btn.sm { --d: 3px; position: relative; min-height: 42px; min-width: 60px; padding: var(--s1) var(--s3); font-size: var(--t-3); }
+.btn.sm::after { content: ""; position: absolute; inset: -6px 0; }
 
-/* dots: their own line under the cards, so they never cover card content */
-.car-dots { flex: none; display: flex; align-items: center; justify-content: center; gap: var(--s2); min-height: 20px; }
+/* dots: their own line under the cards, so they never cover card content.
+   Each dot is a full 44x44 hit box with the visible pill centred inside it —
+   packing the pills any tighter would make neighbours steal each other's tap. */
+.car-dots { flex: none; display: flex; align-items: center; justify-content: center; min-height: 48px; }
 .dot {
   appearance: none;
   border: 0;
   position: relative;
-  width: 20px;
-  height: 5px;
+  flex: none;
+  width: 48px;
+  height: 48px;
   border-radius: var(--radius-pill);
-  background: var(--field);
-  box-shadow: inset 0 0 0 1px var(--hair-off);
-  cursor: pointer;
+  background: none;
   padding: 0;
-  transition: transform var(--motion-fast), background var(--motion-fast);
+  cursor: pointer;
 }
-.dot::after { content: ""; position: absolute; inset: -19px -8px; }
-.dot.on { background: var(--brand-2); box-shadow: none; transform: scaleX(1.25); }
-.dot:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 4px; }
+.dot:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+.dot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #ffffff 0%, var(--bg) 100%);
+  box-shadow: 0 2px 0 #cbd5e1, var(--clay-ring);
+  transition: width var(--motion-med), background var(--motion-fast), box-shadow var(--motion-fast);
+}
+.dot.on::before {
+  width: 26px;
+  background: linear-gradient(180deg, var(--brand-3) 0%, var(--brand-1) 100%);
+  box-shadow: 0 2px 0 #075985, inset 0 1px 0 rgba(255, 255, 255, .5);
+}
 
 /* ---- launcher: two tiers. A mode pill picks the tier, the chips below are its settings. ---- */
 .launcher {
@@ -2116,23 +2292,26 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   gap: var(--lgap);
 }
 
-/* tier 1 — one track, one thumb that slides between two labels */
+/* tier 1 — the slab is cut with a groove; one key pops out of it and slides */
 .mode-tabs {
   position: relative;
   display: flex;
-  padding: 4px;
+  padding: 5px;
   border-radius: var(--radius-pill);
   background: var(--field);
-  box-shadow: inset 0 0 0 1px var(--hair-off);
+  box-shadow: var(--inset);
 }
 .mode-thumb {
   position: absolute;
   z-index: 0;
-  inset: 4px auto 4px 4px;
-  width: calc(50% - 4px);
+  inset: 5px auto 5px 5px;
+  width: calc(50% - 5px);
   border-radius: var(--radius-pill);
-  background: var(--brand-fill);
-  box-shadow: var(--brand-shadow), inset 0 0 0 1px rgba(255, 255, 255, .22);
+  background: var(--clay-face);
+  box-shadow:
+    0 4px 0 #cbd5e1,
+    0 8px 16px -8px var(--shadow),
+    var(--clay-spec), var(--clay-bevel), var(--clay-ring);
   transition: transform var(--motion-med);
 }
 .mode-tabs[data-tab="party"] .mode-thumb { transform: translateX(100%); }
@@ -2145,7 +2324,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   cursor: pointer;
   flex: 1 1 0;
   min-width: 0;
-  min-height: 36px;
+  min-height: 42px;
   padding: 0 var(--s2);
   display: inline-flex;
   align-items: center;
@@ -2156,14 +2335,16 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   color: var(--chip-ink);
   font-size: var(--t-3);
   font-weight: 800;
-  transition: color var(--motion-fast), opacity var(--motion-fast);
+  transition: color var(--motion-fast), transform var(--motion-fast);
 }
-/* 44px band, vertical only: the two tabs can never steal each other's tap */
+/* the band turns a 40px key into a 48px target; it stays inside the track's own padding */
 .mode-tab::after { content: ""; position: absolute; inset: -4px 0; }
-.mode-tab .ico { flex: none; width: 17px; height: 17px; }
+.mode-tab .ico { flex: none; width: 17px; height: 17px; color: var(--ink-soft); transition: color var(--motion-fast); }
 .mode-tab-t { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.mode-tab[aria-selected="true"] { color: var(--on-brand); }
-.mode-tab:not([aria-selected="true"]):active { color: var(--ink); opacity: .8; }
+.mode-tab[aria-selected="true"] { color: var(--ink); }
+.mode-tab[aria-selected="true"] .ico { color: var(--brand-ink); }
+.mode-tab:not([aria-selected="true"]) { transform: translateY(1px); }
+.mode-tab:not([aria-selected="true"]):active { color: var(--ink); transform: translateY(3px); }
 .mode-tab:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
 
 /* tier 2a — the choice that only exists for one tier: it opens and closes with the tab */
@@ -2184,9 +2365,10 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 }
 .mode-context.is-open .mode-context-in { visibility: visible; }
 
-/* tier 2b — the chips themselves */
+/* tier 2b — the chips. Unselected sit *in* the slab; selecting one pushes it out. */
 .chip-row { display: flex; gap: var(--s1); }
 .mode-chip {
+  --d: 3px;
   appearance: none;
   border: 0;
   font: inherit;
@@ -2194,35 +2376,49 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   position: relative;
   flex: 1 1 0;
   min-width: 0;
-  min-height: 32px;
+  min-height: 38px;
   padding: 0 var(--s1);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--s1);
   border-radius: var(--radius-pill);
-  background: var(--tint-glass);
-  box-shadow: inset 0 0 0 1px var(--hair-off);
-  color: var(--ink);
-  font-size: var(--t-micro);
+  background: var(--field);
+  box-shadow: var(--inset);
+  color: var(--chip-ink);
+  font-size: var(--t-3);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  transition: transform var(--motion-fast), background var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
+  transition: transform var(--motion-fast), background var(--motion-fast),
+              color var(--motion-fast), box-shadow var(--motion-fast);
 }
+/* the band is what makes a 38px key a 50px target; the check script reads this inset */
 .mode-chip::after { content: ""; position: absolute; inset: -6px 0; }
 .mode-chip > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .mode-chip .ico { flex: none; width: 14px; height: 14px; }
-.mode-chip:active { transform: var(--motion-press); }
-.mode-chip:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.mode-chip:hover:not(:active) { transform: translateY(-1px); }
+.mode-chip:active { transform: translateY(2px); }
+.mode-chip:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
 .mode-chip[aria-pressed="true"] {
-  background: var(--brand-soft);
-  box-shadow: inset 0 0 0 1.5px var(--brand-2);
+  background: var(--clay-face);
+  box-shadow:
+    0 var(--d) 0 rgba(3, 105, 166, .45),
+    0 calc(var(--d) + 5px) 12px -8px var(--brand-glow),
+    var(--clay-spec), var(--clay-bevel),
+    inset 0 0 0 1.5px var(--brand-2);
   color: var(--brand-ink);
 }
+.mode-chip[aria-pressed="true"]:active { transform: translateY(var(--press-y)); --d: 0px; }
 /* the team builder is a way out, not a fourth size: it does not take a pressed state */
-.mode-chip.go { flex: 0 1 auto; color: var(--ink-soft); }
-.mode-chip.go:active { color: var(--ink); }
+.mode-chip.go {
+  flex: 0 1 auto;
+  background: var(--clay-face);
+  box-shadow: 0 var(--d) 0 #cbd5e1, var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+  color: var(--ink);
+}
+.mode-chip.go .ico { color: var(--brand-ink); }
+.mode-chip.go:active { transform: translateY(var(--press-y)); --d: 0px; }
 
 /* the footnote: online play is not a mode you can pick, so it sits below everything */
 .mode-teaser {
@@ -2237,36 +2433,46 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   font-weight: 700;
   line-height: 1.4;
 }
-.mode-teaser .ico { flex: none; width: 13px; height: 13px; opacity: .75; }
+.mode-teaser .ico { flex: none; width: 13px; height: 13px; opacity: .8; }
 .teaser-t { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .teaser-tag {
   flex: none;
-  padding: 1px 6px;
+  padding: 1px 7px 2px;
   border-radius: var(--radius-pill);
   background: var(--field);
   box-shadow: inset 0 0 0 1px var(--hair-off);
-  color: var(--ink-soft);
+  color: var(--chip-ink);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: .04em;
   text-transform: uppercase;
 }
 
-/* the one loud element on Home: it confirms what the tiles selected */
+/* ---- the one loud element: the arcade button this whole screen exists to reach ----
+   6px of solid coral lip under a lit face. A press travels 4px down and the lip
+   collapses to 2px, which is exactly what a real switch does at the bottom. */
 .btn-hero {
+  --d: 6px;
   position: relative;
   overflow: hidden;
   width: 100%;
-  min-height: 54px;
+  min-height: 68px;
   padding: var(--s2) var(--s4);
   gap: var(--s2);
-  font-size: var(--t-1);
+  border-radius: 24px;
   font-weight: 800;
-  letter-spacing: .01em;
-  background: var(--brand-fill);
+  background:
+    linear-gradient(180deg, var(--cta-hi) 0%, var(--cta) 46%, #f2481f 100%);
   color: var(--on-brand);
-  box-shadow: var(--brand-shadow), inset 0 0 0 1px rgba(255, 255, 255, .22);
+  box-shadow:
+    0 var(--d) 0 var(--cta-lip),
+    0 calc(var(--d) + 10px) 22px -10px rgba(201, 59, 24, .6),
+    inset 0 3px 4px rgba(255, 255, 255, .42),
+    inset 0 -4px 6px rgba(153, 36, 8, .35);
 }
+.btn-hero:hover:not(:active) { transform: translateY(-1px); }
+.btn-hero:active { transform: translateY(var(--press-y-lg)); --d: 2px; }
+.btn-hero:focus-visible { outline: 4px solid var(--cta-lip); outline-offset: 3px; }
 .btn-hero::before {
   content: "";
   position: absolute;
@@ -2274,28 +2480,33 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   right: 0;
   top: 0;
   height: 46%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .3), rgba(255, 255, 255, 0));
+  background: linear-gradient(180deg, rgba(255, 255, 255, .34), rgba(255, 255, 255, 0));
   pointer-events: none;
 }
-.btn-hero .ico { width: 1.3em; height: 1.3em; }
-.hero-txt { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; line-height: 1.2; }
-.hero-t { font-size: var(--t-1); font-weight: 800; letter-spacing: -.01em; }
+.btn-hero .ico { width: 1.15em; height: 1.15em; }
+.hero-txt { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; line-height: 1.1; }
+/* 21px/900 is large text, so white on coral clears the 3:1 bar with room to spare */
+.hero-t { font-size: 21px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+/* the mode line is small type, so it gets an engraved plate: #C93B18 under white is 5.1:1 */
 .hero-sub {
   max-width: 100%;
+  padding: 2px var(--s2) 3px;
+  border-radius: var(--radius-pill);
+  background: var(--cta-lip);
+  box-shadow: inset 0 1px 2px rgba(92, 22, 3, .5);
   font-size: var(--t-micro);
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: .02em;
-  opacity: .85;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* ---- floating dock: equal columns, one clear active state ---- */
+/* ---- the dock on Home: full width, so every tab is a wide, easy thumb target ---- */
 .tabs {
   gap: var(--s1);
-  padding: var(--s1);
-  min-height: 60px;
+  padding: 6px;
+  min-height: 64px;
   width: 100%;
   min-width: 0;
 }
@@ -2310,18 +2521,75 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   letter-spacing: .01em;
 }
 .tab .ico { width: 21px; height: 21px; }
-.tab[aria-current="page"] { box-shadow: 0 10px 20px -12px var(--brand-glow); }
 
-/* Short columns — phones and a 720-high landscape: the column compresses through the
-   spacing tokens first, then the carousel, so the launcher never eats the highlight card. */
-@media (max-height: 760px) {
-  .id-card { gap: var(--s1); }
-  .launcher { --lgap: var(--s1); }
+/* ---- the vertical budget, and who gives way first ----
+   The highlight card is the one thing that must never be cut, so the chrome and the
+   launcher compact before it does. Party is the tier that actually stresses this: it
+   opens the team-size row and asks for ~50px more than Solo. */
+
+/* Any phone-height column: tighten the card's own internals first. */
+@media (max-height: 900px) {
+  .carousel-wrap { gap: var(--s1); }
   .car-card { padding: var(--s3) var(--s4); gap: var(--s1); }
+  .mini-rank li { min-height: 24px; }
+  .btn.sm { min-height: 40px; }
+}
+
+/* Short columns — phones, and a 720-high landscape where the vw type ramp has already
+   reached its ceiling while the height has not. */
+@media (max-height: 760px) {
+  .screen.home { gap: var(--s2); }
+  .id-card { gap: var(--s1); padding: var(--s2) var(--s4) var(--s3); }
+  .launcher { --lgap: var(--s1); padding: var(--s2) var(--s3) var(--s3); }
+  .car-card { padding: var(--s2) var(--s4); }
+  .mode-tab { min-height: 38px; }
+  .mode-tab::after { inset: -5px 0; }        /* keeps the 48px target as the key shrinks */
+  .mode-chip { min-height: 34px; }
+  .mode-chip::after { inset: -7px 0; }
+  .btn-hero { min-height: 54px; --d: 5px; }
+  .hero-t { font-size: 19px; }
+}
+
+/* The 640-and-under phones in the Party tier are the floor of the whole design:
+   every fixed band gives a few pixels so the highlight card keeps its title. */
+@media (max-height: 660px) {
   .btn-hero { min-height: 50px; }
+  .mini-rank li { min-height: 22px; }
+  .screen.home { gap: var(--s1); }
+  .id-card { padding-bottom: var(--s2); }
+  .launcher { padding: var(--s1) var(--s3) var(--s2); }
+  .tabs { padding: 4px; min-height: 60px; }
+  .tab { min-height: 48px; }
+}
+
+/* The floor: 600px of height with the Party tier open is a 217px launcher, 48px of dots
+   and a card that still has four lines to show. Everything here is chrome — no control
+   drops below its 48px band, and the Online footnote survives. */
+@media (max-height: 600px) {
+  .screen.home { gap: 2px; }
+  .id-card { gap: 2px; padding-bottom: var(--s1); }
+  .launcher { --lgap: 2px; padding: var(--s1) var(--s3); }
+  .mode-tab { min-height: 36px; }
+  .mode-tab::after { inset: -6px 0; }
+  .mode-chip { min-height: 32px; }
+  .mode-chip::after { inset: -8px 0; }
+  .btn-hero { min-height: 48px; --d: 4px; }
+  .mini-rank li { min-height: 20px; }
+  .car-card { gap: 2px; }
+  /* the off-cards are scaled to .93, so a 36px key measures ~45 — the band absorbs the
+     difference rather than the button growing back into the card's last pixels */
+  .btn.sm { min-height: 36px; }
+  .btn.sm::after { inset: -8px 0; }
 }
 
 /* the launcher's pressed language, reused by the presets on the mode screen */
-.preset[aria-pressed="true"] { background: var(--brand-soft); box-shadow: inset 0 0 0 1.5px var(--brand-2); }
+.preset { --d: 3px; }
+.preset[aria-pressed="true"] {
+  background: var(--clay-face);
+  box-shadow:
+    0 var(--d) 0 rgba(3, 105, 166, .45),
+    inset 0 0 0 1.5px var(--brand-2),
+    var(--clay-spec);
+}
 .preset[aria-pressed="true"] b { color: var(--brand-ink); }
 

@@ -88,7 +88,7 @@ let failed = 0;
 const rows = [];
 
 for (const [w, h] of VIEWPORTS) {
-  for (const theme of ['light', 'dark']) {
+  for (const theme of ['light']) {   // one clay theme — the dark pass had nothing left to prove
     const ctx = await browser.newContext({ viewport: { width: w, height: h }, colorScheme: theme });
     const pg = await ctx.newPage();
     const errors = [];

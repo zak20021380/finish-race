@@ -66,7 +66,7 @@ const VIEWPORTS = [
   [390, 844],
   [430, 932],
 ];
-const THEMES = ['light', 'dark'];
+const THEMES = ['light'];   // one clay theme: a dark pass would only shoot the same pixels twice
 
 const checkSrc = fs.readFileSync(CHECK_JS, 'utf8');
 

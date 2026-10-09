@@ -92,69 +92,36 @@ export function startParam(): string {
 
 const hex = (v: unknown): string => (typeof v === 'string' && /^#[0-9a-f]{3,8}$/i.test(v) ? v : '');
 
-/** Relative luminance, so an unusual `bg_color` still lands on the right palette. */
-function darkAt(hexColor: string, fallback: boolean): boolean {
-  if (!hexColor) return fallback;
-  const h = hexColor.replace('#', '');
-  const s = h.length === 3 ? h.split('').map((c) => c + c).join('') : h.slice(0, 6);
-  const n = parseInt(s, 16);
-  if (Number.isNaN(n)) return fallback;
-  const lum = (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
-  return lum < 0.42;
-}
-
-const prefersDark = matchMedia('(prefers-color-scheme: dark)');
-let systemDark = prefersDark.matches;
-try { prefersDark.addEventListener('change', (e) => { systemDark = e.matches; applyTheme(); }); } catch { /* fixed at load */ }
+/** The canvas the clay sits on. Chrome, the OS tab and Telegram's background all take it. */
+const CANVAS = '#f1f5f9';
 
 /**
  * The SDK loads in an ordinary tab too, and there it answers `colorScheme: 'light'` with empty
- * themeParams — which would pin the app to light forever. Only a real client gets to declare one.
- */
-const inTelegram = !!tg && !!tg.platform && tg.platform !== 'unknown';
-
-export let isDark = false;
-
-/**
- * themeParams decide the palette in both light and dark; the browser's own
- * preference decides it when Telegram is absent. Surfaces (--tg-bg/ink/soft)
- * always win when present; the client's accent (button/link) tints the brand
- * tokens so a custom Telegram theme still reads as Detour.
+ * themeParams. Which no longer matters: the app ships one light-clay theme, so a client in night
+ * mode gets the same surfaces as one in day mode. Only the client's accent is read, and it tints
+ * the secondary brand ramp — never a fill that carries white type.
  */
 export function applyTheme() {
   const p: TgThemeParams = tg?.themeParams ?? {};
-  const bg = hex(p.secondary_bg_color) || hex(p.bg_color);
-  const scheme = inTelegram && (tg?.colorScheme === 'light' || tg?.colorScheme === 'dark') ? tg.colorScheme : '';
-  isDark = scheme ? scheme === 'dark' : darkAt(bg, systemDark);
-
   const r = document.documentElement;
-  r.classList.toggle('dark', isDark);
-  r.style.colorScheme = isDark ? 'dark' : 'light';
-  const set = (k: string, v: string) => { if (v) r.style.setProperty(k, v); else r.style.removeProperty(k); };
-  set('--tg-bg', bg || hex(p.bg_color));
-  set('--tg-ink', hex(p.text_color));
-  set('--tg-soft', hex(p.hint_color));
-  // Telegram accent tints the primary fill only (white text on it is Telegram's
-  // own contrast pair). Body/link ink stays the app's verified 4.5:1 pair.
+  r.classList.remove('dark');
+  r.style.colorScheme = 'light';
+
   const accent = hex(p.button_color);
-  const link = hex(p.link_color);
-  set('--tg-button', accent);
-  set('--tg-link', link);
   if (accent) {
-    set('--brand-1', accent);
-    set('--brand-2', accent);
+    r.style.setProperty('--brand-1', accent);
+    r.style.setProperty('--brand-2', accent);
   } else {
     r.style.removeProperty('--brand-1');
     r.style.removeProperty('--brand-2');
   }
 
-  const chrome = isDark ? '#17171f' : '#eeeaf8';
-  try { tg?.setHeaderColor?.(chrome); tg?.setBackgroundColor?.(chrome); tg?.setColorScheme?.(isDark ? 'dark' : 'light'); } catch { /* outside Telegram */ }
+  try { tg?.setHeaderColor?.(CANVAS); tg?.setBackgroundColor?.(CANVAS); tg?.setColorScheme?.('light'); } catch { /* outside Telegram */ }
   try {
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', isDark ? '#12121a' : '#eeeaf8');
+    if (meta) meta.setAttribute('content', CANVAS);
     const cs = document.querySelector('meta[name="color-scheme"]');
-    if (cs) cs.setAttribute('content', 'light dark');
+    if (cs) cs.setAttribute('content', 'light');
   } catch { /* no head */ }
 }
 
