@@ -254,17 +254,28 @@
           </div>
 
           <div class="launcher">
-            <button class="btn btn-hero" id="home-play" type="button" aria-describedby="home-play-sub">
+            <div class="mode-hero" id="mode-hero">
+              <div class="mode-hero-left">
+                <span class="mode-hero-ico" id="mode-hero-ico" aria-hidden="true">
+                  <svg class="ico" aria-hidden="true"><use id="mode-hero-use" href="#i-users" /></svg>
+                </span>
+                <div class="mode-hero-txt">
+                  <span class="mode-hero-title" id="home-play-title">2v2 Party</span>
+                  <span class="mode-hero-sub">
+                    <span class="diff-badge" id="home-play-diff">Hard</span>
+                    <span class="mode-hero-vs" id="home-play-sub" aria-live="polite">2v2 · Hard</span>
+                  </span>
+                </div>
+              </div>
+              <button class="mode-change-btn" type="button" id="mode-change" aria-haspopup="dialog" aria-label="Change mode">
+                <svg class="ico" aria-hidden="true"><use href="#i-tune" /></svg>
+                <span>Change</span>
+              </button>
+            </div>
+            <button class="btn btn-hero btn-coral" id="home-play" type="button" aria-describedby="home-play-sub">
               <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg>
               <span class="hero-t">Play</span>
             </button>
-            <div class="play-meta">
-              <p class="play-summary" id="home-play-sub" aria-live="polite">1v1 · Normal</p>
-              <button class="change-pill" type="button" id="mode-change" aria-haspopup="dialog">
-                <svg class="ico" aria-hidden="true"><use href="#i-tune" /></svg>
-                <span>Change mode</span>
-              </button>
-            </div>
           </div>
         </section>
 

@@ -48,7 +48,7 @@ function checkHomeLayout() {
   }
 
   for (const el of document.querySelectorAll(
-    '#s-home .car-card, #s-home .id-card, #s-home .launcher, #s-home .btn-hero, #s-home .play-summary, #s-home .change-pill',
+    '#s-home .car-card, #s-home .id-card, #s-home .launcher, #s-home .btn-hero, #s-home .play-summary, #s-home .change-pill, #s-home .mode-hero, #s-home .mode-change-btn, #s-home .mode-hero-title',
   )) {
     const band = getComputedStyle(el, '::after');
     const over = band.position === 'absolute' ? Math.max(0, -(parseFloat(band.bottom) || 0)) : 0;
@@ -92,13 +92,37 @@ function checkHomeLayout() {
   }
   if (play) {
     const bg = getComputedStyle(play).backgroundImage || '';
-    if (/255,\s*82,\s*43|ff522b|ff5a36/i.test(bg)) {
-      fails.push('Play still uses the orange gradient — want the single brand gradient');
+    if (!/255,\s*82,\s*43|ff522b|ff5a36|255,\s*122,\s*77/i.test(bg)) {
+      fails.push('Play must use the Coral-Orange hero gradient (--cta #FF522B)');
+    }
+  }
+  // ---- Active Mode Card: hero pattern (Brawl-Stars style) ----
+  const hero = document.getElementById('mode-hero');
+  const heroTitle = document.getElementById('home-play-title');
+  const heroDiff = document.getElementById('home-play-diff');
+  if (!hero) fails.push('missing #mode-hero (Active Mode Card)');
+  if (!heroTitle) fails.push('missing #home-play-title');
+  if (!heroDiff) fails.push('missing #home-play-diff');
+  if (heroTitle && !/(1v1|2v2|3v3|2v1|Custom)/.test(heroTitle.textContent || '')) {
+    fails.push(`bad hero title "${(heroTitle.textContent || '').trim()}" — want "2v2 Party" style`);
+  }
+  if (heroDiff && !/^(Easy|Normal|Hard)$/.test((heroDiff.textContent || '').trim())) {
+    fails.push(`bad hero diff "${(heroDiff.textContent || '').trim()}" — want Easy/Normal/Hard badge`);
+  }
+  // PLAY must be the final bottom-most action in the launcher, above the dock.
+  const launcher = document.querySelector('#s-home .launcher');
+  if (launcher && play && play.parentElement === launcher) {
+    if (launcher.lastElementChild !== play) {
+      fails.push('PLAY must be the last child of .launcher (docked under the Active Mode Card)');
+    }
+    const gap = getComputedStyle(launcher).gap || '';
+    if (gap && !/^12px/.test(gap)) {
+      fails.push(`launcher gap "${gap}" — want 12px between card and PLAY`);
     }
   }
 
-  // ---- banned words in visible mode UI ----
-  const banned = /\b(Solo|Party)\b/;
+  // ---- banned words in visible mode UI (Party/Duel/Clash now own the hero card) ----
+  const banned = /\bSolo\b/;
   for (const sel of ['#s-home', '#sheet-mode']) {
     const root = document.querySelector(sel);
     if (!root) continue;

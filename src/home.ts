@@ -412,9 +412,39 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     draftDiff = menuState.difficulty;
   };
 
+  const MODE_TITLES: Record<ModePreset, string> = {
+    '1v1': '1v1 Duel',
+    '2v2': '2v2 Party',
+    '3v3': '3v3 Party',
+    '2v1': '2v1 Clash',
+  };
+
+  const MODE_ICONS: Record<ModePreset | 'custom', string> = {
+    '1v1': '#i-user',
+    '2v2': '#i-users',
+    '3v3': '#i-users',
+    '2v1': '#i-users',
+    custom: '#i-users',
+  };
+
   const paintLauncher = (): void => {
     const label = lastModeLabel();
+    const id = modeIdOf(menuState.sizes);
+    const diff = cap(menuState.difficulty);
     if (homeSub) homeSub.textContent = label;
+    const titleEl = document.getElementById('home-play-title');
+    if (titleEl) {
+      titleEl.textContent = id === 'custom'
+        ? `Custom ${menuState.sizes[0]}v${menuState.sizes[1]}`
+        : MODE_TITLES[id as ModePreset];
+    }
+    const diffEl = document.getElementById('home-play-diff');
+    if (diffEl) {
+      diffEl.textContent = diff;
+      diffEl.setAttribute('data-diff', menuState.difficulty);
+    }
+    const useEl = document.getElementById('mode-hero-use') as SVGUseElement | null;
+    if (useEl) useEl.setAttribute('href', MODE_ICONS[id]);
     homePlay.setAttribute('aria-label', `Play ${label}`);
   };
 
