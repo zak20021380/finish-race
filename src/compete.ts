@@ -1,10 +1,11 @@
 /**
- * compete.ts — Arena Cups / Telegram Squads + floating Global Leaderboard.
+ * compete.ts — Arena (Tournament Cups) + Ranks (dedicated Leaderboard).
  *
- * IA: two top-level modes only ("Arena Cups" live/upcoming feed, "Telegram
- * Squads" clan wars). The old 4-way sub-tabs are gone; Top Players /
- * Countries / Teams live behind a floating "Leaderboard" pill that toggles a
- * secondary panel with its own quiet Players | Countries | Teams switch.
+ * IA: Arena owns Live / Upcoming / Archive cups only. Ranks is the dedicated
+ * leaderboard tab with a two-way clay switch ("Telegram Squads" clan wars vs
+ * "Solo Champions" top players) plus a docked "My Squad Standing" card so the
+ * player always sees their community progress. Solo Champions keeps the
+ * Players | Countries | Teams secondary switch.
  * Tournament cards are high-energy Dark Clay arena cards with per-status
  * hierarchy (live glow + ENTER NOW, upcoming slate + Register, ended archive).
  */
@@ -34,7 +35,7 @@ export interface CompeteApi {
   sheet(id: string): HTMLElement | null;
 }
 
-type SquadMode = 'solo' | 'squads';
+type RankMode = 'squads' | 'solo';
 type LbTab = 'players' | 'countries' | 'teams';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -78,23 +79,25 @@ const moodOf = (t: Tournament): string => {
   return 'Open';
 };
 
+function pickEl(id: string, legacy: string): HTMLElement {
+  return (document.getElementById(id) ?? document.getElementById(legacy)) as HTMLElement;
+}
+
 export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
-  const modeBtns = [...document.querySelectorAll<HTMLButtonElement>('[data-squadmode]')];
+  const modeBtns = [...document.querySelectorAll<HTMLButtonElement>('[data-rankmode],[data-squadmode]')];
   const lbBtns = [...document.querySelectorAll<HTMLButtonElement>('[data-lb]')];
-  const toolbar = document.getElementById('arena-toolbar');
   const feedLabel = document.getElementById('arena-feed-t');
-  const lbToggle = document.getElementById('lb-toggle') as HTMLButtonElement | null;
-  const arenaPane = $('comp-tournaments');
-  const boardPane = document.getElementById('comp-leaderboard') as HTMLElement | null;
-  const squadsPane = $('comp-squads');
+  const ranksStats = document.getElementById('ranks-stats');
+  const arenaPane = pickEl('arena-tournaments', 'comp-tournaments');
+  const squadsPane = pickEl('ranks-squads', 'comp-squads');
+  const soloWrap = document.getElementById('ranks-solo');
   const lbPanes: Record<LbTab, HTMLElement> = {
-    players: $('comp-players'),
-    countries: $('comp-countries'),
-    teams: $('comp-teams'),
+    players: pickEl('ranks-players', 'comp-players'),
+    countries: pickEl('ranks-countries', 'comp-countries'),
+    teams: pickEl('ranks-teams', 'comp-teams'),
   };
 
-  let squadMode: SquadMode = 'solo';
-  let lbOpen = false;
+  let rankMode: RankMode = 'squads';
   let lbTab: LbTab = 'players';
   let loadedArena = false;
   let loadedLb: Partial<Record<LbTab, boolean>> = {};
@@ -112,10 +115,28 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   /* ---------- squad dock helpers ---------- */
 
-  const squadDock = (): HTMLElement | null => document.getElementById('squad-dock');
+  const squadDock = (): HTMLElement | null =>
+    document.getElementById('ranks-dock') ?? document.getElementById('squad-dock');
 
   const openSquadSheet = (): void => {
     (document.getElementById('team-chip') as HTMLButtonElement | null)?.click();
+  };
+
+  const inviteSquad = (s: RankedSquad): void => {
+    const text = `${s.handle} — join my squad in Detour!`;
+    try {
+      if (navigator.clipboard?.writeText) {
+        void navigator.clipboard.writeText(text).then(
+          () => notify('success'),
+          () => notify('warning'),
+        );
+      } else {
+        notify('success');
+      }
+    } catch {
+      notify('warning');
+    }
+    impact('medium');
   };
 
   /** 1240 -> "1.2k", 986 -> "986" — keeps the sub line on one row. */
@@ -129,38 +150,44 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   /* ---------- top-level paint ---------- */
 
-  function paintMode(): void {
-    for (const b of modeBtns) b.setAttribute('aria-selected', String(b.dataset.squadmode === squadMode));
-    for (const b of lbBtns) b.setAttribute('aria-selected', String(b.dataset.lb === lbTab));
-    const squads = squadMode === 'squads';
+  const isRanksVisible = (): boolean => {
+    const el = document.getElementById('s-ranks') ?? document.getElementById('s-compete');
+    return !!el && !el.hidden;
+  };
 
-    if (toolbar) toolbar.hidden = squads;
-    if (lbToggle) {
-      lbToggle.setAttribute('aria-pressed', String(lbOpen));
-      lbToggle.setAttribute('aria-expanded', String(lbOpen));
-      lbToggle.classList.toggle('on', lbOpen);
-      lbToggle.querySelector('span')!.textContent = lbOpen ? 'Hide Board' : 'Leaderboard';
+  const isArenaVisible = (): boolean => {
+    const el = document.getElementById('s-arena') ?? document.getElementById('s-compete');
+    return !!el && !el.hidden;
+  };
+
+  function paintArena(): void {
+    paintFeedLabel();
+  }
+
+  function paintRanks(): void {
+    for (const b of modeBtns) {
+      const v = b.dataset.rankmode ?? b.dataset.squadmode;
+      const selected = v === rankMode || (rankMode === 'solo' && v === 'solo') || (rankMode === 'squads' && v === 'squads');
+      b.setAttribute('aria-selected', String(selected));
     }
-    if (boardPane) boardPane.hidden = squads || !lbOpen;
-    arenaPane.hidden = squads || lbOpen;
-    if (!squads && lbOpen && boardPane) {
+    for (const b of lbBtns) b.setAttribute('aria-selected', String(b.dataset.lb === lbTab));
+    const squads = rankMode === 'squads';
+    squadsPane.hidden = !squads;
+    if (soloWrap) soloWrap.hidden = squads;
+    // Legacy single-pane board (pre-split markup): keep hidden unless solo.
+    const legacyBoard = document.getElementById('comp-leaderboard');
+    if (legacyBoard) legacyBoard.hidden = squads;
+    if (!squads) {
       for (const k of Object.keys(lbPanes) as LbTab[]) lbPanes[k].hidden = k !== lbTab;
     }
-    squadsPane.hidden = !squads;
-
+    paintRanksStats();
     const dock = squadDock();
-    if (dock) dock.hidden = !squads;
-    if (squads) paintSquadDock();
-    paintFeedLabel();
+    if (dock) dock.hidden = false;
+    paintSquadDock();
   }
 
   function paintFeedLabel(): void {
     if (!feedLabel) return;
-    if (lbOpen) {
-      const names: Record<LbTab, string> = { players: 'Top Players', countries: 'Top Countries', teams: 'Top Teams' };
-      feedLabel.textContent = `Global Leaderboard · ${names[lbTab]}`;
-      return;
-    }
     const live = tournaments.filter((t) => t.status === 'live').length;
     const up = tournaments.filter((t) => t.status === 'upcoming').length;
     if (!tournaments.length) {
@@ -173,48 +200,49 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     feedLabel.textContent = parts.length ? `${parts.join(' · ')} cups` : 'Arena feed';
   }
 
-  function selectMode(next: SquadMode): void {
-    if (next === squadMode && (next === 'solo' ? (lbOpen ? loadedLb[lbTab] : loadedArena) : squadsLoaded)) {
-      paintMode();
+  function paintRanksStats(): void {
+    if (!ranksStats) return;
+    try {
+      const rows = getSquadRanking();
+      const fighters = rows.reduce((n, s) => n + s.members, 0);
+      const trophies = rows.reduce((n, s) => n + s.trophies, 0);
+      const me = getMySquad();
+      const base = `${rows.length} squads · ${compactCount(fighters)} fighters · ${compactCount(trophies)} 🏆`;
+      ranksStats.textContent = me ? `${base} · you: ${me.handle} #${me.rank}` : `${base} · join a squad to climb`;
+    } catch {
+      ranksStats.textContent = 'Squad Warfare · live standings';
+    }
+  }
+
+  function selectRankMode(next: RankMode): void {
+    if (next === rankMode && (next === 'squads' ? squadsLoaded : loadedLb[lbTab])) {
+      paintRanks();
       return;
     }
-    squadMode = next;
-    paintMode();
+    rankMode = next;
+    paintRanks();
     impact('light');
     if (next === 'squads') loadSquads();
-    else if (lbOpen) void loadLb(lbTab);
-    else void loadTournaments();
+    else void loadLb(lbTab);
+    const sc = document.getElementById('ranks-scroll');
+    if (sc) sc.scrollTo({ top: 0 });
   }
 
   for (const b of modeBtns) {
     b.addEventListener('click', () => {
-      const v = b.dataset.squadmode;
-      if (v === 'solo' || v === 'squads') selectMode(v);
+      const v = (b.dataset.rankmode ?? b.dataset.squadmode) as string | undefined;
+      if (v === 'solo' || v === 'squads') selectRankMode(v);
     });
   }
 
-  function toggleBoard(force?: boolean): void {
-    if (squadMode !== 'solo') squadMode = 'solo';
-    lbOpen = force ?? !lbOpen;
-    paintMode();
-    impact('light');
-    if (lbOpen) void loadLb(lbTab);
-    else if (!loadedArena) void loadTournaments();
-    else {
-      const sc = document.getElementById('compete-scroll');
-      if (sc) sc.scrollTo({ top: 0 });
-    }
-  }
-
-  lbToggle?.addEventListener('click', () => toggleBoard());
-
   function selectLb(next: LbTab): void {
     if (next === lbTab && loadedLb[next]) {
-      paintMode();
+      paintRanks();
       return;
     }
     lbTab = next;
-    paintMode();
+    if (rankMode !== 'solo') rankMode = 'solo';
+    paintRanks();
     impact('light');
     void loadLb(next);
   }
@@ -446,6 +474,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   async function loadTournaments(): Promise<void> {
     const el = arenaPane;
+    if (!el) return;
     if (!loadedArena) el.innerHTML = skel(3);
     try {
       tournaments = await getTournaments();
@@ -547,8 +576,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   function startTick(): void {
     if (tick) return;
     tick = window.setInterval(() => {
-      if ($('s-compete').hidden) return;
-      if (squadMode !== 'solo' || lbOpen) return;
+      if (!isArenaVisible()) return;
       for (const t of tournaments) {
         if (t.status === 'ended') continue;
         const time = arenaPane.querySelector<HTMLElement>(`[data-count="${t.id}"]`);
@@ -559,7 +587,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }, 1000);
   }
 
-  /* ---------- global leaderboard (behind the pill) ---------- */
+  /* ---------- solo leaderboard (behind the Ranks switch) ---------- */
 
   async function loadLb(which: LbTab): Promise<void> {
     if (which === 'countries') await loadCountries();
@@ -806,24 +834,30 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     const go = document.createElement('button');
     go.type = 'button';
-    go.className = `squad-go${mine ? ' bound' : ' join'}`;
-    go.textContent = mine ? '✓' : '+';
-    go.setAttribute('aria-label', mine ? `View ${s.handle} details` : `Join ${s.handle}`);
-    go.addEventListener('click', (e) => {
-      e.stopPropagation();
-      impact('light');
-      if (mine) {
-        openSquadSheet();
-        return;
-      }
-      const r = bindSquadById(s.id);
-      if (r === 'bad-handle') { notify('warning'); return; }
-      notify('success');
-      impact('medium');
-      loadSquads();
-    });
+    if (mine) {
+      go.className = 'squad-go bound invite';
+      go.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>';
+      go.setAttribute('aria-label', `Invite to ${s.handle}: copy squad invite`);
+      go.addEventListener('click', (e) => {
+        e.stopPropagation();
+        inviteSquad(s);
+      });
+    } else {
+      go.className = 'squad-go join';
+      go.textContent = '+';
+      go.setAttribute('aria-label', `Join ${s.handle}`);
+      go.addEventListener('click', (e) => {
+        e.stopPropagation();
+        impact('light');
+        const r = bindSquadById(s.id);
+        if (r === 'bad-handle') { notify('warning'); return; }
+        notify('success');
+        impact('medium');
+        loadSquads();
+      });
+    }
 
-    // The whole row opens squad details; the compact key joins/binds.
+    // The whole row opens squad details; the compact key joins / invites.
     li.addEventListener('click', () => {
       impact('light');
       openSquadSheet();
@@ -844,7 +878,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   function paintSquadDock(): void {
     const dock = squadDock();
     if (!dock) return;
-    if (squadMode !== 'squads') {
+    if (!isRanksVisible()) {
       dock.hidden = true;
       return;
     }
@@ -872,12 +906,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       btn.className = 'btn btn-primary sm squad-dock-btn';
       btn.textContent = 'Find Squad';
       btn.setAttribute('aria-label', 'Find Squad: open squad picker');
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         impact('light');
         openSquadSheet();
       });
 
       dock.append(ico, txt, btn);
+      dock.setAttribute('aria-label', 'My Squad Standing: no squad bound. Find a squad to start earning trophies.');
       return;
     }
 
@@ -890,33 +926,47 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const txt = document.createElement('span');
     txt.className = 'squad-dock-txt';
     const t = document.createElement('b');
-    t.textContent = `${me.handle} · Rank #${me.rank}`;
+    t.textContent = `My Squad · ${me.handle} · #${me.rank}`;
     t.title = `${me.name} · ${me.handle}`;
     const s = document.createElement('small');
     const yours = mine > 0 ? ` · +${mine.toLocaleString('en-US')} yours` : ' · fight to contribute';
     s.textContent = `${me.trophies.toLocaleString('en-US')} trophies${yours}`;
     txt.append(t, s);
 
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn btn-ghost sm squad-dock-btn';
-    btn.textContent = 'View';
-    btn.setAttribute('aria-label', `View ${me.handle} squad details`);
-    btn.addEventListener('click', () => {
+    const invite = document.createElement('button');
+    invite.type = 'button';
+    invite.className = 'btn btn-primary sm squad-dock-btn';
+    invite.textContent = 'Invite';
+    invite.setAttribute('aria-label', `Invite to ${me.handle}: copy squad invite`);
+    invite.addEventListener('click', (e) => {
+      e.stopPropagation();
+      inviteSquad(me);
+    });
+
+    const view = document.createElement('button');
+    view.type = 'button';
+    view.className = 'btn btn-ghost sm squad-dock-btn';
+    view.textContent = 'View';
+    view.setAttribute('aria-label', `View ${me.handle} squad details`);
+    view.addEventListener('click', (e) => {
+      e.stopPropagation();
       impact('light');
       openSquadSheet();
     });
 
-    dock.append(av, txt, btn);
+    dock.append(av, txt, invite, view);
+    dock.setAttribute('aria-label', `My Squad Standing: ${me.handle}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} trophies.`);
   }
 
   function loadSquads(): void {
     const el = squadsPane;
+    if (!el) return;
     if (!squadsLoaded) el.innerHTML = skel(5);
     const rows = getSquadRanking();
     if (!rows.length) {
       el.innerHTML = empty('No squads ranked yet.');
       paintSquadDock();
+      paintRanksStats();
       return;
     }
     const me = getMySquad();
@@ -928,6 +978,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }
     el.append(ol);
     paintSquadDock();
+    paintRanksStats();
     squadsLoaded = true;
   }
 
@@ -937,23 +988,36 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     loadedLb.teams = false;
     loadedArena = false;
     squadsLoaded = false;
-    if (squadMode === 'squads') loadSquads();
-    else if (lbOpen) void loadLb(lbTab);
-    else void loadTournaments();
+    if (isRanksVisible()) {
+      paintRanks();
+      if (rankMode === 'squads') loadSquads();
+      else void loadLb(lbTab);
+    } else if (isArenaVisible()) {
+      paintArena();
+      void loadTournaments();
+    }
   });
 
   onSquadChange(() => {
     squadsLoaded = false;
-    if (squadMode === 'squads' && !$('s-compete').hidden) loadSquads();
+    paintRanksStats();
+    if (isRanksVisible()) {
+      if (rankMode === 'squads') loadSquads();
+      else paintSquadDock();
+    }
   });
 
   return {
     setRoute(id: string) {
-      if (id === 'compete') {
-        paintMode();
-        if (squadMode === 'squads') loadSquads();
-        else if (lbOpen) void loadLb(lbTab);
-        else void loadTournaments();
+      // Legacy "compete" route lands on Arena (its old default feed).
+      if (id === 'compete') id = 'arena';
+      if (id === 'arena') {
+        paintArena();
+        void loadTournaments();
+      } else if (id === 'ranks') {
+        paintRanks();
+        if (rankMode === 'squads') loadSquads();
+        else void loadLb(lbTab);
       }
     },
   };

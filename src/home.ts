@@ -248,7 +248,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   $('feat-join').addEventListener('click', () => {
     impact('light');
-    api.router.go('compete');
+    api.router.go('arena');
   });
 
   /* ---------- Telegram Channel Cup: live squad war slide ---------- */

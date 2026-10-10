@@ -904,7 +904,8 @@ export function createMenu(api: MenuApi): Menu {
         customDrawn = true;
         paintCustom();
       }
-      const active = id === 'home' || id === 'modes' || id === 'custom' || id === 'game' ? 'home' : id;
+      const raw = id === 'compete' ? 'arena' : id;
+      const active = raw === 'home' || raw === 'modes' || raw === 'custom' || raw === 'game' ? 'home' : raw;
       for (const t of tabs) {
         const on = t.dataset.tab === active;
         if (on) t.setAttribute('aria-current', 'page');

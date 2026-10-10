@@ -20,6 +20,10 @@ const ENTER = ['in-fwd', 'in-back'];
 const LEAVE = ['out-fwd', 'out-back'];
 const MS = 280;
 
+/** Legacy route aliases: pre-split "compete" lands on Arena (its old default feed). */
+const ALIAS: Record<string, string> = { compete: 'arena' };
+const resolve = (id: string): string => ALIAS[id] ?? id;
+
 export function createRouter(root: HTMLElement, onScreen: (id: string, prev: string | null) => void): Router {
   const screens = new Map<string, HTMLElement>();
   for (const el of root.querySelectorAll<HTMLElement>('.screen')) screens.set(el.dataset.screen ?? '', el);
@@ -63,11 +67,12 @@ export function createRouter(root: HTMLElement, onScreen: (id: string, prev: str
 
   return {
     go(id, opts) {
+      const to = resolve(id);
       const from = stack[stack.length - 1] ?? null;
-      if (!screens.has(id) || id === from) return;
-      if (opts?.replace && from !== null) stack[stack.length - 1] = id;
-      else stack.push(id);
-      transition(from, id, 1, false);
+      if (!screens.has(to) || to === from) return;
+      if (opts?.replace && from !== null) stack[stack.length - 1] = to;
+      else stack.push(to);
+      transition(from, to, 1, false);
     },
     back() {
       if (stack.length < 2) return false;
@@ -77,19 +82,21 @@ export function createRouter(root: HTMLElement, onScreen: (id: string, prev: str
       return true;
     },
     popTo(id) {
-      const at = stack.lastIndexOf(id);
+      const to = resolve(id);
+      const at = stack.lastIndexOf(to);
       const from = stack[stack.length - 1];
-      if (at < 0 || from === id) return false;
+      if (at < 0 || from === to) return false;
       stack = stack.slice(0, at + 1);
-      transition(from, id, -1, false);
+      transition(from, to, -1, false);
       return true;
     },
     get current() { return stack[stack.length - 1] ?? ''; },
     get canGoBack() { return stack.length > 1; },
     start(id) {
-      stack = [id];
-      for (const [name, el] of screens) el.hidden = name !== id;
-      onScreen(id, null);
+      const to = resolve(id);
+      stack = [to];
+      for (const [name, el] of screens) el.hidden = name !== to;
+      onScreen(to, null);
     },
   };
 }

@@ -1763,6 +1763,13 @@ html.rm *, html.rm *::before, html.rm *::after {
 #comp-tournaments[hidden] { display: none; }
 #comp-leaderboard { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
 #comp-leaderboard[hidden] { display: none; }
+/* split-screen aliases: Arena owns cups, Ranks owns squads + solo boards */
+#arena-tournaments { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+#arena-tournaments[hidden] { display: none; }
+#ranks-solo { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+#ranks-solo[hidden] { display: none; }
+#ranks-players, #ranks-countries, #ranks-teams { min-height: 0; }
+#ranks-players[hidden], #ranks-countries[hidden], #ranks-teams[hidden] { display: none; }
 
 /* ---- arena toolbar: feed count left, floating leaderboard pill right ---- */
 .arena-toolbar {
@@ -3439,6 +3446,8 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 #sheet-squad .sheet-body { max-height: 52vh; }
 #comp-squads { display: flex; flex-direction: column; gap: var(--s2); min-height: 0; max-width: 100%; }
 #comp-squads[hidden] { display: none; }
+#ranks-squads { display: flex; flex-direction: column; gap: var(--s2); min-height: 0; max-width: 100%; }
+#ranks-squads[hidden] { display: none; }
 
 /* ---- squad dock: pinned clay callout floating above the nav ----
    Lives outside the scroll so it can never clip. Not in squad: compact
@@ -4392,4 +4401,135 @@ html.rm .set-toast { transition: none; }
   .notif-badge { animation: none; }
 }
 html.rm .notif-badge { animation: none; }
+
+/* ==========================================================================
+   DOCK-NAV — 5-tab primary navigation (Play · Arena · Ranks · Shop · Profile).
+   Same Dark Clay recipe as .tabs: #10141D canvas, #1C2433 faces, #F8FAFC ink.
+   .dock-nav is the primary selector; .tabs stays as a legacy alias so every
+   existing state machine keeps working. 5 tabs share the width equally and
+   stay on 44px+ targets down to 360px viewports. Transform/opacity only.
+   ========================================================================== */
+
+.tabs.dock-nav,
+.dock-nav {
+  --d: 5px;
+  flex: none;
+  display: flex;
+  gap: var(--s1);
+  margin: 0 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 64px;
+  padding: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--clay-face);
+  box-shadow:
+    0 var(--d) 0 #080C14,
+    var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+}
+.dock-nav .tab {
+  --d: 3px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 var(--s1);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .01em;
+  line-height: 1.1;
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast),
+              background var(--motion-fast), color var(--motion-fast);
+}
+.dock-nav .tab span {
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dock-nav .tab:hover:not(:active) { transform: translateY(-1px); }
+.dock-nav .tab:active { transform: translateY(var(--press-y)); --d: 0px; }
+.dock-nav .tab .ico { width: 21px; height: 21px; flex: none; }
+.dock-nav .tab:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+.dock-nav .tab[aria-current="page"] {
+  background: var(--brand-fill);
+  color: var(--on-brand);
+  box-shadow:
+    0 var(--d) 0 var(--brand-lip),
+    0 calc(var(--d) + 6px) 14px -8px var(--brand-glow),
+    inset 0 2px 3px rgba(255, 255, 255, .32);
+  animation: dock-pop .34s var(--bounce) both;
+}
+
+/* 360px floor: tighter chrome first, targets never drop below 44px. */
+@media (max-width: 380px) {
+  .tabs.dock-nav,
+  .dock-nav { gap: 2px; padding: 4px; min-height: 60px; }
+  .dock-nav .tab { min-height: 48px; padding: 0 2px; gap: 2px; }
+  .dock-nav .tab .ico { width: 19px; height: 19px; }
+}
+@media (max-height: 660px) {
+  .tabs.dock-nav,
+  .dock-nav { min-height: 60px; padding: 4px; }
+  .dock-nav .tab { min-height: 48px; }
+}
+@media (max-height: 600px) {
+  .dock-nav .tab { min-height: 44px; }
+}
+
+/* ==========================================================================
+   ARENA + RANKS — split of the old Compete screen.
+   Arena owns cups only (no leaderboard pill). Ranks owns Squad Warfare +
+   Solo Champions with a docked My Squad Standing card. Both reuse the
+   compete-screen clay column; only the extras below are new.
+   ========================================================================== */
+
+.arena-screen,
+.ranks-screen { overflow: hidden; max-width: 100%; }
+.arena-screen .arena-toolbar { justify-content: flex-start; }
+.ranks-head .m-title { font-weight: 800; letter-spacing: -.01em; }
+
+/* dynamic community stats under the Leaderboard title */
+.ranks-sub {
+  flex: none;
+  margin: 0;
+  padding: 0 var(--s1);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.ranks-mode { flex: none; }
+.ranks-body { padding-bottom: calc(var(--dock-height) + 24px); }
+
+/* invite key inside a squad row: same 36px tactile circle, icon centred */
+.squad-go.invite .ico { width: 16px; height: 16px; }
+.squad-go.invite { color: var(--brand-ink); }
+
+/* My Squad Standing dock on Ranks: avatar + standing + Invite + View.
+   The dock body opens details; Invite copies the handle for virality. */
+.ranks-screen .squad-dock { gap: var(--s2); }
+.ranks-screen .squad-dock-txt { flex: 1 1 auto; }
+.ranks-screen .squad-dock-btn { flex: none; min-width: 64px; min-height: 44px; }
+@media (max-width: 380px) {
+  .ranks-screen .squad-dock { padding: var(--s2); }
+  .ranks-screen .squad-dock-btn { min-width: 58px; padding-left: var(--s2); padding-right: var(--s2); }
+}
 

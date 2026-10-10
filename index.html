@@ -129,6 +129,19 @@
           <path d="M12 14v3M8.5 20.4h7M9.5 17.4h5" />
         </g>
       </symbol>
+      <symbol id="i-swords" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 4l9 9" />
+          <path d="M19 4l-9 9" />
+          <path d="M12 16l4-4M14 14l4.5 4.5M10 14l-4.5 4.5M12 16l-4-4" />
+        </g>
+      </symbol>
+      <symbol id="i-crown" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 8.5l2.6 7h10.8L20 8.5l-4.1 3-3.9-6-3.9 6Z" />
+          <path d="M6.5 18.5h11" />
+        </g>
+      </symbol>
       <symbol id="i-ext" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14 4.5h5.5V10" />
@@ -385,43 +398,49 @@
           </button>
         </section>
 
-        <!-- ---------------- compete ---------------- -->
-        <section class="screen menu compete-screen" id="s-compete" data-screen="compete" tabindex="-1" hidden aria-labelledby="compete-title">
+        <!-- ---------------- arena: tournament cups only ---------------- -->
+        <section class="screen menu compete-screen arena-screen" id="s-arena" data-screen="arena" tabindex="-1" hidden aria-labelledby="arena-title">
           <div class="m-head compete-head">
-            <h1 class="m-title" id="compete-title">Compete</h1>
-          </div>
-          <div class="seg squad-mode" role="tablist" aria-label="Compete mode">
-            <button class="seg-b mode-seg" type="button" role="tab" data-squadmode="solo" aria-selected="true">
-              <span class="seg-t">Arena Cups</span>
-              <small class="seg-s">Live &amp; Upcoming</small>
-            </button>
-            <button class="seg-b mode-seg" type="button" role="tab" data-squadmode="squads" aria-selected="false">
-              <span class="seg-t">Telegram Squads</span>
-              <small class="seg-s">Channels &amp; Groups</small>
-            </button>
+            <h1 class="m-title" id="arena-title">Arena</h1>
           </div>
           <div class="arena-toolbar" id="arena-toolbar">
             <p class="arena-feed-t" id="arena-feed-t" aria-live="polite">Arena feed</p>
-            <button class="lb-pill" type="button" id="lb-toggle" aria-pressed="false" aria-expanded="false" aria-controls="comp-leaderboard">
-              <svg class="ico" aria-hidden="true"><use href="#i-cup" /></svg>
-              <span>Leaderboard</span>
+          </div>
+          <div class="compete-body" data-scroll id="arena-scroll">
+            <div id="arena-tournaments" role="tabpanel" aria-label="Arena Cups"></div>
+          </div>
+        </section>
+
+        <!-- ---------------- ranks: dedicated leaderboard ---------------- -->
+        <section class="screen menu compete-screen ranks-screen" id="s-ranks" data-screen="ranks" tabindex="-1" hidden aria-labelledby="ranks-title">
+          <div class="m-head compete-head ranks-head">
+            <h1 class="m-title" id="ranks-title">Leaderboard</h1>
+          </div>
+          <p class="ranks-sub" id="ranks-stats" aria-live="polite">Squad Warfare · live standings</p>
+          <div class="seg squad-mode ranks-mode" role="tablist" aria-label="Leaderboard mode">
+            <button class="seg-b mode-seg" type="button" role="tab" data-rankmode="squads" aria-selected="true">
+              <span class="seg-t">Telegram Squads</span>
+              <small class="seg-s">Channels &amp; Groups</small>
+            </button>
+            <button class="seg-b mode-seg" type="button" role="tab" data-rankmode="solo" aria-selected="false">
+              <span class="seg-t">Solo Champions</span>
+              <small class="seg-s">Top Players</small>
             </button>
           </div>
-          <div class="compete-body" data-scroll id="compete-scroll">
-            <div id="comp-tournaments" role="tabpanel" aria-label="Arena Cups"></div>
-            <div id="comp-leaderboard" role="tabpanel" aria-label="Global Leaderboard" hidden>
+          <div class="compete-body ranks-body" data-scroll id="ranks-scroll">
+            <div id="ranks-squads" role="tabpanel" aria-label="Telegram Squads"></div>
+            <div id="ranks-solo" role="tabpanel" aria-label="Solo Champions" hidden>
               <div class="seg lb-seg" role="tablist" aria-label="Leaderboard boards">
                 <button class="seg-b" type="button" role="tab" data-lb="players" aria-selected="true">Players</button>
                 <button class="seg-b" type="button" role="tab" data-lb="countries" aria-selected="false">Countries</button>
                 <button class="seg-b" type="button" role="tab" data-lb="teams" aria-selected="false">Teams</button>
               </div>
-              <div id="comp-players" role="tabpanel" aria-label="Top players"></div>
-              <div id="comp-countries" role="tabpanel" aria-label="Top countries" hidden></div>
-              <div id="comp-teams" role="tabpanel" aria-label="Top teams" hidden></div>
+              <div id="ranks-players" role="tabpanel" aria-label="Top players"></div>
+              <div id="ranks-countries" role="tabpanel" aria-label="Top countries" hidden></div>
+              <div id="ranks-teams" role="tabpanel" aria-label="Top teams" hidden></div>
             </div>
-            <div id="comp-squads" role="tabpanel" aria-label="Telegram Squads" hidden></div>
           </div>
-          <div class="squad-dock" id="squad-dock" hidden></div>
+          <div class="squad-dock" id="ranks-dock" hidden></div>
         </section>
 
         <!-- ---------------- custom teams ---------------- -->
@@ -785,12 +804,15 @@
         </section>
       </div>
 
-      <nav class="tabs" id="tabs" aria-label="Main">
+      <nav class="tabs dock-nav" id="tabs" aria-label="Main">
         <button class="tab" type="button" data-tab="home">
           <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg><span>Play</span>
         </button>
-        <button class="tab" type="button" data-tab="compete">
-          <svg class="ico" aria-hidden="true"><use href="#i-flag" /></svg><span>Compete</span>
+        <button class="tab" type="button" data-tab="arena">
+          <svg class="ico" aria-hidden="true"><use href="#i-swords" /></svg><span>Arena</span>
+        </button>
+        <button class="tab" type="button" data-tab="ranks">
+          <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg><span>Ranks</span>
         </button>
         <button class="tab" type="button" data-tab="shop">
           <svg class="ico" aria-hidden="true"><use href="#i-bag" /></svg><span>Shop</span>
