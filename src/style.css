@@ -2040,9 +2040,14 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 }
 
 /* ---- highlights: single contained slide, no peek ----
-   The wrap clips any off-screen card (overflow:hidden); the track is a
-   100%-width scroll-snap slider so exactly one active card fills the
-   viewport between the paging dots. No adjacent slivers, no edge cut-off. */
+   The track is a 100%-width scroll-snap slider so exactly one active card
+   fills the viewport between the paging dots. No adjacent slivers, no edge
+   cut-off. Horizontal clipping lives on the track (overflow-x: auto); the
+   wrap stays visible vertically so card shadows paint instead of clipping.
+   Shadow fix: the scroll container clips card drop shadows at its padding
+   box, so it carries 24px of vertical breathing room (cancelled with an
+   equal negative margin, so the column budget is unchanged). The wrap stays
+   transparent and lets that breathing room paint instead of clipping it. */
 .carousel-wrap {
   flex: 1 1 auto;
   min-height: 0;
@@ -2050,8 +2055,9 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   flex-direction: column;
   justify-content: center;
   gap: var(--s2);
-  overflow: hidden;
+  overflow: visible;
   background: transparent;
+  background-color: transparent;
   box-shadow: none;
   border: 0;
 }
@@ -2063,8 +2069,9 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   align-items: stretch;
   gap: 0;
   padding-inline: 0;
-  padding-block: 4px;                 /* lets the active tile's drop shadow breathe */
+  padding-block: 24px;                /* shadow extent: soft 0 8px 20px drop fits inside */
   margin-inline: 0;
+  margin-block: -24px;                /* cancels the padding so siblings do not shift */
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
@@ -2075,6 +2082,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
   background: transparent;
+  background-color: transparent;
   box-shadow: none;
   border: 0;
 }
@@ -2098,7 +2106,8 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   overflow: hidden;
   border-radius: var(--r-panel);
   background: var(--clay-face);
-  box-shadow: var(--clay), var(--clay-ring);
+  /* soft, tight drop: low-alpha 0 8px 20px so no clipped edge reads as a band */
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .25), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
   transform: none;
   transform-origin: center;
   transition: box-shadow var(--motion-med), background var(--motion-med);
@@ -2107,7 +2116,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 .car-card.is-active {
   transform: none;
   background: var(--clay-face);
-  box-shadow: var(--clay), var(--clay-ring);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .25), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
 }
 /* ---- card contents: a label, one loud line, then the detail ---- */
 .car-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; }
@@ -2261,8 +2270,19 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 
 /* dots: their own line under the cards, so they never cover card content.
    Each dot is a full 44x44 hit box with the visible pill centred inside it —
-   packing the pills any tighter would make neighbours steal each other's tap. */
-.car-dots { flex: none; display: flex; align-items: center; justify-content: center; min-height: 48px; }
+   packing the pills any tighter would make neighbours steal each other's tap.
+   The row itself is transparent with no shadow/border, so no band shows around it. */
+.car-dots {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  background: transparent;
+  background-color: transparent;
+  box-shadow: none;
+  border: 0;
+}
 .dot {
   appearance: none;
   border: 0;
