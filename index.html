@@ -129,6 +129,25 @@
           <path d="M12 14v3M8.5 20.4h7M9.5 17.4h5" />
         </g>
       </symbol>
+      <symbol id="i-ext" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 4.5h5.5V10" />
+          <path d="M19.5 4.5 11 13" />
+          <path d="M19 13.5V19a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 4 19V7a1.5 1.5 0 0 1 1.5-1.5H11" />
+        </g>
+      </symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4.5 6.5h15M9.5 4.5h5M6.5 6.5l1 12a1.6 1.6 0 0 0 1.6 1.5h5.8a1.6 1.6 0 0 0 1.6-1.5l1-12" />
+          <path d="M10 10.5v6.5M14 10.5v6.5" />
+        </g>
+      </symbol>
+      <symbol id="i-chat" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 12a8 8 0 0 1-8 8H5l-1.6 1.6V12a8 8 0 0 1 8-8h0a8 8 0 0 1 8 8Z" />
+          <path d="M8.5 11h7M8.5 14h4" />
+        </g>
+      </symbol>
     </svg>
 
     <div class="bg" aria-hidden="true">
@@ -437,41 +456,105 @@
           <button class="btn btn-primary" type="button" id="custom-start">Start race</button>
         </section>
 
-        <!-- ---------------- settings ---------------- -->
-        <section class="screen menu" id="s-settings" data-screen="settings" tabindex="-1" hidden aria-labelledby="settings-title" data-scroll>
+        <!-- ---------------- settings: 3 tactile Dark Clay cards, vertical fill ---------------- -->
+        <section class="screen menu settings-screen" id="s-settings" data-screen="settings" tabindex="-1" hidden aria-labelledby="settings-title">
           <div class="m-head">
             <button class="icon-btn" type="button" data-back aria-label="Back to home">
               <svg class="ico" aria-hidden="true"><use href="#i-back" /></svg>
             </button>
-            <h1 class="m-title" id="settings-title">Settings</h1>
+            <h1 class="m-title" id="settings-title" data-i18n="settingsTitle">Settings</h1>
             <span class="m-head-pad" aria-hidden="true"></span>
           </div>
 
-          <div class="rows">
-            <button class="row" type="button" role="switch" aria-checked="true" data-set="sound">
-              <span class="row-txt">
-                <span class="row-t">Sound</span>
-                <span class="row-s">Kept for you — the game has no audio yet</span>
-              </span>
-              <span class="switch" aria-hidden="true"></span>
-            </button>
-            <button class="row" type="button" role="switch" aria-checked="true" data-set="haptics">
-              <span class="row-txt">
-                <span class="row-t">Haptics</span>
-                <span class="row-s">Buzz on walls, moves and the result</span>
-              </span>
-              <span class="switch" aria-hidden="true"></span>
-            </button>
-            <button class="row" type="button" role="switch" aria-checked="false" data-set="reducedMotion">
-              <span class="row-txt">
-                <span class="row-t">Reduced motion</span>
-                <span class="row-s">No floating, sliding or pulsing</span>
-              </span>
-              <span class="switch" aria-hidden="true"></span>
-            </button>
+          <div class="set-stack" data-scroll>
+            <section class="set-card" aria-labelledby="set-h-game">
+              <h2 class="set-card-h" id="set-h-game">
+                <span class="set-ico" aria-hidden="true"><svg class="ico"><use href="#i-tune" /></svg></span>
+                <span data-i18n="gameplayAudio">Gameplay &amp; Audio</span>
+              </h2>
+              <div class="set-rows">
+                <button class="row set-row" type="button" id="lang-row" aria-haspopup="dialog">
+                  <span class="set-ico sm sky" aria-hidden="true"><svg class="ico"><use href="#i-globe" /></svg></span>
+                  <span class="row-txt">
+                    <span class="row-t" data-i18n="language">Language</span>
+                    <span class="row-s" data-i18n="languageSub">App language · applies instantly</span>
+                  </span>
+                  <span class="lang-pill" aria-hidden="true">
+                    <span class="flag" id="lang-flag">🇬🇧</span>
+                    <span class="flag-code" id="lang-code">EN</span>
+                    <span id="lang-name">English</span>
+                  </span>
+                  <svg class="ico chev tactile" aria-hidden="true"><use href="#i-next" /></svg>
+                </button>
+                <button class="row" type="button" role="switch" aria-checked="true" data-set="sound">
+                  <span class="row-txt">
+                    <span class="row-t" data-i18n="sound">Sound</span>
+                    <span class="row-s" data-i18n="soundSub">Kept for you — the game has no audio yet</span>
+                  </span>
+                  <span class="switch" aria-hidden="true"></span>
+                </button>
+                <button class="row" type="button" role="switch" aria-checked="true" data-set="haptics">
+                  <span class="row-txt">
+                    <span class="row-t" data-i18n="haptics">Haptics</span>
+                    <span class="row-s" data-i18n="hapticsSub">Buzz on walls, moves and the result</span>
+                  </span>
+                  <span class="switch" aria-hidden="true"></span>
+                </button>
+                <button class="row" type="button" role="switch" aria-checked="false" data-set="reducedMotion">
+                  <span class="row-txt">
+                    <span class="row-t" data-i18n="reducedMotion">Reduced motion</span>
+                    <span class="row-s" data-i18n="reducedMotionSub">No floating, sliding or pulsing</span>
+                  </span>
+                  <span class="switch" aria-hidden="true"></span>
+                </button>
+              </div>
+            </section>
+
+            <section class="set-card" aria-labelledby="set-h-comm">
+              <h2 class="set-card-h" id="set-h-comm">
+                <span class="set-ico" aria-hidden="true"><svg class="ico"><use href="#i-send" /></svg></span>
+                <span data-i18n="communitySupport">Community &amp; Support</span>
+              </h2>
+              <div class="set-rows">
+                <button class="row set-row" type="button" id="tg-channel">
+                  <span class="set-ico sm sky" aria-hidden="true"><svg class="ico"><use href="#i-send" /></svg></span>
+                  <span class="row-txt">
+                    <span class="row-t" data-i18n="tgChannel">Official Telegram Channel</span>
+                    <span class="row-s" data-i18n="tgChannelSub">News, cups and squad events</span>
+                  </span>
+                  <svg class="ico ext" aria-hidden="true"><use href="#i-ext" /></svg>
+                </button>
+                <button class="row set-row" type="button" id="support-row">
+                  <span class="set-ico sm mint" aria-hidden="true"><svg class="ico"><use href="#i-chat" /></svg></span>
+                  <span class="row-txt">
+                    <span class="row-t" data-i18n="supportFeedback">Support &amp; Feedback</span>
+                    <span class="row-s" data-i18n="supportFeedbackSub">Help, ideas and bug reports</span>
+                  </span>
+                  <svg class="ico chev tactile" aria-hidden="true"><use href="#i-next" /></svg>
+                </button>
+              </div>
+            </section>
+
+            <section class="set-card" aria-labelledby="set-h-app">
+              <h2 class="set-card-h" id="set-h-app">
+                <span class="set-ico" aria-hidden="true"><svg class="ico"><use href="#i-bag" /></svg></span>
+                <span data-i18n="appStorage">App &amp; Storage</span>
+              </h2>
+              <div class="set-rows">
+                <button class="row set-row danger" type="button" id="reset-row" aria-haspopup="dialog">
+                  <span class="set-ico sm danger" aria-hidden="true"><svg class="ico"><use href="#i-trash" /></svg></span>
+                  <span class="row-txt">
+                    <span class="row-t" data-i18n="resetData">Reset Local Data</span>
+                    <span class="row-s" data-i18n="resetDataSub">Coins, teams and progress on this device</span>
+                  </span>
+                  <svg class="ico chev tactile" aria-hidden="true"><use href="#i-next" /></svg>
+                </button>
+              </div>
+              <p class="ver-badge"><span class="ver-dot" aria-hidden="true"></span><span data-i18n="versionBadge">Version 1.0.0 · Local save only</span></p>
+            </section>
           </div>
-          <p class="fine">Saved on this device only. Nothing else is stored.</p>
-          <div class="spacer" aria-hidden="true"></div>
+          <p class="fine set-fine" data-i18n="savedNote">Saved on this device only. Nothing else is stored.</p>
+          <div class="set-toast" id="set-toast" role="status" aria-live="polite" hidden></div>
         </section>
 
         <!-- ---------------- shop ---------------- -->
