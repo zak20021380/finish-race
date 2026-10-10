@@ -14,8 +14,9 @@ import {
 import {
   AGE_MAX, AGE_MIN, claimIdentityReward, createTeam, favouriteMode, IDENTITY_REWARD, joinTeam, KINDS,
   leaveTeam, levelInfo, myTeam, onChange, profile,
-  setAge, setCountry, theme,
+  setAge, setBadge, setCountry, setFrame, theme,
 } from './storage';
+import { BADGES, badgeProgress, equippedBadge, isBadgeUnlocked, unlockedCount } from './badges';
 import { MAX_BALLS, newGame } from './rules';
 import { createPreview, createRenderer, type Preview, type View } from './render';
 import { setBalance } from './coin';
@@ -322,6 +323,7 @@ export function createMenu(api: MenuApi): Menu {
   }
 
   /* ---------- squad: Telegram channel binding (header pill owns this sheet) ---------- */
+  let paintBadgesRef: (() => void) | null = null;
   const squadSheet = api.sheet('sheet-squad');
   const squadQ = $('squad-q') as HTMLInputElement;
   const squadList = $<HTMLElement>('squad-list');
@@ -480,10 +482,19 @@ export function createMenu(api: MenuApi): Menu {
     paintSquadPill();
     showSquadSearch();
   });
-  onSquadChange(() => { paintSquadPill(); if (squadSheet && !squadSheet.hidden) showSquadBoundRefresh(); });
+  onSquadChange(() => { paintSquadPill(); if (squadSheet && !squadSheet.hidden) showSquadBoundRefresh(); paintBadgesSafe(); });
   function showSquadBoundRefresh() {
     if (!squadBoundView.hidden) showSquadBound();
     else paintSquadList(squadQ.value);
+  }
+  /* badge rack also answers to squad binds (Squad Warrior unlocks there). */
+  function paintBadgesSafe() {
+    try {
+      const rack = document.getElementById('pf-badge-rack');
+      if (!rack) return;
+      /* paintBadges is defined below — call it late so squad events never race init. */
+      (paintBadgesRef as (() => void) | null)?.();
+    } catch { /* rack paints on next profile repaint */ }
   }
 
   /* ---- the entry points: the Home country chip jumps to Profile, where the picker lives ---- */
@@ -514,6 +525,153 @@ export function createMenu(api: MenuApi): Menu {
     $(flagId).textContent = code ? flagOf(code) : '';
     $(codeId).textContent = code;
   };
+
+  /* Avatar frames for the hero slot: persisted as profile.frame (default | auric | neon). */
+  const FRAMES: { id: string; name: string }[] = [
+    { id: 'default', name: 'Default' },
+    { id: 'auric', name: 'Auric' },
+    { id: 'neon', name: 'Neon' },
+  ];
+  const frameName = (id: string | null): string =>
+    FRAMES.find((f) => f.id === id)?.name ?? 'Default';
+
+  const paintHeroExtras = (lv: { n: number; got: number; need: number }) => {
+    /* recessed profile XP bar mirrors Home's bar (same levelInfo source). */
+    const pfBar = document.getElementById('pf-bar');
+    const pfFill = document.getElementById('pf-fill');
+    if (pfBar && pfFill) {
+      pfFill.style.setProperty('--p', `${Math.round((lv.got / lv.need) * 100)}%`);
+      pfBar.setAttribute('aria-valuenow', String(lv.got));
+      pfBar.setAttribute('aria-valuemax', String(lv.need));
+      pfBar.setAttribute('aria-valuetext', `Level ${lv.n}, ${lv.got} of ${lv.need} XP`);
+    }
+    const remain = document.getElementById('pf-xp-remain');
+    if (remain) {
+      const left = Math.max(0, lv.need - lv.got);
+      remain.textContent = left === 0 ? `LVL ${lv.n + 1} ready` : `${left} to LVL ${lv.n + 1}`;
+    }
+    const lvlPill = document.getElementById('pf-lvl-pill');
+    if (lvlPill) lvlPill.setAttribute('aria-label', `Level ${lv.n}`);
+    /* avatar frame slot */
+    const wrap = document.getElementById('pf-avatar-wrap');
+    if (wrap) wrap.setAttribute('data-frame', profile.frame ?? 'default');
+    const frameN = document.getElementById('pf-frame-n');
+    if (frameN) frameN.textContent = frameName(profile.frame);
+    /* primary equipped badge next to the name */
+    const eq = equippedBadge();
+    const eqWrap = document.getElementById('pf-equipped-badge');
+    if (eqWrap) {
+      if (!eq) {
+        eqWrap.hidden = true;
+      } else {
+        eqWrap.hidden = false;
+        eqWrap.setAttribute('data-accent', eq.accent);
+        const use = document.getElementById('pf-equipped-use') as unknown as SVGUseElement | null;
+        if (use) use.setAttribute('href', eq.icon);
+        const label = document.getElementById('pf-equipped-t');
+        if (label) label.textContent = eq.name;
+        eqWrap.setAttribute('aria-label', `Equipped badge: ${eq.name}`);
+        eqWrap.setAttribute('title', eq.name);
+      }
+    }
+  };
+
+  /* Honor & Badges rack: 4 tactile slots, unlocked = metallic glow, locked = recessed. */
+  const paintBadges = () => {
+    const rack = document.getElementById('pf-badge-rack');
+    const count = document.getElementById('pf-badge-count');
+    if (count) count.textContent = `${unlockedCount()}/${BADGES.length}`;
+    if (!rack) return;
+    rack.textContent = '';
+    for (const b of BADGES) {
+      const unlocked = isBadgeUnlocked(b.id);
+      const prog = badgeProgress(b.id);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `badge-slot ${unlocked ? 'is-unlocked' : 'is-locked'}`;
+      btn.setAttribute('role', 'listitem');
+      btn.dataset.badge = b.id;
+      btn.setAttribute('data-accent', b.accent);
+      if (unlocked && profile.badge === b.id) btn.classList.add('is-equipped');
+      const ico = document.createElement('span');
+      ico.className = 'badge-ico';
+      ico.setAttribute('aria-hidden', 'true');
+      if (unlocked) {
+        ico.innerHTML = `<svg class="ico" aria-hidden="true"><use href="${b.icon}" /></svg>`;
+      } else {
+        ico.innerHTML = `<span class="badge-lock"><svg class="ico ico-main" aria-hidden="true"><use href="${b.icon}" /></svg>`
+          + `<svg class="ico ico-lock" aria-hidden="true"><use href="#i-lock" /></svg></span>`;
+      }
+      const nm = document.createElement('span');
+      nm.className = 'badge-n';
+      nm.textContent = b.name;
+      const pr = document.createElement('span');
+      pr.className = 'badge-p';
+      if (unlocked) {
+        pr.textContent = profile.badge === b.id ? 'Equipped' : 'Unlocked';
+        if (profile.badge === b.id) pr.classList.add('badge-equipped-dot');
+      } else {
+        pr.textContent = prog.label;
+      }
+      btn.setAttribute('aria-label', `${b.name} — ${unlocked ? 'unlocked' : `locked, ${prog.label}`}. Open details.`);
+      btn.title = unlocked ? b.name : `${b.name} · ${prog.label}`;
+      btn.append(ico, nm, pr);
+      btn.addEventListener('click', () => openBadge(b.id));
+      rack.append(btn);
+    }
+  };
+  paintBadgesRef = paintBadges;
+
+  let badgeDraft: string | null = null;
+  function openBadge(id: string) {
+    const def = BADGES.find((b) => b.id === id);
+    const sheet = api.sheet('sheet-badge');
+    if (!def || !sheet) return;
+    badgeDraft = id;
+    const unlocked = isBadgeUnlocked(id);
+    const prog = badgeProgress(id);
+    const hero = document.getElementById('badge-sheet-hero');
+    if (hero) {
+      hero.setAttribute('data-accent', def.accent);
+      hero.classList.toggle('is-locked', !unlocked);
+    }
+    const use = document.getElementById('badge-sheet-use') as unknown as SVGUseElement | null;
+    if (use) use.setAttribute('href', unlocked ? def.icon : '#i-lock');
+    const title = document.getElementById('badge-title');
+    if (title) title.textContent = def.name;
+    const lore = document.getElementById('badge-lore');
+    if (lore) lore.textContent = def.lore;
+    const crit = document.getElementById('badge-criteria');
+    if (crit) crit.textContent = def.criteria;
+    const state = document.getElementById('badge-state');
+    if (state) state.textContent = unlocked ? 'Unlocked' : 'Locked';
+    const fill = document.getElementById('badge-progress-fill');
+    const bar = document.getElementById('badge-progress-bar');
+    const label = document.getElementById('badge-progress-t');
+    const pct = prog.need > 0 ? Math.min(100, Math.round((prog.got / prog.need) * 100)) : 100;
+    if (fill) fill.style.width = `${unlocked ? 100 : pct}%`;
+    if (bar) {
+      bar.setAttribute('aria-valuenow', String(prog.got));
+      bar.setAttribute('aria-valuemax', String(prog.need));
+    }
+    if (label) label.textContent = unlocked ? 'Complete — ready to equip' : prog.label;
+    const equip = document.getElementById('badge-equip') as HTMLButtonElement | null;
+    if (equip) {
+      if (!unlocked) {
+        equip.disabled = true;
+        equip.textContent = prog.label;
+      } else if (profile.badge === id) {
+        equip.disabled = true;
+        equip.textContent = 'Equipped';
+      } else {
+        equip.disabled = false;
+        equip.textContent = 'Equip to Profile';
+      }
+    }
+    api.sheets.open(sheet);
+    impact('light');
+  }
+
   const paintIdentity = () => {
     const lv = levelInfo();
     const t = myTeam();
@@ -527,6 +685,8 @@ export function createMenu(api: MenuApi): Menu {
     bar.setAttribute('aria-valuenow', String(lv.got));
     bar.setAttribute('aria-valuemax', String(lv.need));
     bar.setAttribute('aria-valuetext', `Level ${lv.n}, ${lv.got} of ${lv.need} XP`);
+    paintHeroExtras(lv);
+    paintBadges();
 
     const c = profile.country;
     $('country-chip').classList.toggle('unset', !c);
@@ -580,6 +740,24 @@ export function createMenu(api: MenuApi): Menu {
   onChange(paintProfile);
   paintProfile();
   new ResizeObserver(() => { if (!pfScreen.hidden) paintProfile(); }).observe(pfScreen);
+
+  /* frame slot cycles Default → Auric → Neon; badge drawer equips to the hero card. */
+  document.getElementById('pf-frame-btn')?.addEventListener('click', () => {
+    const ids = FRAMES.map((f) => f.id);
+    const cur = profile.frame ?? 'default';
+    const next = ids[(ids.indexOf(cur) + 1) % ids.length];
+    setFrame(next === 'default' ? null : next);
+    impact('light');
+    notify('success');
+  });
+  document.getElementById('badge-equip')?.addEventListener('click', () => {
+    if (!badgeDraft || !isBadgeUnlocked(badgeDraft)) return;
+    setBadge(badgeDraft);
+    notify('success');
+    impact('medium');
+    api.sheets.close();
+    showPfToast('Badge equipped');
+  });
 
   /* ---- difficulty: mode select owns the segmented control; Home shows fixed labels ---- */
   let difficulty: Difficulty = menuState.difficulty;

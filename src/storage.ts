@@ -75,6 +75,10 @@ export interface Save {
   teamId: string | null;
   /** every team this device knows about: the seeded clubs plus any you created or joined */
   teams: Team[];
+  /** Equipped profile badge id (see badges.ts), or null until the player equips one. */
+  badge: string | null;
+  /** Tactile avatar frame id (default | auric | neon), persisted for the hero frame slot. */
+  frame: string | null;
 }
 
 /** The three starter items are owned before the first race; the wallet starts stocked for the demo. */
@@ -97,6 +101,8 @@ function fresh(): Save {
     rewards: { country: false, age: false },
     teamId: null,
     teams: seedTeams(),
+    badge: null,
+    frame: null,
   };
 }
 
@@ -165,6 +171,18 @@ function migrate(raw: Partial<Save> | null): Save {
   const id = raw.teamId;
   if (typeof id === 'string' && s.teams.some((t) => t.id === id && inTeam(t))) s.teamId = id;
   else s.teamId = null;
+  /* equipped badge + avatar frame: plain string ids, validated against length only here;
+     badges.ts / menu.ts decide whether the id is still a known badge/frame. */
+  if (typeof raw.badge === 'string' && raw.badge.length > 0 && raw.badge.length <= 32) {
+    s.badge = raw.badge;
+  } else if (raw.badge === null) {
+    s.badge = null;
+  }
+  if (typeof raw.frame === 'string' && raw.frame.length > 0 && raw.frame.length <= 24) {
+    s.frame = raw.frame;
+  } else if (raw.frame === null) {
+    s.frame = null;
+  }
   return s;
 }
 
@@ -292,6 +310,18 @@ export function setAge(n: number | null) {
   const v = Math.floor(n);
   if (!Number.isFinite(v)) return;
   profile.age = Math.max(AGE_MIN, Math.min(AGE_MAX, v));
+  flush();
+}
+
+/** Equipped profile badge id (opaque here — badges.ts owns the catalogue). */
+export function setBadge(id: string | null) {
+  profile.badge = id && id.length > 0 && id.length <= 32 ? id : null;
+  flush();
+}
+
+/** Tactile avatar frame id (opaque here — menu.ts owns the frame catalogue). */
+export function setFrame(id: string | null) {
+  profile.frame = id && id.length > 0 && id.length <= 24 ? id : null;
   flush();
 }
 

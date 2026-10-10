@@ -167,6 +167,19 @@
           <path d="M8.5 11h7M8.5 14h4" />
         </g>
       </symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5" y="10.5" width="14" height="9.5" rx="2.6" />
+          <path d="M8.2 10.5V8a3.8 3.8 0 0 1 7.6 0v2.5" />
+          <circle cx="12" cy="15.2" r="1.3" fill="currentColor" stroke="none" />
+        </g>
+      </symbol>
+      <symbol id="i-medal" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="14.5" r="5.2" />
+          <path d="M9 9.8 6.4 3.6h4.2L12 6.7l1.4-3.1h4.2L15 9.8" />
+        </g>
+      </symbol>
     </svg>
 
     <div class="bg" aria-hidden="true">
@@ -631,52 +644,81 @@
             <span class="m-head-pad" aria-hidden="true"></span>
           </div>
           <div class="pane pf-pane" data-scroll>
-            <div class="p-card wide pf-hero">
-              <span class="avatar big" id="pf-avatar" aria-hidden="true">
-                <img id="pf-avatar-img" alt="" hidden />
-                <span id="pf-avatar-t">P</span>
-              </span>
-              <div class="p-id">
-                <p class="p-name" id="pf-name">Player</p>
-                <p class="p-sub">Level <span id="pf-level">1</span> · <span id="pf-xp">0/10 XP</span></p>
+            <div class="p-card wide pf-hero pf-hero-v2">
+              <div class="pf-hero-top">
+                <div class="pf-avatar-wrap" id="pf-avatar-wrap" data-frame="default">
+                  <span class="avatar big pf-avatar-frame" id="pf-avatar" aria-hidden="true">
+                    <img id="pf-avatar-img" alt="" hidden />
+                    <span id="pf-avatar-t">P</span>
+                  </span>
+                  <button class="pf-frame-slot" type="button" id="pf-frame-btn" aria-label="Change avatar frame">
+                    <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
+                    <span id="pf-frame-n">Default</span>
+                  </button>
+                </div>
+                <div class="p-id pf-id-v2">
+                  <div class="pf-name-row">
+                    <p class="p-name" id="pf-name">Player</p>
+                    <span class="pf-equipped-badge" id="pf-equipped-badge" hidden>
+                      <svg class="ico" aria-hidden="true"><use id="pf-equipped-use" href="#i-crown" /></svg>
+                      <span id="pf-equipped-t">Early Adopter</span>
+                    </span>
+                  </div>
+                  <div class="pf-lvl-row">
+                    <span class="lvl-pill pf-lvl-pill" id="pf-lvl-pill"><span class="pf-lvl-k">LVL</span><b id="pf-level">1</b></span>
+                    <span class="coin-pill pf-coin-pill"><span class="coin" data-coin aria-hidden="true"></span><span id="pf-coins">0</span></span>
+                  </div>
+                  <div class="pf-xp-block">
+                    <span class="bar pf-xp-bar" role="progressbar" id="pf-bar" aria-label="Progress to the next level" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><i id="pf-fill"></i></span>
+                    <span class="pf-xp-meta"><span id="pf-xp">0/10 XP</span><span class="pf-xp-remain" id="pf-xp-remain">10 to LVL 2</span></span>
+                  </div>
+                </div>
               </div>
             </div>
-            <dl class="p-stats quad pf-stats">
+            <dl class="p-stats quad pf-stats pf-hud">
               <div class="stat"><dt>Games</dt><dd id="pf-games">0</dd></div>
               <div class="stat"><dt>Wins</dt><dd id="pf-wins">0</dd></div>
               <div class="stat"><dt>Losses</dt><dd id="pf-losses">0</dd></div>
               <div class="stat"><dt>Best run</dt><dd id="pf-best">0</dd></div>
             </dl>
+            <div class="pf-sec pf-badges-sec">
+              <h2 class="eq-h pf-sec-h"><span>Honor &amp; Badges</span><span class="pf-sec-sub pf-badge-count" id="pf-badge-count">1/4</span></h2>
+              <div class="badge-rack" id="pf-badge-rack" role="list" aria-label="Player badges"></div>
+            </div>
             <div class="pf-sec">
               <h2 class="eq-h pf-sec-h"><span>Player Identity</span><span class="pf-sec-sub">Optional · Claim reward</span></h2>
-              <div class="pf-tiles">
-                <button class="pf-tile row edit" type="button" id="pf-country" aria-haspopup="dialog">
-                  <span class="row-txt">
-                    <span class="row-t pf-t">Country
-                      <span class="reward-badge" id="pf-country-reward"><span class="coin coin-xs" data-coin aria-hidden="true"></span>+100</span>
-                      <span class="verified-badge" id="pf-country-done" hidden><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Set</span>
-                    </span>
-                    <span class="row-s">Your flag, for when leaderboards arrive</span>
+              <div class="pf-identity-grid">
+                <button class="pf-id-card" type="button" id="pf-country" aria-haspopup="dialog">
+                  <span class="pf-id-top">
+                    <span class="pf-id-ico" aria-hidden="true"><svg class="ico"><use href="#i-globe" /></svg></span>
+                    <span class="pf-id-label">Country</span>
+                    <svg class="ico chev" aria-hidden="true"><use href="#i-next" /></svg>
                   </span>
-                  <span class="row-v pick-v">
+                  <span class="pf-id-value">
                     <span class="flag" id="pf-flag" aria-hidden="true"></span>
                     <span class="flag-code" id="pf-code" aria-hidden="true"></span>
                     <span id="pf-country-v">Not set</span>
                   </span>
-                  <svg class="ico chev" aria-hidden="true"><use href="#i-next" /></svg>
-                </button>
-                <button class="pf-tile row edit" type="button" id="pf-age" aria-haspopup="dialog">
-                  <span class="row-txt">
-                    <span class="row-t pf-t">Age
-                      <span class="reward-badge" id="pf-age-reward"><span class="coin coin-xs" data-coin aria-hidden="true"></span>+100</span>
-                      <span class="verified-badge" id="pf-age-done" hidden><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Set</span>
-                    </span>
-                    <span class="row-s">Optional, only to complete your profile</span>
+                  <span class="pf-id-foot">
+                    <span class="reward-badge" id="pf-country-reward"><span class="coin coin-xs" data-coin aria-hidden="true"></span>+100</span>
+                    <span class="verified-badge" id="pf-country-done" hidden><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Set</span>
+                    <span class="pf-id-hint">Flag for leaderboards</span>
                   </span>
-                  <span class="row-v pick-v">
+                </button>
+                <button class="pf-id-card" type="button" id="pf-age" aria-haspopup="dialog">
+                  <span class="pf-id-top">
+                    <span class="pf-id-ico" aria-hidden="true"><svg class="ico"><use href="#i-user" /></svg></span>
+                    <span class="pf-id-label">Age</span>
+                    <svg class="ico chev" aria-hidden="true"><use href="#i-next" /></svg>
+                  </span>
+                  <span class="pf-id-value">
                     <span id="pf-age-v">Not set</span>
                   </span>
-                  <svg class="ico chev" aria-hidden="true"><use href="#i-next" /></svg>
+                  <span class="pf-id-foot">
+                    <span class="reward-badge" id="pf-age-reward"><span class="coin coin-xs" data-coin aria-hidden="true"></span>+100</span>
+                    <span class="verified-badge" id="pf-age-done" hidden><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Set</span>
+                    <span class="pf-id-hint">Complete your profile</span>
+                  </span>
                 </button>
               </div>
             </div>
@@ -691,10 +733,6 @@
                   <span class="row-v" id="pf-team-v">No team</span>
                   <svg class="ico chev" aria-hidden="true"><use href="#i-next" /></svg>
                 </button>
-                <div class="pf-tile row">
-                  <span class="row-txt"><span class="row-t">Coins</span><span class="row-s">Mock balance, won on the board</span></span>
-                  <span class="row-v pick-v"><span class="coin" data-coin aria-hidden="true"></span><span id="pf-coins">0</span></span>
-                </div>
                 <div class="pf-tile row">
                   <span class="row-txt"><span class="row-t">Win streak</span><span class="row-s">Bot races only</span></span>
                   <span class="row-v" id="pf-streak">0</span>
@@ -1013,6 +1051,32 @@
         <div class="sheet-actions">
           <button class="btn btn-ghost" type="button" data-sheet-close>Close</button>
         </div>
+      </section>
+
+      <!-- badge: lore, criteria, progress + equip to profile -->
+      <section class="sheet badge-sheet" id="sheet-badge" hidden role="dialog" aria-modal="true" aria-labelledby="badge-title">
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <div class="badge-sheet-hero" id="badge-sheet-hero" data-accent="gold">
+          <span class="badge-ico-lg" id="badge-sheet-ico-wrap" aria-hidden="true">
+            <svg class="ico" aria-hidden="true"><use id="badge-sheet-use" href="#i-crown" /></svg>
+          </span>
+          <span class="badge-sheet-state" id="badge-state">Unlocked</span>
+        </div>
+        <h2 class="sheet-t" id="badge-title">Badge</h2>
+        <p class="sheet-p" id="badge-lore">Lore</p>
+        <div class="badge-criteria">
+          <span class="badge-criteria-k">How to earn</span>
+          <p id="badge-criteria">Criteria</p>
+        </div>
+        <div class="badge-progress" id="badge-progress-wrap">
+          <span class="cap-track" role="progressbar" id="badge-progress-bar" aria-label="Badge progress" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><i class="cap-fill" id="badge-progress-fill"></i></span>
+          <span class="cap-label" id="badge-progress-t"></span>
+        </div>
+        <div class="sheet-actions split">
+          <button class="btn btn-ghost" type="button" data-sheet-close>Close</button>
+          <button class="btn btn-primary" type="button" id="badge-equip" data-autofocus>Equip to Profile</button>
+        </div>
+        <p class="fine">Equipped badge shows next to your name on your identity card.</p>
       </section>
 
       <!-- language: clay bottom drawer with the 5 supported locales -->
