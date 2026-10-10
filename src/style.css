@@ -3837,4 +3837,353 @@ html:not(.no-flags) .lang-row .flag-code { display: none; }
   .set-card { border-radius: 18px; }
 }
 html.rm .set-toast { transition: none; }
+
+/* ==========================================================================
+   NOTIFICATIONS — tactile In-Game Notification Center (Bell & Drawer).
+   Dark Clay: #10141D canvas, #1C2433 faces, #F8FAFC ink, slate #94A3B8
+   secondary. The bell is a clay key beside the coin pill; the drawer is a
+   clay bottom sheet whose list owns the only scroll (zero body bounce).
+   Motion stays on transform/opacity so the compositor does all of it.
+   ========================================================================== */
+
+/* ---- header bell: Dark Clay key + glowing crimson/coral unread badge ---- */
+.notif-bell { position: relative; }
+.notif-bell:active { transform: translateY(2px); }
+.notif-bell .ico { color: var(--chip-ink); }
+.notif-bell.has-unread .ico { color: var(--ink); }
+.notif-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #FF6B57 0%, #E0264F 100%);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  box-shadow:
+    0 2px 0 #8F0E2E,
+    0 0 12px rgba(255, 82, 43, .65),
+    inset 0 1px 0 rgba(255, 255, 255, .45);
+  animation: notif-ping 1.8s ease-out infinite;
+  pointer-events: none;
+}
+.notif-badge[hidden] { display: none; }
+@keyframes notif-ping {
+  0% { box-shadow: 0 2px 0 #8F0E2E, 0 0 0 0 rgba(255, 82, 43, .55), inset 0 1px 0 rgba(255, 255, 255, .45); }
+  70% { box-shadow: 0 2px 0 #8F0E2E, 0 0 0 7px rgba(255, 82, 43, 0), inset 0 1px 0 rgba(255, 255, 255, .45); }
+  100% { box-shadow: 0 2px 0 #8F0E2E, 0 0 0 0 rgba(255, 82, 43, 0), inset 0 1px 0 rgba(255, 255, 255, .45); }
+}
+
+/* ---- drawer: clay face, 24px top corners, glowing top rim highlight ---- */
+.notif-sheet {
+  border-radius: 24px 24px 0 0;
+  background: var(--clay-face);
+  background-color: #1C2433;
+  box-shadow:
+    inset 0 1px 0 var(--hair-lit),
+    inset 0 0 0 1px rgba(255, 255, 255, .06),
+    0 -20px 44px -20px var(--shadow),
+    0 0 24px -8px rgba(56, 189, 248, .12);
+  gap: var(--s2);
+}
+/* mobile-safe height: the panel caps at the viewport, only the list moves */
+.notif-sheet .notif-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 52vh;
+  max-height: 52dvh;
+}
+.notif-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+.notif-title-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+.notif-title.sheet-t { margin: 0; text-align: left; }
+.notif-count {
+  flex: none;
+  padding: 3px 10px 4px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 82, 43, .16);
+  box-shadow: inset 0 0 0 1px rgba(255, 82, 43, .38);
+  color: #FFB59D;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.notif-count[hidden] { display: none; }
+/* circular clay dismiss ×: a key, not a link — it travels down on press */
+.notif-x {
+  --d: 3px;
+  appearance: none;
+  border: 0;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #2E3A55 0%, #232E44 100%);
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow:
+    0 var(--d) 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    var(--clay-ring);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.notif-x:hover:not(:active) { transform: translateY(-1px); }
+.notif-x:active { transform: translateY(2px); --d: 0px; }
+.notif-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.notif-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+/* subtle slate text key: quiet by design, 44px hit band kept */
+.notif-mark {
+  appearance: none;
+  position: relative;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  padding: 8px 4px;
+  min-height: 36px;
+  border-radius: var(--radius-pill);
+  color: #94A3B8;
+  font-size: var(--t-3);
+  font-weight: 700;
+  transition: transform var(--motion-fast), opacity var(--motion-fast), color var(--motion-fast);
+}
+.notif-mark::after { content: ""; position: absolute; inset: -4px 0; }
+.notif-mark:hover:not(:active):not([disabled]) { color: var(--ink); }
+.notif-mark:active:not([disabled]) { transform: translateY(2px); opacity: .8; }
+.notif-mark:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.notif-mark[disabled] { opacity: .45; cursor: default; }
+
+/* ---- list: the one scroll in the drawer; the page never bounces ---- */
+.notif-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 2px 2px 4px;
+  margin: 0 -2px;
+}
+.notif-list::-webkit-scrollbar { display: none; }
+.notif-list:focus { outline: none; }
+.notif-list:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+
+/* ---- cards: recessed #141A25 inner tiles, icon badge + slate timestamp ---- */
+.notif-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s3);
+  border-radius: var(--r-chip);
+  background: #141A25;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .45),
+    inset 0 -1px 0 rgba(255, 255, 255, .06),
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform var(--motion-fast), background var(--motion-fast);
+}
+.notif-card:hover { background: #161D2B; }
+.notif-card:active { transform: translateY(2px); }
+.notif-card:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+/* unread: subtle left accent bar in coral — the one loud edge in the drawer */
+.notif-card.is-unread::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #FF7A4D 0%, #FF522B 100%);
+  box-shadow: 0 0 10px rgba(255, 82, 43, .6);
+}
+.notif-card.is-unread { padding-left: calc(var(--s3) + 6px); }
+.notif-card.is-read { cursor: default; }
+.notif-card.is-read .notif-title,
+.notif-card.is-read .notif-body { color: var(--ink-soft); }
+/* left icon badge: embossed chip with an ambient kind-colored glow */
+.notif-ico {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #0A0F1C 0%, var(--field) 100%);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .55),
+    inset 0 -1px 0 rgba(255, 255, 255, .08),
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+.notif-ico .ico { width: 22px; height: 22px; }
+.notif-ico.squad { color: var(--brand-ink); box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 -1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(125,211,252,.3), 0 0 14px -2px rgba(56,189,248,.35); }
+.notif-ico.tournament { color: var(--honey-ink); box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 -1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(252,211,77,.3), 0 0 14px -2px rgba(245,158,11,.4); }
+.notif-ico.reward { color: var(--coin-ink); box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 -1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(252,211,77,.32), 0 0 14px -2px rgba(245,158,11,.45); }
+.notif-txt {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.notif-kind {
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  line-height: 1.2;
+}
+.notif-card.kind-squad .notif-kind { color: var(--brand-ink); }
+.notif-card.kind-tournament .notif-kind { color: var(--honey-ink); }
+.notif-card.kind-reward .notif-kind { color: var(--coin-ink); }
+.notif-title {
+  margin: 0;
+  font-size: var(--t-2);
+  font-weight: 800;
+  letter-spacing: -.01em;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.notif-body {
+  margin: 0;
+  font-size: var(--t-3);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--chip-ink);
+}
+.notif-time {
+  margin-top: 2px;
+  font-size: var(--t-micro);
+  font-weight: 700;
+  color: #94A3B8;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+/* unread dot: small glowing coral pip, top-right of the card */
+.notif-dot {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #FF522B;
+  box-shadow: 0 0 10px rgba(255, 82, 43, .8);
+  pointer-events: none;
+}
+/* reward claim: compact key pinned to the card's end */
+.notif-claim { flex: none; align-self: center; }
+.notif-claim[disabled] { opacity: .7; }
+.notif-claimed {
+  flex: none;
+  align-self: center;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--mint-soft);
+  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .32);
+  color: var(--mint-ink);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ---- empty state: recessed bell medallion + "All caught up!" ---- */
+.notif-empty {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s5) var(--s4);
+  border-radius: var(--r-chip);
+  background: var(--field);
+  box-shadow: var(--inset);
+  text-align: center;
+}
+.notif-empty[hidden] { display: none; }
+.notif-empty-ico {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #0A0F1C 0%, var(--field) 100%);
+  color: var(--ink-soft);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .55),
+    inset 0 -1px 0 rgba(255, 255, 255, .08),
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+.notif-empty-ico .ico { width: 26px; height: 26px; }
+.notif-empty-t {
+  margin: var(--s2) 0 0;
+  font-size: var(--t-1);
+  font-weight: 800;
+  color: var(--ink);
+}
+.notif-empty-s {
+  margin: 0;
+  font-size: var(--t-3);
+  font-weight: 600;
+  line-height: 1.4;
+  color: #94A3B8;
+}
+
+/* short columns keep the list scrollable and every key on target */
+@media (max-height: 700px) {
+  .notif-sheet .notif-list { max-height: 44vh; max-height: 44dvh; }
+  .notif-card { padding: var(--s2) var(--s3); }
+  .notif-ico { width: 40px; height: 40px; }
+}
+
+/* reduced motion: no badge pulse, matching the app-wide restraint */
+@media (prefers-reduced-motion: reduce) {
+  .notif-badge { animation: none; }
+}
+html.rm .notif-badge { animation: none; }
 

@@ -13,6 +13,7 @@ import { createMenu, type Menu } from './menu';
 import { createHome } from './home';
 import { createCompete } from './compete';
 import { createShop } from './shop';
+import { createNotifications } from './notifications';
 import { mountCoins, setBalance } from './coin';
 import { menuState, motionReduced } from './settings';
 import { onChange, recordGame, theme } from './storage';
@@ -537,6 +538,7 @@ menu = createMenu({ router, sheets, sheet: sheetById, start: startGame, onBack }
 const shop = createShop({ sheets, sheet: sheetById });
 home = createHome({ router, sheets, start: startGame });
 compete = createCompete({ router, sheets, sheet: sheetById });
+createNotifications({ sheets });
 paintNames();
 ui();
 router.start('home');

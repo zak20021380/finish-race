@@ -142,6 +142,12 @@
           <path d="M10 10.5v6.5M14 10.5v6.5" />
         </g>
       </symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 9.5a6 6 0 0 1 12 0c0 4 1.2 5.4 1.9 6H4.1c.7-.6 1.9-2 1.9-6Z" />
+          <path d="M10 19.2a2.2 2.2 0 0 0 4 0" />
+        </g>
+      </symbol>
       <symbol id="i-chat" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20 12a8 8 0 0 1-8 8H5l-1.6 1.6V12a8 8 0 0 1 8-8h0a8 8 0 0 1 8 8Z" />
@@ -178,6 +184,10 @@
               </button>
               <div class="id-side">
                 <span class="coin-pill"><span class="coin" data-coin aria-hidden="true"></span><span id="p-coins">0</span></span>
+                <button class="icon-btn xs notif-bell" type="button" id="home-notifs" aria-label="Open notifications">
+                  <svg class="ico" aria-hidden="true"><use href="#i-bell" /></svg>
+                  <span class="notif-badge" id="notif-badge" aria-hidden="true" hidden></span>
+                </button>
                 <button class="icon-btn xs" type="button" id="home-settings" aria-label="Open settings">
                   <svg class="ico" aria-hidden="true"><use href="#i-tune" /></svg>
                 </button>
@@ -1055,6 +1065,27 @@
         </div>
         <div class="sheet-actions sticky">
           <button class="btn btn-primary" type="button" id="mode-start" data-autofocus>Start 1v1 · Normal</button>
+        </div>
+      </section>
+
+      <!-- notifications: tactile inbox & alerts drawer over the same dimming scrim -->
+      <section class="sheet tall notif-sheet" id="sheet-notifications" hidden role="dialog" aria-modal="true" aria-labelledby="notif-title">
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <div class="notif-head">
+          <div class="notif-title-wrap">
+            <h2 class="sheet-t left notif-title" id="notif-title">Inbox &amp; Alerts</h2>
+            <span class="notif-count" id="notif-count" hidden></span>
+          </div>
+          <button class="notif-x" type="button" data-sheet-close aria-label="Close notifications">×</button>
+        </div>
+        <div class="notif-actions">
+          <button class="notif-mark" type="button" id="notif-mark-all">Mark all as read</button>
+        </div>
+        <div class="notif-list" id="notif-list" data-scroll tabindex="0" role="list" aria-label="Notifications"></div>
+        <div class="notif-empty" id="notif-empty" hidden>
+          <span class="notif-empty-ico" aria-hidden="true"><svg class="ico"><use href="#i-bell" /></svg></span>
+          <p class="notif-empty-t">All caught up!</p>
+          <p class="notif-empty-s">Squad moves, cups and rewards land here.</p>
         </div>
       </section>
     </div>
