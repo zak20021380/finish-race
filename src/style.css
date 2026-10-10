@@ -1792,10 +1792,14 @@ html.rm *, html.rm *::before, html.rm *::after {
 /* split-screen aliases: Arena owns cups, Ranks owns squads + solo boards */
 #arena-tournaments { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
 #arena-tournaments[hidden] { display: none; }
-#ranks-solo { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+/* Solo Champions: sub-tabs + Your Standing (in-flow) + ladder. No absolute /
+   floating "you" bar — everything stacks in normal flow so rows never overlap. */
+#ranks-solo { display: flex; flex-direction: column; gap: 12px; min-height: 0; flex: 1 1 auto; }
 #ranks-solo[hidden] { display: none; }
-#ranks-players, #ranks-countries, #ranks-teams { min-height: 0; }
-#ranks-players[hidden], #ranks-countries[hidden], #ranks-teams[hidden] { display: none; }
+#ranks-players, #ranks-countries { flex: 1 1 auto; min-height: 0; }
+/* Legacy teams pane (removed from Solo Champions): never show if old markup lingers. */
+#ranks-teams, #comp-teams { display: none !important; }
+#ranks-players[hidden], #ranks-countries[hidden] { display: none; }
 
 /* ---- arena toolbar: feed count left, floating leaderboard pill right ---- */
 .arena-toolbar {
@@ -2032,29 +2036,134 @@ html.rm *, html.rm *::before, html.rm *::after {
   .arena-card .trophy-badge { width: 42px; height: 42px; }
   .btn-coral.arena-cta { min-height: 44px; min-width: 110px; }
 }
-.rank-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-radius: var(--radius-md); overflow: hidden; background: var(--glass-bg); box-shadow: var(--glass-border); }
+/* ---- Solo Champions ladder: gamified Dark Clay table ----
+   Canvas #10141D, card surface #1C2433, ink #F8FAFC. The list is a single clay
+   card; rows are in normal flow (no absolute / floating bars). Presses travel
+   translateY only (transform/opacity) for 60fps tactile feedback. */
+.rank-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  background: var(--clay-face);
+  background-color: #1C2433;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  box-shadow: var(--clay), var(--clay-ring);
+}
+.rank-list::-webkit-scrollbar { display: none; }
 .rank-row {
   display: flex;
   align-items: center;
   gap: var(--s2);
-  min-height: 44px;
-  padding: var(--s2) var(--s3);
+  min-height: 56px;
+  padding: var(--s2) var(--s2) var(--s2) var(--s3);
   font-size: var(--t-3);
   font-weight: 700;
-  color: var(--ink);
+  color: #F8FAFC;
   font-variant-numeric: tabular-nums;
+  transition: transform var(--motion-fast), background var(--motion-fast);
 }
 .rank-row + .rank-row { box-shadow: inset 0 1px 0 var(--sep); }
-.rank-row .rk { flex: none; width: 1.6em; font-weight: 800; color: var(--ink-soft); }
-.rank-row .fl { flex: none; width: 1.6em; text-align: center; font-size: 15px; }
-.rank-row .nm { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rank-row .nm small { display: block; font-size: var(--t-micro); font-weight: 600; color: var(--ink-soft); }
-.rank-row .pt { flex: none; font-weight: 800; }
-.rank-row.me { background: var(--brand-soft); }
-.rank-row.me .nm, .rank-row.me .rk { color: var(--brand-ink); }
+.rank-row:active { transform: translateY(var(--press-y)); }
+.rank-row:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+/* rank badge: plain slate by default, embossed 3D metal for the podium */
+.rank-row .rk {
+  --d: 2px;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--field);
+  box-shadow: 0 var(--d) 0 #080C14, inset 0 1px 0 rgba(255, 255, 255, .08);
+  color: var(--ink-soft);
+  font-size: var(--t-3);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.rank-row .rk.gold {
+  background: linear-gradient(180deg, #fde68a 0%, #fbbf24 45%, #f59e0b 100%);
+  color: #10141D;
+  box-shadow:
+    0 var(--d) 0 var(--gold-lip),
+    0 0 10px rgba(245, 158, 11, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .65),
+    inset 0 -2px 3px rgba(146, 64, 14, .35);
+}
+.rank-row .rk.silver {
+  background: linear-gradient(180deg, #f1f5f9 0%, #cbd5e1 45%, #94a3b8 100%);
+  color: #10141D;
+  box-shadow:
+    0 var(--d) 0 #475569,
+    0 0 8px rgba(148, 163, 184, .4),
+    inset 0 1px 0 rgba(255, 255, 255, .7),
+    inset 0 -2px 3px rgba(51, 65, 85, .35);
+}
+.rank-row .rk.bronze {
+  background: linear-gradient(180deg, #fed7aa 0%, #fdba74 45%, #c2703d 100%);
+  color: #10141D;
+  box-shadow:
+    0 var(--d) 0 #7c3f14,
+    0 0 8px rgba(194, 112, 61, .45),
+    inset 0 1px 0 rgba(255, 255, 255, .6),
+    inset 0 -2px 3px rgba(124, 63, 20, .35);
+}
+/* country identity: crisp flag tile + code fallback (Windows has no flag glyphs) */
+.rank-row .fl {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08), inset 0 1px 0 rgba(255, 255, 255, .08);
+  text-align: center;
+}
+.rank-row .fl .flag { font-size: 18px; line-height: 1; }
+.rank-row .fl .flag-code { padding: 1px 5px; font-size: 10px; }
+.rank-row .nm {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 800;
+  color: #F8FAFC;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rank-row .nm small { display: block; font-size: var(--t-micro); font-weight: 600; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* score: prominent tabular number + trophy, momentum arrow beside it */
+.rank-row .pt {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  color: #F8FAFC;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.rank-row .pt .cup { font-size: 14px; line-height: 1; }
+.rank-row .tr { flex: none; width: 1.4em; text-align: center; font-size: 12px; line-height: 1; }
+.rank-row .tr.up { color: var(--mint-ink); }
+.rank-row .tr.down { color: var(--danger); }
+.rank-row .tr.same { color: var(--ink-soft); }
+.rank-row.me { background: var(--brand-soft); box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .32); }
+.rank-row.me .nm { color: var(--brand-ink); }
+/* Legacy floating "you" bar (pre-refactor .rank-pinned): never float again.
+   If old markup lingers, it renders as a normal in-flow card — no overlap. */
 .rank-pinned {
-  position: sticky;
-  bottom: 0;
+  position: static;
   margin-top: var(--s2);
   border-radius: var(--radius-md);
   background: linear-gradient(180deg, var(--solid-a), var(--solid-b));
@@ -2074,7 +2183,9 @@ button.rank-pinned.hint {
   font-size: var(--t-micro);
   font-weight: 800;
   color: var(--brand-ink);
+  transition: transform var(--motion-fast), opacity var(--motion-fast);
 }
+button.rank-pinned.hint:active { transform: translateY(var(--press-y)); }
 button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .empty {
   padding: var(--s5) var(--s4);
@@ -3904,7 +4015,9 @@ html.rm .car-card.nations-cup::before { display: none; }
 
 /* ---- Leaderboard screen: proper vertical flex — tabs fixed, list fills, dock pinned ----
    Screen is a full-height column; the scroll container flexes to fill the middle
-   between tabs and bottom card with smooth touch scrolling and no dead voids. */
+   between tabs and bottom card with smooth touch scrolling and no dead voids.
+   Solo list owns smooth chrome-free scrolling: flex:1 + overflow-y:auto +
+   scrollbar-width:none, touch-action pan-y, compositor-only motion. */
 #s-ranks,
 .ranks-screen {
   display: flex;
@@ -3913,6 +4026,7 @@ html.rm .car-card.nations-cup::before { display: none; }
   min-height: 0;
   overflow: hidden;
   max-width: 100%;
+  background: #10141D;
 }
 .ranks-body,
 #ranks-scroll {
@@ -3921,8 +4035,135 @@ html.rm .car-card.nations-cup::before { display: none; }
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   padding-bottom: 12px;
 }
+.ranks-body::-webkit-scrollbar,
+#ranks-scroll::-webkit-scrollbar { display: none; }
+
+/* ---- Solo Champions sub-tabs: sleek segmented clay switch (2 logical views) ----
+   Top Players (global ladder) | Top Countries (nations ladder). No Teams tab —
+   teams belong to squads, not solo. Equal halves, tactile translateY press. */
+.seg.lb-seg.solo-seg {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  background: #0E1526;
+  background-color: #0E1526;
+  box-shadow: var(--inset), inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+.solo-seg .seg-b {
+  min-height: 48px;
+  border-radius: 14px;
+  font-size: var(--t-2);
+  color: #94A3B8;
+  transition: transform var(--motion-fast), background var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
+}
+.solo-seg .seg-b:active { transform: translateY(var(--press-y)); }
+.solo-seg .seg-b[aria-selected="true"] {
+  background: var(--clay-face);
+  background-color: #1C2433;
+  color: #7DD3FC;
+  box-shadow:
+    0 2px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 0 0 1px rgba(125, 211, 252, .22);
+}
+
+/* ---- Solo "Your Standing" summary module: in-flow below sub-tabs ----
+   Replaces the old floating .player-my-rank / .rank-pinned bar that covered
+   middle rows. Static flex row: avatar + identity + trophy score. Never
+   absolute, never overlapping. Dark Clay #1C2433, ink #F8FAFC. */
+.solo-standing {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 68px;
+  padding: var(--s2) var(--s3) var(--s2) var(--s2);
+  border-radius: 16px;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  background: var(--clay-face);
+  background-color: #1C2433;
+  box-shadow: var(--clay), var(--clay-ring), inset 0 0 0 1px rgba(125, 211, 252, .18);
+}
+.solo-standing[hidden] { display: none; }
+.solo-standing:empty { display: none; }
+.standing-avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--field);
+  background-color: #0E1526;
+  box-shadow: var(--inset);
+  color: #F8FAFC;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+}
+.standing-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.standing-name {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  line-height: 1.35;
+  color: #F8FAFC;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.standing-sub {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #94A3B8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.standing-score {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--t-2);
+  font-weight: 900;
+  color: #F8FAFC;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.standing-score .cup { font-size: 16px; line-height: 1; }
+.standing-cta {
+  --d: 2px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  flex: none;
+  min-height: 44px;
+  padding: 0 var(--s3);
+  border-radius: var(--radius-pill);
+  background: var(--brand-fill);
+  color: var(--on-brand);
+  font-size: var(--t-3);
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 var(--d) 0 var(--brand-lip), inset 0 1px 0 rgba(255, 255, 255, .3);
+  transition: transform var(--motion-fast), opacity var(--motion-fast);
+}
+.standing-cta:active { transform: translateY(var(--press-y)); --d: 0px; }
+.standing-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
 /* ---- squad dock: pinned clay callout floating above the nav ----
    Lives outside the scroll so it can never clip. Not in squad: compact
@@ -4971,7 +5212,8 @@ html.rm .notif-badge { animation: none; }
 /* ==========================================================================
    ARENA + RANKS — split of the old Compete screen.
    Arena owns cups only (no leaderboard pill). Ranks owns Squad Warfare +
-   Solo Champions with a docked My Squad Standing card. Both reuse the
+   Solo Champions. The squad dock belongs EXCLUSIVELY to Squads; Solo gets
+   full breathing room with its own Your Standing module. Both reuse the
    compete-screen clay column; only the extras below are new.
    ========================================================================== */
 
@@ -5001,6 +5243,26 @@ html.rm .notif-badge { animation: none; }
 .ranks-mode { flex: none; }
 /* Dock lives in-flow below the scroll — only 12px pad, no dead void. */
 .ranks-body { padding-bottom: 12px; }
+/* Solo ladder panes: fill the scroll column, chrome-free smooth scroll. */
+#ranks-solo #ranks-players,
+#ranks-solo #ranks-countries {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+#ranks-solo #ranks-players::-webkit-scrollbar,
+#ranks-solo #ranks-countries::-webkit-scrollbar { display: none; }
+/* Squad banner never leaks into Solo Champions (JS hides via hidden attr). */
+#ranks-dock[hidden] { display: none !important; }
+@media (max-width: 380px) {
+  .solo-standing { padding: var(--s2); gap: var(--s2); }
+  .rank-row { padding-left: var(--s2); gap: var(--s2); }
+}
 
 /* bound Invite pill keeps brand-ink text */
 .squad-go.invite { color: var(--brand-ink); }
@@ -5965,4 +6227,350 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 html.rm .arena-card.is-hero,
 html.rm .arena-pass { animation: none; }
 html.rm .arena-hero-backlight { display: none; }
+
+/* ==========================================================================
+   GAME MODE SELECTOR — bottom sheet triggered by the lobby Change key.
+   Canvas #10141D, surface Dark Clay #1C2433, 24px top corners, ink #F8FAFC.
+   Three uncluttered sections: Quick Play / Friends Room (viral) / Practice.
+   Motion stays on transform/opacity so every press runs at 60fps.
+   ========================================================================== */
+
+/* ---- surface: Dark Clay #1C2433, 24px top corners, smooth entry ---- */
+#sheet-game-modes,
+.gm-sheet {
+  border-radius: 24px 24px 0 0;
+  background: #1C2433;
+  background-color: #1C2433;
+  box-shadow:
+    inset 0 1px 0 var(--hair-lit),
+    inset 0 0 0 1px rgba(255, 255, 255, .06),
+    0 -20px 44px -20px var(--shadow),
+    0 0 24px -8px rgba(56, 189, 248, .12);
+}
+/* entry transition lives on .sheet (transform var(--motion-med)); this keeps it explicit */
+#sheet-game-modes { transition: transform var(--motion-med); }
+
+/* ---- header: title + clean close key ---- */
+.gm-head {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+.gm-head-txt { flex: 1 1 auto; min-width: 0; }
+.gm-title.sheet-t { margin: 0; text-align: left; }
+.gm-sub {
+  margin: 2px 0 0;
+  font-size: var(--t-micro);
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.gm-x {
+  --d: 3px;
+  appearance: none;
+  border: 0;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #2E3A55 0%, #232E44 100%);
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow:
+    0 var(--d) 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    var(--clay-ring);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.gm-x:hover:not(:active) { transform: translateY(-1px); }
+.gm-x:active { transform: translateY(2px); --d: 0px; }
+.gm-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+/* ---- body: the one scroll in the drawer, chrome-free ---- */
+.gm-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 62vh;
+  max-height: 62dvh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 2px 2px 4px;
+  margin: 0 -2px;
+}
+.gm-body::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.gm-sec { margin-top: var(--s2); }
+.gm-sec:first-child { margin-top: 0; }
+.gm-viral {
+  flex: none;
+  padding: 2px 8px 3px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+  color: #10141D;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  box-shadow: 0 2px 0 var(--gold-lip), 0 0 10px rgba(245, 158, 11, .5);
+}
+
+/* ---- mode cards: tactile clay rows, 3D icon left, rewards + search time ---- */
+.gm-list { display: flex; flex-direction: column; gap: var(--s2); }
+.gm-card {
+  appearance: none;
+  border: 2px solid transparent;
+  font: inherit;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  min-height: 76px;
+  padding: var(--s3);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #202A3E 0%, #1C2433 100%);
+  background-color: #1C2433;
+  box-shadow: var(--clay), var(--clay-ring);
+  color: var(--ink);
+  text-align: left;
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), border-color var(--motion-fast), background var(--motion-fast);
+}
+.gm-card:hover:not(:active) { transform: translateY(-1px); }
+.gm-card:active { transform: scale(0.98); }
+.gm-card:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+/* active: cyan / electric-blue clay glow border */
+.gm-card.is-active,
+.gm-card[aria-checked="true"] {
+  border-color: rgba(56, 189, 248, .85);
+  background:
+    linear-gradient(180deg, #232E46 0%, #1C2433 100%) padding-box,
+    linear-gradient(135deg, #0284c7, #38bdf8) border-box;
+  box-shadow:
+    var(--clay),
+    0 0 0 1px rgba(56, 189, 248, .45),
+    0 0 22px -4px rgba(56, 189, 248, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .1);
+}
+.gm-ico {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 17px;
+  background: linear-gradient(180deg, #0A0F1C 0%, var(--field) 100%);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .55),
+    inset 0 -1px 0 rgba(255, 255, 255, .08),
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+.gm-ico .ico { width: 26px; height: 26px; }
+.gm-ico.duel { color: #FCD34D; box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 0 0 1px rgba(252,211,77,.32), 0 0 14px -2px rgba(245,158,11,.45); }
+.gm-ico.party { color: var(--brand-ink); box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 0 0 1px rgba(125,211,252,.32), 0 0 14px -2px rgba(56,189,248,.45); }
+.gm-ico.bot { color: var(--mint-ink); box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 0 0 1px rgba(110,231,183,.3), 0 0 14px -2px rgba(16,185,129,.4); }
+.gm-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.gm-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); min-width: 0; }
+.gm-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--t-2);
+  font-weight: 800;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gm-card.is-active .gm-name, .gm-card[aria-checked="true"] .gm-name { color: var(--brand-ink); }
+.gm-time {
+  flex: none;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.gm-desc {
+  display: block;
+  font-size: var(--t-micro);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gm-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.gm-reward {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  color: var(--honey-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.gm-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px 3px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-soft);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .3);
+  color: var(--brand-ink);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.gm-tag.safe {
+  background: var(--mint-soft);
+  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .32);
+  color: var(--mint-ink);
+}
+.gm-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--brand-fill);
+  color: var(--on-brand);
+  box-shadow: 0 2px 0 var(--brand-lip), 0 6px 12px -6px var(--brand-glow);
+}
+.gm-check .ico { width: 14px; height: 14px; }
+.gm-card.is-active .gm-check, .gm-card[aria-checked="true"] .gm-check { display: grid; }
+
+/* ---- friends room: dedicated clay card with create + join ---- */
+.gm-room {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #202A3E 0%, #1C2433 100%);
+  background-color: #1C2433;
+  box-shadow: var(--clay), var(--clay-ring);
+}
+.gm-room.is-active {
+  border: 2px solid rgba(56, 189, 248, .85);
+  box-shadow:
+    var(--clay),
+    0 0 22px -4px rgba(56, 189, 248, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .1);
+}
+.gm-room-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-width: 0; }
+.gm-room-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.gm-room-txt b { font-size: var(--t-2); font-weight: 800; color: var(--ink); }
+.gm-room-txt span { font-size: var(--t-micro); font-weight: 600; color: var(--ink-soft); }
+.gm-btn { flex: none; }
+.gm-room:active { transform: none; }
+.gm-invite { display: flex; flex-direction: column; gap: var(--s2); }
+.gm-invite[hidden] { display: none; }
+.gm-code-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  box-shadow: var(--inset);
+}
+.gm-code-label { flex: 1 1 auto; min-width: 0; font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
+.gm-code {
+  flex: none;
+  font-size: var(--t-1);
+  font-weight: 900;
+  letter-spacing: .18em;
+  color: var(--brand-ink);
+  font-variant-numeric: tabular-nums;
+}
+.gm-copy {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  flex: none;
+  min-height: 36px;
+  padding: 0 var(--s3);
+  border-radius: var(--radius-pill);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .3);
+  transition: transform var(--motion-fast), opacity var(--motion-fast);
+}
+.gm-copy:active { transform: scale(0.98); opacity: .85; }
+.gm-copy:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.gm-invite-btn { width: 100%; }
+.gm-link {
+  margin: 0;
+  text-align: center;
+  font-size: var(--t-micro);
+  font-weight: 700;
+  color: var(--ink-soft);
+  word-break: break-all;
+  font-variant-numeric: tabular-nums;
+}
+.gm-divider { display: flex; align-items: center; gap: var(--s2); color: var(--ink-soft); }
+.gm-divider::before, .gm-divider::after { content: ""; flex: 1 1 auto; height: 1px; background: var(--sep); }
+.gm-divider span { font-size: var(--t-micro); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.gm-join { width: 100%; }
+.gm-join .gm-btn { flex: none; }
+.gm-err { margin: 0; }
+.gm-err:not([hidden]) { color: var(--danger); }
+
+/* lobby type badge: TEAM / RANKED etc ride the same pill, tinted per mode */
+.diff-badge[data-gmode="duel_1v1"] {
+  background: var(--honey-soft);
+  color: var(--honey-ink);
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .32);
+}
+.diff-badge[data-gmode="party_2v2"] {
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .3);
+}
+.diff-badge[data-gmode="bot"] {
+  background: var(--mint-soft);
+  color: var(--mint-ink);
+  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .3);
+}
+.diff-badge[data-gmode="room"] {
+  background: rgba(255, 82, 43, .16);
+  box-shadow: inset 0 0 0 1px rgba(255, 82, 43, .38);
+  color: #FFB59D;
+}
+
+/* short columns keep every key on target */
+@media (max-height: 700px) {
+  .gm-body { max-height: 56vh; max-height: 56dvh; }
+  .gm-card { min-height: 68px; padding: var(--s2) var(--s3); }
+  .gm-ico { width: 46px; height: 46px; border-radius: 15px; }
+}
+@media (max-width: 380px) {
+  .gm-desc { white-space: normal; overflow: visible; text-overflow: clip; }
+  .gm-top { align-items: center; }
+}
+html.rm .gm-card, html.rm .gm-x, html.rm .gm-copy { transition: none; }
 

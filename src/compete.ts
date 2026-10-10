@@ -3,9 +3,11 @@
  *
  * IA: Arena owns Live / Upcoming / Archive cups only. Ranks is the dedicated
  * leaderboard tab with a two-way clay switch ("Telegram Squads" clan wars vs
- * "Solo Champions" top players) plus a docked "My Squad Standing" card so the
- * player always sees their community progress. Solo Champions keeps the
- * Players | Countries | Teams secondary switch.
+ * "Solo Champions" top players). The squad dock ("My Squad Standing" / join
+ * prompt) belongs EXCLUSIVELY to the squads tab. Solo Champions owns a
+ * "Your Standing" summary module directly below its Top Players | Top Countries
+ * segmented switch — no floating / absolute-positioned "you" bar that can cover
+ * list rows.
  * Tournament cards are high-energy Dark Clay arena cards with per-status
  * hierarchy (live glow + ENTER ARENA, upcoming slate + Pre-register, ended
  * archive). The Hero cup is three flex rows — header · prizes & meta ·
@@ -16,17 +18,15 @@ import {
   formatCountdown,
   getCountryRanking,
   getPlayerRanking,
-  getTeamRanking,
   getTournaments,
   trendArrow,
   type CountryRow,
   type PlayerRow,
-  type TeamRow,
   type Tournament,
 } from './data';
 import { flagOf, nameOf } from './countries';
 import { coinSvg, coinText, mountCoins, setBalance } from './coin';
-import { myTeam, onChange, profile, spendCoins } from './storage';
+import { onChange, profile, spendCoins } from './storage';
 import { bindSquadById, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadKind, squadLetter, type RankedSquad } from './squads';
 import { impact, notify, tgUser } from './telegram';
 import type { Router } from './router';
@@ -39,7 +39,7 @@ export interface CompeteApi {
 }
 
 type RankMode = 'squads' | 'solo';
-type LbTab = 'players' | 'countries' | 'teams';
+type LbTab = 'players' | 'countries';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const JOINED_KEY = 'detour.tourneys.v1';
@@ -94,10 +94,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   const arenaPane = pickEl('arena-tournaments', 'comp-tournaments');
   const squadsPane = pickEl('ranks-squads', 'comp-squads');
   const soloWrap = document.getElementById('ranks-solo');
-  const lbPanes: Record<LbTab, HTMLElement> = {
-    players: pickEl('ranks-players', 'comp-players'),
-    countries: pickEl('ranks-countries', 'comp-countries'),
-    teams: pickEl('ranks-teams', 'comp-teams'),
+  const lbPanes: Record<LbTab, HTMLElement | null> = {
+    players: document.getElementById('ranks-players') ?? document.getElementById('comp-players'),
+    countries: document.getElementById('ranks-countries') ?? document.getElementById('comp-countries'),
   };
 
   let rankMode: RankMode = 'squads';
@@ -110,11 +109,32 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   let pending: Tournament | null = null;
   let tick = 0;
 
-  const youName = (): string => {
+  /** Clean user handle: "@username" when Telegram provides one, else first name, else null. */
+  const youHandle = (): string | null => {
     const u = tgUser();
+    if (u?.username) {
+      const h = u.username.trim().replace(/^@+/, '').slice(0, 32);
+      if (h) return `@${h}`;
+    }
     const full = [u?.first_name, u?.last_name].filter(Boolean).join(' ').trim();
-    return (full || u?.username || 'You').slice(0, 18);
+    if (full && full.toLowerCase() !== 'you') return full.slice(0, 24);
+    return null;
   };
+
+  /** "You (@Username)" — never the glitchy "You · You". Falls back to plain "You". */
+  const youLabel = (): string => {
+    const h = youHandle();
+    return h ? `You (${h})` : 'You';
+  };
+
+  const myTrophyScore = (): number =>
+    Math.max(0, profile.stats.wins * 120 + profile.stats.games * 20);
+
+  const myRecord = (): string =>
+    `${profile.stats.wins}W · ${profile.stats.losses}L`;
+
+  const soloStandingEl = (): HTMLElement | null =>
+    document.getElementById('solo-standing');
 
   /* ---------- squad dock helpers ---------- */
 
@@ -181,12 +201,25 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const legacyBoard = document.getElementById('comp-leaderboard');
     if (legacyBoard) legacyBoard.hidden = squads;
     if (!squads) {
-      for (const k of Object.keys(lbPanes) as LbTab[]) lbPanes[k].hidden = k !== lbTab;
+      for (const k of Object.keys(lbPanes) as LbTab[]) {
+        const pane = lbPanes[k];
+        if (pane) pane.hidden = k !== lbTab;
+      }
+      const standing = soloStandingEl();
+      if (standing) standing.hidden = false;
+    } else {
+      const standing = soloStandingEl();
+      if (standing) standing.hidden = true;
     }
+    // Legacy teams pane (removed from Solo Champions): keep hidden if it still exists.
+    const legacyTeams = document.getElementById('ranks-teams') ?? document.getElementById('comp-teams');
+    if (legacyTeams) legacyTeams.hidden = true;
     paintRanksStats();
+    // The squad banner belongs EXCLUSIVELY to the Telegram Squads tab.
+    // Solo Champions gets full breathing room: dock stays hidden there.
     const dock = squadDock();
-    if (dock) dock.hidden = false;
-    paintSquadDock();
+    if (dock) dock.hidden = !squads;
+    if (squads) paintSquadDock();
   }
 
   function paintFeedLabel(): void {
@@ -253,7 +286,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   for (const b of lbBtns) {
     b.addEventListener('click', () => {
       const v = b.dataset.lb as LbTab;
-      if (v === 'players' || v === 'countries' || v === 'teams') selectLb(v);
+      if (v === 'players' || v === 'countries') selectLb(v);
     });
   }
 
@@ -789,28 +822,49 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }, 1000);
   }
 
-  /* ---------- solo leaderboard (behind the Ranks switch) ---------- */
+  /* ---------- solo leaderboard (Solo Champions: Top Players | Top Countries) ----------
+     No floating / absolute "you" bar. The user's standing lives in #solo-standing,
+     an in-flow summary module directly below the sub-tabs. Lists are pure ladders. */
 
   async function loadLb(which: LbTab): Promise<void> {
     if (which === 'countries') await loadCountries();
-    else if (which === 'players') await loadPlayers();
-    else await loadTeams();
+    else await loadPlayers();
     loadedLb[which] = true;
   }
 
-  function row(rank: number, flag: string, name: string, sub: string | null, points: string, trend: string, me: boolean): HTMLLIElement {
-    const li = document.createElement('li');
-    li.className = `rank-row${me ? ' me' : ''}`;
-    const rk = document.createElement('span');
-    rk.className = 'rk';
-    rk.textContent = String(rank);
+  const podiumOf = (rank: number): '' | 'gold' | 'silver' | 'bronze' =>
+    rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
+
+  function flagBadge(codeOrEmoji: string, code: string): HTMLSpanElement {
     const fl = document.createElement('span');
     fl.className = 'fl';
-    fl.textContent = flag;
     fl.setAttribute('aria-hidden', 'true');
+    const flag = document.createElement('span');
+    flag.className = 'flag';
+    flag.textContent = codeOrEmoji;
+    const chip = document.createElement('span');
+    chip.className = 'flag-code';
+    chip.textContent = code;
+    fl.append(flag, chip);
+    return fl;
+  }
+
+  function row(rank: number, flagEmoji: string, flagCode: string, name: string, sub: string | null, points: string, trend: 'up' | 'down' | 'same', me: boolean): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = `rank-row${me ? ' me' : ''}`;
+    const podium = podiumOf(rank);
+    const trendLabel = trend === 'up' ? 'rising' : trend === 'down' ? 'falling' : 'steady';
+    li.setAttribute('aria-label', `#${rank} ${name} — ${points} trophies, ${trendLabel}`);
+    if (me) li.setAttribute('aria-current', 'true');
+    const rk = document.createElement('span');
+    rk.className = podium ? `rk ${podium}` : 'rk';
+    rk.textContent = String(rank);
+    rk.setAttribute('aria-hidden', 'true');
+    const fl = flagBadge(flagEmoji, flagCode);
     const nm = document.createElement('span');
     nm.className = 'nm';
     nm.textContent = name;
+    nm.title = name;
     if (sub) {
       const s = document.createElement('small');
       s.textContent = sub;
@@ -818,164 +872,182 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }
     const pt = document.createElement('span');
     pt.className = 'pt';
-    pt.textContent = points;
+    const num = document.createElement('b');
+    num.textContent = points;
+    const cup = document.createElement('span');
+    cup.className = 'cup';
+    cup.textContent = '🏆';
+    cup.setAttribute('aria-hidden', 'true');
+    pt.append(num, cup);
+    pt.title = `${points} trophies`;
     const tr = document.createElement('span');
     tr.className = `tr ${trend}`;
-    tr.textContent = trendArrow(trend as 'up' | 'down' | 'same');
+    tr.textContent = trendArrow(trend);
+    tr.title = trendLabel;
+    tr.setAttribute('aria-hidden', 'true');
     li.append(rk, fl, nm, pt, tr);
     return li;
   }
 
-  function pinned(el: HTMLElement, node: HTMLElement): void {
-    const wrap = document.createElement('div');
-    wrap.className = 'rank-pinned';
-    wrap.append(node);
-    el.append(wrap);
+  /** "Your Standing" summary module — in-flow below the sub-tabs, never floating. */
+  function paintSoloStanding(opts: {
+    tab: LbTab;
+    rankText: string;
+    percentText: string | null;
+    score: number;
+    extraSub: string | null;
+  }): void {
+    const host = soloStandingEl();
+    if (!host) return;
+    host.hidden = false;
+    host.textContent = '';
+    host.classList.toggle('is-players', opts.tab === 'players');
+    host.classList.toggle('is-countries', opts.tab === 'countries');
+
+    const av = document.createElement('span');
+    av.className = 'standing-avatar';
+    av.setAttribute('aria-hidden', 'true');
+    if (opts.tab === 'countries' && profile.country) {
+      av.textContent = flagOf(profile.country);
+    } else {
+      const h = youHandle() ?? 'Y';
+      av.textContent = h.replace(/^@/, '').slice(0, 1).toUpperCase() || 'Y';
+    }
+
+    const main = document.createElement('span');
+    main.className = 'standing-main';
+    const name = document.createElement('b');
+    name.className = 'standing-name';
+    name.textContent = youLabel();
+    name.title = youLabel();
+    const sub = document.createElement('small');
+    sub.className = 'standing-sub';
+    const rankPart = opts.rankText;
+    const pctPart = opts.percentText ? ` · ${opts.percentText}` : '';
+    const recPart = ` · ${myRecord()}`;
+    const extra = opts.extraSub ? ` · ${opts.extraSub}` : '';
+    sub.textContent = `${rankPart}${pctPart}${recPart}${extra}`;
+    main.append(name, sub);
+
+    const score = document.createElement('span');
+    score.className = 'standing-score';
+    const num = document.createElement('b');
+    num.textContent = opts.score.toLocaleString('en-US');
+    const cup = document.createElement('span');
+    cup.className = 'cup';
+    cup.textContent = '🏆';
+    cup.setAttribute('aria-hidden', 'true');
+    score.append(num, cup);
+    score.title = `${opts.score.toLocaleString('en-US')} trophies`;
+    score.setAttribute('aria-label', `${opts.score.toLocaleString('en-US')} trophies, ${rankPart}${pctPart}, record ${myRecord()}`);
+
+    host.append(av, main, score);
+    host.setAttribute('aria-label', `Your Standing: ${youLabel()}, ${rankPart}${pctPart}, ${opts.score.toLocaleString('en-US')} trophies, record ${myRecord()}`);
+  }
+
+  function paintPlayersStanding(): void {
+    paintSoloStanding({
+      tab: 'players',
+      rankText: '-',
+      percentText: null,
+      score: myTrophyScore(),
+      extraSub: profile.stats.games > 0 ? `${profile.stats.wins} wins` : 'Unranked · play to climb',
+    });
+  }
+
+  function paintCountriesStanding(rows: CountryRow[] | null): void {
+    const code = profile.country;
+    const hit = code && rows ? rows.find((c) => c.code === code) : undefined;
+    if (hit && rows) {
+      const pct = Math.max(1, Math.round((hit.rank / Math.max(1, rows.length)) * 100));
+      paintSoloStanding({
+        tab: 'countries',
+        rankText: `#${hit.rank}`,
+        percentText: `Top ${pct}%`,
+        score: hit.points,
+        extraSub: nameOf(code as string),
+      });
+    } else if (code) {
+      paintSoloStanding({
+        tab: 'countries',
+        rankText: '-',
+        percentText: null,
+        score: 0,
+        extraSub: `${nameOf(code)} · warming up`,
+      });
+    } else {
+      paintSoloStanding({
+        tab: 'countries',
+        rankText: '-',
+        percentText: null,
+        score: myTrophyScore(),
+        extraSub: 'Pick a country in Profile',
+      });
+      const host = soloStandingEl();
+      if (host) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'standing-cta';
+        btn.textContent = 'Set Flag';
+        btn.setAttribute('aria-label', 'Pick your country in Profile');
+        btn.addEventListener('click', () => { impact('light'); api.router.go('profile'); });
+        host.append(btn);
+      }
+    }
   }
 
   async function loadCountries(): Promise<void> {
     const el = lbPanes.countries;
+    if (!el) return;
     if (!loadedLb.countries) el.innerHTML = skel(6);
     let rows: CountryRow[];
     try {
       rows = await getCountryRanking();
     } catch {
       el.innerHTML = empty('Rankings unavailable. Check your connection and try again.');
+      paintCountriesStanding(null);
       return;
     }
     if (!rows.length) {
       el.innerHTML = empty('No countries ranked yet.');
+      paintCountriesStanding([]);
       return;
     }
     el.textContent = '';
     const ol = document.createElement('ol');
     ol.className = 'rank-list';
     for (const c of rows) {
-      ol.append(row(c.rank, flagOf(c.code), `${c.name}`, null, c.points.toLocaleString('en-US'), c.trend, profile.country === c.code));
+      ol.append(row(c.rank, flagOf(c.code), c.code, c.name, null, c.points.toLocaleString('en-US'), c.trend, profile.country === c.code));
     }
     el.append(ol);
-    const mine = profile.country;
-    if (mine) {
-      const hit = rows.find((c) => c.code === mine);
-      const meRow = document.createElement('div');
-      meRow.className = 'rank-row me';
-      meRow.innerHTML = '';
-      const rk = document.createElement('span');
-      rk.className = 'rk';
-      rk.textContent = hit ? String(hit.rank) : '—';
-      const fl = document.createElement('span');
-      fl.className = 'fl';
-      fl.textContent = flagOf(mine);
-      const nm = document.createElement('span');
-      nm.className = 'nm';
-      nm.textContent = `You · ${nameOf(mine)}`;
-      const pt = document.createElement('span');
-      pt.className = 'pt';
-      pt.textContent = hit ? hit.points.toLocaleString('en-US') : '0';
-      meRow.append(rk, fl, nm, pt);
-      pinned(el, meRow);
-    } else {
-      const hint = document.createElement('button');
-      hint.className = 'rank-row rank-pinned hint';
-      hint.type = 'button';
-      hint.textContent = 'Pick your country in Profile to appear here.';
-      hint.setAttribute('aria-label', 'Pick your country in Profile');
-      hint.addEventListener('click', () => { impact('light'); api.router.go('profile'); });
-      el.append(hint);
-    }
+    paintCountriesStanding(rows);
   }
 
   async function loadPlayers(): Promise<void> {
     const el = lbPanes.players;
+    if (!el) return;
     if (!loadedLb.players) el.innerHTML = skel(6);
     let rows: PlayerRow[];
     try {
       rows = await getPlayerRanking();
     } catch {
       el.innerHTML = empty('Rankings unavailable. Check your connection and try again.');
+      paintPlayersStanding();
       return;
     }
     if (!rows.length) {
       el.innerHTML = empty('No players ranked yet.');
+      paintPlayersStanding();
       return;
     }
     el.textContent = '';
     const ol = document.createElement('ol');
     ol.className = 'rank-list';
     rows.forEach((p, i) => {
-      ol.append(row(i + 1, flagOf(p.countryCode), p.name, `${p.wins} wins`, p.points.toLocaleString('en-US'), p.trend, false));
+      ol.append(row(i + 1, flagOf(p.countryCode), p.countryCode, p.name, `${p.wins} wins`, p.points.toLocaleString('en-US'), p.trend, false));
     });
     el.append(ol);
-    const meRow = document.createElement('div');
-    meRow.className = 'rank-row me';
-    const rk = document.createElement('span');
-    rk.className = 'rk';
-    rk.textContent = '—';
-    const fl = document.createElement('span');
-    fl.className = 'fl';
-    fl.textContent = profile.country ? flagOf(profile.country) : '•';
-    const nm = document.createElement('span');
-    nm.className = 'nm';
-    nm.textContent = `You · ${youName()}`;
-    const sub = document.createElement('small');
-    sub.textContent = `${profile.stats.wins} wins · ${profile.stats.games} games`;
-    nm.append(sub);
-    const pt = document.createElement('span');
-    pt.className = 'pt';
-    pt.textContent = (profile.stats.wins * 120 + profile.stats.games * 20).toLocaleString('en-US');
-    meRow.append(rk, fl, nm, pt);
-    pinned(el, meRow);
-  }
-
-  async function loadTeams(): Promise<void> {
-    const el = lbPanes.teams;
-    if (!loadedLb.teams) el.innerHTML = skel(5);
-    let rows: TeamRow[];
-    try {
-      rows = await getTeamRanking();
-    } catch {
-      el.innerHTML = empty('Rankings unavailable. Check your connection and try again.');
-      return;
-    }
-    if (!rows.length) {
-      el.innerHTML = empty('No teams ranked yet.');
-      return;
-    }
-    el.textContent = '';
-    const ol = document.createElement('ol');
-    ol.className = 'rank-list';
-    const mine = myTeam();
-    for (const t of rows) {
-      ol.append(row(t.rank, '🛡', t.name, `${t.code} · ${t.members} members`, t.points.toLocaleString('en-US'), t.trend, mine?.id === t.id || mine?.code === t.code));
-    }
-    el.append(ol);
-    if (mine) {
-      const hit = rows.find((r) => r.id === mine.id || r.code === mine.code);
-      const meRow = document.createElement('div');
-      meRow.className = 'rank-row me';
-      const rk = document.createElement('span');
-      rk.className = 'rk';
-      rk.textContent = hit ? String(hit.rank) : '—';
-      const fl = document.createElement('span');
-      fl.className = 'fl';
-      fl.textContent = '🛡';
-      const nm = document.createElement('span');
-      nm.className = 'nm';
-      nm.textContent = `You · ${mine.name}`;
-      const pt = document.createElement('span');
-      pt.className = 'pt';
-      pt.textContent = hit ? hit.points.toLocaleString('en-US') : '0';
-      meRow.append(rk, fl, nm, pt);
-      pinned(el, meRow);
-    } else {
-      const hint = document.createElement('button');
-      hint.className = 'rank-row rank-pinned hint';
-      hint.type = 'button';
-      hint.textContent = 'Find a team on Home to appear here.';
-      hint.setAttribute('aria-label', 'Find a team on Home');
-      hint.addEventListener('click', () => { impact('light'); api.router.go('home'); });
-      el.append(hint);
-    }
+    paintPlayersStanding();
   }
 
   /* ---------- Telegram Squads: channel/community ranking ---------- */
@@ -1093,7 +1165,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   function paintSquadDock(): void {
     const dock = squadDock();
     if (!dock) return;
-    if (!isRanksVisible()) {
+    // Squad dock is exclusive to the Telegram Squads tab — never in Solo Champions.
+    if (!isRanksVisible() || rankMode !== 'squads') {
       dock.hidden = true;
       return;
     }
@@ -1200,7 +1273,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   onChange(() => {
     loadedLb.countries = false;
     loadedLb.players = false;
-    loadedLb.teams = false;
     loadedArena = false;
     squadsLoaded = false;
     if (isRanksVisible()) {
@@ -1216,9 +1288,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   onSquadChange(() => {
     squadsLoaded = false;
     paintRanksStats();
-    if (isRanksVisible()) {
-      if (rankMode === 'squads') loadSquads();
-      else paintSquadDock();
+    if (isRanksVisible() && rankMode === 'squads') {
+      loadSquads();
     }
   });
 

@@ -450,14 +450,13 @@
           <div class="compete-body ranks-body" data-scroll id="ranks-scroll">
             <div id="ranks-squads" role="tabpanel" aria-label="Telegram Squads"></div>
             <div id="ranks-solo" role="tabpanel" aria-label="Solo Champions" hidden>
-              <div class="seg lb-seg" role="tablist" aria-label="Leaderboard boards">
-                <button class="seg-b" type="button" role="tab" data-lb="players" aria-selected="true">Players</button>
-                <button class="seg-b" type="button" role="tab" data-lb="countries" aria-selected="false">Countries</button>
-                <button class="seg-b" type="button" role="tab" data-lb="teams" aria-selected="false">Teams</button>
+              <div class="seg lb-seg solo-seg" role="tablist" aria-label="Solo Champions boards">
+                <button class="seg-b" type="button" role="tab" data-lb="players" aria-selected="true">Top Players</button>
+                <button class="seg-b" type="button" role="tab" data-lb="countries" aria-selected="false">Top Countries</button>
               </div>
+              <section class="solo-standing" id="solo-standing" aria-label="Your Standing" aria-live="polite"></section>
               <div id="ranks-players" role="tabpanel" aria-label="Top players"></div>
               <div id="ranks-countries" role="tabpanel" aria-label="Top countries" hidden></div>
-              <div id="ranks-teams" role="tabpanel" aria-label="Top teams" hidden></div>
             </div>
           </div>
           <div class="squad-dock" id="ranks-dock" hidden></div>
@@ -1181,6 +1180,85 @@
         </div>
         <div class="sheet-actions sticky">
           <button class="btn btn-primary" type="button" id="mode-start" data-autofocus>Start 1v1 · Normal</button>
+        </div>
+      </section>
+
+      <!-- game mode selector: quick play / friends room / practice -->
+      <section class="sheet tall gm-sheet" id="sheet-game-modes" hidden role="dialog" aria-modal="true" aria-labelledby="gm-title">
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <div class="gm-head">
+          <div class="gm-head-txt">
+            <h2 class="sheet-t left gm-title" id="gm-title">Select Game Mode</h2>
+            <p class="gm-sub">Pick how you want to race</p>
+          </div>
+          <button class="gm-x" type="button" data-sheet-close aria-label="Close game mode selection">×</button>
+        </div>
+        <div class="gm-body" data-scroll>
+          <h3 class="sec-t gm-sec">Quick Play (Online)</h3>
+          <div class="gm-list" role="radiogroup" aria-label="Quick play modes">
+            <button class="gm-card" type="button" data-gmode="duel_1v1" role="radio" aria-checked="false">
+              <span class="gm-ico duel" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
+              <span class="gm-txt">
+                <span class="gm-top"><span class="gm-name">1v1 Duel</span><span class="gm-time">~5s</span></span>
+                <span class="gm-desc">Fast arcade showdown with random players</span>
+                <span class="gm-meta"><span class="gm-reward">🏆 +30</span><span class="gm-reward">🪙 +65</span><span class="gm-tag">Ranked</span></span>
+              </span>
+              <span class="gm-check" aria-hidden="true"><svg class="ico"><use href="#i-check" /></svg></span>
+            </button>
+            <button class="gm-card" type="button" data-gmode="party_2v2" role="radio" aria-checked="false">
+              <span class="gm-ico party" aria-hidden="true"><svg class="ico"><use href="#i-users" /></svg></span>
+              <span class="gm-txt">
+                <span class="gm-top"><span class="gm-name">2v2 Team Party</span><span class="gm-time">~8s</span></span>
+                <span class="gm-desc">4-player team rumble · you + mate vs the world</span>
+                <span class="gm-meta"><span class="gm-reward">🏆 +50</span><span class="gm-reward">🪙 +100</span><span class="gm-tag">Ranked</span></span>
+              </span>
+              <span class="gm-check" aria-hidden="true"><svg class="ico"><use href="#i-check" /></svg></span>
+            </button>
+          </div>
+
+          <h3 class="sec-t gm-sec">Play with Friends (Custom Room) <span class="gm-viral">Viral</span></h3>
+          <div class="gm-room" aria-label="Custom room">
+            <div class="gm-room-row">
+              <span class="gm-room-txt">
+                <b>Create Room</b>
+                <span>Private lobby for friends</span>
+              </span>
+              <button class="btn btn-primary sm gm-btn" type="button" id="gm-create">Create</button>
+            </div>
+            <div class="gm-invite" id="gm-invite" hidden>
+              <div class="gm-code-row">
+                <span class="gm-code-label">Room code</span>
+                <b class="gm-code" id="gm-code" aria-live="polite">0000</b>
+                <button class="gm-copy" type="button" id="gm-copy">Copy</button>
+              </div>
+              <a class="btn btn-coral sm gm-invite-btn" id="gm-invite-btn" href="#" target="_blank" rel="noopener">
+                <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg><span>Invite via Telegram</span>
+              </a>
+              <p class="gm-link" id="gm-link">t.me/bot?start=room_0000</p>
+            </div>
+            <div class="gm-divider" aria-hidden="true"><span>or</span></div>
+            <label class="field gm-join">
+              <svg class="ico" aria-hidden="true"><use href="#i-search" /></svg>
+              <input id="gm-join-input" class="input code" type="text" inputmode="numeric" maxlength="4"
+                placeholder="Enter 4-digit code" autocomplete="off" spellcheck="false" enterkeyhint="go"
+                aria-label="Enter a 4-digit room code" data-input />
+              <button class="btn btn-ghost sm gm-btn" type="button" id="gm-join">Join</button>
+            </label>
+            <p class="pick-empty gm-err" id="gm-err" role="status" hidden></p>
+          </div>
+
+          <h3 class="sec-t gm-sec">Practice &amp; Offline</h3>
+          <div class="gm-list" role="radiogroup" aria-label="Practice modes">
+            <button class="gm-card" type="button" data-gmode="bot" role="radio" aria-checked="false">
+              <span class="gm-ico bot" aria-hidden="true"><svg class="ico"><use href="#i-bot" /></svg></span>
+              <span class="gm-txt">
+                <span class="gm-top"><span class="gm-name">Play vs Bot (Training)</span><span class="gm-time">Instant</span></span>
+                <span class="gm-desc">Safe sandbox mode with zero trophy loss</span>
+                <span class="gm-meta"><span class="gm-reward">🪙 +65</span><span class="gm-tag safe">0 🏆 risk</span></span>
+              </span>
+              <span class="gm-check" aria-hidden="true"><svg class="ico"><use href="#i-check" /></svg></span>
+            </button>
+          </div>
         </div>
       </section>
 

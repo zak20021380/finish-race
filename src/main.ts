@@ -19,6 +19,7 @@ import { menuState, motionReduced } from './settings';
 import { onChange, recordGame, theme } from './storage';
 import { impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
+import { initGameModes } from './gamemodes';
 
 initTelegram();
 applyFlagSupport();
@@ -539,6 +540,7 @@ const shop = createShop({ sheets, sheet: sheetById });
 home = createHome({ router, sheets, start: startGame });
 compete = createCompete({ router, sheets, sheet: sheetById });
 createNotifications({ sheets });
+initGameModes(sheets);
 paintNames();
 ui();
 router.start('home');

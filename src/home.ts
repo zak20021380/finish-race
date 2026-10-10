@@ -35,6 +35,7 @@ import { createRenderer, type View } from './render';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
 import type { RaceSetup } from './menu';
+import { getLobbyDisplay, onGameModeChange, paintLobby as paintGameLobby, paintSheetState as paintGameSheet } from './gamemodes';
 
 export interface HomeApi {
   router: Router;
@@ -538,24 +539,26 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   };
 
   const paintLauncher = (): void => {
-    const label = lastModeLabel();
-    const id = modeIdOf(menuState.sizes);
-    const diff = cap(menuState.difficulty);
-    if (homeSub) homeSub.textContent = label;
+    // Game Mode Selector owns the lobby card: title + TYPE badge (TEAM / RANKED etc).
+    const lobby = getLobbyDisplay();
+    if (homeSub) homeSub.textContent = lobby.sub;
     const titleEl = document.getElementById('home-play-title');
-    if (titleEl) {
-      titleEl.textContent = id === 'custom'
-        ? `Custom ${menuState.sizes[0]}v${menuState.sizes[1]}`
-        : MODE_TITLES[id as ModePreset];
-    }
+    if (titleEl) titleEl.textContent = lobby.title;
     const diffEl = document.getElementById('home-play-diff');
     if (diffEl) {
-      diffEl.textContent = diff;
-      diffEl.setAttribute('data-diff', menuState.difficulty);
+      diffEl.textContent = lobby.badge;
+      diffEl.setAttribute('data-gmode', lobby.id);
+      diffEl.removeAttribute('data-diff');
     }
     const useEl = document.getElementById('mode-hero-use') as SVGUseElement | null;
-    if (useEl) useEl.setAttribute('href', MODE_ICONS[id]);
-    homePlay.setAttribute('aria-label', `Play ${label}`);
+    if (useEl) useEl.setAttribute('href', lobby.icon);
+    homePlay.setAttribute('aria-label', `Play ${lobby.title} — ${lobby.badge}`);
+    // Keep the shared painter in sync for callers that bypass this closure.
+    try {
+      paintGameLobby();
+    } catch {
+      /* DOM not ready */
+    }
   };
 
   const paintSheet = (): void => {
@@ -638,6 +641,21 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     });
   };
 
+  /** Game Mode Selector sheet: the Change key's one door (see gamemodes.ts). */
+  const openGameModes = (): void => {
+    const el = document.getElementById('sheet-game-modes') as HTMLElement | null;
+    if (!el) {
+      openSheet();
+      return;
+    }
+    try {
+      paintGameSheet();
+    } catch {
+      /* paint on open anyway */
+    }
+    api.sheets.open(el);
+  };
+
   for (const b of modeCards) {
     b.addEventListener('click', () => {
       const m = b.dataset.mode;
@@ -695,7 +713,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   modeChange?.addEventListener('click', () => {
     impact('light');
-    openSheet();
+    openGameModes();
   });
 
   /* ---------- identity shortcuts ---------- */
@@ -746,6 +764,11 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     paintLauncher();
     paintSheet();
     paintPreviews();
+  });
+
+  onGameModeChange(() => {
+    paintLauncher();
+    paintSheet();
   });
 
   if (sheetMode) {
