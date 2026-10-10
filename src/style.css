@@ -1691,7 +1691,8 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
 }
 .cta.ghost:focus-visible { outline-color: var(--ink-soft); }
 
-/* very short screens: tighten gaps/padding only — targets stay >= 44px */
+/* very short screens: tighten gaps/padding only — targets stay >= 44px.
+   The 2-row user-bar stays spacious: 12px gaps preserved, only padding steps down. */
 @media (max-height: 600px) {
   .chips { padding-top: var(--s1); }
   .chip { min-height: 44px; }
@@ -1699,6 +1700,7 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   .g-head { min-height: 44px; }
   .tab { min-height: 44px; }
   .id-card { padding: var(--s2) var(--s3) var(--s3); }
+  .id-card.user-bar { padding: 14px; gap: 12px; }
   .avatar { width: 44px; height: 44px; }
   .mode { min-height: 52px; }
   .btn-hero { min-height: 56px; }
@@ -2079,20 +2081,60 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   padding: var(--s4);
 }
 
-/* ---- identity card: who, then where/with whom, then how far along ---- */
+/* ---- identity card: premium Dark Clay arcade HUD, two spacious rows ----
+   Row 1 = identity + tools · Row 2 = squad + progression.
+   Surface: clean --clay-face (#1C2433) with top rim light + deep bottom drop. */
 .id-card {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
+  gap: 12px;
+  padding: 18px;
+  border-radius: 24px;
+  background: var(--clay-face);
+  background-color: #1C2433;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 14px 28px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.35),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.id-card.user-bar {
+  gap: 14px;
 }
 .id-row {
   display: flex;
   align-items: center;
-  gap: var(--s2);
+  gap: 12px;
   min-width: 0;
 }
-/* the avatar's frame is the tile itself: a ring plus a lip, not a border */
+/* Row 1: identity left, tools right — balanced, breathing room */
+.id-row.id-top {
+  justify-content: space-between;
+}
+.id-identity {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* Row 2: squad pill + recessed XP — squad stays prominent, XP fills the rest */
+.id-row.id-bottom {
+  justify-content: space-between;
+  gap: 12px;
+}
+.id-row.id-bottom .squad-pill {
+  flex: none;
+  max-width: 46%;
+}
+.id-row.id-bottom .id-xp {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* the avatar's frame is the tile itself: a ring plus a lip, not a border.
+   3D embossed: deep extrusion + top specular so it pops off the #1C2433 face. */
 .avatar-btn {
   appearance: none;
   border: 0;
@@ -2101,7 +2143,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   flex: none;
   display: grid;
   place-items: center;
-  padding: 0;
+  padding: 0 6px 6px 0;
   border-radius: 34%;
   cursor: pointer;
 }
@@ -2109,8 +2151,31 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 .avatar-btn::after { content: ""; position: absolute; inset: -2px 0; }
 .avatar-btn:hover:not(:active) .avatar { transform: translateY(-1px); }
 .avatar-btn:active .avatar { transform: translateY(2px); }
+.avatar-btn:active { transform: translateY(2px); }
 .avatar-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 4px; }
-.id-card .avatar { width: 44px; height: 44px; font-size: var(--t-2); }
+.id-card .avatar {
+  width: 44px;
+  height: 44px;
+  font-size: var(--t-2);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 3px 0 #080C14,
+    0 10px 18px -8px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 2px var(--brand-soft),
+    inset 0 2px 2px rgba(255, 255, 255, 0.12),
+    inset 0 -3px 4px rgba(0, 0, 0, 0.35);
+}
+/* Lv badge pinned to the avatar corner — floats above the frame */
+.avatar-lvl {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  z-index: 2;
+  padding: 2px 7px;
+  font-size: 10px;
+  line-height: 1.2;
+  pointer-events: none;
+}
 .id-name-btn {
   appearance: none;
   border: 0;
@@ -2168,15 +2233,19 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   white-space: nowrap;
 }
 .lvl-pill b { font-weight: 800; }
-.id-side { flex: none; display: flex; align-items: center; gap: var(--s1); }
-/* the purse: a gold key with a bronze lip, so the balance looks like the thing you spend */
+.id-side { flex: none; display: flex; align-items: center; gap: 8px; }
+/* the purse: a gold key with a bronze lip, so the balance looks like the thing you spend.
+   Now a real button — same tactile travel as the bell + gear. */
 .coin-pill {
   --d: 3px;
+  appearance: none;
+  border: 0;
+  font: inherit;
   display: inline-flex;
   align-items: center;
   gap: var(--s1);
-  min-height: 30px;
-  padding: 0 var(--s2) 1px;
+  min-height: 32px;
+  padding: 0 10px 1px;
   border-radius: var(--radius-pill);
   background: var(--gold-face);
   color: #10141D;
@@ -2184,29 +2253,40 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  cursor: pointer;
   box-shadow:
     0 var(--d) 0 var(--gold-lip),
     0 calc(var(--d) + 5px) 12px -8px rgba(180, 83, 9, .55),
     inset 0 2px 2px rgba(255, 255, 255, .6),
     inset 0 -2px 3px rgba(146, 64, 14, .35);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
 }
+.coin-pill:hover:not(:active) { transform: translateY(-1px); }
+.coin-pill:active { transform: translateY(2px); --d: 0px; }
+.coin-pill:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.user-bar .coin-pill:active { transform: translateY(2px); }
 .coin-pill .coin { width: 1.05em; height: 1.05em; filter: drop-shadow(0 1px 0 rgba(146, 64, 14, .4)); }
 .icon-btn.xs {
   --d: 2px;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-md);
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
   background: var(--clay-face);
   color: var(--chip-ink);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow:
     0 var(--d) 0 #080C14,
     var(--clay-spec), var(--clay-bevel), var(--clay-ring);
 }
 .icon-btn.xs::after { inset: -8px; }
 .icon-btn.xs .ico { width: 18px; height: 18px; }
+.icon-btn.xs:active { transform: translateY(2px); --d: 0px; }
+.user-bar .icon-btn.xs:active,
+.user-bar .notif-bell:active { transform: translateY(2px); }
 
 /* chips: content-sized, so a label only ever ellipsises when the row is genuinely full.
-   They are lighter clay than the card they sit on, and they sink on tap. */
+   They are lighter clay than the card they sit on, and they sink on tap.
+   Squad pill stays prominent for community virality. */
 .id-chips { flex-wrap: wrap; gap: var(--s1); }
 .tag-chip {
   --d: 2px;
@@ -2216,15 +2296,16 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: var(--s1);
+  gap: 6px;
   flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
   margin: 0;
-  padding: 0 var(--s2);
-  min-height: 30px;
+  padding: 0 12px;
+  min-height: 34px;
   border-radius: var(--radius-pill);
   background: linear-gradient(180deg, #232E44 0%, #1C2433 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--chip-ink);
   cursor: pointer;
   box-shadow:
@@ -2235,7 +2316,8 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 }
 .tag-chip::after { content: ""; position: absolute; inset: -9px 0; }
 .tag-chip:hover:not(:active) { transform: translateY(-1px); }
-.tag-chip:active { transform: translateY(var(--press-y)); --d: 0px; }
+.tag-chip:active { transform: translateY(2px); --d: 0px; }
+.user-bar .squad-pill:active { transform: translateY(2px); }
 .tag-chip:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
 .tag-chip .chip-ico { width: 14px; height: 14px; color: var(--brand-ink); }
 .tag-chip-t {
@@ -2265,9 +2347,30 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 }
 .tag-chip.unset .tag-chip-t { text-decoration: underline dotted; text-underline-offset: 3px; }
 
-/* level line: a channel cut into the slab, filled with something glossy */
-.id-xp { gap: var(--s2); }
-.id-xp .bar { height: 10px; }
+/* progression line: sleek recessed channel cut into the slab.
+   Track is deep matte (rgba(0,0,0,0.4)); fill is energetic cyan → indigo. */
+.id-xp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.id-xp .bar {
+  height: 10px;
+  background: rgba(0, 0, 0, 0.4);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+}
+.id-xp .bar i {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(90deg, #22d3ee 0%, #6366f1 100%);
+  box-shadow:
+    0 0 10px rgba(34, 211, 238, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.14);
+}
 .lvl-r {
   font-size: var(--t-micro);
   font-weight: 800;
@@ -2949,10 +3052,12 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 }
 
 /* Short columns — phones, and a 720-high landscape where the vw type ramp has already
-   reached its ceiling while the height has not. */
+   reached its ceiling while the height has not.
+   user-bar keeps its 12px rhythm: the 2-row layout already saved a row, so no cramming. */
 @media (max-height: 760px) {
   .screen.home { gap: var(--s2); }
   .id-card { gap: var(--s1); padding: var(--s2) var(--s4) var(--s3); }
+  .id-card.user-bar { gap: 12px; padding: 14px 18px; }
   .launcher { gap: var(--s2); }
   .mode-hero { min-height: 64px; padding: var(--s2) var(--s3); }
   .mode-hero-ico { width: 42px; height: 42px; border-radius: 14px; }
@@ -2963,12 +3068,14 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 }
 
 /* The 640-and-under phones are the floor of the whole design:
-   every fixed band gives a few pixels so the highlight card keeps its title. */
+   every fixed band gives a few pixels so the highlight card keeps its title.
+   user-bar keeps full padding — its 2 rows are already the compact form. */
 @media (max-height: 660px) {
   .btn-hero { min-height: 52px; }
   .mini-rank li { min-height: 22px; }
   .screen.home { gap: var(--s1); }
   .id-card { padding-bottom: var(--s2); }
+  .id-card.user-bar { padding: 14px 18px; gap: 12px; }
   .launcher { gap: var(--s2); }
   .mode-hero { min-height: 60px; padding: var(--s2); }
   .mode-change-btn { min-width: 84px; }
@@ -2978,10 +3085,12 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 
 /* The floor: 600px of height with the Active Mode Card + PLAY launcher is a
    ~140px launcher, 48px of dots and a card that still has four lines to show.
-   Everything here is chrome — no control drops below its 44px target. */
+   Everything here is chrome — no control drops below its 44px target.
+   user-bar never collapses below 12px gaps. */
 @media (max-height: 600px) {
   .screen.home { gap: 2px; }
   .id-card { gap: 2px; padding-bottom: var(--s1); }
+  .id-card.user-bar { gap: 12px; padding: 12px 14px; }
   .launcher { gap: var(--s2); }
   .mode-hero { min-height: 56px; }
   .mode-hero-ico { width: 38px; height: 38px; }
@@ -3259,6 +3368,288 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
     inset 0 2px 3px rgba(255, 255, 255, .4),
     inset 0 -2px 3px rgba(0, 0, 0, .2);
 }
+
+/* ---- Nations Cup: Global Nations showcase (slide 1) ----
+   Dark Clay / Tactile Slate: #10141D canvas, #1C2433 face, #F8FAFC ink.
+   Card owns a blue/gold ambient glow; rows are distinct recessed tracks
+   (rgba(0,0,0,.3)); podium badges are extruded metal; presses travel
+   translateY only so every interaction stays on the compositor at 60fps.
+   Height contract: head (24px) + 3 x 34px rows + 6px gaps + 40px CTA =
+   the same band the tournament / daily / cup cards fill, so swiping
+   slides never shifts the dots or the launcher. */
+.car-card.nations-cup {
+  position: relative;
+  isolation: isolate;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  gap: 8px;
+  background:
+    radial-gradient(120% 90% at 12% 0%, rgba(56, 189, 248, .20), rgba(56, 189, 248, 0) 55%),
+    radial-gradient(110% 85% at 88% 0%, rgba(245, 158, 11, .18), rgba(245, 158, 11, 0) 60%),
+    linear-gradient(180deg, #202A3E 0%, #1C2433 100%);
+}
+.car-card.nations-cup::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(60% 45% at 50% 108%, rgba(245, 158, 11, .10), rgba(245, 158, 11, 0) 70%);
+  pointer-events: none;
+}
+/* header: energetic globe tile + loud condensed title */
+.nations-kicker {
+  color: var(--ink);
+  gap: var(--s2);
+}
+.nations-ico {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+  color: #fff;
+  box-shadow:
+    0 2px 0 #075985,
+    0 0 12px rgba(56, 189, 248, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .5),
+    inset 0 -2px 3px rgba(0, 0, 0, .22);
+}
+.nations-ico .ico { width: 14px; height: 14px; }
+/* standings: three distinct tactile recessed cards, not one flat list */
+.mini-rank.nations-rank {
+  background: transparent;
+  box-shadow: none;
+  gap: 6px;
+  overflow: visible;
+  border-radius: 0;
+}
+.mini-rank.nations-rank li.nations-row {
+  min-height: 34px;
+  padding: 4px var(--s2);
+  gap: var(--s2);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .5),
+    inset 0 -1px 0 rgba(255, 255, 255, .06),
+    inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+.mini-rank.nations-rank li + li { box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .5),
+    inset 0 -1px 0 rgba(255, 255, 255, .06),
+    inset 0 0 0 1px rgba(255, 255, 255, .05); }
+.mini-rank.nations-rank li.nations-row.me {
+  background: var(--brand-soft);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .32), inset 0 2px 4px rgba(0, 0, 0, .35);
+}
+.mini-rank.nations-rank li.is-error { justify-content: center; color: var(--ink-soft); font-weight: 700; }
+/* podium: 3D tactile metal badges — gold / silver / bronze */
+.mini-rank.nations-rank .rk {
+  --d: 2px;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--field);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow:
+    0 var(--d) 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .12);
+}
+.mini-rank.nations-rank .rk.gold {
+  background: linear-gradient(180deg, #fde68a 0%, #fbbf24 45%, #f59e0b 100%);
+  color: #10141D;
+  box-shadow:
+    0 var(--d) 0 var(--gold-lip),
+    0 0 10px rgba(245, 158, 11, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .65),
+    inset 0 -2px 3px rgba(146, 64, 14, .35);
+}
+.mini-rank.nations-rank .rk.silver {
+  background: linear-gradient(180deg, #f1f5f9 0%, #cbd5e1 45%, #94a3b8 100%);
+  color: #10141D;
+  box-shadow:
+    0 var(--d) 0 #475569,
+    0 0 8px rgba(148, 163, 184, .4),
+    inset 0 1px 0 rgba(255, 255, 255, .7),
+    inset 0 -2px 3px rgba(51, 65, 85, .35);
+}
+.mini-rank.nations-rank .rk.bronze {
+  background: linear-gradient(180deg, #fed7aa 0%, #fdba74 45%, #c2703d 100%);
+  color: #10141D;
+  box-shadow:
+    0 var(--d) 0 #7c3f14,
+    0 0 8px rgba(194, 112, 61, .45),
+    inset 0 1px 0 rgba(255, 255, 255, .6),
+    inset 0 -2px 3px rgba(124, 63, 20, .35);
+}
+.mini-rank.nations-rank li.me .rk { color: inherit; }
+.mini-rank.nations-rank .rk.gold,
+.mini-rank.nations-rank .rk.silver,
+.mini-rank.nations-rank .rk.bronze { color: #10141D; }
+/* identity: flag emblem tile + bold name */
+.mini-rank.nations-rank .fl {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08), inset 0 1px 0 rgba(255, 255, 255, .08);
+  text-align: center;
+}
+.mini-rank.nations-rank .fl .flag { font-size: 18px; line-height: 1; }
+.mini-rank.nations-rank .fl .flag-code {
+  padding: 1px 5px;
+  font-size: 10px;
+}
+.mini-rank.nations-rank .nm { font-weight: 800; color: var(--ink); }
+.mini-rank.nations-rank li.me .nm { color: var(--brand-ink); }
+/* score: trophy + tabular counter */
+.mini-rank.nations-rank .pt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.mini-rank.nations-rank .pt .cup { font-size: 12px; line-height: 1; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); }
+.mini-rank.nations-rank .pt b { font-weight: 900; }
+/* momentum: polished pills — glowing green rise, muted red drop */
+.mini-rank.nations-rank .tr {
+  flex: none;
+  min-width: 28px;
+  height: 20px;
+  padding: 0 7px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  width: auto;
+  text-align: center;
+}
+.mini-rank.nations-rank .tr.up {
+  background: rgba(16, 185, 129, .18);
+  color: var(--mint-ink);
+  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .42), 0 0 8px rgba(16, 185, 129, .45);
+}
+.mini-rank.nations-rank .tr.down {
+  background: rgba(224, 38, 79, .14);
+  color: var(--red-ink);
+  box-shadow: inset 0 0 0 1px rgba(253, 164, 175, .30);
+}
+.mini-rank.nations-rank .tr.same {
+  background: rgba(148, 163, 184, .12);
+  color: var(--ink-soft);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .25);
+}
+/* footer CTA: full-width tactile Dark Clay key, 60fps press */
+.nations-foot { flex: none; display: flex; min-width: 0; }
+.nations-cta {
+  --d: 3px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  flex: 1 1 auto;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 40px;
+  padding: 6px var(--s2) 6px var(--s2);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #232E44 0%, #1C2433 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--ink);
+  cursor: pointer;
+  box-shadow:
+    0 var(--d) 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    inset 0 0 0 1px rgba(255, 255, 255, .06),
+    0 8px 18px -10px rgba(0, 0, 0, .6);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.nations-cta:hover:not(:active) { transform: translateY(-1px); }
+.nations-cta:active { transform: translateY(2px); --d: 0px; }
+.nations-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+/* 44px target without growing the card: vertical tap band only (no horizontal spill) */
+.nations-cta::after { content: ""; position: absolute; inset: -4px 0; }
+.nations-cta-flag {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, .3);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(255, 255, 255, .08);
+}
+.nations-cta-flag .flag { font-size: 16px; line-height: 1; }
+.nations-cta-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  font-size: var(--t-3);
+  font-weight: 800;
+  letter-spacing: -.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.nations-cta-reward {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px 4px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+  color: #10141D;
+  font-size: var(--t-micro);
+  font-weight: 900;
+  white-space: nowrap;
+  box-shadow: 0 2px 0 var(--gold-lip), 0 0 10px rgba(245, 158, 11, .5), inset 0 1px 0 rgba(255, 255, 255, .6);
+}
+.nations-cta-reward .coin { width: 1em; height: 1em; }
+.nations-cta-reward b { font-weight: 900; }
+.nations-cta.is-set .nations-cta-reward {
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .35);
+}
+.nations-cta .chev { flex: none; width: 16px; height: 16px; color: var(--ink-soft); }
+.nations-cta.is-set .chev { color: var(--brand-ink); }
+/* short columns compact with the rest of the carousel — same budget, no shift */
+@media (max-height: 900px) {
+  .car-card.nations-cup { gap: 6px; }
+  .mini-rank.nations-rank { gap: 5px; }
+  .mini-rank.nations-rank li.nations-row { min-height: 32px; }
+  .nations-cta { min-height: 38px; }
+}
+@media (max-height: 660px) {
+  .mini-rank.nations-rank li.nations-row { min-height: 30px; padding: 3px var(--s2); }
+}
+@media (max-height: 600px) {
+  .car-card.nations-cup { gap: 4px; }
+  .mini-rank.nations-rank { gap: 4px; }
+  .mini-rank.nations-rank li.nations-row { min-height: 28px; }
+  .nations-cta { min-height: 36px; }
+}
+html.rm .car-card.nations-cup::before { display: none; }
 
 /* ---- Compete mode toggle: Arena Cups vs Telegram Squads ----
    Two equal keys; each stacks its own caption line. */

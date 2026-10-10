@@ -312,31 +312,120 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   onSquadChange(() => { paintCup(); });
 
-  /* ---------- top countries: 3 rows + the user's row ---------- */
+  /* ---------- Nations Cup: podium rows + gamified country CTA ---------- */
+
+  const PODIUM_CLASS = ['gold', 'silver', 'bronze'] as const;
 
   const rowEl = (c: CountryRow, me: boolean): HTMLLIElement => {
     const li = document.createElement('li');
+    li.classList.add('nations-row');
+    li.classList.add(`rank-${c.rank}`);
     if (me) li.classList.add('me');
+    const pts = c.points.toLocaleString('en-US');
+    const trendLabel = c.trend === 'up' ? 'rising' : c.trend === 'down' ? 'dropping' : 'steady';
+    li.setAttribute('aria-label', `#${c.rank} ${c.name} — ${pts} points, ${trendLabel}`);
     const rk = document.createElement('span');
-    rk.className = 'rk';
+    const podium = c.rank >= 1 && c.rank <= 3 ? PODIUM_CLASS[c.rank - 1] : '';
+    rk.className = podium ? `rk rank-${c.rank} ${podium}` : `rk rank-${c.rank}`;
     rk.textContent = String(c.rank);
+    rk.setAttribute('aria-hidden', 'true');
     const fl = document.createElement('span');
     fl.className = 'fl';
-    fl.textContent = flagOf(c.code);
     fl.setAttribute('aria-hidden', 'true');
+    const flag = document.createElement('span');
+    flag.className = 'flag';
+    flag.textContent = flagOf(c.code);
+    const code = document.createElement('span');
+    code.className = 'flag-code';
+    code.textContent = c.code;
+    fl.append(flag, code);
     const nm = document.createElement('span');
     nm.className = 'nm';
     nm.textContent = c.name;
     nm.title = c.name;
     const pt = document.createElement('span');
     pt.className = 'pt';
-    pt.textContent = c.points.toLocaleString('en-US');
+    const cup = document.createElement('span');
+    cup.className = 'cup';
+    cup.textContent = '🏆';
+    cup.setAttribute('aria-hidden', 'true');
+    const num = document.createElement('b');
+    num.textContent = pts;
+    pt.append(cup, num);
     const tr = document.createElement('span');
     tr.className = `tr ${c.trend}`;
     tr.textContent = trendArrow(c.trend);
+    tr.title = trendLabel;
     tr.setAttribute('aria-hidden', 'true');
     li.append(rk, fl, nm, pt, tr);
     return li;
+  };
+
+  const paintCountryCta = (all: CountryRow[] | null): void => {
+    const cta = document.getElementById('home-country-cta') as HTMLButtonElement | null;
+    const flagEl = document.getElementById('home-country-cta-flag');
+    const codeEl = document.getElementById('home-country-cta-code');
+    const label = document.getElementById('home-country-cta-label');
+    const reward = document.getElementById('home-country-cta-reward');
+    if (!cta || !label || !reward) return;
+    const code = profile.country;
+    const mine = code && all ? all.find((c) => c.code === code) : undefined;
+    if (!code) {
+      if (flagEl) flagEl.textContent = '🌍';
+      if (codeEl) codeEl.textContent = '';
+      label.textContent = 'Represent Your Flag';
+      reward.innerHTML = '<span class="coin coin-xs" data-coin aria-hidden="true"></span><b>+100</b>';
+      cta.classList.remove('is-set');
+      cta.setAttribute('aria-label', 'Represent your flag in Profile — earn 100 coins');
+    } else {
+      const total = all?.length ?? 10;
+      const rank = mine?.rank;
+      const pct = rank ? Math.max(1, Math.round((rank / Math.max(1, total)) * 100)) : null;
+      if (flagEl) flagEl.textContent = flagOf(code);
+      if (codeEl) codeEl.textContent = code;
+      if (mine && rank && pct !== null) {
+        label.textContent = `${nameOf(code)} · #${rank} · Top ${pct}%`;
+        reward.innerHTML = '';
+        const r = document.createElement('b');
+        r.textContent = `#${rank}`;
+        reward.append(r);
+      } else {
+        label.textContent = `${nameOf(code)} · warming up`;
+        reward.innerHTML = '';
+        const r = document.createElement('b');
+        r.textContent = '•';
+        reward.append(r);
+      }
+      cta.classList.add('is-set');
+      cta.setAttribute('aria-label', `Your flag ${nameOf(code)}${rank ? `, ranked #${rank}` : ''} — change country in Profile`);
+    }
+    mountCoins(cta);
+  };
+
+  const openCountryPicker = (): void => {
+    impact('light');
+    poke();
+    try {
+      api.router.go('profile');
+    } catch {
+      /* router unavailable — fall through to the sheet */
+    }
+    // Land on Profile, then pop the country drawer so it is one tap door-to-door.
+    window.setTimeout(() => {
+      const pf = document.getElementById('pf-country') as HTMLButtonElement | null;
+      if (pf && !pf.hidden) {
+        pf.click();
+        return;
+      }
+      const sheet = document.getElementById('sheet-country');
+      if (sheet) {
+        try {
+          api.sheets.open(sheet as HTMLElement);
+        } catch {
+          /* sheet unavailable */
+        }
+      }
+    }, 80);
   };
 
   const loadCountries = async (): Promise<void> => {
@@ -344,29 +433,31 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     try {
       const all = await getCountryRanking();
       const top3 = all.slice(0, 3);
-      const mine = profile.country ? all.find((c) => c.code === profile.country) : undefined;
       list.textContent = '';
       for (const c of top3) {
         list.append(rowEl(c, profile.country === c.code));
       }
-      if (mine && !top3.some((c) => c.code === mine.code)) {
-        list.append(rowEl(mine, true));
-      }
+      const mine = profile.country ? all.find((c) => c.code === profile.country) : undefined;
+      // The footer CTA owns the user's row (rank + Top %) so the card never
+      // grows a 4th line — height stays identical across carousel slides.
+      paintCountryCta(all);
       const note = $('home-country-note');
+      note.hidden = true;
       if (profile.country) {
-        note.hidden = false;
         note.textContent = mine
           ? `You cheer for ${nameOf(profile.country)} (#${mine.rank})`
           : `Your country: ${nameOf(profile.country)}`;
       } else {
-        note.hidden = false;
         note.textContent = 'Pick your country in Profile';
       }
+      mountCoins(list);
     } catch {
       list.textContent = '';
       const li = document.createElement('li');
+      li.className = 'nations-row is-error';
       li.textContent = 'Rankings unavailable';
       list.append(li);
+      paintCountryCta(null);
     }
   };
 
@@ -615,6 +706,8 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   };
   $('avatar-btn').addEventListener('click', goProfile);
   $('home-profile-btn').addEventListener('click', goProfile);
+  document.getElementById('coin-btn')?.addEventListener('click', goProfile);
+  document.getElementById('home-country-cta')?.addEventListener('click', openCountryPicker);
   $('home-settings').addEventListener('click', () => {
     impact('light');
     api.router.go('settings');

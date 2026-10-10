@@ -497,8 +497,8 @@ export function createMenu(api: MenuApi): Menu {
     } catch { /* rack paints on next profile repaint */ }
   }
 
-  /* ---- the entry points: the Home country chip jumps to Profile, where the picker lives ---- */
-  $('country-chip').addEventListener('click', () => { impact('light'); api.router.go('profile'); });
+  /* ---- the entry points: country now lives only in Profile (header pill removed) ---- */
+  document.getElementById('country-chip')?.addEventListener('click', () => { impact('light'); api.router.go('profile'); });
   $('pf-country').addEventListener('click', openCountry);
   $('pf-age').addEventListener('click', openAge);
   ($('age-minus') as HTMLButtonElement).addEventListener('click', () => {
@@ -522,8 +522,10 @@ export function createMenu(api: MenuApi): Menu {
   const pfScreen = $<HTMLElement>('s-profile');
   const eqPv = new Map<CosKind, Preview>();
   const setFlag = (flagId: string, codeId: string, code: string) => {
-    $(flagId).textContent = code ? flagOf(code) : '';
-    $(codeId).textContent = code;
+    const flagEl = document.getElementById(flagId);
+    if (flagEl) flagEl.textContent = code ? flagOf(code) : '';
+    const codeEl = document.getElementById(codeId);
+    if (codeEl) codeEl.textContent = code;
   };
 
   /* Avatar frames for the hero slot: persisted as profile.frame (default | auric | neon). */
@@ -689,8 +691,10 @@ export function createMenu(api: MenuApi): Menu {
     paintBadges();
 
     const c = profile.country;
-    $('country-chip').classList.toggle('unset', !c);
-    $('country-name').textContent = c ? nameOf(c) : 'Add country';
+    // Header country pill was decluttered — Profile owns country now. Guard for legacy DOM.
+    document.getElementById('country-chip')?.classList.toggle('unset', !c);
+    const countryName = document.getElementById('country-name');
+    if (countryName) countryName.textContent = c ? nameOf(c) : 'Add country';
     setFlag('country-flag', 'country-code', c ?? '');
     $('pf-country-v').textContent = c ? nameOf(c) : 'Not set';
     setFlag('pf-flag', 'pf-code', c ?? '');
