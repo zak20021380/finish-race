@@ -338,27 +338,33 @@ export function createMenu(api: MenuApi): Menu {
     notify('warning');
   }
 
-  function paintSquadPill() {
+  function paintSquadPill(): void {
     const me = getMySquad();
     const chip = $<HTMLElement>('team-chip');
     const label = $<HTMLElement>('team-name');
     const rank = $<HTMLElement>('team-count');
     const avatar = $<HTMLElement>('squad-avatar');
+    const ico = document.getElementById('squad-ico');
     if (me) {
       chip.classList.add('bound');
       avatar.hidden = false;
       avatar.textContent = squadLetter(me);
+      if (ico) ico.hidden = true;
       label.textContent = me.handle;
       rank.hidden = false;
-      rank.textContent = `#${me.rank}`;
+      // ONE inline run directly after the name: " · #1" (leading space, never shrinks via CSS).
+      rank.textContent = ` · #${me.rank}`;
       chip.setAttribute('aria-label', `${me.handle}, squad rank ${me.rank}. Open squad.`);
+      chip.title = `${me.handle} · #${me.rank}`;
     } else {
       chip.classList.remove('bound');
       avatar.hidden = true;
+      if (ico) ico.hidden = false;
       label.textContent = 'Join Squad';
       rank.hidden = true;
       rank.textContent = '';
       chip.setAttribute('aria-label', 'Join Squad');
+      chip.title = 'Join Squad';
     }
   }
 
@@ -517,6 +523,10 @@ export function createMenu(api: MenuApi): Menu {
   $('age-clear').addEventListener('click', clearAge);
   $('team-chip').addEventListener('click', openSquad);
   $('pf-team').addEventListener('click', openTeam);
+  document.getElementById('profile-settings')?.addEventListener('click', () => {
+    impact('light');
+    api.router.go('settings');
+  });
 
   /* ---- the record, and what is worn: re-painted whenever the save changes ---- */
   const pfScreen = $<HTMLElement>('s-profile');
@@ -714,19 +724,29 @@ export function createMenu(api: MenuApi): Menu {
     impact('light');
   }
 
-  const paintIdentity = () => {
+  const paintIdentity = (): void => {
     const lv = levelInfo();
     const t = myTeam();
     setBalance($('p-coins'), profile.coins);
     setBalance($('pf-coins'), profile.coins);
     for (const id of ['p-level', 'pf-level']) $(id).textContent = String(lv.n);
-    $('p-xp').textContent = `${lv.got}/${lv.need} XP`;
     $('pf-xp').textContent = `${lv.got}/${lv.need} XP`;
-    const bar = $<HTMLElement>('p-bar');
-    $('p-fill').style.setProperty('--p', `${Math.round((lv.got / lv.need) * 100)}%`);
-    bar.setAttribute('aria-valuenow', String(lv.got));
-    bar.setAttribute('aria-valuemax', String(lv.need));
-    bar.setAttribute('aria-valuetext', `Level ${lv.n}, ${lv.got} of ${lv.need} XP`);
+    /* Home XP ring (r=26, stroke 3, round caps, accent gradient on muted track): replaces the level pill + XP bar. */
+    const RING_C = 2 * Math.PI * 26;
+    const pct: number = lv.need > 0 ? Math.min(1, Math.max(0, lv.got / lv.need)) : 0;
+    const ring = document.getElementById('p-ring') as unknown as SVGCircleElement | null;
+    if (ring) {
+      ring.style.strokeDasharray = String(RING_C);
+      ring.style.strokeDashoffset = String(RING_C * (1 - pct));
+      ring.setAttribute('aria-hidden', 'true');
+    }
+    const avatarBtn = document.getElementById('avatar-btn') as HTMLButtonElement | null;
+    if (avatarBtn) {
+      avatarBtn.setAttribute(
+        'aria-label',
+        `Open profile, Level ${lv.n}, ${lv.got} of ${lv.need} XP`,
+      );
+    }
     paintHeroExtras(lv);
     paintBadges();
 
@@ -738,6 +758,21 @@ export function createMenu(api: MenuApi): Menu {
     setFlag('country-flag', 'country-code', c ?? '');
     $('pf-country-v').textContent = c ? nameOf(c) : 'Not set';
     setFlag('pf-flag', 'pf-code', c ?? '');
+    /* Home name flag: small glyph next to the name when a country is set. */
+    const homeFlag = document.getElementById('home-flag');
+    const homeGlyph = document.getElementById('home-flag-glyph');
+    const homeCode = document.getElementById('home-flag-code');
+    if (homeFlag && homeGlyph && homeCode) {
+      if (c) {
+        homeFlag.hidden = false;
+        homeGlyph.textContent = flagOf(c);
+        homeCode.textContent = c;
+      } else {
+        homeFlag.hidden = true;
+        homeGlyph.textContent = '';
+        homeCode.textContent = '';
+      }
+    }
     /* country reward state: +100 while unclaimed, verified once set+claimed */
     const cReward = $('pf-country-reward');
     const cDone = $('pf-country-done');

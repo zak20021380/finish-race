@@ -16,13 +16,12 @@
  */
 import type { Difficulty } from './bot';
 import { menuState, motionReduced, onSettings, saveMenu } from './settings';
-import { flagOf, nameOf } from './countries';
+import { nameOf } from './countries';
 import {
   formatCountdown,
   getCountryRanking,
   getDailyChallenge,
   getFeaturedTournament,
-  trendArrow,
   type CountryRow,
   type Tournament,
 } from './data';
@@ -144,6 +143,31 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     }
     // contained slider: only the active slide is visible; mark it for state/CSS
     for (const c of slides) c.classList.toggle('is-active', Number(c.dataset.slide) === a);
+    syncDots();
+  };
+
+  /* Dots sit inside the card, centered, 8px from its bottom edge. Every card
+     stretches to the same carousel-row geometry, so one measurement per
+     resize (cached — no scroll-time layout work) is enough. The CSS `bottom`
+     stays as the no-JS fallback. */
+  const dotsBox = document.getElementById('home-dots') as HTMLElement | null;
+  const DOTS_H = 20;
+  const DOTS_GAP = 8;
+  let dotsTop = -1;
+  const syncDots = (): void => {
+    if (!dotsBox) return;
+    const host = dotsBox.parentElement;
+    const card = carousel.querySelector<HTMLElement>('.car-card.is-active') ?? slides[activeSlide()];
+    if (!host || !card) return;
+    const hr = host.getBoundingClientRect();
+    const crd = card.getBoundingClientRect();
+    if (hr.height === 0 || crd.height === 0) return;
+    const top = Math.max(0, crd.bottom - hr.top - DOTS_GAP - DOTS_H);
+    if (Math.abs(top - dotsTop) > 0.5) {
+      dotsTop = top;
+      dotsBox.style.top = `${top}px`;
+      dotsBox.style.bottom = 'auto';
+    }
   };
 
   const goSlide = (i: number): void => {
@@ -194,6 +218,13 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       autoTimer = 0;
     } else poke();
   });
+  // Keep the inside-dots glued to the card bottom across resizes/rotations.
+  try {
+    new ResizeObserver(() => syncDots()).observe(carousel);
+  } catch {
+    /* ResizeObserver unavailable — CSS fallback + paintDots cover it */
+  }
+  window.addEventListener('resize', syncDots);
 
   /* ---------- featured tournament ---------- */
 
@@ -313,9 +344,79 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   onSquadChange(() => { paintCup(); });
 
-  /* ---------- Nations Cup: podium rows + gamified country CTA ---------- */
+  /* ---------- Nations Cup: 44px rows + user row / pick-country CTA ----------
+     Layout only — data (getCountryRanking) and handlers (openCountryPicker)
+     are unchanged. Flags are MIT flag-icons SVGs vendored into
+     src/assets/flags (© Lipis, MIT), rendered lazy in a 28px circle with a
+     monogram fallback. The 2-letter code box is never rendered here. */
 
   const PODIUM_CLASS = ['gold', 'silver', 'bronze'] as const;
+
+  const NATIONS_FLAG_SRC: Record<string, string> = {
+    US: new URL('./assets/flags/us.svg', import.meta.url).href,
+    BR: new URL('./assets/flags/br.svg', import.meta.url).href,
+    JP: new URL('./assets/flags/jp.svg', import.meta.url).href,
+    DE: new URL('./assets/flags/de.svg', import.meta.url).href,
+    IN: new URL('./assets/flags/in.svg', import.meta.url).href,
+    FR: new URL('./assets/flags/fr.svg', import.meta.url).href,
+    GB: new URL('./assets/flags/gb.svg', import.meta.url).href,
+    UA: new URL('./assets/flags/ua.svg', import.meta.url).href,
+    TR: new URL('./assets/flags/tr.svg', import.meta.url).href,
+    ES: new URL('./assets/flags/es.svg', import.meta.url).href,
+  };
+
+  const monogramOf = (name: string): string => {
+    const parts = name.trim().split(/\s+/).filter((p) => p.length > 0);
+    if (parts.length === 0) return '•';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0].slice(0, 1) + parts[1].slice(0, 1)).toUpperCase();
+  };
+
+  const flagCircle = (code: string, name: string): HTMLSpanElement => {
+    const wrap = document.createElement('span');
+    wrap.className = 'flag-circle';
+    wrap.setAttribute('aria-hidden', 'true');
+    const src: string | undefined = NATIONS_FLAG_SRC[code.toUpperCase()];
+    if (src) {
+      const img = document.createElement('img');
+      img.className = 'flag-img';
+      img.src = src;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.draggable = false;
+      img.addEventListener('error', () => {
+        wrap.textContent = '';
+        wrap.classList.add('is-fallback');
+        const mono = document.createElement('span');
+        mono.className = 'flag-mono';
+        mono.textContent = monogramOf(name);
+        wrap.append(mono);
+      });
+      wrap.append(img);
+    } else {
+      wrap.classList.add('is-fallback');
+      const mono = document.createElement('span');
+      mono.className = 'flag-mono';
+      mono.textContent = monogramOf(name);
+      wrap.append(mono);
+    }
+    return wrap;
+  };
+
+  /** Display-only magnitude for the "▲ N" trend (ranking has no move size). */
+  const trendDeltaOf = (code: string): number => {
+    const up = code.toUpperCase();
+    const a: number = up.charCodeAt(0) || 65;
+    const b: number = up.charCodeAt(1) || 65;
+    return ((a + b) % 3) + 1;
+  };
+
+  const trendTextOf = (c: CountryRow): string => {
+    if (c.trend === 'up') return `▲ ${trendDeltaOf(c.code)}`;
+    if (c.trend === 'down') return `▼ ${trendDeltaOf(c.code)}`;
+    return '•';
+  };
 
   const rowEl = (c: CountryRow, me: boolean): HTMLLIElement => {
     const li = document.createElement('li');
@@ -333,30 +434,51 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const fl = document.createElement('span');
     fl.className = 'fl';
     fl.setAttribute('aria-hidden', 'true');
-    const flag = document.createElement('span');
-    flag.className = 'flag';
-    flag.textContent = flagOf(c.code);
-    const code = document.createElement('span');
-    code.className = 'flag-code';
-    code.textContent = c.code;
-    fl.append(flag, code);
+    fl.append(flagCircle(c.code, c.name));
     const nm = document.createElement('span');
     nm.className = 'nm';
     nm.textContent = c.name;
     nm.title = c.name;
     const pt = document.createElement('span');
     pt.className = 'pt';
-    const cup = document.createElement('span');
-    cup.className = 'cup';
-    cup.textContent = '🏆';
-    cup.setAttribute('aria-hidden', 'true');
     const num = document.createElement('b');
     num.textContent = pts;
-    pt.append(cup, num);
+    pt.append(num);
+    pt.title = `${pts} points`;
     const tr = document.createElement('span');
     tr.className = `tr ${c.trend}`;
-    tr.textContent = trendArrow(c.trend);
+    tr.textContent = trendTextOf(c);
     tr.title = trendLabel;
+    tr.setAttribute('aria-hidden', 'true');
+    li.append(rk, fl, nm, pt, tr);
+    return li;
+  };
+
+  const userPlaceholderRow = (code: string): HTMLLIElement => {
+    const li = document.createElement('li');
+    li.classList.add('nations-row', 'me', 'is-user');
+    const label = nameOf(code);
+    li.setAttribute('aria-label', `${label} — warming up`);
+    const rk = document.createElement('span');
+    rk.className = 'rk rank-na';
+    rk.textContent = '–';
+    rk.setAttribute('aria-hidden', 'true');
+    const fl = document.createElement('span');
+    fl.className = 'fl';
+    fl.setAttribute('aria-hidden', 'true');
+    fl.append(flagCircle(code, label));
+    const nm = document.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = label;
+    nm.title = label;
+    const pt = document.createElement('span');
+    pt.className = 'pt';
+    const num = document.createElement('b');
+    num.textContent = '–';
+    pt.append(num);
+    const tr = document.createElement('span');
+    tr.className = 'tr same';
+    tr.textContent = '•';
     tr.setAttribute('aria-hidden', 'true');
     li.append(rk, fl, nm, pt, tr);
     return li;
@@ -364,41 +486,26 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   const paintCountryCta = (all: CountryRow[] | null): void => {
     const cta = document.getElementById('home-country-cta') as HTMLButtonElement | null;
-    const flagEl = document.getElementById('home-country-cta-flag');
-    const codeEl = document.getElementById('home-country-cta-code');
     const label = document.getElementById('home-country-cta-label');
     const reward = document.getElementById('home-country-cta-reward');
     if (!cta || !label || !reward) return;
+    void all;
     const code = profile.country;
-    const mine = code && all ? all.find((c) => c.code === code) : undefined;
+    const foot = cta.closest('.nations-foot') as HTMLElement | null;
     if (!code) {
-      if (flagEl) flagEl.textContent = '🌍';
-      if (codeEl) codeEl.textContent = '';
-      label.textContent = 'Represent Your Flag';
+      cta.hidden = false;
+      if (foot) foot.hidden = false;
+      label.textContent = 'Pick your country';
       reward.innerHTML = '<span class="coin coin-xs" data-coin aria-hidden="true"></span><b>+100</b>';
       cta.classList.remove('is-set');
-      cta.setAttribute('aria-label', 'Represent your flag in Profile — earn 100 coins');
+      cta.setAttribute('aria-label', 'Pick your country in Profile — earn 100 coins');
     } else {
-      const total = all?.length ?? 10;
-      const rank = mine?.rank;
-      const pct = rank ? Math.max(1, Math.round((rank / Math.max(1, total)) * 100)) : null;
-      if (flagEl) flagEl.textContent = flagOf(code);
-      if (codeEl) codeEl.textContent = code;
-      if (mine && rank && pct !== null) {
-        label.textContent = `${nameOf(code)} · #${rank} · Top ${pct}%`;
-        reward.innerHTML = '';
-        const r = document.createElement('b');
-        r.textContent = `#${rank}`;
-        reward.append(r);
-      } else {
-        label.textContent = `${nameOf(code)} · warming up`;
-        reward.innerHTML = '';
-        const r = document.createElement('b');
-        r.textContent = '•';
-        reward.append(r);
-      }
+      // Country set: the 4th user row owns the rank — no footer button, and
+      // the empty foot hides so its flex gap cannot push the 4th row out.
+      cta.hidden = true;
+      if (foot) foot.hidden = true;
       cta.classList.add('is-set');
-      cta.setAttribute('aria-label', `Your flag ${nameOf(code)}${rank ? `, ranked #${rank}` : ''} — change country in Profile`);
+      cta.setAttribute('aria-label', `Your flag ${nameOf(code)} — change country in Profile`);
     }
     mountCoins(cta);
   };
@@ -438,9 +545,17 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       for (const c of top3) {
         list.append(rowEl(c, profile.country === c.code));
       }
-      const mine = profile.country ? all.find((c) => c.code === profile.country) : undefined;
-      // The footer CTA owns the user's row (rank + Top %) so the card never
-      // grows a 4th line — height stays identical across carousel slides.
+      const code = profile.country;
+      const mine = code ? all.find((c) => c.code === code) : undefined;
+      if (code) {
+        // User row is the 4th line with its real rank (accent border via .me).
+        // Dedupe: when the user is already top-3 the loop above owns the highlight.
+        const inTop3 = top3.some((c) => c.code === code);
+        if (!inTop3) {
+          list.append(mine ? rowEl(mine, true) : userPlaceholderRow(code));
+        }
+      }
+      // Footer CTA only when no country is set; otherwise the 4th row owns it.
       paintCountryCta(all);
       const note = $('home-country-note');
       note.hidden = true;
@@ -727,7 +842,8 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   $('home-profile-btn').addEventListener('click', goProfile);
   document.getElementById('coin-btn')?.addEventListener('click', goProfile);
   document.getElementById('home-country-cta')?.addEventListener('click', openCountryPicker);
-  $('home-settings').addEventListener('click', () => {
+  /* Settings gear now lives in the Profile header — keep a guarded hook for legacy DOM. */
+  document.getElementById('home-settings')?.addEventListener('click', () => {
     impact('light');
     api.router.go('settings');
   });

@@ -196,45 +196,44 @@
         <!-- ---------------- home ---------------- -->
         <section class="screen home" id="s-home" data-screen="home" tabindex="-1" aria-labelledby="home-title">
           <h1 id="home-title" hidden>Play</h1>
-          <header class="id-card user-bar">
-            <div class="id-row id-top">
-              <div class="id-identity">
-                <button class="avatar-btn" type="button" id="avatar-btn" aria-label="Open profile">
-                  <span class="avatar" id="avatar" aria-hidden="true">
-                    <img id="avatar-img" alt="" hidden />
-                    <span id="avatar-t">P</span>
-                  </span>
+          <header class="id-card id-compact" id="home-id-card">
+            <button class="avatar-btn id-avatar-btn" type="button" id="avatar-btn" aria-label="Open profile, Level 1, 0 of 10 XP">
+              <span class="id-avatar-ring" aria-hidden="true">
+                <svg class="id-ring" viewBox="0 0 56 56" focusable="false">
+                  <defs>
+                    <linearGradient id="id-ring-grad" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0" stop-color="#38bdf8" />
+                      <stop offset="1" stop-color="#10b981" />
+                    </linearGradient>
+                  </defs>
+                  <circle class="id-ring-track" cx="28" cy="28" r="26" />
+                  <circle class="id-ring-fill" id="p-ring" cx="28" cy="28" r="26" />
+                </svg>
+                <span class="avatar id-avatar" id="avatar">
+                  <img id="avatar-img" alt="" hidden />
+                  <span id="avatar-t">P</span>
+                </span>
+                <span class="id-lvl" aria-hidden="true"><b id="p-level">1</b></span>
+              </span>
+            </button>
+            <div class="id-mid">
+              <div class="id-name-row">
+                <button class="id-name-btn" type="button" id="home-profile-btn" aria-label="Open profile">
+                  <span class="player-name id-name" id="p-name">Player</span>
                 </button>
-                <div class="player-info">
-                  <div class="name-row">
-                    <button class="id-name-btn" type="button" id="home-profile-btn" aria-label="Open profile">
-                      <span class="player-name id-name" id="p-name">Player</span>
-                    </button>
-                    <span class="lvl-badge lvl-pill">Lv&nbsp;<b id="p-level">1</b></span>
-                  </div>
-                  <div class="id-xp">
-                    <span class="bar thin" role="progressbar" id="p-bar" aria-label="Progress to the next level" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><i id="p-fill"></i></span>
-                    <span class="lvl-r" id="p-xp">0/10 XP</span>
-                  </div>
-                </div>
+                <span class="id-flag" id="home-flag" hidden aria-hidden="true"><span class="flag" id="home-flag-glyph"></span><span class="flag-code" id="home-flag-code"></span></span>
               </div>
-              <div class="id-side">
-                <button class="coin-pill" type="button" id="coin-btn" aria-label="Open profile — coin balance"><span class="coin" data-coin aria-hidden="true"></span><span id="p-coins">0</span></button>
-                <button class="icon-btn xs notif-bell" type="button" id="home-notifs" aria-label="Open notifications">
-                  <svg class="ico" aria-hidden="true"><use href="#i-bell" /></svg>
-                  <span class="notif-badge" id="notif-badge" aria-hidden="true" hidden></span>
-                </button>
-                <button class="icon-btn xs" type="button" id="home-settings" aria-label="Open settings">
-                  <svg class="ico" aria-hidden="true"><use href="#i-tune" /></svg>
-                </button>
-              </div>
+              <button class="id-team" type="button" id="team-chip" aria-haspopup="dialog" aria-label="Join Squad">
+                <span class="squad-avatar id-team-av" id="squad-avatar" hidden aria-hidden="true">S</span>
+                <svg class="ico chip-ico id-team-ico" id="squad-ico" aria-hidden="true"><use href="#i-send" /></svg>
+                <span class="id-team-line"><span class="id-team-t" id="team-name">Join Squad</span><span class="id-team-rank" id="team-count" hidden></span></span>
+              </button>
             </div>
-            <div class="id-row id-bottom squad-bar">
-              <button class="tag-chip squad-pill" type="button" id="team-chip" aria-haspopup="dialog" aria-label="Join Squad">
-                <span class="squad-avatar" id="squad-avatar" hidden aria-hidden="true">S</span>
-                <svg class="ico chip-ico" id="squad-ico" aria-hidden="true"><use href="#i-send" /></svg>
-                <span class="tag-chip-t" id="team-name">Join Squad</span>
-                <span class="rank-pill" id="team-count" hidden></span>
+            <div class="id-side">
+              <button class="coin-pill id-coin" type="button" id="coin-btn" aria-label="Open profile — coin balance"><span class="coin" data-coin aria-hidden="true"></span><span id="p-coins">0</span></button>
+              <button class="icon-btn xs notif-bell id-bell" type="button" id="home-notifs" aria-label="Open notifications">
+                <svg class="ico" aria-hidden="true"><use href="#i-bell" /></svg>
+                <span class="notif-badge id-dot" id="notif-badge" hidden></span>
               </button>
             </div>
           </header>
@@ -268,8 +267,9 @@
                 </div>
               </article>
               <article class="car-card nations-cup" data-slide="1" aria-label="Nations Cup global standings">
-                <div class="car-head">
+                <div class="car-head nations-head">
                   <span class="car-kicker nations-kicker"><span class="nations-ico" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-globe" /></svg></span> Nations Cup</span>
+                  <span class="nations-weekly">Weekly</span>
                 </div>
                 <ol class="mini-rank nations-rank" id="home-countries">
                   <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
@@ -277,11 +277,10 @@
                   <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
                 </ol>
                 <div class="nations-foot">
-                  <button class="nations-cta" type="button" id="home-country-cta" aria-haspopup="dialog" aria-label="Set your country in Profile — earn 100 coins">
-                    <span class="nations-cta-flag" aria-hidden="true"><span class="flag" id="home-country-cta-flag"></span><span class="flag-code" id="home-country-cta-code"></span></span>
-                    <span class="nations-cta-label" id="home-country-cta-label">Represent Your Flag</span>
+                  <button class="nations-cta" type="button" id="home-country-cta" aria-haspopup="dialog" aria-label="Pick your country in Profile — earn 100 coins">
+                    <span class="nations-cta-flag" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-flag" /></svg></span>
+                    <span class="nations-cta-label" id="home-country-cta-label">Pick your country</span>
                     <span class="nations-cta-reward" id="home-country-cta-reward"><span class="coin coin-xs" data-coin aria-hidden="true"></span><b>+100</b></span>
-                    <svg class="ico chev" aria-hidden="true"><use href="#i-next" /></svg>
                   </button>
                   <p class="car-note" id="home-country-note" hidden></p>
                 </div>
@@ -647,7 +646,9 @@
               <svg class="ico" aria-hidden="true"><use href="#i-back" /></svg>
             </button>
             <h1 class="m-title" id="profile-title">Profile</h1>
-            <span class="m-head-pad" aria-hidden="true"></span>
+            <button class="icon-btn" type="button" id="profile-settings" aria-label="Open settings">
+              <svg class="ico" aria-hidden="true"><use href="#i-tune" /></svg>
+            </button>
           </div>
           <div class="pane pf-pane" data-scroll>
             <div class="p-card wide pf-hero pf-hero-v2">

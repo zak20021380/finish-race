@@ -297,8 +297,10 @@ export function createNotifications(deps: NotificationsDeps): { refresh(): void 
   const paintBadge = (): void => {
     const unread = getUnreadCount();
     if (badge) {
+      /* Card carries a dot only — the numeric count lives in the sheet (#notif-count). */
       badge.hidden = unread === 0;
-      badge.textContent = unread > 9 ? '9+' : String(unread);
+      badge.textContent = '';
+      badge.setAttribute('aria-hidden', 'true');
     }
     if (bell) {
       bell.classList.toggle('has-unread', unread > 0);
