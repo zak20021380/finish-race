@@ -19,7 +19,7 @@ import { menuState, motionReduced } from './settings';
 import { onChange, recordGame, theme } from './storage';
 import { impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
-import { initGameModes } from './gamemodes';
+import { gmBack, initGameModes } from './gamemodes';
 
 initTelegram();
 applyFlagSupport();
@@ -137,7 +137,11 @@ const setBackButton = onBackPress(() => onBack());
 
 function onBack() {
   impact('light');
-  if (sheets.isOpen) { sheets.close(); return; }
+  if (sheets.isOpen) {
+    // the game-mode drawer's friends pane unwinds one step before the drawer does
+    if (!gmBack()) sheets.close();
+    return;
+  }
   if (router.current === 'game') {
     if (state.winner !== null) { quitToMenu(); return; }
     pauseGame();
@@ -540,7 +544,10 @@ const shop = createShop({ sheets, sheet: sheetById });
 home = createHome({ router, sheets, start: startGame });
 compete = createCompete({ router, sheets, sheet: sheetById });
 createNotifications({ sheets });
-initGameModes(sheets);
+initGameModes(sheets, {
+  /* the drawer already persisted sizes + difficulty, so the race it names is the race it runs */
+  onStart: () => startGame({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] }),
+});
 paintNames();
 ui();
 router.start('home');

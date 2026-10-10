@@ -6230,15 +6230,20 @@ html.rm .arena-hero-backlight { display: none; }
 
 /* ==========================================================================
    GAME MODE SELECTOR — bottom sheet triggered by the lobby Change key.
+   Three large rows (Quick match / Play with friends / Practice vs Bot), the
+   room UI on its own sub-screen, one reward caption and one sticky Start.
    Canvas #10141D, surface Dark Clay #1C2433, 24px top corners, ink #F8FAFC.
-   Three uncluttered sections: Quick Play / Friends Room (viral) / Practice.
    Motion stays on transform/opacity so every press runs at 60fps.
    ========================================================================== */
 
-/* ---- surface: Dark Clay #1C2433, 24px top corners, smooth entry ---- */
+/* ---- surface: Dark Clay #1C2433, 24px top corners, 85dvh, safe-area aware ---- */
 #sheet-game-modes,
 .gm-sheet {
   border-radius: 24px 24px 0 0;
+  /* the drawer never grows past 85dvh; .sheet's padding already carries the
+     safe-area insets, so the content sits above the home indicator */
+  max-height: 85vh;
+  max-height: 85dvh;
   background: #1C2433;
   background-color: #1C2433;
   box-shadow:
@@ -6250,13 +6255,12 @@ html.rm .arena-hero-backlight { display: none; }
 /* entry transition lives on .sheet (transform var(--motion-med)); this keeps it explicit */
 #sheet-game-modes { transition: transform var(--motion-med); }
 
-/* ---- header: title + clean close key ---- */
+/* ---- header: title, one back key for the sub-screen, one close key ---- */
 .gm-head {
   flex: none;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--s3);
+  align-items: center;
+  gap: var(--s2);
 }
 .gm-head-txt { flex: 1 1 auto; min-width: 0; }
 .gm-title.sheet-t { margin: 0; text-align: left; }
@@ -6265,14 +6269,18 @@ html.rm .arena-hero-backlight { display: none; }
   font-size: var(--t-micro);
   font-weight: 700;
   color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.gm-x {
+/* 44px clay keys: the back arrow only exists on the friends sub-screen */
+.gm-key {
   --d: 3px;
   appearance: none;
   border: 0;
   flex: none;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   padding: 0;
@@ -6289,16 +6297,15 @@ html.rm .arena-hero-backlight { display: none; }
     var(--clay-ring);
   transition: transform var(--motion-fast), box-shadow var(--motion-fast);
 }
-.gm-x:hover:not(:active) { transform: translateY(-1px); }
-.gm-x:active { transform: translateY(2px); --d: 0px; }
-.gm-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.gm-key .ico { width: 20px; height: 20px; }
+.gm-key:hover:not(:active) { transform: translateY(-1px); }
+.gm-key:active { transform: translateY(2px); --d: 0px; }
+.gm-key:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
-/* ---- body: the one scroll in the drawer, chrome-free ---- */
+/* ---- body: the one region that may scroll, chrome-free and header-free ---- */
 .gm-body {
   flex: 1 1 auto;
   min-height: 0;
-  max-height: 62vh;
-  max-height: 62dvh;
   display: flex;
   flex-direction: column;
   gap: var(--s2);
@@ -6312,51 +6319,29 @@ html.rm .arena-hero-backlight { display: none; }
   margin: 0 -2px;
 }
 .gm-body::-webkit-scrollbar { display: none; width: 0; height: 0; }
-.gm-sec { margin-top: var(--s2); }
-.gm-sec:first-child { margin-top: 0; }
-.gm-viral {
-  flex: none;
-  padding: 2px 8px 3px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
-  color: #10141D;
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  box-shadow: 0 2px 0 var(--gold-lip), 0 0 10px rgba(245, 158, 11, .5);
-}
-
-/* ---- mode cards: tactile clay rows, 3D icon left, rewards + search time ---- */
+.gm-view { flex: none; display: flex; flex-direction: column; gap: var(--s2); }
 .gm-list { display: flex; flex-direction: column; gap: var(--s2); }
+
+/* ---- mode rows: one glass card, a 76px pick, and the option strip inside ---- */
 .gm-card {
-  appearance: none;
-  border: 2px solid transparent;
-  font: inherit;
-  cursor: pointer;
   position: relative;
   display: flex;
-  align-items: center;
-  gap: var(--s3);
-  width: 100%;
-  min-height: 76px;
-  padding: var(--s3);
+  flex-direction: column;
+  gap: var(--s2);
+  padding: 6px;
+  border: 2px solid transparent;
   border-radius: var(--radius-md);
-  background: linear-gradient(180deg, #202A3E 0%, #1C2433 100%);
   background-color: #1C2433;
-  box-shadow: var(--clay), var(--clay-ring);
-  color: var(--ink);
-  text-align: left;
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast), border-color var(--motion-fast), background var(--motion-fast);
+  background-image:
+    linear-gradient(180deg, #202A3E 0%, #1C2433 100%) padding-box,
+    linear-gradient(180deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .04)) border-box;
+  box-shadow: var(--glass-border-top), var(--glass-border), var(--clay);
+  transition: box-shadow var(--motion-fast), background-image var(--motion-fast), border-color var(--motion-fast);
 }
-.gm-card:hover:not(:active) { transform: translateY(-1px); }
-.gm-card:active { transform: scale(0.98); }
-.gm-card:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-/* active: cyan / electric-blue clay glow border */
-.gm-card.is-active,
-.gm-card[aria-checked="true"] {
-  border-color: rgba(56, 189, 248, .85);
-  background:
+/* selected: gradient border + the check badge inside the same row */
+.gm-card.is-active {
+  border-color: transparent;
+  background-image:
     linear-gradient(180deg, #232E46 0%, #1C2433 100%) padding-box,
     linear-gradient(135deg, #0284c7, #38bdf8) border-box;
   box-shadow:
@@ -6365,6 +6350,31 @@ html.rm .arena-hero-backlight { display: none; }
     0 0 22px -4px rgba(56, 189, 248, .55),
     inset 0 1px 0 rgba(255, 255, 255, .1);
 }
+/* the pick is the whole row: icon, title, one line, check badge */
+.gm-pick {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  min-height: 60px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  transition: transform var(--motion-fast), opacity var(--motion-fast);
+}
+.gm-pick:hover:not(:active) { opacity: .92; }
+.gm-pick:active { transform: scale(.98); }
+.gm-pick:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.gm-pick[disabled] { opacity: .55; cursor: default; }
+.gm-pick[disabled]:active { transform: none; }
+/* gradient icon badge: dark glass well with the mode's own tinted halo */
 .gm-ico {
   flex: none;
   width: 52px;
@@ -6380,13 +6390,10 @@ html.rm .arena-hero-backlight { display: none; }
 }
 .gm-ico .ico { width: 26px; height: 26px; }
 .gm-ico.duel { color: #FCD34D; box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 0 0 1px rgba(252,211,77,.32), 0 0 14px -2px rgba(245,158,11,.45); }
-.gm-ico.party { color: var(--brand-ink); box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 0 0 1px rgba(125,211,252,.32), 0 0 14px -2px rgba(56,189,248,.45); }
+.gm-ico.room { color: #FFB59D; box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,82,43,.34), 0 0 14px -2px rgba(255,82,43,.45); }
 .gm-ico.bot { color: var(--mint-ink); box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 0 0 1px rgba(110,231,183,.3), 0 0 14px -2px rgba(16,185,129,.4); }
-.gm-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.gm-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); min-width: 0; }
+.gm-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .gm-name {
-  flex: 1 1 auto;
-  min-width: 0;
   font-size: var(--t-2);
   font-weight: 800;
   letter-spacing: -.01em;
@@ -6395,15 +6402,7 @@ html.rm .arena-hero-backlight { display: none; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.gm-card.is-active .gm-name, .gm-card[aria-checked="true"] .gm-name { color: var(--brand-ink); }
-.gm-time {
-  flex: none;
-  font-size: var(--t-micro);
-  font-weight: 800;
-  color: var(--ink-soft);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
+.gm-card.is-active .gm-name { color: var(--brand-ink); }
 .gm-desc {
   display: block;
   font-size: var(--t-micro);
@@ -6414,83 +6413,66 @@ html.rm .arena-hero-backlight { display: none; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.gm-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
-.gm-reward {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: var(--t-micro);
-  font-weight: 800;
-  color: var(--honey-ink);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.gm-tag {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px 3px;
-  border-radius: var(--radius-pill);
-  background: var(--brand-soft);
-  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .3);
-  color: var(--brand-ink);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.gm-tag.safe {
-  background: var(--mint-soft);
-  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .32);
-  color: var(--mint-ink);
-}
+/* check badge: lives in the row, so the title can never sit under it */
 .gm-check {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+  flex: none;
   display: none;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   background: var(--brand-fill);
   color: var(--on-brand);
   box-shadow: 0 2px 0 var(--brand-lip), 0 6px 12px -6px var(--brand-glow);
 }
-.gm-check .ico { width: 14px; height: 14px; }
-.gm-card.is-active .gm-check, .gm-card[aria-checked="true"] .gm-check { display: grid; }
+.gm-check .ico { width: 15px; height: 15px; }
+.gm-card.is-active .gm-check { display: grid; }
 
-/* ---- friends room: dedicated clay card with create + join ---- */
+/* ---- option strip inside the selected row: segmented control + wait ---- */
+.gm-seg {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 0 6px 6px;
+}
+.gm-seg .seg { flex: 1 1 auto; min-width: 0; }
+.gm-wait {
+  flex: none;
+  padding: 5px var(--s2);
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+  color: var(--ink-soft);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.gm-seg .seg-b { min-height: 44px; }
+
+/* ---- friends sub-screen: create a room, or join one with a 4-digit code ---- */
 .gm-room {
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
+  gap: var(--s3);
   padding: var(--s3);
+  border: 2px solid transparent;
   border-radius: var(--radius-md);
-  background: linear-gradient(180deg, #202A3E 0%, #1C2433 100%);
   background-color: #1C2433;
-  box-shadow: var(--clay), var(--clay-ring);
+  background-image:
+    linear-gradient(180deg, #202A3E 0%, #1C2433 100%) padding-box,
+    linear-gradient(180deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .04)) border-box;
+  box-shadow: var(--glass-border-top), var(--glass-border), var(--clay);
 }
-.gm-room.is-active {
-  border: 2px solid rgba(56, 189, 248, .85);
-  box-shadow:
-    var(--clay),
-    0 0 22px -4px rgba(56, 189, 248, .55),
-    inset 0 1px 0 rgba(255, 255, 255, .1);
-}
-.gm-room-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-width: 0; }
-.gm-room-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.gm-room-txt b { font-size: var(--t-2); font-weight: 800; color: var(--ink); }
-.gm-room-txt span { font-size: var(--t-micro); font-weight: 600; color: var(--ink-soft); }
-.gm-btn { flex: none; }
-.gm-room:active { transform: none; }
+.gm-create { width: 100%; }
 .gm-invite { display: flex; flex-direction: column; gap: var(--s2); }
 .gm-invite[hidden] { display: none; }
 .gm-code-row {
   display: flex;
   align-items: center;
   gap: var(--s2);
-  padding: var(--s2) var(--s3);
+  min-height: 44px;
+  padding: var(--s1) var(--s3);
   border-radius: var(--radius-sm);
   background: var(--field);
   box-shadow: var(--inset);
@@ -6509,7 +6491,8 @@ html.rm .arena-hero-backlight { display: none; }
   border: 0;
   font: inherit;
   flex: none;
-  min-height: 36px;
+  min-height: 44px;
+  min-width: 44px;
   padding: 0 var(--s3);
   border-radius: var(--radius-pill);
   background: var(--brand-soft);
@@ -6532,13 +6515,53 @@ html.rm .arena-hero-backlight { display: none; }
   word-break: break-all;
   font-variant-numeric: tabular-nums;
 }
-.gm-divider { display: flex; align-items: center; gap: var(--s2); color: var(--ink-soft); }
-.gm-divider::before, .gm-divider::after { content: ""; flex: 1 1 auto; height: 1px; background: var(--sep); }
-.gm-divider span { font-size: var(--t-micro); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-.gm-join { width: 100%; }
-.gm-join .gm-btn { flex: none; }
-.gm-err { margin: 0; }
+/* join: a label, a 4-digit field and one Join key — no divider anywhere */
+.gm-join { display: flex; flex-direction: column; gap: var(--s2); }
+.gm-join-l {
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.gm-join-row { display: flex; align-items: center; gap: var(--s2); }
+.gm-join-field { flex: 1 1 auto; min-width: 0; }
+.gm-join-field .input { text-align: center; }
+.gm-join-btn { flex: none; min-width: 88px; }
+.gm-err { margin: 0; font-size: var(--t-micro); font-weight: 700; }
 .gm-err:not([hidden]) { color: var(--danger); }
+
+/* ---- sticky footer: one reward caption for the selected mode, one Start ---- */
+.gm-foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.gm-rewards {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin: 0;
+  min-height: 18px;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+.gm-lead { text-transform: uppercase; letter-spacing: .06em; }
+.gm-rw {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.gm-rw b { font-size: var(--t-micro); font-weight: 900; color: var(--ink); }
+.gm-rw .ico { width: 14px; height: 14px; color: var(--honey-ink); }
+.gm-rw .coin { width: 14px; height: 14px; }
+.gm-start { width: 100%; }
 
 /* lobby type badge: TEAM / RANKED etc ride the same pill, tinted per mode */
 .diff-badge[data-gmode="duel_1v1"] {
@@ -6562,15 +6585,10 @@ html.rm .arena-hero-backlight { display: none; }
   color: #FFB59D;
 }
 
-/* short columns keep every key on target */
+/* short columns: the drawer already caps at 85dvh, so only the badge shrinks */
 @media (max-height: 700px) {
-  .gm-body { max-height: 56vh; max-height: 56dvh; }
-  .gm-card { min-height: 68px; padding: var(--s2) var(--s3); }
   .gm-ico { width: 46px; height: 46px; border-radius: 15px; }
+  .gm-ico .ico { width: 23px; height: 23px; }
 }
-@media (max-width: 380px) {
-  .gm-desc { white-space: normal; overflow: visible; text-overflow: clip; }
-  .gm-top { align-items: center; }
-}
-html.rm .gm-card, html.rm .gm-x, html.rm .gm-copy { transition: none; }
+html.rm .gm-pick, html.rm .gm-key, html.rm .gm-copy, html.rm .gm-card { transition: none; }
 

@@ -35,7 +35,7 @@ import { createRenderer, type View } from './render';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
 import type { RaceSetup } from './menu';
-import { getLobbyDisplay, onGameModeChange, paintLobby as paintGameLobby, paintSheetState as paintGameSheet } from './gamemodes';
+import { getLobbyDisplay, onGameModeChange, paintLobby as paintGameLobby, paintSheetState as paintGameSheet, resetSheetView } from './gamemodes';
 
 export interface HomeApi {
   router: Router;
@@ -649,6 +649,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       return;
     }
     try {
+      resetSheetView();          // always opens on the three rows
       paintGameSheet();
     } catch {
       /* paint on open anyway */
