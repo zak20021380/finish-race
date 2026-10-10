@@ -968,6 +968,28 @@
         </div>
       </section>
 
+      <!-- language: clay bottom drawer with the 5 supported locales -->
+      <section class="sheet lang-sheet" id="sheet-lang" hidden role="dialog" aria-modal="true" aria-labelledby="lang-title">
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <h2 class="sheet-t" id="lang-title" data-i18n="chooseLanguage">Choose language</h2>
+        <p class="sheet-p" data-i18n="chooseLanguageSub">Applies instantly to the whole app.</p>
+        <ul class="pick lang-pick" id="lang-list" role="listbox" aria-label="Languages" data-scroll tabindex="0"></ul>
+        <div class="sheet-actions">
+          <button class="btn btn-ghost" type="button" data-sheet-close data-i18n="cancel">Cancel</button>
+        </div>
+      </section>
+
+      <!-- reset: confirm wiping the device-local save -->
+      <section class="sheet" id="sheet-reset" hidden role="dialog" aria-modal="true" aria-labelledby="reset-title">
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <h2 class="sheet-t" id="reset-title" data-i18n="resetTitle">Reset local data?</h2>
+        <p class="sheet-p" data-i18n="resetBody">Coins, owned items, stats, teams and settings go back to defaults. This cannot be undone.</p>
+        <div class="sheet-actions split">
+          <button class="btn btn-ghost" type="button" data-sheet-close data-autofocus data-i18n="cancel">Cancel</button>
+          <button class="btn btn-danger" type="button" id="reset-yes" data-i18n="resetConfirm">Reset everything</button>
+        </div>
+      </section>
+
       <!-- choose mode: 4 presets with live renderer previews + custom + online -->
       <section class="sheet tall mode-sheet" id="sheet-mode" hidden role="dialog" aria-modal="true" aria-labelledby="mode-title">
         <h2 class="sheet-t" id="mode-title">Choose mode</h2>

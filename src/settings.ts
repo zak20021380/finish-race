@@ -79,11 +79,16 @@ function readLang(): LangCode {
   try {
     const raw = window.localStorage.getItem(L_KEY);
     if (raw && LANG_SET.has(raw)) return raw as LangCode;
-    /* first run: honour the Telegram / browser language when it maps cleanly */
-    const nav = (navigator.language || '').toLowerCase();
-    const base = nav.split('-')[0];
-    if (LANG_SET.has(base)) return base as LangCode;
-    if (base === 'nb' || base === 'nn') return 'en';
+    /* first run: honour the Telegram / browser language when it maps cleanly.
+       Read Telegram globals directly (no import) to avoid a cycle with telegram.ts. */
+    const w = window as unknown as {
+      Telegram?: { WebApp?: { initDataUnsafe?: { language_code?: string }; languageCode?: string } };
+    };
+    const tgLc = w.Telegram?.WebApp?.initDataUnsafe?.language_code ?? w.Telegram?.WebApp?.languageCode ?? '';
+    for (const cand of [tgLc, navigator.language || '']) {
+      const base = (cand || '').toLowerCase().split('-')[0];
+      if (LANG_SET.has(base)) return base as LangCode;
+    }
   } catch { /* storage refused — fall through to English */ }
   return 'en';
 }

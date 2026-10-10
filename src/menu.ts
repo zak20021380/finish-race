@@ -7,7 +7,10 @@
  * is forced), and the team sheet is reachable from Home and Profile alike.
  */
 import { DIFFICULTIES, type Difficulty } from './bot';
-import { menuState, saveMenu, settings, setSetting, onSettings, type Settings } from './settings';
+import {
+  LANGS, lang, langDef, onLang, setLang, t,
+  menuState, saveMenu, settings, setSetting, onSettings, type LangCode, type Settings,
+} from './settings';
 import {
   AGE_MAX, AGE_MIN, claimIdentityReward, createTeam, favouriteMode, IDENTITY_REWARD, joinTeam, KINDS,
   leaveTeam, levelInfo, myTeam, onChange, profile,
@@ -684,6 +687,159 @@ export function createMenu(api: MenuApi): Menu {
     });
   }
   onSettings(paintSettings);
+
+  /* ---- settings overhaul: language drawer, community rows, reset flow ---- */
+  const CHANNEL_URL = 'https://t.me/detour_game';
+
+  const paintI18n = () => {
+    for (const el of document.querySelectorAll<HTMLElement>('[data-i18n]')) {
+      const key = el.dataset.i18n;
+      if (!key) continue;
+      el.textContent = t(key);
+    }
+  };
+
+  const paintLangPill = () => {
+    const d = langDef(lang);
+    const flag = $('lang-flag');
+    const code = $('lang-code');
+    const nm = $('lang-name');
+    if (flag) flag.textContent = d.flag;
+    if (code) code.textContent = d.code.toUpperCase();
+    if (nm) nm.textContent = d.native;
+    const row = $('lang-row');
+    if (row) row.setAttribute('aria-label', `${t('language')}: ${d.native}`);
+  };
+
+  const paintLangList = () => {
+    const list = $('lang-list');
+    if (!list) return;
+    list.textContent = '';
+    for (const l of LANGS) {
+      const li = document.createElement('li');
+      li.className = 'pick-row lang-row';
+      li.setAttribute('role', 'option');
+      li.tabIndex = 0;
+      li.dataset.lang = l.code;
+      li.setAttribute('aria-selected', String(l.code === lang));
+      const flag = document.createElement('span');
+      flag.className = 'flag';
+      flag.textContent = l.flag;
+      const fcode = document.createElement('span');
+      fcode.className = 'flag-code';
+      fcode.textContent = l.code.toUpperCase();
+      const nm = document.createElement('span');
+      nm.className = 'pick-n';
+      nm.textContent = l.native;
+      const sub = document.createElement('small');
+      sub.textContent = l.label;
+      nm.append(sub);
+      const tick = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      tick.setAttribute('class', 'ico tick');
+      tick.setAttribute('aria-hidden', 'true');
+      tick.innerHTML = '<use href="#i-check" />';
+      li.append(flag, fcode, nm, tick);
+      list.append(li);
+    }
+  };
+
+  const paintLang = () => {
+    paintI18n();
+    paintLangPill();
+    paintLangList();
+  };
+
+  function openLang() {
+    const sheet = api.sheet('sheet-lang');
+    if (!sheet) return;
+    paintLangList();
+    api.sheets.open(sheet);
+    impact('light');
+  }
+
+  function chooseLang(code: string) {
+    if ((LANGS as { code: string }[]).every((l) => l.code !== code)) return;
+    setLang(code as LangCode);
+    notify('success');
+    impact('medium');
+    api.sheets.close();
+  }
+
+  let setToastTimer = 0;
+  function showSetToast(msg: string) {
+    const toast = $('set-toast');
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.hidden = false;
+    toast.classList.remove('show');
+    void toast.offsetWidth;
+    toast.classList.add('show');
+    window.clearTimeout(setToastTimer);
+    setToastTimer = window.setTimeout(() => {
+      toast.classList.remove('show');
+      window.setTimeout(() => { toast.hidden = true; }, 240);
+    }, 2300);
+  }
+
+  function openExternal(url: string) {
+    try {
+      const w = window as unknown as {
+        Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void; openLink?: (u: string) => void } };
+      };
+      const tg = w.Telegram?.WebApp;
+      if (url.includes('t.me/') && tg?.openTelegramLink) { tg.openTelegramLink(url); return; }
+      if (tg?.openLink) { tg.openLink(url); return; }
+    } catch { /* fall through to window.open */ }
+    try { window.open(url, '_blank', 'noopener'); } catch { /* webview blocked */ }
+  }
+
+  function doReset() {
+    try {
+      const doomed: string[] = [];
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const k = window.localStorage.key(i);
+        if (k && k.startsWith('detour.')) doomed.push(k);
+      }
+      for (const k of doomed) window.localStorage.removeItem(k);
+    } catch { /* storage refused — reload still gives defaults */ }
+    notify('success');
+    api.sheets.close();
+    showSetToast(t('resetDone'));
+    window.setTimeout(() => window.location.reload(), 650);
+  }
+
+  $('lang-row')?.addEventListener('click', openLang);
+  $('lang-list')?.addEventListener('click', (e) => {
+    const row = (e.target as HTMLElement | null)?.closest<HTMLElement>('.lang-row');
+    if (!row?.dataset.lang) return;
+    impact('light');
+    chooseLang(row.dataset.lang);
+  });
+  $('lang-list')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const row = (e.target as HTMLElement | null)?.closest<HTMLElement>('.lang-row');
+    if (!row?.dataset.lang) return;
+    e.preventDefault();
+    chooseLang(row.dataset.lang);
+  });
+  $('tg-channel')?.addEventListener('click', () => { impact('light'); openExternal(CHANNEL_URL); });
+  $('support-row')?.addEventListener('click', () => {
+    impact('light');
+    notify('success');
+    showSetToast(t('supportNote'));
+  });
+  $('reset-row')?.addEventListener('click', () => {
+    const sheet = api.sheet('sheet-reset');
+    if (!sheet) return;
+    impact('light');
+    api.sheets.open(sheet);
+  });
+  $('reset-yes')?.addEventListener('click', () => { impact('medium'); doReset(); });
+
+  /* live repaint: internal watchers + the public DOM event for external listeners */
+  onLang(paintLang);
+  window.addEventListener('detour:lang', () => paintLang());
+  paintLang();
 
   /* ---- mode cards ---- */
   /** vs Bot races the last configuration saved; the Teams row and the presets pick their own sizes. */
