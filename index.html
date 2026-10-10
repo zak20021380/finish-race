@@ -221,52 +221,17 @@
           </div>
 
           <div class="launcher">
-            <div class="mode-tabs" role="tablist" aria-label="Play mode">
-              <span class="mode-thumb" aria-hidden="true"></span>
-              <button class="mode-tab" type="button" role="tab" id="mtab-solo" data-mode-tab="solo"
-                      aria-selected="true" aria-controls="mctx-diff mctx-size"
-                      aria-label="Solo / Bot Match — one ball each, against the machine">
-                <svg class="ico" aria-hidden="true"><use href="#i-bot" /></svg>
-                <span class="mode-tab-t">Solo / Bot</span>
-              </button>
-              <button class="mode-tab" type="button" role="tab" id="mtab-party" data-mode-tab="party"
-                      aria-selected="false" aria-controls="mctx-diff mctx-size" tabindex="-1"
-                      aria-label="Party and Teams — two sides, up to three balls each">
-                <svg class="ico" aria-hidden="true"><use href="#i-users" /></svg>
-                <span class="mode-tab-t">Party &amp; Teams</span>
-              </button>
-            </div>
-
-            <!-- Row 2 (contextual): exactly one of these is open at a time, never both. -->
-            <div class="mode-context is-open" id="mctx-diff" role="group" aria-label="Bot difficulty">
-              <div class="mode-context-in">
-                <div class="chip-row">
-                  <button class="mode-chip" type="button" data-diff="easy" aria-pressed="false">Easy</button>
-                  <button class="mode-chip" type="button" data-diff="normal" aria-pressed="true">Normal</button>
-                  <button class="mode-chip" type="button" data-diff="hard" aria-pressed="false">Hard</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="mode-context" id="mctx-size" role="group" aria-label="Team size">
-              <div class="mode-context-in">
-                <div class="chip-row">
-                  <button class="mode-chip" type="button" data-size="1,1" aria-pressed="false">1v1</button>
-                  <button class="mode-chip" type="button" data-size="2,2" aria-pressed="true">2v2</button>
-                  <button class="mode-chip" type="button" data-size="3,3" aria-pressed="false">3v3</button>
-                  <button class="mode-chip go" type="button" id="tile-custom" data-mode="custom"
-                          aria-label="Custom teams — open the team builder">
-                    <svg class="ico" aria-hidden="true"><use href="#i-tune" /></svg>
-                    <span>Custom</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <button class="btn btn-hero" id="home-play" type="button" aria-label="Play">
+            <button class="btn btn-hero" id="home-play" type="button" aria-describedby="home-play-sub">
               <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg>
-              <span class="hero-t">PLAY</span>
+              <span class="hero-t">Play</span>
             </button>
+            <div class="play-meta">
+              <p class="play-summary" id="home-play-sub" aria-live="polite">1v1 · Normal</p>
+              <button class="change-pill" type="button" id="mode-change" aria-haspopup="dialog">
+                <svg class="ico" aria-hidden="true"><use href="#i-tune" /></svg>
+                <span>Change mode</span>
+              </button>
+            </div>
           </div>
         </section>
 
@@ -540,7 +505,7 @@
             <button class="icon-btn" type="button" id="menu-btn" aria-label="Game menu" aria-haspopup="dialog">
               <svg class="ico" aria-hidden="true"><use href="#i-menu" /></svg>
             </button>
-            <p class="g-mode" id="mode-label">vs Bot · Normal</p>
+            <p class="g-mode" id="mode-label">1v1 · Normal</p>
             <span class="m-head-pad" aria-hidden="true"></span>
           </div>
 
@@ -763,6 +728,68 @@
             Local mock standings — real club tables arrive with online play.
             <button class="link" type="button" id="team-leave">Leave team</button>
           </p>
+        </div>
+      </section>
+
+      <!-- choose mode: 4 presets with live renderer previews + custom + online -->
+      <section class="sheet tall mode-sheet" id="sheet-mode" hidden role="dialog" aria-modal="true" aria-labelledby="mode-title">
+        <h2 class="sheet-t" id="mode-title">Choose mode</h2>
+        <div class="sheet-body" data-scroll>
+          <div class="mode-grid" role="radiogroup" aria-label="Mode">
+            <button class="mode-card" type="button" data-mode="1v1" role="radio" aria-checked="false">
+              <span class="mode-pv-wrap">
+                <canvas class="mode-pv" data-mode-pv="1v1" aria-hidden="true"></canvas>
+                <span class="mode-check" aria-hidden="true"><svg class="ico"><use href="#i-check" /></svg></span>
+              </span>
+              <span class="mode-name">1v1</span>
+              <span class="mode-desc">You control 1 ball vs the bot's 1</span>
+            </button>
+            <button class="mode-card" type="button" data-mode="2v2" role="radio" aria-checked="false">
+              <span class="mode-pv-wrap">
+                <canvas class="mode-pv" data-mode-pv="2v2" aria-hidden="true"></canvas>
+                <span class="mode-check" aria-hidden="true"><svg class="ico"><use href="#i-check" /></svg></span>
+              </span>
+              <span class="mode-name">2v2</span>
+              <span class="mode-desc">You control 2 balls vs the bot's 2</span>
+            </button>
+            <button class="mode-card" type="button" data-mode="3v3" role="radio" aria-checked="false">
+              <span class="mode-pv-wrap">
+                <canvas class="mode-pv" data-mode-pv="3v3" aria-hidden="true"></canvas>
+                <span class="mode-check" aria-hidden="true"><svg class="ico"><use href="#i-check" /></svg></span>
+              </span>
+              <span class="mode-name">3v3</span>
+              <span class="mode-desc">You control 3 balls vs the bot's 3</span>
+            </button>
+            <button class="mode-card" type="button" data-mode="2v1" role="radio" aria-checked="false">
+              <span class="mode-pv-wrap">
+                <canvas class="mode-pv" data-mode-pv="2v1" aria-hidden="true"></canvas>
+                <span class="mode-check" aria-hidden="true"><svg class="ico"><use href="#i-check" /></svg></span>
+              </span>
+              <span class="mode-name">2v1</span>
+              <span class="mode-desc">You control 2 balls vs the bot's 1</span>
+            </button>
+            <button class="mode-card ghost" type="button" id="mode-custom">
+              <span class="mode-pv-wrap icon" aria-hidden="true"><svg class="ico"><use href="#i-tune" /></svg></span>
+              <span class="mode-name">Custom</span>
+              <span class="mode-desc">Any teams up to 3v3</span>
+            </button>
+            <button class="mode-card ghost off" type="button" disabled aria-disabled="true" aria-label="Online play, coming soon">
+              <span class="mode-pv-wrap icon" aria-hidden="true"><svg class="ico"><use href="#i-globe" /></svg></span>
+              <span class="mode-name">Online</span>
+              <span class="mode-desc">Race a friend</span>
+              <span class="badge soon">Soon</span>
+            </button>
+          </div>
+          <h3 class="sec-t">Bot level</h3>
+          <div class="seg" role="group" aria-label="Bot level">
+            <button class="seg-b" type="button" data-mdiff="easy" aria-pressed="false">Easy</button>
+            <button class="seg-b" type="button" data-mdiff="normal" aria-pressed="false">Normal</button>
+            <button class="seg-b" type="button" data-mdiff="hard" aria-pressed="false">Hard</button>
+          </div>
+          <p class="mode-hint" id="mode-hint" aria-live="polite"></p>
+        </div>
+        <div class="sheet-actions sticky">
+          <button class="btn btn-primary" type="button" id="mode-start" data-autofocus>Start 1v1 · Normal</button>
         </div>
       </section>
     </div>

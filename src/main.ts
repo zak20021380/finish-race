@@ -349,7 +349,7 @@ function paintNames() {
   const u = tgUser();
   $('name-0').textContent = (u?.first_name || u?.username || 'YOU').toUpperCase().slice(0, 14);
   $('name-1').textContent = 'BOT';
-  modeLabel.textContent = `vs Bot · ${sizes[0]}v${sizes[1]} · ${difficulty[0].toUpperCase()}${difficulty.slice(1)}`;
+  modeLabel.textContent = `${sizes[0]}v${sizes[1]} · ${difficulty[0].toUpperCase()}${difficulty.slice(1)}`;
 }
 
 function startGame(setup: { difficulty: Difficulty; sizes: [number, number] }) {
@@ -535,7 +535,7 @@ document.addEventListener('visibilitychange', syncLoop);
 mountCoins();                              // every [data-coin] slot gets the shared gold coin
 menu = createMenu({ router, sheets, sheet: sheetById, start: startGame, onBack });
 const shop = createShop({ sheets, sheet: sheetById });
-home = createHome({ router, start: startGame });
+home = createHome({ router, sheets, start: startGame });
 compete = createCompete({ router, sheets, sheet: sheetById });
 paintNames();
 ui();

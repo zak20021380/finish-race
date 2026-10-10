@@ -1,5 +1,5 @@
 /**
- * home.ts — Home: identity card, flexible highlights, then the mode launcher.
+ * home.ts — Home: identity card, flexible highlights, then the single Play launcher.
  *
  * Home never scrolls vertically; the carousel is the one horizontal gesture
  * (CSS scroll-snap + `touch-action: pan-x`, `data-carousel` opts out of the
@@ -7,9 +7,15 @@
  * Each slide is 100% of the viewport width inside an overflow-hidden wrap, so
  * only the active slide shows cleanly between the paging dots. `.is-active`
  * marks the slide in focus (state binding preserved, no visual peek).
+ *
+ * Mode selection is one Play button + a "Choose mode" bottom sheet. Play starts
+ * immediately with the last setup (default 1v1 Normal). The sheet holds a
+ * 2-column grid of preset cards with live renderer previews, a Custom entry
+ * that opens the team builder, a disabled Online entry, a Bot level segmented
+ * control and a sticky Start button whose label updates live.
  */
 import type { Difficulty } from './bot';
-import { menuState, motionReduced, onSettings, saveMenu, type ModeTab } from './settings';
+import { menuState, motionReduced, onSettings, saveMenu } from './settings';
 import { flagOf, nameOf } from './countries';
 import {
   formatCountdown,
@@ -21,13 +27,17 @@ import {
   type Tournament,
 } from './data';
 import { coinText, mountCoins } from './coin';
-import { earnCoins, onChange, profile } from './storage';
+import { earnCoins, onChange, profile, theme } from './storage';
 import { impact, notify } from './telegram';
+import { newGame } from './rules';
+import { createRenderer, type View } from './render';
 import type { Router } from './router';
+import type { Sheets } from './sheets';
 import type { RaceSetup } from './menu';
 
 export interface HomeApi {
   router: Router;
+  sheets: Sheets;
   start(setup: RaceSetup): void;
 }
 
@@ -53,36 +63,55 @@ function markClaimed(): void {
 
 const cap = (d: Difficulty): string => d.charAt(0).toUpperCase() + d.slice(1);
 
-type ModeKind = 'bot' | 'teams' | 'custom';
+export type ModePreset = '1v1' | '2v2' | '3v3' | '2v1';
+export type ModeId = ModePreset | 'custom';
 
-function kindOfSizes(sizes: readonly [number, number] | readonly number[]): ModeKind {
+export const PRESETS: Record<ModePreset, [number, number]> = {
+  '1v1': [1, 1],
+  '2v2': [2, 2],
+  '3v3': [3, 3],
+  '2v1': [2, 1],
+};
+
+const PRESET_ORDER: ModePreset[] = ['1v1', '2v2', '3v3', '2v1'];
+
+export function modeIdOf(sizes: readonly [number, number] | readonly number[]): ModeId {
   const a = sizes[0];
   const b = sizes[1];
-  if (a === 1 && b === 1) return 'bot';
-  if ((a === 2 && b === 2) || (a === 3 && b === 3) || (a === 2 && b === 1)) return 'teams';
+  if (a === 1 && b === 1) return '1v1';
+  if (a === 2 && b === 2) return '2v2';
+  if (a === 3 && b === 3) return '3v3';
+  if (a === 2 && b === 1) return '2v1';
   return 'custom';
 }
 
-/** "vs Bot · Normal" / "Teams 2v2 · Hard" / "Custom 2v1 · Easy" — the Play subtitle. */
+function sizesOf(preset: ModePreset): [number, number] {
+  const s = PRESETS[preset];
+  return [s[0], s[1]];
+}
+
+/** "1v1 · Normal" / "2v2 · Hard" / "Custom 2v1 · Easy" — the Play summary. */
 export function lastModeLabel(): string {
   const d = cap(menuState.difficulty);
   const [a, b] = menuState.sizes;
-  if (menuState.tab === 'solo') return `vs Bot · ${d}`;
-  if (kindOfSizes(menuState.sizes) === 'custom') return `Custom ${a}v${b} · ${d}`;
-  return `Teams ${a}v${b} · ${d}`;
+  const id = modeIdOf(menuState.sizes);
+  if (id === 'custom') return `Custom ${a}v${b} · ${d}`;
+  return `${id} · ${d}`;
 }
 
 function isDiff(v: string | undefined): v is Difficulty {
   return v === 'easy' || v === 'normal' || v === 'hard';
 }
 
-function parseSize(v: string | undefined): [number, number] | null {
-  if (!v) return null;
-  const [a, b] = v.split(',').map(Number);
-  if (!Number.isInteger(a) || !Number.isInteger(b)) return null;
-  if (a < 1 || a > 3 || b < 1 || b > 3) return null;
-  return [a, b];
+function isPreset(v: string | undefined): v is ModePreset {
+  return v === '1v1' || v === '2v2' || v === '3v3' || v === '2v1';
 }
+
+const DIFF_HINT: Record<Difficulty, string> = {
+  easy: 'Relaxed pace — the bot rarely walls.',
+  normal: 'Balanced play — the bot walls when it pays off.',
+  hard: 'Sharpest play — the bot walls often and races cleanly.',
+};
 
 export function createHome(api: HomeApi): { setRoute(id: string): void } {
   const carousel = $('home-carousel') as HTMLElement;
@@ -295,49 +324,177 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     void loadDaily();
   });
 
-  /* ---------- launcher: one tier at a time, every pick lands in menuState ---------- */
+  /* ---------- launcher: one Play button + summary + sheet draft ---------- */
 
-  const tabTrack = document.querySelector<HTMLElement>('.mode-tabs');
-  const sizeRow = document.getElementById('mctx-size');
-  const diffRow = document.getElementById('mctx-diff');
-  const tabBtns = [...document.querySelectorAll<HTMLButtonElement>('[data-mode-tab]')];
+  const homePlay = $('home-play') as HTMLButtonElement;
+  const homeSub = $('home-play-sub') as HTMLElement;
+  const modeChange = document.getElementById('mode-change') as HTMLButtonElement | null;
+  const sheetMode = document.getElementById('sheet-mode') as HTMLElement | null;
+  const modeCards = [...document.querySelectorAll<HTMLButtonElement>('.mode-card[data-mode]')];
+  const diffBtns = [...document.querySelectorAll<HTMLButtonElement>('.seg-b[data-mdiff]')];
+  const modeHint = document.getElementById('mode-hint') as HTMLElement | null;
+  const modeStart = document.getElementById('mode-start') as HTMLButtonElement | null;
+  const modeCustom = document.getElementById('mode-custom') as HTMLButtonElement | null;
+
+  // Draft edited inside the sheet; committed to menuState on every tap so Home
+  // and the sticky Start stay in sync even if the sheet is dismissed.
+  let draftMode: ModePreset = '1v1';
+  let draftDiff: Difficulty = 'normal';
+
+  const syncDraftFromMenu = (): void => {
+    const id = modeIdOf(menuState.sizes);
+    draftMode = id === 'custom' ? '1v1' : id;
+    // If the saved size is custom, keep showing it on Home but edit a preset.
+    // When the saved size is a preset, the draft starts there.
+    if (id !== 'custom') draftMode = id;
+    draftDiff = menuState.difficulty;
+  };
 
   const paintLauncher = (): void => {
-    const tab = menuState.tab;
-    const isSolo = tab === 'solo';
-    if (tabTrack) tabTrack.dataset.tab = tab;
-    for (const b of tabBtns) {
-      const on = b.dataset.modeTab === tab;
-      b.setAttribute('aria-selected', String(on));
-      b.tabIndex = on ? 0 : -1;
-    }
-    // Strict conditional: exactly one contextual row is open, never both.
-    // Solo → difficulty only · Party → team size only.
-    if (sizeRow) sizeRow.classList.toggle('is-open', !isSolo);
-    if (diffRow) diffRow.classList.toggle('is-open', isSolo);
-    for (const b of document.querySelectorAll<HTMLButtonElement>('.mode-chip[data-diff]')) {
-      b.setAttribute('aria-pressed', String(b.dataset.diff === menuState.difficulty));
-    }
-    for (const b of document.querySelectorAll<HTMLButtonElement>('.mode-chip[data-size]')) {
-      const p = parseSize(b.dataset.size);
-      const on = p !== null && p[0] === menuState.sizes[0] && p[1] === menuState.sizes[1];
-      b.setAttribute('aria-pressed', String(on));
-    }
-    // Hero PLAY is icon + PLAY only (sub-pill removed by design).
-    // Binding preserved: if a sub element exists (legacy/tests), keep it in sync.
-    const sub = document.getElementById('home-play-sub');
-    if (sub) sub.textContent = lastModeLabel();
+    const label = lastModeLabel();
+    if (homeSub) homeSub.textContent = label;
+    homePlay.setAttribute('aria-label', `Play ${label}`);
   };
 
-  /** Solo is always one ball each, so the tier swap rewrites the size the race will use. */
-  const setTab = (tab: ModeTab): void => {
-    if (menuState.tab === tab) return;
-    impact('light');
-    saveMenu(tab === 'solo'
-      ? { tab, sizes: [1, 1] }
-      : { tab, sizes: kindOfSizes(menuState.sizes) === 'bot' ? [2, 2] : [...menuState.sizes] });
-    paintLauncher();
+  const paintSheet = (): void => {
+    for (const b of modeCards) {
+      const on = b.dataset.mode === draftMode;
+      b.setAttribute('aria-checked', String(on));
+    }
+    for (const b of diffBtns) {
+      b.setAttribute('aria-pressed', String(b.dataset.mdiff === draftDiff));
+    }
+    if (modeHint) modeHint.textContent = DIFF_HINT[draftDiff];
+    if (modeStart) {
+      const label = `Start ${draftMode} · ${cap(draftDiff)}`;
+      modeStart.textContent = label;
+      modeStart.setAttribute('aria-label', label);
+    }
   };
+
+  /* Mini board illustrations: the real renderer pointed at a 6x4 patch with
+     each preset's ball counts. Your first ball wears the selection ring. */
+  const previewRenderers = new Map<string, { resize(): void; draw(v: View, now: number): void; setTheme(t: ReturnType<typeof theme>): void }>();
+
+  function modeView(preset: ModePreset): View {
+    // Bottom-row spots on a 6x4 patch: room for 3v3 in one row, centred for smaller.
+    const spots: Record<ModePreset, Array<{ team: 0 | 1; x: number }>> = {
+      '1v1': [{ team: 0, x: 2.5 }, { team: 1, x: 3.5 }],
+      '2v2': [{ team: 0, x: 1.5 }, { team: 0, x: 2.5 }, { team: 1, x: 3.5 }, { team: 1, x: 4.5 }],
+      '3v3': [
+        { team: 0, x: 0.5 }, { team: 0, x: 1.5 }, { team: 0, x: 2.5 },
+        { team: 1, x: 3.5 }, { team: 1, x: 4.5 }, { team: 1, x: 5.5 },
+      ],
+      '2v1': [{ team: 0, x: 1.5 }, { team: 0, x: 2.5 }, { team: 1, x: 4.5 }],
+    };
+    const list = spots[preset];
+    const y = 3.5;
+    const s = newGame(sizesOf(preset));
+    // Keep the race's team counts but show the patch positions.
+    const balls = list.map((b, i) => ({ pos: { x: b.x, y }, team: b.team as 0 | 1, id: i, sel: i === 0 }));
+    return {
+      state: { ...s, turn: 0, winner: null },
+      balls,
+      hints: [],
+      ghost: null,
+      last: [null, null],
+      thinking: null,
+    };
+  }
+
+  const paintPreviews = (): void => {
+    if (!sheetMode || sheetMode.hidden) return;
+    const t = theme();
+    const now = performance.now();
+    for (const preset of PRESET_ORDER) {
+      const canvas = document.querySelector<HTMLCanvasElement>(`canvas[data-mode-pv=${JSON.stringify(preset)}]`);
+      if (!canvas) continue;
+      let r = previewRenderers.get(preset);
+      if (!r) {
+        r = createRenderer(canvas, { cols: 6, rows: 4, theme: () => theme() });
+        previewRenderers.set(preset, r);
+      } else {
+        r.setTheme(t);
+      }
+      r.resize();
+      const v = modeView(preset);
+      r.draw(v, now);
+      r.draw(v, now + 600);
+    }
+  };
+
+  const openSheet = (): void => {
+    if (!sheetMode) return;
+    syncDraftFromMenu();
+    paintSheet();
+    api.sheets.open(sheetMode);
+    // The canvas has no size while hidden; lay it out after the sheet opens.
+    requestAnimationFrame(() => {
+      paintPreviews();
+      // One more frame after the slide settles for the final size.
+      window.setTimeout(paintPreviews, 300);
+    });
+  };
+
+  for (const b of modeCards) {
+    b.addEventListener('click', () => {
+      const m = b.dataset.mode;
+      if (!isPreset(m)) return;
+      draftMode = m;
+      impact('light');
+      // Persist immediately so Home's summary and the sticky Start stay live.
+      try {
+        saveMenu({ sizes: sizesOf(m), difficulty: draftDiff, mode: 'bot' });
+      } catch {
+        /* stay in memory */
+      }
+      paintSheet();
+      paintLauncher();
+      paintPreviews();
+    });
+  }
+
+  for (const b of diffBtns) {
+    b.addEventListener('click', () => {
+      const d = b.dataset.mdiff;
+      if (!isDiff(d)) return;
+      draftDiff = d;
+      impact('light');
+      try {
+        saveMenu({ difficulty: d, mode: 'bot' });
+      } catch {
+        /* stay in memory */
+      }
+      paintSheet();
+      paintLauncher();
+    });
+  }
+
+  modeCustom?.addEventListener('click', () => {
+    impact('light');
+    api.sheets.close();
+    // Let the sheet slide out before the screen slides in.
+    window.setTimeout(() => api.router.go('custom'), 60);
+  });
+
+  modeStart?.addEventListener('click', () => {
+    impact('light');
+    const sizes = sizesOf(draftMode);
+    try {
+      saveMenu({ mode: 'bot', sizes, difficulty: draftDiff });
+    } catch {
+      /* stay in memory */
+    }
+    paintSheet();
+    paintLauncher();
+    api.sheets.close();
+    api.start({ difficulty: draftDiff, sizes: [...sizes] as [number, number] });
+  });
+
+  modeChange?.addEventListener('click', () => {
+    impact('light');
+    openSheet();
+  });
 
   /* ---------- identity shortcuts ---------- */
 
@@ -354,50 +511,13 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   /* ---------- launcher input ---------- */
 
-  for (const b of tabBtns) {
-    b.addEventListener('click', () => {
-      const t = b.dataset.modeTab;
-      if (t === 'solo' || t === 'party') setTab(t);
-    });
-  }
-  /* the pill is a tablist, so the arrows walk it like a segmented control */
-  tabTrack?.addEventListener('keydown', (e) => {
-    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-    e.preventDefault();
-    const next: ModeTab = menuState.tab === 'solo' ? 'party' : 'solo';
-    setTab(next);
-    tabBtns.find((b) => b.dataset.modeTab === next)?.focus();
-  });
-
-  for (const b of document.querySelectorAll<HTMLButtonElement>('.mode-chip[data-diff]')) {
-    b.addEventListener('click', () => {
-      const d = b.dataset.diff;
-      if (!isDiff(d)) return;
-      impact('light');
-      saveMenu({ difficulty: d });
-      paintLauncher();
-    });
-  }
-
-  for (const b of document.querySelectorAll<HTMLButtonElement>('.mode-chip[data-size]')) {
-    b.addEventListener('click', () => {
-      const p = parseSize(b.dataset.size);
-      if (!p) return;
-      impact('light');
-      saveMenu({ sizes: p });
-      paintLauncher();
-    });
-  }
-
-  /* the team builder is its own screen — a way out of the launcher, not a fourth size */
-  $('tile-custom').addEventListener('click', () => {
-    impact('medium');
-    api.router.go('custom');
-  });
-
-  $('home-play').addEventListener('click', () => {
+  homePlay.addEventListener('click', () => {
     impact('light');
-    saveMenu({ mode: 'bot' });
+    try {
+      saveMenu({ mode: 'bot' });
+    } catch {
+      /* stay in memory */
+    }
     api.start({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] });
   });
 
@@ -415,13 +535,22 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     void loadCountries();
     void loadDaily();
     paintLauncher();
+    paintSheet();
+    paintPreviews();
   });
 
+  if (sheetMode) {
+    new ResizeObserver(() => paintPreviews()).observe(sheetMode);
+  }
+  window.addEventListener('resize', paintPreviews);
+
+  syncDraftFromMenu();
   void loadFeatured();
   void loadCountries();
   void loadDaily();
   paintDots();
   paintLauncher();
+  paintSheet();
   armAuto();
   startTick();
   mountCoins(carousel);
@@ -429,13 +558,10 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   return {
     setRoute(id: string) {
       if (id !== 'home') return;
-      /* the team builder can leave a multi-ball size behind a solo tier — it is a party race */
-      if (menuState.tab === 'solo' && kindOfSizes(menuState.sizes) !== 'bot') {
-        saveMenu({ tab: 'party' });
-      }
       paintDots();
       poke();
       paintLauncher();
+      paintSheet();
       void loadCountries();
     },
   };

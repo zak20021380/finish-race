@@ -301,7 +301,8 @@ export function createMenu(api: MenuApi): Menu {
     $('pf-best').textContent = en(s.best);
     $('pf-streak').textContent = en(s.streak);
     const fav = favouriteMode();
-    $('pf-fav').textContent = fav === 'bot' ? 'vs Bot' : '—';
+    const favLabel = fav === 'bot' ? `${menuState.sizes[0]}v${menuState.sizes[1]}` : '—';
+    $('pf-fav').textContent = favLabel;
     $('pf-fav-sub').textContent = s.games ? `${en(s.modes.bot ?? 0)} bot races` : 'No races yet';
     if (pfScreen.hidden) return;                        // a hidden canvas has no width to lay out
     const t = theme();
