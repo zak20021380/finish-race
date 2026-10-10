@@ -1563,6 +1563,30 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
 .sheet-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--s2); }
 .sheet-body .btn { width: 100%; }
 [data-scroll] { overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+
+/* ---- chrome-free scrolling: every scroll surface loses its native scrollbar ----
+   The tray, the pane and the board all keep their gesture (touch-action: pan-y,
+   overscroll-behavior: contain) — only the ugly browser chrome is suppressed, so
+   a scroll never shifts the layout under a thumb. */
+[data-scroll],
+[data-carousel],
+.pf-pane,
+#s-profile, #s-profile *,
+#s-game, #s-game *,
+.sheet-body, .sheet-body * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+[data-scroll]::-webkit-scrollbar,
+[data-carousel]::-webkit-scrollbar,
+.pf-pane::-webkit-scrollbar,
+#s-profile::-webkit-scrollbar, #s-profile ::-webkit-scrollbar,
+#s-game::-webkit-scrollbar, #s-game ::-webkit-scrollbar,
+.sheet-body::-webkit-scrollbar, .sheet-body ::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
 .field {
   flex: none;
   display: flex;
@@ -3978,7 +4002,7 @@ html.rm .car-card.nations-cup::before { display: none; }
    on this screen; the page never scrolls and nothing escapes horizontally.
    ========================================================================== */
 
-/* ---- the pane: the one scroll on Profile, with a minimal custom track ---- */
+/* ---- the pane: the one scroll on Profile — chrome-free, dock-safe ---- */
 .pf-pane {
   flex: 1 1 auto;
   min-height: 0;
@@ -3986,20 +4010,13 @@ html.rm .car-card.nations-cup::before { display: none; }
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: #2A364F transparent;
-  scrollbar-gutter: stable;
-  padding-bottom: var(--s4);
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  /* the identity grid must clear the bottom dock with room to spare */
+  padding-bottom: calc(var(--dock-height) + 16px);
 }
-.pf-pane::-webkit-scrollbar { width: 6px; }
-.pf-pane::-webkit-scrollbar-track { background: transparent; }
-.pf-pane::-webkit-scrollbar-thumb {
-  background: #2A364F;
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-.pf-pane::-webkit-scrollbar-thumb:hover { background: #35446A; background-clip: content-box; }
 /* no document-level sideways drift: every direct child is width-capped */
 .pf-pane > * { max-width: 100%; min-width: 0; }
 #s-profile { overflow: hidden; max-width: 100%; }
@@ -4013,13 +4030,13 @@ html.rm .car-card.nations-cup::before { display: none; }
   box-shadow: var(--clay), var(--clay-ring);
 }
 
-/* ---- stats: a balanced 4-column tactile recessed card ---- */
+/* ---- stats: a balanced 4-column tactile recessed card — 9px rails, HUD-tight ---- */
 .pf-stats.p-stats.quad {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--s1);
   margin: 0;
-  padding: var(--s3) var(--s2);
+  padding: 9px var(--s2);
   border-radius: 20px;
   background: linear-gradient(180deg, #0A0F1C 0%, var(--field) 100%);
   box-shadow:
@@ -5224,130 +5241,151 @@ html.rm .notif-badge { animation: none; }
   text-shadow: 0 2px 0 rgba(0, 0, 0, .45);
 }
 
-/* ---- Honor & Badges: horizontal tactile rack, 4 slots, no page scroll-x ---- */
+/* ---- Honor & Badges: slim horizontal tray of circular 3D medal chips ----
+   One recessed slate rack, four 38px clay coins, zero prose. Unlocked coins are
+   metallic and lit from the rim; locked coins sink into the rack with a lock
+   glyph. Every detail — name, lore, criteria, Equip — lives in the drawer, so
+   the tray costs one glance of vertical space. */
 .pf-badges-sec { min-width: 0; max-width: 100%; }
-.pf-badge-count { color: var(--brand-ink); font-variant-numeric: tabular-nums; }
+.pf-badge-count { color: var(--brand-ink); font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+/* subtle text link: "View All ›" — quiet until reached for */
+.pf-sec-link {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  min-height: 28px;
+  padding: 0 2px;
+  border-radius: 8px;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .02em;
+  color: var(--ink-soft);
+  transition: transform var(--motion-fast), color var(--motion-fast);
+}
+.pf-sec-link .ico { width: 13px; height: 13px; }
+.pf-sec-link:hover:not(:active) { color: var(--brand-ink); transform: translateY(-1px); }
+.pf-sec-link:active { transform: translateY(1px); color: var(--brand-ink); }
+.pf-sec-link:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+/* the rack: a recessed tray that holds the coins in place */
 .badge-rack {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--s2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s1);
   min-width: 0;
   max-width: 100%;
+  padding: 8px 10px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #0A0F1C 0%, var(--field) 100%);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, .5),
+    inset 0 -1px 0 rgba(255, 255, 255, .06),
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
 }
+/* a coin holder: transparent frame, 44px target, transform-only press */
 .badge-slot {
-  --d: 3px;
   appearance: none;
   border: 0;
   font: inherit;
   cursor: pointer;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  min-width: 0;
-  min-height: 96px;
-  padding: var(--s2) 4px;
-  border-radius: 18px;
-  background: var(--clay-face);
+  justify-content: center;
+  padding: 2px 0;
+  border-radius: 14px;
+  background: none;
   color: var(--ink);
-  text-align: center;
-  box-shadow:
-    0 var(--d) 0 #080C14,
-    var(--clay-spec), var(--clay-bevel), var(--clay-ring);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast);
+  box-shadow: none;
+  transition: transform var(--motion-fast);
 }
 .badge-slot:hover:not(:active) { transform: translateY(-1px); }
-.badge-slot:active { transform: translateY(var(--press-y)); --d: 0px; }
+.badge-slot:active { transform: translateY(var(--press-y)); }
 .badge-slot:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-.badge-ico {
+
+/* the medal chip: a 38px tactile clay coin — dual-tone extrusion + rim light */
+.badge-chip {
   flex: none;
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
-  border-radius: 15px;
-  background: linear-gradient(180deg, #0A0F1C 0%, var(--field) 100%);
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, .55),
-    inset 0 -1px 0 rgba(255, 255, 255, .08),
-    inset 0 0 0 1px rgba(255, 255, 255, .06);
+  border-radius: 50%;
+  background: linear-gradient(180deg, #2E3A55 0%, #141B2A 100%);
   color: var(--chip-ink);
+  box-shadow:
+    0 2px 0 #080C14,
+    inset 0 2px 2px rgba(255, 255, 255, .14),
+    inset 0 -2px 4px rgba(0, 0, 0, .4),
+    inset 0 0 0 1px rgba(255, 255, 255, .08);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
 }
-.badge-ico .ico { width: 22px; height: 22px; }
-/* unlocked: rich metallic/clay + subtle ambient glow per accent */
-.badge-slot.is-unlocked[data-accent="gold"] .badge-ico { color: #FCD34D; box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 -1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(252,211,77,.4), 0 0 14px -2px rgba(245,158,11,.5); }
-.badge-slot.is-unlocked[data-accent="sky"] .badge-ico { color: var(--brand-ink); box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 -1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(125,211,252,.4), 0 0 14px -2px rgba(56,189,248,.5); }
-.badge-slot.is-unlocked[data-accent="mint"] .badge-ico { color: var(--mint-ink); box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 -1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(110,231,183,.4), 0 0 14px -2px rgba(16,185,129,.5); }
-.badge-slot.is-unlocked[data-accent="coral"] .badge-ico { color: #FFB59D; box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 -1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(255,82,43,.42), 0 0 14px -2px rgba(255,82,43,.5); }
-.badge-slot.is-unlocked.is-equipped {
-  background:
-    linear-gradient(180deg, var(--solid-a), var(--solid-b)) padding-box,
-    linear-gradient(135deg, rgba(251,191,36,.6), rgba(56,189,248,.5)) border-box;
-  border: 1.5px solid transparent;
+.badge-chip .ico { width: 18px; height: 18px; }
+/* unlocked: glowing metallic coin with an ambient rim highlight per accent */
+.badge-chip[data-state="unlocked"][data-accent="gold"] {
+  background: linear-gradient(180deg, #3B3420 0%, #1E1A12 100%);
+  color: #FCD34D;
+  box-shadow: 0 2px 0 #080C14, inset 0 2px 2px rgba(255,255,255,.22), inset 0 -2px 4px rgba(0,0,0,.45), inset 0 0 0 1.5px rgba(252,211,77,.5), 0 0 14px -3px rgba(245,158,11,.65);
 }
-.badge-n {
-  display: block;
-  max-width: 100%;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1.25;
-  letter-spacing: .01em;
-  white-space: normal;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+.badge-chip[data-state="unlocked"][data-accent="sky"] {
+  background: linear-gradient(180deg, #1D3048 0%, #101A2B 100%);
+  color: var(--brand-ink);
+  box-shadow: 0 2px 0 #080C14, inset 0 2px 2px rgba(255,255,255,.2), inset 0 -2px 4px rgba(0,0,0,.45), inset 0 0 0 1.5px rgba(125,211,252,.5), 0 0 14px -3px rgba(56,189,248,.65);
 }
-.badge-slot.is-unlocked .badge-n { color: var(--ink); }
-.badge-p {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  max-width: 100%;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-variant-numeric: tabular-nums;
+.badge-chip[data-state="unlocked"][data-accent="mint"] {
+  background: linear-gradient(180deg, #17352C 0%, #0D1F1C 100%);
+  color: var(--mint-ink);
+  box-shadow: 0 2px 0 #080C14, inset 0 2px 2px rgba(255,255,255,.2), inset 0 -2px 4px rgba(0,0,0,.45), inset 0 0 0 1.5px rgba(110,231,183,.5), 0 0 14px -3px rgba(16,185,129,.65);
 }
-.badge-slot.is-unlocked .badge-p { color: var(--mint-ink); }
-.badge-equipped-dot {
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--honey-ink);
+.badge-chip[data-state="unlocked"][data-accent="coral"] {
+  background: linear-gradient(180deg, #3A211C 0%, #221312 100%);
+  color: #FFB59D;
+  box-shadow: 0 2px 0 #080C14, inset 0 2px 2px rgba(255,255,255,.2), inset 0 -2px 4px rgba(0,0,0,.45), inset 0 0 0 1.5px rgba(255,82,43,.52), 0 0 14px -3px rgba(255,82,43,.65);
 }
-/* locked: recessed slate silhouette + lock */
-.badge-slot.is-locked {
-  background: var(--field);
-  box-shadow: var(--inset);
-  cursor: pointer;
+/* equipped: the coin wears a solid gold ring — the hero pill names it */
+.badge-slot.is-equipped .badge-chip,
+.badge-pick-row.is-equipped .badge-chip {
+  box-shadow:
+    0 2px 0 #080C14,
+    inset 0 2px 2px rgba(255, 255, 255, .22),
+    inset 0 -2px 4px rgba(0, 0, 0, .45),
+    inset 0 0 0 1.5px rgba(252, 211, 77, .55),
+    0 0 0 2px rgba(251, 191, 36, .8),
+    0 0 18px -2px rgba(245, 158, 11, .75);
 }
-.badge-slot.is-locked .badge-ico { color: #475569; background: #0A0F1C; }
-.badge-slot.is-locked .badge-ico .ico-lock { width: 14px; height: 14px; }
-.badge-slot.is-locked .badge-n { color: var(--ink-soft); }
-.badge-lock {
-  position: relative;
-  display: grid;
-  place-items: center;
+/* locked: a recessed slate slot — sunken, desaturated, lock glyph pinned to the rim */
+.badge-chip[data-state="locked"] {
+  background: linear-gradient(180deg, #151B28 0%, #0C111E 100%);
+  color: #475569;
+  box-shadow:
+    0 2px 0 #080C14,
+    inset 0 2px 5px rgba(0, 0, 0, .6),
+    inset 0 -1px 0 rgba(255, 255, 255, .05),
+    inset 0 0 0 1px rgba(255, 255, 255, .05);
 }
-.badge-lock .ico-main { width: 20px; height: 20px; opacity: .55; }
+.badge-lock { position: relative; display: grid; place-items: center; }
+.badge-lock .ico-main { width: 16px; height: 16px; opacity: .45; }
 .badge-lock .ico-lock {
   position: absolute;
-  right: -4px;
-  bottom: -4px;
+  right: -5px;
+  bottom: -5px;
   width: 15px;
   height: 15px;
-  padding: 2px;
+  padding: 2.5px;
   border-radius: 50%;
   background: #1C2433;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12);
-  color: var(--ink-soft);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
+  color: #64748B;
 }
 
 /* ---- two-column compact identity grid: tactile clay tiles ---- */
@@ -5517,14 +5555,56 @@ html.rm .notif-badge { animation: none; }
 .badge-progress .cap-track { height: 8px; }
 .badge-progress .cap-label { font-size: var(--t-micro); font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
 
+/* ---- "View All" drawer: the full catalogue as a quiet pick list ---- */
+.badges-sheet .pick { max-height: none; }
+.badge-pick-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 54px;
+  padding: var(--s1) var(--s2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: transform var(--motion-fast), background var(--motion-fast);
+}
+.badge-pick-row:hover:not(:active) { transform: translateY(-1px); }
+.badge-pick-row:active { transform: translateY(var(--press-y)); }
+.badge-pick-row:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+.badge-pick-row .badge-chip { width: 36px; height: 36px; }
+.badge-pick-row .badge-chip .ico { width: 16px; height: 16px; }
+.badge-pick-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.badge-pick-n {
+  min-width: 0;
+  font-size: var(--t-2);
+  font-weight: 800;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.badge-pick-s {
+  min-width: 0;
+  font-size: var(--t-micro);
+  font-weight: 700;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.badge-pick-row.is-unlocked .badge-pick-s { color: var(--mint-ink); }
+.badge-pick-row.is-equipped .badge-pick-n { color: var(--honey-ink); }
+.badge-pick-row .tick { width: 18px; height: 18px; flex: none; color: var(--honey-ink); visibility: hidden; }
+.badge-pick-row.is-equipped .tick { visibility: visible; }
+
 /* ---- profile responsive: zero horizontal scroll, targets stay >= 44px ---- */
 @media (max-width: 380px) {
   .pf-hero-v2 { padding: var(--s3); }
   .pf-hero-top { gap: var(--s2); }
   .pf-avatar-frame.avatar.big { width: 60px; height: 60px; border-radius: 21px; }
-  .badge-rack { gap: 6px; }
-  .badge-slot { min-height: 88px; border-radius: 15px; }
-  .badge-ico { width: 38px; height: 38px; border-radius: 13px; }
+  .badge-rack { gap: 4px; padding: 6px 8px; }
+  .badge-chip { width: 36px; height: 36px; }
+  .badge-chip .ico { width: 16px; height: 16px; }
+  .badge-lock .ico-lock { width: 13px; height: 13px; right: -4px; bottom: -4px; }
   .pf-id-card { min-height: 124px; padding: var(--s2); border-radius: 18px; }
   .pf-equipped-badge { max-width: 100%; }
   .pf-name-row { flex-wrap: wrap; }

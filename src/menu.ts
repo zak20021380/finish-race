@@ -578,51 +578,91 @@ export function createMenu(api: MenuApi): Menu {
     }
   };
 
-  /* Honor & Badges rack: 4 tactile slots, unlocked = metallic glow, locked = recessed. */
+  /* Honor & Badges: a slim horizontal tray of circular medal chips — 38px clay
+     coins, unlocked = lit metal, locked = recessed slate + lock glyph. No prose
+     in the tray: the name, lore, criteria and Equip live in the drawer. */
+  const makeChip = (unlocked: boolean, b: { icon: string; accent: string }): HTMLSpanElement => {
+    const chip = document.createElement('span');
+    chip.className = 'badge-chip';
+    chip.setAttribute('aria-hidden', 'true');
+    chip.setAttribute('data-accent', b.accent);
+    chip.setAttribute('data-state', unlocked ? 'unlocked' : 'locked');
+    chip.innerHTML = unlocked
+      ? `<svg class="ico" aria-hidden="true"><use href="${b.icon}" /></svg>`
+      : `<span class="badge-lock"><svg class="ico ico-main" aria-hidden="true"><use href="${b.icon}" /></svg>`
+        + `<svg class="ico ico-lock" aria-hidden="true"><use href="#i-lock" /></svg></span>`;
+    return chip;
+  };
+
   const paintBadges = () => {
     const rack = document.getElementById('pf-badge-rack');
     const count = document.getElementById('pf-badge-count');
-    if (count) count.textContent = `${unlockedCount()}/${BADGES.length}`;
+    if (count) count.textContent = `(${unlockedCount()}/${BADGES.length})`;
     if (!rack) return;
     rack.textContent = '';
     for (const b of BADGES) {
       const unlocked = isBadgeUnlocked(b.id);
       const prog = badgeProgress(b.id);
+      const equipped = unlocked && profile.badge === b.id;
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = `badge-slot ${unlocked ? 'is-unlocked' : 'is-locked'}`;
+      btn.className = `badge-slot ${unlocked ? 'is-unlocked' : 'is-locked'}${equipped ? ' is-equipped' : ''}`;
       btn.setAttribute('role', 'listitem');
       btn.dataset.badge = b.id;
-      btn.setAttribute('data-accent', b.accent);
-      if (unlocked && profile.badge === b.id) btn.classList.add('is-equipped');
-      const ico = document.createElement('span');
-      ico.className = 'badge-ico';
-      ico.setAttribute('aria-hidden', 'true');
-      if (unlocked) {
-        ico.innerHTML = `<svg class="ico" aria-hidden="true"><use href="${b.icon}" /></svg>`;
-      } else {
-        ico.innerHTML = `<span class="badge-lock"><svg class="ico ico-main" aria-hidden="true"><use href="${b.icon}" /></svg>`
-          + `<svg class="ico ico-lock" aria-hidden="true"><use href="#i-lock" /></svg></span>`;
-      }
-      const nm = document.createElement('span');
-      nm.className = 'badge-n';
-      nm.textContent = b.name;
-      const pr = document.createElement('span');
-      pr.className = 'badge-p';
-      if (unlocked) {
-        pr.textContent = profile.badge === b.id ? 'Equipped' : 'Unlocked';
-        if (profile.badge === b.id) pr.classList.add('badge-equipped-dot');
-      } else {
-        pr.textContent = prog.label;
-      }
-      btn.setAttribute('aria-label', `${b.name} — ${unlocked ? 'unlocked' : `locked, ${prog.label}`}. Open details.`);
+      const chip = makeChip(unlocked, b);
+      btn.setAttribute(
+        'aria-label',
+        `${b.name} — ${unlocked ? (equipped ? 'equipped' : 'unlocked') : `locked, ${prog.label}`}. Open details.`,
+      );
       btn.title = unlocked ? b.name : `${b.name} · ${prog.label}`;
-      btn.append(ico, nm, pr);
+      btn.append(chip);
       btn.addEventListener('click', () => openBadge(b.id));
       rack.append(btn);
     }
+    paintBadgeList();
   };
   paintBadgesRef = paintBadges;
+
+  /* "View All ›" drawer: the full catalogue as a quiet pick list — a row per
+     medal, tap any row for the same detail drawer the tray chip opens. */
+  function paintBadgeList() {
+    const list = document.getElementById('badge-list');
+    if (!list) return;
+    list.textContent = '';
+    for (const b of BADGES) {
+      const unlocked = isBadgeUnlocked(b.id);
+      const prog = badgeProgress(b.id);
+      const equipped = unlocked && profile.badge === b.id;
+      const li = document.createElement('li');
+      li.className = `badge-pick-row ${unlocked ? 'is-unlocked' : 'is-locked'}${equipped ? ' is-equipped' : ''}`;
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', String(equipped));
+      li.tabIndex = 0;
+      const chip = makeChip(unlocked, b);
+      const txt = document.createElement('span');
+      txt.className = 'badge-pick-txt';
+      const nm = document.createElement('span');
+      nm.className = 'badge-pick-n';
+      nm.textContent = b.name;
+      const st = document.createElement('span');
+      st.className = 'badge-pick-s';
+      st.textContent = unlocked ? (equipped ? 'Equipped' : 'Unlocked') : prog.label;
+      txt.append(nm, st);
+      const tick = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      tick.setAttribute('class', 'ico tick');
+      tick.setAttribute('aria-hidden', 'true');
+      tick.innerHTML = '<use href="#i-check" />';
+      const open = () => openBadge(b.id);
+      li.addEventListener('click', open);
+      li.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        open();
+      });
+      li.append(chip, txt, tick);
+      list.append(li);
+    }
+  }
 
   let badgeDraft: string | null = null;
   function openBadge(id: string) {
@@ -761,6 +801,16 @@ export function createMenu(api: MenuApi): Menu {
     impact('medium');
     api.sheets.close();
     showPfToast('Badge equipped');
+  });
+  /* "View All ›" opens the full honor catalogue; the tray stays the shortcut. */
+  document.getElementById('pf-badges-all')?.addEventListener('click', () => {
+    const sheet = api.sheet('sheet-badges');
+    if (!sheet) return;
+    paintBadgeList();
+    const sub = document.getElementById('badges-sub');
+    if (sub) sub.textContent = `${unlockedCount()} of ${BADGES.length} unlocked. Tap a medal for its lore and to equip it.`;
+    api.sheets.open(sheet);
+    impact('light');
   });
 
   /* ---- difficulty: mode select owns the segmented control; Home shows fixed labels ---- */

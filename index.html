@@ -689,7 +689,10 @@
               <div class="stat"><dt>Best run</dt><dd id="pf-best">0</dd></div>
             </dl>
             <div class="pf-sec pf-badges-sec">
-              <h2 class="eq-h pf-sec-h"><span>Honor &amp; Badges</span><span class="pf-sec-sub pf-badge-count" id="pf-badge-count">1/4</span></h2>
+              <h2 class="eq-h pf-sec-h">
+                <span>Honor &amp; Badges <span class="pf-badge-count" id="pf-badge-count">(1/4)</span></span>
+                <button class="pf-sec-link" type="button" id="pf-badges-all">View All <svg class="ico" aria-hidden="true"><use href="#i-next" /></svg></button>
+              </h2>
               <div class="badge-rack" id="pf-badge-rack" role="list" aria-label="Player badges"></div>
             </div>
             <div class="pf-sec">
@@ -1084,6 +1087,17 @@
           <button class="btn btn-primary" type="button" id="badge-equip" data-autofocus>Equip to Profile</button>
         </div>
         <p class="fine">Equipped badge shows next to your name on your identity card.</p>
+      </section>
+
+      <!-- all badges: the full honor catalogue as a quiet pick list -->
+      <section class="sheet tall badges-sheet" id="sheet-badges" hidden role="dialog" aria-modal="true" aria-labelledby="badges-title">
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <h2 class="sheet-t" id="badges-title">Honor &amp; Badges</h2>
+        <p class="sheet-p" id="badges-sub">1 of 4 unlocked. Tap a medal for its lore and to equip it.</p>
+        <ul class="pick badge-pick" id="badge-list" role="listbox" aria-label="All badges" data-scroll tabindex="0"></ul>
+        <div class="sheet-actions">
+          <button class="btn btn-ghost" type="button" data-sheet-close data-autofocus>Close</button>
+        </div>
       </section>
 
       <!-- language: clay bottom drawer with the 5 supported locales -->
