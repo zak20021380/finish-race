@@ -7,7 +7,10 @@
  * player always sees their community progress. Solo Champions keeps the
  * Players | Countries | Teams secondary switch.
  * Tournament cards are high-energy Dark Clay arena cards with per-status
- * hierarchy (live glow + ENTER NOW, upcoming slate + Register, ended archive).
+ * hierarchy (live glow + ENTER ARENA, upcoming slate + Pre-register, ended
+ * archive). The Hero cup is three flex rows — header · prizes & meta ·
+ * capacity + CTA — and every card sizes to its own content: no fixed height,
+ * no overflow clipping, no truncated line.
  */
 import {
   formatCountdown,
@@ -22,7 +25,7 @@ import {
   type Tournament,
 } from './data';
 import { flagOf, nameOf } from './countries';
-import { coinText, mountCoins, setBalance } from './coin';
+import { coinSvg, coinText, mountCoins, setBalance } from './coin';
 import { myTeam, onChange, profile, spendCoins } from './storage';
 import { bindSquadById, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadKind, squadLetter, type RankedSquad } from './squads';
 import { impact, notify, tgUser } from './telegram';
@@ -331,20 +334,41 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return t;
   }
 
-  /** Dual prize pool — exact spec format, pure text (no orphan spans).
-   *  Hero: "🏆 250 Trophies  ·  🪙 5,000 Coins" (full labels, prominent).
-   *  Upcoming (compact): "🪙 2,500 · 🏆 150". */
+  /** Dual prize pool — the shared coin SVG + trophies, no orphan spans, no truncation.
+   *  Hero: two tactile chips, gold coins "5,000" + sky trophies "🏆 750".
+   *  Upcoming (compact): one quiet line "5,000 · 🏆 150". */
   function prizePoolEl(t: Tournament, compact = false): HTMLElement {
     const wrap = document.createElement('div');
     wrap.className = compact ? 'arena-prizes is-compact' : 'arena-prizes is-hero-pool';
     const coins = coinText(t.prizePool);
     const trophies = trophyPoolOf(t).toLocaleString('en-US');
+    wrap.setAttribute('aria-label', `Prize pool ${coins} coins plus ${trophies} trophies`);
+
+    const coinHost = document.createElement('span');
+    coinHost.className = 'arena-coin';
+    coinHost.append(coinSvg());
+    const amount = document.createElement('span');
+    amount.className = 'arena-coin-amt';
+    amount.textContent = coins;
+
+    const cup = document.createElement('span');
+    cup.className = 'arena-cup-emo';
+    cup.textContent = '🏆';
+    cup.setAttribute('aria-hidden', 'true');
+    const trAmt = document.createElement('span');
+    trAmt.className = 'arena-trophy-amt';
+    trAmt.textContent = trophies;
+
     if (compact) {
-      wrap.textContent = `🪙 ${coins} · 🏆 ${trophies}`;
-      wrap.setAttribute('aria-label', `Prize pool ${coins} coins plus ${trophies} trophies`);
+      wrap.append(coinHost, amount, document.createTextNode(' · '), cup, trAmt);
     } else {
-      wrap.textContent = `🏆 ${trophies} Trophies  ·  🪙 ${coins} Coins`;
-      wrap.setAttribute('aria-label', `Prize pool ${trophies} trophies plus ${coins} coins`);
+      const coinChip = document.createElement('span');
+      coinChip.className = 'arena-prize-chip is-coins';
+      coinChip.append(coinHost, amount);
+      const trophyChip = document.createElement('span');
+      trophyChip.className = 'arena-prize-chip is-trophies';
+      trophyChip.append(cup, trAmt);
+      wrap.append(coinChip, trophyChip);
     }
     return wrap;
   }
@@ -368,16 +392,19 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return wrap;
   }
 
-  function capLabelEl(t: Tournament): HTMLElement {
+  /** Capacity head. Hero is spec-exact: "184/256 entered". Upcoming keeps the
+   *  fill mood after it. Always a single line the card has room for — never clipped. */
+  function capLabelEl(t: Tournament, hero = false): HTMLElement {
     const label = document.createElement('span');
     label.className = 'cap-label';
-    // Spec-exact dynamic capacity: "184/256 Players" (no spaces, no "Entered").
-    label.append(document.createTextNode(`${t.players}/${t.maxPlayers} Players · `));
-    const hot = document.createElement('span');
-    hot.className = 'hot';
-    hot.textContent = moodOf(t);
-    label.append(hot);
-    label.setAttribute('aria-label', `${t.players} of ${t.maxPlayers} players entered, ${moodOf(t)}`);
+    label.append(document.createTextNode(hero ? `${t.players}/${t.maxPlayers} entered` : `${t.players}/${t.maxPlayers} entered · `));
+    if (!hero) {
+      const hot = document.createElement('span');
+      hot.className = 'hot';
+      hot.textContent = moodOf(t);
+      label.append(hot);
+    }
+    label.setAttribute('aria-label', `${t.players} of ${t.maxPlayers} players entered${hero ? '' : `, ${moodOf(t)}`}`);
     return label;
   }
 
@@ -394,8 +421,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     } else {
       btn.className = 'btn btn-ghost arena-cta upcoming-cta';
       btn.disabled = isJoined;
-      if (isJoined) btn.textContent = t.entryFee ? 'Registered ✓' : 'Reminder Set ✓';
-      else btn.textContent = t.entryFee ? 'Register' : 'Remind Me';
+      // Spec-exact secondary CTA: sleek tactile "Pre-register".
+      if (isJoined) btn.textContent = t.entryFee ? 'Pre-registered ✓' : 'Reminder Set ✓';
+      else btn.textContent = 'Pre-register';
     }
     btn.setAttribute('aria-label', `${btn.textContent}: ${t.name}`);
     btn.addEventListener('click', () => askJoin(t));
@@ -417,6 +445,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     backlight.setAttribute('aria-hidden', 'true');
     card.append(backlight);
 
+    /* Row 1 — header: cup icon + cup name on the left, pulsing ● LIVE on the right. */
     const top = document.createElement('div');
     top.className = 'arena-top';
     const id = document.createElement('div');
@@ -427,10 +456,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const name = document.createElement('h3');
     name.className = 'arena-name';
     name.textContent = t.name;
-    const sub = document.createElement('p');
-    sub.className = 'arena-sub';
-    sub.textContent = t.entryFee ? `${coinText(t.entryFee)} entry · Free with ticket` : 'Free entry';
-    titles.append(name, sub);
+    titles.append(name);
     id.append(titles);
     const badge = document.createElement('span');
     badge.className = 'pill live pulse';
@@ -446,9 +472,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     top.append(id, badge);
     card.append(top);
 
+    /* Row 2 — prizes & meta: gold coins + trophies + entry info (+ time left). */
     const prizeRow = document.createElement('div');
     prizeRow.className = 'arena-prize-row hero-prizes';
     prizeRow.append(prizePoolEl(t, false));
+    const entry = document.createElement('span');
+    entry.className = 'arena-sub hero-entry';
+    entry.textContent = t.entryFee ? `${coinText(t.entryFee)} entry · Free with ticket` : 'Free entry';
+    prizeRow.append(entry);
     const time = document.createElement('span');
     time.className = 'arena-time hero-time';
     time.dataset.count = t.id;
@@ -456,17 +487,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     prizeRow.append(time);
     card.append(prizeRow);
 
-    const capBlock = document.createElement('div');
-    capBlock.className = 'arena-cap-block';
-    capBlock.append(capLabelEl(t), meterEl(t));
-    card.append(capBlock);
-
+    /* Row 3 — capacity & CTA: progress meter on the left, ENTER ARENA on the right. */
     const foot = document.createElement('div');
     foot.className = 'arena-foot hero-foot';
-    const feeNote = document.createElement('span');
-    feeNote.className = 'arena-entry-note';
-    feeNote.textContent = t.entryFee ? `${coinText(t.entryFee)} to enter` : 'Free to enter';
-    foot.append(feeNote, actionBtn(t));
+    const capBlock = document.createElement('div');
+    capBlock.className = 'arena-cap-block';
+    capBlock.append(capLabelEl(t, true), meterEl(t));
+    foot.append(capBlock, actionBtn(t));
     card.append(foot);
     return card;
   }
@@ -509,17 +536,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     prizeRow.append(slots);
     card.append(prizeRow);
 
+    // Foot: capacity meter left, sleek tactile Pre-register right — never clipped.
+    const foot = document.createElement('div');
+    foot.className = 'arena-foot upcoming-foot';
     const capBlock = document.createElement('div');
     capBlock.className = 'arena-cap-block';
     capBlock.append(capLabelEl(t), meterEl(t));
-    card.append(capBlock);
-
-    const foot = document.createElement('div');
-    foot.className = 'arena-foot upcoming-foot';
-    const feeNote = document.createElement('span');
-    feeNote.className = 'arena-entry-note';
-    feeNote.textContent = t.entryFee ? `${coinText(t.entryFee)} entry` : 'Free entry';
-    foot.append(feeNote, actionBtn(t));
+    foot.append(capBlock, actionBtn(t));
     card.append(foot);
     return card;
   }
@@ -569,8 +592,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return card;
   }
 
-  /** Player Arena Pass & Status: clean ticket bar (no orphans, no truncation). */
-  function buildPassWidget(liveCount: number): HTMLElement {
+  /** Player Arena Pass & Status: clean ticket bar (no orphans, no truncation).
+   *  Left = icon + stacked "Tickets: 2" / "Best Finish: Top 4"; right = actions. */
+  function buildPassWidget(): HTMLElement {
     const pass = readPass();
     const claimedToday = pass.lastClaim === todayStr();
 
@@ -595,7 +619,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     count.textContent = `Tickets: ${pass.tickets}`;
     const sub = document.createElement('small');
     sub.className = 'arena-pass-sub';
-    sub.textContent = liveCount ? `Best Finish: ${bestFinishLabel()} · ${liveCount} live` : `Best Finish: ${bestFinishLabel()}`;
+    sub.textContent = `Best Finish: ${bestFinishLabel()}`;
     titles.append(count, sub);
     left.append(ico, titles);
 
@@ -664,7 +688,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     });
     if (!tournaments.length) {
       el.innerHTML = empty('No tournaments right now. Check back soon.');
-      el.append(buildPassWidget(0));
+      el.append(buildPassWidget());
       paintFeedLabel();
       return;
     }
@@ -676,8 +700,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     for (const t of live) el.append(buildLiveCard(t));
     for (const t of up) el.append(buildUpcomingCard(t));
 
-    // Player status module fills the vertical gap between cards and dock.
-    el.append(buildPassWidget(live.length));
+    // Player status module sits right under the cups in the same flex column.
+    el.append(buildPassWidget());
 
     if (done.length) {
       const arch = document.createElement('details');

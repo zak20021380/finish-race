@@ -1837,18 +1837,22 @@ html.rm *, html.rm *::before, html.rm *::after {
 
 /* ---- arena cards: high-energy Dark Clay, per-status hierarchy ----
    Canvas #10141D, cards #1C2433, text #F8FAFC. Opaque clay only (no blur),
-   transform/opacity motion only, so the feed stays at 60fps touch. */
+   transform/opacity motion only, so the feed stays at 60fps touch.
+   Sizing is always content-driven: height auto + fit-content, and NEVER
+   overflow:hidden — a clipped card is a broken card. The neon glows ride
+   border-radius:inherit so they stay inside the rounded face on their own. */
 .arena-card {
   position: relative;
+  height: auto;
+  min-height: fit-content;
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
-  padding: var(--s3);
-  border-radius: 20px;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 18px;
   background: var(--clay-face);
   background-color: #1C2433;
   box-shadow: var(--clay), var(--clay-ring);
-  overflow: hidden;
   max-width: 100%;
   min-width: 0;
 }
@@ -1879,8 +1883,8 @@ html.rm *, html.rm *::before, html.rm *::after {
   background-color: #1C2433;
   box-shadow: var(--clay), var(--clay-ring), 0 0 26px -8px rgba(56, 189, 248, .35);
 }
-.arena-glow { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(60% 42% at 50% 0%, rgba(125, 211, 252, .12), transparent 70%); }
-.arena-card.is-live > *:not(.arena-glow) { position: relative; }
+.arena-glow { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: radial-gradient(60% 42% at 50% 0%, rgba(125, 211, 252, .12), transparent 70%); }
+.arena-card.is-live > *:not(.arena-glow):not(.arena-hero-backlight) { position: relative; }
 
 /* UPCOMING: muted cool slate, quiet until it starts */
 .arena-card.is-upcoming {
@@ -1972,7 +1976,7 @@ html.rm *, html.rm *::before, html.rm *::after {
 .champ-who { flex: 0 1 auto; min-width: 0; font-size: var(--t-3); font-weight: 800; color: #F8FAFC; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .champ-meta { flex: 1 1 auto; min-width: 0; text-align: right; font-size: var(--t-micro); font-weight: 700; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 /* archive accordion: ended cups live here, collapsed by default */
-.arena-archive { border-radius: var(--radius-md); background: transparent; }
+.arena-archive { border-radius: 18px; background: transparent; }
 .arena-archive-sum {
   list-style: none;
   cursor: pointer;
@@ -1981,8 +1985,9 @@ html.rm *, html.rm *::before, html.rm *::after {
   justify-content: space-between;
   gap: var(--s2);
   min-height: 48px;
-  padding: 0 var(--s3);
-  border-radius: var(--radius-md);
+  height: auto;
+  padding: 12px 16px;
+  border-radius: 18px;
   background: var(--clay-face);
   background-color: #1C2433;
   box-shadow: var(--clay), var(--clay-ring);
@@ -1995,8 +2000,8 @@ html.rm *, html.rm *::before, html.rm *::after {
 .arena-archive-sum:active { transform: translateY(2px); }
 .arch-chev { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 9px; background: var(--field); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); color: var(--ink-soft); font-size: 18px; line-height: 1; transform: rotate(90deg); transition: transform var(--motion-med); }
 .arena-archive[open] .arch-chev { transform: rotate(-90deg); }
-.arena-archive-list { display: flex; flex-direction: column; gap: 16px; padding-top: 16px; }
-.arena-top .pill { flex: none; max-width: 52%; overflow: hidden; text-overflow: ellipsis; }
+.arena-archive-list { display: flex; flex-direction: column; gap: 14px; padding-top: 14px; }
+.arena-top .pill { flex: none; max-width: 56%; overflow: visible; text-overflow: clip; }
 .arena-card .cap-meter { min-width: 0; }
 @media (max-height: 700px) {
   .arena-card .trophy { width: 48px; height: 48px; }
@@ -5536,18 +5541,36 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
    Vertical rhythm: 16px gaps, dock-safe bottom pad, transform-only presses.
    ========================================================================== */
 
-/* ---- screen column: even flex spacing, no dead void, dock-safe bottom ---- */
-.arena-screen { display: flex; flex-direction: column; gap: 16px; flex: 1 1 auto; min-height: 0; }
+/* ---- screen column: natural flex stack, 14px rhythm, dock-safe bottom pad ----
+   The screen, its scroll body and the card feed are all flex columns on the same
+   14px rhythm. Cards are flex:none and min-height:fit-content, so the feed is
+   exactly as tall as its content: nothing shrinks, nothing clips, and the body
+   scrolls instead of crushing the Hero cup into a 110px sliver. */
+.screen.arena-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+  max-width: 100%;
+}
 .arena-screen .compete-body,
 #arena-scroll {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding-bottom: calc(var(--dock-height) + 16px);
+  gap: 14px;
+  padding-bottom: calc(var(--dock-height) + 20px);
 }
-#arena-tournaments { display: flex; flex-direction: column; gap: 16px; flex: 1 1 auto; min-height: 100%; justify-content: flex-start; }
+#arena-tournaments {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: none;
+  min-height: 100%;
+  justify-content: flex-start;
+}
+#arena-tournaments > * { flex: none; height: auto; min-height: fit-content; }
 
 /* ---- shared tactile press: 60fps translateY only, compositor-friendly ---- */
 .arena-card,
@@ -5562,11 +5585,14 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 .btn-coral.arena-cta:active { --d: 1px; transform: translateY(2px); }
 .btn-ghost.arena-cta:active { --d: 0px; transform: translateY(2px); }
 
-/* ---- HERO: live Neon Rush Cup — prominent, ambient neon backlight ---- */
+/* ---- HERO: live Neon Rush Cup — prominent, ambient neon backlight ----
+   Three flex rows, zero clipping: header · prizes & meta · capacity + CTA. */
 .arena-card.is-hero {
+  height: auto;
+  min-height: fit-content;
   gap: 12px;
-  padding: 20px;
-  border-radius: 22px;
+  padding: 18px;
+  border-radius: 18px;
   border-top: 1px solid rgba(255, 255, 255, .16);
   background:
     radial-gradient(130% 95% at 85% 0%, rgba(56, 189, 248, .26), rgba(56, 189, 248, 0) 55%),
@@ -5583,7 +5609,8 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 }
 .arena-hero-backlight {
   position: absolute;
-  inset: -1px;
+  inset: 0;
+  border-radius: inherit;
   pointer-events: none;
   background:
     radial-gradient(55% 34% at 50% 0%, rgba(125, 211, 252, .18), transparent 70%),
@@ -5591,40 +5618,32 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 }
 .arena-card.is-hero > *:not(.arena-glow):not(.arena-hero-backlight) { position: relative; }
 .arena-card.is-hero .arena-name { font-size: var(--t-1); font-weight: 900; letter-spacing: -.015em; }
+/* no cup ever loses a character: names and meta wrap onto a new line, never "…" */
+.arena-card .arena-name,
+.arena-card .arena-sub {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
 .arena-card.is-hero .trophy { width: 64px; height: 64px; }
 .arena-card.is-hero .trophy-badge { width: 54px; height: 54px; border-radius: 18px; }
 .arena-card.is-hero .trophy-badge .ico { width: 27px; height: 27px; }
 
-/* hero dual prize pool: coins + trophies side by side, wraps cleanly */
+/* hero dual prize pool: gold coins chip + sky trophies chip, wraps cleanly */
 .arena-prizes { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
 .arena-prizes.is-hero-pool {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
-  font-size: var(--t-2);
-  font-weight: 900;
-  letter-spacing: -.01em;
-  color: var(--honey-ink);
+  gap: 8px;
   font-variant-numeric: tabular-nums;
-  line-height: 1.35;
 }
-.arena-prizes.is-compact {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: var(--t-3);
-  font-weight: 800;
-  color: var(--honey-ink);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.hero-prizes { flex: 1 1 auto; min-width: 0; }
-.arena-trophy {
+.arena-prize-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
-  padding: 3px 10px 4px;
+  padding: 5px 11px 6px;
   border-radius: var(--radius-pill);
   background: var(--honey-soft);
   box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .32), 0 2px 0 rgba(0, 0, 0, .45);
@@ -5634,8 +5653,37 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.arena-trophy .trophy-emo { font-size: 13px; line-height: 1; }
-.arena-trophy b { font-weight: 800; }
+.arena-prize-chip.is-trophies {
+  background: rgba(56, 189, 248, .14);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .3), 0 2px 0 rgba(0, 0, 0, .45);
+  color: #7DD3FC;
+}
+/* inline coin SVG + amounts: the chip never depends on an emoji font */
+.arena-coin { display: inline-flex; flex: none; align-items: center; }
+.arena-coin .coin { width: 1.2em; height: 1.2em; }
+.arena-cup-emo { flex: none; font-size: 1.05em; line-height: 1; }
+.arena-coin-amt,
+.arena-trophy-amt { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.arena-prizes.is-compact {
+  flex: 0 1 auto;
+  min-width: 0;
+  gap: 6px;
+  font-size: var(--t-3);
+  font-weight: 800;
+  color: var(--honey-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
+}
+.hero-prizes { flex: 1 1 auto; min-width: 0; align-items: center; justify-content: flex-start; flex-wrap: wrap; }
+.hero-prizes .hero-time { margin-left: auto; }
+/* row 2 meta: entry info never truncates — it wraps onto its own line instead */
+.hero-entry {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
 .live-label { font-weight: 900; letter-spacing: .06em; }
 .arena-prize-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; flex-wrap: wrap; }
 .hero-time {
@@ -5676,44 +5724,38 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   font-weight: 800;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.35;
 }
 .cap-label .hot { color: #7DD3FC; }
 
-/* hero foot: entry note left, chunky 3D CTA anchored bottom-right */
-.hero-foot { align-items: flex-end; margin-top: 2px; }
-.arena-entry-note {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: var(--t-micro);
-  font-weight: 700;
-  color: var(--ink-soft);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding-bottom: 12px;
-}
+/* foot row (hero + upcoming): capacity meter left, chunky 3D CTA right */
+.hero-foot,
+.upcoming-foot { align-items: center; gap: 12px; }
+.hero-foot .arena-cap-block,
+.upcoming-foot .arena-cap-block { flex: 1 1 auto; min-width: 0; }
 .btn-coral.arena-cta.hero-cta {
   --d: 5px;
   flex: none;
-  min-height: 52px;
-  min-width: 150px;
-  padding: 0 var(--s4);
-  border-radius: 18px;
+  min-height: 40px;
+  min-width: 148px;
+  padding: 14px var(--s4);
+  border-radius: 15px;
   font-size: var(--t-2);
   font-weight: 900;
   letter-spacing: .06em;
   text-transform: uppercase;
 }
 
-/* ---- UPCOMING: clean Dark Clay #1C2433, quiet until it starts ---- */
+/* ---- UPCOMING: clean Dark Clay #1C2433, natural size, quiet until it starts ---- */
 .arena-card.is-upcoming {
+  height: auto;
+  min-height: fit-content;
   gap: 12px;
-  padding: 18px;
-  border-radius: 20px;
+  padding: 14px 16px;
+  border-radius: 18px;
   border-top: 1px solid rgba(255, 255, 255, .09);
   background: linear-gradient(180deg, #202A3E 0%, #1C2433 100%);
   background-color: #1C2433;
@@ -5721,16 +5763,14 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 }
 .countdown-badge {
   flex: none;
-  max-width: 48%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: 52%;
+  overflow: visible;
+  text-overflow: clip;
   white-space: nowrap;
   background: linear-gradient(180deg, rgba(14, 165, 233, .24) 0%, rgba(14, 165, 233, .14) 100%);
   color: var(--brand-ink);
 }
-.upcoming-foot { align-items: flex-end; }
-.upcoming-foot .arena-entry-note { padding-bottom: 10px; }
-/* secondary tactile pill: Register / Remind Me — quiet clay, real lip */
+/* secondary tactile pill: Pre-register — quiet clay, real lip */
 .btn-ghost.arena-cta.upcoming-cta {
   --d: 3px;
   flex: none;
@@ -5750,13 +5790,15 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 }
 .upcoming-cta:hover:not(:active) { transform: translateY(-1px); }
 
-/* ---- ARENA PASS & STATUS: clean ticket bar, no orphans, no truncation ---- */
+/* ---- ARENA PASS & STATUS: clean ticket bar, stacked text, no truncation ---- */
 .arena-pass {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  height: auto;
+  min-height: fit-content;
+  gap: 12px;
   padding: 18px;
-  border-radius: 20px;
+  border-radius: 18px;
   border-top: 1px solid rgba(255, 255, 255, .1);
   background:
     radial-gradient(110% 90% at 10% 0%, rgba(245, 158, 11, .12), rgba(245, 158, 11, 0) 55%),
@@ -5796,28 +5838,31 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   font-size: 21px;
   line-height: 1;
 }
-.arena-pass-titles { flex: 1 1 auto; min-width: 0; max-width: 100%; display: flex; flex-direction: column; gap: 3px; }
+/* Left: icon + vertically stacked text (gap 2px). Right: Claim + History. */
+.arena-pass-titles { flex: 1 1 auto; min-width: 0; max-width: 100%; display: flex; flex-direction: column; gap: 2px; }
 .arena-pass-count {
   min-width: 0;
   max-width: 100%;
-  font-size: var(--t-2);
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 700;
   letter-spacing: -.01em;
   color: #F8FAFC;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.3;
   font-variant-numeric: tabular-nums;
 }
 .arena-pass-sub {
   min-width: 0;
   max-width: 100%;
-  font-size: var(--t-micro);
-  font-weight: 700;
-  color: var(--ink-soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94A3B8;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.3;
   font-variant-numeric: tabular-nums;
 }
 /* Right side: tactile blue Claim + ghost History — wraps cleanly, never squeezes left. */
@@ -5825,19 +5870,17 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 .arena-pass-claim { --d: 3px; min-height: 44px; white-space: nowrap; flex: none; }
 .arena-pass-history { --d: 3px; min-height: 44px; white-space: nowrap; flex: none; }
 .arena-pass-claim[disabled] { opacity: .72; }
-@media (max-width: 400px) {
+@media (max-width: 420px) {
   .arena-pass-main { flex-wrap: wrap; }
   .arena-pass-left { flex: 1 1 100%; }
   .arena-pass-actions { flex: 1 1 100%; justify-content: stretch; flex-wrap: wrap; }
   .arena-pass-claim, .arena-pass-history { flex: 1 1 0; min-width: 0; }
-  .btn-coral.arena-cta.hero-cta { min-width: 132px; min-height: 48px; }
-  .countdown-badge { max-width: 52%; }
+  .btn-coral.arena-cta.hero-cta { min-width: 128px; min-height: 44px; }
 }
 @media (max-height: 700px) {
-  .arena-card.is-hero { padding: 16px; }
   .arena-card.is-hero .trophy { width: 52px; height: 52px; }
   .arena-card.is-hero .trophy-badge { width: 46px; height: 46px; border-radius: 15px; }
-  .btn-coral.arena-cta.hero-cta { min-height: 48px; }
+  .btn-coral.arena-cta.hero-cta { min-height: 44px; }
 }
 html.rm .arena-card.is-hero,
 html.rm .arena-pass { animation: none; }
