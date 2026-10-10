@@ -256,28 +256,97 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   /* ---------- arena feed ---------- */
 
+    /* ---------- arena pass (tickets + best finish) state ---------- */
+
+  const PASS_KEY = 'detour.arena.pass.v1';
+
+  interface PassState {
+    tickets: number;
+    /** YYYY-MM-DD of the last daily claim, local time */
+    lastClaim: string;
+    best: string;
+  }
+
+  function todayStr(): string {
+    const d = new Date();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${m}-${day}`;
+  }
+
+  function readPass(): PassState {
+    const fallback: PassState = { tickets: 2, lastClaim: '', best: 'Top 4' };
+    try {
+      const raw = window.localStorage.getItem(PASS_KEY);
+      if (!raw) return fallback;
+      const p = JSON.parse(raw) as Partial<PassState>;
+      return {
+        tickets: typeof p.tickets === 'number' && Number.isFinite(p.tickets) ? Math.max(0, Math.min(9, Math.floor(p.tickets))) : fallback.tickets,
+        lastClaim: typeof p.lastClaim === 'string' ? p.lastClaim : '',
+        best: typeof p.best === 'string' && p.best.length > 0 && p.best.length <= 24 ? p.best : fallback.best,
+      };
+    } catch {
+      return fallback;
+    }
+  }
+
+  function writePass(s: PassState): void {
+    try {
+      window.localStorage.setItem(PASS_KEY, JSON.stringify(s));
+    } catch {
+      /* in-memory only */
+    }
+  }
+
+  function bestFinishLabel(): string {
+    // Persisted best finish; new devices start at the motivational default.
+    // A real backend would compute this from tournament results.
+    const stored = readPass().best;
+    if (joined.size > 0) return stored || 'Top 4';
+    if (profile.stats.games > 0) return stored || 'Top 4';
+    return stored || 'Top 4';
+  }
+
+  function trophyPoolOf(t: Tournament): number {
+    if (typeof t.trophyPool === 'number' && Number.isFinite(t.trophyPool)) return Math.max(0, Math.floor(t.trophyPool));
+    return Math.max(0, Math.round(t.prizePool / 8));
+  }
+
   function trophyEl(kind: 'neon' | 'steel' | 'dim'): HTMLElement {
     const t = document.createElement('span');
     t.className = `trophy trophy-${kind}`;
     t.setAttribute('aria-hidden', 'true');
     const badge = document.createElement('span');
     badge.className = 'trophy-badge';
-    badge.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-cup" /></svg>';
+    // Build SVG via DOM (no innerHTML) so no orphan text nodes can leak.
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('class', 'ico');
+    svg.setAttribute('aria-hidden', 'true');
+    const use = document.createElementNS(svgNS, 'use');
+    use.setAttribute('href', '#i-cup');
+    svg.append(use);
+    badge.append(svg);
     t.append(badge);
     return t;
   }
 
-  function coinPrize(amount: number): HTMLElement {
-    const s = document.createElement('span');
-    s.className = 'arena-prize';
-    const coin = document.createElement('span');
-    coin.className = 'coin';
-    coin.setAttribute('data-coin', '');
-    coin.setAttribute('aria-hidden', 'true');
-    const pv = document.createElement('b');
-    pv.textContent = coinText(amount);
-    s.append(coin, pv);
-    return s;
+  /** Dual prize pool — exact spec format, pure text (no orphan spans).
+   *  Hero: "🏆 250 Trophies  ·  🪙 5,000 Coins" (full labels, prominent).
+   *  Upcoming (compact): "🪙 2,500 · 🏆 150". */
+  function prizePoolEl(t: Tournament, compact = false): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = compact ? 'arena-prizes is-compact' : 'arena-prizes is-hero-pool';
+    const coins = coinText(t.prizePool);
+    const trophies = trophyPoolOf(t).toLocaleString('en-US');
+    if (compact) {
+      wrap.textContent = `🪙 ${coins} · 🏆 ${trophies}`;
+      wrap.setAttribute('aria-label', `Prize pool ${coins} coins plus ${trophies} trophies`);
+    } else {
+      wrap.textContent = `🏆 ${trophies} Trophies  ·  🪙 ${coins} Coins`;
+      wrap.setAttribute('aria-label', `Prize pool ${trophies} trophies plus ${coins} coins`);
+    }
+    return wrap;
   }
 
   function meterEl(t: Tournament): HTMLElement {
@@ -302,12 +371,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   function capLabelEl(t: Tournament): HTMLElement {
     const label = document.createElement('span');
     label.className = 'cap-label';
-    label.append(document.createTextNode(`${t.players} / ${t.maxPlayers} entered · `));
+    // Spec-exact dynamic capacity: "184/256 Players" (no spaces, no "Entered").
+    label.append(document.createTextNode(`${t.players}/${t.maxPlayers} Players · `));
     const hot = document.createElement('span');
     hot.className = 'hot';
     hot.textContent = moodOf(t);
     label.append(hot);
-    label.setAttribute('aria-label', `${t.players} of ${t.maxPlayers} entered, ${moodOf(t)}`);
+    label.setAttribute('aria-label', `${t.players} of ${t.maxPlayers} players entered, ${moodOf(t)}`);
     return label;
   }
 
@@ -316,13 +386,16 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     btn.type = 'button';
     const isJoined = joined.has(t.id);
     if (t.status === 'live') {
-      btn.className = 'btn btn-coral arena-cta';
+      btn.className = 'btn btn-coral arena-cta hero-cta';
       btn.disabled = isJoined;
-      btn.textContent = isJoined ? 'Entered ✓' : 'Enter Now';
+      // Spec-exact primary CTA: bold tactile 3D "ENTER ARENA" (CSS uppercases visually).
+      btn.textContent = isJoined ? 'Entered ✓' : 'ENTER ARENA';
+      btn.dataset.hero = 'enter';
     } else {
-      btn.className = 'btn btn-ghost arena-cta';
+      btn.className = 'btn btn-ghost arena-cta upcoming-cta';
       btn.disabled = isJoined;
-      btn.textContent = isJoined ? 'Registered ✓' : t.entryFee ? 'Register' : 'Remind Me';
+      if (isJoined) btn.textContent = t.entryFee ? 'Registered ✓' : 'Reminder Set ✓';
+      else btn.textContent = t.entryFee ? 'Register' : 'Remind Me';
     }
     btn.setAttribute('aria-label', `${btn.textContent}: ${t.name}`);
     btn.addEventListener('click', () => askJoin(t));
@@ -331,13 +404,18 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   function buildLiveCard(t: Tournament): HTMLElement {
     const card = document.createElement('article');
-    card.className = 'arena-card is-live';
+    card.className = 'arena-card is-live is-hero';
     card.dataset.id = t.id;
+    card.setAttribute('aria-label', `${t.name}, live tournament, prize pool ${coinText(t.prizePool)} plus ${trophyPoolOf(t)} trophies`);
 
     const glow = document.createElement('div');
     glow.className = 'arena-glow';
     glow.setAttribute('aria-hidden', 'true');
     card.append(glow);
+    const backlight = document.createElement('div');
+    backlight.className = 'arena-hero-backlight';
+    backlight.setAttribute('aria-hidden', 'true');
+    card.append(backlight);
 
     const top = document.createElement('div');
     top.className = 'arena-top';
@@ -351,33 +429,44 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     name.textContent = t.name;
     const sub = document.createElement('p');
     sub.className = 'arena-sub';
-    sub.textContent = t.entryFee ? `${coinText(t.entryFee)} entry` : 'Free entry';
+    sub.textContent = t.entryFee ? `${coinText(t.entryFee)} entry · Free with ticket` : 'Free entry';
     titles.append(name, sub);
     id.append(titles);
     const badge = document.createElement('span');
     badge.className = 'pill live pulse';
+    badge.setAttribute('aria-label', 'Live tournament');
     const dot = document.createElement('i');
     dot.className = 'live-dot';
     dot.setAttribute('aria-hidden', 'true');
-    badge.append(dot, document.createTextNode('Live'));
+    // Spec-exact pulsing red "● LIVE" (dot + uppercase label, no orphan text).
+    const liveLabel = document.createElement('b');
+    liveLabel.className = 'live-label';
+    liveLabel.textContent = 'LIVE';
+    badge.append(dot, liveLabel);
     top.append(id, badge);
     card.append(top);
 
     const prizeRow = document.createElement('div');
-    prizeRow.className = 'arena-prize-row';
-    prizeRow.append(coinPrize(t.prizePool));
+    prizeRow.className = 'arena-prize-row hero-prizes';
+    prizeRow.append(prizePoolEl(t, false));
     const time = document.createElement('span');
-    time.className = 'arena-time';
+    time.className = 'arena-time hero-time';
     time.dataset.count = t.id;
     time.textContent = `${formatCountdown(t.endsAt)} left`;
     prizeRow.append(time);
     card.append(prizeRow);
 
-    card.append(meterEl(t));
+    const capBlock = document.createElement('div');
+    capBlock.className = 'arena-cap-block';
+    capBlock.append(capLabelEl(t), meterEl(t));
+    card.append(capBlock);
 
     const foot = document.createElement('div');
-    foot.className = 'arena-foot';
-    foot.append(capLabelEl(t), actionBtn(t));
+    foot.className = 'arena-foot hero-foot';
+    const feeNote = document.createElement('span');
+    feeNote.className = 'arena-entry-note';
+    feeNote.textContent = t.entryFee ? `${coinText(t.entryFee)} to enter` : 'Free to enter';
+    foot.append(feeNote, actionBtn(t));
     card.append(foot);
     return card;
   }
@@ -386,6 +475,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const card = document.createElement('article');
     card.className = 'arena-card is-upcoming';
     card.dataset.id = t.id;
+    card.setAttribute('aria-label', `${t.name}, upcoming tournament, prize pool ${coinText(t.prizePool)} plus ${trophyPoolOf(t)} trophies`);
 
     const top = document.createElement('div');
     top.className = 'arena-top';
@@ -399,30 +489,37 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     name.textContent = t.name;
     const sub = document.createElement('p');
     sub.className = 'arena-sub';
-    sub.textContent = t.entryFee ? `${coinText(t.entryFee)} entry` : 'Free entry';
+    sub.textContent = t.entryFee ? `${coinText(t.entryFee)} entry · Free with ticket` : 'Free entry · Reminder available';
     titles.append(name, sub);
     id.append(titles);
     const badge = document.createElement('span');
-    badge.className = 'pill upcoming';
+    badge.className = 'pill upcoming countdown-badge';
     badge.dataset.start = t.id;
-    badge.textContent = `Starts in ${formatCountdown(t.endsAt)}`;
+    // Spec-exact uppercase countdown: "STARTS IN 1D 1H".
+    badge.textContent = `STARTS IN ${formatCountdown(t.endsAt).toUpperCase()}`;
     top.append(id, badge);
     card.append(top);
 
     const prizeRow = document.createElement('div');
     prizeRow.className = 'arena-prize-row';
-    prizeRow.append(coinPrize(t.prizePool));
+    prizeRow.append(prizePoolEl(t, true));
     const slots = document.createElement('span');
     slots.className = 'arena-slots';
     slots.textContent = `${t.maxPlayers - t.players} slots left`;
     prizeRow.append(slots);
     card.append(prizeRow);
 
-    card.append(meterEl(t));
+    const capBlock = document.createElement('div');
+    capBlock.className = 'arena-cap-block';
+    capBlock.append(capLabelEl(t), meterEl(t));
+    card.append(capBlock);
 
     const foot = document.createElement('div');
-    foot.className = 'arena-foot';
-    foot.append(capLabelEl(t), actionBtn(t));
+    foot.className = 'arena-foot upcoming-foot';
+    const feeNote = document.createElement('span');
+    feeNote.className = 'arena-entry-note';
+    feeNote.textContent = t.entryFee ? `${coinText(t.entryFee)} entry` : 'Free entry';
+    foot.append(feeNote, actionBtn(t));
     card.append(foot);
     return card;
   }
@@ -472,6 +569,83 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return card;
   }
 
+  /** Player Arena Pass & Status: clean ticket bar (no orphans, no truncation). */
+  function buildPassWidget(liveCount: number): HTMLElement {
+    const pass = readPass();
+    const claimedToday = pass.lastClaim === todayStr();
+
+    const card = document.createElement('section');
+    card.className = 'arena-pass';
+    card.setAttribute('aria-label', 'Player Arena Pass and status');
+
+    const main = document.createElement('div');
+    main.className = 'arena-pass-main';
+
+    const left = document.createElement('div');
+    left.className = 'arena-pass-left';
+    const ico = document.createElement('span');
+    ico.className = 'arena-pass-ico';
+    ico.textContent = '🎟️';
+    ico.setAttribute('aria-hidden', 'true');
+    const titles = document.createElement('div');
+    titles.className = 'arena-pass-titles';
+    // Spec-exact clean balance: "Tickets: 2" (single text node, no emoji dup, no orphans).
+    const count = document.createElement('b');
+    count.className = 'arena-pass-count';
+    count.textContent = `Tickets: ${pass.tickets}`;
+    const sub = document.createElement('small');
+    sub.className = 'arena-pass-sub';
+    sub.textContent = liveCount ? `Best Finish: ${bestFinishLabel()} · ${liveCount} live` : `Best Finish: ${bestFinishLabel()}`;
+    titles.append(count, sub);
+    left.append(ico, titles);
+
+    const actions = document.createElement('div');
+    actions.className = 'arena-pass-actions';
+
+    const claim = document.createElement('button');
+    claim.type = 'button';
+    claim.className = 'btn btn-primary sm arena-pass-claim';
+    claim.disabled = claimedToday;
+    claim.textContent = claimedToday ? 'Claimed ✓' : 'Claim +1 Free';
+    claim.setAttribute('aria-label', claimedToday ? 'Daily ticket already claimed' : 'Claim free daily ticket');
+    claim.addEventListener('click', () => {
+      const cur = readPass();
+      if (cur.lastClaim === todayStr()) return;
+      cur.tickets = Math.min(9, cur.tickets + 1);
+      cur.lastClaim = todayStr();
+      writePass(cur);
+      count.textContent = `Tickets: ${cur.tickets}`;
+      claim.disabled = true;
+      claim.textContent = 'Claimed ✓';
+      claim.setAttribute('aria-label', 'Daily ticket already claimed');
+      notify('success');
+      impact('medium');
+    });
+
+    const history = document.createElement('button');
+    history.type = 'button';
+    history.className = 'btn btn-ghost sm arena-pass-history';
+    history.textContent = 'History';
+    history.setAttribute('aria-label', 'Open tournament history');
+    history.addEventListener('click', () => {
+      impact('light');
+      const arch = arenaPane.querySelector<HTMLDetailsElement>('details.arena-archive');
+      if (arch) {
+        arch.open = true;
+        const sum = arch.querySelector<HTMLElement>('summary');
+        if (sum) sum.focus({ preventScroll: true });
+        arch.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } else {
+        api.router.go('ranks');
+      }
+    });
+
+    actions.append(claim, history);
+    main.append(left, actions);
+    card.append(main);
+    return card;
+  }
+
   async function loadTournaments(): Promise<void> {
     const el = arenaPane;
     if (!el) return;
@@ -490,6 +664,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     });
     if (!tournaments.length) {
       el.innerHTML = empty('No tournaments right now. Check back soon.');
+      el.append(buildPassWidget(0));
       paintFeedLabel();
       return;
     }
@@ -500,6 +675,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     for (const t of live) el.append(buildLiveCard(t));
     for (const t of up) el.append(buildUpcomingCard(t));
+
+    // Player status module fills the vertical gap between cards and dock.
+    el.append(buildPassWidget(live.length));
 
     if (done.length) {
       const arch = document.createElement('details');
@@ -582,7 +760,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         const time = arenaPane.querySelector<HTMLElement>(`[data-count="${t.id}"]`);
         if (time) time.textContent = `${formatCountdown(t.endsAt)} left`;
         const pill = arenaPane.querySelector<HTMLElement>(`[data-start="${t.id}"]`);
-        if (pill) pill.textContent = `Starts in ${formatCountdown(t.endsAt)}`;
+        if (pill) pill.textContent = `STARTS IN ${formatCountdown(t.endsAt).toUpperCase()}`;
       }
     }, 1000);
   }
@@ -806,12 +984,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     nm.className = 'squad-name';
     nm.textContent = s.name;
     nm.title = s.name;
+    // Tiny subtle kind icon — never a space-eating pill. Full label stays in title/a11y.
     const kind = document.createElement('span');
     const k = squadKind(s);
     kind.className = 'squad-kind';
     kind.dataset.kind = k;
-    kind.textContent = k === 'channel' ? 'Channel' : 'Group';
+    kind.textContent = k === 'channel' ? '📢' : '👥';
     kind.title = k === 'channel' ? 'Telegram channel' : 'Telegram group';
+    kind.setAttribute('aria-hidden', 'true');
     nameRow.append(nm, kind);
 
     const sub = document.createElement('span');
@@ -836,7 +1016,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     go.type = 'button';
     if (mine) {
       go.className = 'squad-go bound invite';
-      go.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>';
+      go.textContent = 'Invite';
       go.setAttribute('aria-label', `Invite to ${s.handle}: copy squad invite`);
       go.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -844,7 +1024,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       });
     } else {
       go.className = 'squad-go join';
-      go.textContent = '+';
+      go.textContent = 'Join';
       go.setAttribute('aria-label', `Join ${s.handle}`);
       go.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -871,7 +1051,18 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       }
     });
 
-    li.append(rk, av, txt, pt, go);
+    // 3-column flex: left (rank + avatar, fixed) · center (dynamic info) · right (score + CTA, fixed).
+    const left = document.createElement('span');
+    left.className = 'squad-left';
+    left.setAttribute('aria-hidden', 'true');
+    left.append(rk, av);
+    // rk/av were marked aria-hidden individually; the row itself carries the label.
+    rk.removeAttribute('aria-hidden');
+    av.removeAttribute('aria-hidden');
+    const right = document.createElement('span');
+    right.className = 'squad-right';
+    right.append(pt, go);
+    li.append(left, txt, right);
     return li;
   }
 
