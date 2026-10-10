@@ -390,26 +390,35 @@
           <div class="m-head compete-head">
             <h1 class="m-title" id="compete-title">Compete</h1>
           </div>
-          <div class="seg squad-mode" role="tablist" aria-label="Leaderboard mode">
+          <div class="seg squad-mode" role="tablist" aria-label="Compete mode">
             <button class="seg-b mode-seg" type="button" role="tab" data-squadmode="solo" aria-selected="true">
-              <span class="seg-t">Solo Champions</span>
+              <span class="seg-t">Arena Cups</span>
+              <small class="seg-s">Live &amp; Upcoming</small>
             </button>
             <button class="seg-b mode-seg" type="button" role="tab" data-squadmode="squads" aria-selected="false">
               <span class="seg-t">Telegram Squads</span>
               <small class="seg-s">Channels &amp; Groups</small>
             </button>
           </div>
-          <div class="seg" id="compete-tabs" role="tablist" aria-label="Compete sections">
-            <button class="seg-b" type="button" role="tab" data-comp="tournaments" aria-selected="true">Tournaments</button>
-            <button class="seg-b" type="button" role="tab" data-comp="countries" aria-selected="false">Countries</button>
-            <button class="seg-b" type="button" role="tab" data-comp="players" aria-selected="false">Players</button>
-            <button class="seg-b" type="button" role="tab" data-comp="teams" aria-selected="false">Teams</button>
+          <div class="arena-toolbar" id="arena-toolbar">
+            <p class="arena-feed-t" id="arena-feed-t" aria-live="polite">Arena feed</p>
+            <button class="lb-pill" type="button" id="lb-toggle" aria-pressed="false" aria-expanded="false" aria-controls="comp-leaderboard">
+              <svg class="ico" aria-hidden="true"><use href="#i-cup" /></svg>
+              <span>Leaderboard</span>
+            </button>
           </div>
           <div class="compete-body" data-scroll id="compete-scroll">
-            <div id="comp-tournaments" role="tabpanel" aria-label="Tournaments"></div>
-            <div id="comp-countries" role="tabpanel" aria-label="Countries" hidden></div>
-            <div id="comp-players" role="tabpanel" aria-label="Players" hidden></div>
-            <div id="comp-teams" role="tabpanel" aria-label="Teams" hidden></div>
+            <div id="comp-tournaments" role="tabpanel" aria-label="Arena Cups"></div>
+            <div id="comp-leaderboard" role="tabpanel" aria-label="Global Leaderboard" hidden>
+              <div class="seg lb-seg" role="tablist" aria-label="Leaderboard boards">
+                <button class="seg-b" type="button" role="tab" data-lb="players" aria-selected="true">Players</button>
+                <button class="seg-b" type="button" role="tab" data-lb="countries" aria-selected="false">Countries</button>
+                <button class="seg-b" type="button" role="tab" data-lb="teams" aria-selected="false">Teams</button>
+              </div>
+              <div id="comp-players" role="tabpanel" aria-label="Top players"></div>
+              <div id="comp-countries" role="tabpanel" aria-label="Top countries" hidden></div>
+              <div id="comp-teams" role="tabpanel" aria-label="Top teams" hidden></div>
+            </div>
             <div id="comp-squads" role="tabpanel" aria-label="Telegram Squads" hidden></div>
           </div>
           <div class="squad-dock" id="squad-dock" hidden></div>

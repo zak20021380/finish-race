@@ -717,7 +717,7 @@ html.rm .coin.sweep .coin-sweep { animation: none; }
    padding vary per role (--r-panel / --s4). No backdrop-filter: a clay tile is
    opaque, so the GPU never has to re-sample what is behind it. */
 .p-card, .id-card, .launcher, .m-card, .rows, .tabs,
-.car-card, .tourney-card, .cos, .eq, .stepper,
+.car-card, .tourney-card, .arena-card, .arena-archive-sum, .cos, .eq, .stepper,
 .p-stats.triple, .p-stats.quad, .rank-list {
   background: var(--clay-face);
   box-shadow: var(--clay), var(--clay-ring);
@@ -1737,8 +1737,8 @@ html.rm *, html.rm *::before, html.rm *::after {
    ========================================================================== */
 
 /* Compete owns a fixed header + mode switch; only the body scrolls. The docked
-   squad CTA lives outside the scroll, so the list pads by dock + 16 and the
-   last row never hides behind chrome. */
+   squad CTA lives outside the scroll, so the list pads by dock + 24 and the
+   last card never hides behind the bottom nav. Cards stack on a 14px rhythm. */
 .screen.compete-screen { overflow: hidden; max-width: 100%; }
 .compete-head .m-title { font-weight: 800; letter-spacing: -.01em; }
 .compete-body {
@@ -1747,35 +1747,242 @@ html.rm *, html.rm *::before, html.rm *::after {
   max-width: 100%;
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
+  gap: 14px;
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
   scrollbar-width: none;
-  padding-bottom: calc(var(--dock-height) + 16px);
+  padding: 2px 2px calc(var(--dock-height) + 24px);
+  margin: 0 -2px;
 }
 .compete-body::-webkit-scrollbar { display: none; }
 .compete-body > * { max-width: 100%; min-width: 0; }
+#comp-tournaments { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+#comp-tournaments[hidden] { display: none; }
+#comp-leaderboard { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+#comp-leaderboard[hidden] { display: none; }
+
+/* ---- arena toolbar: feed count left, floating leaderboard pill right ---- */
+.arena-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  min-width: 0;
+  max-width: 100%;
+}
+.arena-toolbar[hidden] { display: none; }
+.arena-feed-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.lb-pill {
+  --d: 2px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 var(--s3);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #232E44 0%, #1C2433 100%);
+  color: var(--chip-ink);
+  font-size: var(--t-3);
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow:
+    0 var(--d) 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    var(--clay-ring);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast), color var(--motion-fast);
+}
+.lb-pill .ico { width: 16px; height: 16px; color: var(--honey-ink); }
+.lb-pill:hover:not(:active) { transform: translateY(-1px); }
+.lb-pill:active { transform: translateY(var(--press-y)); --d: 0px; }
+.lb-pill:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.lb-pill.on {
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+  box-shadow: inset 0 0 0 1.5px rgba(125, 211, 252, .35), 0 var(--d) 0 #080C14;
+}
+.lb-pill.on .ico { color: var(--brand-ink); }
+.lb-seg { flex: none; }
+
+/* ---- arena cards: high-energy Dark Clay, per-status hierarchy ----
+   Canvas #10141D, cards #1C2433, text #F8FAFC. Opaque clay only (no blur),
+   transform/opacity motion only, so the feed stays at 60fps touch. */
+.arena-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3);
+  border-radius: 20px;
+  background: var(--clay-face);
+  background-color: #1C2433;
+  box-shadow: var(--clay), var(--clay-ring);
+  overflow: hidden;
+  max-width: 100%;
+  min-width: 0;
+}
+/* legacy alias: anything still rendering .tourney-card gets the arena face */
 .tourney-card {
   display: flex;
   flex-direction: column;
   gap: var(--s2);
-  padding: var(--s3) var(--s4);
-  border-radius: var(--radius-md);
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-border), var(--glass-border-top), var(--elev-2);
-}
-@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
-  .tourney-card { background: linear-gradient(180deg, var(--card-a) 0%, var(--card-b) 100%); }
+  padding: var(--s3);
+  border-radius: 20px;
+  background: var(--clay-face);
+  background-color: #1C2433;
+  box-shadow: var(--clay), var(--clay-ring);
 }
 .tourney-top { display: flex; align-items: center; gap: var(--s2); }
 .tourney-name { flex: 1 1 auto; min-width: 0; margin: 0; font-size: var(--t-2); font-weight: 800; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tourney-meta { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; font-variant-numeric: tabular-nums; }
 .tourney-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
+
+/* LIVE: rich dark clay + cyan/indigo backlight + crimson rim energy */
+.arena-card.is-live {
+  border-top: 1px solid rgba(255, 255, 255, .14);
+  background:
+    radial-gradient(120% 90% at 85% 0%, rgba(56, 189, 248, .2), rgba(56, 189, 248, 0) 55%),
+    radial-gradient(90% 70% at 8% 100%, rgba(224, 38, 79, .13), rgba(224, 38, 79, 0) 60%),
+    radial-gradient(80% 60% at 100% 40%, rgba(99, 102, 241, .14), rgba(99, 102, 241, 0) 60%),
+    linear-gradient(180deg, #202A3E 0%, #1C2433 100%);
+  background-color: #1C2433;
+  box-shadow: var(--clay), var(--clay-ring), 0 0 26px -8px rgba(56, 189, 248, .35);
+}
+.arena-glow { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(60% 42% at 50% 0%, rgba(125, 211, 252, .12), transparent 70%); }
+.arena-card.is-live > *:not(.arena-glow) { position: relative; }
+
+/* UPCOMING: muted cool slate, quiet until it starts */
+.arena-card.is-upcoming {
+  background: linear-gradient(180deg, #1A2232 0%, #161D2B 100%);
+  background-color: #161D2B;
+  box-shadow: var(--clay), var(--clay-ring);
+}
+/* ENDED: compact recessed tile — it sits inside the archive, not the feed */
+.arena-card.is-ended {
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-md);
+  background: var(--field);
+  background-color: #0E1526;
+  box-shadow: var(--inset);
+}
+.arena-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s2); min-width: 0; }
+.arena-id { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: var(--s2); }
+.arena-card .trophy { width: 56px; height: 56px; }
+.arena-card .trophy-badge { width: 48px; height: 48px; border-radius: 16px; }
+.arena-card .trophy-badge .ico { width: 24px; height: 24px; }
+.arena-card.is-ended .trophy { width: 42px; height: 42px; }
+.arena-card.is-ended .trophy-badge { width: 38px; height: 38px; border-radius: 13px; }
+.arena-card.is-ended .trophy-badge .ico { width: 19px; height: 19px; }
+.trophy-steel .trophy-badge {
+  color: #7DD3FC;
+  box-shadow:
+    0 3px 0 #080C14,
+    0 10px 18px -10px rgba(2, 132, 199, .5),
+    inset 0 1px 0 rgba(255, 255, 255, .22),
+    inset 0 -2px 4px rgba(0, 0, 0, .4),
+    inset 0 0 0 1px rgba(125, 211, 252, .28);
+}
+.trophy-dim .trophy-badge {
+  color: var(--ink-soft);
+  box-shadow:
+    0 3px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 -2px 4px rgba(0, 0, 0, .45);
+}
+.arena-titles { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.arena-name { margin: 0; min-width: 0; font-size: var(--t-2); font-weight: 800; letter-spacing: -.01em; line-height: 1.2; color: #F8FAFC; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arena-sub { margin: 0; font-size: var(--t-micro); font-weight: 700; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.arena-prize-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; }
+.arena-prize { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--t-1); font-weight: 800; color: var(--honey-ink); font-variant-numeric: tabular-nums; }
+.arena-prize .coin { width: 1.2em; height: 1.2em; }
+.arena-prize b { font-weight: 800; }
+.arena-time, .arena-slots { flex: none; font-size: var(--t-micro); font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.arena-slots { color: var(--ink-soft); font-weight: 700; }
+.arena-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; }
+.arena-foot .cap-label { flex: 1 1 auto; min-width: 0; }
+/* chunky CTAs: live is loud coral ENTER NOW, upcoming is quiet clay Register */
+.btn-coral.arena-cta {
+  --d: 5px;
+  flex: none;
+  min-height: 48px;
+  min-width: 122px;
+  padding: 0 var(--s4);
+  font-size: var(--t-2);
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.btn-ghost.arena-cta { --d: 3px; flex: none; min-height: 44px; min-width: 108px; padding: 0 var(--s3); font-size: var(--t-3); font-weight: 800; }
+.arena-cta[disabled] { opacity: .72; }
+/* ended champion line: compact, recessed, trophy + name + payout */
+.arena-champ {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, .03);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+.champ-cup { flex: none; font-size: 16px; line-height: 1; }
+.champ-who { flex: 0 1 auto; min-width: 0; font-size: var(--t-3); font-weight: 800; color: #F8FAFC; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.champ-meta { flex: 1 1 auto; min-width: 0; text-align: right; font-size: var(--t-micro); font-weight: 700; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+/* archive accordion: ended cups live here, collapsed by default */
+.arena-archive { border-radius: var(--radius-md); background: transparent; }
+.arena-archive-sum {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  min-height: 48px;
+  padding: 0 var(--s3);
+  border-radius: var(--radius-md);
+  background: var(--clay-face);
+  background-color: #1C2433;
+  box-shadow: var(--clay), var(--clay-ring);
+  font-size: var(--t-3);
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+.arena-archive-sum::-webkit-details-marker { display: none; }
+.arena-archive-sum:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.arena-archive-sum:active { transform: translateY(2px); }
+.arch-chev { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 9px; background: var(--field); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); color: var(--ink-soft); font-size: 18px; line-height: 1; transform: rotate(90deg); transition: transform var(--motion-med); }
+.arena-archive[open] .arch-chev { transform: rotate(-90deg); }
+.arena-archive-list { display: flex; flex-direction: column; gap: 14px; padding-top: 14px; }
+.arena-top .pill { flex: none; max-width: 52%; overflow: hidden; text-overflow: ellipsis; }
+.arena-card .cap-meter { min-width: 0; }
+@media (max-height: 700px) {
+  .arena-card .trophy { width: 48px; height: 48px; }
+  .arena-card .trophy-badge { width: 42px; height: 42px; }
+  .btn-coral.arena-cta { min-height: 44px; min-width: 110px; }
+}
 .rank-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-radius: var(--radius-md); overflow: hidden; background: var(--glass-bg); box-shadow: var(--glass-border); }
 .rank-row {
   display: flex;
@@ -3046,10 +3253,9 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
     inset 0 -2px 3px rgba(0, 0, 0, .2);
 }
 
-/* ---- Compete mode toggle: the top-level Solo vs Squads switch ----
-   Two equal keys; the Squads key stacks a "Channels & Groups" caption. */
+/* ---- Compete mode toggle: Arena Cups vs Telegram Squads ----
+   Two equal keys; each stacks its own caption line. */
 .seg.squad-mode { flex: none; margin-bottom: var(--s1); }
-#compete-tabs[hidden] { display: none; }
 .seg.squad-mode .mode-seg {
   display: flex;
   flex-direction: column;

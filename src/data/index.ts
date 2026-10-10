@@ -19,6 +19,9 @@ export interface Tournament {
   endsAt: number;
   players: number;
   maxPlayers: number;
+  /** set for ended cups: who lifted the trophy + what was paid out */
+  champion?: string;
+  championMeta?: string;
 }
 
 export interface CountryRow {
@@ -69,7 +72,7 @@ function seeding(): { tournaments: Tournament[]; countries: CountryRow[]; player
     { id: 't-neon', name: 'Neon Rush Cup', status: 'live', prizePool: 5000, entryFee: 120, endsAt: t + 2 * HOUR + 14 * 60_000, players: 184, maxPlayers: 256 },
     { id: 't-violet', name: 'Violet Rampart Open', status: 'upcoming', prizePool: 2500, entryFee: 60, endsAt: t + 26 * HOUR, players: 96, maxPlayers: 128 },
     { id: 't-midnight', name: 'Midnight Circuit', status: 'upcoming', prizePool: 1200, entryFee: 30, endsAt: t + 3 * 24 * HOUR + 5 * HOUR, players: 41, maxPlayers: 64 },
-    { id: 't-dawn', name: 'Dawn Sprint', status: 'ended', prizePool: 800, entryFee: 0, endsAt: t - 5 * HOUR, players: 64, maxPlayers: 64 },
+    { id: 't-dawn', name: 'Dawn Sprint', status: 'ended', prizePool: 800, entryFee: 0, endsAt: t - 5 * HOUR, players: 64, maxPlayers: 64, champion: 'Amara', championMeta: 'NG · 34 wins' },
   ];
   const countries: CountryRow[] = [
     { code: 'US', name: 'United States', points: 12840, trend: 'up', rank: 1 },

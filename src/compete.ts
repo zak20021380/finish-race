@@ -1,9 +1,12 @@
 /**
- * compete.ts — Tournaments / Countries / Players / Teams behind the preview API.
+ * compete.ts — Arena Cups / Telegram Squads + floating Global Leaderboard.
  *
- * Skeletons while loading, empty states when there is nothing to rank, and the
- * user's own row pinned at the bottom of every ranked list. Tournament Join
- * opens a confirm sheet that deducts the entry fee from the local wallet.
+ * IA: two top-level modes only ("Arena Cups" live/upcoming feed, "Telegram
+ * Squads" clan wars). The old 4-way sub-tabs are gone; Top Players /
+ * Countries / Teams live behind a floating "Leaderboard" pill that toggles a
+ * secondary panel with its own quiet Players | Countries | Teams switch.
+ * Tournament cards are high-energy Dark Clay arena cards with per-status
+ * hierarchy (live glow + ENTER NOW, upcoming slate + Register, ended archive).
  */
 import {
   formatCountdown,
@@ -31,7 +34,8 @@ export interface CompeteApi {
   sheet(id: string): HTMLElement | null;
 }
 
-type Tab = 'tournaments' | 'countries' | 'players' | 'teams';
+type SquadMode = 'solo' | 'squads';
+type LbTab = 'players' | 'countries' | 'teams';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const JOINED_KEY = 'detour.tourneys.v1';
@@ -59,21 +63,41 @@ const skel = (rows: number): string =>
 
 const empty = (msg: string): string => `<div class="empty" role="status">${msg}</div>`;
 
+const pctOf = (t: Tournament): number =>
+  t.maxPlayers > 0 ? Math.min(100, Math.max(0, Math.round((t.players / t.maxPlayers) * 100))) : 0;
+
+const moodOf = (t: Tournament): string => {
+  const pct = pctOf(t);
+  if (t.status === 'live') {
+    if (pct >= 85) return 'Closing Soon';
+    if (pct >= 50) return 'Filling fast';
+    return 'Open';
+  }
+  if (pct >= 90) return 'Almost full';
+  if (pct >= 50) return 'Filling fast';
+  return 'Open';
+};
+
 export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
-  const tabs = [...document.querySelectorAll<HTMLButtonElement>('[data-comp]')];
   const modeBtns = [...document.querySelectorAll<HTMLButtonElement>('[data-squadmode]')];
-  const tabsBar = $('compete-tabs');
+  const lbBtns = [...document.querySelectorAll<HTMLButtonElement>('[data-lb]')];
+  const toolbar = document.getElementById('arena-toolbar');
+  const feedLabel = document.getElementById('arena-feed-t');
+  const lbToggle = document.getElementById('lb-toggle') as HTMLButtonElement | null;
+  const arenaPane = $('comp-tournaments');
+  const boardPane = document.getElementById('comp-leaderboard') as HTMLElement | null;
   const squadsPane = $('comp-squads');
-  const panes: Record<Tab, HTMLElement> = {
-    tournaments: $('comp-tournaments'),
-    countries: $('comp-countries'),
+  const lbPanes: Record<LbTab, HTMLElement> = {
     players: $('comp-players'),
+    countries: $('comp-countries'),
     teams: $('comp-teams'),
   };
-  type SquadMode = 'solo' | 'squads';
-  let tab: Tab = 'tournaments';
+
   let squadMode: SquadMode = 'solo';
-  let loaded: Partial<Record<Tab, boolean>> = {};
+  let lbOpen = false;
+  let lbTab: LbTab = 'players';
+  let loadedArena = false;
+  let loadedLb: Partial<Record<LbTab, boolean>> = {};
   let squadsLoaded = false;
   let tournaments: Tournament[] = [];
   let joined = joinedSet();
@@ -86,7 +110,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return (full || u?.username || 'You').slice(0, 18);
   };
 
-  /* ---------- leaderboard mode: Solo Champions vs Telegram Squads ---------- */
+  /* ---------- squad dock helpers ---------- */
 
   const squadDock = (): HTMLElement | null => document.getElementById('squad-dock');
 
@@ -103,24 +127,63 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return `${s}k`;
   };
 
+  /* ---------- top-level paint ---------- */
+
   function paintMode(): void {
     for (const b of modeBtns) b.setAttribute('aria-selected', String(b.dataset.squadmode === squadMode));
+    for (const b of lbBtns) b.setAttribute('aria-selected', String(b.dataset.lb === lbTab));
     const squads = squadMode === 'squads';
-    tabsBar.hidden = squads;
+
+    if (toolbar) toolbar.hidden = squads;
+    if (lbToggle) {
+      lbToggle.setAttribute('aria-pressed', String(lbOpen));
+      lbToggle.setAttribute('aria-expanded', String(lbOpen));
+      lbToggle.classList.toggle('on', lbOpen);
+      lbToggle.querySelector('span')!.textContent = lbOpen ? 'Hide Board' : 'Leaderboard';
+    }
+    if (boardPane) boardPane.hidden = squads || !lbOpen;
+    arenaPane.hidden = squads || lbOpen;
+    if (!squads && lbOpen && boardPane) {
+      for (const k of Object.keys(lbPanes) as LbTab[]) lbPanes[k].hidden = k !== lbTab;
+    }
     squadsPane.hidden = !squads;
-    for (const k of Object.keys(panes) as Tab[]) panes[k].hidden = squads || k !== tab;
+
     const dock = squadDock();
     if (dock) dock.hidden = !squads;
     if (squads) paintSquadDock();
+    paintFeedLabel();
+  }
+
+  function paintFeedLabel(): void {
+    if (!feedLabel) return;
+    if (lbOpen) {
+      const names: Record<LbTab, string> = { players: 'Top Players', countries: 'Top Countries', teams: 'Top Teams' };
+      feedLabel.textContent = `Global Leaderboard · ${names[lbTab]}`;
+      return;
+    }
+    const live = tournaments.filter((t) => t.status === 'live').length;
+    const up = tournaments.filter((t) => t.status === 'upcoming').length;
+    if (!tournaments.length) {
+      feedLabel.textContent = 'Arena feed';
+      return;
+    }
+    const parts: string[] = [];
+    if (live) parts.push(`${live} live`);
+    if (up) parts.push(`${up} upcoming`);
+    feedLabel.textContent = parts.length ? `${parts.join(' · ')} cups` : 'Arena feed';
   }
 
   function selectMode(next: SquadMode): void {
-    if (next === squadMode && (next === 'solo' ? loaded[tab] : squadsLoaded)) { paintMode(); return; }
+    if (next === squadMode && (next === 'solo' ? (lbOpen ? loadedLb[lbTab] : loadedArena) : squadsLoaded)) {
+      paintMode();
+      return;
+    }
     squadMode = next;
     paintMode();
     impact('light');
     if (next === 'squads') loadSquads();
-    else void load(tab);
+    else if (lbOpen) void loadLb(lbTab);
+    else void loadTournaments();
   }
 
   for (const b of modeBtns) {
@@ -130,103 +193,308 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     });
   }
 
-  /* ---------- tabs ---------- */
-
-  function select(next: Tab): void {
+  function toggleBoard(force?: boolean): void {
     if (squadMode !== 'solo') squadMode = 'solo';
-    if (next === tab && loaded[next]) { paintMode(); return; }
-    tab = next;
-    for (const b of tabs) b.setAttribute('aria-selected', String(b.dataset.comp === next));
+    lbOpen = force ?? !lbOpen;
     paintMode();
     impact('light');
-    void load(next);
+    if (lbOpen) void loadLb(lbTab);
+    else if (!loadedArena) void loadTournaments();
+    else {
+      const sc = document.getElementById('compete-scroll');
+      if (sc) sc.scrollTo({ top: 0 });
+    }
   }
 
-  for (const b of tabs) {
+  lbToggle?.addEventListener('click', () => toggleBoard());
+
+  function selectLb(next: LbTab): void {
+    if (next === lbTab && loadedLb[next]) {
+      paintMode();
+      return;
+    }
+    lbTab = next;
+    paintMode();
+    impact('light');
+    void loadLb(next);
+  }
+
+  for (const b of lbBtns) {
     b.addEventListener('click', () => {
-      const v = b.dataset.comp as Tab;
-      if (v === 'tournaments' || v === 'countries' || v === 'players' || v === 'teams') select(v);
+      const v = b.dataset.lb as LbTab;
+      if (v === 'players' || v === 'countries' || v === 'teams') selectLb(v);
     });
   }
 
-  async function load(which: Tab): Promise<void> {
-    if (which === 'tournaments') await loadTournaments();
-    else if (which === 'countries') await loadCountries();
-    else if (which === 'players') await loadPlayers();
-    else await loadTeams();
-    loaded[which] = true;
+  /* ---------- arena feed ---------- */
+
+  function trophyEl(kind: 'neon' | 'steel' | 'dim'): HTMLElement {
+    const t = document.createElement('span');
+    t.className = `trophy trophy-${kind}`;
+    t.setAttribute('aria-hidden', 'true');
+    const badge = document.createElement('span');
+    badge.className = 'trophy-badge';
+    badge.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-cup" /></svg>';
+    t.append(badge);
+    return t;
   }
 
-  /* ---------- tournaments ---------- */
+  function coinPrize(amount: number): HTMLElement {
+    const s = document.createElement('span');
+    s.className = 'arena-prize';
+    const coin = document.createElement('span');
+    coin.className = 'coin';
+    coin.setAttribute('data-coin', '');
+    coin.setAttribute('aria-hidden', 'true');
+    const pv = document.createElement('b');
+    pv.textContent = coinText(amount);
+    s.append(coin, pv);
+    return s;
+  }
+
+  function meterEl(t: Tournament): HTMLElement {
+    const pct = pctOf(t);
+    const wrap = document.createElement('div');
+    wrap.className = 'cap-meter';
+    const track = document.createElement('span');
+    track.className = 'cap-track';
+    track.setAttribute('role', 'progressbar');
+    track.setAttribute('aria-label', `${t.name} capacity: ${t.players} of ${t.maxPlayers} entered`);
+    track.setAttribute('aria-valuemin', '0');
+    track.setAttribute('aria-valuemax', '100');
+    track.setAttribute('aria-valuenow', String(pct));
+    const fill = document.createElement('i');
+    fill.className = 'cap-fill';
+    fill.style.width = `${pct}%`;
+    track.append(fill);
+    wrap.append(track);
+    return wrap;
+  }
+
+  function capLabelEl(t: Tournament): HTMLElement {
+    const label = document.createElement('span');
+    label.className = 'cap-label';
+    label.append(document.createTextNode(`${t.players} / ${t.maxPlayers} entered · `));
+    const hot = document.createElement('span');
+    hot.className = 'hot';
+    hot.textContent = moodOf(t);
+    label.append(hot);
+    label.setAttribute('aria-label', `${t.players} of ${t.maxPlayers} entered, ${moodOf(t)}`);
+    return label;
+  }
+
+  function actionBtn(t: Tournament): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    const isJoined = joined.has(t.id);
+    if (t.status === 'live') {
+      btn.className = 'btn btn-coral arena-cta';
+      btn.disabled = isJoined;
+      btn.textContent = isJoined ? 'Entered ✓' : 'Enter Now';
+    } else {
+      btn.className = 'btn btn-ghost arena-cta';
+      btn.disabled = isJoined;
+      btn.textContent = isJoined ? 'Registered ✓' : t.entryFee ? 'Register' : 'Remind Me';
+    }
+    btn.setAttribute('aria-label', `${btn.textContent}: ${t.name}`);
+    btn.addEventListener('click', () => askJoin(t));
+    return btn;
+  }
+
+  function buildLiveCard(t: Tournament): HTMLElement {
+    const card = document.createElement('article');
+    card.className = 'arena-card is-live';
+    card.dataset.id = t.id;
+
+    const glow = document.createElement('div');
+    glow.className = 'arena-glow';
+    glow.setAttribute('aria-hidden', 'true');
+    card.append(glow);
+
+    const top = document.createElement('div');
+    top.className = 'arena-top';
+    const id = document.createElement('div');
+    id.className = 'arena-id';
+    id.append(trophyEl('neon'));
+    const titles = document.createElement('div');
+    titles.className = 'arena-titles';
+    const name = document.createElement('h3');
+    name.className = 'arena-name';
+    name.textContent = t.name;
+    const sub = document.createElement('p');
+    sub.className = 'arena-sub';
+    sub.textContent = t.entryFee ? `${coinText(t.entryFee)} entry` : 'Free entry';
+    titles.append(name, sub);
+    id.append(titles);
+    const badge = document.createElement('span');
+    badge.className = 'pill live pulse';
+    const dot = document.createElement('i');
+    dot.className = 'live-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    badge.append(dot, document.createTextNode('Live'));
+    top.append(id, badge);
+    card.append(top);
+
+    const prizeRow = document.createElement('div');
+    prizeRow.className = 'arena-prize-row';
+    prizeRow.append(coinPrize(t.prizePool));
+    const time = document.createElement('span');
+    time.className = 'arena-time';
+    time.dataset.count = t.id;
+    time.textContent = `${formatCountdown(t.endsAt)} left`;
+    prizeRow.append(time);
+    card.append(prizeRow);
+
+    card.append(meterEl(t));
+
+    const foot = document.createElement('div');
+    foot.className = 'arena-foot';
+    foot.append(capLabelEl(t), actionBtn(t));
+    card.append(foot);
+    return card;
+  }
+
+  function buildUpcomingCard(t: Tournament): HTMLElement {
+    const card = document.createElement('article');
+    card.className = 'arena-card is-upcoming';
+    card.dataset.id = t.id;
+
+    const top = document.createElement('div');
+    top.className = 'arena-top';
+    const id = document.createElement('div');
+    id.className = 'arena-id';
+    id.append(trophyEl('steel'));
+    const titles = document.createElement('div');
+    titles.className = 'arena-titles';
+    const name = document.createElement('h3');
+    name.className = 'arena-name';
+    name.textContent = t.name;
+    const sub = document.createElement('p');
+    sub.className = 'arena-sub';
+    sub.textContent = t.entryFee ? `${coinText(t.entryFee)} entry` : 'Free entry';
+    titles.append(name, sub);
+    id.append(titles);
+    const badge = document.createElement('span');
+    badge.className = 'pill upcoming';
+    badge.dataset.start = t.id;
+    badge.textContent = `Starts in ${formatCountdown(t.endsAt)}`;
+    top.append(id, badge);
+    card.append(top);
+
+    const prizeRow = document.createElement('div');
+    prizeRow.className = 'arena-prize-row';
+    prizeRow.append(coinPrize(t.prizePool));
+    const slots = document.createElement('span');
+    slots.className = 'arena-slots';
+    slots.textContent = `${t.maxPlayers - t.players} slots left`;
+    prizeRow.append(slots);
+    card.append(prizeRow);
+
+    card.append(meterEl(t));
+
+    const foot = document.createElement('div');
+    foot.className = 'arena-foot';
+    foot.append(capLabelEl(t), actionBtn(t));
+    card.append(foot);
+    return card;
+  }
+
+  function buildEndedCard(t: Tournament): HTMLElement {
+    const card = document.createElement('article');
+    card.className = 'arena-card is-ended';
+    card.dataset.id = t.id;
+
+    const top = document.createElement('div');
+    top.className = 'arena-top';
+    const id = document.createElement('div');
+    id.className = 'arena-id';
+    id.append(trophyEl('dim'));
+    const titles = document.createElement('div');
+    titles.className = 'arena-titles';
+    const name = document.createElement('h3');
+    name.className = 'arena-name';
+    name.textContent = t.name;
+    const sub = document.createElement('p');
+    sub.className = 'arena-sub';
+    sub.textContent = 'Final · archived';
+    titles.append(name, sub);
+    id.append(titles);
+    const badge = document.createElement('span');
+    badge.className = 'pill ended';
+    badge.textContent = 'Final';
+    top.append(id, badge);
+    card.append(top);
+
+    const champ = document.createElement('div');
+    champ.className = 'arena-champ';
+    const cup = document.createElement('span');
+    cup.className = 'champ-cup';
+    cup.textContent = '🏆';
+    cup.setAttribute('aria-hidden', 'true');
+    const who = document.createElement('span');
+    who.className = 'champ-who';
+    who.textContent = t.champion ?? 'Champion crowned';
+    const meta = document.createElement('span');
+    meta.className = 'champ-meta';
+    const paid = t.championMeta ? `${t.championMeta} · ${coinText(t.prizePool)} paid` : `${coinText(t.prizePool)} distributed`;
+    meta.textContent = paid;
+    champ.append(cup, who, meta);
+    champ.setAttribute('aria-label', `Winner ${who.textContent}, ${paid}`);
+    card.append(champ);
+    return card;
+  }
 
   async function loadTournaments(): Promise<void> {
-    const el = panes.tournaments;
-    if (!loaded.tournaments) el.innerHTML = skel(3);
+    const el = arenaPane;
+    if (!loadedArena) el.innerHTML = skel(3);
     try {
       tournaments = await getTournaments();
     } catch {
       el.innerHTML = empty('Tournaments unavailable. Check your connection and try again.');
+      paintFeedLabel();
       return;
     }
+    // Live first, upcoming next, ended last — the feed never mixes the archive in.
+    tournaments.sort((a, b) => {
+      const order = { live: 0, upcoming: 1, ended: 2 } as const;
+      return order[a.status] - order[b.status];
+    });
     if (!tournaments.length) {
       el.innerHTML = empty('No tournaments right now. Check back soon.');
+      paintFeedLabel();
       return;
     }
     el.textContent = '';
-    for (const t of tournaments) {
-      const card = document.createElement('article');
-      card.className = 'tourney-card';
-      card.dataset.id = t.id;
+    const live = tournaments.filter((t) => t.status === 'live');
+    const up = tournaments.filter((t) => t.status === 'upcoming');
+    const done = tournaments.filter((t) => t.status === 'ended');
 
-      const top = document.createElement('div');
-      top.className = 'tourney-top';
-      const name = document.createElement('h3');
-      name.className = 'tourney-name';
-      name.textContent = t.name;
-      const badge = document.createElement('span');
-      badge.className = `pill ${t.status}`;
-      badge.textContent = t.status === 'live' ? 'Live' : t.status === 'upcoming' ? 'Upcoming' : 'Ended';
-      top.append(name, badge);
+    for (const t of live) el.append(buildLiveCard(t));
+    for (const t of up) el.append(buildUpcomingCard(t));
 
-      const meta = document.createElement('div');
-      meta.className = 'tourney-meta';
-      const prize = document.createElement('span');
-      prize.className = 'car-prize';
-      const coin = document.createElement('span');
-      coin.className = 'coin';
-      coin.setAttribute('data-coin', '');
-      coin.setAttribute('aria-hidden', 'true');
-      const pv = document.createElement('b');
-      pv.textContent = coinText(t.prizePool);
-      prize.append(coin, pv);
-      const fee = document.createElement('span');
-      fee.className = 'car-fee';
-      fee.textContent = t.entryFee ? `${coinText(t.entryFee)} entry` : 'Free entry';
-      const count = document.createElement('span');
-      count.className = 'car-count';
-      count.dataset.count = t.id;
-      count.textContent = t.status === 'ended' ? 'Ended' : formatCountdown(t.endsAt);
-      meta.append(prize, fee, count);
-
-      const foot = document.createElement('div');
-      foot.className = 'tourney-foot';
-      const players = document.createElement('span');
-      players.className = 'car-players';
-      players.textContent = `${t.players}/${t.maxPlayers} players`;
-      const join = document.createElement('button');
-      join.className = 'btn btn-primary sm';
-      join.type = 'button';
-      const isJoined = joined.has(t.id);
-      join.disabled = t.status === 'ended' || isJoined;
-      join.textContent = isJoined ? 'Joined' : t.status === 'ended' ? 'Ended' : 'Join';
-      join.setAttribute('aria-label', `${join.textContent}: ${t.name}`);
-      join.addEventListener('click', () => askJoin(t));
-      foot.append(players, join);
-
-      card.append(top, meta, foot);
-      el.append(card);
+    if (done.length) {
+      const arch = document.createElement('details');
+      arch.className = 'arena-archive';
+      const sum = document.createElement('summary');
+      sum.className = 'arena-archive-sum';
+      const t = document.createElement('span');
+      t.textContent = `Archive · Recent Results (${done.length})`;
+      const archChev: HTMLElement = document.createElement('span');
+      archChev.className = 'arch-chev';
+      archChev.textContent = '›';
+      archChev.setAttribute('aria-hidden', 'true');
+      sum.append(t, archChev);
+      arch.append(sum);
+      const list = document.createElement('div');
+      list.className = 'arena-archive-list';
+      for (const e of done) list.append(buildEndedCard(e));
+      arch.append(list);
+      el.append(arch);
     }
+
     mountCoins(el);
+    loadedArena = true;
+    paintFeedLabel();
     startTick();
   }
 
@@ -272,6 +540,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     notify('success');
     impact('medium');
     api.sheets.close();
+    loadedArena = false;
     void loadTournaments();
   });
 
@@ -279,14 +548,25 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (tick) return;
     tick = window.setInterval(() => {
       if ($('s-compete').hidden) return;
+      if (squadMode !== 'solo' || lbOpen) return;
       for (const t of tournaments) {
-        const el = panes.tournaments.querySelector<HTMLElement>(`[data-count=${JSON.stringify(t.id)}]`);
-        if (el && t.status !== 'ended') el.textContent = formatCountdown(t.endsAt);
+        if (t.status === 'ended') continue;
+        const time = arenaPane.querySelector<HTMLElement>(`[data-count="${t.id}"]`);
+        if (time) time.textContent = `${formatCountdown(t.endsAt)} left`;
+        const pill = arenaPane.querySelector<HTMLElement>(`[data-start="${t.id}"]`);
+        if (pill) pill.textContent = `Starts in ${formatCountdown(t.endsAt)}`;
       }
     }, 1000);
   }
 
-  /* ---------- ranked lists ---------- */
+  /* ---------- global leaderboard (behind the pill) ---------- */
+
+  async function loadLb(which: LbTab): Promise<void> {
+    if (which === 'countries') await loadCountries();
+    else if (which === 'players') await loadPlayers();
+    else await loadTeams();
+    loadedLb[which] = true;
+  }
 
   function row(rank: number, flag: string, name: string, sub: string | null, points: string, trend: string, me: boolean): HTMLLIElement {
     const li = document.createElement('li');
@@ -324,8 +604,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   async function loadCountries(): Promise<void> {
-    const el = panes.countries;
-    if (!loaded.countries) el.innerHTML = skel(6);
+    const el = lbPanes.countries;
+    if (!loadedLb.countries) el.innerHTML = skel(6);
     let rows: CountryRow[];
     try {
       rows = await getCountryRanking();
@@ -376,8 +656,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   async function loadPlayers(): Promise<void> {
-    const el = panes.players;
-    if (!loaded.players) el.innerHTML = skel(6);
+    const el = lbPanes.players;
+    if (!loadedLb.players) el.innerHTML = skel(6);
     let rows: PlayerRow[];
     try {
       rows = await getPlayerRanking();
@@ -418,8 +698,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   async function loadTeams(): Promise<void> {
-    const el = panes.teams;
-    if (!loaded.teams) el.innerHTML = skel(5);
+    const el = lbPanes.teams;
+    if (!loadedLb.teams) el.innerHTML = skel(5);
     let rows: TeamRow[];
     try {
       rows = await getTeamRanking();
@@ -652,12 +932,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   onChange(() => {
-    loaded.countries = false;
-    loaded.players = false;
-    loaded.teams = false;
+    loadedLb.countries = false;
+    loadedLb.players = false;
+    loadedLb.teams = false;
+    loadedArena = false;
     squadsLoaded = false;
     if (squadMode === 'squads') loadSquads();
-    else if (tab !== 'tournaments') void load(tab);
+    else if (lbOpen) void loadLb(lbTab);
+    else void loadTournaments();
   });
 
   onSquadChange(() => {
@@ -670,7 +952,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       if (id === 'compete') {
         paintMode();
         if (squadMode === 'squads') loadSquads();
-        else void load(tab);
+        else if (lbOpen) void loadLb(lbTab);
+        else void loadTournaments();
       }
     },
   };
