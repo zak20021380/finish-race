@@ -1700,7 +1700,7 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   .g-head { min-height: 44px; }
   .tab { min-height: 44px; }
   .id-card { padding: var(--s2) var(--s3) var(--s3); }
-  .id-card.user-bar { padding: 14px; gap: 12px; }
+  .id-card.user-bar { padding: 16px; gap: 12px; border-radius: 20px; }
   .avatar { width: 44px; height: 44px; }
   .mode { min-height: 52px; }
   .btn-hero { min-height: 56px; }
@@ -2081,8 +2081,8 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   padding: var(--s4);
 }
 
-/* ---- identity card: premium Dark Clay arcade HUD, two spacious rows ----
-   Row 1 = identity + tools · Row 2 = squad + progression.
+/* ---- identity card: premium Dark Clay arcade HUD, two clean rows ----
+   Row 1 = identity (avatar + name/Lv + XP) + tools · Row 2 = dedicated squad bar.
    Surface: clean --clay-face (#1C2433) with top rim light + deep bottom drop. */
 .id-card {
   flex: none;
@@ -2101,7 +2101,11 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
     inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 .id-card.user-bar {
-  gap: 14px;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--clay-face);
+  background-color: #1C2433;
 }
 .id-row {
   display: flex;
@@ -2112,29 +2116,28 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 /* Row 1: identity left, tools right — balanced, breathing room */
 .id-row.id-top {
   justify-content: space-between;
+  align-items: center;
 }
 .id-identity {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-/* Row 2: squad pill + recessed XP — squad stays prominent, XP fills the rest */
-.id-row.id-bottom {
-  justify-content: space-between;
   gap: 12px;
 }
-.id-row.id-bottom .squad-pill {
-  flex: none;
-  max-width: 46%;
+/* Row 2: dedicated squad sub-row — full-width bottom bar, never shares a line with XP */
+.id-row.id-bottom,
+.id-row.squad-bar {
+  justify-content: stretch;
+  gap: 12px;
 }
-.id-row.id-bottom .id-xp {
+.id-row.squad-bar .squad-pill {
   flex: 1 1 auto;
-  min-width: 0;
+  max-width: none;
+  justify-content: center;
 }
-/* the avatar's frame is the tile itself: a ring plus a lip, not a border.
-   3D embossed: deep extrusion + top specular so it pops off the #1C2433 face. */
+/* Avatar is a clean standalone tactile Dark Clay tile — no badges pinned to its border,
+   so nothing overlaps or clips. The level badge lives inline next to the name instead. */
 .avatar-btn {
   appearance: none;
   border: 0;
@@ -2143,12 +2146,13 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   flex: none;
   display: grid;
   place-items: center;
-  padding: 0 6px 6px 0;
+  padding: 0;
+  margin: 0;
   border-radius: 34%;
   cursor: pointer;
 }
-/* 44px tap band around a 40px disc, vertical-only so the name button keeps its own hit box */
-.avatar-btn::after { content: ""; position: absolute; inset: -2px 0; }
+/* generous tap target without growing layout: an overlay band, not padding */
+.avatar-btn::after { content: ""; position: absolute; inset: -6px; }
 .avatar-btn:hover:not(:active) .avatar { transform: translateY(-1px); }
 .avatar-btn:active .avatar { transform: translateY(2px); }
 .avatar-btn:active { transform: translateY(2px); }
@@ -2165,16 +2169,20 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
     inset 0 2px 2px rgba(255, 255, 255, 0.12),
     inset 0 -3px 4px rgba(0, 0, 0, 0.35);
 }
-/* Lv badge pinned to the avatar corner — floats above the frame */
-.avatar-lvl {
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-  z-index: 2;
-  padding: 2px 7px;
-  font-size: 10px;
-  line-height: 1.2;
-  pointer-events: none;
+/* Left column: avatar + stacked player info (name row on top, XP underneath) */
+.player-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 .id-name-btn {
   appearance: none;
@@ -2183,24 +2191,24 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   font: inherit;
   margin: 0;
   padding: 0;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
-  min-height: 40px;
   position: relative;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: var(--s1);
   text-align: left;
   cursor: pointer;
   border-radius: var(--r-chip);
   transition: opacity var(--motion-fast);
 }
-/* the 48px target is a band, not a taller box: a min-height here would grow row 1
-   past the avatar and cost the carousel a line it does not have on a 720 column */
+/* the tap target is a band, not a taller box: it must not grow row 1 past the avatar */
 .id-name-btn::after { content: ""; position: absolute; inset: -4px 0; }
 .id-name-btn:active { opacity: .7; }
 .id-name-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-.id-name {
+/* Level badge is inline next to the name — never absolutely positioned over the avatar,
+   so no overlap or clipped borders. */
+.id-name,
+.player-name {
   min-width: 0;
   font-size: var(--t-1);
   font-weight: 800;
@@ -2212,8 +2220,10 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   text-overflow: ellipsis;
 }
 /* the level badge is a mint key: it is a fact about the player, not an action */
-.lvl-pill {
+.lvl-pill,
+.lvl-badge {
   --d: 2px;
+  position: static;
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -2232,7 +2242,8 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.lvl-pill b { font-weight: 800; }
+.lvl-pill b, .lvl-badge b { font-weight: 800; }
+/* Top-right cluster: coins pill, bell, settings in one neat horizontal row */
 .id-side { flex: none; display: flex; align-items: center; gap: 8px; }
 /* the purse: a gold key with a bronze lip, so the balance looks like the thing you spend.
    Now a real button — same tactile travel as the bell + gear. */
@@ -2347,16 +2358,19 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 }
 .tag-chip.unset .tag-chip-t { text-decoration: underline dotted; text-underline-offset: 3px; }
 
-/* progression line: sleek recessed channel cut into the slab.
-   Track is deep matte (rgba(0,0,0,0.4)); fill is energetic cyan → indigo. */
+/* progression line: sleek recessed channel tucked right underneath the name.
+   It lives inside .player-info now — never on the same flex line as the tall
+   34px squad button, so baselines stay natural with zero overlap. */
 .id-xp {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  width: 100%;
 }
-.id-xp .bar {
-  height: 10px;
+.id-xp .bar,
+.id-xp .bar.thin {
+  height: 6px;
   background: rgba(0, 0, 0, 0.4);
   box-shadow:
     inset 0 2px 4px rgba(0, 0, 0, 0.55),
@@ -3057,7 +3071,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 @media (max-height: 760px) {
   .screen.home { gap: var(--s2); }
   .id-card { gap: var(--s1); padding: var(--s2) var(--s4) var(--s3); }
-  .id-card.user-bar { gap: 12px; padding: 14px 18px; }
+  .id-card.user-bar { gap: 12px; padding: 16px; border-radius: 20px; }
   .launcher { gap: var(--s2); }
   .mode-hero { min-height: 64px; padding: var(--s2) var(--s3); }
   .mode-hero-ico { width: 42px; height: 42px; border-radius: 14px; }
@@ -3075,7 +3089,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   .mini-rank li { min-height: 22px; }
   .screen.home { gap: var(--s1); }
   .id-card { padding-bottom: var(--s2); }
-  .id-card.user-bar { padding: 14px 18px; gap: 12px; }
+  .id-card.user-bar { padding: 16px; gap: 12px; border-radius: 20px; }
   .launcher { gap: var(--s2); }
   .mode-hero { min-height: 60px; padding: var(--s2); }
   .mode-change-btn { min-width: 84px; }
@@ -3090,7 +3104,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 @media (max-height: 600px) {
   .screen.home { gap: 2px; }
   .id-card { gap: 2px; padding-bottom: var(--s1); }
-  .id-card.user-bar { gap: 12px; padding: 12px 14px; }
+  .id-card.user-bar { gap: 12px; padding: 16px; border-radius: 20px; }
   .launcher { gap: var(--s2); }
   .mode-hero { min-height: 56px; }
   .mode-hero-ico { width: 38px; height: 38px; }

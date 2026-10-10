@@ -204,11 +204,19 @@
                     <img id="avatar-img" alt="" hidden />
                     <span id="avatar-t">P</span>
                   </span>
-                  <span class="lvl-pill avatar-lvl" aria-hidden="true">Lv <b id="p-level">1</b></span>
                 </button>
-                <button class="id-name-btn" type="button" id="home-profile-btn" aria-label="Open profile">
-                  <span class="id-name" id="p-name">Player</span>
-                </button>
+                <div class="player-info">
+                  <div class="name-row">
+                    <button class="id-name-btn" type="button" id="home-profile-btn" aria-label="Open profile">
+                      <span class="player-name id-name" id="p-name">Player</span>
+                    </button>
+                    <span class="lvl-badge lvl-pill">Lv&nbsp;<b id="p-level">1</b></span>
+                  </div>
+                  <div class="id-xp">
+                    <span class="bar thin" role="progressbar" id="p-bar" aria-label="Progress to the next level" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><i id="p-fill"></i></span>
+                    <span class="lvl-r" id="p-xp">0/10 XP</span>
+                  </div>
+                </div>
               </div>
               <div class="id-side">
                 <button class="coin-pill" type="button" id="coin-btn" aria-label="Open profile — coin balance"><span class="coin" data-coin aria-hidden="true"></span><span id="p-coins">0</span></button>
@@ -221,17 +229,13 @@
                 </button>
               </div>
             </div>
-            <div class="id-row id-bottom">
+            <div class="id-row id-bottom squad-bar">
               <button class="tag-chip squad-pill" type="button" id="team-chip" aria-haspopup="dialog" aria-label="Join Squad">
                 <span class="squad-avatar" id="squad-avatar" hidden aria-hidden="true">S</span>
                 <svg class="ico chip-ico" id="squad-ico" aria-hidden="true"><use href="#i-send" /></svg>
                 <span class="tag-chip-t" id="team-name">Join Squad</span>
                 <span class="rank-pill" id="team-count" hidden></span>
               </button>
-              <div class="id-xp">
-                <span class="bar thin" role="progressbar" id="p-bar" aria-label="Progress to the next level" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><i id="p-fill"></i></span>
-                <span class="lvl-r" id="p-xp">0/10 XP</span>
-              </div>
             </div>
           </header>
 
