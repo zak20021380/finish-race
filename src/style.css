@@ -186,6 +186,8 @@
   /* lane the board slot keeps above the board: the FINISH pill straddles that edge, so its
      upper half needs room inside the slot's own padding box — nothing gets cropped */
   --finish-lane: 16px;
+  /* bottom nav height: the compete scroll pads by dock + 16 so rows never hide behind chrome */
+  --dock-height: 72px;
 
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
@@ -1734,7 +1736,28 @@ html.rm *, html.rm *::before, html.rm *::after {
    COMPETE — seg tabs, scrollable body, tournament cards, ranked rows.
    ========================================================================== */
 
-.compete-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--s2); padding-bottom: var(--s2); }
+/* Compete owns a fixed header + mode switch; only the body scrolls. The docked
+   squad CTA lives outside the scroll, so the list pads by dock + 16 and the
+   last row never hides behind chrome. */
+.screen.compete-screen { overflow: hidden; max-width: 100%; }
+.compete-head .m-title { font-weight: 800; letter-spacing: -.01em; }
+.compete-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  scrollbar-width: none;
+  padding-bottom: calc(var(--dock-height) + 16px);
+}
+.compete-body::-webkit-scrollbar { display: none; }
+.compete-body > * { max-width: 100%; min-width: 0; }
 .tourney-card {
   display: flex;
   flex-direction: column;
@@ -3023,22 +3046,54 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
     inset 0 -2px 3px rgba(0, 0, 0, .2);
 }
 
-/* ---- Compete mode toggle: the top-level Solo vs Squads switch ---- */
+/* ---- Compete mode toggle: the top-level Solo vs Squads switch ----
+   Two equal keys; the Squads key stacks a "Channels & Groups" caption. */
 .seg.squad-mode { flex: none; margin-bottom: var(--s1); }
 #compete-tabs[hidden] { display: none; }
+.seg.squad-mode .mode-seg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-height: 52px;
+  padding: 6px var(--s2);
+  line-height: 1.2;
+}
+.seg-t { display: block; font-size: var(--t-3); font-weight: 800; white-space: nowrap; }
+.seg-s {
+  display: block;
+  font-size: var(--t-micro);
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.seg-b[aria-selected="true"] .seg-s { color: var(--brand-ink); opacity: .85; }
 
-/* ---- Telegram Squads ranking: clay list, 3D rank badges, Join/View keys ---- */
+/* ---- Telegram Squads ranking: decluttered clay rows + compact tactile key ----
+   Dark Clay: #10141D canvas, #1C2433 faces, 18px radii. Title on top,
+   @handle · members beneath in slate #94A3B8, trophies as number + cup only.
+   The row itself opens details; the 36px key joins. Transform-only presses. */
 .squad-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-radius: var(--radius-md); overflow: hidden; background: var(--clay-face); box-shadow: var(--clay), var(--clay-ring); }
 .squad-row {
   display: flex;
   align-items: center;
   gap: var(--s2);
-  min-height: 56px;
-  padding: var(--s2) var(--s3);
+  min-width: 0;
+  max-width: 100%;
+  min-height: 60px;
+  padding: var(--s2) var(--s2) var(--s2) var(--s3);
   font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: transform var(--motion-fast), background var(--motion-fast);
 }
 .squad-row + .squad-row { box-shadow: inset 0 1px 0 var(--sep); }
-.squad-row.me { background: var(--brand-soft); }
+.squad-row:hover { background: rgba(255, 255, 255, .02); }
+.squad-row:active { transform: translateY(1px); }
+.squad-row:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+.squad-row.me { background: var(--brand-soft); box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .32); }
+.squad-row.me + .squad-row { box-shadow: none; border-top: 1px solid rgba(125, 211, 252, .18); }
 .squad-row.me .squad-name { color: var(--brand-ink); }
 .squad-row .rk {
   --d: 2px;
@@ -3069,63 +3124,106 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   color: #10141D;
   box-shadow: 0 var(--d) 0 #7c3f14, inset 0 1px 0 rgba(255, 255, 255, .5);
 }
-.squad-id { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: var(--s2); }
-.squad-txt { flex: 1 1 auto; min-width: 0; }
+.squad-row .squad-avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+}
+.squad-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.squad-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .squad-name {
-  display: block;
-  font-size: var(--t-3);
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: var(--t-2);
   font-weight: 800;
+  letter-spacing: -.01em;
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.squad-kind {
+  flex: none;
+  padding: 2px 7px 3px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  line-height: 1;
+  white-space: nowrap;
+}
+.squad-kind[data-kind="channel"] {
+  background: var(--brand-soft);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .32);
+  color: var(--brand-ink);
+}
+.squad-kind[data-kind="group"] {
+  background: var(--mint-soft);
+  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .3);
+  color: var(--mint-ink);
+}
 .squad-sub {
   display: block;
-  margin-top: 1px;
   font-size: var(--t-micro);
   font-weight: 600;
-  color: var(--ink-soft);
+  color: #94A3B8;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
-.squad-pt { flex: none; text-align: right; font-size: var(--t-3); font-weight: 800; color: var(--honey-ink); font-variant-numeric: tabular-nums; }
-.squad-pt small { display: block; font-size: var(--t-micro); font-weight: 700; color: var(--ink-soft); }
-.squad-act {
+.squad-pt {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--t-3);
+  font-weight: 800;
+  color: var(--honey-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.squad-pt b { font-weight: 800; }
+.squad-pt .trophy { font-size: 1em; line-height: 1; }
+/* compact tactile key: 36px circle, extruded, travels down on press */
+.squad-go {
   --d: 2px;
   appearance: none;
+  position: relative;
   border: 0;
   font: inherit;
   flex: none;
-  min-width: 64px;
-  min-height: 40px;
-  padding: 0 var(--s3);
-  border-radius: var(--radius-pill);
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
   cursor: pointer;
-  font-size: var(--t-3);
+  font-size: 18px;
   font-weight: 800;
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast), opacity var(--motion-fast);
+  line-height: 1;
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast), opacity var(--motion-fast);
 }
-.squad-act.join {
+.squad-go::after { content: ""; position: absolute; inset: -4px; }
+.squad-go.join {
   background: var(--brand-fill);
   color: var(--on-brand);
   box-shadow: 0 var(--d) 0 var(--brand-lip), inset 0 1px 0 rgba(255, 255, 255, .3);
 }
-.squad-act.view {
-  background: var(--clay-face);
-  color: var(--ink);
-  box-shadow: 0 var(--d) 0 #080C14, var(--clay-spec), var(--clay-ring);
-}
-.squad-act.bound {
+.squad-go.bound {
   background: var(--brand-soft);
   color: var(--brand-ink);
-  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .3);
-  cursor: default;
+  box-shadow: inset 0 0 0 1.5px rgba(125, 211, 252, .4);
+  font-size: 15px;
 }
-.squad-act:active:not([disabled]) { transform: translateY(var(--press-y)); --d: 0px; }
-.squad-act:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.squad-go:hover:not(:active) { transform: translateY(-1px); }
+.squad-go:active { transform: translateY(var(--press-y)); --d: 0px; }
+.squad-go:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
 /* ---- squad picker rows inside the sheet: same press language, viewport-safe ---- */
 .squad-pick { max-height: 30vh; }
@@ -3133,8 +3231,63 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 .squad-pick .pick-n small { display: block; font-size: var(--t-micro); font-weight: 600; color: var(--ink-soft); }
 .squad-err { color: var(--danger); }
 #sheet-squad .sheet-body { max-height: 52vh; }
-#comp-squads { display: flex; flex-direction: column; gap: var(--s2); min-height: 0; }
+#comp-squads { display: flex; flex-direction: column; gap: var(--s2); min-height: 0; max-width: 100%; }
 #comp-squads[hidden] { display: none; }
+
+/* ---- squad dock: pinned clay callout floating above the nav ----
+   Lives outside the scroll so it can never clip. Not in squad: compact
+   prompt + Find Squad. In squad: rank + personal contribution + View. */
+.squad-dock {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  max-width: 100%;
+  min-height: 68px;
+  margin-top: var(--s1);
+  padding: var(--s2) var(--s3) var(--s2) var(--s2);
+  border-radius: 18px;
+  background: var(--clay-face);
+  box-shadow: var(--clay), var(--clay-ring);
+}
+.squad-dock[hidden] { display: none; }
+.squad-dock-ico {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--field);
+  box-shadow: var(--inset);
+  font-size: 20px;
+  line-height: 1;
+}
+.squad-dock .squad-avatar { width: 40px; height: 40px; font-size: 16px; }
+.squad-dock-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.squad-dock-txt b {
+  display: block;
+  font-size: var(--t-2);
+  font-weight: 800;
+  letter-spacing: -.01em;
+  line-height: 1.25;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.squad-dock-txt small {
+  display: block;
+  font-size: var(--t-micro);
+  font-weight: 600;
+  color: #94A3B8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.squad-dock-btn { flex: none; }
+.squad-dock.member { box-shadow: var(--clay), var(--clay-ring), inset 0 0 0 1px rgba(125, 211, 252, .22); }
 
 /* short phones keep the cup CTA and squad rows on their targets */
 @media (max-height: 700px) {

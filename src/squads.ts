@@ -15,6 +15,9 @@ import { readJson, writeJson } from './storage';
 
 export type SquadTrend = 'up' | 'down' | 'same';
 
+/** Unified community type: a Telegram Channel (broadcast) or Group (chat). */
+export type SquadKind = 'channel' | 'group';
+
 export interface Squad {
   id: string;
   /** canonical handle with leading @, e.g. @DogeSquad */
@@ -23,6 +26,8 @@ export interface Squad {
   members: number;
   trophies: number;
   trend: SquadTrend;
+  /** community type; optional so older saves without it still validate */
+  kind?: SquadKind;
 }
 
 export interface RankedSquad extends Squad {
@@ -38,14 +43,14 @@ interface SquadSave {
 }
 
 const SEEDS: Squad[] = [
-  { id: 'sq-doge', handle: '@DogeSquad', name: 'Doge Squad', members: 1240, trophies: 18420, trend: 'up' },
-  { id: 'sq-neon', handle: '@NeonRacers', name: 'Neon Racers', members: 986, trophies: 16210, trend: 'up' },
-  { id: 'sq-turbo', handle: '@TurboTurtles', name: 'Turbo Turtles', members: 874, trophies: 14980, trend: 'down' },
-  { id: 'sq-night', handle: '@NightCircuits', name: 'Night Circuits', members: 812, trophies: 13150, trend: 'same' },
-  { id: 'sq-violet', handle: '@VioletRampart', name: 'Violet Rampart', members: 640, trophies: 11240, trend: 'up' },
-  { id: 'sq-bend', handle: '@BendLine', name: 'Bend Line', members: 512, trophies: 9680, trend: 'down' },
-  { id: 'sq-check', handle: '@Checkpoint12', name: 'Checkpoint 12', members: 388, trophies: 7410, trend: 'same' },
-  { id: 'sq-open', handle: '@OpenRoad', name: 'Open Road', members: 246, trophies: 5230, trend: 'up' },
+  { id: 'sq-doge', handle: '@DogeSquad', name: 'Doge Squad', members: 1240, trophies: 18420, trend: 'up', kind: 'channel' },
+  { id: 'sq-neon', handle: '@NeonRacers', name: 'Neon Racers', members: 986, trophies: 16210, trend: 'up', kind: 'group' },
+  { id: 'sq-turbo', handle: '@TurboTurtles', name: 'Turbo Turtles', members: 874, trophies: 14980, trend: 'down', kind: 'channel' },
+  { id: 'sq-night', handle: '@NightCircuits', name: 'Night Circuits', members: 812, trophies: 13150, trend: 'same', kind: 'group' },
+  { id: 'sq-violet', handle: '@VioletRampart', name: 'Violet Rampart', members: 640, trophies: 11240, trend: 'up', kind: 'channel' },
+  { id: 'sq-bend', handle: '@BendLine', name: 'Bend Line', members: 512, trophies: 9680, trend: 'down', kind: 'group' },
+  { id: 'sq-check', handle: '@Checkpoint12', name: 'Checkpoint 12', members: 388, trophies: 7410, trend: 'same', kind: 'channel' },
+  { id: 'sq-open', handle: '@OpenRoad', name: 'Open Road', members: 246, trophies: 5230, trend: 'up', kind: 'group' },
 ];
 
 function fresh(): SquadSave {
@@ -59,7 +64,16 @@ function squadOk(s: unknown): s is Squad {
     && typeof x.name === 'string' && x.name.length > 0 && x.name.length <= 32
     && typeof x.members === 'number' && Number.isFinite(x.members) && x.members >= 0
     && typeof x.trophies === 'number' && Number.isFinite(x.trophies) && x.trophies >= 0
-    && (x.trend === 'up' || x.trend === 'down' || x.trend === 'same');
+    && (x.trend === 'up' || x.trend === 'down' || x.trend === 'same')
+    && (x.kind === undefined || x.kind === 'channel' || x.kind === 'group');
+}
+
+/** Resolve the community type, defaulting deterministically for legacy saves. */
+export function squadKind(s: Pick<Squad, 'id' | 'kind'>): SquadKind {
+  if (s.kind === 'channel' || s.kind === 'group') return s.kind;
+  let h = 0;
+  for (let i = 0; i < s.id.length; i++) h = (h * 31 + s.id.charCodeAt(i)) >>> 0;
+  return h % 2 === 0 ? 'channel' : 'group';
 }
 
 function migrate(raw: Partial<SquadSave> | null): SquadSave {
@@ -67,7 +81,7 @@ function migrate(raw: Partial<SquadSave> | null): SquadSave {
   if (!raw || typeof raw !== 'object') return s;
   if (typeof raw.boundId === 'string') s.boundId = raw.boundId;
   if (Array.isArray(raw.custom)) {
-    s.custom = raw.custom.filter(squadOk).slice(0, 20);
+    s.custom = raw.custom.filter(squadOk).map((c) => ({ ...c, kind: squadKind(c) })).slice(0, 20);
   }
   if (raw.bonus && typeof raw.bonus === 'object') {
     for (const [k, v] of Object.entries(raw.bonus)) {
@@ -117,6 +131,13 @@ export function getMySquad(): RankedSquad | null {
   return getSquadRanking().find((s) => s.id === save.boundId) ?? null;
 }
 
+/** Personal trophy contribution banked for the bound squad this device. */
+export function getMyContribution(): number {
+  if (!save.boundId) return 0;
+  const v = save.bonus[save.boundId] ?? 0;
+  return Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
+}
+
 export function searchSquads(q: string, limit = 6): RankedSquad[] {
   const needle = (q ?? '').trim().replace(/^@/, '').toLowerCase();
   const all = getSquadRanking();
@@ -141,7 +162,7 @@ export function bindSquad(rawHandle: string): BindResult {
     return was;
   }
   const id = `sq-${Date.now().toString(36)}-${handle.slice(1, 6).toLowerCase()}`;
-  const created: Squad = { id, handle, name: displayNameOf(handle), members: 1, trophies: 0, trend: 'same' };
+  const created: Squad = { id, handle, name: displayNameOf(handle), members: 1, trophies: 0, trend: 'same', kind: 'channel' };
   save.custom = [...save.custom, created].slice(-20);
   const was = save.boundId ? 'switched' : 'bound';
   save.boundId = id;

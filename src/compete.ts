@@ -20,7 +20,7 @@ import {
 import { flagOf, nameOf } from './countries';
 import { coinText, mountCoins, setBalance } from './coin';
 import { myTeam, onChange, profile, spendCoins } from './storage';
-import { bindSquadById, getMySquad, getSquadRanking, onSquadChange, squadLetter } from './squads';
+import { bindSquadById, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadKind, squadLetter, type RankedSquad } from './squads';
 import { impact, notify, tgUser } from './telegram';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
@@ -88,12 +88,30 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   /* ---------- leaderboard mode: Solo Champions vs Telegram Squads ---------- */
 
+  const squadDock = (): HTMLElement | null => document.getElementById('squad-dock');
+
+  const openSquadSheet = (): void => {
+    (document.getElementById('team-chip') as HTMLButtonElement | null)?.click();
+  };
+
+  /** 1240 -> "1.2k", 986 -> "986" — keeps the sub line on one row. */
+  const compactCount = (n: number): string => {
+    if (!Number.isFinite(n) || n < 0) return '0';
+    if (n < 1000) return String(Math.floor(n));
+    const v = n / 1000;
+    const s = v >= 100 ? String(Math.round(v)) : v.toFixed(1).replace(/\.0$/, '');
+    return `${s}k`;
+  };
+
   function paintMode(): void {
     for (const b of modeBtns) b.setAttribute('aria-selected', String(b.dataset.squadmode === squadMode));
     const squads = squadMode === 'squads';
     tabsBar.hidden = squads;
     squadsPane.hidden = !squads;
     for (const k of Object.keys(panes) as Tab[]) panes[k].hidden = squads || k !== tab;
+    const dock = squadDock();
+    if (dock) dock.hidden = !squads;
+    if (squads) paintSquadDock();
   }
 
   function selectMode(next: SquadMode): void {
@@ -452,12 +470,173 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   /* ---------- Telegram Squads: channel/community ranking ---------- */
 
+  function squadRow(s: RankedSquad, mine: boolean): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = `squad-row${mine ? ' me' : ''}`;
+    li.tabIndex = 0;
+    li.dataset.id = s.id;
+    li.title = `${s.name} · ${s.handle}`;
+    li.setAttribute('aria-label', `${s.name}, ${s.handle}, rank ${s.rank}, ${s.trophies.toLocaleString('en-US')} trophies. Press Enter for squad details.`);
+    if (mine) li.setAttribute('aria-current', 'true');
+
+    const rk = document.createElement('span');
+    rk.className = `rk${s.rank === 1 ? ' gold' : s.rank === 2 ? ' silver' : s.rank === 3 ? ' bronze' : ''}`;
+    rk.textContent = String(s.rank);
+    rk.setAttribute('aria-hidden', 'true');
+
+    const av = document.createElement('span');
+    av.className = 'squad-avatar';
+    av.textContent = squadLetter(s);
+    av.setAttribute('aria-hidden', 'true');
+
+    const txt = document.createElement('span');
+    txt.className = 'squad-txt';
+
+    const nameRow = document.createElement('span');
+    nameRow.className = 'squad-name-row';
+    const nm = document.createElement('span');
+    nm.className = 'squad-name';
+    nm.textContent = s.name;
+    nm.title = s.name;
+    const kind = document.createElement('span');
+    const k = squadKind(s);
+    kind.className = 'squad-kind';
+    kind.dataset.kind = k;
+    kind.textContent = k === 'channel' ? 'Channel' : 'Group';
+    kind.title = k === 'channel' ? 'Telegram channel' : 'Telegram group';
+    nameRow.append(nm, kind);
+
+    const sub = document.createElement('span');
+    sub.className = 'squad-sub';
+    sub.textContent = `${s.handle} · ${compactCount(s.members)} members`;
+
+    txt.append(nameRow, sub);
+
+    const pt = document.createElement('span');
+    pt.className = 'squad-pt';
+    const num = document.createElement('b');
+    num.textContent = s.trophies.toLocaleString('en-US');
+    const cup = document.createElement('span');
+    cup.className = 'trophy';
+    cup.textContent = '🏆';
+    cup.setAttribute('aria-hidden', 'true');
+    pt.append(num, cup);
+    pt.title = `${s.trophies.toLocaleString('en-US')} squad trophies`;
+    pt.setAttribute('aria-label', `${s.trophies.toLocaleString('en-US')} trophies`);
+
+    const go = document.createElement('button');
+    go.type = 'button';
+    go.className = `squad-go${mine ? ' bound' : ' join'}`;
+    go.textContent = mine ? '✓' : '+';
+    go.setAttribute('aria-label', mine ? `View ${s.handle} details` : `Join ${s.handle}`);
+    go.addEventListener('click', (e) => {
+      e.stopPropagation();
+      impact('light');
+      if (mine) {
+        openSquadSheet();
+        return;
+      }
+      const r = bindSquadById(s.id);
+      if (r === 'bad-handle') { notify('warning'); return; }
+      notify('success');
+      impact('medium');
+      loadSquads();
+    });
+
+    // The whole row opens squad details; the compact key joins/binds.
+    li.addEventListener('click', () => {
+      impact('light');
+      openSquadSheet();
+    });
+    li.addEventListener('keydown', (e) => {
+      if (e.target !== li) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        impact('light');
+        openSquadSheet();
+      }
+    });
+
+    li.append(rk, av, txt, pt, go);
+    return li;
+  }
+
+  function paintSquadDock(): void {
+    const dock = squadDock();
+    if (!dock) return;
+    if (squadMode !== 'squads') {
+      dock.hidden = true;
+      return;
+    }
+    dock.hidden = false;
+    const me = getMySquad();
+    dock.textContent = '';
+    dock.classList.toggle('member', !!me);
+
+    if (!me) {
+      const ico = document.createElement('span');
+      ico.className = 'squad-dock-ico';
+      ico.textContent = '🏆';
+      ico.setAttribute('aria-hidden', 'true');
+
+      const txt = document.createElement('span');
+      txt.className = 'squad-dock-txt';
+      const t = document.createElement('b');
+      t.textContent = 'Join a squad to earn trophies for your community';
+      const s = document.createElement('small');
+      s.textContent = 'Race points count for your channel or group';
+      txt.append(t, s);
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-primary sm squad-dock-btn';
+      btn.textContent = 'Find Squad';
+      btn.setAttribute('aria-label', 'Find Squad: open squad picker');
+      btn.addEventListener('click', () => {
+        impact('light');
+        openSquadSheet();
+      });
+
+      dock.append(ico, txt, btn);
+      return;
+    }
+
+    const mine = getMyContribution();
+    const av = document.createElement('span');
+    av.className = 'squad-avatar';
+    av.textContent = squadLetter(me);
+    av.setAttribute('aria-hidden', 'true');
+
+    const txt = document.createElement('span');
+    txt.className = 'squad-dock-txt';
+    const t = document.createElement('b');
+    t.textContent = `${me.handle} · Rank #${me.rank}`;
+    t.title = `${me.name} · ${me.handle}`;
+    const s = document.createElement('small');
+    const yours = mine > 0 ? ` · +${mine.toLocaleString('en-US')} yours` : ' · fight to contribute';
+    s.textContent = `${me.trophies.toLocaleString('en-US')} trophies${yours}`;
+    txt.append(t, s);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-ghost sm squad-dock-btn';
+    btn.textContent = 'View';
+    btn.setAttribute('aria-label', `View ${me.handle} squad details`);
+    btn.addEventListener('click', () => {
+      impact('light');
+      openSquadSheet();
+    });
+
+    dock.append(av, txt, btn);
+  }
+
   function loadSquads(): void {
     const el = squadsPane;
     if (!squadsLoaded) el.innerHTML = skel(5);
     const rows = getSquadRanking();
     if (!rows.length) {
       el.innerHTML = empty('No squads ranked yet.');
+      paintSquadDock();
       return;
     }
     const me = getMySquad();
@@ -465,72 +644,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const ol = document.createElement('ol');
     ol.className = 'squad-list';
     for (const s of rows) {
-      const li = document.createElement('li');
-      li.className = `squad-row${me?.id === s.id ? ' me' : ''}`;
-      const rk = document.createElement('span');
-      rk.className = `rk${s.rank === 1 ? ' gold' : s.rank === 2 ? ' silver' : s.rank === 3 ? ' bronze' : ''}`;
-      rk.textContent = String(s.rank);
-      const idWrap = document.createElement('span');
-      idWrap.className = 'squad-id';
-      const av = document.createElement('span');
-      av.className = 'squad-avatar';
-      av.textContent = squadLetter(s);
-      av.setAttribute('aria-hidden', 'true');
-      const txt = document.createElement('span');
-      txt.className = 'squad-txt';
-      const nm = document.createElement('span');
-      nm.className = 'squad-name';
-      nm.textContent = `${s.handle} · ${s.name}`;
-      nm.title = `${s.handle} · ${s.name}`;
-      const sub = document.createElement('span');
-      sub.className = 'squad-sub';
-      sub.textContent = `${s.members.toLocaleString('en-US')} members`;
-      txt.append(nm, sub);
-      idWrap.append(av, txt);
-      const pt = document.createElement('span');
-      pt.className = 'squad-pt';
-      pt.textContent = `${s.trophies.toLocaleString('en-US')} 🏆`;
-      const troph = document.createElement('small');
-      troph.textContent = 'squad trophies';
-      pt.append(troph);
-      const act = document.createElement('button');
-      act.type = 'button';
-      const mine = me?.id === s.id;
-      act.className = `squad-act${mine ? ' bound' : ' join'}`;
-      act.textContent = mine ? 'View' : 'Join';
-      act.setAttribute('aria-label', mine ? `View ${s.handle}` : `Join ${s.handle}`);
-      act.addEventListener('click', () => {
-        impact('light');
-        if (mine) {
-          (document.getElementById('team-chip') as HTMLButtonElement | null)?.click();
-          return;
-        }
-        if (act.textContent === 'Join') {
-          const r = bindSquadById(s.id);
-          if (r === 'bad-handle') { notify('warning'); return; }
-          notify('success');
-          impact('medium');
-          loadSquads();
-          return;
-        }
-        (document.getElementById('team-chip') as HTMLButtonElement | null)?.click();
-      });
-      li.append(rk, idWrap, pt, act);
-      ol.append(li);
+      ol.append(squadRow(s, me?.id === s.id));
     }
     el.append(ol);
-    if (!me) {
-      const hint = document.createElement('button');
-      hint.className = 'rank-row rank-pinned hint';
-      hint.type = 'button';
-      hint.textContent = 'Join a squad on Home to score for a channel.';
-      hint.setAttribute('aria-label', 'Join a squad on Home');
-      hint.addEventListener('click', () => {
-        impact('light');
-        (document.getElementById('team-chip') as HTMLButtonElement | null)?.click();
-      });
-      el.append(hint);
-    }
+    paintSquadDock();
     squadsLoaded = true;
   }
 

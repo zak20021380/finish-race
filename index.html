@@ -376,13 +376,18 @@
         </section>
 
         <!-- ---------------- compete ---------------- -->
-        <section class="screen menu" id="s-compete" data-screen="compete" tabindex="-1" hidden aria-labelledby="compete-title">
-          <div class="m-head">
-            <h1 class="m-title" id="compete-title">Compete <span class="preview-badge">Preview</span></h1>
+        <section class="screen menu compete-screen" id="s-compete" data-screen="compete" tabindex="-1" hidden aria-labelledby="compete-title">
+          <div class="m-head compete-head">
+            <h1 class="m-title" id="compete-title">Compete</h1>
           </div>
           <div class="seg squad-mode" role="tablist" aria-label="Leaderboard mode">
-            <button class="seg-b" type="button" role="tab" data-squadmode="solo" aria-selected="true">Solo Champions</button>
-            <button class="seg-b" type="button" role="tab" data-squadmode="squads" aria-selected="false">Telegram Squads</button>
+            <button class="seg-b mode-seg" type="button" role="tab" data-squadmode="solo" aria-selected="true">
+              <span class="seg-t">Solo Champions</span>
+            </button>
+            <button class="seg-b mode-seg" type="button" role="tab" data-squadmode="squads" aria-selected="false">
+              <span class="seg-t">Telegram Squads</span>
+              <small class="seg-s">Channels &amp; Groups</small>
+            </button>
           </div>
           <div class="seg" id="compete-tabs" role="tablist" aria-label="Compete sections">
             <button class="seg-b" type="button" role="tab" data-comp="tournaments" aria-selected="true">Tournaments</button>
@@ -397,6 +402,7 @@
             <div id="comp-teams" role="tabpanel" aria-label="Teams" hidden></div>
             <div id="comp-squads" role="tabpanel" aria-label="Telegram Squads" hidden></div>
           </div>
+          <div class="squad-dock" id="squad-dock" hidden></div>
         </section>
 
         <!-- ---------------- custom teams ---------------- -->
