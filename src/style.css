@@ -2859,6 +2859,170 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 }
 .cup-top small { color: var(--ink-soft); font-weight: 700; }
 
+/* ---- Featured tournament arcade polish: vibrant Dark Clay, 60fps only ----
+   Pure CSS gradients + box-shadows + transform animations. No backdrop-filter,
+   no blur, no images — the compositor only ever moves two small layers
+   (trophy float + live pulse). Cards keep the clay foundation, lit from above
+   with a glossy top rim and a themed ambient backlight. */
+.car-card.tourney {
+  position: relative;
+  border-top: 1px solid rgba(255, 255, 255, .14);
+  gap: 6px;
+}
+/* Neon Rush Cup: dark cyber-mesh + cyan/magenta ambient backlight */
+.car-card[data-slide="0"] {
+  background:
+    radial-gradient(120% 90% at 85% 0%, rgba(37, 99, 235, .22), rgba(37, 99, 235, 0) 55%),
+    radial-gradient(100% 80% at 92% 12%, rgba(236, 72, 153, .15), rgba(236, 72, 153, 0) 60%),
+    repeating-linear-gradient(0deg, rgba(125, 211, 252, .05) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(90deg, rgba(125, 211, 252, .05) 0 1px, transparent 1px 7px),
+    linear-gradient(180deg, #202A3E 0%, #1C2433 100%);
+}
+/* Channel Cup: warm amber/gold ambient glow */
+.car-card[data-slide="3"] {
+  background:
+    radial-gradient(120% 95% at 85% 0%, rgba(245, 158, 11, .2), rgba(245, 158, 11, 0) 60%),
+    radial-gradient(80% 70% at 95% 20%, rgba(251, 191, 36, .1), rgba(251, 191, 36, 0) 60%),
+    linear-gradient(180deg, #202A3E 0%, #1C2433 100%);
+}
+/* split body: content owns the width, trophy owns a fixed slot — no void */
+.car-body {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-width: 0;
+}
+.car-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* 3D trophy/badge: embossed clay badge, dual-tone extrusion, floating tilt */
+.trophy {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  will-change: transform;
+  animation: trophy-float 3.4s ease-in-out infinite;
+}
+.trophy-badge {
+  width: 60px;
+  height: 60px;
+  display: grid;
+  place-items: center;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #2E3A55 0%, #141B2A 100%);
+  color: var(--brand-ink);
+}
+.trophy-badge .ico { width: 30px; height: 30px; }
+.trophy-neon .trophy-badge {
+  color: #7DD3FC;
+  box-shadow:
+    -3px 5px 0 rgba(37, 99, 235, .45),
+    3px 5px 0 rgba(236, 72, 153, .35),
+    0 12px 22px -8px rgba(0, 0, 0, .6),
+    inset 0 1px 0 rgba(255, 255, 255, .28),
+    inset 0 -2px 4px rgba(0, 0, 0, .4),
+    0 0 16px rgba(56, 189, 248, .3);
+}
+.trophy-gold .trophy-badge {
+  color: #FCD34D;
+  box-shadow:
+    -3px 5px 0 rgba(245, 158, 11, .42),
+    3px 5px 0 rgba(180, 83, 9, .55),
+    0 12px 22px -8px rgba(0, 0, 0, .6),
+    inset 0 1px 0 rgba(255, 255, 255, .28),
+    inset 0 -2px 4px rgba(0, 0, 0, .4),
+    0 0 16px rgba(245, 158, 11, .32);
+}
+@keyframes trophy-float {
+  0%, 100% { transform: rotate(-6deg) translateY(-2px); }
+  50% { transform: rotate(-3deg) translateY(2px); }
+}
+/* gamified capacity: recessed tactile track + glowing electric fill */
+.cap-meter { min-width: 0; }
+.cap-track {
+  display: block;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, .35);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .55), inset 0 -1px 0 rgba(255, 255, 255, .06);
+  overflow: hidden;
+}
+.cap-fill {
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0284c7 0%, #22d3ee 60%, #a5f3fc 100%);
+  box-shadow: 0 0 10px rgba(34, 211, 238, .7), inset 0 1px 0 rgba(255, 255, 255, .6);
+}
+.cap-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.cap-label .hot { color: #7DD3FC; }
+.car-card[data-slide="3"] .cap-label .hot { color: #FCD34D; }
+.car-foot .cap-label, .car-foot .car-sub { flex: 1 1 auto; min-width: 0; }
+/* live badge: red pill + soft glowing animated pulse ring */
+.pill.live {
+  background: linear-gradient(180deg, var(--bad-1) 0%, var(--bad-2) 100%);
+  color: var(--on-brand);
+  box-shadow: 0 2px 0 #8f0e2e, 0 0 10px rgba(239, 68, 68, .5), inset 0 1px 0 rgba(255, 255, 255, .3);
+  animation: live-badge-glow 1.8s ease-in-out infinite;
+}
+@keyframes live-badge-glow {
+  0%, 100% { box-shadow: 0 2px 0 #8f0e2e, 0 0 10px rgba(239, 68, 68, .5), inset 0 1px 0 rgba(255, 255, 255, .3); }
+  50% { box-shadow: 0 2px 0 #8f0e2e, 0 0 18px rgba(239, 68, 68, .75), inset 0 1px 0 rgba(255, 255, 255, .3); }
+}
+/* Join live CTA: juicy high-contrast 3D push-button, top streak, deep lip */
+.car-card .join-live {
+  --d: 4px;
+  flex: none;
+  position: relative;
+  overflow: hidden;
+  min-height: 44px;
+}
+.btn-primary.join-live {
+  --btn-lip: #075985;
+  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+  color: #fff;
+  box-shadow:
+    0 var(--d) 0 var(--btn-lip),
+    0 calc(var(--d) + 8px) 20px -8px rgba(2, 132, 199, .65),
+    inset 0 2px 3px rgba(255, 255, 255, .45),
+    inset 0 -2px 3px rgba(0, 0, 0, .2);
+}
+.btn-primary.join-live::before,
+.btn-coral.join-live::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 46%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .45), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+.btn-coral.join-live {
+  box-shadow:
+    0 var(--d) 0 var(--cta-lip),
+    0 calc(var(--d) + 8px) 20px -8px rgba(255, 82, 43, .55),
+    inset 0 2px 3px rgba(255, 255, 255, .4),
+    inset 0 -2px 3px rgba(0, 0, 0, .2);
+}
+
 /* ---- Compete mode toggle: the top-level Solo vs Squads switch ---- */
 .seg.squad-mode { flex: none; margin-bottom: var(--s1); }
 #compete-tabs[hidden] { display: none; }

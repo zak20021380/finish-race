@@ -205,7 +205,26 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     ($('feat-prize') as HTMLElement).textContent = coinText(featured.prizePool);
     $('feat-fee').textContent = featured.entryFee ? `${coinText(featured.entryFee)} entry` : 'Free entry';
     $('feat-count').textContent = featured.status === 'ended' ? 'Ended' : formatCountdown(featured.endsAt);
-    $('feat-players').textContent = `${featured.players}/${featured.maxPlayers} players`;
+    const pct = featured.maxPlayers > 0
+      ? Math.min(100, Math.max(0, Math.round((featured.players / featured.maxPlayers) * 100)))
+      : 0;
+    const fill = document.getElementById('feat-fill') as HTMLElement | null;
+    if (fill) fill.style.width = `${pct}%`;
+    const bar = document.getElementById('feat-bar') as HTMLElement | null;
+    if (bar) bar.setAttribute('aria-valuenow', String(pct));
+    const mood = featured.status === 'ended' ? 'Ended' : pct >= 85 ? 'Almost Full' : pct >= 50 ? 'Filling fast' : 'Open';
+    const label = $('feat-players');
+    label.textContent = '';
+    label.append(
+      document.createTextNode(`${featured.players} / ${featured.maxPlayers} joined · `),
+      (() => {
+        const hot = document.createElement('span');
+        hot.className = 'hot';
+        hot.textContent = mood;
+        return hot;
+      })(),
+    );
+    label.setAttribute('aria-label', `${featured.players} of ${featured.maxPlayers} joined, ${mood}`);
     const join = $('feat-join') as HTMLButtonElement;
     join.disabled = featured.status === 'ended';
     join.textContent = featured.status === 'live' ? 'Join live' : featured.status === 'upcoming' ? 'Join' : 'Ended';

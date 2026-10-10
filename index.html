@@ -186,20 +186,30 @@
 
           <div class="carousel-wrap">
             <div class="carousel" id="home-carousel" data-carousel tabindex="0" aria-roledescription="carousel" aria-label="Highlights">
-              <article class="car-card" data-slide="0" aria-label="Featured tournament">
+              <article class="car-card tourney" data-slide="0" aria-label="Featured tournament">
                 <div class="car-head">
                   <span class="car-kicker">Featured Tournament</span>
                   <span class="pill" id="feat-badge">Upcoming</span>
                 </div>
-                <h2 class="car-title" id="feat-name"><span class="skel w60"></span></h2>
-                <div class="car-meta">
-                  <span class="car-prize"><span class="coin" data-coin aria-hidden="true"></span><b id="feat-prize">—</b></span>
-                  <span class="car-fee" id="feat-fee">—</span>
-                  <span class="car-count" id="feat-count">—</span>
+                <div class="car-body">
+                  <div class="car-main">
+                    <h2 class="car-title" id="feat-name"><span class="skel w60"></span></h2>
+                    <div class="car-meta">
+                      <span class="car-prize"><span class="coin" data-coin aria-hidden="true"></span><b id="feat-prize">—</b></span>
+                      <span class="car-fee" id="feat-fee">—</span>
+                      <span class="car-count" id="feat-count">—</span>
+                    </div>
+                    <div class="cap-meter">
+                      <span class="cap-track" role="progressbar" aria-label="Tournament capacity" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="feat-bar"><i class="cap-fill" id="feat-fill"></i></span>
+                    </div>
+                  </div>
+                  <div class="trophy trophy-neon" aria-hidden="true">
+                    <span class="trophy-badge"><svg class="ico" aria-hidden="true"><use href="#i-cup" /></svg></span>
+                  </div>
                 </div>
                 <div class="car-foot">
-                  <span class="car-players" id="feat-players">—</span>
-                  <button class="btn btn-primary sm" type="button" id="feat-join">Join</button>
+                  <span class="cap-label" id="feat-players">—</span>
+                  <button class="btn btn-primary sm join-live" type="button" id="feat-join">Join</button>
                 </div>
               </article>
               <article class="car-card" data-slide="1" aria-label="Top countries">
@@ -226,22 +236,29 @@
                   <button class="btn btn-ghost sm" type="button" id="daily-claim">Claim</button>
                 </div>
               </article>
-              <article class="car-card cup-card" data-slide="3" aria-label="Telegram Channel Cup">
+              <article class="car-card cup-card tourney" data-slide="3" aria-label="Telegram Channel Cup">
                 <div class="car-head">
                   <span class="car-kicker">Telegram Channel Cup</span>
                   <span class="pill live pulse" id="cup-badge"><i class="live-dot" aria-hidden="true"></i>Live</span>
                 </div>
-                <div class="cup-meta">
-                  <span class="cup-top" id="cup-top">—</span>
-                  <span class="car-prize"><span class="coin" data-coin aria-hidden="true"></span><b id="cup-prize">—</b></span>
-                </div>
-                <div class="car-meta">
-                  <span class="car-players" id="cup-players">—</span>
-                  <span class="car-count" id="cup-count">—</span>
+                <div class="car-body">
+                  <div class="car-main">
+                    <div class="cup-meta">
+                      <span class="cup-top" id="cup-top">—</span>
+                      <span class="car-prize"><span class="coin" data-coin aria-hidden="true"></span><b id="cup-prize">—</b></span>
+                    </div>
+                    <div class="car-meta">
+                      <span class="car-players" id="cup-players">—</span>
+                      <span class="car-count" id="cup-count">—</span>
+                    </div>
+                  </div>
+                  <div class="trophy trophy-gold" aria-hidden="true">
+                    <span class="trophy-badge"><svg class="ico" aria-hidden="true"><use href="#i-cup" /></svg></span>
+                  </div>
                 </div>
                 <div class="car-foot">
                   <span class="car-sub" id="cup-sub">Points go to you + your squad</span>
-                  <button class="btn btn-coral sm" type="button" id="cup-fight">Fight for Squad</button>
+                  <button class="btn btn-coral sm join-live" type="button" id="cup-fight">Fight for Squad</button>
                 </div>
               </article>
             </div>
