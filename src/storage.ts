@@ -68,6 +68,10 @@ export interface Save {
   stats: Stats;
   /** ISO 3166-1 alpha-2, or null until the player picks one in Profile */
   country: string | null;
+  /** Player-declared age, or null until set. Optional — only used for the completion reward. */
+  age: number | null;
+  /** One-time completion rewards: each flips to true the first time the field is set. */
+  rewards: { country: boolean; age: boolean };
   teamId: string | null;
   /** every team this device knows about: the seeded clubs plus any you created or joined */
   teams: Team[];
@@ -76,6 +80,10 @@ export interface Save {
 /** The three starter items are owned before the first race; the wallet starts stocked for the demo. */
 const STARTERS: Record<CosKind, string> = { ball: CLASSIC_BALL.id, wall: CLASSIC_WALL.id, board: CLASSIC_BOARD.id };
 export const START_COINS = 1850;
+/** Completion reward paid once per identity field (country, age). */
+export const IDENTITY_REWARD = 100;
+export const AGE_MIN = 7;
+export const AGE_MAX = 99;
 
 function fresh(): Save {
   return {
@@ -85,6 +93,8 @@ function fresh(): Save {
     equipped: { ...STARTERS },
     stats: { games: 0, wins: 0, losses: 0, streak: 0, best: 0, modes: {} },
     country: null,
+    age: null,
+    rewards: { country: false, age: false },
     teamId: null,
     teams: seedTeams(),
   };
@@ -136,6 +146,19 @@ function migrate(raw: Partial<Save> | null): Save {
   s.stats.best = Math.max(s.stats.best, s.stats.streak);
 
   if (knownCountry(raw.country ?? '')) s.country = (raw.country as string).toUpperCase();
+
+  if (whole(raw.age)) {
+    const a = Math.floor(raw.age as number);
+    if (a >= AGE_MIN && a <= AGE_MAX) s.age = a;
+  }
+  const rw = raw.rewards as Partial<Save['rewards']> | undefined;
+  if (rw) {
+    if (rw.country === true) s.rewards.country = true;
+    if (rw.age === true) s.rewards.age = true;
+  }
+  /* A save from before rewards existed that already set a field keeps its
+     completion state consistent: claimed only when the reward was paid.
+     Do NOT auto-mark — the player still earns it once on next set. */
 
   const teams = Array.isArray(raw.teams) ? raw.teams.filter(teamOk).slice(0, 40) : [];
   if (teams.length) s.teams = teams;
@@ -262,6 +285,31 @@ export function levelInfo() {
 export function setCountry(code: string | null) {
   profile.country = code ? code.toUpperCase() : null;
   flush();
+}
+
+export function setAge(n: number | null) {
+  if (n === null) { profile.age = null; flush(); return; }
+  const v = Math.floor(n);
+  if (!Number.isFinite(v)) return;
+  profile.age = Math.max(AGE_MIN, Math.min(AGE_MAX, v));
+  flush();
+}
+
+export type IdentityKind = 'country' | 'age';
+
+/**
+ * Pays the one-time +100 completion reward for an identity field.
+ * Returns the coins awarded (IDENTITY_REWARD) or 0 when already claimed.
+ * The field itself must already be set — this only flips the claimed flag.
+ */
+export function claimIdentityReward(kind: IdentityKind): number {
+  if (profile.rewards[kind]) return 0;
+  const has = kind === 'country' ? !!profile.country : profile.age !== null;
+  if (!has) return 0;
+  profile.rewards[kind] = true;
+  profile.coins += IDENTITY_REWARD;
+  flush();
+  return IDENTITY_REWARD;
 }
 
 export const myTeam = (): Team | null => profile.teams.find((t) => t.id === profile.teamId) ?? null;

@@ -503,8 +503,8 @@
             <h1 class="m-title" id="profile-title">Profile</h1>
             <span class="m-head-pad" aria-hidden="true"></span>
           </div>
-          <div class="pane" data-scroll>
-            <div class="p-card wide">
+          <div class="pane pf-pane" data-scroll>
+            <div class="p-card wide pf-hero">
               <span class="avatar big" id="pf-avatar" aria-hidden="true">
                 <img id="pf-avatar-img" alt="" hidden />
                 <span id="pf-avatar-t">P</span>
@@ -514,53 +514,80 @@
                 <p class="p-sub">Level <span id="pf-level">1</span> · <span id="pf-xp">0/10 XP</span></p>
               </div>
             </div>
-            <dl class="p-stats quad">
+            <dl class="p-stats quad pf-stats">
               <div class="stat"><dt>Games</dt><dd id="pf-games">0</dd></div>
               <div class="stat"><dt>Wins</dt><dd id="pf-wins">0</dd></div>
               <div class="stat"><dt>Losses</dt><dd id="pf-losses">0</dd></div>
               <div class="stat"><dt>Best run</dt><dd id="pf-best">0</dd></div>
             </dl>
-            <div class="rows tight">
-            <button class="row edit" type="button" id="pf-country" aria-haspopup="dialog">
-              <span class="row-txt">
-                <span class="row-t">Country</span>
-                <span class="row-s">Your flag, for when leaderboards arrive</span>
-              </span>
-              <span class="row-v pick-v">
-                <span class="flag" id="pf-flag" aria-hidden="true"></span>
-                <span class="flag-code" id="pf-code" aria-hidden="true"></span>
-                <span id="pf-country-v">Not set</span>
-              </span>
-              <svg class="ico chev" aria-hidden="true"><use href="#i-next" /></svg>
-            </button>
-            <button class="row edit" type="button" id="pf-team" aria-haspopup="dialog">
-              <span class="row-txt">
-                <span class="row-t">Team</span>
-                <span class="row-s">Create one or join with a code</span>
-              </span>
-              <span class="row-v" id="pf-team-v">No team</span>
-              <svg class="ico chev" aria-hidden="true"><use href="#i-next" /></svg>
-            </button>
-            <div class="row">
-              <span class="row-txt"><span class="row-t">Coins</span><span class="row-s">Mock balance, won on the board</span></span>
-              <span class="row-v pick-v"><span class="coin" data-coin aria-hidden="true"></span><span id="pf-coins">0</span></span>
-            </div>
-            <div class="row">
-              <span class="row-txt"><span class="row-t">Win streak</span><span class="row-s">Bot races only</span></span>
-              <span class="row-v" id="pf-streak">0</span>
-            </div>
-            <div class="row">
-              <span class="row-txt"><span class="row-t">Favourite mode</span><span class="row-s" id="pf-fav-sub">No races yet</span></span>
-              <span class="row-v" id="pf-fav">—</span>
-            </div>
-            </div>
-            <div class="equips">
-              <h2 class="eq-h">Equipped</h2>
-              <div class="eq-row">
-                <figure class="eq"><canvas class="cos-pv" data-eq="ball" aria-hidden="true"></canvas><figcaption id="eq-ball">Classic</figcaption></figure>
-                <figure class="eq"><canvas class="cos-pv" data-eq="wall" aria-hidden="true"></canvas><figcaption id="eq-wall">Classic</figcaption></figure>
-                <figure class="eq"><canvas class="cos-pv" data-eq="board" aria-hidden="true"></canvas><figcaption id="eq-board">Lavender</figcaption></figure>
+            <div class="pf-sec">
+              <h2 class="eq-h pf-sec-h"><span>Player Identity</span><span class="pf-sec-sub">Optional · Claim reward</span></h2>
+              <div class="pf-tiles">
+                <button class="pf-tile row edit" type="button" id="pf-country" aria-haspopup="dialog">
+                  <span class="row-txt">
+                    <span class="row-t pf-t">Country
+                      <span class="reward-badge" id="pf-country-reward"><span class="coin coin-xs" data-coin aria-hidden="true"></span>+100</span>
+                      <span class="verified-badge" id="pf-country-done" hidden><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Set</span>
+                    </span>
+                    <span class="row-s">Your flag, for when leaderboards arrive</span>
+                  </span>
+                  <span class="row-v pick-v">
+                    <span class="flag" id="pf-flag" aria-hidden="true"></span>
+                    <span class="flag-code" id="pf-code" aria-hidden="true"></span>
+                    <span id="pf-country-v">Not set</span>
+                  </span>
+                  <svg class="ico chev" aria-hidden="true"><use href="#i-next" /></svg>
+                </button>
+                <button class="pf-tile row edit" type="button" id="pf-age" aria-haspopup="dialog">
+                  <span class="row-txt">
+                    <span class="row-t pf-t">Age
+                      <span class="reward-badge" id="pf-age-reward"><span class="coin coin-xs" data-coin aria-hidden="true"></span>+100</span>
+                      <span class="verified-badge" id="pf-age-done" hidden><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Set</span>
+                    </span>
+                    <span class="row-s">Optional, only to complete your profile</span>
+                  </span>
+                  <span class="row-v pick-v">
+                    <span id="pf-age-v">Not set</span>
+                  </span>
+                  <svg class="ico chev" aria-hidden="true"><use href="#i-next" /></svg>
+                </button>
               </div>
+            </div>
+            <div class="pf-sec">
+              <h2 class="eq-h pf-sec-h"><span>Progress</span></h2>
+              <div class="pf-tiles rows tight pf-rows">
+                <button class="pf-tile row edit" type="button" id="pf-team" aria-haspopup="dialog">
+                  <span class="row-txt">
+                    <span class="row-t">Team</span>
+                    <span class="row-s">Create one or join with a code</span>
+                  </span>
+                  <span class="row-v" id="pf-team-v">No team</span>
+                  <svg class="ico chev" aria-hidden="true"><use href="#i-next" /></svg>
+                </button>
+                <div class="pf-tile row">
+                  <span class="row-txt"><span class="row-t">Coins</span><span class="row-s">Mock balance, won on the board</span></span>
+                  <span class="row-v pick-v"><span class="coin" data-coin aria-hidden="true"></span><span id="pf-coins">0</span></span>
+                </div>
+                <div class="pf-tile row">
+                  <span class="row-txt"><span class="row-t">Win streak</span><span class="row-s">Bot races only</span></span>
+                  <span class="row-v" id="pf-streak">0</span>
+                </div>
+                <div class="pf-tile row">
+                  <span class="row-txt"><span class="row-t">Favourite mode</span><span class="row-s" id="pf-fav-sub">No races yet</span></span>
+                  <span class="row-v" id="pf-fav">—</span>
+                </div>
+              </div>
+            </div>
+            <div class="equips pf-equips">
+              <h2 class="eq-h">Equipped</h2>
+              <div class="eq-row pf-eq-row">
+                <figure class="eq pf-eq"><canvas class="cos-pv pf-cos-pv" data-eq="ball" aria-hidden="true"></canvas><figcaption id="eq-ball">Classic</figcaption></figure>
+                <figure class="eq pf-eq"><canvas class="cos-pv pf-cos-pv" data-eq="wall" aria-hidden="true"></canvas><figcaption id="eq-wall">Classic</figcaption></figure>
+                <figure class="eq pf-eq"><canvas class="cos-pv pf-cos-pv" data-eq="board" aria-hidden="true"></canvas><figcaption id="eq-board">Lavender</figcaption></figure>
+              </div>
+            </div>
+            <div class="pf-toast" id="pf-toast" role="status" aria-live="polite" hidden>
+              <span class="coin" data-coin aria-hidden="true"></span><span id="pf-toast-t">+100 Coins</span>
             </div>
           </div>
         </section>
@@ -737,6 +764,27 @@
         <div class="sheet-actions">
           <button class="btn btn-ghost" type="button" data-sheet-close>Cancel</button>
         </div>
+      </section>
+
+      <!-- age: optional stepper drawer; setting it once pays the completion reward -->
+      <section class="sheet" id="sheet-age" hidden role="dialog" aria-modal="true" aria-labelledby="age-title">
+        <h2 class="sheet-t" id="age-title">Your age</h2>
+        <p class="sheet-p">Optional — set it once to complete your profile and claim <b>+100 coins</b>. You can clear it any time.</p>
+        <div class="age-stepper" role="group" aria-label="Age picker">
+          <button class="step-b" type="button" id="age-minus" aria-label="One year younger">
+            <svg class="ico" aria-hidden="true"><use href="#i-minus" /></svg>
+          </button>
+          <output class="age-n" id="age-n" aria-live="polite">18</output>
+          <button class="step-b" type="button" id="age-plus" aria-label="One year older">
+            <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>
+          </button>
+        </div>
+        <p class="pick-empty" id="age-hint" role="status" hidden></p>
+        <div class="sheet-actions split">
+          <button class="btn btn-ghost" type="button" id="age-clear">Clear</button>
+          <button class="btn btn-primary" type="button" id="age-save" data-autofocus>Save age</button>
+        </div>
+        <p class="fine">Stored on this device only. Nothing leaves your phone.</p>
       </section>
 
       <!-- tournament join: mock entry fee, deducted from the local wallet -->

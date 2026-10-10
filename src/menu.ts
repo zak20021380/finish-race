@@ -9,8 +9,9 @@
 import { DIFFICULTIES, type Difficulty } from './bot';
 import { menuState, saveMenu, settings, setSetting, onSettings, type Settings } from './settings';
 import {
-  createTeam, favouriteMode, joinTeam, KINDS, leaveTeam, levelInfo, myTeam, onChange, profile,
-  setCountry, theme,
+  AGE_MAX, AGE_MIN, claimIdentityReward, createTeam, favouriteMode, IDENTITY_REWARD, joinTeam, KINDS,
+  leaveTeam, levelInfo, myTeam, onChange, profile,
+  setAge, setCountry, theme,
 } from './storage';
 import { MAX_BALLS, newGame } from './rules';
 import { createPreview, createRenderer, type Preview, type View } from './render';
@@ -119,8 +120,10 @@ export function createMenu(api: MenuApi): Menu {
 
   function chooseCountry(code: string) {
     setCountry(code);
+    const paid = claimIdentityReward('country');
     notify('success');
     api.sheets.close();
+    if (paid > 0) showPfToast(`+${paid} Coins · Country set`);
   }
 
   countryQ.addEventListener('input', () => paintCountryList(countryQ.value));
@@ -150,6 +153,62 @@ export function createMenu(api: MenuApi): Menu {
     const want = seed ? countryList.querySelector<HTMLElement>(`[data-code=${JSON.stringify(seed)}]`) : null;
     if (want) { want.scrollIntoView({ block: 'center' }); want.focus({ preventScroll: true }); }
     impact('light');
+  }
+
+  /* ---------- profile completion toast: animated +100 confirmation ---------- */
+  let pfToastTimer = 0;
+  function showPfToast(msg: string) {
+    const toast = document.getElementById('pf-toast');
+    const label = document.getElementById('pf-toast-t');
+    if (!toast || !label) return;
+    label.textContent = msg;
+    toast.hidden = false;
+    toast.classList.remove('out', 'bump');
+    void toast.offsetWidth; // restart the entrance each time
+    toast.classList.add('show', 'bump');
+    window.clearTimeout(pfToastTimer);
+    pfToastTimer = window.setTimeout(() => {
+      toast.classList.add('out');
+      window.setTimeout(() => { toast.hidden = true; toast.classList.remove('show', 'out', 'bump'); }, 260);
+    }, 2300);
+  }
+
+  /* ---------- age: optional stepper drawer, claimed once like country ---------- */
+  const ageSheet = api.sheet('sheet-age');
+  let ageDraft = profile.age ?? 18;
+  const paintAgeDraft = () => {
+    $('age-n').textContent = String(ageDraft);
+    ($('age-minus') as HTMLButtonElement).disabled = ageDraft <= AGE_MIN;
+    ($('age-plus') as HTMLButtonElement).disabled = ageDraft >= AGE_MAX;
+    const hint = $<HTMLElement>('age-hint');
+    if (profile.rewards.age) { hint.hidden = true; return; }
+    hint.hidden = false;
+    hint.textContent = `Save to claim +${IDENTITY_REWARD} coins · ${AGE_MIN}–${AGE_MAX}, optional`;
+  };
+
+  function openAge() {
+    if (!ageSheet) return;
+    ageDraft = profile.age ?? 18;
+    ageDraft = Math.max(AGE_MIN, Math.min(AGE_MAX, ageDraft));
+    paintAgeDraft();
+    api.sheets.open(ageSheet);
+    impact('light');
+  }
+
+  function saveAge() {
+    setAge(ageDraft);
+    const paid = claimIdentityReward('age');
+    notify('success');
+    impact('medium');
+    api.sheets.close();
+    if (paid > 0) showPfToast(`+${paid} Coins · Age set`);
+  }
+
+  function clearAge() {
+    setAge(null);
+    notify('success');
+    impact('light');
+    api.sheets.close();
   }
 
   /* ---------- team ---------- */
@@ -427,6 +486,21 @@ export function createMenu(api: MenuApi): Menu {
   /* ---- the entry points: the Home country chip jumps to Profile, where the picker lives ---- */
   $('country-chip').addEventListener('click', () => { impact('light'); api.router.go('profile'); });
   $('pf-country').addEventListener('click', openCountry);
+  $('pf-age').addEventListener('click', openAge);
+  ($('age-minus') as HTMLButtonElement).addEventListener('click', () => {
+    if (ageDraft <= AGE_MIN) return;
+    ageDraft--;
+    paintAgeDraft();
+    impact('light');
+  });
+  ($('age-plus') as HTMLButtonElement).addEventListener('click', () => {
+    if (ageDraft >= AGE_MAX) return;
+    ageDraft++;
+    paintAgeDraft();
+    impact('light');
+  });
+  $('age-save').addEventListener('click', saveAge);
+  $('age-clear').addEventListener('click', clearAge);
   $('team-chip').addEventListener('click', openSquad);
   $('pf-team').addEventListener('click', openTeam);
 
@@ -457,6 +531,20 @@ export function createMenu(api: MenuApi): Menu {
     setFlag('country-flag', 'country-code', c ?? '');
     $('pf-country-v').textContent = c ? nameOf(c) : 'Not set';
     setFlag('pf-flag', 'pf-code', c ?? '');
+    /* country reward state: +100 while unclaimed, verified once set+claimed */
+    const cReward = $('pf-country-reward');
+    const cDone = $('pf-country-done');
+    if (cReward) cReward.hidden = profile.rewards.country;
+    if (cDone) cDone.hidden = !(c && profile.rewards.country);
+    $('pf-country').classList.toggle('claimed', !!c);
+
+    const age = profile.age;
+    $('pf-age-v').textContent = age !== null ? `${age} yrs` : 'Not set';
+    const aReward = $('pf-age-reward');
+    const aDone = $('pf-age-done');
+    if (aReward) aReward.hidden = profile.rewards.age;
+    if (aDone) aDone.hidden = !(age !== null && profile.rewards.age);
+    $('pf-age').classList.toggle('claimed', age !== null);
 
     paintSquadPill();
     $('pf-team-v').textContent = t ? `${t.name} · ${t.members.length}` : 'No team';
