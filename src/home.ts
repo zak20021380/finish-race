@@ -28,6 +28,7 @@ import {
 } from './data';
 import { coinText, mountCoins } from './coin';
 import { earnCoins, onChange, profile, theme } from './storage';
+import { awardSquadPoints, getChannelCup, getMySquad, onSquadChange } from './squads';
 import { impact, notify } from './telegram';
 import { newGame } from './rules';
 import { createRenderer, type View } from './render';
@@ -173,7 +174,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       if (document.hidden || motionReduced()) return;
       const s = $('s-home');
       if (s.hidden) return;
-      goSlide((activeSlide() + 1) % 3);
+      goSlide((activeSlide() + 1) % slides.length);
     }, 6000);
   };
   onSettings(() => {
@@ -230,6 +231,67 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     impact('light');
     api.router.go('compete');
   });
+
+  /* ---------- Telegram Channel Cup: live squad war slide ---------- */
+
+  const paintCup = (): void => {
+    const cup = getChannelCup();
+    const me = getMySquad();
+    ($('cup-prize') as HTMLElement).textContent = coinText(cup.prizePool);
+    $('cup-players').textContent = `${cup.players.toLocaleString('en-US')} fighters`;
+    $('cup-count').textContent = formatCountdown(cup.endsAt);
+    const top = $('cup-top');
+    if (cup.top) {
+      top.textContent = '';
+      const lead = document.createElement('b');
+      lead.textContent = cup.top.handle;
+      const rest = document.createElement('small');
+      rest.textContent = ` leads · ${cup.top.trophies.toLocaleString('en-US')} 🏆`;
+      top.append(lead, document.createTextNode(' '), rest);
+    } else {
+      top.textContent = 'No squads yet';
+    }
+    const fight = $('cup-fight') as HTMLButtonElement;
+    const sub = $('cup-sub');
+    if (me) {
+      fight.disabled = false;
+      fight.textContent = 'Fight for Squad';
+      fight.setAttribute('aria-label', `Fight for ${me.handle}: score for you and your squad`);
+      sub.textContent = `Fighting as ${me.handle} · #${me.rank}`;
+    } else {
+      fight.disabled = false;
+      fight.textContent = 'Enter Cup';
+      fight.setAttribute('aria-label', 'Enter Cup: bind a Telegram squad first');
+      sub.textContent = 'Points go to you + your squad';
+    }
+    mountCoins(carousel);
+  };
+
+  let cupCooldown = 0;
+  ($('cup-fight') as HTMLButtonElement).addEventListener('click', () => {
+    const now = Date.now();
+    if (now < cupCooldown) return;
+    const me = getMySquad();
+    if (!me) {
+      // Unbound: the squad sheet is the CTA — same door as the header pill.
+      impact('light');
+      ($('team-chip') as HTMLButtonElement).click();
+      return;
+    }
+    cupCooldown = now + 1200;
+    awardSquadPoints(25);
+    earnCoins(25);
+    notify('success');
+    impact('medium');
+    const fight = $('cup-fight') as HTMLButtonElement;
+    const prev = fight.textContent;
+    fight.textContent = '+25 for Squad';
+    fight.disabled = true;
+    window.setTimeout(() => { fight.disabled = false; if (fight.textContent === '+25 for Squad') fight.textContent = prev; }, 1200);
+    paintCup();
+  });
+
+  onSquadChange(() => { paintCup(); });
 
   /* ---------- top countries: 3 rows + the user's row ---------- */
 
@@ -526,8 +588,13 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   const startTick = (): void => {
     if (tick) return;
     tick = window.setInterval(() => {
-      if ($('s-home').hidden || !featured || featured.status === 'ended') return;
-      $('feat-count').textContent = formatCountdown(featured.endsAt);
+      if ($('s-home').hidden) return;
+      if (featured && featured.status !== 'ended') {
+        $('feat-count').textContent = formatCountdown(featured.endsAt);
+      }
+      const cup = getChannelCup();
+      const el = $('cup-count');
+      if (el) el.textContent = formatCountdown(cup.endsAt);
     }, 1000);
   };
 
@@ -551,6 +618,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   paintDots();
   paintLauncher();
   paintSheet();
+  paintCup();
   armAuto();
   startTick();
   mountCoins(carousel);
@@ -562,6 +630,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       poke();
       paintLauncher();
       paintSheet();
+      paintCup();
       void loadCountries();
     },
   };

@@ -20,6 +20,7 @@ import {
 import { flagOf, nameOf } from './countries';
 import { coinText, mountCoins, setBalance } from './coin';
 import { myTeam, onChange, profile, spendCoins } from './storage';
+import { bindSquadById, getMySquad, getSquadRanking, onSquadChange, squadLetter } from './squads';
 import { impact, notify, tgUser } from './telegram';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
@@ -60,14 +61,20 @@ const empty = (msg: string): string => `<div class="empty" role="status">${msg}<
 
 export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   const tabs = [...document.querySelectorAll<HTMLButtonElement>('[data-comp]')];
+  const modeBtns = [...document.querySelectorAll<HTMLButtonElement>('[data-squadmode]')];
+  const tabsBar = $('compete-tabs');
+  const squadsPane = $('comp-squads');
   const panes: Record<Tab, HTMLElement> = {
     tournaments: $('comp-tournaments'),
     countries: $('comp-countries'),
     players: $('comp-players'),
     teams: $('comp-teams'),
   };
+  type SquadMode = 'solo' | 'squads';
   let tab: Tab = 'tournaments';
+  let squadMode: SquadMode = 'solo';
   let loaded: Partial<Record<Tab, boolean>> = {};
+  let squadsLoaded = false;
   let tournaments: Tournament[] = [];
   let joined = joinedSet();
   let pending: Tournament | null = null;
@@ -79,13 +86,40 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return (full || u?.username || 'You').slice(0, 18);
   };
 
+  /* ---------- leaderboard mode: Solo Champions vs Telegram Squads ---------- */
+
+  function paintMode(): void {
+    for (const b of modeBtns) b.setAttribute('aria-selected', String(b.dataset.squadmode === squadMode));
+    const squads = squadMode === 'squads';
+    tabsBar.hidden = squads;
+    squadsPane.hidden = !squads;
+    for (const k of Object.keys(panes) as Tab[]) panes[k].hidden = squads || k !== tab;
+  }
+
+  function selectMode(next: SquadMode): void {
+    if (next === squadMode && (next === 'solo' ? loaded[tab] : squadsLoaded)) { paintMode(); return; }
+    squadMode = next;
+    paintMode();
+    impact('light');
+    if (next === 'squads') loadSquads();
+    else void load(tab);
+  }
+
+  for (const b of modeBtns) {
+    b.addEventListener('click', () => {
+      const v = b.dataset.squadmode;
+      if (v === 'solo' || v === 'squads') selectMode(v);
+    });
+  }
+
   /* ---------- tabs ---------- */
 
   function select(next: Tab): void {
-    if (next === tab && loaded[next]) return;
+    if (squadMode !== 'solo') squadMode = 'solo';
+    if (next === tab && loaded[next]) { paintMode(); return; }
     tab = next;
     for (const b of tabs) b.setAttribute('aria-selected', String(b.dataset.comp === next));
-    for (const k of Object.keys(panes) as Tab[]) panes[k].hidden = k !== next;
+    paintMode();
     impact('light');
     void load(next);
   }
@@ -416,18 +450,110 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }
   }
 
+  /* ---------- Telegram Squads: channel/community ranking ---------- */
+
+  function loadSquads(): void {
+    const el = squadsPane;
+    if (!squadsLoaded) el.innerHTML = skel(5);
+    const rows = getSquadRanking();
+    if (!rows.length) {
+      el.innerHTML = empty('No squads ranked yet.');
+      return;
+    }
+    const me = getMySquad();
+    el.textContent = '';
+    const ol = document.createElement('ol');
+    ol.className = 'squad-list';
+    for (const s of rows) {
+      const li = document.createElement('li');
+      li.className = `squad-row${me?.id === s.id ? ' me' : ''}`;
+      const rk = document.createElement('span');
+      rk.className = `rk${s.rank === 1 ? ' gold' : s.rank === 2 ? ' silver' : s.rank === 3 ? ' bronze' : ''}`;
+      rk.textContent = String(s.rank);
+      const idWrap = document.createElement('span');
+      idWrap.className = 'squad-id';
+      const av = document.createElement('span');
+      av.className = 'squad-avatar';
+      av.textContent = squadLetter(s);
+      av.setAttribute('aria-hidden', 'true');
+      const txt = document.createElement('span');
+      txt.className = 'squad-txt';
+      const nm = document.createElement('span');
+      nm.className = 'squad-name';
+      nm.textContent = `${s.handle} · ${s.name}`;
+      nm.title = `${s.handle} · ${s.name}`;
+      const sub = document.createElement('span');
+      sub.className = 'squad-sub';
+      sub.textContent = `${s.members.toLocaleString('en-US')} members`;
+      txt.append(nm, sub);
+      idWrap.append(av, txt);
+      const pt = document.createElement('span');
+      pt.className = 'squad-pt';
+      pt.textContent = `${s.trophies.toLocaleString('en-US')} 🏆`;
+      const troph = document.createElement('small');
+      troph.textContent = 'squad trophies';
+      pt.append(troph);
+      const act = document.createElement('button');
+      act.type = 'button';
+      const mine = me?.id === s.id;
+      act.className = `squad-act${mine ? ' bound' : ' join'}`;
+      act.textContent = mine ? 'View' : 'Join';
+      act.setAttribute('aria-label', mine ? `View ${s.handle}` : `Join ${s.handle}`);
+      act.addEventListener('click', () => {
+        impact('light');
+        if (mine) {
+          (document.getElementById('team-chip') as HTMLButtonElement | null)?.click();
+          return;
+        }
+        if (act.textContent === 'Join') {
+          const r = bindSquadById(s.id);
+          if (r === 'bad-handle') { notify('warning'); return; }
+          notify('success');
+          impact('medium');
+          loadSquads();
+          return;
+        }
+        (document.getElementById('team-chip') as HTMLButtonElement | null)?.click();
+      });
+      li.append(rk, idWrap, pt, act);
+      ol.append(li);
+    }
+    el.append(ol);
+    if (!me) {
+      const hint = document.createElement('button');
+      hint.className = 'rank-row rank-pinned hint';
+      hint.type = 'button';
+      hint.textContent = 'Join a squad on Home to score for a channel.';
+      hint.setAttribute('aria-label', 'Join a squad on Home');
+      hint.addEventListener('click', () => {
+        impact('light');
+        (document.getElementById('team-chip') as HTMLButtonElement | null)?.click();
+      });
+      el.append(hint);
+    }
+    squadsLoaded = true;
+  }
+
   onChange(() => {
     loaded.countries = false;
     loaded.players = false;
     loaded.teams = false;
-    if (tab !== 'tournaments') void load(tab);
+    squadsLoaded = false;
+    if (squadMode === 'squads') loadSquads();
+    else if (tab !== 'tournaments') void load(tab);
+  });
+
+  onSquadChange(() => {
+    squadsLoaded = false;
+    if (squadMode === 'squads' && !$('s-compete').hidden) loadSquads();
   });
 
   return {
     setRoute(id: string) {
       if (id === 'compete') {
-        for (const k of Object.keys(panes) as Tab[]) panes[k].hidden = k !== tab;
-        void load(tab);
+        paintMode();
+        if (squadMode === 'squads') loadSquads();
+        else void load(tab);
       }
     },
   };

@@ -116,6 +116,19 @@
         </g>
         <circle cx="12" cy="16.9" r="1.05" fill="currentColor" />
       </symbol>
+      <symbol id="i-send" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 3.6 10.4 14.2" />
+          <path d="M21 3.6 14.2 20.4l-3.8-6.2L4.2 10.4Z" />
+        </g>
+      </symbol>
+      <symbol id="i-cup" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 4h10v5a5 5 0 0 1-10 0Z" />
+          <path d="M7 5H4.5a2.5 2.5 0 0 0 2.6 4.6M17 5h2.5a2.5 2.5 0 0 1-2.6 4.6" />
+          <path d="M12 14v3M8.5 20.4h7M9.5 17.4h5" />
+        </g>
+      </symbol>
     </svg>
 
     <div class="bg" aria-hidden="true">
@@ -158,10 +171,11 @@
                 <span class="flag-code" id="country-code" aria-hidden="true"></span>
                 <span class="tag-chip-t" id="country-name">Add country</span>
               </button>
-              <button class="tag-chip" type="button" id="team-chip" aria-haspopup="dialog">
-                <svg class="ico chip-ico" aria-hidden="true"><use href="#i-users" /></svg>
-                <span class="tag-chip-t" id="team-name">Find a team</span>
-                <span class="tag-chip-n" id="team-count"></span>
+              <button class="tag-chip squad-pill" type="button" id="team-chip" aria-haspopup="dialog" aria-label="Join Squad">
+                <span class="squad-avatar" id="squad-avatar" hidden aria-hidden="true">S</span>
+                <svg class="ico chip-ico" id="squad-ico" aria-hidden="true"><use href="#i-send" /></svg>
+                <span class="tag-chip-t" id="team-name">Join Squad</span>
+                <span class="rank-pill" id="team-count" hidden></span>
               </button>
             </div>
             <div class="id-row id-xp">
@@ -212,11 +226,30 @@
                   <button class="btn btn-ghost sm" type="button" id="daily-claim">Claim</button>
                 </div>
               </article>
+              <article class="car-card cup-card" data-slide="3" aria-label="Telegram Channel Cup">
+                <div class="car-head">
+                  <span class="car-kicker">Telegram Channel Cup</span>
+                  <span class="pill live pulse" id="cup-badge"><i class="live-dot" aria-hidden="true"></i>Live</span>
+                </div>
+                <div class="cup-meta">
+                  <span class="cup-top" id="cup-top">—</span>
+                  <span class="car-prize"><span class="coin" data-coin aria-hidden="true"></span><b id="cup-prize">—</b></span>
+                </div>
+                <div class="car-meta">
+                  <span class="car-players" id="cup-players">—</span>
+                  <span class="car-count" id="cup-count">—</span>
+                </div>
+                <div class="car-foot">
+                  <span class="car-sub" id="cup-sub">Points go to you + your squad</span>
+                  <button class="btn btn-coral sm" type="button" id="cup-fight">Fight for Squad</button>
+                </div>
+              </article>
             </div>
             <div class="car-dots" id="home-dots" role="tablist" aria-label="Highlight pages">
               <button class="dot on" type="button" data-dot="0" role="tab" aria-selected="true" aria-label="Page 1"></button>
               <button class="dot" type="button" data-dot="1" role="tab" aria-selected="false" aria-label="Page 2"></button>
               <button class="dot" type="button" data-dot="2" role="tab" aria-selected="false" aria-label="Page 3"></button>
+              <button class="dot" type="button" data-dot="3" role="tab" aria-selected="false" aria-label="Page 4"></button>
             </div>
           </div>
 
@@ -300,7 +333,11 @@
           <div class="m-head">
             <h1 class="m-title" id="compete-title">Compete <span class="preview-badge">Preview</span></h1>
           </div>
-          <div class="seg" role="tablist" aria-label="Compete sections">
+          <div class="seg squad-mode" role="tablist" aria-label="Leaderboard mode">
+            <button class="seg-b" type="button" role="tab" data-squadmode="solo" aria-selected="true">Solo Champions</button>
+            <button class="seg-b" type="button" role="tab" data-squadmode="squads" aria-selected="false">Telegram Squads</button>
+          </div>
+          <div class="seg" id="compete-tabs" role="tablist" aria-label="Compete sections">
             <button class="seg-b" type="button" role="tab" data-comp="tournaments" aria-selected="true">Tournaments</button>
             <button class="seg-b" type="button" role="tab" data-comp="countries" aria-selected="false">Countries</button>
             <button class="seg-b" type="button" role="tab" data-comp="players" aria-selected="false">Players</button>
@@ -311,6 +348,7 @@
             <div id="comp-countries" role="tabpanel" aria-label="Countries" hidden></div>
             <div id="comp-players" role="tabpanel" aria-label="Players" hidden></div>
             <div id="comp-teams" role="tabpanel" aria-label="Teams" hidden></div>
+            <div id="comp-squads" role="tabpanel" aria-label="Telegram Squads" hidden></div>
           </div>
         </section>
 
@@ -728,6 +766,46 @@
             Local mock standings — real club tables arrive with online play.
             <button class="link" type="button" id="team-leave">Leave team</button>
           </p>
+        </div>
+      </section>
+
+      <!-- squad: bind a Telegram channel/chat, view stats, leave or switch -->
+      <section class="sheet tall" id="sheet-squad" hidden role="dialog" aria-modal="true" aria-labelledby="squad-title">
+        <h2 class="sheet-t" id="squad-title">Join Squad</h2>
+
+        <div class="sheet-body" id="squad-search-view" data-scroll>
+          <p class="sheet-p">Bind a Telegram channel. Race points count for you and your squad.</p>
+          <label class="field">
+            <svg class="ico" aria-hidden="true"><use href="#i-search" /></svg>
+            <input id="squad-q" class="input" type="search" placeholder="@channel" autocomplete="off"
+              spellcheck="false" enterkeyhint="search" aria-label="Search or enter a Telegram channel" data-input />
+          </label>
+          <ul class="pick squad-pick" id="squad-list" role="listbox" aria-label="Telegram squads" data-scroll tabindex="0"></ul>
+          <p class="pick-empty" id="squad-empty" hidden role="status">No squad matches that.</p>
+          <p class="pick-empty squad-err" id="squad-err" role="status" hidden></p>
+        </div>
+
+        <div class="sheet-body" id="squad-bound-view" data-scroll hidden>
+          <p class="team-head squad-head">
+            <span class="squad-avatar lg" id="squad-view-avatar" aria-hidden="true">S</span>
+            <b id="squad-view-name">Squad</b>
+            <span class="rank-pill" id="squad-view-rank">#1</span>
+          </p>
+          <p class="sheet-p left" id="squad-view-sub"></p>
+          <dl class="p-stats triple tight">
+            <div class="stat"><dt>Members</dt><dd id="squad-view-members">0</dd></div>
+            <div class="stat"><dt>Trophies</dt><dd id="squad-view-points">0</dd></div>
+            <div class="stat"><dt>Rank</dt><dd id="squad-view-pos">#—</dd></div>
+          </dl>
+          <div class="sheet-actions">
+            <button class="btn btn-ghost" type="button" id="squad-switch">Switch squad</button>
+            <button class="btn btn-ghost warn" type="button" id="squad-leave">Leave squad</button>
+          </div>
+          <p class="fine">Wins add trophies to your squad in the Channel Cup.</p>
+        </div>
+
+        <div class="sheet-actions">
+          <button class="btn btn-ghost" type="button" data-sheet-close>Close</button>
         </div>
       </section>
 

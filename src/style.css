@@ -2752,4 +2752,216 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
     var(--clay-spec);
 }
 .preset[aria-pressed="true"] b { color: var(--brand-ink); }
+
+/* ==========================================================================
+   SQUADS — Telegram Channel / Community competition.
+   Same Dark Clay recipe: #10141D canvas, #1C2433 clay faces, #F8FAFC ink,
+   Coral (#FF522B / #B83010) for the one loud squad action, sky Blue for the
+   secondary. Every press travels translateY, never scale. Sheets keep the
+   100vh contract: the panel caps at 86vh and only [data-scroll] lists move.
+   ========================================================================== */
+
+/* ---- header squad pill: unbound is a quiet clay key, bound carries avatar + rank ---- */
+.squad-pill { max-width: 100%; }
+.squad-avatar {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 34%;
+  background: linear-gradient(180deg, #2A354C 0%, #141B2A 100%);
+  box-shadow: inset 0 0 0 1.5px var(--brand-soft), inset 0 1px 1px rgba(255, 255, 255, .12);
+  color: var(--brand-ink);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+.squad-avatar.lg {
+  width: 40px;
+  height: 40px;
+  font-size: var(--t-1);
+  border-radius: 34%;
+}
+.squad-pill.bound { color: var(--ink); }
+.squad-pill.bound #squad-ico { display: none; }
+.squad-pill:not(.bound) #squad-avatar { display: none; }
+.rank-pill {
+  flex: none;
+  padding: 2px var(--s2);
+  border-radius: var(--radius-pill);
+  background: var(--brand-soft);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .3);
+  color: var(--brand-ink);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.squad-head { gap: var(--s2); }
+.squad-head b { max-width: 46vw; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* ---- chunky Coral 3D CTA: the squad action, same extrusion language as .btn-primary ---- */
+.btn-coral {
+  --btn-lip: var(--cta-lip);
+  background: linear-gradient(180deg, var(--cta-hi) 0%, var(--cta) 100%);
+  color: var(--on-brand);
+  box-shadow:
+    0 var(--d) 0 var(--btn-lip),
+    0 calc(var(--d) + 7px) 16px -8px var(--cta-shadow),
+    inset 0 2px 3px rgba(255, 255, 255, .35),
+    inset 0 -2px 3px rgba(0, 0, 0, .18);
+}
+.btn-coral:active { transform: translateY(var(--press-y)); --d: 1px; }
+.btn-coral:focus-visible { outline: 3px solid var(--cta); outline-offset: 3px; }
+.btn-coral[disabled] { opacity: .55; cursor: default; }
+
+/* ---- Channel Cup slide: coral accent, live pulse, compact meta ---- */
+.car-card[data-slide="3"] { --acc: var(--cta); --acc-ink: #FFB59D; --acc-soft: rgba(255, 82, 43, .16); }
+.pill.live.pulse { display: inline-flex; align-items: center; gap: 6px; }
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 0 rgba(255, 255, 255, .7);
+  animation: live-pulse 1.6s ease-out infinite;
+}
+@keyframes live-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, .7); }
+  70% { box-shadow: 0 0 0 7px rgba(255, 255, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+}
+.cup-meta { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; }
+.cup-top {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--t-2);
+  font-weight: 800;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.cup-top small { color: var(--ink-soft); font-weight: 700; }
+
+/* ---- Compete mode toggle: the top-level Solo vs Squads switch ---- */
+.seg.squad-mode { flex: none; margin-bottom: var(--s1); }
+#compete-tabs[hidden] { display: none; }
+
+/* ---- Telegram Squads ranking: clay list, 3D rank badges, Join/View keys ---- */
+.squad-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-radius: var(--radius-md); overflow: hidden; background: var(--clay-face); box-shadow: var(--clay), var(--clay-ring); }
+.squad-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 56px;
+  padding: var(--s2) var(--s3);
+  font-variant-numeric: tabular-nums;
+}
+.squad-row + .squad-row { box-shadow: inset 0 1px 0 var(--sep); }
+.squad-row.me { background: var(--brand-soft); }
+.squad-row.me .squad-name { color: var(--brand-ink); }
+.squad-row .rk {
+  --d: 2px;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--field);
+  box-shadow: 0 var(--d) 0 #080C14, inset 0 1px 0 rgba(255, 255, 255, .08);
+  color: var(--ink-soft);
+  font-size: var(--t-3);
+  font-weight: 800;
+}
+.squad-row .rk.gold {
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+  color: #10141D;
+  box-shadow: 0 var(--d) 0 var(--gold-lip), inset 0 1px 0 rgba(255, 255, 255, .6);
+}
+.squad-row .rk.silver {
+  background: linear-gradient(180deg, #e2e8f0 0%, #94a3b8 100%);
+  color: #10141D;
+  box-shadow: 0 var(--d) 0 #475569, inset 0 1px 0 rgba(255, 255, 255, .6);
+}
+.squad-row .rk.bronze {
+  background: linear-gradient(180deg, #fdba74 0%, #c2703d 100%);
+  color: #10141D;
+  box-shadow: 0 var(--d) 0 #7c3f14, inset 0 1px 0 rgba(255, 255, 255, .5);
+}
+.squad-id { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: var(--s2); }
+.squad-txt { flex: 1 1 auto; min-width: 0; }
+.squad-name {
+  display: block;
+  font-size: var(--t-3);
+  font-weight: 800;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.squad-sub {
+  display: block;
+  margin-top: 1px;
+  font-size: var(--t-micro);
+  font-weight: 600;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.squad-pt { flex: none; text-align: right; font-size: var(--t-3); font-weight: 800; color: var(--honey-ink); font-variant-numeric: tabular-nums; }
+.squad-pt small { display: block; font-size: var(--t-micro); font-weight: 700; color: var(--ink-soft); }
+.squad-act {
+  --d: 2px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  flex: none;
+  min-width: 64px;
+  min-height: 40px;
+  padding: 0 var(--s3);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  font-size: var(--t-3);
+  font-weight: 800;
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), opacity var(--motion-fast);
+}
+.squad-act.join {
+  background: var(--brand-fill);
+  color: var(--on-brand);
+  box-shadow: 0 var(--d) 0 var(--brand-lip), inset 0 1px 0 rgba(255, 255, 255, .3);
+}
+.squad-act.view {
+  background: var(--clay-face);
+  color: var(--ink);
+  box-shadow: 0 var(--d) 0 #080C14, var(--clay-spec), var(--clay-ring);
+}
+.squad-act.bound {
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .3);
+  cursor: default;
+}
+.squad-act:active:not([disabled]) { transform: translateY(var(--press-y)); --d: 0px; }
+.squad-act:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+/* ---- squad picker rows inside the sheet: same press language, viewport-safe ---- */
+.squad-pick { max-height: 30vh; }
+.squad-pick .pick-row { min-height: 52px; }
+.squad-pick .pick-n small { display: block; font-size: var(--t-micro); font-weight: 600; color: var(--ink-soft); }
+.squad-err { color: var(--danger); }
+#sheet-squad .sheet-body { max-height: 52vh; }
+#comp-squads { display: flex; flex-direction: column; gap: var(--s2); min-height: 0; }
+#comp-squads[hidden] { display: none; }
+
+/* short phones keep the cup CTA and squad rows on their targets */
+@media (max-height: 700px) {
+  .squad-row { min-height: 52px; }
+  .squad-pick { max-height: 26vh; }
+}
 

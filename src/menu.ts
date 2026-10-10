@@ -17,6 +17,10 @@ import { createPreview, createRenderer, type Preview, type View } from './render
 import { setBalance } from './coin';
 import { flagOf, guessCountry, nameOf, search } from './countries';
 import { cleanCode, standings, YOU } from './teams';
+import {
+  bindSquad, bindSquadById, cleanHandle, getMySquad, leaveSquad,
+  onSquadChange, searchSquads, squadLetter,
+} from './squads';
 import { BOT_RAMP, type CosKind } from './themes';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
@@ -255,10 +259,176 @@ export function createMenu(api: MenuApi): Menu {
     impact('light');
   }
 
+  /* ---------- squad: Telegram channel binding (header pill owns this sheet) ---------- */
+  const squadSheet = api.sheet('sheet-squad');
+  const squadQ = $('squad-q') as HTMLInputElement;
+  const squadList = $<HTMLElement>('squad-list');
+  const squadEmpty = $<HTMLElement>('squad-empty');
+  const squadErr = $<HTMLElement>('squad-err');
+  const squadSearchView = $<HTMLElement>('squad-search-view');
+  const squadBoundView = $<HTMLElement>('squad-bound-view');
+
+  function squadError(msg: string) {
+    squadErr.textContent = msg;
+    squadErr.hidden = false;
+    notify('warning');
+  }
+
+  function paintSquadPill() {
+    const me = getMySquad();
+    const chip = $<HTMLElement>('team-chip');
+    const label = $<HTMLElement>('team-name');
+    const rank = $<HTMLElement>('team-count');
+    const avatar = $<HTMLElement>('squad-avatar');
+    if (me) {
+      chip.classList.add('bound');
+      avatar.hidden = false;
+      avatar.textContent = squadLetter(me);
+      label.textContent = me.handle;
+      rank.hidden = false;
+      rank.textContent = `#${me.rank}`;
+      chip.setAttribute('aria-label', `${me.handle}, squad rank ${me.rank}. Open squad.`);
+    } else {
+      chip.classList.remove('bound');
+      avatar.hidden = true;
+      label.textContent = 'Join Squad';
+      rank.hidden = true;
+      rank.textContent = '';
+      chip.setAttribute('aria-label', 'Join Squad');
+    }
+  }
+
+  function paintSquadList(q: string) {
+    const rows = searchSquads(q);
+    const me = getMySquad();
+    squadList.textContent = '';
+    const needle = cleanHandle(q);
+    const hasExact = needle && rows.some((s) => s.handle.toLowerCase() === needle.toLowerCase());
+    if (needle && !hasExact) {
+      const li = document.createElement('li');
+      li.className = 'pick-row';
+      li.setAttribute('role', 'option');
+      li.tabIndex = -1;
+      li.dataset.handle = needle;
+      li.innerHTML = '';
+      const av = document.createElement('span');
+      av.className = 'squad-avatar';
+      av.textContent = squadLetter({ handle: needle, name: needle });
+      const nm = document.createElement('span');
+      nm.className = 'pick-n';
+      nm.textContent = `Bind ${needle}`;
+      const sub = document.createElement('small');
+      sub.textContent = 'New channel · starts at 0 trophies';
+      nm.append(sub);
+      li.append(av, nm);
+      squadList.append(li);
+    }
+    for (const s of rows) {
+      const li = document.createElement('li');
+      li.className = 'pick-row';
+      li.setAttribute('role', 'option');
+      li.tabIndex = -1;
+      li.dataset.squad = s.id;
+      li.setAttribute('aria-selected', String(me?.id === s.id));
+      const av = document.createElement('span');
+      av.className = 'squad-avatar';
+      av.textContent = squadLetter(s);
+      const nm = document.createElement('span');
+      nm.className = 'pick-n';
+      nm.textContent = `${s.handle} · ${s.name}`;
+      const sub = document.createElement('small');
+      sub.textContent = `#${s.rank} · ${en(s.members)} members · ${en(s.trophies)} trophies`;
+      nm.append(sub);
+      const tick = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      tick.setAttribute('class', 'ico tick');
+      tick.setAttribute('aria-hidden', 'true');
+      tick.innerHTML = '<use href="#i-check" />';
+      li.append(av, nm, tick);
+      squadList.append(li);
+    }
+    squadEmpty.hidden = squadList.childElementCount > 0;
+    if (!squadList.childElementCount) squadEmpty.textContent = q.trim() ? 'No squad matches that.' : 'No squads yet.';
+  }
+
+  function showSquadSearch() {
+    squadSearchView.hidden = false;
+    squadBoundView.hidden = true;
+    $('squad-title').textContent = 'Join Squad';
+    squadErr.hidden = true;
+    paintSquadList(squadQ.value);
+  }
+
+  function showSquadBound() {
+    const me = getMySquad();
+    if (!me) { showSquadSearch(); return; }
+    squadSearchView.hidden = true;
+    squadBoundView.hidden = false;
+    $('squad-title').textContent = 'Your Squad';
+    $<HTMLElement>('squad-view-avatar').textContent = squadLetter(me);
+    $<HTMLElement>('squad-view-name').textContent = me.handle;
+    $<HTMLElement>('squad-view-rank').textContent = `#${me.rank}`;
+    $<HTMLElement>('squad-view-sub').textContent = `${me.name} · ${en(me.members)} members cheer for this channel.`;
+    $<HTMLElement>('squad-view-members').textContent = en(me.members);
+    $<HTMLElement>('squad-view-points').textContent = en(me.trophies);
+    $<HTMLElement>('squad-view-pos').textContent = `#${me.rank}`;
+  }
+
+  function openSquad() {
+    if (!squadSheet) return;
+    squadQ.value = '';
+    const me = getMySquad();
+    if (me) showSquadBound();
+    else showSquadSearch();
+    api.sheets.open(squadSheet);
+    impact('light');
+  }
+
+  function commitBind(handleOrId: string, isId: boolean) {
+    const r = isId ? bindSquadById(handleOrId) : bindSquad(handleOrId);
+    if (r === 'bad-handle') return squadError('That is not a channel handle — try @channel.');
+    squadErr.hidden = true;
+    notify('success');
+    impact('medium');
+    paintSquadPill();
+    showSquadBound();
+  }
+
+  squadQ.addEventListener('input', () => { squadErr.hidden = true; paintSquadList(squadQ.value); });
+  squadQ.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const q = squadQ.value;
+    const rows = searchSquads(q);
+    if (rows.length === 1 && !cleanHandle(q)) { commitBind(rows[0].id, true); return; }
+    if (cleanHandle(q)) { commitBind(q, false); return; }
+    if (rows.length) { commitBind(rows[0].id, true); return; }
+    squadError('Type a channel like @DogeSquad.');
+  });
+  squadList.addEventListener('click', (e) => {
+    const row = (e.target as HTMLElement | null)?.closest<HTMLElement>('.pick-row');
+    if (!row) return;
+    impact('light');
+    if (row.dataset.squad) commitBind(row.dataset.squad, true);
+    else if (row.dataset.handle) commitBind(row.dataset.handle, false);
+  });
+  $('squad-switch').addEventListener('click', () => { impact('light'); showSquadSearch(); squadQ.focus({ preventScroll: true }); });
+  $('squad-leave').addEventListener('click', () => {
+    leaveSquad();
+    impact('medium');
+    paintSquadPill();
+    showSquadSearch();
+  });
+  onSquadChange(() => { paintSquadPill(); if (squadSheet && !squadSheet.hidden) showSquadBoundRefresh(); });
+  function showSquadBoundRefresh() {
+    if (!squadBoundView.hidden) showSquadBound();
+    else paintSquadList(squadQ.value);
+  }
+
   /* ---- the entry points: the Home country chip jumps to Profile, where the picker lives ---- */
   $('country-chip').addEventListener('click', () => { impact('light'); api.router.go('profile'); });
   $('pf-country').addEventListener('click', openCountry);
-  for (const id of ['team-chip', 'pf-team']) $(id).addEventListener('click', openTeam);
+  $('team-chip').addEventListener('click', openSquad);
+  $('pf-team').addEventListener('click', openTeam);
 
   /* ---- the record, and what is worn: re-painted whenever the save changes ---- */
   const pfScreen = $<HTMLElement>('s-profile');
@@ -288,8 +458,7 @@ export function createMenu(api: MenuApi): Menu {
     $('pf-country-v').textContent = c ? nameOf(c) : 'Not set';
     setFlag('pf-flag', 'pf-code', c ?? '');
 
-    $('team-name').textContent = t ? t.name : 'Find a team';
-    $('team-count').textContent = t ? String(t.members.length) : '';
+    paintSquadPill();
     $('pf-team-v').textContent = t ? `${t.name} · ${t.members.length}` : 'No team';
   };
   const paintProfile = () => {
@@ -468,6 +637,7 @@ export function createMenu(api: MenuApi): Menu {
   paintSettings();
   paintSwatches();
   paintCustom();
+  paintSquadPill();
 
   /** A `startapp=team-XXXX` link pre-fills the join field, so an invite lands somewhere useful. */
   const invite = /^team-([a-z0-9]{1,5})$/i.exec(startParam());
