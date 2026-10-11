@@ -547,6 +547,17 @@ export function createMenu(api: MenuApi): Menu {
   const frameName = (id: string | null): string =>
     FRAMES.find((f) => f.id === id)?.name ?? 'Default';
 
+  /* Rank tiers: cosmetic tags driven by level, so the hero reads like a gamer card. */
+  const RANKS: { min: number; id: string; name: string }[] = [
+    { min: 1, id: 'rookie', name: 'Rookie' },
+    { min: 3, id: 'bronze', name: 'Bronze' },
+    { min: 6, id: 'silver', name: 'Silver' },
+    { min: 10, id: 'gold', name: 'Gold' },
+    { min: 16, id: 'elite', name: 'Elite' },
+    { min: 24, id: 'legend', name: 'Legend' },
+  ];
+  const rankFor = (n: number) => [...RANKS].reverse().find((r) => n >= r.min) ?? RANKS[0];
+
   const paintHeroExtras = (lv: { n: number; got: number; need: number }) => {
     /* recessed profile XP bar mirrors Home's bar (same levelInfo source). */
     const pfBar = document.getElementById('pf-bar');
@@ -560,10 +571,17 @@ export function createMenu(api: MenuApi): Menu {
     const remain = document.getElementById('pf-xp-remain');
     if (remain) {
       const left = Math.max(0, lv.need - lv.got);
-      remain.textContent = left === 0 ? `LVL ${lv.n + 1} ready` : `${left} to LVL ${lv.n + 1}`;
+      remain.textContent = left === 0 ? `LVL ${lv.n + 1} ready` : `${left} XP to LVL ${lv.n + 1}`;
     }
     const lvlPill = document.getElementById('pf-lvl-pill');
     if (lvlPill) lvlPill.setAttribute('aria-label', `Level ${lv.n}`);
+    /* rank tag under the level pill */
+    const rankTag = document.getElementById('pf-rank-tag');
+    if (rankTag) {
+      const r = rankFor(lv.n);
+      rankTag.dataset.rank = r.id;
+      rankTag.textContent = r.name;
+    }
     /* avatar frame slot */
     const wrap = document.getElementById('pf-avatar-wrap');
     if (wrap) wrap.setAttribute('data-frame', profile.frame ?? 'default');
@@ -756,7 +774,7 @@ export function createMenu(api: MenuApi): Menu {
     const countryName = document.getElementById('country-name');
     if (countryName) countryName.textContent = c ? nameOf(c) : 'Add country';
     setFlag('country-flag', 'country-code', c ?? '');
-    $('pf-country-v').textContent = c ? nameOf(c) : 'Not set';
+    $('pf-country-v').textContent = c ? nameOf(c) : 'Add country';
     setFlag('pf-flag', 'pf-code', c ?? '');
     /* Home name flag: small glyph next to the name when a country is set. */
     const homeFlag = document.getElementById('home-flag');
@@ -789,7 +807,7 @@ export function createMenu(api: MenuApi): Menu {
     $('pf-age').classList.toggle('claimed', age !== null);
 
     paintSquadPill();
-    $('pf-team-v').textContent = t ? `${t.name} · ${t.members.length}` : 'No team';
+    $('pf-team-v').textContent = t ? `${t.name} · ${t.members.length}` : 'Join a team';
   };
   const paintProfile = () => {
     const s = profile.stats;
@@ -803,6 +821,16 @@ export function createMenu(api: MenuApi): Menu {
     const favLabel = fav === 'bot' ? `${menuState.sizes[0]}v${menuState.sizes[1]}` : '—';
     $('pf-fav').textContent = favLabel;
     $('pf-fav-sub').textContent = s.games ? `${en(s.modes.bot ?? 0)} bot races` : 'No races yet';
+    /* empty stats become an exciting quest card until the first race lands */
+    const quest = document.getElementById('pf-quest');
+    const empty = document.getElementById('pf-quest-empty');
+    const stats = document.getElementById('pf-quest-stats');
+    if (quest && empty && stats) {
+      const isNew = s.games === 0;
+      quest.dataset.empty = String(isNew);
+      empty.hidden = !isNew;
+      stats.hidden = isNew;
+    }
     if (pfScreen.hidden) return;                        // a hidden canvas has no width to lay out
     const t = theme();
     for (const k of KINDS) {
@@ -846,6 +874,13 @@ export function createMenu(api: MenuApi): Menu {
     if (sub) sub.textContent = `${unlockedCount()} of ${BADGES.length} unlocked. Tap a medal for its lore and to equip it.`;
     api.sheets.open(sheet);
     impact('light');
+  });
+
+  /* first-match CTA: plays the saved bot race, the same one Home's Play button runs. */
+  document.getElementById('pf-play')?.addEventListener('click', () => {
+    impact('light');
+    saveMenu({ mode: 'bot' });
+    api.start({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] });
   });
 
   /* ---- difficulty: mode select owns the segmented control; Home shows fixed labels ---- */
