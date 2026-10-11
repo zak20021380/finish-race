@@ -156,26 +156,28 @@ try {
       expect(`difficulty ${tag}`, hard === 'true', `aria-pressed=${hard}`);
 
       await pg.click('.gm-pick[data-gmode="duel_1v1"]');
-      await pg.waitForTimeout(150);
-      await pg.click('#sheet-game-modes [data-size="party_2v2"]');
       await pg.waitForTimeout(250);
-      const party = await pg.evaluate(() => ({
-        start: document.getElementById('gm-start')?.textContent?.trim(),
-        wait: document.getElementById('gm-wait')?.textContent?.trim(),
-        coin: document.getElementById('gm-rw-coin-n')?.textContent?.trim(),
-        trophy: document.getElementById('gm-rw-trophy-n')?.textContent?.trim(),
-        label: document.getElementById('gm-rw-trophy')?.getAttribute('aria-label'),
-      }));
+      /* 2v2 is a teaser: on screen, disabled, badged "Soon" — 1v1 stays the pick */
+      const teaser = await pg.evaluate(() => {
+        const b = document.querySelector('#sheet-game-modes [data-size="party_2v2"]');
+        const badge = b && b.querySelector('.gm-soon');
+        return {
+          disabled: !!(b && (b.disabled || b.getAttribute('aria-disabled') === 'true')),
+          badge: badge ? badge.textContent.trim() : '',
+          pressed: b ? b.getAttribute('aria-pressed') : null,
+          start: document.getElementById('gm-start')?.textContent?.trim(),
+          wait: document.getElementById('gm-wait')?.textContent?.trim(),
+          coin: document.getElementById('gm-rw-coin-n')?.textContent?.trim(),
+          trophy: document.getElementById('gm-rw-trophy-n')?.textContent?.trim(),
+        };
+      });
       expect(
-        `quick 2v2 ${tag}`,
-        party.start === 'Start 2v2 match' && party.wait === '~8s' && party.coin === '+100' && party.trophy === '+50'
-          && party.label === '50 trophies',
-        JSON.stringify(party),
+        `2v2 teaser ${tag}`,
+        teaser.disabled === true && teaser.badge === 'Soon' && teaser.pressed === 'false'
+          && teaser.start === 'Start 1v1 match' && teaser.wait === '~5s' && teaser.coin === '+65'
+          && teaser.trophy === '+30',
+        JSON.stringify(teaser),
       );
-
-      /* back to 1v1 so the screenshots match the spec's example */
-      await pg.click('#sheet-game-modes [data-size="duel_1v1"]');
-      await pg.waitForTimeout(250);
 
       report(`main sheet ${tag}`, await pg.evaluate(boot('modes')));
       fs.mkdirSync(SHOTS, { recursive: true });

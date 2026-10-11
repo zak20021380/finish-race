@@ -1227,7 +1227,11 @@
                 <div class="gm-seg" hidden>
                   <div class="seg" role="group" aria-label="Match size">
                     <button class="seg-b" type="button" data-size="duel_1v1" aria-pressed="true">1v1</button>
-                    <button class="seg-b" type="button" data-size="party_2v2" aria-pressed="false">2v2</button>
+                    <button class="seg-b is-teaser" type="button" data-size="party_2v2" aria-pressed="false"
+                      disabled aria-disabled="true" aria-label="2v2, coming soon">
+                      <span class="gm-seg-label" aria-hidden="true">2v2</span>
+                      <span class="gm-soon" aria-hidden="true">Soon</span>
+                    </button>
                   </div>
                   <span class="gm-wait" id="gm-wait" aria-live="polite">~5s</span>
                 </div>
@@ -1238,7 +1242,7 @@
                   <span class="gm-ico room" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-users" /></svg></span>
                   <span class="gm-txt">
                     <span class="gm-name">Play with friends</span>
-                    <span class="gm-desc">Private room with a code</span>
+                    <span class="gm-desc">Invite friends directly via Telegram link</span>
                   </span>
                   <span class="gm-check" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-check" /></svg></span>
                 </button>
@@ -1249,7 +1253,7 @@
                   <span class="gm-ico bot" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-bot" /></svg></span>
                   <span class="gm-txt">
                     <span class="gm-name">Practice vs Bot</span>
-                    <span class="gm-desc">No pressure, no ranking</span>
+                    <span class="gm-desc">No pressure, train your skills</span>
                   </span>
                   <span class="gm-check" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-check" /></svg></span>
                 </button>
@@ -1303,16 +1307,16 @@
         <div class="gm-foot">
           <p class="gm-rewards" id="gm-rewards" aria-live="polite">
             <span class="gm-lead" id="gm-lead">Win</span>
-            <span class="gm-rw" id="gm-rw-trophy" role="img" aria-label="50 trophies">
-              <b aria-hidden="true" id="gm-rw-trophy-n">+50</b>
+            <span class="gm-rw" id="gm-rw-trophy" role="img" aria-label="30 trophies">
+              <b aria-hidden="true" id="gm-rw-trophy-n">+30</b>
               <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-cup" /></svg>
             </span>
-            <span class="gm-rw" role="img" aria-label="100 coins">
-              <b aria-hidden="true" id="gm-rw-coin-n">+100</b>
+            <span class="gm-rw" role="img" aria-label="65 coins">
+              <b aria-hidden="true" id="gm-rw-coin-n">+65</b>
               <span class="coin" data-coin aria-hidden="true"></span>
             </span>
           </p>
-          <button class="btn btn-primary gm-start" type="button" id="gm-start">Start 2v2 match</button>
+          <button class="btn btn-primary gm-start" type="button" id="gm-start">Start 1v1 match</button>
         </div>
       </section>
 

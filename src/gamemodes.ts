@@ -6,6 +6,8 @@
  * friends and Practice vs Bot â€” plus one reward caption and one sticky Start.
  * Selecting a mode updates the lobby instantly and persists to the device; the
  * row that is open shows its options in place (1v1/2v2 or Easy/Normal/Hard).
+ * 1v1 is the default: the 2v2 key ships disabled behind a "Soon" badge until
+ * party matchmaking lands, so a stored party pick falls back to the duel.
  * The room UI lives on its own sub-screen behind a back arrow, never in the list.
  *
  * Rooms are local-first: Create mints a 4-digit code and reveals a 1-tap
@@ -36,7 +38,8 @@ export interface LobbyDisplay {
 const KEY = 'detour.gamemode.v1';
 const BOT_HANDLE = 'detour_game_bot';
 
-const DEFAULT_SELECTION: GameModeSelection = { id: 'party_2v2', roomCode: null };
+/** 1v1 is the door everyone walks through: 2v2 is still a teaser in the drawer. */
+const DEFAULT_SELECTION: GameModeSelection = { id: 'duel_1v1', roomCode: null };
 
 /* ---- what the sheet renders: the DOM stays declarative, the labels live here ---- */
 
@@ -93,8 +96,10 @@ function load(): GameModeSelection {
   try {
     const raw = readJson<GameModeSelection>(KEY);
     if (!raw || !isGameModeId(raw.id)) return { ...DEFAULT_SELECTION };
-    const roomCode = raw.id === 'room' ? cleanRoomCode(raw.roomCode) : null;
-    return { id: raw.id, roomCode };
+    /* 2v2 is parked behind a disabled key for now: land the old pick on 1v1 */
+    const id: GameModeId = raw.id === 'party_2v2' ? 'duel_1v1' : raw.id;
+    const roomCode = id === 'room' ? cleanRoomCode(raw.roomCode) : null;
+    return { id, roomCode };
   } catch {
     return { ...DEFAULT_SELECTION };
   }

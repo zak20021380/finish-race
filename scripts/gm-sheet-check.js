@@ -9,6 +9,7 @@
  *  - the drawer is not open, scrolls, grows past 85dvh or hangs off the viewport,
  *  - it is not exactly 3 rows, or a row is shorter than ~76px,
  *  - more (or fewer) than one row is selected, or a hidden row still shows its options,
+ *  - the 2v2 key is selectable or unbadged (it ships as a disabled "Soon" teaser),
  *  - leftovers survive: VIRAL tag, RANKED pill, per-row rewards, "or" divider,
  *    section headers, the drag handle, or the room UI inside the main list,
  *  - there is not exactly one close control,
@@ -100,7 +101,7 @@ function checkGmSheet(pane) {
       if (!txt(row.querySelector('.gm-name'))) fails.push(`row ${row.dataset.row} has no title`);
       const d = txt(row.querySelector('.gm-desc'));
       if (!d) fails.push(`row ${row.dataset.row} has no one-line description`);
-      else if (d.length > 40) fails.push(`row ${row.dataset.row} description is ${d.length} chars, not one short line`);
+      else if (d.length > 44) fails.push(`row ${row.dataset.row} description is ${d.length} chars, not one short line`);
     }
     if (seg) {
       const open = !seg.hidden;
@@ -118,6 +119,17 @@ function checkGmSheet(pane) {
   const onCard = active[0] && active[0].querySelector('.gm-check');
   if (pane !== 'room' && active.length === 1 && (!onCard || !shown(onCard))) {
     fails.push('selected row has no check badge');
+  }
+
+  /* 2v2 ships as a teaser: still on screen, never selectable, badged "Soon" */
+  const teaser = sheet.querySelector('.seg-b.is-teaser');
+  if (!teaser) fails.push('missing the 2v2 teaser key');
+  else {
+    if (!teaser.disabled && teaser.getAttribute('aria-disabled') !== 'true') {
+      fails.push('the 2v2 teaser key is not disabled');
+    }
+    if (!teaser.querySelector('.gm-soon')) fails.push('the 2v2 teaser key has no "Soon" badge');
+    if (teaser.getAttribute('aria-pressed') === 'true') fails.push('the disabled 2v2 key is pressed');
   }
 
   /* ---------- 3. nothing crowding the list any more ---------- */

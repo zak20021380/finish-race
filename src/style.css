@@ -6637,7 +6637,9 @@ html.rm .arena-hero-backlight { display: none; }
    Motion stays on transform/opacity so every press runs at 60fps.
    ========================================================================== */
 
-/* ---- surface: Dark Clay #1C2433, 24px top corners, 85dvh, safe-area aware ---- */
+/* ---- surface: Dark Clay #1C2433, 24px top corners, 85dvh, safe-area aware ----
+   The frosted layer is the scrim's (its 4px blur sits behind this panel), so the
+   panel itself stays live-blur-free: one dark fill + a white/10 rim + a cyan kiss. */
 #sheet-game-modes,
 .gm-sheet {
   border-radius: 24px 24px 0 0;
@@ -6645,11 +6647,15 @@ html.rm .arena-hero-backlight { display: none; }
      safe-area insets, so the content sits above the home indicator */
   max-height: 85vh;
   max-height: 85dvh;
+  /* one spacing unit for the whole drawer (the 12px "gap-3" step) */
+  --gm-gap: 12px;
+  /* no grip handle up here: the header can sit closer to the top edge */
+  padding-top: var(--s4);
   background: #1C2433;
   background-color: #1C2433;
   box-shadow:
     inset 0 1px 0 var(--hair-lit),
-    inset 0 0 0 1px rgba(255, 255, 255, .06),
+    inset 0 0 0 1px rgba(255, 255, 255, .10),
     0 -20px 44px -20px var(--shadow),
     0 0 24px -8px rgba(56, 189, 248, .12);
 }
@@ -6661,14 +6667,25 @@ html.rm .arena-hero-backlight { display: none; }
   flex: none;
   display: flex;
   align-items: center;
-  gap: var(--s2);
+  gap: var(--gm-gap);
 }
 .gm-head-txt { flex: 1 1 auto; min-width: 0; }
-.gm-title.sheet-t { margin: 0; text-align: left; }
+/* two reading levels: a hard title, a soft one-line instruction under it */
+.gm-title.sheet-t {
+  margin: 0;
+  text-align: left;
+  font-size: var(--t-1);
+  font-weight: 800;
+  letter-spacing: -.01em;
+  line-height: 1.2;
+  color: var(--ink);
+}
 .gm-sub {
-  margin: 2px 0 0;
+  margin: 3px 0 0;
   font-size: var(--t-micro);
   font-weight: 700;
+  letter-spacing: .01em;
+  line-height: 1.3;
   color: var(--ink-soft);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6696,12 +6713,22 @@ html.rm .arena-hero-backlight { display: none; }
     0 var(--d) 0 #080C14,
     inset 0 1px 0 rgba(255, 255, 255, .14),
     var(--clay-ring);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), color var(--motion-fast);
 }
 .gm-key .ico { width: 20px; height: 20px; }
 .gm-key:hover:not(:active) { transform: translateY(-1px); }
 .gm-key:active { transform: translateY(2px); --d: 0px; }
 .gm-key:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+/* the dismiss key reads as a lit ring on hover, then sinks into the clay on press */
+.gm-key.gm-x { font-size: 26px; font-weight: 600; }
+.gm-key.gm-x:hover:not(:active) {
+  color: var(--brand-ink);
+  box-shadow:
+    0 var(--d) 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 0 0 1px rgba(56, 189, 248, .45),
+    0 0 16px -6px rgba(56, 189, 248, .9);
+}
 
 /* ---- body: the one region that may scroll, chrome-free and header-free ---- */
 .gm-body {
@@ -6709,7 +6736,7 @@ html.rm .arena-hero-backlight { display: none; }
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
+  gap: var(--gm-gap);
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
@@ -6720,15 +6747,15 @@ html.rm .arena-hero-backlight { display: none; }
   margin: 0 -2px;
 }
 .gm-body::-webkit-scrollbar { display: none; width: 0; height: 0; }
-.gm-view { flex: none; display: flex; flex-direction: column; gap: var(--s2); }
-.gm-list { display: flex; flex-direction: column; gap: var(--s2); }
+.gm-view { flex: none; display: flex; flex-direction: column; gap: var(--gm-gap); }
+.gm-list { display: flex; flex-direction: column; gap: var(--gm-gap); }
 
 /* ---- mode rows: one glass card, a 76px pick, and the option strip inside ---- */
 .gm-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
+  gap: var(--gm-gap);
   padding: 6px;
   border: 2px solid transparent;
   border-radius: var(--radius-md);
@@ -6739,17 +6766,19 @@ html.rm .arena-hero-backlight { display: none; }
   box-shadow: var(--glass-border-top), var(--glass-border), var(--clay);
   transition: box-shadow var(--motion-fast), background-image var(--motion-fast), border-color var(--motion-fast);
 }
-/* selected: gradient border + the check badge inside the same row */
+/* selected: gradient border + the check badge inside the same row.
+   The halo is electric cyan on purpose — it is the only glowing card in here. */
 .gm-card.is-active {
   border-color: transparent;
   background-image:
     linear-gradient(180deg, #232E46 0%, #1C2433 100%) padding-box,
-    linear-gradient(135deg, #0284c7, #38bdf8) border-box;
+    linear-gradient(135deg, #22d3ee, #0ea5e9 55%, #0284c7) border-box;
   box-shadow:
     var(--clay),
-    0 0 0 1px rgba(56, 189, 248, .45),
-    0 0 22px -4px rgba(56, 189, 248, .55),
-    inset 0 1px 0 rgba(255, 255, 255, .1);
+    0 0 0 1px rgba(56, 189, 248, .5),
+    0 0 26px -6px rgba(34, 211, 238, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 0 24px -14px rgba(56, 189, 248, .95);
 }
 /* the pick is the whole row: icon, title, one line, check badge */
 .gm-pick {
@@ -6768,10 +6797,11 @@ html.rm .arena-hero-backlight { display: none; }
   background: transparent;
   color: var(--ink);
   text-align: left;
-  transition: transform var(--motion-fast), opacity var(--motion-fast);
+  transition: transform var(--motion-fast), opacity var(--motion-fast), background-color var(--motion-fast);
 }
 .gm-pick:hover:not(:active) { opacity: .92; }
-.gm-pick:active { transform: scale(.98); }
+/* the tap lands as a soft well inside the card, not as a page-wide ripple */
+.gm-pick:active { transform: scale(.98); background-color: rgba(255, 255, 255, .05); }
 .gm-pick:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .gm-pick[disabled] { opacity: .55; cursor: default; }
 .gm-pick[disabled]:active { transform: none; }
@@ -6782,7 +6812,7 @@ html.rm .arena-hero-backlight { display: none; }
   height: 52px;
   display: grid;
   place-items: center;
-  border-radius: 17px;
+  border-radius: 16px;
   background: linear-gradient(180deg, #0A0F1C 0%, var(--field) 100%);
   box-shadow:
     inset 0 2px 4px rgba(0, 0, 0, .55),
@@ -6790,9 +6820,36 @@ html.rm .arena-hero-backlight { display: none; }
     inset 0 0 0 1px rgba(255, 255, 255, .06);
 }
 .gm-ico .ico { width: 26px; height: 26px; }
-.gm-ico.duel { color: #FCD34D; box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 0 0 1px rgba(252,211,77,.32), 0 0 14px -2px rgba(245,158,11,.45); }
-.gm-ico.room { color: #FFB59D; box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,82,43,.34), 0 0 14px -2px rgba(255,82,43,.45); }
-.gm-ico.bot { color: var(--mint-ink); box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 0 0 1px rgba(110,231,183,.3), 0 0 14px -2px rgba(16,185,129,.4); }
+/* one well, three tints: amber swords, coral friends, emerald bot — each with its own glow */
+.gm-ico.duel {
+  color: #FDE68A;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .55),
+    inset 0 0 0 1px rgba(252, 211, 77, .34),
+    0 0 16px -4px rgba(245, 158, 11, .55);
+}
+.gm-ico.room {
+  color: #FFC7B2;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .55),
+    inset 0 0 0 1px rgba(255, 82, 43, .36),
+    0 0 16px -4px rgba(255, 82, 43, .5);
+}
+.gm-ico.bot {
+  color: var(--mint-ink);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .55),
+    inset 0 0 0 1px rgba(110, 231, 183, .32),
+    0 0 16px -4px rgba(16, 185, 129, .5);
+}
+/* the selected mode's icon burns a touch brighter than the row it sits in */
+.gm-card.is-active .gm-ico.duel {
+  color: #FEF3C7;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .55),
+    inset 0 0 0 1px rgba(252, 211, 77, .55),
+    0 0 18px -3px rgba(245, 158, 11, .8);
+}
 .gm-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .gm-name {
   font-size: var(--t-2);
@@ -6804,15 +6861,15 @@ html.rm .arena-hero-backlight { display: none; }
   text-overflow: ellipsis;
 }
 .gm-card.is-active .gm-name { color: var(--brand-ink); }
+/* one short line by default; the friends blurb may break to a second line at
+   360px rather than ellipsize — the 52px icon still owns the row's height */
 .gm-desc {
   display: block;
   font-size: var(--t-micro);
   font-weight: 600;
   line-height: 1.35;
   color: var(--ink-soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: break-word;
 }
 /* check badge: lives in the row, so the title can never sit under it */
 .gm-check {
@@ -6824,7 +6881,11 @@ html.rm .arena-hero-backlight { display: none; }
   border-radius: 50%;
   background: var(--brand-fill);
   color: var(--on-brand);
-  box-shadow: 0 2px 0 var(--brand-lip), 0 6px 12px -6px var(--brand-glow);
+  box-shadow:
+    0 2px 0 var(--brand-lip),
+    0 6px 12px -6px var(--brand-glow),
+    0 0 14px -4px rgba(56, 189, 248, .9),
+    inset 0 1px 0 rgba(255, 255, 255, .45);
 }
 .gm-check .ico { width: 15px; height: 15px; }
 .gm-card.is-active .gm-check { display: grid; }
@@ -6837,19 +6898,49 @@ html.rm .arena-hero-backlight { display: none; }
   padding: 0 6px 6px;
 }
 .gm-seg .seg { flex: 1 1 auto; min-width: 0; }
+/* queue estimate: a small neon chip, so "5 seconds" reads as a promise */
 .gm-wait {
   flex: none;
-  padding: 5px var(--s2);
+  padding: 5px 10px;
   border-radius: var(--radius-pill);
-  background: var(--field);
-  box-shadow: inset 0 0 0 1px var(--hair-off);
-  color: var(--ink-soft);
+  background: rgba(34, 211, 238, .12);
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, .35);
+  color: #7DD3FC;
   font-size: var(--t-micro);
   font-weight: 800;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 .gm-seg .seg-b { min-height: 44px; }
+/* 2v2 ships as a teaser: same 44px key, dimmed face, never selectable */
+.gm-seg .seg-b.is-teaser {
+  position: relative;
+  cursor: default;
+  color: rgba(203, 213, 225, .7);
+  background: rgba(255, 255, 255, .04);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
+}
+.gm-seg .seg-b.is-teaser:active { transform: none; }
+.gm-seg-label { display: block; }
+/* corner badge: a mini glow that says why the key does not move */
+.gm-soon {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  padding: 1px 5px;
+  border-radius: var(--radius-pill);
+  background: rgba(34, 211, 238, .16);
+  box-shadow:
+    inset 0 0 0 1px rgba(34, 211, 238, .45),
+    0 0 10px -3px rgba(34, 211, 238, .9);
+  color: #A5F3FC;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  white-space: nowrap;
+}
 
 /* ---- friends sub-screen: create a room, or join one with a 4-digit code ---- */
 .gm-room {
@@ -6937,8 +7028,9 @@ html.rm .arena-hero-backlight { display: none; }
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--s2);
 }
+/* one centered capsule: WIN +30 (trophy) +65 (coin), never a row of loose numbers */
 .gm-rewards {
   display: flex;
   align-items: center;
@@ -6946,12 +7038,16 @@ html.rm .arena-hero-backlight { display: none; }
   flex-wrap: wrap;
   gap: var(--s2);
   margin: 0;
-  min-height: 18px;
+  min-height: 26px;
+  padding: 4px var(--s3);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
   font-size: var(--t-micro);
   font-weight: 800;
   color: var(--ink-soft);
 }
-.gm-lead { text-transform: uppercase; letter-spacing: .06em; }
+.gm-lead { text-transform: uppercase; letter-spacing: .08em; }
 .gm-rw {
   display: inline-flex;
   align-items: center;
@@ -6962,7 +7058,25 @@ html.rm .arena-hero-backlight { display: none; }
 .gm-rw b { font-size: var(--t-micro); font-weight: 900; color: var(--ink); }
 .gm-rw .ico { width: 14px; height: 14px; color: var(--honey-ink); }
 .gm-rw .coin { width: 14px; height: 14px; }
-.gm-start { width: 100%; }
+/* the one loud key: a 3D clay slab that sinks into its lip on press */
+.gm-start {
+  --d: 5px;
+  width: 100%;
+  min-height: 52px;
+  padding-top: 14px;
+  padding-bottom: 14px;
+  font-size: var(--t-1);
+  font-weight: 900;
+  letter-spacing: -.01em;
+  box-shadow:
+    0 var(--d) 0 var(--brand-lip),
+    0 calc(var(--d) + 8px) 18px -8px var(--brand-glow),
+    inset 0 2px 3px rgba(255, 255, 255, .34),
+    inset 0 -3px 6px rgba(0, 0, 0, .28),
+    inset 0 0 0 1px rgba(255, 255, 255, .14);
+}
+.gm-start:hover:not(:active) { transform: translateY(-1px); }
+.gm-start:active { transform: translateY(var(--press-y)); --d: 1px; }
 
 /* lobby type badge: TEAM / RANKED etc ride the same pill, tinted per mode */
 .diff-badge[data-gmode="duel_1v1"] {
