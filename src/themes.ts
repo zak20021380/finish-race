@@ -82,10 +82,16 @@ export interface BoardTheme {
   name: string;
   desc: string;
   price: number;
+  /** the clay slab's face */
   surface: string;
-  /** shadow the board casts on the card */
+  /** shadow the slab casts on the card */
   drop: string;
+  /** the tactile groove between two tiles */
   grid: string;
+  /** inset clay tiles: [lit square, shaded square] of the faint two-tone checker */
+  tile: [string, string];
+  /** the slab's inner bevel, lit from above: [top highlight, bottom shade] */
+  bevel: [string, string];
   /** border ring: green at FINISH easing into the board's own trim */
   ring: Stop[];
   /** checkered strip: [lit square, dark square] */
@@ -97,6 +103,10 @@ export interface BoardTheme {
   edge: string;
   /** finish light sweep alpha */
   sweep: number;
+  /** soft light beams falling from the finish strip, an rgba() colour fading to its own 0 alpha */
+  beam: string;
+  /** how hard each team's colour tints its own start square, 0 = no tint */
+  startTint: number;
 }
 
 export interface Theme {
@@ -125,6 +135,16 @@ export const BOT_RAMP: Ramp = {
 export const TEAM2_RAMP: Ramp = {
   light: '#8fe3b4', mid: '#17915c', dark: '#0a4d30', glow: 'rgba(23,145,92,.55)', shade: '10,70,50',
   wl: '#4fc98d', wd: '#0c6b41', edge: 'rgba(10,70,50,.28)', ol: 'rgba(23,145,92,.5)', os: 'rgba(23,145,92,.95)',
+};
+
+/**
+ * A mine in the ground you put there yourself: warm warning red, never a team colour, so a buried
+ * trap can never be mistaken for a wall or a ball. Opponent mines have no palette at all — they
+ * are never drawn (see `view()` in rules.ts).
+ */
+export const MINE_RAMP: Ramp = {
+  light: '#ffd0a3', mid: '#f2751f', dark: '#4a1503', glow: 'rgba(255,120,40,.7)', shade: '110,40,8',
+  wl: '#ffb169', wd: '#a3340a', edge: 'rgba(74,21,3,.55)', ol: 'rgba(242,117,31,.55)', os: 'rgba(242,117,31,1)',
 };
 
 /** An illegal slot. Owns no side, so it keeps the same "no" everywhere. */
@@ -193,30 +213,55 @@ export const WALLS: WallStyle[] = [
 
 /* ---------- board themes ---------- */
 
+/**
+ * Board themes are clay slabs now, not flat sheets: an outer drop shadow, a lit inner bevel and a
+ * grid of inset tiles with a 1px groove between them. `indigo` is the arena the race ships with;
+ * `lavender` is the light variant of the same slab.
+ */
 export const BOARDS: BoardTheme[] = [
   {
-    id: 'lavender', name: 'Lavender', price: 0, desc: 'Soft lilac court with a green finish glow.',
-    surface: '#f7f7fc', drop: 'rgba(88,84,140,.20)', grid: '#d0d0de',
-    ring: [[0, '#2fa86f'], [0.06, '#48bb8c'], [0.16, '#8acbb0'], [0.34, '#cbccdd'], [0.62, '#d5d4e4'], [1, '#dbdae9']],
-    checker: ['#f4fbf7', '#28a06a'],
-    glow: [[0, 'rgba(47,168,111,.30)'], [0.45, 'rgba(47,168,111,.10)'], [1, 'rgba(47,168,111,0)']],
-    rule: 'rgba(15,107,69,.32)', edge: 'rgba(255,255,255,.75)', sweep: 0.55,
-  },
-  {
-    id: 'midnight', name: 'Midnight', price: 340, desc: 'Deep indigo. The line burns brighter against it.',
-    surface: '#242843', drop: 'rgba(18,20,44,.5)', grid: 'rgba(255,255,255,.13)',
-    ring: [[0, '#3ad194'], [0.06, '#2fae7c'], [0.16, '#2a6288'], [0.34, '#39456e'], [0.62, '#333b60'], [1, '#3b4470']],
+    id: 'indigo', name: 'Indigo', price: 0, desc: 'Deep indigo clay. The arena the race ships with.',
+    surface: '#2b3157', drop: 'rgba(5,7,22,.55)', grid: 'rgba(8,10,28,.35)',
+    tile: ['rgba(255,255,255,.055)', 'rgba(255,255,255,.018)'],
+    bevel: ['rgba(255,255,255,.18)', 'rgba(4,6,20,.45)'],
+    ring: [[0, '#3ad194'], [0.06, '#2fae7c'], [0.16, '#2c6a9a'], [0.34, '#3b4874'], [0.62, '#39436c'], [1, '#414b78']],
     checker: ['#eafff6', '#17b373'],
     glow: [[0, 'rgba(56,220,150,.30)'], [0.45, 'rgba(56,220,150,.10)'], [1, 'rgba(56,220,150,0)']],
-    rule: 'rgba(190,255,225,.24)', edge: 'rgba(255,255,255,.2)', sweep: 0.4,
+    rule: 'rgba(190,255,225,.24)', edge: 'rgba(255,255,255,.22)', sweep: 0.4,
+    beam: 'rgba(140,255,205,.16)', startTint: 0.16,
   },
   {
-    id: 'mint', name: 'Mint', price: 280, desc: 'A pale green pitch with a clean white line.',
-    surface: '#eefbf3', drop: 'rgba(70,120,100,.2)', grid: '#c6e2d3',
+    id: 'lavender', name: 'Lavender', price: 0, desc: 'Soft lilac clay slab, lit from above.',
+    surface: '#eeedfb', drop: 'rgba(84,80,138,.32)', grid: 'rgba(120,116,176,.18)',
+    tile: ['#ffffff', '#f4f3fd'],
+    bevel: ['rgba(255,255,255,.9)', 'rgba(112,108,168,.22)'],
+    ring: [[0, '#2fa86f'], [0.06, '#48bb8c'], [0.16, '#a9dccc'], [0.34, '#d6d5e8'], [0.62, '#deddef'], [1, '#e6e5f5']],
+    checker: ['#f4fbf7', '#28a06a'],
+    glow: [[0, 'rgba(47,168,111,.30)'], [0.45, 'rgba(47,168,111,.10)'], [1, 'rgba(47,168,111,0)']],
+    rule: 'rgba(15,107,69,.32)', edge: 'rgba(255,255,255,.8)', sweep: 0.55,
+    beam: 'rgba(47,168,111,.18)', startTint: 0.12,
+  },
+  {
+    id: 'mint', name: 'Mint', price: 280, desc: 'A pale green slab with a clean white line.',
+    surface: '#e6f7ee', drop: 'rgba(56,110,88,.28)', grid: 'rgba(72,132,108,.2)',
+    tile: ['#ffffff', '#f0fbf5'],
+    bevel: ['rgba(255,255,255,.9)', 'rgba(70,124,102,.22)'],
     ring: [[0, '#2fbf85'], [0.06, '#57cfa0'], [0.16, '#8fdcc0'], [0.34, '#c4e6d6'], [0.62, '#cfe9de'], [1, '#d7eee3']],
     checker: ['#ffffff', '#22a06b'],
     glow: [[0, 'rgba(47,168,111,.26)'], [0.45, 'rgba(47,168,111,.08)'], [1, 'rgba(47,168,111,0)']],
     rule: 'rgba(15,107,69,.28)', edge: 'rgba(255,255,255,.8)', sweep: 0.5,
+    beam: 'rgba(34,160,107,.2)', startTint: 0.13,
+  },
+  {
+    id: 'midnight', name: 'Midnight', price: 340, desc: 'Near-black indigo. The line burns brighter against it.',
+    surface: '#171c3c', drop: 'rgba(2,3,14,.65)', grid: 'rgba(0,0,0,.45)',
+    tile: ['rgba(255,255,255,.045)', 'rgba(255,255,255,.012)'],
+    bevel: ['rgba(255,255,255,.14)', 'rgba(0,0,0,.55)'],
+    ring: [[0, '#43e3a2'], [0.06, '#2fae7c'], [0.16, '#26507f'], [0.34, '#222a52'], [0.62, '#1e2547'], [1, '#242c52']],
+    checker: ['#f4fffa', '#12a869'],
+    glow: [[0, 'rgba(67,227,162,.34)'], [0.45, 'rgba(67,227,162,.12)'], [1, 'rgba(67,227,162,0)']],
+    rule: 'rgba(200,255,232,.28)', edge: 'rgba(255,255,255,.16)', sweep: 0.42,
+    beam: 'rgba(120,255,205,.18)', startTint: 0.18,
   },
 ];
 

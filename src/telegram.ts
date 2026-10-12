@@ -157,7 +157,7 @@ export function onBackPress(cb: () => void): (visible: boolean) => void {
   return () => {};
 }
 
-export const impact = (s: 'light' | 'medium') => {
+export const impact = (s: 'light' | 'medium' | 'heavy') => {
   if (!settings.haptics) return;
   try { tg?.HapticFeedback?.impactOccurred(s); } catch { /* ignore */ }
 };

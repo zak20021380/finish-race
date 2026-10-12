@@ -2,20 +2,27 @@
  * render.ts — Canvas 2D drawing + pointer → board hit-testing.
  * All sizes derive from `cell`, so the look scales to any phone.
  *
- * Nothing here owns a colour: balls, walls and the board itself are drawn from the `Theme` data in
- * `themes.ts` (see `setTheme`). The renderer also paints the shop's miniature boards — pass `cols`
- * and `rows` and it lays out that patch of board instead of a whole race, so a preview card shows
- * the same code path the race uses rather than a picture of it.
+ * The board is a clay slab: an outer drop shadow, a lit inner bevel, and a grid of inset tiles
+ * with a 1px groove between them. It is painted once into an offscreen canvas and blitted every
+ * frame, so the tiles cost nothing while the board animates (see `buildStatic`).
+ *
+ * Nothing here owns a colour: balls, walls, mines and the slab itself are drawn from the `Theme`
+ * data in `themes.ts` (see `setTheme`). The renderer also paints the shop's miniature boards — pass
+ * `cols` and `rows` and it lays out that patch of board instead of a whole race, so a preview card
+ * shows the same code path the race uses rather than a picture of it.
  *
  * Seats, not sides: `view.balls` carries every ball on the board with the team it belongs to, so a
  * race of three balls a side draws the same code path a 1v1 does. Balls of one team share a colour
  * family and are told apart by a number badge; the chosen ball wears a ring and only its legal
  * cells are drawn as dots.
  */
-import { COLS, MAX_TEAMS, ROWS, type Cell, type GameState, type Player, type Pos, type Wall, type WallSpec } from './rules';
+import {
+  COLS, MAX_TEAMS, ROWS, startLayout,
+  type Cell, type GameState, type Player, type Pos, type Wall, type WallSpec,
+} from './rules';
 import { motionReduced } from './settings';
 import {
-  BOT_RAMP, CLASSIC_BALL, CLASSIC_WALL, DEFAULT_THEME, ERR_RAMP, TEAM2_RAMP,
+  BOT_RAMP, CLASSIC_BALL, CLASSIC_WALL, DEFAULT_THEME, ERR_RAMP, MINE_RAMP, TEAM2_RAMP,
   type BallSkin, type CosKind, type Ramp, type Stop, type Theme, type WallStyle,
 } from './themes';
 
@@ -68,8 +75,13 @@ export interface RendererOptions {
   theme?: () => Theme;
 }
 
-/** Which dock key is down: only that key's targets answer to a tap. */
-export type ActionMode = 'move' | 'wall' | 'mine';
+/**
+ * What the board is doing. `move` is direct play: every target is live at once — a ball, a legal
+ * cell, a groove between two squares. `mine` is the chip's mine key being held down, which swaps
+ * the whole board for the placement band. There is no wall key to reach for: a groove *is* the
+ * wall target, so a tap either picks up a ball or starts a wall.
+ */
+export type ActionMode = 'move' | 'mine';
 
 export type Hit =
   | { kind: 'ball'; id: number }
@@ -84,6 +96,27 @@ const LINE_ZONE = 0.3;  // cells from a grid line that still read as "aiming at 
 const MIN_TOUCH = 44;   // css px: smallest legal tap target we allow
 const BADGE_FROM = 28;  // cell size below which a number badge would be unreadable
 const SOLID: number[] = [];
+const BLAST_MS = 700;   // the whole mine trigger, flash to last spark
+const RIPPLE_MS = 380;  // a tap's ripple
+const STREAK_MS = 300;  // how long a sliding ball's trail takes to fade
+
+/** 14 sparks, on fixed unit vectors: a burst costs no randomness and allocates nothing. */
+const SPARK_N = 14;
+const SPARK_C = new Float32Array(SPARK_N);
+const SPARK_S = new Float32Array(SPARK_N);
+const SPARK_L = new Float32Array(SPARK_N);
+for (let i = 0; i < SPARK_N; i++) {
+  const a = (i / SPARK_N) * TAU + 0.24;
+  SPARK_C[i] = Math.cos(a);
+  SPARK_S[i] = Math.sin(a);
+  SPARK_L[i] = 0.55 + 0.7 * (((i * 37) % 11) / 11);   // varied lengths, still deterministic
+}
+
+/**
+ * The same colour with its alpha driven to zero, for a gradient that has to fade a stop out.
+ * Board palettes author every fading colour as an rgba() literal, so this only has to read one.
+ */
+const clear = (col: string) => (col.startsWith('rgb') ? col.replace(/[\d.]+\)\s*$/, '0)') : col);
 
 /** A stop's colour may name a ramp slot ("mid") or be literal; board stops are always literal. */
 const resolve = (ramp: Ramp | null, list: Stop[]): Stop[] => {
@@ -119,9 +152,10 @@ function distToWall(bx: number, by: number, w: WallSpec, along: number): number 
 /**
  * Pointer (CSS px, canvas-local) → the thing to act on.
  * Priority, not raw distance: one of your balls picks up, an armed ghost confirms, a tap inside a
- * legal cell moves, a tap that lands on a grid line arms a wall. A 44px target and a 0.3-cell line
- * band cannot both fit in a 37px cell, so the cell the target sits in always wins for the target.
- * Only the dock key that is down offers targets — a tap while Wall is armed never moves a ball.
+ * legal cell moves, and a tap out on a groove arms a wall. A 44px target and a 0.3-cell line band
+ * cannot both fit in a 37px cell, so the square the finger is in always wins for itself and the
+ * groove only answers when the tap is neither on a ball, on an armed ghost, nor in a legal cell.
+ * One mode is left: while the mine key is held down the board offers mines and nothing else.
  */
 export function hitTest(L: Layout, px: number, py: number, o: {
   hints: Pos[];
@@ -158,14 +192,8 @@ export function hitTest(L: Layout, px: number, py: number, o: {
     if (armed) cand.push({ hit: { kind: 'mine-confirm', cell: armed.cell }, pri: 0, d: armed.d });
     const spot = near(o.mineHints);
     if (spot) cand.push({ hit: { kind: 'mine', cell: spot.cell }, pri: 1, d: spot.d });
-  } else if (o.mode === 'wall') {
-    if (o.armed) {
-      const d = distToWall(bx, by, o.armed, 0.5);
-      if (d <= Math.min(0.42, Math.max(LINE_ZONE, 18 / c))) cand.push({ hit: { kind: 'confirm', spec: o.armed }, pri: 0, d });
-    }
-    const s = slotNear(bx, by, L.cols, L.rows);
-    if (s) cand.push({ hit: { kind: 'wall', spec: s }, pri: 1, d: distToWall(bx, by, s, 1.25) });
   } else {
+    // direct play: a ball picks up, an armed ghost confirms, a legal cell moves, a groove walls
     let ballId: number | null = null, db = Infinity;
     for (const b of o.balls) {
       if (b.team !== o.mine) continue;
@@ -173,11 +201,18 @@ export function hitTest(L: Layout, px: number, py: number, o: {
       if (d < db) { db = d; ballId = b.id; }
     }
     if (ballId !== null && db <= reach) cand.push({ hit: { kind: 'ball', id: ballId }, pri: 0, d: db });
+    if (o.armed) {
+      const d = distToWall(bx, by, o.armed, 0.5);
+      if (d <= Math.min(0.42, Math.max(LINE_ZONE, 18 / c))) cand.push({ hit: { kind: 'confirm', spec: o.armed }, pri: 0, d });
+    }
     const spot = near(o.hints);
     if (spot) {
       const own = Math.max(Math.abs(bx - spot.cell.c - 0.5), Math.abs(by - spot.cell.r - 0.5)) <= 0.5;
-      cand.push({ hit: { kind: 'move', to: spot.cell }, pri: own ? 2 : 4, d: spot.d });
+      cand.push({ hit: { kind: 'move', to: spot.cell }, pri: own ? 1 : 3, d: spot.d });
     }
+    // the groove itself is the wall target, so no mode has to be armed to draw one
+    const s = slotNear(bx, by, L.cols, L.rows);
+    if (s) cand.push({ hit: { kind: 'wall', spec: s }, pri: 2, d: distToWall(bx, by, s, 1.25) });
   }
 
   cand.sort((a, b) => a.pri - b.pri || a.d - b.d);
@@ -212,6 +247,17 @@ function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: n
   ctx.closePath();
 }
 
+/**
+ * The start squares of the game on screen, taken from the same helper the rules place the balls
+ * with, so the tint under a ball can never drift away from the ball.
+ */
+function startBoard(s: GameState): { c: number; r: number; t: Player }[] {
+  const out: { c: number; r: number; t: Player }[] = [];
+  const lay = startLayout(s.teams.map((t) => t.balls));
+  for (let t = 0; t < lay.length; t++) for (const p of lay[t]) out.push({ c: p.c, r: p.r, t });
+  return out;
+}
+
 function computeLayout(w: number, h: number, dpr: number, cols: number, rows: number): Layout {
   const m = 3;
   const raw = Math.min((w - 2 * m) / cols, (h - 2 * m) / rows);
@@ -230,8 +276,21 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   let sides: Side[] = seats(th);
   const born = new Map<number, number>();                    // wall key → first-seen time (pop-in)
   const pulses: { x: number; y: number; t0: number; p: Player }[] = []; // wall landing rings
-  const blasts: { x: number; y: number; t0: number; p: Player }[] = []; // mine flashes, queued by blast()
+  const blasts: { x: number; y: number; t0: number }[] = []; // mine triggers, queued by blast()
+  const ripples: { x: number; y: number; t0: number; p: Player }[] = []; // tap feedback
+  /** Sliding balls leave a short comet tail: pooled, reused, and dropped as they fade. */
+  const streaks: { x0: number; y0: number; x1: number; y1: number; t0: number; p: Player }[] = [];
+  const prevPos = new Map<number, Vec>();                    // ball id → where it was last frame
   let bg: HTMLCanvasElement | null = null;                   // static board layer, rebuilt on resize
+  let mineBody: CanvasGradient | null = null;                // the mine's dim warm sphere
+  let mineGlow: CanvasGradient | null = null;                // …and the glow it casts
+  let blastGlow: CanvasGradient | null = null;               // the wide light a trigger throws
+  /** When the armed mine ghost first appeared, so it can drop into place once. */
+  let mineGhostAt = 0;
+  let mineGhostKey = '';
+  /** The start squares of the game on screen, rebuilt only when the team sizes change. */
+  let startKey = '';
+  let starts: { c: number; r: number; t: Player }[] = [];
   let lastW = 0, lastH = 0, lastDpr = 0;
   // layout-sized paint servers: built once per resize, reused every frame
   const dash = { trail: [] as number[], last: [] as number[], ghost: [] as number[], armed: [] as number[] };
@@ -273,21 +332,71 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     g.clearRect(0, 0, cv.width, cv.height);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+    /* the slab: one solid clay face lifted off the card by a soft outer drop shadow */
     g.save();
     g.shadowColor = b.drop;
-    g.shadowBlur = 14 * dpr;
-    g.shadowOffsetY = 4 * dpr;
+    g.shadowBlur = 18 * dpr;
+    g.shadowOffsetY = 5 * dpr;
     rr(g, ox, oy, bw, bh, R);
     g.fillStyle = b.surface;
     g.fill();
     g.restore();
 
+    /* everything after this is clipped to the slab, so no bevel or beam can bleed past its edge */
     g.save();
     rr(g, ox, oy, bw, bh, R);
     g.clip();
 
     // device-pixel snapping keeps the finish checker crisp at any dpr (no half-pixel seams)
     const px = (n: number) => Math.round(n * dpr) / dpr;
+
+    /* the inner bevel that makes it read as clay: lit along the top edge, shaded into the bottom */
+    const bevelW = Math.max(2, c * 0.13);
+    const bev = g.createLinearGradient(0, oy, 0, oy + bh);
+    bev.addColorStop(0, b.bevel[0]);
+    bev.addColorStop(0.1, clear(b.bevel[0]));
+    bev.addColorStop(0.86, clear(b.bevel[1]));
+    bev.addColorStop(1, b.bevel[1]);
+    g.lineWidth = bevelW;
+    g.strokeStyle = bev;
+    rr(g, ox + bevelW / 2, oy + bevelW / 2, bw - bevelW, bh - bevelW, R - bevelW / 2);
+    g.stroke();
+
+    /* the grooves the tiles sit in: one hairline per grid line, snapped to the device pixel */
+    const lwDev = Math.max(1, Math.round(dpr));
+    const half = (lwDev % 2) / 2;
+    const snap = (n: number) => (Math.round(n * dpr - half) + half) / dpr;
+    g.strokeStyle = b.grid;
+    g.lineWidth = lwDev / dpr;
+    g.beginPath();
+    for (let i = 1; i < cols; i++) { const x = snap(ox + i * c); g.moveTo(x, oy); g.lineTo(x, oy + bh); }
+    for (let i = 1; i < rows; i++) { const y = snap(oy + i * c); g.moveTo(ox, y); g.lineTo(ox + bw, y); }
+    g.stroke();
+
+    /* inset clay tiles: a faint two-tone checker with a 1px tactile gap, each square shaded
+       darker at its top and lighter at its foot, which is what reads as "pressed in" */
+    const gap = Math.max(1, c * 0.03);
+    const tw = c - gap, tr = Math.min(c * 0.15, tw / 2);
+    const shade = g.createLinearGradient(0, 0, 0, c);
+    shade.addColorStop(0, b.bevel[1]);
+    shade.addColorStop(0.42, clear(b.bevel[1]));
+    shade.addColorStop(0.78, clear(b.bevel[0]));
+    shade.addColorStop(1, b.bevel[0]);
+    g.lineWidth = Math.max(1, c * 0.035);
+    g.strokeStyle = shade;
+    for (let r0 = 0; r0 < rows; r0++) {
+      for (let c0 = 0; c0 < cols; c0++) {
+        const tx = ox + c0 * c + gap / 2, ty = oy + r0 * c + gap / 2;
+        rr(g, tx, ty, tw, tw, tr);
+        g.fillStyle = (c0 + r0) % 2 === 0 ? b.tile[0] : b.tile[1];
+        g.fill();
+        g.save();
+        g.translate(tx, ty);              // the shared shade gradient follows the tile
+        rr(g, 0, 0, tw, tw, tr);
+        g.stroke();
+        g.restore();
+      }
+    }
 
     // soft glow under the line, fading out roughly three rows down
     const fg = g.createLinearGradient(0, oy, 0, oy + 3 * c);
@@ -309,15 +418,23 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     g.lineWidth = Math.max(1, c * 0.02);
     g.beginPath(); g.moveTo(ox, px(oy + c)); g.lineTo(ox + bw, px(oy + c)); g.stroke();
 
-    const lwDev = Math.max(1, Math.round(dpr));
-    const half = (lwDev % 2) / 2;
-    const snap = (n: number) => (Math.round(n * dpr - half) + half) / dpr;
-    g.strokeStyle = b.grid;
-    g.lineWidth = lwDev / dpr;
-    g.beginPath();
-    for (let i = 1; i < cols; i++) { const x = snap(ox + i * c); g.moveTo(x, oy); g.lineTo(x, oy + bh); }
-    for (let i = 1; i < rows; i++) { const y = snap(oy + i * c); g.moveTo(ox, y); g.lineTo(ox + bw, y); }
-    g.stroke();
+    /* three soft beams falling out of the finish, gone by the fourth row */
+    if (b.beam) {
+      const top = oy + c * 0.55, bot = oy + c * 3.5;
+      const beam = g.createLinearGradient(0, top, 0, bot);
+      beam.addColorStop(0, b.beam);
+      beam.addColorStop(0.55, clear(b.beam));
+      beam.addColorStop(1, clear(b.beam));
+      g.fillStyle = beam;
+      for (let i = 0; i < 3; i++) {
+        const cx = ox + (bw * (i + 0.5)) / 3, w0 = c * 0.5, w1 = c * 1.45;
+        g.beginPath();
+        g.moveTo(cx - w0, top); g.lineTo(cx + w0, top);
+        g.lineTo(cx + w1, bot); g.lineTo(cx - w1, bot);
+        g.closePath();
+        g.fill();
+      }
+    }
     g.restore();
 
     // border ring: green at the finish, easing into the board's own trim
@@ -366,6 +483,25 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       glow.addColorStop(1, 'rgba(255,255,255,0)');
       glowG.push(glow);
     }
+
+    /* the mine's two paint servers: a dim warm sphere and the glow that goes with it */
+    const mr = c * 0.34;
+    const mb = ctx.createRadialGradient(-0.3 * mr, -0.34 * mr, mr * 0.08, 0, 0, mr * 1.1);
+    mb.addColorStop(0, MINE_RAMP.light);
+    mb.addColorStop(0.42, MINE_RAMP.mid);
+    mb.addColorStop(1, MINE_RAMP.dark);
+    mineBody = mb;
+    const mg = ctx.createRadialGradient(0, 0, mr * 0.5, 0, 0, mr * 2.6);
+    mg.addColorStop(0, MINE_RAMP.glow);
+    mg.addColorStop(1, 'rgba(255,255,255,0)');
+    mineGlow = mg;
+    /* the trigger's light: one wide soft wash the whole burst sits in, so the blast is still
+       readable half a second later, after the flash and the first sparks are gone */
+    const bg2 = ctx.createRadialGradient(0, 0, 0, 0, 0, c * 2.4);
+    bg2.addColorStop(0, 'rgba(255,150,60,.75)');
+    bg2.addColorStop(0.42, 'rgba(255,90,20,.34)');
+    bg2.addColorStop(1, 'rgba(255,90,20,0)');
+    blastGlow = bg2;
   }
 
   /** Wall-body gradients, bucketed by thickness: built once per size, never per frame. */
@@ -543,11 +679,11 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.restore();
   }
 
-  /** Halo under the balls of the seat to move (or of the winner). */
+  /** Halo under the balls of the seat to move (or of the winner) — the one light on the slab. */
   function drawGlow(cx: number, cy: number, r: number, i: number, k: number) {
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.globalAlpha = Math.min(1, (0.34 + 0.3 * k) * sides[i].ball.halo);
+    ctx.globalAlpha = Math.min(1, (0.42 + 0.34 * k) * sides[i].ball.halo);
     ctx.fillStyle = glowG[i];
     ctx.beginPath(); ctx.arc(0, 0, r * 2.3, 0, TAU); ctx.fill();
     ctx.restore();
@@ -578,34 +714,44 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.restore();
   }
 
-  /** The chosen ball: a white ring plus a dashed team-coloured one, so it reads on any skin. */
+  /** The chosen ball: a white ring plus a dashed team-coloured one, breathing so it stays alive. */
   function drawSel(cx: number, cy: number, r: number, i: number, now: number, still: boolean) {
     const c = L.cell;
+    const pulse = still ? 1 : 0.5 + 0.5 * Math.sin(now / 300);      // the ring swells and settles
     ctx.save();
     ctx.lineCap = 'round';
-    ctx.strokeStyle = 'rgba(255,255,255,.92)';
+    ctx.strokeStyle = `rgba(255,255,255,${0.7 + 0.26 * pulse})`;
     ctx.lineWidth = Math.max(2, c * 0.075);
-    ctx.beginPath(); ctx.arc(cx, cy, r * 1.34, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, r * 1.3 * (1 + 0.05 * pulse), 0, TAU); ctx.stroke();
     ctx.strokeStyle = sides[i].ramp.mid;
     ctx.lineWidth = Math.max(1.5, c * 0.045);
     ctx.setLineDash([c * 0.15, c * 0.12]);
     ctx.lineDashOffset = still ? 0 : -now / 40;
-    ctx.beginPath(); ctx.arc(cx, cy, r * 1.62, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, r * 1.6, 0, TAU); ctx.stroke();
     ctx.restore();
   }
 
   /**
-   * A mine: a dim spiked sphere. Placeholder art on purpose — the spikes are what make it read as
-   * a trap at 30px, and `armed` stands it up bright for the placement preview.
+   * A mine you buried: a dim spiked sphere in the warning red, breathing gently, with a tiny light
+   * blinking on top of it. `phase` is 'buried' for one in the ground, 'ghost' for the square
+   * already tapped in the two-tap flow — the ghost is translucent and drops into place. `drop`
+   * scales it during that landing. Only ever called for your own mines (see `view()` in rules.ts).
    */
-  function drawMine(cx: number, cy: number, i: number, k: number, armed: boolean) {
-    const c = L.cell, s = sides[i];
-    const r = c * (armed ? 0.29 : 0.25) * (1 + 0.07 * k);
+  function drawMine(cx: number, cy: number, phase: 'buried' | 'ghost', k: number, drop: number,
+    now: number, still: boolean) {
+    const c = L.cell;
+    const r = c * (phase === 'ghost' ? 0.27 : 0.24) * (1 + 0.06 * k) * drop;
+    const alpha = (phase === 'ghost' ? 0.6 : 0.78) * (0.88 + 0.12 * k);
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.globalAlpha = armed ? 0.95 : 0.3 + 0.12 * k;
+    if (mineGlow) {                                   // the warm halo it casts on the clay
+      ctx.globalAlpha = alpha * 0.9 * drop;
+      ctx.fillStyle = mineGlow;
+      ctx.beginPath(); ctx.arc(0, 0, c * 0.884 * drop, 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha = alpha;
     ctx.lineCap = 'round';
-    ctx.strokeStyle = armed ? '#fff' : s.ramp.light;
+    ctx.strokeStyle = MINE_RAMP.mid;
     ctx.lineWidth = Math.max(1.5, c * 0.05);
     ctx.beginPath();
     for (let n = 0; n < 8; n++) {
@@ -615,14 +761,17 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     }
     ctx.stroke();
     ctx.beginPath(); ctx.arc(0, 0, r * 0.84, 0, TAU);
-    ctx.fillStyle = `rgba(${s.ramp.shade},.9)`;
+    ctx.fillStyle = mineBody ?? MINE_RAMP.dark;
     ctx.fill();
     ctx.lineWidth = Math.max(1, c * 0.028);
-    ctx.strokeStyle = s.ramp.light;
+    ctx.strokeStyle = MINE_RAMP.edge;
     ctx.stroke();
-    ctx.beginPath(); ctx.arc(-r * 0.28, -r * 0.3, r * 0.16, 0, TAU);   // one specular dot
-    ctx.fillStyle = 'rgba(255,255,255,.5)';
-    ctx.fill();
+    // the tell-tale light: one short hard blink every 1.4s, alive but never loud
+    const bt = (now % 1400) / 1400;
+    const blink = still ? 0.6 : bt < 0.14 ? 1 - bt / 0.14 : 0.05;
+    ctx.globalAlpha = alpha * (0.3 + 0.7 * blink);
+    ctx.fillStyle = MINE_RAMP.light;
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.3, 0, TAU); ctx.fill();
     ctx.restore();
   }
 
@@ -660,6 +809,36 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.restore();
     }
 
+    /* each team's own start squares wear a whisper of its colour, so a race reads from the bottom up */
+    if (rows === ROWS && th.board.startTint > 0) {
+      const key = v.state.teams.map((t) => t.balls).join(',');
+      if (key !== startKey) { startKey = key; starts = startBoard(v.state); }
+      ctx.save();
+      ctx.globalAlpha = th.board.startTint;
+      for (const s0 of starts) {
+        ctx.fillStyle = sides[s0.t].ramp.mid;
+        rr(ctx, ox + s0.c * c + c * 0.05, oy + s0.r * c + c * 0.05, c * 0.9, c * 0.9, c * 0.16);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    /* a tap just landed: a quick ripple in the colour of the seat that plays it */
+    for (let i = ripples.length - 1; i >= 0; i--) {
+      const f = ripples[i];
+      const t = (now - f.t0) / RIPPLE_MS;
+      if (t >= 1) { ripples.splice(i, 1); continue; }
+      const ease = 1 - Math.pow(1 - t, 2);
+      ctx.save();
+      ctx.globalAlpha = 0.3 * (1 - t);
+      ctx.fillStyle = sides[f.p].ramp.mid;
+      ctx.beginPath(); ctx.arc(f.x, f.y, c * (0.22 + 0.6 * ease), 0, TAU); ctx.fill();
+      ctx.globalAlpha = 0.6 * (1 - t);
+      ctx.lineWidth = Math.max(1, c * 0.05 * (1 - t));
+      ctx.beginPath(); ctx.arc(f.x, f.y, c * (0.18 + 0.78 * ease), 0, TAU); ctx.stroke();
+      ctx.restore();
+    }
+
     // last move of each seat: trail out of the old cell, ants around the old wall
     for (let pi = 0; pi < v.last.length; pi++) {
       const m = v.last[pi];
@@ -692,6 +871,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.strokeStyle = 'rgba(255,255,255,.9)';
     ctx.lineWidth = Math.max(1.5, c * 0.035);
     ctx.fillStyle = side.ramp.mid;
+    ctx.shadowColor = side.ramp.glow;                 // the dots carry a little glow of their own
+    ctx.shadowBlur = c * 0.4 * (0.6 + 0.4 * pulse);
     for (let i = 0; i < v.hints.length; i++) {
       const h = v.hints[i];
       const x = ox + (h.c + 0.5) * c, y = oy + (h.r + 0.5) * c;
@@ -732,10 +913,14 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
     // the cell already tapped in the two-tap mine flow, standing by for its confirm tap
     if (v.mineGhost) {
+      const key = `${v.mineGhost.c},${v.mineGhost.r}`;
+      if (key !== mineGhostKey) { mineGhostKey = key; mineGhostAt = now; }
+      const p = still ? 1 : Math.min(1, (now - mineGhostAt) / 220);
+      const drop = 1 + 0.55 * (1 - p) * (1 - p);        // it drops into the square and settles
       const gp = sides[v.state.turn].ramp;
       cellRing(v.mineGhost, gp.os, Math.max(1.5, c * 0.045), dash.armed, still ? 0 : -now / 26);
-      drawMine(ox + (v.mineGhost.c + 0.5) * c, oy + (v.mineGhost.r + 0.5) * c, v.state.turn, pulse, true);
-    }
+      drawMine(ox + (v.mineGhost.c + 0.5) * c, oy + (v.mineGhost.r + 0.5) * c, 'ghost', pulse, drop, now, still);
+    } else mineGhostKey = '';
 
     // placed walls (pop-in + landing pulse); walls are never removed mid-game
     for (let i = 0; i < v.state.walls.length; i++) {
@@ -755,7 +940,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const mineK = still ? 0.5 : 0.5 + 0.5 * Math.sin(now / 520);
     for (const m of v.state.mines) {
       if (m.triggered || m.owner !== v.human) continue;
-      drawMine(ox + (m.cell.c + 0.5) * c, oy + (m.cell.r + 0.5) * c, m.owner, mineK, false);
+      drawMine(ox + (m.cell.c + 0.5) * c, oy + (m.cell.r + 0.5) * c, 'buried', mineK, 1, now, still);
     }
 
     for (let i = pulses.length - 1; i >= 0; i--) {
@@ -770,32 +955,67 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.restore();
     }
 
-    // mine blast: a hot core, the owner's shock ring and eight shards thrown out. Painted in the
-    // owner's ramp rather than white, because the board surface is nearly white itself.
+    /*
+     * The trigger: a white flash, a warm core, one expanding shockwave and 14 sparks, all inside
+     * BLAST_MS. Painted in the mine's own warning red — the board surface may be pale, and a mine
+     * must never read as a team colour. Reduced motion keeps the flash and the ring, drops the
+     * sparks.
+     */
     for (let i = blasts.length - 1; i >= 0; i--) {
       const f = blasts[i];
-      const t = (now - f.t0) / 420;
+      const t = (now - f.t0) / BLAST_MS;
       if (t >= 1) { blasts.splice(i, 1); continue; }
-      const ramp = sides[f.p].ramp;
       const ease = 1 - Math.pow(1 - t, 3);
       ctx.save();
-      ctx.globalAlpha = (1 - t) * (1 - t) * 0.95;
-      ctx.fillStyle = ramp.glow;
-      ctx.beginPath(); ctx.arc(f.x, f.y, c * (0.3 + 0.8 * ease), 0, TAU); ctx.fill();
-      ctx.globalAlpha = 0.8 * (1 - t);
-      ctx.strokeStyle = ramp.mid;
-      ctx.lineWidth = Math.max(1.5, c * 0.09 * (1 - t));
-      ctx.beginPath(); ctx.arc(f.x, f.y, c * (0.45 + 1.15 * ease), 0, TAU); ctx.stroke();
-      ctx.lineCap = 'round';
-      ctx.lineWidth = Math.max(1, c * 0.055 * (1 - t));
-      ctx.strokeStyle = ramp.dark;
-      ctx.beginPath();
-      for (let n = 0; n < 8; n++) {
-        const a = n * Math.PI / 4 + Math.PI / 8;
-        const r0 = c * (0.34 + 0.8 * ease), r1 = r0 + c * 0.55 * (1 - t);
-        ctx.moveTo(f.x + Math.cos(a) * r0, f.y + Math.sin(a) * r0);
-        ctx.lineTo(f.x + Math.cos(a) * r1, f.y + Math.sin(a) * r1);
+      if (t < 0.18) {                                  // the flash, gone before the ring lands
+        const ft = t / 0.18;
+        ctx.globalAlpha = (1 - ft) * 0.85;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(f.x, f.y, c * (0.32 + 0.7 * ease), 0, TAU); ctx.fill();
       }
+      /* the burst's own light: a wide linear fade. Both gradients are built around the origin,
+         like every other paint server here, so the context has to move onto the square first. */
+      if (blastGlow) {
+        ctx.save();
+        ctx.translate(f.x, f.y);
+        ctx.globalAlpha = 0.9 * (1 - t);
+        ctx.fillStyle = blastGlow;
+        ctx.beginPath(); ctx.arc(0, 0, c * 2.4, 0, TAU); ctx.fill();
+        ctx.restore();
+      }
+      ctx.globalAlpha = 0.85 * (1 - t);
+      ctx.strokeStyle = MINE_RAMP.mid;
+      ctx.lineWidth = Math.max(1.5, c * 0.11 * (1 - t));
+      ctx.beginPath(); ctx.arc(f.x, f.y, c * (0.4 + 1.9 * ease), 0, TAU); ctx.stroke();
+      if (!still) {
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = MINE_RAMP.light;
+        ctx.lineWidth = Math.max(1, c * 0.05 * (1 - t));
+        ctx.beginPath();
+        for (let n = 0; n < SPARK_N; n++) {
+          const r0 = c * (0.3 + 1.2 * ease) * SPARK_L[n];
+          const r1 = r0 + c * 0.45 * (1 - t) * SPARK_L[n];
+          ctx.moveTo(f.x + SPARK_C[n] * r0, f.y + SPARK_S[n] * r0);
+          ctx.lineTo(f.x + SPARK_C[n] * r1, f.y + SPARK_S[n] * r1);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    /* short comet tails: a sliding ball drags a fading streak of its own colour behind it */
+    for (let i = streaks.length - 1; i >= 0; i--) {
+      const s0 = streaks[i];
+      const t = (now - s0.t0) / STREAK_MS;
+      if (t >= 1) { streaks.splice(i, 1); continue; }
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = sides[s0.p].ramp.mid;
+      ctx.globalAlpha = 0.34 * (1 - t) * (1 - t);
+      ctx.lineWidth = c * 0.06 + c * 0.3 * (1 - t);
+      ctx.beginPath();
+      ctx.moveTo(ox + s0.x0 * c, oy + s0.y0 * c);
+      ctx.lineTo(ox + s0.x1 * c, oy + s0.y1 * c);
       ctx.stroke();
       ctx.restore();
     }
@@ -809,7 +1029,20 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     for (const i of ORDER) {
       const b = v.balls[i];
       const seat = b.team;
-      const cx = ox + b.pos.x * c, cy = oy + b.pos.y * c, r = c * 0.34;
+      const cx = ox + b.pos.x * c, cy = oy + b.pos.y * c;
+      const r = c * 0.34 * (b.sel ? 1.08 : 1);        // the chosen ball lifts off the clay
+      /* the tail it is dragging right now: sampled from where it stood last frame */
+      const was = prevPos.get(b.id);
+      if (was) {
+        if (!still) {
+          const dx = b.pos.x - was.x, dy = b.pos.y - was.y;
+          if (dx * dx + dy * dy > 0.0004) {
+            streaks.push({ x0: was.x, y0: was.y, x1: b.pos.x, y1: b.pos.y, t0: now, p: seat });
+            if (streaks.length > 96) streaks.shift();
+          }
+        }
+        was.x = b.pos.x; was.y = b.pos.y;
+      } else prevPos.set(b.id, { x: b.pos.x, y: b.pos.y });
       const active = v.state.winner === null && v.state.turn === seat;
       if (active || v.state.winner === seat) {
         drawGlow(cx, cy, r, seat, still ? 0.6 : 0.5 + 0.5 * Math.sin(now / 260));
@@ -846,14 +1079,23 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     resize,
     draw,
     layout: () => L,
-    resetFx: () => { born.clear(); pulses.length = 0; blasts.length = 0; },
+    resetFx: () => {
+      born.clear(); pulses.length = 0; blasts.length = 0;
+      ripples.length = 0; streaks.length = 0; prevPos.clear(); mineGhostKey = '';
+    },
+    /** A tap landed: a ripple where the finger was, in the seat's own colour. Board units. */
+    ripple(x: number, y: number, p: Player) {
+      const { cell: c, ox, oy } = L;
+      ripples.push({ x: ox + x * c, y: oy + y * c, t0: performance.now(), p });
+      if (ripples.length > 12) ripples.shift();
+    },
     /**
-     * Queue the flash for a mine that just went off. The caller owns the moment (only it knows a
+     * Queue the trigger for a mine that just went off. The caller owns the moment (only it knows a
      * trigger happened), the frame loop owns the paint.
      */
-    blast(at: Cell, p: Player) {
+    blast(at: Cell) {
       const { cell: c, ox, oy } = L;
-      blasts.push({ x: ox + (at.c + 0.5) * c, y: oy + (at.r + 0.5) * c, t0: performance.now(), p });
+      blasts.push({ x: ox + (at.c + 0.5) * c, y: oy + (at.r + 0.5) * c, t0: performance.now() });
     },
     /** Equipping repaints the board and every cached gradient once; never per frame. */
     setTheme(t: Theme) {

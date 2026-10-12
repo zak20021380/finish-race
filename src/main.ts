@@ -6,8 +6,7 @@ import {
 } from './rules';
 import { botAction, botThinkMs, type Difficulty } from './bot';
 import {
-  createRenderer, hitTest, type ActionMode, type BallView, type Ghost, type Hit, type Mark,
-  type Vec, type View,
+  createRenderer, hitTest, type BallView, type Ghost, type Hit, type Mark, type Vec, type View,
 } from './render';
 import { createConfetti } from './confetti';
 import { createRouter } from './router';
@@ -19,6 +18,7 @@ import { createShop } from './shop';
 import { createNotifications } from './notifications';
 import { mountCoins, setBalance } from './coin';
 import { menuState, motionReduced } from './settings';
+import { BOT_RAMP } from './themes';
 import { onChange, recordGame, theme } from './storage';
 import { impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
@@ -63,6 +63,8 @@ const menuBtn = $<HTMLButtonElement>('menu-btn');
 const modeLabel = $<HTMLElement>('mode-label');
 const chips = [$<HTMLDivElement>('chip-0'), $<HTMLDivElement>('chip-1')];
 const steps = [$<HTMLSpanElement>('steps-0'), $<HTMLSpanElement>('steps-1')];
+const turnPill = $<HTMLElement>('turn');
+const turnText = $<HTMLSpanElement>('turn-text');
 const sheetPause = $<HTMLElement>('sheet-pause');
 const sheetQuit = $<HTMLElement>('sheet-quit');
 const reward = $<HTMLParagraphElement>('reward');
@@ -80,17 +82,11 @@ function setSteps(p: Player, d: number) {
   el.classList.add('pop');
 }
 
-/* the action dock: which key is down, and the mine budget the Mine key carries */
-const MODES: ActionMode[] = ['move', 'wall', 'mine'];
-const dock = $<HTMLDivElement>('dock');
-const dockKeys: Record<ActionMode, HTMLButtonElement> = {
-  move: $<HTMLButtonElement>('act-move'),
-  wall: $<HTMLButtonElement>('act-wall'),
-  mine: $<HTMLButtonElement>('act-mine'),
-};
+/* the mine key lives on your own chip: three pips, and the whole board while it is armed */
+const mineBtn = $<HTMLButtonElement>('mine-btn');
 const minePips = Array.from({ length: CONFIG.MINES_PER_TEAM }, () => {
   const dot = document.createElement('i');
-  dock.querySelector<HTMLElement>('#mine-pips')!.appendChild(dot);
+  $<HTMLElement>('mine-pips').appendChild(dot);
   return dot;
 });
 let shownMines = -1;
@@ -98,9 +94,20 @@ function setMinePips(left: number) {
   if (shownMines === left) return;
   shownMines = left;
   minePips.forEach((el, i) => el.classList.toggle('on', i < left));
-  dockKeys.mine.setAttribute('aria-label', left
-    ? `Mine — ${left} of ${CONFIG.MINES_PER_TEAM} left`
-    : 'Mine — none left');
+  mineBtn.setAttribute('aria-label', left
+    ? `Bury a mine — ${left} of ${CONFIG.MINES_PER_TEAM} left`
+    : 'Bury a mine — none left');
+}
+
+/* the trigger shakes the board itself, once. Reduced motion never shakes anything. */
+let shakeTimer = 0;
+function shake() {
+  if (motionReduced()) return;
+  wrap.classList.remove('shake');
+  void wrap.offsetWidth;                 // restarting the animation needs a reflow in between
+  wrap.classList.add('shake');
+  clearTimeout(shakeTimer);
+  shakeTimer = window.setTimeout(() => wrap.classList.remove('shake'), 700);
 }
 
 /* floating message over the board: why a slot was refused, or "tap again to place" */
@@ -202,8 +209,8 @@ let state: GameState = newGame(sizes);
 const ballViews: BallView[] = [];
 /** The ball the player picked up, by id — only its legal cells are drawn as dots. */
 let selected: number | null = null;
-/** Which dock key is down; Move is the resting state the other two fall back to. */
-let mode: ActionMode = 'move';
+/** Your chip's mine key: armed, the whole board becomes the placement band. Direct play otherwise. */
+let mineArmed = false;
 let hints: Pos[] = [];
 let mineHints: Cell[] = [];
 /** The cell tapped once in the two-tap mine flow, waiting for its confirm tap. */
@@ -223,12 +230,18 @@ const waiting: (() => void)[] = [];            // bot thinks parked by the pause
 const canAct = () => state.winner === null && state.turn === HUMAN && !paused;
 const clearGhost = () => { ghost = null; mineGhost = null; clearNote(); };
 
-/** The dock is a mode switch with a resting key: tapping the live one falls back to Move. */
-function setMode(next: ActionMode) {
+/**
+ * The chip's mine key: tapping it hands the board over to the placement band, tapping it again
+ * hands direct play straight back. Placing a mine lets the key go on its own, so the next tap is
+ * always a plain board tap.
+ */
+function armMine(next: boolean) {
+  const on = next && canAct() && minesLeft(state, HUMAN) > 0;
+  if (on === mineArmed) return;
   impact('light');
-  mode = mode === next && next !== 'move' ? 'move' : next;
-  clearGhost();
+  mineArmed = on;
   selected = null;
+  clearGhost();
   closeHint();
   ui();
 }
@@ -289,8 +302,10 @@ function ui() {
   if (selected !== null && (state.winner !== null || state.turn !== HUMAN
     || !state.balls.some((b) => b.id === selected))) selected = null;
   const live = canAct();
-  hints = live && mode === 'move' && selected !== null ? reachableBall(state, selected) : [];
-  mineHints = live && mode === 'mine' ? mineCells(state, HUMAN) : [];
+  /* the key only ever covers one turn, and only while there is still a mine to bury */
+  if (!live || minesLeft(state, HUMAN) <= 0) mineArmed = false;
+  hints = live && !mineArmed && selected !== null ? reachableBall(state, selected) : [];
+  mineHints = live && mineArmed ? mineCells(state, HUMAN) : [];
   /* an armed cell that is no longer placeable — the turn moved on, or a ball rolled over it */
   if (mineGhost && !mineHints.some((h) => sameCell(h, mineGhost))) mineGhost = null;
   const thinking = wantsOpponent() && !paused;
@@ -300,20 +315,23 @@ function ui() {
   } else if (paused) {
     statusText.textContent = 'Paused';
   } else if (state.turn === HUMAN) {
-    statusText.textContent = mode === 'mine' ? 'Pick a square to bury a mine'
-      : mode === 'wall' ? 'Draw a wall across two squares'
+    statusText.textContent = mineArmed ? 'Pick a square to bury a mine'
       : selected === null ? 'Pick one of your balls' : 'Your move';
   } else {
     statusText.textContent = `${TEAM_NAME[state.turn]} is thinking`;
   }
   dots.classList.toggle('on', thinking);
 
-  for (const m of MODES) {
-    const k = dockKeys[m];
-    k.setAttribute('aria-pressed', String(mode === m));
-    k.disabled = !live || (m === 'mine' && minesLeft(state, HUMAN) <= 0);
-  }
+  mineBtn.setAttribute('aria-pressed', String(mineArmed));
+  mineBtn.disabled = !live || minesLeft(state, HUMAN) <= 0;
   setMinePips(minesLeft(state, HUMAN));
+
+  /* the top bar says whose turn it is, wearing that seat's own colour */
+  const seat = state.winner ?? state.turn;
+  turnPill.classList.toggle('you', seat === HUMAN);
+  turnPill.style.setProperty('--turn', seat === HUMAN ? theme().ball.ramp.mid : BOT_RAMP.mid);
+  turnText.textContent = state.winner !== null ? `${TEAM_NAME[seat]} win${seat === HUMAN ? '' : 's'}`
+    : seat === HUMAN ? 'Your turn' : `${TEAM_NAME[seat]}'s turn`;
 
   for (const p of SEATS) {
     chips[p].classList.toggle('active', state.winner === null && state.turn === p && !paused);
@@ -370,6 +388,7 @@ function play(a: Action): boolean {
   const landed = moved === null ? null : ballById(next, moved)?.pos ?? null;
   if (a.kind === 'move' && from && landed) marks[by] = { kind: 'step', from, to: landed };
   else if (a.kind === 'wall') { marks[by] = { kind: 'wall', spec: a.wall }; impact('medium'); }
+  if (a.kind === 'mine') mineArmed = false;      // one mine per trip to the key
   state = next;
   ghost = null;
   mineGhost = null;
@@ -378,8 +397,9 @@ function play(a: Action): boolean {
   const blast = blastOf(prev, next);
   if (blast) {
     const cells = landed ? landed.r - blast.cell.r : 0;
-    renderer.blast(blast.cell, blast.owner);
-    impact('medium');
+    renderer.blast(blast.cell);
+    shake();
+    impact('heavy');
     notify('warning');
     showNote(`Mine! ${TEAM_NAME[by]} ${by === HUMAN ? 'were' : 'was'} thrown back `
       + `${cells} cell${cells === 1 ? '' : 's'}`, false, 2600);
@@ -398,7 +418,7 @@ function restart() {
   selected = null;
   ghost = null;
   mineGhost = null;
-  mode = 'move';
+  mineArmed = false;
   marks[0] = null; marks[1] = null;
   shownSteps[0] = -1; shownSteps[1] = -1;
   shownMines = -1;
@@ -472,8 +492,8 @@ const at = (p: Vec) => hitTest(renderer.layout(), p.x, p.y, {
   hints,
   armed: ghost?.armed ? ghost.spec : null,
   balls: cells(),
-  mine: state.turn,
-  mode,
+  mine: HUMAN,
+  mode: mineArmed ? 'mine' : 'move',
   mineHints,
   armedMine: mineGhost,
 });
@@ -520,24 +540,22 @@ function onTouch(p: Vec) {
   if (hit.kind === 'wall' || hit.kind === 'confirm') tapWall(hit);
 }
 
-/** Mouse: hovering a wall slot previews it; mines arm on click, like everywhere else. */
+/** Mouse: hovering a groove previews the wall there; mines arm on click, like everywhere else. */
 function onMouse(p: Vec, click: boolean) {
   if (!canAct()) { ghost = null; return; }
-  if (mode === 'mine') {
+  if (mineArmed) {
     if (click) tapMine(at(p));
     return;
   }
   const hit = at(p);
-  const spec = mode === 'wall' && hit && hit.kind === 'wall' ? hit.spec : null;
+  const spec = hit && hit.kind === 'wall' ? hit.spec : null;
   const wall: Wall | null = spec ? { ...spec, owner: state.turn } : null;
-  ghost = wall ? { spec: wall, ok: wallOk(state, wall), armed: false, p: state.turn } : null;
+  /* hovering is a preview; only a groove or the armed ghost may hold the slot */
+  ghost = wall ? { spec: wall, ok: wallOk(state, wall), armed: false, p: state.turn }
+    : hit?.kind === 'confirm' ? ghost : null;
 
   if (!click) return;
-  if (mode === 'wall') {
-    if (hit && (hit.kind === 'wall' || hit.kind === 'confirm')) tapWall(hit);
-    else clearGhost();
-    return;
-  }
+  if (hit && (hit.kind === 'wall' || hit.kind === 'confirm')) { tapWall(hit); return; }
   if (hit?.kind === 'ball') { impact('light'); pick(hit.id === selected ? null : hit.id); return; }
   if (hit?.kind === 'move') { impact('light'); play({ kind: 'move', ball: selected ?? undefined, to: hit.to }); return; }
   clearGhost();
@@ -547,6 +565,8 @@ canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   if (!canAct()) return;
   const p = local(e);
+  const L = renderer.layout();
+  renderer.ripple((p.x - L.ox) / L.cell, (p.y - L.oy) / L.cell, HUMAN);   // the tap answers at once
   if (e.pointerType === 'mouse') onMouse(p, true);
   else onTouch(p);
 });
@@ -558,7 +578,7 @@ canvas.addEventListener('pointermove', (e) => {
 canvas.addEventListener('pointerleave', () => { if (ghost && !ghost.armed) ghost = null; });
 hintEl.addEventListener('click', () => { impact('light'); closeHint(); });
 
-for (const m of MODES) dockKeys[m].addEventListener('click', () => setMode(m));
+mineBtn.addEventListener('click', () => { armMine(!mineArmed); });
 
 again.addEventListener('click', () => { impact('light'); restart(); });
 toMenu.addEventListener('click', () => { impact('light'); quitToMenu(); });

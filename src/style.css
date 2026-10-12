@@ -380,6 +380,17 @@ html, body {
   padding-top: var(--finish-lane);
 }
 .board-wrap { position: relative; width: 100%; height: 100%; }
+/* the mine trigger: a 4px micro-shake of the board alone, over in half a second.
+   prefers-reduced-motion flattens it along with every other animation in the sheet. */
+@keyframes board-shake {
+  0%   { transform: translate3d(0, 0, 0); }
+  16%  { transform: translate3d(-4px, 2px, 0); }
+  34%  { transform: translate3d(3px, -2px, 0); }
+  54%  { transform: translate3d(-2px, -2px, 0); }
+  74%  { transform: translate3d(2px, 2px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+.board-wrap.shake { animation: board-shake .5s cubic-bezier(.36, .07, .19, .97) both; }
 @supports (width: 1cqw) {
   .board-wrap { width: min(100cqw, 66.667cqh); height: min(100cqh, 150cqw); }
 }
@@ -458,26 +469,43 @@ html, body {
 .note.error { background: var(--bad-2); color: #fff; box-shadow: 0 10px 22px -10px var(--bad-shadow); }
 .note.show { opacity: 1; transform: translate(-50%, 0); }
 
-/* ---- the action dock: the three keys one turn can spend, under the board ---- */
-/* Scoped under `.dock` because `.seg-b` (SHELL, further down this file) already sets min-height
-   and padding on the same element — equal specificity would lose to it on source order alone. */
-.dock { flex: none; margin-top: var(--s2); }
-.dock .dock-b {
+/* ---- the mine key, carried by your own chip: a compact recessed block, 44px square ---- */
+/* The board is the action dock now — this is the one key left, so it sits where the eye already is
+   when the turn changes. Recessed at rest, lit in your own colour while it is armed. */
+.mine-btn {
+  position: relative;
+  appearance: none;
+  border: 0;
+  flex: none;
   display: grid;
-  grid-template-rows: auto auto 4px;   /* the third row is the pip slot: Move and Wall keep it empty
-                                          so all three labels sit on one baseline */
+  grid-template-rows: 1fr auto;
   place-items: center;
-  gap: 2px;
-  min-height: 48px;
-  padding: var(--s1) 3px 3px;
+  gap: 1px;
+  width: 44px;
+  height: 44px;
+  padding: 4px 0 3px;
+  border-radius: 14px;
+  background: var(--field);
+  color: var(--ink-soft);
+  cursor: pointer;
+  box-shadow: var(--inset);
+  transition: transform var(--motion-fast), color var(--motion-fast),
+              box-shadow var(--motion-fast), background var(--motion-fast);
 }
-.dock .dock-b .ico { width: 18px; height: 18px; }
-.dock-t {
-  font-size: var(--t-micro);
-  font-weight: 800;
-  letter-spacing: var(--ls-3);
-  text-transform: uppercase;
+.mine-btn .ico { width: 18px; height: 18px; }
+.mine-btn:active { transform: translateY(1px); }
+.mine-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+/* armed: the key lights up in your own colour, and the pips answer */
+.mine-btn[aria-pressed="true"] {
+  color: var(--tint);
+  background: var(--solid-a);
+  box-shadow: inset 0 0 0 2px var(--tint), 0 0 14px -4px var(--glow), var(--inset);
 }
+.mine-btn[aria-pressed="true"] .ico { animation: breathe 1.6s ease-in-out infinite; }
+/* the opponent is to move, or the mines are spent: inert without moving the layout */
+.mine-btn[disabled] { opacity: .4; cursor: default; }
+.mine-btn[disabled] .ico { animation: none; }
+
 .pips { display: flex; align-items: center; gap: 3px; }
 .pips i {
   width: 4px;
@@ -488,10 +516,7 @@ html, body {
   transition: opacity var(--motion-fast), box-shadow var(--motion-fast);
 }
 .pips i.on { opacity: 1; }
-/* the key is armed and still has mines: the dots answer, quietly */
-.dock .dock-b[aria-pressed="true"] .pips i.on { box-shadow: 0 0 6px -1px currentColor; }
-/* the opponent is to move, or the mines are spent: the key is inert without moving the layout */
-.dock .dock-b[disabled] { opacity: .38; cursor: default; }
+.mine-btn[aria-pressed="true"] .pips i.on { box-shadow: 0 0 6px -1px currentColor; }
 
 /* ---- level 3: player chips — seat, name and steps on one row ---- */
 .chips { flex: none; display: flex; gap: var(--s2); padding-top: var(--s2); }
@@ -499,12 +524,12 @@ html, body {
   position: relative;
   flex: 1 1 0;
   min-width: 0;
-  min-height: 40px;
+  min-height: 52px;                  /* the mine key is 44px on its own; the chip pads around it */
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 3px;
-  padding: var(--s1) var(--s3);
+  padding: var(--s1) var(--s2);
   border-radius: var(--r-chip);
   background: var(--tint-glass);
   box-shadow:
@@ -512,7 +537,9 @@ html, body {
     0 4px 10px -6px var(--shadow-soft);
   transition: transform var(--motion-fast), opacity var(--motion-fast);
 }
-.chip-row { display: flex; align-items: center; gap: var(--s2); width: 100%; min-width: 0; }
+.chip-row { display: flex; align-items: center; gap: var(--s1); width: 100%; min-width: 0; }
+/* avatar | name over steps | the mine key: the stacked text is what keeps 320px from overflowing */
+.chip-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .chip.red { --tint: var(--red); --ink-t: var(--red-ink); --glow: var(--red-glow); }
 .chip.blue { --tint: var(--blue); --ink-t: var(--blue-ink); --glow: var(--blue-glow); }
 .chip::after {
@@ -530,12 +557,13 @@ html, body {
 .chip.thinking::after { opacity: 1; animation: breathe 1.5s ease-in-out infinite; }
 
 .chip .ball {
+  /* the seat's own ball, doubling as its avatar: the token on the board is the token up here */
   flex: none;
-  width: 13px;
-  height: 13px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
-  background: radial-gradient(circle at 32% 28%, #fff6 0%, var(--tint) 58%, #0003 100%);
-  box-shadow: 0 1px 3px -1px var(--glow);
+  background: radial-gradient(circle at 32% 26%, #fff8 0%, var(--tint) 58%, #0004 100%);
+  box-shadow: 0 1px 3px -1px var(--glow), inset 0 0 0 1px rgba(255, 255, 255, .18);
 }
 .chip .who {
   flex: 1 1 auto;
@@ -1412,7 +1440,7 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
 .p-stats.triple.tight { margin: 0 0 var(--s3); padding: var(--s2) var(--s3); border-radius: 16px; }
 .sheet .fine { margin-top: var(--s3); }
 
-/* ---- in-game head ---- */
+/* ---- in-game head: menu key | match mode | whose turn it is, in that seat's colour ---- */
 .g-head { min-height: 40px; }
 .g-mode {
   flex: 1 1 auto;
@@ -1428,6 +1456,38 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.turn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 46%;
+  min-height: 28px;
+  padding: 5px var(--s2) 5px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.turn-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--turn, var(--brand-2));
+  box-shadow: 0 0 10px -1px var(--turn, var(--brand-2));
+  transition: background var(--motion-med), box-shadow var(--motion-med);
+}
+.turn #turn-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* your turn: the dot breathes, and the pill wears your colour on its edge */
+.turn.you { box-shadow: inset 0 0 0 1px var(--turn, var(--brand-2)); }
+.turn.you .turn-dot { animation: breathe 1.8s ease-in-out infinite; }
 
 /* ---- bottom dock: one thick clay pill, floating clear of the safe area ----
    The active tab is a filled key with its own extrusion, so "where am I" reads
@@ -1704,9 +1764,6 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
    The 2-row user-bar stays spacious: 12px gaps preserved, only padding steps down. */
 @media (max-height: 600px) {
   .chips { padding-top: var(--s1); }
-  .chip { min-height: 44px; }
-  .dock { margin-top: var(--s1); }
-  .dock .dock-b { min-height: 44px; }
   .status { min-height: 32px; padding: var(--s1) var(--s3); }
   .g-head { min-height: 44px; }
   .tab { min-height: 44px; }
