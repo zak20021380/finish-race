@@ -2544,23 +2544,31 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   white-space: nowrap;
 }
 
-/* ---- identity card (compact): exact spec grid ----
-   CARD: display:grid; grid-template-columns:56px 1fr auto; column-gap:12px;
-   align-items:center; padding:14px; border-radius:24px; min-height:84px.
-   Glass surface with a 1px top highlight. */
+/* ---- identity card (compact): the Dark Clay arcade HUD pill ----
+   One horizontal row — avatar hero · identity · wallet. The slab is lit from above
+   (1px top edge + a sheen that dies by 46%), pools to near-black along its base, and
+   floats on a soft ambient drop. No backdrop-filter anywhere: the tile is opaque clay,
+   so the GPU never has to re-sample what sits behind it. */
 .id-card.id-compact {
   flex: none;
-  display: grid;
-  grid-template-columns: 56px 1fr auto;
-  column-gap: 12px;
+  display: flex;
+  flex-direction: row;                /* .id-card below is a column; this row overrides it */
   align-items: center;
+  column-gap: 12px;
   min-height: 84px;
-  padding: 14px;
+  padding: 10px 16px;                  /* px-4 py-2.5 */
   border-radius: 24px;
-  background: var(--glass-bg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .07) 0%, rgba(255, 255, 255, 0) 46%),
+    var(--clay-face);
   background-color: #1C2433;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: var(--clay), var(--clay-ring);
+  box-shadow:
+    0 18px 34px -20px rgba(0, 0, 0, .85),          /* ambient drop */
+    0 2px 6px -2px rgba(0, 0, 0, .5),
+    inset 0 1px 0 rgba(255, 255, 255, .14),        /* glassy top edge */
+    inset 0 -14px 22px -16px rgba(0, 0, 0, .9),    /* deep dark-clay inner pool */
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
   overflow: hidden;
   min-width: 0;
   max-width: 100%;
@@ -2575,7 +2583,9 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 .id-card.id-compact #home-settings {
   display: none !important;
 }
-/* left: 48px avatar + 4px XP ring (56px total) + overlapping level badge */
+/* COL 1 — avatar hero: 48px face inside a cyan gradient ring inside the XP arc.
+   The ring is a border-box paint under a padding-box face, so it costs no element
+   and no layout: the 56px cell still holds face (44px) · rim (2px) · XP arc (3px). */
 .id-avatar-btn {
   appearance: none;
   border: 0;
@@ -2634,47 +2644,66 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   height: 48px;
   border-radius: 50%;
   overflow: hidden;
-  background: linear-gradient(135deg, #38bdf8 0%, #6366f1 100%);
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.25);
+  border: 2px solid transparent;
+  background:
+    linear-gradient(140deg, #38bdf8 0%, #6366f1 100%) padding-box,
+    conic-gradient(from 210deg, #22d3ee, #38bdf8, #a78bfa, #38bdf8, #22d3ee) border-box;
+  box-shadow:
+    0 0 14px -2px rgba(56, 189, 248, .55),         /* the ring's glow */
+    0 6px 12px -6px rgba(0, 0, 0, .85),            /* crisp drop shadow */
+    inset 0 1px 1px rgba(255, 255, 255, .3);
   color: #fff;
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(2, 6, 23, .6);
 }
 .id-card .id-avatar.avatar img {
   border-radius: 50%;
 }
+/* Level badge: an embossed arcade key — dark separation ring, sharp metallic rim,
+   extruded lip, and a face deep enough that white 900 clears 4.5:1 at both ends. */
 .id-lvl {
   position: absolute;
-  right: -2px;
-  bottom: -2px;
+  right: -3px;
+  bottom: -1px;
   z-index: 2;
   display: grid;
   place-items: center;
-  width: 20px;
-  min-width: 20px;
-  height: 20px;
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
   padding: 0;
   border-radius: 50%;
-  background: linear-gradient(180deg, #0477b8 0%, #0369a6 100%);
+  background: linear-gradient(180deg, #0477b8 0%, #075985 100%);
   color: #fff;
-  border: 2px solid #1c2433;
+  border: 1px solid #062033;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 900;
   line-height: 1;
+  letter-spacing: 0;
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 1px rgba(2, 6, 23, .8);
+  box-shadow:
+    0 0 0 1px rgba(125, 211, 252, .55),
+    0 2px 0 #062033,
+    0 5px 10px -4px rgba(0, 0, 0, .85),
+    inset 0 1px 1px rgba(255, 255, 255, .5),
+    inset 0 -2px 3px rgba(0, 0, 0, .45);
   pointer-events: none;
 }
-.id-lvl b { font-weight: 700; }
-/* COL 2, TEXT (min-width:0; display:flex; flex-direction:column; gap:3px; justify-content:center) */
+.id-lvl b { font-weight: 900; }
+/* COL 2, TEXT — name on top, squad badge underneath.
+   No overflow on the column itself: both rows carry vertical tap bands that reach
+   past the row box, and a clip here would silently shrink them to the visible face. */
 .id-mid {
+  flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 3px;
-  overflow: hidden;
+  gap: 4px;
 }
 .id-name-row {
   display: flex;
@@ -2689,7 +2718,8 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   background: none;
   font: inherit;
   position: relative;
-  flex: 1 1 auto;
+  z-index: 2;                          /* the upper band wins the shared strip */
+  flex: 0 1 auto;                      /* hug the name, so the flag chip is not orphaned */
   min-width: 0;
   max-width: 100%;
   display: flex;
@@ -2704,7 +2734,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 .id-name-btn::after {
   content: "";
   position: absolute;
-  inset: -10px 0;
+  inset: -12px 0 -6px 0;
 }
 .id-name-btn:focus-visible {
   outline: 3px solid var(--brand-2);
@@ -2714,10 +2744,11 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   flex: 1 1 auto;
   min-width: 0;
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: -0.01em;
   line-height: 1.2;
   color: var(--ink);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .5);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2739,52 +2770,76 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 .id-flag[hidden] { display: none; }
 .id-flag .flag { font-size: 12px; line-height: 1; }
 .id-flag .flag-code { font-size: 8px; font-weight: 800; letter-spacing: 0.02em; }
-/* Caption: display:flex; align-items:center; justify-content:flex-start; gap:6px; 12/500; muted. */
+/* Squad: a sleek recessed badge, not a bare caption. Content-sized (align-self) so the
+   pill hugs its emblem, capped at 100% so a long handle still ellipsises. */
 .id-team {
   appearance: none;
   border: 0;
   background: none;
   font: inherit;
   position: relative;
+  z-index: 1;
+  align-self: flex-start;
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
   max-width: 100%;
-  min-height: 28px;
-  height: 28px;
-  padding: 0;
+  min-height: 26px;
+  height: 26px;
+  padding: 0 8px 0 2px;
   margin: 0;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: var(--radius-pill);
   text-align: left;
-  color: var(--ink-soft);
+  color: var(--chip-ink);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .05) 0%, rgba(0, 0, 0, .14) 100%),
+    var(--field);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .09),
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    0 1px 3px rgba(0, 0, 0, .45);
+  transition: transform var(--motion-fast), opacity var(--motion-fast);
 }
 .id-team::after {
   content: "";
   position: absolute;
-  inset: -8px 0;
+  inset: -6px 0 -14px 0;
 }
 .id-team:focus-visible {
   outline: 3px solid var(--brand-2);
   outline-offset: 1px;
 }
-.id-team:active { opacity: 0.7; }
+.id-team:hover:not(:active) { transform: translateY(-1px); }
+.id-team:active { transform: translateY(1px); opacity: 0.8; }
+/* mini clan emblem: a lit slate-sky shield with a sky rim, so it reads as a crest */
 .id-team-av.squad-avatar {
-  width: 14px;
-  height: 14px;
-  min-width: 14px;
-  font-size: 9px;
-  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  font-size: 10px;
+  border-radius: 34%;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .2) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(180deg, #14405F 0%, #0B1B31 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(125, 211, 252, .38),
+    inset 0 1px 0 rgba(255, 255, 255, .22),
+    0 1px 3px rgba(0, 0, 0, .5);
+  color: var(--brand-ink);
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .55);
 }
 .id-team-ico.chip-ico {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   flex: none;
-  color: var(--ink-soft);
+  color: var(--brand-ink);
 }
 /* ONE inline run directly after the icon: team name ellipsizes, " · #1" never shrinks. */
 .id-team-line {
@@ -2801,27 +2856,35 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   flex: 0 1 auto;
   min-width: 0;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.3;
-  color: var(--ink-soft);
+  color: var(--chip-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
+/* Only the rank carries the amber, and a hairline rule — not a "·" in the string — keeps
+   it off the handle. One text node, and the divider costs a pixel instead of a glyph. */
 .id-team-rank {
   flex: none;
-  font-size: 12px;
-  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  padding-left: 6px;
+  border-left: 1px solid rgba(148, 163, 184, .3);
+  font-size: 11px;
+  font-weight: 800;
   line-height: 1.3;
-  color: var(--ink-soft);
+  color: var(--honey-ink);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  text-shadow: 0 0 8px rgba(245, 158, 11, .35);
 }
 .id-team-rank[hidden] { display: none; }
 .id-team.bound .id-team-ico { display: none; }
 .id-team:not(.bound) .id-team-av { display: none; }
 .id-team:not(.bound) .id-team-t { color: var(--ink-soft); }
+.id-team:not(.bound) { padding-left: 7px; }
 /* COL 3, ACTIONS (display:flex; align-items:center; gap:8px) */
 .id-side {
   flex: none;
@@ -2829,32 +2892,47 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   align-items: center;
   gap: 8px;
 }
+/* Wallet: a 3D claymorphic capsule. Four gold stops give the barrel its roundness,
+   a hard-edged gloss band dies at 45% for the glass top lip, and the bronze lip below
+   is a 0-blur spread so pressing costs the compositor one transform. */
 .id-coin.coin-pill {
   --d: 2px;
-  height: 36px;
-  min-height: 36px;
-  max-height: 36px;
+  height: 38px;
+  min-height: 38px;
+  max-height: 38px;
   padding: 0 12px;
   font-size: 15px;
-  font-weight: 700;
-  background: linear-gradient(180deg, #ffd66b 0%, #f5a623 100%);
-  color: #3a2400;
-  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .6) 0%, rgba(255, 255, 255, .16) 44%, rgba(255, 255, 255, 0) 45%),
+    linear-gradient(180deg, #FFDD8A 0%, #FBBF24 40%, #F59E0B 74%, #D97706 100%);
+  color: #2B1A02;                      /* dark ink on gold: 12:1 at the lightest stop */
+  font-variant-numeric: tabular-nums;  /* Latin digits, fixed advance, no jitter */
+  letter-spacing: .01em;
   flex: none;
   max-width: 112px;
-  overflow: hidden;
+  overflow: visible;                   /* its own box clips the ::after tap band otherwise */
   position: relative;
   border: 0;
   box-shadow:
-    0 var(--d) 0 #b45309,
-    0 calc(var(--d) + 5px) 12px -8px rgba(180, 83, 9, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.65),
-    inset 0 -2px 3px rgba(146, 64, 14, 0.28);
+    0 var(--d) 0 #92400E,
+    0 calc(var(--d) + 7px) 15px -9px rgba(245, 158, 11, .55),
+    inset 0 0 0 1px rgba(120, 53, 15, .5),
+    inset 0 1px 0 rgba(255, 255, 255, .7),
+    inset 0 -4px 6px -2px rgba(146, 64, 14, .5);
 }
 .id-coin.coin-pill::after {
   content: "";
   position: absolute;
-  inset: -4px 0;
+  inset: -5px 0;
+}
+.id-coin.coin-pill:active {
+  transform: translateY(2px);
+  --d: 0px;
+  box-shadow:
+    inset 0 0 0 1px rgba(120, 53, 15, .6),
+    inset 0 3px 9px rgba(120, 53, 15, .6),
+    inset 0 -1px 0 rgba(255, 255, 255, .22);
 }
 .id-coin.coin-pill #p-coins {
   min-width: 0;
@@ -2863,45 +2941,97 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
-.id-coin.coin-pill .coin { width: 20px; height: 20px; flex: none; }
-.id-bell.icon-btn.xs {
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
-  min-height: 36px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 4px 10px -6px var(--shadow-soft);
-  color: var(--ink);
+/* the coin itself is lit from inside: a warm halo plus a hard edge keeps it off the gold */
+.id-coin.coin-pill .coin {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  filter:
+    drop-shadow(0 0 4px rgba(255, 224, 150, .95))
+    drop-shadow(0 1px 0 rgba(120, 53, 15, .55));
 }
-.id-bell.icon-btn.xs::after { content: ""; position: absolute; inset: -4px; }
-.id-bell.icon-btn.xs .ico { width: 16px; height: 16px; }
+/* Bell: a circular frosted key sunk into the slab — rim light above, dark pool below,
+   and a press that drops the face into its own socket instead of shrinking it. */
+.id-bell.icon-btn.xs {
+  --d: 2px;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: 50%;
+  border-top: 0;
+  background:
+    radial-gradient(120% 96% at 50% 0%, rgba(255, 255, 255, .17) 0%, rgba(255, 255, 255, .05) 42%, rgba(255, 255, 255, 0) 62%),
+    var(--field);
+  box-shadow:
+    0 var(--d) 0 rgba(0, 0, 0, .6),
+    inset 0 0 0 1px rgba(255, 255, 255, .1),
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    inset 0 -8px 12px -10px rgba(0, 0, 0, .95);
+  color: var(--chip-ink);
+}
+.id-bell.icon-btn.xs::after { content: ""; position: absolute; inset: -5px; }
+.id-bell.icon-btn.xs .ico { width: 17px; height: 17px; }
+.id-bell.icon-btn.xs:hover:not(:active) {
+  transform: translateY(-1px);
+  box-shadow:
+    0 calc(var(--d) + 1px) 0 rgba(0, 0, 0, .6),
+    inset 0 0 0 1px rgba(255, 255, 255, .16),
+    inset 0 1px 0 rgba(255, 255, 255, .24),
+    inset 0 -8px 12px -10px rgba(0, 0, 0, .95);
+}
+.id-bell.icon-btn.xs:active {
+  transform: translateY(2px);
+  --d: 0px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .07),
+    inset 0 3px 7px rgba(0, 0, 0, .75);
+}
+/* Unread dot: a lit crimson bead on a clay socket, with an expanding ring rather than
+   an animated box-shadow — transform/opacity only, so it costs the compositor nothing. */
 .id-dot.notif-badge {
   position: absolute;
-  top: 5px;
-  right: 5px;
+  top: 4px;
+  right: 4px;
+  z-index: 3;
   min-width: 0;
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   padding: 0;
   border-radius: 50%;
-  background: #ff522b;
-  box-shadow: 0 0 0 2px #1c2433, 0 0 8px rgba(255, 82, 43, 0.8);
+  background: radial-gradient(circle at 34% 28%, #FF9A7E 0%, #FF522B 46%, #C2103A 100%);
+  box-shadow: 0 0 0 2px #1C2433, 0 0 9px rgba(255, 82, 43, .85);
   animation: none;
   font-size: 0;
   line-height: 0;
 }
+.id-dot.notif-badge::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 82, 43, .75);
+  animation: id-dot-ping 1.9s cubic-bezier(.22, .61, .36, 1) infinite;
+}
+@keyframes id-dot-ping {
+  0% { transform: scale(.8); opacity: .8; }
+  70% { transform: scale(2.3); opacity: 0; }
+  100% { transform: scale(2.3); opacity: 0; }
+}
 .id-dot.notif-badge[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .id-dot.notif-badge::after { animation: none; opacity: 0; }
+}
+html.rm .id-dot.notif-badge::after { animation: none; opacity: 0; }
 /* profile header owns the settings gear now */
 #profile-settings { flex: none; }
-/* Spec holds at 320px too: keep 14px padding / 12px column-gap; only the coin
-   max-width steps down so long names + 5-digit balances never overflow. */
+/* 320px is a real floor. Below 380 the columns close in to one grid step, which buys the
+   squad handle back the ~8px the 38px bell costs it, and the capsule cap rises to fit a
+   6-digit balance — max-width only binds when the number is genuinely long, so the common
+   1,850 wallet is untouched. */
 @media (max-width: 380px) {
-  .id-card.id-compact { column-gap: 12px; padding: 14px; }
-  .id-coin.coin-pill { max-width: 96px; }
+  .id-card.id-compact { column-gap: var(--s2); padding: 10px 14px; }
+  .id-coin.coin-pill { max-width: 104px; font-size: 14px; }
 }
 
 /* ---- highlights: single contained slide, no peek ----

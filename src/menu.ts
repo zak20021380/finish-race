@@ -352,8 +352,8 @@ export function createMenu(api: MenuApi): Menu {
       if (ico) ico.hidden = true;
       label.textContent = me.handle;
       rank.hidden = false;
-      // ONE inline run directly after the name: " · #1" (leading space, never shrinks via CSS).
-      rank.textContent = ` · #${me.rank}`;
+      // The rank alone: CSS draws the dot separator so only "#1" picks up the amber.
+      rank.textContent = `#${me.rank}`;
       chip.setAttribute('aria-label', `${me.handle}, squad rank ${me.rank}. Open squad.`);
       chip.title = `${me.handle} · #${me.rank}`;
     } else {
