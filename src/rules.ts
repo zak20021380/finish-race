@@ -125,6 +125,10 @@ export const ballOf = (s: GameState, team: Player, index = 0): Ball => {
   return s.balls[0];
 };
 
+/** The team's first ball, or null when it has none on the board — the turn's default pick. */
+export const firstBall = (s: GameState, team: Player): Ball | null =>
+  s.balls.find((b) => b.team === team) ?? null;
+
 /* ---------- edge blocking ---------- */
 
 interface Blocks { h: Set<number>; v: Set<number> }

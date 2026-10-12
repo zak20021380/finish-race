@@ -722,6 +722,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       human: 0,
       mineHints: [],
       mineGhost: null,
+      capsule: null,
     };
   }
 

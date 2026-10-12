@@ -1,12 +1,14 @@
 import './style.css';
 import {
-  COLS, CONFIG, apply, ballById, distField, mineCells, minesLeft, newGame, pathLen, reachableBall,
-  steps as teamSteps, view as fogOfWar, wallOk,
-  type Action, type Cell, type GameState, type Mine, type Player, type Pos, type Wall, type WallSpec,
+  COLS, CONFIG, apply, ballById, distField, firstBall, mineCells, minesLeft, newGame, pathLen,
+  reachableBall, steps as teamSteps, view as fogOfWar, wallOk,
+  type Action, type Ball, type Cell, type GameState, type Mine, type Player, type Pos, type Wall,
+  type WallSpec,
 } from './rules';
 import { botAction, botThinkMs, type Difficulty } from './bot';
 import {
-  createRenderer, hitTest, type BallView, type Ghost, type Hit, type Mark, type Vec, type View,
+  createRenderer, hitTest, wallCentre, type BallView, type CapsuleAction, type Ghost, type Hit,
+  type Mark, type Vec, type View,
 } from './render';
 import { createConfetti } from './confetti';
 import { createRouter } from './router';
@@ -209,6 +211,8 @@ let state: GameState = newGame(sizes);
 const ballViews: BallView[] = [];
 /** The ball the player picked up, by id — only its legal cells are drawn as dots. */
 let selected: number | null = null;
+/** The turn whose ball was picked for the player automatically, so it only happens once per turn. */
+let autoPicked: Player | null = null;
 /** Your chip's mine key: armed, the whole board becomes the placement band. Direct play otherwise. */
 let mineArmed = false;
 let hints: Pos[] = [];
@@ -217,18 +221,20 @@ let mineHints: Cell[] = [];
 let mineGhost: Cell | null = null;
 const sameCell = (a: Cell | null, b: Cell | null) => !!a && !!b && a.c === b.c && a.r === b.r;
 let ghost: Ghost | null = null;                 // wall preview; armed = waiting for a confirm tap
+/** The on-canvas [✓]/[✕] caps anchored beside an armed ghost, or null. */
+let capsule: CapsuleAction | null = null;
 const marks: (Mark | null)[] = [null, null];
 /** Reused every frame: the loop must not allocate. */
 const view: View = {
   state, balls: ballViews, hints, ghost, last: marks, thinking: null,
-  human: HUMAN, mineHints, mineGhost,
+  human: HUMAN, mineHints, mineGhost, capsule,
 };
 let gen = 0; // bumps on restart so stale bot replies are dropped
 let paused = false;
 const waiting: (() => void)[] = [];            // bot thinks parked by the pause sheet
 
 const canAct = () => state.winner === null && state.turn === HUMAN && !paused;
-const clearGhost = () => { ghost = null; mineGhost = null; clearNote(); };
+const clearGhost = () => { ghost = null; mineGhost = null; capsule = null; clearNote(); };
 
 /**
  * The chip's mine key: tapping it hands the board over to the placement band, tapping it again
@@ -257,6 +263,16 @@ function syncBalls() {
   }
 }
 
+/**
+ * What a player's turn put in hand: their first ball, if it can still move. The turn always opens
+ * on a move, so the dots render straight away; a waxed-in trail re-derives nothing.
+ */
+function selectionFor(s: GameState): Ball | null {
+  if (s.winner !== null) return null;
+  const b = firstBall(s, s.turn);
+  return b && reachableBall(s, b.id).length ? b : null;
+}
+
 /** Picks up one of your balls — or puts it back down, if it was already the chosen one. */
 function pick(id: number | null) {
   selected = id;
@@ -264,9 +280,22 @@ function pick(id: number | null) {
   ui();                     // the status says what to do next, and only that ball's dots light up
 }
 
+/** The wall ghost's floating caps: confirm commits the slot, cancel clears it. */
+function armCapsules() {
+  if (ghost?.armed) {
+    const centre = wallCentre(ghost.spec);
+    capsule = { ax: centre.x, ay: centre.y, hit: { kind: 'confirm', spec: ghost.spec } };
+  } else if (mineGhost) {
+    capsule = { ax: mineGhost.c + 0.5, ay: mineGhost.r + 0.5, hit: { kind: 'mine-confirm', cell: mineGhost } };
+  } else {
+    capsule = null;
+  }
+}
+
 /* one-time hint: lives in memory only, this app never persists game state */
 let hintClosed = false;
 let hintTimer = 0;
+/** A tap anywhere on the board ends the coaching hint; it is shown once, on game start. */
 function closeHint() { hintClosed = true; clearTimeout(hintTimer); hintEl.hidden = true; }
 function maybeShowHint() {
   if (hintClosed || !canAct() || !hintEl.hidden) return;
@@ -304,10 +333,16 @@ function ui() {
   const live = canAct();
   /* the key only ever covers one turn, and only while there is still a mine to bury */
   if (!live || minesLeft(state, HUMAN) <= 0) mineArmed = false;
+  /* at the start of a human turn, put that turn's first ball in hand so the dots light up at once */
+  if (live && !mineArmed && selected === null && autoPicked !== state.turn) {
+    const auto = selectionFor(state);
+    if (auto) { selected = auto.id; autoPicked = state.turn; }
+  }
   hints = live && !mineArmed && selected !== null ? reachableBall(state, selected) : [];
   mineHints = live && mineArmed ? mineCells(state, HUMAN) : [];
   /* an armed cell that is no longer placeable — the turn moved on, or a ball rolled over it */
   if (mineGhost && !mineHints.some((h) => sameCell(h, mineGhost))) mineGhost = null;
+  armCapsules();
   const thinking = wantsOpponent() && !paused;
 
   if (state.winner !== null) {
@@ -392,7 +427,10 @@ function play(a: Action): boolean {
   state = next;
   ghost = null;
   mineGhost = null;
+  capsule = null;
   selected = null;         // the turn is over: the next pick is a fresh one
+  autoPicked = null;       // ...and the next human turn auto-selects its own first ball
+  closeHint();             // the first move or action ends the coaching hint
   clearNote();
   const blast = blastOf(prev, next);
   if (blast) {
@@ -416,9 +454,14 @@ function restart() {
   ballViews.length = 0;
   syncBalls();
   selected = null;
+  autoPicked = null;
   ghost = null;
   mineGhost = null;
+  capsule = null;
   mineArmed = false;
+  hintClosed = false;      // a fresh race gets its coaching hint back, in memory only
+  clearTimeout(hintTimer);
+  hintEl.hidden = true;
   marks[0] = null; marks[1] = null;
   shownSteps[0] = -1; shownSteps[1] = -1;
   shownMines = -1;
@@ -496,17 +539,42 @@ const at = (p: Vec) => hitTest(renderer.layout(), p.x, p.y, {
   mode: mineArmed ? 'mine' : 'move',
   mineHints,
   armedMine: mineGhost,
+  capsule,
 });
+
+/** Clear the wall ghost and anything it was holding (the caps included). */
+function disarmWall() { ghost = null; capsule = null; clearNote(); }
+
+/**
+ * The wall ghost's input branch: [✓] commits, [✕] cancels, another groove relocates the ghost, and
+ * a ball or a legal-move dot immediately drops the ghost and plays that move.
+ * Returns true when the tap was handled here.
+ */
+function wallBranch(hit: Hit | null): boolean {
+  if (!ghost?.armed) {
+    if (hit?.kind === 'cancel') { disarmWall(); return true; }
+    if (hit?.kind === 'wall') { tapWall(hit); return true; }   // open the two-tap wall here
+    return false;
+  }
+  if (hit?.kind === 'confirm') { tapWall(hit); return true; }
+  if (hit?.kind === 'cancel') { disarmWall(); return true; }
+  if (hit?.kind === 'wall') { tapWall(hit); return true; }   // relocate to the new slot
+  if (hit?.kind === 'ball') { disarmWall(); impact('light'); pick(hit.id === selected ? null : hit.id); return true; }
+  if (!hit) { disarmWall(); pick(null); return true; }        // neutral board space cancels
+  return false;
+}
 
 /** The two-tap mine flow: one tap arms the square, the next buries it. */
 function tapMine(hit: Hit | null): boolean {
-  if (!hit) return false;
+  // board background, or the [✕] cap: disarm the mine ghost and its caps
+  if (!hit || hit.kind === 'cancel') { mineGhost = null; capsule = null; return true; }
   if (hit.kind === 'mine-confirm') {
     if (mineGhost) play({ kind: 'mine', cell: mineGhost });
     return true;
   }
   if (hit.kind !== 'mine') return false;
   mineGhost = hit.cell;
+  armCapsules();
   closeHint();
   impact('light');
   showNote('Tap again to bury', false, 0);
@@ -522,42 +590,55 @@ function tapWall(hit: { kind: 'wall' | 'confirm'; spec: WallSpec }) {
   }
   const ok = wallOk(state, wall);
   ghost = { spec: hit.spec, ok, armed: true, p: state.turn };
+  armCapsules();
   closeHint();
   if (ok) { impact('light'); showNote('Tap again to place', false, 0); } else refuse(wall);
 }
 
-/** Touch: whatever the live key offers is what a tap acts on — a ball, a line, or a square. */
+/**
+ * Touch: whatever the live key offers is what a tap acts on — the ghost caps, a ball, a line, or a
+ * square. An armed wall ghost owns the tap first; otherwise the strict move/groove arbitration wins.
+ */
 function onTouch(p: Vec) {
   const hit = at(p);
-  if (tapMine(hit)) return;
+  if (mineArmed) { tapMine(hit); return; }
+  if (wallBranch(hit)) return;
   if (!hit) { pick(null); clearGhost(); return; }
   if (hit.kind === 'ball') { impact('light'); pick(hit.id === selected ? null : hit.id); return; }
   if (hit.kind === 'move') {
+    disarmWall();
     impact('light');
     play({ kind: 'move', ball: selected ?? undefined, to: hit.to });
     return;
   }
-  if (hit.kind === 'wall' || hit.kind === 'confirm') tapWall(hit);
+  if (hit.kind === 'confirm') tapWall(hit);
 }
 
 /** Mouse: hovering a groove previews the wall there; mines arm on click, like everywhere else. */
 function onMouse(p: Vec, click: boolean) {
-  if (!canAct()) { ghost = null; return; }
+  if (!canAct()) { disarmWall(); return; }
   if (mineArmed) {
     if (click) tapMine(at(p));
     return;
   }
   const hit = at(p);
-  const spec = hit && hit.kind === 'wall' ? hit.spec : null;
-  const wall: Wall | null = spec ? { ...spec, owner: state.turn } : null;
-  /* hovering is a preview; only a groove or the armed ghost may hold the slot */
-  ghost = wall ? { spec: wall, ok: wallOk(state, wall), armed: false, p: state.turn }
-    : hit?.kind === 'confirm' ? ghost : null;
-
-  if (!click) return;
-  if (hit && (hit.kind === 'wall' || hit.kind === 'confirm')) { tapWall(hit); return; }
+  if (!click) {
+    /* hovering is a preview; an armed ghost keeps its slot and its caps */
+    if (ghost?.armed) return;
+    const spec = hit && hit.kind === 'wall' ? hit.spec : null;
+    const wall: Wall | null = spec ? { ...spec, owner: state.turn } : null;
+    ghost = wall ? { spec: wall, ok: wallOk(state, wall), armed: false, p: state.turn } : null;
+    capsule = null;
+    return;
+  }
+  if (wallBranch(hit)) return;
   if (hit?.kind === 'ball') { impact('light'); pick(hit.id === selected ? null : hit.id); return; }
-  if (hit?.kind === 'move') { impact('light'); play({ kind: 'move', ball: selected ?? undefined, to: hit.to }); return; }
+  if (hit?.kind === 'move') {
+    disarmWall();
+    impact('light');
+    play({ kind: 'move', ball: selected ?? undefined, to: hit.to });
+    return;
+  }
   clearGhost();
 }
 
@@ -575,7 +656,9 @@ canvas.addEventListener('pointermove', (e) => {
   if (e.pointerType !== 'mouse') return;
   onMouse(local(e), false);
 });
-canvas.addEventListener('pointerleave', () => { if (ghost && !ghost.armed) ghost = null; });
+canvas.addEventListener('pointerleave', () => {
+  if (ghost && !ghost.armed) { ghost = null; capsule = null; }
+});
 hintEl.addEventListener('click', () => { impact('light'); closeHint(); });
 
 mineBtn.addEventListener('click', () => { armMine(!mineArmed); });
@@ -622,6 +705,7 @@ function frame(now: number) {
   view.ghost = ghost;
   view.mineHints = mineHints;
   view.mineGhost = mineGhost;
+  view.capsule = capsule;
   view.last = marks;
   view.thinking = wantsOpponent() && !paused ? state.turn : null;
   renderer.draw(view, now);

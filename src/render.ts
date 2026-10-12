@@ -60,6 +60,8 @@ export interface View {
   mineHints: Cell[];
   /** the cell already tapped in the two-tap mine flow, waiting for the confirm tap */
   mineGhost: Cell | null;
+  /** the [✓]/[✕] caps a wall or mine ghost draws, or null when no ghost is armed */
+  capsule: CapsuleAction | null;
 }
 
 export interface Layout {
@@ -89,10 +91,21 @@ export type Hit =
   | { kind: 'wall'; spec: WallSpec }
   | { kind: 'mine'; cell: Cell }
   | { kind: 'mine-confirm'; cell: Cell }
-  | { kind: 'move'; to: Pos };
+  | { kind: 'move'; to: Pos }
+  | { kind: 'cancel' };
+
+/** The on-canvas [✓]/[✕] caps a ghost draws: their board anchor plus the hit a tap confirms. */
+export interface CapsuleAction {
+  ax: number;
+  ay: number;
+  hit: { kind: 'confirm'; spec: WallSpec } | { kind: 'mine-confirm'; cell: Cell };
+}
 
 const TAU = Math.PI * 2;
-const LINE_ZONE = 0.3;  // cells from a grid line that still read as "aiming at that line"
+/** A tap within this many cells of a legal-move dot centre always means that move — never the groove. */
+const MOVE_ZONE = 0.15;
+/** ...and within this many cells of a grid line still reads as "aiming at that line" (the groove). */
+const GROOVE_ZONE = 0.3;
 const MIN_TOUCH = 44;   // css px: smallest legal tap target we allow
 const BADGE_FROM = 28;  // cell size below which a number badge would be unreadable
 const SOLID: number[] = [];
@@ -133,7 +146,7 @@ function slotNear(bx: number, by: number, cols: number, rows: number): WallSpec 
   const hY = clamp(Math.round(by), 1, rows - 1);
   const vX = clamp(Math.round(bx), 1, cols - 1);
   const dh = Math.abs(by - hY), dv = Math.abs(bx - vX);
-  if (Math.min(dh, dv) > LINE_ZONE) return null;
+  if (Math.min(dh, dv) > GROOVE_ZONE) return null;
   return dh <= dv
     ? { o: 'h', x: clamp(Math.round(bx) - 1, 0, cols - 2), y: hY }
     : { o: 'v', x: vX, y: clamp(Math.round(by) - 1, 0, rows - 2) };
@@ -149,13 +162,51 @@ function distToWall(bx: number, by: number, w: WallSpec, along: number): number 
   return Math.abs(bx - w.x);
 }
 
+/** The board-space centre of a wall's body, used to anchor its floating action capsules. */
+export function wallCentre(w: WallSpec): Vec {
+  return w.o === 'h' ? { x: w.x + 1, y: w.y } : { x: w.x, y: w.y + 1 };
+}
+
+/** Radius of a floating action capsule (the [✓] / [✕] chips), in cells. Also its tap target. */
+const CAP_R = 0.3;
+/** Half the distance between the two capsule centres, in cells. */
+const CAP_GAP = 0.4;
+
+/**
+ * A floating capsule's centre beside a board anchor, clamped so both chips stay wholly inside the
+ * canvas: the whole 2·CAP_R disc is kept within a half-cell margin of every edge.
+ */
+function capsulePos(L: Layout, ax: number, ay: number, side: 'confirm' | 'cancel'): Vec {
+  const dir = side === 'confirm' ? 1 : -1;
+  return {
+    x: clamp(ax + dir * (CAP_GAP + CAP_R), 0.5 + CAP_R, L.cols - 0.5 - CAP_R),
+    y: clamp(ay, 0.5 + CAP_R, L.rows - 0.5 - CAP_R),
+  };
+}
+
+/** The centre of the confirm ([✓]) capsule beside a board anchor, in board units. */
+export const capsuleConfirmPos = (L: Layout, ax: number, ay: number): Vec => capsulePos(L, ax, ay, 'confirm');
+/** The centre of the cancel ([✕]) capsule beside a board anchor, in board units. */
+export const capsuleCancelPos = (L: Layout, ax: number, ay: number): Vec => capsulePos(L, ax, ay, 'cancel');
+
+/** Which capsule, if either, a tap at (bx, by) lands on. Board coords in, capsule name out. */
+function capsuleHit(L: Layout, bx: number, by: number, cap: CapsuleAction): 'confirm' | 'cancel' | null {
+  const r2 = CAP_R * CAP_R;
+  const c = capsuleConfirmPos(L, cap.ax, cap.ay);
+  if ((bx - c.x) * (bx - c.x) + (by - c.y) * (by - c.y) <= r2) return 'confirm';
+  const x = capsuleCancelPos(L, cap.ax, cap.ay);
+  if ((bx - x.x) * (bx - x.x) + (by - x.y) * (by - x.y) <= r2) return 'cancel';
+  return null;
+}
+
 /**
  * Pointer (CSS px, canvas-local) → the thing to act on.
- * Priority, not raw distance: one of your balls picks up, an armed ghost confirms, a tap inside a
- * legal cell moves, and a tap out on a groove arms a wall. A 44px target and a 0.3-cell line band
- * cannot both fit in a 37px cell, so the square the finger is in always wins for itself and the
- * groove only answers when the tap is neither on a ball, on an armed ghost, nor in a legal cell.
- * One mode is left: while the mine key is held down the board offers mines and nothing else.
+ * Priority, not raw distance: an armed ghost (or the on-canvas action capsules) confirms first, one
+ * of your balls picks up, a tap in the move zone (0.15 cell) moves, and only a tap nearer the
+ * groove than the move zone arms a wall. A tap between the two zones falls back to the nearest
+ * legal dot so a sloppy finger still moves rather than starting a wall. One mode is left: while the
+ * mine key is armed the board offers mines and nothing else, and the top and bottom two rows are
+ * refused outright.
  */
 export function hitTest(L: Layout, px: number, py: number, o: {
   hints: Pos[];
@@ -169,6 +220,8 @@ export function hitTest(L: Layout, px: number, py: number, o: {
   mineHints: Cell[];
   /** the cell waiting for its confirm tap — read only while `mode` is 'mine' */
   armedMine: Cell | null;
+  /** the outcome a tap on an on-canvas action capsule should act on, if drawn */
+  capsule?: CapsuleAction | null;
 }): Hit | null {
   const c = L.cell;
   if (c <= 0) return null;
@@ -177,23 +230,31 @@ export function hitTest(L: Layout, px: number, py: number, o: {
 
   const cand: { hit: Hit; pri: number; d: number }[] = [];
   const reach = Math.max(0.5, MIN_TOUCH / 2 / c);   // 44px target, in cells
-  /** the nearest of these cells to the tap, if one is close enough to have been the aim */
-  const near = (cells: readonly Pos[]) => {
+  /** the nearest of these cells to the tap, with the distance. `maxD` gates what counts as the aim. */
+  const nearest = (cells: readonly Pos[], maxD: number) => {
     let best: Pos | null = null, d = Infinity;
     for (const h of cells) {
       const e = Math.hypot(bx - h.c - 0.5, by - h.r - 0.5);
       if (e < d) { d = e; best = h; }
     }
-    return best && d <= reach ? { cell: best, d } : null;
+    return best && d <= maxD ? { cell: best, d } : null;
   };
 
   if (o.mode === 'mine') {
-    const armed = o.armedMine ? near([o.armedMine]) : null;
+    // mines only: ball selection and wall hit-tests are bypassed; empty board space disarms via null
+    const cap = o.capsule ? capsuleHit(L, bx, by, o.capsule) : null;
+    if (cap) cand.push({ hit: cap === 'confirm' ? o.capsule!.hit : { kind: 'cancel' }, pri: 0, d: 0 });
+    const armed = o.armedMine ? nearest([o.armedMine], reach) : null;
     if (armed) cand.push({ hit: { kind: 'mine-confirm', cell: armed.cell }, pri: 0, d: armed.d });
-    const spot = near(o.mineHints);
+    const spot = nearest(o.mineHints, reach);
     if (spot) cand.push({ hit: { kind: 'mine', cell: spot.cell }, pri: 1, d: spot.d });
   } else {
-    // direct play: a ball picks up, an armed ghost confirms, a legal cell moves, a groove walls
+    /* Priority order (lower number wins): the action capsules and your own ball, then a move dot
+       inside 0.15 cells, then the armed ghost confirming, then a groove, then a far move fallback.
+       A dot within the move zone is pushed on its own, so no groove can ever be offered there. */
+    const cap = o.capsule ? capsuleHit(L, bx, by, o.capsule) : null;
+    if (cap) cand.push({ hit: cap === 'confirm' ? o.capsule!.hit : { kind: 'cancel' }, pri: 0, d: 0 });
+
     let ballId: number | null = null, db = Infinity;
     for (const b of o.balls) {
       if (b.team !== o.mine) continue;
@@ -201,18 +262,21 @@ export function hitTest(L: Layout, px: number, py: number, o: {
       if (d < db) { db = d; ballId = b.id; }
     }
     if (ballId !== null && db <= reach) cand.push({ hit: { kind: 'ball', id: ballId }, pri: 0, d: db });
+
+    const spot = nearest(o.hints, reach);
+    if (spot && spot.d <= MOVE_ZONE) {
+      cand.push({ hit: { kind: 'move', to: spot.cell }, pri: 1, d: spot.d });
+    } else {
+      const s = slotNear(bx, by, L.cols, L.rows);
+      const wd = s ? distToWall(bx, by, s, 1.25) : Infinity;
+      if (s && wd <= (spot ? spot.d : Infinity)) cand.push({ hit: { kind: 'wall', spec: s }, pri: 3, d: wd });
+      if (spot) cand.push({ hit: { kind: 'move', to: spot.cell }, pri: 4, d: spot.d });
+    }
+
     if (o.armed) {
       const d = distToWall(bx, by, o.armed, 0.5);
-      if (d <= Math.min(0.42, Math.max(LINE_ZONE, 18 / c))) cand.push({ hit: { kind: 'confirm', spec: o.armed }, pri: 0, d });
+      if (d <= Math.min(0.42, Math.max(GROOVE_ZONE, 18 / c))) cand.push({ hit: { kind: 'confirm', spec: o.armed }, pri: 2, d });
     }
-    const spot = near(o.hints);
-    if (spot) {
-      const own = Math.max(Math.abs(bx - spot.cell.c - 0.5), Math.abs(by - spot.cell.r - 0.5)) <= 0.5;
-      cand.push({ hit: { kind: 'move', to: spot.cell }, pri: own ? 1 : 3, d: spot.d });
-    }
-    // the groove itself is the wall target, so no mode has to be armed to draw one
-    const s = slotNear(bx, by, L.cols, L.rows);
-    if (s) cand.push({ hit: { kind: 'wall', spec: s }, pri: 2, d: distToWall(bx, by, s, 1.25) });
   }
 
   cand.sort((a, b) => a.pri - b.pri || a.d - b.d);
@@ -788,6 +852,51 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.restore();
   }
 
+  /**
+   * A single floating action capsule: a dark disc so it reads on any board, a coloured inner chip,
+   * and a white check or a red cross. Anchored beside an armed ghost and clamped to the canvas.
+   */
+  function drawCapsule(cx: number, cy: number, kind: 'confirm' | 'cancel', color: string, c: number, still: boolean) {
+    const r = CAP_R * c;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.fillStyle = 'rgba(12,16,26,.62)';
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
+    ctx.fillStyle = kind === 'confirm' ? color : 'rgba(255,255,255,.95)';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.82, 0, TAU); ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(1.5, c * 0.045);
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.82, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = kind === 'confirm' ? 'rgba(255,255,255,.96)' : MINE_RAMP.mid;
+    ctx.lineWidth = Math.max(1.6, c * 0.05);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const g = r * 0.4;
+    ctx.beginPath();
+    if (kind === 'confirm') { ctx.moveTo(-g, 0.05 * g); ctx.lineTo(-g * 0.2, g); ctx.lineTo(g, -g * 0.9); }
+    else {
+      ctx.moveTo(-g * 0.7, -g * 0.7); ctx.lineTo(g * 0.7, g * 0.7);
+      ctx.moveTo(g * 0.7, -g * 0.7); ctx.lineTo(-g * 0.7, g * 0.7);
+    }
+    ctx.stroke();
+    if (!still) {                                   // a slow breath, so the pair reads as live controls
+      ctx.globalAlpha = 0.18 + 0.12 * Math.sin(performance.now() / 420);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(1, c * 0.03);
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.95, 0, TAU); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /** The floating [✓]/[✕] pair anchored beside an armed ghost, clamped inside the canvas. */
+  function drawCapsules(ax: number, ay: number, p: Player, still: boolean) {
+    const { cell: c, ox, oy } = L;
+    const confirm = capsuleConfirmPos(L, ax, ay);
+    const cancel = capsuleCancelPos(L, ax, ay);
+    drawCapsule(ox + confirm.x * c, oy + confirm.y * c, 'confirm', sides[p].ramp.mid, c, still);
+    drawCapsule(ox + cancel.x * c, oy + cancel.y * c, 'cancel', MINE_RAMP.mid, c, still);
+  }
+
   function draw(v: View, now: number) {
     const { cell: c, ox, oy } = L;
     const still = motionReduced();
@@ -909,6 +1018,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         outline(v.ghost.spec, 'rgba(255,45,85,.95)', Math.max(2, c * 0.06), SOLID, 0, ERR);
         cross(v.ghost.spec, '#fff', c * 0.19);
       }
+      if (v.ghost.armed) {
+        const centre = wallCentre(v.ghost.spec);
+        drawCapsules(centre.x, centre.y, v.ghost.p, still);
+      }
     }
 
     // the cell already tapped in the two-tap mine flow, standing by for its confirm tap
@@ -920,6 +1033,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const gp = sides[v.state.turn].ramp;
       cellRing(v.mineGhost, gp.os, Math.max(1.5, c * 0.045), dash.armed, still ? 0 : -now / 26);
       drawMine(ox + (v.mineGhost.c + 0.5) * c, oy + (v.mineGhost.r + 0.5) * c, 'ghost', pulse, drop, now, still);
+      drawCapsules(v.mineGhost.c + 0.5, v.mineGhost.r + 0.5, v.state.turn, still);
     } else mineGhostKey = '';
 
     // placed walls (pop-in + landing pulse); walls are never removed mid-game
@@ -1165,6 +1279,7 @@ const sceneView = (s: Scene): View => {
     human: 0,
     mineHints: [],
     mineGhost: null,
+    capsule: null,
   };
 };
 

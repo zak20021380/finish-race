@@ -928,7 +928,7 @@ export function createMenu(api: MenuApi): Menu {
       state: s,
       balls: s.balls.map((b) => ({ pos: { x: b.pos.c + 0.5, y: b.pos.r + 0.5 }, team: b.team, id: b.id, sel: false })),
       hints: [], ghost: null, last: [null, null], thinking: null,
-      human: 0, mineHints: [], mineGhost: null,
+      human: 0, mineHints: [], mineGhost: null, capsule: null,
     };
     const t = performance.now();
     teamPv.draw(v, t);
