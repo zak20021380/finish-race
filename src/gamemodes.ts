@@ -326,6 +326,9 @@ export function paintSheetState(): void {
     /* the options for a mode only exist while that mode is the selected one */
     const seg = card.querySelector<HTMLElement>('.gm-seg');
     if (seg) seg.hidden = !on;
+    /* the locked filters row rides with the quick-match options */
+    const filters = card.querySelector<HTMLElement>('.gm-filters');
+    if (filters) filters.hidden = !on;
   }
 
   for (const b of document.querySelectorAll<HTMLButtonElement>('#sheet-game-modes [data-size]')) {
@@ -440,6 +443,35 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
       paintSheetState();
     });
   }
+
+  /* the locked filters row: a wiggle and a toast, never a queue change */
+  const filters = document.getElementById('gm-filters') as HTMLButtonElement | null;
+  const tip = filters?.querySelector<HTMLElement>('.gm-f-tip') ?? null;
+  let tipTimer = 0;
+  filters?.addEventListener('click', () => {
+    impact('light');
+    notify('warning');
+    filters.classList.remove('shake');
+    void filters.offsetWidth; /* restart the wiggle */
+    filters.classList.add('shake');
+    if (tip) {
+      tip.hidden = false;
+      void tip.offsetWidth;
+      tip.classList.add('on');
+    }
+    window.clearTimeout(tipTimer);
+    tipTimer = window.setTimeout(() => {
+      if (tip) {
+        tip.classList.remove('on');
+        window.setTimeout(() => {
+          tip.hidden = true;
+        }, 200);
+      }
+    }, 1600);
+  });
+  filters?.addEventListener('animationend', () => {
+    filters.classList.remove('shake');
+  });
 
   const joinInput = document.getElementById('gm-join-input') as HTMLInputElement | null;
   const joinBtn = document.getElementById('gm-join') as HTMLButtonElement | null;

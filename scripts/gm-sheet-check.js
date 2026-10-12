@@ -90,8 +90,10 @@ function checkGmSheet(pane) {
     const h = row.getBoundingClientRect().height;
     const seg = row.querySelector('.gm-seg');
     const expanded = !!(seg && !seg.hidden);
-    const lo = expanded ? 120 : 70;
-    const hi = expanded ? 155 : 85;
+    /* the Quick match card carries the locked filters row under its size strip */
+    const extra = row.dataset.row === 'online' && expanded ? 48 : 0;
+    const lo = expanded ? 120 + extra : 70;
+    const hi = expanded ? 155 + extra : 85;
     if (h > 0 && (h < lo || h > hi)) {
       fails.push(`row ${row.dataset.row} height ${Math.round(h)} outside ${lo}–${hi}px (a ~76px row)`);
     }
@@ -108,6 +110,14 @@ function checkGmSheet(pane) {
       const active = row.classList.contains('is-active');
       if (open !== active) {
         fails.push(`row ${row.dataset.row} options ${open ? 'shown' : 'hidden'} while the row is ${active ? 'active' : 'inactive'}`);
+      }
+    }
+    /* the locked filters row belongs to the quick-match options: same visibility */
+    const filters = row.querySelector('.gm-filters');
+    if (row.dataset.row === 'online') {
+      if (!filters) fails.push('row online has no locked .gm-filters row');
+      else if (filters.hidden === row.classList.contains('is-active')) {
+        fails.push(`locked filters row ${filters.hidden ? 'hidden' : 'shown'} while the quick row is ${row.classList.contains('is-active') ? 'active' : 'inactive'}`);
       }
     }
   });
