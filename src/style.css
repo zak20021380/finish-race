@@ -5815,108 +5815,107 @@ html.rm .notif-badge { animation: none; }
    Presses travel translateY, never scale. Transform/opacity motion only.
    ========================================================================== */
 
-/* ---- hero identity card: avatar frame + name/badge + LVL/coins + XP ---- */
-.pf-hero-v2 {
+/* ---- hero identity card: three stacked tiers, one accent each ------------
+   Tier 1 identity + wallet (cyan rank · gold purse)
+   Tier 2 progression      (one line, one label)
+   Tier 3 actions          (two equal slate/glass pills)
+   Hue discipline: cyan = progression, gold = coins/rewards, slate = actions. */
+.pf-hero.pf-hero-v2 {
+  position: relative;
+  overflow: hidden;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--s3);
   border-radius: 22px;
   padding: var(--s4);
-  background:
-    radial-gradient(120% 90% at 88% 0%, rgba(56, 189, 248, .13), rgba(56, 189, 248, 0) 55%),
-    radial-gradient(80% 70% at 6% 100%, rgba(255, 82, 43, .08), rgba(255, 82, 43, 0) 60%),
-    var(--clay-face);
+  background: var(--clay-face);
   box-shadow: var(--clay), var(--clay-ring);
 }
-.pf-hero-top {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--s3);
-  min-width: 0;
-  max-width: 100%;
+/* one cyan wash at the purse corner: the card's only ambient light */
+.pf-hero-aurora {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(58% 46% at 96% 0%, rgba(34, 211, 238, .10), transparent 72%);
 }
-/* 3D tactile avatar frame: clay token + glowing ring + extrusion lip */
+.pf-hero-top { position: relative; display: flex; align-items: center; gap: var(--s3); min-width: 0; max-width: 100%; }
+
+/* the avatar *is* the frame control, so it needs no caption pill under it.
+   --av is the single size knob: the ring and the token both derive from it. */
 .pf-avatar-wrap {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--s1);
-  min-width: 0;
-}
-.pf-avatar-frame.avatar.big {
-  width: 68px;
-  height: 68px;
-  font-size: 22px;
-  border-radius: 24px;
-  background: var(--clay-face);
-  box-shadow:
-    0 4px 0 #080C14,
-    0 0 0 2px rgba(125, 211, 252, .35),
-    0 0 18px rgba(56, 189, 248, .35),
-    inset 0 2px 2px rgba(255, 255, 255, .12),
-    var(--clay-bevel);
-}
-.pf-avatar-wrap[data-frame="auric"] .pf-avatar-frame.avatar.big {
-  box-shadow:
-    0 4px 0 #080C14,
-    0 0 0 2px rgba(251, 191, 36, .55),
-    0 0 20px rgba(245, 158, 11, .5),
-    inset 0 2px 2px rgba(255, 255, 255, .14),
-    var(--clay-bevel);
-}
-.pf-avatar-wrap[data-frame="neon"] .pf-avatar-frame.avatar.big {
-  box-shadow:
-    0 4px 0 #080C14,
-    0 0 0 2px rgba(110, 231, 183, .55),
-    0 0 20px rgba(16, 185, 129, .5),
-    inset 0 2px 2px rgba(255, 255, 255, .14),
-    var(--clay-bevel);
-}
-.pf-frame-slot {
-  --d: 2px;
+  --av: 68px;
   appearance: none;
   border: 0;
   font: inherit;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 92px;
-  min-height: 28px;
-  padding: 0 var(--s2);
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #2E3A55 0%, #232E44 100%);
-  color: var(--chip-ink);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  white-space: nowrap;
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  background: none;
   cursor: pointer;
+}
+.pf-avatar-wrap[data-frame="default"] { --ring-a: #22d3ee; --ring-b: #38bdf8; --ring-c: #0284c7; --ring-glow: rgba(34, 211, 238, .5); }
+.pf-avatar-wrap[data-frame="auric"]   { --ring-a: #fde68a; --ring-b: #f59e0b; --ring-c: #b45309; --ring-glow: rgba(245, 158, 11, .55); }
+.pf-avatar-wrap[data-frame="neon"]    { --ring-a: #6ee7b7; --ring-b: #22d3ee; --ring-c: #0ea5e9; --ring-glow: rgba(34, 211, 238, .55); }
+/* the integrated ring: a conic halo the token sits inside, not a border */
+.pf-avatar-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--av) + 8px);
+  height: calc(var(--av) + 8px);
+  margin: calc((var(--av) + 8px) / -2) 0 0 calc((var(--av) + 8px) / -2);
+  border-radius: calc(var(--av) * 0.37);
+  background: conic-gradient(from 0deg, var(--ring-a), var(--ring-b) 35%, var(--ring-c) 65%, var(--ring-a));
+  filter: blur(4px);
+  opacity: .55;
+  z-index: 0;
+  animation: pf-ring-spin 6s linear infinite;
+}
+@keyframes pf-ring-spin { to { transform: rotate(360deg); } }
+.pf-avatar-frame.avatar.big {
+  position: relative;
+  z-index: 1;
+  width: var(--av);
+  height: var(--av);
+  font-size: calc(var(--av) * 0.32);
+  border-radius: calc(var(--av) * 0.35);
+  background: linear-gradient(180deg, #2A3550 0%, #161D2C 100%);
   box-shadow:
-    0 var(--d) 0 #080C14,
-    inset 0 1px 0 rgba(255, 255, 255, .14),
-    var(--clay-ring);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+    0 4px 0 #080C14,
+    inset 0 0 0 2px #10141D,
+    inset 0 2px 3px rgba(255, 255, 255, .16),
+    inset 0 -3px 5px rgba(0, 0, 0, .45),
+    0 0 18px -3px var(--ring-glow);
 }
-.pf-frame-slot .ico { width: 12px; height: 12px; color: var(--honey-ink); }
-.pf-frame-slot span {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+.pf-avatar-frame.avatar.big > img,
+.pf-avatar-frame.avatar.big > span { position: relative; z-index: 1; }
+/* corner glyph: the only hint that the token is pressable */
+.pf-avatar-tag {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #2A3550 0%, #161D2C 100%);
+  color: var(--brand-ink);
+  box-shadow: 0 2px 0 #080C14, var(--clay-ring);
 }
-.pf-frame-slot:hover:not(:active) { transform: translateY(-1px); }
-.pf-frame-slot:active { transform: translateY(2px); --d: 0px; }
-.pf-frame-slot:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.pf-avatar-tag .ico { width: 11px; height: 11px; }
+.pf-avatar-wrap:hover:not(:active) .pf-avatar-frame { transform: translateY(-1px); }
+.pf-avatar-wrap:active .pf-avatar-frame { transform: translateY(2px); }
+.pf-avatar-wrap:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; border-radius: 26px; }
 
-.pf-id-v2 { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--s2); }
-.pf-name-row {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  min-width: 0;
-  max-width: 100%;
-}
+.pf-id-v2 { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: var(--s2); }
+.pf-name-row { display: flex; align-items: center; gap: var(--s2); min-width: 0; max-width: 100%; }
 .pf-name-row .p-name { flex: 0 1 auto; min-width: 0; font-size: var(--t-1); }
-/* primary equipped badge next to the name: rich metallic/clay pill + glow */
+/* primary equipped badge next to the name: clay pill, accent ring per badge */
 .pf-equipped-badge {
   flex: none;
   display: inline-flex;
@@ -5929,83 +5928,154 @@ html.rm .notif-badge { animation: none; }
   box-shadow:
     0 2px 0 #080C14,
     inset 0 1px 0 rgba(255, 255, 255, .14),
-    inset 0 0 0 1px rgba(251, 191, 36, .3),
-    0 0 12px rgba(245, 158, 11, .3);
-  color: var(--honey-ink);
+    inset 0 0 0 1px rgba(125, 211, 252, .28);
+  color: var(--brand-ink);
   font-size: var(--t-micro);
   font-weight: 800;
   line-height: 1.2;
   white-space: nowrap;
 }
 .pf-equipped-badge .ico { width: 13px; height: 13px; flex: none; }
-.pf-equipped-badge span {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.pf-equipped-badge[data-accent="sky"] { color: var(--brand-ink); box-shadow: 0 2px 0 #080C14, inset 0 1px 0 rgba(255,255,255,.14), inset 0 0 0 1px rgba(125,211,252,.32), 0 0 12px rgba(56,189,248,.3); }
-.pf-equipped-badge[data-accent="mint"] { color: var(--mint-ink); box-shadow: 0 2px 0 #080C14, inset 0 1px 0 rgba(255,255,255,.14), inset 0 0 0 1px rgba(110,231,183,.32), 0 0 12px rgba(16,185,129,.32); }
-.pf-equipped-badge[data-accent="coral"] { color: #FFB59D; box-shadow: 0 2px 0 #080C14, inset 0 1px 0 rgba(255,255,255,.14), inset 0 0 0 1px rgba(255,82,43,.35), 0 0 12px rgba(255,82,43,.32); }
+.pf-equipped-badge span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pf-equipped-badge[data-accent="sky"]   { color: var(--brand-ink); box-shadow: 0 2px 0 #080C14, inset 0 1px 0 rgba(255,255,255,.14), inset 0 0 0 1px rgba(125,211,252,.32); }
+.pf-equipped-badge[data-accent="mint"]  { color: var(--mint-ink); box-shadow: 0 2px 0 #080C14, inset 0 1px 0 rgba(255,255,255,.14), inset 0 0 0 1px rgba(110,231,183,.32); }
+.pf-equipped-badge[data-accent="coral"] { color: #FFB59D; box-shadow: 0 2px 0 #080C14, inset 0 1px 0 rgba(255,255,255,.14), inset 0 0 0 1px rgba(255,82,43,.35); }
 .pf-equipped-badge[hidden] { display: none; }
 
-.pf-lvl-row { display: flex; align-items: center; gap: var(--s2); min-width: 0; flex-wrap: wrap; }
-/* stylized embossed LVL pill */
-.pf-lvl-pill {
-  --d: 3px;
+/* one badge carries level and rank: cyan glass, the progression hue, no metallic tiers */
+.pf-rank-badge {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 12px 6px;
+  gap: 5px;
+  max-width: 100%;
+  min-height: 26px;
+  padding: 0 10px;
   border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #3A4A6B 0%, #232E44 100%);
-  color: var(--ink);
-  box-shadow:
-    0 var(--d) 0 #080C14,
-    inset 0 2px 2px rgba(255, 255, 255, .18),
-    inset 0 -2px 3px rgba(0, 0, 0, .35),
-    inset 0 0 0 1px rgba(125, 211, 252, .28),
-    0 0 14px rgba(56, 189, 248, .22);
-  font-size: var(--t-3);
-  font-weight: 900;
-  letter-spacing: .08em;
+  background: linear-gradient(180deg, rgba(34, 211, 238, .16) 0%, rgba(2, 132, 199, .07) 100%);
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, .32), 0 0 14px -6px rgba(34, 211, 238, .6);
+  color: var(--brand-ink);
+  font-size: var(--t-micro);
+  font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  overflow: hidden;
 }
-.pf-lvl-k { font-size: 10px; font-weight: 900; letter-spacing: .1em; color: var(--brand-ink); }
-.pf-lvl-pill b { font-size: var(--t-2); font-weight: 900; }
+.pf-rank-k { letter-spacing: .06em; text-transform: uppercase; }
+.pf-rank-badge b { font-size: var(--t-3); font-weight: 900; color: var(--ink); }
+.pf-rank-dot { opacity: .45; }
+.pf-rank-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; letter-spacing: .05em; text-transform: uppercase; }
 .pf-coin-pill { flex: none; max-width: 100%; }
 
-/* vibrant recessed XP bar + remaining counter */
-.pf-xp-block { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+/* tier 2: a single recessed line and a single label */
+.pf-xp-block { position: relative; display: flex; flex-direction: column; align-items: stretch; gap: var(--s1); min-width: 0; }
 .pf-xp-bar.bar {
-  height: 12px;
+  height: 8px;
   background: #0A0F1C;
-  box-shadow: inset 0 2px 5px rgba(0, 0, 0, .6), inset 0 -1px 0 rgba(255, 255, 255, .07);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .55), inset 0 -1px 0 rgba(255, 255, 255, .06);
 }
 .pf-xp-bar.bar i {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .55) 0%, rgba(255, 255, 255, 0) 52%),
-    linear-gradient(90deg, #0284c7 0%, #22d3ee 55%, #6EE7B7 100%);
-  box-shadow: 0 0 10px rgba(34, 211, 238, .55), inset 0 -2px 3px rgba(0, 0, 0, .16);
+  background: linear-gradient(90deg, var(--brand-1) 0%, #22d3ee 100%);
+  box-shadow: 0 0 10px -2px rgba(34, 211, 238, .6);
   transition: width .4s ease;
 }
 .pf-xp-meta {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s2);
+  align-self: flex-end;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--t-micro);
   font-weight: 800;
-  color: var(--ink-soft);
+  color: var(--brand-ink);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  text-shadow: 0 0 10px rgba(34, 211, 238, .35);
 }
-.pf-xp-meta span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.pf-xp-remain { color: var(--brand-ink); }
+
+/* tier 3: two equal-width interactive pills; nothing inside may push a track wide */
+.pf-hero-chip-row { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); min-width: 0; }
+.pf-chip {
+  --d: 3px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  min-width: 0;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 10px;
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, .02) 100%),
+    var(--clay-face);
+  color: var(--ink);
+  text-align: left;
+  overflow: hidden;
+  box-shadow: 0 var(--d) 0 #080C14, inset 0 1px 0 rgba(255, 255, 255, .08), var(--clay-ring);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.pf-chip:hover:not(:active) { transform: translateY(-1px); }
+.pf-chip:active { transform: translateY(var(--press-y)); --d: 1px; }
+.pf-chip:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+/* slate, not cyan: these are secondary actions, not progression */
+.pf-chip-ico {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--field);
+  color: var(--chip-ink);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .5), inset 0 0 0 1px var(--hair);
+}
+.pf-chip-ico .ico { width: 16px; height: 16px; }
+.pf-chip-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+/* label + reward share the top line so the value row gets the full width */
+.pf-chip-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pf-chip-line > .pf-chip-reward { margin-left: auto; }
+.pf-chip-k {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.pf-chip-v {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: var(--t-3);
+  font-weight: 800;
+  color: var(--ink);
+}
+/* a long country or team name takes a second line before it ellipsises, so the
+   2-up pills never cut one in half — the ellipsis stays only as the overflow net */
+.pf-chip-v > span:last-child {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+.pf-chip-reward { flex: none; }
+/* the in-chip badges are narrow: a compact gold key, and "Set" needs no tick */
+.pf-chip .reward-badge { padding: 2px 7px 3px; font-size: 9.5px; }
+.pf-chip .verified-badge { padding: 2px 7px 3px; font-size: 9.5px; }
+.pf-chip .verified-badge .ico { display: none; }
+/* claimed reads from the "Set" badge alone: the icon keeps one slate colour */
+.pf-chip.claimed { box-shadow: 0 var(--d) 0 #080C14, inset 0 1px 0 rgba(255, 255, 255, .08), var(--clay-ring), inset 0 0 0 1px rgba(110, 231, 183, .18); }
 
 /* ---- arcade HUD stats: embossed module with dividing grooves ---- */
 .pf-hud.p-stats.quad {
@@ -6391,9 +6461,10 @@ html.rm .notif-badge { animation: none; }
 
 /* ---- profile responsive: zero horizontal scroll, targets stay >= 44px ---- */
 @media (max-width: 380px) {
-  .pf-hero-v2 { padding: var(--s3); }
+  .pf-hero.pf-hero-v2 { padding: var(--s3); }
   .pf-hero-top { gap: var(--s2); }
-  .pf-avatar-frame.avatar.big { width: 60px; height: 60px; border-radius: 21px; }
+  .pf-avatar-wrap { --av: 60px; }
+  .pf-chip { padding: var(--s2); }
   .badge-rack { gap: 4px; padding: 6px 8px; }
   .badge-chip { width: 36px; height: 36px; }
   .badge-chip .ico { width: 16px; height: 16px; }
@@ -6403,8 +6474,8 @@ html.rm .notif-badge { animation: none; }
   .pf-name-row { flex-wrap: wrap; }
 }
 @media (max-height: 700px) {
-  .pf-hero-v2 { padding: var(--s3) var(--s4); }
-  .pf-avatar-frame.avatar.big { width: 60px; height: 60px; }
+  .pf-hero.pf-hero-v2 { padding: var(--s3) var(--s4); }
+  .pf-avatar-wrap { --av: 60px; }
 }
 html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: none; }
 
@@ -7240,280 +7311,10 @@ html.rm .gm-pick, html.rm .gm-key, html.rm .gm-copy, html.rm .gm-card { transiti
 
 /* ==========================================================================
    PROFILE AESTHETIC — Telegram Gaming Mini-App energy.
-   Rich gradients, ambient glows, glassmorphism and vibrant accents layered
-   over the Dark Clay base: Electric Cyan, Neon Amber/Gold for rank, Violet.
-   Everything is transform/opacity + box-shadow only; presses never scale.
+   Rich gradients, ambient glows and vibrant accents layered over the Dark
+   Clay base. Everything is transform/opacity + box-shadow only; presses
+   never scale. The hero card's own rules live in the PROFILE V2 block above.
    ========================================================================== */
-
-/* ---- hero: glossy glass slab with an aurora backlight and lit top edge ---- */
-.pf-hero.pf-hero-v2 {
-  position: relative;
-  overflow: hidden;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--s3);
-  border-radius: 22px;
-  border-top: 1px solid rgba(255, 255, 255, .14);
-  background:
-    radial-gradient(120% 95% at 90% 0%, rgba(34, 211, 238, .28), rgba(34, 211, 238, 0) 52%),
-    radial-gradient(95% 80% at 4% 4%, rgba(168, 85, 247, .20), rgba(168, 85, 247, 0) 58%),
-    radial-gradient(90% 75% at 8% 108%, rgba(255, 82, 43, .16), rgba(255, 82, 43, 0) 60%),
-    linear-gradient(180deg, #26314B 0%, #1B2333 100%);
-  background-color: #1C2433;
-  box-shadow:
-    var(--clay),
-    var(--clay-ring),
-    0 0 34px -10px rgba(34, 211, 238, .45),
-    0 0 46px -20px rgba(168, 85, 247, .4);
-}
-.pf-hero-aurora {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background:
-    radial-gradient(42% 60% at 20% 0%, rgba(125, 211, 252, .22), transparent 72%),
-    radial-gradient(34% 52% at 96% 16%, rgba(236, 72, 153, .18), transparent 74%);
-  animation: pf-aurora 9s ease-in-out infinite alternate;
-}
-@keyframes pf-aurora {
-  0%   { opacity: .7; }
-  100% { opacity: 1; }
-}
-.pf-hero-top { position: relative; }
-
-/* ---- avatar: animated gradient frame + ambient glow, styled per frame ---- */
-.pf-avatar-wrap { position: relative; }
-.pf-avatar-wrap[data-frame="default"] { --ring-a: #22d3ee; --ring-b: #38bdf8; --ring-c: #a855f7; --ring-glow: rgba(34, 211, 238, .55); }
-.pf-avatar-wrap[data-frame="auric"]   { --ring-a: #fde68a; --ring-b: #f59e0b; --ring-c: #ef4444; --ring-glow: rgba(245, 158, 11, .6); }
-.pf-avatar-wrap[data-frame="neon"]    { --ring-a: #6ee7b7; --ring-b: #22d3ee; --ring-c: #a855f7; --ring-glow: rgba(16, 185, 129, .6); }
-.pf-avatar-glow {
-  position: absolute;
-  top: 2px;
-  left: 50%;
-  width: 84px;
-  height: 84px;
-  margin-left: -42px;
-  border-radius: 30px;
-  background: conic-gradient(from 0deg, var(--ring-a, #22d3ee), var(--ring-b, #38bdf8) 35%, var(--ring-c, #a855f7) 65%, var(--ring-a, #22d3ee));
-  filter: blur(3px);
-  opacity: .95;
-  z-index: 0;
-  animation: pf-ring-spin 6s linear infinite;
-}
-@keyframes pf-ring-spin { to { transform: rotate(360deg); } }
-#pf-avatar-wrap .pf-avatar-frame.avatar.big {
-  position: relative;
-  z-index: 1;
-  width: 68px;
-  height: 68px;
-  border-radius: 24px;
-  background: linear-gradient(180deg, #2A3550 0%, #161D2C 100%);
-  box-shadow:
-    0 4px 0 #080C14,
-    inset 0 0 0 3px #10141D,
-    inset 0 2px 3px rgba(255, 255, 255, .18),
-    inset 0 -3px 5px rgba(0, 0, 0, .45),
-    0 0 20px -2px var(--ring-glow, rgba(34, 211, 238, .55));
-}
-/* keep the real photo/initials above the frame's ring */
-.pf-avatar-frame.avatar.big > img,
-.pf-avatar-frame.avatar.big > span { position: relative; z-index: 1; }
-
-/* ---- frame cycle pill: glossy key with a gold crown ---- */
-.pf-frame-slot {
-  position: relative;
-  z-index: 1;
-  background: linear-gradient(180deg, #313E5C 0%, #202A3E 100%);
-  border-top: 1px solid rgba(255, 255, 255, .16);
-  box-shadow:
-    0 2px 0 #080C14,
-    inset 0 1px 0 rgba(255, 255, 255, .16),
-    inset 0 0 0 1px rgba(255, 255, 255, .05);
-  color: var(--honey-ink);
-}
-.pf-frame-slot .ico { color: var(--honey-ink); filter: drop-shadow(0 0 6px rgba(245, 158, 11, .6)); }
-
-/* ---- rank tag: metallic amber badge, tiered by level ---- */
-.pf-rank-tag {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px 5px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #fde68a 0%, #f59e0b 55%, #d97706 100%);
-  color: #3A2506;
-  font-size: var(--t-micro);
-  font-weight: 900;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  line-height: 1;
-  white-space: nowrap;
-  box-shadow:
-    0 2px 0 #7c4a03,
-    inset 0 1px 0 rgba(255, 255, 255, .7),
-    inset 0 -2px 3px rgba(120, 53, 15, .3),
-    0 0 14px -3px rgba(245, 158, 11, .7);
-}
-.pf-rank-tag[data-rank="bronze"] {
-  background: linear-gradient(180deg, #f0b892 0%, #c2723c 60%, #8a4a1e 100%);
-  color: #2b1405;
-  box-shadow: 0 2px 0 #6b3712, inset 0 1px 0 rgba(255,255,255,.6), inset 0 -2px 3px rgba(70,30,8,.35), 0 0 14px -3px rgba(194,114,60,.7);
-}
-.pf-rank-tag[data-rank="silver"] {
-  background: linear-gradient(180deg, #f1f5f9 0%, #cbd5e1 55%, #94a3b8 100%);
-  color: #1e293b;
-  box-shadow: 0 2px 0 #64748b, inset 0 1px 0 rgba(255,255,255,.85), inset 0 -2px 3px rgba(51,65,85,.3), 0 0 14px -3px rgba(148,163,184,.7);
-}
-.pf-rank-tag[data-rank="gold"] {
-  background: linear-gradient(180deg, #fde68a 0%, #f59e0b 55%, #d97706 100%);
-  color: #3A2506;
-  box-shadow: 0 2px 0 #7c4a03, inset 0 1px 0 rgba(255,255,255,.7), inset 0 -2px 3px rgba(120,53,15,.3), 0 0 16px -3px rgba(245,158,11,.8);
-}
-.pf-rank-tag[data-rank="elite"] {
-  background: linear-gradient(180deg, #c4b5fd 0%, #8b5cf6 55%, #6d28d9 100%);
-  color: #1e1145;
-  box-shadow: 0 2px 0 #4c1d95, inset 0 1px 0 rgba(255,255,255,.6), inset 0 -2px 3px rgba(30,17,69,.35), 0 0 16px -3px rgba(139,92,246,.75);
-}
-.pf-rank-tag[data-rank="legend"] {
-  background: linear-gradient(180deg, #67e8f9 0%, #22d3ee 45%, #8b5cf6 100%);
-  color: #06212b;
-  box-shadow: 0 2px 0 #0e7490, inset 0 1px 0 rgba(255,255,255,.7), inset 0 -2px 3px rgba(6,33,43,.35), 0 0 18px -2px rgba(34,211,238,.8);
-}
-
-/* ---- LVL pill: electric cyan glass, embossed ---- */
-.pf-lvl-pill {
-  background: linear-gradient(180deg, #3C5480 0%, #1E2A44 100%);
-  border-top: 1px solid rgba(255, 255, 255, .18);
-  box-shadow:
-    0 3px 0 #080C14,
-    inset 0 2px 2px rgba(255, 255, 255, .22),
-    inset 0 -2px 3px rgba(0, 0, 0, .4),
-    inset 0 0 0 1px rgba(34, 211, 238, .35),
-    0 0 16px -2px rgba(34, 211, 238, .5);
-}
-.pf-lvl-k { color: #67E8F9; text-shadow: 0 0 8px rgba(34, 211, 238, .6); }
-.pf-lvl-pill b { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .5); }
-
-/* ---- XP block: glowing liquid bar with a moving sheen ---- */
-.pf-xp-block {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
-  grid-template-rows: auto auto;
-  column-gap: var(--s2);
-  row-gap: 4px;
-  align-items: center;
-  min-width: 0;
-}
-.pf-xp-icon {
-  grid-column: 1;
-  grid-row: 1 / span 2;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 7px;
-  color: var(--honey-ink);
-  background: linear-gradient(180deg, rgba(245, 158, 11, .28) 0%, rgba(245, 158, 11, .08) 100%);
-  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .35), 0 0 10px -2px rgba(245, 158, 11, .6);
-}
-.pf-xp-icon .ico { width: 12px; height: 12px; }
-.pf-xp-bar.bar { grid-column: 2; grid-row: 1; height: 12px; }
-.pf-xp-meta { grid-column: 2; grid-row: 2; }
-.pf-xp-bar.bar i {
-  position: relative;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .6) 0%, rgba(255, 255, 255, 0) 52%),
-    linear-gradient(90deg, #0891b2 0%, #22d3ee 50%, #6EE7B7 100%);
-  box-shadow: 0 0 12px rgba(34, 211, 238, .7), 0 0 22px -6px rgba(34, 211, 238, .6), inset 0 -2px 3px rgba(0, 0, 0, .2);
-  overflow: hidden;
-}
-.pf-xp-bar.bar i::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, .55) 50%, transparent 80%);
-  background-size: 220% 100%;
-  animation: pf-sheen 2.4s linear infinite;
-}
-@keyframes pf-sheen { from { background-position: 220% 0; } to { background-position: -120% 0; } }
-.pf-xp-remain { color: #67E8F9; text-shadow: 0 0 8px rgba(34, 211, 238, .45); }
-
-/* ---- hero identity pills: glassy interactive buttons ---- */
-.pf-hero-chip-row {
-  position: relative;
-  display: flex;
-  gap: var(--s2);
-  min-width: 0;
-}
-.pf-chip {
-  --d: 3px;
-  appearance: none;
-  border: 0;
-  font: inherit;
-  cursor: pointer;
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  padding: 8px 10px;
-  border-radius: 16px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .10) 0%, rgba(255, 255, 255, .02) 100%),
-    linear-gradient(180deg, #2A3550 0%, #1A2232 100%);
-  border-top: 1px solid rgba(255, 255, 255, .14);
-  color: var(--ink);
-  text-align: left;
-  box-shadow:
-    0 var(--d) 0 #080C14,
-    inset 0 1px 0 rgba(255, 255, 255, .12),
-    var(--clay-ring);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast);
-}
-.pf-chip:hover:not(:active) { transform: translateY(-1px); }
-.pf-chip:active { transform: translateY(var(--press-y)); --d: 1px; }
-.pf-chip:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-.pf-chip-ico {
-  flex: none;
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border-radius: 11px;
-  background: linear-gradient(180deg, #0A0F1C 0%, #172235 100%);
-  color: #67E8F9;
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, .55),
-    inset 0 0 0 1px rgba(34, 211, 238, .3),
-    0 0 12px -3px rgba(34, 211, 238, .55);
-}
-.pf-chip-ico .ico { width: 17px; height: 17px; }
-.pf-chip-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.pf-chip-k {
-  font-size: 9.5px;
-  font-weight: 800;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-.pf-chip-v {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-  font-size: var(--t-3);
-  font-weight: 800;
-  color: var(--ink);
-  white-space: nowrap;
-}
-.pf-chip-v > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.pf-chip-reward { flex: none; }
-.pf-chip.claimed { box-shadow: 0 var(--d) 0 #080C14, inset 0 1px 0 rgba(255,255,255,.12), var(--clay-ring), inset 0 0 0 1px rgba(110, 231, 183, .28); }
-.pf-chip.claimed .pf-chip-ico {
-  color: var(--mint-ink);
-  box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 0 0 1px rgba(110,231,183,.35), 0 0 12px -3px rgba(16,185,129,.6);
-}
 
 /* ---- quest / CTA card: dynamic pattern + glowing duel + claymorphic Play ---- */
 .pf-quest {
@@ -7785,19 +7586,14 @@ html.rm .gm-pick, html.rm .gm-key, html.rm .gm-copy, html.rm .gm-card { transiti
 }
 
 /* ---- reduced motion: kill every new animation ---- */
-html.rm .pf-hero-aurora,
 html.rm .pf-avatar-glow,
-html.rm .pf-xp-bar.bar i::after,
 html.rm .pf-quest-ico,
 html.rm .badge-chip[data-state="locked"]::after,
 html.rm .dock-nav .tab[aria-current="page"] .ico,
 html.rm .dock-nav .tab[aria-current="page"]::after { animation: none; }
 
+/* one column below 361px: the pills are half-width, so a long country name needs the whole row */
 @media (max-width: 360px) {
-  .pf-hero-chip-row { flex-direction: column; }
-  .pf-rank-tag { font-size: 9.5px; padding: 3px 8px 4px; }
-}
-@media (max-width: 380px), (max-height: 700px) {
-  #pf-avatar-wrap .pf-avatar-frame.avatar.big { width: 60px; height: 60px; border-radius: 21px; font-size: 20px; }
-  .pf-avatar-glow { width: 74px; height: 74px; margin-left: -37px; border-radius: 26px; }
+  .pf-hero-chip-row { grid-template-columns: minmax(0, 1fr); }
+  .pf-rank-badge { font-size: 9.5px; }
 }

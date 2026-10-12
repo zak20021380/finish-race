@@ -568,25 +568,24 @@ export function createMenu(api: MenuApi): Menu {
       pfBar.setAttribute('aria-valuemax', String(lv.need));
       pfBar.setAttribute('aria-valuetext', `Level ${lv.n}, ${lv.got} of ${lv.need} XP`);
     }
-    const remain = document.getElementById('pf-xp-remain');
-    if (remain) {
-      const left = Math.max(0, lv.need - lv.got);
-      remain.textContent = left === 0 ? `LVL ${lv.n + 1} ready` : `${left} XP to LVL ${lv.n + 1}`;
+    const rankBadge = document.getElementById('pf-rank-badge');
+    const rankName = rankFor(lv.n);
+    if (rankBadge) {
+      rankBadge.dataset.rank = rankName.id;
+      rankBadge.setAttribute('aria-label', `Level ${lv.n}, ${rankName.name} rank`);
     }
-    const lvlPill = document.getElementById('pf-lvl-pill');
-    if (lvlPill) lvlPill.setAttribute('aria-label', `Level ${lv.n}`);
-    /* rank tag under the level pill */
+    /* the rank name lives inside the merged badge */
     const rankTag = document.getElementById('pf-rank-tag');
-    if (rankTag) {
-      const r = rankFor(lv.n);
-      rankTag.dataset.rank = r.id;
-      rankTag.textContent = r.name;
-    }
-    /* avatar frame slot */
+    if (rankTag) rankTag.textContent = rankName.name;
+    /* the avatar is the frame control: its name reads out instead of a caption pill */
     const wrap = document.getElementById('pf-avatar-wrap');
-    if (wrap) wrap.setAttribute('data-frame', profile.frame ?? 'default');
-    const frameN = document.getElementById('pf-frame-n');
-    if (frameN) frameN.textContent = frameName(profile.frame);
+    if (wrap) {
+      const frame = profile.frame ?? 'default';
+      const label = `${frameName(frame)} avatar frame. Tap to change.`;
+      wrap.setAttribute('data-frame', frame);
+      wrap.setAttribute('aria-label', label);
+      wrap.setAttribute('title', label);
+    }
     /* primary equipped badge next to the name */
     const eq = equippedBadge();
     const eqWrap = document.getElementById('pf-equipped-badge');
@@ -748,7 +747,7 @@ export function createMenu(api: MenuApi): Menu {
     setBalance($('p-coins'), profile.coins);
     setBalance($('pf-coins'), profile.coins);
     for (const id of ['p-level', 'pf-level']) $(id).textContent = String(lv.n);
-    $('pf-xp').textContent = `${lv.got}/${lv.need} XP`;
+    $('pf-xp').textContent = `${lv.got} / ${lv.need} XP`;
     /* Home XP ring (r=26, stroke 3, round caps, accent gradient on muted track): replaces the level pill + XP bar. */
     const RING_C = 2 * Math.PI * 26;
     const pct: number = lv.need > 0 ? Math.min(1, Math.max(0, lv.got / lv.need)) : 0;
@@ -848,8 +847,8 @@ export function createMenu(api: MenuApi): Menu {
   paintProfile();
   new ResizeObserver(() => { if (!pfScreen.hidden) paintProfile(); }).observe(pfScreen);
 
-  /* frame slot cycles Default → Auric → Neon; badge drawer equips to the hero card. */
-  document.getElementById('pf-frame-btn')?.addEventListener('click', () => {
+  /* frame cycle: tapping the avatar steps Default → Auric → Neon; the name reads out via aria-label. */
+  document.getElementById('pf-avatar-wrap')?.addEventListener('click', () => {
     const ids = FRAMES.map((f) => f.id);
     const cur = profile.frame ?? 'default';
     const next = ids[(ids.indexOf(cur) + 1) % ids.length];

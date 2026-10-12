@@ -659,18 +659,17 @@
           <div class="pane pf-pane" data-scroll>
             <div class="p-card wide pf-hero pf-hero-v2">
               <span class="pf-hero-aurora" aria-hidden="true"></span>
+
+              <!-- tier 1 · identity + wallet -->
               <div class="pf-hero-top">
-                <div class="pf-avatar-wrap" id="pf-avatar-wrap" data-frame="default">
+                <button class="pf-avatar-wrap" type="button" id="pf-avatar-wrap" data-frame="default">
                   <span class="pf-avatar-glow" aria-hidden="true"></span>
                   <span class="avatar big pf-avatar-frame" id="pf-avatar" aria-hidden="true">
                     <img id="pf-avatar-img" alt="" hidden />
                     <span id="pf-avatar-t">P</span>
                   </span>
-                  <button class="pf-frame-slot" type="button" id="pf-frame-btn" aria-label="Change avatar frame">
-                    <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
-                    <span id="pf-frame-n">Default</span>
-                  </button>
-                </div>
+                  <span class="pf-avatar-tag" aria-hidden="true"><svg class="ico"><use href="#i-crown" /></svg></span>
+                </button>
                 <div class="p-id pf-id-v2">
                   <div class="pf-name-row">
                     <p class="p-name" id="pf-name">Player</p>
@@ -679,31 +678,36 @@
                       <span id="pf-equipped-t">Early Adopter</span>
                     </span>
                   </div>
-                  <div class="pf-lvl-row">
-                    <span class="lvl-pill pf-lvl-pill" id="pf-lvl-pill"><span class="pf-lvl-k">LVL</span><b id="pf-level">1</b></span>
-                    <span class="pf-rank-tag" id="pf-rank-tag" data-rank="rookie">Rookie</span>
-                    <span class="coin-pill pf-coin-pill"><span class="coin" data-coin aria-hidden="true"></span><span id="pf-coins">0</span></span>
-                  </div>
-                  <div class="pf-xp-block">
-                    <span class="pf-xp-icon" aria-hidden="true"><svg class="ico"><use href="#i-crown" /></svg></span>
-                    <span class="bar pf-xp-bar" role="progressbar" id="pf-bar" aria-label="Progress to the next level" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><i id="pf-fill"></i></span>
-                    <span class="pf-xp-meta"><span id="pf-xp">0/10 XP</span><span class="pf-xp-remain" id="pf-xp-remain">10 to LVL 2</span></span>
-                  </div>
+                  <span class="pf-rank-badge" id="pf-rank-badge" data-rank="rookie"><span class="pf-rank-k">Lvl</span><b id="pf-level">1</b><span class="pf-rank-dot" aria-hidden="true">•</span><span class="pf-rank-n" id="pf-rank-tag">Rookie</span></span>
                 </div>
+                <span class="coin-pill pf-coin-pill"><span class="coin" data-coin aria-hidden="true"></span><span id="pf-coins">0</span></span>
               </div>
+
+              <!-- tier 2 · progression: one line, one label -->
+              <div class="pf-xp-block">
+                <span class="bar pf-xp-bar" role="progressbar" id="pf-bar" aria-label="Progress to the next level" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><i id="pf-fill"></i></span>
+                <span class="pf-xp-meta" id="pf-xp">0 / 10 XP</span>
+              </div>
+
+              <!-- tier 3 · actions: two equal pills -->
               <div class="pf-hero-chip-row">
                 <button class="pf-chip" type="button" id="pf-country" aria-haspopup="dialog">
                   <span class="pf-chip-ico" aria-hidden="true"><svg class="ico"><use href="#i-flag" /></svg></span>
                   <span class="pf-chip-txt">
-                    <span class="pf-chip-k">Country</span>
+                    <span class="pf-chip-line">
+                      <span class="pf-chip-k">Country</span>
+                      <span class="pf-chip-reward reward-badge" id="pf-country-reward">+100</span>
+                      <span class="pf-chip-reward verified-badge" id="pf-country-done" hidden><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Set</span>
+                    </span>
                     <span class="pf-chip-v"><span class="flag" id="pf-flag" aria-hidden="true"></span><span class="flag-code" id="pf-code" aria-hidden="true"></span><span id="pf-country-v">Add country</span></span>
                   </span>
-                  <span class="pf-chip-reward reward-badge" id="pf-country-reward"><span class="coin coin-xs" data-coin aria-hidden="true"></span>+100</span>
-                  <span class="pf-chip-reward verified-badge" id="pf-country-done" hidden><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Set</span>
                 </button>
                 <button class="pf-chip" type="button" id="pf-team" aria-haspopup="dialog">
                   <span class="pf-chip-ico" aria-hidden="true"><svg class="ico"><use href="#i-shield" /></svg></span>
-                  <span class="pf-chip-txt"><span class="pf-chip-k">Team</span><span class="pf-chip-v" id="pf-team-v">Join a team</span></span>
+                  <span class="pf-chip-txt">
+                    <span class="pf-chip-line"><span class="pf-chip-k">Team</span></span>
+                    <span class="pf-chip-v"><span id="pf-team-v">Join a team</span></span>
+                  </span>
                 </button>
               </div>
             </div>
