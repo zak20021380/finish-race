@@ -99,6 +99,19 @@
           <rect x="3.4" y="12.8" width="17.2" height="4.8" rx="1.7" />
         </g>
       </symbol>
+      <symbol id="i-move" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 4.4v15.2M4.4 12h15.2" />
+          <path d="m8.8 7.6 3.2-3.2 3.2 3.2M8.8 16.4l3.2 3.2 3.2-3.2M7.6 8.8 4.4 12l3.2 3.2M16.4 8.8l3.2 3.2-3.2 3.2" />
+        </g>
+      </symbol>
+      <symbol id="i-mine" viewBox="0 0 24 24">
+        <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M12 2.4v3.1M12 18.5v3.1M2.4 12h3.1M18.5 12h3.1M5.2 5.2l2.2 2.2M16.6 16.6l2.2 2.2M18.8 5.2l-2.2 2.2M7.4 16.6l-2.2 2.2" />
+        </g>
+        <circle cx="12" cy="12" r="5.1" fill="currentColor" />
+        <circle cx="10.1" cy="10" r="1.5" fill="#fff" opacity=".55" />
+      </symbol>
       <symbol id="i-users" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="8" r="3.1" />
@@ -839,6 +852,20 @@
               </div>
             </div>
 
+            <!-- what this turn spends: one key per action, the mine key carries the budget -->
+            <div class="seg dock" id="dock" role="group" aria-label="Turn action">
+              <button class="seg-b dock-b" type="button" id="act-move" aria-pressed="true">
+                <svg class="ico" aria-hidden="true"><use href="#i-move" /></svg><span class="dock-t">Move</span>
+              </button>
+              <button class="seg-b dock-b" type="button" id="act-wall" aria-pressed="false">
+                <svg class="ico" aria-hidden="true"><use href="#i-wall" /></svg><span class="dock-t">Wall</span>
+              </button>
+              <button class="seg-b dock-b" type="button" id="act-mine" aria-pressed="false">
+                <svg class="ico" aria-hidden="true"><use href="#i-mine" /></svg><span class="dock-t">Mine</span>
+                <span class="pips" id="mine-pips" aria-hidden="true"></span>
+              </button>
+            </div>
+
             <footer class="chips">
               <div class="chip red" id="chip-0">
                 <span class="chip-row">
@@ -846,25 +873,12 @@
                   <span class="who" id="name-0">YOU</span>
                   <span class="steps" id="steps-0">11 steps</span>
                 </span>
-                <!-- wall budget: the dashes are built from WALL_LIMIT, the count is rewritten -->
-                <span class="chip-row walls" id="walls-0" role="img" aria-label="Walls left: 8 of 8">
-                  <span class="wall-segs" aria-hidden="true"></span>
-                  <span class="wall-count" aria-hidden="true">
-                    <svg class="ico"><use href="#i-wall" /></svg><span class="wall-n">8/8</span>
-                  </span>
-                </span>
               </div>
               <div class="chip blue" id="chip-1">
                 <span class="chip-row">
                   <span class="ball" aria-hidden="true"></span>
                   <span class="who" id="name-1">BOT</span>
                   <span class="steps" id="steps-1">11 steps</span>
-                </span>
-                <span class="chip-row walls" id="walls-1" role="img" aria-label="Walls left: 8 of 8">
-                  <span class="wall-segs" aria-hidden="true"></span>
-                  <span class="wall-count" aria-hidden="true">
-                    <svg class="ico"><use href="#i-wall" /></svg><span class="wall-n">8/8</span>
-                  </span>
                 </span>
               </div>
             </footer>

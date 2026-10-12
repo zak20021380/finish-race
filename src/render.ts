@@ -12,7 +12,7 @@
  * family and are told apart by a number badge; the chosen ball wears a ring and only its legal
  * cells are drawn as dots.
  */
-import { COLS, MAX_TEAMS, ROWS, type GameState, type Player, type Pos, type Wall, type WallSpec } from './rules';
+import { COLS, MAX_TEAMS, ROWS, type Cell, type GameState, type Player, type Pos, type Wall, type WallSpec } from './rules';
 import { motionReduced } from './settings';
 import {
   BOT_RAMP, CLASSIC_BALL, CLASSIC_WALL, DEFAULT_THEME, ERR_RAMP, TEAM2_RAMP,
@@ -47,6 +47,12 @@ export interface View {
   /** one entry per seat: what that seat did last */
   last: (Mark | null)[];
   thinking: Player | null;  // the seat deciding, when it is not the player's
+  /** the seat this client plays: only its mines are ever drawn, and only while still buried */
+  human: Player;
+  /** placeable cells while the mine key is armed — painted softer than the move dots */
+  mineHints: Cell[];
+  /** the cell already tapped in the two-tap mine flow, waiting for the confirm tap */
+  mineGhost: Cell | null;
 }
 
 export interface Layout {
@@ -62,10 +68,15 @@ export interface RendererOptions {
   theme?: () => Theme;
 }
 
+/** Which dock key is down: only that key's targets answer to a tap. */
+export type ActionMode = 'move' | 'wall' | 'mine';
+
 export type Hit =
   | { kind: 'ball'; id: number }
   | { kind: 'confirm'; spec: WallSpec }
   | { kind: 'wall'; spec: WallSpec }
+  | { kind: 'mine'; cell: Cell }
+  | { kind: 'mine-confirm'; cell: Cell }
   | { kind: 'move'; to: Pos };
 
 const TAU = Math.PI * 2;
@@ -110,6 +121,7 @@ function distToWall(bx: number, by: number, w: WallSpec, along: number): number 
  * Priority, not raw distance: one of your balls picks up, an armed ghost confirms, a tap inside a
  * legal cell moves, a tap that lands on a grid line arms a wall. A 44px target and a 0.3-cell line
  * band cannot both fit in a 37px cell, so the cell the target sits in always wins for the target.
+ * Only the dock key that is down offers targets — a tap while Wall is armed never moves a ball.
  */
 export function hitTest(L: Layout, px: number, py: number, o: {
   hints: Pos[];
@@ -118,6 +130,11 @@ export function hitTest(L: Layout, px: number, py: number, o: {
   balls: readonly { id: number; team: Player; c: number; r: number }[];
   /** the seat whose balls answer to a tap */
   mine: Player;
+  mode: ActionMode;
+  /** placeable cells — read only while `mode` is 'mine' */
+  mineHints: Cell[];
+  /** the cell waiting for its confirm tap — read only while `mode` is 'mine' */
+  armedMine: Cell | null;
 }): Hit | null {
   const c = L.cell;
   if (c <= 0) return null;
@@ -126,31 +143,42 @@ export function hitTest(L: Layout, px: number, py: number, o: {
 
   const cand: { hit: Hit; pri: number; d: number }[] = [];
   const reach = Math.max(0.5, MIN_TOUCH / 2 / c);   // 44px target, in cells
+  /** the nearest of these cells to the tap, if one is close enough to have been the aim */
+  const near = (cells: readonly Pos[]) => {
+    let best: Pos | null = null, d = Infinity;
+    for (const h of cells) {
+      const e = Math.hypot(bx - h.c - 0.5, by - h.r - 0.5);
+      if (e < d) { d = e; best = h; }
+    }
+    return best && d <= reach ? { cell: best, d } : null;
+  };
 
-  let ballId: number | null = null, db = Infinity;
-  for (const b of o.balls) {
-    if (b.team !== o.mine) continue;
-    const d = Math.hypot(bx - b.c - 0.5, by - b.r - 0.5);
-    if (d < db) { db = d; ballId = b.id; }
+  if (o.mode === 'mine') {
+    const armed = o.armedMine ? near([o.armedMine]) : null;
+    if (armed) cand.push({ hit: { kind: 'mine-confirm', cell: armed.cell }, pri: 0, d: armed.d });
+    const spot = near(o.mineHints);
+    if (spot) cand.push({ hit: { kind: 'mine', cell: spot.cell }, pri: 1, d: spot.d });
+  } else if (o.mode === 'wall') {
+    if (o.armed) {
+      const d = distToWall(bx, by, o.armed, 0.5);
+      if (d <= Math.min(0.42, Math.max(LINE_ZONE, 18 / c))) cand.push({ hit: { kind: 'confirm', spec: o.armed }, pri: 0, d });
+    }
+    const s = slotNear(bx, by, L.cols, L.rows);
+    if (s) cand.push({ hit: { kind: 'wall', spec: s }, pri: 1, d: distToWall(bx, by, s, 1.25) });
+  } else {
+    let ballId: number | null = null, db = Infinity;
+    for (const b of o.balls) {
+      if (b.team !== o.mine) continue;
+      const d = Math.hypot(bx - b.c - 0.5, by - b.r - 0.5);
+      if (d < db) { db = d; ballId = b.id; }
+    }
+    if (ballId !== null && db <= reach) cand.push({ hit: { kind: 'ball', id: ballId }, pri: 0, d: db });
+    const spot = near(o.hints);
+    if (spot) {
+      const own = Math.max(Math.abs(bx - spot.cell.c - 0.5), Math.abs(by - spot.cell.r - 0.5)) <= 0.5;
+      cand.push({ hit: { kind: 'move', to: spot.cell }, pri: own ? 2 : 4, d: spot.d });
+    }
   }
-  if (ballId !== null && db <= reach) cand.push({ hit: { kind: 'ball', id: ballId }, pri: 0, d: db });
-
-  let dot: Pos | null = null, dd = Infinity;
-  for (const h of o.hints) {
-    const d = Math.hypot(bx - h.c - 0.5, by - h.r - 0.5);
-    if (d < dd) { dd = d; dot = h; }
-  }
-  if (dot && dd <= reach) {
-    const own = Math.max(Math.abs(bx - dot.c - 0.5), Math.abs(by - dot.r - 0.5)) <= 0.5;
-    cand.push({ hit: { kind: 'move', to: dot }, pri: own ? 2 : 4, d: dd });
-  }
-
-  if (o.armed) {
-    const d = distToWall(bx, by, o.armed, 0.5);
-    if (d <= Math.min(0.42, Math.max(LINE_ZONE, 18 / c))) cand.push({ hit: { kind: 'confirm', spec: o.armed }, pri: 1, d });
-  }
-  const s = slotNear(bx, by, L.cols, L.rows);
-  if (s) cand.push({ hit: { kind: 'wall', spec: s }, pri: 3, d: distToWall(bx, by, s, 1.25) });
 
   cand.sort((a, b) => a.pri - b.pri || a.d - b.d);
   return cand.length ? cand[0].hit : null;
@@ -202,6 +230,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   let sides: Side[] = seats(th);
   const born = new Map<number, number>();                    // wall key → first-seen time (pop-in)
   const pulses: { x: number; y: number; t0: number; p: Player }[] = []; // wall landing rings
+  const blasts: { x: number; y: number; t0: number; p: Player }[] = []; // mine flashes, queued by blast()
   let bg: HTMLCanvasElement | null = null;                   // static board layer, rebuilt on resize
   let lastW = 0, lastH = 0, lastDpr = 0;
   // layout-sized paint servers: built once per resize, reused every frame
@@ -565,6 +594,51 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.restore();
   }
 
+  /**
+   * A mine: a dim spiked sphere. Placeholder art on purpose — the spikes are what make it read as
+   * a trap at 30px, and `armed` stands it up bright for the placement preview.
+   */
+  function drawMine(cx: number, cy: number, i: number, k: number, armed: boolean) {
+    const c = L.cell, s = sides[i];
+    const r = c * (armed ? 0.29 : 0.25) * (1 + 0.07 * k);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.globalAlpha = armed ? 0.95 : 0.3 + 0.12 * k;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = armed ? '#fff' : s.ramp.light;
+    ctx.lineWidth = Math.max(1.5, c * 0.05);
+    ctx.beginPath();
+    for (let n = 0; n < 8; n++) {
+      const co = Math.cos(n * Math.PI / 4), si = Math.sin(n * Math.PI / 4);
+      ctx.moveTo(co * r * 0.78, si * r * 0.78);
+      ctx.lineTo(co * r * 1.3, si * r * 1.3);
+    }
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.84, 0, TAU);
+    ctx.fillStyle = `rgba(${s.ramp.shade},.9)`;
+    ctx.fill();
+    ctx.lineWidth = Math.max(1, c * 0.028);
+    ctx.strokeStyle = s.ramp.light;
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(-r * 0.28, -r * 0.3, r * 0.16, 0, TAU);   // one specular dot
+    ctx.fillStyle = 'rgba(255,255,255,.5)';
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /** Marching ants around a whole cell — "this is the square you are about to use". */
+  function cellRing(cell: Cell, color: string, width: number, dashes: number[], phase = 0) {
+    const c = L.cell;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.setLineDash(dashes);
+    ctx.lineDashOffset = phase;
+    rr(ctx, L.ox + cell.c * c + c * 0.08, L.oy + cell.r * c + c * 0.08, c * 0.84, c * 0.84, c * 0.2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function draw(v: View, now: number) {
     const { cell: c, ox, oy } = L;
     const still = motionReduced();
@@ -629,6 +703,19 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     }
     ctx.restore();
 
+    // placeable cells while the mine key is down: a soft fill per square, no outline — 64 outlined
+    // boxes read as a wall of noise, and the armed square already gets its own marching ants
+    if (v.mineHints.length) {
+      ctx.save();
+      ctx.fillStyle = side.ramp.mid;
+      ctx.globalAlpha = 0.055 + 0.03 * pulse;
+      for (const h of v.mineHints) {
+        rr(ctx, ox + h.c * c + c * 0.12, oy + h.r * c + c * 0.12, c * 0.76, c * 0.76, c * 0.17);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
     if (v.ghost) {
       const gp = sides[v.ghost.p].ramp;
       if (v.ghost.ok) {
@@ -641,6 +728,13 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         outline(v.ghost.spec, 'rgba(255,45,85,.95)', Math.max(2, c * 0.06), SOLID, 0, ERR);
         cross(v.ghost.spec, '#fff', c * 0.19);
       }
+    }
+
+    // the cell already tapped in the two-tap mine flow, standing by for its confirm tap
+    if (v.mineGhost) {
+      const gp = sides[v.state.turn].ramp;
+      cellRing(v.mineGhost, gp.os, Math.max(1.5, c * 0.045), dash.armed, still ? 0 : -now / 26);
+      drawMine(ox + (v.mineGhost.c + 0.5) * c, oy + (v.mineGhost.r + 0.5) * c, v.state.turn, pulse, true);
     }
 
     // placed walls (pop-in + landing pulse); walls are never removed mid-game
@@ -657,6 +751,13 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       drawBar(w, w.owner, Math.min(1, p * 3), still ? 1 : 1 - Math.pow(1 - p, 3), true);
     }
 
+    // buried mines — this seat's own only. An enemy trap is never painted, not even by accident.
+    const mineK = still ? 0.5 : 0.5 + 0.5 * Math.sin(now / 520);
+    for (const m of v.state.mines) {
+      if (m.triggered || m.owner !== v.human) continue;
+      drawMine(ox + (m.cell.c + 0.5) * c, oy + (m.cell.r + 0.5) * c, m.owner, mineK, false);
+    }
+
     for (let i = pulses.length - 1; i >= 0; i--) {
       const f = pulses[i];
       const t = (now - f.t0) / 460;
@@ -666,6 +767,36 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.strokeStyle = sides[f.p].ramp.mid;
       ctx.lineWidth = Math.max(1.5, c * 0.07 * (1 - t));
       ctx.beginPath(); ctx.arc(f.x, f.y, c * (0.5 + 1.5 * t), 0, TAU); ctx.stroke();
+      ctx.restore();
+    }
+
+    // mine blast: a hot core, the owner's shock ring and eight shards thrown out. Painted in the
+    // owner's ramp rather than white, because the board surface is nearly white itself.
+    for (let i = blasts.length - 1; i >= 0; i--) {
+      const f = blasts[i];
+      const t = (now - f.t0) / 420;
+      if (t >= 1) { blasts.splice(i, 1); continue; }
+      const ramp = sides[f.p].ramp;
+      const ease = 1 - Math.pow(1 - t, 3);
+      ctx.save();
+      ctx.globalAlpha = (1 - t) * (1 - t) * 0.95;
+      ctx.fillStyle = ramp.glow;
+      ctx.beginPath(); ctx.arc(f.x, f.y, c * (0.3 + 0.8 * ease), 0, TAU); ctx.fill();
+      ctx.globalAlpha = 0.8 * (1 - t);
+      ctx.strokeStyle = ramp.mid;
+      ctx.lineWidth = Math.max(1.5, c * 0.09 * (1 - t));
+      ctx.beginPath(); ctx.arc(f.x, f.y, c * (0.45 + 1.15 * ease), 0, TAU); ctx.stroke();
+      ctx.lineCap = 'round';
+      ctx.lineWidth = Math.max(1, c * 0.055 * (1 - t));
+      ctx.strokeStyle = ramp.dark;
+      ctx.beginPath();
+      for (let n = 0; n < 8; n++) {
+        const a = n * Math.PI / 4 + Math.PI / 8;
+        const r0 = c * (0.34 + 0.8 * ease), r1 = r0 + c * 0.55 * (1 - t);
+        ctx.moveTo(f.x + Math.cos(a) * r0, f.y + Math.sin(a) * r0);
+        ctx.lineTo(f.x + Math.cos(a) * r1, f.y + Math.sin(a) * r1);
+      }
+      ctx.stroke();
       ctx.restore();
     }
 
@@ -715,7 +846,15 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     resize,
     draw,
     layout: () => L,
-    resetFx: () => { born.clear(); pulses.length = 0; },
+    resetFx: () => { born.clear(); pulses.length = 0; blasts.length = 0; },
+    /**
+     * Queue the flash for a mine that just went off. The caller owns the moment (only it knows a
+     * trigger happened), the frame loop owns the paint.
+     */
+    blast(at: Cell, p: Player) {
+      const { cell: c, ox, oy } = L;
+      blasts.push({ x: ox + (at.c + 0.5) * c, y: oy + (at.r + 0.5) * c, t0: performance.now(), p });
+    },
     /** Equipping repaints the board and every cached gradient once; never per frame. */
     setTheme(t: Theme) {
       if (t.ball === th.ball && t.wall === th.wall && t.board === th.board) return;
@@ -781,6 +920,9 @@ const sceneView = (s: Scene): View => {
     ghost: null,
     last: Array.from({ length: teams }, () => null),
     thinking: null,
+    human: 0,
+    mineHints: [],
+    mineGhost: null,
   };
 };
 

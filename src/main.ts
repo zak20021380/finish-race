@@ -1,11 +1,14 @@
 import './style.css';
 import {
-  COLS, apply, ballById, distField, newGame, pathLen, reachableBall, steps as teamSteps, wallOk,
-  wallsLeft, WALL_LIMIT,
-  type Action, type GameState, type Player, type Pos, type Wall, type WallSpec,
+  COLS, CONFIG, apply, ballById, distField, mineCells, minesLeft, newGame, pathLen, reachableBall,
+  steps as teamSteps, view as fogOfWar, wallOk,
+  type Action, type Cell, type GameState, type Mine, type Player, type Pos, type Wall, type WallSpec,
 } from './rules';
 import { botAction, botThinkMs, type Difficulty } from './bot';
-import { createRenderer, hitTest, type BallView, type Ghost, type Mark, type Vec, type View } from './render';
+import {
+  createRenderer, hitTest, type ActionMode, type BallView, type Ghost, type Hit, type Mark,
+  type Vec, type View,
+} from './render';
 import { createConfetti } from './confetti';
 import { createRouter } from './router';
 import { createSheets } from './sheets';
@@ -77,28 +80,27 @@ function setSteps(p: Player, d: number) {
   el.classList.add('pop');
 }
 
-/* wall budget readout: one dash per wall, built once from WALL_LIMIT, then only classes change */
-const wallRows = [$<HTMLSpanElement>('walls-0'), $<HTMLSpanElement>('walls-1')];
-const wallSegs: HTMLElement[][] = wallRows.map((row) => {
-  const box = row.querySelector<HTMLElement>('.wall-segs')!;
-  return Array.from({ length: WALL_LIMIT }, () => {
-    const seg = document.createElement('i');
-    box.appendChild(seg);
-    return seg;
-  });
+/* the action dock: which key is down, and the mine budget the Mine key carries */
+const MODES: ActionMode[] = ['move', 'wall', 'mine'];
+const dock = $<HTMLDivElement>('dock');
+const dockKeys: Record<ActionMode, HTMLButtonElement> = {
+  move: $<HTMLButtonElement>('act-move'),
+  wall: $<HTMLButtonElement>('act-wall'),
+  mine: $<HTMLButtonElement>('act-mine'),
+};
+const minePips = Array.from({ length: CONFIG.MINES_PER_TEAM }, () => {
+  const dot = document.createElement('i');
+  dock.querySelector<HTMLElement>('#mine-pips')!.appendChild(dot);
+  return dot;
 });
-const wallNums = wallRows.map((row) => row.querySelector<HTMLElement>('.wall-n')!);
-const shownWalls: [number, number] = [-1, -1];
-function setWalls(p: Player, left: number) {
-  if (shownWalls[p] === left) return;
-  shownWalls[p] = left;
-  wallNums[p].textContent = `${left}/${WALL_LIMIT}`;
-  wallRows[p].classList.toggle('dry', left === 0);
-  for (let i = 0; i < WALL_LIMIT; i++) wallSegs[p][i].classList.toggle('on', i < left);
-  wallRows[p].setAttribute('aria-label', `Walls left: ${left} of ${WALL_LIMIT}`);
-  wallNums[p].classList.remove('pop');
-  void wallNums[p].offsetWidth;
-  wallNums[p].classList.add('pop');
+let shownMines = -1;
+function setMinePips(left: number) {
+  if (shownMines === left) return;
+  shownMines = left;
+  minePips.forEach((el, i) => el.classList.toggle('on', i < left));
+  dockKeys.mine.setAttribute('aria-label', left
+    ? `Mine — ${left} of ${CONFIG.MINES_PER_TEAM} left`
+    : 'Mine — none left');
 }
 
 /* floating message over the board: why a slot was refused, or "tap again to place" */
@@ -174,14 +176,13 @@ let opponent: Opponent = makeBot(difficulty);
 
 const wantsOpponent = () => state.turn !== HUMAN && state.winner === null;
 
-const REASON = { empty: 'No walls left', overlap: 'Overlaps a wall', blocked: 'Blocks the path' };
+const REASON = { overlap: 'Overlaps a wall', blocked: 'Blocks the path' };
 
 /**
- * Why a slot was refused: an empty budget, an overlap on the same line, or a sealed path.
- * `wallOk` only answers yes/no, so the reason stays a UI-layer concern.
+ * Why a wall slot was refused: an overlap on the same line, or a sealed path. `wallOk` only
+ * answers yes/no, so the reason stays a UI-layer concern.
  */
 function wallIssue(s: GameState, w: Wall): keyof typeof REASON {
-  if (wallsLeft(s, w.owner) <= 0) return 'empty';
   const clash = s.walls.some((o) => o.o === w.o
     && (w.o === 'h' ? o.y === w.y && Math.abs(o.x - w.x) < 2 : o.x === w.x && Math.abs(o.y - w.y) < 2));
   if (clash) return 'overlap';
@@ -201,17 +202,36 @@ let state: GameState = newGame(sizes);
 const ballViews: BallView[] = [];
 /** The ball the player picked up, by id — only its legal cells are drawn as dots. */
 let selected: number | null = null;
+/** Which dock key is down; Move is the resting state the other two fall back to. */
+let mode: ActionMode = 'move';
 let hints: Pos[] = [];
+let mineHints: Cell[] = [];
+/** The cell tapped once in the two-tap mine flow, waiting for its confirm tap. */
+let mineGhost: Cell | null = null;
+const sameCell = (a: Cell | null, b: Cell | null) => !!a && !!b && a.c === b.c && a.r === b.r;
 let ghost: Ghost | null = null;                 // wall preview; armed = waiting for a confirm tap
 const marks: (Mark | null)[] = [null, null];
 /** Reused every frame: the loop must not allocate. */
-const view: View = { state, balls: ballViews, hints, ghost, last: marks, thinking: null };
+const view: View = {
+  state, balls: ballViews, hints, ghost, last: marks, thinking: null,
+  human: HUMAN, mineHints, mineGhost,
+};
 let gen = 0; // bumps on restart so stale bot replies are dropped
 let paused = false;
 const waiting: (() => void)[] = [];            // bot thinks parked by the pause sheet
 
 const canAct = () => state.winner === null && state.turn === HUMAN && !paused;
-const clearGhost = () => { ghost = null; clearNote(); };
+const clearGhost = () => { ghost = null; mineGhost = null; clearNote(); };
+
+/** The dock is a mode switch with a resting key: tapping the live one falls back to Move. */
+function setMode(next: ActionMode) {
+  impact('light');
+  mode = mode === next && next !== 'move' ? 'move' : next;
+  clearGhost();
+  selected = null;
+  closeHint();
+  ui();
+}
 
 /** Brings the drawn ball list into step with the state; existing entries are reused as they are. */
 function syncBalls() {
@@ -268,7 +288,11 @@ function ui() {
   /* a pick that no longer belongs to you, or to a ball that is gone, is dropped here */
   if (selected !== null && (state.winner !== null || state.turn !== HUMAN
     || !state.balls.some((b) => b.id === selected))) selected = null;
-  hints = canAct() && selected !== null ? reachableBall(state, selected) : [];
+  const live = canAct();
+  hints = live && mode === 'move' && selected !== null ? reachableBall(state, selected) : [];
+  mineHints = live && mode === 'mine' ? mineCells(state, HUMAN) : [];
+  /* an armed cell that is no longer placeable — the turn moved on, or a ball rolled over it */
+  if (mineGhost && !mineHints.some((h) => sameCell(h, mineGhost))) mineGhost = null;
   const thinking = wantsOpponent() && !paused;
 
   if (state.winner !== null) {
@@ -276,17 +300,25 @@ function ui() {
   } else if (paused) {
     statusText.textContent = 'Paused';
   } else if (state.turn === HUMAN) {
-    statusText.textContent = selected === null ? 'Pick one of your balls' : 'Your move';
+    statusText.textContent = mode === 'mine' ? 'Pick a square to bury a mine'
+      : mode === 'wall' ? 'Draw a wall across two squares'
+      : selected === null ? 'Pick one of your balls' : 'Your move';
   } else {
     statusText.textContent = `${TEAM_NAME[state.turn]} is thinking`;
   }
   dots.classList.toggle('on', thinking);
 
+  for (const m of MODES) {
+    const k = dockKeys[m];
+    k.setAttribute('aria-pressed', String(mode === m));
+    k.disabled = !live || (m === 'mine' && minesLeft(state, HUMAN) <= 0);
+  }
+  setMinePips(minesLeft(state, HUMAN));
+
   for (const p of SEATS) {
     chips[p].classList.toggle('active', state.winner === null && state.turn === p && !paused);
     chips[p].classList.toggle('thinking', thinking && p === state.turn);
     setSteps(p, pathLen(state, p));
-    setWalls(p, wallsLeft(state, p));
   }
 
   if (state.winner === null && overlayOpen) {
@@ -301,30 +333,57 @@ function ui() {
 async function runOpponent() {
   if (state.winner !== null || !wantsOpponent()) return;
   const token = ++gen;
-  const a = await opponent.think(state);
+  const a = await opponent.think(fogOfWar(state, state.turn));
   if (token !== gen) return;
   if (paused) await new Promise<void>((res) => waiting.push(res));   // parked until Resume
   if (token !== gen) return;
-  if (!play(a)) play({ kind: 'pass' });
+  if (play(a)) return;
+  /* a bot only sees its own side of the fog, so a mine it buries can sit on a square the human
+     already mined, which the rules refuse: carry on racing rather than throw the turn away */
+  const st = teamSteps(state, state.turn)[0];
+  play(st ? { kind: 'move', ball: st.ball, to: st.to } : { kind: 'pass' });
+}
+
+/** The mine that went off across this action: triggered mines only ever flip in place. */
+function blastOf(prev: GameState, next: GameState): Mine | null {
+  for (let i = 0; i < next.mines.length; i++) {
+    const m = next.mines[i];
+    if (m.triggered && !prev.mines[i]?.triggered) return m;
+  }
+  return null;
 }
 
 function play(a: Action): boolean {
+  const prev = state;
   const by = state.turn;
   /* which ball is about to move, so the trail can start under it */
   let from: Pos | null = null;
+  let moved: number | null = null;
   if (a.kind === 'move') {
-    const st = teamSteps(state, by).find((x) => x.to.c === a.to.c && x.to.r === a.to.r
+    const st = teamSteps(prev, by).find((x) => x.to.c === a.to.c && x.to.r === a.to.r
       && (a.ball === undefined || x.ball === a.ball));
-    from = st ? ballById(state, st.ball)?.pos ?? null : null;
+    if (st) { moved = st.ball; from = ballById(prev, st.ball)?.pos ?? null; }
   }
-  const next = apply(state, a);
+  const next = apply(prev, a);
   if (!next) return false;
-  if (a.kind === 'move' && from) marks[by] = { kind: 'step', from, to: a.to };
+  /* where the ball actually came to rest — after a blast that is three rows further down */
+  const landed = moved === null ? null : ballById(next, moved)?.pos ?? null;
+  if (a.kind === 'move' && from && landed) marks[by] = { kind: 'step', from, to: landed };
   else if (a.kind === 'wall') { marks[by] = { kind: 'wall', spec: a.wall }; impact('medium'); }
   state = next;
   ghost = null;
+  mineGhost = null;
   selected = null;         // the turn is over: the next pick is a fresh one
   clearNote();
+  const blast = blastOf(prev, next);
+  if (blast) {
+    const cells = landed ? landed.r - blast.cell.r : 0;
+    renderer.blast(blast.cell, blast.owner);
+    impact('medium');
+    notify('warning');
+    showNote(`Mine! ${TEAM_NAME[by]} ${by === HUMAN ? 'were' : 'was'} thrown back `
+      + `${cells} cell${cells === 1 ? '' : 's'}`, false, 2600);
+  }
   ui();
   if (state.winner !== null) notify(state.winner === HUMAN ? 'success' : 'error');
   else if (wantsOpponent()) void runOpponent();
@@ -338,9 +397,11 @@ function restart() {
   syncBalls();
   selected = null;
   ghost = null;
+  mineGhost = null;
+  mode = 'move';
   marks[0] = null; marks[1] = null;
   shownSteps[0] = -1; shownSteps[1] = -1;
-  shownWalls[0] = -1; shownWalls[1] = -1;
+  shownMines = -1;
   overlayOpen = false;
   overlay.hidden = true;
   reward.hidden = true;
@@ -406,62 +467,80 @@ function refuse(w: Wall) {
 /** Every ball on the board, in cell coordinates, for the hit-test. */
 const cells = () => state.balls.map((b) => ({ id: b.id, team: b.team, c: b.pos.c, r: b.pos.r }));
 
-/** Touch: tap one of your balls to pick it up, then a dot to move it; wall lines stay two-tap. */
-function onTouch(p: Vec) {
-  const hit = hitTest(renderer.layout(), p.x, p.y, {
-    hints,
-    armed: ghost?.armed ? ghost.spec : null,
-    balls: cells(),
-    mine: state.turn,
-  });
-  if (!hit) { pick(null); clearGhost(); return; }
+/** What the key that is down offers to a tap. */
+const at = (p: Vec) => hitTest(renderer.layout(), p.x, p.y, {
+  hints,
+  armed: ghost?.armed ? ghost.spec : null,
+  balls: cells(),
+  mine: state.turn,
+  mode,
+  mineHints,
+  armedMine: mineGhost,
+});
 
+/** The two-tap mine flow: one tap arms the square, the next buries it. */
+function tapMine(hit: Hit | null): boolean {
+  if (!hit) return false;
+  if (hit.kind === 'mine-confirm') {
+    if (mineGhost) play({ kind: 'mine', cell: mineGhost });
+    return true;
+  }
+  if (hit.kind !== 'mine') return false;
+  mineGhost = hit.cell;
+  closeHint();
+  impact('light');
+  showNote('Tap again to bury', false, 0);
+  return true;
+}
+
+/** The two-tap wall flow: one tap arms the slot, the next puts the wall up. */
+function tapWall(hit: { kind: 'wall' | 'confirm'; spec: WallSpec }) {
+  const wall: Wall = { ...hit.spec, owner: state.turn };
+  if (hit.kind === 'confirm') {
+    if (wallOk(state, wall)) play({ kind: 'wall', wall }); else refuse(wall);
+    return;
+  }
+  const ok = wallOk(state, wall);
+  ghost = { spec: hit.spec, ok, armed: true, p: state.turn };
+  closeHint();
+  if (ok) { impact('light'); showNote('Tap again to place', false, 0); } else refuse(wall);
+}
+
+/** Touch: whatever the live key offers is what a tap acts on — a ball, a line, or a square. */
+function onTouch(p: Vec) {
+  const hit = at(p);
+  if (tapMine(hit)) return;
+  if (!hit) { pick(null); clearGhost(); return; }
   if (hit.kind === 'ball') { impact('light'); pick(hit.id === selected ? null : hit.id); return; }
   if (hit.kind === 'move') {
     impact('light');
     play({ kind: 'move', ball: selected ?? undefined, to: hit.to });
     return;
   }
-
-  const spec = hit.spec;
-  const wall: Wall = { ...spec, owner: state.turn };
-  /* an empty budget never arms a ghost: the tap only reports why nothing will happen */
-  if (wallsLeft(state, wall.owner) <= 0) { refuse(wall); return; }
-  if (hit.kind === 'confirm') {
-    if (!wallOk(state, wall)) { refuse(wall); return; }
-    play({ kind: 'wall', wall });
-    return;
-  }
-  const ok = wallOk(state, wall);
-  ghost = { spec, ok, armed: true, p: state.turn };
-  closeHint();
-  if (ok) { impact('light'); showNote('Tap again to place', false, 0); } else refuse(wall);
+  if (hit.kind === 'wall' || hit.kind === 'confirm') tapWall(hit);
 }
 
-/** Mouse: hover previews walls, one click picks a ball, a second click moves it. */
+/** Mouse: hovering a wall slot previews it; mines arm on click, like everywhere else. */
 function onMouse(p: Vec, click: boolean) {
   if (!canAct()) { ghost = null; return; }
-  const hit = hitTest(renderer.layout(), p.x, p.y, {
-    hints,
-    armed: null,
-    balls: cells(),
-    mine: state.turn,
-  });
-  const spec: WallSpec | null = hit && hit.kind === 'wall' ? hit.spec : null;
-  const by = state.turn;
-  /* out of walls: no preview ghost at all, so the line stops reading as a live slot */
-  const budget = wallsLeft(state, by) > 0;
-  const wall: Wall | null = spec && budget ? { ...spec, owner: by } : null;
-  const ok = wall ? wallOk(state, wall) : false;
-  ghost = wall ? { spec: wall, ok, armed: false, p: by } : null;
+  if (mode === 'mine') {
+    if (click) tapMine(at(p));
+    return;
+  }
+  const hit = at(p);
+  const spec = mode === 'wall' && hit && hit.kind === 'wall' ? hit.spec : null;
+  const wall: Wall | null = spec ? { ...spec, owner: state.turn } : null;
+  ghost = wall ? { spec: wall, ok: wallOk(state, wall), armed: false, p: state.turn } : null;
 
   if (!click) return;
+  if (mode === 'wall') {
+    if (hit && (hit.kind === 'wall' || hit.kind === 'confirm')) tapWall(hit);
+    else clearGhost();
+    return;
+  }
   if (hit?.kind === 'ball') { impact('light'); pick(hit.id === selected ? null : hit.id); return; }
   if (hit?.kind === 'move') { impact('light'); play({ kind: 'move', ball: selected ?? undefined, to: hit.to }); return; }
-  if (spec && !budget) { refuse({ ...spec, owner: by }); return; }
-  if (wall && ok) { closeHint(); play({ kind: 'wall', wall }); return; }
-  if (wall) refuse(wall);
-  else clearGhost();
+  clearGhost();
 }
 
 canvas.addEventListener('pointerdown', (e) => {
@@ -478,6 +557,8 @@ canvas.addEventListener('pointermove', (e) => {
 });
 canvas.addEventListener('pointerleave', () => { if (ghost && !ghost.armed) ghost = null; });
 hintEl.addEventListener('click', () => { impact('light'); closeHint(); });
+
+for (const m of MODES) dockKeys[m].addEventListener('click', () => setMode(m));
 
 again.addEventListener('click', () => { impact('light'); restart(); });
 toMenu.addEventListener('click', () => { impact('light'); quitToMenu(); });
@@ -519,6 +600,8 @@ function frame(now: number) {
   view.balls = ballViews;
   view.hints = hints;
   view.ghost = ghost;
+  view.mineHints = mineHints;
+  view.mineGhost = mineGhost;
   view.last = marks;
   view.thinking = wantsOpponent() && !paused ? state.turn : null;
   renderer.draw(view, now);

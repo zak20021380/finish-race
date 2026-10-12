@@ -9,10 +9,23 @@
  * invariants after every single action.
  */
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import * as rules from '../src/rules.ts';
 import {
-  CONFIG, COLS, ROWS, allWalls, apply, doMine, mineCells, mineOk, newGame, reachable,
-  view, liveMines, minesLeft, wallOk,
+  CONFIG, COLS, ROWS, allWalls, apply, doMine, doWall, mineCells, mineOk, newGame, reachable,
+  steps, view, liveMines, minesLeft, wallOk,
 } from '../src/rules.ts';
+
+/* bot.ts says `from './rules'`, which Vite resolves and Node does not. Node only strips types from
+   a real `.ts` file, so rewrite that one specifier into a generated twin in .shots/ — rebuilt on
+   every run, so the bot under test can never drift from src/bot.ts. */
+const botSrc = fs.readFileSync(path.join('src', 'bot.ts'), 'utf8')
+  .replace("'./rules'", JSON.stringify(pathToFileURL(path.resolve('src', 'rules.ts')).href));
+fs.mkdirSync('.shots', { recursive: true });
+fs.writeFileSync('.shots/bot-under-test.ts', botSrc);
+const { botAction } = await import(pathToFileURL(path.resolve('.shots', 'bot-under-test.ts')).href);
 
 const ball = (s, id = 0) => s.balls[id].pos;
 const put = (s, id, c, r) => { const n = structuredClone(s); n.balls[id].pos = { c, r }; return n; };
@@ -184,6 +197,47 @@ check('pure: no input mutation', () => {
   mineCells(s, 0);
   view(s, 0);
   assert.equal(JSON.stringify(s), before);
+});
+
+check('walls are unlimited: 9 legal walls in a row, past the old 8', () => {
+  let s = newGame([1, 1]);
+  for (const y of [3, 5, 7]) for (const x of [0, 2, 4]) {
+    const next = doWall(s, { o: 'h', x, y, owner: s.turn });
+    assert.ok(next, `wall ${x},${y} rejected with only ${s.walls.length} built`);
+    s = { ...next, turn: s.turn };
+  }
+  assert.equal(s.walls.length, 9);
+});
+
+check('the wall budget exports are gone', () => {
+  assert.ok(!('WALL_LIMIT' in rules), 'WALL_LIMIT still exported');
+  assert.ok(!('wallsLeft' in rules), 'wallsLeft still exported');
+});
+
+check('bot: every action survives the real state, or main.ts falls back and races on', () => {
+  let seed = 7;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  let mined = 0, walled = 0, moved = 0, refused = 0;
+  for (let g = 0; g < 120; g++) {
+    let s = newGame([1 + ((rnd() * 3) | 0), 1 + ((rnd() * 3) | 0)]);
+    for (let i = 0; i < 40 && s.winner === null; i++) {
+      const a = botAction(view(s, s.turn), ['easy', 'normal', 'hard'][(rnd() * 3) | 0]);
+      // the bot is handed the projection but the rules run on the whole state, exactly as main.ts does
+      let next = apply(s, a);
+      if (!next) {
+        refused++;
+        const st = steps(s, s.turn)[0];
+        next = st ? apply(s, { kind: 'move', ball: st.ball, to: st.to }) : apply(s, { kind: 'pass' });
+        assert.ok(next, 'even the fallback step was refused');
+      }
+      if (a.kind === 'mine') mined++; else if (a.kind === 'wall') walled++; else if (a.kind === 'move') moved++;
+      s = next;
+    }
+  }
+  assert.ok(mined > 40, `the bot buried only ${mined} mines in 120 games`);
+  assert.ok(walled > 0, 'the bot never walled: the wall branch stopped firing');
+  assert.ok(moved > 200, `the bot barely raced: ${moved} moves`);
+  console.log(`   (bot: ${mined} mines, ${walled} walls, ${moved} moves, ${refused} refused by the fog)`);
 });
 
 check('fuzz: 300 random playouts keep every invariant', () => {

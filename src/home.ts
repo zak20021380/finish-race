@@ -719,6 +719,9 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       ghost: null,
       last: [null, null],
       thinking: null,
+      human: 0,
+      mineHints: [],
+      mineGhost: null,
     };
   }
 
