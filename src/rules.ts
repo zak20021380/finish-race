@@ -28,12 +28,14 @@ export const ROWS = 12;
 /** Team and ball counts the rules accept; the start-layout helper fills the bottom two rows. */
 export const MAX_TEAMS = 3;
 export const MAX_BALLS = 3;
-/** Mine tunables, in one place so the server and the client never disagree. */
+/** Engine tunables, in one place so the server and the client never disagree. */
 export const CONFIG = {
   /** Mines each team may bury per race. */
   MINES_PER_TEAM: 3,
   /** Cells a ball is thrown straight down the column when it sets off a mine. */
   KNOCKBACK: 3,
+  /** Seconds a seat gets to act before `getAutoMove()` plays the turn for it. */
+  TURN_TIME_LIMIT: 8,
 } as const;
 /** A mine may not be buried in the top or bottom this-many rows: no free wins, no point-blank traps. */
 const MINE_ZONE = 2;
@@ -357,6 +359,30 @@ export function apply(s: GameState, a: Action): GameState | null {
     case 'mine': return doMine(s, a.cell);
     case 'pass': return s.winner === null ? { ...s, turn: nextTeam(s, s.turn) } : null;
   }
+}
+
+/**
+ * The turn the engine plays for a seat whose clock ran out. Progress first: among the steps that
+ * shorten a ball's path to FINISH, the one coming to rest closest to the line — so a wall that
+ * forces a detour is walked around rather than answered with a sideways shuffle. A team with
+ * nothing to gain takes the step that costs it least, and only passes when it cannot move at all.
+ */
+export function getAutoMove(s: GameState, team: Player = s.turn): Action {
+  const opts = steps(s, team);
+  if (!opts.length) return { kind: 'pass' };
+  const d = distField(s.walls);
+  const to = (st: Step) => pathOn(d, st.to);
+  /** 0 = gaining ground on FINISH, 1 = holding position, 2 = giving it up. */
+  const tier = (st: Step): number => {
+    const ball = ballById(s, st.ball);
+    const from = ball ? pathOn(d, ball.pos) : Infinity;
+    const land = to(st);
+    return land < from ? 0 : land === from ? 1 : 2;
+  };
+  const better = (a: Step, b: Step) => (tier(a) !== tier(b) ? tier(a) < tier(b) : to(a) < to(b));
+  let best = opts[0];
+  for (const st of opts) if (better(st, best)) best = st;
+  return { kind: 'move', ball: best.ball, to: best.to };
 }
 
 /* ---------- fog of war ---------- */

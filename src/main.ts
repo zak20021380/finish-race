@@ -1,7 +1,7 @@
 import './style.css';
 import {
-  COLS, CONFIG, apply, ballById, distField, firstBall, mineCells, minesLeft, newGame, pathLen,
-  reachableBall, steps as teamSteps, view as fogOfWar, wallOk,
+  COLS, CONFIG, apply, ballById, distField, firstBall, getAutoMove, mineCells, minesLeft, newGame,
+  pathLen, reachableBall, steps as teamSteps, view as fogOfWar, wallOk,
   type Action, type Ball, type Cell, type GameState, type Mine, type Player, type Pos, type Wall,
   type WallSpec,
 } from './rules';
@@ -67,6 +67,7 @@ const chips = [$<HTMLDivElement>('chip-0'), $<HTMLDivElement>('chip-1')];
 const steps = [$<HTMLSpanElement>('steps-0'), $<HTMLSpanElement>('steps-1')];
 const turnPill = $<HTMLElement>('turn');
 const turnText = $<HTMLSpanElement>('turn-text');
+const turnClock = $<HTMLSpanElement>('turn-clock');
 const sheetPause = $<HTMLElement>('sheet-pause');
 const sheetQuit = $<HTMLElement>('sheet-quit');
 const reward = $<HTMLParagraphElement>('reward');
@@ -114,14 +115,15 @@ function shake() {
 
 /* floating message over the board: why a slot was refused, or "tap again to place" */
 let noteTimer = 0;
-function showNote(msg: string, error: boolean, ttl: number) {
+function showNote(msg: string, error: boolean, ttl: number, timeout = false) {
   noteEl.textContent = msg;
   noteEl.classList.toggle('error', error);
+  noteEl.classList.toggle('timeout', timeout);   // the blitz verdict gets its own clay tone
   noteEl.classList.add('show');
   clearTimeout(noteTimer);
   if (ttl) noteTimer = setTimeout(() => noteEl.classList.remove('show'), ttl);
 }
-const clearNote = () => { clearTimeout(noteTimer); noteEl.classList.remove('show'); };
+const clearNote = () => { clearTimeout(noteTimer); noteEl.classList.remove('show', 'timeout'); };
 
 /* ---------- screens ---------- */
 
@@ -443,9 +445,74 @@ function play(a: Action): boolean {
       + `${cells} cell${cells === 1 ? '' : 's'}`, false, 2600);
   }
   ui();
+  startClock();          // the turn has moved on: the next seat gets its own allowance
   if (state.winner !== null) notify(state.winner === HUMAN ? 'success' : 'error');
   else if (wantsOpponent()) void runOpponent();
   return true;
+}
+
+/**
+ * Blitz clock. One interval, owned by the turn that started it: `startClock` is the only thing that
+ * arms it, and it arms nothing unless a human seat is actually up — so a bot's think time, an open
+ * sheet, a finished race and a hidden webview all leave the timer cleared rather than running blind.
+ */
+const URGENT_AT = 3;
+let turnTimerId: number | null = null;
+let turnSecondsLeft: number = CONFIG.TURN_TIME_LIMIT;
+
+/** Is the countdown this seat's to lose? */
+const clockLive = () => !paused && !overlayOpen && !document.hidden && router.current === 'game'
+  && state.winner === null && state.turn === HUMAN;
+
+/** Park the countdown: the interval is gone, and the pill stops advertising a clock it isn't running. */
+function stopClock() {
+  if (turnTimerId !== null) {
+    clearInterval(turnTimerId);
+    turnTimerId = null;
+  }
+  paintClock();
+}
+
+/** A new turn: the full allowance, and an interval only once a human seat is actually up. */
+function startClock() {
+  stopClock();
+  turnSecondsLeft = CONFIG.TURN_TIME_LIMIT;
+  paintClock();
+  if (clockLive()) turnTimerId = window.setInterval(tickClock, 1000);
+}
+
+function paintClock() {
+  const live = clockLive();
+  turnClock.hidden = !live;
+  if (live) turnClock.textContent = `${turnSecondsLeft}s`;
+  turnPill.classList.toggle('urgent', live && turnSecondsLeft <= URGENT_AT);
+}
+
+function tickClock() {
+  turnSecondsLeft--;
+  if (turnSecondsLeft <= 0) {
+    turnSecondsLeft = 0;
+    stopClock();
+    paintClock();
+    timeoutMove();
+    return;
+  }
+  if (turnSecondsLeft <= URGENT_AT) impact('light');
+  paintClock();
+}
+
+/**
+ * The clock ran out. Every armed mode goes before the move is committed, so a half-placed wall or a
+ * live mine key can never be carried into the next seat's turn.
+ */
+function timeoutMove() {
+  mineArmed = false;
+  clearGhost();
+  selected = null;
+  notify('warning');
+  play(getAutoMove(state, state.turn));
+  /* after play(), which clears the banner itself to make room for the next prompt */
+  showNote('Time out! Auto-moved.', false, 1800, true);
 }
 
 function restart() {
@@ -473,6 +540,7 @@ function restart() {
   confetti.stop();
   renderer.resetFx();
   ui();
+  startClock();
 }
 
 function paintNames() {
@@ -714,12 +782,15 @@ function frame(now: number) {
 }
 
 /** The webview keeps a hidden Mini App running, and the pause sheet is a real stop: no frames
- *  are burned unless the board is on screen and unpaused. */
+ *  are burned unless the board is on screen and unpaused. The clock follows the same rule —
+ *  leaving the board stops it, coming back hands the seat a full allowance again. */
 let raf = 0;
 function syncLoop() {
   const want = !document.hidden && !paused && router.current === 'game';
   if (want && !raf) { last = performance.now(); raf = requestAnimationFrame(frame); }
   else if (!want && raf) { cancelAnimationFrame(raf); raf = 0; }
+  if (!want) stopClock();
+  else if (turnTimerId === null) startClock();
 }
 document.addEventListener('visibilitychange', syncLoop);
 

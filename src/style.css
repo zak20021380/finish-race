@@ -183,9 +183,14 @@
   --bounce: cubic-bezier(.34, 1.56, .64, 1);
   /* banners sit one row down so the checkered strip is never covered */
   --banner-top: calc(100% / 12 + var(--s2));
-  /* lane the board slot keeps above the board: the FINISH pill straddles that edge, so its
-     upper half needs room inside the slot's own padding box — nothing gets cropped */
-  --finish-lane: 16px;
+  /* the FINISH plate: a fixed height, so the lane under it can be derived from the badge itself and
+     the clip can never eat a corner when the type clamp steps up on a wider phone */
+  --finish-pill-h: 22px;
+  --finish-clearance: 8px;
+  --finish-ring: rgba(110, 231, 183, .18);
+  /* lane the board slot keeps above the canvas: the whole badge, its clearance and 2px of slack for
+     sub-pixel rounding — the pill floats clear of the board instead of straddling its top edge */
+  --finish-lane: calc(var(--finish-pill-h) + var(--finish-clearance) + 2px);
   /* bottom nav height: the compete scroll pads by dock + 16 so rows never hide behind chrome */
   --dock-height: 72px;
 
@@ -325,25 +330,25 @@ html, body {
   .card { background: linear-gradient(180deg, var(--card-a) 0%, var(--card-b) 100%); }
 }
 
-/* ---- the finish label: a frosted pill straddling the board's top edge ---- */
+/* ---- the finish label: a debossed clay plate floating clear above the canvas ----
+   It used to straddle the board's top edge, which put half of it over the checkered strip and
+   smeared that strip through a live backdrop-filter. Now it sits in its own lane, solid clay,
+   pressed into the card with the shared inset recipe — board furniture, not a banner. */
 .finish-pill {
   position: absolute;
   left: 50%;
-  top: 0;
-  transform: translate(-50%, -50%);
+  bottom: calc(100% + var(--finish-clearance));
+  transform: translateX(-50%);
   z-index: 3;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--s1);
-  padding: var(--s1) var(--s2);
+  height: var(--finish-pill-h);
+  padding: 0 var(--s2);
   border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, var(--solid-a), var(--tint-glass));
-  backdrop-filter: blur(7px) saturate(1.25);
-  -webkit-backdrop-filter: blur(7px) saturate(1.25);
-  box-shadow:
-    inset 0 0 0 1px var(--hair),
-    0 6px 16px -8px rgba(15, 107, 69, .5),
-    0 1px 2px var(--shadow-soft);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--finish-ring);
   font-size: var(--t-micro);
   line-height: 1;
   white-space: nowrap;
@@ -351,15 +356,15 @@ html, body {
 }
 .finish-pill .ico {
   flex: none;
-  width: 1.25em;
-  height: 1.25em;
+  width: 1.15em;
+  height: 1.15em;
   color: var(--green-ink);
 }
 .finish-pill .label {
   font-weight: var(--w-2);
   letter-spacing: .18em;
   text-indent: .18em;                /* balances the trailing letter-space */
-  color: var(--green-ink);           /* theme-aware ink: clears 4.5:1 on the pill in both palettes */
+  color: var(--green-ink);           /* light on the recessed groove: clears 4.5:1 by a wide margin */
 }
 
 /* ---- board ---- */
@@ -374,9 +379,10 @@ html, body {
   place-items: center;
   container-type: size;
   overflow: hidden;
-  /* the finish lane: the pill straddles the board's top edge, so the slot spends a strip of its
-     own padding box on the pill's upper half. The board still sizes itself from the content box,
-     which keeps the 2:3 ratio intact and the finish row clear of the card's rounded corner. */
+  /* the finish lane: the slot spends this strip of its own padding box on the FINISH plate and the
+     clearance under it, so the badge sits inside the clip instead of being cut by it. The board
+     still sizes itself from the content box, which keeps the 2:3 ratio intact and the finish row
+     clear of the card's rounded corner. */
   padding-top: var(--finish-lane);
 }
 .board-wrap { position: relative; width: 100%; height: 100%; }
@@ -467,6 +473,13 @@ html, body {
   transition: opacity .18s ease, transform .18s ease;
 }
 .note.error { background: var(--bad-2); color: #fff; box-shadow: 0 10px 22px -10px var(--bad-shadow); }
+/* the blitz timeout: raised clay with a honey edge, not the deep prompt banner — it reports a
+   verdict the player never asked for, so it should look like the board's own furniture */
+.note.timeout {
+  background: linear-gradient(180deg, var(--solid-a) 0%, var(--solid-b) 100%);
+  color: var(--honey-ink);
+  box-shadow: var(--clay), inset 0 0 0 1px var(--honey-soft);
+}
 .note.show { opacity: 1; transform: translate(-50%, 0); }
 
 /* ---- the mine key, carried by your own chip: a compact recessed block, 44px square ---- */
@@ -1457,6 +1470,7 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   text-overflow: ellipsis;
 }
 .turn {
+  position: relative;               /* anchors the urgent alarm ring */
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -1469,6 +1483,7 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   box-shadow: inset 0 0 0 1px var(--hair);
   font-size: var(--t-micro);
   font-weight: 800;
+  font-variant-numeric: tabular-nums;   /* the countdown must not shove the pill sideways */
   letter-spacing: .04em;
   text-transform: uppercase;
   color: var(--ink);
@@ -1488,6 +1503,38 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
 /* your turn: the dot breathes, and the pill wears your colour on its edge */
 .turn.you { box-shadow: inset 0 0 0 1px var(--turn, var(--brand-2)); }
 .turn.you .turn-dot { animation: breathe 1.8s ease-in-out infinite; }
+/* the blitz clock rides on the end of the pill. The separator is the countdown's own pseudo, so
+   hiding the clock (bot's turn, paused, race over) takes the gap and the dot with it. */
+.turn-clock {
+  flex: none;
+  letter-spacing: 0;
+  text-transform: none;             /* "8s", the unit reads as a unit */
+  color: var(--ink-soft);
+}
+.turn-clock::before { content: "·"; margin-right: 6px; opacity: .5; }
+/* ---- the last three seconds: the pill lights up from inside and breathes ----
+   The glow is a static inset shadow on an overlay pseudo, and only its opacity animates, so the
+   compositor owns the pulse. Reduced motion flattens it to a steady lit ring. */
+.turn.urgent { color: var(--honey-ink); }
+.turn.urgent .turn-clock { color: var(--honey-ink); }
+.turn.urgent .turn-dot {
+  background: var(--bad-1);
+  box-shadow: 0 0 12px -1px var(--bad-1);
+  animation-duration: 1s;
+}
+.turn.urgent::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px var(--bad-1),
+    inset 0 0 12px -2px var(--bad-1),
+    inset 0 0 22px -6px var(--honey);
+  animation: turn-alarm 1s ease-in-out infinite;
+}
+@keyframes turn-alarm { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
 
 /* ---- bottom dock: one thick clay pill, floating clear of the safe area ----
    The active tab is a filled key with its own extrusion, so "where am I" reads
