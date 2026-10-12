@@ -86,11 +86,26 @@ function pickEl(id: string, legacy: string): HTMLElement {
   return (document.getElementById(id) ?? document.getElementById(legacy)) as HTMLElement;
 }
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/** Sprite icon as a real element — the house artwork, never an emoji stand-in. */
+function svgIcon(href: string, cls: string): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('class', cls);
+  svg.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS(SVG_NS, 'use');
+  use.setAttribute('href', href);
+  svg.append(use);
+  return svg;
+}
+
 export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   const modeBtns = [...document.querySelectorAll<HTMLButtonElement>('[data-rankmode],[data-squadmode]')];
   const lbBtns = [...document.querySelectorAll<HTMLButtonElement>('[data-lb]')];
   const feedLabel = document.getElementById('arena-feed-t');
   const ranksStats = document.getElementById('ranks-stats');
+  const modeSwitch = document.querySelector<HTMLElement>('.ranks-mode');
+  const soloSwitch = document.querySelector<HTMLElement>('.solo-seg');
   const arenaPane = pickEl('arena-tournaments', 'comp-tournaments');
   const squadsPane = pickEl('ranks-squads', 'comp-squads');
   const soloWrap = document.getElementById('ranks-solo');
@@ -104,6 +119,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   let loadedArena = false;
   let loadedLb: Partial<Record<LbTab, boolean>> = {};
   let squadsLoaded = false;
+  /** Last solo ladder seen — the stat chips quote it instead of the squad totals. */
+  let soloStats = { loaded: false, rows: 0, trophies: 0 };
   let tournaments: Tournament[] = [];
   let joined = joinedSet();
   let pending: Tournament | null = null;
@@ -194,6 +211,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       b.setAttribute('aria-selected', String(selected));
     }
     for (const b of lbBtns) b.setAttribute('aria-selected', String(b.dataset.lb === lbTab));
+    if (modeSwitch) modeSwitch.dataset.active = rankMode;
+    if (soloSwitch) soloSwitch.dataset.active = lbTab;
     const squads = rankMode === 'squads';
     squadsPane.hidden = !squads;
     if (soloWrap) soloWrap.hidden = squads;
@@ -236,17 +255,48 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     feedLabel.textContent = parts.length ? `${parts.join(' · ')} cups` : 'Arena feed';
   }
 
+  /** One quick-stat chip: sprite icon + value over a muted label. */
+  function setChip(key: 'a' | 'b' | 'c', icon: string, value: string, label: string): void {
+    const chip = ranksStats?.querySelector<HTMLElement>(`[data-stat="${key}"]`);
+    if (!chip) return;
+    chip.querySelector('use')?.setAttribute('href', icon);
+    const n = chip.querySelector<HTMLElement>('.rstat-n');
+    const l = chip.querySelector<HTMLElement>('.rstat-l');
+    if (n) n.textContent = value;
+    if (l) l.textContent = label;
+  }
+
+  const quietChips = (): void => {
+    setChip('a', '#i-users', '—', 'Squads');
+    setChip('b', '#i-swords', '—', 'Fighters');
+    setChip('c', '#i-cup', '—', 'Trophies');
+  };
+
   function paintRanksStats(): void {
     if (!ranksStats) return;
+    if (rankMode === 'solo') {
+      if (!soloStats.loaded) {
+        const countries = lbTab === 'countries';
+        setChip('a', countries ? '#i-globe' : '#i-user', '—', countries ? 'Countries' : 'Players');
+        setChip('b', '#i-cup', '—', 'Trophies');
+        setChip('c', '#i-medal', compactCount(myTrophyScore()), 'Yours');
+        return;
+      }
+      const countries = lbTab === 'countries';
+      setChip('a', countries ? '#i-globe' : '#i-user', String(soloStats.rows), countries ? 'Countries' : 'Players');
+      setChip('b', '#i-cup', compactCount(soloStats.trophies), 'Trophies');
+      setChip('c', '#i-medal', compactCount(myTrophyScore()), 'Yours');
+      return;
+    }
     try {
       const rows = getSquadRanking();
       const fighters = rows.reduce((n, s) => n + s.members, 0);
       const trophies = rows.reduce((n, s) => n + s.trophies, 0);
-      const me = getMySquad();
-      const base = `${rows.length} squads · ${compactCount(fighters)} fighters · ${compactCount(trophies)} 🏆`;
-      ranksStats.textContent = me ? `${base} · you: ${me.handle} #${me.rank}` : `${base} · join a squad to climb`;
+      setChip('a', '#i-users', String(rows.length), 'Squads');
+      setChip('b', '#i-swords', compactCount(fighters), 'Fighters');
+      setChip('c', '#i-cup', compactCount(trophies), 'Trophies');
     } catch {
-      ranksStats.textContent = 'Squad Warfare · live standings';
+      quietChips();
     }
   }
 
@@ -849,43 +899,64 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return fl;
   }
 
+  /** Shared ladder row: rank crest · identity · tabular score · right-edge action. */
+  function rankCrest(rank: number): HTMLElement {
+    const rk = document.createElement('span');
+    const podium = podiumOf(rank);
+    rk.className = podium ? `lb-rank ${podium}` : 'lb-rank';
+    if (rank === 1) rk.append(svgIcon('#i-crown', 'lb-crown'));
+    const n = document.createElement('b');
+    n.textContent = String(rank);
+    rk.append(n);
+    return rk;
+  }
+
+  function scoreCell(points: string, title: string): HTMLElement {
+    const pt = document.createElement('span');
+    pt.className = 'lb-score';
+    pt.append(svgIcon('#i-cup', 'lb-cup'));
+    const num = document.createElement('b');
+    num.textContent = points;
+    pt.append(num);
+    pt.title = title;
+    return pt;
+  }
+
   function row(rank: number, flagEmoji: string, flagCode: string, name: string, sub: string | null, points: string, trend: 'up' | 'down' | 'same', me: boolean): HTMLLIElement {
     const li = document.createElement('li');
-    li.className = `rank-row${me ? ' me' : ''}`;
-    const podium = podiumOf(rank);
+    li.className = `rank-row lb-row${me ? ' is-you' : ''}${rank === 1 ? ' is-champ' : ''}`;
     const trendLabel = trend === 'up' ? 'rising' : trend === 'down' ? 'falling' : 'steady';
     li.setAttribute('aria-label', `#${rank} ${name} — ${points} trophies, ${trendLabel}`);
     if (me) li.setAttribute('aria-current', 'true');
-    const rk = document.createElement('span');
-    rk.className = podium ? `rk ${podium}` : 'rk';
-    rk.textContent = String(rank);
-    rk.setAttribute('aria-hidden', 'true');
-    const fl = flagBadge(flagEmoji, flagCode);
+
+    const id = document.createElement('span');
+    id.className = 'lb-id';
+    id.append(flagBadge(flagEmoji, flagCode));
+    const txt = document.createElement('span');
+    txt.className = 'lb-txt';
     const nm = document.createElement('span');
-    nm.className = 'nm';
+    nm.className = 'lb-name';
     nm.textContent = name;
     nm.title = name;
+    txt.append(nm);
     if (sub) {
-      const s = document.createElement('small');
+      const s = document.createElement('span');
+      s.className = 'lb-sub';
       s.textContent = sub;
-      nm.append(s);
+      txt.append(s);
     }
-    const pt = document.createElement('span');
-    pt.className = 'pt';
-    const num = document.createElement('b');
-    num.textContent = points;
-    const cup = document.createElement('span');
-    cup.className = 'cup';
-    cup.textContent = '🏆';
-    cup.setAttribute('aria-hidden', 'true');
-    pt.append(num, cup);
-    pt.title = `${points} trophies`;
+    id.append(txt);
+
+    const act = document.createElement('span');
+    act.className = 'lb-act';
     const tr = document.createElement('span');
     tr.className = `tr ${trend}`;
     tr.textContent = trendArrow(trend);
     tr.title = trendLabel;
     tr.setAttribute('aria-hidden', 'true');
-    li.append(rk, fl, nm, pt, tr);
+    act.append(tr);
+
+    li.append(rankCrest(rank), id, scoreCell(points, `${points} trophies`), act);
     return li;
   }
 
@@ -922,27 +993,23 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     name.title = youLabel();
     const sub = document.createElement('small');
     sub.className = 'standing-sub';
-    const rankPart = opts.rankText;
-    const pctPart = opts.percentText ? ` · ${opts.percentText}` : '';
-    const recPart = ` · ${myRecord()}`;
-    const extra = opts.extraSub ? ` · ${opts.extraSub}` : '';
-    sub.textContent = `${rankPart}${pctPart}${recPart}${extra}`;
+    const detail = [opts.rankText !== '-' ? opts.rankText : '', opts.percentText ?? '', myRecord(), opts.extraSub ?? '']
+      .filter((p) => p.length > 0)
+      .join(' · ');
+    sub.textContent = detail;
     main.append(name, sub);
 
     const score = document.createElement('span');
     score.className = 'standing-score';
+    score.append(svgIcon('#i-cup', 'cup'));
     const num = document.createElement('b');
     num.textContent = opts.score.toLocaleString('en-US');
-    const cup = document.createElement('span');
-    cup.className = 'cup';
-    cup.textContent = '🏆';
-    cup.setAttribute('aria-hidden', 'true');
-    score.append(num, cup);
+    score.append(num);
     score.title = `${opts.score.toLocaleString('en-US')} trophies`;
-    score.setAttribute('aria-label', `${opts.score.toLocaleString('en-US')} trophies, ${rankPart}${pctPart}, record ${myRecord()}`);
+    score.setAttribute('aria-label', `${opts.score.toLocaleString('en-US')} trophies, ${detail}`);
 
     host.append(av, main, score);
-    host.setAttribute('aria-label', `Your Standing: ${youLabel()}, ${rankPart}${pctPart}, ${opts.score.toLocaleString('en-US')} trophies, record ${myRecord()}`);
+    host.setAttribute('aria-label', `Your Standing: ${youLabel()}, ${detail}, ${opts.score.toLocaleString('en-US')} trophies`);
   }
 
   function paintPlayersStanding(): void {
@@ -951,7 +1018,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       rankText: '-',
       percentText: null,
       score: myTrophyScore(),
-      extraSub: profile.stats.games > 0 ? `${profile.stats.wins} wins` : 'Unranked · play to climb',
+      extraSub: profile.stats.games > 0 ? null : 'Unranked · play to climb',
     });
   }
 
@@ -1020,7 +1087,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       ol.append(row(c.rank, flagOf(c.code), c.code, c.name, null, c.points.toLocaleString('en-US'), c.trend, profile.country === c.code));
     }
     el.append(ol);
+    soloStats = { loaded: true, rows: rows.length, trophies: rows.reduce((n, c) => n + c.points, 0) };
     paintCountriesStanding(rows);
+    paintRanksStats();
   }
 
   async function loadPlayers(): Promise<void> {
@@ -1047,71 +1116,55 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       ol.append(row(i + 1, flagOf(p.countryCode), p.countryCode, p.name, `${p.wins} wins`, p.points.toLocaleString('en-US'), p.trend, false));
     });
     el.append(ol);
+    soloStats = { loaded: true, rows: rows.length, trophies: rows.reduce((n, p) => n + p.points, 0) };
     paintPlayersStanding();
+    paintRanksStats();
   }
 
   /* ---------- Telegram Squads: channel/community ranking ---------- */
 
   function squadRow(s: RankedSquad, mine: boolean): HTMLLIElement {
     const li = document.createElement('li');
-    li.className = `squad-row${mine ? ' me' : ''}`;
+    li.className = `squad-row lb-row${mine ? ' is-you' : ''}${s.rank === 1 ? ' is-champ' : ''}`;
     li.tabIndex = 0;
     li.dataset.id = s.id;
-    li.title = `${s.name} · ${s.handle}`;
-    li.setAttribute('aria-label', `${s.name}, ${s.handle}, rank ${s.rank}, ${s.trophies.toLocaleString('en-US')} trophies. Press Enter for squad details.`);
+    const label = s.name || s.handle.replace(/^@/, '');
+    li.title = `${label} · ${s.handle}`;
+    li.setAttribute('aria-label', `${label}, ${s.handle}, rank ${s.rank}, ${s.trophies.toLocaleString('en-US')} trophies. Press Enter for squad details.`);
     if (mine) li.setAttribute('aria-current', 'true');
 
-    const rk = document.createElement('span');
-    rk.className = `rk${s.rank === 1 ? ' gold' : s.rank === 2 ? ' silver' : s.rank === 3 ? ' bronze' : ''}`;
-    rk.textContent = String(s.rank);
-    rk.setAttribute('aria-hidden', 'true');
-
+    /* Identity column: square avatar, then the name — which owns the flexible width. */
+    const id = document.createElement('span');
+    id.className = 'lb-id';
     const av = document.createElement('span');
-    av.className = 'squad-avatar';
+    av.className = 'lb-av';
     av.textContent = squadLetter(s);
     av.setAttribute('aria-hidden', 'true');
-
     const txt = document.createElement('span');
-    txt.className = 'squad-txt';
-
-    const nameRow = document.createElement('span');
-    nameRow.className = 'squad-name-row';
+    txt.className = 'lb-txt';
     const nm = document.createElement('span');
-    nm.className = 'squad-name';
-    nm.textContent = s.name;
-    nm.title = s.name;
-    // Tiny subtle kind icon — never a space-eating pill. Full label stays in title/a11y.
-    const kind = document.createElement('span');
-    const k = squadKind(s);
-    kind.className = 'squad-kind';
-    kind.dataset.kind = k;
-    kind.textContent = k === 'channel' ? '📢' : '👥';
-    kind.title = k === 'channel' ? 'Telegram channel' : 'Telegram group';
-    kind.setAttribute('aria-hidden', 'true');
-    nameRow.append(nm, kind);
-
+    nm.className = 'lb-name';
+    nm.textContent = label;
+    nm.title = label;
     const sub = document.createElement('span');
-    sub.className = 'squad-sub';
-    sub.textContent = `${s.handle} · ${compactCount(s.members)} members`;
+    sub.className = 'lb-sub';
+    const k = squadKind(s);
+    sub.append(svgIcon(k === 'channel' ? '#i-send' : '#i-users', 'lb-kind'));
+    const subT = document.createElement('span');
+    subT.className = 'lb-sub-t';
+    subT.textContent = s.handle;
+    subT.title = `${k === 'channel' ? 'Telegram channel' : 'Telegram group'} · ${compactCount(s.members)} members`;
+    sub.append(subT);
+    txt.append(nm, sub);
+    id.append(av, txt);
 
-    txt.append(nameRow, sub);
-
-    const pt = document.createElement('span');
-    pt.className = 'squad-pt';
-    const num = document.createElement('b');
-    num.textContent = s.trophies.toLocaleString('en-US');
-    const cup = document.createElement('span');
-    cup.className = 'trophy';
-    cup.textContent = '🏆';
-    cup.setAttribute('aria-hidden', 'true');
-    pt.append(num, cup);
-    pt.title = `${s.trophies.toLocaleString('en-US')} squad trophies`;
-    pt.setAttribute('aria-label', `${s.trophies.toLocaleString('en-US')} trophies`);
-
+    /* Action column: one pill pinned to the right edge — glass cyan to join, solid to invite. */
+    const act = document.createElement('span');
+    act.className = 'lb-act';
     const go = document.createElement('button');
     go.type = 'button';
     if (mine) {
-      go.className = 'squad-go bound invite';
+      go.className = 'lb-btn is-invite';
       go.textContent = 'Invite';
       go.setAttribute('aria-label', `Invite to ${s.handle}: copy squad invite`);
       go.addEventListener('click', (e) => {
@@ -1119,7 +1172,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         inviteSquad(s);
       });
     } else {
-      go.className = 'squad-go join';
+      go.className = 'lb-btn is-join';
       go.textContent = 'Join';
       go.setAttribute('aria-label', `Join ${s.handle}`);
       go.addEventListener('click', (e) => {
@@ -1132,6 +1185,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         loadSquads();
       });
     }
+    act.append(go);
+
+    li.append(
+      rankCrest(s.rank),
+      id,
+      scoreCell(s.trophies.toLocaleString('en-US'), `${s.trophies.toLocaleString('en-US')} squad trophies`),
+      act,
+    );
 
     // The whole row opens squad details; the compact key joins / invites.
     li.addEventListener('click', () => {
@@ -1146,19 +1207,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         openSquadSheet();
       }
     });
-
-    // 3-column flex: left (rank + avatar, fixed) · center (dynamic info) · right (score + CTA, fixed).
-    const left = document.createElement('span');
-    left.className = 'squad-left';
-    left.setAttribute('aria-hidden', 'true');
-    left.append(rk, av);
-    // rk/av were marked aria-hidden individually; the row itself carries the label.
-    rk.removeAttribute('aria-hidden');
-    av.removeAttribute('aria-hidden');
-    const right = document.createElement('span');
-    right.className = 'squad-right';
-    right.append(pt, go);
-    li.append(left, txt, right);
     return li;
   }
 
@@ -1177,21 +1225,23 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     if (!me) {
       const ico = document.createElement('span');
-      ico.className = 'squad-dock-ico';
-      ico.textContent = '🏆';
+      ico.className = 'dock-av is-empty';
+      ico.append(svgIcon('#i-cup', 'dock-ico'));
       ico.setAttribute('aria-hidden', 'true');
 
       const txt = document.createElement('span');
-      txt.className = 'squad-dock-txt';
+      txt.className = 'dock-txt';
       const t = document.createElement('b');
-      t.textContent = 'Join a squad to earn trophies for your community';
+      t.className = 'dock-name';
+      t.textContent = 'Join a squad to earn trophies';
       const s = document.createElement('small');
+      s.className = 'dock-sub';
       s.textContent = 'Race points count for your channel or group';
       txt.append(t, s);
 
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'btn btn-primary sm squad-dock-btn';
+      btn.className = 'dock-btn is-primary';
       btn.textContent = 'Find Squad';
       btn.setAttribute('aria-label', 'Find Squad: open squad picker');
       btn.addEventListener('click', (e) => {
@@ -1200,30 +1250,51 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         openSquadSheet();
       });
 
-      dock.append(ico, txt, btn);
+      const actions = document.createElement('span');
+      actions.className = 'dock-actions';
+      actions.append(btn);
+      dock.append(ico, txt, actions);
       dock.setAttribute('aria-label', 'My Squad Standing: no squad bound. Find a squad to start earning trophies.');
       return;
     }
 
     const mine = getMyContribution();
+
     const av = document.createElement('span');
-    av.className = 'squad-avatar';
+    av.className = 'dock-av';
     av.textContent = squadLetter(me);
     av.setAttribute('aria-hidden', 'true');
 
     const txt = document.createElement('span');
-    txt.className = 'squad-dock-txt';
-    const t = document.createElement('b');
-    t.textContent = `My Squad · ${me.handle} · #${me.rank}`;
-    t.title = `${me.name} · ${me.handle}`;
-    const s = document.createElement('small');
-    const yours = mine > 0 ? ` · +${mine.toLocaleString('en-US')} yours` : ' · fight to contribute';
-    s.textContent = `${me.trophies.toLocaleString('en-US')} trophies${yours}`;
-    txt.append(t, s);
+    txt.className = 'dock-txt';
+    const top = document.createElement('span');
+    top.className = 'dock-top';
+    const kick = document.createElement('small');
+    kick.className = 'dock-kicker';
+    kick.textContent = 'My Squad';
+    const rank = document.createElement('span');
+    rank.className = 'dock-rank';
+    rank.textContent = `#${me.rank}`;
+    top.append(kick, rank);
+    const nm = document.createElement('b');
+    nm.className = 'dock-name';
+    nm.textContent = me.handle;
+    nm.title = `${me.name} · ${me.handle}`;
+    txt.append(top, nm);
+
+    const score = document.createElement('span');
+    score.className = 'dock-score';
+    score.append(svgIcon('#i-cup', 'dock-cup'));
+    const num = document.createElement('b');
+    num.textContent = me.trophies.toLocaleString('en-US');
+    const sub = document.createElement('small');
+    sub.textContent = mine > 0 ? `+${mine.toLocaleString('en-US')} yours` : 'fight to contribute';
+    score.append(num, sub);
+    score.title = `${me.trophies.toLocaleString('en-US')} squad trophies`;
 
     const invite = document.createElement('button');
     invite.type = 'button';
-    invite.className = 'btn btn-primary sm squad-dock-btn';
+    invite.className = 'dock-btn is-primary';
     invite.textContent = 'Invite';
     invite.setAttribute('aria-label', `Invite to ${me.handle}: copy squad invite`);
     invite.addEventListener('click', (e) => {
@@ -1233,7 +1304,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     const view = document.createElement('button');
     view.type = 'button';
-    view.className = 'btn btn-ghost sm squad-dock-btn';
+    view.className = 'dock-btn';
     view.textContent = 'View';
     view.setAttribute('aria-label', `View ${me.handle} squad details`);
     view.addEventListener('click', (e) => {
@@ -1242,7 +1313,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       openSquadSheet();
     });
 
-    dock.append(av, txt, invite, view);
+    const actions = document.createElement('span');
+    actions.className = 'dock-actions';
+    actions.append(invite, view);
+
+    dock.append(av, txt, score, actions);
     dock.setAttribute('aria-label', `My Squad Standing: ${me.handle}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} trophies.`);
   }
 

@@ -441,13 +441,36 @@
           <div class="m-head compete-head ranks-head">
             <h1 class="m-title" id="ranks-title">Leaderboard</h1>
           </div>
-          <p class="ranks-sub" id="ranks-stats" aria-live="polite">Squad Warfare · live standings</p>
-          <div class="seg squad-mode ranks-mode" role="tablist" aria-label="Leaderboard mode">
-            <button class="seg-b mode-seg" type="button" role="tab" data-rankmode="squads" aria-selected="true">
+          <div class="ranks-stats" id="ranks-stats" role="status" aria-live="polite">
+            <span class="rstat" data-stat="a">
+              <svg class="rstat-ico" aria-hidden="true"><use href="#i-users" /></svg>
+              <span class="rstat-body">
+                <b class="rstat-n">—</b>
+                <small class="rstat-l">Squads</small>
+              </span>
+            </span>
+            <span class="rstat" data-stat="b">
+              <svg class="rstat-ico" aria-hidden="true"><use href="#i-swords" /></svg>
+              <span class="rstat-body">
+                <b class="rstat-n">—</b>
+                <small class="rstat-l">Fighters</small>
+              </span>
+            </span>
+            <span class="rstat" data-stat="c">
+              <svg class="rstat-ico" aria-hidden="true"><use href="#i-cup" /></svg>
+              <span class="rstat-body">
+                <b class="rstat-n">—</b>
+                <small class="rstat-l">Trophies</small>
+              </span>
+            </span>
+          </div>
+          <div class="mode-switch ranks-mode" role="tablist" aria-label="Leaderboard mode" data-active="squads">
+            <span class="mode-thumb" aria-hidden="true"></span>
+            <button class="mode-seg" type="button" role="tab" data-rankmode="squads" aria-selected="true">
               <span class="seg-t">Telegram Squads</span>
               <small class="seg-s">Channels &amp; Groups</small>
             </button>
-            <button class="seg-b mode-seg" type="button" role="tab" data-rankmode="solo" aria-selected="false">
+            <button class="mode-seg" type="button" role="tab" data-rankmode="solo" aria-selected="false">
               <span class="seg-t">Solo Champions</span>
               <small class="seg-s">Top Players</small>
             </button>
@@ -455,9 +478,10 @@
           <div class="compete-body ranks-body" data-scroll id="ranks-scroll">
             <div id="ranks-squads" role="tabpanel" aria-label="Telegram Squads"></div>
             <div id="ranks-solo" role="tabpanel" aria-label="Solo Champions" hidden>
-              <div class="seg lb-seg solo-seg" role="tablist" aria-label="Solo Champions boards">
-                <button class="seg-b" type="button" role="tab" data-lb="players" aria-selected="true">Top Players</button>
-                <button class="seg-b" type="button" role="tab" data-lb="countries" aria-selected="false">Top Countries</button>
+              <div class="mode-switch solo-seg" role="tablist" aria-label="Solo Champions boards" data-active="players">
+                <span class="mode-thumb" aria-hidden="true"></span>
+                <button class="mode-seg" type="button" role="tab" data-lb="players" aria-selected="true">Top Players</button>
+                <button class="mode-seg" type="button" role="tab" data-lb="countries" aria-selected="false">Top Countries</button>
               </div>
               <section class="solo-standing" id="solo-standing" aria-label="Your Standing" aria-live="polite"></section>
               <div id="ranks-players" role="tabpanel" aria-label="Top players"></div>
