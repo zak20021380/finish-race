@@ -24,7 +24,8 @@ import { menuState, motionReduced } from './settings';
 import { onChange, recordGame, theme } from './storage';
 import { impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
-import { gmBack, initGameModes } from './gamemodes';
+import { getGameMode, gmBack, initGameModes, setGameMode } from './gamemodes';
+import { createMatchmaking } from './matchmaking';
 
 initTelegram();
 applyFlagSupport();
@@ -151,6 +152,25 @@ let menu: Menu;
 const sheets = createSheets($('scrim'));
 const sheetById = (id: string) => document.getElementById(id);
 
+/**
+ * The 1v1 searching stage. Quick match queues here instead of dropping straight onto the
+ * board; the race itself still starts through the single `startGame()` door, and cancelling
+ * hands the player back to the mode drawer they came from.
+ */
+const matchmaking = createMatchmaking({
+  onMatchFound: () => startGame({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] }),
+  onCancel: () => {
+    const drawer = sheetById('sheet-game-modes');
+    if (drawer) sheets.open(drawer);
+  },
+  /* A queue with nobody in it beats nobody: take the bot, and remember the choice so the
+     lobby agrees with the race that just started. */
+  onPractice: () => {
+    setGameMode('bot');
+    startGame({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] });
+  },
+});
+
 let home: { setRoute(id: string): void } | null = null;
 let compete: { setRoute(id: string): void } | null = null;
 
@@ -170,6 +190,8 @@ const setBackButton = onBackPress(() => onBack());
 
 function onBack() {
   impact('light');
+  // the searching stage sits above every sheet, so it unwinds first
+  if (matchmaking.isOpen) { matchmaking.cancel(); return; }
   if (sheets.isOpen) {
     // the game-mode drawer's friends pane unwinds one step before the drawer does
     if (!gmBack()) sheets.close();
@@ -936,7 +958,13 @@ compete = createCompete({ router, sheets, sheet: sheetById });
 createNotifications({ sheets });
 initGameModes(sheets, {
   /* the drawer already persisted sizes + difficulty, so the race it names is the race it runs */
-  onStart: () => startGame({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] }),
+  onStart: () => {
+    const sel = getGameMode();
+    /* Quick match is online: it queues on the searching stage first. Practice and a private
+       room have nobody to wait for, so they start the race right away. */
+    if (sel.id === 'duel_1v1' || sel.id === 'party_2v2') { matchmaking.open(); return; }
+    startGame({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] });
+  },
 });
 paintNames();
 ui();

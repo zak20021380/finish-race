@@ -9361,3 +9361,366 @@ html.rm .ms-challenge,
 html.rm .ms-guild,
 html.rm .ms-x,
 html.rm .lb-row { transition: none; }
+
+
+/* ==========================================================================
+   MATCHMAKING — the 1v1 searching stage (Quick match → Start 1v1 match).
+   One full-viewport clay stage: the two-orb arena (you left, the rival still a
+   silhouette right), the synapse rings radiating outward between them, the
+   cycling status line and the elapsed clock. Depth is the shared clay recipe,
+   the press travels translateY, and nothing here carries a backdrop-filter.
+   Every animation is transform/opacity only, so html.rm stills the whole
+   stage through the global reduced-motion block above.
+   ========================================================================== */
+
+.mm {
+  position: absolute;
+  inset: 0;
+  z-index: 24;                          /* over the dock, the scrim and every sheet */
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  /* the Telegram viewport is the phone's: the stage honours both safe areas */
+  padding:
+    max(var(--s3), env(safe-area-inset-top))
+    max(var(--pad-app-x), env(safe-area-inset-right))
+    max(var(--s3), env(safe-area-inset-bottom))
+    max(var(--pad-app-x), env(safe-area-inset-left));
+  background:
+    radial-gradient(120% 72% at 50% 4%, rgba(56, 189, 248, .16), rgba(56, 189, 248, 0) 62%),
+    radial-gradient(110% 60% at 50% 104%, rgba(255, 82, 43, .1), rgba(255, 82, 43, 0) 62%),
+    linear-gradient(180deg, var(--bg-m) 0%, var(--bg) 56%, var(--bg-b) 100%);
+  opacity: 0;
+  transform: translate3d(0, 3%, 0);
+  transition: opacity var(--motion-med), transform .3s var(--bounce);
+  pointer-events: none;                 /* a fading stage never eats a tap */
+  overflow: hidden;
+}
+.mm.open { opacity: 1; transform: none; pointer-events: auto; }
+/* the match lands: one gold bloom across the stage, over in 300ms */
+.mm::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(90% 62% at 50% 42%, rgba(252, 211, 77, .34), rgba(252, 211, 77, 0) 70%);
+}
+.mm.is-found::after { animation: mm-bloom .3s ease both; }
+@keyframes mm-bloom {
+  0%   { opacity: 0; }
+  32%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+/* no motion: the bloom stops travelling and simply holds while the rival locks in */
+html.rm .mm.is-found::after { animation: none; opacity: .34; }
+
+/* ---- header: muted gold caps over the promise ---- */
+.mm-head {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s1);
+  text-align: center;
+}
+.mm-kicker {
+  margin: 0;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .24em;
+  text-indent: .24em;
+  text-transform: uppercase;
+  color: var(--tiq);
+  opacity: .78;
+}
+.mm-title { margin: 0; font-size: var(--t-hd); font-weight: var(--w-2); color: var(--ink); }
+
+/* ---- the stage: one clay slab the whole search happens on ---- */
+.mm-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s4);
+  padding: var(--s4) var(--s3);
+  border-radius: var(--r-panel);
+  background: var(--clay-face);
+  box-shadow: var(--clay), var(--clay-ring);
+  overflow: hidden;
+}
+
+/* ---- arena: two orbs, one synapse ---- */
+.mm-arena {
+  --orb: 92px;
+  position: relative;
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;   /* the orbs stay partners, never a list */
+  align-items: center;
+  justify-items: center;
+  gap: var(--s3);
+}
+/* rings radiate from the synapse rather than from either orb: the search lives
+   in the space between the two minds */
+.mm-radar { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.mm-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px rgba(56, 189, 248, .46);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(.4);
+  animation: mm-ping 2.6s cubic-bezier(.3, .6, .4, 1) infinite;
+}
+.mm-ring.gold { box-shadow: inset 0 0 0 1.5px rgba(252, 211, 77, .42); animation-delay: .87s; }
+.mm-ring:nth-child(3) { animation-delay: 1.73s; }
+@keyframes mm-ping {
+  0%   { opacity: 0;  transform: translate(-50%, -50%) scale(.4); }
+  18%  { opacity: .7; }
+  100% { opacity: 0;  transform: translate(-50%, -50%) scale(1.55); }
+}
+
+.mm-orb {
+  --aura: var(--tier-rookie);
+  --aura-glow: var(--tier-rookie-glow);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+}
+/* the tier is an aura colour, exactly as the ladder prints it */
+.mm-orb[data-tier="tactician"] { --aura: var(--tier-tactician); --aura-glow: var(--tier-tactician-glow); }
+.mm-orb[data-tier="strategist"] { --aura: var(--tier-strategist); --aura-glow: var(--tier-strategist-glow); }
+.mm-orb[data-tier="grandmaster"] { --aura: var(--tier-grandmaster); --aura-glow: var(--tier-grandmaster-glow); }
+.mm-aura {
+  position: absolute;
+  top: calc(var(--orb) / -5);
+  left: 50%;
+  width: calc(var(--orb) * 1.5);
+  height: calc(var(--orb) * 1.5);
+  transform: translateX(-50%);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(closest-side, var(--aura-glow), rgba(0, 0, 0, 0) 72%);
+}
+.mm-face {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--orb);
+  height: var(--orb);
+  border-radius: 50%;
+  overflow: hidden;
+  background: linear-gradient(180deg, #26314B 0%, #1A2232 100%);
+  box-shadow:
+    var(--clay-spec),
+    var(--clay-bevel),
+    inset 0 0 0 2px var(--aura),
+    0 12px 24px -14px rgba(0, 0, 0, .9);
+}
+.mm-img { width: 100%; height: 100%; object-fit: cover; }
+.mm-initial { font-size: calc(var(--orb) * .4); font-weight: 900; color: var(--ink); }
+/* the rival stays a breathing silhouette until the match lands */
+.mm-scan {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--ink-soft);
+  animation: mm-breathe 1.7s ease-in-out infinite;
+}
+.mm-scan .ico { width: calc(var(--orb) * .46); height: calc(var(--orb) * .46); }
+@keyframes mm-breathe {
+  0%, 100% { opacity: .42; transform: scale(.94); }
+  50%      { opacity: .92; transform: scale(1); }
+}
+.mm-orb.is-rival:not(.is-locked) .mm-face {
+  box-shadow:
+    var(--clay-spec),
+    var(--clay-bevel),
+    inset 0 0 0 2px rgba(148, 163, 184, .4),
+    0 12px 24px -14px rgba(0, 0, 0, .9);
+}
+.mm-orb.is-rival:not(.is-locked) .mm-tiq { opacity: .5; }
+/* locked in: the 300ms impact that hands the seat over */
+.mm-orb.is-locked .mm-face { animation: mm-impact .3s var(--bounce) both; }
+@keyframes mm-impact {
+  0%   { transform: scale(.86); }
+  55%  { transform: scale(1.07); }
+  100% { transform: scale(1); }
+}
+
+/* TIQ is gold with the brain glyph, on every orb */
+.mm-tiq {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px rgba(252, 211, 77, .26);
+  font-size: var(--t-micro);
+  font-weight: 900;
+  color: var(--tiq);
+  font-variant-numeric: tabular-nums;
+}
+.mm-tiq .ico { width: 13px; height: 13px; color: var(--honey-ink); }
+.mm-name {
+  max-width: min(16ch, 100%);
+  overflow: hidden;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- the synapse: three nodes riding the line between the orbs ---- */
+.mm-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  width: 40px;
+  padding: 0 1px;
+}
+.mm-link::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(56, 189, 248, .55), rgba(252, 211, 77, .55));
+}
+.mm-node {
+  position: relative;
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand-3);
+  box-shadow: 0 0 9px rgba(56, 189, 248, .75);
+  animation: mm-node 1.5s ease-in-out infinite;
+}
+.mm-node:nth-child(2) {
+  background: var(--tiq);
+  box-shadow: 0 0 9px rgba(252, 211, 77, .75);
+  animation-delay: .25s;
+}
+.mm-node:nth-child(3) { animation-delay: .5s; }
+@keyframes mm-node {
+  0%, 100% { opacity: .3; transform: scale(.7); }
+  50%      { opacity: 1;  transform: scale(1); }
+}
+
+/* ---- the live line and the elapsed clock ---- */
+.mm-status {
+  margin: 0;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px var(--s3);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .05);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair);
+  font-size: var(--t-3);
+  font-weight: 700;
+  color: var(--chip-ink);
+  text-align: center;
+}
+.mm-status.swap { animation: mm-swap .46s ease both; }
+@keyframes mm-swap {
+  0%   { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: none; }
+}
+.mm-timer {
+  margin: 0;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.mm-timer b { color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+
+/* ---- a quiet queue: two clay keys appear under the clock, Cancel still below ----
+   The same ghost key every other secondary action uses, only narrowed so the pair
+   fits the stage's width. */
+.mm-fallback {
+  display: flex;
+  gap: var(--s2);
+  width: 100%;
+}
+.mm-fallback.on { animation: mm-swap .46s ease both; }
+.mm-fallback .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 var(--s3);
+  font-size: var(--t-3);
+}
+
+/* ---- the one key on the stage: coral rim, real lip, sink on press ---- */
+.mm-cancel {
+  --d: 5px;
+  flex: none;
+  width: 100%;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  appearance: none;
+  border: 0;
+  font: inherit;
+  font-size: var(--t-1);
+  font-weight: 900;
+  cursor: pointer;
+  color: var(--ink);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #2A3550 0%, #202A3E 100%);
+  box-shadow:
+    0 var(--d) 0 #0B0E14,
+    inset 0 0 0 1.5px rgba(255, 82, 43, .48),
+    inset 0 2px 3px rgba(255, 255, 255, .14),
+    inset 0 -3px 6px rgba(0, 0, 0, .32);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.mm-cancel .mm-x { font-size: 1.15em; line-height: 1; color: var(--cta-hi); }
+.mm-cancel:hover:not(:active) { transform: translateY(-1px); }
+.mm-cancel:active { transform: translateY(var(--press-y)); --d: 1px; }
+.mm-cancel:focus-visible { outline: 3px solid var(--cta); outline-offset: 3px; }
+
+/* ---- short and narrow phones: the arena gives before a control does ---- */
+@media (max-height: 700px) {
+  .mm-arena { --orb: 76px; }
+  .mm-stage { gap: var(--s3); padding: var(--s3) var(--s2); }
+  .mm-cancel { min-height: 48px; }
+}
+@media (max-width: 340px) {
+  .mm-arena { --orb: 68px; }
+  .mm-name { max-width: 9ch; }
+}
+
+/* ---- reduced motion: the stage still reads, it just stops sweeping ---- */
+html.rm .mm { transition: none; }
+html.rm .mm-cancel { transition: none; }
+html.rm .mm-ring,
+html.rm .mm-node,
+html.rm .mm-scan,
+html.rm .mm-status.swap,
+html.rm .mm-orb.is-locked .mm-face { animation: none; }

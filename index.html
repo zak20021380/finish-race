@@ -974,6 +974,68 @@
         </button>
       </nav>
 
+      <!-- matchmaking: the full-viewport searching stage Quick match opens (src/matchmaking.ts).
+           Clay only — no backdrop-filter anywhere on it. -->
+      <section class="mm" id="overlay-matchmaking" hidden role="dialog" aria-modal="true" aria-labelledby="mm-title">
+        <header class="mm-head">
+          <p class="mm-kicker">Matchmaking</p>
+          <h2 class="mm-title" id="mm-title">Searching for a worthy mind...</h2>
+        </header>
+
+        <div class="mm-stage">
+          <div class="mm-arena">
+            <!-- radiating rings: centred on the synapse between the two orbs -->
+            <span class="mm-radar" aria-hidden="true">
+              <span class="mm-ring"></span>
+              <span class="mm-ring gold"></span>
+              <span class="mm-ring"></span>
+            </span>
+
+            <div class="mm-orb is-you" id="mm-you" data-tier="rookie">
+              <span class="mm-aura" aria-hidden="true"></span>
+              <span class="mm-face">
+                <img class="mm-img" id="mm-you-img" alt="" hidden />
+                <span class="mm-initial" id="mm-you-t">P</span>
+              </span>
+              <span class="mm-tiq"><svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg><b id="mm-you-tiq">0</b></span>
+              <span class="mm-name" id="mm-you-name">You</span>
+            </div>
+
+            <div class="mm-link" aria-hidden="true">
+              <i class="mm-node"></i><i class="mm-node"></i><i class="mm-node"></i>
+            </div>
+
+            <div class="mm-orb is-rival" id="mm-rival" data-tier="rookie">
+              <span class="mm-aura" aria-hidden="true"></span>
+              <span class="mm-face">
+                <img class="mm-img" id="mm-rival-img" alt="" hidden />
+                <span class="mm-scan" id="mm-rival-scan" aria-hidden="true"><svg class="ico"><use href="#i-user" /></svg></span>
+                <span class="mm-initial" id="mm-rival-t" hidden>?</span>
+              </span>
+              <span class="mm-tiq"><svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg><b id="mm-rival-tiq">—</b></span>
+              <span class="mm-name" id="mm-rival-name">Scanning...</span>
+            </div>
+          </div>
+
+          <p class="mm-status" id="mm-status" aria-hidden="true">Scanning tactical tier...</p>
+          <p class="mm-timer" aria-hidden="true">Elapsed: <b id="mm-elapsed">00:00</b></p>
+
+          <!-- a quiet queue: the stage stops promising and offers two ways out -->
+          <div class="mm-fallback" id="mm-fallback" hidden>
+            <button class="btn btn-ghost" type="button" id="mm-expand"
+              aria-label="Widen the search radius, look beyond your tier">Widen search</button>
+            <button class="btn btn-ghost" type="button" id="mm-practice">Practice vs Bot</button>
+          </div>
+        </div>
+
+        <button class="mm-cancel" type="button" id="mm-cancel" data-autofocus>
+          <span class="mm-x" aria-hidden="true">×</span><span>Cancel Search</span>
+        </button>
+
+        <!-- the stage itself is silent to a screen reader: one polite line carries the state -->
+        <p class="sr-only" id="mm-live" role="status" aria-live="polite"></p>
+      </section>
+
       <div class="scrim" id="scrim" hidden></div>
 
       <!-- pause sheet -->
