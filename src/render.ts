@@ -356,7 +356,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   const pulses: { x: number; y: number; t0: number; p: Player }[] = []; // wall landing rings
   const blasts: { x: number; y: number; t0: number }[] = []; // mine triggers, queued by blast()
   /** The rolling log: one sprite per warning that landed, and the dust its shove kicks up. */
-  const rolls: { col: number; stopRow: number; t0: number }[] = [];
+  const rolls: { left: number; stopRow: number; t0: number }[] = [];
   const dust: { x: number; y: number; t0: number }[] = [];
   const ripples: { x: number; y: number; t0: number; p: Player }[] = []; // tap feedback
   /** Sliding balls leave a short comet tail: pooled, reused, and dropped as they fade. */
@@ -1084,7 +1084,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
     /* a telegraphed lane is nobody's secret: every seat is shown the stripe and where it stops */
     const lane = v.state.hazard?.pending ?? null;
-    if (lane) drawLane(lane.col, logStopRow(v.state.walls, lane.col), now, still);
+    if (lane) drawLane(lane.left, logStopRow(v.state.walls, lane.left, lane.width), now, still);
 
     /* a tap just landed: a quick ripple in the colour of the seat that plays it */
     for (let i = ripples.length - 1; i >= 0; i--) {
@@ -1337,12 +1337,12 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         if (t >= 1) { rolls.splice(i, 1); continue; }
         const run = f.stopRow + 0.5;                       // cells it covers, head of the lane first
         const go = t < 0.84 ? 1 - Math.pow(1 - t / 0.84, 2) : 1;
-        drawLog(ox + (f.col + 0.5) * c, oy + (go * run - 0.45) * c, c, go * run,
+        drawLog(ox + (f.left + 0.5) * c, oy + (go * run - 0.45) * c, c, go * run,
           t < 0.84 ? 1 : 1 - (t - 0.84) / 0.16);
       }
       ctx.restore();
     }
-    if (lane) drawLaneHead(lane.col, now, still);          // the nameplate stays above the traffic
+    if (lane) drawLaneHead(lane.left, now, still);          // the nameplate stays above the traffic
 
     // "<side> is thinking" pips above that side's leading ball
     if (v.thinking !== null) {
@@ -1382,7 +1382,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
      */
     rollLog(ev: LogEvent, t0: number) {
       const { cell: c, ox, oy } = L;
-      rolls.push({ col: ev.col, stopRow: ev.stopRow, t0 });
+      rolls.push({ left: ev.left, stopRow: ev.stopRow, t0 });
       for (const m of ev.moves) {
         const f = clamp((m.from.r + 0.5) / (ev.stopRow + 1), 0.14, 0.86);
         dust.push({ x: ox + (m.to.c + 0.5) * c, y: oy + (m.to.r + 0.5) * c, t0: t0 + LOG_MS * f });

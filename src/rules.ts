@@ -20,11 +20,12 @@
  * wall, the bottom edge or another ball), and the mine is spent. The blast never chains.
  * Opponent mines are secret: clients get `view(state, team)`, never the raw state.
  *
- * The rolling log (opt-in: `newGame(sizes, { hazards: true, seed })`) is a public hazard on a
- * timetable derived from that seed alone — see `hazards.ts`. A round is one turn per team; rounds 1
- * and 2 stay hazard-free. A lane is telegraphed for a whole round and the log rolls down it when the
- * last team of that round has acted, shoving every ball above the first blocking wall back down the
- * lane. Ranked and normal play pass no `hazards` flag and behave exactly as before.
+ * The wide rolling log (opt-in: `newGame(sizes, { hazards: true, seed })`) is a public hazard on
+ * a timetable derived from that seed alone — see `hazards.ts`. A round is one turn per team; rounds
+ * 1 and 2 stay hazard-free. A 3-column lane is telegraphed for a whole round and the log rolls down
+ * all its columns at once when the last team of that round has acted, shoving every ball above the
+ * first blocking wall back down its own column. Ranked and normal play pass no `hazards` flag and
+ * behave exactly as before.
  *
  * Multiplayer later: send an `Action` over the wire and feed whatever comes back into `apply()`.
  */
