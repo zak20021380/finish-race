@@ -1296,6 +1296,20 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
 .chaos[aria-checked="true"] .chaos-ico { background: #3b2a12; color: #f59e0b; }
 .chaos[aria-checked="true"] .switch { background: #b45309; }
 .chaos[aria-checked="true"] .switch::after { transform: translateX(20px); }
+/* The game head's Chaos chip: tiny, amber, and only ever shown while the race really runs the log. */
+.chaos-flag {
+  flex: none;
+  align-self: center;
+  padding: 3px 7px;
+  border-radius: var(--radius-pill);
+  background: #3b2a12;
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .5);
+  color: #fbbf24;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+.chaos-flag[hidden] { display: none; }
 .seg {
   display: flex;
   gap: var(--s1);
@@ -3908,6 +3922,10 @@ html.rm .mode-hero-dot::after { animation: none; opacity: 0; }
   color: var(--brand-ink);
 }
 .mode-pv-wrap.icon .ico { width: 28px; height: 28px; }
+/* Chaos wears the board lane's own amber: a card in the picker and a chip in the game head. */
+.mode-pv-wrap.icon.chaos-pv,
+.chaos-card .chaos-pv { background: #3b2a12; color: #f59e0b; }
+.chaos-card:active .chaos-pv { transform: scale(.94); }
 .mode-pv { display: block; width: 100%; height: 100%; }
 .mode-check {
   position: absolute;

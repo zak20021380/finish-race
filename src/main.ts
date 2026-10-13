@@ -72,6 +72,7 @@ const sheetPause = $<HTMLElement>('sheet-pause');
 const sheetQuit = $<HTMLElement>('sheet-quit');
 const reward = $<HTMLParagraphElement>('reward');
 const rewardN = $<HTMLSpanElement>('reward-n');
+const chaosFlag = $<HTMLSpanElement>('chaos-flag');
 
 /* walls-to-place readout on each chip: repaints only when the number changes */
 const shownWalls: [number, number] = [-1, -1];
@@ -223,8 +224,14 @@ const renderer = createRenderer(canvas, { theme });
 const confetti = createConfetti(confettiEl);
 const toVec = (p: Pos): Vec => ({ x: p.c + 0.5, y: p.r + 0.5 });
 
-/** Chaos mode: the rolling log is offered on the Custom screen only, and never remembered. */
+/** Chaos mode: the rolling log, offered in the mode picker and on the Custom screen. */
 let chaos = false;
+/**
+ * Dev shortcut: `?chaos=1` starts every race the app does not pin with the log on, and each restart
+ * rolls a fresh seed. A caller that names `hazards` wins — that is how ranked or online seats opt
+ * out — and without the parameter this is false, so nothing about the app changes.
+ */
+const chaosUrl = new URLSearchParams(window.location.search).get('chaos') === '1';
 /** How long a log takes to roll down its lane — the animation and the input lock share this. */
 const LOG_MS = 600;
 /** Hands and the blitz clock stand down while a log is on its way. */
@@ -390,6 +397,9 @@ function ui() {
   mineBtn.setAttribute('aria-pressed', String(mineArmed));
   mineBtn.disabled = !live || minesLeft(state, HUMAN) <= 0;
   setMinePips(minesLeft(state, HUMAN));
+
+  /* the chip follows the state, so it reports what the race is actually running, not what was asked for */
+  chaosFlag.hidden = state.hazard?.on !== true;
 
   /* the top bar says whose turn it is, wearing that seat's own colour */
   const seat = state.winner ?? state.turn;
@@ -626,7 +636,7 @@ function paintNames() {
 function startGame(setup: { difficulty: Difficulty; sizes: [number, number]; hazards?: boolean }) {
   difficulty = setup.difficulty;
   sizes = setup.sizes;
-  chaos = Boolean(setup.hazards);
+  chaos = setup.hazards ?? chaosUrl;
   opponent = makeBot(difficulty);
   paused = false;
   restart();

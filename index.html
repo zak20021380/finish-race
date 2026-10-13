@@ -844,6 +844,8 @@
               <svg class="ico" aria-hidden="true"><use href="#i-menu" /></svg>
             </button>
             <p class="g-mode" id="mode-label">1v1 · Normal</p>
+            <!-- the rolling log is a mode a player should be able to see is running -->
+            <span class="chaos-flag" id="chaos-flag" hidden>CHAOS</span>
             <!-- whose turn it is, wearing that seat's colour; the status line carries the live region -->
             <span class="turn you" id="turn" aria-hidden="true">
               <i class="turn-dot"></i><span id="turn-text">Your turn</span><span class="turn-clock" id="turn-clock" hidden>8s</span>
@@ -1236,6 +1238,11 @@
               <span class="mode-pv-wrap icon" aria-hidden="true"><svg class="ico"><use href="#i-tune" /></svg></span>
               <span class="mode-name">Custom</span>
               <span class="mode-desc">Any teams up to 3v3</span>
+            </button>
+            <button class="mode-card ghost chaos-card" type="button" id="mode-chaos" data-start="chaos">
+              <span class="mode-pv-wrap icon chaos-pv" aria-hidden="true"><svg class="ico"><use href="#i-log" /></svg></span>
+              <span class="mode-name">Chaos</span>
+              <span class="mode-desc">Random rolling logs hit the board</span>
             </button>
             <button class="mode-card ghost off" type="button" disabled aria-disabled="true" aria-label="Online play, coming soon">
               <span class="mode-pv-wrap icon" aria-hidden="true"><svg class="ico"><use href="#i-globe" /></svg></span>

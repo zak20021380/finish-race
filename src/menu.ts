@@ -980,7 +980,8 @@ export function createMenu(api: MenuApi): Menu {
   $('custom-start').addEventListener('click', () => {
     impact('light');
     saveMenu({ mode: 'bot', sizes: [...custom] });
-    api.start({ difficulty, sizes: [...custom], hazards: chaos });
+    /* off is "no opinion", so the ?chaos=1 dev shortcut can still light the race up */
+    api.start({ difficulty, sizes: [...custom], hazards: chaos || undefined });
   });
 
   new ResizeObserver(() => paintCustomPv()).observe(customScreen);
@@ -1157,10 +1158,15 @@ export function createMenu(api: MenuApi): Menu {
   for (const el of document.querySelectorAll<HTMLElement>('[data-start]')) {
     el.addEventListener('click', () => {
       if (el.getAttribute('aria-disabled') === 'true') return;   // Online: the badge is the answer
-      if (el.dataset.start !== 'bot') return;                    // vs Bot is the only race that starts
+      const kind = el.dataset.start;
+      if (kind !== 'bot' && kind !== 'chaos') return;     // vs Bot and Chaos are the races that start
       impact('light');
+      if (kind === 'chaos') api.sheets.close();           // Chaos is picked inside the mode sheet
       saveMenu({ mode: 'bot' });
-      api.start({ difficulty, sizes: [...menuState.sizes] });
+      /* Chaos is the same race with the rolling log on, at the level the sheet already shows */
+      api.start(kind === 'chaos'
+        ? { difficulty: menuState.difficulty, sizes: [...menuState.sizes], hazards: true }
+        : { difficulty, sizes: [...menuState.sizes] });
     });
   }
   for (const el of document.querySelectorAll<HTMLElement>('[data-preset]')) {
