@@ -330,8 +330,14 @@ function startBoard(s: GameState): { c: number; r: number; t: Player }[] {
   return out;
 }
 
+/**
+ * The gap the slab keeps inside its canvas. Only the ring stroke and the slab's own drop shadow
+ * need room here — the card's padding does the real spacing, so the board fills the card.
+ */
+const LAYOUT_PAD = 2;
+
 function computeLayout(w: number, h: number, dpr: number, cols: number, rows: number): Layout {
-  const m = 3;
+  const m = LAYOUT_PAD;
   const raw = Math.min((w - 2 * m) / cols, (h - 2 * m) / rows);
   const cell = Math.max(8, Math.floor(raw * dpr) / dpr); // whole device pixels → crisp grid
   const ox = Math.round(((w - cols * cell) / 2) * dpr) / dpr;

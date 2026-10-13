@@ -20,7 +20,6 @@ import { createShop } from './shop';
 import { createNotifications } from './notifications';
 import { mountCoins, setBalance } from './coin';
 import { menuState, motionReduced } from './settings';
-import { BOT_RAMP } from './themes';
 import { onChange, recordGame, theme } from './storage';
 import { impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
@@ -51,8 +50,6 @@ document.addEventListener('dblclick', (e) => e.preventDefault());
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>('board');
 const wrap = $<HTMLDivElement>('board-wrap');
-const statusText = $<HTMLSpanElement>('status-text');
-const dots = $<HTMLSpanElement>('dots');
 const overlay = $<HTMLDivElement>('overlay');
 const verdict = $<HTMLParagraphElement>('verdict');
 const sub = $<HTMLParagraphElement>('sub');
@@ -62,12 +59,16 @@ const noteEl = $<HTMLParagraphElement>('note');
 const hintEl = $<HTMLDivElement>('hint');
 const confettiEl = $<HTMLCanvasElement>('confetti');
 const menuBtn = $<HTMLButtonElement>('menu-btn');
-const modeLabel = $<HTMLElement>('mode-label');
+const roundLabel = $<HTMLParagraphElement>('round-label');
+const pauseMode = $<HTMLSpanElement>('pause-mode');
+const overMode = $<HTMLParagraphElement>('over-mode');
+const announce = $<HTMLParagraphElement>('turn-announce');
+/** the countdown ring: `style.strokeDashoffset` drives the arc, `data-timer` on the chip its colour */
+const timerFill = $<HTMLElement>('timer-fill');
+const timerN = $<HTMLElement>('timer-n');
 const chips = [$<HTMLDivElement>('chip-0'), $<HTMLDivElement>('chip-1')];
+const dots = $<HTMLSpanElement>('dots');
 const wallBadges = [$<HTMLSpanElement>('walls-0'), $<HTMLSpanElement>('walls-1')];
-const turnPill = $<HTMLElement>('turn');
-const turnText = $<HTMLSpanElement>('turn-text');
-const turnClock = $<HTMLSpanElement>('turn-clock');
 const sheetPause = $<HTMLElement>('sheet-pause');
 const sheetQuit = $<HTMLElement>('sheet-quit');
 const reward = $<HTMLParagraphElement>('reward');
@@ -130,9 +131,11 @@ function shake() {
   shakeTimer = window.setTimeout(() => wrap.classList.remove('shake'), 700);
 }
 
-/* floating message over the board: why a slot was refused, or "tap again to place" */
+/* the toast over the lower board: why a slot was refused, "tap again to place", what to do next */
 let noteTimer = 0;
+let toastMsg = '';
 function showNote(msg: string, error: boolean, ttl: number, timeout = false) {
+  toastMsg = msg;
   noteEl.textContent = msg;
   noteEl.classList.toggle('error', error);
   noteEl.classList.toggle('timeout', timeout);   // the blitz verdict gets its own clay tone
@@ -140,7 +143,17 @@ function showNote(msg: string, error: boolean, ttl: number, timeout = false) {
   clearTimeout(noteTimer);
   if (ttl) noteTimer = setTimeout(() => noteEl.classList.remove('show'), ttl);
 }
-const clearNote = () => { clearTimeout(noteTimer); noteEl.classList.remove('show', 'timeout'); };
+const clearNote = () => { clearTimeout(noteTimer); toastMsg = ''; noteEl.classList.remove('show', 'timeout'); };
+
+/**
+ * The standing prompt for this turn. It used to own a row under the card; now it fades over the
+ * lower board, so it costs the canvas nothing. Every path that reaches `ui()` with a new prompt has
+ * already cleared the toast, so an identical message means the old one is still on screen.
+ */
+function showHint(msg: string) {
+  if (!msg || msg === toastMsg) return;
+  showNote(msg, false, 2800);
+}
 
 /* ---------- screens ---------- */
 
@@ -259,6 +272,10 @@ const view: View = {
 };
 let gen = 0; // bumps on restart so stale bot replies are dropped
 let paused = false;
+/** Turns played since the race started: the rules keep no round clock, so the HUD counts its own. */
+let turnsPlayed = 0;
+/** The last thing spoken into the live region, so a repaint never repeats the same announcement. */
+let saidTurn = '';
 const waiting: (() => void)[] = [];            // bot thinks parked by the pause sheet
 
 const canAct = () => state.winner === null && state.turn === HUMAN && !paused && !rolling;
@@ -373,15 +390,11 @@ function ui() {
   armCapsules();
   const thinking = wantsOpponent() && !paused;
 
-  if (state.winner !== null) {
-    statusText.textContent = `${TEAM_NAME[state.winner]} win${state.winner === HUMAN ? '' : 's'}`;
-  } else if (paused) {
-    statusText.textContent = 'Paused';
-  } else if (state.turn === HUMAN) {
-    statusText.textContent = mineArmed ? 'Pick a square to bury a mine'
-      : selected === null ? 'Pick one of your balls' : 'Your move';
-  } else {
-    statusText.textContent = `${TEAM_NAME[state.turn]} is thinking`;
+  /* the toast says what to do next; the bot's turn is told by its own chip, so it says nothing */
+  if (paused) showHint('Paused');
+  else if (state.winner === null && state.turn === HUMAN) {
+    showHint(mineArmed ? 'Pick a square to bury a mine'
+      : selected === null ? 'Pick one of your balls' : 'Your move');
   }
   dots.classList.toggle('on', thinking);
 
@@ -389,18 +402,22 @@ function ui() {
   mineBtn.disabled = !live || minesLeft(state, HUMAN) <= 0;
   setMinePips(minesLeft(state, HUMAN));
 
-  /* the top bar says whose turn it is, wearing that seat's own colour */
+  /* whose turn it is rides on the chips now: a clay glow, a lift, and the countdown ring */
   const seat = state.winner ?? state.turn;
-  turnPill.classList.toggle('you', seat === HUMAN);
-  turnPill.style.setProperty('--turn', seat === HUMAN ? theme().ball.ramp.mid : BOT_RAMP.mid);
-  turnText.textContent = state.winner !== null ? `${TEAM_NAME[seat]} win${seat === HUMAN ? '' : 's'}`
-    : seat === HUMAN ? 'Your turn' : `${TEAM_NAME[seat]}'s turn`;
-
   for (const p of SEATS) {
     chips[p].classList.toggle('active', state.winner === null && state.turn === p && !paused);
     chips[p].classList.toggle('thinking', thinking && p === state.turn);
     setWalls(p, wallsRemaining(state, p));
   }
+  const spoken = state.winner !== null ? `${TEAM_NAME[seat]} win${seat === HUMAN ? '' : 's'}`
+    : seat === HUMAN ? 'Your turn' : `${TEAM_NAME[seat]}'s turn`;
+  if (spoken !== saidTurn) { saidTurn = spoken; announce.textContent = spoken; }
+
+  /* one turn per seat makes a round; the counter is the UI's, the rules keep none */
+  roundLabel.textContent = `Round ${Math.floor(turnsPlayed / Math.max(1, state.teams.length)) + 1}`;
+  /* the lane's own nameplate is painted at the heart of the finish strip, so the label yields to it */
+  wrap.classList.toggle('lane', state.hazard?.pending != null);
+  paintClock();
 
   if (state.winner === null && overlayOpen) {
     overlayOpen = false;
@@ -492,6 +509,7 @@ function play(a: Action): boolean {
   else if (a.kind === 'wall') { marks[by] = { kind: 'wall', spec: a.wall }; impact('medium'); }
   if (a.kind === 'mine') mineArmed = false;      // one mine per trip to the key
   state = next;
+  turnsPlayed++;                 // one seat has acted; the round caption counts them
   ghost = null;
   mineGhost = null;
   capsule = null;
@@ -524,14 +542,20 @@ function play(a: Action): boolean {
  * sheet, a finished race and a hidden webview all leave the timer cleared rather than running blind.
  */
 const URGENT_AT = 3;
+/** the amber step, before the last three seconds: 5s or less is a warning, 3s or less an alarm */
+const WARN_AT = 5;
+/** the ring's whole arc: the SVG's r=21, so C = 2·π·21. The dash offset drains from 12 o'clock. */
+const RING_C = 2 * Math.PI * 21;
 let turnTimerId: number | null = null;
 let turnSecondsLeft: number = CONFIG.TURN_TIME_LIMIT;
+/** the fraction the ring last showed, so a refill never animates backwards through 1s of easing */
+let ringFrac = -1;
 
 /** Is the countdown this seat's to lose? */
 const clockLive = () => !paused && !overlayOpen && !document.hidden && router.current === 'game'
   && state.winner === null && state.turn === HUMAN && !rolling;
 
-/** Park the countdown: the interval is gone, and the pill stops advertising a clock it isn't running. */
+/** Park the countdown: the interval is gone, and the chip stops advertising a clock it isn't running. */
 function stopClock() {
   if (turnTimerId !== null) {
     clearInterval(turnTimerId);
@@ -548,11 +572,23 @@ function startClock() {
   if (clockLive()) turnTimerId = window.setInterval(tickClock, 1000);
 }
 
+/**
+ * The countdown, painted on the seat that owns it: a ring around its ball and the seconds punched
+ * through the middle. The number is always there, so the colour is a heads-up and never the only
+ * signal — accent past 5s, amber to 5s, red to 3s (where the ring also breathes).
+ */
 function paintClock() {
+  const chip = chips[HUMAN];
   const live = clockLive();
-  turnClock.hidden = !live;
-  if (live) turnClock.textContent = `${turnSecondsLeft}s`;
-  turnPill.classList.toggle('urgent', live && turnSecondsLeft <= URGENT_AT);
+  chip.classList.toggle('timing', live);
+  if (!live) { chip.removeAttribute('data-timer'); return; }
+  const left = Math.max(0, turnSecondsLeft);
+  const frac = left / CONFIG.TURN_TIME_LIMIT;
+  timerFill.style.transition = frac < ringFrac ? '' : 'none';
+  ringFrac = frac;
+  timerFill.style.strokeDashoffset = String(RING_C * (1 - frac));
+  timerN.textContent = String(left);
+  chip.dataset.timer = left <= URGENT_AT ? 'red' : left <= WARN_AT ? 'amber' : 'accent';
 }
 
 function tickClock() {
@@ -578,8 +614,8 @@ function timeoutMove() {
   selected = null;
   notify('warning');
   play(getAutoMove(state, state.turn));
-  /* after play(), which clears the banner itself to make room for the next prompt */
-  showNote('Time out! Auto-moved.', false, 1800, true);
+  /* after play(), which clears the toast itself to make room for the next prompt */
+  showNote('Auto-move', false, 1800, true);
 }
 
 function restart() {
@@ -603,6 +639,8 @@ function restart() {
   marks[0] = null; marks[1] = null;
   shownWalls[0] = -1; shownWalls[1] = -1;
   shownMines = -1;
+  turnsPlayed = 0;
+  saidTurn = '';
   overlayOpen = false;
   overlay.hidden = true;
   reward.hidden = true;
@@ -618,7 +656,10 @@ function paintNames() {
   const u = tgUser();
   $('name-0').textContent = (u?.first_name || u?.username || 'YOU').toUpperCase().slice(0, 14);
   $('name-1').textContent = 'BOT';
-  modeLabel.textContent = `${sizes[0]}v${sizes[1]} · ${difficulty[0].toUpperCase()}${difficulty.slice(1)}`;
+  /* the race names itself where a race is being stopped or judged, not on every frame of play */
+  const mode = `${sizes[0]}v${sizes[1]} · ${difficulty[0].toUpperCase()}${difficulty.slice(1)}`;
+  pauseMode.textContent = ` · ${mode}`;
+  overMode.textContent = mode;
 }
 
 function startGame(setup: { difficulty: Difficulty; sizes: [number, number] }) {

@@ -836,11 +836,9 @@
             <button class="icon-btn" type="button" id="menu-btn" aria-label="Game menu" aria-haspopup="dialog">
               <svg class="ico" aria-hidden="true"><use href="#i-menu" /></svg>
             </button>
-            <p class="g-mode" id="mode-label">1v1 · Normal</p>
-            <!-- whose turn it is, wearing that seat's colour; the status line carries the live region -->
-            <span class="turn you" id="turn" aria-hidden="true">
-              <i class="turn-dot"></i><span id="turn-text">Your turn</span><span class="turn-clock" id="turn-clock" hidden>8s</span>
-            </span>
+            <!-- the round is the only thing the top bar says; whose turn is on the chips -->
+            <p class="g-round" id="round-label">Round 1</p>
+            <span class="m-head-pad" aria-hidden="true"></span>
           </div>
 
           <main class="card">
@@ -848,13 +846,13 @@
               <div class="board-wrap" id="board-wrap">
                 <canvas id="board" role="img" aria-label="Race board: red and blue tokens race to the checkered finish strip along the top row"></canvas>
 
-                <!-- the finish lives in the board; this is its only label -->
-                <span class="finish-pill">
-                  <svg class="ico" aria-hidden="true"><use href="#i-flag" /></svg><span class="label">FINISH</span>
+                <!-- the finish label is engraved into the strip it names -->
+                <span class="finish-tag" aria-hidden="true">
+                  <svg class="ico"><use href="#i-flag" /></svg><span class="label">FINISH</span>
                 </span>
 
-                <!-- why a slot was refused, or the "tap again" prompt -->
-                <p class="note" id="note" aria-live="polite"></p>
+                <!-- why a slot was refused, or the "tap again" prompt: a toast, no layout space -->
+                <p class="note" id="note" role="status" aria-live="polite"></p>
 
                 <!-- one-time hint -->
                 <div class="hint" id="hint" hidden>
@@ -864,13 +862,21 @@
               </div>
             </div>
 
-            <!-- the whole board is the action dock now: your chip carries the one key left, the mine -->
+            <!-- the whole board is the action dock now: your chip carries the one key left, the mine.
+                 Whose turn it is and how long is left live on the chips, in the thumb zone. -->
             <footer class="chips">
               <div class="chip red" id="chip-0">
                 <span class="chip-row">
-                  <span class="ball" aria-hidden="true"></span>
+                  <span class="chip-ball">
+                    <span class="ball" aria-hidden="true"></span>
+                    <svg class="timer" viewBox="0 0 46 46" aria-hidden="true" focusable="false">
+                      <circle class="timer-track" cx="23" cy="23" r="21" />
+                      <circle class="timer-fill" id="timer-fill" cx="23" cy="23" r="21" />
+                    </svg>
+                    <b class="timer-n" id="timer-n" aria-hidden="true">8</b>
+                  </span>
                   <span class="chip-txt">
-                    <span class="who" id="name-0">YOU</span>
+                    <span class="who-line"><span class="who" id="name-0">YOU</span></span>
                     <span class="walls" id="walls-0" aria-label="Walls left: 8 of 8">
                       <span class="wall-glyph" aria-hidden="true">▬</span><span class="wall-n">8</span><span class="wall-w">walls</span>
                     </span>
@@ -883,9 +889,14 @@
               </div>
               <div class="chip blue" id="chip-1">
                 <span class="chip-row">
-                  <span class="ball" aria-hidden="true"></span>
+                  <span class="chip-ball">
+                    <span class="ball" aria-hidden="true"></span>
+                  </span>
                   <span class="chip-txt">
-                    <span class="who" id="name-1">BOT</span>
+                    <span class="who-line">
+                      <span class="who" id="name-1">BOT</span>
+                      <span class="dots" id="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                    </span>
                     <span class="walls" id="walls-1" aria-label="Walls left: 8 of 8">
                       <span class="wall-glyph" aria-hidden="true">▬</span><span class="wall-n">8</span><span class="wall-w">walls</span>
                     </span>
@@ -895,9 +906,8 @@
             </footer>
           </main>
 
-          <p class="status" id="status" role="status" aria-live="polite">
-            <span id="status-text"></span><span class="dots" id="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-          </p>
+          <!-- the turn is spoken, never painted: the chips already show it -->
+          <p class="sr-only" id="turn-announce" role="status" aria-live="polite"></p>
 
           <canvas class="confetti" id="confetti" aria-hidden="true"></canvas>
 
@@ -905,6 +915,7 @@
             <div class="panel">
               <svg class="flag" aria-hidden="true"><use href="#i-flag" /></svg>
               <p class="verdict" id="verdict">You win</p>
+              <p class="over-mode" id="over-mode">1v1 · Normal</p>
               <p class="sub" id="sub">You reached the finish first.</p>
               <p class="reward" id="reward" hidden>
                 <span class="coin" data-coin aria-hidden="true"></span><span id="reward-n">0</span><span>coins</span>
@@ -940,7 +951,7 @@
 
       <!-- pause sheet -->
       <section class="sheet" id="sheet-pause" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
-        <h2 class="sheet-t" id="pause-title">Paused</h2>
+        <h2 class="sheet-t" id="pause-title">Paused<span class="pause-mode" id="pause-mode"> · 1v1 · Normal</span></h2>
         <div class="sheet-actions">
           <button class="btn btn-primary" type="button" id="pause-resume" data-autofocus>
             <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg><span>Resume</span>

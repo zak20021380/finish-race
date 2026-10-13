@@ -181,16 +181,10 @@
   --motion-press: translateY(var(--press-y));
   /* bounce for the dock: it overshoots once, then settles */
   --bounce: cubic-bezier(.34, 1.56, .64, 1);
-  /* banners sit one row down so the checkered strip is never covered */
-  --banner-top: calc(100% / 12 + var(--s2));
-  /* the FINISH plate: a fixed height, so the lane under it can be derived from the badge itself and
-     the clip can never eat a corner when the type clamp steps up on a wider phone */
+  /* banners float over the lower board now, so the finish row is never covered */
+  /* the FINISH plate: a fixed height, so it stays legible on the checkered strip it sits on */
   --finish-pill-h: 22px;
-  --finish-clearance: 8px;
   --finish-ring: rgba(110, 231, 183, .18);
-  /* lane the board slot keeps above the canvas: the whole badge, its clearance and 2px of slack for
-     sub-pixel rounding — the pill floats clear of the board instead of straddling its top edge */
-  --finish-lane: calc(var(--finish-pill-h) + var(--finish-clearance) + 2px);
   /* bottom nav height: the compete scroll pads by dock + 16 so rows never hide behind chrome */
   --dock-height: 72px;
   /* the "my standing" bar and the squad dock are the same object at the same size */
@@ -332,15 +326,16 @@ html, body {
   .card { background: linear-gradient(180deg, var(--card-a) 0%, var(--card-b) 100%); }
 }
 
-/* ---- the finish label: a debossed clay plate floating clear above the canvas ----
-   It used to straddle the board's top edge, which put half of it over the checkered strip and
-   smeared that strip through a live backdrop-filter. Now it sits in its own lane, solid clay,
-   pressed into the card with the shared inset recipe — board furniture, not a banner. */
-.finish-pill {
+/* ---- the finish label: pressed into the checkered strip it names ----
+   It used to own a lane above the canvas, which cost the board a whole row of height. Now it is
+   a recessed plate centred on row 0 — board furniture, not a banner, and `pointer-events: none`
+   so a tap always belongs to the board underneath. A ball only ever reaches row 0 as the race
+   ends, so the plate never hides anything in play. */
+.finish-tag {
   position: absolute;
   left: 50%;
-  bottom: calc(100% + var(--finish-clearance));
-  transform: translateX(-50%);
+  top: calc(100% / 24);                 /* the middle of row 0 */
+  transform: translate(-50%, -50%);
   z-index: 3;
   display: flex;
   align-items: center;
@@ -354,24 +349,29 @@ html, body {
   font-size: var(--t-micro);
   line-height: 1;
   white-space: nowrap;
-  pointer-events: none;              /* taps always belong to the board underneath */
+  pointer-events: none;
 }
-.finish-pill .ico {
+.finish-tag .ico {
   flex: none;
   width: 1.15em;
   height: 1.15em;
   color: var(--green-ink);
 }
-.finish-pill .label {
+.finish-tag .label {
   font-weight: var(--w-2);
   letter-spacing: .18em;
-  text-indent: .18em;                /* balances the trailing letter-space */
-  color: var(--green-ink);           /* light on the recessed groove: clears 4.5:1 by a wide margin */
+  text-indent: .18em;                   /* balances the trailing letter-space */
+  color: var(--green-ink);              /* 12:1 on the recessed groove */
 }
+/* a telegraphed log paints its own nameplate at the heart of this row: the label steps aside.
+   The checkered strip is the real finish marker, so losing the word loses no information. */
+.board-wrap.lane .finish-tag { opacity: 0; }
+.finish-tag { transition: opacity .2s ease; }
 
 /* ---- board ---- */
-/* The slot takes the free height and the wrap fits the largest 2:3 box inside
-   it, so the board shrinks on 360x640 instead of pushing chips/status off. */
+/* The slot takes the free height and the wrap fits the largest 2:3 box inside it, so the board
+   shrinks on 360x640 instead of pushing the chips off. Nothing else claims a lane: the finish
+   label lives on the strip, so the canvas gets every pixel of the card above the chips. */
 .board-slot {
   flex: 1 1 auto;
   min-height: 0;
@@ -381,11 +381,6 @@ html, body {
   place-items: center;
   container-type: size;
   overflow: hidden;
-  /* the finish lane: the slot spends this strip of its own padding box on the FINISH plate and the
-     clearance under it, so the badge sits inside the clip instead of being cut by it. The board
-     still sizes itself from the content box, which keeps the 2:3 ratio intact and the finish row
-     clear of the card's rounded corner. */
-  padding-top: var(--finish-lane);
 }
 .board-wrap { position: relative; width: 100%; height: 100%; }
 /* the mine trigger: a 4px micro-shake of the board alone, over in half a second.
@@ -411,11 +406,11 @@ html, body {
   touch-action: none;
 }
 
-/* ---- one-time hint pill (shares the banner slot with .note) ---- */
+/* ---- one-time hint pill (shares the lower-board toast band with .note) ---- */
 .hint {
   position: absolute;
   left: 50%;
-  top: var(--banner-top);
+  bottom: 30%;                          /* over the board's lower third, clear of the start rows */
   transform: translateX(-50%);
   z-index: 3;
   display: flex;
@@ -451,12 +446,14 @@ html, body {
 .hint-x:active { transform: var(--motion-press); opacity: .8; }
 .hint-x:focus-visible { outline: 3px solid var(--pill-ink); outline-offset: 2px; }
 
-/* ---- floating message over the board: reason or confirm prompt ---- */
-/* stays in the DOM (only opacity changes) so its aria-live region announces */
+/* ---- floating toast over the lower board: a refusal, a confirm prompt, the next-step hint ----
+   The status pill under the card is gone: every prompt fades here instead, so it costs no layout
+   height and the board keeps the row it used to lose. stays in the DOM (only opacity changes) so
+   its aria-live region announces. */
 .note {
   position: absolute;
   left: 50%;
-  top: var(--banner-top);
+  bottom: 18%;
   transform: translate(-50%, 6px);
   z-index: 4;
   width: max-content;
@@ -533,28 +530,32 @@ html, body {
 .pips i.on { opacity: 1; }
 .mine-btn[aria-pressed="true"] .pips i.on { box-shadow: 0 0 6px -1px currentColor; }
 
-/* ---- level 3: player chips — seat, name and steps on one row ---- */
-.chips { flex: none; display: flex; gap: var(--s2); padding-top: var(--s2); }
+/* ---- level 3: player chips — the thumb zone. Turn, countdown and walls all live here now. ---- */
+.chips { flex: none; display: flex; gap: var(--s2); padding-top: var(--s1); }
 .chip {
   position: relative;
   flex: 1 1 0;
   min-width: 0;
-  min-height: 52px;                  /* the mine key is 44px on its own; the chip pads around it */
+  height: 64px;                          /* spec: two equal 64px chips */
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 3px;
-  padding: var(--s1) var(--s2);
+  padding: 0 var(--s2);
   border-radius: var(--r-chip);
   background: var(--tint-glass);
   box-shadow:
     inset 0 0 0 1px var(--hair),
     0 4px 10px -6px var(--shadow-soft);
-  transition: transform var(--motion-fast), opacity var(--motion-fast);
+  /* the turn hand-off is a cross-fade, not a jump: glow, lift and face all move on one 200ms clock */
+  transition: transform .2s ease, opacity .2s ease, box-shadow .2s ease, background .2s ease;
 }
-.chip-row { display: flex; align-items: center; gap: var(--s1); width: 100%; min-width: 0; }
-/* avatar | name over steps | the mine key: the stacked text is what keeps 320px from overflowing */
-.chip-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.chip-row { display: flex; align-items: center; gap: var(--s2); width: 100%; min-width: 0; }
+/* the ball, its countdown ring and the seconds inside it — one 46px block, ring included */
+.chip-ball { position: relative; flex: none; width: 46px; height: 46px; }
+/* avatar | name over walls | the mine key: the stacked text is what keeps 320px from overflowing */
+.chip-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.who-line { display: flex; align-items: center; gap: var(--s1); min-width: 0; }
 .chip.red { --tint: var(--red); --ink-t: var(--red-ink); --glow: var(--red-glow); }
 .chip.blue { --tint: var(--blue); --ink-t: var(--blue-ink); --glow: var(--blue-glow); }
 .chip::after {
@@ -562,36 +563,94 @@ html, body {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow: inset 0 0 0 2px var(--tint), 0 0 14px -2px var(--glow);
+  box-shadow: inset 0 0 0 2px var(--tint), 0 0 18px -2px var(--glow);
   opacity: 0;
   transition: opacity .2s ease;
   pointer-events: none;
 }
-.chip.active { background: var(--solid-a); transform: translateY(-1px); }
+/* the seat to move: a clay glow in its own colour, lifted 2px off the card */
+.chip.active {
+  background: var(--solid-a);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 var(--hair-lit),
+    inset 0 -2px 3px rgba(0, 0, 0, .3),
+    0 6px 14px -8px var(--glow);
+}
 .chip.active::after { opacity: 1; }
 .chip.thinking::after { opacity: 1; animation: breathe 1.5s ease-in-out infinite; }
 
 .chip .ball {
   /* the seat's own ball, doubling as its avatar: the token on the board is the token up here */
-  flex: none;
-  width: 15px;
-  height: 15px;
+  position: absolute;
+  inset: 3px;
+  width: 40px;                           /* spec: 40px team-coloured ball */
+  height: 40px;
   border-radius: 50%;
   background: radial-gradient(circle at 32% 26%, #fff8 0%, var(--tint) 58%, #0004 100%);
   box-shadow: 0 1px 3px -1px var(--glow), inset 0 0 0 1px rgba(255, 255, 255, .18);
 }
+
+/* ---- the blitz clock, live on the chip that owns it ----
+   An SVG ring around the ball with the seconds punched through the middle of it. The number is
+   always painted, so the ring's colour is a heads-up and never the only signal. r=21 → C=131.95. */
+.timer {
+  position: absolute;
+  inset: 0;
+  width: 46px;
+  height: 46px;
+  transform: rotate(-90deg);             /* the arc drains from 12 o'clock */
+  opacity: 0;
+  transition: opacity .2s ease;
+  pointer-events: none;
+}
+.chip.timing .timer { opacity: 1; }
+.timer-track { fill: none; stroke: var(--field); stroke-width: 3; }
+.timer-fill {
+  fill: none;
+  stroke: var(--brand-3);                /* >5s: the app's own accent */
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 131.95;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 1s linear, stroke .2s ease;
+}
+.chip[data-timer="amber"] .timer-fill { stroke: var(--honey); }      /* <=5s */
+.chip[data-timer="red"] .timer-fill { stroke: #ff6b87; }             /* <=3s: bad-1 lifted to clear 4.5:1 on --solid-a */
+.chip[data-timer="red"] .timer-fill { animation: timer-pulse 1s ease-in-out infinite; }
+@keyframes timer-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+.timer-n {
+  position: absolute;
+  inset: 0;
+  display: none;
+  place-items: center;
+  font-size: 15px;                       /* spec: 15/700, tabular */
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: #fff;                           /* 4.6:1 on the red ball, 6:1 on the blue one */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .7);
+  pointer-events: none;
+}
+.chip.timing .timer-n { display: grid; }
+/* reduced motion: the ring keeps counting, it just never breathes */
+@media (prefers-reduced-motion: reduce) {
+  .chip[data-timer="red"] .timer-fill { animation: none; opacity: 1; }
+}
+html.rm .chip[data-timer="red"] .timer-fill { animation: none; opacity: 1; }
 .chip .who {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   color: var(--ink-t);
-  font-size: var(--t-3);
-  font-weight: var(--w-3);
+  font-size: 14px;                       /* spec: 14/700 */
+  font-weight: 700;
   letter-spacing: var(--ls-3);
   text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 .chip .walls {
   /* premium wall badge: a debossed clay capsule, team-accented, fixed-width digits */
   align-self: flex-start;
@@ -639,6 +698,12 @@ html, body {
   font-weight: 700;
   opacity: .72;
 }
+/* 360px floor: a 46px ball block and the 44px mine key leave the stats row ~46px, so the word goes
+   and the bar glyph carries it. The badge's aria-label still spells out "Walls left: N of 8". */
+@media (max-width: 380px) {
+  .chip-row { gap: var(--s1); }
+  .chip .walls .wall-w { display: none; }
+}
 .chip .walls.pop { animation: step-pop .34s cubic-bezier(.2, 1.3, .5, 1); }
 /* budget spent: mute the badge, fade the count, drop the accent glow */
 .chip .walls.depleted {
@@ -669,38 +734,28 @@ html, body {
     color: #fbbf24; opacity: 1; }
 }
 
-/* ---- level 1: status pill, tucked under the card ---- */
-.status {
-  flex: none;
-  align-self: center;
-  max-width: 100%;
-  min-height: 32px;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s2);
-  padding: var(--s1) var(--s3);
-  border-radius: var(--radius-pill);
-  background: var(--solid-a);
-  box-shadow:
-    inset 0 0 0 1px var(--hair-off),
-    0 8px 18px -12px var(--shadow);
-  font-size: var(--t-1);
-  font-weight: var(--w-1);
-  line-height: 1.25;
-  color: var(--ink);
-  white-space: nowrap;
+/* ---- the spoken turn: an aria-live region with no box of its own ----
+   The status pill under the card is gone — the chips carry turn + countdown visually now, so the
+   announcement needs a lane that costs zero height. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
-.dots { display: none; align-items: center; gap: var(--s1); }
+/* the bot's "thinking" pips, now worn on its own chip */
+.dots { display: none; align-items: center; gap: var(--s1); flex: none; }
 .dots.on { display: inline-flex; }
 .dots i {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: var(--brand-2);
+  background: var(--ink-t, var(--brand-2));
   animation: blink 1.2s infinite ease-in-out;
 }
 .dots i:nth-child(2) { animation-delay: .18s; }
@@ -1520,15 +1575,17 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
 .p-stats.triple.tight { margin: 0 0 var(--s3); padding: var(--s2) var(--s3); border-radius: 16px; }
 .sheet .fine { margin-top: var(--s3); }
 
-/* ---- in-game head: menu key | match mode | whose turn it is, in that seat's colour ---- */
-.g-head { min-height: 40px; }
-.g-mode {
+/* ---- in-game head: 44px, one key and one caption. Nothing else. ----
+   The turn pill and the mode label moved out: whose turn it is rides on the chips below, and the
+   mode names the race in the two places that actually need it — the pause sheet and the result. */
+.g-head { height: 44px; min-height: 44px; }
+.g-round {
   flex: 1 1 auto;
   min-width: 0;
   margin: 0;
   text-align: center;
   font-size: var(--t-micro);
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: var(--ls-3);
   text-transform: uppercase;
   color: var(--ink-soft);
@@ -1536,72 +1593,22 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.turn {
-  position: relative;               /* anchors the urgent alarm ring */
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 46%;
-  min-height: 28px;
-  padding: 5px var(--s2) 5px 6px;
-  border-radius: var(--radius-pill);
-  background: var(--field);
-  box-shadow: inset 0 0 0 1px var(--hair);
+/* the race the result belongs to: a quiet caption under the verdict */
+.over-mode {
+  margin: calc(var(--s1) * -1) 0 var(--s2);
   font-size: var(--t-micro);
   font-weight: 800;
-  font-variant-numeric: tabular-nums;   /* the countdown must not shove the pill sideways */
-  letter-spacing: .04em;
+  letter-spacing: var(--ls-3);
   text-transform: uppercase;
-  color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-}
-.turn-dot {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--turn, var(--brand-2));
-  box-shadow: 0 0 10px -1px var(--turn, var(--brand-2));
-  transition: background var(--motion-med), box-shadow var(--motion-med);
-}
-.turn #turn-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-/* your turn: the dot breathes, and the pill wears your colour on its edge */
-.turn.you { box-shadow: inset 0 0 0 1px var(--turn, var(--brand-2)); }
-.turn.you .turn-dot { animation: breathe 1.8s ease-in-out infinite; }
-/* the blitz clock rides on the end of the pill. The separator is the countdown's own pseudo, so
-   hiding the clock (bot's turn, paused, race over) takes the gap and the dot with it. */
-.turn-clock {
-  flex: none;
-  letter-spacing: 0;
-  text-transform: none;             /* "8s", the unit reads as a unit */
   color: var(--ink-soft);
 }
-.turn-clock::before { content: "·"; margin-right: 6px; opacity: .5; }
-/* ---- the last three seconds: the pill lights up from inside and breathes ----
-   The glow is a static inset shadow on an overlay pseudo, and only its opacity animates, so the
-   compositor owns the pulse. Reduced motion flattens it to a steady lit ring. */
-.turn.urgent { color: var(--honey-ink); }
-.turn.urgent .turn-clock { color: var(--honey-ink); }
-.turn.urgent .turn-dot {
-  background: var(--bad-1);
-  box-shadow: 0 0 12px -1px var(--bad-1);
-  animation-duration: 1s;
+.pause-mode {
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: var(--ls-3);
+  text-transform: uppercase;
+  color: var(--ink-soft);
 }
-.turn.urgent::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  box-shadow:
-    inset 0 0 0 1px var(--bad-1),
-    inset 0 0 12px -2px var(--bad-1),
-    inset 0 0 22px -6px var(--honey);
-  animation: turn-alarm 1s ease-in-out infinite;
-}
-@keyframes turn-alarm { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
 
 /* ---- bottom dock: one thick clay pill, floating clear of the safe area ----
    The active tab is a filled key with its own extrusion, so "where am I" reads
@@ -1878,7 +1885,6 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
    The 2-row user-bar stays spacious: 12px gaps preserved, only padding steps down. */
 @media (max-height: 600px) {
   .chips { padding-top: var(--s1); }
-  .status { min-height: 32px; padding: var(--s1) var(--s3); }
   .g-head { min-height: 44px; }
   .tab { min-height: 44px; }
   .id-card { padding: var(--s2) var(--s3) var(--s3); }
