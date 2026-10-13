@@ -394,6 +394,23 @@ html, body {
   100% { transform: translate3d(0, 0, 0); }
 }
 .board-wrap.shake { animation: board-shake .5s cubic-bezier(.36, .07, .19, .97) both; }
+/* While a log is rolling the board is inert: the same lock that parks the opponent parks the
+   finger, and the frame wears the lane's amber so the wait reads as weight, not as a frozen app. */
+.board-wrap.rolling { pointer-events: none; }
+.board-wrap.rolling::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 2px rgba(245, 158, 11, .34), 0 0 20px rgba(245, 158, 11, .16);
+  animation: log-rolling 1.15s ease-in-out infinite;
+}
+@keyframes log-rolling {
+  0%, 100% { opacity: .5; }
+  50%      { opacity: 1; }
+}
+html.rm .board-wrap.rolling::after { animation: none; opacity: .85; }
 @supports (width: 1cqw) {
   .board-wrap { width: min(100cqw, 66.667cqh); height: min(100cqh, 150cqw); }
 }

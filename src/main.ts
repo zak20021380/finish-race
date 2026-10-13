@@ -7,7 +7,8 @@ import {
 } from './rules';
 import { botAction, botThinkMs, type Difficulty } from './bot';
 import {
-  createRenderer, hitTest, wallCentre, type BallView, type CapsuleAction, type Ghost, type Hit,
+  createRenderer, hitTest, logArriveMs, logFaceRow, logRollMs, wallCentre,
+  type BallView, type CapsuleAction, type Ghost, type Hit,
   type Mark, type Vec, type View,
 } from './render';
 import { createConfetti } from './confetti';
@@ -236,14 +237,18 @@ const renderer = createRenderer(canvas, { theme });
 const confetti = createConfetti(confettiEl);
 const toVec = (p: Pos): Vec => ({ x: p.c + 0.5, y: p.r + 0.5 });
 
-/** How long a log takes to roll down its lane — the animation and the input lock share this. */
-const LOG_MS = 600;
-/** Hands and the blitz clock stand down while a log is on its way. */
+/** Hands, the opponent's brain and the blitz clock all stand down while a log is on its way. */
 let rolling = false;
+/** Bot turns parked by a roll, in the order they arrived. */
+const rollHeld: (() => void)[] = [];
 /** `lastEvent` stays on the state, so the object's identity is what marks it as already played. */
 let playedLog: LogEvent | null = null;
 /** ball id → the moment the log reaches it, so a shoved ball only starts sliding when it is hit. */
 const logWait = new Map<number, number>();
+/** ball id → the rows a shove carries it between: the ball rides the trunk's face, not a lerp. */
+const logShove = new Map<number, { y0: number; y1: number }>();
+/** the roll's own clock, so the face the balls follow and the sprite are the same curve */
+let rollT0 = 0, rollStop = 0, rumbleId = 0;
 let state: GameState = newGame(sizes, { hazards: true, seed: (Math.random() * 0x7fffffff) | 0 });
 /**
  * Every ball the renderer draws, in state order, with the animated centre under it. The entries
@@ -417,6 +422,7 @@ function ui() {
   roundLabel.textContent = `Round ${Math.floor(turnsPlayed / Math.max(1, state.teams.length)) + 1}`;
   /* the lane's own nameplate is painted at the heart of the finish strip, so the label yields to it */
   wrap.classList.toggle('lane', state.hazard?.pending != null);
+  wrap.classList.toggle('rolling', rolling);   // the board is visibly inert while a trunk is on it
   paintClock();
 
   if (state.winner === null && overlayOpen) {
@@ -428,12 +434,19 @@ function ui() {
   maybeShowHint();
 }
 
+/** A bot turn parked until the board is clear of a rolling log. */
+const untilRoll = () => (rolling
+  ? new Promise<void>((res) => { rollHeld.push(res); })
+  : Promise.resolve());
+
 async function runOpponent() {
   if (state.winner !== null || !wantsOpponent()) return;
   const token = ++gen;
-  const a = await opponent.think(fogOfWar(state, state.turn));
+  await untilRoll();                    // it does not think over the top of a trunk, let alone move
   if (token !== gen) return;
   if (paused) await new Promise<void>((res) => waiting.push(res));   // parked until Resume
+  if (token !== gen) return;
+  const a = await opponent.think(fogOfWar(state, state.turn));
   if (token !== gen) return;
   if (play(a)) return;
   /* a bot only sees its own side of the fog, so a mine it buries can sit on a square the human
@@ -452,20 +465,26 @@ function blastOf(prev: GameState, next: GameState): Mine | null {
 }
 
 /**
- * The warning round closed and its log came down the lane. The sprite, the dust and the slide are
- * the renderer's; what main.ts adds is holding every shoved ball until the log reaches it, naming
- * what happened in the note, and keeping hands and the blitz clock off the board while it rolls.
+ * The log is coming down the lane, so nothing else may move: taps are refused, the bot parks, the
+ * clock stays stopped, and the haptics run the whole way down — a soft thud every 140ms, a heavy
+ * one at every ball the face meets and at the wall it slams into. The sprite and the shove timing
+ * both come from `render.ts`, so the board and this lock can never disagree about when it ends.
  */
 function playLog(ev: LogEvent, next: GameState) {
   playedLog = ev;
   rolling = true;
   const token = gen;                    // restart() bumps it, so a stale roll cannot unlock the new race
   const t0 = performance.now();
+  const T = logRollMs(ev.stopRow);
+  const blocked = ev.stopRow < ROWS - 1;
+  rollT0 = t0; rollStop = ev.stopRow;
   renderer.rollLog(ev, t0);
   if (!motionReduced()) {
     for (const m of ev.moves) {
-      const f = Math.max(0.14, Math.min(0.86, (m.from.r + 0.5) / (ev.stopRow + 1)));
-      logWait.set(m.ballId, t0 + LOG_MS * f);
+      const hit = t0 + logArriveMs(m.from.r, ev.stopRow);
+      logWait.set(m.ballId, hit);
+      logShove.set(m.ballId, { y0: m.from.r, y1: m.to.r });
+      window.setTimeout(() => { if (token === gen) impact('heavy'); }, hit - t0);
     }
   }
   /* the log meets the top-most ball first, so that is the shove the note reports */
@@ -475,19 +494,24 @@ function playLog(ev: LogEvent, next: GameState) {
   const thrown = hit ? hit.to.r - hit.from.r : 0;
   const msg = hit
     ? `Log! ${TEAM_NAME[team] ?? 'Ball'} pushed back ${thrown} cell${thrown === 1 ? '' : 's'}`
-    : ev.stopRow < ROWS - 1 ? 'Log blocked by a wall' : 'Log rolled down an empty lane';
-  shake();
-  impact('heavy');
+    : blocked ? 'Log blocked by a wall' : 'Log rolled down an empty lane';
+  impact('medium');
   notify('warning');
-  showNote(msg, false, 2600);
+  showNote(msg, false, Math.max(2600, T));
+  const rumble = window.setInterval(() => impact('light'), 140);
+  /* a wall takes the whole trunk's weight at the end of the run, and the board says so then */
+  if (blocked) window.setTimeout(() => { if (token === gen) { shake(); impact('heavy'); } }, T);
   window.setTimeout(() => {
+    window.clearInterval(rumble);
     if (token !== gen) return;          // the race restarted: that lock belongs to the new one
     rolling = false;
     logWait.clear();                    // anything still held is released, never left frozen
+    logShove.clear();
+    while (rollHeld.length) rollHeld.shift()!();
     if (paused || state.winner !== null) return;
     ui();
     startClock();                       // the seat gets its allowance back once the board is clear
-  }, LOG_MS + 80);
+  }, T + 380);
 }
 
 function play(a: Action): boolean {
@@ -888,8 +912,17 @@ function frame(now: number) {
       logWait.delete(b.id);
     }
     const tx = b.pos.c + 0.5, ty = b.pos.r + 0.5;
-    v.pos.x += (tx - v.pos.x) * k;
-    v.pos.y += (ty - v.pos.y) * k;
+    const sh = logShove.get(b.id);
+    if (sh) {
+      /* the trunk is pushing it, so it rides the face: never ahead of it, never behind it either */
+      const y = Math.min(sh.y1, Math.max(sh.y0, logFaceRow(rollStop, now - rollT0)));
+      v.pos.x += (tx - v.pos.x) * k;
+      v.pos.y = y + 0.5;
+      if (y >= sh.y1) logShove.delete(b.id);
+    } else {
+      v.pos.x += (tx - v.pos.x) * k;
+      v.pos.y += (ty - v.pos.y) * k;
+    }
     if (Math.abs(tx - v.pos.x) < 0.002) v.pos.x = tx;
     if (Math.abs(ty - v.pos.y) < 0.002) v.pos.y = ty;
     v.sel = selected !== null && v.id === selected;
