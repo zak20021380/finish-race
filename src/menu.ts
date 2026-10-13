@@ -882,21 +882,20 @@ export function createMenu(api: MenuApi): Menu {
     api.start({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] });
   });
 
-  /* ---- difficulty: mode select owns the segmented control; Home shows fixed labels ---- */
-  let difficulty: Difficulty = menuState.difficulty;
-  const paintBotSub = () => {
+  /* ---- difficulty: menuState.difficulty is the single source; every control paints it, every start reads it ---- */
+  const capDiff = (d: Difficulty): string => d.charAt(0).toUpperCase() + d.slice(1);
+  const paintBotSub = (): void => {
     const el = document.getElementById('mode-bot-sub');
-    if (el) el.textContent = 'vs Bot';
+    if (el) el.textContent = `vs Bot · ${capDiff(menuState.difficulty)}`;
   };
-  const paintDiff = () => {
-    for (const b of segs) b.setAttribute('aria-pressed', String(b.dataset.diff === difficulty));
+  const paintDiff = (): void => {
+    for (const b of segs) b.setAttribute('aria-pressed', String(b.dataset.diff === menuState.difficulty));
     paintBotSub();
   };
   for (const b of segs) {
     b.addEventListener('click', () => {
       const d = b.dataset.diff as Difficulty;
-      if (!DIFFICULTIES.includes(d) || d === difficulty) return;
-      difficulty = d;
+      if (!DIFFICULTIES.includes(d) || d === menuState.difficulty) return;
       saveMenu({ difficulty: d });
       paintDiff();
       impact('light');
@@ -981,7 +980,7 @@ export function createMenu(api: MenuApi): Menu {
     impact('light');
     saveMenu({ mode: 'bot', sizes: [...custom] });
     /* off is "no opinion", so the ?chaos=1 dev shortcut can still light the race up */
-    api.start({ difficulty, sizes: [...custom], hazards: chaos || undefined });
+    api.start({ difficulty: menuState.difficulty, sizes: [...custom], hazards: chaos || undefined });
   });
 
   new ResizeObserver(() => paintCustomPv()).observe(customScreen);
@@ -1166,7 +1165,7 @@ export function createMenu(api: MenuApi): Menu {
       /* Chaos is the same race with the rolling log on, at the level the sheet already shows */
       api.start(kind === 'chaos'
         ? { difficulty: menuState.difficulty, sizes: [...menuState.sizes], hazards: true }
-        : { difficulty, sizes: [...menuState.sizes] });
+        : { difficulty: menuState.difficulty, sizes: [...menuState.sizes] });
     });
   }
   for (const el of document.querySelectorAll<HTMLElement>('[data-preset]')) {
@@ -1175,7 +1174,7 @@ export function createMenu(api: MenuApi): Menu {
       if (!a || !b) return;
       impact('light');
       saveMenu({ mode: 'bot', sizes: [a, b] });
-      api.start({ difficulty, sizes: [a, b] });
+      api.start({ difficulty: menuState.difficulty, sizes: [a, b] });
     });
   }
   for (const el of document.querySelectorAll<HTMLElement>('[data-go]')) {
@@ -1211,9 +1210,8 @@ export function createMenu(api: MenuApi): Menu {
     setRoute(id) {
       tabbar.hidden = id === 'game';
       if (id === 'profile') paintProfile();       // the equipped row is only laid out once it is showing
-      /* Home now commits the strength live, so re-read it whenever these screens come forward */
+      /* Home commits the strength live to menuState, so repaint whenever these screens come forward */
       if (id === 'modes' || id === 'custom') {
-        difficulty = menuState.difficulty;
         paintDiff();
       }
       if (id === 'custom') {                      // the preview is the same board, smaller

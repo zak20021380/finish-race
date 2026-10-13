@@ -634,7 +634,9 @@ function paintNames() {
 }
 
 function startGame(setup: { difficulty: Difficulty; sizes: [number, number]; hazards?: boolean }) {
-  difficulty = setup.difficulty;
+  /* menuState.difficulty is the single source: the Choose-mode sheet persists it live,
+     so every start path (vs Bot card, Chaos card, Play) runs the level the sheet shows. */
+  difficulty = menuState.difficulty;
   sizes = setup.sizes;
   chaos = setup.hazards ?? chaosUrl;
   opponent = makeBot(difficulty);
