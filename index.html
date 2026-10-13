@@ -459,50 +459,48 @@
           </div>
           <div class="ranks-stats" id="ranks-stats" role="status" aria-live="polite">
             <span class="rstat" data-stat="a">
-              <svg class="rstat-ico" aria-hidden="true"><use href="#i-users" /></svg>
-              <span class="rstat-body">
+              <span class="rstat-top">
+                <svg class="rstat-ico" aria-hidden="true"><use href="#i-users" /></svg>
                 <b class="rstat-n">—</b>
-                <small class="rstat-l">Squads</small>
               </span>
+              <small class="rstat-l">Mind Guilds</small>
             </span>
             <span class="rstat" data-stat="b">
-              <svg class="rstat-ico" aria-hidden="true"><use href="#i-swords" /></svg>
-              <span class="rstat-body">
+              <span class="rstat-top">
+                <svg class="rstat-ico" aria-hidden="true"><use href="#i-user" /></svg>
                 <b class="rstat-n">—</b>
-                <small class="rstat-l">Fighters</small>
               </span>
+              <small class="rstat-l">Tactical Minds</small>
             </span>
             <span class="rstat" data-stat="c">
-              <svg class="rstat-ico" aria-hidden="true"><use href="#i-cup" /></svg>
-              <span class="rstat-body">
+              <span class="rstat-top">
+                <svg class="rstat-ico" aria-hidden="true"><use href="#i-cup" /></svg>
                 <b class="rstat-n">—</b>
-                <small class="rstat-l">Trophies</small>
               </span>
+              <small class="rstat-l">Tactical IQ</small>
             </span>
           </div>
-          <div class="mode-switch ranks-mode" role="tablist" aria-label="Leaderboard mode" data-active="squads">
+          <div class="mode-switch ranks-tabs" role="tablist" aria-label="Leaderboard boards" data-active="minds">
             <span class="mode-thumb" aria-hidden="true"></span>
-            <button class="mode-seg" type="button" role="tab" data-rankmode="squads" aria-selected="true">
-              <span class="seg-t">Telegram Squads</span>
+            <button class="mode-seg" type="button" role="tab" data-board="minds" aria-selected="true" aria-controls="ranks-minds">
+              <span class="seg-t">Top Minds</span>
+              <small class="seg-s">High-IQ Players</small>
+            </button>
+            <button class="mode-seg" type="button" role="tab" data-board="guilds" aria-selected="false" aria-controls="ranks-guilds">
+              <span class="seg-t">Intellect Guilds</span>
               <small class="seg-s">Channels &amp; Groups</small>
             </button>
-            <button class="mode-seg" type="button" role="tab" data-rankmode="solo" aria-selected="false">
-              <span class="seg-t">Solo Champions</span>
-              <small class="seg-s">Top Players</small>
+            <button class="mode-seg" type="button" role="tab" data-board="nations" aria-selected="false" aria-controls="ranks-nations">
+              <span class="seg-t">Nations IQ</span>
+              <small class="seg-s">Aggregate Score</small>
             </button>
           </div>
           <div class="compete-body ranks-body" data-scroll id="ranks-scroll">
-            <div id="ranks-squads" role="tabpanel" aria-label="Telegram Squads"></div>
-            <div id="ranks-solo" role="tabpanel" aria-label="Solo Champions" hidden>
-              <div class="mode-switch solo-seg" role="tablist" aria-label="Solo Champions boards" data-active="players">
-                <span class="mode-thumb" aria-hidden="true"></span>
-                <button class="mode-seg" type="button" role="tab" data-lb="players" aria-selected="true">Top Players</button>
-                <button class="mode-seg" type="button" role="tab" data-lb="countries" aria-selected="false">Top Countries</button>
-              </div>
-              <section class="solo-standing" id="solo-standing" aria-label="Your Standing" aria-live="polite"></section>
-              <div id="ranks-players" role="tabpanel" aria-label="Top players"></div>
-              <div id="ranks-countries" role="tabpanel" aria-label="Top countries" hidden></div>
-            </div>
+            <section class="podium" id="ranks-podium" role="list" aria-label="Top three" hidden></section>
+            <section class="solo-standing" id="solo-standing" aria-label="Your Standing" aria-live="polite" hidden></section>
+            <div id="ranks-minds" role="tabpanel" aria-label="Top Minds"></div>
+            <div id="ranks-guilds" role="tabpanel" aria-label="Intellect Guilds" hidden></div>
+            <div id="ranks-nations" role="tabpanel" aria-label="Nations IQ" hidden></div>
           </div>
           <div class="squad-dock" id="ranks-dock" hidden></div>
         </section>

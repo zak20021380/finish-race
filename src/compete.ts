@@ -2,12 +2,12 @@
  * compete.ts — Arena (Tournament Cups) + Ranks (dedicated Leaderboard).
  *
  * IA: Arena owns Live / Upcoming / Archive cups only. Ranks is the dedicated
- * leaderboard tab with a two-way clay switch ("Telegram Squads" clan wars vs
- * "Solo Champions" top players). The squad dock ("My Squad Standing" / join
- * prompt) belongs EXCLUSIVELY to the squads tab. Solo Champions owns a
- * "Your Standing" summary module directly below its Top Players | Top Countries
- * segmented switch — no floating / absolute-positioned "you" bar that can cover
- * list rows.
+ * leaderboard tab: one three-way clay switch over Top Minds (solo champions),
+ * Intellect Guilds (Telegram channels & groups) and Nations IQ (aggregate
+ * country score). Above the ladder sits the Top 3 clay podium, so the list
+ * itself starts at #4; the guild board carries its Join / Invite keys there.
+ * The squad dock ("My Squad Standing" / join prompt) belongs EXCLUSIVELY to the
+ * guild board, and the "Your Standing" module to the two IQ boards.
  * Tournament cards are high-energy Dark Clay arena cards with per-status
  * hierarchy (live glow + ENTER ARENA, upcoming slate + Pre-register, ended
  * archive). The Hero cup is three flex rows — header · prizes & meta ·
@@ -38,8 +38,7 @@ export interface CompeteApi {
   sheet(id: string): HTMLElement | null;
 }
 
-type RankMode = 'squads' | 'solo';
-type LbTab = 'players' | 'countries';
+type Board = 'minds' | 'guilds' | 'nations';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const JOINED_KEY = 'detour.tourneys.v1';
@@ -100,27 +99,26 @@ function svgIcon(href: string, cls: string): SVGSVGElement {
 }
 
 export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
-  const modeBtns = [...document.querySelectorAll<HTMLButtonElement>('[data-rankmode],[data-squadmode]')];
-  const lbBtns = [...document.querySelectorAll<HTMLButtonElement>('[data-lb]')];
+  const boardBtns = [...document.querySelectorAll<HTMLButtonElement>('.ranks-tabs [data-board]')];
   const feedLabel = document.getElementById('arena-feed-t');
   const ranksStats = document.getElementById('ranks-stats');
-  const modeSwitch = document.querySelector<HTMLElement>('.ranks-mode');
-  const soloSwitch = document.querySelector<HTMLElement>('.solo-seg');
+  const boardSwitch = document.querySelector<HTMLElement>('.ranks-tabs');
   const arenaPane = pickEl('arena-tournaments', 'comp-tournaments');
-  const squadsPane = pickEl('ranks-squads', 'comp-squads');
-  const soloWrap = document.getElementById('ranks-solo');
-  const lbPanes: Record<LbTab, HTMLElement | null> = {
-    players: document.getElementById('ranks-players') ?? document.getElementById('comp-players'),
-    countries: document.getElementById('ranks-countries') ?? document.getElementById('comp-countries'),
+  const podiumEl = document.getElementById('ranks-podium');
+  const panes: Record<Board, HTMLElement | null> = {
+    minds: document.getElementById('ranks-minds'),
+    guilds: document.getElementById('ranks-guilds'),
+    nations: document.getElementById('ranks-nations'),
   };
 
-  let rankMode: RankMode = 'squads';
-  let lbTab: LbTab = 'players';
+  let board: Board = 'minds';
+  let loadedBoard: Partial<Record<Board, boolean>> = {};
   let loadedArena = false;
-  let loadedLb: Partial<Record<LbTab, boolean>> = {};
-  let squadsLoaded = false;
-  /** Last solo ladder seen — the stat chips quote it instead of the squad totals. */
-  let soloStats = { loaded: false, rows: 0, trophies: 0 };
+  /** Aggregate of the last ladder each solo board loaded — the stat chips quote it. */
+  const boardStats: Record<'minds' | 'nations', { loaded: boolean; rows: number; points: number }> = {
+    minds: { loaded: false, rows: 0, points: 0 },
+    nations: { loaded: false, rows: 0, points: 0 },
+  };
   let tournaments: Tournament[] = [];
   let joined = joinedSet();
   let pending: Tournament | null = null;
@@ -205,40 +203,20 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   function paintRanks(): void {
-    for (const b of modeBtns) {
-      const v = b.dataset.rankmode ?? b.dataset.squadmode;
-      const selected = v === rankMode || (rankMode === 'solo' && v === 'solo') || (rankMode === 'squads' && v === 'squads');
-      b.setAttribute('aria-selected', String(selected));
+    for (const b of boardBtns) b.setAttribute('aria-selected', String(b.dataset.board === board));
+    if (boardSwitch) boardSwitch.dataset.active = board;
+    for (const k of Object.keys(panes) as Board[]) {
+      const pane = panes[k];
+      if (pane) pane.hidden = k !== board;
     }
-    for (const b of lbBtns) b.setAttribute('aria-selected', String(b.dataset.lb === lbTab));
-    if (modeSwitch) modeSwitch.dataset.active = rankMode;
-    if (soloSwitch) soloSwitch.dataset.active = lbTab;
-    const squads = rankMode === 'squads';
-    squadsPane.hidden = !squads;
-    if (soloWrap) soloWrap.hidden = squads;
-    // Legacy single-pane board (pre-split markup): keep hidden unless solo.
-    const legacyBoard = document.getElementById('comp-leaderboard');
-    if (legacyBoard) legacyBoard.hidden = squads;
-    if (!squads) {
-      for (const k of Object.keys(lbPanes) as LbTab[]) {
-        const pane = lbPanes[k];
-        if (pane) pane.hidden = k !== lbTab;
-      }
-      const standing = soloStandingEl();
-      if (standing) standing.hidden = false;
-    } else {
-      const standing = soloStandingEl();
-      if (standing) standing.hidden = true;
-    }
-    // Legacy teams pane (removed from Solo Champions): keep hidden if it still exists.
-    const legacyTeams = document.getElementById('ranks-teams') ?? document.getElementById('comp-teams');
-    if (legacyTeams) legacyTeams.hidden = true;
+    // "Your Standing" is a player fact — it belongs to the two IQ boards, never to a guild.
+    const standing = soloStandingEl();
+    if (standing) standing.hidden = board === 'guilds';
     paintRanksStats();
-    // The squad banner belongs EXCLUSIVELY to the Telegram Squads tab.
-    // Solo Champions gets full breathing room: dock stays hidden there.
+    // The squad banner belongs EXCLUSIVELY to the Intellect Guilds board.
     const dock = squadDock();
-    if (dock) dock.hidden = !squads;
-    if (squads) paintSquadDock();
+    if (dock) dock.hidden = board !== 'guilds';
+    if (board === 'guilds') paintSquadDock();
   }
 
   function paintFeedLabel(): void {
@@ -267,76 +245,56 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   const quietChips = (): void => {
-    setChip('a', '#i-users', '—', 'Squads');
-    setChip('b', '#i-swords', '—', 'Fighters');
-    setChip('c', '#i-cup', '—', 'Trophies');
+    setChip('a', '#i-users', '—', 'Mind Guilds');
+    setChip('b', '#i-user', '—', 'Tactical Minds');
+    setChip('c', '#i-cup', '—', 'Tactical IQ');
   };
 
+  /**
+   * The three chips read as Mind Guilds / Tactical Minds / Tactical IQ, but which
+   * population each counts follows the visible board — quoting guild totals while the
+   * user reads the solo ladder is what the old single-sentence stat bar got wrong.
+   */
   function paintRanksStats(): void {
     if (!ranksStats) return;
-    if (rankMode === 'solo') {
-      if (!soloStats.loaded) {
-        const countries = lbTab === 'countries';
-        setChip('a', countries ? '#i-globe' : '#i-user', '—', countries ? 'Countries' : 'Players');
-        setChip('b', '#i-cup', '—', 'Trophies');
-        setChip('c', '#i-medal', compactCount(myTrophyScore()), 'Yours');
-        return;
+    if (board === 'guilds') {
+      try {
+        const rows = getSquadRanking();
+        setChip('a', '#i-users', String(rows.length), 'Mind Guilds');
+        setChip('b', '#i-user', compactCount(rows.reduce((n, s) => n + s.members, 0)), 'Tactical Minds');
+        setChip('c', '#i-cup', compactCount(rows.reduce((n, s) => n + s.trophies, 0)), 'Tactical IQ');
+      } catch {
+        quietChips();
       }
-      const countries = lbTab === 'countries';
-      setChip('a', countries ? '#i-globe' : '#i-user', String(soloStats.rows), countries ? 'Countries' : 'Players');
-      setChip('b', '#i-cup', compactCount(soloStats.trophies), 'Trophies');
-      setChip('c', '#i-medal', compactCount(myTrophyScore()), 'Yours');
       return;
     }
-    try {
-      const rows = getSquadRanking();
-      const fighters = rows.reduce((n, s) => n + s.members, 0);
-      const trophies = rows.reduce((n, s) => n + s.trophies, 0);
-      setChip('a', '#i-users', String(rows.length), 'Squads');
-      setChip('b', '#i-swords', compactCount(fighters), 'Fighters');
-      setChip('c', '#i-cup', compactCount(trophies), 'Trophies');
-    } catch {
-      quietChips();
-    }
+    const nations = board === 'nations';
+    const st = boardStats[nations ? 'nations' : 'minds'];
+    setChip('a', nations ? '#i-globe' : '#i-user', st.loaded ? String(st.rows) : '—', nations ? 'Nations' : 'Tactical Minds');
+    setChip('b', '#i-cup', st.loaded ? compactCount(st.points) : '—', 'Tactical IQ');
+    setChip('c', '#i-medal', compactCount(myTrophyScore()), 'Yours');
   }
 
-  function selectRankMode(next: RankMode): void {
-    if (next === rankMode && (next === 'squads' ? squadsLoaded : loadedLb[lbTab])) {
+  function selectBoard(next: Board): void {
+    if (next === board && loadedBoard[next]) {
       paintRanks();
       return;
     }
-    rankMode = next;
+    board = next;
+    // The podium is board data: blank it here so the incoming ladder never inherits
+    // the previous board's top three while its rows are still loading.
+    if (podiumEl) podiumEl.hidden = true;
     paintRanks();
     impact('light');
-    if (next === 'squads') loadSquads();
-    else void loadLb(lbTab);
+    void loadBoard(next);
     const sc = document.getElementById('ranks-scroll');
     if (sc) sc.scrollTo({ top: 0 });
   }
 
-  for (const b of modeBtns) {
+  for (const b of boardBtns) {
     b.addEventListener('click', () => {
-      const v = (b.dataset.rankmode ?? b.dataset.squadmode) as string | undefined;
-      if (v === 'solo' || v === 'squads') selectRankMode(v);
-    });
-  }
-
-  function selectLb(next: LbTab): void {
-    if (next === lbTab && loadedLb[next]) {
-      paintRanks();
-      return;
-    }
-    lbTab = next;
-    if (rankMode !== 'solo') rankMode = 'solo';
-    paintRanks();
-    impact('light');
-    void loadLb(next);
-  }
-
-  for (const b of lbBtns) {
-    b.addEventListener('click', () => {
-      const v = b.dataset.lb as LbTab;
-      if (v === 'players' || v === 'countries') selectLb(v);
+      const v = b.dataset.board;
+      if (v === 'minds' || v === 'guilds' || v === 'nations') selectBoard(v);
     });
   }
 
@@ -872,14 +830,16 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }, 1000);
   }
 
-  /* ---------- solo leaderboard (Solo Champions: Top Players | Top Countries) ----------
+  /* ---------- IQ boards (Top Minds | Nations IQ) ----------
      No floating / absolute "you" bar. The user's standing lives in #solo-standing,
-     an in-flow summary module directly below the sub-tabs. Lists are pure ladders. */
+     an in-flow summary module directly under the board tabs. The ladder itself is a
+     pure list: the podium owns #1-3, so its rows start at #4. */
 
-  async function loadLb(which: LbTab): Promise<void> {
-    if (which === 'countries') await loadCountries();
-    else await loadPlayers();
-    loadedLb[which] = true;
+  async function loadBoard(which: Board): Promise<void> {
+    if (which === 'guilds') loadSquads();
+    else if (which === 'nations') await loadNations();
+    else await loadMinds();
+    loadedBoard[which] = true;
   }
 
   const podiumOf = (rank: number): '' | 'gold' | 'silver' | 'bronze' =>
@@ -899,12 +859,104 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return fl;
   }
 
+  /* ---------- Top 3 clay podium ---------- */
+
+  interface PodiumEntry {
+    rank: number;
+    name: string;
+    score: string;
+    /** Nation entry: Unicode flag emoji, with its ISO chip as the Windows fallback. */
+    flag?: string;
+    code?: string;
+    /** Guild / player entry: a single-letter clay medallion. */
+    letter?: string;
+    /** The ladder no longer carries #1-3, so a board whose rows have actions must move them up here. */
+    action?: HTMLElement;
+    onTap?: () => void;
+  }
+
+  function podiumCard(e: PodiumEntry): HTMLElement {
+    const card = document.createElement('div');
+    card.className = `pod-card ${podiumOf(e.rank)}`;
+    card.dataset.rank = String(e.rank);
+    card.setAttribute('role', 'listitem');
+    card.setAttribute('aria-label', `Rank ${e.rank}: ${e.name}, ${e.score} Tactical IQ`);
+
+    const medal = document.createElement('span');
+    medal.className = 'pod-medal';
+    medal.setAttribute('aria-hidden', 'true');
+    if (e.rank === 1) medal.append(svgIcon('#i-crown', 'pod-crown'));
+    const medalN = document.createElement('b');
+    medalN.textContent = String(e.rank);
+    medal.append(medalN);
+
+    const av = document.createElement('span');
+    av.className = 'pod-av';
+    av.setAttribute('aria-hidden', 'true');
+    if (e.flag && e.code) {
+      av.append(flagBadge(e.flag, e.code));
+    } else {
+      av.textContent = (e.letter ?? e.name).replace(/^@/, '').slice(0, 1).toUpperCase();
+    }
+
+    const nm = document.createElement('span');
+    nm.className = 'pod-name';
+    nm.textContent = e.name;
+    nm.title = e.name;
+
+    const iq = document.createElement('span');
+    iq.className = 'pod-iq';
+    iq.append(svgIcon('#i-cup', 'pod-cup'));
+    const iqN = document.createElement('b');
+    iqN.textContent = e.score;
+    iq.append(iqN);
+    iq.title = `${e.score} Tactical IQ`;
+
+    const step = document.createElement('span');
+    step.className = 'pod-step';
+    step.setAttribute('aria-hidden', 'true');
+    const stepN = document.createElement('b');
+    stepN.textContent = String(e.rank);
+    step.append(stepN);
+
+    /* The pillar is the card's base, so the join / invite key stacks above it —
+       otherwise the step ends up floating in the middle of the card. */
+    card.append(medal, av, nm, iq);
+    if (e.action) card.append(e.action);
+    card.append(step);
+    if (e.onTap) {
+      card.classList.add('is-tappable');
+      card.tabIndex = 0;
+      card.addEventListener('click', e.onTap);
+      card.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          e.onTap?.();
+        }
+      });
+    }
+    return card;
+  }
+
+  function paintPodium(entries: PodiumEntry[]): void {
+    const host = podiumEl;
+    if (!host) return;
+    host.textContent = '';
+    const top = entries.filter((e) => e.rank >= 1 && e.rank <= 3);
+    if (!top.length) {
+      host.hidden = true;
+      return;
+    }
+    const boardName = board === 'guilds' ? 'Intellect Guilds' : board === 'nations' ? 'Nations IQ' : 'Top Minds';
+    host.setAttribute('aria-label', `Top ${top.length} on ${boardName}`);
+    host.append(...top.map(podiumCard));
+    host.hidden = false;
+  }
+
   /** Shared ladder row: rank crest · identity · tabular score · right-edge action. */
   function rankCrest(rank: number): HTMLElement {
     const rk = document.createElement('span');
-    const podium = podiumOf(rank);
-    rk.className = podium ? `lb-rank ${podium}` : 'lb-rank';
-    if (rank === 1) rk.append(svgIcon('#i-crown', 'lb-crown'));
+    rk.className = 'lb-rank';
     const n = document.createElement('b');
     n.textContent = String(rank);
     rk.append(n);
@@ -924,9 +976,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   function row(rank: number, flagEmoji: string, flagCode: string, name: string, sub: string | null, points: string, trend: 'up' | 'down' | 'same', me: boolean): HTMLLIElement {
     const li = document.createElement('li');
-    li.className = `rank-row lb-row${me ? ' is-you' : ''}${rank === 1 ? ' is-champ' : ''}`;
+    li.className = `rank-row lb-row${me ? ' is-you' : ''}`;
     const trendLabel = trend === 'up' ? 'rising' : trend === 'down' ? 'falling' : 'steady';
-    li.setAttribute('aria-label', `#${rank} ${name} — ${points} trophies, ${trendLabel}`);
+    li.setAttribute('aria-label', `#${rank} ${name} — ${points} Tactical IQ, ${trendLabel}`);
     if (me) li.setAttribute('aria-current', 'true');
 
     const id = document.createElement('span');
@@ -956,13 +1008,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     tr.setAttribute('aria-hidden', 'true');
     act.append(tr);
 
-    li.append(rankCrest(rank), id, scoreCell(points, `${points} trophies`), act);
+    li.append(rankCrest(rank), id, scoreCell(points, `${points} Tactical IQ`), act);
     return li;
   }
 
   /** "Your Standing" summary module — in-flow below the sub-tabs, never floating. */
   function paintSoloStanding(opts: {
-    tab: LbTab;
+    tab: Board;
     rankText: string;
     percentText: string | null;
     score: number;
@@ -972,13 +1024,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (!host) return;
     host.hidden = false;
     host.textContent = '';
-    host.classList.toggle('is-players', opts.tab === 'players');
-    host.classList.toggle('is-countries', opts.tab === 'countries');
 
     const av = document.createElement('span');
     av.className = 'standing-avatar';
     av.setAttribute('aria-hidden', 'true');
-    if (opts.tab === 'countries' && profile.country) {
+    if (opts.tab === 'nations' && profile.country) {
       av.textContent = flagOf(profile.country);
     } else {
       const h = youHandle() ?? 'Y';
@@ -1005,16 +1055,16 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const num = document.createElement('b');
     num.textContent = opts.score.toLocaleString('en-US');
     score.append(num);
-    score.title = `${opts.score.toLocaleString('en-US')} trophies`;
-    score.setAttribute('aria-label', `${opts.score.toLocaleString('en-US')} trophies, ${detail}`);
+    score.title = `${opts.score.toLocaleString('en-US')} Tactical IQ`;
+    score.setAttribute('aria-label', `${opts.score.toLocaleString('en-US')} Tactical IQ, ${detail}`);
 
     host.append(av, main, score);
-    host.setAttribute('aria-label', `Your Standing: ${youLabel()}, ${detail}, ${opts.score.toLocaleString('en-US')} trophies`);
+    host.setAttribute('aria-label', `Your Standing: ${youLabel()}, ${detail}, ${opts.score.toLocaleString('en-US')} Tactical IQ`);
   }
 
-  function paintPlayersStanding(): void {
+  function paintMindsStanding(): void {
     paintSoloStanding({
-      tab: 'players',
+      tab: 'minds',
       rankText: '-',
       percentText: null,
       score: myTrophyScore(),
@@ -1022,13 +1072,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     });
   }
 
-  function paintCountriesStanding(rows: CountryRow[] | null): void {
+  function paintNationsStanding(rows: CountryRow[] | null): void {
     const code = profile.country;
     const hit = code && rows ? rows.find((c) => c.code === code) : undefined;
     if (hit && rows) {
       const pct = Math.max(1, Math.round((hit.rank / Math.max(1, rows.length)) * 100));
       paintSoloStanding({
-        tab: 'countries',
+        tab: 'nations',
         rankText: `#${hit.rank}`,
         percentText: `Top ${pct}%`,
         score: hit.points,
@@ -1036,7 +1086,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       });
     } else if (code) {
       paintSoloStanding({
-        tab: 'countries',
+        tab: 'nations',
         rankText: '-',
         percentText: null,
         score: 0,
@@ -1044,7 +1094,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       });
     } else {
       paintSoloStanding({
-        tab: 'countries',
+        tab: 'nations',
         rankText: '-',
         percentText: null,
         score: myTrophyScore(),
@@ -1063,74 +1113,124 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }
   }
 
-  async function loadCountries(): Promise<void> {
-    const el = lbPanes.countries;
+  async function loadNations(): Promise<void> {
+    const el = panes.nations;
     if (!el) return;
-    if (!loadedLb.countries) el.innerHTML = skel(6);
+    if (!loadedBoard.nations) el.innerHTML = skel(6);
     let rows: CountryRow[];
     try {
       rows = await getCountryRanking();
     } catch {
       el.innerHTML = empty('Rankings unavailable. Check your connection and try again.');
-      paintCountriesStanding(null);
+      paintNationsStanding(null);
       return;
     }
     if (!rows.length) {
       el.innerHTML = empty('No countries ranked yet.');
-      paintCountriesStanding([]);
+      paintNationsStanding([]);
       return;
     }
+    paintPodium(rows.slice(0, 3).map((c) => ({
+      rank: c.rank,
+      name: c.name,
+      score: c.points.toLocaleString('en-US'),
+      flag: flagOf(c.code),
+      code: c.code,
+    })));
     el.textContent = '';
     const ol = document.createElement('ol');
     ol.className = 'rank-list';
-    for (const c of rows) {
+    for (const c of rows.slice(3)) {
       ol.append(row(c.rank, flagOf(c.code), c.code, c.name, null, c.points.toLocaleString('en-US'), c.trend, profile.country === c.code));
     }
     el.append(ol);
-    soloStats = { loaded: true, rows: rows.length, trophies: rows.reduce((n, c) => n + c.points, 0) };
-    paintCountriesStanding(rows);
+    boardStats.nations = { loaded: true, rows: rows.length, points: rows.reduce((n, c) => n + c.points, 0) };
+    paintNationsStanding(rows);
     paintRanksStats();
   }
 
-  async function loadPlayers(): Promise<void> {
-    const el = lbPanes.players;
+  async function loadMinds(): Promise<void> {
+    const el = panes.minds;
     if (!el) return;
-    if (!loadedLb.players) el.innerHTML = skel(6);
+    if (!loadedBoard.minds) el.innerHTML = skel(6);
     let rows: PlayerRow[];
     try {
       rows = await getPlayerRanking();
     } catch {
       el.innerHTML = empty('Rankings unavailable. Check your connection and try again.');
-      paintPlayersStanding();
+      paintMindsStanding();
       return;
     }
     if (!rows.length) {
       el.innerHTML = empty('No players ranked yet.');
-      paintPlayersStanding();
+      paintMindsStanding();
       return;
     }
+    paintPodium(rows.slice(0, 3).map((p, i) => ({
+      rank: i + 1,
+      name: p.name,
+      score: p.points.toLocaleString('en-US'),
+      flag: flagOf(p.countryCode),
+      code: p.countryCode,
+    })));
     el.textContent = '';
     const ol = document.createElement('ol');
     ol.className = 'rank-list';
-    rows.forEach((p, i) => {
-      ol.append(row(i + 1, flagOf(p.countryCode), p.countryCode, p.name, `${p.wins} wins`, p.points.toLocaleString('en-US'), p.trend, false));
+    rows.slice(3).forEach((p, i) => {
+      ol.append(row(i + 4, flagOf(p.countryCode), p.countryCode, p.name, `${p.wins} wins`, p.points.toLocaleString('en-US'), p.trend, false));
     });
     el.append(ol);
-    soloStats = { loaded: true, rows: rows.length, trophies: rows.reduce((n, p) => n + p.points, 0) };
-    paintPlayersStanding();
+    boardStats.minds = { loaded: true, rows: rows.length, points: rows.reduce((n, p) => n + p.points, 0) };
+    paintMindsStanding();
     paintRanksStats();
   }
 
-  /* ---------- Telegram Squads: channel/community ranking ---------- */
+  /* ---------- Intellect Guilds: Telegram channel / community ranking ---------- */
+
+  /** Bind a guild (or copy an invite for your own) — one spec, used by the row and the podium. */
+  function squadAction(s: RankedSquad, mine: boolean): { label: string; mine: boolean; hint: string; run: () => void } {
+    if (mine) {
+      return { label: 'Invite', mine: true, hint: `Invite to ${s.handle}: copy squad invite`, run: () => inviteSquad(s) };
+    }
+    return {
+      label: 'Join',
+      mine: false,
+      hint: `Join ${s.handle}`,
+      run: () => {
+        impact('light');
+        if (bindSquadById(s.id) === 'bad-handle') {
+          notify('warning');
+          return;
+        }
+        notify('success');
+        impact('medium');
+        loadSquads();
+      },
+    };
+  }
+
+  /** The compact glass-to-solid key; `cls` lets the ladder and the podium share the behaviour. */
+  function squadKey(a: { label: string; mine: boolean; hint: string; run: () => void }, cls: string): HTMLButtonElement {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `${cls} ${a.mine ? 'is-invite' : 'is-join'}`;
+    b.textContent = a.label;
+    b.setAttribute('aria-label', a.hint);
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      a.run();
+    });
+    return b;
+  }
 
   function squadRow(s: RankedSquad, mine: boolean): HTMLLIElement {
     const li = document.createElement('li');
-    li.className = `squad-row lb-row${mine ? ' is-you' : ''}${s.rank === 1 ? ' is-champ' : ''}`;
+    li.className = `squad-row lb-row${mine ? ' is-you' : ''}`;
     li.tabIndex = 0;
     li.dataset.id = s.id;
     const label = s.name || s.handle.replace(/^@/, '');
     li.title = `${label} · ${s.handle}`;
-    li.setAttribute('aria-label', `${label}, ${s.handle}, rank ${s.rank}, ${s.trophies.toLocaleString('en-US')} trophies. Press Enter for squad details.`);
+    li.setAttribute('aria-label', `${label}, ${s.handle}, rank ${s.rank}, ${s.trophies.toLocaleString('en-US')} Tactical IQ. Press Enter for squad details.`);
     if (mine) li.setAttribute('aria-current', 'true');
 
     /* Identity column: square avatar, then the name — which owns the flexible width. */
@@ -1161,36 +1261,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     /* Action column: one pill pinned to the right edge — glass cyan to join, solid to invite. */
     const act = document.createElement('span');
     act.className = 'lb-act';
-    const go = document.createElement('button');
-    go.type = 'button';
-    if (mine) {
-      go.className = 'lb-btn is-invite';
-      go.textContent = 'Invite';
-      go.setAttribute('aria-label', `Invite to ${s.handle}: copy squad invite`);
-      go.addEventListener('click', (e) => {
-        e.stopPropagation();
-        inviteSquad(s);
-      });
-    } else {
-      go.className = 'lb-btn is-join';
-      go.textContent = 'Join';
-      go.setAttribute('aria-label', `Join ${s.handle}`);
-      go.addEventListener('click', (e) => {
-        e.stopPropagation();
-        impact('light');
-        const r = bindSquadById(s.id);
-        if (r === 'bad-handle') { notify('warning'); return; }
-        notify('success');
-        impact('medium');
-        loadSquads();
-      });
-    }
-    act.append(go);
+    act.append(squadKey(squadAction(s, mine), 'lb-btn'));
 
     li.append(
       rankCrest(s.rank),
       id,
-      scoreCell(s.trophies.toLocaleString('en-US'), `${s.trophies.toLocaleString('en-US')} squad trophies`),
+      scoreCell(s.trophies.toLocaleString('en-US'), `${s.trophies.toLocaleString('en-US')} squad Tactical IQ`),
       act,
     );
 
@@ -1213,8 +1289,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   function paintSquadDock(): void {
     const dock = squadDock();
     if (!dock) return;
-    // Squad dock is exclusive to the Telegram Squads tab — never in Solo Champions.
-    if (!isRanksVisible() || rankMode !== 'squads') {
+    // Squad dock is exclusive to the Intellect Guilds board — never on an IQ board.
+    if (!isRanksVisible() || board !== 'guilds') {
       dock.hidden = true;
       return;
     }
@@ -1233,7 +1309,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       txt.className = 'dock-txt';
       const t = document.createElement('b');
       t.className = 'dock-name';
-      t.textContent = 'Join a squad to earn trophies';
+      t.textContent = 'Join a guild to earn Tactical IQ';
       const s = document.createElement('small');
       s.className = 'dock-sub';
       s.textContent = 'Race points count for your channel or group';
@@ -1254,7 +1330,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       actions.className = 'dock-actions';
       actions.append(btn);
       dock.append(ico, txt, actions);
-      dock.setAttribute('aria-label', 'My Squad Standing: no squad bound. Find a squad to start earning trophies.');
+      dock.setAttribute('aria-label', 'My Squad Standing: no squad bound. Find a guild to start earning Tactical IQ.');
       return;
     }
 
@@ -1290,7 +1366,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const sub = document.createElement('small');
     sub.textContent = mine > 0 ? `+${mine.toLocaleString('en-US')} yours` : 'fight to contribute';
     score.append(num, sub);
-    score.title = `${me.trophies.toLocaleString('en-US')} squad trophies`;
+    score.title = `${me.trophies.toLocaleString('en-US')} squad Tactical IQ`;
 
     const invite = document.createElement('button');
     invite.type = 'button';
@@ -1318,42 +1394,53 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     actions.append(invite, view);
 
     dock.append(av, txt, score, actions);
-    dock.setAttribute('aria-label', `My Squad Standing: ${me.handle}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} trophies.`);
+    dock.setAttribute('aria-label', `My Squad Standing: ${me.handle}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} Tactical IQ.`);
   }
 
   function loadSquads(): void {
-    const el = squadsPane;
+    const el = panes.guilds;
     if (!el) return;
-    if (!squadsLoaded) el.innerHTML = skel(5);
+    if (!loadedBoard.guilds) el.innerHTML = skel(5);
     const rows = getSquadRanking();
     if (!rows.length) {
       el.innerHTML = empty('No squads ranked yet.');
+      paintPodium([]);
       paintSquadDock();
       paintRanksStats();
       return;
     }
     const me = getMySquad();
+    paintPodium(rows.slice(0, 3).map((s) => ({
+      rank: s.rank,
+      name: s.name || s.handle.replace(/^@/, ''),
+      score: s.trophies.toLocaleString('en-US'),
+      letter: squadLetter(s),
+      action: squadKey(squadAction(s, me?.id === s.id), 'pod-btn'),
+      onTap: () => {
+        impact('light');
+        openSquadSheet();
+      },
+    })));
     el.textContent = '';
     const ol = document.createElement('ol');
     ol.className = 'squad-list';
-    for (const s of rows) {
+    for (const s of rows.slice(3)) {
       ol.append(squadRow(s, me?.id === s.id));
     }
     el.append(ol);
     paintSquadDock();
     paintRanksStats();
-    squadsLoaded = true;
+    loadedBoard.guilds = true;
   }
 
   onChange(() => {
-    loadedLb.countries = false;
-    loadedLb.players = false;
+    loadedBoard.nations = false;
+    loadedBoard.minds = false;
+    loadedBoard.guilds = false;
     loadedArena = false;
-    squadsLoaded = false;
     if (isRanksVisible()) {
       paintRanks();
-      if (rankMode === 'squads') loadSquads();
-      else void loadLb(lbTab);
+      void loadBoard(board);
     } else if (isArenaVisible()) {
       paintArena();
       void loadTournaments();
@@ -1361,9 +1448,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   });
 
   onSquadChange(() => {
-    squadsLoaded = false;
+    loadedBoard.guilds = false;
     paintRanksStats();
-    if (isRanksVisible() && rankMode === 'squads') {
+    if (isRanksVisible() && board === 'guilds') {
       loadSquads();
     }
   });
@@ -1377,8 +1464,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         void loadTournaments();
       } else if (id === 'ranks') {
         paintRanks();
-        if (rankMode === 'squads') loadSquads();
-        else void loadLb(lbTab);
+        void loadBoard(board);
       }
     },
   };

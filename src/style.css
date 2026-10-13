@@ -1942,19 +1942,23 @@ html.rm *, html.rm *::before, html.rm *::after {
 .compete-body > * { max-width: 100%; min-width: 0; }
 #comp-tournaments { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
 #comp-tournaments[hidden] { display: none; }
-#comp-leaderboard { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
-#comp-leaderboard[hidden] { display: none; }
 /* split-screen aliases: Arena owns cups, Ranks owns squads + solo boards */
 #arena-tournaments { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
 #arena-tournaments[hidden] { display: none; }
-/* Solo Champions: sub-tabs + Your Standing (in-flow) + ladder. No absolute /
-   floating "you" bar — everything stacks in normal flow so rows never overlap. */
-#ranks-solo { display: flex; flex-direction: column; gap: 12px; min-height: 0; flex: 1 1 auto; }
-#ranks-solo[hidden] { display: none; }
-#ranks-players, #ranks-countries { flex: 1 1 auto; min-height: 0; }
-/* Legacy teams pane (removed from Solo Champions): never show if old markup lingers. */
-#ranks-teams, #comp-teams { display: none !important; }
-#ranks-players[hidden], #ranks-countries[hidden] { display: none; }
+/* Ranks boards stack in normal flow inside #ranks-scroll: podium, then Your
+   Standing, then the ladder. Nothing is absolute, so nothing can overlap a row. */
+#ranks-minds,
+#ranks-guilds,
+#ranks-nations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
+  max-width: 100%;
+}
+#ranks-minds[hidden],
+#ranks-guilds[hidden],
+#ranks-nations[hidden] { display: none; }
 
 /* ---- arena toolbar: feed count left, floating leaderboard pill right ---- */
 .arena-toolbar {
@@ -2232,25 +2236,10 @@ html.rm *, html.rm *::before, html.rm *::after {
 }
 .lb-row:active { transform: translateY(1px); }
 .lb-row:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
-/* the leader: a gold ambient border + crown aura, and a taller slab for real podium step */
-.lb-row.is-champ {
-  padding-top: 13px;
-  padding-bottom: 13px;
-  border-color: transparent;
-  background:
-    radial-gradient(115% 95% at 8% 50%, rgba(245, 158, 11, .18), rgba(245, 158, 11, 0) 60%) padding-box,
-    linear-gradient(180deg, #28304A 0%, #1C2433 100%) padding-box,
-    linear-gradient(135deg, #FDE68A 0%, rgba(245, 158, 11, .30) 46%, #FBBF24 100%) border-box;
-  box-shadow:
-    0 0 26px -10px rgba(245, 158, 11, .7),
-    0 10px 20px -14px var(--shadow),
-    inset 0 1px 0 rgba(255, 255, 255, .14);
-}
-.lb-row.is-champ .lb-name { color: #FEF3C7; }
-.lb-row.is-champ .lb-av { box-shadow: inset 0 0 0 1.5px rgba(251, 191, 36, .42), inset 0 1px 1px rgba(255, 255, 255, .12); }
 .lb-row.is-you { border-color: rgba(125, 211, 252, .4); }
 
-/* Col 1 — rank: embossed metal for the podium, clean slate pill for 4+. */
+/* Col 1 — rank: a clean slate pill. The metals belong to the podium above,
+   so every ladder row from #4 down wears the same quiet crest. */
 .lb-rank {
   position: relative;
   display: grid;
@@ -2266,44 +2255,6 @@ html.rm *, html.rm *::before, html.rm *::after {
   font-variant-numeric: tabular-nums;
 }
 .lb-rank > * { grid-area: 1 / 1; }
-.lb-rank.gold {
-  background: linear-gradient(180deg, #fde68a 0%, #fbbf24 45%, #f59e0b 100%);
-  color: #10141D;
-  box-shadow:
-    0 2px 0 var(--gold-lip),
-    0 0 10px rgba(245, 158, 11, .5),
-    inset 0 1px 0 rgba(255, 255, 255, .65),
-    inset 0 -2px 3px rgba(146, 64, 14, .35);
-}
-.lb-rank.silver {
-  background: linear-gradient(180deg, #f1f5f9 0%, #cbd5e1 45%, #94a3b8 100%);
-  color: #10141D;
-  box-shadow:
-    0 2px 0 #475569,
-    0 0 8px rgba(148, 163, 184, .35),
-    inset 0 1px 0 rgba(255, 255, 255, .7),
-    inset 0 -2px 3px rgba(51, 65, 85, .35);
-}
-.lb-rank.bronze {
-  background: linear-gradient(180deg, #fed7aa 0%, #fdba74 45%, #c2703d 100%);
-  color: #10141D;
-  box-shadow:
-    0 2px 0 #7c3f14,
-    0 0 8px rgba(194, 112, 61, .4),
-    inset 0 1px 0 rgba(255, 255, 255, .6),
-    inset 0 -2px 3px rgba(124, 63, 20, .35);
-}
-/* the champion's crown sits on the crest's top edge, clear of the row above */
-.lb-crown {
-  position: absolute;
-  top: -12px;
-  left: 50%;
-  width: 15px;
-  height: 15px;
-  transform: translateX(-50%);
-  color: var(--honey-ink);
-  filter: drop-shadow(0 0 5px rgba(245, 158, 11, .6));
-}
 
 /* Col 2 — avatar + identity. The name owns every pixel the fixed columns leave. */
 .lb-id { display: flex; align-items: center; gap: var(--lb-gap); min-width: 0; }
@@ -2416,7 +2367,7 @@ html.rm *, html.rm *::before, html.rm *::after {
 .lb-btn:hover:not(:active) { transform: translateY(-1px); }
 .lb-btn:active { transform: translateY(var(--press-y)); --d: 0px; }
 .lb-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-/* solo boards have no join action: the momentum arrow takes the fourth column */
+/* Solo boards have no join action: the momentum arrow takes the fourth column. */
 .rank-row .lb-act { justify-content: flex-end; }
 .rank-row .tr { flex: none; width: 1.4em; text-align: center; font-size: 12px; line-height: 1; }
 .rank-row .tr.up { color: var(--mint-ink); }
@@ -2433,6 +2384,11 @@ html.rm *, html.rm *::before, html.rm *::after {
   .lb-av, .lb-id .fl { width: 32px; height: 32px; border-radius: 10px; }
   .lb-av { font-size: 13px; }
 }
+/* Solo boards have no join action: the momentum arrow takes the fourth column, so
+   the 56–64px the guild rows reserve for a pill is pure tax here. Handed back to the
+   name, it is what keeps "United Kingdom" whole on the Nations board. Declared after
+   the width query above, which would otherwise win at equal specificity. */
+.rank-row { --lb-act: 26px; }
 /* Legacy floating "you" bar (pre-refactor .rank-pinned): never float again.
    If old markup lingers, it renders as a normal in-flow card — no overlap. */
 .rank-pinned {
@@ -4616,13 +4572,15 @@ html.rm .mode-hero-dot::after { animation: none; opacity: 0; }
 }
 html.rm .car-card.nations-cup::before { display: none; }
 
-/* ---- Ranks mode switch: a sliding gaming pill over a recessed groove ----
-   Two equal keys share one extruded thumb that translateX()es between them, so
-   the active state reads as a position, not just a colour change. */
-.mode-switch {
+/* ---- Leaderboard board tabs: a sliding clay thumb over a recessed groove ----
+   Three equal keys share one extruded thumb that translateX()es by its own width,
+   so the active board reads as a position, not just a colour change. Titles wrap:
+   "Intellect Guilds" is the longest label and a 90px segment is the narrowest it
+   lands on, so the key grows to two lines rather than ellipsising the board name. */
+.ranks-tabs {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   flex: none;
   padding: 5px;
   border-radius: var(--radius-md);
@@ -4633,7 +4591,7 @@ html.rm .car-card.nations-cup::before { display: none; }
   position: absolute;
   top: 5px;
   left: 5px;
-  width: calc((100% - 10px) / 2);
+  width: calc((100% - 10px) / 3);
   height: calc(100% - 10px);
   border-radius: 14px;
   background: var(--clay-face);
@@ -4645,8 +4603,8 @@ html.rm .car-card.nations-cup::before { display: none; }
     0 0 20px -8px var(--brand-glow);
   transition: transform var(--motion-med);
 }
-.mode-switch[data-active="solo"] .mode-thumb,
-.mode-switch[data-active="countries"] .mode-thumb { transform: translateX(100%); }
+.ranks-tabs[data-active="guilds"] .mode-thumb { transform: translateX(100%); }
+.ranks-tabs[data-active="nations"] .mode-thumb { transform: translateX(200%); }
 .mode-seg {
   position: relative;
   z-index: 1;
@@ -4660,7 +4618,7 @@ html.rm .car-card.nations-cup::before { display: none; }
   justify-content: center;
   gap: 1px;
   min-height: 52px;
-  padding: 6px var(--s2);
+  padding: 6px 4px;
   border-radius: 14px;
   background: transparent;
   color: var(--chip-ink);
@@ -4671,26 +4629,248 @@ html.rm .car-card.nations-cup::before { display: none; }
 .mode-seg:active { transform: translateY(1px); }
 .mode-seg:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .mode-seg[aria-selected="true"] { color: var(--brand-ink); }
-.seg-t { display: block; font-size: var(--t-3); font-weight: 800; white-space: nowrap; }
+.seg-t {
+  display: block;
+  font-size: var(--t-3);
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: center;
+  text-wrap: balance;
+}
 .seg-s {
   display: block;
   font-size: var(--t-micro);
   font-weight: 700;
   letter-spacing: .02em;
   color: var(--ink-soft);
-  white-space: nowrap;
+  text-align: center;
+  line-height: 1.15;
 }
 .mode-seg[aria-selected="true"] .seg-s { color: var(--brand-ink); opacity: .78; }
-/* Solo sub-tabs: one label per key, slightly shorter — same thumb language. */
-.solo-seg .mode-seg {
-  flex-direction: row;
-  min-height: 48px;
-  font-size: var(--t-2);
-  font-weight: 800;
-  white-space: nowrap;
+
+/* ---- Top 3 clay podium ----------------------------------------------------
+   The showcase band above every board. Silver stands left, gold takes the centre
+   on a taller pillar, bronze takes the right. The DOM stays in rank order
+   (1 → 2 → 3) so Tab and a screen reader follow the ladder, and grid placement
+   draws the actual podium; the tracks bottom-align, so pillar height alone is
+   what lifts #1. Everything lives inside #ranks-scroll and scrolls away with the
+   list rather than taxing the ladder's vertical budget.
+   Each metal sets four custom properties; the crest, the avatar ring and the
+   pillar all read from them, so a new metal is one block, not four edits. */
+.podium {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  column-gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding-top: 15px; /* the crown hangs above the leader's crest */
 }
-@media (max-width: 380px) {
-  .solo-seg .mode-seg { font-size: var(--t-3); }
+.podium[hidden] { display: none; }
+.pod-card {
+  --pod-face: #fde68a;
+  --pod-mid: #fbbf24;
+  --pod-deep: #f59e0b;
+  --pod-lip: #b45309;
+  --pod-glow: rgba(245, 158, 11, .5);
+  --pod-rise: 20px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 7px 5px 0;
+  border-radius: 14px 14px 0 0;
+  background: var(--clay-face);
+  background-color: #1C2433;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .13),
+    inset 1px 0 0 rgba(255, 255, 255, .05),
+    inset -1px 0 0 rgba(0, 0, 0, .3);
+  color: var(--ink);
+  transition: transform var(--motion-fast), filter var(--motion-fast);
+}
+.pod-card.silver {
+  --pod-face: #f1f5f9;
+  --pod-mid: #cbd5e1;
+  --pod-deep: #94a3b8;
+  --pod-lip: #475569;
+  --pod-glow: rgba(148, 163, 184, .38);
+}
+.pod-card.bronze {
+  --pod-face: #fed7aa;
+  --pod-mid: #fdba74;
+  --pod-deep: #c2703d;
+  --pod-lip: #7c3f14;
+  --pod-glow: rgba(194, 112, 61, .42);
+}
+.pod-card[data-rank="1"] { grid-column: 2; --pod-rise: 34px; z-index: 1; }
+.pod-card[data-rank="2"] { grid-column: 1; }
+.pod-card[data-rank="3"] { grid-column: 3; }
+/* Rank order in the DOM + explicit columns send the sparse auto-placement cursor
+   forward, which would drop silver and bronze onto a second row. Pin the row. */
+.pod-card { grid-row: 1; }
+.pod-card.is-tappable { cursor: pointer; }
+/* micro-press: sink *and* squeeze, so a card reads as soft clay under the thumb */
+.pod-card:active { transform: translateY(2px) scale(.972); filter: brightness(1.07); }
+.pod-card:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+/* the metal crest — an extruded disc with a debossed numeral */
+.pod-medal {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, var(--pod-face) 0%, var(--pod-mid) 45%, var(--pod-deep) 100%);
+  box-shadow:
+    0 2px 0 var(--pod-lip),
+    0 0 12px -2px var(--pod-glow),
+    inset 0 1px 0 rgba(255, 255, 255, .7),
+    inset 0 -3px 5px rgba(0, 0, 0, .26);
+  color: #10141D;
+  font-size: var(--t-micro);
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.pod-crown {
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translateX(-50%);
+  color: var(--honey-ink);
+  filter: drop-shadow(0 0 5px rgba(245, 158, 11, .65));
+}
+
+/* the avatar, ringed in its own metal so the leader catches the eye first */
+.pod-av {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  background: linear-gradient(180deg, #2A354C 0%, #141B2A 100%);
+  box-shadow:
+    inset 0 0 0 1.5px var(--pod-mid),
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    0 0 16px -4px var(--pod-glow);
+  color: var(--brand-ink);
+  font-size: var(--t-2);
+  font-weight: 900;
+  line-height: 1;
+}
+/* nations ride the same flag + ISO-chip pair the ladder uses, so the Windows
+   fallback that has no flag glyphs still reads a country */
+.pod-av .fl { display: grid; place-items: center; }
+.pod-av .flag { font-size: 22px; line-height: 1; }
+.pod-av .flag-code { padding: 1px 5px; font-size: 10px; }
+
+.pod-name {
+  min-width: 0;
+  max-width: 100%;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pod-card.gold .pod-name { color: #FEF3C7; }
+
+/* the Tactical IQ badge: recessed groove, cup + tabular number */
+.pod-iq {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 3px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(255, 255, 255, .06);
+  color: var(--honey-ink);
+  font-size: var(--t-micro);
+  font-weight: 900;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.pod-iq b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pod-cup { flex: none; width: 11px; height: 11px; color: var(--honey); }
+
+/* the join / invite key only the guild board brings; same fills as the ladder */
+.pod-btn {
+  position: relative;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform var(--motion-fast), background var(--motion-fast);
+}
+/* 30px face + a 9px vertical band reaches the house 48px target without height */
+.pod-btn::after { content: ""; position: absolute; inset: -9px 0; }
+.pod-btn { --d: 3px; }
+.pod-btn.is-join {
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .34), inset 0 1px 0 rgba(255, 255, 255, .07);
+}
+.pod-btn.is-invite {
+  background: var(--brand-fill);
+  color: var(--on-brand);
+  box-shadow: 0 var(--d) 0 var(--brand-lip), inset 0 1px 0 rgba(255, 255, 255, .3);
+}
+.pod-btn:active { transform: translateY(var(--press-y)); --d: 0px; }
+.pod-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+/* the pillar: metal fading into the clay body, debossed by its own top rim */
+.pod-step {
+  position: relative;
+  flex: none;
+  width: calc(100% + 10px);
+  height: var(--pod-rise);
+  margin: 4px -5px 0;
+  border-radius: 0 0 12px 12px;
+  background: linear-gradient(180deg, var(--pod-mid) 0%, var(--pod-deep) 55%, #161E2C 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .3),
+    inset 1px 0 0 rgba(255, 255, 255, .1),
+    inset -1px 0 0 rgba(0, 0, 0, .35),
+    inset 0 -5px 8px rgba(0, 0, 0, .4),
+    0 3px 0 -1px rgba(0, 0, 0, .3);
+}
+/* the rank stamped into the pillar, held clear of the debossing */
+.pod-step b {
+  position: absolute;
+  inset: 0 0 auto;
+  padding-top: 3px;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  color: rgba(16, 20, 29, .62);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- Telegram Squads ladder: the 4-column .lb-row grid, plus its own cursor ----
@@ -4703,11 +4883,8 @@ html.rm .car-card.nations-cup::before { display: none; }
 .squad-pick .pick-n small { display: block; font-size: var(--t-micro); font-weight: 600; color: var(--ink-soft); }
 .squad-err { color: var(--danger); }
 #sheet-squad .sheet-body { max-height: 52vh; }
-#comp-squads { display: flex; flex-direction: column; gap: var(--s2); min-height: 0; max-width: 100%; }
-#comp-squads[hidden] { display: none; }
-#ranks-squads { display: flex; flex-direction: column; gap: var(--s2); min-height: 0; max-width: 100%; }
-/* No height / max-height caps here — the screen scroll owns scrolling, rows are never half-cut. */
-#ranks-squads[hidden] { display: none; }
+/* No height / max-height caps on the boards — the screen scroll owns scrolling,
+   so a row is never half-cut at the bottom of a nested overflow box. */
 
 /* ---- Leaderboard screen: proper vertical flex — tabs fixed, list fills, dock pinned ----
    Screen is a full-height column; the scroll container flexes to fill the middle
@@ -5978,9 +6155,11 @@ html.rm .notif-badge { animation: none; }
 .arena-screen .arena-toolbar { justify-content: flex-start; }
 .ranks-head .m-title { font-weight: 800; letter-spacing: -.01em; }
 
-/* ---- quick stats: three frosted chips, value over label, one icon each ----
+/* ---- quick stats: three frosted chips, icon + value over the label ----
    Replaces the long "8 squads · 5.7k fighters · …" sentence that used to wrap
-   under the title. Equal thirds keep the spacing balanced at every width. */
+   under the title. The label sits on its own line at full chip width: the Mind
+   & Intellect names ("Tactical Minds") are the longest the board has ever
+   carried, and beside the icon they only had ~68px on a 320px phone. */
 .ranks-stats {
   flex: none;
   display: grid;
@@ -5990,11 +6169,11 @@ html.rm .notif-badge { animation: none; }
 }
 .rstat {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 7px;
+  gap: 1px;
   min-width: 0;
-  padding: 7px 8px;
+  padding: 7px 6px;
   border-radius: 14px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .07) 0%, rgba(255, 255, 255, .015) 100%),
@@ -6004,9 +6183,17 @@ html.rm .notif-badge { animation: none; }
     inset 0 1px 0 rgba(255, 255, 255, .1),
     0 6px 14px -10px var(--shadow);
 }
-.rstat-ico { flex: none; width: 17px; height: 17px; color: var(--brand-ink); opacity: .9; }
-.rstat-body { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.rstat-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+}
+.rstat-ico { flex: none; width: 15px; height: 15px; color: var(--brand-ink); opacity: .9; }
 .rstat-n {
+  min-width: 0;
   font-size: var(--t-2);
   font-weight: 900;
   letter-spacing: -.01em;
@@ -6018,29 +6205,27 @@ html.rm .notif-badge { animation: none; }
   text-overflow: ellipsis;
 }
 .rstat-l {
-  font-size: 10px;
+  max-width: 100%;
+  font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: .04em;
+  letter-spacing: .02em;
   text-transform: uppercase;
-  line-height: 1.2;
+  line-height: 1.25;
+  text-align: center;
   color: var(--ink-soft);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .rstat[data-stat="c"] .rstat-ico { color: var(--honey-ink); }
-.ranks-mode { flex: none; }
 /* Dock lives in-flow below the scroll — only 12px pad, no dead void. */
 .ranks-body { padding-bottom: 12px; }
-/* Solo panes are plain blocks: #ranks-scroll is the only scroller on this screen,
-   so a nested overflow box would just steal the gesture and half-cut the last row. */
-#ranks-solo { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; max-width: 100%; }
-/* Squad banner never leaks into Solo Champions (JS hides via hidden attr). */
+/* Squad banner never leaks onto an IQ board (JS hides via the hidden attr). */
 #ranks-dock[hidden] { display: none !important; }
 @media (max-width: 380px) {
   .solo-standing { padding: var(--s2); gap: var(--s2); }
-  .rstat { gap: 5px; padding: 6px; }
-  .rstat-ico { width: 15px; height: 15px; }
+  .rstat { padding: 6px 4px; }
+  .rstat-l { font-size: 9px; letter-spacing: .01em; }
 }
 
 /* ==========================================================================
