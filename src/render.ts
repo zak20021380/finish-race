@@ -1267,6 +1267,7 @@ const sceneView = (s: Scene): View => {
       teams: Array.from({ length: teams }, () => ({ balls: 1 })),
       balls: s.balls.map((b, i) => ({ id: i, team: b.team, owner: b.team, pos: { c: 0, r: s.rows - 1 } })),
       walls: s.walls,
+      wallsLeft: Array.from({ length: teams }, () => 0),
       mines: [],
       turn: 0,
       winner: null,

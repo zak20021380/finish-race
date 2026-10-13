@@ -10,7 +10,7 @@
  */
 import {
   COLS, ROWS, allWalls, ballById, ballPath, distField, doWall, mineCells, nextTeam, pathLen,
-  pathOn, steps,
+  pathOn, steps, wallsRemaining,
   type Action, type GameState, type Player, type Pos, type Wall,
 } from './rules';
 
@@ -111,7 +111,7 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
     }
   }
 
-  if (foeD <= myD && Math.random() < p.wallRate) {
+  if (foeD <= myD && wallsRemaining(s, me) > 0 && Math.random() < p.wallRate) {
     let best: Wall | null = null;
     let bestScore = 0;
     let bestSelf = Infinity;

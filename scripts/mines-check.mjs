@@ -12,10 +12,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import * as rules from '../src/rules.ts';
 import {
   CONFIG, COLS, ROWS, allWalls, apply, doMine, doWall, mineCells, mineOk, newGame, reachable,
-  steps, view, liveMines, minesLeft, wallOk,
+  steps, view, liveMines, minesLeft, wallOk, wallsRemaining,
 } from '../src/rules.ts';
 
 /* bot.ts says `from './rules'`, which Vite resolves and Node does not. Node only strips types from
@@ -43,6 +42,7 @@ const check = (name, fn) => { fn(); run++; console.log('ok -', name); };
 check('config', () => {
   assert.equal(CONFIG.MINES_PER_TEAM, 3);
   assert.equal(CONFIG.KNOCKBACK, 3);
+  assert.equal(CONFIG.WALL_LIMIT, 8);
 });
 
 check('newGame starts with no mines', () => {
@@ -199,19 +199,35 @@ check('pure: no input mutation', () => {
   assert.equal(JSON.stringify(s), before);
 });
 
-check('walls are unlimited: 9 legal walls in a row, past the old 8', () => {
+check('walls are rationed: eight legal walls, then the ninth is refused', () => {
   let s = newGame([1, 1]);
-  for (const y of [3, 5, 7]) for (const x of [0, 2, 4]) {
-    const next = doWall(s, { o: 'h', x, y, owner: s.turn });
-    assert.ok(next, `wall ${x},${y} rejected with only ${s.walls.length} built`);
+  let built = 0;
+  /* a diagonal staircase of non-overlapping slots, far more than the budget, all individually legal */
+  for (const y of [3, 4, 5, 6, 7, 8, 9]) for (const x of [0, 2, 4, 6]) {
+    const w = { o: 'h', x, y, owner: s.turn };
+    if (!wallOk(s, w)) continue;
+    const next = doWall(s, w);
+    assert.ok(next, `wall ${x},${y} rejected with ${built} built`);
     s = { ...next, turn: s.turn };
+    built++;
   }
-  assert.equal(s.walls.length, 9);
+  assert.equal(built, CONFIG.WALL_LIMIT, `placed ${built} walls, budget is ${CONFIG.WALL_LIMIT}`);
+  assert.equal(wallsRemaining(s, 0), 0, 'budget should be spent');
+  const extra = allWalls(0).find((w) => {
+    const t = { ...s, turn: 0 };
+    return wallOk(t, w);
+  });
+  assert.equal(extra, undefined, 'a ninth wall was still legal');
 });
 
-check('the wall budget exports are gone', () => {
-  assert.ok(!('WALL_LIMIT' in rules), 'WALL_LIMIT still exported');
-  assert.ok(!('wallsLeft' in rules), 'wallsLeft still exported');
+check('the wall budget is tracked per seat and starts full', () => {
+  const s = newGame([2, 2]);
+  assert.deepEqual(s.wallsLeft, [CONFIG.WALL_LIMIT, CONFIG.WALL_LIMIT]);
+  assert.equal(wallsRemaining(s, 0), CONFIG.WALL_LIMIT);
+  const after = doWall(s, { o: 'h', x: 0, y: 3, owner: 0 });
+  assert.ok(after, 'first wall should place');
+  assert.deepEqual(after.wallsLeft, [CONFIG.WALL_LIMIT - 1, CONFIG.WALL_LIMIT]);
+  assert.equal(wallsRemaining(after, 1), CONFIG.WALL_LIMIT, 'the other seat is untouched');
 });
 
 check('bot: every action survives the real state, or main.ts falls back and races on', () => {

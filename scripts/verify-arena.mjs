@@ -196,12 +196,13 @@ const yourTurn = () => pg.waitForFunction(() => {
 const state = () => pg.evaluate(() => ({
   status: document.getElementById('status-text').textContent,
   note: document.getElementById('note').classList.contains('show') ? document.getElementById('note').textContent : '',
-  steps0: document.getElementById('steps-0').textContent,
+  walls0: document.getElementById('walls-0').querySelector('.wall-n').textContent,
+  depleted: document.getElementById('walls-0').classList.contains('depleted'),
   pips: document.querySelectorAll('#mine-pips i.on').length,
   pressed: document.getElementById('mine-btn').getAttribute('aria-pressed'),
   shake: document.querySelector('.board-wrap').classList.contains('shake'),
 }));
-const stepsOf = (t) => Number((t.match(/(\d+)/) ?? [])[1] ?? NaN);
+const wallsOf = (t) => Number(t);
 
 await yourTurn();
 const s = await state();
@@ -221,9 +222,9 @@ if (warm(dotAfter) < warm(dotBefore) + 20 || lum(dotAfter) < lum(dotBefore) + 15
 await tap(3.5, 10.5);
 await pg.waitForTimeout(400);
 const moved = await state();
-if (stepsOf(moved.steps0) !== stepsOf(s.steps0) - 1) fail(`move: the ball did not step up (${s.steps0} -> ${moved.steps0})`);
+if (wallsOf(moved.walls0) !== wallsOf(s.walls0)) fail(`move: a move changed the wall budget (${s.walls0} -> ${moved.walls0})`);
 if (/pick one of your balls|your move/i.test(moved.status)) fail(`move: the turn never passed (${moved.status})`);
-rows.push(`move  ${s.steps0} -> ${moved.steps0}, ring lum ${lum(ringBefore) | 0}->${lum(ringAfter) | 0}, dot lum ${lum(dotBefore) | 0}->${lum(dotAfter) | 0}`);
+rows.push(`move  walls ${s.walls0} -> ${moved.walls0}, ring lum ${lum(ringBefore) | 0}->${lum(ringAfter) | 0}, dot lum ${lum(dotBefore) | 0}->${lum(dotAfter) | 0}`);
 
 /* 2 — direct wall: the groove above the ball. First tap paints the ghost, second puts it up. */
 await yourTurn();
@@ -239,8 +240,8 @@ await pg.waitForTimeout(500);
 const walled = await state();
 const grooveWall = await probe(4, 9, 'lum');
 if (/tap again to place/i.test(walled.note)) fail('wall: the ghost never confirmed');
-if (stepsOf(walled.steps0) !== stepsOf(moved.steps0) + 1) fail(`wall: the detour never showed up (${moved.steps0} -> ${walled.steps0})`);
-rows.push(`wall  ghost ${rgb(grooveGhost)} -> placed ${rgb(grooveWall)}, steps ${moved.steps0} -> ${walled.steps0}`);
+if (wallsOf(walled.walls0) !== wallsOf(moved.walls0) - 1) fail(`wall: the budget never dropped (${moved.walls0} -> ${walled.walls0})`);
+rows.push(`wall  ghost ${rgb(grooveGhost)} -> placed ${rgb(grooveWall)}, walls ${moved.walls0} -> ${walled.walls0}`);
 
 /* 3 — the chip's mine key: the band paints, a tap drops the ghost in, a second tap buries it. */
 await yourTurn();

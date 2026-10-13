@@ -6,8 +6,8 @@
  *
  * Teams: 1 to 3 teams of 1 to 3 balls each (max 3v3). Every team starts spread across the bottom
  * two rows and races any one of its balls to the top. Teams alternate turns; on its turn a team
- * moves ANY ONE of its balls one cell, places a wall (walls are unlimited), or buries a mine from
- * its budget of `CONFIG.MINES_PER_TEAM` (see the mine section below).
+ * moves ANY ONE of its balls one cell, places a wall from its budget of `CONFIG.WALL_LIMIT`, or
+ * buries a mine from its budget of `CONFIG.MINES_PER_TEAM` (see the mine section below).
  *
  * Walls sit ON grid lines and are 2 cells long:
  *   'h' wall {x, y}: horizontal, on the line above row y (y = 1..ROWS-1), covers columns x and x+1.
@@ -30,6 +30,8 @@ export const MAX_TEAMS = 3;
 export const MAX_BALLS = 3;
 /** Engine tunables, in one place so the server and the client never disagree. */
 export const CONFIG = {
+  /** Walls each team may place per race. */
+  WALL_LIMIT: 8,
   /** Mines each team may bury per race. */
   MINES_PER_TEAM: 3,
   /** Cells a ball is thrown straight down the column when it sets off a mine. */
@@ -69,6 +71,8 @@ export interface GameState {
   teams: TeamMeta[];
   balls: Ball[];
   walls: Wall[];
+  /** Walls each team still has to place, indexed by player; starts at `CONFIG.WALL_LIMIT`. */
+  wallsLeft: number[];
   /** Every mine ever buried, including the spent ones; opponent mines are hidden by `view()`. */
   mines: Mine[];
   turn: Player;
@@ -112,6 +116,7 @@ export function newGame(sizes: readonly number[] = [1, 1]): GameState {
     teams: n.map((balls) => ({ balls })),
     balls,
     walls: [],
+    wallsLeft: n.map(() => CONFIG.WALL_LIMIT),
     mines: [],
     turn: 0,
     winner: null,
@@ -233,9 +238,16 @@ export function reachableBall(s: GameState, ballId: number): Pos[] {
   return steps(s, ball.team).filter((st) => st.ball === ballId).map((st) => st.to);
 }
 
-/** Is this wall legal? In bounds, no overlap along the same line, and every ball keeps a path. */
+/** Walls a side still has to place: the budget minus what it has spent, never below zero. */
+export function wallsRemaining(s: GameState, team: Player): number {
+  const left = s.wallsLeft[team];
+  return left === undefined ? 0 : Math.max(0, left);
+}
+
+/** Is this wall legal? Within the owner's budget, in bounds, no overlap, and every ball keeps a path. */
 export function wallOk(s: GameState, w: Wall): boolean {
   if (s.winner !== null) return false;
+  if (wallsRemaining(s, w.owner) <= 0) return false;
   if (w.o === 'h') {
     if (w.x < 0 || w.x > COLS - 2 || w.y < 1 || w.y > ROWS - 1) return false;
   } else if (w.x < 1 || w.x > COLS - 1 || w.y < 0 || w.y > ROWS - 2) return false;
@@ -342,7 +354,8 @@ function blownTo(s: GameState, from: Pos): Pos {
 
 export function doWall(s: GameState, w: Wall): GameState | null {
   if (w.owner !== s.turn || !wallOk(s, w)) return null;
-  return endTurn({ ...s, walls: [...s.walls, { ...w }] }, w.owner);
+  const wallsLeft = s.wallsLeft.map((n, t) => (t === w.owner ? Math.max(0, n - 1) : n));
+  return endTurn({ ...s, walls: [...s.walls, { ...w }], wallsLeft }, w.owner);
 }
 
 /** Bury a mine for the team on turn. The cell is the whole payload; the seat comes from the state. */

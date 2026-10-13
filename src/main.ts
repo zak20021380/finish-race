@@ -1,7 +1,7 @@
 import './style.css';
 import {
   COLS, CONFIG, apply, ballById, distField, firstBall, getAutoMove, mineCells, minesLeft, newGame,
-  pathLen, reachableBall, steps as teamSteps, view as fogOfWar, wallOk,
+  reachableBall, steps as teamSteps, view as fogOfWar, wallOk, wallsRemaining,
   type Action, type Ball, type Cell, type GameState, type Mine, type Player, type Pos, type Wall,
   type WallSpec,
 } from './rules';
@@ -64,7 +64,7 @@ const confettiEl = $<HTMLCanvasElement>('confetti');
 const menuBtn = $<HTMLButtonElement>('menu-btn');
 const modeLabel = $<HTMLElement>('mode-label');
 const chips = [$<HTMLDivElement>('chip-0'), $<HTMLDivElement>('chip-1')];
-const steps = [$<HTMLSpanElement>('steps-0'), $<HTMLSpanElement>('steps-1')];
+const wallBadges = [$<HTMLSpanElement>('walls-0'), $<HTMLSpanElement>('walls-1')];
 const turnPill = $<HTMLElement>('turn');
 const turnText = $<HTMLSpanElement>('turn-text');
 const turnClock = $<HTMLSpanElement>('turn-clock');
@@ -73,16 +73,33 @@ const sheetQuit = $<HTMLElement>('sheet-quit');
 const reward = $<HTMLParagraphElement>('reward');
 const rewardN = $<HTMLSpanElement>('reward-n');
 
-/* steps-to-FINISH readout on each chip: repaints only when the number changes */
-const shownSteps: [number, number] = [-1, -1];
-function setSteps(p: Player, d: number) {
-  if (shownSteps[p] === d) return;
-  shownSteps[p] = d;
-  const el = steps[p];
-  el.textContent = Number.isFinite(d) ? `${d} step${d === 1 ? '' : 's'}` : 'no path';
+/* walls-to-place readout on each chip: repaints only when the number changes */
+const shownWalls: [number, number] = [-1, -1];
+function setWalls(p: Player, left: number) {
+  if (shownWalls[p] === left) return;
+  const first = shownWalls[p] < 0;
+  shownWalls[p] = left;
+  const el = wallBadges[p];
+  const num = el.querySelector<HTMLElement>('.wall-n');
+  if (num) num.textContent = String(left);
+  el.classList.toggle('depleted', left <= 0);
+  el.setAttribute('aria-label', `Walls left: ${left} of ${CONFIG.WALL_LIMIT}`);
+  if (first) return;               // the opening paint is not a placement: no pop
   el.classList.remove('pop');
-  void el.offsetWidth;   // restarting the animation needs a reflow between the two class changes
+  void el.offsetWidth;             // restarting the animation needs a reflow between the two class changes
   el.classList.add('pop');
+}
+
+/* a player with no walls taps a groove: the badge pulses in warning and a toast says why */
+let wallWarnTimer = 0;
+function warnNoWalls(p: Player) {
+  const el = wallBadges[p];
+  if (motionReduced()) { el.classList.remove('depleted'); return; }
+  el.classList.remove('depleted', 'dry-warn');
+  void el.offsetWidth;
+  el.classList.add('depleted', 'dry-warn');
+  clearTimeout(wallWarnTimer);
+  wallWarnTimer = window.setTimeout(() => el.classList.remove('dry-warn'), 650);
 }
 
 /* the mine key lives on your own chip: three pips, and the whole board while it is armed */
@@ -187,13 +204,14 @@ let opponent: Opponent = makeBot(difficulty);
 
 const wantsOpponent = () => state.turn !== HUMAN && state.winner === null;
 
-const REASON = { overlap: 'Overlaps a wall', blocked: 'Blocks the path' };
+const REASON = { dry: 'No walls remaining!', overlap: 'Overlaps a wall', blocked: 'Blocks the path' };
 
 /**
- * Why a wall slot was refused: an overlap on the same line, or a sealed path. `wallOk` only
- * answers yes/no, so the reason stays a UI-layer concern.
+ * Why a wall slot was refused: the budget is spent, an overlap on the same line, or a sealed path.
+ * `wallOk` only answers yes/no, so the reason stays a UI-layer concern.
  */
 function wallIssue(s: GameState, w: Wall): keyof typeof REASON {
+  if (wallsRemaining(s, w.owner) <= 0) return 'dry';
   const clash = s.walls.some((o) => o.o === w.o
     && (w.o === 'h' ? o.y === w.y && Math.abs(o.x - w.x) < 2 : o.x === w.x && Math.abs(o.y - w.y) < 2));
   if (clash) return 'overlap';
@@ -373,7 +391,7 @@ function ui() {
   for (const p of SEATS) {
     chips[p].classList.toggle('active', state.winner === null && state.turn === p && !paused);
     chips[p].classList.toggle('thinking', thinking && p === state.turn);
-    setSteps(p, pathLen(state, p));
+    setWalls(p, wallsRemaining(state, p));
   }
 
   if (state.winner === null && overlayOpen) {
@@ -530,7 +548,7 @@ function restart() {
   clearTimeout(hintTimer);
   hintEl.hidden = true;
   marks[0] = null; marks[1] = null;
-  shownSteps[0] = -1; shownSteps[1] = -1;
+  shownWalls[0] = -1; shownWalls[1] = -1;
   shownMines = -1;
   overlayOpen = false;
   overlay.hidden = true;
@@ -592,6 +610,7 @@ const local = (e: PointerEvent) => {
 function refuse(w: Wall) {
   const why = wallIssue(state, w);
   showNote(REASON[why], true, 2200);
+  if (why === 'dry') warnNoWalls(w.owner);
   notify('warning');
 }
 
@@ -652,11 +671,18 @@ function tapMine(hit: Hit | null): boolean {
 /** The two-tap wall flow: one tap arms the slot, the next puts the wall up. */
 function tapWall(hit: { kind: 'wall' | 'confirm'; spec: WallSpec }) {
   const wall: Wall = { ...hit.spec, owner: state.turn };
-  if (hit.kind === 'confirm') {
-    if (wallOk(state, wall)) play({ kind: 'wall', wall }); else refuse(wall);
+  const ok = wallOk(state, wall);
+  /* a spent budget disallows the preview entirely: refuse the tap and pulse the badge instead */
+  if (wallsRemaining(state, wall.owner) <= 0) {
+    ghost = null;
+    capsule = null;
+    refuse(wall);
     return;
   }
-  const ok = wallOk(state, wall);
+  if (hit.kind === 'confirm') {
+    if (ok) play({ kind: 'wall', wall }); else refuse(wall);
+    return;
+  }
   ghost = { spec: hit.spec, ok, armed: true, p: state.turn };
   armCapsules();
   closeHint();
@@ -691,9 +717,9 @@ function onMouse(p: Vec, click: boolean) {
   }
   const hit = at(p);
   if (!click) {
-    /* hovering is a preview; an armed ghost keeps its slot and its caps */
+    /* hovering is a preview; an armed ghost keeps its slot and its caps, and a spent budget shows none */
     if (ghost?.armed) return;
-    const spec = hit && hit.kind === 'wall' ? hit.spec : null;
+    const spec = hit && hit.kind === 'wall' && wallsRemaining(state, state.turn) > 0 ? hit.spec : null;
     const wall: Wall | null = spec ? { ...spec, owner: state.turn } : null;
     ghost = wall ? { spec: wall, ok: wallOk(state, wall), armed: false, p: state.turn } : null;
     capsule = null;

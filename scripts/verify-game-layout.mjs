@@ -73,13 +73,15 @@ const PROBE = `(function () {
     aspect: +(W.w / W.h).toFixed(4),
     boardTopFromCard: +(W.t - C.t).toFixed(1),
     scrollV: document.documentElement.scrollHeight - document.documentElement.clientHeight,
-    counters: [...document.querySelectorAll('.chip')].map((c) => ({
-      id: c.id,
-      num: c.querySelector('.wall-n')?.textContent ?? null,
-      segs: [...c.querySelectorAll('.wall-segs i')].filter((i) => i.classList.contains('on')).length,
-      total: c.querySelectorAll('.wall-segs i').length,
-      dry: c.querySelector('.walls')?.classList.contains('dry') ?? null,
-    })),
+    counters: [...document.querySelectorAll('.chip')].map((c) => {
+      const badge = c.querySelector('.walls');
+      return {
+        id: c.id,
+        num: badge?.querySelector('.wall-n')?.textContent ?? null,
+        depleted: badge?.classList.contains('depleted') ?? null,
+        aria: badge?.getAttribute('aria-label') ?? null,
+      };
+    }),
   };
 })()`;
 
@@ -108,9 +110,9 @@ for (const [w, h] of VIEWPORTS) {
       if (Math.abs(m.aspect - 2 / 3) > 0.02) bad.push(`aspect ${m.aspect}, expected 2:3`);
       if (m.scrollV > 1) bad.push(`page scrolls by ${m.scrollV}px`);
       for (const c of m.counters) {
-        if (c.num !== `${LIMIT}/${LIMIT}`) bad.push(`${c.id} counter reads ${c.num}`);
-        if (c.total !== LIMIT || c.segs !== LIMIT) bad.push(`${c.id} has ${c.segs}/${c.total} dashes lit`);
-        if (c.dry) bad.push(`${c.id} starts out of walls`);
+        if (c.num !== String(LIMIT)) bad.push(`${c.id} counter reads ${c.num} walls`);
+        if (c.depleted) bad.push(`${c.id} starts out of walls`);
+        if (c.aria !== `Walls left: ${LIMIT} of ${LIMIT}`) bad.push(`${c.id} aria says ${c.aria}`);
       }
     }
     if (errors.length) bad.push(`js: ${errors[0]}`);
@@ -138,25 +140,27 @@ for (const [w, h] of VIEWPORTS) {
         return c.classList.contains('active') && !c.classList.contains('thinking');
       }, null, { timeout: 15000 });
 
-      /* one horizontal line each, so no two walls can overlap and every column stays open */
-      const slots = [[0, 1], [2, 2], [4, 3], [6, 4], [0, 5], [2, 6], [4, 7], [6, 8]];
+      /* one horizontal line each, on distinct rows (no overlap) and clear of the finish pill */
+      const slots = [[2, 2], [4, 3], [6, 4], [2, 5], [4, 6], [6, 7], [2, 8], [4, 9]];
       for (let i = 0; i < slots.length; i++) {
         await yourTurn();
-        await pg.mouse.click(geo.x + (slots[i][0] + 1) * geo.cell, geo.y + slots[i][1] * geo.cell);
+        /* the wall flow is two-tap: the first press arms the ghost, the second commits it */
+        const wx = geo.x + (slots[i][0] + 1) * geo.cell, wy = geo.y + slots[i][1] * geo.cell;
+        await pg.mouse.click(wx, wy);
+        await pg.mouse.click(wx, wy);
         await yourTurn();
         const left = await pg.textContent('#walls-0 .wall-n');
-        if (left !== `${LIMIT - i - 1}/${LIMIT}`) bad.push(`wall ${i + 1}: counter reads ${left}`);
+        if (left !== String(LIMIT - i - 1)) bad.push(`wall ${i + 1}: counter reads ${left}`);
         if (i === 2) await pg.screenshot({ path: path.join(OUT, 'game-walls-3.png') });
       }
 
       const spent = await pg.evaluate(`(function () {
         const w = document.getElementById('walls-0');
-        return { num: w.querySelector('.wall-n').textContent, dry: w.classList.contains('dry'),
-                 on: w.querySelectorAll('.wall-segs i.on').length, aria: w.getAttribute('aria-label') };
+        return { num: w.querySelector('.wall-n').textContent, depleted: w.classList.contains('depleted'),
+                 aria: w.getAttribute('aria-label') };
       })()`);
-      if (spent.num !== `0/${LIMIT}`) bad.push(`spent counter reads ${spent.num}`);
-      if (!spent.dry) bad.push('counter not marked dry at 0');
-      if (spent.on !== 0) bad.push(`${spent.on} dashes still lit at 0`);
+      if (spent.num !== '0') bad.push(`spent counter reads ${spent.num}`);
+      if (!spent.depleted) bad.push('counter not marked depleted at 0');
       if (spent.aria !== `Walls left: 0 of ${LIMIT}`) bad.push(`aria label says ${spent.aria}`);
 
       /* mouse: a ninth wall is reported, never placed */
@@ -165,11 +169,13 @@ for (const [w, h] of VIEWPORTS) {
       await pg.waitForTimeout(300);
       const refused = await pg.evaluate(`(function () {
         const n = document.getElementById('note');
+        const b = document.getElementById('walls-0');
         return { msg: n.textContent, show: n.classList.contains('show'),
-                 num: document.querySelector('#walls-0 .wall-n').textContent };
+                 num: b.querySelector('.wall-n').textContent, warn: b.classList.contains('dry-warn') };
       })()`);
-      if (!refused.show || !/no walls left/i.test(refused.msg)) bad.push(`9th wall not refused (${refused.msg})`);
-      if (refused.num !== `0/${LIMIT}`) bad.push(`counter moved on a refused tap: ${refused.num}`);
+      if (!refused.show || !/no walls remaining/i.test(refused.msg)) bad.push(`9th wall not refused (${refused.msg})`);
+      if (refused.num !== '0') bad.push(`counter moved on a refused tap: ${refused.num}`);
+      if (!refused.warn) bad.push('depleted badge did not pulse on the refused tap');
 
       /* touch: the two-tap path must be just as dead */
       await pg.evaluate((g) => { window.__geo = g; }, geo);
@@ -181,7 +187,7 @@ for (const [w, h] of VIEWPORTS) {
           clientX: d.x + 3.5 * d.cell, clientY: d.y + 10 * d.cell }));
         return { msg: n.textContent, show: n.classList.contains('show') };
       })()`);
-      if (!touch.show || !/no walls left/i.test(touch.msg)) bad.push(`touch path not refused (${touch.msg})`);
+      if (!touch.show || !/no walls remaining/i.test(touch.msg)) bad.push(`touch path not refused (${touch.msg})`);
       await pg.screenshot({ path: path.join(OUT, 'game-walls-0.png') });
     }
 
