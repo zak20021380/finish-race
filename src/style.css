@@ -2398,20 +2398,44 @@ html.rm .pod-card.is-spot::after { animation: none; opacity: .28; }
 }
 .lb-sub-t { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .lb-kind { flex: none; width: 11px; height: 11px; opacity: .55; }
-/* country identity: crisp flag tile + code fallback (Windows has no flag glyphs) */
-.lb-id .fl {
+/* Country identity: a photo flag on a three-tier cascade — circle-flags SVG, then
+   flagcdn PNG, then the clay ISO chip. The chip sits underneath from the first
+   frame, so a blocked CDN costs a photo and never moves a row. */
+.fp {
+  position: relative;
   flex: none;
-  width: 36px;
-  height: 36px;
   display: grid;
   place-items: center;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, .05);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
-  text-align: center;
+  width: var(--fp-d, 36px);
+  height: var(--fp-d, 36px);
 }
-.lb-id .fl .flag { font-size: 18px; line-height: 1; }
-.lb-id .fl .flag-code { padding: 1px 5px; font-size: 10px; }
+.fp-chip {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #2A354C 0%, #141B2A 100%);
+  box-shadow: inset 0 0 0 1px var(--hair), inset 0 1px 0 rgba(255, 255, 255, .12);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .02em;
+  line-height: 1;
+  color: var(--brand-ink);
+}
+.fp-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35);
+}
+.fp.is-chip .fp-img { display: none; }
+.fp-badge { --fp-d: 36px; }
+.fp-lg { --fp-d: 40px; }
+.fp-lg .fp-chip { border-radius: 14px; font-size: 11px; }
 
 /* Col 3 — score: the cup sits at a fixed x and the tabular number right-aligns
    inside the column, so both the icons and the digits stack down the ladder. */
@@ -2445,6 +2469,18 @@ html.rm .pod-card.is-spot::after { animation: none; opacity: .28; }
 .lb-delta.up { color: var(--mint-ink); }
 .lb-delta.down { color: var(--danger); }
 .lb-delta[hidden] { display: none; }
+/* the density metric: TIQ per mind, under the aggregate the board ranks by */
+.lb-avg {
+  display: block;
+  text-align: right;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: .01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--honey);
+  opacity: .85;
+}
 .lb-tiq {
   flex: none;
   width: 15px;
@@ -2489,14 +2525,16 @@ html.rm .pod-card.is-spot::after { animation: none; opacity: .28; }
 }
 /* 32px face + an 8px vertical band reaches the house 48px target for free */
 .lb-btn::after { content: ""; position: absolute; inset: -8px 0; }
-/* Join and Invite share the frosted clay; only your own guild picks up the cyan rim,
-   so the two states stay separable without either one shouting. */
+/* Join keeps the frosted clay — eight identical bright keys is what used to turn this
+   ladder into a wall of CTAs. Invite is coral because it is the one capsule on the
+   board sitting on a row that is already yours, and there is exactly one such row. */
 .lb-btn.is-invite {
-  color: var(--brand-ink);
+  background: linear-gradient(180deg, var(--cta-hi) 0%, var(--cta) 100%);
+  color: var(--on-brand);
   box-shadow:
-    inset 0 0 0 1px rgba(125, 211, 252, .3),
-    inset 0 1px 0 rgba(255, 255, 255, .14),
-    0 var(--d) 0 #0B111C;
+    inset 0 1px 0 rgba(255, 255, 255, .3),
+    inset 0 -2px 3px rgba(0, 0, 0, .18),
+    0 var(--d) 0 var(--cta-lip);
 }
 .lb-btn:hover:not(:active) { transform: translateY(-1px); }
 .lb-btn:active { transform: translateY(var(--press-y)); --d: 0px; }
@@ -2546,7 +2584,7 @@ html.rm .pod-card.is-spot::after { animation: none; opacity: .28; }
 /* 380px floor: shave the fixed columns first so the name is the last thing to lose */
 @media (max-width: 380px) {
   .lb-row { --lb-rank: 30px; --lb-score: 72px; --lb-act: 56px; --lb-gap: 6px; padding: 8px 6px; }
-  .lb-av, .lb-id .fl { width: 32px; height: 32px; border-radius: 10px; }
+  .lb-av, .lb-hex, .lb-id .fp-badge { width: 32px; height: 32px; border-radius: 10px; --fp-d: 32px; }
   .lb-av { font-size: 13px; }
 }
 /* Solo boards have no join action: the momentum arrow takes the fourth column, so
@@ -2554,6 +2592,16 @@ html.rm .pod-card.is-spot::after { animation: none; opacity: .28; }
    name, it is what keeps "United Kingdom" whole on the Nations board. Declared after
    the width query above, which would otherwise win at equal specificity. */
 .rank-row { --lb-act: 26px; }
+/* 320px floor: the guild row is the only one that carries a crest, a member stack
+   and a capsule, and its name was the thing that lost. The score column only ever
+   holds "13,150" and "AVG 16" here, so it hands 14px back to the name, the channel
+   icon (already in the row's accessible name) steps out, and the crest shrugs 6px. */
+@media (max-width: 340px) {
+  .squad-row { --lb-score: 58px; --lb-rank: 28px; }
+  .squad-row .lb-hex { width: 32px; height: 28px; }
+  .squad-row .lb-kind { display: none; }
+  .squad-row .lb-name { font-size: 12px; }
+}
 /* Legacy floating "you" bar (pre-refactor .rank-pinned): never float again.
    If old markup lingers, it renders as a normal in-flow card — no overlap. */
 .rank-pinned {
@@ -5001,11 +5049,9 @@ html.rm .pod-card.gold .pod-av::after { opacity: .45; }
   font-weight: 900;
   line-height: 1;
 }
-/* nations ride the same flag + ISO-chip pair the ladder uses, so the Windows
-   fallback that has no flag glyphs still reads a country */
-.pod-av .fl { display: grid; place-items: center; }
-.pod-av .flag { font-size: 19px; line-height: 1; }
-.pod-av .flag-code { padding: 1px 4px; font-size: 9px; }
+/* nations ride the same photo cascade as the ladder, sized to the crest well */
+.pod-av .fp-badge { --fp-d: 32px; }
+.pod-av .fp-chip { border-radius: 10px; font-size: 9px; }
 
 .pod-name {
   min-width: 0;
@@ -5287,25 +5333,6 @@ html.rm .pod-card.gold .pod-av::after { opacity: .45; }
   white-space: nowrap;
 }
 .standing-score .tiq { flex: none; width: 16px; height: 16px; color: var(--honey); filter: drop-shadow(0 0 4px rgba(245, 158, 11, .4)); }
-.standing-cta {
-  --d: 2px;
-  appearance: none;
-  border: 0;
-  font: inherit;
-  flex: none;
-  min-height: 44px;
-  padding: 0 var(--s3);
-  border-radius: var(--radius-pill);
-  background: var(--brand-fill);
-  color: var(--on-brand);
-  font-size: var(--t-3);
-  font-weight: 800;
-  cursor: pointer;
-  box-shadow: 0 var(--d) 0 var(--brand-lip), inset 0 1px 0 rgba(255, 255, 255, .3);
-  transition: transform var(--motion-fast), opacity var(--motion-fast);
-}
-.standing-cta:active { transform: translateY(var(--press-y)); --d: 0px; }
-.standing-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
 /* ---- Top Minds hero card: the same clay module, promoted to an identity card ----
    Percentile ring · tier · TIQ, then the four-axis read of your own play, then the
@@ -5489,6 +5516,254 @@ html.rm .pod-card.gold .pod-av::after { opacity: .45; }
   text-transform: uppercase;
   line-height: 1.2;
   color: var(--cta-hi);
+}
+
+/* ==========================================================================
+   ZONE C2 — INTELLECT GUILDS: hex crests, member stacks, density, own hero
+   ========================================================================== */
+
+/* Hexagonal clay crest. clip-path throws away the box-shadow every other tile uses
+   for depth, so the extrusion is two clipped layers: the outer one is the lip. */
+.hex {
+  --hex-clip: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 34px;
+  clip-path: var(--hex-clip);
+  background: linear-gradient(180deg, #38BDF8 0%, #0B111C 100%);
+}
+.hex-face {
+  position: absolute;
+  inset: 2px;
+  display: grid;
+  place-items: center;
+  clip-path: var(--hex-clip);
+  background: linear-gradient(180deg, #2A354C 0%, #141B2A 100%);
+}
+.hex-face b {
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--brand-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A stack of minds, not a roster: the discs read as density, the number is real. */
+.gstack { flex: none; display: inline-flex; align-items: center; }
+.gstack i {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #33405C 0%, #1A2233 100%);
+  box-shadow: 0 0 0 1.5px #10141D, inset 0 1px 0 rgba(255, 255, 255, .18);
+}
+.gstack i + i { margin-left: -5px; }
+.gstack b {
+  margin-left: 5px;
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The pinned own-guild hero. A flex sibling above the scroller, so it is genuinely
+   pinned without covering a row — and it replaces the bottom dock when bound. */
+.gh {
+  flex: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--s2);
+  row-gap: 6px;
+  max-width: 100%;
+  padding: var(--s2);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(56, 189, 248, .08) 0%, rgba(255, 255, 255, 0) 46%),
+    var(--clay-face);
+  background-color: #1E2739;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 -1px 0 rgba(0, 0, 0, .34),
+    inset 0 0 0 1.5px rgba(125, 211, 252, .34),
+    0 1px 0 #0A0F1A,
+    0 12px 22px -16px var(--shadow);
+}
+.gh[hidden] { display: none; }
+.gh-crest { grid-row: 1; width: 46px; height: 40px; }
+.gh-crest .hex-face b { font-size: 17px; }
+.gh-txt { grid-row: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gh-top { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.gh-kick {
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--brand-ink);
+}
+.gh-rank { font-size: 10px; font-weight: 900; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.gh-name {
+  min-width: 0;
+  font-size: var(--t-1);
+  font-weight: 900;
+  letter-spacing: -.01em;
+  line-height: 1.2;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gh-sub { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.gh-sub small {
+  min-width: 0;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gh-score {
+  grid-row: 1;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  color: var(--tiq);
+  font-variant-numeric: tabular-nums;
+}
+.gh-line { display: flex; align-items: center; gap: 4px; font-size: var(--t-1); font-weight: 900; }
+.gh-line .tiq { flex: none; width: 14px; height: 14px; color: var(--honey); filter: drop-shadow(0 0 4px rgba(245, 158, 11, .4)); }
+.gh-score small { font-size: 9px; font-weight: 700; color: var(--ink-soft); white-space: nowrap; }
+.gh-acts { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: var(--s1); }
+.gh-btn {
+  --d: 3px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+  border-radius: var(--radius-pill);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .09) 0%, rgba(255, 255, 255, .02) 100%),
+    #222C42;
+  color: var(--chip-ink);
+  font-size: var(--t-3);
+  font-weight: 900;
+  letter-spacing: .01em;
+  cursor: pointer;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .09),
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    0 var(--d) 0 #0B111C;
+  transition: transform var(--motion-fast);
+}
+.gh-btn.is-coral {
+  background: linear-gradient(180deg, var(--cta-hi) 0%, var(--cta) 100%);
+  color: var(--on-brand);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .3),
+    inset 0 -2px 3px rgba(0, 0, 0, .18),
+    0 var(--d) 0 var(--cta-lip);
+}
+.gh-btn:active { transform: translateY(var(--press-y)); --d: 0px; }
+.gh-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+
+/* ==========================================================================
+   ZONE C3 — NATIONS IQ: your flag's standing, the live event, the hook
+   ========================================================================== */
+.nat-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--s2);
+  row-gap: 6px;
+  padding: var(--s2);
+  margin-bottom: var(--s1);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(56, 189, 248, .07) 0%, rgba(255, 255, 255, 0) 46%),
+    var(--clay-face);
+  background-color: #1E2739;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 -1px 0 rgba(0, 0, 0, .34),
+    inset 0 0 0 1px rgba(125, 211, 252, .22),
+    0 1px 0 #0A0F1A,
+    0 12px 22px -16px var(--shadow);
+}
+.nat-hero .fp-lg { grid-row: 1; }
+.nat-hero-txt { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.nat-hero-txt b { font-size: var(--t-2); font-weight: 900; line-height: 1.3; color: var(--ink); }
+.nat-hero-txt small { font-size: 10px; font-weight: 700; line-height: 1.3; color: var(--ink-soft); }
+.nat-hero .mh-ptrack { grid-column: 1 / -1; }
+.nat-hero-btn {
+  --d: 3px;
+  position: relative;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, var(--cta-hi) 0%, var(--cta) 100%);
+  color: var(--on-brand);
+  font-size: var(--t-3);
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .3),
+    0 var(--d) 0 var(--cta-lip);
+  transition: transform var(--motion-fast);
+}
+/* 40px face + a 4px band reaches the house 48px target without eating the strip */
+.nat-hero-btn::after { content: ""; position: absolute; inset: -4px 0; }
+.nat-hero-btn:active { transform: translateY(var(--press-y)); --d: 0px; }
+.nat-hero-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+
+/* Live event: the cup's own deadline, ticking in the same coral language as the
+   season capsule up in the HUD. */
+.nat-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 11px 6px 9px;
+  margin-bottom: var(--s1);
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px rgba(255, 82, 43, .24);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: var(--chip-ink);
+}
+.nat-pill-t { min-width: 0; }
+
+.nat-foot {
+  padding: 12px 4px 2px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  text-align: center;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+.mh-ptrack.is-cyan i {
+  background: linear-gradient(90deg, var(--brand-1), var(--brand-3));
+  box-shadow: 0 0 12px -2px var(--brand-glow);
 }
 
 /* ---- My Squad footer: elevated clay card pinned under the ladder ----

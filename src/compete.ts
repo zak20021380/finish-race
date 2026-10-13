@@ -29,7 +29,7 @@ import {
   type Tournament,
   type Trend,
 } from './data';
-import { flagOf, nameOf } from './countries';
+import { nameOf } from './countries';
 import { coinSvg, coinText, mountCoins, setBalance } from './coin';
 import { onChange, profile, spendCoins } from './storage';
 import { motionReduced } from './settings';
@@ -149,6 +149,13 @@ function divisionOf(tiq: number): { tier: MindTier; label: string; next: number 
 /** A win is worth 120 TIQ and it also lands a game (+20) — the same formula myTrophyScore uses. */
 const TIQ_PER_WIN = 140;
 
+/** FNV-1a over an ASCII key: stable across renders, so a seeded figure never jitters. */
+function hashOf(key: string): number {
+  let h = 216613261;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
+  return Math.abs(h);
+}
+
 /**
  * Seeded weekly TIQ delta: stable per player across renders and signed by their own
  * trend, so the chip can never contradict the arrow beside it. Real deltas arrive
@@ -156,10 +163,20 @@ const TIQ_PER_WIN = 140;
  */
 function deltaOf(key: string, points: number, trend: Trend): number {
   if (trend === 'same') return 0;
-  let h = 216613261;
-  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
-  const mag = 8 + (Math.abs(h) % 71) + Math.round(points * 0.004);
+  const mag = 8 + (hashOf(key) % 71) + Math.round(points * 0.004);
   return trend === 'up' ? mag : -mag;
+}
+
+/**
+ * The seeded country rows carry an aggregate and no roster, so each nation's field
+ * is split across a stable head-count and the average is then arithmetic on those
+ * two numbers — total, minds and AVG can never disagree. Real rosters land with the
+ * backend, at which point this function and its caller both go away.
+ */
+function fieldOf(code: string, points: number): { minds: number; avg: number } {
+  const target = 1100 + (hashOf(code) % 500);
+  const minds = Math.max(3, Math.round(points / target));
+  return { minds, avg: Math.round(points / minds) };
 }
 
 const signed = (n: number): string => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n).toLocaleString('en-US')}`;
@@ -173,6 +190,60 @@ function svgIcon(href: string, cls: string): SVGSVGElement {
   use.setAttribute('href', href);
   svg.append(use);
   return svg;
+}
+
+/* ---------- flag rendering pipeline ---------- */
+
+/** Only a bare ISO alpha-2 may ever be interpolated into a URL — nothing else. */
+const iso2 = (code: string | null | undefined): string | null =>
+  code && /^[A-Za-z]{2}$/.test(code) ? code.toLowerCase() : null;
+
+/**
+ * circle-flags ships as an npm package, so the jsdelivr *gh* path in the brief
+ * (…/gh/hats-scripts/circle-flags@latest/flags/us.svg) answers 404 at every casing
+ * and ref; the npm resolution of the same library on the same CDN is what serves.
+ */
+const FLAG_SVG = (cc: string): string => `https://cdn.jsdelivr.net/npm/circle-flags/flags/${cc}.svg`;
+const FLAG_PNG = (cc: string): string => `https://flagcdn.com/w80/${cc}.png`;
+
+/**
+ * Photo flag, three tiers: circle-flags SVG → flagcdn PNG → the clay ISO chip.
+ * The chip is in the DOM from the start and the image is layered over it, so a
+ * slow or blocked CDN shows a legible code instead of a hole, and a failure needs
+ * no layout pass. Every image is lazy and decoded async.
+ */
+function flagPhoto(code: string | null, cls: string): HTMLElement {
+  const wrap = document.createElement('span');
+  wrap.className = `fp ${cls}`;
+  wrap.setAttribute('aria-hidden', 'true');
+
+  const chip = document.createElement('span');
+  chip.className = 'fp-chip';
+  chip.textContent = (code ?? '').slice(0, 3).toUpperCase() || '—';
+  wrap.append(chip);
+
+  const cc = iso2(code);
+  if (!cc) {
+    wrap.classList.add('is-chip');
+    return wrap;
+  }
+
+  const img = document.createElement('img');
+  img.className = 'fp-img';
+  img.alt = '';
+  img.loading = 'lazy';
+  img.decoding = 'async';
+  let tier = 0;
+  img.addEventListener('error', () => {
+    if (tier === 0) { tier = 1; img.src = FLAG_PNG(cc); return; }
+    tier = 2;
+    img.remove();
+    wrap.classList.add('is-chip');
+  });
+  img.addEventListener('load', () => wrap.classList.add('is-photo'));
+  wrap.append(img);
+  img.src = FLAG_SVG(cc);
+  return wrap;
 }
 
 export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
@@ -200,6 +271,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     nations: { loaded: false, rows: 0, points: 0 },
   };
   let tournaments: Tournament[] = [];
+  /** The live cup behind the Nations IQ event pill, fetched with the country board. */
+  let natCup: Tournament | null = null;
   let joined = joinedSet();
   let pending: Tournament | null = null;
   let tick = 0;
@@ -298,6 +371,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const dock = squadDock();
     if (dock) dock.hidden = board !== 'guilds';
     if (board === 'guilds') paintSquadDock();
+    paintGuildHero();
   }
 
   function paintFeedLabel(): void {
@@ -915,7 +989,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   function startTick(): void {
     if (tick) return;
     tick = window.setInterval(() => {
-      if (isRanksVisible()) paintSeason();
+      if (isRanksVisible()) {
+        paintSeason();
+        if (board === 'nations' && natCup) {
+          const pill = document.querySelector<HTMLElement>('[data-nat-cup]');
+          if (pill) pill.textContent = natPillText(natCup);
+        }
+      }
       if (!isArenaVisible()) return;
       for (const t of tournaments) {
         if (t.status === 'ended') continue;
@@ -942,18 +1022,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   const podiumOf = (rank: number): '' | 'gold' | 'silver' | 'bronze' =>
     rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
 
-  function flagBadge(codeOrEmoji: string, code: string): HTMLSpanElement {
-    const fl = document.createElement('span');
-    fl.className = 'fl';
-    fl.setAttribute('aria-hidden', 'true');
-    const flag = document.createElement('span');
-    flag.className = 'flag';
-    flag.textContent = codeOrEmoji;
-    const chip = document.createElement('span');
-    chip.className = 'flag-code';
-    chip.textContent = code;
-    fl.append(flag, chip);
-    return fl;
+  /** The ranks screen always has an ISO code in hand, so the emoji tier is skipped. */
+  function flagBadge(code: string | null): HTMLElement {
+    return flagPhoto(code, 'fp-badge');
   }
 
   /* ---------- Top 3 clay podium ---------- */
@@ -962,8 +1033,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     rank: number;
     name: string;
     score: string;
-    /** Nation entry: Unicode flag emoji, with its ISO chip as the Windows fallback. */
-    flag?: string;
+    /** Nation entry: the flag photo, with the ISO chip as its own fallback. */
     code?: string;
     /** Guild / player entry: a single-letter clay medallion. */
     letter?: string;
@@ -1005,8 +1075,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const av = document.createElement('span');
     av.className = 'pod-av';
     av.setAttribute('aria-hidden', 'true');
-    if (e.flag && e.code) {
-      av.append(flagBadge(e.flag, e.code));
+    if (e.code) {
+      av.append(flagBadge(e.code));
     } else {
       av.textContent = (e.letter ?? e.name).replace(/^@/, '').slice(0, 1).toUpperCase();
     }
@@ -1127,7 +1197,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   interface LadderRow {
     rank: number;
-    flag: string;
     code: string;
     name: string;
     sub: string | null;
@@ -1138,6 +1207,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     me: boolean;
     /** Mind tiers describe a person, not a country aggregate, so boards opt in. */
     tiered?: boolean;
+    /** Nations quote a per-mind average under the aggregate the board ranks by. */
+    avg?: number;
     /** Stable key for the seeded weekly delta. */
     key?: string;
     /** The climber directly above, so inspection can name the gap it has to close. */
@@ -1151,7 +1222,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
    * is a placeholder waiting for a backend.
    */
   function row(r: LadderRow): HTMLLIElement {
-    const { rank, flag, code, name, points, trend, tiered = false } = r;
+    const { rank, code, name, points, trend, tiered = false } = r;
     const li = document.createElement('li');
     li.className = `rank-row lb-row${r.me ? ' is-you' : ''}`;
     li.dataset.rank = String(rank);
@@ -1164,7 +1235,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     const id = document.createElement('span');
     id.className = 'lb-id';
-    id.append(flagBadge(flag, code));
+    id.append(flagBadge(code));
     const txt = document.createElement('span');
     txt.className = 'lb-txt';
     const nmLine = document.createElement('span');
@@ -1205,7 +1276,16 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     tr.setAttribute('aria-hidden', 'true');
     act.append(tr);
 
-    li.append(rankCrest(rank), id, scoreCell(points, `${points} Tactical IQ`, delta), act);
+    const cell = scoreCell(points, `${points} Tactical IQ`, r.avg ? 0 : delta);
+    if (r.avg) {
+      const avg = document.createElement('small');
+      avg.className = 'lb-avg';
+      avg.textContent = `AVG ${r.avg.toLocaleString('en-US')}`;
+      avg.title = `${r.avg.toLocaleString('en-US')} average Tactical IQ per mind`;
+      cell.append(avg);
+    }
+
+    li.append(rankCrest(rank), id, cell, act);
 
     /* ---- inspection read: the four numbers a row can honestly tell you ---- */
     const peek = document.createElement('span');
@@ -1247,9 +1327,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return li;
   }
 
-  /** "Your Standing" summary module — in-flow below the sub-tabs, never floating. */
+  /** The compact "Your Standing" row — used by Nations IQ, where the hero strip is
+      the nation's card and this one stays personal. */
   function paintSoloStanding(opts: {
-    tab: Board;
     rankText: string;
     percentText: string | null;
     score: number;
@@ -1265,12 +1345,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const av = document.createElement('span');
     av.className = 'standing-avatar';
     av.setAttribute('aria-hidden', 'true');
-    if (opts.tab === 'nations' && profile.country) {
-      av.textContent = flagOf(profile.country);
-    } else {
-      const h = youHandle() ?? 'Y';
-      av.textContent = h.replace(/^@/, '').slice(0, 1).toUpperCase() || 'Y';
-    }
+    const h = youHandle() ?? 'Y';
+    av.textContent = h.replace(/^@/, '').slice(0, 1).toUpperCase() || 'Y';
 
     const main = document.createElement('span');
     main.className = 'standing-main';
@@ -1494,45 +1570,115 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return b;
   }
 
+  /**
+   * On Nations IQ the hero strip above already carries the flag, the rank and the
+   * gap, so this card stops repeating them and states the only fact that is
+   * genuinely personal: your own record and your own TIQ. With no country bound the
+   * hero asks for one, so the card steps out entirely.
+   */
   function paintNationsStanding(rows: CountryRow[] | null): void {
+    const host = soloStandingEl();
+    if (!host) return;
     const code = profile.country;
     const hit = code && rows ? rows.find((c) => c.code === code) : undefined;
-    if (hit && rows) {
-      const pct = Math.max(1, Math.round((hit.rank / Math.max(1, rows.length)) * 100));
-      paintSoloStanding({
-        tab: 'nations',
-        rankText: `#${hit.rank}`,
-        percentText: `Top ${pct}%`,
-        score: hit.points,
-        extraSub: nameOf(code as string),
-      });
-    } else if (code) {
-      paintSoloStanding({
-        tab: 'nations',
-        rankText: '-',
-        percentText: null,
-        score: 0,
-        extraSub: `${nameOf(code)} · warming up`,
-      });
-    } else {
-      paintSoloStanding({
-        tab: 'nations',
-        rankText: '-',
-        percentText: null,
-        score: myTrophyScore(),
-        extraSub: 'Pick a country in Profile',
-      });
-      const host = soloStandingEl();
-      if (host) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'standing-cta';
-        btn.textContent = 'Set Flag';
-        btn.setAttribute('aria-label', 'Pick your country in Profile');
-        btn.addEventListener('click', () => { impact('light'); api.router.go('profile'); });
-        host.append(btn);
-      }
+    if (!code || !hit) {
+      host.hidden = true;
+      return;
     }
+    paintSoloStanding({
+      rankText: '-',
+      percentText: null,
+      score: myTrophyScore(),
+      extraSub: null,
+    });
+  }
+
+  /** A one-line event banner; the countdown is the live cup's own deadline. */
+  const natPillText = (cup: Tournament | null): string =>
+    cup
+      ? `Nations Cup · ${formatCountdown(cup.endsAt)} · wins count double for your flag.`
+      : 'Nations Cup · bracket opens soon · wins count double for your flag.';
+
+  function nationsPill(cup: Tournament | null): HTMLElement {
+    const p = document.createElement('p');
+    p.className = 'nat-pill';
+    const dot = document.createElement('i');
+    dot.className = 'ml-pulse';
+    dot.setAttribute('aria-hidden', 'true');
+    const t = document.createElement('span');
+    t.className = 'nat-pill-t';
+    t.dataset.natCup = '1';
+    t.textContent = natPillText(cup);
+    p.append(dot, t);
+    return p;
+  }
+
+  /**
+   * Own-nation strip: where the flag sits, how far the nation above it is, and what
+   * the bar means. With no country bound it asks for one rather than showing an
+   * empty row — the same route the compact standing card uses.
+   */
+  function nationsHero(rows: CountryRow[]): HTMLElement {
+    const card = document.createElement('section');
+    card.className = 'nat-hero';
+    const code = profile.country;
+
+    if (!code) {
+      card.append(flagPhoto(null, 'fp-lg'));
+      const txt = document.createElement('span');
+      txt.className = 'nat-hero-txt';
+      const b = document.createElement('b');
+      b.textContent = 'Your flag is not on the board yet';
+      const s = document.createElement('small');
+      s.textContent = 'Pick a country and every race you win starts counting for it.';
+      txt.append(b, s);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'nat-hero-btn';
+      btn.textContent = 'Set flag';
+      btn.setAttribute('aria-label', 'Pick your country in Profile');
+      btn.addEventListener('click', () => { impact('light'); api.router.go('profile'); });
+      card.append(txt, btn);
+      return card;
+    }
+
+    const hit = rows.find((c) => c.code === code);
+    const above = hit ? rows.find((c) => c.rank === hit.rank - 1) : undefined;
+    const nm = nameOf(code) || code;
+
+    card.append(flagPhoto(code, 'fp-lg'));
+    const txt = document.createElement('span');
+    txt.className = 'nat-hero-txt';
+    const b = document.createElement('b');
+    b.textContent = hit
+      ? `${nm}'s minds rank #${hit.rank} — every win you take raises the average`
+      : `${nm} is warming up — no ranked races yet`;
+    const s = document.createElement('small');
+    s.textContent = hit
+      ? (above ? `${(above.points - hit.points).toLocaleString('en-US')} TIQ behind ${above.name}` : 'No nation above you — hold the line.')
+      : 'Race to put your country on the ladder.';
+    txt.append(b, s);
+    card.append(txt);
+
+    if (hit) {
+      const bar = document.createElement('span');
+      bar.className = 'mh-ptrack is-cyan';
+      const fill = document.createElement('i');
+      fill.style.width = above
+        ? `${Math.max(4, Math.min(100, Math.round((hit.points / above.points) * 100)))}%`
+        : '100%';
+      bar.append(fill);
+      bar.setAttribute('role', 'presentation');
+      card.append(bar);
+    }
+    return card;
+  }
+
+  function nationsFoot(): HTMLElement {
+    const p = document.createElement('p');
+    p.className = 'nat-foot';
+    p.textContent = 'Sharpest nations. Your flag needs your brain.';
+    return p;
   }
 
   async function loadNations(): Promise<void> {
@@ -1540,8 +1686,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (!el) return;
     if (!loadedBoard.nations) el.innerHTML = skel(6);
     let rows: CountryRow[];
+    let cups: Tournament[];
     try {
-      rows = await getCountryRanking();
+      const pair = await Promise.all([getCountryRanking(), getTournaments()]);
+      rows = pair[0];
+      cups = pair[1];
     } catch {
       el.innerHTML = empty('Rankings unavailable. Check your connection and try again.');
       paintNationsStanding(null);
@@ -1552,34 +1701,37 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       paintNationsStanding([]);
       return;
     }
+    natCup = cups.find((c) => c.status === 'live') ?? null;
     paintPodium(rows.slice(0, 3).map((c) => ({
       rank: c.rank,
       name: c.name,
       score: c.points.toLocaleString('en-US'),
-      flag: flagOf(c.code),
       code: c.code,
       delta: deltaOf(c.code, c.points, c.trend),
     })));
     el.textContent = '';
+    el.append(nationsHero(rows), nationsPill(natCup));
     const ol = document.createElement('ol');
     ol.className = 'rank-list';
     for (const c of rows.slice(3)) {
       const up = rows[c.rank - 2];
+      const f = fieldOf(c.code, c.points);
+      const d = deltaOf(c.code, c.points, c.trend);
       ol.append(row({
         rank: c.rank,
-        flag: flagOf(c.code),
         code: c.code,
         name: c.name,
-        sub: null,
+        sub: `${compactCount(f.minds)} minds${d ? ` · ${signed(d)} wk` : ''}`,
         points: c.points.toLocaleString('en-US'),
         tiq: c.points,
         trend: c.trend,
         me: profile.country === c.code,
+        avg: f.avg,
         key: c.code,
         above: up ? { name: up.name, tiq: up.points } : null,
       }));
     }
-    el.append(ol);
+    el.append(ol, nationsFoot());
     boardStats.nations = { loaded: true, rows: rows.length, points: rows.reduce((n, c) => n + c.points, 0) };
     paintNationsStanding(rows);
     paintRanksStats();
@@ -1606,7 +1758,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       rank: i + 1,
       name: p.name,
       score: p.points.toLocaleString('en-US'),
-      flag: flagOf(p.countryCode),
       code: p.countryCode,
       tier: tierOf(p.points),
       tierLabel: divisionOf(p.points).label,
@@ -1619,7 +1770,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       const up = rows[i + 2];
       ol.append(row({
         rank: i + 4,
-        flag: flagOf(p.countryCode),
         code: p.countryCode,
         name: p.name,
         sub: `${p.wins} wins`,
@@ -1677,6 +1827,130 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return b;
   }
 
+  /** Hexagonal clay crest: lip and face share one clip, two pixels apart, because
+      clip-path throws away the box-shadow the rest of the sheet uses for depth. */
+  function hexCrest(letter: string, cls: string): HTMLElement {
+    const wrap = document.createElement('span');
+    wrap.className = `hex ${cls}`;
+    wrap.setAttribute('aria-hidden', 'true');
+    const face = document.createElement('span');
+    face.className = 'hex-face';
+    const b = document.createElement('b');
+    b.textContent = letter;
+    face.append(b);
+    wrap.append(face);
+    return wrap;
+  }
+
+  /**
+   * A stack of minds, not a roster of faces: the seeded guilds carry a member count
+   * and no identities, so the discs read as density and the number says the rest.
+   */
+  function memberStack(members: number): HTMLElement {
+    const s = document.createElement('span');
+    s.className = 'gstack';
+    s.setAttribute('aria-hidden', 'true');
+    const shown = Math.max(1, Math.min(3, members));
+    for (let i = 0; i < shown; i++) s.append(document.createElement('i'));
+    const rest = document.createElement('b');
+    rest.textContent = members > shown ? `+${compactCount(members - shown)}` : String(members);
+    s.append(rest);
+    return s;
+  }
+
+  /** The squad's own TIQ per mind — the density metric a head-count alone hides. */
+  const avgOf = (s: { trophies: number; members: number }): number =>
+    Math.round(s.trophies / Math.max(1, s.members));
+
+  const guildHeroEl = (): HTMLElement | null => {
+    const existing = document.getElementById('guild-hero');
+    if (existing) return existing;
+    const sc = document.getElementById('ranks-scroll');
+    const parent = sc?.parentElement;
+    if (!parent || !sc) return null;
+    const el = document.createElement('section');
+    el.id = 'guild-hero';
+    el.className = 'gh';
+    el.hidden = true;
+    parent.insertBefore(el, sc);
+    return el;
+  };
+
+  /**
+   * Own-guild hero, pinned above the ladder as a flex sibling of the scroller — so
+   * it never overlays a row. When a guild is bound it replaces the bottom dock: the
+   * screen states your standing in one place, not two.
+   */
+  function paintGuildHero(): void {
+    const host = guildHeroEl();
+    if (!host) return;
+    const me = isRanksVisible() && board === 'guilds' ? getMySquad() : null;
+    if (!me) { host.hidden = true; return; }
+    const dock = squadDock();
+    if (dock) dock.hidden = true;
+    host.hidden = false;
+    host.textContent = '';
+
+    const mine = getMyContribution();
+    host.append(hexCrest(squadLetter(me), 'gh-crest'));
+
+    const txt = document.createElement('span');
+    txt.className = 'gh-txt';
+    const top = document.createElement('span');
+    top.className = 'gh-top';
+    const kick = document.createElement('small');
+    kick.className = 'gh-kick';
+    kick.textContent = 'My guild';
+    const rank = document.createElement('b');
+    rank.className = 'gh-rank';
+    rank.textContent = `#${me.rank}`;
+    top.append(kick, rank);
+    const nm = document.createElement('b');
+    nm.className = 'gh-name';
+    nm.textContent = me.name || me.handle.replace(/^@/, '');
+    nm.title = `${me.name} · ${me.handle}`;
+    const sub = document.createElement('span');
+    sub.className = 'gh-sub';
+    /* The stack already carries the head-count, so the density line says only what
+       the count cannot: what one mind in this guild is worth on average. */
+    const density = document.createElement('small');
+    density.textContent = `AVG ${avgOf(me).toLocaleString('en-US')} TIQ per mind`;
+    sub.append(memberStack(me.members), density);
+    txt.append(top, nm, sub);
+
+    const score = document.createElement('span');
+    score.className = 'gh-score';
+    const line = document.createElement('span');
+    line.className = 'gh-line';
+    line.append(svgIcon('#i-brain', 'tiq'));
+    const num = document.createElement('b');
+    num.textContent = me.trophies.toLocaleString('en-US');
+    line.append(num);
+    const csub = document.createElement('small');
+    csub.textContent = mine > 0 ? `+${mine.toLocaleString('en-US')} yours` : 'fight to contribute';
+    score.append(line, csub);
+    score.title = `${me.trophies.toLocaleString('en-US')} combined Tactical IQ`;
+
+    const acts = document.createElement('span');
+    acts.className = 'gh-acts';
+    const invite = document.createElement('button');
+    invite.type = 'button';
+    invite.className = 'gh-btn is-coral';
+    invite.textContent = 'Invite';
+    invite.setAttribute('aria-label', `Invite to ${me.handle}: copy squad invite`);
+    invite.addEventListener('click', (e) => { e.stopPropagation(); inviteSquad(me); });
+    const view = document.createElement('button');
+    view.type = 'button';
+    view.className = 'gh-btn';
+    view.textContent = 'View';
+    view.setAttribute('aria-label', `View ${me.handle} squad details`);
+    view.addEventListener('click', (e) => { e.stopPropagation(); impact('light'); openSquadSheet(); });
+    acts.append(invite, view);
+
+    host.append(txt, score, acts);
+    host.setAttribute('aria-label', `My guild: ${me.name}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} combined Tactical IQ, ${me.members.toLocaleString('en-US')} minds.`);
+  }
+
   function squadRow(s: RankedSquad, mine: boolean): HTMLLIElement {
     const li = document.createElement('li');
     li.className = `squad-row lb-row${mine ? ' is-you' : ''}`;
@@ -1687,42 +1961,44 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     li.setAttribute('aria-label', `${label}, ${s.handle}, rank ${s.rank}, ${s.trophies.toLocaleString('en-US')} Tactical IQ. Press Enter for squad details.`);
     if (mine) li.setAttribute('aria-current', 'true');
 
-    /* Identity column: square avatar, then the name — which owns the flexible width. */
+    /* Identity column: hex crest, then the name — which owns the flexible width.
+       The @handle lives in the title and the accessible name: at 320 the identity
+       column is ~86px, and handle + member stack together is what used to squeeze
+       the guild name into "Doge…". */
     const id = document.createElement('span');
     id.className = 'lb-id';
-    const av = document.createElement('span');
-    av.className = 'lb-av';
-    av.textContent = squadLetter(s);
-    av.setAttribute('aria-hidden', 'true');
+    const av = hexCrest(squadLetter(s), 'lb-hex');
     const txt = document.createElement('span');
     txt.className = 'lb-txt';
     const nm = document.createElement('span');
     nm.className = 'lb-name';
     nm.textContent = label;
-    nm.title = label;
+    nm.title = `${label} · ${s.handle}`;
     const sub = document.createElement('span');
     sub.className = 'lb-sub';
     const k = squadKind(s);
     sub.append(svgIcon(k === 'channel' ? '#i-send' : '#i-users', 'lb-kind'));
-    const subT = document.createElement('span');
-    subT.className = 'lb-sub-t';
-    subT.textContent = s.handle;
-    subT.title = `${k === 'channel' ? 'Telegram channel' : 'Telegram group'} · ${compactCount(s.members)} members`;
-    sub.append(subT);
+    const stack = memberStack(s.members);
+    stack.title = `${k === 'channel' ? 'Telegram channel' : 'Telegram group'} · ${s.handle} · ${s.members.toLocaleString('en-US')} members`;
+    sub.append(stack);
     txt.append(nm, sub);
     id.append(av, txt);
 
-    /* Action column: one pill pinned to the right edge — glass cyan to join, solid to invite. */
+    /* Action column: one capsule pinned to the right edge — coral to invite your own
+       guild, frosted clay to join somebody else's. Only one row per board is coral,
+       so the ladder never becomes the wall of CTAs it used to be. */
     const act = document.createElement('span');
     act.className = 'lb-act';
     act.append(squadKey(squadAction(s, mine), 'lb-btn'));
 
-    li.append(
-      rankCrest(s.rank),
-      id,
-      scoreCell(s.trophies.toLocaleString('en-US'), `${s.trophies.toLocaleString('en-US')} squad Tactical IQ`),
-      act,
-    );
+    const cell = scoreCell(s.trophies.toLocaleString('en-US'), `${s.trophies.toLocaleString('en-US')} squad Tactical IQ`);
+    const avg = document.createElement('small');
+    avg.className = 'lb-avg';
+    avg.textContent = `AVG ${avgOf(s).toLocaleString('en-US')}`;
+    avg.title = `${avgOf(s).toLocaleString('en-US')} Tactical IQ per mind across ${s.members.toLocaleString('en-US')} members`;
+    cell.append(avg);
+
+    li.append(rankCrest(s.rank), id, cell, act);
 
     // The whole row opens squad details; the compact key joins / invites.
     li.addEventListener('click', () => {
@@ -1883,6 +2159,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }
     el.append(ol);
     paintSquadDock();
+    paintGuildHero();
     paintRanksStats();
     loadedBoard.guilds = true;
   }
