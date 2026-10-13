@@ -2261,6 +2261,7 @@ html.rm *, html.rm *::before, html.rm *::after {
   --lb-score: 80px;
   --lb-act: 58px;
   --lb-gap: 8px;
+  position: relative;
   display: grid;
   grid-template-columns: var(--lb-rank) minmax(0, 1fr) var(--lb-score) var(--lb-act);
   align-items: center;
@@ -2290,6 +2291,28 @@ html.rm *, html.rm *::before, html.rm *::after {
 .lb-row:active { transform: translateY(1px); }
 .lb-row:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
 .lb-row.is-you { border-color: rgba(125, 211, 252, .4); }
+/* Every ladder row is a control now: it opens its own inspection read.
+   56px is the spec band, and it clears the house 48px target with room to spare. */
+.lb-row { cursor: pointer; min-height: 56px; }
+.lb-row.is-open { border-color: rgba(125, 211, 252, .34); }
+/* The rival strip's landing flash — opacity only, drawn over the row's own clay. */
+.lb-row.is-spot::after,
+.pod-card.is-spot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--brand-soft);
+  box-shadow: inset 0 0 0 2px var(--brand-2);
+  animation: ml-spot 1.4s ease-out forwards;
+  pointer-events: none;
+}
+@keyframes ml-spot {
+  from { opacity: .9; }
+  to { opacity: 0; }
+}
+html.rm .lb-row.is-spot::after,
+html.rm .pod-card.is-spot::after { animation: none; opacity: .28; }
 
 /* Col 1 — rank: an extruded clay key. Deliberately NOT a metal — the podium above
    owns gold/silver/bronze, so #4 down read as prestige by shape and lift, not by
@@ -2331,6 +2354,27 @@ html.rm *, html.rm *::before, html.rm *::after {
   line-height: 1;
 }
 .lb-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+/* name line: the name shrinks first, the tier never does — the tier is the point */
+.lb-nm { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.lb-tier {
+  flex: none;
+  margin-right: 4px;
+  padding: 1px 5px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  line-height: 1.45;
+  text-transform: uppercase;
+  color: var(--aura, var(--ink-soft));
+  white-space: nowrap;
+}
+.lb-row[data-tier="rookie"] { --aura: var(--tier-rookie); }
+.lb-row[data-tier="tactician"] { --aura: var(--tier-tactician); }
+.lb-row[data-tier="strategist"] { --aura: var(--tier-strategist); }
+.lb-row[data-tier="grandmaster"] { --aura: var(--tier-grandmaster); }
 .lb-name {
   min-width: 0;
   font-size: var(--t-2);
@@ -2374,8 +2418,9 @@ html.rm *, html.rm *::before, html.rm *::after {
 .lb-score {
   justify-self: stretch;
   display: flex;
-  align-items: center;
-  gap: 4px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
   min-width: 0;
   font-size: var(--t-2);
   font-weight: 900;
@@ -2384,7 +2429,22 @@ html.rm *, html.rm *::before, html.rm *::after {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.lb-line { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .lb-score b { flex: 1 1 auto; min-width: 0; text-align: right; font-weight: 900; }
+/* the weekly movement, right-aligned under the number so the column still stacks */
+.lb-delta {
+  display: block;
+  text-align: right;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: .01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+.lb-delta.up { color: var(--mint-ink); }
+.lb-delta.down { color: var(--danger); }
+.lb-delta[hidden] { display: none; }
 .lb-tiq {
   flex: none;
   width: 15px;
@@ -2447,6 +2507,38 @@ html.rm *, html.rm *::before, html.rm *::after {
 .rank-row .tr.down { color: var(--danger); }
 .rank-row .tr.same { color: var(--ink-soft); }
 .rank-row.is-you .lb-name { color: var(--brand-ink); }
+/* ---- inspection read: a second grid row inside the same clay card ----
+   It spans every column, so the four fixed columns keep their x-positions and the
+   facts simply appear underneath them. Nothing here is a placeholder: each fact is
+   computed from the row's own numbers. */
+.lb-peek {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 12px;
+  padding-top: 8px;
+  margin-top: 8px;
+  border-top: 1px solid var(--sep);
+}
+.lb-peek[hidden] { display: none; }
+.lb-fact { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.lb-fact small {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.lb-fact b {
+  font-size: var(--t-3);
+  font-weight: 900;
+  line-height: 1.2;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 /* short phones keep the cup CTA and squad rows on their targets */
 @media (max-height: 700px) {
   .lb-row { padding-top: 8px; padding-bottom: 8px; }
@@ -4758,14 +4850,15 @@ html.rm .car-card.nations-cup::before { display: none; }
   --pod-lip: #b45309;
   --pod-glow: rgba(245, 158, 11, .5);
   --pod-rise: 20px;
+  min-height: 130px;
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
   max-width: 100%;
-  padding: 7px 5px 0;
+  padding: 6px 5px 0;
   border-radius: 14px 14px 0 0;
   background: var(--clay-face);
   background-color: #1C2433;
@@ -4790,9 +4883,19 @@ html.rm .car-card.nations-cup::before { display: none; }
   --pod-lip: #7c3f14;
   --pod-glow: rgba(194, 112, 61, .42);
 }
-.pod-card[data-rank="1"] { grid-column: 2; --pod-rise: 34px; z-index: 1; }
+/* #1 stands 20px taller than its neighbours; because the pillar is the flexible
+   child, that extra height lands in the pedestal and not in the content. */
+.pod-card[data-rank="1"] { grid-column: 2; min-height: 150px; --pod-rise: 40px; z-index: 1; }
 .pod-card[data-rank="2"] { grid-column: 1; }
 .pod-card[data-rank="3"] { grid-column: 3; }
+/* The leader's throne paints two layers behind the content, so every child of a
+   podium card is lifted above them. */
+.pod-card > * { position: relative; z-index: 1; }
+/* Tier auras: the ring, the tier word and the progress arc all read one pair. */
+.pod-card[data-tier="rookie"] { --aura: var(--tier-rookie); --aura-glow: var(--tier-rookie-glow); }
+.pod-card[data-tier="tactician"] { --aura: var(--tier-tactician); --aura-glow: var(--tier-tactician-glow); }
+.pod-card[data-tier="strategist"] { --aura: var(--tier-strategist); --aura-glow: var(--tier-strategist-glow); }
+.pod-card[data-tier="grandmaster"] { --aura: var(--tier-grandmaster); --aura-glow: var(--tier-grandmaster-glow); }
 /* Rank order in the DOM + explicit columns send the sparse auto-placement cursor
    forward, which would drop silver and bronze onto a second row. Pin the row. */
 .pod-card { grid-row: 1; }
@@ -4801,51 +4904,98 @@ html.rm .car-card.nations-cup::before { display: none; }
 .pod-card:active { transform: translateY(2px) scale(.972); filter: brightness(1.07); }
 .pod-card:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
-/* the metal crest — an extruded disc with a debossed numeral */
-.pod-medal {
+/* The rank numeral is engraved into the pillar below, so the card carries no crest
+   disc — that pixel budget now pays for the tier word and the weekly delta. */
+.pod-crown {
+  position: absolute;
+  z-index: 2;
+  top: -15px;
+  left: 50%;
+  width: 17px;
+  height: 17px;
+  transform: translateX(-50%);
+  color: var(--honey-ink);
+  filter: drop-shadow(0 0 6px rgba(245, 158, 11, .7));
+  animation: pod-crown 3.2s ease-in-out infinite;
+}
+@keyframes pod-crown {
+  0%, 100% { transform: translate(-50%, 0); }
+  50% { transform: translate(-50%, -3px); }
+}
+/* The throne: a radial gold bloom behind the leader, drawn under its content. */
+.pod-card.gold::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: -14px -6px auto;
+  height: 118px;
+  border-radius: 50%;
+  background: radial-gradient(58% 62% at 50% 38%, rgba(245, 158, 11, .3), rgba(245, 158, 11, 0) 72%);
+  pointer-events: none;
+}
+/* Holographic shimmer: a clipped band travelling on transform, never on position.
+   The gold hairline lives on the card, not here — the pillar overhangs the card by
+   5px a side, so a ring on this layer would draw two stray edges down the podium. */
+.pod-holo {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.pod-holo::after {
+  content: "";
+  position: absolute;
+  top: -25%;
+  bottom: -25%;
+  left: -55%;
+  width: 42%;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, .14) 42%, rgba(125, 211, 252, .2) 58%, rgba(255, 255, 255, 0) 100%);
+  animation: pod-holo 3.8s ease-in-out infinite;
+}
+@keyframes pod-holo {
+  0% { transform: translateX(0); }
+  62%, 100% { transform: translateX(340%); }
+}
+/* The throne is carried by the glow, the crown, the shimmer and the taller pillar:
+   a hairline ring here would sit 5px inside the pillar's own edge and draw two
+   stray lines straight down the gold. */
+/* Synapse pulse: the leader's own aura breathing out from the avatar ring. */
+.pod-card.gold .pod-av::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 16px;
+  border: 1.5px solid var(--aura, var(--pod-mid));
+  animation: pod-synapse 2.6s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes pod-synapse {
+  0% { transform: scale(.88); opacity: .8; }
+  70%, 100% { transform: scale(1.22); opacity: 0; }
+}
+html.rm .pod-crown,
+html.rm .pod-holo::after,
+html.rm .pod-card.gold .pod-av::after { animation: none; }
+html.rm .pod-holo::after { opacity: .12; }
+html.rm .pod-card.gold .pod-av::after { opacity: .45; }
+
+/* the avatar: a ball of clay ringed in its mind's aura, falling back to its metal
+   on boards where a tier does not apply (a guild's 18k is not a mind) */
+.pod-av {
   position: relative;
   flex: none;
   display: grid;
   place-items: center;
-  width: 27px;
-  height: 27px;
-  border-radius: 50%;
-  background: linear-gradient(180deg, var(--pod-face) 0%, var(--pod-mid) 45%, var(--pod-deep) 100%);
-  box-shadow:
-    0 2px 0 var(--pod-lip),
-    0 0 12px -2px var(--pod-glow),
-    inset 0 1px 0 rgba(255, 255, 255, .7),
-    inset 0 -3px 5px rgba(0, 0, 0, .26);
-  color: #10141D;
-  font-size: var(--t-micro);
-  font-weight: 900;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-.pod-crown {
-  position: absolute;
-  top: -13px;
-  left: 50%;
-  width: 14px;
-  height: 14px;
-  transform: translateX(-50%);
-  color: var(--honey-ink);
-  filter: drop-shadow(0 0 5px rgba(245, 158, 11, .65));
-}
-
-/* the avatar, ringed in its own metal so the leader catches the eye first */
-.pod-av {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 13px;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
   background: linear-gradient(180deg, #2A354C 0%, #141B2A 100%);
   box-shadow:
-    inset 0 0 0 1.5px var(--pod-mid),
+    inset 0 0 0 2px var(--aura, var(--pod-mid)),
     inset 0 1px 0 rgba(255, 255, 255, .14),
-    0 0 16px -4px var(--pod-glow);
+    0 0 16px -4px var(--aura-glow, var(--pod-glow));
   color: var(--brand-ink);
   font-size: var(--t-2);
   font-weight: 900;
@@ -4854,15 +5004,15 @@ html.rm .car-card.nations-cup::before { display: none; }
 /* nations ride the same flag + ISO-chip pair the ladder uses, so the Windows
    fallback that has no flag glyphs still reads a country */
 .pod-av .fl { display: grid; place-items: center; }
-.pod-av .flag { font-size: 22px; line-height: 1; }
-.pod-av .flag-code { padding: 1px 5px; font-size: 10px; }
+.pod-av .flag { font-size: 19px; line-height: 1; }
+.pod-av .flag-code { padding: 1px 4px; font-size: 9px; }
 
 .pod-name {
   min-width: 0;
   max-width: 100%;
   font-size: var(--t-micro);
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1.15;
   text-align: center;
   color: var(--ink);
   white-space: nowrap;
@@ -4879,7 +5029,7 @@ html.rm .car-card.nations-cup::before { display: none; }
   gap: 3px;
   min-width: 0;
   max-width: 100%;
-  padding: 3px 7px;
+  padding: 1px 7px;
   border-radius: var(--radius-pill);
   background: var(--field);
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(255, 255, 255, .06);
@@ -4891,6 +5041,51 @@ html.rm .car-card.nations-cup::before { display: none; }
 }
 .pod-iq b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .pod-tiq { flex: none; width: 11px; height: 11px; color: var(--honey); }
+
+/* the tier word, in the same aura as the ring, so colour and name agree */
+.pod-tier {
+  max-width: 100%;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  line-height: 1.15;
+  text-align: center;
+  color: var(--aura, var(--ink-soft));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pod-tier[hidden] { display: none; }
+
+/* weekly movement: mint up, rose down — the same pair the trend arrows use */
+.pod-delta {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+.pod-delta.up { color: var(--mint-ink); box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .26); }
+.pod-delta.down { color: var(--danger); box-shadow: inset 0 0 0 1px rgba(253, 164, 175, .26); }
+.pod-delta[hidden] { display: none; }
+
+/* the band caption, outside the role=list it labels */
+.pod-band {
+  margin: 0 0 2px;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--ink-soft);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .7);
+}
+.pod-band[hidden] { display: none; }
 
 /* the join / invite key only the guild board brings; same frosted clay as the ladder */
 .pod-btn {
@@ -4934,13 +5129,14 @@ html.rm .car-card.nations-cup::before { display: none; }
 .pod-btn:active { transform: translateY(var(--press-y)); --d: 0px; }
 .pod-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
-/* the pillar: metal fading into the clay body, debossed by its own top rim */
+/* the pillar: metal fading into the clay body, debossed by its own top rim.
+   It is the card's flexible child, so a taller card means a taller pedestal. */
 .pod-step {
   position: relative;
-  flex: none;
+  flex: 1 1 auto;
   width: calc(100% + 10px);
-  height: var(--pod-rise);
-  margin: 4px -5px 0;
+  min-height: var(--pod-rise);
+  margin: 3px -5px 0;
   border-radius: 0 0 12px 12px;
   background: linear-gradient(180deg, var(--pod-mid) 0%, var(--pod-deep) 55%, #161E2C 100%);
   box-shadow:
@@ -5110,6 +5306,190 @@ html.rm .car-card.nations-cup::before { display: none; }
 }
 .standing-cta:active { transform: translateY(var(--press-y)); --d: 0px; }
 .standing-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+/* ---- Top Minds hero card: the same clay module, promoted to an identity card ----
+   Percentile ring · tier · TIQ, then the four-axis read of your own play, then the
+   next division as a sentence you can act on, then one coral key. Nations keeps the
+   one-line .solo-standing form above; only this board grows the card.
+   The ring is a real SVG arc on pathLength=100, so the dash *is* the percentage. */
+.solo-standing.mh {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--s2);
+  padding: var(--s2);
+  min-height: 0;
+}
+.mh-top { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+.mh-ring { position: relative; flex: none; width: 48px; height: 48px; display: grid; place-items: center; }
+.mh-arc { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.mh-arc circle { stroke-width: 3; }
+.mh-arc-track { stroke: rgba(255, 255, 255, .1); }
+.mh-arc-fill { stroke: var(--ml-aura, var(--brand-2)); stroke-linecap: round; }
+.mh-ring b {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--field);
+  box-shadow: var(--inset);
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+}
+.mh-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mh-line {
+  font-size: var(--t-1);
+  font-weight: 900;
+  letter-spacing: -.01em;
+  line-height: 1.2;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mh-pct {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  line-height: 1.3;
+  color: var(--ml-aura, var(--brand-ink));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mh-score {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--tiq);
+  font-size: var(--t-1);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.mh-score .tiq { flex: none; width: 15px; height: 15px; color: var(--honey); filter: drop-shadow(0 0 4px rgba(245, 158, 11, .4)); }
+.mh-score .lb-delta { margin-left: 1px; }
+.mh-axes { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 7px 8px; min-width: 0; }
+.mh-axis { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.mh-axis small {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  line-height: 1.1;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mh-track {
+  position: relative;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  box-shadow: var(--inset);
+  overflow: hidden;
+}
+.mh-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--brand-1), var(--brand-3));
+  transition: width var(--motion-med);
+}
+.mh-prog { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.mh-ptrack {
+  height: 9px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  box-shadow: var(--inset);
+  overflow: hidden;
+}
+.mh-ptrack i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--honey-lip), var(--honey-ink));
+  box-shadow: 0 0 12px -2px rgba(245, 158, 11, .6);
+  transition: width var(--motion-med);
+}
+.mh-ptext { font-size: 10px; font-weight: 700; line-height: 1.3; color: var(--chip-ink); }
+/* The one loud key on this screen, same extrusion as the arena CTA. */
+.mh-cta {
+  --d: 4px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  flex: none;
+  width: 100%;
+  height: 48px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, var(--cta-hi) 0%, var(--cta) 100%);
+  color: var(--on-brand);
+  font-size: var(--t-1);
+  font-weight: 900;
+  letter-spacing: .02em;
+  cursor: pointer;
+  box-shadow:
+    0 var(--d) 0 var(--cta-lip),
+    0 calc(var(--d) + 7px) 16px -8px var(--cta-shadow),
+    inset 0 2px 3px rgba(255, 255, 255, .35),
+    inset 0 -2px 3px rgba(0, 0, 0, .18);
+  transition: transform var(--motion-fast);
+}
+.mh-cta:active { transform: translateY(var(--press-y)); --d: 1px; }
+.mh-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+
+/* ---- Rival watch: the gap made personal, and one tap from the row it names ---- */
+.rival {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  width: 100%;
+  min-height: 48px;
+  margin-bottom: var(--s1);
+  padding: 7px 10px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 82, 43, .12) 0%, rgba(255, 82, 43, .02) 100%),
+    var(--clay-face);
+  background-color: #1C2433;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 82, 43, .26),
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    0 6px 14px -12px var(--shadow);
+  color: var(--chip-ink);
+  font-size: var(--t-3);
+  font-weight: 700;
+  line-height: 1.3;
+  transition: transform var(--motion-fast);
+}
+.rival:active { transform: translateY(2px); }
+.rival:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.rival-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--cta); box-shadow: 0 0 8px rgba(255, 82, 43, .7); }
+.rival-t { flex: 1 1 auto; min-width: 0; }
+.rival-go {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 82, 43, .14);
+  box-shadow: inset 0 0 0 1px rgba(255, 82, 43, .3);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: var(--cta-hi);
+}
 
 /* ---- My Squad footer: elevated clay card pinned under the ladder ----
    Outside the scroll, so it can never clip a row. A cyan accent line across the
@@ -6458,6 +6838,13 @@ html.rm .ml-pulse::after { display: none; }
   .rstat { padding: 3px 4px; }
   .rstat-l { font-size: 9px; letter-spacing: .01em; }
   .ml-title { letter-spacing: .03em; }
+  /* Four axes still fit one row at 320 — the auto-fit track would otherwise wrap
+     the grid and spend 25px of a 300px scroller on a fifth line of the hero card. */
+  .solo-standing.mh { gap: 6px; padding: 6px; }
+  .mh-axes { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px 6px; }
+  .mh-axis small { letter-spacing: .03em; }
+  .rival { padding: 6px 8px; }
+  .rival-go { padding: 3px 6px; }
 }
 
 /* ==========================================================================

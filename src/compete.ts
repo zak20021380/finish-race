@@ -27,10 +27,12 @@ import {
   type CountryRow,
   type PlayerRow,
   type Tournament,
+  type Trend,
 } from './data';
 import { flagOf, nameOf } from './countries';
 import { coinSvg, coinText, mountCoins, setBalance } from './coin';
 import { onChange, profile, spendCoins } from './storage';
+import { motionReduced } from './settings';
 import { bindSquadById, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadKind, squadLetter, type RankedSquad } from './squads';
 import { impact, notify, tgUser } from './telegram';
 import type { Router } from './router';
@@ -107,12 +109,60 @@ function seasonOf(t: number): { no: number; endsAt: number } {
 /** TIQ bands. The tier is an aura colour, never a badge word on the ladder. */
 type MindTier = 'rookie' | 'tactician' | 'strategist' | 'grandmaster';
 
+const TIER_NAME: Record<MindTier, string> = {
+  rookie: 'Rookie',
+  tactician: 'Tactician',
+  strategist: 'Strategist',
+  grandmaster: 'Grandmaster',
+};
+
+/** Grandmaster tops out at 4000 rather than Infinity so its three divisions exist. */
+const TIER_BAND: Record<MindTier, [number, number]> = {
+  rookie: [0, 1000],
+  tactician: [1000, 2000],
+  strategist: [2000, 3000],
+  grandmaster: [3000, 4000],
+};
+
+const DIVISION = ['I', 'II', 'III'];
+
 function tierOf(tiq: number): MindTier {
   if (tiq >= 3000) return 'grandmaster';
   if (tiq >= 2000) return 'strategist';
   if (tiq >= 1000) return 'tactician';
   return 'rookie';
 }
+
+/**
+ * Each aura is split into three visible steps, so "Tactician II" is a place you can
+ * see yourself move inside the colour you already wear. `next` is 0 at the peak.
+ */
+function divisionOf(tiq: number): { tier: MindTier; label: string; next: number } {
+  const tier = tierOf(tiq);
+  const [lo, hi] = TIER_BAND[tier];
+  const step = (hi - lo) / DIVISION.length;
+  const div = Math.min(DIVISION.length - 1, Math.floor(Math.max(0, tiq - lo) / step));
+  const next = div === DIVISION.length - 1 && tier === 'grandmaster' ? 0 : lo + step * (div + 1);
+  return { tier, label: `${TIER_NAME[tier]} ${DIVISION[div]}`, next: Math.ceil(next) };
+}
+
+/** A win is worth 120 TIQ and it also lands a game (+20) — the same formula myTrophyScore uses. */
+const TIQ_PER_WIN = 140;
+
+/**
+ * Seeded weekly TIQ delta: stable per player across renders and signed by their own
+ * trend, so the chip can never contradict the arrow beside it. Real deltas arrive
+ * with the backend; the Preview chip on the HUD already says this board is seeded.
+ */
+function deltaOf(key: string, points: number, trend: Trend): number {
+  if (trend === 'same') return 0;
+  let h = 216613261;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
+  const mag = 8 + (Math.abs(h) % 71) + Math.round(points * 0.004);
+  return trend === 'up' ? mag : -mag;
+}
+
+const signed = (n: number): string => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n).toLocaleString('en-US')}`;
 
 /** Sprite icon as a real element — the house artwork, never an emoji stand-in. */
 function svgIcon(href: string, cls: string): SVGSVGElement {
@@ -917,25 +967,40 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     code?: string;
     /** Guild / player entry: a single-letter clay medallion. */
     letter?: string;
+    /** Mind tiers only exist on the personal boards — a guild's 18k is not a mind. */
+    tier?: MindTier;
+    tierLabel?: string;
+    /** Weekly TIQ movement, rendered as a chip rather than left to the trend arrow. */
+    delta?: number;
     /** The ladder no longer carries #1-3, so a board whose rows have actions must move them up here. */
     action?: HTMLElement;
     onTap?: () => void;
   }
 
+  /**
+   * Card order is avatar → name → tier → TIQ → delta → pillar. The pillar stays the
+   * last child because it is the card's base: appending the join key after it floats
+   * the step into the middle of the card.
+   */
   function podiumCard(e: PodiumEntry): HTMLElement {
     const card = document.createElement('div');
     card.className = `pod-card ${podiumOf(e.rank)}`;
     card.dataset.rank = String(e.rank);
+    if (e.tier) card.dataset.tier = e.tier;
     card.setAttribute('role', 'listitem');
-    card.setAttribute('aria-label', `Rank ${e.rank}: ${e.name}, ${e.score} Tactical IQ`);
+    const said = [
+      e.tierLabel ? `${e.tierLabel}, ` : '',
+      `${e.score} Tactical IQ`,
+      e.delta ? `${signed(e.delta)} this week` : '',
+    ].join('');
+    card.setAttribute('aria-label', `Rank ${e.rank}: ${e.name}, ${said}`);
 
-    const medal = document.createElement('span');
-    medal.className = 'pod-medal';
-    medal.setAttribute('aria-hidden', 'true');
-    if (e.rank === 1) medal.append(svgIcon('#i-crown', 'pod-crown'));
-    const medalN = document.createElement('b');
-    medalN.textContent = String(e.rank);
-    medal.append(medalN);
+    if (e.rank === 1) {
+      const holo = document.createElement('span');
+      holo.className = 'pod-holo';
+      holo.setAttribute('aria-hidden', 'true');
+      card.append(holo, svgIcon('#i-crown', 'pod-crown'));
+    }
 
     const av = document.createElement('span');
     av.className = 'pod-av';
@@ -951,6 +1016,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     nm.textContent = e.name;
     nm.title = e.name;
 
+    const tier = document.createElement('span');
+    tier.className = 'pod-tier';
+    tier.textContent = e.tierLabel ?? '';
+    if (!e.tierLabel) tier.hidden = true;
+
     const iq = document.createElement('span');
     iq.className = 'pod-iq';
     iq.append(svgIcon('#i-brain', 'pod-tiq'));
@@ -959,6 +1029,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     iq.append(iqN);
     iq.title = `${e.score} Tactical IQ`;
 
+    const delta = document.createElement('span');
+    delta.className = e.delta ? `pod-delta ${e.delta > 0 ? 'up' : 'down'}` : 'pod-delta';
+    delta.textContent = e.delta ? signed(e.delta) : '';
+    if (!e.delta) delta.hidden = true;
+    else delta.title = `${signed(e.delta)} Tactical IQ this week`;
+
     const step = document.createElement('span');
     step.className = 'pod-step';
     step.setAttribute('aria-hidden', 'true');
@@ -966,9 +1042,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     stepN.textContent = String(e.rank);
     step.append(stepN);
 
-    /* The pillar is the card's base, so the join / invite key stacks above it —
-       otherwise the step ends up floating in the middle of the card. */
-    card.append(medal, av, nm, iq);
+    card.append(av, nm, tier, iq);
+    if (e.delta) card.append(delta);
     if (e.action) card.append(e.action);
     card.append(step);
     if (e.onTap) {
@@ -985,17 +1060,36 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return card;
   }
 
+  /** "PEAK MINDS · SEASON 4" — the band's caption, kept outside the role=list it labels. */
+  function podBand(): HTMLElement | null {
+    const host = podiumEl;
+    if (!host) return null;
+    const existing = document.getElementById('pod-band');
+    if (existing) return existing;
+    const t = document.createElement('h2');
+    t.id = 'pod-band';
+    t.className = 'pod-band';
+    host.parentNode?.insertBefore(t, host);
+    return t;
+  }
+
   function paintPodium(entries: PodiumEntry[]): void {
     const host = podiumEl;
     if (!host) return;
     host.textContent = '';
+    const band = podBand();
     const top = entries.filter((e) => e.rank >= 1 && e.rank <= 3);
     if (!top.length) {
       host.hidden = true;
+      if (band) band.hidden = true;
       return;
     }
     const boardName = board === 'guilds' ? 'Intellect Guilds' : board === 'nations' ? 'Nations IQ' : 'Top Minds';
     host.setAttribute('aria-label', `Top ${top.length} on ${boardName}`);
+    if (band) {
+      band.textContent = `Peak minds · Season ${seasonOf(Date.now()).no}`;
+      band.hidden = false;
+    }
     host.append(...top.map(podiumCard));
     host.hidden = false;
   }
@@ -1010,38 +1104,94 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return rk;
   }
 
-  function scoreCell(points: string, title: string): HTMLElement {
+  /** `delta` is optional so the squad ladder keeps its single-line score cell. */
+  function scoreCell(points: string, title: string, delta = 0): HTMLElement {
     const pt = document.createElement('span');
     pt.className = 'lb-score';
-    pt.append(svgIcon('#i-brain', 'lb-tiq'));
+    const line = document.createElement('span');
+    line.className = 'lb-line';
+    line.append(svgIcon('#i-brain', 'lb-tiq'));
     const num = document.createElement('b');
     num.textContent = points;
-    pt.append(num);
+    line.append(num);
+    pt.append(line);
+    const d = document.createElement('small');
+    d.className = delta ? `lb-delta ${delta > 0 ? 'up' : 'down'}` : 'lb-delta';
+    d.textContent = delta ? signed(delta) : '';
+    d.title = delta ? `${signed(delta)} Tactical IQ this week` : '';
+    if (!delta) d.hidden = true;
+    pt.append(d);
     pt.title = title;
     return pt;
   }
 
-  function row(rank: number, flagEmoji: string, flagCode: string, name: string, sub: string | null, points: string, trend: 'up' | 'down' | 'same', me: boolean): HTMLLIElement {
+  interface LadderRow {
+    rank: number;
+    flag: string;
+    code: string;
+    name: string;
+    sub: string | null;
+    points: string;
+    /** The numeric TIQ behind `points`: the tier, the delta and the read all derive from it. */
+    tiq: number;
+    trend: Trend;
+    me: boolean;
+    /** Mind tiers describe a person, not a country aggregate, so boards opt in. */
+    tiered?: boolean;
+    /** Stable key for the seeded weekly delta. */
+    key?: string;
+    /** The climber directly above, so inspection can name the gap it has to close. */
+    above?: { name: string; tiq: number } | null;
+    wins?: number;
+  }
+
+  /**
+   * Shared ladder row: rank crest · identity · tabular score · trend. Tap opens the
+   * inspection read, which is assembled from the row's own numbers — nothing in it
+   * is a placeholder waiting for a backend.
+   */
+  function row(r: LadderRow): HTMLLIElement {
+    const { rank, flag, code, name, points, trend, tiered = false } = r;
     const li = document.createElement('li');
-    li.className = `rank-row lb-row${me ? ' is-you' : ''}`;
+    li.className = `rank-row lb-row${r.me ? ' is-you' : ''}`;
+    li.dataset.rank = String(rank);
     const trendLabel = trend === 'up' ? 'rising' : trend === 'down' ? 'falling' : 'steady';
-    li.setAttribute('aria-label', `#${rank} ${name} — ${points} Tactical IQ, ${trendLabel}`);
-    if (me) li.setAttribute('aria-current', 'true');
+    const div = divisionOf(r.tiq);
+    const delta = deltaOf(r.key ?? String(rank), r.tiq, trend);
+    li.setAttribute('aria-label', `#${rank} ${name} — ${points} Tactical IQ, ${trendLabel}. Activate to inspect.`);
+    if (r.me) li.setAttribute('aria-current', 'true');
+    if (tiered) li.dataset.tier = div.tier;
 
     const id = document.createElement('span');
     id.className = 'lb-id';
-    id.append(flagBadge(flagEmoji, flagCode));
+    id.append(flagBadge(flag, code));
     const txt = document.createElement('span');
     txt.className = 'lb-txt';
+    const nmLine = document.createElement('span');
+    nmLine.className = 'lb-nm';
     const nm = document.createElement('span');
     nm.className = 'lb-name';
     nm.textContent = name;
     nm.title = name;
-    txt.append(nm);
-    if (sub) {
+    nmLine.append(nm);
+    txt.append(nmLine);
+    /* The tier rides the second line, ahead of the detail: at 320 the identity
+       column is ~90px, and a clipped name is a worse trade than a clipped win count. */
+    if (tiered || r.sub) {
       const s = document.createElement('span');
       s.className = 'lb-sub';
-      s.textContent = sub;
+      if (tiered) {
+        const tier = document.createElement('span');
+        tier.className = 'lb-tier';
+        tier.textContent = div.label;
+        s.append(tier);
+      }
+      if (r.sub) {
+        const st = document.createElement('span');
+        st.className = 'lb-sub-t';
+        st.textContent = r.sub;
+        s.append(st);
+      }
       txt.append(s);
     }
     id.append(txt);
@@ -1055,7 +1205,45 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     tr.setAttribute('aria-hidden', 'true');
     act.append(tr);
 
-    li.append(rankCrest(rank), id, scoreCell(points, `${points} Tactical IQ`), act);
+    li.append(rankCrest(rank), id, scoreCell(points, `${points} Tactical IQ`, delta), act);
+
+    /* ---- inspection read: the four numbers a row can honestly tell you ---- */
+    const peek = document.createElement('span');
+    peek.className = 'lb-peek';
+    peek.hidden = true;
+    const facts: string[][] = [];
+    if (tiered) facts.push(['Tier', div.label]);
+    if (r.wins !== undefined) facts.push(['Wins', String(r.wins)]);
+    if (r.wins && r.wins > 0) facts.push(['TIQ / win', Math.round(r.tiq / r.wins).toLocaleString('en-US')]);
+    if (r.above && r.above.tiq > r.tiq) facts.push([`To pass ${r.above.name}`, (r.above.tiq - r.tiq).toLocaleString('en-US')]);
+    facts.push(['Week', delta ? `${signed(delta)} TIQ` : 'flat']);
+    for (const [k, v] of facts) {
+      const cell = document.createElement('span');
+      cell.className = 'lb-fact';
+      const key = document.createElement('small');
+      key.textContent = k;
+      const val = document.createElement('b');
+      val.textContent = v;
+      cell.append(key, val);
+      peek.append(cell);
+    }
+    li.append(peek);
+
+    const open = (on: boolean): void => {
+      li.classList.toggle('is-open', on);
+      peek.hidden = !on;
+      li.setAttribute('aria-expanded', String(on));
+    };
+    li.tabIndex = 0;
+    li.setAttribute('aria-expanded', 'false');
+    li.addEventListener('click', () => { impact('light'); open(!li.classList.contains('is-open')); });
+    li.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        impact('light');
+        open(!li.classList.contains('is-open'));
+      }
+    });
     return li;
   }
 
@@ -1071,6 +1259,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (!host) return;
     host.hidden = false;
     host.textContent = '';
+    // The compact row is the nations form; Top Minds paints the tall hero card.
+    host.classList.remove('mh');
 
     const av = document.createElement('span');
     av.className = 'standing-avatar';
@@ -1109,14 +1299,199 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     host.setAttribute('aria-label', `Your Standing: ${youLabel()}, ${detail}, ${opts.score.toLocaleString('en-US')} Tactical IQ`);
   }
 
-  function paintMindsStanding(): void {
-    paintSoloStanding({
-      tab: 'minds',
-      rankText: '-',
-      percentText: null,
-      score: myTrophyScore(),
-      extraSub: profile.stats.games > 0 ? null : 'Unranked · play to climb',
+  /**
+   * The four mind axes, each read from a signal the local save actually carries —
+   * win rate, volume, how many of those races were against a person rather than the
+   * bot, and how much streak survived the losses. `Traps` is the honest weak point:
+   * the save counts opponents, not mines placed, so it is a proxy until the backend
+   * reports hazard play.
+   */
+  function mindAxes(): { label: string; pct: number; hint: string }[] {
+    const s = profile.stats;
+    const g = Math.max(0, s.games);
+    const clamp = (n: number): number => Math.max(0, Math.min(100, Math.round(n * 100)));
+    return [
+      { label: 'Foresight', pct: clamp(g ? s.wins / g : 0), hint: 'Win rate across every race' },
+      { label: 'Tempo', pct: clamp(g / 40), hint: 'Races played — 40 fills the bar' },
+      { label: 'Traps', pct: clamp(g ? (s.modes.online ?? 0) / g : 0), hint: 'Share of races against real minds' },
+      { label: 'Compose', pct: clamp(s.best + s.losses > 0 ? s.best / (s.best + s.losses) : 0), hint: 'Best streak held against losses' },
+    ];
+  }
+
+  /** Momentum, since the save has no weekly history of its own to quote. */
+  const myTrend = (): Trend =>
+    profile.stats.wins > profile.stats.losses ? 'up' : profile.stats.losses > profile.stats.wins ? 'down' : 'same';
+
+  /** Jump the scroller to a rank and flash it, so a rival chip is a real link. */
+  function spotRank(rank: number): void {
+    const sc = document.getElementById('ranks-scroll');
+    const target = sc?.querySelector<HTMLElement>(`[data-rank="${rank}"]`);
+    if (!sc || !target) return;
+    target.scrollIntoView({ block: 'center', behavior: motionReduced() ? 'auto' : 'smooth' });
+    target.classList.add('is-spot');
+    window.setTimeout(() => target.classList.remove('is-spot'), 1400);
+    impact('light');
+  }
+
+  /**
+   * The Top Minds hero card: who you are on this ladder (percentile ring · tier ·
+   * TIQ), the four-axis read of your own play, the next division as a sentence you
+   * can act on, and one coral key that leaves for the launcher.
+   */
+  function paintMindsStanding(rows: PlayerRow[] | null): void {
+    const host = soloStandingEl();
+    if (!host) return;
+    host.textContent = '';
+    host.classList.add('mh');
+    host.hidden = false;
+
+    const tiq = myTrophyScore();
+    const div = divisionOf(tiq);
+    const field = rows?.length ?? 0;
+    const ahead = rows ? rows.filter((p) => p.points > tiq).length : 0;
+    const onBoard = profile.stats.games > 0 && field > 0;
+    const myRank = ahead + 1;
+    const pct = onBoard ? Math.max(1, Math.round((myRank / (field + 1)) * 100)) : 100;
+    const delta = deltaOf('you', tiq, myTrend());
+
+    /* ring: an SVG arc on pathLength=100, so the dash is literally the percentage */
+    const ring = document.createElement('span');
+    ring.className = 'mh-ring';
+    ring.setAttribute('aria-hidden', 'true');
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'mh-arc');
+    svg.setAttribute('viewBox', '0 0 44 44');
+    const mk = (cls: string): SVGElement => {
+      const c = document.createElementNS(SVG_NS, 'circle');
+      c.setAttribute('class', cls);
+      c.setAttribute('cx', '22');
+      c.setAttribute('cy', '22');
+      c.setAttribute('r', '19');
+      c.setAttribute('fill', 'none');
+      svg.append(c);
+      return c;
+    };
+    mk('mh-arc-track');
+    const arc = mk('mh-arc-fill');
+    arc.setAttribute('pathLength', '100');
+    arc.setAttribute('stroke-dasharray', `${onBoard ? pct : 0} 100`);
+    const av = document.createElement('b');
+    const h = youHandle() ?? 'Y';
+    av.textContent = h.replace(/^@/, '').slice(0, 1).toUpperCase() || 'Y';
+    ring.append(svg, av);
+
+    const idWrap = document.createElement('span');
+    idWrap.className = 'mh-id';
+    const line = document.createElement('b');
+    line.className = 'mh-line';
+    line.textContent = `You · ${div.label}`;
+    const pctLine = document.createElement('small');
+    pctLine.className = 'mh-pct';
+    pctLine.textContent = !onBoard
+      ? 'Unranked · play to climb'
+      : pct >= 100
+        ? `Below the top ${field}`
+        : `Top ${pct}% of minds`;
+    idWrap.append(line, pctLine);
+
+    const score = document.createElement('span');
+    score.className = 'mh-score';
+    score.append(svgIcon('#i-brain', 'tiq'));
+    const num = document.createElement('b');
+    num.textContent = tiq.toLocaleString('en-US');
+    score.append(num);
+    if (delta) {
+      const d = document.createElement('small');
+      d.className = `lb-delta ${delta > 0 ? 'up' : 'down'}`;
+      d.textContent = signed(delta);
+      score.append(d);
+    }
+    score.title = `${tiq.toLocaleString('en-US')} Tactical IQ`;
+    score.setAttribute('aria-label', `${tiq.toLocaleString('en-US')} Tactical IQ, ${signed(delta)} this week`);
+
+    const top = document.createElement('span');
+    top.className = 'mh-top';
+    top.append(ring, idWrap, score);
+
+    const axes = document.createElement('span');
+    axes.className = 'mh-axes';
+    for (const a of mindAxes()) {
+      const cell = document.createElement('span');
+      cell.className = 'mh-axis';
+      cell.title = a.hint;
+      const label = document.createElement('small');
+      label.textContent = a.label;
+      const track = document.createElement('span');
+      track.className = 'mh-track';
+      const fill = document.createElement('i');
+      fill.style.width = `${a.pct}%`;
+      track.append(fill);
+      cell.append(label, track);
+      cell.setAttribute('aria-label', `${a.label} ${a.pct} percent, ${a.hint}`);
+      axes.append(cell);
+    }
+
+    /* progress to the next division, in wins — the unit the CTA can actually deliver */
+    const gap = div.next > tiq ? div.next - tiq : 0;
+    const wins = gap > 0 ? Math.ceil(gap / TIQ_PER_WIN) : 0;
+    const span = div.next > 0 ? div.next - TIER_BAND[div.tier][0] : 1;
+    const through = span > 0 ? Math.max(0, Math.min(100, Math.round(((tiq - TIER_BAND[div.tier][0]) / span) * 100))) : 100;
+    const prog = document.createElement('span');
+    prog.className = 'mh-prog';
+    const pTrack = document.createElement('span');
+    pTrack.className = 'mh-ptrack';
+    const pFill = document.createElement('i');
+    pFill.style.width = `${through}%`;
+    pTrack.append(pFill);
+    const pText = document.createElement('small');
+    pText.className = 'mh-ptext';
+    pText.textContent = wins
+      ? `${wins} win${wins === 1 ? '' : 's'} to ${divisionOf(div.next).label} — your crest starts glowing.`
+      : 'Peak division. Hold it against the ladder.';
+    prog.append(pTrack, pText);
+
+    const cta = document.createElement('button');
+    cta.type = 'button';
+    cta.className = 'mh-cta';
+    cta.textContent = 'Climb now';
+    cta.setAttribute('aria-label', 'Climb now — go and start a race');
+    cta.addEventListener('click', () => {
+      impact('medium');
+      api.router.go('home');
     });
+
+    host.append(top, axes, prog, cta);
+    host.setAttribute('aria-label', `Your Standing: ${youLabel()}, ${div.label}, ${tiq.toLocaleString('en-US')} Tactical IQ, ${pctLine.textContent}`);
+
+    /* Loss aversion: the single climber one rung above you, tappable to their row. */
+    const rival = rows && ahead > 0 ? rows[ahead - 1] : null;
+    const strip = rival && rival.points > tiq ? rivalStrip(rival, rival.points - tiq, ahead) : null;
+    const pane = panes.minds;
+    if (pane && strip) {
+      const old = pane.querySelector('.rival');
+      if (old) old.remove();
+      pane.prepend(strip);
+    }
+  }
+
+  /** The gap made personal, and one tap away from the row it names. */
+  function rivalStrip(rival: PlayerRow, gap: number, rank: number): HTMLElement {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'rival';
+    const dot = document.createElement('i');
+    dot.className = 'rival-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    const txt = document.createElement('span');
+    txt.className = 'rival-t';
+    txt.textContent = `${rival.name} is ${gap.toLocaleString('en-US')} TIQ sharper today — close the gap.`;
+    const go = document.createElement('span');
+    go.className = 'rival-go';
+    go.textContent = 'Jump';
+    b.append(dot, txt, go);
+    b.setAttribute('aria-label', `Jump to rank ${rank}, ${rival.name}`);
+    b.addEventListener('click', () => spotRank(rank));
+    return b;
   }
 
   function paintNationsStanding(rows: CountryRow[] | null): void {
@@ -1183,12 +1558,26 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       score: c.points.toLocaleString('en-US'),
       flag: flagOf(c.code),
       code: c.code,
+      delta: deltaOf(c.code, c.points, c.trend),
     })));
     el.textContent = '';
     const ol = document.createElement('ol');
     ol.className = 'rank-list';
     for (const c of rows.slice(3)) {
-      ol.append(row(c.rank, flagOf(c.code), c.code, c.name, null, c.points.toLocaleString('en-US'), c.trend, profile.country === c.code));
+      const up = rows[c.rank - 2];
+      ol.append(row({
+        rank: c.rank,
+        flag: flagOf(c.code),
+        code: c.code,
+        name: c.name,
+        sub: null,
+        points: c.points.toLocaleString('en-US'),
+        tiq: c.points,
+        trend: c.trend,
+        me: profile.country === c.code,
+        key: c.code,
+        above: up ? { name: up.name, tiq: up.points } : null,
+      }));
     }
     el.append(ol);
     boardStats.nations = { loaded: true, rows: rows.length, points: rows.reduce((n, c) => n + c.points, 0) };
@@ -1205,12 +1594,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       rows = await getPlayerRanking();
     } catch {
       el.innerHTML = empty('Rankings unavailable. Check your connection and try again.');
-      paintMindsStanding();
+      paintMindsStanding(null);
       return;
     }
     if (!rows.length) {
       el.innerHTML = empty('No players ranked yet.');
-      paintMindsStanding();
+      paintMindsStanding(null);
       return;
     }
     paintPodium(rows.slice(0, 3).map((p, i) => ({
@@ -1219,16 +1608,34 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       score: p.points.toLocaleString('en-US'),
       flag: flagOf(p.countryCode),
       code: p.countryCode,
+      tier: tierOf(p.points),
+      tierLabel: divisionOf(p.points).label,
+      delta: deltaOf(p.id, p.points, p.trend),
     })));
     el.textContent = '';
     const ol = document.createElement('ol');
     ol.className = 'rank-list';
     rows.slice(3).forEach((p, i) => {
-      ol.append(row(i + 4, flagOf(p.countryCode), p.countryCode, p.name, `${p.wins} wins`, p.points.toLocaleString('en-US'), p.trend, false));
+      const up = rows[i + 2];
+      ol.append(row({
+        rank: i + 4,
+        flag: flagOf(p.countryCode),
+        code: p.countryCode,
+        name: p.name,
+        sub: `${p.wins} wins`,
+        points: p.points.toLocaleString('en-US'),
+        tiq: p.points,
+        trend: p.trend,
+        me: false,
+        tiered: true,
+        key: p.id,
+        wins: p.wins,
+        above: up ? { name: up.name, tiq: up.points } : null,
+      }));
     });
     el.append(ol);
     boardStats.minds = { loaded: true, rows: rows.length, points: rows.reduce((n, p) => n + p.points, 0) };
-    paintMindsStanding();
+    paintMindsStanding(rows);
     paintRanksStats();
   }
 
