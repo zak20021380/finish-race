@@ -1,13 +1,17 @@
 /**
  * compete.ts — Arena (Tournament Cups) + Ranks (dedicated Leaderboard).
  *
- * IA: Arena owns Live / Upcoming / Archive cups only. Ranks is the dedicated
- * leaderboard tab: one three-way clay switch over Top Minds (solo champions),
- * Intellect Guilds (Telegram channels & groups) and Nations IQ (aggregate
- * country score). Above the ladder sits the Top 3 clay podium, so the list
- * itself starts at #4; the guild board carries its Join / Invite keys there.
- * The squad dock ("My Squad Standing" / join prompt) belongs EXCLUSIVELY to the
- * guild board, and the "Your Standing" module to the two IQ boards.
+ * IA: Arena owns Live / Upcoming / Archive cups only. Ranks is "The Mind Ladder":
+ * one three-way clay switch over Top Minds (solo champions), Intellect Guilds
+ * (Telegram channels & groups) and Nations IQ (aggregate country score). Above
+ * the ladder sits the Top 3 clay podium, so the list itself starts at #4; the
+ * guild board carries its Join / Invite keys there. The squad dock ("My Squad
+ * Standing" / join prompt) belongs EXCLUSIVELY to the guild board, and the
+ * "Your Standing" module to the two IQ boards.
+ * Identity: TIQ (Tactical IQ) is the hero metric — gold digits with the brain
+ * glyph, on the HUD pills, the podium and the ladder. #i-cup is reserved for
+ * season prizes. The four mind tiers (Rookie / Tactician / Strategist /
+ * Grandmaster) are an aura colour driven off your TIQ, never a badge word.
  * Tournament cards are high-energy Dark Clay arena cards with per-status
  * hierarchy (live glow + ENTER ARENA, upcoming slate + Pre-register, ended
  * archive). The Hero cup is three flex rows — header · prizes & meta ·
@@ -87,6 +91,29 @@ function pickEl(id: string, legacy: string): HTMLElement {
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+/* ---------- Mind Ladder identity: the season clock and the TIQ tiers ---------- */
+
+/** Season 4 closes 2026-10-16 14:00Z. Anchoring to a fixed boundary and rolling it
+ *  every 28 days keeps the scarcity chip a real countdown after that date instead
+ *  of a frozen string that quietly stops matching the pulsing dot beside it. */
+const SEASON_ANCHOR = Date.UTC(2026, 9, 16, 14, 0);
+const SEASON_MS = 28 * 86400_000;
+
+function seasonOf(t: number): { no: number; endsAt: number } {
+  const k = Math.ceil((t - SEASON_ANCHOR) / SEASON_MS);
+  return { no: 4 + k, endsAt: SEASON_ANCHOR + k * SEASON_MS };
+}
+
+/** TIQ bands. The tier is an aura colour, never a badge word on the ladder. */
+type MindTier = 'rookie' | 'tactician' | 'strategist' | 'grandmaster';
+
+function tierOf(tiq: number): MindTier {
+  if (tiq >= 3000) return 'grandmaster';
+  if (tiq >= 2000) return 'strategist';
+  if (tiq >= 1000) return 'tactician';
+  return 'rookie';
+}
+
 /** Sprite icon as a real element — the house artwork, never an emoji stand-in. */
 function svgIcon(href: string, cls: string): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg');
@@ -103,6 +130,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   const feedLabel = document.getElementById('arena-feed-t');
   const ranksStats = document.getElementById('ranks-stats');
   const boardSwitch = document.querySelector<HTMLElement>('.ranks-tabs');
+  const ranksScreen = document.getElementById('s-ranks');
+  const seasonChip = document.getElementById('ranks-season');
+  const seasonText = seasonChip?.querySelector<HTMLElement>('.ml-season-t') ?? null;
   const arenaPane = pickEl('arena-tournaments', 'comp-tournaments');
   const podiumEl = document.getElementById('ranks-podium');
   const panes: Record<Board, HTMLElement | null> = {
@@ -203,6 +233,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   function paintRanks(): void {
+    paintSeason();
     for (const b of boardBtns) b.setAttribute('aria-selected', String(b.dataset.board === board));
     if (boardSwitch) boardSwitch.dataset.active = board;
     for (const k of Object.keys(panes) as Board[]) {
@@ -245,24 +276,29 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   const quietChips = (): void => {
-    setChip('a', '#i-users', '—', 'Mind Guilds');
-    setChip('b', '#i-user', '—', 'Tactical Minds');
-    setChip('c', '#i-cup', '—', 'Tactical IQ');
+    setChip('a', '#i-brain', '—', 'Tactical Minds');
+    setChip('b', '#i-brain', '—', 'Combined TIQ');
+    setChip('c', '#i-star', '—', 'Your TIQ');
   };
 
   /**
-   * The three chips read as Mind Guilds / Tactical Minds / Tactical IQ, but which
-   * population each counts follows the visible board — quoting guild totals while the
-   * user reads the solo ladder is what the old single-sentence stat bar got wrong.
+   * The pills read as a headcount, a field total and your own number. Only the two
+   * TIQ pills carry gold digits — the brain is the score's glyph now, so the cup is
+   * free to mean a season prize alone. Which population each counts follows the
+   * visible board: quoting guild totals while the user reads the solo ladder is what
+   * the old single-sentence stat bar got wrong.
    */
   function paintRanksStats(): void {
     if (!ranksStats) return;
+    if (ranksScreen) ranksScreen.dataset.tier = tierOf(myTrophyScore());
+    // The coral rim means "this number is yours", so it can only sit on the pill that carries it.
+    ranksStats.querySelector<HTMLElement>('[data-stat="c"]')?.classList.toggle('is-you', board !== 'guilds');
     if (board === 'guilds') {
       try {
         const rows = getSquadRanking();
-        setChip('a', '#i-users', String(rows.length), 'Mind Guilds');
-        setChip('b', '#i-user', compactCount(rows.reduce((n, s) => n + s.members, 0)), 'Tactical Minds');
-        setChip('c', '#i-cup', compactCount(rows.reduce((n, s) => n + s.trophies, 0)), 'Tactical IQ');
+        setChip('a', '#i-shield', String(rows.length), 'Mind Guilds');
+        setChip('b', '#i-brain', compactCount(rows.reduce((n, s) => n + s.members, 0)), 'Tactical Minds');
+        setChip('c', '#i-brain', compactCount(rows.reduce((n, s) => n + s.trophies, 0)), 'Combined TIQ');
       } catch {
         quietChips();
       }
@@ -270,9 +306,19 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }
     const nations = board === 'nations';
     const st = boardStats[nations ? 'nations' : 'minds'];
-    setChip('a', nations ? '#i-globe' : '#i-user', st.loaded ? String(st.rows) : '—', nations ? 'Nations' : 'Tactical Minds');
-    setChip('b', '#i-cup', st.loaded ? compactCount(st.points) : '—', 'Tactical IQ');
-    setChip('c', '#i-medal', compactCount(myTrophyScore()), 'Yours');
+    setChip('a', nations ? '#i-globe' : '#i-brain', st.loaded ? String(st.rows) : '—', nations ? 'Nations' : 'Tactical Minds');
+    setChip('b', '#i-brain', st.loaded ? compactCount(st.points) : '—', 'Combined TIQ');
+    setChip('c', '#i-star', compactCount(myTrophyScore()), 'Your TIQ');
+  }
+
+  /** The season capsule: "S4 · 3d 14h left", recomputed on entry and every tick. */
+  function paintSeason(): void {
+    if (!seasonText) return;
+    const t = Date.now();
+    const s = seasonOf(t);
+    const left = formatCountdown(s.endsAt, t);
+    seasonText.textContent = `S${s.no} · ${left} left`;
+    seasonChip?.setAttribute('title', `Season ${s.no} closes in ${left}`);
   }
 
   function selectBoard(next: Board): void {
@@ -819,6 +865,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   function startTick(): void {
     if (tick) return;
     tick = window.setInterval(() => {
+      if (isRanksVisible()) paintSeason();
       if (!isArenaVisible()) return;
       for (const t of tournaments) {
         if (t.status === 'ended') continue;
@@ -906,7 +953,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     const iq = document.createElement('span');
     iq.className = 'pod-iq';
-    iq.append(svgIcon('#i-cup', 'pod-cup'));
+    iq.append(svgIcon('#i-brain', 'pod-tiq'));
     const iqN = document.createElement('b');
     iqN.textContent = e.score;
     iq.append(iqN);
@@ -966,7 +1013,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   function scoreCell(points: string, title: string): HTMLElement {
     const pt = document.createElement('span');
     pt.className = 'lb-score';
-    pt.append(svgIcon('#i-cup', 'lb-cup'));
+    pt.append(svgIcon('#i-brain', 'lb-tiq'));
     const num = document.createElement('b');
     num.textContent = points;
     pt.append(num);
@@ -1051,7 +1098,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     const score = document.createElement('span');
     score.className = 'standing-score';
-    score.append(svgIcon('#i-cup', 'cup'));
+    score.append(svgIcon('#i-brain', 'tiq'));
     const num = document.createElement('b');
     num.textContent = opts.score.toLocaleString('en-US');
     score.append(num);
@@ -1302,7 +1349,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (!me) {
       const ico = document.createElement('span');
       ico.className = 'dock-av is-empty';
-      ico.append(svgIcon('#i-cup', 'dock-ico'));
+      ico.append(svgIcon('#i-brain', 'dock-ico'));
       ico.setAttribute('aria-hidden', 'true');
 
       const txt = document.createElement('span');
@@ -1360,7 +1407,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     const score = document.createElement('span');
     score.className = 'dock-score';
-    score.append(svgIcon('#i-cup', 'dock-cup'));
+    score.append(svgIcon('#i-brain', 'dock-tiq'));
     const num = document.createElement('b');
     num.textContent = me.trophies.toLocaleString('en-US');
     const sub = document.createElement('small');
@@ -1464,6 +1511,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         void loadTournaments();
       } else if (id === 'ranks') {
         paintRanks();
+        startTick();
         void loadBoard(board);
       }
     },

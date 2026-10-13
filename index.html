@@ -211,6 +211,20 @@
           <path d="M9 9.8 6.4 3.6h4.2L12 6.7l1.4-3.1h4.2L15 9.8" />
         </g>
       </symbol>
+      <!-- TIQ: the two-lobe brain is the hero metric's glyph; the cup is a season prize, never a score. -->
+      <symbol id="i-brain" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
+          <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
+          <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" />
+          <path d="M17.598 6.5A3 3 0 0 0 12 5a3 3 0 0 0-5.598 1.5" />
+          <path d="M9.999 19.5A3 3 0 0 0 12 18a3 3 0 0 0 2.001 1.5" />
+          <path d="M12 18V5" />
+        </g>
+      </symbol>
+      <symbol id="i-star" viewBox="0 0 24 24">
+        <polygon points="12 2.6 14.9 8.6 21.4 9.5 16.7 14.1 17.8 20.6 12 17.5 6.2 20.6 7.3 14.1 2.6 9.5 9.1 8.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+      </symbol>
     </svg>
 
     <div class="bg" aria-hidden="true">
@@ -461,45 +475,62 @@
 
         <!-- ---------------- ranks: dedicated leaderboard ---------------- -->
         <section class="screen menu compete-screen ranks-screen" id="s-ranks" data-screen="ranks" tabindex="-1" hidden aria-labelledby="ranks-title">
-          <div class="m-head compete-head ranks-head">
-            <h1 class="m-title" id="ranks-title">Leaderboard</h1>
-          </div>
-          <div class="ranks-stats" id="ranks-stats" role="status" aria-live="polite">
-            <span class="rstat" data-stat="a">
-              <span class="rstat-top">
-                <svg class="rstat-ico" aria-hidden="true"><use href="#i-users" /></svg>
-                <b class="rstat-n">—</b>
+          <!-- Zone A — Mind Ladder HUD: engraved identity row over three clay TIQ pills. -->
+          <header class="ranks-head" id="ranks-head">
+            <div class="ml-id-row">
+              <div class="ml-id">
+                <h1 class="m-title ml-title" id="ranks-title">The Mind Ladder</h1>
+                <p class="ml-sub">Where sharp minds rank.</p>
+              </div>
+              <div class="ml-badges">
+                <span class="ml-season" id="ranks-season" title="Season 4 closes">
+                  <i class="ml-pulse" aria-hidden="true"></i>
+                  <b class="ml-season-t">S4 · — left</b>
+                </span>
+                <span class="ml-preview">Preview</span>
+              </div>
+            </div>
+            <div class="ranks-stats" id="ranks-stats" role="status" aria-live="polite">
+              <span class="rstat" data-stat="a">
+                <span class="rstat-top">
+                  <svg class="rstat-ico" aria-hidden="true"><use href="#i-brain" /></svg>
+                  <b class="rstat-n">—</b>
+                </span>
+                <small class="rstat-l">Tactical Minds</small>
               </span>
-              <small class="rstat-l">Mind Guilds</small>
-            </span>
-            <span class="rstat" data-stat="b">
-              <span class="rstat-top">
-                <svg class="rstat-ico" aria-hidden="true"><use href="#i-user" /></svg>
-                <b class="rstat-n">—</b>
+              <span class="rstat" data-stat="b">
+                <span class="rstat-top">
+                  <svg class="rstat-ico" aria-hidden="true"><use href="#i-brain" /></svg>
+                  <b class="rstat-n">—</b>
+                </span>
+                <small class="rstat-l">Combined TIQ</small>
               </span>
-              <small class="rstat-l">Tactical Minds</small>
-            </span>
-            <span class="rstat" data-stat="c">
-              <span class="rstat-top">
-                <svg class="rstat-ico" aria-hidden="true"><use href="#i-cup" /></svg>
-                <b class="rstat-n">—</b>
+              <span class="rstat is-you" data-stat="c">
+                <span class="rstat-top">
+                  <svg class="rstat-ico" aria-hidden="true"><use href="#i-star" /></svg>
+                  <b class="rstat-n">—</b>
+                </span>
+                <small class="rstat-l">Your TIQ</small>
               </span>
-              <small class="rstat-l">Tactical IQ</small>
-            </span>
-          </div>
+            </div>
+          </header>
+          <!-- Zone B — one clay track, three boards: icon + name, never a sub-label. -->
           <div class="mode-switch ranks-tabs" role="tablist" aria-label="Leaderboard boards" data-active="minds">
             <span class="mode-thumb" aria-hidden="true"></span>
-            <button class="mode-seg" type="button" role="tab" data-board="minds" aria-selected="true" aria-controls="ranks-minds">
+            <button class="mode-seg" type="button" role="tab" data-board="minds" aria-selected="true" aria-controls="ranks-minds" aria-label="Top Minds, high-IQ players">
+              <svg class="seg-ico" aria-hidden="true"><use href="#i-brain" /></svg>
               <span class="seg-t">Top Minds</span>
-              <small class="seg-s">High-IQ Players</small>
+              <i class="seg-dot" aria-hidden="true"></i>
             </button>
-            <button class="mode-seg" type="button" role="tab" data-board="guilds" aria-selected="false" aria-controls="ranks-guilds">
+            <button class="mode-seg" type="button" role="tab" data-board="guilds" aria-selected="false" aria-controls="ranks-guilds" aria-label="Intellect Guilds, channels and groups">
+              <svg class="seg-ico" aria-hidden="true"><use href="#i-shield" /></svg>
               <span class="seg-t">Intellect Guilds</span>
-              <small class="seg-s">Channels &amp; Groups</small>
+              <i class="seg-dot" aria-hidden="true"></i>
             </button>
-            <button class="mode-seg" type="button" role="tab" data-board="nations" aria-selected="false" aria-controls="ranks-nations">
+            <button class="mode-seg" type="button" role="tab" data-board="nations" aria-selected="false" aria-controls="ranks-nations" aria-label="Nations IQ, aggregate country score">
+              <svg class="seg-ico" aria-hidden="true"><use href="#i-globe" /></svg>
               <span class="seg-t">Nations IQ</span>
-              <small class="seg-s">Aggregate Score</small>
+              <i class="seg-dot" aria-hidden="true"></i>
             </button>
           </div>
           <div class="compete-body ranks-body" data-scroll id="ranks-scroll">

@@ -39,6 +39,26 @@
   --honey-ink: #FCD34D;
   --honey-soft: rgba(245, 158, 11, .18);
 
+  /* ---- Mind Ladder: TIQ is the hero metric, the cup is a season prize ----
+     A TIQ reading is always gold + the brain glyph; #i-cup never stands in for a
+     score. The four mind tiers each own one aura (ring colour + bloom), so a
+     Grandmaster and a Rookie are separable without a badge word. Violet is the
+     aura hue; cyan stays "active", coral stays "the one loud action". */
+  --tiq: #FCD34D;
+  --violet: #A78BFA;
+  --violet-soft: rgba(167, 139, 250, .16);
+  --tier-rookie: #94A3B8;
+  --tier-rookie-glow: rgba(148, 163, 184, .34);
+  --tier-tactician: #38BDF8;
+  --tier-tactician-glow: rgba(56, 189, 248, .42);
+  --tier-strategist: #A78BFA;
+  --tier-strategist-glow: rgba(167, 139, 250, .45);
+  --tier-grandmaster: #FCD34D;
+  --tier-grandmaster-glow: rgba(252, 211, 77, .5);
+  /* Zone A and Zone B own fixed bands so the ladder's budget never drifts. */
+  --ml-head-h: 88px;
+  --ml-seg-h: 56px;
+
   /* Result fills keep their deep hues in both themes: the type on them is always white. */
   --win-1: #17805a;
   --win-2: #0f6b45;
@@ -2365,7 +2385,7 @@ html.rm *, html.rm *::before, html.rm *::after {
   white-space: nowrap;
 }
 .lb-score b { flex: 1 1 auto; min-width: 0; text-align: right; font-weight: 900; }
-.lb-cup {
+.lb-tiq {
   flex: none;
   width: 15px;
   height: 15px;
@@ -4626,15 +4646,17 @@ html.rm .mode-hero-dot::after { animation: none; opacity: 0; }
 html.rm .car-card.nations-cup::before { display: none; }
 
 /* ---- Leaderboard board tabs: a sliding clay thumb over a recessed groove ----
-   Three equal keys share one extruded thumb that translateX()es by its own width,
-   so the active board reads as a position, not just a colour change. Titles wrap:
-   "Intellect Guilds" is the longest label and a 90px segment is the narrowest it
-   lands on, so the key grows to two lines rather than ellipsising the board name. */
+   One 56px track, three equal keys, one extruded cyan thumb that translateX()es
+   by its own width, so the active board reads as a position and not just a
+   colour change. Each key is glyph-over-name: the board names are the label, so
+   there is no third line to spend height on. "Intellect Guilds" is the longest
+   and wraps to two lines on a 90px key rather than ellipsising a board name. */
 .ranks-tabs {
   position: relative;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   flex: none;
+  height: var(--ml-seg-h);
   padding: 5px;
   border-radius: var(--radius-md);
   background: var(--field);
@@ -4647,13 +4669,15 @@ html.rm .car-card.nations-cup::before { display: none; }
   width: calc((100% - 10px) / 3);
   height: calc(100% - 10px);
   border-radius: 14px;
-  background: var(--clay-face);
+  background:
+    linear-gradient(180deg, rgba(56, 189, 248, .22) 0%, rgba(2, 132, 199, .12) 100%),
+    var(--clay-face);
   background-color: #1C2433;
   box-shadow:
     0 3px 0 #080C14,
-    inset 0 1px 0 rgba(255, 255, 255, .12),
-    inset 0 0 0 1px rgba(125, 211, 252, .26),
-    0 0 20px -8px var(--brand-glow);
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 0 0 1px rgba(125, 211, 252, .45),
+    0 0 22px -8px rgba(14, 165, 233, .8);
   transition: transform var(--motion-med);
 }
 .ranks-tabs[data-active="guilds"] .mode-thumb { transform: translateX(100%); }
@@ -4670,8 +4694,8 @@ html.rm .car-card.nations-cup::before { display: none; }
   align-items: center;
   justify-content: center;
   gap: 1px;
-  min-height: 52px;
-  padding: 6px 4px;
+  height: 100%;
+  padding: 0 4px;
   border-radius: 14px;
   background: transparent;
   color: var(--chip-ink);
@@ -4679,27 +4703,34 @@ html.rm .car-card.nations-cup::before { display: none; }
   cursor: pointer;
   transition: color var(--motion-fast), transform var(--motion-fast);
 }
-.mode-seg:active { transform: translateY(1px); }
+/* The face is 46px inside the 56px track; the band is what reaches 48px. Vertical
+   only — the keys are flush against each other, so a horizontal band would make
+   the thumb's neighbours steal each other's taps. */
+.mode-seg::after { content: ""; position: absolute; inset: -1px 0; }
+.mode-seg:active { transform: translateY(2px); }
 .mode-seg:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .mode-seg[aria-selected="true"] { color: var(--brand-ink); }
+.seg-ico { flex: none; width: 14px; height: 14px; opacity: .72; }
+.mode-seg[aria-selected="true"] .seg-ico { opacity: 1; filter: drop-shadow(0 0 6px var(--brand-glow)); }
 .seg-t {
   display: block;
   font-size: var(--t-3);
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.1;
   text-align: center;
   text-wrap: balance;
 }
-.seg-s {
-  display: block;
-  font-size: var(--t-micro);
-  font-weight: 700;
-  letter-spacing: .02em;
-  color: var(--ink-soft);
-  text-align: center;
-  line-height: 1.15;
+.seg-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--brand-2);
+  box-shadow: 0 0 8px var(--brand-glow);
+  opacity: 0;
+  transform: scale(.4);
+  transition: opacity var(--motion-fast), transform var(--motion-fast);
 }
-.mode-seg[aria-selected="true"] .seg-s { color: var(--brand-ink); opacity: .78; }
+.mode-seg[aria-selected="true"] .seg-dot { opacity: 1; transform: scale(1); }
 
 /* ---- Top 3 clay podium ----------------------------------------------------
    The showcase band above every board. Silver stands left, gold takes the centre
@@ -4859,7 +4890,7 @@ html.rm .car-card.nations-cup::before { display: none; }
   font-variant-numeric: tabular-nums;
 }
 .pod-iq b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.pod-cup { flex: none; width: 11px; height: 11px; color: var(--honey); }
+.pod-tiq { flex: none; width: 11px; height: 11px; color: var(--honey); }
 
 /* the join / invite key only the guild board brings; same frosted clay as the ladder */
 .pod-btn {
@@ -5059,7 +5090,7 @@ html.rm .car-card.nations-cup::before { display: none; }
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.standing-score .cup { flex: none; width: 16px; height: 16px; color: var(--honey); filter: drop-shadow(0 0 4px rgba(245, 158, 11, .4)); }
+.standing-score .tiq { flex: none; width: 16px; height: 16px; color: var(--honey); filter: drop-shadow(0 0 4px rgba(245, 158, 11, .4)); }
 .standing-cta {
   --d: 2px;
   appearance: none;
@@ -5197,7 +5228,7 @@ html.rm .car-card.nations-cup::before { display: none; }
 }
 .dock-score b { font-size: 15px; font-weight: 900; letter-spacing: -.01em; line-height: 1.15; }
 .dock-score small { font-size: 10px; font-weight: 700; line-height: 1.2; color: var(--ink-soft); }
-.dock-cup { display: none; }
+.dock-tiq { display: none; }
 .dock-actions { justify-self: end; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .dock-btn {
   --d: 2px;
@@ -6233,15 +6264,121 @@ html.rm .notif-badge { animation: none; }
 
 .arena-screen,
 .ranks-screen { overflow: hidden; max-width: 100%; }
-#s-ranks.ranks-screen { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+#s-ranks.ranks-screen { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 10px; }
 .arena-screen .arena-toolbar { justify-content: flex-start; }
-.ranks-head .m-title { font-weight: 800; letter-spacing: -.01em; }
 
-/* ---- quick stats: three frosted chips, icon + value over the label ----
-   Replaces the long "8 squads · 5.7k fighters · …" sentence that used to wrap
-   under the title. The label sits on its own line at full chip width: the Mind
-   & Intellect names ("Tactical Minds") are the longest the board has ever
-   carried, and beside the icon they only had ~68px on a 320px phone. */
+/* ---- Zone A: the Mind Ladder HUD — one fixed 88px band, two rows ----
+   Row 1: the engraved wordmark over its promise line, with the season countdown
+   and the Preview marker stacked against the right edge. Row 2: three clay TIQ
+   pills. Both rows are fixed, so the ladder always starts at the same y.
+   The title is engraved, not embossed: the dark shadow falls *under* the glyph
+   and a hair of light sits above it, which is what carves type into dark clay. */
+.ranks-head {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: var(--ml-head-h);
+  min-width: 0;
+  max-width: 100%;
+}
+.ml-id-row {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s2);
+  min-width: 0;
+}
+.ml-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ml-title {
+  flex: none;
+  text-align: left;
+  font-size: var(--t-1);
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  line-height: 1.15;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .8), 0 -1px 0 rgba(255, 255, 255, .06);
+}
+.ml-sub {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--t-micro);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ml-badges {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+/* Scarcity: a recessed clay capsule — the pulse is its own layer so the ring can
+   travel on transform/opacity only, never on box-shadow. */
+.ml-season {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 2px 7px 2px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px rgba(255, 82, 43, .3);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  line-height: 1.35;
+  color: var(--chip-ink);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.ml-pulse {
+  position: relative;
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cta);
+}
+.ml-pulse::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: rgba(255, 82, 43, .5);
+  animation: ml-ping 1.9s cubic-bezier(0, 0, .2, 1) infinite;
+}
+@keyframes ml-ping {
+  0% { transform: scale(.5); opacity: .9; }
+  70%, 100% { transform: scale(1.8); opacity: 0; }
+}
+html.rm .ml-pulse::after { display: none; }
+/* Every number above the ladder is seeded preview data — say so once, quietly. */
+.ml-preview {
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(148, 163, 184, .12);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  line-height: 1.45;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* ---- Zone A row 2: three clay TIQ pills, glyph + value over the label ----
+   The label owns its own line at full pill width: "Tactical Minds" is the
+   longest name the board carries and beside the icon it only had ~68px at 320.
+   Which pill is gold is the identity rule — a TIQ reading is gold, a headcount
+   is ink, and the player's own pill is the one coral-rimmed key on the HUD. */
 .ranks-stats {
   flex: none;
   display: grid;
@@ -6255,7 +6392,7 @@ html.rm .notif-badge { animation: none; }
   align-items: center;
   gap: 1px;
   min-width: 0;
-  padding: 7px 6px;
+  padding: 4px 6px;
   border-radius: 14px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .07) 0%, rgba(255, 255, 255, .015) 100%),
@@ -6269,11 +6406,11 @@ html.rm .notif-badge { animation: none; }
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
   max-width: 100%;
 }
-.rstat-ico { flex: none; width: 15px; height: 15px; color: var(--brand-ink); opacity: .9; }
+.rstat-ico { flex: none; width: 14px; height: 14px; color: var(--brand-ink); opacity: .9; }
 .rstat-n {
   min-width: 0;
   font-size: var(--t-2);
@@ -6299,13 +6436,28 @@ html.rm .notif-badge { animation: none; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.rstat[data-stat="c"] .rstat-ico { color: var(--honey-ink); }
+.rstat[data-stat="b"] .rstat-n,
+.rstat[data-stat="c"] .rstat-n { color: var(--tiq); }
+.rstat.is-you {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 82, 43, .5),
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    0 0 18px -6px rgba(255, 82, 43, .7),
+    0 6px 14px -10px var(--shadow);
+}
+/* Your pill carries your own tier aura; the coral rim above it stays the HUD's. */
+.rstat.is-you .rstat-ico { color: var(--ml-aura, var(--tier-rookie)); opacity: 1; }
+#s-ranks[data-tier="rookie"]      { --ml-aura: var(--tier-rookie); }
+#s-ranks[data-tier="tactician"]   { --ml-aura: var(--tier-tactician); }
+#s-ranks[data-tier="strategist"]  { --ml-aura: var(--tier-strategist); }
+#s-ranks[data-tier="grandmaster"] { --ml-aura: var(--tier-grandmaster); }
 /* Squad banner never leaks onto an IQ board (JS hides via the hidden attr). */
 #ranks-dock[hidden] { display: none !important; }
 @media (max-width: 380px) {
   .solo-standing { padding: var(--s2); gap: var(--s2); }
-  .rstat { padding: 6px 4px; }
+  .rstat { padding: 3px 4px; }
   .rstat-l { font-size: 9px; letter-spacing: .01em; }
+  .ml-title { letter-spacing: .03em; }
 }
 
 /* ==========================================================================
