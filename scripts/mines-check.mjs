@@ -1,30 +1,39 @@
 /**
- * mines-check.mjs — assertion run for the mine rules in src/rules.ts (no DOM, no Playwright).
+ * mines-check.mjs — assertion run for the pure rules: mines in src/rules.ts, the rolling log in
+ * src/hazards.ts and the bot's reading of it in src/bot.ts. No DOM, no Playwright.
  * Run: node --experimental-strip-types scripts/mines-check.mjs
  *
  * Covers: the CONFIG tunables, the placement band (never the top or bottom two rows), occupied
  * cells, the per-team budget, whose turn it is, mines not blocking movement, the 3-cell
  * knockback and each of its three early stops, no chained blasts, friendly fire, and what
  * view(state, team) is allowed to reveal — plus 300 randomised playouts that re-check those
- * invariants after every single action.
+ * invariants after every single action. Then the log: a schedule that is a pure function of the
+ * seed, a hazard-free opening, the telegraph/resolve round cycle, the wall shield, the lane's three
+ * early stops, multi-ball and own-team hits, mines that never arm under a shove, and the bot.
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import {
-  CONFIG, COLS, ROWS, allWalls, apply, doMine, doWall, mineCells, mineOk, newGame, reachable,
-  steps, view, liveMines, minesLeft, wallOk, wallsRemaining,
-} from '../src/rules.ts';
 
-/* bot.ts says `from './rules'`, which Vite resolves and Node does not. Node only strips types from
-   a real `.ts` file, so rewrite that one specifier into a generated twin in .shots/ — rebuilt on
-   every run, so the bot under test can never drift from src/bot.ts. */
-const botSrc = fs.readFileSync(path.join('src', 'bot.ts'), 'utf8')
-  .replace("'./rules'", JSON.stringify(pathToFileURL(path.resolve('src', 'rules.ts')).href));
+/* rules.ts ↔ hazards.ts ↔ bot.ts say `from './rules'` / `'./hazards'`, which Vite resolves and Node
+   does not. Node only strips types from a real `.ts` file, so rewrite those specifiers into
+   generated twins in .shots/ — rebuilt from src on every run, so what is under test can never drift
+   from it, and all three modules still share one instance of each. */
+const NAMES = ['rules', 'hazards', 'bot'];
+const HREF = Object.fromEntries(NAMES.map((n) => [n, pathToFileURL(path.resolve('.shots', `${n}-under-test.ts`)).href]));
 fs.mkdirSync('.shots', { recursive: true });
-fs.writeFileSync('.shots/bot-under-test.ts', botSrc);
-const { botAction } = await import(pathToFileURL(path.resolve('.shots', 'bot-under-test.ts')).href);
+for (const n of NAMES) {
+  const src = fs.readFileSync(path.join('src', `${n}.ts`), 'utf8')
+    .replace(/from '\.\/(rules|hazards|bot)'/g, (_m, m) => `from '${HREF[m]}'`);
+  fs.writeFileSync(new URL(HREF[n]), src);
+}
+const {
+  CONFIG, COLS, ROWS, HAZARD, allWalls, apply, doMine, doWall, logStopRow, mineCells, mineOk, newGame,
+  reachable, steps, view, liveMines, minesLeft, wallOk, wallsRemaining,
+} = await import(HREF.rules);
+const { hazardAt, hazardSchedule, runLog } = await import(HREF.hazards);
+const { botAction } = await import(HREF.bot);
 
 const ball = (s, id = 0) => s.balls[id].pos;
 const put = (s, id, c, r) => { const n = structuredClone(s); n.balls[id].pos = { c, r }; return n; };
@@ -311,4 +320,238 @@ check('fuzz: 300 random playouts keep every invariant', () => {
   console.log(`   (${triggers} blasts, ${finished} finished games)`);
 });
 
-console.log(`\n${run} mine-rule checks passed`);
+/* ---------- rolling log ---------- */
+
+/** Park the race in a warning round: the lane is telegraphed and the last team has yet to act. */
+const inWarning = (col, sizes = [1, 1], round = 4) => {
+  const s = newGame(sizes, { hazards: true, seed: 5 });
+  return {
+    ...s,
+    hazard: { ...s.hazard, round, emitted: 1, pending: { col, hitRound: round }, nextWarningRound: round },
+  };
+};
+
+/** The last team of the round acts: the round closes and any due log comes down with it. */
+const closeRound = (s, a = { kind: 'pass' }) => apply({ ...s, turn: s.teams.length - 1 }, a);
+const moveTo = (ev, id) => ev.moves.find((m) => m.ballId === id)?.to;
+
+check('hazard config', () => {
+  assert.deepEqual({ ...HAZARD }, { firstWarningRound: 3, minGap: 3, maxGap: 9, knockback: 3 });
+});
+
+check('hazard: the schedule is a pure function of the seed', () => {
+  assert.deepEqual(hazardSchedule(7, 30), hazardSchedule(7, 30));
+  assert.deepEqual(hazardSchedule(7, 30).map((h) => h.k), Array.from({ length: 30 }, (_, i) => i));
+  assert.notDeepEqual(hazardSchedule(7, 30), hazardSchedule(8, 30), 'a new seed must retime the board');
+  assert.deepEqual({ k: 4, ...hazardAt(7, 4) }, hazardSchedule(7, 5)[4]);
+  // nothing about the moves so far can shift it: the same k from the same seed, whatever the state
+  const a = newGame([1, 1], { hazards: true, seed: 7 });
+  const b = apply(apply(a, { kind: 'pass' }), { kind: 'pass' });
+  assert.deepEqual(hazardSchedule(b.hazard.seed, 6), hazardSchedule(a.hazard.seed, 6));
+});
+
+check('hazard: rounds 1 and 2 are clean and every gap sits in minGap..maxGap', () => {
+  for (let seed = 0; seed < 250; seed++) {
+    const plan = hazardSchedule(seed, 14);
+    let prev = 0;
+    for (const h of plan) {
+      assert.ok(h.warnRound >= 3, `seed ${seed}: warned in round ${h.warnRound}`);
+      const gap = h.warnRound - prev;
+      assert.ok(gap >= HAZARD.minGap && gap <= HAZARD.maxGap, `seed ${seed}: gap ${gap} out of range`);
+      assert.ok(h.col >= 0 && h.col < COLS, `seed ${seed}: lane ${h.col} off board`);
+      assert.ok(h.warnRound > prev, 'the clock must never run backwards');
+      prev = h.warnRound;
+    }
+  }
+});
+
+check('hazard: off by default, and an off race sees nothing at all', () => {
+  assert.equal(newGame([1, 1]).hazard, undefined);
+  assert.equal(newGame([1, 1], { hazards: false, seed: 2 }).hazard, undefined);
+  let s = newGame([2, 2, 1]);
+  for (let i = 0; i < 400; i++) {
+    s = apply(s, { kind: 'pass' });
+    assert.equal(s.hazard, undefined, 'a plain race grew a hazard clock');
+    assert.equal(s.lastEvent, null, 'a plain race fired a log');
+  }
+  assert.deepEqual(ball(s), { c: 3, r: ROWS - 1 }, 'nothing moved a ball');
+});
+
+check('hazard: telegraphed for its whole round, resolved when the round ends', () => {
+  const seed = 11;
+  let s = newGame([1, 1], { hazards: true, seed });
+  assert.deepEqual(s.hazard, { on: true, seed, round: 1, emitted: 0, pending: null, nextWarningRound: hazardAt(seed, 0).warnRound });
+  const warned = [];
+  let hits = 0;
+  for (let i = 0; i < 280; i++) {
+    const was = s.hazard;
+    const next = apply(s, { kind: 'pass' });
+    const now = next.hazard;
+    assert.ok(now.round === was.round || now.round === was.round + 1, 'the clock jumped');
+    assert.equal(now.seed, seed);
+    if (!was.pending && now.pending) {
+      warned.push({ col: now.pending.col, round: now.round });
+      assert.equal(now.pending.hitRound, now.round, 'a warning lands in its own round');
+      assert.equal(now.emitted, was.emitted + 1);
+      assert.equal(view(next, 1).hazard.pending.col, now.pending.col, 'the telegraph must be public');
+    }
+    if (was.pending && !now.pending) {
+      hits++;
+      assert.equal(now.round, was.round + 1, 'a log lands the instant its round closes');
+      assert.equal(next.lastEvent.type, 'log');
+      assert.equal(next.lastEvent.col, was.pending.col, 'the event reports the telegraphed lane');
+      assert.ok(next.lastEvent.stopRow < ROWS);
+    }
+    assert.ok(!now.pending || now.pending.hitRound === now.round, 'a stale telegraph survived its round');
+    assert.ok(now.round >= 3 || !now.pending, 'no warning in rounds 1 or 2');
+    s = next;
+  }
+  assert.ok(warned.length >= 4, `only ${warned.length} hazards in 280 turns`);
+  assert.equal(hits, warned.length - (s.hazard.pending ? 1 : 0), 'every closed warning must land');
+  warned.forEach((w, k) => {
+    const due = hazardAt(seed, k);
+    assert.equal(w.col, due.col, `hazard ${k} lane`);
+    assert.equal(w.round, due.warnRound, `hazard ${k} round`);
+  });
+});
+
+check('log: one hit ball is shoved the full 3 cells', () => {
+  const ev = (s) => s.lastEvent;
+  let s = put(inWarning(3), 0, 3, 6);
+  s = closeRound(s);
+  assert.equal(logStopRow(s.walls, 3), ROWS - 1, 'no wall, so the lane runs to the bottom');
+  assert.deepEqual(ball(s, 0), { c: 3, r: 9 });
+  assert.deepEqual(ev(s), { type: 'log', col: 3, stopRow: ROWS - 1, moves: [{ ballId: 0, from: { c: 3, r: 6 }, to: { c: 3, r: 9 } }] });
+  assert.equal(s.hazard.pending, null);
+  assert.equal(s.hazard.round, 5);
+  assert.equal(s.turn, 0, 'the hand-off is untouched');
+});
+
+check('log: a wall in the lane stops it, and balls under that wall are shielded', () => {
+  let s = put(inWarning(3), 0, 3, 3);
+  s = put({ ...s, walls: [{ o: 'h', x: 3, y: 6, owner: 1 }] }, 1, 3, 8); // line above row 6, covers 3 and 4
+  assert.equal(logStopRow(s.walls, 3), 5);
+  s = closeRound(s);
+  assert.deepEqual(ball(s, 0), { c: 3, r: 5 }, '2 cells, then the wall');
+  assert.deepEqual(ball(s, 1), { c: 3, r: 8 }, 'the ball below the wall never saw the log');
+  assert.deepEqual(s.lastEvent, { type: 'log', col: 3, stopRow: 5, moves: [{ ballId: 0, from: { c: 3, r: 3 }, to: { c: 3, r: 5 } }] });
+});
+
+check('log: a shove stops at the bottom edge', () => {
+  const s = closeRound(put(inWarning(3), 0, 3, 9));
+  assert.deepEqual(ball(s, 0), { c: 3, r: ROWS - 1 }, '2 cells, not 3');
+  assert.deepEqual(moveTo(s.lastEvent, 0), { c: 3, r: ROWS - 1 });
+});
+
+check('log: a shove stops at another ball, which does not move twice', () => {
+  let s = put(inWarning(3), 1, 3, 11); // already on the last row: nowhere to go
+  s = put(s, 0, 3, 9);
+  s = closeRound(s);
+  assert.deepEqual(ball(s, 0), { c: 3, r: 10 }, '1 cell, then the ball');
+  assert.deepEqual(ball(s, 1), { c: 3, r: 11 });
+  assert.deepEqual(s.lastEvent.moves, [{ ballId: 0, from: { c: 3, r: 9 }, to: { c: 3, r: 10 } }], 'a ball that cannot move reports no move');
+});
+
+check('log: two balls in one lane, the bottom-most shoved first', () => {
+  let s = put(inWarning(3), 0, 3, 2);
+  s = put(s, 1, 3, 4);
+  s = closeRound(s);
+  assert.deepEqual(s.lastEvent.moves.map((m) => [m.ballId, m.from.r, m.to.r]), [[1, 4, 7], [0, 2, 5]]);
+  assert.deepEqual(ball(s, 0), { c: 3, r: 5 }, 'takes the cell the one below vacated');
+  assert.deepEqual(ball(s, 1), { c: 3, r: 7 });
+});
+
+check('log: it hits its own team too', () => {
+  let s = put(inWarning(3, [2, 1]), 0, 3, 5);
+  s = put(s, 1, 3, 7); // both belong to team 0, which is not even the side that just acted
+  assert.equal(s.balls[0].team, 0);
+  assert.equal(s.balls[1].team, 0);
+  s = closeRound(s);
+  assert.deepEqual(s.lastEvent.moves.map((m) => m.ballId), [1, 0]);
+  assert.deepEqual(ball(s, 0), { c: 3, r: 8 });
+  assert.deepEqual(ball(s, 1), { c: 3, r: 10 });
+});
+
+check('log: a shove across a mine never sets it off', () => {
+  let s = put(inWarning(3), 0, 3, 6);
+  s = { ...s, mines: [{ cell: { c: 3, r: 9 }, owner: 1, triggered: false }] };
+  const after = closeRound(s);
+  assert.deepEqual(ball(after, 0), { c: 3, r: 9 }, 'landed on the mine');
+  assert.equal(after.mines[0].triggered, false, 'the log is not a blast');
+  assert.deepEqual(liveMines(after).map((m) => m.cell), [{ c: 3, r: 9 }]);
+});
+
+check('log: an empty lane still reports the event', () => {
+  const s = closeRound(inWarning(5)); // both balls sit on columns 3 and 4
+  assert.deepEqual(s.lastEvent, { type: 'log', col: 5, stopRow: ROWS - 1, moves: [] });
+  assert.deepEqual(ball(s, 0), { c: 3, r: ROWS - 1 });
+  assert.deepEqual(ball(s, 1), { c: 4, r: ROWS - 1 });
+});
+
+check('log: runLog is pure — the state it read is untouched', () => {
+  let s = put(inWarning(3), 0, 3, 6);
+  s = { ...s, mines: [{ cell: { c: 3, r: 9 }, owner: 1, triggered: false }] };
+  const before = JSON.stringify(s);
+  const out = runLog(s, s.hazard.pending);
+  assert.equal(out.balls[0].pos.r, 9, 'the copy moved');
+  assert.equal(JSON.stringify(s), before);
+  assert.equal(s.mines[0].triggered, false);
+  const ended = closeRound(s);
+  assert.equal(JSON.stringify(s), before, 'apply mutated in place');
+  assert.notEqual(ended, s);
+});
+
+check('log: rounds only close when every team has acted', () => {
+  let s = newGame([1, 1, 1], { hazards: true, seed: 5 });
+  for (const expect of [1, 1, 2, 2, 2, 3, 3, 3, 4]) {
+    s = apply(s, { kind: 'pass' });
+    assert.equal(s.hazard.round, expect, 'a round is one turn per team');
+  }
+});
+
+check('bot: never ends a move inside a telegraphed lane it can afford to leave', () => {
+  let s = put(inWarning(3), 0, 4, 11);          // the foe, out of the way
+  s = put(s, 1, 3, 5);                          // the bot starts inside the lane
+  s = { ...s, turn: 1 };
+  // its cheapest step is straight up the lane (4 steps to FINISH); a swerve costs 5, well inside 2
+  assert.deepEqual(steps(s, 1).map((st) => st.to), [{ c: 3, r: 4 }, { c: 3, r: 6 }, { c: 2, r: 5 }, { c: 4, r: 5 }]);
+  let moves = 0;
+  for (let i = 0; i < 200; i++) {
+    const a = botAction(view(s, 1), 'hard');
+    if (a.kind !== 'move') continue;
+    moves++;
+    const stop = logStopRow(s.walls, 3);
+    assert.ok(a.to.c !== 3 || a.to.r > stop, `the bot finished in the lane: ${JSON.stringify(a.to)}`);
+    assert.ok(apply(s, a), 'the bot proposed an illegal step');
+  }
+  assert.ok(moves > 60, `the bot barely moved: ${moves}`);
+});
+
+check('bot: walks the lane when every way out costs it more than two steps', () => {
+  let s = newGame([1, 2], { hazards: true, seed: 5 });
+  s = {
+    ...s,
+    balls: s.balls.map((b) => (b.id === 0 ? { ...b, pos: { c: 5, r: 11 } }
+      : b.id === 1 ? { ...b, pos: { c: 3, r: 5 } } : { ...b, pos: { c: 4, r: 9 } })),
+    walls: [
+      { o: 'h', x: 3, y: 6, owner: 0 },        // blocks the way down and puts the shield line at 5
+      { o: 'v', x: 3, y: 4, owner: 0 },        // blocks the way left
+      { o: 'v', x: 4, y: 4, owner: 0 },        // blocks the way right
+    ],
+    hazard: { ...s.hazard, round: 4, emitted: 1, pending: { col: 3, hitRound: 4 }, nextWarningRound: 4 },
+    turn: 1,
+  };
+  assert.equal(logStopRow(s.walls, 3), 5, 'the bot is standing exactly on the shield line');
+  assert.deepEqual(steps(s, 1).filter((st) => st.ball === 1), [{ ball: 1, to: { c: 3, r: 4 } }]);
+  let moves = 0;
+  for (let i = 0; i < 60; i++) {
+    const a = botAction(view(s, 1), 'hard');
+    if (a.kind !== 'move') continue;
+    moves++;
+    assert.deepEqual(a.to, { c: 3, r: 4 }, 'the only escape costs 8 steps, so the lane is the pick');
+    assert.ok(a.ball === 1, 'it should still be the trapped ball that walks the lane');
+  }
+  assert.ok(moves > 10, `the bot never raced: ${moves}`);
+});
+
+console.log(`\n${run} rules checks passed`);

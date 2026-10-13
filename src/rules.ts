@@ -20,8 +20,20 @@
  * wall, the bottom edge or another ball), and the mine is spent. The blast never chains.
  * Opponent mines are secret: clients get `view(state, team)`, never the raw state.
  *
+ * The rolling log (opt-in: `newGame(sizes, { hazards: true, seed })`) is a public hazard on a
+ * timetable derived from that seed alone — see `hazards.ts`. A round is one turn per team; rounds 1
+ * and 2 stay hazard-free. A lane is telegraphed for a whole round and the log rolls down it when the
+ * last team of that round has acted, shoving every ball above the first blocking wall back down the
+ * lane. Ranked and normal play pass no `hazards` flag and behave exactly as before.
+ *
  * Multiplayer later: send an `Action` over the wire and feed whatever comes back into `apply()`.
  */
+import { initPhase, tickHazard } from './hazards';
+import type { HazardPhase, LogEvent } from './hazards';
+
+export { HAZARD, logStopRow } from './hazards';
+export type { HazardPhase, LogEvent, LogMove, Pending } from './hazards';
+
 
 export const COLS = 8;
 export const ROWS = 12;
@@ -61,6 +73,14 @@ export interface Ball {
 
 export interface TeamMeta { balls: number }
 
+/** What a seat may ask for when the race is set up. Every switch defaults to plain, ranked play. */
+export interface GameSetup {
+  /** Opt the race into the rolling log. Off keeps the rules byte-for-byte the old ones. */
+  hazards?: boolean;
+  /** The log timetable is derived from this alone, so a server and its clients can agree on it. */
+  seed?: number;
+}
+
 export type Action =
   | { kind: 'move'; ball?: number; to: Pos }
   | { kind: 'wall'; wall: Wall }
@@ -77,6 +97,10 @@ export interface GameState {
   mines: Mine[];
   turn: Player;
   winner: Player | null;
+  /** The rolling log's clock and telegraph; absent unless the race was set up with `hazards`. */
+  hazard?: HazardPhase;
+  /** The log that last went off, kept so the UI can animate it. Public info, unlike `mines`. */
+  lastEvent?: LogEvent | null;
 }
 
 export const nextTeam = (s: GameState, t: Player): number => (t + 1) % s.teams.length;
@@ -103,7 +127,7 @@ export function startLayout(sizes: readonly number[]): Pos[][] {
   return out;
 }
 
-export function newGame(sizes: readonly number[] = [1, 1]): GameState {
+export function newGame(sizes: readonly number[] = [1, 1], setup: GameSetup = {}): GameState {
   const n = sizes.slice(0, MAX_TEAMS).map(clampSize);
   const layout = startLayout(n);
   const balls: Ball[] = [];
@@ -112,7 +136,7 @@ export function newGame(sizes: readonly number[] = [1, 1]): GameState {
       balls.push({ id: balls.length, team: t, owner: t, pos: layout[t][i] });
     }
   }
-  return {
+  const s: GameState = {
     teams: n.map((balls) => ({ balls })),
     balls,
     walls: [],
@@ -120,7 +144,10 @@ export function newGame(sizes: readonly number[] = [1, 1]): GameState {
     mines: [],
     turn: 0,
     winner: null,
+    lastEvent: null,
   };
+  if (setup.hazards) s.hazard = initPhase(setup.seed ?? 0);
+  return s;
 }
 
 export const ballsOf = (s: GameState, team: Player): Ball[] => s.balls.filter((b) => b.team === team);
@@ -305,15 +332,19 @@ export function mineOk(s: GameState, cell: Cell, owner: Player = s.turn): boolea
 
 /* ---------- transitions (return a new state, or null if illegal) ---------- */
 
+/**
+ * Hand the turn to the next side that can act, then let the log clock move with it: a hand-off that
+ * wraps past the acting team closes the round, and closing a round is what brings down a warning.
+ */
 function endTurn(s: GameState, played: Player): GameState {
   if (s.winner !== null) return s;
   const n = s.teams.length;
   const canAct = (t: Player) => reachable(s, t).length > 0;
   for (let i = 1; i < n; i++) {
     const next = (played + i) % n;
-    if (canAct(next)) return { ...s, turn: next };
+    if (canAct(next)) return tickHazard({ ...s, turn: next }, played);
   }
-  return { ...s, turn: canAct(played) ? played : (played + 1) % n };
+  return tickHazard({ ...s, turn: canAct(played) ? played : (played + 1) % n }, played);
 }
 
 export function doMove(s: GameState, to: Pos, ballId?: number): GameState | null {
@@ -370,7 +401,9 @@ export function apply(s: GameState, a: Action): GameState | null {
     case 'move': return doMove(s, a.to, a.ball);
     case 'wall': return doWall(s, a.wall);
     case 'mine': return doMine(s, a.cell);
-    case 'pass': return s.winner === null ? { ...s, turn: nextTeam(s, s.turn) } : null;
+    case 'pass': return s.winner === null
+      ? tickHazard({ ...s, turn: nextTeam(s, s.turn) }, s.turn)
+      : null;
   }
 }
 
@@ -403,7 +436,8 @@ export function getAutoMove(s: GameState, team: Player = s.turn): Action {
 /**
  * The state as one team is allowed to see it: its own mines plus the ones already set off, with
  * every opponent mine still in the ground stripped out. Nothing else changes, so the projection is
- * still a valid `GameState` the client can run the same queries against.
+ * still a valid `GameState` the client can run the same queries against. The log is the opposite of
+ * a mine — `hazard` and `lastEvent` are public and go to every seat untouched.
  *
  * SECURITY: the server must only ever send `view(state, team)` to a client — never the raw state,
  * which carries the hidden mines.

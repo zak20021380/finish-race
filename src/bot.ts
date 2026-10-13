@@ -5,13 +5,17 @@
  * often it walls, how far it looks ahead, how often it mines and how much it wanders — never the
  * anti-stalemate invariant below, which every level obeys.
  *
+ * A telegraphed rolling log is public, so the bot reads it too: it finishes its move outside the
+ * lane unless a wall already shields the cell it lands on, and it only takes the lane back when
+ * swerving out would cost it more than two steps.
+ *
  * It is fed `view(state, seat)` by the caller, so everything here reasons only about what a real
  * player could know: the opponent's hidden mines are not in `s`, and neither is the bot's answer.
  */
 import {
-  COLS, ROWS, allWalls, ballById, ballPath, distField, doWall, mineCells, nextTeam, pathLen,
-  pathOn, steps, wallsRemaining,
-  type Action, type GameState, type Player, type Pos, type Wall,
+  COLS, ROWS, allWalls, ballById, ballPath, distField, doWall, logStopRow, mineCells, nextTeam,
+  pathLen, pathOn, steps, wallsRemaining,
+  type Action, type GameState, type Player, type Pos, type Step, type Wall,
 } from './rules';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
@@ -129,13 +133,21 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
     if (best) return { kind: 'wall', wall: best };
   }
 
-  const mySteps = steps(s, me);
+  let mySteps = steps(s, me);
+  const score = (q: Pos) => { const v = d[q.r * COLS + q.c]; return v < 0 ? 999 : v; };
+  const lane = s.hazard?.pending;
+  if (lane && mySteps.length) {
+    const stop = logStopRow(s.walls, lane.col);
+    const clear = mySteps.filter((st) => st.to.c !== lane.col || st.to.r > stop);
+    const best = (xs: Step[]) => Math.min(...xs.map((st) => score(st.to)));
+    // dodging pays whenever it costs the bot no more than two steps of its own route
+    if (clear.length && best(clear) <= best(mySteps) + 2) mySteps = clear;
+  }
   if (mySteps.length) {
     if (p.noise > 0 && Math.random() < p.noise) {
       const st = mySteps[(Math.random() * mySteps.length) | 0];
       return { kind: 'move', ball: st.ball, to: st.to };
     }
-    const score = (q: Pos) => { const v = d[q.r * COLS + q.c]; return v < 0 ? 999 : v; };
     const min = Math.min(...mySteps.map((st) => score(st.to)));
     // among the cells that gain the most ground, play the ball that is already closest to the line
     let pool = mySteps.filter((st) => score(st.to) === min);
