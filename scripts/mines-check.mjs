@@ -322,22 +322,25 @@ check('fuzz: 300 random playouts keep every invariant', () => {
 
 /* ---------- rolling log ---------- */
 
-/** Park the race in a warning round: the wide lane is telegraphed and the last team has yet to act. */
-const inWarning = (left, sizes = [1, 1], round = 4, width = HAZARD.logWidth) => {
-  const s = newGame(sizes, { hazards: true, seed: 5 });
-  return {
-    ...s,
-    hazard: { ...s.hazard, round, emitted: 1, pending: { left, width, hitRound: round }, nextWarningRound: round },
-  };
+/** A seed whose k-th hazard sweeps the lane that starts at `left`. */
+const seedWith = (left, k = 1) => {
+  for (let s = 0; ; s++) if (hazardAt(s, k).left === left) return s;
 };
+
+/** Time the race so the next round close drops a log on the lane that starts at `left`. */
+const strikeDue = (left, sizes = [1, 1], round = 4, width = HAZARD.logWidth) => {
+  const s = newGame(sizes, { hazards: true, seed: seedWith(left) });
+  assert.equal(width, HAZARD.logWidth, 'the trunk is always logWidth columns wide');
+  return { ...s, hazard: { ...s.hazard, round, emitted: 1, nextHitRound: round + 1 } };
+};
+
 
 /** The last team of the round acts: the round closes and any due log comes down with it. */
 const closeRound = (s, a = { kind: 'pass' }) => apply({ ...s, turn: s.teams.length - 1 }, a);
 const moveTo = (ev, id) => ev.moves.find((m) => m.ballId === id)?.to;
 
 check('hazard config', () => {
-  assert.deepEqual({ ...HAZARD }, { firstWarningRound: 3, minGap: 3, maxGap: 9, knockback: 3, logWidth: 3 });
-});
+  assert.deepEqual({ ...HAZARD }, { firstHitRound: 3, minGap: 3, maxGap: 9, knockback: 3, logWidth: 3 });});
 
 check('hazard: the schedule is a pure function of the seed', () => {
   assert.deepEqual(hazardSchedule(7, 30), hazardSchedule(7, 30));
@@ -355,13 +358,13 @@ check('hazard: rounds 1 and 2 are clean and every gap sits in minGap..maxGap', (
     const plan = hazardSchedule(seed, 14);
     let prev = 0;
     for (const h of plan) {
-      assert.ok(h.warnRound >= 3, `seed ${seed}: warned in round ${h.warnRound}`);
-      const gap = h.warnRound - prev;
+      assert.ok(h.hitRound >= 3, `seed ${seed}: warned in round ${h.hitRound}`);
+      const gap = h.hitRound - prev;
       assert.ok(gap >= HAZARD.minGap && gap <= HAZARD.maxGap, `seed ${seed}: gap ${gap} out of range`);
       assert.equal(h.width, HAZARD.logWidth, `seed ${seed}: width must be logWidth`);
       assert.ok(h.left >= 0 && h.left <= COLS - h.width, `seed ${seed}: lane left ${h.left} off board`);
-      assert.ok(h.warnRound > prev, 'the clock must never run backwards');
-      prev = h.warnRound;
+      assert.ok(h.hitRound > prev, 'the clock must never run backwards');
+      prev = h.hitRound;
     }
   }
 });
@@ -378,64 +381,53 @@ check('hazard: off by default, and an off race sees nothing at all', () => {
   assert.deepEqual(ball(s), { c: 3, r: ROWS - 1 }, 'nothing moved a ball');
 });
 
-check('hazard: telegraphed for its whole round, resolved when the round ends', () => {
+check('hazard: nothing is telegraphed — the lane drops the instant its round closes', () => {
   const seed = 11;
   let s = newGame([1, 1], { hazards: true, seed });
-  assert.deepEqual(s.hazard, { on: true, seed, round: 1, emitted: 0, pending: null, nextWarningRound: hazardAt(seed, 0).warnRound });
-  const warned = [];
-  let hits = 0;
+  assert.deepEqual(s.hazard, { on: true, seed, round: 1, emitted: 0, nextHitRound: hazardAt(seed, 0).hitRound });
+  const hits = [];
   for (let i = 0; i < 280; i++) {
     const was = s.hazard;
     const next = apply(s, { kind: 'pass' });
     const now = next.hazard;
     assert.ok(now.round === was.round || now.round === was.round + 1, 'the clock jumped');
     assert.equal(now.seed, seed);
-    if (!was.pending && now.pending) {
-      warned.push({ left: now.pending.left, width: now.pending.width, round: now.round });
-      assert.equal(now.pending.hitRound, now.round, 'a warning lands in its own round');
-      assert.equal(now.pending.width, HAZARD.logWidth);
-      assert.ok(now.pending.left >= 0 && now.pending.left <= COLS - now.pending.width);
-      assert.equal(now.emitted, was.emitted + 1);
-      assert.equal(view(next, 1).hazard.pending.left, now.pending.left, 'the telegraph must be public');
-      assert.ok(!('col' in now.pending), 'old single col field must be gone');
-    }
-    if (was.pending && !now.pending) {
-      hits++;
-      assert.equal(now.round, was.round + 1, 'a log lands the instant its round closes');
+    assert.ok(!('pending' in now), 'the phase must carry no telegraph for a client to read');
+    if (now.emitted > was.emitted) {
+      const due = hazardAt(seed, was.emitted);
+      assert.equal(now.round, due.hitRound, 'hazard ' + was.emitted + ' drops on its round, not before');
+      assert.equal(now.round, was.round + 1, 'a log lands the instant the round closes');
       assert.equal(next.lastEvent.type, 'log');
-      assert.equal(next.lastEvent.left, was.pending.left, 'the event reports the telegraphed lane');
-      assert.equal(next.lastEvent.width, was.pending.width);
+      assert.equal(next.lastEvent.left, due.left, 'the strike reports the lane it drew');
+      assert.equal(next.lastEvent.width, due.width);
       assert.ok(!('col' in next.lastEvent), 'old single col field must be gone');
       assert.ok(next.lastEvent.stopRow < ROWS);
+      assert.equal(view(next, 1).lastEvent.left, due.left, 'the strike is public the moment it lands');
+      hits.push(now.round);
+    } else {
+      assert.equal(now.nextHitRound, was.nextHitRound, 'a quiet round must not retime the next strike');
     }
-    assert.ok(!now.pending || now.pending.hitRound === now.round, 'a stale telegraph survived its round');
-    assert.ok(now.round >= 3 || !now.pending, 'no warning in rounds 1 or 2');
+    assert.ok(now.round >= 3 || hits.length === 0, 'no strike in rounds 1 or 2');
     s = next;
   }
-  assert.ok(warned.length >= 4, `only ${warned.length} hazards in 280 turns`);
-  assert.equal(hits, warned.length - (s.hazard.pending ? 1 : 0), 'every closed warning must land');
-  warned.forEach((w, k) => {
-    const due = hazardAt(seed, k);
-    assert.equal(w.left, due.left, `hazard ${k} lane`);
-    assert.equal(w.width, due.width, `hazard ${k} width`);
-    assert.equal(w.round, due.warnRound, `hazard ${k} round`);
-  });
+  assert.ok(hits.length >= 4, 'only ' + hits.length + ' hazards in 280 turns');
+  assert.ok(hits.every((r, i) => i === 0 || r > hits[i - 1]), 'the strike clock must never run backwards');
 });
 
 check('log: one hit ball is shoved the full 3 cells', () => {
   const ev = (s) => s.lastEvent;
-  let s = put(inWarning(2), 0, 3, 6);
+  let s = put(strikeDue(2), 0, 3, 6);
   s = closeRound(s);
   assert.equal(logStopRow(s.walls, 2, 3), ROWS - 1, 'no wall, so the lane runs to the bottom');
   assert.deepEqual(ball(s, 0), { c: 3, r: 9 });
   assert.deepEqual(ev(s), { type: 'log', left: 2, width: 3, stopRow: ROWS - 1, moves: [{ ballId: 0, from: { c: 3, r: 6 }, to: { c: 3, r: 9 } }] });
-  assert.equal(s.hazard.pending, null);
+  assert.equal(s.hazard.emitted, 2, 'the strike is spent');
   assert.equal(s.hazard.round, 5);
   assert.equal(s.turn, 0, 'the hand-off is untouched');
 });
 
 check('log: a wall in the lane stops it, and balls under that wall are shielded', () => {
-  let s = put(inWarning(2), 0, 3, 3);
+  let s = put(strikeDue(2), 0, 3, 3);
   s = put({ ...s, walls: [{ o: 'h', x: 3, y: 6, owner: 1 }] }, 1, 3, 8); // line above row 6, covers 3 and 4
   assert.equal(logStopRow(s.walls, 2, 3), 5);
   s = closeRound(s);
@@ -446,7 +438,7 @@ check('log: a wall in the lane stops it, and balls under that wall are shielded'
 
 check('log: a single partial wall stops the entire wide trunk', () => {
   // lane 3..5; wall covers only col 5 (x=5 covers 5,6) yet the whole trunk halts at row 5
-  let s = put(inWarning(3), 0, 2, 2);
+  let s = put(strikeDue(3), 0, 2, 2);
   s = put(s, 1, 4, 2);
   s = { ...s, walls: [{ o: 'h', x: 5, y: 6, owner: 1 }] };
   assert.equal(logStopRow(s.walls, 3, 3), 5, 'one blocked column halts all three');
@@ -460,7 +452,7 @@ check('log: a single partial wall stops the entire wide trunk', () => {
 });
 
 check('log: simultaneous hits across multiple lane columns', () => {
-  let s = put(inWarning(2), 0, 2, 4);
+  let s = put(strikeDue(2), 0, 2, 4);
   s = put(s, 1, 4, 4);
   s = closeRound(s);
   assert.equal(s.lastEvent.left, 2);
@@ -471,13 +463,13 @@ check('log: simultaneous hits across multiple lane columns', () => {
 });
 
 check('log: a shove stops at the bottom edge', () => {
-  const s = closeRound(put(inWarning(2), 0, 3, 9));
+  const s = closeRound(put(strikeDue(2), 0, 3, 9));
   assert.deepEqual(ball(s, 0), { c: 3, r: ROWS - 1 }, '2 cells, not 3');
   assert.deepEqual(moveTo(s.lastEvent, 0), { c: 3, r: ROWS - 1 });
 });
 
 check('log: a shove stops at another ball, which does not move twice', () => {
-  let s = put(inWarning(2), 1, 3, 11); // already on the last row: nowhere to go
+  let s = put(strikeDue(2), 1, 3, 11); // already on the last row: nowhere to go
   s = put(s, 0, 3, 9);
   s = closeRound(s);
   assert.deepEqual(ball(s, 0), { c: 3, r: 10 }, '1 cell, then the ball');
@@ -486,7 +478,7 @@ check('log: a shove stops at another ball, which does not move twice', () => {
 });
 
 check('log: two balls in one lane, the bottom-most shoved first', () => {
-  let s = put(inWarning(2), 0, 3, 2);
+  let s = put(strikeDue(2), 0, 3, 2);
   s = put(s, 1, 3, 4);
   s = closeRound(s);
   assert.deepEqual(s.lastEvent.moves.map((m) => [m.ballId, m.from.r, m.to.r]), [[1, 4, 7], [0, 2, 5]]);
@@ -496,7 +488,7 @@ check('log: two balls in one lane, the bottom-most shoved first', () => {
 
 check('log: chain push collision across the wide lane', () => {
   // same column chain: bottom ball blocked by edge, top ball stacks behind it
-  let s = put(inWarning(1), 0, 2, 8);
+  let s = put(strikeDue(1), 0, 2, 8);
   s = put(s, 1, 2, 9);
   s = { ...s, balls: [...s.balls.map((b) => (b.id === 1 ? { ...b, pos: { c: 2, r: 10 } } : b)), { id: 2, team: 1, owner: 1, pos: { c: 2, r: 11 } }] };
   s = closeRound(s);
@@ -506,7 +498,7 @@ check('log: chain push collision across the wide lane', () => {
 });
 
 check('log: it hits its own team too', () => {
-  let s = put(inWarning(2, [2, 1]), 0, 3, 5);
+  let s = put(strikeDue(2, [2, 1]), 0, 3, 5);
   s = put(s, 1, 3, 7); // both belong to team 0, which is not even the side that just acted
   assert.equal(s.balls[0].team, 0);
   assert.equal(s.balls[1].team, 0);
@@ -517,7 +509,7 @@ check('log: it hits its own team too', () => {
 });
 
 check('log: a shove across a mine never sets it off', () => {
-  let s = put(inWarning(2), 0, 3, 6);
+  let s = put(strikeDue(2), 0, 3, 6);
   s = { ...s, mines: [{ cell: { c: 3, r: 9 }, owner: 1, triggered: false }] };
   const after = closeRound(s);
   assert.deepEqual(ball(after, 0), { c: 3, r: 9 }, 'landed on the mine');
@@ -527,7 +519,7 @@ check('log: a shove across a mine never sets it off', () => {
 
 check('log: shield protection below the shared stop line', () => {
   // lane 2..4, wall blocks only col 4 at y=6 -> stopRow 5 for all; balls below are safe
-  let s = put(inWarning(2), 0, 2, 1);
+  let s = put(strikeDue(2), 0, 2, 1);
   s = put(s, 1, 4, 8);
   s = { ...s, walls: [{ o: 'h', x: 4, y: 6, owner: 0 }] };
   assert.equal(logStopRow(s.walls, 2, 3), 5);
@@ -537,17 +529,17 @@ check('log: shield protection below the shared stop line', () => {
 });
 
 check('log: an empty lane still reports the event', () => {
-  const s = closeRound(inWarning(5)); // both balls sit on columns 3 and 4
+  const s = closeRound(strikeDue(5)); // both balls sit on columns 3 and 4
   assert.deepEqual(s.lastEvent, { type: 'log', left: 5, width: 3, stopRow: ROWS - 1, moves: [] });
   assert.deepEqual(ball(s, 0), { c: 3, r: ROWS - 1 });
   assert.deepEqual(ball(s, 1), { c: 4, r: ROWS - 1 });
 });
 
 check('log: runLog is pure — the state it read is untouched', () => {
-  let s = put(inWarning(2), 0, 3, 6);
+  let s = put(strikeDue(2), 0, 3, 6);
   s = { ...s, mines: [{ cell: { c: 3, r: 9 }, owner: 1, triggered: false }] };
   const before = JSON.stringify(s);
-  const out = runLog(s, s.hazard.pending);
+  const out = runLog(s, { left: 2, width: 3 });
   assert.equal(out.balls[0].pos.r, 9, 'the copy moved');
   assert.equal(JSON.stringify(s), before);
   assert.equal(s.mines[0].triggered, false);
@@ -564,51 +556,22 @@ check('log: rounds only close when every team has acted', () => {
   }
 });
 
-check('bot: never ends a move inside ANY telegraphed lane column it can afford to leave', () => {
-  let s = put(inWarning(3), 0, 4, 11);          // the foe, out of the way
-  s = put(s, 1, 3, 5);                          // the bot starts inside the wide lane 3..5
+check('bot: nothing to dodge — it races on through a lane it cannot see', () => {
+  let s = strikeDue(3);
+  s = put(s, 0, 4, 11);                            // the foe, out of the way
+  s = put(s, 1, 3, 5);                             // the bot, dead centre in the lane about to drop
   s = { ...s, turn: 1 };
-  // its cheapest step is straight up the lane (4 steps to FINISH); a swerve to col 2 costs 5, well inside 2
+  // its cheapest step is straight up the lane that is about to drop: (3,4)
   assert.deepEqual(steps(s, 1).map((st) => st.to), [{ c: 3, r: 4 }, { c: 3, r: 6 }, { c: 2, r: 5 }, { c: 4, r: 5 }]);
   let moves = 0;
   for (let i = 0; i < 200; i++) {
     const a = botAction(view(s, 1), 'hard');
     if (a.kind !== 'move') continue;
     moves++;
-    const lane = s.hazard.pending;
-    const stop = logStopRow(s.walls, lane.left, lane.width);
-    const inside = a.to.c >= lane.left && a.to.c < lane.left + lane.width && a.to.r <= stop;
-    assert.ok(!inside, `the bot finished in the lane: ${JSON.stringify(a.to)}`);
     assert.ok(apply(s, a), 'the bot proposed an illegal step');
+    assert.ok(a.to.c >= 3 && a.to.c < 6, 'a bot with no telegraph to read has no reason to leave the lane');
   }
-  assert.ok(moves > 60, `the bot barely moved: ${moves}`);
-});
-
-check('bot: walks the lane when every way out costs it more than two steps', () => {
-  let s = newGame([1, 2], { hazards: true, seed: 5 });
-  s = {
-    ...s,
-    balls: s.balls.map((b) => (b.id === 0 ? { ...b, pos: { c: 5, r: 11 } }
-      : b.id === 1 ? { ...b, pos: { c: 3, r: 5 } } : { ...b, pos: { c: 4, r: 9 } })),
-    walls: [
-      { o: 'h', x: 3, y: 6, owner: 0 },        // blocks the way down and puts the shield line at 5
-      { o: 'v', x: 3, y: 4, owner: 0 },        // blocks the way left
-      { o: 'v', x: 4, y: 4, owner: 0 },        // blocks the way right
-    ],
-    hazard: { ...s.hazard, round: 4, emitted: 1, pending: { left: 3, width: 3, hitRound: 4 }, nextWarningRound: 4 },
-    turn: 1,
-  };
-  assert.equal(logStopRow(s.walls, 3, 3), 5, 'the bot is standing exactly on the shield line');
-  assert.deepEqual(steps(s, 1).filter((st) => st.ball === 1), [{ ball: 1, to: { c: 3, r: 4 } }]);
-  let moves = 0;
-  for (let i = 0; i < 60; i++) {
-    const a = botAction(view(s, 1), 'hard');
-    if (a.kind !== 'move') continue;
-    moves++;
-    assert.deepEqual(a.to, { c: 3, r: 4 }, 'the only escape costs 8 steps, so the lane is the pick');
-    assert.ok(a.ball === 1, 'it should still be the trapped ball that walks the lane');
-  }
-  assert.ok(moves > 10, `the bot never raced: ${moves}`);
+  assert.ok(moves > 60, 'the bot barely moved: ' + moves);
 });
 
 check('hazard: determinism by seed and left bounds', () => {

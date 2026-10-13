@@ -1,15 +1,19 @@
 /**
- * hazards.ts — the rolling log: a telegraphed lane that sweeps down the board when a round ends.
+ * hazards.ts — the rolling log: a 3-column lane that drops on the board without a moment's warning.
  *
  * The whole timetable is a pure function of (seed, hazard number), so the server and every online
  * client derive the identical schedule without exchanging it — nothing here depends on move history
- * or on a hidden PRNG stream. Rounds are 1-based and rounds 1 and 2 stay hazard-free, so every seat
- * sees the board before the first warning. A warning is public for the whole round it lands in, and
- * the log rolls the instant that round's last team has acted: from row 0 down all `logWidth`
- * columns simultaneously until a horizontal wall blocking ANY lane column (or the bottom edge)
- * stops it, and every ball above that line across the lane — friend or foe — is shoved up to
- * `HAZARD.knockback` cells straight down its own column. A wall under a ball is a shield,
- * and a shove never sets a mine off.
+ * or on a hidden PRNG stream. Rounds are 1-based and rounds 1 and 2 stay hazard-free.
+ *
+ * There is deliberately no telegraph any more: the lane is drawn from the schedule at the instant its
+ * round closes, so a seat learns about a log the same moment it is announced — one second of strike
+ * alert, during which nobody may act, and then it rolls. The old round-long pending window let every
+ * player casually stroll out of the way; unpredictability is the whole point of the hazard.
+ *
+ * When it drops, the trunk sweeps from row 0 down all `width` columns simultaneously until a
+ * horizontal wall blocking ANY lane column (or the bottom edge) stops it, and every ball above that
+ * line across the lane — friend or foe — is shoved up to `HAZARD.knockback` cells straight down its
+ * own column. A wall under a ball is a shield, and a shove never sets a mine off.
  *
  * `rules.ts` owns *when* this runs (every turn hand-off); this file owns *what* it does.
  */
@@ -18,9 +22,9 @@ import type { Ball, GameState, Player, Pos, Wall } from './rules';
 
 /** Engine tunables for the log, in one place so the server and the client never disagree. */
 export const HAZARD = {
-  /** The earliest round a log may be warned in. */
-  firstWarningRound: 3,
-  /** Rounds between two consecutive warnings. */
+  /** The earliest round a log may drop in. */
+  firstHitRound: 3,
+  /** Rounds between two consecutive strikes. */
   minGap: 3,
   maxGap: 9,
   /** Cells a ball is shoved down the lane; shortened by a wall, the edge or another ball. */
@@ -29,11 +33,11 @@ export const HAZARD = {
   logWidth: 3,
 } as const;
 
-/** Rounds 1..2 are safe whatever `firstWarningRound` is tuned to. */
+/** Rounds 1..2 are safe whatever `firstHitRound` is tuned to. */
 const SAFE_ROUNDS = 2;
 
-/** The lane a warning has put on the board, and the round whose end brings it down. */
-export interface Pending { left: number; width: number; hitRound: number }
+/** The lane a log sweeps: its leftmost column and how many it covers. */
+export interface Lane { left: number; width: number }
 export interface LogMove { ballId: number; from: Pos; to: Pos }
 /** What the log did, newest first-free: the UI animates it, the rules never read it back. */
 export interface LogEvent { type: 'log'; left: number; width: number; stopRow: number; moves: LogMove[] }
@@ -44,10 +48,10 @@ export interface HazardPhase {
   seed: number;
   /** 1-based; closes (and triggers a due log) when the hand-off wraps past the acting team. */
   round: number;
-  /** Hazards warned so far — the index the next lane and gap are drawn from. */
+  /** Hazards dropped so far — the index the next lane and gap are drawn from. */
   emitted: number;
-  pending: Pending | null;
-  nextWarningRound: number;
+  /** The round the next log falls in. The lane itself is unknown until it does. */
+  nextHitRound: number;
 }
 
 const cellKey = (p: Pos) => p.r * COLS + p.c;
@@ -67,28 +71,28 @@ function prng(seed: number, k: number): () => number {
 /** lo..hi inclusive; `r` is drawn in a fixed order so hazard k always yields the same pair. */
 const randInt = (r: () => number, lo: number, hi: number) => lo + Math.floor(r() * (hi - lo + 1));
 
-/** Hazard k's lane and the round it is warned in — which is also the round it lands in. */
-export function hazardAt(seed: number, k: number): { left: number; width: number; warnRound: number } {
-  const floor = Math.max(HAZARD.firstWarningRound, SAFE_ROUNDS + 1);
+/** Hazard k's lane and the round it falls in — which is also the round it strikes in. */
+export function hazardAt(seed: number, k: number): Lane & { hitRound: number } {
+  const floor = Math.max(HAZARD.firstHitRound, SAFE_ROUNDS + 1);
   let left = 0;
-  let warn = 0;
+  let hit = 0;
   for (let i = 0; i <= k; i++) {
     const r = prng(seed, i);
     const gap = randInt(r, HAZARD.minGap, HAZARD.maxGap);
     left = randInt(r, 0, COLS - HAZARD.logWidth);
-    warn = Math.max(floor, warn + gap);
+    hit = Math.max(floor, hit + gap);
   }
-  return { left, width: HAZARD.logWidth, warnRound: warn };
+  return { left, width: HAZARD.logWidth, hitRound: hit };
 }
 
 /** The first `count` hazards of a seed — the whole schedule, recomputed any time, identically. */
-export function hazardSchedule(seed: number, count: number): { k: number; left: number; width: number; warnRound: number }[] {
+export function hazardSchedule(seed: number, count: number): (Lane & { hitRound: number; k: number })[] {
   return Array.from({ length: count }, (_, k) => ({ k, ...hazardAt(seed, k) }));
 }
 
-/** A fresh phase: round 1, nothing telegraphed, hazard 0 already timed. */
+/** A fresh phase: round 1, nothing announced, hazard 0 already timed. */
 export function initPhase(seed: number): HazardPhase {
-  return { on: true, seed, round: 1, emitted: 0, pending: null, nextWarningRound: hazardAt(seed, 0).warnRound };
+  return { on: true, seed, round: 1, emitted: 0, nextHitRound: hazardAt(seed, 0).hitRound };
 }
 
 /** A horizontal wall on the line above row `r` that covers `col`. */
@@ -119,7 +123,7 @@ export function logStopRow(walls: readonly Wall[], left: number, width: number =
  * A shove stops at the lane's shared stop line, the edge, or a cell still occupied — and never
  * arms a mine on the way.
  */
-export function runLog(s: GameState, lane: Pending): { balls: Ball[]; event: LogEvent } {
+export function runLog(s: GameState, lane: Lane): { balls: Ball[]; event: LogEvent } {
   const stopRow = logStopRow(s.walls, lane.left, lane.width);
   const hits = s.balls
     .filter((b) => b.pos.c >= lane.left && b.pos.c < lane.left + lane.width && b.pos.r <= stopRow)
@@ -149,27 +153,18 @@ export function runLog(s: GameState, lane: Pending): { balls: Ball[]; event: Log
 
 /**
  * One turn hand-off: `s` already carries the next `turn` and `played` is the seat that just acted.
- * The round closes when the hand-off wraps past `played`, which is the instant a due log lands; the
- * next hazard is then armed if its round has begun. At most one lane is ever on the board.
+ * The round closes when the hand-off wraps past `played`, and if that round is the one the schedule
+ * timed, the log drops right there — its lane is drawn from the seed at this instant, so nothing
+ * earlier could have read it. The next strike is then timed for the round after it.
  */
 export function tickHazard(s: GameState, played: Player): GameState {
   const hz = s.hazard;
   if (!hz || s.winner !== null) return s;
-  const wrapped = s.turn !== played && s.turn <= played;
-  const next: HazardPhase = { ...hz, round: hz.round + (wrapped ? 1 : 0) };
-  let balls = s.balls;
-  let event = s.lastEvent ?? null;
-  if (next.pending && wrapped) {
-    const swept = runLog(s, next.pending);
-    balls = swept.balls;
-    event = swept.event;
-    next.pending = null;
-    next.nextWarningRound = hazardAt(hz.seed, next.emitted).warnRound;
-  }
-  if (!next.pending && next.round === next.nextWarningRound) {
-    const due = hazardAt(hz.seed, next.emitted);
-    next.pending = { left: due.left, width: due.width, hitRound: next.round };
-    next.emitted += 1;
-  }
-  return { ...s, balls, hazard: next, lastEvent: event };
+  if (!(s.turn !== played && s.turn <= played)) return s;   // the round is still open
+  const next: HazardPhase = { ...hz, round: hz.round + 1 };
+  if (next.round < next.nextHitRound) return { ...s, hazard: next };
+  const swept = runLog(s, hazardAt(hz.seed, hz.emitted));
+  next.emitted += 1;
+  next.nextHitRound = hazardAt(hz.seed, next.emitted).hitRound;
+  return { ...s, balls: swept.balls, hazard: next, lastEvent: swept.event };
 }

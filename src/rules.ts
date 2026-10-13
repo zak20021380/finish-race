@@ -22,10 +22,10 @@
  *
  * The wide rolling log (opt-in: `newGame(sizes, { hazards: true, seed })`) is a public hazard on
  * a timetable derived from that seed alone — see `hazards.ts`. A round is one turn per team; rounds
- * 1 and 2 stay hazard-free. A 3-column lane is telegraphed for a whole round and the log rolls down
- * all its columns at once when the last team of that round has acted, shoving every ball above the
- * first blocking wall back down its own column. Ranked and normal play pass no `hazards` flag and
- * behave exactly as before.
+ * 1 and 2 stay hazard-free. Nothing is telegraphed: when the last team of a timed round acts, the
+ * lane is drawn from the seed and drops on the spot, shoving every ball above the first blocking
+ * wall back down its own column. Ranked and normal play pass no `hazards` flag and behave exactly
+ * as before.
  *
  * Multiplayer later: send an `Action` over the wire and feed whatever comes back into `apply()`.
  */
@@ -33,7 +33,7 @@ import { initPhase, tickHazard } from './hazards';
 import type { HazardPhase, LogEvent } from './hazards';
 
 export { HAZARD, logStopRow } from './hazards';
-export type { HazardPhase, LogEvent, LogMove, Pending } from './hazards';
+export type { HazardPhase, Lane, LogEvent, LogMove } from './hazards';
 
 
 export const COLS = 8;
@@ -98,7 +98,7 @@ export interface GameState {
   mines: Mine[];
   turn: Player;
   winner: Player | null;
-  /** The rolling log's clock and telegraph; absent unless the race was set up with `hazards`. */
+  /** The rolling log's clock; absent unless the race was set up with `hazards`. */
   hazard?: HazardPhase;
   /** The log that last went off, kept so the UI can animate it. Public info, unlike `mines`. */
   lastEvent?: LogEvent | null;

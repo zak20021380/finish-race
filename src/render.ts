@@ -17,7 +17,7 @@
  * cells are drawn as dots.
  */
 import {
-  COLS, HAZARD, MAX_TEAMS, ROWS, logStopRow, startLayout,
+  COLS, HAZARD, MAX_TEAMS, ROWS, startLayout,
   type Cell, type GameState, type LogEvent, type Player, type Pos, type Wall, type WallSpec,
 } from './rules';
 import { motionReduced } from './settings';
@@ -119,13 +119,15 @@ const HAZARD_INK = '#1b1b29';
 const LOG_DUST = 'rgba(222,198,164,.9)';
 /* ---- the rolling log: one clock, so the sprite, the shoved balls and main.ts's locks agree ---- */
 /** The trunk's steady pace, and the slower launch it eases in over the first two rows. */
-export const LOG_ROW_MS = 320;
+export const LOG_ROW_MS = 140;
+/** The whole warning a seat gets: a second of tremor and a flashing badge, then it is already on them. */
+export const LOG_ALERT_MS = 1000;
 const LOG_LAUNCH_ROWS = 2;
 const LOG_LAUNCH_V = 0.5;      // speed it lifts off at, as a fraction of the steady pace
-const LOG_FADE_MS = 320;       // the clean fade-out on its shield line
-const LOG_SKID_MS = 1500;      // how long the scuff it dragged stays on the clay
-const LOG_SLAM_MS = 640;       // wall impact: flash, chips, recoil
-const LOG_THUMP_MS = 460;      // a shoved ball's micro-bounce as it comes to rest
+const LOG_FADE_MS = 200;       // the clean fade-out on its shield line
+const LOG_SKID_MS = 900;       // how long the scuff it dragged stays on the clay
+const LOG_SLAM_MS = 420;       // wall impact: flash, chips, recoil
+const LOG_THUMP_MS = 300;      // a shoved ball's micro-bounce as it comes to rest
 const LOG_BANDS = 26;          // slices per trunk: the cylinder's foreshortening resolution
 /** ms the eased launch spends covering `rows` cells: the mean of its two speeds. */
 const launchMs = (rows: number) => (2 * rows * LOG_ROW_MS) / (1 + LOG_LAUNCH_V);
@@ -1145,95 +1147,37 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   }
 
   /**
-   * The telegraphed lane: an amber danger wash and a pair of marching rails across all `width`
-   * columns, hazard chevrons marching down to the shield line, and a one-pixel tremor in the tiles
-   * it is about to sweep. Public information, so every seat is shown the same thing, and the stripe
-   * stops where a wall stops the log — which is why the ball below it needs no dodging.
+   * The strike alert: the only heads-up a log gives. The lane's tiles jump around under it and a
+   * hazard badge blinks at the head of the columns the trunk is about to come down — then it does.
+   * `k` is how far through the second we are, so the badge can lean in. Reduced motion keeps the
+   * badge lit and the board dead still: the warning stays readable, the tremor does not.
    */
-  function drawLane(col: number, width: number, stop: number, now: number, still: boolean) {
-    const c = L.cell, x0 = L.ox + col * c, w = width * c, top = L.oy, h = (stop + 1) * c;
-    const cx = x0 + w / 2;
-    const pulse = still ? 0.55 : 0.5 + 0.5 * Math.sin(now / 260);
+  function drawStrike(left: number, width: number, k: number, now: number, still: boolean) {
+    const c = L.cell, dpr = L.dpr, x0 = L.ox + left * c, w = width * c, top = L.oy;
     ctx.save();
     rr(ctx, L.ox, top, cols * c, rows * c, CORNER * c);
     ctx.clip();
-    /* the tiles under it shift a whole device pixel, back and forth: something heavy is leaning there */
     if (!still && bg) {
-      const j = (Math.sin(now / 9.3) > 0 ? 1 : -1) / L.dpr;
-      ctx.drawImage(bg, x0 * L.dpr, top * L.dpr, w * L.dpr, h * L.dpr, x0 + j, top - j * 0.6, w, h);
+      const a = Math.sin(now / 6.1) + Math.sin(now / 2.7) * 0.5;
+      const j = (a > 0 ? 2 : a < -0.2 ? -2 : 1) / dpr;
+      ctx.drawImage(bg, x0 * dpr, top * dpr, w * dpr, rows * c * dpr, x0 + j, top - j, w, rows * c);
     }
-    ctx.globalAlpha = 0.11 + 0.08 * pulse;
-    ctx.fillStyle = HAZARD_AMBER;
-    ctx.fillRect(x0, top, w, h);
-    ctx.globalAlpha = 0.42 + 0.3 * pulse;
-    ctx.strokeStyle = HAZARD_AMBER;
-    ctx.lineWidth = Math.max(2, c * 0.085);
-    ctx.setLineDash([c * 0.3, c * 0.26]);
-    ctx.lineDashOffset = still ? 0 : now / 22;
+    const cx = x0 + w / 2, cy = top + c * 0.62;
+    const r = c * 0.6 * (0.86 + 0.14 * k);
+    /* one second is not long: the badge blinks hard rather than fading politely */
+    ctx.globalAlpha = still || Math.floor(now / 95) % 2 === 0 ? 1 : 0.42;
     ctx.beginPath();
-    ctx.moveTo(x0, top); ctx.lineTo(x0, top + h);
-    ctx.moveTo(x0 + w, top); ctx.lineTo(x0 + w, top + h);
-    ctx.stroke();
-    ctx.setLineDash(SOLID);
-    /* hazard chevrons wide enough to cover the whole trunk, walking down to the shield line */
-    ctx.globalAlpha = 0.34 + 0.32 * pulse;
-    ctx.strokeStyle = '#fde68a';
-    ctx.lineWidth = Math.max(1.5, c * 0.07);
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    const step = c * 1.6;
-    ctx.beginPath();
-    for (let y = top + (still ? step * 0.5 : (now / 9) % step); y < top + h; y += step) {
-      ctx.moveTo(cx - w * 0.34, y - c * 0.14);
-      ctx.lineTo(cx, y + c * 0.14);
-      ctx.lineTo(cx + w * 0.34, y - c * 0.14);
-    }
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  /**
-   * The log waiting at the head of the lane: perched on the board's top edge, so half of it hangs
-   * above the checkered strip, and trembling because a trunk that size does not sit still. Reduced
-   * motion sets it down on the edge, still, and lets the wash alone carry the warning.
-   */
-  function drawPerch(col: number, width: number, now: number, still: boolean) {
-    const c = L.cell;
-    const cx = L.ox + (col + width / 2) * c, cy = L.oy;
-    if (still) { drawTrunk(cx, cy, 0, 0.7, 0); return; }
-    const jx = Math.sin(now / 7.1) * c * 0.022 + Math.sin(now / 3.3) * c * 0.012;
-    drawTrunk(cx + jx, cy + Math.sin(now / 5.7) * c * 0.014, now / 26, 0.9,
-      Math.sin(now / 91) * 0.018);
-  }
-
-  /** The lane's nameplate: a log glyph and "Log incoming", riding over the whole danger lane. */
-  function drawLaneHead(col: number, width: number, now: number, still: boolean) {
-    const c = L.cell;
-    const fs = Math.max(8, Math.round(c * 0.3));
-    const label = 'Log incoming';
-    ctx.save();
-    ctx.font = `800 ${fs}px -apple-system, "Segoe UI", Roboto, sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    const pad = fs * 0.6, icon = fs * 1.7, gap = fs * 0.45;
-    const w = icon + gap + ctx.measureText(label).width + pad * 2, h = fs * 2;
-    const lo = L.ox + w / 2 + c * 0.12, hi = L.ox + cols * c - w / 2 - c * 0.12;
-    const cx = clamp(L.ox + (col + width / 2) * c, Math.min(lo, hi), Math.max(lo, hi));
-    const cy = L.oy + c * 0.52 + (still ? 0 : Math.sin(now / 320) * c * 0.03);
-    ctx.globalAlpha = still ? 0.9 : 0.78 + 0.22 * Math.sin(now / 260);
+    ctx.moveTo(cx, cy - r); ctx.lineTo(cx + r * 0.95, cy + r * 0.66); ctx.lineTo(cx - r * 0.95, cy + r * 0.66);
+    ctx.closePath();
     ctx.fillStyle = HAZARD_AMBER;
-    rr(ctx, cx - w / 2, cy - h / 2, w, h, h / 2);
     ctx.fill();
-    /* the glyph: a barrel seen from the side, cut end and one ring, in the chip's own dark ink */
-    const gx = cx - w / 2 + pad, gy = cy, bw = icon * 0.78, bh = fs * 0.86;
-    ctx.strokeStyle = HAZARD_INK;
-    ctx.fillStyle = HAZARD_INK;
-    ctx.lineWidth = Math.max(1, fs * 0.15);
-    rr(ctx, gx, gy - bh / 2, bw, bh, bh / 2);
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(1, c * 0.05);
+    ctx.strokeStyle = 'rgba(27,27,41,.8)';
     ctx.stroke();
-    ctx.beginPath(); ctx.ellipse(gx + bw, gy, fs * 0.19, bh / 2, 0, 0, TAU); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(gx + bw * 0.42, gy, fs * 0.11, bh * 0.34, 0, 0, TAU); ctx.stroke();
-    ctx.fillText(label, gx + icon + gap, cy + 0.5);
+    ctx.fillStyle = HAZARD_INK;                     // the bang inside it
+    ctx.fillRect(cx - c * 0.055, cy - r * 0.3, c * 0.11, r * 0.5);
+    ctx.beginPath(); ctx.arc(cx, cy + r * 0.36, c * 0.068, 0, TAU); ctx.fill();
     ctx.restore();
   }
 
@@ -1414,14 +1358,6 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         ctx.fill();
       }
       ctx.restore();
-    }
-
-    /* a telegraphed lane is nobody's secret: every seat is shown the stripe and where it stops */
-    const lane = v.state.hazard?.pending ?? null;
-    if (lane) {
-      const stop = logStopRow(v.state.walls, lane.left, lane.width);
-      drawLane(lane.left, lane.width, stop, now, still);
-      drawPerch(lane.left, lane.width, now, still);       // the trunk already leaning over the line
     }
 
     /* a tap just landed: a quick ripple in the colour of the seat that plays it */
@@ -1686,9 +1622,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       }
       for (let i = rolls.length - 1; i >= 0; i--) {
         const f = rolls[i];
-        const e = now - f.t0;
+        const e = now - f.t0 - LOG_ALERT_MS;             // negative while the strike alert is up
         const T = logRollMs(f.stopRow);
         if (e >= T + LOG_SKID_MS) { rolls.splice(i, 1); continue; }
+        if (e < 0) { drawStrike(f.left, f.width, 1 + e / LOG_ALERT_MS, now, still); continue; }
         const face = logFaceRow(f.stopRow, e);           // it stops travelling at the shield line
         const cx = ox + (f.left + f.width / 2) * c;
         drawSkid(f.left, f.width, face, e < T ? 0.46 : 0.46 * (1 - (e - T) / LOG_SKID_MS));
@@ -1704,7 +1641,6 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       }
       ctx.restore();
     }
-    if (lane) drawLaneHead(lane.left, lane.width, now, still);   // the nameplate stays above traffic
 
     // "<side> is thinking" pips above that side's leading ball
     if (v.thinking !== null) {
@@ -1745,7 +1681,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const { cell: c, ox, oy } = L;
       rolls.push({ left: ev.left, width: ev.width, stopRow: ev.stopRow, t0, slam: ev.stopRow < rows - 1 });
       for (const m of ev.moves) {
-        const hit = t0 + logArriveMs(m.to.r, ev.stopRow);   // when the face catches up with the ball
+        const hit = t0 + LOG_ALERT_MS + logArriveMs(m.to.r, ev.stopRow);   // when the face catches up
         dust.push({ x: ox + (m.to.c + 0.5) * c, y: oy + (m.to.r + 0.5) * c, t0: hit });
         thump.set(m.ballId, hit);
       }

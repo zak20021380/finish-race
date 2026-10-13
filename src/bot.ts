@@ -5,15 +5,15 @@
  * often it walls, how far it looks ahead, how often it mines and how much it wanders — never the
  * anti-stalemate invariant below, which every level obeys.
  *
- * A telegraphed wide rolling log is public, so the bot reads it too: it finishes its move outside
- * ANY of the lane columns unless a wall already shields the cell it lands on, and it only takes
- * the lane back when swerving out would cost it more than two steps.
+ * The rolling log is nothing to plan around: its lane is drawn from the seed the instant its round
+ * closes, so there is no telegraph here to read. The bot races on and takes whatever drops, exactly
+ * as a human does when the strike alert refuses their tap.
  *
  * It is fed `view(state, seat)` by the caller, so everything here reasons only about what a real
  * player could know: the opponent's hidden mines are not in `s`, and neither is the bot's answer.
  */
 import {
-  COLS, ROWS, allWalls, ballById, ballPath, distField, doWall, logStopRow, mineCells, nextTeam,
+  COLS, ROWS, allWalls, ballById, ballPath, distField, doWall, mineCells, nextTeam,
   pathLen, pathOn, steps, wallsRemaining,
   type Action, type GameState, type Player, type Pos, type Step, type Wall,
 } from './rules';
@@ -135,16 +135,6 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
 
   let mySteps = steps(s, me);
   const score = (q: Pos) => { const v = d[q.r * COLS + q.c]; return v < 0 ? 999 : v; };
-  const lane = s.hazard?.pending;
-  if (lane && mySteps.length) {
-    const stop = logStopRow(s.walls, lane.left, lane.width);
-    const inLane = (st: Step) =>
-      st.to.c >= lane.left && st.to.c < lane.left + lane.width && st.to.r <= stop;
-    const clear = mySteps.filter((st) => !inLane(st));
-    const best = (xs: Step[]) => Math.min(...xs.map((st) => score(st.to)));
-    // dodging pays whenever it costs the bot no more than two steps of its own route
-    if (clear.length && best(clear) <= best(mySteps) + 2) mySteps = clear;
-  }
   if (mySteps.length) {
     if (p.noise > 0 && Math.random() < p.noise) {
       const st = mySteps[(Math.random() * mySteps.length) | 0];

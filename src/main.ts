@@ -7,7 +7,7 @@ import {
 } from './rules';
 import { botAction, botThinkMs, type Difficulty } from './bot';
 import {
-  createRenderer, hitTest, logArriveMs, logFaceRow, logRollMs, wallCentre,
+  createRenderer, hitTest, logArriveMs, logFaceRow, logRollMs, wallCentre, LOG_ALERT_MS,
   type BallView, type CapsuleAction, type Ghost, type Hit,
   type Mark, type Vec, type View,
 } from './render';
@@ -420,8 +420,8 @@ function ui() {
 
   /* one turn per seat makes a round; the counter is the UI's, the rules keep none */
   roundLabel.textContent = `Round ${Math.floor(turnsPlayed / Math.max(1, state.teams.length)) + 1}`;
-  /* the lane's own nameplate is painted at the heart of the finish strip, so the label yields to it */
-  wrap.classList.toggle('lane', state.hazard?.pending != null);
+  /* the strike badge is painted at the heart of the finish strip, so the label yields while it is up */
+  wrap.classList.toggle('lane', rolling);
   wrap.classList.toggle('rolling', rolling);   // the board is visibly inert while a trunk is on it
   paintClock();
 
@@ -465,23 +465,26 @@ function blastOf(prev: GameState, next: GameState): Mine | null {
 }
 
 /**
- * The log is coming down the lane, so nothing else may move: taps are refused, the bot parks, the
- * clock stays stopped, and the haptics run the whole way down — a soft thud every 140ms, a heavy
- * one at every ball the face meets and at the wall it slams into. The sprite and the shove timing
- * both come from `render.ts`, so the board and this lock can never disagree about when it ends.
+ * A log has just dropped, and it is the only warning anyone gets: one second of tremor and a
+ * blinking badge, then the trunk is away. Nothing may move across all of that — taps are refused,
+ * the bot parks, the blitz clock stays stopped — so the strike cannot be walked out of. The sprite
+ * and every beat inside it are timed by `render.ts`, so the board and this lock cannot disagree.
  */
 function playLog(ev: LogEvent, next: GameState) {
   playedLog = ev;
   rolling = true;
   const token = gen;                    // restart() bumps it, so a stale roll cannot unlock the new race
   const t0 = performance.now();
+  const strike = t0 + LOG_ALERT_MS;     // the trunk leaves the top edge when the alert ends
   const T = logRollMs(ev.stopRow);
   const blocked = ev.stopRow < ROWS - 1;
-  rollT0 = t0; rollStop = ev.stopRow;
+  rollT0 = strike; rollStop = ev.stopRow;
   renderer.rollLog(ev, t0);
+  shake();                              // the board itself trembles for the whole second
+  impact('heavy');
   if (!motionReduced()) {
     for (const m of ev.moves) {
-      const hit = t0 + logArriveMs(m.from.r, ev.stopRow);
+      const hit = strike + logArriveMs(m.from.r, ev.stopRow);
       logWait.set(m.ballId, hit);
       logShove.set(m.ballId, { y0: m.from.r, y1: m.to.r });
       window.setTimeout(() => { if (token === gen) impact('heavy'); }, hit - t0);
@@ -495,14 +498,18 @@ function playLog(ev: LogEvent, next: GameState) {
   const msg = hit
     ? `Log! ${TEAM_NAME[team] ?? 'Ball'} pushed back ${thrown} cell${thrown === 1 ? '' : 's'}`
     : blocked ? 'Log blocked by a wall' : 'Log rolled down an empty lane';
-  impact('medium');
   notify('warning');
-  showNote(msg, false, Math.max(2600, T));
-  const rumble = window.setInterval(() => impact('light'), 140);
-  /* a wall takes the whole trunk's weight at the end of the run, and the board says so then */
-  if (blocked) window.setTimeout(() => { if (token === gen) { shake(); impact('heavy'); } }, T);
+  showNote(msg, false, Math.max(2600, LOG_ALERT_MS + T));
+  /* a trunk this heavy is felt the whole way down: a soft thud every 140ms once it is rolling */
   window.setTimeout(() => {
-    window.clearInterval(rumble);
+    if (token !== gen) return;
+    rumbleId = window.setInterval(() => impact('light'), 140);
+  }, LOG_ALERT_MS);
+  /* and if a wall took it, the board shakes where it hit, not when it started */
+  if (blocked) window.setTimeout(() => { if (token === gen) { shake(); impact('heavy'); } }, strike - t0 + T);
+  window.setTimeout(() => {
+    window.clearInterval(rumbleId);
+    rumbleId = 0;
     if (token !== gen) return;          // the race restarted: that lock belongs to the new one
     rolling = false;
     logWait.clear();                    // anything still held is released, never left frozen
@@ -511,7 +518,7 @@ function playLog(ev: LogEvent, next: GameState) {
     if (paused || state.winner !== null) return;
     ui();
     startClock();                       // the seat gets its allowance back once the board is clear
-  }, T + 380);
+  }, strike - t0 + T + 240);
 }
 
 function play(a: Action): boolean {
@@ -647,8 +654,11 @@ function restart() {
   /* every race rolls a fresh seed, so no two races telegraph the same lanes */
   state = newGame(sizes, { hazards: true, seed: (Math.random() * 0x7fffffff) | 0 });
   rolling = false;
+  window.clearInterval(rumbleId);
+  rumbleId = 0;
   playedLog = null;
   logWait.clear();
+  logShove.clear();
   ballViews.length = 0;
   syncBalls();
   selected = null;
