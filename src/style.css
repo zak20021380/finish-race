@@ -123,13 +123,12 @@
   /* the board's status banner stays deep in every screen: its type is always white */
   --pill: rgba(15, 23, 42, .92);
   --pill-ink: #ffffff;
-  --pill-x: rgba(255, 255, 255, .18);
 
   /* ---- type scale: two reading levels (status > chips); the finish label is board furniture ---- */
   --t-1: clamp(0.9375rem, 0.885rem + .55vw, 1.0625rem);   /* status pill, card titles */
   --t-2: clamp(0.8125rem, 0.775rem + .35vw, 0.9375rem);   /* stats, row labels */
   --t-3: clamp(0.6875rem, 0.665rem + .28vw, 0.8125rem);   /* player chips, descriptions */
-  --t-micro: clamp(0.625rem, 0.61rem + .2vw, 0.75rem);    /* finish pill, hint, steps caption */
+  --t-micro: clamp(0.625rem, 0.61rem + .2vw, 0.75rem);    /* finish pill, steps caption */
   --t-hd: clamp(1.0625rem, .975rem + .7vw, 1.375rem);     /* screen titles */
   --t-title: clamp(1.5rem, 1.32rem + 1.4vw, 1.875rem);    /* win / lose verdict */
   --w-1: 700; --w-2: 800; --w-3: 800;
@@ -443,48 +442,8 @@ html.rm .board-wrap.rolling::after { animation: none; opacity: .85; }
   touch-action: none;
 }
 
-/* ---- one-time hint pill (shares the lower-board toast band with .note) ---- */
-.hint {
-  position: absolute;
-  left: 50%;
-  bottom: 30%;                          /* over the board's lower third, clear of the start rows */
-  transform: translateX(-50%);
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  gap: var(--s1);
-  width: max-content;                 /* left:50% would otherwise halve the shrink-to-fit box */
-  max-width: calc(100% - var(--s2));
-  padding: var(--s2) var(--s2) var(--s2) var(--s3);
-  border-radius: var(--radius-pill);
-  background: var(--pill);
-  color: var(--pill-ink);
-  font-size: var(--t-micro);
-  font-weight: 600;
-  line-height: 1.2;
-  box-shadow: 0 10px 22px -10px var(--shadow);
-  animation: rise .28s ease-out;
-}
-.hint-x {
-  position: relative;                 /* small pill, 44px hit area */
-  appearance: none;
-  border: 0;
-  flex: none;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: var(--pill-x);
-  color: var(--pill-ink);
-  font-size: 17px;
-  line-height: 1;
-  cursor: pointer;
-}
-.hint-x::after { content: ""; position: absolute; inset: -9px; }
-.hint-x:active { transform: var(--motion-press); opacity: .8; }
-.hint-x:focus-visible { outline: 3px solid var(--pill-ink); outline-offset: 2px; }
-
-/* ---- floating toast over the lower board: a refusal, a confirm prompt, the next-step hint ----
-   The status pill under the card is gone: every prompt fades here instead, so it costs no layout
+/* ---- floating toast over the lower board: a refusal, a confirm prompt, an event alert ----
+   The status pill under the card is gone: every alert fades here instead, so it costs no layout
    height and the board keeps the row it used to lose. stays in the DOM (only opacity changes) so
    its aria-live region announces. */
 .note {
@@ -1931,7 +1890,6 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   .btn-hero { min-height: 56px; }
 }
 
-@keyframes rise { from { opacity: 0; transform: translate(-50%, 8px); } }
 @keyframes fade { from { opacity: 0; } }
 @keyframes pop { from { opacity: 0; transform: scale(.9); } }
 @keyframes step-pop { 0% { transform: scale(1); } 38% { transform: scale(1.25); } 100% { transform: scale(1); } }

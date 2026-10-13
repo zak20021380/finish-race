@@ -57,7 +57,6 @@ const sub = $<HTMLParagraphElement>('sub');
 const again = $<HTMLButtonElement>('again');
 const toMenu = $<HTMLButtonElement>('to-menu');
 const noteEl = $<HTMLParagraphElement>('note');
-const hintEl = $<HTMLDivElement>('hint');
 const confettiEl = $<HTMLCanvasElement>('confetti');
 const menuBtn = $<HTMLButtonElement>('menu-btn');
 const roundLabel = $<HTMLParagraphElement>('round-label');
@@ -132,7 +131,7 @@ function shake() {
   shakeTimer = window.setTimeout(() => wrap.classList.remove('shake'), 700);
 }
 
-/* the toast over the lower board: why a slot was refused, "tap again to place", what to do next */
+/* the toast over the lower board: why a slot was refused, "tap again to place", an event alert */
 let noteTimer = 0;
 let toastMsg = '';
 function showNote(msg: string, error: boolean, ttl: number, timeout = false) {
@@ -145,16 +144,6 @@ function showNote(msg: string, error: boolean, ttl: number, timeout = false) {
   if (ttl) noteTimer = setTimeout(() => noteEl.classList.remove('show'), ttl);
 }
 const clearNote = () => { clearTimeout(noteTimer); toastMsg = ''; noteEl.classList.remove('show', 'timeout'); };
-
-/**
- * The standing prompt for this turn. It used to own a row under the card; now it fades over the
- * lower board, so it costs the canvas nothing. Every path that reaches `ui()` with a new prompt has
- * already cleared the toast, so an identical message means the old one is still on screen.
- */
-function showHint(msg: string) {
-  if (!msg || msg === toastMsg) return;
-  showNote(msg, false, 2800);
-}
 
 /* ---------- screens ---------- */
 
@@ -298,7 +287,6 @@ function armMine(next: boolean) {
   mineArmed = on;
   selected = null;
   clearGhost();
-  closeHint();
   ui();
 }
 
@@ -327,7 +315,7 @@ function selectionFor(s: GameState): Ball | null {
 function pick(id: number | null) {
   selected = id;
   clearGhost();
-  ui();                     // the status says what to do next, and only that ball's dots light up
+  ui();                     // only the picked ball's dots light up
 }
 
 /** The wall ghost's floating caps: confirm commits the slot, cancel clears it. */
@@ -340,18 +328,6 @@ function armCapsules() {
   } else {
     capsule = null;
   }
-}
-
-/* one-time hint: lives in memory only, this app never persists game state */
-let hintClosed = false;
-let hintTimer = 0;
-/** A tap anywhere on the board ends the coaching hint; it is shown once, on game start. */
-function closeHint() { hintClosed = true; clearTimeout(hintTimer); hintEl.hidden = true; }
-function maybeShowHint() {
-  if (hintClosed || !canAct() || !hintEl.hidden) return;
-  hintEl.hidden = false;
-  clearTimeout(hintTimer);
-  hintTimer = setTimeout(closeHint, 12000);
 }
 
 let overlayOpen = false;
@@ -395,12 +371,6 @@ function ui() {
   armCapsules();
   const thinking = wantsOpponent() && !paused;
 
-  /* the toast says what to do next; the bot's turn is told by its own chip, so it says nothing */
-  if (paused) showHint('Paused');
-  else if (state.winner === null && state.turn === HUMAN) {
-    showHint(mineArmed ? 'Pick a square to bury a mine'
-      : selected === null ? 'Pick one of your balls' : 'Your move');
-  }
   dots.classList.toggle('on', thinking);
 
   mineBtn.setAttribute('aria-pressed', String(mineArmed));
@@ -431,7 +401,6 @@ function ui() {
     menuBtn.disabled = false;
   }
   if (state.winner !== null) showOverlay();
-  maybeShowHint();
 }
 
 /** A bot turn parked until the board is clear of a rolling log. */
@@ -546,7 +515,6 @@ function play(a: Action): boolean {
   capsule = null;
   selected = null;         // the turn is over: the next pick is a fresh one
   autoPicked = null;       // ...and the next human turn auto-selects its own first ball
-  closeHint();             // the first move or action ends the coaching hint
   clearNote();
   const blast = blastOf(prev, next);
   if (blast) {
@@ -667,9 +635,6 @@ function restart() {
   mineGhost = null;
   capsule = null;
   mineArmed = false;
-  hintClosed = false;      // a fresh race gets its coaching hint back, in memory only
-  clearTimeout(hintTimer);
-  hintEl.hidden = true;
   marks[0] = null; marks[1] = null;
   shownWalls[0] = -1; shownWalls[1] = -1;
   shownMines = -1;
@@ -792,7 +757,6 @@ function tapMine(hit: Hit | null): boolean {
   if (hit.kind !== 'mine') return false;
   mineGhost = hit.cell;
   armCapsules();
-  closeHint();
   impact('light');
   showNote('Tap again to bury', false, 0);
   return true;
@@ -815,7 +779,6 @@ function tapWall(hit: { kind: 'wall' | 'confirm'; spec: WallSpec }) {
   }
   ghost = { spec: hit.spec, ok, armed: true, p: state.turn };
   armCapsules();
-  closeHint();
   if (ok) { impact('light'); showNote('Tap again to place', false, 0); } else refuse(wall);
 }
 
@@ -883,7 +846,6 @@ canvas.addEventListener('pointermove', (e) => {
 canvas.addEventListener('pointerleave', () => {
   if (ghost && !ghost.armed) { ghost = null; capsule = null; }
 });
-hintEl.addEventListener('click', () => { impact('light'); closeHint(); });
 
 mineBtn.addEventListener('click', () => { armMine(!mineArmed); });
 
