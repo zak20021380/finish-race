@@ -46,8 +46,8 @@ export interface Menu {
   afterStart(): void;
 }
 
-/** A race to start: how sharp the opponent is, how many balls each side fields, and the Chaos flag. */
-export interface RaceSetup { difficulty: Difficulty; sizes: [number, number]; hazards?: boolean }
+/** A race to start: how sharp the opponent is and how many balls each side fields. */
+export interface RaceSetup { difficulty: Difficulty; sizes: [number, number] }
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const en = (n: number) => n.toLocaleString('en-US');
@@ -967,20 +967,10 @@ export function createMenu(api: MenuApi): Menu {
     b.addEventListener('click', () => nudge(Number(b.dataset.team) as 0 | 1, Number(b.dataset.step)));
   }
 
-  /* ---- Chaos: the one switch this screen offers, and the one hazard no preset can reach ---- */
-  const chaosBtn = $<HTMLButtonElement>('custom-chaos');
-  let chaos = false;
-  chaosBtn.addEventListener('click', () => {
-    chaos = !chaos;
-    chaosBtn.setAttribute('aria-checked', String(chaos));
-    impact('light');
-  });
-
   $('custom-start').addEventListener('click', () => {
     impact('light');
     saveMenu({ mode: 'bot', sizes: [...custom] });
-    /* off is "no opinion", so the ?chaos=1 dev shortcut can still light the race up */
-    api.start({ difficulty: menuState.difficulty, sizes: [...custom], hazards: chaos || undefined });
+    api.start({ difficulty: menuState.difficulty, sizes: [...custom] });
   });
 
   new ResizeObserver(() => paintCustomPv()).observe(customScreen);
@@ -1158,14 +1148,10 @@ export function createMenu(api: MenuApi): Menu {
     el.addEventListener('click', () => {
       if (el.getAttribute('aria-disabled') === 'true') return;   // Online: the badge is the answer
       const kind = el.dataset.start;
-      if (kind !== 'bot' && kind !== 'chaos') return;     // vs Bot and Chaos are the races that start
+      if (kind !== 'bot') return;     // vs Bot is the race that starts
       impact('light');
-      if (kind === 'chaos') api.sheets.close();           // Chaos is picked inside the mode sheet
       saveMenu({ mode: 'bot' });
-      /* Chaos is the same race with the rolling log on, at the level the sheet already shows */
-      api.start(kind === 'chaos'
-        ? { difficulty: menuState.difficulty, sizes: [...menuState.sizes], hazards: true }
-        : { difficulty: menuState.difficulty, sizes: [...menuState.sizes] });
+      api.start({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] });
     });
   }
   for (const el of document.querySelectorAll<HTMLElement>('[data-preset]')) {

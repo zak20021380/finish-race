@@ -72,7 +72,6 @@ const sheetPause = $<HTMLElement>('sheet-pause');
 const sheetQuit = $<HTMLElement>('sheet-quit');
 const reward = $<HTMLParagraphElement>('reward');
 const rewardN = $<HTMLSpanElement>('reward-n');
-const chaosFlag = $<HTMLSpanElement>('chaos-flag');
 
 /* walls-to-place readout on each chip: repaints only when the number changes */
 const shownWalls: [number, number] = [-1, -1];
@@ -224,14 +223,6 @@ const renderer = createRenderer(canvas, { theme });
 const confetti = createConfetti(confettiEl);
 const toVec = (p: Pos): Vec => ({ x: p.c + 0.5, y: p.r + 0.5 });
 
-/** Chaos mode: the rolling log, offered in the mode picker and on the Custom screen. */
-let chaos = false;
-/**
- * Dev shortcut: `?chaos=1` starts every race the app does not pin with the log on, and each restart
- * rolls a fresh seed. A caller that names `hazards` wins — that is how ranked or online seats opt
- * out — and without the parameter this is false, so nothing about the app changes.
- */
-const chaosUrl = new URLSearchParams(window.location.search).get('chaos') === '1';
 /** How long a log takes to roll down its lane — the animation and the input lock share this. */
 const LOG_MS = 600;
 /** Hands and the blitz clock stand down while a log is on its way. */
@@ -240,7 +231,7 @@ let rolling = false;
 let playedLog: LogEvent | null = null;
 /** ball id → the moment the log reaches it, so a shoved ball only starts sliding when it is hit. */
 const logWait = new Map<number, number>();
-let state: GameState = newGame(sizes);
+let state: GameState = newGame(sizes, { hazards: true, seed: (Math.random() * 0x7fffffff) | 0 });
 /**
  * Every ball the renderer draws, in state order, with the animated centre under it. The entries
  * survive across frames and restarts reset them, so the frame loop never allocates.
@@ -397,9 +388,6 @@ function ui() {
   mineBtn.setAttribute('aria-pressed', String(mineArmed));
   mineBtn.disabled = !live || minesLeft(state, HUMAN) <= 0;
   setMinePips(minesLeft(state, HUMAN));
-
-  /* the chip follows the state, so it reports what the race is actually running, not what was asked for */
-  chaosFlag.hidden = state.hazard?.on !== true;
 
   /* the top bar says whose turn it is, wearing that seat's own colour */
   const seat = state.winner ?? state.turn;
@@ -596,8 +584,8 @@ function timeoutMove() {
 
 function restart() {
   gen++;
-  /* a chaos race rolls a fresh seed each time, so no two races telegraph the same lanes */
-  state = newGame(sizes, chaos ? { hazards: true, seed: (Math.random() * 0x7fffffff) | 0 } : {});
+  /* every race rolls a fresh seed, so no two races telegraph the same lanes */
+  state = newGame(sizes, { hazards: true, seed: (Math.random() * 0x7fffffff) | 0 });
   rolling = false;
   playedLog = null;
   logWait.clear();
@@ -633,12 +621,11 @@ function paintNames() {
   modeLabel.textContent = `${sizes[0]}v${sizes[1]} · ${difficulty[0].toUpperCase()}${difficulty.slice(1)}`;
 }
 
-function startGame(setup: { difficulty: Difficulty; sizes: [number, number]; hazards?: boolean }) {
+function startGame(setup: { difficulty: Difficulty; sizes: [number, number] }) {
   /* menuState.difficulty is the single source: the Choose-mode sheet persists it live,
-     so every start path (vs Bot card, Chaos card, Play) runs the level the sheet shows. */
+     so every start path (vs Bot card, Play) runs the level the sheet shows. */
   difficulty = menuState.difficulty;
   sizes = setup.sizes;
-  chaos = setup.hazards ?? chaosUrl;
   opponent = makeBot(difficulty);
   paused = false;
   restart();
