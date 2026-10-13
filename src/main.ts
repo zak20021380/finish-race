@@ -1,9 +1,9 @@
 import './style.css';
 import {
-  COLS, CONFIG, apply, ballById, distField, firstBall, getAutoMove, mineCells, minesLeft, newGame,
+  COLS, CONFIG, ROWS, apply, ballById, distField, firstBall, getAutoMove, mineCells, minesLeft, newGame,
   reachableBall, steps as teamSteps, view as fogOfWar, wallOk, wallsRemaining,
-  type Action, type Ball, type Cell, type GameState, type Mine, type Player, type Pos, type Wall,
-  type WallSpec,
+  type Action, type Ball, type Cell, type GameState, type LogEvent, type Mine, type Player,
+  type Pos, type Wall, type WallSpec,
 } from './rules';
 import { botAction, botThinkMs, type Difficulty } from './bot';
 import {
@@ -223,6 +223,16 @@ const renderer = createRenderer(canvas, { theme });
 const confetti = createConfetti(confettiEl);
 const toVec = (p: Pos): Vec => ({ x: p.c + 0.5, y: p.r + 0.5 });
 
+/** Chaos mode: the rolling log is offered on the Custom screen only, and never remembered. */
+let chaos = false;
+/** How long a log takes to roll down its lane — the animation and the input lock share this. */
+const LOG_MS = 600;
+/** Hands and the blitz clock stand down while a log is on its way. */
+let rolling = false;
+/** `lastEvent` stays on the state, so the object's identity is what marks it as already played. */
+let playedLog: LogEvent | null = null;
+/** ball id → the moment the log reaches it, so a shoved ball only starts sliding when it is hit. */
+const logWait = new Map<number, number>();
 let state: GameState = newGame(sizes);
 /**
  * Every ball the renderer draws, in state order, with the animated centre under it. The entries
@@ -253,7 +263,7 @@ let gen = 0; // bumps on restart so stale bot replies are dropped
 let paused = false;
 const waiting: (() => void)[] = [];            // bot thinks parked by the pause sheet
 
-const canAct = () => state.winner === null && state.turn === HUMAN && !paused;
+const canAct = () => state.winner === null && state.turn === HUMAN && !paused && !rolling;
 const clearGhost = () => { ghost = null; mineGhost = null; capsule = null; clearNote(); };
 
 /**
@@ -426,6 +436,45 @@ function blastOf(prev: GameState, next: GameState): Mine | null {
   return null;
 }
 
+/**
+ * The warning round closed and its log came down the lane. The sprite, the dust and the slide are
+ * the renderer's; what main.ts adds is holding every shoved ball until the log reaches it, naming
+ * what happened in the note, and keeping hands and the blitz clock off the board while it rolls.
+ */
+function playLog(ev: LogEvent, next: GameState) {
+  playedLog = ev;
+  rolling = true;
+  const token = gen;                    // restart() bumps it, so a stale roll cannot unlock the new race
+  const t0 = performance.now();
+  renderer.rollLog(ev, t0);
+  if (!motionReduced()) {
+    for (const m of ev.moves) {
+      const f = Math.max(0.14, Math.min(0.86, (m.from.r + 0.5) / (ev.stopRow + 1)));
+      logWait.set(m.ballId, t0 + LOG_MS * f);
+    }
+  }
+  /* the log meets the top-most ball first, so that is the shove the note reports */
+  let hit: LogEvent['moves'][number] | undefined = ev.moves[0];
+  for (const m of ev.moves) if (hit && m.from.r < hit.from.r) hit = m;
+  const team = hit ? ballById(next, hit.ballId)?.team ?? HUMAN : HUMAN;
+  const thrown = hit ? hit.to.r - hit.from.r : 0;
+  const msg = hit
+    ? `Log! ${TEAM_NAME[team] ?? 'Ball'} pushed back ${thrown} cell${thrown === 1 ? '' : 's'}`
+    : ev.stopRow < ROWS - 1 ? 'Log blocked by a wall' : 'Log rolled down an empty lane';
+  shake();
+  impact('heavy');
+  notify('warning');
+  showNote(msg, false, 2600);
+  window.setTimeout(() => {
+    if (token !== gen) return;          // the race restarted: that lock belongs to the new one
+    rolling = false;
+    logWait.clear();                    // anything still held is released, never left frozen
+    if (paused || state.winner !== null) return;
+    ui();
+    startClock();                       // the seat gets its allowance back once the board is clear
+  }, LOG_MS + 80);
+}
+
 function play(a: Action): boolean {
   const prev = state;
   const by = state.turn;
@@ -462,6 +511,8 @@ function play(a: Action): boolean {
     showNote(`Mine! ${TEAM_NAME[by]} ${by === HUMAN ? 'were' : 'was'} thrown back `
       + `${cells} cell${cells === 1 ? '' : 's'}`, false, 2600);
   }
+  /* a log that just landed is a fresh object every time, so identity is the play-once flag */
+  if (next.lastEvent && next.lastEvent !== playedLog) playLog(next.lastEvent, next);
   ui();
   startClock();          // the turn has moved on: the next seat gets its own allowance
   if (state.winner !== null) notify(state.winner === HUMAN ? 'success' : 'error');
@@ -480,7 +531,7 @@ let turnSecondsLeft: number = CONFIG.TURN_TIME_LIMIT;
 
 /** Is the countdown this seat's to lose? */
 const clockLive = () => !paused && !overlayOpen && !document.hidden && router.current === 'game'
-  && state.winner === null && state.turn === HUMAN;
+  && state.winner === null && state.turn === HUMAN && !rolling;
 
 /** Park the countdown: the interval is gone, and the pill stops advertising a clock it isn't running. */
 function stopClock() {
@@ -535,7 +586,11 @@ function timeoutMove() {
 
 function restart() {
   gen++;
-  state = newGame(sizes);
+  /* a chaos race rolls a fresh seed each time, so no two races telegraph the same lanes */
+  state = newGame(sizes, chaos ? { hazards: true, seed: (Math.random() * 0x7fffffff) | 0 } : {});
+  rolling = false;
+  playedLog = null;
+  logWait.clear();
   ballViews.length = 0;
   syncBalls();
   selected = null;
@@ -568,9 +623,10 @@ function paintNames() {
   modeLabel.textContent = `${sizes[0]}v${sizes[1]} · ${difficulty[0].toUpperCase()}${difficulty.slice(1)}`;
 }
 
-function startGame(setup: { difficulty: Difficulty; sizes: [number, number] }) {
+function startGame(setup: { difficulty: Difficulty; sizes: [number, number]; hazards?: boolean }) {
   difficulty = setup.difficulty;
   sizes = setup.sizes;
+  chaos = Boolean(setup.hazards);
   opponent = makeBot(difficulty);
   paused = false;
   restart();
@@ -786,6 +842,11 @@ function frame(now: number) {
   if (ballViews.length !== state.balls.length) syncBalls();
   for (let i = 0; i < state.balls.length; i++) {
     const b = state.balls[i], v = ballViews[i];
+    const gate = logWait.get(b.id);
+    if (gate !== undefined) {
+      if (now < gate) continue;         // a rolling log has not reached this ball yet: it stays put
+      logWait.delete(b.id);
+    }
     const tx = b.pos.c + 0.5, ty = b.pos.r + 0.5;
     v.pos.x += (tx - v.pos.x) * k;
     v.pos.y += (ty - v.pos.y) * k;

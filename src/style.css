@@ -1254,6 +1254,48 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   color: var(--ink-soft);
 }
 
+/* Chaos (rolling logs): the Custom screen's one switch, on the steppers' clay recipe.
+   Amber, not coral — the coral CTA belongs to PLAY, and this is a risk, not a call to action. */
+.chaos {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 64px;
+  padding: var(--s2) var(--s3) var(--s2) var(--s4);
+  border-radius: var(--radius-md);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-border), var(--glass-border-top);
+  color: var(--ink);
+}
+@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+  .chaos { background: linear-gradient(180deg, var(--card-a), var(--card-b)); }
+}
+.chaos:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.chaos:active { transform: translateY(1px); }
+.chaos-txt { flex: 1 1 auto; min-width: 0; }
+.chaos-t { display: block; font-size: var(--t-2); font-weight: 800; }
+.chaos-s { display: block; margin-top: 2px; font-size: var(--t-micro); line-height: 1.35; font-weight: 600; color: var(--ink-soft); }
+.chaos-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  color: #94a3b8;
+}
+.chaos-ico .ico { width: 20px; height: 20px; }
+.chaos[aria-checked="true"] .chaos-ico { background: #3b2a12; color: #f59e0b; }
+.chaos[aria-checked="true"] .switch { background: #b45309; }
+.chaos[aria-checked="true"] .switch::after { transform: translateX(20px); }
 .seg {
   display: flex;
   gap: var(--s1);

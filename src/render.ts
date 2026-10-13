@@ -17,8 +17,8 @@
  * cells are drawn as dots.
  */
 import {
-  COLS, MAX_TEAMS, ROWS, startLayout,
-  type Cell, type GameState, type Player, type Pos, type Wall, type WallSpec,
+  COLS, MAX_TEAMS, ROWS, logStopRow, startLayout,
+  type Cell, type GameState, type LogEvent, type Player, type Pos, type Wall, type WallSpec,
 } from './rules';
 import { motionReduced } from './settings';
 import {
@@ -110,8 +110,16 @@ const MIN_TOUCH = 44;   // css px: smallest legal tap target we allow
 const BADGE_FROM = 28;  // cell size below which a number badge would be unreadable
 const SOLID: number[] = [];
 const BLAST_MS = 700;   // the whole mine trigger, flash to last spark
+const LOG_MS = 600;     // the rolling log: head of the lane down to its shield line
+const DUST_MS = 420;    // the puff a shoved ball kicks up where it comes to rest
 const RIPPLE_MS = 380;  // a tap's ripple
 const STREAK_MS = 300;  // how long a sliding ball's trail takes to fade
+/* The log is nobody's team: like the mine's warning red it keeps its own colours, amber and wood. */
+const HAZARD_AMBER = '#f59e0b';
+const HAZARD_INK = '#1b1b29';
+const LOG_BODY = '#a9764c';
+const LOG_END = '#d8b48b';
+const LOG_RING = 'rgba(60,38,22,.85)';
 
 /** 14 sparks, on fixed unit vectors: a burst costs no randomness and allocates nothing. */
 const SPARK_N = 14;
@@ -341,6 +349,9 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   const born = new Map<number, number>();                    // wall key → first-seen time (pop-in)
   const pulses: { x: number; y: number; t0: number; p: Player }[] = []; // wall landing rings
   const blasts: { x: number; y: number; t0: number }[] = []; // mine triggers, queued by blast()
+  /** The rolling log: one sprite per warning that landed, and the dust its shove kicks up. */
+  const rolls: { col: number; stopRow: number; t0: number }[] = [];
+  const dust: { x: number; y: number; t0: number }[] = [];
   const ripples: { x: number; y: number; t0: number; p: Player }[] = []; // tap feedback
   /** Sliding balls leave a short comet tail: pooled, reused, and dropped as they fade. */
   const streaks: { x0: number; y0: number; x1: number; y1: number; t0: number; p: Player }[] = [];
@@ -897,6 +908,139 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     drawCapsule(ox + cancel.x * c, oy + cancel.y * c, 'cancel', MINE_RAMP.mid, c, still);
   }
 
+  /**
+   * The telegraphed lane: an amber wash and a marching stripe down the column the log will take,
+   * with chevrons pointing at the shield line — the last row it can reach. Public information, so
+   * every seat is shown the same thing, and the stripe stops where a wall stops the log, which is
+   * why the ball below it needs no dodging. Reduced motion keeps it lit but perfectly still.
+   */
+  function drawLane(col: number, stop: number, now: number, still: boolean) {
+    const c = L.cell, x0 = L.ox + col * c, top = L.oy, h = (stop + 1) * c, cx = x0 + c / 2;
+    const pulse = still ? 0.55 : 0.5 + 0.5 * Math.sin(now / 260);
+    ctx.save();
+    rr(ctx, L.ox, top, cols * c, rows * c, CORNER * c);
+    ctx.clip();
+    ctx.fillStyle = `rgba(245,158,11,${0.07 + 0.05 * pulse})`;
+    ctx.fillRect(x0, top, c, h);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = `rgba(245,158,11,${0.45 + 0.3 * pulse})`;
+    ctx.lineWidth = Math.max(2, c * 0.11);
+    ctx.setLineDash([c * 0.3, c * 0.26]);
+    ctx.lineDashOffset = still ? 0 : now / 22;
+    ctx.beginPath(); ctx.moveTo(cx, top); ctx.lineTo(cx, top + h); ctx.stroke();
+    ctx.setLineDash(SOLID);
+    ctx.lineWidth = Math.max(1.5, c * 0.07);
+    ctx.strokeStyle = `rgba(253,230,138,${0.4 + 0.35 * pulse})`;
+    for (let r = 1; r <= stop; r += 2) {            // a chevron every other cell, pointing the way
+      const bob = still ? 0 : Math.sin(now / 300 + r) * c * 0.08;
+      const y = top + (r + 0.5) * c + bob, w = c * 0.24;
+      ctx.beginPath();
+      ctx.moveTo(cx - w, y - c * 0.11); ctx.lineTo(cx, y + c * 0.11); ctx.lineTo(cx + w, y - c * 0.11);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /** The lane's nameplate: a log glyph and "Log incoming", riding at the head of the lane. */
+  function drawLaneHead(col: number, now: number, still: boolean) {
+    const c = L.cell;
+    const fs = Math.max(8, Math.round(c * 0.3));
+    const label = 'Log incoming';
+    ctx.save();
+    ctx.font = `800 ${fs}px -apple-system, "Segoe UI", Roboto, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    const pad = fs * 0.6, icon = fs * 1.7, gap = fs * 0.45;
+    const w = icon + gap + ctx.measureText(label).width + pad * 2, h = fs * 2;
+    const lo = L.ox + w / 2 + c * 0.12, hi = L.ox + cols * c - w / 2 - c * 0.12;
+    const cx = clamp(L.ox + (col + 0.5) * c, Math.min(lo, hi), Math.max(lo, hi));
+    const cy = L.oy + c * 0.52;
+    ctx.globalAlpha = still ? 0.9 : 0.78 + 0.22 * Math.sin(now / 260);
+    ctx.fillStyle = HAZARD_AMBER;
+    rr(ctx, cx - w / 2, cy - h / 2, w, h, h / 2);
+    ctx.fill();
+    /* the glyph: a barrel seen from the side, cut end and one ring, in the chip's own dark ink */
+    const gx = cx - w / 2 + pad, gy = cy, bw = icon * 0.78, bh = fs * 0.86;
+    ctx.strokeStyle = HAZARD_INK;
+    ctx.fillStyle = HAZARD_INK;
+    ctx.lineWidth = Math.max(1, fs * 0.15);
+    rr(ctx, gx, gy - bh / 2, bw, bh, bh / 2);
+    ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(gx + bw, gy, fs * 0.19, bh / 2, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(gx + bw * 0.42, gy, fs * 0.11, bh * 0.34, 0, 0, TAU); ctx.stroke();
+    ctx.fillText(label, gx + icon + gap, cy + 0.5);
+    ctx.restore();
+  }
+
+  /**
+   * The log itself: a clay barrel lying across the lane, lit along its back and shaded in its belly.
+   * A perfect cylinder shows its rotation nowhere but on its surface, so `phase` — how far it has
+   * rolled, in cells — is what scrolls the bark rings and wobbles the body.
+   */
+  function drawLog(cx: number, cy: number, c: number, phase: number, alpha: number) {
+    const w = c * 0.92, h = c * 0.5;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(Math.sin(phase * 2.2) * 0.05);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = 'rgba(0,0,0,.26)';                 // the shadow it drags over the clay
+    rr(ctx, -w / 2 + c * 0.05, -h / 2 + c * 0.09, w, h, h / 2);
+    ctx.fill();
+    ctx.fillStyle = LOG_BODY;
+    rr(ctx, -w / 2, -h / 2, w, h, h / 2);
+    ctx.fill();
+    ctx.save();
+    rr(ctx, -w / 2, -h / 2, w, h, h / 2);
+    ctx.clip();
+    ctx.fillStyle = 'rgba(255,255,255,.2)';
+    ctx.fillRect(-w / 2, -h / 2 + h * 0.12, w, h * 0.2);
+    ctx.fillStyle = 'rgba(0,0,0,.18)';
+    ctx.fillRect(-w / 2, h / 2 - h * 0.26, w, h * 0.26);
+    ctx.strokeStyle = LOG_RING;
+    ctx.lineWidth = Math.max(1, c * 0.05);
+    for (let i = 0; i < 4; i++) {
+      const t = (phase * 0.55 + i / 4) % 1;
+      const k = 0.5 + 0.5 * Math.cos(t * TAU);         // a ring thins as it turns to the far side
+      ctx.globalAlpha = alpha * (0.25 + 0.5 * k);
+      ctx.beginPath();
+      ctx.ellipse(-w / 2 + t * w, 0, Math.max(1, h * 0.24 * k), h / 2 - c * 0.07, 0, 0, TAU);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = LOG_END;                           // the cut end: unmistakably a log
+    ctx.beginPath();
+    ctx.ellipse(w / 2 - h * 0.14, 0, h * 0.18, h / 2 - c * 0.06, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /** Where a shoved ball comes to rest: a soft clay ring and a few motes. Dust, never fire. */
+  function drawDust(f: { x: number; y: number; t0: number }, now: number, c: number, still: boolean) {
+    const t = (now - f.t0) / DUST_MS;
+    if (t < 0 || t >= 1) return;
+    const ease = 1 - Math.pow(1 - t, 3);
+    ctx.save();
+    ctx.globalAlpha = 0.55 * (1 - t);
+    ctx.strokeStyle = 'rgba(226,214,196,.9)';
+    ctx.lineWidth = Math.max(1, c * 0.08 * (1 - t));
+    ctx.beginPath(); ctx.arc(f.x, f.y, c * (0.28 + 1 * ease), 0, TAU); ctx.stroke();
+    if (!still) {
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(203,180,150,.85)';
+      ctx.lineWidth = Math.max(1, c * 0.05 * (1 - t));
+      ctx.beginPath();
+      for (let n = 0; n < SPARK_N; n += 2) {           // the same spark fan, flattened and grey
+        const r0 = c * (0.2 + 0.8 * ease) * SPARK_L[n];
+        const r1 = r0 + c * 0.26 * (1 - t);
+        ctx.moveTo(f.x + SPARK_C[n] * r0, f.y + SPARK_S[n] * r0 * 0.45 + c * 0.18 * ease);
+        ctx.lineTo(f.x + SPARK_C[n] * r1, f.y + SPARK_S[n] * r1 * 0.45 + c * 0.18 * ease);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function draw(v: View, now: number) {
     const { cell: c, ox, oy } = L;
     const still = motionReduced();
@@ -931,6 +1075,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       }
       ctx.restore();
     }
+
+    /* a telegraphed lane is nobody's secret: every seat is shown the stripe and where it stops */
+    const lane = v.state.hazard?.pending ?? null;
+    if (lane) drawLane(lane.col, logStopRow(v.state.walls, lane.col), now, still);
 
     /* a tap just landed: a quick ripple in the colour of the seat that plays it */
     for (let i = ripples.length - 1; i >= 0; i--) {
@@ -1168,6 +1316,28 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       drawBall(cx, cy, r, seat, SEATS_N[seat] > 1 ? n : 0);
     }
 
+    /* the log rides over the balls it is shoving, then fades out on its shield line */
+    if (rolls.length || dust.length) {
+      ctx.save();
+      rr(ctx, ox, oy, cols * c, rows * c, CORNER * c);
+      ctx.clip();
+      for (let i = dust.length - 1; i >= 0; i--) {
+        if (now - dust[i].t0 >= DUST_MS) { dust.splice(i, 1); continue; }
+        drawDust(dust[i], now, c, still);
+      }
+      for (let i = rolls.length - 1; i >= 0; i--) {
+        const f = rolls[i];
+        const t = (now - f.t0) / LOG_MS;
+        if (t >= 1) { rolls.splice(i, 1); continue; }
+        const run = f.stopRow + 0.5;                       // cells it covers, head of the lane first
+        const go = t < 0.84 ? 1 - Math.pow(1 - t / 0.84, 2) : 1;
+        drawLog(ox + (f.col + 0.5) * c, oy + (go * run - 0.45) * c, c, go * run,
+          t < 0.84 ? 1 : 1 - (t - 0.84) / 0.16);
+      }
+      ctx.restore();
+    }
+    if (lane) drawLaneHead(lane.col, now, still);          // the nameplate stays above the traffic
+
     // "<side> is thinking" pips above that side's leading ball
     if (v.thinking !== null) {
       let lead: BallView | null = null;
@@ -1196,6 +1366,21 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     resetFx: () => {
       born.clear(); pulses.length = 0; blasts.length = 0;
       ripples.length = 0; streaks.length = 0; prevPos.clear(); mineGhostKey = '';
+      rolls.length = 0; dust.length = 0;
+    },
+    /**
+     * A warning round just closed, so its log is rolling: the sprite takes LOG_MS from the head of
+     * the lane down to `stopRow`, and every ball it shoves puffs dust where it comes to rest — a
+     * beat later, timed to when the log reaches it, so the hit and the slide agree. `t0` comes from
+     * the caller's frame clock, so the roll and the ball hold start on the same millisecond.
+     */
+    rollLog(ev: LogEvent, t0: number) {
+      const { cell: c, ox, oy } = L;
+      rolls.push({ col: ev.col, stopRow: ev.stopRow, t0 });
+      for (const m of ev.moves) {
+        const f = clamp((m.from.r + 0.5) / (ev.stopRow + 1), 0.14, 0.86);
+        dust.push({ x: ox + (m.to.c + 0.5) * c, y: oy + (m.to.r + 0.5) * c, t0: t0 + LOG_MS * f });
+      }
     },
     /** A tap landed: a ripple where the finger was, in the seat's own colour. Board units. */
     ripple(x: number, y: number, p: Player) {

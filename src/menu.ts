@@ -46,8 +46,8 @@ export interface Menu {
   afterStart(): void;
 }
 
-/** A race to start: how sharp the opponent is, and how many balls each side fields. */
-export interface RaceSetup { difficulty: Difficulty; sizes: [number, number] }
+/** A race to start: how sharp the opponent is, how many balls each side fields, and the Chaos flag. */
+export interface RaceSetup { difficulty: Difficulty; sizes: [number, number]; hazards?: boolean }
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const en = (n: number) => n.toLocaleString('en-US');
@@ -968,10 +968,19 @@ export function createMenu(api: MenuApi): Menu {
     b.addEventListener('click', () => nudge(Number(b.dataset.team) as 0 | 1, Number(b.dataset.step)));
   }
 
+  /* ---- Chaos: the one switch this screen offers, and the one hazard no preset can reach ---- */
+  const chaosBtn = $<HTMLButtonElement>('custom-chaos');
+  let chaos = false;
+  chaosBtn.addEventListener('click', () => {
+    chaos = !chaos;
+    chaosBtn.setAttribute('aria-checked', String(chaos));
+    impact('light');
+  });
+
   $('custom-start').addEventListener('click', () => {
     impact('light');
     saveMenu({ mode: 'bot', sizes: [...custom] });
-    api.start({ difficulty, sizes: [...custom] });
+    api.start({ difficulty, sizes: [...custom], hazards: chaos });
   });
 
   new ResizeObserver(() => paintCustomPv()).observe(customScreen);

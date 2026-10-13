@@ -118,6 +118,12 @@
         <circle cx="12" cy="12" r="5.1" fill="currentColor" />
         <circle cx="10.1" cy="10" r="1.5" fill="#fff" opacity=".55" />
       </symbol>
+      <symbol id="i-log" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6.6 5.6h8.4a3 6.4 0 0 1 0 12.8H6.6a3 6.4 0 0 1 0-12.8Z" />
+          <path d="M11.2 8v8" opacity=".55" />
+        </g>
+      </symbol>
       <symbol id="i-users" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="8" r="3.1" />
@@ -553,6 +559,15 @@
               <button class="seg-b" type="button" data-diff="normal" aria-pressed="true">Normal</button>
               <button class="seg-b" type="button" data-diff="hard" aria-pressed="false">Hard</button>
             </div>
+
+            <button class="chaos" type="button" role="switch" aria-checked="false" id="custom-chaos">
+              <span class="chaos-ico" aria-hidden="true"><svg class="ico"><use href="#i-log" /></svg></span>
+              <span class="chaos-txt">
+                <span class="chaos-t">Chaos (rolling logs)</span>
+                <span class="chaos-s">Every few rounds a log sweeps one telegraphed lane</span>
+              </span>
+              <span class="switch" aria-hidden="true"></span>
+            </button>
           </div>
 
           <div class="team-pv">
