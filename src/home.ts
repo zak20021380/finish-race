@@ -34,7 +34,7 @@ import { createRenderer, type View } from './render';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
 import type { RaceSetup } from './menu';
-import { getLobbyDisplay, onGameModeChange, paintLobby as paintGameLobby, paintSheetState as paintGameSheet, resetSheetView } from './gamemodes';
+import { onGameModeChange, paintLobby as paintGameLobby, paintSheetState as paintGameSheet, resetSheetView } from './gamemodes';
 
 export interface HomeApi {
   router: Router;
@@ -615,8 +615,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   /* ---------- launcher: one Play button + summary + sheet draft ---------- */
 
   const homePlay = $('home-play') as HTMLButtonElement;
-  const homeSub = $('home-play-sub') as HTMLElement;
-  const modeChange = document.getElementById('mode-change') as HTMLButtonElement | null;
+  const modeHero = document.getElementById('mode-hero') as HTMLButtonElement | null;
   const sheetMode = document.getElementById('sheet-mode') as HTMLElement | null;
   const modeCards = [...document.querySelectorAll<HTMLButtonElement>('.mode-card[data-mode]')];
   const diffBtns = [...document.querySelectorAll<HTMLButtonElement>('.seg-b[data-mdiff]')];
@@ -653,28 +652,8 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     custom: '#i-users',
   };
 
-  const paintLauncher = (): void => {
-    // Game Mode Selector owns the lobby card: title + TYPE badge (TEAM / RANKED etc).
-    const lobby = getLobbyDisplay();
-    if (homeSub) homeSub.textContent = lobby.sub;
-    const titleEl = document.getElementById('home-play-title');
-    if (titleEl) titleEl.textContent = lobby.title;
-    const diffEl = document.getElementById('home-play-diff');
-    if (diffEl) {
-      diffEl.textContent = lobby.badge;
-      diffEl.setAttribute('data-gmode', lobby.id);
-      diffEl.removeAttribute('data-diff');
-    }
-    const useEl = document.getElementById('mode-hero-use') as SVGUseElement | null;
-    if (useEl) useEl.setAttribute('href', lobby.icon);
-    homePlay.setAttribute('aria-label', `Play ${lobby.title} — ${lobby.badge}`);
-    // Keep the shared painter in sync for callers that bypass this closure.
-    try {
-      paintGameLobby();
-    } catch {
-      /* DOM not ready */
-    }
-  };
+  // Game Mode Selector owns the lobby card: icon, title, status dot, subtitle.
+  const paintLauncher = paintGameLobby;
 
   const paintSheet = (): void => {
     for (const b of modeCards) {
@@ -760,7 +739,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     });
   };
 
-  /** Game Mode Selector sheet: the Change key's one door (see gamemodes.ts). */
+  /** Game Mode Selector sheet: the whole mode card's one door (see gamemodes.ts). */
   const openGameModes = (): void => {
     const el = document.getElementById('sheet-game-modes') as HTMLElement | null;
     if (!el) {
@@ -831,7 +810,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     api.start({ difficulty: draftDiff, sizes: [...sizes] as [number, number] });
   });
 
-  modeChange?.addEventListener('click', () => {
+  modeHero?.addEventListener('click', () => {
     impact('light');
     openGameModes();
   });

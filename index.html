@@ -66,6 +66,12 @@
           <circle cx="8.2" cy="16" r="2.6" />
         </g>
       </symbol>
+      <symbol id="i-swap" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 9h12.6M13.4 5.6 16.9 9l-3.5 3.4" />
+          <path d="M20 15H7.4M10.6 11.6 7.1 15l3.5 3.4" />
+        </g>
+      </symbol>
       <symbol id="i-bag" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
           <path d="M5.2 8.6h13.6l-1 10.1a1.7 1.7 0 0 1-1.7 1.5H7.9a1.7 1.7 0 0 1-1.7-1.5Z" />
@@ -351,24 +357,21 @@
           </div>
 
           <div class="launcher">
-            <div class="mode-hero" id="mode-hero">
-              <div class="mode-hero-left">
-                <span class="mode-hero-ico" id="mode-hero-ico" aria-hidden="true">
-                  <svg class="ico" aria-hidden="true"><use id="mode-hero-use" href="#i-users" /></svg>
+            <button class="mode-hero" type="button" id="mode-hero" data-gmode="duel_1v1" aria-haspopup="dialog">
+              <span class="mode-hero-ico" aria-hidden="true">
+                <svg class="ico" aria-hidden="true"><use id="mode-hero-use" href="#i-swords" /></svg>
+              </span>
+              <span class="mode-hero-txt">
+                <span class="mode-hero-title" id="home-play-title">1v1 Duel</span>
+                <span class="mode-hero-sub">
+                  <span class="mode-hero-dot" id="mode-hero-dot" data-status="online" aria-hidden="true"></span>
+                  <span class="mode-hero-vs" id="home-play-sub" aria-live="polite">Ranked · ~5s queue</span>
                 </span>
-                <div class="mode-hero-txt">
-                  <span class="mode-hero-title" id="home-play-title">2v2 Party</span>
-                  <span class="mode-hero-sub">
-                    <span class="diff-badge" id="home-play-diff">Hard</span>
-                    <span class="mode-hero-vs" id="home-play-sub" aria-live="polite">2v2 · Hard</span>
-                  </span>
-                </div>
-              </div>
-              <button class="mode-change-btn" type="button" id="mode-change" aria-haspopup="dialog" aria-label="Change mode">
-                <svg class="ico" aria-hidden="true"><use href="#i-tune" /></svg>
-                <span>Change</span>
-              </button>
-            </div>
+              </span>
+              <span class="mode-hero-key" aria-hidden="true">
+                <svg class="ico" aria-hidden="true"><use href="#i-swap" /></svg>
+              </span>
+            </button>
             <button class="btn btn-hero btn-coral" id="home-play" type="button" aria-describedby="home-play-sub">
               <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg>
               <span class="hero-t">Play</span>

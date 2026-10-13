@@ -7,10 +7,10 @@
  *  - document scrollHeight > innerHeight (page scrolls),
  *  - #s-home scrollHeight > clientHeight (column overflows),
  *  - any element's bottom edge goes past the tab bar's top edge,
- *  - any .car-card / .id-card / .btn-hero / .play-summary / .change-pill clips,
+ *  - any .car-card / .id-card / .btn-hero / .mode-hero clips,
  *  - any leaf text overflows its box without ellipsis truncation,
  *  - "Solo" or "Party" appears in Home or Choose-mode text,
- *  - Play / summary / Change pill missing or malformed,
+ *  - Play / mode card / status dot missing or malformed,
  *  - mode cards missing, short (<96px), or Online not disabled with Soon,
  *  - key targets <44px.
  *
@@ -48,7 +48,7 @@ function checkHomeLayout() {
   }
 
   for (const el of document.querySelectorAll(
-    '#s-home .car-card, #s-home .id-card, #s-home .launcher, #s-home .btn-hero, #s-home .play-summary, #s-home .change-pill, #s-home .mode-hero, #s-home .mode-change-btn, #s-home .mode-hero-title',
+    '#s-home .car-card, #s-home .id-card, #s-home .launcher, #s-home .btn-hero, #s-home .play-summary, #s-home .mode-hero, #s-home .mode-hero-txt, #s-home .mode-hero-title, #s-home .mode-hero-sub',
   )) {
     const band = getComputedStyle(el, '::after');
     const over = band.position === 'absolute' ? Math.max(0, -(parseFloat(band.bottom) || 0)) : 0;
@@ -80,14 +80,12 @@ function checkHomeLayout() {
   // ---- new Play block ----
   const play = document.getElementById('home-play');
   const sub = document.getElementById('home-play-sub');
-  const change = document.getElementById('mode-change');
   if (!play) fails.push('missing #home-play');
   if (!sub) fails.push('missing #home-play-sub');
-  if (!change) fails.push('missing #mode-change');
   if (sub) {
     const t = (sub.textContent || '').trim();
-    if (!/^((1v1|2v2|3v3|2v1) · (Easy|Normal|Hard)|Custom \d+v\d+ · (Easy|Normal|Hard))$/.test(t)) {
-      fails.push(`bad summary "${t}" — want "2v2 · Normal" style`);
+    if (!/^(Ranked · ~\d+s queue|Offline Practice|Private · (Friends only|Create or join))$/.test(t)) {
+      fails.push(`bad mode subtitle "${t}" — want "Offline Practice" style`);
     }
   }
   if (play) {
@@ -96,18 +94,21 @@ function checkHomeLayout() {
       fails.push('Play must use the Coral-Orange hero gradient (--cta #FF522B)');
     }
   }
-  // ---- Active Mode Card: hero pattern (Brawl-Stars style) ----
+  // ---- Active Mode Card: one tappable clay slab (icon · title · dot + subtitle) ----
   const hero = document.getElementById('mode-hero');
   const heroTitle = document.getElementById('home-play-title');
-  const heroDiff = document.getElementById('home-play-diff');
+  const heroDot = document.getElementById('mode-hero-dot');
   if (!hero) fails.push('missing #mode-hero (Active Mode Card)');
   if (!heroTitle) fails.push('missing #home-play-title');
-  if (!heroDiff) fails.push('missing #home-play-diff');
-  if (heroTitle && !/(1v1|2v2|3v3|2v1|Custom)/.test(heroTitle.textContent || '')) {
-    fails.push(`bad hero title "${(heroTitle.textContent || '').trim()}" — want "2v2 Party" style`);
+  if (!heroDot) fails.push('missing #mode-hero-dot (status indicator)');
+  if (hero && !/^(duel_1v1|party_2v2|bot|room)$/.test(hero.getAttribute('data-gmode') || '')) {
+    fails.push('mode card has no data-gmode accent');
   }
-  if (heroDiff && !/^(Easy|Normal|Hard)$/.test((heroDiff.textContent || '').trim())) {
-    fails.push(`bad hero diff "${(heroDiff.textContent || '').trim()}" — want Easy/Normal/Hard badge`);
+  if (heroTitle && !/(1v1 Duel|2v2 Party|vs Bot|Room \d{4}|Custom Room)/.test(heroTitle.textContent || '')) {
+    fails.push(`bad hero title "${(heroTitle.textContent || '').trim()}" — want "vs Bot" style`);
+  }
+  if (heroDot && !/^(online|practice|private)$/.test(heroDot.getAttribute('data-status') || '')) {
+    fails.push(`bad status dot "${heroDot.getAttribute('data-status')}"`);
   }
   // PLAY must be the final bottom-most action in the launcher, above the dock.
   const launcher = document.querySelector('#s-home .launcher');
@@ -115,9 +116,11 @@ function checkHomeLayout() {
     if (launcher.lastElementChild !== play) {
       fails.push('PLAY must be the last child of .launcher (docked under the Active Mode Card)');
     }
+    // 12px is the design gap; the max-height 760/660/600 floor queries drop it to
+    // --s2 (8px) on short phones, which is intended, not a regression.
     const gap = getComputedStyle(launcher).gap || '';
-    if (gap && !/^12px/.test(gap)) {
-      fails.push(`launcher gap "${gap}" — want 12px between card and PLAY`);
+    if (gap && !/^(8|12)px/.test(gap)) {
+      fails.push(`launcher gap "${gap}" — want 12px (8px on the short-phone floors)`);
     }
   }
 
@@ -189,7 +192,7 @@ function checkHomeLayout() {
     if (r.height < 43.5) fails.push(`target <44px: ${name} height ${Math.round(r.height)}`);
   };
   target(play, '#home-play');
-  target(change, '#mode-change');
+  target(hero, '#mode-hero');
   if (sheet && !sheet.hidden) {
     for (const c of sheet.querySelectorAll('.mode-card')) target(c, `.mode-card ${c.dataset.mode || 'ghost'}`);
     for (const b of sheet.querySelectorAll('.seg-b')) target(b, `.seg-b ${b.textContent.trim()}`);

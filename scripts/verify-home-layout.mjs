@@ -89,7 +89,7 @@ try {
         console.log(`FAIL home ${tag}\n- ${homeResult.fails.join('\n- ')}`);
       }
       // Open the sheet and re-check (now includes card heights + targets).
-      await pg.click('#mode-change');
+      await pg.click('#mode-hero');
       await pg.waitForTimeout(700);
       const sheetVisible = await pg.evaluate(() => {
         const s = document.getElementById('sheet-mode');

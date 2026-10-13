@@ -3613,56 +3613,81 @@ html.rm .id-dot.notif-badge::after { animation: none; opacity: 0; }
   padding: 0;
 }
 
-/* ---- Active Mode Card: rich graphite #1C2433, 22px corners, specular top ----
-   Same clay recipe as every panel: drop · top highlight · bottom bevel · ring. */
+/* ---- Active Mode Card: one tappable clay slab that names the mode ----
+   The medallion, the words and the swap key are the card's *contents*, not three
+   competing affordances — the whole slab opens the drawer. `--mode-*` is the
+   accent the selected mode owns (set by `data-gmode`); the ring and the
+   medallion glow read as one neon trim rather than as decoration. */
 .mode-hero {
+  --mode-accent: var(--brand-2);
+  --mode-ink: var(--brand-ink);
+  --mode-glow: rgba(14, 165, 233, .34);
+  appearance: none;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  flex: none;
+  width: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--s3);
-  min-height: 72px;
-  padding: 12px;
-  border-radius: 22px;
-  background: var(--clay-face);
-  box-shadow: var(--clay), var(--clay-ring);
+  gap: var(--s2);
+  min-height: 76px;
+  padding: 13px 14px;
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(130% 88% at 50% -42%, rgba(255, 255, 255, .09), transparent 62%),
+    var(--clay-face);
+  color: var(--ink);
+  cursor: pointer;
+  box-shadow:
+    var(--clay-drop),
+    var(--clay-spec),
+    var(--clay-bevel),
+    inset 0 0 0 1px var(--mode-glow),
+    0 0 26px -8px var(--mode-glow);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
 }
-.mode-hero-left {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-}
-/* embossed icon chip: recessed field, lit from above */
+.mode-hero[data-gmode="duel_1v1"] { --mode-accent: var(--honey); --mode-ink: var(--honey-ink); --mode-glow: rgba(245, 158, 11, .34); }
+.mode-hero[data-gmode="party_2v2"] { --mode-accent: var(--brand-2); --mode-ink: var(--brand-ink); --mode-glow: rgba(14, 165, 233, .34); }
+.mode-hero[data-gmode="bot"] { --mode-accent: var(--brand-3); --mode-ink: var(--brand-ink); --mode-glow: rgba(56, 189, 248, .34); }
+.mode-hero[data-gmode="room"] { --mode-accent: var(--cta); --mode-ink: #FFB59D; --mode-glow: rgba(255, 82, 43, .3); }
+.mode-hero:hover:not(:active) { transform: translateY(-1px); }
+/* the micro-press: the slab gives 2% rather than sliding, so the type never reflows */
+.mode-hero:active { transform: scale(.98); }
+.mode-hero:focus-visible { outline: 3px solid var(--mode-accent); outline-offset: 3px; }
+/* embossed clay medallion: recessed field, lit from above, mode colour bleeding out */
 .mode-hero-ico {
   flex: none;
-  width: 48px;
-  height: 48px;
+  width: 50px;
+  height: 50px;
   display: grid;
   place-items: center;
-  border-radius: 16px;
-  background: linear-gradient(180deg, #0A0F1C 0%, var(--field) 100%);
-  color: var(--brand-ink);
+  border-radius: var(--r-chip);
+  background:
+    radial-gradient(72% 66% at 50% 20%, var(--mode-glow), transparent 74%),
+    linear-gradient(180deg, #0A0F1C 0%, var(--field) 100%);
+  color: var(--mode-ink);
   box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, .55),
-    inset 0 -1px 0 rgba(255, 255, 255, .08),
-    inset 0 0 0 1px rgba(255, 255, 255, .06);
+    inset 0 2px 5px rgba(0, 0, 0, .62),
+    inset 0 -1px 0 rgba(255, 255, 255, .1),
+    inset 0 0 0 1px rgba(255, 255, 255, .07);
 }
-.mode-hero-ico .ico { width: 24px; height: 24px; }
+.mode-hero-ico .ico { width: 25px; height: 25px; }
 .mode-hero-txt {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--s1);
+  gap: 3px;
 }
 .mode-hero-title {
   min-width: 0;
   font-size: var(--t-1);
-  font-weight: 800;
-  letter-spacing: -.01em;
+  font-weight: 900;
+  letter-spacing: -.015em;
   line-height: 1.15;
   color: var(--ink);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .4);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3670,108 +3695,76 @@ html.rm .id-dot.notif-badge::after { animation: none; opacity: 0; }
 .mode-hero-sub {
   display: flex;
   align-items: center;
-  gap: var(--s2);
+  gap: 4px;
   min-width: 0;
 }
-/* subtle difficulty badge: quiet by default, tinted per level */
-.diff-badge {
+/* status dot: the mode's live state, so it never has to be spelled out in words.
+   The box is the pulse's full travel, so the ring never overflows the text row. */
+.mode-hero-dot {
+  --dot: var(--mint);
+  --dot-glow: rgba(16, 185, 129, .6);
+  position: relative;
   flex: none;
-  padding: 3px 10px 4px;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, .08);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
-  color: var(--chip-ink);
-  font-size: var(--t-micro);
-  font-weight: 800;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  line-height: 1.2;
-  white-space: nowrap;
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
 }
-.diff-badge[data-diff="hard"] {
-  background: var(--honey-soft);
-  color: var(--honey-ink);
-  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .32);
+.mode-hero-dot::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot);
+  box-shadow: 0 0 0 2px rgba(8, 12, 20, .5), 0 0 10px 1px var(--dot-glow);
 }
-.diff-badge[data-diff="normal"] {
-  background: var(--brand-soft);
-  color: var(--brand-ink);
-  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .3);
-}
-.diff-badge[data-diff="easy"] {
-  background: var(--mint-soft);
-  color: var(--mint-ink);
-  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .3);
-}
-/* full "2v2 · Hard" label preserved for aria-describedby + compat, visually hidden */
-.mode-hero-vs {
+.mode-hero-dot[data-status="practice"] { --dot: var(--brand-3); --dot-glow: rgba(56, 189, 248, .62); }
+.mode-hero-dot[data-status="private"] { --dot: var(--cta); --dot-glow: rgba(255, 82, 43, .58); }
+.mode-hero-dot::after {
+  content: "";
   position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--dot-glow);
+  animation: mode-dot-ping 2.2s cubic-bezier(.22, .61, .36, 1) infinite;
+}
+@keyframes mode-dot-ping {
+  0% { transform: scale(.58); opacity: .85; }
+  70%, 100% { transform: scale(1); opacity: 0; }
+}
+.mode-hero-vs {
+  min-width: 0;
+  font-size: var(--t-micro);
+  font-weight: 700;
+  letter-spacing: .02em;
+  line-height: 1.3;
+  color: var(--ink-soft);
+  white-space: nowrap;
   overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
+  text-overflow: ellipsis;
 }
-/* chunky 3D secondary Change key: lighter clay face on the graphite card */
-.mode-change-btn {
-  --d: 3px;
-  appearance: none;
-  border: 0;
-  font: inherit;
+/* trailing affordance: a recessed clay key that says "this is a selector" */
+.mode-hero-key {
   flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s1);
-  min-height: 44px;
-  min-width: 96px;
-  padding: 0 var(--s3);
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #2E3A55 0%, #232E44 100%);
-  color: var(--ink);
-  font-size: var(--t-3);
-  font-weight: 800;
-  white-space: nowrap;
-  cursor: pointer;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--mode-ink);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .02));
   box-shadow:
-    0 var(--d) 0 #080C14,
-    inset 0 1px 0 rgba(255, 255, 255, .14),
-    var(--clay-ring);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast), opacity var(--motion-fast);
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    inset 0 0 0 1px rgba(255, 255, 255, .07);
+  transition: transform var(--motion-fast);
 }
-.mode-change-btn .ico { width: 16px; height: 16px; color: var(--brand-ink); }
-.mode-change-btn:hover:not(:active) { transform: translateY(-1px); }
-.mode-change-btn:active { transform: translateY(var(--press-y)); --d: 0px; }
-.mode-change-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
-/* legacy alias: anything still querying .change-pill gets the same key */
-.change-pill {
-  --d: 3px;
-  appearance: none;
-  border: 0;
-  font: inherit;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s1);
-  min-height: 44px;
-  min-width: 44px;
-  padding: 0 var(--s3);
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #2E3A55 0%, #232E44 100%);
-  color: var(--ink);
-  font-size: var(--t-3);
-  font-weight: 800;
-  white-space: nowrap;
-  cursor: pointer;
-  box-shadow:
-    0 var(--d) 0 #080C14,
-    inset 0 1px 0 rgba(255, 255, 255, .14),
-    var(--clay-ring);
+.mode-hero-key .ico { width: 17px; height: 17px; }
+.mode-hero:active .mode-hero-key { transform: scale(.9); }
+/* the ring is the pulse; the dot itself never moves, so a still card still reads live */
+@media (prefers-reduced-motion: reduce) {
+  .mode-hero-dot::after { animation: none; opacity: 0; }
 }
+html.rm .mode-hero-dot::after { animation: none; opacity: 0; }
 
 /* ---- the one loud element: massive tactile Coral-Orange PLAY ----
    Coral face #FF522B → hi #FF7A4D on Dark Clay #1C2433, lip #B83010.
@@ -4000,8 +3993,8 @@ html.rm .id-dot.notif-badge::after { animation: none; opacity: 0; }
   .id-card { gap: var(--s1); padding: var(--s2) var(--s4) var(--s3); }
   .id-card.user-bar { gap: 12px; padding: 16px; border-radius: 20px; }
   .launcher { gap: var(--s2); }
-  .mode-hero { min-height: 64px; padding: var(--s2) var(--s3); }
-  .mode-hero-ico { width: 42px; height: 42px; border-radius: 14px; }
+  .mode-hero { min-height: 68px; padding: 11px 13px; }
+  .mode-hero-ico { width: 45px; height: 45px; }
   .car-card { padding: var(--s2) var(--s4) 30px; }
   .btn-hero { min-height: 56px; --d: 5px; }
   .hero-t { font-size: 19px; }
@@ -4018,8 +4011,8 @@ html.rm .id-dot.notif-badge::after { animation: none; opacity: 0; }
   .id-card { padding-bottom: var(--s2); }
   .id-card.user-bar { padding: 16px; gap: 12px; border-radius: 20px; }
   .launcher { gap: var(--s2); }
-  .mode-hero { min-height: 60px; padding: var(--s2); }
-  .mode-change-btn { min-width: 84px; }
+  .mode-hero { min-height: 62px; padding: 10px 12px; }
+  .mode-hero-ico { width: 42px; height: 42px; }
   .tabs { padding: 4px; min-height: 60px; }
   .tab { min-height: 48px; }
 }
@@ -4033,8 +4026,11 @@ html.rm .id-dot.notif-badge::after { animation: none; opacity: 0; }
   .id-card { gap: 2px; padding-bottom: var(--s1); }
   .id-card.user-bar { gap: 12px; padding: 16px; border-radius: 20px; }
   .launcher { gap: var(--s2); }
-  .mode-hero { min-height: 56px; }
-  .mode-hero-ico { width: 38px; height: 38px; }
+  .mode-hero { min-height: 58px; }
+  .mode-hero-ico { width: 38px; height: 38px; border-radius: 14px; }
+  .mode-hero-ico .ico { width: 20px; height: 20px; }
+  .mode-hero-key { width: 30px; height: 30px; border-radius: 11px; }
+  .mode-hero-key .ico { width: 15px; height: 15px; }
   .btn-hero { min-height: 48px; --d: 4px; }
   .mini-rank li:not(.nations-row) { min-height: 20px; }
   .car-card { gap: 2px; padding-bottom: 30px; }
@@ -7656,28 +7652,6 @@ html.rm .arena-hero-backlight { display: none; }
 }
 .gm-start:hover:not(:active) { transform: translateY(-1px); }
 .gm-start:active { transform: translateY(var(--press-y)); --d: 1px; }
-
-/* lobby type badge: TEAM / RANKED etc ride the same pill, tinted per mode */
-.diff-badge[data-gmode="duel_1v1"] {
-  background: var(--honey-soft);
-  color: var(--honey-ink);
-  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .32);
-}
-.diff-badge[data-gmode="party_2v2"] {
-  background: var(--brand-soft);
-  color: var(--brand-ink);
-  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .3);
-}
-.diff-badge[data-gmode="bot"] {
-  background: var(--mint-soft);
-  color: var(--mint-ink);
-  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .3);
-}
-.diff-badge[data-gmode="room"] {
-  background: rgba(255, 82, 43, .16);
-  box-shadow: inset 0 0 0 1px rgba(255, 82, 43, .38);
-  color: #FFB59D;
-}
 
 /* short columns: the drawer already caps at 85dvh, so only the badge shrinks */
 @media (max-height: 700px) {

@@ -1,9 +1,10 @@
 /**
- * gamemodes.ts â€” Game Mode Selector: lobby state, bottom sheet wiring, custom rooms.
+ * gamemodes.ts — Game Mode Selector: lobby state, bottom sheet wiring, custom rooms.
  *
- * The lobby stays clean (one title + one type badge + Change key). The
- * `#sheet-game-modes` drawer holds exactly three rows â€” Quick match, Play with
- * friends and Practice vs Bot â€” plus one reward caption and one sticky Start.
+ * The lobby stays clean: one tappable clay card (icon · title · status dot ·
+ * short subtitle) that opens the drawer. The
+ * `#sheet-game-modes` drawer holds exactly three rows — Quick match, Play with
+ * friends and Practice vs Bot — plus one reward caption and one sticky Start.
  * Selecting a mode updates the lobby instantly and persists to the device; the
  * row that is open shows its options in place (1v1/2v2 or Easy/Normal/Hard).
  * 1v1 is the default: the 2v2 key ships disabled behind a "Soon" badge until
@@ -13,7 +14,7 @@
  * Rooms are local-first: Create mints a 4-digit code and reveals a 1-tap
  * "Invite via Telegram" deep-link (`t.me/<bot>?start=room_XXXX`). Join validates
  * a 4-digit code. Online races still start as local bot races with matching
- * sizes until netplay lands â€” the lobby is the contract, the starter is a stub.
+ * sizes until netplay lands — the lobby is the contract, the starter is a stub.
  */
 import { readJson, writeJson } from './storage';
 import { menuState, saveMenu } from './settings';
@@ -27,10 +28,13 @@ export interface GameModeSelection {
   roomCode: string | null;
 }
 
+/** What the launcher's status dot is reporting: a live queue, a bot, or a private room. */
+export type LobbyStatus = 'online' | 'practice' | 'private';
+
 export interface LobbyDisplay {
   id: GameModeId;
   title: string;
-  badge: string;
+  status: LobbyStatus;
   icon: string;
   sub: string;
 }
@@ -68,7 +72,7 @@ const START_LABEL: Record<GameModeId, string> = {
 
 interface RewardLine {
   lead: string;
-  /** `null` when the mode pays no trophies â€” practice has no ranking to lose. */
+  /** `null` when the mode pays no trophies — practice has no ranking to lose. */
   trophy: string | null;
   coin: string;
 }
@@ -161,18 +165,18 @@ export function setGameMode(id: GameModeId, opts?: { roomCode?: string | null })
 export function getLobbyDisplay(sel: GameModeSelection = current): LobbyDisplay {
   switch (sel.id) {
     case 'duel_1v1':
-      return { id: sel.id, title: '1v1 Duel', badge: 'DUEL / RANKED', icon: '#i-swords', sub: '1v1 Â· Ranked Â· ~5s' };
+      return { id: sel.id, title: '1v1 Duel', status: 'online', icon: '#i-swords', sub: 'Ranked · ~5s queue' };
     case 'party_2v2':
-      return { id: sel.id, title: '2v2 Party', badge: 'TEAM / RANKED', icon: '#i-users', sub: '2v2 Â· Ranked Â· ~8s' };
+      return { id: sel.id, title: '2v2 Party', status: 'online', icon: '#i-users', sub: 'Ranked · ~8s queue' };
     case 'bot':
-      return { id: sel.id, title: 'vs Bot', badge: 'PRACTICE / OFFLINE', icon: '#i-bot', sub: 'Training Â· Zero trophy loss' };
+      return { id: sel.id, title: 'vs Bot', status: 'practice', icon: '#i-bot', sub: 'Offline Practice' };
     case 'room':
       return {
         id: sel.id,
         title: sel.roomCode ? `Room ${sel.roomCode}` : 'Custom Room',
-        badge: 'FRIENDS / PRIVATE',
+        status: 'private',
         icon: '#i-send',
-        sub: sel.roomCode ? `Private Â· ${sel.roomCode} Â· Friends only` : 'Private room Â· Friends only',
+        sub: sel.roomCode ? 'Private · Friends only' : 'Private · Create or join',
       };
   }
 }
@@ -209,7 +213,7 @@ export function buildInviteLink(code: string): string {
 
 export function buildShareUrl(code: string): string {
   const url = encodeURIComponent(buildInviteLink(code));
-  const text = encodeURIComponent(`Join my Detour room ${code} â€” 1 tap to race!`);
+  const text = encodeURIComponent(`Join my Detour room ${code} — 1 tap to race!`);
   return `https://t.me/share/url?url=${url}&text=${text}`;
 }
 
@@ -234,7 +238,7 @@ function openInvite(code: string): void {
   try {
     window.open(buildShareUrl(code), '_blank', 'noopener');
   } catch {
-    /* webview blocked â€” the link text itself is still copyable */
+    /* webview blocked — the link text itself is still copyable */
   }
 }
 
@@ -267,20 +271,21 @@ async function copyText(text: string): Promise<boolean> {
 
 export function paintLobby(): void {
   const lobby = getLobbyDisplay();
+  const card = document.getElementById('mode-hero');
+  if (card) {
+    card.setAttribute('data-gmode', lobby.id);
+    card.setAttribute('aria-label', `Change game mode. Currently ${lobby.title} — ${lobby.sub}`);
+  }
   const titleEl = document.getElementById('home-play-title');
   if (titleEl) titleEl.textContent = lobby.title;
-  const badgeEl = document.getElementById('home-play-diff');
-  if (badgeEl) {
-    badgeEl.textContent = lobby.badge;
-    badgeEl.setAttribute('data-gmode', lobby.id);
-    badgeEl.removeAttribute('data-diff');
-  }
+  const dotEl = document.getElementById('mode-hero-dot');
+  if (dotEl) dotEl.setAttribute('data-status', lobby.status);
   const useEl = document.getElementById('mode-hero-use') as unknown as SVGUseElement | null;
   if (useEl) useEl.setAttribute('href', lobby.icon);
   const subEl = document.getElementById('home-play-sub');
   if (subEl) subEl.textContent = lobby.sub;
   const play = document.getElementById('home-play') as HTMLButtonElement | null;
-  if (play) play.setAttribute('aria-label', `Play ${lobby.title} â€” ${lobby.badge}`);
+  if (play) play.setAttribute('aria-label', `Play ${lobby.title} — ${lobby.sub}`);
 }
 
 /** Swap the drawer between the mode list and the friends sub-screen. */

@@ -98,7 +98,7 @@ try {
       await pg.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'networkidle' });
       await pg.waitForTimeout(1300);
 
-      await pg.click('#mode-change');
+      await pg.click('#mode-hero');
       await pg.waitForTimeout(700);
       const open = await pg.evaluate(
         () => {
