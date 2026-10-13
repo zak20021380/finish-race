@@ -193,6 +193,8 @@
   --finish-lane: calc(var(--finish-pill-h) + var(--finish-clearance) + 2px);
   /* bottom nav height: the compete scroll pads by dock + 16 so rows never hide behind chrome */
   --dock-height: 72px;
+  /* the "my standing" bar and the squad dock are the same object at the same size */
+  --sticky-bar-h: 72px;
 
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
@@ -2214,7 +2216,7 @@ html.rm *, html.rm *::before, html.rm *::after {
 .lb-row {
   --lb-rank: 34px;
   --lb-score: 80px;
-  --lb-act: 64px;
+  --lb-act: 58px;
   --lb-gap: 8px;
   display: grid;
   grid-template-columns: var(--lb-rank) minmax(0, 1fr) var(--lb-score) var(--lb-act);
@@ -2222,12 +2224,20 @@ html.rm *, html.rm *::before, html.rm *::after {
   column-gap: var(--lb-gap);
   min-width: 0;
   max-width: 100%;
-  padding: 10px;
+  padding: 9px 10px;
   border: 1px solid var(--hair);
-  border-radius: 16px;
-  background: var(--clay-face);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .045) 0%, rgba(255, 255, 255, 0) 46%),
+    var(--clay-face);
   background-color: #1C2433;
-  box-shadow: var(--clay-spec), 0 8px 16px -12px var(--shadow);
+  /* debossed rim — light on the top edge, dark on the bottom — over one ambient drop,
+     so a row reads as clay let into the canvas rather than a card floating on it */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 -1px 0 rgba(0, 0, 0, .3),
+    0 1px 0 #0A0F1A,
+    0 10px 18px -14px var(--shadow);
   color: var(--ink);
   font-size: var(--t-2);
   font-weight: 700;
@@ -2238,20 +2248,25 @@ html.rm *, html.rm *::before, html.rm *::after {
 .lb-row:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
 .lb-row.is-you { border-color: rgba(125, 211, 252, .4); }
 
-/* Col 1 — rank: a clean slate pill. The metals belong to the podium above,
-   so every ladder row from #4 down wears the same quiet crest. */
+/* Col 1 — rank: an extruded clay key. Deliberately NOT a metal — the podium above
+   owns gold/silver/bronze, so #4 down read as prestige by shape and lift, not by
+   borrowing a finish they no longer have. */
 .lb-rank {
   position: relative;
   display: grid;
   place-items: center;
   width: var(--lb-rank);
   height: var(--lb-rank);
-  border-radius: 11px;
-  background: var(--field);
-  box-shadow: 0 2px 0 #080C14, inset 0 1px 0 rgba(255, 255, 255, .08);
-  color: var(--ink-soft);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #28334C 0%, #1A2233 100%);
+  box-shadow:
+    0 2px 0 #0A0F1A,
+    inset 0 1px 0 rgba(255, 255, 255, .15),
+    inset 0 0 0 1px rgba(255, 255, 255, .05);
+  color: var(--chip-ink);
   font-size: var(--t-2);
   font-weight: 900;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 .lb-rank > * { grid-area: 1 / 1; }
@@ -2327,10 +2342,18 @@ html.rm *, html.rm *::before, html.rm *::after {
   white-space: nowrap;
 }
 .lb-score b { flex: 1 1 auto; min-width: 0; text-align: right; font-weight: 900; }
-.lb-cup { flex: none; width: 15px; height: 15px; color: var(--honey); }
+.lb-cup {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--honey);
+  filter: drop-shadow(0 0 4px rgba(245, 158, 11, .4));
+}
 
-/* Col 4 — the action fills its column: one standard pill, flush with the edge. */
-.lb-act { justify-self: stretch; display: flex; min-width: 0; }
+/* Col 4 — the action is a mini-capsule, right-aligned in its column. It used to be a
+   full-bleed 40px pill, and on the guild board eight identical bright-blue keys turned
+   the ladder into a wall of CTAs. Frosted clay keeps every row scannable. */
+.lb-act { justify-self: stretch; display: flex; justify-content: flex-end; min-width: 0; }
 .lb-btn {
   --d: 2px;
   position: relative;
@@ -2340,35 +2363,42 @@ html.rm *, html.rm *::before, html.rm *::after {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: 40px;
-  padding: 0 8px;
+  min-width: 48px;
+  height: 32px;
+  padding: 0 11px;
   border-radius: var(--radius-pill);
-  font-size: 12px;
+  font-size: var(--t-micro);
   font-weight: 800;
-  letter-spacing: .02em;
+  letter-spacing: .01em;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast);
+  /* the card's own clay, frosted with a hair of white and lifted on a dark lip */
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .09) 0%, rgba(255, 255, 255, .02) 100%),
+    #222C42;
+  color: var(--chip-ink);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .09),
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    0 var(--d) 0 #0B111C;
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast), color var(--motion-fast);
 }
-/* 40px face + a vertical-only band reaches the house 48px target for free */
-.lb-btn::after { content: ""; position: absolute; inset: -4px 0; }
-.lb-btn.is-join {
-  background: var(--brand-soft);
-  color: var(--brand-ink);
-  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .34), inset 0 1px 0 rgba(255, 255, 255, .07);
-}
+/* 32px face + an 8px vertical band reaches the house 48px target for free */
+.lb-btn::after { content: ""; position: absolute; inset: -8px 0; }
+/* Join and Invite share the frosted clay; only your own guild picks up the cyan rim,
+   so the two states stay separable without either one shouting. */
 .lb-btn.is-invite {
-  background: var(--brand-fill);
-  color: var(--on-brand);
-  box-shadow: 0 var(--d) 0 var(--brand-lip), inset 0 1px 0 rgba(255, 255, 255, .3);
+  color: var(--brand-ink);
+  box-shadow:
+    inset 0 0 0 1px rgba(125, 211, 252, .3),
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    0 var(--d) 0 #0B111C;
 }
 .lb-btn:hover:not(:active) { transform: translateY(-1px); }
 .lb-btn:active { transform: translateY(var(--press-y)); --d: 0px; }
 .lb-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 /* Solo boards have no join action: the momentum arrow takes the fourth column. */
-.rank-row .lb-act { justify-content: flex-end; }
 .rank-row .tr { flex: none; width: 1.4em; text-align: center; font-size: 12px; line-height: 1; }
 .rank-row .tr.up { color: var(--mint-ink); }
 .rank-row .tr.down { color: var(--danger); }
@@ -4808,8 +4838,9 @@ html.rm .car-card.nations-cup::before { display: none; }
 .pod-iq b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .pod-cup { flex: none; width: 11px; height: 11px; color: var(--honey); }
 
-/* the join / invite key only the guild board brings; same fills as the ladder */
+/* the join / invite key only the guild board brings; same frosted clay as the ladder */
 .pod-btn {
+  --d: 2px;
   position: relative;
   appearance: none;
   border: 0;
@@ -4818,28 +4849,33 @@ html.rm .car-card.nations-cup::before { display: none; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 30px;
+  min-width: 48px;
+  height: 32px;
   padding: 0 12px;
   border-radius: var(--radius-pill);
-  font-size: 12px;
+  font-size: var(--t-micro);
   font-weight: 800;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
-  transition: transform var(--motion-fast), background var(--motion-fast);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .09) 0%, rgba(255, 255, 255, .02) 100%),
+    #222C42;
+  color: var(--chip-ink);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .09),
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    0 var(--d) 0 #0B111C;
+  transition: transform var(--motion-fast), background var(--motion-fast), color var(--motion-fast);
 }
-/* 30px face + a 9px vertical band reaches the house 48px target without height */
-.pod-btn::after { content: ""; position: absolute; inset: -9px 0; }
-.pod-btn { --d: 3px; }
-.pod-btn.is-join {
-  background: var(--brand-soft);
-  color: var(--brand-ink);
-  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .34), inset 0 1px 0 rgba(255, 255, 255, .07);
-}
+/* 32px face + an 8px vertical band reaches the house 48px target without height */
+.pod-btn::after { content: ""; position: absolute; inset: -8px 0; }
 .pod-btn.is-invite {
-  background: var(--brand-fill);
-  color: var(--on-brand);
-  box-shadow: 0 var(--d) 0 var(--brand-lip), inset 0 1px 0 rgba(255, 255, 255, .3);
+  color: var(--brand-ink);
+  box-shadow:
+    inset 0 0 0 1px rgba(125, 211, 252, .3),
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    0 var(--d) 0 #0B111C;
 }
 .pod-btn:active { transform: translateY(var(--press-y)); --d: 0px; }
 .pod-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
@@ -4912,7 +4948,12 @@ html.rm .car-card.nations-cup::before { display: none; }
   touch-action: pan-y;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  padding-bottom: 12px;
+  /* End-of-flick breathing room. The standing bar and the squad dock are in-flow
+     siblings of this scroller rather than overlays — measured clear of the last row
+     at 320/360/390 — so padding them out of --sticky-bar-h / --dock-height would be
+     ~136px of dead canvas, not a clipping fix. Declared here because #ranks-scroll's
+     ID specificity would defeat any later .ranks-body override. */
+  padding-bottom: var(--space-3);
 }
 .ranks-body::-webkit-scrollbar,
 #ranks-scroll::-webkit-scrollbar { display: none; }
@@ -4928,13 +4969,21 @@ html.rm .car-card.nations-cup::before { display: none; }
   display: flex;
   align-items: center;
   gap: var(--s3);
-  min-height: 68px;
+  min-height: var(--sticky-bar-h);
   padding: var(--s2) var(--s3) var(--s2) var(--s2);
-  border-radius: 16px;
-  border-top: 1px solid rgba(255, 255, 255, .08);
-  background: var(--clay-face);
-  background-color: #1C2433;
-  box-shadow: var(--clay), var(--clay-ring), inset 0 0 0 1px rgba(125, 211, 252, .18);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, 0) 44%),
+    var(--clay-face);
+  background-color: #1E2739;
+  /* debossed clay: a lit top edge, a shadowed bottom edge, then the cyan rim that
+     says "this row is you" — the same language the ladder cards use, one size up */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 -1px 0 rgba(0, 0, 0, .34),
+    inset 0 0 0 1px rgba(125, 211, 252, .22),
+    0 1px 0 #0A0F1A,
+    0 12px 22px -16px var(--shadow);
 }
 .solo-standing[hidden] { display: none; }
 .solo-standing:empty { display: none; }
@@ -4987,7 +5036,7 @@ html.rm .car-card.nations-cup::before { display: none; }
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.standing-score .cup { flex: none; width: 16px; height: 16px; color: var(--honey); }
+.standing-score .cup { flex: none; width: 16px; height: 16px; color: var(--honey); filter: drop-shadow(0 0 4px rgba(245, 158, 11, .4)); }
 .standing-cta {
   --d: 2px;
   appearance: none;
@@ -5022,13 +5071,20 @@ html.rm .car-card.nations-cup::before { display: none; }
   align-items: center;
   column-gap: 8px;
   max-width: 100%;
-  min-height: 72px;
+  min-height: var(--sticky-bar-h);
   margin-top: var(--s1);
   padding: 12px 8px;
-  border-radius: 18px;
-  background: var(--clay-face);
-  background-color: #1C2433;
-  box-shadow: var(--clay), var(--clay-ring);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, 0) 44%),
+    var(--clay-face);
+  background-color: #1E2739;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 -1px 0 rgba(0, 0, 0, .34),
+    inset 0 0 0 1px rgba(125, 211, 252, .22),
+    0 1px 0 #0A0F1A,
+    0 12px 22px -16px var(--shadow);
   font-variant-numeric: tabular-nums;
   position: relative;
   overflow: hidden;
@@ -5145,7 +5201,10 @@ html.rm .car-card.nations-cup::before { display: none; }
   cursor: pointer;
   transition: transform var(--motion-fast), box-shadow var(--motion-fast);
 }
-.dock-btn::after { content: ""; position: absolute; inset: -4px 0; }
+/* 40px face + a 4px vertical band reaches the 48px target; 2px on each side closes
+   the last 3px of width the two-up Invite/View pair loses inside the 116px column,
+   and still leaves 2px between adjacent bands so neither steals the other's tap. */
+.dock-btn::after { content: ""; position: absolute; inset: -4px -2px; }
 .dock-btn.is-primary {
   background: var(--brand-fill);
   color: var(--on-brand);
@@ -6218,8 +6277,6 @@ html.rm .notif-badge { animation: none; }
   text-overflow: ellipsis;
 }
 .rstat[data-stat="c"] .rstat-ico { color: var(--honey-ink); }
-/* Dock lives in-flow below the scroll — only 12px pad, no dead void. */
-.ranks-body { padding-bottom: 12px; }
 /* Squad banner never leaks onto an IQ board (JS hides via the hidden attr). */
 #ranks-dock[hidden] { display: none !important; }
 @media (max-width: 380px) {
