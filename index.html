@@ -699,6 +699,8 @@
             </section>
           </div>
           <p class="fine set-fine" data-i18n="savedNote">Saved on this device only. Nothing else is stored.</p>
+          <!-- Compliance copy belongs here and nowhere else: the ladder is a game metric. -->
+          <p class="fine set-fine tiq-note" id="tiq-note">TIQ is Detour's in-game tactical rating. Detour trains strategic thinking.</p>
           <div class="set-toast" id="set-toast" role="status" aria-live="polite" hidden></div>
         </section>
 
@@ -1168,6 +1170,37 @@
 
         <div class="sheet-actions">
           <button class="btn btn-ghost" type="button" data-sheet-close>Close</button>
+        </div>
+      </section>
+
+      <!-- Mind sheet: the cognitive profile behind one ladder name (Ranks Part 4).
+           One sheet, two shapes: a *mind* carries the four-axis read, a *guild* never
+           does — a channel's combined TIQ is not a mind, so it gets density instead. -->
+      <section class="sheet tall mind-sheet" id="sheet-mind" hidden tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="ms-name">
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <header class="ms-head">
+          <span class="ms-marks" aria-hidden="true">
+            <span class="ms-av" id="ms-av">—</span>
+            <span class="ms-flag" id="ms-flag"></span>
+          </span>
+          <span class="ms-id">
+            <b class="ms-name" id="ms-name">Mind</b>
+            <small class="ms-tier" id="ms-tier"></small>
+          </span>
+          <button class="ms-x" type="button" data-sheet-close aria-label="Close mind profile">
+            <span class="ms-x-g" aria-hidden="true">&times;</span>
+          </button>
+        </header>
+        <div class="sheet-body ms-body" id="ms-body" data-scroll></div>
+        <div class="ms-acts">
+          <button class="ms-challenge" type="button" id="ms-challenge" aria-label="Challenge mind: start a race">
+            <svg class="ico" aria-hidden="true"><use href="#i-swords" /></svg>
+            <span>Challenge mind</span>
+          </button>
+          <button class="ms-guild" type="button" id="ms-guild" aria-label="View Intellect Guilds">
+            <svg class="ico" aria-hidden="true"><use href="#i-users" /></svg>
+            <span>View guild</span>
+          </button>
         </div>
       </section>
 

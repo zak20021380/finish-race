@@ -181,6 +181,54 @@ function fieldOf(code: string, points: number): { minds: number; avg: number } {
 
 const signed = (n: number): string => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n).toLocaleString('en-US')}`;
 
+/* ---------- mind profile: the four axes, the form strip, the percentile ring ---------- */
+
+/** One axis of the cognitive read: a bar, the number behind it, and where it came from. */
+interface MindAxis {
+  label: string;
+  icon: string;
+  pct: number;
+  value: string;
+  hint: string;
+}
+
+/** Newest on the right; `u` is a race the save genuinely does not remember. */
+type FormCell = 'w' | 'l' | 'u';
+
+const clampPct = (n: number): number => Math.max(0, Math.min(100, Math.round(n * 100)));
+
+/** Each axis is a count against a fixed cap, so the bar and the number never disagree. */
+const axisPct = (count: number, cap: number): number => clampPct(count / cap);
+
+/**
+ * A rival's axes, seeded once from their own key. The ladder holds no race log for
+ * anybody but you, so these are the Preview chip's figures — stable across renders and
+ * the only part of the sheet not read from real data.
+ */
+function rivalAxes(p: PlayerRow): MindAxis[] {
+  const h = hashOf(p.id);
+  const blocked = 3 + (h % 8);
+  const mine = 14 + ((h >> 4) % 8);
+  const field = mine + 6 + ((h >> 8) % 9);
+  const baited = 2 + ((h >> 12) % 7);
+  const back = 2 + ((h >> 16) % 9);
+  return [
+    { label: 'Foresight', icon: '#i-brain', pct: axisPct(blocked, 12), value: `${blocked} blocked paths`, hint: 'Walls read before committing · cap 12 a race · Season preview figure' },
+    { label: 'Tempo', icon: '#i-move', pct: axisPct(field - mine, 14), value: `${mine} vs ${field} turns`, hint: `Their ${mine} turns against the field's ${field} · Season preview figure` },
+    { label: 'Traps', icon: '#i-mine', pct: axisPct(baited, 9), value: `${baited} dead-ends baited`, hint: 'Dead-ends laid for the other side · cap 9 · Season preview figure' },
+    { label: 'Compose', icon: '#i-shield', pct: axisPct(back, 12), value: `${back} comeback wins`, hint: 'Races won from behind · cap 12 · Season preview figure' },
+  ];
+}
+
+/** Weighted by the trend already printed beside the name, so form never fights arrow. */
+function rivalForm(key: string, trend: Trend): FormCell[] {
+  const h = hashOf(key);
+  const bias = trend === 'up' ? 72 : trend === 'down' ? 40 : 56;
+  const out: FormCell[] = [];
+  for (let i = 0; i < 5; i++) out.push((h >> (i * 3)) % 100 < bias ? 'w' : 'l');
+  return out;
+}
+
 /** Sprite icon as a real element — the house artwork, never an emoji stand-in. */
 function svgIcon(href: string, cls: string): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg');
@@ -190,6 +238,37 @@ function svgIcon(href: string, cls: string): SVGSVGElement {
   use.setAttribute('href', href);
   svg.append(use);
   return svg;
+}
+
+/**
+ * Percentile ring: one SVG arc on pathLength=100, so the dash *is* the percentage and
+ * the mount animation only has to walk stroke-dashoffset from empty to its own value.
+ */
+function percentRing(pct: number, inner: HTMLElement, extraCls = ''): HTMLElement {
+  const ring = document.createElement('span');
+  ring.className = `mh-ring${extraCls ? ` ${extraCls}` : ''}`;
+  ring.setAttribute('aria-hidden', 'true');
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('class', 'mh-arc');
+  svg.setAttribute('viewBox', '0 0 44 44');
+  const arc = (fill: boolean): void => {
+    const c = document.createElementNS(SVG_NS, 'circle');
+    c.setAttribute('class', fill ? 'mh-arc-fill' : 'mh-arc-track');
+    c.setAttribute('cx', '22');
+    c.setAttribute('cy', '22');
+    c.setAttribute('r', '19');
+    c.setAttribute('fill', 'none');
+    if (fill) {
+      c.setAttribute('pathLength', '100');
+      c.setAttribute('stroke-dasharray', '100 100');
+      c.style.strokeDashoffset = String(100 - Math.max(0, Math.min(100, pct)));
+    }
+    svg.append(c);
+  };
+  arc(false);
+  arc(true);
+  ring.append(svg, inner);
+  return ring;
 }
 
 /* ---------- flag rendering pipeline ---------- */
@@ -1214,6 +1293,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     /** The climber directly above, so inspection can name the gap it has to close. */
     above?: { name: string; tiq: number } | null;
     wins?: number;
+    /** A mind opens its profile sheet; without this a row keeps the inline read. */
+    onOpen?: () => void;
   }
 
   /**
@@ -1287,6 +1368,23 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     li.append(rankCrest(rank), id, cell, act);
 
+    li.tabIndex = 0;
+
+    /* A mind has a profile to open, so its row goes straight there. A nation does not —
+       it is an aggregate — so that board keeps the inline inspection read instead. */
+    if (r.onOpen) {
+      const run = (): void => { r.onOpen?.(); };
+      li.setAttribute('aria-label', `#${rank} ${name} — ${points} Tactical IQ, ${trendLabel}. Activate to open the mind profile.`);
+      li.addEventListener('click', run);
+      li.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          run();
+        }
+      });
+      return li;
+    }
+
     /* ---- inspection read: the four numbers a row can honestly tell you ---- */
     const peek = document.createElement('span');
     peek.className = 'lb-peek';
@@ -1314,7 +1412,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       peek.hidden = !on;
       li.setAttribute('aria-expanded', String(on));
     };
-    li.tabIndex = 0;
     li.setAttribute('aria-expanded', 'false');
     li.addEventListener('click', () => { impact('light'); open(!li.classList.contains('is-open')); });
     li.addEventListener('keydown', (ev) => {
@@ -1382,16 +1479,33 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
    * the save counts opponents, not mines placed, so it is a proxy until the backend
    * reports hazard play.
    */
-  function mindAxes(): { label: string; pct: number; hint: string }[] {
+  function mindAxes(): MindAxis[] {
     const s = profile.stats;
     const g = Math.max(0, s.games);
-    const clamp = (n: number): number => Math.max(0, Math.min(100, Math.round(n * 100)));
+    const online = s.modes.online ?? 0;
     return [
-      { label: 'Foresight', pct: clamp(g ? s.wins / g : 0), hint: 'Win rate across every race' },
-      { label: 'Tempo', pct: clamp(g / 40), hint: 'Races played — 40 fills the bar' },
-      { label: 'Traps', pct: clamp(g ? (s.modes.online ?? 0) / g : 0), hint: 'Share of races against real minds' },
-      { label: 'Compose', pct: clamp(s.best + s.losses > 0 ? s.best / (s.best + s.losses) : 0), hint: 'Best streak held against losses' },
+      { label: 'Foresight', icon: '#i-brain', pct: clampPct(g ? s.wins / g : 0), value: `${s.wins}/${g} races won`, hint: 'Win rate across every race' },
+      { label: 'Tempo', icon: '#i-move', pct: clampPct(g / 40), value: `${g} races played`, hint: 'Races played — 40 fills the bar' },
+      { label: 'Traps', icon: '#i-mine', pct: clampPct(g ? online / g : 0), value: `${online} vs a mind`, hint: 'Share of races against real minds' },
+      { label: 'Compose', icon: '#i-shield', pct: clampPct(s.best + s.losses > 0 ? s.best / (s.best + s.losses) : 0), value: `${s.best}W streak · ${s.losses}L`, hint: 'Best streak held against losses' },
     ];
+  }
+
+  /**
+   * Your last five, read from the only history the save keeps: a win streak is bounded
+   * by the loss that ended the one before it, so everything past it is unrecorded
+   * rather than invented.
+   */
+  function myForm(): FormCell[] {
+    const s = profile.stats;
+    const wins = Math.min(5, s.streak);
+    const loss = s.losses > 0 && s.streak < s.games && wins < 5 ? 1 : 0;
+    const known = wins + loss;
+    const out: FormCell[] = [];
+    for (let i = 5 - known; i > 0; i--) out.push('u');
+    if (loss) out.push('l');
+    for (let i = 0; i < wins; i++) out.push('w');
+    return out;
   }
 
   /** Momentum, since the save has no weekly history of its own to quote. */
@@ -1430,31 +1544,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const pct = onBoard ? Math.max(1, Math.round((myRank / (field + 1)) * 100)) : 100;
     const delta = deltaOf('you', tiq, myTrend());
 
-    /* ring: an SVG arc on pathLength=100, so the dash is literally the percentage */
-    const ring = document.createElement('span');
-    ring.className = 'mh-ring';
-    ring.setAttribute('aria-hidden', 'true');
-    const svg = document.createElementNS(SVG_NS, 'svg');
-    svg.setAttribute('class', 'mh-arc');
-    svg.setAttribute('viewBox', '0 0 44 44');
-    const mk = (cls: string): SVGElement => {
-      const c = document.createElementNS(SVG_NS, 'circle');
-      c.setAttribute('class', cls);
-      c.setAttribute('cx', '22');
-      c.setAttribute('cy', '22');
-      c.setAttribute('r', '19');
-      c.setAttribute('fill', 'none');
-      svg.append(c);
-      return c;
-    };
-    mk('mh-arc-track');
-    const arc = mk('mh-arc-fill');
-    arc.setAttribute('pathLength', '100');
-    arc.setAttribute('stroke-dasharray', `${onBoard ? pct : 0} 100`);
+    /* ring: one shared arc, so the hero card and the mind sheet fill the same way */
     const av = document.createElement('b');
     const h = youHandle() ?? 'Y';
     av.textContent = h.replace(/^@/, '').slice(0, 1).toUpperCase() || 'Y';
-    ring.append(svg, av);
+    const ring = percentRing(onBoard ? pct : 0, av);
 
     const idWrap = document.createElement('span');
     idWrap.className = 'mh-id';
@@ -1569,6 +1663,258 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     b.addEventListener('click', () => spotRank(rank));
     return b;
   }
+
+  /* ---------- the mind sheet: one ladder name's cognitive profile (bottom clay sheet) ----------
+     One panel, two shapes. A *mind* gets the four-axis read; a *guild* never does, because
+     a channel's combined TIQ is not a mind — it gets density and its real join / invite key.
+     Both shapes carry only actions the local backend can actually perform. */
+
+  const msEls = {
+    sheet: document.getElementById('sheet-mind'),
+    av: document.getElementById('ms-av'),
+    flag: document.getElementById('ms-flag'),
+    name: document.getElementById('ms-name'),
+    tier: document.getElementById('ms-tier'),
+    body: document.getElementById('ms-body'),
+    challenge: document.getElementById('ms-challenge') as HTMLButtonElement | null,
+    guild: document.getElementById('ms-guild') as HTMLButtonElement | null,
+  };
+
+  /** The last field each board loaded — the percentile ring has to be a rank over something. */
+  let mindsField: PlayerRow[] = [];
+  let guildField: RankedSquad[] = [];
+  /** What the two keys at the foot of the open sheet are allowed to do right now. */
+  let msPending: { kind: 'mind'; name: string; tiq: number } | { kind: 'guild'; squad: RankedSquad } | null = null;
+
+  function msHead(letter: string, code: string | null, name: string, tier: string): void {
+    const { av, flag, name: nm, tier: tr } = msEls;
+    if (av) av.textContent = letter;
+    if (flag) {
+      flag.textContent = '';
+      if (code) flag.append(flagPhoto(code, 'fp-ms'));
+    }
+    if (nm) {
+      nm.textContent = name;
+      nm.title = name;
+    }
+    if (tr) {
+      tr.textContent = tier;
+      tr.title = tier;
+    }
+  }
+
+  function msHero(points: string, delta: number, pct: number, sub: string): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'ms-hero';
+    const col = document.createElement('span');
+    col.className = 'ms-hero-id';
+    const iq = document.createElement('span');
+    iq.className = 'ms-iq';
+    iq.append(svgIcon('#i-brain', 'tiq'));
+    const num = document.createElement('b');
+    num.textContent = points;
+    iq.append(num);
+    if (delta) {
+      const d = document.createElement('small');
+      d.className = `lb-delta ${delta > 0 ? 'up' : 'down'}`;
+      d.textContent = signed(delta);
+      iq.append(d);
+    }
+    const line = document.createElement('small');
+    line.className = 'ms-hero-sub';
+    line.textContent = sub;
+    col.append(iq, line);
+    const inner = document.createElement('b');
+    inner.textContent = `${pct}%`;
+    const ringCol = document.createElement('span');
+    ringCol.className = 'ms-ring-col';
+    const cap = document.createElement('small');
+    cap.className = 'ms-ring-c';
+    cap.textContent = 'Percentile';
+    ringCol.append(percentRing(pct, inner, 'ms-ring'), cap);
+    wrap.append(col, ringCol);
+    return wrap;
+  }
+
+  /** Caption over content, in the same engraved-cap voice the podium band uses. */
+  function msSection(title: string, ...kids: HTMLElement[]): HTMLElement {
+    const wrap = document.createElement('section');
+    wrap.className = 'ms-block';
+    const h = document.createElement('h3');
+    h.className = 'ms-h';
+    h.textContent = title;
+    wrap.append(h, ...kids);
+    return wrap;
+  }
+
+  function msAxisList(axes: MindAxis[]): HTMLElement {
+    const list = document.createElement('div');
+    list.className = 'ms-axes';
+    for (const a of axes) {
+      const line = document.createElement('div');
+      line.className = 'ms-axis';
+      line.title = a.hint;
+      const head = document.createElement('span');
+      head.className = 'ms-axis-h';
+      head.append(svgIcon(a.icon, 'ms-axis-ico'));
+      const label = document.createElement('small');
+      label.textContent = a.label;
+      const value = document.createElement('b');
+      value.textContent = a.value;
+      head.append(label, value);
+      const track = document.createElement('span');
+      track.className = 'mh-track ms-track';
+      track.setAttribute('role', 'progressbar');
+      track.setAttribute('aria-label', `${a.label}: ${a.value}`);
+      track.setAttribute('aria-valuemin', '0');
+      track.setAttribute('aria-valuemax', '100');
+      track.setAttribute('aria-valuenow', String(a.pct));
+      const fill = document.createElement('i');
+      fill.style.width = `${a.pct}%`;
+      track.append(fill);
+      line.append(head, track);
+      list.append(line);
+    }
+    return list;
+  }
+
+  function msFormStrip(form: FormCell[], caption: string): HTMLElement {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'ms-form';
+    const dots = document.createElement('span');
+    dots.className = 'ms-dots';
+    const read = form.map((c) => (c === 'w' ? 'W' : c === 'l' ? 'L' : 'unrecorded')).join(', ');
+    dots.setAttribute('aria-label', `Last five, newest on the right: ${read}.`);
+    for (const c of form) {
+      const d = document.createElement('i');
+      d.className = `ms-dot ${c}`;
+      d.textContent = c === 'w' ? 'W' : c === 'l' ? 'L' : '·';
+      dots.append(d);
+    }
+    const cap = document.createElement('small');
+    cap.className = 'ms-form-c';
+    cap.textContent = caption;
+    rowEl.append(dots, cap);
+    return rowEl;
+  }
+
+  function msStats(pairs: [string, string][]): HTMLElement {
+    const grid = document.createElement('div');
+    grid.className = 'ms-stats';
+    for (const [k, v] of pairs) {
+      const cell = document.createElement('div');
+      cell.className = 'ms-stat';
+      const key = document.createElement('small');
+      key.textContent = k;
+      const val = document.createElement('b');
+      val.textContent = v;
+      cell.append(key, val);
+      grid.append(cell);
+    }
+    return grid;
+  }
+
+  function msFine(text: string): HTMLElement {
+    const p = document.createElement('p');
+    p.className = 'fine ms-fine';
+    p.textContent = text;
+    return p;
+  }
+
+  /** The two clay keys never change shape — only what they can honestly do changes. */
+  function msActions(kind: 'mind' | 'guild', label: string, hint: string): void {
+    const ch = msEls.challenge;
+    const gu = msEls.guild;
+    if (ch) {
+      const span = ch.querySelector<HTMLElement>('span');
+      if (span) span.textContent = label;
+      ch.setAttribute('aria-label', hint);
+    }
+    if (gu) {
+      gu.setAttribute('aria-label', kind === 'guild' ? 'View this guild in the squad sheet' : 'View the Intellect Guilds board');
+    }
+  }
+
+  function openMind(p: PlayerRow, rank: number): void {
+    const el = msEls.sheet;
+    const body = msEls.body;
+    if (!el || !body) return;
+    const div = divisionOf(p.points);
+    const field = mindsField.length;
+    const pct = field > 0 ? Math.max(1, Math.min(99, Math.round((rank / (field + 1)) * 100))) : 100;
+    const tiq = p.points.toLocaleString('en-US');
+    msPending = { kind: 'mind', name: p.name, tiq: p.points };
+    el.dataset.tier = div.tier;
+    msHead(p.name.slice(0, 1).toUpperCase() || '?', p.countryCode, p.name, div.label);
+    el.setAttribute('aria-label', `Mind profile: ${p.name}, ${div.label}, ${tiq} Tactical IQ`);
+    body.textContent = '';
+    body.append(
+      msHero(tiq, deltaOf(p.id, p.points, p.trend), pct, `#${rank} of ${field} minds · ${p.wins} wins`),
+      msSection('Mind profile', msAxisList(rivalAxes(p))),
+      msSection('Form', msFormStrip(rivalForm(p.id, p.trend), 'Season preview · newest on the right')),
+      msFine(`Beat ${p.name}'s ${tiq} TIQ: Challenge mind starts a race, and every win is 140 TIQ.`),
+    );
+    msActions('mind', 'Challenge mind', `Challenge mind: start a race against ${p.name}'s ${tiq} TIQ`);
+    impact('light');
+    api.sheets.open(el);
+  }
+
+  function openGuild(s: RankedSquad): void {
+    const el = msEls.sheet;
+    const body = msEls.body;
+    if (!el || !body) return;
+    const mine = getMySquad()?.id === s.id;
+    const act = squadAction(s, mine);
+    const field = guildField.length;
+    const pct = field > 0 ? Math.max(1, Math.min(99, Math.round((s.rank / (field + 1)) * 100))) : 100;
+    const kind = squadKind(s);
+    const label = s.name || s.handle.replace(/^@/, '');
+    const contrib = mine ? getMyContribution() : 0;
+    msPending = { kind: 'guild', squad: s };
+    delete el.dataset.tier;
+    msHead(squadLetter(s), null, label, `${kind === 'channel' ? 'Telegram channel' : 'Telegram group'} · #${s.rank}`);
+    el.setAttribute('aria-label', `Guild profile: ${label}, ${s.trophies.toLocaleString('en-US')} combined Tactical IQ`);
+    body.textContent = '';
+    body.append(
+      msHero(s.trophies.toLocaleString('en-US'), 0, pct, `#${s.rank} of ${field} guilds`),
+      msSection(
+        'Guild read',
+        msStats([
+          ['Members', s.members.toLocaleString('en-US')],
+          ['AVG per mind', avgOf(s).toLocaleString('en-US')],
+          ['Rank', `#${s.rank}`],
+          ['Yours', contrib > 0 ? contrib.toLocaleString('en-US') : '—'],
+        ]),
+      ),
+      msFine('A guild carries no mind tier — its TIQ is the sum of the minds inside it.'),
+    );
+    msActions('guild', act.label === 'Invite' ? 'Invite squad' : `Join ${label}`, act.hint);
+    impact('light');
+    api.sheets.open(el);
+  }
+
+  msEls.challenge?.addEventListener('click', () => {
+    const p = msPending;
+    if (!p) return;
+    if (p.kind === 'mind') {
+      impact('medium');
+      api.sheets.close();
+      api.router.go('home');
+      return;
+    }
+    squadAction(p.squad, getMySquad()?.id === p.squad.id).run();
+  });
+
+  msEls.guild?.addEventListener('click', () => {
+    const p = msPending;
+    impact('light');
+    if (p?.kind === 'guild') {
+      openSquadSheet();
+      return;
+    }
+    api.sheets.close();
+    selectBoard('guilds');
+  });
 
   /**
    * On Nations IQ the hero strip above already carries the flag, the rank and the
@@ -1754,6 +2100,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       paintMindsStanding(null);
       return;
     }
+    mindsField = rows;
     paintPodium(rows.slice(0, 3).map((p, i) => ({
       rank: i + 1,
       name: p.name,
@@ -1762,6 +2109,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       tier: tierOf(p.points),
       tierLabel: divisionOf(p.points).label,
       delta: deltaOf(p.id, p.points, p.trend),
+      onTap: () => openMind(p, i + 1),
     })));
     el.textContent = '';
     const ol = document.createElement('ol');
@@ -1781,6 +2129,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         key: p.id,
         wins: p.wins,
         above: up ? { name: up.name, tiq: up.points } : null,
+        onOpen: () => openMind(p, i + 4),
       }));
     });
     el.append(ol);
@@ -1958,7 +2307,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     li.dataset.id = s.id;
     const label = s.name || s.handle.replace(/^@/, '');
     li.title = `${label} · ${s.handle}`;
-    li.setAttribute('aria-label', `${label}, ${s.handle}, rank ${s.rank}, ${s.trophies.toLocaleString('en-US')} Tactical IQ. Press Enter for squad details.`);
+    li.setAttribute('aria-label', `${label}, ${s.handle}, rank ${s.rank}, ${s.trophies.toLocaleString('en-US')} Tactical IQ. Activate to open the guild profile.`);
     if (mine) li.setAttribute('aria-current', 'true');
 
     /* Identity column: hex crest, then the name — which owns the flexible width.
@@ -2000,17 +2349,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     li.append(rankCrest(s.rank), id, cell, act);
 
-    // The whole row opens squad details; the compact key joins / invites.
-    li.addEventListener('click', () => {
-      impact('light');
-      openSquadSheet();
-    });
+    // The whole row opens the guild's profile sheet, which carries the real keys.
+    li.addEventListener('click', () => { openGuild(s); });
     li.addEventListener('keydown', (e) => {
       if (e.target !== li) return;
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        impact('light');
-        openSquadSheet();
+        openGuild(s);
       }
     });
     return li;
@@ -2140,6 +2485,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       return;
     }
     const me = getMySquad();
+    guildField = rows;
     paintPodium(rows.slice(0, 3).map((s) => ({
       rank: s.rank,
       name: s.name || s.handle.replace(/^@/, ''),

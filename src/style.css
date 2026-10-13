@@ -2288,7 +2288,7 @@ html.rm *, html.rm *::before, html.rm *::after {
   font-variant-numeric: tabular-nums;
   transition: transform var(--motion-fast), background var(--motion-fast);
 }
-.lb-row:active { transform: translateY(1px); }
+.lb-row:active { transform: translateY(2px); }
 .lb-row:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
 .lb-row.is-you { border-color: rgba(125, 211, 252, .4); }
 /* Every ladder row is a control now: it opens its own inspection read.
@@ -4964,11 +4964,11 @@ html.rm .car-card.nations-cup::before { display: none; }
   transform: translateX(-50%);
   color: var(--honey-ink);
   filter: drop-shadow(0 0 6px rgba(245, 158, 11, .7));
-  animation: pod-crown 3.2s ease-in-out infinite;
+  animation: pod-crown 2.4s ease-in-out infinite;
 }
 @keyframes pod-crown {
   0%, 100% { transform: translate(-50%, 0); }
-  50% { transform: translate(-50%, -3px); }
+  50% { transform: translate(-50%, -4px); }
 }
 /* The throne: a radial gold bloom behind the leader, drawn under its content. */
 .pod-card.gold::before {
@@ -5351,7 +5351,15 @@ html.rm .pod-card.gold .pod-av::after { opacity: .45; }
 .mh-arc { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
 .mh-arc circle { stroke-width: 3; }
 .mh-arc-track { stroke: rgba(255, 255, 255, .1); }
-.mh-arc-fill { stroke: var(--ml-aura, var(--brand-2)); stroke-linecap: round; }
+.mh-arc-fill {
+  stroke: var(--ml-aura, var(--brand-2));
+  stroke-linecap: round;
+  /* the arc walks from empty to its own dashoffset, so the fill reads as a measurement
+     being taken rather than a number that was always there */
+  animation: ml-ring-fill 900ms ease-out;
+}
+@keyframes ml-ring-fill { from { stroke-dashoffset: 100; } }
+html.rm .mh-arc-fill { animation: none; }
 .mh-ring b {
   width: 38px;
   height: 38px;
@@ -9052,3 +9060,346 @@ html.rm .dock-nav .tab[aria-current="page"]::after { animation: none; }
   .pf-hero-chip-row { grid-template-columns: minmax(0, 1fr); }
   .pf-rank-badge { font-size: 9.5px; }
 }
+
+/* ==========================================================================
+   THE MIND LADDER — Part 4: the mind sheet, its micro-interactions, the gate.
+   One clay bottom sheet behind every ladder name. Depth is extrusion and inner
+   shadow only: no backdrop-filter anywhere in this block, so the panel stays
+   opaque slate over the scrim rather than turning to glass.
+   ========================================================================== */
+
+/* ---- settings footer: the one place TIQ is explained ---- */
+.tiq-note { margin-top: var(--s1); text-align: center; }
+
+/* ---- surface + header ---- */
+.mind-sheet {
+  border-radius: 24px 24px 0 0;
+  /* the brief's own ceiling, and the same 85dvh the mode sheet already proves at 360x640 */
+  max-height: 85vh;
+  max-height: 85dvh;
+  gap: var(--s2);
+  background: linear-gradient(180deg, #232E44 0%, #1C2433 46%);
+  background-color: #1C2433;
+  box-shadow:
+    inset 0 1px 0 var(--hair-lit),
+    inset 0 0 0 1px rgba(255, 255, 255, .06),
+    0 -20px 44px -20px var(--shadow);
+}
+/* A mind wears its aura on the ring, the tier word and the axis glyphs. A guild carries
+   no tier — openGuild() drops the attribute — so every var() below falls back to sky. */
+#sheet-mind[data-tier="rookie"]      { --ml-aura: var(--tier-rookie); }
+#sheet-mind[data-tier="tactician"]   { --ml-aura: var(--tier-tactician); }
+#sheet-mind[data-tier="strategist"]  { --ml-aura: var(--tier-strategist); }
+#sheet-mind[data-tier="grandmaster"] { --ml-aura: var(--tier-grandmaster); }
+
+.ms-head { flex: none; display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+/* The flag rides the corner of the avatar, so the identity column keeps its width at 320. */
+.ms-marks { position: relative; flex: none; width: 54px; height: 54px; }
+.ms-av {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #2A354C 0%, #141B2A 100%);
+  box-shadow:
+    inset 0 0 0 2px var(--ml-aura, var(--brand-2)),
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    0 0 18px -6px var(--ml-aura, var(--brand-glow)),
+    0 3px 0 #0A0F1A;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+}
+.ms-flag { position: absolute; right: -3px; bottom: -3px; }
+.fp-ms { --fp-d: 24px; }
+.fp-ms .fp-chip { border-radius: 9px; font-size: 8px; box-shadow: inset 0 0 0 1px #0A0F1A, 0 0 0 2px #1C2433; }
+.fp-ms .fp-img { border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35), 0 0 0 2px #1C2433; }
+
+.ms-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ms-name {
+  font-size: var(--t-1);
+  font-weight: 900;
+  letter-spacing: -.01em;
+  line-height: 1.2;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ms-tier {
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  line-height: 1.3;
+  color: var(--ml-aura, var(--brand-ink));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 48px circular clay key: the house extrusion, sunk by the same travel as .gm-key */
+.ms-x {
+  --d: 3px;
+  position: relative;
+  flex: none;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #2E3A55 0%, #232E44 100%);
+  color: var(--ink);
+  cursor: pointer;
+  box-shadow:
+    0 var(--d) 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    var(--clay-ring);
+  transition: transform var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
+}
+.ms-x-g { font-size: 26px; font-weight: 600; line-height: .8; }
+.ms-x:hover:not(:active) { color: var(--brand-ink); }
+.ms-x:active { transform: translateY(var(--press-y)); --d: 0px; }
+.ms-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+/* ---- body ---- */
+.ms-body { gap: var(--s3); padding-right: 2px; }
+
+.ms-hero {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, 0) 46%),
+    var(--clay-face);
+  background-color: #1E2739;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 -1px 0 rgba(0, 0, 0, .34),
+    inset 0 0 0 1px var(--ml-aura, var(--hair)),
+    0 1px 0 #0A0F1A;
+  transition: transform var(--motion-fast);
+}
+.ms-hero:active { transform: translateY(2px); }
+.ms-hero-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ms-iq {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--tiq);
+  font-size: var(--t-hd);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.ms-iq .tiq { flex: none; width: 18px; height: 18px; color: var(--honey); filter: drop-shadow(0 0 5px rgba(245, 158, 11, .45)); }
+.ms-iq b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ms-iq .lb-delta { flex: none; font-size: 10px; }
+.ms-hero-sub {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  line-height: 1.3;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* the shared ring, one size up so the percentile is the first thing you read */
+.ms-ring-col { flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.ms-ring-c {
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  line-height: 1.1;
+  color: var(--ink-soft);
+}
+.ms-ring { width: 56px; height: 56px; }
+.ms-ring b { width: 44px; height: 44px; border-radius: 14px; font-size: 13px; letter-spacing: -.02em; }
+
+.ms-block { flex: none; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ms-h {
+  margin: 0;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .7);
+}
+
+.ms-axes { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.ms-axis { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ms-axis-h { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ms-axis-ico { flex: none; width: 14px; height: 14px; color: var(--ml-aura, var(--brand-ink)); }
+.ms-axis-h small {
+  flex: none;
+  width: 62px;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: var(--chip-ink);
+}
+.ms-axis-h b {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ms-track { height: 8px; }
+
+.ms-form { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+.ms-dots { flex: none; display: flex; gap: 5px; }
+.ms-dot {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+}
+/* cyan won, coral lost, and an unrecorded race stays a dim dash rather than being
+   drawn as a result the save never kept */
+.ms-dot.w {
+  background: linear-gradient(180deg, rgba(56, 189, 248, .3) 0%, rgba(2, 132, 199, .14) 100%);
+  box-shadow: inset 0 0 0 1.5px var(--brand-3), inset 0 1px 0 rgba(255, 255, 255, .16);
+  color: #E0F2FE;
+}
+.ms-dot.l {
+  background: linear-gradient(180deg, rgba(255, 82, 43, .28) 0%, rgba(184, 48, 16, .16) 100%);
+  box-shadow: inset 0 0 0 1.5px var(--cta), inset 0 1px 0 rgba(255, 255, 255, .14);
+  color: #FFE4DC;
+}
+.ms-dot.u { background: var(--field); box-shadow: var(--inset); color: var(--ink-soft); }
+.ms-form-c {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ink-soft);
+}
+
+.ms-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; min-width: 0; }
+.ms-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--field);
+  box-shadow: var(--inset);
+}
+.ms-stat small {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: var(--ink-soft);
+}
+.ms-stat b {
+  font-size: var(--t-1);
+  font-weight: 900;
+  line-height: 1.2;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ms-fine { flex: none; margin: 0; text-align: left; font-size: 10px; line-height: 1.4; }
+
+/* ---- foot keys: coral over slate, both 48px, both able to do what they say ---- */
+.ms-acts { flex: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); margin-top: var(--s1); }
+.ms-challenge,
+.ms-guild {
+  --d: 4px;
+  position: relative;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  height: 48px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  font-size: var(--t-micro);
+  font-weight: 900;
+  letter-spacing: .01em;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), color var(--motion-fast);
+}
+.ms-challenge .ico,
+.ms-guild .ico { flex: none; width: 15px; height: 15px; }
+.ms-challenge span,
+.ms-guild span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ms-challenge {
+  background: linear-gradient(180deg, var(--cta-hi) 0%, var(--cta) 100%);
+  color: var(--on-brand);
+  box-shadow:
+    0 var(--d) 0 var(--cta-lip),
+    0 calc(var(--d) + 7px) 16px -8px var(--cta-shadow),
+    inset 0 2px 3px rgba(255, 255, 255, .35),
+    inset 0 -2px 3px rgba(0, 0, 0, .18);
+}
+.ms-guild {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .09) 0%, rgba(255, 255, 255, .02) 100%),
+    #222C42;
+  color: var(--chip-ink);
+  box-shadow:
+    inset 0 0 0 1px rgba(125, 211, 252, .26),
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    0 var(--d) 0 #0B111C;
+}
+.ms-challenge:active,
+.ms-guild:active { transform: translateY(var(--press-y)); --d: 1px; }
+.ms-challenge:focus-visible,
+.ms-guild:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+
+/* ---- the tight phone: the keys lose their artwork before they lose a label ---- */
+@media (max-width: 340px) {
+  .ms-challenge .ico,
+  .ms-guild .ico { display: none; }
+  .ms-axis-h small { width: 56px; }
+  .ms-dot { width: 24px; height: 24px; font-size: 10px; }
+}
+
+/* ---- reduced motion: the throne still glows, it just stops moving ---- */
+html.rm .ms-hero,
+html.rm .ms-challenge,
+html.rm .ms-guild,
+html.rm .ms-x,
+html.rm .lb-row { transition: none; }
