@@ -64,6 +64,12 @@ const tg = window.Telegram?.WebApp;
 export const tgUser = (): TgUser | undefined => tg?.initDataUnsafe?.user;
 
 /**
+ * The raw Mini App `initData` query string, or '' outside Telegram. The matchmaker verifies it
+ * server-side (`worker/auth.ts`), so the client only ever forwards it — it never trusts it.
+ */
+export const tgInitData = (): string => tg?.initData ?? '';
+
+/**
  * The client's language, e.g. `fa` or `pt-BR`. Telegram puts it in the initData query string rather
  * than next to the user, so try the documented spots and then the query string before the browser.
  */

@@ -25,7 +25,7 @@ import { onChange, recordGame, theme } from './storage';
 import { impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
 import { getGameMode, gmBack, initGameModes, setGameMode } from './gamemodes';
-import { createMatchmaking } from './matchmaking';
+import { createMatchmaking, onlineSearch } from './matchmaking';
 
 initTelegram();
 applyFlagSupport();
@@ -156,8 +156,14 @@ const sheetById = (id: string) => document.getElementById(id);
  * The 1v1 searching stage. Quick match queues here instead of dropping straight onto the
  * board; the race itself still starts through the single `startGame()` door, and cancelling
  * hands the player back to the mode drawer they came from.
+ *
+ * The transport is the Worker's matchmaker (`worker/`, wired in `matchmaking.ts`): it pairs you
+ * with a real opponent and remembers the `{ matchId, seed, side }` the online race runs on. With
+ * no Worker listening — a static preview — the same call falls back to the local search, so this
+ * stage is still playable on its own.
  */
 const matchmaking = createMatchmaking({
+  source: onlineSearch(),
   onMatchFound: () => startGame({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] }),
   onCancel: () => {
     const drawer = sheetById('sheet-game-modes');

@@ -7,12 +7,13 @@
  * line and its rings sweeping outward between them, the elapsed clock and the
  * cycling status line.
  *
- * Nothing here talks to a server yet. `source` is the seam a socket plugs into:
- * it takes an `AbortSignal` (plus the current `wide` skill filter) and resolves
- * with the `OpponentData` it found. The built-in `simulatedSearch()` answers after
- * ~4s, so the flow is playable today; a transport that is not wired yet (a
- * rejection that is not our own abort) falls back to that same simulated search
- * instead of leaving the radar spinning.
+ * `source` is the seam a transport plugs into: it takes an `AbortSignal` (plus the current `wide`
+ * skill filter) and resolves with the `OpponentData` it found. `onlineSearch()` is the real one —
+ * one socket to the Worker's matchmaker (`worker/`), which answers with the opponent and the
+ * `{ matchId, seed, side }` the race will run on. With no Worker behind the page (a static
+ * preview, a `file://` tab, a refused upgrade) that same socket call falls back to the
+ * `simulatedSearch()` that has always answered after ~4s, so the stage is never left spinning. A
+ * transport that rejects for its own reasons falls back the same way.
  *
  * A queue that stays silent for `QUIET_MS` stops promising and asks: the stage
  * offers a widened radius (the same clock, a relaxed filter) and a seat against
@@ -26,7 +27,7 @@
  */
 import { motionReduced, settings } from './settings';
 import { profile } from './storage';
-import { impact, notify, tgUser } from './telegram';
+import { impact, notify, tgInitData, tgUser } from './telegram';
 
 /* ---------- TIQ: the same reading the ladder prints ---------- */
 
@@ -149,6 +150,226 @@ function readFace(fallbackName: string): Face {
   const avatarUrl = (img && !img.hidden && img.src ? img.src : null) ?? u?.photo_url ?? null;
   const letter = domText('avatar-t', '') || name.charAt(0) || 'P';
   return { name, initial: letter.slice(0, 1).toUpperCase(), avatarUrl };
+}
+
+/* ---------- online transport: the Worker's waiting room over a WebSocket ---------- */
+
+/** What the upcoming online race runs on: the id both sides agree on, the shared seed, your side. */
+export interface OnlineMatch {
+  matchId: string;
+  seed: number;
+  side: 0 | 1;
+}
+
+/** The seat and the socket it arrived on — part two of the online race rides this connection. */
+export interface OnlineRace {
+  match: OnlineMatch;
+  socket: WebSocket;
+}
+
+/** What the matchmaker sends back (`worker/matchmaker.ts`). The socket is its only producer. */
+interface FoundMessage {
+  type: 'MATCH_FOUND';
+  matchId: string;
+  seed: number;
+  side: 0 | 1;
+  opponent: { name: string; tiq: number; tier: string; flag: string };
+}
+
+/** An attempt the socket is answering. Only the newest one is allowed to settle. */
+interface Seat {
+  run: number;
+  signal: AbortSignal;
+  opts: MatchSourceOptions;
+  resolve: (opponent: OpponentData) => void;
+  reject: (error: Error) => void;
+}
+
+const TIERS: ReadonlyArray<MindTier> = ['rookie', 'tactician', 'strategist', 'grandmaster'];
+
+/** Keep the socket's tier label if it is one we know; otherwise read it off the TIQ. */
+const asTier = (value: string, tiq: number): MindTier =>
+  (TIERS as readonly string[]).includes(value) ? (value as MindTier) : tierOf(tiq);
+
+/** `VITE_WS_URL`, or same-origin `/ws/matchmake`. '' means there is no origin to hang one off. */
+const WS_URL = import.meta.env.VITE_WS_URL?.trim() ?? '';
+
+function socketUrl(): string {
+  if (WS_URL) {
+    if (WS_URL.startsWith('ws://') || WS_URL.startsWith('wss://')) return WS_URL;
+    const base = WS_URL.startsWith('http') ? WS_URL : `https://${WS_URL}`;
+    return base.replace(/^http/, 'ws');
+  }
+  return location.host ? `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws/matchmake` : '';
+}
+
+/** Identity first, then the numbers the matchmaker filters on. */
+function socketParams(wide: boolean): string {
+  const tiq = myTiq();
+  const params = new URLSearchParams();
+  const init = tgInitData();
+  if (init) params.set('initData', init);
+  params.set('tiq', String(tiq));
+  params.set('tier', tierOf(tiq));
+  params.set('flag', profile.country ?? '');
+  params.set('name', readFace('Player').name);
+  params.set('wide', wide ? '1' : '0');
+  return params.toString();
+}
+
+/** The one waiting-room socket per page: a widened search widens this one instead of rejoining. */
+let ws: WebSocket | null = null;
+let wsWide = false;
+let wsMatched = false;
+let wsRuns = 0;
+let teardownId = 0;
+let seat: Seat | null = null;
+let race: OnlineRace | null = null;
+
+/** The match the stage just locked in, for the race that follows it. Null until there is one. */
+export const onlineRace = (): OnlineRace | null => race;
+
+function post(sock: WebSocket, payload: string): void {
+  try {
+    if (sock.readyState === 1) sock.send(payload);
+  } catch {
+    /* the socket is already gone: the close handler will settle the attempt */
+  }
+}
+
+function parseFound(raw: string): FoundMessage | null {
+  try {
+    const msg = JSON.parse(raw) as Partial<FoundMessage>;
+    const o = msg.opponent;
+    if (msg.type !== 'MATCH_FOUND' || typeof msg.matchId !== 'string' || typeof msg.seed !== 'number') return null;
+    if (!o || typeof o.name !== 'string' || typeof o.tiq !== 'number') return null;
+    return {
+      type: 'MATCH_FOUND',
+      matchId: msg.matchId,
+      seed: msg.seed,
+      side: msg.side === 1 ? 1 : 0,
+      opponent: {
+        name: o.name,
+        tiq: o.tiq,
+        tier: typeof o.tier === 'string' ? o.tier : '',
+        flag: typeof o.flag === 'string' ? o.flag : '',
+      },
+    };
+  } catch {
+    return null;                       // not ours: a frame we cannot read is a frame we ignore
+  }
+}
+
+/** The matchmaker's payload, in the shape the stage paints. */
+function onlineOpponent(msg: FoundMessage): OpponentData {
+  const name = msg.opponent.name.trim() || 'Rival';
+  return {
+    id: `online-${msg.matchId}`,
+    name,
+    tiq: msg.opponent.tiq,
+    tier: asTier(msg.opponent.tier, msg.opponent.tiq),
+    avatarUrl: null,
+    initial: name.charAt(0).toUpperCase(),
+  };
+}
+
+/** The socket went away before a match: the local search takes the seat, radar never runs dry. */
+function socketGone(sock: WebSocket): void {
+  if (race?.socket === sock) race = null;
+  if (sock !== ws) return;             // a socket this search already let go of
+  ws = null;
+  wsWide = false;
+  const lost = seat;
+  seat = null;
+  if (!lost) return;
+  if (lost.signal.aborted) { lost.reject(aborted()); return; }
+  simulatedSearch()(lost.signal, lost.opts).then(lost.resolve, lost.reject);
+}
+
+function wire(sock: WebSocket): void {
+  sock.addEventListener('open', () => post(sock, JSON.stringify({ type: 'QUEUE', wide: wsWide })));
+  sock.addEventListener('message', (ev) => {
+    const msg = parseFound(String(ev.data));
+    if (!msg) return;
+    wsMatched = true;
+    race = { match: { matchId: msg.matchId, seed: msg.seed, side: msg.side }, socket: sock };
+    const answered = seat;
+    seat = null;
+    answered?.resolve(onlineOpponent(msg));
+  });
+  sock.addEventListener('close', () => socketGone(sock));
+  sock.addEventListener('error', () => socketGone(sock));
+}
+
+/** A CANCEL, then the close. A socket that already carried a match belongs to the race: it stays. */
+function closeSocket(cancel: boolean): void {
+  window.clearTimeout(teardownId);
+  teardownId = 0;
+  const sock = ws;
+  const matched = wsMatched;
+  ws = null;
+  wsWide = false;
+  wsMatched = false;
+  if (!sock || matched) return;
+  if (cancel) post(sock, JSON.stringify({ type: 'CANCEL' }));
+  try {
+    sock.close(1000, cancel ? 'cancelled' : 'done');
+  } catch {
+    /* already closed */
+  }
+}
+
+function onAbort(attempt: Seat): void {
+  if (seat?.run === attempt.run) seat = null;
+  attempt.reject(aborted());
+  if (wsMatched) return;               // the race owns the socket now: nothing to clean up
+  /* A widen aborts and re-queues in the same tick, so the teardown waits one turn of the loop:
+     a socket that is about to be widened is never cancelled out from under the new search. */
+  window.clearTimeout(teardownId);
+  teardownId = window.setTimeout(() => closeSocket(true), 0);
+}
+
+/**
+ * The online transport: the `MatchSource` the stage queues with. It opens one socket to the
+ * matchmaker, says who you are and how wide the net is, and resolves with the opponent it pairs
+ * you with — storing the `{ matchId, seed, side }` the race will need. When the socket never
+ * answers — a static preview with no Worker behind it — it answers with the local search instead.
+ */
+export function onlineSearch(): MatchSource {
+  return (signal, opts) => new Promise<OpponentData>((resolve, reject) => {
+    const attempt: Seat = { run: ++wsRuns, signal, opts, resolve, reject };
+    window.clearTimeout(teardownId);
+    teardownId = 0;
+    if (signal.aborted) { reject(aborted()); return; }
+    signal.addEventListener('abort', () => onAbort(attempt), { once: true });
+
+    const url = socketUrl();
+    if (!url) { simulatedSearch()(signal, opts).then(resolve, reject); return; }
+
+    /* Already in the waiting room: widen it in place. WIDEN keeps the place this player has
+       already earned, where a fresh QUEUE would send them to the back of the line. */
+    if (ws && !wsMatched && (ws.readyState === 0 || ws.readyState === 1)) {
+      const widening = opts.wide && !wsWide;
+      wsWide = wsWide || opts.wide;
+      seat = attempt;
+      if (ws.readyState === 1) post(ws, JSON.stringify(widening ? { type: 'WIDEN' } : { type: 'QUEUE', wide: opts.wide }));
+      return;                          // a connecting socket queues with this flag when it opens
+    }
+
+    closeSocket(true);                 // whatever else was left over is not this search's socket
+    let sock: WebSocket;
+    try {
+      sock = new WebSocket(`${url}?${socketParams(opts.wide)}`);
+    } catch {
+      simulatedSearch()(signal, opts).then(resolve, reject);
+      return;
+    }
+    seat = attempt;
+    ws = sock;
+    wsWide = opts.wide;
+    wsMatched = false;
+    wire(sock);
+  });
 }
 
 /* ---------- the triumphant tick (sound + haptic) ---------- */

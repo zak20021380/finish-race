@@ -1,0 +1,31 @@
+# Detour matchmaking backend — the 1v1 waiting room.
+#
+# The client build (Vite, `src/`) never imports anything under `worker/`: wrangler bundles the
+# worker on its own, so `npm run build` stays a static frontend build and the two never touch.
+#
+# Local:   npx wrangler dev            (needs a .dev.vars, see below)
+# Deploy:  npx wrangler deploy         (then set the secret with `wrangler secret put`)
+
+name = "detour-matchmaking"
+main = "worker/index.ts"
+compatibility_date = "2025-09-01"
+
+# One singleton instance holds the whole waiting room, so every socket that asks for a 1v1 lands
+# on the same object and pairing is a local lookup rather than a fan-out across many instances.
+[[durable_objects.bindings]]
+name = "MATCHMAKER"
+class_name = "MatchmakerDO"
+
+# The modern (SQLite-backed) Durable Object migration. The waiting queue itself is in memory —
+# the storage engine is only what the class is declared on.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MatchmakerDO"]
+
+[vars]
+# `true` lets a local browser queue as a guest with no valid initData. Deployed: keep it false,
+# and put the real values in `.dev.vars` for local work:
+#
+#   TELEGRAM_BOT_TOKEN = "<token from @BotFather>"
+#   DEV_AUTH = "true"
+DEV_AUTH = "false"

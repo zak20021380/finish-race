@@ -1,14 +1,16 @@
-# Detour — Telegram Mini App (frontend only)
+# Detour — Telegram Mini App
 
-Vite + TypeScript + Canvas 2D. No backend: the opponent is a local bot, coins are mock and every
-save lives in the browser. Shop and Profile are real screens; Online is still a placeholder.
+Vite + TypeScript + Canvas 2D, plus a small Cloudflare Workers matchmaking backend in `worker/`.
+The opponent is still a local bot and coins are mock; the save lives in the browser. Quick match
+queues on a real waiting room when a Worker is behind the page and falls back to the local search
+when there is not one.
 
 ## Run
 
 ```bash
 npm install
 npm run dev        # http://localhost:5173 (also on your LAN)
-npm run build      # type-check + production build in dist/
+npm run build      # client + worker type-check, then the production build in dist/
 ```
 
 Works in a normal browser too (the Telegram SDK is optional).
@@ -149,6 +151,29 @@ Telegram only loads **HTTPS** URLs.
 | `src/shop.ts` | The shop: tabs, cards with live previews, equip, and the buy confirm flow |
 | `src/main.ts` | Game wiring: input (tap-to-arm / confirm, mouse hover + click), loop, chips, status, payout, overlay, pause |
 | `src/style.css` | Tokens, mesh background, clay panels, board frame, menu shell, shop and profile |
+| `wrangler.toml` | The Worker: `MATCHMAKER` → `MatchmakerDO`, SQLite Durable Object migration |
+| `worker/index.ts` | `GET /health` and `GET /ws/matchmake`, forwarded to the singleton Durable Object |
+| `worker/auth.ts` | Telegram `initData` verified with `crypto.subtle` HMAC-SHA256, plus the dev guest door |
+| `worker/matchmaker.ts` | The waiting room: the queue, the 250/600 pairing radii and `MATCH_FOUND` |
+| `scripts/verify-worker-matchmaking.mjs` | Drives the whole protocol in plain Node, no wrangler needed |
+
+## Matchmaking backend
+
+Quick match hands the seat to `src/matchmaking.ts`, whose transport opens a socket to
+`VITE_WS_URL` (or `/ws/matchmake` on the page's own origin) carrying `initData`, `tiq`, `tier`,
+`flag` and `wide`. The client sends `{ type: 'QUEUE' | 'WIDEN' | 'CANCEL' }` and reads
+`{ type: 'MATCH_FOUND', matchId, seed, side, opponent }`; a match is then remembered as
+`{ matchId, seed, side }` for the race. When no Worker answers, the same call answers with the
+local search, so the stage is playable either way. The Worker verifies Telegram `initData` itself —
+`DEV_AUTH=true` (`wrangler.toml`) or a loopback host opens a guest door for local work. Nothing in
+`src/` imports `worker/`: wrangler bundles the backend on its own.
+
+```bash
+npx wrangler dev                       # local workerd, http://127.0.0.1:8787
+VITE_WS_URL=ws://127.0.0.1:8787/ws/matchmake npm run dev
+npm run check:worker                   # the worker's own strict typecheck (in `npm run build`)
+node scripts/verify-worker-matchmaking.mjs
+```
 
 ## Going multiplayer later
 
