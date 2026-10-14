@@ -1,7 +1,7 @@
 import './style.css';
 import {
   COLS, CONFIG, ROWS, apply, ballById, distField, firstBall, getAutoMove, mineCells, minesLeft, newGame,
-  reachableBall, steps as teamSteps, view as fogOfWar, wallOk, wallsRemaining,
+  reachableBall, steps as teamSteps, view as fogOfWar, wallOk, wallsCross, wallsOverlap, wallsRemaining,
   type Action, type Ball, type Cell, type GameState, type LogEvent, type Mine, type Player,
   type Pos, type Wall, type WallSpec,
 } from './rules';
@@ -12,6 +12,7 @@ import {
   type Mark, type Vec, type View,
 } from './render';
 import { createConfetti } from './confetti';
+import { BOARD_IDLE, holdMineKey, moveDots, pickBall, previewWall, type BoardMode } from './boardmode';
 import { createRouter } from './router';
 import { createSheets } from './sheets';
 import { createMenu, type Menu } from './menu';
@@ -301,17 +302,22 @@ let opponent: Opponent = makeBot(difficulty);
 const rivalTurn = () => state.turn !== localSide && state.winner === null;
 const wantsOpponent = () => rivalTurn() && !active;
 
-const REASON = { dry: 'No walls remaining!', overlap: 'Overlaps a wall', blocked: 'Blocks the path' };
+const REASON = {
+  dry: 'No walls remaining!',
+  overlap: 'Overlaps a wall',
+  cross: 'Crosses a wall',
+  blocked: 'Blocks the path',
+};
 
 /**
- * Why a wall slot was refused: the budget is spent, an overlap on the same line, or a sealed path.
- * `wallOk` only answers yes/no, so the reason stays a UI-layer concern.
+ * Why a wall slot was refused: the budget is spent, a clash with a wall already standing (a shared
+ * edge segment, or a `+` through a vertex) or a sealed path. `wallOk` only answers yes/no, so the
+ * reason stays a UI-layer concern.
  */
 function wallIssue(s: GameState, w: Wall): keyof typeof REASON {
   if (wallsRemaining(s, w.owner) <= 0) return 'dry';
-  const clash = s.walls.some((o) => o.o === w.o
-    && (w.o === 'h' ? o.y === w.y && Math.abs(o.x - w.x) < 2 : o.x === w.x && Math.abs(o.y - w.y) < 2));
-  if (clash) return 'overlap';
+  if (s.walls.some((o) => wallsCross(o, w))) return 'cross';
+  if (s.walls.some((o) => wallsOverlap(o, w))) return 'overlap';
   const d = distField([...s.walls, w]);
   return s.balls.some((b) => d[b.pos.r * COLS + b.pos.c] < 0) ? 'blocked' : 'overlap';
 }
@@ -367,7 +373,25 @@ let saidTurn = '';
 const waiting: (() => void)[] = [];            // bot thinks parked by the pause sheet
 
 const canAct = () => state.winner === null && state.turn === localSide && !paused && !rolling;
-const clearGhost = () => { ghost = null; mineGhost = null; capsule = null; clearNote(); };
+const clearGhost = () => { mineGhost = null; setMode({ ...mode(), preview: null }); clearNote(); };
+
+/**
+ * The board's action modes — a ball in hand, a wall preview, the mine key — as one value. The rule
+ * that only one of them may own the board at a time is `boardmode.ts`'s; these two just move it.
+ * The move dots are derived from the mode rather than stored, so a change here drops them at once
+ * and the frame loop paints them back only if the new mode still calls for them.
+ */
+const mode = (): BoardMode<Ghost> => ({ selected, preview: ghost, mine: mineArmed });
+/** The dots a mode calls for: a ball in hand draws them, a wall preview or the mine key never does. */
+const dotsFor = (m: BoardMode<Ghost>): Pos[] =>
+  canAct() && moveDots(m) && m.selected !== null ? reachableBall(state, m.selected) : [];
+function setMode(next: BoardMode<Ghost>) {
+  selected = next.selected;
+  ghost = next.preview;
+  mineArmed = next.mine;
+  hints = dotsFor(next);         // derived, so it is rebuilt the moment the mode moves — never stale
+  armCapsules();                 // the [✓]/[✕] caps hang off the preview, so they follow it
+}
 
 /**
  * The chip's mine key: tapping it hands the board over to the placement band, tapping it again
@@ -378,9 +402,9 @@ function armMine(next: boolean) {
   const on = next && canAct() && minesLeft(state, localSide) > 0;
   if (on === mineArmed) return;
   impact('light');
-  mineArmed = on;
-  selected = null;
-  clearGhost();
+  mineGhost = null;
+  setMode(holdMineKey(mode(), on));   // the key owns the board: no ball in hand, no wall preview
+  clearNote();
   ui();
 }
 
@@ -407,9 +431,10 @@ function selectionFor(s: GameState): Ball | null {
 
 /** Picks up one of your balls — or puts it back down, if it was already the chosen one. */
 function pick(id: number | null) {
-  selected = id;
-  clearGhost();
-  ui();                     // only the picked ball's dots light up
+  mineGhost = null;
+  setMode(pickBall(mode(), id));   // the ball comes to hand, and any wall preview goes with it
+  clearNote();
+  ui();                            // only the picked ball's dots light up
 }
 
 /** The wall ghost's floating caps: confirm commits the slot, cancel clears it. */
@@ -466,12 +491,15 @@ function ui() {
   const live = canAct();
   /* the key only ever covers one turn, and only while there is still a mine to bury */
   if (!live || minesLeft(state, localSide) <= 0) mineArmed = false;
-  /* at the start of a human turn, put that turn's first ball in hand so the dots light up at once */
-  if (live && !mineArmed && selected === null && autoPicked !== state.turn) {
+  /* at the start of a human turn, put that turn's first ball in hand so the dots light up at once —
+     unless a wall preview is already up, since that owns the board until it is confirmed or dropped */
+  if (live && !mineArmed && !ghost && selected === null && autoPicked !== state.turn) {
     const auto = selectionFor(state);
     if (auto) { selected = auto.id; autoPicked = state.turn; }
   }
-  hints = live && !mineArmed && selected !== null ? reachableBall(state, selected) : [];
+  /* the dots belong to the ball in hand and to nothing else: a wall preview or the mine key
+     suppresses them outright, so a dashed bar is never drawn under a selection ring */
+  hints = dotsFor(mode());
   mineHints = live && mineArmed ? mineCells(state, localSide) : [];
   /* an armed cell that is no longer placeable — the turn moved on, or a ball rolled over it */
   if (mineGhost && !mineHints.some((h) => sameCell(h, mineGhost))) mineGhost = null;
@@ -624,11 +652,9 @@ function play(a: Action, remote = false): boolean {
   /* a move this seat made is also a move the rival has to see: the matchmaker relays it */
   if (!remote && active) active.send(a);
   turnsPlayed++;                 // one seat has acted; the round caption counts them
-  ghost = null;
   mineGhost = null;
-  capsule = null;
-  selected = null;         // the turn is over: the next pick is a fresh one
-  autoPicked = null;       // ...and the next human turn auto-selects its own first ball
+  setMode(BOARD_IDLE);           // the turn is over: the next pick is a fresh one
+  autoPicked = null;             // ...and the next human turn auto-selects its own first ball
   clearNote();
   const blast = blastOf(prev, next);
   if (blast) {
@@ -723,9 +749,8 @@ function tickClock() {
  * live mine key can never be carried into the next seat's turn.
  */
 function timeoutMove() {
-  mineArmed = false;
-  clearGhost();
-  selected = null;
+  mineGhost = null;
+  setMode(BOARD_IDLE);
   notify('warning');
   play(getAutoMove(state, state.turn));
   /* after play(), which clears the toast itself to make room for the next prompt */
@@ -745,12 +770,9 @@ function restart() {
   logShove.clear();
   ballViews.length = 0;
   syncBalls();
-  selected = null;
-  autoPicked = null;
-  ghost = null;
+  setMode(BOARD_IDLE);
   mineGhost = null;
-  capsule = null;
-  mineArmed = false;
+  autoPicked = null;
   marks[0] = null; marks[1] = null;
   shownWalls[0] = -1; shownWalls[1] = -1;
   shownMines = -1;
@@ -913,7 +935,7 @@ const at = (p: Vec) => hitTest(renderer.layout(), p.x, p.y, {
 });
 
 /** Clear the wall ghost and anything it was holding (the caps included). */
-function disarmWall() { ghost = null; capsule = null; clearNote(); }
+function disarmWall() { setMode({ ...mode(), preview: null }); clearNote(); }
 
 /**
  * The wall ghost's input branch: [✓] commits, [✕] cancels, another groove relocates the ghost, and
@@ -956,8 +978,7 @@ function tapWall(hit: { kind: 'wall' | 'confirm'; spec: WallSpec }) {
   const ok = wallOk(state, wall);
   /* a spent budget disallows the preview entirely: refuse the tap and pulse the badge instead */
   if (wallsRemaining(state, wall.owner) <= 0) {
-    ghost = null;
-    capsule = null;
+    setMode({ ...mode(), preview: null });
     refuse(wall);
     return;
   }
@@ -965,8 +986,8 @@ function tapWall(hit: { kind: 'wall' | 'confirm'; spec: WallSpec }) {
     if (ok) play({ kind: 'wall', wall }); else refuse(wall);
     return;
   }
-  ghost = { spec: hit.spec, ok, armed: true, p: state.turn };
-  armCapsules();
+  /* arming the slot takes the board: a dashed bar and a ball's move dots are never both up */
+  setMode(previewWall(mode(), { spec: hit.spec, ok, armed: true, p: state.turn }));
   if (ok) { impact('light'); showNote('Tap again to place', false, 0); } else refuse(wall);
 }
 
@@ -978,7 +999,7 @@ function onTouch(p: Vec) {
   const hit = at(p);
   if (mineArmed) { tapMine(hit); return; }
   if (wallBranch(hit)) return;
-  if (!hit) { pick(null); clearGhost(); return; }
+  if (!hit) { pick(null); return; }
   if (hit.kind === 'ball') { impact('light'); pick(hit.id === selected ? null : hit.id); return; }
   if (hit.kind === 'move') {
     disarmWall();
@@ -1002,8 +1023,7 @@ function onMouse(p: Vec, click: boolean) {
     if (ghost?.armed) return;
     const spec = hit && hit.kind === 'wall' && wallsRemaining(state, state.turn) > 0 ? hit.spec : null;
     const wall: Wall | null = spec ? { ...spec, owner: state.turn } : null;
-    ghost = wall ? { spec: wall, ok: wallOk(state, wall), armed: false, p: state.turn } : null;
-    capsule = null;
+    setMode(previewWall(mode(), wall ? { spec: wall, ok: wallOk(state, wall), armed: false, p: state.turn } : null));
     return;
   }
   if (wallBranch(hit)) return;
@@ -1032,7 +1052,7 @@ canvas.addEventListener('pointermove', (e) => {
   onMouse(local(e), false);
 });
 canvas.addEventListener('pointerleave', () => {
-  if (ghost && !ghost.armed) { ghost = null; capsule = null; }
+  if (ghost && !ghost.armed) setMode({ ...mode(), preview: null });
 });
 
 mineBtn.addEventListener('click', () => { armMine(!mineArmed); });
@@ -1069,6 +1089,8 @@ function frame(now: number) {
   last = now;
   const k = motionReduced() ? 1 : 1 - Math.exp(-dt * 14); // frame-rate independent lerp
   if (ballViews.length !== state.balls.length) syncBalls();
+  /* one mode value per frame: the ring rides the dots, so a previewing board shows no ball as picked */
+  const m = mode(), dots = moveDots(m);
   for (let i = 0; i < state.balls.length; i++) {
     const b = state.balls[i], v = ballViews[i];
     const gate = logWait.get(b.id);
@@ -1090,7 +1112,7 @@ function frame(now: number) {
     }
     if (Math.abs(tx - v.pos.x) < 0.002) v.pos.x = tx;
     if (Math.abs(ty - v.pos.y) < 0.002) v.pos.y = ty;
-    v.sel = selected !== null && v.id === selected;
+    v.sel = dots && v.id === m.selected;
   }
   view.state = state;
   view.balls = ballViews;

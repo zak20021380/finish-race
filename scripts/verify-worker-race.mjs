@@ -116,7 +116,7 @@ const workerModule = await import(pathToFileURL(workerOut).href);
 const worker = workerModule.default;
 const { MatchmakerDO } = workerModule;
 const rules = await import(pathToFileURL(rulesOut).href);
-const { apply, getAutoMove, newGame, steps, wallOk, allWalls } = rules;
+const { apply, getAutoMove, newGame, steps, wallOk, wallsClash, allWalls } = rules;
 const { hazardAt } = await import(pathToFileURL(hazardsOut).href);
 
 /* ---------- a runtime: the worker, one singleton DO, and a fake namespace ---------- */
@@ -272,6 +272,48 @@ function ok(label, condition, detail = '') {
     String(relayed?.action.wall.owner));
   ok('the relayed wall is the one the rules accepted',
     JSON.stringify(apply(state, relayed.action)?.walls) === JSON.stringify([{ ...wall, owner: 0 }]));
+}
+
+/* wall geometry is the room's to enforce, not the client's */
+{
+  const rt = runtime();
+  const a = await open(rt, { tiq: 1000 });
+  const b = await open(rt, { tiq: 1000 });
+  send(a, { type: 'QUEUE', wide: false });
+  send(b, { type: 'QUEUE', wide: false });
+  const [ma] = only(a, 'MATCH_FOUND');
+  const start = newGame(ma.sizes, { hazards: true, seed: ma.seed });
+
+  const flat = { o: 'h', x: 2, y: 5, owner: 0 };      // spans (2,5) (3,5) (4,5), pivot (3,5)
+  const cross = { o: 'v', x: 3, y: 4, owner: 1 };     // same pivot: a `+` through flat's midpoint
+  const over = { o: 'h', x: 3, y: 5, owner: 1 };      // shares flat's second edge segment
+  const corner = { o: 'v', x: 4, y: 5, owner: 1 };    // touches flat at one vertex only
+  const after = { ...start, walls: [flat] };
+  ok('a `+` through an existing wall is illegal in the shared rules', !wallOk(after, cross));
+  ok('an overlapping collinear wall is illegal too', !wallOk(after, over));
+  ok('an L-corner that only touches it is legal', wallOk(after, corner));
+
+  send(a, { type: 'MOVE', action: { kind: 'wall', wall: flat } });
+  const [placed] = only(b, 'MOVE');
+  ok('the room relays a plain horizontal wall', JSON.stringify(placed?.action.wall) === JSON.stringify(flat));
+
+  const before = a.received.length;
+  send(b, { type: 'MOVE', action: { kind: 'wall', wall: cross } });
+  ok('a vertical wall through its centre vertex is refused',
+    only(b, 'REJECT').at(-1)?.reason === 'illegal_action');
+  ok('and a `+` is never relayed to the other seat', only(a, 'MOVE', before).length === 0);
+
+  send(b, { type: 'MOVE', action: { kind: 'wall', wall: over } });
+  ok('a wall overlapping it is refused', only(b, 'REJECT').at(-1)?.reason === 'illegal_action');
+  ok('and an overlap is never relayed either', only(a, 'MOVE', before).length === 0);
+
+  send(b, { type: 'MOVE', action: { kind: 'wall', wall: corner } });
+  const [second] = only(a, 'MOVE', before);
+  ok('the L-corner is relayed', JSON.stringify(second?.action.wall) === JSON.stringify(corner));
+  const board = second ? apply({ ...after, turn: 1 }, second.action) : null;
+  ok('both seats end up on the same two walls',
+    JSON.stringify(board?.walls) === JSON.stringify([flat, corner]));
+  ok('and no two walls on the board clash', !!board && !wallsClash(board.walls[0], board.walls[1]));
 }
 
 /* resignation */

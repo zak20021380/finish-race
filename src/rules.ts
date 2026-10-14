@@ -12,7 +12,9 @@
  * Walls sit ON grid lines and are 2 cells long:
  *   'h' wall {x, y}: horizontal, on the line above row y (y = 1..ROWS-1), covers columns x and x+1.
  *   'v' wall {x, y}: vertical, on the line left of column x (x = 1..COLS-1), covers rows y and y+1.
- * Walls may touch and cross, but never overlap along the same line.
+ * A wall owns both of its edge segments and the vertex they hinge on, so two walls may meet at an
+ * L-corner or a T-junction but never share an edge segment, and never cross through one shared
+ * vertex into a `+`. See `wallsOverlap` / `wallsCross`.
  *
  * Mines are hidden traps: a team buries one on any cell that holds no ball and no live mine, never
  * in the top two or bottom two rows. They do not block movement — a ball that steps onto one sets
@@ -225,6 +227,66 @@ export function pathLen(s: GameState, team: Player): number {
   return best;
 }
 
+/* ---------- wall geometry ---------- */
+
+/**
+ * A grid vertex: where the line left of column `x` crosses the line above row `y`. Walls are named
+ * by cells, but they collide on the lattice of these vertices, so the lattice gets a name too.
+ */
+export interface Vertex { x: number; y: number }
+
+/** The three vertices a wall spans — both ends and the hinge between them. */
+export function wallVertices(w: WallSpec): [Vertex, Vertex, Vertex] {
+  return w.o === 'h'
+    ? [{ x: w.x, y: w.y }, { x: w.x + 1, y: w.y }, { x: w.x + 2, y: w.y }]
+    : [{ x: w.x, y: w.y }, { x: w.x, y: w.y + 1 }, { x: w.x, y: w.y + 2 }];
+}
+
+/**
+ * The vertex a wall's two segments hinge on — its midpoint, and the one point a perpendicular wall
+ * could cross it at. An 'h' wall at (x, y) hinges on (x + 1, y); a 'v' wall at (x, y) on (x, y + 1).
+ */
+export const wallPivot = (w: WallSpec): Vertex =>
+  (w.o === 'h' ? { x: w.x + 1, y: w.y } : { x: w.x, y: w.y + 1 });
+
+/** Vertical edge segments are keyed above the horizontal ones, so the two families never collide. */
+const SEG_V = COLS * ROWS;
+
+/** A wall's two edge segments as keys. `out` is written in place: the bot calls this in a loop. */
+function wallSegments(w: WallSpec, out: [number, number]): [number, number] {
+  out[0] = w.o === 'h' ? w.y * COLS + w.x : SEG_V + w.x * ROWS + w.y;
+  out[1] = out[0] + 1;
+  return out;
+}
+
+const _segA: [number, number] = [0, 0];
+const _segB: [number, number] = [0, 0];
+
+/**
+ * Do two walls share an edge segment? Only collinear walls can, and then they lie on top of each
+ * other for one or both of their segments. Touching end to end (x and x + 2) is not an overlap.
+ */
+export function wallsOverlap(a: WallSpec, b: WallSpec): boolean {
+  if (a.o !== b.o) return false;
+  wallSegments(a, _segA);
+  wallSegments(b, _segB);
+  return _segA[0] === _segB[0] || _segA[0] === _segB[1] || _segA[1] === _segB[0] || _segA[1] === _segB[1];
+}
+
+/**
+ * Do two perpendicular walls cross through the same vertex? Sharing a pivot is the illegal `+`:
+ * both walls would run straight through the point instead of stopping at it. A T-junction and an
+ * L-corner share a vertex but never a pivot — one wall ends where the other passes — so they stand.
+ */
+export function wallsCross(a: WallSpec, b: WallSpec): boolean {
+  if (a.o === b.o) return false;
+  const p = wallPivot(a), q = wallPivot(b);
+  return p.x === q.x && p.y === q.y;
+}
+
+/** May these two walls stand on the board together? No shared edge, and no `+` through a vertex. */
+export const wallsClash = (a: WallSpec, b: WallSpec): boolean => wallsOverlap(a, b) || wallsCross(a, b);
+
 /* ---------- queries ---------- */
 
 export interface Step { ball: number; to: Pos }
@@ -272,7 +334,10 @@ export function wallsRemaining(s: GameState, team: Player): number {
   return left === undefined ? 0 : Math.max(0, left);
 }
 
-/** Is this wall legal? Within the owner's budget, in bounds, no overlap, and every ball keeps a path. */
+/**
+ * Is this wall legal? Within the owner's budget, in bounds, clear of every wall already standing
+ * (no shared edge segment, no `+` through a vertex) and every ball keeps a path.
+ */
 export function wallOk(s: GameState, w: Wall): boolean {
   if (s.winner !== null) return false;
   if (wallsRemaining(s, w.owner) <= 0) return false;
@@ -280,10 +345,7 @@ export function wallOk(s: GameState, w: Wall): boolean {
     if (w.x < 0 || w.x > COLS - 2 || w.y < 1 || w.y > ROWS - 1) return false;
   } else if (w.x < 1 || w.x > COLS - 1 || w.y < 0 || w.y > ROWS - 2) return false;
 
-  for (const o of s.walls) {
-    if (o.o !== w.o) continue;
-    if (w.o === 'h' ? o.y === w.y && Math.abs(o.x - w.x) < 2 : o.x === w.x && Math.abs(o.y - w.y) < 2) return false;
-  }
+  for (const o of s.walls) if (wallsClash(o, w)) return false;
   const d = distField([...s.walls, w]);
   return s.balls.every((ball) => d[ball.pos.r * COLS + ball.pos.c] >= 0);
 }

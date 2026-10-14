@@ -11,20 +11,55 @@
   `build({ entryPoints, outfile, ... })` with rollup + `ts.transpileModule`; `.tmp/esbuild-hook.mjs`
   is a resolve hook that rewrites the bare specifier `esbuild` to it; `.tmp/esbuild-redirect.mjs`
   registers the hook. Then:
-  `node --import ./.tmp/esbuild-redirect.mjs scripts/verify-worker-matchmaking.mjs` → 35/35, and
-  the same for `verify-worker-race.mjs` → 29/29. Prefer this over re-implementing their assertions.
-- **Workaround harness: `.tmp/shop-preview.mjs`** (and `.tmp/admin-check.mjs`, same skeleton) —
-  bundles the real `src/` with rollup + `ts.transpileModule` (no esbuild), inlines `style.css` and
-  the bundle into a copy of `index.html`, serves it on 127.0.0.1, and drives headless Chrome over
-  CDP at 360x640. Two gotchas it already handles: strip the remote `telegram-web-app.js` script (a
-  no-egress box stalls the parser on it) and shim `import.meta.env = {}` (vite substitutes it at
-  build time; the raw bundle otherwise throws on `import.meta.env.VITE_WS_URL` in `matchmaking.ts`).
+  `node --import ./.tmp/esbuild-redirect.mjs scripts/verify-worker-matchmaking.mjs` → 35/35,
+  `verify-worker-race.mjs` → 40/40, `verify-worker-admin.mjs` → 69/69. Prefer this over
+  re-implementing their assertions.
+- **Pure-rules suites run with no toolchain at all:** `node --experimental-strip-types
+  scripts/mines-check.mjs` → 41/41 and `scripts/walls-check.mjs` → 12/12. Both copy `src/*.ts` into
+  `.shots/<name>-under-test.ts` with the relative specifiers rewritten (Node only strips types from
+  a real `.ts`, and `rules.ts` says `from './hazards'`). `src/boardmode.ts` imports nothing, so a
+  test can read it straight out of `src/`.
+- **Workaround harness: `.tmp/shop-preview.mjs`** (and `.tmp/admin-check.mjs`, `.tmp/wall-mode-check.mjs`,
+  `.tmp/wall-shot.mjs`, same skeleton) — bundles the real `src/` with rollup + `ts.transpileModule`
+  (no esbuild), inlines `style.css` and the bundle into a copy of `index.html`, serves it on
+  127.0.0.1, and drives headless Chrome over CDP at 360x640. Three gotchas it already handles: strip
+  the remote `telegram-web-app.js` script (a no-egress box stalls the parser on it), shim
+  `import.meta.env = {}` (vite substitutes it at build time; the raw bundle otherwise throws on
+  `import.meta.env.VITE_WS_URL` in `matchmaking.ts`), and dispatch synthetic `PointerEvent`s
+  (`pointerType: 'mouse'` for hover, `'touch'` for a tap) instead of plumbing CDP input.
+- **Pixel probes must replicate `computeLayout` exactly — `LAYOUT_PAD` is 2**, so
+  `raw = min((w-4)/cols, (h-4)/rows)` and `cell = floor(raw*dpr)/dpr`. `.shots/wall-badge-check.mjs`
+  still has the old `(w - 6)`; copying it shifts every probe by cells and will lie to you. On
+  360x640 the truth is `cell 39.5, ox 2, oy 3` (canvas 320x480). Probe board-space points, not
+  pixels: a cell centre catches the move dots, a point on a grid line between centres catches a wall.
+  For the selection ring, take the max over an *annulus* (it pulses in and out of a fixed radius).
 - `.tmp/smoke-game.mjs` walks Home -> `#home-play` -> `[data-gmode="bot"]` -> `#gm-start` to smoke
   the board screen. Note `#home-play` starts a *bot race* directly; the matchmaking stage is only
   reachable via `#mode-hero` -> `[data-gmode="duel_1v1"]` -> `#gm-start`.
 - `.shots/` holds the CDP screenshot scripts and PNGs; `.tmp/` is scratch. Both gitignored.
 - Editing gotcha: never batch parallel `Edit` calls at the same file — the writes race and silently
   clobber each other. Apply them one at a time and re-grep afterwards.
+
+## Rules engine (src/rules.ts)
+- **Wall geometry is two edge segments plus the vertex they hinge on.** `Vertex`, `wallVertices`,
+  `wallPivot` (`h(x,y)` → `(x+1, y)`, `v(x,y)` → `(x, y+1)`), `wallSegments` (vertical segment keys
+  offset by `SEG_V = COLS*ROWS` so the families never collide), and the predicates `wallsOverlap` /
+  `wallsCross` / `wallsClash`. `wallOk` loops `wallsClash` against every standing wall.
+- **Only a *shared pivot* is the illegal `+`.** An endpoint landing on another wall's midpoint is a
+  T-junction and is legal; two ends meeting is an L-corner; collinear walls touching end to end
+  (`x` and `x+2`) are legal. Do not widen `wallsCross` to "any shared vertex".
+- The bot needs no special casing: `botAction` scores candidates through `doWall`, which runs
+  `wallOk`. Keep it that way rather than pre-filtering `allWalls`.
+
+## Board action modes (src/boardmode.ts)
+- One mode owns the board: a ball in hand, a wall preview, or the mine key. Pure and dependency-free,
+  so it is unit-testable. `pickBall` clears the preview; `previewWall(m, null)` (the pointer leaving)
+  drops the bar *alone* so a hover does not cost the ball in hand; `moveDots` / `selectionRing` are
+  what the renderer gates on.
+- `main.ts` holds the values (`selected` / `ghost` / `mineArmed`) and `mode()` / `setMode()` are the
+  only writers — `setMode` also calls `armCapsules()`, and **recomputes `hints` via `dotsFor(mode())`**.
+  The dots are *derived*; a writer of the mode that forgets them is exactly the bug this fixed.
+
 
 ## Design system (src/style.css)
 - One theme, "Dark Clay": opaque slabs, no live blur. `--glass-blur: none` and

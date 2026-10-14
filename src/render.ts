@@ -835,16 +835,20 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
   /**
    * A placed wall, a ghost or a refusal — same 2-cell body. Drawn along local +x (vertical
-   * walls just rotate), so one cached gradient serves both orientations and the round caps
-   * stop exactly on the grid intersections the wall spans.
+   * walls just rotate), so one cached gradient serves both orientations.
+   *
+   * The body is inset twice over. Once for the caps: a round cap hangs `t/2` past each end, so the
+   * stroke starts at `t/2` and the two together still span exactly the two cells the wall covers.
+   * Then once more by a hair, so an L-corner or a T-junction stops just short of the perpendicular
+   * wall it touches instead of bulging over it.
    */
   function drawBar(w: WallSpec, pi: number, alpha: number, grow: number, glow: boolean) {
     const { cell: c, ox, oy, dpr } = L;
     const s = sides[pi];
     const st = s.wall;
     const t = c * 0.13 * st.thick * (0.62 + 0.38 * grow);
-    // round caps hang t/2 past each end, butt caps do not: either way the bar spans exactly 2 cells
-    const cap = st.caps === 'butt' ? 0 : t / 2, len = 2 * c - 2 * cap;
+    const cap = st.caps === 'butt' ? 0 : t / 2;
+    const x0 = cap + Math.min(2, c * 0.06), len = Math.max(0, 2 * c - 2 * x0);
     ctx.save();
     ctx.translate(ox + w.x * c, oy + w.y * c);
     if (w.o === 'v') { ctx.translate(0, 2 * c); ctx.rotate(-Math.PI / 2); }
@@ -853,7 +857,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.lineWidth = t;
     ctx.strokeStyle = barGrad(pi, t);
     if (glow && st.glow > 0) { ctx.shadowColor = s.ramp.glow; ctx.shadowBlur = c * 0.16 * st.glow * dpr; }
-    ctx.beginPath(); ctx.moveTo(cap, 0); ctx.lineTo(cap + len, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 + len, 0); ctx.stroke();
 
     ctx.shadowBlur = 0;
     ctx.shadowColor = 'transparent';
@@ -861,14 +865,14 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.strokeStyle = `rgba(255,255,255,${st.gloss})`;
       ctx.lineWidth = Math.max(1, t * (st.glossAt === 0 ? 0.34 : 0.26));
       ctx.beginPath();
-      ctx.moveTo(cap + t * 0.2, t * st.glossAt); ctx.lineTo(cap + len - t * 0.2, t * st.glossAt);
+      ctx.moveTo(x0 + t * 0.2, t * st.glossAt); ctx.lineTo(x0 + len - t * 0.2, t * st.glossAt);
       ctx.stroke();
     }
     if (st.rim > 0) {                                         // a pane reads through its edge
       ctx.globalAlpha = alpha * st.rim;
       ctx.strokeStyle = s.ramp.light;
       ctx.lineWidth = Math.max(1, t * 0.12);
-      rr(ctx, 0, -t / 2, 2 * c, t, t / 2);
+      rr(ctx, x0, -t / 2, len, t, t / 2);
       ctx.stroke();
       ctx.globalAlpha = alpha * st.alpha;
     }
@@ -876,8 +880,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.strokeStyle = 'rgba(255,255,255,.52)';
       ctx.lineWidth = Math.max(1, t * 0.26);
       ctx.beginPath();
-      let x = cap + len * 0.32; ctx.moveTo(x, -t * 0.4); ctx.lineTo(x, t * 0.4);
-      x = cap + len * 0.68; ctx.moveTo(x, -t * 0.4); ctx.lineTo(x, t * 0.4);
+      let x = x0 + len * 0.32; ctx.moveTo(x, -t * 0.4); ctx.lineTo(x, t * 0.4);
+      x = x0 + len * 0.68; ctx.moveTo(x, -t * 0.4); ctx.lineTo(x, t * 0.4);
       ctx.stroke();
     }
     ctx.restore();
