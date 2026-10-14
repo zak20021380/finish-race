@@ -33,6 +33,7 @@
 import { COLS, ROWS, type Action } from './rules';
 import { menuState, motionReduced, settings } from './settings';
 import { payout, profile } from './storage';
+import { runtime, tiqFrom } from './admin';
 import { impact, notify, tgInitData, tgUser } from './telegram';
 
 /* ---------- TIQ: the same reading the ladder prints ---------- */
@@ -54,9 +55,17 @@ export function tierOf(tiq: number): MindTier {
   return 'rookie';
 }
 
-/** Your TIQ: a win is worth 120 and every race lands 20 — the ladder's own formula. */
+/**
+ * Your TIQ: the ladder's own formula, with the Admin Command Center's win reward and its TIQ
+ * grants folded in. The 140 default still lands exactly the old 120-per-win + 20-per-race.
+ */
 export function myTiq(): number {
-  return Math.max(0, profile.stats.wins * 120 + profile.stats.games * 20);
+  return tiqFrom(profile.stats.wins, profile.stats.games, profile.tiqBonus);
+}
+
+/** The aura the ladder paints for you: the admin's forced preview, or read off the TIQ. */
+export function myTier(): MindTier {
+  return runtime.tierOverride ?? tierOf(myTiq());
 }
 
 export interface OpponentData {
@@ -108,15 +117,25 @@ const asOpponent = (r: { id: string; name: string; tiq: number; flag: string }):
 /**
  * The closest three minds to your own — a believable queue, never a random blowout.
  * `wide` is the radius the stage asks for once the queue has gone quiet: every
- * rival is fair game, and a ±400 TIQ wobble keeps a widened search from landing on
- * the same nearest-three answer twice.
+ * rival is fair game, and a wobble the size of the wide radius keeps a widened
+ * search from landing on the same nearest-three answer twice.
  */
 export function pickRival(mine: number = myTiq(), wide = false): OpponentData {
   if (wide) {
-    const pool = RIVALS.map((r) => ({ ...r, tiq: Math.max(0, r.tiq + Math.round((Math.random() - 0.5) * 800)) }));
+    const spread = Math.max(100, runtime.radiusWide);
+    const pool = RIVALS.map((r) => ({ ...r, tiq: Math.max(0, r.tiq + Math.round((Math.random() - 0.5) * spread * 2)) }));
     return asOpponent(pool[Math.floor(Math.random() * pool.length)]);
   }
-  const near = [...RIVALS].sort((a, b) => Math.abs(a.tiq - mine) - Math.abs(b.tiq - mine)).slice(0, 3);
+  /* the ordinary band, as the admin set it: only minds inside it, nearest first */
+  const band = runtime.radiusNormal;
+  const near = RIVALS.filter((r) => Math.abs(r.tiq - mine) <= band)
+    .sort((a, b) => Math.abs(a.tiq - mine) - Math.abs(b.tiq - mine))
+    .slice(0, 3);
+  if (!near.length) {
+    /* nobody inside the band: the closest mind still takes the seat, so a queue is never empty */
+    const closest = [...RIVALS].sort((a, b) => Math.abs(a.tiq - mine) - Math.abs(b.tiq - mine));
+    return asOpponent(closest[0]);
+  }
   return asOpponent(near[Math.floor(Math.random() * near.length)]);
 }
 
@@ -301,7 +320,7 @@ function socketParams(wide: boolean): string {
   const init = tgInitData();
   if (init) params.set('initData', init);
   params.set('tiq', String(tiq));
-  params.set('tier', tierOf(tiq));
+  params.set('tier', myTier());
   params.set('flag', profile.country ?? '');
   params.set('name', readFace('Player').name);
   params.set('wide', wide ? '1' : '0');
@@ -692,16 +711,11 @@ const TIP_MS = 4000;
 const TIPS: ReadonlyArray<string> = [
   'Walls are unlimited — seal the lane your rival needs, not the one they are standing in.',
   'A mine throws a ball straight down its column. Bury it where the rival must land.',
-  'The blitz clock moves for you after 8s, and its auto-move will walk into a mine.',
+  'The blitz clock runs out and its auto-move will walk you straight into a mine.',
   'Nothing warns you about the rolling log. Rounds 1 and 2 are always clean — cross early.',
   'Input locks while a log rolls. Be where you want to be before the board starts to shake.',
   'A horizontal wall shortens a mine blast: one under your own ball is cheap insurance.',
 ];
-/** A win lands 120 and every finished race lands 20 — `myTiq()`'s own formula, per win. */
-const TIQ_PER_WIN = 120 + 20;
-/** The radii `worker/matchmaker.ts` filters on: tight until a seat asks for more. */
-const TIER_RADIUS = 250;
-const WIDE_RADIUS = 600;
 /** The impact animation that locks the rival in. */
 const IMPACT_MS = 300;
 /** The stage's own fade, which the board slides in behind. */
@@ -838,13 +852,14 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
   function paintYou(): void {
     const face = readFace('You');
     const tiq = myTiq();
-    if (you) you.dataset.tier = tierOf(tiq);
+    const tier = myTier();
+    if (you) you.dataset.tier = tier;
     if (youName) youName.textContent = face.name;
-    if (youTier) youTier.textContent = TIER_NAME[tierOf(tiq)];
+    if (youTier) youTier.textContent = TIER_NAME[tier];
     if (youTiq) youTiq.textContent = tiq.toLocaleString('en-US');
     paintFace(youImg, youT, face);
     paintFlag(youFlag, profile.country);
-    you?.setAttribute('aria-label', `${face.name}, TIQ ${tiq}, ${TIER_NAME[tierOf(tiq)]}`);
+    you?.setAttribute('aria-label', `${face.name}, TIQ ${tiq}, ${TIER_NAME[tier]}`);
   }
 
   function paintRival(o: OpponentData): void {
@@ -860,14 +875,16 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
 
   /** The radius chip is the one number on the rail a widen actually moves. */
   function setRange(wide: boolean): void {
-    if (rangeVal) rangeVal.textContent = wide ? `±${WIDE_RADIUS} WIDE` : `±${TIER_RADIUS}`;
+    if (rangeVal) rangeVal.textContent = wide ? `±${runtime.radiusWide} WIDE` : `±${runtime.radiusNormal}`;
     rangeChip?.classList.toggle('is-wide', wide);
   }
 
   /** What a win is worth here, read off the same two formulas the settlement uses. */
   function paintStakes(): void {
-    if (stakeEls.tiq) stakeEls.tiq.textContent = String(TIQ_PER_WIN);
-    if (stakeEls.gold) stakeEls.gold.textContent = String(payout({ difficulty: menuState.difficulty, won: true }));
+    if (stakeEls.tiq) stakeEls.tiq.textContent = String(runtime.winTiq);
+    if (stakeEls.gold) {
+      stakeEls.gold.textContent = String(payout({ difficulty: menuState.difficulty, won: true }, runtime.coinMult));
+    }
     /* the ladder's own capsule is the season's only source; it prints "S4 · 3d left" */
     const season = /S\d+/.exec(domText('ranks-season', ''))?.[0] ?? '';
     if (stakeEls.season) {

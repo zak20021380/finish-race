@@ -5,6 +5,8 @@
 import { settings } from './settings';
 
 export interface TgUser {
+  /** Telegram's numeric user id — the key the admin allowlist matches on. */
+  id?: number;
   first_name?: string;
   last_name?: string;
   username?: string;

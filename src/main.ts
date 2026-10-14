@@ -25,7 +25,8 @@ import { onChange, recordGame, theme } from './storage';
 import { impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
 import { getGameMode, gmBack, initGameModes, setGameMode } from './gamemodes';
-import { createMatchmaking, onlineRace, onlineSearch, type OnlineSession, type RaceEnd } from './matchmaking';
+import { createMatchmaking, myTier, onlineRace, onlineSearch, type OnlineSession, type RaceEnd } from './matchmaking';
+import { createAdmin, onRuntime, runtime, type Admin } from './admin';
 
 initTelegram();
 applyFlagSupport();
@@ -163,6 +164,7 @@ const clearNote = () => {
 /* ---------- screens ---------- */
 
 let menu: Menu;
+let admin: Admin | null = null;
 const sheets = createSheets($('scrim'));
 const sheetById = (id: string) => document.getElementById(id);
 
@@ -200,6 +202,21 @@ const matchmaking = createMatchmaking({
   },
 });
 
+/**
+ * The one door every queue goes through, so the Admin Command Center's Maintenance Lock can stand
+ * in front of it: with the lock on, a new queue is refused with the reason rather than silently
+ * doing nothing. `matchmaking.open()` is never called directly.
+ */
+function queueMatch() {
+  if (runtime.maintenance) {
+    impact('light');
+    notify('warning');
+    showNote('Maintenance in progress — matchmaking is paused.', false, 2600);
+    return;
+  }
+  matchmaking.open();
+}
+
 let home: { setRoute(id: string): void } | null = null;
 let compete: { setRoute(id: string): void } | null = null;
 
@@ -211,6 +228,7 @@ const router = createRouter($('screens'), (id) => {
   // Telegram BackButton on every screen except Home; always functional via onBack fallback.
   setBackButton(id !== 'home');
   if (id !== 'game') pauseGame();     // the board only ticks while it is on screen
+  if (id === 'home') admin?.relayout();   // the launcher only has a height once Home is up
   syncLoop();
 });
 
@@ -219,6 +237,8 @@ const setBackButton = onBackPress(() => onBack());
 
 function onBack() {
   impact('light');
+  // the Command Center is a full-viewport stage above every sheet: it unwinds first
+  if (admin?.isOpen) { admin.close(); return; }
   // the searching stage sits above every sheet, so it unwinds first
   if (matchmaking.isOpen) { matchmaking.cancel(); return; }
   if (sheets.isOpen) {
@@ -300,7 +320,7 @@ const logWait = new Map<number, number>();
 const logShove = new Map<number, { y0: number; y1: number }>();
 /** the roll's own clock, so the face the balls follow and the sprite are the same curve */
 let rollT0 = 0, rollStop = 0, rumbleId = 0;
-let state: GameState = newGame(sizes, { hazards: true, seed: (Math.random() * 0x7fffffff) | 0 });
+let state: GameState = newGame(sizes, { hazards: runtime.hazards, seed: (Math.random() * 0x7fffffff) | 0 });
 /**
  * Every ball the renderer draws, in state order, with the animated centre under it. The entries
  * survive across frames and restarts reset them, so the frame loop never allocates.
@@ -417,8 +437,9 @@ function showOverlay() {
   sub.textContent = subLine(won) + wallsNote;
   overlay.hidden = false;
   if (won && !motionReduced()) confetti.burst();
-  /* one credit per finished race: showOverlay only runs once per game over */
-  const earned = recordGame({ difficulty, won });
+  /* one credit per finished race: showOverlay only runs once per game over. The Admin Command
+     Center's Double-Coins multiplier scales what the settlement pays. */
+  const earned = recordGame({ difficulty, won }, runtime.coinMult);
   setBalance(rewardN, 0);                 // every payout counts up from zero
   setBalance(rewardN, earned);
   reward.hidden = false;
@@ -627,7 +648,8 @@ const WARN_AT = 5;
 /** the ring's whole arc: the SVG's r=21, so C = 2·π·21. The dash offset drains from 12 o'clock. */
 const RING_C = 2 * Math.PI * 21;
 let turnTimerId: number | null = null;
-let turnSecondsLeft: number = CONFIG.TURN_TIME_LIMIT;
+/** The live allowance, read off the Command Center every turn — so a change lands on the next one. */
+let turnSecondsLeft: number = runtime.blitz;
 /** the fraction the ring last showed, so a refill never animates backwards through 1s of easing */
 let ringFrac = -1;
 
@@ -647,7 +669,7 @@ function stopClock() {
 /** A new turn: the full allowance, and an interval only once a human seat is actually up. */
 function startClock() {
   stopClock();
-  turnSecondsLeft = CONFIG.TURN_TIME_LIMIT;
+  turnSecondsLeft = runtime.blitz;
   paintClock();
   if (clockLive()) turnTimerId = window.setInterval(tickClock, 1000);
 }
@@ -663,7 +685,7 @@ function paintClock() {
   chip.classList.toggle('timing', live);
   if (!live) { chip.removeAttribute('data-timer'); return; }
   const left = Math.max(0, turnSecondsLeft);
-  const frac = left / CONFIG.TURN_TIME_LIMIT;
+  const frac = left / Math.max(1, runtime.blitz);
   timerFill.style.transition = frac < ringFrac ? '' : 'none';
   ringFrac = frac;
   timerFill.style.strokeDashoffset = String(RING_C * (1 - frac));
@@ -702,7 +724,7 @@ function restart() {
   gen++;
   /* Every local race rolls a fresh seed so no two telegraph the same lanes; an online race takes
      the seed the matchmaker handed both sides, so the logs and the hazards are the same board. */
-  state = newGame(sizes, { hazards: true, seed: active ? active.seed : (Math.random() * 0x7fffffff) | 0 });
+  state = newGame(sizes, { hazards: runtime.hazards, seed: active ? active.seed : (Math.random() * 0x7fffffff) | 0 });
   rolling = false;
   window.clearInterval(rumbleId);
   rumbleId = 0;
@@ -1006,7 +1028,7 @@ mineBtn.addEventListener('click', () => { armMine(!mineArmed); });
 again.addEventListener('click', () => {
   impact('light');
   /* a networked seat is not ours to restart: Play again means queue again */
-  if (active) { active.close(); active = null; matchmaking.open(); return; }
+  if (active) { active.close(); active = null; queueMatch(); return; }
   restart();
 });
 toMenu.addEventListener('click', () => { impact('light'); quitToMenu(); });
@@ -1089,17 +1111,32 @@ document.addEventListener('visibilitychange', syncLoop);
 
 mountCoins();                              // every [data-coin] slot gets the shared gold coin
 menu = createMenu({ router, sheets, sheet: sheetById, start: startGame, onBack });
-const shop = createShop({ sheets, sheet: sheetById, note: showNote });
+/* the till reads the live sales switch, so the Command Center's toggle lands without a reload */
+const shop = createShop({
+  sheets, sheet: sheetById, note: showNote, salesOpen: () => runtime.salesOpen,
+});
 home = createHome({ router, sheets, start: startGame });
 compete = createCompete({ router, sheets, sheet: sheetById });
 createNotifications({ sheets });
+
+/* ---- Admin Command Center: the Home FAB and the live-ops stage (src/admin.ts) ---- */
+admin = createAdmin({
+  note: showNote,
+  tier: myTier,
+  /* the stage is not a router screen, so it shows the BackButton itself while it is up */
+  onToggle: (open) => setBackButton(open || router.current !== 'home'),
+});
+admin.mount();
+/* the shop is the one screen that reads a switch at paint time: repaint it the moment it moves */
+onRuntime(() => shop.refresh());
+
 initGameModes(sheets, {
   /* the drawer already persisted sizes + difficulty, so the race it names is the race it runs */
   onStart: () => {
     const sel = getGameMode();
     /* Quick match is online: it queues on the searching stage first. Practice and a private
        room have nobody to wait for, so they start the race right away. */
-    if (sel.id === 'duel_1v1' || sel.id === 'party_2v2') { matchmaking.open(); return; }
+    if (sel.id === 'duel_1v1' || sel.id === 'party_2v2') { queueMatch(); return; }
     startGame({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] });
   },
 });

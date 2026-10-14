@@ -6,10 +6,11 @@
  * the same number Home shows and the same save the board reads. Buying spends, takes ownership and
  * puts the item on in one tap, so the card you just paid for is wearing it when the sheet closes.
  *
- * Showcase mode (`SHOWCASE`) parks all of that: the tabs still browse, every card still previews
- * the real thing, but the only card that answers is the one you are already wearing. The rest wear
- * an inert "Not for sale" capsule, and the two doors to the wallet — the card and the confirm key —
- * both refuse before a coin moves. Nothing was deleted to get here: `SHOWCASE = false` reopens it.
+ * Showcase mode parks all of that: the tabs still browse, every card still previews the real
+ * thing, but the only card that answers is the one you are already wearing. The rest wear an inert
+ * "Not for sale" capsule, and the two doors to the wallet — the card and the confirm key — both
+ * refuse before a coin moves. Nothing was deleted to get here: the Admin Command Center's "Shop
+ * Sales Enabled" switch flips the whole till back on live (`salesOpen` in the ShopApi).
  */
 import { ITEMS, themeOf, type CosKind, type Item, type Theme } from './themes';
 import { createPreview, type Preview } from './render';
@@ -25,14 +26,17 @@ export interface ShopApi {
   sheet(id: string): HTMLElement | null;
   /** the board's own toast (`showNote` in main.ts): the shop refuses in the game's voice */
   note(msg: string, error: boolean, ttl: number): void;
+  /** Is the till open? Read live, so the admin switch takes effect without a reload. */
+  salesOpen(): boolean;
 }
 
 export interface Shop {
   setRoute(id: string): void;
+  /** Repaint the cards and the header — the sales switch, or a grant, just moved. */
+  refresh(): void;
 }
 
-/** Showcase mode: the catalogue is open, the till is shut. One flag reopens the shop. */
-const SHOWCASE: boolean = true;
+/** What a shut till says: the catalogue is open, the wallet is not. */
 const SHOWCASE_NOTE = 'Shop is temporarily disabled — items are not for sale.';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -82,10 +86,10 @@ export function createShop(api: ShopApi): Shop {
         : themeOf(e.ball, e.wall, it.id);
   };
 
-  /** The card's state: the worn item is never locked, and while the shop is shut nothing else answers. */
+  /** The card's state: the worn item is never locked, and while the till is shut nothing else answers. */
   const stateOf = (it: Item): State => {
     if (isEquipped(it.kind, it.id)) return 'equipped';
-    if (SHOWCASE) return 'locked';
+    if (!api.salesOpen()) return 'locked';
     if (owns(it.kind, it.id)) return 'owned';
     return profile.coins >= it.price ? 'buy' : 'short';
   };
@@ -182,7 +186,7 @@ export function createShop(api: ShopApi): Shop {
 
   function act(it: Item) {
     if (isEquipped(it.kind, it.id)) return;               // the worn item: nothing to do, same as ever
-    if (SHOWCASE) { refuse(); return; }                  // guard: no equip, no spend, no unlock
+    if (!api.salesOpen()) { refuse(); return; }           // guard: no equip, no spend, no unlock
     if (owns(it.kind, it.id)) { impact('light'); equip(it.kind, it.id); return; }
     ask(it);
   }
@@ -213,8 +217,8 @@ export function createShop(api: ShopApi): Shop {
     const it = pending;
     pending = null;
     api.sheets.close();
-    // the last gate before the wallet: while the shop is shut the confirm key refuses too
-    if (SHOWCASE) { refuse(); return; }
+    // the last gate before the wallet: while the till is shut the confirm key refuses too
+    if (!api.salesOpen()) { refuse(); return; }
     if (buy(it.kind, it.id, it.price) !== 'bought') { notify('warning'); return; }
     notify('success');
     impact('medium');
@@ -259,6 +263,13 @@ export function createShop(api: ShopApi): Shop {
       if (shown && !cards.length) build();
       sync();
       if (shown) size();
+    },
+    /* The sales switch (or a grant) moved: repaint every card in place. Before the grid has ever
+       been built there is nothing to repaint — `build()` paints on the way in anyway. */
+    refresh() {
+      if (!cards.length) return;
+      paint();
+      size();
     },
   };
 }

@@ -10108,3 +10108,488 @@ html.rm .mm-pod.is-locked { animation: none; }
 html.rm .mm-sweep { opacity: .5; }
 html.rm .mm-seg i { opacity: .55; transform: none; }
 html.rm .mm-blip { opacity: .5; }
+
+/* ==========================================================================
+   ADMIN COMMAND CENTER — the Home FAB, the live broadcast strip and the
+   full-viewport Dark Clay stage (src/admin.ts).
+   Same one palette: opaque slabs, a real 0-blur extrusion under every key, a
+   metallic top hairline, translateY press-sink. No backdrop-filter anywhere,
+   and every interactive target is at least 48px.
+   ========================================================================== */
+
+/* ---- the Home key: a sculpted clay squircle, anchored above the launcher ---- */
+.admin-fab {
+  --d: 4px;
+  position: absolute;
+  right: 0;
+  bottom: 168px;                       /* refined in JS: clears the mode card + PLAY */
+  z-index: 6;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  appearance: none;
+  cursor: pointer;
+  border-radius: 17px;
+  background:
+    radial-gradient(120% 100% at 50% -32%, rgba(255, 255, 255, .1), transparent 62%),
+    var(--clay-face);
+  box-shadow:
+    0 var(--d) 0 #0A0E15,
+    var(--clay-drop), var(--clay-spec), var(--clay-bevel),
+    inset 0 0 0 1px rgba(56, 189, 248, .34),
+    0 0 18px -6px rgba(56, 189, 248, .45);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.admin-fab:active { transform: translateY(var(--press-y)); --d: 1px; }
+.admin-fab:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+.admin-fab-ico { width: 26px; height: 26px; color: var(--tiq); }
+.admin-fab-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--mint);
+  box-shadow: 0 0 0 2px #1C2433, 0 0 8px 1px rgba(16, 185, 129, .8);
+}
+.admin-fab-dot[data-state="lock"] {
+  background: var(--red);
+  box-shadow: 0 0 0 2px #1C2433, 0 0 8px 1px var(--red-glow);
+}
+@keyframes adm-dot { 0%, 100% { opacity: 1 } 50% { opacity: .4 } }
+@media (prefers-reduced-motion: no-preference) {
+  .admin-fab-dot[data-state="live"] { animation: adm-dot 2.4s ease-in-out infinite; }
+}
+html.rm .admin-fab-dot { animation: none; }
+
+/* ---- the pinned broadcast: a gold strip at the top of Home ---- */
+.home-broadcast {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+  min-height: 38px;
+  padding: 9px var(--s3);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, #2A2415 0%, #1F1A10 100%);
+  color: var(--honey-ink);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  box-shadow:
+    var(--clay-spec), var(--clay-bevel),
+    inset 0 0 0 1px rgba(245, 158, 11, .32),
+    0 8px 18px -14px rgba(245, 158, 11, .5);
+}
+.home-broadcast .ico { flex: none; width: 14px; height: 14px; color: var(--honey); }
+.home-broadcast-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- the stage: one full-viewport clay slab ---- */
+.admin {
+  position: absolute;
+  inset: 0;
+  z-index: 26;                         /* over the dock, the scrim, the sheets and matchmaking */
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  /* the Telegram viewport is the phone's: the stage honours both safe areas */
+  padding:
+    max(var(--s3), env(safe-area-inset-top))
+    max(var(--pad-app-x), env(safe-area-inset-right))
+    max(var(--s3), env(safe-area-inset-bottom))
+    max(var(--pad-app-x), env(safe-area-inset-left));
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(252, 211, 77, .1), rgba(252, 211, 77, 0) 60%),
+    radial-gradient(110% 60% at 50% 104%, rgba(56, 189, 248, .1), rgba(56, 189, 248, 0) 62%),
+    linear-gradient(180deg, var(--bg-m) 0%, var(--bg) 56%, var(--bg-b) 100%);
+  opacity: 0;
+  transform: translate3d(0, 3%, 0);
+  transition: opacity var(--motion-med), transform .3s var(--bounce);
+  pointer-events: none;                /* a fading stage never eats a tap */
+  overflow: hidden;
+}
+.admin.open { opacity: 1; transform: none; pointer-events: auto; }
+html.rm .admin { transition: none; }
+
+.admin-head { flex: none; display: flex; align-items: center; gap: var(--s2); }
+.admin-head-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+/* engraved gold kicker: a dark under-shadow is the whole illusion */
+.admin-kicker {
+  margin: 0;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: var(--ls-3);
+  text-transform: uppercase;
+  color: var(--honey-ink);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .6);
+}
+.admin-title { margin: 0; font-size: var(--t-hd); font-weight: var(--w-2); color: var(--ink); }
+.admin-badge {
+  flex: none;
+  padding: 5px 9px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  white-space: nowrap;
+  color: var(--mint-ink);
+  background: var(--mint-soft);
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .35);
+}
+.admin-badge[data-door="dev"] {
+  color: var(--brand-ink);
+  background: var(--brand-soft);
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, .35);
+}
+.admin-close {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  appearance: none;
+  cursor: pointer;
+  border-radius: 50%;
+  background: var(--clay-face);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 26px;
+  line-height: 1;
+  box-shadow: 0 var(--lip) 0 #0A0E15, var(--clay-drop), var(--clay-spec), var(--clay-bevel);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.admin-close:active { transform: translateY(var(--press-y)); --lip: 1px; }
+.admin-close:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+/* ---- the segmented clay track: 56px tall, one recessed well ---- */
+.admin-tabs {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  height: 56px;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.admin-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 4px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .01em;
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast),
+              background var(--motion-fast), color var(--motion-fast);
+}
+.admin-tab:active { transform: translateY(var(--press-y)); }
+.admin-tab:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+/* the live tab is a raised key inside the well, not a colour swap alone */
+.admin-tab[aria-selected="true"] {
+  background: var(--clay-face);
+  color: var(--ink);
+  box-shadow: var(--clay-spec), var(--clay-bevel), inset 0 0 0 1px rgba(56, 189, 248, .28);
+}
+
+.admin-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding-bottom: var(--s2);
+}
+.admin-panel { display: flex; flex-direction: column; gap: var(--s2); }
+
+/* ---- live status strip: three inset KPI wells ---- */
+.adm-kpis { display: flex; gap: var(--s2); }
+.adm-kpi {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 9px;
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.adm-kpi-l {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.adm-kpi b { font-size: var(--t-3); font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+.adm-kpi[data-state="on"] b { color: var(--mint-ink); }
+.adm-kpi[data-state="off"] b { color: var(--honey-ink); }
+
+.adm-sec-h {
+  margin: var(--s3) 0 0;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: var(--ls-3);
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.admin-panel > .adm-sec-h:first-child { margin-top: 0; }
+.adm-note { margin: var(--s2) 0 0; font-size: var(--t-micro); line-height: 1.45; color: var(--ink-soft); }
+
+/* ---- switch rows: the whole 60px slab is the target ---- */
+.adm-list { display: flex; flex-direction: column; gap: var(--s2); }
+.adm-sw {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 12px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  background: var(--clay-face);
+  color: var(--ink);
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.adm-sw:active { transform: translateY(var(--press-y)); }
+.adm-sw:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.adm-sw-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.adm-sw-t { font-size: var(--t-2); font-weight: 800; color: var(--ink); }
+.adm-sw-s { font-size: var(--t-micro); line-height: 1.3; color: var(--ink-soft); }
+.adm-knob {
+  flex: none;
+  width: 50px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  box-shadow: var(--inset);
+  transition: background var(--motion-fast), box-shadow var(--motion-fast);
+}
+.adm-knob i {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #64748B 0%, #475569 100%);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .25);
+  transition: transform var(--motion-fast), background var(--motion-fast);
+}
+.adm-sw[aria-checked="true"] .adm-knob {
+  background: var(--mint-soft);
+  box-shadow: var(--inset), inset 0 0 0 1px rgba(16, 185, 129, .4);
+}
+.adm-sw[aria-checked="true"] .adm-knob i {
+  transform: translateX(20px);
+  background: var(--gold-face);
+  box-shadow: 0 2px 0 var(--gold-lip), inset 0 1px 0 rgba(255, 255, 255, .5);
+}
+@media (prefers-reduced-motion: reduce) { .adm-knob i { transition: none; } }
+
+/* ---- broadcast composer ---- */
+.adm-bc { display: flex; flex-direction: column; gap: var(--s2); }
+.adm-field {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 50px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.adm-field .ico { flex: none; width: 15px; height: 15px; color: var(--honey); }
+.adm-input {
+  flex: 1 1 auto;
+  align-self: stretch;                 /* the field itself is the 48px target, not just the glyph run */
+  min-width: 0;
+  appearance: none;
+  border: 0;
+  background: none;
+  outline: none;
+  font: inherit;
+  font-size: var(--t-2);
+  color: var(--ink);
+  -webkit-user-select: text;
+  user-select: text;
+}
+.adm-input::placeholder { color: var(--ink-soft); opacity: .65; }
+.adm-bc-actions { display: flex; gap: var(--s2); }
+.adm-bc-actions .adm-btn { flex: 1 1 0; }
+.adm-bc-live {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-micro);
+  color: var(--ink-soft);
+}
+.adm-bc-live[data-on="true"] { color: var(--honey-ink); }
+
+/* ---- the shared clay key ---- */
+.adm-btn {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: var(--radius-md);
+  background: var(--clay-face);
+  color: var(--ink);
+  font-size: var(--t-2);
+  font-weight: 800;
+  box-shadow: 0 var(--lip) 0 #0A0E15, var(--clay-drop), var(--clay-spec), var(--clay-bevel);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), filter var(--motion-fast);
+}
+.adm-btn:active { transform: translateY(var(--press-y)); --lip: 1px; }
+.adm-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.adm-btn-wide { width: 100%; margin-top: var(--s3); }
+.adm-btn-primary {
+  background: var(--brand-fill);
+  color: var(--on-brand);
+  box-shadow: 0 var(--lip) 0 var(--brand-lip), var(--brand-shadow);
+}
+.adm-btn-danger {
+  background: linear-gradient(180deg, var(--bad-1) 0%, var(--bad-2) 100%);
+  color: #fff;
+  box-shadow: 0 var(--lip) 0 #7F0B2A, var(--bad-shadow);
+}
+.adm-btn-danger.armed { filter: saturate(1.2) brightness(1.12); }
+
+/* ---- stepper rows ---- */
+.adm-steps {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 62px;
+  padding: 9px 10px 9px 12px;
+  border-radius: var(--radius-md);
+  background: var(--clay-face);
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+}
+.adm-steps-t { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.adm-steps-n { font-size: var(--t-2); font-weight: 800; color: var(--ink); }
+.adm-steps-s { font-size: var(--t-micro); line-height: 1.3; color: var(--ink-soft); }
+.adm-steps-c { flex: none; display: flex; align-items: center; gap: 4px; }
+.adm-step {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  color: var(--brand-ink);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.adm-step .ico { width: 18px; height: 18px; }
+.adm-step:active { transform: translateY(var(--press-y)); }
+.adm-step:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.adm-val {
+  min-width: 52px;
+  text-align: center;
+  font-size: var(--t-2);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/* ---- quick tools ---- */
+.adm-tools { display: flex; gap: var(--s2); }
+.adm-tool {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: 11px 12px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  background: var(--clay-face);
+  color: var(--ink);
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.adm-tool:active { transform: translateY(var(--press-y)); }
+.adm-tool:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.adm-tool-t { font-size: var(--t-2); font-weight: 800; color: var(--ink); }
+.adm-tool-now {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--t-3);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--honey-ink);
+}
+.adm-tool-now .coin { width: 15px; height: 15px; }
+.adm-tool-now .ico { width: 15px; height: 15px; color: var(--tiq); }
+
+/* ---- mind tier preview ---- */
+.adm-tier {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: var(--clay-face);
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+}
+.adm-tier-ring {
+  --aura: var(--tier-rookie);
+  --aura-glow: var(--tier-rookie-glow);
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%, rgba(255, 255, 255, .14), transparent 62%), var(--clay-face);
+  box-shadow: inset 0 0 0 3px var(--aura), 0 0 16px -2px var(--aura-glow), var(--clay-spec);
+  transition: box-shadow var(--motion-fast);
+}
+.adm-tier-ring[data-tier="tactician"] { --aura: var(--tier-tactician); --aura-glow: var(--tier-tactician-glow); }
+.adm-tier-ring[data-tier="strategist"] { --aura: var(--tier-strategist); --aura-glow: var(--tier-strategist-glow); }
+.adm-tier-ring[data-tier="grandmaster"] { --aura: var(--tier-grandmaster); --aura-glow: var(--tier-grandmaster-glow); }
+.adm-tier-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.adm-tier-txt b { font-size: var(--t-2); font-weight: 800; color: var(--ink); }
+
+/* the panel is tall on a short phone: tighten the rows rather than the type */
+@media (max-height: 700px) {
+  .adm-sw { min-height: 56px; padding: 8px 11px; }
+  .adm-steps { min-height: 58px; padding: 8px 9px 8px 11px; }
+  .adm-tool { min-height: 68px; }
+}

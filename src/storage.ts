@@ -79,6 +79,11 @@ export interface Save {
   badge: string | null;
   /** Tactile avatar frame id (default | auric | neon), persisted for the hero frame slot. */
   frame: string | null;
+  /**
+   * TIQ the player has been granted outside a race (Admin Command Center, future
+   * events). Added on top of the ladder's own formula — `myTiq()` in matchmaking.ts.
+   */
+  tiqBonus: number;
 }
 
 /** The three starter items are owned before the first race; the wallet starts stocked for the demo. */
@@ -103,6 +108,7 @@ function fresh(): Save {
     teams: seedTeams(),
     badge: null,
     frame: null,
+    tiqBonus: 0,
   };
 }
 
@@ -183,6 +189,7 @@ function migrate(raw: Partial<Save> | null): Save {
   } else if (raw.frame === null) {
     s.frame = null;
   }
+  if (whole(raw.tiqBonus)) s.tiqBonus = Math.max(0, Math.floor(raw.tiqBonus));
   return s;
 }
 
@@ -244,12 +251,14 @@ export function buy(kind: CosKind, id: string, price: number): BuyResult {
 const WIN: Record<Difficulty, number> = { easy: 40, normal: 65, hard: 100 };
 const LOSS: Record<Difficulty, number> = { easy: 12, normal: 18, hard: 25 };
 
-export function payout(r: { difficulty: Difficulty; won: boolean }): number {
-  return (r.won ? WIN : LOSS)[r.difficulty];
+export function payout(r: { difficulty: Difficulty; won: boolean }, mult = 1): number {
+  const base = (r.won ? WIN : LOSS)[r.difficulty];
+  const scale = Number.isFinite(mult) && mult > 0 ? mult : 1;
+  return Math.max(0, Math.round(base * scale));
 }
 
 /** Settles one finished race: the tally, the streak and the wallet. */
-export function recordGame(r: { difficulty: Difficulty; won: boolean }): number {
+export function recordGame(r: { difficulty: Difficulty; won: boolean }, mult = 1): number {
   const s = profile.stats;
   s.games++;
   s.modes.bot = (s.modes.bot ?? 0) + 1;
@@ -261,7 +270,7 @@ export function recordGame(r: { difficulty: Difficulty; won: boolean }): number 
     s.losses++;
     s.streak = 0;
   }
-  const coins = payout(r);
+  const coins = payout(r, mult);
   profile.coins += coins;
   flush();
   return coins;
@@ -279,6 +288,14 @@ export function spendCoins(n: number): boolean {
 export function earnCoins(n: number): number {
   const gain = Math.max(0, Math.floor(n));
   profile.coins += gain;
+  flush();
+  return gain;
+}
+
+/** Tournament prizes, event grants and the Admin Command Center move TIQ the same way. */
+export function earnTiq(n: number): number {
+  const gain = Math.max(0, Math.floor(n));
+  profile.tiqBonus += gain;
   flush();
   return gain;
 }
