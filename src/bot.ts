@@ -13,7 +13,7 @@
  * player could know: the opponent's hidden mines are not in `s`, and neither is the bot's answer.
  */
 import {
-  COLS, ROWS, allWalls, ballById, ballPath, distField, doWall, mineCells, nextTeam,
+  allWalls, ballById, ballPath, distField, doWall, mineCells, nextTeam,
   pathLen, pathOn, steps, wallsRemaining,
   type Action, type GameState, type Player, type Pos, type Step, type Wall,
 } from './rules';
@@ -45,26 +45,27 @@ export function botThinkMs(d: Difficulty): number {
 }
 
 const DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]] as const;
-const key = (c: number, r: number) => r * COLS + c;
+/** A cell key on the board in play: the stride is the board's own width, never a constant. */
+const key = (c: number, r: number, cols: number) => r * cols + c;
 
 /**
  * The cells on the shortest route from `from` to FINISH, nearest the ball first. Walking strictly
  * downhill on the distance field is enough: a neighbour one step closer is by definition reachable.
  */
-function route(d: Int16Array, from: Pos): Pos[] {
+function route(d: Int16Array, from: Pos, cols: number, rows: number): Pos[] {
   const out: Pos[] = [];
   let { c, r } = from;
-  let v = d[key(c, r)];
+  let v = d[key(c, r, cols)];
   if (v < 0) return out;
-  while (v > 0 && out.length < COLS * ROWS) {
+  while (v > 0 && out.length < cols * rows) {
     let nc = c, nr = r;
     for (const [dc, dr] of DIRS) {
       const cc = c + dc, rr = r + dr;
-      if (cc < 0 || cc >= COLS || rr < 0 || rr >= ROWS) continue;
-      if (d[key(cc, rr)] === v - 1) { nc = cc; nr = rr; break; }
+      if (cc < 0 || cc >= cols || rr < 0 || rr >= rows) continue;
+      if (d[key(cc, rr, cols)] === v - 1) { nc = cc; nr = rr; break; }
     }
     if (nc === c && nr === r) break;              // sealed in: no downhill step left
-    c = nc; r = nr; v = d[key(c, r)];
+    c = nc; r = nr; v = d[key(c, r, cols)];
     out.push({ c, r });
   }
   return out;
@@ -76,7 +77,7 @@ function dangerOf(s: GameState, me: Player): Set<number> {
   for (const m of s.mines) {
     // a spent mine is harmless, but it marks a lane somebody chose to mine — and its own traps
     // are still in the ground, so the bot must not walk into them either
-    if (m.triggered || m.owner === me) out.add(key(m.cell.c, m.cell.r));
+    if (m.triggered || m.owner === me) out.add(key(m.cell.c, m.cell.r, s.cols));
   }
   return out;
 }
@@ -86,7 +87,7 @@ function leadBall(s: GameState, foe: Player, d: Int16Array): Pos {
   let best = s.balls[0].pos, v = Infinity;
   for (const b of s.balls) {
     if (b.team !== foe) continue;
-    const e = pathOn(d, b.pos);
+    const e = pathOn(d, b.pos, s.cols);
     if (e < v) { v = e; best = b.pos; }
   }
   return best;
@@ -102,14 +103,15 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
   const p = PROFILES[difficulty];
   const me = s.turn, foe = nextTeam(s, me);
   const myD = pathLen(s, me), foeD = pathLen(s, foe);
-  const d = distField(s.walls);
+  const d = distField(s.walls, s.cols, s.rows);
+  const k = (c: number, r: number) => key(c, r, s.cols);
 
   if (Math.random() < p.mineRate) {
     const spots = mineCells(s, me);
     if (spots.length) {
-      const onRoute = new Set(route(d, leadBall(s, foe, d)).map((c) => key(c.c, c.r)));
+      const onRoute = new Set(route(d, leadBall(s, foe, d), s.cols, s.rows).map((c) => k(c.c, c.r)));
       // anywhere the foe is heading, biased to the squares it reaches soonest
-      const ahead = spots.filter((c) => onRoute.has(key(c.c, c.r)));
+      const ahead = spots.filter((c) => onRoute.has(k(c.c, c.r)));
       const pool = (ahead.length ? ahead : spots).slice(0, 8);
       return { kind: 'mine', cell: pool[(Math.random() * pool.length) | 0] };
     }
@@ -119,7 +121,7 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
     let best: Wall | null = null;
     let bestScore = 0;
     let bestSelf = Infinity;
-    for (const w of allWalls(me)) {
+    for (const w of allWalls(me, s.cols, s.rows)) {
       const t = doWall(s, w);
       if (!t) continue;
       const cost = pathLen(t, foe) - foeD;
@@ -134,7 +136,7 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
   }
 
   let mySteps = steps(s, me);
-  const score = (q: Pos) => { const v = d[q.r * COLS + q.c]; return v < 0 ? 999 : v; };
+  const score = (q: Pos) => { const v = d[k(q.c, q.r)]; return v < 0 ? 999 : v; };
   if (mySteps.length) {
     if (p.noise > 0 && Math.random() < p.noise) {
       const st = mySteps[(Math.random() * mySteps.length) | 0];
@@ -144,7 +146,7 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
     // among the cells that gain the most ground, play the ball that is already closest to the line
     let pool = mySteps.filter((st) => score(st.to) === min);
     const danger = dangerOf(s, me);
-    const wary = pool.filter((st) => !danger.has(key(st.to.c, st.to.r)));
+    const wary = pool.filter((st) => !danger.has(k(st.to.c, st.to.r)));
     if (wary.length) pool = wary;                 // never a hard ban: a bot with one way out takes it
     const near = new Map<number, number>();
     for (const st of pool) {
@@ -158,6 +160,6 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
     return { kind: 'move', ball: pick.ball, to: pick.to };
   }
 
-  for (const w of allWalls(me)) if (doWall(s, w)) return { kind: 'wall', wall: w };
+  for (const w of allWalls(me, s.cols, s.rows)) if (doWall(s, w)) return { kind: 'wall', wall: w };
   return { kind: 'pass' };
 }

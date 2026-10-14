@@ -7,8 +7,9 @@
  * down: collinear walls may not share a segment, perpendicular walls may not share a pivot (the
  * illegal `+`), and touching at an L-corner or a T-junction stays legal — checked as pure predicates,
  * through `doWall`, and across full randomised bot playouts so nothing on the board ever clashes.
- * Then the modes: a ball in hand and a wall preview are mutually exclusive, so the move dots and the
- * dashed preview can never be drawn at once.
+ * The same rules are then re-checked on the wide board 3 and 4 contenders play on, where the two
+ * extra columns are legal squares and the duel's are not. Then the modes: a ball in hand and a wall
+ * preview are mutually exclusive, so the move dots and the dashed preview can never be drawn at once.
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -57,7 +58,7 @@ check('geometry: a wall spans two segments and hinges on the vertex between them
   assert.deepEqual(wallPivot(h(2, 5)), { x: 3, y: 5 }, 'horizontal midpoint');
   assert.deepEqual(wallPivot(v(3, 4)), { x: 3, y: 5 }, 'vertical midpoint — the same vertex');
   /* a wall's own two segments never overlap each other, whatever it is */
-  for (const w of allWalls(0)) assert.equal(wallsOverlap(w, w), true);
+  for (const w of allWalls(0, COLS, ROWS)) assert.equal(wallsOverlap(w, w), true);
 });
 
 check('same orientation: a horizontal wall rejects both of its same-line neighbours', () => {
@@ -91,7 +92,7 @@ check('overlap is symmetric, and a shared segment is found either way round', ()
 });
 
 check('overlap, exhaustively: collinear walls share a segment only when they should', () => {
-  const all = allWalls(0);
+  const all = allWalls(0, COLS, ROWS);
   for (const a of all) {
     for (const b of all) {
       /* perpendicular walls can never share a segment — they do not even lie on the same line */
@@ -174,15 +175,59 @@ check('a legal wall goes up, and the board it leaves has no clash anywhere', () 
   assert.equal(doWall({ ...s, turn: 0 }, h(5, 7)), null, '`+` through v(6,6)');
 });
 
+check('the wide board opens two more columns, and the duel still refuses them', () => {
+  const duel = newGame([1, 1]);                       // two contenders: the classic eight columns
+  const wide = newGame([1, 1, 1]);                    // three: the wide ten
+  assert.equal(duel.cols, 8);
+  assert.equal(duel.rows, 12);
+  assert.equal(wide.cols, 10);
+  assert.equal(wide.rows, 12);
+  /* a horizontal wall over the last pair of columns */
+  assert.equal(wallOk(duel, h(7, 5)), false, 'x=7 runs off an eight-column board');
+  assert.equal(wallOk(wide, h(7, 5)), true, 'but it fits the wide board');
+  assert.equal(wallOk(wide, h(8, 5)), true, 'and so does the last slot');
+  assert.equal(wallOk(wide, h(9, 5)), false, 'x=9 runs off the wide board');
+  /* and a vertical one on the right-hand line */
+  assert.equal(wallOk(duel, v(8, 5)), false, 'v(8,..) is off an eight-column board');
+  assert.equal(wallOk(wide, v(9, 5)), true, "v(9,..) is the wide board's right edge");
+  assert.equal(wallOk(wide, v(10, 5)), false, 'and v(10,..) is past it');
+  /* the enumerator follows whatever grid it is handed */
+  assert.equal(allWalls(0, wide.cols, wide.rows).filter((w) => w.o === 'h').length, (wide.cols - 1) * (wide.rows - 1));
+  assert.equal(allWalls(0, duel.cols, duel.rows).filter((w) => w.o === 'v').length, (duel.cols - 1) * (duel.rows - 1));
+  /* the wide board's own clash rules are the same ones: a `+` is still a `+` two columns over */
+  const s = { ...wide, walls: [{ o: 'h', x: 7, y: 5, owner: 0 }] };   // pivot (8, 5)
+  assert.equal(wallOk(s, { o: 'v', x: 8, y: 4, owner: 0 }), false, 'a `+` at the wide board pivot');
+  assert.equal(wallOk(s, { o: 'v', x: 7, y: 5, owner: 0 }), true, 'an L-corner there is still legal');
+});
+
+check('the bot plays a three- and a four-seat board without ever clashing', () => {
+  for (const sizes of [[1, 1, 1], [1, 1, 1, 1], [2, 2]]) {
+    let s = newGame(sizes);
+    assert.equal(s.cols, 10, `${sizes} should be on the wide board`);
+    let turns = 0;
+    for (; turns < 240 && s.winner === null; turns++) {
+      const a = botAction(s, 'normal');
+      const next = apply(s, a);
+      assert.ok(next, `${sizes}: the bot's ${a.kind} was refused`);
+      assert.equal(clashOn(next.walls), null, `${sizes}: the board clashed after ${a.kind}`);
+      if (a.kind === 'wall') assert.equal(wallOk(s, a.wall), true, 'the bot only offers walls the rules accept');
+      s = next;
+    }
+    assert.ok(turns > 20, `${sizes}: the race barely ran (${turns} turns)`);
+  }
+});
+
 check('the bot never picks a wall that clashes, on any board it plays', () => {
   const rnd = (n) => Math.floor(Math.random() * n);
-  let placed = 0, races = 0;
+  const BOARDS = [[1, 1], [1, 1, 1], [1, 1, 1, 1], [2, 2]];
+  let placed = 0, races = 0, wide = 0;
   for (const difficulty of ['easy', 'normal', 'hard']) {
     for (let race = 0; race < 25; race++) {
-      let s = newGame(race % 2 ? [2, 2] : [1, 1]);
+      let s = newGame(BOARDS[race % BOARDS.length]);
+      if (s.cols === 10) wide++;
       /* open on a board that is already busy, so the bot has to route its walls around real ones */
       for (let k = 0; k < 6; k++) {
-        const pool = allWalls(0).filter((w) => wallOk({ ...s, turn: 0 }, w));
+        const pool = allWalls(0, s.cols, s.rows).filter((w) => wallOk({ ...s, turn: 0 }, w));
         if (!pool.length) break;
         s = doWall({ ...s, turn: 0 }, pool[rnd(pool.length)]);
         assert.equal(clashOn(s.walls), null, 'a board seeded only from legal walls never clashes');
@@ -204,6 +249,7 @@ check('the bot never picks a wall that clashes, on any board it plays', () => {
     }
   }
   assert.ok(races > 0 && placed > 20, `expected the bot to wall a few times, saw ${placed}`);
+  assert.ok(wide > 0, 'the playouts must cover the wide board too');
 });
 
 check('action modes: a ball in hand and a wall preview never share the board', () => {

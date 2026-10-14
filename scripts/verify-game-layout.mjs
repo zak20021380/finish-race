@@ -39,7 +39,7 @@ try {
 
 const EXE = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const VIEWPORTS = [[360, 600], [360, 640], [390, 844], [430, 932]];
-const LIMIT = 8;   // mirrors WALL_LIMIT; asserted against the DOM so drift cannot pass silently
+const LIMIT = 8;   // the DUEL budget (wallBudget(2)); asserted against the DOM so drift cannot pass silently
 const SPEND = process.env.SPEND ?? 'light';   // which theme plays the budget down (light|dark)
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };

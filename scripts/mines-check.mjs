@@ -3,8 +3,9 @@
  * src/hazards.ts and the bot's reading of it in src/bot.ts. No DOM, no Playwright.
  * Run: node --experimental-strip-types scripts/mines-check.mjs
  *
- * Covers: the CONFIG tunables, the placement band (never the top or bottom two rows), occupied
- * cells, the per-team budget, whose turn it is, mines not blocking movement, the 3-cell
+ * Covers: the CONFIG tunables, the board the rules pick for 2, 3 and 4 contenders (grid, spaced
+ * spawns, wall budgets, the goal-path guard), the placement band (never the top or bottom two rows),
+ * occupied cells, the per-team budget, whose turn it is, mines not blocking movement, the 3-cell
  * knockback and each of its three early stops, no chained blasts, friendly fire, and what
  * view(state, team) is allowed to reveal — plus 300 randomised playouts that re-check those
  * invariants after every single action. Then the log: a schedule that is a pure function of the
@@ -29,8 +30,9 @@ for (const n of NAMES) {
   fs.writeFileSync(new URL(HREF[n]), src);
 }
 const {
-  CONFIG, COLS, ROWS, HAZARD, allWalls, apply, doMine, doWall, logStopRow, mineCells, mineOk, newGame,
-  reachable, steps, view, liveMines, minesLeft, wallOk, wallsRemaining,
+  CONFIG, COLS, ROWS, WIDE_COLS, WIDE_ROWS, HAZARD, MAX_TEAMS, allWalls, apply, contendersIn,
+  dimsFor, doMine, doWall, hasPathToFinish, logStopRow, mineCells, mineOk, newGame, reachable, spawnColumns,
+  startLayout, steps, view, liveMines, minesLeft, wallBudget, wallOk, wallsRemaining,
 } = await import(HREF.rules);
 const { hazardAt, hazardSchedule, runLog } = await import(HREF.hazards);
 const { botAction } = await import(HREF.bot);
@@ -52,6 +54,115 @@ check('config', () => {
   assert.equal(CONFIG.MINES_PER_TEAM, 3);
   assert.equal(CONFIG.KNOCKBACK, 3);
   assert.equal(CONFIG.WALL_LIMIT, 8);
+});
+
+/* ---------- board geometry: the grid grows with the number of contenders ---------- */
+
+check('grid: a duel keeps the classic 8x12 board, three or more get the wide one', () => {
+  assert.equal(COLS, 8);
+  assert.equal(ROWS, 12);
+  assert.equal(WIDE_COLS, 10);
+  assert.deepEqual(dimsFor(2), { cols: COLS, rows: ROWS });
+  assert.deepEqual(dimsFor(3), { cols: WIDE_COLS, rows: WIDE_ROWS });
+  assert.deepEqual(dimsFor(4), { cols: WIDE_COLS, rows: WIDE_ROWS });
+  /* the state carries the grid, so nothing downstream has to consult a module constant */
+  const duel = newGame([1, 1]);
+  assert.equal(duel.cols, 8);
+  assert.equal(duel.rows, 12);
+  for (const sizes of [[1, 1, 1], [1, 1, 1, 1], [2, 2]]) {
+    const s = newGame(sizes);
+    assert.equal(s.cols, 10, `${sizes} should get the wide board`);
+    assert.equal(s.rows, 12, `${sizes} keeps the duel's race length`);
+  }
+  /* it follows the BALLS, not the seats: a 2v2 is four contenders and needs the room */
+  assert.equal(contendersIn([1, 1]), 2);
+  assert.equal(contendersIn([2, 2]), 4);
+  assert.equal(contendersIn([1, 1, 1]), 3);
+});
+
+check('grid: the rules accept four seats', () => {
+  assert.equal(MAX_TEAMS, 4);
+  const s = newGame([1, 1, 1, 1]);
+  assert.equal(s.teams.length, 4);
+  assert.deepEqual(s.balls.map((b) => b.team), [0, 1, 2, 3]);
+  assert.equal(newGame([1, 1, 1, 1, 1]).teams.length, 4, 'a fifth seat is dropped, not wrapped');
+});
+
+check('spawn: balls never start glued together in adjacent middle cells', () => {
+  /* the classic duel: symmetric, with a two-tile hole where the pair used to sit shoulder to shoulder */
+  assert.deepEqual(spawnColumns(8, 2), [2, 5]);
+  assert.deepEqual(startLayout([1, 1], 8, 12), [[{ c: 2, r: 11 }], [{ c: 5, r: 11 }]]);
+  /* three and four spread across the wide board */
+  assert.deepEqual(spawnColumns(10, 3), [1, 5, 8]);
+  assert.deepEqual(spawnColumns(10, 4), [1, 3, 6, 8]);
+  for (const [cols, count] of [[8, 2], [10, 2], [10, 3], [10, 4], [10, 5]]) {
+    const c = spawnColumns(cols, count);
+    assert.equal(c.length, count, `${count} balls on ${cols} columns`);
+    assert.equal(new Set(c).size, count, `duplicate column for ${count} on ${cols}`);
+    for (let i = 1; i < c.length; i++) assert.ok(c[i] - c[i - 1] >= 2, `adjacent spawn ${c} on ${cols}`);
+    assert.equal(c[0] + c[c.length - 1], cols - 1, `not symmetric about the middle: ${c} on ${cols}`);
+  }
+  /* and the board the rules actually hand out keeps that promise, ball by ball */
+  for (const sizes of [[1, 1], [1, 1, 1], [1, 1, 1, 1], [2, 2], [3, 3], [3, 3, 3]]) {
+    const s = newGame(sizes);
+    const cells = s.balls.map((b) => b.pos);
+    assert.equal(cells.length, sizes.reduce((a, b) => a + b, 0), `${sizes} ball count`);
+    for (const b of cells) assert.ok(b.c >= 0 && b.c < s.cols && b.r >= 0 && b.r < s.rows, 'ball off board');
+    assert.equal(new Set(cells.map((b) => `${b.c},${b.r}`)).size, cells.length, `${sizes}: two balls share a square`);
+    for (let i = 0; i < cells.length; i++) {
+      for (let j = i + 1; j < cells.length; j++) {
+        const d = Math.abs(cells[i].c - cells[j].c) + Math.abs(cells[i].r - cells[j].r);
+        assert.ok(d > 1, `${sizes}: balls ${i} and ${j} start side by side at ${JSON.stringify(cells)}`);
+      }
+    }
+  }
+  /* an over-crowded board cannot keep everyone apart, but it still never stacks two balls */
+  const jam = newGame([3, 3, 3, 3]);                   // twelve balls on ten columns
+  assert.equal(jam.balls.length, 12);
+  assert.equal(new Set(jam.balls.map((b) => `${b.pos.c},${b.pos.r}`)).size, 12, 'two balls share a start square');
+  for (const b of jam.balls) assert.ok(b.pos.c >= 0 && b.pos.c < jam.cols && b.pos.r >= 0 && b.pos.r < jam.rows, 'ball off board');
+});
+
+check('budget: walls scale with the contenders so the board cannot be over-saturated', () => {
+  assert.equal(wallBudget(2), 8, 'a duel keeps the classic budget');
+  assert.equal(wallBudget(3), 6);
+  assert.equal(wallBudget(4), 5);
+  assert.equal(wallBudget(5), 5, 'past four it stops shrinking');
+  assert.deepEqual(newGame([1, 1]).wallsLeft, [8, 8]);
+  assert.deepEqual(newGame([1, 1, 1]).wallsLeft, [6, 6, 6]);
+  assert.deepEqual(newGame([1, 1, 1, 1]).wallsLeft, [5, 5, 5, 5]);
+  assert.deepEqual(newGame([2, 2]).wallsLeft, [5, 5], 'four balls on the board is the four-contender budget');
+});
+
+check('path: the goal-path guard follows the board it is standing on', () => {
+  for (const sizes of [[1, 1], [1, 1, 1], [1, 1, 1, 1], [2, 2]]) {
+    const s = newGame(sizes);
+    assert.equal(hasPathToFinish(s), true, `${sizes} starts with every ball free`);
+    /* a full line of walls one row above the start seals the bottom in — and is seen */
+    const line = [];
+    for (let x = 0; x < s.cols; x += 2) line.push({ o: 'h', x, y: s.rows - 2, owner: 0 });
+    assert.equal(hasPathToFinish(s, line), false, `${sizes} must see the sealed board`);
+    assert.equal(hasPathToFinish(s, line.slice(0, -1)), true, `${sizes} is open one wall short`);
+  }
+});
+
+check('mines: the placement band follows the wide board', () => {
+  const s = newGame([1, 1, 1]);                  // 10 columns, 12 rows
+  assert.equal(s.cols, 10);
+  assert.equal(mineCells(s, 0).length, 10 * (12 - 4));
+  assert.equal(mineOk(s, { c: 9, r: 2 }), true, 'the tenth column is on the board');
+  assert.equal(mineOk(s, { c: 10, r: 2 }), false, 'and the eleventh is not');
+});
+
+check('log: the lane and its stop line follow the wide board too', () => {
+  /* a three-contender race runs on ten columns, so a lane may start as far right as column 7 */
+  const seen = new Set();
+  for (let k = 0; k < 80; k++) seen.add(hazardAt(11, k, WIDE_COLS).left);
+  const lanes = [...seen];
+  assert.ok(lanes.every((l) => l >= 0 && l <= WIDE_COLS - HAZARD.logWidth), `lane off the wide board: ${lanes}`);
+  assert.ok(Math.max(...lanes) > COLS - HAZARD.logWidth, 'the wide board must open lanes the duel cannot have');
+  assert.equal(logStopRow([], 0, 3, WIDE_ROWS), WIDE_ROWS - 1, 'the trunk reaches the wide board bottom');
+  assert.equal(logStopRow([], 0, 3, ROWS), ROWS - 1);
 });
 
 check('newGame starts with no mines', () => {
@@ -222,7 +333,7 @@ check('walls are rationed: eight legal walls, then the ninth is refused', () => 
   }
   assert.equal(built, CONFIG.WALL_LIMIT, `placed ${built} walls, budget is ${CONFIG.WALL_LIMIT}`);
   assert.equal(wallsRemaining(s, 0), 0, 'budget should be spent');
-  const extra = allWalls(0).find((w) => {
+  const extra = allWalls(0, s.cols, s.rows).find((w) => {
     const t = { ...s, turn: 0 };
     return wallOk(t, w);
   });
@@ -230,13 +341,18 @@ check('walls are rationed: eight legal walls, then the ninth is refused', () => 
 });
 
 check('the wall budget is tracked per seat and starts full', () => {
-  const s = newGame([2, 2]);
+  const s = newGame([1, 1]);
   assert.deepEqual(s.wallsLeft, [CONFIG.WALL_LIMIT, CONFIG.WALL_LIMIT]);
   assert.equal(wallsRemaining(s, 0), CONFIG.WALL_LIMIT);
   const after = doWall(s, { o: 'h', x: 0, y: 3, owner: 0 });
   assert.ok(after, 'first wall should place');
   assert.deepEqual(after.wallsLeft, [CONFIG.WALL_LIMIT - 1, CONFIG.WALL_LIMIT]);
   assert.equal(wallsRemaining(after, 1), CONFIG.WALL_LIMIT, 'the other seat is untouched');
+  /* and the same on the wide board, where the budget is the four-contender one */
+  const wide = newGame([2, 2]);
+  const wideAfter = doWall(wide, { o: 'h', x: 0, y: 3, owner: 0 });
+  assert.ok(wideAfter, 'first wall should place on the wide board too');
+  assert.deepEqual(wideAfter.wallsLeft, [wallBudget(4) - 1, wallBudget(4)]);
 });
 
 check('bot: every action survives the real state, or main.ts falls back and races on', () => {
@@ -271,7 +387,7 @@ check('fuzz: 300 random playouts keep every invariant', () => {
   const pick = (xs) => xs[Math.floor(rnd() * xs.length)];
   let triggers = 0, finished = 0;
   for (let g = 0; g < 300; g++) {
-    let s = newGame(pick([[1, 1], [1, 1, 1], [2, 3], [3, 3, 3]]));
+    let s = newGame(pick([[1, 1], [1, 1, 1], [1, 1, 1, 1], [2, 3], [2, 2], [3, 3, 3]]));
     for (let i = 0; i < 160 && s.winner === null; i++) {
       const roll = rnd();
       let a = null;
@@ -283,7 +399,7 @@ check('fuzz: 300 random playouts keep every invariant', () => {
         const cells = mineCells(s, s.turn);
         if (cells.length) a = { kind: 'mine', cell: pick(cells) };
       } else {
-        const w = { ...pick(allWalls(s.turn)), owner: s.turn };
+        const w = { ...pick(allWalls(s.turn, s.cols, s.rows)), owner: s.turn };
         if (wallOk(s, w)) a = { kind: 'wall', wall: w };
       }
       if (!a) a = { kind: 'pass' };
@@ -291,22 +407,24 @@ check('fuzz: 300 random playouts keep every invariant', () => {
       assert.ok(next, `legal action rejected: ${JSON.stringify(a)}`);
       assert.notEqual(next, s, 'apply mutated in place');
       s = next;
+      /* every invariant is re-read through the board's OWN grid, never a module constant */
       const seen = new Set();
       for (const b of s.balls) {
-        assert.ok(b.pos.c >= 0 && b.pos.c < COLS && b.pos.r >= 0 && b.pos.r < ROWS, 'ball off board');
-        const k = b.pos.r * COLS + b.pos.c;
+        assert.ok(b.pos.c >= 0 && b.pos.c < s.cols && b.pos.r >= 0 && b.pos.r < s.rows, 'ball off board');
+        const k = b.pos.r * s.cols + b.pos.c;
         assert.ok(!seen.has(k), 'two balls on one cell');
         seen.add(k);
       }
-      for (const t of [0, 1, 2]) assert.ok(minesLeft(s, t) >= 0, 'mine budget overspent');
+      for (let t = 0; t < s.teams.length; t++) assert.ok(minesLeft(s, t) >= 0, 'mine budget overspent');
       const armed = new Set();
       for (const m of liveMines(s)) {
-        assert.ok(m.cell.r >= 2 && m.cell.r <= ROWS - 3, 'mine in a banned row');
-        const k = m.cell.r * COLS + m.cell.c;
+        assert.ok(m.cell.c >= 0 && m.cell.c < s.cols, 'mine off board');
+        assert.ok(m.cell.r >= 2 && m.cell.r <= s.rows - 3, 'mine in a banned row');
+        const k = m.cell.r * s.cols + m.cell.c;
         assert.ok(!armed.has(k), 'two live mines on one cell');
         armed.add(k);
       }
-      for (const t of [0, 1, 2]) {
+      for (let t = 0; t < s.teams.length; t++) {
         const v = view(s, t);
         assert.ok(!v.mines.some((m) => m.owner !== t && !m.triggered), 'view leaked an enemy mine');
       }
@@ -322,15 +440,18 @@ check('fuzz: 300 random playouts keep every invariant', () => {
 
 /* ---------- rolling log ---------- */
 
-/** A seed whose k-th hazard sweeps the lane that starts at `left`. */
-const seedWith = (left, k = 1) => {
-  for (let s = 0; ; s++) if (hazardAt(s, k).left === left) return s;
+/** A seed whose k-th hazard sweeps the lane that starts at `left`, on a board `cols` wide. */
+const seedWith = (left, k = 1, cols = COLS) => {
+  for (let s = 0; ; s++) if (hazardAt(s, k, cols).left === left) return s;
 };
 
 /** Time the race so the next round close drops a log on the lane that starts at `left`. */
 const strikeDue = (left, sizes = [1, 1], round = 4, width = HAZARD.logWidth) => {
-  const s = newGame(sizes, { hazards: true, seed: seedWith(left) });
+  /* the lane is drawn on the race's own grid, so the seed has to be searched on it too */
+  const cols = dimsFor(contendersIn(sizes)).cols;
+  const s = newGame(sizes, { hazards: true, seed: seedWith(left, 1, cols) });
   assert.equal(width, HAZARD.logWidth, 'the trunk is always logWidth columns wide');
+  assert.equal(hazardAt(s.hazard.seed, 1, cols).left, left, 'the seed must sweep the lane under test');
   return { ...s, hazard: { ...s.hazard, round, emitted: 1, nextHitRound: round + 1 } };
 };
 
@@ -378,7 +499,7 @@ check('hazard: off by default, and an off race sees nothing at all', () => {
     assert.equal(s.hazard, undefined, 'a plain race grew a hazard clock');
     assert.equal(s.lastEvent, null, 'a plain race fired a log');
   }
-  assert.deepEqual(ball(s), { c: 3, r: ROWS - 1 }, 'nothing moved a ball');
+  assert.deepEqual(ball(s), startLayout([2, 2, 1], s.cols, s.rows)[0][0], 'nothing moved a ball');
 });
 
 check('hazard: nothing is telegraphed — the lane drops the instant its round closes', () => {
@@ -528,11 +649,28 @@ check('log: shield protection below the shared stop line', () => {
   assert.deepEqual(ball(s, 1), { c: 4, r: 8 }, 'below the wall: shielded');
 });
 
-check('log: an empty lane still reports the event', () => {
-  const s = closeRound(strikeDue(5)); // both balls sit on columns 3 and 4
-  assert.deepEqual(s.lastEvent, { type: 'log', left: 5, width: 3, stopRow: ROWS - 1, moves: [] });
-  assert.deepEqual(ball(s, 0), { c: 3, r: ROWS - 1 });
-  assert.deepEqual(ball(s, 1), { c: 4, r: ROWS - 1 });
+check('log: a lane with nothing under it still reports the event', () => {
+  /* the duel spawns on columns 2 and 5 and lane 5..7 reaches one of them, so park both clear of
+     it: a strike with nothing to shove is still a strike, and it still reports where it fell */
+  let s = put(strikeDue(5), 0, 3, ROWS - 1);
+  s = put(s, 1, 4, ROWS - 1);
+  const after = closeRound(s);
+  assert.deepEqual(after.lastEvent, { type: 'log', left: 5, width: 3, stopRow: ROWS - 1, moves: [] });
+  assert.deepEqual(ball(after, 0), { c: 3, r: ROWS - 1 });
+  assert.deepEqual(ball(after, 1), { c: 4, r: ROWS - 1 });
+});
+
+check('log: the wide board runs the same trunk across ten columns', () => {
+  let s = put(strikeDue(2, [1, 1, 1]), 0, 3, 6);       // lane 2..4, only the middle ball under it
+  assert.equal(s.cols, WIDE_COLS);
+  assert.deepEqual(s.balls.map((b) => b.pos.c), [3, 5, 8], 'the other two start clear of the lane');
+  const after = closeRound(s);
+  assert.equal(after.lastEvent.left, 2);
+  assert.equal(after.lastEvent.width, 3);
+  assert.equal(after.lastEvent.stopRow, WIDE_ROWS - 1, 'the trunk reaches the wide board bottom');
+  assert.deepEqual(ball(after, 0), { c: 3, r: 9 }, 'shoved the full three cells');
+  assert.deepEqual(ball(after, 1), { c: 5, r: WIDE_ROWS - 1 }, 'outside the lane: untouched');
+  assert.deepEqual(ball(after, 2), { c: 8, r: WIDE_ROWS - 1 }, 'and so is the far one');
 });
 
 check('log: runLog is pure — the state it read is untouched', () => {

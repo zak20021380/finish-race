@@ -33,7 +33,7 @@
  * them to mode selection. Motion is transform/opacity only; the global
  * reduced-motion block stills the sweep, the pulses and the flash.
  */
-import { COLS, ROWS, type Action } from './rules';
+import { contendersIn, dimsFor, type Action } from './rules';
 import { menuState, motionReduced, settings } from './settings';
 import { payout, profile } from './storage';
 import { runtime, tiqFrom } from './admin';
@@ -365,21 +365,23 @@ function readBoard(raw: unknown): [number, number] {
   return [menuState.sizes[0], menuState.sizes[1]];
 }
 
-const onBoard = (v: unknown): v is { c: number; r: number } => {
+const onBoard = (v: unknown, cols: number, rows: number): v is { c: number; r: number } => {
   const p = v as { c?: unknown; r?: unknown } | null;
   return !!p && Number.isInteger(p.c) && Number.isInteger(p.r)
-    && (p.c as number) >= 0 && (p.c as number) < COLS && (p.r as number) >= 0 && (p.r as number) < ROWS;
+    && (p.c as number) >= 0 && (p.c as number) < cols && (p.r as number) >= 0 && (p.r as number) < rows;
 };
 
 /**
  * An action rebuilt from the wire, never trusted as it arrived — the same guards the room applies
- * on the way out, so a frame the matchmaker would refuse cannot break this board either.
+ * on the way out, so a frame the matchmaker would refuse cannot break this board either. The bounds
+ * are the board this race is actually played on: a 3- or 4-contender match runs on the wide grid,
+ * so a column past the duel width is a legal square there and must not be dropped here.
  */
-function readAction(raw: unknown, side: 0 | 1): Action | null {
+function readAction(raw: unknown, side: 0 | 1, cols: number, rows: number): Action | null {
   const a = raw as { kind?: unknown; ball?: unknown; to?: unknown; wall?: unknown; cell?: unknown } | null;
   if (!a || typeof a !== 'object') return null;
   if (a.kind === 'move') {
-    if (!onBoard(a.to)) return null;
+    if (!onBoard(a.to, cols, rows)) return null;
     if (a.ball !== undefined && !Number.isInteger(a.ball)) return null;
     const to = { c: a.to.c, r: a.to.r };
     return a.ball === undefined ? { kind: 'move', to } : { kind: 'move', to, ball: a.ball as number };
@@ -390,13 +392,19 @@ function readAction(raw: unknown, side: 0 | 1): Action | null {
     return { kind: 'wall', wall: { o: w.o, x: w.x as number, y: w.y as number, owner: side } };
   }
   if (a.kind === 'mine') {
-    if (!onBoard(a.cell)) return null;
+    if (!onBoard(a.cell, cols, rows)) return null;
     return { kind: 'mine', cell: { c: a.cell.c, r: a.cell.r } };
   }
   return a.kind === 'pass' ? { kind: 'pass' } : null;
 }
 
-function parseFrame(raw: string): RaceFrame | null {
+/**
+ * One frame off the socket. `sizes` is the board the race on this socket is played on, when there
+ * is one: the grid the rules derive from it is what bounds an incoming move. A frame that arrives
+ * before a match exists can carry no move, so the classic duel board is the safe default.
+ */
+function parseFrame(raw: string, sizes?: readonly [number, number]): RaceFrame | null {
+  const { cols, rows } = dimsFor(sizes ? contendersIn(sizes) : 0);
   try {
     const msg = JSON.parse(raw) as Record<string, unknown>;
     if (!msg || typeof msg !== 'object') return null;
@@ -420,7 +428,7 @@ function parseFrame(raw: string): RaceFrame | null {
       };
     }
     if (msg.type === 'MOVE') {
-      const action = readAction(msg.action, side);
+      const action = readAction(msg.action, side, cols, rows);
       return action ? { type: 'MOVE', side, action } : null;
     }
     if (msg.type === 'REJECT') return { type: 'REJECT', reason: typeof msg.reason === 'string' ? msg.reason : 'refused' };
@@ -580,7 +588,7 @@ function refuseSearch(sock: WebSocket, reason: string): void {
 function wire(sock: WebSocket): void {
   sock.addEventListener('open', () => post(sock, JSON.stringify({ type: 'QUEUE', wide: wsWide })));
   sock.addEventListener('message', (ev) => {
-    const frame = parseFrame(String(ev.data));
+    const frame = parseFrame(String(ev.data), race?.sizes);
     if (!frame) return;
 
     if (frame.type === 'ERROR') {

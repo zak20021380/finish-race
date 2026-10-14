@@ -22,7 +22,7 @@
  * and a replay of the same pairing derives the same numbers. The queue is in memory: it is a
  * waiting room, not a record, and a socket that dies is a player who stopped waiting.
  */
-import { COLS, MAX_BALLS, ROWS, apply, newGame, type Action, type GameState } from '../src/rules';
+import { MAX_BALLS, apply, contendersIn, dimsFor, newGame, type Action, type GameState } from '../src/rules';
 import { authenticate, authRequestFrom, type Identity, type MindTier } from './auth';
 import { json } from './http';
 import type { Env } from './env';
@@ -147,22 +147,23 @@ function readSizes(raw: string | null): [number, number] {
 
 const sameBoard = (a: Waiter, b: Waiter): boolean => a.sizes[0] === b.sizes[0] && a.sizes[1] === b.sizes[1];
 
-const inBounds = (v: unknown): v is { c: number; r: number } => {
+const inBounds = (v: unknown, cols: number, rows: number): v is { c: number; r: number } => {
   const p = v as { c?: unknown; r?: unknown } | null;
   return !!p && Number.isInteger(p.c) && Number.isInteger(p.r)
-    && (p.c as number) >= 0 && (p.c as number) < COLS && (p.r as number) >= 0 && (p.r as number) < ROWS;
+    && (p.c as number) >= 0 && (p.c as number) < cols && (p.r as number) >= 0 && (p.r as number) < rows;
 };
 
 /**
  * An action, read from the wire and rebuilt here rather than trusted: a wall's owner is the seat
- * that sent it, never the number in the payload, and every coordinate has to be a square on the
- * board. Anything else is refused before it can reach the rules.
+ * that sent it, never the number in the payload, and every coordinate has to be a square on THIS
+ * board — the grid is sized by the number of contenders, so a 3- or 4-contender race is two columns
+ * wider than a duel and a move into those columns is legal there.
  */
-function readAction(raw: unknown, side: 0 | 1): Action | null {
+function readAction(raw: unknown, side: 0 | 1, cols: number, rows: number): Action | null {
   const a = raw as { kind?: unknown; ball?: unknown; to?: unknown; wall?: unknown; cell?: unknown } | null;
   if (!a || typeof a !== 'object') return null;
   if (a.kind === 'move') {
-    if (!inBounds(a.to)) return null;
+    if (!inBounds(a.to, cols, rows)) return null;
     if (a.ball !== undefined && !Number.isInteger(a.ball)) return null;
     const to = { c: a.to.c, r: a.to.r };
     return a.ball === undefined ? { kind: 'move', to } : { kind: 'move', to, ball: a.ball as number };
@@ -173,13 +174,17 @@ function readAction(raw: unknown, side: 0 | 1): Action | null {
     return { kind: 'wall', wall: { o: w.o, x: w.x as number, y: w.y as number, owner: side } };
   }
   if (a.kind === 'mine') {
-    if (!inBounds(a.cell)) return null;
+    if (!inBounds(a.cell, cols, rows)) return null;
     return { kind: 'mine', cell: { c: a.cell.c, r: a.cell.r } };
   }
   return a.kind === 'pass' ? { kind: 'pass' } : null;
 }
 
-function readMessage(raw: unknown, side: 0 | 1): ClientMessage | null {
+/** The board a socket is playing on: the live race's own grid, or the one its queue asked for. */
+const boardOf = (waiter: Waiter): { cols: number; rows: number } =>
+  waiter.race ? waiter.race.state : dimsFor(contendersIn(waiter.sizes));
+
+function readMessage(raw: unknown, side: 0 | 1, cols: number, rows: number): ClientMessage | null {
   if (typeof raw !== 'string') return null;
   try {
     const msg = JSON.parse(raw) as { type?: unknown; wide?: unknown; action?: unknown };
@@ -188,7 +193,7 @@ function readMessage(raw: unknown, side: 0 | 1): ClientMessage | null {
     if (msg.type === 'CANCEL') return { type: 'CANCEL' };
     if (msg.type === 'RESIGN') return { type: 'RESIGN' };
     if (msg.type === 'MOVE') {
-      const action = readAction(msg.action, side);
+      const action = readAction(msg.action, side, cols, rows);
       return action ? { type: 'MOVE', action } : null;
     }
   } catch {
@@ -387,7 +392,8 @@ export class MatchmakerDO {
 
   private attach(waiter: Waiter): void {
     waiter.ws.addEventListener('message', (ev: MessageEvent) => {
-      const msg = readMessage(ev.data, waiter.side);
+      const board = boardOf(waiter);
+      const msg = readMessage(ev.data, waiter.side, board.cols, board.rows);
       if (!msg) return;
       /* a paired socket is a race, not a queue: the same connection changes what it means */
       if (waiter.race) this.relay(waiter, msg);

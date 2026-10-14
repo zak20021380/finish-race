@@ -10,7 +10,9 @@
  *   - every move of a full race, relayed and replayed on both sides;
  *   - an out-of-turn move, an illegal move, and a wall with a spoofed owner;
  *   - RESIGN and a mid-race disconnect (the forfeit path);
- *   - board sizes: 1v1 never pairs with 2v2.
+ *   - board sizes: 1v1 never pairs with 2v2;
+ *   - board geometry: a duel is 8 columns, a 2v2 is the wide 10, the wide board's extra columns are
+ *     relayed rather than dropped as off-board, and a whole race replays on it move for move.
  *
  *   node scripts/verify-worker-race.mjs
  */
@@ -158,6 +160,45 @@ const send = (socket, message) => socket.send(JSON.stringify(message));
 const frames = (socket, cursor) => socket.received.slice(cursor).map((raw) => JSON.parse(raw));
 const only = (socket, type, cursor = 0) => frames(socket, cursor).filter((f) => f.type === type);
 
+/**
+ * Play a whole race through the room: every move is judged there, relayed to the rival and replayed
+ * on both boards. They have to stay identical to each other and to the room's own copy, move for
+ * move — the one property that makes the server authoritative rather than a postbox.
+ */
+function playOut(rt, a, b, matchId, one, two) {
+  let clientA = one, clientB = two;
+  let cursorA = a.received.length, cursorB = b.received.length;
+  let actions = 0, agreed = true, roomAgreed = true;
+  while (clientA.winner === null && actions < 400) {
+    const actor = clientA.turn === 0 ? a : b;
+    const mine = clientA.turn === 0 ? clientA : clientB;
+    const action = getAutoMove(mine, mine.turn);
+    const before = actor.received.length;
+    send(actor, { type: 'MOVE', action });
+    if (frames(actor, before).find((f) => f.type === 'REJECT')) { agreed = false; break; }
+    const next = apply(mine, action);
+    if (!next) { agreed = false; break; }
+    if (actor === a) { clientA = next; cursorA = a.received.length; }
+    else { clientB = next; cursorB = b.received.length; }
+
+    const peer = actor === a ? b : a;
+    const relayed = only(peer, 'MOVE', actor === a ? cursorB : cursorA).at(-1);
+    if (!relayed) { agreed = false; break; }
+    const peerNext = apply(peer === a ? clientA : clientB, relayed.action);
+    if (!peerNext) { agreed = false; break; }
+    if (peer === a) { clientA = peerNext; cursorA = a.received.length; }
+    else { clientB = peerNext; cursorB = b.received.length; }
+    if (JSON.stringify(clientA) !== JSON.stringify(clientB)) { agreed = false; break; }
+    if (relayed.side !== (actor === a ? 0 : 1)) { agreed = false; break; }
+    /* The room settles a race the moment a winner appears, so it only holds the board while the
+       race is still running — which is exactly when it has to agree with both screens. */
+    const room = rt.lobby.races.get(matchId);
+    if (room && JSON.stringify(room.state) !== JSON.stringify(clientA)) { roomAgreed = false; break; }
+    actions++;
+  }
+  return { agreed, actions, clientA, clientB, roomAgreed };
+}
+
 /* ---------- checks ---------- */
 
 let ran = 0;
@@ -212,47 +253,61 @@ function ok(label, condition, detail = '') {
   ok('an illegal move is refused', only(a, 'REJECT').at(-1)?.reason === 'illegal_action');
 
   /* a full race: every move relayed, both boards landing on the same squares */
-  let clientA = one;
-  let clientB = two;
-  let cursorA = a.received.length;
-  let cursorB = b.received.length;
-  let actions = 0;
-  let agreed = true;
-  let roomAgreed = true;             // the room's own board keeps up with both clients, move for move
-  while (clientA.winner === null && actions < 400) {
-    const actor = clientA.turn === 0 ? a : b;
-    const mine = clientA.turn === 0 ? clientA : clientB;
-    const action = getAutoMove(mine, mine.turn);
-    const before = actor.received.length;
-    send(actor, { type: 'MOVE', action });
-    const rejected = frames(actor, before).find((f) => f.type === 'REJECT');
-    if (rejected) { agreed = false; break; }
-    const next = apply(mine, action);
-    if (!next) { agreed = false; break; }
-    if (actor === a) { clientA = next; cursorA = a.received.length; }
-    else { clientB = next; cursorB = b.received.length; }
-
-    const peer = actor === a ? b : a;
-    const relayed = only(peer, 'MOVE', actor === a ? cursorB : cursorA).at(-1);
-    if (!relayed) { agreed = false; break; }
-    const peerNext = apply(peer === a ? clientA : clientB, relayed.action);
-    if (!peerNext) { agreed = false; break; }
-    if (peer === a) { clientA = peerNext; cursorA = a.received.length; }
-    else { clientB = peerNext; cursorB = b.received.length; }
-    if (JSON.stringify(clientA) !== JSON.stringify(clientB)) { agreed = false; break; }
-    if (relayed.side !== (actor === a ? 0 : 1)) { agreed = false; break; }
-    /* The room settles a race the moment a winner appears, so it only holds the board while the
-       race is still running — which is exactly when it has to agree with both screens. */
-    const room = rt.lobby.races.get(ma.matchId);
-    if (room && JSON.stringify(room.state) !== JSON.stringify(clientA)) { roomAgreed = false; break; }
-    actions++;
-  }
+  const { agreed, actions, clientA, clientB, roomAgreed } = playOut(rt, a, b, ma.matchId, one, two);
 
   ok('every relayed move kept both boards identical', agreed && actions > 20, `${actions} moves`);
   ok('the race reached a winner', clientA.winner !== null, `winner ${clientA.winner}`);
   ok('the winner is the same on both screens', clientA.winner === clientB.winner);
   ok('the room played the same race the clients did', roomAgreed && agreed);
   ok('a finished race is dropped from the room', rt.lobby.races.size === 0);
+}
+
+/* the board a race runs on is the room's, and so are the squares it accepts */
+{
+  const rt = runtime();
+  const a = await open(rt, { tiq: 1000, sizes: [2, 2] });
+  const b = await open(rt, { tiq: 1000, sizes: [2, 2] });
+  send(a, { type: 'QUEUE', wide: false });
+  send(b, { type: 'QUEUE', wide: false });
+  const [ma] = only(a, 'MATCH_FOUND');
+  const state = newGame(ma.sizes, { hazards: true, seed: ma.seed });
+  const cells = state.balls.map((x) => x.pos);
+
+  ok('a four-ball race runs on the wide board', state.cols === 10 && state.rows === 12,
+    `${state.cols}x${state.rows}`);
+  ok('its four balls start on the bottom row, none of them side by side',
+    cells.length === 4
+    && cells.every((p) => p.r === state.rows - 1)
+    && cells.every((p, i) => cells.every((q, j) => i === j || Math.abs(p.c - q.c) + Math.abs(p.r - q.r) > 1)),
+    JSON.stringify(cells));
+  ok('and the room hands out the four-contender wall budget',
+    JSON.stringify(state.wallsLeft) === '[5,5]', JSON.stringify(state.wallsLeft));
+
+  /* a wall out in the two new columns: the duel has no such square, the wide board does */
+  const wideWall = { o: 'v', x: 9, y: 3, owner: 0 };
+  ok('the rules accept a wall in the wide board\'s new columns', wallOk(state, wideWall));
+  send(a, { type: 'MOVE', action: { kind: 'wall', wall: wideWall } });
+  const [placedWide] = only(b, 'MOVE');
+  ok('and the room relays it rather than dropping it as off-board',
+    JSON.stringify(placedWide?.action.wall) === JSON.stringify(wideWall));
+
+  const duel = newGame([1, 1], { hazards: true, seed: ma.seed });
+  ok('the duel board is still the classic eight columns', duel.cols === 8 && duel.rows === 12,
+    `${duel.cols}x${duel.rows}`);
+  ok('and the same wall is off it', !wallOk(duel, wideWall));
+
+  /* the same whole-race replay, this time on the wide grid — continued from the wall the room just
+     accepted, so both clients start where the room actually is */
+  const from = apply(state, { kind: 'wall', wall: wideWall }) ?? state;
+  ok('the relayed wall is where the wide race continues from',
+    from.walls.length === 1 && from.turn === 1, `${from.walls.length} walls, turn ${from.turn}`);
+  const wide = playOut(rt, a, b, ma.matchId, from, from);
+  ok('a full race replays identically on the wide board', wide.agreed && wide.actions > 20,
+    `${wide.actions} moves`);
+  ok('and it reaches a winner both seats agree on',
+    wide.clientA.winner !== null && wide.clientA.winner === wide.clientB.winner);
+  ok('the room played the same wide race', wide.roomAgreed);
+  ok('a finished wide race is dropped from the room too', rt.lobby.races.size === 0);
 }
 
 /* walls are relayed with the sender's own seat as the owner, whatever the payload claims */

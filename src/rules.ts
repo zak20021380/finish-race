@@ -1,17 +1,20 @@
 /**
  * rules.ts — pure game logic. No DOM, no timers, no network.
  *
- * Coordinates: cell (c, r); c = 0..COLS-1 left→right, r = 0..ROWS-1 top→bottom.
- * Row 0 is FINISH.
+ * Coordinates: cell (c, r); c = 0..cols-1 left→right, r = 0..rows-1 top→bottom. Row 0 is FINISH.
+ * `cols` and `rows` are NOT constants: the board grows with the race. Two contenders keep the
+ * classic 8x12 duel board; three or four play the wider 10x12 one, which is what gives the extra
+ * balls room to spread without traffic-jamming on turn 1. Every helper that walks the board takes
+ * the dimensions it should walk (`s.cols` / `s.rows`), never a module constant — see `dimsFor`.
  *
- * Teams: 1 to 3 teams of 1 to 3 balls each (max 3v3). Every team starts spread across the bottom
- * two rows and races any one of its balls to the top. Teams alternate turns; on its turn a team
- * moves ANY ONE of its balls one cell, places a wall from its budget of `CONFIG.WALL_LIMIT`, or
- * buries a mine from its budget of `CONFIG.MINES_PER_TEAM` (see the mine section below).
+ * Teams: 1 to 4 teams of 1 to 4 balls each. Every team starts spread across the bottom rows and
+ * races any one of its balls to the top. Teams alternate turns; on its turn a team moves ANY ONE
+ * of its balls one cell, places a wall from its budget of `wallBudget(contenders)`, or buries a
+ * mine from its budget of `CONFIG.MINES_PER_TEAM` (see the mine section below).
  *
  * Walls sit ON grid lines and are 2 cells long:
- *   'h' wall {x, y}: horizontal, on the line above row y (y = 1..ROWS-1), covers columns x and x+1.
- *   'v' wall {x, y}: vertical, on the line left of column x (x = 1..COLS-1), covers rows y and y+1.
+ *   'h' wall {x, y}: horizontal, on the line above row y (y = 1..rows-1), covers columns x and x+1.
+ *   'v' wall {x, y}: vertical, on the line left of column x (x = 1..cols-1), covers rows y and y+1.
  * A wall owns both of its edge segments and the vertex they hinge on, so two walls may meet at an
  * L-corner or a T-junction but never share an edge segment, and never cross through one shared
  * vertex into a `+`. See `wallsOverlap` / `wallsCross`.
@@ -38,14 +41,18 @@ export { HAZARD, logStopRow } from './hazards';
 export type { HazardPhase, Lane, LogEvent, LogMove } from './hazards';
 
 
+/** The classic duel board: 8 columns, 12 rows, FINISH on row 0. */
 export const COLS = 8;
 export const ROWS = 12;
-/** Team and ball counts the rules accept; the start-layout helper fills the bottom two rows. */
-export const MAX_TEAMS = 3;
+/** The board three or more contenders race on: two columns wider, same height, same pacing. */
+export const WIDE_COLS = 10;
+export const WIDE_ROWS = 12;
+/** Team and ball counts the rules accept; the start-layout helper fills the bottom rows. */
+export const MAX_TEAMS = 4;
 export const MAX_BALLS = 3;
 /** Engine tunables, in one place so the server and the client never disagree. */
 export const CONFIG = {
-  /** Walls each team may place per race. */
+  /** Walls each team may place per race in a two-contender duel — the classic budget. */
   WALL_LIMIT: 8,
   /** Mines each team may bury per race. */
   MINES_PER_TEAM: 3,
@@ -65,6 +72,9 @@ export type Cell = Pos;
 export interface WallSpec { o: 'h' | 'v'; x: number; y: number }
 export interface Wall extends WallSpec { owner: Player }
 export interface Mine { cell: Cell; owner: Player; triggered: boolean }
+
+/** How big a board is: the only two numbers that describe the grid. */
+export interface Dims { cols: number; rows: number }
 
 export interface Ball {
   id: number;
@@ -91,10 +101,14 @@ export type Action =
   | { kind: 'pass' };
 
 export interface GameState {
+  /** How wide the board is: 8 in a duel, 10 once three or more contenders race. */
+  cols: number;
+  /** How tall the board is. Row 0 is FINISH, the bottom row is where the balls start. */
+  rows: number;
   teams: TeamMeta[];
   balls: Ball[];
   walls: Wall[];
-  /** Walls each team still has to place, indexed by player; starts at `CONFIG.WALL_LIMIT`. */
+  /** Walls each team still has to place, indexed by player; starts at `wallBudget(contenders)`. */
   wallsLeft: number[];
   /** Every mine ever buried, including the spent ones; opponent mines are hidden by `view()`. */
   mines: Mine[];
@@ -110,20 +124,101 @@ export const nextTeam = (s: GameState, t: Player): number => (t + 1) % s.teams.l
 
 const clampSize = (n: number) => Math.max(1, Math.min(MAX_BALLS, Math.floor(n) || 1));
 
+/* ---------- board size ---------- */
+
 /**
- * Spread each team's balls over the bottom two rows, centre columns first and alternating
- * between teams — the classic 1v1 lands on (3, ROWS-1) and (4, ROWS-1), exactly as always.
+ * How many balls a race puts on the board. This — not the number of seats — is what the grid is
+ * sized to: it is the balls that traffic-jam, so a 2v2 needs the room a 4-way does.
  */
-export function startLayout(sizes: readonly number[]): Pos[][] {
-  const slots: Pos[] = [];
-  const centre = [3, 4, 2, 5, 1, 6, 0, 7];
-  for (const r of [ROWS - 1, ROWS - 2]) for (const c of centre) slots.push({ c, r });
+export const contendersIn = (sizes: readonly number[]): number =>
+  sizes.slice(0, MAX_TEAMS).reduce((n, size) => n + clampSize(size), 0);
+
+/**
+ * The board a race is played on. Two contenders keep the classic duel board, so 1v1 pacing is
+ * exactly what it always was; three or more move to the wider one, which is the breathing room
+ * that lets the extra balls spread out instead of queueing behind each other on turn 1.
+ */
+export function dimsFor(contenders: number): Dims {
+  return contenders >= 3 ? { cols: WIDE_COLS, rows: WIDE_ROWS } : { cols: COLS, rows: ROWS };
+}
+
+/** Walls each seat may place, by contenders on the board: 2 → 8, 3 → 6, 4 or more → 5. */
+const WALL_TIERS: readonly number[] = [CONFIG.WALL_LIMIT, CONFIG.WALL_LIMIT, 6, 5];
+export function wallBudget(contenders: number): number {
+  const i = Math.max(0, Math.min(WALL_TIERS.length - 1, Math.floor(contenders) - 1));
+  return WALL_TIERS[i];
+}
+
+/**
+ * The columns `count` start squares sit on: spread evenly across the board with a lane between
+ * them, so two balls never begin glued together in adjacent middle cells. Two balls keep the
+ * widest gap — 2 and 5 on the classic eight-column board, with a two-tile hole in the middle —
+ * while three and four fill in between (1, 5, 8 and 1, 3, 6, 8 on the ten-column one).
+ */
+export function spawnColumns(cols: number, count: number): number[] {
+  if (count <= 0 || cols <= 0) return [];
+  if (count === 1) return [Math.floor((cols - 1) / 2)];
+  /* Two balls keep clear of the corners; a crowd cannot afford the margin and keeps its lanes instead. */
+  const margin = count === 2 ? 2 : count <= 4 ? 1 : 0;
+  const lo = Math.min(margin, cols - 1);
+  const hi = Math.max(lo, cols - 1 - margin);
+  const out: number[] = [];
+  for (let i = 0; i < count; i++) out.push(lo + Math.round((i * (hi - lo)) / (count - 1)));
+  return out;
+}
+
+/** `n` columns picked evenly out of an ascending list, never two of them side by side. */
+function spreadOf(list: readonly number[], n: number): number[] {
+  const out: number[] = [];
+  if (n <= 0 || !list.length) return out;
+  let prev = -1;
+  for (let i = 0; i < n; i++) {
+    let idx = n === 1 ? Math.floor((list.length - 1) / 2) : Math.round((i * (list.length - 1)) / (n - 1));
+    if (idx <= prev) idx = prev + 1;                        // strictly forward: never a repeat
+    if (prev >= 0 && idx < list.length && list[idx] - list[prev] < 2) idx++;   // and never beside it
+    if (idx >= list.length) return out;                     // the list ran out
+    out.push(list[idx]);
+    prev = idx;
+  }
+  return out;
+}
+
+/**
+ * Spread every ball across the bottom of the board: one row while the balls can still keep a lane
+ * between them, more above that, evenly spaced and never glued together. Seats are filled in turn,
+ * so the classic 1v1 lands on (2, rows-1) and (5, rows-1) — symmetric, with a two-tile gap where
+ * the two balls used to sit shoulder to shoulder — and a 4-way spreads over columns 1, 3, 6 and 8.
+ * Rows above the first draw from the columns the rows below left free, so no ball starts directly
+ * above another one while the board has room for that.
+ */
+export function startLayout(sizes: readonly number[], cols: number = COLS, rows: number = ROWS): Pos[][] {
   const out: Pos[][] = sizes.map(() => []);
+  const total = sizes.reduce((n, size) => n + Math.max(0, Math.floor(size) || 0), 0);
+  if (total <= 0 || cols <= 0 || rows <= 0) return out;
+  /* One row holds at most half the columns rounded up: past that the balls would have to touch. */
+  const capacity = Math.max(1, Math.ceil(cols / 2));
+  const rowCount = Math.min(rows, Math.max(1, Math.ceil(total / capacity)));
+  const perRow = Math.ceil(total / rowCount);
+  const slots: Pos[] = [];
+  const used = new Set<number>();
+  for (let j = 0; j < rowCount; j++) {
+    const n = Math.min(perRow, total - j * perRow);
+    if (n <= 0) break;
+    const free: number[] = [];
+    for (let c = 0; c < cols; c++) if (!used.has(c)) free.push(c);
+    let pick = j === 0 ? spawnColumns(cols, n) : spreadOf(free, n);
+    /* an over-crowded board cannot avoid reusing a column: fall back to the plain spread */
+    if (pick.length < n) pick = spawnColumns(cols, n);
+    for (const c of pick) {
+      used.add(c);
+      slots.push({ c, r: rows - 1 - j });
+    }
+  }
   const max = Math.max(...sizes, 1);
   let placed = 0;
   for (let i = 0; i < max; i++) {
     for (let t = 0; t < sizes.length; t++) {
-      if (i >= sizes[t]) continue;
+      if (i >= sizes[t] || placed >= slots.length) continue;
       out[t].push({ ...slots[placed++] });
     }
   }
@@ -132,24 +227,29 @@ export function startLayout(sizes: readonly number[]): Pos[][] {
 
 export function newGame(sizes: readonly number[] = [1, 1], setup: GameSetup = {}): GameState {
   const n = sizes.slice(0, MAX_TEAMS).map(clampSize);
-  const layout = startLayout(n);
+  const contenders = n.reduce((a, b) => a + b, 0);
+  const { cols, rows } = dimsFor(contenders);
+  const layout = startLayout(n, cols, rows);
   const balls: Ball[] = [];
   for (let t = 0; t < n.length; t++) {
     for (let i = 0; i < n[t]; i++) {
       balls.push({ id: balls.length, team: t, owner: t, pos: layout[t][i] });
     }
   }
+  const budget = wallBudget(contenders);
   const s: GameState = {
+    cols,
+    rows,
     teams: n.map((balls) => ({ balls })),
     balls,
     walls: [],
-    wallsLeft: n.map(() => CONFIG.WALL_LIMIT),
+    wallsLeft: n.map(() => budget),
     mines: [],
     turn: 0,
     winner: null,
     lastEvent: null,
   };
-  if (setup.hazards) s.hazard = initPhase(setup.seed ?? 0);
+  if (setup.hazards) s.hazard = initPhase(setup.seed ?? 0, cols);
   return s;
 }
 
@@ -172,36 +272,48 @@ interface Blocks { h: Set<number>; v: Set<number> }
 
 const DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]] as const;
 
+/**
+ * The lattice wall edges and wall segments are keyed on: the largest board the rules lay out.
+ * A key is then unique on every board, so the pure geometry predicates (`wallsClash` and friends)
+ * need no dimensions at all — they compare walls that were always drawn on the same board.
+ */
+const LATTICE_C = Math.max(COLS, WIDE_COLS);
+const LATTICE_R = Math.max(ROWS, WIDE_ROWS);
+
 function blocks(walls: readonly Wall[]): Blocks {
   const h = new Set<number>();
   const v = new Set<number>();
   for (const w of walls) {
-    if (w.o === 'h') { h.add(w.y * COLS + w.x); h.add(w.y * COLS + w.x + 1); }
-    else { v.add(w.x * ROWS + w.y); v.add(w.x * ROWS + w.y + 1); }
+    if (w.o === 'h') { h.add(w.y * LATTICE_C + w.x); h.add(w.y * LATTICE_C + w.x + 1); }
+    else { v.add(w.x * LATTICE_R + w.y); v.add(w.x * LATTICE_R + w.y + 1); }
   }
   return { h, v };
 }
 
-function canStep(b: Blocks, c: number, r: number, dc: number, dr: number): boolean {
+function canStep(b: Blocks, c: number, r: number, dc: number, dr: number, cols: number, rows: number): boolean {
   const nc = c + dc, nr = r + dr;
-  if (nc < 0 || nc >= COLS || nr < 0 || nr >= ROWS) return false;
-  if (dr === -1) return !b.h.has(r * COLS + c);
-  if (dr === 1) return !b.h.has((r + 1) * COLS + c);
-  if (dc === -1) return !b.v.has(c * ROWS + r);
-  return !b.v.has((c + 1) * ROWS + r);
+  if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) return false;
+  if (dr === -1) return !b.h.has(r * LATTICE_C + c);
+  if (dr === 1) return !b.h.has((r + 1) * LATTICE_C + c);
+  if (dc === -1) return !b.v.has(c * LATTICE_R + r);
+  return !b.v.has((c + 1) * LATTICE_R + r);
 }
 
-/** BFS distance-to-FINISH for every cell (index = r*COLS + c). -1 = unreachable. Balls are ignored. */
-export function distField(walls: readonly Wall[]): Int16Array {
+/**
+ * BFS distance-to-FINISH for every cell (index = r*cols + c). -1 = unreachable. Balls are ignored.
+ * The dimensions are the board's own, so the same walk serves the 8-column duel and the 10-column
+ * three- and four-contender boards.
+ */
+export function distField(walls: readonly Wall[], cols: number, rows: number): Int16Array {
   const b = blocks(walls);
-  const d = new Int16Array(COLS * ROWS).fill(-1);
+  const d = new Int16Array(cols * rows).fill(-1);
   const q: number[] = [];
-  for (let c = 0; c < COLS; c++) { d[c] = 0; q.push(c); }
+  for (let c = 0; c < cols; c++) { d[c] = 0; q.push(c); }
   for (let i = 0; i < q.length; i++) {
-    const id = q[i], c = id % COLS, r = (id / COLS) | 0;
+    const id = q[i], c = id % cols, r = (id / cols) | 0;
     for (const [dc, dr] of DIRS) {
-      if (!canStep(b, c, r, dc, dr)) continue;
-      const n = (r + dr) * COLS + c + dc;
+      if (!canStep(b, c, r, dc, dr, cols, rows)) continue;
+      const n = (r + dr) * cols + c + dc;
       if (d[n] < 0) { d[n] = d[id] + 1; q.push(n); }
     }
   }
@@ -209,21 +321,31 @@ export function distField(walls: readonly Wall[]): Int16Array {
 }
 
 /** Shortest path length from a cell to FINISH (Infinity if sealed in). */
-export const pathOn = (d: Int16Array, pos: Pos): number => {
-  const v = d[pos.r * COLS + pos.c];
+export const pathOn = (d: Int16Array, pos: Pos, cols: number): number => {
+  const v = d[pos.r * cols + pos.c];
   return v < 0 ? Infinity : v;
 };
 
+/**
+ * Does every ball on the board still have a route to FINISH with `walls` standing? This is the
+ * goal-path guard: a wall is only legal while this stays true, so no number of walls can ever
+ * freeze a race, on either board size.
+ */
+export function hasPathToFinish(s: GameState, walls: readonly Wall[] = s.walls): boolean {
+  const d = distField(walls, s.cols, s.rows);
+  return s.balls.every((b) => d[b.pos.r * s.cols + b.pos.c] >= 0);
+}
+
 /** One ball's distance to FINISH (Infinity if sealed in). */
 export function ballPath(s: GameState, ball: Ball): number {
-  return pathOn(distField(s.walls), ball.pos);
+  return pathOn(distField(s.walls, s.cols, s.rows), ball.pos, s.cols);
 }
 
 /** A team's distance to FINISH: its nearest ball — what a race is judged on. */
 export function pathLen(s: GameState, team: Player): number {
-  const d = distField(s.walls);
+  const d = distField(s.walls, s.cols, s.rows);
   let best = Infinity;
-  for (const b of s.balls) if (b.team === team) best = Math.min(best, pathOn(d, b.pos));
+  for (const b of s.balls) if (b.team === team) best = Math.min(best, pathOn(d, b.pos, s.cols));
   return best;
 }
 
@@ -250,11 +372,11 @@ export const wallPivot = (w: WallSpec): Vertex =>
   (w.o === 'h' ? { x: w.x + 1, y: w.y } : { x: w.x, y: w.y + 1 });
 
 /** Vertical edge segments are keyed above the horizontal ones, so the two families never collide. */
-const SEG_V = COLS * ROWS;
+const SEG_V = LATTICE_C * LATTICE_R;
 
 /** A wall's two edge segments as keys. `out` is written in place: the bot calls this in a loop. */
 function wallSegments(w: WallSpec, out: [number, number]): [number, number] {
-  out[0] = w.o === 'h' ? w.y * COLS + w.x : SEG_V + w.x * ROWS + w.y;
+  out[0] = w.o === 'h' ? w.y * LATTICE_C + w.x : SEG_V + w.x * LATTICE_R + w.y;
   out[1] = out[0] + 1;
   return out;
 }
@@ -299,7 +421,7 @@ export function steps(s: GameState, team: Player = s.turn): Step[] {
   for (const ball of s.balls) {
     if (ball.team !== team) continue;
     for (const [dc, dr] of DIRS) {
-      if (!canStep(b, ball.pos.c, ball.pos.r, dc, dr)) continue;
+      if (!canStep(b, ball.pos.c, ball.pos.r, dc, dr, s.cols, s.rows)) continue;
       const to = { c: ball.pos.c + dc, r: ball.pos.r + dr };
       if (s.balls.some((o) => o.pos.c === to.c && o.pos.r === to.r)) continue;
       out.push({ ball: ball.id, to });
@@ -313,7 +435,7 @@ export function reachable(s: GameState, team: Player = s.turn): Pos[] {
   const seen = new Set<number>();
   const out: Pos[] = [];
   for (const { to } of steps(s, team)) {
-    const k = to.r * COLS + to.c;
+    const k = to.r * s.cols + to.c;
     if (seen.has(k)) continue;
     seen.add(k);
     out.push(to);
@@ -335,26 +457,25 @@ export function wallsRemaining(s: GameState, team: Player): number {
 }
 
 /**
- * Is this wall legal? Within the owner's budget, in bounds, clear of every wall already standing
- * (no shared edge segment, no `+` through a vertex) and every ball keeps a path.
+ * Is this wall legal? Within the owner's budget, in bounds for THIS board, clear of every wall
+ * already standing (no shared edge segment, no `+` through a vertex) and every ball keeps a path.
  */
 export function wallOk(s: GameState, w: Wall): boolean {
   if (s.winner !== null) return false;
   if (wallsRemaining(s, w.owner) <= 0) return false;
   if (w.o === 'h') {
-    if (w.x < 0 || w.x > COLS - 2 || w.y < 1 || w.y > ROWS - 1) return false;
-  } else if (w.x < 1 || w.x > COLS - 1 || w.y < 0 || w.y > ROWS - 2) return false;
+    if (w.x < 0 || w.x > s.cols - 2 || w.y < 1 || w.y > s.rows - 1) return false;
+  } else if (w.x < 1 || w.x > s.cols - 1 || w.y < 0 || w.y > s.rows - 2) return false;
 
   for (const o of s.walls) if (wallsClash(o, w)) return false;
-  const d = distField([...s.walls, w]);
-  return s.balls.every((ball) => d[ball.pos.r * COLS + ball.pos.c] >= 0);
+  return hasPathToFinish(s, [...s.walls, w]);
 }
 
 /** Every wall position on the board (legal or not) for the given owner. */
-export function allWalls(owner: Player): Wall[] {
+export function allWalls(owner: Player, cols: number = COLS, rows: number = ROWS): Wall[] {
   const out: Wall[] = [];
-  for (let y = 1; y < ROWS; y++) for (let x = 0; x <= COLS - 2; x++) out.push({ o: 'h', x, y, owner });
-  for (let x = 1; x < COLS; x++) for (let y = 0; y <= ROWS - 2; y++) out.push({ o: 'v', x, y, owner });
+  for (let y = 1; y < rows; y++) for (let x = 0; x <= cols - 2; x++) out.push({ o: 'h', x, y, owner });
+  for (let x = 1; x < cols; x++) for (let y = 0; y <= rows - 2; y++) out.push({ o: 'v', x, y, owner });
   return out;
 }
 
@@ -378,8 +499,8 @@ export function minesLeft(s: GameState, team: Player): number {
 export function mineCells(s: GameState, owner: Player = s.turn): Cell[] {
   if (s.winner !== null || minesLeft(s, owner) <= 0) return [];
   const out: Cell[] = [];
-  for (let r = MINE_ZONE; r < ROWS - MINE_ZONE; r++) {
-    for (let c = 0; c < COLS; c++) if (mineOk(s, { c, r }, owner)) out.push({ c, r });
+  for (let r = MINE_ZONE; r < s.rows - MINE_ZONE; r++) {
+    for (let c = 0; c < s.cols; c++) if (mineOk(s, { c, r }, owner)) out.push({ c, r });
   }
   return out;
 }
@@ -388,7 +509,7 @@ export function mineCells(s: GameState, owner: Player = s.turn): Cell[] {
 export function mineOk(s: GameState, cell: Cell, owner: Player = s.turn): boolean {
   if (s.winner !== null) return false;
   if (minesLeft(s, owner) <= 0) return false;
-  if (cell.c < 0 || cell.c >= COLS || cell.r < MINE_ZONE || cell.r >= ROWS - MINE_ZONE) return false;
+  if (cell.c < 0 || cell.c >= s.cols || cell.r < MINE_ZONE || cell.r >= s.rows - MINE_ZONE) return false;
   if (s.balls.some((b) => b.pos.c === cell.c && b.pos.r === cell.r)) return false;
   return mineAt(s, cell) === null;
 }
@@ -439,7 +560,7 @@ function blownTo(s: GameState, from: Pos): Pos {
   for (let i = 0; i < CONFIG.KNOCKBACK; i++) {
     const next: Pos = { c: at.c, r: at.r + 1 };
     // canStep already refuses the bottom edge and a horizontal wall on the line below.
-    if (!canStep(b, at.c, at.r, 0, 1)) break;
+    if (!canStep(b, at.c, at.r, 0, 1, s.cols, s.rows)) break;
     if (s.balls.some((o) => o.pos.c === next.c && o.pos.r === next.r)) break;
     at = next;
   }
@@ -479,12 +600,12 @@ export function apply(s: GameState, a: Action): GameState | null {
 export function getAutoMove(s: GameState, team: Player = s.turn): Action {
   const opts = steps(s, team);
   if (!opts.length) return { kind: 'pass' };
-  const d = distField(s.walls);
-  const to = (st: Step) => pathOn(d, st.to);
+  const d = distField(s.walls, s.cols, s.rows);
+  const to = (st: Step) => pathOn(d, st.to, s.cols);
   /** 0 = gaining ground on FINISH, 1 = holding position, 2 = giving it up. */
   const tier = (st: Step): number => {
     const ball = ballById(s, st.ball);
-    const from = ball ? pathOn(d, ball.pos) : Infinity;
+    const from = ball ? pathOn(d, ball.pos, s.cols) : Infinity;
     const land = to(st);
     return land < from ? 0 : land === from ? 1 : 2;
   };

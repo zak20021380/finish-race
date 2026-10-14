@@ -137,6 +137,12 @@ export const TEAM2_RAMP: Ramp = {
   wl: '#4fc98d', wd: '#0c6b41', edge: 'rgba(10,70,50,.28)', ol: 'rgba(23,145,92,.5)', os: 'rgba(23,145,92,.95)',
 };
 
+/** …and a fourth team is one more seat than the rules used to allow, so it gets a family too. */
+export const TEAM3_RAMP: Ramp = {
+  light: '#c9b6ff', mid: '#7c3aed', dark: '#2e1065', glow: 'rgba(124,58,237,.55)', shade: '45,16,100',
+  wl: '#a78bfa', wd: '#5b21b6', edge: 'rgba(45,16,100,.28)', ol: 'rgba(124,58,237,.5)', os: 'rgba(124,58,237,.95)',
+};
+
 /**
  * A mine in the ground you put there yourself: warm warning red, never a team colour, so a buried
  * trap can never be mistaken for a wall or a ball. Opponent mines have no palette at all — they

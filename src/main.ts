@@ -1,7 +1,8 @@
 import './style.css';
 import {
-  COLS, CONFIG, ROWS, apply, ballById, distField, firstBall, getAutoMove, mineCells, minesLeft, newGame,
-  reachableBall, steps as teamSteps, view as fogOfWar, wallOk, wallsCross, wallsOverlap, wallsRemaining,
+  CONFIG, apply, ballById, distField, firstBall, getAutoMove, mineCells, minesLeft, newGame,
+  reachableBall, steps as teamSteps, view as fogOfWar, wallBudget, wallOk, wallsCross, wallsOverlap,
+  wallsRemaining,
   type Action, type Ball, type Cell, type GameState, type LogEvent, type Mine, type Player,
   type Pos, type Wall, type WallSpec,
 } from './rules';
@@ -84,6 +85,9 @@ const rewardN = $<HTMLSpanElement>('reward-n');
 
 /* walls-to-place readout on each chip: repaints only when the number changes */
 const shownWalls: [number, number] = [-1, -1];
+/** The race's budget per seat: the rules scale it with the number of contenders, so it is read
+ *  off the live board rather than assumed — a 4-way hands out 5 walls, a duel the classic 8. */
+let wallsEach: number = CONFIG.WALL_LIMIT;
 function setWalls(p: Player, left: number) {
   if (shownWalls[p] === left) return;
   const first = shownWalls[p] < 0;
@@ -92,7 +96,7 @@ function setWalls(p: Player, left: number) {
   const num = el.querySelector<HTMLElement>('.wall-n');
   if (num) num.textContent = String(left);
   el.classList.toggle('depleted', left <= 0);
-  el.setAttribute('aria-label', `Walls left: ${left} of ${CONFIG.WALL_LIMIT}`);
+  el.setAttribute('aria-label', `Walls left: ${left} of ${wallsEach}`);
   if (first) return;               // the opening paint is not a placement: no pop
   el.classList.remove('pop');
   void el.offsetWidth;             // restarting the animation needs a reflow between the two class changes
@@ -318,8 +322,8 @@ function wallIssue(s: GameState, w: Wall): keyof typeof REASON {
   if (wallsRemaining(s, w.owner) <= 0) return 'dry';
   if (s.walls.some((o) => wallsCross(o, w))) return 'cross';
   if (s.walls.some((o) => wallsOverlap(o, w))) return 'overlap';
-  const d = distField([...s.walls, w]);
-  return s.balls.some((b) => d[b.pos.r * COLS + b.pos.c] < 0) ? 'blocked' : 'overlap';
+  const d = distField([...s.walls, w], s.cols, s.rows);
+  return s.balls.some((b) => d[b.pos.r * s.cols + b.pos.c] < 0) ? 'blocked' : 'overlap';
 }
 
 const renderer = createRenderer(canvas, { theme });
@@ -583,7 +587,7 @@ function playLog(ev: LogEvent, next: GameState) {
   const t0 = performance.now();
   const strike = t0 + LOG_ALERT_MS;     // the trunk leaves the top edge when the alert ends
   const T = logRollMs(ev.stopRow);
-  const blocked = ev.stopRow < ROWS - 1;
+  const blocked = ev.stopRow < next.rows - 1;
   rollT0 = strike; rollStop = ev.stopRow;
   renderer.rollLog(ev, t0);
   shake();                              // the board itself trembles for the whole second
@@ -763,6 +767,11 @@ function restart() {
   /* Every local race rolls a fresh seed so no two telegraph the same lanes; an online race takes
      the seed the matchmaker handed both sides, so the logs and the hazards are the same board. */
   state = newGame(sizes, { hazards: runtime.hazards, seed: active ? active.seed : (Math.random() * 0x7fffffff) | 0 });
+  /* The grid the rules picked for this race — a duel keeps 8 columns, a 3- or 4-contender race gets
+     10 — and the wall budget that goes with it. Both are read off the board, never assumed, so a
+     menu change between races cannot leave the canvas painting the wrong lattice. */
+  renderer.setBoard(state.cols, state.rows);
+  wallsEach = wallBudget(state.balls.length);
   rolling = false;
   window.clearInterval(rumbleId);
   rumbleId = 0;

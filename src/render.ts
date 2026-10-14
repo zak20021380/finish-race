@@ -22,7 +22,7 @@ import {
 } from './rules';
 import { motionReduced } from './settings';
 import {
-  BOT_RAMP, CLASSIC_BALL, CLASSIC_WALL, DEFAULT_THEME, ERR_RAMP, MINE_RAMP, TEAM2_RAMP,
+  BOT_RAMP, CLASSIC_BALL, CLASSIC_WALL, DEFAULT_THEME, ERR_RAMP, MINE_RAMP, TEAM2_RAMP, TEAM3_RAMP,
   type BallSkin, type CosKind, type Ramp, type Stop, type Theme, type WallStyle,
 } from './themes';
 
@@ -70,7 +70,7 @@ export interface Layout {
 }
 
 export interface RendererOptions {
-  /** board patch to paint — the race uses the whole 8x12 */
+  /** board patch to paint — the race uses whatever `GameState` says (`cols` x `rows`) */
   cols?: number;
   rows?: number;
   /** asked for on `setTheme`; never polled per frame */
@@ -362,8 +362,8 @@ interface Side { ramp: Ramp; ball: BallSkin; wall: WallStyle }
 /** Every seat the rules allow, plus the refusal palette that owns no side. */
 const SEAT_COUNT = MAX_TEAMS + 1;
 const ERR = MAX_TEAMS;
-/** Fixed families for the seats that are never themed: the opponent, the third team, and "no". */
-const FIXED: Ramp[] = [BOT_RAMP, TEAM2_RAMP, ERR_RAMP];
+/** Fixed families for the seats that are never themed: the opponent, then teams 2 and 3, then "no". */
+const FIXED: Ramp[] = [BOT_RAMP, TEAM2_RAMP, TEAM3_RAMP, ERR_RAMP];
 
 const CORNER = 0.4;              // board corner radius, in cells
 /** How many balls each seat fields: filled at the top of every frame, reused, never reallocated. */
@@ -388,7 +388,7 @@ function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: n
  */
 function startBoard(s: GameState): { c: number; r: number; t: Player }[] {
   const out: { c: number; r: number; t: Player }[] = [];
-  const lay = startLayout(s.teams.map((t) => t.balls));
+  const lay = startLayout(s.teams.map((t) => t.balls), s.cols, s.rows);
   for (let t = 0; t < lay.length; t++) for (const p of lay[t]) out.push({ c: p.c, r: p.r, t });
   return out;
 }
@@ -410,7 +410,9 @@ function computeLayout(w: number, h: number, dpr: number, cols: number, rows: nu
 
 export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions = {}) {
   const ctx = canvas.getContext('2d')!;
-  const cols = opts.cols ?? COLS, rows = opts.rows ?? ROWS;
+  /* The board can change size between races (`setBoard`): a duel is 8 columns, a 3- or 4-contender
+     race 10. Everything below reads these, never a module constant. */
+  let cols = opts.cols ?? COLS, rows = opts.rows ?? ROWS;
   let L = computeLayout(1, 1, 1, cols, rows);
   let th: Theme = opts.theme ? opts.theme() : DEFAULT_THEME;
   /** seat 0 wears the equipped skin and style; every other seat keeps its fixed family. */
@@ -1352,7 +1354,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
     /* each team's own start squares wear a whisper of its colour, so a race reads from the bottom up */
     if (rows === ROWS && th.board.startTint > 0) {
-      const key = v.state.teams.map((t) => t.balls).join(',');
+      const key = `${v.state.cols}x${v.state.rows}:${v.state.teams.map((t) => t.balls).join(',')}`;
       if (key !== startKey) { startKey = key; starts = startBoard(v.state); }
       ctx.save();
       ctx.globalAlpha = th.board.startTint;
@@ -1671,6 +1673,17 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     resize,
     draw,
     layout: () => L,
+    /**
+     * Point the renderer at a board of a different size. The rules pick the grid from the number of
+     * contenders, so the race screen hands the board over on every `restart()`; nothing is repainted
+     * until the next frame, and a board that has not moved size costs nothing.
+     */
+    setBoard(c: number, r: number) {
+      if (c === cols && r === rows) return;
+      cols = c; rows = r;
+      lastW = -1;                    // force the next resize() past its "nothing changed" early-out
+      resize();
+    },
     resetFx: () => {
       born.clear(); pulses.length = 0; blasts.length = 0;
       ripples.length = 0; streaks.length = 0; prevPos.clear(); mineGhostKey = '';
@@ -1757,6 +1770,8 @@ const sceneView = (s: Scene): View => {
   const teams = Math.max(2, ...s.balls.map((b) => b.team + 1));
   return {
     state: {
+      cols: s.cols,
+      rows: s.rows,
       teams: Array.from({ length: teams }, () => ({ balls: 1 })),
       balls: s.balls.map((b, i) => ({ id: i, team: b.team, owner: b.team, pos: { c: 0, r: s.rows - 1 } })),
       walls: s.walls,

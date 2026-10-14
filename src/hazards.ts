@@ -54,7 +54,7 @@ export interface HazardPhase {
   nextHitRound: number;
 }
 
-const cellKey = (p: Pos) => p.r * COLS + p.c;
+const cellKey = (p: Pos, cols: number) => p.r * cols + p.c;
 
 /** mulberry32 keyed by a fixed mix of (seed, k), so the stream is reproducible and stateless. */
 function prng(seed: number, k: number): () => number {
@@ -72,27 +72,27 @@ function prng(seed: number, k: number): () => number {
 const randInt = (r: () => number, lo: number, hi: number) => lo + Math.floor(r() * (hi - lo + 1));
 
 /** Hazard k's lane and the round it falls in — which is also the round it strikes in. */
-export function hazardAt(seed: number, k: number): Lane & { hitRound: number } {
+export function hazardAt(seed: number, k: number, cols: number = COLS): Lane & { hitRound: number } {
   const floor = Math.max(HAZARD.firstHitRound, SAFE_ROUNDS + 1);
   let left = 0;
   let hit = 0;
   for (let i = 0; i <= k; i++) {
     const r = prng(seed, i);
     const gap = randInt(r, HAZARD.minGap, HAZARD.maxGap);
-    left = randInt(r, 0, COLS - HAZARD.logWidth);
+    left = randInt(r, 0, Math.max(0, cols - HAZARD.logWidth));
     hit = Math.max(floor, hit + gap);
   }
   return { left, width: HAZARD.logWidth, hitRound: hit };
 }
 
 /** The first `count` hazards of a seed — the whole schedule, recomputed any time, identically. */
-export function hazardSchedule(seed: number, count: number): (Lane & { hitRound: number; k: number })[] {
-  return Array.from({ length: count }, (_, k) => ({ k, ...hazardAt(seed, k) }));
+export function hazardSchedule(seed: number, count: number, cols: number = COLS): (Lane & { hitRound: number; k: number })[] {
+  return Array.from({ length: count }, (_, k) => ({ k, ...hazardAt(seed, k, cols) }));
 }
 
 /** A fresh phase: round 1, nothing announced, hazard 0 already timed. */
-export function initPhase(seed: number): HazardPhase {
-  return { on: true, seed, round: 1, emitted: 0, nextHitRound: hazardAt(seed, 0).hitRound };
+export function initPhase(seed: number, cols: number = COLS): HazardPhase {
+  return { on: true, seed, round: 1, emitted: 0, nextHitRound: hazardAt(seed, 0, cols).hitRound };
 }
 
 /** A horizontal wall on the line above row `r` that covers `col`. */
@@ -101,11 +101,17 @@ const blocksLane = (walls: readonly Wall[], col: number, r: number): boolean =>
 
 /**
  * The last row the wide log reaches: the row above the first horizontal wall blocking ANY of its
- * lane columns, or the bottom edge. A partial obstruction halts the entire trunk.
+ * lane columns, or the bottom edge. A partial obstruction halts the entire trunk. `rows` is the
+ * board's own height, so the lane runs to the true bottom on either board size.
  */
-export function logStopRow(walls: readonly Wall[], left: number, width: number = HAZARD.logWidth): number {
+export function logStopRow(
+  walls: readonly Wall[],
+  left: number,
+  width: number = HAZARD.logWidth,
+  rows: number = ROWS,
+): number {
   let stop = 0;
-  for (let r = 1; r < ROWS; r++) {
+  for (let r = 1; r < rows; r++) {
     let blocked = false;
     for (let c = left; c < left + width; c++) {
       if (blocksLane(walls, c, r)) { blocked = true; break; }
@@ -124,21 +130,21 @@ export function logStopRow(walls: readonly Wall[], left: number, width: number =
  * arms a mine on the way.
  */
 export function runLog(s: GameState, lane: Lane): { balls: Ball[]; event: LogEvent } {
-  const stopRow = logStopRow(s.walls, lane.left, lane.width);
+  const stopRow = logStopRow(s.walls, lane.left, lane.width, s.rows);
   const hits = s.balls
     .filter((b) => b.pos.c >= lane.left && b.pos.c < lane.left + lane.width && b.pos.r <= stopRow)
     .sort((a, b) => b.pos.r - a.pos.r);
-  const taken = new Set<number>(s.balls.map((b) => cellKey(b.pos)));
+  const taken = new Set<number>(s.balls.map((b) => cellKey(b.pos, s.cols)));
   const moved = new Map<number, Pos>();
   const moves: LogMove[] = [];
   for (const b of hits) {
-    taken.delete(cellKey(b.pos));
+    taken.delete(cellKey(b.pos, s.cols));
     let r = b.pos.r;
     for (let i = 0; i < HAZARD.knockback && r + 1 <= stopRow; i++) {
-      if (taken.has(cellKey({ c: b.pos.c, r: r + 1 }))) break;
+      if (taken.has(cellKey({ c: b.pos.c, r: r + 1 }, s.cols))) break;
       r += 1;
     }
-    taken.add(cellKey({ c: b.pos.c, r }));
+    taken.add(cellKey({ c: b.pos.c, r }, s.cols));
     if (r !== b.pos.r) {
       moved.set(b.id, { c: b.pos.c, r });
       moves.push({ ballId: b.id, from: { c: b.pos.c, r: b.pos.r }, to: { c: b.pos.c, r } });
@@ -163,8 +169,8 @@ export function tickHazard(s: GameState, played: Player): GameState {
   if (!(s.turn !== played && s.turn <= played)) return s;   // the round is still open
   const next: HazardPhase = { ...hz, round: hz.round + 1 };
   if (next.round < next.nextHitRound) return { ...s, hazard: next };
-  const swept = runLog(s, hazardAt(hz.seed, hz.emitted));
+  const swept = runLog(s, hazardAt(hz.seed, hz.emitted, s.cols));
   next.emitted += 1;
-  next.nextHitRound = hazardAt(hz.seed, next.emitted).hitRound;
+  next.nextHitRound = hazardAt(hz.seed, next.emitted, s.cols).hitRound;
   return { ...s, balls: swept.balls, hazard: next, lastEvent: swept.event };
 }
