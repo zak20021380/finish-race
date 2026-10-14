@@ -225,6 +225,18 @@
       <symbol id="i-star" viewBox="0 0 24 24">
         <polygon points="12 2.6 14.9 8.6 21.4 9.5 16.7 14.1 17.8 20.6 12 17.5 6.2 20.6 7.3 14.1 2.6 9.5 9.1 8.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
       </symbol>
+      <!-- arena telemetry: the bolt is the live seat, the target is the pairing radius -->
+      <symbol id="i-bolt" viewBox="0 0 24 24">
+        <path d="M13.6 2.8 5.4 13.4h5.1l-.9 7.8 8.4-10.8h-5.2Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+      </symbol>
+      <symbol id="i-target" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <circle cx="12" cy="12" r="8.2" />
+          <circle cx="12" cy="12" r="3.9" />
+          <path d="M12 1.8v3.2M12 19v3.2M1.8 12H5M19 12h3.2" />
+        </g>
+        <circle cx="12" cy="12" r="1.4" fill="currentColor" />
+      </symbol>
     </svg>
 
     <div class="bg" aria-hidden="true">
@@ -983,42 +995,97 @@
         </header>
 
         <div class="mm-stage">
+          <!-- what this arena is actually running: seat, pairing radius, hazards -->
+          <div class="mm-tele" aria-hidden="true">
+            <span class="mm-tele-c"><svg class="ico"><use href="#i-bolt" /></svg>1v1 Arena</span>
+            <span class="mm-tele-c is-range" id="mm-range"><svg class="ico"><use href="#i-target" /></svg>TIQ range <b>±250</b></span>
+            <span class="mm-tele-c"><svg class="ico"><use href="#i-mine" /></svg>Hazards <b>ON</b></span>
+          </div>
+
           <div class="mm-arena">
-            <!-- radiating rings: centred on the synapse between the two orbs -->
-            <span class="mm-radar" aria-hidden="true">
-              <span class="mm-ring"></span>
-              <span class="mm-ring gold"></span>
-              <span class="mm-ring"></span>
-            </span>
-
-            <div class="mm-orb is-you" id="mm-you" data-tier="rookie">
-              <span class="mm-aura" aria-hidden="true"></span>
-              <span class="mm-face">
-                <img class="mm-img" id="mm-you-img" alt="" hidden />
-                <span class="mm-initial" id="mm-you-t">P</span>
+            <!-- left contender: you, on a team-blue sphere ringed by your tier aura -->
+            <div class="mm-pod is-you" id="mm-you" data-tier="rookie">
+              <span class="mm-pod-role">Player</span>
+              <span class="mm-orb">
+                <span class="mm-aura" aria-hidden="true"></span>
+                <span class="mm-face">
+                  <img class="mm-img" id="mm-you-img" alt="" hidden />
+                  <span class="mm-initial" id="mm-you-t">P</span>
+                </span>
+                <span class="mm-flag" id="mm-you-flag" aria-hidden="true"></span>
               </span>
-              <span class="mm-tiq"><svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg><b id="mm-you-tiq">0</b></span>
-              <span class="mm-name" id="mm-you-name">You</span>
+              <span class="mm-pod-name" id="mm-you-name">You</span>
+              <span class="mm-pod-tier" id="mm-you-tier">Rookie</span>
+              <span class="mm-plaque"><svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg><b id="mm-you-tiq">0</b></span>
             </div>
 
-            <div class="mm-link" aria-hidden="true">
-              <i class="mm-node"></i><i class="mm-node"></i><i class="mm-node"></i>
+            <!-- the tactical core: compass ring, sweep, synapse pulses, VS medallion -->
+            <div class="mm-core" aria-hidden="true">
+              <svg class="mm-radar" viewBox="0 0 100 100">
+                <defs>
+                  <linearGradient id="mm-beam" x1="0" y1="1" x2="0.72" y2="0">
+                    <stop offset="0" stop-color="#38BDF8" stop-opacity=".62" />
+                    <stop offset="1" stop-color="#38BDF8" stop-opacity="0" />
+                  </linearGradient>
+                </defs>
+                <circle class="mm-dial" cx="50" cy="50" r="46" />
+                <circle class="mm-compass" cx="50" cy="50" r="41" />
+                <g class="mm-sweep"><path d="M50 50 L50 9 A41 41 0 0 1 79 21 Z" fill="url(#mm-beam)" /></g>
+                <line class="mm-axis" x1="6" y1="50" x2="34" y2="50" />
+                <line class="mm-axis" x1="66" y1="50" x2="94" y2="50" />
+                <circle class="mm-node n-l" cx="14" cy="50" r="2.7" />
+                <circle class="mm-node n-l2" cx="24" cy="50" r="2.1" />
+                <circle class="mm-node n-r" cx="86" cy="50" r="2.7" />
+                <circle class="mm-node n-r2" cx="76" cy="50" r="2.1" />
+                <circle class="mm-blip" cx="70" cy="33" r="2" />
+                <circle class="mm-blip b2" cx="32" cy="68" r="1.6" />
+              </svg>
+              <span class="mm-pulse"></span>
+              <span class="mm-pulse gold"></span>
+              <span class="mm-pulse p3"></span>
+              <span class="mm-vs"><span class="mm-vs-t">VS</span></span>
             </div>
 
-            <div class="mm-orb is-rival" id="mm-rival" data-tier="rookie">
-              <span class="mm-aura" aria-hidden="true"></span>
-              <span class="mm-face">
-                <img class="mm-img" id="mm-rival-img" alt="" hidden />
-                <span class="mm-scan" id="mm-rival-scan" aria-hidden="true"><svg class="ico"><use href="#i-user" /></svg></span>
-                <span class="mm-initial" id="mm-rival-t" hidden>?</span>
+            <!-- right contender: a live scanner until the match locks in -->
+            <div class="mm-pod is-rival" id="mm-rival" data-tier="rookie">
+              <span class="mm-pod-role">Rival</span>
+              <span class="mm-orb">
+                <span class="mm-aura" aria-hidden="true"></span>
+                <span class="mm-shock" aria-hidden="true"></span>
+                <span class="mm-face">
+                  <img class="mm-img" id="mm-rival-img" alt="" hidden />
+                  <span class="mm-scan" id="mm-rival-scan" aria-hidden="true"><svg class="ico"><use href="#i-user" /></svg></span>
+                  <span class="mm-initial" id="mm-rival-t" hidden>?</span>
+                </span>
+                <span class="mm-flag" id="mm-rival-flag" aria-hidden="true"></span>
               </span>
-              <span class="mm-tiq"><svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg><b id="mm-rival-tiq">—</b></span>
-              <span class="mm-name" id="mm-rival-name">Scanning...</span>
+              <span class="mm-pod-name" id="mm-rival-name">Scanning...</span>
+              <span class="mm-pod-tier" id="mm-rival-tier">Unknown</span>
+              <span class="mm-plaque"><svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg><b id="mm-rival-tiq">—</b></span>
             </div>
           </div>
 
-          <p class="mm-status" id="mm-status" aria-hidden="true">Scanning tactical tier...</p>
-          <p class="mm-timer" aria-hidden="true">Elapsed: <b id="mm-elapsed">00:00</b></p>
+          <!-- the search console: the cycling line, a segmented sweep, the elapsed clock -->
+          <div class="mm-console">
+            <p class="mm-status" id="mm-status" aria-hidden="true">Scanning tactical tier...</p>
+            <div class="mm-console-row" aria-hidden="true">
+              <span class="mm-seg"><i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i><i style="--i:3"></i><i style="--i:4"></i><i style="--i:5"></i><i style="--i:6"></i><i style="--i:7"></i><i style="--i:8"></i><i style="--i:9"></i><i style="--i:10"></i><i style="--i:11"></i></span>
+              <p class="mm-timer">Elapsed: <b id="mm-elapsed">00:00</b></p>
+            </div>
+          </div>
+
+          <!-- what the race is worth: the same numbers the settlement pays out -->
+          <div class="mm-stakes" aria-hidden="true">
+            <span class="mm-stakes-t">Win stakes</span>
+            <span class="mm-stakes-c is-tiq"><svg class="ico"><use href="#i-brain" /></svg>+<b id="mm-stake-tiq">140</b> TIQ</span>
+            <span class="mm-stakes-c is-gold"><svg class="ico"><use href="#i-medal" /></svg>+<b id="mm-stake-gold">65</b> Gold</span>
+            <span class="mm-stakes-c is-cup"><svg class="ico"><use href="#i-cup" /></svg>Ranked <b id="mm-stake-season">S4</b></span>
+          </div>
+
+          <div class="mm-tip">
+            <svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg>
+            <p class="mm-tip-t" id="mm-tip">Walls are unlimited — seal the lane your rival needs, not the one they are in.</p>
+          </div>
 
           <!-- a quiet queue: the stage stops promising and offers two ways out -->
           <div class="mm-fallback" id="mm-fallback" hidden>

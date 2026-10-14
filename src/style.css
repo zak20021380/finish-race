@@ -9364,13 +9364,14 @@ html.rm .lb-row { transition: none; }
 
 
 /* ==========================================================================
-   MATCHMAKING — the 1v1 searching stage (Quick match → Start 1v1 match).
-   One full-viewport clay stage: the two-orb arena (you left, the rival still a
-   silhouette right), the synapse rings radiating outward between them, the
-   cycling status line and the elapsed clock. Depth is the shared clay recipe,
-   the press travels translateY, and nothing here carries a backdrop-filter.
-   Every animation is transform/opacity only, so html.rm stills the whole
-   stage through the global reduced-motion block above.
+   MATCHMAKING — the 1v1 Versus Arena stage (Quick match → Start 1v1 match).
+   One full-viewport clay slab: a telemetry rail across the top, two extruded
+   contender pods (you on a team-blue sphere, the rival still a scanner) either
+   side of a tactical radar core with the VS medallion in it, then the search
+   console, the stakes the race actually pays and a mind tip. Depth is the
+   shared clay recipe — deep inner shadow, extruded lip, metallic top hairline —
+   and nothing here carries a backdrop-filter. Every animation is
+   transform/opacity only, so html.rm stills the whole stage.
    ========================================================================== */
 
 .mm {
@@ -9436,78 +9437,156 @@ html.rm .mm.is-found::after { animation: none; opacity: .34; }
 }
 .mm-title { margin: 0; font-size: var(--t-hd); font-weight: var(--w-2); color: var(--ink); }
 
-/* ---- the stage: one clay slab the whole search happens on ---- */
+/* ---- the arena card: a lit slab with the two sides' ambience pooled at the edges
+       and a 2.5% engineering grid over the clay so the surface reads as an instrument ---- */
 .mm-stage {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
+  max-height: 600px;
+  margin: auto 0;                         /* a tall phone gets atmosphere, not a taller slab */
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: var(--s4);
-  padding: var(--s4) var(--s3);
+  justify-content: space-between;         /* the bands hold the card's top and bottom edges */
+  gap: var(--s2);
+  padding: var(--s3) var(--s2);
   border-radius: var(--r-panel);
-  background: var(--clay-face);
+  background:
+    radial-gradient(56% 42% at 4% 38%, rgba(56, 189, 248, .15), rgba(56, 189, 248, 0) 68%),
+    radial-gradient(56% 42% at 96% 38%, rgba(255, 82, 43, .14), rgba(255, 82, 43, 0) 68%),
+    var(--clay-face);
   box-shadow: var(--clay), var(--clay-ring);
   overflow: hidden;
 }
+.mm-stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .025;
+  background-image:
+    repeating-linear-gradient(0deg, #fff 0 1px, rgba(255, 255, 255, 0) 1px 9px),
+    repeating-linear-gradient(90deg, #fff 0 1px, rgba(255, 255, 255, 0) 1px 9px);
+}
+/* the grid is a surface treatment, never a layer over the readout */
+.mm-stage > * { position: relative; z-index: 1 }
 
-/* ---- arena: two orbs, one synapse ---- */
+/* ---- telemetry rail: what this seat, this radius and this board are running ---- */
+.mm-tele {
+  align-self: stretch;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 5px;
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair);
+}
+.mm-tele-c {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .045);
+  box-shadow: inset 0 0 0 1px var(--hair), inset 0 1px 0 rgba(255, 255, 255, .1);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  line-height: 1.25;
+  color: var(--chip-ink);
+  white-space: nowrap;
+}
+.mm-tele-c .ico { width: 11px; height: 11px; color: var(--brand-3); }
+.mm-tele-c b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.mm-tele-c:first-child { color: var(--brand-ink); }
+.mm-tele-c:first-child .ico { color: var(--brand-ink); }
+.mm-tele-c:last-child .ico { color: var(--honey-ink); }
+/* widened: the radius chip turns gold, because it is the one number that moved */
+.mm-tele-c.is-wide {
+  color: var(--tiq);
+  background: rgba(252, 211, 77, .1);
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .4), inset 0 1px 0 rgba(255, 255, 255, .1);
+}
+.mm-tele-c.is-wide .ico,
+.mm-tele-c.is-wide b { color: var(--tiq); }
+
+/* ---- the arena: two contender pods either side of the tactical core ---- */
 .mm-arena {
-  --orb: 92px;
+  --orb: 84px;
   position: relative;
   align-self: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 300px;
   display: grid;
-  grid-template-columns: 1fr auto 1fr;   /* the orbs stay partners, never a list */
-  align-items: center;
+  grid-template-columns: 1fr auto 1fr;   /* the pods stay partners, never a list */
+  align-items: stretch;
   justify-items: center;
-  gap: var(--s3);
-}
-/* rings radiate from the synapse rather than from either orb: the search lives
-   in the space between the two minds */
-.mm-radar { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
-.mm-ring {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 200px;
-  height: 200px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1.5px rgba(56, 189, 248, .46);
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(.4);
-  animation: mm-ping 2.6s cubic-bezier(.3, .6, .4, 1) infinite;
-}
-.mm-ring.gold { box-shadow: inset 0 0 0 1.5px rgba(252, 211, 77, .42); animation-delay: .87s; }
-.mm-ring:nth-child(3) { animation-delay: 1.73s; }
-@keyframes mm-ping {
-  0%   { opacity: 0;  transform: translate(-50%, -50%) scale(.4); }
-  18%  { opacity: .7; }
-  100% { opacity: 0;  transform: translate(-50%, -50%) scale(1.55); }
+  gap: var(--s2);
 }
 
-.mm-orb {
+.mm-pod {
   --aura: var(--tier-rookie);
   --aura-glow: var(--tier-rookie-glow);
+  --pod-shine: rgba(125, 211, 252, .5);
   position: relative;
+  min-width: 0;
+  min-height: 156px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--s2);
-  min-width: 0;
+  justify-content: space-evenly;
+  gap: 4px;
+  padding: 8px 6px 9px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #26324B 0%, #1B2334 100%);
+  box-shadow:
+    var(--clay-drop),
+    var(--clay-spec),
+    var(--clay-bevel),
+    inset 0 0 0 1px rgba(255, 255, 255, .06),
+    inset 0 0 26px rgba(0, 0, 0, .4);
 }
+/* the metallic hairline along the top edge: the pod is lit from above */
+.mm-pod::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 0;
+  height: 1px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), var(--pod-shine), rgba(255, 255, 255, 0));
+}
+.mm-pod.is-rival { --pod-shine: rgba(252, 211, 77, .46); }
 /* the tier is an aura colour, exactly as the ladder prints it */
-.mm-orb[data-tier="tactician"] { --aura: var(--tier-tactician); --aura-glow: var(--tier-tactician-glow); }
-.mm-orb[data-tier="strategist"] { --aura: var(--tier-strategist); --aura-glow: var(--tier-strategist-glow); }
-.mm-orb[data-tier="grandmaster"] { --aura: var(--tier-grandmaster); --aura-glow: var(--tier-grandmaster-glow); }
+.mm-pod[data-tier="tactician"] { --aura: var(--tier-tactician); --aura-glow: var(--tier-tactician-glow); }
+.mm-pod[data-tier="strategist"] { --aura: var(--tier-strategist); --aura-glow: var(--tier-strategist-glow); }
+.mm-pod[data-tier="grandmaster"] { --aura: var(--tier-grandmaster); --aura-glow: var(--tier-grandmaster-glow); }
+
+.mm-pod-role {
+  flex: none;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.mm-pod.is-you .mm-pod-role { color: var(--brand-ink); }
+.mm-pod.is-rival .mm-pod-role { color: var(--honey-ink); }
+
+/* ---- the sphere: a lit clay ball with the tier aura as its rim, not a flat disc ---- */
+.mm-orb { position: relative; flex: none; width: var(--orb); height: var(--orb); }
 .mm-aura {
   position: absolute;
-  top: calc(var(--orb) / -5);
-  left: 50%;
-  width: calc(var(--orb) * 1.5);
-  height: calc(var(--orb) * 1.5);
-  transform: translateX(-50%);
+  inset: -30%;
   border-radius: 50%;
   pointer-events: none;
   background: radial-gradient(closest-side, var(--aura-glow), rgba(0, 0, 0, 0) 72%);
@@ -9516,26 +9595,56 @@ html.rm .mm.is-found::after { animation: none; opacity: .34; }
   position: relative;
   display: grid;
   place-items: center;
-  width: var(--orb);
-  height: var(--orb);
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
   overflow: hidden;
-  background: linear-gradient(180deg, #26314B 0%, #1A2232 100%);
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, .6), rgba(255, 255, 255, 0) 42%),
+    radial-gradient(circle at 66% 84%, rgba(0, 0, 0, .5), rgba(0, 0, 0, 0) 58%),
+    radial-gradient(circle at 50% 36%, #7DD3FC 0%, #0EA5E9 44%, #0B3A5E 100%);
   box-shadow:
-    var(--clay-spec),
-    var(--clay-bevel),
     inset 0 0 0 2px var(--aura),
-    0 12px 24px -14px rgba(0, 0, 0, .9);
+    inset 0 5px 9px rgba(255, 255, 255, .16),
+    inset 0 -7px 13px rgba(0, 0, 0, .45),
+    0 10px 20px -10px rgba(0, 0, 0, .9),
+    0 0 20px -4px var(--aura-glow);
 }
-.mm-img { width: 100%; height: 100%; object-fit: cover; }
-.mm-initial { font-size: calc(var(--orb) * .4); font-weight: 900; color: var(--ink); }
-/* the rival stays a breathing silhouette until the match lands */
+.mm-img { position: relative; width: 100%; height: 100%; object-fit: cover; }
+.mm-initial {
+  position: relative;
+  font-size: calc(var(--orb) * .38);
+  font-weight: 900;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, .55);
+}
+/* the rival is the other side of the arena: warm where you are cold */
+.mm-pod.is-rival .mm-face {
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, .55), rgba(255, 255, 255, 0) 42%),
+    radial-gradient(circle at 66% 84%, rgba(0, 0, 0, .55), rgba(0, 0, 0, 0) 58%),
+    radial-gradient(circle at 50% 36%, #FFC49A 0%, #FF522B 44%, #5B1A0C 100%);
+}
+/* until the match lands there is no one in this sphere: a breathing slate ghost */
+.mm-pod.is-rival:not(.is-locked) .mm-face {
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, .3), rgba(255, 255, 255, 0) 44%),
+    radial-gradient(circle at 66% 84%, rgba(0, 0, 0, .55), rgba(0, 0, 0, 0) 58%),
+    radial-gradient(circle at 50% 36%, #3B4A68 0%, #26314B 48%, #131A29 100%);
+  box-shadow:
+    inset 0 0 0 2px rgba(148, 163, 184, .42),
+    inset 0 5px 9px rgba(255, 255, 255, .1),
+    inset 0 -7px 13px rgba(0, 0, 0, .45),
+    0 10px 20px -10px rgba(0, 0, 0, .9);
+}
 .mm-scan {
+  position: relative;
   display: grid;
   place-items: center;
   width: 100%;
   height: 100%;
-  color: var(--ink-soft);
+  color: #B6C2D6;
   animation: mm-breathe 1.7s ease-in-out infinite;
 }
 .mm-scan .ico { width: calc(var(--orb) * .46); height: calc(var(--orb) * .46); }
@@ -9543,103 +9652,221 @@ html.rm .mm.is-found::after { animation: none; opacity: .34; }
   0%, 100% { opacity: .42; transform: scale(.94); }
   50%      { opacity: .92; transform: scale(1); }
 }
-.mm-orb.is-rival:not(.is-locked) .mm-face {
-  box-shadow:
-    var(--clay-spec),
-    var(--clay-bevel),
-    inset 0 0 0 2px rgba(148, 163, 184, .4),
-    0 12px 24px -14px rgba(0, 0, 0, .9);
+/* the corner flag: the ladder's own photo cascade, in the pod's size */
+.mm-flag { position: absolute; right: -3px; bottom: -3px; z-index: 2; --fp-d: 24px; }
+.mm-flag .fp-chip { border-radius: 9px; font-size: 8px; box-shadow: inset 0 0 0 1px #0A0F1A, 0 0 0 2px #1C2433; }
+.mm-flag .fp-img { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35), 0 0 0 2px #1C2433; }
+
+/* locked in: the gold shockwave, then the pod settles with its new rival */
+.mm-shock {
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px rgba(252, 211, 77, .95), 0 0 18px rgba(252, 211, 77, .55);
+  opacity: 0;
+  pointer-events: none;
 }
-.mm-orb.is-rival:not(.is-locked) .mm-tiq { opacity: .5; }
-/* locked in: the 300ms impact that hands the seat over */
-.mm-orb.is-locked .mm-face { animation: mm-impact .3s var(--bounce) both; }
+.mm-pod.is-locked .mm-shock { animation: mm-shock .62s ease-out both; }
+@keyframes mm-shock {
+  0%   { opacity: 0; transform: scale(.74); }
+  20%  { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+.mm-pod.is-locked { animation: mm-impact .3s var(--bounce) both; }
 @keyframes mm-impact {
   0%   { transform: scale(.86); }
   55%  { transform: scale(1.07); }
   100% { transform: scale(1); }
 }
 
-/* TIQ is gold with the brain glyph, on every orb */
-.mm-tiq {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 10px;
-  border-radius: var(--radius-pill);
-  background: var(--field);
-  box-shadow: var(--inset), inset 0 0 0 1px rgba(252, 211, 77, .26);
-  font-size: var(--t-micro);
-  font-weight: 900;
-  color: var(--tiq);
-  font-variant-numeric: tabular-nums;
-}
-.mm-tiq .ico { width: 13px; height: 13px; color: var(--honey-ink); }
-.mm-name {
-  max-width: min(16ch, 100%);
+.mm-pod-name {
+  flex: none;
+  max-width: 100%;
   overflow: hidden;
   font-size: var(--t-micro);
-  font-weight: 800;
-  letter-spacing: .04em;
+  font-weight: 900;
+  letter-spacing: .02em;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: var(--ink);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-/* ---- the synapse: three nodes riding the line between the orbs ---- */
-.mm-link {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 5px;
-  width: 40px;
-  padding: 0 1px;
-}
-.mm-link::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 2px;
-  transform: translateY(-50%);
-  border-radius: 2px;
-  background: linear-gradient(90deg, rgba(56, 189, 248, .55), rgba(252, 211, 77, .55));
-}
-.mm-node {
-  position: relative;
-  display: block;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--brand-3);
-  box-shadow: 0 0 9px rgba(56, 189, 248, .75);
-  animation: mm-node 1.5s ease-in-out infinite;
-}
-.mm-node:nth-child(2) {
-  background: var(--tiq);
-  box-shadow: 0 0 9px rgba(252, 211, 77, .75);
-  animation-delay: .25s;
-}
-.mm-node:nth-child(3) { animation-delay: .5s; }
-@keyframes mm-node {
-  0%, 100% { opacity: .3; transform: scale(.7); }
-  50%      { opacity: 1;  transform: scale(1); }
-}
-
-/* ---- the live line and the elapsed clock ---- */
-.mm-status {
-  margin: 0;
-  min-height: 32px;
-  display: inline-flex;
-  align-items: center;
-  padding: 6px var(--s3);
+/* the tier word carries the aura it is ringed in */
+.mm-pod-tier {
+  flex: none;
+  max-width: 100%;
+  padding: 2px 8px;
   border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px var(--aura-glow);
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  color: var(--aura);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* TIQ is gold + the brain glyph, on a plaque that is extruded like every key */
+.mm-plaque {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 3px 9px;
+  border-radius: 10px;
+  background: var(--gold-face);
+  box-shadow:
+    0 3px 0 var(--gold-lip),
+    inset 0 1px 0 rgba(255, 255, 255, .6),
+    inset 0 -2px 3px rgba(0, 0, 0, .22),
+    0 6px 14px -8px rgba(245, 158, 11, .85);
+  font-size: var(--t-micro);
+  font-weight: 900;
+  line-height: 1.35;
+  color: #2A1B04;
+  font-variant-numeric: tabular-nums;
+}
+.mm-plaque .ico { width: 12px; height: 12px; color: #7A4A05; }
+/* an unread rival sits in a groove; the lock is what pays out the gold */
+.mm-pod.is-rival:not(.is-locked) .mm-plaque {
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px rgba(252, 211, 77, .26);
+  color: var(--tiq);
+}
+.mm-pod.is-rival:not(.is-locked) .mm-plaque .ico { color: var(--honey-ink); }
+.mm-pod.is-rival:not(.is-locked) .mm-pod-name { color: var(--ink-soft); }
+.mm-pod.is-rival:not(.is-locked) .mm-pod-tier { color: var(--ink-soft); box-shadow: inset 0 0 0 1px var(--hair); }
+
+/* ---- the tactical core: compass ring, sweep, synapse pulses, VS medallion ---- */
+.mm-core {
+  --core: 96px;
+  position: relative;
+  z-index: 1;
+  flex: none;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: var(--core);
+  height: var(--core);
+}
+.mm-radar { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.mm-dial {
+  fill: rgba(14, 21, 38, .62);
+  stroke: rgba(56, 189, 248, .2);
+  stroke-width: 1.5;
+}
+.mm-compass {
+  fill: none;
+  stroke: rgba(125, 211, 252, .46);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-dasharray: 2 7;
+  transform-box: view-box;
+  transform-origin: 50px 50px;
+  animation: mm-spin 15s linear infinite;
+}
+.mm-sweep {
+  transform-box: view-box;
+  transform-origin: 50px 50px;
+  animation: mm-spin 3.4s linear infinite;
+}
+@keyframes mm-spin { to { transform: rotate(360deg); } }
+.mm-axis { stroke: rgba(252, 211, 77, .34); stroke-width: 1.6; stroke-linecap: round; }
+.mm-node { fill: var(--brand-3); animation: mm-flow 1.5s ease-in-out infinite; }
+.mm-node.n-l2 { animation-delay: .18s; }
+.mm-node.n-r { fill: var(--tiq); animation-delay: .5s; }
+.mm-node.n-r2 { fill: var(--tiq); animation-delay: .68s; }
+/* the nodes ride the axis toward their own pod: the bridge is live at both ends */
+@keyframes mm-flow {
+  0%, 100% { opacity: .28; transform: translateX(0); }
+  50%      { opacity: 1; transform: translateX(-3px); }
+}
+.mm-node.n-r, .mm-node.n-r2 { animation-name: mm-flow-r; }
+@keyframes mm-flow-r {
+  0%, 100% { opacity: .28; transform: translateX(0); }
+  50%      { opacity: 1; transform: translateX(3px); }
+}
+.mm-blip { fill: rgba(125, 211, 252, .8); animation: mm-blip 3.4s ease-in-out infinite; }
+.mm-blip.b2 { animation-delay: 1.7s; }
+@keyframes mm-blip {
+  0%, 62%, 100% { opacity: 0; }
+  68%           { opacity: .95; }
+  88%           { opacity: .12; }
+}
+/* synapse pulses: they radiate from the core and stop at the pods' inner edge */
+.mm-pulse {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px rgba(56, 189, 248, .46);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(.42);
+  animation: mm-ping 2.6s cubic-bezier(.3, .6, .4, 1) infinite;
+}
+.mm-pulse.gold { box-shadow: inset 0 0 0 1.5px rgba(252, 211, 77, .42); animation-delay: .87s; }
+.mm-pulse.p3 { animation-delay: 1.73s; }
+@keyframes mm-ping {
+  0%   { opacity: 0;  transform: translate(-50%, -50%) scale(.42); }
+  18%  { opacity: .7; }
+  100% { opacity: 0;  transform: translate(-50%, -50%) scale(1.22); }
+}
+/* the medallion: clay-and-gold, extruded, lit from above */
+.mm-vs {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, .62), rgba(255, 255, 255, 0) 46%),
+    linear-gradient(180deg, #FDE68A 0%, #F59E0B 58%, #B45309 100%);
+  box-shadow:
+    0 4px 0 #7C3A06,
+    0 0 0 2px rgba(252, 211, 77, .5),
+    0 0 22px rgba(252, 211, 77, .4),
+    inset 0 -5px 9px rgba(0, 0, 0, .3);
+  animation: mm-throb 2.2s ease-in-out infinite;
+}
+.mm-vs-t {
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: .01em;
+  color: #2A1B04;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .45);
+}
+@keyframes mm-throb {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.055); }
+}
+
+/* ---- search console: the cycling line, the segmented sweep, the elapsed clock ---- */
+.mm-console {
+  align-self: stretch;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px 9px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--field);
   box-shadow: var(--inset), inset 0 0 0 1px var(--hair);
+}
+.mm-status {
+  margin: 0;
+  min-height: 17px;
   font-size: var(--t-3);
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: .01em;
   color: var(--chip-ink);
   text-align: center;
 }
@@ -9648,20 +9875,113 @@ html.rm .mm.is-found::after { animation: none; opacity: .34; }
   0%   { opacity: 0; transform: translateY(4px); }
   100% { opacity: 1; transform: none; }
 }
+.mm-console-row { display: flex; align-items: center; gap: var(--s2); }
+.mm-seg { flex: 1 1 auto; min-width: 0; display: flex; gap: 3px; }
+.mm-seg i {
+  flex: 1 1 0;
+  height: 7px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #38BDF8, #0284C7);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .4);
+  opacity: .16;
+  transform: scaleY(.66);
+  animation: mm-seg 1.2s linear infinite;
+  animation-delay: calc(var(--i, 0) * .085s);
+}
+@keyframes mm-seg {
+  0%, 74%, 100% { opacity: .16; transform: scaleY(.66); }
+  16%, 44%      { opacity: 1;   transform: scaleY(1); }
+}
 .mm-timer {
+  flex: none;
   margin: 0;
   font-size: var(--t-micro);
-  font-weight: 800;
+  font-weight: 900;
   letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--ink-soft);
 }
-.mm-timer b { color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.mm-timer b { color: var(--tiq); font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 
-/* ---- a quiet queue: two clay keys appear under the clock, Cancel still below ----
+/* ---- stakes: the same numbers the settlement pays, on a raised clay key ---- */
+.mm-stakes {
+  align-self: stretch;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 7px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, #26324B 0%, #1B2334 100%);
+  box-shadow:
+    var(--clay-spec),
+    var(--clay-bevel),
+    inset 0 0 0 1px rgba(255, 255, 255, .06),
+    0 8px 16px -12px rgba(0, 0, 0, .9);
+}
+.mm-stakes-t {
+  flex: none;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: var(--ink-soft);
+}
+.mm-stakes-c {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 3px 6px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px var(--hair), inset 0 1px 0 rgba(255, 255, 255, .1);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  line-height: 1.3;
+  color: var(--chip-ink);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.mm-stakes-c .ico { width: 11px; height: 11px; }
+.mm-stakes-c b { color: var(--ink); }
+.mm-stakes-c.is-tiq, .mm-stakes-c.is-tiq .ico { color: var(--tiq); }
+.mm-stakes-c.is-gold .ico { color: var(--honey-ink); }
+.mm-stakes-c.is-cup .ico { color: var(--brand-ink); }
+
+/* ---- mind tip: one inset footer card that keeps trading lines ---- */
+.mm-tip {
+  align-self: stretch;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px rgba(125, 211, 252, .14);
+}
+.mm-tip > .ico { flex: none; width: 15px; height: 15px; color: var(--violet); }
+.mm-tip-t {
+  margin: 0;
+  min-height: 25px;
+  font-size: var(--t-micro);
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--chip-ink);
+}
+.mm-tip-t.swap { animation: mm-swap .46s ease both; }
+
+/* ---- a quiet queue: two clay keys appear under the stage, Cancel still below ----
    The same ghost key every other secondary action uses, only narrowed so the pair
    fits the stage's width. */
 .mm-fallback {
+  align-self: stretch;
+  flex: none;
   display: flex;
   gap: var(--s2);
   width: 100%;
@@ -9707,20 +10027,52 @@ html.rm .mm.is-found::after { animation: none; opacity: .34; }
 
 /* ---- short and narrow phones: the arena gives before a control does ---- */
 @media (max-height: 700px) {
-  .mm-arena { --orb: 76px; }
-  .mm-stage { gap: var(--s3); padding: var(--s3) var(--s2); }
+  .mm-stage { gap: var(--s2); padding: var(--s2) var(--s2); }
+  .mm-arena { --orb: 74px; max-height: 226px; }
+  .mm-core { --core: 88px; }
+  .mm-pulse { width: 78px; height: 78px; }
+  .mm-vs { width: 42px; height: 42px; }
+  .mm-vs-t { font-size: 16px; }
   .mm-cancel { min-height: 48px; }
 }
+@media (max-height: 620px) {
+  .mm-arena { --orb: 66px; max-height: 196px; }
+  .mm-pod { min-height: 150px; gap: 3px; padding: 6px 5px 7px; }
+  .mm-core { --core: 80px; }
+  .mm-pulse { width: 70px; height: 70px; }
+}
 @media (max-width: 340px) {
-  .mm-arena { --orb: 68px; }
-  .mm-name { max-width: 9ch; }
+  .mm-tele { gap: 3px; padding: 4px 3px; }
+  .mm-tele-c { padding: 3px 5px; font-size: 8px; letter-spacing: .03em; }
+  .mm-stakes { gap: 3px; padding: 5px 5px; }
+  .mm-stakes-c { padding: 3px 5px; font-size: 8px; }
+  .mm-pod-name { max-width: 9ch; }
+}
+/* a tall phone: the arena takes the extra height before anything else does */
+@media (min-height: 860px) {
+  .mm-arena { --orb: 96px; }
+  .mm-core { --core: 108px; }
+  .mm-pulse { width: 94px; height: 94px; }
+  .mm-vs { width: 52px; height: 52px; }
+  .mm-vs-t { font-size: 19px; }
 }
 
 /* ---- reduced motion: the stage still reads, it just stops sweeping ---- */
 html.rm .mm { transition: none; }
 html.rm .mm-cancel { transition: none; }
-html.rm .mm-ring,
+html.rm .mm-compass,
+html.rm .mm-sweep,
+html.rm .mm-pulse,
 html.rm .mm-node,
+html.rm .mm-blip,
+html.rm .mm-vs,
+html.rm .mm-seg i,
 html.rm .mm-scan,
+html.rm .mm-shock,
 html.rm .mm-status.swap,
-html.rm .mm-orb.is-locked .mm-face { animation: none; }
+html.rm .mm-tip-t.swap,
+html.rm .mm-pod.is-locked { animation: none; }
+/* the sweep is the only thing that would otherwise freeze mid-dial */
+html.rm .mm-sweep { opacity: .5; }
+html.rm .mm-seg i { opacity: .55; transform: none; }
+html.rm .mm-blip { opacity: .5; }

@@ -1,11 +1,11 @@
 /**
- * matchmaking.ts — the 1v1 searching stage: radar, clock, match-found impact.
+ * matchmaking.ts — the 1v1 searching stage: the Versus Arena.
  *
  * Quick match no longer drops straight onto the board: the mode drawer hands the
- * seat to this module, which owns one full-viewport clay stage — the two-orb
- * arena (you on the left, the rival still a silhouette on the right), the synapse
- * line and its rings sweeping outward between them, the elapsed clock and the
- * cycling status line.
+ * seat to this module, which owns one full-viewport clay stage — a telemetry rail
+ * (seat, pairing radius, hazards), two extruded contender pods (you on a team-blue
+ * sphere, the rival a live scanner on the right), the tactical radar core and its
+ * VS medallion between them, then the search console, the stakes and a mind tip.
  *
  * `source` is the seam a transport plugs into: it takes an `AbortSignal` (plus the current `wide`
  * skill filter) and resolves with the `OpponentData` it found. `onlineSearch()` is the real one —
@@ -28,11 +28,11 @@
  * animation has locked the rival in — the caller starts the race and the stage
  * fades away behind the board. `onCancel` is the player aborting, which returns
  * them to mode selection. Motion is transform/opacity only; the global
- * reduced-motion block stills the rings, the pulse and the flash.
+ * reduced-motion block stills the sweep, the pulses and the flash.
  */
 import { COLS, ROWS, type Action } from './rules';
 import { menuState, motionReduced, settings } from './settings';
-import { profile } from './storage';
+import { payout, profile } from './storage';
 import { impact, notify, tgInitData, tgUser } from './telegram';
 
 /* ---------- TIQ: the same reading the ladder prints ---------- */
@@ -68,6 +68,8 @@ export interface OpponentData {
   avatarUrl: string | null;
   /** Drawn when the rival carries no photo. */
   initial: string;
+  /** ISO alpha-2, when the seat carries one: the pod's corner flag. */
+  flag?: string | null;
 }
 
 /** What this attempt is asking for: `wide` is the relaxed skill filter. */
@@ -81,24 +83,26 @@ export type MatchSource = (signal: AbortSignal, opts: MatchSourceOptions) => Pro
 
 /* ---------- the waiting room: a seeded pool, no server required ---------- */
 
-const RIVALS: ReadonlyArray<{ id: string; name: string; tiq: number }> = [
-  { id: 'r-nadia', name: 'Nadia K.', tiq: 1240 },
-  { id: 'r-rune', name: 'Rune', tiq: 1875 },
-  { id: 'r-ivo', name: 'Ivo Petrov', tiq: 2140 },
-  { id: 'r-mira', name: 'Mira', tiq: 2680 },
-  { id: 'r-sable', name: 'Sable', tiq: 3150 },
-  { id: 'r-kenji', name: 'Kenji', tiq: 980 },
-  { id: 'r-lior', name: 'Lior', tiq: 1545 },
-  { id: 'r-ada', name: 'Ada W.', tiq: 2360 },
+/** The waiting room: a seeded pool, no server required. `flag` is the pod's corner badge. */
+const RIVALS: ReadonlyArray<{ id: string; name: string; tiq: number; flag: string }> = [
+  { id: 'r-nadia', name: 'Nadia K.', tiq: 1240, flag: 'PL' },
+  { id: 'r-rune', name: 'Rune', tiq: 1875, flag: 'NO' },
+  { id: 'r-ivo', name: 'Ivo Petrov', tiq: 2140, flag: 'BG' },
+  { id: 'r-mira', name: 'Mira', tiq: 2680, flag: 'KZ' },
+  { id: 'r-sable', name: 'Sable', tiq: 3150, flag: 'GB' },
+  { id: 'r-kenji', name: 'Kenji', tiq: 980, flag: 'JP' },
+  { id: 'r-lior', name: 'Lior', tiq: 1545, flag: 'IL' },
+  { id: 'r-ada', name: 'Ada W.', tiq: 2360, flag: 'DE' },
 ];
 
-const asOpponent = (r: { id: string; name: string; tiq: number }): OpponentData => ({
+const asOpponent = (r: { id: string; name: string; tiq: number; flag: string }): OpponentData => ({
   id: r.id,
   name: r.name,
   tiq: r.tiq,
   tier: tierOf(r.tiq),
   avatarUrl: null,
   initial: (r.name.charAt(0) || '?').toUpperCase(),
+  flag: r.flag,
 });
 
 /**
@@ -156,6 +160,63 @@ function readFace(fallbackName: string): Face {
   const avatarUrl = (img && !img.hidden && img.src ? img.src : null) ?? u?.photo_url ?? null;
   const letter = domText('avatar-t', '') || name.charAt(0) || 'P';
   return { name, initial: letter.slice(0, 1).toUpperCase(), avatarUrl };
+}
+
+/* ---------- the corner flag: the ladder's photo cascade, kept live in one host ---------- */
+
+/** Only a bare ISO alpha-2 may ever be interpolated into a URL — nothing else. */
+const iso2 = (code: string | null | undefined): string | null =>
+  code && /^[A-Za-z]{2}$/.test(code) ? code.toLowerCase() : null;
+
+/** The same two CDNs `compete.ts` walks; that module keeps its own copy private. */
+const FLAG_SVG = (cc: string): string => `https://cdn.jsdelivr.net/npm/circle-flags/flags/${cc}.svg`;
+const FLAG_PNG = (cc: string): string => `https://flagcdn.com/w80/${cc}.png`;
+
+/**
+ * Paint a flag into a pod's corner. The scanner rewrites this host five times a
+ * second, so the chip and the image are built once and only their `src` moves —
+ * a tick must never churn the DOM or re-fetch a flag the CDN already answered.
+ */
+function paintFlag(host: HTMLElement | null, code: string | null | undefined): void {
+  if (!host) return;
+  host.classList.add('fp', 'mm-flag');
+  let chip = host.querySelector<HTMLElement>('.fp-chip');
+  if (!chip) {
+    chip = document.createElement('span');
+    chip.className = 'fp-chip';
+    host.append(chip);
+  }
+  const cc = iso2(code);
+  chip.textContent = (code ?? '').slice(0, 3).toUpperCase() || '—';
+  if (!cc) {
+    host.querySelector('.fp-img')?.remove();
+    host.classList.add('is-chip');
+    return;
+  }
+  let img = host.querySelector<HTMLImageElement>('.fp-img');
+  if (!img) {
+    img = document.createElement('img');
+    img.className = 'fp-img';
+    img.alt = '';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.addEventListener('error', () => {
+      const cur = img?.dataset.cc ?? '';
+      if (img && img.dataset.tier !== '1') {                 // tier 2: the PNG mirror
+        if (img.dataset.tier === '2') return;
+        img.dataset.tier = '1';
+        img.src = FLAG_PNG(cur);
+        return;
+      }
+      if (img) { img.dataset.tier = '2'; host.classList.add('is-chip'); }
+    });
+    host.append(img);
+  }
+  if (img.dataset.cc === cc) return;               // same flag, same pixels: leave it alone
+  img.dataset.cc = cc;
+  img.dataset.tier = '0';
+  host.classList.remove('is-chip');
+  img.src = FLAG_SVG(cc);
 }
 
 /* ---------- online transport: the Worker's waiting room, and the race it turns into ---------- */
@@ -417,7 +478,10 @@ function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_F
 }
 
 /** The matchmaker's payload, in the shape the stage paints. */
-function onlineOpponent(msg: { matchId: string; opponent: { name: string; tiq: number; tier: string } }): OpponentData {
+function onlineOpponent(msg: {
+  matchId: string;
+  opponent: { name: string; tiq: number; tier: string; flag: string };
+}): OpponentData {
   const name = msg.opponent.name.trim() || 'Rival';
   return {
     id: `online-${msg.matchId}`,
@@ -426,6 +490,7 @@ function onlineOpponent(msg: { matchId: string; opponent: { name: string; tiq: n
     tier: asTier(msg.opponent.tier, msg.opponent.tiq),
     avatarUrl: null,
     initial: name.charAt(0).toUpperCase(),
+    flag: msg.opponent.flag,
   };
 }
 
@@ -613,6 +678,30 @@ const STATUS: ReadonlyArray<string> = [
   'Expanding search radius...',
 ];
 const STATUS_MS = 2500;
+/** The scanner's cadence: five candidate minds a second until the match lands. */
+const SCAN_MS = 180;
+/** The silhouettes it flicks through while the seat still has no face. */
+const SCAN_FACES: ReadonlyArray<string> = ['#i-user', '#i-bot', '#i-users'];
+/** How often the arena trades its coaching line. */
+const TIP_MS = 4000;
+/**
+ * Every line here is a rule the board enforces: unlimited walls, the mine blast's
+ * knockback (`rules.ts`), the 8s blitz hand-off, and a log that is never telegraphed
+ * and locks input while it rolls (`hazards.ts`, `render.ts`).
+ */
+const TIPS: ReadonlyArray<string> = [
+  'Walls are unlimited — seal the lane your rival needs, not the one they are standing in.',
+  'A mine throws a ball straight down its column. Bury it where the rival must land.',
+  'The blitz clock moves for you after 8s, and its auto-move will walk into a mine.',
+  'Nothing warns you about the rolling log. Rounds 1 and 2 are always clean — cross early.',
+  'Input locks while a log rolls. Be where you want to be before the board starts to shake.',
+  'A horizontal wall shortens a mine blast: one under your own ball is cheap insurance.',
+];
+/** A win lands 120 and every finished race lands 20 — `myTiq()`'s own formula, per win. */
+const TIQ_PER_WIN = 120 + 20;
+/** The radii `worker/matchmaker.ts` filters on: tight until a seat asks for more. */
+const TIER_RADIUS = 250;
+const WIDE_RADIUS = 600;
 /** The impact animation that locks the rival in. */
 const IMPACT_MS = 300;
 /** The stage's own fade, which the board slides in behind. */
@@ -635,6 +724,7 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
   const youTiq = document.getElementById('mm-you-tiq') as HTMLElement | null;
   const rivalImg = document.getElementById('mm-rival-img') as HTMLImageElement | null;
   const rivalScan = document.getElementById('mm-rival-scan') as HTMLElement | null;
+  const scanGlyph = rivalScan?.querySelector('use') ?? null;
   const rivalT = document.getElementById('mm-rival-t') as HTMLElement | null;
   const rivalName = document.getElementById('mm-rival-name') as HTMLElement | null;
   const rivalTiq = document.getElementById('mm-rival-tiq') as HTMLElement | null;
@@ -645,6 +735,18 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
   const fallbackEl = document.getElementById('mm-fallback') as HTMLElement | null;
   const expandBtn = document.getElementById('mm-expand') as HTMLButtonElement | null;
   const practiceBtn = document.getElementById('mm-practice') as HTMLButtonElement | null;
+  const youTier = document.getElementById('mm-you-tier') as HTMLElement | null;
+  const rivalTier = document.getElementById('mm-rival-tier') as HTMLElement | null;
+  const youFlag = document.getElementById('mm-you-flag') as HTMLElement | null;
+  const rivalFlag = document.getElementById('mm-rival-flag') as HTMLElement | null;
+  const rangeChip = document.getElementById('mm-range') as HTMLElement | null;
+  const rangeVal = rangeChip?.querySelector('b') ?? null;
+  const tipEl = document.getElementById('mm-tip') as HTMLElement | null;
+  const stakeEls = {
+    tiq: document.getElementById('mm-stake-tiq') as HTMLElement | null,
+    gold: document.getElementById('mm-stake-gold') as HTMLElement | null,
+    season: document.getElementById('mm-stake-season') as HTMLElement | null,
+  };
 
   let source: MatchSource = init.source ?? simulatedSearch();
   let onMatchFound = init.onMatchFound;
@@ -652,12 +754,16 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
   let run = 0;
   let started = 0;
   let statusIdx = 0;
+  let tipIdx = 0;
+  let scanIdx = 0;
   let clockId = 0;
   let statusId = 0;
   let liveId = 0;
   let foundId = 0;
   let hideId = 0;
   let quietId = 0;
+  let scanId = 0;
+  let tipId = 0;
   /** How many times the player has widened this search: the second pass is a short re-roll. */
   let widenings = 0;
   let ctrl: AbortController | null = null;
@@ -673,9 +779,11 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
   function stopTimers(): void {
     window.clearInterval(clockId);
     window.clearInterval(statusId);
+    window.clearInterval(scanId);
+    window.clearInterval(tipId);
     window.clearTimeout(liveId);
     window.clearTimeout(quietId);
-    clockId = statusId = liveId = quietId = 0;
+    clockId = statusId = liveId = quietId = scanId = tipId = 0;
   }
 
   /** Back to the silhouette: the stage can be reopened without a stale rival in it. */
@@ -689,14 +797,18 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
       rivalImg.removeAttribute('src');
     }
     if (rivalName) rivalName.textContent = 'Scanning...';
+    if (rivalTier) rivalTier.textContent = 'Unknown';
     if (rivalTiq) rivalTiq.textContent = '—';
+    paintFlag(rivalFlag, null);
     rival?.setAttribute('aria-label', 'Waiting for an opponent');
     if (statusEl) {
       statusEl.classList.remove('swap');
       statusEl.textContent = STATUS[0];
     }
     if (elapsedEl) elapsedEl.textContent = '00:00';
+    setRange(false);
     statusIdx = 0;
+    scanIdx = 0;
     widenings = 0;
     clearQuiet();
     root?.classList.remove('is-found');
@@ -728,18 +840,40 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
     const tiq = myTiq();
     if (you) you.dataset.tier = tierOf(tiq);
     if (youName) youName.textContent = face.name;
-    if (youTiq) youTiq.textContent = String(tiq);
+    if (youTier) youTier.textContent = TIER_NAME[tierOf(tiq)];
+    if (youTiq) youTiq.textContent = tiq.toLocaleString('en-US');
     paintFace(youImg, youT, face);
+    paintFlag(youFlag, profile.country);
     you?.setAttribute('aria-label', `${face.name}, TIQ ${tiq}, ${TIER_NAME[tierOf(tiq)]}`);
   }
 
   function paintRival(o: OpponentData): void {
     if (rival) rival.dataset.tier = o.tier;
     if (rivalName) rivalName.textContent = o.name;
-    if (rivalTiq) rivalTiq.textContent = String(o.tiq);
+    if (rivalTier) rivalTier.textContent = TIER_NAME[o.tier];
+    if (rivalTiq) rivalTiq.textContent = o.tiq.toLocaleString('en-US');
     if (rivalScan) rivalScan.hidden = true;
     paintFace(rivalImg, rivalT, o);
+    paintFlag(rivalFlag, o.flag ?? null);
     rival?.setAttribute('aria-label', `${o.name}, TIQ ${o.tiq}, ${TIER_NAME[o.tier]}`);
+  }
+
+  /** The radius chip is the one number on the rail a widen actually moves. */
+  function setRange(wide: boolean): void {
+    if (rangeVal) rangeVal.textContent = wide ? `±${WIDE_RADIUS} WIDE` : `±${TIER_RADIUS}`;
+    rangeChip?.classList.toggle('is-wide', wide);
+  }
+
+  /** What a win is worth here, read off the same two formulas the settlement uses. */
+  function paintStakes(): void {
+    if (stakeEls.tiq) stakeEls.tiq.textContent = String(TIQ_PER_WIN);
+    if (stakeEls.gold) stakeEls.gold.textContent = String(payout({ difficulty: menuState.difficulty, won: true }));
+    /* the ladder's own capsule is the season's only source; it prints "S4 · 3d left" */
+    const season = /S\d+/.exec(domText('ranks-season', ''))?.[0] ?? '';
+    if (stakeEls.season) {
+      stakeEls.season.textContent = season;
+      stakeEls.season.closest('.mm-stakes-c')?.toggleAttribute('hidden', season === '');
+    }
   }
 
   /** One line of the sweep, with its own fade so two neighbours never cross-fade. */
@@ -750,6 +884,52 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
     statusEl.classList.remove('swap');
     void statusEl.offsetWidth;          // restarting the fade needs a reflow in between
     statusEl.classList.add('swap');
+  }
+
+  /**
+   * One tick of the neural scanner: a different candidate face, flag and TIQ every
+   * `SCAN_MS`, so the empty seat reads as a lock in progress rather than a wait.
+   * The numbers stay inside the radius this search is asking for. Reduced motion
+   * never starts it — the pod simply holds the ghost.
+   */
+  function scanTick(): void {
+    if (!rivalTiq) return;
+    scanIdx++;
+    const near = pickRival(myTiq(), widenings > 0);
+    const roll = Math.max(0, near.tiq + Math.round((Math.random() - 0.5) * 260));
+    rivalTiq.textContent = roll.toLocaleString('en-US');
+    paintFlag(rivalFlag, RIVALS[scanIdx % RIVALS.length].flag);
+    scanGlyph?.setAttribute('href', SCAN_FACES[scanIdx % SCAN_FACES.length]);
+  }
+
+  /** The tip ticker: one coaching line at a time, traded every `TIP_MS`. */
+  function cycleTip(): void {
+    if (!tipEl) return;
+    tipIdx = (tipIdx + 1) % TIPS.length;
+    tipEl.textContent = TIPS[tipIdx];
+    if (motionReduced()) return;
+    tipEl.classList.remove('swap');
+    void tipEl.offsetWidth;
+    tipEl.classList.add('swap');
+  }
+
+  /**
+   * A queue that has gone quiet has no candidates to lock onto, so the scanner stops
+   * inventing them: the ghost and the dash come back, and the widen earns them again.
+   */
+  function startScan(): void {
+    window.clearInterval(scanId);
+    scanId = 0;
+    if (motionReduced()) return;
+    scanId = window.setInterval(scanTick, SCAN_MS);
+  }
+
+  function stopScan(): void {
+    window.clearInterval(scanId);
+    scanId = 0;
+    if (rivalTiq) rivalTiq.textContent = '—';
+    paintFlag(rivalFlag, null);
+    scanGlyph?.setAttribute('href', SCAN_FACES[0]);
   }
 
   function cycleStatus(): void {
@@ -776,6 +956,7 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
     quietId = window.setTimeout(() => {
       if (state !== 'searching') return;
       stopCycling();
+      stopScan();
       setStatus('Queue is quiet — widen the search?');
       if (fallbackEl) {
         fallbackEl.hidden = false;
@@ -806,11 +987,13 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
     impact('light');
     widenings += 1;
     clearQuiet();
+    setRange(true);
     ctrl?.abort();                       // the abandoned attempt must not answer into this one
     ctrl = new AbortController();
     const id = ++run;
     setStatus(widenings > 1 ? 'Second pass — every mind is fair game...' : 'Expanding search radius...');
     startCycling();
+    startScan();
     if (liveEl) liveEl.textContent = 'Search widened — looking beyond your tier';
     const src = init.source ?? simulatedSearch(widenings > 1 ? WIDE_AGAIN_MS : WIDE_MS);
     queue(id, src, init.source ? 1 : 0, true);
@@ -898,7 +1081,14 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
       if (elapsedEl) elapsedEl.textContent = clock(performance.now() - started);
     }, 500);
     startCycling();
+    startScan();
     armQuiet();
+    paintStakes();
+    /* the tip ticker restarts from the top with every search, so a reopen never shows a stale line */
+    tipIdx = 0;
+    if (tipEl) tipEl.textContent = TIPS[0];
+    window.clearInterval(tipId);
+    tipId = window.setInterval(cycleTip, TIP_MS);
 
     /* announced after the region is live, so a screen reader hears it once */
     if (liveEl) liveEl.textContent = '';
