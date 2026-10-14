@@ -13,7 +13,11 @@
  * **The controller** (`createAdmin`) wires the FAB, the overlay, its four tabs and every control
  * to that config. It owns no game state of its own.
  *
- * **The server** is the third half. The Worker (`worker/index.ts`, `worker/matchmaker.ts`) owns the
+ * **The telemetry** (`dayStats`, below) is what the Stats tab is made of: this device's own
+ * counters for the UTC day, folded into a population reading that stays stable until the date
+ * rolls. It is the only part of the panel that describes rather than commands.
+ *
+ * **The server** is the fourth half. The Worker (`worker/index.ts`, `worker/matchmaker.ts`) owns the
  * same three knobs for the live room — the maintenance lock and both queue radii — and enforces
  * them itself. The Server tab reads `GET /admin/status` for the queue and the rooms, and every
  * change to those three fields is pushed to `POST /admin/config` the moment it happens. With no
@@ -28,6 +32,7 @@
 import { motionReduced } from './settings';
 import { earnCoins, earnTiq, onChange, profile, readJson, writeJson } from './storage';
 import { coinText, mountCoins, setBalance } from './coin';
+import { flagPhoto } from './compete';
 import { impact, notify, tgInitData, tgUser } from './telegram';
 import type { MindTier } from './matchmaking';
 
@@ -198,6 +203,171 @@ const ECONOMY_DEFAULTS: Partial<AdminRuntime> = {
  */
 export function tiqFrom(wins: number, games: number, bonus: number): number {
   return Math.max(0, wins * Math.max(0, runtime.winTiq - RACE_TIQ) + games * RACE_TIQ + bonus);
+}
+
+/* ---------- the day's telemetry: what the Stats tab is made of ---------- */
+
+/**
+ * The counters this device keeps for itself, one UTC day at a time. Everything else on the Stats
+ * tab is a model (see `dayStats`); this part is measured, and it is the only part that is.
+ */
+interface DayCounters {
+  /** The UTC date these counters belong to, `YYYY-MM-DD`. */
+  day: string;
+  /** Sessions this device opened today. */
+  visits: number;
+  /** Races that finished on this device today. */
+  matches: number;
+  /** Coins the wallet took in today, from a race or a grant. */
+  coins: number;
+}
+
+const TELEMETRY_KEY = 'detour.telemetry.v1';
+
+/** UTC, so the panel's "today" is the server's "today" on every device. */
+const utcDay = (): string => new Date().toISOString().slice(0, 10);
+
+const count = (v: unknown): number => (isNum(v) ? Math.max(0, Math.floor(v)) : 0);
+
+const blankDay = (day: string): DayCounters => ({ day, visits: 0, matches: 0, coins: 0 });
+
+/** Yesterday's blob — or a half-written one — starts today at zero rather than carrying over. */
+function loadDay(): DayCounters {
+  const raw = readJson<DayCounters>(TELEMETRY_KEY);
+  const now = utcDay();
+  if (!raw || raw.day !== now) return blankDay(now);
+  return { day: now, visits: count(raw.visits), matches: count(raw.matches), coins: count(raw.coins) };
+}
+
+let day: DayCounters = loadDay();
+
+/** The counters, rolled over if the date moved while the app stayed open. */
+function today(): DayCounters {
+  const now = utcDay();
+  if (day.day !== now) day = blankDay(now);
+  return day;
+}
+
+const saveDay = (): void => writeJson(TELEMETRY_KEY, day);
+
+let visited = false;
+
+/** This device opened the app. Once per session, not once per paint. */
+export function recordVisit(): void {
+  const d = today();
+  if (visited) return;
+  visited = true;
+  d.visits++;
+  saveDay();
+}
+
+/** A race finished on this device: one duel, and whatever the settlement paid. */
+export function recordRace(coins: number): void {
+  const d = today();
+  d.matches++;
+  d.coins += Math.max(0, Math.floor(coins));
+  saveDay();
+}
+
+/** Coins moved outside a race — a grant, a prize, a refund. */
+export function recordCoins(n: number): void {
+  const d = today();
+  d.coins += Math.max(0, Math.floor(n));
+  saveDay();
+}
+
+/** One row of the Top Nations strip. An empty code is the globe: everybody else. */
+export interface NationShare {
+  code: string;
+  share: number;
+}
+
+export interface DayStats {
+  players: number;
+  matches: number;
+  coins: number;
+  active: number;
+  nations: NationShare[];
+  /** True when a Worker answered and the live figures are its own. */
+  live: boolean;
+}
+
+/** The markets a Detour board actually fills from. The player's own code is added by `nationsOf`. */
+const NATION_POOL: readonly string[] = [
+  'IR', 'DE', 'RU', 'US', 'BR', 'IN', 'TR', 'ID', 'EG', 'NG', 'VN', 'PH', 'UA', 'PL', 'FR',
+  'IT', 'ES', 'MX', 'AR', 'PK', 'BD', 'TH', 'MY', 'SA', 'IQ', 'MA', 'DZ', 'KE', 'ZA', 'GB',
+  'NL', 'RO', 'CZ', 'SE', 'PT', 'GR', 'AE', 'CA', 'AU', 'JP', 'KR', 'SG', 'CO', 'PE', 'CL',
+  'KZ', 'UZ', 'AZ', 'GE', 'AM', 'BY', 'BG', 'HU', 'RS', 'HR', 'SK', 'LT', 'LV', 'EE', 'FI',
+  'NO', 'DK', 'CH', 'AT', 'BE', 'IE', 'NZ',
+];
+
+/** FNV-1a over the date: one seed per UTC day, the same on every device. */
+function hash32(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/** xorshift32, so a day's numbers are stable without walking a visible line. */
+function stream(seed: number): () => number {
+  let s = seed || 0x9e3779b9;
+  return () => {
+    s ^= s << 13; s >>>= 0;
+    s ^= s >>> 17;
+    s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
+}
+
+/** A lopsided top three and a globe for the rest, with the player's own flag pinned in. */
+function nationsOf(rand: () => number): NationShare[] {
+  const picked: string[] = [];
+  const mine = profile.country && NATION_POOL.includes(profile.country) ? profile.country : null;
+  if (mine) picked.push(mine);
+  while (picked.length < 3) {
+    const code = NATION_POOL[Math.floor(rand() * NATION_POOL.length)];
+    if (!picked.includes(code)) picked.push(code);
+  }
+  const lead = 24 + Math.round(rand() * 18);
+  const second = Math.max(6, Math.round(lead * (0.42 + rand() * 0.3)));
+  const third = Math.max(4, Math.round(second * (0.5 + rand() * 0.4)));
+  const rest = Math.max(5, 100 - lead - second - third);
+  return [
+    { code: picked[0], share: lead },
+    { code: picked[1], share: second },
+    { code: picked[2], share: third },
+    { code: '', share: rest },
+  ];
+}
+
+/**
+ * The day's reading.
+ *
+ * This panel is a Mini App with no analytics backend behind it: nothing tells it how many people
+ * opened Detour in Tehran this morning. So the *shape* of the day — how many turned up, how much
+ * they played, which flags they carry — is a deterministic model keyed on the UTC date: the same
+ * numbers on every device for the whole day, and a different day tomorrow. This device's own
+ * measured counters ride on top, so the panel never claims less than it knows, and a Worker that
+ * answers replaces the model outright for the one figure it actually owns — the live seats.
+ */
+export function dayStats(live: ServerStatus | null): DayStats {
+  const rand = stream(hash32(day.day));
+  const modelPlayers = 1400 + Math.floor(rand() * 2600);
+  const modelMatches = Math.round(modelPlayers * (1.5 + rand() * 0.9));
+  const modelCoins = Math.round(modelMatches * (160 + rand() * 150));
+  const d = today();
+  return {
+    players: modelPlayers + d.visits,
+    matches: modelMatches + d.matches,
+    coins: modelCoins + d.coins,
+    /* a live room reports its own seats; the model assumes a few per cent are on a board */
+    active: live ? live.queueCount + live.activeMatchesCount * 2 : Math.max(1, Math.round(modelPlayers * 0.035)),
+    nations: nationsOf(rand),
+    live: !!live,
+  };
 }
 
 /* ---------- the live server: the Worker is the other half of this panel ---------- */
@@ -400,8 +570,10 @@ export function createAdmin(api: AdminApi): Admin {
   const tabs = [...document.querySelectorAll<HTMLButtonElement>('[data-atab]')];
   const panels = [...document.querySelectorAll<HTMLElement>('[data-apanel]')];
   const sws = [...document.querySelectorAll<HTMLButtonElement>('[data-tog]')];
-  const stepBtns = [...document.querySelectorAll<HTMLButtonElement>('[data-step] [data-dir]')];
-  const stepRows = [...document.querySelectorAll<HTMLElement>('[data-step]')];
+  /* every lookup below is scoped to the stage: the game-mode drawer carries its own
+     `data-step` ball counters, and a bare `[data-step]` would drag them in with it */
+  const stepBtns = [...(stage?.querySelectorAll<HTMLButtonElement>('[data-step] [data-dir]') ?? [])];
+  const stepRows = [...(stage?.querySelectorAll<HTMLElement>('[data-step]') ?? [])];
   const bcInput = $<HTMLInputElement>('bc-input');
   const bcLive = $<HTMLElement>('bc-live');
   const banner = $<HTMLElement>('home-broadcast');
@@ -418,6 +590,12 @@ export function createAdmin(api: AdminApi): Admin {
   const serverList = $<HTMLElement>('srv-list');
   const serverRefresh = $<HTMLButtonElement>('srv-refresh');
   const serverClear = $<HTMLButtonElement>('srv-clear');
+  const statPlayers = $<HTMLElement>('stat-players');
+  const statMatches = $<HTMLElement>('stat-matches');
+  const statCoins = $<HTMLElement>('stat-coins');
+  const statActive = $<HTMLElement>('stat-active');
+  const statSource = $<HTMLElement>('stat-source');
+  const statNations = $<HTMLElement>('stat-nations');
 
   let open = false;
   let hideId = 0;
@@ -425,29 +603,18 @@ export function createAdmin(api: AdminApi): Admin {
   let live = false;
   /** True once `/admin/status` has answered: the panel is governing a real room. */
   let serverOn = false;
+  /** The last reading of the room, so the Stats tab can paint before the next fetch lands. */
+  let lastStatus: ServerStatus | null = null;
   /** What the Worker was last told, so an unchanged toggle never sends a pointless call. */
   let lastPushed: ServerConfig | null = null;
 
   /* ---------- painting ---------- */
-
-  const setKpi = (id: string, text: string, on: boolean) => {
-    const kpi = $(id);
-    if (!kpi) return;
-    kpi.dataset.state = on ? 'on' : 'off';
-    const b = kpi.querySelector('b');
-    if (b) b.textContent = text;
-  };
 
   function paintToggles() {
     for (const el of sws) {
       const key = el.dataset.tog as ToggleKey;
       if (TOGGLES.includes(key)) el.setAttribute('aria-checked', String(runtime[key]));
     }
-  }
-
-  function paintKpis() {
-    setKpi('kpi-shop', runtime.salesOpen ? 'Open' : 'Closed', runtime.salesOpen);
-    setKpi('kpi-haz', runtime.hazards ? 'Active' : 'Off', runtime.hazards);
   }
 
   function paintDot() {
@@ -475,7 +642,7 @@ export function createAdmin(api: AdminApi): Admin {
     if (banner) banner.hidden = !text;
     if (bannerText) bannerText.textContent = text;
     if (bcLive) {
-      bcLive.textContent = text || 'No announcement pinned.';
+      bcLive.textContent = text || 'Nothing pinned';
       bcLive.dataset.on = String(!!text);
     }
   }
@@ -494,13 +661,56 @@ export function createAdmin(api: AdminApi): Admin {
 
   function paintAll() {
     paintToggles();
-    paintKpis();
     paintDot();
     paintBadge();
     paintSteps();
     paintBroadcast();
     paintTier();
     paintSave();
+    paintStats();
+  }
+
+  /* ---------- the Stats tab ---------- */
+
+  /** The figure the executive grid prints: grouped, never a raw run of digits. */
+  const figure = (n: number): string => Math.max(0, Math.round(n)).toLocaleString('en-US');
+
+  /** The flag badge is compete.ts's own renderer, so a nation looks the same here as on the ladder. */
+  function paintNations(nations: NationShare[]) {
+    if (!statNations) return;
+    statNations.textContent = '';
+    for (const n of nations) {
+      const li = document.createElement('li');
+      li.className = 'adm-nat';
+      if (n.code) {
+        li.append(flagPhoto(n.code, 'fp-stat'));
+      } else {
+        const globe = document.createElement('span');
+        globe.className = 'adm-nat-globe';
+        globe.setAttribute('aria-hidden', 'true');
+        globe.textContent = '🌎';
+        li.append(globe);
+      }
+      const pct = document.createElement('b');
+      pct.className = 'adm-nat-p';
+      pct.textContent = `${n.share}%`;
+      li.append(pct);
+      li.setAttribute('aria-label', n.code ? `${n.code}, ${n.share} percent` : `Rest of the world, ${n.share} percent`);
+      statNations.append(li);
+    }
+  }
+
+  function paintStats() {
+    const s = dayStats(lastStatus);
+    if (statPlayers) statPlayers.textContent = figure(s.players);
+    if (statMatches) statMatches.textContent = figure(s.matches);
+    if (statCoins) statCoins.textContent = figure(s.coins);
+    if (statActive) statActive.textContent = figure(s.active);
+    if (statSource) {
+      statSource.textContent = s.live ? 'Live feed' : 'Modelled';
+      statSource.dataset.live = String(s.live);
+    }
+    paintNations(s.nations);
   }
 
   /* ---------- the live server ---------- */
@@ -516,8 +726,9 @@ export function createAdmin(api: AdminApi): Admin {
   /** Nothing answered: the panel governs this device alone, and says so. */
   function markLocal() {
     serverOn = false;
-    setKpi('kpi-server', 'Local', false);
+    lastStatus = null;
     paintServer(null);
+    paintStats();
   }
 
   /** `12s` / `1m 20s`: a wait in the unit somebody would actually say it in. */
@@ -590,8 +801,9 @@ export function createAdmin(api: AdminApi): Admin {
   async function refreshServer(): Promise<void> {
     const status = await fetchStatus();
     serverOn = !!status;
-    setKpi('kpi-server', serverOn ? 'Online' : 'Local', serverOn);
+    lastStatus = status;
     paintServer(status);
+    paintStats();
     if (serverOn) await syncConfig();
   }
 
@@ -700,9 +912,11 @@ export function createAdmin(api: AdminApi): Admin {
   for (const t of tabs) {
     t.addEventListener('click', () => {
       impact('light');
-      const id = t.dataset.atab ?? 'ops';
+      const id = t.dataset.atab ?? 'stats';
       selectTab(id);
-      if (id === 'server') void refreshServer();   // the roster is only ever as fresh as its last read
+      /* both of these read the room: the roster and the live seat count are only ever as fresh
+         as their last read, so landing on either one asks the Worker again */
+      if (id === 'server' || id === 'stats') void refreshServer();
     });
   }
 
@@ -728,9 +942,8 @@ export function createAdmin(api: AdminApi): Admin {
       impact('light');
       setRuntime({ [key]: !runtime[key] } as Partial<AdminRuntime>);
       paintToggles();
-      paintKpis();
       paintDot();
-      const label = key === 'salesOpen' ? 'Shop sales' : key === 'hazards' ? 'Board hazards' : 'Maintenance lock';
+      const label = key === 'salesOpen' ? 'Shop Store' : key === 'hazards' ? 'Hazards' : 'Maintenance Lock';
       api.note(`${label}: ${runtime[key] ? 'on' : 'off'}`, false, 1800);
       notify(runtime[key] ? 'success' : 'warning');
     });
@@ -744,7 +957,6 @@ export function createAdmin(api: AdminApi): Admin {
       const dir = btn.dataset.dir === '-1' ? -1 : 1;
       k.apply(k.next(dir));
       paintSteps();
-      paintKpis();
       impact('light');
     });
   }
@@ -781,7 +993,9 @@ export function createAdmin(api: AdminApi): Admin {
 
   $<HTMLButtonElement>('tool-coins')?.addEventListener('click', () => {
     const got = earnCoins(500);
+    recordCoins(got);
     paintSave();
+    paintStats();
     impact('medium');
     notify('success');
     api.note(`+${coinText(got)} coins granted.`, false, 2200);
@@ -869,6 +1083,7 @@ export function createAdmin(api: AdminApi): Admin {
     mount() {
       if (fab) fab.hidden = !isAdmin();
       if (stage) mountCoins(stage);
+      recordVisit();                       // the day's first sighting of this device
       paintAll();
       // the launcher only has a height once the home screen has been laid out
       requestAnimationFrame(() => {

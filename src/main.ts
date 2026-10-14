@@ -27,7 +27,7 @@ import { impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
 import { getGameMode, gmBack, initGameModes, setGameMode } from './gamemodes';
 import { createMatchmaking, myTier, onlineRace, onlineSearch, type OnlineSession, type RaceEnd } from './matchmaking';
-import { createAdmin, onRuntime, runtime, type Admin } from './admin';
+import { createAdmin, onRuntime, recordRace, runtime, type Admin } from './admin';
 
 initTelegram();
 applyFlagSupport();
@@ -477,6 +477,7 @@ function showOverlay() {
   /* one credit per finished race: showOverlay only runs once per game over. The Admin Command
      Center's Double-Coins multiplier scales what the settlement pays. */
   const earned = recordGame({ difficulty, won }, runtime.coinMult);
+  recordRace(earned);                   // the Command Center's Stats tab counts the day's duels
   setBalance(rewardN, 0);                 // every payout counts up from zero
   setBalance(rewardN, earned);
   reward.hidden = false;

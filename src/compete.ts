@@ -291,7 +291,7 @@ const FLAG_PNG = (cc: string): string => `https://flagcdn.com/w80/${cc}.png`;
  * slow or blocked CDN shows a legible code instead of a hole, and a failure needs
  * no layout pass. Every image is lazy and decoded async.
  */
-function flagPhoto(code: string | null, cls: string): HTMLElement {
+export function flagPhoto(code: string | null, cls: string): HTMLElement {
   const wrap = document.createElement('span');
   wrap.className = `fp ${cls}`;
   wrap.setAttribute('aria-hidden', 'true');

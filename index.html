@@ -1137,8 +1137,9 @@
       <div class="scrim" id="scrim" hidden></div>
 
       <!-- ============ Admin Command Center (src/admin.ts) ============
-           A full-viewport Dark Clay stage: extruded slabs, engraved kicker, zero
-           backdrop-filter. Every control is at least 48px. -->
+           A full-viewport Dark Clay stage in four tabs: the Stats dashboard,
+           the live Controls, the Worker and the Tools. Opaque slabs, extruded
+           depth, engraved kicker, zero backdrop-filter, every control >= 48px. -->
       <section class="admin" id="overlay-admin" hidden role="dialog" aria-modal="true" aria-labelledby="admin-title">
         <header class="admin-head">
           <div class="admin-head-txt">
@@ -1152,80 +1153,93 @@
         </header>
 
         <div class="admin-tabs" role="tablist" aria-label="Command Center sections">
-          <button class="admin-tab" type="button" role="tab" id="atab-ops" data-atab="ops"
-            aria-selected="true" aria-controls="apanel-ops">Live Ops</button>
-          <button class="admin-tab" type="button" role="tab" id="atab-econ" data-atab="econ"
-            aria-selected="false" aria-controls="apanel-econ">Economy &amp; Rules</button>
-          <button class="admin-tab" type="button" role="tab" id="atab-tools" data-atab="tools"
-            aria-selected="false" aria-controls="apanel-tools">Quick Tools</button>
+          <button class="admin-tab" type="button" role="tab" id="atab-stats" data-atab="stats"
+            aria-selected="true" aria-controls="apanel-stats"><span class="admin-tab-g" aria-hidden="true">📊</span>Stats</button>
+          <button class="admin-tab" type="button" role="tab" id="atab-controls" data-atab="controls"
+            aria-selected="false" aria-controls="apanel-controls"><span class="admin-tab-g" aria-hidden="true">⚙️</span>Controls</button>
           <button class="admin-tab" type="button" role="tab" id="atab-server" data-atab="server"
-            aria-selected="false" aria-controls="apanel-server">Server</button>
+            aria-selected="false" aria-controls="apanel-server"><span class="admin-tab-g" aria-hidden="true">☁️</span>Server</button>
+          <button class="admin-tab" type="button" role="tab" id="atab-tools" data-atab="tools"
+            aria-selected="false" aria-controls="apanel-tools"><span class="admin-tab-g" aria-hidden="true">🛠️</span>Tools</button>
         </div>
 
         <div class="admin-body" data-scroll tabindex="0">
 
-          <!-- ---------- tab 1: live ops ---------- -->
-          <div class="admin-panel" data-apanel="ops" id="apanel-ops" role="tabpanel" aria-labelledby="atab-ops">
-            <div class="adm-kpis">
-              <span class="adm-kpi" id="kpi-shop" data-state="off"><span class="adm-kpi-l">Shop</span><b>Closed</b></span>
-              <span class="adm-kpi" id="kpi-haz" data-state="on"><span class="adm-kpi-l">Hazards</span><b>Active</b></span>
-              <span class="adm-kpi" id="kpi-server" data-state="off"><span class="adm-kpi-l">Server</span><b>Local</b></span>
+          <!-- ---------- Stats: the day's telemetry, and the landing tab ---------- -->
+          <div class="admin-panel" data-apanel="stats" id="apanel-stats" role="tabpanel" aria-labelledby="atab-stats">
+            <div class="adm-grid">
+              <div class="adm-card">
+                <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-users" /></svg></span>
+                <b class="adm-card-v" id="stat-players">—</b>
+                <span class="adm-card-l">Players Today</span>
+              </div>
+              <div class="adm-card">
+                <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
+                <b class="adm-card-v" id="stat-matches">—</b>
+                <span class="adm-card-l">Matches Today</span>
+              </div>
+              <div class="adm-card">
+                <span class="adm-card-i" aria-hidden="true"><span class="coin" data-coin></span></span>
+                <b class="adm-card-v" id="stat-coins">—</b>
+                <span class="adm-card-l">Coin Volume</span>
+              </div>
+              <div class="adm-card">
+                <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-bolt" /></svg></span>
+                <b class="adm-card-v" id="stat-active">—</b>
+                <span class="adm-card-l">Active Now</span>
+              </div>
             </div>
 
-            <p class="adm-sec-h">Master switches</p>
+            <div class="adm-nations">
+              <div class="adm-nations-h">
+                <span class="adm-nations-t">Top Nations</span>
+                <span class="adm-nations-s" id="stat-source" data-live="false">Modelled</span>
+              </div>
+              <ul class="adm-nations-list" id="stat-nations" aria-label="Top player countries"></ul>
+            </div>
+          </div>
+
+          <!-- ---------- Controls: the live switches, the broadcast, the tuning ---------- -->
+          <div class="admin-panel" data-apanel="controls" id="apanel-controls" role="tabpanel"
+            aria-labelledby="atab-controls" hidden>
+            <p class="adm-sec-h">Live switches</p>
             <div class="adm-list">
               <button class="adm-sw" type="button" role="switch" data-tog="salesOpen" aria-checked="false"
-                aria-label="Shop Sales Enabled">
-                <span class="adm-sw-txt">
-                  <span class="adm-sw-t">Shop Sales Enabled</span>
-                  <span class="adm-sw-s">Switch the Shop between the closed showcase and full Buy</span>
-                </span>
+                aria-label="Shop Store">
+                <span class="adm-sw-i" aria-hidden="true"><svg class="ico"><use href="#i-bag" /></svg></span>
+                <span class="adm-sw-t">Shop Store</span>
                 <span class="adm-knob" aria-hidden="true"><i></i></span>
               </button>
               <button class="adm-sw" type="button" role="switch" data-tog="hazards" aria-checked="true"
-                aria-label="Board Hazards, rolling log and mines">
-                <span class="adm-sw-txt">
-                  <span class="adm-sw-t">Board Hazards</span>
-                  <span class="adm-sw-s">Rolling log and mines on upcoming boards</span>
-                </span>
+                aria-label="Hazards">
+                <span class="adm-sw-i" aria-hidden="true"><svg class="ico"><use href="#i-mine" /></svg></span>
+                <span class="adm-sw-t">Hazards</span>
                 <span class="adm-knob" aria-hidden="true"><i></i></span>
               </button>
               <button class="adm-sw" type="button" role="switch" data-tog="maintenance" aria-checked="false"
                 aria-label="Maintenance Lock">
-                <span class="adm-sw-txt">
-                  <span class="adm-sw-t">Maintenance Lock</span>
-                  <span class="adm-sw-s">Block new match queues with a maintenance notice</span>
-                </span>
+                <span class="adm-sw-i" aria-hidden="true"><svg class="ico"><use href="#i-lock" /></svg></span>
+                <span class="adm-sw-t">Maintenance Lock</span>
                 <span class="adm-knob" aria-hidden="true"><i></i></span>
               </button>
             </div>
 
-            <p class="adm-sec-h">Global broadcast</p>
+            <p class="adm-sec-h">Broadcast<span class="adm-bc-live" id="bc-live" data-on="false">Nothing pinned</span></p>
             <div class="adm-bc">
               <label class="adm-field">
-                <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
+                <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
                 <input id="bc-input" class="adm-input" type="text" maxlength="140" autocomplete="off"
-                  spellcheck="false" placeholder="Season 4 tournament starts at 20:00 UTC!"
+                  spellcheck="false" placeholder="Season 4 starts at 20:00 UTC"
                   aria-label="Broadcast message" />
               </label>
-              <div class="adm-bc-actions">
-                <button class="adm-btn adm-btn-primary" type="button" id="bc-publish">Publish</button>
-                <button class="adm-btn" type="button" id="bc-clear">Clear</button>
-              </div>
-              <p class="adm-bc-live" id="bc-live" data-on="false">No announcement pinned.</p>
+              <button class="adm-btn adm-btn-primary" type="button" id="bc-publish">Send</button>
+              <button class="adm-btn" type="button" id="bc-clear">Clear</button>
             </div>
-          </div>
 
-          <!-- ---------- tab 2: economy & rules ---------- -->
-          <div class="admin-panel" data-apanel="econ" id="apanel-econ" role="tabpanel"
-            aria-labelledby="atab-econ" hidden>
-            <p class="adm-sec-h">TIQ &amp; coins</p>
-            <div class="adm-list">
-              <div class="adm-steps" data-step="tiq">
-                <span class="adm-steps-t">
-                  <span class="adm-steps-n">Win TIQ Reward</span>
-                  <span class="adm-steps-s">Ladder credit per win · step 10</span>
-                </span>
+            <p class="adm-sec-h">Economy &amp; rules</p>
+            <div class="adm-tunes">
+              <div class="adm-tune" data-step="tiq">
+                <span class="adm-tune-n">Win TIQ</span>
                 <span class="adm-steps-c">
                   <button class="adm-step" type="button" data-dir="-1" aria-label="Decrease Win TIQ Reward">
                     <svg class="ico" aria-hidden="true"><use href="#i-minus" /></svg>
@@ -1236,11 +1250,8 @@
                   </button>
                 </span>
               </div>
-              <div class="adm-steps" data-step="coin">
-                <span class="adm-steps-t">
-                  <span class="adm-steps-n">Win Coin Payout Multiplier</span>
-                  <span class="adm-steps-s">Double-coins event · 1.0x / 1.5x / 2.0x</span>
-                </span>
+              <div class="adm-tune" data-step="coin">
+                <span class="adm-tune-n">Coins</span>
                 <span class="adm-steps-c">
                   <button class="adm-step" type="button" data-dir="-1" aria-label="Lower coin payout multiplier">
                     <svg class="ico" aria-hidden="true"><use href="#i-minus" /></svg>
@@ -1251,15 +1262,8 @@
                   </button>
                 </span>
               </div>
-            </div>
-
-            <p class="adm-sec-h">Matchmaking</p>
-            <div class="adm-list">
-              <div class="adm-steps" data-step="blitz">
-                <span class="adm-steps-t">
-                  <span class="adm-steps-n">Blitz Turn Timer</span>
-                  <span class="adm-steps-s">Seconds before the auto-move · 10s / 15s / 20s</span>
-                </span>
+              <div class="adm-tune" data-step="blitz">
+                <span class="adm-tune-n">Blitz</span>
                 <span class="adm-steps-c">
                   <button class="adm-step" type="button" data-dir="-1" aria-label="Shorten blitz turn timer">
                     <svg class="ico" aria-hidden="true"><use href="#i-minus" /></svg>
@@ -1270,11 +1274,8 @@
                   </button>
                 </span>
               </div>
-              <div class="adm-steps" data-step="radius-normal">
-                <span class="adm-steps-t">
-                  <span class="adm-steps-n">Normal Queue TIQ Radius</span>
-                  <span class="adm-steps-s">Pairing band · step 50</span>
-                </span>
+              <div class="adm-tune" data-step="radius-normal">
+                <span class="adm-tune-n">Queue Normal</span>
                 <span class="adm-steps-c">
                   <button class="adm-step" type="button" data-dir="-1" aria-label="Narrow the normal queue radius">
                     <svg class="ico" aria-hidden="true"><use href="#i-minus" /></svg>
@@ -1285,11 +1286,8 @@
                   </button>
                 </span>
               </div>
-              <div class="adm-steps" data-step="radius-wide">
-                <span class="adm-steps-t">
-                  <span class="adm-steps-n">Wide Queue TIQ Radius</span>
-                  <span class="adm-steps-s">Relaxed band after a widen · step 50</span>
-                </span>
+              <div class="adm-tune" data-step="radius-wide">
+                <span class="adm-tune-n">Queue Wide</span>
                 <span class="adm-steps-c">
                   <button class="adm-step" type="button" data-dir="-1" aria-label="Narrow the wide queue radius">
                     <svg class="ico" aria-hidden="true"><use href="#i-minus" /></svg>
@@ -1300,45 +1298,16 @@
                   </button>
                 </span>
               </div>
-            </div>
-
-            <button class="adm-btn adm-btn-wide" type="button" id="econ-reset">Reset to Defaults</button>
-          </div>
-
-          <!-- ---------- tab 3: quick tools ---------- -->
-          <div class="admin-panel" data-apanel="tools" id="apanel-tools" role="tabpanel"
-            aria-labelledby="atab-tools" hidden>
-            <p class="adm-sec-h">Instant grants</p>
-            <div class="adm-tools">
-              <button class="adm-tool" type="button" id="tool-coins">
-                <span class="adm-tool-t">+500 Coins</span>
-                <span class="adm-tool-now"><span class="coin" data-coin aria-hidden="true"></span><b id="tool-coins-now">0</b></span>
-              </button>
-              <button class="adm-tool" type="button" id="tool-tiq">
-                <span class="adm-tool-t">+200 TIQ</span>
-                <span class="adm-tool-now"><svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg><b id="tool-tiq-now">0</b></span>
+              <button class="adm-tune adm-tune-key" type="button" id="econ-reset">
+                <span class="adm-tune-n">Economy</span>
+                <span class="adm-tune-b">Reset Defaults</span>
               </button>
             </div>
-
-            <p class="adm-sec-h">Mind tier preview</p>
-            <div class="adm-tier">
-              <span class="adm-tier-ring" id="tool-tier-ring" data-tier="rookie" aria-hidden="true"></span>
-              <span class="adm-tier-txt">
-                <b id="tool-tier-label">Rookie · from TIQ</b>
-                <span class="adm-steps-s">Rookie → Tactician → Strategist → Grandmaster</span>
-              </span>
-              <button class="adm-btn" type="button" id="tool-tier">Cycle Mind Tier</button>
-            </div>
-
-            <p class="adm-sec-h">Danger zone</p>
-            <button class="adm-btn adm-btn-danger adm-btn-wide" type="button" id="tool-reset">Reset Local Save</button>
-            <p class="adm-note">Two taps: the second wipes coins, items, stats, teams and settings on this device.</p>
           </div>
 
-          <!-- ---------- tab 4: the live server ---------- -->
+          <!-- ---------- Server: the Worker behind the room ---------- -->
           <div class="admin-panel" data-apanel="server" id="apanel-server" role="tabpanel"
             aria-labelledby="atab-server" hidden>
-            <p class="adm-sec-h">Live server</p>
             <div class="adm-server" id="adm-server" data-state="local">
               <div class="adm-server-head">
                 <span class="adm-server-t">Matchmaking backend</span>
@@ -1360,9 +1329,38 @@
                 <button class="adm-btn adm-btn-danger" type="button" id="srv-clear">Clear Queue</button>
               </div>
             </div>
-            <p class="adm-note">Maintenance Lock and both queue radii are pushed to the Worker the
-              moment they change. With no Worker behind the page, the panel stays in Local mode and
-              every control still governs this device.</p>
+            <p class="adm-note">Maintenance Lock and both queue radii reach the Worker the moment
+              they move. With nothing answering, the panel governs this device alone.</p>
+          </div>
+
+          <!-- ---------- Tools: grants, the ladder preview, the two resets ---------- -->
+          <div class="admin-panel" data-apanel="tools" id="apanel-tools" role="tabpanel"
+            aria-labelledby="atab-tools" hidden>
+            <div class="adm-tools">
+              <button class="adm-tool" type="button" id="tool-coins">
+                <span class="adm-tool-i" aria-hidden="true"><span class="coin" data-coin></span></span>
+                <b class="adm-tool-v" id="tool-coins-now">0</b>
+                <span class="adm-tool-t">+500 Coins</span>
+              </button>
+              <button class="adm-tool" type="button" id="tool-tiq">
+                <span class="adm-tool-i" aria-hidden="true"><svg class="ico"><use href="#i-brain" /></svg></span>
+                <b class="adm-tool-v" id="tool-tiq-now">0</b>
+                <span class="adm-tool-t">+200 TIQ</span>
+              </button>
+            </div>
+
+            <div class="adm-tier">
+              <span class="adm-tier-ring" id="tool-tier-ring" data-tier="rookie" aria-hidden="true"></span>
+              <span class="adm-tier-txt">
+                <b id="tool-tier-label">Rookie · from TIQ</b>
+                <span class="adm-tier-s">Rookie → Grandmaster</span>
+              </span>
+              <button class="adm-btn" type="button" id="tool-tier" aria-label="Cycle the Mind tier preview">Cycle</button>
+            </div>
+
+            <p class="adm-sec-h">Danger zone</p>
+            <button class="adm-btn adm-btn-danger adm-btn-wide" type="button" id="tool-reset">Reset Local Save</button>
+            <p class="adm-note">Two taps: the second wipes coins, items, stats, teams and settings on this device.</p>
           </div>
         </div>
       </section>
