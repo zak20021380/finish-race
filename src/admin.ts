@@ -10,17 +10,25 @@
  * through the same wrapped door as the save, and `setRuntime` is the only writer — so a toggle
  * takes effect everywhere the instant it flips, with no reload and no second source of truth.
  *
- * **The controller** (`createAdmin`) wires the FAB, the overlay, its three tabs and every control
+ * **The controller** (`createAdmin`) wires the FAB, the overlay, its four tabs and every control
  * to that config. It owns no game state of its own.
  *
- * Who may open it: a Telegram user id on the allowlist (`ADMIN_IDS`, extended by
- * `VITE_ADMIN_IDS`) — or the dev door, which opens for any browser outside Telegram or on a
- * loopback host, so the panel is testable without a device.
+ * **The server** is the third half. The Worker (`worker/index.ts`, `worker/matchmaker.ts`) owns the
+ * same three knobs for the live room — the maintenance lock and both queue radii — and enforces
+ * them itself. The Server tab reads `GET /admin/status` for the queue and the rooms, and every
+ * change to those three fields is pushed to `POST /admin/config` the moment it happens. With no
+ * Worker answering, every call is a no-op, the pill reads Local, and the panel still governs the
+ * device — nothing here ever depends on a backend being up.
+ *
+ * Who may open it: a Telegram user id on the allowlist (`ADMIN_IDS`, extended by `VITE_ADMIN_IDS`)
+ * — or the dev door, which opens for any browser outside Telegram or on a loopback host, so the
+ * panel is testable without a device. The Worker checks the same allowlist (`ADMIN_IDS` in
+ * wrangler.toml) on every `/admin/*` call, so the panel's door is never the server's door.
  */
 import { motionReduced } from './settings';
 import { earnCoins, earnTiq, onChange, profile, readJson, writeJson } from './storage';
 import { coinText, mountCoins, setBalance } from './coin';
-import { impact, notify, tgUser } from './telegram';
+import { impact, notify, tgInitData, tgUser } from './telegram';
 import type { MindTier } from './matchmaking';
 
 /* ---------- who may open it ---------- */
@@ -192,6 +200,124 @@ export function tiqFrom(wins: number, games: number, bonus: number): number {
   return Math.max(0, wins * Math.max(0, runtime.winTiq - RACE_TIQ) + games * RACE_TIQ + bonus);
 }
 
+/* ---------- the live server: the Worker is the other half of this panel ---------- */
+
+/**
+ * The three knobs `MatchmakerDO` enforces itself. They are the server's copy of the local runtime:
+ * the panel pushes them, the room applies them to the next pairing pass, and `/admin/status` reads
+ * them back so a second admin can see what is actually in force.
+ */
+export interface ServerConfig {
+  maintenance: boolean;
+  normalRadius: number;
+  wideRadius: number;
+}
+
+/** One seat in the room's queue, as `/admin/status` reports it. */
+export interface QueuedPlayer {
+  id: string;
+  name: string;
+  tiq: number;
+  wide: boolean;
+  waitedMs: number;
+}
+
+/** One live 1v1, as `/admin/status` reports it. */
+export interface ActiveRoom {
+  matchId: string;
+  p0: string;
+  p1: string;
+  turn: number;
+  round: number;
+}
+
+export interface ServerStatus {
+  ok: true;
+  queueCount: number;
+  activeMatchesCount: number;
+  queuedPlayers: QueuedPlayer[];
+  activeRooms: ActiveRoom[];
+  config: ServerConfig;
+}
+
+/** The Worker base: `VITE_WS_URL` when the app was pointed at one, else this page's own origin. */
+function workerBase(): string {
+  const ws = import.meta.env.VITE_WS_URL?.trim();
+  if (ws) {
+    const base = ws.startsWith('http') ? ws : `https://${ws}`;
+    return base.replace(/^ws/, 'http').replace(/\/+$/, '');
+  }
+  return location.host ? location.origin : '';
+}
+
+/** A Worker route, or `''` when there is no origin to hang one off. */
+function workerUrl(path: string): string {
+  const base = workerBase();
+  return base ? `${base}${path}` : '';
+}
+
+/**
+ * What every admin call carries: the Mini App's own `initData` when Telegram handed one over, plus
+ * the explicit developer marker. The Worker ignores the marker unless it is on a dev host and a
+ * valid signature always wins over it, so sending both is safe and keeps local work possible.
+ */
+function adminHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { accept: 'application/json', 'x-admin': '1' };
+  const init = tgInitData();
+  if (init) headers['x-telegram-init-data'] = init;
+  return headers;
+}
+
+/** One admin call on a short leash: a Worker that is not there must never hold the panel up. */
+async function adminFetch(path: string, init: RequestInit = {}): Promise<Response | null> {
+  const url = workerUrl(path);
+  if (!url) return null;
+  const extra = (init.headers ?? {}) as Record<string, string>;
+  const ac = new AbortController();
+  const timer = window.setTimeout(() => ac.abort(), 2500);
+  try {
+    return await fetch(url, { ...init, signal: ac.signal, headers: { ...adminHeaders(), ...extra } });
+  } catch {
+    return null;                              // offline, refused, or too slow: the same answer
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+/** The room's own reading of itself, or null when nothing answers. */
+async function fetchStatus(): Promise<ServerStatus | null> {
+  const res = await adminFetch('/admin/status');
+  if (!res || !res.ok) return null;
+  try {
+    const data = (await res.json()) as ServerStatus;
+    return data && data.ok === true ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Push a config patch to the live server. False when it could not be delivered. */
+async function pushConfig(patch: ServerConfig): Promise<boolean> {
+  const res = await adminFetch('/admin/config', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  return !!res && res.ok;
+}
+
+/** One moderation action. False when the server refused it or never answered. */
+async function serverAction(
+  body: { action: 'CLEAR_QUEUE' } | { action: 'ABORT_MATCH'; matchId: string },
+): Promise<boolean> {
+  const res = await adminFetch('/admin/action', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return !!res && res.ok;
+}
+
 /* ---------- the controller ---------- */
 
 export interface AdminApi {
@@ -285,11 +411,22 @@ export function createAdmin(api: AdminApi): Admin {
   const coinsNow = $<HTMLElement>('tool-coins-now');
   const tiqNow = $<HTMLElement>('tool-tiq-now');
   const resetBtn = $<HTMLButtonElement>('tool-reset');
+  const serverCard = $<HTMLElement>('adm-server');
+  const serverChip = $<HTMLElement>('adm-server-chip');
+  const serverQueue = $<HTMLElement>('srv-queue');
+  const serverRooms = $<HTMLElement>('srv-rooms');
+  const serverList = $<HTMLElement>('srv-list');
+  const serverRefresh = $<HTMLButtonElement>('srv-refresh');
+  const serverClear = $<HTMLButtonElement>('srv-clear');
 
   let open = false;
   let hideId = 0;
   let resetId = 0;
   let live = false;
+  /** True once `/admin/status` has answered: the panel is governing a real room. */
+  let serverOn = false;
+  /** What the Worker was last told, so an unchanged toggle never sends a pointless call. */
+  let lastPushed: ServerConfig | null = null;
 
   /* ---------- painting ---------- */
 
@@ -366,38 +503,138 @@ export function createAdmin(api: AdminApi): Admin {
     paintSave();
   }
 
-  /* ---------- server reachability ---------- */
+  /* ---------- the live server ---------- */
 
-  /** The Worker answers `GET /health`; anything else (or a timeout) reads as Local. */
-  function healthUrl(): string {
-    const ws = import.meta.env.VITE_WS_URL?.trim();
-    if (ws) {
-      const base = ws.startsWith('http') ? ws : `https://${ws}`;
-      try {
-        return new URL('/health', base.replace(/^ws/, 'http')).toString();
-      } catch {
-        return '';
-      }
-    }
-    return location.host ? `${location.origin}/health` : '';
+  /** The local runtime, in the three fields the Worker also enforces. */
+  function serverConfig(): ServerConfig {
+    return { maintenance: runtime.maintenance, normalRadius: runtime.radiusNormal, wideRadius: runtime.radiusWide };
   }
 
-  async function probeServer() {
-    const url = healthUrl();
-    if (!url) {
-      setKpi('kpi-server', 'Local', false);
+  const sameConfig = (a: ServerConfig | null, b: ServerConfig): boolean =>
+    !!a && a.maintenance === b.maintenance && a.normalRadius === b.normalRadius && a.wideRadius === b.wideRadius;
+
+  /** Nothing answered: the panel governs this device alone, and says so. */
+  function markLocal() {
+    serverOn = false;
+    setKpi('kpi-server', 'Local', false);
+    paintServer(null);
+  }
+
+  /** `12s` / `1m 20s`: a wait in the unit somebody would actually say it in. */
+  function waited(ms: number): string {
+    const s = Math.max(0, Math.round(ms / 1000));
+    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+  }
+
+  function rosterRow(name: string, meta: string, matchId?: string): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = matchId ? 'adm-server-row is-room' : 'adm-server-row';
+    const txt = document.createElement('span');
+    txt.className = 'adm-server-txt';
+    const n = document.createElement('span');
+    n.className = 'adm-server-n';
+    n.textContent = name;
+    const m = document.createElement('span');
+    m.className = 'adm-server-m';
+    m.textContent = meta;
+    txt.append(n, m);
+    li.append(txt);
+    if (matchId) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'adm-btn adm-btn-danger adm-abort';
+      btn.dataset.abort = matchId;
+      btn.textContent = 'Abort';
+      btn.setAttribute('aria-label', `Abort room ${matchId}`);
+      li.append(btn);
+    }
+    return li;
+  }
+
+  function emptyRow(text: string): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = 'adm-server-empty';
+    li.textContent = text;
+    return li;
+  }
+
+  /** The chip, the two counters and the roster, all from one status payload (or its absence). */
+  function paintServer(status: ServerStatus | null) {
+    if (serverCard) serverCard.dataset.state = status ? 'live' : 'local';
+    if (serverChip) serverChip.textContent = status ? 'LIVE SERVER' : 'LOCAL MODE';
+    if (serverQueue) serverQueue.textContent = status ? String(status.queueCount) : '—';
+    if (serverRooms) serverRooms.textContent = status ? String(status.activeMatchesCount) : '—';
+    if (!serverList) return;
+    serverList.textContent = '';
+    if (!status) {
+      serverList.append(emptyRow('No telemetry — the Worker is not answering.'));
       return;
     }
-    const ac = new AbortController();
-    const timer = window.setTimeout(() => ac.abort(), 1600);
-    try {
-      const res = await fetch(url, { signal: ac.signal, headers: { accept: 'application/json' } });
-      setKpi('kpi-server', res.ok ? 'Online' : 'Local', res.ok);
-    } catch {
-      setKpi('kpi-server', 'Local', false);
-    } finally {
-      window.clearTimeout(timer);
+    if (!status.queuedPlayers.length && !status.activeRooms.length) {
+      serverList.append(emptyRow('Nobody is waiting, and no room is running.'));
+      return;
     }
+    for (const p of status.queuedPlayers) {
+      serverList.append(rosterRow(p.name, `TIQ ${p.tiq} · ${p.wide ? 'wide' : 'normal'} · ${waited(p.waitedMs)}`));
+    }
+    for (const r of status.activeRooms) {
+      serverList.append(rosterRow(
+        `${r.p0} vs ${r.p1}`,
+        `#${r.matchId} · turn ${r.turn} · round ${r.round}`,
+        r.matchId,
+      ));
+    }
+  }
+
+  /** Read the room, paint it, and remember whether the Worker is really there. */
+  async function refreshServer(): Promise<void> {
+    const status = await fetchStatus();
+    serverOn = !!status;
+    setKpi('kpi-server', serverOn ? 'Online' : 'Local', serverOn);
+    paintServer(status);
+    if (serverOn) await syncConfig();
+  }
+
+  /**
+   * Keep the Worker's own enforcement in step with the local runtime. Only the three fields the
+   * server also owns travel; anything else the panel changes is a device-local matter. With no
+   * Worker answering there is nothing to sync, and the panel simply stays in Local mode.
+   */
+  async function syncConfig(): Promise<void> {
+    if (!serverOn) return;
+    const want = serverConfig();
+    if (sameConfig(lastPushed, want)) return;
+    if (await pushConfig(want)) lastPushed = want;
+    else markLocal();
+  }
+
+  /** Empty the room's queue on the server, then read it back so the roster agrees. */
+  async function clearQueue(): Promise<void> {
+    impact('medium');
+    if (!(await serverAction({ action: 'CLEAR_QUEUE' }))) {
+      markLocal();
+      notify('error');
+      api.note('Clear Queue failed — the Worker is not answering.', true, 2400);
+      return;
+    }
+    notify('success');
+    api.note('Queue cleared on the server.', false, 2000);
+    await refreshServer();
+  }
+
+  /** Pull one stuck room: both seats are told, and the room stops existing. */
+  async function abortMatch(matchId: string): Promise<void> {
+    if (!matchId) return;
+    impact('medium');
+    if (!(await serverAction({ action: 'ABORT_MATCH', matchId }))) {
+      markLocal();
+      notify('error');
+      api.note('Abort failed — the Worker is not answering.', true, 2400);
+      return;
+    }
+    notify('success');
+    api.note(`Room ${matchId} aborted.`, false, 2000);
+    await refreshServer();
   }
 
   /* ---------- the FAB ---------- */
@@ -424,7 +661,7 @@ export function createAdmin(api: AdminApi): Admin {
     stage.classList.add('open');
     document.documentElement.classList.add('admin-open');
     paintAll();
-    void probeServer();
+    void refreshServer();                 // the Server KPI is read off `/admin/status`, not `/health`
     closeBtn?.focus({ preventScroll: true });
     api.onToggle(true);
     impact('medium');
@@ -460,7 +697,25 @@ export function createAdmin(api: AdminApi): Admin {
     // the backdrop below the stage's own column closes it, like every other full-viewport stage
     if (e.target === stage) closeStage();
   });
-  for (const t of tabs) t.addEventListener('click', () => { impact('light'); selectTab(t.dataset.atab ?? 'ops'); });
+  for (const t of tabs) {
+    t.addEventListener('click', () => {
+      impact('light');
+      const id = t.dataset.atab ?? 'ops';
+      selectTab(id);
+      if (id === 'server') void refreshServer();   // the roster is only ever as fresh as its last read
+    });
+  }
+
+  serverRefresh?.addEventListener('click', () => {
+    impact('light');
+    void refreshServer();
+  });
+  serverClear?.addEventListener('click', () => { void clearQueue(); });
+  /* every Abort is delegated: the roster is rebuilt on each read, so no handler outlives its row */
+  serverList?.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-abort]');
+    if (btn) void abortMatch(btn.dataset.abort ?? '');
+  });
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && open) closeStage();
@@ -588,6 +843,9 @@ export function createAdmin(api: AdminApi): Admin {
   onRuntime(() => {
     paintBroadcast();
     paintDot();
+    /* Maintenance Lock and both radii are the server's too: the same flip that repaints the panel
+       pushes the new values to `POST /admin/config`. Offline, `syncConfig` is a no-op. */
+    void syncConfig();
   });
 
   const onResize = () => {

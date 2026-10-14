@@ -213,3 +213,96 @@ export async function authenticate(req: AuthRequest, env: Env): Promise<Identity
 
   return guestSeat(req, tier);
 }
+
+/* ---------- the admin door ---------- */
+
+/**
+ * What admin verification needs from an inbound request — its URL and its headers. `Request`
+ * satisfies this, and so does a plain object, which keeps the check testable without a runtime.
+ */
+export interface AdminRequestLike {
+  url: string;
+  headers: { get(name: string): string | null };
+}
+
+export interface AdminIdentity {
+  /** The verified Telegram user id, or `dev` when the development door was the way in. */
+  userId: string;
+  door: 'tg' | 'dev';
+}
+
+/** The allowlist, read the way it is written: `ADMIN_IDS` split on commas, blanks dropped. */
+export function adminIds(env: Env): string[] {
+  return (env.ADMIN_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+/** Headers that open the development door when the caller is already on a dev host. */
+const DEV_ADMIN_HEADERS = ['x-detour-admin', 'x-admin'];
+
+/** `1`, `true`, `yes`, `on` — anything but an explicit negative. */
+function truthy(value: string | null): boolean {
+  if (value === null) return false;
+  const v = value.trim().toLowerCase();
+  return v !== '' && v !== '0' && v !== 'false' && v !== 'no' && v !== 'off';
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * The signed initData an admin request carries, from wherever the caller put it: the
+ * `X-Telegram-Init-Data` header, Telegram's `Authorization: tma <initData>`, or `?initData=`.
+ */
+function adminInitData(request: AdminRequestLike): string {
+  const header = request.headers.get('x-telegram-init-data')?.trim();
+  if (header) return header;
+  const auth = request.headers.get('authorization')?.trim() ?? '';
+  const bearer = /^tma\s+(.+)$/i.exec(auth);
+  if (bearer) return bearer[1].trim();
+  try {
+    return new URL(request.url).searchParams.get('initData') ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** An explicit "this really is a developer" marker: a header, or `?admin=1`. */
+function devMarker(request: AdminRequestLike): boolean {
+  for (const name of DEV_ADMIN_HEADERS) if (truthy(request.headers.get(name))) return true;
+  try {
+    return truthy(new URL(request.url).searchParams.get('admin'));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Who is asking to run the live server. A valid Telegram signature naming an id on the allowlist
+ * is always enough — that door wins over everything. Failing that, the development door opens for
+ * a loopback host (or `DEV_AUTH = "true"`) that carries an explicit admin marker. Anything else is
+ * refused, and the caller answers `403`.
+ */
+export async function verifyAdminRequest(request: AdminRequestLike, env: Env): Promise<AdminIdentity | null> {
+  const token = env.TELEGRAM_BOT_TOKEN?.trim();
+  const initData = adminInitData(request);
+
+  if (initData && token) {
+    const fields = await verify(initData, token);
+    if (fields) {
+      const user = parseUser(fields.get('user'));
+      const id = user?.id === undefined || user?.id === null
+        ? ''
+        : String(user.id).replace(/[^0-9-]/g, '').slice(0, 20);
+      if (id && adminIds(env).includes(id)) return { userId: id, door: 'tg' };
+    }
+  }
+
+  const dev = env.DEV_AUTH === 'true' || isLocalhost(hostOf(request.url));
+  if (dev && devMarker(request)) return { userId: 'dev', door: 'dev' };
+  return null;
+}

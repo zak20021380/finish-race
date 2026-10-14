@@ -200,6 +200,18 @@ const matchmaking = createMatchmaking({
     setGameMode('bot');
     startGame({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] });
   },
+  /* The Worker refused the queue itself. The local Maintenance Lock normally catches this before a
+     socket is ever opened, so this is the server's own enforcement arriving late — say the same
+     thing the lock does, and hand the player back to the drawer they came from. */
+  onRefused: (reason) => {
+    impact('light');
+    notify('warning');
+    showNote(reason === 'MAINTENANCE'
+      ? 'Maintenance in progress — matchmaking is paused.'
+      : 'The server closed the queue. Try again in a moment.', false, 2600);
+    const drawer = sheetById('sheet-game-modes');
+    if (drawer) sheets.open(drawer);
+  },
 });
 
 /**
@@ -835,7 +847,7 @@ function endOnline(end: RaceEnd): void {
   notify(end.win ? 'success' : 'error');
   showNote(end.win
     ? (end.why === 'resign' ? 'Rival resigned — you win' : 'Rival left — you win')
-    : 'Connection lost',
+    : end.why === 'aborted' ? 'Room closed by an operator' : 'Connection lost',
   !end.win, 3000);
 }
 

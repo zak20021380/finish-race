@@ -13,4 +13,8 @@ export interface Env {
   TELEGRAM_BOT_TOKEN?: string;
   /** `"true"` opens the guest door for local work (see `DEV_AUTH` in wrangler.toml). */
   DEV_AUTH?: string;
+  /** Comma-separated Telegram user ids allowed through the `/admin/*` routes — the server-side
+   *  half of the Command Center's allowlist (`ADMIN_IDS` in `src/admin.ts`). A var, not a secret:
+   *  `ADMIN_IDS = "123456789,987654321"`. An empty value closes the Telegram door entirely. */
+  ADMIN_IDS?: string;
 }

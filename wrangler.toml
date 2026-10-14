@@ -29,3 +29,9 @@ new_sqlite_classes = ["MatchmakerDO"]
 #   TELEGRAM_BOT_TOKEN = "<token from @BotFather>"
 #   DEV_AUTH = "true"
 DEV_AUTH = "false"
+
+# Who may call `/admin/*` — the Command Center's server half (see `src/admin.ts`, `worker/auth.ts`).
+# A comma-separated list of Telegram user ids, mirroring the panel's own `ADMIN_IDS` allowlist.
+# An empty value closes the Telegram door entirely; `/admin/status` still answers a dev-marked
+# loopback request while `DEV_AUTH = "true"` or the caller is on localhost.
+ADMIN_IDS = ""

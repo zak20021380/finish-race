@@ -52,6 +52,36 @@
   credit folded into `winTiq`, which is why the 140 default equals the original 120/win + 20/race.
 - `Save.tiqBonus` + `earnTiq()` in `storage.ts` are how a TIQ grant persists (TIQ itself is derived).
 
+## Admin Command Center — the server half (worker/)
+- `worker/auth.ts` `verifyAdminRequest(request, env)` takes an `AdminRequestLike` (`{url,
+  headers.get}`), **not** a real `Request`, so it is testable in plain Node. It reads initData from
+  `X-Telegram-Init-Data` / `Authorization: tma <initData>` / `?initData=`, verifies the HMAC, and
+  checks `env.ADMIN_IDS`. A valid signature always wins; the dev door needs a dev host
+  (`DEV_AUTH="true"` or loopback) **and** a marker (`x-admin`, `x-detour-admin`, or `?admin=1`).
+- `worker/index.ts` verifies `/admin/*` itself and answers **403**, then forwards the *original*
+  request to the same `MatchmakerDO`. Add a new admin route: handle it in the DO's `admin()`
+  dispatcher (before the upgrade check in `fetch()`), not in the worker.
+- `MatchmakerDO` owns `maintenance` / `normalRadius` / `wideRadius` (defaults 250/600). `take()`
+  reads them, so `/admin/config` changes the next pairing pass. The maintenance gate is in
+  `enqueue()`, **not** at the upgrade: the socket still connects, the QUEUE is refused with
+  `{type:"ERROR",reason:"MAINTENANCE"}` and closed cleanly. `evictAll(reason)` is the shared
+  notify-then-close used by both the lock and `CLEAR_QUEUE`.
+- The panel's three shared fields are pushed by the `onRuntime` watcher via `syncConfig()`, which
+  diffs against `lastPushed` and is a **no-op while `serverOn` is false** (offline never retries in a
+  loop). The Server KPI pill reads `/admin/status`, not `/health` (`probeServer`/`healthUrl` are gone).
+- Client admin calls send `x-admin: 1` **and** the Telegram initData; the Worker ignores the marker
+  off a dev host, so sending both is safe.
+- **The server's frames and the client's fallback.** `worker/matchmaker.ts` emits `{type:"ERROR",
+  reason}` (maintenance / cleared) and `{type:"ABORTED",matchId}`. `src/matchmaking.ts` must keep
+  treating a refusal as a *decision*, not a dead socket: it rejects with an `Error` named
+  `'queue-refused'` carrying `reason`, and `queue()`'s rejection handler skips the
+  `simulatedSearch()` fallback for it. Without that, a maintenance refusal silently becomes a bot
+  race. `RaceEnd['why']` includes `'aborted'`.
+- **New admin UI content goes in a new tab, never the Live Ops panel.** `.tmp/admin-check.mjs` walks
+  every element of `#overlay-admin` and fails on `bottom > innerHeight` — including elements scrolled
+  out of the `overflow-y: auto` body. Ops already fills 360x640 exactly; a hidden panel's children
+  have zero height and are skipped.
+
 ## Conventions
 - Strict TS, `noImplicitReturns`, no unused imports. Prefer `aria-disabled` over the `disabled`
   attribute when a control must still receive the tap that explains why it is inert.

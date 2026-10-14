@@ -66,10 +66,67 @@ interface Race {
   over: boolean;
 }
 
-/** The ordinary radius. */
+/** The ordinary radius, and the number the room starts on. */
 const TIER_RADIUS = 250;
 /** The widened radius, once either side has asked for one. */
 const WIDE_RADIUS = 600;
+
+/**
+ * The three knobs the Admin Command Center can move on a running server. They live on the room
+ * itself, so `/admin/config` changes what the *next* pairing pass does rather than what some
+ * client believes — the enforcement is here, not in the panel.
+ */
+export interface ServerConfig {
+  /** New QUEUE attempts are refused, and everyone already waiting is sent home. */
+  maintenance: boolean;
+  /** The ordinary pairing band, in TIQ. */
+  normalRadius: number;
+  /** The relaxed band, once either side has widened. */
+  wideRadius: number;
+}
+
+/** One seat waiting in the room, as `/admin/status` reports it. */
+export interface QueuedPlayer {
+  id: string;
+  name: string;
+  tiq: number;
+  wide: boolean;
+  /** How long this seat has been in the queue, in milliseconds. */
+  waitedMs: number;
+}
+
+/** One live race, as `/admin/status` reports it. */
+export interface ActiveRoom {
+  matchId: string;
+  /** The two display names, in seat order: `p0` opened the race. */
+  p0: string;
+  p1: string;
+  /** Whose turn the authoritative board is on. */
+  turn: number;
+  /** The hazard round the room is in; 1 when the board runs no rolling log. */
+  round: number;
+}
+
+export interface ServerStatus {
+  ok: true;
+  queueCount: number;
+  activeMatchesCount: number;
+  queuedPlayers: QueuedPlayer[];
+  activeRooms: ActiveRoom[];
+  config: ServerConfig;
+}
+
+const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
+
+/** A request body, or an empty object when there is none / it is not JSON. Never throws. */
+async function readBody(request: Request): Promise<Record<string, unknown>> {
+  try {
+    const body = await request.json();
+    return body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
 
 /** FNV-1a, 32 bit: the match id and the race seed both have to be identical on both sides. */
 function hash(text: string): number {
@@ -160,11 +217,18 @@ export class MatchmakerDO {
   private paired = 0;
   /** Every race still being played, by match id. */
   private races = new Map<string, Race>();
+  /** The admin's maintenance lock: nobody new gets in while it is on. */
+  private maintenance = false;
+  /** The live pairing bands — the defaults until `/admin/config` moves them. */
+  private normalRadius = TIER_RADIUS;
+  private wideRadius = WIDE_RADIUS;
 
   constructor(_state: DurableObjectState, private env: Env) {}
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    /* The worker has already verified the caller on `/admin/*`; these never carry an upgrade. */
+    if (url.pathname.startsWith('/admin/')) return this.admin(request, url);
     if ((request.headers.get('Upgrade') ?? '').toLowerCase() !== 'websocket') {
       return json({ error: 'expected_upgrade', hint: 'GET /ws/matchmake with Upgrade: websocket' }, 426);
     }
@@ -181,6 +245,124 @@ export class MatchmakerDO {
     this.attach(waiter);
     this.pairNow();                            // the queue may already hold their match
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  /* ---------- the admin surface ---------- */
+
+  /** The three live knobs, as the panel reads them back. */
+  private config(): ServerConfig {
+    return { maintenance: this.maintenance, normalRadius: this.normalRadius, wideRadius: this.wideRadius };
+  }
+
+  /** Everything a live server knows about itself: the queue, the rooms, and the config. */
+  private status(): ServerStatus {
+    const now = Date.now();
+    return {
+      ok: true,
+      queueCount: this.queue.length,
+      activeMatchesCount: this.races.size,
+      queuedPlayers: this.queue.map((w) => ({
+        id: w.id,
+        name: w.name,
+        tiq: w.tiq,
+        wide: w.wide,
+        waitedMs: Math.max(0, now - w.joinedAt),
+      })),
+      activeRooms: [...this.races.values()].map((r) => ({
+        matchId: r.matchId,
+        p0: r.seats[0].name,
+        p1: r.seats[1].name,
+        turn: r.state.turn,
+        round: r.state.hazard?.round ?? 1,
+      })),
+      config: this.config(),
+    };
+  }
+
+  /** The `/admin/*` routes, already authenticated by the worker in front of this object. */
+  private async admin(request: Request, url: URL): Promise<Response> {
+    if (url.pathname === '/admin/status') return json(this.status());
+
+    if (url.pathname === '/admin/config') {
+      const body = await readBody(request);
+      return json({ ok: true, config: this.configure(body) });
+    }
+
+    if (url.pathname === '/admin/action') {
+      const body = await readBody(request);
+      const result = this.act(body);
+      return json(result, result.ok ? 200 : 400);
+    }
+
+    return json({ error: 'not_found' }, 404);
+  }
+
+  /**
+   * Apply a live config patch and answer with what is now in force. Only fields that actually
+   * arrived are touched, so a panel that sends one switch never resets the radii it did not mean
+   * to move. A widened band re-runs the search: people who were waiting may already be a pair.
+   */
+  private configure(body: Record<string, unknown>): ServerConfig {
+    if (typeof body.maintenance === 'boolean') this.setMaintenance(body.maintenance);
+    if (typeof body.normalRadius === 'number' && Number.isFinite(body.normalRadius)) {
+      this.normalRadius = clamp(Math.round(body.normalRadius), 0, 2000);
+    }
+    if (typeof body.wideRadius === 'number' && Number.isFinite(body.wideRadius)) {
+      this.wideRadius = clamp(Math.round(body.wideRadius), 0, 4000);
+    }
+    this.pairNow();
+    return this.config();
+  }
+
+  /** Turning the lock on is the one config change that also has to empty the room. */
+  private setMaintenance(on: boolean): void {
+    if (on === this.maintenance) return;
+    this.maintenance = on;
+    if (on) this.evictAll('MAINTENANCE');
+  }
+
+  /** The two moderation actions the panel offers. */
+  private act(body: Record<string, unknown>): { ok: boolean; error?: string; cleared?: number; aborted?: string } {
+    if (body.action === 'CLEAR_QUEUE') {
+      const cleared = this.queue.length;
+      this.evictAll('CLEARED');
+      return { ok: true, cleared };
+    }
+    if (body.action === 'ABORT_MATCH') {
+      const matchId = typeof body.matchId === 'string' ? body.matchId : '';
+      const race = this.races.get(matchId);
+      if (!race) return { ok: false, error: 'no_such_match' };
+      this.abort(race);
+      return { ok: true, aborted: matchId };
+    }
+    return { ok: false, error: 'unknown_action' };
+  }
+
+  /** Every waiting seat is told why and let go. A race already under way is somebody's game. */
+  private evictAll(reason: string): void {
+    const waiting = this.queue;
+    this.queue = [];
+    for (const w of waiting) {
+      this.deliver(w, JSON.stringify({ type: 'ERROR', reason }));
+      try {
+        w.ws.close(1000, reason.toLowerCase());
+      } catch {
+        /* the socket is already gone */
+      }
+    }
+  }
+
+  /** The admin pulls a stuck room: both seats are told, then the room stops existing. */
+  private abort(race: Race): void {
+    this.settle(race);
+    for (const seat of race.seats) {
+      this.deliver(seat, JSON.stringify({ type: 'ABORTED', matchId: race.matchId }));
+      try {
+        seat.ws.close(1000, 'aborted');
+      } catch {
+        /* the socket is already gone */
+      }
+    }
   }
 
   /* ---------- the queue ---------- */
@@ -219,6 +401,17 @@ export class MatchmakerDO {
 
   /** QUEUE enters the player, or updates the filter of one already waiting, then looks for a race. */
   private enqueue(waiter: Waiter, wide: boolean): void {
+    /* The maintenance lock is enforced here, not in the panel: a socket that asks anyway is told
+       why and closed cleanly, so a client that never saw the toggle still cannot get in. */
+    if (this.maintenance) {
+      this.deliver(waiter, JSON.stringify({ type: 'ERROR', reason: 'MAINTENANCE' }));
+      try {
+        waiter.ws.close(1000, 'maintenance');
+      } catch {
+        /* the socket is already gone */
+      }
+      return;
+    }
     const at = this.queue.indexOf(waiter);
     if (at === -1) {
       waiter.wide = wide;
@@ -260,8 +453,8 @@ export class MatchmakerDO {
 
   /** The next pair: the close ones first, then the widened net, then anyone at all. */
   private take(): [Waiter, Waiter] | null {
-    return this.find(() => true, TIER_RADIUS)
-      ?? this.find((a, b) => a.wide || b.wide, WIDE_RADIUS)
+    return this.find(() => true, this.normalRadius)
+      ?? this.find((a, b) => a.wide || b.wide, this.wideRadius)
       ?? this.find((a, b) => a.wide && b.wide, Infinity);
   }
 

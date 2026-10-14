@@ -1158,6 +1158,8 @@
             aria-selected="false" aria-controls="apanel-econ">Economy &amp; Rules</button>
           <button class="admin-tab" type="button" role="tab" id="atab-tools" data-atab="tools"
             aria-selected="false" aria-controls="apanel-tools">Quick Tools</button>
+          <button class="admin-tab" type="button" role="tab" id="atab-server" data-atab="server"
+            aria-selected="false" aria-controls="apanel-server">Server</button>
         </div>
 
         <div class="admin-body" data-scroll tabindex="0">
@@ -1331,6 +1333,36 @@
             <p class="adm-sec-h">Danger zone</p>
             <button class="adm-btn adm-btn-danger adm-btn-wide" type="button" id="tool-reset">Reset Local Save</button>
             <p class="adm-note">Two taps: the second wipes coins, items, stats, teams and settings on this device.</p>
+          </div>
+
+          <!-- ---------- tab 4: the live server ---------- -->
+          <div class="admin-panel" data-apanel="server" id="apanel-server" role="tabpanel"
+            aria-labelledby="atab-server" hidden>
+            <p class="adm-sec-h">Live server</p>
+            <div class="adm-server" id="adm-server" data-state="local">
+              <div class="adm-server-head">
+                <span class="adm-server-t">Matchmaking backend</span>
+                <span class="adm-server-chip" id="adm-server-chip">LOCAL MODE</span>
+              </div>
+              <div class="adm-server-stats">
+                <span class="adm-stat">
+                  <b id="srv-queue">—</b>
+                  <span class="adm-stat-l">Waiting in Queue</span>
+                </span>
+                <span class="adm-stat">
+                  <b id="srv-rooms">—</b>
+                  <span class="adm-stat-l">Active 1v1 Rooms</span>
+                </span>
+              </div>
+              <ul class="adm-server-list" id="srv-list" aria-label="Live server telemetry"></ul>
+              <div class="adm-server-actions">
+                <button class="adm-btn" type="button" id="srv-refresh">Refresh</button>
+                <button class="adm-btn adm-btn-danger" type="button" id="srv-clear">Clear Queue</button>
+              </div>
+            </div>
+            <p class="adm-note">Maintenance Lock and both queue radii are pushed to the Worker the
+              moment they change. With no Worker behind the page, the panel stays in Local mode and
+              every control still governs this device.</p>
           </div>
         </div>
       </section>

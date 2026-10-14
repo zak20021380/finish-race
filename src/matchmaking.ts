@@ -13,7 +13,10 @@
  * `{ matchId, seed, side, sizes }` the race will run on. With no Worker behind the page (a static
  * preview, a `file://` tab, a refused upgrade) that same socket call falls back to the
  * `simulatedSearch()` that has always answered after ~4s, so the stage is never left spinning. A
- * transport that rejects for its own reasons falls back the same way.
+ * transport that rejects for its own reasons falls back the same way — with one exception. When
+ * the matchmaker *refuses* the queue (`{ type: "ERROR" }`, which is what the Admin Command Center's
+ * maintenance lock and its Clear Queue both send), that is a decision rather than a dead socket:
+ * the search ends, `onRefused` says why, and no bot stands in for it.
  *
  * A matched socket does not stop being useful at `MATCH_FOUND`: the SAME connection carries the
  * race. `onlineRace()` hands back the seat plus `send()`/`onMove()`/`onEnd()`, so `main.ts` plays
@@ -253,8 +256,8 @@ export interface OnlineMatch {
 export interface RaceEnd {
   /** True when the win is yours. */
   win: boolean;
-  /** The rival quit, the rival's socket died, or ours did. */
-  why: 'resign' | 'left' | 'drop';
+  /** The rival quit, the rival's socket died, ours did, or an operator pulled the room. */
+  why: 'resign' | 'left' | 'drop' | 'aborted';
 }
 
 /**
@@ -284,7 +287,31 @@ type RaceFrame =
       opponent: { name: string; tiq: number; tier: string; flag: string } }
   | { type: 'MOVE'; side: 0 | 1; action: Action }
   | { type: 'REJECT'; reason: string }
-  | { type: 'RESIGN' | 'OPPONENT_LEFT'; side: 0 | 1 };
+  | { type: 'RESIGN' | 'OPPONENT_LEFT'; side: 0 | 1 }
+  /* The two the Admin Command Center's server half sends: a refused queue, and a pulled room. */
+  | { type: 'ERROR'; reason: string }
+  | { type: 'ABORTED'; matchId: string };
+
+/**
+ * A refusal is not a dead socket. A socket that dies means the local search may take over — that is
+ * the whole fallback story. A server that answers `ERROR` has *decided* something (maintenance is
+ * on, an operator emptied the queue), and quietly racing a bot instead would contradict it. So a
+ * refusal travels as its own error kind and ends the search outright.
+ */
+const REFUSED = 'queue-refused';
+
+function refused(reason: string): Error {
+  const e = new Error(`queue refused: ${reason}`);
+  e.name = REFUSED;
+  (e as Error & { reason?: string }).reason = reason;
+  return e;
+}
+
+/** The reason a refusal carried, or null when this was an ordinary failure. */
+function refusalOf(e: unknown): string | null {
+  if (!(e instanceof Error) || e.name !== REFUSED) return null;
+  return (e as Error & { reason?: string }).reason ?? 'REFUSED';
+}
 
 /** An attempt the socket is answering. Only the newest one is allowed to settle. */
 interface Seat {
@@ -398,6 +425,8 @@ function parseFrame(raw: string): RaceFrame | null {
     }
     if (msg.type === 'REJECT') return { type: 'REJECT', reason: typeof msg.reason === 'string' ? msg.reason : 'refused' };
     if (msg.type === 'RESIGN' || msg.type === 'OPPONENT_LEFT') return { type: msg.type, side };
+    if (msg.type === 'ERROR') return { type: 'ERROR', reason: typeof msg.reason === 'string' ? msg.reason : 'REFUSED' };
+    if (msg.type === 'ABORTED') return { type: 'ABORTED', matchId: typeof msg.matchId === 'string' ? msg.matchId : '' };
     return null;
   } catch {
     return null;                       // not ours: a frame we cannot read is a frame we ignore
@@ -526,11 +555,39 @@ function socketGone(sock: WebSocket): void {
   simulatedSearch()(lost.signal, lost.opts).then(lost.resolve, lost.reject);
 }
 
+/**
+ * The room refused the queue. The socket is let go and the waiting seat is answered with a refusal
+ * rather than an abort, so the caller can tell "the server said no" from "the socket went away" —
+ * only the latter may fall back to the local search.
+ */
+function refuseSearch(sock: WebSocket, reason: string): void {
+  if (sock !== ws) return;                    // a socket this search already let go of
+  ws = null;
+  wsWide = false;
+  wsMatched = false;
+  window.clearTimeout(teardownId);
+  teardownId = 0;
+  const lost = seat;
+  seat = null;
+  try {
+    sock.close(1000, reason.toLowerCase());
+  } catch {
+    /* the server already closed it */
+  }
+  lost?.reject(refused(reason));
+}
+
 function wire(sock: WebSocket): void {
   sock.addEventListener('open', () => post(sock, JSON.stringify({ type: 'QUEUE', wide: wsWide })));
   sock.addEventListener('message', (ev) => {
     const frame = parseFrame(String(ev.data));
     if (!frame) return;
+
+    if (frame.type === 'ERROR') {
+      if (race?.socket === sock) endRace(sock, false, 'aborted');
+      else refuseSearch(sock, frame.reason);
+      return;
+    }
 
     if (frame.type === 'MATCH_FOUND') {
       if (race?.socket === sock) return;      // one match per socket: a repeat is not a new race
@@ -549,6 +606,8 @@ function wire(sock: WebSocket): void {
       else raceQueue.push({ action: frame.action, side: frame.side });
     } else if (frame.type === 'REJECT') {
       raceReject?.(frame.reason);
+    } else if (frame.type === 'ABORTED') {
+      endRace(sock, false, 'aborted');        // an operator pulled the room out from under both seats
     } else {
       endRace(sock, true, frame.type === 'RESIGN' ? 'resign' : 'left');
     }
@@ -677,6 +736,11 @@ export interface MatchmakingInit {
   onCancel?: () => void;
   /** The queue stayed quiet and the player chose the bot instead. */
   onPractice?: () => void;
+  /**
+   * The server refused the queue outright — maintenance is on, or an operator emptied it. Fired
+   * instead of any local fallback, because racing a bot would contradict the server's own answer.
+   */
+  onRefused?: (reason: string) => void;
 }
 
 export interface Matchmaking {
@@ -1065,6 +1129,13 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
     }, EXIT_MS);
   }
 
+  /** The server said no: end the search and say why, rather than quietly racing a bot instead. */
+  function refusedStage(reason: string): void {
+    teardown(`Queue refused: ${reason}`);
+    hide();
+    init.onRefused?.(reason);
+  }
+
   /** Walk the source, falling back to the local search when no socket answers. */
   function queue(id: number, src: MatchSource, tries: number, wide: boolean): void {
     const signal = ctrl?.signal;
@@ -1073,8 +1144,11 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
       (o) => {
         if (stillHere(id)) found(o);
       },
-      () => {
-        if (!stillHere(id) || tries <= 0) return;
+      (err) => {
+        if (!stillHere(id)) return;
+        const why = refusalOf(err);
+        if (why !== null) { refusedStage(why); return; }   // a decision, not a dead socket
+        if (tries <= 0) return;
         queue(id, simulatedSearch(), tries - 1, wide);
       },
     );
