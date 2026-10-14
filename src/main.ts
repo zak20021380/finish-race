@@ -18,17 +18,19 @@ import { createRouter } from './router';
 import { createSheets } from './sheets';
 import { createMenu, type Menu } from './menu';
 import { createHome } from './home';
-import { createCompete } from './compete';
+import { createCompete, flagPhoto } from './compete';
 import { createShop } from './shop';
 import { createNotifications } from './notifications';
 import { mountCoins, setBalance } from './coin';
 import { menuState, motionReduced } from './settings';
-import { onChange, recordGame, theme } from './storage';
+import { onChange, profile, recordGame, theme } from './storage';
 import { SEAT_RAMPS } from './themes';
 import { impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
 import { getGameMode, gmBack, initGameModes, onGameModeChange, setGameMode } from './gamemodes';
-import { createMatchmaking, myTier, onlineRace, onlineSearch, type OnlineSession, type RaceEnd } from './matchmaking';
+import {
+  createMatchmaking, myTier, myTiq, onlineRace, onlineSearch, type OnlineSession, type RaceEnd,
+} from './matchmaking';
 import { createAdmin, onRuntime, recordRace, runtime, type Admin } from './admin';
 
 initTelegram();
@@ -78,15 +80,20 @@ const chips = [
   $<HTMLDivElement>('chip-2'), $<HTMLDivElement>('chip-3'),
 ];
 const dots = $<HTMLSpanElement>('dots');
-/** The seat-0 furniture that follows the local player when an online seat is not seat 0. */
-const chipRows = chips.map((chip) => chip.querySelector<HTMLElement>('.chip-row'));
-const timerCapsule = chips[0].querySelector<HTMLElement>('.chip-ball');
+/** The blitz ring and its seconds: seat 0's markup, carried to whichever seat the local player is. */
+const timerRing = chips[0].querySelector<HTMLElement>('.timer');
+const timerNum = chips[0].querySelector<HTMLElement>('.timer-n');
 const wallBadges = [
   $<HTMLSpanElement>('walls-0'), $<HTMLSpanElement>('walls-1'),
   $<HTMLSpanElement>('walls-2'), $<HTMLSpanElement>('walls-3'),
 ];
-/** The dock itself. `data-seats` is how CSS is told how many chips it is laying out — two keep the
- *  one-row 64px layout, three and four reflow to a compact 2-up grid (see the reflow rule). */
+/** One corner-flag host and one XP pill per seat, in seat order — the identity half of a chip. */
+const flagBadges = [0, 1, 2, 3].map((p) => $<HTMLSpanElement>(`flag-${p}`));
+const xpPills = [0, 1, 2, 3].map((p) => $<HTMLSpanElement>(`xp-${p}`));
+const xpNums = [0, 1, 2, 3].map((p) => xpPills[p].querySelector<HTMLElement>('.xp-n'));
+/** The dock itself. `data-players` is how CSS is told how many chips it is laying out — two keep the
+ *  generous one-row layout, three and four reflow to a compact 2-up block (see the reflow rule).
+ *  `data-seats` is written alongside it: the older probes read that one, and it costs nothing. */
 const chipsEl = $<HTMLElement>('chips');
 const sheetPause = $<HTMLElement>('sheet-pause');
 const sheetQuit = $<HTMLElement>('sheet-quit');
@@ -314,6 +321,9 @@ let difficulty: Difficulty = menuState.difficulty;
  *  four-way. It used to be a fixed pair; `MAX_TEAMS` is what the board can hold. */
 let sizes: number[] = [...menuState.sizes];
 let opponent: Opponent = makeBot(difficulty);
+/** The seed this race's board was built on. Every bot seat derives its flag and its XP from it, so
+ *  the four pills are stable for the whole race instead of reshuffling on every repaint. */
+let raceSeed = 1;
 
 /** Is the other seat to move? In an online race that seat is a person, not the machine. */
 const rivalTurn = () => state.turn !== localSide && state.winner === null;
@@ -574,6 +584,8 @@ function ui() {
     chips[p]?.classList.toggle('thinking', thinking && p === state.turn);
     setWalls(p, wallsRemaining(state, p));
   }
+  /* the flags and the XP pills ride along: both are diffed, so this is a comparison per seat */
+  paintSeatIdentity();
   const spoken = state.winner !== null ? `${TEAM_NAME[seat]} win${seat === localSide ? '' : 's'}`
     : seat === localSide ? 'Your turn' : `${TEAM_NAME[seat]}'s turn`;
   if (spoken !== saidTurn) { saidTurn = spoken; announce.textContent = spoken; }
@@ -815,7 +827,8 @@ function restart() {
   gen++;
   /* Every local race rolls a fresh seed so no two telegraph the same lanes; an online race takes
      the seed the matchmaker handed both sides, so the logs and the hazards are the same board. */
-  state = newGame(sizes, { hazards: runtime.hazards, seed: active ? active.seed : (Math.random() * 0x7fffffff) | 0 });
+  raceSeed = active ? active.seed : (Math.random() * 0x7fffffff) | 0;
+  state = newGame(sizes, { hazards: runtime.hazards, seed: raceSeed });
   /* The grid the rules picked for this race — a duel keeps 8 columns, a 3- or 4-contender race gets
      10 — and the wall budget that goes with it. Both are read off the board, never assumed, so a
      menu change between races cannot leave the canvas painting the wrong lattice. `fitBoard` hands
@@ -839,7 +852,12 @@ function restart() {
   marks.length = state.teams.length;
   marks.fill(null);
   shownWalls.fill(-1);
+  /* a new race means new rivals: their flags and their XP are drawn off the new seed, so the caches
+     that guard the repaints have to forget the old ones or the chips would keep last race's faces */
+  shownFlags.fill(undefined);
+  shownXp.fill(-1);
   paintRoster();
+  paintSeatIdentity();
   shownMines = -1;
   turnsPlayed = 0;
   saidTurn = '';
@@ -862,6 +880,9 @@ function restart() {
  */
 function paintRoster(): void {
   const n = state.teams.length;
+  /* `data-players` is the live one; `data-seats` is written beside it because the older probes read
+     that name and it costs a string. Both say the same thing: how many chips the dock is laying out. */
+  chipsEl.dataset.players = String(n);
   chipsEl.dataset.seats = String(n);
   for (let p = 0; p < chips.length; p++) {
     const el = chips[p];
@@ -876,10 +897,67 @@ function paintRoster(): void {
   }
 }
 
+/* ---------- seat identity: the corner flag and the XP pill on every chip ---------- */
+
+/** What a bot seat draws its flag and its XP from: one draw per seat, per race, off `raceSeed`. */
+const RIVAL_FLAGS = [
+  'DE', 'JP', 'BR', 'KR', 'FR', 'ES', 'IT', 'NL', 'SE', 'PL', 'TR', 'MX', 'CA', 'AU', 'IN', 'PT',
+];
+const RIVAL_XP = [1180, 2040, 880, 3120, 1545, 2680, 980, 2360];
+
+/** Your XP: the ladder's own reading, so a race that settles moves it on the spot. */
+const myXp = (): number => myTiq();
+
+/** A seat's flag — yours off the profile, an online rival's off the wire, a bot's from the pool. */
+function flagFor(p: Player): string | null {
+  if (p === localSide) return profile.country;
+  if (active && p === rivalSide()) return active.opponent.flag ?? null;
+  return RIVAL_FLAGS[(raceSeed + p * 5) % RIVAL_FLAGS.length];
+}
+
+/** A seat's XP. Yours is live; a rival's is fixed for the race. */
+function xpFor(p: Player): number {
+  if (p === localSide) return myXp();
+  if (active && p === rivalSide()) return active.opponent.tiq;
+  return RIVAL_XP[(raceSeed + p * 3) % RIVAL_XP.length];
+}
+
+/** Comma-groups a count the way a scoreboard does, without the locale's own ideas about digits. */
+const commas = (n: number): string => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+/** What each chip already shows, so a repaint on every action costs a comparison and nothing else. */
+const shownFlags: (string | null | undefined)[] = [undefined, undefined, undefined, undefined];
+const shownXp: number[] = [-1, -1, -1, -1];
+
+/**
+ * Paints the identity half of every fielded chip: the corner flag welded to its sphere and the XP
+ * pill beside its name. Both are diffed — a rival's identity is fixed for the race and `ui()` runs
+ * on every action, so rewriting them each time would be pure churn. `flagPhoto` draws the flag, so
+ * the HUD wears the same photo (and the same three-tier fallback) as the ladder and the profile.
+ */
+function paintSeatIdentity(): void {
+  for (const p of roster()) {
+    const code = flagFor(p);
+    if (shownFlags[p] !== code) {
+      shownFlags[p] = code;
+      const host = flagBadges[p];
+      if (host) { host.textContent = ''; host.append(flagPhoto(code, 'fp-hud')); }
+    }
+    const xp = xpFor(p);
+    if (shownXp[p] !== xp) {
+      shownXp[p] = xp;
+      const n = xpNums[p];
+      if (n) n.textContent = commas(xp);
+      xpPills[p]?.setAttribute('aria-label', `${commas(xp)} XP`);
+    }
+  }
+}
+
 /**
  * The four chip swatches, in seat order. Seat 0 wears the equipped skin; seats 1..3 wear the fixed
  * seat ramps — the very array `render.ts` draws their spheres and wall bars from, so the token on
- * the board and the swatch on the chip can never disagree about who is who.
+ * the board and the swatch on the chip can never disagree about who is who. The mine key is dock
+ * furniture rather than a chip's child now, so it wears the local seat's colour from here too.
  */
 function paintSeatTints(): void {
   const ramps = [theme().ball.ramp, ...SEAT_RAMPS];
@@ -888,6 +966,11 @@ function paintSeatTints(): void {
     if (!r) continue;
     chips[i].style.setProperty('--tint', r.mid);
     chips[i].style.setProperty('--glow', r.glow);
+  }
+  const mine = ramps[localSide];
+  if (mine) {
+    mineBtn.style.setProperty('--tint', mine.mid);
+    mineBtn.style.setProperty('--glow', mine.glow);
   }
 }
 
@@ -909,17 +992,17 @@ function paintNames() {
 }
 
 /**
- * The interactive furniture is seat-indexed in the markup (`#mine-btn` and the blitz ring in seat
- * 0's chip, the thinking dots in seat 1's), but an online seat can be either side. The chips keep
- * their names and colours; only the controls follow the local player to their own chip.
+ * The two pieces of seat-indexed chrome are the blitz ring (seat 0's markup) and the thinking dots
+ * (seat 1's), but an online seat can be either side. The chips keep their names, colours, flags and
+ * XP; only those two move — and only the ring and its seconds, never the whole capsule, which would
+ * leave the destination seat wearing two spheres.
  */
 function seatChrome(): void {
-  const row = chipRows[localSide];
-  const rivalWho = chips[rivalSide()].querySelector<HTMLElement>('.who-line');
-  if (!row || !rivalWho || !timerCapsule) return;
-  row.insertBefore(timerCapsule, row.firstChild);   // this seat's own countdown ring
-  row.appendChild(mineBtn);                        // ...and its own mine key
-  rivalWho.appendChild(dots);                      // the rival gets the thinking dots
+  const seatBall = chips[localSide]?.querySelector<HTMLElement>('.chip-ball');
+  const rivalWho = chips[rivalSide()]?.querySelector<HTMLElement>('.who-line');
+  if (!seatBall || !rivalWho || !timerRing || !timerNum) return;
+  seatBall.append(timerRing, timerNum);   // this seat's own countdown ring
+  rivalWho.appendChild(dots);             // the rival gets the thinking dots
 }
 
 /** How a race starts: the local shape, plus the live seat when the matchmaker paired one. */
@@ -949,7 +1032,9 @@ function startGame(setup: StartSetup) {
   paused = false;
   restart();
   seatChrome();
+  paintSeatTints();       // the mine key is dock furniture now: it wears the local seat's colour
   paintNames();
+  paintSeatIdentity();
   /* a networked board cannot be restarted into the same seat: the pause sheet only offers leaving */
   $('pause-restart').hidden = !!active;
 
@@ -1364,4 +1449,8 @@ const paintTheme = () => {
   paintSeatTints();
 };
 onChange(paintTheme);
+/* a settled race writes the save, and the save is what your XP pill reads: repaint it the moment
+   the wallet or the tally moves, so the chip is never one race behind. */
+onChange(paintSeatIdentity);
 paintTheme();
+paintSeatIdentity();
