@@ -3497,9 +3497,9 @@ html.rm .id-dot.notif-badge::after { animation: none; opacity: 0; }
   align-items: stretch;
   gap: 0;
   padding-inline: 0;
-  padding-block: 24px;                /* shadow extent: soft 0 8px 20px drop fits inside */
+  padding-block: 20px;                /* shadow extent: soft 0 8px 20px drop fits inside */
   margin-inline: 0;
-  margin-block: -24px;                /* cancels the padding so siblings do not shift */
+  margin-block: -20px;                /* cancels the padding so siblings do not shift */
   overflow-x: auto;
   overflow-y: visible;
   scroll-snap-type: x mandatory;
@@ -3549,11 +3549,10 @@ html.rm .id-dot.notif-badge::after { animation: none; opacity: 0; }
 }
 /* ---- card contents: a label, one loud line, then the detail ---- */
 .car-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; }
-/* each highlight owns an accent, so the strip reads as three different things
-   even before you can read the words. The dot is the accent; the word is ink. */
-.car-card[data-slide="0"] { --acc: var(--honey); --acc-ink: var(--honey-ink); --acc-soft: var(--honey-soft); }
-.car-card[data-slide="1"] { --acc: var(--brand-2); --acc-ink: var(--brand-ink); --acc-soft: var(--brand-soft); }
-.car-card[data-slide="2"] { --acc: var(--mint); --acc-ink: var(--mint-ink); --acc-soft: var(--mint-soft); }
+/* each slide owns an accent, so the strip reads as a different thing even
+   before you can read the words. The dot is the accent; the word is ink. */
+.car-card.nations-cup { --acc: var(--honey); --acc-ink: var(--honey-ink); --acc-soft: var(--honey-soft); }
+.car-card.mind-ladder { --acc: #a78bfa; --acc-ink: #C4B5FD; --acc-soft: rgba(167, 139, 250, .16); }
 .car-kicker {
   display: inline-flex;
   align-items: center;
@@ -4272,8 +4271,7 @@ html.rm .mode-hero-dot::after { animation: none; opacity: 0; }
 .btn-coral:focus-visible { outline: 3px solid var(--cta); outline-offset: 3px; }
 .btn-coral[disabled] { opacity: .55; cursor: default; }
 
-/* ---- Channel Cup slide: coral accent, live pulse, compact meta ---- */
-.car-card[data-slide="3"] { --acc: var(--cta); --acc-ink: #FFB59D; --acc-soft: rgba(255, 82, 43, .16); }
+/* ---- live pulse: the LIVE pill's breathing dot ---- */
 .pill.live.pulse { display: inline-flex; align-items: center; gap: 6px; }
 .live-dot {
   width: 8px;
@@ -4288,61 +4286,9 @@ html.rm .mode-hero-dot::after { animation: none; opacity: 0; }
   70% { box-shadow: 0 0 0 7px rgba(255, 255, 255, 0); }
   100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
 }
-.cup-meta { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; }
-.cup-top {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: var(--t-2);
-  font-weight: 800;
-  color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-variant-numeric: tabular-nums;
-}
-.cup-top small { color: var(--ink-soft); font-weight: 700; }
 
-/* ---- Featured tournament arcade polish: vibrant Dark Clay, 60fps only ----
-   Pure CSS gradients + box-shadows + transform animations. No backdrop-filter,
-   no blur, no images — the compositor only ever moves two small layers
-   (trophy float + live pulse). Cards keep the clay foundation, lit from above
-   with a glossy top rim and a themed ambient backlight. */
-.car-card.tourney {
-  position: relative;
-  border-top: 1px solid rgba(255, 255, 255, .14);
-  gap: 6px;
-}
-/* Neon Rush Cup: dark cyber-mesh + cyan/magenta ambient backlight */
-.car-card[data-slide="0"] {
-  background:
-    radial-gradient(120% 90% at 85% 0%, rgba(37, 99, 235, .22), rgba(37, 99, 235, 0) 55%),
-    radial-gradient(100% 80% at 92% 12%, rgba(236, 72, 153, .15), rgba(236, 72, 153, 0) 60%),
-    repeating-linear-gradient(0deg, rgba(125, 211, 252, .05) 0 1px, transparent 1px 7px),
-    repeating-linear-gradient(90deg, rgba(125, 211, 252, .05) 0 1px, transparent 1px 7px),
-    linear-gradient(180deg, #202A3E 0%, #1C2433 100%);
-}
-/* Channel Cup: warm amber/gold ambient glow */
-.car-card[data-slide="3"] {
-  background:
-    radial-gradient(120% 95% at 85% 0%, rgba(245, 158, 11, .2), rgba(245, 158, 11, 0) 60%),
-    radial-gradient(80% 70% at 95% 20%, rgba(251, 191, 36, .1), rgba(251, 191, 36, 0) 60%),
-    linear-gradient(180deg, #202A3E 0%, #1C2433 100%);
-}
-/* split body: content owns the width, trophy owns a fixed slot — no void */
-.car-body {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-  min-width: 0;
-}
-.car-main {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-/* 3D trophy/badge: embossed clay badge, dual-tone extrusion, floating tilt */
+/* ---- 3D trophy/badge: embossed clay badge, dual-tone extrusion, floating tilt
+   (shared by the Arena cup cards) ---- */
 .trophy {
   flex: none;
   width: 72px;
@@ -4416,7 +4362,6 @@ html.rm .mode-hero-dot::after { animation: none; opacity: 0; }
   font-variant-numeric: tabular-nums;
 }
 .cap-label .hot { color: #7DD3FC; }
-.car-card[data-slide="3"] .cap-label .hot { color: #FCD34D; }
 .car-foot .cap-label, .car-foot .car-sub { flex: 1 1 auto; min-width: 0; }
 /* live badge: red pill + soft glowing animated pulse ring */
 .pill.live {
@@ -4429,42 +4374,6 @@ html.rm .mode-hero-dot::after { animation: none; opacity: 0; }
   0%, 100% { box-shadow: 0 2px 0 #8f0e2e, 0 0 10px rgba(239, 68, 68, .5), inset 0 1px 0 rgba(255, 255, 255, .3); }
   50% { box-shadow: 0 2px 0 #8f0e2e, 0 0 18px rgba(239, 68, 68, .75), inset 0 1px 0 rgba(255, 255, 255, .3); }
 }
-/* Join live CTA: juicy high-contrast 3D push-button, top streak, deep lip */
-.car-card .join-live {
-  --d: 4px;
-  flex: none;
-  position: relative;
-  overflow: hidden;
-  min-height: 44px;
-}
-.btn-primary.join-live {
-  --btn-lip: #075985;
-  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
-  color: #fff;
-  box-shadow:
-    0 var(--d) 0 var(--btn-lip),
-    0 calc(var(--d) + 8px) 20px -8px rgba(2, 132, 199, .65),
-    inset 0 2px 3px rgba(255, 255, 255, .45),
-    inset 0 -2px 3px rgba(0, 0, 0, .2);
-}
-.btn-primary.join-live::before,
-.btn-coral.join-live::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 46%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .45), rgba(255, 255, 255, 0));
-  pointer-events: none;
-}
-.btn-coral.join-live {
-  box-shadow:
-    0 var(--d) 0 var(--cta-lip),
-    0 calc(var(--d) + 8px) 20px -8px rgba(255, 82, 43, .55),
-    inset 0 2px 3px rgba(255, 255, 255, .4),
-    inset 0 -2px 3px rgba(0, 0, 0, .2);
-}
 
 /* ---- Nations Cup: Global Nations showcase (slide 1) ----
    Mobile-first, 360x640 reference. Content always fits inside the card's
@@ -4476,8 +4385,8 @@ html.rm .mode-hero-dot::after { animation: none; opacity: 0; }
   position: relative;
   isolation: isolate;
   justify-content: flex-start;
-  gap: 8px;
-  padding: 12px 12px 30px;
+  gap: 4px;
+  padding: 8px 12px 28px;
   overflow: hidden;
   border-radius: var(--r-panel);
   border-top: 1px solid rgba(255, 255, 255, 0.12);
@@ -4502,7 +4411,7 @@ html.rm .mode-hero-dot::after { animation: none; opacity: 0; }
   pointer-events: none;
 }
 /* header: globe icon + NATIONS CUP 13/700 tracked caps + muted Weekly */
-.nations-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; min-height: 22px; }
+.nations-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; min-height: 20px; }
 .car-card.nations-cup .car-kicker::before { content: none; display: none; }
 .nations-kicker {
   color: var(--ink);
@@ -4539,7 +4448,7 @@ html.rm .mode-hero-dot::after { animation: none; opacity: 0; }
 .mini-rank.nations-rank {
   background: transparent;
   box-shadow: none;
-  gap: 6px;
+  gap: 4px;
   overflow: visible;
   border-radius: 0;
   margin: 0;
@@ -4549,9 +4458,9 @@ html.rm .mode-hero-dot::after { animation: none; opacity: 0; }
   align-items: center;
   gap: 8px;
   min-width: 0;
-  height: 44px;
-  min-height: 44px;
-  max-height: 44px;
+  height: 40px;
+  min-height: 40px;
+  max-height: 40px;
   padding: 0 10px;
   border-radius: 12px;
   background: rgba(255, 255, 255, .045);
@@ -4565,7 +4474,7 @@ html.rm .mode-hero-dot::after { animation: none; opacity: 0; }
   border-top-color: rgba(125, 211, 252, .35);
   box-shadow: inset 0 0 0 1.5px var(--brand-2);
 }
-.mini-rank.nations-rank li.is-error { justify-content: center; color: var(--ink-soft); font-weight: 700; height: 44px; min-height: 44px; }
+.mini-rank.nations-rank li.is-error { justify-content: center; color: var(--ink-soft); font-weight: 700; height: 40px; min-height: 40px; }
 /* rank: gold / silver / bronze for 1-3, plain number otherwise */
 .mini-rank.nations-rank .rk {
   flex: none;
@@ -4753,25 +4662,24 @@ html.rm .mode-hero-dot::after { animation: none; opacity: 0; }
 }
 .nations-cta-reward .coin { width: 1em; height: 1em; }
 .nations-cta-reward b { font-weight: 900; font-variant-numeric: tabular-nums; }
-/* compact density below 620px: tighten chrome, never the 44px rows */
+/* compact density below 620px: tighten chrome, never the 40px rows */
 @media (max-width: 620px) {
-  .car-card.nations-cup { gap: 8px; padding: 12px 12px 30px; }
-  .mini-rank.nations-rank { gap: 6px; }
-  .mini-rank.nations-rank li.nations-row { height: 44px; min-height: 44px; max-height: 44px; }
-  .nations-cta { height: 40px; min-height: 40px; max-height: 40px; }
+  .car-card.nations-cup { gap: 4px; padding: 8px 12px 28px; }
+  .mini-rank.nations-rank { gap: 4px; }
+  .mini-rank.nations-rank li.nations-row { height: 40px; min-height: 40px; max-height: 40px; }
 }
-/* short columns: rows stay 44px — only gaps and chrome compact */
+/* short columns: rows stay 40px — only gaps and chrome compact */
 @media (max-height: 900px) {
-  .car-card.nations-cup { gap: 8px; }
-  .mini-rank.nations-rank { gap: 6px; }
+  .car-card.nations-cup { gap: 4px; }
+  .mini-rank.nations-rank { gap: 4px; }
 }
 @media (max-height: 660px) {
-  .car-card.nations-cup { gap: 6px; padding-top: 10px; }
-  .mini-rank.nations-rank { gap: 6px; }
+  .car-card.nations-cup { gap: 4px; padding-top: 8px; }
+  .mini-rank.nations-rank { gap: 4px; }
 }
 @media (max-height: 600px) {
-  .car-card.nations-cup { gap: 6px; padding-top: 10px; }
-  .mini-rank.nations-rank { gap: 6px; }
+  .car-card.nations-cup { gap: 4px; padding-top: 8px; }
+  .mini-rank.nations-rank { gap: 4px; }
 }
 html.rm .car-card.nations-cup::before { display: none; }
 
@@ -10880,4 +10788,242 @@ html.rm .admin { transition: none; }
 /* the panel is tall on a short phone: tighten the rows rather than the type */
 @media (max-height: 700px) {
   .adm-server-list { max-height: 168px; }
+}
+
+/* ==========================================================================
+   HOME CAROUSEL — the two authentic slides
+   Nations Cup (slide 0) is a national-standings showcase; The Mind Ladder
+   (slide 1) is the individual TIQ prestige card. Both are opaque Dark Clay
+   tiles: extruded bevels, deep inner shadows, zero backdrop-filter and zero
+   blur. Row heights stay 44px and every CTA is a 48px pill.
+   ========================================================================== */
+
+/* ---- pager dots: keep the 6px visual, widen the pointer target ----
+   The row stays the 20px indicator strip; the ::after band gives each dot a
+   48x28 hit area (the same trick .btn.sm uses). The band is anchored to the
+   row top and reaches the card's bottom edge, so it fills the card's whole
+   28px dot reserve without ever overlapping the CTA above it. */
+.dot::after { content: ""; position: absolute; inset: 0 -10px -8px; }
+
+/* ---- one 48px clay CTA pill per slide ---- */
+.card-cta {
+  --d: 3px;
+  position: relative;
+  flex: none;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--s4);
+  font-size: var(--t-2);
+  letter-spacing: .01em;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #26314A 0%, #1B2333 100%);
+  color: var(--ink);
+  box-shadow:
+    0 var(--d) 0 #080C14,
+    0 calc(var(--d) + 6px) 14px -8px rgba(0, 0, 0, .5),
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 -2px 4px rgba(0, 0, 0, .38),
+    var(--clay-ring);
+}
+.card-cta::after { content: ""; position: absolute; inset: -4px 0; }
+.card-cta:hover:not(:active) { transform: translateY(-1px); }
+.card-cta:active { transform: translateY(2px); --d: 1px; }
+.card-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.car-card .card-cta { width: 100%; }
+.car-card.nations-cup .nations-hold { color: var(--honey-ink); }
+.car-card.mind-ladder .mind-cta { color: #C4B5FD; }
+
+/* ---- Nations Cup: the player's own national contribution strip ---- */
+.nations-mine {
+  flex: none;
+  margin: 0;
+  min-width: 0;
+  display: block;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: var(--field);
+  box-shadow: var(--inset);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- The Mind Ladder: TIQ hero card ---- */
+.car-card.mind-ladder {
+  position: relative;
+  isolation: isolate;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 8px 12px 28px;
+  overflow: hidden;
+  border-radius: var(--r-panel);
+  border-top: 1px solid rgba(255, 255, 255, .12);
+  background:
+    radial-gradient(120% 90% at 12% 0%, rgba(139, 92, 246, .18), rgba(139, 92, 246, 0) 55%),
+    radial-gradient(110% 85% at 90% 0%, rgba(245, 158, 11, .12), rgba(245, 158, 11, 0) 60%),
+    linear-gradient(180deg, #202A3E 0%, #1C2433 100%);
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, .18),
+    inset 0 2px 2px rgba(255, 255, 255, .08),
+    inset 0 -3px 3px rgba(0, 0, 0, .35),
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+.mind-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; min-height: 20px; }
+.car-card.mind-ladder .car-kicker::before { content: none; display: none; }
+.mind-kicker {
+  color: var(--ink);
+  gap: var(--s2);
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.mind-ico {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%);
+  color: #fff;
+  box-shadow:
+    0 2px 0 #4c1d95,
+    inset 0 1px 0 rgba(255, 255, 255, .5),
+    inset 0 -2px 3px rgba(0, 0, 0, .22);
+}
+.mind-ico .ico { width: 14px; height: 14px; }
+.mind-top {
+  flex: none;
+  padding: 3px 10px 4px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #fde68a 0%, #f59e0b 100%);
+  color: #10141D;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 0 2px 0 #7c2d12, inset 0 1px 0 rgba(255, 255, 255, .6);
+}
+/* podium: three compact 44px rows — 3D sphere avatar, flag badge, tier, TIQ */
+.mind-podium {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+.mind-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 40px;
+  min-height: 40px;
+  max-height: 40px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .045);
+  border-top: 1px solid rgba(255, 255, 255, .06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.mind-row.is-error { justify-content: center; color: var(--ink-soft); font-weight: 700; }
+.mind-av {
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, .9) 0%, rgba(255, 255, 255, 0) 42%),
+    radial-gradient(circle at 62% 72%, #38bdf8 0%, #4338ca 70%, #1e1b4b 100%);
+  box-shadow:
+    0 3px 6px rgba(0, 0, 0, .5),
+    inset 0 -3px 5px rgba(0, 0, 0, .45),
+    inset 0 2px 3px rgba(255, 255, 255, .45);
+}
+.mind-ini { font-size: 12px; font-weight: 900; letter-spacing: .01em; }
+.mind-av .mind-flag {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  --fp-d: 15px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 0 0 2px #1C2433;
+}
+.mind-nm {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mind-tier {
+  flex: none;
+  padding: 3px 8px 4px;
+  border-radius: var(--radius-pill);
+  background: rgba(167, 139, 250, .16);
+  color: #C4B5FD;
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, .45);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+.mind-score {
+  flex: none;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  color: var(--honey-ink);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .5);
+  white-space: nowrap;
+}
+/* your own standing: one recessed strip, the psychological hook */
+.mind-mine {
+  flex: none;
+  margin: 0;
+  min-width: 0;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: var(--field);
+  box-shadow: var(--inset);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+/* short columns: tighten chrome, never the 40px rows */
+@media (max-width: 620px) {
+  .car-card.mind-ladder { gap: 4px; padding: 8px 12px 28px; }
+}
+@media (max-height: 660px) {
+  .car-card.mind-ladder { gap: 4px; padding-top: 8px; }
+}
+@media (max-height: 600px) {
+  .car-card.mind-ladder { gap: 4px; padding-top: 8px; }
 }

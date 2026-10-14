@@ -17,18 +17,10 @@
 import type { Difficulty } from './bot';
 import { menuState, motionReduced, onSettings, saveMenu } from './settings';
 import { nameOf } from './countries';
-import {
-  formatCountdown,
-  getCountryRanking,
-  getDailyChallenge,
-  getFeaturedTournament,
-  type CountryRow,
-  type Tournament,
-} from './data';
-import { coinText, mountCoins } from './coin';
-import { earnCoins, onChange, profile, theme } from './storage';
-import { awardSquadPoints, getChannelCup, getMySquad, onSquadChange } from './squads';
-import { impact, notify } from './telegram';
+import { getCountryRanking, getPlayerRanking, type CountryRow, type PlayerRow } from './data';
+import { onChange, profile, theme } from './storage';
+import { impact } from './telegram';
+import { flagPhoto } from './compete';
 import { newGame } from './rules';
 import { createRenderer, type View } from './render';
 import type { Router } from './router';
@@ -43,24 +35,6 @@ export interface HomeApi {
 }
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
-
-const DAILY_KEY = 'detour.daily.v1';
-
-function claimedToday(): boolean {
-  try {
-    return window.localStorage.getItem(DAILY_KEY) === new Date().toDateString();
-  } catch {
-    return false;
-  }
-}
-
-function markClaimed(): void {
-  try {
-    window.localStorage.setItem(DAILY_KEY, new Date().toDateString());
-  } catch {
-    /* in-memory only */
-  }
-}
 
 const cap = (d: Difficulty): string => d.charAt(0).toUpperCase() + d.slice(1);
 
@@ -118,8 +92,6 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   const carousel = $('home-carousel') as HTMLElement;
   const dots = [...document.querySelectorAll<HTMLButtonElement>('#home-dots .dot')];
   const slides = [...carousel.querySelectorAll<HTMLElement>('.car-card')];
-  let featured: Tournament | null = null;
-  let tick = 0;
 
   /* ---------- carousel: dots + slow auto-advance that pauses on touch ---------- */
 
@@ -225,124 +197,6 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     /* ResizeObserver unavailable — CSS fallback + paintDots cover it */
   }
   window.addEventListener('resize', syncDots);
-
-  /* ---------- featured tournament ---------- */
-
-  const paintFeatured = (): void => {
-    if (!featured) return;
-    const badge = $('feat-badge');
-    $('feat-name').textContent = featured.name;
-    badge.textContent = featured.status === 'live' ? 'Live' : featured.status === 'upcoming' ? 'Upcoming' : 'Ended';
-    badge.className = `pill ${featured.status}`;
-    ($('feat-prize') as HTMLElement).textContent = coinText(featured.prizePool);
-    $('feat-fee').textContent = featured.entryFee ? `${coinText(featured.entryFee)} entry` : 'Free entry';
-    $('feat-count').textContent = featured.status === 'ended' ? 'Ended' : formatCountdown(featured.endsAt);
-    const pct = featured.maxPlayers > 0
-      ? Math.min(100, Math.max(0, Math.round((featured.players / featured.maxPlayers) * 100)))
-      : 0;
-    const fill = document.getElementById('feat-fill') as HTMLElement | null;
-    if (fill) fill.style.width = `${pct}%`;
-    const bar = document.getElementById('feat-bar') as HTMLElement | null;
-    if (bar) bar.setAttribute('aria-valuenow', String(pct));
-    const mood = featured.status === 'ended' ? 'Ended' : pct >= 85 ? 'Almost Full' : pct >= 50 ? 'Filling fast' : 'Open';
-    const label = $('feat-players');
-    label.textContent = '';
-    label.append(
-      document.createTextNode(`${featured.players} / ${featured.maxPlayers} joined · `),
-      (() => {
-        const hot = document.createElement('span');
-        hot.className = 'hot';
-        hot.textContent = mood;
-        return hot;
-      })(),
-    );
-    label.setAttribute('aria-label', `${featured.players} of ${featured.maxPlayers} joined, ${mood}`);
-    const join = $('feat-join') as HTMLButtonElement;
-    join.disabled = featured.status === 'ended';
-    join.textContent = featured.status === 'live' ? 'Join live' : featured.status === 'upcoming' ? 'Join' : 'Ended';
-    join.setAttribute('aria-label', `${join.textContent}: ${featured.name}`);
-    mountCoins(carousel);
-  };
-
-  const loadFeatured = async (): Promise<void> => {
-    try {
-      featured = await getFeaturedTournament();
-    } catch {
-      featured = null;
-    }
-    if (!featured) {
-      $('feat-name').textContent = 'Tournaments unavailable';
-      $('feat-count').textContent = '—';
-      return;
-    }
-    paintFeatured();
-  };
-
-  $('feat-join').addEventListener('click', () => {
-    impact('light');
-    api.router.go('arena');
-  });
-
-  /* ---------- Telegram Channel Cup: live squad war slide ---------- */
-
-  const paintCup = (): void => {
-    const cup = getChannelCup();
-    const me = getMySquad();
-    ($('cup-prize') as HTMLElement).textContent = coinText(cup.prizePool);
-    $('cup-players').textContent = `${cup.players.toLocaleString('en-US')} fighters`;
-    $('cup-count').textContent = formatCountdown(cup.endsAt);
-    const top = $('cup-top');
-    if (cup.top) {
-      top.textContent = '';
-      const lead = document.createElement('b');
-      lead.textContent = cup.top.handle;
-      const rest = document.createElement('small');
-      rest.textContent = ` leads · ${cup.top.trophies.toLocaleString('en-US')} 🏆`;
-      top.append(lead, document.createTextNode(' '), rest);
-    } else {
-      top.textContent = 'No squads yet';
-    }
-    const fight = $('cup-fight') as HTMLButtonElement;
-    const sub = $('cup-sub');
-    if (me) {
-      fight.disabled = false;
-      fight.textContent = 'Fight for Squad';
-      fight.setAttribute('aria-label', `Fight for ${me.handle}: score for you and your squad`);
-      sub.textContent = `Fighting as ${me.handle} · #${me.rank}`;
-    } else {
-      fight.disabled = false;
-      fight.textContent = 'Enter Cup';
-      fight.setAttribute('aria-label', 'Enter Cup: bind a Telegram squad first');
-      sub.textContent = 'Points go to you + your squad';
-    }
-    mountCoins(carousel);
-  };
-
-  let cupCooldown = 0;
-  ($('cup-fight') as HTMLButtonElement).addEventListener('click', () => {
-    const now = Date.now();
-    if (now < cupCooldown) return;
-    const me = getMySquad();
-    if (!me) {
-      // Unbound: the squad sheet is the CTA — same door as the header pill.
-      impact('light');
-      ($('team-chip') as HTMLButtonElement).click();
-      return;
-    }
-    cupCooldown = now + 1200;
-    awardSquadPoints(25);
-    earnCoins(25);
-    notify('success');
-    impact('medium');
-    const fight = $('cup-fight') as HTMLButtonElement;
-    const prev = fight.textContent;
-    fight.textContent = '+25 for Squad';
-    fight.disabled = true;
-    window.setTimeout(() => { fight.disabled = false; if (fight.textContent === '+25 for Squad') fight.textContent = prev; }, 1200);
-    paintCup();
-  });
-
-  onSquadChange(() => { paintCup(); });
 
   /* ---------- Nations Cup: 44px rows + user row / pick-country CTA ----------
      Layout only — data (getCountryRanking) and handlers (openCountryPicker)
@@ -454,86 +308,21 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     return li;
   };
 
-  const userPlaceholderRow = (code: string): HTMLLIElement => {
-    const li = document.createElement('li');
-    li.classList.add('nations-row', 'me', 'is-user');
-    const label = nameOf(code);
-    li.setAttribute('aria-label', `${label} — warming up`);
-    const rk = document.createElement('span');
-    rk.className = 'rk rank-na';
-    rk.textContent = '–';
-    rk.setAttribute('aria-hidden', 'true');
-    const fl = document.createElement('span');
-    fl.className = 'fl';
-    fl.setAttribute('aria-hidden', 'true');
-    fl.append(flagCircle(code, label));
-    const nm = document.createElement('span');
-    nm.className = 'nm';
-    nm.textContent = label;
-    nm.title = label;
-    const pt = document.createElement('span');
-    pt.className = 'pt';
-    const num = document.createElement('b');
-    num.textContent = '–';
-    pt.append(num);
-    const tr = document.createElement('span');
-    tr.className = 'tr same';
-    tr.textContent = '•';
-    tr.setAttribute('aria-hidden', 'true');
-    li.append(rk, fl, nm, pt, tr);
-    return li;
-  };
-
-  const paintCountryCta = (all: CountryRow[] | null): void => {
-    const cta = document.getElementById('home-country-cta') as HTMLButtonElement | null;
-    const label = document.getElementById('home-country-cta-label');
-    const reward = document.getElementById('home-country-cta-reward');
-    if (!cta || !label || !reward) return;
-    void all;
+  /** The player's own national contribution, under the top three. */
+  const paintNationMine = (rows: CountryRow[]): void => {
+    const el = document.getElementById('home-nation-mine');
+    if (!el) return;
     const code = profile.country;
-    const foot = cta.closest('.nations-foot') as HTMLElement | null;
     if (!code) {
-      cta.hidden = false;
-      if (foot) foot.hidden = false;
-      label.textContent = 'Pick your country';
-      reward.innerHTML = '<span class="coin coin-xs" data-coin aria-hidden="true"></span><b>+100</b>';
-      cta.classList.remove('is-set');
-      cta.setAttribute('aria-label', 'Pick your country in Profile — earn 100 coins');
-    } else {
-      // Country set: the 4th user row owns the rank — no footer button, and
-      // the empty foot hides so its flex gap cannot push the 4th row out.
-      cta.hidden = true;
-      if (foot) foot.hidden = true;
-      cta.classList.add('is-set');
-      cta.setAttribute('aria-label', `Your flag ${nameOf(code)} — change country in Profile`);
+      el.textContent = 'Your nation: not set · Pick in Profile';
+      el.removeAttribute('title');
+      return;
     }
-    mountCoins(cta);
-  };
-
-  const openCountryPicker = (): void => {
-    impact('light');
-    poke();
-    try {
-      api.router.go('profile');
-    } catch {
-      /* router unavailable — fall through to the sheet */
-    }
-    // Land on Profile, then pop the country drawer so it is one tap door-to-door.
-    window.setTimeout(() => {
-      const pf = document.getElementById('pf-country') as HTMLButtonElement | null;
-      if (pf && !pf.hidden) {
-        pf.click();
-        return;
-      }
-      const sheet = document.getElementById('sheet-country');
-      if (sheet) {
-        try {
-          api.sheets.open(sheet as HTMLElement);
-        } catch {
-          /* sheet unavailable */
-        }
-      }
-    }, 80);
+    const mine = rows.find((c) => c.code === code);
+    const contributed = profile.stats.wins * 140;
+    const rank = mine ? `#${mine.rank}` : '—';
+    el.textContent = `Your nation: ${rank} · +${contributed.toLocaleString('en-US')} pts contributed`;
+    el.setAttribute('title', `You fight for ${nameOf(code)}`);
   };
 
   const loadCountries = async (): Promise<void> => {
@@ -545,71 +334,112 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       for (const c of top3) {
         list.append(rowEl(c, profile.country === c.code));
       }
-      const code = profile.country;
-      const mine = code ? all.find((c) => c.code === code) : undefined;
-      if (code) {
-        // User row is the 4th line with its real rank (accent border via .me).
-        // Dedupe: when the user is already top-3 the loop above owns the highlight.
-        const inTop3 = top3.some((c) => c.code === code);
-        if (!inTop3) {
-          list.append(mine ? rowEl(mine, true) : userPlaceholderRow(code));
-        }
-      }
-      // Footer CTA only when no country is set; otherwise the 4th row owns it.
-      paintCountryCta(all);
-      const note = $('home-country-note');
-      note.hidden = true;
-      if (profile.country) {
-        note.textContent = mine
-          ? `You cheer for ${nameOf(profile.country)} (#${mine.rank})`
-          : `Your country: ${nameOf(profile.country)}`;
-      } else {
-        note.textContent = 'Pick your country in Profile';
-      }
-      mountCoins(list);
+      paintNationMine(all);
     } catch {
       list.textContent = '';
       const li = document.createElement('li');
       li.className = 'nations-row is-error';
       li.textContent = 'Rankings unavailable';
       list.append(li);
-      paintCountryCta(null);
+      const el = document.getElementById('home-nation-mine');
+      if (el) el.textContent = 'Your nation: —';
     }
   };
 
-  /* ---------- daily challenge ---------- */
-
-  const loadDaily = async (): Promise<void> => {
-    const streak = profile.stats.streak;
-    ($('daily-streak') as HTMLElement).textContent = `🔥 ${streak}`;
+  document.getElementById('home-cup-table')?.addEventListener('click', () => {
+    impact('light');
+    poke();
     try {
-      const d = await getDailyChallenge(streak);
-      $('daily-title').textContent = d.detail;
-      ($('daily-reward') as HTMLElement).textContent = coinText(d.reward);
-      $('daily-detail').textContent = `Resets at midnight · chest ${coinText(d.reward)}`;
-      paintClaim(d.reward);
+      api.router.go('ranks');
     } catch {
-      $('daily-detail').textContent = 'Come back tomorrow';
+      /* router unavailable */
+    }
+    // Land on The Mind Ladder, then open the Nations IQ board — the cup table.
+    window.setTimeout(() => {
+      document.querySelector<HTMLButtonElement>('.ranks-tabs [data-board="nations"]')?.click();
+    }, 80);
+  });
+
+  /* ---------- The Mind Ladder: top minds + your cognitive standing ----------
+     Individual TIQ prestige. TIQ is the hero metric: bold gold digits, a tier
+     chip drawn from the same bands the ladder uses, and the player's own
+     percentile strip below the podium. No countdown, no capacity meter. */
+
+  const MIND_TIERS: ReadonlyArray<{ min: number; name: string }> = [
+    { min: 3000, name: 'Grandmaster' },
+    { min: 2000, name: 'Strategist' },
+    { min: 1000, name: 'Tactician' },
+    { min: 0, name: 'Rookie' },
+  ];
+
+  const mindTier = (tiq: number): string =>
+    (MIND_TIERS.find((t) => tiq >= t.min) ?? MIND_TIERS[MIND_TIERS.length - 1]).name;
+
+  /** Your TIQ: 120 a win plus 20 a race — the exact formula the ladder reads. */
+  const myTiq = (): number => Math.max(0, profile.stats.wins * 120 + profile.stats.games * 20);
+
+  /** Nominal ladder pool + a monotone, deterministic rank/percentile (Preview data). */
+  const MIND_POOL = 2400;
+  const mindStanding = (tiq: number): { rank: number; pct: number } => {
+    const rank = Math.min(MIND_POOL, Math.max(1, Math.round(MIND_POOL - (tiq / 3600) * (MIND_POOL - 1))));
+    return { rank, pct: Math.min(100, Math.max(1, Math.round((rank / MIND_POOL) * 100))) };
+  };
+
+  const mindRow = (p: PlayerRow): HTMLLIElement => {
+    const li = document.createElement('li');
+    li.className = 'mind-row';
+    const tier = mindTier(p.points);
+    const score = p.points.toLocaleString('en-US');
+    li.setAttribute('aria-label', `${p.name} — ${tier}, ${score} TIQ`);
+    const av = document.createElement('span');
+    av.className = 'mind-av';
+    av.setAttribute('aria-hidden', 'true');
+    const ini = document.createElement('b');
+    ini.className = 'mind-ini';
+    ini.textContent = monogramOf(p.name);
+    av.append(ini, flagPhoto(p.countryCode, 'mind-flag'));
+    const nm = document.createElement('span');
+    nm.className = 'mind-nm';
+    nm.textContent = p.name;
+    nm.title = p.name;
+    const chip = document.createElement('span');
+    chip.className = 'mind-tier';
+    chip.textContent = tier;
+    const sc = document.createElement('span');
+    sc.className = 'mind-score';
+    sc.textContent = score;
+    li.append(av, nm, chip, sc);
+    return li;
+  };
+
+  const paintMindMine = (): void => {
+    const el = document.getElementById('home-mind-mine');
+    if (!el) return;
+    const tiq = myTiq();
+    const { rank, pct } = mindStanding(tiq);
+    el.textContent = `You: Rank #${rank} · TIQ ${tiq.toLocaleString('en-US')} · Top ${pct}% Global Mind`;
+  };
+
+  const loadMinds = async (): Promise<void> => {
+    const list = $('home-minds');
+    paintMindMine();
+    try {
+      const all = await getPlayerRanking();
+      list.textContent = '';
+      for (const p of all.slice(0, 3)) list.append(mindRow(p));
+    } catch {
+      list.textContent = '';
+      const li = document.createElement('li');
+      li.className = 'mind-row is-error';
+      li.textContent = 'Ladder unavailable';
+      list.append(li);
     }
   };
 
-  const paintClaim = (reward: number): void => {
-    const btn = $('daily-claim') as HTMLButtonElement;
-    const done = claimedToday();
-    btn.disabled = done;
-    btn.textContent = done ? 'Claimed' : `Claim ${coinText(reward)}`;
-  };
-
-  $('daily-claim').addEventListener('click', () => {
-    if (claimedToday()) return;
-    const raw = ($('daily-reward') as HTMLElement).textContent ?? '';
-    const reward = Number(raw.replace(/[^0-9]/g, '')) || 150;
-    earnCoins(reward);
-    markClaimed();
-    notify('success');
-    impact('medium');
-    paintClaim(reward);
-    void loadDaily();
+  document.getElementById('home-mind-cta')?.addEventListener('click', () => {
+    impact('light');
+    poke();
+    api.router.go('ranks');
   });
 
   /* ---------- launcher: one Play button + summary + sheet draft ---------- */
@@ -824,7 +654,6 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   $('avatar-btn').addEventListener('click', goProfile);
   $('home-profile-btn').addEventListener('click', goProfile);
   document.getElementById('coin-btn')?.addEventListener('click', goProfile);
-  document.getElementById('home-country-cta')?.addEventListener('click', openCountryPicker);
   /* Settings gear now lives in the Profile header — keep a guarded hook for legacy DOM. */
   document.getElementById('home-settings')?.addEventListener('click', () => {
     impact('light');
@@ -843,24 +672,9 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     api.start({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] });
   });
 
-  /* ---------- countdown ticker ---------- */
-
-  const startTick = (): void => {
-    if (tick) return;
-    tick = window.setInterval(() => {
-      if ($('s-home').hidden) return;
-      if (featured && featured.status !== 'ended') {
-        $('feat-count').textContent = formatCountdown(featured.endsAt);
-      }
-      const cup = getChannelCup();
-      const el = $('cup-count');
-      if (el) el.textContent = formatCountdown(cup.endsAt);
-    }, 1000);
-  };
-
   onChange(() => {
     void loadCountries();
-    void loadDaily();
+    void loadMinds();
     paintLauncher();
     paintSheet();
     paintPreviews();
@@ -877,16 +691,12 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   window.addEventListener('resize', paintPreviews);
 
   syncDraftFromMenu();
-  void loadFeatured();
   void loadCountries();
-  void loadDaily();
+  void loadMinds();
   paintDots();
   paintLauncher();
   paintSheet();
-  paintCup();
   armAuto();
-  startTick();
-  mountCoins(carousel);
 
   return {
     setRoute(id: string) {
@@ -895,8 +705,8 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       poke();
       paintLauncher();
       paintSheet();
-      paintCup();
       void loadCountries();
+      void loadMinds();
     },
   };
 }

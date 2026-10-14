@@ -1,5 +1,7 @@
 /**
- * verify-nations-cup.mjs — Playwright driver for scripts/nations-cup-check.js.
+ * verify-nations-cup.mjs — Playwright driver for scripts/nations-cup-check.js,
+ * which now covers the whole 2-slide Home carousel: Nations Cup (slide 0) and
+ * The Mind Ladder (slide 1).
  *
  * No new project dependencies: `playwright-core` is resolved at runtime only.
  * Run without touching package.json:
@@ -7,10 +9,11 @@
  *   NODE_PATH="C:\\Users\\PC-Y\\AppData\\Local\\Temp\\opencode\\check\\node_modules" node scripts/verify-nations-cup.mjs
  *
  * Serves ./dist over 127.0.0.1, then checks 320x640, 360x640 and 390x844 in
- * light + dark, with a long country name injected (ellipsis, no overflow):
- * country unset (CTA footer) and country set to DE (4th user row, real rank),
- * plus an NG pass (monogram fallback for the unvendored flag).
- * Saves .shots/nations-360x640-{light,dark}.png on success.
+ * light + dark, with a long country name injected on the Nations slide
+ * (ellipsis, no overflow). Each viewport runs the check on BOTH slides — dot 0
+ * (Nations Cup) and dot 1 (The Mind Ladder) — plus a country-set (DE) pass and
+ * an NG pass (monogram/flag-chip fallback). Saves
+ * .shots/nations-360x640-{light,dark}.png on success.
  */
 import http from 'node:http';
 import fs from 'node:fs';
@@ -30,12 +33,12 @@ try {
 } catch {
   console.error(
     'playwright-core not found. Run with NODE_PATH pointing at a temp install, e.g.:\n' +
-      '  NODE_PATH="C:\\\\Users\\\\PC-Y\\\\AppData\\\\Local\\\\Temp\\\\opencode\\\\check\\\\node_modules" node scripts/verify-nations-cup.mjs',
+      '  NODE_PATH="C:\\\\\\\\Users\\\\\\\\PC-Y\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\opencode\\\\\\\\check\\\\\\\\node_modules" node scripts/verify-nations-cup.mjs',
   );
   process.exit(2);
 }
 
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png' };
 
 function serve() {
   return new Promise((resolve) => {
@@ -75,7 +78,7 @@ const browser = await chromium.launch({ executablePath: EXE, args: ['--no-sandbo
 let failed = 0;
 let ran = 0;
 
-async function check(tag, w, h, theme, country) {
+async function check(tag, w, h, theme, country, slide) {
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, colorScheme: theme });
   if (country) {
     await ctx.addInitScript((code) => {
@@ -93,27 +96,30 @@ async function check(tag, w, h, theme, country) {
   const pg = await ctx.newPage();
   await pg.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'networkidle' });
   await pg.waitForTimeout(1300);
-  // Bring the Nations Cup slide into view: the dots overlay the active card,
-  // so they are only comparable to the nations card while it is active.
-  await pg.click('#home-dots .dot[data-dot="1"]');
+  // Land on the slide under test; the dots overlay the active card, so their
+  // geometry is only comparable while that card is the active one.
+  await pg.click(`#home-dots .dot[data-dot="${slide}"]`);
   await pg.waitForTimeout(700);
-  // Long country name: ellipsis must hold, nothing may spill out of the card.
-  await pg.evaluate((name) => {
-    const nm = document.querySelector('.nations-rank .nations-row .nm');
-    if (nm) {
-      nm.textContent = name;
-      nm.title = name;
-      nm.closest('li')?.setAttribute('aria-label', `#1 ${name} — 12,840 points, rising`);
-    }
-  }, LONG_NAME);
-  await pg.waitForTimeout(150);
-  const result = await pg.evaluate(`${checkSrc}\ncheckNationsCup()`);
+  // Long country name on the Nations slide: the ellipse must hold, nothing may
+  // spill out of the card.
+  if (slide === 0) {
+    await pg.evaluate((name) => {
+      const nm = document.querySelector('.nations-rank .nations-row .nm');
+      if (nm) {
+        nm.textContent = name;
+        nm.title = name;
+        nm.closest('li')?.setAttribute('aria-label', `#1 ${name} — 12,840 points, rising`);
+      }
+    }, LONG_NAME);
+    await pg.waitForTimeout(150);
+  }
+  const result = await pg.evaluate(`${checkSrc}\ncheckHomeCarousel()`);
   ran += 1;
   if (result.pass) {
-    console.log(`PASS nations ${tag}`);
+    console.log(`PASS carousel ${tag}`);
   } else {
     failed += 1;
-    console.log(`FAIL nations ${tag}\n- ${result.fails.join('\n- ')}`);
+    console.log(`FAIL carousel ${tag}\n- ${result.fails.join('\n- ')}`);
   }
   return { ctx, pg };
 }
@@ -122,25 +128,25 @@ try {
   for (const [w, h] of VIEWPORTS) {
     for (const theme of THEMES) {
       for (const country of [null, 'DE']) {
-        const tag = `${w}x${h} ${theme} country=${country ?? 'unset'}`;
-        const { ctx } = await check(tag, w, h, theme, country);
-        // Required screenshot: 360x640, CTA state (the clipped "Represent Your
-        // Flag" case), after the long-name injection to prove the ellipsis.
-        if (w === 360 && h === 640 && !country) {
-          fs.mkdirSync(SHOTS, { recursive: true });
-          const pg = ctx.pages()[0];
-          await pg.screenshot({ path: path.join(SHOTS, `nations-360x640-${theme}.png`) });
-          console.log(`shot nations-360x640-${theme}.png`);
+        for (const slide of [0, 1]) {
+          const tag = `${w}x${h} ${theme} country=${country ?? 'unset'} slide=${slide}`;
+          const { ctx } = await check(tag, w, h, theme, country, slide);
+          if (w === 360 && h === 640 && !country && slide === 0) {
+            fs.mkdirSync(SHOTS, { recursive: true });
+            const pg = ctx.pages()[0];
+            await pg.screenshot({ path: path.join(SHOTS, `nations-360x640-${theme}.png`) });
+            console.log(`shot nations-360x640-${theme}.png`);
+          }
+          await ctx.close();
         }
-        await ctx.close();
       }
     }
   }
-  // Monogram fallback: NG is not vendored — the user row must show initials,
-  // never the 2-letter box, with no overflow.
+  // Flag fallback: NG has no vendored local SVG on the Nations slide, so its
+  // flag resolves through the CDN cascade — the row must still render a badge.
   for (const theme of THEMES) {
-    const tag = `360x640 ${theme} country=NG (monogram fallback)`;
-    const { ctx } = await check(tag, 360, 640, theme, 'NG');
+    const tag = `360x640 ${theme} country=NG (flag fallback) slide=0`;
+    const { ctx } = await check(tag, 360, 640, theme, 'NG', 0);
     await ctx.close();
   }
 } finally {
@@ -149,7 +155,7 @@ try {
 }
 
 if (failed > 0) {
-  console.error(`${failed} of ${ran} nations-cup check(s) failed`);
+  console.error(`${failed} of ${ran} carousel check(s) failed`);
   process.exit(1);
 }
-console.log(`all ${ran} nations-cup checks passed`);
+console.log(`all ${ran} carousel checks passed`);

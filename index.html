@@ -303,94 +303,36 @@
 
           <div class="carousel-wrap">
             <div class="carousel" id="home-carousel" data-carousel tabindex="0" aria-roledescription="carousel" aria-label="Highlights">
-              <article class="car-card tourney" data-slide="0" aria-label="Featured tournament">
-                <div class="car-head">
-                  <span class="car-kicker">Featured Tournament</span>
-                  <span class="pill" id="feat-badge">Upcoming</span>
-                </div>
-                <div class="car-body">
-                  <div class="car-main">
-                    <h2 class="car-title" id="feat-name"><span class="skel w60"></span></h2>
-                    <div class="car-meta">
-                      <span class="car-prize"><span class="coin" data-coin aria-hidden="true"></span><b id="feat-prize">—</b></span>
-                      <span class="car-fee" id="feat-fee">—</span>
-                      <span class="car-count" id="feat-count">—</span>
-                    </div>
-                    <div class="cap-meter">
-                      <span class="cap-track" role="progressbar" aria-label="Tournament capacity" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="feat-bar"><i class="cap-fill" id="feat-fill"></i></span>
-                    </div>
-                  </div>
-                  <div class="trophy trophy-neon" aria-hidden="true">
-                    <span class="trophy-badge"><svg class="ico" aria-hidden="true"><use href="#i-cup" /></svg></span>
-                  </div>
-                </div>
-                <div class="car-foot">
-                  <span class="cap-label" id="feat-players">—</span>
-                  <button class="btn btn-primary sm join-live" type="button" id="feat-join">Join</button>
-                </div>
-              </article>
-              <article class="car-card nations-cup" data-slide="1" aria-label="Nations Cup global standings">
+              <article class="car-card nations-cup" data-slide="0" data-index="0" aria-label="Nations Cup — world standings">
                 <div class="car-head nations-head">
-                  <span class="car-kicker nations-kicker"><span class="nations-ico" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-globe" /></svg></span> Nations Cup</span>
-                  <span class="nations-weekly">Weekly</span>
+                  <span class="car-kicker nations-kicker"><span class="nations-ico" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-globe" /></svg></span> Nations Cup · S4</span>
+                  <span class="pill live pulse cup-live"><i class="live-dot" aria-hidden="true"></i>Live</span>
                 </div>
                 <ol class="mini-rank nations-rank" id="home-countries">
                   <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
                   <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
                   <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
                 </ol>
-                <div class="nations-foot">
-                  <button class="nations-cta" type="button" id="home-country-cta" aria-haspopup="dialog" aria-label="Pick your country in Profile — earn 100 coins">
-                    <span class="nations-cta-flag" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-flag" /></svg></span>
-                    <span class="nations-cta-label" id="home-country-cta-label">Pick your country</span>
-                    <span class="nations-cta-reward" id="home-country-cta-reward"><span class="coin coin-xs" data-coin aria-hidden="true"></span><b>+100</b></span>
-                  </button>
-                  <p class="car-note" id="home-country-note" hidden></p>
-                </div>
+                <p class="nations-mine" id="home-nation-mine"><span class="skel w60"></span></p>
+                <button class="btn card-cta nations-hold" type="button" id="home-cup-table">View Cup Table</button>
               </article>
-              <article class="car-card" data-slide="2" aria-label="Daily challenge">
-                <div class="car-head">
-                  <span class="car-kicker">Daily Challenge</span>
-                  <span class="streak" id="daily-streak">🔥 0</span>
+              <article class="car-card mind-ladder" data-slide="1" data-index="1" aria-label="The Mind Ladder — top tactical minds">
+                <div class="car-head mind-head">
+                  <span class="car-kicker mind-kicker"><span class="mind-ico" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg></span> The Mind Ladder</span>
+                  <span class="mind-top" id="mind-top">Top 100</span>
                 </div>
-                <h2 class="car-title sm" id="daily-title">Win 2 bot races</h2>
-                <p class="car-sub" id="daily-detail">Streak resets at midnight</p>
-                <div class="car-foot">
-                  <span class="car-prize"><span class="coin" data-coin aria-hidden="true"></span><b id="daily-reward">150</b><span class="car-fee">chest</span></span>
-                  <button class="btn btn-ghost sm" type="button" id="daily-claim">Claim</button>
-                </div>
-              </article>
-              <article class="car-card cup-card tourney" data-slide="3" aria-label="Telegram Channel Cup">
-                <div class="car-head">
-                  <span class="car-kicker">Telegram Channel Cup</span>
-                  <span class="pill live pulse" id="cup-badge"><i class="live-dot" aria-hidden="true"></i>Live</span>
-                </div>
-                <div class="car-body">
-                  <div class="car-main">
-                    <div class="cup-meta">
-                      <span class="cup-top" id="cup-top">—</span>
-                      <span class="car-prize"><span class="coin" data-coin aria-hidden="true"></span><b id="cup-prize">—</b></span>
-                    </div>
-                    <div class="car-meta">
-                      <span class="car-players" id="cup-players">—</span>
-                      <span class="car-count" id="cup-count">—</span>
-                    </div>
-                  </div>
-                  <div class="trophy trophy-gold" aria-hidden="true">
-                    <span class="trophy-badge"><svg class="ico" aria-hidden="true"><use href="#i-cup" /></svg></span>
-                  </div>
-                </div>
-                <div class="car-foot">
-                  <span class="car-sub" id="cup-sub">Points go to you + your squad</span>
-                  <button class="btn btn-coral sm join-live" type="button" id="cup-fight">Fight for Squad</button>
-                </div>
+                <ol class="mind-podium" id="home-minds">
+                  <li class="mind-row"><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
+                  <li class="mind-row"><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
+                  <li class="mind-row"><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
+                </ol>
+                <p class="mind-mine" id="home-mind-mine"><span class="skel w60"></span></p>
+                <button class="btn card-cta mind-cta" type="button" id="home-mind-cta">View Full Ladder</button>
               </article>
             </div>
             <div class="car-dots" id="home-dots" role="tablist" aria-label="Highlight pages">
               <button class="dot on" type="button" data-dot="0" role="tab" aria-selected="true" aria-label="Page 1"></button>
               <button class="dot" type="button" data-dot="1" role="tab" aria-selected="false" aria-label="Page 2"></button>
-              <button class="dot" type="button" data-dot="2" role="tab" aria-selected="false" aria-label="Page 3"></button>
-              <button class="dot" type="button" data-dot="3" role="tab" aria-selected="false" aria-label="Page 4"></button>
             </div>
           </div>
 

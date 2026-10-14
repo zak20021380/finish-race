@@ -1,270 +1,237 @@
 /**
- * nations-cup-check.js — DOM check for the Home "Nations Cup" carousel card.
+ * nations-cup-check.js — DOM check for the Home carousel: the two authentic
+ * slides — Nations Cup (slide 0) and The Mind Ladder (slide 1).
  * Paste into the browser console on any viewport, or run via
  * scripts/verify-nations-cup.mjs which drives it with Playwright.
  *
  * Fails when:
- *  - the card overflows (scrollH/scrollW > clientH/clientW: bottom clipped,
- *    bottom radius lost, or a long country name spills out),
- *  - the card's bottom corners are not rounded (radius lost),
- *  - the header still has the blue bullet, or misses NATIONS CUP / Weekly,
- *  - rows are not 44px with 6px gaps on one consistent surface,
- *  - a rank 1-3 badge misses gold/silver/bronze, or rank 4+ is not plain,
- *  - a flag is not a 28px lazy circle (or monogram fallback), or the
- *    2-letter text box shows,
- *  - the name is not 14/600 with ellipsis, points not 14/700 tabular,
- *    a trophy icon shows, or the trend is a pill instead of a plain arrow,
- *  - country set but no highlighted 4th user row; country unset but no
- *    40px accent-gradient "Pick your country" CTA with the +100 coin chip,
- *  - the dots are not inside the card, centered, ~8px from the bottom edge,
- *  - the carousel track/wrap is not transparent, or clips vertically
- *    (anything but overflow-y visible + 24px padding/-24px margin),
- *  - any leaf text in the card clips without ellipsis truncation.
+ *  - the track is not strictly 2 slides (data-index 0 and 1) with 2 dots, and
+ *    no slide carries the removed mock text (Neon Rush / Featured Tournament /
+ *    Daily Challenge / Telegram Channel Cup / Fight for Squad),
+ *  - a card overflows (scrollH/scrollW > clientH/clientW), loses its radius or
+ *    does not clip to it,
+ *  - anything samples the backdrop (backdrop-filter / blur) — the dark-clay
+ *    rule,
+ *  - the Nations Cup header is not "NATIONS CUP · S4" with the globe glyph and
+ *    a glowing LIVE pill, does not carry gold/silver/bronze rank markers on
+ *    three 40px rows with a real flag badge, name and score each, misses the
+ *    "Your nation" contribution strip, or misses the 48px "View Cup Table" pill,
+ *  - The Mind Ladder header is not "THE MIND LADDER" with the brain glyph and a
+ *    TOP 100 pill, does not carry three 40px podium rows (sphere avatar + flag
+ *    badge + name + tier chip + gold TIQ score), misses the "You: Rank #
+ *    · TIQ · Top %" standing bar, or misses the 48px "View Full Ladder" pill,
+ *  - a CTA pill is under 48px tall, or a nation/podium row under 40px,
+ *  - the active carousel dot / aria-selected / .is-active are out of sync with
+ *    the scrolled slide,
+ *  - any element bottoms out behind the tab dock, the page or #s-home scrolls,
+ *    or any leaf text clips without ellipsis truncation.
  *
  * Returns { pass, fails[] }.
  */
-function checkNationsCup() {
+function checkHomeCarousel() {
   const fails = [];
   const near = (a, b, t) => Math.abs(a - b) <= t;
+  const $ = (s) => document.querySelector(s);
 
-  const card = document.querySelector('.car-card.nations-cup');
-  if (!card) return { pass: false, fails: ['missing .car-card.nations-cup'] };
-  const cr = card.getBoundingClientRect();
-  if (cr.width === 0 || cr.height === 0) return { pass: false, fails: ['nations card has 0 size'] };
-
-  // ---- 1. no overflow: content fits inside the card's bottom padding ----
-  if (card.scrollHeight > card.clientHeight + 2) {
-    fails.push(`card clipped vertically: scrollH ${card.scrollHeight} > clientH ${card.clientHeight}`);
-  }
-  if (card.scrollWidth > card.clientWidth + 2) {
-    fails.push(`card clipped horizontally: scrollW ${card.scrollWidth} > clientW ${card.clientWidth}`);
-  }
-
-  // ---- card corners intact: full radius + clipping kept inside ----
-  const cs = getComputedStyle(card);
-  const bl = parseFloat(cs.borderBottomLeftRadius) || 0;
-  const br = parseFloat(cs.borderBottomRightRadius) || 0;
-  if (bl < 8 || br < 8) {
-    fails.push(`card bottom radius lost: bl ${cs.borderBottomLeftRadius} br ${cs.borderBottomRightRadius}`);
-  }
-  if (cs.overflow !== 'hidden' && cs.overflowY !== 'hidden' && cs.overflow !== 'clip') {
-    fails.push(`card must clip to its radius, overflow is "${cs.overflow}"`);
-  }
-
-  // ---- 2. header: globe + NATIONS CUP 13/700 tracked caps, Weekly right, no bullet ----
-  const kicker = card.querySelector('.nations-kicker');
-  if (!kicker) {
-    fails.push('missing .nations-kicker');
-  } else {
-    const t = (kicker.textContent || '').replace(/\s+/g, ' ').trim();
-    if (!/nations cup/i.test(t)) fails.push(`kicker text "${t}" — want "NATIONS CUP"`);
-    const ks = getComputedStyle(kicker);
-    if (parseFloat(ks.fontSize) < 12.5 || parseFloat(ks.fontSize) > 13.5) {
-      fails.push(`kicker font-size ${ks.fontSize} — want 13px`);
-    }
-    if (parseInt(ks.fontWeight, 10) < 700) fails.push(`kicker weight ${ks.fontWeight} — want 700`);
-    if (!kicker.querySelector('.nations-ico svg, .nations-ico .ico')) {
-      fails.push('kicker missing globe icon (.nations-ico svg)');
-    }
-    const before = getComputedStyle(kicker, '::before');
-    if (before.content !== 'none' && before.content !== '') {
-      fails.push(`blue bullet still present (::before content ${before.content})`);
-    }
-  }
-  const weekly = card.querySelector('.nations-weekly');
-  if (!weekly) {
-    fails.push('missing .nations-weekly caption');
-  } else if ((weekly.textContent || '').trim() !== 'Weekly') {
-    fails.push(`weekly caption "${(weekly.textContent || '').trim()}" — want "Weekly"`);
-  }
-
-  // ---- 3. rows: 44px, 6px gaps, one consistent surface ----
-  const rows = [...card.querySelectorAll('.nations-rank .nations-row:not(.is-error)')];
-  const cta = document.getElementById('home-country-cta');
-  const ctaVisible = !!cta && !cta.hidden && cta.getBoundingClientRect().height > 0;
-  if (rows.length !== 3 && rows.length !== 4) {
-    fails.push(`want 3 rows (+CTA) or 4 rows (user row), found ${rows.length}`);
-  }
-  const surfaces = new Set();
-  rows.forEach((li, i) => {
-    const r = li.getBoundingClientRect();
-    if (!near(r.height, 44, 1)) fails.push(`row ${i + 1} height ${Math.round(r.height)} — want 44px`);
-    if (i > 0) {
-      const prev = rows[i - 1].getBoundingClientRect();
-      const gap = r.top - prev.bottom;
-      if (!near(gap, 6, 1.5)) fails.push(`row gap ${i}→${i + 1} is ${gap.toFixed(1)}px — want 6px`);
-    }
-    surfaces.add(getComputedStyle(li).backgroundColor);
-    // rank badge
-    const rk = li.querySelector('.rk');
-    const rank = parseInt((rk?.textContent || '').trim(), 10);
-    if (Number.isNaN(rank) && !li.classList.contains('is-user')) {
-      fails.push(`row ${i + 1} rank "${(rk?.textContent || '').trim()}" is not a number`);
-    } else if (!li.classList.contains('is-user')) {
-      const want = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
-      if (want && !(rk?.classList.contains(want))) fails.push(`rank ${rank} missing .${want} badge`);
-      if (!want && (rk?.classList.contains('gold') || rk?.classList.contains('silver') || rk?.classList.contains('bronze'))) {
-        fails.push(`rank ${rank} should be a plain number, has a podium badge`);
-      }
-    }
-    // flag: 28px circle, lazy img or monogram — never the 2-letter box
-    const circ = li.querySelector('.flag-circle');
-    if (!circ) {
-      fails.push(`row ${i + 1} missing .flag-circle`);
-    } else {
-      const fr = circ.getBoundingClientRect();
-      if (!near(fr.width, 28, 1) || !near(fr.height, 28, 1)) {
-        fails.push(`row ${i + 1} flag ${Math.round(fr.width)}x${Math.round(fr.height)} — want 28px circle`);
-      }
-      const img = circ.querySelector('img.flag-img');
-      const mono = circ.querySelector('.flag-mono');
-      if (img) {
-        if (img.loading !== 'lazy') fails.push(`row ${i + 1} flag img must be lazy-loaded`);
-      } else if (!mono || !(mono.textContent || '').trim()) {
-        fails.push(`row ${i + 1} flag needs lazy img or monogram fallback`);
-      }
-    }
-    if (li.querySelector('.flag-code')) fails.push(`row ${i + 1} shows the 2-letter text box (.flag-code)`);
-    // name 14/600 ellipsis
-    const nm = li.querySelector('.nm');
-    if (nm) {
-      const ns = getComputedStyle(nm);
-      if (parseFloat(ns.fontSize) < 13.5 || parseFloat(ns.fontSize) > 14.5) {
-        fails.push(`row ${i + 1} name font-size ${ns.fontSize} — want 14px`);
-      }
-      if (parseInt(ns.fontWeight, 10) < 600) fails.push(`row ${i + 1} name weight ${ns.fontWeight} — want 600`);
-      if (ns.textOverflow !== 'ellipsis') fails.push(`row ${i + 1} name must ellipsize`);
-    }
-    // points 14/700 tabular, no trophy
-    const pt = li.querySelector('.pt');
-    if (pt) {
-      const ps = getComputedStyle(pt);
-      if (parseFloat(ps.fontSize) < 13.5 || parseFloat(ps.fontSize) > 14.5) {
-        fails.push(`row ${i + 1} points font-size ${ps.fontSize} — want 14px`);
-      }
-      if (!/tabular-nums/.test(ps.fontVariantNumeric || '')) {
-        fails.push(`row ${i + 1} points must use tabular numbers`);
-      }
-      if (li.querySelector('.pt .cup')) fails.push(`row ${i + 1} still has the trophy icon`);
-    }
-    // trend: plain colored arrow + delta, no pill
-    const tr = li.querySelector('.tr');
-    if (tr) {
-      const ts = getComputedStyle(tr);
-      const bg = ts.backgroundColor || '';
-      const isTransparent = /^rgba\(0,\s*0,\s*0,\s*0\)$/.test(bg) || bg === 'transparent';
-      if (!isTransparent || ts.backgroundImage !== 'none' || ts.boxShadow !== 'none') {
-        fails.push(`row ${i + 1} trend still a pill (bg ${bg}, shadow ${ts.boxShadow})`);
-      }
-      const txt = (tr.textContent || '').trim();
-      if (!/^[▲▼] \d$/.test(txt) && txt !== '•' && txt !== '–') {
-        fails.push(`row ${i + 1} trend "${txt}" — want "▲ N" / "▼ N" / "•"`);
-      }
-    }
-    // nothing may pass the card's bottom padding
-    if (r.bottom > cr.bottom - 24 + 1 && i === rows.length - 1 && !ctaVisible) {
-      // last row with no CTA must still clear the dots reserve (checked via card overflow too)
-    }
-  });
-  if (surfaces.size > 2) {
-    fails.push(`rows use ${surfaces.size} surfaces — want one consistent surface (+ user highlight)`);
-  }
-
-  // ---- 4 + 5. user row vs CTA footer ----
-  const meRows = rows.filter((li) => li.classList.contains('me'));
-  if (ctaVisible) {
-    if (meRows.length > 0 && rows.length > 3) {
-      fails.push('CTA visible but a 4th user row is also shown');
-    }
-    const cr2 = cta.getBoundingClientRect();
-    if (!near(cr2.height, 40, 1)) fails.push(`CTA height ${Math.round(cr2.height)} — want 40px`);
-    const bg = getComputedStyle(cta).backgroundImage || '';
-    if (!/linear-gradient/i.test(bg)) fails.push('CTA must use an accent gradient (distinct from rows)');
-    const label = document.getElementById('home-country-cta-label');
-    if ((label?.textContent || '').trim().toLowerCase() !== 'pick your country') {
-      fails.push(`CTA label "${(label?.textContent || '').trim()}" — want "Pick your country"`);
-    }
-    const reward = document.getElementById('home-country-cta-reward');
-    if (!reward || !/\+100/.test(reward.textContent || '') || !reward.querySelector('.coin')) {
-      fails.push('CTA needs the +100 coin reward chip (coin icon)');
-    }
-    if (!cta.querySelector('.nations-cta-flag svg')) fails.push('CTA needs a flag icon (no empty box)');
-    if (cta.querySelector('.flag-code')) fails.push('CTA shows the 2-letter text box');
-    if (cr2.bottom > cr.bottom - 24 + 1) fails.push('CTA exceeds the card bottom padding');
-  } else {
-    if (meRows.length !== 1) {
-      fails.push(`country set: want the highlighted user row as 4th row, found ${meRows.length} .me rows`);
-    } else {
-      const bs = getComputedStyle(meRows[0]).boxShadow || '';
-      if (!/14,\s*165,\s*233|125,\s*211,\s*252|56,\s*189,\s*248/.test(bs)) {
-        fails.push('user row missing the accent border');
-      }
-    }
-  }
-
-  // ---- 6. dots inside the card, centered, 8px from the bottom edge ----
-  const dots = document.getElementById('home-dots');
-  if (!dots) {
-    fails.push('missing #home-dots');
-  } else {
-    const dr = dots.getBoundingClientRect();
-    if (dr.left < cr.left - 1 || dr.right > cr.right + 1 || dr.top < cr.top - 1 || dr.bottom > cr.bottom + 1) {
-      fails.push(`dots not inside the card (dots ${Math.round(dr.bottom)} vs card ${Math.round(cr.bottom)})`);
-    }
-    const fromBottom = cr.bottom - dr.bottom;
-    if (fromBottom < 4 || fromBottom > 14) {
-      fails.push(`dots ${fromBottom.toFixed(1)}px from card bottom — want 8px`);
-    }
-    const off = Math.abs((dr.left + dr.right) / 2 - (cr.left + cr.right) / 2);
-    if (off > 5) fails.push(`dots off-center by ${off.toFixed(1)}px`);
-  }
-
-  // ---- carousel: transparent track, overflow-y visible, 24px padding/-24px margin ----
   const track = document.getElementById('home-carousel');
-  const wrap = track?.closest('.carousel-wrap');
-  for (const [el, name] of [[track, 'carousel track'], [wrap, 'carousel container']]) {
-    if (!el) {
-      fails.push(`missing ${name}`);
-      continue;
-    }
-    const bgc = getComputedStyle(el).backgroundColor || '';
-    if (!/^rgba\(0,\s*0,\s*0,\s*0\)$/.test(bgc) && bgc !== 'transparent') {
-      fails.push(`${name} not transparent (bg ${bgc}) — the dark rectangle must go`);
-    }
+  if (!track) return { pass: false, fails: ['missing #home-carousel'] };
+  const cards = [...track.querySelectorAll('.car-card')];
+  const dots = [...document.querySelectorAll('#home-dots .dot')];
+
+  // ---- 1. strictly two slides ----
+  if (cards.length !== 2) fails.push(`want exactly 2 slides, found ${cards.length}`);
+  if (dots.length !== 2) fails.push(`want exactly 2 pagination dots, found ${dots.length}`);
+  if (cards.map((c) => c.dataset.index).join(',') !== '0,1') {
+    fails.push(`slide data-index must be 0,1 — found ${cards.map((c) => c.dataset.index).join(',')}`);
   }
-  if (track) {
-    const ts = getComputedStyle(track);
-    if (ts.overflowY !== 'visible' && ts.overflowY !== 'auto') {
-      fails.push(`carousel overflow-y is "${ts.overflowY}" — want visible (shadows must not clip)`);
+  if (!cards[0]?.classList.contains('nations-cup')) fails.push('slide 0 must be .car-card.nations-cup');
+  if (!cards[1]?.classList.contains('mind-ladder')) fails.push('slide 1 must be .car-card.mind-ladder');
+
+  // ---- 2. no mock tournament copy anywhere on Home ----
+  const homeText = (document.getElementById('s-home')?.innerText || '').replace(/\s+/g, ' ');
+  for (const banned of ['Neon Rush', 'Featured Tournament', 'Daily Challenge', 'Telegram Channel Cup', 'Fight for Squad']) {
+    if (new RegExp(banned, 'i').test(homeText)) fails.push(`mock slide text still present: "${banned}"`);
+  }
+
+  // ---- 3. every card clips to its radius, no overflow, no backdrop sampling ----
+  for (const c of cards) {
+    const name = c.className.toString().split(' ').find((x) => x !== 'car-card') || 'car-card';
+    const cr = c.getBoundingClientRect();
+    if (cr.width === 0 || cr.height === 0) { fails.push(`${name} has 0 size`); continue; }
+    if (c.scrollHeight > c.clientHeight + 2) fails.push(`${name} clipped vertically: ${c.scrollHeight} > ${c.clientHeight}`);
+    if (c.scrollWidth > c.clientWidth + 2) fails.push(`${name} clipped horizontally: ${c.scrollWidth} > ${c.clientWidth}`);
+    const cs = getComputedStyle(c);
+    if ((parseFloat(cs.borderBottomLeftRadius) || 0) < 8) fails.push(`${name} lost its bottom radius`);
+    if (cs.overflow !== 'hidden' && cs.overflowY !== 'hidden' && cs.overflow !== 'clip') {
+      fails.push(`${name} must clip to its radius (overflow ${cs.overflow})`);
     }
-    if (!near(parseFloat(ts.paddingTop), 24, 1) || !near(parseFloat(ts.paddingBottom), 24, 1)) {
-      fails.push(`carousel padding-block ${ts.paddingTop}/${ts.paddingBottom} — want 24px`);
+    const bf = cs.backdropFilter || cs.webkitBackdropFilter || 'none';
+    if (bf !== 'none') fails.push(`${name} samples the backdrop (backdrop-filter ${bf})`);
+    if (/blur\(/.test(cs.filter || '')) fails.push(`${name} applies blur()`);
+  }
+
+  // ---- 4. Nations Cup (slide 0) ----
+  const cup = cards.find((c) => c.classList.contains('nations-cup'));
+  if (cup) {
+    const kicker = cup.querySelector('.nations-kicker');
+    const ktxt = (kicker?.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!/nations cup/i.test(ktxt) || !/s4/i.test(ktxt)) fails.push(`cup header "${ktxt}" — want "NATIONS CUP · S4"`);
+    if (!kicker?.querySelector('.nations-ico use[href="#i-globe"]')) fails.push('cup header missing the globe glyph');
+    const live = cup.querySelector('.cup-live');
+    if (!live || !/live/i.test(live.textContent || '')) fails.push('cup missing the LIVE pill');
+    if (live) {
+      const before = getComputedStyle(live, '::before');
+      if (before.content === 'none') { /* pulse dot is a child, not a pseudo */ }
+      if (!live.querySelector('.live-dot')) fails.push('LIVE pill missing its pulse dot');
     }
-    if (!near(parseFloat(ts.marginTop), -24, 1) || !near(parseFloat(ts.marginBottom), -24, 1)) {
-      fails.push(`carousel margin-block ${ts.marginTop}/${ts.marginBottom} — want -24px`);
+    const rows = [...cup.querySelectorAll('.nations-rank .nations-row:not(.is-error)')];
+    if (rows.length !== 3) fails.push(`cup wants exactly 3 nation rows, found ${rows.length}`);
+    const wantBadge = ['gold', 'silver', 'bronze'];
+    rows.forEach((li, i) => {
+      const r = li.getBoundingClientRect();
+      if (r.height < 39.5) fails.push(`nation row ${i + 1} height ${Math.round(r.height)} < 40px`);
+      const rk = li.querySelector('.rk');
+      if ((rk?.textContent || '').trim() !== String(i + 1)) fails.push(`nation row ${i + 1} rank marker "${(rk?.textContent || '').trim()}" — want "${i + 1}"`);
+      if (!rk?.classList.contains(wantBadge[i])) fails.push(`nation row ${i + 1} rank ${i + 1} missing .${wantBadge[i]} badge`);
+      const circ = li.querySelector('.flag-circle');
+      if (!circ) fails.push(`nation row ${i + 1} missing .flag-circle flag badge`);
+      else {
+        const img = circ.querySelector('img.flag-img');
+        if (img && img.loading !== 'lazy') fails.push(`nation row ${i + 1} flag must be lazy-loaded`);
+        if (!img && !circ.querySelector('.flag-mono')) fails.push(`nation row ${i + 1} flag needs a lazy img or a monogram fallback`);
+        if (li.querySelector('.flag-code')) fails.push(`nation row ${i + 1} shows the 2-letter text box`);
+      }
+      const nm = li.querySelector('.nm');
+      if (!(nm?.textContent || '').trim()) fails.push(`nation row ${i + 1} missing a country name`);
+      if (nm && getComputedStyle(nm).textOverflow !== 'ellipsis') fails.push(`nation row ${i + 1} name must ellipsize`);
+      const pt = li.querySelector('.pt b');
+      if (!/^[\d,]+$/.test((pt?.textContent || '').trim())) fails.push(`nation row ${i + 1} missing a numeric score`);
+      if (!/tabular-nums/.test(getComputedStyle(li.querySelector('.pt')).fontVariantNumeric || '')) fails.push(`nation row ${i + 1} score must use tabular numbers`);
+    });
+    const mine = document.getElementById('home-nation-mine');
+    if (!mine || !/^your nation:/i.test((mine.textContent || '').trim())) fails.push('cup missing the "Your nation" contribution strip');
+    const btn = document.getElementById('home-cup-table');
+    if (!btn) fails.push('cup missing #home-cup-table');
+    else {
+      if ((btn.textContent || '').trim() !== 'View Cup Table') fails.push(`cup CTA "${(btn.textContent || '').trim()}" — want "View Cup Table"`);
+      const h = btn.getBoundingClientRect().height;
+      if (h < 47.5) fails.push(`cup CTA height ${Math.round(h)} < 48px`);
     }
   }
 
-  // ---- no clipped leaf text without ellipsis inside the card ----
-  for (const el of card.querySelectorAll('*')) {
-    if (!(el instanceof HTMLElement)) continue;
-    const r = el.getBoundingClientRect();
-    if (r.width === 0 || r.height === 0) continue;
-    if (el.scrollWidth <= el.clientWidth + 2) continue;
-    const st = getComputedStyle(el);
-    if (st.textOverflow === 'ellipsis') continue;
-    if (st.position === 'absolute' && (st.clip !== 'auto' || /rect\(/.test(st.clipPath || ''))) continue;
-    if (el.children.length === 0 && (el.textContent || '').trim().length > 0) {
-      fails.push(`text clipped without ellipsis: <${el.tagName.toLowerCase()} class="${el.className}"> "${(el.textContent || '').trim().slice(0, 32)}"`);
-      break;
+  // ---- 5. The Mind Ladder (slide 1) ----
+  const mind = cards.find((c) => c.classList.contains('mind-ladder'));
+  if (mind) {
+    const kicker = mind.querySelector('.mind-kicker');
+    if (!/mind ladder/i.test((kicker?.textContent || '').replace(/\s+/g, ' '))) fails.push('ladder header missing "THE MIND LADDER"');
+    if (!kicker?.querySelector('.mind-ico use[href="#i-brain"]')) fails.push('ladder header missing the brain glyph');
+    const top = mind.querySelector('.mind-top');
+    if (!/top 100/i.test((top?.textContent || '').trim())) fails.push(`ladder status pill "${(top?.textContent || '').trim()}" — want "Top 100"`);
+    const rows = [...mind.querySelectorAll('.mind-podium .mind-row:not(.is-error)')];
+    if (rows.length !== 3) fails.push(`ladder wants exactly 3 podium rows, found ${rows.length}`);
+    rows.forEach((li, i) => {
+      const r = li.getBoundingClientRect();
+      if (r.height < 39.5) fails.push(`podium row ${i + 1} height ${Math.round(r.height)} < 40px`);
+      if (!li.querySelector('.mind-av')) fails.push(`podium row ${i + 1} missing the sphere avatar`);
+      if (!li.querySelector('.mind-flag')) fails.push(`podium row ${i + 1} missing the flag badge`);
+      if (!(li.querySelector('.mind-nm')?.textContent || '').trim()) fails.push(`podium row ${i + 1} missing the player name`);
+      if (!(li.querySelector('.mind-tier')?.textContent || '').trim()) fails.push(`podium row ${i + 1} missing the tier chip`);
+      const sc = li.querySelector('.mind-score');
+      if (!/^[\d,]+$/.test((sc?.textContent || '').trim())) fails.push(`podium row ${i + 1} missing a numeric TIQ score`);
+      const col = sc ? getComputedStyle(sc).color : '';
+      if (!/rgb\(252,\s*211,\s*77\)/.test(col)) fails.push(`podium row ${i + 1} TIQ score not gold (${col})`);
+    });
+    const mine = document.getElementById('home-mind-mine');
+    if (!/^you: rank #\d+ · tiq [\d,]+ · top \d+% global mind$/i.test((mine?.textContent || '').trim())) {
+      fails.push(`ladder standing bar "${(mine?.textContent || '').trim()}" — want "You: Rank #N · TIQ N · Top N% Global Mind"`);
+    }
+    const btn = document.getElementById('home-mind-cta');
+    if (!btn) fails.push('ladder missing #home-mind-cta');
+    else {
+      if ((btn.textContent || '').trim() !== 'View Full Ladder') fails.push(`ladder CTA "${(btn.textContent || '').trim()}" — want "View Full Ladder"`);
+      const h = btn.getBoundingClientRect().height;
+      if (h < 47.5) fails.push(`ladder CTA height ${Math.round(h)} < 48px`);
+    }
+  }
+
+  // ---- 6. dots: inside the card, synced to the scrolled slide ----
+  const dotsBox = document.getElementById('home-dots');
+  const active = (() => {
+    const step = cards[1] ? cards[1].offsetLeft - cards[0].offsetLeft : 1;
+    return Math.min(cards.length - 1, Math.max(0, Math.round(track.scrollLeft / (step || 1))));
+  })();
+  if (dotsBox) {
+    const dr = dotsBox.getBoundingClientRect();
+    const cr = cards[active].getBoundingClientRect();
+    if (dr.left < cr.left - 1 || dr.right > cr.right + 1) fails.push('dots are not inside the active card');
+    const dot = dotsBox.querySelector('.dot');
+    const after = dot ? getComputedStyle(dot, '::after') : null;
+    if (after) {
+      const w = parseFloat(after.width) || 0;
+      const h = parseFloat(after.height) || 0;
+      // The card's inside dot reserve (28px) is the ceiling for the band: it may
+      // not grow upward or it would swallow the CTA's tap area.
+      if (w < 44 || h < 24) fails.push(`dot hit area ${w}x${h} — want at least 44x24`);
+    }
+    dots.forEach((d, i) => {
+      const on = i === active;
+      if (d.classList.contains('on') !== on) fails.push(`dot ${i} .on out of sync (active slide ${active})`);
+      if (d.getAttribute('aria-selected') !== String(on)) fails.push(`dot ${i} aria-selected out of sync`);
+    });
+    cards.forEach((c, i) => {
+      if (c.classList.contains('is-active') !== (i === active)) fails.push(`slide ${i} .is-active out of sync`);
+    });
+  } else {
+    fails.push('missing #home-dots');
+  }
+
+  // ---- 7. column fit + nothing behind the dock ----
+  const tabs = document.getElementById('tabs');
+  const tabTop = tabs ? tabs.getBoundingClientRect().top : Number.POSITIVE_INFINITY;
+  const home = document.getElementById('s-home');
+  if (document.documentElement.scrollHeight > window.innerHeight + 1) fails.push('the page scrolls');
+  if (home && home.scrollHeight > home.clientHeight + 2) fails.push(`#s-home overflows (${home.scrollHeight} > ${home.clientHeight})`);
+  if (home) {
+    for (const el of home.querySelectorAll('*')) {
+      if (el.closest('#tabs')) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+      if (r.bottom > tabTop + 1) {
+        fails.push(`behind the tab dock: <${el.tagName.toLowerCase()} class="${el.className.toString().slice(0, 40)}">`);
+        break;
+      }
+    }
+  }
+  const play = document.getElementById('home-play');
+  if (play && play.getBoundingClientRect().bottom > tabTop + 1) fails.push('PLAY is pushed behind the dock');
+
+  // ---- 8. no clipped leaf text without ellipsis inside the deck ----
+  for (const c of cards) {
+    for (const el of c.querySelectorAll('*')) {
+      if (!(el instanceof HTMLElement)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+      if (el.scrollWidth <= el.clientWidth + 2) continue;
+      const st = getComputedStyle(el);
+      if (st.textOverflow === 'ellipsis') continue;
+      if (st.position === 'absolute' && (st.clip !== 'auto' || /rect\(/.test(st.clipPath || ''))) continue;
+      if (el.children.length === 0 && (el.textContent || '').trim().length > 0) {
+        fails.push(`text clipped without ellipsis: <${el.tagName.toLowerCase()} class="${el.className}"> "${(el.textContent || '').trim().slice(0, 32)}"`);
+        break;
+      }
     }
   }
 
   return { pass: fails.length === 0, fails };
 }
 
+/** Back-compat entry point used by scripts/verify-nations-cup.mjs. */
+function checkNationsCup() {
+  return checkHomeCarousel();
+}
+
 // Browser-console usage
 if (typeof window !== 'undefined' && new URLSearchParams(location.search).has('assert')) {
-  const r = checkNationsCup();
-  if (!r.pass) throw new Error(`nations cup:\n- ${r.fails.join('\n- ')}`);
+  const r = checkHomeCarousel();
+  if (!r.pass) throw new Error(`home carousel:\n- ${r.fails.join('\n- ')}`);
 }
