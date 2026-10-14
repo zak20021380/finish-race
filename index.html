@@ -734,7 +734,20 @@
             <button class="seg-b" type="button" role="tab" id="tab-board" data-shop="board" aria-selected="false" aria-controls="shop-grid">Boards</button>
           </div>
 
+          <!-- showcase mode: the catalogue is open and the till is shut, so the notice sits
+               between the tabs and the grid where it explains every card below it -->
+          <div class="shop-closed">
+            <svg class="ico shop-closed-ico" aria-hidden="true"><use href="#i-lock" /></svg>
+            <div class="shop-closed-txt">
+              <p class="shop-closed-t">Shop Temporarily Closed</p>
+              <p class="shop-closed-s">Items are for preview only and not for sale right now.</p>
+            </div>
+          </div>
+
           <div class="shop-grid" id="shop-grid" role="tabpanel" aria-labelledby="tab-ball" data-scroll></div>
+
+          <!-- the same toast the board uses, so a locked card refuses on this screen too -->
+          <p class="note" role="status" aria-live="polite"></p>
         </section>
 
         <section class="screen menu" id="s-profile" data-screen="profile" tabindex="-1" hidden aria-labelledby="profile-title">

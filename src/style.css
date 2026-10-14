@@ -1431,6 +1431,24 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
 .balance-l { font-size: var(--t-micro); font-weight: 700; letter-spacing: .02em; }
 .balance.bump { animation: coin-pop .4s cubic-bezier(.2, 1.3, .5, 1); }
 
+/* ---- showcase mode: one inset plaque between the tabs and the grid ----
+   Recessed into the slab rather than lifted off it, with the coin gold as its only edge, so it
+   reads as a notice stamped into the screen instead of a card competing with the items. */
+.shop-closed {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-md);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--coin-line);
+}
+.shop-closed-ico { width: 20px; height: 20px; color: var(--coin-ink); }
+.shop-closed-txt { min-width: 0; }
+.shop-closed-t { margin: 0; font-size: var(--t-2); font-weight: 800; color: var(--ink); }
+.shop-closed-s { margin: 2px 0 0; font-size: var(--t-micro); line-height: 1.35; font-weight: 600; color: var(--ink-soft); }
+
 .shop-grid {
   flex: 1 1 auto;
   min-height: 0;
@@ -1439,6 +1457,7 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   gap: var(--s3);
   align-content: start;
 }
+/* a card is a slab of the same clay as every other panel: opaque, lit from above, no live blur */
 .cos {
   position: relative;
   display: flex;
@@ -1446,16 +1465,8 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   gap: var(--s2);
   padding: var(--s3);
   border-radius: var(--radius-md);
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow:
-    var(--glass-border),
-    var(--glass-border-top),
-    var(--elev-2);
-}
-@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
-  .cos { background: linear-gradient(180deg, var(--card-a) 0%, var(--card-b) 100%); }
+  background: var(--clay-face);
+  box-shadow: var(--clay), var(--clay-ring);
 }
 /* the preview is the renderer's own board patch, so it needs no border to explain itself */
 .cos-pv {
@@ -1481,6 +1492,10 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   font: inherit;
   font-size: var(--t-3);
   font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   flex: none;
   min-width: 68px;
   min-height: 44px;
@@ -1492,6 +1507,8 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   box-shadow: 0 10px 20px -12px var(--brand-glow);
   transition: transform var(--motion-fast), opacity var(--motion-fast);
 }
+/* the padlock only exists for the locked capsule, so it ships hidden */
+.cos-lock { display: none; width: 1.05em; height: 1.05em; }
 .cos-btn:active { transform: var(--motion-press); opacity: .9; }
 .cos-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .cos[data-state="owned"] .cos-btn {
@@ -1513,6 +1530,21 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   cursor: not-allowed;
 }
 .cos[data-state="short"] .cos-price { color: var(--danger); }
+/* showcase mode: the buy key becomes an inert clay capsule that only explains itself.
+   It takes its own line, because a padlock plus "Not for sale" never fits beside a price inside a
+   160px card — and the 48px tap target it buys back is worth more than the row it costs. */
+.cos[data-state="locked"] .cos-foot { flex-direction: column; align-items: stretch; gap: var(--s1); }
+.cos[data-state="locked"] .cos-price { opacity: .4; }
+.cos[data-state="locked"] .cos-btn {
+  width: 100%;
+  min-height: 48px;
+  background: var(--field);
+  color: var(--ink-soft);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  cursor: not-allowed;
+}
+.cos[data-state="locked"] .cos-btn:active { transform: none; opacity: 1; }
+.cos[data-state="locked"] .cos-btn .cos-lock { display: block; opacity: .85; }
 .cos-note { margin: 0; font-size: var(--t-micro); font-weight: 700; color: var(--danger); }
 /* an odd last card takes the row and lies on its side, so the grid never leaves a hole */
 .cos.wide { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: var(--s3); }

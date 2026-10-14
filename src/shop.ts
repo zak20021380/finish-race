@@ -5,6 +5,11 @@
  * Coins here are mock and local: the only gate on a purchase is the balance in the header, which is
  * the same number Home shows and the same save the board reads. Buying spends, takes ownership and
  * puts the item on in one tap, so the card you just paid for is wearing it when the sheet closes.
+ *
+ * Showcase mode (`SHOWCASE`) parks all of that: the tabs still browse, every card still previews
+ * the real thing, but the only card that answers is the one you are already wearing. The rest wear
+ * an inert "Not for sale" capsule, and the two doors to the wallet — the card and the confirm key —
+ * both refuse before a coin moves. Nothing was deleted to get here: `SHOWCASE = false` reopens it.
  */
 import { ITEMS, themeOf, type CosKind, type Item, type Theme } from './themes';
 import { createPreview, type Preview } from './render';
@@ -18,11 +23,17 @@ export interface ShopApi {
   sheets: Sheets;
   /** sheet ids come from the DOM so markup stays the single source of truth */
   sheet(id: string): HTMLElement | null;
+  /** the board's own toast (`showNote` in main.ts): the shop refuses in the game's voice */
+  note(msg: string, error: boolean, ttl: number): void;
 }
 
 export interface Shop {
   setRoute(id: string): void;
 }
+
+/** Showcase mode: the catalogue is open, the till is shut. One flag reopens the shop. */
+const SHOWCASE: boolean = true;
+const SHOWCASE_NOTE = 'Shop is temporarily disabled — items are not for sale.';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -30,7 +41,9 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const CARD = `<article class="cos"><canvas class="cos-pv" aria-hidden="true"></canvas>`
   + `<div class="cos-txt"><h3 class="cos-n"></h3><p class="cos-d"></p>`
   + `<div class="cos-foot"><span class="cos-price"><span class="coin" data-coin aria-hidden="true"></span><b></b></span>`
-  + `<button class="cos-btn" type="button"></button></div>`
+  + `<button class="cos-btn" type="button">`
+  + `<svg class="cos-lock" aria-hidden="true"><use href="#i-lock" /></svg><span class="cos-lb"></span>`
+  + `</button></div>`
   + `<p class="cos-note" hidden></p></div></article>`;
 
 const make = (html: string) => {
@@ -39,9 +52,12 @@ const make = (html: string) => {
   return t.content.firstElementChild as HTMLElement;
 };
 
-interface Card { el: HTMLElement; btn: HTMLButtonElement; note: HTMLElement; item: Item; pv: Preview }
+interface Card {
+  el: HTMLElement; btn: HTMLButtonElement; label: HTMLElement;
+  note: HTMLElement; item: Item; pv: Preview;
+}
 
-type State = 'buy' | 'owned' | 'equipped' | 'short';
+type State = 'buy' | 'owned' | 'equipped' | 'short' | 'locked';
 
 export function createShop(api: ShopApi): Shop {
   const grid = $<HTMLElement>('shop-grid');
@@ -66,10 +82,13 @@ export function createShop(api: ShopApi): Shop {
         : themeOf(e.ball, e.wall, it.id);
   };
 
-  const stateOf = (it: Item): State =>
-    isEquipped(it.kind, it.id) ? 'equipped'
-      : owns(it.kind, it.id) ? 'owned'
-        : profile.coins >= it.price ? 'buy' : 'short';
+  /** The card's state: the worn item is never locked, and while the shop is shut nothing else answers. */
+  const stateOf = (it: Item): State => {
+    if (isEquipped(it.kind, it.id)) return 'equipped';
+    if (SHOWCASE) return 'locked';
+    if (owns(it.kind, it.id)) return 'owned';
+    return profile.coins >= it.price ? 'buy' : 'short';
+  };
 
   /* ---------- animation: only while the shop is the screen you are looking at ---------- */
 
@@ -100,6 +119,7 @@ export function createShop(api: ShopApi): Shop {
       el.dataset.id = item.id;
       const canvas = el.querySelector<HTMLCanvasElement>('canvas')!;
       const btn = el.querySelector<HTMLButtonElement>('button')!;
+      const label = el.querySelector<HTMLElement>('.cos-lb')!;
       const note = el.querySelector<HTMLElement>('.cos-note')!;
       el.querySelector('.cos-n')!.textContent = item.name;
       // the description only earns its space on the wide card, where it fills the row
@@ -110,7 +130,13 @@ export function createShop(api: ShopApi): Shop {
       price.querySelector('b')!.textContent = item.price ? coinText(item.price) : 'Starter';
       mountCoins(el);
       btn.addEventListener('click', () => act(item));
-      return { el, btn, note, item, pv: createPreview(canvas, item.kind, themeFor(item)) };
+      // a locked card refuses wherever it is tapped, not only on the capsule that says so
+      el.addEventListener('click', (e) => {
+        if (btn.contains(e.target as Node)) return;      // the capsule owns its own click
+        if (isEquipped(item.kind, item.id)) return;      // the worn card is a no-op, as it always was
+        refuse();
+      });
+      return { el, btn, label, note, item, pv: createPreview(canvas, item.kind, themeFor(item)) };
     });
     grid.textContent = '';
     for (const c of cards) grid.append(c.el);
@@ -124,11 +150,17 @@ export function createShop(api: ShopApi): Shop {
   function paint() {
     for (const c of cards) {
       const s = stateOf(c.item);
+      const locked = s === 'locked';
       c.el.dataset.state = s;
-      c.btn.textContent = s === 'equipped' ? 'Equipped' : s === 'owned' ? 'Equip' : 'Buy';
-      c.btn.setAttribute('aria-label', `${c.btn.textContent}: ${c.item.name} ${c.item.kind}`);
-      c.btn.disabled = s === 'short' || s === 'equipped';
-      c.btn.setAttribute('aria-disabled', String(c.btn.disabled));
+      c.label.textContent = locked ? 'Not for sale'
+        : s === 'equipped' ? 'Equipped' : s === 'owned' ? 'Equip' : 'Buy';
+      c.btn.setAttribute('aria-label', locked
+        ? `Not for sale: ${c.item.name} ${c.item.kind} — the shop is temporarily closed`
+        : `${c.label.textContent}: ${c.item.name} ${c.item.kind}`);
+      /* `aria-disabled`, not `disabled`: a locked capsule still has to take the tap that explains
+         itself, and a real `disabled` button swallows the click before the guard can speak. */
+      c.btn.disabled = !locked && (s === 'short' || s === 'equipped');
+      c.btn.setAttribute('aria-disabled', String(locked || s === 'short' || s === 'equipped'));
       if (s === 'equipped') c.btn.setAttribute('aria-current', 'true');
       else c.btn.removeAttribute('aria-current');
       c.note.hidden = s !== 'short';
@@ -138,12 +170,19 @@ export function createShop(api: ShopApi): Shop {
     setBalance(coins, profile.coins);
   }
 
+  /** The one refusal the shop has: soft tap, one line, no state touched. */
+  function refuse() {
+    impact('light');
+    api.note(SHOWCASE_NOTE, false, 2600);
+  }
+
   function celebrate() {
     for (const c of cards) c.el.classList.toggle('just', c.item.id === flash);
   }
 
   function act(it: Item) {
-    if (isEquipped(it.kind, it.id)) return;
+    if (isEquipped(it.kind, it.id)) return;               // the worn item: nothing to do, same as ever
+    if (SHOWCASE) { refuse(); return; }                  // guard: no equip, no spend, no unlock
     if (owns(it.kind, it.id)) { impact('light'); equip(it.kind, it.id); return; }
     ask(it);
   }
@@ -174,6 +213,8 @@ export function createShop(api: ShopApi): Shop {
     const it = pending;
     pending = null;
     api.sheets.close();
+    // the last gate before the wallet: while the shop is shut the confirm key refuses too
+    if (SHOWCASE) { refuse(); return; }
     if (buy(it.kind, it.id, it.price) !== 'bought') { notify('warning'); return; }
     notify('success');
     impact('medium');

@@ -57,7 +57,9 @@ const verdict = $<HTMLParagraphElement>('verdict');
 const sub = $<HTMLParagraphElement>('sub');
 const again = $<HTMLButtonElement>('again');
 const toMenu = $<HTMLButtonElement>('to-menu');
-const noteEl = $<HTMLParagraphElement>('note');
+/* every toast on the page: the board's own, and the shop's copy of it. One message goes to all of
+   them, so the note speaks on whichever screen is up; the hidden one costs nothing. */
+const noteEls = [...document.querySelectorAll<HTMLParagraphElement>('.note')];
 const confettiEl = $<HTMLCanvasElement>('confetti');
 const menuBtn = $<HTMLButtonElement>('menu-btn');
 const roundLabel = $<HTMLParagraphElement>('round-label');
@@ -135,19 +137,28 @@ function shake() {
   shakeTimer = window.setTimeout(() => wrap.classList.remove('shake'), 700);
 }
 
-/* the toast over the lower board: why a slot was refused, "tap again to place", an event alert */
+/* the toast over the lower board: why a slot was refused, "tap again to place", an event alert.
+   Only the screen that is actually up takes the message, so a refusal in the shop never leaks
+   onto the board behind it (and vice versa). */
 let noteTimer = 0;
 let toastMsg = '';
 function showNote(msg: string, error: boolean, ttl: number, timeout = false) {
   toastMsg = msg;
-  noteEl.textContent = msg;
-  noteEl.classList.toggle('error', error);
-  noteEl.classList.toggle('timeout', timeout);   // the blitz verdict gets its own clay tone
-  noteEl.classList.add('show');
+  for (const el of noteEls) {
+    if (el.closest<HTMLElement>('.screen')?.hidden) continue;
+    el.textContent = msg;
+    el.classList.toggle('error', error);
+    el.classList.toggle('timeout', timeout);     // the blitz verdict gets its own clay tone
+    el.classList.add('show');
+  }
   clearTimeout(noteTimer);
-  if (ttl) noteTimer = setTimeout(() => noteEl.classList.remove('show'), ttl);
+  if (ttl) noteTimer = setTimeout(() => { for (const el of noteEls) el.classList.remove('show'); }, ttl);
 }
-const clearNote = () => { clearTimeout(noteTimer); toastMsg = ''; noteEl.classList.remove('show', 'timeout'); };
+const clearNote = () => {
+  clearTimeout(noteTimer);
+  toastMsg = '';
+  for (const el of noteEls) el.classList.remove('show', 'timeout');
+};
 
 /* ---------- screens ---------- */
 
@@ -1078,7 +1089,7 @@ document.addEventListener('visibilitychange', syncLoop);
 
 mountCoins();                              // every [data-coin] slot gets the shared gold coin
 menu = createMenu({ router, sheets, sheet: sheetById, start: startGame, onBack });
-const shop = createShop({ sheets, sheet: sheetById });
+const shop = createShop({ sheets, sheet: sheetById, note: showNote });
 home = createHome({ router, sheets, start: startGame });
 compete = createCompete({ router, sheets, sheet: sheetById });
 createNotifications({ sheets });
