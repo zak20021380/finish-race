@@ -1,6 +1,6 @@
 import './style.css';
 import {
-  CONFIG, apply, ballById, distField, firstBall, getAutoMove, mineCells, minesLeft, newGame,
+  CONFIG, MAX_TEAMS, apply, ballById, distField, firstBall, getAutoMove, mineCells, minesLeft, newGame,
   reachableBall, steps as teamSteps, view as fogOfWar, wallBudget, wallOk, wallsCross, wallsOverlap,
   wallsRemaining,
   type Action, type Ball, type Cell, type GameState, type LogEvent, type Mine, type Player,
@@ -24,9 +24,10 @@ import { createNotifications } from './notifications';
 import { mountCoins, setBalance } from './coin';
 import { menuState, motionReduced } from './settings';
 import { onChange, recordGame, theme } from './storage';
+import { SEAT_RAMPS } from './themes';
 import { impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
-import { getGameMode, gmBack, initGameModes, setGameMode } from './gamemodes';
+import { getGameMode, gmBack, initGameModes, onGameModeChange, setGameMode } from './gamemodes';
 import { createMatchmaking, myTier, onlineRace, onlineSearch, type OnlineSession, type RaceEnd } from './matchmaking';
 import { createAdmin, onRuntime, recordRace, runtime, type Admin } from './admin';
 
@@ -72,27 +73,38 @@ const announce = $<HTMLParagraphElement>('turn-announce');
 /** the countdown ring: `style.strokeDashoffset` drives the arc, `data-timer` on the chip its colour */
 const timerFill = $<HTMLElement>('timer-fill');
 const timerN = $<HTMLElement>('timer-n');
-const chips = [$<HTMLDivElement>('chip-0'), $<HTMLDivElement>('chip-1')];
+const chips = [
+  $<HTMLDivElement>('chip-0'), $<HTMLDivElement>('chip-1'),
+  $<HTMLDivElement>('chip-2'), $<HTMLDivElement>('chip-3'),
+];
 const dots = $<HTMLSpanElement>('dots');
 /** The seat-0 furniture that follows the local player when an online seat is not seat 0. */
 const chipRows = chips.map((chip) => chip.querySelector<HTMLElement>('.chip-row'));
 const timerCapsule = chips[0].querySelector<HTMLElement>('.chip-ball');
-const wallBadges = [$<HTMLSpanElement>('walls-0'), $<HTMLSpanElement>('walls-1')];
+const wallBadges = [
+  $<HTMLSpanElement>('walls-0'), $<HTMLSpanElement>('walls-1'),
+  $<HTMLSpanElement>('walls-2'), $<HTMLSpanElement>('walls-3'),
+];
+/** The dock itself. `data-seats` is how CSS is told how many chips it is laying out — two keep the
+ *  one-row 64px layout, three and four reflow to a compact 2-up grid (see the reflow rule). */
+const chipsEl = $<HTMLElement>('chips');
 const sheetPause = $<HTMLElement>('sheet-pause');
 const sheetQuit = $<HTMLElement>('sheet-quit');
 const reward = $<HTMLParagraphElement>('reward');
 const rewardN = $<HTMLSpanElement>('reward-n');
 
-/* walls-to-place readout on each chip: repaints only when the number changes */
-const shownWalls: [number, number] = [-1, -1];
+/* walls-to-place readout on each chip: repaints only when the number changes. One slot per seat the
+   rules allow, so a four-way race has somewhere to put its fourth badge. */
+const shownWalls: number[] = [-1, -1, -1, -1];
 /** The race's budget per seat: the rules scale it with the number of contenders, so it is read
- *  off the live board rather than assumed — a 4-way hands out 5 walls, a duel the classic 8. */
+ *  off the live board rather than assumed — a 4-way hands out 5 walls, a 3-way 6, a duel the classic 8. */
 let wallsEach: number = CONFIG.WALL_LIMIT;
 function setWalls(p: Player, left: number) {
+  const el = wallBadges[p];
+  if (!el) return;                    // a seat this race does not field
   if (shownWalls[p] === left) return;
   const first = shownWalls[p] < 0;
   shownWalls[p] = left;
-  const el = wallBadges[p];
   const num = el.querySelector<HTMLElement>('.wall-n');
   if (num) num.textContent = String(left);
   el.classList.toggle('depleted', left <= 0);
@@ -107,6 +119,7 @@ function setWalls(p: Player, left: number) {
 let wallWarnTimer = 0;
 function warnNoWalls(p: Player) {
   const el = wallBadges[p];
+  if (!el) return;
   if (motionReduced()) { el.classList.remove('depleted'); return; }
   el.classList.remove('depleted', 'dry-warn');
   void el.offsetWidth;
@@ -276,8 +289,6 @@ function onBack() {
 
 /* ---------- game ---------- */
 
-/** The two seats that race, and the two seats the footer shows. */
-const SEATS: Player[] = [0, 1];
 /**
  * Seat 0 is you in a local race; the matchmaker decides in an online one, so every rule that used
  * to say "the human" says `localSide` instead — the input lock, the clock, the mine key, the
@@ -289,7 +300,7 @@ let active: OnlineSession | null = null;
 /** Why an online race ended without a finish line, for the panel's own caption. */
 let forfeit: RaceEnd['why'] | null = null;
 const rivalSide = (): Player => (localSide === 0 ? 1 : 0);
-/** `You`, and the name on the other chip: local names in a bot race, the player's in an online one. */
+/** `You`, and the name on each other chip: local names in a bot race, the player's in an online one. */
 const TEAM_NAME: Record<number, string> = { 0: 'You', 1: 'Bot' };
 
 /** Swap this for a network-backed implementation to go multiplayer. */
@@ -299,7 +310,9 @@ const makeBot = (d: Difficulty): Opponent => ({
 });
 
 let difficulty: Difficulty = menuState.difficulty;
-let sizes: [number, number] = [...menuState.sizes];
+/** The seats this race fields, one entry per ball count: `[1, 1]` for a duel, `[1, 1, 1, 1]` for a
+ *  four-way. It used to be a fixed pair; `MAX_TEAMS` is what the board can hold. */
+let sizes: number[] = [...menuState.sizes];
 let opponent: Opponent = makeBot(difficulty);
 
 /** Is the other seat to move? In an online race that seat is a person, not the machine. */
@@ -330,6 +343,35 @@ const renderer = createRenderer(canvas, { theme });
 const confetti = createConfetti(confettiEl);
 const toVec = (p: Pos): Vec => ({ x: p.c + 0.5, y: p.r + 0.5 });
 
+/** Where the board's own numbers are published for CSS: the card that holds both the board and the
+ *  dock, so one write reaches `.board-wrap`, `.finish-tag` and `.chips` alike. */
+const boardCard = wrap.closest<HTMLElement>('.card') ?? wrap;
+
+/**
+ * Hand the grid the rules picked to CSS, which is what lets the board box size itself to the
+ * board's own aspect instead of a hard-coded 2:3. Without it a 10x12 board letterboxes inside a
+ * 2:3 box — the slab floats away from the box's top edge and the finish plate drifts off the strip
+ * it names. Called on every `setBoard`, so a duel and a party get their own box.
+ */
+function fitBoard(c: number, r: number) {
+  boardCard.style.setProperty('--board-cols', String(c));
+  boardCard.style.setProperty('--board-rows', String(r));
+}
+
+/**
+ * The cell metric and the slab's own top edge, read back off the live layout and published for the
+ * furniture that has to match it: the finish plate is welded to row 0, so it needs both. The grid
+ * is centred in the canvas, so the slab almost never starts at y=0 — a 10x12 board in a 328x394
+ * box sits at oy=5 — and a plate placed at `height/(2*rows)` alone lands five pixels off the strip
+ * it names. Publishing the offset makes the plate exact at every grid, box and viewport. Called on
+ * every resize, because both numbers move whenever the box does.
+ */
+function publishCell() {
+  const L = renderer.layout();
+  boardCard.style.setProperty('--board-cell', `${L.cell}px`);
+  boardCard.style.setProperty('--board-oy', `${L.oy}px`);
+}
+
 /** Hands, the opponent's brain and the blitz clock all stand down while a log is on its way. */
 let rolling = false;
 /** Bot turns parked by a roll, in the order they arrived. */
@@ -343,6 +385,12 @@ const logShove = new Map<number, { y0: number; y1: number }>();
 /** the roll's own clock, so the face the balls follow and the sprite are the same curve */
 let rollT0 = 0, rollStop = 0, rumbleId = 0;
 let state: GameState = newGame(sizes, { hazards: runtime.hazards, seed: (Math.random() * 0x7fffffff) | 0 });
+/**
+ * The seats this race actually fields, in seat order. Read off the live board rather than assumed:
+ * the same screen runs a two-seat duel and a four-seat party, and every loop that used to walk the
+ * fixed pair `[0, 1]` walks this instead.
+ */
+const roster = (): Player[] => Array.from({ length: state.teams.length }, (_t, i) => i);
 /**
  * Every ball the renderer draws, in state order, with the animated centre under it. The entries
  * survive across frames and restarts reset them, so the frame loop never allocates.
@@ -362,7 +410,8 @@ const sameCell = (a: Cell | null, b: Cell | null) => !!a && !!b && a.c === b.c &
 let ghost: Ghost | null = null;                 // wall preview; armed = waiting for a confirm tap
 /** The on-canvas [✓]/[✕] caps anchored beside an armed ghost, or null. */
 let capsule: CapsuleAction | null = null;
-const marks: (Mark | null)[] = [null, null];
+/** One entry per seat: what that seat did last. Sized to the live roster in `restart()`. */
+const marks: (Mark | null)[] = Array.from({ length: state.teams.length }, () => null);
 /** Reused every frame: the loop must not allocate. */
 const view: View = {
   state, balls: ballViews, hints, ghost, last: marks, thinking: null,
@@ -520,9 +569,9 @@ function ui() {
 
   /* whose turn it is rides on the chips now: a clay glow, a lift, and the countdown ring */
   const seat = state.winner ?? state.turn;
-  for (const p of SEATS) {
-    chips[p].classList.toggle('active', state.winner === null && state.turn === p && !paused);
-    chips[p].classList.toggle('thinking', thinking && p === state.turn);
+  for (const p of roster()) {
+    chips[p]?.classList.toggle('active', state.winner === null && state.turn === p && !paused);
+    chips[p]?.classList.toggle('thinking', thinking && p === state.turn);
     setWalls(p, wallsRemaining(state, p));
   }
   const spoken = state.winner !== null ? `${TEAM_NAME[seat]} win${seat === localSide ? '' : 's'}`
@@ -769,8 +818,10 @@ function restart() {
   state = newGame(sizes, { hazards: runtime.hazards, seed: active ? active.seed : (Math.random() * 0x7fffffff) | 0 });
   /* The grid the rules picked for this race — a duel keeps 8 columns, a 3- or 4-contender race gets
      10 — and the wall budget that goes with it. Both are read off the board, never assumed, so a
-     menu change between races cannot leave the canvas painting the wrong lattice. */
+     menu change between races cannot leave the canvas painting the wrong lattice. `fitBoard` hands
+     the same two numbers to CSS, which is what sizes the board box to the grid's own aspect. */
   renderer.setBoard(state.cols, state.rows);
+  fitBoard(state.cols, state.rows);
   wallsEach = wallBudget(state.balls.length);
   rolling = false;
   window.clearInterval(rumbleId);
@@ -783,8 +834,12 @@ function restart() {
   setMode(BOARD_IDLE);
   mineGhost = null;
   autoPicked = null;
-  marks[0] = null; marks[1] = null;
-  shownWalls[0] = -1; shownWalls[1] = -1;
+  /* the roster may have grown or shrunk since the last race: one mark per seat, and every seat's
+     wall badge starts unread so the opening paint is not mistaken for a placement */
+  marks.length = state.teams.length;
+  marks.fill(null);
+  shownWalls.fill(-1);
+  paintRoster();
   shownMines = -1;
   turnsPlayed = 0;
   saidTurn = '';
@@ -799,13 +854,56 @@ function restart() {
   startClock();
 }
 
+/**
+ * Reveal exactly the chips this race fields. Two seats is the duel the dock was built for; three
+ * and four reveal the extra seats the markup already carries. `data-seats` goes with them, because
+ * the dock has to reflow — four 64px chips across a 360px card would leave 84px each and the ball
+ * alone is 46 of them.
+ */
+function paintRoster(): void {
+  const n = state.teams.length;
+  chipsEl.dataset.seats = String(n);
+  for (let p = 0; p < chips.length; p++) {
+    const el = chips[p];
+    if (!el) continue;
+    const on = p < n;
+    el.hidden = !on;
+    /* the chip's colour class follows the seat, so a revealed seat is tinted before its first paint */
+    el.classList.toggle('red', p === 0);
+    el.classList.toggle('blue', p === 1);
+    el.classList.toggle('gold', p === 2);
+    el.classList.toggle('green', p === 3);
+  }
+}
+
+/**
+ * The four chip swatches, in seat order. Seat 0 wears the equipped skin; seats 1..3 wear the fixed
+ * seat ramps — the very array `render.ts` draws their spheres and wall bars from, so the token on
+ * the board and the swatch on the chip can never disagree about who is who.
+ */
+function paintSeatTints(): void {
+  const ramps = [theme().ball.ramp, ...SEAT_RAMPS];
+  for (let i = 0; i < chips.length; i++) {
+    const r = ramps[i];
+    if (!r) continue;
+    chips[i].style.setProperty('--tint', r.mid);
+    chips[i].style.setProperty('--glow', r.glow);
+  }
+}
+
 function paintNames() {
   const me = ((tgUser()?.first_name || tgUser()?.username || 'You')).toUpperCase().slice(0, 14);
   const foe = (active ? active.opponent.name : 'Bot').toUpperCase().slice(0, 14);
-  $('name-0').textContent = localSide === 0 ? me : foe;
-  $('name-1').textContent = localSide === 0 ? foe : me;
+  /* One name per seat that is actually fielded. Seat 0 and its rival keep the names they always
+     had; the extra seats a party adds are numbered, so four chips never say the same thing twice. */
+  for (const p of roster()) {
+    const el = document.getElementById(`name-${p}`);
+    if (!el) continue;
+    el.textContent = p === localSide ? me : p === rivalSide() ? foe : (TEAM_NAME[p] ?? `BOT ${p}`);
+  }
   /* the race names itself where a race is being stopped or judged, not on every frame of play */
-  const mode = `${sizes[0]}v${sizes[1]} · ${active ? 'Online' : `${difficulty[0].toUpperCase()}${difficulty.slice(1)}`}`;
+  const shape = sizes.length > 2 ? `${sizes.length}-player` : `${sizes[0]}v${sizes[1]}`;
+  const mode = `${shape} · ${active ? 'Online' : `${difficulty[0].toUpperCase()}${difficulty.slice(1)}`}`;
   pauseMode.textContent = ` · ${mode}`;
   overMode.textContent = mode;
 }
@@ -827,7 +925,8 @@ function seatChrome(): void {
 /** How a race starts: the local shape, plus the live seat when the matchmaker paired one. */
 interface StartSetup {
   difficulty: Difficulty;
-  sizes: [number, number];
+  /** one entry per seat — `[1, 1]` is a duel, `[1, 1, 1, 1]` a four-way. Capped at `MAX_TEAMS`. */
+  sizes: readonly number[];
   online?: OnlineSession | null;
 }
 
@@ -835,13 +934,16 @@ function startGame(setup: StartSetup) {
   /* menuState.difficulty is the single source: the Choose-mode sheet persists it live,
      so every start path (vs Bot card, Play) runs the level the sheet shows. */
   difficulty = menuState.difficulty;
-  /* An online seat brings its own board and side; a local race is always seat 0 against the bot. */
+  /* An online seat brings its own board and side; a local race is always seat 0 against the rest. */
   active = setup.online ?? null;
   forfeit = null;
   localSide = active ? active.side : 0;
-  sizes = active ? [active.sizes[0], active.sizes[1]] : setup.sizes;
+  sizes = active ? [active.sizes[0], active.sizes[1]] : setup.sizes.slice(0, MAX_TEAMS);
+  /* Name every seat before the first paint: `You` for this screen, a numbered bot for each extra
+     seat a party adds, and the rival's own name when the seat across the board is a person. */
+  for (let p = 0; p < sizes.length; p++) TEAM_NAME[p] = p === 0 ? 'You' : `Bot${p > 1 ? ` ${p}` : ''}`;
   TEAM_NAME[localSide] = 'You';
-  TEAM_NAME[rivalSide()] = active ? active.opponent.name : 'Bot';
+  if (active) TEAM_NAME[rivalSide()] = active.opponent.name;
   view.human = localSide;
   opponent = makeBot(difficulty);
   paused = false;
@@ -1088,10 +1190,11 @@ $('quit-yes').addEventListener('click', () => { impact('light'); quitToMenu(); }
 
 /* ---------- loop ---------- */
 
-new ResizeObserver(() => { renderer.resize(); confetti.resize(); }).observe(wrap);
-window.addEventListener('resize', () => { renderer.resize(); confetti.resize(); });
+new ResizeObserver(() => { renderer.resize(); confetti.resize(); publishCell(); }).observe(wrap);
+window.addEventListener('resize', () => { renderer.resize(); confetti.resize(); publishCell(); });
 renderer.resize();
 confetti.resize();
+publishCell();
 
 let last = performance.now();
 function frame(now: number) {
@@ -1174,28 +1277,91 @@ admin.mount();
 /* the shop is the one screen that reads a switch at paint time: repaint it the moment it moves */
 onRuntime(() => shop.refresh());
 
+/* ---- the local party: 2, 3 or 4 seats on the board the rules pick for them ----
+   The mode drawer's Practice card carries one segmented control, and it is the whole of the
+   three- and four-player entry: pick 3 or 4 and Start runs a race of that many one-ball seats,
+   which `dimsFor` lays out on the wide 10x12 board with the wall budget that goes with it. Two
+   keeps the classic duel shapes the drawer already persists. It is a local-only setting — quick
+   match and the private room hand the board to whoever is at the other end of the socket — so it
+   is stored on its own key rather than in the menu's two-seat `sizes` tuple. */
+const PARTY_KEY = 'detour.party.v1';
+function loadPartySeats(): number {
+  try {
+    const n = Math.floor(Number(JSON.parse(localStorage.getItem(PARTY_KEY) ?? '2')));
+    return n >= 2 && n <= MAX_TEAMS ? n : 2;
+  } catch { return 2; }
+}
+let partySeats = loadPartySeats();
+
+/** The sizes a local race starts with: the drawer's duel shapes, or one ball per seat for a party. */
+const localSizes = (): number[] =>
+  partySeats > 2 ? Array.from({ length: partySeats }, () => 1) : [...menuState.sizes];
+
+/** The Start label the seat count implies — the drawer's own label, spoken with the party size. */
+function partyLabel(): string {
+  return partySeats > 2 ? `Start ${partySeats}-player match` : 'Start practice match';
+}
+
+/** Paint the Players control, and make the Start label name the race it will actually run. */
+function paintParty(): void {
+  for (const b of document.querySelectorAll<HTMLButtonElement>('#sheet-game-modes [data-seats]')) {
+    b.setAttribute('aria-pressed', String(Number(b.dataset.seats) === partySeats));
+  }
+  /* only the practice card honours the seat count, so only its label speaks it */
+  if (getGameMode().id !== 'bot') return;
+  const start = $<HTMLButtonElement>('gm-start');
+  if (start && start.textContent !== partyLabel()) start.textContent = partyLabel();
+}
+for (const b of document.querySelectorAll<HTMLButtonElement>('#sheet-game-modes [data-seats]')) {
+  b.addEventListener('click', () => {
+    const n = Math.floor(Number(b.dataset.seats));
+    if (!(n >= 2 && n <= MAX_TEAMS) || n === partySeats) return;
+    partySeats = n;
+    try { localStorage.setItem(PARTY_KEY, JSON.stringify(n)); } catch { /* stay in memory */ }
+    impact('light');
+    paintParty();
+  });
+}
+/* The drawer owns `#gm-start` and rewrites it from `paintSheetState()` on every mode change, every
+   difficulty tap and every init — and inside `setGameMode` it does so *after* its watchers fire, so
+   an `onGameModeChange` hook can never be the last writer. The seat count is a *refinement* of the
+   drawer's label rather than a competing one, so it is re-spoken whenever the drawer repaints:
+   observe the label itself. The equality guard in `paintParty` means our own write cannot re-enter,
+   so this settles in one pass instead of looping. */
+function watchPartyLabel(): void {
+  const start = $<HTMLButtonElement>('gm-start');
+  if (!start) return;
+  new MutationObserver(paintParty).observe(start, { childList: true, characterData: true, subtree: true });
+}
+/* The drawer repaints its own Start label inside its own `onGameModeChange` handler, and
+   subscribers fire in registration order — so this one is registered *after* `initGameModes`
+   below, never before it. Registered first it would name the seat count and then be silently
+   overwritten by `paintSheetState`, which is exactly the "Start practice match" bug. */
 initGameModes(sheets, {
   /* the drawer already persisted sizes + difficulty, so the race it names is the race it runs */
   onStart: () => {
     const sel = getGameMode();
     /* Quick match is online: it queues on the searching stage first. Practice and a private
-       room have nobody to wait for, so they start the race right away. */
+       room have nobody to wait for, so they start the race right away — on the seat count the
+       Practice card is showing. */
     if (sel.id === 'duel_1v1' || sel.id === 'party_2v2') { queueMatch(); return; }
-    startGame({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] });
+    startGame({ difficulty: menuState.difficulty, sizes: localSizes() });
   },
 });
+onGameModeChange(paintParty);
+watchPartyLabel();
+paintParty();
+paintRoster();
 paintNames();
 ui();
 router.start('home');
 setBackButton(false);
 menu.afterStart();
 
-/* equipping repaints the board, and the chip dot that stands for your ball */
+/* equipping repaints the board, and the chip swatch that stands for your ball */
 const paintTheme = () => {
-  const t = theme();
-  renderer.setTheme(t);
-  chips[0].style.setProperty('--tint', t.ball.ramp.mid);
-  chips[0].style.setProperty('--glow', t.ball.ramp.glow);
+  renderer.setTheme(theme());
+  paintSeatTints();
 };
 onChange(paintTheme);
 paintTheme();

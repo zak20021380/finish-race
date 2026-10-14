@@ -22,7 +22,7 @@ import {
 } from './rules';
 import { motionReduced } from './settings';
 import {
-  BOT_RAMP, CLASSIC_BALL, CLASSIC_WALL, DEFAULT_THEME, ERR_RAMP, MINE_RAMP, TEAM2_RAMP, TEAM3_RAMP,
+  CLASSIC_BALL, CLASSIC_WALL, DEFAULT_THEME, ERR_RAMP, MINE_RAMP, SEAT_RAMPS,
   type BallSkin, type CosKind, type Ramp, type Stop, type Theme, type WallStyle,
 } from './themes';
 
@@ -104,10 +104,23 @@ export interface CapsuleAction {
 const TAU = Math.PI * 2;
 /** A tap within this many cells of a legal-move dot centre always means that move — never the groove. */
 const MOVE_ZONE = 0.15;
-/** ...and within this many cells of a grid line still reads as "aiming at that line" (the groove). */
+/**
+ * The *floor* of the groove's own reach, in cells. The live value is `grooveZone()`, which lifts it
+ * to half a thumb on a cramped board: a ten-column board on a 360px phone draws ~35px cells, and
+ * asking a finger to land within 10px of a hairline is not a control, it is a test.
+ */
 const GROOVE_ZONE = 0.3;
+/**
+ * The ceiling on that reach, in cells. Held just under half a cell so every point on the board still
+ * resolves to exactly one nearest groove — at 0.5 the two lines bounding a cell would meet and a tap
+ * between them would have no answer at all.
+ */
+const GROOVE_MAX = 0.46;
 const MIN_TOUCH = 44;   // css px: smallest legal tap target we allow
 const BADGE_FROM = 28;  // cell size below which a number badge would be unreadable
+/** The board's two metrics: the ball's radius and the wall bar's thickness, both fractions of a cell. */
+const BALL_R = 0.34;
+const BAR_T = 0.13;
 const SOLID: number[] = [];
 const BLAST_MS = 700;   // the whole mine trigger, flash to last spark
 const DUST_MS = 420;    // the puff a shoved ball kicks up where it comes to rest
@@ -210,14 +223,42 @@ const resolve = (ramp: Ramp | null, list: Stop[]): Stop[] => {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
+/* ---------- the board's metrics ----------
+ * One cell is the whole unit system: `computeLayout` fits the grid the rules picked (8x12 for a
+ * duel, 10x12 for three or four contenders) into whatever box the stage hands it, and every size
+ * below is a fraction of the cell that comes out. That is what makes the board scale from a
+ * 430x932 phone down to a 360x640 one without a single media query — and what makes the *touch*
+ * targets scale with it, which is the part a purely visual fit would get wrong.
+ */
+
+/** The ball's radius in css px on a board whose cells are `cell` px across. */
+const ballR = (cell: number) => cell * BALL_R;
+/** The wall bar's thickness in css px, before the seat's own `thick` multiplier. */
+const barT = (cell: number) => cell * BAR_T;
+/**
+ * How far from a grid line a tap still reads as "aiming at that line", in cells. A thumb is 44px;
+ * on a roomy board that sits well inside the 0.3-cell floor and the zone stays tight, but a
+ * ten-column board on a 360px phone draws ~35px cells and the same thumb spans two thirds of a
+ * cell — so the zone grows to meet it. That growth *is* the magnet: on the wide board a tap
+ * anywhere in a cell snaps to its nearest groove, and only the sliver at the exact centre (past
+ * `GROOVE_MAX`) falls through to the legal-move dot underneath, which keeps the two gestures from
+ * ever fighting over one tap.
+ */
+const grooveZone = (cell: number) => Math.min(GROOVE_MAX, Math.max(GROOVE_ZONE, MIN_TOUCH * 0.5 / cell));
+
 /* ---------- hit-testing ---------- */
 
-/** Nearest valid wall slot when (bx, by) aims at a grid line, else null. Board coords. */
-function slotNear(bx: number, by: number, cols: number, rows: number): WallSpec | null {
+/**
+ * Nearest valid wall slot when (bx, by) aims at a grid line, else null. Board coords.
+ * `zone` is how far a tap may sit from a line and still mean it — see `grooveZone`: on the wide
+ * board it is wide enough that the whole cell snaps to its nearest groove, so a two-span wall on a
+ * ten-column grid is armed by aiming at the seam, not at a pixel.
+ */
+function slotNear(bx: number, by: number, cols: number, rows: number, zone: number): WallSpec | null {
   const hY = clamp(Math.round(by), 1, rows - 1);
   const vX = clamp(Math.round(bx), 1, cols - 1);
   const dh = Math.abs(by - hY), dv = Math.abs(bx - vX);
-  if (Math.min(dh, dv) > GROOVE_ZONE) return null;
+  if (Math.min(dh, dv) > zone) return null;
   return dh <= dv
     ? { o: 'h', x: clamp(Math.round(bx) - 1, 0, cols - 2), y: hY }
     : { o: 'v', x: vX, y: clamp(Math.round(by) - 1, 0, rows - 2) };
@@ -238,20 +279,28 @@ export function wallCentre(w: WallSpec): Vec {
   return w.o === 'h' ? { x: w.x + 1, y: w.y } : { x: w.x, y: w.y + 1 };
 }
 
-/** Radius of a floating action capsule (the [✓] / [✕] chips), in cells. Also its tap target. */
+/**
+ * Radius of a floating action capsule (the [✓] / [✕] chips), in cells, on a board whose cells are
+ * `cell` px across. `CAP_R` is what a roomy board draws; on a cramped one the chip grows until it
+ * is a thumb's worth of pixels, and stops at `CAP_R_MAX` so the pair still fits beside a wall
+ * without the two chips touching. It only ever grows — a 430px phone draws the classic size.
+ */
 const CAP_R = 0.3;
-/** Half the distance between the two capsule centres, in cells. */
-const CAP_GAP = 0.4;
+const CAP_R_MAX = 0.34;
+const capR = (cell: number) => Math.min(CAP_R_MAX, Math.max(CAP_R, MIN_TOUCH * 0.36 / cell));
+/** Half the distance between the two capsule centres, in cells: one radius plus a hair of daylight. */
+const capGap = (r: number) => r + 0.1;
 
 /**
  * A floating capsule's centre beside a board anchor, clamped so both chips stay wholly inside the
- * canvas: the whole 2·CAP_R disc is kept within a half-cell margin of every edge.
+ * canvas: the whole 2·capR disc is kept within a half-cell margin of every edge.
  */
 function capsulePos(L: Layout, ax: number, ay: number, side: 'confirm' | 'cancel'): Vec {
   const dir = side === 'confirm' ? 1 : -1;
+  const r = capR(L.cell);
   return {
-    x: clamp(ax + dir * (CAP_GAP + CAP_R), 0.5 + CAP_R, L.cols - 0.5 - CAP_R),
-    y: clamp(ay, 0.5 + CAP_R, L.rows - 0.5 - CAP_R),
+    x: clamp(ax + dir * (capGap(r) + r), 0.5 + r, L.cols - 0.5 - r),
+    y: clamp(ay, 0.5 + r, L.rows - 0.5 - r),
   };
 }
 
@@ -262,7 +311,7 @@ export const capsuleCancelPos = (L: Layout, ax: number, ay: number): Vec => caps
 
 /** Which capsule, if either, a tap at (bx, by) lands on. Board coords in, capsule name out. */
 function capsuleHit(L: Layout, bx: number, by: number, cap: CapsuleAction): 'confirm' | 'cancel' | null {
-  const r2 = CAP_R * CAP_R;
+  const r = capR(L.cell), r2 = r * r;
   const c = capsuleConfirmPos(L, cap.ax, cap.ay);
   if ((bx - c.x) * (bx - c.x) + (by - c.y) * (by - c.y) <= r2) return 'confirm';
   const x = capsuleCancelPos(L, cap.ax, cap.ay);
@@ -278,6 +327,11 @@ function capsuleHit(L: Layout, bx: number, by: number, cap: CapsuleAction): 'con
  * legal dot so a sloppy finger still moves rather than starting a wall. One mode is left: while the
  * mine key is armed the board offers mines and nothing else, and the top and bottom two rows are
  * refused outright.
+ *
+ * The groove's own reach is `grooveZone(cell)` rather than a constant: on the wide board it grows
+ * until a whole cell snaps to its nearest line, which is what makes a two-span wall on a ten-column
+ * grid comfortable to arm with a thumb. It never outranks a ball or a legal-move dot — those are
+ * decided above it, on priority — so the magnet can only ever claim taps nothing else wanted.
  */
 export function hitTest(L: Layout, px: number, py: number, o: {
   hints: Pos[];
@@ -301,6 +355,7 @@ export function hitTest(L: Layout, px: number, py: number, o: {
 
   const cand: { hit: Hit; pri: number; d: number }[] = [];
   const reach = Math.max(0.5, MIN_TOUCH / 2 / c);   // 44px target, in cells
+  const gz = grooveZone(c);                         // the groove's own reach on this board, in cells
   /** the nearest of these cells to the tap, with the distance. `maxD` gates what counts as the aim. */
   const nearest = (cells: readonly Pos[], maxD: number) => {
     let best: Pos | null = null, d = Infinity;
@@ -338,15 +393,17 @@ export function hitTest(L: Layout, px: number, py: number, o: {
     if (spot && spot.d <= MOVE_ZONE) {
       cand.push({ hit: { kind: 'move', to: spot.cell }, pri: 1, d: spot.d });
     } else {
-      const s = slotNear(bx, by, L.cols, L.rows);
+      const s = slotNear(bx, by, L.cols, L.rows, gz);
       const wd = s ? distToWall(bx, by, s, 1.25) : Infinity;
       if (s && wd <= (spot ? spot.d : Infinity)) cand.push({ hit: { kind: 'wall', spec: s }, pri: 3, d: wd });
       if (spot) cand.push({ hit: { kind: 'move', to: spot.cell }, pri: 4, d: spot.d });
     }
 
     if (o.armed) {
+      /* The confirm tap commits, so it reaches a little further than the preview that armed it did:
+         the same thumb that found the slot lands on the same slot again without re-aiming. */
       const d = distToWall(bx, by, o.armed, 0.5);
-      if (d <= Math.min(0.42, Math.max(GROOVE_ZONE, 18 / c))) cand.push({ hit: { kind: 'confirm', spec: o.armed }, pri: 2, d });
+      if (d <= Math.min(0.5, gz + 0.08)) cand.push({ hit: { kind: 'confirm', spec: o.armed }, pri: 2, d });
     }
   }
 
@@ -356,14 +413,28 @@ export function hitTest(L: Layout, px: number, py: number, o: {
 
 /* ---------- drawing ---------- */
 
-/** One seat: its colours, its ball material, its wall material. Seats 0..2 play, seat 3 refuses. */
+/**
+ * One seat: its colours, its ball material, its wall material. Seats 0..3 play, seat 4 refuses.
+ * Seat 0 wears whatever skin the player equipped; seats 1..3 are the fixed families — cobalt, solar
+ * gold, emerald — and seat 4 is the refusal red that owns no side. `SEAT_RAMPS` is the single source
+ * of the fixed order, shared with `main.ts` so the HUD chips cannot drift from the spheres.
+ */
 interface Side { ramp: Ramp; ball: BallSkin; wall: WallStyle }
 
 /** Every seat the rules allow, plus the refusal palette that owns no side. */
 const SEAT_COUNT = MAX_TEAMS + 1;
 const ERR = MAX_TEAMS;
-/** Fixed families for the seats that are never themed: the opponent, then teams 2 and 3, then "no". */
-const FIXED: Ramp[] = [BOT_RAMP, TEAM2_RAMP, TEAM3_RAMP, ERR_RAMP];
+/** Fixed families for the seats that are never themed: seats 1, 2, 3, then "no". */
+const FIXED: Ramp[] = [...SEAT_RAMPS, ERR_RAMP];
+
+/**
+ * The wall's own numbering: how many tick bands a seat's bar wears. Colour already separates the
+ * four seats, but a wall has to stay readable where colour does not survive — a greyscale
+ * screenshot, a colour-blind eye, a board washed out by the finish-strip glow. Seat 0 wears none
+ * (it is the one bar a player places themselves), and the count climbs 1 → 2 → 3 across the rest,
+ * so four walls on one board can always be told apart.
+ */
+const SEAT_TICKS: readonly number[] = [0, 1, 2, 3];
 
 const CORNER = 0.4;              // board corner radius, in cells
 /** How many balls each seat fields: filled at the top of every frame, reused, never reallocated. */
@@ -371,8 +442,14 @@ const SEATS_N = new Int16Array(SEAT_COUNT);
 /** Draw order of the balls, nearest last: likewise. */
 const ORDER: number[] = [];
 
+/**
+ * A rounded rect. `r` is clamped to the box and to zero: a caller that insets a shape by more than
+ * half its own width — the bevel ring on a board squeezed into a handful of pixels, which is what a
+ * hidden canvas produces before its stage has a size — would otherwise hand `arcTo` a negative
+ * radius, and `arcTo` throws on that. A zero radius is a plain corner, which is the right answer.
+ */
 function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  const k = Math.min(r, w / 2, h / 2); // capsule-thin outlines must not self-overlap
+  const k = Math.max(0, Math.min(r, w / 2, h / 2));
   ctx.beginPath();
   ctx.moveTo(x + k, y);
   ctx.arcTo(x + w, y, x + w, y + h, k);
@@ -395,14 +472,28 @@ function startBoard(s: GameState): { c: number; r: number; t: Player }[] {
 
 /**
  * The gap the slab keeps inside its canvas. Only the ring stroke and the slab's own drop shadow
- * need room here — the card's padding does the real spacing, so the board fills the card.
+ * need room here — the card's padding does the real spacing, so the board fills the card. It is a
+ * slice of a cell rather than a constant, so a cramped board keeps the same *proportion* of
+ * breathing room a roomy one has, and it is floored at `LAYOUT_PAD` because the ring stroke is 1px.
  */
 const LAYOUT_PAD = 2;
+const layoutPad = (cell: number) => Math.max(LAYOUT_PAD, Math.min(6, cell * 0.06));
 
+/**
+ * Fit the grid into the box the stage handed us: one cell size that satisfies both axes, quantised
+ * to whole device pixels so the grooves land on the pixel grid and the board stays crisp. The cell
+ * floor is 1px rather than 8 — a board in a box too small for even one cell must shrink to fit, not
+ * spill past its canvas — and the margin is re-derived from the cell it produced, one pass, because
+ * a pad expressed in cells cannot be known before the cell is.
+ */
 function computeLayout(w: number, h: number, dpr: number, cols: number, rows: number): Layout {
-  const m = LAYOUT_PAD;
-  const raw = Math.min((w - 2 * m) / cols, (h - 2 * m) / rows);
-  const cell = Math.max(8, Math.floor(raw * dpr) / dpr); // whole device pixels → crisp grid
+  const fit = (m: number) => {
+    const raw = Math.min((w - 2 * m) / cols, (h - 2 * m) / rows);
+    return Math.max(1, Math.floor(Math.max(0, raw) * dpr) / dpr);
+  };
+  let cell = fit(LAYOUT_PAD);
+  const m = layoutPad(cell);
+  if (m !== LAYOUT_PAD) cell = fit(m);
   const ox = Math.round(((w - cols * cell) / 2) * dpr) / dpr;
   const oy = Math.round(((h - rows * cell) / 2) * dpr) / dpr;
   return { w, h, cell, ox, oy, dpr, cols, rows };
@@ -625,7 +716,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     sg.addColorStop(0.56, `rgba(255,255,255,${b.sweep})`);
     sg.addColorStop(1, `rgba(255,255,255,0)`);
     sweep.grad = sg;
-    const br = c * 0.34;
+    const br = ballR(c);
     for (let i = 0; i < MAX_TEAMS; i++) {
       const s = sides[i];
       const shadow = ctx.createRadialGradient(0, 0, 0, 0, 0, br * 1.1);
@@ -645,7 +736,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     }
 
     /* the mine's two paint servers: a dim warm sphere and the glow that goes with it */
-    const mr = c * 0.34;
+    const mr = ballR(c);
     const mb = ctx.createRadialGradient(-0.3 * mr, -0.34 * mr, mr * 0.08, 0, 0, mr * 1.1);
     mb.addColorStop(0, MINE_RAMP.light);
     mb.addColorStop(0.42, MINE_RAMP.mid);
@@ -848,7 +939,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const { cell: c, ox, oy, dpr } = L;
     const s = sides[pi];
     const st = s.wall;
-    const t = c * 0.13 * st.thick * (0.62 + 0.38 * grow);
+    const t = barT(c) * st.thick * (0.62 + 0.38 * grow);
     const cap = st.caps === 'butt' ? 0 : t / 2;
     const x0 = cap + Math.min(2, c * 0.06), len = Math.max(0, 2 * c - 2 * x0);
     ctx.save();
@@ -878,12 +969,18 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.stroke();
       ctx.globalAlpha = alpha * st.alpha;
     }
-    if (pi === 1) {                                            // cross-bands: ownership without colour
+    /* Ownership that survives losing colour: a seat's own number of tick bands across its bar, so
+       four walls on one board still read apart in greyscale. Seat 0 wears none — it is the bar the
+       player places themselves, and the one they never have to identify. */
+    const ticks = SEAT_TICKS[pi] ?? 0;
+    if (ticks > 0) {
       ctx.strokeStyle = 'rgba(255,255,255,.52)';
       ctx.lineWidth = Math.max(1, t * 0.26);
       ctx.beginPath();
-      let x = x0 + len * 0.32; ctx.moveTo(x, -t * 0.4); ctx.lineTo(x, t * 0.4);
-      x = x0 + len * 0.68; ctx.moveTo(x, -t * 0.4); ctx.lineTo(x, t * 0.4);
+      for (let i = 0; i < ticks; i++) {
+        const x = x0 + (len * (i + 1)) / (ticks + 1);
+        ctx.moveTo(x, -t * 0.4); ctx.lineTo(x, t * 0.4);
+      }
       ctx.stroke();
     }
     ctx.restore();
@@ -990,7 +1087,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.restore();
     }
 
-    ctx.beginPath(); ctx.arc(0, 0, r - 0.5, 0, TAU);   // crisp edge
+    /* the crisp edge: the 1px stroke's own centre-line, pulled inside the silhouette so the ring
+       does not feather past it. On a cramped board `r` can fall under half a pixel, so the inset
+       is clamped to zero — a hairline ring on a 1px ball, never a negative radius (which throws). */
+    ctx.beginPath(); ctx.arc(0, 0, Math.max(0, r - 0.5), 0, TAU);
     ctx.strokeStyle = s.ramp.edge; ctx.lineWidth = 1; ctx.stroke();
 
     shine(s, r);
@@ -1112,7 +1212,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
    * and a white check or a red cross. Anchored beside an armed ghost and clamped to the canvas.
    */
   function drawCapsule(cx: number, cy: number, kind: 'confirm' | 'cancel', color: string, c: number, still: boolean) {
-    const r = CAP_R * c;
+    const r = capR(c) * c;
     ctx.save();
     ctx.translate(cx, cy);
     ctx.fillStyle = 'rgba(12,16,26,.62)';
@@ -1332,12 +1432,32 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   }
 
   function draw(v: View, now: number) {
+    /* Self-heal the fit before painting. `setBoard` re-fits on every race, but a board built while
+       its screen was still hidden measures a zero box and keeps that degenerate cell forever: the
+       stage's ResizeObserver catches the reveal only when the *wrap* changes size, and a wrap that
+       was already sized can stay silent. Two property reads per frame buy a board that can never
+       paint at a stale size — the bug was a ball drawn at cell 1.08 (a negative `r - 0.5` throw). */
+    if (canvas.clientWidth !== lastW || canvas.clientHeight !== lastH) resize();
     const { cell: c, ox, oy } = L;
     const still = motionReduced();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (bg) ctx.drawImage(bg, 0, 0);
     ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
+
+    /*
+     * Everything below is board furniture — the strip's sweep, the start tints, walls, mines,
+     * landing pulses, blast rings, the balls and their halos and rings, the rolling log and the
+     * thinking pips. The slab *is* the board, so none of it may paint outside the slab.
+     *
+     * This used to be free: the board filled its canvas edge to edge and the canvas clipped the
+     * spill for us. Now the grid is centred inside a box of its own aspect, so a bottom-row ball's
+     * selection ring (`r * 1.6`) and turn halo (`r * 2.3`) reach past the slab and float on the card
+     * as a crimson arc under the board. One clip here covers every one of them.
+     */
+    ctx.save();
+    rr(ctx, ox, oy, cols * c, rows * c, CORNER * c);
+    ctx.clip();
 
     // slow light sweep across the finish strip (clipped to the strip and the rounded corners)
     if (!still && sweep.grad) {
@@ -1578,7 +1698,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const b = v.balls[i];
       const seat = b.team;
       const cx = ox + b.pos.x * c, cy = oy + b.pos.y * c;
-      const r = c * 0.34 * (b.sel ? 1.08 : 1);        // the chosen ball lifts off the clay
+      const r = ballR(c) * (b.sel ? 1.08 : 1);        // the chosen ball lifts off the clay
       /* the tail it is dragging right now: sampled from where it stood last frame */
       const was = prevPos.get(b.id);
       if (was) {
@@ -1667,6 +1787,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         ctx.restore();
       }
     }
+
+    ctx.restore();                     // the slab clip opened at the top of this frame
   }
 
   return {

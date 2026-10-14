@@ -862,7 +862,7 @@
           <main class="card">
             <div class="board-slot">
               <div class="board-wrap" id="board-wrap">
-                <canvas id="board" role="img" aria-label="Race board: red and blue tokens race to the checkered finish strip along the top row"></canvas>
+                <canvas id="board" role="img" aria-label="Race board: team tokens race to the checkered finish strip along the top row"></canvas>
 
                 <!-- the finish label is engraved into the strip it names -->
                 <span class="finish-tag" aria-hidden="true">
@@ -875,8 +875,12 @@
             </div>
 
             <!-- the whole board is the action dock now: your chip carries the one key left, the mine.
-                 Whose turn it is and how long is left live on the chips, in the thumb zone. -->
-            <footer class="chips">
+                 Whose turn it is and how long is left live on the chips, in the thumb zone.
+                 A duel shows two of them; a three- or four-way reveals the extra seats, and
+                 `data-seats` on the dock tells CSS how many it is laying out (see the reflow rule
+                 in style.css). The seats past the first are always bot seats locally, so they carry
+                 no mine key and no countdown ring — only a ball, a name and a wall count. -->
+            <footer class="chips" id="chips" data-seats="2">
               <div class="chip red" id="chip-0">
                 <span class="chip-row">
                   <span class="chip-ball">
@@ -911,6 +915,32 @@
                     </span>
                     <span class="walls" id="walls-1" aria-label="Walls left: 8 of 8">
                       <span class="wall-glyph" aria-hidden="true">▬</span><span class="wall-n">8</span><span class="wall-w">walls</span>
+                    </span>
+                  </span>
+                </span>
+              </div>
+              <div class="chip gold" id="chip-2" hidden>
+                <span class="chip-row">
+                  <span class="chip-ball">
+                    <span class="ball" aria-hidden="true"></span>
+                  </span>
+                  <span class="chip-txt">
+                    <span class="who-line"><span class="who" id="name-2">BOT 2</span></span>
+                    <span class="walls" id="walls-2" aria-label="Walls left: 6 of 6">
+                      <span class="wall-glyph" aria-hidden="true">▬</span><span class="wall-n">6</span><span class="wall-w">walls</span>
+                    </span>
+                  </span>
+                </span>
+              </div>
+              <div class="chip green" id="chip-3" hidden>
+                <span class="chip-row">
+                  <span class="chip-ball">
+                    <span class="ball" aria-hidden="true"></span>
+                  </span>
+                  <span class="chip-txt">
+                    <span class="who-line"><span class="who" id="name-3">BOT 3</span></span>
+                    <span class="walls" id="walls-3" aria-label="Walls left: 5 of 5">
+                      <span class="wall-glyph" aria-hidden="true">▬</span><span class="wall-n">5</span><span class="wall-w">walls</span>
                     </span>
                   </span>
                 </span>
@@ -1730,6 +1760,16 @@
                     <button class="seg-b" type="button" data-diff="easy" aria-pressed="false">Easy</button>
                     <button class="seg-b" type="button" data-diff="normal" aria-pressed="true">Normal</button>
                     <button class="seg-b" type="button" data-diff="hard" aria-pressed="false">Hard</button>
+                  </div>
+                  <!-- The whole of the three- and four-player entry: one seat count, and Start runs a
+                       race of that many one-ball seats. Two keeps the classic 8x12 duel board; three
+                       and four move to the wider 10x12 one, which is the room the extra balls need.
+                       Painted and persisted by main.ts (`paintParty`), which is also what makes the
+                       Start label name the seat count it will run. -->
+                  <div class="seg" role="group" aria-label="Players" id="party-seats">
+                    <button class="seg-b" type="button" data-seats="2" aria-pressed="true" aria-label="Two players, a one-on-one duel">2P</button>
+                    <button class="seg-b" type="button" data-seats="3" aria-pressed="false" aria-label="Three players, one ball each">3P</button>
+                    <button class="seg-b" type="button" data-seats="4" aria-pressed="false" aria-label="Four players, one ball each">4P</button>
                   </div>
                 </div>
               </div>

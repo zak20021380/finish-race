@@ -101,10 +101,13 @@
   --red: #e0264f;
   --blue: #3057db;
   --green: #10b981;
+  --gold: #e8a80c;                     /* seat 2's solar gold — GOLD_RAMP.mid, the sphere's own value */
+  --emerald: #17915c;                  /* seat 3's emerald — TEAM2_RAMP.mid, likewise */
   /* Light inks for dark clay #1C2433: crisp white titles, slate-silver secondary. */
   --red-ink: #FDA4AF;
   --blue-ink: #93C5FD;
   --green-ink: #6EE7B7;
+  --gold-ink: #FCD34D;
   --ink: #F8FAFC;                      /* crisp clean white */
   --ink-soft: #94A3B8;                 /* slate silver secondary */
   --chip-ink: #CBD5E1;
@@ -114,6 +117,7 @@
   --danger: #FDA4AF;
   --red-glow: rgba(224, 38, 79, .25);
   --blue-glow: rgba(48, 87, 219, .25);
+  --gold-glow: rgba(232, 168, 12, .28);
   /* mock coins: gold on slate — light gold ink for translucent trays */
   --coin: rgba(245, 158, 11, .16);
   --coin-line: rgba(245, 158, 11, .35);
@@ -349,23 +353,30 @@ html, body {
    It used to own a lane above the canvas, which cost the board a whole row of height. Now it is
    a recessed plate centred on row 0 — board furniture, not a banner, and `pointer-events: none`
    so a tap always belongs to the board underneath. A ball only ever reaches row 0 as the race
-   ends, so the plate never hides anything in play. */
+   ends, so the plate never hides anything in play.
+   Row 0 of a *twelve-row* board, whichever board that is: the row count comes from `--board-rows`,
+   published by main.ts alongside the grid, so the plate stays welded to the strip when a three- or
+   four-contender race swaps the 8x12 board for the 10x12 one. Its height and type track
+   `--board-cell` the same way, clamped so the label never outgrows the row it sits in.
+   The slab is *centred* in its canvas, so row 0 starts at `--board-oy` rather than at zero — the
+   offset is published too, and the plate's centre is `oy + cell/2` in the canvas's own pixels,
+   which is what `.board-wrap` measures in because the canvas fills it edge to edge. */
 .finish-tag {
   position: absolute;
   left: 50%;
-  top: calc(100% / 24);                 /* the middle of row 0 */
+  top: calc(var(--board-oy, 0px) + var(--board-cell, 36px) / 2);   /* the middle of row 0 */
   transform: translate(-50%, -50%);
   z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--s1);
-  height: var(--finish-pill-h);
+  height: clamp(18px, calc(var(--board-cell, 36px) * 0.62), var(--finish-pill-h));
   padding: 0 var(--s2);
   border-radius: var(--radius-pill);
   background: var(--field);
   box-shadow: var(--inset), inset 0 0 0 1px var(--finish-ring);
-  font-size: var(--t-micro);
+  font-size: clamp(9px, calc(var(--board-cell, 36px) * 0.3), var(--t-micro));
   line-height: 1;
   white-space: nowrap;
   pointer-events: none;
@@ -388,9 +399,14 @@ html, body {
 .finish-tag { transition: opacity .2s ease; }
 
 /* ---- board ---- */
-/* The slot takes the free height and the wrap fits the largest 2:3 box inside it, so the board
-   shrinks on 360x640 instead of pushing the chips off. Nothing else claims a lane: the finish
-   label lives on the strip, so the canvas gets every pixel of the card above the chips. */
+/* The slot takes the free height and the wrap fits the largest board of the *active* grid inside
+   it, so the board shrinks on 360x640 instead of pushing the chips off. Nothing else claims a lane:
+   the finish label lives on the strip, so the canvas gets every pixel of the card above the chips.
+   The grid is not always 8x12: three or four contenders move to the wider 10x12 board, and a 2:3
+   box would then letterbox it — the slab would float in a box taller than itself, and the finish
+   plate would drift off the strip it names. So the box's own aspect is driven by `--board-cols` /
+   `--board-rows`, which main.ts republishes on every `setBoard`. A duel resolves to exactly the
+   2:3 box this rule has always drawn: min(100cqw, 66.667cqh) and min(100cqh, 150cqw). */
 .board-slot {
   flex: 1 1 auto;
   min-height: 0;
@@ -431,7 +447,11 @@ html, body {
 }
 html.rm .board-wrap.rolling::after { animation: none; opacity: .85; }
 @supports (width: 1cqw) {
-  .board-wrap { width: min(100cqw, 66.667cqh); height: min(100cqh, 150cqw); }
+  .board-wrap {
+    /* the largest box of the active grid's aspect that fits the slot, both axes bounded */
+    width: min(100cqw, calc(100cqh * var(--board-cols, 8) / var(--board-rows, 12)));
+    height: min(100cqh, calc(100cqw * var(--board-rows, 12) / var(--board-cols, 8)));
+  }
 }
 .board-wrap canvas {
   position: absolute;
@@ -554,6 +574,35 @@ html.rm .board-wrap.rolling::after { animation: none; opacity: .85; }
 .who-line { display: flex; align-items: center; gap: var(--s1); min-width: 0; }
 .chip.red { --tint: var(--red); --ink-t: var(--red-ink); --glow: var(--red-glow); }
 .chip.blue { --tint: var(--blue); --ink-t: var(--blue-ink); --glow: var(--blue-glow); }
+.chip.gold { --tint: var(--gold); --ink-t: var(--gold-ink); --glow: var(--gold-glow); }
+.chip.green { --tint: var(--emerald); --ink-t: var(--green-ink); --glow: rgba(23, 145, 92, .26); }
+
+/* ---- the dock grows a seat ----
+   A duel keeps its two 64px chips shoulder to shoulder, exactly as before. Three or four seats
+   cannot: four chips across a 360px card would get 84px each and the 46px ball alone would leave
+   nothing for a name, so the row reflows to a 2-up grid and the chip goes compact — a 34px ball
+   and a 50px row. That costs the board ~56px of height on the *short* phone, which is the one
+   place a 10-column grid needs it most; the count comes from main.ts via `data-seats`, which is
+   also what tells the dock how many chips it is laying out. */
+.chips[data-seats="3"], .chips[data-seats="4"] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.chips[data-seats="3"] .chip:last-child { grid-column: 1 / -1; }
+.chips[data-seats="3"] .chip,
+.chips[data-seats="4"] .chip { height: 50px; }
+.chips[data-seats="3"] .chip-ball,
+.chips[data-seats="4"] .chip-ball { width: 34px; height: 34px; }
+.chips[data-seats="3"] .chip .ball,
+.chips[data-seats="4"] .chip .ball { inset: 2px; width: 30px; height: 30px; }
+.chips[data-seats="3"] .timer,
+.chips[data-seats="4"] .timer { width: 34px; height: 34px; }
+.chips[data-seats="3"] .timer-n,
+.chips[data-seats="4"] .timer-n { font-size: 12px; }
+.chips[data-seats="3"] .chip .who,
+.chips[data-seats="4"] .chip .who { font-size: 12px; }
+.chips[data-seats="3"] .chip .walls,
+.chips[data-seats="4"] .chip .walls { height: 17px; }
 .chip::after {
   content: "";
   position: absolute;
@@ -8333,6 +8382,14 @@ html.rm .arena-hero-backlight { display: none; }
   font-variant-numeric: tabular-nums;
 }
 .gm-seg .seg-b { min-height: 44px; }
+/* The practice card carries two option rows — bot level and seat count — so its strip stacks
+   rather than sitting side by side: three buttons across half a 360px card is not a tap target.
+   Both rows keep the same 44px keys, so the card just gets taller. */
+.gm-card[data-row="bot"] .gm-seg {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
 /* 2v2 ships as a teaser: same 44px key, dimmed face, never selectable */
 .gm-seg .seg-b.is-teaser {
   position: relative;

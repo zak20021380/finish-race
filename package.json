@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
-    "build": "tsc --noEmit && npm run check:worker && vite build",
+    "build": "tsc --noEmit && npm run check:worker && node scripts/build-vite.mjs",
     "check:worker": "tsc -p worker/tsconfig.json",
     "preview": "vite preview --host"
   },

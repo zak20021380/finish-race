@@ -131,17 +131,37 @@ export const BOT_RAMP: Ramp = {
   wl: '#7794ff', wd: '#2142b0', edge: 'rgba(20,30,100,.28)', ol: 'rgba(48,87,219,.5)', os: 'rgba(48,87,219,.95)',
 };
 
+/**
+ * Solar gold. The third seat's family, and the one warm note on a board that is otherwise cool:
+ * a bright amber, deliberately far from the crimson in *lightness* rather than in hue, so a
+ * four-way reads at a glance even on a 24px sphere. Never for sale.
+ */
+export const GOLD_RAMP: Ramp = {
+  light: '#ffe9a8', mid: '#e8a80c', dark: '#6b4203', glow: 'rgba(232,168,12,.6)', shade: '95,62,6',
+  wl: '#ffd166', wd: '#a06f08', edge: 'rgba(107,66,3,.3)', ol: 'rgba(232,168,12,.5)', os: 'rgba(232,168,12,.95)',
+};
+
 /** The rules allow a third team, so a third fixed family exists for it. Also never for sale. */
 export const TEAM2_RAMP: Ramp = {
   light: '#8fe3b4', mid: '#17915c', dark: '#0a4d30', glow: 'rgba(23,145,92,.55)', shade: '10,70,50',
   wl: '#4fc98d', wd: '#0c6b41', edge: 'rgba(10,70,50,.28)', ol: 'rgba(23,145,92,.5)', os: 'rgba(23,145,92,.95)',
 };
 
-/** …and a fourth team is one more seat than the rules used to allow, so it gets a family too. */
+/** …and a fourth team is one more seat than the rules used to allow, so it gets a family too.
+ *  Royal violet: unused by the live seat order (which runs cobalt → gold → emerald), kept as the
+ *  alternate for seat 3 — a board that needs to read cold can wear this instead of the green. */
 export const TEAM3_RAMP: Ramp = {
   light: '#c9b6ff', mid: '#7c3aed', dark: '#2e1065', glow: 'rgba(124,58,237,.55)', shade: '45,16,100',
   wl: '#a78bfa', wd: '#5b21b6', edge: 'rgba(45,16,100,.28)', ol: 'rgba(124,58,237,.5)', os: 'rgba(124,58,237,.95)',
 };
+
+/**
+ * The fixed seats, in seat order: seat 1, seat 2, seat 3. Seat 0 wears the equipped skin, so it is
+ * never in here. One array, read by both sides of the app — `render.ts` draws seat `i + 1`'s sphere
+ * and walls from `SEAT_RAMPS[i]`, and `main.ts` tints HUD chip `i + 1` from the very same entry, so
+ * the sphere a player sees on the board and the swatch on their chip can never drift apart.
+ */
+export const SEAT_RAMPS: readonly Ramp[] = [BOT_RAMP, GOLD_RAMP, TEAM2_RAMP];
 
 /**
  * A mine in the ground you put there yourself: warm warning red, never a team colour, so a buried

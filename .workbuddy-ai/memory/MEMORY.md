@@ -13,11 +13,24 @@ Detailed history lives in the dated logs beside this file. This is the durable i
 - Browser checks: `.tmp/*-check.mjs` bundle real `src/` with rollup + `ts.transpileModule`, inline
   `style.css` + bundle into a copy of `index.html`, serve on 127.0.0.1, drive headless Chrome over raw
   CDP at 360x640. Must strip the remote `telegram-web-app.js`, shim `import.meta.env = {}`, dispatch
-  synthetic `PointerEvent`s. `.tmp/board-size-check.mjs` = board geometry (12/12).
+  synthetic `PointerEvent`s. `.tmp/board-size-check.mjs` = grid choice (12/12);
+  **`.tmp/board-scale-check.mjs` = fit + palettes + magnet + dock across 360x640 / 390x844 / 430x932
+  for 2P/3P/4P (86/86)**. `.tmp/probe-bbox.mjs` / `.tmp/probe-party.mjs` are one-off probes that
+  reuse the bundle the harness already wrote (no bundling of their own).
 - **Pixel probes:** replicate `computeLayout` exactly — `LAYOUT_PAD = 2`, so `raw = min((w-4)/cols,
-  (h-4)/rows)`, `cell = floor(raw*dpr)/dpr`. Probe board-space points, not pixels. A **slab-width**
-  probe cannot tell 8x12 from 10x12 apart (the board scales to fit); find balls by **colour-family
-  runs**, not saturation peaks (a red halo out-saturates a blue ball).
+  (h-4)/rows)`, `cell = max(1, floor(raw*dpr)/dpr)`, then a **second pass** with
+  `pad = max(2, min(6, cell*0.06))`. Probe board-space points, not pixels. A **slab-width** probe
+  cannot tell 8x12 from 10x12 apart (the board scales to fit).
+- **Calibrate off the fully-opaque bounding box, never a colour feature.** `getImageData` once, keep
+  pixels with `alpha >= 250`: the slab is the only opaque thing (shadows are blurred translucent
+  colours, every glow/ring/streak is blended), so its bbox *is* `ox, oy, cols*cell x rows*cell`.
+  Deriving `ox` from the finish strip's leftmost white pixel fails — the checkers alternate and the
+  strip starts **green**, so that pixel is the second checker (half a cell out).
+- **Find a ball by saturation-weighted centroid, not per-column counts.** The seat to move wears a
+  halo at radius 0.78 cell vs the ball's 0.34, so window votes report one ball as three columns. A
+  radial halo is centred on its ball, so the centroid is right either way.
+- **Viewport px ≠ canvas-local px.** `getBoundingClientRect()` vs `getImageData` offsets differ by the
+  canvas's own `top`. Subtract it before comparing.
 - **Layout budget at 360x640:** `.admin-body` is 504px and the harness fails on any element whose
   `bottom > innerHeight`, including children scrolled out of the body.
 - `.shots/` = CDP scripts + PNGs; `.tmp/` = scratch. Both gitignored.
@@ -43,6 +56,32 @@ Detailed history lives in the dated logs beside this file. This is the durable i
   sets `wallsEach = wallBudget(state.balls.length)`. Wire validation is dims-aware both sides:
   `worker/matchmaker.ts` `readMessage(..., cols, rows)` via `boardOf(waiter)`; `src/matchmaking.ts`
   `parseFrame(raw, sizes)`.
+
+## Responsive board fit (src/render.ts, src/main.ts, src/style.css)
+- **One metric, derived:** `computeLayout(w, h, dpr, cols, rows)` fits the grid into the box and
+  everything scales from `L.cell` — `ballR(cell)`, `barT(cell)`, `capR(cell)`, `grooveZone(cell)`.
+  Never a module constant for anything that is painted.
+- **Seat palettes come from `SEAT_RAMPS`** in `themes.ts` (crimson skin · cobalt · solar gold ·
+  emerald) and feed both the renderer's spheres/bars and the HUD chips, so they cannot drift.
+  `SEAT_TICKS` gives each seat's wall bar a tick count, so ownership reads without colour.
+- **`main.ts` publishes the layout to CSS on `.card`:** `--board-cols` / `--board-rows` (from
+  `fitBoard`, on every `setBoard`) and `--board-cell` / `--board-oy` (from `publishCell`, on every
+  resize). `.board-wrap` takes the board's own aspect from the first pair;
+  `.finish-tag`'s `top` is `calc(var(--board-oy, 0px) + var(--board-cell, 36px) / 2)` — the slab is
+  **centred** in the canvas, so row 0 starts at `oy`, and `100% / (2 * rows)` is wrong.
+- **Nothing may paint outside the slab.** `draw()` opens one `rr(...)+clip()` after `setTransform`
+  and closes it at the very end (no early returns, so it is balanced). Without it a bottom-row
+  ball's selection ring (`r * 1.6`) and turn halo (`r * 2.3`) float on the card — the canvas used to
+  clip that spill for free when the board filled it edge to edge.
+- **Clamp every derived radius.** `ctx.arc(0, 0, r - 0.5, …)` on a degenerate cell throws
+  `IndexSizeError` and aborts the whole frame, which reads as a blank board. And `draw()` re-fits
+  when `clientWidth/Height` no longer match `lastW/lastH`: a race built while its screen was hidden
+  measures `0x0` and a wrap that was already sized fires no `ResizeObserver` on reveal.
+- **The drawer owns `#gm-start` and repaints it last.** `gamemodes.ts` `setGameMode` fires its
+  watchers *then* calls `paintSheetState()` (and the diff-button handler calls it directly), so an
+  `onGameModeChange` hook can never be the last writer. `paintParty` is registered after
+  `initGameModes` **and** re-applied by a `MutationObserver` on the label, with an equality guard so
+  it cannot re-enter. Party size persists at `detour.party.v1`.
 
 ## Rules engine geometry (src/rules.ts)
 - A wall = two edge segments + the vertex they hinge on. `wallVertices`, `wallPivot` (`h(x,y)`→
