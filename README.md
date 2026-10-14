@@ -1,9 +1,10 @@
 # Detour — Telegram Mini App
 
-Vite + TypeScript + Canvas 2D, plus a small Cloudflare Workers matchmaking backend in `worker/`.
-The opponent is still a local bot and coins are mock; the save lives in the browser. Quick match
-queues on a real waiting room when a Worker is behind the page and falls back to the local search
-when there is not one.
+Vite + TypeScript + Canvas 2D, plus a small Cloudflare Workers backend in `worker/`. A 1v1 quick
+match can be played for real against another player — the matchmaker pairs the two seats and the
+same socket relays the race between them. The bot, pass-and-play, the mock coins and the
+browser-only save are all unchanged; with no Worker behind the page quick match falls back to the
+local search exactly as it always did.
 
 ## Run
 
@@ -155,7 +156,8 @@ Telegram only loads **HTTPS** URLs.
 | `worker/index.ts` | `GET /health` and `GET /ws/matchmake`, forwarded to the singleton Durable Object |
 | `worker/auth.ts` | Telegram `initData` verified with `crypto.subtle` HMAC-SHA256, plus the dev guest door |
 | `worker/matchmaker.ts` | The waiting room: the queue, the 250/600 pairing radii and `MATCH_FOUND` |
-| `scripts/verify-worker-matchmaking.mjs` | Drives the whole protocol in plain Node, no wrangler needed |
+| `scripts/verify-worker-matchmaking.mjs` | Drives the whole queueing protocol in plain Node, no wrangler needed |
+| `scripts/verify-worker-race.mjs` | Drives two clients through a whole relayed race, resignations and disconnects |
 
 ## Matchmaking backend
 
@@ -173,20 +175,48 @@ npx wrangler dev                       # local workerd, http://127.0.0.1:8787
 VITE_WS_URL=ws://127.0.0.1:8787/ws/matchmake npm run dev
 npm run check:worker                   # the worker's own strict typecheck (in `npm run build`)
 node scripts/verify-worker-matchmaking.mjs
+node scripts/verify-worker-race.mjs
 ```
+
+### The race, on the same socket
+
+The socket that queued is the socket that plays. Both seats are handed the same `seed` and the same
+board size, so `newGame(sizes, { hazards: true, seed })` builds the identical board on both screens
+— the hazards and the rolling-log timetable are pure functions of that seed — and the room keeps
+its own authoritative copy of it (it imports `src/rules.ts`, the module the client plays):
+
+- `{ type: 'MOVE', action }` is judged against the real state before it is relayed to the other
+  seat as `{ type: 'MOVE', side, action }`. A wall is stamped with the sender's seat, never with
+  the owner the payload claims.
+- An out-of-turn or illegal move answers `{ type: 'REJECT', reason }` and changes nothing.
+- `{ type: 'RESIGN' }` and a socket that dies mid-race both hand the win to the seat opposite,
+  which reads `{ type: 'RESIGN', side }` or `{ type: 'OPPONENT_LEFT', side }` and shows the reason
+  in the end panel.
+
+The client applies its own move the moment it is played and sends it on; the rival's moves come
+back through the same `play()` door the bot uses, so walls, mines, thrown-back balls, log strikes
+and the blitz clock behave exactly as they do offline. `onlineRace()` in `src/matchmaking.ts` is
+that seat — `send()`, `onMove()`, `onEnd()`, `resign()` — and it is null when the search fell back
+to the local simulation, which is how the offline board keeps working with no Worker at all.
 
 ## Going multiplayer later
 
-`main.ts` talks to the opponent through one interface:
+`main.ts` still talks to the *local* opponent through one interface:
 
 ```ts
 interface Opponent { think(s: GameState): Promise<Action> }
 ```
 
-`makeBot(difficulty)` returns one today. Replace it with an implementation that sends your own
-moves over a socket and resolves with the remote player's `Action`; the Online card is where it
-plugs in. Everything goes through `apply(state, action)`, so the server can run the same
-`rules.ts` to validate moves.
+`makeBot(difficulty)` returns one. A live race does not go through it: the seat `onlineRace()`
+hands back sends the move the player just made and feeds the rival's moves into the same `play()`
+door, with the bot stood down for the length of the race (`wantsOpponent()` is false while a seat
+is live). Everything still goes through `apply(state, action)` on both screens, which is what lets
+`worker/` run the same `rules.ts` to judge a move before relaying it.
+
+What is still missing from online play: a rematch on the same seats (Play again re-queues), a
+reconnect into a race that is already running, an authoritative `reject` resync (a refused move
+is reported, not repaired), and a server-side check that a seat's clock actually ran out before
+its timeout move is relayed.
 
 ## Tweaking the look
 

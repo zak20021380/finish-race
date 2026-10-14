@@ -25,7 +25,7 @@ import { onChange, recordGame, theme } from './storage';
 import { impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
 import { getGameMode, gmBack, initGameModes, setGameMode } from './gamemodes';
-import { createMatchmaking, onlineSearch } from './matchmaking';
+import { createMatchmaking, onlineRace, onlineSearch, type OnlineSession, type RaceEnd } from './matchmaking';
 
 initTelegram();
 applyFlagSupport();
@@ -69,6 +69,9 @@ const timerFill = $<HTMLElement>('timer-fill');
 const timerN = $<HTMLElement>('timer-n');
 const chips = [$<HTMLDivElement>('chip-0'), $<HTMLDivElement>('chip-1')];
 const dots = $<HTMLSpanElement>('dots');
+/** The seat-0 furniture that follows the local player when an online seat is not seat 0. */
+const chipRows = chips.map((chip) => chip.querySelector<HTMLElement>('.chip-row'));
+const timerCapsule = chips[0].querySelector<HTMLElement>('.chip-ball');
 const wallBadges = [$<HTMLSpanElement>('walls-0'), $<HTMLSpanElement>('walls-1')];
 const sheetPause = $<HTMLElement>('sheet-pause');
 const sheetQuit = $<HTMLElement>('sheet-quit');
@@ -164,7 +167,16 @@ const sheetById = (id: string) => document.getElementById(id);
  */
 const matchmaking = createMatchmaking({
   source: onlineSearch(),
-  onMatchFound: () => startGame({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] }),
+  /* A live seat plays the person the matchmaker paired; with no Worker behind the page the same
+     stage falls back to the local search, `onlineRace()` is null, and the bot drives the rival. */
+  onMatchFound: () => {
+    const seat = onlineRace();
+    startGame({
+      difficulty: menuState.difficulty,
+      sizes: seat ? [seat.sizes[0], seat.sizes[1]] : [...menuState.sizes],
+      online: seat,
+    });
+  },
   onCancel: () => {
     const drawer = sheetById('sheet-game-modes');
     if (drawer) sheets.open(drawer);
@@ -216,12 +228,21 @@ function onBack() {
 
 /* ---------- game ---------- */
 
-/** You are seat 0; every other seat is the machine. */
-const HUMAN = 0 as const;
-const BOT = 1 as const;
 /** The two seats that race, and the two seats the footer shows. */
-const SEATS: Player[] = [HUMAN, BOT];
-const TEAM_NAME: Record<number, string> = { [HUMAN]: 'You', [BOT]: 'Bot' };
+const SEATS: Player[] = [0, 1];
+/**
+ * Seat 0 is you in a local race; the matchmaker decides in an online one, so every rule that used
+ * to say "the human" says `localSide` instead — the input lock, the clock, the mine key, the
+ * chips, the payout and the verdict all follow the side this screen is actually playing.
+ */
+let localSide: Player = 0;
+/** The live online seat, when this race is against a person instead of the machine. */
+let active: OnlineSession | null = null;
+/** Why an online race ended without a finish line, for the panel's own caption. */
+let forfeit: RaceEnd['why'] | null = null;
+const rivalSide = (): Player => (localSide === 0 ? 1 : 0);
+/** `You`, and the name on the other chip: local names in a bot race, the player's in an online one. */
+const TEAM_NAME: Record<number, string> = { 0: 'You', 1: 'Bot' };
 
 /** Swap this for a network-backed implementation to go multiplayer. */
 interface Opponent { think(s: GameState): Promise<Action> }
@@ -233,7 +254,9 @@ let difficulty: Difficulty = menuState.difficulty;
 let sizes: [number, number] = [...menuState.sizes];
 let opponent: Opponent = makeBot(difficulty);
 
-const wantsOpponent = () => state.turn !== HUMAN && state.winner === null;
+/** Is the other seat to move? In an online race that seat is a person, not the machine. */
+const rivalTurn = () => state.turn !== localSide && state.winner === null;
+const wantsOpponent = () => rivalTurn() && !active;
 
 const REASON = { dry: 'No walls remaining!', overlap: 'Overlaps a wall', blocked: 'Blocks the path' };
 
@@ -290,7 +313,7 @@ const marks: (Mark | null)[] = [null, null];
 /** Reused every frame: the loop must not allocate. */
 const view: View = {
   state, balls: ballViews, hints, ghost, last: marks, thinking: null,
-  human: HUMAN, mineHints, mineGhost, capsule,
+  human: localSide, mineHints, mineGhost, capsule,
 };
 let gen = 0; // bumps on restart so stale bot replies are dropped
 let paused = false;
@@ -300,7 +323,7 @@ let turnsPlayed = 0;
 let saidTurn = '';
 const waiting: (() => void)[] = [];            // bot thinks parked by the pause sheet
 
-const canAct = () => state.winner === null && state.turn === HUMAN && !paused && !rolling;
+const canAct = () => state.winner === null && state.turn === localSide && !paused && !rolling;
 const clearGhost = () => { ghost = null; mineGhost = null; capsule = null; clearNote(); };
 
 /**
@@ -309,7 +332,7 @@ const clearGhost = () => { ghost = null; mineGhost = null; capsule = null; clear
  * always a plain board tap.
  */
 function armMine(next: boolean) {
-  const on = next && canAct() && minesLeft(state, HUMAN) > 0;
+  const on = next && canAct() && minesLeft(state, localSide) > 0;
   if (on === mineArmed) return;
   impact('light');
   mineArmed = on;
@@ -358,17 +381,29 @@ function armCapsules() {
   }
 }
 
+/**
+ * How the race was decided: a finish line, or a rival who did not stay to see it. A forfeit is a
+ * win that never touched the board, so it says so rather than pretending a ball crossed.
+ */
+function subLine(won: boolean): string {
+  const rival = active?.opponent.name ?? 'The bot';
+  if (!forfeit) return won ? 'Your team crossed the line first.' : `${rival} reached FINISH first.`;
+  if (forfeit === 'drop') return 'Connection lost — the rival takes the win.';
+  if (!won) return `${rival} took the win.`;
+  return `${rival} ${forfeit === 'resign' ? 'resigned' : 'left the race'} — the win is yours.`;
+}
+
 let overlayOpen = false;
 function showOverlay() {
   if (overlayOpen) return;
   overlayOpen = true;
-  const won = state.winner === HUMAN;
+  const won = state.winner === localSide;
   const built = state.walls.length;
   const wallsNote = built ? ` ${built} wall${built === 1 ? '' : 's'} went up along the way.` : '';
   overlay.classList.toggle('win', won);
   overlay.classList.toggle('lose', !won);
-  verdict.textContent = `${TEAM_NAME[state.winner ?? HUMAN]} win${won ? '' : 's'}`;
-  sub.textContent = (won ? 'Your team crossed the line first.' : 'The bot reached FINISH first.') + wallsNote;
+  verdict.textContent = `${TEAM_NAME[state.winner ?? localSide]} win${won ? '' : 's'}`;
+  sub.textContent = subLine(won) + wallsNote;
   overlay.hidden = false;
   if (won && !motionReduced()) confetti.burst();
   /* one credit per finished race: showOverlay only runs once per game over */
@@ -382,28 +417,29 @@ function showOverlay() {
 
 function ui() {
   /* a pick that no longer belongs to you, or to a ball that is gone, is dropped here */
-  if (selected !== null && (state.winner !== null || state.turn !== HUMAN
+  if (selected !== null && (state.winner !== null || state.turn !== localSide
     || !state.balls.some((b) => b.id === selected))) selected = null;
   const live = canAct();
   /* the key only ever covers one turn, and only while there is still a mine to bury */
-  if (!live || minesLeft(state, HUMAN) <= 0) mineArmed = false;
+  if (!live || minesLeft(state, localSide) <= 0) mineArmed = false;
   /* at the start of a human turn, put that turn's first ball in hand so the dots light up at once */
   if (live && !mineArmed && selected === null && autoPicked !== state.turn) {
     const auto = selectionFor(state);
     if (auto) { selected = auto.id; autoPicked = state.turn; }
   }
   hints = live && !mineArmed && selected !== null ? reachableBall(state, selected) : [];
-  mineHints = live && mineArmed ? mineCells(state, HUMAN) : [];
+  mineHints = live && mineArmed ? mineCells(state, localSide) : [];
   /* an armed cell that is no longer placeable — the turn moved on, or a ball rolled over it */
   if (mineGhost && !mineHints.some((h) => sameCell(h, mineGhost))) mineGhost = null;
   armCapsules();
-  const thinking = wantsOpponent() && !paused;
+  /* the rival's dots tick for a bot's think time and for a person's just the same */
+  const thinking = rivalTurn() && !paused;
 
   dots.classList.toggle('on', thinking);
 
   mineBtn.setAttribute('aria-pressed', String(mineArmed));
-  mineBtn.disabled = !live || minesLeft(state, HUMAN) <= 0;
-  setMinePips(minesLeft(state, HUMAN));
+  mineBtn.disabled = !live || minesLeft(state, localSide) <= 0;
+  setMinePips(minesLeft(state, localSide));
 
   /* whose turn it is rides on the chips now: a clay glow, a lift, and the countdown ring */
   const seat = state.winner ?? state.turn;
@@ -412,8 +448,8 @@ function ui() {
     chips[p].classList.toggle('thinking', thinking && p === state.turn);
     setWalls(p, wallsRemaining(state, p));
   }
-  const spoken = state.winner !== null ? `${TEAM_NAME[seat]} win${seat === HUMAN ? '' : 's'}`
-    : seat === HUMAN ? 'Your turn' : `${TEAM_NAME[seat]}'s turn`;
+  const spoken = state.winner !== null ? `${TEAM_NAME[seat]} win${seat === localSide ? '' : 's'}`
+    : seat === localSide ? 'Your turn' : `${TEAM_NAME[seat]}'s turn`;
   if (spoken !== saidTurn) { saidTurn = spoken; announce.textContent = spoken; }
 
   /* one turn per seat makes a round; the counter is the UI's, the rules keep none */
@@ -490,7 +526,7 @@ function playLog(ev: LogEvent, next: GameState) {
   /* the log meets the top-most ball first, so that is the shove the note reports */
   let hit: LogEvent['moves'][number] | undefined = ev.moves[0];
   for (const m of ev.moves) if (hit && m.from.r < hit.from.r) hit = m;
-  const team = hit ? ballById(next, hit.ballId)?.team ?? HUMAN : HUMAN;
+  const team = hit ? ballById(next, hit.ballId)?.team ?? localSide : localSide;
   const thrown = hit ? hit.to.r - hit.from.r : 0;
   const msg = hit
     ? `Log! ${TEAM_NAME[team] ?? 'Ball'} pushed back ${thrown} cell${thrown === 1 ? '' : 's'}`
@@ -518,7 +554,11 @@ function playLog(ev: LogEvent, next: GameState) {
   }, strike - t0 + T + 240);
 }
 
-function play(a: Action): boolean {
+/**
+ * The single door every action comes through — taps, the bot, the blitz timeout and (with
+ * `remote`) the rival's moves off the wire — so a networked race animates exactly like a local one.
+ */
+function play(a: Action, remote = false): boolean {
   const prev = state;
   const by = state.turn;
   /* which ball is about to move, so the trail can start under it */
@@ -537,6 +577,8 @@ function play(a: Action): boolean {
   else if (a.kind === 'wall') { marks[by] = { kind: 'wall', spec: a.wall }; impact('medium'); }
   if (a.kind === 'mine') mineArmed = false;      // one mine per trip to the key
   state = next;
+  /* a move this seat made is also a move the rival has to see: the matchmaker relays it */
+  if (!remote && active) active.send(a);
   turnsPlayed++;                 // one seat has acted; the round caption counts them
   ghost = null;
   mineGhost = null;
@@ -551,14 +593,14 @@ function play(a: Action): boolean {
     shake();
     impact('heavy');
     notify('warning');
-    showNote(`Mine! ${TEAM_NAME[by]} ${by === HUMAN ? 'were' : 'was'} thrown back `
+    showNote(`Mine! ${TEAM_NAME[by]} ${by === localSide ? 'were' : 'was'} thrown back `
       + `${cells} cell${cells === 1 ? '' : 's'}`, false, 2600);
   }
   /* a log that just landed is a fresh object every time, so identity is the play-once flag */
   if (next.lastEvent && next.lastEvent !== playedLog) playLog(next.lastEvent, next);
   ui();
   startClock();          // the turn has moved on: the next seat gets its own allowance
-  if (state.winner !== null) notify(state.winner === HUMAN ? 'success' : 'error');
+  if (state.winner !== null) notify(state.winner === localSide ? 'success' : 'error');
   else if (wantsOpponent()) void runOpponent();
   return true;
 }
@@ -580,7 +622,7 @@ let ringFrac = -1;
 
 /** Is the countdown this seat's to lose? */
 const clockLive = () => !paused && !overlayOpen && !document.hidden && router.current === 'game'
-  && state.winner === null && state.turn === HUMAN && !rolling;
+  && state.winner === null && state.turn === localSide && !rolling;
 
 /** Park the countdown: the interval is gone, and the chip stops advertising a clock it isn't running. */
 function stopClock() {
@@ -605,7 +647,7 @@ function startClock() {
  * signal — accent past 5s, amber to 5s, red to 3s (where the ring also breathes).
  */
 function paintClock() {
-  const chip = chips[HUMAN];
+  const chip = chips[localSide];
   const live = clockLive();
   chip.classList.toggle('timing', live);
   if (!live) { chip.removeAttribute('data-timer'); return; }
@@ -647,8 +689,9 @@ function timeoutMove() {
 
 function restart() {
   gen++;
-  /* every race rolls a fresh seed, so no two races telegraph the same lanes */
-  state = newGame(sizes, { hazards: true, seed: (Math.random() * 0x7fffffff) | 0 });
+  /* Every local race rolls a fresh seed so no two telegraph the same lanes; an online race takes
+     the seed the matchmaker handed both sides, so the logs and the hazards are the same board. */
+  state = newGame(sizes, { hazards: true, seed: active ? active.seed : (Math.random() * 0x7fffffff) | 0 });
   rolling = false;
   window.clearInterval(rumbleId);
   rumbleId = 0;
@@ -680,29 +723,94 @@ function restart() {
 }
 
 function paintNames() {
-  const u = tgUser();
-  $('name-0').textContent = (u?.first_name || u?.username || 'YOU').toUpperCase().slice(0, 14);
-  $('name-1').textContent = 'BOT';
+  const me = ((tgUser()?.first_name || tgUser()?.username || 'You')).toUpperCase().slice(0, 14);
+  const foe = (active ? active.opponent.name : 'Bot').toUpperCase().slice(0, 14);
+  $('name-0').textContent = localSide === 0 ? me : foe;
+  $('name-1').textContent = localSide === 0 ? foe : me;
   /* the race names itself where a race is being stopped or judged, not on every frame of play */
-  const mode = `${sizes[0]}v${sizes[1]} · ${difficulty[0].toUpperCase()}${difficulty.slice(1)}`;
+  const mode = `${sizes[0]}v${sizes[1]} · ${active ? 'Online' : `${difficulty[0].toUpperCase()}${difficulty.slice(1)}`}`;
   pauseMode.textContent = ` · ${mode}`;
   overMode.textContent = mode;
 }
 
-function startGame(setup: { difficulty: Difficulty; sizes: [number, number] }) {
+/**
+ * The interactive furniture is seat-indexed in the markup (`#mine-btn` and the blitz ring in seat
+ * 0's chip, the thinking dots in seat 1's), but an online seat can be either side. The chips keep
+ * their names and colours; only the controls follow the local player to their own chip.
+ */
+function seatChrome(): void {
+  const row = chipRows[localSide];
+  const rivalWho = chips[rivalSide()].querySelector<HTMLElement>('.who-line');
+  if (!row || !rivalWho || !timerCapsule) return;
+  row.insertBefore(timerCapsule, row.firstChild);   // this seat's own countdown ring
+  row.appendChild(mineBtn);                        // ...and its own mine key
+  rivalWho.appendChild(dots);                      // the rival gets the thinking dots
+}
+
+/** How a race starts: the local shape, plus the live seat when the matchmaker paired one. */
+interface StartSetup {
+  difficulty: Difficulty;
+  sizes: [number, number];
+  online?: OnlineSession | null;
+}
+
+function startGame(setup: StartSetup) {
   /* menuState.difficulty is the single source: the Choose-mode sheet persists it live,
      so every start path (vs Bot card, Play) runs the level the sheet shows. */
   difficulty = menuState.difficulty;
-  sizes = setup.sizes;
+  /* An online seat brings its own board and side; a local race is always seat 0 against the bot. */
+  active = setup.online ?? null;
+  forfeit = null;
+  localSide = active ? active.side : 0;
+  sizes = active ? [active.sizes[0], active.sizes[1]] : setup.sizes;
+  TEAM_NAME[localSide] = 'You';
+  TEAM_NAME[rivalSide()] = active ? active.opponent.name : 'Bot';
+  view.human = localSide;
   opponent = makeBot(difficulty);
   paused = false;
   restart();
+  seatChrome();
   paintNames();
+  /* a networked board cannot be restarted into the same seat: the pause sheet only offers leaving */
+  $('pause-restart').hidden = !!active;
+
+  if (active) {
+    const session = active;
+    /* the rival's moves come through the same door the bot's do, so walls, mines, log strikes and
+       the blitz hand-off all animate exactly as they do offline */
+    session.onMove((action) => { if (state.winner === null) play(action, true); });
+    session.onEnd((end) => endOnline(end));
+    session.onReject(() => {
+      notify('error');
+      showNote('Move refused — the two boards disagree', true, 2400);
+    });
+  }
+
   router.go('game');
+}
+
+/**
+ * The online race ended without a finish line: award it, say why, and stop the clock. The board is
+ * left exactly as it stands — nothing is rewound, because both screens stopped on the same turn.
+ */
+function endOnline(end: RaceEnd): void {
+  if (state.winner !== null) return;
+  forfeit = end.why;
+  state = { ...state, winner: end.win ? localSide : rivalSide() };
+  stopClock();
+  ui();
+  notify(end.win ? 'success' : 'error');
+  showNote(end.win
+    ? (end.why === 'resign' ? 'Rival resigned — you win' : 'Rival left — you win')
+    : 'Connection lost',
+  !end.win, 3000);
 }
 
 function pauseGame() {
   if (paused) return;
+  /* A networked race does not pause: the rival is still playing and their clock is still theirs,
+     so the pause sheet in an online race is only a way out — Resume just closes it again. */
+  if (active) return;
   paused = true;
   clearGhost();
   syncLoop();
@@ -719,6 +827,13 @@ function resumeGame() {
 
 function quitToMenu() {
   sheets.close();
+  /* Walking out of a live online race is a resignation: the rival takes the win, and the socket
+     goes with it — leaving it open would only hold the other player's seat hostage. */
+  if (active) {
+    if (state.winner === null) active.resign();
+    active.close();
+    active = null;
+  }
   paused = true;
   router.popTo('home');
 }
@@ -745,7 +860,7 @@ const at = (p: Vec) => hitTest(renderer.layout(), p.x, p.y, {
   hints,
   armed: ghost?.armed ? ghost.spec : null,
   balls: cells(),
-  mine: HUMAN,
+  mine: localSide,
   mode: mineArmed ? 'mine' : 'move',
   mineHints,
   armedMine: mineGhost,
@@ -862,7 +977,7 @@ canvas.addEventListener('pointerdown', (e) => {
   if (!canAct()) return;
   const p = local(e);
   const L = renderer.layout();
-  renderer.ripple((p.x - L.ox) / L.cell, (p.y - L.oy) / L.cell, HUMAN);   // the tap answers at once
+  renderer.ripple((p.x - L.ox) / L.cell, (p.y - L.oy) / L.cell, localSide);   // the tap answers at once
   if (e.pointerType === 'mouse') onMouse(p, true);
   else onTouch(p);
 });
@@ -877,7 +992,12 @@ canvas.addEventListener('pointerleave', () => {
 
 mineBtn.addEventListener('click', () => { armMine(!mineArmed); });
 
-again.addEventListener('click', () => { impact('light'); restart(); });
+again.addEventListener('click', () => {
+  impact('light');
+  /* a networked seat is not ours to restart: Play again means queue again */
+  if (active) { active.close(); active = null; matchmaking.open(); return; }
+  restart();
+});
 toMenu.addEventListener('click', () => { impact('light'); quitToMenu(); });
 menuBtn.addEventListener('click', () => {
   if (state.winner !== null) return;

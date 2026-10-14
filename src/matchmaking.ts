@@ -10,10 +10,15 @@
  * `source` is the seam a transport plugs into: it takes an `AbortSignal` (plus the current `wide`
  * skill filter) and resolves with the `OpponentData` it found. `onlineSearch()` is the real one —
  * one socket to the Worker's matchmaker (`worker/`), which answers with the opponent and the
- * `{ matchId, seed, side }` the race will run on. With no Worker behind the page (a static
+ * `{ matchId, seed, side, sizes }` the race will run on. With no Worker behind the page (a static
  * preview, a `file://` tab, a refused upgrade) that same socket call falls back to the
  * `simulatedSearch()` that has always answered after ~4s, so the stage is never left spinning. A
  * transport that rejects for its own reasons falls back the same way.
+ *
+ * A matched socket does not stop being useful at `MATCH_FOUND`: the SAME connection carries the
+ * race. `onlineRace()` hands back the seat plus `send()`/`onMove()`/`onEnd()`, so `main.ts` plays
+ * the move locally and lets the matchmaker hand it to the rival. A session the fallback never
+ * opened is simply null, and the race runs against the local bot exactly as it always did.
  *
  * A queue that stays silent for `QUIET_MS` stops promising and asks: the stage
  * offers a widened radius (the same clock, a relaxed filter) and a seat against
@@ -25,7 +30,8 @@
  * them to mode selection. Motion is transform/opacity only; the global
  * reduced-motion block stills the rings, the pulse and the flash.
  */
-import { motionReduced, settings } from './settings';
+import { COLS, ROWS, type Action } from './rules';
+import { menuState, motionReduced, settings } from './settings';
 import { profile } from './storage';
 import { impact, notify, tgInitData, tgUser } from './telegram';
 
@@ -152,29 +158,53 @@ function readFace(fallbackName: string): Face {
   return { name, initial: letter.slice(0, 1).toUpperCase(), avatarUrl };
 }
 
-/* ---------- online transport: the Worker's waiting room over a WebSocket ---------- */
+/* ---------- online transport: the Worker's waiting room, and the race it turns into ---------- */
 
 /** What the upcoming online race runs on: the id both sides agree on, the shared seed, your side. */
 export interface OnlineMatch {
   matchId: string;
   seed: number;
   side: 0 | 1;
+  /** The board both seats asked for: two sides only ever race the same game. */
+  sizes: [number, number];
 }
 
-/** The seat and the socket it arrived on — part two of the online race rides this connection. */
-export interface OnlineRace {
-  match: OnlineMatch;
+/** Why a race ended before anyone reached FINISH. */
+export interface RaceEnd {
+  /** True when the win is yours. */
+  win: boolean;
+  /** The rival quit, the rival's socket died, or ours did. */
+  why: 'resign' | 'left' | 'drop';
+}
+
+/**
+ * A live online race. The socket that queued is the socket that plays: `send()` hands a move to the
+ * matchmaker, which judges it against the real board and relays it to the rival.
+ */
+export interface OnlineSession extends OnlineMatch {
+  opponent: OpponentData;
   socket: WebSocket;
+  /** Send one legal move to the rival. False when the socket is gone. */
+  send(action: Action): boolean;
+  /** Forfeit: the rival wins immediately. */
+  resign(): void;
+  /** Let the socket go (no forfeit): the session is done being a race. */
+  close(): void;
+  /** A move the rival made, in the order the matchmaker accepted it. */
+  onMove(cb: (action: Action, side: 0 | 1) => void): void;
+  /** The race ended without a finish line. */
+  onEnd(cb: (end: RaceEnd) => void): void;
+  /** The matchmaker refused a move: the two boards have drifted apart. */
+  onReject(cb: (reason: string) => void): void;
 }
 
-/** What the matchmaker sends back (`worker/matchmaker.ts`). The socket is its only producer. */
-interface FoundMessage {
-  type: 'MATCH_FOUND';
-  matchId: string;
-  seed: number;
-  side: 0 | 1;
-  opponent: { name: string; tiq: number; tier: string; flag: string };
-}
+/** One frame the room can send (`worker/matchmaker.ts` is its only producer). */
+type RaceFrame =
+  | { type: 'MATCH_FOUND'; matchId: string; seed: number; side: 0 | 1; sizes: [number, number];
+      opponent: { name: string; tiq: number; tier: string; flag: string } }
+  | { type: 'MOVE'; side: 0 | 1; action: Action }
+  | { type: 'REJECT'; reason: string }
+  | { type: 'RESIGN' | 'OPPONENT_LEFT'; side: 0 | 1 };
 
 /** An attempt the socket is answering. Only the newest one is allowed to settle. */
 interface Seat {
@@ -214,7 +244,84 @@ function socketParams(wide: boolean): string {
   params.set('flag', profile.country ?? '');
   params.set('name', readFace('Player').name);
   params.set('wide', wide ? '1' : '0');
+  /* the board this search is for: the matchmaker only pairs two seats playing the same game */
+  params.set('sizes', menuState.sizes.join(','));
   return params.toString();
+}
+
+/** The board the room said both seats are playing, or the one this client asked for. */
+function readBoard(raw: unknown): [number, number] {
+  if (Array.isArray(raw) && raw.length === 2) {
+    const pair = raw.map((n) => (typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 3 ? n : NaN));
+    if (pair.every((n) => !Number.isNaN(n))) return [pair[0], pair[1]];
+  }
+  return [menuState.sizes[0], menuState.sizes[1]];
+}
+
+const onBoard = (v: unknown): v is { c: number; r: number } => {
+  const p = v as { c?: unknown; r?: unknown } | null;
+  return !!p && Number.isInteger(p.c) && Number.isInteger(p.r)
+    && (p.c as number) >= 0 && (p.c as number) < COLS && (p.r as number) >= 0 && (p.r as number) < ROWS;
+};
+
+/**
+ * An action rebuilt from the wire, never trusted as it arrived — the same guards the room applies
+ * on the way out, so a frame the matchmaker would refuse cannot break this board either.
+ */
+function readAction(raw: unknown, side: 0 | 1): Action | null {
+  const a = raw as { kind?: unknown; ball?: unknown; to?: unknown; wall?: unknown; cell?: unknown } | null;
+  if (!a || typeof a !== 'object') return null;
+  if (a.kind === 'move') {
+    if (!onBoard(a.to)) return null;
+    if (a.ball !== undefined && !Number.isInteger(a.ball)) return null;
+    const to = { c: a.to.c, r: a.to.r };
+    return a.ball === undefined ? { kind: 'move', to } : { kind: 'move', to, ball: a.ball as number };
+  }
+  if (a.kind === 'wall') {
+    const w = a.wall as { o?: unknown; x?: unknown; y?: unknown } | null;
+    if (!w || (w.o !== 'h' && w.o !== 'v') || !Number.isInteger(w.x) || !Number.isInteger(w.y)) return null;
+    return { kind: 'wall', wall: { o: w.o, x: w.x as number, y: w.y as number, owner: side } };
+  }
+  if (a.kind === 'mine') {
+    if (!onBoard(a.cell)) return null;
+    return { kind: 'mine', cell: { c: a.cell.c, r: a.cell.r } };
+  }
+  return a.kind === 'pass' ? { kind: 'pass' } : null;
+}
+
+function parseFrame(raw: string): RaceFrame | null {
+  try {
+    const msg = JSON.parse(raw) as Record<string, unknown>;
+    if (!msg || typeof msg !== 'object') return null;
+    const side: 0 | 1 = msg.side === 1 ? 1 : 0;
+    if (msg.type === 'MATCH_FOUND') {
+      const o = msg.opponent as { name?: unknown; tiq?: unknown; tier?: unknown; flag?: unknown } | null;
+      if (typeof msg.matchId !== 'string' || typeof msg.seed !== 'number') return null;
+      if (!o || typeof o.name !== 'string' || typeof o.tiq !== 'number') return null;
+      return {
+        type: 'MATCH_FOUND',
+        matchId: msg.matchId,
+        seed: msg.seed,
+        side,
+        sizes: readBoard(msg.sizes),
+        opponent: {
+          name: o.name,
+          tiq: o.tiq,
+          tier: typeof o.tier === 'string' ? o.tier : '',
+          flag: typeof o.flag === 'string' ? o.flag : '',
+        },
+      };
+    }
+    if (msg.type === 'MOVE') {
+      const action = readAction(msg.action, side);
+      return action ? { type: 'MOVE', side, action } : null;
+    }
+    if (msg.type === 'REJECT') return { type: 'REJECT', reason: typeof msg.reason === 'string' ? msg.reason : 'refused' };
+    if (msg.type === 'RESIGN' || msg.type === 'OPPONENT_LEFT') return { type: msg.type, side };
+    return null;
+  } catch {
+    return null;                       // not ours: a frame we cannot read is a frame we ignore
+  }
 }
 
 /** The one waiting-room socket per page: a widened search widens this one instead of rejoining. */
@@ -224,10 +331,17 @@ let wsMatched = false;
 let wsRuns = 0;
 let teardownId = 0;
 let seat: Seat | null = null;
-let race: OnlineRace | null = null;
 
-/** The match the stage just locked in, for the race that follows it. Null until there is one. */
-export const onlineRace = (): OnlineRace | null => race;
+/** The live race, and the handlers `main.ts` puts on it. One race at a time, by construction. */
+let race: OnlineSession | null = null;
+let raceMove: ((action: Action, side: 0 | 1) => void) | null = null;
+let raceEnd: ((end: RaceEnd) => void) | null = null;
+let raceReject: ((reason: string) => void) | null = null;
+/** Moves that landed between the match and the race screen: replayed the moment it subscribes. */
+let raceQueue: Array<{ action: Action; side: 0 | 1 }> = [];
+
+/** The seat the stage just locked in, for the race that follows it. Null until there is one. */
+export const onlineRace = (): OnlineSession | null => race;
 
 function post(sock: WebSocket, payload: string): void {
   try {
@@ -237,31 +351,73 @@ function post(sock: WebSocket, payload: string): void {
   }
 }
 
-function parseFound(raw: string): FoundMessage | null {
+function forget(sock: WebSocket): void {
+  if (race?.socket === sock) {
+    race = null;
+    raceMove = null;
+    raceEnd = null;
+    raceReject = null;
+    raceQueue = [];
+  }
   try {
-    const msg = JSON.parse(raw) as Partial<FoundMessage>;
-    const o = msg.opponent;
-    if (msg.type !== 'MATCH_FOUND' || typeof msg.matchId !== 'string' || typeof msg.seed !== 'number') return null;
-    if (!o || typeof o.name !== 'string' || typeof o.tiq !== 'number') return null;
-    return {
-      type: 'MATCH_FOUND',
-      matchId: msg.matchId,
-      seed: msg.seed,
-      side: msg.side === 1 ? 1 : 0,
-      opponent: {
-        name: o.name,
-        tiq: o.tiq,
-        tier: typeof o.tier === 'string' ? o.tier : '',
-        flag: typeof o.flag === 'string' ? o.flag : '',
-      },
-    };
+    sock.close(1000, 'done');
   } catch {
-    return null;                       // not ours: a frame we cannot read is a frame we ignore
+    /* already closed */
   }
 }
 
+/** The race is over without a finish line: hand the reason to whoever is listening. */
+function endRace(sock: WebSocket, win: boolean, why: RaceEnd['why']): void {
+  if (race?.socket !== sock) return;
+  const ended = raceEnd;
+  race = null;
+  raceMove = null;
+  raceEnd = null;
+  raceReject = null;
+  raceQueue = [];
+  ended?.({ win, why });
+}
+
+function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_FOUND' }>): OnlineSession {
+  return {
+    matchId: found.matchId,
+    seed: found.seed,
+    side: found.side,
+    sizes: found.sizes,
+    opponent: onlineOpponent(found),
+    socket: sock,
+    send(action) {
+      if (race?.socket !== sock || sock.readyState !== 1) return false;
+      try {
+        sock.send(JSON.stringify({ type: 'MOVE', action }));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    resign() {
+      post(sock, JSON.stringify({ type: 'RESIGN' }));
+    },
+    close() {
+      forget(sock);
+    },
+    onMove(cb) {
+      raceMove = cb;
+      const queued = raceQueue;             // a rival can be quick: nothing is dropped on the floor
+      raceQueue = [];
+      for (const move of queued) cb(move.action, move.side);
+    },
+    onEnd(cb) {
+      raceEnd = cb;
+    },
+    onReject(cb) {
+      raceReject = cb;
+    },
+  };
+}
+
 /** The matchmaker's payload, in the shape the stage paints. */
-function onlineOpponent(msg: FoundMessage): OpponentData {
+function onlineOpponent(msg: { matchId: string; opponent: { name: string; tiq: number; tier: string } }): OpponentData {
   const name = msg.opponent.name.trim() || 'Rival';
   return {
     id: `online-${msg.matchId}`,
@@ -273,9 +429,9 @@ function onlineOpponent(msg: FoundMessage): OpponentData {
   };
 }
 
-/** The socket went away before a match: the local search takes the seat, radar never runs dry. */
+/** The socket went away: mid-race that is a loss, mid-search it is the local search's turn. */
 function socketGone(sock: WebSocket): void {
-  if (race?.socket === sock) race = null;
+  if (race?.socket === sock) { endRace(sock, false, 'drop'); return; }
   if (sock !== ws) return;             // a socket this search already let go of
   ws = null;
   wsWide = false;
@@ -289,13 +445,29 @@ function socketGone(sock: WebSocket): void {
 function wire(sock: WebSocket): void {
   sock.addEventListener('open', () => post(sock, JSON.stringify({ type: 'QUEUE', wide: wsWide })));
   sock.addEventListener('message', (ev) => {
-    const msg = parseFound(String(ev.data));
-    if (!msg) return;
-    wsMatched = true;
-    race = { match: { matchId: msg.matchId, seed: msg.seed, side: msg.side }, socket: sock };
-    const answered = seat;
-    seat = null;
-    answered?.resolve(onlineOpponent(msg));
+    const frame = parseFrame(String(ev.data));
+    if (!frame) return;
+
+    if (frame.type === 'MATCH_FOUND') {
+      if (race?.socket === sock) return;      // one match per socket: a repeat is not a new race
+      wsMatched = true;
+      const session = makeSession(sock, frame);
+      race = session;
+      const answered = seat;
+      seat = null;
+      answered?.resolve(session.opponent);
+      return;
+    }
+
+    if (race?.socket !== sock) return;        // race traffic on a socket that is not racing
+    if (frame.type === 'MOVE') {
+      if (raceMove) raceMove(frame.action, frame.side);
+      else raceQueue.push({ action: frame.action, side: frame.side });
+    } else if (frame.type === 'REJECT') {
+      raceReject?.(frame.reason);
+    } else {
+      endRace(sock, true, frame.type === 'RESIGN' ? 'resign' : 'left');
+    }
   });
   sock.addEventListener('close', () => socketGone(sock));
   sock.addEventListener('error', () => socketGone(sock));
@@ -340,6 +512,8 @@ export function onlineSearch(): MatchSource {
     const attempt: Seat = { run: ++wsRuns, signal, opts, resolve, reject };
     window.clearTimeout(teardownId);
     teardownId = 0;
+    /* A new search ends whatever race was carried before it: one page, one live seat. */
+    if (race) forget(race.socket);
     if (signal.aborted) { reject(aborted()); return; }
     signal.addEventListener('abort', () => onAbort(attempt), { once: true });
 

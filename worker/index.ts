@@ -3,8 +3,8 @@
  *
  * Two routes and nothing else: `GET /health` for a liveness probe, and `GET /ws/matchmake`, which
  * is handed straight to the singleton `MatchmakerDO`. The Durable Object owns the upgrade — it
- * verifies initData and pairs — because a `WebSocket` cannot be passed through `fetch`, only the
- * upgrade request can.
+ * verifies initData, pairs, and then relays the race on that same socket — because a `WebSocket`
+ * cannot be passed through `fetch`, only the upgrade request can.
  */
 import { MatchmakerDO } from './matchmaker';
 import { json } from './http';
