@@ -7738,8 +7738,8 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: clamp(6px, 1.1vh, 11px);
-  padding: clamp(10px, 1.7vh, 16px) clamp(11px, 3.2vw, 16px) clamp(11px, 1.9vh, 16px);
+  gap: clamp(9px, 2vh, 16px);
+  padding: clamp(10px, 1.7vh, 16px) clamp(11px, 3.2vw, 16px) clamp(9px, 1.5vh, 16px);
   border-radius: 20px;
   border-top: 1px solid rgba(255, 255, 255, .14);
   background:
@@ -7795,25 +7795,18 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.stars-meta {
-  min-width: 0;
-  font-size: 10.5px;
-  font-weight: 800;
-  letter-spacing: .04em;
-  color: var(--ink-soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .stars-count {
   flex: none;
-  padding: 5px 8px 6px;
+  padding: 5px 9px 6px;
   border-radius: 12px;
-  background: linear-gradient(180deg, #0A0F17 0%, #0E1526 100%);
+  /* an engraved clay pill: slate face, crisp amber rim, soft inner depth */
+  background: linear-gradient(180deg, #26314A 0%, #1A2333 100%);
   box-shadow:
-    inset 0 1px 4px rgba(0, 0, 0, .55),
-    inset 0 0 0 1px rgba(252, 211, 77, .16);
-  color: var(--honey-ink);
+    inset 0 0 0 1px rgba(245, 158, 11, .25),
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    inset 0 -2px 3px rgba(0, 0, 0, .32),
+    0 2px 0 #080C14;
+  color: #FDE68A;
   font-size: var(--t-micro);
   font-weight: 900;
   font-variant-numeric: tabular-nums;
@@ -7821,6 +7814,7 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   white-space: nowrap;
   text-align: center;
   line-height: 1.1;
+  text-shadow: 0 1px 0 #05070C;
 }
 
 /* ---- the Top-3 podium: three clay cards, the champion raised with the one gold rim.
@@ -7835,7 +7829,7 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: end;                    /* the champion's extra height grows upward */
-  align-content: center;
+  align-content: end;                  /* the podium sits ON the runners — no void between */
   gap: 6px;
 }
 .stars-pod {
@@ -7864,15 +7858,19 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 .stars-pod[data-rank="1"] { order: 2; }
 .stars-pod[data-rank="3"] { order: 3; }
 .stars-pod-rank {
-  padding: 1px 7px 2px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #232E44 0%, #161E2D 100%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07), 0 2px 0 #080C14;
-  color: var(--chip-ink);
-  font-size: 10.5px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #2A354C 0%, #161E2D 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), inset 0 0 0 1px rgba(255, 255, 255, .08), 0 2px 0 #080C14;
+  color: var(--ink);
+  font-size: 12px;
   font-weight: 900;
-  line-height: 1.25;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 0 #05070C;
 }
 .stars-pod[data-metal="gold"] .stars-pod-rank {
   background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 62%, #B45309 100%);
@@ -7959,16 +7957,20 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   justify-content: center;
   gap: 4px;
   padding: 3px 9px 4px;
-  border-radius: 11px;
-  background: linear-gradient(180deg, #0A0F17 0%, #0E1526 100%);
+  border-radius: var(--radius-pill);
+  /* translucent slate over a soft amber specular rim — no black box cutout */
+  background: linear-gradient(180deg, rgba(42, 53, 76, .9) 0%, rgba(26, 35, 51, .9) 100%);
   box-shadow:
-    inset 0 1px 4px rgba(0, 0, 0, .55),
-    inset 0 0 0 1px rgba(252, 211, 77, .22);
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 -2px 3px rgba(0, 0, 0, .34),
+    inset 0 0 0 1px rgba(245, 158, 11, .3),
+    0 2px 0 #0B111C;
   color: #FDE68A;
   font-size: 11.5px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  text-shadow: 0 1px 0 #05070C;
 }
 .stars-pod-star { flex: none; width: 16px; height: 16px; }
 
@@ -7986,104 +7988,117 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 .stars-run {
   flex: none;
   min-width: 0;
-  min-height: 40px;
+  min-height: 48px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 10px 4px 7px;
-  border-radius: 13px;
-  background: var(--clay-face);
+  gap: 9px;
+  padding: 6px 11px 6px 9px;
+  border-radius: 15px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(252, 211, 77, .05), rgba(252, 211, 77, 0) 60%),
+    var(--clay-face);
   background-color: #1C2433;
   box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
 }
+/* the place is a medal circle, never a #hashtag */
 .stars-run-rank {
   flex: none;
-  width: 26px;
-  padding: 2px 0 3px;
-  border-radius: 9px;
-  background: linear-gradient(180deg, #232E44 0%, #161E2D 100%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07), 0 2px 0 #080C14;
-  color: var(--chip-ink);
-  font-size: 10.5px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #2A354C 0%, #161E2D 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), inset 0 0 0 1px rgba(255, 255, 255, .08), 0 2px 0 #080C14;
+  color: var(--ink);
+  font-size: 12.5px;
   font-weight: 900;
-  line-height: 1.1;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
-  text-align: center;
+  text-shadow: 0 1px 0 #05070C;
 }
-.stars-av-sm { width: 28px; height: 28px; font-size: 10.5px; }
+.stars-av-sm { width: 30px; height: 30px; font-size: 11px; }
 .stars-av-sm .stars-av-flag { right: -3px; bottom: -3px; }
-.stars-av-sm .stars-av-flag .fp { --fp-d: 14px; }
-.stars-run-id {
+.stars-av-sm .stars-av-flag .fp { --fp-d: 15px; }
+.stars-run-nm {
   flex: 1 1 auto;
   min-width: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-}
-.stars-run-nm {
-  min-width: 0;
-  font-size: var(--t-3);
+  font-size: var(--t-2);
   font-weight: 800;
   letter-spacing: -.01em;
   line-height: 1.2;
   color: var(--ink);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-shadow: 0 1px 0 #05070C;
 }
+/* the score rides a warm gold pill, not a bare muted run of digits */
 .stars-run-tiq {
   flex: none;
-  font-size: 9.5px;
-  font-weight: 800;
-  color: var(--ink-soft);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 10px 5px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, rgba(252, 211, 77, .16) 0%, rgba(245, 158, 11, .1) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 0 0 1px rgba(245, 158, 11, .34),
+    0 2px 0 #0B111C;
+  color: #FDE68A;
+  font-size: 10.5px;
+  font-weight: 900;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-shadow: 0 1px 0 #05070C;
 }
-.stars-run-tiq b { color: var(--honey-ink); font-weight: 900; }
+.stars-run-tiq b { color: #FDE68A; font-weight: 900; }
 
 /* ---- the pinned local row: 44px, gold-rimmed, where you sit and what the Arena pays ---- */
 .stars-you {
   flex: none;
   min-width: 0;
-  min-height: 44px;
+  min-height: 52px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 10px;
-  border-radius: 14px;
+  gap: 9px;
+  padding: 6px 11px 6px 9px;
+  border-radius: 16px;
+  /* the hero card of the field: a full golden clay rim, never a flat black slab */
   background:
-    radial-gradient(120% 130% at 0% 0%, rgba(252, 211, 77, .12), rgba(252, 211, 77, 0) 62%),
-    linear-gradient(180deg, #26314A 0%, #1A2333 100%);
+    radial-gradient(120% 140% at 0% 0%, rgba(252, 211, 77, .16), rgba(252, 211, 77, 0) 62%),
+    linear-gradient(180deg, #2A3651 0%, #1A2333 100%);
   box-shadow:
     var(--clay-drop), var(--clay-spec), var(--clay-bevel),
-    inset 0 0 0 1.5px rgba(252, 211, 77, .42);
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 0 0 1.5px rgba(252, 211, 77, .5),
+    0 0 22px -10px rgba(252, 211, 77, .5);
 }
-.stars-you-rank {
+.stars-you-chip {
   flex: none;
-  width: 30px;
-  padding: 2px 0 3px;
-  border-radius: 9px;
-  background: linear-gradient(180deg, #2B3550 0%, #1A2333 100%);
-  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .5), 0 2px 0 #080C14;
-  color: var(--honey-ink);
-  font-size: 11px;
-  font-weight: 900;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-.stars-you-flag { flex: none; display: inline-flex; }
-.stars-you-flag .fp { --fp-d: 18px; }
-.stars-you-flag .fp-chip { border-radius: 50%; font-size: 7.5px; letter-spacing: 0; }
-.stars-you-flag .fp-img { border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35), 0 0 0 1.5px #0E1526; }
-.stars-you-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.stars-you-nm {
-  font-size: var(--t-3);
+  display: grid;
+  place-items: center;
+  padding: 5px 9px 6px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 62%, #B45309 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 2px 0 var(--gold-lip);
+  color: #3B2405;
+  font-size: 10.5px;
   font-weight: 900;
   letter-spacing: .06em;
-  text-transform: uppercase;
+  line-height: 1;
+}
+.stars-you-av { width: 34px; height: 34px; font-size: 13px; }
+.stars-you-av .stars-av-flag { right: -4px; bottom: -4px; }
+.stars-you-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.stars-you-iq {
+  font-size: var(--t-2);
+  font-weight: 900;
+  letter-spacing: .01em;
   line-height: 1.2;
-  color: #F8FAFC;
+  color: #FDE68A;
+  font-variant-numeric: tabular-nums;
   text-shadow: 0 1px 0 #05070C;
 }
 .stars-you-note {
@@ -8141,18 +8156,17 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   .stars-pod[data-rank="1"] { padding-top: 13px; padding-bottom: 12px; }
 }
 @media (max-height: 620px) {
-  .stars-av { width: 32px; height: 32px; font-size: 11.5px; }
-  .stars-av-flag .fp { --fp-d: 15px; }
+  .stars-pod .stars-av { width: 32px; height: 32px; font-size: 11.5px; }
+  .stars-pod .stars-av-flag .fp { --fp-d: 15px; }
   .stars-pod-name { font-size: 11px; }
   .stars-pod-tiq { font-size: 9px; }
   .stars-pod-star { width: 15px; height: 15px; }
-  .stars-run { min-height: 38px; }
+  .stars-run { min-height: 44px; }
   .stars-runners { gap: 4px; }
 }
 /* short and narrow (320x568): the copy stays whole, the type steps down instead */
 @media (max-width: 352px) {
   .stars-emblem { width: 52px; height: 52px; }
-  .stars-meta { font-size: 9.5px; }
   .stars-pod { padding: 7px 4px 6px; }
   .stars-pod-tiq { font-size: 9px; }
   .stars-pod-prize { font-size: 10.5px; padding: 3px 6px 4px; }
@@ -8168,10 +8182,10 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   .stars-name { font-size: 1.3125rem; }
   .stars-pod { padding: 12px 8px 11px; gap: 6px; }
   .stars-pod[data-rank="1"] { padding-top: 18px; padding-bottom: 16px; }
-  .stars-av { width: 40px; height: 40px; font-size: 14px; }
-  .stars-av-flag { right: -5px; bottom: -5px; }
-  .stars-av-flag .fp { --fp-d: 18px; }
-  .stars-run { min-height: 44px; }
+  .stars-pod .stars-av { width: 40px; height: 40px; font-size: 14px; }
+  .stars-pod .stars-av-flag { right: -5px; bottom: -5px; }
+  .stars-pod .stars-av-flag .fp { --fp-d: 18px; }
+  .stars-run { min-height: 52px; }
   .stars-pod-star { width: 18px; height: 18px; }
   .stars-cta { min-height: 56px; border-radius: 20px; font-size: var(--t-1); }
 }

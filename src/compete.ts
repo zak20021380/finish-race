@@ -308,14 +308,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   /** The Arena showcase's own parts: one card, hydrated in place, never rebuilt. */
   const cupEls = {
     name: document.getElementById('stars-name'),
-    meta: document.getElementById('stars-meta'),
     emblem: document.getElementById('stars-emblem-img') as HTMLImageElement | null,
     count: document.getElementById('stars-count'),
     podium: document.getElementById('stars-podium'),
     runners: document.getElementById('stars-runners'),
     you: document.getElementById('stars-you'),
-    youRank: document.getElementById('stars-you-rank'),
-    youFlag: document.getElementById('stars-you-flag'),
+    youAv: document.getElementById('stars-you-av'),
+    youIni: document.getElementById('stars-you-ini'),
+    youIq: document.getElementById('stars-you-iq'),
     youNote: document.getElementById('stars-you-note'),
     cta: document.getElementById('stars-cta') as HTMLButtonElement | null,
   };
@@ -629,7 +629,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     const rank = document.createElement('span');
     rank.className = 'stars-pod-rank';
-    rank.textContent = `#${r.rank}`;
+    rank.textContent = String(r.rank);
 
     const av = sphere(r, 'stars-av');
 
@@ -658,30 +658,29 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return li;
   }
 
-  /** A runner row: rank · sphere + flag · "Name · 1,234 TIQ". No pills on the right. */
+  /** A runner row: a medal circle · sphere + flag · the name · the warm gold TIQ pill. */
   function runnerRow(r: ContenderRow): HTMLLIElement {
     const li = document.createElement('li');
     li.className = 'stars-run';
 
     const rank = document.createElement('span');
     rank.className = 'stars-run-rank';
-    rank.textContent = `#${r.rank}`;
+    rank.textContent = String(r.rank);
 
     const av = sphere(r, 'stars-av stars-av-sm');
 
-    const id = document.createElement('span');
-    id.className = 'stars-run-id';
     const nm = document.createElement('b');
     nm.className = 'stars-run-nm';
     nm.textContent = r.name;
+    nm.title = r.name;
+
     const tiq = document.createElement('span');
     tiq.className = 'stars-run-tiq';
     const tiqN = document.createElement('b');
     tiqN.textContent = num(r.tiq);
     tiq.append(tiqN, document.createTextNode(' TIQ'));
-    id.append(nm, document.createTextNode('·'), tiq);
 
-    li.append(rank, av, id);
+    li.append(rank, av, nm, tiq);
     li.setAttribute('aria-label', `Place ${r.rank}: ${r.name}, ${num(r.tiq)} Tactical IQ`);
     return li;
   }
@@ -702,10 +701,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   /**
-   * The pinned local row. Every number on it is read off the save and the field the
-   * card is actually showing — the rank counts the contenders above you in this list,
-   * and the gap is the TIQ of the last paid place minus your own, converted with the
-   * same TIQ-per-win the Mind Ladder uses. Nothing here is a motivational constant.
+   * The pinned local row: the player's own ball, their live TIQ and what the Arena
+   * pays. The place and the seat state are read off the save and the field the card
+   * is actually showing — nothing here is a motivational constant.
    */
   function paintYou(c: GrandCup): void {
     const you = cupEls.you;
@@ -714,26 +712,28 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const rank = (field ? field.filter((r) => r.tiq > tiq).length : 0) + 1;
     const seated = seat?.cup === c.id;
 
-    setText(cupEls.youRank, `#${rank}`);
-    // The flag is a device fact and can be set after first paint, so rebuild only
-    // when the ISO code actually changes — never thrash the row.
-    const flag = cupEls.youFlag;
-    if (flag) {
+    // the local ball: the player's own initials, with the nation flag when one is set
+    const u = tgUser();
+    const base = (u?.first_name || youHandle() || 'You').replace(/[^A-Za-z0-9]/g, '');
+    setText(cupEls.youIni, (base.slice(0, 2) || 'YO').toUpperCase());
+    const av = cupEls.youAv;
+    if (av) {
+      let badge = av.querySelector<HTMLElement>('.stars-av-flag');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'stars-av-flag';
+        av.append(badge);
+      }
+      // the flag is a device fact and can be set after first paint — rebuild only on change
       const code = profile.country ?? '';
-      if (flag.dataset.cc !== code) {
-        flag.textContent = '';
-        if (code) flag.append(flagPhoto(code, 'fp-badge'));
-        flag.dataset.cc = code;
+      if (badge.dataset.cc !== code) {
+        badge.textContent = '';
+        if (code) badge.append(flagPhoto(code, 'fp-badge'));
+        badge.dataset.cc = code;
       }
     }
-    const note = cupEls.youNote;
-    if (note) {
-      note.textContent = '';
-      const t = document.createElement('b');
-      t.textContent = num(tiq) + ' TIQ';
-      note.append(t, document.createTextNode(' · Top 3 wins Stars'));
-      if (seated) note.append(document.createTextNode(' · seat locked'));
-    }
+    setText(cupEls.youIq, `${num(tiq)} TIQ`);
+    setText(cupEls.youNote, seated ? 'Top 3 wins Stars · seat locked' : 'Top 3 wins Stars');
     you.classList.toggle('is-seated', seated);
     you.setAttribute('aria-label',
       `You: place ${rank} of the ${field?.length ?? 0} contenders shown, ${num(tiq)} Tactical IQ. ` +
@@ -757,7 +757,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   /** Write the cup's own numbers into the standing geometry. Runs on every entry. */
   function paintCup(c: GrandCup): void {
     setText(cupEls.name, c.name.toUpperCase());
-    setText(cupEls.meta, c.specs.join(' · '));
     paintYou(c);
     paintCount(c, Date.now());
     paintCta(c);
