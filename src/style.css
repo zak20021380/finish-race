@@ -7707,16 +7707,15 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
    Dark Clay spec: canvas #10141D, card face #1C2433 lit from above, gold ink
    #FCD34D for the Stars. No backdrop-filter and no blur() anywhere on this
    screen: every surface is opaque clay and every glow is a gradient fill.
-   Geometry: header · specs · prize ribbon · live standings · CTA. The podium the
-   screen used to spend its middle on is gone — the ribbon states the split in one
-   line, and the height it freed now carries the field you are actually playing.
-   Only the standings list flexes; everything else is `flex: none`, so a short
-   phone clips a row inside its own scroller instead of silently compressing one.
+   Geometry: hero header · Top-3 podium · two runners · the pinned You row · CTA.
+   The old subtitle, spec pills, prize ribbon and fill meter are gone — the exact
+   120 / 50 / 30 split is stated once, on the podium itself, beside the real
+   Telegram Star. The podium band is the one flexible block; everything else is
+   `flex: none`, so a short phone scrolls the stage instead of compressing a row.
    ========================================================================== */
 
 /* ---- the stage: the card's height budget, never the page's ---- */
 .screen.arena-screen { overflow: hidden; max-width: 100%; }
-.arena-stage,
 .arena-screen #arena-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -7729,24 +7728,16 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   overscroll-behavior: contain;
   scrollbar-width: none;
 }
-.arena-stage::-webkit-scrollbar { display: none; }
-#arena-tournaments {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-#arena-tournaments[hidden] { display: none; }
+.arena-screen #arena-scroll::-webkit-scrollbar { display: none; }
 
 /* ---- the card: one slab, every section on the same rhythm ---- */
 .stars-card {
   position: relative;
   flex: 1 1 auto;
-  min-height: 0;
+  min-height: min-content;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;     /* slack lands between sections, never as a void */
   gap: clamp(6px, 1.1vh, 11px);
   padding: clamp(10px, 1.7vh, 16px) clamp(11px, 3.2vw, 16px) clamp(11px, 1.9vh, 16px);
   border-radius: 20px;
@@ -7759,18 +7750,15 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   box-shadow: var(--clay), var(--clay-ring), 0 0 34px -14px rgba(252, 211, 77, .45);
 }
 
-/* ---- header: faceted star medallion · pill + title + hook · live clock ---- */
+/* ---- hero header: the 60px Star emblem · engraved title + one format line · clock ---- */
 .stars-head { flex: none; display: flex; align-items: center; gap: 9px; min-width: 0; }
 .stars-emblem {
   flex: none;
   display: grid;
   place-items: center;
-  width: clamp(40px, 6.6vh, 52px);
-  height: clamp(40px, 6.6vh, 52px);
-  /* px, not %: percentage padding resolves against the containing block's width, so
-     an 11% inset here was a 31px gutter that border-box could not shrink back down */
-  padding: clamp(4px, .95vh, 7px);
-  border-radius: clamp(12px, 2vh, 16px);
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
   background:
     radial-gradient(70% 60% at 50% 26%, rgba(252, 211, 77, .3), rgba(252, 211, 77, 0) 72%),
     linear-gradient(180deg, #2A354C 0%, #141B2A 100%);
@@ -7780,37 +7768,19 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
     0 3px 0 #080C14,
     var(--clay-drop);
 }
-.stars-emblem-star { display: block; width: 100%; height: 100%; overflow: visible; }
+/* the PNG is RGBA gold: `screen` lets the metal catch the clay light with no box */
+.stars-emblem-img,
+.stars-pod-star {
+  display: block;
+  object-fit: contain;
+  mix-blend-mode: screen;
+}
+.stars-emblem-img {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 2px 5px rgba(245, 158, 11, .42));
+}
 .stars-titles { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.stars-official {
-  align-self: flex-start;
-  max-width: 100%;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px 3px 5px;
-  border-radius: var(--radius-pill);
-  background: var(--honey-soft);
-  box-shadow:
-    inset 0 0 0 1px rgba(252, 211, 77, .34),
-    inset 0 1px 0 rgba(255, 255, 255, .16),
-    0 2px 0 rgba(0, 0, 0, .45),
-    0 0 16px -6px rgba(252, 211, 77, .6);
-  color: var(--honey-ink);
-  font-size: 9.5px;
-  font-weight: 900;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  animation: stars-official-glow 3.4s ease-in-out infinite;
-}
-.stars-official .ico { width: 12px; height: 12px; }
-@keyframes stars-official-glow {
-  0%, 100% { box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .34), inset 0 1px 0 rgba(255, 255, 255, .16), 0 2px 0 rgba(0, 0, 0, .45), 0 0 14px -6px rgba(252, 211, 77, .45); }
-  50%      { box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .44), inset 0 1px 0 rgba(255, 255, 255, .16), 0 2px 0 rgba(0, 0, 0, .45), 0 0 22px -4px rgba(252, 211, 77, .75); }
-}
 /* engraved, not embossed: the shadow falls under the glyph, light sits above it */
 .stars-name {
   margin: 0;
@@ -7825,13 +7795,11 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.stars-hook {
-  flex: none;
-  margin: 0;
+.stars-meta {
   min-width: 0;
   font-size: 10.5px;
-  font-weight: 600;
-  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: .04em;
   color: var(--ink-soft);
   white-space: nowrap;
   overflow: hidden;
@@ -7839,7 +7807,7 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 }
 .stars-count {
   flex: none;
-  padding: 5px 7px 6px;
+  padding: 5px 8px 6px;
   border-radius: 12px;
   background: linear-gradient(180deg, #0A0F17 0%, #0E1526 100%);
   box-shadow:
@@ -7855,219 +7823,180 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   line-height: 1.1;
 }
 
-/* ---- specs: the format, one compact row of clay keys ---- */
-.stars-specs {
-  flex: none;
+/* ---- the Top-3 podium: three clay cards, the champion raised with the one gold rim.
+       This band is the card's only flexible block, so it holds the celebration while
+       the runs, the You row and the CTA stay pinned to the bottom. ---- */
+.stars-podium {
+  flex: 1 0 auto;
+  min-width: 0;
   list-style: none;
   margin: 0;
   padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;                    /* the champion's extra height grows upward */
+  align-content: center;
+  gap: 6px;
+}
+.stars-pod {
+  min-width: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 5px;
-  min-width: 0;
+  padding: 10px 6px 9px;
+  border-radius: 16px;
+  background: var(--clay-face);
+  background-color: #1C2433;
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel);
+  text-align: center;
 }
-.stars-spec {
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3px 5px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #232E44 0%, #1A2233 100%);
+/* the champion stands ~10px taller and wears the screen's one gold rim */
+.stars-pod[data-rank="1"] {
+  padding-top: 15px;
+  padding-bottom: 14px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .1),
-    inset 0 0 0 1px rgba(255, 255, 255, .06),
-    0 2px 0 #080C14;
+    var(--clay-drop), var(--clay-spec), var(--clay-bevel),
+    inset 0 0 0 1.5px rgba(252, 211, 77, .5);
+}
+/* podium order: silver on the left, the champion raised in the centre, bronze right */
+.stars-pod[data-rank="2"] { order: 1; }
+.stars-pod[data-rank="1"] { order: 2; }
+.stars-pod[data-rank="3"] { order: 3; }
+.stars-pod-rank {
+  padding: 1px 7px 2px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #232E44 0%, #161E2D 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07), 0 2px 0 #080C14;
   color: var(--chip-ink);
-  font-size: 10px;
+  font-size: 10.5px;
+  font-weight: 900;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+.stars-pod[data-metal="gold"] .stars-pod-rank {
+  background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 62%, #B45309 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 2px 0 var(--gold-lip);
+  color: #3B2405;
+}
+.stars-pod[data-metal="silver"] .stars-pod-rank {
+  background: linear-gradient(180deg, #F1F5F9 0%, #94A3B8 62%, #475569 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 2px 0 #334155;
+  color: #16202E;
+}
+.stars-pod[data-metal="bronze"] .stars-pod-rank {
+  background: linear-gradient(180deg, #FDBA74 0%, #EA580C 62%, #7C2D12 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), 0 2px 0 #7C2D12;
+  color: #2A1005;
+}
+/* the sphere: one lit top-left highlight over a body ramp, one dark underside.
+   Metal tints the ramp, so #1 is a gold ball, #2 silver and #3 bronze. */
+.stars-av {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background:
+    radial-gradient(52% 46% at 32% 24%, rgba(255, 255, 255, .6), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(120% 120% at 30% 22%, var(--av-hi, #4E6285) 0%, var(--av-mid, #2A354C) 48%, var(--av-lo, #131A29) 100%);
+  box-shadow:
+    inset 0 -3px 5px rgba(0, 0, 0, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .2),
+    0 2px 0 #080C14;
+  color: var(--av-ink, #DBEAFE);
+  font-size: 12.5px;
+  font-weight: 900;
+  letter-spacing: -.02em;
+  line-height: 1;
+}
+.stars-av-t { display: block; }
+.stars-pod[data-metal="gold"] .stars-av   { --av-hi: #FDE9A9; --av-mid: #D97706; --av-lo: #7C3A0B; --av-ink: #432004; }
+.stars-pod[data-metal="silver"] .stars-av { --av-hi: #F8FAFC; --av-mid: #94A3B8; --av-lo: #334155; --av-ink: #0F172A; }
+.stars-pod[data-metal="bronze"] .stars-av { --av-hi: #FED7AA; --av-mid: #C2410C; --av-lo: #5C1B08; --av-ink: #FFF7ED; }
+/* the nation rides the ball's corner, ringed in the card's own navy */
+.stars-av-flag {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: inline-flex;
+}
+.stars-av-flag .fp { --fp-d: 16px; }
+.stars-av-flag .fp-chip { border-radius: 50%; font-size: 7px; letter-spacing: 0; }
+.stars-av-flag .fp-img { border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35), 0 0 0 2px #141B2A; }
+.stars-pod-name {
+  max-width: 100%;
+  font-size: var(--t-3);
   font-weight: 800;
-  letter-spacing: .01em;
+  letter-spacing: -.01em;
+  line-height: 1.2;
+  color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-/* ---- ribbon: the pool and its exact split, on one line ---- */
-.stars-ribbon {
-  flex: none;
-  min-width: 0;
-  display: flex;
-  align-items: stretch;
-  gap: 6px;
-}
-.stars-pool {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 9px 7px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #0A0F17 0%, #0E1526 100%);
-  box-shadow:
-    inset 0 2px 6px rgba(0, 0, 0, .6),
-    inset 0 0 0 1px rgba(252, 211, 77, .22),
-    0 0 22px -12px rgba(252, 211, 77, .55);
-  color: var(--honey-ink);
-  font-size: 10px;
+.stars-pod[data-rank="1"] .stars-pod-name { color: #FEF3C7; }
+.stars-pod-tiq {
+  max-width: 100%;
+  font-size: 9.5px;
   font-weight: 800;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.stars-pool .ico { width: 13px; height: 13px; color: var(--honey); }
-.stars-pool-l { color: var(--ink-soft); }
-.stars-pool b {
-  font-size: 14px;
-  font-weight: 900;
-  letter-spacing: 0;
-  color: #FDE68A;
+  letter-spacing: .01em;
+  line-height: 1.2;
+  color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 14px rgba(252, 211, 77, .45), 0 1px 0 #05070C;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.stars-pool-s { width: 14px; height: 14px; }
-.stars-split {
-  flex: 1 1 auto;
-  min-width: 0;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  align-items: stretch;
-  gap: 5px;
-}
-.stars-cut {
-  flex: 1 1 0;
-  min-width: 0;
+.stars-pod-tiq b { color: var(--honey-ink); font-weight: 900; }
+/* the Stars that place pays, in the card's own inset well — the real gold PNG */
+.stars-pod-prize {
+  margin-top: 1px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 4px 4px;
-  border-radius: 14px;
-  background: var(--clay-face);
-  background-color: #1C2433;
-  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel);
-  color: var(--ink);
+  gap: 4px;
+  padding: 3px 9px 4px;
+  border-radius: 11px;
+  background: linear-gradient(180deg, #0A0F17 0%, #0E1526 100%);
+  box-shadow:
+    inset 0 1px 4px rgba(0, 0, 0, .55),
+    inset 0 0 0 1px rgba(252, 211, 77, .22);
+  color: #FDE68A;
   font-size: 11.5px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  overflow: hidden;
 }
-.stars-cut .ico { width: 12px; height: 12px; opacity: .8; }
-.stars-cut-s { width: 13px; height: 13px; }
-.stars-cut b { font-weight: 900; }
-.stars-cut.is-gold   { box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), inset 0 0 0 1.5px rgba(252, 211, 77, .5); }
-.stars-cut.is-gold   { color: #FDE68A; }
-.stars-cut.is-gold .ico { color: var(--honey); }
-.stars-cut.is-silver { box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), inset 0 0 0 1.5px rgba(203, 213, 225, .4); }
-.stars-cut.is-silver { color: #E2E8F0; }
-.stars-cut.is-silver .ico { color: #CBD5E1; }
-.stars-cut.is-bronze { box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), inset 0 0 0 1.5px rgba(251, 146, 60, .38); }
-.stars-cut.is-bronze { color: #FDBA74; }
-.stars-cut.is-bronze .ico { color: #FB923C; }
+.stars-pod-star { flex: none; width: 16px; height: 16px; }
 
-/* ---- live standings: the only flexible block on the card ---- */
-.stars-ladder {
-  flex: 1 1 auto;
-  min-height: 0;
+/* ---- the runners: places four and five, identity only, no dead right-side pills ---- */
+.stars-runners {
+  flex: none;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.stars-ladder-h { flex: none; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-.stars-standings-t {
-  flex: none;
-  margin: 0;
-  font-size: 9.5px;
-  font-weight: 900;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  text-shadow: 0 1px 0 #05070C;
-}
-.stars-seats {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 9.5px;
-  font-weight: 800;
-  letter-spacing: .02em;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.stars-mood {
-  flex: none;
-  font-size: 9.5px;
-  font-weight: 900;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: var(--brand-ink);
-  white-space: nowrap;
-}
-.stars-track {
-  flex: none;
-  position: relative;
-  display: block;
-  height: 7px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #0A0F17 0%, #131A29 100%);
-  box-shadow:
-    inset 0 1px 3px rgba(0, 0, 0, .62),
-    inset 0 0 0 1px rgba(255, 255, 255, .06);
-  overflow: hidden;
-}
-.stars-meter {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 58%, #B45309 100%);
-  box-shadow: 0 0 12px rgba(252, 211, 77, .5), inset 0 1px 0 rgba(255, 255, 255, .5);
-  transition: width var(--motion-med);
-}
-
-/* the field itself scrolls, and only the field: a clipped row is a visible failure,
-   a compressed one is not */
-.stars-field {
-  flex: 1 1 auto;
-  min-height: 0;
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-height: 340px;                  /* the field stops absorbing before it drifts off the card */
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
+  gap: 5px;
 }
-.stars-field::-webkit-scrollbar { display: none; }
-
-/* ---- one contender: rank · sphere + flag · name + stats · projected payout ---- */
-.ac-row {
-  /* rows breathe into a tall phone and hold their floor on a short one, so the field
-     never has to leave a void under the last contender */
-  flex: 1 1 auto;
-  min-height: 36px;
-  max-height: 64px;
+.stars-run {
+  flex: none;
   min-width: 0;
+  min-height: 40px;
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 4px 7px;
-  border-radius: 14px;
+  gap: 8px;
+  padding: 4px 10px 4px 7px;
+  border-radius: 13px;
   background: var(--clay-face);
   background-color: #1C2433;
   box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
 }
-.ac-rank {
+.stars-run-rank {
   flex: none;
   width: 26px;
   padding: 2px 0 3px;
@@ -8081,114 +8010,46 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
-/* one metal per podium place, and only on the pill — a colour wash on the whole row
-   would make the fourth row look broken next to it */
-.ac-row[data-metal="gold"] .ac-rank {
-  background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 62%, #B45309 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 2px 0 var(--gold-lip);
-  color: #3B2405;
+.stars-av-sm { width: 28px; height: 28px; font-size: 10.5px; }
+.stars-av-sm .stars-av-flag { right: -3px; bottom: -3px; }
+.stars-av-sm .stars-av-flag .fp { --fp-d: 14px; }
+.stars-run-id {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+  overflow: hidden;
 }
-.ac-row[data-metal="silver"] .ac-rank {
-  background: linear-gradient(180deg, #F1F5F9 0%, #94A3B8 62%, #475569 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 2px 0 #334155;
-  color: #16202E;
-}
-.ac-row[data-metal="bronze"] .ac-rank {
-  background: linear-gradient(180deg, #FDBA74 0%, #EA580C 62%, #7C2D12 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), 0 2px 0 #7C2D12;
-  color: #2A1005;
-}
-/* the sphere: one lit top-left highlight over a body ramp, one dark underside.
-   Metal tints the ramp, so #1 is a gold ball and #5 a plain clay one. */
-.ac-av {
-  flex: none;
-  width: 30px;
-  height: 30px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background:
-    radial-gradient(52% 46% at 32% 24%, rgba(255, 255, 255, .6), rgba(255, 255, 255, 0) 72%),
-    radial-gradient(120% 120% at 30% 22%, var(--av-hi, #4E6285) 0%, var(--av-mid, #2A354C) 48%, var(--av-lo, #131A29) 100%);
-  box-shadow:
-    inset 0 -3px 5px rgba(0, 0, 0, .55),
-    inset 0 1px 0 rgba(255, 255, 255, .2),
-    0 2px 0 #080C14;
-  color: var(--av-ink, #DBEAFE);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: -.02em;
-  line-height: 1;
-}
-.ac-row[data-metal="gold"] .ac-av   { --av-hi: #FDE9A9; --av-mid: #D97706; --av-lo: #7C3A0B; --av-ink: #432004; }
-.ac-row[data-metal="silver"] .ac-av { --av-hi: #F8FAFC; --av-mid: #94A3B8; --av-lo: #334155; --av-ink: #0F172A; }
-.ac-row[data-metal="bronze"] .ac-av { --av-hi: #FED7AA; --av-mid: #C2410C; --av-lo: #5C1B08; --av-ink: #FFF7ED; }
-.ac-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.ac-nm { display: flex; align-items: center; gap: 5px; min-width: 0; }
-.ac-name {
+.stars-run-nm {
   min-width: 0;
   font-size: var(--t-3);
   font-weight: 800;
   letter-spacing: -.01em;
   line-height: 1.2;
   color: var(--ink);
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* the flag rides the name's own line, never welded to the sphere's corner */
-.ac-flag { flex: none; display: inline-flex; align-items: center; }
-.ac-flag .fp { --fp-d: 15px; }
-.ac-flag .fp-chip { border-radius: 50%; font-size: 6.5px; letter-spacing: 0; }
-.ac-flag .fp-img { border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35), 0 0 0 1.5px #0E1526; }
-.ac-sub {
-  min-width: 0;
-  font-size: 9.5px;
-  font-weight: 700;
-  line-height: 1.25;
-  color: var(--ink-soft);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ac-sub b { color: var(--honey-ink); font-weight: 900; }
-.ac-pay {
+.stars-run-tiq {
   flex: none;
-  min-width: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  padding: 4px 6px 5px;
-  border-radius: 10px;
-  background: linear-gradient(180deg, #0A0F17 0%, #0E1526 100%);
-  box-shadow:
-    inset 0 1px 4px rgba(0, 0, 0, .55),
-    inset 0 0 0 1px rgba(252, 211, 77, .2);
-  color: #FDE68A;
-  font-size: 11px;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.ac-pay .ico { width: 13px; height: 13px; }
-/* a place the vault does not fund pays nothing, and says so in slate rather than
-   borrowing the gold of the places that do */
-.ac-pay.is-zero {
+  font-size: 9.5px;
+  font-weight: 800;
   color: var(--ink-soft);
-  box-shadow: inset 0 1px 4px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(255, 255, 255, .06);
+  font-variant-numeric: tabular-nums;
 }
-.ac-pay.is-zero .ico { opacity: .35; }
+.stars-run-tiq b { color: var(--honey-ink); font-weight: 900; }
 
-/* ---- the pinned local row: this is you, and what it would take to be paid ---- */
+/* ---- the pinned local row: 44px, gold-rimmed, where you sit and what the Arena pays ---- */
 .stars-you {
   flex: none;
   min-width: 0;
+  min-height: 44px;
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 7px;
+  gap: 8px;
+  padding: 5px 10px;
   border-radius: 14px;
   background:
     radial-gradient(120% 130% at 0% 0%, rgba(252, 211, 77, .12), rgba(252, 211, 77, 0) 62%),
@@ -8197,13 +8058,24 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
     var(--clay-drop), var(--clay-spec), var(--clay-bevel),
     inset 0 0 0 1.5px rgba(252, 211, 77, .42);
 }
-/* the pinned row is already rimmed in gold — a gold *medal* on the pill would read as
-   a podium place, and #6 outside the paid zone is not one */
-.ac-rank.is-you {
+.stars-you-rank {
+  flex: none;
+  width: 30px;
+  padding: 2px 0 3px;
+  border-radius: 9px;
   background: linear-gradient(180deg, #2B3550 0%, #1A2333 100%);
   box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .5), 0 2px 0 #080C14;
   color: var(--honey-ink);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
+.stars-you-flag { flex: none; display: inline-flex; }
+.stars-you-flag .fp { --fp-d: 18px; }
+.stars-you-flag .fp-chip { border-radius: 50%; font-size: 7.5px; letter-spacing: 0; }
+.stars-you-flag .fp-img { border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35), 0 0 0 1.5px #0E1526; }
 .stars-you-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .stars-you-nm {
   font-size: var(--t-3);
@@ -8226,20 +8098,7 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   text-overflow: ellipsis;
 }
 .stars-you-note b { color: var(--honey-ink); font-weight: 900; }
-.stars-you.is-paid .stars-you-note { color: var(--mint-ink); }
-
-/* ---- skeleton: the field loads on a fetch, and an empty box is not a loading state ---- */
-.ac-row.is-skel { min-height: 42px; opacity: .5; }
-.ac-skel {
-  display: block;
-  height: 100%;
-  min-height: 30px;
-  border-radius: 10px;
-  background: linear-gradient(90deg, #1A2233 0%, #232E44 46%, #1A2233 92%);
-  background-size: 220% 100%;
-  animation: stars-skel 1.25s linear infinite;
-}
-@keyframes stars-skel { from { background-position: 120% 0; } to { background-position: -60% 0; } }
+.stars-you.is-seated .stars-you-note { color: var(--mint-ink); }
 
 /* ---- the one loud key: 50px extruded clay, amber face on a dark lip ---- */
 .stars-cta {
@@ -8278,43 +8137,46 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 
 /* ---- shorter and narrower phones: the card gives before the CTA does ---- */
 @media (max-height: 700px) {
-  .ac-av { width: 27px; height: 27px; font-size: 10px; }
+  .stars-pod { padding: 8px 5px 7px; gap: 4px; }
+  .stars-pod[data-rank="1"] { padding-top: 13px; padding-bottom: 12px; }
 }
 @media (max-height: 620px) {
-  .stars-field { gap: 4px; }
-  .ac-row { padding: 4px 6px; }
+  .stars-av { width: 32px; height: 32px; font-size: 11.5px; }
+  .stars-av-flag .fp { --fp-d: 15px; }
+  .stars-pod-name { font-size: 11px; }
+  .stars-pod-tiq { font-size: 9px; }
+  .stars-pod-star { width: 15px; height: 15px; }
+  .stars-run { min-height: 38px; }
+  .stars-runners { gap: 4px; }
 }
 /* short and narrow (320x568): the copy stays whole, the type steps down instead */
 @media (max-width: 352px) {
-  .stars-mood { display: none; }    /* the meter already says how full the room is */
-  .stars-ladder-h { gap: 5px; }
-  .stars-standings-t { letter-spacing: .06em; }
-  .stars-pool-l { display: none; }
-  .stars-pool { padding: 6px 7px 7px; }
-  .stars-cut { font-size: 10.5px; }
-  .stars-cut .ico { display: none; }
-  .stars-spec { font-size: 9.5px; padding: 3px 3px; }
-  .ac-sub, .stars-you-note { font-size: 9px; }
-  .ac-pay { min-width: 36px; font-size: 10px; padding: 4px 5px 5px; }
+  .stars-emblem { width: 52px; height: 52px; }
+  .stars-meta { font-size: 9.5px; }
+  .stars-pod { padding: 7px 4px 6px; }
+  .stars-pod-tiq { font-size: 9px; }
+  .stars-pod-prize { font-size: 10.5px; padding: 3px 6px 4px; }
+  .stars-pod-star { width: 14px; height: 14px; }
+  .stars-run-nm { font-size: 11px; }
+  .stars-run-tiq { font-size: 9px; }
   .stars-cta { letter-spacing: .02em; }
 }
-/* a tall phone: the card scales up rather than leaving slack above the dock */
+/* a tall phone: the celebration scales up rather than leaving slack above the key */
 @media (min-height: 780px) {
   .stars-card { gap: 12px; padding: 18px 18px; border-radius: 24px; }
-  .stars-emblem { width: 60px; height: 60px; border-radius: 18px; }
-  .stars-hook { display: block; font-size: var(--t-3); }
+  .stars-emblem { width: 64px; height: 64px; border-radius: 18px; }
   .stars-name { font-size: 1.3125rem; }
-  .stars-spec { min-height: 30px; font-size: var(--t-micro); }
-  .stars-pool { font-size: var(--t-micro); }
-  .stars-cut { font-size: var(--t-2); }
-  .ac-row { padding: 7px 9px; }
-  .ac-av { width: 36px; height: 36px; font-size: 12.5px; }
-  .ac-name { font-size: var(--t-2); }
-  .ac-sub { font-size: 10.5px; }
+  .stars-pod { padding: 12px 8px 11px; gap: 6px; }
+  .stars-pod[data-rank="1"] { padding-top: 18px; padding-bottom: 16px; }
+  .stars-av { width: 40px; height: 40px; font-size: 14px; }
+  .stars-av-flag { right: -5px; bottom: -5px; }
+  .stars-av-flag .fp { --fp-d: 18px; }
+  .stars-run { min-height: 44px; }
+  .stars-pod-star { width: 18px; height: 18px; }
   .stars-cta { min-height: 56px; border-radius: 20px; font-size: var(--t-1); }
 }
-html.rm .stars-official, html.rm .ac-skel { animation: none; }
-html.rm .stars-meter, html.rm .stars-cta { transition: none; }
+html.rm .stars-cta { transition: none; }
+
 
 /* ==========================================================================
    GAME MODE SELECTOR — bottom sheet triggered by the lobby Change key.

@@ -480,12 +480,11 @@
         </section>
 
         <!-- ---------------- arena: the 200 Stars Arena, staged in full.
-             One championship, one card: header · specs · prize ribbon · live
-             standings · CTA. The stage never scrolls at 360x640; the standings list
-             inside it is the one scroller, and only of last resort. Every
-             number (countdown, contenders, fill width, your own place in the field)
-             is hydrated by src/compete.ts; the geometry below is what keeps it
-             inside the phone. ---------------- -->
+             One championship, one card: hero header · Top-3 podium · runners ·
+             the pinned You row · CTA. The stage never scrolls at 360x640. Every
+             number (countdown, contenders, who is on the podium, your own place in
+             the field) is hydrated by src/compete.ts; the geometry below is what
+             keeps it inside the phone. ---------------- -->
         <section class="screen menu compete-screen arena-screen" id="s-arena" data-screen="arena" tabindex="-1" hidden aria-labelledby="arena-title">
           <div class="m-head compete-head">
             <h1 class="m-title" id="arena-title">Arena</h1>
@@ -493,70 +492,34 @@
 
           <div class="compete-body stars-stage" data-scroll id="arena-scroll">
             <article class="stars-card" id="stars-card" aria-labelledby="stars-name">
-              <!-- header: the faceted Star emblem, the official pill over the engraved title, live clock -->
+              <!-- hero header: the official Telegram Star emblem, the engraved title over its
+                   single format line, and the dark-clay bracket clock. -->
               <div class="stars-head">
                 <span class="stars-emblem" aria-hidden="true">
-                  <svg class="stars-emblem-star" viewBox="0 0 56 56" focusable="false"><use href="#i-star-3d" /></svg>
+                  <img class="stars-emblem-img" id="stars-emblem-img" alt="" width="60" height="60" />
                 </span>
                 <div class="stars-titles">
-                  <span class="stars-official" id="stars-official"><svg class="ico" aria-hidden="true"><use href="#i-star-3d" /></svg>Stars official</span>
                   <h2 class="stars-name" id="stars-name">200 STARS ARENA</h2>
+                  <span class="stars-meta" id="stars-meta">1v1 · 8s Blitz</span>
                 </div>
                 <span class="stars-count" id="stars-count" role="timer" aria-label="Bracket opens in">01:45:20</span>
               </div>
-              <p class="stars-hook" id="stars-hook">Outsmart the grid. Claim real Telegram Stars.</p>
 
-              <!-- specs: the format, in the header's own voice. The paid pill is derived from the prize ladder. -->
-              <ul class="stars-specs" id="stars-specs" aria-label="Tournament format">
-                <li class="stars-spec">1v1</li>
-                <li class="stars-spec">8s Blitz</li>
-                <li class="stars-spec">Top 3 Paid</li>
-              </ul>
+              <!-- champions: the Top 3 on a three-column podium, #1 raised. Filled by src/compete.ts. -->
+              <ol class="stars-podium" id="stars-podium" aria-label="Top three contenders"></ol>
 
-              <!-- ribbon: the whole pool and its exact split on one compact line -->
-              <div class="stars-ribbon" id="stars-ribbon" role="group" aria-label="Total pool 200 Telegram Stars, paid 120 to first, 50 to second, 30 to third">
-                <span class="stars-pool">
-                  <svg class="ico" aria-hidden="true"><use href="#i-cup" /></svg>
-                  <span class="stars-pool-l">Pool</span>
-                  <b id="stars-pool-n">200</b>
-                  <svg class="ico stars-pool-s" aria-hidden="true"><use href="#i-star-3d" /></svg>
+              <!-- runners: places four and five, compact and right-pill free. -->
+              <ol class="stars-runners" id="stars-runners" aria-label="Contenders four and five"></ol>
+
+              <!-- the pinned local row: where you sit and what the Arena pays. -->
+              <div class="stars-you" id="stars-you">
+                <span class="stars-you-rank" id="stars-you-rank">#—</span>
+                <span class="stars-you-flag" id="stars-you-flag" aria-hidden="true"></span>
+                <span class="stars-you-txt">
+                  <b class="stars-you-nm">YOU</b>
+                  <span class="stars-you-note" id="stars-you-note">0 TIQ · Top 3 wins Stars</span>
                 </span>
-                <ol class="stars-split" id="stars-split" aria-label="Prize distribution">
-                  <li class="stars-cut is-gold" data-place="1" data-metal="gold">
-                    <svg class="ico" aria-hidden="true"><use href="#i-medal" /></svg>
-                    <b class="stars-cut-n">120</b><svg class="ico stars-cut-s" aria-hidden="true"><use href="#i-star-3d" /></svg>
-                  </li>
-                  <li class="stars-cut is-silver" data-place="2" data-metal="silver">
-                    <svg class="ico" aria-hidden="true"><use href="#i-medal" /></svg>
-                    <b class="stars-cut-n">50</b><svg class="ico stars-cut-s" aria-hidden="true"><use href="#i-star-3d" /></svg>
-                  </li>
-                  <li class="stars-cut is-bronze" data-place="3" data-metal="bronze">
-                    <svg class="ico" aria-hidden="true"><use href="#i-medal" /></svg>
-                    <b class="stars-cut-n">30</b><svg class="ico stars-cut-s" aria-hidden="true"><use href="#i-star-3d" /></svg>
-                  </li>
-                </ol>
               </div>
-
-              <!-- live standings: the field that is actually in the bracket, and where you sit in it -->
-              <section class="stars-ladder" aria-labelledby="stars-standings-t">
-                <div class="stars-ladder-h">
-                  <h3 class="stars-standings-t" id="stars-standings-t">Arena standings</h3>
-                  <span class="stars-seats" id="stars-seats">184/256 contenders</span>
-                  <span class="stars-mood" id="stars-mood">Filling fast</span>
-                </div>
-                <span class="stars-track" id="stars-track" role="progressbar" aria-label="Contenders registered" aria-valuemin="0" aria-valuemax="256" aria-valuenow="184" aria-valuetext="184 of 256 contenders registered">
-                  <i class="stars-meter" id="stars-meter" style="width: 72%"></i>
-                </span>
-                <ol class="stars-field" id="stars-field" data-scroll aria-label="Live contender standings"></ol>
-                <div class="stars-you" id="stars-you">
-                  <span class="ac-rank is-you" id="stars-you-rank">#—</span>
-                  <span class="stars-you-txt">
-                    <b class="stars-you-nm">You</b>
-                    <span class="stars-you-note" id="stars-you-note">Enter the Arena to take a seat</span>
-                  </span>
-                  <span class="ac-pay is-you" id="stars-you-pay"><svg class="ico" aria-hidden="true"><use href="#i-star-3d" /></svg><b>—</b></span>
-                </div>
-              </section>
 
               <button class="stars-cta" type="button" id="stars-cta" aria-haspopup="dialog">ENTER ARENA · PLAY MATCH</button>
             </article>

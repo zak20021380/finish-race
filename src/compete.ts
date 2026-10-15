@@ -42,6 +42,7 @@ import { bindSquadById, getMyContribution, getMySquad, getSquadRanking, onSquadC
 import { impact, notify, tgUser } from './telegram';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
+import starsImg from './assets/images/telegram_stars.png';
 
 export interface CompeteApi {
   router: Router;
@@ -58,10 +59,6 @@ const skel = (rows: number): string =>
   Array.from({ length: rows }, () => '<div class="skel-row"><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></div>').join('');
 
 const empty = (msg: string): string => `<div class="empty" role="status">${msg}</div>`;
-
-/** Seat fill as a whole percent — the meter's width and the mood word both read it. */
-const fillPctOf = (c: { players: number; maxPlayers: number }): number =>
-  c.maxPlayers > 0 ? Math.min(100, Math.max(0, Math.round((c.players / c.maxPlayers) * 100))) : 0;
 
 function pickEl(id: string, legacy: string): HTMLElement {
   return (document.getElementById(id) ?? document.getElementById(legacy)) as HTMLElement;
@@ -311,23 +308,19 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   /** The Arena showcase's own parts: one card, hydrated in place, never rebuilt. */
   const cupEls = {
     name: document.getElementById('stars-name'),
-    hook: document.getElementById('stars-hook'),
-    ribbon: document.getElementById('stars-ribbon'),
-    pool: document.getElementById('stars-pool-n'),
-    split: document.getElementById('stars-split'),
-    specs: document.getElementById('stars-specs'),
-    seats: document.getElementById('stars-seats'),
-    mood: document.getElementById('stars-mood'),
+    meta: document.getElementById('stars-meta'),
+    emblem: document.getElementById('stars-emblem-img') as HTMLImageElement | null,
     count: document.getElementById('stars-count'),
-    track: document.getElementById('stars-track'),
-    meter: document.getElementById('stars-meter'),
-    field: document.getElementById('stars-field'),
+    podium: document.getElementById('stars-podium'),
+    runners: document.getElementById('stars-runners'),
     you: document.getElementById('stars-you'),
     youRank: document.getElementById('stars-you-rank'),
+    youFlag: document.getElementById('stars-you-flag'),
     youNote: document.getElementById('stars-you-note'),
-    youPay: document.getElementById('stars-you-pay'),
     cta: document.getElementById('stars-cta') as HTMLButtonElement | null,
   };
+  // One Star asset, two mounts: the 60px hero emblem and every prize pill.
+  if (cupEls.emblem) cupEls.emblem.src = starsImg;
   const podiumEl = document.getElementById('ranks-podium');
   const panes: Record<Board, HTMLElement | null> = {
     minds: document.getElementById('ranks-minds'),
@@ -538,7 +531,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   /** A seat is a device fact, like every other mock in this app. */
   const SEAT_KEY = 'detour.arena.seat.v1';
 
-  /** How many of the field the card shows before the pinned You row takes the rest. */
+  /** The head of the field the card shows: three on the podium, two runners below. */
   const FIELD_ROWS = 5;
 
   interface Seat {
@@ -582,10 +575,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   /** Grouped Latin digits, exactly the way the Mind Ladder quotes a score. */
   const num = (n: number): string => n.toLocaleString('en-US');
 
-  /** Seat-fill word — 184 of 256 is "Filling fast", and it tracks the real number. */
-  const moodOfFill = (pct: number): string =>
-    pct >= 90 ? 'Almost full' : pct >= 70 ? 'Filling fast' : pct >= 35 ? 'Filling up' : 'Open seats';
-
   /** The bracket clock: `01:44:58` counting down, then the stage says so itself. */
   const startsText = (c: GrandCup, from: number): string =>
     c.startsAt - from <= 0 ? 'Bracket live' : formatCountdown(c.startsAt, from);
@@ -604,92 +593,112 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return (parts.length > 1 ? parts[0][0] + parts[1][0] : parts[0].slice(0, 2)).toUpperCase();
   };
 
-  function paintSpecs(c: GrandCup): void {
-    const pills = cupEls.specs?.querySelectorAll<HTMLElement>('.stars-spec');
-    if (!pills) return;
-    specWords(c).forEach((spec, i) => {
-      const pill = pills[i];
-      if (pill) setText(pill, spec);
-    });
+  /** The official Telegram Star, mounted wherever the Arena pays or crowns. The PNG
+   *  is RGBA gold, so `screen` blends the metal onto the clay with no box behind it. */
+  function starImg(cls: string): HTMLImageElement {
+    const img = document.createElement('img');
+    img.className = cls;
+    img.src = starsImg;
+    img.alt = '';
+    img.decoding = 'async';
+    return img;
   }
 
-  /** The ribbon: the pool on the left, the exact split on the right, so 120 + 50 + 30
-   *  never has to be guessed and never has to be typed into the markup either. */
-  function paintRibbon(c: GrandCup): void {
-    setText(cupEls.pool, num(c.stars));
-    const cuts = cupEls.split?.querySelectorAll<HTMLElement>('.stars-cut');
-    c.prizes.forEach((prize, i) => {
-      const cut = cuts?.[i];
-      if (!cut) return;
-      setText(cut.querySelector<HTMLElement>('.stars-cut-n'), num(prize.stars));
-      cut.dataset.place = String(prize.place);
-      cut.setAttribute('aria-label', `Place ${prize.place} pays ${num(prize.stars)} Telegram Stars`);
-    });
-    cupEls.ribbon?.setAttribute('aria-label',
-      `Total pool ${num(c.stars)} Telegram Stars, paid ${c.prizes.map((p) => num(p.stars)).join(', ')}`);
+  /** One contender's ball: two initials over the sphere, the nation flag on its corner. */
+  function sphere(r: ContenderRow, cls: string): HTMLElement {
+    const av = document.createElement('span');
+    av.className = cls;
+    av.setAttribute('aria-hidden', 'true');
+    const ini = document.createElement('b');
+    ini.className = 'stars-av-t';
+    ini.textContent = initials(r.name);
+    const flag = document.createElement('span');
+    flag.className = 'stars-av-flag';
+    flag.append(flagPhoto(r.countryCode, 'fp-badge'));
+    av.append(ini, flag);
+    return av;
   }
 
-  /** One contender: rank · sphere + flag · name + stats · projected payout. */
-  function contenderRow(r: ContenderRow): HTMLElement {
+  /** A podium card: rank badge · sphere + flag · name + TIQ · the Stars that place pays. */
+  function arenaPod(r: ContenderRow): HTMLLIElement {
     const li = document.createElement('li');
-    li.className = 'ac-row';
+    li.className = 'stars-pod';
+    li.dataset.rank = String(r.rank);
     const metal = metalOf(r.rank);
     if (metal) li.dataset.metal = metal;
 
     const rank = document.createElement('span');
-    rank.className = 'ac-rank';
+    rank.className = 'stars-pod-rank';
     rank.textContent = `#${r.rank}`;
 
-    const av = document.createElement('span');
-    av.className = 'ac-av';
-    av.textContent = initials(r.name);
-    av.setAttribute('aria-hidden', 'true');
+    const av = sphere(r, 'stars-av');
 
-    const flag = document.createElement('span');
-    flag.className = 'ac-flag';
-    flag.append(flagPhoto(r.countryCode, 'fp-badge'));
+    const name = document.createElement('span');
+    name.className = 'stars-pod-name';
+    name.textContent = r.name;
+    name.title = r.name;
 
-    const nameEl = document.createElement('span');
-    nameEl.className = 'ac-name';
-    nameEl.textContent = r.name;
+    const tiq = document.createElement('span');
+    tiq.className = 'stars-pod-tiq';
+    const tiqN = document.createElement('b');
+    tiqN.textContent = num(r.tiq);
+    tiq.append(tiqN, document.createTextNode(' TIQ'));
 
-    const nm = document.createElement('span');
-    nm.className = 'ac-nm';
-    nm.append(flag, nameEl);
+    const prize = document.createElement('span');
+    prize.className = 'stars-pod-prize';
+    prize.title = `Place ${r.rank} wins ${num(r.payout)} Telegram Stars`;
+    prize.append(starImg('stars-pod-star'));
+    const prizeN = document.createElement('b');
+    prizeN.textContent = num(r.payout);
+    prize.append(prizeN);
 
-    const tiq = document.createElement('b');
-    tiq.textContent = `${num(r.tiq)} TIQ`;
-    const sub = document.createElement('span');
-    sub.className = 'ac-sub';
-    sub.append(tiq, document.createTextNode(r.streak > 0 ? ` · ${r.streak}W streak` : ' · no streak'));
-
-    const id = document.createElement('span');
-    id.className = 'ac-id';
-    id.append(nm, sub);
-
-    const pay = document.createElement('span');
-    pay.className = r.payout > 0 ? 'ac-pay' : 'ac-pay is-zero';
-    pay.append(svgIcon('#i-star-3d', 'ico'));
-    const payN = document.createElement('b');
-    payN.textContent = r.payout > 0 ? num(r.payout) : '—';
-    pay.append(payN);
-    pay.title = r.payout > 0
-      ? `Projects to pay ${num(r.payout)} Telegram Stars`
-      : 'Outside the paid places — nothing to project';
-
-    li.append(rank, av, id, pay);
+    li.append(rank, av, name, tiq, prize);
     li.setAttribute('aria-label',
-      `Place ${r.rank}: ${r.name}, ${num(r.tiq)} Tactical IQ, ${r.streak} win streak, ` +
-      `${r.payout > 0 ? `projects to pay ${num(r.payout)} Stars` : 'outside the paid places'}`);
+      `Place ${r.rank}: ${r.name}, ${num(r.tiq)} Tactical IQ, pays ${num(r.payout)} Telegram Stars`);
     return li;
   }
 
-  /** The head of the field. Static bracket data, so it is built once per load. */
-  function paintField(): void {
-    const host = cupEls.field;
-    if (!host) return;
-    host.textContent = '';
-    for (const r of field ?? []) host.append(contenderRow(r));
+  /** A runner row: rank · sphere + flag · "Name · 1,234 TIQ". No pills on the right. */
+  function runnerRow(r: ContenderRow): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = 'stars-run';
+
+    const rank = document.createElement('span');
+    rank.className = 'stars-run-rank';
+    rank.textContent = `#${r.rank}`;
+
+    const av = sphere(r, 'stars-av stars-av-sm');
+
+    const id = document.createElement('span');
+    id.className = 'stars-run-id';
+    const nm = document.createElement('b');
+    nm.className = 'stars-run-nm';
+    nm.textContent = r.name;
+    const tiq = document.createElement('span');
+    tiq.className = 'stars-run-tiq';
+    const tiqN = document.createElement('b');
+    tiqN.textContent = num(r.tiq);
+    tiq.append(tiqN, document.createTextNode(' TIQ'));
+    id.append(nm, document.createTextNode('·'), tiq);
+
+    li.append(rank, av, id);
+    li.setAttribute('aria-label', `Place ${r.rank}: ${r.name}, ${num(r.tiq)} Tactical IQ`);
+    return li;
+  }
+
+  /** The head of the field, split: the Top 3 stand on the podium, 4 and 5 run below. */
+  function paintBoard(): void {
+    const rows = field ?? [];
+    const podium = cupEls.podium;
+    if (podium) {
+      podium.textContent = '';
+      for (const r of rows.filter((x) => x.rank <= 3)) podium.append(arenaPod(r));
+    }
+    const runners = cupEls.runners;
+    if (runners) {
+      runners.textContent = '';
+      for (const r of rows.filter((x) => x.rank >= 4)) runners.append(runnerRow(r));
+    }
   }
 
   /**
@@ -703,35 +712,32 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (!you) return;
     const tiq = myTrophyScore();
     const rank = (field ? field.filter((r) => r.tiq > tiq).length : 0) + 1;
-    const paid = paidPlaces(c);
-    const cutoff = field && paid > 0 ? field[paid - 1]?.tiq ?? 0 : 0;
-    const gap = cutoff - tiq;
-    const inPaid = gap <= 0;
-    const payout = inPaid ? c.prizes[rank - 1]?.stars ?? 0 : 0;
     const seated = seat?.cup === c.id;
 
     setText(cupEls.youRank, `#${rank}`);
+    // The flag is a device fact and can be set after first paint, so rebuild only
+    // when the ISO code actually changes — never thrash the row.
+    const flag = cupEls.youFlag;
+    if (flag) {
+      const code = profile.country ?? '';
+      if (flag.dataset.cc !== code) {
+        flag.textContent = '';
+        if (code) flag.append(flagPhoto(code, 'fp-badge'));
+        flag.dataset.cc = code;
+      }
+    }
     const note = cupEls.youNote;
     if (note) {
       note.textContent = '';
       const t = document.createElement('b');
       t.textContent = num(tiq) + ' TIQ';
-      note.append(t, document.createTextNode(
-        inPaid ? ' · in the prize pool' : ` · Win ${Math.ceil(gap / TIQ_PER_WIN)} more to enter prize pool`,
-      ));
+      note.append(t, document.createTextNode(' · Top 3 wins Stars'));
       if (seated) note.append(document.createTextNode(' · seat locked'));
     }
-    const pay = cupEls.youPay;
-    if (pay) {
-      pay.classList.toggle('is-zero', payout <= 0);
-      const b = pay.querySelector('b');
-      if (b) b.textContent = payout > 0 ? num(payout) : '—';
-    }
-    you.classList.toggle('is-paid', inPaid);
+    you.classList.toggle('is-seated', seated);
     you.setAttribute('aria-label',
       `You: place ${rank} of the ${field?.length ?? 0} contenders shown, ${num(tiq)} Tactical IQ. ` +
-      (inPaid ? 'Inside the paid places.' : `${Math.ceil(gap / TIQ_PER_WIN)} more wins to reach them.`) +
-      (seated ? ' Your seat is locked.' : ''));
+      `Top 3 places win Telegram Stars.` + (seated ? ' Your seat is locked.' : ''));
   }
 
   function paintCount(c: GrandCup, from: number): void {
@@ -750,17 +756,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   /** Write the cup's own numbers into the standing geometry. Runs on every entry. */
   function paintCup(c: GrandCup): void {
-    const pct = fillPctOf(c);
     setText(cupEls.name, c.name.toUpperCase());
-    setText(cupEls.hook, c.hook);
-    paintSpecs(c);
-    paintRibbon(c);
-    setText(cupEls.seats, `${c.players}/${c.maxPlayers} contenders`);
-    setText(cupEls.mood, moodOfFill(pct));
-    cupEls.track?.setAttribute('aria-valuemax', String(c.maxPlayers));
-    cupEls.track?.setAttribute('aria-valuenow', String(c.players));
-    cupEls.track?.setAttribute('aria-valuetext', `${c.players} of ${c.maxPlayers} contenders registered`);
-    if (cupEls.meter) cupEls.meter.style.width = `${pct}%`;
+    setText(cupEls.meta, c.specs.join(' · '));
     paintYou(c);
     paintCount(c, Date.now());
     paintCta(c);
@@ -826,7 +823,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       } catch {
         field = null;
       }
-      paintField();
+      paintBoard();
     }
     paintCup(cup);
   }
