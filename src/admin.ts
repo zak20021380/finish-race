@@ -32,6 +32,7 @@
 import { motionReduced } from './settings';
 import { earnCoins, earnTiq, onChange, profile, readJson, writeJson } from './storage';
 import { coinText, mountCoins, setBalance } from './coin';
+import { CONFIG } from './rules';
 import { flagPhoto } from './compete';
 import { impact, notify, tgInitData, tgUser } from './telegram';
 import type { MindTier } from './matchmaking';
@@ -94,8 +95,12 @@ export interface AdminRuntime {
 
 /** The coin multiplier a Double-Coins event steps through. */
 export const COIN_STEPS: readonly number[] = [1, 1.5, 2];
-/** The blitz allowances the stepper offers. */
-export const BLITZ_STEPS: readonly number[] = [10, 15, 20];
+/**
+ * The blitz allowances the stepper offers. The engine's own limit (`CONFIG.TURN_TIME_LIMIT`, 8s) is
+ * the baseline and must always be one of them, so the default below can never be a value the panel
+ * cannot step back to.
+ */
+export const BLITZ_STEPS: readonly number[] = [6, 8, 10, 12];
 
 export const DEFAULT_RUNTIME: AdminRuntime = {
   salesOpen: false,
@@ -104,7 +109,7 @@ export const DEFAULT_RUNTIME: AdminRuntime = {
   broadcast: '',
   winTiq: 140,
   coinMult: 1,
-  blitz: 15,
+  blitz: CONFIG.TURN_TIME_LIMIT,
   radiusNormal: 250,
   radiusWide: 600,
   tierOverride: null,

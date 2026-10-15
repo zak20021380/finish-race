@@ -179,6 +179,25 @@ export const ERR_RAMP: Ramp = {
   wl: '#ff9a9a', wd: '#d6173f', edge: 'rgba(120,10,30,.28)', ol: 'rgba(255,45,85,.5)', os: 'rgba(255,45,85,.95)',
 };
 
+/**
+ * The two action chips an armed ghost hangs beside itself: the confirm [✓] and the cancel [✕].
+ *
+ * They are semantics, not seats — `render.ts` used to tint the tick with the placing player's own
+ * ramp, which painted a *red* seat's confirm key pink and left the cancel cross in the mine amber,
+ * so the pair read backwards. Green means yes and red means no on every board, in every theme and
+ * for every seat, so both chips are fixed here and never themed, never for sale.
+ */
+export const OK_RAMP: Ramp = {
+  light: '#86efac', mid: '#22c55e', dark: '#15803d', glow: 'rgba(34,197,94,.6)', shade: '20,90,50',
+  wl: '#5ee09b', wd: '#167f45', edge: 'rgba(20,90,50,.3)', ol: 'rgba(34,197,94,.5)', os: 'rgba(34,197,94,.95)',
+};
+
+/** …and its partner: the cross that drops the preview. Crimson, for the same reason. */
+export const NO_RAMP: Ramp = {
+  light: '#fca5a5', mid: '#ef4444', dark: '#b91c1c', glow: 'rgba(239,68,68,.6)', shade: '120,20,20',
+  wl: '#ff8f8f', wd: '#c02121', edge: 'rgba(120,20,20,.3)', ol: 'rgba(239,68,68,.5)', os: 'rgba(239,68,68,.95)',
+};
+
 /* ---------- ball skins ---------- */
 
 export const BALLS: BallSkin[] = [

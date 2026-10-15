@@ -100,7 +100,7 @@ function grandCupSeed(): GrandCup {
     hook: 'Outsmart the grid. Claim real Telegram Stars.',
     stars: 200,
     prizes: GRAND_CUP_PRIZES.map((p) => ({ ...p })),
-    specs: ['1v1 Knockout', '15s Blitz', 'Fair Matchmaking'],
+    specs: ['1v1 Knockout', '8s Blitz', 'Fair Matchmaking'],
     players: 184,
     maxPlayers: 256,
     // 01:45:20 on the first paint; the controller ticks it down from here.

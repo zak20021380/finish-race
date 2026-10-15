@@ -54,6 +54,9 @@ check('config', () => {
   assert.equal(CONFIG.MINES_PER_TEAM, 3);
   assert.equal(CONFIG.KNOCKBACK, 3);
   assert.equal(CONFIG.WALL_LIMIT, 8);
+  /* the canonical blitz turn: the Command Center's allowance is seeded from this number, so a
+     change here is a change to every race's clock */
+  assert.equal(CONFIG.TURN_TIME_LIMIT, 8);
 });
 
 /* ---------- board geometry: the grid grows with the number of contenders ---------- */

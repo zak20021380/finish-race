@@ -58,7 +58,12 @@ export const CONFIG = {
   MINES_PER_TEAM: 3,
   /** Cells a ball is thrown straight down the column when it sets off a mine. */
   KNOCKBACK: 3,
-  /** Seconds a seat gets to act before `getAutoMove()` plays the turn for it. */
+  /**
+   * Seconds a seat gets to act before `getAutoMove()` plays the turn for it. 8 is the canonical
+   * blitz turn: the Command Center's allowance (`DEFAULT_RUNTIME.blitz` in admin.ts) is seeded from
+   * this number and its stepper can only pick from `BLITZ_STEPS`, so the clock cannot drift from
+   * the engine's own limit.
+   */
   TURN_TIME_LIMIT: 8,
 } as const;
 /** A mine may not be buried in the top or bottom this-many rows: no free wins, no point-blank traps. */

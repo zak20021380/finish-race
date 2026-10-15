@@ -580,7 +580,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }
   }
 
-  /** The three spec pills: 1v1 Knockout · 15s Blitz · Fair Matchmaking. */
+  /** The three spec pills: 1v1 Knockout · 8s Blitz · Fair Matchmaking. */
   function paintSpecs(c: GrandCup): void {
     const pills = cupEls.specs?.querySelectorAll<HTMLElement>('.stars-spec');
     if (!pills) return;

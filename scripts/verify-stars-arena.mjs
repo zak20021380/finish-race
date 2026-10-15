@@ -172,7 +172,7 @@ for (const [w, h] of [[320, 568], [360, 640], [390, 844]]) {
     if (!m.podium[i].cls.includes(`is-${metal}`)) fail(`${tag}: podium ${i + 1} lost its ${metal} rim (${m.podium[i].cls})`);
   }
   if (!/grandmaster/i.test(m.podium[0].crest)) fail(`${tag}: 1st place crest reads "${m.podium[0].crest}"`);
-  if (m.specs.join('|') !== '1v1 Knockout|15s Blitz|Fair Matchmaking') fail(`${tag}: specs ${JSON.stringify(m.specs)}`);
+  if (m.specs.join('|') !== '1v1 Knockout|8s Blitz|Fair Matchmaking') fail(`${tag}: specs ${JSON.stringify(m.specs)}`);
   if (m.fill !== '184 / 256 Contenders') fail(`${tag}: fill label reads "${m.fill}"`);
   if (m.mood !== 'Filling fast') fail(`${tag}: mood reads "${m.mood}"`);
   if (!/^Starts in \d{2}:\d{2}:\d{2}$/.test(m.count ?? '')) fail(`${tag}: countdown reads "${m.count}"`);

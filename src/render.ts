@@ -22,7 +22,7 @@ import {
 } from './rules';
 import { motionReduced } from './settings';
 import {
-  CLASSIC_BALL, CLASSIC_WALL, DEFAULT_THEME, ERR_RAMP, MINE_RAMP, SEAT_RAMPS,
+  CLASSIC_BALL, CLASSIC_WALL, DEFAULT_THEME, ERR_RAMP, MINE_RAMP, NO_RAMP, OK_RAMP, SEAT_RAMPS,
   type BallSkin, type CosKind, type Ramp, type Stop, type Theme, type WallStyle,
 } from './themes';
 
@@ -1229,20 +1229,22 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
   /**
    * A single floating action capsule: a dark disc so it reads on any board, a coloured inner chip,
-   * and a white check or a red cross. Anchored beside an armed ghost and clamped to the canvas.
+   * a bevel rim and a white glyph. The chip's own ramp decides its colour — emerald for confirm,
+   * crimson for cancel (OK_RAMP / NO_RAMP) — so the pair says yes/no the same way for every seat
+   * and on every board. Anchored beside an armed ghost and clamped to the canvas.
    */
-  function drawCapsule(cx: number, cy: number, kind: 'confirm' | 'cancel', color: string, c: number, still: boolean) {
+  function drawCapsule(cx: number, cy: number, kind: 'confirm' | 'cancel', ramp: Ramp, c: number, still: boolean) {
     const r = capR(c) * c;
     ctx.save();
     ctx.translate(cx, cy);
     ctx.fillStyle = 'rgba(12,16,26,.62)';
     ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
-    ctx.fillStyle = kind === 'confirm' ? color : 'rgba(255,255,255,.95)';
+    ctx.fillStyle = ramp.mid;
     ctx.beginPath(); ctx.arc(0, 0, r * 0.82, 0, TAU); ctx.fill();
-    ctx.strokeStyle = color;
+    ctx.strokeStyle = ramp.dark;
     ctx.lineWidth = Math.max(1.5, c * 0.045);
     ctx.beginPath(); ctx.arc(0, 0, r * 0.82, 0, TAU); ctx.stroke();
-    ctx.strokeStyle = kind === 'confirm' ? 'rgba(255,255,255,.96)' : MINE_RAMP.mid;
+    ctx.strokeStyle = 'rgba(255,255,255,.96)';
     ctx.lineWidth = Math.max(1.6, c * 0.05);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -1256,20 +1258,24 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.stroke();
     if (!still) {                                   // a slow breath, so the pair reads as live controls
       ctx.globalAlpha = 0.18 + 0.12 * Math.sin(performance.now() / 420);
-      ctx.strokeStyle = color;
+      ctx.strokeStyle = ramp.mid;
       ctx.lineWidth = Math.max(1, c * 0.03);
       ctx.beginPath(); ctx.arc(0, 0, r * 0.95, 0, TAU); ctx.stroke();
     }
     ctx.restore();
   }
 
-  /** The floating [✓]/[✕] pair anchored beside an armed ghost, clamped inside the canvas. */
-  function drawCapsules(ax: number, ay: number, p: Player, still: boolean) {
+  /**
+   * The floating [✓]/[✕] pair anchored beside an armed ghost, clamped inside the canvas. Which seat
+   * armed the ghost makes no difference to the pair: the ramps are OK_RAMP and NO_RAMP.
+   */
+  function drawCapsules(ax: number, ay: number, still: boolean) {
     const { cell: c, ox, oy } = L;
     const confirm = capsuleConfirmPos(L, ax, ay);
     const cancel = capsuleCancelPos(L, ax, ay);
-    drawCapsule(ox + confirm.x * c, oy + confirm.y * c, 'confirm', sides[p].ramp.mid, c, still);
-    drawCapsule(ox + cancel.x * c, oy + cancel.y * c, 'cancel', MINE_RAMP.mid, c, still);
+    /* semantics, not the placing seat: green tick, red cross, whatever p is wearing */
+    drawCapsule(ox + confirm.x * c, oy + confirm.y * c, 'confirm', OK_RAMP, c, still);
+    drawCapsule(ox + cancel.x * c, oy + cancel.y * c, 'cancel', NO_RAMP, c, still);
   }
 
   /**
@@ -1594,7 +1600,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       }
       if (v.ghost.armed) {
         const centre = wallCentre(v.ghost.spec);
-        drawCapsules(centre.x, centre.y, v.ghost.p, still);
+        drawCapsules(centre.x, centre.y, still);
       }
     }
 
@@ -1607,7 +1613,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const gp = sides[v.state.turn].ramp;
       cellRing(v.mineGhost, gp.os, Math.max(1.5, c * 0.045), dash.armed, still ? 0 : -now / 26);
       drawMine(ox + (v.mineGhost.c + 0.5) * c, oy + (v.mineGhost.r + 0.5) * c, 'ghost', pulse, drop, now, still);
-      drawCapsules(v.mineGhost.c + 0.5, v.mineGhost.r + 0.5, v.state.turn, still);
+      drawCapsules(v.mineGhost.c + 0.5, v.mineGhost.r + 0.5, still);
     } else mineGhostKey = '';
 
     // placed walls (pop-in + landing pulse); walls are never removed mid-game

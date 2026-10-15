@@ -745,6 +745,12 @@ function play(a: Action, remote = false): boolean {
  * Blitz clock. One interval, owned by the turn that started it: `startClock` is the only thing that
  * arms it, and it arms nothing unless a human seat is actually up — so a bot's think time, an open
  * sheet, a finished race and a hidden webview all leave the timer cleared rather than running blind.
+ *
+ * The allowance itself is the Command Center's (`runtime.blitz`), which now ships at the engine's
+ * own canonical limit — `CONFIG.TURN_TIME_LIMIT`, 8 seconds — and can only be stepped through
+ * `BLITZ_STEPS`. `turnLimit()` is the one reader: the clock, the ring's fraction and the first
+ * paint all take the same number, so the HUD can never advertise a length the interval is not
+ * counting down.
  */
 const URGENT_AT = 3;
 /** the amber step, before the last three seconds: 5s or less is a warning, 3s or less an alarm */
@@ -752,8 +758,13 @@ const WARN_AT = 5;
 /** the ring's whole arc: the SVG's r=21, so C = 2·π·21. The dash offset drains from 12 o'clock. */
 const RING_C = 2 * Math.PI * 21;
 let turnTimerId: number | null = null;
-/** The live allowance, read off the Command Center every turn — so a change lands on the next one. */
-let turnSecondsLeft: number = runtime.blitz;
+/** The live allowance in whole seconds; a malformed one falls back to the engine's limit. */
+const turnLimit = (): number => {
+  const n = Math.round(runtime.blitz);
+  return Number.isFinite(n) && n > 0 ? n : CONFIG.TURN_TIME_LIMIT;
+};
+/** The seconds left on the live turn, reset to `turnLimit()` by every `startClock`. */
+let turnSecondsLeft: number = turnLimit();
 /** the fraction the ring last showed, so a refill never animates backwards through 1s of easing */
 let ringFrac = -1;
 
@@ -773,7 +784,7 @@ function stopClock() {
 /** A new turn: the full allowance, and an interval only once a human seat is actually up. */
 function startClock() {
   stopClock();
-  turnSecondsLeft = runtime.blitz;
+  turnSecondsLeft = turnLimit();
   paintClock();
   if (clockLive()) turnTimerId = window.setInterval(tickClock, 1000);
 }
@@ -785,15 +796,17 @@ function startClock() {
  */
 function paintClock() {
   const chip = chips[localSide];
+  const left = Math.max(0, turnSecondsLeft);
+  /* the number is painted whether or not the clock runs: an idle seat shows the turn's length, not
+     whatever the last race happened to leave in the middle of the ring */
+  timerN.textContent = String(left);
   const live = clockLive();
   chip.classList.toggle('timing', live);
   if (!live) { chip.removeAttribute('data-timer'); return; }
-  const left = Math.max(0, turnSecondsLeft);
-  const frac = left / Math.max(1, runtime.blitz);
+  const frac = left / turnLimit();
   timerFill.style.transition = frac < ringFrac ? '' : 'none';
   ringFrac = frac;
   timerFill.style.strokeDashoffset = String(RING_C * (1 - frac));
-  timerN.textContent = String(left);
   chip.dataset.timer = left <= URGENT_AT ? 'red' : left <= WARN_AT ? 'amber' : 'accent';
 }
 
@@ -1449,6 +1462,8 @@ watchPartyLabel();
 paintParty();
 paintRoster();
 paintNames();
+/* the HUD ships wearing the allowance it will actually count down, before any race has started */
+paintClock();
 ui();
 router.start('home');
 setBackButton(false);
