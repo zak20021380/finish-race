@@ -1,13 +1,14 @@
 /**
- * compete.ts — Arena (the 200 Stars Grand Cup) + Ranks (dedicated Leaderboard).
+ * compete.ts — Arena (the 200 Stars Arena) + Ranks (dedicated Leaderboard).
  *
- * IA: Arena stages exactly ONE championship — the 200 Telegram Stars Grand Cup —
- * as a single dark-clay showcase that fills the phone between the header and the
- * bottom dock: the Star & Cup emblem with the engraved title, the recessed prize
- * vault, the 1st / 2nd / 3rd podium, the three spec pills, the contender fill
- * meter with its live countdown, and the 52px REGISTER FOR ARENA key that opens
- * the confirmation drawer. There is no cup feed, no archive and no coin entry fee
- * anywhere on it: one cup, staged in full, hydrated from `getGrandCup()`.
+ * IA: Arena stages exactly ONE championship — the 200 Telegram Stars Arena — as a
+ * single dark-clay showcase that fills the phone between the header and the bottom
+ * dock: the faceted Star medallion with the engraved title and the live bracket
+ * clock, the two format pills plus the paid-places pill, one compact prize ribbon
+ * carrying the pool and its 120 / 50 / 30 split, the live standings of the head of
+ * the field with a pinned "You" row, and the 50px ENTER ARENA key that takes a seat
+ * and queues the match. There is no cup feed, no archive and no coin entry fee
+ * anywhere on it: one championship, staged in full, hydrated from `getGrandCup()`.
  *
  * Ranks is "The Mind Ladder": one three-way clay switch over Top Minds (solo
  * champions), Intellect Guilds (Telegram channels & groups) and Nations IQ
@@ -22,10 +23,13 @@
  */
 import {
   formatCountdown,
+  getArenaStandings,
   getCountryRanking,
   getGrandCup,
   getPlayerRanking,
+  paidPlaces,
   trendArrow,
+  type ContenderRow,
   type CountryRow,
   type GrandCup,
   type PlayerRow,
@@ -43,6 +47,8 @@ export interface CompeteApi {
   router: Router;
   sheets: Sheets;
   sheet(id: string): HTMLElement | null;
+  /** The one door every queue goes through — the Arena's PLAY MATCH key opens it. */
+  queue(): void;
 }
 
 type Board = 'minds' | 'guilds' | 'nations';
@@ -306,13 +312,20 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   const cupEls = {
     name: document.getElementById('stars-name'),
     hook: document.getElementById('stars-hook'),
-    vault: document.getElementById('stars-vault'),
-    podium: document.getElementById('stars-podium'),
+    ribbon: document.getElementById('stars-ribbon'),
+    pool: document.getElementById('stars-pool-n'),
+    split: document.getElementById('stars-split'),
     specs: document.getElementById('stars-specs'),
+    seats: document.getElementById('stars-seats'),
     mood: document.getElementById('stars-mood'),
     count: document.getElementById('stars-count'),
     track: document.getElementById('stars-track'),
     meter: document.getElementById('stars-meter'),
+    field: document.getElementById('stars-field'),
+    you: document.getElementById('stars-you'),
+    youRank: document.getElementById('stars-you-rank'),
+    youNote: document.getElementById('stars-you-note'),
+    youPay: document.getElementById('stars-you-pay'),
     cta: document.getElementById('stars-cta') as HTMLButtonElement | null,
   };
   const podiumEl = document.getElementById('ranks-podium');
@@ -332,6 +345,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   /** The staged championship. `null` until `getGrandCup()` answers — the markup
    *  already carries the showcase skeleton, so nothing has to be rebuilt. */
   let cup: GrandCup | null = null;
+  /** The head of the Arena field, loaded with the cup and painted once. */
+  let field: ContenderRow[] | null = null;
   /** The same cup behind the Nations IQ event pill, fetched with the country board. */
   let natCup: GrandCup | null = null;
   let tick = 0;
@@ -513,14 +528,18 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     });
   }
 
-  /* ---------- arena: the 200 Stars Grand Cup ----------
+  /* ---------- arena: the 200 Stars Arena ----------
      One championship, staged in the markup and hydrated here. The showcase is a
-     single clay card whose geometry (header · vault · podium · specs · fill · CTA)
-     is what makes it fit 360x640 with no scroll, so this controller never rebuilds
-     it: it writes the live numbers in, ticks the countdown and owns the seat. */
+     single clay card whose geometry (header · specs · prize ribbon · live standings
+     · CTA) is what makes it fit 360x640 with no scroll, so this controller never
+     rebuilds the card: it writes the live numbers in, ticks the countdown, paints
+     the field and owns the seat. */
 
   /** A seat is a device fact, like every other mock in this app. */
   const SEAT_KEY = 'detour.arena.seat.v1';
+
+  /** How many of the field the card shows before the pinned You row takes the rest. */
+  const FIELD_ROWS = 5;
 
   interface Seat {
     /** the cup this device registered for */
@@ -560,50 +579,173 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (el && el.textContent !== text) el.textContent = text;
   };
 
+  /** Grouped Latin digits, exactly the way the Mind Ladder quotes a score. */
+  const num = (n: number): string => n.toLocaleString('en-US');
+
   /** Seat-fill word — 184 of 256 is "Filling fast", and it tracks the real number. */
   const moodOfFill = (pct: number): string =>
     pct >= 90 ? 'Almost full' : pct >= 70 ? 'Filling fast' : pct >= 35 ? 'Filling up' : 'Open seats';
 
-  /** "Starts in 01:45:20" until the bracket opens; then the stage says so itself. */
+  /** The bracket clock: `01:44:58` counting down, then the stage says so itself. */
   const startsText = (c: GrandCup, from: number): string =>
-    c.startsAt - from <= 0 ? 'Bracket live' : `Starts in ${formatCountdown(c.startsAt, from)}`;
+    c.startsAt - from <= 0 ? 'Bracket live' : formatCountdown(c.startsAt, from);
 
-  /** The podium reads the exact split out of the data, in place order. */
-  function paintPodiumPrizes(c: GrandCup): void {
-    for (const prize of c.prizes) {
-      const card = cupEls.podium?.querySelector<HTMLElement>(`[data-place="${prize.place}"]`);
-      if (!card) continue;
-      setText(card.querySelector<HTMLElement>('.stars-pod-n'), String(prize.stars));
-      const crest = card.querySelector<HTMLElement>('.stars-pod-crest b')?.textContent?.trim();
-      const said = `Place ${prize.place}: ${prize.stars} Telegram Stars`;
-      card.setAttribute('aria-label', crest ? `${said}, ${crest} crest` : said);
-    }
-  }
+  /** The format pills: the data's own, plus the paid count read off the prize ladder. */
+  const specWords = (c: GrandCup): string[] => [...c.specs, `Top ${paidPlaces(c)} Paid`];
 
-  /** The three spec pills: 1v1 Knockout · 8s Blitz · Fair Matchmaking. */
+  /** Metal for a bracket place — the three that get a rim, and nothing above them. */
+  const metalOf = (place: number): string =>
+    place === 1 ? 'gold' : place === 2 ? 'silver' : place === 3 ? 'bronze' : '';
+
+  /** Two letters is all a 30px sphere holds without a second glyph crowding it. */
+  const initials = (name: string): string => {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    return (parts.length > 1 ? parts[0][0] + parts[1][0] : parts[0].slice(0, 2)).toUpperCase();
+  };
+
   function paintSpecs(c: GrandCup): void {
     const pills = cupEls.specs?.querySelectorAll<HTMLElement>('.stars-spec');
     if (!pills) return;
-    c.specs.forEach((spec, i) => {
+    specWords(c).forEach((spec, i) => {
       const pill = pills[i];
       if (pill) setText(pill, spec);
     });
+  }
+
+  /** The ribbon: the pool on the left, the exact split on the right, so 120 + 50 + 30
+   *  never has to be guessed and never has to be typed into the markup either. */
+  function paintRibbon(c: GrandCup): void {
+    setText(cupEls.pool, num(c.stars));
+    const cuts = cupEls.split?.querySelectorAll<HTMLElement>('.stars-cut');
+    c.prizes.forEach((prize, i) => {
+      const cut = cuts?.[i];
+      if (!cut) return;
+      setText(cut.querySelector<HTMLElement>('.stars-cut-n'), num(prize.stars));
+      cut.dataset.place = String(prize.place);
+      cut.setAttribute('aria-label', `Place ${prize.place} pays ${num(prize.stars)} Telegram Stars`);
+    });
+    cupEls.ribbon?.setAttribute('aria-label',
+      `Total pool ${num(c.stars)} Telegram Stars, paid ${c.prizes.map((p) => num(p.stars)).join(', ')}`);
+  }
+
+  /** One contender: rank · sphere + flag · name + stats · projected payout. */
+  function contenderRow(r: ContenderRow): HTMLElement {
+    const li = document.createElement('li');
+    li.className = 'ac-row';
+    const metal = metalOf(r.rank);
+    if (metal) li.dataset.metal = metal;
+
+    const rank = document.createElement('span');
+    rank.className = 'ac-rank';
+    rank.textContent = `#${r.rank}`;
+
+    const av = document.createElement('span');
+    av.className = 'ac-av';
+    av.textContent = initials(r.name);
+    av.setAttribute('aria-hidden', 'true');
+
+    const flag = document.createElement('span');
+    flag.className = 'ac-flag';
+    flag.append(flagPhoto(r.countryCode, 'fp-badge'));
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'ac-name';
+    nameEl.textContent = r.name;
+
+    const nm = document.createElement('span');
+    nm.className = 'ac-nm';
+    nm.append(flag, nameEl);
+
+    const tiq = document.createElement('b');
+    tiq.textContent = `${num(r.tiq)} TIQ`;
+    const sub = document.createElement('span');
+    sub.className = 'ac-sub';
+    sub.append(tiq, document.createTextNode(r.streak > 0 ? ` · ${r.streak}W streak` : ' · no streak'));
+
+    const id = document.createElement('span');
+    id.className = 'ac-id';
+    id.append(nm, sub);
+
+    const pay = document.createElement('span');
+    pay.className = r.payout > 0 ? 'ac-pay' : 'ac-pay is-zero';
+    pay.append(svgIcon('#i-star-3d', 'ico'));
+    const payN = document.createElement('b');
+    payN.textContent = r.payout > 0 ? num(r.payout) : '—';
+    pay.append(payN);
+    pay.title = r.payout > 0
+      ? `Projects to pay ${num(r.payout)} Telegram Stars`
+      : 'Outside the paid places — nothing to project';
+
+    li.append(rank, av, id, pay);
+    li.setAttribute('aria-label',
+      `Place ${r.rank}: ${r.name}, ${num(r.tiq)} Tactical IQ, ${r.streak} win streak, ` +
+      `${r.payout > 0 ? `projects to pay ${num(r.payout)} Stars` : 'outside the paid places'}`);
+    return li;
+  }
+
+  /** The head of the field. Static bracket data, so it is built once per load. */
+  function paintField(): void {
+    const host = cupEls.field;
+    if (!host) return;
+    host.textContent = '';
+    for (const r of field ?? []) host.append(contenderRow(r));
+  }
+
+  /**
+   * The pinned local row. Every number on it is read off the save and the field the
+   * card is actually showing — the rank counts the contenders above you in this list,
+   * and the gap is the TIQ of the last paid place minus your own, converted with the
+   * same TIQ-per-win the Mind Ladder uses. Nothing here is a motivational constant.
+   */
+  function paintYou(c: GrandCup): void {
+    const you = cupEls.you;
+    if (!you) return;
+    const tiq = myTrophyScore();
+    const rank = (field ? field.filter((r) => r.tiq > tiq).length : 0) + 1;
+    const paid = paidPlaces(c);
+    const cutoff = field && paid > 0 ? field[paid - 1]?.tiq ?? 0 : 0;
+    const gap = cutoff - tiq;
+    const inPaid = gap <= 0;
+    const payout = inPaid ? c.prizes[rank - 1]?.stars ?? 0 : 0;
+    const seated = seat?.cup === c.id;
+
+    setText(cupEls.youRank, `#${rank}`);
+    const note = cupEls.youNote;
+    if (note) {
+      note.textContent = '';
+      const t = document.createElement('b');
+      t.textContent = num(tiq) + ' TIQ';
+      note.append(t, document.createTextNode(
+        inPaid ? ' · in the prize pool' : ` · Win ${Math.ceil(gap / TIQ_PER_WIN)} more to enter prize pool`,
+      ));
+      if (seated) note.append(document.createTextNode(' · seat locked'));
+    }
+    const pay = cupEls.youPay;
+    if (pay) {
+      pay.classList.toggle('is-zero', payout <= 0);
+      const b = pay.querySelector('b');
+      if (b) b.textContent = payout > 0 ? num(payout) : '—';
+    }
+    you.classList.toggle('is-paid', inPaid);
+    you.setAttribute('aria-label',
+      `You: place ${rank} of the ${field?.length ?? 0} contenders shown, ${num(tiq)} Tactical IQ. ` +
+      (inPaid ? 'Inside the paid places.' : `${Math.ceil(gap / TIQ_PER_WIN)} more wins to reach them.`) +
+      (seated ? ' Your seat is locked.' : ''));
   }
 
   function paintCount(c: GrandCup, from: number): void {
     setText(cupEls.count, startsText(c, from));
   }
 
-  /** Seat state on the one key: locked reads as locked, never as a dead button. */
+  /** The key always offers the same thing; the seat's state is stated on the You row
+   *  rather than by recolouring the one loud action on the screen. */
   function paintCta(c: GrandCup): void {
     const btn = cupEls.cta;
     if (!btn) return;
-    const mine = seat?.cup === c.id;
-    btn.classList.toggle('is-seated', mine);
-    setText(btn, mine ? 'SEAT LOCKED ✓' : 'REGISTER FOR ARENA');
-    btn.setAttribute('aria-label', mine
-      ? `${c.name}: your seat is locked. Activate to review the confirmation.`
-      : `Register for the ${c.name}`);
+    btn.setAttribute('aria-label', seat?.cup === c.id
+      ? `${c.name}: your seat is locked. Play your match.`
+      : `Enter the ${c.name} and play your match`);
   }
 
   /** Write the cup's own numbers into the standing geometry. Runs on every entry. */
@@ -611,59 +753,54 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const pct = fillPctOf(c);
     setText(cupEls.name, c.name.toUpperCase());
     setText(cupEls.hook, c.hook);
-    setText(elOf('stars-vault-n'), String(c.stars));
-    cupEls.vault?.setAttribute('aria-label', `Total prize: ${c.stars} Telegram Stars`);
-    paintPodiumPrizes(c);
     paintSpecs(c);
-    setText(elOf('stars-fill-seats'), `${c.players} / ${c.maxPlayers} Contenders`);
+    paintRibbon(c);
+    setText(cupEls.seats, `${c.players}/${c.maxPlayers} contenders`);
     setText(cupEls.mood, moodOfFill(pct));
-    const track = cupEls.track;
-    if (track) {
-      track.setAttribute('aria-valuemax', String(c.maxPlayers));
-      track.setAttribute('aria-valuenow', String(c.players));
-      track.setAttribute('aria-valuetext', `${c.players} of ${c.maxPlayers} contenders registered`);
-    }
+    cupEls.track?.setAttribute('aria-valuemax', String(c.maxPlayers));
+    cupEls.track?.setAttribute('aria-valuenow', String(c.players));
+    cupEls.track?.setAttribute('aria-valuetext', `${c.players} of ${c.maxPlayers} contenders registered`);
     if (cupEls.meter) cupEls.meter.style.width = `${pct}%`;
+    paintYou(c);
     paintCount(c, Date.now());
     paintCta(c);
   }
 
-  /** The confirmation drawer: what a seat costs, which seat it is, what it opens. */
+  /** The confirmation drawer, reached only from an unseated key: what a seat costs,
+   *  which seat it is, and what locking it opens. */
   function openSeatSheet(): void {
     if (!cup) return;
     const sheet = api.sheet('sheet-stars');
     if (!sheet) return;
-    const mine = seat?.cup === cup.id;
-    setText(sheet.querySelector<HTMLElement>('#stars-sheet-title'), mine ? 'Your seat is locked' : 'Take your seat?');
-    setText(sheet.querySelector<HTMLElement>('#stars-sheet-desc'), `${cup.name} · ${cup.specs.join(' · ')}`);
+    setText(sheet.querySelector<HTMLElement>('#stars-sheet-title'), 'Take your seat?');
+    setText(sheet.querySelector<HTMLElement>('#stars-sheet-desc'), `${cup.name} · ${specWords(cup).join(' · ')}`);
     setText(sheet.querySelector<HTMLElement>('#stars-sheet-entry'), cup.entry);
     setText(sheet.querySelector<HTMLElement>('#stars-sheet-seat'), `${cup.players} / ${cup.maxPlayers}`);
     setText(sheet.querySelector<HTMLElement>('#stars-sheet-start'), formatCountdown(cup.startsAt));
-    const yes = sheet.querySelector<HTMLButtonElement>('#stars-sheet-yes');
-    if (yes) {
-      yes.textContent = mine ? 'Seat locked ✓' : 'Lock my seat';
-      yes.disabled = mine;
-    }
     impact('light');
     api.sheets.open(sheet);
   }
 
-  /** Locking the seat: the room fills by one on this device and the key flips. */
+  /** Locking the seat fills the room by one on this device, then enters the bracket. */
   function lockSeat(): void {
     if (!cup) return;
-    if (seat?.cup === cup.id) {
-      api.sheets.close();
-      return;
+    if (seat?.cup !== cup.id) {
+      seat = writeSeat(cup.id);
+      if (cup.players < cup.maxPlayers) cup.players += 1;
+      paintCup(cup);
+      impact('medium');
+      notify('success');
     }
-    seat = writeSeat(cup.id);
-    if (cup.players < cup.maxPlayers) cup.players += 1;
-    paintCup(cup);
     api.sheets.close();
-    impact('medium');
-    notify('success');
+    api.queue();
   }
 
-  cupEls.cta?.addEventListener('click', openSeatSheet);
+  cupEls.cta?.addEventListener('click', () => {
+    impact('light');
+    // Already entered: the key means play, so it does not route through a drawer first.
+    if (cup && seat?.cup === cup.id) api.queue();
+    else openSeatSheet();
+  });
   elOf('stars-sheet-yes')?.addEventListener('click', lockSeat);
 
   function tickCup(): void {
@@ -684,6 +821,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       // out: without this, a seated player would be told the room is a seat smaller
       // than it showed when they took it.
       if (seat?.cup === cup.id && cup.players < cup.maxPlayers) cup.players += 1;
+      try {
+        field = await getArenaStandings(cup, FIELD_ROWS);
+      } catch {
+        field = null;
+      }
+      paintField();
     }
     paintCup(cup);
   }

@@ -232,6 +232,46 @@
       <symbol id="i-star" viewBox="0 0 24 24">
         <polygon points="12 2.6 14.9 8.6 21.4 9.5 16.7 14.1 17.8 20.6 12 17.5 6.2 20.6 7.3 14.1 2.6 9.5 9.1 8.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
       </symbol>
+      <!-- ==== The Telegram Star, cut as a gem ============================================
+           Ten facets — a lit and a shaded triangle per point — share one light ramp that is
+           mapped in the star's own user space, not each triangle's box. That is what makes
+           the pinwheel read as solid metal catching a single source from the upper left;
+           per-box gradients would light every facet the same way and flatten it back to a
+           decal. Seam strokes carry the cut lines, the rim stroke is the specular edge.
+           Full colour on purpose: this emblem never inherits `currentColor`. -->
+      <symbol id="i-star-3d" viewBox="0 0 56 56">
+        <defs>
+          <linearGradient id="s3d-lit" gradientUnits="userSpaceOnUse" x1="9" y1="8" x2="46" y2="44">
+            <stop offset="0" stop-color="#FFF6C9" /><stop offset=".42" stop-color="#FDE047" /><stop offset="1" stop-color="#F59E0B" />
+          </linearGradient>
+          <linearGradient id="s3d-shade" gradientUnits="userSpaceOnUse" x1="9" y1="8" x2="46" y2="44">
+            <stop offset="0" stop-color="#F59E0B" /><stop offset=".55" stop-color="#D97706" /><stop offset="1" stop-color="#9A3412" />
+          </linearGradient>
+          <linearGradient id="s3d-rim" gradientUnits="userSpaceOnUse" x1="14" y1="6" x2="42" y2="46">
+            <stop offset="0" stop-color="#FFFBE8" /><stop offset=".5" stop-color="#FCD34D" stop-opacity=".35" /><stop offset="1" stop-color="#7C2D12" stop-opacity=".6" />
+          </linearGradient>
+          <radialGradient id="s3d-spec" cx="34%" cy="26%" r="34%">
+            <stop offset="0" stop-color="#FFFDF2" stop-opacity=".85" /><stop offset="1" stop-color="#FFFDF2" stop-opacity="0" />
+          </radialGradient>
+        </defs>
+        <g stroke="#7C2D12" stroke-opacity=".38" stroke-width=".55" stroke-linejoin="round">
+          <polygon points="28,28 22.71,20.72 28,7" fill="url(#s3d-lit)" />
+          <polygon points="28,28 28,7 33.29,20.72" fill="url(#s3d-shade)" />
+          <polygon points="28,28 33.29,20.72 47.97,21.51" fill="url(#s3d-lit)" />
+          <polygon points="28,28 47.97,21.51 36.56,30.78" fill="url(#s3d-shade)" />
+          <polygon points="28,28 36.56,30.78 40.34,44.99" fill="url(#s3d-lit)" />
+          <polygon points="28,28 40.34,44.99 28,37" fill="url(#s3d-shade)" />
+          <polygon points="28,28 28,37 15.66,44.99" fill="url(#s3d-lit)" />
+          <polygon points="28,28 15.66,44.99 19.44,30.78" fill="url(#s3d-shade)" />
+          <polygon points="28,28 19.44,30.78 8.03,21.51" fill="url(#s3d-lit)" />
+          <polygon points="28,28 8.03,21.51 22.71,20.72" fill="url(#s3d-shade)" />
+        </g>
+        <path d="M28 7 33.29 20.72 47.97 21.51 36.56 30.78 40.34 44.99 28 37 15.66 44.99 19.44 30.78 8.03 21.51 22.71 20.72Z"
+          fill="none" stroke="url(#s3d-rim)" stroke-width="1.15" stroke-linejoin="round" />
+        <path d="M28 7 33.29 20.72 47.97 21.51 36.56 30.78 40.34 44.99 28 37 15.66 44.99 19.44 30.78 8.03 21.51 22.71 20.72Z" fill="url(#s3d-spec)" />
+        <path d="M11 5.6c.9 3.2 1.6 3.9 4.8 4.8-3.2.9-3.9 1.6-4.8 4.8-.9-3.2-1.6-3.9-4.8-4.8 3.2-.9 3.9-1.6 4.8-4.8Z" fill="#FEF3C7" opacity=".9" />
+        <path d="M46.4 33.6c.6 2.2 1.1 2.7 3.3 3.3-2.2.6-2.7 1.1-3.3 3.3-.6-2.2-1.1-2.7-3.3-3.3 2.2-.6 2.7-1.1 3.3-3.3Z" fill="#FDE68A" opacity=".7" />
+      </symbol>
       <!-- arena telemetry: the bolt is the live seat, the target is the pairing radius -->
       <symbol id="i-bolt" viewBox="0 0 24 24">
         <path d="M13.6 2.8 5.4 13.4h5.1l-.9 7.8 8.4-10.8h-5.2Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
@@ -439,11 +479,13 @@
           </button>
         </section>
 
-        <!-- ---------------- arena: the 200 Stars Grand Cup, staged in full.
-             One championship, one card, one scroll container that never scrolls at
-             360x640: header · vault · podium · specs · fill meter · CTA. Every number
-             (countdown, contenders, fill width) is hydrated by src/compete.ts; the
-             geometry below is what keeps it inside the phone. ---------------- -->
+        <!-- ---------------- arena: the 200 Stars Arena, staged in full.
+             One championship, one card: header · specs · prize ribbon · live
+             standings · CTA. The stage never scrolls at 360x640; the standings list
+             inside it is the one scroller, and only of last resort. Every
+             number (countdown, contenders, fill width, your own place in the field)
+             is hydrated by src/compete.ts; the geometry below is what keeps it
+             inside the phone. ---------------- -->
         <section class="screen menu compete-screen arena-screen" id="s-arena" data-screen="arena" tabindex="-1" hidden aria-labelledby="arena-title">
           <div class="m-head compete-head">
             <h1 class="m-title" id="arena-title">Arena</h1>
@@ -451,102 +493,72 @@
 
           <div class="compete-body stars-stage" data-scroll id="arena-scroll">
             <article class="stars-card" id="stars-card" aria-labelledby="stars-name">
-              <!-- header: the Star & Cup emblem beside the official pill and engraved title -->
+              <!-- header: the faceted Star emblem, the official pill over the engraved title, live clock -->
               <div class="stars-head">
                 <span class="stars-emblem" aria-hidden="true">
-                  <svg viewBox="0 0 56 56" focusable="false">
-                    <defs>
-                      <linearGradient id="sg-tile" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0" stop-color="#2A354C" /><stop offset="1" stop-color="#141B2A" />
-                      </linearGradient>
-                      <linearGradient id="sg-gold" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0" stop-color="#FFE9A8" /><stop offset=".48" stop-color="#FBBF24" /><stop offset="1" stop-color="#B45309" />
-                      </linearGradient>
-                      <linearGradient id="sg-star" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0" stop-color="#BAE6FD" /><stop offset="1" stop-color="#0284C7" />
-                      </linearGradient>
-                      <radialGradient id="sg-halo" cx="50%" cy="34%" r="62%">
-                        <stop offset="0" stop-color="#FCD34D" stop-opacity=".34" /><stop offset="1" stop-color="#FCD34D" stop-opacity="0" />
-                      </radialGradient>
-                    </defs>
-                    <!-- clay medallion, lit from above: the emblem's own stage -->
-                    <rect x="1" y="1" width="54" height="54" rx="17" fill="url(#sg-tile)" />
-                    <rect x="1" y="1" width="54" height="54" rx="17" fill="url(#sg-halo)" />
-                    <rect x="1.5" y="1.5" width="53" height="53" rx="16.5" fill="none" stroke="#0B111C" stroke-width="1" />
-                    <rect x="3" y="3" width="50" height="50" rx="15" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="1" />
-                    <!-- cup: handles, bowl, stem, plinth, all in the gold ramp -->
-                    <path d="M15.5 16C9.9 16.4 8.6 21 11.4 24.2c1.5 1.7 3.4 2.7 5 3.2" fill="none" stroke="url(#sg-gold)" stroke-width="2.6" stroke-linecap="round" />
-                    <path d="M40.5 16c5.6.4 6.9 5 4.1 8.2-1.5 1.7-3.4 2.7-5 3.2" fill="none" stroke="url(#sg-gold)" stroke-width="2.6" stroke-linecap="round" />
-                    <path d="M15 13.4h26c-1 11.6-6.1 19.2-13 20.6-6.9-1.4-12-9-13-20.6Z" fill="url(#sg-gold)" />
-                    <path d="M15 13.4h26c-.2 2.6-.7 5.2-1.4 7.6H16.4c-.7-2.4-1.2-5-1.4-7.6Z" fill="#FFF6D6" opacity=".35" />
-                    <path d="M26.4 34.4h3.2v7.1h-3.2z" fill="url(#sg-gold)" />
-                    <path d="M18.4 41.5h19.2c0 3.1-1.7 4.6-4.4 4.6h-10.4c-2.7 0-4.4-1.5-4.4-4.6Z" fill="url(#sg-gold)" />
-                    <path d="M18.4 41.5h19.2c0 1.1-.2 2-.6 2.7H19c-.4-.7-.6-1.6-.6-2.7Z" fill="#FFF6D6" opacity=".28" />
-                    <!-- the Telegram star, cut into the bowl -->
-                    <path d="M28 15.4 29.59 19.62 34.09 19.82 30.57 22.63 31.76 26.98 28 24.5 24.24 26.98 25.43 22.63 21.91 19.82 26.41 19.62Z" fill="url(#sg-star)" />
-                    <path d="M28 15.4 29.59 19.62 28 20.9 26.41 19.62Z" fill="#E0F2FE" opacity=".55" />
-                  </svg>
+                  <svg class="stars-emblem-star" viewBox="0 0 56 56" focusable="false"><use href="#i-star-3d" /></svg>
                 </span>
                 <div class="stars-titles">
-                  <span class="stars-official" id="stars-official">🌟 STARS OFFICIAL</span>
-                  <h2 class="stars-name" id="stars-name">200 STARS GRAND CUP</h2>
+                  <span class="stars-official" id="stars-official"><svg class="ico" aria-hidden="true"><use href="#i-star-3d" /></svg>Stars official</span>
+                  <h2 class="stars-name" id="stars-name">200 STARS ARENA</h2>
                 </div>
+                <span class="stars-count" id="stars-count" role="timer" aria-label="Bracket opens in">01:45:20</span>
               </div>
               <p class="stars-hook" id="stars-hook">Outsmart the grid. Claim real Telegram Stars.</p>
 
-              <!-- vault: the whole prize in one recessed clay slot -->
-              <p class="stars-vault" id="stars-vault" role="group" aria-label="Total prize: 200 Telegram Stars">
-                <span class="stars-vault-l">Total prize</span>
-                <span class="stars-vault-n"><span class="stars-glyph" aria-hidden="true">⭐</span><b id="stars-vault-n">200</b> TELEGRAM STARS</span>
-              </p>
-
-              <!-- podium: the exact split, so 120 + 50 + 30 never has to be guessed -->
-              <ol class="stars-podium" id="stars-podium" aria-label="Prize distribution across the podium">
-                <li class="stars-pod is-gold" data-place="1">
-                  <span class="stars-pod-place">1ST</span>
-                  <span class="stars-pod-mid">
-                    <span class="stars-pod-stars"><span class="stars-glyph" aria-hidden="true">⭐</span><b class="stars-pod-n">120</b></span>
-                    <span class="stars-pod-unit">Stars</span>
-                  </span>
-                  <span class="stars-pod-crest"><svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg><b>Grandmaster</b></span>
-                </li>
-                <li class="stars-pod is-silver" data-place="2">
-                  <span class="stars-pod-place">2ND</span>
-                  <span class="stars-pod-mid">
-                    <span class="stars-pod-stars"><span class="stars-glyph" aria-hidden="true">⭐</span><b class="stars-pod-n">50</b></span>
-                    <span class="stars-pod-unit">Stars</span>
-                  </span>
-                  <span class="stars-pod-crest"><svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg><b>Strategist</b></span>
-                </li>
-                <li class="stars-pod is-bronze" data-place="3">
-                  <span class="stars-pod-place">3RD</span>
-                  <span class="stars-pod-mid">
-                    <span class="stars-pod-stars"><span class="stars-glyph" aria-hidden="true">⭐</span><b class="stars-pod-n">30</b></span>
-                    <span class="stars-pod-unit">Stars</span>
-                  </span>
-                  <span class="stars-pod-crest"><svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg><b>Tactician</b></span>
-                </li>
-              </ol>
-
-              <!-- specs: the three rules of the bracket -->
+              <!-- specs: the format, in the header's own voice. The paid pill is derived from the prize ladder. -->
               <ul class="stars-specs" id="stars-specs" aria-label="Tournament format">
-                <li class="stars-spec">1v1 Knockout</li>
+                <li class="stars-spec">1v1</li>
                 <li class="stars-spec">8s Blitz</li>
-                <li class="stars-spec">Fair Matchmaking</li>
+                <li class="stars-spec">Top 3 Paid</li>
               </ul>
 
-              <!-- registration: contenders, mood and the live countdown over the fill meter -->
-              <div class="stars-fill" id="stars-fill">
-                <div class="stars-fill-row">
-                  <span class="stars-fill-t"><span id="stars-fill-seats">184 / 256 Contenders</span> · <b class="stars-mood" id="stars-mood">Filling fast</b></span>
-                  <span class="stars-count" id="stars-count" role="timer">Starts in 01:45:20</span>
-                </div>
-                <span class="stars-track" id="stars-track" role="progressbar" aria-label="Contenders registered" aria-valuemin="0" aria-valuemax="256" aria-valuenow="184" aria-valuetext="184 of 256 contenders registered">
-                  <i class="stars-meter" id="stars-meter" style="width: 71.9%"></i>
+              <!-- ribbon: the whole pool and its exact split on one compact line -->
+              <div class="stars-ribbon" id="stars-ribbon" role="group" aria-label="Total pool 200 Telegram Stars, paid 120 to first, 50 to second, 30 to third">
+                <span class="stars-pool">
+                  <svg class="ico" aria-hidden="true"><use href="#i-cup" /></svg>
+                  <span class="stars-pool-l">Pool</span>
+                  <b id="stars-pool-n">200</b>
+                  <svg class="ico stars-pool-s" aria-hidden="true"><use href="#i-star-3d" /></svg>
                 </span>
+                <ol class="stars-split" id="stars-split" aria-label="Prize distribution">
+                  <li class="stars-cut is-gold" data-place="1" data-metal="gold">
+                    <svg class="ico" aria-hidden="true"><use href="#i-medal" /></svg>
+                    <b class="stars-cut-n">120</b><svg class="ico stars-cut-s" aria-hidden="true"><use href="#i-star-3d" /></svg>
+                  </li>
+                  <li class="stars-cut is-silver" data-place="2" data-metal="silver">
+                    <svg class="ico" aria-hidden="true"><use href="#i-medal" /></svg>
+                    <b class="stars-cut-n">50</b><svg class="ico stars-cut-s" aria-hidden="true"><use href="#i-star-3d" /></svg>
+                  </li>
+                  <li class="stars-cut is-bronze" data-place="3" data-metal="bronze">
+                    <svg class="ico" aria-hidden="true"><use href="#i-medal" /></svg>
+                    <b class="stars-cut-n">30</b><svg class="ico stars-cut-s" aria-hidden="true"><use href="#i-star-3d" /></svg>
+                  </li>
+                </ol>
               </div>
 
-              <button class="stars-cta" type="button" id="stars-cta" aria-haspopup="dialog">REGISTER FOR ARENA</button>
+              <!-- live standings: the field that is actually in the bracket, and where you sit in it -->
+              <section class="stars-ladder" aria-labelledby="stars-standings-t">
+                <div class="stars-ladder-h">
+                  <h3 class="stars-standings-t" id="stars-standings-t">Arena standings</h3>
+                  <span class="stars-seats" id="stars-seats">184/256 contenders</span>
+                  <span class="stars-mood" id="stars-mood">Filling fast</span>
+                </div>
+                <span class="stars-track" id="stars-track" role="progressbar" aria-label="Contenders registered" aria-valuemin="0" aria-valuemax="256" aria-valuenow="184" aria-valuetext="184 of 256 contenders registered">
+                  <i class="stars-meter" id="stars-meter" style="width: 72%"></i>
+                </span>
+                <ol class="stars-field" id="stars-field" data-scroll aria-label="Live contender standings"></ol>
+                <div class="stars-you" id="stars-you">
+                  <span class="ac-rank is-you" id="stars-you-rank">#—</span>
+                  <span class="stars-you-txt">
+                    <b class="stars-you-nm">You</b>
+                    <span class="stars-you-note" id="stars-you-note">Enter the Arena to take a seat</span>
+                  </span>
+                  <span class="ac-pay is-you" id="stars-you-pay"><svg class="ico" aria-hidden="true"><use href="#i-star-3d" /></svg><b>—</b></span>
+                </div>
+              </section>
+
+              <button class="stars-cta" type="button" id="stars-cta" aria-haspopup="dialog">ENTER ARENA · PLAY MATCH</button>
             </article>
           </div>
         </section>
@@ -1567,10 +1579,10 @@
         <p class="fine">Stored on this device only. Nothing leaves your phone.</p>
       </section>
 
-      <!-- arena registration: one seat in the 200 Stars Grand Cup. Free to enter, kept on this device. -->
+      <!-- arena registration: one seat in the 200 Stars Arena. Free to enter, kept on this device. -->
       <section class="sheet" id="sheet-stars" hidden role="dialog" aria-modal="true" aria-labelledby="stars-sheet-title">
         <h2 class="sheet-t" id="stars-sheet-title">Take your seat?</h2>
-        <p class="sheet-p" id="stars-sheet-desc">200 Stars Grand Cup · 1v1 Knockout · 8s Blitz</p>
+        <p class="sheet-p" id="stars-sheet-desc">200 Stars Arena · 1v1 · 8s Blitz · Top 3 Paid</p>
         <dl class="p-stats triple tight">
           <div class="stat"><dt>Entry</dt><dd id="stars-sheet-entry">Free</dd></div>
           <div class="stat"><dt>Seat</dt><dd id="stars-sheet-seat">184 / 256</dd></div>
@@ -1578,7 +1590,7 @@
         </dl>
         <div class="sheet-actions split">
           <button class="btn btn-ghost" type="button" data-sheet-close data-autofocus>Not yet</button>
-          <button class="btn btn-primary" type="button" id="stars-sheet-yes">Lock my seat</button>
+          <button class="btn btn-primary" type="button" id="stars-sheet-yes">Lock seat &amp; play</button>
         </div>
         <p class="fine">Stars are paid out by Telegram when the bracket settles. Your seat is remembered on this device.</p>
       </section>

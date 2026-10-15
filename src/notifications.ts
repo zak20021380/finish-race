@@ -94,10 +94,10 @@ function seed(): AppNotification[] {
       read: false,
     },
     {
-      id: 'seed-grand-cup',
+      id: 'seed-arena-cup',
       kind: 'tournament',
-      title: 'Grand Cup starting soon',
-      body: '200 Stars Grand Cup opens its brackets in 10 minutes — take your seat.',
+      title: 'Arena bracket opening soon',
+      body: '200 Stars Arena opens its brackets in 10 minutes — take your seat.',
       createdAt: now - 26 * min,
       read: false,
     },

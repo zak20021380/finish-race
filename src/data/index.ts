@@ -16,12 +16,12 @@ export interface CupPrize {
 }
 
 /**
- * The one tournament the Arena stages: the 200 Telegram Stars Grand Cup.
+ * The one tournament the Arena stages: the 200 Telegram Stars Arena.
  *
  * There is no cup feed here on purpose — a single championship is the whole
- * screen, so the shape carries exactly what the showcase renders: the vault,
- * the three podium steps, the three spec pills and the seat count. `startsAt`
- * is ms epoch and anchored to `Date.now()`, so the countdown stays live.
+ * screen, so the shape carries exactly what the showcase renders: the pool, the
+ * paid places, the two format pills and the seat count. `startsAt` is ms epoch
+ * and anchored to `Date.now()`, so the countdown stays live.
  */
 export interface GrandCup {
   id: string;
@@ -30,16 +30,36 @@ export interface GrandCup {
   hook: string;
   /** the whole prize vault, in Telegram Stars */
   stars: number;
-  /** exact distribution across the podium, in place order */
+  /** exact distribution across the paid places, in place order */
   prizes: CupPrize[];
-  /** the three spec pills under the podium */
+  /** the format pills — the paid-places pill is derived from `prizes`, so it is never typed here */
   specs: string[];
   players: number;
   maxPlayers: number;
   /** ms epoch the bracket opens */
   startsAt: number;
-  /** what a seat costs — the Grand Cup is free to enter */
+  /** what a seat costs — the Arena is free to enter */
   entry: string;
+}
+
+/**
+ * One live contender in the Arena field.
+ *
+ * The showcase leaderboard needs more than `PlayerRow` carries: a projected
+ * payout and a current win streak both belong to a tournament, not to the season
+ * ladder, so they are stated here rather than inferred from a win total.
+ */
+export interface ContenderRow {
+  rank: number;
+  id: string;
+  name: string;
+  countryCode: string;
+  /** Tactical IQ — the same number the Mind Ladder quotes for this player. */
+  tiq: number;
+  /** consecutive wins going into the bracket */
+  streak: number;
+  /** Stars this place projects to pay; 0 once the vault has run out. */
+  payout: number;
 }
 
 export interface CountryRow {
@@ -85,22 +105,33 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const now = (): number => Date.now();
 
-/** The podium is the prize: 120 + 50 + 30 exactly fills the 200 Star vault. */
+/** The paid places are the ones the vault actually funds — 120 + 50 + 30 is all 200 Stars. */
 const GRAND_CUP_PRIZES: CupPrize[] = [
   { place: 1, metal: 'gold', stars: 120 },
   { place: 2, metal: 'silver', stars: 50 },
   { place: 3, metal: 'bronze', stars: 30 },
 ];
 
+/** How many places a cup pays. The spec pill quotes it, so the copy can never
+ *  promise a payout the prize ladder does not fund. */
+export const paidPlaces = (c: { prizes: CupPrize[] }): number =>
+  c.prizes.filter((p) => p.stars > 0).length;
+
+/** Consecutive wins each seeded mind is carrying into the bracket, by player id. */
+const STREAKS: Record<string, number> = {
+  'u-amara': 6, 'u-sofia': 4, 'u-kenji': 1, 'u-priya': 9,
+  'u-lucas': 2, 'u-noor': 0, 'u-owen': 3, 'u-hana': 5,
+};
+
 function grandCupSeed(): GrandCup {
   const t = now();
   return {
     id: 'cup-200-stars',
-    name: '200 Stars Grand Cup',
+    name: '200 Stars Arena',
     hook: 'Outsmart the grid. Claim real Telegram Stars.',
     stars: 200,
     prizes: GRAND_CUP_PRIZES.map((p) => ({ ...p })),
-    specs: ['1v1 Knockout', '8s Blitz', 'Fair Matchmaking'],
+    specs: ['1v1', '8s Blitz'],
     players: 184,
     maxPlayers: 256,
     // 01:45:20 on the first paint; the controller ticks it down from here.
@@ -148,6 +179,28 @@ export async function getGrandCup(): Promise<GrandCup> {
   await sleep(LATENCY);
   const cup = seeding().cup;
   return { ...cup, prizes: cup.prizes.map((p) => ({ ...p })), specs: [...cup.specs] };
+}
+
+/**
+ * The live head of the Arena field, in bracket order.
+ *
+ * Ranks come off the same seeded minds the ladder quotes, so the two screens can
+ * never disagree about who is ahead; the payout is read straight out of the cup's
+ * own prize ladder, which is why a fourth-place row pays nothing rather than a
+ * made-up number.
+ */
+export async function getArenaStandings(cup: GrandCup, limit = 5): Promise<ContenderRow[]> {
+  await sleep(LATENCY);
+  const field = [...seeding().players].sort((a, b) => b.points - a.points).slice(0, limit);
+  return field.map((p, i): ContenderRow => ({
+    rank: i + 1,
+    id: p.id,
+    name: p.name,
+    countryCode: p.countryCode,
+    tiq: p.points,
+    streak: STREAKS[p.id] ?? 0,
+    payout: cup.prizes.find((z) => z.place === i + 1)?.stars ?? 0,
+  }));
 }
 
 export async function getCountryRanking(): Promise<CountryRow[]> {

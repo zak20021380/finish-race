@@ -1372,7 +1372,7 @@ const shop = createShop({
   sheets, sheet: sheetById, note: showNote, salesOpen: () => runtime.salesOpen,
 });
 home = createHome({ router, sheets, start: startGame });
-compete = createCompete({ router, sheets, sheet: sheetById });
+compete = createCompete({ router, sheets, sheet: sheetById, queue: () => queueMatch() });
 createNotifications({ sheets });
 
 /* ---- Admin Command Center: the Home FAB and the live-ops stage (src/admin.ts) ---- */

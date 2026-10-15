@@ -7703,13 +7703,15 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 
 
 /* ==========================================================================
-   STARS ARENA — the 200 Stars Grand Cup, staged on one full-height clay card.
+   STARS ARENA — the 200 Telegram Stars Arena, staged on one full-height clay card.
    Dark Clay spec: canvas #10141D, card face #1C2433 lit from above, gold ink
    #FCD34D for the Stars. No backdrop-filter and no blur() anywhere on this
    screen: every surface is opaque clay and every glow is a gradient fill.
-   Geometry: the stage takes whatever height the dock leaves and the card fills
-   it (header · vault · podium · specs · fill · CTA), so 360x640 shows the whole
-   championship with no scroll, no clipping and no dead space above the dock.
+   Geometry: header · specs · prize ribbon · live standings · CTA. The podium the
+   screen used to spend its middle on is gone — the ribbon states the split in one
+   line, and the height it freed now carries the field you are actually playing.
+   Only the standings list flexes; everything else is `flex: none`, so a short
+   phone clips a row inside its own scroller instead of silently compressing one.
    ========================================================================== */
 
 /* ---- the stage: the card's height budget, never the page's ---- */
@@ -7745,8 +7747,8 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   display: flex;
   flex-direction: column;
   justify-content: space-between;     /* slack lands between sections, never as a void */
-  gap: clamp(4px, 1.2vh, 12px);
-  padding: clamp(10px, 1.9vh, 18px) clamp(11px, 3.2vw, 18px);
+  gap: clamp(6px, 1.1vh, 11px);
+  padding: clamp(10px, 1.7vh, 16px) clamp(11px, 3.2vw, 16px) clamp(11px, 1.9vh, 16px);
   border-radius: 20px;
   border-top: 1px solid rgba(255, 255, 255, .14);
   background:
@@ -7757,23 +7759,36 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   box-shadow: var(--clay), var(--clay-ring), 0 0 34px -14px rgba(252, 211, 77, .45);
 }
 
-/* ---- header: emblem · official pill · engraved title ---- */
-.stars-head { flex: none; display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* ---- header: faceted star medallion · pill + title + hook · live clock ---- */
+.stars-head { flex: none; display: flex; align-items: center; gap: 9px; min-width: 0; }
 .stars-emblem {
   flex: none;
   display: grid;
   place-items: center;
-  width: clamp(42px, 7.6vh, 56px);
-  height: clamp(42px, 7.6vh, 56px);
-  border-radius: 17px;
-  box-shadow: 0 3px 0 #080C14, var(--clay-drop);
+  width: clamp(40px, 6.6vh, 52px);
+  height: clamp(40px, 6.6vh, 52px);
+  /* px, not %: percentage padding resolves against the containing block's width, so
+     an 11% inset here was a 31px gutter that border-box could not shrink back down */
+  padding: clamp(4px, .95vh, 7px);
+  border-radius: clamp(12px, 2vh, 16px);
+  background:
+    radial-gradient(70% 60% at 50% 26%, rgba(252, 211, 77, .3), rgba(252, 211, 77, 0) 72%),
+    linear-gradient(180deg, #2A354C 0%, #141B2A 100%);
+  box-shadow:
+    inset 0 0 0 1px #0B111C,
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    0 3px 0 #080C14,
+    var(--clay-drop);
 }
-.stars-emblem svg { display: block; width: 100%; height: 100%; border-radius: 17px; }
-.stars-titles { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.stars-emblem-star { display: block; width: 100%; height: 100%; overflow: visible; }
+.stars-titles { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .stars-official {
   align-self: flex-start;
   max-width: 100%;
-  padding: 3px 9px 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 3px 5px;
   border-radius: var(--radius-pill);
   background: var(--honey-soft);
   box-shadow:
@@ -7782,14 +7797,16 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
     0 2px 0 rgba(0, 0, 0, .45),
     0 0 16px -6px rgba(252, 211, 77, .6);
   color: var(--honey-ink);
-  font-size: var(--t-micro);
+  font-size: 9.5px;
   font-weight: 900;
   letter-spacing: .08em;
+  text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   animation: stars-official-glow 3.4s ease-in-out infinite;
 }
+.stars-official .ico { width: 12px; height: 12px; }
 @keyframes stars-official-glow {
   0%, 100% { box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .34), inset 0 1px 0 rgba(255, 255, 255, .16), 0 2px 0 rgba(0, 0, 0, .45), 0 0 14px -6px rgba(252, 211, 77, .45); }
   50%      { box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .44), inset 0 1px 0 rgba(255, 255, 255, .16), 0 2px 0 rgba(0, 0, 0, .45), 0 0 22px -4px rgba(252, 211, 77, .75); }
@@ -7798,7 +7815,7 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 .stars-name {
   margin: 0;
   min-width: 0;
-  font-size: clamp(1.03125rem, .95rem + 1.2vw, 1.375rem);
+  font-size: clamp(.9375rem, .86rem + 1.1vw, 1.375rem);
   font-weight: 900;
   letter-spacing: -.005em;
   line-height: 1.06;
@@ -7812,165 +7829,33 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   flex: none;
   margin: 0;
   min-width: 0;
-  font-size: var(--t-3);
-  font-weight: 700;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.25;
   color: var(--ink-soft);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-/* ---- vault: the whole prize, sunk into the clay ---- */
-.stars-vault {
+.stars-count {
   flex: none;
-  margin: 0;
-  min-height: clamp(44px, 7.8vh, 58px);
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 8px 12px;
-  border-radius: 16px;
+  padding: 5px 7px 6px;
+  border-radius: 12px;
   background: linear-gradient(180deg, #0A0F17 0%, #0E1526 100%);
   box-shadow:
-    inset 0 2px 6px rgba(0, 0, 0, .6),
-    inset 0 -1px 0 rgba(255, 255, 255, .05),
-    inset 0 0 0 1px rgba(252, 211, 77, .18),
-    0 0 24px -12px rgba(252, 211, 77, .5);
-}
-.stars-vault-l {
-  flex: none;
-  font-size: var(--t-micro);
-  font-weight: 800;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-.stars-vault-n {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 5px;
-  overflow: hidden;
-  font-size: clamp(.75rem, .65rem + .75vw, .875rem);
-  font-weight: 900;
-  letter-spacing: .01em;
+    inset 0 1px 4px rgba(0, 0, 0, .55),
+    inset 0 0 0 1px rgba(252, 211, 77, .16);
   color: var(--honey-ink);
-  white-space: nowrap;
-}
-.stars-vault-n b {
-  font-size: 1.45em;
-  font-weight: 900;
-  color: #FDE68A;
-  text-shadow: 0 0 16px rgba(252, 211, 77, .5), 0 1px 0 #05070C;
-  font-variant-numeric: tabular-nums;
-}
-.stars-glyph { flex: none; font-size: .95em; line-height: 1; }
-
-/* ---- podium: the exact split, so 120 + 50 + 30 never has to be guessed ---- */
-.stars-podium {
-  flex: 1 1 auto;
-  min-height: 104px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: end;                   /* a real podium: the winner's pillar is the tallest */
-  gap: 8px;
-}
-.stars-pod {
-  position: relative;
-  height: 100%;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;     /* place · prize · crest: a rhythm, not a void */
-  gap: 4px;
-  padding: 11px 6px;
-  border-radius: 16px;
-  background: var(--clay-face);
-  background-color: #1C2433;
-  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
-  text-align: center;
-}
-.stars-pod.is-silver, .stars-pod.is-bronze { height: 88%; }
-.stars-pod-mid {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
-  min-width: 0;
-  max-width: 100%;
-}
-.stars-pod-place {
   font-size: var(--t-micro);
   font-weight: 900;
-  letter-spacing: .12em;
-  color: var(--ink-soft);
-}
-.stars-pod-stars {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: clamp(1rem, .94rem + .7vw, 1.1875rem);
-  font-weight: 900;
   font-variant-numeric: tabular-nums;
-  color: #F8FAFC;
+  letter-spacing: .01em;
+  white-space: nowrap;
+  text-align: center;
   line-height: 1.1;
 }
-.stars-pod-unit { font-size: var(--t-micro); font-weight: 700; color: var(--ink-soft); }
-.stars-pod-crest {
-  margin-top: 2px;
-  max-width: 100%;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 7px 4px;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, .06);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
-  color: var(--chip-ink);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.stars-pod-crest .ico { flex: none; width: 11px; height: 11px; }
 
-/* gold rim · silver rim · bronze rim — one metal per step, never a colour wash */
-.stars-pod.is-gold {
-  box-shadow:
-    var(--clay-drop), var(--clay-spec), var(--clay-bevel),
-    inset 0 0 0 1.5px rgba(252, 211, 77, .55),
-    0 0 22px -10px rgba(252, 211, 77, .75);
-  background:
-    radial-gradient(120% 70% at 50% 0%, rgba(252, 211, 77, .16), rgba(252, 211, 77, 0) 68%),
-    var(--clay-face);
-  background-color: #1C2433;
-}
-.stars-pod.is-gold .stars-pod-place { color: var(--honey-ink); }
-.stars-pod.is-gold .stars-pod-stars { color: #FDE68A; text-shadow: 0 0 14px rgba(252, 211, 77, .45); }
-.stars-pod.is-gold .stars-pod-crest {
-  background: rgba(252, 211, 77, .16);
-  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .38);
-  color: var(--honey-ink);
-}
-.stars-pod.is-silver {
-  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), inset 0 0 0 1.5px rgba(203, 213, 225, .45);
-}
-.stars-pod.is-silver .stars-pod-stars { color: #E2E8F0; }
-.stars-pod.is-bronze {
-  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), inset 0 0 0 1.5px rgba(251, 146, 60, .42);
-}
-.stars-pod.is-bronze .stars-pod-stars { color: #FDBA74; }
-
-/* ---- specs: the three rules of the bracket ---- */
+/* ---- specs: the format, one compact row of clay keys ---- */
 .stars-specs {
   flex: none;
   list-style: none;
@@ -7978,17 +7863,17 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   padding: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
 }
 .stars-spec {
   flex: 1 1 0;
   min-width: 0;
-  min-height: 28px;
+  min-height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 6px;
+  padding: 3px 5px;
   border-radius: var(--radius-pill);
   background: linear-gradient(180deg, #232E44 0%, #1A2233 100%);
   box-shadow:
@@ -7996,7 +7881,7 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
     inset 0 0 0 1px rgba(255, 255, 255, .06),
     0 2px 0 #080C14;
   color: var(--chip-ink);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: .01em;
   white-space: nowrap;
@@ -8004,44 +7889,136 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   text-overflow: ellipsis;
 }
 
-/* ---- registration: contenders, mood word, live countdown, fill meter ---- */
-.stars-fill { flex: none; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.stars-fill-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-.stars-fill-t {
+/* ---- ribbon: the pool and its exact split, on one line ---- */
+.stars-ribbon {
+  flex: none;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+.stars-pool {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 9px 7px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #0A0F17 0%, #0E1526 100%);
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, .6),
+    inset 0 0 0 1px rgba(252, 211, 77, .22),
+    0 0 22px -12px rgba(252, 211, 77, .55);
+  color: var(--honey-ink);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.stars-pool .ico { width: 13px; height: 13px; color: var(--honey); }
+.stars-pool-l { color: var(--ink-soft); }
+.stars-pool b {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0;
+  color: #FDE68A;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 14px rgba(252, 211, 77, .45), 0 1px 0 #05070C;
+}
+.stars-pool-s { width: 14px; height: 14px; }
+.stars-split {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: var(--t-micro);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 5px;
+}
+.stars-cut {
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 4px 4px;
+  border-radius: 14px;
+  background: var(--clay-face);
+  background-color: #1C2433;
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel);
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.stars-cut .ico { width: 12px; height: 12px; opacity: .8; }
+.stars-cut-s { width: 13px; height: 13px; }
+.stars-cut b { font-weight: 900; }
+.stars-cut.is-gold   { box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), inset 0 0 0 1.5px rgba(252, 211, 77, .5); }
+.stars-cut.is-gold   { color: #FDE68A; }
+.stars-cut.is-gold .ico { color: var(--honey); }
+.stars-cut.is-silver { box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), inset 0 0 0 1.5px rgba(203, 213, 225, .4); }
+.stars-cut.is-silver { color: #E2E8F0; }
+.stars-cut.is-silver .ico { color: #CBD5E1; }
+.stars-cut.is-bronze { box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), inset 0 0 0 1.5px rgba(251, 146, 60, .38); }
+.stars-cut.is-bronze { color: #FDBA74; }
+.stars-cut.is-bronze .ico { color: #FB923C; }
+
+/* ---- live standings: the only flexible block on the card ---- */
+.stars-ladder {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.stars-ladder-h { flex: none; display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.stars-standings-t {
+  flex: none;
+  margin: 0;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  text-shadow: 0 1px 0 #05070C;
+}
+.stars-seats {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 9.5px;
   font-weight: 800;
+  letter-spacing: .02em;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.stars-mood { color: var(--brand-ink); font-weight: 900; }
-.stars-count {
+.stars-mood {
   flex: none;
-  padding: 4px 9px 5px;
-  border-radius: var(--radius-pill);
-  background: var(--field);
-  box-shadow:
-    inset 0 1px 4px rgba(0, 0, 0, .55),
-    inset 0 0 0 1px rgba(255, 255, 255, .07);
-  color: var(--ink);
-  font-size: var(--t-micro);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--brand-ink);
   white-space: nowrap;
 }
 .stars-track {
+  flex: none;
   position: relative;
   display: block;
-  height: 12px;
+  height: 7px;
   border-radius: var(--radius-pill);
   background: linear-gradient(180deg, #0A0F17 0%, #131A29 100%);
   box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, .62),
-    inset 0 -1px 0 rgba(255, 255, 255, .05),
+    inset 0 1px 3px rgba(0, 0, 0, .62),
     inset 0 0 0 1px rgba(255, 255, 255, .06);
   overflow: hidden;
 }
@@ -8050,16 +8027,226 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 58%, #B45309 100%);
-  box-shadow: 0 0 16px rgba(252, 211, 77, .55), inset 0 1px 0 rgba(255, 255, 255, .5);
+  box-shadow: 0 0 12px rgba(252, 211, 77, .5), inset 0 1px 0 rgba(255, 255, 255, .5);
   transition: width var(--motion-med);
 }
 
-/* ---- the one loud key: 52px extruded clay, amber face on a dark lip ---- */
+/* the field itself scrolls, and only the field: a clipped row is a visible failure,
+   a compressed one is not */
+.stars-field {
+  flex: 1 1 auto;
+  min-height: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 340px;                  /* the field stops absorbing before it drifts off the card */
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.stars-field::-webkit-scrollbar { display: none; }
+
+/* ---- one contender: rank · sphere + flag · name + stats · projected payout ---- */
+.ac-row {
+  /* rows breathe into a tall phone and hold their floor on a short one, so the field
+     never has to leave a void under the last contender */
+  flex: 1 1 auto;
+  min-height: 36px;
+  max-height: 64px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 7px;
+  border-radius: 14px;
+  background: var(--clay-face);
+  background-color: #1C2433;
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+}
+.ac-rank {
+  flex: none;
+  width: 26px;
+  padding: 2px 0 3px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #232E44 0%, #161E2D 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07), 0 2px 0 #080C14;
+  color: var(--chip-ink);
+  font-size: 10.5px;
+  font-weight: 900;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+/* one metal per podium place, and only on the pill — a colour wash on the whole row
+   would make the fourth row look broken next to it */
+.ac-row[data-metal="gold"] .ac-rank {
+  background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 62%, #B45309 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 2px 0 var(--gold-lip);
+  color: #3B2405;
+}
+.ac-row[data-metal="silver"] .ac-rank {
+  background: linear-gradient(180deg, #F1F5F9 0%, #94A3B8 62%, #475569 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 2px 0 #334155;
+  color: #16202E;
+}
+.ac-row[data-metal="bronze"] .ac-rank {
+  background: linear-gradient(180deg, #FDBA74 0%, #EA580C 62%, #7C2D12 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), 0 2px 0 #7C2D12;
+  color: #2A1005;
+}
+/* the sphere: one lit top-left highlight over a body ramp, one dark underside.
+   Metal tints the ramp, so #1 is a gold ball and #5 a plain clay one. */
+.ac-av {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background:
+    radial-gradient(52% 46% at 32% 24%, rgba(255, 255, 255, .6), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(120% 120% at 30% 22%, var(--av-hi, #4E6285) 0%, var(--av-mid, #2A354C) 48%, var(--av-lo, #131A29) 100%);
+  box-shadow:
+    inset 0 -3px 5px rgba(0, 0, 0, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .2),
+    0 2px 0 #080C14;
+  color: var(--av-ink, #DBEAFE);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: -.02em;
+  line-height: 1;
+}
+.ac-row[data-metal="gold"] .ac-av   { --av-hi: #FDE9A9; --av-mid: #D97706; --av-lo: #7C3A0B; --av-ink: #432004; }
+.ac-row[data-metal="silver"] .ac-av { --av-hi: #F8FAFC; --av-mid: #94A3B8; --av-lo: #334155; --av-ink: #0F172A; }
+.ac-row[data-metal="bronze"] .ac-av { --av-hi: #FED7AA; --av-mid: #C2410C; --av-lo: #5C1B08; --av-ink: #FFF7ED; }
+.ac-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ac-nm { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.ac-name {
+  min-width: 0;
+  font-size: var(--t-3);
+  font-weight: 800;
+  letter-spacing: -.01em;
+  line-height: 1.2;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* the flag rides the name's own line, never welded to the sphere's corner */
+.ac-flag { flex: none; display: inline-flex; align-items: center; }
+.ac-flag .fp { --fp-d: 15px; }
+.ac-flag .fp-chip { border-radius: 50%; font-size: 6.5px; letter-spacing: 0; }
+.ac-flag .fp-img { border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35), 0 0 0 1.5px #0E1526; }
+.ac-sub {
+  min-width: 0;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ac-sub b { color: var(--honey-ink); font-weight: 900; }
+.ac-pay {
+  flex: none;
+  min-width: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 4px 6px 5px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #0A0F17 0%, #0E1526 100%);
+  box-shadow:
+    inset 0 1px 4px rgba(0, 0, 0, .55),
+    inset 0 0 0 1px rgba(252, 211, 77, .2);
+  color: #FDE68A;
+  font-size: 11px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ac-pay .ico { width: 13px; height: 13px; }
+/* a place the vault does not fund pays nothing, and says so in slate rather than
+   borrowing the gold of the places that do */
+.ac-pay.is-zero {
+  color: var(--ink-soft);
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+.ac-pay.is-zero .ico { opacity: .35; }
+
+/* ---- the pinned local row: this is you, and what it would take to be paid ---- */
+.stars-you {
+  flex: none;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 7px;
+  border-radius: 14px;
+  background:
+    radial-gradient(120% 130% at 0% 0%, rgba(252, 211, 77, .12), rgba(252, 211, 77, 0) 62%),
+    linear-gradient(180deg, #26314A 0%, #1A2333 100%);
+  box-shadow:
+    var(--clay-drop), var(--clay-spec), var(--clay-bevel),
+    inset 0 0 0 1.5px rgba(252, 211, 77, .42);
+}
+/* the pinned row is already rimmed in gold — a gold *medal* on the pill would read as
+   a podium place, and #6 outside the paid zone is not one */
+.ac-rank.is-you {
+  background: linear-gradient(180deg, #2B3550 0%, #1A2333 100%);
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .5), 0 2px 0 #080C14;
+  color: var(--honey-ink);
+}
+.stars-you-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.stars-you-nm {
+  font-size: var(--t-3);
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: #F8FAFC;
+  text-shadow: 0 1px 0 #05070C;
+}
+.stars-you-note {
+  min-width: 0;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stars-you-note b { color: var(--honey-ink); font-weight: 900; }
+.stars-you.is-paid .stars-you-note { color: var(--mint-ink); }
+
+/* ---- skeleton: the field loads on a fetch, and an empty box is not a loading state ---- */
+.ac-row.is-skel { min-height: 42px; opacity: .5; }
+.ac-skel {
+  display: block;
+  height: 100%;
+  min-height: 30px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #1A2233 0%, #232E44 46%, #1A2233 92%);
+  background-size: 220% 100%;
+  animation: stars-skel 1.25s linear infinite;
+}
+@keyframes stars-skel { from { background-position: 120% 0; } to { background-position: -60% 0; } }
+
+/* ---- the one loud key: 50px extruded clay, amber face on a dark lip ---- */
 .stars-cta {
   --d: 5px;
   flex: none;
   width: 100%;
-  min-height: 52px;
+  min-height: 50px;
   appearance: none;
   border: 0;
   font: inherit;
@@ -8067,11 +8254,12 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 7px;
   padding: 0 var(--s3);
   border-radius: 18px;
   background: linear-gradient(180deg, #FDE68A 0%, #FBBF24 46%, #D97706 100%);
   color: #3B2405;
-  font-size: var(--t-1);
+  font-size: var(--t-2);
   font-weight: 900;
   letter-spacing: .04em;
   text-transform: uppercase;
@@ -8084,65 +8272,49 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
     0 14px 26px -12px rgba(245, 158, 11, .62);
   transition: transform var(--motion-fast), box-shadow var(--motion-fast);
 }
+.stars-cta .ico { width: 17px; height: 17px; }
 .stars-cta:active { --d: 3px; transform: translateY(2px); }
 .stars-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
-.stars-cta.is-seated {
-  background: linear-gradient(180deg, #1F2A3E 0%, #182133 100%);
-  color: var(--mint-ink);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .12),
-    inset 0 -2px 3px rgba(0, 0, 0, .35),
-    inset 0 0 0 1px rgba(110, 231, 183, .34),
-    0 var(--d) 0 #080C14,
-    0 10px 22px -14px rgba(16, 185, 129, .55);
-}
 
 /* ---- shorter and narrower phones: the card gives before the CTA does ---- */
 @media (max-height: 700px) {
-  .stars-podium { min-height: 96px; }
+  .ac-av { width: 27px; height: 27px; font-size: 10px; }
 }
-@media (max-height: 600px) {
-  .stars-podium { min-height: 86px; }
-  .stars-pod { padding: 7px 5px; }
+@media (max-height: 620px) {
+  .stars-field { gap: 4px; }
+  .ac-row { padding: 4px 6px; }
 }
 /* short and narrow (320x568): the copy stays whole, the type steps down instead */
 @media (max-width: 352px) {
-  .stars-pod-crest b { display: none; }   /* the crest glyph survives, the word does not */
-  .stars-spec { font-size: 10px; padding: 4px 4px; }
-  .stars-fill-t { font-size: 9.5px; }
-  .stars-count { padding: 3px 6px 4px; font-size: 9px; }
-  .stars-vault { flex-direction: column; align-items: flex-start; gap: 1px; }
-  .stars-vault-l { font-size: 9px; }
-}
-/* when there is no slack, the three pillars are equal: the silhouette is a reward for room */
-@media (max-height: 700px) {
-  .stars-pod.is-silver, .stars-pod.is-bronze { height: 92%; }
-  .stars-pod { padding: 9px 5px; }
-}
-@media (max-height: 620px) {
-  .stars-pod.is-silver, .stars-pod.is-bronze { height: 100%; }
+  .stars-mood { display: none; }    /* the meter already says how full the room is */
+  .stars-ladder-h { gap: 5px; }
+  .stars-standings-t { letter-spacing: .06em; }
+  .stars-pool-l { display: none; }
+  .stars-pool { padding: 6px 7px 7px; }
+  .stars-cut { font-size: 10.5px; }
+  .stars-cut .ico { display: none; }
+  .stars-spec { font-size: 9.5px; padding: 3px 3px; }
+  .ac-sub, .stars-you-note { font-size: 9px; }
+  .ac-pay { min-width: 36px; font-size: 10px; padding: 4px 5px 5px; }
+  .stars-cta { letter-spacing: .02em; }
 }
 /* a tall phone: the card scales up rather than leaving slack above the dock */
 @media (min-height: 780px) {
-  .stars-card { gap: 14px; padding: 20px 18px; border-radius: 24px; }
-  .stars-emblem { width: 64px; height: 64px; border-radius: 19px; }
-  .stars-emblem svg { border-radius: 19px; }
-  .stars-name { font-size: 1.5rem; }
-  .stars-hook { font-size: var(--t-2); }
-  .stars-vault { min-height: 74px; padding: 14px 16px; border-radius: 18px; }
-  .stars-vault-n { font-size: 1.0625rem; }
-  .stars-podium { min-height: 220px; max-height: 320px; }
-  .stars-pod { padding: 16px 10px; border-radius: 18px; }
-  .stars-pod-stars { font-size: 1.375rem; }
-  .stars-pod-crest { font-size: 10px; padding: 4px 9px 5px; }
-  .stars-spec { min-height: 34px; font-size: var(--t-micro); }
-  .stars-fill { gap: 8px; }
-  .stars-track { height: 14px; }
-  .stars-cta { min-height: 60px; border-radius: 20px; }
+  .stars-card { gap: 12px; padding: 18px 18px; border-radius: 24px; }
+  .stars-emblem { width: 60px; height: 60px; border-radius: 18px; }
+  .stars-hook { display: block; font-size: var(--t-3); }
+  .stars-name { font-size: 1.3125rem; }
+  .stars-spec { min-height: 30px; font-size: var(--t-micro); }
+  .stars-pool { font-size: var(--t-micro); }
+  .stars-cut { font-size: var(--t-2); }
+  .ac-row { padding: 7px 9px; }
+  .ac-av { width: 36px; height: 36px; font-size: 12.5px; }
+  .ac-name { font-size: var(--t-2); }
+  .ac-sub { font-size: 10.5px; }
+  .stars-cta { min-height: 56px; border-radius: 20px; font-size: var(--t-1); }
 }
-html.rm .stars-official { animation: none; }
-html.rm .stars-meter { transition: none; }
-html.rm .stars-cta { transition: none; }
+html.rm .stars-official, html.rm .ac-skel { animation: none; }
+html.rm .stars-meter, html.rm .stars-cta { transition: none; }
 
 /* ==========================================================================
    GAME MODE SELECTOR — bottom sheet triggered by the lobby Change key.

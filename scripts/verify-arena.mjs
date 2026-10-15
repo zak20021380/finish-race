@@ -5,8 +5,9 @@
  *   NODE_PATH="...\\node_modules" node scripts/verify-arena.mjs   # see verify-game-layout.mjs
  *
  * The name is a leftover: this file checks the RACE (the board, its chips and the
- * mine key), not the Arena tab. The Arena tab — the 200 Stars Grand Cup showcase —
- * is covered by scripts/verify-stars-arena.mjs.
+ * mine key), not the Arena tab. The Arena tab — the 200 Stars Arena showcase with
+ * its faceted Star emblem, prize ribbon and live contenders leaderboard — is
+ * covered by scripts/verify-stars-arena.mjs.
  *
  * Layout, at 320x568 / 320x640 / 360x640 / 390x844:
  *  - the old action dock is gone; the turn pill and the chip mine key are there,
