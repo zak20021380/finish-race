@@ -1,14 +1,20 @@
 /**
- * compete.ts — Arena (the 200 Stars Arena) + Ranks (dedicated Leaderboard).
+ * compete.ts — Arena (the 200 Stars Channel Cup) + Ranks (dedicated Leaderboard).
  *
- * IA: Arena stages exactly ONE championship — the 200 Telegram Stars Arena — as a
- * single dark-clay showcase that fills the phone between the header and the bottom
- * dock: the faceted Star medallion with the engraved title and the live bracket
- * clock, the two format pills plus the paid-places pill, one compact prize ribbon
- * carrying the pool and its 120 / 50 / 30 split, the live standings of the head of
- * the field with a pinned "You" row, and the 50px ENTER ARENA key that takes a seat
- * and queues the match. There is no cup feed, no archive and no coin entry fee
- * anywhere on it: one championship, staged in full, hydrated from `getGrandCup()`.
+ * IA: Arena stages exactly ONE championship — the 200 Telegram Stars Channel Cup
+ * — as a single dark-clay showcase that fills the phone between the header and
+ * the bottom dock: the faceted Star medallion with the engraved title over the
+ * rule that makes the cup spread (the pool pays the Top 10 players of the #1
+ * channel, not ten individuals), the live bracket clock, the Top-3 channel
+ * podium, two runner channels, the pinned squad row and the 50px PLAY FOR YOUR
+ * SQUAD key. Every channel card — podium, runner or the squad row — opens that
+ * channel's Top-10 roster sheet, where the Stars are attributed to the people
+ * who actually earned them. There is no cup feed, no archive and no coin entry
+ * fee anywhere on it: one championship, staged in full.
+ *
+ * The channel ladder is the SAME feed the Intellect Guilds board ranks
+ * (`getSquadRanking()`), so the two screens can never disagree about who leads
+ * the championship; only the roster members are seeded preview data.
  *
  * Ranks is "The Mind Ladder": one three-way clay switch over Top Minds (solo
  * champions), Intellect Guilds (Telegram channels & groups) and Nations IQ
@@ -23,16 +29,18 @@
  */
 import {
   formatCountdown,
-  getArenaStandings,
+  getChannelRoster,
   getCountryRanking,
   getGrandCup,
   getPlayerRanking,
   paidPlaces,
   trendArrow,
-  type ContenderRow,
+  type ChannelSeed,
   type CountryRow,
   type GrandCup,
   type PlayerRow,
+  type RosterRow,
+  type RosterYou,
   type Trend,
 } from './data';
 import { nameOf } from './countries';
@@ -305,22 +313,26 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   const ranksScreen = document.getElementById('s-ranks');
   const seasonChip = document.getElementById('ranks-season');
   const seasonText = seasonChip?.querySelector<HTMLElement>('.ml-season-t') ?? null;
-  /** The Arena showcase's own parts: one card, hydrated in place, never rebuilt. */
+  /** The Cup showcase's own parts: one card, hydrated in place, never rebuilt. */
   const cupEls = {
     name: document.getElementById('stars-name'),
     emblem: document.getElementById('stars-emblem-img') as HTMLImageElement | null,
+    hook: document.getElementById('stars-hook'),
     count: document.getElementById('stars-count'),
     podium: document.getElementById('stars-podium'),
     runners: document.getElementById('stars-runners'),
-    you: document.getElementById('stars-you'),
-    youAv: document.getElementById('stars-you-av'),
-    youIni: document.getElementById('stars-you-ini'),
-    youIq: document.getElementById('stars-you-iq'),
-    youNote: document.getElementById('stars-you-note'),
+    squad: document.getElementById('stars-squad') as HTMLButtonElement | null,
+    squadChip: document.getElementById('stars-squad-chip'),
+    squadLetter: document.getElementById('stars-squad-letter'),
+    squadName: document.getElementById('stars-squad-name'),
+    squadNote: document.getElementById('stars-squad-note'),
     cta: document.getElementById('stars-cta') as HTMLButtonElement | null,
   };
-  // One Star asset, two mounts: the 60px hero emblem and every prize pill.
+  // One Star asset, two static mounts: the hero emblem and the roster's prize notice.
+  // Every other Star on the Cup is built by `starImg()` as its row is painted.
   if (cupEls.emblem) cupEls.emblem.src = starsImg;
+  const noticeStar = document.getElementById('sr-notice-star') as HTMLImageElement | null;
+  if (noticeStar) noticeStar.src = starsImg;
   const podiumEl = document.getElementById('ranks-podium');
   const panes: Record<Board, HTMLElement | null> = {
     minds: document.getElementById('ranks-minds'),
@@ -338,8 +350,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   /** The staged championship. `null` until `getGrandCup()` answers — the markup
    *  already carries the showcase skeleton, so nothing has to be rebuilt. */
   let cup: GrandCup | null = null;
-  /** The head of the Arena field, loaded with the cup and painted once. */
-  let field: ContenderRow[] | null = null;
+  /** The head of the channel ladder — the same five squads the Guilds board ranks. */
+  let channels: RankedSquad[] = [];
+  /** Rosters already fetched, keyed by channel + the TIQ they were merged against. */
+  const rosters = new Map<string, Promise<RosterRow[]>>();
+  /** The local player's row inside their own channel's roster, or null if unbound. */
+  let myRoster: RosterRow[] | null = null;
+  let myRosterKey: string | null = null;
   /** The same cup behind the Nations IQ event pill, fetched with the country board. */
   let natCup: GrandCup | null = null;
   let tick = 0;
@@ -360,6 +377,15 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   const youLabel = (): string => {
     const h = youHandle();
     return h ? `You (${h})` : 'You';
+  };
+
+  /** The bare name a roster row carries — a handle is not a name, and "You" is last. */
+  const youName = (): string => {
+    const u = tgUser();
+    const full = [u?.first_name, u?.last_name].filter(Boolean).join(' ').trim();
+    if (full && full.toLowerCase() !== 'you') return full.slice(0, 20);
+    if (u?.username) return u.username.slice(0, 20);
+    return 'You';
   };
 
   const myTrophyScore = (): number =>
@@ -531,8 +557,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   /** A seat is a device fact, like every other mock in this app. */
   const SEAT_KEY = 'detour.arena.seat.v1';
 
-  /** The head of the field the card shows: three on the podium, two runners below. */
+  /** The head of the channel ladder the card shows: three on the podium, two below. */
   const FIELD_ROWS = 5;
+
+  /** How many contributors a channel's roster sheet lists — the paid places, no more. */
+  const ROSTER_ROWS = 10;
 
   interface Seat {
     /** the cup this device registered for */
@@ -604,8 +633,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return img;
   }
 
-  /** One contender's ball: two initials over the sphere, the nation flag on its corner. */
-  function sphere(r: ContenderRow, cls: string): HTMLElement {
+  /** One player's ball: two initials over the sphere, the nation flag on its corner. */
+  function sphere(r: { name: string; countryCode: string }, cls: string): HTMLElement {
     const av = document.createElement('span');
     av.className = cls;
     av.setAttribute('aria-hidden', 'true');
@@ -619,145 +648,288 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return av;
   }
 
-  /** A podium card: rank badge · sphere + flag · name + TIQ · the Stars that place pays. */
-  function arenaPod(r: ContenderRow): HTMLLIElement {
+  /* ---------- the channel ladder, and the roster behind each card ---------- */
+
+  /** The Cup ranks the very same squads the Intellect Guilds board ranks. */
+  const channelLadder = (): RankedSquad[] => getSquadRanking().slice(0, FIELD_ROWS);
+
+  const seedOf = (s: RankedSquad): ChannelSeed =>
+    ({ id: s.id, handle: s.handle, name: s.name, tiq: s.trophies });
+
+  const kindWord = (s: RankedSquad): string => (squadKind(s) === 'channel' ? 'channel' : 'group');
+  const kindLabel = (s: RankedSquad): string => `Telegram ${kindWord(s)}`;
+
+  /** The local player only ever has a place in a roster they actually belong to. */
+  function youIn(ch: ChannelSeed): RosterYou | null {
+    const mine = getMySquad();
+    if (!mine || mine.id !== ch.id) return null;
+    return { name: youName(), countryCode: profile.country ?? '', tiq: myTrophyScore() };
+  }
+
+  /** A roster is fetched once per channel + TIQ pair, so re-entry never re-rolls it. */
+  function rosterOf(ch: ChannelSeed): Promise<RosterRow[]> {
+    const you = youIn(ch);
+    const key = `${ch.id}|${you ? you.tiq : '-'}`;
+    let hit = rosters.get(key);
+    if (!hit) {
+      hit = getChannelRoster(ch, you);
+      rosters.set(key, hit);
+    }
+    return hit;
+  }
+
+  const tag = (cls: string, text?: string): HTMLElement => {
+    const el = document.createElement('span');
+    el.className = cls;
+    if (text !== undefined) el.textContent = text;
+    return el;
+  };
+
+  /** A bold run inside a sentence — the digits carry the colour, the prose never does. */
+  const strong = (text: string): HTMLElement => {
+    const b = document.createElement('b');
+    b.textContent = text;
+    return b;
+  };
+
+  /** The channel's own mark: a clay squircle, the handle's letter, Telegram's tick. */
+  function channelAv(s: RankedSquad, cls: string): HTMLElement {
+    const av = tag(`stars-ch-av${cls ? ` ${cls}` : ''}`);
+    av.setAttribute('aria-hidden', 'true');
+    const t = document.createElement('b');
+    t.className = 'stars-ch-t';
+    t.textContent = squadLetter(s);
+    const tick = tag('stars-ch-verify');
+    tick.append(svgIcon('#i-check', 'ico'));
+    av.append(t, tick);
+    return av;
+  }
+
+  /** Every card on the Cup is a door: it opens that channel's Top-10 roster. */
+  function openable(el: HTMLElement, s: RankedSquad, say: string): void {
+    el.setAttribute('role', 'button');
+    el.tabIndex = 0;
+    el.setAttribute('aria-haspopup', 'dialog');
+    el.setAttribute('aria-label', say);
+    el.addEventListener('click', () => { void openRoster(s); });
+    el.addEventListener('keydown', (e) => {
+      if (e.target !== el) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        void openRoster(s);
+      }
+    });
+  }
+
+  /** A podium channel: rank · icon · handle · squad TIQ · members · the pool it
+   *  holds for its own Top 10 · the cue that says a tap opens the roster. */
+  function podChannel(s: RankedSquad, c: GrandCup): HTMLLIElement {
     const li = document.createElement('li');
     li.className = 'stars-pod';
-    li.dataset.rank = String(r.rank);
-    const metal = metalOf(r.rank);
+    li.dataset.rank = String(s.rank);
+    const metal = metalOf(s.rank);
     if (metal) li.dataset.metal = metal;
 
-    const rank = document.createElement('span');
-    rank.className = 'stars-pod-rank';
-    rank.textContent = String(r.rank);
+    const name = tag('stars-pod-name', s.handle);
+    name.title = s.name;
 
-    const av = sphere(r, 'stars-av');
+    const tiq = tag('stars-pod-tiq');
+    tiq.append(strong(num(s.trophies)), document.createTextNode(' TIQ'));
 
-    const name = document.createElement('span');
-    name.className = 'stars-pod-name';
-    name.textContent = r.name;
-    name.title = r.name;
+    li.append(tag('stars-pod-rank', String(s.rank)), channelAv(s, ''), name, tiq,
+      tag('stars-pod-mem', `${compactCount(s.members)} players`));
 
-    const tiq = document.createElement('span');
-    tiq.className = 'stars-pod-tiq';
-    const tiqN = document.createElement('b');
-    tiqN.textContent = num(r.tiq);
-    tiq.append(tiqN, document.createTextNode(' TIQ'));
+    if (s.rank === 1) {
+      const prize = tag('stars-pod-prize');
+      const pool = document.createElement('small');
+      pool.textContent = 'Pool';
+      prize.append(starImg('stars-pod-star'), strong(num(c.stars)), pool);
+      prize.title = `The #1 channel's Top 10 split ${num(c.stars)} Telegram Stars`;
+      li.append(prize);
+    }
+    li.append(tag('stars-pod-hint', 'Tap to view roster'));
 
-    const prize = document.createElement('span');
-    prize.className = 'stars-pod-prize';
-    prize.title = `Place ${r.rank} wins ${num(r.payout)} Telegram Stars`;
-    prize.append(starImg('stars-pod-star'));
-    const prizeN = document.createElement('b');
-    prizeN.textContent = num(r.payout);
-    prize.append(prizeN);
-
-    li.append(rank, av, name, tiq, prize);
-    li.setAttribute('aria-label',
-      `Place ${r.rank}: ${r.name}, ${num(r.tiq)} Tactical IQ, pays ${num(r.payout)} Telegram Stars`);
+    openable(li, s, `${kindLabel(s)} ${s.handle}, rank ${s.rank} with ${num(s.trophies)} squad `
+      + `Tactical IQ and ${s.members.toLocaleString('en-US')} members. Tap to view the Top ${ROSTER_ROWS} roster.`);
     return li;
   }
 
-  /** A runner row: a medal circle · sphere + flag · the name · the warm gold TIQ pill. */
-  function runnerRow(r: ContenderRow): HTMLLIElement {
+  /** A runner channel: place · icon · handle · members · the TIQ pill · a chevron. */
+  function runChannel(s: RankedSquad): HTMLLIElement {
     const li = document.createElement('li');
     li.className = 'stars-run';
 
-    const rank = document.createElement('span');
-    rank.className = 'stars-run-rank';
-    rank.textContent = String(r.rank);
-
-    const av = sphere(r, 'stars-av stars-av-sm');
-
+    const id = tag('stars-run-id');
     const nm = document.createElement('b');
     nm.className = 'stars-run-nm';
-    nm.textContent = r.name;
-    nm.title = r.name;
+    nm.textContent = s.handle;
+    nm.title = s.name;
+    id.append(nm, tag('stars-run-mem', `${compactCount(s.members)} players · ${kindWord(s)}`));
 
-    const tiq = document.createElement('span');
-    tiq.className = 'stars-run-tiq';
-    const tiqN = document.createElement('b');
-    tiqN.textContent = num(r.tiq);
-    tiq.append(tiqN, document.createTextNode(' TIQ'));
+    const tiq = tag('stars-run-tiq');
+    tiq.append(strong(num(s.trophies)), document.createTextNode(' TIQ'));
 
-    li.append(rank, av, nm, tiq);
-    li.setAttribute('aria-label', `Place ${r.rank}: ${r.name}, ${num(r.tiq)} Tactical IQ`);
+    li.append(tag('stars-run-rank', String(s.rank)), channelAv(s, 'stars-ch-sm'), id, tiq,
+      svgIcon('#i-next', 'stars-run-go'));
+    openable(li, s, `${kindLabel(s)} ${s.handle}, rank ${s.rank} with ${num(s.trophies)} squad `
+      + `Tactical IQ. Tap to view the Top ${ROSTER_ROWS} roster.`);
     return li;
   }
 
-  /** The head of the field, split: the Top 3 stand on the podium, 4 and 5 run below. */
-  function paintBoard(): void {
-    const rows = field ?? [];
+  /** The head of the ladder, split: three channels on the podium, two runners below. */
+  function paintBoard(c: GrandCup): void {
     const podium = cupEls.podium;
     if (podium) {
       podium.textContent = '';
-      for (const r of rows.filter((x) => x.rank <= 3)) podium.append(arenaPod(r));
+      for (const s of channels.filter((x) => x.rank <= 3)) podium.append(podChannel(s, c));
     }
     const runners = cupEls.runners;
     if (runners) {
       runners.textContent = '';
-      for (const r of rows.filter((x) => x.rank >= 4)) runners.append(runnerRow(r));
+      for (const s of channels.filter((x) => x.rank >= 4)) runners.append(runChannel(s));
     }
   }
 
   /**
-   * The pinned local row: the player's own ball, their live TIQ and what the Arena
-   * pays. The place and the seat state are read off the save and the field the card
-   * is actually showing — nothing here is a motivational constant.
+   * The pinned squad row: the channel this device rides for, where it sits in the
+   * Cup, and where the player sits inside it. Every number is read off the local
+   * squad registry and the same roster the sheet shows — an unbound device is told
+   * so, and its key goes to the real join flow rather than to a placeholder.
    */
-  function paintYou(c: GrandCup): void {
-    const you = cupEls.you;
-    if (!you) return;
-    const tiq = myTrophyScore();
-    const rank = (field ? field.filter((r) => r.tiq > tiq).length : 0) + 1;
-    const seated = seat?.cup === c.id;
+  function paintSquad(c: GrandCup): void {
+    const row = cupEls.squad;
+    if (!row) return;
+    const mine = getMySquad();
+    const paid = paidPlaces(c);
 
-    // the local ball: the player's own initials, with the nation flag when one is set
-    const u = tgUser();
-    const base = (u?.first_name || youHandle() || 'You').replace(/[^A-Za-z0-9]/g, '');
-    setText(cupEls.youIni, (base.slice(0, 2) || 'YO').toUpperCase());
-    const av = cupEls.youAv;
-    if (av) {
-      let badge = av.querySelector<HTMLElement>('.stars-av-flag');
-      if (!badge) {
-        badge = document.createElement('span');
-        badge.className = 'stars-av-flag';
-        av.append(badge);
-      }
-      // the flag is a device fact and can be set after first paint — rebuild only on change
-      const code = profile.country ?? '';
-      if (badge.dataset.cc !== code) {
-        badge.textContent = '';
-        if (code) badge.append(flagPhoto(code, 'fp-badge'));
-        badge.dataset.cc = code;
+    if (!mine) {
+      row.classList.add('is-unbound');
+      row.removeAttribute('aria-haspopup');
+      setText(cupEls.squadChip, 'JOIN ONE');
+      setText(cupEls.squadLetter, '?');
+      setText(cupEls.squadName, 'No channel bound');
+      setText(cupEls.squadNote, 'Tap to join a squad');
+      row.setAttribute('aria-label',
+        `No channel bound. Tap to join a Telegram squad — its Top ${paid} players share the ${c.stars}-Star pool.`);
+      return;
+    }
+
+    row.classList.remove('is-unbound');
+    row.setAttribute('aria-haspopup', 'dialog');
+    setText(cupEls.squadChip, 'YOUR SQUAD');
+    setText(cupEls.squadLetter, squadLetter(mine));
+    setText(cupEls.squadName, `${mine.handle} · Rank ${mine.rank}`);
+
+    const note = cupEls.squadNote;
+    const you = myRoster?.find((r) => r.isYou) ?? null;
+    if (note) {
+      note.textContent = '';
+      if (you && you.stars > 0) {
+        note.append(document.createTextNode('Your rank: '), strong(`#${you.rank}`),
+          document.createTextNode(' · earn '), starImg('stars-squad-star'), strong(num(you.stars)));
+      } else if (you) {
+        note.append(document.createTextNode('Rank '), strong(`#${you.rank}`),
+          document.createTextNode(` · outside the paid ${paid}`));
+      } else {
+        note.append(strong(num(myTrophyScore())), document.createTextNode(' TIQ · tap for the roster'));
       }
     }
-    setText(cupEls.youIq, `${num(tiq)} TIQ`);
-    setText(cupEls.youNote, seated ? 'Top 3 wins Stars · seat locked' : 'Top 3 wins Stars');
-    you.classList.toggle('is-seated', seated);
-    you.setAttribute('aria-label',
-      `You: place ${rank} of the ${field?.length ?? 0} contenders shown, ${num(tiq)} Tactical IQ. ` +
-      `Top 3 places win Telegram Stars.` + (seated ? ' Your seat is locked.' : ''));
+    row.setAttribute('aria-label', seat?.cup === c.id
+      ? `Your squad ${mine.handle} is rank ${mine.rank} in the ${c.name}; your seat is locked. Tap to view the roster.`
+      : `Your squad ${mine.handle} is rank ${mine.rank} in the ${c.name}. Tap to view the roster.`);
+  }
+
+  /** Which channel the sheet is showing: a slower fetch must not overwrite a newer tap. */
+  let rosterOpen: string | null = null;
+
+  function rosterRow(r: RosterRow): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = `sr-row${r.isYou ? ' is-you' : ''}`;
+    const metal = metalOf(r.rank);
+    if (metal) li.dataset.metal = metal;
+
+    const id = tag('sr-id-col');
+    const nm = document.createElement('b');
+    nm.className = 'sr-nm';
+    nm.textContent = r.name;
+    nm.title = r.name;
+    const tiq = document.createElement('small');
+    tiq.className = 'sr-tiq';
+    tiq.append(strong(num(r.tiq)), document.createTextNode(' TIQ contributed'));
+    id.append(nm, tiq);
+
+    const pay = tag('sr-pay');
+    if (r.stars > 0) pay.append(starImg('sr-pay-star'), strong(num(r.stars)));
+    else {
+      li.classList.add('is-outside');
+      pay.textContent = '—';
+    }
+
+    li.append(tag('sr-medal', String(r.rank)), sphere(r, 'stars-av'), id);
+    if (r.isYou) li.append(tag('sr-you-tag', 'YOU'));
+    li.append(pay);
+    li.setAttribute('aria-label', `Rank ${r.rank}: ${r.name}, ${num(r.tiq)} Tactical IQ contributed, `
+      + (r.stars > 0 ? `projects ${num(r.stars)} Telegram Stars` : 'outside the paid places'));
+    return li;
+  }
+
+  /** The roster sheet: one channel's head, then the ten people the Stars go to. */
+  async function openRoster(s: RankedSquad): Promise<void> {
+    const sheet = api.sheet('sheet-roster');
+    if (!sheet) return;
+    const list = sheet.querySelector<HTMLElement>('#sr-list');
+    if (!list) return;
+
+    rosterOpen = s.id;
+    const metal = metalOf(s.rank);
+    if (metal) sheet.dataset.metal = metal;
+    else delete sheet.dataset.metal;
+
+    setText(sheet.querySelector<HTMLElement>('#sr-letter'), squadLetter(s));
+    setText(sheet.querySelector<HTMLElement>('#sr-rank'), String(s.rank));
+    setText(sheet.querySelector<HTMLElement>('#sr-name'), s.handle);
+    const sub = sheet.querySelector<HTMLElement>('#sr-sub');
+    if (sub) {
+      sub.textContent = '';
+      sub.append(strong(num(s.trophies)), document.createTextNode(
+        ` TIQ · ${s.members.toLocaleString('en-US')} members · ${kindWord(s)}`));
+    }
+
+    list.innerHTML = `<li class="sr-skel">${skel(6)}</li>`;
+    impact('light');
+    api.sheets.open(sheet);
+
+    let rows: RosterRow[];
+    try {
+      rows = await rosterOf(seedOf(s));
+    } catch {
+      if (rosterOpen === s.id) list.innerHTML = empty('The roster did not load.');
+      return;
+    }
+    if (rosterOpen !== s.id) return;
+    list.textContent = '';
+    for (const r of rows.slice(0, ROSTER_ROWS)) list.append(rosterRow(r));
   }
 
   function paintCount(c: GrandCup, from: number): void {
     setText(cupEls.count, startsText(c, from));
   }
 
-  /** The key always offers the same thing; the seat's state is stated on the You row
-   *  rather than by recolouring the one loud action on the screen. */
+  /** The key always offers the same thing; the seat's state is stated on the squad
+   *  row rather than by recolouring the one loud action on the screen. */
   function paintCta(c: GrandCup): void {
     const btn = cupEls.cta;
     if (!btn) return;
     btn.setAttribute('aria-label', seat?.cup === c.id
-      ? `${c.name}: your seat is locked. Play your match.`
-      : `Enter the ${c.name} and play your match`);
+      ? `${c.name}: your seat is locked. Play your match and bank TIQ for your channel.`
+      : `Enter the ${c.name} and play your match for your channel.`);
   }
 
   /** Write the cup's own numbers into the standing geometry. Runs on every entry. */
   function paintCup(c: GrandCup): void {
     setText(cupEls.name, c.name.toUpperCase());
-    paintYou(c);
+    setText(cupEls.hook, c.hook);
+    paintSquad(c);
     paintCount(c, Date.now());
     paintCta(c);
   }
@@ -768,7 +940,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (!cup) return;
     const sheet = api.sheet('sheet-stars');
     if (!sheet) return;
-    setText(sheet.querySelector<HTMLElement>('#stars-sheet-title'), 'Take your seat?');
+    setText(sheet.querySelector<HTMLElement>('#stars-sheet-title'), 'Play for your squad?');
     setText(sheet.querySelector<HTMLElement>('#stars-sheet-desc'), `${cup.name} · ${specWords(cup).join(' · ')}`);
     setText(sheet.querySelector<HTMLElement>('#stars-sheet-entry'), cup.entry);
     setText(sheet.querySelector<HTMLElement>('#stars-sheet-seat'), `${cup.players} / ${cup.maxPlayers}`);
@@ -799,8 +971,34 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   });
   elOf('stars-sheet-yes')?.addEventListener('click', lockSeat);
 
+  /** Bound: the roster of your own channel. Unbound: the real join flow. */
+  cupEls.squad?.addEventListener('click', () => {
+    const mine = getMySquad();
+    if (mine) void openRoster(mine);
+    else openSquadSheet();
+  });
+
   function tickCup(): void {
     if (cup) paintCount(cup, Date.now());
+  }
+
+  /** The local player's place inside their own channel, once per TIQ change. */
+  async function loadMyRoster(): Promise<void> {
+    const mine = getMySquad();
+    if (!mine) {
+      myRoster = null;
+      myRosterKey = null;
+      return;
+    }
+    const you = youIn(seedOf(mine));
+    const key = `${mine.id}|${you ? you.tiq : '-'}`;
+    if (key === myRosterKey) return;
+    myRosterKey = key;
+    try {
+      myRoster = await rosterOf(seedOf(mine));
+    } catch {
+      myRoster = null;
+    }
   }
 
   /** Fetch the staged cup once, then keep repainting it: re-entry costs no rebuild. */
@@ -817,14 +1015,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       // out: without this, a seated player would be told the room is a seat smaller
       // than it showed when they took it.
       if (seat?.cup === cup.id && cup.players < cup.maxPlayers) cup.players += 1;
-      try {
-        field = await getArenaStandings(cup, FIELD_ROWS);
-      } catch {
-        field = null;
-      }
-      paintBoard();
     }
+    channels = channelLadder();
+    paintBoard(cup);
     paintCup(cup);
+    await loadMyRoster();
+    paintSquad(cup);
   }
 
   function startTick(): void {
@@ -2285,6 +2481,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (isRanksVisible() && board === 'guilds') {
       loadSquads();
     }
+    // The Cup ladder and your place in it read the same registry: bind a channel
+    // anywhere and the Arena's podium, squad row and roster all move with it.
+    myRosterKey = null;
+    if (isArenaVisible()) void loadCup();
   });
 
   return {

@@ -479,12 +479,14 @@
           </button>
         </section>
 
-        <!-- ---------------- arena: the 200 Stars Arena, staged in full.
-             One championship, one card: hero header · Top-3 podium · runners ·
-             the pinned You row · CTA. The stage never scrolls at 360x640. Every
-             number (countdown, contenders, who is on the podium, your own place in
-             the field) is hydrated by src/compete.ts; the geometry below is what
-             keeps it inside the phone. ---------------- -->
+        <!-- ---------------- arena: the 200 Stars Channel Cup, staged in full.
+             One championship, one card: hero header over the virality rule ·
+             Top-3 channel podium · two runner channels · the pinned squad row ·
+             CTA. Every channel card is a door into that channel's Top-10 roster
+             sheet. The stage never scrolls at 360x640. Every number (countdown,
+             channels, squad TIQ, where you sit inside your own channel) is
+             hydrated by src/compete.ts; the geometry below is what keeps it
+             inside the phone. ---------------- -->
         <section class="screen menu compete-screen arena-screen" id="s-arena" data-screen="arena" tabindex="-1" hidden aria-labelledby="arena-title">
           <div class="m-head compete-head">
             <h1 class="m-title" id="arena-title">Arena</h1>
@@ -492,37 +494,45 @@
 
           <div class="compete-body stars-stage" data-scroll id="arena-scroll">
             <article class="stars-card" id="stars-card" aria-labelledby="stars-name">
-              <!-- hero header: the official Telegram Star emblem, the engraved title over its
-                   single format line, and the dark-clay bracket clock. -->
+              <!-- hero header: the official Star emblem, the engraved title over the rule
+                   that makes the cup viral, and the dark-clay bracket clock. -->
               <div class="stars-head">
                 <span class="stars-emblem" aria-hidden="true">
                   <img class="stars-emblem-img" id="stars-emblem-img" alt="" width="60" height="60" />
                 </span>
                 <div class="stars-titles">
-                  <h2 class="stars-name" id="stars-name">200 STARS ARENA</h2>
+                  <h2 class="stars-name" id="stars-name">200 STARS CHANNEL CUP</h2>
+                  <p class="stars-rule" id="stars-rule">
+                    <svg class="ico stars-rule-ico" aria-hidden="true"><use href="#i-cup" /></svg>
+                    <span class="stars-rule-t" id="stars-hook">200 Stars split across Top 10 players of #1 Channel</span>
+                  </p>
                 </div>
                 <span class="stars-count" id="stars-count" role="timer" aria-label="Bracket opens in">01:45:20</span>
               </div>
 
-              <!-- champions: the Top 3 on a three-column podium, #1 raised. Filled by src/compete.ts. -->
-              <ol class="stars-podium" id="stars-podium" aria-label="Top three contenders"></ol>
+              <!-- channels: the Top 3 squads on a three-column podium, #1 raised.
+                   Filled by src/compete.ts; each card opens its roster. -->
+              <ol class="stars-podium" id="stars-podium" aria-label="Top three channels"></ol>
 
-              <!-- runners: places four and five, compact and right-pill free. -->
-              <ol class="stars-runners" id="stars-runners" aria-label="Contenders four and five"></ol>
+              <!-- runners: places four and five, compact rows that carry a chevron
+                   because they open the same roster sheet. -->
+              <ol class="stars-runners" id="stars-runners" aria-label="Channels four and five"></ol>
 
-              <!-- the pinned local row: your ball, your live TIQ and what the Arena pays. -->
-              <div class="stars-you" id="stars-you">
-                <span class="stars-you-chip" id="stars-you-chip">YOU</span>
-                <span class="stars-av stars-you-av" id="stars-you-av" aria-hidden="true">
-                  <b class="stars-av-t" id="stars-you-ini">Y</b>
+              <!-- the pinned local row: the channel you ride for, where it sits in the
+                   cup, and where you sit inside it. -->
+              <button class="stars-squad" type="button" id="stars-squad">
+                <span class="stars-squad-chip" id="stars-squad-chip">YOUR SQUAD</span>
+                <span class="stars-ch-av stars-squad-av" id="stars-squad-av" aria-hidden="true">
+                  <b class="stars-ch-t" id="stars-squad-letter">?</b>
                 </span>
-                <span class="stars-you-txt">
-                  <b class="stars-you-iq" id="stars-you-iq">0 TIQ</b>
-                  <span class="stars-you-note" id="stars-you-note">Top 3 wins Stars</span>
+                <span class="stars-squad-txt">
+                  <b class="stars-squad-name" id="stars-squad-name">No channel bound</b>
+                  <span class="stars-squad-note" id="stars-squad-note">Tap to join a squad</span>
                 </span>
-              </div>
+                <svg class="ico stars-squad-go" aria-hidden="true"><use href="#i-next" /></svg>
+              </button>
 
-              <button class="stars-cta" type="button" id="stars-cta" aria-haspopup="dialog">ENTER ARENA · PLAY MATCH</button>
+              <button class="stars-cta" type="button" id="stars-cta" aria-haspopup="dialog">PLAY FOR YOUR SQUAD</button>
             </article>
           </div>
         </section>
@@ -1545,8 +1555,8 @@
 
       <!-- arena registration: one seat in the 200 Stars Arena. Free to enter, kept on this device. -->
       <section class="sheet" id="sheet-stars" hidden role="dialog" aria-modal="true" aria-labelledby="stars-sheet-title">
-        <h2 class="sheet-t" id="stars-sheet-title">Take your seat?</h2>
-        <p class="sheet-p" id="stars-sheet-desc">200 Stars Arena · 1v1 · 8s Blitz · Top 3 Paid</p>
+        <h2 class="sheet-t" id="stars-sheet-title">Play for your squad?</h2>
+        <p class="sheet-p" id="stars-sheet-desc">200 Stars Channel Cup · Channels · 8s Blitz · Top 10 Paid</p>
         <dl class="p-stats triple tight">
           <div class="stat"><dt>Entry</dt><dd id="stars-sheet-entry">Free</dd></div>
           <div class="stat"><dt>Seat</dt><dd id="stars-sheet-seat">184 / 256</dd></div>
@@ -1556,7 +1566,32 @@
           <button class="btn btn-ghost" type="button" data-sheet-close data-autofocus>Not yet</button>
           <button class="btn btn-primary" type="button" id="stars-sheet-yes">Lock seat &amp; play</button>
         </div>
-        <p class="fine">Stars are paid out by Telegram when the bracket settles. Your seat is remembered on this device.</p>
+        <p class="fine">Your wins move your channel up the Cup. Stars are paid to the Top 10 contributors of the #1 channel when the bracket settles.</p>
+      </section>
+
+      <!-- roster: one channel's Top 10, and the Stars each of them projects to.
+           Opens from any channel card, the runner rows and the squad row. -->
+      <section class="sheet tall roster-sheet" id="sheet-roster" hidden tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="sr-name">
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <header class="sr-head">
+          <span class="sr-marks" aria-hidden="true">
+            <span class="stars-ch-av sr-av"><b class="stars-ch-t" id="sr-letter">?</b></span>
+            <span class="sr-rank" id="sr-rank">1</span>
+          </span>
+          <span class="sr-id">
+            <b class="sr-name" id="sr-name">Channel</b>
+            <small class="sr-sub" id="sr-sub"></small>
+          </span>
+          <button class="ms-x" type="button" data-sheet-close aria-label="Close channel roster">
+            <span class="ms-x-g" aria-hidden="true">&times;</span>
+          </button>
+        </header>
+        <p class="sr-notice" id="sr-notice">
+          <img class="sr-notice-star" id="sr-notice-star" alt="" width="16" height="16" />
+          <span>Top 10 Contributors win 200 Telegram Stars</span>
+        </p>
+        <ol class="sheet-body sr-list" id="sr-list" data-scroll aria-label="Top ten contributors"></ol>
+        <p class="fine sr-fine">Places 1 to 10 split the 200-Star pool between them. Only the #1 channel's roster is paid.</p>
       </section>
 
       <!-- team: a local mock of a club, shaped so a Telegram group can own it later -->

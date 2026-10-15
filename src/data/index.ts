@@ -8,15 +8,15 @@
 
 export type Trend = 'up' | 'down' | 'same';
 
-/** One step of the Grand Cup podium: a place, its metal and the Stars it pays. */
+/** One step of the Channel Cup payout: a place in the #1 channel's Top 10. */
 export interface CupPrize {
-  place: 1 | 2 | 3;
-  metal: 'gold' | 'silver' | 'bronze';
+  place: number;
+  metal: 'gold' | 'silver' | 'bronze' | null;
   stars: number;
 }
 
 /**
- * The one tournament the Arena stages: the 200 Telegram Stars Arena.
+ * The one tournament the Arena stages: the 200 Telegram Stars Channel Cup.
  *
  * There is no cup feed here on purpose — a single championship is the whole
  * screen, so the shape carries exactly what the showcase renders: the pool, the
@@ -43,23 +43,39 @@ export interface GrandCup {
 }
 
 /**
- * One live contender in the Arena field.
- *
- * The showcase leaderboard needs more than `PlayerRow` carries: a projected
- * payout and a current win streak both belong to a tournament, not to the season
- * ladder, so they are stated here rather than inferred from a win total.
+ * The channel whose roster the Arena opens: the squad's own handle plus the
+ * squad TIQ the Guilds ladder already quotes, so the two screens can never
+ * disagree about who leads the championship.
  */
-export interface ContenderRow {
-  rank: number;
+export interface ChannelSeed {
   id: string;
+  handle: string;
+  name: string;
+  tiq: number;
+}
+
+/** The local player, merged into the roster of the squad they are bound to. */
+export interface RosterYou {
   name: string;
   countryCode: string;
-  /** Tactical IQ — the same number the Mind Ladder quotes for this player. */
   tiq: number;
-  /** consecutive wins going into the bracket */
-  streak: number;
-  /** Stars this place projects to pay; 0 once the vault has run out. */
-  payout: number;
+}
+
+/**
+ * One contributor inside a channel roster.
+ *
+ * `stars` is the payout that place projects to — the pool only ever funds the
+ * Top 10, so a row ranked below the ladder pays nothing rather than a made-up
+ * number.
+ */
+export interface RosterRow {
+  rank: number;
+  name: string;
+  countryCode: string;
+  /** TIQ this member banked for the channel. */
+  tiq: number;
+  stars: number;
+  isYou: boolean;
 }
 
 export interface CountryRow {
@@ -105,11 +121,22 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const now = (): number => Date.now();
 
-/** The paid places are the ones the vault actually funds — 120 + 50 + 30 is all 200 Stars. */
+/**
+ * The whole vault, spread over the Top 10 contributors of the #1 channel.
+ * 45+30+22+19+17+16+15+14+12+10 is exactly the 200 Stars the cup promises, so
+ * "Top 10 Paid" is arithmetic and not marketing.
+ */
 const GRAND_CUP_PRIZES: CupPrize[] = [
-  { place: 1, metal: 'gold', stars: 120 },
-  { place: 2, metal: 'silver', stars: 50 },
-  { place: 3, metal: 'bronze', stars: 30 },
+  { place: 1, metal: 'gold', stars: 45 },
+  { place: 2, metal: 'silver', stars: 30 },
+  { place: 3, metal: 'bronze', stars: 22 },
+  { place: 4, metal: null, stars: 19 },
+  { place: 5, metal: null, stars: 17 },
+  { place: 6, metal: null, stars: 16 },
+  { place: 7, metal: null, stars: 15 },
+  { place: 8, metal: null, stars: 14 },
+  { place: 9, metal: null, stars: 12 },
+  { place: 10, metal: null, stars: 10 },
 ];
 
 /** How many places a cup pays. The spec pill quotes it, so the copy can never
@@ -117,21 +144,15 @@ const GRAND_CUP_PRIZES: CupPrize[] = [
 export const paidPlaces = (c: { prizes: CupPrize[] }): number =>
   c.prizes.filter((p) => p.stars > 0).length;
 
-/** Consecutive wins each seeded mind is carrying into the bracket, by player id. */
-const STREAKS: Record<string, number> = {
-  'u-amara': 6, 'u-sofia': 4, 'u-kenji': 1, 'u-priya': 9,
-  'u-lucas': 2, 'u-noor': 0, 'u-owen': 3, 'u-hana': 5,
-};
-
 function grandCupSeed(): GrandCup {
   const t = now();
   return {
     id: 'cup-200-stars',
-    name: '200 Stars Arena',
-    hook: 'Outsmart the grid. Claim real Telegram Stars.',
+    name: '200 Stars Channel Cup',
+    hook: '200 Stars split across Top 10 players of #1 Channel',
     stars: 200,
     prizes: GRAND_CUP_PRIZES.map((p) => ({ ...p })),
-    specs: ['1v1', '8s Blitz'],
+    specs: ['Channels', '8s Blitz'],
     players: 184,
     maxPlayers: 256,
     // 01:45:20 on the first paint; the controller ticks it down from here.
@@ -181,26 +202,59 @@ export async function getGrandCup(): Promise<GrandCup> {
   return { ...cup, prizes: cup.prizes.map((p) => ({ ...p })), specs: [...cup.specs] };
 }
 
+/* ---------- channel rosters ----------
+   The Arena ranks channels, but a channel is only ever as loud as the ten
+   contributors that carry it. Their TIQ is a fixed slice of the squad's own
+   total, so a roster can never quote a top mind that outweighs the ladder it
+   came from, and the payout column is the cup's prize ladder read in order. */
+
+/** Share of the squad TIQ held by each of the top ten contributors. */
+const ROSTER_SHARE = [.14, .11, .092, .078, .066, .056, .048, .041, .035, .03];
+
+/** Name + nation pool. Purely cosmetic — the TIQ is always derived from the squad. */
+const ROSTER_MINDS: ReadonlyArray<readonly [string, string]> = [
+  ['Viktor', 'UA'], ['Lena', 'DE'], ['Mateo', 'ES'], ['Aiko', 'JP'],
+  ['Zara', 'SA'], ['Diego', 'BR'], ['Nina', 'PL'], ['Omar', 'EG'],
+  ['Yuki', 'JP'], ['Ivan', 'KZ'], ['Sara', 'IR'], ['Kwame', 'GH'],
+  ['Elif', 'TR'], ['Pavel', 'CZ'], ['Mei', 'CN'], ['Tariq', 'PK'],
+  ['Anouk', 'NL'], ['Ravi', 'IN'], ['Chloe', 'FR'], ['Bilal', 'MA'],
+  ['Hana', 'KR'], ['Nour', 'MA'], ['Marco', 'IT'], ['Dana', 'IL'],
+];
+
+/** FNV-1a. A channel's roster is stable across taps, reloads and repaints. */
+function hash32(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
 /**
- * The live head of the Arena field, in bracket order.
+ * The contributors behind one channel, ranked by TIQ.
  *
- * Ranks come off the same seeded minds the ladder quotes, so the two screens can
- * never disagree about who is ahead; the payout is read straight out of the cup's
- * own prize ladder, which is why a fourth-place row pays nothing rather than a
- * made-up number.
+ * Ten rows is what the sheet shows, but the local player is merged in at their
+ * real personal TIQ and the full list comes back — a squad member sitting at
+ * #11 has to be able to see that they are outside the paid ten, not be dropped
+ * from the feed and left with a rank nobody computed.
  */
-export async function getArenaStandings(cup: GrandCup, limit = 5): Promise<ContenderRow[]> {
+export async function getChannelRoster(ch: ChannelSeed, you: RosterYou | null = null): Promise<RosterRow[]> {
   await sleep(LATENCY);
-  const field = [...seeding().players].sort((a, b) => b.points - a.points).slice(0, limit);
-  return field.map((p, i): ContenderRow => ({
-    rank: i + 1,
-    id: p.id,
-    name: p.name,
-    countryCode: p.countryCode,
-    tiq: p.points,
-    streak: STREAKS[p.id] ?? 0,
-    payout: cup.prizes.find((z) => z.place === i + 1)?.stars ?? 0,
-  }));
+  const h = hash32(ch.id);
+  const rows = ROSTER_SHARE.map((share, i): RosterRow => {
+    const [name, countryCode] = ROSTER_MINDS[(h + i * 7) % ROSTER_MINDS.length];
+    return {
+      rank: 0, name, countryCode,
+      tiq: Math.max(1, Math.round(ch.tiq * share)),
+      stars: 0, isYou: false,
+    };
+  });
+  if (you) {
+    rows.push({
+      rank: 0, name: you.name, countryCode: you.countryCode,
+      tiq: Math.max(0, Math.round(you.tiq)), stars: 0, isYou: true,
+    });
+  }
+  rows.sort((a, b) => b.tiq - a.tiq || Number(b.isYou) - Number(a.isYou));
+  return rows.map((r, i): RosterRow => ({ ...r, rank: i + 1, stars: GRAND_CUP_PRIZES[i]?.stars ?? 0 }));
 }
 
 export async function getCountryRanking(): Promise<CountryRow[]> {
