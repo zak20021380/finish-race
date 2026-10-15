@@ -4,6 +4,10 @@
  *   npm run build
  *   NODE_PATH="...\\node_modules" node scripts/verify-arena.mjs   # see verify-game-layout.mjs
  *
+ * The name is a leftover: this file checks the RACE (the board, its chips and the
+ * mine key), not the Arena tab. The Arena tab — the 200 Stars Grand Cup showcase —
+ * is covered by scripts/verify-stars-arena.mjs.
+ *
  * Layout, at 320x568 / 320x640 / 360x640 / 390x844:
  *  - the old action dock is gone; the turn pill and the chip mine key are there,
  *  - nothing overflows (page, card, chips, status, head) and every tap target is >= 44px,

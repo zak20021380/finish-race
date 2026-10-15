@@ -1,37 +1,38 @@
 /**
- * compete.ts — Arena (Tournament Cups) + Ranks (dedicated Leaderboard).
+ * compete.ts — Arena (the 200 Stars Grand Cup) + Ranks (dedicated Leaderboard).
  *
- * IA: Arena owns Live / Upcoming / Archive cups only. Ranks is "The Mind Ladder":
- * one three-way clay switch over Top Minds (solo champions), Intellect Guilds
- * (Telegram channels & groups) and Nations IQ (aggregate country score). Above
- * the ladder sits the Top 3 clay podium, so the list itself starts at #4; the
- * guild board carries its Join / Invite keys there. The squad dock ("My Squad
- * Standing" / join prompt) belongs EXCLUSIVELY to the guild board, and the
- * "Your Standing" module to the two IQ boards.
+ * IA: Arena stages exactly ONE championship — the 200 Telegram Stars Grand Cup —
+ * as a single dark-clay showcase that fills the phone between the header and the
+ * bottom dock: the Star & Cup emblem with the engraved title, the recessed prize
+ * vault, the 1st / 2nd / 3rd podium, the three spec pills, the contender fill
+ * meter with its live countdown, and the 52px REGISTER FOR ARENA key that opens
+ * the confirmation drawer. There is no cup feed, no archive and no coin entry fee
+ * anywhere on it: one cup, staged in full, hydrated from `getGrandCup()`.
+ *
+ * Ranks is "The Mind Ladder": one three-way clay switch over Top Minds (solo
+ * champions), Intellect Guilds (Telegram channels & groups) and Nations IQ
+ * (aggregate country score). Above the ladder sits the Top 3 clay podium, so the
+ * list itself starts at #4; the guild board carries its Join / Invite keys there.
+ * The squad dock ("My Squad Standing" / join prompt) belongs EXCLUSIVELY to the
+ * guild board, and the "Your Standing" module to the two IQ boards.
  * Identity: TIQ (Tactical IQ) is the hero metric — gold digits with the brain
  * glyph, on the HUD pills, the podium and the ladder. #i-cup is reserved for
  * season prizes. The four mind tiers (Rookie / Tactician / Strategist /
  * Grandmaster) are an aura colour driven off your TIQ, never a badge word.
- * Tournament cards are high-energy Dark Clay arena cards with per-status
- * hierarchy (live glow + ENTER ARENA, upcoming slate + Pre-register, ended
- * archive). The Hero cup is three flex rows — header · prizes & meta ·
- * capacity + CTA — and every card sizes to its own content: no fixed height,
- * no overflow clipping, no truncated line.
  */
 import {
   formatCountdown,
   getCountryRanking,
+  getGrandCup,
   getPlayerRanking,
-  getTournaments,
   trendArrow,
   type CountryRow,
+  type GrandCup,
   type PlayerRow,
-  type Tournament,
   type Trend,
 } from './data';
 import { nameOf } from './countries';
-import { coinSvg, coinText, mountCoins, setBalance } from './coin';
-import { onChange, profile, spendCoins } from './storage';
+import { onChange, profile } from './storage';
 import { motionReduced } from './settings';
 import { bindSquadById, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadKind, squadLetter, type RankedSquad } from './squads';
 import { impact, notify, tgUser } from './telegram';
@@ -47,45 +48,14 @@ export interface CompeteApi {
 type Board = 'minds' | 'guilds' | 'nations';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
-const JOINED_KEY = 'detour.tourneys.v1';
-
-function joinedSet(): Set<string> {
-  try {
-    const raw = window.localStorage.getItem(JOINED_KEY);
-    const arr: unknown = raw ? JSON.parse(raw) : [];
-    return new Set(Array.isArray(arr) ? arr.filter((x): x is string => typeof x === 'string') : []);
-  } catch {
-    return new Set<string>();
-  }
-}
-
-function saveJoined(s: Set<string>): void {
-  try {
-    window.localStorage.setItem(JOINED_KEY, JSON.stringify([...s]));
-  } catch {
-    /* in-memory only */
-  }
-}
-
 const skel = (rows: number): string =>
   Array.from({ length: rows }, () => '<div class="skel-row"><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></div>').join('');
 
 const empty = (msg: string): string => `<div class="empty" role="status">${msg}</div>`;
 
-const pctOf = (t: Tournament): number =>
-  t.maxPlayers > 0 ? Math.min(100, Math.max(0, Math.round((t.players / t.maxPlayers) * 100))) : 0;
-
-const moodOf = (t: Tournament): string => {
-  const pct = pctOf(t);
-  if (t.status === 'live') {
-    if (pct >= 85) return 'Closing Soon';
-    if (pct >= 50) return 'Filling fast';
-    return 'Open';
-  }
-  if (pct >= 90) return 'Almost full';
-  if (pct >= 50) return 'Filling fast';
-  return 'Open';
-};
+/** Seat fill as a whole percent — the meter's width and the mood word both read it. */
+const fillPctOf = (c: { players: number; maxPlayers: number }): number =>
+  c.maxPlayers > 0 ? Math.min(100, Math.max(0, Math.round((c.players / c.maxPlayers) * 100))) : 0;
 
 function pickEl(id: string, legacy: string): HTMLElement {
   return (document.getElementById(id) ?? document.getElementById(legacy)) as HTMLElement;
@@ -327,13 +297,24 @@ export function flagPhoto(code: string | null, cls: string): HTMLElement {
 
 export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   const boardBtns = [...document.querySelectorAll<HTMLButtonElement>('.ranks-tabs [data-board]')];
-  const feedLabel = document.getElementById('arena-feed-t');
   const ranksStats = document.getElementById('ranks-stats');
   const boardSwitch = document.querySelector<HTMLElement>('.ranks-tabs');
   const ranksScreen = document.getElementById('s-ranks');
   const seasonChip = document.getElementById('ranks-season');
   const seasonText = seasonChip?.querySelector<HTMLElement>('.ml-season-t') ?? null;
-  const arenaPane = pickEl('arena-tournaments', 'comp-tournaments');
+  /** The Arena showcase's own parts: one card, hydrated in place, never rebuilt. */
+  const cupEls = {
+    name: document.getElementById('stars-name'),
+    hook: document.getElementById('stars-hook'),
+    vault: document.getElementById('stars-vault'),
+    podium: document.getElementById('stars-podium'),
+    specs: document.getElementById('stars-specs'),
+    mood: document.getElementById('stars-mood'),
+    count: document.getElementById('stars-count'),
+    track: document.getElementById('stars-track'),
+    meter: document.getElementById('stars-meter'),
+    cta: document.getElementById('stars-cta') as HTMLButtonElement | null,
+  };
   const podiumEl = document.getElementById('ranks-podium');
   const panes: Record<Board, HTMLElement | null> = {
     minds: document.getElementById('ranks-minds'),
@@ -343,17 +324,16 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   let board: Board = 'minds';
   let loadedBoard: Partial<Record<Board, boolean>> = {};
-  let loadedArena = false;
   /** Aggregate of the last ladder each solo board loaded — the stat chips quote it. */
   const boardStats: Record<'minds' | 'nations', { loaded: boolean; rows: number; points: number }> = {
     minds: { loaded: false, rows: 0, points: 0 },
     nations: { loaded: false, rows: 0, points: 0 },
   };
-  let tournaments: Tournament[] = [];
-  /** The live cup behind the Nations IQ event pill, fetched with the country board. */
-  let natCup: Tournament | null = null;
-  let joined = joinedSet();
-  let pending: Tournament | null = null;
+  /** The staged championship. `null` until `getGrandCup()` answers — the markup
+   *  already carries the showcase skeleton, so nothing has to be rebuilt. */
+  let cup: GrandCup | null = null;
+  /** The same cup behind the Nations IQ event pill, fetched with the country board. */
+  let natCup: GrandCup | null = null;
   let tick = 0;
 
   /** Clean user handle: "@username" when Telegram provides one, else first name, else null. */
@@ -431,7 +411,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   };
 
   function paintArena(): void {
-    paintFeedLabel();
+    if (cup) paintCup(cup);
   }
 
   function paintRanks(): void {
@@ -451,20 +431,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (dock) dock.hidden = board !== 'guilds';
     if (board === 'guilds') paintSquadDock();
     paintGuildHero();
-  }
-
-  function paintFeedLabel(): void {
-    if (!feedLabel) return;
-    const live = tournaments.filter((t) => t.status === 'live').length;
-    const up = tournaments.filter((t) => t.status === 'upcoming').length;
-    if (!tournaments.length) {
-      feedLabel.textContent = 'Arena feed';
-      return;
-    }
-    const parts: string[] = [];
-    if (live) parts.push(`${live} live`);
-    if (up) parts.push(`${up} upcoming`);
-    feedLabel.textContent = parts.length ? `${parts.join(' · ')} cups` : 'Arena feed';
   }
 
   /** One quick-stat chip: sprite icon + value over a muted label. */
@@ -547,523 +513,180 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     });
   }
 
-  /* ---------- arena feed ---------- */
+  /* ---------- arena: the 200 Stars Grand Cup ----------
+     One championship, staged in the markup and hydrated here. The showcase is a
+     single clay card whose geometry (header · vault · podium · specs · fill · CTA)
+     is what makes it fit 360x640 with no scroll, so this controller never rebuilds
+     it: it writes the live numbers in, ticks the countdown and owns the seat. */
 
-    /* ---------- arena pass (tickets + best finish) state ---------- */
+  /** A seat is a device fact, like every other mock in this app. */
+  const SEAT_KEY = 'detour.arena.seat.v1';
 
-  const PASS_KEY = 'detour.arena.pass.v1';
-
-  interface PassState {
-    tickets: number;
-    /** YYYY-MM-DD of the last daily claim, local time */
-    lastClaim: string;
-    best: string;
+  interface Seat {
+    /** the cup this device registered for */
+    cup: string;
+    /** ms epoch the seat was locked */
+    at: number;
   }
 
-  function todayStr(): string {
-    const d = new Date();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${d.getFullYear()}-${m}-${day}`;
-  }
-
-  function readPass(): PassState {
-    const fallback: PassState = { tickets: 2, lastClaim: '', best: 'Top 4' };
+  function readSeat(): Seat | null {
     try {
-      const raw = window.localStorage.getItem(PASS_KEY);
-      if (!raw) return fallback;
-      const p = JSON.parse(raw) as Partial<PassState>;
-      return {
-        tickets: typeof p.tickets === 'number' && Number.isFinite(p.tickets) ? Math.max(0, Math.min(9, Math.floor(p.tickets))) : fallback.tickets,
-        lastClaim: typeof p.lastClaim === 'string' ? p.lastClaim : '',
-        best: typeof p.best === 'string' && p.best.length > 0 && p.best.length <= 24 ? p.best : fallback.best,
-      };
+      const raw = window.localStorage.getItem(SEAT_KEY);
+      if (!raw) return null;
+      const s = JSON.parse(raw) as Partial<Seat>;
+      if (typeof s.cup !== 'string' || typeof s.at !== 'number' || !Number.isFinite(s.at)) return null;
+      return { cup: s.cup, at: s.at };
     } catch {
-      return fallback;
+      return null;
     }
   }
 
-  function writePass(s: PassState): void {
+  function writeSeat(cupId: string): Seat {
+    const s: Seat = { cup: cupId, at: Date.now() };
     try {
-      window.localStorage.setItem(PASS_KEY, JSON.stringify(s));
+      window.localStorage.setItem(SEAT_KEY, JSON.stringify(s));
     } catch {
       /* in-memory only */
     }
+    return s;
   }
 
-  function bestFinishLabel(): string {
-    // Persisted best finish; new devices start at the motivational default.
-    // A real backend would compute this from tournament results.
-    const stored = readPass().best;
-    if (joined.size > 0) return stored || 'Top 4';
-    if (profile.stats.games > 0) return stored || 'Top 4';
-    return stored || 'Top 4';
-  }
+  let seat: Seat | null = readSeat();
 
-  function trophyPoolOf(t: Tournament): number {
-    if (typeof t.trophyPool === 'number' && Number.isFinite(t.trophyPool)) return Math.max(0, Math.floor(t.trophyPool));
-    return Math.max(0, Math.round(t.prizePool / 8));
-  }
+  const elOf = (id: string): HTMLElement | null => document.getElementById(id);
 
-  function trophyEl(kind: 'neon' | 'steel' | 'dim'): HTMLElement {
-    const t = document.createElement('span');
-    t.className = `trophy trophy-${kind}`;
-    t.setAttribute('aria-hidden', 'true');
-    const badge = document.createElement('span');
-    badge.className = 'trophy-badge';
-    // Build SVG via DOM (no innerHTML) so no orphan text nodes can leak.
-    const svgNS = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(svgNS, 'svg');
-    svg.setAttribute('class', 'ico');
-    svg.setAttribute('aria-hidden', 'true');
-    const use = document.createElementNS(svgNS, 'use');
-    use.setAttribute('href', '#i-cup');
-    svg.append(use);
-    badge.append(svg);
-    t.append(badge);
-    return t;
-  }
+  /** Write only when it differs: a repaint must never thrash the layout. */
+  const setText = (el: HTMLElement | null, text: string): void => {
+    if (el && el.textContent !== text) el.textContent = text;
+  };
 
-  /** Dual prize pool — the shared coin SVG + trophies, no orphan spans, no truncation.
-   *  Hero: two tactile chips, gold coins "5,000" + sky trophies "🏆 750".
-   *  Upcoming (compact): one quiet line "5,000 · 🏆 150". */
-  function prizePoolEl(t: Tournament, compact = false): HTMLElement {
-    const wrap = document.createElement('div');
-    wrap.className = compact ? 'arena-prizes is-compact' : 'arena-prizes is-hero-pool';
-    const coins = coinText(t.prizePool);
-    const trophies = trophyPoolOf(t).toLocaleString('en-US');
-    wrap.setAttribute('aria-label', `Prize pool ${coins} coins plus ${trophies} trophies`);
+  /** Seat-fill word — 184 of 256 is "Filling fast", and it tracks the real number. */
+  const moodOfFill = (pct: number): string =>
+    pct >= 90 ? 'Almost full' : pct >= 70 ? 'Filling fast' : pct >= 35 ? 'Filling up' : 'Open seats';
 
-    const coinHost = document.createElement('span');
-    coinHost.className = 'arena-coin';
-    coinHost.append(coinSvg());
-    const amount = document.createElement('span');
-    amount.className = 'arena-coin-amt';
-    amount.textContent = coins;
+  /** "Starts in 01:45:20" until the bracket opens; then the stage says so itself. */
+  const startsText = (c: GrandCup, from: number): string =>
+    c.startsAt - from <= 0 ? 'Bracket live' : `Starts in ${formatCountdown(c.startsAt, from)}`;
 
-    const cup = document.createElement('span');
-    cup.className = 'arena-cup-emo';
-    cup.textContent = '🏆';
-    cup.setAttribute('aria-hidden', 'true');
-    const trAmt = document.createElement('span');
-    trAmt.className = 'arena-trophy-amt';
-    trAmt.textContent = trophies;
-
-    if (compact) {
-      wrap.append(coinHost, amount, document.createTextNode(' · '), cup, trAmt);
-    } else {
-      const coinChip = document.createElement('span');
-      coinChip.className = 'arena-prize-chip is-coins';
-      coinChip.append(coinHost, amount);
-      const trophyChip = document.createElement('span');
-      trophyChip.className = 'arena-prize-chip is-trophies';
-      trophyChip.append(cup, trAmt);
-      wrap.append(coinChip, trophyChip);
+  /** The podium reads the exact split out of the data, in place order. */
+  function paintPodiumPrizes(c: GrandCup): void {
+    for (const prize of c.prizes) {
+      const card = cupEls.podium?.querySelector<HTMLElement>(`[data-place="${prize.place}"]`);
+      if (!card) continue;
+      setText(card.querySelector<HTMLElement>('.stars-pod-n'), String(prize.stars));
+      const crest = card.querySelector<HTMLElement>('.stars-pod-crest b')?.textContent?.trim();
+      const said = `Place ${prize.place}: ${prize.stars} Telegram Stars`;
+      card.setAttribute('aria-label', crest ? `${said}, ${crest} crest` : said);
     }
-    return wrap;
   }
 
-  function meterEl(t: Tournament): HTMLElement {
-    const pct = pctOf(t);
-    const wrap = document.createElement('div');
-    wrap.className = 'cap-meter';
-    const track = document.createElement('span');
-    track.className = 'cap-track';
-    track.setAttribute('role', 'progressbar');
-    track.setAttribute('aria-label', `${t.name} capacity: ${t.players} of ${t.maxPlayers} entered`);
-    track.setAttribute('aria-valuemin', '0');
-    track.setAttribute('aria-valuemax', '100');
-    track.setAttribute('aria-valuenow', String(pct));
-    const fill = document.createElement('i');
-    fill.className = 'cap-fill';
-    fill.style.width = `${pct}%`;
-    track.append(fill);
-    wrap.append(track);
-    return wrap;
-  }
-
-  /** Capacity head. Hero is spec-exact: "184/256 entered". Upcoming keeps the
-   *  fill mood after it. Always a single line the card has room for — never clipped. */
-  function capLabelEl(t: Tournament, hero = false): HTMLElement {
-    const label = document.createElement('span');
-    label.className = 'cap-label';
-    label.append(document.createTextNode(hero ? `${t.players}/${t.maxPlayers} entered` : `${t.players}/${t.maxPlayers} entered · `));
-    if (!hero) {
-      const hot = document.createElement('span');
-      hot.className = 'hot';
-      hot.textContent = moodOf(t);
-      label.append(hot);
-    }
-    label.setAttribute('aria-label', `${t.players} of ${t.maxPlayers} players entered${hero ? '' : `, ${moodOf(t)}`}`);
-    return label;
-  }
-
-  function actionBtn(t: Tournament): HTMLButtonElement {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    const isJoined = joined.has(t.id);
-    if (t.status === 'live') {
-      btn.className = 'btn btn-coral arena-cta hero-cta';
-      btn.disabled = isJoined;
-      // Spec-exact primary CTA: bold tactile 3D "ENTER ARENA" (CSS uppercases visually).
-      btn.textContent = isJoined ? 'Entered ✓' : 'ENTER ARENA';
-      btn.dataset.hero = 'enter';
-    } else {
-      btn.className = 'btn btn-ghost arena-cta upcoming-cta';
-      btn.disabled = isJoined;
-      // Spec-exact secondary CTA: sleek tactile "Pre-register".
-      if (isJoined) btn.textContent = t.entryFee ? 'Pre-registered ✓' : 'Reminder Set ✓';
-      else btn.textContent = 'Pre-register';
-    }
-    btn.setAttribute('aria-label', `${btn.textContent}: ${t.name}`);
-    btn.addEventListener('click', () => askJoin(t));
-    return btn;
-  }
-
-  function buildLiveCard(t: Tournament): HTMLElement {
-    const card = document.createElement('article');
-    card.className = 'arena-card is-live is-hero';
-    card.dataset.id = t.id;
-    card.setAttribute('aria-label', `${t.name}, live tournament, prize pool ${coinText(t.prizePool)} plus ${trophyPoolOf(t)} trophies`);
-
-    const glow = document.createElement('div');
-    glow.className = 'arena-glow';
-    glow.setAttribute('aria-hidden', 'true');
-    card.append(glow);
-    const backlight = document.createElement('div');
-    backlight.className = 'arena-hero-backlight';
-    backlight.setAttribute('aria-hidden', 'true');
-    card.append(backlight);
-
-    /* Row 1 — header: cup icon + cup name on the left, pulsing ● LIVE on the right. */
-    const top = document.createElement('div');
-    top.className = 'arena-top';
-    const id = document.createElement('div');
-    id.className = 'arena-id';
-    id.append(trophyEl('neon'));
-    const titles = document.createElement('div');
-    titles.className = 'arena-titles';
-    const name = document.createElement('h3');
-    name.className = 'arena-name';
-    name.textContent = t.name;
-    titles.append(name);
-    id.append(titles);
-    const badge = document.createElement('span');
-    badge.className = 'pill live pulse';
-    badge.setAttribute('aria-label', 'Live tournament');
-    const dot = document.createElement('i');
-    dot.className = 'live-dot';
-    dot.setAttribute('aria-hidden', 'true');
-    // Spec-exact pulsing red "● LIVE" (dot + uppercase label, no orphan text).
-    const liveLabel = document.createElement('b');
-    liveLabel.className = 'live-label';
-    liveLabel.textContent = 'LIVE';
-    badge.append(dot, liveLabel);
-    top.append(id, badge);
-    card.append(top);
-
-    /* Row 2 — prizes & meta: gold coins + trophies + entry info (+ time left). */
-    const prizeRow = document.createElement('div');
-    prizeRow.className = 'arena-prize-row hero-prizes';
-    prizeRow.append(prizePoolEl(t, false));
-    const entry = document.createElement('span');
-    entry.className = 'arena-sub hero-entry';
-    entry.textContent = t.entryFee ? `${coinText(t.entryFee)} entry · Free with ticket` : 'Free entry';
-    prizeRow.append(entry);
-    const time = document.createElement('span');
-    time.className = 'arena-time hero-time';
-    time.dataset.count = t.id;
-    time.textContent = `${formatCountdown(t.endsAt)} left`;
-    prizeRow.append(time);
-    card.append(prizeRow);
-
-    /* Row 3 — capacity & CTA: progress meter on the left, ENTER ARENA on the right. */
-    const foot = document.createElement('div');
-    foot.className = 'arena-foot hero-foot';
-    const capBlock = document.createElement('div');
-    capBlock.className = 'arena-cap-block';
-    capBlock.append(capLabelEl(t, true), meterEl(t));
-    foot.append(capBlock, actionBtn(t));
-    card.append(foot);
-    return card;
-  }
-
-  function buildUpcomingCard(t: Tournament): HTMLElement {
-    const card = document.createElement('article');
-    card.className = 'arena-card is-upcoming';
-    card.dataset.id = t.id;
-    card.setAttribute('aria-label', `${t.name}, upcoming tournament, prize pool ${coinText(t.prizePool)} plus ${trophyPoolOf(t)} trophies`);
-
-    const top = document.createElement('div');
-    top.className = 'arena-top';
-    const id = document.createElement('div');
-    id.className = 'arena-id';
-    id.append(trophyEl('steel'));
-    const titles = document.createElement('div');
-    titles.className = 'arena-titles';
-    const name = document.createElement('h3');
-    name.className = 'arena-name';
-    name.textContent = t.name;
-    const sub = document.createElement('p');
-    sub.className = 'arena-sub';
-    sub.textContent = t.entryFee ? `${coinText(t.entryFee)} entry · Free with ticket` : 'Free entry · Reminder available';
-    titles.append(name, sub);
-    id.append(titles);
-    const badge = document.createElement('span');
-    badge.className = 'pill upcoming countdown-badge';
-    badge.dataset.start = t.id;
-    // Spec-exact uppercase countdown: "STARTS IN 1D 1H".
-    badge.textContent = `STARTS IN ${formatCountdown(t.endsAt).toUpperCase()}`;
-    top.append(id, badge);
-    card.append(top);
-
-    const prizeRow = document.createElement('div');
-    prizeRow.className = 'arena-prize-row';
-    prizeRow.append(prizePoolEl(t, true));
-    const slots = document.createElement('span');
-    slots.className = 'arena-slots';
-    slots.textContent = `${t.maxPlayers - t.players} slots left`;
-    prizeRow.append(slots);
-    card.append(prizeRow);
-
-    // Foot: capacity meter left, sleek tactile Pre-register right — never clipped.
-    const foot = document.createElement('div');
-    foot.className = 'arena-foot upcoming-foot';
-    const capBlock = document.createElement('div');
-    capBlock.className = 'arena-cap-block';
-    capBlock.append(capLabelEl(t), meterEl(t));
-    foot.append(capBlock, actionBtn(t));
-    card.append(foot);
-    return card;
-  }
-
-  function buildEndedCard(t: Tournament): HTMLElement {
-    const card = document.createElement('article');
-    card.className = 'arena-card is-ended';
-    card.dataset.id = t.id;
-
-    const top = document.createElement('div');
-    top.className = 'arena-top';
-    const id = document.createElement('div');
-    id.className = 'arena-id';
-    id.append(trophyEl('dim'));
-    const titles = document.createElement('div');
-    titles.className = 'arena-titles';
-    const name = document.createElement('h3');
-    name.className = 'arena-name';
-    name.textContent = t.name;
-    const sub = document.createElement('p');
-    sub.className = 'arena-sub';
-    sub.textContent = 'Final · archived';
-    titles.append(name, sub);
-    id.append(titles);
-    const badge = document.createElement('span');
-    badge.className = 'pill ended';
-    badge.textContent = 'Final';
-    top.append(id, badge);
-    card.append(top);
-
-    const champ = document.createElement('div');
-    champ.className = 'arena-champ';
-    const cup = document.createElement('span');
-    cup.className = 'champ-cup';
-    cup.textContent = '🏆';
-    cup.setAttribute('aria-hidden', 'true');
-    const who = document.createElement('span');
-    who.className = 'champ-who';
-    who.textContent = t.champion ?? 'Champion crowned';
-    const meta = document.createElement('span');
-    meta.className = 'champ-meta';
-    const paid = t.championMeta ? `${t.championMeta} · ${coinText(t.prizePool)} paid` : `${coinText(t.prizePool)} distributed`;
-    meta.textContent = paid;
-    champ.append(cup, who, meta);
-    champ.setAttribute('aria-label', `Winner ${who.textContent}, ${paid}`);
-    card.append(champ);
-    return card;
-  }
-
-  /** Player Arena Pass & Status: clean ticket bar (no orphans, no truncation).
-   *  Left = icon + stacked "Tickets: 2" / "Best Finish: Top 4"; right = actions. */
-  function buildPassWidget(): HTMLElement {
-    const pass = readPass();
-    const claimedToday = pass.lastClaim === todayStr();
-
-    const card = document.createElement('section');
-    card.className = 'arena-pass';
-    card.setAttribute('aria-label', 'Player Arena Pass and status');
-
-    const main = document.createElement('div');
-    main.className = 'arena-pass-main';
-
-    const left = document.createElement('div');
-    left.className = 'arena-pass-left';
-    const ico = document.createElement('span');
-    ico.className = 'arena-pass-ico';
-    ico.textContent = '🎟️';
-    ico.setAttribute('aria-hidden', 'true');
-    const titles = document.createElement('div');
-    titles.className = 'arena-pass-titles';
-    // Spec-exact clean balance: "Tickets: 2" (single text node, no emoji dup, no orphans).
-    const count = document.createElement('b');
-    count.className = 'arena-pass-count';
-    count.textContent = `Tickets: ${pass.tickets}`;
-    const sub = document.createElement('small');
-    sub.className = 'arena-pass-sub';
-    sub.textContent = `Best Finish: ${bestFinishLabel()}`;
-    titles.append(count, sub);
-    left.append(ico, titles);
-
-    const actions = document.createElement('div');
-    actions.className = 'arena-pass-actions';
-
-    const claim = document.createElement('button');
-    claim.type = 'button';
-    claim.className = 'btn btn-primary sm arena-pass-claim';
-    claim.disabled = claimedToday;
-    claim.textContent = claimedToday ? 'Claimed ✓' : 'Claim +1 Free';
-    claim.setAttribute('aria-label', claimedToday ? 'Daily ticket already claimed' : 'Claim free daily ticket');
-    claim.addEventListener('click', () => {
-      const cur = readPass();
-      if (cur.lastClaim === todayStr()) return;
-      cur.tickets = Math.min(9, cur.tickets + 1);
-      cur.lastClaim = todayStr();
-      writePass(cur);
-      count.textContent = `Tickets: ${cur.tickets}`;
-      claim.disabled = true;
-      claim.textContent = 'Claimed ✓';
-      claim.setAttribute('aria-label', 'Daily ticket already claimed');
-      notify('success');
-      impact('medium');
+  /** The three spec pills: 1v1 Knockout · 15s Blitz · Fair Matchmaking. */
+  function paintSpecs(c: GrandCup): void {
+    const pills = cupEls.specs?.querySelectorAll<HTMLElement>('.stars-spec');
+    if (!pills) return;
+    c.specs.forEach((spec, i) => {
+      const pill = pills[i];
+      if (pill) setText(pill, spec);
     });
-
-    const history = document.createElement('button');
-    history.type = 'button';
-    history.className = 'btn btn-ghost sm arena-pass-history';
-    history.textContent = 'History';
-    history.setAttribute('aria-label', 'Open tournament history');
-    history.addEventListener('click', () => {
-      impact('light');
-      const arch = arenaPane.querySelector<HTMLDetailsElement>('details.arena-archive');
-      if (arch) {
-        arch.open = true;
-        const sum = arch.querySelector<HTMLElement>('summary');
-        if (sum) sum.focus({ preventScroll: true });
-        arch.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      } else {
-        api.router.go('ranks');
-      }
-    });
-
-    actions.append(claim, history);
-    main.append(left, actions);
-    card.append(main);
-    return card;
   }
 
-  async function loadTournaments(): Promise<void> {
-    const el = arenaPane;
-    if (!el) return;
-    if (!loadedArena) el.innerHTML = skel(3);
-    try {
-      tournaments = await getTournaments();
-    } catch {
-      el.innerHTML = empty('Tournaments unavailable. Check your connection and try again.');
-      paintFeedLabel();
-      return;
-    }
-    // Live first, upcoming next, ended last — the feed never mixes the archive in.
-    tournaments.sort((a, b) => {
-      const order = { live: 0, upcoming: 1, ended: 2 } as const;
-      return order[a.status] - order[b.status];
-    });
-    if (!tournaments.length) {
-      el.innerHTML = empty('No tournaments right now. Check back soon.');
-      el.append(buildPassWidget());
-      paintFeedLabel();
-      return;
-    }
-    el.textContent = '';
-    const live = tournaments.filter((t) => t.status === 'live');
-    const up = tournaments.filter((t) => t.status === 'upcoming');
-    const done = tournaments.filter((t) => t.status === 'ended');
-
-    for (const t of live) el.append(buildLiveCard(t));
-    for (const t of up) el.append(buildUpcomingCard(t));
-
-    // Player status module sits right under the cups in the same flex column.
-    el.append(buildPassWidget());
-
-    if (done.length) {
-      const arch = document.createElement('details');
-      arch.className = 'arena-archive';
-      const sum = document.createElement('summary');
-      sum.className = 'arena-archive-sum';
-      const t = document.createElement('span');
-      t.textContent = `Archive · Recent Results (${done.length})`;
-      const archChev: HTMLElement = document.createElement('span');
-      archChev.className = 'arch-chev';
-      archChev.textContent = '›';
-      archChev.setAttribute('aria-hidden', 'true');
-      sum.append(t, archChev);
-      arch.append(sum);
-      const list = document.createElement('div');
-      list.className = 'arena-archive-list';
-      for (const e of done) list.append(buildEndedCard(e));
-      arch.append(list);
-      el.append(arch);
-    }
-
-    mountCoins(el);
-    loadedArena = true;
-    paintFeedLabel();
-    startTick();
+  function paintCount(c: GrandCup, from: number): void {
+    setText(cupEls.count, startsText(c, from));
   }
 
-  function askJoin(t: Tournament): void {
-    if (t.status === 'ended' || joined.has(t.id)) return;
-    pending = t;
-    ($('tourney-desc') as HTMLElement).textContent = `${t.name} · ${t.players}/${t.maxPlayers} players · ${formatCountdown(t.endsAt)} left`;
-    ($('tourney-fee') as HTMLElement).textContent = coinText(t.entryFee);
-    setBalance($('tourney-have') as HTMLElement, profile.coins);
-    ($('tourney-after') as HTMLElement).textContent = coinText(Math.max(0, profile.coins - t.entryFee));
-    const err = $('tourney-err');
-    err.hidden = true;
-    const yes = $('tourney-yes') as HTMLButtonElement;
-    yes.textContent = t.entryFee ? `Join for ${coinText(t.entryFee)}` : 'Join free';
-    yes.disabled = profile.coins < t.entryFee;
-    if (profile.coins < t.entryFee) {
-      err.hidden = false;
-      err.textContent = `Not enough coins — ${coinText(t.entryFee - profile.coins)} short. Win a race to top up.`;
-    }
-    const sheet = api.sheet('sheet-tourney');
-    if (sheet) {
-      impact('light');
-      api.sheets.open(sheet);
-    }
+  /** Seat state on the one key: locked reads as locked, never as a dead button. */
+  function paintCta(c: GrandCup): void {
+    const btn = cupEls.cta;
+    if (!btn) return;
+    const mine = seat?.cup === c.id;
+    btn.classList.toggle('is-seated', mine);
+    setText(btn, mine ? 'SEAT LOCKED ✓' : 'REGISTER FOR ARENA');
+    btn.setAttribute('aria-label', mine
+      ? `${c.name}: your seat is locked. Activate to review the confirmation.`
+      : `Register for the ${c.name}`);
   }
 
-  ($('tourney-yes') as HTMLButtonElement).addEventListener('click', () => {
-    if (!pending) return;
-    const t = pending;
-    pending = null;
-    if (joined.has(t.id)) {
+  /** Write the cup's own numbers into the standing geometry. Runs on every entry. */
+  function paintCup(c: GrandCup): void {
+    const pct = fillPctOf(c);
+    setText(cupEls.name, c.name.toUpperCase());
+    setText(cupEls.hook, c.hook);
+    setText(elOf('stars-vault-n'), String(c.stars));
+    cupEls.vault?.setAttribute('aria-label', `Total prize: ${c.stars} Telegram Stars`);
+    paintPodiumPrizes(c);
+    paintSpecs(c);
+    setText(elOf('stars-fill-seats'), `${c.players} / ${c.maxPlayers} Contenders`);
+    setText(cupEls.mood, moodOfFill(pct));
+    const track = cupEls.track;
+    if (track) {
+      track.setAttribute('aria-valuemax', String(c.maxPlayers));
+      track.setAttribute('aria-valuenow', String(c.players));
+      track.setAttribute('aria-valuetext', `${c.players} of ${c.maxPlayers} contenders registered`);
+    }
+    if (cupEls.meter) cupEls.meter.style.width = `${pct}%`;
+    paintCount(c, Date.now());
+    paintCta(c);
+  }
+
+  /** The confirmation drawer: what a seat costs, which seat it is, what it opens. */
+  function openSeatSheet(): void {
+    if (!cup) return;
+    const sheet = api.sheet('sheet-stars');
+    if (!sheet) return;
+    const mine = seat?.cup === cup.id;
+    setText(sheet.querySelector<HTMLElement>('#stars-sheet-title'), mine ? 'Your seat is locked' : 'Take your seat?');
+    setText(sheet.querySelector<HTMLElement>('#stars-sheet-desc'), `${cup.name} · ${cup.specs.join(' · ')}`);
+    setText(sheet.querySelector<HTMLElement>('#stars-sheet-entry'), cup.entry);
+    setText(sheet.querySelector<HTMLElement>('#stars-sheet-seat'), `${cup.players} / ${cup.maxPlayers}`);
+    setText(sheet.querySelector<HTMLElement>('#stars-sheet-start'), formatCountdown(cup.startsAt));
+    const yes = sheet.querySelector<HTMLButtonElement>('#stars-sheet-yes');
+    if (yes) {
+      yes.textContent = mine ? 'Seat locked ✓' : 'Lock my seat';
+      yes.disabled = mine;
+    }
+    impact('light');
+    api.sheets.open(sheet);
+  }
+
+  /** Locking the seat: the room fills by one on this device and the key flips. */
+  function lockSeat(): void {
+    if (!cup) return;
+    if (seat?.cup === cup.id) {
       api.sheets.close();
       return;
     }
-    if (!spendCoins(t.entryFee)) {
-      notify('warning');
-      ($('tourney-err') as HTMLElement).hidden = false;
-      ($('tourney-err') as HTMLElement).textContent = 'Not enough coins for that entry.';
-      return;
-    }
-    joined.add(t.id);
-    saveJoined(joined);
-    notify('success');
-    impact('medium');
+    seat = writeSeat(cup.id);
+    if (cup.players < cup.maxPlayers) cup.players += 1;
+    paintCup(cup);
     api.sheets.close();
-    loadedArena = false;
-    void loadTournaments();
-  });
+    impact('medium');
+    notify('success');
+  }
+
+  cupEls.cta?.addEventListener('click', openSeatSheet);
+  elOf('stars-sheet-yes')?.addEventListener('click', lockSeat);
+
+  function tickCup(): void {
+    if (cup) paintCount(cup, Date.now());
+  }
+
+  /** Fetch the staged cup once, then keep repainting it: re-entry costs no rebuild. */
+  async function loadCup(): Promise<void> {
+    startTick();
+    if (!cup) {
+      try {
+        cup = await getGrandCup();
+      } catch {
+        cup = null;
+        return;
+      }
+      // A seat this device already holds is one of the contenders the seed counts
+      // out: without this, a seated player would be told the room is a seat smaller
+      // than it showed when they took it.
+      if (seat?.cup === cup.id && cup.players < cup.maxPlayers) cup.players += 1;
+    }
+    paintCup(cup);
+  }
 
   function startTick(): void {
     if (tick) return;
@@ -1075,17 +698,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
           if (pill) pill.textContent = natPillText(natCup);
         }
       }
-      if (!isArenaVisible()) return;
-      for (const t of tournaments) {
-        if (t.status === 'ended') continue;
-        const time = arenaPane.querySelector<HTMLElement>(`[data-count="${t.id}"]`);
-        if (time) time.textContent = `${formatCountdown(t.endsAt)} left`;
-        const pill = arenaPane.querySelector<HTMLElement>(`[data-start="${t.id}"]`);
-        if (pill) pill.textContent = `STARTS IN ${formatCountdown(t.endsAt).toUpperCase()}`;
-      }
+      if (isArenaVisible()) tickCup();
     }, 1000);
   }
 
+  /* ---------- IQ boards (Top Minds | Nations IQ) ----------
   /* ---------- IQ boards (Top Minds | Nations IQ) ----------
      No floating / absolute "you" bar. The user's standing lives in #solo-standing,
      an in-flow summary module directly under the board tabs. The ladder itself is a
@@ -1939,13 +1556,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     });
   }
 
-  /** A one-line event banner; the countdown is the live cup's own deadline. */
-  const natPillText = (cup: Tournament | null): string =>
-    cup
-      ? `Nations Cup · ${formatCountdown(cup.endsAt)} · wins count double for your flag.`
+  /** A one-line event banner; the countdown is the Grand Cup's own kickoff. */
+  const natPillText = (event: GrandCup | null): string =>
+    event
+      ? `Nations Cup · ${formatCountdown(event.startsAt)} to kickoff · wins count double for your flag.`
       : 'Nations Cup · bracket opens soon · wins count double for your flag.';
 
-  function nationsPill(cup: Tournament | null): HTMLElement {
+  function nationsPill(cup: GrandCup | null): HTMLElement {
     const p = document.createElement('p');
     p.className = 'nat-pill';
     const dot = document.createElement('i');
@@ -2032,11 +1649,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (!el) return;
     if (!loadedBoard.nations) el.innerHTML = skel(6);
     let rows: CountryRow[];
-    let cups: Tournament[];
+    let event: GrandCup;
     try {
-      const pair = await Promise.all([getCountryRanking(), getTournaments()]);
+      const pair = await Promise.all([getCountryRanking(), getGrandCup()]);
       rows = pair[0];
-      cups = pair[1];
+      event = pair[1];
     } catch {
       el.innerHTML = empty('Rankings unavailable. Check your connection and try again.');
       paintNationsStanding(null);
@@ -2047,7 +1664,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       paintNationsStanding([]);
       return;
     }
-    natCup = cups.find((c) => c.status === 'live') ?? null;
+    natCup = event;
     paintPodium(rows.slice(0, 3).map((c) => ({
       rank: c.rank,
       name: c.name,
@@ -2514,13 +2131,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     loadedBoard.nations = false;
     loadedBoard.minds = false;
     loadedBoard.guilds = false;
-    loadedArena = false;
     if (isRanksVisible()) {
       paintRanks();
       void loadBoard(board);
     } else if (isArenaVisible()) {
       paintArena();
-      void loadTournaments();
+      void loadCup();
     }
   });
 
@@ -2538,7 +2154,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       if (id === 'compete') id = 'arena';
       if (id === 'arena') {
         paintArena();
-        void loadTournaments();
+        void loadCup();
       } else if (id === 'ranks') {
         paintRanks();
         startTick();

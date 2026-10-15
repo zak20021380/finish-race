@@ -7,23 +7,39 @@
  */
 
 export type Trend = 'up' | 'down' | 'same';
-export type TourneyStatus = 'live' | 'upcoming' | 'ended';
 
-export interface Tournament {
+/** One step of the Grand Cup podium: a place, its metal and the Stars it pays. */
+export interface CupPrize {
+  place: 1 | 2 | 3;
+  metal: 'gold' | 'silver' | 'bronze';
+  stars: number;
+}
+
+/**
+ * The one tournament the Arena stages: the 200 Telegram Stars Grand Cup.
+ *
+ * There is no cup feed here on purpose — a single championship is the whole
+ * screen, so the shape carries exactly what the showcase renders: the vault,
+ * the three podium steps, the three spec pills and the seat count. `startsAt`
+ * is ms epoch and anchored to `Date.now()`, so the countdown stays live.
+ */
+export interface GrandCup {
   id: string;
   name: string;
-  status: TourneyStatus;
-  prizePool: number;
-  /** trophy pool paid to leaderboard climbers — shown alongside coins */
-  trophyPool: number;
-  entryFee: number;
-  /** ms epoch when a live tourney ends or an upcoming one starts */
-  endsAt: number;
+  /** the one-line hook under the engraved title */
+  hook: string;
+  /** the whole prize vault, in Telegram Stars */
+  stars: number;
+  /** exact distribution across the podium, in place order */
+  prizes: CupPrize[];
+  /** the three spec pills under the podium */
+  specs: string[];
   players: number;
   maxPlayers: number;
-  /** set for ended cups: who lifted the trophy + what was paid out */
-  champion?: string;
-  championMeta?: string;
+  /** ms epoch the bracket opens */
+  startsAt: number;
+  /** what a seat costs — the Grand Cup is free to enter */
+  entry: string;
 }
 
 export interface CountryRow {
@@ -65,17 +81,36 @@ export interface DailyChallenge {
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const LATENCY = 380;
 
-const HOUR = 3600_000;
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
 const now = (): number => Date.now();
 
-function seeding(): { tournaments: Tournament[]; countries: CountryRow[]; players: PlayerRow[]; teams: TeamRow[] } {
+/** The podium is the prize: 120 + 50 + 30 exactly fills the 200 Star vault. */
+const GRAND_CUP_PRIZES: CupPrize[] = [
+  { place: 1, metal: 'gold', stars: 120 },
+  { place: 2, metal: 'silver', stars: 50 },
+  { place: 3, metal: 'bronze', stars: 30 },
+];
+
+function grandCupSeed(): GrandCup {
   const t = now();
-  const tournaments: Tournament[] = [
-    { id: 't-neon', name: 'Neon Rush Cup', status: 'live', prizePool: 5000, trophyPool: 750, entryFee: 120, endsAt: t + 2 * HOUR + 14 * 60_000, players: 184, maxPlayers: 256 },
-    { id: 't-violet', name: 'Violet Rampart Open', status: 'upcoming', prizePool: 2500, trophyPool: 300, entryFee: 60, endsAt: t + 26 * HOUR, players: 96, maxPlayers: 128 },
-    { id: 't-midnight', name: 'Midnight Circuit', status: 'upcoming', prizePool: 1200, trophyPool: 150, entryFee: 30, endsAt: t + 3 * 24 * HOUR + 5 * HOUR, players: 41, maxPlayers: 64 },
-    { id: 't-dawn', name: 'Dawn Sprint', status: 'ended', prizePool: 800, trophyPool: 100, entryFee: 0, endsAt: t - 5 * HOUR, players: 64, maxPlayers: 64, champion: 'Amara', championMeta: 'NG · 34 wins' },
-  ];
+  return {
+    id: 'cup-200-stars',
+    name: '200 Stars Grand Cup',
+    hook: 'Outsmart the grid. Claim real Telegram Stars.',
+    stars: 200,
+    prizes: GRAND_CUP_PRIZES.map((p) => ({ ...p })),
+    specs: ['1v1 Knockout', '15s Blitz', 'Fair Matchmaking'],
+    players: 184,
+    maxPlayers: 256,
+    // 01:45:20 on the first paint; the controller ticks it down from here.
+    startsAt: t + 1 * HOUR + 45 * MINUTE + 20_000,
+    entry: 'Free entry',
+  };
+}
+
+function seeding(): { cup: GrandCup; countries: CountryRow[]; players: PlayerRow[]; teams: TeamRow[] } {
+  const cup = grandCupSeed();
   const countries: CountryRow[] = [
     { code: 'US', name: 'United States', points: 12840, trend: 'up', rank: 1 },
     { code: 'BR', name: 'Brazil', points: 11210, trend: 'up', rank: 2 },
@@ -105,18 +140,14 @@ function seeding(): { tournaments: Tournament[]; countries: CountryRow[]; player
     { id: 'seed-3', name: 'Checkpoint Twelve', code: 'CHK12', points: 3960, members: 3, trend: 'same', rank: 4 },
     { id: 'seed-4', name: 'Open Road', code: 'OPEN3', points: 3120, members: 2, trend: 'up', rank: 5 },
   ];
-  return { tournaments, countries, players, teams };
+  return { cup, countries, players, teams };
 }
 
-export async function getTournaments(): Promise<Tournament[]> {
+/** The championship behind the Arena screen. One cup, staged in full. */
+export async function getGrandCup(): Promise<GrandCup> {
   await sleep(LATENCY);
-  return seeding().tournaments.map((t) => ({ ...t }));
-}
-
-export async function getFeaturedTournament(): Promise<Tournament> {
-  await sleep(LATENCY);
-  const all = seeding().tournaments;
-  return { ...(all.find((t) => t.status === 'live') ?? all[0]) };
+  const cup = seeding().cup;
+  return { ...cup, prizes: cup.prizes.map((p) => ({ ...p })), specs: [...cup.specs] };
 }
 
 export async function getCountryRanking(): Promise<CountryRow[]> {

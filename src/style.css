@@ -1064,7 +1064,7 @@ html.rm .coin.sweep .coin-sweep { animation: none; }
    padding vary per role (--r-panel / --s4). No backdrop-filter: a clay tile is
    opaque, so the GPU never has to re-sample what is behind it. */
 .p-card, .id-card, .launcher, .m-card, .rows, .tabs,
-.car-card, .tourney-card, .arena-card, .arena-archive-sum, .cos, .eq, .stepper,
+.car-card, .cos, .eq, .stepper,
 .p-stats.triple, .p-stats.quad, .rank-list {
   background: var(--clay-face);
   box-shadow: var(--clay), var(--clay-ring);
@@ -2178,11 +2178,7 @@ html.rm *, html.rm *::before, html.rm *::after {
 }
 .compete-body::-webkit-scrollbar { display: none; }
 .compete-body > * { max-width: 100%; min-width: 0; }
-#comp-tournaments { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
-#comp-tournaments[hidden] { display: none; }
 /* split-screen aliases: Arena owns cups, Ranks owns squads + solo boards */
-#arena-tournaments { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
-#arena-tournaments[hidden] { display: none; }
 /* Ranks boards stack in normal flow inside #ranks-scroll: podium, then Your
    Standing, then the ladder. Nothing is absolute, so nothing can overlap a row. */
 #ranks-minds,
@@ -2198,31 +2194,6 @@ html.rm *, html.rm *::before, html.rm *::after {
 #ranks-guilds[hidden],
 #ranks-nations[hidden] { display: none; }
 
-/* ---- arena toolbar: feed count left, floating leaderboard pill right ---- */
-.arena-toolbar {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2);
-  min-width: 0;
-  max-width: 100%;
-}
-.arena-toolbar[hidden] { display: none; }
-.arena-feed-t {
-  flex: 1 1 auto;
-  min-width: 0;
-  margin: 0;
-  font-size: var(--t-micro);
-  font-weight: 800;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-variant-numeric: tabular-nums;
-}
 .lb-pill {
   --d: 2px;
   appearance: none;
@@ -2260,179 +2231,6 @@ html.rm *, html.rm *::before, html.rm *::after {
 .lb-pill.on .ico { color: var(--brand-ink); }
 .lb-seg { flex: none; }
 
-/* ---- arena cards: high-energy Dark Clay, per-status hierarchy ----
-   Canvas #10141D, cards #1C2433, text #F8FAFC. Opaque clay only (no blur),
-   transform/opacity motion only, so the feed stays at 60fps touch.
-   Sizing is always content-driven: height auto + fit-content, and NEVER
-   overflow:hidden — a clipped card is a broken card. The neon glows ride
-   border-radius:inherit so they stay inside the rounded face on their own. */
-.arena-card {
-  position: relative;
-  height: auto;
-  min-height: fit-content;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 18px;
-  border-radius: 18px;
-  background: var(--clay-face);
-  background-color: #1C2433;
-  box-shadow: var(--clay), var(--clay-ring);
-  max-width: 100%;
-  min-width: 0;
-}
-/* legacy alias: anything still rendering .tourney-card gets the arena face */
-.tourney-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  padding: var(--s3);
-  border-radius: 20px;
-  background: var(--clay-face);
-  background-color: #1C2433;
-  box-shadow: var(--clay), var(--clay-ring);
-}
-.tourney-top { display: flex; align-items: center; gap: var(--s2); }
-.tourney-name { flex: 1 1 auto; min-width: 0; margin: 0; font-size: var(--t-2); font-weight: 800; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tourney-meta { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; font-variant-numeric: tabular-nums; }
-.tourney-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
-
-/* LIVE: rich dark clay + cyan/indigo backlight + crimson rim energy */
-.arena-card.is-live {
-  border-top: 1px solid rgba(255, 255, 255, .14);
-  background:
-    radial-gradient(120% 90% at 85% 0%, rgba(56, 189, 248, .2), rgba(56, 189, 248, 0) 55%),
-    radial-gradient(90% 70% at 8% 100%, rgba(224, 38, 79, .13), rgba(224, 38, 79, 0) 60%),
-    radial-gradient(80% 60% at 100% 40%, rgba(99, 102, 241, .14), rgba(99, 102, 241, 0) 60%),
-    linear-gradient(180deg, #202A3E 0%, #1C2433 100%);
-  background-color: #1C2433;
-  box-shadow: var(--clay), var(--clay-ring), 0 0 26px -8px rgba(56, 189, 248, .35);
-}
-.arena-glow { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: radial-gradient(60% 42% at 50% 0%, rgba(125, 211, 252, .12), transparent 70%); }
-.arena-card.is-live > *:not(.arena-glow):not(.arena-hero-backlight) { position: relative; }
-
-/* UPCOMING: muted cool slate, quiet until it starts */
-.arena-card.is-upcoming {
-  background: linear-gradient(180deg, #1A2232 0%, #161D2B 100%);
-  background-color: #161D2B;
-  box-shadow: var(--clay), var(--clay-ring);
-}
-/* ENDED: compact recessed tile — it sits inside the archive, not the feed */
-.arena-card.is-ended {
-  gap: var(--s2);
-  padding: var(--s2) var(--s3);
-  border-radius: var(--radius-md);
-  background: var(--field);
-  background-color: #0E1526;
-  box-shadow: var(--inset);
-}
-.arena-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s2); min-width: 0; }
-.arena-id { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: var(--s2); }
-.arena-card .trophy { width: 56px; height: 56px; }
-.arena-card .trophy-badge { width: 48px; height: 48px; border-radius: 16px; }
-.arena-card .trophy-badge .ico { width: 24px; height: 24px; }
-.arena-card.is-ended .trophy { width: 42px; height: 42px; }
-.arena-card.is-ended .trophy-badge { width: 38px; height: 38px; border-radius: 13px; }
-.arena-card.is-ended .trophy-badge .ico { width: 19px; height: 19px; }
-.trophy-steel .trophy-badge {
-  color: #7DD3FC;
-  box-shadow:
-    0 3px 0 #080C14,
-    0 10px 18px -10px rgba(2, 132, 199, .5),
-    inset 0 1px 0 rgba(255, 255, 255, .22),
-    inset 0 -2px 4px rgba(0, 0, 0, .4),
-    inset 0 0 0 1px rgba(125, 211, 252, .28);
-}
-.trophy-neon .trophy-badge {
-  color: #7DD3FC;
-  background: linear-gradient(180deg, #2E3A55 0%, #141B2A 100%);
-  box-shadow:
-    0 3px 0 #080C14,
-    0 10px 18px -10px rgba(56, 189, 248, .55),
-    inset 0 1px 0 rgba(255, 255, 255, .22),
-    inset 0 -2px 4px rgba(0, 0, 0, .4),
-    inset 0 0 0 1px rgba(125, 211, 252, .32),
-    0 0 16px rgba(56, 189, 248, .3);
-}
-.trophy-dim .trophy-badge {
-  color: var(--ink-soft);
-  box-shadow:
-    0 3px 0 #080C14,
-    inset 0 1px 0 rgba(255, 255, 255, .1),
-    inset 0 -2px 4px rgba(0, 0, 0, .45);
-}
-.arena-titles { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.arena-name { margin: 0; min-width: 0; font-size: var(--t-2); font-weight: 800; letter-spacing: -.01em; line-height: 1.2; color: #F8FAFC; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.arena-sub { margin: 0; font-size: var(--t-micro); font-weight: 700; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
-.arena-prize-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; }
-.arena-prize { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--t-1); font-weight: 800; color: var(--honey-ink); font-variant-numeric: tabular-nums; }
-.arena-prize .coin { width: 1.2em; height: 1.2em; }
-.arena-prize b { font-weight: 800; }
-.arena-time, .arena-slots { flex: none; font-size: var(--t-micro); font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.arena-slots { color: var(--ink-soft); font-weight: 700; }
-.arena-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; }
-.arena-foot .cap-label { flex: 1 1 auto; min-width: 0; }
-/* chunky CTAs: live is loud coral ENTER NOW, upcoming is quiet clay Register */
-.btn-coral.arena-cta {
-  --d: 5px;
-  flex: none;
-  min-height: 48px;
-  min-width: 122px;
-  padding: 0 var(--s4);
-  font-size: var(--t-2);
-  font-weight: 900;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-}
-.btn-ghost.arena-cta { --d: 3px; flex: none; min-height: 44px; min-width: 108px; padding: 0 var(--s3); font-size: var(--t-3); font-weight: 800; }
-.arena-cta[disabled] { opacity: .72; }
-/* ended champion line: compact, recessed, trophy + name + payout */
-.arena-champ {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  min-width: 0;
-  padding: var(--s2) var(--s3);
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, .03);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
-}
-.champ-cup { flex: none; font-size: 16px; line-height: 1; }
-.champ-who { flex: 0 1 auto; min-width: 0; font-size: var(--t-3); font-weight: 800; color: #F8FAFC; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.champ-meta { flex: 1 1 auto; min-width: 0; text-align: right; font-size: var(--t-micro); font-weight: 700; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
-/* archive accordion: ended cups live here, collapsed by default */
-.arena-archive { border-radius: 18px; background: transparent; }
-.arena-archive-sum {
-  list-style: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2);
-  min-height: 48px;
-  height: auto;
-  padding: 12px 16px;
-  border-radius: 18px;
-  background: var(--clay-face);
-  background-color: #1C2433;
-  box-shadow: var(--clay), var(--clay-ring);
-  font-size: var(--t-3);
-  font-weight: 800;
-  color: var(--ink-soft);
-}
-.arena-archive-sum::-webkit-details-marker { display: none; }
-.arena-archive-sum:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-.arena-archive-sum:active { transform: translateY(2px); }
-.arch-chev { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 9px; background: var(--field); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); color: var(--ink-soft); font-size: 18px; line-height: 1; transform: rotate(90deg); transition: transform var(--motion-med); }
-.arena-archive[open] .arch-chev { transform: rotate(-90deg); }
-.arena-archive-list { display: flex; flex-direction: column; gap: 14px; padding-top: 14px; }
-.arena-top .pill { flex: none; max-width: 56%; overflow: visible; text-overflow: clip; }
-.arena-card .cap-meter { min-width: 0; }
-@media (max-height: 700px) {
-  .arena-card .trophy { width: 48px; height: 48px; }
-  .arena-card .trophy-badge { width: 42px; height: 42px; }
-  .btn-coral.arena-cta { min-height: 44px; min-width: 110px; }
-}
 /* ---- Leaderboard ladder: one strict 4-column grid for both boards ----
    rank crest | identity | tabular score | right-edge action. Only the identity
    column flexes, so nothing drifts row to row and names get every leftover pixel.
@@ -7020,16 +6818,16 @@ html.rm .notif-badge { animation: none; }
 
 /* ==========================================================================
    ARENA + RANKS — split of the old Compete screen.
-   Arena owns cups only (no leaderboard pill). Ranks owns Squad Warfare +
-   Solo Champions. The squad dock belongs EXCLUSIVELY to Squads; Solo gets
-   full breathing room with its own Your Standing module. Both reuse the
+   Arena owns one championship (the 200 Stars Grand Cup, staged in the STARS
+   ARENA block below, with no leaderboard pill). Ranks owns Top Minds, Intellect
+   Guilds and Nations IQ. The squad dock belongs EXCLUSIVELY to the guild board;
+   the two IQ boards get their own Your Standing module. Both reuse the
    compete-screen clay column; only the extras below are new.
    ========================================================================== */
 
 .arena-screen,
 .ranks-screen { overflow: hidden; max-width: 100%; }
 #s-ranks.ranks-screen { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 10px; }
-.arena-screen .arena-toolbar { justify-content: flex-start; }
 
 /* ---- Zone A: the Mind Ladder HUD — one fixed 88px band, two rows ----
    Row 1: the engraved wordmark over its promise line, with the season countdown
@@ -7902,356 +7700,449 @@ html.rm .ml-pulse::after { display: none; }
 }
 html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: none; }
 
+
+
 /* ==========================================================================
-   ARENA OVERHAUL — Hero Cup + slate upcoming + Pass widget.
-   Dark Clay / Tactile Slate: canvas #10141D, cards #1C2433, ink #F8FAFC.
-   Vertical rhythm: 16px gaps, dock-safe bottom pad, transform-only presses.
+   STARS ARENA — the 200 Stars Grand Cup, staged on one full-height clay card.
+   Dark Clay spec: canvas #10141D, card face #1C2433 lit from above, gold ink
+   #FCD34D for the Stars. No backdrop-filter and no blur() anywhere on this
+   screen: every surface is opaque clay and every glow is a gradient fill.
+   Geometry: the stage takes whatever height the dock leaves and the card fills
+   it (header · vault · podium · specs · fill · CTA), so 360x640 shows the whole
+   championship with no scroll, no clipping and no dead space above the dock.
    ========================================================================== */
 
-/* ---- screen column: natural flex stack, 14px rhythm, dock-safe bottom pad ----
-   The screen, its scroll body and the card feed are all flex columns on the same
-   14px rhythm. Cards are flex:none and min-height:fit-content, so the feed is
-   exactly as tall as its content: nothing shrinks, nothing clips, and the body
-   scrolls instead of crushing the Hero cup into a 110px sliver. */
-.screen.arena-screen {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  overflow: hidden;
-  max-width: 100%;
-}
-.arena-screen .compete-body,
-#arena-scroll {
+/* ---- the stage: the card's height budget, never the page's ---- */
+.screen.arena-screen { overflow: hidden; max-width: 100%; }
+.arena-stage,
+.arena-screen #arena-scroll {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding-bottom: calc(var(--dock-height) + 20px);
+  gap: 0;
+  padding: 2px;                       /* room for the card's own extrusion */
+  overflow-y: auto;                   /* a scroll of last resort on tiny phones */
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
 }
+.arena-stage::-webkit-scrollbar { display: none; }
 #arena-tournaments {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  flex: none;
-  min-height: 100%;
-  justify-content: flex-start;
 }
-#arena-tournaments > * { flex: none; height: auto; min-height: fit-content; }
+#arena-tournaments[hidden] { display: none; }
 
-/* ---- shared tactile press: 60fps translateY only, compositor-friendly ---- */
-.arena-card,
-.arena-pass,
-.arena-archive-sum {
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
-}
-.arena-card:active { transform: translateY(2px); }
-.arena-pass-claim:active,
-.arena-pass-history:active,
-.arena-cta:active { transform: translateY(2px); }
-.btn-coral.arena-cta:active { --d: 1px; transform: translateY(2px); }
-.btn-ghost.arena-cta:active { --d: 0px; transform: translateY(2px); }
-
-/* ---- HERO: live Neon Rush Cup — prominent, ambient neon backlight ----
-   Three flex rows, zero clipping: header · prizes & meta · capacity + CTA. */
-.arena-card.is-hero {
-  height: auto;
-  min-height: fit-content;
-  gap: 12px;
-  padding: 18px;
-  border-radius: 18px;
-  border-top: 1px solid rgba(255, 255, 255, .16);
+/* ---- the card: one slab, every section on the same rhythm ---- */
+.stars-card {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;     /* slack lands between sections, never as a void */
+  gap: clamp(4px, 1.2vh, 12px);
+  padding: clamp(10px, 1.9vh, 18px) clamp(11px, 3.2vw, 18px);
+  border-radius: 20px;
+  border-top: 1px solid rgba(255, 255, 255, .14);
   background:
-    radial-gradient(130% 95% at 85% 0%, rgba(56, 189, 248, .26), rgba(56, 189, 248, 0) 55%),
-    radial-gradient(100% 80% at 95% 18%, rgba(236, 72, 153, .16), rgba(236, 72, 153, 0) 60%),
-    radial-gradient(90% 75% at 6% 100%, rgba(224, 38, 79, .14), rgba(224, 38, 79, 0) 62%),
-    radial-gradient(85% 60% at 100% 55%, rgba(99, 102, 241, .16), rgba(99, 102, 241, 0) 60%),
+    radial-gradient(118% 66% at 50% 0%, rgba(252, 211, 77, .12), rgba(252, 211, 77, 0) 62%),
+    radial-gradient(88% 58% at 6% 100%, rgba(56, 189, 248, .09), rgba(56, 189, 248, 0) 60%),
     linear-gradient(180deg, #232E46 0%, #1C2433 100%);
   background-color: #1C2433;
-  box-shadow:
-    var(--clay),
-    var(--clay-ring),
-    0 0 32px -8px rgba(56, 189, 248, .4),
-    0 0 44px -18px rgba(236, 72, 153, .3);
+  box-shadow: var(--clay), var(--clay-ring), 0 0 34px -14px rgba(252, 211, 77, .45);
 }
-.arena-hero-backlight {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background:
-    radial-gradient(55% 34% at 50% 0%, rgba(125, 211, 252, .18), transparent 70%),
-    radial-gradient(40% 30% at 92% 12%, rgba(236, 72, 153, .12), transparent 70%);
-}
-.arena-card.is-hero > *:not(.arena-glow):not(.arena-hero-backlight) { position: relative; }
-.arena-card.is-hero .arena-name { font-size: var(--t-1); font-weight: 900; letter-spacing: -.015em; }
-/* no cup ever loses a character: names and meta wrap onto a new line, never "…" */
-.arena-card .arena-name,
-.arena-card .arena-sub {
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-  overflow-wrap: anywhere;
-}
-.arena-card.is-hero .trophy { width: 64px; height: 64px; }
-.arena-card.is-hero .trophy-badge { width: 54px; height: 54px; border-radius: 18px; }
-.arena-card.is-hero .trophy-badge .ico { width: 27px; height: 27px; }
 
-/* hero dual prize pool: gold coins chip + sky trophies chip, wraps cleanly */
-.arena-prizes { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
-.arena-prizes.is-hero-pool {
-  flex: 0 1 auto;
+/* ---- header: emblem · official pill · engraved title ---- */
+.stars-head { flex: none; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.stars-emblem {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: clamp(42px, 7.6vh, 56px);
+  height: clamp(42px, 7.6vh, 56px);
+  border-radius: 17px;
+  box-shadow: 0 3px 0 #080C14, var(--clay-drop);
+}
+.stars-emblem svg { display: block; width: 100%; height: 100%; border-radius: 17px; }
+.stars-titles { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.stars-official {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 3px 9px 4px;
+  border-radius: var(--radius-pill);
+  background: var(--honey-soft);
+  box-shadow:
+    inset 0 0 0 1px rgba(252, 211, 77, .34),
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    0 2px 0 rgba(0, 0, 0, .45),
+    0 0 16px -6px rgba(252, 211, 77, .6);
+  color: var(--honey-ink);
+  font-size: var(--t-micro);
+  font-weight: 900;
+  letter-spacing: .08em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: stars-official-glow 3.4s ease-in-out infinite;
+}
+@keyframes stars-official-glow {
+  0%, 100% { box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .34), inset 0 1px 0 rgba(255, 255, 255, .16), 0 2px 0 rgba(0, 0, 0, .45), 0 0 14px -6px rgba(252, 211, 77, .45); }
+  50%      { box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .44), inset 0 1px 0 rgba(255, 255, 255, .16), 0 2px 0 rgba(0, 0, 0, .45), 0 0 22px -4px rgba(252, 211, 77, .75); }
+}
+/* engraved, not embossed: the shadow falls under the glyph, light sits above it */
+.stars-name {
+  margin: 0;
   min-width: 0;
-  gap: 8px;
+  font-size: clamp(1.03125rem, .95rem + 1.2vw, 1.375rem);
+  font-weight: 900;
+  letter-spacing: -.005em;
+  line-height: 1.06;
+  color: #F8FAFC;
+  text-shadow: 0 1px 0 #05070C, 0 -1px 0 rgba(255, 255, 255, .07);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stars-hook {
+  flex: none;
+  margin: 0;
+  min-width: 0;
+  font-size: var(--t-3);
+  font-weight: 700;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- vault: the whole prize, sunk into the clay ---- */
+.stars-vault {
+  flex: none;
+  margin: 0;
+  min-height: clamp(44px, 7.8vh, 58px);
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #0A0F17 0%, #0E1526 100%);
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, .6),
+    inset 0 -1px 0 rgba(255, 255, 255, .05),
+    inset 0 0 0 1px rgba(252, 211, 77, .18),
+    0 0 24px -12px rgba(252, 211, 77, .5);
+}
+.stars-vault-l {
+  flex: none;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.stars-vault-n {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  overflow: hidden;
+  font-size: clamp(.75rem, .65rem + .75vw, .875rem);
+  font-weight: 900;
+  letter-spacing: .01em;
+  color: var(--honey-ink);
+  white-space: nowrap;
+}
+.stars-vault-n b {
+  font-size: 1.45em;
+  font-weight: 900;
+  color: #FDE68A;
+  text-shadow: 0 0 16px rgba(252, 211, 77, .5), 0 1px 0 #05070C;
   font-variant-numeric: tabular-nums;
 }
-.arena-prize-chip {
+.stars-glyph { flex: none; font-size: .95em; line-height: 1; }
+
+/* ---- podium: the exact split, so 120 + 50 + 30 never has to be guessed ---- */
+.stars-podium {
+  flex: 1 1 auto;
+  min-height: 104px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;                   /* a real podium: the winner's pillar is the tallest */
+  gap: 8px;
+}
+.stars-pod {
+  position: relative;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;     /* place · prize · crest: a rhythm, not a void */
+  gap: 4px;
+  padding: 11px 6px;
+  border-radius: 16px;
+  background: var(--clay-face);
+  background-color: #1C2433;
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+  text-align: center;
+}
+.stars-pod.is-silver, .stars-pod.is-bronze { height: 88%; }
+.stars-pod-mid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  max-width: 100%;
+}
+.stars-pod-place {
+  font-size: var(--t-micro);
+  font-weight: 900;
+  letter-spacing: .12em;
+  color: var(--ink-soft);
+}
+.stars-pod-stars {
   display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: clamp(1rem, .94rem + .7vw, 1.1875rem);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: #F8FAFC;
+  line-height: 1.1;
+}
+.stars-pod-unit { font-size: var(--t-micro); font-weight: 700; color: var(--ink-soft); }
+.stars-pod-crest {
+  margin-top: 2px;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px 4px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+  color: var(--chip-ink);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.stars-pod-crest .ico { flex: none; width: 11px; height: 11px; }
+
+/* gold rim · silver rim · bronze rim — one metal per step, never a colour wash */
+.stars-pod.is-gold {
+  box-shadow:
+    var(--clay-drop), var(--clay-spec), var(--clay-bevel),
+    inset 0 0 0 1.5px rgba(252, 211, 77, .55),
+    0 0 22px -10px rgba(252, 211, 77, .75);
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(252, 211, 77, .16), rgba(252, 211, 77, 0) 68%),
+    var(--clay-face);
+  background-color: #1C2433;
+}
+.stars-pod.is-gold .stars-pod-place { color: var(--honey-ink); }
+.stars-pod.is-gold .stars-pod-stars { color: #FDE68A; text-shadow: 0 0 14px rgba(252, 211, 77, .45); }
+.stars-pod.is-gold .stars-pod-crest {
+  background: rgba(252, 211, 77, .16);
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .38);
+  color: var(--honey-ink);
+}
+.stars-pod.is-silver {
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), inset 0 0 0 1.5px rgba(203, 213, 225, .45);
+}
+.stars-pod.is-silver .stars-pod-stars { color: #E2E8F0; }
+.stars-pod.is-bronze {
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), inset 0 0 0 1.5px rgba(251, 146, 60, .42);
+}
+.stars-pod.is-bronze .stars-pod-stars { color: #FDBA74; }
+
+/* ---- specs: the three rules of the bracket ---- */
+.stars-specs {
+  flex: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
-  padding: 5px 11px 6px;
+}
+.stars-spec {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
   border-radius: var(--radius-pill);
-  background: var(--honey-soft);
-  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .32), 0 2px 0 rgba(0, 0, 0, .45);
-  color: var(--honey-ink);
-  font-size: var(--t-3);
+  background: linear-gradient(180deg, #232E44 0%, #1A2233 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 0 0 1px rgba(255, 255, 255, .06),
+    0 2px 0 #080C14;
+  color: var(--chip-ink);
+  font-size: 10.5px;
   font-weight: 800;
-  font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
   white-space: nowrap;
-}
-.arena-prize-chip.is-trophies {
-  background: rgba(56, 189, 248, .14);
-  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .3), 0 2px 0 rgba(0, 0, 0, .45);
-  color: #7DD3FC;
-}
-/* inline coin SVG + amounts: the chip never depends on an emoji font */
-.arena-coin { display: inline-flex; flex: none; align-items: center; }
-.arena-coin .coin { width: 1.2em; height: 1.2em; }
-.arena-cup-emo { flex: none; font-size: 1.05em; line-height: 1; }
-.arena-coin-amt,
-.arena-trophy-amt { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.arena-prizes.is-compact {
-  flex: 0 1 auto;
-  min-width: 0;
-  gap: 6px;
-  font-size: var(--t-3);
-  font-weight: 800;
-  color: var(--honey-ink);
-  font-variant-numeric: tabular-nums;
-  white-space: normal;
-}
-.hero-prizes { flex: 1 1 auto; min-width: 0; align-items: center; justify-content: flex-start; flex-wrap: wrap; }
-.hero-prizes .hero-time { margin-left: auto; }
-/* row 2 meta: entry info never truncates — it wraps onto its own line instead */
-.hero-entry {
-  flex: 0 1 auto;
-  min-width: 0;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-}
-.live-label { font-weight: 900; letter-spacing: .06em; }
-.arena-prize-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; flex-wrap: wrap; }
-.hero-time {
-  padding: 4px 10px 5px;
-  border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, .32);
-  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .22);
-  color: var(--brand-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* hero capacity block: label + clean gradient meter, no broken hairline */
-.arena-cap-block { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.arena-card .cap-meter { min-width: 0; }
-.arena-card .cap-track {
-  display: block;
-  height: 10px;
-  border-radius: var(--radius-pill);
-  background: #0B1220;
-  background-color: #0B1220;
-  box-shadow: inset 0 2px 5px rgba(0, 0, 0, .6);
-  overflow: hidden;
-}
-.arena-card .cap-fill {
-  display: block;
-  height: 100%;
-  width: 0%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #0284c7 0%, #0ea5e9 45%, #22d3ee 100%);
-  box-shadow: 0 0 12px rgba(34, 211, 238, .45);
-}
-.arena-card.is-upcoming .cap-fill {
-  background: linear-gradient(90deg, #7c3aed 0%, #0ea5e9 100%);
-  box-shadow: 0 0 10px rgba(124, 58, 237, .4);
-}
-.arena-foot .cap-label,
-.arena-cap-block .cap-label {
+/* ---- registration: contenders, mood word, live countdown, fill meter ---- */
+.stars-fill { flex: none; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.stars-fill-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.stars-fill-t {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: var(--t-micro);
   font-weight: 800;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.cap-label .hot { color: #7DD3FC; }
+.stars-mood { color: var(--brand-ink); font-weight: 900; }
+.stars-count {
+  flex: none;
+  padding: 4px 9px 5px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  box-shadow:
+    inset 0 1px 4px rgba(0, 0, 0, .55),
+    inset 0 0 0 1px rgba(255, 255, 255, .07);
+  color: var(--ink);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.stars-track {
+  position: relative;
+  display: block;
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #0A0F17 0%, #131A29 100%);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .62),
+    inset 0 -1px 0 rgba(255, 255, 255, .05),
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
+  overflow: hidden;
+}
+.stars-meter {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 58%, #B45309 100%);
+  box-shadow: 0 0 16px rgba(252, 211, 77, .55), inset 0 1px 0 rgba(255, 255, 255, .5);
+  transition: width var(--motion-med);
+}
 
-/* foot row (hero + upcoming): capacity meter left, chunky 3D CTA right */
-.hero-foot,
-.upcoming-foot { align-items: center; gap: 12px; }
-.hero-foot .arena-cap-block,
-.upcoming-foot .arena-cap-block { flex: 1 1 auto; min-width: 0; }
-.btn-coral.arena-cta.hero-cta {
+/* ---- the one loud key: 52px extruded clay, amber face on a dark lip ---- */
+.stars-cta {
   --d: 5px;
   flex: none;
-  min-height: 40px;
-  min-width: 148px;
-  padding: 14px var(--s4);
-  border-radius: 15px;
-  font-size: var(--t-2);
+  width: 100%;
+  min-height: 52px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--s3);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #FDE68A 0%, #FBBF24 46%, #D97706 100%);
+  color: #3B2405;
+  font-size: var(--t-1);
   font-weight: 900;
-  letter-spacing: .06em;
+  letter-spacing: .04em;
   text-transform: uppercase;
-}
-
-/* ---- UPCOMING: clean Dark Clay #1C2433, natural size, quiet until it starts ---- */
-.arena-card.is-upcoming {
-  height: auto;
-  min-height: fit-content;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  border-top: 1px solid rgba(255, 255, 255, .09);
-  background: linear-gradient(180deg, #202A3E 0%, #1C2433 100%);
-  background-color: #1C2433;
-  box-shadow: var(--clay), var(--clay-ring);
-}
-.countdown-badge {
-  flex: none;
-  max-width: 52%;
-  overflow: visible;
-  text-overflow: clip;
   white-space: nowrap;
-  background: linear-gradient(180deg, rgba(14, 165, 233, .24) 0%, rgba(14, 165, 233, .14) 100%);
-  color: var(--brand-ink);
-}
-/* secondary tactile pill: Pre-register — quiet clay, real lip */
-.btn-ghost.arena-cta.upcoming-cta {
-  --d: 3px;
-  flex: none;
-  min-height: 44px;
-  min-width: 124px;
-  padding: 0 18px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #26334D 0%, #1C2433 100%);
-  color: var(--ink);
-  font-size: var(--t-3);
-  font-weight: 800;
-  letter-spacing: .02em;
   box-shadow:
-    0 var(--d) 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .6),
+    inset 0 -2px 3px rgba(0, 0, 0, .26),
+    inset 0 0 0 1px rgba(255, 255, 255, .22),
+    0 var(--d) 0 var(--gold-lip),
+    0 14px 26px -12px rgba(245, 158, 11, .62);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.stars-cta:active { --d: 3px; transform: translateY(2px); }
+.stars-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+.stars-cta.is-seated {
+  background: linear-gradient(180deg, #1F2A3E 0%, #182133 100%);
+  color: var(--mint-ink);
+  box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .12),
-    var(--clay-ring);
+    inset 0 -2px 3px rgba(0, 0, 0, .35),
+    inset 0 0 0 1px rgba(110, 231, 183, .34),
+    0 var(--d) 0 #080C14,
+    0 10px 22px -14px rgba(16, 185, 129, .55);
 }
-.upcoming-cta:hover:not(:active) { transform: translateY(-1px); }
 
-/* ---- ARENA PASS & STATUS: clean ticket bar, stacked text, no truncation ---- */
-.arena-pass {
-  display: flex;
-  flex-direction: column;
-  height: auto;
-  min-height: fit-content;
-  gap: 12px;
-  padding: 18px;
-  border-radius: 18px;
-  border-top: 1px solid rgba(255, 255, 255, .1);
-  background:
-    radial-gradient(110% 90% at 10% 0%, rgba(245, 158, 11, .12), rgba(245, 158, 11, 0) 55%),
-    radial-gradient(100% 85% at 95% 100%, rgba(56, 189, 248, .1), rgba(56, 189, 248, 0) 60%),
-    linear-gradient(180deg, #202A3E 0%, #1C2433 100%);
-  background-color: #1C2433;
-  box-shadow: var(--clay), var(--clay-ring);
-}
-.arena-pass-main {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-  max-width: 100%;
-}
-.arena-pass-left {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  max-width: 100%;
-}
-.arena-pass-ico {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 15px;
-  background: linear-gradient(180deg, #2E3A55 0%, #141B2A 100%);
-  box-shadow:
-    0 3px 0 #080C14,
-    inset 0 1px 0 rgba(255, 255, 255, .16),
-    inset 0 0 0 1px rgba(252, 211, 77, .25);
-  font-size: 21px;
-  line-height: 1;
-}
-/* Left: icon + vertically stacked text (gap 2px). Right: Claim + History. */
-.arena-pass-titles { flex: 1 1 auto; min-width: 0; max-width: 100%; display: flex; flex-direction: column; gap: 2px; }
-.arena-pass-count {
-  min-width: 0;
-  max-width: 100%;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -.01em;
-  color: #F8FAFC;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-  line-height: 1.3;
-  font-variant-numeric: tabular-nums;
-}
-.arena-pass-sub {
-  min-width: 0;
-  max-width: 100%;
-  font-size: 11px;
-  font-weight: 600;
-  color: #94A3B8;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-  line-height: 1.3;
-  font-variant-numeric: tabular-nums;
-}
-/* Right side: tactile blue Claim + ghost History — wraps cleanly, never squeezes left. */
-.arena-pass-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; max-width: 100%; }
-.arena-pass-claim { --d: 3px; min-height: 44px; white-space: nowrap; flex: none; }
-.arena-pass-history { --d: 3px; min-height: 44px; white-space: nowrap; flex: none; }
-.arena-pass-claim[disabled] { opacity: .72; }
-@media (max-width: 420px) {
-  .arena-pass-main { flex-wrap: wrap; }
-  .arena-pass-left { flex: 1 1 100%; }
-  .arena-pass-actions { flex: 1 1 100%; justify-content: stretch; flex-wrap: wrap; }
-  .arena-pass-claim, .arena-pass-history { flex: 1 1 0; min-width: 0; }
-  .btn-coral.arena-cta.hero-cta { min-width: 128px; min-height: 44px; }
-}
+/* ---- shorter and narrower phones: the card gives before the CTA does ---- */
 @media (max-height: 700px) {
-  .arena-card.is-hero .trophy { width: 52px; height: 52px; }
-  .arena-card.is-hero .trophy-badge { width: 46px; height: 46px; border-radius: 15px; }
-  .btn-coral.arena-cta.hero-cta { min-height: 44px; }
+  .stars-podium { min-height: 96px; }
 }
-html.rm .arena-card.is-hero,
-html.rm .arena-pass { animation: none; }
-html.rm .arena-hero-backlight { display: none; }
+@media (max-height: 600px) {
+  .stars-podium { min-height: 86px; }
+  .stars-pod { padding: 7px 5px; }
+}
+/* short and narrow (320x568): the copy stays whole, the type steps down instead */
+@media (max-width: 352px) {
+  .stars-pod-crest b { display: none; }   /* the crest glyph survives, the word does not */
+  .stars-spec { font-size: 10px; padding: 4px 4px; }
+  .stars-fill-t { font-size: 9.5px; }
+  .stars-count { padding: 3px 6px 4px; font-size: 9px; }
+  .stars-vault { flex-direction: column; align-items: flex-start; gap: 1px; }
+  .stars-vault-l { font-size: 9px; }
+}
+/* when there is no slack, the three pillars are equal: the silhouette is a reward for room */
+@media (max-height: 700px) {
+  .stars-pod.is-silver, .stars-pod.is-bronze { height: 92%; }
+  .stars-pod { padding: 9px 5px; }
+}
+@media (max-height: 620px) {
+  .stars-pod.is-silver, .stars-pod.is-bronze { height: 100%; }
+}
+/* a tall phone: the card scales up rather than leaving slack above the dock */
+@media (min-height: 780px) {
+  .stars-card { gap: 14px; padding: 20px 18px; border-radius: 24px; }
+  .stars-emblem { width: 64px; height: 64px; border-radius: 19px; }
+  .stars-emblem svg { border-radius: 19px; }
+  .stars-name { font-size: 1.5rem; }
+  .stars-hook { font-size: var(--t-2); }
+  .stars-vault { min-height: 74px; padding: 14px 16px; border-radius: 18px; }
+  .stars-vault-n { font-size: 1.0625rem; }
+  .stars-podium { min-height: 220px; max-height: 320px; }
+  .stars-pod { padding: 16px 10px; border-radius: 18px; }
+  .stars-pod-stars { font-size: 1.375rem; }
+  .stars-pod-crest { font-size: 10px; padding: 4px 9px 5px; }
+  .stars-spec { min-height: 34px; font-size: var(--t-micro); }
+  .stars-fill { gap: 8px; }
+  .stars-track { height: 14px; }
+  .stars-cta { min-height: 60px; border-radius: 20px; }
+}
+html.rm .stars-official { animation: none; }
+html.rm .stars-meter { transition: none; }
+html.rm .stars-cta { transition: none; }
 
 /* ==========================================================================
    GAME MODE SELECTOR — bottom sheet triggered by the lobby Change key.

@@ -94,10 +94,10 @@ function seed(): AppNotification[] {
       read: false,
     },
     {
-      id: 'seed-neon-cup',
+      id: 'seed-grand-cup',
       kind: 'tournament',
-      title: 'Tournament starting soon',
-      body: 'Neon Rush Cup starts in 10 minutes — don’t miss out!',
+      title: 'Grand Cup starting soon',
+      body: '200 Stars Grand Cup opens its brackets in 10 minutes — take your seat.',
       createdAt: now - 26 * min,
       read: false,
     },
