@@ -13,7 +13,7 @@ import {
   type Mark, type Vec, type View,
 } from './render';
 import { createConfetti } from './confetti';
-import { BOARD_IDLE, holdMineKey, moveDots, pickBall, previewWall, type BoardMode } from './boardmode';
+import { BOARD_IDLE, holdMineKey, holdsBall, moveDots, pickBall, previewWall, type BoardMode } from './boardmode';
 import { createRouter } from './router';
 import { createSheets } from './sheets';
 import { createMenu, type Menu } from './menu';
@@ -908,10 +908,17 @@ const RIVAL_XP = [1180, 2040, 880, 3120, 1545, 2680, 980, 2360];
 /** Your XP: the ladder's own reading, so a race that settles moves it on the spot. */
 const myXp = (): number => myTiq();
 
+/**
+ * The flag a seat flies when nothing is set: a real ISO code, never `flagPhoto`'s "—" clay chip. An
+ * empty profile is the common case on a first run, and the dock has no room for a placeholder that
+ * reads as a broken image — so an unset country, or a rival who arrived without one, gets this.
+ */
+const DEFAULT_FLAG = 'GB';
+
 /** A seat's flag — yours off the profile, an online rival's off the wire, a bot's from the pool. */
 function flagFor(p: Player): string | null {
-  if (p === localSide) return profile.country;
-  if (active && p === rivalSide()) return active.opponent.flag ?? null;
+  if (p === localSide) return profile.country || DEFAULT_FLAG;
+  if (active && p === rivalSide()) return active.opponent.flag || DEFAULT_FLAG;
   return RIVAL_FLAGS[(raceSeed + p * 5) % RIVAL_FLAGS.length];
 }
 
@@ -1216,8 +1223,12 @@ function onMouse(p: Vec, click: boolean) {
   }
   const hit = at(p);
   if (!click) {
-    /* hovering is a preview; an armed ghost keeps its slot and its caps, and a spent budget shows none */
-    if (ghost?.armed) return;
+    /* Hovering is a preview — but only while no ball is in hand. `previewWall` puts the ball back
+       down, so a pointer crossing a groove on its way to a legal-move dot would otherwise wipe the
+       dots and cancel the pick mid-travel. A picked ball owns the pointer until it is played or put
+       down; a groove opens a wall on an explicit tap instead. */
+    if (holdsBall(mode()) || ghost?.armed) return;
+    /* an armed ghost keeps its slot and its caps, and a spent budget shows none */
     const spec = hit && hit.kind === 'wall' && wallsRemaining(state, state.turn) > 0 ? hit.spec : null;
     const wall: Wall | null = spec ? { ...spec, owner: state.turn } : null;
     setMode(previewWall(mode(), wall ? { spec: wall, ok: wallOk(state, wall), armed: false, p: state.turn } : null));

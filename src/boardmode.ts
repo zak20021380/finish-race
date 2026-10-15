@@ -29,9 +29,21 @@ export const pickBall = <P>(m: BoardMode<P>, id: number | null): BoardMode<P> =>
  * A groove: the wall preview comes up and the ball in hand goes back down, so a dashed bar can never
  * be drawn under a selection ring. `null` — the pointer left the board — drops the bar alone, which
  * is what keeps a hover a preview rather than a commitment.
+ *
+ * That same rule is why a *hover* may never reach here while a ball is in hand: `previewWall` puts
+ * the ball back down, so a pointer travelling from a picked ball towards one of its legal-move dots
+ * crosses a groove on the way, and each crossing would wipe the dots the player is aiming at. A
+ * picked ball owns the pointer until it is put down or played — see `holdsBall`.
  */
 export const previewWall = <P>(m: BoardMode<P>, preview: P | null): BoardMode<P> =>
   ({ ...m, preview, selected: preview === null ? m.selected : null });
+
+/**
+ * A ball is in hand — the one state a hover must never take away. `main.ts` asks this before it lets
+ * a pointer move become a wall preview, so the dots stay up for the whole journey and only an
+ * explicit tap on a groove that is not a legal-move target hands the board over to a wall.
+ */
+export const holdsBall = <P>(m: BoardMode<P>): boolean => m.selected !== null;
 
 /** The mine key owns the board: while it is down, both of the other modes stand down. */
 export const holdMineKey = <P>(m: BoardMode<P>, on: boolean): BoardMode<P> =>

@@ -246,6 +246,20 @@ const barT = (cell: number) => cell * BAR_T;
  */
 const grooveZone = (cell: number) => Math.min(GROOVE_MAX, Math.max(GROOVE_ZONE, MIN_TOUCH * 0.5 / cell));
 
+/**
+ * The legal-move cell a tap landed in, if any. A ball in hand draws one dot per legal destination, so
+ * the *cell* under a dot is the target the player is aiming at — and a tap anywhere inside it means
+ * that move, never the groove that runs along its edge. This is deliberately a containment test and
+ * not a radius: `nearest` below is gated on `reach`, which on a board with fat cells is narrower than
+ * half a cell, so a tap in a dot's corner would otherwise fall through to the magnet.
+ */
+function hintCellAt(hints: readonly Pos[], bx: number, by: number): Pos | null {
+  for (const h of hints) {
+    if (bx >= h.c && bx <= h.c + 1 && by >= h.r && by <= h.r + 1) return h;
+  }
+  return null;
+}
+
 /* ---------- hit-testing ---------- */
 
 /**
@@ -322,11 +336,11 @@ function capsuleHit(L: Layout, bx: number, by: number, cap: CapsuleAction): 'con
 /**
  * Pointer (CSS px, canvas-local) → the thing to act on.
  * Priority, not raw distance: an armed ghost (or the on-canvas action capsules) confirms first, one
- * of your balls picks up, a tap in the move zone (0.15 cell) moves, and only a tap nearer the
- * groove than the move zone arms a wall. A tap between the two zones falls back to the nearest
- * legal dot so a sloppy finger still moves rather than starting a wall. One mode is left: while the
- * mine key is armed the board offers mines and nothing else, and the top and bottom two rows are
- * refused outright.
+ * of your balls picks up, a legal-move dot's own cell moves, and only a tap that is inside no dot
+ * cell and nearer the groove than the nearest dot arms a wall. A tap between the dot and the groove
+ * falls back to the nearest legal dot so a sloppy finger still moves rather than starting a wall.
+ * One mode is left: while the mine key is armed the board offers mines and nothing else, and the
+ * top and bottom two rows are refused outright.
  *
  * The groove's own reach is `grooveZone(cell)` rather than a constant: on the wide board it grows
  * until a whole cell snaps to its nearest line, which is what makes a two-span wall on a ten-column
@@ -389,8 +403,14 @@ export function hitTest(L: Layout, px: number, py: number, o: {
     }
     if (ballId !== null && db <= reach) cand.push({ hit: { kind: 'ball', id: ballId }, pri: 0, d: db });
 
-    const spot = nearest(o.hints, reach);
-    if (spot && spot.d <= MOVE_ZONE) {
+    /* A ball in hand makes every legal-move cell a target in its own right, and the containment
+       test is what enforces it: a tap inside one is that move, full stop, and the groove is never
+       even offered there. Only a tap that lands in no dot cell can arm a wall. */
+    const inCell = hintCellAt(o.hints, bx, by);
+    const spot = inCell
+      ? { cell: inCell, d: Math.hypot(bx - inCell.c - 0.5, by - inCell.r - 0.5) }
+      : nearest(o.hints, reach);
+    if (spot && (inCell !== null || spot.d <= MOVE_ZONE)) {
       cand.push({ hit: { kind: 'move', to: spot.cell }, pri: 1, d: spot.d });
     } else {
       const s = slotNear(bx, by, L.cols, L.rows, gz);

@@ -118,6 +118,13 @@
         <circle cx="12" cy="12" r="5.1" fill="currentColor" />
         <circle cx="10.1" cy="10" r="1.5" fill="#fff" opacity=".55" />
       </symbol>
+      <symbol id="i-bomb" viewBox="0 0 24 24">
+        <circle cx="10.2" cy="14.8" r="6.6" fill="currentColor" />
+        <circle cx="7.7" cy="12.4" r="2" fill="#fff" opacity=".5" />
+        <path d="M14.5 10.3 17.1 7.7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" />
+        <path d="M17.3 7.5c1.1-1.1 2.6-.8 3.2.4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+        <circle cx="21.1" cy="5.5" r="1.7" fill="currentColor" />
+      </symbol>
       <symbol id="i-log" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M6.6 5.6h8.4a3 6.4 0 0 1 0 12.8H6.6a3 6.4 0 0 1 0-12.8Z" />
@@ -874,15 +881,16 @@
               </div>
             </div>
 
-            <!-- The whole board is the action dock now, and every seat in it carries a full identity:
-                 a 3D sphere with its corner flag, a name, a live XP pill and the wall ammo it has
-                 left. The one key left — the mine — is anchored in the dock *beside* the chips rather
-                 than inside one of them, which is what buys each seat its whole width back while
-                 keeping a >=48px target. `data-players` (and `data-seats`, kept for older probes)
-                 tells CSS how many chips it is laying out: two share one line with the mine key,
-                 three and four reflow to a compact 2-up grid. Only the local seat carries the blitz
-                 ring and the mine key's pips; the seats past the first are bot seats locally, so
-                 they show a ball, a flag, a name, an XP pill and a wall count and nothing else. -->
+            <!-- The whole board is the action dock now, and every seat in it is a two-row card.
+                 Left: the seat's 3D sphere with an uninterrupted radial countdown ring and the
+                 seconds punched through it. Right, top row: a crisp circular flag, the bold name and
+                 a subtle inline XP tag. Right, bottom row: the sculpted inset ammo strip — the
+                 team-coloured wall bar, the count and, in a duel, the word. The one key left, the
+                 bomb, lives inside the "YOU" card's right side in a duel so the dock reads as two
+                 balanced player cards; three and four lift it back out to the dock's own column,
+                 where no chip has width to spare. `data-players` (and `data-seats`, kept for older
+                 probes) tells CSS how many chips it is laying out. Only the local seat carries the
+                 blitz ring and the bomb's charge capsules. -->
             <footer class="chips" id="chips" data-seats="2" data-players="2">
               <div class="chip red" id="chip-0">
                 <span class="chip-row">
@@ -893,39 +901,44 @@
                       <circle class="timer-fill" id="timer-fill" cx="23" cy="23" r="21" />
                     </svg>
                     <b class="timer-n" id="timer-n" aria-hidden="true">8</b>
-                    <span class="flag-badge" id="flag-0" aria-hidden="true"></span>
                   </span>
                   <span class="chip-txt">
                     <span class="who-line">
+                      <span class="flag-badge" id="flag-0" aria-hidden="true"></span>
                       <span class="who" id="name-0">YOU</span>
-                      <span class="walls" id="walls-0" aria-label="Walls left: 8 of 8">
-                        <span class="wall-glyph" aria-hidden="true">▬</span><span class="wall-n">8</span><span class="wall-w">walls</span>
+                      <span class="xp" id="xp-0">
+                        <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
+                        <span class="xp-n">0</span><span class="xp-u">XP</span>
                       </span>
                     </span>
-                    <span class="xp" id="xp-0">
-                      <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
-                      <span class="xp-n">0</span><span class="xp-u">XP</span>
+                    <span class="walls" id="walls-0" aria-label="Walls left: 8 of 8">
+                      <span class="wall-glyph" aria-hidden="true">▬</span><span class="wall-n">8</span><span class="wall-w">walls</span>
                     </span>
                   </span>
                 </span>
+                <button class="mine-btn" type="button" id="mine-btn" aria-pressed="false" aria-label="Bury a mine">
+                  <svg class="ico" aria-hidden="true"><use href="#i-bomb" /></svg>
+                  <span class="bomb-lab" aria-hidden="true">Bomb</span>
+                  <span class="pips" id="mine-pips" aria-hidden="true"></span>
+                </button>
               </div>
               <div class="chip blue" id="chip-1">
                 <span class="chip-row">
                   <span class="chip-ball">
                     <span class="ball" aria-hidden="true"></span>
-                    <span class="flag-badge" id="flag-1" aria-hidden="true"></span>
                   </span>
                   <span class="chip-txt">
                     <span class="who-line">
+                      <span class="flag-badge" id="flag-1" aria-hidden="true"></span>
                       <span class="who" id="name-1">BOT</span>
-                      <span class="dots" id="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-                      <span class="walls" id="walls-1" aria-label="Walls left: 8 of 8">
-                        <span class="wall-glyph" aria-hidden="true">▬</span><span class="wall-n">8</span><span class="wall-w">walls</span>
+                      <span class="xp" id="xp-1">
+                        <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
+                        <span class="xp-n">0</span><span class="xp-u">XP</span>
                       </span>
+                      <span class="dots" id="dots" aria-hidden="true"><i></i><i></i><i></i></span>
                     </span>
-                    <span class="xp" id="xp-1">
-                      <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
-                      <span class="xp-n">0</span><span class="xp-u">XP</span>
+                    <span class="walls" id="walls-1" aria-label="Walls left: 8 of 8">
+                      <span class="wall-glyph" aria-hidden="true">▬</span><span class="wall-n">8</span><span class="wall-w">walls</span>
                     </span>
                   </span>
                 </span>
@@ -934,18 +947,18 @@
                 <span class="chip-row">
                   <span class="chip-ball">
                     <span class="ball" aria-hidden="true"></span>
-                    <span class="flag-badge" id="flag-2" aria-hidden="true"></span>
                   </span>
                   <span class="chip-txt">
                     <span class="who-line">
+                      <span class="flag-badge" id="flag-2" aria-hidden="true"></span>
                       <span class="who" id="name-2">BOT 2</span>
-                      <span class="walls" id="walls-2" aria-label="Walls left: 6 of 6">
-                        <span class="wall-glyph" aria-hidden="true">▬</span><span class="wall-n">6</span><span class="wall-w">walls</span>
+                      <span class="xp" id="xp-2">
+                        <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
+                        <span class="xp-n">0</span><span class="xp-u">XP</span>
                       </span>
                     </span>
-                    <span class="xp" id="xp-2">
-                      <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
-                      <span class="xp-n">0</span><span class="xp-u">XP</span>
+                    <span class="walls" id="walls-2" aria-label="Walls left: 6 of 6">
+                      <span class="wall-glyph" aria-hidden="true">▬</span><span class="wall-n">6</span><span class="wall-w">walls</span>
                     </span>
                   </span>
                 </span>
@@ -954,26 +967,22 @@
                 <span class="chip-row">
                   <span class="chip-ball">
                     <span class="ball" aria-hidden="true"></span>
-                    <span class="flag-badge" id="flag-3" aria-hidden="true"></span>
                   </span>
                   <span class="chip-txt">
                     <span class="who-line">
+                      <span class="flag-badge" id="flag-3" aria-hidden="true"></span>
                       <span class="who" id="name-3">BOT 3</span>
-                      <span class="walls" id="walls-3" aria-label="Walls left: 5 of 5">
-                        <span class="wall-glyph" aria-hidden="true">▬</span><span class="wall-n">5</span><span class="wall-w">walls</span>
+                      <span class="xp" id="xp-3">
+                        <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
+                        <span class="xp-n">0</span><span class="xp-u">XP</span>
                       </span>
                     </span>
-                    <span class="xp" id="xp-3">
-                      <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
-                      <span class="xp-n">0</span><span class="xp-u">XP</span>
+                    <span class="walls" id="walls-3" aria-label="Walls left: 5 of 5">
+                      <span class="wall-glyph" aria-hidden="true">▬</span><span class="wall-n">5</span><span class="wall-w">walls</span>
                     </span>
                   </span>
                 </span>
               </div>
-              <button class="mine-btn" type="button" id="mine-btn" aria-pressed="false" aria-label="Bury a mine">
-                <svg class="ico" aria-hidden="true"><use href="#i-mine" /></svg>
-                <span class="pips" id="mine-pips" aria-hidden="true"></span>
-              </button>
             </footer>
           </main>
 

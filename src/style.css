@@ -497,76 +497,116 @@ html.rm .board-wrap.rolling::after { animation: none; opacity: .85; }
 }
 .note.show { opacity: 1; transform: translate(-50%, 0); }
 
-/* ---- the mine key: dock furniture, a tactile 52px key with its ammo pips ----
-   The board is the action dock now — this is the one key left, so it sits where the eye already is
-   when the turn changes, *beside* the seat chips rather than inside one of them. That is deliberate:
-   a 48px key inside a seat chip costs that seat ~54px of the 130 it has at 360px, and the seat is
-   where the identity lives. Anchored in the dock's own column it keeps a comfortable target and
-   every chip keeps its width. Raised clay at rest, lit in your own seat colour while it is armed. */
+/* ---- the bomb key: a tactical dark-clay key welded into the "YOU" card ----
+   The board is the action dock, and this is the one key left on it. In a duel it sits inside the
+   right side of seat 0's card, so the dock reads as two balanced player cards rather than two cards
+   and a stray grey square; three and four lift it back out to the dock's own column (see the reflow
+   rule), where no card has width to spare. Raised clay with a warm amber rim over a crimson
+   underglow, a bomb cut into it, the word under that, and one LED capsule per mine the seat may
+   still bury — lit amber while a charge is left, sunk and dark once it is spent. */
 .mine-btn {
   --tint: var(--brand-3);              /* the local seat's colour; `paintSeatTints` re-writes it */
   --glow: var(--brand-glow);
+  --led-lit: #fbbf24;                  /* an available charge, and the key's own ink */
   position: relative;
   appearance: none;
   border: 0;
-  grid-column: 3;
+  flex: none;
   align-self: center;
   justify-self: center;
   display: grid;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: auto auto auto;
   place-items: center;
   gap: 2px;
-  width: 52px;
-  height: 52px;
-  padding: 5px 0 4px;
-  border-radius: 16px;
-  background: var(--solid-a);
-  color: var(--ink-soft);
+  width: 48px;
+  height: 48px;
+  padding: 5px 4px 4px;
+  border-radius: 15px;
+  color: var(--led-lit);
   cursor: pointer;
+  background: linear-gradient(180deg, #2C3853 0%, #1B2333 100%);
   box-shadow:
-    inset 0 0 0 1px var(--hair),
-    inset 0 1px 0 var(--hair-lit),
+    inset 0 0 0 1px rgba(245, 158, 11, .34),          /* the warm inner rim */
+    inset 0 -2px 0 rgba(224, 38, 79, .3),              /* ... over a crimson underglow */
+    inset 0 2px 0 var(--hair-lit),                     /* the lit top of the extrusion */
+    inset 0 -4px 6px rgba(0, 0, 0, .38),               /* and the shadow that sinks it into the clay */
     0 4px 10px -6px var(--shadow-soft);
   transition: transform var(--motion-fast), color var(--motion-fast),
               box-shadow var(--motion-fast), background var(--motion-fast);
 }
-.mine-btn .ico { width: 20px; height: 20px; }
+.mine-btn .ico {
+  width: 19px;
+  height: 19px;
+  filter: drop-shadow(0 0 5px rgba(245, 158, 11, .45));
+}
+/* the micro-label: small, tracked out, and lit like the rest of the key */
+.bomb-lab {
+  font-size: 6.5px;
+  font-weight: 900;
+  letter-spacing: .14em;
+  text-indent: .14em;                  /* the tracking would otherwise hang off the right edge */
+  line-height: 1;
+  text-transform: uppercase;
+  color: #fcd34d;
+  text-shadow: 0 0 6px rgba(245, 158, 11, .6);
+}
 .mine-btn:active { transform: translateY(1px); }
 .mine-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-/* armed: the key lights up in your own colour, and the pips answer */
+/* armed: the key sinks into the clay and burns, and the capsules answer */
 .mine-btn[aria-pressed="true"] {
-  color: var(--tint);
-  background: var(--field);
-  box-shadow: inset 0 0 0 2px var(--tint), 0 0 16px -4px var(--glow), var(--inset);
+  color: #fff3d6;
+  background: linear-gradient(180deg, #4A3110 0%, #2A1B06 100%);
+  box-shadow:
+    inset 0 0 0 2px var(--led-lit),
+    inset 0 0 14px -2px rgba(245, 158, 11, .55),
+    inset 0 2px 0 rgba(255, 255, 255, .16),
+    inset 0 -3px 0 rgba(0, 0, 0, .5),
+    0 0 18px -4px rgba(245, 158, 11, .75);
 }
 .mine-btn[aria-pressed="true"] .ico { animation: breathe 1.6s ease-in-out infinite; }
 /* the opponent is to move, or the mines are spent: inert without moving the layout */
-.mine-btn[disabled] { opacity: .4; cursor: default; }
+.mine-btn[disabled] { opacity: .42; cursor: default; filter: saturate(.5); }
 .mine-btn[disabled] .ico { animation: none; }
 
-/* the ammo pips: one dot per mine the seat may still bury, dimmed down to a track when spent */
-.pips { display: flex; align-items: center; gap: 3px; }
+/* the charge capsules: one per mine the seat may still bury. A live one is a lit amber LED sitting
+   proud of its socket; a spent one is the empty socket it left behind. */
+.pips { display: flex; align-items: center; gap: 2px; }
 .pips i {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: .26;                     /* spent: the same dot, dimmed down to a track */
-  transition: opacity var(--motion-fast), box-shadow var(--motion-fast);
+  width: 9px;
+  height: 4px;
+  border-radius: 999px;
+  background: #080C16;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, .95),
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
+  transition: background var(--motion-fast), box-shadow var(--motion-fast);
 }
-.pips i.on { opacity: 1; }
-.mine-btn[aria-pressed="true"] .pips i.on { box-shadow: 0 0 6px -1px currentColor; }
+.pips i.on {
+  background: linear-gradient(180deg, #FCD34D 0%, #F59E0B 58%, #B45309 100%);
+  box-shadow:
+    0 0 7px -1px rgba(245, 158, 11, .9),
+    inset 0 1px 0 rgba(255, 255, 255, .55),
+    inset 0 0 0 1px rgba(0, 0, 0, .25);
+}
+.mine-btn[aria-pressed="true"] .pips i.on {
+  box-shadow:
+    0 0 10px 0 rgba(251, 191, 36, .95),
+    inset 0 1px 0 rgba(255, 255, 255, .6);
+}
 
 /* ---- level 3: the dock — identity, ammo and the clock, all in the thumb zone ----
-   The dock is a grid, not a row. Two seats and the mine key share one line; three and four reflow to
-   a compact 2-up block with the mine key holding the third column across both rows. That is what
-   lets every seat carry a full identity — sphere, corner flag, name, XP pill and wall ammo — while
-   the mine key keeps a comfortable target without stealing width from a seat. */
+   Two seats share one line, and the "YOU" card is the wider of the two because it carries the bomb
+   key inside its right side. That is what the extra width buys: the card's text column has to fit a
+   flag, a name and an XP tag on its top row, and a 48px key's worth of it was exactly what used to
+   push the name into an ellipsis. Three and four seats cannot afford it — four cards across a 360px
+   dock would get 84px each — so the block goes 2-up and the key leaves the card (see the reflow
+   rule). `data-players` is what tells CSS which of the two docks it is laying out. */
 .chips {
+  position: relative;
   flex: none;
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  gap: var(--s2);
+  grid-template-columns: 1.35fr 1fr;
+  gap: 6px;
   padding-top: var(--s1);
 }
 .chip {
@@ -574,10 +614,9 @@ html.rm .board-wrap.rolling::after { animation: none; opacity: .85; }
   min-width: 0;
   height: 68px;                          /* two seats: the generous one-row card */
   display: flex;
-  flex-direction: column;
-  justify-content: center;
+  align-items: center;
   gap: 3px;
-  padding: 0 6px;
+  padding: 0 5px;
   border-radius: var(--r-chip);
   background: var(--tint-glass);
   box-shadow:
@@ -586,97 +625,132 @@ html.rm .board-wrap.rolling::after { animation: none; opacity: .85; }
   /* the turn hand-off is a cross-fade, not a jump: glow, lift and face all move on one 200ms clock */
   transition: transform .2s ease, opacity .2s ease, box-shadow .2s ease, background .2s ease;
 }
-.chip-row { display: flex; align-items: center; gap: 5px; width: 100%; min-width: 0; }
-/* the ball, its countdown ring, the seconds inside it and the corner flag — one block, ring included */
-.chip-ball { position: relative; flex: none; width: 42px; height: 42px; }
-/* avatar | name + wall badge over the XP pill: the stacked text is what keeps 320px from overflowing */
-.chip-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.who-line { display: flex; align-items: center; gap: var(--s1); min-width: 0; }
+.chip-row { display: flex; align-items: center; gap: 4px; flex: 1 1 auto; min-width: 0; }
+/* the ball, its countdown ring and the seconds inside it — one block, and nothing else on it */
+.chip-ball { position: relative; flex: none; width: 36px; height: 36px; }
+/* the two-row card: flag + name + XP over the ammo strip */
+.chip-txt {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+/* 3px, not the dock's 4: a top row of flag + name + XP tag is the tightest line in the app */
+.who-line { display: flex; align-items: center; gap: 3px; min-width: 0; }
 
-/* ---- the corner flag: a crisp circular badge welded to the seat's sphere ----
+/* ---- the country flag: a crisp circular badge, inline with the seat's name ----
    `flagPhoto` draws it, so the HUD, the ladder and the profile all wear the same photo flag with the
-   same three-tier fallback. The ring is the chip's own clay, so the badge reads as cut into the
-   sphere rather than pasted on top of it. */
+   same three-tier fallback. It sits on the name's own line rather than welded to the sphere: the
+   countdown ring is drawn *around* the ball, so the two used to fight for the same corner and the
+   ring came out broken exactly when the clock mattered most. `flagPhoto(null)` paints an ISO chip
+   reading "—", which is why `main.ts` hands this a real default code instead. */
 .flag-badge {
-  position: absolute;
-  right: -4px;
-  bottom: -4px;
-  width: 19px;
-  height: 19px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: var(--field);
-  box-shadow: 0 0 0 2px var(--solid-b), 0 2px 6px -2px rgba(0, 0, 0, .85);
+  box-shadow: 0 0 0 1.5px var(--solid-b), inset 0 0 0 1px var(--hair);
   pointer-events: none;
 }
-.flag-badge .fp { --fp-d: 19px; }
-.flag-badge .fp-chip { border-radius: 50%; font-size: 7px; letter-spacing: 0; }
+.flag-badge .fp { --fp-d: 14px; }
+.flag-badge .fp-chip { border-radius: 50%; font-size: 6px; letter-spacing: 0; }
 .flag-badge .fp-img { box-shadow: none; }
 
-/* ---- the XP pill: an engraved reading, gold on slate, tabular so it never jitters ----
+/* ---- the XP tag: a subtle inline reading, gold on nothing ----
    It is the ladder's own number (wins + races + the Command Center's grants), so it moves the
-   instant a match settles; a rival's is fixed for the race. */
+   instant a match settles; a rival's is fixed for the race. No pill: on a top row that is ~78px wide
+   in a duel the pill's own padding and its "XP" suffix were what pushed the name into an ellipsis,
+   so the bolt carries the unit and the name takes the row's slack. */
 .chip .xp {
-  align-self: flex-start;
+  flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  max-width: 100%;
-  height: 18px;
-  padding: 0 7px 0 6px;
-  border-radius: 999px;
-  background: var(--field);
+  gap: 1px;
+  height: 14px;
+  padding: 0;
+  background: none;
   color: var(--honey-ink);
-  font-size: var(--t-micro);
+  font-size: 9.5px;
   font-weight: 800;
-  letter-spacing: .01em;
+  letter-spacing: 0;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
   white-space: nowrap;
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, .5),
-    inset 0 -1px 0 rgba(255, 255, 255, .05),
-    inset 0 0 0 1px var(--hair);
 }
-.chip .xp .ico { width: 10px; height: 10px; flex: none; color: var(--honey); }
+.chip .xp .ico { width: 8px; height: 8px; flex: none; color: var(--honey); }
 .chip .xp .xp-n { min-width: 1ch; }
-.chip .xp .xp-u { font-size: .86em; opacity: .66; }
+.chip .xp .xp-u { display: none; }     /* the bolt already says what the number is */
 .chip.red { --tint: var(--red); --ink-t: var(--red-ink); --glow: var(--red-glow); }
 .chip.blue { --tint: var(--blue); --ink-t: var(--blue-ink); --glow: var(--blue-glow); }
 .chip.gold { --tint: var(--gold); --ink-t: var(--gold-ink); --glow: var(--gold-glow); }
 .chip.green { --tint: var(--emerald); --ink-t: var(--green-ink); --glow: rgba(23, 145, 92, .26); }
 
 /* ---- the dock grows a seat ----
-   A duel keeps two generous one-row cards shoulder to shoulder. Three or four seats cannot: four
-   chips across a 360px card would get 84px each, and the sphere alone would leave nothing for a
-   flag, a name and an XP pill. So the block goes 2-up, the chip goes compact — a 34px sphere and a
-   52px row — and the mine key spans both rows in the dock's own column, which is what keeps a
-   comfortable target without costing a seat its width. That costs the board ~48px of height on the
-   *short* phone, which is the one place a 10-column grid needs it most; the count comes from
-   main.ts via `data-players`, which is also what tells the dock how many chips it is laying out. */
+   A duel keeps two generous cards shoulder to shoulder, the wider one carrying the bomb key. Three
+   or four cannot: four cards across a 360px dock would get 84px each and the sphere alone would leave
+   nothing for a flag, a name and an XP tag. So the block goes 2-up, the card goes compact — a 34px
+   sphere and a 52px row — and the bomb key leaves the card for the dock's own column, held
+   absolutely against the dock's right edge, which is what keeps every card its full width while the
+   key keeps a comfortable target. Taking it out of `#chip-0`'s flow is also what frees `#chip-0` of
+   its positioning context, so the card goes `position: static` here and wears its turn ring on its
+   own box-shadow instead of the `::after` overlay it uses everywhere else. That costs the board
+   ~48px of height on the *short* phone, which is the one place a 10-column grid needs it most; the
+   count comes from main.ts via `data-players`. */
+.chips[data-players="3"],
+.chips[data-players="4"] { grid-template-columns: 1fr 1fr; gap: var(--s2); padding-right: 60px; }
 .chips[data-players="3"] #chip-2 { grid-column: 1 / 3; }
 .chips[data-players="3"] .mine-btn,
-.chips[data-players="4"] .mine-btn { grid-row: 1 / span 2; }
+.chips[data-players="4"] .mine-btn {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  margin-top: -26px;
+  width: 52px;
+  height: 52px;
+  padding: 6px 5px 5px;
+  border-radius: 16px;
+}
+.chips[data-players="3"] #chip-0,
+.chips[data-players="4"] #chip-0 { position: static; transform: none; }
+.chips[data-players="3"] #chip-0::after,
+.chips[data-players="4"] #chip-0::after { display: none; }
+.chips[data-players="3"] #chip-0.active,
+.chips[data-players="4"] #chip-0.active {
+  box-shadow:
+    inset 0 0 0 2px var(--tint),
+    0 0 18px -2px var(--glow),
+    inset 0 1px 0 var(--hair-lit),
+    inset 0 -2px 3px rgba(0, 0, 0, .3),
+    0 6px 14px -8px var(--glow);
+}
 .chips[data-players="3"] .chip,
-.chips[data-players="4"] .chip { height: 52px; gap: 2px; padding: 0 5px; }
+.chips[data-players="4"] .chip { height: 52px; gap: 3px; padding: 0 5px; }
 .chips[data-players="3"] .chip-ball,
-.chips[data-players="4"] .chip-ball { width: 34px; height: 34px; }
+.chips[data-players="4"] .chip-ball { width: 30px; height: 30px; }
 .chips[data-players="3"] .chip .ball,
-.chips[data-players="4"] .chip .ball { inset: 2px; width: 30px; height: 30px; }
+.chips[data-players="4"] .chip .ball { inset: 2px; width: 26px; height: 26px; }
 .chips[data-players="3"] .timer,
-.chips[data-players="4"] .timer { width: 34px; height: 34px; }
+.chips[data-players="4"] .timer { width: 30px; height: 30px; }
 .chips[data-players="3"] .timer-n,
 .chips[data-players="4"] .timer-n { font-size: 11px; }
 .chips[data-players="3"] .flag-badge,
-.chips[data-players="4"] .flag-badge { right: -3px; bottom: -3px; width: 16px; height: 16px; }
+.chips[data-players="4"] .flag-badge { width: 13px; height: 13px; }
 .chips[data-players="3"] .flag-badge .fp,
-.chips[data-players="4"] .flag-badge .fp { --fp-d: 16px; }
+.chips[data-players="4"] .flag-badge .fp { --fp-d: 13px; }
 .chips[data-players="3"] .chip .who,
-.chips[data-players="4"] .chip .who { font-size: 11px; }
+.chips[data-players="4"] .chip .who { font-size: 10px; }
 .chips[data-players="3"] .chip .walls,
-.chips[data-players="4"] .chip .walls { height: 16px; }
+.chips[data-players="4"] .chip .walls { height: 16px; padding: 0 6px; }
 .chips[data-players="3"] .chip .xp,
-.chips[data-players="4"] .chip .xp { height: 16px; font-size: 9.5px; }
+.chips[data-players="4"] .chip .xp { height: 13px; font-size: 9px; }
+.chips[data-players="3"] .chip .xp .ico,
+.chips[data-players="4"] .chip .xp .ico { width: 7px; height: 7px; }
 .chip::after {
   content: "";
   position: absolute;
@@ -703,21 +777,23 @@ html.rm .board-wrap.rolling::after { animation: none; opacity: .85; }
   /* the seat's own ball, doubling as its avatar: the token on the board is the token up here */
   position: absolute;
   inset: 2px;
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: radial-gradient(circle at 32% 26%, #fff8 0%, var(--tint) 58%, #0004 100%);
   box-shadow: 0 1px 3px -1px var(--glow), inset 0 0 0 1px rgba(255, 255, 255, .18);
 }
 
 /* ---- the blitz clock, live on the chip that owns it ----
-   An SVG ring around the ball with the seconds punched through the middle of it. The number is
-   always painted, so the ring's colour is a heads-up and never the only signal. r=21 → C=131.95. */
+   An SVG ring around the ball with the seconds punched through the middle of it, and nothing else
+   anywhere near it: the country flag used to sit on the sphere's corner and clipped the ring at
+   exactly the moment the clock started to matter. The number is always painted, so the ring's
+   colour is a heads-up and never the only signal. r=21 → C=131.95. */
 .timer {
   position: absolute;
   inset: 0;
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   transform: rotate(-90deg);             /* the arc drains from 12 o'clock */
   opacity: 0;
   transition: opacity .2s ease;
@@ -743,7 +819,7 @@ html.rm .board-wrap.rolling::after { animation: none; opacity: .85; }
   inset: 0;
   display: none;
   place-items: center;
-  font-size: 15px;                       /* spec: 15/700, tabular */
+  font-size: 13px;                       /* 11px once the dock reflows to its compact 2-up block */
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -758,11 +834,11 @@ html.rm .board-wrap.rolling::after { animation: none; opacity: .85; }
 }
 html.rm .chip[data-timer="red"] .timer-fill { animation: none; opacity: 1; }
 .chip .who {
-  flex: 1 1 auto;                        /* the name yields to the wall badge, never the other way */
+  flex: 1 1 auto;                        /* the name takes the row's slack, so the XP tag sits right */
   min-width: 0;
   color: var(--ink-t);
-  font-size: 13px;                       /* 11px once the dock reflows to its compact 2-up block */
-  font-weight: 700;
+  font-size: 12px;                       /* 11px once the dock reflows to its compact 2-up block */
+  font-weight: 800;
   letter-spacing: var(--ls-3);
   text-transform: uppercase;
   white-space: nowrap;
@@ -771,19 +847,17 @@ html.rm .chip[data-timer="red"] .timer-fill { animation: none; opacity: 1; }
 }
 
 .chip .walls {
-  /* premium wall badge: a debossed clay capsule, team-accented, fixed-width digits */
-  flex: none;                            /* the name ellipsizes; the ammo count never moves */
-  align-self: center;
-  display: inline-flex;
+  /* the ammo strip: a debossed clay well the width of the card, team-accented, fixed-width digits */
+  display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
+  width: 100%;
   height: 18px;
-  padding: 0 6px 0 5px;
-  border-radius: 999px;
-  width: fit-content;
+  padding: 0 7px;
+  border-radius: 7px;
   background: var(--field);
   color: var(--ink-t);
-  font-size: var(--t-micro);
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: .01em;
   line-height: 1;
@@ -791,7 +865,7 @@ html.rm .chip[data-timer="red"] .timer-fill { animation: none; opacity: 1; }
   font-feature-settings: "tnum" 1;
   white-space: nowrap;
   box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, .5),
+    inset 0 2px 4px rgba(0, 0, 0, .55),
     inset 0 -1px 0 rgba(255, 255, 255, .05),
     inset 0 0 0 1px var(--hair);
   transition: color var(--motion-fast), opacity var(--motion-fast), box-shadow var(--motion-fast);
@@ -813,12 +887,20 @@ html.rm .chip[data-timer="red"] .timer-fill { animation: none; opacity: 1; }
   min-width: 1ch;                     /* one digit column, so 8 -> 0 never nudges the label */
   text-align: center;
 }
-/* The word is never painted in the dock: a chip is at most ~190px wide and the name shares that row,
-   so the badge says what it is with the team-coloured bar and the count alone — exactly the ammo
-   readout the seat needs. The markup keeps the word (and the badge keeps its `aria-label`, which
-   spells out "Walls left: N of 8"), so nothing is lost to a screen reader or to a wider surface. */
-.chip .walls .wall-w { display: none; }
-/* 360px floor: the sphere and the ammo badge are fixed, so the row gap is what gives way. */
+/* The word is painted in a duel, where the strip owns the whole row and has nothing else to say.
+   Three and four seats drop it: a compact card is ~130px wide and the count is the readout. The
+   badge keeps its `aria-label` either way, which spells out "Walls left: N of 8". */
+.chip .walls .wall-w {
+  margin-left: -1px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  opacity: .7;
+}
+.chips[data-players="3"] .chip .walls .wall-w,
+.chips[data-players="4"] .chip .walls .wall-w { display: none; }
+/* 360px floor: the sphere and the ammo strip are fixed, so the row gap is what gives way. */
 @media (max-width: 380px) {
   .chip-row { gap: var(--s1); }
 }
