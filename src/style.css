@@ -7703,20 +7703,20 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 
 
 /* ==========================================================================
-   STARS CHANNEL CUP — the 200 Telegram Stars championship, staged on one
-   full-height clay card. The leaderboard ranks Telegram channels; every card is
-   a door into that channel's Top-10 roster, which is where the Stars actually
-   land.
+   THE 200 STARS CUP — the Telegram Stars championship, staged on one
+   full-height clay card. The card's ladder reads two ways through the switch in
+   its header: CHANNELS ranks the squads, and every channel card is a door into
+   that channel's Top-10 roster; TOP PLAYERS lists the ten people the Stars
+   actually land on.
    Dark Clay spec: canvas #10141D, card face #1C2433 lit from above, gold ink
    #FCD34D for the Stars. No backdrop-filter and no blur() anywhere on this
    screen or its sheet: every surface is opaque clay and every glow is a
    gradient fill.
-   Geometry: hero header over the virality rule · Top-3 channel podium · two
-   runner channels · the pinned squad row · CTA. The rule kicker lives inside
-   the emblem's own 58px row, so the copy that explains the cup costs the card
-   no height at all. The podium band is the one flexible block; everything else
-   is `flex: none`, so a short phone scrolls the stage instead of compressing a
-   row.
+   Geometry: hero header carrying the board switch · Top-3 podium · two runners ·
+   the pinned squad row · CTA. The switch lives inside the emblem's own 58px row,
+   in the title column, so the second leaderboard costs the card no height at
+   all. The podium band is the one flexible block; everything else is `flex:
+   none`, so a short phone scrolls the stage instead of compressing a row.
    ========================================================================== */
 
 /* ---- the stage: the card's height budget, never the page's ---- */
@@ -7777,6 +7777,7 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 .stars-emblem-img,
 .stars-pod-star,
 .stars-squad-star,
+.stars-run-star,
 .sr-notice-star,
 .sr-pay-star {
   display: block;
@@ -7793,7 +7794,7 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 .stars-name {
   margin: 0;
   min-width: 0;
-  font-size: clamp(.8125rem, .68rem + .85vw, 1.1875rem);
+  font-size: clamp(.875rem, .74rem + .85vw, 1.25rem);
   font-weight: 900;
   letter-spacing: -.018em;
   line-height: 1.08;
@@ -7803,22 +7804,43 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* the rule that makes the cup spread: one honey line, allowed to break in two */
-.stars-rule {
+/* the board switch: two clay keys over a recessed track, living in the title
+   column. The 58px emblem already towers over the engraved title, so a 38px
+   track here costs the card no height at all — as a band under the head it
+   would have cost 38px + a gap the phone does not have. */
+.stars-tabs {
+  position: relative;
   flex: none;
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
-  margin: 0;
-  min-width: 0;
-  font-size: 8.5px;
-  font-weight: 800;
-  line-height: 1.3;
-  color: #FDE68A;
-  text-shadow: 0 1px 0 #05070C;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  height: 38px;
+  padding: 4px;
+  border-radius: 13px;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair);
 }
-.stars-rule-ico { flex: none; width: 11px; height: 11px; margin-top: .5px; color: var(--honey); }
-.stars-rule-t { min-width: 0; }
+.stars-tabs .mode-thumb {
+  top: 4px;
+  left: 4px;
+  width: calc((100% - 8px) / 2);
+  height: calc(100% - 8px);
+  border-radius: 10px;
+}
+.stars-tabs[data-active="players"] .mode-thumb { transform: translateX(100%); }
+.stars-tabs .mode-seg {
+  flex-direction: row;
+  gap: 0;
+  padding: 0 3px;
+  border-radius: 10px;
+  font-size: 9.5px;
+  letter-spacing: -.01em;
+  white-space: nowrap;
+}
+/* the face is 30px inside the 38px track; the band is what reaches 48px.
+   Vertical only — the keys are flush, so a side band would let a neighbour
+   steal the other's tap. */
+.stars-tabs .mode-seg::after { inset: -9px 0; }
+.stars-tabs .mode-seg[aria-pressed="true"] { color: var(--brand-ink); }
 .stars-count {
   flex: none;
   padding: 5px 9px 6px;
@@ -7911,10 +7933,10 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 }
 .stars-pod:active { transform: translateY(2px); }
 .stars-pod:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-/* the champion stands ~10px taller and wears the screen's one gold rim */
+/* the champion stands ~24px taller and wears the screen's one gold rim */
 .stars-pod[data-rank="1"] {
-  padding-top: 13px;
-  padding-bottom: 12px;
+  padding-top: 21px;
+  padding-bottom: 18px;
   box-shadow:
     var(--clay-drop), var(--clay-spec), var(--clay-bevel),
     inset 0 0 0 1.5px rgba(252, 211, 77, .5);
@@ -7996,18 +8018,9 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   text-overflow: ellipsis;
 }
 .stars-pod-tiq b { color: var(--honey-ink); font-weight: 900; }
-.stars-pod-mem {
-  max-width: 100%;
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1.2;
-  color: var(--ink-soft);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* the Stars the #1 channel's Top 10 split — only the champion carries a pool */
+/* the Stars: on the channels board only the champion wears one, because only the
+   #1 channel's Top 10 are paid; on the players board every place carries its own
+   share of that same ladder. */
 .stars-pod-prize {
   margin-top: 1px;
   display: inline-flex;
@@ -8032,19 +8045,18 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 }
 .stars-pod-prize small { font-size: 8.5px; font-weight: 800; letter-spacing: .04em; opacity: .85; }
 .stars-pod-star { flex: none; width: 15px; height: 15px; }
-/* every podium card is a door: the hint says so before the first mis-tap */
-.stars-pod-hint {
-  margin-top: 2px;
-  max-width: 100%;
-  font-size: 7px;
-  font-weight: 900;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  line-height: 1.2;
-  color: var(--brand-ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* the players board: a person wears a lit ball with their nation on the corner,
+   not a channel squircle. Same three metals, painted through the sphere's own
+   custom properties. */
+.stars-pod .stars-av { width: 38px; height: 38px; font-size: 13px; }
+.stars-pod[data-metal="gold"] .stars-av {
+  --av-hi: #FDE9A9; --av-mid: #D97706; --av-lo: #7C3A0B; --av-ink: #432004;
+}
+.stars-pod[data-metal="silver"] .stars-av {
+  --av-hi: #F8FAFC; --av-mid: #94A3B8; --av-lo: #334155; --av-ink: #0F172A;
+}
+.stars-pod[data-metal="bronze"] .stars-av {
+  --av-hi: #FED7AA; --av-mid: #C2410C; --av-lo: #5C1B08; --av-ink: #FFF7ED;
 }
 
 /* ---- the runners: places four and five, each row a chevron-cued door ---- */
@@ -8112,17 +8124,11 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   text-overflow: ellipsis;
   text-shadow: 0 1px 0 #05070C;
 }
-.stars-run-mem {
-  min-width: 0;
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1.2;
-  color: var(--ink-soft);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+/* the players board's runner mark: the same ball, shrunk to the row's squircle */
+.stars-run .stars-av { width: 30px; height: 30px; font-size: 11px; }
+.stars-run .stars-av-flag { right: -3px; bottom: -3px; }
+.stars-run .stars-av-flag .fp { --fp-d: 15px; }
+.stars-run .stars-av-flag .fp-img { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35), 0 0 0 2px #1C2433; }
 /* the score rides a warm gold pill, not a bare muted run of digits */
 .stars-run-tiq {
   flex: none;
@@ -8144,6 +8150,42 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   text-shadow: 0 1px 0 #05070C;
 }
 .stars-run-tiq b { color: #FDE68A; font-weight: 900; }
+/* a runner's own share of the pool, on the players board: the same warm pill,
+   carried by the Star instead of the score */
+.stars-run-pay {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 8px 5px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, rgba(252, 211, 77, .2) 0%, rgba(245, 158, 11, .12) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 0 0 1px rgba(245, 158, 11, .4),
+    0 2px 0 #0B111C;
+  color: #FDE68A;
+  font-size: 10.5px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-shadow: 0 1px 0 #05070C;
+}
+.stars-run-star { flex: none; width: 13px; height: 13px; }
+/* a player is a place on the ladder, not a door: on the players board the cards
+   keep their shape but stop pretending a tap opens something. */
+.stars-card[data-view="players"] .stars-pod,
+.stars-card[data-view="players"] .stars-run {
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+}
+.stars-card[data-view="players"] .stars-pod:active,
+.stars-card[data-view="players"] .stars-run:active { transform: none; }
+/* the band's loading state keeps the real card shapes so the switch never jumps */
+.stars-pod.is-skel, .stars-run.is-skel { cursor: default; justify-content: center; }
+.stars-run.is-skel { min-height: 48px; }
+.stars-pod.is-skel { min-height: 120px; }
+.stars-pod.is-skel .skel, .stars-run.is-skel .skel { width: 60%; height: 12px; }
 .stars-run-go, .stars-squad-go {
   flex: none;
   width: 15px;
@@ -8274,28 +8316,45 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 @media (max-height: 700px) {
   .stars-card { gap: clamp(8px, 1.4vh, 13px); }
   .stars-pod { padding: 7px 5px 6px; gap: 3px; }
-  .stars-pod[data-rank="1"] { padding-top: 11px; padding-bottom: 10px; }
+  .stars-pod[data-rank="1"] { padding-top: 19px; padding-bottom: 16px; }
 }
 @media (max-height: 620px) {
-  .stars-pod .stars-ch-av { width: 34px; height: 34px; }
+  .stars-pod .stars-ch-av, .stars-pod .stars-av { width: 34px; height: 34px; }
   .stars-pod-name { font-size: 11px; }
   .stars-pod-tiq { font-size: 9.5px; }
-  .stars-pod-mem { font-size: 8.5px; }
   .stars-pod-star { width: 14px; height: 14px; }
-  .stars-run { min-height: 44px; }
+  /* the face drops to 44px here, so the band grows to keep the 48px target —
+     2px each side fits inside the runners' own 4px gap */
+  .stars-run { min-height: 44px; position: relative; }
+  .stars-run::after { content: ""; position: absolute; inset: -2px 0; }
   .stars-runners { gap: 4px; }
+}
+/* the shortest phones: every fixed row gives a little, because the band cannot.
+   The champion keeps the tallest pillar on the card but spends the one the
+   runners and the key just took back. */
+@media (max-height: 600px) {
+  .stars-card { gap: 5px; padding-top: 9px; }
+  .stars-emblem { width: 48px; height: 48px; }
+  .stars-pod { padding: 6px 4px 5px; }
+  .stars-pod[data-rank="1"] { padding-top: 13px; padding-bottom: 11px; }
+  .stars-pod-prize { font-size: 10px; padding: 3px 6px 4px; }
+  .stars-squad { min-height: 48px; }
+  .stars-cta { min-height: 48px; }
 }
 /* short and narrow (320x568): the copy stays whole, the type steps down instead */
 @media (max-width: 352px) {
   .stars-emblem { width: 52px; height: 52px; }
-  .stars-rule { font-size: 8px; }
+  .stars-tabs { height: 34px; }
+  .stars-tabs .mode-seg { font-size: 8.5px; }
+  /* the face is 26px inside the 34px track here, so the band carries 22px of it */
+  .stars-tabs .mode-seg::after { inset: -11px 0; }
   .stars-pod { padding: 6px 4px 5px; }
   .stars-pod-tiq { font-size: 9px; }
   .stars-pod-prize { font-size: 10px; padding: 3px 6px 4px; }
   .stars-pod-star { width: 13px; height: 13px; }
-  .stars-pod-hint { font-size: 6.5px; letter-spacing: .02em; }
   .stars-run-nm { font-size: 11px; }
   .stars-run-tiq { font-size: 9px; }
+  .stars-run-pay { font-size: 9px; padding: 4px 6px 5px; }
   .stars-squad-chip { font-size: 8.5px; padding: 5px 6px 6px; }
   .stars-cta { letter-spacing: .02em; }
 }
@@ -8304,10 +8363,12 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   .stars-card { gap: 12px; padding: 18px 18px; border-radius: 24px; }
   .stars-emblem { width: 64px; height: 64px; border-radius: 18px; }
   .stars-name { font-size: 1.3125rem; }
-  .stars-rule { font-size: 9.5px; }
+  .stars-tabs { height: 40px; }
+  .stars-tabs .mode-seg { font-size: 10.5px; }
+  .stars-tabs .mode-seg::after { inset: -10px 0; }
   .stars-pod { padding: 11px 8px 10px; gap: 4px; }
-  .stars-pod[data-rank="1"] { padding-top: 15px; padding-bottom: 14px; }
-  .stars-pod .stars-ch-av { width: 42px; height: 42px; }
+  .stars-pod[data-rank="1"] { padding-top: 25px; padding-bottom: 22px; }
+  .stars-pod .stars-ch-av, .stars-pod .stars-av { width: 42px; height: 42px; }
   .stars-pod-star { width: 17px; height: 17px; }
   .stars-run { min-height: 52px; }
   .stars-cta { min-height: 56px; border-radius: 20px; font-size: var(--t-1); }

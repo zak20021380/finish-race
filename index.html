@@ -479,14 +479,16 @@
           </button>
         </section>
 
-        <!-- ---------------- arena: the 200 Stars Channel Cup, staged in full.
-             One championship, one card: hero header over the virality rule ·
-             Top-3 channel podium · two runner channels · the pinned squad row ·
-             CTA. Every channel card is a door into that channel's Top-10 roster
-             sheet. The stage never scrolls at 360x640. Every number (countdown,
-             channels, squad TIQ, where you sit inside your own channel) is
-             hydrated by src/compete.ts; the geometry below is what keeps it
-             inside the phone. ---------------- -->
+        <!-- ---------------- arena: the 200 Stars Cup, staged in full.
+             One championship, one card: hero header carrying a two-way clay
+             switch · Top-3 podium · two runners · the pinned squad row · CTA.
+             The switch re-reads the same band two ways: CHANNELS (the squad
+             ladder, each card a door into that channel's Top-10 roster sheet)
+             and TOP PLAYERS (the ten people the Stars actually go to). The
+             stage never scrolls at 360x640. Every number (countdown, channels,
+             squad TIQ, where you sit inside your own channel) is hydrated by
+             src/compete.ts; the geometry below is what keeps it inside the
+             phone. ---------------- -->
         <section class="screen menu compete-screen arena-screen" id="s-arena" data-screen="arena" tabindex="-1" hidden aria-labelledby="arena-title">
           <div class="m-head compete-head">
             <h1 class="m-title" id="arena-title">Arena</h1>
@@ -494,28 +496,30 @@
 
           <div class="compete-body stars-stage" data-scroll id="arena-scroll">
             <article class="stars-card" id="stars-card" aria-labelledby="stars-name">
-              <!-- hero header: the official Star emblem, the engraved title over the rule
-                   that makes the cup viral, and the dark-clay bracket clock. -->
+              <!-- hero header: the official Star emblem, the engraved title over the
+                   board switch, and the dark-clay bracket clock. The switch sits in the
+                   title column, inside the emblem's own 58px row, so it costs the card
+                   no height at all. -->
               <div class="stars-head">
                 <span class="stars-emblem" aria-hidden="true">
                   <img class="stars-emblem-img" id="stars-emblem-img" alt="" width="60" height="60" />
                 </span>
                 <div class="stars-titles">
-                  <h2 class="stars-name" id="stars-name">200 STARS CHANNEL CUP</h2>
-                  <p class="stars-rule" id="stars-rule">
-                    <svg class="ico stars-rule-ico" aria-hidden="true"><use href="#i-cup" /></svg>
-                    <span class="stars-rule-t" id="stars-hook">200 Stars split across Top 10 players of #1 Channel</span>
-                  </p>
+                  <h2 class="stars-name" id="stars-name">200 STARS CUP</h2>
+                  <div class="stars-tabs" id="stars-tabs" role="group" aria-label="Arena leaderboard" data-active="channels">
+                    <span class="mode-thumb" aria-hidden="true"></span>
+                    <button class="mode-seg" type="button" data-view="channels" aria-pressed="true">Channels</button>
+                    <button class="mode-seg" type="button" data-view="players" aria-pressed="false">Top Players</button>
+                  </div>
                 </div>
                 <span class="stars-count" id="stars-count" role="timer" aria-label="Bracket opens in">01:45:20</span>
               </div>
 
-              <!-- channels: the Top 3 squads on a three-column podium, #1 raised.
-                   Filled by src/compete.ts; each card opens its roster. -->
+              <!-- the ladder head: three places on a three-column podium, #1 raised.
+                   Filled by src/compete.ts for whichever board the switch is on. -->
               <ol class="stars-podium" id="stars-podium" aria-label="Top three channels"></ol>
 
-              <!-- runners: places four and five, compact rows that carry a chevron
-                   because they open the same roster sheet. -->
+              <!-- places four and five, compact rows beside the podium. -->
               <ol class="stars-runners" id="stars-runners" aria-label="Channels four and five"></ol>
 
               <!-- the pinned local row: the channel you ride for, where it sits in the
@@ -1556,7 +1560,7 @@
       <!-- arena registration: one seat in the 200 Stars Arena. Free to enter, kept on this device. -->
       <section class="sheet" id="sheet-stars" hidden role="dialog" aria-modal="true" aria-labelledby="stars-sheet-title">
         <h2 class="sheet-t" id="stars-sheet-title">Play for your squad?</h2>
-        <p class="sheet-p" id="stars-sheet-desc">200 Stars Channel Cup · Channels · 8s Blitz · Top 10 Paid</p>
+        <p class="sheet-p" id="stars-sheet-desc">200 Stars Cup · Channels · 8s Blitz · Top 10 Paid</p>
         <dl class="p-stats triple tight">
           <div class="stat"><dt>Entry</dt><dd id="stars-sheet-entry">Free</dd></div>
           <div class="stat"><dt>Seat</dt><dd id="stars-sheet-seat">184 / 256</dd></div>
@@ -1667,7 +1671,7 @@
             <button class="btn btn-ghost" type="button" id="squad-switch">Switch squad</button>
             <button class="btn btn-ghost warn" type="button" id="squad-leave">Leave squad</button>
           </div>
-          <p class="fine">Wins add trophies to your squad in the Channel Cup.</p>
+          <p class="fine">Wins add trophies to your squad in the 200 Stars Cup.</p>
         </div>
 
         <div class="sheet-actions">

@@ -1,16 +1,20 @@
 /**
- * compete.ts — Arena (the 200 Stars Channel Cup) + Ranks (dedicated Leaderboard).
+ * compete.ts — Arena (the 200 Stars Cup) + Ranks (dedicated Leaderboard).
  *
- * IA: Arena stages exactly ONE championship — the 200 Telegram Stars Channel Cup
- * — as a single dark-clay showcase that fills the phone between the header and
- * the bottom dock: the faceted Star medallion with the engraved title over the
- * rule that makes the cup spread (the pool pays the Top 10 players of the #1
- * channel, not ten individuals), the live bracket clock, the Top-3 channel
- * podium, two runner channels, the pinned squad row and the 50px PLAY FOR YOUR
- * SQUAD key. Every channel card — podium, runner or the squad row — opens that
- * channel's Top-10 roster sheet, where the Stars are attributed to the people
- * who actually earned them. There is no cup feed, no archive and no coin entry
- * fee anywhere on it: one championship, staged in full.
+ * IA: Arena stages exactly ONE championship — the 200 Telegram Stars Cup — as a
+ * single dark-clay showcase that fills the phone between the header and the
+ * bottom dock: the faceted Star medallion with the engraved title over a two-way
+ * clay switch, the live bracket clock, a Top-3 podium, two runners, the pinned
+ * squad row and the 50px PLAY FOR YOUR SQUAD key.
+ *
+ * The switch re-reads the same band two ways without leaving the screen.
+ * CHANNELS ranks the squads, and each card opens that channel's Top-10 roster
+ * sheet. TOP PLAYERS lists the ten people the pool actually lands on — the
+ * leading channel's own Top 10, place by place — because the cup funds no
+ * individual outside that ten. Both boards therefore quote one set of numbers:
+ * the ladder is `getSquadRanking()` and the players are `getChannelRoster()`.
+ * There is no cup feed, no archive and no coin entry fee anywhere on it: one
+ * championship, staged in full.
  *
  * The channel ladder is the SAME feed the Intellect Guilds board ranks
  * (`getSquadRanking()`), so the two screens can never disagree about who leads
@@ -61,6 +65,10 @@ export interface CompeteApi {
 }
 
 type Board = 'minds' | 'guilds' | 'nations';
+
+/** The Arena stages one cup but reads it two ways: by channel, or by the people
+ *  the channel's Stars actually land on. */
+type ArenaView = 'channels' | 'players';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const skel = (rows: number): string =>
@@ -315,9 +323,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   const seasonText = seasonChip?.querySelector<HTMLElement>('.ml-season-t') ?? null;
   /** The Cup showcase's own parts: one card, hydrated in place, never rebuilt. */
   const cupEls = {
+    card: document.getElementById('stars-card'),
     name: document.getElementById('stars-name'),
     emblem: document.getElementById('stars-emblem-img') as HTMLImageElement | null,
-    hook: document.getElementById('stars-hook'),
+    tabs: document.getElementById('stars-tabs'),
     count: document.getElementById('stars-count'),
     podium: document.getElementById('stars-podium'),
     runners: document.getElementById('stars-runners'),
@@ -328,6 +337,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     squadNote: document.getElementById('stars-squad-note'),
     cta: document.getElementById('stars-cta') as HTMLButtonElement | null,
   };
+  const viewBtns = [...document.querySelectorAll<HTMLButtonElement>('#stars-tabs [data-view]')];
   // One Star asset, two static mounts: the hero emblem and the roster's prize notice.
   // Every other Star on the Cup is built by `starImg()` as its row is painted.
   if (cupEls.emblem) cupEls.emblem.src = starsImg;
@@ -352,6 +362,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   let cup: GrandCup | null = null;
   /** The head of the channel ladder — the same five squads the Guilds board ranks. */
   let channels: RankedSquad[] = [];
+  /** Which ladder the header switch is showing: the squads, or the ten people they pay. */
+  let view: ArenaView = 'channels';
+  /** The paid ten, fetched once per leading channel — the players board's rows. */
+  let playerRows: RosterRow[] | null = null;
+  let playerRowsFor: string | null = null;
   /** Rosters already fetched, keyed by channel + the TIQ they were merged against. */
   const rosters = new Map<string, Promise<RosterRow[]>>();
   /** The local player's row inside their own channel's roster, or null if unbound. */
@@ -547,12 +562,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     });
   }
 
-  /* ---------- arena: the 200 Stars Arena ----------
+  /* ---------- arena: the 200 Stars Cup ----------
      One championship, staged in the markup and hydrated here. The showcase is a
-     single clay card whose geometry (header · specs · prize ribbon · live standings
-     · CTA) is what makes it fit 360x640 with no scroll, so this controller never
-     rebuilds the card: it writes the live numbers in, ticks the countdown, paints
-     the field and owns the seat. */
+     single clay card whose geometry (header with the board switch · podium ·
+     runners · squad row · CTA) is what makes it fit 360x640 with no scroll, so
+     this controller never rebuilds the card: it writes the live numbers in,
+     ticks the countdown, repaints the one band the switch moves and owns the
+     seat. */
 
   /** A seat is a device fact, like every other mock in this app. */
   const SEAT_KEY = 'detour.arena.seat.v1';
@@ -614,6 +630,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   /** Metal for a bracket place — the three that get a rim, and nothing above them. */
   const metalOf = (place: number): string =>
     place === 1 ? 'gold' : place === 2 ? 'silver' : place === 3 ? 'bronze' : '';
+
+  /** The handle without its sigil: a card this small reads better as a name. */
+  const bare = (handle: string): string => handle.replace(/^@+/, '');
 
   /** Two letters is all a 30px sphere holds without a second glyph crowding it. */
   const initials = (name: string): string => {
@@ -721,8 +740,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     });
   }
 
-  /** A podium channel: rank · icon · handle · squad TIQ · members · the pool it
-   *  holds for its own Top 10 · the cue that says a tap opens the roster. */
+  /** A podium channel: rank · mark · name · squad TIQ · the pool its Top 10 split. */
   function podChannel(s: RankedSquad, c: GrandCup): HTMLLIElement {
     const li = document.createElement('li');
     li.className = 'stars-pod';
@@ -730,14 +748,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const metal = metalOf(s.rank);
     if (metal) li.dataset.metal = metal;
 
-    const name = tag('stars-pod-name', s.handle);
+    const name = tag('stars-pod-name', bare(s.handle));
     name.title = s.name;
 
     const tiq = tag('stars-pod-tiq');
     tiq.append(strong(num(s.trophies)), document.createTextNode(' TIQ'));
 
-    li.append(tag('stars-pod-rank', String(s.rank)), channelAv(s, ''), name, tiq,
-      tag('stars-pod-mem', `${compactCount(s.members)} players`));
+    li.append(tag('stars-pod-rank', String(s.rank)), channelAv(s, ''), name, tiq);
 
     if (s.rank === 1) {
       const prize = tag('stars-pod-prize');
@@ -747,14 +764,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       prize.title = `The #1 channel's Top 10 split ${num(c.stars)} Telegram Stars`;
       li.append(prize);
     }
-    li.append(tag('stars-pod-hint', 'Tap to view roster'));
 
     openable(li, s, `${kindLabel(s)} ${s.handle}, rank ${s.rank} with ${num(s.trophies)} squad `
       + `Tactical IQ and ${s.members.toLocaleString('en-US')} members. Tap to view the Top ${ROSTER_ROWS} roster.`);
     return li;
   }
 
-  /** A runner channel: place · icon · handle · members · the TIQ pill · a chevron. */
+  /** A runner channel: place · mark · name · the TIQ pill · a chevron. */
   function runChannel(s: RankedSquad): HTMLLIElement {
     const li = document.createElement('li');
     li.className = 'stars-run';
@@ -762,9 +778,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const id = tag('stars-run-id');
     const nm = document.createElement('b');
     nm.className = 'stars-run-nm';
-    nm.textContent = s.handle;
+    nm.textContent = bare(s.handle);
     nm.title = s.name;
-    id.append(nm, tag('stars-run-mem', `${compactCount(s.members)} players · ${kindWord(s)}`));
+    id.append(nm);
 
     const tiq = tag('stars-run-tiq');
     tiq.append(strong(num(s.trophies)), document.createTextNode(' TIQ'));
@@ -772,22 +788,157 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     li.append(tag('stars-run-rank', String(s.rank)), channelAv(s, 'stars-ch-sm'), id, tiq,
       svgIcon('#i-next', 'stars-run-go'));
     openable(li, s, `${kindLabel(s)} ${s.handle}, rank ${s.rank} with ${num(s.trophies)} squad `
-      + `Tactical IQ. Tap to view the Top ${ROSTER_ROWS} roster.`);
+      + `Tactical IQ and ${s.members.toLocaleString('en-US')} members. Tap to view the Top ${ROSTER_ROWS} roster.`);
     return li;
   }
 
+  /* ---------- the players board: the ten people the pool actually pays ----------
+     The cup funds no individual outside the leading channel's Top 10, so this is
+     not a second leaderboard with invented numbers — it is the same roster the
+     sheet shows, read place by place. TIQ, nation and payout all come from
+     `getChannelRoster`, so the two views can never disagree. */
+
+  /** A podium player: rank · ball + flag · name · TIQ banked · their own share. */
+  function podPlayer(r: RosterRow): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = 'stars-pod';
+    li.dataset.rank = String(r.rank);
+    const metal = metalOf(r.rank);
+    if (metal) li.dataset.metal = metal;
+
+    const name = tag('stars-pod-name', r.name);
+    name.title = r.name;
+
+    const tiq = tag('stars-pod-tiq');
+    tiq.append(strong(num(r.tiq)), document.createTextNode(' TIQ'));
+
+    li.append(tag('stars-pod-rank', String(r.rank)), sphere(r, 'stars-av'), name, tiq);
+    if (r.stars > 0) {
+      const prize = tag('stars-pod-prize');
+      prize.append(starImg('stars-pod-star'), strong(num(r.stars)));
+      prize.title = `Projected share of the leading channel's pool: ${num(r.stars)} Telegram Stars`;
+      li.append(prize);
+    }
+    li.setAttribute('aria-label', `Rank ${r.rank}: ${r.name}, ${num(r.tiq)} Tactical IQ contributed, `
+      + (r.stars > 0 ? `projected ${num(r.stars)} Telegram Stars` : 'outside the paid places'));
+    return li;
+  }
+
+  /** A runner player: place · ball + flag · name · TIQ · their own share. */
+  function runPlayer(r: RosterRow): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = 'stars-run';
+
+    const id = tag('stars-run-id');
+    const nm = document.createElement('b');
+    nm.className = 'stars-run-nm';
+    nm.textContent = r.name;
+    nm.title = r.name;
+    id.append(nm);
+
+    const tiq = tag('stars-run-tiq');
+    tiq.append(strong(num(r.tiq)), document.createTextNode(' TIQ'));
+
+    li.append(tag('stars-run-rank', String(r.rank)), sphere(r, 'stars-av'), id, tiq);
+    if (r.stars > 0) {
+      const pay = tag('stars-run-pay');
+      pay.append(starImg('stars-run-star'), strong(num(r.stars)));
+      pay.title = `Projected share of the pool: ${num(r.stars)} Telegram Stars`;
+      li.append(pay);
+    }
+    li.setAttribute('aria-label', `Rank ${r.rank}: ${r.name}, ${num(r.tiq)} Tactical IQ contributed, `
+      + (r.stars > 0 ? `projected ${num(r.stars)} Telegram Stars` : 'outside the paid places'));
+    return li;
+  }
+
+  /** The band's loading state: the real card shapes, with the type shimmering. */
+  function paintBoardSkel(): void {
+    for (const [el, cls, n] of [[cupEls.podium, 'stars-pod', 3], [cupEls.runners, 'stars-run', 2]] as const) {
+      if (!el) continue;
+      el.textContent = '';
+      for (let i = 0; i < n; i++) {
+        const li = document.createElement('li');
+        li.className = `${cls} is-skel`;
+        const s = document.createElement('span');
+        s.className = 'skel';
+        li.append(s);
+        el.append(li);
+      }
+    }
+  }
+
+  /** Fill the band from the leading channel's roster, fetching it once per leader. */
+  async function paintPlayers(): Promise<void> {
+    const lead = channels[0];
+    if (!lead) return;
+    if (playerRowsFor !== lead.id) {
+      playerRowsFor = lead.id;
+      playerRows = null;
+      if (view === 'players') paintBoardSkel();
+    }
+    if (!playerRows) {
+      try {
+        playerRows = await rosterOf(seedOf(lead));
+      } catch {
+        playerRows = null;
+        playerRowsFor = null;
+        if (view === 'players') paintChannelBoard();
+        return;
+      }
+    }
+    // A slower roster must never overwrite a board the switch has already moved on.
+    if (view !== 'players' || channels[0]?.id !== lead.id) return;
+    const rows = playerRows;
+    if (cupEls.podium) {
+      cupEls.podium.textContent = '';
+      cupEls.podium.setAttribute('aria-label', `Top three players of ${lead.handle}, whose Top ${ROSTER_ROWS} split the pool`);
+      for (const r of rows.filter((x) => x.rank <= 3)) cupEls.podium.append(podPlayer(r));
+    }
+    if (cupEls.runners) {
+      cupEls.runners.textContent = '';
+      cupEls.runners.setAttribute('aria-label', `Players four and five of ${lead.handle}`);
+      for (const r of rows.filter((x) => x.rank >= 4).slice(0, 2)) cupEls.runners.append(runPlayer(r));
+    }
+  }
+
   /** The head of the ladder, split: three channels on the podium, two runners below. */
-  function paintBoard(c: GrandCup): void {
-    const podium = cupEls.podium;
-    if (podium) {
-      podium.textContent = '';
-      for (const s of channels.filter((x) => x.rank <= 3)) podium.append(podChannel(s, c));
+  function paintChannelBoard(): void {
+    const c = cup;
+    if (!c) return;
+    if (cupEls.podium) {
+      cupEls.podium.textContent = '';
+      for (const s of channels.filter((x) => x.rank <= 3)) cupEls.podium.append(podChannel(s, c));
     }
-    const runners = cupEls.runners;
-    if (runners) {
-      runners.textContent = '';
-      for (const s of channels.filter((x) => x.rank >= 4)) runners.append(runChannel(s));
+    if (cupEls.runners) {
+      cupEls.runners.textContent = '';
+      for (const s of channels.filter((x) => x.rank >= 4)) cupEls.runners.append(runChannel(s));
     }
+  }
+
+  /** Repaint the band for whichever board the header switch is on. */
+  function paintBoard(): void {
+    if (cupEls.card) cupEls.card.dataset.view = view;
+    if (view === 'players') { void paintPlayers(); return; }
+    if (cupEls.podium) cupEls.podium.setAttribute('aria-label', 'Top three channels');
+    if (cupEls.runners) cupEls.runners.setAttribute('aria-label', 'Channels four and five');
+    paintChannelBoard();
+  }
+
+  /** The switch never leaves the screen: it re-reads the same band a second way. */
+  function selectView(next: ArenaView): void {
+    if (next === view) return;
+    view = next;
+    impact('light');
+    if (cupEls.tabs) cupEls.tabs.dataset.active = next;
+    for (const b of viewBtns) b.setAttribute('aria-pressed', String(b.dataset.view === next));
+    paintBoard();
+  }
+
+  for (const b of viewBtns) {
+    b.addEventListener('click', () => {
+      const v = b.dataset.view;
+      if (v === 'channels' || v === 'players') selectView(v);
+    });
   }
 
   /**
@@ -818,7 +969,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     row.setAttribute('aria-haspopup', 'dialog');
     setText(cupEls.squadChip, 'YOUR SQUAD');
     setText(cupEls.squadLetter, squadLetter(mine));
-    setText(cupEls.squadName, `${mine.handle} · Rank ${mine.rank}`);
+    setText(cupEls.squadName, `${bare(mine.handle)} · Rank ${mine.rank}`);
 
     const note = cupEls.squadNote;
     const you = myRoster?.find((r) => r.isYou) ?? null;
@@ -928,7 +1079,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   /** Write the cup's own numbers into the standing geometry. Runs on every entry. */
   function paintCup(c: GrandCup): void {
     setText(cupEls.name, c.name.toUpperCase());
-    setText(cupEls.hook, c.hook);
     paintSquad(c);
     paintCount(c, Date.now());
     paintCta(c);
@@ -1017,7 +1167,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       if (seat?.cup === cup.id && cup.players < cup.maxPlayers) cup.players += 1;
     }
     channels = channelLadder();
-    paintBoard(cup);
+    paintBoard();
     paintCup(cup);
     await loadMyRoster();
     paintSquad(cup);
@@ -2482,7 +2632,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       loadSquads();
     }
     // The Cup ladder and your place in it read the same registry: bind a channel
-    // anywhere and the Arena's podium, squad row and roster all move with it.
+    // anywhere and the Arena's podium, squad row and roster all move with it. The
+    // players board reads that same roster, so its cache goes too — otherwise the
+    // two boards would quote different TIQ for the same channel.
+    rosters.clear();
+    playerRows = null;
+    playerRowsFor = null;
     myRosterKey = null;
     if (isArenaVisible()) void loadCup();
   });

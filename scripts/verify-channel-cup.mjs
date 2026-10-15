@@ -1,25 +1,32 @@
 /**
  * verify-channel-cup.mjs — serves ./dist and drives the ARENA tab as the
- * 200 Stars CHANNEL CUP: a Telegram channel/squad championship whose one card
- * opens into that channel's Top-10 roster sheet.
+ * 200 Stars Cup: a Telegram Stars championship whose one card reads two ways
+ * through a clay switch in its header — CHANNELS (the squad ladder) and TOP
+ * PLAYERS (the ten people the leading channel's pool actually pays).
  *
  *   npm run build
  *   node scripts/verify-channel-cup.mjs
  *
- * One phone, 360x640, because that is the fit the pivot has to hold:
- *  - the header carries the Star emblem, "200 STARS CHANNEL CUP" and the rule
- *    badge that explains where the pool actually goes, over a live HH:MM:SS clock,
- *  - the podium is three CHANNELS (rank badge, verified channel mark, handle,
- *    squad TIQ, member count, roster cue) and only #1 wears the 200-Star pool,
- *  - two runner channels follow, each with a chevron, then the pinned squad row,
- *    then a >=48px PLAY FOR YOUR SQUAD key,
+ * One phone, 360x640, because that is the fit the card has to hold:
+ *  - the header carries the Star emblem, "200 STARS CUP" that never clips, the
+ *    two-way switch (>=48px keys, sliding thumb, no clipped label) and a live
+ *    HH:MM:SS clock,
+ *  - the channels podium is three CHANNELS (rank badge, verified channel mark,
+ *    bare name, squad TIQ) with no @ sigil, no member count and no "tap to view
+ *    roster" cue — the card itself is the door, and only #1 wears the pool,
+ *  - two runner channels follow with a chevron, then the pinned squad row, then
+ *    a >=48px PLAY FOR YOUR SQUAD key,
+ *  - switching to TOP PLAYERS re-reads the same band as individuals: sphere +
+ *    nation flag + TIQ + their own share of the cup's 45/30/22/19/17 ladder,
+ *    stepping gold/silver/bronze, and no row is a roster door,
+ *  - switching back restores the channels board and its single pool pill,
  *  - tapping a channel opens the roster sheet with exactly ten contributors,
- *    ranked 1..10, whose projected payouts sum to the 200-Star pool; the close
- *    key and the backdrop both shut it,
+ *    ranked 1..10, whose projected payouts sum to the 200-Star pool,
  *  - the stage never scrolls and nothing spills its box, and no blur or
  *    backdrop-filter is live on the screen or its sheet.
  *
- * `.shots/arena/channel-cup-360x640.png` and `channel-cup-roster.png` are kept.
+ * `.shots/arena/` keeps `channel-cup-360x640.png`, `channel-cup-players.png`,
+ * `channel-cup-roster.png` and `channel-cup-squad.png`.
  */
 import http from 'node:http';
 import fs from 'node:fs';
@@ -83,30 +90,51 @@ const PROBE = `(function () {
     role: li.getAttribute('role') ?? '',
     haspopup: li.getAttribute('aria-haspopup') ?? '',
     badge: li.querySelector('.stars-pod-rank')?.textContent?.trim() ?? '',
-    mark: li.querySelector('.stars-ch-av .stars-ch-t')?.textContent?.trim() ?? '',
+    mark: li.querySelector('.stars-ch-av .stars-ch-t, .stars-av .stars-av-t')?.textContent?.trim() ?? '',
     tick: !!li.querySelector('.stars-ch-verify use'),
+    flag: !!li.querySelector('.stars-av-flag .fp'),
     name: li.querySelector('.stars-pod-name')?.textContent?.trim() ?? '',
     tiq: li.querySelector('.stars-pod-tiq')?.textContent?.trim() ?? '',
-    mem: li.querySelector('.stars-pod-mem')?.textContent?.trim() ?? '',
     pool: li.querySelector('.stars-pod-prize')?.textContent?.trim() ?? '',
-    hint: li.querySelector('.stars-pod-hint')?.textContent?.trim() ?? '',
+    poolStar: !!li.querySelector('.stars-pod-prize img'),
     nameSpill: spill('.stars-pod-name', li),
     tiqSpill: spill('.stars-pod-tiq', li),
-    memSpill: spill('.stars-pod-mem', li),
-    hintSpill: spill('.stars-pod-hint', li),
     h: +li.getBoundingClientRect().height.toFixed(1),
   }));
 
   const runs = [...document.querySelectorAll('.stars-run')].map((li) => ({
     rank: li.querySelector('.stars-run-rank')?.textContent?.trim() ?? '',
+    mark: li.querySelector('.stars-ch-av .stars-ch-t, .stars-av .stars-av-t')?.textContent?.trim() ?? '',
+    flag: !!li.querySelector('.stars-av-flag .fp'),
     name: li.querySelector('.stars-run-nm')?.textContent?.trim() ?? '',
-    mem: li.querySelector('.stars-run-mem')?.textContent?.trim() ?? '',
     tiq: li.querySelector('.stars-run-tiq')?.textContent?.trim() ?? '',
+    pay: li.querySelector('.stars-run-pay')?.textContent?.trim() ?? '',
+    payStar: !!li.querySelector('.stars-run-star'),
     go: !!li.querySelector('.stars-run-go use'),
+    role: li.getAttribute('role') ?? '',
     nameSpill: spill('.stars-run-nm', li),
-    memSpill: spill('.stars-run-mem', li),
     h: +li.getBoundingClientRect().height.toFixed(1),
   }));
+
+  /* the board switch: two keys on a sliding clay thumb. The face is 30px here,
+     so the ::after band is what has to carry the tap target to 48px. */
+  const band = (el) => {
+    const cs = getComputedStyle(el, '::after');
+    const v = (p) => (cs[p] && cs[p] !== 'auto' ? -parseFloat(cs[p]) : 0);
+    return +(el.getBoundingClientRect().height + v('top') + v('bottom')).toFixed(1);
+  };
+  const tabsEl = document.getElementById('stars-tabs');
+  const tabs = {
+    active: tabsEl?.dataset.active ?? '',
+    keys: [...document.querySelectorAll('#stars-tabs .mode-seg')].map((b) => ({
+      view: b.dataset.view ?? '',
+      pressed: b.getAttribute('aria-pressed') ?? '',
+      t: b.textContent.trim(),
+      spill: spill(b),
+      tap: band(b),
+    })),
+    thumb: !!tabsEl?.querySelector('.mode-thumb'),
+  };
 
   const emblemImg = document.querySelector('.stars-emblem-img');
 
@@ -125,7 +153,8 @@ const PROBE = `(function () {
   return {
     title: txt('#arena-title'),
     name: txt('#stars-name'),
-    hook: txt('#stars-hook'),
+    view: card?.dataset.view ?? '',
+    tabs,
     count: txt('#stars-count'),
     emblem: { box: box(emblem), src: emblemImg ? emblemImg.getAttribute('src') : null },
     pods, runs,
@@ -146,6 +175,11 @@ const PROBE = `(function () {
       meter: !!document.getElementById('stars-meter'),
       youRow: !!document.getElementById('stars-you'),
       flatGlyph: document.querySelectorAll('.stars-glyph').length,
+      podMem: document.querySelectorAll('.stars-pod-mem').length,
+      podHint: document.querySelectorAll('.stars-pod-hint').length,
+      runMem: document.querySelectorAll('.stars-run-mem').length,
+      rule: document.querySelectorAll('.stars-rule').length,
+      hook: !!document.getElementById('stars-hook'),
     },
     scroll: {
       page: document.documentElement.scrollHeight - document.documentElement.clientHeight,
@@ -155,7 +189,7 @@ const PROBE = `(function () {
     },
     overflow: {
       card: over(card), head: over(document.querySelector('.stars-head')),
-      rule: over(document.querySelector('.stars-rule-t')), count: over(document.querySelector('.stars-count')),
+      tabs: over(document.getElementById('stars-tabs')), count: over(document.querySelector('.stars-count')),
       podium: over(document.getElementById('stars-podium')), runners: over(document.getElementById('stars-runners')),
       squad: over(squad), cta: over(cta), arena: over(arena), stage: over(stage),
     },
@@ -226,15 +260,23 @@ await pg.waitForTimeout(1400);
 
 const m = await pg.evaluate(PROBE);
 
-/* 1 — header: the emblem, the title, and the rule that makes the cup spread */
+/* 1 — header: the emblem, the engraved title and the two-way board switch */
 if (m.title !== 'Arena') fail(`aria title reads "${m.title}"`);
-if (m.name !== '200 STARS CHANNEL CUP') fail(`title reads "${m.name}"`);
-if (m.hook !== '200 Stars split across Top 10 players of #1 Channel') fail(`rule badge reads "${m.hook}"`);
+if (m.name !== '200 STARS CUP') fail(`title reads "${m.name}"`);
 if (!/^\d{2}:\d{2}:\d{2}$/.test(m.count ?? '')) fail(`bracket clock reads "${m.count}"`);
 if (!m.emblem.box || m.emblem.box.w < 56 || m.emblem.box.w > 60) fail(`emblem is ${m.emblem.box?.w}px, want 56-60`);
 if (!/telegram_stars/i.test(m.emblem.src ?? '')) fail(`hero emblem is not the Telegram Star asset (${m.emblem.src})`);
+if (m.view !== 'channels') fail(`the card opens on the "${m.view}" board, want channels`);
+if (!m.tabs.thumb) fail('the board switch has no sliding clay thumb');
+if (m.tabs.active !== 'channels') fail(`the switch is on "${m.tabs.active}"`);
+if (m.tabs.keys.length !== 2) fail(`the switch has ${m.tabs.keys.length} keys, want 2`);
+for (const k of m.tabs.keys) {
+  if (k.spill > 0.5) fail(`the "${k.t}" key spills ${k.spill}px — a clipped label is what the switch replaced`);
+  if (k.tap < 48) fail(`the "${k.t}" key is a ${k.tap}px tap target, want >=48`);
+  if (k.pressed !== String(k.view === 'channels')) fail(`the "${k.t}" key reports aria-pressed="${k.pressed}"`);
+}
 
-/* 2 — the podium ranks CHANNELS, and only the leader holds the pool */
+/* 2 — the channels board: three squads, no sigils, no counts, no roster cues */
 if (m.pods.length !== 3) fail(`podium shows ${m.pods.length} channels, want 3`);
 const ranks = m.pods.map((p) => p.rank).sort().join(',');
 if (ranks !== '1,2,3') fail(`podium ranks are ${ranks}`);
@@ -242,15 +284,16 @@ for (const p of m.pods) {
   if (p.badge !== p.rank) fail(`podium #${p.rank} badge reads "${p.badge}"`);
   if (p.role !== 'button' || p.haspopup !== 'dialog') fail(`podium #${p.rank} is not an openable button`);
   if (!p.mark || !p.tick) fail(`podium #${p.rank} has no channel mark or no verification tick`);
-  if (!p.name.startsWith('@')) fail(`podium #${p.rank} name "${p.name}" is not a Telegram handle`);
+  if (!p.name) fail(`podium #${p.rank} names nothing`);
+  if (p.name.startsWith('@')) fail(`podium #${p.rank} still wears the @ sigil ("${p.name}")`);
   if (!/^[\d,]+ TIQ$/.test(p.tiq)) fail(`podium #${p.rank} TIQ reads "${p.tiq}"`);
-  if (!/^[\d.]+k? players$/.test(p.mem)) fail(`podium #${p.rank} member count reads "${p.mem}"`);
-  if (!/roster/i.test(p.hint)) fail(`podium #${p.rank} has no roster cue ("${p.hint}")`);
+  if (p.flag) fail(`podium #${p.rank} (a channel) carries a player flag`);
   for (const [k, v] of Object.entries(p)) if (k.endsWith('Spill') && v > 0.5) fail(`podium #${p.rank} ${k} spills ${v}px`);
 }
 const first = m.pods.find((p) => p.rank === '1');
 if (first?.metal !== 'gold') fail(`the leader wears ${first?.metal || 'no'} metal, want gold`);
 if (!/^200\s*Pool$/.test(first?.pool ?? '')) fail(`the leader's pool pill reads "${first?.pool}"`);
+if (!first?.poolStar) fail("the leader's pool pill has no real Star asset");
 for (const p of m.pods.filter((x) => x.rank !== '1')) if (p.pool) fail(`#${p.rank} claims a pool ("${p.pool}") that only #1 holds`);
 if (m.pods.length && Math.max(...m.pods.map((p) => p.h)) - Math.min(...m.pods.map((p) => p.h)) < 6) {
   fail('the champion is not raised above the other two');
@@ -260,16 +303,66 @@ if (m.pods.length && Math.max(...m.pods.map((p) => p.h)) - Math.min(...m.pods.ma
 if (m.runs.length !== 2) fail(`${m.runs.length} runner channels, want 2`);
 m.runs.forEach((r, i) => {
   if (r.rank !== String(i + 4)) fail(`runner ${i + 1} ranks "${r.rank}"`);
-  if (!r.name.startsWith('@')) fail(`runner ${i + 1} name "${r.name}" is not a handle`);
+  if (r.name.startsWith('@')) fail(`runner ${i + 1} name "${r.name}" still wears the @ sigil`);
+  if (!r.name) fail(`runner ${i + 1} names nothing`);
   if (!/^[\d,]+ TIQ$/.test(r.tiq)) fail(`runner ${i + 1} TIQ reads "${r.tiq}"`);
   if (!r.go) fail(`runner ${i + 1} has no chevron`);
+  if (r.pay) fail(`runner ${i + 1} claims a Star share ("${r.pay}") — the pool pays channels, not runners`);
   if (r.h < 48) fail(`runner ${i + 1} is ${r.h}px tall, under the 48px target`);
   for (const [k, v] of Object.entries(r)) if (k.endsWith('Spill') && v > 0.5) fail(`runner ${i + 1} ${k} spills ${v}px`);
 });
 if (!m.squad.chip) fail('the squad row has no chip');
 if (!m.squad.name) fail('the squad row names nothing');
+if (m.squad.name.startsWith('@')) fail(`the squad row still wears the @ sigil ("${m.squad.name}")`);
 if (m.squad.h < 48) fail(`the squad row is ${m.squad.h}px tall`);
 for (const [k, v] of Object.entries(m.squad)) if (k.endsWith('Spill') && v > 0.5) fail(`squad row ${k} spills ${v}px`);
+
+/* 3b — the switch re-reads the same band as the ten people the pool pays */
+await pg.click('#stars-tabs [data-view="players"]');
+await pg.waitForTimeout(1400);
+const p = await pg.evaluate(PROBE);
+if (p.view !== 'players') fail(`the switch left the card on "${p.view}"`);
+if (p.tabs.active !== 'players') fail(`the switch thumb is still on "${p.tabs.active}"`);
+if (p.tabs.keys.find((k) => k.view === 'players')?.pressed !== 'true') fail('the Top Players key never reports itself pressed');
+if (p.pods.length !== 3 || p.runs.length !== 2) fail(`the players board shows ${p.pods.length}+${p.runs.length}, want 3+2`);
+const paid = [...p.pods.map((x) => x.pool), ...p.runs.map((x) => x.pay)];
+for (const [i, share] of paid.entries()) {
+  const n = Number(String(share).replace(/[^\d]/g, ''));
+  if (!n) fail(`players-board place ${i + 1} pays "${share}"`);
+}
+/* the cup's own ladder, read in order: 45 30 22 19 17 */
+if (paid.map((s) => Number(String(s).replace(/[^\d]/g, ''))).join(',') !== '45,30,22,19,17') {
+  fail(`the players board pays ${paid.join(',')} — not the cup's 45/30/22/19/17`);
+}
+for (const x of [...p.pods, ...p.runs]) {
+  if (!x.mark) fail(`a players-board place has no avatar initials`);
+  if (!x.flag) fail(`a players-board place has no nation flag`);
+  if (x.tick) fail('a player is marked as a verified channel');
+  if (x.role === 'button') fail('a player row is wired as a roster door — people are not channels');
+  if (x.go) fail('a player row still carries the channel chevron');
+  for (const [k, v] of Object.entries(x)) if (k.endsWith('Spill') && v > 0.5) fail(`players board ${k} spills ${v}px`);
+}
+if (p.pods[0]?.metal !== 'gold' || p.pods[1]?.metal !== 'silver' || p.pods[2]?.metal !== 'bronze') {
+  fail('the players podium does not step gold/silver/bronze');
+}
+if (Math.max(...p.pods.map((x) => x.h)) - Math.min(...p.pods.map((x) => x.h)) < 12) {
+  fail(`the players podium barely steps (${p.pods.map((x) => x.h).join('/')}px) — every place carries a pill, so the rise must come from the pillar`);
+}
+for (const [k, v] of Object.entries(p.scroll)) if (v > 1) fail(`the players board makes ${k} scroll by ${v}px`);
+for (const [k, v] of Object.entries(p.overflow)) if (v > 0) fail(`the players board ${k} overflows by ${v}px`);
+await pg.screenshot({ path: path.join(OUT, 'channel-cup-players.png') });
+await pg.click('#stars-tabs [data-view="channels"]');
+await pg.waitForTimeout(700);
+const back = await pg.evaluate(PROBE);
+if (back.view !== 'channels' || back.pods.map((x) => x.name).join(',') !== m.pods.map((x) => x.name).join(',')) {
+  fail('switching back did not restore the channels board');
+}
+const backFirst = back.pods.find((x) => x.rank === '1');
+if (!/^200\s*Pool$/.test(backFirst?.pool ?? '')) {
+  fail(`the channels board lost its pool pill after a round trip ("${backFirst?.pool}")`);
+}
+if (back.pods.some((x) => x.pool && x.rank !== '1')) fail('a round trip left pool pills on the unled channels');
+say(`players board: ${p.pods.map((x) => `${x.rank}:${x.name} ${x.tiq.replace(' TIQ', '')} ${x.pool}`).join('  |  ')}`);
 
 /* 4 — the individual leaderboard is gone, and so is the furniture that carried it */
 for (const [k, v] of Object.entries(m.purged)) if (v) fail(`purged arena furniture left (${k} = ${v})`);
@@ -308,7 +401,8 @@ if (!/Top 10 Contributors win 200 Telegram Stars/.test(r.notice)) fail(`prize no
 if (!/telegram_stars/i.test(r.noticeStar ?? '')) fail('the prize notice carries no real Star asset');
 if (r.close.w < 48 || r.close.h < 48) fail(`the close key is ${r.close.w}x${r.close.h}, want >=48`);
 if (r.rows.length !== 10) fail(`the roster lists ${r.rows.length} contributors, want 10`);
-if (r.head.name !== gold.name) fail(`the sheet shows ${r.head.name} but ${gold.name} was tapped`);
+// the sheet keeps the full @handle: inside it the entries are a channel's people.
+if (r.head.name !== `@${gold.name}`) fail(`the sheet shows ${r.head.name} but @${gold.name} was tapped`);
 
 let pool = 0;
 r.rows.forEach((row, i) => {
@@ -418,7 +512,7 @@ const bs = await bpg.evaluate(() => {
 });
 if (bs.unbound) fail('a bound device still reads the squad row as unbound');
 if (bs.chip !== 'YOUR SQUAD') fail(`the squad chip reads "${bs.chip}"`);
-if (bs.name !== '@NeonRacers · Rank 2') fail(`the squad row names "${bs.name}"`);
+if (bs.name !== 'NeonRacers · Rank 2') fail(`the squad row names "${bs.name}"`);
 if (!bs.star) fail('the squad row pays with a text glyph, not the real Star asset');
 if (bs.noteSpill > 0.5) fail(`the squad note spills ${bs.noteSpill}px`);
 if (bs.haspopup !== 'dialog') fail('a bound squad row no longer opens a dialog');
@@ -446,7 +540,7 @@ srv.close();
 
 for (const n of notes) console.log(`  · ${n}`);
 console.log(`layout 360x640  card ${m.fits.cardH}px  gap ${m.fits.gapToDock}px  clock "${m.count}"`);
-console.log(`podium ${m.pods.map((p) => `${p.rank}:${p.name} ${p.tiq.replace(' TIQ', '')} ${p.mem}`).join('  |  ')}`);
+console.log(`podium ${m.pods.map((p) => `${p.rank}:${p.name} ${p.tiq.replace(' TIQ', '')}`).join('  |  ')}`);
 console.log(`runners ${m.runs.map((x) => `${x.rank}:${x.name}`).join('  |  ')}  squad "${m.squad.name}" "${m.squad.note}"`);
 console.log(`roster  ${r.rows.length} contributors, payouts ${ladder.join('+')} = ${pool}`);
 

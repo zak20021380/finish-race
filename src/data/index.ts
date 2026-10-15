@@ -16,7 +16,7 @@ export interface CupPrize {
 }
 
 /**
- * The one tournament the Arena stages: the 200 Telegram Stars Channel Cup.
+ * The one tournament the Arena stages: the 200 Telegram Stars Cup.
  *
  * There is no cup feed here on purpose — a single championship is the whole
  * screen, so the shape carries exactly what the showcase renders: the pool, the
@@ -26,8 +26,6 @@ export interface CupPrize {
 export interface GrandCup {
   id: string;
   name: string;
-  /** the one-line hook under the engraved title */
-  hook: string;
   /** the whole prize vault, in Telegram Stars */
   stars: number;
   /** exact distribution across the paid places, in place order */
@@ -148,8 +146,7 @@ function grandCupSeed(): GrandCup {
   const t = now();
   return {
     id: 'cup-200-stars',
-    name: '200 Stars Channel Cup',
-    hook: '200 Stars split across Top 10 players of #1 Channel',
+    name: '200 Stars Cup',
     stars: 200,
     prizes: GRAND_CUP_PRIZES.map((p) => ({ ...p })),
     specs: ['Channels', '8s Blitz'],
