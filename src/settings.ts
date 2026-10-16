@@ -10,7 +10,7 @@ export type Mode = 'bot' | 'online';
 export type ModeTab = 'solo' | 'party';
 
 export interface Settings {
-  /** placeholder until the app actually has audio */
+  /** the engine's step/leap effects and the matchmaking chime */
   sound: boolean;
   haptics: boolean;
   reducedMotion: boolean;
@@ -139,7 +139,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     language: 'Language',
     languageSub: 'App language · applies instantly',
     sound: 'Sound',
-    soundSub: 'Kept for you — the game has no audio yet',
+    soundSub: 'Steps, leaps and match sounds',
     haptics: 'Haptics',
     hapticsSub: 'Buzz on walls, moves and the result',
     reducedMotion: 'Reduced motion',
@@ -169,7 +169,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     language: 'زبان',
     languageSub: 'زبان برنامه · اعمال فوری',
     sound: 'صدا',
-    soundSub: 'برای شما نگه داشته شد — بازی هنوز صدا ندارد',
+    soundSub: 'صدای قدم‌ها، پرش‌ها و مسابقه',
     haptics: 'لرزش لمسی',
     hapticsSub: 'لرزش برای دیوارها، حرکت‌ها و نتیجه',
     reducedMotion: 'کاهش حرکت',
@@ -199,7 +199,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     language: 'Язык',
     languageSub: 'Язык приложения · применяется сразу',
     sound: 'Звук',
-    soundSub: 'Сохранено для вас — в игре пока нет звука',
+    soundSub: 'Шаги, прыжки и звуки матча',
     haptics: 'Вибрация',
     hapticsSub: 'Отклик на стены, ходы и результат',
     reducedMotion: 'Меньше движения',
@@ -229,7 +229,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     language: 'اللغة',
     languageSub: 'لغة التطبيق · تُطبق فورًا',
     sound: 'الصوت',
-    soundSub: 'محفوظ لك — لا صوت في اللعبة بعد',
+    soundSub: 'أصوات الخطوات والقفزات والمباراة',
     haptics: 'الاهتزاز',
     hapticsSub: 'اهتزاز عند الجدران والحركات والنتيجة',
     reducedMotion: 'تقليل الحركة',
@@ -259,7 +259,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     language: 'Idioma',
     languageSub: 'Idioma de la app · se aplica al instante',
     sound: 'Sonido',
-    soundSub: 'Guardado para ti — el juego aún no tiene audio',
+    soundSub: 'Pasos, saltos y sonidos de partida',
     haptics: 'Vibración',
     hapticsSub: 'Vibra con muros, movimientos y el resultado',
     reducedMotion: 'Movimiento reducido',

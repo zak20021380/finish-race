@@ -35,6 +35,7 @@
  */
 import { contendersIn, dimsFor, type Action } from './rules';
 import { menuState, motionReduced, settings } from './settings';
+import { audioContext } from './sound';
 import { payout, profile } from './storage';
 import { runtime, tiqFrom } from './admin';
 import { impact, notify, tgInitData, tgUser } from './telegram';
@@ -702,18 +703,13 @@ export function onlineSearch(): MatchSource {
 /** E5 then B5, 90ms apart: a short rising pair, never a jingle. */
 const NOTES: ReadonlyArray<readonly [number, number]> = [[659.25, 0], [987.77, 0.09]];
 
-let audio: AudioContext | null = null;
-
-/** Respects the Sound switch; a webview without WebAudio simply gets the haptic. */
+/** Respects the Sound switch; the shared engine (`sound.ts`) is the app's only AudioContext. */
 function chime(): void {
   if (!settings.sound) return;
   try {
-    const Ctor = window.AudioContext
-      ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctor) return;
-    audio ??= new Ctor();
-    const ctx = audio;
-    if (ctx.state === 'suspended') void ctx.resume();
+    const ctx = audioContext();
+    if (!ctx) return;
+    if (ctx.state !== 'running') void ctx.resume().catch(() => { /* still locked */ });
     const t0 = ctx.currentTime;
     for (const [freq, at] of NOTES) {
       const osc = ctx.createOscillator();

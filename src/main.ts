@@ -23,6 +23,7 @@ import { createShop } from './shop';
 import { createNotifications } from './notifications';
 import { mountCoins, setBalance } from './coin';
 import { menuState, motionReduced } from './settings';
+import { playMove, RIVAL_MOVE_GAIN } from './sound';
 import { onChange, profile, recordGame, theme } from './storage';
 import { SEAT_RAMPS } from './themes';
 import { impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
@@ -740,7 +741,14 @@ function play(a: Action, remote = false): boolean {
   if (!next) return false;
   /* where the ball actually came to rest — after a blast that is three rows further down */
   const landed = moved === null ? null : ballById(next, moved)?.pos ?? null;
-  if (a.kind === 'move' && from && landed) marks[by] = { kind: 'step', from, to: landed };
+  if (a.kind === 'move' && from && landed) {
+    marks[by] = { kind: 'step', from, to: landed };
+    /* one voice per step, whoever took it: the human's own rings at full with a light tap in the
+       hand, a bot or the wire's rival sits behind it. Both are pure side effects — a locked
+       webview or a muted switch must never touch the turn the rules just moved. */
+    if (by === localSide && !remote) { playMove(); impact('light'); }
+    else playMove(RIVAL_MOVE_GAIN);
+  }
   else if (a.kind === 'wall') { marks[by] = { kind: 'wall', spec: a.wall }; impact('medium'); }
   if (a.kind === 'mine') mineArmed = false;      // one mine per trip to the key
   state = next;
