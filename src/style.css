@@ -6142,7 +6142,6 @@ html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: no
   --set-card-gap: calc(2px + var(--set-t) * 3);     /* 2 -> 5 */
   --set-stack-gap: calc(3px + var(--set-t) * 5);    /* 3 -> 8 */
   --set-scr-gap: calc(4px + var(--set-t) * 8);      /* 4 -> 12 */
-  --set-note-pad: calc(5px + var(--set-t) * 3);     /* 5 -> 8 */
   /* The horizontal inset is fluid as well: `--s3` collapses from 16 to 8 at the 700px
      breakpoint, and a fixed pad there makes the foot badge wrap one line taller at exactly
      the height where the screen gained 1px — the same dead-band bug, one axis over. */
@@ -6208,11 +6207,9 @@ html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: no
 }
 .set-stack::-webkit-scrollbar { display: none; }
 
-/* tactile Dark Clay card: matte charcoal depth, lit from above.
-   Three cues, never more: a soft ambient drop under the slab, a lit rim along
-   the top edge, and a hairline all the way round. The face itself is matte —
-   the gradient stops in the charcoal band (#212B40 → #171E2B) instead of
-   carrying a gloss, so nothing on this screen glares. */
+/* minimalist Dark Clay slab: a quiet charcoal face under one soft inner light and
+   a subtle 1px translucent border. Two cues, never more — nothing glares, and the
+   padding is generous so the rows have breathing room around the label. */
 .set-card {
   flex: none;
   display: flex;
@@ -6220,27 +6217,29 @@ html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: no
   gap: var(--set-card-gap);
   padding: var(--set-pad-t) var(--set-pad-x) var(--set-pad-b);
   border-radius: 20px;
-  background: linear-gradient(180deg, #212B40 0%, #1B2331 58%, #171E2B 100%);
-  background-color: #1B2331;
+  background: linear-gradient(180deg, #1E2737 0%, #19202C 58%, #161C27 100%);
+  background-color: #19202C;
   box-shadow:
-    0 14px 28px rgba(0, 0, 0, .45),
-    inset 0 1px 0 rgba(255, 255, 255, .10),
-    inset 0 -3px 4px rgba(0, 0, 0, .38),
+    0 10px 22px rgba(0, 0, 0, .38),
+    inset 0 1px 0 rgba(255, 255, 255, .07),
     inset 0 0 0 1px rgba(255, 255, 255, .06);
 }
+/* the section header is a quiet uppercase label, not a token: 11px / 600 in a
+   low-opacity slate, tucked above its rows with consistent tracking */
 .set-card-h {
   display: flex;
   align-items: center;
-  gap: var(--s2);
   margin: 0;
   padding: 0 var(--s1);
-  font-size: var(--t-2);
-  font-weight: 800;
-  letter-spacing: -.01em;
+  min-height: var(--set-ico);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .09em;
+  text-transform: uppercase;
   line-height: 1.2;
-  color: #F8FAFC;
+  color: rgba(148, 163, 184, .85);
 }
-/* embossed icon chip beside each card title + each row */
+/* the row icon chips keep their carved-in well so the rows still read as keys */
 .set-ico {
   flex: none;
   width: var(--set-ico);
@@ -6254,17 +6253,6 @@ html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: no
     inset 0 2px 4px rgba(0, 0, 0, .55),
     inset 0 -1px 0 rgba(255, 255, 255, .08),
     inset 0 0 0 1px rgba(255, 255, 255, .06);
-}
-/* the SECTION badge is the one sculpted token on a card: raised off the face
-   with its own solid lip, a lit top rim and a hairline — the row icons below it
-   stay carved-in wells, so the eye reads hierarchy from depth alone. */
-.set-card-h .set-ico {
-  background: linear-gradient(180deg, #2C3750 0%, #1B2331 100%);
-  box-shadow:
-    0 2px 0 #080C14,
-    0 6px 12px -6px rgba(0, 0, 0, .7),
-    inset 0 1px 0 rgba(255, 255, 255, .16),
-    inset 0 0 0 1px rgba(255, 255, 255, .07);
 }
 .set-ico .ico { width: calc(var(--set-ico) * .7); height: calc(var(--set-ico) * .7); }
 .set-ico.sm { width: calc(var(--set-ico) + 6px); height: calc(var(--set-ico) + 6px); border-radius: calc(var(--set-ico) * .4); }
@@ -6324,13 +6312,13 @@ html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: no
 html[dir="rtl"] .chev.tactile { transform: scaleX(-1); }
 html[dir="rtl"] .set-row:active .chev.tactile { transform: scaleX(-1) translateY(2px); }
 
-/* ---- tactile clay groove toggle ------------------------------------------
-   Not a flat pill: the track is a well carved INTO the card (deep inner
-   shadow, a hairline all the way round, no extrusion of its own), and the one
-   thing that changes between states is what fills it. Off = the raw charcoal
-   well. On = the same well flooded with a warm amber ramp behind a soft bloom,
-   so the control glows rather than shouts. The knob is a solid clay token with
-   a real lip under it, jittered up a pixel when the track is pressed.
+/* ---- refined clay toggle -------------------------------------------------
+   The track is a groove carved INTO the card: a deep inset charcoal well with a
+   crisp hairline all the way round and NO outer bloom. When the row is on, the
+   same well floods with a contained warm amber ramp — a clean #F59E0B body, an
+   inset lit edge, zero spill outside the control. The knob is a tactile
+   matte-white token with a gentle soft shadow; the transition is the same
+   springy travel as before, and `html.reduced-motion` stills it for free.
 
    Specificity note: the base `.row[aria-checked="true"] .switch` paints the
    deep-sky fill (3 class-level selectors) and would win over a bare
@@ -6346,90 +6334,94 @@ html[dir="rtl"] .set-row:active .chev.tactile { transform: scaleX(-1) translateY
     inset 0 0 0 1px rgba(255, 255, 255, .07);
   transition: transform var(--motion-fast), box-shadow var(--motion-med);
 }
-/* the amber flood: an overlay so the fill can CROSS-FADE in instead of
-   swapping (a gradient background is not animatable) */
+/* the amber fill: an overlay so the fill can CROSS-FADE in instead of swapping
+   (a gradient background is not animatable). Kept inside the track: subtle top
+   sheen, darker under-edge, contained. */
 .settings-screen .switch::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(180deg, #FCD34D 0%, #F59E0B 54%, #C2740A 100%);
-  box-shadow: inset 0 2px 3px rgba(255, 255, 255, .4), inset 0 -2px 4px rgba(120, 53, 15, .5);
+  background: linear-gradient(180deg, #FBBF24 0%, #F59E0B 55%, #D97706 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .35),
+    inset 0 -3px 5px rgba(120, 53, 15, .42),
+    inset 0 0 0 1px rgba(255, 255, 255, .12);
   opacity: 0;
   transition: opacity var(--motion-med);
 }
+/* the knob: matte white, a soft low shadow — no glow */
 .settings-screen .switch::after {
   z-index: 1;
   top: 4px;
   left: 4px;
   width: 26px;
   height: 26px;
-  background: linear-gradient(180deg, #FFFFFF 0%, #D6DDE7 100%);
+  background: linear-gradient(180deg, #FFFFFF 0%, #DFE5EC 100%);
   box-shadow:
-    0 2px 0 rgba(0, 0, 0, .45),
-    0 5px 9px rgba(0, 0, 0, .55),
+    0 4px 8px rgba(0, 0, 0, .38),
+    0 1px 2px rgba(0, 0, 0, .28),
     inset 0 1px 0 #fff,
-    inset 0 -2px 3px rgba(15, 23, 42, .22);
+    inset 0 -2px 3px rgba(15, 23, 42, .18);
   transition: transform var(--motion-med), box-shadow var(--motion-med);
 }
 .settings-screen .row[aria-checked="true"] .switch {
   background: linear-gradient(180deg, #070B14 0%, #0D1424 100%);
   box-shadow:
-    inset 0 3px 6px rgba(90, 45, 0, .5),
-    inset 0 0 0 1px rgba(252, 211, 77, .5),
-    0 0 14px -2px rgba(245, 158, 11, .62),
-    0 0 28px -8px rgba(245, 158, 11, .4);
+    inset 0 3px 6px rgba(120, 53, 15, .35),
+    inset 0 0 0 1px rgba(252, 211, 77, .55),
+    inset 0 0 6px rgba(245, 158, 11, .35);
 }
 .settings-screen .row[aria-checked="true"] .switch::before { opacity: 1; }
 .settings-screen .row[aria-checked="true"] .switch::after {
+  /* the spring: an overshoot ease rides the same travel */
+  transition: transform .3s cubic-bezier(.34, 1.56, .64, 1), box-shadow var(--motion-med);
   transform: translateX(24px);
   box-shadow:
-    0 2px 0 rgba(120, 53, 15, .5),
-    0 5px 9px rgba(0, 0, 0, .5),
+    0 4px 8px rgba(70, 35, 0, .42),
+    0 1px 2px rgba(0, 0, 0, .32),
     inset 0 1px 0 #fff,
-    inset 0 -2px 3px rgba(180, 83, 9, .35);
+    inset 0 -2px 3px rgba(180, 83, 9, .3);
 }
 /* pressing the groove seats the whole control a hair deeper */
 .settings-screen .row:active .switch { transform: translateY(1px); }
 
-/* the build stamp closes the badge: same fine ink, one mint bead out front, and a
-   hairline that separates the standing facts from the compliance line */
-.set-notes .set-ver {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  margin-top: 1px;
-  padding-top: 5px;
-  border-top: 1px solid rgba(255, 255, 255, .07);
-  font-weight: 700;
-  letter-spacing: .01em;
-}
+/* a single quiet mint bead leads the stamp */
 .ver-dot {
   flex: none;
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: var(--mint);
-  box-shadow: 0 0 8px rgba(16, 185, 129, .8);
+  opacity: .8;
 }
-/* the foot of the screen: every "fine print" line rides ONE quiet badge — a
-   low-opacity clay tray that reads as fine print rather than a second card. The
-   ink is lifted to --chip-ink so the .78 fade still clears body-text contrast. */
+/* the foot of the screen: ONE compact centred badge — muted pill, hairline ring,
+   fine ink. It reads as metadata, never as a control. */
 .set-notes {
   flex: none;
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  justify-content: center;
   margin: 0 var(--s1);
-  padding: var(--set-note-pad) var(--set-pad-x);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, .035);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .055);
-  opacity: .78;
+  padding: 0;
 }
 .set-fine { margin: 0; }
-.set-notes .set-fine { margin: 0; color: var(--chip-ink); font-size: var(--t-micro); line-height: 1.3; }
+.set-notes .set-ver {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 5px 14px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .035);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
+  color: var(--chip-ink);
+  font-size: var(--t-micro);
+  font-weight: 600;
+  letter-spacing: .02em;
+  line-height: 1.2;
+  white-space: nowrap;
+  opacity: .72;
+}
 
 /* transient settings toast (support hint / reset confirm) */
 .set-toast {
@@ -10084,9 +10076,6 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
    shadow only: no backdrop-filter anywhere in this block, so the panel stays
    opaque slate over the scrim rather than turning to glass.
    ========================================================================== */
-
-/* ---- settings footer: the one place TIQ is explained ---- */
-.tiq-note { margin-top: var(--s1); text-align: center; }
 
 /* ---- surface + header ---- */
 .mind-sheet {

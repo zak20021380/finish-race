@@ -699,7 +699,6 @@
           <div class="set-stack" data-scroll>
             <section class="set-card" aria-labelledby="set-h-game">
               <h2 class="set-card-h" id="set-h-game">
-                <span class="set-ico" aria-hidden="true"><svg class="ico"><use href="#i-tune" /></svg></span>
                 <span data-i18n="gameplayAudio">Gameplay &amp; Audio</span>
               </h2>
               <div class="set-rows">
@@ -717,24 +716,15 @@
                   <svg class="ico chev tactile" aria-hidden="true"><use href="#i-next" /></svg>
                 </button>
                 <button class="row" type="button" role="switch" aria-checked="true" data-set="sound">
-                  <span class="row-txt">
-                    <span class="row-t" data-i18n="sound">Sound</span>
-                    <span class="row-s" data-i18n="soundSub">Steps, walls, and blast effects</span>
-                  </span>
+                  <span class="row-txt"><span class="row-t" data-i18n="sound">Sound</span></span>
                   <span class="switch" aria-hidden="true"></span>
                 </button>
                 <button class="row" type="button" role="switch" aria-checked="true" data-set="haptics">
-                  <span class="row-txt">
-                    <span class="row-t" data-i18n="haptics">Haptics</span>
-                    <span class="row-s" data-i18n="hapticsSub">Buzz on walls, moves and the result</span>
-                  </span>
+                  <span class="row-txt"><span class="row-t" data-i18n="haptics">Haptics</span></span>
                   <span class="switch" aria-hidden="true"></span>
                 </button>
                 <button class="row" type="button" role="switch" aria-checked="false" data-set="reducedMotion">
-                  <span class="row-txt">
-                    <span class="row-t" data-i18n="reducedMotion">Reduced motion</span>
-                    <span class="row-s" data-i18n="reducedMotionSub">No floating, sliding or pulsing</span>
-                  </span>
+                  <span class="row-txt"><span class="row-t" data-i18n="reducedMotion">Reduced motion</span></span>
                   <span class="switch" aria-hidden="true"></span>
                 </button>
               </div>
@@ -742,7 +732,6 @@
 
             <section class="set-card" aria-labelledby="set-h-comm">
               <h2 class="set-card-h" id="set-h-comm">
-                <span class="set-ico" aria-hidden="true"><svg class="ico"><use href="#i-send" /></svg></span>
                 <span data-i18n="communitySupport">Community &amp; Support</span>
               </h2>
               <div class="set-rows">
@@ -767,7 +756,6 @@
 
             <section class="set-card" aria-labelledby="set-h-app">
               <h2 class="set-card-h" id="set-h-app">
-                <span class="set-ico" aria-hidden="true"><svg class="ico"><use href="#i-bag" /></svg></span>
                 <span data-i18n="appStorage">App &amp; Storage</span>
               </h2>
               <div class="set-rows">
@@ -782,14 +770,10 @@
               </div>
             </section>
           </div>
-          <!-- Every "fine print" line on this screen rides ONE quiet badge: the device-local save
-               note, the TIQ compliance line (which belongs here and nowhere else — the ladder is a
-               game metric), and the build stamp. Grouping them frees the height the third card
-               used to spend on its own footer row. -->
+          <!-- the foot: ONE quiet badge — a single muted line that closes the screen without
+               standing between the controls and the exit. -->
           <div class="set-notes" role="note">
-            <p class="fine set-fine" data-i18n="savedNote">Saved on this device only. Nothing else is stored.</p>
-            <p class="fine set-fine tiq-note" id="tiq-note">TIQ is Detour's in-game tactical rating. Detour trains strategic thinking.</p>
-            <p class="fine set-fine set-ver"><span class="ver-dot" aria-hidden="true"></span><span data-i18n="versionBadge">Version 1.0.0 · Local save only</span></p>
+            <p class="fine set-fine set-ver"><span class="ver-dot" aria-hidden="true"></span><span data-i18n="versionBadge">Detour v1.0.0 · Local Save</span></p>
           </div>
           <div class="set-toast" id="set-toast" role="status" aria-live="polite" hidden></div>
         </section>
