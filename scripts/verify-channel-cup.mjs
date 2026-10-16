@@ -8,11 +8,14 @@
  *   node scripts/verify-channel-cup.mjs
  *
  * One phone, 360x640, because that is the fit the card has to hold:
- *  - the header is two compact rows, at or under 60px: the Star inline beside
- *    "200 STARS CUP" (never clipping) with a live HH:MM:SS clock pinned right,
- *    then the two-way switch (>=48px keys, sliding thumb, no clipped label)
- *    stretched across the full card and centred over the podium — no solid
- *    black box behind any header element,
+ *  - the header is two compact rows, at or under 60px: the Star set into a dark jewel
+ *    face behind a 1px gold rim, inline beside the silver clipped-metal wordmark
+ *    "200 STARS CUP" (never clipping), with a live HH:MM:SS clock pinned right as a
+ *    dark glass capsule with a gold hairline and a breathing gold bead, then the
+ *    two-way switch (>=48px keys, sliding thumb, no clipped label) stretched across
+ *    the full card and centred over the podium — no solid black box behind any
+ *    header element, and gold reserved for the live/premium things so the CTA stays
+ *    the only solid gold slab on the screen,
  *  - the channels podium is three CHANNELS (rank badge, verified channel mark,
  *    bare name, squad TIQ) with no @ sigil, no member count and no "tap to view
  *    roster" cue — the card itself is the door, and only #1 wears the pool,
@@ -150,6 +153,13 @@ const PROBE = `(function () {
   };
 
   const emblemImg = document.querySelector('.stars-emblem-img');
+  const clockEl = document.querySelector('.stars-count');
+  const thumbEl = document.querySelector('#stars-tabs .mode-thumb');
+  const beadCs = clockEl ? getComputedStyle(clockEl, '::before') : null;
+  const faceCs = emblem ? getComputedStyle(emblem, '::before') : null;
+  const nameCs = nameEl ? getComputedStyle(nameEl) : null;
+  const thumbCs = thumbEl ? getComputedStyle(thumbEl) : null;
+  const gold = /245,\\s*158,\\s*11|251,\\s*191,\\s*36|252,\\s*211,\\s*77|253,\\s*230,\\s*138/;
 
   /* clay only: every painted node on the screen and its sheet */
   const blurs = [];
@@ -174,6 +184,37 @@ const PROBE = `(function () {
       bg: emblemCs?.backgroundColor ?? null,
       border: emblemCs?.borderTopWidth ?? null,
       shadow: emblemCs?.boxShadow ?? null,
+      /* the setting: a gradient gold rim on the element, a lit dark face on ::before */
+      rim: emblemCs?.backgroundImage ?? null,
+      face: faceCs?.backgroundImage ?? null,
+      imgW: emblemImg ? +emblemImg.getBoundingClientRect().width.toFixed(1) : null,
+      imgBlend: emblemImg ? getComputedStyle(emblemImg).mixBlendMode : null,
+    },
+    hero: {
+      /* the wordmark is cool polished silver, not gold, and clipped out of a gradient */
+      wordmark: {
+        clip: nameCs?.webkitBackgroundClip ?? nameCs?.backgroundClip ?? null,
+        img: nameCs?.backgroundImage ?? null,
+        color: nameCs?.color ?? null,
+        gold: nameCs ? gold.test(nameCs.backgroundImage) : false,
+      },
+      /* the clock is a dark glass capsule with a gold hairline and a breathing bead */
+      clock: {
+        bg: clockEl ? getComputedStyle(clockEl).backgroundColor : null,
+        border: clockEl ? getComputedStyle(clockEl).borderTopColor : null,
+        goldBorder: clockEl ? gold.test(getComputedStyle(clockEl).borderTopColor) : false,
+        goldBloom: clockEl ? gold.test(getComputedStyle(clockEl).boxShadow) : false,
+        bead: beadCs?.content ?? null,
+        beadGold: beadCs ? gold.test(beadCs.backgroundImage) : false,
+        beadAnim: beadCs?.animationName ?? null,
+        w: clockEl ? +clockEl.getBoundingClientRect().width.toFixed(1) : null,
+      },
+      /* the lit key keeps a hairline gold rim without becoming a second gold slab */
+      thumb: {
+        rimGold: thumbCs ? gold.test(thumbCs.boxShadow) : false,
+        bg: thumbCs?.backgroundColor ?? null,
+        transition: thumbCs?.transitionProperty ?? null,
+      },
     },
     header: {
       headH: +headBox.h.toFixed(1),
@@ -294,7 +335,10 @@ await pg.waitForTimeout(1400);
 
 const m = await pg.evaluate(PROBE);
 
-/* 1 — header: two rows — the Star inline with the title + clock, then the switch */
+/* 1 — header: two rows — the Star medallion inline with the silver wordmark + clock,
+   then the switch. One palette rule: gold marks the live/premium things (the Star's
+   setting, the clock's bead, the lit key's rim) and the wordmark stays cool silver, so
+   the CTA below is still the only solid gold slab on the screen. */
 if (m.title !== 'Arena') fail(`aria title reads "${m.title}"`);
 if (m.name !== '200 STARS CUP') fail(`title reads "${m.name}"`);
 if (!/^\d{2}:\d{2}:\d{2}$/.test(m.count ?? '')) fail(`bracket clock reads "${m.count}"`);
@@ -317,11 +361,41 @@ if (rgba(fillOf('.stars-head')).a !== 0 || rgba(fillOf('.stars-titlebar')).a !==
 }
 if (rgba(fillOf('#stars-tabs')).a >= 0.99) fail(`the switch track is an opaque box (${fillOf('#stars-tabs')})`);
 if (rgba(fillOf('.stars-count')).a >= 0.99) fail(`the clock cuts an opaque box (${fillOf('.stars-count')})`);
-if (m.emblem.bg !== 'rgba(0, 0, 0, 0)' || parseFloat(m.emblem.border) > 0 || m.emblem.shadow !== 'none') {
-  fail(`the Star still wears a wrapper box (${m.emblem.bg} / ${m.emblem.border} / ${m.emblem.shadow})`);
+
+/* the Star's setting: a gradient gold rim on the element, a dark lit face on ::before,
+   and the gold PNG set into it — but the element itself still paints no fill, so the
+   medallion reads as set into the card rather than stuck on top of it */
+if (m.emblem.bg !== 'rgba(0, 0, 0, 0)' || parseFloat(m.emblem.border) > 0) {
+  fail(`the Star's setting paints an opaque box (${m.emblem.bg} / ${m.emblem.border})`);
 }
+if (!/gradient/.test(m.emblem.rim ?? '')) fail(`the Star has no gold rim (${m.emblem.rim})`);
+if (!/gradient/.test(m.emblem.face ?? '')) fail(`the Star has no lit jewel face (${m.emblem.face})`);
+if (!gold.test(m.emblem.shadow ?? '')) fail(`the Star carries no gold bloom (${m.emblem.shadow})`);
+if (!m.emblem.imgW || m.emblem.imgW < m.emblem.box.w * 0.6 || m.emblem.imgW > m.emblem.box.w * 0.86) {
+  fail(`the Star is ${m.emblem.imgW}px inside a ${m.emblem.box.w}px setting, want 60-86% so the rim stays a ring`);
+}
+if (m.emblem.imgBlend !== 'screen') fail(`the Star blends as "${m.emblem.imgBlend}", want screen`);
+
+/* the wordmark: clipped metal gradient, and silver — never gold, or it competes
+   with the CTA and with the Star it is supposed to sit beside */
+if (m.hero.wordmark.clip !== 'text' || !/gradient/.test(m.hero.wordmark.img ?? '')) {
+  fail(`the wordmark is not clipped metal (${m.hero.wordmark.clip} / ${m.hero.wordmark.img})`);
+}
+if (m.hero.wordmark.gold) fail(`the wordmark went gold (${m.hero.wordmark.img})`);
+
+/* the clock: a dark glass capsule, a gold hairline, and the one thing in the band
+   that moves — the bead */
+if (m.hero.clock.bg === null || rgba(m.hero.clock.bg).a >= 0.99) fail(`the clock is an opaque capsule (${m.hero.clock.bg})`);
+if (!m.hero.clock.goldBorder) fail(`the clock has no gold hairline (${m.hero.clock.border})`);
+if (!m.hero.clock.goldBloom) fail(`the clock carries no warm bloom (${m.hero.clock.goldBloom})`);
+if (m.hero.clock.bead === 'none' || !m.hero.clock.bead) fail('the clock has no pulse bead');
+if (!m.hero.clock.beadGold) fail(`the clock's bead is not gold (${m.hero.clock.beadGold})`);
+if (m.hero.clock.beadAnim !== 'cup-clock') fail(`the clock's bead does not breathe (${m.hero.clock.beadAnim})`);
+
 if (m.view !== 'channels') fail(`the card opens on the "${m.view}" board, want channels`);
 if (!m.tabs.thumb) fail('the board switch has no sliding clay thumb');
+if (!m.hero.thumb.rimGold) fail('the lit key has no gold rim');
+if (m.hero.thumb.bg !== 'rgba(0, 0, 0, 0)') fail(`the lit key is a flat fill, not a gradient cap (${m.hero.thumb.bg})`);
 if (m.tabs.active !== 'channels') fail(`the switch is on "${m.tabs.active}"`);
 if (m.tabs.keys.length !== 2) fail(`the switch has ${m.tabs.keys.length} keys, want 2`);
 for (const k of m.tabs.keys) {

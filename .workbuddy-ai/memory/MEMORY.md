@@ -68,6 +68,21 @@ History lives in the dated logs beside this file; this is the durable index.
   `--inset` wells, `--lip`/`--press-y` controls, gold ink `--honey-ink` (#FCD34D). On a ≤700px-tall
   viewport `--s3` is 8px. Toasts are `.note`; `showNote()` writes to the *visible* screen only.
 
+## Arena hero header (the 200 Stars Cup, `compete.ts` + `.stars-head`)
+- **Palette rule:** gold = live/premium (the Star's setting, the clock's bead, the lit
+  key's rim); the wordmark stays cool silver. That keeps the CTA the only solid gold slab.
+- **Budget: `.stars-head` ≤ 60px**, or the card scrolls at 360x640. Measured 58 / 60 / 54
+  at 360x640 / 390x844 / 320x568. Row 1 has ~80px of *horizontal* slack and ~2px vertical,
+  so header work is styling-only — never add a row.
+- The emblem's gold rim is a **gradient fill behind a padded `::before`**, not a border,
+  because `verify-channel-cup.mjs` audits header fills for opaque near-black boxes. The
+  face is `::before { z-index: 0 }`, the PNG `position: relative; z-index: 1` at 74%.
+- The wordmark is `background-clip: text` + `filter: drop-shadow(...)` (a `text-shadow`
+  shows through a transparent fill), inside `@supports`, with a plain silver fallback.
+- **PROBE gotcha:** a regex inside a template literal needs `\\s`, not `\s` — `/245,\s*158/`
+  silently becomes `/245,s*158/` and every "is it gold?" test returns false.
+- `.tmp/header-check.mjs` is the CDP probe for this header (no playwright needed).
+
 ## Admin Command Center
 - Client `src/admin.ts`: tabs `[data-atab]` = stats · controls · server · tools. `runtime` is the one live
   config (`setRuntime` the only writer), persisted at `detour.admin.v1`; add a switch via `AdminRuntime` +
