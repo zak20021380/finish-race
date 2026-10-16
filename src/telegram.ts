@@ -174,3 +174,12 @@ export const notify = (t: 'success' | 'error' | 'warning') => {
   if (!settings.haptics) return;
   try { tg?.HapticFeedback?.notificationOccurred(t); } catch { /* ignore */ }
 };
+
+/** A mine going off: the hardest pattern Telegram offers, error buzz over a heavy impact, as one call. */
+export const detonation = () => {
+  if (!settings.haptics) return;
+  try {
+    tg?.HapticFeedback?.notificationOccurred('error');
+    tg?.HapticFeedback?.impactOccurred('heavy');
+  } catch { /* ignore */ }
+};

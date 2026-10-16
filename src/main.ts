@@ -23,10 +23,10 @@ import { createShop } from './shop';
 import { createNotifications } from './notifications';
 import { mountCoins, setBalance } from './coin';
 import { menuState, motionReduced } from './settings';
-import { playMove, RIVAL_MOVE_GAIN } from './sound';
+import { playExplosion, playMove, RIVAL_MOVE_GAIN } from './sound';
 import { onChange, profile, recordGame, theme } from './storage';
 import { SEAT_RAMPS } from './themes';
-import { impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
+import { detonation, impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
 import { createRoomCode, getGameMode, gmBack, initGameModes, onGameModeChange, setGameMode } from './gamemodes';
 import {
@@ -764,8 +764,8 @@ function play(a: Action, remote = false): boolean {
     const cells = landed ? landed.r - blast.cell.r : 0;
     renderer.blast(blast.cell);
     shake();
-    impact('heavy');
-    notify('warning');
+    playExplosion();
+    detonation();
     showNote(`Mine! ${TEAM_NAME[by]} ${by === localSide ? 'were' : 'was'} thrown back `
       + `${cells} cell${cells === 1 ? '' : 's'}`, false, 2600);
   }
