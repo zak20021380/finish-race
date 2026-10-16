@@ -8,13 +8,21 @@
  *   node scripts/verify-channel-cup.mjs
  *
  * One phone, 360x640, because that is the fit the card has to hold:
- *  - the header is two compact rows, at or under 60px: the bare Star floating on the
- *    clay with its amber ambient glow (no box, no rim, no jewel face) inline beside
- *    the embossed silver wordmark "200 STARS CUP" (never clipping), the round engraved
- *    help key that opens the Rules sheet, and a live HH:MM:SS clock pinned right as
- *    an inset slate capsule with an ultra-thin warm hairline and a breathing gold
- *    bead, then the two-way switch (>=48px keys, sliding thumb, no clipped label)
- *    stretched across the full card and centred over the podium — no solid black box
+ *  - the header is two bands — the championship lockup over a control strip — inside a
+ *    budget of 78px at 360x640. Band one: the bare Star floating on the clay with its
+ *    amber ambient glow (no box, no rim, no jewel face) at 30-42px, inline beside the
+ *    big embossed platinum wordmark "200 STARS CUP" (never clipping), with the round
+ *    glass help key closing the right edge. Band two: one strip, the two-way switch
+ *    (>=48px keys, sliding thumb, no clipped label) holding the left and the live
+ *    HH:MM:SS clock — a smoked-glass capsule with a warm hairline, three recessed
+ *    registers and a breathing gold bead — holding the right.
+ *
+ *    The clock used to share band one, and the budget used to be 60px. It moved on
+ *    purpose: at 360px the card is only ~317px wide, and a wordmark worth the name, a
+ *    three-register countdown and a 36px Star cannot share one line without the title
+ *    clipping. Splitting them is what made both bigger. What still binds is the fit —
+ *    the stage must not scroll and the card must not slide under the dock — and the
+ *    geometry pass below enforces exactly that on this same run. No solid black box
  *    behind any header element, and gold reserved for the live/premium things so the
  *    CTA stays the only solid gold slab on the screen,
  *  - the channels podium is three CHANNELS (rank badge, clean channel mark — the
@@ -100,6 +108,8 @@ const PROBE = `(function () {
   const tabsHost = document.getElementById('stars-tabs');
   const podiumEl = document.getElementById('stars-podium');
   const headBox = box(head), titlebarBox = box(titlebar), tabsHostBox = box(tabsHost), podiumHeadBox = box(podiumEl);
+  const stripBox = box(document.querySelector('.stars-strip'));
+  const countBox = box(document.querySelector('.stars-count'));
   const headFills = ['.stars-head', '.stars-titlebar', '.stars-emblem', '.stars-count', '#stars-tabs', '#stars-tabs .mode-thumb', '#stars-tabs .mode-seg']
     .map((sel) => { const el = document.querySelector(sel); return { sel, bg: el ? getComputedStyle(el).backgroundColor : null }; });
   const emblemCs = emblem ? getComputedStyle(emblem) : null;
@@ -237,9 +247,13 @@ const PROBE = `(function () {
       /* the Star rides row one beside the title: same band, immediately left of it */
       inlineStar: !!emblem && Math.abs((box(emblem).t + box(emblem).b) / 2 - (box(nameEl).t + box(nameEl).b) / 2) <= 4
         && box(emblem).r <= box(nameEl).l + 0.5,
-      /* row two spans the card and centres over the three-column podium */
-      fullWidth: Math.abs(tabsHostBox.w - headBox.w) <= 1 && Math.abs(tabsHostBox.w - podiumHeadBox.w) <= 1,
-      centered: Math.abs((tabsHostBox.l + tabsHostBox.r) / 2 - (podiumHeadBox.l + podiumHeadBox.r) / 2) <= 1,
+      /* the lockup is band one, the control strip is band two, spanning the card under it */
+      stripBox, countBox, podiumHeadBox,
+      bandOrder: !!stripBox && stripBox.t >= titlebarBox.b - 0.5,
+      stripSpans: !!stripBox && Math.abs(stripBox.w - headBox.w) <= 1,
+      /* inside the strip the switch holds the majority and the clock closes the right edge */
+      switchShare: stripBox?.w ? +(tabsHostBox.w / stripBox.w).toFixed(3) : 0,
+      clockFlush: !!stripBox && !!countBox && Math.abs(countBox.r - stripBox.r) <= 1,
       fills: headFills,
     },
     pods, runs,
@@ -362,13 +376,17 @@ const m = await pg.evaluate(PROBE);
 if (m.title !== 'Arena') fail(`aria title reads "${m.title}"`);
 if (m.name !== '200 STARS CUP') fail(`title reads "${m.name}"`);
 if (!/^\d{2}:\d{2}:\d{2}$/.test(m.count ?? '')) fail(`bracket clock reads "${m.count}"`);
-if (!m.emblem.box || m.emblem.box.w < 20 || m.emblem.box.w > 28) fail(`emblem is ${m.emblem.box?.w}px, want 20-28 inline with the title`);
+if (!m.emblem.box || m.emblem.box.w < 30 || m.emblem.box.w > 42) fail(`emblem is ${m.emblem.box?.w}px, want 30-42 inline with the wordmark`);
 if (Math.abs(m.emblem.box.w - m.emblem.box.h) > 1) fail(`emblem is not square (${m.emblem.box?.w}x${m.emblem.box?.h})`);
 if (!/telegram_stars/i.test(m.emblem.src ?? '')) fail(`hero emblem is not the Telegram Star asset (${m.emblem.src})`);
-if (!m.header.inlineStar) fail('the Star is not inline beside the title in row one');
-if (m.header.headH > 60.5) fail(`the header is ${m.header.headH}px tall, want <= 60`);
-if (!m.header.fullWidth) fail(`the switch spans ${m.header.tabsHostBox?.w}px of the ${m.header.headBox?.w}px header, want full width`);
-if (!m.header.centered) fail('the switch is not centred over the podium');
+if (!m.header.inlineStar) fail('the Star is not inline beside the wordmark in the lockup band');
+/* the header: the lockup band over the control strip, inside this run's 78px budget.
+   The budget moved up from 60 with the lockup — see the note at the top of the file. */
+if (m.header.headH > 78) fail(`the header is ${m.header.headH}px tall, want <= 78`);
+if (!m.header.bandOrder) fail('the control strip does not sit under the lockup');
+if (!m.header.stripSpans) fail(`the strip spans ${m.header.stripBox?.w}px of the ${m.header.headBox?.w}px header, want full width`);
+if (m.header.switchShare < 0.55) fail(`the switch holds only ${m.header.switchShare} of the strip — the countdown has taken the row`);
+if (!m.header.clockFlush) fail('the clock is not flush with the right edge of the strip');
 /* the black-cutout audit: no header element paints a solid black fill, the
    wrappers stay bare, and the track and clock are translucent by construction */
 for (const f of m.header.fills) {

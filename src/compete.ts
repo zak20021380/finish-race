@@ -1074,8 +1074,63 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     for (const r of rows.slice(0, ROSTER_ROWS)) list.append(rosterRow(r));
   }
 
+  /** One window of the clock: a unit of the countdown, the `44` in `01:44:58`. Units
+   *  are nodes rather than characters because the readout is an instrument — each unit
+   *  wants its own recessed face under the gold numerals. The face and the numerals are
+   *  separate boxes on purpose: the numerals are clipped out of a metal gradient, and a
+   *  text clip would otherwise clip the window's own face away with them. */
+  function countUnit(digits: string): HTMLElement {
+    const plate = document.createElement('b');
+    const ink = document.createElement('span');
+    ink.textContent = digits;
+    plate.append(ink);
+    return plate;
+  }
+
+  /** The colon between two units: still the real glyph, at the digits' own size, so it
+   *  shares their line box and lands on their baseline with no nudging. */
+  function countSep(): HTMLElement {
+    const i = document.createElement('i');
+    i.textContent = ':';
+    return i;
+  }
+
+  /** `01:44:58` → three units; `44:58` → two. Anything else — the bracket opening, or
+   *  a countdown quoted in days — is not a clock and is written as plain text. */
+  const countUnits = (text: string): string[] | null => {
+    const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(text);
+    if (!m) return null;
+    return m[3] ? [m[1], m[2], m[3]] : [m[1], m[2]];
+  };
+
+  /** The bracket clock, painted as an instrument: one plate per unit with the colon
+   *  kept between them, so `01:44:58` reads as three windows instead of one run of
+   *  eight glyphs. The shape is rebuilt only when it changes — never inside a bracket
+   *  — so the once-a-second repaint rewrites two or three short strings and nothing
+   *  else. The element's text still spells the countdown exactly as before, colons
+   *  included, which is what a screen reader and every other reader of it gets. */
   function paintCount(c: GrandCup, from: number): void {
-    setText(cupEls.count, startsText(c, from));
+    const el = cupEls.count;
+    if (!el) return;
+    const text = startsText(c, from);
+    const units = countUnits(text);
+    const shape = units ? `u${units.length}` : 'text';
+    if (el.dataset.shape !== shape) {
+      el.dataset.shape = shape;
+      el.textContent = '';
+      if (!units) el.textContent = text;
+      else units.forEach((u, i) => {
+        if (i) el.append(countSep());
+        el.append(countUnit(u));
+      });
+      return;
+    }
+    if (!units) {
+      setText(el, text);
+      return;
+    }
+    const plates = el.querySelectorAll<HTMLElement>('b > span');
+    units.forEach((u, i) => setText(plates[i] ?? null, u));
   }
 
   /** The key always offers the same thing; the seat's state is stated on the squad

@@ -496,32 +496,39 @@
 
           <div class="compete-body stars-stage" data-scroll id="arena-scroll">
             <article class="stars-card" id="stars-card" aria-labelledby="stars-name">
-              <!-- hero header, two rows: branding + rules + live clock over the board switch.
-                   Row one: the Star floats bare on the clay with a warm amber ambient glow —
-                   no box, no rim — beside the heavy embossed wordmark, the round clay help
-                   key, and the inset countdown pill with amber monospace digits and a
-                   breathing gold bead. Row two: the two-way clay switch stretched across
-                   the full card, centred over the podium below. The whole head stays at or
-                   under 60px, so the podium keeps its pixels and the switch costs the card
-                   no extra height. Gold is reserved for the live and the premium here —
-                   the Star, the digits, the lit key — which leaves the CTA below as the
-                   only solid gold slab on the screen. -->
+              <!-- hero header, two bands: the championship lockup over the control strip.
+                   Band one is the brand — the Star floating bare on the clay inside a warm
+                   amber ambient glow (no box, no rim), beside the big embossed platinum
+                   wordmark, with the round glass help key closing the right edge. Band two
+                   is a single control strip: the two-way board switch holding the left, the
+                   live bracket clock holding the right.
+
+                   WHY THE CLOCK LEFT BAND ONE: on a 360px phone the card is only ~317px
+                   wide, and a wordmark worth the name plus a three-register countdown plus
+                   a 36px Star cannot share one line at that width — the title would clip.
+                   Moving the clock into the strip buys the wordmark its size and gives the
+                   countdown the full height of the band, so both end up bigger instead of
+                   both ending up cramped. Gold is still reserved for the live and the
+                   premium — the Star's glow, the clock's numerals, the lit switch key —
+                   which leaves the CTA below as the only solid gold slab on the screen. -->
               <div class="stars-head">
                 <div class="stars-titlebar">
                   <span class="stars-emblem" aria-hidden="true">
-                    <img class="stars-emblem-img" id="stars-emblem-img" alt="" width="26" height="26" />
+                    <img class="stars-emblem-img" id="stars-emblem-img" alt="" width="36" height="36" />
                   </span>
                   <h2 class="stars-name" id="stars-name">200 STARS CUP</h2>
                   <button class="stars-info" type="button" id="stars-info" aria-haspopup="dialog"
                     aria-label="How the 200 Stars Cup works">
                     <span aria-hidden="true">?</span>
                   </button>
-                  <span class="stars-count" id="stars-count" role="timer" aria-label="Bracket opens in">01:45:20</span>
                 </div>
-                <div class="stars-tabs" id="stars-tabs" role="group" aria-label="Arena leaderboard" data-active="channels">
-                  <span class="mode-thumb" aria-hidden="true"></span>
-                  <button class="mode-seg" type="button" data-view="channels" aria-pressed="true">Channels</button>
-                  <button class="mode-seg" type="button" data-view="players" aria-pressed="false">Top Players</button>
+                <div class="stars-strip">
+                  <div class="stars-tabs" id="stars-tabs" role="group" aria-label="Arena leaderboard" data-active="channels">
+                    <span class="mode-thumb" aria-hidden="true"></span>
+                    <button class="mode-seg" type="button" data-view="channels" aria-pressed="true">Channels</button>
+                    <button class="mode-seg" type="button" data-view="players" aria-pressed="false">Top Players</button>
+                  </div>
+                  <span class="stars-count" id="stars-count" role="timer" aria-label="Bracket opens in">01:45:20</span>
                 </div>
               </div>
 
