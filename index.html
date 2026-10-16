@@ -187,12 +187,6 @@
           <path d="M19 13.5V19a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 4 19V7a1.5 1.5 0 0 1 1.5-1.5H11" />
         </g>
       </symbol>
-      <symbol id="i-trash" viewBox="0 0 24 24">
-        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4.5 6.5h15M9.5 4.5h5M6.5 6.5l1 12a1.6 1.6 0 0 0 1.6 1.5h5.8a1.6 1.6 0 0 0 1.6-1.5l1-12" />
-          <path d="M10 10.5v6.5M14 10.5v6.5" />
-        </g>
-      </symbol>
       <symbol id="i-bell" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
           <path d="M6 9.5a6 6 0 0 1 12 0c0 4 1.2 5.4 1.9 6H4.1c.7-.6 1.9-2 1.9-6Z" />
@@ -203,6 +197,15 @@
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20 12a8 8 0 0 1-8 8H5l-1.6 1.6V12a8 8 0 0 1 8-8h0a8 8 0 0 1 8 8Z" />
           <path d="M8.5 11h7M8.5 14h4" />
+        </g>
+      </symbol>
+      <symbol id="i-headset" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4.6 13.4v-.9a7.4 7.4 0 0 1 14.8 0v.9" />
+          <rect x="3.6" y="12.6" width="4.2" height="6.6" rx="1.9" />
+          <rect x="16.2" y="12.6" width="4.2" height="6.6" rx="1.9" />
+          <path d="M20.4 19v.4a2.4 2.4 0 0 1-2.4 2.4h-4.2" />
+          <circle cx="12.9" cy="21.45" r="0.95" fill="currentColor" stroke="none" />
         </g>
       </symbol>
       <symbol id="i-lock" viewBox="0 0 24 24">
@@ -686,7 +689,7 @@
           <button class="btn btn-primary" type="button" id="custom-start">Start race</button>
         </section>
 
-        <!-- ---------------- settings: 3 tactile Dark Clay cards, vertical fill ---------------- -->
+        <!-- ---------------- settings: 2 tactile Dark Clay cards, vertical fill ---------------- -->
         <section class="screen menu settings-screen" id="s-settings" data-screen="settings" tabindex="-1" hidden aria-labelledby="settings-title">
           <div class="m-head set-head">
             <button class="icon-btn set-back" type="button" data-back aria-label="Back to home">
@@ -723,10 +726,6 @@
                   <span class="row-txt"><span class="row-t" data-i18n="haptics">Haptics</span></span>
                   <span class="switch" aria-hidden="true"></span>
                 </button>
-                <button class="row" type="button" role="switch" aria-checked="false" data-set="reducedMotion">
-                  <span class="row-txt"><span class="row-t" data-i18n="reducedMotion">Reduced motion</span></span>
-                  <span class="switch" aria-hidden="true"></span>
-                </button>
               </div>
             </section>
 
@@ -743,29 +742,13 @@
                   </span>
                   <svg class="ico ext" aria-hidden="true"><use href="#i-ext" /></svg>
                 </button>
-                <button class="row set-row" type="button" id="support-row">
-                  <span class="set-ico sm mint" aria-hidden="true"><svg class="ico"><use href="#i-chat" /></svg></span>
+                <button class="row set-row" type="button" id="admin-row" aria-haspopup="dialog">
+                  <span class="set-ico sm gold" aria-hidden="true"><svg class="ico"><use href="#i-headset" /></svg></span>
                   <span class="row-txt">
-                    <span class="row-t" data-i18n="supportFeedback">Support &amp; Feedback</span>
-                    <span class="row-s" data-i18n="supportFeedbackSub">Help, ideas and bug reports</span>
+                    <span class="row-t" data-i18n="contactAdmin">Contact Admin</span>
+                    <span class="row-s" data-i18n="contactAdminSub">Direct help, inquiries &amp; feedback</span>
                   </span>
-                  <svg class="ico chev tactile" aria-hidden="true"><use href="#i-next" /></svg>
-                </button>
-              </div>
-            </section>
-
-            <section class="set-card" aria-labelledby="set-h-app">
-              <h2 class="set-card-h" id="set-h-app">
-                <span data-i18n="appStorage">App &amp; Storage</span>
-              </h2>
-              <div class="set-rows">
-                <button class="row set-row danger" type="button" id="reset-row" aria-haspopup="dialog">
-                  <span class="set-ico sm danger" aria-hidden="true"><svg class="ico"><use href="#i-trash" /></svg></span>
-                  <span class="row-txt">
-                    <span class="row-t" data-i18n="resetData">Reset Local Data</span>
-                    <span class="row-s" data-i18n="resetDataSub">Coins, teams and progress on this device</span>
-                  </span>
-                  <svg class="ico chev tactile" aria-hidden="true"><use href="#i-next" /></svg>
+                  <span class="admin-pill" aria-hidden="true"><svg class="ico"><use href="#i-chat" /></svg></span>
                 </button>
               </div>
             </section>
@@ -775,7 +758,6 @@
           <div class="set-notes" role="note">
             <p class="fine set-fine set-ver"><span class="ver-dot" aria-hidden="true"></span><span data-i18n="versionBadge">Detour v1.0.0 · Local Save</span></p>
           </div>
-          <div class="set-toast" id="set-toast" role="status" aria-live="polite" hidden></div>
         </section>
 
         <!-- ---------------- shop ---------------- -->
@@ -1798,17 +1780,6 @@
         <ul class="pick lang-pick" id="lang-list" role="listbox" aria-label="Languages" data-scroll tabindex="0"></ul>
         <div class="sheet-actions">
           <button class="btn btn-ghost" type="button" data-sheet-close data-i18n="cancel">Cancel</button>
-        </div>
-      </section>
-
-      <!-- reset: confirm wiping the device-local save -->
-      <section class="sheet" id="sheet-reset" hidden role="dialog" aria-modal="true" aria-labelledby="reset-title">
-        <span class="sheet-grip" aria-hidden="true"></span>
-        <h2 class="sheet-t" id="reset-title" data-i18n="resetTitle">Reset local data?</h2>
-        <p class="sheet-p" data-i18n="resetBody">Coins, owned items, stats, teams and settings go back to defaults. This cannot be undone.</p>
-        <div class="sheet-actions split">
-          <button class="btn btn-ghost" type="button" data-sheet-close data-autofocus data-i18n="cancel">Cancel</button>
-          <button class="btn btn-danger" type="button" id="reset-yes" data-i18n="resetConfirm">Reset everything</button>
         </div>
       </section>
 

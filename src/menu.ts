@@ -989,8 +989,9 @@ export function createMenu(api: MenuApi): Menu {
   }
   onSettings(paintSettings);
 
-  /* ---- settings overhaul: language drawer, community rows, reset flow ---- */
+  /* ---- settings overhaul: language drawer + community/admin rows ---- */
   const CHANNEL_URL = 'https://t.me/detour_game';
+  const ADMIN_URL = 'https://t.me/detour_support_bot';
 
   const paintI18n = () => {
     for (const el of document.querySelectorAll<HTMLElement>('[data-i18n]')) {
@@ -1066,22 +1067,6 @@ export function createMenu(api: MenuApi): Menu {
     api.sheets.close();
   }
 
-  let setToastTimer = 0;
-  function showSetToast(msg: string) {
-    const toast = $('set-toast');
-    if (!toast) return;
-    toast.textContent = msg;
-    toast.hidden = false;
-    toast.classList.remove('show');
-    void toast.offsetWidth;
-    toast.classList.add('show');
-    window.clearTimeout(setToastTimer);
-    setToastTimer = window.setTimeout(() => {
-      toast.classList.remove('show');
-      window.setTimeout(() => { toast.hidden = true; }, 240);
-    }, 2300);
-  }
-
   function openExternal(url: string) {
     try {
       const w = window as unknown as {
@@ -1092,21 +1077,6 @@ export function createMenu(api: MenuApi): Menu {
       if (tg?.openLink) { tg.openLink(url); return; }
     } catch { /* fall through to window.open */ }
     try { window.open(url, '_blank', 'noopener'); } catch { /* webview blocked */ }
-  }
-
-  function doReset() {
-    try {
-      const doomed: string[] = [];
-      for (let i = 0; i < window.localStorage.length; i++) {
-        const k = window.localStorage.key(i);
-        if (k && k.startsWith('detour.')) doomed.push(k);
-      }
-      for (const k of doomed) window.localStorage.removeItem(k);
-    } catch { /* storage refused — reload still gives defaults */ }
-    notify('success');
-    api.sheets.close();
-    showSetToast(t('resetDone'));
-    window.setTimeout(() => window.location.reload(), 650);
   }
 
   $('lang-row')?.addEventListener('click', openLang);
@@ -1124,18 +1094,8 @@ export function createMenu(api: MenuApi): Menu {
     chooseLang(row.dataset.lang);
   });
   $('tg-channel')?.addEventListener('click', () => { impact('light'); openExternal(CHANNEL_URL); });
-  $('support-row')?.addEventListener('click', () => {
-    impact('light');
-    notify('success');
-    showSetToast(t('supportNote'));
-  });
-  $('reset-row')?.addEventListener('click', () => {
-    const sheet = api.sheet('sheet-reset');
-    if (!sheet) return;
-    impact('light');
-    api.sheets.open(sheet);
-  });
-  $('reset-yes')?.addEventListener('click', () => { impact('medium'); doReset(); });
+  /* Contact Admin: Telegram first (openTelegramLink), desktop fallback — never a dead tap. */
+  $('admin-row')?.addEventListener('click', () => { impact('light'); openExternal(ADMIN_URL); });
 
   /* live repaint: internal watchers + the public DOM event for external listeners */
   onLang(paintLang);

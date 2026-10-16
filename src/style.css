@@ -2164,7 +2164,8 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
     transition-duration: .001ms !important;
   }
 }
-/* the Reduced motion toggle asks for the same restraint where the OS never did */
+/* an OS-level reduced-motion preference (or a leftover saved one) asks for the
+   same restraint where the media query alone would not catch in-app classes */
 html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::after {
   animation-duration: .001ms !important;
   animation-iteration-count: 1 !important;
@@ -6114,11 +6115,13 @@ html.reduced-motion .mh-arc-fill { animation: none; }
 html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: none; }
 
 /* ==========================================================================
-   SETTINGS — Dark Clay overhaul: 3 tactile cards, vertical fill.
+   SETTINGS — Dark Clay overhaul: 2 tactile cards, vertical fill.
    Canvas #10141D, cards #1B2331 (20px radius), headers #F8FAFC.
    Column: head (fixed) → stack (flexible, fills dead space) → fine-note badge.
    The stack owns the only scroll on this screen, and on a 360x640 phone there is
-   nothing to scroll: the dial below sizes the whole column to the box.
+   nothing to scroll: the dial below sizes the whole column to the box. Five rows
+   (3 + 2) over two cards have to spread the canvas the seven rows used to, so
+   every metric lifts its top landing as well as its top range.
    ========================================================================== */
 
 /* One elastic dial: 0 at a 640px phone, 1 at 932px and up, and it also gives
@@ -6135,13 +6138,17 @@ html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: no
   overflow: hidden;
   max-width: 100%;
   --set-t: clamp(0px, calc((var(--app-h) - 640px) / 292 - (430px - min(100vw, 430px)) / 220), 1px);
-  --set-row: calc(44px + var(--set-t) * 10);        /* 44 -> 54 */
-  --set-ico: calc(22px + var(--set-t) * 8);         /* 22 -> 30 */
-  --set-pad-t: calc(4px + var(--set-t) * 8);        /* 4 -> 12 */
-  --set-pad-b: calc(3px + var(--set-t) * 5);        /* 3 -> 8 */
-  --set-card-gap: calc(2px + var(--set-t) * 3);     /* 2 -> 5 */
-  --set-stack-gap: calc(3px + var(--set-t) * 5);    /* 3 -> 8 */
+  --set-row: calc(52px + var(--set-t) * 24);        /* 52 -> 76 */
+  --set-ico: calc(24px + var(--set-t) * 8);         /* 24 -> 32 */
+  --set-pad-t: calc(12px + var(--set-t) * 12);      /* 12 -> 24 */
+  --set-pad-b: calc(10px + var(--set-t) * 10);      /* 10 -> 20 */
+  --set-card-gap: calc(4px + var(--set-t) * 6);     /* 4 -> 10 */
+  --set-stack-gap: calc(10px + var(--set-t) * 6);   /* 10 -> 16 */
   --set-scr-gap: calc(4px + var(--set-t) * 8);      /* 4 -> 12 */
+  /* The switches breathe with the rows: the ~46% the viewport grows is carried
+     by the rows, the pads and the control, so the look never sags or cramps. */
+  --set-sw-w: calc(56px + var(--set-t) * 12);       /* 56 -> 68 */
+  --set-sw-h: calc(32px + var(--set-t) * 6);        /* 32 -> 38 */
   /* The horizontal inset is fluid as well: `--s3` collapses from 16 to 8 at the 700px
      breakpoint, and a fixed pad there makes the foot badge wrap one line taller at exactly
      the height where the screen gained 1px — the same dead-band bug, one axis over. */
@@ -6187,7 +6194,7 @@ html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: no
     0 3px 7px rgba(0, 0, 0, .45);
 }
 
-/* flexible band between the top bar and the dock: spreads the 3 cards so no
+/* flexible band between the top bar and the dock: spreads the 2 cards so no
    dead space survives on tall phones, and never needs to scroll on a short one.
    The 2px padding is shadow room for the cards inside the clip; the box itself
    stays flush with the column (a negative margin here would scroll the screen
@@ -6258,8 +6265,9 @@ html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: no
 .set-ico.sm { width: calc(var(--set-ico) + 6px); height: calc(var(--set-ico) + 6px); border-radius: calc(var(--set-ico) * .4); }
 .set-ico.sm .ico { width: calc(var(--set-ico) * .8); height: calc(var(--set-ico) * .8); }
 .set-ico.sky { color: var(--brand-ink); }
-.set-ico.mint { color: var(--mint-ink); background: linear-gradient(180deg, #0A0F1C 0%, rgba(16, 185, 129, .22) 100%); }
-.set-ico.danger { color: var(--red-ink); background: linear-gradient(180deg, #0A0F1C 0%, rgba(224, 38, 79, .22) 100%); }
+/* the admin chip: the deep well lit gold from below — a verified desk, tinted
+   like the amber switches so the support route reads as the app's own channel */
+.set-ico.gold { color: var(--gold-ink); background: linear-gradient(180deg, #0A0F1C 0%, rgba(232, 168, 12, .22) 100%); }
 
 /* rows live directly on the card: dividers only, no nested tray */
 .set-rows { display: flex; flex-direction: column; min-width: 0; }
@@ -6268,7 +6276,32 @@ html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: no
 .set-rows .row:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
 .set-rows .row:active { background: rgba(255, 255, 255, .03); }
 .set-row .row-txt { flex: 1 1 auto; }
-.set-row.danger .row-t { color: var(--red-ink); }
+
+/* ---- Contact Admin: a raised clay pill with the open-chat glyph ----------
+   The channel row answers with the foreign-open key; the admin row answers
+   with the app's own chat pill instead — raised with a solid lip like a key,
+   gold, and it physically travels down on the row's press. */
+.admin-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--set-ico) * 1.5);
+  height: calc(var(--set-ico) * 1.22);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #2E3A55 0%, #1D2736 100%);
+  color: var(--gold-ink);
+  box-shadow:
+    0 2px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 0 0 1px rgba(255, 255, 255, .07);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.admin-pill .ico { width: calc(var(--set-ico) * .62); height: calc(var(--set-ico) * .62); }
+.set-row:active .admin-pill {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 #080C14, inset 0 1px 0 rgba(255, 255, 255, .14);
+}
 
 /* language pill: recessed flag chip + tactile chevron key */
 .lang-pill {
@@ -6296,8 +6329,8 @@ html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: no
 }
 .chev.tactile, .ext {
   flex: none;
-  width: 30px;
-  height: 30px;
+  width: calc(28px + var(--set-t) * 6);
+  height: calc(28px + var(--set-t) * 6);
   padding: 6px;
   border-radius: 10px;
   background: linear-gradient(180deg, #2A354C 0%, #1C2433 100%);
@@ -6325,8 +6358,8 @@ html[dir="rtl"] .set-row:active .chev.tactile { transform: scaleX(-1) translateY
    `.settings-screen .switch` (2), so BOTH states are restated here at 4 —
    the checked rule can never fall back to the blue ramp. */
 .settings-screen .switch {
-  width: 58px;
-  height: 34px;
+  width: var(--set-sw-w);
+  height: var(--set-sw-h);
   background: linear-gradient(180deg, #070B14 0%, #0D1424 100%);
   box-shadow:
     inset 0 3px 6px rgba(0, 0, 0, .78),
@@ -6355,8 +6388,8 @@ html[dir="rtl"] .set-row:active .chev.tactile { transform: scaleX(-1) translateY
   z-index: 1;
   top: 4px;
   left: 4px;
-  width: 26px;
-  height: 26px;
+  width: calc(var(--set-sw-h) - 8px);
+  height: calc(var(--set-sw-h) - 8px);
   background: linear-gradient(180deg, #FFFFFF 0%, #DFE5EC 100%);
   box-shadow:
     0 4px 8px rgba(0, 0, 0, .38),
@@ -6376,7 +6409,7 @@ html[dir="rtl"] .set-row:active .chev.tactile { transform: scaleX(-1) translateY
 .settings-screen .row[aria-checked="true"] .switch::after {
   /* the spring: an overshoot ease rides the same travel */
   transition: transform .3s cubic-bezier(.34, 1.56, .64, 1), box-shadow var(--motion-med);
-  transform: translateX(24px);
+  transform: translateX(calc(var(--set-sw-w) - var(--set-sw-h)));
   box-shadow:
     0 4px 8px rgba(70, 35, 0, .42),
     0 1px 2px rgba(0, 0, 0, .32),
@@ -6422,29 +6455,6 @@ html[dir="rtl"] .set-row:active .chev.tactile { transform: scaleX(-1) translateY
   white-space: nowrap;
   opacity: .72;
 }
-
-/* transient settings toast (support hint / reset confirm) */
-.set-toast {
-  position: absolute;
-  left: 50%;
-  bottom: 12px;
-  transform: translate(-50%, 8px);
-  z-index: 6;
-  width: max-content;
-  max-width: calc(100% - var(--s4));
-  padding: var(--s2) var(--s4);
-  border-radius: var(--radius-pill);
-  background: rgba(15, 23, 42, .94);
-  box-shadow: inset 0 0 0 1px var(--hair), 0 10px 22px -10px var(--shadow);
-  color: var(--ink);
-  font-size: var(--t-3);
-  font-weight: 700;
-  text-align: center;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity .22s ease, transform .22s ease;
-}
-.set-toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 /* language drawer: clay sheet, grip, tactile rows */
 .sheet-grip {
@@ -6497,13 +6507,12 @@ html:not(.no-flags) .lang-row .flag-code { display: none; }
 .lang-row[aria-selected="true"] .pick-n small { color: var(--brand-ink); opacity: .75; }
 
 /* Short columns: the elastic dial above does the work, so the only thing left is to keep the
-   row subtitle on one line. Below ~620px of app height the column genuinely cannot hold seven
-   rows at a 44px target — the stack scrolls there rather than shrinking the targets, which is
-   the one case it ever scrolls. 360x640 and every larger phone never do. */
+   row subtitle on one line. Below ~500px of app height the column genuinely cannot hold the
+   five rows at their 52px base target — the stack scrolls there rather than shrinking the
+   targets, which is the one case it ever scrolls. 360x640 and every larger phone never do. */
 @media (max-height: 700px) {
   .set-row .row-s { font-size: 10px; line-height: 1.25; }
 }
-html.reduced-motion .set-toast { transition: none; }
 
 /* ==========================================================================
    NOTIFICATIONS — tactile In-Game Notification Center (Bell & Drawer).
