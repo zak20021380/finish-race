@@ -496,22 +496,26 @@
 
           <div class="compete-body stars-stage" data-scroll id="arena-scroll">
             <article class="stars-card" id="stars-card" aria-labelledby="stars-name">
-              <!-- hero header, two rows: identity + bracket clock over the board switch.
-                   Row one: the Star medallion — the gold PNG set into a dark jewel face
-                   behind a 1px gold rim — inline beside the silver wordmark, the clock
-                   pinned to the right as a dark glass capsule with a breathing gold bead.
-                   Row two: the two-way clay switch stretched across the full card,
-                   centred over the podium below. The whole head stays at or under 60px,
-                   so the podium keeps its pixels and the switch costs the card no extra
-                   height. Gold is reserved for the live and the premium here — the
-                   setting, the bead, the lit key's rim — which leaves the CTA below as
-                   the only solid gold slab on the screen. -->
+              <!-- hero header, two rows: branding + rules + live clock over the board switch.
+                   Row one: the Star floats bare on the clay with a warm amber ambient glow —
+                   no box, no rim — beside the heavy embossed wordmark, the round clay help
+                   key, and the inset countdown pill with amber monospace digits and a
+                   breathing gold bead. Row two: the two-way clay switch stretched across
+                   the full card, centred over the podium below. The whole head stays at or
+                   under 60px, so the podium keeps its pixels and the switch costs the card
+                   no extra height. Gold is reserved for the live and the premium here —
+                   the Star, the digits, the lit key — which leaves the CTA below as the
+                   only solid gold slab on the screen. -->
               <div class="stars-head">
                 <div class="stars-titlebar">
                   <span class="stars-emblem" aria-hidden="true">
-                    <img class="stars-emblem-img" id="stars-emblem-img" alt="" width="24" height="24" />
+                    <img class="stars-emblem-img" id="stars-emblem-img" alt="" width="26" height="26" />
                   </span>
                   <h2 class="stars-name" id="stars-name">200 STARS CUP</h2>
+                  <button class="stars-info" type="button" id="stars-info" aria-haspopup="dialog"
+                    aria-label="How the 200 Stars Cup works">
+                    <span aria-hidden="true">?</span>
+                  </button>
                   <span class="stars-count" id="stars-count" role="timer" aria-label="Bracket opens in">01:45:20</span>
                 </div>
                 <div class="stars-tabs" id="stars-tabs" role="group" aria-label="Arena leaderboard" data-active="channels">
@@ -1602,6 +1606,43 @@
         </p>
         <ol class="sheet-body sr-list" id="sr-list" data-scroll aria-label="Top ten contributors"></ol>
         <p class="fine sr-fine">Places 1 to 10 split the 200-Star pool between them. Only the #1 channel's roster is paid.</p>
+      </section>
+
+      <!-- rules: the 200 Stars Cup explained — what a win banks, who wins the cup,
+           and how the 200-Star pool reaches the winning channel's Top 10. Opens from
+           the round help key in the Cup header; the scrim (and Escape) close it. -->
+      <section class="sheet tall rules-sheet" id="sheet-rules" hidden tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <header class="rules-head">
+          <h2 class="sheet-t left rules-title" id="rules-title">200 Stars Cup Rules</h2>
+          <button class="ms-x" type="button" data-sheet-close aria-label="Close rules">
+            <span class="ms-x-g" aria-hidden="true">&times;</span>
+          </button>
+        </header>
+        <ol class="sheet-body rules-steps" id="rules-steps" data-scroll aria-label="How the cup works">
+          <li class="rules-step">
+            <span class="rules-num" aria-hidden="true">1</span>
+            <span class="rules-txt">
+              <b>Represent Your Squad</b>
+              <small>Every Arena match won earns TIQ score for you and your chosen Telegram channel.</small>
+            </span>
+          </li>
+          <li class="rules-step">
+            <span class="rules-num" aria-hidden="true">2</span>
+            <span class="rules-txt">
+              <b>The Championship</b>
+              <small>When the countdown timer expires, the #1 ranked channel on the leaderboard wins the tournament.</small>
+            </span>
+          </li>
+          <li class="rules-step">
+            <span class="rules-num" aria-hidden="true">3</span>
+            <span class="rules-txt">
+              <b>Prize Distribution</b>
+              <small>The 200 Telegram Stars prize pool is automatically split among the Top 10 individual contributors of the winning channel based on squad rank.</small>
+            </span>
+          </li>
+        </ol>
+        <button class="btn btn-ghost rules-got" type="button" data-sheet-close data-autofocus>Got it</button>
       </section>
 
       <!-- team: a local mock of a club, shaped so a Telegram group can own it later -->

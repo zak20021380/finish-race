@@ -8,30 +8,34 @@
  *   node scripts/verify-channel-cup.mjs
  *
  * One phone, 360x640, because that is the fit the card has to hold:
- *  - the header is two compact rows, at or under 60px: the Star set into a dark jewel
- *    face behind a 1px gold rim, inline beside the silver clipped-metal wordmark
- *    "200 STARS CUP" (never clipping), with a live HH:MM:SS clock pinned right as a
- *    dark glass capsule with a gold hairline and a breathing gold bead, then the
- *    two-way switch (>=48px keys, sliding thumb, no clipped label) stretched across
- *    the full card and centred over the podium — no solid black box behind any
- *    header element, and gold reserved for the live/premium things so the CTA stays
- *    the only solid gold slab on the screen,
- *  - the channels podium is three CHANNELS (rank badge, verified channel mark,
- *    bare name, squad TIQ) with no @ sigil, no member count and no "tap to view
- *    roster" cue — the card itself is the door, and only #1 wears the pool,
- *  - two runner channels follow with a chevron, then the pinned squad row, then
- *    a >=48px PLAY FOR YOUR SQUAD key,
+ *  - the header is two compact rows, at or under 60px: the bare Star floating on the
+ *    clay with its amber ambient glow (no box, no rim, no jewel face) inline beside
+ *    the embossed silver wordmark "200 STARS CUP" (never clipping), the round engraved
+ *    help key that opens the Rules sheet, and a live HH:MM:SS clock pinned right as
+ *    an inset slate capsule with an ultra-thin warm hairline and a breathing gold
+ *    bead, then the two-way switch (>=48px keys, sliding thumb, no clipped label)
+ *    stretched across the full card and centred over the podium — no solid black box
+ *    behind any header element, and gold reserved for the live/premium things so the
+ *    CTA stays the only solid gold slab on the screen,
+ *  - the channels podium is three CHANNELS (rank badge, clean channel mark — the
+ *    decorative verification ticks are gone —, bare name, squad TIQ) with no @ sigil,
+ *    no member count and no "tap to view roster" cue — the card itself is the door,
+ *    only #1 wears the pool, and only #1 wears the single crown glyph,
+ *  - two runner channels follow with a chevron, then the pinned squad row (the handle
+ *    and its cup rank as two separate facts), then a >=48px PLAY FOR YOUR SQUAD key,
  *  - switching to TOP PLAYERS re-reads the same band as individuals: sphere +
  *    nation flag + TIQ + their own share of the cup's 45/30/22/19/17 ladder,
- *    stepping gold/silver/bronze, and no row is a roster door,
+ *    stepping gold/silver/bronze with exactly one crown, and no row is a roster door,
  *  - switching back restores the channels board and its single pool pill,
+ *  - the header's help key opens the Rules sheet — "200 Stars Cup Rules" over three
+ *    numbered steps, a >=48px close key — and its own key shuts it again,
  *  - tapping a channel opens the roster sheet with exactly ten contributors,
  *    ranked 1..10, whose projected payouts sum to the 200-Star pool,
  *  - the stage never scrolls and nothing spills its box, and no blur or
  *    backdrop-filter is live on the screen or its sheet.
  *
  * `.shots/arena/` keeps `channel-cup-360x640.png`, `channel-cup-players.png`,
- * `channel-cup-roster.png` and `channel-cup-squad.png`.
+ * `channel-cup-roster.png`, `channel-cup-squad.png` and `channel-cup-rules.png`.
  */
 import http from 'node:http';
 import fs from 'node:fs';
@@ -108,6 +112,7 @@ const PROBE = `(function () {
     badge: li.querySelector('.stars-pod-rank')?.textContent?.trim() ?? '',
     mark: li.querySelector('.stars-ch-av .stars-ch-t, .stars-av .stars-av-t')?.textContent?.trim() ?? '',
     tick: !!li.querySelector('.stars-ch-verify use'),
+    crown: !!li.querySelector('.stars-pod-crown use'),
     flag: !!li.querySelector('.stars-av-flag .fp'),
     name: li.querySelector('.stars-pod-name')?.textContent?.trim() ?? '',
     tiq: li.querySelector('.stars-pod-tiq')?.textContent?.trim() ?? '',
@@ -115,6 +120,9 @@ const PROBE = `(function () {
     poolStar: !!li.querySelector('.stars-pod-prize img'),
     nameSpill: spill('.stars-pod-name', li),
     tiqSpill: spill('.stars-pod-tiq', li),
+    crownSpill: (function () { const c = li.querySelector('.stars-pod-crown'); if (!c) return 0;
+      const cb = c.getBoundingClientRect(), rb = li.getBoundingClientRect();
+      return +(Math.max(0, rb.left - cb.left, cb.right - rb.right)).toFixed(1); })(),
     h: +li.getBoundingClientRect().height.toFixed(1),
   }));
 
@@ -156,7 +164,6 @@ const PROBE = `(function () {
   const clockEl = document.querySelector('.stars-count');
   const thumbEl = document.querySelector('#stars-tabs .mode-thumb');
   const beadCs = clockEl ? getComputedStyle(clockEl, '::before') : null;
-  const faceCs = emblem ? getComputedStyle(emblem, '::before') : null;
   const nameCs = nameEl ? getComputedStyle(nameEl) : null;
   const thumbCs = thumbEl ? getComputedStyle(thumbEl) : null;
   const gold = /245,\\s*158,\\s*11|251,\\s*191,\\s*36|252,\\s*211,\\s*77|253,\\s*230,\\s*138/;
@@ -184,11 +191,19 @@ const PROBE = `(function () {
       bg: emblemCs?.backgroundColor ?? null,
       border: emblemCs?.borderTopWidth ?? null,
       shadow: emblemCs?.boxShadow ?? null,
-      /* the setting: a gradient gold rim on the element, a lit dark face on ::before */
-      rim: emblemCs?.backgroundImage ?? null,
-      face: faceCs?.backgroundImage ?? null,
+      /* the Star now floats bare: the PNG's own alpha carries the emblem and its
+         weight comes from an amber drop-glow — no rim, no jewel face, no box */
+      glow: emblemImg ? getComputedStyle(emblemImg).filter : null,
       imgW: emblemImg ? +emblemImg.getBoundingClientRect().width.toFixed(1) : null,
       imgBlend: emblemImg ? getComputedStyle(emblemImg).mixBlendMode : null,
+    },
+    info: {
+      box: box(document.getElementById('stars-info')),
+      radius: document.getElementById('stars-info') ? getComputedStyle(document.getElementById('stars-info')).borderTopLeftRadius : null,
+      bg: document.getElementById('stars-info') ? getComputedStyle(document.getElementById('stars-info')).backgroundColor : null,
+      tap: document.getElementById('stars-info') ? band(document.getElementById('stars-info')) : 0,
+      label: document.getElementById('stars-info')?.getAttribute('aria-label') ?? null,
+      haspopup: document.getElementById('stars-info')?.getAttribute('aria-haspopup') ?? null,
     },
     hero: {
       /* the wordmark is cool polished silver, not gold, and clipped out of a gradient */
@@ -231,9 +246,11 @@ const PROBE = `(function () {
     squad: {
       chip: txt('#stars-squad-chip'),
       name: txt('#stars-squad-name'),
+      pos: txt('.stars-squad-pos'),
       note: txt('#stars-squad-note'),
       mark: txt('#stars-squad-letter'),
       nameSpill: spill('#stars-squad-name'),
+      posSpill: spill('.stars-squad-pos'),
       noteSpill: spill('#stars-squad-note'),
       h: +squad.getBoundingClientRect().height.toFixed(1),
     },
@@ -335,10 +352,11 @@ await pg.waitForTimeout(1400);
 
 const m = await pg.evaluate(PROBE);
 
-/* 1 — header: two rows — the Star medallion inline with the silver wordmark + clock,
-   then the switch. One palette rule: gold marks the live/premium things (the Star's
-   setting, the clock's bead, the lit key's rim) and the wordmark stays cool silver, so
-   the CTA below is still the only solid gold slab on the screen. */
+/* 1 — header: two rows — the bare floating Star inline with the silver wordmark,
+   the help key and the clock, then the switch. One palette rule: gold marks the
+   live/premium things (the Star's glow, the clock's bead, the lit key's rim) and
+   the wordmark stays cool silver, so the CTA below is still the only solid gold
+   slab on the screen. */
 if (m.title !== 'Arena') fail(`aria title reads "${m.title}"`);
 if (m.name !== '200 STARS CUP') fail(`title reads "${m.name}"`);
 if (!/^\d{2}:\d{2}:\d{2}$/.test(m.count ?? '')) fail(`bracket clock reads "${m.count}"`);
@@ -362,19 +380,28 @@ if (rgba(fillOf('.stars-head')).a !== 0 || rgba(fillOf('.stars-titlebar')).a !==
 if (rgba(fillOf('#stars-tabs')).a >= 0.99) fail(`the switch track is an opaque box (${fillOf('#stars-tabs')})`);
 if (rgba(fillOf('.stars-count')).a >= 0.99) fail(`the clock cuts an opaque box (${fillOf('.stars-count')})`);
 
-/* the Star's setting: a gradient gold rim on the element, a dark lit face on ::before,
-   and the gold PNG set into it — but the element itself still paints no fill, so the
-   medallion reads as set into the card rather than stuck on top of it */
+/* the Star floats bare on the clay: no fill, no border, and its weight carried by
+   an amber drop-glow instead of a rim — a frame would box in the one premium glyph */
 if (m.emblem.bg !== 'rgba(0, 0, 0, 0)' || parseFloat(m.emblem.border) > 0) {
-  fail(`the Star's setting paints an opaque box (${m.emblem.bg} / ${m.emblem.border})`);
+  fail(`the Star paints an opaque box (${m.emblem.bg} / ${m.emblem.border})`);
 }
-if (!/gradient/.test(m.emblem.rim ?? '')) fail(`the Star has no gold rim (${m.emblem.rim})`);
-if (!/gradient/.test(m.emblem.face ?? '')) fail(`the Star has no lit jewel face (${m.emblem.face})`);
-if (!gold.test(m.emblem.shadow ?? '')) fail(`the Star carries no gold bloom (${m.emblem.shadow})`);
-if (!m.emblem.imgW || m.emblem.imgW < m.emblem.box.w * 0.6 || m.emblem.imgW > m.emblem.box.w * 0.86) {
-  fail(`the Star is ${m.emblem.imgW}px inside a ${m.emblem.box.w}px setting, want 60-86% so the rim stays a ring`);
+if (!/drop-shadow/.test(m.emblem.glow ?? '') || !gold.test(m.emblem.glow ?? '')) {
+  fail(`the Star carries no warm ambient glow (${m.emblem.glow})`);
+}
+if (!m.emblem.imgW || Math.abs(m.emblem.imgW - m.emblem.box.w) > 1) {
+  fail(`the Star is ${m.emblem.imgW}px in a ${m.emblem.box.w}px box, want it full-bleed`);
 }
 if (m.emblem.imgBlend !== 'screen') fail(`the Star blends as "${m.emblem.imgBlend}", want screen`);
+
+/* the help key: a round engraved clay pill with a >=44px invisible tap band and the
+   dialog manners of a real door — it is the way into the Rules sheet */
+if (!m.info.box || Math.abs(m.info.box.w - m.info.box.h) > 1 || m.info.radius !== '50%') {
+  fail(`the help key is not a round key (${JSON.stringify(m.info.box)} / ${m.info.radius})`);
+}
+if (!m.info.box || m.info.box.w < 22 || m.info.box.w > 30) fail(`the help key is ${m.info.box?.w}px wide, want 22-30`);
+if (m.info.bg !== 'rgba(0, 0, 0, 0)') fail(`the help key paints a flat fill (${m.info.bg})`);
+if (m.info.tap < 44) fail(`the help key tap band is ${m.info.tap}px, want >=44`);
+if (m.info.haspopup !== 'dialog' || !m.info.label) fail('the help key is not a labelled dialog door');
 
 /* the wordmark: clipped metal gradient, and silver — never gold, or it competes
    with the CTA and with the Star it is supposed to sit beside */
@@ -411,7 +438,8 @@ if (ranks !== '1,2,3') fail(`podium ranks are ${ranks}`);
 for (const p of m.pods) {
   if (p.badge !== p.rank) fail(`podium #${p.rank} badge reads "${p.badge}"`);
   if (p.role !== 'button' || p.haspopup !== 'dialog') fail(`podium #${p.rank} is not an openable button`);
-  if (!p.mark || !p.tick) fail(`podium #${p.rank} has no channel mark or no verification tick`);
+  if (!p.mark) fail(`podium #${p.rank} has no channel mark`);
+  if (p.tick) fail(`podium #${p.rank} still wears a verification tick`);
   if (!p.name) fail(`podium #${p.rank} names nothing`);
   if (p.name.startsWith('@')) fail(`podium #${p.rank} still wears the @ sigil ("${p.name}")`);
   if (!/^[\d,]+ TIQ$/.test(p.tiq)) fail(`podium #${p.rank} TIQ reads "${p.tiq}"`);
@@ -420,6 +448,8 @@ for (const p of m.pods) {
 }
 const first = m.pods.find((p) => p.rank === '1');
 if (first?.metal !== 'gold') fail(`the leader wears ${first?.metal || 'no'} metal, want gold`);
+if (!first?.crown) fail('the champion is not crowned');
+if (m.pods.filter((p) => p.crown).length !== 1) fail(`the board wears ${m.pods.filter((p) => p.crown).length} crowns, want only the champion's`);
 if (!/^200\s*Pool$/.test(first?.pool ?? '')) fail(`the leader's pool pill reads "${first?.pool}"`);
 if (!first?.poolStar) fail("the leader's pool pill has no real Star asset");
 for (const p of m.pods.filter((x) => x.rank !== '1')) if (p.pool) fail(`#${p.rank} claims a pool ("${p.pool}") that only #1 holds`);
@@ -433,6 +463,7 @@ m.runs.forEach((r, i) => {
   if (r.rank !== String(i + 4)) fail(`runner ${i + 1} ranks "${r.rank}"`);
   if (r.name.startsWith('@')) fail(`runner ${i + 1} name "${r.name}" still wears the @ sigil`);
   if (!r.name) fail(`runner ${i + 1} names nothing`);
+  if (r.tick) fail(`runner ${i + 1} still wears a verification tick`);
   if (!/^[\d,]+ TIQ$/.test(r.tiq)) fail(`runner ${i + 1} TIQ reads "${r.tiq}"`);
   if (!r.go) fail(`runner ${i + 1} has no chevron`);
   if (r.pay) fail(`runner ${i + 1} claims a Star share ("${r.pay}") — the pool pays channels, not runners`);
@@ -473,6 +504,7 @@ for (const x of [...p.pods, ...p.runs]) {
 if (p.pods[0]?.metal !== 'gold' || p.pods[1]?.metal !== 'silver' || p.pods[2]?.metal !== 'bronze') {
   fail('the players podium does not step gold/silver/bronze');
 }
+if (!p.pods[0]?.crown || p.pods.filter((x) => x.crown).length !== 1) fail('the players board does not crown exactly its champion');
 if (Math.max(...p.pods.map((x) => x.h)) - Math.min(...p.pods.map((x) => x.h)) < 12) {
   fail(`the players podium barely steps (${p.pods.map((x) => x.h).join('/')}px) — every place carries a pill, so the rise must come from the pillar`);
 }
@@ -512,6 +544,52 @@ if (m.ctaBox.w < 48) fail(`the CTA is ${m.ctaBox.w}px wide`);
 if (m.blurCount) fail(`live blur on the Cup (${JSON.stringify(m.blurs)})`);
 
 await pg.screenshot({ path: path.join(OUT, 'channel-cup-360x640.png') });
+
+/* ---------- 6b — the header's help key opens the Rules sheet ---------- */
+
+const RULES = `(function () {
+  const sheet = document.getElementById('sheet-rules');
+  const txt = (sel) => document.querySelector(sel)?.textContent?.trim() ?? null;
+  const cb = document.querySelector('#sheet-rules .ms-x')?.getBoundingClientRect() ?? { width: 0, height: 0 };
+  return {
+    open: !sheet.hidden && sheet.classList.contains('open'),
+    scrim: !document.getElementById('scrim').hidden,
+    title: txt('#rules-title'),
+    steps: [...document.querySelectorAll('.rules-step')].map((li) => ({
+      n: li.querySelector('.rules-num')?.textContent?.trim() ?? '',
+      b: li.querySelector('b')?.textContent?.trim() ?? '',
+      s: li.querySelector('small')?.textContent?.trim() ?? '',
+    })),
+    close: { w: +cb.width.toFixed(1), h: +cb.height.toFixed(1) },
+    h: +sheet.getBoundingClientRect().height.toFixed(1),
+  };
+})()`;
+
+await pg.click('#stars-info');
+await pg.waitForTimeout(700);
+const rules = await pg.evaluate(RULES);
+if (!rules.open) fail('the help key did not open the rules sheet');
+if (!rules.scrim) fail('the rules sheet opened without its backdrop');
+if (rules.title !== '200 Stars Cup Rules') fail(`the rules title reads "${rules.title}"`);
+if (rules.steps.length !== 3) fail(`the rules sheet lists ${rules.steps.length} steps, want 3`);
+const ruleTitles = ['Represent Your Squad', 'The Championship', 'Prize Distribution'];
+const ruleBody = [
+  'Every Arena match won earns TIQ score for you and your chosen Telegram channel.',
+  'When the countdown timer expires, the #1 ranked channel on the leaderboard wins the tournament.',
+  'The 200 Telegram Stars prize pool is automatically split among the Top 10 individual contributors of the winning channel based on squad rank.',
+];
+rules.steps.forEach((s, i) => {
+  if (s.n !== String(i + 1)) fail(`rules step ${i + 1} medallion reads "${s.n}"`);
+  if (s.b !== ruleTitles[i]) fail(`rules step ${i + 1} title reads "${s.b}"`);
+  if (s.s !== ruleBody[i]) fail(`rules step ${i + 1} body reads "${s.s}"`);
+});
+if (rules.close.w < 48 || rules.close.h < 48) fail(`the rules close key is ${rules.close.w}x${rules.close.h}, want >=48`);
+if (rules.h > 640) fail(`the rules sheet is ${rules.h}px tall on a 640px phone`);
+await pg.screenshot({ path: path.join(OUT, 'channel-cup-rules.png') });
+await pg.click('#sheet-rules .ms-x');
+await pg.waitForTimeout(500);
+if (!(await pg.evaluate(() => document.getElementById('sheet-rules').hidden))) fail('the rules close key left the sheet open');
+say('rules sheet: 3 steps, opens from the help key, shuts from its own key');
 
 /* ---------- 7 — a channel tap opens its Top-10 roster ---------- */
 
@@ -623,12 +701,14 @@ await bpg.waitForTimeout(1600);
 const bs = await bpg.evaluate(() => {
   const row = document.getElementById('stars-squad');
   const note = document.getElementById('stars-squad-note');
+  const pos = document.querySelector('.stars-squad-pos');
   const rg = document.createRange();
   rg.selectNodeContents(note);
   return {
     chip: document.getElementById('stars-squad-chip').textContent.trim(),
     mark: document.getElementById('stars-squad-letter').textContent.trim(),
     name: document.getElementById('stars-squad-name').textContent.trim(),
+    pos: pos?.textContent?.trim() ?? null,
     note: note.textContent.trim(),
     noteSpill: +(rg.getBoundingClientRect().right - note.getBoundingClientRect().right).toFixed(1),
     star: !!note.querySelector('img'),
@@ -640,7 +720,9 @@ const bs = await bpg.evaluate(() => {
 });
 if (bs.unbound) fail('a bound device still reads the squad row as unbound');
 if (bs.chip !== 'YOUR SQUAD') fail(`the squad chip reads "${bs.chip}"`);
-if (bs.name !== 'NeonRacers · Rank 2') fail(`the squad row names "${bs.name}"`);
+if (bs.name !== 'NeonRacers#2') fail(`the squad row names "${bs.name}" — want the bare handle beside its rank pill`);
+if (bs.pos !== '#2') fail(`the squad rank pill reads "${bs.pos}"`);
+if (!/^You #2 · earn 30$/.test(bs.note.replace(/\s+/g, ' '))) fail(`the squad note reads "${bs.note}"`);
 if (!bs.star) fail('the squad row pays with a text glyph, not the real Star asset');
 if (bs.noteSpill > 0.5) fail(`the squad note spills ${bs.noteSpill}px`);
 if (bs.haspopup !== 'dialog') fail('a bound squad row no longer opens a dialog');

@@ -711,16 +711,16 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return b;
   };
 
-  /** The channel's own mark: a clay squircle, the handle's letter, Telegram's tick. */
+  /** The channel's own mark: a clay squircle carrying the handle's letter. The old
+   *  per-avatar Telegram tick was pure noise on a board where every entry is a
+   *  channel — dropped, so the mark and its metal can breathe. */
   function channelAv(s: RankedSquad, cls: string): HTMLElement {
     const av = tag(`stars-ch-av${cls ? ` ${cls}` : ''}`);
     av.setAttribute('aria-hidden', 'true');
     const t = document.createElement('b');
     t.className = 'stars-ch-t';
     t.textContent = squadLetter(s);
-    const tick = tag('stars-ch-verify');
-    tick.append(svgIcon('#i-check', 'ico'));
-    av.append(t, tick);
+    av.append(t);
     return av;
   }
 
@@ -754,6 +754,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const tiq = tag('stars-pod-tiq');
     tiq.append(strong(num(s.trophies)), document.createTextNode(' TIQ'));
 
+    /* the champion wears the one crown on the board, set into its raised pedestal */
+    if (s.rank === 1) li.append(svgIcon('#i-crown', 'stars-pod-crown'));
     li.append(tag('stars-pod-rank', String(s.rank)), channelAv(s, ''), name, tiq);
 
     if (s.rank === 1) {
@@ -812,6 +814,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const tiq = tag('stars-pod-tiq');
     tiq.append(strong(num(r.tiq)), document.createTextNode(' TIQ'));
 
+    if (r.rank === 1) li.append(svgIcon('#i-crown', 'stars-pod-crown'));
     li.append(tag('stars-pod-rank', String(r.rank)), sphere(r, 'stars-av'), name, tiq);
     if (r.stars > 0) {
       const prize = tag('stars-pod-prize');
@@ -969,17 +972,26 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     row.setAttribute('aria-haspopup', 'dialog');
     setText(cupEls.squadChip, 'YOUR SQUAD');
     setText(cupEls.squadLetter, squadLetter(mine));
-    setText(cupEls.squadName, `${bare(mine.handle)} · Rank ${mine.rank}`);
+    /* name line: the handle, then its cup rank as its own pill — the two facts sit
+       side by side instead of running together into one ellipsised string */
+    const name = cupEls.squadName;
+    if (name) {
+      name.textContent = '';
+      name.append(document.createTextNode(bare(mine.handle)));
+      const pos = tag('stars-squad-pos', `#${mine.rank}`);
+      pos.title = `Rank ${mine.rank} in the ${c.name}`;
+      name.append(pos);
+    }
 
     const note = cupEls.squadNote;
     const you = myRoster?.find((r) => r.isYou) ?? null;
     if (note) {
       note.textContent = '';
       if (you && you.stars > 0) {
-        note.append(document.createTextNode('Your rank: '), strong(`#${you.rank}`),
+        note.append(document.createTextNode('You '), strong(`#${you.rank}`),
           document.createTextNode(' · earn '), starImg('stars-squad-star'), strong(num(you.stars)));
       } else if (you) {
-        note.append(document.createTextNode('Rank '), strong(`#${you.rank}`),
+        note.append(document.createTextNode('You '), strong(`#${you.rank}`),
           document.createTextNode(` · outside the paid ${paid}`));
       } else {
         note.append(strong(num(myTrophyScore())), document.createTextNode(' TIQ · tap for the roster'));
@@ -1120,6 +1132,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     else openSeatSheet();
   });
   elOf('stars-sheet-yes')?.addEventListener('click', lockSeat);
+
+  /** The header's round key: the cup's three rules, one dark-clay sheet. */
+  elOf('stars-info')?.addEventListener('click', () => {
+    const sheet = api.sheet('sheet-rules');
+    if (!sheet) return;
+    impact('light');
+    api.sheets.open(sheet);
+  });
 
   /** Bound: the roster of your own channel. Unbound: the real join flow. */
   cupEls.squad?.addEventListener('click', () => {

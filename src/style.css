@@ -7732,9 +7732,10 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
    #FCD34D for the Stars. No backdrop-filter and no blur() anywhere on this
    screen or its sheet: every surface is opaque clay and every glow is a
    gradient fill.
-   Geometry: a two-row hero header — the Star medallion inline beside the silver
-   wordmark with the bracket clock on the right, then the board switch stretched
-   across the full card — over the Top-3 podium · two runners · the pinned squad row
+   Geometry: a two-row hero header — the bare Star with its amber ambient glow beside
+   the embossed silver wordmark, the round help key, and the inset bracket clock on
+   the right; then the board switch stretched across the full card, its keys riding a
+   recessed trench — over the Top-3 podium · two runners · the pinned squad row
    · CTA. The header stays at or under 60px, so the podium keeps its pixels. The
    podium band is the one flexible block; everything else is `flex: none`, so a short
    phone scrolls the stage instead of compressing a row.
@@ -7793,40 +7794,21 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   gap: 4px;
   min-width: 0;
 }
-/* the Star's setting: a dark jewel face sunk into a 1px gold rim. The rim is a
-   gradient FILL behind a padded pseudo-element rather than a border, so the emblem
-   still paints no opaque box of its own — the card's clay reads through the bloom
-   around it, which is what keeps it looking set into the card, not stuck on top. */
+/* the Star floats bare on the clay: the box, the rim and the jewel face are gone,
+   and the PNG's own alpha carries the emblem. Its weight comes from a warm amber
+   ambient drop-glow — light landing on the card, never a frame around it. */
 .stars-emblem {
   position: relative;
   flex: none;
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
-  padding: 1px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
   border: none;
-  border-radius: 8px;
-  background-color: transparent;
-  background-image: linear-gradient(145deg, #FEF3C7 0%, #FBBF24 28%, #C2740A 58%, #FDE68A 100%);
-  box-shadow:
-    0 2px 5px rgba(2, 6, 16, .6),
-    0 0 15px -5px rgba(245, 158, 11, .85);
-}
-/* the jewel face: lit from the top-left like every other clay surface, then falling
-   to near-black, so the gold PNG inside it has something dark to burn against. */
-.stars-emblem::before {
-  content: "";
-  position: absolute;
-  inset: 1px;
-  z-index: 0;
-  border-radius: 7px;
-  background:
-    radial-gradient(118% 96% at 50% -8%, rgba(255, 255, 255, .26), rgba(255, 255, 255, 0) 60%),
-    radial-gradient(146% 128% at 50% 22%, #384767 0%, #1C2536 58%, #0D121C 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .22),
-    inset 0 -2px 4px rgba(0, 0, 0, .62);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
 }
 /* the PNG is RGBA gold: `screen` lets the metal catch the clay light with no box */
 .stars-emblem-img,
@@ -7839,29 +7821,30 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   object-fit: contain;
   mix-blend-mode: screen;
 }
-/* 74% of the face, so the rim keeps a visible 1px ring all the way round */
+/* full-bleed in its box; the amber ambient glow lives in the filter */
 .stars-emblem-img {
   position: relative;
   z-index: 1;
-  width: 74%;
-  height: 74%;
+  width: 100%;
+  height: 100%;
   filter:
-    drop-shadow(0 0 5px rgba(245, 158, 11, .7))
-    drop-shadow(0 1px 2px rgba(2, 6, 16, .65));
+    drop-shadow(0 0 6px rgba(245, 158, 11, .55))
+    drop-shadow(0 3px 9px rgba(245, 158, 11, .32))
+    drop-shadow(0 1px 2px rgba(2, 6, 16, .6));
 }
-/* row one: the Star holds the left edge, the title follows inline, the clock
-   sits on the far right — all three share one centered band */
-.stars-titlebar { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
-/* the wordmark: cool polished silver, never gold. The gradient is the metal; the
-   engraving is done with `drop-shadow` rather than `text-shadow`, because the fill
-   is transparent and a text-shadow would simply show through it. */
+/* row one: the Star holds the left edge, the title follows inline, the help key
+   and the clock sit on the far right — all four share one centered band */
+.stars-titlebar { display: flex; align-items: center; gap: 7px; width: 100%; min-width: 0; }
+/* the wordmark: heavy embossed silver with crisp tracking. The gradient is the
+   metal; the engraving is done with `drop-shadow` rather than `text-shadow`, because
+   the fill is transparent and a text-shadow would simply show through it. */
 .stars-name {
   margin: 0;
   flex: 1 1 auto;
   min-width: 0;
   font-size: 17px;
   font-weight: 900;
-  letter-spacing: -.015em;
+  letter-spacing: .015em;
   line-height: 1.05;
   color: #F8FAFC;
   text-shadow: 0 1px 0 #05070C, 0 0 18px rgba(148, 178, 224, .22);
@@ -7883,9 +7866,41 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
     text-shadow: none;
   }
 }
-/* the board switch, row two: a full-width engraved slot cut into the card itself —
-   a translucent dark-slate well with a hairline rim and soft inner depth, so the
-   card's own surface reads through the track and no black box is ever cut in. */
+/* the round help key: an engraved clay pill, sunk into the band with the house
+   inner shadow and a muted "?" — it whispers the rules instead of cutting a hole
+   in the header. The 26px face carries a 50px invisible tap band. */
+.stars-info {
+  position: relative;
+  flex: none;
+  appearance: none;
+  border: 0;
+  padding: 0;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #26314A 0%, #1C2536 100%);
+  box-shadow:
+    inset 0 2px 4px rgba(2, 6, 16, .6),
+    inset 0 -1px 0 rgba(255, 255, 255, .07),
+    0 1px 0 rgba(255, 255, 255, .06);
+  color: #A7B4CC;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color var(--motion-fast), transform var(--motion-fast);
+}
+.stars-info::after { content: ""; position: absolute; inset: -12px; border-radius: 50%; }
+.stars-info:hover, .stars-info:active { color: #FDE68A; }
+.stars-info:active { transform: translateY(1px); }
+.stars-info:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+/* the board switch, row two: a full-width engraved trench cut into the card itself —
+   a deep translucent dark-slate well with a hairline rim and soft inner depth, so
+   the card's own surface reads through the track and no black box is ever cut in. */
 .stars-tabs {
   position: relative;
   flex: none;
@@ -7894,15 +7909,15 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   width: 100%;
   height: 30px;
   padding: 3px;
-  border: 1px solid rgba(255, 255, 255, .07);
-  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, .06);
+  border-radius: 12px;
   background:
-    linear-gradient(180deg, rgba(2, 6, 16, .48) 0%, rgba(2, 6, 16, .1) 100%),
-    rgba(17, 25, 41, .5);
+    linear-gradient(180deg, rgba(2, 6, 16, .58) 0%, rgba(2, 6, 16, .22) 100%),
+    rgba(15, 22, 36, .5);
   box-shadow:
-    inset 0 2px 5px rgba(2, 6, 16, .55),
-    inset 0 -1px 0 rgba(255, 255, 255, .055),
-    0 1px 0 rgba(255, 255, 255, .045);
+    inset 0 3px 6px rgba(2, 6, 16, .62),
+    inset 0 -1px 0 rgba(255, 255, 255, .05),
+    0 1px 0 rgba(255, 255, 255, .05);
 }
 /* an abspos grid child resolves `top`/`left` against the PADDING box, which the
    1px rim already holds 1px in — so 3px here lands the cap 4px from the edge,
@@ -7912,20 +7927,18 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   left: 3px;
   width: calc((100% - 6px) / 2);
   height: calc(100% - 6px);
-  border-radius: 8px;
-  /* an elevated dark-clay cap: a cool top highlight, a warm wash under it, and a
-     hairline gold rim so the lit key reads as the live one without becoming a
-     second gold slab competing with the CTA. */
+  border-radius: 9px;
+  /* an elevated soft-clay cap: a delicate top edge highlight, a gentle drop shadow,
+     and only a whisper of warm gold at the rim — the lit key reads live through its
+     gold text instead of becoming a second gold slab competing with the CTA. */
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, .14) 0%, rgba(255, 255, 255, 0) 56%),
-    linear-gradient(180deg, rgba(252, 211, 77, .14) 0%, rgba(252, 211, 77, 0) 76%),
-    linear-gradient(180deg, #3A4964 0%, #222D44 100%);
+    linear-gradient(180deg, rgba(255, 255, 255, .18) 0%, rgba(255, 255, 255, .03) 52%, rgba(255, 255, 255, 0) 100%),
+    linear-gradient(180deg, #3E4E6B 0%, #27324A 100%);
   box-shadow:
-    0 2px 6px rgba(2, 6, 16, .55),
-    0 1px 0 rgba(255, 255, 255, .08),
-    inset 0 1px 0 rgba(255, 255, 255, .2),
-    inset 0 0 0 1px rgba(252, 211, 77, .24),
-    0 0 15px -6px rgba(252, 211, 77, .6);
+    0 2px 5px rgba(2, 6, 16, .5),
+    0 1px 0 rgba(255, 255, 255, .06),
+    inset 0 1px 0 rgba(255, 255, 255, .24),
+    inset 0 0 0 1px rgba(252, 211, 77, .16);
   transition: transform var(--motion-med);
 }
 .stars-tabs[data-active="players"] .mode-thumb { transform: translateX(100%); }
@@ -7933,14 +7946,14 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   flex-direction: row;
   gap: 0;
   padding: 0 3px;
-  border-radius: 8px;
+  border-radius: 9px;
   /* the unpressed key is nothing but a label: no face, no depth */
   background: transparent;
   box-shadow: none;
   color: #8593AB;
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: .01em;
+  letter-spacing: .02em;
   white-space: nowrap;
   transition: color var(--motion-fast);
 }
@@ -7952,29 +7965,31 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   color: #FDE68A;
   text-shadow: 0 0 10px rgba(245, 158, 11, .4), 0 1px 0 #05070C;
 }
-/* the bracket clock: a dark glass capsule with a gold hairline, a warm inner wash
-   and a bead that breathes once every two seconds. It is the only thing in the
-   band that moves, so the countdown carries its own urgency with no extra word. */
+/* the bracket clock: an inset slate capsule with an ultra-thin translucent rim,
+   warm amber monospace digits, and a bead that breathes once every two seconds.
+   It is the only thing in the band that moves, so the countdown carries its own
+   urgency with no extra word. */
 .stars-count {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 3px 8px 4px;
-  border: 1px solid rgba(245, 158, 11, .34);
+  border: 1px solid rgba(245, 158, 11, .28);
   border-radius: 999px;
   background:
     linear-gradient(180deg, rgba(245, 158, 11, .16) 0%, rgba(245, 158, 11, .02) 60%),
     rgba(13, 20, 34, .6);
   box-shadow:
-    inset 0 1px 2px rgba(2, 6, 16, .5),
+    inset 0 2px 4px rgba(2, 6, 16, .55),
     inset 0 -1px 0 rgba(255, 255, 255, .05),
     0 0 13px -5px rgba(245, 158, 11, .8);
   color: #FDE68A;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 10px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
-  letter-spacing: .03em;
+  letter-spacing: .04em;
   white-space: nowrap;
   text-align: center;
   line-height: 1.1;
@@ -7997,7 +8012,8 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 }
 
 /* ---- the channel icon: a clay squircle, not a ball — a channel is a place,
-       not a player. Metal tints the body; Telegram's tick rides its corner. ---- */
+       not a player. Metal tints the body; every decorative corner tick is gone,
+       so a board of channels reads as colours and letters, not badge noise. ---- */
 .stars-ch-av {
   position: relative;
   flex: none;
@@ -8018,20 +8034,6 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   line-height: 1;
 }
 .stars-ch-t { font-size: 14px; font-weight: 900; letter-spacing: -.02em; }
-.stars-ch-verify {
-  position: absolute;
-  right: -4px;
-  bottom: -4px;
-  display: grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: linear-gradient(180deg, #38BDF8 0%, #0284C7 100%);
-  box-shadow: 0 0 0 2px #141B2A, inset 0 1px 0 rgba(255, 255, 255, .35);
-  color: #F8FAFC;
-}
-.stars-ch-verify .ico { width: 9px; height: 9px; }
 
 /* ---- the Top-3 podium: three clay channel cards, the champion raised with the
        one gold rim. This band is the card's only flexible block, so it holds the
@@ -8049,6 +8051,7 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   gap: 6px;
 }
 .stars-pod {
+  position: relative;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -8066,13 +8069,27 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 }
 .stars-pod:active { transform: translateY(2px); }
 .stars-pod:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-/* the champion stands ~24px taller and wears the screen's one gold rim */
+/* the champion stands ~24px taller, wears the screen's one gold rim, and is
+   crowned by the board's only glyph — set into its own raised headroom, so the
+   silver and bronze pedestals keep their breathing room */
 .stars-pod[data-rank="1"] {
   padding-top: 21px;
   padding-bottom: 18px;
   box-shadow:
     var(--clay-drop), var(--clay-spec), var(--clay-bevel),
     inset 0 0 0 1.5px rgba(252, 211, 77, .5);
+}
+.stars-pod-crown {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 13px;
+  height: 13px;
+  color: #FCD34D;
+  opacity: .95;
+  filter: drop-shadow(0 1px 3px rgba(2, 6, 16, .7)) drop-shadow(0 0 7px rgba(245, 158, 11, .5));
+  pointer-events: none;
 }
 /* podium order: silver on the left, the champion raised in the centre, bronze right */
 .stars-pod[data-rank="2"] { order: 1; }
@@ -8211,12 +8228,12 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   align-items: center;
   gap: 9px;
   padding: 6px 10px 6px 9px;
-  border-radius: 15px;
+  border-radius: 16px;
   background:
     radial-gradient(120% 140% at 0% 0%, rgba(252, 211, 77, .05), rgba(252, 211, 77, 0) 60%),
     var(--clay-face);
   background-color: #1C2433;
-  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: transform var(--motion-fast);
@@ -8242,8 +8259,6 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 }
 .stars-ch-sm { width: 30px; height: 30px; border-radius: 11px; }
 .stars-ch-sm .stars-ch-t { font-size: 12px; }
-.stars-ch-sm .stars-ch-verify { width: 14px; height: 14px; right: -3px; bottom: -3px; }
-.stars-ch-sm .stars-ch-verify .ico { width: 8px; height: 8px; }
 .stars-run-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .stars-run-nm {
   min-width: 0;
@@ -8374,10 +8389,12 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 }
 .stars-squad-av { width: 34px; height: 34px; border-radius: 12px; }
 .stars-squad-av .stars-ch-t { font-size: 13px; }
-.stars-squad-av .stars-ch-verify { width: 15px; height: 15px; }
 .stars-squad-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .stars-squad-name {
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--t-2);
   font-weight: 900;
   letter-spacing: -.02em;
@@ -8388,6 +8405,23 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   overflow: hidden;
   text-overflow: ellipsis;
   text-shadow: 0 1px 0 #05070C;
+}
+/* the squad's cup rank: a quiet slate pill beside the gold handle, so the two
+   facts never run together in one ellipsised string */
+.stars-squad-pos {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px 2.5px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), inset 0 0 0 1px rgba(255, 255, 255, .07);
+  color: var(--ink-soft);
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  line-height: 1;
+  text-shadow: none;
 }
 .stars-squad-note {
   min-width: 0;
@@ -8468,7 +8502,7 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 @media (max-height: 600px) {
   .stars-card { gap: 5px; padding-top: 9px; }
   .stars-emblem { width: 22px; height: 22px; }
-  .stars-emblem::before { border-radius: 6px; }
+  .stars-info { width: 22px; height: 22px; font-size: 12px; }
   .stars-name { font-size: 15px; }
   .stars-tabs { height: 28px; }
   /* the face is 20px inside the 28px track here, so the band carries 28px of it */
@@ -8482,7 +8516,7 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 /* short and narrow (320x568): the copy stays whole, the type steps down instead */
 @media (max-width: 352px) {
   .stars-emblem { width: 22px; height: 22px; }
-  .stars-emblem::before { border-radius: 6px; }
+  .stars-info { width: 22px; height: 22px; font-size: 12px; }
   .stars-name { font-size: 15px; }
   .stars-tabs { height: 28px; }
   .stars-tabs .mode-seg { font-size: 8.5px; }
@@ -8503,8 +8537,6 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 /* a tall phone: the celebration scales up rather than leaving slack above the key */
 @media (min-height: 780px) {
   .stars-card { gap: 12px; padding: 18px 18px; border-radius: 24px; }
-  .stars-emblem { width: 26px; height: 26px; }
-  .stars-emblem::before { border-radius: 8px; }
   .stars-name { font-size: 18px; }
   .stars-tabs .mode-seg { font-size: 10.5px; }
   .stars-pod { padding: 11px 8px 10px; gap: 4px; }
@@ -8517,6 +8549,65 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 html.rm .stars-cta, html.rm .stars-pod, html.rm .stars-run, html.rm .stars-squad { transition: none; }
 html.rm .stars-tabs .mode-thumb { transition: none; }
 html.rm .stars-count::before { animation: none; }
+
+/* ==========================================================================
+   THE CUP RULES SHEET — the three steps between a win and the Stars, opened by
+   the round help key in the Cup header. Same dark-clay recipe as the roster:
+   an opaque slate panel, engraved medallions, depth from inner shadow only
+   (the shared .scrim behind it carries the app's one backdrop blur).
+   ========================================================================== */
+.rules-sheet {
+  border-radius: 24px 24px 0 0;
+  max-height: 85vh;
+  max-height: 85dvh;
+  gap: var(--s3);
+  background: linear-gradient(180deg, #232E44 0%, #1C2433 46%);
+  background-color: #1C2433;
+  box-shadow:
+    inset 0 1px 0 var(--hair-lit),
+    inset 0 0 0 1px rgba(255, 255, 255, .06),
+    0 -20px 44px -20px var(--shadow);
+}
+.rules-head { flex: none; display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+.rules-title { flex: 1 1 auto; min-width: 0; margin: 0; }
+.rules-steps { list-style: none; margin: 0; padding: 0 2px 0 0; gap: 8px; }
+.rules-step {
+  flex: none;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(252, 211, 77, .06), rgba(252, 211, 77, 0) 62%),
+    var(--clay-face);
+  background-color: #1C2433;
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+}
+.rules-num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #2E3A55 0%, #1A2333 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 -2px 3px rgba(0, 0, 0, .4),
+    inset 0 0 0 1px rgba(252, 211, 77, .24);
+  color: var(--honey-ink);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 0 #05070C;
+}
+.rules-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.rules-txt b { font-size: var(--t-2); font-weight: 900; letter-spacing: -.01em; color: var(--ink); }
+.rules-txt small { font-size: var(--t-3); font-weight: 600; line-height: 1.42; color: var(--ink-soft); }
+.rules-got { flex: none; margin-top: 2px; }
 
 /* ==========================================================================
    CHANNEL ROSTER SHEET — the Top 10 behind one channel, and the Stars each of
