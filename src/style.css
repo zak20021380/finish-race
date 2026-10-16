@@ -7760,24 +7760,19 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
    bracket clock on line one, the board switch spanning line two. The whole head
    stays under 64px, so the podium keeps every pixel it has today. */
 .stars-head { flex: none; display: flex; align-items: center; gap: 9px; min-width: 0; }
+/* the Star sits directly on the card's clay surface: no squircle, no cutout,
+   no rim — only the emblem's own warm ambient drop below. */
 .stars-emblem {
   flex: none;
   display: grid;
   place-items: center;
   width: 56px;
   height: 56px;
-  padding: 5px;
-  border-radius: 16px;
-  /* a warm gold ember behind the Star, over an extruded dark-clay squircle */
-  background:
-    radial-gradient(64% 58% at 50% 36%, rgba(252, 211, 77, .38), rgba(252, 211, 77, 0) 74%),
-    linear-gradient(180deg, #232E44 0%, #131A29 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(252, 211, 77, .16),
-    inset 0 1px 0 rgba(255, 255, 255, .16),
-    inset 0 -3px 4px rgba(0, 0, 0, .44),
-    0 3px 0 #070B12,
-    0 6px 12px -6px rgba(0, 0, 0, .6);
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 /* the PNG is RGBA gold: `screen` lets the metal catch the clay light with no box */
 .stars-emblem-img,
@@ -7793,7 +7788,7 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 .stars-emblem-img {
   width: 100%;
   height: 100%;
-  filter: drop-shadow(0 2px 5px rgba(245, 158, 11, .42));
+  filter: drop-shadow(0 6px 14px rgba(245, 158, 11, .28));
 }
 .stars-titles { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 /* line one: the title holds the left edge, the clock the right; both share one
@@ -7814,40 +7809,36 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* the board switch: two clay keys over a recessed dark-slate groove, spanning the
-   title column. The 56px emblem already towers over the engraved title, so a 34px
-   track here costs the card no height at all — as a band under the head it would
-   have cost 34px + a gap the phone does not have. */
+/* the board switch: two clay keys over a translucent engraved groove in the card
+   itself — the card's surface reads through the track, so there is no black box.
+   The 56px emblem already towers over the engraved title, so a 34px track here
+   costs the card no height at all. */
 .stars-tabs {
   position: relative;
   flex: none;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   height: 34px;
-  padding: 4px;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, .08);
   border-radius: 12px;
-  /* an engraved tactile groove: rich slate clay, never a flat black cutout */
-  background: linear-gradient(180deg, #141A26 0%, #182030 100%);
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, .5),
-    inset 0 -1px 0 rgba(255, 255, 255, .05),
-    inset 0 0 0 1px rgba(255, 255, 255, .06);
+  background: rgba(15, 23, 42, .6) !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .5) !important;
 }
+/* an abspos grid child resolves `top`/`left` against the PADDING box, which the
+   1px rim already holds 1px in — so 3px here lands the pill 4px from the edge,
+   and the calc fills the 8px content box (H - 8) exactly. */
 .stars-tabs .mode-thumb {
-  top: 4px;
-  left: 4px;
-  width: calc((100% - 8px) / 2);
-  height: calc(100% - 8px);
+  top: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / 2);
+  height: calc(100% - 6px);
   border-radius: 9px;
-  /* an extruded dark-clay key cap: specular lit on top, seated under its own drop */
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .07) 0%, rgba(255, 255, 255, 0) 46%),
-    linear-gradient(180deg, #242F45 0%, #1B2436 100%);
+  /* an elevated dark-clay pill: its own drop under it, one hairline of light on top */
+  background: #1E293B !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .14),
-    inset 0 0 0 1px rgba(255, 255, 255, .05),
-    inset 0 -2px 3px rgba(0, 0, 0, .28),
-    0 2px 6px rgba(0, 0, 0, .4);
+    0 2px 5px rgba(0, 0, 0, .35),
+    inset 0 1px 0 rgba(255, 255, 255, .12) !important;
 }
 .stars-tabs[data-active="players"] .mode-thumb { transform: translateX(100%); }
 .stars-tabs .mode-seg {
@@ -7855,7 +7846,10 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   gap: 0;
   padding: 0 3px;
   border-radius: 9px;
-  color: #94A3B8;
+  /* the unpressed key is nothing but a label: no face, no depth */
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #94A3B8 !important;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0;
@@ -7866,22 +7860,19 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
    steal the other's tap. */
 .stars-tabs .mode-seg::after { inset: -11px 0; }
 .stars-tabs .mode-seg[aria-pressed="true"] {
-  color: #FDE68A;
+  color: #FDE68A !important;
   text-shadow: 0 0 10px rgba(245, 158, 11, .35), 0 1px 0 #05070C;
 }
-/* the bracket clock: an engraved clay capsule with a delicate amber rim — slate
-   face, warm amber digits, soft inner depth, no flat black box */
+/* the bracket clock: a clay capsule sunk into the card — a translucent face, a
+   fine amber rim and soft inner depth, so the card reads through it. */
 .stars-count {
   flex: none;
   padding: 4px 8px 5px;
+  border: 1px solid rgba(245, 158, 11, .28);
   border-radius: 11px;
-  background: linear-gradient(180deg, #1E2739 0%, #161D2B 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(245, 158, 11, .3),
-    inset 0 1px 0 rgba(255, 255, 255, .08),
-    inset 0 -2px 3px rgba(0, 0, 0, .38),
-    0 2px 0 #070B12;
-  color: #FDE68A;
+  background: rgba(255, 255, 255, .03) !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .4) !important;
+  color: #FDE68A !important;
   font-size: 10px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
@@ -8363,7 +8354,7 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
    runners and the key just took back. */
 @media (max-height: 600px) {
   .stars-card { gap: 5px; padding-top: 9px; }
-  .stars-emblem { width: 48px; height: 48px; padding: 4px; }
+  .stars-emblem { width: 48px; height: 48px; }
   .stars-name { font-size: 15px; }
   .stars-tabs { height: 30px; }
   /* the face is 22px inside the 30px track here, so the band carries 26px of it */
@@ -8376,7 +8367,7 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 }
 /* short and narrow (320x568): the copy stays whole, the type steps down instead */
 @media (max-width: 352px) {
-  .stars-emblem { width: 52px; height: 52px; padding: 4px; }
+  .stars-emblem { width: 52px; height: 52px; }
   .stars-name { font-size: 15px; }
   .stars-tabs { height: 30px; }
   .stars-tabs .mode-seg { font-size: 8.5px; }
@@ -8395,7 +8386,7 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 /* a tall phone: the celebration scales up rather than leaving slack above the key */
 @media (min-height: 780px) {
   .stars-card { gap: 12px; padding: 18px 18px; border-radius: 24px; }
-  .stars-emblem { width: 60px; height: 60px; padding: 6px; border-radius: 18px; }
+  .stars-emblem { width: 60px; height: 60px; }
   .stars-name { font-size: 18px; }
   .stars-tabs { height: 36px; }
   .stars-tabs .mode-seg { font-size: 10.5px; }
