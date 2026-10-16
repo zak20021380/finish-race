@@ -7755,23 +7755,29 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   box-shadow: var(--clay), var(--clay-ring), 0 0 34px -14px rgba(252, 211, 77, .45);
 }
 
-/* ---- hero header: the 58px Star emblem · engraved title over the rule · clock ---- */
+/* ---- hero header: the 56px Star emblem · the title/timer line over the switch ----
+   Two columns on one 56px row: the emblem, and beside it the title with the engraved
+   bracket clock on line one, the board switch spanning line two. The whole head
+   stays under 64px, so the podium keeps every pixel it has today. */
 .stars-head { flex: none; display: flex; align-items: center; gap: 9px; min-width: 0; }
 .stars-emblem {
   flex: none;
   display: grid;
   place-items: center;
-  width: 58px;
-  height: 58px;
+  width: 56px;
+  height: 56px;
+  padding: 5px;
   border-radius: 16px;
+  /* a warm gold ember behind the Star, over an extruded dark-clay squircle */
   background:
-    radial-gradient(70% 60% at 50% 26%, rgba(252, 211, 77, .3), rgba(252, 211, 77, 0) 72%),
-    linear-gradient(180deg, #2A354C 0%, #141B2A 100%);
+    radial-gradient(64% 58% at 50% 36%, rgba(252, 211, 77, .38), rgba(252, 211, 77, 0) 74%),
+    linear-gradient(180deg, #232E44 0%, #131A29 100%);
   box-shadow:
-    inset 0 0 0 1px #0B111C,
+    inset 0 0 0 1px rgba(252, 211, 77, .16),
     inset 0 1px 0 rgba(255, 255, 255, .16),
-    0 3px 0 #080C14,
-    var(--clay-drop);
+    inset 0 -3px 4px rgba(0, 0, 0, .44),
+    0 3px 0 #070B12,
+    0 6px 12px -6px rgba(0, 0, 0, .6);
 }
 /* the PNG is RGBA gold: `screen` lets the metal catch the clay light with no box */
 .stars-emblem-img,
@@ -7789,74 +7795,97 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   height: 100%;
   filter: drop-shadow(0 2px 5px rgba(245, 158, 11, .42));
 }
-.stars-titles { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.stars-titles { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+/* line one: the title holds the left edge, the clock the right; both share one
+   centered band, so the pair reads as a single balanced line */
+.stars-titlebar { display: flex; align-items: center; gap: 8px; min-width: 0; }
 /* engraved, not embossed: the shadow falls under the glyph, light sits above it */
 .stars-name {
   margin: 0;
+  flex: 1 1 auto;
   min-width: 0;
-  font-size: clamp(.875rem, .74rem + .85vw, 1.25rem);
+  font-size: 17px;
   font-weight: 900;
-  letter-spacing: -.018em;
-  line-height: 1.08;
+  letter-spacing: -.02em;
+  line-height: 1.05;
   color: #F8FAFC;
-  text-shadow: 0 1px 0 #05070C, 0 -1px 0 rgba(255, 255, 255, .07);
+  text-shadow: 0 1px 0 #05070C, 0 -1px 0 rgba(255, 255, 255, .08);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* the board switch: two clay keys over a recessed track, living in the title
-   column. The 58px emblem already towers over the engraved title, so a 38px
-   track here costs the card no height at all — as a band under the head it
-   would have cost 38px + a gap the phone does not have. */
+/* the board switch: two clay keys over a recessed dark-slate groove, spanning the
+   title column. The 56px emblem already towers over the engraved title, so a 34px
+   track here costs the card no height at all — as a band under the head it would
+   have cost 34px + a gap the phone does not have. */
 .stars-tabs {
   position: relative;
   flex: none;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  height: 38px;
+  height: 34px;
   padding: 4px;
-  border-radius: 13px;
-  background: var(--field);
-  box-shadow: var(--inset), inset 0 0 0 1px var(--hair);
+  border-radius: 12px;
+  /* an engraved tactile groove: rich slate clay, never a flat black cutout */
+  background: linear-gradient(180deg, #141A26 0%, #182030 100%);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .5),
+    inset 0 -1px 0 rgba(255, 255, 255, .05),
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
 }
 .stars-tabs .mode-thumb {
   top: 4px;
   left: 4px;
   width: calc((100% - 8px) / 2);
   height: calc(100% - 8px);
-  border-radius: 10px;
+  border-radius: 9px;
+  /* an extruded dark-clay key cap: specular lit on top, seated under its own drop */
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .07) 0%, rgba(255, 255, 255, 0) 46%),
+    linear-gradient(180deg, #242F45 0%, #1B2436 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 0 0 1px rgba(255, 255, 255, .05),
+    inset 0 -2px 3px rgba(0, 0, 0, .28),
+    0 2px 6px rgba(0, 0, 0, .4);
 }
 .stars-tabs[data-active="players"] .mode-thumb { transform: translateX(100%); }
 .stars-tabs .mode-seg {
   flex-direction: row;
   gap: 0;
   padding: 0 3px;
-  border-radius: 10px;
-  font-size: 9.5px;
-  letter-spacing: -.01em;
+  border-radius: 9px;
+  color: #94A3B8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
   white-space: nowrap;
 }
-/* the face is 30px inside the 38px track; the band is what reaches 48px.
+/* the face is 26px inside the 34px track; the band is what reaches 48px.
    Vertical only — the keys are flush, so a side band would let a neighbour
    steal the other's tap. */
-.stars-tabs .mode-seg::after { inset: -9px 0; }
-.stars-tabs .mode-seg[aria-pressed="true"] { color: var(--brand-ink); }
+.stars-tabs .mode-seg::after { inset: -11px 0; }
+.stars-tabs .mode-seg[aria-pressed="true"] {
+  color: #FDE68A;
+  text-shadow: 0 0 10px rgba(245, 158, 11, .35), 0 1px 0 #05070C;
+}
+/* the bracket clock: an engraved clay capsule with a delicate amber rim — slate
+   face, warm amber digits, soft inner depth, no flat black box */
 .stars-count {
   flex: none;
-  padding: 5px 9px 6px;
-  border-radius: 12px;
-  /* an engraved clay pill: slate face, crisp amber rim, soft inner depth */
-  background: linear-gradient(180deg, #26314A 0%, #1A2333 100%);
+  padding: 4px 8px 5px;
+  border-radius: 11px;
+  background: linear-gradient(180deg, #1E2739 0%, #161D2B 100%);
   box-shadow:
-    inset 0 0 0 1px rgba(245, 158, 11, .25),
-    inset 0 1px 0 rgba(255, 255, 255, .12),
-    inset 0 -2px 3px rgba(0, 0, 0, .32),
-    0 2px 0 #080C14;
+    inset 0 0 0 1px rgba(245, 158, 11, .3),
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    inset 0 -2px 3px rgba(0, 0, 0, .38),
+    0 2px 0 #070B12;
   color: #FDE68A;
-  font-size: var(--t-micro);
+  font-size: 10px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
-  letter-spacing: .01em;
+  letter-spacing: .02em;
   white-space: nowrap;
   text-align: center;
   line-height: 1.1;
@@ -8334,7 +8363,11 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
    runners and the key just took back. */
 @media (max-height: 600px) {
   .stars-card { gap: 5px; padding-top: 9px; }
-  .stars-emblem { width: 48px; height: 48px; }
+  .stars-emblem { width: 48px; height: 48px; padding: 4px; }
+  .stars-name { font-size: 15px; }
+  .stars-tabs { height: 30px; }
+  /* the face is 22px inside the 30px track here, so the band carries 26px of it */
+  .stars-tabs .mode-seg::after { inset: -13px 0; }
   .stars-pod { padding: 6px 4px 5px; }
   .stars-pod[data-rank="1"] { padding-top: 13px; padding-bottom: 11px; }
   .stars-pod-prize { font-size: 10px; padding: 3px 6px 4px; }
@@ -8343,11 +8376,12 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 }
 /* short and narrow (320x568): the copy stays whole, the type steps down instead */
 @media (max-width: 352px) {
-  .stars-emblem { width: 52px; height: 52px; }
-  .stars-tabs { height: 34px; }
+  .stars-emblem { width: 52px; height: 52px; padding: 4px; }
+  .stars-name { font-size: 15px; }
+  .stars-tabs { height: 30px; }
   .stars-tabs .mode-seg { font-size: 8.5px; }
-  /* the face is 26px inside the 34px track here, so the band carries 22px of it */
-  .stars-tabs .mode-seg::after { inset: -11px 0; }
+  /* the face is 22px inside the 30px track here, so the band carries 26px of it */
+  .stars-tabs .mode-seg::after { inset: -13px 0; }
   .stars-pod { padding: 6px 4px 5px; }
   .stars-pod-tiq { font-size: 9px; }
   .stars-pod-prize { font-size: 10px; padding: 3px 6px 4px; }
@@ -8361,10 +8395,11 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 /* a tall phone: the celebration scales up rather than leaving slack above the key */
 @media (min-height: 780px) {
   .stars-card { gap: 12px; padding: 18px 18px; border-radius: 24px; }
-  .stars-emblem { width: 64px; height: 64px; border-radius: 18px; }
-  .stars-name { font-size: 1.3125rem; }
-  .stars-tabs { height: 40px; }
+  .stars-emblem { width: 60px; height: 60px; padding: 6px; border-radius: 18px; }
+  .stars-name { font-size: 18px; }
+  .stars-tabs { height: 36px; }
   .stars-tabs .mode-seg { font-size: 10.5px; }
+  /* the face is 28px inside the 36px track here, so the band carries 20px of it */
   .stars-tabs .mode-seg::after { inset: -10px 0; }
   .stars-pod { padding: 11px 8px 10px; gap: 4px; }
   .stars-pod[data-rank="1"] { padding-top: 25px; padding-bottom: 22px; }
