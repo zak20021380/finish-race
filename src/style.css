@@ -7866,9 +7866,11 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
     text-shadow: none;
   }
 }
-/* the round help key: an engraved clay pill, sunk into the band with the house
-   inner shadow and a muted "?" — it whispers the rules instead of cutting a hole
-   in the header. The 26px face carries a 50px invisible tap band. */
+/* the round help key: a polished glass bead, not a hole in the band — a cool sheen
+   landing on its upper left over a deep slate core, so it reads as something you can
+   press. The "?" is bright silver, engraved into the glass with a dark shadow below
+   it and a whisper of light above; the warm ring only arrives on hover/press, which
+   keeps gold meaning "live" at rest. The 26px face carries a 50px invisible tap band. */
 .stars-info {
   position: relative;
   flex: none;
@@ -7880,27 +7882,48 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: linear-gradient(180deg, #26314A 0%, #1C2536 100%);
+  /* two paints: the glass catches the light top-left, the core stays cool and deep */
+  background:
+    radial-gradient(115% 115% at 30% 18%, rgba(255, 255, 255, .2) 0%, rgba(255, 255, 255, .05) 44%, rgba(255, 255, 255, 0) 70%),
+    linear-gradient(180deg, #2E3A57 0%, #1A2233 100%);
   box-shadow:
-    inset 0 2px 4px rgba(2, 6, 16, .6),
-    inset 0 -1px 0 rgba(255, 255, 255, .07),
-    0 1px 0 rgba(255, 255, 255, .06);
-  color: #A7B4CC;
+    inset 0 1px 0 rgba(255, 255, 255, .2),
+    inset 0 -2px 4px rgba(2, 6, 16, .55),
+    inset 0 0 0 1px rgba(255, 255, 255, .055),
+    0 2px 5px rgba(2, 6, 16, .45);
+  color: #DCE4F1;
   font: inherit;
   font-size: 13px;
   font-weight: 900;
   line-height: 1;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: color var(--motion-fast), transform var(--motion-fast);
+  transition: color var(--motion-fast), transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+/* the glyph is cut into the bead rather than printed on it */
+.stars-info > span {
+  display: block;
+  margin-top: -1px;
+  text-shadow: 0 1px 0 rgba(4, 6, 12, .95), 0 -1px 0 rgba(255, 255, 255, .1), 0 0 10px rgba(148, 178, 224, .22);
 }
 .stars-info::after { content: ""; position: absolute; inset: -12px; border-radius: 50%; }
-.stars-info:hover, .stars-info:active { color: #FDE68A; }
-.stars-info:active { transform: translateY(1px); }
+.stars-info:hover, .stars-info:active {
+  color: #FDE68A;
+  /* the bead warms from the inside out: a gold hairline and a soft amber halo */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .22),
+    inset 0 -2px 4px rgba(2, 6, 16, .55),
+    inset 0 0 0 1px rgba(252, 211, 77, .34),
+    0 0 13px -3px rgba(245, 158, 11, .8),
+    0 2px 5px rgba(2, 6, 16, .45);
+}
+.stars-info:active { transform: translateY(1px) scale(.96); }
 .stars-info:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-/* the board switch, row two: a full-width engraved trench cut into the card itself —
-   a deep translucent dark-slate well with a hairline rim and soft inner depth, so
-   the card's own surface reads through the track and no black box is ever cut in. */
+/* the board switch, row two: a full-width glass capsule sunk into the card itself.
+   Soft depth instead of a hard trench — the light dies gently from the top edge, the
+   bottom rim catches a hairline, and the card's own surface reads through the track,
+   so no black box is ever cut in. The capsule shape (not a squircle) is what lets the
+   lit key slide like a lozenge under the labels. */
 .stars-tabs {
   position: relative;
   flex: none;
@@ -7909,53 +7932,59 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   width: 100%;
   height: 30px;
   padding: 3px;
-  border: 1px solid rgba(255, 255, 255, .06);
-  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, .075);
+  border-radius: 999px;
   background:
-    linear-gradient(180deg, rgba(2, 6, 16, .58) 0%, rgba(2, 6, 16, .22) 100%),
-    rgba(15, 22, 36, .5);
+    linear-gradient(180deg, rgba(2, 6, 16, .44) 0%, rgba(2, 6, 16, .14) 100%),
+    rgba(14, 20, 33, .55);
   box-shadow:
-    inset 0 3px 6px rgba(2, 6, 16, .62),
-    inset 0 -1px 0 rgba(255, 255, 255, .05),
-    0 1px 0 rgba(255, 255, 255, .05);
+    inset 0 3px 6px rgba(2, 6, 16, .5),
+    inset 0 -1px 0 rgba(255, 255, 255, .06),
+    0 1px 0 rgba(255, 255, 255, .04);
 }
 /* an abspos grid child resolves `top`/`left` against the PADDING box, which the
-   1px rim already holds 1px in — so 3px here lands the cap 4px from the edge,
+   1px rim already holds 1px in — so 3px here lands the key 4px from the edge,
    and the calc fills the 8px content box (H - 8) exactly. */
 .stars-tabs .mode-thumb {
   top: 3px;
   left: 3px;
   width: calc((100% - 6px) / 2);
   height: calc(100% - 6px);
-  border-radius: 9px;
-  /* an elevated soft-clay cap: a delicate top edge highlight, a gentle drop shadow,
-     and only a whisper of warm gold at the rim — the lit key reads live through its
-     gold text instead of becoming a second gold slab competing with the CTA. */
+  border-radius: 999px;
+  /* the lit key, made like the rest of the card's metal: a glass sheen across its
+     upper half, a cool slate body, a bright top edge, and a whisper of warm gold
+     tucked in at the rim and along the underside — enough to read as lit without
+     becoming a second gold slab competing with the CTA. */
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, .18) 0%, rgba(255, 255, 255, .03) 52%, rgba(255, 255, 255, 0) 100%),
-    linear-gradient(180deg, #3E4E6B 0%, #27324A 100%);
+    linear-gradient(180deg, rgba(255, 255, 255, .22) 0%, rgba(255, 255, 255, .05) 48%, rgba(255, 255, 255, 0) 100%),
+    linear-gradient(180deg, #47597F 0%, #26314A 100%);
   box-shadow:
-    0 2px 5px rgba(2, 6, 16, .5),
-    0 1px 0 rgba(255, 255, 255, .06),
-    inset 0 1px 0 rgba(255, 255, 255, .24),
-    inset 0 0 0 1px rgba(252, 211, 77, .16);
-  transition: transform var(--motion-med);
+    0 2px 6px rgba(2, 6, 16, .52),
+    0 1px 0 rgba(255, 255, 255, .07),
+    inset 0 1px 0 rgba(255, 255, 255, .3),
+    inset 0 -7px 11px -9px rgba(245, 158, 11, .55),
+    inset 0 0 0 1px rgba(252, 211, 77, .18);
+  /* a spring on the slide: it settles rather than arrives */
+  transition: transform .42s cubic-bezier(.22, 1, .36, 1);
 }
 .stars-tabs[data-active="players"] .mode-thumb { transform: translateX(100%); }
 .stars-tabs .mode-seg {
   flex-direction: row;
   gap: 0;
   padding: 0 3px;
-  border-radius: 9px;
-  /* the unpressed key is nothing but a label: no face, no depth */
+  border-radius: 999px;
+  /* the unpressed key is nothing but a label: no face, no depth. The type is set
+     like the card's other micro-labels — uppercase, widely tracked, tabular — so
+     the switch reads as one engraved control instead of two loose words. */
   background: transparent;
   box-shadow: none;
-  color: #8593AB;
-  font-size: 10px;
+  color: #97A5BC;
+  font-size: 9.5px;
   font-weight: 800;
-  letter-spacing: .02em;
+  letter-spacing: .11em;
+  text-transform: uppercase;
   white-space: nowrap;
-  transition: color var(--motion-fast);
+  transition: color var(--motion-fast), text-shadow var(--motion-fast);
 }
 /* the face is 22px inside the 30px track; the band is what reaches 48px.
    Vertical only — the keys are flush, so a side band would let a neighbour
@@ -7963,39 +7992,47 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 .stars-tabs .mode-seg::after { inset: -13px 0; }
 .stars-tabs .mode-seg[aria-pressed="true"] {
   color: #FDE68A;
-  text-shadow: 0 0 10px rgba(245, 158, 11, .4), 0 1px 0 #05070C;
+  /* the lit label sits IN the key: a dark seat under it, a warm bloom around it */
+  text-shadow: 0 0 12px rgba(245, 158, 11, .46), 0 1px 0 #05070C;
 }
-/* the bracket clock: an inset slate capsule with an ultra-thin translucent rim,
-   warm amber monospace digits, and a bead that breathes once every two seconds.
-   It is the only thing in the band that moves, so the countdown carries its own
-   urgency with no extra word. */
+.stars-tabs .mode-seg:active { transform: translateY(1px); }
+/* the bracket clock: a small glass capsule holding a live number — a gold hairline
+   rim, a sheen across its upper left, a lit top edge and a deep slate floor, with
+   warm amber monospace digits cut into it. A bead breathes at its left once every
+   two seconds; it is the only thing in the band that moves, so the countdown
+   carries its own urgency with no extra word. */
 .stars-count {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 8px 4px;
-  border: 1px solid rgba(245, 158, 11, .28);
+  padding: 3px 9px 4px;
+  border: 1px solid rgba(245, 158, 11, .3);
   border-radius: 999px;
   background:
-    linear-gradient(180deg, rgba(245, 158, 11, .16) 0%, rgba(245, 158, 11, .02) 60%),
-    rgba(13, 20, 34, .6);
+    radial-gradient(120% 170% at 14% 0%, rgba(252, 211, 77, .22) 0%, rgba(252, 211, 77, 0) 64%),
+    linear-gradient(180deg, rgba(30, 39, 60, .8) 0%, rgba(10, 15, 26, .78) 100%);
   box-shadow:
-    inset 0 2px 4px rgba(2, 6, 16, .55),
-    inset 0 -1px 0 rgba(255, 255, 255, .05),
-    0 0 13px -5px rgba(245, 158, 11, .8);
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 -1px 0 rgba(245, 158, 11, .14),
+    inset 0 2px 5px rgba(2, 6, 16, .5),
+    0 0 15px -6px rgba(245, 158, 11, .9),
+    0 1px 2px rgba(2, 6, 16, .4);
   color: #FDE68A;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
-  letter-spacing: .04em;
+  /* digits set close and tabular: a fixed-width number that does not shiver as it
+     ticks, and no airy tracking to date it */
+  letter-spacing: .02em;
   white-space: nowrap;
   text-align: center;
   line-height: 1.1;
-  text-shadow: 0 0 9px rgba(245, 158, 11, .4), 0 1px 0 #05070C;
+  text-shadow: 0 0 9px rgba(245, 158, 11, .42), 0 1px 0 #05070C;
 }
-/* the pulse bead — the same gold as the Star, one twentieth the size */
+/* the pulse bead — the same gold as the Star, one twentieth the size, with a soft
+   ring around it so the beat reads even at 5px */
 .stars-count::before {
   content: "";
   flex: none;
@@ -8003,7 +8040,10 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   height: 5px;
   border-radius: 50%;
   background: radial-gradient(circle at 34% 30%, #FFFDF3 0%, #FBBF24 52%, #B45309 100%);
-  box-shadow: 0 0 6px rgba(251, 191, 36, .95), 0 0 12px rgba(245, 158, 11, .5);
+  box-shadow:
+    0 0 6px rgba(251, 191, 36, .95),
+    0 0 12px rgba(245, 158, 11, .5),
+    0 0 0 2px rgba(245, 158, 11, .13);
   animation: cup-clock 2s ease-in-out infinite;
 }
 @keyframes cup-clock {
@@ -8538,7 +8578,7 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
 @media (min-height: 780px) {
   .stars-card { gap: 12px; padding: 18px 18px; border-radius: 24px; }
   .stars-name { font-size: 18px; }
-  .stars-tabs .mode-seg { font-size: 10.5px; }
+  .stars-tabs .mode-seg { font-size: 10px; }
   .stars-pod { padding: 11px 8px 10px; gap: 4px; }
   .stars-pod[data-rank="1"] { padding-top: 25px; padding-bottom: 22px; }
   .stars-pod .stars-ch-av, .stars-pod .stars-av { width: 42px; height: 42px; }

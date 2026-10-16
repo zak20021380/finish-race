@@ -335,6 +335,8 @@ const notes = [];
 const bad = [];
 const fail = (m) => bad.push(m);
 const say = (m) => notes.push(m);
+/** The warm palette: gold threads the Star's glow, the clock's hairline and bead. */
+const GOLD = /245,\s*158,\s*11|251,\s*191,\s*36|252,\s*211,\s*77|253,\s*230,\s*138/;
 /** `rgb()/rgba()` to channels — the header audit reads computed background fills. */
 const rgba = (s) => {
   const p = (String(s).match(/[\d.]+/g) ?? []).map(Number);
@@ -385,7 +387,7 @@ if (rgba(fillOf('.stars-count')).a >= 0.99) fail(`the clock cuts an opaque box (
 if (m.emblem.bg !== 'rgba(0, 0, 0, 0)' || parseFloat(m.emblem.border) > 0) {
   fail(`the Star paints an opaque box (${m.emblem.bg} / ${m.emblem.border})`);
 }
-if (!/drop-shadow/.test(m.emblem.glow ?? '') || !gold.test(m.emblem.glow ?? '')) {
+if (!/drop-shadow/.test(m.emblem.glow ?? '') || !GOLD.test(m.emblem.glow ?? '')) {
   fail(`the Star carries no warm ambient glow (${m.emblem.glow})`);
 }
 if (!m.emblem.imgW || Math.abs(m.emblem.imgW - m.emblem.box.w) > 1) {
