@@ -91,7 +91,9 @@ coloured jargon alone never has to tell them apart.
 ## Controls
 
 - **Move**: tap one of your balls, then one of the dots that light up beside it — the chosen ball wears a ring and only its legal cells are shown. Each chip carries a wall badge showing how many walls that side has left.
-- **Teams on the board**: every side races 1 to 3 balls (up to 4 sides) and alternates turns; on its turn a team moves any ONE of its balls one cell, or places a wall. Each side owns a colour family and its balls carry number badges, so a 3v3 stays readable. Balls — friendly or hostile — block, nothing jumps, and the first ball to the top row wins.
+- **Teams on the board**: every side races 1 to 3 balls (up to 4 sides) and alternates turns; on its turn a team moves any ONE of its balls one cell, or places a wall. Each side owns a colour family and its balls carry number badges, so a 3v3 stays readable. The first ball to the top row wins.
+- **A ball in the way is a stepping stone, not a wall.** A ball may not walk into another ball, but it may LEAP over one: it lands on the square directly behind the body when the board leaves that square open, and hops to one of the body's two flanks when a wall, the perimeter or a third ball closes it. The leap is offered over any other ball — a team's own balls jam a corridor exactly the same way, and in a four-way "the opponent" is not a single seat. A body hemmed in on all three sides really is a wall. This is what a one-wide corridor needs: without it, two balls meeting head-on in a walled lane have nothing to do but shuffle forever. `steps()` is the only door, so a tap, the bot, the blitz auto-move and a move off the wire all see the same leaps, and `stepField()` measures distance in *actions* with the bodies on the board — a body is one action to leap, not a wall to walk around.
+- **A shuffle cannot go on forever.** `GameState.repeat` is a small deterministic ledger of the boards the last few turns left behind. Once a race shuffles back onto a board it has already been in `REPEAT_LIMIT` (3) turns running, `steps()` narrows to the steps that actually gain ground on FINISH; if that still cannot break the cycle, the race is adjudicated at `REPEAT_ADJUDICATE` (6) — the ball nearest FINISH takes it, and `state.adjudicated` marks the win as called rather than crossed. Both are pure functions of the state, so every seat and the server reach the same verdict from the same board. A `pass` is never filed: it is a seat declining, not a board the race has been in.
 - **The board is sized to the race.** Two contenders play the classic 8-column duel board; three or four get a 10-column one, so the extra balls start with room instead of queueing behind each other. `dimsFor(contenders)` picks the grid and `GameState.cols` / `GameState.rows` carry it — nothing downstream reads a module constant. Start squares are always spread with a lane between them: a 1v1 opens on columns 2 and 5 (a two-tile hole where the pair used to sit shoulder to shoulder), a 3-way on 1, 5 and 8, a 4-way on 1, 3, 6 and 8.
 - **Walls are rationed per side, by contender count: 8 / 6 / 5.** `wallBudget(contenders)` returns 8 for a duel, 6 for three on the board and 5 for four, so a crowded board cannot be saturated. The chip under the board carries a premium wall badge that counts them down — a stylized wall glyph and the number left in that side's colour — mutes itself with a `.depleted` state at zero, and refuses placement outright. Tapping a groove with an empty budget shows no ghost, pulses the badge in warning amber and flashes "No walls remaining!". A wall still only has to stay in bounds, not overlap another wall on the same line, and keep every ball's path to FINISH open.
 - **Wall (touch)**: tap a grid line — a ghost wall appears — tap the ghost again to place it, or tap anywhere else to cancel. An illegal slot shows a red ghost, a warning buzz and the reason ("Blocks the path" / "Overlaps a wall"); a spent budget shows no ghost and reads "No walls remaining!".
@@ -152,13 +154,15 @@ Telegram only loads **HTTPS** URLs.
 | `src/menu.ts` | Home, mode select, settings, the identity card, the country and team sheets and the tab bar — it only asks `main.ts` to start a race |
 | `src/shop.ts` | The shop: tabs, cards with live previews, equip, and the buy confirm flow |
 | `src/main.ts` | Game wiring: input (tap-to-arm / confirm, mouse hover + click), loop, chips, status, payout, overlay, pause |
+| `src/room.ts` | The multi-seat lobby (2–4 seats), the bot backfill, the takeover, and the `RoomDriver` that plays every machine seat |
 | `src/style.css` | Tokens, mesh background, clay panels, board frame, menu shell, shop and profile |
 | `wrangler.toml` | The Worker: `MATCHMAKER` → `MatchmakerDO`, SQLite Durable Object migration |
 | `worker/index.ts` | `GET /health` and `GET /ws/matchmake`, forwarded to the singleton Durable Object |
 | `worker/auth.ts` | Telegram `initData` verified with `crypto.subtle` HMAC-SHA256, plus the dev guest door |
-| `worker/matchmaker.ts` | The waiting room: the queue, the 250/600 pairing radii and `MATCH_FOUND` |
+| `worker/matchmaker.ts` | The waiting room: the queue, the 250/600 pairing radii, `MATCH_FOUND`, and the 2–4 seat rooms |
 | `scripts/verify-worker-matchmaking.mjs` | Drives the whole queueing protocol in plain Node, no wrangler needed |
 | `scripts/verify-worker-race.mjs` | Drives two clients through a whole relayed race, resignations and disconnects |
+| `scripts/room-check.mjs` | The corridor leap, the anti-oscillation guard, and whole 4-seat mixed rooms, on the real rules |
 
 ## Matchmaking backend
 
@@ -200,6 +204,37 @@ and the blitz clock behave exactly as they do offline. `onlineRace()` in `src/ma
 that seat — `send()`, `onMove()`, `onEnd()`, `resign()` — and it is null when the search fell back
 to the local simulation, which is how the offline board keeps working with no Worker at all.
 
+### Rooms: 2 to 4 seats, humans and bots in any mix
+
+A socket that asks for `?room=<n>` (2 to 4) is not a queue entry at all — it takes a seat in a
+multi-seat room, which is the same lobby model the client runs (`src/room.ts`). Seats fill as people
+arrive; the moment the room is full it launches, and when the wait timer runs out first every seat
+still empty is backfilled with a bot. A four-seat room therefore always starts: 4 humans, 2 + 2,
+1 + 3, or a solo host who never waited for anybody.
+
+- The timer is the Durable Object's own alarm (`MatchmakerDO.alarm()`), not a `setTimeout` — an
+  object can be evicted between messages and an alarm is the one thing that survives that. `?bottier=`
+  picks the level the machine seats play; the default `mixed` ladders them Hard / Normal / Hard.
+- `{ type: 'ROOM_FOUND', matchId, seed, side, sizes, seats }` is the room's `MATCH_FOUND`: it names
+  every seat and says which of them the machine holds. `{ type: 'ROOM_START' }` from the host is the
+  early start. Moves, resignations and refusals are the 1v1 frames.
+- The race behind a room is a `RoomDriver` (`src/room.ts`): it owns the authoritative board, judges
+  every human action, and plays every automated seat itself — a person's move and the machine's
+  answers arrive in one batch, so a room of one person and three bots never needs a second round
+  trip. The clock that governs a person's turn is never charged for the machine's.
+- A seat whose person leaves — a resignation, a CANCEL, or a socket that simply died — is not
+  abandoned: the machine takes it over at the room's own tier, everyone else is told with
+  `{ type: 'SEAT_BOT', side, name }`, and the race runs to a real finish.
+- A machine seat is never paid: `rewardEligible()` is false for a backfilled bot and for a seat a
+  person walked out of, so no bot claims a Star, a trophy or a rung on the ladder. The dock says the
+  same thing visually — a machine seat wears a bot mark in the flag's own slot and `data-bot` on the
+  chip, so it can never be read as a person.
+
+The **client** plays rooms locally today: the mode drawer's Practice card (any seat count) and the
+private-room card both open a room through `openLocalRoom()`, host in seat 0 and the machine in the
+rest, which is why a 4-player practice race now has laddered bots and bot badges. Pointing the room
+card at the server's `?room=` protocol is the next step, and it needs no change on the server side.
+
 ## Going multiplayer later
 
 `main.ts` still talks to the *local* opponent through one interface:
@@ -208,16 +243,20 @@ to the local simulation, which is how the offline board keeps working with no Wo
 interface Opponent { think(s: GameState): Promise<Action> }
 ```
 
-`makeBot(difficulty)` returns one. A live race does not go through it: the seat `onlineRace()`
+`makeBot(difficulty)` returns one — and takes either a level or a `(seat) => level` resolver, which
+is how a room ladders its machine seats while a plain race plays one level throughout. A live race
+does not go through it: the seat `onlineRace()`
 hands back sends the move the player just made and feeds the rival's moves into the same `play()`
 door, with the bot stood down for the length of the race (`wantsOpponent()` is false while a seat
 is live). Everything still goes through `apply(state, action)` on both screens, which is what lets
 `worker/` run the same `rules.ts` to judge a move before relaying it.
 
 What is still missing from online play: a rematch on the same seats (Play again re-queues), a
-reconnect into a race that is already running, an authoritative `reject` resync (a refused move
+reconnect into a *1v1* race that is already running (a room seat already handles it — the machine
+takes over and the person can take it back), an authoritative `reject` resync (a refused move
 is reported, not repaired), and a server-side check that a seat's clock actually ran out before
-its timeout move is relayed.
+its timeout move is relayed. The client's own online seat is still 1v1: `OnlineSession` carries one
+rival and two sides, so the server's room protocol is ready before the multi-seat race screen is.
 
 ## Tweaking the look
 

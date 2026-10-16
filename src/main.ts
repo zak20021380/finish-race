@@ -27,11 +27,15 @@ import { onChange, profile, recordGame, theme } from './storage';
 import { SEAT_RAMPS } from './themes';
 import { impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
-import { getGameMode, gmBack, initGameModes, onGameModeChange, setGameMode } from './gamemodes';
+import { createRoomCode, getGameMode, gmBack, initGameModes, onGameModeChange, setGameMode } from './gamemodes';
 import {
   createMatchmaking, myTier, myTiq, onlineRace, onlineSearch, type OnlineSession, type RaceEnd,
 } from './matchmaking';
 import { createAdmin, onRuntime, recordRace, runtime, type Admin } from './admin';
+import {
+  ROOM_WAIT_MS, createRoom, difficultyFor, isAutomated, lobbyLine, rewardEligible, seatBadge,
+  seatName, sizesOf, startEarly, type BotTier, type Room,
+} from './room';
 
 initTelegram();
 applyFlagSupport();
@@ -310,10 +314,26 @@ const rivalSide = (): Player => (localSide === 0 ? 1 : 0);
 /** `You`, and the name on each other chip: local names in a bot race, the player's in an online one. */
 const TEAM_NAME: Record<number, string> = { 0: 'You', 1: 'Bot' };
 
+/**
+ * The lobby this race was launched from, or null for a plain race. A room names its seats and says
+ * which of them the machine owns — a bot backfilled into a vacancy and a seat a person walked out
+ * of are the same thing to everything downstream (`isAutomated`), so the dock, the turn dispatcher
+ * and the payout each ask one question instead of three.
+ */
+let room: Room | null = null;
+
 /** Swap this for a network-backed implementation to go multiplayer. */
 interface Opponent { think(s: GameState): Promise<Action> }
-const makeBot = (d: Difficulty): Opponent => ({
-  think: (s) => new Promise((res) => setTimeout(() => res(botAction(s, d)), botThinkMs(d))),
+/**
+ * A bot brain. The level can be fixed (a practice race plays the drawer's pick) or resolved per
+ * seat (a room ladders its machine seats), so a four-seat room can field Hard, Normal and Easy at
+ * once and the dispatcher never has to know which seat it is thinking for.
+ */
+const makeBot = (d: Difficulty | ((seat: Player) => Difficulty)): Opponent => ({
+  think: (s) => {
+    const level = typeof d === 'function' ? d(s.turn) : d;
+    return new Promise((res) => setTimeout(() => res(botAction(s, level)), botThinkMs(level)));
+  },
 });
 
 let difficulty: Difficulty = menuState.difficulty;
@@ -513,11 +533,17 @@ function armCapsules() {
 }
 
 /**
- * How the race was decided: a finish line, or a rival who did not stay to see it. A forfeit is a
- * win that never touched the board, so it says so rather than pretending a ball crossed.
+ * How the race was decided: a finish line, a stalemate the engine called, or a rival who did not
+ * stay to see it. A forfeit is a win that never touched the board, and an adjudication is a win the
+ * board itself awarded, so each says so rather than pretending a ball crossed.
  */
 function subLine(won: boolean): string {
   const rival = active?.opponent.name ?? 'The bot';
+  if (state.adjudicated) {
+    return won
+      ? 'Stalemate called — your ball was nearest FINISH.'
+      : 'Stalemate called — the nearest ball to FINISH took the race.';
+  }
   if (!forfeit) return won ? 'Your team crossed the line first.' : `${rival} reached FINISH first.`;
   if (forfeit === 'drop') return 'Connection lost — the rival takes the win.';
   if (!won) return `${rival} took the win.`;
@@ -538,8 +564,11 @@ function showOverlay() {
   overlay.hidden = false;
   if (won && !motionReduced()) confetti.burst();
   /* one credit per finished race: showOverlay only runs once per game over. The Admin Command
-     Center's Double-Coins multiplier scales what the settlement pays. */
-  const earned = recordGame({ difficulty, won }, runtime.coinMult);
+     Center's Double-Coins multiplier scales what the settlement pays. A seat the machine held is
+     the one exception: it pays nothing and it touches no ladder, because a bot is not a person and
+     neither is a seat somebody walked out of. */
+  const mine = !room || rewardEligible(room, localSide);
+  const earned = mine ? recordGame({ difficulty, won }, runtime.coinMult) : 0;
   recordRace(earned);                   // the Command Center's Stats tab counts the day's duels
   setBalance(rewardN, 0);                 // every payout counts up from zero
   setBalance(rewardN, earned);
@@ -907,6 +936,12 @@ function paintRoster(): void {
     el.classList.toggle('blue', p === 1);
     el.classList.toggle('gold', p === 2);
     el.classList.toggle('green', p === 3);
+    /* and it says who is holding it: `bot` for a seat the machine was backfilled into, `takeover`
+       for one a person walked out of and the machine finished. Both are machine-controlled seats,
+       and the dock never lets one read as a person. */
+    const badge = room ? seatBadge(room, p) : null;
+    if (badge) el.dataset.bot = badge;
+    else delete el.dataset.bot;
   }
 }
 
@@ -935,6 +970,23 @@ function flagFor(p: Player): string | null {
   return RIVAL_FLAGS[(raceSeed + p * 5) % RIVAL_FLAGS.length];
 }
 
+/**
+ * What a machine-held seat wears where a person's country flag would sit: the bot glyph, in the
+ * same 14px circle, so the dock reads "the machine is holding this seat" at a glance without a
+ * single pixel of new layout.
+ */
+function botMark(): SVGElement {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'ico bot-mark');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const use = document.createElementNS(NS, 'use');
+  use.setAttribute('href', '#i-bot');
+  svg.append(use);
+  return svg;
+}
+
 /** A seat's XP. Yours is live; a rival's is fixed for the race. */
 function xpFor(p: Player): number {
   if (p === localSide) return myXp();
@@ -955,13 +1007,27 @@ const shownXp: number[] = [-1, -1, -1, -1];
  * on every action, so rewriting them each time would be pure churn. `flagPhoto` draws the flag, so
  * the HUD wears the same photo (and the same three-tier fallback) as the ladder and the profile.
  */
+/**
+ * Paints the identity half of every fielded chip: the corner badge welded to its sphere and the XP
+ * pill beside its name. Both are diffed — a rival's identity is fixed for the race and `ui()` runs
+ * on every action, so rewriting them each time would be pure churn. `flagPhoto` draws the flag, so
+ * the HUD wears the same photo (and the same three-tier fallback) as the ladder and the profile.
+ *
+ * A seat the machine holds wears a bot mark in the flag's place instead. It is the same slot, the
+ * same size and the same diff, so the dock's own layout budget — which has no room to spare at four
+ * chips on a 360px card — is untouched, and a machine seat can never be mistaken for a country.
+ */
 function paintSeatIdentity(): void {
   for (const p of roster()) {
-    const code = flagFor(p);
+    const mark = room && isAutomated(room, p) ? 'bot' : 'flag';
+    const code = mark === 'flag' ? flagFor(p) : mark;
     if (shownFlags[p] !== code) {
       shownFlags[p] = code;
       const host = flagBadges[p];
-      if (host) { host.textContent = ''; host.append(flagPhoto(code, 'fp-hud')); }
+      if (host) {
+        host.textContent = '';
+        host.append(mark === 'bot' ? botMark() : flagPhoto(code, 'fp-hud'));
+      }
     }
     const xp = xpFor(p);
     if (shownXp[p] !== xp) {
@@ -1031,6 +1097,9 @@ interface StartSetup {
   /** one entry per seat — `[1, 1]` is a duel, `[1, 1, 1, 1]` a four-way. Capped at `MAX_TEAMS`. */
   sizes: readonly number[];
   online?: OnlineSession | null;
+  /** The lobby this race came out of, when it came out of one: it names the seats, says which are
+   *  the machine's, and pays only the seats a person actually held to the end. */
+  room?: Room | null;
 }
 
 function startGame(setup: StartSetup) {
@@ -1041,14 +1110,24 @@ function startGame(setup: StartSetup) {
   active = setup.online ?? null;
   forfeit = null;
   localSide = active ? active.side : 0;
-  sizes = active ? [active.sizes[0], active.sizes[1]] : setup.sizes.slice(0, MAX_TEAMS);
-  /* Name every seat before the first paint: `You` for this screen, a numbered bot for each extra
-     seat a party adds, and the rival's own name when the seat across the board is a person. */
-  for (let p = 0; p < sizes.length; p++) TEAM_NAME[p] = p === 0 ? 'You' : `Bot${p > 1 ? ` ${p}` : ''}`;
+  /* A room's seats are its own — one ball per seat, however many it filled with bots. */
+  room = setup.room ?? null;
+  sizes = active ? [active.sizes[0], active.sizes[1]]
+    : room ? sizesOf(room)
+    : setup.sizes.slice(0, MAX_TEAMS);
+  /* Name every seat before the first paint: `You` for this screen, a room's own seat names (the
+     machine's included), and a numbered bot for each extra seat a party adds. */
+  for (let p = 0; p < sizes.length; p++) {
+    TEAM_NAME[p] = room && !isAutomated(room, p) && p !== localSide
+      ? seatName(room, p)
+      : `Bot${p > 1 ? ` ${p}` : ''}`;
+  }
   TEAM_NAME[localSide] = 'You';
   if (active) TEAM_NAME[rivalSide()] = active.opponent.name;
   view.human = localSide;
-  opponent = makeBot(difficulty);
+  /* One brain per seat: a room ladders its machine seats, a plain race plays one level throughout. */
+  const lobby = room;
+  opponent = makeBot(lobby ? (seat) => difficultyFor(lobby, seat) : difficulty);
   paused = false;
   restart();
   seatChrome();
@@ -1402,9 +1481,32 @@ function loadPartySeats(): number {
 }
 let partySeats = loadPartySeats();
 
-/** The sizes a local race starts with: the drawer's duel shapes, or one ball per seat for a party. */
-const localSizes = (): number[] =>
-  partySeats > 2 ? Array.from({ length: partySeats }, () => 1) : [...menuState.sizes];
+/**
+ * Open the lobby for a local race and launch it. Every local race with more than one seat is a
+ * room: the host holds seat 0 and the rest are backfilled with the machine, which is the same
+ * contract the server's rooms run on — so the dock's bot badges, the per-seat difficulty and the
+ * payout guard all behave here exactly as they do online. The board is one ball per seat, however
+ * many seats the room holds, which is what `sizesOf` answers.
+ *
+ * The host pressing Start is the *early* start: a private room's seats stay open for the people who
+ * were invited, and `tick()` fills them once the wait runs out. Doing it here rather than on a timer
+ * is the honest reading of the tap — nobody presses Start to wait eight more seconds.
+ */
+function openLocalRoom(botTier: BotTier): Room {
+  const me = tgUser();
+  const host = {
+    kind: 'human' as const,
+    id: me?.id === undefined ? 'local' : String(me.id),
+    name: (me?.first_name || me?.username || 'You').slice(0, 14),
+  };
+  return startEarly(createRoom({
+    code: getGameMode().roomCode ?? createRoomCode(),
+    seats: partySeats,
+    host,
+    waitMs: ROOM_WAIT_MS,
+    botTier,
+  }));
+}
 
 /** The Start label the seat count implies — the drawer's own label, spoken with the party size. */
 function partyLabel(): string {
@@ -1452,9 +1554,13 @@ initGameModes(sheets, {
     const sel = getGameMode();
     /* Quick match is online: it queues on the searching stage first. Practice and a private
        room have nobody to wait for, so they start the race right away — on the seat count the
-       Practice card is showing. */
+       Practice card is showing. Practice plays the level the drawer shows on every seat; a private
+       room ladders its machine seats instead, which is the dynamic difficulty a room setting buys. */
     if (sel.id === 'duel_1v1' || sel.id === 'party_2v2') { queueMatch(); return; }
-    startGame({ difficulty: menuState.difficulty, sizes: localSizes() });
+    const botTier: BotTier = sel.id === 'room' ? 'mixed' : menuState.difficulty;
+    const lobby = openLocalRoom(botTier);
+    showNote(lobbyLine(lobby, Date.now()), false, 2200, true);
+    startGame({ difficulty: menuState.difficulty, sizes: sizesOf(lobby), room: lobby });
   },
 });
 onGameModeChange(paintParty);

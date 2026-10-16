@@ -25,6 +25,32 @@ History lives in the dated logs beside this file; this is the durable index.
 - **Never batch parallel `Edit` calls at one file** — the writes race and clobber.
 - `.shots/` = CDP scripts + PNGs, `.tmp/` = scratch; both gitignored.
 
+## Movement: leaps + anti-oscillation (src/rules.ts)
+- A ball may LEAP over ANY other ball (own included): straight to the square behind the body when
+  `canStep` from the BODY's cell passes, else a sidestep to a flank where `canStep(body, perp)` holds.
+  Hemmed in on all three sides = a wall, nothing offered. `rawSteps` is the unfiltered set; `steps()`
+  = `rawSteps` + the anti-oscillation filter, and it is the ONLY door (tap, bot, blitz, wire).
+- `stepField(s)` = distance to FINISH in ACTIONS with the bodies standing (reverse CSR graph; a
+  sidestep is a one-way edge). It is the bot's body metric, replacing the old `distFenced`. It
+  returns a SHARED scratch buffer — read it, never hold it across another call.
+- `GameState.repeat = { seen, streak }`; `REPEAT_LIMIT=3` narrows `steps()` to strictly-forward
+  moves, `REPEAT_ADJUDICATE=6` awards the race to the nearest ball (`adjudicated: true`). `pass` is
+  never filed. `boardFingerprint` = turn + wall/mine counts + every ball cell.
+- ALLOCATION IS THE TURN BUDGET. `blocks()` hands back a shared `_blocks` Set pair (never hold a
+  `Blocks` across another `blocks()` call); `distField` reuses `_bfsQ`; `stepField` reuses
+  `_revOff/_revPre/_stepDist/_stepQ/_body`. Fresh per-call buffers blew p99 past 5ms.
+
+## Rooms (src/room.ts + worker/matchmaker.ts)
+- 2..4 seats, `human`|`bot`. `isAutomated` (badge/tier) vs `isHuman` (may play) are different
+  questions — a vacant seat is neither. `rewardEligible` is false for every automated seat.
+- `tierFor` counts automated seats BEFORE the index, so `backfill` hands out `mixed`'s hard/normal/
+  hard ladder seat by seat. `RoomDriver.submit` plays every automated seat due in the SAME call, so
+  the human clock is never charged for the machine's; `drop`/`resume` are takeover/reclaim.
+- Worker: `?room=<n>&bottier=<tier>` makes a socket a room seat, NOT a queue entry. The wait rides
+  on `MatchmakerDO.alarm()`. Frames: `ROOM_FOUND`, `ROOM_START`, `SEAT_BOT`. 1v1 untouched.
+- Client: every local race goes through `openLocalRoom()`; the dock writes `data-bot` and paints
+  `.bot-mark` (`#i-bot`) INTO THE FLAG'S OWN 14px SLOT — no new layout at 4 chips on 360px.
+
 ## Board sizing (src/rules.ts)
 - `state.cols`/`.rows` are the only source of truth. `dimsFor(contenders)` → 8x12 for ≤2, 10x12 for ≥3;
   contenders = total balls, not seats. `MAX_TEAMS`=4; `wallBudget` 8/6/5 for 2/3/≥4. `spawnColumns` →

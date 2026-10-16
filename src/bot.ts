@@ -17,6 +17,11 @@
  *   normal — full multi-contender + hazard evaluation, softmax over near-optimal actions.
  *   hard   — the same, plus a top-K 2-ply reply check and a tighter softmax band.
  *
+ * Leaps are part of the move set, not a special case: the candidates come from `steps()`, so a hop
+ * over a rival is a candidate like any other, and the ground it gains is measured on `stepField` —
+ * the distance that counts a body as one action to leap rather than a wall to walk around. That is
+ * what lets the bot commit to a one-wide corridor instead of refusing it as impassable.
+ *
  * It is fed `view(state, seat)` by the caller, so everything here reasons only about what a real
  * player could know: the opponent's hidden mines are not in `s`, and neither is the bot's answer.
  * All of it runs synchronously and its work is bounded — a wall slot that can bite nothing is never
@@ -24,7 +29,7 @@
  * budget on the widest, busiest board. `scripts/bot-tiers-check.mjs` measures it.
  */
 import {
-  allWalls, apply, ballById, distField, HAZARD, mineCells, pathOn, steps,
+  allWalls, apply, ballById, distField, HAZARD, mineCells, pathOn, stepField, steps,
   wallBudget, wallOk, wallsClash, wallsRemaining,
   type Action, type Ball, type Cell, type GameState, type Player, type Pos, type Wall,
 } from './rules';
@@ -150,26 +155,6 @@ function dangerCells(s: GameState, me: Player): Set<number> {
 
 /* ---------- movement ---------- */
 
-/**
- * Distance to FINISH with rival bodies treated as solid: each occupied cell is fenced with the four
- * walls of its own edges and the rules' own BFS is run over the result. A ball that can only reach
- * the line by walking *through* a rival is told so — which is how the bot refuses to commit to a
- * one-wide corridor two balls cannot pass in, and walks round it instead. The fence reuses the exact
- * edge keys `rules.ts` walks, so it can never disagree with the rules about a wall that is really
- * there; it is a view of the board, not a change to it.
- */
-function distFenced(s: GameState, blocked: Set<number>): Int16Array {
-  if (!blocked.size) return distField(s.walls, s.cols, s.rows);
-  /* a copy, never the caller's array: `view()` shares it, and the fence is a view, not a move */
-  const walls = s.walls.slice();
-  for (const k of blocked) {
-    const c = k % s.cols, r = (k / s.cols) | 0;
-    walls.push({ o: 'h', x: c, y: r, owner: 0 }, { o: 'h', x: c, y: r + 1, owner: 0 },
-      { o: 'v', x: c, y: r, owner: 0 }, { o: 'v', x: c + 1, y: r, owner: 0 });
-  }
-  return distField(walls, s.cols, s.rows);
-}
-
 /** The cells a contender's lead ball could step onto next that walk it one step closer to FINISH. */
 function blockTargets(s: GameState, d: Int16Array, team: Player): Set<number> {
   const out = new Set<number>();
@@ -221,8 +206,9 @@ function moveCandidates(
     const after = pathOn(d, st.to, s.cols);
     if (!Number.isFinite(after)) continue;               // a sealed pocket is never a move
     const from = Number.isFinite(before) ? before : after;
-    /* Ground is measured with the rivals' bodies in the way, not on the bare board: a step that
-       walks into a spot only a rival's own square can reach the line from is not ground gained. */
+    /* Ground is measured with the rivals' bodies on the board, not on the bare one: the walk counts
+       a body as one action to leap, so a step that walks into a spot only a rival's own square can
+       reach the line from is not ground gained. */
     const oppFrom = dfOpp[b.pos.r * s.cols + b.pos.c];
     const oppTo = dfOpp[st.to.r * s.cols + st.to.c];
     let sc: number;
@@ -594,10 +580,10 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
   const d = distField(s.walls, s.cols, s.rows);
   const myD = teamField(s, me, d);
   const foes = contenders(s, me, d);
-  /* the board as it stands with every rival body in the way — the metric the moves are judged on */
-  const bodies = new Set<number>();
-  for (const b of s.balls) if (b.team !== me) bodies.add(key(b.pos.c, b.pos.r, s.cols));
-  const dfOpp = distFenced(s, bodies);
+  /* the board as it stands with every rival body on it — the metric the moves are judged on. It is
+     `stepField`, not a fence: a body is a square to leap, not a wall to walk round, so a corridor
+     two balls are wedged in is one action wide and the bot commits to it instead of refusing. */
+  const dfOpp = stepField(s);
   const hz = s.hazard;
   const hazardOn = !!hz;
   /* the round cadence is public: a strike is imminent when the next hit round is this one or the

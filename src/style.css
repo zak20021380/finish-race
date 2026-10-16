@@ -661,6 +661,26 @@ html.rm .board-wrap.rolling::after { animation: none; opacity: .85; }
 .flag-badge .fp-chip { border-radius: 50%; font-size: 6px; letter-spacing: 0; }
 .flag-badge .fp-img { box-shadow: none; }
 
+/* ---- the machine's seats: a bot mark where the country flag would be ----
+   A backfilled bot and a seat a person walked out of are both the machine's, and the dock has to
+   say so without a single pixel of new layout: the flag circle is 14px of the tightest row in the
+   app, so the mark takes the flag's own slot rather than a slot beside it. `data-bot` is written by
+   `paintRoster()` — `bot` for a backfilled seat, `takeover` for one the machine finished — and the
+   chip's hairline warms up so the difference survives a glance at four cards. */
+.flag-badge .bot-mark {
+  width: 9px;
+  height: 9px;
+  color: var(--honey-ink);
+}
+.chip[data-bot] .flag-badge {
+  background: rgba(252, 211, 77, .14);
+  box-shadow: 0 0 0 1.5px var(--solid-b), inset 0 0 0 1px rgba(252, 211, 77, .22);
+}
+.chip[data-bot='takeover'] .flag-badge {
+  box-shadow: 0 0 0 1.5px var(--tint), inset 0 0 0 1px var(--hair);
+}
+.chip[data-bot='takeover'] .flag-badge .bot-mark { color: var(--tint); }
+
 /* ---- the XP tag: a subtle inline reading, gold on nothing ----
    It is the ladder's own number (wins + races + the Command Center's grants), so it moves the
    instant a match settles; a rival's is fixed for the race. No pill: on a top row that is ~78px wide

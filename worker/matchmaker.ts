@@ -21,8 +21,28 @@
  * Seats, sides and the seed all come out of the match id, so both players are told the same race
  * and a replay of the same pairing derives the same numbers. The queue is in memory: it is a
  * waiting room, not a record, and a socket that dies is a player who stopped waiting.
+ *
+ * ---------- rooms: 2 to 4 seats, humans and bots in any mix ----------
+ *
+ * A socket that asks for `?room=<n>` is not a queue entry at all: it takes a seat in a multi-seat
+ * room, which is the same lobby model the client runs (`src/room.ts`). Seats fill as people arrive;
+ * the moment the room is full it launches, and when the wait timer runs out first, every seat still
+ * empty is backfilled with a bot. The timer is the object's own alarm — a Durable Object can be
+ * evicted between messages, and an alarm is the one thing that survives that — so a room always
+ * fills and always starts, whether or not anybody is still connected to say so.
+ *
+ * The race behind a room is a `RoomDriver`: it owns the authoritative board, judges every human
+ * action, and plays every automated seat itself. A human's move and the machine's answer therefore
+ * arrive as one batch, and a seat that was backfilled with a bot, or taken over when its person
+ * left, needs no special case anywhere: the driver asks `isAutomated` and plays it.
  */
-import { MAX_BALLS, apply, contendersIn, dimsFor, newGame, type Action, type GameState } from '../src/rules';
+import {
+  MAX_BALLS, MAX_TEAMS, apply, contendersIn, dimsFor, newGame, type Action, type GameState,
+} from '../src/rules';
+import {
+  ROOM_WAIT_MS, backfill, createRoom, createRoomDriver, difficultyFor, isAutomated, launch,
+  seatHuman, sizesOf, type BotTier, type Room, type RoomDriver, type RoomEvent,
+} from '../src/room';
 import { authenticate, authRequestFrom, type Identity, type MindTier } from './auth';
 import { json } from './http';
 import type { Env } from './env';
@@ -34,7 +54,10 @@ type ClientMessage =
   | { type: 'WIDEN' }
   | { type: 'CANCEL' }
   | { type: 'MOVE'; action: Action }
-  | { type: 'RESIGN' };
+  | { type: 'RESIGN' }
+  /* The room path: the host starting early. Everything else a room seat sends is a MOVE or a
+     RESIGN, exactly as a 1v1 seat sends them. */
+  | { type: 'ROOM_START' };
 
 interface Waiter {
   ws: WebSocket;
@@ -66,6 +89,43 @@ interface Race {
   over: boolean;
 }
 
+/* ---------- rooms ---------- */
+
+/** One socket holding a seat in a room. A room seat never waits in the 1v1 queue. */
+interface RoomMember {
+  ws: WebSocket;
+  /** The seat, which is also the team index the rules play it as. */
+  seat: number;
+  id: string;
+  name: string;
+  tiq: number;
+  tier: MindTier;
+  flag: string;
+}
+
+/**
+ * A live multi-seat room: the lobby model from `src/room.ts`, the sockets holding its human seats,
+ * and — once it has launched — the driver that owns the authoritative board.
+ */
+interface LiveRoom {
+  /** The lobby: seats, the wait timer, the backfill. Frozen once `launched`. */
+  room: Room;
+  size: number;
+  /** Indexed by seat: the socket holding it, or null while the machine holds it. */
+  members: (RoomMember | null)[];
+  /** Minted at launch, so both seats of every pairing derive the same numbers. */
+  matchId: string;
+  seed: number;
+  /** The authoritative race. Null until the room launches. */
+  driver: RoomDriver | null;
+}
+
+/** Where a socket sits: which room, and which seat in it. */
+interface RoomRef { live: LiveRoom; seat: number }
+
+/** What a room's status row reports, on top of what a 1v1 room reports. */
+export interface RoomSummary { players: number; bots: number }
+
 /** The ordinary radius, and the number the room starts on. */
 const TIER_RADIUS = 250;
 /** The widened radius, once either side has asked for one. */
@@ -95,16 +155,20 @@ export interface QueuedPlayer {
   waitedMs: number;
 }
 
-/** One live race, as `/admin/status` reports it. */
+/** One live race, as `/admin/status` reports it. A room of more than two seats reports its size. */
 export interface ActiveRoom {
   matchId: string;
-  /** The two display names, in seat order: `p0` opened the race. */
+  /** The first two display names, in seat order: `p0` opened the race. */
   p0: string;
   p1: string;
   /** Whose turn the authoritative board is on. */
   turn: number;
   /** The hazard round the room is in; 1 when the board runs no rolling log. */
   round: number;
+  /** How many seats the race fields — 2 for a duel, up to `MAX_TEAMS` for a room. */
+  players?: number;
+  /** How many of those seats the machine is holding. */
+  bots?: number;
 }
 
 export interface ServerStatus {
@@ -145,6 +209,18 @@ function readSizes(raw: string | null): [number, number] {
   return [parts[0], parts[1]];
 }
 
+/** `room=4` from the query: how many seats the socket is asking for. 0 means "not a room". */
+function readRoomSize(raw: string | null): number {
+  const n = Number((raw ?? '').trim());
+  if (!Number.isInteger(n) || n < 2 || n > MAX_TEAMS) return 0;
+  return n;
+}
+
+/** `bottier=hard` from the query: the level a room hands its backfilled bots. */
+function readBotTier(raw: string | null): BotTier {
+  return raw === 'easy' || raw === 'normal' || raw === 'hard' ? raw : 'mixed';
+}
+
 const sameBoard = (a: Waiter, b: Waiter): boolean => a.sizes[0] === b.sizes[0] && a.sizes[1] === b.sizes[1];
 
 const inBounds = (v: unknown, cols: number, rows: number): v is { c: number; r: number } => {
@@ -159,7 +235,7 @@ const inBounds = (v: unknown, cols: number, rows: number): v is { c: number; r: 
  * board — the grid is sized by the number of contenders, so a 3- or 4-contender race is two columns
  * wider than a duel and a move into those columns is legal there.
  */
-function readAction(raw: unknown, side: 0 | 1, cols: number, rows: number): Action | null {
+function readAction(raw: unknown, side: number, cols: number, rows: number): Action | null {
   const a = raw as { kind?: unknown; ball?: unknown; to?: unknown; wall?: unknown; cell?: unknown } | null;
   if (!a || typeof a !== 'object') return null;
   if (a.kind === 'move') {
@@ -184,7 +260,7 @@ function readAction(raw: unknown, side: 0 | 1, cols: number, rows: number): Acti
 const boardOf = (waiter: Waiter): { cols: number; rows: number } =>
   waiter.race ? waiter.race.state : dimsFor(contendersIn(waiter.sizes));
 
-function readMessage(raw: unknown, side: 0 | 1, cols: number, rows: number): ClientMessage | null {
+function readMessage(raw: unknown, side: number, cols: number, rows: number): ClientMessage | null {
   if (typeof raw !== 'string') return null;
   try {
     const msg = JSON.parse(raw) as { type?: unknown; wide?: unknown; action?: unknown };
@@ -192,6 +268,7 @@ function readMessage(raw: unknown, side: 0 | 1, cols: number, rows: number): Cli
     if (msg.type === 'WIDEN') return { type: 'WIDEN' };
     if (msg.type === 'CANCEL') return { type: 'CANCEL' };
     if (msg.type === 'RESIGN') return { type: 'RESIGN' };
+    if (msg.type === 'ROOM_START') return { type: 'ROOM_START' };
     if (msg.type === 'MOVE') {
       const action = readAction(msg.action, side, cols, rows);
       return action ? { type: 'MOVE', action } : null;
@@ -222,13 +299,19 @@ export class MatchmakerDO {
   private paired = 0;
   /** Every race still being played, by match id. */
   private races = new Map<string, Race>();
+  /** Rooms still filling their seats. They leave this list the moment they launch. */
+  private openRooms: LiveRoom[] = [];
+  /** Rooms that have launched, by match id. */
+  private rooms = new Map<string, LiveRoom>();
+  /** Which room seat a socket is holding. A socket in here is not a queue entry. */
+  private refs = new Map<WebSocket, RoomRef>();
   /** The admin's maintenance lock: nobody new gets in while it is on. */
   private maintenance = false;
   /** The live pairing bands — the defaults until `/admin/config` moves them. */
   private normalRadius = TIER_RADIUS;
   private wideRadius = WIDE_RADIUS;
 
-  constructor(_state: DurableObjectState, private env: Env) {}
+  constructor(private state: DurableObjectState, private env: Env) {}
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
@@ -246,10 +329,26 @@ export class MatchmakerDO {
     const server = pair[1];
     server.accept();
 
-    const waiter = this.enter(server, identity, url.searchParams.get('wide') === '1', readSizes(url.searchParams.get('sizes')));
-    this.attach(waiter);
-    this.pairNow();                            // the queue may already hold their match
+    /* A room socket and a queue socket are two different things from the first frame: a room seat
+       is never in the pairing queue, so a 4-seat room can never be broken up into a duel. */
+    const roomSize = readRoomSize(url.searchParams.get('room'));
+    if (roomSize) {
+      this.joinRoom(server, identity, roomSize, readBotTier(url.searchParams.get('bottier')));
+    } else {
+      const waiter = this.enter(server, identity, url.searchParams.get('wide') === '1', readSizes(url.searchParams.get('sizes')));
+      this.attach(waiter);
+      this.pairNow();                          // the queue may already hold their match
+    }
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  /** The wait timer. A room that has run out of patience fills its seats and starts. */
+  async alarm(): Promise<void> {
+    const now = Date.now();
+    for (const live of [...this.openRooms]) {
+      if (!live.driver && now - live.room.openedAt >= live.room.waitMs) this.launchRoom(live);
+    }
+    this.rearm();
   }
 
   /* ---------- the admin surface ---------- */
@@ -265,7 +364,7 @@ export class MatchmakerDO {
     return {
       ok: true,
       queueCount: this.queue.length,
-      activeMatchesCount: this.races.size,
+      activeMatchesCount: this.races.size + this.rooms.size,
       queuedPlayers: this.queue.map((w) => ({
         id: w.id,
         name: w.name,
@@ -273,14 +372,33 @@ export class MatchmakerDO {
         wide: w.wide,
         waitedMs: Math.max(0, now - w.joinedAt),
       })),
-      activeRooms: [...this.races.values()].map((r) => ({
-        matchId: r.matchId,
-        p0: r.seats[0].name,
-        p1: r.seats[1].name,
-        turn: r.state.turn,
-        round: r.state.hazard?.round ?? 1,
-      })),
+      activeRooms: [
+        ...[...this.races.values()].map((r) => ({
+          matchId: r.matchId,
+          p0: r.seats[0].name,
+          p1: r.seats[1].name,
+          turn: r.state.turn,
+          round: r.state.hazard?.round ?? 1,
+        })),
+        ...[...this.rooms.values()].map((live) => this.roomSummary(live)),
+      ],
       config: this.config(),
+    };
+  }
+
+  /** One launched room as a status row: the first two seats by name, and how many the machine holds. */
+  private roomSummary(live: LiveRoom): ActiveRoom {
+    const roster = live.driver?.room ?? live.room;
+    let bots = 0;
+    for (let i = 0; i < roster.seats.length; i++) if (isAutomated(roster, i)) bots++;
+    return {
+      matchId: live.matchId,
+      p0: roster.seats[0]?.name ?? '',
+      p1: roster.seats[1]?.name ?? '',
+      turn: live.driver?.state.turn ?? 0,
+      round: live.driver?.state.hazard?.round ?? 1,
+      players: roster.seats.length,
+      bots,
     };
   }
 
@@ -336,9 +454,10 @@ export class MatchmakerDO {
     if (body.action === 'ABORT_MATCH') {
       const matchId = typeof body.matchId === 'string' ? body.matchId : '';
       const race = this.races.get(matchId);
-      if (!race) return { ok: false, error: 'no_such_match' };
-      this.abort(race);
-      return { ok: true, aborted: matchId };
+      if (race) { this.abort(race); return { ok: true, aborted: matchId }; }
+      const room = this.rooms.get(matchId);
+      if (room) { this.abortRoom(room); return { ok: true, aborted: matchId }; }
+      return { ok: false, error: 'no_such_match' };
     }
     return { ok: false, error: 'unknown_action' };
   }
@@ -355,6 +474,21 @@ export class MatchmakerDO {
         /* the socket is already gone */
       }
     }
+    /* a room still filling its seats is waiting too: nobody is locked into a board yet */
+    for (const live of [...this.openRooms]) {
+      for (const m of live.members) {
+        if (!m) continue;
+        this.refs.delete(m.ws);
+        try {
+          m.ws.send(JSON.stringify({ type: 'ERROR', reason }));
+          m.ws.close(1000, reason.toLowerCase());
+        } catch {
+          /* the socket is already gone */
+        }
+      }
+    }
+    this.openRooms = [];
+    this.rearm();
   }
 
   /** The admin pulls a stuck room: both seats are told, then the room stops existing. */
@@ -364,6 +498,21 @@ export class MatchmakerDO {
       this.deliver(seat, JSON.stringify({ type: 'ABORTED', matchId: race.matchId }));
       try {
         seat.ws.close(1000, 'aborted');
+      } catch {
+        /* the socket is already gone */
+      }
+    }
+  }
+
+  /** The admin pulls a multi-seat room: every seat still held by a person is told, then let go. */
+  private abortRoom(live: LiveRoom): void {
+    this.rooms.delete(live.matchId);
+    for (const m of live.members) {
+      if (!m) continue;
+      this.refs.delete(m.ws);
+      try {
+        m.ws.send(JSON.stringify({ type: 'ABORTED', matchId: live.matchId }));
+        m.ws.close(1000, 'aborted');
       } catch {
         /* the socket is already gone */
       }
@@ -512,6 +661,219 @@ export class MatchmakerDO {
       waiter.ws.send(payload);
     } catch {
       this.leave(waiter, false);                         // it closed between pairing and send
+    }
+  }
+
+  /* ---------- rooms ---------- */
+
+  /**
+   * Take a seat in a room of `size`. A room that is still filling and matches the size is joined;
+   * otherwise a new one is opened with this socket as the host. The moment every seat is taken the
+   * room launches — nobody waits for a fourth when there are four already — and otherwise the wait
+   * timer is armed so the machine fills the rest if nobody else turns up.
+   */
+  private joinRoom(ws: WebSocket, identity: Identity, size: number, tier: BotTier): void {
+    if (this.maintenance) {
+      this.postTo(ws, JSON.stringify({ type: 'ERROR', reason: 'MAINTENANCE' }));
+      try {
+        ws.close(1000, 'maintenance');
+      } catch {
+        /* the socket is already gone */
+      }
+      return;
+    }
+    let live = this.openRooms.find((r) => !r.driver && r.size === size && this.freeSeat(r) >= 0);
+    if (!live) {
+      live = {
+        room: createRoom({ code: this.mintRoomCode(), seats: size, waitMs: ROOM_WAIT_MS, botTier: tier, now: Date.now() }),
+        size,
+        members: Array.from({ length: size }, () => null),
+        matchId: '',
+        seed: 0,
+        driver: null,
+      };
+      this.openRooms.push(live);
+    }
+    const seat = this.freeSeat(live);
+    if (seat < 0) return;                        // unreachable: the search only picks rooms with one
+    live.members[seat] = {
+      ws, seat, id: identity.player.id, name: identity.player.name,
+      tiq: identity.tiq, tier: identity.tier, flag: identity.flag,
+    };
+    live.room = seatHuman(live.room, seat, {
+      kind: 'human', id: identity.player.id, name: identity.player.name,
+    });
+    this.refs.set(ws, { live, seat });
+
+    ws.addEventListener('message', (ev: MessageEvent) => {
+      const ref = this.refs.get(ws);
+      if (!ref) return;
+      const board = ref.live.driver
+        ? ref.live.driver.state
+        : dimsFor(contendersIn(sizesOf(ref.live.room)));
+      const msg = readMessage(ev.data, ref.seat, board.cols, board.rows);
+      if (msg) this.roomFrame(ref, msg);
+    });
+    ws.addEventListener('close', () => this.roomLeave(this.refs.get(ws)));
+    ws.addEventListener('error', () => this.roomLeave(this.refs.get(ws)));
+
+    /* a full room starts now; anything less waits, and the alarm fills it when the wait runs out */
+    if (live.members.every((m) => m !== null)) this.launchRoom(live);
+    else this.rearm();
+  }
+
+  /** The lowest seat nobody is holding. */
+  private freeSeat(live: LiveRoom): number {
+    return live.members.findIndex((m) => m === null);
+  }
+
+  /** A room's 4-digit invite code, minted from the pairing counter so two rooms never collide. */
+  private mintRoomCode(): string {
+    return String(1000 + ((++this.paired * 7919) % 9000));
+  }
+
+  /**
+   * Arm the object's clock for the earliest wait still running. A Durable Object can be evicted
+   * between messages, and an alarm is the one thing that survives it, so the wait timer lives here
+   * rather than in a `setTimeout` that would die with the instance.
+   */
+  private rearm(): void {
+    const storage = this.state.storage;
+    if (!storage) return;                        // a harness with no storage backend drives `alarm()` itself
+    let soonest = Infinity;
+    for (const live of this.openRooms) {
+      if (live.driver) continue;
+      soonest = Math.min(soonest, live.room.openedAt + live.room.waitMs);
+    }
+    if (soonest === Infinity) storage.deleteAlarm();
+    else storage.setAlarm(soonest);
+  }
+
+  /**
+   * Freeze the room and put it on the board: every seat still empty is backfilled with a bot, the
+   * roster is told who is sitting where, and the machine plays any turn it already owns. From here
+   * the room is a race, and the driver is the only thing that judges it.
+   */
+  private launchRoom(live: LiveRoom): void {
+    if (live.driver) return;
+    live.room = launch(backfill(live.room));
+    live.seed = hash(`${live.room.code}|${live.members.map((m) => m?.id ?? 'bot').join('|')}|${this.paired}`);
+    live.matchId = `r${hash(`${live.room.code}|${++this.paired}`).toString(36)}`;
+    live.driver = createRoomDriver(live.room, { hazards: true, seed: live.seed });
+    this.openRooms = this.openRooms.filter((r) => r !== live);
+    this.rooms.set(live.matchId, live);
+    this.rearm();
+
+    for (const m of live.members) if (m) this.postTo(m.ws, this.roomFoundMessage(live, m.seat));
+    /* Seat 0 is the host, so a person normally opens — but a takeover or an odd roster can put the
+       machine on turn before anybody has moved, and the room must not wait for a human to start it. */
+    this.pushRoomEvents(live, live.driver.runBots());
+  }
+
+  /** `ROOM_FOUND`: the seat, the shared race, and every seat's name and owner. */
+  private roomFoundMessage(live: LiveRoom, seat: number): string {
+    const roster = live.driver?.room ?? live.room;
+    return JSON.stringify({
+      type: 'ROOM_FOUND',
+      matchId: live.matchId,
+      seed: live.seed,
+      side: seat,
+      sizes: sizesOf(roster),
+      seats: roster.seats.map((s, i) => ({
+        side: i,
+        name: s.name,
+        bot: isAutomated(roster, i),
+        difficulty: difficultyFor(roster, i),
+      })),
+    });
+  }
+
+  /** A frame from a seat in a room: the host's early start, a move, or a resignation. */
+  private roomFrame(ref: RoomRef, msg: ClientMessage): void {
+    const live = ref.live;
+    if (!live.driver) {
+      /* the room has not launched: a seat can start it early or walk away, and nothing else */
+      if (msg.type === 'ROOM_START' && ref.seat === 0) this.launchRoom(live);
+      else if (msg.type === 'CANCEL') this.roomLeave(ref);
+      return;
+    }
+    if (msg.type === 'RESIGN' || msg.type === 'CANCEL') { this.takeSeatOver(ref); return; }
+    if (msg.type !== 'MOVE') return;
+    const result = live.driver.submit(ref.seat, msg.action);
+    if (!result.ok) {
+      const member = live.members[ref.seat];
+      if (member) this.postTo(member.ws, JSON.stringify({ type: 'REJECT', reason: result.reason }));
+      return;
+    }
+    this.pushRoomEvents(live, result.events);
+    if (live.driver.state.winner !== null) this.rooms.delete(live.matchId);
+  }
+
+  /**
+   * Hand every event to every human seat except the one that played it — that seat applied its own
+   * action locally before it ever reached the wire. The machine's turns are in the same batch, so a
+   * room of one person and three bots needs no second round trip to keep moving.
+   */
+  private pushRoomEvents(live: LiveRoom, events: readonly RoomEvent[]): void {
+    if (!events.length) return;
+    for (const m of live.members) {
+      if (!m) continue;
+      for (const ev of events) {
+        if (ev.seat === m.seat) continue;
+        this.postTo(m.ws, JSON.stringify({ type: 'MOVE', side: ev.seat, action: ev.action }));
+      }
+    }
+  }
+
+  /**
+   * A seat's person left — a resignation, a CANCEL, or a socket that simply died. The seat is not
+   * abandoned: the machine takes it over at the room's own tier, everyone else is told, and the race
+   * carries on to a real finish instead of dissolving. Before the room launches there is no board to
+   * carry on with, so the seat merely reopens for somebody else.
+   */
+  private takeSeatOver(ref: RoomRef): void {
+    const live = ref.live;
+    const member = live.members[ref.seat];
+    if (member) {
+      this.refs.delete(member.ws);
+      try {
+        member.ws.close(1000, 'left');
+      } catch {
+        /* the socket is already gone */
+      }
+      live.members[ref.seat] = null;
+    }
+    const driver = live.driver;
+    if (!driver) { this.rearm(); return; }
+    const roster = driver.room;
+    driver.drop(ref.seat);
+    const name = roster.seats[ref.seat]?.name ?? `Seat ${ref.seat}`;
+    for (const m of live.members) {
+      if (m) this.postTo(m.ws, JSON.stringify({ type: 'SEAT_BOT', side: ref.seat, name }));
+    }
+    this.pushRoomEvents(live, driver.runBots());
+    if (driver.state.winner !== null) this.rooms.delete(live.matchId);
+  }
+
+  /** A socket went away. In a room that means the machine finishes the seat; in the queue, goodbye. */
+  private roomLeave(ref: RoomRef | undefined): void {
+    if (!ref) return;
+    if (ref.live.driver) { this.takeSeatOver(ref); return; }
+    const member = ref.live.members[ref.seat];
+    if (member) this.refs.delete(member.ws);
+    ref.live.members[ref.seat] = null;
+    if (ref.live.members.every((m) => m === null)) {
+      this.openRooms = this.openRooms.filter((r) => r !== ref.live);
+    }
+    this.rearm();
+  }
+
+  /** Send to a socket that may already be gone; a dead one is not this call's problem. */
+  private postTo(ws: WebSocket, payload: string): void {
+    try {
+      ws.send(payload);
+    } catch {
+      /* the socket is already gone: its own close handler will settle the seat */
     }
   }
 

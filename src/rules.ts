@@ -12,6 +12,21 @@
  * of its balls one cell, places a wall from its budget of `wallBudget(contenders)`, or buries a
  * mine from its budget of `CONFIG.MINES_PER_TEAM` (see the mine section below).
  *
+ * Leaps: a ball may not walk into another ball, but it may LEAP over one. A ball standing directly
+ * in the way is a stepping stone, not a wall — the mover lands on the square behind it when the
+ * board leaves that square open, and hops to one of the body's flanks when a wall, the perimeter or
+ * a third ball closes it. That is the standard board-game leap, and it is what a one-wide corridor
+ * needs: without it, two balls meeting head-on in a walled lane have nothing to do but shuffle
+ * forever, because neither can pass and neither can back off without giving up the race. The leap
+ * is offered over ANY other ball, not only a rival's: a team's own balls jam a corridor exactly the
+ * same way, and in a four-way free-for-all "the opponent" is not a single seat.
+ *
+ * Anti-oscillation: `repeat` is a small deterministic ledger of the boards the last few turns left
+ * behind. Once a race shuffles back onto a board it has already been in `REPEAT_LIMIT` turns
+ * running, `steps()` narrows to the steps that actually gain ground; if that still cannot break the
+ * cycle, the race is adjudicated — the ball nearest FINISH takes it. Both are pure functions of the
+ * state, so every seat and the server reach the same verdict from the same board.
+ *
  * Walls sit ON grid lines and are 2 cells long:
  *   'h' wall {x, y}: horizontal, on the line above row y (y = 1..rows-1), covers columns x and x+1.
  *   'v' wall {x, y}: vertical, on the line left of column x (x = 1..cols-1), covers rows y and y+1.
@@ -119,10 +134,39 @@ export interface GameState {
   mines: Mine[];
   turn: Player;
   winner: Player | null;
+  /** True when the win came from the anti-oscillation adjudication, not from a ball crossing FINISH. */
+  adjudicated?: boolean;
   /** The rolling log's clock; absent unless the race was set up with `hazards`. */
   hazard?: HazardPhase;
   /** The log that last went off, kept so the UI can animate it. Public info, unlike `mines`. */
   lastEvent?: LogEvent | null;
+  /** The anti-oscillation ledger. Public to every seat — it carries no hidden information. */
+  repeat?: RepeatTrack;
+}
+
+/* ---------- anti-oscillation ---------- */
+
+/**
+ * How many turns in a row may land on a board the race has already been in before `steps()` stops
+ * offering steps that give ground back. Three is long enough that a genuine two-ball dance round a
+ * wall is never mistaken for a shuffle, and short enough that a real one is caught inside a round.
+ */
+export const REPEAT_LIMIT = 3;
+/** Consecutive repeated boards at which the race is decided on the board rather than by shuffling. */
+export const REPEAT_ADJUDICATE = REPEAT_LIMIT * 2;
+/** How many recent boards the ledger remembers: the window a repetition is recognised inside. */
+export const REPEAT_WINDOW = 16;
+
+/**
+ * The shuffle ledger. `seen` is the fingerprint of each of the last few boards, newest last; a
+ * fingerprint that is already in the window is a board the race has been in before, and `streak`
+ * counts how many turns in a row have done that. Two balls stepping back and forth in a pocket
+ * reproduce the same fingerprint every other turn, so the streak climbs; a wall, a mine, a ball
+ * moving anywhere new, or a ball crossing FINISH changes the fingerprint and resets it.
+ */
+export interface RepeatTrack {
+  seen: number[];
+  streak: number;
 }
 
 export const nextTeam = (s: GameState, t: Player): number => (t + 1) % s.teams.length;
@@ -255,6 +299,7 @@ export function newGame(sizes: readonly number[] = [1, 1], setup: GameSetup = {}
     lastEvent: null,
   };
   if (setup.hazards) s.hazard = initPhase(setup.seed ?? 0, cols);
+  s.repeat = { seen: [boardFingerprint(s)], streak: 0 };
   return s;
 }
 
@@ -285,14 +330,22 @@ const DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]] as const;
 const LATTICE_C = Math.max(COLS, WIDE_COLS);
 const LATTICE_R = Math.max(ROWS, WIDE_ROWS);
 
+/**
+ * The two edge sets, reused. Nothing in this module holds a `Blocks` across another `blocks()`
+ * call — the walk that reads it finishes before the next one starts — and a bot turn runs this
+ * dozens of times over, so two fresh `Set`s per call was pure garbage.
+ */
+const _blocks: Blocks = { h: new Set<number>(), v: new Set<number>() };
+
 function blocks(walls: readonly Wall[]): Blocks {
-  const h = new Set<number>();
-  const v = new Set<number>();
+  const { h, v } = _blocks;
+  h.clear();
+  v.clear();
   for (const w of walls) {
     if (w.o === 'h') { h.add(w.y * LATTICE_C + w.x); h.add(w.y * LATTICE_C + w.x + 1); }
     else { v.add(w.x * LATTICE_R + w.y); v.add(w.x * LATTICE_R + w.y + 1); }
   }
-  return { h, v };
+  return _blocks;
 }
 
 function canStep(b: Blocks, c: number, r: number, dc: number, dr: number, cols: number, rows: number): boolean {
@@ -304,22 +357,80 @@ function canStep(b: Blocks, c: number, r: number, dc: number, dr: number, cols: 
   return !b.v.has((c + 1) * LATTICE_R + r);
 }
 
+/** The two directions at right angles to `(dc, dr)` — the ways a leap can sidestep a body. */
+function flanksOf(dc: number, dr: number): ReadonlyArray<readonly [number, number]> {
+  return dc === 0
+    ? [[-1, 0] as const, [1, 0] as const]
+    : [[0, -1] as const, [0, 1] as const];
+}
+
+/** Is this square on the board and free of every ball? The leap's landing test, looped not closure'd. */
+function cellFree(s: GameState, c: number, r: number, body?: Uint8Array): boolean {
+  if (c < 0 || c >= s.cols || r < 0 || r >= s.rows) return false;
+  if (body) return body[r * s.cols + c] === 0;
+  for (const o of s.balls) if (o.pos.c === c && o.pos.r === r) return false;
+  return true;
+}
+
+/**
+ * Where a ball leaping in direction `(dc, dr)` comes down, given the body standing on the square
+ * that direction leads to. The straight leap — over the body, onto the square directly behind it —
+ * is the whole rule while that square is free. When a wall, the board's edge or a third ball closes
+ * it, the leap becomes a sidestep: the mover hops to one of the two squares flanking the body, so
+ * long as the board leaves that flank open and no wall runs between the body and it. Nothing at all
+ * when the body is hemmed in on all three sides — a body wedged in a sealed one-wide pocket is a
+ * wall.
+ *
+ * The landings are reported to a sink rather than collected into an array: `stepField` walks every
+ * cell of the board with this, and a landing list per body was the single largest source of garbage
+ * in a bot turn. `body` is the same occupancy test as a mask, for that walk.
+ */
+function eachLeapTarget(
+  s: GameState, b: Blocks, over: Pos, dc: number, dr: number,
+  sink: (c: number, r: number) => void, body?: Uint8Array,
+): void {
+  const bc = over.c + dc, br = over.r + dr;
+  if (cellFree(s, bc, br, body) && canStep(b, over.c, over.r, dc, dr, s.cols, s.rows)) {
+    sink(bc, br);
+    return;                                       // the straight leap lands: no sidestep is offered
+  }
+  for (const [pc, pr] of flanksOf(dc, dr)) {
+    const fc = over.c + pc, fr = over.r + pr;
+    if (!cellFree(s, fc, fr, body)) continue;
+    if (!canStep(b, over.c, over.r, pc, pr, s.cols, s.rows)) continue;
+    sink(fc, fr);
+  }
+}
+
+/** The same rule, as a list — what `steps()` reads, where a leap is rare and clarity is worth more. */
+function leapTargets(s: GameState, b: Blocks, over: Pos, dc: number, dr: number): Pos[] {
+  const out: Pos[] = [];
+  eachLeapTarget(s, b, over, dc, dr, (c, r) => out.push({ c, r }));
+  return out;
+}
+
 /**
  * BFS distance-to-FINISH for every cell (index = r*cols + c). -1 = unreachable. Balls are ignored.
  * The dimensions are the board's own, so the same walk serves the 8-column duel and the 10-column
- * three- and four-contender boards.
+ * three- and four-contender boards. The queue is shared scratch — the walk finishes before the
+ * field it returns is read — because a bot turn runs this once per wall it prices.
  */
+let _bfsQ = new Int32Array(0);
+
 export function distField(walls: readonly Wall[], cols: number, rows: number): Int16Array {
   const b = blocks(walls);
-  const d = new Int16Array(cols * rows).fill(-1);
-  const q: number[] = [];
-  for (let c = 0; c < cols; c++) { d[c] = 0; q.push(c); }
-  for (let i = 0; i < q.length; i++) {
-    const id = q[i], c = id % cols, r = (id / cols) | 0;
+  const n = cols * rows;
+  const d = new Int16Array(n).fill(-1);
+  if (_bfsQ.length < n) _bfsQ = new Int32Array(n);
+  const q = _bfsQ;
+  let tail = 0;
+  for (let c = 0; c < cols; c++) { d[c] = 0; q[tail++] = c; }
+  for (let head = 0; head < tail; head++) {
+    const id = q[head], c = id % cols, r = (id / cols) | 0;
     for (const [dc, dr] of DIRS) {
       if (!canStep(b, c, r, dc, dr, cols, rows)) continue;
-      const n = (r + dr) * cols + c + dc;
-      if (d[n] < 0) { d[n] = d[id] + 1; q.push(n); }
+      const nn = (r + dr) * cols + c + dc;
+      if (d[nn] < 0) { d[nn] = d[id] + 1; q[tail++] = nn; }
     }
   }
   return d;
@@ -418,21 +529,131 @@ export const wallsClash = (a: WallSpec, b: WallSpec): boolean => wallsOverlap(a,
 
 export interface Step { ball: number; to: Pos }
 
-/** Every legal step for the team: each ball's 4-neighbourhood, walls and all balls block. */
-export function steps(s: GameState, team: Player = s.turn): Step[] {
-  if (s.winner !== null) return [];
+/**
+ * Every step a team's balls have on the bare board: each ball's 4-neighbourhood, with walls and the
+ * board's edge blocking, and a ball in the way turned into a leap rather than a refusal. No
+ * anti-oscillation filter — this is the raw move set `steps()` narrows.
+ */
+function rawSteps(s: GameState, team: Player): Step[] {
   const b = blocks(s.walls);
   const out: Step[] = [];
   for (const ball of s.balls) {
     if (ball.team !== team) continue;
     for (const [dc, dr] of DIRS) {
       if (!canStep(b, ball.pos.c, ball.pos.r, dc, dr, s.cols, s.rows)) continue;
-      const to = { c: ball.pos.c + dc, r: ball.pos.r + dr };
-      if (s.balls.some((o) => o.pos.c === to.c && o.pos.r === to.r)) continue;
-      out.push({ ball: ball.id, to });
+      const to: Pos = { c: ball.pos.c + dc, r: ball.pos.r + dr };
+      let blocked = false;
+      for (const o of s.balls) {
+        if (o.id !== ball.id && o.pos.c === to.c && o.pos.r === to.r) { blocked = true; break; }
+      }
+      if (!blocked) { out.push({ ball: ball.id, to }); continue; }
+      for (const land of leapTargets(s, b, to, dc, dr)) out.push({ ball: ball.id, to: land });
     }
   }
   return out;
+}
+
+/**
+ * Every legal step for the team: each ball's 4-neighbourhood — walls block, and a ball in the way
+ * is leapt — or, while the race is caught in a repetition (`REPEAT_LIMIT`), only the steps that
+ * actually gain ground on FINISH. The narrowing is the anti-oscillation rule, and it lives here so
+ * that every door into the engine (a tap, the bot, the blitz auto-move, a message off the wire)
+ * obeys it without having to know about it. A team with no forward step keeps the plain set, so the
+ * rule can slow a shuffle but never freeze a race.
+ */
+export function steps(s: GameState, team: Player = s.turn): Step[] {
+  if (s.winner !== null) return [];
+  const all = rawSteps(s, team);
+  if (!all.length || !forcing(s)) return all;
+  const d = distField(s.walls, s.cols, s.rows);
+  const fwd = all.filter((st) => {
+    const ball = ballById(s, st.ball);
+    return ball !== null && pathOn(d, st.to, s.cols) < pathOn(d, ball.pos, s.cols);
+  });
+  return fwd.length ? fwd : all;
+}
+
+/* ---------- the step graph, as reusable scratch ---------- */
+
+/**
+ * The most predecessors one cell can have in the step graph: four plain neighbours, four cells that
+ * leap straight over a body into it, and eight that sidestep into it. Nothing can exceed it.
+ */
+const REV_CAP = 16;
+let _revOff = new Int32Array(0);
+let _revPre = new Int32Array(0);
+let _stepDist = new Int16Array(0);
+let _stepQ = new Int32Array(0);
+let _body = new Uint8Array(0);
+
+/** Grow the scratch to fit a board of `n` cells. Done once per board size, never per call. */
+function growStepScratch(n: number): void {
+  if (_stepDist.length >= n) return;
+  _revOff = new Int32Array(n + 1);
+  _revPre = new Int32Array((n + 1) * REV_CAP);
+  _stepDist = new Int16Array(n);
+  _stepQ = new Int32Array(n);
+  _body = new Uint8Array(n);
+}
+
+/**
+ * Distance to FINISH measured in *actions* rather than cells, with every ball on the board standing
+ * where it is: the BFS walks the same step graph `steps()` offers — one cell, or a leap over a body
+ * — so a corridor two balls are wedged in is one action wide instead of sealed, which is what the
+ * bot needs to judge a lane honestly. Only walls and the board's edge can shut a lane here; a body
+ * is something to step over. Every ball is a body, the mover's own included, exactly as `steps()`
+ * treats them, and a body's own cell is a source like any other — a mover looks out *from* where it
+ * stands — but never a target, because a mover may not walk into a body, only over it. -1 = out of
+ * reach.
+ *
+ * The graph is built backwards, one bucket per cell, because a sidestep is a one-way edge: it lands
+ * the mover beside a body and nothing walks it back the same way. The field is a shared scratch
+ * buffer reused on the next call — read it, do not keep it.
+ */
+export function stepField(s: GameState): Int16Array {
+  const { cols, rows } = s;
+  const n = cols * rows;
+  const b = blocks(s.walls);
+
+  growStepScratch(n);
+  const body = _body;
+  body.fill(0, 0, n);
+  for (const o of s.balls) body[o.pos.r * cols + o.pos.c] = 1;
+
+  _revOff.fill(0, 0, n + 1);
+  /** File `from` among `to`'s predecessors — the reverse of one legal step. */
+  const link = (from: number, to: number): void => {
+    const at = _revOff[to];
+    if (at >= REV_CAP) return;                    // provably unreachable; never overrun a bucket
+    _revPre[to * REV_CAP + at] = from;
+    _revOff[to] = at + 1;
+  };
+  /** One cell's outgoing edges, filed backwards. A body is never a target — only something to leap. */
+  const edges = (from: number, c: number, r: number): void => {
+    for (const [dc, dr] of DIRS) {
+      if (!canStep(b, c, r, dc, dr, cols, rows)) continue;
+      const nc = c + dc, nr = r + dr;
+      const over = nr * cols + nc;
+      if (!body[over]) { link(from, over); continue; }
+      eachLeapTarget(s, b, { c: nc, r: nr }, dc, dr, (lc, lr) => link(from, lr * cols + lc), body);
+    }
+  };
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) edges(r * cols + c, c, r);
+
+  const d = _stepDist, q = _stepQ;
+  d.fill(-1, 0, n);
+  let head = 0, tail = 0;
+  for (let c = 0; c < cols; c++) { d[c] = 0; q[tail++] = c; }
+  while (head < tail) {
+    const id = q[head++];
+    const step = d[id] + 1;
+    const base = id * REV_CAP, count = _revOff[id];
+    for (let k = 0; k < count; k++) {
+      const p = _revPre[base + k];
+      if (d[p] < 0) { d[p] = step; q[tail++] = p; }
+    }
+  }
+  return d;
 }
 
 /** Distinct cells the team can step into — the dots the UI shows. */
@@ -522,18 +743,80 @@ export function mineOk(s: GameState, cell: Cell, owner: Player = s.turn): boolea
 /* ---------- transitions (return a new state, or null if illegal) ---------- */
 
 /**
+ * The fingerprint of a board: whose turn it is, how many walls stand, and where every ball is. It
+ * deliberately ignores the walls' identities and the mines — a wall may only ever be added, and a
+ * mine may only ever be spent, so a board that repeats this fingerprint has repeated the only part
+ * of itself that can move backwards: the balls. FNV-1a over small integers, allocation-free, so a
+ * simulated turn pays for it like it pays for a comparison. Public, because the ledger it feeds is
+ * public: two seats that disagree about a repetition would disagree about the race.
+ */
+export function boardFingerprint(s: GameState): number {
+  let h = (2166136261 ^ s.turn ^ Math.imul(s.walls.length, 2654435761) ^ Math.imul(s.mines.length, 40503)) >>> 0;
+  for (const b of s.balls) h = Math.imul(h ^ (b.pos.r * 16 + b.pos.c), 16777619) >>> 0;
+  return h >>> 0;
+}
+
+/** Is the engine forcing forward steps? Only while the race is caught in a repetition. */
+const forcing = (s: GameState): boolean => (s.repeat?.streak ?? 0) >= REPEAT_LIMIT;
+
+/**
+ * File the board this turn just left behind. A fingerprint already in the window is a shuffle and
+ * the streak climbs; anything new — a ball that moved somewhere it has not been, a wall that went
+ * up, a mine that went off — resets it. Always returns a fresh track: the state is never mutated,
+ * and a caller's `seen` array is never written through.
+ */
+function noteBoard(s: GameState): RepeatTrack {
+  const key = boardFingerprint(s);
+  const seen = s.repeat?.seen ?? [];
+  const streak = seen.includes(key) ? (s.repeat?.streak ?? 0) + 1 : 0;
+  const kept = seen.length >= REPEAT_WINDOW ? seen.slice(seen.length - REPEAT_WINDOW + 1) : seen.slice();
+  kept.push(key);
+  return { seen: kept, streak };
+}
+
+/**
+ * The stalemate backstop. A race that has repeated itself this long has stopped being a race, and
+ * the board still says who was winning it: the team whose nearest ball stands closest to FINISH
+ * takes it. Deterministic and instant — no clock, no random, no seat can argue with it.
+ */
+function adjudicate(s: GameState, track: RepeatTrack): GameState {
+  if (track.streak < REPEAT_ADJUDICATE || s.winner !== null) return s;
+  const d = distField(s.walls, s.cols, s.rows);
+  let best: Player | null = null, bestV = Infinity;
+  for (let t = 0; t < s.teams.length; t++) {
+    let v = Infinity;
+    for (const b of s.balls) if (b.team === t) v = Math.min(v, pathOn(d, b.pos, s.cols));
+    if (v < bestV) { bestV = v; best = t; }
+  }
+  return best === null ? s : { ...s, winner: best, adjudicated: true };
+}
+
+/**
  * Hand the turn to the next side that can act, then let the log clock move with it: a hand-off that
  * wraps past the acting team closes the round, and closing a round is what brings down a warning.
+ * The board the turn leaves behind goes into the shuffle ledger on the way out.
  */
 function endTurn(s: GameState, played: Player): GameState {
   if (s.winner !== null) return s;
   const n = s.teams.length;
   const canAct = (t: Player) => reachable(s, t).length > 0;
+  let handoff: GameState | null = null;
   for (let i = 1; i < n; i++) {
     const next = (played + i) % n;
-    if (canAct(next)) return tickHazard({ ...s, turn: next }, played);
+    if (canAct(next)) { handoff = { ...s, turn: next }; break; }
   }
-  return tickHazard({ ...s, turn: canAct(played) ? played : (played + 1) % n }, played);
+  handoff ??= { ...s, turn: canAct(played) ? played : (played + 1) % n };
+  return recordTurn(handoff, played);
+}
+
+/**
+ * File the board and let the log clock move on. A `pass` never comes through here: it is a seat
+ * declining, not a board the race has been in, and filing it would let a table of passers trip the
+ * anti-oscillation rule without a single ball having moved.
+ */
+function recordTurn(s: GameState, played: Player): GameState {
+  const track = noteBoard(s);
+  return adjudicate(tickHazard({ ...s, repeat: track }, played), track);
 }
 
 export function doMove(s: GameState, to: Pos, ballId?: number): GameState | null {
