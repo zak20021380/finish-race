@@ -445,7 +445,7 @@ html, body {
   0%, 100% { opacity: .5; }
   50%      { opacity: 1; }
 }
-html.rm .board-wrap.rolling::after { animation: none; opacity: .85; }
+html.reduced-motion .board-wrap.rolling::after { animation: none; opacity: .85; }
 @supports (width: 1cqw) {
   .board-wrap {
     /* the largest box of the active grid's aspect that fits the slot, both axes bounded */
@@ -852,7 +852,7 @@ html.rm .board-wrap.rolling::after { animation: none; opacity: .85; }
 @media (prefers-reduced-motion: reduce) {
   .chip[data-timer="red"] .timer-fill { animation: none; opacity: 1; }
 }
-html.rm .chip[data-timer="red"] .timer-fill { animation: none; opacity: 1; }
+html.reduced-motion .chip[data-timer="red"] .timer-fill { animation: none; opacity: 1; }
 .chip .who {
   flex: 1 1 auto;                        /* the name takes the row's slack, so the XP tag sits right */
   min-width: 0;
@@ -1077,7 +1077,7 @@ html.rm .chip[data-timer="red"] .timer-fill { animation: none; opacity: 1; }
   85% { opacity: 1; }
   100% { transform: translateX(46px); opacity: 0; }
 }
-html.rm .coin.sweep .coin-sweep { animation: none; }
+html.reduced-motion .coin.sweep .coin-sweep { animation: none; }
 
 /* ---- shared panel recipe: elevated white clay, lit from above ----
    Every full-width card on a screen takes this; only the radius and the internal
@@ -2165,7 +2165,7 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   }
 }
 /* the Reduced motion toggle asks for the same restraint where the OS never did */
-html.rm *, html.rm *::before, html.rm *::after {
+html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::after {
   animation-duration: .001ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: .001ms !important;
@@ -2322,8 +2322,8 @@ html.rm *, html.rm *::before, html.rm *::after {
   from { opacity: .9; }
   to { opacity: 0; }
 }
-html.rm .lb-row.is-spot::after,
-html.rm .pod-card.is-spot::after { animation: none; opacity: .28; }
+html.reduced-motion .lb-row.is-spot::after,
+html.reduced-motion .pod-card.is-spot::after { animation: none; opacity: .28; }
 
 /* Col 1 — rank: an extruded clay key. Deliberately NOT a metal — the podium above
    owns gold/silver/bronze, so #4 down read as prestige by shape and lift, not by
@@ -3475,7 +3475,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 @media (prefers-reduced-motion: reduce) {
   .id-dot.notif-badge::after { animation: none; opacity: 0; }
 }
-html.rm .id-dot.notif-badge::after { animation: none; opacity: 0; }
+html.reduced-motion .id-dot.notif-badge::after { animation: none; opacity: 0; }
 /* profile header owns the settings gear now */
 #profile-settings { flex: none; }
 /* 320px is a real floor. Below 380 the columns close in to one grid step, which buys the
@@ -3943,7 +3943,7 @@ html.rm .id-dot.notif-badge::after { animation: none; opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
   .mode-hero-dot::after { animation: none; opacity: 0; }
 }
-html.rm .mode-hero-dot::after { animation: none; opacity: 0; }
+html.reduced-motion .mode-hero-dot::after { animation: none; opacity: 0; }
 
 /* ---- the one loud element: massive tactile Coral-Orange PLAY ----
    Coral face #FF522B → hi #FF7A4D on Dark Clay #1C2433, lip #B83010.
@@ -4702,7 +4702,7 @@ html.rm .mode-hero-dot::after { animation: none; opacity: 0; }
   .car-card.nations-cup { gap: 4px; padding-top: 8px; }
   .mini-rank.nations-rank { gap: 4px; }
 }
-html.rm .car-card.nations-cup::before { display: none; }
+html.reduced-motion .car-card.nations-cup::before { display: none; }
 
 /* ---- Leaderboard board tabs: a sliding clay thumb over a recessed groove ----
    One 56px track, three equal keys, one extruded cyan thumb that translateX()es
@@ -4942,11 +4942,11 @@ html.rm .car-card.nations-cup::before { display: none; }
   0% { transform: scale(.88); opacity: .8; }
   70%, 100% { transform: scale(1.22); opacity: 0; }
 }
-html.rm .pod-crown,
-html.rm .pod-holo::after,
-html.rm .pod-card.gold .pod-av::after { animation: none; }
-html.rm .pod-holo::after { opacity: .12; }
-html.rm .pod-card.gold .pod-av::after { opacity: .45; }
+html.reduced-motion .pod-crown,
+html.reduced-motion .pod-holo::after,
+html.reduced-motion .pod-card.gold .pod-av::after { animation: none; }
+html.reduced-motion .pod-holo::after { opacity: .12; }
+html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
 
 /* the avatar: a ball of clay ringed in its mind's aura, falling back to its metal
    on boards where a tier does not apply (a guild's 18k is not a mind) */
@@ -5278,7 +5278,7 @@ html.rm .pod-card.gold .pod-av::after { opacity: .45; }
   animation: ml-ring-fill 900ms ease-out;
 }
 @keyframes ml-ring-fill { from { stroke-dashoffset: 100; } }
-html.rm .mh-arc-fill { animation: none; }
+html.reduced-motion .mh-arc-fill { animation: none; }
 .mh-ring b {
   width: 38px;
   height: 38px;
@@ -6111,49 +6111,122 @@ html.rm .mh-arc-fill { animation: none; }
 }
 #age-hint { color: var(--mint-ink); }
 
-html.rm .reward-badge, html.rm .pf-toast { animation: none; }
+html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: none; }
 
 /* ==========================================================================
    SETTINGS — Dark Clay overhaul: 3 tactile cards, vertical fill.
-   Canvas #10141D, cards #1C2433 (20px radius), headers #F8FAFC.
-   Column: head (fixed) → stack (flexible, fills dead space) → fine note.
-   The stack owns the only scroll on this screen; normally nothing scrolls.
+   Canvas #10141D, cards #1B2331 (20px radius), headers #F8FAFC.
+   Column: head (fixed) → stack (flexible, fills dead space) → fine-note badge.
+   The stack owns the only scroll on this screen, and on a 360x640 phone there is
+   nothing to scroll: the dial below sizes the whole column to the box.
    ========================================================================== */
 
+/* One elastic dial: 0 at a 640px phone, 1 at 932px and up, and it also gives
+   ground on a narrow column (the foot badge wraps one line taller at 320px than
+   at 430px, so the dial has to know the width as well as the height). Every
+   metric on this screen interpolates off it, so the column always lands inside
+   its box. A fixed breakpoint ladder cannot do this — it leaves dead bands (at
+   661 / 701 / 761 the chrome stepped up ~30px while the screen grew 1px) where
+   the screen suddenly needs a scrollbar. Below ~620px the column is genuinely
+   taller than the phone can hold and the stack scrolls; that is the only case
+   it ever scrolls. */
 .screen.settings-screen {
-  gap: var(--s3);
+  gap: var(--set-scr-gap);
   overflow: hidden;
   max-width: 100%;
+  --set-t: clamp(0px, calc((var(--app-h) - 640px) / 292 - (430px - min(100vw, 430px)) / 220), 1px);
+  --set-row: calc(44px + var(--set-t) * 10);        /* 44 -> 54 */
+  --set-ico: calc(22px + var(--set-t) * 8);         /* 22 -> 30 */
+  --set-pad-t: calc(4px + var(--set-t) * 8);        /* 4 -> 12 */
+  --set-pad-b: calc(3px + var(--set-t) * 5);        /* 3 -> 8 */
+  --set-card-gap: calc(2px + var(--set-t) * 3);     /* 2 -> 5 */
+  --set-stack-gap: calc(3px + var(--set-t) * 5);    /* 3 -> 8 */
+  --set-scr-gap: calc(4px + var(--set-t) * 8);      /* 4 -> 12 */
+  --set-note-pad: calc(5px + var(--set-t) * 3);     /* 5 -> 8 */
+  /* The horizontal inset is fluid as well: `--s3` collapses from 16 to 8 at the 700px
+     breakpoint, and a fixed pad there makes the foot badge wrap one line taller at exactly
+     the height where the screen gained 1px — the same dead-band bug, one axis over. */
+  --set-pad-x: calc(8px + var(--set-t) * 8);        /* 8 -> 16 */
+}
+
+/* ---- header: a recessed clay pill back key and an embossed wordmark ----
+   The base .icon-btn is a raised key with a solid lip; on this screen the back
+   control is carved INTO the slab instead — same 44px target, pill curve, and
+   the shadow stack inverted (deep inner well, no extrusion). The spacer keeps
+   the title optically centred against the wider pill, so the wordmark lands on
+   the true mid-line of the column rather than a few px off it. */
+.set-head { gap: var(--s3); }
+.set-head .set-back {
+  --d: 0px;
+  width: 58px;
+  height: 40px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #0B111E 0%, var(--field) 100%);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, .65),
+    inset 0 -1px 0 rgba(255, 255, 255, .07),
+    inset 0 0 0 1px rgba(255, 255, 255, .07);
+  transition: box-shadow var(--motion-fast), transform var(--motion-fast);
+}
+.set-head .set-back .ico { width: 20px; height: 20px; color: var(--chip-ink); }
+/* pressing a well pushes it deeper: the inset deepens, nothing lifts */
+.set-head .set-back:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 3px 8px rgba(0, 0, 0, .8),
+    inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+.set-head .set-back:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+.set-pad { width: 58px; }
+
+/* embossed title: a faint lit rim on top, a hard cast shadow below, so the
+   wordmark reads as pressed OUT of the clay rather than printed on it */
+.set-head .set-title {
+  text-shadow:
+    0 -1px 0 rgba(255, 255, 255, .06),
+    0 1px 0 rgba(0, 0, 0, .7),
+    0 3px 7px rgba(0, 0, 0, .45);
 }
 
 /* flexible band between the top bar and the dock: spreads the 3 cards so no
-   dead space survives on tall phones, and scrolls internally on short ones */
+   dead space survives on tall phones, and never needs to scroll on a short one.
+   The 2px padding is shadow room for the cards inside the clip; the box itself
+   stays flush with the column (a negative margin here would scroll the screen
+   2px sideways, which is exactly the overflow this screen may not have). */
 .set-stack {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
   justify-content: space-evenly;
-  gap: var(--s3);
+  gap: var(--set-stack-gap);
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: none;
   padding: 2px 2px 4px;
-  margin: 0 -2px;
+  margin: 0;
 }
 .set-stack::-webkit-scrollbar { display: none; }
 
-/* tactile Dark Clay card: solid #1C2433 face, 20px corners, lit from above */
+/* tactile Dark Clay card: matte charcoal depth, lit from above.
+   Three cues, never more: a soft ambient drop under the slab, a lit rim along
+   the top edge, and a hairline all the way round. The face itself is matte —
+   the gradient stops in the charcoal band (#212B40 → #171E2B) instead of
+   carrying a gloss, so nothing on this screen glares. */
 .set-card {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
-  padding: var(--s3) var(--s3) var(--s2);
+  gap: var(--set-card-gap);
+  padding: var(--set-pad-t) var(--set-pad-x) var(--set-pad-b);
   border-radius: 20px;
-  background: linear-gradient(180deg, #202A3E 0%, #1C2433 100%);
-  background-color: #1C2433;
-  box-shadow: var(--clay), var(--clay-ring);
+  background: linear-gradient(180deg, #212B40 0%, #1B2331 58%, #171E2B 100%);
+  background-color: #1B2331;
+  box-shadow:
+    0 14px 28px rgba(0, 0, 0, .45),
+    inset 0 1px 0 rgba(255, 255, 255, .10),
+    inset 0 -3px 4px rgba(0, 0, 0, .38),
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
 }
 .set-card-h {
   display: flex;
@@ -6170,11 +6243,11 @@ html.rm .reward-badge, html.rm .pf-toast { animation: none; }
 /* embossed icon chip beside each card title + each row */
 .set-ico {
   flex: none;
-  width: 36px;
-  height: 36px;
+  width: var(--set-ico);
+  height: var(--set-ico);
   display: grid;
   place-items: center;
-  border-radius: 12px;
+  border-radius: calc(var(--set-ico) * .36);
   background: linear-gradient(180deg, #0A0F1C 0%, var(--field) 100%);
   color: var(--brand-ink);
   box-shadow:
@@ -6182,17 +6255,28 @@ html.rm .reward-badge, html.rm .pf-toast { animation: none; }
     inset 0 -1px 0 rgba(255, 255, 255, .08),
     inset 0 0 0 1px rgba(255, 255, 255, .06);
 }
-.set-ico .ico { width: 19px; height: 19px; }
-.set-ico.sm { width: 38px; height: 38px; border-radius: 13px; }
-.set-ico.sm .ico { width: 20px; height: 20px; }
+/* the SECTION badge is the one sculpted token on a card: raised off the face
+   with its own solid lip, a lit top rim and a hairline — the row icons below it
+   stay carved-in wells, so the eye reads hierarchy from depth alone. */
+.set-card-h .set-ico {
+  background: linear-gradient(180deg, #2C3750 0%, #1B2331 100%);
+  box-shadow:
+    0 2px 0 #080C14,
+    0 6px 12px -6px rgba(0, 0, 0, .7),
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 0 0 1px rgba(255, 255, 255, .07);
+}
+.set-ico .ico { width: calc(var(--set-ico) * .7); height: calc(var(--set-ico) * .7); }
+.set-ico.sm { width: calc(var(--set-ico) + 6px); height: calc(var(--set-ico) + 6px); border-radius: calc(var(--set-ico) * .4); }
+.set-ico.sm .ico { width: calc(var(--set-ico) * .8); height: calc(var(--set-ico) * .8); }
 .set-ico.sky { color: var(--brand-ink); }
 .set-ico.mint { color: var(--mint-ink); background: linear-gradient(180deg, #0A0F1C 0%, rgba(16, 185, 129, .22) 100%); }
 .set-ico.danger { color: var(--red-ink); background: linear-gradient(180deg, #0A0F1C 0%, rgba(224, 38, 79, .22) 100%); }
 
 /* rows live directly on the card: dividers only, no nested tray */
 .set-rows { display: flex; flex-direction: column; min-width: 0; }
-.set-rows .row { border-radius: 14px; min-height: 62px; padding: var(--s2) var(--s2); }
-.set-rows .row + .row { border-radius: 14px; box-shadow: inset 0 1px 0 var(--sep); }
+.set-rows .row { border-radius: 12px; min-height: var(--set-row); padding: var(--s1) var(--s2); }
+.set-rows .row + .row { border-radius: 12px; box-shadow: inset 0 1px 0 var(--sep); }
 .set-rows .row:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
 .set-rows .row:active { background: rgba(255, 255, 255, .03); }
 .set-row .row-txt { flex: 1 1 auto; }
@@ -6240,69 +6324,112 @@ html.rm .reward-badge, html.rm .pf-toast { animation: none; }
 html[dir="rtl"] .chev.tactile { transform: scaleX(-1); }
 html[dir="rtl"] .set-row:active .chev.tactile { transform: scaleX(-1) translateY(2px); }
 
-/* tactile 3D toggle: recessed track, extruded knob, deep-sky ON fill */
+/* ---- tactile clay groove toggle ------------------------------------------
+   Not a flat pill: the track is a well carved INTO the card (deep inner
+   shadow, a hairline all the way round, no extrusion of its own), and the one
+   thing that changes between states is what fills it. Off = the raw charcoal
+   well. On = the same well flooded with a warm amber ramp behind a soft bloom,
+   so the control glows rather than shouts. The knob is a solid clay token with
+   a real lip under it, jittered up a pixel when the track is pressed.
+
+   Specificity note: the base `.row[aria-checked="true"] .switch` paints the
+   deep-sky fill (3 class-level selectors) and would win over a bare
+   `.settings-screen .switch` (2), so BOTH states are restated here at 4 —
+   the checked rule can never fall back to the blue ramp. */
 .settings-screen .switch {
-  width: 56px;
-  height: 33px;
-  background: #0A0F1C;
+  width: 58px;
+  height: 34px;
+  background: linear-gradient(180deg, #070B14 0%, #0D1424 100%);
   box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, .6),
+    inset 0 3px 6px rgba(0, 0, 0, .78),
     inset 0 -1px 0 rgba(255, 255, 255, .07),
     inset 0 0 0 1px rgba(255, 255, 255, .07);
+  transition: transform var(--motion-fast), box-shadow var(--motion-med);
+}
+/* the amber flood: an overlay so the fill can CROSS-FADE in instead of
+   swapping (a gradient background is not animatable) */
+.settings-screen .switch::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, #FCD34D 0%, #F59E0B 54%, #C2740A 100%);
+  box-shadow: inset 0 2px 3px rgba(255, 255, 255, .4), inset 0 -2px 4px rgba(120, 53, 15, .5);
+  opacity: 0;
+  transition: opacity var(--motion-med);
 }
 .settings-screen .switch::after {
-  top: 3px;
-  left: 3px;
-  width: 27px;
-  height: 27px;
-  background: linear-gradient(180deg, #FFFFFF 0%, #CBD5E1 100%);
+  z-index: 1;
+  top: 4px;
+  left: 4px;
+  width: 26px;
+  height: 26px;
+  background: linear-gradient(180deg, #FFFFFF 0%, #D6DDE7 100%);
   box-shadow:
-    0 3px 0 rgba(0, 0, 0, .35),
-    0 5px 10px rgba(0, 0, 0, .5),
+    0 2px 0 rgba(0, 0, 0, .45),
+    0 5px 9px rgba(0, 0, 0, .55),
     inset 0 1px 0 #fff,
-    inset 0 -2px 3px rgba(15, 23, 42, .18);
+    inset 0 -2px 3px rgba(15, 23, 42, .22);
+  transition: transform var(--motion-med), box-shadow var(--motion-med);
 }
 .settings-screen .row[aria-checked="true"] .switch {
-  background: var(--brand-fill);
+  background: linear-gradient(180deg, #070B14 0%, #0D1424 100%);
   box-shadow:
-    0 3px 0 var(--brand-lip),
-    0 10px 18px -10px var(--brand-glow),
-    inset 0 2px 3px rgba(255, 255, 255, .35),
-    inset 0 -2px 3px rgba(0, 0, 0, .2);
+    inset 0 3px 6px rgba(90, 45, 0, .5),
+    inset 0 0 0 1px rgba(252, 211, 77, .5),
+    0 0 14px -2px rgba(245, 158, 11, .62),
+    0 0 28px -8px rgba(245, 158, 11, .4);
 }
-.settings-screen .row[aria-checked="true"] .switch::after { transform: translateX(23px); }
-.settings-screen .row:active .switch { filter: brightness(1.06); }
+.settings-screen .row[aria-checked="true"] .switch::before { opacity: 1; }
+.settings-screen .row[aria-checked="true"] .switch::after {
+  transform: translateX(24px);
+  box-shadow:
+    0 2px 0 rgba(120, 53, 15, .5),
+    0 5px 9px rgba(0, 0, 0, .5),
+    inset 0 1px 0 #fff,
+    inset 0 -2px 3px rgba(180, 83, 9, .35);
+}
+/* pressing the groove seats the whole control a hair deeper */
+.settings-screen .row:active .switch { transform: translateY(1px); }
 
-/* compact version badge: recessed pill pinned to the card foot */
-.ver-badge {
+/* the build stamp closes the badge: same fine ink, one mint bead out front, and a
+   hairline that separates the standing facts from the compliance line */
+.set-notes .set-ver {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--s2);
-  margin: var(--s1) 0 0;
-  padding: 9px 12px;
-  border-radius: var(--radius-pill);
-  background: var(--field);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .5), inset 0 -1px 0 rgba(255, 255, 255, .06);
-  color: var(--ink-soft);
-  font-size: var(--t-micro);
+  gap: 6px;
+  margin-top: 1px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(255, 255, 255, .07);
   font-weight: 700;
   letter-spacing: .01em;
-  line-height: 1.2;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .ver-dot {
   flex: none;
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--mint);
-  box-shadow: 0 0 10px rgba(16, 185, 129, .8);
+  box-shadow: 0 0 8px rgba(16, 185, 129, .8);
+}
+/* the foot of the screen: every "fine print" line rides ONE quiet badge — a
+   low-opacity clay tray that reads as fine print rather than a second card. The
+   ink is lifted to --chip-ink so the .78 fade still clears body-text contrast. */
+.set-notes {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 var(--s1);
+  padding: var(--set-note-pad) var(--set-pad-x);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .035);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .055);
+  opacity: .78;
 }
 .set-fine { margin: 0; }
+.set-notes .set-fine { margin: 0; color: var(--chip-ink); font-size: var(--t-micro); line-height: 1.3; }
 
 /* transient settings toast (support hint / reset confirm) */
 .set-toast {
@@ -6377,28 +6504,14 @@ html:not(.no-flags) .lang-row .flag-code { display: none; }
 .lang-row[aria-selected="true"] .pick-n { color: var(--brand-ink); }
 .lang-row[aria-selected="true"] .pick-n small { color: var(--brand-ink); opacity: .75; }
 
-/* short columns: tighten chrome first, targets stay >= 44px */
-@media (max-height: 760px) {
-  .screen.settings-screen { gap: var(--s2); }
-  .set-stack { gap: var(--s2); }
-  .set-card { padding: var(--s2) var(--s2) var(--s1); gap: var(--s1); }
-  .set-rows .row { min-height: 58px; }
-  .set-ico.sm { width: 34px; height: 34px; }
+/* Short columns: the elastic dial above does the work, so the only thing left is to keep the
+   row subtitle on one line. Below ~620px of app height the column genuinely cannot hold seven
+   rows at a 44px target — the stack scrolls there rather than shrinking the targets, which is
+   the one case it ever scrolls. 360x640 and every larger phone never do. */
+@media (max-height: 700px) {
+  .set-row .row-s { font-size: 10px; line-height: 1.25; }
 }
-@media (max-height: 660px) {
-  .screen.settings-screen { gap: var(--s1); }
-  .set-stack { gap: var(--s2); }
-  .set-card-h { font-size: var(--t-3); }
-  .set-ico { width: 32px; height: 32px; border-radius: 11px; }
-  .set-rows .row { min-height: 56px; }
-  .ver-badge { padding: 7px 10px; }
-  .set-fine { font-size: var(--t-micro); }
-}
-@media (max-height: 600px) {
-  .set-stack { gap: var(--s1); }
-  .set-card { border-radius: 18px; }
-}
-html.rm .set-toast { transition: none; }
+html.reduced-motion .set-toast { transition: none; }
 
 /* ==========================================================================
    NOTIFICATIONS — tactile In-Game Notification Center (Bell & Drawer).
@@ -6747,7 +6860,7 @@ html.rm .set-toast { transition: none; }
 @media (prefers-reduced-motion: reduce) {
   .notif-badge { animation: none; }
 }
-html.rm .notif-badge { animation: none; }
+html.reduced-motion .notif-badge { animation: none; }
 
 /* ==========================================================================
    DOCK-NAV — 5-tab primary navigation (Play · Arena · Ranks · Shop · Profile).
@@ -6941,7 +7054,7 @@ html.rm .notif-badge { animation: none; }
   0% { transform: scale(.5); opacity: .9; }
   70%, 100% { transform: scale(1.8); opacity: 0; }
 }
-html.rm .ml-pulse::after { display: none; }
+html.reduced-motion .ml-pulse::after { display: none; }
 /* Every number above the ladder is seeded preview data — say so once, quietly. */
 .ml-preview {
   padding: 1px 6px;
@@ -7718,7 +7831,7 @@ html.rm .ml-pulse::after { display: none; }
   .pf-hero.pf-hero-v2 { padding: var(--s3) var(--s4); }
   .pf-avatar-wrap { --av: 60px; }
 }
-html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: none; }
+html.reduced-motion .pf-xp-bar.bar i, html.reduced-motion .reward-badge { animation: none; transition: none; }
 
 
 
@@ -8701,9 +8814,9 @@ html.rm .pf-xp-bar.bar i, html.rm .reward-badge { animation: none; transition: n
   .stars-run { min-height: 52px; }
   .stars-cta { min-height: 56px; border-radius: 20px; font-size: var(--t-1); }
 }
-html.rm .stars-cta, html.rm .stars-pod, html.rm .stars-run, html.rm .stars-squad { transition: none; }
-html.rm .stars-tabs .mode-thumb { transition: none; }
-html.rm .stars-count::before { animation: none; }
+html.reduced-motion .stars-cta, html.reduced-motion .stars-pod, html.reduced-motion .stars-run, html.reduced-motion .stars-squad { transition: none; }
+html.reduced-motion .stars-tabs .mode-thumb { transition: none; }
+html.reduced-motion .stars-count::before { animation: none; }
 
 /* ==========================================================================
    THE CUP RULES SHEET — the three steps between a win and the Stars, opened by
@@ -9671,9 +9784,9 @@ html.rm .stars-count::before { animation: none; }
   }
   .gm-rewards { min-height: 24px; padding: 2px var(--s3); }
 }
-html.rm .gm-pick, html.rm .gm-key, html.rm .gm-copy, html.rm .gm-card,
-html.rm .gm-filters, html.rm .gm-f-tip { transition: none; }
-html.rm .gm-filters.shake { animation: none; }
+html.reduced-motion .gm-pick, html.reduced-motion .gm-key, html.reduced-motion .gm-copy, html.reduced-motion .gm-card,
+html.reduced-motion .gm-filters, html.reduced-motion .gm-f-tip { transition: none; }
+html.reduced-motion .gm-filters.shake { animation: none; }
 
 
 /* ==========================================================================
@@ -9953,11 +10066,11 @@ html.rm .gm-filters.shake { animation: none; }
 }
 
 /* ---- reduced motion: kill every new animation ---- */
-html.rm .pf-avatar-glow,
-html.rm .pf-quest-ico,
-html.rm .badge-chip[data-state="locked"]::after,
-html.rm .dock-nav .tab[aria-current="page"] .ico,
-html.rm .dock-nav .tab[aria-current="page"]::after { animation: none; }
+html.reduced-motion .pf-avatar-glow,
+html.reduced-motion .pf-quest-ico,
+html.reduced-motion .badge-chip[data-state="locked"]::after,
+html.reduced-motion .dock-nav .tab[aria-current="page"] .ico,
+html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none; }
 
 /* one column below 361px: the pills are half-width, so a long country name needs the whole row */
 @media (max-width: 360px) {
@@ -10302,11 +10415,11 @@ html.rm .dock-nav .tab[aria-current="page"]::after { animation: none; }
 }
 
 /* ---- reduced motion: the throne still glows, it just stops moving ---- */
-html.rm .ms-hero,
-html.rm .ms-challenge,
-html.rm .ms-guild,
-html.rm .ms-x,
-html.rm .lb-row { transition: none; }
+html.reduced-motion .ms-hero,
+html.reduced-motion .ms-challenge,
+html.reduced-motion .ms-guild,
+html.reduced-motion .ms-x,
+html.reduced-motion .lb-row { transition: none; }
 
 
 /* ==========================================================================
@@ -10317,7 +10430,7 @@ html.rm .lb-row { transition: none; }
    console, the stakes the race actually pays and a mind tip. Depth is the
    shared clay recipe — deep inner shadow, extruded lip, metallic top hairline —
    and nothing here carries a backdrop-filter. Every animation is
-   transform/opacity only, so html.rm stills the whole stage.
+   transform/opacity only, so html.reduced-motion stills the whole stage.
    ========================================================================== */
 
 .mm {
@@ -10360,7 +10473,7 @@ html.rm .lb-row { transition: none; }
   100% { opacity: 0; }
 }
 /* no motion: the bloom stops travelling and simply holds while the rival locks in */
-html.rm .mm.is-found::after { animation: none; opacity: .34; }
+html.reduced-motion .mm.is-found::after { animation: none; opacity: .34; }
 
 /* ---- header: muted gold caps over the promise ---- */
 .mm-head {
@@ -11004,24 +11117,24 @@ html.rm .mm.is-found::after { animation: none; opacity: .34; }
 }
 
 /* ---- reduced motion: the stage still reads, it just stops sweeping ---- */
-html.rm .mm { transition: none; }
-html.rm .mm-cancel { transition: none; }
-html.rm .mm-compass,
-html.rm .mm-sweep,
-html.rm .mm-pulse,
-html.rm .mm-node,
-html.rm .mm-blip,
-html.rm .mm-vs,
-html.rm .mm-seg i,
-html.rm .mm-scan,
-html.rm .mm-shock,
-html.rm .mm-status.swap,
-html.rm .mm-tip-t.swap,
-html.rm .mm-pod.is-locked { animation: none; }
+html.reduced-motion .mm { transition: none; }
+html.reduced-motion .mm-cancel { transition: none; }
+html.reduced-motion .mm-compass,
+html.reduced-motion .mm-sweep,
+html.reduced-motion .mm-pulse,
+html.reduced-motion .mm-node,
+html.reduced-motion .mm-blip,
+html.reduced-motion .mm-vs,
+html.reduced-motion .mm-seg i,
+html.reduced-motion .mm-scan,
+html.reduced-motion .mm-shock,
+html.reduced-motion .mm-status.swap,
+html.reduced-motion .mm-tip-t.swap,
+html.reduced-motion .mm-pod.is-locked { animation: none; }
 /* the sweep is the only thing that would otherwise freeze mid-dial */
-html.rm .mm-sweep { opacity: .5; }
-html.rm .mm-seg i { opacity: .55; transform: none; }
-html.rm .mm-blip { opacity: .5; }
+html.reduced-motion .mm-sweep { opacity: .5; }
+html.reduced-motion .mm-seg i { opacity: .55; transform: none; }
+html.reduced-motion .mm-blip { opacity: .5; }
 
 /* ==========================================================================
    ADMIN COMMAND CENTER — the Home FAB, the live broadcast strip and the
@@ -11078,7 +11191,7 @@ html.rm .mm-blip { opacity: .5; }
 @media (prefers-reduced-motion: no-preference) {
   .admin-fab-dot[data-state="live"] { animation: adm-dot 2.4s ease-in-out infinite; }
 }
-html.rm .admin-fab-dot { animation: none; }
+html.reduced-motion .admin-fab-dot { animation: none; }
 
 /* ---- the pinned broadcast: a gold strip at the top of Home ---- */
 .home-broadcast {
@@ -11127,7 +11240,7 @@ html.rm .admin-fab-dot { animation: none; }
   overflow: hidden;
 }
 .admin.open { opacity: 1; transform: none; pointer-events: auto; }
-html.rm .admin { transition: none; }
+html.reduced-motion .admin { transition: none; }
 
 .admin-head { flex: none; display: flex; align-items: center; gap: var(--s2); }
 .admin-head-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }

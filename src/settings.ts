@@ -10,7 +10,7 @@ export type Mode = 'bot' | 'online';
 export type ModeTab = 'solo' | 'party';
 
 export interface Settings {
-  /** the engine's step/leap effects and the matchmaking chime */
+  /** the engine's step, wall and blast effects and the matchmaking chime */
   sound: boolean;
   haptics: boolean;
   reducedMotion: boolean;
@@ -139,7 +139,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     language: 'Language',
     languageSub: 'App language · applies instantly',
     sound: 'Sound',
-    soundSub: 'Steps, leaps and match sounds',
+    soundSub: 'Steps, walls, and blast effects',
     haptics: 'Haptics',
     hapticsSub: 'Buzz on walls, moves and the result',
     reducedMotion: 'Reduced motion',
@@ -169,7 +169,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     language: 'زبان',
     languageSub: 'زبان برنامه · اعمال فوری',
     sound: 'صدا',
-    soundSub: 'صدای قدم‌ها، پرش‌ها و مسابقه',
+    soundSub: 'صدای قدم‌ها، دیوارها و انفجارها',
     haptics: 'لرزش لمسی',
     hapticsSub: 'لرزش برای دیوارها، حرکت‌ها و نتیجه',
     reducedMotion: 'کاهش حرکت',
@@ -199,7 +199,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     language: 'Язык',
     languageSub: 'Язык приложения · применяется сразу',
     sound: 'Звук',
-    soundSub: 'Шаги, прыжки и звуки матча',
+    soundSub: 'Шаги, стены и взрывы',
     haptics: 'Вибрация',
     hapticsSub: 'Отклик на стены, ходы и результат',
     reducedMotion: 'Меньше движения',
@@ -229,7 +229,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     language: 'اللغة',
     languageSub: 'لغة التطبيق · تُطبق فورًا',
     sound: 'الصوت',
-    soundSub: 'أصوات الخطوات والقفزات والمباراة',
+    soundSub: 'أصوات الخطوات والجدران والانفجارات',
     haptics: 'الاهتزاز',
     hapticsSub: 'اهتزاز عند الجدران والحركات والنتيجة',
     reducedMotion: 'تقليل الحركة',
@@ -259,7 +259,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     language: 'Idioma',
     languageSub: 'Idioma de la app · se aplica al instante',
     sound: 'Sonido',
-    soundSub: 'Pasos, saltos y sonidos de partida',
+    soundSub: 'Pasos, muros y explosiones',
     haptics: 'Vibración',
     hapticsSub: 'Vibra con muros, movimientos y el resultado',
     reducedMotion: 'Movimiento reducido',
@@ -290,8 +290,13 @@ const watchers: ((s: Settings) => void)[] = [];
 /** The system preference always wins; the toggle can only ask for more restraint. */
 export const motionReduced = () => systemReduce || settings.reducedMotion;
 
+/**
+ * The global kill-switch every pulse, slide and float in the sheet is keyed to.
+ * `html.reduced-motion` stills them all; `setSetting` re-applies it on every write
+ * so flipping the row lands on the very next frame.
+ */
 export function applyMotion() {
-  document.documentElement.classList.toggle('rm', motionReduced());
+  document.documentElement.classList.toggle('reduced-motion', motionReduced());
 }
 
 export function setSetting<K extends keyof Settings>(key: K, value: Settings[K]) {

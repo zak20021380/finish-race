@@ -688,12 +688,12 @@
 
         <!-- ---------------- settings: 3 tactile Dark Clay cards, vertical fill ---------------- -->
         <section class="screen menu settings-screen" id="s-settings" data-screen="settings" tabindex="-1" hidden aria-labelledby="settings-title">
-          <div class="m-head">
-            <button class="icon-btn" type="button" data-back aria-label="Back to home">
+          <div class="m-head set-head">
+            <button class="icon-btn set-back" type="button" data-back aria-label="Back to home">
               <svg class="ico" aria-hidden="true"><use href="#i-back" /></svg>
             </button>
-            <h1 class="m-title" id="settings-title" data-i18n="settingsTitle">Settings</h1>
-            <span class="m-head-pad" aria-hidden="true"></span>
+            <h1 class="m-title set-title" id="settings-title" data-i18n="settingsTitle">Settings</h1>
+            <span class="m-head-pad set-pad" aria-hidden="true"></span>
           </div>
 
           <div class="set-stack" data-scroll>
@@ -719,7 +719,7 @@
                 <button class="row" type="button" role="switch" aria-checked="true" data-set="sound">
                   <span class="row-txt">
                     <span class="row-t" data-i18n="sound">Sound</span>
-                    <span class="row-s" data-i18n="soundSub">Kept for you — the game has no audio yet</span>
+                    <span class="row-s" data-i18n="soundSub">Steps, walls, and blast effects</span>
                   </span>
                   <span class="switch" aria-hidden="true"></span>
                 </button>
@@ -780,12 +780,17 @@
                   <svg class="ico chev tactile" aria-hidden="true"><use href="#i-next" /></svg>
                 </button>
               </div>
-              <p class="ver-badge"><span class="ver-dot" aria-hidden="true"></span><span data-i18n="versionBadge">Version 1.0.0 · Local save only</span></p>
             </section>
           </div>
-          <p class="fine set-fine" data-i18n="savedNote">Saved on this device only. Nothing else is stored.</p>
-          <!-- Compliance copy belongs here and nowhere else: the ladder is a game metric. -->
-          <p class="fine set-fine tiq-note" id="tiq-note">TIQ is Detour's in-game tactical rating. Detour trains strategic thinking.</p>
+          <!-- Every "fine print" line on this screen rides ONE quiet badge: the device-local save
+               note, the TIQ compliance line (which belongs here and nowhere else — the ladder is a
+               game metric), and the build stamp. Grouping them frees the height the third card
+               used to spend on its own footer row. -->
+          <div class="set-notes" role="note">
+            <p class="fine set-fine" data-i18n="savedNote">Saved on this device only. Nothing else is stored.</p>
+            <p class="fine set-fine tiq-note" id="tiq-note">TIQ is Detour's in-game tactical rating. Detour trains strategic thinking.</p>
+            <p class="fine set-fine set-ver"><span class="ver-dot" aria-hidden="true"></span><span data-i18n="versionBadge">Version 1.0.0 · Local save only</span></p>
+          </div>
           <div class="set-toast" id="set-toast" role="status" aria-live="polite" hidden></div>
         </section>
 

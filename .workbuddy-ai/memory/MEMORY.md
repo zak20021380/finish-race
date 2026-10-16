@@ -23,6 +23,10 @@ History lives in the dated logs beside this file; this is the durable index.
   opaque). Find a ball by **saturation-weighted centroid** (the turn halo spans 3 columns). Viewport px
   ≠ canvas-local px: subtract the canvas `top`.
 - **Never batch parallel `Edit` calls at one file** — the writes race and clobber.
+- **Every CDP harness must `fs.rmSync(profile, {recursive:true, force:true})` on exit.** Each run leaves an
+  ~18MB Chrome profile in `%TEMP%`; thirty of them filled C: to 0 bytes and every shell command began
+  failing with `ENOSPC`. (The PowerShell tool also refuses `Remove-Item -Recurse` inside a computed loop —
+  delete explicit `-LiteralPath`s in batches.)
 - `.shots/` = CDP scripts + PNGs, `.tmp/` = scratch; both gitignored.
 
 ## Movement: leaps + anti-oscillation (src/rules.ts)
@@ -93,6 +97,30 @@ History lives in the dated logs beside this file; this is the durable index.
 - One theme, "Dark Clay": opaque slabs, no live blur (`--glass-blur: none`). `--clay`/`--clay-ring` raised,
   `--inset` wells, `--lip`/`--press-y` controls, gold ink `--honey-ink` (#FCD34D). On a ≤700px-tall
   viewport `--s3` is 8px. Toasts are `.note`; `showNote()` writes to the *visible* screen only.
+- **Reduced motion is `html.reduced-motion`** (renamed from `html.rm`). `applyMotion()` in `settings.ts`
+  is its only writer; the system `prefers-reduced-motion` always wins (`motionReduced()`).
+
+## Settings screen (`#s-settings`, style.css + index.html + settings.ts)
+- **The elastic dial.** One fluid `--set-t` on `.screen.settings-screen` sizes the whole column, so the
+  screen fits its box at every phone size. A breakpoint ladder CANNOT: it leaves dead bands (at 661/701/761
+  the chrome stepped up ~30px while the screen grew 1px) where the screen suddenly scrolls.
+  `--set-t: clamp(0px, calc((var(--app-h) - 640px)/292 - (430px - min(100vw,430px))/220), 1px)` — the
+  height term alone is not enough, the foot badge wraps one line taller at 320px than at 430px.
+  Every metric (row height, badge, card padding, all gaps) is a `calc()` off it.
+- **Use `--set-pad-x`, never `--s3`, for these cards.** The global `:root` block drops `--s3` 16→8 at
+  `max-height: 700px`, which reintroduces the same dead band one axis over.
+- Verified zero overflow on 60/60 sizes (widths 320/360/390/412/430 × heights 640…932). Below ~620px app
+  height the stack scrolls — the only case it ever does. `.tmp/settings-audit.mjs` + `.tmp/probe-sweep.mjs`.
+- **The foot is ONE badge:** `#s-settings .set-notes` (opacity .78, ink lifted to `--chip-ink` so the fade
+  still clears body-text contrast) holds the save note, the TIQ compliance line and the build stamp.
+  `.ver-badge` was deleted; `.ver-dot` is the mint bead inside the badge.
+- Toggles are carved grooves (`.settings-screen .switch`), **amber/gold when ON** — the base
+  `.row[aria-checked="true"] .switch` paints the blue ramp at specificity (0,3,0), so BOTH states must be
+  restated at (0,4,0) or the checked toggle silently falls back to blue.
+- `soundSub` = "Steps, walls, and blast effects" in all five language tables.
+- **Sound is gated at the source**: `playMove`/`playExplosion` (sound.ts) and `chime` (matchmaking.ts) all
+  return early on `!settings.sound`; haptics likewise through `impact`/`notify`/`detonation` in telegram.ts.
+  `setSetting()` writes `detour.settings.v1` and `setLang()` writes `detour.lang.v1`, both on the same tap.
 
 ## Arena hero header (the 200 Stars Cup, `compete.ts` + `.stars-head`)
 - **Palette rule:** gold = live/premium (the Star's setting, the clock's bead, the lit
