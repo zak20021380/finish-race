@@ -8,9 +8,11 @@
  *   node scripts/verify-channel-cup.mjs
  *
  * One phone, 360x640, because that is the fit the card has to hold:
- *  - the header carries the Star emblem, "200 STARS CUP" that never clips, the
- *    two-way switch (>=48px keys, sliding thumb, no clipped label) and a live
- *    HH:MM:SS clock,
+ *  - the header is two compact rows, at or under 60px: the Star inline beside
+ *    "200 STARS CUP" (never clipping) with a live HH:MM:SS clock pinned right,
+ *    then the two-way switch (>=48px keys, sliding thumb, no clipped label)
+ *    stretched across the full card and centred over the podium — no solid
+ *    black box behind any header element,
  *  - the channels podium is three CHANNELS (rank badge, verified channel mark,
  *    bare name, squad TIQ) with no @ sigil, no member count and no "tap to view
  *    roster" cue — the card itself is the door, and only #1 wears the pool,
@@ -84,6 +86,17 @@ const PROBE = `(function () {
   const emblem = document.querySelector('.stars-emblem');
   const cardBox = box(card), dockBox = box(dock);
 
+  /* the header: two stacked rows — identity + clock, then the full-width switch */
+  const head = document.querySelector('.stars-head');
+  const titlebar = document.querySelector('.stars-titlebar');
+  const nameEl = document.getElementById('stars-name');
+  const tabsHost = document.getElementById('stars-tabs');
+  const podiumEl = document.getElementById('stars-podium');
+  const headBox = box(head), titlebarBox = box(titlebar), tabsHostBox = box(tabsHost), podiumHeadBox = box(podiumEl);
+  const headFills = ['.stars-head', '.stars-titlebar', '.stars-emblem', '.stars-count', '#stars-tabs', '#stars-tabs .mode-thumb', '#stars-tabs .mode-seg']
+    .map((sel) => { const el = document.querySelector(sel); return { sel, bg: el ? getComputedStyle(el).backgroundColor : null }; });
+  const emblemCs = emblem ? getComputedStyle(emblem) : null;
+
   const pods = [...document.querySelectorAll('.stars-pod')].map((li) => ({
     rank: li.dataset.rank ?? '',
     metal: li.dataset.metal ?? '',
@@ -156,7 +169,23 @@ const PROBE = `(function () {
     view: card?.dataset.view ?? '',
     tabs,
     count: txt('#stars-count'),
-    emblem: { box: box(emblem), src: emblemImg ? emblemImg.getAttribute('src') : null },
+    emblem: {
+      box: box(emblem), src: emblemImg ? emblemImg.getAttribute('src') : null,
+      bg: emblemCs?.backgroundColor ?? null,
+      border: emblemCs?.borderTopWidth ?? null,
+      shadow: emblemCs?.boxShadow ?? null,
+    },
+    header: {
+      headH: +headBox.h.toFixed(1),
+      headBox, titlebarBox, tabsHostBox, podiumHeadBox,
+      /* the Star rides row one beside the title: same band, immediately left of it */
+      inlineStar: !!emblem && Math.abs((box(emblem).t + box(emblem).b) / 2 - (box(nameEl).t + box(nameEl).b) / 2) <= 4
+        && box(emblem).r <= box(nameEl).l + 0.5,
+      /* row two spans the card and centres over the three-column podium */
+      fullWidth: Math.abs(tabsHostBox.w - headBox.w) <= 1 && Math.abs(tabsHostBox.w - podiumHeadBox.w) <= 1,
+      centered: Math.abs((tabsHostBox.l + tabsHostBox.r) / 2 - (podiumHeadBox.l + podiumHeadBox.r) / 2) <= 1,
+      fills: headFills,
+    },
     pods, runs,
     squad: {
       chip: txt('#stars-squad-chip'),
@@ -248,6 +277,11 @@ const notes = [];
 const bad = [];
 const fail = (m) => bad.push(m);
 const say = (m) => notes.push(m);
+/** `rgb()/rgba()` to channels — the header audit reads computed background fills. */
+const rgba = (s) => {
+  const p = (String(s).match(/[\d.]+/g) ?? []).map(Number);
+  return { r: p[0] ?? 0, g: p[1] ?? 0, b: p[2] ?? 0, a: p.length > 3 ? p[3] : 1 };
+};
 
 const ctx = await browser.newContext({ viewport: { width: 360, height: 640 }, hasTouch: true });
 const pg = await ctx.newPage();
@@ -260,12 +294,32 @@ await pg.waitForTimeout(1400);
 
 const m = await pg.evaluate(PROBE);
 
-/* 1 — header: the emblem, the engraved title and the two-way board switch */
+/* 1 — header: two rows — the Star inline with the title + clock, then the switch */
 if (m.title !== 'Arena') fail(`aria title reads "${m.title}"`);
 if (m.name !== '200 STARS CUP') fail(`title reads "${m.name}"`);
 if (!/^\d{2}:\d{2}:\d{2}$/.test(m.count ?? '')) fail(`bracket clock reads "${m.count}"`);
-if (!m.emblem.box || m.emblem.box.w < 56 || m.emblem.box.w > 60) fail(`emblem is ${m.emblem.box?.w}px, want 56-60`);
+if (!m.emblem.box || m.emblem.box.w < 20 || m.emblem.box.w > 28) fail(`emblem is ${m.emblem.box?.w}px, want 20-28 inline with the title`);
+if (Math.abs(m.emblem.box.w - m.emblem.box.h) > 1) fail(`emblem is not square (${m.emblem.box?.w}x${m.emblem.box?.h})`);
 if (!/telegram_stars/i.test(m.emblem.src ?? '')) fail(`hero emblem is not the Telegram Star asset (${m.emblem.src})`);
+if (!m.header.inlineStar) fail('the Star is not inline beside the title in row one');
+if (m.header.headH > 60.5) fail(`the header is ${m.header.headH}px tall, want <= 60`);
+if (!m.header.fullWidth) fail(`the switch spans ${m.header.tabsHostBox?.w}px of the ${m.header.headBox?.w}px header, want full width`);
+if (!m.header.centered) fail('the switch is not centred over the podium');
+/* the black-cutout audit: no header element paints a solid black fill, the
+   wrappers stay bare, and the track and clock are translucent by construction */
+for (const f of m.header.fills) {
+  const c = rgba(f.bg);
+  if (c.a >= 0.99 && Math.max(c.r, c.g, c.b) <= 24) fail(`the header cuts a solid black box (${f.sel} = ${f.bg})`);
+}
+const fillOf = (sel) => m.header.fills.find((f) => f.sel === sel)?.bg ?? 'rgb(0, 0, 0)';
+if (rgba(fillOf('.stars-head')).a !== 0 || rgba(fillOf('.stars-titlebar')).a !== 0) {
+  fail('a header wrapper paints a fill instead of sitting on the card');
+}
+if (rgba(fillOf('#stars-tabs')).a >= 0.99) fail(`the switch track is an opaque box (${fillOf('#stars-tabs')})`);
+if (rgba(fillOf('.stars-count')).a >= 0.99) fail(`the clock cuts an opaque box (${fillOf('.stars-count')})`);
+if (m.emblem.bg !== 'rgba(0, 0, 0, 0)' || parseFloat(m.emblem.border) > 0 || m.emblem.shadow !== 'none') {
+  fail(`the Star still wears a wrapper box (${m.emblem.bg} / ${m.emblem.border} / ${m.emblem.shadow})`);
+}
 if (m.view !== 'channels') fail(`the card opens on the "${m.view}" board, want channels`);
 if (!m.tabs.thumb) fail('the board switch has no sliding clay thumb');
 if (m.tabs.active !== 'channels') fail(`the switch is on "${m.tabs.active}"`);
@@ -539,7 +593,7 @@ await browser.close();
 srv.close();
 
 for (const n of notes) console.log(`  · ${n}`);
-console.log(`layout 360x640  card ${m.fits.cardH}px  gap ${m.fits.gapToDock}px  clock "${m.count}"`);
+console.log(`layout 360x640  card ${m.fits.cardH}px  gap ${m.fits.gapToDock}px  header ${m.header.headH}px  clock "${m.count}"`);
 console.log(`podium ${m.pods.map((p) => `${p.rank}:${p.name} ${p.tiq.replace(' TIQ', '')}`).join('  |  ')}`);
 console.log(`runners ${m.runs.map((x) => `${x.rank}:${x.name}`).join('  |  ')}  squad "${m.squad.name}" "${m.squad.note}"`);
 console.log(`roster  ${r.rows.length} contributors, payouts ${ladder.join('+')} = ${pool}`);

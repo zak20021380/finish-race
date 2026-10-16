@@ -496,24 +496,24 @@
 
           <div class="compete-body stars-stage" data-scroll id="arena-scroll">
             <article class="stars-card" id="stars-card" aria-labelledby="stars-name">
-              <!-- hero header: the official Star emblem, then the title/timer line over
-                   the board switch. The switch lives in the title column, inside the
-                   emblem's own 56px row, so the second leaderboard costs the card no
-                   height at all and the whole head stays under 64px. -->
+              <!-- hero header, two rows: identity + bracket clock over the board switch.
+                   Row one: the official Star inline beside the engraved title, the
+                   clock pinned to the right. Row two: the two-way clay switch
+                   stretched across the full card, centred over the podium below.
+                   The whole head stays at or under 60px, so the podium keeps its
+                   pixels and the switch costs the card no extra height. -->
               <div class="stars-head">
-                <span class="stars-emblem" aria-hidden="true">
-                  <img class="stars-emblem-img" id="stars-emblem-img" alt="" width="60" height="60" />
-                </span>
-                <div class="stars-titles">
-                  <div class="stars-titlebar">
-                    <h2 class="stars-name" id="stars-name">200 STARS CUP</h2>
-                    <span class="stars-count" id="stars-count" role="timer" aria-label="Bracket opens in">01:45:20</span>
-                  </div>
-                  <div class="stars-tabs" id="stars-tabs" role="group" aria-label="Arena leaderboard" data-active="channels">
-                    <span class="mode-thumb" aria-hidden="true"></span>
-                    <button class="mode-seg" type="button" data-view="channels" aria-pressed="true">Channels</button>
-                    <button class="mode-seg" type="button" data-view="players" aria-pressed="false">Top Players</button>
-                  </div>
+                <div class="stars-titlebar">
+                  <span class="stars-emblem" aria-hidden="true">
+                    <img class="stars-emblem-img" id="stars-emblem-img" alt="" width="24" height="24" />
+                  </span>
+                  <h2 class="stars-name" id="stars-name">200 STARS CUP</h2>
+                  <span class="stars-count" id="stars-count" role="timer" aria-label="Bracket opens in">01:45:20</span>
+                </div>
+                <div class="stars-tabs" id="stars-tabs" role="group" aria-label="Arena leaderboard" data-active="channels">
+                  <span class="mode-thumb" aria-hidden="true"></span>
+                  <button class="mode-seg" type="button" data-view="channels" aria-pressed="true">Channels</button>
+                  <button class="mode-seg" type="button" data-view="players" aria-pressed="false">Top Players</button>
                 </div>
               </div>
 
