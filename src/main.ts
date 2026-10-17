@@ -567,9 +567,9 @@ function showOverlay() {
 
 /**
  * The beat the goal zone gets for itself. The rules land a winner the moment the ball touches row 0,
- * and the renderer answers with a light sweep along the checkered line — but the result card lays a
- * scrim over the whole board, so a card that lands on the same tick buries the one thing the board
- * does to mark the line being taken. The card waits for the pulse instead.
+ * and the renderer answers with a golden light sweep along the unified finish bar — but the result
+ * card lays a scrim over the whole board, so a card that lands on the same tick buries the one thing
+ * the board does to mark the line being taken. The card waits for the pulse instead.
  */
 const GOAL_BEAT_MS = 600;
 let goalBeat = 0;

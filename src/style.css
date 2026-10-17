@@ -349,10 +349,10 @@ html, body {
    The goal zone used to be a plate in this sheet, absolutely positioned onto row 0 of a canvas it
    cannot share a coordinate system with — which is why it needed `--board-cell`, `--board-oy` and a
    `lane` class to keep it welded down, and why it still read as a badge laid over the checkers.
-   Row 0 is now one sculpted band the renderer draws: a dark-clay apex kerb with the FINISH crest
-   struck into it over a recessed run of beveled checks. It moves with the board because it *is* the
-   board, it yields to a rolling log from inside the same frame loop, and it costs no lane above the
-   canvas — see the goal zone in `buildStatic()` and the crest in `draw()`. */
+   Row 0 is now one sculpted band the renderer draws: a heavily embossed dark-clay apex kerb with
+   the FINISH crest struck into it — one seamless bar, no checkered inlay. It moves with the board
+   because it *is* the board, it yields to a rolling log from inside the same frame loop, and it
+   costs no lane above the canvas — see the goal zone in `buildStatic()` and the crest in `draw()`. */
 
 /* ---- board ---- */
 /* The slot takes the free height and the wrap fits the largest board of the *active* grid inside

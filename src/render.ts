@@ -477,7 +477,9 @@ const CREST_WORD = 'FINISH';
 const CREST_MIN = 24;
 /** Heavy enough to survive being nine pixels tall, on the stack the app already ships. */
 const crestFont = (px: number) =>
-  `800 ${px}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif`;
+  `900 ${px}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif`;
+/** Tracking between the crest's letters, in ems: wide enough to read as an inscription, not a word. */
+const CREST_TRACK = 0.26;
 /** How long the arrival pulse runs, and how long the crown waits for a ball to reach the line. */
 const GOAL_MS = 1150;
 const GOAL_WAIT_MS = 420;
@@ -657,7 +659,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     rr(g, ox, oy, bw, bh, R);
     g.clip();
 
-    // device-pixel snapping keeps the finish checker crisp at any dpr (no half-pixel seams)
+    // device-pixel snapping keeps the finish bar's hairlines crisp at any dpr (no half-pixel seams)
     const px = (n: number) => Math.round(n * dpr) / dpr;
 
     /* the inner bevel that makes it read as clay: lit along the top edge, shaded into the bottom */
@@ -694,7 +696,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     shade.addColorStop(1, b.bevel[0]);
     g.lineWidth = Math.max(1, c * 0.035);
     g.strokeStyle = shade;
-    for (let r0 = 0; r0 < rows; r0++) {
+    for (let r0 = 1; r0 < rows; r0++) {            // row 0 belongs to the finish bar, not the tiles
       for (let c0 = 0; c0 < cols; c0++) {
         const tx = ox + c0 * c + gap / 2, ty = oy + r0 * c + gap / 2;
         rr(g, tx, ty, tw, tw, tr);
@@ -708,61 +710,56 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       }
     }
 
-    /* ---------- the goal zone: row 0 is sculpted, not stickered ----------
-       Its upper two thirds are one band of dark clay — the apex kerb the board is crowned by — with
-       the FINISH crest struck into it; its lower third is the checkered line itself, laid as beveled
-       tiles. The row is still exactly one cell tall, so none of this costs the board height, and
-       nothing about it is a separate object laid over the grid. */
-    const kh = c * (2 / 3);                        // the crown band; the checker band is the rest
-    const q = c / 3;                               // one checker square, three to a cell
+    /* ---------- the goal zone: row 0 is one sculpted finish bar ----------
+       The whole row is a single seamless band of dark clay — the apex kerb the board is crowned by —
+       with the FINISH crest struck into it. There is no checkered inlay to break the surface up: the
+       bar is one continuous recessed plane from the slab's top edge down to the arrival cells, so
+       the line reads as one object rather than a strip of tiles. The row is still exactly one cell
+       tall, so none of this costs the board height, and nothing about it is a separate object laid
+       over the grid. */
+    const kh = c;                                  // the bar is the whole crown row
+    const gold = resolve(null, b.crest);
+    const core = gold[(gold.length / 2) | 0][1];   // the crest's own metal, shared with its rim
 
-    /* the checkered line, cut into the slab: the band gets a recess of its own to sit in (on a pale
-       arena the tiles underneath are white, and white checks on white tiles are no line at all), and
-       each square is then shaded into its top edge and lit at its foot */
-    g.fillStyle = b.bevel[1];
-    g.fillRect(ox, oy + kh, bw, q);
-    const cg = Math.max(1, c * 0.035), cs = q - cg, cr = Math.min(cs * 0.2, c * 0.08);
-    const cshade = g.createLinearGradient(0, 0, 0, cs);
-    cshade.addColorStop(0, b.bevel[1]);
-    cshade.addColorStop(0.2, clear(b.bevel[1]));
-    cshade.addColorStop(0.74, clear(b.bevel[0]));
-    cshade.addColorStop(1, b.bevel[0]);
-    g.lineWidth = Math.max(1, c * 0.03);
-    for (let i = 0; i < cols * 3; i++) {
-      const tx = ox + i * q + cg / 2, ty = oy + kh + cg / 2;
-      rr(g, px(tx), px(ty), cs, cs, cr);
-      g.fillStyle = i % 2 === 0 ? b.checker[0] : b.checker[1];
-      g.fill();
-      g.save();
-      g.translate(tx, ty);                         // the shared bevel follows the square
-      rr(g, 0, 0, cs, cs, cr);
-      g.strokeStyle = cshade;
-      g.stroke();
-      g.restore();
-    }
-
-    /* the crown: one raised band of dark clay across the top of the slab, lit along its own rim and
-       shaded into the foot that overhangs the checks */
+    /* the bar itself: one recessed band of dark clay, lit along its crown and gathering shade
+       toward its foot */
     const kerb = g.createLinearGradient(0, oy, 0, oy + kh);
     kerb.addColorStop(0, b.kerb[0]);
-    kerb.addColorStop(0.66, b.kerb[1]);
+    kerb.addColorStop(0.55, b.kerb[1]);
     kerb.addColorStop(1, b.kerb[1]);
     g.fillStyle = kerb;
     g.fillRect(ox, oy, bw, kh);
-    /* its top-edge rim light, sitting just inside the ring that trims the whole slab */
-    g.fillStyle = b.bevel[0];
-    g.fillRect(ox, oy + Math.max(1, c * 0.055), bw, Math.max(1, c * 0.028));
-    /* and the shadow the kerb's lip throws down into the recessed line */
-    const cast = g.createLinearGradient(0, oy + kh, 0, oy + kh + q * 0.8);
-    cast.addColorStop(0, 'rgba(0,0,0,.45)');
-    cast.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = cast;
-    g.fillRect(ox, oy + kh, bw, q * 0.8);
 
-    // the line itself, where the kerb's foot meets the field
-    g.strokeStyle = b.rule;
-    g.lineWidth = Math.max(1, c * 0.02);
-    g.beginPath(); g.moveTo(ox, px(oy + c)); g.lineTo(ox + bw, px(oy + c)); g.stroke();
+    /* the warm-gold ambient the title sits in: one soft centred radial, so the middle of the bar
+       carries a quiet glow the crest is struck into */
+    const gx = ox + bw / 2, gy = oy + kh * 0.52;
+    const amb = g.createRadialGradient(gx, gy, 0, gx, gy, Math.max(c * 2.2, bw * 0.3));
+    amb.addColorStop(0, 'rgba(255,208,116,.22)');
+    amb.addColorStop(0.5, 'rgba(255,192,92,.08)');
+    amb.addColorStop(1, 'rgba(255,192,92,0)');
+    g.fillStyle = amb;
+    g.fillRect(ox, oy, bw, kh);
+
+    /* the top metallic rim: a crisp gold highlight riding just inside the ring that trims the slab,
+       fading into the clay so the crown reads lit rather than outlined */
+    const rimH = Math.max(2, c * 0.14);
+    const rim = g.createLinearGradient(0, oy, 0, oy + rimH);
+    rim.addColorStop(0, 'rgba(255,244,206,.85)');
+    rim.addColorStop(0.4, tint(core, 0.55));
+    rim.addColorStop(1, tint(core, 0));
+    g.fillStyle = rim;
+    g.fillRect(ox, oy, bw, rimH);
+
+    /* the foot of the bar, read as a bevel: a dark lip easing it onto the arrival cells, closed by
+       one clean hairline — the border that separates the crown from the board proper */
+    const lip = Math.max(2, c * 0.2);
+    const foot = g.createLinearGradient(0, oy + kh - lip, 0, oy + kh);
+    foot.addColorStop(0, 'rgba(0,0,0,0)');
+    foot.addColorStop(1, 'rgba(0,0,0,.5)');
+    g.fillStyle = foot;
+    g.fillRect(ox, oy + kh - lip, bw, lip);
+    g.fillStyle = b.rule;
+    g.fillRect(ox, px(oy + c) - Math.max(1, c * 0.02), bw, Math.max(1, c * 0.02));
 
     /* the light the goal zone throws down onto the arrival tiles: the emerald wash the arena is
        themed with, and its warm amber partner, both starting below the line so they never wash the
@@ -816,10 +813,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     glowG.length = 0;
     sweep.band = c * 2.4;
     const sg = ctx.createLinearGradient(0, 0, sweep.band, 0);
-    sg.addColorStop(0, `rgba(255,255,255,0)`);
-    sg.addColorStop(0.44, `rgba(255,255,255,${b.sweep})`);
-    sg.addColorStop(0.56, `rgba(255,255,255,${b.sweep})`);
-    sg.addColorStop(1, `rgba(255,255,255,0)`);
+    sg.addColorStop(0, `rgba(255,236,178,0)`);
+    sg.addColorStop(0.44, `rgba(255,236,178,${b.sweep})`);
+    sg.addColorStop(0.56, `rgba(255,236,178,${b.sweep})`);
+    sg.addColorStop(1, `rgba(255,236,178,0)`);
     sweep.grad = sg;
     const br = ballR(c);
     for (let i = 0; i < MAX_TEAMS; i++) {
@@ -864,24 +861,26 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
   /**
    * Strike the crown's inscription at this board's own scale: measure the word once at a known size
-   * and let the crown set the type, never the other way round. Then the metal — a dark drop into the
-   * clay, the gold ramp over it, and two hairlines that fade outward so the word reads as part of
-   * the kerb's own moulding rather than a label dropped onto it.
+   * and let the bar set the type, never the other way round. Then the metal — a crisp dark drop into
+   * the clay, a hair of light along each glyph's crown, and the gold ramp over the two — so the word
+   * reads as an embossed strike rather than a label dropped onto the bar. Two tapered accents flank
+   * it: thick at the word's shoulder, drawn to a point and faded out, so the line stays centred on
+   * the bar without a hard end.
    */
   function buildCrest(bw: number) {
     const { cell: c, ox, oy, dpr } = L;
-    const kh = c * (2 / 3);
+    const kh = c;
     crestArt = null;
     if (c < CREST_MIN) return;
     const m = crestProbe ?? (crestProbe = document.createElement('canvas').getContext('2d')!);
     m.font = crestFont(100);
     let units = 0;                                   // the word's width per 100px of type, tracking in
-    for (const ch of CREST_WORD) units += m.measureText(ch).width + 22;
-    units -= 22;
-    /* the inscription leaves the kerb's own ends bare, so the band still reads as one moulding */
-    const fs = Math.min(kh * 0.44, ((bw - c * 2.6) / units) * 100);
+    for (const ch of CREST_WORD) units += m.measureText(ch).width + CREST_TRACK * 100;
+    units -= CREST_TRACK * 100;
+    /* the inscription leaves the bar's own ends bare, so the band still reads as one moulding */
+    const fs = Math.min(kh * 0.42, ((bw - c * 2.6) / units) * 100);
     if (fs < 6) return;
-    const track = fs * 0.22;
+    const track = fs * CREST_TRACK;
     m.font = crestFont(fs);
     const wds: number[] = [];
     let tw = 0;
@@ -897,22 +896,38 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const mid = H / 2, cx = W / 2;
     const gold = resolve(null, th.board.crest);
     const core = gold[(gold.length / 2) | 0][1];
+    const strike = (dy: number) => {
+      let x = cx - tw / 2;
+      for (let i = 0; i < wds.length; i++) { g.fillText(CREST_WORD[i], x, mid + dy); x += wds[i] + track; }
+    };
     for (const sgn of [-1, 1]) {
       const x0 = cx + sgn * (tw / 2 + gap), x1 = x0 + sgn * rule;
+      const h0 = Math.max(1, fs * 0.075), h1 = Math.max(0.5, fs * 0.02);
       const rl = g.createLinearGradient(x0, 0, x1, 0);
-      rl.addColorStop(0, tint(core, 0.7));
+      rl.addColorStop(0, tint(core, 0.95));
+      rl.addColorStop(0.45, tint(core, 0.55));
       rl.addColorStop(1, tint(core, 0));
       g.fillStyle = rl;
-      g.fillRect(Math.min(x0, x1), mid, rule, Math.max(1, fs * 0.1));
+      g.beginPath();
+      g.moveTo(x0, mid - h0);
+      g.lineTo(x1, mid - h1);
+      g.lineTo(x1, mid + h1);
+      g.lineTo(x0, mid + h0);
+      g.closePath();
+      g.fill();
+      g.beginPath();                                 // the finial that finishes the accent at the word
+      g.arc(x0 + sgn * fs * 0.06, mid, Math.max(0.8, fs * 0.045), 0, TAU);
+      g.fillStyle = tint(core, 0.9);
+      g.fill();
     }
-    let x = cx - tw / 2;
-    g.fillStyle = 'rgba(0,0,0,.6)';                  // the drop the raised metal casts on the clay
-    for (let i = 0; i < wds.length; i++) { g.fillText(CREST_WORD[i], x, mid + fs * 0.1); x += wds[i] + track; }
+    g.fillStyle = 'rgba(0,0,0,.65)';                 // the crisp drop the raised metal casts
+    strike(fs * 0.09);
+    g.fillStyle = 'rgba(255,248,220,.38)';           // a hair of light along each glyph's crown
+    strike(-fs * 0.035);
     const body = g.createLinearGradient(0, mid - fs * 0.52, 0, mid + fs * 0.52);
     for (const [t, col] of gold) body.addColorStop(t, col);
     g.fillStyle = body;
-    x = cx - tw / 2;
-    for (let i = 0; i < wds.length; i++) { g.fillText(CREST_WORD[i], x, mid); x += wds[i] + track; }
+    strike(0);
     crestArt = cv;
     crestGeo.w = W; crestGeo.h = H;
     crestGeo.x = ox + (bw - W) / 2;
@@ -1682,7 +1697,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.restore();
     }
 
-    /* the arrival pulse: one bright pass of light along the checkered line plus a wash over the
+    /* the victory pulse: one golden pass of light along the unified finish bar plus a wash over the
        whole goal zone. Additive, inside the slab, and gone in just over a second — nothing here
        moves a box, so the victory card cannot land on a board that has shifted under it. */
     if (goal > 0) {
@@ -1691,7 +1706,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.clip();
       ctx.beginPath(); ctx.rect(ox, oy, bw, c); ctx.clip();
       ctx.globalCompositeOperation = 'lighter';
-      ctx.fillStyle = `rgba(255,246,224,${(0.18 * goal * goal).toFixed(3)})`;
+      ctx.fillStyle = `rgba(255,222,142,${(0.22 * goal * goal).toFixed(3)})`;
       ctx.fillRect(ox, oy, bw, c);
       if (!still && sweep.grad) {
         ctx.translate(ox - sweep.band + (bw + sweep.band) * (1 - goal * goal), 0);

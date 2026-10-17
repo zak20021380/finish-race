@@ -94,12 +94,11 @@ export interface BoardTheme {
   bevel: [string, string];
   /** border ring: green at FINISH easing into the board's own trim */
   ring: Stop[];
-  /** checkered strip: [lit square, dark square] */
-  checker: [string, string];
   /**
    * The apex kerb the goal zone is crowned by — one sculpted band of dark clay that the FINISH
-   * crest is struck into, rather than a plate laid over the tiles: [lit face, shaded foot].
-   * It is always dark enough for the gold to clear 4.5:1 against it.
+   * crest is struck into, rather than a plate laid over the tiles: [lit face, shaded foot]. It
+   * fills the whole of row 0, so the finish is one seamless bar with no checkered inlay, and it is
+   * always dark enough for the gold to clear 4.5:1 against it.
    */
   kerb: [string, string];
   /** the metallic ramp the crest is struck in: lit at the crown, shaded at the foot */
@@ -289,7 +288,6 @@ export const BOARDS: BoardTheme[] = [
     tile: ['rgba(255,255,255,.055)', 'rgba(255,255,255,.018)'],
     bevel: ['rgba(255,255,255,.18)', 'rgba(4,6,20,.45)'],
     ring: [[0, '#3ad194'], [0.06, '#2fae7c'], [0.16, '#2c6a9a'], [0.34, '#3b4874'], [0.62, '#39436c'], [1, '#414b78']],
-    checker: ['#eafff6', '#17b373'],
     kerb: ['#1b4b3d', '#08201b'], crest: CREST,
     spill: [[0, 'rgba(255,182,84,.17)'], [0.5, 'rgba(255,150,40,.06)'], [1, 'rgba(255,150,40,0)']],
     glow: [[0, 'rgba(56,220,150,.30)'], [0.45, 'rgba(56,220,150,.10)'], [1, 'rgba(56,220,150,0)']],
@@ -302,7 +300,6 @@ export const BOARDS: BoardTheme[] = [
     tile: ['#ffffff', '#f4f3fd'],
     bevel: ['rgba(255,255,255,.9)', 'rgba(112,108,168,.22)'],
     ring: [[0, '#2fa86f'], [0.06, '#48bb8c'], [0.16, '#a9dccc'], [0.34, '#d6d5e8'], [0.62, '#deddef'], [1, '#e6e5f5']],
-    checker: ['#f4fbf7', '#28a06a'],
     kerb: ['#155c3d', '#07281c'], crest: CREST,
     spill: [[0, 'rgba(255,170,70,.15)'], [0.5, 'rgba(255,150,40,.05)'], [1, 'rgba(255,150,40,0)']],
     glow: [[0, 'rgba(47,168,111,.30)'], [0.45, 'rgba(47,168,111,.10)'], [1, 'rgba(47,168,111,0)']],
@@ -315,7 +312,6 @@ export const BOARDS: BoardTheme[] = [
     tile: ['#ffffff', '#f0fbf5'],
     bevel: ['rgba(255,255,255,.9)', 'rgba(70,124,102,.22)'],
     ring: [[0, '#2fbf85'], [0.06, '#57cfa0'], [0.16, '#8fdcc0'], [0.34, '#c4e6d6'], [0.62, '#cfe9de'], [1, '#d7eee3']],
-    checker: ['#ffffff', '#22a06b'],
     kerb: ['#0f5c40', '#052a1e'], crest: CREST,
     spill: [[0, 'rgba(255,178,80,.14)'], [0.5, 'rgba(255,150,40,.05)'], [1, 'rgba(255,150,40,0)']],
     glow: [[0, 'rgba(47,168,111,.26)'], [0.45, 'rgba(47,168,111,.08)'], [1, 'rgba(47,168,111,0)']],
@@ -328,7 +324,6 @@ export const BOARDS: BoardTheme[] = [
     tile: ['rgba(255,255,255,.045)', 'rgba(255,255,255,.012)'],
     bevel: ['rgba(255,255,255,.14)', 'rgba(0,0,0,.55)'],
     ring: [[0, '#43e3a2'], [0.06, '#2fae7c'], [0.16, '#26507f'], [0.34, '#222a52'], [0.62, '#1e2547'], [1, '#242c52']],
-    checker: ['#f4fffa', '#12a869'],
     kerb: ['#0f5f42', '#05231b'], crest: CREST,
     spill: [[0, 'rgba(255,196,96,.18)'], [0.5, 'rgba(255,160,50,.07)'], [1, 'rgba(255,160,50,0)']],
     glow: [[0, 'rgba(67,227,162,.34)'], [0.45, 'rgba(67,227,162,.12)'], [1, 'rgba(67,227,162,0)']],
