@@ -1,25 +1,24 @@
 /**
- * chat.ts — quick chat for a live race: the wheel, the bubbles, the mute/report hold, and the
- * machine's three reactions.
+ * chat.ts — quick chat: the top-bar key, its bottom sheet, and the bubbles over the dock.
  *
- * Two rules shape the whole file. First, the vocabulary is closed: every send comes from
- * `data/phrases.ts`, so there is no input, no parser and nothing a player can type. Second, it is
- * local: a message is a bubble with a timer, a report is a toast, and mute is a boolean that dies
- * with the page. Nothing here opens a socket.
+ * The vocabulary is closed (`data/phrases.ts`): every send is one of twelve taunts or one of eight
+ * emotes, so there is no input, no parser and nothing a player can type. The transport is local —
+ * a message is a bubble with a timer, a report is a toast, mute is a boolean that dies with the
+ * page. Nothing here opens a socket.
  *
- * The game itself is read, never written: `state()` is the same value `main.ts` plays on, and the
- * only events chat knows are the ones the board already publishes — a triggered mine, `lastEvent`
- * from a rolling log, and the wall list growing. Polling the state rather than hooking the turn
- * loop is what keeps `main.ts` to a single wiring call.
+ * The board is read, never written. Bubbles sit in a layer over the board box, but each one is
+ * measured against the canvas before it is placed: the layer's slot directly above a chip is the
+ * first choice, and a slot with no saturated team pixels (a ball) is preferred, walking upward.
+ * That is what keeps a message off a token without the renderer ever knowing chat exists.
  */
 import './chat.css';
 import type { GameState, Player } from './rules';
 import { EMOTES, TAUNTS, type ChatEmote } from './data/phrases';
 
 export interface ChatOptions {
-  /** The 44px key in the dock. */
+  /** The 44px key in the top bar. */
   key: HTMLButtonElement;
-  /** The bubble lane beside it: bubbles live here, so they can never sit on the board. */
+  /** The bubble layer: a DOM overlay over the board, pointer-events none. */
   lane: HTMLElement;
   /** The seat chips, in player order — index === Player. */
   chips: readonly HTMLElement[];
@@ -32,22 +31,19 @@ export interface ChatOptions {
 }
 
 export interface Chat {
-  /** Hides anything open and stops the watcher. */
   destroy(): void;
 }
 
-/** A bubble lives this long, then leaves on its own. */
 const BUBBLE_MS = 2500;
-/** One message every three seconds, whatever the source. */
 const SEND_GAP_MS = 3000;
-/** The machine reacts at most once every eight seconds. */
 const BOT_GAP_MS = 8000;
-/** Long-press on the rival's chip: 400ms, and a slide of 8px cancels it. */
 const HOLD_MS = 400;
 const HOLD_SLOP = 8;
-/** The watcher's tick: fine enough for a 400ms hold, cheap enough to run for a whole race. */
 const POLL_MS = 200;
 const MENU_W = 168;
+/** Vertical gaps above the chip a bubble may try, nearest first. */
+const BUBBLE_GAPS = [8, 30, 52, 74, 96, 118];
+const SAMPLE_STEP = 4;
 
 type Side = 'me' | 'foe';
 
@@ -62,6 +58,8 @@ function el<K extends keyof HTMLElementTagNameMap>(
 
 export function createChat(o: ChatOptions): Chat {
   const root = o.lane.closest<HTMLElement>('.screen') ?? document.body;
+  const found = document.getElementById('board');
+  const canvas = found instanceof HTMLCanvasElement ? found : null;
 
   /* ---------- the bubbles ---------- */
 
@@ -69,7 +67,6 @@ export function createChat(o: ChatOptions): Chat {
     me: el('div', 'chat-bubble is-mine'),
     foe: el('div', 'chat-bubble is-foe'),
   };
-  /** The bubble's text lives in its own span: the face stays free for the tail, the text clamps. */
   const bubbleText: Record<Side, HTMLElement> = {
     me: el('span', 'chat-bubble-t'),
     foe: el('span', 'chat-bubble-t'),
@@ -79,6 +76,75 @@ export function createChat(o: ChatOptions): Chat {
     bubbles[side].hidden = true;
     bubbles[side].appendChild(bubbleText[side]);
     o.lane.appendChild(bubbles[side]);
+  }
+
+  /** How many saturated red/blue pixels (a ball) sit under a page-space rectangle. */
+  function ballUnder(left: number, top: number, w: number, h: number): number {
+    if (!canvas) return 0;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1 || canvas.width < 1 || canvas.height < 1) return 0;
+    const sx = canvas.width / rect.width;
+    const sy = canvas.height / rect.height;
+    const x0 = Math.max(0, Math.floor((left - rect.left) * sx));
+    const y0 = Math.max(0, Math.floor((top - rect.top) * sy));
+    const x1 = Math.min(canvas.width, Math.ceil((left + w - rect.left) * sx));
+    const y1 = Math.min(canvas.height, Math.ceil((top + h - rect.top) * sy));
+    const bw = x1 - x0;
+    const bh = y1 - y0;
+    if (bw < 2 || bh < 2) return 0;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return 0;
+    let data: Uint8ClampedArray;
+    try {
+      data = ctx.getImageData(x0, y0, bw, bh).data;
+    } catch {
+      return 0;                        // a tainted canvas must not break the HUD
+    }
+    let hits = 0;
+    for (let y = 0; y < bh; y += SAMPLE_STEP) {
+      for (let x = 0; x < bw; x += SAMPLE_STEP) {
+        const i = (y * bw + x) * 4;
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const red = r > 120 && r - g > 45 && r - b > 30;
+        const blue = b > 100 && b - r > 45 && b - g > 20;
+        if (red || blue) hits++;
+      }
+    }
+    return hits;
+  }
+
+  /** The first chip that is not yours — the seat a rival bubble belongs over. */
+  function rivalSide(): Player {
+    const local = o.localSide();
+    for (let p = 0; p < o.chips.length; p++) if (p !== local) return p;
+    return local === 0 ? 1 : 0;
+  }
+
+  /**
+   * Put a bubble above a seat: centred on its ball, the nearest clear height first. The bubble's
+   * bottom edge stays at least 8px clear of the chip, so it can never cover the chip itself.
+   */
+  function place(side: Side, seat: Player) {
+    const bubble = bubbles[side];
+    const chip = o.chips[seat];
+    if (!chip) return;
+    const laneBox = o.lane.getBoundingClientRect();
+    const chipBox = chip.getBoundingClientRect();
+    const w = bubble.offsetWidth || 120;
+    const h = bubble.offsetHeight || 32;
+    const anchor = chipBox.left + Math.min(30, chipBox.width / 2);
+    const left = Math.min(Math.max(anchor - w / 2, laneBox.left + 4), laneBox.right - w - 4);
+    let top = chipBox.top - BUBBLE_GAPS[0] - h;
+    for (const gap of BUBBLE_GAPS) {
+      const candidate = chipBox.top - gap - h;
+      if (candidate < laneBox.top + 4) break;
+      if (ballUnder(left, candidate, w, h) === 0) { top = candidate; break; }
+    }
+    const clampedTop = Math.max(top, laneBox.top + 4);
+    bubble.style.left = `${left - laneBox.left}px`;
+    bubble.style.top = `${clampedTop - laneBox.top}px`;
   }
 
   function hideBubble(side: Side) {
@@ -96,8 +162,9 @@ export function createChat(o: ChatOptions): Chat {
     const node = bubbles[side];
     node.classList.toggle('is-emote', emote);
     bubbleText[side].replaceChildren(content);
-    node.hidden = false;
-    void node.offsetWidth;               // the swap starts from the rail, not from mid-air
+    node.hidden = false;                 // measurable before it is placed
+    place(side, side === 'me' ? o.localSide() : rivalSide());
+    void node.offsetWidth;
     node.classList.add('show');
     window.clearTimeout(bubbleTimers[side]);
     bubbleTimers[side] = window.setTimeout(() => hideBubble(side), BUBBLE_MS);
@@ -109,35 +176,34 @@ export function createChat(o: ChatOptions): Chat {
     return box;
   }
 
-  /* ---------- the wheel (built from the closed vocabulary) ---------- */
+  /* ---------- the sheet (built from the closed vocabulary) ---------- */
 
   const scrim = el('div', 'chat-scrim');
   scrim.hidden = true;
-  scrim.addEventListener('click', () => { closeWheel(false); closeMenu(); });
+  scrim.addEventListener('click', () => { closeSheet(false); closeMenu(); });
 
-  const wheel = el('section', 'chat-wheel');
-  wheel.hidden = true;
-  wheel.tabIndex = -1;
-  wheel.setAttribute('role', 'dialog');
-  wheel.setAttribute('aria-modal', 'true');
-  wheel.setAttribute('aria-label', 'Quick chat');
+  const sheet = el('section', 'chat-sheet');
+  sheet.hidden = true;
+  sheet.tabIndex = -1;
+  sheet.setAttribute('role', 'dialog');
+  sheet.setAttribute('aria-modal', 'true');
+  sheet.setAttribute('aria-label', 'Quick chat');
 
-  const head = el('div', 'chat-wheel-head');
-  const title = el('p', 'chat-wheel-t', 'Quick chat');
-  const cool = el('span', 'chat-cool', 'Ready');
-  const closeKey = el('button', 'chat-wheel-x');
+  const head = el('div', 'chat-sheet-head');
+  const title = el('p', 'chat-sheet-t', 'Quick chat');
+  const closeKey = el('button', 'chat-sheet-x');
   closeKey.type = 'button';
   closeKey.setAttribute('aria-label', 'Close quick chat');
   closeKey.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>';
-  closeKey.addEventListener('click', () => closeWheel());
-  head.append(title, cool, closeKey);
+  closeKey.addEventListener('click', () => closeSheet());
+  head.append(title, closeKey);
 
+  const body = el('div', 'chat-body');
   const emoteRow = el('div', 'chat-emotes');
   emoteRow.setAttribute('role', 'group');
   emoteRow.setAttribute('aria-label', 'Emotes');
-  const phraseGrid = el('div', 'chat-phrases');
-  phraseGrid.setAttribute('data-scroll', '');        // the page never scrolls; this list may
-  const options: HTMLButtonElement[] = [];
+  const phraseList = el('div', 'chat-phrases');
+  phraseList.setAttribute('data-scroll', '');        // the page never scrolls; this list may
 
   for (const emote of EMOTES) {
     const b = el('button', 'chat-emote-btn');
@@ -146,19 +212,23 @@ export function createChat(o: ChatOptions): Chat {
     b.title = emote.label;
     b.innerHTML = emote.svg;
     b.addEventListener('click', () => sendEmote(emote));
-    options.push(b);
     emoteRow.appendChild(b);
   }
   for (const text of TAUNTS) {
     const b = el('button', 'chat-phrase', text);
     b.type = 'button';
     b.addEventListener('click', () => sendText(text));
-    options.push(b);
-    phraseGrid.appendChild(b);
+    phraseList.appendChild(b);
   }
+  body.append(emoteRow, phraseList);
 
-  wheel.append(head, emoteRow, phraseGrid);
-  root.append(scrim, wheel);
+  const wait = el('div', 'chat-wait');
+  const waitN = el('b', 'chat-wait-n', '0');
+  const waitL = el('span', 'chat-wait-l', 'One message every 3 seconds');
+  wait.append(waitN, waitL);
+
+  sheet.append(head, body, wait);
+  root.append(scrim, sheet);
 
   /* ---------- the report hold's menu ---------- */
 
@@ -191,14 +261,13 @@ export function createChat(o: ChatOptions): Chat {
 
   /* ---------- session state ---------- */
 
-  let openPanel = false;
+  let sheetOpen = false;
   let menuOpen = false;
   let muted = false;
   let lastSentAt = 0;
   let lastBotAt = 0;
   let prevState: GameState | null = null;
   let keyOff: boolean | null = null;
-  let coolText = '';
   let cooling = false;
 
   const canChat = (): boolean => o.live() && !o.busy();
@@ -210,7 +279,7 @@ export function createChat(o: ChatOptions): Chat {
     if (!canChat() || isCooling()) return;
     lastSentAt = Date.now();
     setBubble('me', document.createTextNode(text));
-    closeWheel(false);
+    closeSheet(false);
     paintCool();
   }
 
@@ -218,11 +287,11 @@ export function createChat(o: ChatOptions): Chat {
     if (!canChat() || isCooling()) return;
     lastSentAt = Date.now();
     setBubble('me', emoteNode(emote), true);
-    closeWheel(false);
+    closeSheet(false);
     paintCool();
   }
 
-  /** The machine's side of the conversation — one line, eight seconds apart, silence while muted. */
+  /** The machine's side — one line, eight seconds apart, silence while muted. */
   function botSay(line: string, now: number) {
     if (muted || !o.live()) return;
     if (now - lastBotAt < BOT_GAP_MS) return;
@@ -231,7 +300,7 @@ export function createChat(o: ChatOptions): Chat {
   }
 
   /* The two fixed replies are looked up in the taunt list instead of being retyped here, so the
-     bot can only ever say a phrase the wheel already offers. */
+     bot can only ever say a phrase the sheet already offers. */
   const MINE_REPLY = TAUNTS.find((t) => t === 'Oops, my bad.') ?? null;
   const LOG_REPLY = TAUNTS.find((t) => t === 'Tick tock.') ?? null;
 
@@ -240,10 +309,7 @@ export function createChat(o: ChatOptions): Chat {
     botSay(line, now);
   }
 
-  /**
-   * What the board did since the last tick. All three events are public information the HUD
-   * already turns into speech and notes, so chat reads the same numbers and never the fog.
-   */
+  /** What the board did since the last tick. */
   function scan(s: GameState) {
     const prev = prevState;
     prevState = s;
@@ -261,7 +327,7 @@ export function createChat(o: ChatOptions): Chat {
       }
     }
 
-    /* a log: `lastEvent` is a fresh object per roll, exactly like the note's play-once flag */
+    /* a log: `lastEvent` is a fresh object per roll */
     const log = s.lastEvent;
     if (log && log !== prev.lastEvent && log.type === 'log') {
       const shoved = log.moves.some((m) => s.balls.some((b) => b.id === m.ballId && b.team === local));
@@ -275,20 +341,16 @@ export function createChat(o: ChatOptions): Chat {
     }
   }
 
-  /* ---------- the wheel's open/close and cooldown ---------- */
+  /* ---------- the sheet's open/close and cooldown ---------- */
 
   function paintCool() {
     const left = Math.max(0, lastSentAt + SEND_GAP_MS - Date.now());
-    const text = left > 0 ? `Wait ${Math.ceil(left / 1000)}s` : 'Ready';
-    if (text !== coolText) {
-      coolText = text;
-      cool.textContent = text;
-      cool.dataset.state = left > 0 ? 'wait' : 'ready';
-    }
     const next = left > 0;
+    const secs = String(Math.ceil(left / 1000));
+    if (waitN.textContent !== secs) waitN.textContent = secs;
     if (next !== cooling) {
       cooling = next;
-      for (const b of options) b.disabled = cooling;
+      sheet.classList.toggle('cooling', cooling);
     }
   }
 
@@ -297,38 +359,39 @@ export function createChat(o: ChatOptions): Chat {
   }
 
   function openWheel() {
-    if (openPanel || !canChat()) return;
-    openPanel = true;
+    if (sheetOpen || !canChat()) return;
+    sheetOpen = true;
     closeMenu();
     paintCool();
-    wheel.hidden = false;
+    sheet.hidden = false;
     scrim.hidden = false;
+    void sheet.offsetWidth;              // settle the closed state before sliding up
+    sheet.classList.add('open');
     scrim.classList.add('open');
     o.key.setAttribute('aria-expanded', 'true');
-    requestAnimationFrame(() => { wheel.classList.add('open'); });
-    wheel.focus({ preventScroll: true });
+    sheet.focus({ preventScroll: true });
   }
 
-  function closeWheel(restore = true) {
-    if (!openPanel) return;
-    openPanel = false;
-    wheel.classList.remove('open');
+  function closeSheet(restore = true) {
+    if (!sheetOpen) return;
+    sheetOpen = false;
+    sheet.classList.remove('open');
     o.key.setAttribute('aria-expanded', 'false');
-    window.setTimeout(() => { if (!openPanel) wheel.hidden = true; }, 180);
+    window.setTimeout(() => { if (!sheetOpen) sheet.hidden = true; }, 210);
     maybeHideScrim();
     if (restore) o.key.focus({ preventScroll: true });
   }
 
   function maybeHideScrim() {
-    if (openPanel || menuOpen) return;
+    if (sheetOpen || menuOpen) return;
     scrim.classList.remove('open');
     window.setTimeout(() => {
-      if (!openPanel && !menuOpen) scrim.hidden = true;
+      if (!sheetOpen && !menuOpen) scrim.hidden = true;
     }, 180);
   }
 
   function openMenu(chip: HTMLElement) {
-    closeWheel(false);
+    closeSheet(false);
     menuOpen = true;
     paintMenu();
     menu.hidden = false;
@@ -361,12 +424,12 @@ export function createChat(o: ChatOptions): Chat {
   });
 
   o.key.setAttribute('aria-expanded', 'false');
-  o.key.addEventListener('click', () => { if (openPanel) closeWheel(); else openWheel(); });
+  o.key.addEventListener('click', () => { if (sheetOpen) closeSheet(); else openWheel(); });
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (menuOpen) { closeMenu(); return; }
-    if (openPanel) closeWheel();
+    if (sheetOpen) closeSheet();
   });
 
   /* ---------- long-press: 400ms on the rival's chip ---------- */
@@ -413,7 +476,7 @@ export function createChat(o: ChatOptions): Chat {
     scan(o.state());
     syncKey();
     paintCool();
-    if (openPanel && !canChat()) closeWheel(false);
+    if (sheetOpen && !canChat()) closeSheet(false);
   }
 
   syncKey();
@@ -427,7 +490,7 @@ export function createChat(o: ChatOptions): Chat {
       window.clearTimeout(bubbleTimers.foe);
       window.clearTimeout(toastTimer);
       scrim.hidden = true;
-      wheel.hidden = true;
+      sheet.hidden = true;
       menu.hidden = true;
       toast.hidden = true;
     },

@@ -59,34 +59,6 @@
 .stud.bl { bottom: -5px; left: -5px; }
 .stud.br { bottom: -5px; right: -5px; }
 
-/* ---- one caption line under each chip ----
-   A duel only: the captions speak the two team colours, and party modes field seats with names
-   these two lines cannot honestly describe. 12px / 500 as specified; both inks clear 4.5:1 on
-   the dock's clay. */
-.seat-caps {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: 1.35fr 1fr;
-  gap: 6px;
-  margin-top: 2px;
-  padding: 0 2px;
-}
-.seat-cap {
-  min-width: 0;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 16px;
-  letter-spacing: .01em;
-  color: var(--ink-soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.seat-cap.cap-0 { color: var(--red-ink); }
-.seat-cap.cap-1 { color: var(--blue-ink); }
-.chips[data-players='3'] .seat-caps,
-.chips[data-players='4'] .seat-caps { display: none; }
-
 /* ---- event callouts: one short beat over the board, never in front of a fingertip ---- */
 .callouts {
   position: absolute;

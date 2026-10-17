@@ -13438,3 +13438,92 @@ html.reduced-motion .adm-mode-seg { transition: none; }
 @media (max-height: 600px) {
   .car-card.mind-ladder { gap: 4px; padding-top: 8px; }
 }
+
+/* ============================================================================================
+   RACE DOCK, SECOND PASS — one clean row: YOUR chip | the mine key | BOT chip.
+
+   The chat key no longer floats in the dock (it lives in the top bar), so the dock is a single
+   64px row: two equal chips around a fixed 64px mine key, all on the same 8px rhythm. The board
+   slab already reaches 7px past the board's box, so a 5px margin is the 12px the slab asks for.
+   Horizontal space is the scarce axis at 360px: the chips are `flex: 1 1 0`, the key is
+   `flex: none`, and every text line ellipsizes rather than pushing a neighbour.
+
+   The bottom safe area is already paid by the app shell (`--pad-b: max(--s3, env(...))`), which is
+   what keeps this row off the home indicator; paying it again here would lift the dock twice.
+   ============================================================================================ */
+.chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 64px;
+  margin-top: 5px;                    /* 5 + the slab's 7px overhang = 12px below the frame */
+  padding-top: 0;
+  row-gap: 0;
+}
+.chip {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  height: 64px;
+  gap: 6px;
+  padding: 0 8px;
+  border-radius: 18px;
+}
+.chip-row { gap: 6px; }
+/* the 40px team ball: the board's own token, doubling as the seat avatar */
+.chip-ball { width: 40px; height: 40px; }
+.chip .ball { inset: 2px; width: 36px; height: 36px; }
+.chip .timer { width: 40px; height: 40px; }
+.chip .timer-n { font-size: 14px; }
+.chip-txt { gap: 5px; }
+.who-line { gap: 5px; }
+.chip .who {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* a 64px row holds the name and the ammo pill; the XP tag stays in the DOM for the ladder but
+   does not compete for the row's last pixels */
+.chip .xp { display: none; }
+.chip .walls {
+  width: fit-content;
+  max-width: 100%;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.chip .walls .wall-w { display: none; }
+.chip .walls .wall-glyph { width: 9px; height: 5px; }
+/* the mine key: its own slot, never squeezed by a chip */
+.mine-btn {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+}
+
+/* three and four seats keep the 2-up party grid; the mine key rides the dock's right column */
+.chips[data-players="3"],
+.chips[data-players="4"] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: auto;
+  padding-right: 72px;
+}
+.chips[data-players="3"] .mine-btn,
+.chips[data-players="4"] .mine-btn {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  margin-top: -32px;
+  width: 64px;
+  height: 64px;
+}

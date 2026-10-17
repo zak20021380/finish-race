@@ -1,55 +1,33 @@
-/* chat.css — quick chat, drawn in the same dark clay as the dock it lives in.
-   Nothing here changes the board: the key is one more 44px key in the dock, and the bubbles live
-   in the lane beside it, so a message can never sit over the grid or over a ball. */
+/* chat.css — quick chat: the top-bar key, its bottom sheet, and the bubbles over the dock.
+   Nothing here changes the board: bubbles are DOM pills placed above a chip, and the sheet is a
+   modal that closes the moment a phrase is sent. */
 
-/* ---- the dock's chat rail ----
-   A full-width row above the two chips. It costs the board ~44px of height on the shortest phone,
-   which is the price of a real 44px target that does not squeeze a chip's name or ammo strip:
-   the two seat cards already spend every pixel of the dock's width. */
-.chat-dock {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 44px;
-  min-width: 0;
-}
-
-/* the key itself: .icon-btn's 44px clay key, warmed to the honey accent */
-.chat-key {
-  --d: 2px;
-  width: 44px;
-  height: 44px;
-  border-radius: 15px;
-  color: var(--honey-ink);
-}
-.chat-key .ico { width: 21px; height: 21px; }
-.chat-key[disabled] { opacity: .4; filter: saturate(.4); cursor: default; }
-
-/* the lane: fixed 44px so a bubble never grows the dock, and never reaches the board */
+/* ---- the bubble layer ----
+   Sits over the board box but reaches past it: a bubble is anchored above its sender's chip, so it
+   can hang in the gap under the board. chat.ts samples the canvas before choosing the height, so a
+   bubble never sits on a ball; the layer itself never takes a tap. */
 .chat-lane {
-  position: relative;
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 44px;
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
 }
 
-/* ---- a sent message: a clay bubble with a tail pointing down at its seat ---- */
+/* ---- one message: a short clay bubble, tail down toward the seat ---- */
 .chat-bubble {
   position: absolute;
-  top: 0;
-  max-width: 47%;
-  min-height: 32px;
-  max-height: 39px;
-  padding: 6px 9px;
+  max-width: 148px;
+  min-height: 30px;
+  max-height: 44px;
+  padding: 6px 10px;
   display: flex;
   align-items: center;
   border-radius: 14px;
   background: var(--clay-face);
   color: var(--ink);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  line-height: 1.18;
+  line-height: 1.2;
   letter-spacing: .005em;
   box-shadow:
     0 2px 0 #080C14,
@@ -60,45 +38,41 @@
   transition: opacity .16s ease, transform .16s ease;
   pointer-events: none;
 }
-.chat-bubble.is-mine { left: 0; border-bottom-left-radius: 5px; }
-.chat-bubble.is-foe { right: 0; border-bottom-right-radius: 5px; }
 .chat-bubble.show { opacity: 1; transform: none; }
 .chat-bubble::after {
   content: '';
   position: absolute;
+  left: 50%;
   bottom: -5px;
+  margin-left: -5px;
   width: 0;
   height: 0;
   border-left: 5px solid transparent;
   border-right: 5px solid transparent;
   border-top: 6px solid #1C2433;
 }
-.chat-bubble.is-mine::after { left: 26px; }
-.chat-bubble.is-foe::after { right: 26px; }
-
-/* the text is what clamps, so the tail may hang outside the face */
+/* the text is what clamps; the tail may hang outside the face */
 .chat-bubble-t {
   min-width: 0;
-  max-height: 27px;
+  max-height: 32px;
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
-
-/* an emote is a square clay tile, no text */
+/* an emote is a square tile, no text */
 .chat-bubble.is-emote {
-  width: 38px;
-  min-height: 38px;
+  width: 44px;
+  min-height: 44px;
   padding: 0;
   display: grid;
   place-items: center;
-  border-radius: 13px;
+  border-radius: 14px;
 }
 .chat-bubble.is-emote .chat-bubble-t { display: grid; place-items: center; max-height: none; }
-.chat-emote svg { width: 26px; height: 26px; display: block; }
+.chat-emote svg { width: 28px; height: 28px; display: block; }
 
-/* ---- the wheel: emotes on top, the twelve phrases two-up below ---- */
+/* ---- the scrim and the bottom sheet ---- */
 .chat-scrim {
   position: absolute;
   inset: 0;
@@ -110,118 +84,128 @@
 }
 .chat-scrim.open { opacity: 1; }
 
-.chat-wheel {
+.chat-sheet {
   position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 8px;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 15;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px;
-  border-radius: 22px;
+  max-height: 86%;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-radius: 24px 24px 0 0;
   background: var(--clay-face);
-  box-shadow: 0 -2px 0 #080C14, var(--clay), var(--clay-ring);
+  box-shadow: 0 -3px 0 #080C14, var(--clay), var(--clay-ring);
   opacity: 0;
-  transform: translateY(14px) scale(.995);
-  transition: transform .18s cubic-bezier(.22, .61, .36, 1), opacity .18s ease;
+  transform: translateY(24px);
+  transition: transform .2s cubic-bezier(.22, .61, .36, 1), opacity .2s ease;
 }
-.chat-wheel.open { opacity: 1; transform: none; }
-.chat-wheel:focus { outline: none; }
+.chat-sheet.open { opacity: 1; transform: none; }
+/* the top-bar key is inert during a log roll or while a mine is armed */
+#chat-btn[disabled] { opacity: .4; filter: saturate(.4); cursor: default; }
+.chat-sheet:focus { outline: none; }
 
-.chat-wheel-head { display: flex; align-items: center; gap: 8px; min-height: 36px; }
-.chat-wheel-t {
+.chat-sheet-head { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.chat-sheet-t {
   flex: 1 1 auto;
   min-width: 0;
   margin: 0;
   color: var(--ink);
-  font-size: var(--t-2);
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: .01em;
 }
-.chat-cool {
-  flex: none;
-  color: var(--ink-soft);
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.chat-cool[data-state='wait'] { color: var(--honey-ink); }
-.chat-wheel-x {
+.chat-sheet-x {
   flex: none;
   appearance: none;
   border: 0;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   padding: 0;
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--field);
   color: var(--ink-soft);
   cursor: pointer;
   box-shadow: inset 0 0 0 1px var(--hair), var(--inset);
 }
-.chat-wheel-x .ico { width: 16px; height: 16px; }
-.chat-wheel-x:active { transform: translateY(1px); }
-.chat-wheel-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.chat-sheet-x .ico { width: 18px; height: 18px; }
+.chat-sheet-x:active { transform: translateY(1px); }
+.chat-sheet-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
-/* eight emotes, one row, never wrapped: 8 x ~37px inside a 360px phone */
-.chat-emotes {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 4px;
+.chat-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
 }
+
+/* eight emotes on one row. 44px targets need a swipe on a 360px phone, so the row scrolls
+   horizontally and snaps; all eight are there, the last one a short flick away. */
+.chat-emotes {
+  display: flex;
+  gap: 6px;
+  padding: 2px 2px 4px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  overscroll-behavior: contain;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.chat-emotes::-webkit-scrollbar { display: none; }
 .chat-emote-btn {
+  flex: none;
   appearance: none;
   border: 0;
-  min-width: 0;
-  aspect-ratio: 1;
+  width: 44px;
+  height: 44px;
   padding: 0;
   display: grid;
   place-items: center;
-  border-radius: 12px;
+  border-radius: 14px;
   color: var(--honey-ink);
   background: var(--solid-a);
   cursor: pointer;
+  scroll-snap-align: start;
   box-shadow:
     0 2px 0 #0B111D,
     inset 0 0 0 1px var(--hair),
     inset 0 1px 0 rgba(255, 255, 255, .06);
   transition: transform var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
 }
-.chat-emote-btn svg { width: 78%; height: 78%; display: block; }
+.chat-emote-btn svg { width: 26px; height: 26px; display: block; }
 .chat-emote-btn:active { transform: translateY(2px); }
 .chat-emote-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
-/* the twelve taunts, two columns and exactly the sheet's own row height */
+/* the twelve taunts as one column of 48px rows */
 .chat-phrases {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 5px;
-  max-height: 46vh;
-  padding-bottom: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
+  padding-bottom: 2px;
 }
 .chat-phrase {
+  flex: none;
   appearance: none;
   border: 0;
-  min-height: 40px;
-  padding: 7px 9px;
+  min-height: 48px;
+  padding: 8px 12px;
   text-align: left;
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--solid-a);
   color: var(--ink);
   font-family: inherit;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 1.2;
   cursor: pointer;
   box-shadow:
@@ -232,8 +216,38 @@
 }
 .chat-phrase:active { transform: translateY(2px); }
 .chat-phrase:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 1px; }
-.chat-emote-btn[disabled],
-.chat-phrase[disabled] { opacity: .38; cursor: default; }
+
+/* cooling down: the list is replaced by the remaining seconds */
+.chat-wait {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 180px;
+  padding: 24px 12px;
+  border-radius: 18px;
+  background: var(--field);
+  box-shadow: var(--inset);
+  text-align: center;
+}
+.chat-wait-n {
+  font-size: 44px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--honey-ink);
+  font-variant-numeric: tabular-nums;
+  animation: chat-wait-pulse 1s ease-in-out infinite;
+}
+.chat-wait-l {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  color: var(--ink-soft);
+}
+.chat-sheet.cooling .chat-body { display: none; }
+.chat-sheet.cooling .chat-wait { display: flex; }
+@keyframes chat-wait-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
 
 /* ---- long-press menu on the rival's chip ---- */
 .chat-menu {
@@ -251,7 +265,7 @@
 .chat-menu-b {
   appearance: none;
   border: 0;
-  height: 40px;
+  height: 44px;
   padding: 0 12px;
   text-align: left;
   border-radius: 11px;
@@ -266,11 +280,11 @@
 .chat-menu-b:active { background: rgba(255, 255, 255, .07); }
 .chat-menu-b:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -2px; }
 
-/* a stub, and it says so with the app's own toast weight at the top of the race screen */
+/* a stub, and it says so with the app's own clay pill at the top of the race screen */
 .chat-toast {
   position: absolute;
   z-index: 18;
-  top: 8px;
+  top: 52px;                            /* under the 44px top bar, never over its keys */
   left: 50%;
   transform: translateX(-50%);
   margin: 0;
@@ -289,28 +303,19 @@
   from { opacity: 0; transform: translate(-50%, -4px); }
 }
 
-/* the hold must not start a text selection or the platform's callout. No row gap: the chat rail
-   is part of the dock, not a second panel stacked under the board, so it welds to the chip row. */
+/* the hold must not start a text selection or the platform's callout */
 .chips {
-  row-gap: 0;
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
 }
 
-/* three and four seats lift the bomb out of the card into the dock's own right column; the rail
-   above pushes the dock taller, so the key is re-anchored to the chip block rather than the dock */
-.chips[data-players='3'] .mine-btn,
-.chips[data-players='4'] .mine-btn {
-  top: auto;
-  bottom: 30px;
-  margin-top: 0;
-}
-
-html.reduced-motion .chat-wheel,
+html.reduced-motion .chat-sheet,
 html.reduced-motion .chat-bubble,
 html.reduced-motion .chat-scrim,
-html.reduced-motion .chat-toast {
-  transition: none;
-  animation: none;
+html.reduced-motion .chat-toast { transition: none; animation: none; }
+html.reduced-motion .chat-wait-n { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .chat-sheet, .chat-bubble, .chat-scrim, .chat-toast { transition: none; animation: none; }
+  .chat-wait-n { animation: none; }
 }
