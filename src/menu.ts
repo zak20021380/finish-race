@@ -12,9 +12,9 @@ import {
   menuState, saveMenu, settings, setSetting, onSettings, type LangCode, type Settings,
 } from './settings';
 import {
-  AGE_MAX, AGE_MIN, claimIdentityReward, claimReferralRewards, createTeam, favouriteMode,
-  IDENTITY_REWARD, joinTeam, KINDS, leaveTeam, levelInfo, myTeam, onChange, profile,
-  REFERRAL_REWARD, setAge, setBadge, setCountry, setFrame, theme,
+  ageLocked, claimIdentityReward, claimReferralRewards, createTeam, daysInMonth, DOB_MIN_YEAR,
+  dobMaxYear, dobValue, favouriteMode, IDENTITY_REWARD, joinTeam, KINDS, leaveTeam, levelInfo,
+  myTeam, onChange, profile, REFERRAL_REWARD, setBadge, setCountry, setDob, setFrame, theme, validDob,
 } from './storage';
 import { BADGES, badgeProgress, equippedBadge, isBadgeUnlocked, unlockedCount } from './badges';
 import { MAX_BALLS, newGame } from './rules';
@@ -181,42 +181,197 @@ export function createMenu(api: MenuApi): Menu {
     }, 2300);
   }
 
-  /* ---------- age: optional stepper drawer, claimed once like country ---------- */
+  /* ---------- birthdate: three numeric wells, auto-advancing, locked for good on confirm ---------- */
   const ageSheet = api.sheet('sheet-age');
-  let ageDraft = profile.age ?? 18;
-  const paintAgeDraft = () => {
-    $('age-n').textContent = String(ageDraft);
-    ($('age-minus') as HTMLButtonElement).disabled = ageDraft <= AGE_MIN;
-    ($('age-plus') as HTMLButtonElement).disabled = ageDraft >= AGE_MAX;
-    const hint = $<HTMLElement>('age-hint');
-    if (profile.rewards.age) { hint.hidden = true; return; }
-    hint.hidden = false;
-    hint.textContent = `Save to claim +${IDENTITY_REWARD} coins · ${AGE_MIN}–${AGE_MAX}, optional`;
-  };
+  const dayIn = $<HTMLInputElement>('dob-day');
+  const monthIn = $<HTMLInputElement>('dob-month');
+  const yearIn = $<HTMLInputElement>('dob-year');
+  const dobFields = [dayIn, monthIn, yearIn];
+  const ageSave = $<HTMLButtonElement>('age-save');
+  const ageConfirm = $<HTMLElement>('dob-confirm');
+  const dobLead = $<HTMLElement>('dob-lead');
+  const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  const dobErr = $<HTMLElement>('dob-err');
+  const dobErrT = $<HTMLElement>('dob-err-t');
+  /** Wells that hold a committed verdict: a full-length value, or one the fingers have left. */
+  const dobChecked = new Set<HTMLInputElement>();
+  let dobBad = new Set<HTMLInputElement>();
+  let dobErrMsg = '';
+  let dobErrTimer = 0;
+  let dobLit = false;
+
+  /** The draft only stands when the save layer would accept it: calendar day, year window, age window. */
+  function dobDraft(): { y: number; m: number; d: number } | null {
+    if (!dayIn.value || !monthIn.value || !yearIn.value) return null;
+    const d = Number(dayIn.value); const m = Number(monthIn.value); const y = Number(yearIn.value);
+    if (!Number.isFinite(d) || !Number.isFinite(m) || !Number.isFinite(y)) return null;
+    return validDob(y, m, d) ? { y, m, d } : null;
+  }
+
+  /** One well's verdict on the digits it currently holds, or null when they read fine. */
+  function fieldIssue(el: HTMLInputElement): string | null {
+    const v = el.value;
+    if (!v) return null;
+    const n = Number(v);
+    if (el === yearIn) {
+      return n < DOB_MIN_YEAR || n > dobMaxYear()
+        ? `Year must be between ${DOB_MIN_YEAR} and ${dobMaxYear()}` : null;
+    }
+    if (el === monthIn) return n < 1 || n > 12 ? 'Month must be between 01 and 12' : null;
+    if (n < 1 || n > 31) return 'Day must be between 1 and 31';
+    const m = Number(monthIn.value);
+    if (m >= 1 && m <= 12) {
+      const max = daysInMonth(Number(yearIn.value) || 2000, m);
+      if (n > max) return `${MONTH_NAMES[m - 1]} has up to ${max} days`;
+    }
+    return null;
+  }
+
+  /** The chip: one line of what is wrong, faded in on the first bad verdict and out on the fix. */
+  function paintDobErr(msg: string) {
+    if (msg === dobErrMsg) return;
+    dobErrMsg = msg;
+    window.clearTimeout(dobErrTimer);
+    if (msg) {
+      dobErrT.textContent = msg;
+      dobErr.hidden = false;
+      dobErr.classList.remove('out');
+      void dobErr.offsetWidth;
+      dobErr.classList.add('on');
+    } else {
+      dobErr.classList.remove('on');
+      dobErr.classList.add('out');
+      dobErrTimer = window.setTimeout(() => { dobErr.hidden = true; dobErr.classList.remove('out'); }, 200);
+    }
+  }
+
+  function paintDob() {
+    const issues = new Map<HTMLInputElement, string>();
+    for (const el of dobFields) {
+      const msg = dobChecked.has(el) ? fieldIssue(el) : null;
+      if (msg) issues.set(el, msg);
+    }
+    for (const el of dobFields) {
+      const bad = issues.has(el);
+      el.classList.toggle('is-invalid', bad);
+      el.setAttribute('aria-invalid', bad ? 'true' : 'false');
+    }
+    /* one error buzz per fresh verdict, never on a repaint of the same one */
+    if ([...issues.keys()].some((el) => !dobBad.has(el))) notify('error');
+    dobBad = new Set(issues.keys());
+    paintDobErr(issues.get(dayIn) ?? issues.get(monthIn) ?? issues.get(yearIn) ?? '');
+    const valid = dobDraft() !== null;
+    ageSave.disabled = !valid;
+    ageSave.textContent = 'Confirm Birthdate';
+    dobLead.innerHTML = profile.rewards.age
+      ? 'Set your date of birth to complete your profile. This is a permanent, one-time entry.'
+      : `Set it once to complete your profile and claim <b>+${IDENTITY_REWARD} coins</b>.`;
+    if (valid && !dobLit) {
+      ageSave.classList.remove('lit');
+      void ageSave.offsetWidth;         // replay the warm-up from the first frame
+      ageSave.classList.add('lit');
+    } else if (!valid) {
+      ageSave.classList.remove('lit');
+    }
+    dobLit = valid;
+  }
+
+  /** Digits only, and only digits that fit: anything else never reaches the well. */
+  function onDobKeydown(e: KeyboardEvent) {
+    const el = e.currentTarget as HTMLInputElement;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.key === 'Tab' || e.key === 'Enter') return;
+    if (e.key === 'Backspace') {
+      if (el.value === '') {
+        const i = dobFields.indexOf(el);
+        if (i > 0) { e.preventDefault(); dobFields[i - 1].focus({ preventScroll: true }); }
+      }
+      return;
+    }
+    if (e.key.length === 1 && !/[0-9]/.test(e.key)) e.preventDefault();
+  }
+
+  /** A finished value earns its verdict: a good one walks the focus onward, a bad one stays put and shakes. */
+  function onDobInput(e: Event) {
+    const el = e.currentTarget as HTMLInputElement;
+    const cap = el.maxLength > 0 ? el.maxLength : 4;
+    const clean = el.value.replace(/\D+/g, '').slice(0, cap);
+    if (clean !== el.value) el.value = clean;
+    if (clean.length >= cap) {
+      dobChecked.add(el);
+      if (!fieldIssue(el)) {
+        const i = dobFields.indexOf(el);
+        if (i < dobFields.length - 1) dobFields[i + 1].focus({ preventScroll: true });
+      }
+    } else {
+      dobChecked.delete(el);            // mid-edit: withdraw the old verdict, keep the digits
+    }
+    paintDob();
+  }
+
+  /** Leaving a well pads a lone digit and locks in its verdict — nothing is ever wiped. */
+  function onDobBlur(e: FocusEvent) {
+    const el = e.currentTarget as HTMLInputElement;
+    if ((el === dayIn || el === monthIn) && el.value.length === 1) el.value = pad2(Number(el.value));
+    dobChecked.add(el);
+    paintDob();
+  }
 
   function openAge() {
     if (!ageSheet) return;
-    ageDraft = profile.age ?? 18;
-    ageDraft = Math.max(AGE_MIN, Math.min(AGE_MAX, ageDraft));
-    paintAgeDraft();
+    if (ageLocked()) {
+      /* the locked row no longer reacts; this guard is the belt to its braces */
+      notify('warning');
+      showPfToast('🔒 Birthdate is locked');
+      return;
+    }
+    const dob = dobValue();
+    const legacy = profile.age !== null ? new Date().getFullYear() - profile.age : null;
+    const guess = dob?.y ?? legacy;
+    /* a fresh entry: no verdicts carried over, the chip closed without animating */
+    dobChecked.clear();
+    dobBad = new Set();
+    dobErrMsg = '';
+    window.clearTimeout(dobErrTimer);
+    dobErr.hidden = true;
+    dobErr.classList.remove('on', 'out');
+    yearIn.value = guess !== null && guess >= DOB_MIN_YEAR && guess <= dobMaxYear() ? String(guess) : '';
+    monthIn.value = dob ? pad2(dob.m) : '';
+    dayIn.value = dob ? pad2(dob.d) : '';
+    ageConfirm.hidden = true;
+    ageSave.hidden = false;
+    paintDob();
     api.sheets.open(ageSheet);
     impact('light');
   }
 
-  function saveAge() {
-    setAge(ageDraft);
+  /** The confirm pulse: one more deliberate tap between the picker and the permanent lock. */
+  function askAgeConfirm() {
+    if (ageSave.disabled) return;
+    impact('light');
+    ageSave.hidden = true;
+    ageConfirm.hidden = false;
+    $('dob-lock').focus({ preventScroll: true });
+  }
+
+  function cancelAgeConfirm() {
+    impact('light');
+    ageConfirm.hidden = true;
+    ageSave.hidden = false;
+    ageSave.focus({ preventScroll: true });
+  }
+
+  function lockAge() {
+    const draft = dobDraft();
+    if (!draft) return;
+    if (!setDob(draft.y, draft.m, draft.d)) return;   // already locked, or out of window: nothing to do
     const paid = claimIdentityReward('age');
     notify('success');
     impact('medium');
+    if (paid > 0) playReward();
     api.sheets.close();
-    if (paid > 0) showPfToast(`+${paid} Coins · Age set`);
-  }
-
-  function clearAge() {
-    setAge(null);
-    notify('success');
-    impact('light');
-    api.sheets.close();
+    showPfToast(paid > 0 ? `+${paid} Coins · Birthdate locked` : '🔒 Birthdate locked');
   }
 
   /* ---------- team ---------- */
@@ -511,20 +666,15 @@ export function createMenu(api: MenuApi): Menu {
   document.getElementById('country-chip')?.addEventListener('click', () => { impact('light'); api.router.go('profile'); });
   $('pf-country').addEventListener('click', openCountry);
   $('pf-age').addEventListener('click', openAge);
-  ($('age-minus') as HTMLButtonElement).addEventListener('click', () => {
-    if (ageDraft <= AGE_MIN) return;
-    ageDraft--;
-    paintAgeDraft();
-    impact('light');
-  });
-  ($('age-plus') as HTMLButtonElement).addEventListener('click', () => {
-    if (ageDraft >= AGE_MAX) return;
-    ageDraft++;
-    paintAgeDraft();
-    impact('light');
-  });
-  $('age-save').addEventListener('click', saveAge);
-  $('age-clear').addEventListener('click', clearAge);
+  for (const el of dobFields) {
+    el.addEventListener('keydown', onDobKeydown);
+    el.addEventListener('input', onDobInput);
+    el.addEventListener('blur', onDobBlur);
+    el.addEventListener('focus', () => { try { el.select(); } catch { /* a tap still lands the caret */ } });
+  }
+  ageSave.addEventListener('click', askAgeConfirm);
+  $('dob-cancel').addEventListener('click', cancelAgeConfirm);
+  $('dob-lock').addEventListener('click', lockAge);
   $('team-chip').addEventListener('click', openSquad);
   $('pf-team').addEventListener('click', openTeam);
   document.getElementById('profile-settings')?.addEventListener('click', () => {
@@ -897,13 +1047,24 @@ export function createMenu(api: MenuApi): Menu {
     if (cDone) cDone.hidden = !(c && profile.rewards.country);
     $('pf-country').classList.toggle('claimed', !!c);
 
+    /* the age row: once the birthdate is locked the row seals — badge on, chevron gone, tap dead */
     const age = profile.age;
+    const locked = ageLocked();
+    const dob = dobValue();
     $('pf-age-v').textContent = age !== null ? `${age} yrs` : 'Not set';
+    $('pf-age-s').textContent = locked && dob
+      ? `Born ${dob.d} ${MONTH_LABELS[dob.m - 1]} ${dob.y}`
+      : locked ? 'Permanent entry' : 'Complete your profile';
     const aReward = $('pf-age-reward');
     const aDone = $('pf-age-done');
     if (aReward) aReward.hidden = profile.rewards.age;
-    if (aDone) aDone.hidden = !(age !== null && profile.rewards.age);
-    $('pf-age').classList.toggle('claimed', age !== null);
+    if (aDone) aDone.hidden = !locked;
+    const aRow = $('pf-age');
+    aRow.classList.toggle('claimed', age !== null);
+    aRow.classList.toggle('edit', !locked);
+    aRow.classList.toggle('locked', locked);
+    if (locked) aRow.setAttribute('aria-disabled', 'true');
+    else aRow.removeAttribute('aria-disabled');
 
     paintSquadPill();
     $('pf-team-v').textContent = t ? `${t.name} · ${t.members.length}` : 'Join a team';

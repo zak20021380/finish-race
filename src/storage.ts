@@ -83,8 +83,10 @@ export interface Save {
   stats: Stats;
   /** ISO 3166-1 alpha-2, or null until the player picks one in Profile */
   country: string | null;
-  /** Player-declared age, or null until set. Optional — only used for the completion reward. */
+  /** Player-declared age, or null until set. Derived from `dob` once the birthdate is locked. */
   age: number | null;
+  /** The locked birthdate as ISO `YYYY-MM-DD`, or null until confirmed once. Permanent: never cleared. */
+  dob: string | null;
   /** One-time completion rewards: each flips to true the first time the field is set. */
   rewards: { country: boolean; age: boolean };
   teamId: string | null;
@@ -110,6 +112,8 @@ export const START_COINS = 1850;
 export const IDENTITY_REWARD = 100;
 export const AGE_MIN = 7;
 export const AGE_MAX = 99;
+/** The birthdate picker's earliest year; the latest year is derived from AGE_MIN, measured today. */
+export const DOB_MIN_YEAR = 1940;
 /** What one invited friend pays: the inviter banks it as unclaimed, the friend gets it on join. */
 export const REFERRAL_REWARD = 500;
 export const REFERRAL_WELCOME = 500;
@@ -123,6 +127,7 @@ function fresh(): Save {
     stats: { games: 0, wins: 0, losses: 0, streak: 0, best: 0, modes: {} },
     country: null,
     age: null,
+    dob: null,
     rewards: { country: false, age: false },
     teamId: null,
     teams: seedTeams(),
@@ -148,6 +153,56 @@ function teamOk(t: unknown): t is Team {
     && text(x.startParam, 40) && (x.chatId === null || text(x.chatId, 32))
     && typeof x.seed === 'boolean' && Array.isArray(x.members) && x.members.length > 0
     && x.members.length <= 64 && x.members.every(memberOk);
+}
+
+/* ---------- the birthdate: one calendar, validated once, then locked for good ---------- */
+
+export interface Dob { y: number; m: number; d: number }
+
+const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const isoDob = (y: number, m: number, d: number) => `${y}-${pad2(m)}-${pad2(d)}`;
+
+export const isLeap = (y: number): boolean => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+
+/** How many days a month has, February answering to the leap-year rule. */
+export function daysInMonth(y: number, m: number): number {
+  return m === 2 && isLeap(y) ? 29 : MONTH_DAYS[m - 1] ?? 0;
+}
+
+/**
+ * The latest selectable birth year. It is AGE_MIN + 1 back from today, so every day of that year
+ * still clears the age floor — 2026 gives 2018, which lets a late-2018 birthday stay 7 today.
+ */
+export function dobMaxYear(now: Date = new Date()): number {
+  return now.getFullYear() - AGE_MIN - 1;
+}
+
+/** Age on `now` from a birthdate, counting the birthday itself as the step. */
+export function ageFromDob(y: number, m: number, d: number, now: Date = new Date()): number {
+  let a = now.getFullYear() - y;
+  const md = now.getMonth() + 1 - m;
+  if (md < 0 || (md === 0 && now.getDate() < d)) a--;
+  return a;
+}
+
+/** A date the picker and the migration both accept: real calendar day, year window, age window. */
+export function validDob(y: number, m: number, d: number, now: Date = new Date()): boolean {
+  if (!whole(y) || !whole(m) || !whole(d)) return false;
+  y = Math.floor(y); m = Math.floor(m); d = Math.floor(d);
+  if (y < DOB_MIN_YEAR || y > dobMaxYear(now)) return false;
+  if (m < 1 || m > 12) return false;
+  if (d < 1 || d > daysInMonth(y, m)) return false;
+  const age = ageFromDob(y, m, d, now);
+  return age >= AGE_MIN && age <= AGE_MAX;
+}
+
+function parseDob(raw: unknown): Dob | null {
+  if (typeof raw !== 'string') return null;
+  const mt = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (!mt) return null;
+  const y = Number(mt[1]); const m = Number(mt[2]); const d = Number(mt[3]);
+  return validDob(y, m, d) ? { y, m, d } : null;
 }
 
 /**
@@ -180,7 +235,12 @@ function migrate(raw: Partial<Save> | null): Save {
 
   if (knownCountry(raw.country ?? '')) s.country = (raw.country as string).toUpperCase();
 
-  if (whole(raw.age)) {
+  /* A locked birthdate is the source of truth; a pre-lock age-only save keeps its number. */
+  const dob = parseDob(raw.dob);
+  if (dob) {
+    s.dob = isoDob(dob.y, dob.m, dob.d);
+    s.age = ageFromDob(dob.y, dob.m, dob.d);
+  } else if (whole(raw.age)) {
     const a = Math.floor(raw.age as number);
     if (a >= AGE_MIN && a <= AGE_MAX) s.age = a;
   }
@@ -391,7 +451,32 @@ export function setCountry(code: string | null) {
   flush();
 }
 
+/** The locked birthdate, parsed back from the save, or null while the entry is still open. */
+export function dobValue(): Dob | null {
+  return parseDob(profile.dob);
+}
+
+/** True once the birthdate is confirmed: no edit path may ever reopen it. */
+export const ageLocked = (): boolean => profile.dob !== null;
+
+/**
+ * The one-time lock. Validates the calendar date and writes the birthdate + derived age in one
+ * flush. Returns false when the entry is already locked or the date is outside the window —
+ * a locked birthdate can never be changed or cleared.
+ */
+export function setDob(y: number, m: number, d: number): boolean {
+  if (profile.dob !== null) return false;
+  if (!validDob(y, m, d)) return false;
+  const yy = Math.floor(y); const mm = Math.floor(m); const dd = Math.floor(d);
+  profile.dob = isoDob(yy, mm, dd);
+  profile.age = ageFromDob(yy, mm, dd);
+  flush();
+  return true;
+}
+
+/** Legacy age-only writes stay open, but a locked birthdate refuses every one of them. */
 export function setAge(n: number | null) {
+  if (profile.dob !== null) return;
   if (n === null) { profile.age = null; flush(); return; }
   const v = Math.floor(n);
   if (!Number.isFinite(v)) return;
@@ -420,7 +505,7 @@ export type IdentityKind = 'country' | 'age';
  */
 export function claimIdentityReward(kind: IdentityKind): number {
   if (profile.rewards[kind]) return 0;
-  const has = kind === 'country' ? !!profile.country : profile.age !== null;
+  const has = kind === 'country' ? !!profile.country : profile.dob !== null || profile.age !== null;
   if (!has) return 0;
   profile.rewards[kind] = true;
   profile.coins += IDENTITY_REWARD;

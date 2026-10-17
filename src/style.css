@@ -6090,27 +6090,240 @@ html.reduced-motion .mh-arc-fill { animation: none; }
 }
 
 
-/* ---- age stepper sheet ---- */
-.age-stepper {
+/* ---- birthdate sheet: three deeply recessed numeric wells, then the permanent lock ---- */
+.dob-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.15fr;
+  gap: var(--s2);
+}
+.dob-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.dob-lb {
+  text-align: center;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: var(--ls-3);
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+/* the wells: a dark groove, crisp inset depth; digits land white, focus rings amber */
+.dob-in {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  min-width: 0;
+  height: 62px;
+  padding: 0 var(--s1);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 24px;
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+  caret-color: var(--gold-ink);
+  text-shadow: 0 0 14px rgba(245, 158, 11, .18);
+  box-shadow:
+    var(--inset),
+    inset 0 0 0 1px rgba(255, 255, 255, .05),
+    inset 0 -2px 0 rgba(255, 255, 255, .06);
+  transition: box-shadow var(--motion-fast), background var(--motion-fast);
+}
+.dob-in::placeholder { color: var(--ink-soft); opacity: .7; font-weight: 800; letter-spacing: .06em; text-shadow: none; }
+.dob-in:focus {
+  outline: none;
+  background: #0B1120;
+  box-shadow:
+    var(--inset),
+    inset 0 0 0 1px rgba(245, 158, 11, .55),
+    0 0 0 3px rgba(245, 158, 11, .16),
+    0 0 18px -2px rgba(245, 158, 11, .35);
+}
+/* the verdict: a soft coral rim over the groove, plus one tactile shake per bad value */
+.dob-in.is-invalid {
+  background: #150E1E;
+  box-shadow:
+    var(--inset),
+    inset 0 0 0 1px rgba(239, 68, 68, .4),
+    0 0 0 3px rgba(239, 68, 68, .12),
+    0 0 16px -2px rgba(239, 68, 68, .35);
+  animation: clay-shake .25s cubic-bezier(.36, .07, .19, .97) both;
+}
+@keyframes clay-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-3px); }
+  40%, 80% { transform: translateX(3px); }
+}
+html.reduced-motion .dob-in.is-invalid { animation: none; }
+
+/* the inline error chip: compact dark clay, one coral dot, fades in and out above the seal */
+.dob-err {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: var(--s4);
+  gap: var(--s2);
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  text-align: left;
+  background:
+    linear-gradient(180deg, rgba(239, 68, 68, .07) 0%, rgba(239, 68, 68, .02) 100%),
+    linear-gradient(180deg, #1A2232 0%, #151C2A 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(239, 68, 68, .26),
+    inset 0 2px 2px rgba(255, 255, 255, .04),
+    inset 0 -2px 4px rgba(0, 0, 0, .35);
+  color: #FCA5A5;
+  font-size: 12px;
+  line-height: 1.35;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity .2s ease, transform .2s cubic-bezier(.2, 1, .4, 1);
+}
+.dob-err.on { opacity: 1; transform: none; }
+.dob-err.out { opacity: 0; transform: translateY(-4px); }
+.dob-err-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #FCA5A5 0%, #EF4444 55%, #B91C1C 100%);
+  box-shadow: 0 0 8px rgba(239, 68, 68, .55), inset 0 1px 1px rgba(255, 255, 255, .35);
+}
+html.reduced-motion .dob-err { transition: none; }
+
+/* the one-time seal: a matte clay micro-callout with a translucent amber rim, not a warning box */
+.dob-warn {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: 12px var(--s3);
+  border-radius: 16px;
+  text-align: left;
+  background:
+    linear-gradient(180deg, rgba(245, 158, 11, .05) 0%, rgba(245, 158, 11, .02) 100%),
+    linear-gradient(180deg, #1A2232 0%, #151C2A 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 158, 11, .15),
+    inset 0 2px 2px rgba(255, 255, 255, .05),
+    inset 0 -2px 4px rgba(0, 0, 0, .38),
+    0 10px 20px -16px rgba(0, 0, 0, .7);
+}
+.dob-warn-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: linear-gradient(180deg, #131A29 0%, #0E1523 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 158, 11, .22),
+    inset 0 2px 3px rgba(0, 0, 0, .6),
+    inset 0 -1px 0 rgba(255, 255, 255, .06);
+}
+.dob-warn-ico svg { display: block; width: 19px; height: 19px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .7)); }
+.dob-warn-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dob-warn-h {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  color: rgba(252, 211, 77, .78);
+}
+.dob-warn-p { font-size: 12px; line-height: 1.5; color: var(--ink-soft); }
+
+/* the gold clay key: muted clay until the date is whole, then lit and springy */
+.btn.dob-cta {
+  --btn-lip: var(--gold-lip);
+  width: 100%;
+  background: var(--gold-face);
+  color: #10141D;
+  transition: transform .18s cubic-bezier(.2, 1.35, .45, 1), box-shadow var(--motion-fast),
+              background var(--motion-fast), color var(--motion-fast), opacity var(--motion-fast);
+  box-shadow:
+    0 var(--d) 0 var(--btn-lip),
+    0 calc(var(--d) + 7px) 16px -8px rgba(245, 158, 11, .55),
+    inset 0 2px 3px rgba(255, 255, 255, .45),
+    inset 0 -2px 3px rgba(120, 53, 15, .3);
+}
+.btn.dob-cta[disabled] {
+  --btn-lip: #070B13;
+  opacity: 1;
+  background: linear-gradient(180deg, #232C3F 0%, #1B2333 100%);
+  color: #5B6B84;
+  text-shadow: none;
+  box-shadow:
+    0 var(--d) 0 var(--btn-lip),
+    inset 0 1px 0 rgba(255, 255, 255, .04),
+    inset 0 -2px 4px rgba(0, 0, 0, .4);
+}
+.btn.dob-cta.lit { animation: dob-cta-lit .5s cubic-bezier(.2, 1.25, .4, 1) both; }
+@keyframes dob-cta-lit {
+  0% {
+    box-shadow:
+      0 var(--d) 0 var(--btn-lip),
+      0 0 0 0 rgba(245, 158, 11, 0),
+      inset 0 2px 3px rgba(255, 255, 255, .45),
+      inset 0 -2px 3px rgba(120, 53, 15, .3);
+  }
+  55% {
+    box-shadow:
+      0 var(--d) 0 var(--btn-lip),
+      0 0 24px 6px rgba(245, 158, 11, .45),
+      inset 0 2px 3px rgba(255, 255, 255, .45),
+      inset 0 -2px 3px rgba(120, 53, 15, .3);
+  }
+  100% {
+    box-shadow:
+      0 var(--d) 0 var(--btn-lip),
+      0 calc(var(--d) + 7px) 16px -8px rgba(245, 158, 11, .55),
+      inset 0 2px 3px rgba(255, 255, 255, .45),
+      inset 0 -2px 3px rgba(120, 53, 15, .3);
+  }
+}
+html.reduced-motion .btn.dob-cta.lit { animation: none; }
+
+/* the confirm pulse: one deliberate beat between the picker and the lock */
+.dob-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
   padding: var(--s3);
   border-radius: 20px;
   background: var(--field);
-  box-shadow: var(--inset);
+  box-shadow: var(--inset), inset 0 0 0 1px rgba(245, 158, 11, .28);
+  animation: dob-pulse .3s cubic-bezier(.2, 1.3, .5, 1) both;
 }
-.age-n {
-  min-width: 3ch;
-  text-align: center;
-  font-size: 32px;
-  font-weight: 800;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
+.dob-confirm-t { margin: 0; text-align: center; font-size: var(--t-2); font-weight: 800; color: var(--ink); }
+.dob-confirm .sheet-actions { margin-top: 0; }
+@keyframes dob-pulse {
+  0% { opacity: 0; transform: translateY(8px) scale(.97); }
+  100% { opacity: 1; transform: none; }
 }
-#age-hint { color: var(--mint-ink); }
+html.reduced-motion .dob-confirm { animation: none; }
+
+/* ---- the permanent lock chip on the Age row, and the row gone inert ---- */
+.lock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px 4px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+  color: #10141D;
+  font-size: var(--t-micro);
+  font-weight: 900;
+  letter-spacing: .06em;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow:
+    0 2px 0 var(--gold-lip),
+    inset 0 1px 0 rgba(255, 255, 255, .55);
+}
+.pf-rows .pf-tile.row.locked { cursor: default; }
+.pf-rows .pf-tile.row.locked:active { transform: none; }
+.pf-tile.row.locked .chev { display: none; }
 
 html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: none; }
 
