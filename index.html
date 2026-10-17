@@ -1783,6 +1783,36 @@
         </div>
       </section>
 
+      <!-- contact support: the in-app Contact Admin drawer — message never leaves the Mini App -->
+      <section class="sheet support-sheet" id="sheet-support" hidden role="dialog" aria-modal="true" aria-labelledby="support-title">
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <header class="support-head">
+          <h2 class="sheet-t left support-title" id="support-title" data-i18n="supportTitle">Contact Support</h2>
+          <button class="support-x" type="button" data-sheet-close aria-label="Close support sheet">✕</button>
+        </header>
+        <div class="support-cats" role="group" aria-label="What is this about">
+          <button class="cat-pill" type="button" data-cat="feedback" aria-pressed="true"><span data-i18n="supportCatFeedback">Feedback</span></button>
+          <button class="cat-pill" type="button" data-cat="bug" aria-pressed="false"><span data-i18n="supportCatBug">Bug Report</span></button>
+          <button class="cat-pill" type="button" data-cat="stars" aria-pressed="false"><span data-i18n="supportCatStars">Stars Help</span></button>
+        </div>
+        <label class="support-field">
+          <span class="sr-only" id="support-msg-label">Your message</span>
+          <textarea id="support-msg" class="support-input" maxlength="300" rows="4" data-autofocus
+            placeholder="Write your message or feedback here..." data-i18n-ph="supportPlaceholder"
+            aria-labelledby="support-msg-label" enterkeyhint="send" spellcheck="false"></textarea>
+          <output class="support-count" id="support-count" for="support-msg">300</output>
+        </label>
+        <button class="btn btn-primary support-send" type="button" id="support-send" aria-busy="false">
+          <svg class="ico send-go" aria-hidden="true"><use href="#i-send" /></svg>
+          <svg class="ico send-spin" aria-hidden="true"><use href="#i-restart" /></svg>
+          <span class="send-t" data-i18n="supportSend">Send Message</span>
+        </button>
+        <p class="support-ok" id="support-ok" role="status" hidden>
+          <svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>
+          <span data-i18n="supportOk">Message sent to admins!</span>
+        </p>
+      </section>
+
       <!-- choose mode: 4 presets with live renderer previews + custom + online -->
       <section class="sheet tall mode-sheet" id="sheet-mode" hidden role="dialog" aria-modal="true" aria-labelledby="mode-title">
         <h2 class="sheet-t" id="mode-title">Choose mode</h2>

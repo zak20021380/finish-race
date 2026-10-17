@@ -6117,11 +6117,13 @@ html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: no
 /* ==========================================================================
    SETTINGS — Dark Clay overhaul: 2 tactile cards, vertical fill.
    Canvas #10141D, cards #1B2331 (20px radius), headers #F8FAFC.
-   Column: head (fixed) → stack (flexible, fills dead space) → fine-note badge.
-   The stack owns the only scroll on this screen, and on a 360x640 phone there is
-   nothing to scroll: the dial below sizes the whole column to the box. Five rows
-   (3 + 2) over two cards have to spread the canvas the seven rows used to, so
-   every metric lifts its top landing as well as its top range.
+   Column: head (fixed) → stack (content-tall, top-aligned) → fine-note badge.
+   The three sit in ONE snug group: header→card gap 14–16, card→card gap 12–14
+   and the badge flows 16–20 under the last card, so any leftover viewport air
+   pools BELOW the badge (top-aligned rhythm) instead of stretching between the
+   cards. The stack still owns the only scroll: `flex-shrink` + `min-height: 0`
+   cap it at its allotment, so below ~620px app height it scrolls — the one
+   case it ever scrolls.
    ========================================================================== */
 
 /* One elastic dial: 0 at a 640px phone, 1 at 932px and up, and it also gives
@@ -6133,6 +6135,9 @@ html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: no
    the screen suddenly needs a scrollbar. Below ~620px the column is genuinely
    taller than the phone can hold and the stack scrolls; that is the only case
    it ever scrolls. */
+/* snug column: the flex gap between head → stack → notes is the header→card
+   gap (12 + the stack's 2px shadow padding = 14 → 16 at the dial top); the
+   badge adds its own margin so its slot lands on 16 → 20. */
 .screen.settings-screen {
   gap: var(--set-scr-gap);
   overflow: hidden;
@@ -6143,8 +6148,8 @@ html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: no
   --set-pad-t: calc(12px + var(--set-t) * 12);      /* 12 -> 24 */
   --set-pad-b: calc(10px + var(--set-t) * 10);      /* 10 -> 20 */
   --set-card-gap: calc(4px + var(--set-t) * 6);     /* 4 -> 10 */
-  --set-stack-gap: calc(10px + var(--set-t) * 6);   /* 10 -> 16 */
-  --set-scr-gap: calc(4px + var(--set-t) * 8);      /* 4 -> 12 */
+  --set-stack-gap: calc(12px + var(--set-t) * 2);   /* 12 -> 14: card -> card */
+  --set-scr-gap: calc(12px + var(--set-t) * 2);     /* 12 -> 14: head -> stack, stack -> badge base */
   /* The switches breathe with the rows: the ~46% the viewport grows is carried
      by the rows, the pads and the control, so the look never sags or cramps. */
   --set-sw-w: calc(56px + var(--set-t) * 12);       /* 56 -> 68 */
@@ -6194,17 +6199,19 @@ html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: no
     0 3px 7px rgba(0, 0, 0, .45);
 }
 
-/* flexible band between the top bar and the dock: spreads the 2 cards so no
-   dead space survives on tall phones, and never needs to scroll on a short one.
-   The 2px padding is shadow room for the cards inside the clip; the box itself
+/* content-tall band that keeps the two cards in a snug, top-aligned group:
+   no space-evenly, no flex-grow — the cards ride right under the header and
+   the badge rides right under the last card. Shrink + min-height:0 cap the
+   band on short phones, where the overflow-y here is the only scroll. The
+   2px padding is shadow room for the cards inside the clip; the box itself
    stays flush with the column (a negative margin here would scroll the screen
    2px sideways, which is exactly the overflow this screen may not have). */
 .set-stack {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  justify-content: space-evenly;
+  justify-content: flex-start;
   gap: var(--set-stack-gap);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -6428,13 +6435,13 @@ html[dir="rtl"] .set-row:active .chev.tactile { transform: scaleX(-1) translateY
   background: var(--mint);
   opacity: .8;
 }
-/* the foot of the screen: ONE compact centred badge — muted pill, hairline ring,
-   fine ink. It reads as metadata, never as a control. */
+/* the foot of the screen: ONE compact centred badge that flows right below the
+   last card — screen gap (12 + 4px stack pad foot) + this margin = 16 → 20. */
 .set-notes {
   flex: none;
   display: flex;
   justify-content: center;
-  margin: 0 var(--s1);
+  margin: calc(var(--set-t) * 2) var(--s1) 0;
   padding: 0;
 }
 .set-fine { margin: 0; }
@@ -6505,6 +6512,164 @@ html:not(.no-flags) .lang-row .flag-code { display: none; }
 .lang-row[aria-selected="true"] { background: var(--brand-soft); }
 .lang-row[aria-selected="true"] .pick-n { color: var(--brand-ink); }
 .lang-row[aria-selected="true"] .pick-n small { color: var(--brand-ink); opacity: .75; }
+
+/* ---- Contact Support: the in-app Contact Admin drawer (Dark Clay bottom sheet)
+   Everything lives inside the sheet, so the phone never leaves the Mini App:
+   an engraved round ✕ beside the title, compact context pills, a deeply
+   recessed textured textarea (16px type — no iOS zoom-on-focus) with a live
+   char meter, then the gold clay send key. Send taps the button, swaps in a
+   spinner, haptic-taps, then a mint badge confirms before the drawer
+   auto-dismisses. Fixed geometry + dvh keep it clear of the keyboard and the
+   page never scrolls behind the scrim (the sheets system owns the close). */
+.support-sheet { gap: var(--s3); }
+.support-head { display: flex; align-items: center; gap: var(--s2); }
+.support-title { flex: 1 1 auto; margin: 0; }
+/* engraved close ✕: the same carved-in well as the Settings back key, round */
+.support-x {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #0B111E 0%, var(--field) 100%);
+  color: var(--chip-ink);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, .65),
+    inset 0 -1px 0 rgba(255, 255, 255, .07),
+    inset 0 0 0 1px rgba(255, 255, 255, .07);
+  transition: box-shadow var(--motion-fast), transform var(--motion-fast), color var(--motion-fast);
+}
+.support-x:hover { color: var(--ink); }
+.support-x:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 3px 8px rgba(0, 0, 0, .8),
+    inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+.support-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+/* context pills: recessed grooves; the active one rises as a gold clay token */
+.support-cats { display: flex; flex-wrap: wrap; gap: var(--s1); }
+.cat-pill {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  color: var(--ink-soft);
+  font-size: var(--t-3);
+  font-weight: 700;
+  letter-spacing: .01em;
+  white-space: nowrap;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .5),
+    inset 0 -1px 0 rgba(255, 255, 255, .06),
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast), color var(--motion-fast);
+}
+.cat-pill:active { transform: translateY(1px); }
+.cat-pill:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.cat-pill[aria-pressed="true"] {
+  background: linear-gradient(180deg, #FBBF24 0%, #F59E0B 55%, #D97706 100%);
+  color: #78350F;
+  box-shadow:
+    0 2px 0 #92400E,
+    inset 0 1px 0 rgba(255, 255, 255, .38),
+    inset 0 -3px 5px rgba(120, 53, 15, .42);
+}
+/* the message well: deeply recessed, textured, 16px type, crisp placeholder */
+.support-field { position: relative; display: block; }
+.support-input {
+  display: block;
+  width: 100%;
+  min-height: 100px;
+  max-height: 34dvh;
+  padding: 12px 14px 26px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #070B14 0%, #0D1424 100%);
+  background-size: 140px 140px, auto;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.45;
+  box-shadow:
+    inset 0 3px 7px rgba(0, 0, 0, .72),
+    inset 0 -1px 0 rgba(255, 255, 255, .06),
+    inset 0 0 0 1px rgba(255, 255, 255, .07);
+  resize: none;
+  transition: box-shadow var(--motion-fast);
+}
+.support-input::placeholder { color: var(--ink-soft); opacity: .85; }
+.support-input:focus {
+  outline: none;
+  color: var(--ink);
+  box-shadow:
+    inset 0 3px 7px rgba(0, 0, 0, .72),
+    inset 0 -1px 0 rgba(255, 255, 255, .08),
+    inset 0 0 0 1px rgba(252, 211, 77, .35),
+    inset 0 0 10px rgba(245, 158, 11, .12);
+}
+/* the char meter sits in the well's own bottom corner, reading the count down */
+.support-count {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+  color: var(--ink-soft);
+  opacity: .8;
+  pointer-events: none;
+}
+/* gold clay send key: the amber ramp of the switches, knuckle travel on press */
+.support-send {
+  --btn-lip: #92400E;
+  background: linear-gradient(180deg, #FBBF24 0%, #F59E0B 55%, #D97706 100%);
+  color: #78350F;
+  font-size: var(--t-2);
+  min-height: 50px;
+  box-shadow:
+    0 var(--d) 0 var(--btn-lip),
+    0 calc(var(--d) + 8px) 18px -8px rgba(245, 158, 11, .5),
+    inset 0 2px 3px rgba(255, 255, 255, .4),
+    inset 0 -3px 5px rgba(120, 53, 15, .42);
+}
+.support-send .send-go { color: #78350F; }
+.support-send .send-spin { display: none; }
+.support-send.sending { opacity: .92; }
+.support-send.sending .send-go { display: none; }
+.support-send.sending .send-spin { display: block; animation: support-spin .8s linear infinite; color: #78350F; }
+@keyframes support-spin { to { transform: rotate(360deg); } }
+html.reduced-motion .support-send.sending .send-spin { animation: none; }
+/* the confirmation: a quiet mint pill with a check — it greets the eye for a
+   beat while the drawer slides away */
+.support-ok {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  align-self: center;
+  margin: 0;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--mint-soft);
+  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .35);
+  color: var(--mint-ink);
+  font-size: var(--t-3);
+  font-weight: 700;
+}
+.support-ok .ico { width: 14px; height: 14px; color: var(--mint-ink); }
+
 
 /* Short columns: the elastic dial above does the work, so the only thing left is to keep the
    row subtitle on one line. Below ~500px of app height the column genuinely cannot hold the

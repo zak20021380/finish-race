@@ -8,7 +8,7 @@
  */
 import { DIFFICULTIES, type Difficulty } from './bot';
 import {
-  LANGS, lang, langDef, onLang, setLang, t,
+  LANGS, lang, langDef, motionReduced, onLang, setLang, t,
   menuState, saveMenu, settings, setSetting, onSettings, type LangCode, type Settings,
 } from './settings';
 import {
@@ -991,13 +991,17 @@ export function createMenu(api: MenuApi): Menu {
 
   /* ---- settings overhaul: language drawer + community/admin rows ---- */
   const CHANNEL_URL = 'https://t.me/detour_game';
-  const ADMIN_URL = 'https://t.me/detour_support_bot';
 
   const paintI18n = () => {
     for (const el of document.querySelectorAll<HTMLElement>('[data-i18n]')) {
       const key = el.dataset.i18n;
       if (!key) continue;
       el.textContent = t(key);
+    }
+    for (const el of document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-i18n-ph]')) {
+      const key = el.dataset.i18nPh;
+      if (!key) continue;
+      el.setAttribute('placeholder', t(key));
     }
   };
 
@@ -1094,8 +1098,81 @@ export function createMenu(api: MenuApi): Menu {
     chooseLang(row.dataset.lang);
   });
   $('tg-channel')?.addEventListener('click', () => { impact('light'); openExternal(CHANNEL_URL); });
-  /* Contact Admin: Telegram first (openTelegramLink), desktop fallback — never a dead tap. */
-  $('admin-row')?.addEventListener('click', () => { impact('light'); openExternal(ADMIN_URL); });
+
+  /* ---- Contact Admin: the in-app support drawer -----------------------------------------------
+     The row opens a Dark-Clay bottom sheet — category pills, a recessed 300-char textarea and
+     a gold clay send key — so the message is written and submitted inside the Mini App, never
+     by hopping out to a private chat. Tap-outside and Escape close are the sheets' own; this
+     block only owns open / verify / send / confirm / auto-dismiss and the busy-state resets. */
+  const supportSheet = api.sheet('sheet-support');
+  const supportMsg = supportSheet?.querySelector<HTMLTextAreaElement>('#support-msg') ?? null;
+  const supportSend = supportSheet?.querySelector<HTMLButtonElement>('#support-send') ?? null;
+  const supportOk = supportSheet?.querySelector<HTMLElement>('#support-ok') ?? null;
+  const supportCount = supportSheet?.querySelector<HTMLElement>('#support-count') ?? null;
+  const SUPPORT_MAX = 300;
+  let supportBusy = false;
+  let supportTimer = 0;
+
+  const supportReset = () => {
+    supportBusy = false;
+    if (supportSend) {
+      supportSend.disabled = false;
+      supportSend.setAttribute('aria-busy', 'false');
+      supportSend.classList.remove('sending');
+      const lbl = supportSend.querySelector('.send-t');
+      if (lbl) lbl.textContent = t('supportSend');
+    }
+    if (supportMsg) supportMsg.value = '';
+    if (supportCount) supportCount.textContent = String(SUPPORT_MAX);
+    if (supportOk) supportOk.hidden = true;
+  };
+
+  function openSupport() {
+    if (!supportSheet) return;
+    clearTimeout(supportTimer);
+    supportReset();
+    impact('light');
+    api.sheets.open(supportSheet);
+  }
+
+  function sendSupport() {
+    if (!supportSheet || !supportMsg || !supportSend || supportBusy) return;
+    const text = supportMsg.value.trim();
+    if (!text) { impact('light'); supportMsg.focus({ preventScroll: true }); return; }
+    supportBusy = true;
+    supportSend.classList.add('sending');
+    supportSend.setAttribute('aria-busy', 'true');
+    const lbl = supportSend.querySelector('.send-t');
+    if (lbl) lbl.textContent = t('supportSending');
+    impact('medium');                     /* light Telegram haptic on the send tap itself */
+    clearTimeout(supportTimer);
+    supportTimer = window.setTimeout(() => {
+      notify('success');                  /* the haptic + badge pair confirm the send */
+      if (supportOk) supportOk.hidden = false;
+      clearTimeout(supportTimer);
+      supportTimer = window.setTimeout(() => {
+        /* auto-dismiss only if the user has not already backed out mid-flight */
+        if (supportSheet.classList.contains('open')) api.sheets.close();
+        clearTimeout(supportTimer);
+        supportTimer = window.setTimeout(supportReset, motionReduced() ? 0 : 320);
+      }, motionReduced() ? 150 : 950);
+    }, motionReduced() ? 80 : 700);
+  }
+
+  supportSheet?.querySelector('.support-cats')?.addEventListener('click', (e) => {
+    const pill = (e.target as HTMLElement | null)?.closest<HTMLElement>('.cat-pill');
+    if (!pill || supportBusy) return;
+    impact('light');
+    for (const p of supportSheet.querySelectorAll('.cat-pill')) p.setAttribute('aria-pressed', String(p === pill));
+  });
+  supportMsg?.addEventListener('input', () => {
+    if (supportCount) supportCount.textContent = String(SUPPORT_MAX - supportMsg.value.length);
+  });
+  supportMsg?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendSupport(); }
+  });
+  supportSend?.addEventListener('click', sendSupport);
+  $('admin-row')?.addEventListener('click', openSupport);
 
   /* live repaint: internal watchers + the public DOM event for external listeners */
   onLang(paintLang);

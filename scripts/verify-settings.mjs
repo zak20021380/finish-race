@@ -11,11 +11,14 @@
  *      the reset sheet are all gone;
  *   3. Contact Admin is present (title + subtext + pill);
  *   4. the Official Telegram Channel row behind openTelegramLink;
- *   5. Contact Admin calls window.Telegram.WebApp.openTelegramLink on the
- *      configured admin handle, and falls back to window.open on desktop
- *      (no Telegram globals);
+ *   5. Contact Admin opens the IN-APP support bottom sheet (no external hop):
+ *      header + engraved ✕, the three category pills, the recessed 300-char
+ *      textarea, the gold Send key — then the full send flow (busy spinner →
+ *      success badge → auto-dismiss), Escape close and tap-outside close;
  *   6. the Sound / Haptics switches still toggle;
- *   7. zero vertical scroll at 360x640 (page and stack alike).
+ *   7. zero vertical scroll at 360x640 and 430x932 (page and stack alike);
+ *   8. the snug top-aligned rhythm: header→card 14–16, card→card 12–14,
+ *      badge 16–20 under the last card, zero dead air between the cards.
  * Screenshots: .shots/settings-{w}x{h}.png · exit 1 on any failure.
  */
 import http from 'node:http';
@@ -59,7 +62,41 @@ function serve() {
 }
 
 const CHANNEL_URL = 'https://t.me/detour_game';
-const ADMIN_URL = 'https://t.me/detour_support_bot';
+const MSG = 'Board wall vanished on move 6';
+
+/** Telegram WebApp stub installed BEFORE the bundle loads — src/telegram.ts binds its
+ *  `tg` reference at module init, so a post-load stub would never receive the haptics.
+ *  The property is LOCKED (writable: false) so the remote telegram-web-app.js cannot
+ *  replace it out from under the audit; outside the client that script only no-ops. */
+const TG_STUB = `
+  window.__tgCalls = [];
+  const push = (...a) => window.__tgCalls.push(a);
+  let stub;
+  try {
+    stub = window.Telegram?.WebApp || {};
+  } catch { stub = {}; }
+  stub.ready = stub.ready || (() => {});
+  stub.expand = stub.expand || (() => {});
+  stub.disableVerticalSwipes = stub.disableVerticalSwipes || (() => {});
+  stub.setHeaderColor = stub.setHeaderColor || (() => {});
+  stub.setBackgroundColor = stub.setBackgroundColor || (() => {});
+  stub.setColorScheme = stub.setColorScheme || (() => {});
+  stub.isVersionAtLeast = stub.isVersionAtLeast || (() => true);
+  stub.version = stub.version || '7.2';
+  stub.platform = stub.platform || 'ios';
+  stub.openTelegramLink = (u) => push('tglink', u);
+  stub.openLink = (u) => push('link', u);
+  stub.HapticFeedback = {
+    impactOccurred: (s) => push('impact', s),
+    notificationOccurred: (t) => push('notify', t),
+    selectionChanged: () => {},
+  };
+  try { Object.freeze(stub.HapticFeedback); Object.freeze(stub); } catch { /* still fine */ }
+  try {
+    Object.defineProperty(window, 'Telegram', { value: { WebApp: stub }, writable: false, configurable: false });
+  } catch { window.Telegram = { WebApp: stub }; }
+  try { Object.defineProperty(window, '__tgCalls', { value: window.__tgCalls, writable: true, configurable: false }); } catch { /* ok */ }
+`;
 
 /** Open the settings screen along the real user path and check its shape. */
 async function openSettings(pg, w, h) {
@@ -104,6 +141,12 @@ fs.mkdirSync(SHOTS, { recursive: true });
 try {
   /* ---- 360x640: the mark every rewrite must hit ---- */
   const ctx = await browser.newContext({ viewport: { width: 360, height: 640 } });
+  /* the real telegram-web-app.js must never run here: outside the client it only
+     no-ops haptics and re-points Telegram.WebApp, killing the traps. Serve an
+     empty body so the init-script stub is the one and only WebApp. */
+  await ctx.route('**/telegram-web-app.js**', (route) => route.fulfill({ status: 200, body: '', contentType: 'application/javascript' }));
+  await ctx.route('**/telegram.org/js/telegram-web-app.js**', (route) => route.fulfill({ status: 200, body: '', contentType: 'application/javascript' }));
+  await ctx.addInitScript(TG_STUB);
   const pg = await ctx.newPage();
   const st = await openSettings(pg, 360, 640);
   const expect = (name, ok) => {
@@ -125,28 +168,118 @@ try {
   expect('zero page scroll at 360x640', st.pageScroll <= 0);
   expect('zero stack scroll at 360x640', st.stackScroll <= 0);
 
-  /* Telegram route: stub the WebApp and click */
-  const tgCalled = await pg.evaluate(() => {
-    const calls = [];
-    window.Telegram = { WebApp: { openTelegramLink: (u) => { calls.push(u); } } };
-    document.getElementById('admin-row').click();
-    document.getElementById('tg-channel').click();
-    window.Telegram = undefined;
-    return { admin: calls[0], channel: calls[1] };
+  /* ---- the in-app support sheet: Contact Admin must NEVER link out ---- */
+  await pg.click('#admin-row');
+  await pg.waitForTimeout(500);
+  const modal = await pg.evaluate(() => {
+    const sheet = document.getElementById('sheet-support');
+    const open = !!sheet && sheet.classList.contains('open');
+    const scrimOpen = !document.getElementById('scrim').hidden;
+    return {
+      open, scrimOpen,
+      title: sheet?.querySelector('.support-title')?.textContent?.trim() ?? '',
+      closeBtn: !!sheet?.querySelector('.support-x'),
+      pills: [...(sheet?.querySelectorAll('.cat-pill') ?? [])].map((p) => ({
+        label: p.textContent.trim(), active: p.getAttribute('aria-pressed') === 'true',
+      })),
+      textarea: !!sheet?.querySelector('.support-input'),
+      placeholder: sheet?.querySelector('.support-input')?.getAttribute('placeholder') ?? '',
+      send: sheet?.querySelector('#support-send .send-t')?.textContent?.trim() ?? '',
+      maxLen: sheet?.querySelector('.support-input')?.getAttribute('maxlength') ?? '',
+      count: sheet?.querySelector('.support-count')?.textContent?.trim() ?? '',
+    };
   });
-  expect('admin row → openTelegramLink(admin)', tgCalled.admin === ADMIN_URL);
-  expect('channel row → openTelegramLink(channel)', tgCalled.channel === CHANNEL_URL);
+  expect('admin row opens the in-app support sheet', modal.open && modal.scrimOpen);
+  expect('sheet title = Contact Support', modal.title === 'Contact Support');
+  expect('engraved close button present', modal.closeBtn);
+  expect('three category pills, Feedback active',
+    modal.pills.length === 3 && modal.pills[0].label === 'Feedback' && modal.pills[0].active
+    && modal.pills[1].label === 'Bug Report' && modal.pills[2].label === 'Stars Help');
+  expect('recessed 300-char textarea', modal.textarea && modal.maxLen === '300');
+  expect('crisp placeholder', modal.placeholder.startsWith('Write your message'));
+  expect('gold Send Message key', modal.send === 'Send Message');
+  expect('char meter starts at 300', modal.count === '300');
 
-  /* Desktop fallback: no Telegram global → window.open */
-  const winOpen = await pg.evaluate((oil) => {
-    const calls = [];
-    const old = window.open;
-    window.open = (u) => { calls.push(String(u)); return null; };
+  /* escape close (the sheets system owns it), taps-outside close */
+  await pg.keyboard.press('Escape');
+  await pg.waitForTimeout(600);
+  const goneViaEscape = await pg.evaluate(() => {
+    const sheet = document.getElementById('sheet-support');
+    return !sheet.classList.contains('open') && document.getElementById('scrim').hidden;
+  });
+  expect('Escape closes the support sheet', goneViaEscape);
+
+  const reopenTaps = await pg.evaluate(() => { document.getElementById('admin-row').click(); });
+  await pg.waitForTimeout(450);
+  const reOpen = await pg.evaluate(() => {
+    const sheet = document.getElementById('sheet-support');
+    const open = sheet.classList.contains('open');
+    document.getElementById('scrim').click();          /* tap-outside-to-close */
+    return { open, empty: document.getElementById('support-msg').value === '' };
+  });
+  await pg.waitForTimeout(600);
+  const goneViaScrim = await pg.evaluate(() => !document.getElementById('sheet-support').classList.contains('open'));
+  expect('sheet reopened with a fresh form', reOpen.open && reOpen.empty);
+  expect('tap-outside (scrim) closes the support sheet', goneViaScrim);
+
+  /* reopen and run the live send flow. An empty message must refuse to enter
+     the busy state; a typed one runs spinner → haptic + badge → auto-dismiss,
+     with zero links out. The haptic + hop traps live in the init-script stub
+     (window.__tgCalls) because src/telegram.ts binds its reference at load. */
+  const traps = await pg.evaluate((msg) => {
     document.getElementById('admin-row').click();
-    window.open = old;
-    return calls[0] === oil;
-  }, ADMIN_URL);
-  expect('admin row → window.open fallback (desktop)', winOpen);
+    const btn = document.getElementById('support-send');
+    btn.click();
+    const emptyRefused = !btn.classList.contains('sending');
+    const msgEl = document.getElementById('support-msg');
+    msgEl.value = msg;
+    msgEl.dispatchEvent(new Event('input', { bubbles: true }));
+    btn.click();
+    return { emptyRefused, counter: document.getElementById('support-count').textContent.trim() };
+  }, MSG);
+  await pg.waitForTimeout(350);
+  const busyPhase = await pg.evaluate(() => ({
+    busy: document.getElementById('support-send').classList.contains('sending'),
+    stillOpen: document.getElementById('sheet-support').classList.contains('open'),
+    badgeHidden: document.getElementById('support-ok').hidden,
+  }));
+  await pg.waitForTimeout(800);
+  const badgePhase = await pg.evaluate(() => {
+    const sheet = document.getElementById('sheet-support');
+    return {
+      stillOpen: sheet.classList.contains('open'),
+      badgeShown: !document.getElementById('support-ok').hidden,
+      badgeText: sheet.querySelector('#support-ok span')?.textContent?.trim() ?? '',
+    };
+  });
+  await pg.waitForTimeout(2400);
+  const settled = await pg.evaluate(() => ({
+    stillOpen: document.getElementById('sheet-support').classList.contains('open'),
+    scrimOpen: !document.getElementById('scrim').hidden,
+    busyReset: !document.getElementById('support-send').classList.contains('sending'),
+    sendLabel: document.querySelector('#support-send .send-t')?.textContent?.trim() ?? '',
+    formCleared: document.getElementById('support-msg').value === '',
+  }));
+  const tgCalls = await pg.evaluate(() => window.__tgCalls);
+  const hops = tgCalls.filter(([k]) => k === 'tglink' || k === 'link' || k === 'open');
+  expect('empty send is refused, never busy', traps.emptyRefused);
+  expect(`char meter counts down (${traps.counter})`, traps.counter === String(300 - MSG.length));
+  expect('send key shows the spinner state', busyPhase.busy && busyPhase.stillOpen && busyPhase.badgeHidden);
+  expect('haptic impact on send + success notification',
+    tgCalls.some(([k, s]) => k === 'impact' && s === 'medium')
+    && tgCalls.some(([k, t]) => k === 'notify' && t === 'success'));
+  expect(`zero external hops (${JSON.stringify(hops)})`, hops.length === 0);
+  expect('success badge = Message sent to admins!', badgePhase.badgeShown
+    && badgePhase.badgeText === 'Message sent to admins!' && badgePhase.stillOpen);
+  expect('sheet auto-dismisses, panel hidden', !settled.stillOpen && !settled.scrimOpen);
+  expect('busy + form reset after dismiss', settled.busyReset && settled.sendLabel === 'Send Message' && settled.formCleared);
+
+  /* the channel row keeps its external behavior: Telegram-first hop */
+  const beforeChannel = await pg.evaluate(() => window.__tgCalls.length);
+  await pg.evaluate(() => document.getElementById('tg-channel').click());
+  const channelCalls = await pg.evaluate((n) => window.__tgCalls.slice(n), beforeChannel);
+  expect('channel row → openTelegramLink(channel)',
+    channelCalls.some(([k, u]) => k === 'tglink' && u === CHANNEL_URL));
 
   /* the switches still flip (aria-checked) */
   const toggled = await pg.evaluate(() => {
@@ -170,19 +303,23 @@ try {
   const st2 = await openSettings(pg2, 430, 932);
   expect('zero page scroll at 430x932', st2.pageScroll <= 0);
   expect('zero stack scroll at 430x932', st2.stackScroll <= 0);
-  const gap = await pg2.evaluate(() => {
+  const rhythm = await pg2.evaluate(() => {
     const s = document.getElementById('s-settings');
+    const head = s.querySelector('.set-head').getBoundingClientRect();
     const stack = s.querySelector('.set-stack').getBoundingClientRect();
     const cards = [...s.querySelectorAll('.set-card')].map((c) => c.getBoundingClientRect());
-    const gap1 = cards[0].top - stack.top;
-    const gap2 = cards[1].top - cards[0].bottom;
-    const gap3 = stack.bottom - cards[1].bottom;
-    return { gap1: Math.round(gap1), gap2: Math.round(gap2), gap3: Math.round(gap3) };
+    const badge = s.querySelector('.set-notes').getBoundingClientRect();
+    return {
+      headCard: Math.round(cards[0].top - head.bottom),   /* header -> card: 14 -> 16 */
+      cardCard: Math.round(cards[1].top - cards[0].bottom), /* card -> card: 12 -> 14 */
+      cardBadge: Math.round(badge.top - cards[1].bottom), /* card -> badge: 16 -> 20 */
+      cardAtTop: Math.round(cards[0].top - stack.top),     /* card pinned to the stack's top */
+    };
   });
-  /* the three air slots sit within a third of each other: no bottom void */
-  const slots = [gap.gap1, gap.gap2, gap.gap3];
-  expect(`even air (top/mid/bottom slots = ${slots.join('/')})`,
-    Math.max(...slots) - Math.min(...slots) <= Math.max(...slots) / 3);
+  expect(`header->card gap = ${rhythm.headCard} (14-16)`, rhythm.headCard >= 14 && rhythm.headCard <= 16);
+  expect(`card->card gap = ${rhythm.cardCard} (12-14)`, rhythm.cardCard >= 12 && rhythm.cardCard <= 14);
+  expect(`card->badge gap = ${rhythm.cardBadge} (16-20)`, rhythm.cardBadge >= 16 && rhythm.cardBadge <= 20);
+  expect('cards pinned to the top of the stack', rhythm.cardAtTop <= 3);
   await pg2.screenshot({ path: path.join(SHOTS, 'settings-430x932.png') });
   console.log('shot settings-430x932.png');
   await ctx2.close();

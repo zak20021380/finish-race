@@ -107,6 +107,20 @@ History lives in the dated logs beside this file; this is the durable index.
   `--set-t: clamp(0px, calc((var(--app-h) - 640px)/292 - (430px - min(100vw,430px))/220), 1px)` — the
   height term alone is not enough, the foot badge wraps one line taller at 320px than at 430px.
   Every metric (row height, badge, card padding, all gaps) is a `calc()` off it.
+- **Snug top-aligned rhythm (2026-10-17).** `.set-stack` is `flex: 0 1 auto` + `flex-start` — NO
+  `space-evenly`/grow: header→card 14–16 (`--set-scr-gap` 12 + the stack's 2px pad), card→card 12–14
+  (`--set-stack-gap`), badge flows 16–20 under Card 2 (`--set-scr-gap` + 4px pad foot + `--set-t*2`
+  margin). Leftover air pools BELOW the badge, never between the cards. Shrink + `min-height:0` keep
+  the stack as the only scroll on short phones. `scripts/verify-settings.mjs` asserts the exact gaps
+  at 430x932 and zero overflow at 360x640 + 430x932.
+- **Contact Admin opens an IN-APP sheet (2026-10-17).** `#sheet-support` (menu.ts wires openSupport/
+  sendSupport): pills [Feedback · Bug Report · Stars Help] as `aria-pressed` tokens, a recessed
+  textured 300-char textarea (`data-i18n-ph` repaints placeholders on lang switch), gold clay send
+  key → spinner → `impact('medium')` + `notify('success')` → `.support-ok` mint badge → auto-dismiss
+  ~950ms → reset. Escape/scrim close come free from sheets.ts. The old `openTelegramLink(ADMIN_URL)`
+  hop is gone; `openExternal` survives only for the channel row. verify-settings traps live in an
+  init-script stub (`window.__tgCalls`) — telegram.ts binds `tg` at MODULE LOAD, so post-load stubs
+  never see haptics, and the remote telegram-web-app.js must be route-blocked or it replaces WebApp.
 - **Use `--set-pad-x`, never `--s3`, for these cards.** The global `:root` block drops `--s3` 16→8 at
   `max-height: 700px`, which reintroduces the same dead band one axis over.
 - Verified zero overflow on 60/60 sizes (widths 320/360/390/412/430 × heights 640…932). Below ~620px app
