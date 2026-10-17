@@ -96,6 +96,16 @@ export interface BoardTheme {
   ring: Stop[];
   /** checkered strip: [lit square, dark square] */
   checker: [string, string];
+  /**
+   * The apex kerb the goal zone is crowned by — one sculpted band of dark clay that the FINISH
+   * crest is struck into, rather than a plate laid over the tiles: [lit face, shaded foot].
+   * It is always dark enough for the gold to clear 4.5:1 against it.
+   */
+  kerb: [string, string];
+  /** the metallic ramp the crest is struck in: lit at the crown, shaded at the foot */
+  crest: Stop[];
+  /** the warm half of the light the goal zone throws down onto the arrival tiles */
+  spill: Stop[];
   /** glow under the line */
   glow: Stop[];
   rule: string;
@@ -259,6 +269,15 @@ export const WALLS: WallStyle[] = [
 /* ---------- board themes ---------- */
 
 /**
+ * Solar gold, struck as a raised plate: lit along the crown, shaded across the belly, catching the
+ * light again at its foot. One ramp serves every arena, because the goal word is the same object
+ * wherever it is carved and gold is the only warm note the identity already spends on value.
+ */
+const CREST: Stop[] = [
+  [0, '#fff6d0'], [0.26, '#ffdf85'], [0.54, '#e8a80c'], [0.78, '#8f5f06'], [1, '#d69a17'],
+];
+
+/**
  * Board themes are clay slabs now, not flat sheets: an outer drop shadow, a lit inner bevel and a
  * grid of inset tiles with a 1px groove between them. `indigo` is the arena the race ships with;
  * `lavender` is the light variant of the same slab.
@@ -271,6 +290,8 @@ export const BOARDS: BoardTheme[] = [
     bevel: ['rgba(255,255,255,.18)', 'rgba(4,6,20,.45)'],
     ring: [[0, '#3ad194'], [0.06, '#2fae7c'], [0.16, '#2c6a9a'], [0.34, '#3b4874'], [0.62, '#39436c'], [1, '#414b78']],
     checker: ['#eafff6', '#17b373'],
+    kerb: ['#1b4b3d', '#08201b'], crest: CREST,
+    spill: [[0, 'rgba(255,182,84,.17)'], [0.5, 'rgba(255,150,40,.06)'], [1, 'rgba(255,150,40,0)']],
     glow: [[0, 'rgba(56,220,150,.30)'], [0.45, 'rgba(56,220,150,.10)'], [1, 'rgba(56,220,150,0)']],
     rule: 'rgba(190,255,225,.24)', edge: 'rgba(255,255,255,.22)', sweep: 0.4,
     beam: 'rgba(140,255,205,.16)', startTint: 0.16,
@@ -282,6 +303,8 @@ export const BOARDS: BoardTheme[] = [
     bevel: ['rgba(255,255,255,.9)', 'rgba(112,108,168,.22)'],
     ring: [[0, '#2fa86f'], [0.06, '#48bb8c'], [0.16, '#a9dccc'], [0.34, '#d6d5e8'], [0.62, '#deddef'], [1, '#e6e5f5']],
     checker: ['#f4fbf7', '#28a06a'],
+    kerb: ['#155c3d', '#07281c'], crest: CREST,
+    spill: [[0, 'rgba(255,170,70,.15)'], [0.5, 'rgba(255,150,40,.05)'], [1, 'rgba(255,150,40,0)']],
     glow: [[0, 'rgba(47,168,111,.30)'], [0.45, 'rgba(47,168,111,.10)'], [1, 'rgba(47,168,111,0)']],
     rule: 'rgba(15,107,69,.32)', edge: 'rgba(255,255,255,.8)', sweep: 0.55,
     beam: 'rgba(47,168,111,.18)', startTint: 0.12,
@@ -293,6 +316,8 @@ export const BOARDS: BoardTheme[] = [
     bevel: ['rgba(255,255,255,.9)', 'rgba(70,124,102,.22)'],
     ring: [[0, '#2fbf85'], [0.06, '#57cfa0'], [0.16, '#8fdcc0'], [0.34, '#c4e6d6'], [0.62, '#cfe9de'], [1, '#d7eee3']],
     checker: ['#ffffff', '#22a06b'],
+    kerb: ['#0f5c40', '#052a1e'], crest: CREST,
+    spill: [[0, 'rgba(255,178,80,.14)'], [0.5, 'rgba(255,150,40,.05)'], [1, 'rgba(255,150,40,0)']],
     glow: [[0, 'rgba(47,168,111,.26)'], [0.45, 'rgba(47,168,111,.08)'], [1, 'rgba(47,168,111,0)']],
     rule: 'rgba(15,107,69,.28)', edge: 'rgba(255,255,255,.8)', sweep: 0.5,
     beam: 'rgba(34,160,107,.2)', startTint: 0.13,
@@ -304,6 +329,8 @@ export const BOARDS: BoardTheme[] = [
     bevel: ['rgba(255,255,255,.14)', 'rgba(0,0,0,.55)'],
     ring: [[0, '#43e3a2'], [0.06, '#2fae7c'], [0.16, '#26507f'], [0.34, '#222a52'], [0.62, '#1e2547'], [1, '#242c52']],
     checker: ['#f4fffa', '#12a869'],
+    kerb: ['#0f5f42', '#05231b'], crest: CREST,
+    spill: [[0, 'rgba(255,196,96,.18)'], [0.5, 'rgba(255,160,50,.07)'], [1, 'rgba(255,160,50,0)']],
     glow: [[0, 'rgba(67,227,162,.34)'], [0.45, 'rgba(67,227,162,.12)'], [1, 'rgba(67,227,162,0)']],
     rule: 'rgba(200,255,232,.28)', edge: 'rgba(255,255,255,.16)', sweep: 0.42,
     beam: 'rgba(120,255,205,.18)', startTint: 0.18,

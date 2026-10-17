@@ -132,7 +132,7 @@
   --t-1: clamp(0.9375rem, 0.885rem + .55vw, 1.0625rem);   /* status pill, card titles */
   --t-2: clamp(0.8125rem, 0.775rem + .35vw, 0.9375rem);   /* stats, row labels */
   --t-3: clamp(0.6875rem, 0.665rem + .28vw, 0.8125rem);   /* player chips, descriptions */
-  --t-micro: clamp(0.625rem, 0.61rem + .2vw, 0.75rem);    /* finish pill, steps caption */
+  --t-micro: clamp(0.625rem, 0.61rem + .2vw, 0.75rem);    /* steps caption, micro labels */
   --t-hd: clamp(1.0625rem, .975rem + .7vw, 1.375rem);     /* screen titles */
   --t-title: clamp(1.5rem, 1.32rem + 1.4vw, 1.875rem);    /* win / lose verdict */
   --w-1: 700; --w-2: 800; --w-3: 800;
@@ -204,10 +204,6 @@
   --motion-press: translateY(var(--press-y));
   /* bounce for the dock: it overshoots once, then settles */
   --bounce: cubic-bezier(.34, 1.56, .64, 1);
-  /* banners float over the lower board now, so the finish row is never covered */
-  /* the FINISH plate: a fixed height, so it stays legible on the checkered strip it sits on */
-  --finish-pill-h: 22px;
-  --finish-ring: rgba(110, 231, 183, .18);
   /* bottom nav height: the compete scroll pads by dock + 16 so rows never hide behind chrome */
   --dock-height: 72px;
   /* the "my standing" bar and the squad dock are the same object at the same size */
@@ -349,64 +345,25 @@ html, body {
   .card { background: linear-gradient(180deg, var(--card-a) 0%, var(--card-b) 100%); }
 }
 
-/* ---- the finish label: pressed into the checkered strip it names ----
-   It used to own a lane above the canvas, which cost the board a whole row of height. Now it is
-   a recessed plate centred on row 0 — board furniture, not a banner, and `pointer-events: none`
-   so a tap always belongs to the board underneath. A ball only ever reaches row 0 as the race
-   ends, so the plate never hides anything in play.
-   Row 0 of a *twelve-row* board, whichever board that is: the row count comes from `--board-rows`,
-   published by main.ts alongside the grid, so the plate stays welded to the strip when a three- or
-   four-contender race swaps the 8x12 board for the 10x12 one. Its height and type track
-   `--board-cell` the same way, clamped so the label never outgrows the row it sits in.
-   The slab is *centred* in its canvas, so row 0 starts at `--board-oy` rather than at zero — the
-   offset is published too, and the plate's centre is `oy + cell/2` in the canvas's own pixels,
-   which is what `.board-wrap` measures in because the canvas fills it edge to edge. */
-.finish-tag {
-  position: absolute;
-  left: 50%;
-  top: calc(var(--board-oy, 0px) + var(--board-cell, 36px) / 2);   /* the middle of row 0 */
-  transform: translate(-50%, -50%);
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s1);
-  height: clamp(18px, calc(var(--board-cell, 36px) * 0.62), var(--finish-pill-h));
-  padding: 0 var(--s2);
-  border-radius: var(--radius-pill);
-  background: var(--field);
-  box-shadow: var(--inset), inset 0 0 0 1px var(--finish-ring);
-  font-size: clamp(9px, calc(var(--board-cell, 36px) * 0.3), var(--t-micro));
-  line-height: 1;
-  white-space: nowrap;
-  pointer-events: none;
-}
-.finish-tag .ico {
-  flex: none;
-  width: 1.15em;
-  height: 1.15em;
-  color: var(--green-ink);
-}
-.finish-tag .label {
-  font-weight: var(--w-2);
-  letter-spacing: .18em;
-  text-indent: .18em;                   /* balances the trailing letter-space */
-  color: var(--green-ink);              /* 12:1 on the recessed groove */
-}
-/* a telegraphed log paints its own nameplate at the heart of this row: the label steps aside.
-   The checkered strip is the real finish marker, so losing the word loses no information. */
-.board-wrap.lane .finish-tag { opacity: 0; }
-.finish-tag { transition: opacity .2s ease; }
+/* ---- the finish crown is paint, not furniture ----
+   The goal zone used to be a plate in this sheet, absolutely positioned onto row 0 of a canvas it
+   cannot share a coordinate system with — which is why it needed `--board-cell`, `--board-oy` and a
+   `lane` class to keep it welded down, and why it still read as a badge laid over the checkers.
+   Row 0 is now one sculpted band the renderer draws: a dark-clay apex kerb with the FINISH crest
+   struck into it over a recessed run of beveled checks. It moves with the board because it *is* the
+   board, it yields to a rolling log from inside the same frame loop, and it costs no lane above the
+   canvas — see the goal zone in `buildStatic()` and the crest in `draw()`. */
 
 /* ---- board ---- */
 /* The slot takes the free height and the wrap fits the largest board of the *active* grid inside
    it, so the board shrinks on 360x640 instead of pushing the chips off. Nothing else claims a lane:
-   the finish label lives on the strip, so the canvas gets every pixel of the card above the chips.
-   The grid is not always 8x12: three or four contenders move to the wider 10x12 board, and a 2:3
-   box would then letterbox it — the slab would float in a box taller than itself, and the finish
-   plate would drift off the strip it names. So the box's own aspect is driven by `--board-cols` /
-   `--board-rows`, which main.ts republishes on every `setBoard`. A duel resolves to exactly the
-   2:3 box this rule has always drawn: min(100cqw, 66.667cqh) and min(100cqh, 150cqw). */
+   the finish crown is painted inside row 0, so the canvas gets every pixel of the card above the
+   chips. The grid is not always 8x12: three or four contenders move to the wider 10x12 board, and a
+   2:3 box would then letterbox it — the slab would float in a box taller than itself, and the goal
+   crown would sit further from the card's top edge than the board it belongs to. So the box's own
+   aspect is driven by `--board-cols` / `--board-rows`, which main.ts republishes on every
+   `setBoard`. A duel resolves to exactly the 2:3 box this rule has always drawn: min(100cqw,
+   66.667cqh) and min(100cqh, 150cqw). */
 .board-slot {
   flex: 1 1 auto;
   min-height: 0;

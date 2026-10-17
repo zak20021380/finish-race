@@ -375,32 +375,19 @@ const confetti = createConfetti(confettiEl);
 const toVec = (p: Pos): Vec => ({ x: p.c + 0.5, y: p.r + 0.5 });
 
 /** Where the board's own numbers are published for CSS: the card that holds both the board and the
- *  dock, so one write reaches `.board-wrap`, `.finish-tag` and `.chips` alike. */
+ *  dock, so one write reaches `.board-wrap` and `.chips` alike. */
 const boardCard = wrap.closest<HTMLElement>('.card') ?? wrap;
 
 /**
  * Hand the grid the rules picked to CSS, which is what lets the board box size itself to the
  * board's own aspect instead of a hard-coded 2:3. Without it a 10x12 board letterboxes inside a
- * 2:3 box — the slab floats away from the box's top edge and the finish plate drifts off the strip
- * it names. Called on every `setBoard`, so a duel and a party get their own box.
+ * 2:3 box — the slab floats away from the box's top edge, and the goal crown that sits on it lands
+ * further from the card's edge than the board it belongs to. Called on every `setBoard`, so a duel
+ * and a party get their own box.
  */
 function fitBoard(c: number, r: number) {
   boardCard.style.setProperty('--board-cols', String(c));
   boardCard.style.setProperty('--board-rows', String(r));
-}
-
-/**
- * The cell metric and the slab's own top edge, read back off the live layout and published for the
- * furniture that has to match it: the finish plate is welded to row 0, so it needs both. The grid
- * is centred in the canvas, so the slab almost never starts at y=0 — a 10x12 board in a 328x394
- * box sits at oy=5 — and a plate placed at `height/(2*rows)` alone lands five pixels off the strip
- * it names. Publishing the offset makes the plate exact at every grid, box and viewport. Called on
- * every resize, because both numbers move whenever the box does.
- */
-function publishCell() {
-  const L = renderer.layout();
-  boardCard.style.setProperty('--board-cell', `${L.cell}px`);
-  boardCard.style.setProperty('--board-oy', `${L.oy}px`);
 }
 
 /** Hands, the opponent's brain and the blitz clock all stand down while a log is on its way. */
@@ -578,6 +565,21 @@ function showOverlay() {
   again.focus({ preventScroll: true });
 }
 
+/**
+ * The beat the goal zone gets for itself. The rules land a winner the moment the ball touches row 0,
+ * and the renderer answers with a light sweep along the checkered line — but the result card lays a
+ * scrim over the whole board, so a card that lands on the same tick buries the one thing the board
+ * does to mark the line being taken. The card waits for the pulse instead.
+ */
+const GOAL_BEAT_MS = 600;
+let goalBeat = 0;
+function armGoalBeat() {
+  if (overlayOpen || goalBeat) return;
+  menuBtn.disabled = true;               // no pause sheet opening onto a race that is already settled
+  goalBeat = window.setTimeout(() => { goalBeat = 0; showOverlay(); }, GOAL_BEAT_MS);
+}
+const clearGoalBeat = () => { if (goalBeat) window.clearTimeout(goalBeat); goalBeat = 0; };
+
 function ui() {
   /* a pick that no longer belongs to you, or to a ball that is gone, is dropped here */
   if (selected !== null && (state.winner !== null || state.turn !== localSide
@@ -622,9 +624,9 @@ function ui() {
 
   /* one turn per seat makes a round; the counter is the UI's, the rules keep none */
   roundLabel.textContent = `Round ${Math.floor(turnsPlayed / Math.max(1, state.teams.length)) + 1}`;
-  /* the strike badge is painted at the heart of the finish strip, so the label yields while it is up */
-  wrap.classList.toggle('lane', rolling);
-  wrap.classList.toggle('rolling', rolling);   // the board is visibly inert while a trunk is on it
+  /* the strike badge is painted at the heart of the finish crown, so the crest yields to it from
+     inside the renderer — the board is visibly inert while a trunk is on it */
+  wrap.classList.toggle('rolling', rolling);
   paintClock();
 
   if (state.winner === null && overlayOpen) {
@@ -632,7 +634,7 @@ function ui() {
     overlay.hidden = true;
     menuBtn.disabled = false;
   }
-  if (state.winner !== null) showOverlay();
+  if (state.winner !== null) armGoalBeat();
 }
 
 /** A bot turn parked until the board is clear of a rolling log. */
@@ -911,6 +913,7 @@ function restart() {
   shownMines = -1;
   turnsPlayed = 0;
   saidTurn = '';
+  clearGoalBeat();
   overlayOpen = false;
   overlay.hidden = true;
   reward.hidden = true;
@@ -1197,6 +1200,8 @@ function resumeGame() {
 }
 
 function quitToMenu() {
+  /* a race that ended inside the goal beat still has to be paid out before the board goes away */
+  if (goalBeat) { clearGoalBeat(); showOverlay(); }
   sheets.close();
   /* Walking out of a live online race is a resignation: the rival takes the win, and the socket
      goes with it — leaving it open would only hold the other player's seat hostage. */
@@ -1386,11 +1391,10 @@ $('quit-yes').addEventListener('click', () => { impact('light'); quitToMenu(); }
 
 /* ---------- loop ---------- */
 
-new ResizeObserver(() => { renderer.resize(); confetti.resize(); publishCell(); }).observe(wrap);
-window.addEventListener('resize', () => { renderer.resize(); confetti.resize(); publishCell(); });
+new ResizeObserver(() => { renderer.resize(); confetti.resize(); }).observe(wrap);
+window.addEventListener('resize', () => { renderer.resize(); confetti.resize(); });
 renderer.resize();
 confetti.resize();
-publishCell();
 
 let last = performance.now();
 function frame(now: number) {

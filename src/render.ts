@@ -223,6 +223,17 @@ const resolve = (ramp: Ramp | null, list: Stop[]): Stop[] => {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
+/**
+ * An `rgba()` copy of a hex token at alpha `a`. The crest palette is authored as hex (a metal ramp
+ * has no business carrying alpha), and the crown's flanking rules still have to fade out.
+ */
+function tint(col: string, a: number): string {
+  const h = /^#([0-9a-f]{6})$/i.exec(col);
+  if (!h) return col;
+  const n = parseInt(h[1], 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
 /* ---------- the board's metrics ----------
  * One cell is the whole unit system: `computeLayout` fits the grid the rules picked (8x12 for a
  * duel, 10x12 for three or four contenders) into whatever box the stage hands it, and every size
@@ -457,6 +468,19 @@ const FIXED: Ramp[] = [...SEAT_RAMPS, ERR_RAMP];
 const SEAT_TICKS: readonly number[] = [0, 1, 2, 3];
 
 const CORNER = 0.4;              // board corner radius, in cells
+/**
+ * The word the crown wears. It names the line, it is board furniture rather than UI copy, and it is
+ * the one thing on the slab that has always been set in Latin.
+ */
+const CREST_WORD = 'FINISH';
+/** Below this cell the inscription is mush rather than type, so the crown wears no word at all. */
+const CREST_MIN = 24;
+/** Heavy enough to survive being nine pixels tall, on the stack the app already ships. */
+const crestFont = (px: number) =>
+  `800 ${px}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif`;
+/** How long the arrival pulse runs, and how long the crown waits for a ball to reach the line. */
+const GOAL_MS = 1150;
+const GOAL_WAIT_MS = 420;
 /** How many balls each seat fields: filled at the top of every frame, reused, never reallocated. */
 const SEATS_N = new Int16Array(SEAT_COUNT);
 /** Draw order of the balls, nearest last: likewise. */
@@ -569,6 +593,21 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   const glowG: CanvasGradient[] = [];
   /** Light sweep over the finish strip: one gradient per resize, moved with the canvas transform. */
   const sweep = { grad: null as CanvasGradient | null, band: 0 };
+  /**
+   * The crown's inscription: struck once per resize into a tile of its own, then blitted every
+   * frame. Offscreen and per-frame because it has to yield to a rolling log and flare when the line
+   * is taken, and the static layer can do neither.
+   */
+  let crestArt: HTMLCanvasElement | null = null;
+  const crestGeo = { x: 0, y: 0, w: 0, h: 0 };
+  /** the crest's fade — 1 lit, 0 yielded to a log — eased against real elapsed time, not frames */
+  let crestK = 1, crestT = 0;
+  /** a scratch context that only ever measures the crest's type */
+  let crestProbe: CanvasRenderingContext2D | null = null;
+  /** the moment the line was taken, -1 = the crown is at rest; drives the arrival pulse alone */
+  let goalAt = -1;
+  /** the seat the rules have crowned, and the moment they did it, while its ball finishes travelling */
+  let goalWait = -1, goalSeat: Player | null = null;
 
   /** The player's seat plus every fixed one, from one theme. */
   function seats(t: Theme): Side[] {
@@ -669,29 +708,75 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       }
     }
 
-    // soft glow under the line, fading out roughly three rows down
-    const fg = g.createLinearGradient(0, oy, 0, oy + 3 * c);
-    for (const [t, col] of resolve(null, b.glow)) fg.addColorStop(t, col);
-    g.fillStyle = fg;
-    g.fillRect(ox, oy, bw, 3 * c);
+    /* ---------- the goal zone: row 0 is sculpted, not stickered ----------
+       Its upper two thirds are one band of dark clay — the apex kerb the board is crowned by — with
+       the FINISH crest struck into it; its lower third is the checkered line itself, laid as beveled
+       tiles. The row is still exactly one cell tall, so none of this costs the board height, and
+       nothing about it is a separate object laid over the grid. */
+    const kh = c * (2 / 3);                        // the crown band; the checker band is the rest
+    const q = c / 3;                               // one checker square, three to a cell
 
-    // checkered finish strip across row 0: the line is readable without colour and without a label
-    const q = c / 2;
-    for (let i = 0; i < cols * 2; i++) {
-      for (let j = 0; j < 2; j++) {
-        const x0 = px(ox + i * q), x1 = px(ox + (i + 1) * q);
-        const y0 = px(oy + j * q), y1 = px(oy + (j + 1) * q);
-        g.fillStyle = (i + j) % 2 === 0 ? b.checker[0] : b.checker[1];
-        g.fillRect(x0, y0, x1 - x0, y1 - y0);
-      }
+    /* the checkered line, cut into the slab: the band gets a recess of its own to sit in (on a pale
+       arena the tiles underneath are white, and white checks on white tiles are no line at all), and
+       each square is then shaded into its top edge and lit at its foot */
+    g.fillStyle = b.bevel[1];
+    g.fillRect(ox, oy + kh, bw, q);
+    const cg = Math.max(1, c * 0.035), cs = q - cg, cr = Math.min(cs * 0.2, c * 0.08);
+    const cshade = g.createLinearGradient(0, 0, 0, cs);
+    cshade.addColorStop(0, b.bevel[1]);
+    cshade.addColorStop(0.2, clear(b.bevel[1]));
+    cshade.addColorStop(0.74, clear(b.bevel[0]));
+    cshade.addColorStop(1, b.bevel[0]);
+    g.lineWidth = Math.max(1, c * 0.03);
+    for (let i = 0; i < cols * 3; i++) {
+      const tx = ox + i * q + cg / 2, ty = oy + kh + cg / 2;
+      rr(g, px(tx), px(ty), cs, cs, cr);
+      g.fillStyle = i % 2 === 0 ? b.checker[0] : b.checker[1];
+      g.fill();
+      g.save();
+      g.translate(tx, ty);                         // the shared bevel follows the square
+      rr(g, 0, 0, cs, cs, cr);
+      g.strokeStyle = cshade;
+      g.stroke();
+      g.restore();
     }
+
+    /* the crown: one raised band of dark clay across the top of the slab, lit along its own rim and
+       shaded into the foot that overhangs the checks */
+    const kerb = g.createLinearGradient(0, oy, 0, oy + kh);
+    kerb.addColorStop(0, b.kerb[0]);
+    kerb.addColorStop(0.66, b.kerb[1]);
+    kerb.addColorStop(1, b.kerb[1]);
+    g.fillStyle = kerb;
+    g.fillRect(ox, oy, bw, kh);
+    /* its top-edge rim light, sitting just inside the ring that trims the whole slab */
+    g.fillStyle = b.bevel[0];
+    g.fillRect(ox, oy + Math.max(1, c * 0.055), bw, Math.max(1, c * 0.028));
+    /* and the shadow the kerb's lip throws down into the recessed line */
+    const cast = g.createLinearGradient(0, oy + kh, 0, oy + kh + q * 0.8);
+    cast.addColorStop(0, 'rgba(0,0,0,.45)');
+    cast.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = cast;
+    g.fillRect(ox, oy + kh, bw, q * 0.8);
+
+    // the line itself, where the kerb's foot meets the field
     g.strokeStyle = b.rule;
     g.lineWidth = Math.max(1, c * 0.02);
     g.beginPath(); g.moveTo(ox, px(oy + c)); g.lineTo(ox + bw, px(oy + c)); g.stroke();
 
+    /* the light the goal zone throws down onto the arrival tiles: the emerald wash the arena is
+       themed with, and its warm amber partner, both starting below the line so they never wash the
+       checks out. This is what takes the hard seam out of the join with row 1. */
+    for (const stops of [b.glow, b.spill]) {
+      const fg = g.createLinearGradient(0, oy + c, 0, oy + 3.6 * c);
+      for (const [t, col] of resolve(null, stops)) fg.addColorStop(t, col);
+      g.fillStyle = fg;
+      g.fillRect(ox, oy + c, bw, 2.6 * c);
+    }
+
     /* three soft beams falling out of the finish, gone by the fourth row */
     if (b.beam) {
-      const top = oy + c * 0.55, bot = oy + c * 3.5;
+      const top = oy + c, bot = oy + c * 3.5;
       const beam = g.createLinearGradient(0, top, 0, bot);
       beam.addColorStop(0, b.beam);
       beam.addColorStop(0.55, clear(b.beam));
@@ -774,6 +859,70 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     bg2.addColorStop(1, 'rgba(255,90,20,0)');
     blastGlow = bg2;
     buildLogArt();
+    buildCrest(bw);
+  }
+
+  /**
+   * Strike the crown's inscription at this board's own scale: measure the word once at a known size
+   * and let the crown set the type, never the other way round. Then the metal — a dark drop into the
+   * clay, the gold ramp over it, and two hairlines that fade outward so the word reads as part of
+   * the kerb's own moulding rather than a label dropped onto it.
+   */
+  function buildCrest(bw: number) {
+    const { cell: c, ox, oy, dpr } = L;
+    const kh = c * (2 / 3);
+    crestArt = null;
+    if (c < CREST_MIN) return;
+    const m = crestProbe ?? (crestProbe = document.createElement('canvas').getContext('2d')!);
+    m.font = crestFont(100);
+    let units = 0;                                   // the word's width per 100px of type, tracking in
+    for (const ch of CREST_WORD) units += m.measureText(ch).width + 22;
+    units -= 22;
+    /* the inscription leaves the kerb's own ends bare, so the band still reads as one moulding */
+    const fs = Math.min(kh * 0.44, ((bw - c * 2.6) / units) * 100);
+    if (fs < 6) return;
+    const track = fs * 0.22;
+    m.font = crestFont(fs);
+    const wds: number[] = [];
+    let tw = 0;
+    for (const ch of CREST_WORD) { const w = m.measureText(ch).width; wds.push(w); tw += w + track; }
+    tw -= track;
+    const rule = fs * 1.5, gap = fs * 0.6, H = fs * 1.7, W = tw + 2 * (rule + gap);
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil(W * dpr));
+    cv.height = Math.max(1, Math.ceil(H * dpr));
+    const g = cv.getContext('2d')!;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.textBaseline = 'middle';
+    const mid = H / 2, cx = W / 2;
+    const gold = resolve(null, th.board.crest);
+    const core = gold[(gold.length / 2) | 0][1];
+    for (const sgn of [-1, 1]) {
+      const x0 = cx + sgn * (tw / 2 + gap), x1 = x0 + sgn * rule;
+      const rl = g.createLinearGradient(x0, 0, x1, 0);
+      rl.addColorStop(0, tint(core, 0.7));
+      rl.addColorStop(1, tint(core, 0));
+      g.fillStyle = rl;
+      g.fillRect(Math.min(x0, x1), mid, rule, Math.max(1, fs * 0.1));
+    }
+    let x = cx - tw / 2;
+    g.fillStyle = 'rgba(0,0,0,.6)';                  // the drop the raised metal casts on the clay
+    for (let i = 0; i < wds.length; i++) { g.fillText(CREST_WORD[i], x, mid + fs * 0.1); x += wds[i] + track; }
+    const body = g.createLinearGradient(0, mid - fs * 0.52, 0, mid + fs * 0.52);
+    for (const [t, col] of gold) body.addColorStop(t, col);
+    g.fillStyle = body;
+    x = cx - tw / 2;
+    for (let i = 0; i < wds.length; i++) { g.fillText(CREST_WORD[i], x, mid); x += wds[i] + track; }
+    crestArt = cv;
+    crestGeo.w = W; crestGeo.h = H;
+    crestGeo.x = ox + (bw - W) / 2;
+    crestGeo.y = oy + kh * 0.5 - H / 2;
+  }
+
+  /** Has the seat that took the race actually arrived on the line, or is its ball still gliding? */
+  function leadsOnLine(v: View, seat: Player): boolean {
+    for (const b of v.balls) if (b.team === seat && b.pos.y <= 0.62) return true;
+    return false;
   }
 
   /**
@@ -1466,6 +1615,18 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     if (canvas.clientWidth !== lastW || canvas.clientHeight !== lastH) resize();
     const { cell: c, ox, oy } = L;
     const still = motionReduced();
+    /*
+     * The goal was crossed. The rules land a winner the moment the ball *lands*, but the ball is
+     * still gliding there, so the crown waits for it to touch the line — and if it never does (a
+     * forfeit, an adjudication: a win that never touched the board) the wait itself fires the pulse.
+     */
+    const win = v.state.winner;
+    if (win === null) { goalWait = -1; goalSeat = null; }
+    else if (goalSeat !== win) { goalSeat = win; goalWait = now; }
+    if (win !== null && goalWait >= 0 && (now - goalWait > GOAL_WAIT_MS || leadsOnLine(v, win))) {
+      goalWait = -1;
+      goalAt = now;
+    }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (bg) ctx.drawImage(bg, 0, 0);
@@ -1485,9 +1646,20 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     rr(ctx, ox, oy, cols * c, rows * c, CORNER * c);
     ctx.clip();
 
-    // slow light sweep across the finish strip (clipped to the strip and the rounded corners)
-    if (!still && sweep.grad) {
-      const bw = cols * c;
+    /* ---- the goal zone's own furniture: the crown's inscription and the light it wears ----
+       The strike badge is painted at the heart of this same band, so the crest steps aside while a
+       log is on it, exactly as the plate used to — only now it is the board's own paint doing it,
+       and no DOM layer has to be kept welded to a row that moves with the layout. */
+    const lane = rolls.length > 0;
+    const dtc = crestT ? clamp((now - crestT) / 1000, 0, 0.05) : 0;
+    crestT = now;
+    crestK += ((lane ? 0 : 1) - crestK) * (still ? 1 : 1 - Math.exp(-dtc * 18));
+    const goal = goalAt >= 0 ? 1 - (now - goalAt) / GOAL_MS : -1;   // -1 = the crown is at rest
+    if (goal <= 0) goalAt = -1;
+
+    const bw = cols * c;
+    /* the strip's idle light sweep, held back while the arrival pulse is running the same band */
+    if (!still && sweep.grad && goal < 0) {
       ctx.save();
       rr(ctx, ox, oy, bw, rows * c, CORNER * c);
       ctx.clip();
@@ -1495,6 +1667,38 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.translate(ox - sweep.band + ((now % 5200) / 5200) * (bw + sweep.band), 0);
       ctx.fillStyle = sweep.grad;
       ctx.fillRect(0, oy, sweep.band, c);
+      ctx.restore();
+    }
+
+    if (crestArt && crestK > 0.01) {
+      ctx.save();
+      ctx.globalAlpha = crestK;
+      ctx.drawImage(crestArt, crestGeo.x, crestGeo.y, crestGeo.w, crestGeo.h);
+      if (goal > 0) {                                   // the metal catches the line as it is taken
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = crestK * goal * 0.85;
+        ctx.drawImage(crestArt, crestGeo.x, crestGeo.y, crestGeo.w, crestGeo.h);
+      }
+      ctx.restore();
+    }
+
+    /* the arrival pulse: one bright pass of light along the checkered line plus a wash over the
+       whole goal zone. Additive, inside the slab, and gone in just over a second — nothing here
+       moves a box, so the victory card cannot land on a board that has shifted under it. */
+    if (goal > 0) {
+      ctx.save();
+      rr(ctx, ox, oy, bw, rows * c, CORNER * c);
+      ctx.clip();
+      ctx.beginPath(); ctx.rect(ox, oy, bw, c); ctx.clip();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = `rgba(255,246,224,${(0.18 * goal * goal).toFixed(3)})`;
+      ctx.fillRect(ox, oy, bw, c);
+      if (!still && sweep.grad) {
+        ctx.translate(ox - sweep.band + (bw + sweep.band) * (1 - goal * goal), 0);
+        ctx.globalAlpha = 0.4 + 0.6 * goal;
+        ctx.fillStyle = sweep.grad;
+        ctx.fillRect(0, oy, sweep.band, c);
+      }
       ctx.restore();
     }
 
@@ -1836,6 +2040,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       born.clear(); pulses.length = 0; blasts.length = 0;
       ripples.length = 0; streaks.length = 0; prevPos.clear(); mineGhostKey = '';
       rolls.length = 0; dust.length = 0; thump.clear();
+      goalAt = -1; goalWait = -1; goalSeat = null; crestK = 1; crestT = 0;
     },
     /**
      * A warning round just closed, so its log is rolling: ~320ms per row behind an eased launch, the
