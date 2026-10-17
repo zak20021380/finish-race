@@ -7,7 +7,8 @@
  * storage.ts / squads.ts so the race never depends on persistence.
  *
  * Store API (spec): `getNotifications()`, `markAsRead(id)`,
- * `markAllAsRead()`, `hasUnread()` — plus `getUnreadCount()`,
+ * `markAllAsRead()`, `deleteNotification(id)`, `clearAll()`,
+ * `hasUnread()` — plus `getUnreadCount()`,
  * `addNotification()` for future squad/tournament hooks, and
  * `onNotifications()` so the header bell repaints on every change.
  *
@@ -18,6 +19,8 @@
  */
 import { earnCoins } from './storage';
 import { impact, notify } from './telegram';
+import { motionReduced, settings } from './settings';
+import { audioContext } from './sound';
 import type { Sheets } from './sheets';
 
 export type NotificationKind = 'squad' | 'tournament' | 'reward';
@@ -197,6 +200,24 @@ export function markAllAsRead(): void {
   emit();
 }
 
+/** Removes one row for good. Returns whether something was actually deleted. */
+export function deleteNotification(id: string): boolean {
+  const i = items.findIndex((n) => n.id === id);
+  if (i < 0) return false;
+  items.splice(i, 1);
+  emit();
+  return true;
+}
+
+/** Empties the drawer — the [Clear All] key's move. Returns how many rows went. */
+export function clearAll(): number {
+  const gone = items.length;
+  if (gone === 0) return 0;
+  items = [];
+  emit();
+  return gone;
+}
+
 /** Future hook for squad / tournament / reward events. Returns the stored row. */
 export function addNotification(input: NewNotification): AppNotification {
   const now = Date.now();
@@ -272,7 +293,7 @@ export interface NotificationsDeps {
 const KIND_ICON: Record<NotificationKind, string> = {
   squad: '#i-cup',
   tournament: '#i-flag',
-  reward: '#i-bag',
+  reward: '#i-gift',
 };
 
 const KIND_LABEL: Record<NotificationKind, string> = {
@@ -280,6 +301,37 @@ const KIND_LABEL: Record<NotificationKind, string> = {
   tournament: 'Tournament',
   reward: 'Reward',
 };
+
+/**
+ * The reward chime: the same rising E5→B5 pair the matchmaking lock uses, fed
+ * through the shared engine (`sound.ts`). Respects Sound; silent without WebAudio.
+ */
+const CLAIM_NOTES: ReadonlyArray<readonly [number, number]> = [[659.25, 0], [987.77, 0.09]];
+
+function chime(): void {
+  if (!settings.sound) return;
+  try {
+    const ctx = audioContext();
+    if (!ctx) return;
+    if (ctx.state !== 'running') void ctx.resume().catch(() => { /* still locked */ });
+    const t0 = ctx.currentTime;
+    for (const [freq, at] of CLAIM_NOTES) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      const t = t0 + at;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.13, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.32);
+    }
+  } catch {
+    /* no audio in this webview */
+  }
+}
 
 function el<T extends HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
@@ -293,17 +345,33 @@ export function createNotifications(deps: NotificationsDeps): { refresh(): void 
   const empty = el<HTMLElement>('notif-empty');
   const count = el<HTMLElement>('notif-count');
   const markAll = el<HTMLButtonElement>('notif-mark-all');
+  const clearEvery = el<HTMLButtonElement>('notif-clear-all');
+
+  /**
+   * Mid-claim state: the gold key flashes [+N] for a beat before the repaint
+   * settles the card into its quiet Claimed chip. Kept here so a watcher
+   * repaint mid-flash re-renders the flash instead of killing it early.
+   */
+  let flash: { id: string; coins: number } | null = null;
+  let flashTimer = 0;
 
   const paintBadge = (): void => {
     const unread = getUnreadCount();
     if (badge) {
-      /* Card carries a dot only — the numeric count lives in the sheet (#notif-count). */
+      /* the bell wears the count itself: a warm amber/red counter bead */
       badge.hidden = unread === 0;
-      badge.textContent = '';
+      badge.textContent = unread > 0 ? String(unread) : '';
       badge.setAttribute('aria-hidden', 'true');
     }
     if (bell) {
+      const wasSilent = !bell.classList.contains('has-unread');
       bell.classList.toggle('has-unread', unread > 0);
+      /* a fresh batch rings the bell once on mount: transform-only, no CSS loop */
+      if (wasSilent && unread > 0 && !motionReduced()) {
+        bell.classList.remove('ring');
+        void bell.offsetWidth;
+        bell.classList.add('ring');
+      }
       bell.setAttribute(
         'aria-label',
         unread > 0 ? `Open notifications, ${unread} unread` : 'Open notifications',
@@ -314,6 +382,7 @@ export function createNotifications(deps: NotificationsDeps): { refresh(): void 
       count.textContent = unread > 0 ? `${unread} new` : '';
     }
     if (markAll) markAll.disabled = unread === 0;
+    if (clearEvery) clearEvery.disabled = getNotifications().length === 0;
   };
 
   const paintList = (): void => {
@@ -357,20 +426,30 @@ export function createNotifications(deps: NotificationsDeps): { refresh(): void 
 
       card.append(ico, txt);
 
-      // Reward rows carry a direct [Claim] key; claimed rows go quiet.
-      if (n.kind === 'reward' && !n.claimed) {
-        const claim = document.createElement('button');
-        claim.type = 'button';
-        claim.className = 'btn btn-primary sm notif-claim';
-        claim.dataset.claim = n.id;
-        claim.textContent = 'Claim';
-        claim.setAttribute('aria-label', `Claim reward: ${n.body}`);
-        card.append(claim);
-      } else if (n.kind === 'reward' && n.claimed) {
-        const done = document.createElement('span');
-        done.className = 'notif-claimed';
-        done.textContent = 'Claimed';
-        card.append(done);
+      /* reward rows: [Claim] gold key → [+N] flash → quiet Claimed chip */
+      if (n.kind === 'reward') {
+        if (flash !== null && flash.id === n.id) {
+          const gain = document.createElement('button');
+          gain.type = 'button';
+          gain.className = 'notif-claim is-gain';
+          gain.disabled = true;
+          gain.textContent = `+${flash.coins}`;
+          gain.setAttribute('aria-label', `Claimed +${flash.coins} coins`);
+          card.append(gain);
+        } else if (n.claimed) {
+          const done = document.createElement('span');
+          done.className = 'notif-claimed';
+          done.textContent = 'Claimed';
+          card.append(done);
+        } else {
+          const claim = document.createElement('button');
+          claim.type = 'button';
+          claim.className = 'notif-claim';
+          claim.dataset.claim = n.id;
+          claim.textContent = 'Claim';
+          claim.setAttribute('aria-label', `Claim reward: ${n.body}`);
+          card.append(claim);
+        }
       }
 
       if (!n.read) {
@@ -379,6 +458,20 @@ export function createNotifications(deps: NotificationsDeps): { refresh(): void 
         dot.setAttribute('aria-hidden', 'true');
         card.append(dot);
       }
+
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'notif-del';
+      del.dataset.del = n.id;
+      del.setAttribute('aria-label', `Delete: ${n.title}`);
+      const delSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      delSvg.setAttribute('class', 'ico');
+      delSvg.setAttribute('aria-hidden', 'true');
+      const delUse = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      delUse.setAttribute('href', '#i-trash');
+      delSvg.append(delUse);
+      del.append(delSvg);
+      card.append(del);
 
       list.append(card);
     }
@@ -405,11 +498,49 @@ export function createNotifications(deps: NotificationsDeps): { refresh(): void 
     paintBadge();
   });
 
-  // One delegated listener: card tap marks read, [Claim] settles the wallet.
-  // The claim key stops propagation so one tap never both claims and re-reads.
+  /* [Clear All]: the drawer breathes out once, then the store empties. */
+  clearEvery?.addEventListener('click', () => {
+    if (clearEvery.disabled) return;
+    impact('light');
+    if (list && !motionReduced()) {
+      list.classList.add('is-clearing');
+      window.setTimeout(() => {
+        list.classList.remove('is-clearing');
+        clearAll();
+      }, 170);
+      return;
+    }
+    clearAll();
+    paintList();
+    paintBadge();
+  });
+
+  // One delegated listener: card tap marks read, [Claim] settles the wallet,
+  // [Delete] collapses its card before the row leaves the store. The claim and
+  // delete keys stop propagation, so one tap never does two things at once.
   list?.addEventListener('click', (e) => {
     const target = e.target as HTMLElement | null;
     if (!target) return;
+    const delBtn = target.closest<HTMLButtonElement>('[data-del]');
+    if (delBtn) {
+      e.stopPropagation();
+      const id = delBtn.dataset.del ?? '';
+      const card = delBtn.closest<HTMLElement>('.notif-card');
+      impact('light');
+      if (card && list && !motionReduced()) {
+        /* measured height → 0 collapse, then out of the store (one repaint) */
+        card.classList.add('is-out');
+        card.style.height = `${card.offsetHeight}px`;
+        card.style.paddingTop = '0';
+        card.style.paddingBottom = '0';
+        void card.offsetHeight;
+        card.style.height = '0px';
+        window.setTimeout(() => deleteNotification(id), 230);
+      } else {
+        deleteNotification(id);
+      }
+      return;
+    }
     const claimBtn = target.closest<HTMLButtonElement>('[data-claim]');
     if (claimBtn) {
       e.stopPropagation();
@@ -418,14 +549,14 @@ export function createNotifications(deps: NotificationsDeps): { refresh(): void 
       if (paid > 0) {
         notify('success');
         impact('medium');
-        const prev = claimBtn.textContent;
-        claimBtn.textContent = `+${paid}`;
-        claimBtn.disabled = true;
-        window.setTimeout(() => {
-          if (claimBtn.isConnected && claimBtn.textContent === `+${paid}`) {
-            claimBtn.textContent = prev;
-          }
-        }, 900);
+        chime();
+        flash = { id, coins: paid };
+        if (flashTimer) window.clearTimeout(flashTimer);
+        flashTimer = window.setTimeout(() => {
+          flash = null;
+          flashTimer = 0;
+          paintList();
+        }, 760);
       } else {
         impact('light');
       }

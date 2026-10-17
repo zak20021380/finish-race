@@ -3441,42 +3441,8 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
     inset 0 0 0 1px rgba(255, 255, 255, .07),
     inset 0 3px 7px rgba(0, 0, 0, .75);
 }
-/* Unread dot: a lit crimson bead on a clay socket, with an expanding ring rather than
-   an animated box-shadow — transform/opacity only, so it costs the compositor nothing. */
-.id-dot.notif-badge {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  z-index: 3;
-  min-width: 0;
-  width: 10px;
-  height: 10px;
-  padding: 0;
-  border-radius: 50%;
-  background: radial-gradient(circle at 34% 28%, #FF9A7E 0%, #FF522B 46%, #C2103A 100%);
-  box-shadow: 0 0 0 2px #1C2433, 0 0 9px rgba(255, 82, 43, .85);
-  animation: none;
-  font-size: 0;
-  line-height: 0;
-}
-.id-dot.notif-badge::after {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(255, 82, 43, .75);
-  animation: id-dot-ping 1.9s cubic-bezier(.22, .61, .36, 1) infinite;
-}
-@keyframes id-dot-ping {
-  0% { transform: scale(.8); opacity: .8; }
-  70% { transform: scale(2.3); opacity: 0; }
-  100% { transform: scale(2.3); opacity: 0; }
-}
-.id-dot.notif-badge[hidden] { display: none; }
-@media (prefers-reduced-motion: reduce) {
-  .id-dot.notif-badge::after { animation: none; opacity: 0; }
-}
-html.reduced-motion .id-dot.notif-badge::after { animation: none; opacity: 0; }
+/* Unread state now paints warm: the numeric badge + amber glow live with the
+   other notification styles (see NOTIFICATIONS below), not as a flat dot. */
 /* profile header owns the settings gear now */
 #profile-settings { flex: none; }
 /* 320px is a real floor. Below 380 the columns close in to one grid step, which buys the
@@ -6687,15 +6653,45 @@ html.reduced-motion .support-send.sending .send-spin { animation: none; }
    Motion stays on transform/opacity so the compositor does all of it.
    ========================================================================== */
 
-/* ---- header bell: Dark Clay key + glowing crimson/coral unread badge ---- */
+/* ---- header bell: a sculpted clay key whose counter wears warm amber/red ----
+   The bell key itself ships from .icon-btn.xs (Dark Clay raise + travel). */
 .notif-bell { position: relative; }
 .notif-bell:active { transform: translateY(2px); }
 .notif-bell .ico { color: var(--chip-ink); }
 .notif-bell.has-unread .ico { color: var(--ink); }
+/* unread state: the recessed dark-clay pill warms — an amber halo over the face */
+.icon-btn.xs.notif-bell.has-unread {
+  box-shadow:
+    0 2px 0 #080C14,
+    0 0 18px -2px rgba(251, 146, 60, .4),
+    inset 0 1px 0 rgba(255, 255, 255, .2),
+    inset 0 -8px 12px -10px rgba(0, 0, 0, .95),
+    inset 0 0 0 1px rgba(251, 146, 60, .35);
+}
+.icon-btn.xs.notif-bell.has-unread:active { transform: translateY(2px); }
+.icon-btn.xs.notif-bell.has-unread .notif-badge {
+  background: linear-gradient(180deg, #FFB454 0%, #FF6B57 48%, #E0264F 100%);
+  box-shadow:
+    0 2px 0 #7A1030,
+    0 0 12px rgba(255, 122, 43, .65),
+    inset 0 1px 0 rgba(255, 255, 255, .5);
+}
+/* the fresh-unread chime: one gentle idle wiggle on mount, 3 beats, then still */
+.notif-bell.ring .ico {
+  animation: bell-wiggle .9s cubic-bezier(.36, .07, .19, .97) 3;
+  transform-origin: 50% 60%;
+}
+@keyframes bell-wiggle {
+  0% { transform: rotate(0deg); }
+  20% { transform: rotate(-9deg) translateY(-1px); }
+  45% { transform: rotate(8deg); }
+  70% { transform: rotate(-4deg); }
+  100% { transform: rotate(0deg); }
+}
 .notif-badge {
   position: absolute;
-  top: -4px;
-  right: -4px;
+  top: -5px;
+  right: -5px;
   z-index: 2;
   display: grid;
   place-items: center;
@@ -6703,7 +6699,7 @@ html.reduced-motion .support-send.sending .send-spin { animation: none; }
   height: 18px;
   padding: 0 5px;
   border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #FF6B57 0%, #E0264F 100%);
+  background: linear-gradient(180deg, #FFA24C 0%, #E0264F 100%);
   color: #fff;
   font-size: 10px;
   font-weight: 900;
@@ -6712,17 +6708,17 @@ html.reduced-motion .support-send.sending .send-spin { animation: none; }
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   box-shadow:
-    0 2px 0 #8F0E2E,
-    0 0 12px rgba(255, 82, 43, .65),
+    0 2px 0 #7A1030,
+    0 0 12px rgba(255, 82, 43, .6),
     inset 0 1px 0 rgba(255, 255, 255, .45);
   animation: notif-ping 1.8s ease-out infinite;
   pointer-events: none;
 }
 .notif-badge[hidden] { display: none; }
 @keyframes notif-ping {
-  0% { box-shadow: 0 2px 0 #8F0E2E, 0 0 0 0 rgba(255, 82, 43, .55), inset 0 1px 0 rgba(255, 255, 255, .45); }
-  70% { box-shadow: 0 2px 0 #8F0E2E, 0 0 0 7px rgba(255, 82, 43, 0), inset 0 1px 0 rgba(255, 255, 255, .45); }
-  100% { box-shadow: 0 2px 0 #8F0E2E, 0 0 0 0 rgba(255, 82, 43, 0), inset 0 1px 0 rgba(255, 255, 255, .45); }
+  0% { box-shadow: 0 2px 0 #7A1030, 0 0 0 0 rgba(255, 122, 43, .55), inset 0 1px 0 rgba(255, 255, 255, .45); }
+  70% { box-shadow: 0 2px 0 #7A1030, 0 0 0 7px rgba(255, 122, 43, 0), inset 0 1px 0 rgba(255, 255, 255, .45); }
+  100% { box-shadow: 0 2px 0 #7A1030, 0 0 0 0 rgba(255, 122, 43, 0), inset 0 1px 0 rgba(255, 255, 255, .45); }
 }
 
 /* ---- drawer: clay face, 24px top corners, glowing top rim highlight ---- */
@@ -6758,17 +6754,27 @@ html.reduced-motion .support-send.sending .send-spin { animation: none; }
   align-items: center;
   gap: var(--s2);
 }
-.notif-title.sheet-t { margin: 0; text-align: left; }
+.notif-title.sheet-t {
+  margin: 0;
+  text-align: left;
+  letter-spacing: -.015em;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, .06),
+    0 -1px 1px rgba(0, 0, 0, .55);
+}
 .notif-count {
   flex: none;
-  padding: 3px 10px 4px;
+  padding: 3px 12px 4px;
   border-radius: var(--radius-pill);
-  background: rgba(255, 82, 43, .16);
-  box-shadow: inset 0 0 0 1px rgba(255, 82, 43, .38);
-  color: #FFB59D;
+  background: linear-gradient(180deg, #33270F 0%, #241C08 100%);
+  box-shadow:
+    0 2px 0 rgba(0, 0, 0, .55),
+    inset 0 1px 0 rgba(255, 236, 195, .2),
+    inset 0 0 0 1px rgba(252, 211, 77, .34);
+  color: #FFCE7A;
   font-size: var(--t-micro);
   font-weight: 800;
-  letter-spacing: .04em;
+  letter-spacing: .05em;
   text-transform: uppercase;
   line-height: 1.2;
   white-space: nowrap;
@@ -6800,35 +6806,56 @@ html.reduced-motion .support-send.sending .send-spin { animation: none; }
   transition: transform var(--motion-fast), box-shadow var(--motion-fast);
 }
 .notif-x:hover:not(:active) { transform: translateY(-1px); }
-.notif-x:active { transform: translateY(2px); --d: 0px; }
+.notif-x:active { transform: translateY(2px); --d: 0px; box-shadow: inset 0 2px 6px rgba(0, 0, 0, .7), inset 0 0 0 1px rgba(255, 255, 255, .07); }
 .notif-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+/* the action row: one compact tactile chip pair by the header's right edge */
 .notif-actions {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: var(--s2);
 }
-/* subtle slate text key: quiet by design, 44px hit band kept */
-.notif-mark {
+.notif-act {
+  --d: 2px;
   appearance: none;
-  position: relative;
   border: 0;
-  background: none;
+  position: relative;
   font: inherit;
-  cursor: pointer;
-  padding: 8px 4px;
-  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0 12px;
+  min-height: 32px;
   border-radius: var(--radius-pill);
-  color: #94A3B8;
-  font-size: var(--t-3);
-  font-weight: 700;
-  transition: transform var(--motion-fast), opacity var(--motion-fast), color var(--motion-fast);
+  background: linear-gradient(180deg, #232E44 0%, #1C2433 100%);
+  border-top: 1px solid rgba(255, 255, 255, .1);
+  color: var(--chip-ink);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow:
+    0 var(--d) 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    var(--clay-ring);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), opacity var(--motion-fast), color var(--motion-fast);
 }
-.notif-mark::after { content: ""; position: absolute; inset: -4px 0; }
-.notif-mark:hover:not(:active):not([disabled]) { color: var(--ink); }
-.notif-mark:active:not([disabled]) { transform: translateY(2px); opacity: .8; }
-.notif-mark:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-.notif-mark[disabled] { opacity: .45; cursor: default; }
+.notif-act::after { content: ""; position: absolute; inset: -6px; }
+.notif-act .ico { width: 13px; height: 13px; flex: none; }
+.notif-act:hover:not(:active):not([disabled]) { transform: translateY(-1px); color: var(--ink); }
+.notif-act:active:not([disabled]) { transform: translateY(2px); --d: 0px; box-shadow: inset 0 2px 6px rgba(0, 0, 0, .65), inset 0 0 0 1px rgba(255, 255, 255, .06); }
+.notif-act:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.notif-act[disabled] { opacity: .4; cursor: default; }
+/* the destructive chip quietly warms toward the claim gold, never red-loud */
+.notif-act.danger { color: #FFC9AE; box-shadow: 0 var(--d) 0 #080C14, inset 0 1px 0 rgba(255, 255, 255, .08), inset 0 0 0 1px rgba(255, 122, 43, .28); }
+.notif-act.danger .ico { color: #FF9A6E; }
 
 /* ---- list: the one scroll in the drawer; the page never bounces ---- */
 .notif-list {
@@ -6843,71 +6870,73 @@ html.reduced-motion .support-send.sending .send-spin { animation: none; }
   scrollbar-width: none;
   padding: 2px 2px 4px;
   margin: 0 -2px;
+  transition: opacity 170ms ease, transform 170ms ease;
 }
+.notif-list.is-clearing { opacity: 0; transform: translateX(-12px); pointer-events: none; }
 .notif-list::-webkit-scrollbar { display: none; }
 .notif-list:focus { outline: none; }
 .notif-list:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
 
-/* ---- cards: recessed #141A25 inner tiles, icon badge + slate timestamp ---- */
+/* ---- cards: recessed #141A25 inner tiles with a lit top rim ----
+   The flat side stripe is gone: the unread cue lives in the amber jewel dot. */
 .notif-card {
   position: relative;
   display: flex;
   align-items: flex-start;
   gap: var(--s3);
+  flex: 0 0 auto; /* a scroll never shifts the cards: they keep their size, the list absorbs it */
   padding: var(--s3);
   border-radius: var(--r-chip);
   background: #141A25;
   box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
     inset 0 2px 4px rgba(0, 0, 0, .45),
-    inset 0 -1px 0 rgba(255, 255, 255, .06),
+    inset 0 -1px 0 rgba(255, 255, 255, .05),
     inset 0 0 0 1px rgba(255, 255, 255, .06);
   cursor: pointer;
   overflow: hidden;
-  transition: transform var(--motion-fast), background var(--motion-fast);
+  transition: transform var(--motion-fast), background var(--motion-fast), height 220ms cubic-bezier(.22, .61, .36, 1), padding 220ms cubic-bezier(.22, .61, .36, 1), opacity 190ms ease, box-shadow 220ms ease;
 }
 .notif-card:hover { background: #161D2B; }
 .notif-card:active { transform: translateY(2px); }
 .notif-card:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-/* unread: subtle left accent bar in coral — the one loud edge in the drawer */
-.notif-card.is-unread::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 10px;
-  bottom: 10px;
-  width: 3px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #FF7A4D 0%, #FF522B 100%);
-  box-shadow: 0 0 10px rgba(255, 82, 43, .6);
-}
-.notif-card.is-unread { padding-left: calc(var(--s3) + 6px); }
 .notif-card.is-read { cursor: default; }
 .notif-card.is-read .notif-title,
 .notif-card.is-read .notif-body { color: var(--ink-soft); }
-/* left icon badge: embossed chip with an ambient kind-colored glow */
+/* individual delete: a measured height collapse + fade before the store repaints */
+.notif-card.is-out {
+  overflow: hidden;
+  opacity: 0;
+  transform: translateX(14px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .04);
+  pointer-events: none;
+}
+/* left icon badge: a deeply engraved clay coin with an ambient kind glow */
 .notif-ico {
   flex: none;
   width: 44px;
   height: 44px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #0A0F1C 0%, var(--field) 100%);
+  border-radius: 50%;
+  background: linear-gradient(180deg, #070C17 0%, #10151F 100%);
   box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, .55),
-    inset 0 -1px 0 rgba(255, 255, 255, .08),
-    inset 0 0 0 1px rgba(255, 255, 255, .06);
+    inset 0 3px 6px rgba(0, 0, 0, .65),
+    inset 0 -2px 3px rgba(0, 0, 0, .5),
+    inset 0 0 0 1px rgba(255, 255, 255, .07),
+    0 1px 0 rgba(255, 255, 255, .05);
 }
-.notif-ico .ico { width: 22px; height: 22px; }
-.notif-ico.squad { color: var(--brand-ink); box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 -1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(125,211,252,.3), 0 0 14px -2px rgba(56,189,248,.35); }
-.notif-ico.tournament { color: var(--honey-ink); box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 -1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(252,211,77,.3), 0 0 14px -2px rgba(245,158,11,.4); }
-.notif-ico.reward { color: var(--coin-ink); box-shadow: inset 0 2px 4px rgba(0,0,0,.55), inset 0 -1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(252,211,77,.32), 0 0 14px -2px rgba(245,158,11,.45); }
+.notif-ico .ico { width: 21px; height: 21px; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .8)); }
+.notif-ico.squad { color: var(--brand-ink); filter: drop-shadow(0 0 7px rgba(56, 189, 248, .5)); }
+.notif-ico.tournament { color: var(--honey-ink); filter: drop-shadow(0 0 7px rgba(245, 158, 11, .55)); }
+.notif-ico.reward { color: var(--coin-ink); filter: drop-shadow(0 0 7px rgba(245, 158, 11, .6)); }
 .notif-txt {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding-right: 34px;
 }
 .notif-kind {
   font-size: var(--t-micro);
@@ -6943,21 +6972,93 @@ html.reduced-motion .support-send.sending .send-spin { animation: none; }
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }
-/* unread dot: small glowing coral pip, top-right of the card */
+/* unread dot: a soft glowing amber jewel, seated left of the delete key */
 .notif-dot {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: 18px;
+  right: 44px;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #FF522B;
-  box-shadow: 0 0 10px rgba(255, 82, 43, .8);
+  background: radial-gradient(circle at 34% 28%, #FFE29A 0%, #F5B93B 46%, #B45309 100%);
+  box-shadow: 0 0 10px rgba(245, 158, 11, .8), 0 0 0 2px rgba(0, 0, 0, .3);
+  animation: dot-breathe 2.2s ease-in-out infinite alternate;
   pointer-events: none;
 }
-/* reward claim: compact key pinned to the card's end */
-.notif-claim { flex: none; align-self: center; }
-.notif-claim[disabled] { opacity: .7; }
+@keyframes dot-breathe {
+  0% { box-shadow: 0 0 6px rgba(245, 158, 11, .55), 0 0 0 2px rgba(0, 0, 0, .3); }
+  100% { box-shadow: 0 0 13px rgba(245, 158, 11, .95), 0 0 0 2px rgba(0, 0, 0, .3); }
+}
+/* per-item delete key: a small recessed ✕-socket in the card's corner */
+.notif-del {
+  appearance: none;
+  border: 0;
+  position: absolute;
+  top: 12px;
+  right: 10px;
+  z-index: 2;
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #1B2334 0%, #151B29 100%);
+  color: var(--ink-soft);
+  cursor: pointer;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .6),
+    inset 0 -1px 0 rgba(255, 255, 255, .07);
+  transition: transform var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
+}
+.notif-del .ico { width: 12px; height: 12px; }
+.notif-del:hover { color: #FFB59D; }
+.notif-del:active {
+  transform: scale(.92);
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, .8);
+}
+.notif-del:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 1px; }
+/* reward claim: an elevated gold clay key with a lit brezel and crisp press */
+.notif-claim {
+  --d: 2px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  flex: none;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 2px 15px 0;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #FFC845 0%, #F5A20B 55%, #D97706 100%);
+  color: #2A1B03;
+  font-size: var(--t-micro);
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow:
+    0 var(--d) 0 #8A4905,
+    0 6px 12px -6px rgba(180, 83, 9, .6),
+    inset 0 1px 0 rgba(255, 255, 255, .6),
+    inset 0 -2px 3px rgba(146, 64, 14, .4);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), filter var(--motion-fast);
+}
+.notif-claim:hover:not(:active) { transform: translateY(-1px); filter: brightness(1.05); }
+.notif-claim:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 2px 5px rgba(146, 64, 14, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .3);
+}
+.notif-claim:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
+.notif-claim[disabled] { cursor: default; filter: brightness(1.06); }
+/* the mid-flash [+N] beat keeps lit gold, slightly proud */
+.notif-claim.is-gain { font-size: var(--t-3); font-weight: 900; letter-spacing: .02em; color: #201302; }
 .notif-claimed {
   flex: none;
   align-self: center;
@@ -7022,11 +7123,13 @@ html.reduced-motion .support-send.sending .send-spin { animation: none; }
   .notif-ico { width: 40px; height: 40px; }
 }
 
-/* reduced motion: no badge pulse, matching the app-wide restraint */
+/* reduced motion: no badge ping, no bell wiggle, no jewel breathing */
 @media (prefers-reduced-motion: reduce) {
-  .notif-badge { animation: none; }
+  .notif-badge, .notif-bell.ring .ico, .notif-dot { animation: none; }
 }
-html.reduced-motion .notif-badge { animation: none; }
+html.reduced-motion .notif-badge,
+html.reduced-motion .notif-bell.ring .ico,
+html.reduced-motion .notif-dot { animation: none; }
 
 /* ==========================================================================
    DOCK-NAV — 5-tab primary navigation (Play · Arena · Ranks · Shop · Profile).

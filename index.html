@@ -291,6 +291,24 @@
       <symbol id="i-close" viewBox="0 0 24 24">
         <path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
       </symbol>
+      <!-- the inbox drawer's dismiss key (individual + bulk delete) -->
+      <symbol id="i-trash" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 7h16" />
+          <path d="M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7" />
+          <path d="M6.2 7l.9 11.1a1.9 1.9 0 0 0 1.9 1.7h6a1.9 1.9 0 0 0 1.9-1.7L17.8 7" />
+          <path d="M10.2 11v5.2M13.8 11v5.2" />
+        </g>
+      </symbol>
+      <!-- the reward card's gift mark -->
+      <symbol id="i-gift" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="9.4" width="16" height="10.6" rx="1.6" />
+          <path d="M3 6.4h18v3H3z" />
+          <path d="M12 6.4V20" />
+          <path d="M12 6.2S10.9 3 8.9 3a1.9 1.9 0 0 0 0 3.4ZM12 6.2S13.1 3 15.1 3a1.9 1.9 0 0 1 0 3.4Z" />
+        </g>
+      </symbol>
     </svg>
 
     <div class="bg" aria-hidden="true">
@@ -350,7 +368,7 @@
               <button class="coin-pill id-coin" type="button" id="coin-btn" aria-label="Open profile — coin balance"><span class="coin" data-coin aria-hidden="true"></span><span id="p-coins">0</span></button>
               <button class="icon-btn xs notif-bell id-bell" type="button" id="home-notifs" aria-label="Open notifications">
                 <svg class="ico" aria-hidden="true"><use href="#i-bell" /></svg>
-                <span class="notif-badge id-dot" id="notif-badge" hidden></span>
+                <span class="notif-badge" id="notif-badge" hidden></span>
               </button>
             </div>
           </header>
@@ -2135,13 +2153,18 @@
           <button class="notif-x" type="button" data-sheet-close aria-label="Close notifications">×</button>
         </div>
         <div class="notif-actions">
-          <button class="notif-mark" type="button" id="notif-mark-all">Mark all as read</button>
+          <button class="notif-act" type="button" id="notif-mark-all">
+            <svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><span class="notif-act-t">Mark All Read</span>
+          </button>
+          <button class="notif-act danger" type="button" id="notif-clear-all">
+            <svg class="ico" aria-hidden="true"><use href="#i-trash" /></svg><span class="notif-act-t">Clear All</span>
+          </button>
         </div>
         <div class="notif-list" id="notif-list" data-scroll tabindex="0" role="list" aria-label="Notifications"></div>
         <div class="notif-empty" id="notif-empty" hidden>
           <span class="notif-empty-ico" aria-hidden="true"><svg class="ico"><use href="#i-bell" /></svg></span>
           <p class="notif-empty-t">All caught up!</p>
-          <p class="notif-empty-s">Squad moves, cups and rewards land here.</p>
+          <p class="notif-empty-s">No new alerts.</p>
         </div>
       </section>
     </div>
