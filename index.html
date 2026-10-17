@@ -160,6 +160,13 @@
            <path d="M21 3.6 14.2 20.4l-3.8-6.2L4.2 10.4Z" />
          </g>
        </symbol>
+      <!-- the referral hub's copy key: two offset sheets, the classic copy mark -->
+      <symbol id="i-copy" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="8.6" y="8.6" width="10.4" height="10.4" rx="2.2" />
+          <path d="M15.4 5.9V5a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6.4a2 2 0 0 0 2 2h.9" />
+        </g>
+      </symbol>
       <symbol id="i-cup" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
           <path d="M7 4h10v5a5 5 0 0 1-10 0Z" />
@@ -906,6 +913,16 @@
                   </dl>
                 </div>
               </div>
+            </div>
+            <div class="pf-sec pf-invite-sec">
+              <button class="pf-invite" type="button" id="pf-invite" aria-haspopup="dialog" aria-label="Invite friends and earn coins">
+                <span class="pf-invite-well" aria-hidden="true"><svg class="ico"><use href="#i-gift" /></svg></span>
+                <span class="pf-invite-txt">
+                  <span class="pf-invite-t">Invite Friends</span>
+                  <span class="pf-invite-s" id="pf-invite-s">Earn +500 Coins per invite</span>
+                </span>
+                <span class="pf-invite-pill" id="pf-invite-pill" aria-hidden="true">Invite</span>
+              </button>
             </div>
             <div class="pf-sec pf-badges-sec">
               <h2 class="eq-h pf-sec-h">
@@ -1925,6 +1942,45 @@
           <svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>
           <span data-i18n="supportOk">Message sent to admins!</span>
         </p>
+      </section>
+
+      <!-- referral hub: the personal invite link, Telegram share, and the claimable coin reward -->
+      <section class="sheet referral-sheet" id="sheet-referral" hidden role="dialog" aria-modal="true" aria-labelledby="ref-title">
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <header class="referral-head">
+          <h2 class="sheet-t left referral-title" id="ref-title">Invite Friends &amp; Earn</h2>
+          <button class="referral-x" type="button" data-sheet-close aria-label="Close referral hub">✕</button>
+        </header>
+        <div class="referral-banner">
+          <span class="referral-banner-ico" aria-hidden="true"><svg class="ico"><use href="#i-gift" /></svg></span>
+          <p id="ref-banner">Get <b>500 Coins</b> for you &amp; your friend upon joining!</p>
+        </div>
+        <div class="referral-link-row">
+          <input class="referral-input" id="ref-link" type="text" readonly value="" spellcheck="false"
+            aria-label="Your personal referral link" />
+          <button class="referral-copy" id="ref-copy" type="button" aria-live="polite">
+            <svg class="ico" aria-hidden="true"><use href="#i-copy" /></svg>
+            <span class="ref-copy-t">Copy</span>
+          </button>
+        </div>
+        <button class="btn referral-share" type="button" id="ref-share">
+          <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
+          <span>Share Link via Telegram</span>
+        </button>
+        <div class="referral-stats">
+          <div class="referral-stat">
+            <span class="referral-stat-n" id="ref-joins">0</span>
+            <span class="referral-stat-k">Friends Joined</span>
+          </div>
+          <div class="referral-stat">
+            <span class="referral-stat-n"><b id="ref-unclaimed">0</b><span class="referral-stat-u"> Coins</span></span>
+            <span class="referral-stat-k">Unclaimed Rewards</span>
+          </div>
+        </div>
+        <button class="btn referral-claim" type="button" id="ref-claim" disabled>
+          <svg class="ico" aria-hidden="true"><use href="#i-gift" /></svg>
+          <span>Claim Rewards</span>
+        </button>
       </section>
 
       <!-- choose mode: 4 presets with live renderer previews + custom + online -->

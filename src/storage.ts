@@ -60,6 +60,21 @@ export interface Stats {
   modes: Partial<Record<Mode, number>>;
 }
 
+/**
+ * The referral / invite-to-earn record. It rides the save so the counters persist exactly like the
+ * wallet does, and it is what the Profile's Referral Hub reads and writes: friends who joined
+ * through this player's link, the referral coins credited but not yet claimed into the wallet, the
+ * one-time welcome bonus flag for arriving through someone else's link, and that inbound code.
+ */
+export interface ReferralState {
+  joins: number;
+  unclaimed: number;
+  /** The invitee's side: the welcome bonus is paid once, on the launch that carried the link. */
+  welcome: boolean;
+  /** The inbound referral code this device joined through, or null. */
+  via: string | null;
+}
+
 export interface Save {
   v: number;
   coins: number;
@@ -84,6 +99,8 @@ export interface Save {
    * events). Added on top of the ladder's own formula — `myTiq()` in matchmaking.ts.
    */
   tiqBonus: number;
+  /** Referral engine: invited friends, claimable referral coins, welcome-bonus state. */
+  referral: ReferralState;
 }
 
 /** The three starter items are owned before the first race; the wallet starts stocked for the demo. */
@@ -93,6 +110,9 @@ export const START_COINS = 1850;
 export const IDENTITY_REWARD = 100;
 export const AGE_MIN = 7;
 export const AGE_MAX = 99;
+/** What one invited friend pays: the inviter banks it as unclaimed, the friend gets it on join. */
+export const REFERRAL_REWARD = 500;
+export const REFERRAL_WELCOME = 500;
 
 function fresh(): Save {
   return {
@@ -109,6 +129,7 @@ function fresh(): Save {
     badge: null,
     frame: null,
     tiqBonus: 0,
+    referral: { joins: 0, unclaimed: 0, welcome: false, via: null },
   };
 }
 
@@ -190,6 +211,15 @@ function migrate(raw: Partial<Save> | null): Save {
     s.frame = null;
   }
   if (whole(raw.tiqBonus)) s.tiqBonus = Math.max(0, Math.floor(raw.tiqBonus));
+  const ref = raw.referral as Partial<ReferralState> | undefined;
+  if (ref) {
+    /* A save from before the referral engine simply keeps the fresh zeroes. Anything hand-edited is
+       clamped — a blob can only ever make the counters smaller, never mint an absurd payout. */
+    if (whole(ref.joins)) s.referral.joins = Math.max(0, Math.min(99999, Math.floor(ref.joins)));
+    if (whole(ref.unclaimed)) s.referral.unclaimed = Math.max(0, Math.min(99999999, Math.floor(ref.unclaimed)));
+    if (ref.welcome === true) s.referral.welcome = true;
+    if (typeof ref.via === 'string' && /^[A-Za-z0-9_-]{1,32}$/.test(ref.via)) s.referral.via = ref.via;
+  }
   return s;
 }
 
@@ -298,6 +328,45 @@ export function earnTiq(n: number): number {
   profile.tiqBonus += gain;
   flush();
   return gain;
+}
+
+/* ---------- referral / invite-to-earn ---------- */
+
+/**
+ * One friend joined through this player's link: the joins counter moves and the payout is banked
+ * as unclaimed, never straight into the wallet — the Hub's Claim key is the only door into coins.
+ * Returns the coins credited to the unclaimed balance.
+ */
+export function creditReferralJoin(n = 1): number {
+  const joins = Math.max(0, Math.min(99999, Math.floor(n)));
+  if (!joins) return 0;
+  profile.referral.joins += joins;
+  profile.referral.unclaimed += joins * REFERRAL_REWARD;
+  flush();
+  return joins * REFERRAL_REWARD;
+}
+
+/** The Hub's Claim tap: moves the whole unclaimed balance into the wallet in one flush. */
+export function claimReferralRewards(): number {
+  const due = profile.referral.unclaimed;
+  if (due <= 0) return 0;
+  profile.referral.unclaimed = 0;
+  profile.coins += due;
+  flush();
+  return due;
+}
+
+/**
+ * The invitee's side of a `ref_` link, paid once per save: the caller passes the inbound code and
+ * gets back the welcome coins, or 0 when there was no code or the bonus was already paid.
+ */
+export function markReferralWelcome(via: string): number {
+  if (profile.referral.welcome) return 0;
+  profile.referral.welcome = true;
+  profile.referral.via = /^[A-Za-z0-9_-]{1,32}$/.test(via) ? via : null;
+  profile.coins += REFERRAL_WELCOME;
+  flush();
+  return REFERRAL_WELCOME;
 }
 
 /** The mode raced most, for the profile card. */

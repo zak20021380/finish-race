@@ -30,6 +30,13 @@ export default {
       return json({ ok: true, service: 'detour-matchmaking', time: Date.now() });
     }
 
+    /* The referral hub's ledger seam. Device-local today, so the mock answers zeroes for every
+       code; a real referral ledger slots in here with the same shape `referral.ts` merges. */
+    if (url.pathname === '/referral/state') {
+      const code = (url.searchParams.get('code') ?? '').slice(0, 32);
+      return json({ ok: true, service: 'detour-referral', code, joins: 0, unclaimed: 0 });
+    }
+
     if (url.pathname === '/ws/matchmake') {
       const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
       return lobby.fetch(request);

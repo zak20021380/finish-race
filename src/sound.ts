@@ -144,3 +144,34 @@ export function playExplosion(): void {
 export function audioContext(): AudioContext | null {
   return context();
 }
+
+/**
+ * The reward chime: three struck notes (E5–G5–C6) on the shared context, fire-and-forget. It needs
+ * no decoded asset — each note is a short triangle oscillator with an exponential decay — so the
+ * claim's sound lands on the tap's own frame. Gated by the Sound switch like every other voice,
+ * and a node-graph refusal can never take the claim down with it.
+ */
+export function playReward(): void {
+  if (!settings.sound) return;
+  const c = context();
+  if (!c) return;
+  resume(c);
+  const NOTES = [659.25, 783.99, 1046.5];
+  try {
+    const t0 = c.currentTime + 0.01;
+    NOTES.forEach((freq, i) => {
+      const at = t0 + i * 0.09;
+      const osc = c.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      const gain = c.createGain();
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(0.26, at + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.34);
+      osc.connect(gain).connect(c.destination);
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+      osc.start(at);
+      osc.stop(at + 0.4);
+    });
+  } catch { /* a node graph refusal must never take the claim down with it */ }
+}

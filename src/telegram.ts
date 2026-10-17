@@ -63,6 +63,13 @@ declare global { interface Window { Telegram?: { WebApp?: TgWebApp } } }
 
 const tg = window.Telegram?.WebApp;
 
+/**
+ * The Mini App's bot handle: what every deep link is built on — room invites (`?start=room_XXXX`)
+ * and the referral engine's personal links (`?start=ref_<code>`). One source, so the two features
+ * can never drift apart.
+ */
+export const BOT_HANDLE = 'detour_game_bot';
+
 export const tgUser = (): TgUser | undefined => tg?.initDataUnsafe?.user;
 
 /**

@@ -12,9 +12,9 @@ import {
   menuState, saveMenu, settings, setSetting, onSettings, type LangCode, type Settings,
 } from './settings';
 import {
-  AGE_MAX, AGE_MIN, claimIdentityReward, createTeam, favouriteMode, IDENTITY_REWARD, joinTeam, KINDS,
-  leaveTeam, levelInfo, myTeam, onChange, profile,
-  setAge, setBadge, setCountry, setFrame, theme,
+  AGE_MAX, AGE_MIN, claimIdentityReward, claimReferralRewards, createTeam, favouriteMode,
+  IDENTITY_REWARD, joinTeam, KINDS, leaveTeam, levelInfo, myTeam, onChange, profile,
+  REFERRAL_REWARD, setAge, setBadge, setCountry, setFrame, theme,
 } from './storage';
 import { BADGES, badgeProgress, equippedBadge, isBadgeUnlocked, unlockedCount } from './badges';
 import { MAX_BALLS, newGame } from './rules';
@@ -26,6 +26,9 @@ import {
   bindSquad, bindSquadById, cleanHandle, getMySquad, leaveSquad,
   onSquadChange, searchSquads, squadLetter,
 } from './squads';
+import { copyText } from './gamemodes';
+import { claimWelcomeBonus, pullReferral, referralLink, referralShareUrl } from './referral';
+import { playReward } from './sound';
 import { BOT_RAMP, type CosKind } from './themes';
 import { isTicketCategory, submitTicket } from './support';
 import type { Router } from './router';
@@ -529,6 +532,101 @@ export function createMenu(api: MenuApi): Menu {
     api.router.go('settings');
   });
 
+  /* ---- referral hub: the Invite & Earn card, the link sheet, the claim ----
+     The save owns the counters (`profile.referral`); this block owns the sheet's face and the
+     taps — open, copy, share, claim. The reward chime and the medium haptic fire on a claim that
+     actually paid. The campaign figures come from the storage constants, never hardcoded twice. */
+  const refSheet = api.sheet('sheet-referral');
+  const refLinkEl = document.getElementById('ref-link') as HTMLInputElement | null;
+  let refCopyTimer = 0;
+
+  function paintReferral() {
+    const r = profile.referral;
+    const sub = document.getElementById('pf-invite-s');
+    if (sub) sub.textContent = `Earn +${en(REFERRAL_REWARD)} Coins per invite`;
+    const banner = document.getElementById('ref-banner');
+    if (banner) banner.innerHTML = `Get <b>${en(REFERRAL_REWARD)} Coins</b> for you &amp; your friend upon joining!`;
+    const pill = document.getElementById('pf-invite-pill');
+    if (pill) pill.textContent = r.joins > 0 ? `${en(r.joins)} Invited` : 'Invite';
+    const card = document.getElementById('pf-invite');
+    if (card) {
+      card.setAttribute('aria-label', r.joins > 0
+        ? `Invite friends and earn coins. ${en(r.joins)} friend${r.joins === 1 ? '' : 's'} joined so far`
+        : `Invite friends and earn ${en(REFERRAL_REWARD)} coins per invite`);
+    }
+    const joins = document.getElementById('ref-joins');
+    if (joins) joins.textContent = en(r.joins);
+    const unclaimed = document.getElementById('ref-unclaimed');
+    if (unclaimed) unclaimed.textContent = en(r.unclaimed);
+    const claim = document.getElementById('ref-claim') as HTMLButtonElement | null;
+    if (claim) {
+      claim.disabled = r.unclaimed <= 0;
+      claim.setAttribute('aria-label', r.unclaimed > 0
+        ? `Claim ${en(r.unclaimed)} referral coins`
+        : 'No referral rewards to claim yet');
+    }
+    if (refLinkEl) refLinkEl.value = referralLink();
+    /* the invitee's welcome: the toast lives on this screen, so hold it until the screen shows
+       (createMenu paints the profile once at boot even while Home is the visible route) */
+    if (pendingWelcome > 0 && !pfScreen.hidden) {
+      showPfToast(`+${en(pendingWelcome)} Coins · Welcome bonus`);
+      pendingWelcome = 0;
+    }
+  }
+
+  function openReferral() {
+    if (!refSheet) return;
+    paintReferral();
+    api.sheets.open(refSheet);
+    impact('light');
+    /* the Worker's ledger when the app was pointed at one; resolve to the local save otherwise */
+    void pullReferral().then((moved) => { if (moved) paintReferral(); });
+  }
+
+  document.getElementById('pf-invite')?.addEventListener('click', openReferral);
+  refLinkEl?.addEventListener('focus', () => refLinkEl.select());
+  refLinkEl?.addEventListener('click', () => refLinkEl.select());
+
+  document.getElementById('ref-copy')?.addEventListener('click', () => {
+    const btn = document.getElementById('ref-copy');
+    impact('light');
+    void copyText(referralLink()).then((ok) => {
+      notify(ok ? 'success' : 'warning');
+      if (!btn || !ok) return;
+      const label = btn.querySelector<HTMLElement>('.ref-copy-t');
+      if (label) label.textContent = 'Copied! ✔';
+      btn.classList.add('copied');
+      window.clearTimeout(refCopyTimer);
+      refCopyTimer = window.setTimeout(() => {
+        if (label) label.textContent = 'Copy';
+        btn.classList.remove('copied');
+      }, 1400);
+    });
+  });
+
+  document.getElementById('ref-share')?.addEventListener('click', () => {
+    impact('medium');
+    const share = referralShareUrl();
+    try {
+      const w = window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void } } };
+      if (w.Telegram?.WebApp?.openTelegramLink) { w.Telegram.WebApp.openTelegramLink(share); return; }
+    } catch { /* fall through to window.open */ }
+    try { window.open(share, '_blank', 'noopener'); } catch { /* webview blocked — the link is still copyable */ }
+  });
+
+  document.getElementById('ref-claim')?.addEventListener('click', () => {
+    const paid = claimReferralRewards();
+    if (paid <= 0) { impact('light'); return; }
+    playReward();                              /* the chime lands on the tap's own frame */
+    impact('medium');
+    notify('success');
+    showPfToast(`+${en(paid)} Coins · Referral rewards`);
+    paintReferral();
+  });
+
+  /* the invitee's side: a launch that carried `?start=ref_...` banks its welcome bonus once */
+  let pendingWelcome = claimWelcomeBonus();
+
   /* ---- the record, and what is worn: re-painted whenever the save changes ---- */
   const pfScreen = $<HTMLElement>('s-profile');
   const eqPv = new Map<CosKind, Preview>();
@@ -767,6 +865,7 @@ export function createMenu(api: MenuApi): Menu {
     }
     paintHeroExtras(lv);
     paintBadges();
+    paintReferral();
 
     const c = profile.country;
     // Header country pill was decluttered — Profile owns country now. Guard for legacy DOM.

@@ -18,7 +18,7 @@
  */
 import { readJson, writeJson } from './storage';
 import { menuState, saveMenu } from './settings';
-import { impact, notify } from './telegram';
+import { BOT_HANDLE, impact, notify } from './telegram';
 import type { Sheets } from './sheets';
 
 export type GameModeId = 'duel_1v1' | 'party_2v2' | 'bot' | 'room';
@@ -40,7 +40,6 @@ export interface LobbyDisplay {
 }
 
 const KEY = 'detour.gamemode.v1';
-const BOT_HANDLE = 'detour_game_bot';
 
 /** 1v1 is the door everyone walks through: 2v2 is still a teaser in the drawer. */
 const DEFAULT_SELECTION: GameModeSelection = { id: 'duel_1v1', roomCode: null };
@@ -242,7 +241,8 @@ function openInvite(code: string): void {
   }
 }
 
-async function copyText(text: string): Promise<boolean> {
+/** Clipboard write with a legacy fallback: the room invite and the referral hub share this door. */
+export async function copyText(text: string): Promise<boolean> {
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);

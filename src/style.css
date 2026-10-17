@@ -6013,6 +6013,94 @@ html.reduced-motion .mh-arc-fill { animation: none; }
 }
 .pf-toast.out { opacity: 0; transform: translateY(8px); transition: opacity .25s ease, transform .25s ease; }
 
+/* ---- invite & earn: the compact referral trigger in the Profile rhythm ----
+   One 60px clay slab: engraved ceramic well (warm-gold gift), title + subtext,
+   and the amber clay key on the right. The whole card is the button, so the tap
+   target is the card and the key is its visible affordance. */
+.pf-invite-sec { gap: 0; }
+.pf-invite {
+  --d: 3px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: 9px var(--s3) 9px 10px;
+  border-radius: 20px;
+  text-align: left;
+  background:
+    linear-gradient(180deg, rgba(245, 158, 11, .09) 0%, rgba(245, 158, 11, .02) 60%),
+    var(--clay-face);
+  box-shadow:
+    0 var(--d) 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    inset 0 0 0 1px rgba(245, 158, 11, .16),
+    var(--clay-ring);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.pf-invite:hover:not(:active) { transform: translateY(-1px); }
+.pf-invite:active { transform: translateY(var(--press-y)); --d: 1px; }
+.pf-invite:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+/* the ceramic well: a dark recess the gift glows out of */
+.pf-invite-well {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: linear-gradient(180deg, #0B111E 0%, var(--field) 100%);
+  color: var(--honey-ink);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, .6),
+    inset 0 -1px 0 rgba(255, 255, 255, .06),
+    inset 0 0 0 1px rgba(255, 255, 255, .06),
+    0 0 14px -4px rgba(245, 158, 11, .55);
+}
+.pf-invite-well .ico { width: 20px; height: 20px; filter: drop-shadow(0 0 6px rgba(245, 158, 11, .55)); }
+.pf-invite-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pf-invite-t {
+  font-size: var(--t-2);
+  font-weight: 800;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pf-invite-s {
+  font-size: var(--t-micro);
+  font-weight: 700;
+  color: var(--honey-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* the amber clay key: the support send key's smaller sibling */
+.pf-invite-pill {
+  flex: none;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #FBBF24 0%, #F59E0B 55%, #D97706 100%);
+  color: #78350F;
+  font-size: var(--t-micro);
+  font-weight: 900;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  box-shadow:
+    0 2px 0 #92400E,
+    inset 0 1px 0 rgba(255, 255, 255, .4),
+    inset 0 -2px 3px rgba(120, 53, 15, .35);
+}
+
+
 /* ---- age stepper sheet ---- */
 .age-stepper {
   display: flex;
@@ -6592,6 +6680,205 @@ html.reduced-motion .support-send.sending .send-spin { animation: none; }
   font-weight: 700;
 }
 .support-ok .ico { width: 14px; height: 14px; color: var(--mint-ink); }
+
+/* ---- referral hub: personal invite link, Telegram share, claimable reward ----
+   The Dark-Clay sibling of the support drawer: engraved ✕, a recessed reward
+   banner, a deep well holding the invite URL beside its Copy key, the wide
+   gold share action, the two live counters, and the mint claim key that only
+   wakes once the unclaimed balance is above zero. All fixed geometry — the
+   counters use tabular numerals, so a claim never shifts the layout. */
+.referral-sheet { gap: var(--s3); }
+.referral-head { display: flex; align-items: center; gap: var(--s2); }
+.referral-title { flex: 1 1 auto; margin: 0; }
+/* the same carved-in ✕ well as the support drawer */
+.referral-x {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #0B111E 0%, var(--field) 100%);
+  color: var(--chip-ink);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, .65),
+    inset 0 -1px 0 rgba(255, 255, 255, .07),
+    inset 0 0 0 1px rgba(255, 255, 255, .07);
+  transition: box-shadow var(--motion-fast), transform var(--motion-fast), color var(--motion-fast);
+}
+.referral-x:hover { color: var(--ink); }
+.referral-x:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 3px 8px rgba(0, 0, 0, .8),
+    inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+.referral-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+/* the reward banner: a recessed slate well with the gift in its own warm halo */
+.referral-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #0B111E 0%, var(--field) 100%);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, .6),
+    inset 0 -1px 0 rgba(255, 255, 255, .06),
+    inset 0 0 0 1px rgba(245, 158, 11, .22);
+}
+.referral-banner-ico {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: linear-gradient(180deg, #2A3550 0%, #161D2C 100%);
+  color: var(--honey-ink);
+  box-shadow: 0 2px 0 #080C14, inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 0 0 1px rgba(245, 158, 11, .3);
+}
+.referral-banner-ico .ico { width: 18px; height: 18px; filter: drop-shadow(0 0 6px rgba(245, 158, 11, .5)); }
+.referral-banner p {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--t-3);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+.referral-banner b { font-weight: 900; color: var(--honey-ink); }
+/* link well + copy key: one recessed groove and one clay key beside it */
+.referral-link-row { display: flex; align-items: stretch; gap: var(--s2); min-width: 0; }
+.referral-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #070B14 0%, #0D1424 100%);
+  color: var(--chip-ink);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  box-shadow:
+    inset 0 3px 7px rgba(0, 0, 0, .7),
+    inset 0 -1px 0 rgba(255, 255, 255, .06),
+    inset 0 0 0 1px rgba(255, 255, 255, .07);
+  -webkit-user-select: text;
+  user-select: text;
+}
+.referral-input:focus {
+  outline: none;
+  box-shadow:
+    inset 0 3px 7px rgba(0, 0, 0, .7),
+    inset 0 -1px 0 rgba(255, 255, 255, .08),
+    inset 0 0 0 1px rgba(252, 211, 77, .35);
+}
+.referral-copy {
+  --d: 3px;
+  flex: none;
+  min-width: 84px;
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--clay-face);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-3);
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow:
+    0 var(--d) 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    var(--clay-ring);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), color var(--motion-fast);
+}
+.referral-copy .ico { width: 15px; height: 15px; color: var(--chip-ink); }
+.referral-copy:hover:not(:active) { transform: translateY(-1px); }
+.referral-copy:active { transform: translateY(var(--press-y)); --d: 1px; }
+.referral-copy:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.referral-copy.copied { color: var(--mint-ink); box-shadow: 0 1px 0 #080C14, inset 0 0 0 1px rgba(110, 231, 183, .35); }
+.referral-copy.copied .ico { color: var(--mint-ink); }
+/* the wide share action: the support send key's full-width sibling */
+.referral-share {
+  --btn-lip: #92400E;
+  width: 100%;
+  min-height: 50px;
+  background: linear-gradient(180deg, #FBBF24 0%, #F59E0B 55%, #D97706 100%);
+  color: #78350F;
+  font-size: var(--t-2);
+  box-shadow:
+    0 var(--d) 0 var(--btn-lip),
+    0 calc(var(--d) + 8px) 18px -8px rgba(245, 158, 11, .5),
+    inset 0 2px 3px rgba(255, 255, 255, .4),
+    inset 0 -3px 5px rgba(120, 53, 15, .42);
+}
+.referral-share .ico { color: #78350F; }
+/* the two counters: equal clay tiles, fixed geometry, tabular digits */
+.referral-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); min-width: 0; }
+.referral-stat {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--s2) var(--s1);
+  border-radius: 16px;
+  background: var(--clay-face);
+  box-shadow: var(--clay), var(--clay-ring);
+}
+.referral-stat-n {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: var(--t-1);
+  font-weight: 900;
+  color: var(--honey-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.referral-stat-n b { font-weight: 900; }
+.referral-stat-u { font-size: var(--t-micro); font-weight: 800; color: var(--ink-soft); }
+.referral-stat-k {
+  max-width: 100%;
+  font-size: var(--t-micro);
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* the claim key: mint money-on-the-books, woken only by an unclaimed balance */
+.referral-claim {
+  --btn-lip: #047857;
+  width: 100%;
+  min-height: 50px;
+  background: linear-gradient(180deg, #34D399 0%, #10B981 55%, #059669 100%);
+  color: #064E3B;
+  font-size: var(--t-2);
+  box-shadow:
+    0 var(--d) 0 var(--btn-lip),
+    0 calc(var(--d) + 7px) 16px -8px rgba(16, 185, 129, .45),
+    inset 0 2px 3px rgba(255, 255, 255, .35),
+    inset 0 -2px 4px rgba(6, 78, 59, .35);
+}
+.referral-claim .ico { color: #064E3B; }
+.referral-claim[disabled] { --d: 2px; }
+
 
 
 /* Short columns: the elastic dial above does the work, so the only thing left is to keep the
