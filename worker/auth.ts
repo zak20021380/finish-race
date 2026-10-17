@@ -48,6 +48,14 @@ export interface Identity {
   flag: string;
   /** True only when the guest door was used. */
   guest: boolean;
+  /** Wallet reading the client reported for the directory, clamped. Never an authority. */
+  coins: number;
+  /** Telegram Stars volume the client reported, clamped. */
+  stars: number;
+  /** Friends invited, per the client's own referral hub. */
+  referrals: number;
+  /** Squad / channel handle the client is bound to, or ''. */
+  squad: string;
 }
 
 /* ---------- what the client sends with the upgrade ---------- */
@@ -62,6 +70,11 @@ export interface AuthRequest {
   tier: string;
   flag: string;
   name: string;
+  /** Economy / social telemetry the client reports for the admin directory, all clamped. */
+  coins: number;
+  stars: number;
+  refs: number;
+  squad: string;
 }
 
 /* ---------- parsing ---------- */
@@ -79,6 +92,9 @@ const flagOf = (raw: string): string => (/^[a-z]{2}$/i.test(raw) ? raw.toUpperCa
 
 const cleanName = (raw: string): string => raw.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 20);
 
+/** A telemetry figure, clamped to its sane ceiling — a query string can say anything. */
+const capped = (value: string | null, hi: number): number => Math.min(hi, whole(value) ?? 0);
+
 /** Everything the socket put in the query string, read once. */
 export function authRequestFrom(url: URL): AuthRequest {
   const p = url.searchParams;
@@ -89,6 +105,10 @@ export function authRequestFrom(url: URL): AuthRequest {
     tier: p.get('tier') ?? '',
     flag: flagOf(p.get('flag') ?? ''),
     name: cleanName(p.get('name') ?? ''),
+    coins: capped(p.get('coins'), 100_000_000),
+    stars: capped(p.get('stars'), 10_000_000),
+    refs: capped(p.get('refs'), 100_000),
+    squad: cleanName(p.get('squad') ?? ''),
   };
 }
 
@@ -173,6 +193,10 @@ function guestSeat(req: AuthRequest, tier: MindTier): Identity {
     tier,
     flag: req.flag,
     guest: true,
+    coins: req.coins,
+    stars: req.stars,
+    referrals: req.refs,
+    squad: req.squad,
   };
 }
 
@@ -202,6 +226,10 @@ export async function authenticate(req: AuthRequest, env: Env): Promise<Identity
         tier,
         flag: req.flag,
         guest: false,
+        coins: req.coins,
+        stars: req.stars,
+        referrals: req.refs,
+        squad: req.squad,
       };
     }
     /* A signature that does not hold is a signature that does not hold — but a developer

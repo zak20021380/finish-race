@@ -40,6 +40,10 @@ import {
   agoOf, onTickets, REPLY_MAX, replyTicket, tickets, toggleResolved, unreadCount,
   type Ticket, type TicketCategory,
 } from './support';
+import { getMySquad } from './squads';
+import {
+  directoryAction, directoryPage, liveRow, PAGE_SIZE, YOU_ID, type DirFilter, type DirPlayer,
+} from './players';
 import { impact, notify, tgInitData, tgUser } from './telegram';
 import type { MindTier } from './matchmaking';
 
@@ -576,6 +580,49 @@ async function serverAction(
   return !!res && res.ok;
 }
 
+/** One page of the Worker's player directory, as `GET /admin/players` frames it. */
+interface PlayersPage {
+  ok: true;
+  total: number;
+  offset: number;
+  limit: number;
+  players: DirPlayer[];
+}
+
+/** Read the Worker's directory; null when nothing answers, so the panel can fall back to the index. */
+async function fetchPlayers(q: string, filter: DirFilter, offset: number, limit: number): Promise<PlayersPage | null> {
+  const path = `/admin/players?q=${encodeURIComponent(q)}&filter=${filter}&offset=${offset}&limit=${limit}`;
+  const res = await adminFetch(path);
+  if (!res || !res.ok) return null;
+  try {
+    const data = (await res.json()) as PlayersPage;
+    return data && data.ok === true && Array.isArray(data.players) ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** One moderation action on the Worker's registry. The row as the server now holds it, or null. */
+async function pushPlayerAction(
+  id: string,
+  action: 'BAN' | 'UNBAN' | 'GRANT_COINS',
+  coins = 0,
+): Promise<DirPlayer | null> {
+  const body = action === 'GRANT_COINS' ? { id, action, coins } : { id, action };
+  const res = await adminFetch('/admin/player', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res || !res.ok) return null;
+  try {
+    const data = (await res.json()) as { ok?: boolean; player?: DirPlayer };
+    return data?.ok === true && data.player ? data.player : null;
+  } catch {
+    return null;
+  }
+}
+
 /* ---------- the controller ---------- */
 
 export interface AdminApi {
@@ -598,6 +645,17 @@ export interface Admin {
 }
 
 const $ = <T extends HTMLElement>(id: string): T | null => document.getElementById(id) as T | null;
+
+/** One sprite glyph as a fresh `<svg><use>`, for rows the markup cannot pre-write. */
+function icon(href: string, cls: string): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', `ico${cls ? ` ${cls}` : ''}`);
+  svg.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', href);
+  svg.append(use);
+  return svg;
+}
 
 /** One stepper: read the live value, compute the next, write it back, label it. */
 interface Knob {
@@ -704,6 +762,14 @@ export function createAdmin(api: AdminApi): Admin {
   const inboxList = $<HTMLElement>('adm-inbox-list');
   const inboxEmpty = $<HTMLElement>('adm-inbox-empty');
   const inboxChips = [...document.querySelectorAll<HTMLButtonElement>('[data-ifilter]')];
+  const usersList = $<HTMLElement>('adm-users-list');
+  const usersEmpty = $<HTMLElement>('adm-users-empty');
+  const usersTotalEl = $<HTMLElement>('users-total');
+  const usersSourceEl = $<HTMLElement>('users-source');
+  const usersMore = $<HTMLButtonElement>('users-more');
+  const usersQ = $<HTMLInputElement>('users-q');
+  const usersQClear = $<HTMLButtonElement>('users-q-clear');
+  const userChips = [...document.querySelectorAll<HTMLButtonElement>('[data-ufilter]')];
 
   let open = false;
   let hideId = 0;
@@ -722,6 +788,21 @@ export function createAdmin(api: AdminApi): Admin {
   let range: StatsRange = 'today';
   /** Text typed into a reply box survives the list being rebuilt for any reason. */
   const drafts = new Map<string, string>();
+
+  /** The Users view: the filter chip, the search text, the rows held, and the open card. */
+  let usersFilter: DirFilter = 'all';
+  let usersQuery = '';
+  let usersRows: DirPlayer[] = [];
+  let usersTotal = 0;
+  let usersLimit = PAGE_SIZE;
+  /** True once `/admin/players` has answered this session: the panel is governing a real registry. */
+  let usersOn = false;
+  /** The tab has been opened at least once — the directory is read lazily, on first sight. */
+  let usersAsked = false;
+  /** The newest read is the only one allowed to paint: typing fires reads faster than they land. */
+  let usersSeq = 0;
+  let usersTimer = 0;
+  let openPlayer = '';
 
   /* ---------- painting ---------- */
 
@@ -776,6 +857,7 @@ export function createAdmin(api: AdminApi): Admin {
     paintSave();
     paintStats();
     paintInbox();
+    paintUsers();
   }
 
   /* ---------- the Stats tab ---------- */
@@ -1037,6 +1119,239 @@ export function createAdmin(api: AdminApi): Admin {
     paintInbox();
   }
 
+  /* ---------- the Users tab: the player directory ---------- */
+
+  /** The live seat, folded the way the Worker folds a connection: save first, moderation second. */
+  function liveSeat(): DirPlayer {
+    const u = tgUser();
+    return liveRow({
+      name: (u?.first_name ?? u?.username ?? 'You').slice(0, 40),
+      tiq: tiqFrom(profile.stats.wins, profile.stats.games, profile.tiqBonus),
+      squad: getMySquad()?.handle ?? '',
+    });
+  }
+
+  /** A handle when there is one, the Telegram id behind the seat otherwise. */
+  const userWho = (p: DirPlayer): string =>
+    (p.username ? `@${p.username}` : p.tgId ? `#${p.tgId}` : p.id === YOU_ID ? 'this device' : p.id);
+
+  /** One small status sticker on a row: live, banned, or muted. */
+  function userSticker(text: string, kind: 'live' | 'ban' | 'mute'): HTMLElement {
+    const s = document.createElement('span');
+    s.className = 'adm-user-st';
+    s.dataset.st = kind;
+    s.textContent = text;
+    return s;
+  }
+
+  /** One telemetry cell inside the expanded card. */
+  function userStat(v: string, l: string): HTMLElement {
+    const s = document.createElement('span');
+    s.className = 'adm-stat';
+    const b = document.createElement('b');
+    b.textContent = v;
+    const t = document.createElement('span');
+    t.className = 'adm-stat-l';
+    t.textContent = l;
+    s.append(b, t);
+    return s;
+  }
+
+  /**
+   * One directory row: the summary line always, the telemetry and moderation keys when the card
+   * is the open one. The structure mirrors the Inbox card — one delegated listener, no per-row
+   * handlers outliving a repaint.
+   */
+  function playerCard(p: DirPlayer): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = 'adm-user';
+    li.dataset.uid = p.id;
+    if (p.id === YOU_ID) li.classList.add('is-you');
+    if (p.banned) li.classList.add('is-banned');
+    if (p.inMatch) li.classList.add('is-live');
+    const expanded = p.id === openPlayer;
+    if (expanded) li.classList.add('is-open');
+
+    const main = document.createElement('button');
+    main.type = 'button';
+    main.className = 'adm-user-main';
+    main.dataset.uopen = p.id;
+    main.setAttribute('aria-expanded', String(expanded));
+
+    const av = document.createElement('span');
+    av.className = 'adm-user-av';
+    av.setAttribute('aria-hidden', 'true');
+    av.textContent = (p.name.charAt(0) || '?').toUpperCase();
+
+    const txt = document.createElement('span');
+    txt.className = 'adm-user-txt';
+    const nm = document.createElement('span');
+    nm.className = 'adm-user-n';
+    nm.textContent = p.name;
+    if (p.id === YOU_ID) {
+      const you = document.createElement('b');
+      you.className = 'adm-user-you';
+      you.textContent = 'YOU';
+      nm.append(' ', you);
+    }
+    const sub = document.createElement('span');
+    sub.className = 'adm-user-m';
+    sub.textContent = `${userWho(p)} · TIQ ${figure(p.tiq)}`;
+    txt.append(nm, sub);
+
+    const side = document.createElement('span');
+    side.className = 'adm-user-side';
+    if (p.inMatch) side.append(userSticker('LIVE', 'live'));
+    if (p.banned) side.append(userSticker('BANNED', 'ban'));
+    else if (p.muted) side.append(userSticker('MUTED', 'mute'));
+    side.append(icon('#i-next', 'adm-user-go'));
+
+    main.append(av, txt, side);
+    li.append(main);
+
+    if (!expanded) return li;
+
+    const detail = document.createElement('div');
+    detail.className = 'adm-user-detail';
+
+    const meta = document.createElement('p');
+    meta.className = 'adm-user-id';
+    meta.textContent = `id ${p.tgId || p.id} · first seen ${agoOf(p.firstSeen)} · last seen ${agoOf(p.lastSeen)}`;
+    detail.append(meta);
+
+    const grid = document.createElement('div');
+    grid.className = 'adm-cells adm-user-cells';
+    grid.append(
+      userStat(figure(p.matches), 'Matches'),
+      userStat(p.matches ? `${Math.round((p.wins / p.matches) * 100)}%` : '—', `Win Rate · ${p.wins}W ${p.losses}L`),
+      userStat(String(p.streak), `Streak · best ${p.best}`),
+      userStat(p.lastPlayed ? agoOf(p.lastPlayed) : 'never', 'Last Played'),
+    );
+    detail.append(grid);
+
+    const wallet = document.createElement('div');
+    wallet.className = 'adm-cells adm-user-cells';
+    const coinsCell = document.createElement('span');
+    coinsCell.className = 'adm-stat adm-user-wallet';
+    const coinsB = document.createElement('b');
+    coinsB.textContent = coinText(p.coins);
+    const coinsL = document.createElement('span');
+    coinsL.className = 'adm-stat-l';
+    coinsL.textContent = 'Coins';
+    coinsCell.append(coinsB, coinsL);
+    wallet.append(
+      coinsCell,
+      userStat(`★ ${figure(p.stars)}`, 'Stars Won'),
+      userStat(String(p.referrals), 'Invited Friends'),
+      userStat(p.squad || '—', 'Squad'),
+    );
+    detail.append(wallet);
+
+    const actions = document.createElement('div');
+    actions.className = 'adm-user-actions';
+    const ban = document.createElement('button');
+    ban.type = 'button';
+    ban.className = p.banned ? 'adm-btn adm-btn-danger adm-uban' : 'adm-btn adm-uban';
+    ban.dataset.uban = p.id;
+    ban.setAttribute('aria-pressed', String(p.banned));
+    ban.textContent = p.banned ? 'Unban Player' : 'Ban Player';
+    const grant = (n: number): HTMLButtonElement => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'adm-btn adm-ugrant';
+      b.dataset.ugrant = String(n);
+      b.dataset.uid = p.id;
+      b.setAttribute('aria-label', `Grant ${n} coins to ${p.name}`);
+      const c = document.createElement('span');
+      c.className = 'coin';
+      c.dataset.coin = '';
+      b.append('+', String(n), ' ', c);
+      return b;
+    };
+    actions.append(ban, grant(100), grant(500));
+    detail.append(actions);
+    li.append(detail);
+    mountCoins(detail);
+    return li;
+  }
+
+  /** The list, the count, the source chip and the Load More key, from the rows currently held. */
+  function paintUsers() {
+    if (usersSourceEl) {
+      usersSourceEl.textContent = usersOn ? 'LIVE REGISTRY' : 'LOCAL INDEX';
+      usersSourceEl.dataset.live = String(usersOn);
+    }
+    if (usersTotalEl) {
+      usersTotalEl.textContent = usersRows.length
+        ? `${figure(usersTotal)} ${usersTotal === 1 ? 'player' : 'players'}`
+        : '—';
+    }
+    if (usersMore) usersMore.hidden = usersRows.length >= usersTotal;
+    if (!usersList) return;
+    usersList.textContent = '';
+    for (const p of usersRows) usersList.append(playerCard(p));
+    if (usersEmpty) usersEmpty.hidden = usersRows.length > 0;
+  }
+
+  /**
+   * Read one window of the directory. The Worker's registry is asked first and wins when it
+   * answers; with nothing behind the page the local index (players.ts) answers instead, so the
+   * tab is never empty for want of a server. Only the newest read paints.
+   */
+  async function refreshUsers(reset: boolean): Promise<void> {
+    const run = ++usersSeq;
+    if (reset) usersLimit = PAGE_SIZE;
+    const offset = reset ? 0 : usersRows.length;
+    const live = await fetchPlayers(usersQuery, usersFilter, offset, usersLimit);
+    if (run !== usersSeq) return;                 // a newer read has already been asked for
+    usersOn = !!live;
+    if (live) {
+      usersRows = reset ? live.players : [...usersRows, ...live.players];
+      usersTotal = live.total;
+    } else {
+      const page = directoryPage(
+        { q: usersQuery, filter: usersFilter, offset: 0, limit: usersLimit },
+        liveSeat(),
+      );
+      usersRows = page.players;
+      usersTotal = page.total;
+    }
+    paintUsers();
+  }
+
+  /** BAN / UNBAN / GRANT_COINS, on the Worker when there is one, on the local index otherwise. */
+  async function actOnPlayer(id: string, action: 'BAN' | 'UNBAN' | 'GRANT_COINS', coins = 0): Promise<void> {
+    impact('medium');
+    const row = usersRows.find((p) => p.id === id) ?? null;
+    const name = row?.name ?? 'Player';
+    const server = usersOn ? await pushPlayerAction(id, action, coins) : null;
+    if (usersOn && !server) {
+      /* the registry was there a moment ago and is not now: say so rather than pretend */
+      usersOn = false;
+      api.note('The Worker is not answering — moderation stayed local.', true, 2600);
+      notify('error');
+    }
+    if (!server) {
+      if (!directoryAction(id, action, coins)) return;
+    }
+    if (action === 'BAN') {
+      notify('warning');
+      api.note(`${name} banned from matchmaking.`, false, 2200);
+    } else if (action === 'UNBAN') {
+      notify('success');
+      api.note(`${name} unbanned.`, false, 2000);
+    } else {
+      notify('success');
+      api.note(`Granted ${coinText(coins)} coins to ${name}.`, false, 2200);
+    }
+    await refreshUsers(true);
+    /* the live seat's wallet is the save's: a grant to `you` lands there, not in a registry copy */
+    if (id === YOU_ID && action === 'GRANT_COINS') {
+      earnCoins(coins);
+      paintSave();
+    }
+  }
+
   /* ---------- the live server ---------- */
 
   /** The local runtime, in the three fields the Worker also enforces. */
@@ -1250,6 +1565,15 @@ export function createAdmin(api: AdminApi): Admin {
       if (id === 'server' || id === 'stats') void refreshServer();
       /* the Inbox is device-local: a repaint keeps the relative timestamps honest */
       if (id === 'inbox') paintInbox();
+      /* the directory is read on first sight, not at mount: a panel nobody opened never calls out */
+      if (id === 'users') {
+        if (!usersAsked) {
+          usersAsked = true;
+          void refreshUsers(true);
+        } else {
+          paintUsers();
+        }
+      }
     });
   }
 
@@ -1263,6 +1587,73 @@ export function createAdmin(api: AdminApi): Admin {
       paintInbox();
     });
   }
+
+  /* the Users tab: the filter chips, the search field, the cards and Load More */
+  for (const chip of userChips) {
+    chip.addEventListener('click', () => {
+      const next = (chip.dataset.ufilter ?? 'all') as DirFilter;
+      if (next === usersFilter) return;
+      usersFilter = next;
+      openPlayer = '';
+      for (const c of userChips) c.setAttribute('aria-pressed', String(c === chip));
+      impact('light');
+      void refreshUsers(true);
+    });
+  }
+
+  /* typing is debounced once: a query read per keystroke would race the rows that are landing */
+  usersQ?.addEventListener('input', () => {
+    usersQuery = usersQ.value.trim().slice(0, 64);
+    if (usersQClear) usersQClear.hidden = !usersQuery;
+    window.clearTimeout(usersTimer);
+    usersTimer = window.setTimeout(() => void refreshUsers(true), 180);
+  });
+  usersQClear?.addEventListener('click', () => {
+    if (!usersQuery) return;
+    usersQuery = '';
+    if (usersQ) {
+      usersQ.value = '';
+      usersQ.focus({ preventScroll: true });
+    }
+    usersQClear.hidden = true;
+    impact('light');
+    void refreshUsers(true);
+  });
+  usersMore?.addEventListener('click', () => {
+    impact('light');
+    void refreshUsers(false);
+  });
+
+  /* one delegated listener for the whole directory: the list is rebuilt on every paint */
+  usersList?.addEventListener('click', (e) => {
+    const el = e.target as HTMLElement;
+    const ban = el.closest<HTMLButtonElement>('[data-uban]');
+    if (ban) {
+      const id = ban.dataset.uban ?? '';
+      const banned = ban.getAttribute('aria-pressed') === 'true';
+      void actOnPlayer(id, banned ? 'UNBAN' : 'BAN');
+      return;
+    }
+    const grant = el.closest<HTMLButtonElement>('[data-ugrant]');
+    if (grant) {
+      void actOnPlayer(grant.dataset.uid ?? '', 'GRANT_COINS', Number(grant.dataset.ugrant) || 0);
+      return;
+    }
+    const main = el.closest<HTMLButtonElement>('[data-uopen]');
+    if (!main) return;
+    const id = main.dataset.uopen ?? '';
+    openPlayer = openPlayer === id ? '' : id;
+    impact('light');
+    paintUsers();
+  });
+  usersList?.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && openPlayer) {
+      /* the stage's own Escape must not close the whole panel while a card is open */
+      e.stopPropagation();
+      openPlayer = '';
+      paintUsers();
+    }
+  });
 
   /* the timeframe row: one raised gold key on a recessed track, and a repaint of the dashboard */
   for (const btn of tfBtns) {
@@ -1437,7 +1828,10 @@ export function createAdmin(api: AdminApi): Admin {
 
   // a balance or TIQ moved anywhere else in the app keeps the panel's readouts honest
   onChange(() => {
-    if (open) paintSave();
+    if (!open) return;
+    paintSave();
+    /* the live seat's row reads the save: repaint it while the directory is the open tab */
+    if (usersAsked && !$('apanel-users')?.hidden) paintUsers();
   });
   /* the support queue moved — from this panel, or from the Contact Support sheet */
   onTickets(() => {

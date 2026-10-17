@@ -180,6 +180,133 @@ export interface ServerStatus {
   config: ServerConfig;
 }
 
+/* ---------- the player directory: who the room has seen ---------- */
+
+/**
+ * One player the room has met, as the Command Center's Users tab reads them. The record is the
+ * registry entry the Worker persists into its own Durable Object storage, so the directory
+ * survives an eviction the same way the room's alarm does. Race telemetry (matches, wins, losses,
+ * streak) is incremented by the room itself the moment a board settles — the same authority that
+ * judged the moves; the economy figures are the client's own telemetry, clamped on arrival.
+ */
+export interface PlayerRecord {
+  /** The stable seat id: `tg-<user id>` for a verified Mini App player, `guest-<hex>` on the dev door. */
+  id: string;
+  /** The numeric Telegram user id, or '' for a guest seat. */
+  tgId: string;
+  name: string;
+  username: string;
+  /** ISO 3166-1 alpha-2, or ''. */
+  country: string;
+  tiq: number;
+  /** The first and last time the room saw this player, in ms. */
+  firstSeen: number;
+  lastSeen: number;
+  /** When their last settled race ended, or 0 when they never finished one. */
+  lastPlayed: number;
+  matches: number;
+  wins: number;
+  losses: number;
+  streak: number;
+  best: number;
+  coins: number;
+  stars: number;
+  referrals: number;
+  /** The squad / channel handle the client reported, or ''. */
+  squad: string;
+  banned: boolean;
+  muted: boolean;
+  /** True while the player holds a seat on a live board or sits in a room that is filling. */
+  inMatch: boolean;
+}
+
+/** The directory views the Users tab's filter chips select. */
+export type PlayerFilter = 'all' | 'active' | 'tiq' | 'flagged';
+
+const FILTERS: readonly PlayerFilter[] = ['all', 'active', 'tiq', 'flagged'];
+
+const filterOf = (raw: string | null): PlayerFilter =>
+  (FILTERS as readonly string[]).includes(raw ?? '') ? (raw as PlayerFilter) : 'all';
+
+/** One page of the directory: the window, its total, and the rows. */
+export interface PlayersPage {
+  ok: true;
+  total: number;
+  offset: number;
+  limit: number;
+  players: PlayerRecord[];
+}
+
+/** How many records the registry keeps before the oldest quiet one is forgotten. */
+const PLAYERS_MAX = 2000;
+/** The directory's own page ceiling: the panel asks for 40 at a time, a script could ask for more. */
+const PLAYERS_LIMIT = 100;
+/** A day in ms: what "Active Today" means on both sides of the wire. */
+const ACTIVE_MS = 24 * 60 * 60 * 1000;
+
+const whole = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0);
+
+/** The numeric id behind a seat id, so the panel can search by the number a support ticket quotes. */
+const tgIdOf = (id: string): string => (id.startsWith('tg-') ? id.replace(/[^0-9]/g, '').slice(0, 20) : '');
+
+/** A seat's first registry entry. */
+function freshPlayer(identity: Identity, now: number): PlayerRecord {
+  return {
+    id: identity.player.id,
+    tgId: tgIdOf(identity.player.id),
+    name: identity.player.name.slice(0, 40),
+    username: identity.player.username.slice(0, 40),
+    country: identity.flag.slice(0, 2),
+    tiq: Math.max(0, Math.floor(identity.tiq)),
+    firstSeen: now,
+    lastSeen: now,
+    lastPlayed: 0,
+    matches: 0,
+    wins: 0,
+    losses: 0,
+    streak: 0,
+    best: 0,
+    coins: identity.coins,
+    stars: identity.stars,
+    referrals: identity.referrals,
+    squad: identity.squad,
+    banned: false,
+    muted: false,
+    inMatch: false,
+  };
+}
+
+/** A hydrated record folded field by field: a hand-edited blob is clamped, never trusted. */
+function readPlayer(raw: unknown): PlayerRecord | null {
+  const r = raw as Partial<PlayerRecord> | null | undefined;
+  if (!r || typeof r.id !== 'string' || !r.id) return null;
+  const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.slice(0, max) : '');
+  return {
+    id: r.id.slice(0, 64),
+    tgId: text(r.tgId, 20).replace(/[^0-9-]/g, ''),
+    name: text(r.name, 40) || 'Player',
+    username: text(r.username, 40),
+    country: text(r.country, 2).toUpperCase(),
+    tiq: whole(r.tiq),
+    firstSeen: whole(r.firstSeen),
+    lastSeen: whole(r.lastSeen),
+    lastPlayed: whole(r.lastPlayed),
+    matches: whole(r.matches),
+    wins: whole(r.wins),
+    losses: whole(r.losses),
+    streak: whole(r.streak),
+    best: whole(r.best),
+    coins: whole(r.coins),
+    stars: whole(r.stars),
+    referrals: whole(r.referrals),
+    squad: text(r.squad, 24),
+    banned: r.banned === true,
+    muted: r.muted === true,
+    /* a fresh instance has no live boards: nothing can be mid-match across an eviction */
+    inMatch: false,
+  };
+}
+
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
 /** A request body, or an empty object when there is none / it is not JSON. Never throws. */
@@ -310,8 +437,37 @@ export class MatchmakerDO {
   /** The live pairing bands — the defaults until `/admin/config` moves them. */
   private normalRadius = TIER_RADIUS;
   private wideRadius = WIDE_RADIUS;
+  /** Every player the room has met, by seat id — the Users tab's directory. */
+  private players = new Map<string, PlayerRecord>();
+  /** The moderation lock: a banned seat never reaches matchmaking again. */
+  private banned = new Set<string>();
+  /** A registry write is already scheduled: many touches, one flush. */
+  private dirty = false;
 
-  constructor(private state: DurableObjectState, private env: Env) {}
+  constructor(private state: DurableObjectState, private env: Env) {
+    /* The registry rides the object's own storage, so it survives eviction. A harness that drives
+       the object without a storage backend simply starts empty. */
+    const storage = this.state?.storage;
+    if (storage && typeof this.state.blockConcurrencyWhile === 'function') {
+      this.state.blockConcurrencyWhile(async () => {
+        try {
+          const rows = await storage.get<unknown[]>('players');
+          if (Array.isArray(rows)) {
+            for (const raw of rows) {
+              const rec = readPlayer(raw);
+              if (rec) this.players.set(rec.id, rec);
+            }
+          }
+          const bans = await storage.get<unknown[]>('bans');
+          if (Array.isArray(bans)) {
+            for (const id of bans) if (typeof id === 'string' && id) this.banned.add(id);
+          }
+        } catch {
+          /* a store that refuses the read: the registry simply starts empty */
+        }
+      });
+    }
+  }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
@@ -323,6 +479,12 @@ export class MatchmakerDO {
 
     const identity = await authenticate(authRequestFrom(url), this.env);
     if (!identity) return json({ error: 'unauthorized', hint: 'valid Telegram initData required' }, 401);
+    /* The moderation lock is enforced here, not in the panel: a banned account never reaches
+       matchmaking at all, however fresh its socket is. */
+    if (this.restricted(identity.player.id)) {
+      return json({ error: 'banned', hint: 'matchmaking is restricted for this account' }, 403);
+    }
+    this.touch(identity);
 
     const pair = new WebSocketPair();
     const client = pair[0];
@@ -417,6 +579,15 @@ export class MatchmakerDO {
       return json(result, result.ok ? 200 : 400);
     }
 
+    /* The Users tab: one page of the player directory, then one player's moderation/coins. */
+    if (url.pathname === '/admin/players') return json(this.playersPage(url.searchParams));
+
+    if (url.pathname === '/admin/player') {
+      const body = await readBody(request);
+      const result = this.playerAction(body);
+      return json(result, result.ok ? 200 : 400);
+    }
+
     return json({ error: 'not_found' }, 404);
   }
 
@@ -460,6 +631,179 @@ export class MatchmakerDO {
       return { ok: false, error: 'no_such_match' };
     }
     return { ok: false, error: 'unknown_action' };
+  }
+
+  /* ---------- the directory ---------- */
+
+  /** Is this seat locked out of matchmaking? */
+  private restricted(id: string): boolean {
+    return this.banned.has(id) || this.players.get(id)?.banned === true;
+  }
+
+  /**
+   * Fold a connection into the registry. The room is the authority for race telemetry, but the
+   * profile and economy figures come from the seat's own client — the same query string that
+   * seeded the queue. Figures only ever climb here: a stale client reporting a spent wallet must
+   * not walk a granted balance back, and granting is the panel's job anyway.
+   */
+  private touch(identity: Identity): void {
+    const now = Date.now();
+    const id = identity.player.id;
+    const p = this.players.get(id) ?? freshPlayer(identity, now);
+    p.name = identity.player.name || p.name;
+    p.username = identity.player.username || p.username;
+    p.country = identity.flag || p.country;
+    p.tiq = Math.max(0, Math.floor(identity.tiq));
+    p.lastSeen = now;
+    p.coins = Math.max(p.coins, identity.coins);
+    p.stars = Math.max(p.stars, identity.stars);
+    p.referrals = Math.max(p.referrals, identity.referrals);
+    p.squad = identity.squad || p.squad;
+    p.banned = p.banned || this.banned.has(id);
+    p.muted = p.muted || p.banned;
+    if (!this.players.has(id)) {
+      this.trim();
+      this.players.set(id, p);
+    }
+    this.persist();
+  }
+
+  /** The seat's board came to rest: count it. `winner` null means nobody won — an admin abort. */
+  private verdict(id: string, won: boolean | null): void {
+    const p = this.players.get(id);
+    if (!p) return;
+    p.inMatch = false;
+    p.lastSeen = Date.now();
+    if (won === null) return;
+    p.matches++;
+    p.lastPlayed = p.lastSeen;
+    if (won) {
+      p.wins++;
+      p.streak++;
+      p.best = Math.max(p.best, p.streak);
+    } else {
+      p.losses++;
+      p.streak = 0;
+    }
+    this.persist();
+  }
+
+  /** Mark a seat as holding a live board (or back on the market). */
+  private setInMatch(id: string, on: boolean): void {
+    const p = this.players.get(id);
+    if (!p) return;
+    p.inMatch = on;
+    p.lastSeen = Date.now();
+  }
+
+  /**
+   * Pull a banned seat out of matchmaking: any queue waiter is told why and let go, any room that
+   * is still filling loses the seat and reopens it. A board already under way is somebody's game
+   * and plays out untouched — only the next race is denied.
+   */
+  private kick(id: string, reason: string): void {
+    for (const w of [...this.queue]) {
+      if (w.id !== id) continue;
+      const at = this.queue.indexOf(w);
+      if (at !== -1) this.queue.splice(at, 1);
+      this.deliver(w, JSON.stringify({ type: 'ERROR', reason }));
+      try {
+        w.ws.close(1000, reason.toLowerCase());
+      } catch {
+        /* the socket is already gone */
+      }
+    }
+    for (const live of [...this.openRooms]) {
+      for (const m of [...live.members]) {
+        if (!m || m.id !== id) continue;
+        this.postTo(m.ws, JSON.stringify({ type: 'ERROR', reason }));
+        try {
+          m.ws.close(1000, reason.toLowerCase());
+        } catch {
+          /* the socket is already gone */
+        }
+      }
+    }
+    this.setInMatch(id, false);
+  }
+
+  /** One page of the directory: filtered, sorted, and windowed. */
+  private playersPage(params: URLSearchParams): PlayersPage {
+    const q = (params.get('q') ?? '').trim().toLowerCase().slice(0, 64);
+    const filter = filterOf(params.get('filter'));
+    const offset = Math.max(0, Math.floor(Number(params.get('offset')) || 0));
+    const limit = Math.min(PLAYERS_LIMIT, Math.max(1, Math.floor(Number(params.get('limit')) || 40)));
+    const now = Date.now();
+    const tokens = q.split(/\s+/).filter(Boolean);
+    let rows = [...this.players.values()];
+    if (tokens.length) {
+      rows = rows.filter((p) => {
+        const hay = `${p.name} ${p.username} ${p.tgId} ${p.id}`.toLowerCase();
+        return tokens.every((t) => hay.includes(t));
+      });
+    }
+    if (filter === 'active') rows = rows.filter((p) => p.inMatch || now - p.lastSeen <= ACTIVE_MS);
+    if (filter === 'flagged') rows = rows.filter((p) => p.banned || p.muted);
+    /* flagged first when the filter asks for it; otherwise live boards, then the freshest seats */
+    if (filter === 'flagged') rows.sort((a, b) => Number(b.banned) - Number(a.banned) || b.lastSeen - a.lastSeen);
+    else if (filter === 'tiq') rows.sort((a, b) => b.tiq - a.tiq || b.lastSeen - a.lastSeen);
+    else rows.sort((a, b) => Number(b.inMatch) - Number(a.inMatch) || b.lastSeen - a.lastSeen);
+    const total = rows.length;
+    return { ok: true, total, offset, limit, players: rows.slice(offset, offset + limit) };
+  }
+
+  /** BAN / UNBAN / GRANT_COINS on one seat, answering with the record as it now stands. */
+  private playerAction(body: Record<string, unknown>): { ok: boolean; error?: string; player?: PlayerRecord } {
+    const id = typeof body.id === 'string' ? body.id.slice(0, 64) : '';
+    const action = typeof body.action === 'string' ? body.action : '';
+    const p = id ? this.players.get(id) : undefined;
+    if (!p) return { ok: false, error: 'no_such_player' };
+    if (action === 'BAN') {
+      p.banned = true;
+      p.muted = true;
+      this.banned.add(p.id);
+      this.kick(p.id, 'BANNED');
+    } else if (action === 'UNBAN') {
+      p.banned = false;
+      p.muted = false;
+      this.banned.delete(p.id);
+    } else if (action === 'GRANT_COINS') {
+      const n = typeof body.coins === 'number' && Number.isFinite(body.coins) ? Math.round(body.coins) : 0;
+      p.coins = clamp(p.coins + clamp(n, -1_000_000, 1_000_000), 0, 100_000_000);
+    } else {
+      return { ok: false, error: 'unknown_action' };
+    }
+    p.lastSeen = Date.now();
+    this.persist();
+    return { ok: true, player: p };
+  }
+
+  /** Keep the registry a directory, not a leak: at the cap the oldest quiet seat is forgotten. */
+  private trim(): void {
+    if (this.players.size < PLAYERS_MAX) return;
+    let oldest: PlayerRecord | null = null;
+    for (const p of this.players.values()) {
+      if (p.banned || p.muted || p.inMatch) continue;
+      if (!oldest || p.lastSeen < oldest.lastSeen) oldest = p;
+    }
+    if (oldest) this.players.delete(oldest.id);
+  }
+
+  /** Schedule a registry write. Many touches in one turn still cost one flush. */
+  private persist(): void {
+    if (this.dirty || !this.state?.storage) return;
+    this.dirty = true;
+    void Promise.resolve().then(() => {
+      this.dirty = false;
+      const storage = this.state.storage;
+      if (!storage) return;
+      try {
+        void storage.put('players', [...this.players.values()]);
+        void storage.put('bans', [...this.banned]);
+      } catch {
+        /* a store that refuses the write: the registry stays in memory */
+      }
+    });
   }
 
   /** Every waiting seat is told why and let go. A race already under way is somebody's game. */
@@ -510,6 +854,8 @@ export class MatchmakerDO {
     for (const m of live.members) {
       if (!m) continue;
       this.refs.delete(m.ws);
+      /* an admin pull is not a verdict: the seat is free, the record untouched */
+      this.verdict(m.id, null);
       try {
         m.ws.send(JSON.stringify({ type: 'ABORTED', matchId: live.matchId }));
         m.ws.close(1000, 'aborted');
@@ -562,6 +908,16 @@ export class MatchmakerDO {
       this.deliver(waiter, JSON.stringify({ type: 'ERROR', reason: 'MAINTENANCE' }));
       try {
         waiter.ws.close(1000, 'maintenance');
+      } catch {
+        /* the socket is already gone */
+      }
+      return;
+    }
+    /* a socket that connected before the ban is told at the door too, not silently held */
+    if (this.restricted(waiter.id)) {
+      this.deliver(waiter, JSON.stringify({ type: 'ERROR', reason: 'BANNED' }));
+      try {
+        waiter.ws.close(1000, 'banned');
       } catch {
         /* the socket is already gone */
       }
@@ -651,6 +1007,8 @@ export class MatchmakerDO {
     first.race = race;
     second.race = race;
     this.races.set(matchId, race);
+    this.setInMatch(first.id, true);
+    this.setInMatch(second.id, true);
 
     this.deliver(first, foundMessage(matchId, seed, 0, second, sizes));
     this.deliver(second, foundMessage(matchId, seed, 1, first, sizes));
@@ -764,7 +1122,11 @@ export class MatchmakerDO {
     this.rooms.set(live.matchId, live);
     this.rearm();
 
-    for (const m of live.members) if (m) this.postTo(m.ws, this.roomFoundMessage(live, m.seat));
+    for (const m of live.members) {
+      if (!m) continue;
+      this.setInMatch(m.id, true);
+      this.postTo(m.ws, this.roomFoundMessage(live, m.seat));
+    }
     /* Seat 0 is the host, so a person normally opens — but a takeover or an odd roster can put the
        machine on turn before anybody has moved, and the room must not wait for a human to start it. */
     this.pushRoomEvents(live, live.driver.runBots());
@@ -806,7 +1168,22 @@ export class MatchmakerDO {
       return;
     }
     this.pushRoomEvents(live, result.events);
-    if (live.driver.state.winner !== null) this.rooms.delete(live.matchId);
+    if (live.driver.state.winner !== null) {
+      this.finishRoom(live, live.driver.state.winner);
+      this.rooms.delete(live.matchId);
+    }
+  }
+
+  /**
+   * The room's board came to rest: every person still holding a seat is counted, winner to the
+   * seat that played it, and the rest take the loss. A seat backfilled with a bot was never in the
+   * registry and claims nothing — the same rule the dock's standings already play by.
+   */
+  private finishRoom(live: LiveRoom, winner: number): void {
+    for (let i = 0; i < live.members.length; i++) {
+      const m = live.members[i];
+      if (m) this.verdict(m.id, i === winner);
+    }
   }
 
   /**
@@ -842,6 +1219,8 @@ export class MatchmakerDO {
         /* the socket is already gone */
       }
       live.members[ref.seat] = null;
+      /* a person who walked out of a live board counts as a loss: the machine finishes it for them */
+      if (live.driver) this.verdict(member.id, false);
     }
     const driver = live.driver;
     if (!driver) { this.rearm(); return; }
@@ -910,7 +1289,7 @@ export class MatchmakerDO {
     this.deliver(race.seats[seat.side === 0 ? 1 : 0], JSON.stringify({ type: 'MOVE', side: seat.side, action: msg.action }));
     /* The board is decided: both clients can see the winner for themselves, so the room just
        stops being a race rather than guessing what the loser's screen does next. */
-    if (next.winner !== null) this.settle(race);
+    if (next.winner !== null) this.settle(race, next.winner);
   }
 
   private refuse(seat: Waiter, reason: string): void {
@@ -920,17 +1299,24 @@ export class MatchmakerDO {
   /** Forfeit: a resignation, or a socket that died mid-race. The seat opposite takes the win. */
   private endRace(race: Race, leaver: 0 | 1, why: 'RESIGN' | 'LEFT'): void {
     if (race.over) return;
-    this.settle(race);
+    this.settle(race, leaver === 0 ? 1 : 0);
     const other = race.seats[leaver === 0 ? 1 : 0];
     this.deliver(other, JSON.stringify(why === 'RESIGN'
       ? { type: 'RESIGN', side: leaver }
       : { type: 'OPPONENT_LEFT', side: leaver }));
   }
 
-  /** The race is done: stop routing frames through it, and forget the room. */
-  private settle(race: Race): void {
+  /**
+   * The race is done: stop routing frames through it, forget the room, and write the verdict into
+   * the directory. The room is the one authority that saw every move, so the win/loss counts are
+   * recorded here — a client can claim anything, but only the board it played decides.
+   */
+  private settle(race: Race, winner: number | null = null): void {
     race.over = true;
     this.races.delete(race.matchId);
-    for (const seat of race.seats) if (seat.race === race) seat.race = null;
+    for (const seat of race.seats) {
+      if (seat.race === race) seat.race = null;
+      this.verdict(seat.id, winner === null ? null : seat.side === winner);
+    }
   }
 }

@@ -10,7 +10,7 @@
  * Checks:
  *   1. the stage keeps its geometry: header pinned top, nav pinned bottom, the
  *      body scrolls between them, zero page scroll, every key >= 44px;
- *   2. five bottom tabs (Stats/Controls/Server/Inbox/Tools) switch panels
+ *   2. six bottom tabs (Stats/Users/Controls/Server/Inbox/Tools) switch panels
  *      cleanly, with the springy pill riding the active tab;
  *   3. a ticket filed from the support sheet lands in the Inbox with the badge
  *      count at 1, the category, the relative stamp and the "New" pill;
@@ -51,9 +51,9 @@ function serve() {
       let p = decodeURIComponent(String(req.url).split('?')[0]);
       if (p === '/') p = '/index.html';
       if (p === '/favicon.ico') { res.writeHead(200, { 'Content-Type': 'image/x-icon' }); res.end(); return; }
-      /* the Server/Stats tabs probe the live room; a static audit has none, and the
-         app itself treats ok:false as "Local" — answer so the probe is not a 404 */
-      if (p === '/admin/status' && req.method === 'GET') {
+      /* the Server/Stats/Users tabs probe the live room; a static audit has none, and the
+         app itself treats ok:false as "Local"/"Local Index" — answer so the probe is not a 404 */
+      if ((p === '/admin/status' || p === '/admin/players') && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: false, error: 'no live worker in the static audit' }));
         return;
@@ -181,8 +181,8 @@ try {
   expect('bottom dock pinned at the stage bottom', stage.navBottom >= stage.vh - 40 && stage.navTop >= stage.bodyBottom);
   expect('body scrolls between header and dock', stage.bodyOverflow === 'auto' && stage.bodyScrollable);
   expect('zero page scroll at 360x640', stage.pageScroll <= 0);
-  expect('five tabs: Stats/Controls/Server/Inbox/Tools',
-    stage.labels.join('|') === 'Stats|Controls|Server|Inbox|Tools');
+  expect('six tabs: Stats/Users/Controls/Server/Inbox/Tools',
+    stage.labels.join('|') === 'Stats|Users|Controls|Server|Inbox|Tools');
   expect(`every tab key >= 44px (min ${Math.round(stage.minTabH)}h x ${Math.round(stage.minTabW)}w)`,
     stage.minTabH >= 44 && stage.minTabW >= 44);
   expect('springy gold pill present', stage.pill);
@@ -192,7 +192,7 @@ try {
   const switches = await pg.evaluate(() => {
     const overlay = document.getElementById('overlay-admin');
     const out = [];
-    for (const id of ['stats', 'controls', 'server', 'inbox', 'tools']) {
+    for (const id of ['stats', 'users', 'controls', 'server', 'inbox', 'tools']) {
       overlay.querySelector(`[data-atab="${id}"]`).click();
       const shown = [...overlay.querySelectorAll('[data-apanel]')]
         .filter((p) => !p.hidden)
@@ -204,8 +204,9 @@ try {
   });
   expect('each tab lights exactly its own panel',
     switches.every((s) => s.shown === s.id));
-  expect('the pill steps one slot per tab (0% → 400%)',
-    switches.map((s) => s.pill).join('|') === 'translateX(0%)|translateX(100%)|translateX(200%)|translateX(300%)|translateX(400%)');
+  expect('the pill steps one slot per tab (0% → 500%)',
+    switches.map((s) => s.pill).join('|')
+      === 'translateX(0%)|translateX(100%)|translateX(200%)|translateX(300%)|translateX(400%)|translateX(500%)');
 
   await pg.evaluate(() => document.getElementById('atab-stats').click());
   await pg.screenshot({ path: path.join(SHOTS, 'admin-nav-360x640.png') });

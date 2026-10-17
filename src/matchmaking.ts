@@ -37,6 +37,7 @@ import { contendersIn, dimsFor, type Action } from './rules';
 import { menuState, motionReduced, settings } from './settings';
 import { audioContext } from './sound';
 import { payout, profile } from './storage';
+import { getMySquad } from './squads';
 import { runtime, tiqFrom } from './admin';
 import { impact, notify, tgInitData, tgUser } from './telegram';
 
@@ -354,6 +355,11 @@ function socketParams(wide: boolean): string {
   params.set('wide', wide ? '1' : '0');
   /* the board this search is for: the matchmaker only pairs two seats playing the same game */
   params.set('sizes', menuState.sizes.join(','));
+  /* economy / social telemetry for the Admin Command Center's directory. The room clamps every
+     figure on arrival and never treats any of it as an authority — it is a reading, not a claim. */
+  params.set('coins', String(profile.coins));
+  params.set('refs', String(profile.referral.joins));
+  params.set('squad', getMySquad()?.handle ?? '');
   return params.toString();
 }
 

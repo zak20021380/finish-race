@@ -12,7 +12,10 @@
  *   - `GET /admin/status`: the queue, the rooms and the live config, exactly as the roster reads it;
  *   - `POST /admin/config`: the maintenance lock refusing new QUEUE attempts AND sending everyone
  *     already waiting home, plus both pairing radii moving under a live queue;
- *   - `POST /admin/action`: CLEAR_QUEUE evicting the room, ABORT_MATCH ending one stuck race.
+ *   - `POST /admin/action`: CLEAR_QUEUE evicting the room, ABORT_MATCH ending one stuck race;
+ *   - `GET /admin/players` and `POST /admin/player`: the directory page the Users tab reads, the
+ *     grant that moves a wallet and never drains one, the ban that pulls a waiter from the queue
+ *     and shuts the matchmaking door itself, and the unban that opens it again.
  *
  * The Durable Object runs its real code — Web Crypto HMAC and all — so this is "verified in
  * workerd" minus workerd.
@@ -158,8 +161,11 @@ function runtime(vars = {}) {
 /** Through the worker and into the DO, exactly as a browser upgrade would arrive. */
 async function open(rt, fields = {}) {
   const { initData = '', tiq = 0, tier = 'rookie', flag = '', name = 'Player', wide = false,
-    host = '127.0.0.1:8787' } = fields;
+    coins = 0, refs = 0, squad = '', host = '127.0.0.1:8787' } = fields;
   const query = new URLSearchParams({ tiq: String(tiq), tier, flag, name, wide: wide ? '1' : '0' });
+  if (coins) query.set('coins', String(coins));
+  if (refs) query.set('refs', String(refs));
+  if (squad) query.set('squad', squad);
   if (initData) query.set('initData', initData);
   const res = await rt.route(`http://${host}/ws/matchmake?${query}`, { headers: { upgrade: 'websocket' } });
   return { status: res.status, socket: res.webSocket };
@@ -459,6 +465,110 @@ console.log('\n-- the moderation actions --');
   const unknown = await act(rt, { action: 'EXPLODE' }, headers);
   ok('an unknown action is refused with 400', unknown.status === 400, `status ${unknown.status}`);
   ok('and says why', bodyOf(unknown).error === 'unknown_action', unknown.body);
+}
+
+/* ---------- 7. the player directory ---------- */
+
+console.log('\n-- the player directory --');
+{
+  const rt = runtime({ DEV_AUTH: 'true', TELEGRAM_BOT_TOKEN: TOKEN });
+  const headers = { 'x-admin': '1' };
+  const list = async (query = '') => bodyOf(await call(rt, `/admin/players${query}`, { headers }));
+  const mod = (payload) => call(rt, '/admin/player', { method: 'POST', body: payload, headers });
+
+  const ada = await open(rt, { name: 'Ada', tiq: 1200, flag: 'pl', coins: 250, refs: 3, squad: 'pit-crew' });
+  ok('a fresh seat is admitted', ada.status === 101);
+
+  const all = await list();
+  const row = all.players.find((p) => p.name === 'Ada');
+  ok('the directory lists the seat the room just met', !!row, JSON.stringify(all.players));
+  ok('with the telemetry the client sent', row?.tiq === 1200 && row?.country === 'PL', JSON.stringify(row));
+  ok('and the economy the client reported',
+    row?.coins === 250 && row?.referrals === 3 && row?.squad === 'pit-crew', JSON.stringify(row));
+  ok('a guest seat carries no numeric id', row?.tgId === '');
+  ok('the first page reports its own total', all.total === 1 && all.players.length === 1, JSON.stringify(all));
+
+  await open(rt, { name: 'Bob', tiq: 1250 });
+
+  const one = await list('?limit=1');
+  ok('limit=1 windows the page to one row', one.players.length === 1 && one.total === 2, JSON.stringify(one));
+  const other = await list('?limit=1&offset=1');
+  ok('the offset walks to the second row', other.players.length === 1 && other.players[0].id !== one.players[0].id);
+  const capped = await list('?limit=1000');
+  ok('an absurd limit is clamped to the 100 ceiling', capped.limit === 100, String(capped.limit));
+
+  const searched = await list('?q=ada');
+  ok('search keeps only the matching seats', searched.total === 1 && searched.players[0].id === row.id);
+  const miss = await list('?q=zzz-no-such-seat');
+  ok('a search with no hit is an empty page', miss.total === 0 && miss.players.length === 0);
+
+  /* a grant moves the wallet, and never drains it below zero */
+  const granted = await mod({ id: row.id, action: 'GRANT_COINS', coins: 500 });
+  ok('GRANT_COINS answers with the moved wallet', granted.status === 200 && bodyOf(granted).player.coins === 750, granted.body);
+  const drained = await mod({ id: row.id, action: 'GRANT_COINS', coins: -5000 });
+  ok('a wallet never walks below zero', bodyOf(drained).player.coins === 0, drained.body);
+
+  /* a signed seat has a stable id, so a returning stale client cannot walk a grant back */
+  const veraData = signed({ auth_date: '1700000000', user: JSON.stringify(user(9001, 'Vera', 'vera')), query_id: 'VERA' });
+  const vera = await open(rt, { initData: veraData, name: 'Vera', tiq: 1500, coins: 5 });
+  ok('a signed Mini App seat connects', vera.status === 101, `status ${vera.status}`);
+  const veraRow = (await list('?q=vera')).players[0];
+  ok('the numeric Telegram id is on the record', veraRow?.tgId === '9001', JSON.stringify(veraRow));
+  await mod({ id: veraRow.id, action: 'GRANT_COINS', coins: 900 });
+  await open(rt, { initData: veraData, name: 'Vera', tiq: 1500, coins: 5 });
+  const veraBack = (await list('?q=vera')).players[0];
+  ok('the grant survives a returning stale client', veraBack?.coins === 905, JSON.stringify(veraBack));
+
+  /* banning a waiter: pulled from the queue at once, shut out at the door after. The signed seat
+     is the one with a stable id — a guest is throwaway, so a door check needs Vera's initData. */
+  send(vera.socket, { type: 'QUEUE', wide: false });
+  const waiting = (await status(rt, headers)).queuedPlayers.some((w) => w.id === veraRow.id);
+  ok('the signed seat waits in the queue', waiting);
+  const banned = await mod({ id: veraRow.id, action: 'BAN' });
+  ok('BAN flips the record and says so', banned.status === 200 && bodyOf(banned).player.banned === true, banned.body);
+  ok('the banned waiter is told why', errorOf(vera.socket)?.reason === 'BANNED');
+  ok('and let go cleanly', vera.socket.ended === true);
+  const left = (await status(rt, headers)).queueCount;
+  ok('the queue no longer holds the banned seat', left === 0, String(left));
+  const door = new URLSearchParams({ initData: veraData, name: 'Vera', tiq: '1500' });
+  const shut = await rt.route(`http://127.0.0.1:8787/ws/matchmake?${door}`,
+    { headers: { upgrade: 'websocket' } });
+  ok('the door refuses the banned account with 403', shut.status === 403, `status ${shut.status}`);
+  ok('and the refusal names the reason', JSON.parse(shut.body).error === 'banned', shut.body);
+  const flagged = await list('?filter=flagged');
+  ok('the Flagged view carries the banned seat',
+    flagged.players.some((p) => p.id === veraRow.id) && flagged.players.every((p) => p.banned || p.muted));
+
+  const freed = await mod({ id: veraRow.id, action: 'UNBAN' });
+  ok('UNBAN flips the record back', freed.status === 200 && bodyOf(freed).player.banned === false, freed.body);
+  ok('and the door opens again', (await open(rt, { initData: veraData, name: 'Vera', tiq: 1500 })).status === 101);
+  ok('the unban empties the Flagged view', (await list('?filter=flagged')).total === 0);
+
+  /* a live board reads in-match; an admin pull settles it without inventing a result */
+  const da = await open(rt, { name: 'DuelA', tiq: 1000 });
+  const db = await open(rt, { name: 'DuelB', tiq: 1000 });
+  send(da.socket, { type: 'QUEUE', wide: false });
+  send(db.socket, { type: 'QUEUE', wide: false });
+  const duelMatch = matchOf(da.socket)?.matchId;
+  ok('the pair finds each other', !!duelMatch);
+  const paired = await list('?q=duel');
+  ok('both paired seats read as in a match',
+    paired.players.length === 2 && paired.players.every((p) => p.inMatch), JSON.stringify(paired));
+  ok('and the Active view carries them',
+    (await list('?filter=active&q=duel')).players.every((p) => p.inMatch));
+  await act(rt, { action: 'ABORT_MATCH', matchId: duelMatch }, headers);
+  const settled = await list('?q=duel');
+  ok('the pulled seats are free again', settled.players.every((p) => p.inMatch === false));
+  ok('and the pull invented no result',
+    settled.players.every((p) => p.matches === 0 && p.lastPlayed === 0), JSON.stringify(settled.players));
+
+  /* refusals */
+  const ghost = await mod({ id: 'nobody', action: 'BAN' });
+  ok('a seat the room never met is refused with 400',
+    ghost.status === 400 && bodyOf(ghost).error === 'no_such_player', ghost.body);
+  const odd = await mod({ id: veraRow.id, action: 'EXPLODE' });
+  ok('an unknown moderation action is refused with 400',
+    odd.status === 400 && bodyOf(odd).error === 'unknown_action', odd.body);
 }
 
 console.log(`\n${ran - failed}/${ran} admin checks passed`);

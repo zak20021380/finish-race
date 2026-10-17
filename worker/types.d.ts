@@ -40,14 +40,18 @@ interface DurableObjectState {
   getWebSockets(): WebSocket[];
   blockConcurrencyWhile<T>(callback: () => Promise<T>): Promise<T>;
   /**
-   * The object's own clock. A multi-seat room holds its seats open for a short wait and then fills
-   * them with bots; the wait rides on this alarm rather than on a timer, because a Durable Object
-   * may be evicted between messages and an alarm is the one thing that survives it. Optional here
-   * because the test harness drives the object without a storage backend.
+   * The object's own clock and its key/value store. A multi-seat room holds its seats open for a
+   * short wait and then fills them with bots; the wait rides on this alarm rather than on a timer,
+   * because a Durable Object may be evicted between messages and an alarm is the one thing that
+   * survives that. The store is where the Command Center's player directory is kept, so the
+   * registry outlives an eviction. Optional here because the test harness drives the object
+   * without a storage backend.
    */
   readonly storage?: {
     setAlarm(scheduledTime: number): void;
     deleteAlarm(): void;
+    get<T>(key: string): Promise<T | undefined>;
+    put<T>(key: string, value: T): Promise<void>;
   };
 }
 

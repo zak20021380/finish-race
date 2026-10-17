@@ -1258,10 +1258,11 @@
       <div class="scrim" id="scrim" hidden></div>
 
       <!-- ============ Admin Command Center (src/admin.ts) ============
-           A full-viewport Dark Clay stage: the Stats dashboard, the live
-           Controls, the Worker, the support Inbox and the Tools, navigated
-           from a tactile bottom dock. Opaque slabs, extruded depth, engraved
-           kicker, zero backdrop-filter, every control >= 48px. -->
+           A full-viewport Dark Clay stage: the Stats dashboard, the player
+           directory, the live Controls, the Worker, the support Inbox and
+           the Tools, navigated from a tactile bottom dock. Opaque slabs,
+           extruded depth, engraved kicker, zero backdrop-filter, every
+           control >= 48px. -->
       <section class="admin" id="overlay-admin" hidden role="dialog" aria-modal="true" aria-labelledby="admin-title">
         <header class="admin-head">
           <div class="admin-head-txt">
@@ -1370,6 +1371,32 @@
               </div>
               <ul class="adm-nations-list is-meters" id="stat-nations" aria-label="Top player countries"></ul>
             </div>
+          </div>
+
+          <!-- ---------- Users: the player directory, searched, filtered and moderated ---------- -->
+          <div class="admin-panel" data-apanel="users" id="apanel-users" role="tabpanel"
+            aria-labelledby="atab-users" hidden>
+            <div class="adm-search">
+              <svg class="ico" aria-hidden="true"><use href="#i-search" /></svg>
+              <input id="users-q" class="adm-input" type="search" autocomplete="off" spellcheck="false"
+                placeholder="Search name, @handle or id" aria-label="Search players" enterkeyhint="search" />
+              <button class="adm-search-x" type="button" id="users-q-clear" aria-label="Clear player search" hidden>
+                <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
+              </button>
+            </div>
+            <div class="adm-inbox-filters" role="group" aria-label="Filter players">
+              <button class="adm-chip" type="button" data-ufilter="all" aria-pressed="true">All Players</button>
+              <button class="adm-chip" type="button" data-ufilter="active" aria-pressed="false">Active Today</button>
+              <button class="adm-chip" type="button" data-ufilter="tiq" aria-pressed="false">Top TIQ</button>
+              <button class="adm-chip" type="button" data-ufilter="flagged" aria-pressed="false">Flagged</button>
+            </div>
+            <div class="adm-users-meta">
+              <span id="users-total" aria-live="polite">—</span>
+              <span class="adm-users-src" id="users-source" data-live="false">LOCAL INDEX</span>
+            </div>
+            <ul class="adm-users-list" id="adm-users-list" aria-label="Player directory"></ul>
+            <p class="adm-inbox-empty" id="adm-users-empty" hidden>No players match this view.</p>
+            <button class="adm-btn adm-btn-wide" type="button" id="users-more" hidden>Load More</button>
           </div>
 
           <!-- ---------- Controls: the live switches, the broadcast, the tuning ---------- -->
@@ -1558,6 +1585,11 @@
             aria-selected="true" aria-controls="apanel-stats">
             <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-users" /></svg>
             <span class="admin-tab-l">Stats</span>
+          </button>
+          <button class="admin-tab" type="button" role="tab" id="atab-users" data-atab="users"
+            aria-selected="false" aria-controls="apanel-users">
+            <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-user" /></svg>
+            <span class="admin-tab-l">Users</span>
           </button>
           <button class="admin-tab" type="button" role="tab" id="atab-controls" data-atab="controls"
             aria-selected="false" aria-controls="apanel-controls">
