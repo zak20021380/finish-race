@@ -1003,6 +1003,16 @@
                  probes) tells CSS how many chips it is laying out. Only the local seat carries the
                  blitz ring and the bomb's charge capsules. -->
             <footer class="chips" id="chips" data-seats="2" data-players="2">
+              <!-- Quick chat: the 44px key sits in the dock beside your chip, and the lane beside it
+                   is where bubbles are painted — never over the board, never over a ball. -->
+              <div class="chat-dock" id="chat-dock">
+                <button class="icon-btn chat-key" type="button" id="chat-btn" aria-haspopup="dialog"
+                  aria-expanded="false" aria-label="Quick chat">
+                  <svg class="ico" aria-hidden="true"><use href="#i-chat" /></svg>
+                </button>
+                <div class="chat-lane" id="chat-lane" role="log" aria-live="polite"
+                  aria-label="Quick chat messages"></div>
+              </div>
               <div class="chip red" id="chip-0">
                 <span class="chip-row">
                   <span class="chip-ball">

@@ -13,6 +13,7 @@ import {
   type Mark, type Vec, type View,
 } from './render';
 import { createConfetti } from './confetti';
+import { createChat } from './chat';
 import { BOARD_IDLE, holdMineKey, holdsBall, moveDots, pickBall, previewWall, type BoardMode } from './boardmode';
 import { createRouter } from './router';
 import { createSheets } from './sheets';
@@ -1588,6 +1589,18 @@ paintNames();
 /* the HUD ships wearing the allowance it will actually count down, before any race has started */
 paintClock();
 ui();
+/* Quick chat: the one wiring call. It reads the race through getters — the board's state, the
+   local seat, the two moments the rules close chat, and whether the screen is actually live — so
+   nothing in the turn loop has to know the wheel exists. */
+createChat({
+  key: $<HTMLButtonElement>('chat-btn'),
+  lane: $<HTMLElement>('chat-lane'),
+  chips,
+  state: () => state,
+  localSide: () => localSide,
+  busy: () => rolling || mineArmed,
+  live: () => router.current === 'game' && !paused && !overlayOpen && state.winner === null,
+});
 router.start('home');
 setBackButton(false);
 menu.afterStart();
