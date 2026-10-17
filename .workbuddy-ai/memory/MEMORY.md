@@ -4,9 +4,13 @@ Durable index; dated logs beside this file hold the history.
 
 ## Build / verify
 - `npm run build` = `tsc --noEmit` + `tsc -p worker/tsconfig.json` + `node scripts/build-vite.mjs`.
-- Unit: `node --experimental-strip-types scripts/{mines,walls,room,bot-tiers}-check.mjs` (51/14/28/6).
-  Worker: `verify-worker-{matchmaking,lobby,race,admin}.mjs` (56/36/52/103) — they bundle with esbuild
+- Unit: `node --experimental-strip-types scripts/{mines,walls,room,bot-tiers}-check.mjs` (51/14/31/6).
+  Worker: `verify-worker-{matchmaking,lobby,race,admin}.mjs` (56/39/52/103) — they bundle with esbuild
   and fake `WebSocketPair`/`Response`/the DO namespace, so the real DO code runs in plain Node.
+- `.tmp/lobby-audit.mjs` (49 checks): solo flow at 3 viewports **plus an online pass** driving a fake
+  `WebSocket` injected with `Page.addScriptToEvaluateOnNewDocument` (`window.__ws.push(frame)` in,
+  `window.__wsLog` out). The machine-budget check in room-check is flaky under host CPU load — rerun
+  quiet before suspecting a regression.
 - `playwright-core` IS installed; `verify-gm-sheet.mjs` (Playwright) and the `.tmp/*-audit.mjs` raw-CDP
   harnesses both work (serve `dist`, strip `telegram-web-app.js`, drive headless Chrome).
 - **Every CDP harness must `fs.rmSync(profile, {recursive:true, force:true})` on exit** — 18MB profiles
@@ -40,17 +44,26 @@ Durable index; dated logs beside this file hold the history.
 ## Friends lobby (src/lobby.ts, gamemodes.ts, worker)
 - Three panes: `#gm-view-modes` / `#gm-view-room` (entry) / `#gm-view-lobby`. `showView` is the only
   writer of `view`; it hides the foot on the entry pane and restores `#gm-start`'s list label.
-- `Lobby` is a value; `seatIn`/`vacate`/`setMode`/`setTeam` are pure. **`vacate` promotes the lowest
+- **One knob: the format** (`src/room.ts`: `2v2|2v1|3p|4p`). Everything derives from it — capacity
+  (4/3/3/4), mode (team/team/ffa/ffa), `teamCapacity` (2v2 2/2, 2v1 Blue 2 / Red 1), `defaultTeam`
+  = seat parity, `formatOfMode` ('team'→2v2). `reflowSeats`/`reflowRoom` keep fitting seats where they
+  are; `assignTeam` swaps with the lowest opposite seat when the target team is full; `nextTeam` is
+  shared by client `teamFor` and the UI's `plannedTeam`.
+- `Lobby` is a value; `seatIn`/`vacate`/`setFormat`/`setTeam` are pure. **`vacate` promotes the lowest
   held seat** — host migration, once. `openLobby` falls back to a **solo** lobby after 1400ms with no
   `LOBBY` frame; it sets `solo` before closing its own socket, or the close handler reports a drop.
-- Worker: `?roomcode=NNNN&host=1` mints a 4-seat code lobby (never auto-paired, no timer); a guest
-  must be expected (`room_not_found`). `LOBBY` out; `SET_MODE`/`SET_TEAM`/`ROOM_START`/`CANCEL` in,
-  host-only. The two-player minimum is **code lobbies only** — `?room=<n>` still launches solo.
+  `minToStart` is 3 for 2v1 (all three humans), 2 otherwise — bots may fill the rest.
+- Arena UI: Team view = Blue column / gold `#i-swords` crest / Red column, both `max(cap)` rows with
+  `.lb-lock` on cells a format lacks (2v1 Red's second). FFA = 2x2 grid with seat colour chips.
+  A player may move **their own** seat between teams; the host moves anyone. `[hidden]` still must be
+  restated on `.gm-view`, `.gm-foot`, `.gm-rewards`, `.lb-pick` (author `display` outranks the UA rule).
+- Worker: `?roomcode=NNNN&host=1` mints a code lobby; a guest must be expected (`room_not_found`).
+  `LOBBY` out; `SET_FORMAT`/`SET_MODE` (alias)/`SET_TEAM`/`ROOM_START`/`CANCEL` in. A format nobody
+  fits is **bounced** (`FORMAT_DENIED` to the host + a fresh `LOBBY`), never half-applied. The
+  two-player minimum is **code lobbies only** — `?room=<n>` still launches solo (`formatForSize`).
 - `LobbyRace` mirrors `OnlineSession` (`side: number`, `sizes: number[]`), so `startGame()` runs a room
   race with no second path; `roomFromRoster` trims trailing wells (min 2 seats). Team mode is lobby
   metadata: teams sync and paint, the board still plays one ball per seat.
-- **`[hidden]` must be restated** on `.gm-view`, `.gm-foot`, `.gm-rewards`, `.lb-pick`: an author
-  `display: flex` outranks the UA rule, and a pane that ignores `hidden` paints over its neighbour.
 
 ## Board interaction + HUD (boardmode.ts, render.ts, main.ts)
 - `main.ts` owns `selected`/`ghost`/`mineArmed`; `mode()`/`setMode()` are the only writers; `hints` are

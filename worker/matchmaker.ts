@@ -40,8 +40,9 @@ import {
   MAX_BALLS, MAX_TEAMS, apply, contendersIn, dimsFor, newGame, type Action, type GameState,
 } from '../src/rules';
 import {
-  ROOM_WAIT_MS, backfill, createRoom, createRoomDriver, difficultyFor, isAutomated, launch,
-  seatHuman, sizesOf, type BotTier, type Room, type RoomDriver, type RoomEvent,
+  FORMAT_CAPACITY, FORMAT_MODE, ROOM_WAIT_MS, assignTeam, backfill, createRoom, createRoomDriver,
+  defaultTeam, difficultyFor, formatOfMode, isAutomated, isLobbyFormat, launch, reflowRoom, seatHuman,
+  sizesOf, type BotTier, type LobbyFormat, type Room, type RoomDriver, type RoomEvent,
 } from '../src/room';
 import { authenticate, authRequestFrom, type Identity, type MindTier } from './auth';
 import { json } from './http';
@@ -55,9 +56,11 @@ type ClientMessage =
   | { type: 'CANCEL' }
   | { type: 'MOVE'; action: Action }
   | { type: 'RESIGN' }
-  /* The room path: the host starting early, and the two knobs only the host may turn — the match
-     format and a seat's team. Everything else a room seat sends is a MOVE or a RESIGN. */
+  /* The room path: the host starting early, the host's size pick (2v2 / 2v1 / 3p / 4p), and a
+     seat's team move — any seat may move itself, the host may move anyone. Everything else a room
+     seat sends is a MOVE or a RESIGN. */
   | { type: 'ROOM_START' }
+  | { type: 'SET_FORMAT'; format: LobbyFormat }
   | { type: 'SET_MODE'; mode: 'ffa' | 'team' }
   | { type: 'SET_TEAM'; side: number; team: 0 | 1 };
 
@@ -122,7 +125,9 @@ interface LiveRoom {
   driver: RoomDriver | null;
   /** The seat wearing the crown. A code lobby migrates it when the host walks out. */
   hostSeat: number;
-  /** The format the host picked: everyone for themselves, or two teams. */
+  /** The host's size pick: 2v2 / 2v1 / 3p / 4p. `size`, `mode` and `teams` all follow it. */
+  format: LobbyFormat;
+  /** The format's race shape: everyone for themselves, or two teams. */
   mode: 'ffa' | 'team';
   /** Seat → team (0 blue, 1 red). Only read while `mode` is `team`. */
   teams: number[];
@@ -135,6 +140,9 @@ interface RoomRef { live: LiveRoom; seat: number }
 
 /** What a room's status row reports, on top of what a 1v1 room reports. */
 export interface RoomSummary { players: number; bots: number }
+
+/** The format a fixed-size auto-pair room reports. It never grows a selector; its size is the shape. */
+const formatForSize = (size: number): LobbyFormat => (size === 3 ? '3p' : '4p');
 
 /** The ordinary radius, and the number the room starts on. */
 const TIER_RADIUS = 250;
@@ -408,12 +416,16 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
   try {
     const msg = JSON.parse(raw) as {
       type?: unknown; wide?: unknown; action?: unknown; mode?: unknown; side?: unknown; team?: unknown;
+      format?: unknown;
     };
     if (msg.type === 'QUEUE') return { type: 'QUEUE', wide: msg.wide === true };
     if (msg.type === 'WIDEN') return { type: 'WIDEN' };
     if (msg.type === 'CANCEL') return { type: 'CANCEL' };
     if (msg.type === 'RESIGN') return { type: 'RESIGN' };
     if (msg.type === 'ROOM_START') return { type: 'ROOM_START' };
+    if (msg.type === 'SET_FORMAT') {
+      return isLobbyFormat(msg.format) ? { type: 'SET_FORMAT', format: msg.format } : null;
+    }
     if (msg.type === 'SET_MODE') return { type: 'SET_MODE', mode: msg.mode === 'team' ? 'team' : 'ffa' };
     if (msg.type === 'SET_TEAM') {
       const side = Number(msg.side);
@@ -1094,8 +1106,9 @@ export class MatchmakerDO {
         seed: 0,
         driver: null,
         hostSeat: 0,
+        format: formatForSize(size),
         mode: 'ffa',
-        teams: Array.from({ length: size }, (_, i) => i % 2),
+        teams: Array.from({ length: size }, (_, i) => defaultTeam(i)),
         code: false,
       };
       this.openRooms.push(live);
@@ -1140,7 +1153,8 @@ export class MatchmakerDO {
     if (live?.driver) { this.rejectSocket(ws, 'room_started'); return; }
     if (!live) {
       if (!host) { this.rejectSocket(ws, 'room_not_found'); return; }
-      const size = MAX_TEAMS;
+      const format: LobbyFormat = '4p';
+      const size = FORMAT_CAPACITY[format];
       live = {
         room: createRoom({ code, seats: size, waitMs: ROOM_WAIT_MS, botTier: tier, now: Date.now() }),
         size,
@@ -1149,8 +1163,9 @@ export class MatchmakerDO {
         seed: 0,
         driver: null,
         hostSeat: 0,
-        mode: 'ffa',
-        teams: Array.from({ length: size }, (_, i) => i % 2),
+        format,
+        mode: FORMAT_MODE[format],
+        teams: Array.from({ length: size }, (_, i) => defaultTeam(i)),
         code: true,
       };
       this.lobbies.set(code, live);
@@ -1205,6 +1220,7 @@ export class MatchmakerDO {
       type: 'LOBBY',
       code: live.room.code,
       host: live.hostSeat,
+      format: live.format,
       mode: live.mode,
       you: seat,
       capacity: live.size,
@@ -1232,6 +1248,39 @@ export class MatchmakerDO {
       const next = live.members.findIndex((m) => m !== null);
       if (next >= 0) live.hostSeat = next;
     }
+    this.broadcastLobby(live);
+  }
+
+  /**
+   * The host picked a new size. The seats are reflowed around the people already sitting in them —
+   * never dropped — and when they do not all fit, the pick is bounced back to the host with the
+   * room untouched. Capacity, race mode and the default Blue/Red split all move with the format.
+   */
+  private applyFormat(live: LiveRoom, format: LobbyFormat): void {
+    if (live.driver || live.format === format) return;
+    const capacity = FORMAT_CAPACITY[format];
+    const reflowed = reflowRoom(live.room, capacity);
+    if (!reflowed) {
+      const host = live.members[live.hostSeat];
+      if (host) this.postTo(host.ws, JSON.stringify({ type: 'FORMAT_DENIED', reason: 'room_full' }));
+      this.broadcastLobby(live);
+      return;
+    }
+    const members: (RoomMember | null)[] = Array.from({ length: capacity }, () => null);
+    for (const { from, to } of reflowed.moves) {
+      const m = live.members[from];
+      if (!m) continue;
+      const moved: RoomMember = { ...m, seat: to };
+      members[to] = moved;
+      const ref = this.refs.get(moved.ws);
+      if (ref) ref.seat = to;
+    }
+    live.room = reflowed.room;
+    live.members = members;
+    live.size = capacity;
+    live.format = format;
+    live.mode = FORMAT_MODE[format];
+    live.teams = Array.from({ length: capacity }, (_, i) => defaultTeam(i));
     this.broadcastLobby(live);
   }
 
@@ -1340,23 +1389,39 @@ export class MatchmakerDO {
   private roomFrame(ref: RoomRef, msg: ClientMessage): void {
     const live = ref.live;
     if (!live.driver) {
-      /* Before the launch the only authority is the host's: start, format, team. Any seat may
-         leave, and that is the whole vocabulary of a lobby. */
+      /* Before the launch the only vocabulary a lobby has is the host's start and size pick, and
+         a seat's own team move. Any seat may leave at any time. */
       if (msg.type === 'CANCEL') { this.leaveLobby(ref); return; }
-      if (ref.seat !== live.hostSeat) return;
       if (msg.type === 'ROOM_START') {
-        /* A friends room needs a second player before it is a race; the auto-pair room does not,
-           because its whole contract is that the machine fills whatever is left. */
-        if (!live.code || live.members.filter((m) => m !== null).length >= 2) this.launchRoom(live);
+        if (ref.seat !== live.hostSeat) return;
+        /* A friends room needs its format's minimum before it is a race — two players, or all
+           three for the 2v1's lone challenger. The auto-pair room does not, because its whole
+           contract is that the machine fills whatever is left. */
+        const held = live.members.filter((m) => m !== null).length;
+        if (!live.code || held >= (live.format === '2v1' ? 3 : 2)) this.launchRoom(live);
+        return;
+      }
+      if (msg.type === 'SET_FORMAT') {
+        if (ref.seat === live.hostSeat) this.applyFormat(live, msg.format);
         return;
       }
       if (msg.type === 'SET_MODE') {
-        live.mode = msg.mode;
-        this.broadcastLobby(live);
+        if (ref.seat === live.hostSeat) this.applyFormat(live, formatOfMode(msg.mode));
         return;
       }
       if (msg.type === 'SET_TEAM') {
-        if (msg.side < live.size) live.teams[msg.side] = msg.team;
+        if (live.mode !== 'team') return;
+        if (ref.seat !== live.hostSeat && msg.side !== ref.seat) return;
+        if (msg.side >= live.size) return;
+        const next = assignTeam(
+          live.teams,
+          live.members.map((m) => m !== null),
+          msg.side,
+          msg.team,
+          live.format,
+        );
+        if (!next) return;
+        live.teams = next;
         this.broadcastLobby(live);
       }
       return;

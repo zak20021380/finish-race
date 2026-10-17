@@ -40,6 +40,125 @@ export const DEFAULT_BOT_TIER: BotTier = 'mixed';
 export const MIN_SEATS = 2;
 export const MAX_SEATS = MAX_TEAMS;
 
+/* ---------- the lobby format: who plays whom, and how many seats that takes ---------- */
+
+/**
+ * The four shapes a friends lobby can take. Two team formats — a full 2v2, or two players against
+ * one challenger — and two individual (FFA) sizes. The format is the *only* thing a host picks:
+ * capacity, race mode and the default team layout all derive from it, so the selector and the
+ * roster can never disagree about how many wells a room has.
+ */
+export type LobbyFormat = '2v2' | '2v1' | '3p' | '4p';
+
+export const LOBBY_FORMATS: readonly LobbyFormat[] = ['2v2', '2v1', '3p', '4p'];
+
+export const isLobbyFormat = (v: unknown): v is LobbyFormat =>
+  v === '2v2' || v === '2v1' || v === '3p' || v === '4p';
+
+/** How many seats a format fields. 2v1 is the one asymmetric team shape: three seats. */
+export const FORMAT_CAPACITY: Record<LobbyFormat, number> = { '2v2': 4, '2v1': 3, '3p': 3, '4p': 4 };
+
+/** What the board plays: the team formats share teams, the individual ones do not. */
+export const FORMAT_MODE: Record<LobbyFormat, 'ffa' | 'team'> = {
+  '2v2': 'team', '2v1': 'team', '3p': 'ffa', '4p': 'ffa',
+};
+
+/** How many seats each team may hold. Only read in team formats; FFA keeps everyone on Blue. */
+export function teamCapacity(format: LobbyFormat, team: 0 | 1): number {
+  if (FORMAT_MODE[format] === 'ffa') return FORMAT_CAPACITY[format];
+  return format === '2v1' && team === 1 ? 1 : 2;
+}
+
+/** The team a seat starts on under a format: alternating down the seat order, Blue first. */
+export const defaultTeam = (seat: number): 0 | 1 => (seat % 2 === 0 ? 0 : 1);
+
+/** The format a mode opens on: the fullest team battle, or the four-seat free-for-all. */
+export const formatOfMode = (mode: 'ffa' | 'team'): LobbyFormat => (mode === 'team' ? '2v2' : '4p');
+
+/** The two-way size selector's labels, and the one-line promise printed under it. */
+export const FORMAT_NAME: Record<LobbyFormat, string> = {
+  '2v2': '2 vs 2', '2v1': '2 vs 1', '3p': '3 Players', '4p': '4 Players',
+};
+
+export const FORMAT_LINE: Record<LobbyFormat, string> = {
+  '2v2': '2 vs 2 · Full team battle',
+  '2v1': '2 vs 1 · Two players against one challenger',
+  '3p': '3-player free-for-all · Everyone for themselves',
+  '4p': '4-player free-for-all · Everyone for themselves',
+};
+
+/**
+ * Reflow a set of held seat indices into a room of `capacity` seats. A seat that still fits keeps
+ * its index; one that does not moves to the lowest free well. Null when everyone cannot fit — a
+ * four-player room cannot become a three-seat one without somebody going.
+ */
+export function reflowSeats(held: readonly number[], capacity: number): number[] | null {
+  if (held.length > capacity) return null;
+  const taken = new Set(held.filter((i) => i >= 0 && i < capacity));
+  const out: number[] = [];
+  for (const from of held) {
+    if (from >= 0 && from < capacity) { out.push(from); continue; }
+    let at = 0;
+    while (taken.has(at)) at++;
+    if (at >= capacity) return null;
+    taken.add(at);
+    out.push(at);
+  }
+  return out;
+}
+
+export interface RoomReflow {
+  room: Room;
+  /** Where each held seat went, `from` → `to`, in the room's own seat order. */
+  moves: Array<{ from: number; to: number }>;
+}
+
+/** Resize a room to `capacity`, carrying every held seat along. Null when they will not fit. */
+export function reflowRoom(room: Room, capacity: number): RoomReflow | null {
+  const held: number[] = [];
+  for (let i = 0; i < room.seats.length; i++) {
+    const s = room.seats[i];
+    if (s.kind === 'bot' || isHuman(room, i)) held.push(i);
+  }
+  const mapped = reflowSeats(held, capacity);
+  if (!mapped) return null;
+  const seats: Seat[] = Array.from({ length: capacity }, (_, i) => vacantSeat(i, 'normal'));
+  const moves = held.map((from, k) => ({ from, to: mapped[k] }));
+  for (const { from, to } of moves) seats[to] = { ...room.seats[from], index: to };
+  return { room: { ...room, seats }, moves };
+}
+
+/**
+ * Move one seat to a team, with the team's capacity respected. When the destination is already
+ * full the mover swaps places with the lowest seat on it — which is what makes "tap to switch"
+ * feel right in a full 2v2, and the only way to re-pick the lone challenger in a 2v1. Null when
+ * the move changes nothing or the seat is not held.
+ */
+export function assignTeam(
+  teams: readonly number[],
+  held: readonly boolean[],
+  seat: number,
+  team: 0 | 1,
+  format: LobbyFormat,
+): number[] | null {
+  if (seat < 0 || seat >= teams.length || !held[seat] || teams[seat] === team) return null;
+  const cap = teamCapacity(format, team);
+  let count = 0;
+  let first = -1;
+  for (let i = 0; i < teams.length; i++) {
+    if (held[i] && teams[i] === team) {
+      count++;
+      if (first < 0) first = i;
+    }
+  }
+  const next = teams.slice();
+  if (count < cap) { next[seat] = team; return next; }
+  if (first < 0) return null;
+  next[seat] = team;
+  next[first] = teams[seat];
+  return next;
+}
+
 export interface Seat {
   /** The seat's index in the room — which is also the team index the rules play it as. */
   index: number;

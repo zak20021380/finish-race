@@ -40,6 +40,8 @@ const {
   ROOM_WAIT_MS, backfill, botCount, createRoom, createRoomDriver, difficultyFor, humanCount,
   isAutomated, launch, lobbyLine, rewardEligible, seatBadge, seatHuman, sizesOf, startEarly,
   takeover, tick, vacantSeats, waitLeft,
+  FORMAT_CAPACITY, FORMAT_LINE, FORMAT_MODE, FORMAT_NAME, LOBBY_FORMATS, assignTeam,
+  defaultTeam, formatOfMode, isLobbyFormat, reflowRoom, reflowSeats, teamCapacity,
 } = ROOM;
 
 /* ---------- seeded randomness, so a run is a run and not a mood ---------- */
@@ -589,6 +591,88 @@ check('lobby: the caption counts down, then reports the roster it launched with'
   assert.equal(lobbyLine(room, 3000), '1 of 4 seats taken · bots fill the rest in 5s');
   const started = tick(room, 8000);
   assert.equal(lobbyLine(started, 9000), '4-seat race · 1 human, 3 bots');
+});
+
+/* ---------- 7. the lobby format: one knob, and everything it derives ---------- */
+
+check('lobby format: capacity, mode, teams and copy all follow the one pick', () => {
+  for (const good of ['2v2', '2v1', '3p', '4p']) assert.ok(isLobbyFormat(good), `${good} was refused`);
+  for (const bad of ['2V2', '4', '5p', '', null, undefined, 4]) assert.ok(!isLobbyFormat(bad), `${bad} was accepted`);
+  assert.deepEqual([...LOBBY_FORMATS], ['2v2', '2v1', '3p', '4p']);
+
+  assert.equal(FORMAT_CAPACITY['2v2'], 4);
+  assert.equal(FORMAT_CAPACITY['2v1'], 3);
+  assert.equal(FORMAT_CAPACITY['3p'], 3);
+  assert.equal(FORMAT_CAPACITY['4p'], 4);
+
+  assert.equal(FORMAT_MODE['2v2'], 'team');
+  assert.equal(FORMAT_MODE['2v1'], 'team');
+  assert.equal(FORMAT_MODE['3p'], 'ffa');
+  assert.equal(FORMAT_MODE['4p'], 'ffa');
+
+  assert.equal(teamCapacity('2v2', 0), 2);
+  assert.equal(teamCapacity('2v2', 1), 2);
+  assert.equal(teamCapacity('2v1', 0), 2);
+  assert.equal(teamCapacity('2v1', 1), 1, '2v1 must keep the lone challenger alone');
+  assert.equal(teamCapacity('3p', 0), 3);
+  assert.equal(teamCapacity('4p', 1), 4);
+
+  assert.equal(formatOfMode('team'), '2v2');
+  assert.equal(formatOfMode('ffa'), '4p');
+  assert.deepEqual([0, 1, 2, 3].map(defaultTeam), [0, 1, 0, 1]);
+  for (const f of LOBBY_FORMATS) {
+    assert.ok(FORMAT_NAME[f].length > 0, `${f} has no chip label`);
+    assert.ok(FORMAT_LINE[f].length > 0, `${f} has no promise line`);
+  }
+});
+
+check('lobby format: a reflow keeps every held seat, and refuses the impossible', () => {
+  /* every subset of a four-seat room, into every room size: a fit iff the people fit */
+  for (let cap = 2; cap <= 4; cap++) {
+    for (let mask = 0; mask < 16; mask++) {
+      const held = [0, 1, 2, 3].filter((i) => mask & (1 << i));
+      const out = reflowSeats(held, cap);
+      if (held.length > cap) { assert.equal(out, null, `${held} fitted a ${cap}-seat room`); continue; }
+      assert.ok(out, `${held} was refused a ${cap}-seat room`);
+      assert.equal(out.length, held.length, 'a seat was dropped');
+      assert.equal(new Set(out).size, out.length, 'two seats landed on one well');
+      assert.ok(out.every((i) => i >= 0 && i < cap), 'a seat landed outside the room');
+      assert.ok(held.filter((i) => i < cap).every((i) => out.includes(i)), 'a fitting seat moved for no reason');
+    }
+  }
+  assert.deepEqual(reflowSeats([0, 2], 3), [0, 2], 'a reflow moved seats that already fit');
+  assert.deepEqual(reflowSeats([3], 3), [0], 'an out-of-room seat must land on the lowest free well');
+  assert.equal(reflowSeats([0, 1, 2, 3], 3), null);
+
+  /* a real room resizes around its people: indexes renumbered, order kept, original untouched */
+  let room = createRoom({ code: '1', seats: 4, host: host(), now: 0 });
+  room = seatHuman(room, 3, { kind: 'human', id: 'p-b', name: 'B' });
+  room = seatHuman(room, 0, { kind: 'human', id: 'p-a', name: 'A' });
+  const sized = reflowRoom(room, 3);
+  assert.ok(sized, 'two people were refused a three-seat room');
+  assert.equal(sized.room.seats.length, 3);
+  assert.deepEqual(sized.moves, [{ from: 0, to: 0 }, { from: 3, to: 1 }]);
+  assert.equal(sized.room.seats[0].kind, 'human');
+  assert.equal(sized.room.seats[1].index, 1, 'the moved seat kept a stale index');
+  assert.equal(sized.room.seats[1].id, 'p-b');
+  assert.equal(room.seats.length, 4, 'the source room was mutated');
+  assert.deepEqual(vacantSeats(sized.room), [2], 'the freed well is not backfillable');
+});
+
+check('lobby format: a team move respects the cap, and swaps when the team is full', () => {
+  const held = [true, true, true];
+  /* 2v1: Blue is full, so the Red player who taps Blue swaps the first Blue to Red */
+  assert.deepEqual(assignTeam([0, 1, 0], held, 1, 0, '2v1'), [1, 0, 0]);
+  /* 2v2: Red is full, so a Blue tapping Red swaps with the first Red */
+  assert.deepEqual(assignTeam([0, 1, 0, 1], [true, true, true, true], 2, 1, '2v2'), [0, 0, 1, 1]);
+  /* a team with room takes the seat without displacing anyone */
+  assert.deepEqual(assignTeam([0, 1, 0, 1], [true, true, true, false], 2, 1, '2v2'), [0, 1, 1, 1]);
+  assert.deepEqual(assignTeam([0, 1, 0], held, 2, 1, '3p'), [0, 1, 1]);
+  /* a vacant seat, a no-op move, and a team outside the shape are all refused */
+  assert.equal(assignTeam([0, 1, 0, 1], [true, false, true, true], 1, 0, '2v2'), null);
+  assert.equal(assignTeam([0, 1, 0, 1], [true, true, true, true], 0, 0, '2v2'), null);
+  assert.equal(assignTeam([0, 1], [true, true], 5, 1, '2v2'), null);
+  assert.equal(assignTeam([0, 1, 0], held, 1, 1, '2v1'), null, 'a seat already on its team was moved');
 });
 
 console.log(`\n${run} room checks passed`);

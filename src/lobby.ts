@@ -5,14 +5,15 @@
  * Three ideas hold the whole screen together:
  *
  *   1. **The roster is data, not DOM.** `Lobby` is a plain value, and every mutation is a pure
- *      function on it (`seatIn`, `vacate`, `setMode`, `setTeam`). The sheet re-reads the value and
+ *      function on it (`seatIn`, `vacate`, `setFormat`, `setTeam`). The sheet re-reads the value and
  *      repaints; nothing about a slot's look is stored in a closure. That is what lets the host
  *      migration below be a two-line rule instead of a screen rebuild.
  *
- *   2. **One host, one format.** The host seat owns `mode` and every seat's `team`. A guest's copy
- *      is read-only: it renders the same segmented switch, but the switch does nothing. Promotion is
- *      implicit — `vacate()` hands the crown to the lowest seat still held, so a lobby whose host
- *      walks out never becomes a room nobody can start.
+ *   2. **One host, one format.** The host seat owns the format — 2v2 / 2v1 / 3p / 4p — and with it
+ *      the capacity, the race mode and the default Blue/Red split. A guest's copy is read-only: it
+ *      renders the same selectors, but they do nothing. A player may still move their own seat
+ *      between the teams. Promotion is implicit — `vacate()` hands the crown to the lowest seat
+ *      still held, so a lobby whose host walks out never becomes a room nobody can start.
  *
  *   3. **The wire is optional.** A room that cannot reach the worker is still a room: `openLobby`
  *      falls back to a *solo* lobby after a short connect window, where the host's own seat is
@@ -26,8 +27,13 @@
 import { MAX_TEAMS, type Action } from './rules';
 import { chime, myTier, myTiq, roomSocketUrl, type MindTier, type OpponentData } from './matchmaking';
 import { profile } from './storage';
+import {
+  FORMAT_CAPACITY, FORMAT_LINE, FORMAT_MODE, assignTeam, defaultTeam, isLobbyFormat, reflowSeats,
+  teamCapacity,
+  type LobbyFormat,
+} from './room';
 
-/** How the room plays: everyone for themselves, or two teams. */
+/** How the room plays: everyone for themselves, or two teams. Derived from the format. */
 export type LobbyMode = 'ffa' | 'team';
 
 /** One held seat. A `null` in `Lobby.seats` is an open well. */
@@ -49,6 +55,8 @@ export interface LobbySeat {
 export interface Lobby {
   code: string;
   capacity: number;
+  /** The host's size pick: 2v2 / 2v1 / 3p / 4p. Capacity and mode derive from it. */
+  format: LobbyFormat;
   mode: LobbyMode;
   /** The seat wearing the crown. Always a held seat while the lobby is open. */
   hostSeat: number;
@@ -68,15 +76,33 @@ export const humans = (l: Lobby): number => l.seats.reduce((n, s) => n + (s && !
 
 export const isHost = (l: Lobby): boolean => l.you >= 0 && l.you === l.hostSeat;
 
-/** Two players is the smallest race the rules can play, so it is the smallest a lobby may start. */
-export const canStart = (l: Lobby): boolean => occupied(l) >= 2;
+/**
+ * How many players a format needs before it may start. Two is the smallest race the rules can
+ * play, so a team battle or a free-for-all starts there — the machine fills the rest. The 2v1 is
+ * the exception: its whole promise is the lone challenger, so all three seats have to be held.
+ */
+export const minToStart = (l: Lobby): number => (l.format === '2v1' ? 3 : 2);
 
-/** The team a fresh seat joins: the emptier one, so a 2v2 fills Blue/Red/Blue/Red. */
-export function teamFor(l: Lobby): 0 | 1 {
-  const blue = l.seats.reduce((n, s) => n + (s && s.team === 0 ? 1 : 0), 0);
-  const red = l.seats.reduce((n, s) => n + (s && s.team === 1 ? 1 : 0), 0);
-  return blue <= red ? 0 : 1;
+export const canStart = (l: Lobby): boolean => occupied(l) >= minToStart(l);
+
+/** The plain-language line under the roster: what is missing, or that the room is ready. */
+export function startHint(l: Lobby): string {
+  if (canStart(l)) return isHost(l) ? 'All set — start the match' : 'Waiting for the host…';
+  if (l.format === '2v1') return '2 vs 1 needs all three players';
+  return 'Invite one more player to start';
 }
+
+/** Which team the next arrival takes, given the seats already counted: the emptier one with room. */
+export const nextTeam = (blue: number, red: number, format: LobbyFormat): 0 | 1 =>
+  blue < teamCapacity(format, 0) && blue <= red ? 0 : red < teamCapacity(format, 1) ? 1 : 0;
+
+/** The team a fresh seat joins: the emptier one that still has room under the format. */
+export const teamFor = (l: Lobby): 0 | 1 =>
+  nextTeam(
+    l.seats.reduce((n, s) => n + (s && s.team === 0 ? 1 : 0), 0),
+    l.seats.reduce((n, s) => n + (s && s.team === 1 ? 1 : 0), 0),
+    l.format,
+  );
 
 /** The seat a new arrival takes: the first open well, or -1 when the room is full. */
 export const openSeat = (l: Lobby): number => l.seats.findIndex((s) => s === null);
@@ -111,34 +137,55 @@ export function vacate(l: Lobby, seat: number): Lobby {
   return { ...l, seats: crowned, hostSeat: next };
 }
 
-/** The host's format switch. Guests never reach this: the sheet gates it on `isHost`. */
-export const setMode = (l: Lobby, mode: LobbyMode): Lobby => (l.mode === mode ? l : { ...l, mode });
-
-/** Move one seat between Blue and Red. Host only, and only meaningful in `team` mode. */
-export function setTeam(l: Lobby, seat: number, team: 0 | 1): Lobby {
-  const s = l.seats[seat];
-  if (!s || s.team === team) return l;
-  return { ...l, seats: l.seats.map((x, i) => (i === seat && x ? { ...x, team } : x)) };
-}
-
-/** Alternate Blue/Red down the seat order: the one-tap way out of a lopsided 2v2. */
-export function balanceTeams(l: Lobby): Lobby {
-  let n = 0;
+/**
+ * The host's format switch. Capacity, race mode and the default Blue/Red split all move together,
+ * and held seats are carried into the new layout — a seat that no longer fits is moved to the
+ * lowest open well, and a change nobody fits into is refused by returning the lobby untouched.
+ */
+export function setFormat(l: Lobby, format: LobbyFormat): Lobby {
+  if (l.format === format) return l;
+  const capacity = FORMAT_CAPACITY[format];
+  const held = l.seats.map((s, i) => (s ? i : -1)).filter((i) => i >= 0);
+  const mapped = reflowSeats(held, capacity);
+  if (!mapped) return l;
+  const mode = FORMAT_MODE[format];
+  const seats: (LobbySeat | null)[] = Array.from({ length: capacity }, () => null);
+  held.forEach((from, k) => {
+    const to = mapped[k];
+    const s = l.seats[from] as LobbySeat;
+    seats[to] = { ...s, seat: to, team: mode === 'team' ? defaultTeam(to) : s.team };
+  });
+  const crown = held.indexOf(l.hostSeat);
+  const mine = held.indexOf(l.you);
   return {
     ...l,
-    seats: l.seats.map((s) => {
-      if (!s) return s;
-      const team = (n++ % 2) as 0 | 1;
-      return s.team === team ? s : { ...s, team };
-    }),
+    format,
+    mode,
+    capacity,
+    seats,
+    hostSeat: crown >= 0 ? mapped[crown] : -1,
+    you: mine >= 0 ? mapped[mine] : -1,
   };
 }
 
-/** The mode's one-line promise, printed under the switch. */
-export const MODE_LINE: Record<LobbyMode, string> = {
-  ffa: 'Free-for-all: last player standing wins',
-  team: 'Team Battle: work together to reach the goal',
-};
+/** Move one seat between Blue and Red, respecting the format's team sizes. */
+export function setTeam(l: Lobby, seat: number, team: 0 | 1): Lobby {
+  const next = assignTeam(
+    l.seats.map((s) => s?.team ?? 0),
+    l.seats.map((s) => !!s),
+    seat,
+    team,
+    l.format,
+  );
+  if (!next) return l;
+  return {
+    ...l,
+    seats: l.seats.map((x, i) => (x ? { ...x, team: next[i] === 1 ? 1 : 0 } : x)),
+  };
+}
+
+/** The format's one-line promise, printed under the selector. */
+export { FORMAT_LINE, FORMAT_MODE, type LobbyFormat };
 
 export const MODE_NAME: Record<LobbyMode, string> = { ffa: 'Individual', team: 'Team Match' };
 
@@ -187,15 +234,19 @@ export interface LobbyOptions {
   onRace: (race: LobbyRace) => void;
   /** The server refused us (a code that does not exist, a full room, maintenance). */
   onError: (reason: string) => void;
+  /** A format change the room could not take (every seat is held): a nudge, not an error. */
+  onNotice?: (reason: string) => void;
 }
 
 export interface LobbyHandle {
   readonly lobby: Lobby;
   /** Host only, and only in a lobby with no server behind it. */
   addBot(seat: number): void;
-  setMode(mode: LobbyMode): void;
+  /** Host only: the format switch. False when the pick changes nothing or nobody would fit. */
+  setFormat(format: LobbyFormat): boolean;
+  /** The host may move any seat; a player may move their own. Team formats only. */
   setTeam(seat: number, team: 0 | 1): void;
-  /** Host only. False when the race cannot start yet (fewer than two seats). */
+  /** Host only. False while the format's minimum player count is not met (2v1 needs all three). */
   start(): boolean;
   leave(): void;
   /** The socket died mid-race: tell the board the room is gone. */
@@ -223,6 +274,7 @@ export function hostLobby(code: string, name: string, online: boolean): Lobby {
   return {
     code,
     capacity: MAX_TEAMS,
+    format: '4p',
     mode: 'ffa',
     hostSeat: 0,
     seats: [host, null, null, null],
@@ -234,12 +286,18 @@ export function hostLobby(code: string, name: string, online: boolean): Lobby {
 
 /** One `LOBBY` frame, folded back into the model. Unknown seats are dropped, never trusted. */
 function readLobby(l: Lobby, raw: Record<string, unknown>): Lobby {
+  /* The format is the authority for the roster's shape; a frame without one (or an older server)
+     falls back to what the seats and mode imply. */
+  const format: LobbyFormat = isLobbyFormat(raw.format) ? raw.format
+    : raw.mode === 'team' ? '2v2'
+    : raw.capacity === 3 ? '3p' : '4p';
+  const capacity = FORMAT_CAPACITY[format];
   const rows = Array.isArray(raw.seats) ? raw.seats : [];
-  const seats: (LobbySeat | null)[] = Array.from({ length: l.capacity }, () => null);
+  const seats: (LobbySeat | null)[] = Array.from({ length: capacity }, () => null);
   for (const r of rows) {
     const s = r as Record<string, unknown>;
     const at = typeof s.side === 'number' ? s.side : -1;
-    if (at < 0 || at >= l.capacity) continue;
+    if (at < 0 || at >= capacity) continue;
     const name = typeof s.name === 'string' ? s.name.slice(0, 14) : 'Player';
     seats[at] = {
       seat: at,
@@ -253,13 +311,14 @@ function readLobby(l: Lobby, raw: Record<string, unknown>): Lobby {
     };
   }
   const hostSeat = typeof raw.host === 'number' ? raw.host : seats.findIndex((s) => !!s?.host);
-  const mode: LobbyMode = raw.mode === 'team' ? 'team' : 'ffa';
   const you = typeof raw.you === 'number' ? raw.you : l.you;
   return {
     ...l,
+    capacity,
+    format,
     seats,
     hostSeat,
-    mode,
+    mode: FORMAT_MODE[format],
     you,
     online: true,
     status: 'live',
@@ -295,7 +354,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
     try { sock?.close(); } catch { /* already gone */ }
     sock = null;
     link = null;
-    lobby = { ...hostLobby(opts.code, lobby.seats[0]?.name ?? myName(), false), mode: lobby.mode };
+    const offline = hostLobby(opts.code, lobby.seats[0]?.name ?? myName(), false);
+    lobby = setFormat(offline, lobby.format);
     paint();
   };
 
@@ -321,6 +381,11 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
       case 'LOBBY':
         settled = true;
         push(readLobby(lobby, msg));
+        return;
+      case 'FORMAT_DENIED':
+        /* the room did not take the pick — usually every seat is held; the LOBBY that follows
+           puts the selector back where the room says it is, and the nudge explains the bounce */
+        opts.onNotice?.(typeof msg.reason === 'string' ? msg.reason : 'format_denied');
         return;
       case 'ROOM_FOUND': {
         settled = true;
@@ -436,15 +501,17 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
           : s)),
       });
     },
-    setMode(mode) {
-      if (!isHost(lobby)) return;
-      const next = setMode(lobby, mode);
-      if (next === lobby) return;
+    setFormat(format) {
+      if (!isHost(lobby)) return false;
+      const next = setFormat(lobby, format);
+      if (next === lobby) return false;
       push(next);
-      send({ type: 'SET_MODE', mode });
+      send({ type: 'SET_FORMAT', format });
+      return true;
     },
     setTeam(seat, team) {
-      if (!isHost(lobby)) return;
+      if (lobby.mode !== 'team') return;
+      if (!isHost(lobby) && seat !== lobby.you) return;
       const next = setTeam(lobby, seat, team);
       if (next === lobby) return;
       push(next);

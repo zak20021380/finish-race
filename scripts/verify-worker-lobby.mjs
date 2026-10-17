@@ -178,22 +178,36 @@ function ok(label, condition, detail = '') {
     JSON.stringify(g1?.seats.map((s) => s.team)));
 
   /* the host's format switch reaches every seat */
-  send(host.socket, { type: 'SET_MODE', mode: 'team' });
-  ok('the host\'s format switch reaches the guest', lobbyOf(guest.socket)?.mode === 'team');
-  ok('and it is reflected back to the host', lobbyOf(host.socket)?.mode === 'team');
+  send(host.socket, { type: 'SET_FORMAT', format: '2v2' });
+  ok('the host\'s format switch reaches the guest',
+    lobbyOf(guest.socket)?.format === '2v2' && lobbyOf(guest.socket)?.mode === 'team',
+    JSON.stringify(lobbyOf(guest.socket)?.format));
+  ok('and it is reflected back to the host',
+    lobbyOf(host.socket)?.format === '2v2', JSON.stringify(lobbyOf(host.socket)?.format));
 
   /* a guest cannot turn the same knob */
   const before = frames(host.socket, 'LOBBY').length;
-  send(guest.socket, { type: 'SET_MODE', mode: 'ffa' });
+  send(guest.socket, { type: 'SET_FORMAT', format: '4p' });
   ok('a guest cannot change the format',
-    lobbyOf(host.socket)?.mode === 'team' && frames(host.socket, 'LOBBY').length === before);
+    lobbyOf(host.socket)?.format === '2v2' && frames(host.socket, 'LOBBY').length === before);
 
-  /* team assignment, host only */
+  /* team assignment: the host moves anyone, a guest only their own seat */
   send(host.socket, { type: 'SET_TEAM', side: 1, team: 0 });
   ok('the host can move a seat between the teams', lobbyOf(guest.socket)?.seats[1].team === 0,
     JSON.stringify(lobbyOf(guest.socket)?.seats.map((s) => s.team)));
+  send(guest.socket, { type: 'SET_TEAM', side: 0, team: 1 });
+  ok('a guest cannot move another seat', lobbyOf(host.socket)?.seats[0].team === 0);
   send(guest.socket, { type: 'SET_TEAM', side: 1, team: 1 });
-  ok('a guest cannot move a seat', lobbyOf(guest.socket)?.seats[1].team === 0);
+  ok('a guest can move their own seat',
+    lobbyOf(host.socket)?.seats[1].team === 1,
+    JSON.stringify(lobbyOf(host.socket)?.seats.map((s) => s.team)));
+
+  /* the size switch reflows the seated people into the smaller room, nobody dropped */
+  send(host.socket, { type: 'SET_FORMAT', format: '2v1' });
+  const small = lobbyOf(guest.socket);
+  ok('a 2v1 reflow fits the room into three seats',
+    small?.format === '2v1' && small?.capacity === 3 && small?.seats?.length === 2,
+    JSON.stringify([small?.format, small?.capacity, small?.seats?.length]));
 }
 
 /* a code nobody minted is a typo, and a code already open belongs to its host */
@@ -223,6 +237,14 @@ function ok(label, condition, detail = '') {
   ok('a fifth player is refused with room_full',
     frames(fifth.socket, 'ERROR')[0]?.reason === 'room_full');
   ok('the four seats are untouched', lobbyOf(host.socket)?.seats?.length === 4);
+
+  /* a size the room cannot fit into is bounced back to the host, room untouched */
+  send(host.socket, { type: 'SET_FORMAT', format: '3p' });
+  const denied = frames(host.socket, 'FORMAT_DENIED');
+  ok('a size that cannot hold the room is refused',
+    denied.length === 1 && denied[0].reason === 'room_full'
+    && lobbyOf(host.socket)?.format === '4p' && lobbyOf(host.socket)?.seats?.length === 4,
+    JSON.stringify(denied));
 }
 
 /* the launch: two players, the host's format, and a race both seats agree on */

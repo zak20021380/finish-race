@@ -2273,14 +2273,23 @@
               </div>
 
               <div class="lb-mode">
-                <div class="lb-seg" role="group" aria-label="Match format" id="lb-mode">
+                <div class="lb-seg" role="group" aria-label="Match type" id="lb-mode">
                   <button class="lb-seg-b" type="button" data-mode="ffa" aria-pressed="true">Individual</button>
                   <button class="lb-seg-b" type="button" data-mode="team" aria-pressed="false">Team Match</button>
                 </div>
-                <p class="lb-mode-sub" id="lb-mode-sub">Free-for-all: last player standing wins</p>
+                <!-- the host's size pick: Team Match offers 2v2 / 2v1, Individual offers 3 / 4 players.
+                     Both rows live here; `paintLobbyPane` shows the pair the mode owns. -->
+                <div class="lb-seg" role="group" aria-label="Match size" id="lb-formats">
+                  <button class="lb-seg-b" type="button" data-format="2v2" aria-pressed="false">2 vs 2</button>
+                  <button class="lb-seg-b" type="button" data-format="2v1" aria-pressed="false">2 vs 1</button>
+                  <button class="lb-seg-b" type="button" data-format="3p" aria-pressed="false">3 Players</button>
+                  <button class="lb-seg-b" type="button" data-format="4p" aria-pressed="false">4 Players</button>
+                </div>
+                <p class="lb-mode-sub" id="lb-mode-sub">4-player free-for-all · Everyone for themselves</p>
               </div>
 
               <div class="lb-slots" id="lb-slots" role="list" aria-label="Players in this room"></div>
+              <p class="lb-hint" id="lb-hint" role="status" aria-live="polite">Invite one more player to start</p>
 
               <!-- one 44px row: the invite picker swaps into the Leave key's place, so tapping a
                    well never moves anything below it -->

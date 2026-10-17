@@ -21,9 +21,10 @@ import { menuState, saveMenu } from './settings';
 import { BOT_HANDLE, impact, notify } from './telegram';
 import type { Sheets } from './sheets';
 import {
-  MODE_LINE, canStart, isHost, occupied, openLobby,
-  type Lobby, type LobbyHandle, type LobbyMode, type LobbyRace,
+  FORMAT_LINE, canStart, isHost, nextTeam, occupied, openLobby, startHint,
+  type Lobby, type LobbyHandle, type LobbyMode, type LobbyRace, type LobbyFormat,
 } from './lobby';
+import { isLobbyFormat, teamCapacity } from './room';
 
 export type GameModeId = 'duel_1v1' | 'party_2v2' | 'bot' | 'room';
 
@@ -300,6 +301,9 @@ let handle: LobbyHandle | null = null;
 let roomToken = 0;
 /** The open well whose "+" was tapped: where the picker puts a bot. */
 let pickSeat = -1;
+/** The size each mode remembers, so toggling Team ⇄ Individual returns to the last pick. */
+let lastFfaFormat: LobbyFormat = '4p';
+let lastTeamFormat: LobbyFormat = '2v2';
 /** What the last paint wrote into the grid. A rebuild only happens when this changes. */
 let slotSig = '';
 /** The drawer, kept module-level so a race arriving over the wire can close it. */
@@ -324,29 +328,54 @@ const LOBBY_ERROR: Record<string, string> = {
 
 const errorLine = (reason: string): string => LOBBY_ERROR[reason] ?? 'Could not join that room.';
 
-/** One seat, as the grid paints it. Empty wells are the invite affordance. */
-function slotMarkup(l: Lobby, seat: number): string {
+/** The FFA badge colours, in seat order: every slot is told apart without a team label. */
+const FFA_COLOR: readonly string[] = ['Blue', 'Red', 'Green', 'Yellow'];
+
+/** Where a seat would sit if a new player joined right now — how empty wells pick their column. */
+function plannedTeam(l: Lobby, index: number): 0 | 1 {
+  const held = l.seats[index];
+  if (held) return held.team;
+  let blue = 0;
+  let red = 0;
+  for (let i = 0; i < l.seats.length; i++) {
+    const s = l.seats[i];
+    const team: 0 | 1 = s ? s.team : nextTeam(blue, red, l.format);
+    if (i === index) return team;
+    if (team === 0) blue++; else red++;
+  }
+  return 0;
+}
+
+/** One seat, as the roster paints it. Empty wells are the invite affordance. */
+function slotMarkup(l: Lobby, seat: number, team: 0 | 1 | null): string {
   const s = l.seats[seat];
   if (!s) {
     return `<button class="lb-slot is-open" type="button" role="listitem" data-seat="${seat}"`
+      + (team === null ? '' : ` data-team="${team}"`)
       + ` aria-label="Open seat ${seat + 1}: invite a friend">`
       + '<span class="lb-plus" aria-hidden="true">+</span>'
       + '<span class="lb-open-t">Invite</span></button>';
   }
   const role = s.host ? 'Host' : s.bot ? 'Bot' : s.seat === l.you ? 'You' : 'Ready';
-  const team = s.team === 0 ? 'Blue' : 'Red';
+  const color = seat % FFA_COLOR.length;
+  /* the host may move any seat between the teams; a player may move their own */
+  const canMove = team !== null && (isHost(l) || s.seat === l.you);
   const tags = [
     s.host ? '<span class="lb-crown" role="img" aria-label="Host">👑</span>' : '',
-    l.mode === 'team' ? `<span class="lb-team" data-team="${s.team}">${team}</span>` : '',
+    team === null ? `<span class="lb-color" data-color="${color}">${FFA_COLOR[color]}</span>` : '',
   ].filter(Boolean).join('');
   const cls = ['lb-slot', 'is-held'];
   if (s.host) cls.push('is-host');
   if (s.seat === l.you) cls.push('is-you');
   if (!s.connected) cls.push('is-away');
-  /* the host can move any seat between the two teams: say so, or the pill looks decorative */
-  const hint = l.mode === 'team' && isHost(l) ? ` title="Tap to switch ${esc(s.name)} to Team ${s.team === 0 ? 'Red' : 'Blue'}"` : '';
-  const label = `${s.name}, ${role}${l.mode === 'team' ? `, Team ${team}` : ''}`;
+  const hint = canMove
+    ? ` title="Tap to switch ${esc(s.name)} to Team ${s.team === 0 ? 'Red' : 'Blue'}"`
+    : '';
+  const label = team === null
+    ? `${s.name}, ${role}, ${FFA_COLOR[color]} badge`
+    : `${s.name}, ${role}, Team ${s.team === 0 ? 'Blue' : 'Red'}`;
   return `<button class="${cls.join(' ')}" type="button" role="listitem" data-seat="${seat}"`
+    + (team === null ? ` data-color="${color}"` : ` data-team="${s.team}"`)
     + ` aria-label="${esc(label)}"${hint}>`
     + `<span class="lb-av" aria-hidden="true">${esc(s.initial)}</span>`
     + `<span class="lb-slot-txt"><span class="lb-name">${esc(s.name)}</span>`
@@ -354,15 +383,48 @@ function slotMarkup(l: Lobby, seat: number): string {
     + `<span class="lb-tags">${tags}</span></button>`;
 }
 
-/** Rebuild the grid only when the roster actually moved: a paint must never steal a tap. */
+/**
+ * The team shape: Blue's column, the VS crest, Red's column. Both columns draw the same number of
+ * rows — the fuller team sets the height — and a cell a format does not offer (Red's second in a
+ * 2v1) is a visible lock rather than a silently shorter column, so 2 vs 1 reads as 2 vs 1.
+ */
+function teamMarkup(l: Lobby): string {
+  const cap: [number, number] = [teamCapacity(l.format, 0), teamCapacity(l.format, 1)];
+  const rows = Math.max(cap[0], cap[1]);
+  const seatsOf = (team: 0 | 1): number[] =>
+    l.seats.map((_s, i) => i).filter((i) => plannedTeam(l, i) === team).slice(0, cap[team]);
+  const lock = '<span class="lb-lock" role="listitem" aria-label="Seat locked in this format">'
+    + '<svg class="ico" aria-hidden="true" focusable="false"><use href="#i-lock" /></svg></span>';
+  const column = (team: 0 | 1): string => {
+    const seats = seatsOf(team);
+    const cells: string[] = [];
+    for (let n = 0; n < rows; n++) {
+      const seat = n < cap[team] ? seats[n] : undefined;
+      cells.push(seat === undefined ? lock : slotMarkup(l, seat, team));
+    }
+    return `<div class="lb-team is-${team === 0 ? 'blue' : 'red'}" data-team="${team}">`
+      + `<p class="lb-team-h"><span class="lb-team-dot" aria-hidden="true"></span>`
+      + `${team === 0 ? 'Blue Team' : 'Red Team'}</p>${cells.join('')}</div>`;
+  };
+  return column(0)
+    + '<div class="lb-vs" aria-hidden="true"><span class="lb-vs-c">'
+    + '<svg class="ico lb-vs-i" focusable="false"><use href="#i-swords" /></svg><b>VS</b></span></div>'
+    + column(1);
+}
+
+/** Rebuild the roster only when it actually moved: a paint must never steal a tap. */
 function paintSlots(l: Lobby): void {
-  const sig = `${l.you}|${l.hostSeat}|${l.mode}|`
+  const sig = `${l.you}|${l.hostSeat}|${l.mode}|${l.format}|`
     + l.seats.map((s) => (s ? `${s.id}:${s.name}:${s.team}:${s.host}:${s.bot}:${s.connected}` : '-')).join(',');
   if (sig === slotSig) return;
   slotSig = sig;
   const grid = document.getElementById('lb-slots');
   if (!grid) return;
-  grid.innerHTML = l.seats.map((_s, i) => slotMarkup(l, i)).join('');
+  grid.className = `lb-slots ${l.mode === 'team' ? 'is-team' : 'is-ffa'}`;
+  grid.dataset.format = l.format;
+  grid.innerHTML = l.mode === 'team'
+    ? teamMarkup(l)
+    : l.seats.map((_s, i) => slotMarkup(l, i, null)).join('');
 }
 
 /** Everything the lobby screen shows, from the value alone. */
@@ -380,10 +442,25 @@ function paintLobbyPane(l: Lobby): void {
     b.setAttribute('aria-disabled', String(!host));
     b.classList.toggle('is-locked', !host);
   }
+  /* the size row swaps with the mode: Team Match offers 2v2 / 2v1, Individual offers 3 / 4 players */
+  for (const b of document.querySelectorAll<HTMLButtonElement>('#lb-formats [data-format]')) {
+    const raw = b.dataset.format;
+    const owned = l.mode === 'team' ? raw === '2v2' || raw === '2v1' : raw === '3p' || raw === '4p';
+    b.hidden = !owned;
+    b.setAttribute('aria-pressed', String(raw === l.format));
+    b.setAttribute('aria-disabled', String(!host));
+    b.classList.toggle('is-locked', !host);
+  }
   const sub = document.getElementById('lb-mode-sub');
-  if (sub) sub.textContent = MODE_LINE[l.mode];
+  if (sub) sub.textContent = FORMAT_LINE[l.format];
 
   paintSlots(l);
+
+  const hint = document.getElementById('lb-hint');
+  if (hint) {
+    hint.textContent = startHint(l);
+    hint.classList.toggle('is-ready', canStart(l));
+  }
 
   const botKey = document.getElementById('lb-pick-bot');
   if (botKey) botKey.hidden = l.online;
@@ -392,8 +469,11 @@ function paintLobbyPane(l: Lobby): void {
   if (start) {
     start.textContent = host ? 'Start Match' : 'Waiting for host to start…';
     start.setAttribute('aria-disabled', String(!host || !canStart(l)));
-    if (host && !canStart(l)) start.setAttribute('title', 'Need at least 2 players');
-    else start.removeAttribute('title');
+    if (host && !canStart(l)) {
+      start.setAttribute('title', l.format === '2v1' ? '2 vs 1 needs all 3 players' : 'Need at least 2 players');
+    } else {
+      start.removeAttribute('title');
+    }
     start.classList.add('is-lobby');
     start.classList.toggle('is-waiting', !host);
     start.classList.toggle('is-idle', host && !canStart(l));
@@ -426,6 +506,8 @@ function openRoom(code: string, host: boolean): void {
       showView('room');
       showRoomError(errorLine(reason));
     },
+    /* the room could not take the host's size pick (every seat is held): a nudge, not an error */
+    onNotice: () => { notify('warning'); },
   });
   handle.closed(() => {
     if (token !== roomToken) return;
@@ -748,7 +830,19 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
   document.getElementById('lb-invite')?.addEventListener('click', invite);
   document.getElementById('lb-pick-invite')?.addEventListener('click', () => { showPick(false); invite(); });
 
-  /* ---- lobby: the host's format switch (a guest's copy is view-only) ---- */
+  /* ---- lobby: the host's mode + size switches (a guest's copy is view-only) ---- */
+  const pickFormat = (format: LobbyFormat): void => {
+    const l = handle?.lobby;
+    if (!l) return;
+    if (!isHost(l)) { notify('warning'); return; }
+    if (format === l.format) return;
+    impact('light');
+    /* the pure model refuses a pick nobody fits into; say so rather than leaving it dead */
+    if (!handle?.setFormat(format)) { notify('warning'); return; }
+    if (format === '2v2' || format === '2v1') lastTeamFormat = format;
+    else lastFfaFormat = format;
+  };
+
   for (const b of document.querySelectorAll<HTMLButtonElement>('#lb-mode [data-mode]')) {
     b.addEventListener('click', () => {
       const l = handle?.lobby;
@@ -756,12 +850,18 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
       if (!isHost(l)) { notify('warning'); return; }
       const mode: LobbyMode = b.dataset.mode === 'team' ? 'team' : 'ffa';
       if (mode === l.mode) return;
-      impact('light');
-      handle?.setMode(mode);
+      pickFormat(mode === 'team' ? lastTeamFormat : lastFfaFormat);
     });
   }
 
-  /* ---- lobby: seats. An open well invites; a held one flips teams (host, 2v2 only) ---- */
+  for (const b of document.querySelectorAll<HTMLButtonElement>('#lb-formats [data-format]')) {
+    b.addEventListener('click', () => {
+      const raw = b.dataset.format;
+      if (isLobbyFormat(raw)) pickFormat(raw);
+    });
+  }
+
+  /* ---- lobby: seats. An open well invites; a held one flips teams (2v2/2v1 only) ---- */
   document.getElementById('lb-slots')?.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement | null)?.closest<HTMLElement>('.lb-slot');
     const l = handle?.lobby;
@@ -775,7 +875,7 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
       impact('light');
       return;
     }
-    if (l.mode === 'team' && isHost(l)) {
+    if (l.mode === 'team' && (isHost(l) || s.seat === l.you)) {
       impact('light');
       handle?.setTeam(seat, s.team === 0 ? 1 : 0);
     }
