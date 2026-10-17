@@ -977,13 +977,10 @@
             <button class="icon-btn" type="button" id="menu-btn" aria-label="Game menu" aria-haspopup="dialog">
               <svg class="ico" aria-hidden="true"><use href="#i-menu" /></svg>
             </button>
-            <!-- the round is the only thing the top bar says; whose turn is on the chips -->
+            <!-- the round is the only thing the top bar says; whose turn is on the cards below -->
             <p class="g-round" id="round-label">Round 1</p>
-            <!-- quick chat lives here and only here: the top bar's right key, built like the menu key -->
-            <button class="icon-btn g-chat" type="button" id="chat-btn" aria-haspopup="dialog"
-              aria-expanded="false" aria-label="Quick chat">
-              <svg class="ico" aria-hidden="true"><use href="#i-chat" /></svg>
-            </button>
+            <!-- a menu key's worth of nothing on the right, so the caption sits on the screen's centre -->
+            <span class="g-head-pad" aria-hidden="true"></span>
           </div>
 
           <main class="card">
@@ -1009,17 +1006,19 @@
               </div>
             </div>
 
-            <!-- The whole board is the action dock now, and every seat in it is a two-row card.
-                 Left: the seat's 3D sphere with an uninterrupted radial countdown ring and the
-                 seconds punched through it. Right, top row: a crisp circular flag, the bold name and
-                 a subtle inline XP tag. Right, bottom row: the sculpted inset ammo strip — the
-                 team-coloured wall bar, the count and, in a duel, the word. The one key left, the
-                 bomb, lives inside the "YOU" card's right side in a duel so the dock reads as two
-                 balanced player cards; three and four lift it back out to the dock's own column,
-                 where no chip has width to spare. `data-players` (and `data-seats`, kept for older
-                 probes) tells CSS how many chips it is laying out. Only the local seat carries the
-                 blitz ring and the bomb's charge capsules. -->
+            <!-- The dock is two identical cards. Each is one glass surface with a 1px team rim:
+                 a 44px sphere (its countdown ring and seconds badge ride on it), the name with its
+                 flag after it, and the wall count in a pill under that. Both cards end in the same
+                 56px segment behind a 1px divider — the left one is the bomb key, the right one is
+                 read-only pips. Quick chat is not in this row at all: its 48px key straddles the
+                 24px gap above the dock. `data-players` (and `data-seats`, kept for older probes)
+                 tells CSS how many cards it is laying out. -->
             <footer class="chips" id="chips" data-seats="2" data-players="2">
+              <!-- quick chat: one 48px key in the gap between the slab and the dock -->
+              <button class="chat-fab" type="button" id="chat-btn" aria-haspopup="dialog"
+                aria-expanded="false" aria-label="Quick chat">
+                <svg class="ico" aria-hidden="true"><use href="#i-chat" /></svg>
+              </button>
               <div class="chip red" id="chip-0">
                 <span class="chip-row">
                   <span class="chip-ball">
@@ -1032,8 +1031,8 @@
                   </span>
                   <span class="chip-txt">
                     <span class="who-line">
-                      <span class="flag-badge" id="flag-0" aria-hidden="true"></span>
                       <span class="who" id="name-0">YOU</span>
+                      <span class="flag-badge" id="flag-0" aria-hidden="true"></span>
                       <span class="xp" id="xp-0">
                         <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
                         <span class="xp-n">0</span><span class="xp-u">XP</span>
@@ -1044,13 +1043,12 @@
                     </span>
                   </span>
                 </span>
+                <!-- the bomb is the card's own end segment, not a key beside it -->
+                <button class="mine-btn" type="button" id="mine-btn" aria-pressed="false" aria-label="Bury a mine">
+                  <svg class="ico" aria-hidden="true"><use href="#i-bomb" /></svg>
+                  <span class="pips" id="mine-pips" aria-hidden="true"></span>
+                </button>
               </div>
-              <!-- the action between the seats: one fixed 64px key, never squeezed by a chip -->
-              <button class="mine-btn" type="button" id="mine-btn" aria-pressed="false" aria-label="Bury a mine">
-                <svg class="ico" aria-hidden="true"><use href="#i-bomb" /></svg>
-                <span class="bomb-lab" aria-hidden="true">Bomb</span>
-                <span class="pips" id="mine-pips" aria-hidden="true"></span>
-              </button>
               <div class="chip blue" id="chip-1">
                 <span class="chip-row">
                   <span class="chip-ball">
@@ -1058,8 +1056,8 @@
                   </span>
                   <span class="chip-txt">
                     <span class="who-line">
-                      <span class="flag-badge" id="flag-1" aria-hidden="true"></span>
                       <span class="who" id="name-1">BOT</span>
+                      <span class="flag-badge" id="flag-1" aria-hidden="true"></span>
                       <span class="xp" id="xp-1">
                         <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
                         <span class="xp-n">0</span><span class="xp-u">XP</span>
@@ -1071,6 +1069,10 @@
                     </span>
                   </span>
                 </span>
+                <!-- the rival's segment: the same surface and pips, read-only -->
+                <span class="seat-seg" aria-hidden="true">
+                  <span class="pips"><i class="on"></i><i class="on"></i><i class="on"></i></span>
+                </span>
               </div>
               <div class="chip gold" id="chip-2" hidden>
                 <span class="chip-row">
@@ -1079,8 +1081,8 @@
                   </span>
                   <span class="chip-txt">
                     <span class="who-line">
-                      <span class="flag-badge" id="flag-2" aria-hidden="true"></span>
                       <span class="who" id="name-2">BOT 2</span>
+                      <span class="flag-badge" id="flag-2" aria-hidden="true"></span>
                       <span class="xp" id="xp-2">
                         <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
                         <span class="xp-n">0</span><span class="xp-u">XP</span>
@@ -1099,8 +1101,8 @@
                   </span>
                   <span class="chip-txt">
                     <span class="who-line">
-                      <span class="flag-badge" id="flag-3" aria-hidden="true"></span>
                       <span class="who" id="name-3">BOT 3</span>
+                      <span class="flag-badge" id="flag-3" aria-hidden="true"></span>
                       <span class="xp" id="xp-3">
                         <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
                         <span class="xp-n">0</span><span class="xp-u">XP</span>

@@ -1,4 +1,4 @@
-/* chat.css — quick chat: the top-bar key, its bottom sheet, and the bubbles over the dock.
+/* chat.css — quick chat: the key above the dock, its bottom sheet, and the bubbles over the cards.
    Nothing here changes the board: bubbles are DOM pills placed above a chip, and the sheet is a
    modal that closes the moment a phrase is sent. */
 
@@ -103,8 +103,8 @@
   transition: transform .2s cubic-bezier(.22, .61, .36, 1), opacity .2s ease;
 }
 .chat-sheet.open { opacity: 1; transform: none; }
-/* the top-bar key is inert during a log roll or while a mine is armed */
-#chat-btn[disabled] { opacity: .4; filter: saturate(.4); cursor: default; }
+/* the key above the dock is inert during a log roll or while a mine is armed */
+.chat-fab[disabled] { opacity: .4; filter: saturate(.4); cursor: default; }
 .chat-sheet:focus { outline: none; }
 
 .chat-sheet-head { display: flex; align-items: center; gap: 8px; min-height: 44px; }

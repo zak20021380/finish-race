@@ -1,5 +1,5 @@
 /**
- * chat.ts — quick chat: the top-bar key, its bottom sheet, and the bubbles over the dock.
+ * chat.ts — quick chat: the key above the dock, its bottom sheet, and the bubbles over the cards.
  *
  * The vocabulary is closed (`data/phrases.ts`): every send is one of twelve taunts or one of eight
  * emotes, so there is no input, no parser and nothing a player can type. The transport is local —
@@ -16,7 +16,7 @@ import type { GameState, Player } from './rules';
 import { EMOTES, TAUNTS, type ChatEmote } from './data/phrases';
 
 export interface ChatOptions {
-  /** The 44px key in the top bar. */
+  /** The 48px key that straddles the gap between the slab and the dock. */
   key: HTMLButtonElement;
   /** The bubble layer: a DOM overlay over the board, pointer-events none. */
   lane: HTMLElement;
@@ -183,6 +183,7 @@ export function createChat(o: ChatOptions): Chat {
   scrim.addEventListener('click', () => { closeSheet(false); closeMenu(); });
 
   const sheet = el('section', 'chat-sheet');
+  sheet.id = 'chat-sheet';
   sheet.hidden = true;
   sheet.tabIndex = -1;
   sheet.setAttribute('role', 'dialog');
@@ -424,6 +425,7 @@ export function createChat(o: ChatOptions): Chat {
   });
 
   o.key.setAttribute('aria-expanded', 'false');
+  o.key.setAttribute('aria-controls', sheet.id);
   o.key.addEventListener('click', () => { if (sheetOpen) closeSheet(); else openWheel(); });
 
   document.addEventListener('keydown', (e) => {

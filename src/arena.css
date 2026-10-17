@@ -8,7 +8,9 @@
 
 .board-frame {
   position: absolute;
-  inset: -7px;
+  /* a heavier bottom lip than the sides: it is the ledge the quick-chat key tucks under, and the
+     12px the key overlaps there is rim, never a cell — so no token can end up behind the key. */
+  inset: -7px -7px -12px;
   border-radius: 24px;
   pointer-events: none;
   /* the duel's rim: red down the left edge, blue down the right, over a lifted clay slab */
@@ -56,8 +58,8 @@
 }
 .stud.tl { top: -5px; left: -5px; }
 .stud.tr { top: -5px; right: -5px; }
-.stud.bl { bottom: -5px; left: -5px; }
-.stud.br { bottom: -5px; right: -5px; }
+.stud.bl { bottom: -8px; left: -5px; }
+.stud.br { bottom: -8px; right: -5px; }
 
 /* ---- event callouts: one short beat over the board, never in front of a fingertip ---- */
 .callouts {
