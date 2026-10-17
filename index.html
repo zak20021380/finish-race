@@ -2232,41 +2232,74 @@
           </div>
 
           <div class="gm-view" id="gm-view-room" hidden>
-            <div class="gm-room">
-              <button class="btn btn-primary gm-create" type="button" id="gm-create">
-                <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-plus" /></svg><span>Create room</span>
+            <div class="fr">
+              <!-- Entry: one commitment (create), one lookup (join). Nothing else competes. -->
+              <button class="fr-create" type="button" id="gm-create">
+                <span class="fr-create-ic" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-plus" /></svg></span>
+                <span class="fr-create-txt">
+                  <span class="fr-create-t">Create New Room</span>
+                  <span class="fr-create-s">You host · up to 4 players</span>
+                </span>
               </button>
 
-              <div class="gm-invite" id="gm-invite" hidden>
-                <div class="gm-code-row">
-                  <span class="gm-code-label">Room code</span>
-                  <b class="gm-code" id="gm-code" aria-live="polite">0000</b>
-                  <button class="gm-copy" type="button" id="gm-copy">Copy</button>
-                </div>
-                <a class="btn btn-coral gm-invite-btn" id="gm-invite-btn" href="#" target="_blank" rel="noopener">
-                  <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-send" /></svg><span>Invite via Telegram</span>
-                </a>
-                <p class="gm-link" id="gm-link">t.me/bot?start=room_0000</p>
+              <p class="fr-or" aria-hidden="true"><span>or join with a code</span></p>
+
+              <div class="fr-join">
+                <label class="fr-well" for="gm-join-input">
+                  <span class="fr-hash" aria-hidden="true">#</span>
+                  <input id="gm-join-input" class="fr-input" type="text" inputmode="numeric" maxlength="4"
+                    placeholder="Enter 4-digit code" autocomplete="off" spellcheck="false" enterkeyhint="go"
+                    aria-label="Enter a 4-digit room code" data-input />
+                </label>
+                <button class="fr-join-btn" type="button" id="gm-join" disabled>Join</button>
+              </div>
+              <p class="gm-err" id="gm-err" role="status" hidden></p>
+            </div>
+          </div>
+
+          <!-- the live lobby: code bar, host format switch, four seats, one Start -->
+          <div class="gm-view" id="gm-view-lobby" hidden>
+            <div class="lb">
+              <div class="lb-bar">
+                <button class="lb-code" type="button" id="lb-copy" aria-label="Copy room code">
+                  <span class="lb-hash" aria-hidden="true">#</span><b id="lb-code">0000</b>
+                  <span class="lb-copy-t" id="lb-copy-t">Copy</span>
+                </button>
+                <button class="lb-invite" type="button" id="lb-invite">
+                  <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-send" /></svg>
+                  <span class="lb-invite-t">Invite</span>
+                </button>
+                <span class="lb-count" id="lb-count" role="status" aria-live="polite">1/4 Players</span>
               </div>
 
-              <div class="gm-join">
-                <span class="gm-join-l" id="gm-join-label">Join with code</span>
-                <div class="gm-join-row">
-                  <label class="field gm-join-field">
-                    <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-search" /></svg>
-                    <input id="gm-join-input" class="input code" type="text" inputmode="numeric" maxlength="4"
-                      placeholder="0000" autocomplete="off" spellcheck="false" enterkeyhint="go"
-                      aria-label="Enter a 4-digit room code" aria-describedby="gm-join-label" data-input />
-                  </label>
-                  <button class="btn btn-ghost gm-join-btn" type="button" id="gm-join" disabled>Join</button>
+              <div class="lb-mode">
+                <div class="lb-seg" role="group" aria-label="Match format" id="lb-mode">
+                  <button class="lb-seg-b" type="button" data-mode="ffa" aria-pressed="true">Individual</button>
+                  <button class="lb-seg-b" type="button" data-mode="team" aria-pressed="false">Team Match</button>
                 </div>
-                <p class="gm-err" id="gm-err" role="status" hidden></p>
+                <p class="lb-mode-sub" id="lb-mode-sub">Free-for-all: last player standing wins</p>
+              </div>
+
+              <div class="lb-slots" id="lb-slots" role="list" aria-label="Players in this room"></div>
+
+              <!-- one 44px row: the invite picker swaps into the Leave key's place, so tapping a
+                   well never moves anything below it -->
+              <div class="lb-actions">
+                <div class="lb-pick" id="lb-pick" hidden>
+                  <button class="lb-pick-b" type="button" id="lb-pick-invite">
+                    <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-send" /></svg><span>Invite</span>
+                  </button>
+                  <button class="lb-pick-b" type="button" id="lb-pick-bot">
+                    <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-bot" /></svg><span>Add bot</span>
+                  </button>
+                </div>
+                <button class="lb-leave" type="button" id="lb-leave">Leave Room</button>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="gm-foot">
+        <div class="gm-foot" id="gm-foot">
           <p class="gm-rewards" id="gm-rewards" aria-live="polite">
             <span class="gm-lead" id="gm-lead">Win</span>
             <span class="gm-rw" id="gm-rw-trophy" role="img" aria-label="30 trophies">

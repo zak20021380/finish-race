@@ -2,7 +2,7 @@
  * gm-sheet-check.js — DOM check for the "Select Game Mode" bottom sheet (#sheet-game-modes).
  * Paste into the browser console, or run via scripts/verify-gm-sheet.mjs which drives it.
  *
- * @param {'modes'|'room'} pane which pane of the drawer is on screen
+ * @param {'modes'|'room'|'lobby'} pane which pane of the drawer is on screen
  * @returns {{ pass: boolean, fails: string[] }}
  *
  * Fails when:
@@ -37,7 +37,10 @@ function checkGmSheet(pane) {
   /* ---------- 1. it fits: 85dvh cap, no scrolling, nothing past the bottom edge ---------- */
   const vh = window.innerHeight;
   const r = sheet.getBoundingClientRect();
-  if (r.height > vh * 0.85 + 1) fails.push(`sheet height ${Math.round(r.height)} > 85dvh (${Math.round(vh * 0.85)})`);
+  /* the cap is whatever the drawer declares: it lifts to 90dvh on a short phone, and the check has
+     to read that number instead of assuming the 85dvh default (a 360x640 practice card needs 552) */
+  const cap = parseFloat(getComputedStyle(sheet).maxHeight) || vh * 0.85;
+  if (r.height > cap + 1) fails.push(`sheet height ${Math.round(r.height)} > its ${Math.round(cap)}px cap`);
   if (r.bottom > vh + 1) fails.push(`sheet bottom ${Math.round(r.bottom)} > viewport ${vh}`);
   if (r.top < -1) fails.push(`sheet top ${Math.round(r.top)} < 0`);
   if (sheet.scrollHeight > sheet.clientHeight + 1) {
@@ -61,7 +64,9 @@ function checkGmSheet(pane) {
   }
   const foot = sheet.querySelector('.gm-foot');
   if (!foot) fails.push('missing .gm-foot');
-  else {
+  else if (foot.hidden) {
+    /* the entry pane hides it on purpose; the pane check below owns that assertion */
+  } else {
     const fr = foot.getBoundingClientRect();
     if (fr.bottom > r.bottom + 1 || fr.top < r.top - 1) {
       fails.push(`footer outside the drawer: top ${Math.round(fr.top)} bottom ${Math.round(fr.bottom)}`);
@@ -71,16 +76,24 @@ function checkGmSheet(pane) {
   /* ---------- 2. structure: three rows, one selection, options only where they belong ---------- */
   const main = document.getElementById('gm-view-modes');
   const room = document.getElementById('gm-view-room');
+  const lobby = document.getElementById('gm-view-lobby');
   if (!main) fails.push('missing #gm-view-modes');
   if (!room) fails.push('missing #gm-view-room');
-  if (main && room) {
-    const wantMain = pane !== 'room';
-    if (main.hidden === wantMain) fails.push(`#gm-view-modes hidden=${main.hidden}, want ${!wantMain}`);
-    if (room.hidden !== wantMain) fails.push(`#gm-view-room hidden=${room.hidden}, want ${!wantMain}`);
+  if (!lobby) fails.push('missing #gm-view-lobby');
+  for (const [el, id] of [[main, 'gm-view-modes'], [room, 'gm-view-room'], [lobby, 'gm-view-lobby']]) {
+    if (!el) continue;
+    const want = id === `gm-view-${pane}`;
+    if (el.hidden === want) fails.push(`#${id} hidden=${el.hidden} on the ${pane} pane`);
   }
   const back = document.getElementById('gm-back');
   if (!back) fails.push('missing #gm-back');
-  else if (back.hidden !== (pane !== 'room')) fails.push(`#gm-back hidden=${back.hidden} on the ${pane} pane`);
+  else if (back.hidden !== (pane === 'modes')) fails.push(`#gm-back hidden=${back.hidden} on the ${pane} pane`);
+  /* the entry pane carries its own two actions; the footer belongs to the list and the lobby */
+  const footEl = document.getElementById('gm-foot');
+  if (footEl) {
+    if (pane === 'room' && !footEl.hidden) fails.push('the sticky footer is still on the entry pane');
+    if (pane !== 'room' && footEl.hidden) fails.push(`the sticky footer is hidden on the ${pane} pane`);
+  }
 
   const rows = [].slice.call(sheet.querySelectorAll('.gm-card[data-row]'));
   if (rows.length !== 3) fails.push(`want exactly 3 rows, found ${rows.length}`);
@@ -90,8 +103,9 @@ function checkGmSheet(pane) {
     const h = row.getBoundingClientRect().height;
     const seg = row.querySelector('.gm-seg');
     const expanded = !!(seg && !seg.hidden);
-    /* the Quick match card carries the locked filters row under its size strip */
-    const extra = row.dataset.row === 'online' && expanded ? 48 : 0;
+    /* Two cards carry a second control strip: Quick match (the locked filters row) and Practice
+       (the difficulty ladder plus the 3/4-player seat count). Both are one 44px row taller. */
+    const extra = expanded && (row.dataset.row === 'online' || row.dataset.row === 'bot') ? 56 : 0;
     const lo = expanded ? 120 + extra : 70;
     const hi = expanded ? 155 + extra : 85;
     if (h > 0 && (h < lo || h > hi)) {
@@ -127,7 +141,7 @@ function checkGmSheet(pane) {
   const checked = [].slice.call(sheet.querySelectorAll('.gm-pick[aria-checked="true"]'));
   if (checked.length !== 1) fails.push(`want exactly 1 aria-checked pick, found ${checked.length}`);
   const onCard = active[0] && active[0].querySelector('.gm-check');
-  if (pane !== 'room' && active.length === 1 && (!onCard || !shown(onCard))) {
+  if (pane === 'modes' && active.length === 1 && (!onCard || !shown(onCard))) {
     fails.push('selected row has no check badge');
   }
 
@@ -158,6 +172,10 @@ function checkGmSheet(pane) {
   /* ---------- 4. one reward caption, every number behind a labelled icon ---------- */
   const rewards = sheet.querySelector('.gm-rewards');
   if (!rewards) fails.push('missing .gm-rewards');
+  else if (pane !== 'modes') {
+    /* a room pays no reward caption: the lobby's footer is one Start and nothing else */
+    if (shown(rewards)) fails.push(`.gm-rewards is visible on the ${pane} pane`);
+  }
   else if (!shown(rewards)) fails.push('.gm-rewards is not visible');
   else {
     if (!txt(rewards.querySelector('.gm-lead'))) fails.push('reward caption has no lead word');
@@ -182,7 +200,14 @@ function checkGmSheet(pane) {
   /* ---------- 5. sticky Start names the mode it will run ---------- */
   const start = document.getElementById('gm-start');
   if (!start) fails.push('missing #gm-start');
-  else {
+  else if (pane === 'room') {
+    if (shown(start)) fails.push('the entry pane still shows a Start key');
+  } else if (pane === 'lobby') {
+    const t = txt(start);
+    if (t !== 'Start Match' && t !== 'Waiting for host to start…') fails.push(`bad lobby Start label "${t}"`);
+    if (!shown(start)) fails.push('the lobby Start is not visible');
+    if (!start.classList.contains('is-lobby')) fails.push('the lobby Start is not wearing its gold state');
+  } else {
     const t = txt(start);
     if (!/^Start (1v1|2v2|practice|private) match$/.test(t)) fails.push(`bad Start label "${t}"`);
     if (!shown(start)) fails.push('Start is not visible');
@@ -202,13 +227,16 @@ function checkGmSheet(pane) {
   for (const b of [].slice.call(sheet.querySelectorAll('.seg-b'))) target(b, `.seg-b ${txt(b)}`);
   target(document.getElementById('gm-create'), '#gm-create');
   target(document.getElementById('gm-join'), '#gm-join');
-  target(document.getElementById('gm-copy'), '#gm-copy');
-  target(document.getElementById('gm-invite-btn'), '#gm-invite-btn');
+  target(document.getElementById('lb-copy'), '#lb-copy');
+  target(document.getElementById('lb-invite'), '#lb-invite');
+  target(document.getElementById('lb-leave'), '#lb-leave');
+  for (const b of [].slice.call(sheet.querySelectorAll('.lb-seg-b'))) target(b, `.lb-seg-b ${txt(b)}`);
+  for (const b of [].slice.call(sheet.querySelectorAll('.lb-slot'))) target(b, `.lb-slot ${b.dataset.seat}`);
   const field = document.getElementById('gm-join-input');
   if (field && shown(field)) {
-    const fr = field.closest('.field') || field;
+    const fr = field.closest('.fr-well') || field;
     const b = fr.getBoundingClientRect();
-    if (b.height < 43.5) fails.push(`target <44px: room code field height ${Math.round(b.height)}`);
+    if (b.height < 43.5) fails.push(`target <44px: room code well height ${Math.round(b.height)}`);
   }
 
   /* ---------- 7. no clipped text ---------- */
@@ -308,8 +336,10 @@ function checkGmSheet(pane) {
       if (!stops.length) continue;
       const next = [];
       for (const base of bases) for (const s of stops) next.push(over(s, base));
-      bases = next.slice(0, 16);                            // keep the worst case, cap the cost
-      if (bases.length === 1 && bases[0].a >= 0.999) break;
+      /* A descendant's background paints ON TOP of an opaque ancestor, so the walk must not stop
+         at the first opaque node — that is exactly how a gold key on a slate sheet was read as
+         slate-on-slate. Only the candidate count is capped, never the depth. */
+      bases = next.slice(0, 16);
     }
     return bases;
   };
@@ -343,7 +373,9 @@ function checkGmSheet(pane) {
       .join('')
       .replace(/\s+/g, ' ')
       .trim();
-    if (own) checkContrast(el, cs.color, `${name(el)} "${own.slice(0, 32)}"`);
+    /* a colour glyph (the host's crown) paints its own colours: its CSS `color` means nothing */
+    const glyph = /^[\p{Extended_Pictographic}\uFE0F\s]+$/u.test(own);
+    if (own && !glyph) checkContrast(el, cs.color, `${name(el)} "${own.slice(0, 32)}"`);
     if (el.tagName === 'INPUT') {
       if (el.placeholder) checkContrast(el, getComputedStyle(el, '::placeholder').color, `placeholder "${el.placeholder}"`);
       if (el.value) checkContrast(el, cs.color, `input value "${el.value}"`);

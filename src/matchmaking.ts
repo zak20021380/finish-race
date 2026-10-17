@@ -171,13 +171,13 @@ const domText = (id: string, fallback: string): string => {
   return t ? t : fallback;
 };
 
-interface Face {
+export interface Face {
   name: string;
   initial: string;
   avatarUrl: string | null;
 }
 
-function readFace(fallbackName: string): Face {
+export function readFace(fallbackName: string): Face {
   const img = document.getElementById('avatar-img') as HTMLImageElement | null;
   const u = tgUser();
   const name = (domText('p-name', '') || u?.first_name || u?.username || fallbackName).trim();
@@ -249,9 +249,16 @@ function paintFlag(host: HTMLElement | null, code: string | null | undefined): v
 export interface OnlineMatch {
   matchId: string;
   seed: number;
-  side: 0 | 1;
-  /** The board both seats asked for: two sides only ever race the same game. */
-  sizes: [number, number];
+  /**
+   * The seat this client plays. A duel is 0 or 1; a friends room seats up to four, and the room's
+   * roster is the authority on which one is yours.
+   */
+  side: number;
+  /**
+   * The board: one ball count per seat, in seat order. A duel is `[1, 1]`, a four-seat room
+   * `[1, 1, 1, 1]` — the same shape `newGame()` takes, so both transports start the same game.
+   */
+  sizes: number[];
 }
 
 /** Why a race ended before anyone reached FINISH. */
@@ -276,7 +283,7 @@ export interface OnlineSession extends OnlineMatch {
   /** Let the socket go (no forfeit): the session is done being a race. */
   close(): void;
   /** A move the rival made, in the order the matchmaker accepted it. */
-  onMove(cb: (action: Action, side: 0 | 1) => void): void;
+  onMove(cb: (action: Action, side: number) => void): void;
   /** The race ended without a finish line. */
   onEnd(cb: (end: RaceEnd) => void): void;
   /** The matchmaker refused a move: the two boards have drifted apart. */
@@ -363,6 +370,22 @@ function socketParams(wide: boolean): string {
   return params.toString();
 }
 
+/**
+ * The friends lobby's socket: the same origin and the same identity as the 1v1 queue, but carrying
+ * a room code instead of a search. `host=1` mints the room; without it the worker answers a code it
+ * does not know with `room_not_found`, which is exactly what a mistyped invite should say.
+ */
+export function roomSocketUrl(code: string, host: boolean): string {
+  const base = socketUrl();
+  if (!base) return '';
+  const params = new URLSearchParams(socketParams(false));
+  params.set('roomcode', code);
+  if (host) params.set('host', '1');
+  params.delete('wide');
+  params.delete('sizes');
+  return `${base}?${params.toString()}`;
+}
+
 /** The board the room said both seats are playing, or the one this client asked for. */
 function readBoard(raw: unknown): [number, number] {
   if (Array.isArray(raw) && raw.length === 2) {
@@ -410,7 +433,7 @@ function readAction(raw: unknown, side: 0 | 1, cols: number, rows: number): Acti
  * is one: the grid the rules derive from it is what bounds an incoming move. A frame that arrives
  * before a match exists can carry no move, so the classic duel board is the safe default.
  */
-function parseFrame(raw: string, sizes?: readonly [number, number]): RaceFrame | null {
+function parseFrame(raw: string, sizes?: readonly number[]): RaceFrame | null {
   const { cols, rows } = dimsFor(sizes ? contendersIn(sizes) : 0);
   try {
     const msg = JSON.parse(raw) as Record<string, unknown>;
@@ -710,7 +733,7 @@ export function onlineSearch(): MatchSource {
 const NOTES: ReadonlyArray<readonly [number, number]> = [[659.25, 0], [987.77, 0.09]];
 
 /** Respects the Sound switch; the shared engine (`sound.ts`) is the app's only AudioContext. */
-function chime(): void {
+export function chime(): void {
   if (!settings.sound) return;
   try {
     const ctx = audioContext();

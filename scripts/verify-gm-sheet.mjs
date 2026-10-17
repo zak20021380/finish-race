@@ -186,19 +186,23 @@ try {
       await pg.screenshot({ path: path.join(SHOTS, `gm-main-${w}x${h}-${theme}.png`) });
       console.log(`shot gm-main-${w}x${h}-${theme}.png`);
 
-      /* ---- friends sub-screen ---- */
+      /* ---- friends: the entry pane ---- */
       await pg.click('.gm-pick[data-gmode="room"]');
       await pg.waitForTimeout(350);
       const pane = await pg.evaluate(() => ({
         title: document.getElementById('gm-title')?.textContent?.trim(),
         back: !document.getElementById('gm-back')?.hidden,
         room: !document.getElementById('gm-view-room')?.hidden,
+        lobby: !document.getElementById('gm-view-lobby')?.hidden,
         list: !document.getElementById('gm-view-modes')?.hidden,
         joinOff: document.getElementById('gm-join')?.disabled,
+        foot: document.getElementById('gm-foot')?.hidden,
+        checked: document.querySelector('.gm-pick[data-gmode="room"]')?.getAttribute('aria-checked'),
       }));
       expect(
         `friends pane ${tag}`,
-        pane.title === 'Play with friends' && pane.back === true && pane.room === true && pane.list === false && pane.joinOff === true,
+        pane.title === 'Play with Friends' && pane.back === true && pane.room === true && pane.lobby === false
+          && pane.list === false && pane.joinOff === true && pane.foot === true,
         JSON.stringify(pane),
       );
       report(`friends sheet ${tag}`, await pg.evaluate(boot('room')));
@@ -207,25 +211,73 @@ try {
       await pg.screenshot({ path: path.join(SHOTS, `gm-room-${w}x${h}-${theme}.png`) });
       console.log(`shot gm-room-${w}x${h}-${theme}.png`);
 
-      /* ---- create a room: the invite block must still fit ---- */
+      /* ---- create: the lobby, not a second form. No worker here, so it lands solo. ---- */
       await pg.click('#gm-create');
-      await pg.waitForTimeout(350);
-      const created = await pg.evaluate(() => ({
-        invite: !document.getElementById('gm-invite')?.hidden,
-        code: document.getElementById('gm-code')?.textContent?.trim(),
-        input: document.getElementById('gm-join-input')?.value,
-        joinOn: !document.getElementById('gm-join')?.disabled,
-        checked: document.querySelector('.gm-pick[data-gmode="room"]')?.getAttribute('aria-checked'),
-      }));
+      await pg.waitForTimeout(2100);
+      const created = await pg.evaluate(() => {
+        const slots = [...document.querySelectorAll('#lb-slots .lb-slot')];
+        return {
+          lobby: !document.getElementById('gm-view-lobby')?.hidden,
+          room: !document.getElementById('gm-view-room')?.hidden,
+          code: document.getElementById('lb-code')?.textContent?.trim(),
+          count: document.getElementById('lb-count')?.textContent?.trim(),
+          slots: slots.length,
+          open: slots.filter((s) => s.classList.contains('is-open')).length,
+          host: slots[0]?.classList.contains('is-host'),
+          crown: !!slots[0]?.querySelector('.lb-crown'),
+          start: document.getElementById('gm-start')?.textContent?.trim(),
+          off: document.getElementById('gm-start')?.getAttribute('aria-disabled'),
+        };
+      });
       expect(
         `create room ${tag}`,
-        created.invite === true && /^\d{4}$/.test(created.code || '') && created.input === created.code
-          && created.joinOn === true && created.checked === 'true',
+        created.lobby === true && created.room === false && /^\d{4}$/.test(created.code || '')
+          && created.count === '1/4 Players' && created.slots === 4 && created.open === 3
+          && created.host === true && created.crown === true
+          && created.start === 'Start Match' && created.off === 'true',
         JSON.stringify(created),
       );
-      report(`room with invite ${tag}`, await pg.evaluate(boot('room')));
+      report(`lobby ${tag}`, await pg.evaluate(boot('lobby')));
+      await pg.evaluate(() => document.activeElement && document.activeElement.blur());
+      await pg.waitForTimeout(150);
+      await pg.screenshot({ path: path.join(SHOTS, `gm-lobby-${w}x${h}-${theme}.png`) });
+      console.log(`shot gm-lobby-${w}x${h}-${theme}.png`);
 
-      /* ---- back arrow, then the sticky Start ---- */
+      /* ---- a seat fills, the Start lights, the format switch moves ---- */
+      await pg.click('#lb-slots .lb-slot.is-open');
+      await pg.waitForTimeout(200);
+      await pg.click('#lb-pick-bot');
+      await pg.waitForTimeout(280);
+      await pg.click('#lb-mode [data-mode="team"]');
+      await pg.waitForTimeout(280);
+      const filled = await pg.evaluate(() => ({
+        count: document.getElementById('lb-count')?.textContent?.trim(),
+        off: document.getElementById('gm-start')?.getAttribute('aria-disabled'),
+        mode: document.querySelector('#lb-mode [data-mode="team"]')?.getAttribute('aria-pressed'),
+        sub: document.getElementById('lb-mode-sub')?.textContent?.trim(),
+        pills: [...document.querySelectorAll('.lb-team')].map((e) => e.dataset.team).join(','),
+      }));
+      expect(
+        `lobby fills ${tag}`,
+        filled.count === '2/4 Players' && filled.off === 'false' && filled.mode === 'true'
+          && filled.sub === 'Team Battle: work together to reach the goal' && filled.pills === '0,1',
+        JSON.stringify(filled),
+      );
+      report(`lobby with two seats ${tag}`, await pg.evaluate(boot('lobby')));
+
+      /* ---- back out: the lobby unwinds to the entry pane, then to the list ---- */
+      await pg.click('#gm-back');
+      await pg.waitForTimeout(320);
+      const unwound = await pg.evaluate(() => ({
+        title: document.getElementById('gm-title')?.textContent?.trim(),
+        room: !document.getElementById('gm-view-room')?.hidden,
+        lobby: !document.getElementById('gm-view-lobby')?.hidden,
+      }));
+      expect(
+        `back to entry ${tag}`,
+        unwound.title === 'Play with Friends' && unwound.room === true && unwound.lobby === false,
+        JSON.stringify(unwound),
+      );
       await pg.click('#gm-back');
       await pg.waitForTimeout(300);
       const backed = await pg.evaluate(() => ({

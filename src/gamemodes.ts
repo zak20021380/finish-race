@@ -20,6 +20,10 @@ import { readJson, writeJson } from './storage';
 import { menuState, saveMenu } from './settings';
 import { BOT_HANDLE, impact, notify } from './telegram';
 import type { Sheets } from './sheets';
+import {
+  MODE_LINE, canStart, isHost, occupied, openLobby,
+  type Lobby, type LobbyHandle, type LobbyMode, type LobbyRace,
+} from './lobby';
 
 export type GameModeId = 'duel_1v1' | 'party_2v2' | 'bot' | 'room';
 
@@ -50,7 +54,7 @@ type QuickId = 'duel_1v1' | 'party_2v2';
 /** The three rows: `online` owns both quick sizes, `room` owns the sub-screen. */
 type RowId = 'online' | 'room' | 'bot';
 /** Which pane of the drawer is showing. */
-type SheetView = 'modes' | 'room';
+type SheetView = 'modes' | 'room' | 'lobby';
 
 const ROW_OF: Record<GameModeId, RowId> = {
   duel_1v1: 'online',
@@ -180,14 +184,14 @@ export function getLobbyDisplay(sel: GameModeSelection = current): LobbyDisplay 
   }
 }
 
-/* ---------- rooms ---------- */
+/* ---------- rooms: mint, share, join ---------- */
 
 export function createRoomCode(): string {
   const n = 1000 + Math.floor(Math.random() * 9000);
   return String(n);
 }
 
-/** Mint a fresh room, select it and reveal the invite block. */
+/** Mint a fresh room code and select it. The lobby screen takes over from here. */
 export function createRoom(): GameModeSelection {
   const code = createRoomCode();
   return setGameMode('room', { roomCode: code });
@@ -237,7 +241,7 @@ function openInvite(code: string): void {
   try {
     window.open(buildShareUrl(code), '_blank', 'noopener');
   } catch {
-    /* webview blocked — the link text itself is still copyable */
+    /* webview blocked — the code itself is still copyable */
   }
 }
 
@@ -267,7 +271,7 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
-/* ---------- lobby + sheet painting (same IDs home.ts owns) ---------- */
+/* ---------- the home lobby card (same IDs home.ts owns) ---------- */
 
 export function paintLobby(): void {
   const lobby = getLobbyDisplay();
@@ -288,21 +292,200 @@ export function paintLobby(): void {
   if (play) play.setAttribute('aria-label', `Play ${lobby.title} — ${lobby.sub}`);
 }
 
-/** Swap the drawer between the mode list and the friends sub-screen. */
+/* ---------- the lobby: one socket, one roster, one Start ---------- */
+
+/** The lobby this screen is showing, or null outside one. */
+let handle: LobbyHandle | null = null;
+/** Bumped on every open/leave, so a late frame from a closed socket cannot repaint the new screen. */
+let roomToken = 0;
+/** The open well whose "+" was tapped: where the picker puts a bot. */
+let pickSeat = -1;
+/** What the last paint wrote into the grid. A rebuild only happens when this changes. */
+let slotSig = '';
+/** The drawer, kept module-level so a race arriving over the wire can close it. */
+let sheetHost: Sheets | null = null;
+/** The starter hooks, likewise: the socket callbacks outlive `initGameModes`. */
+let hooks: GameModeInit = {};
+
+const esc = (s: string): string =>
+  s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
+
+/** What the screen says when the server turns us away. One line each, no jargon. */
+const LOBBY_ERROR: Record<string, string> = {
+  room_not_found: 'No room with that code.',
+  ROOM_NOT_FOUND: 'No room with that code.',
+  room_full: 'That room is already full.',
+  ROOM_FULL: 'That room is already full.',
+  room_exists: 'That code is already open. Try joining it.',
+  ROOM_EXISTS: 'That code is already open. Try joining it.',
+  MAINTENANCE: 'Matchmaking is paused. Try again soon.',
+  BANNED: 'This account cannot join rooms.',
+};
+
+const errorLine = (reason: string): string => LOBBY_ERROR[reason] ?? 'Could not join that room.';
+
+/** One seat, as the grid paints it. Empty wells are the invite affordance. */
+function slotMarkup(l: Lobby, seat: number): string {
+  const s = l.seats[seat];
+  if (!s) {
+    return `<button class="lb-slot is-open" type="button" role="listitem" data-seat="${seat}"`
+      + ` aria-label="Open seat ${seat + 1}: invite a friend">`
+      + '<span class="lb-plus" aria-hidden="true">+</span>'
+      + '<span class="lb-open-t">Invite</span></button>';
+  }
+  const role = s.host ? 'Host' : s.bot ? 'Bot' : s.seat === l.you ? 'You' : 'Ready';
+  const team = s.team === 0 ? 'Blue' : 'Red';
+  const tags = [
+    s.host ? '<span class="lb-crown" role="img" aria-label="Host">👑</span>' : '',
+    l.mode === 'team' ? `<span class="lb-team" data-team="${s.team}">${team}</span>` : '',
+  ].filter(Boolean).join('');
+  const cls = ['lb-slot', 'is-held'];
+  if (s.host) cls.push('is-host');
+  if (s.seat === l.you) cls.push('is-you');
+  if (!s.connected) cls.push('is-away');
+  /* the host can move any seat between the two teams: say so, or the pill looks decorative */
+  const hint = l.mode === 'team' && isHost(l) ? ` title="Tap to switch ${esc(s.name)} to Team ${s.team === 0 ? 'Red' : 'Blue'}"` : '';
+  const label = `${s.name}, ${role}${l.mode === 'team' ? `, Team ${team}` : ''}`;
+  return `<button class="${cls.join(' ')}" type="button" role="listitem" data-seat="${seat}"`
+    + ` aria-label="${esc(label)}"${hint}>`
+    + `<span class="lb-av" aria-hidden="true">${esc(s.initial)}</span>`
+    + `<span class="lb-slot-txt"><span class="lb-name">${esc(s.name)}</span>`
+    + `<span class="lb-role">${role}</span></span>`
+    + `<span class="lb-tags">${tags}</span></button>`;
+}
+
+/** Rebuild the grid only when the roster actually moved: a paint must never steal a tap. */
+function paintSlots(l: Lobby): void {
+  const sig = `${l.you}|${l.hostSeat}|${l.mode}|`
+    + l.seats.map((s) => (s ? `${s.id}:${s.name}:${s.team}:${s.host}:${s.bot}:${s.connected}` : '-')).join(',');
+  if (sig === slotSig) return;
+  slotSig = sig;
+  const grid = document.getElementById('lb-slots');
+  if (!grid) return;
+  grid.innerHTML = l.seats.map((_s, i) => slotMarkup(l, i)).join('');
+}
+
+/** Everything the lobby screen shows, from the value alone. */
+function paintLobbyPane(l: Lobby): void {
+  const codeEl = document.getElementById('lb-code');
+  if (codeEl) codeEl.textContent = l.code;
+  document.getElementById('lb-copy')?.setAttribute('aria-label', `Copy room code ${l.code}`);
+
+  const count = document.getElementById('lb-count');
+  if (count) count.textContent = `${occupied(l)}/${l.capacity} Players`;
+
+  const host = isHost(l);
+  for (const b of document.querySelectorAll<HTMLButtonElement>('#lb-mode [data-mode]')) {
+    b.setAttribute('aria-pressed', String(b.dataset.mode === l.mode));
+    b.setAttribute('aria-disabled', String(!host));
+    b.classList.toggle('is-locked', !host);
+  }
+  const sub = document.getElementById('lb-mode-sub');
+  if (sub) sub.textContent = MODE_LINE[l.mode];
+
+  paintSlots(l);
+
+  const botKey = document.getElementById('lb-pick-bot');
+  if (botKey) botKey.hidden = l.online;
+
+  const start = document.getElementById('gm-start') as HTMLButtonElement | null;
+  if (start) {
+    start.textContent = host ? 'Start Match' : 'Waiting for host to start…';
+    start.setAttribute('aria-disabled', String(!host || !canStart(l)));
+    if (host && !canStart(l)) start.setAttribute('title', 'Need at least 2 players');
+    else start.removeAttribute('title');
+    start.classList.add('is-lobby');
+    start.classList.toggle('is-waiting', !host);
+    start.classList.toggle('is-idle', host && !canStart(l));
+  }
+}
+
+/** Open a room's socket and land on the lobby. `host` mints the code; guests must be expected. */
+function openRoom(code: string, host: boolean): void {
+  const token = ++roomToken;
+  handle?.leave();
+  handle = null;
+  slotSig = '';
+  showView('lobby');
+  handle = openLobby({
+    code,
+    host,
+    onState: (l) => { if (token === roomToken) paintLobbyPane(l); },
+    onRace: (race) => {
+      if (token !== roomToken) return;
+      /* the lobby's work is done: the board owns the socket from here */
+      handle = null;
+      roomToken++;
+      sheetHost?.close();
+      hooks.onRoomRace?.(race);
+      setGameMode('room', { roomCode: null });
+    },
+    onError: (reason) => {
+      if (token !== roomToken) return;
+      handle = null;
+      showView('room');
+      showRoomError(errorLine(reason));
+    },
+  });
+  handle.closed(() => {
+    if (token !== roomToken) return;
+    handle = null;
+    showView('room');
+    showRoomError('The room connection dropped. Try again.');
+  });
+}
+
+/** Walk out of the lobby (the host's exit closes it for everyone). */
+function leaveRoom(): void {
+  roomToken++;
+  handle?.leave();
+  handle = null;
+  slotSig = '';
+  pickSeat = -1;
+  const pick = document.getElementById('lb-pick');
+  if (pick) pick.hidden = true;
+  /* the lobby card goes back to "Custom Room": a code nobody is in is not a room */
+  setGameMode('room', { roomCode: null });
+}
+
+function showPick(on: boolean): void {
+  const el = document.getElementById('lb-pick');
+  if (el) el.hidden = !on;
+  if (!on) pickSeat = -1;
+}
+
+/* ---------- the drawer's panes ---------- */
+
+/** Swap the drawer between the mode list, the friends entry and the live lobby. */
 function showView(next: SheetView): void {
   view = next;
   const modes = document.getElementById('gm-view-modes');
   if (modes) modes.hidden = next !== 'modes';
   const room = document.getElementById('gm-view-room');
   if (room) room.hidden = next !== 'room';
+  const lobbyEl = document.getElementById('gm-view-lobby');
+  if (lobbyEl) lobbyEl.hidden = next !== 'lobby';
   const back = document.getElementById('gm-back');
-  if (back) back.hidden = next !== 'room';
+  if (back) back.hidden = next === 'modes';
   const title = document.getElementById('gm-title');
-  if (title) title.textContent = next === 'room' ? 'Play with friends' : 'Select Game Mode';
+  if (title) title.textContent = next === 'modes' ? 'Select Game Mode' : 'Play with Friends';
   const sub = document.getElementById('gm-sub');
-  if (sub) sub.textContent = next === 'room' ? 'Create a room or join with a code' : 'Pick how you want to race';
+  if (sub) {
+    sub.textContent = next === 'modes' ? 'Pick how you want to race'
+      : next === 'lobby' ? 'Invite friends, pick a format, start together'
+      : 'Create a room or join with a code';
+  }
+  /* the entry pane owns its two actions; the foot belongs to the list and the lobby */
+  const foot = document.getElementById('gm-foot');
+  if (foot) foot.hidden = next === 'room';
+  const rewards = document.getElementById('gm-rewards');
+  if (rewards) rewards.hidden = next !== 'modes';
   const body = document.querySelector<HTMLElement>('.gm-body');
   if (body) body.scrollTop = 0;
+  if (next === 'lobby' && handle) paintLobbyPane(handle.lobby);
+  /* the list's Start label and its reward caption are written by `paintSheetState`, and the lobby
+     borrowed the same key: coming back has to restore it, not leave "Start Match" behind */
+  else if (next === 'modes') paintSheetState();
 }
 
 /** The drawer always opens on the three rows, never on a pane left behind. */
@@ -310,13 +493,23 @@ export function resetSheetView(): void {
   showView('modes');
 }
 
+/** Is a lobby still live? The friends row reopens it instead of starting a second one. */
+function inLobby(): boolean {
+  return !!handle && handle.lobby.status !== 'closed';
+}
+
 /**
- * One step of back: the friends pane returns to the list before the drawer
- * closes. Returns false when there is nothing left to unwind here.
+ * One step of back: the lobby leaves the room, the friends pane returns to the list, and only then
+ * does the drawer itself close. Returns false when there is nothing left to unwind here.
  */
 export function gmBack(): boolean {
   const sheet = document.getElementById('sheet-game-modes');
-  if (view !== 'room' || !sheet || sheet.hidden) return false;
+  if (view === 'modes' || !sheet || sheet.hidden) return false;
+  if (view === 'lobby') {
+    leaveRoom();
+    showView('room');
+    return true;
+  }
   showView('modes');
   return true;
 }
@@ -364,19 +557,15 @@ export function paintSheetState(): void {
     coinN.textContent = reward.coin;
     coinN.closest('.gm-rw')?.setAttribute('aria-label', `${reward.coin.replace('+', '')} coins`);
   }
+  /* the lobby owns the Start key while it is on screen: it must not be renamed out from under it */
   const start = document.getElementById('gm-start');
-  if (start) start.textContent = START_LABEL[current.id];
-
-  const invite = document.getElementById('gm-invite');
-  const codeEl = document.getElementById('gm-code');
-  const linkEl = document.getElementById('gm-link');
-  const inviteBtn = document.getElementById('gm-invite-btn') as HTMLAnchorElement | null;
-  if (current.id === 'room' && current.roomCode) {
-    if (invite) invite.hidden = false;
-    if (codeEl) codeEl.textContent = current.roomCode;
-    if (linkEl) linkEl.textContent = buildInviteDisplay(current.roomCode);
-    if (inviteBtn) inviteBtn.href = buildShareUrl(current.roomCode);
+  if (start && view === 'modes') {
+    start.textContent = START_LABEL[current.id];
+    start.removeAttribute('aria-disabled');
+    start.removeAttribute('title');
+    start.classList.remove('is-lobby', 'is-idle', 'is-waiting');
   }
+  if (view === 'lobby' && handle) paintLobbyPane(handle.lobby);
 }
 
 function showRoomError(msg: string): void {
@@ -399,9 +588,15 @@ function clearRoomError(): void {
 export interface GameModeInit {
   /** Starts a race with the sizes + difficulty the drawer just persisted. */
   onStart?: () => void;
+  /** The host pressed Start in a lobby with no server behind it: play that roster locally. */
+  onRoomStart?: (lobby: Lobby) => void;
+  /** A synced room launched: the worker's race goes on the board. */
+  onRoomRace?: (race: LobbyRace) => void;
 }
 
 export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
+  sheetHost = sheets;
+  hooks = init ?? {};
   paintLobby();
   paintSheetState();
   showView('modes');
@@ -412,7 +607,7 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
       const raw = pick.dataset.gmode;
       if (!isGameModeId(raw)) return;
       impact('light');
-      if (raw === 'room') { showView('room'); return; }
+      if (raw === 'room') { showView(inLobby() ? 'lobby' : 'room'); return; }
       clearRoomError();
       setGameMode(raw);
     });
@@ -420,6 +615,7 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
 
   document.getElementById('gm-back')?.addEventListener('click', () => {
     impact('light');
+    if (view === 'lobby') { leaveRoom(); showView('room'); return; }
     showView('modes');
   });
 
@@ -478,6 +674,15 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     filters.classList.remove('shake');
   });
 
+  /* ---- entry: create mints a code and walks straight into the lobby ---- */
+  document.getElementById('gm-create')?.addEventListener('click', () => {
+    impact('medium');
+    clearRoomError();
+    const sel = createRoom();
+    notify('success');
+    openRoom(sel.roomCode ?? createRoomCode(), true);
+  });
+
   const joinInput = document.getElementById('gm-join-input') as HTMLInputElement | null;
   const joinBtn = document.getElementById('gm-join') as HTMLButtonElement | null;
   /** Join only lights up once the field holds a full 4-digit code. */
@@ -487,72 +692,19 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
   };
   syncJoin();
 
-  document.getElementById('gm-create')?.addEventListener('click', () => {
-    impact('medium');
-    clearRoomError();
-    const sel = createRoom();
-    notify('success');
-    // Stay open so the 1-tap invite is reachable; the lobby already shows Room XXXX.
-    const codeEl = document.getElementById('gm-code');
-    if (codeEl && sel.roomCode) codeEl.textContent = sel.roomCode;
-    const linkEl = document.getElementById('gm-link');
-    if (linkEl && sel.roomCode) linkEl.textContent = buildInviteDisplay(sel.roomCode);
-    const invite = document.getElementById('gm-invite');
-    if (invite) invite.hidden = false;
-    const inviteBtn = document.getElementById('gm-invite-btn') as HTMLAnchorElement | null;
-    if (inviteBtn && sel.roomCode) inviteBtn.href = buildShareUrl(sel.roomCode);
-    if (joinInput && sel.roomCode) joinInput.value = sel.roomCode;
-    syncJoin();
-  });
-
-  document.getElementById('gm-invite-btn')?.addEventListener('click', (e) => {
-    const code = getGameMode().roomCode;
-    if (!code) return;
-    // Let the anchor href work outside Telegram; inside, open via the client.
-    try {
-      const w = window as unknown as { Telegram?: { WebApp?: object } };
-      if (w.Telegram?.WebApp) {
-        e.preventDefault();
-        impact('light');
-        openInvite(code);
-      }
-    } catch {
-      /* default anchor navigation */
-    }
-  });
-
-  document.getElementById('gm-copy')?.addEventListener('click', async () => {
-    const code = getGameMode().roomCode;
-    if (!code) return;
-    impact('light');
-    const ok = await copyText(buildInviteLink(code));
-    notify(ok ? 'success' : 'warning');
-    const btn = document.getElementById('gm-copy');
-    if (btn && ok) {
-      const prev = btn.textContent;
-      btn.textContent = 'Copied';
-      window.setTimeout(() => {
-        if (btn.textContent === 'Copied') btn.textContent = prev;
-      }, 1200);
-    }
-  });
-
   const doJoin = (): void => {
     const input = joinInput;
     if (!input) return;
     const res = joinRoomCode(input.value);
     if (!res.ok) {
       impact('light');
-      const r = res as { ok: false; error: string };
-      showRoomError(r.error);
+      showRoomError(res.error);
       input.focus({ preventScroll: true });
       return;
     }
     impact('medium');
     clearRoomError();
-    notify('success');
-    /* the room is selected now: land on the list so Start reads "private match" */
-    showView('modes');
+    openRoom(res.code, false);
   };
 
   document.getElementById('gm-join')?.addEventListener('click', doJoin);
@@ -567,8 +719,98 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     syncJoin();
   });
 
-  /* the sticky Start: persist the row as the race to run, then run it */
+  /* ---- lobby: the code bar ---- */
+  document.getElementById('lb-copy')?.addEventListener('click', async () => {
+    const code = handle?.lobby.code;
+    if (!code) return;
+    impact('light');
+    const ok = await copyText(buildInviteLink(code));
+    notify(ok ? 'success' : 'warning');
+    if (!ok) return;
+    const t = document.getElementById('lb-copy-t');
+    const btn = document.getElementById('lb-copy');
+    if (!t || !btn) return;
+    t.textContent = 'Copied! ✓';
+    btn.classList.add('is-copied');
+    window.setTimeout(() => {
+      if (t.textContent !== 'Copied! ✓') return;
+      t.textContent = 'Copy';
+      btn.classList.remove('is-copied');
+    }, 1400);
+  });
+
+  const invite = (): void => {
+    const code = handle?.lobby.code;
+    if (!code) return;
+    impact('light');
+    openInvite(code);
+  };
+  document.getElementById('lb-invite')?.addEventListener('click', invite);
+  document.getElementById('lb-pick-invite')?.addEventListener('click', () => { showPick(false); invite(); });
+
+  /* ---- lobby: the host's format switch (a guest's copy is view-only) ---- */
+  for (const b of document.querySelectorAll<HTMLButtonElement>('#lb-mode [data-mode]')) {
+    b.addEventListener('click', () => {
+      const l = handle?.lobby;
+      if (!l) return;
+      if (!isHost(l)) { notify('warning'); return; }
+      const mode: LobbyMode = b.dataset.mode === 'team' ? 'team' : 'ffa';
+      if (mode === l.mode) return;
+      impact('light');
+      handle?.setMode(mode);
+    });
+  }
+
+  /* ---- lobby: seats. An open well invites; a held one flips teams (host, 2v2 only) ---- */
+  document.getElementById('lb-slots')?.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement | null)?.closest<HTMLElement>('.lb-slot');
+    const l = handle?.lobby;
+    if (!btn || !l) return;
+    const seat = Number(btn.dataset.seat);
+    if (!Number.isInteger(seat)) return;
+    const s = l.seats[seat];
+    if (!s) {
+      pickSeat = seat;
+      showPick(true);
+      impact('light');
+      return;
+    }
+    if (l.mode === 'team' && isHost(l)) {
+      impact('light');
+      handle?.setTeam(seat, s.team === 0 ? 1 : 0);
+    }
+  });
+
+  document.getElementById('lb-pick-bot')?.addEventListener('click', () => {
+    if (pickSeat < 0) return;
+    impact('medium');
+    handle?.addBot(pickSeat);
+    showPick(false);
+  });
+
+  document.getElementById('lb-leave')?.addEventListener('click', () => {
+    impact('light');
+    leaveRoom();
+    showView('room');
+  });
+
+  /* the sticky Start: the lobby's own key while the lobby is up, the mode's otherwise */
   document.getElementById('gm-start')?.addEventListener('click', () => {
+    if (view === 'lobby') {
+      const l = handle?.lobby;
+      if (!l) return;
+      if (!isHost(l)) { notify('warning'); return; }
+      if (!canStart(l)) { notify('warning'); return; }
+      impact('medium');
+      if (!handle?.start()) return;
+      if (l.online) return;                    // the worker answers with ROOM_FOUND
+      handle = null;
+      roomToken++;
+      sheetHost?.close();
+      hooks.onRoomStart?.(l);
+      setGameMode('room', { roomCode: null });
+      return;
+    }
     impact('light');
     notify('success');
     try {

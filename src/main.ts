@@ -30,12 +30,13 @@ import { SEAT_RAMPS } from './themes';
 import { detonation, impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
 import { createRoomCode, getGameMode, gmBack, initGameModes, onGameModeChange, setGameMode } from './gamemodes';
+import type { Lobby, LobbyRace } from './lobby';
 import {
   createMatchmaking, myTier, myTiq, onlineRace, onlineSearch, type OnlineSession, type RaceEnd,
 } from './matchmaking';
 import { createAdmin, onRuntime, recordRace, runtime, type Admin } from './admin';
 import {
-  ROOM_WAIT_MS, createRoom, difficultyFor, isAutomated, lobbyLine, rewardEligible, seatBadge,
+  MIN_SEATS, ROOM_WAIT_MS, createRoom, difficultyFor, isAutomated, lobbyLine, rewardEligible, seatBadge,
   seatName, sizesOf, startEarly, type BotTier, type Room,
 } from './room';
 
@@ -309,7 +310,7 @@ function onBack() {
  */
 let localSide: Player = 0;
 /** The live online seat, when this race is against a person instead of the machine. */
-let active: OnlineSession | null = null;
+let active: OnlineSession | LobbyRace | null = null;
 /** Why an online race ended without a finish line, for the panel's own caption. */
 let forfeit: RaceEnd['why'] | null = null;
 const rivalSide = (): Player => (localSide === 0 ? 1 : 0);
@@ -1112,7 +1113,7 @@ interface StartSetup {
   difficulty: Difficulty;
   /** one entry per seat — `[1, 1]` is a duel, `[1, 1, 1, 1]` a four-way. Capped at `MAX_TEAMS`. */
   sizes: readonly number[];
-  online?: OnlineSession | null;
+  online?: OnlineSession | LobbyRace | null;
   /** The lobby this race came out of, when it came out of one: it names the seats, says which are
    *  the machine's, and pays only the seats a person actually held to the end. */
   room?: Room | null;
@@ -1128,7 +1129,7 @@ function startGame(setup: StartSetup) {
   localSide = active ? active.side : 0;
   /* A room's seats are its own — one ball per seat, however many it filled with bots. */
   room = setup.room ?? null;
-  sizes = active ? [active.sizes[0], active.sizes[1]]
+  sizes = active ? [...active.sizes]
     : room ? sizesOf(room)
     : setup.sizes.slice(0, MAX_TEAMS);
   /* Name every seat before the first paint: `You` for this screen, a room's own seat names (the
@@ -1139,7 +1140,7 @@ function startGame(setup: StartSetup) {
       : `Bot${p > 1 ? ` ${p}` : ''}`;
   }
   TEAM_NAME[localSide] = 'You';
-  if (active) TEAM_NAME[rivalSide()] = active.opponent.name;
+  if (active && !room) TEAM_NAME[rivalSide()] = active.opponent.name;
   view.human = localSide;
   /* One brain per seat: a room ladders its machine seats, a plain race plays one level throughout. */
   const lobby = room;
@@ -1157,7 +1158,9 @@ function startGame(setup: StartSetup) {
     const session = active;
     /* the rival's moves come through the same door the bot's do, so walls, mines, log strikes and
        the blitz hand-off all animate exactly as they do offline */
-    session.onMove((action) => { if (state.winner === null) play(action, true); });
+    session.onMove((action, side) => {
+      if (state.winner === null && side === state.turn) play(action, true);
+    });
     session.onEnd((end) => endOnline(end));
     session.onReject(() => {
       notify('error');
@@ -1562,6 +1565,42 @@ function watchPartyLabel(): void {
   if (!start) return;
   new MutationObserver(paintParty).observe(start, { childList: true, characterData: true, subtree: true });
 }
+
+/**
+ * The lobby's roster as the `Room` the board already paints. A friends room is the same model the
+ * dock reads — seat names, and which seats the machine holds — so nothing downstream needs to know
+ * whether the roster came off a socket or out of a host's own taps. Trailing open wells are
+ * trimmed: a two-player lobby plays a two-seat board, not a four-seat one with two bots nobody
+ * asked for.
+ */
+function roomFromRoster(
+  code: string,
+  roster: ReadonlyArray<{ name: string; bot: boolean } | null>,
+): Room {
+  let last = roster.length - 1;
+  while (last >= 0 && !roster[last]) last--;
+  const count = Math.max(MIN_SEATS, last + 1);
+  return {
+    code,
+    seats: Array.from({ length: count }, (_, i) => {
+      const s = roster[i] ?? null;
+      return {
+        index: i,
+        kind: s && !s.bot ? 'human' as const : 'bot' as const,
+        id: s && !s.bot ? `seat:${i}` : `bot:${i}`,
+        name: s ? s.name : `Bot${i > 1 ? ` ${i}` : ''}`,
+        difficulty: menuState.difficulty,
+        takenOver: false,
+        connected: true,
+      };
+    }),
+    waitMs: ROOM_WAIT_MS,
+    openedAt: 0,
+    launched: true,
+    botTier: 'mixed',
+  };
+}
+
 /* The drawer repaints its own Start label inside its own `onGameModeChange` handler, and
    subscribers fire in registration order — so this one is registered *after* `initGameModes`
    below, never before it. Registered first it would name the seat count and then be silently
@@ -1579,6 +1618,17 @@ initGameModes(sheets, {
     const lobby = openLocalRoom(botTier);
     showNote(lobbyLine(lobby, Date.now()), false, 2200, true);
     startGame({ difficulty: menuState.difficulty, sizes: sizesOf(lobby), room: lobby });
+  },
+  /* The friends lobby's Start. A lobby with a socket behind it has already asked the worker to
+     launch, and the race arrives on `onRoomRace`; one without a socket plays its own roster here. */
+  onRoomStart: (lobby: Lobby) => {
+    const room = roomFromRoster(lobby.code, lobby.seats);
+    showNote(lobbyLine(room, Date.now()), false, 2200, true);
+    startGame({ difficulty: menuState.difficulty, sizes: sizesOf(room), room });
+  },
+  onRoomRace: (race: LobbyRace) => {
+    const room = roomFromRoster(race.code, race.seats);
+    startGame({ difficulty: menuState.difficulty, sizes: race.sizes, online: race, room });
   },
 });
 onGameModeChange(paintParty);

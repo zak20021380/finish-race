@@ -55,9 +55,11 @@ type ClientMessage =
   | { type: 'CANCEL' }
   | { type: 'MOVE'; action: Action }
   | { type: 'RESIGN' }
-  /* The room path: the host starting early. Everything else a room seat sends is a MOVE or a
-     RESIGN, exactly as a 1v1 seat sends them. */
-  | { type: 'ROOM_START' };
+  /* The room path: the host starting early, and the two knobs only the host may turn — the match
+     format and a seat's team. Everything else a room seat sends is a MOVE or a RESIGN. */
+  | { type: 'ROOM_START' }
+  | { type: 'SET_MODE'; mode: 'ffa' | 'team' }
+  | { type: 'SET_TEAM'; side: number; team: 0 | 1 };
 
 interface Waiter {
   ws: WebSocket;
@@ -118,6 +120,14 @@ interface LiveRoom {
   seed: number;
   /** The authoritative race. Null until the room launches. */
   driver: RoomDriver | null;
+  /** The seat wearing the crown. A code lobby migrates it when the host walks out. */
+  hostSeat: number;
+  /** The format the host picked: everyone for themselves, or two teams. */
+  mode: 'ffa' | 'team';
+  /** Seat → team (0 blue, 1 red). Only read while `mode` is `team`. */
+  teams: number[];
+  /** True for a code-based friends lobby; false for the `?room=<n>` auto-pair room. */
+  code: boolean;
 }
 
 /** Where a socket sits: which room, and which seat in it. */
@@ -343,6 +353,12 @@ function readRoomSize(raw: string | null): number {
   return n;
 }
 
+/** `roomcode=9786` from the query: the friends lobby this socket is joining. */
+function readRoomCode(raw: string | null): string {
+  const digits = (raw ?? '').replace(/\D/g, '').slice(0, 4);
+  return digits.length === 4 ? digits : '';
+}
+
 /** `bottier=hard` from the query: the level a room hands its backfilled bots. */
 function readBotTier(raw: string | null): BotTier {
   return raw === 'easy' || raw === 'normal' || raw === 'hard' ? raw : 'mixed';
@@ -390,12 +406,20 @@ const boardOf = (waiter: Waiter): { cols: number; rows: number } =>
 function readMessage(raw: unknown, side: number, cols: number, rows: number): ClientMessage | null {
   if (typeof raw !== 'string') return null;
   try {
-    const msg = JSON.parse(raw) as { type?: unknown; wide?: unknown; action?: unknown };
+    const msg = JSON.parse(raw) as {
+      type?: unknown; wide?: unknown; action?: unknown; mode?: unknown; side?: unknown; team?: unknown;
+    };
     if (msg.type === 'QUEUE') return { type: 'QUEUE', wide: msg.wide === true };
     if (msg.type === 'WIDEN') return { type: 'WIDEN' };
     if (msg.type === 'CANCEL') return { type: 'CANCEL' };
     if (msg.type === 'RESIGN') return { type: 'RESIGN' };
     if (msg.type === 'ROOM_START') return { type: 'ROOM_START' };
+    if (msg.type === 'SET_MODE') return { type: 'SET_MODE', mode: msg.mode === 'team' ? 'team' : 'ffa' };
+    if (msg.type === 'SET_TEAM') {
+      const side = Number(msg.side);
+      if (!Number.isInteger(side) || side < 0 || side >= MAX_TEAMS) return null;
+      return { type: 'SET_TEAM', side, team: Number(msg.team) === 1 ? 1 : 0 };
+    }
     if (msg.type === 'MOVE') {
       const action = readAction(msg.action, side, cols, rows);
       return action ? { type: 'MOVE', action } : null;
@@ -428,6 +452,8 @@ export class MatchmakerDO {
   private races = new Map<string, Race>();
   /** Rooms still filling their seats. They leave this list the moment they launch. */
   private openRooms: LiveRoom[] = [];
+  /** Code-based friends lobbies, by their 4-digit code. A code lobby is never auto-paired. */
+  private lobbies = new Map<string, LiveRoom>();
   /** Rooms that have launched, by match id. */
   private rooms = new Map<string, LiveRoom>();
   /** Which room seat a socket is holding. A socket in here is not a queue entry. */
@@ -493,8 +519,13 @@ export class MatchmakerDO {
 
     /* A room socket and a queue socket are two different things from the first frame: a room seat
        is never in the pairing queue, so a 4-seat room can never be broken up into a duel. */
+    const roomCode = readRoomCode(url.searchParams.get('roomcode'));
     const roomSize = readRoomSize(url.searchParams.get('room'));
-    if (roomSize) {
+    if (roomCode) {
+      /* the friends lobby: a code the host minted, not a search for strangers */
+      this.joinLobby(server, identity, roomCode, url.searchParams.get('host') === '1',
+        readBotTier(url.searchParams.get('bottier')));
+    } else if (roomSize) {
       this.joinRoom(server, identity, roomSize, readBotTier(url.searchParams.get('bottier')));
     } else {
       const waiter = this.enter(server, identity, url.searchParams.get('wide') === '1', readSizes(url.searchParams.get('sizes')));
@@ -831,6 +862,19 @@ export class MatchmakerDO {
         }
       }
     }
+    for (const live of [...this.lobbies.values()]) {
+      for (const m of live.members) {
+        if (!m) continue;
+        this.refs.delete(m.ws);
+        try {
+          m.ws.send(JSON.stringify({ type: 'ERROR', reason }));
+          m.ws.close(1000, reason.toLowerCase());
+        } catch {
+          /* the socket is already gone */
+        }
+      }
+    }
+    this.lobbies.clear();
     this.openRooms = [];
     this.rearm();
   }
@@ -1049,6 +1093,10 @@ export class MatchmakerDO {
         matchId: '',
         seed: 0,
         driver: null,
+        hostSeat: 0,
+        mode: 'ffa',
+        teams: Array.from({ length: size }, (_, i) => i % 2),
+        code: false,
       };
       this.openRooms.push(live);
     }
@@ -1078,6 +1126,139 @@ export class MatchmakerDO {
     /* a full room starts now; anything less waits, and the alarm fills it when the wait runs out */
     if (live.members.every((m) => m !== null)) this.launchRoom(live);
     else this.rearm();
+  }
+
+  /**
+   * Take a seat in a code-based friends lobby. `host=1` mints the room; a guest has to be expected,
+   * because a code nobody minted is a typo, not a room. Unlike the `?room=<n>` path this one never
+   * fills on a timer: a private room waits for the people it invited, and the host decides when it
+   * is time.
+   */
+  private joinLobby(ws: WebSocket, identity: Identity, code: string, host: boolean, tier: BotTier): void {
+    if (this.maintenance) { this.rejectSocket(ws, 'MAINTENANCE'); return; }
+    let live = this.lobbies.get(code) ?? null;
+    if (live?.driver) { this.rejectSocket(ws, 'room_started'); return; }
+    if (!live) {
+      if (!host) { this.rejectSocket(ws, 'room_not_found'); return; }
+      const size = MAX_TEAMS;
+      live = {
+        room: createRoom({ code, seats: size, waitMs: ROOM_WAIT_MS, botTier: tier, now: Date.now() }),
+        size,
+        members: Array.from({ length: size }, () => null),
+        matchId: '',
+        seed: 0,
+        driver: null,
+        hostSeat: 0,
+        mode: 'ffa',
+        teams: Array.from({ length: size }, (_, i) => i % 2),
+        code: true,
+      };
+      this.lobbies.set(code, live);
+    } else if (host) {
+      /* two hosts on one code would fight over the crown: the second one is told to join instead */
+      this.rejectSocket(ws, 'room_exists');
+      return;
+    }
+    const seat = this.freeSeat(live);
+    if (seat < 0) { this.rejectSocket(ws, 'room_full'); return; }
+    live.members[seat] = {
+      ws, seat, id: identity.player.id, name: identity.player.name,
+      tiq: identity.tiq, tier: identity.tier, flag: identity.flag,
+    };
+    live.room = seatHuman(live.room, seat, {
+      kind: 'human', id: identity.player.id, name: identity.player.name,
+    });
+    this.refs.set(ws, { live, seat });
+
+    ws.addEventListener('message', (ev: MessageEvent) => {
+      const ref = this.refs.get(ws);
+      if (!ref) return;
+      const board = ref.live.driver
+        ? ref.live.driver.state
+        : dimsFor(contendersIn(sizesOf(ref.live.room)));
+      const msg = readMessage(ev.data, ref.seat, board.cols, board.rows);
+      if (msg) this.roomFrame(ref, msg);
+    });
+    ws.addEventListener('close', () => this.roomLeave(this.refs.get(ws)));
+    ws.addEventListener('error', () => this.roomLeave(this.refs.get(ws)));
+
+    this.broadcastLobby(live);
+  }
+
+  /** One `LOBBY` frame, per seat: the roster, the crown, the format, and which seat is yours. */
+  private lobbyMessage(live: LiveRoom, seat: number): string {
+    const seats: unknown[] = [];
+    for (let i = 0; i < live.members.length; i++) {
+      const m = live.members[i];
+      if (!m) continue;
+      seats.push({
+        side: i,
+        id: m.id,
+        name: m.name,
+        host: i === live.hostSeat,
+        bot: false,
+        team: live.teams[i] ?? 0,
+        connected: true,
+      });
+    }
+    return JSON.stringify({
+      type: 'LOBBY',
+      code: live.room.code,
+      host: live.hostSeat,
+      mode: live.mode,
+      you: seat,
+      capacity: live.size,
+      seats,
+    });
+  }
+
+  /** Tell every seat what the room now looks like. The one write path for lobby state. */
+  private broadcastLobby(live: LiveRoom): void {
+    for (const m of live.members) {
+      if (m) this.postTo(m.ws, this.lobbyMessage(live, m.seat));
+    }
+  }
+
+  /**
+   * A seat left a lobby that has not launched. The crown migrates to the lowest seat still held —
+   * a room whose host walked out is still somebody's room — and the last person out closes it.
+   */
+  private lobbyDepart(live: LiveRoom, seat: number): void {
+    if (!live.members.some((m) => m !== null)) {
+      this.lobbies.delete(live.room.code);
+      return;
+    }
+    if (live.hostSeat === seat) {
+      const next = live.members.findIndex((m) => m !== null);
+      if (next >= 0) live.hostSeat = next;
+    }
+    this.broadcastLobby(live);
+  }
+
+  /** A lobby seat walked out on purpose: let the socket go, then settle the room. */
+  private leaveLobby(ref: RoomRef): void {
+    const live = ref.live;
+    const member = live.members[ref.seat];
+    if (member) {
+      this.refs.delete(member.ws);
+      try {
+        member.ws.close(1000, 'left');
+      } catch {
+        /* the socket is already gone */
+      }
+      live.members[ref.seat] = null;
+    }
+    this.lobbyDepart(live, ref.seat);
+  }
+
+  /** A refusal is a decision, not a dead socket: say why, then let the socket go. */
+  private rejectSocket(ws: WebSocket, reason: string): void {
+    this.postTo(ws, JSON.stringify({ type: 'ERROR', reason }));
+    try {
+      ws.close(1000, 'refused');
+    } catch {
+      /* the socket is already gone */
+    }
   }
 
   /** The lowest seat nobody is holding. */
@@ -1119,6 +1300,7 @@ export class MatchmakerDO {
     live.matchId = `r${hash(`${live.room.code}|${++this.paired}`).toString(36)}`;
     live.driver = createRoomDriver(live.room, { hazards: true, seed: live.seed });
     this.openRooms = this.openRooms.filter((r) => r !== live);
+    this.lobbies.delete(live.room.code);
     this.rooms.set(live.matchId, live);
     this.rearm();
 
@@ -1141,10 +1323,14 @@ export class MatchmakerDO {
       seed: live.seed,
       side: seat,
       sizes: sizesOf(roster),
+      mode: live.mode,
+      teams: live.teams,
       seats: roster.seats.map((s, i) => ({
         side: i,
+        id: s.id || `seat:${i}`,
         name: s.name,
         bot: isAutomated(roster, i),
+        team: live.teams[i] ?? 0,
         difficulty: difficultyFor(roster, i),
       })),
     });
@@ -1154,9 +1340,25 @@ export class MatchmakerDO {
   private roomFrame(ref: RoomRef, msg: ClientMessage): void {
     const live = ref.live;
     if (!live.driver) {
-      /* the room has not launched: a seat can start it early or walk away, and nothing else */
-      if (msg.type === 'ROOM_START' && ref.seat === 0) this.launchRoom(live);
-      else if (msg.type === 'CANCEL') this.roomLeave(ref);
+      /* Before the launch the only authority is the host's: start, format, team. Any seat may
+         leave, and that is the whole vocabulary of a lobby. */
+      if (msg.type === 'CANCEL') { this.leaveLobby(ref); return; }
+      if (ref.seat !== live.hostSeat) return;
+      if (msg.type === 'ROOM_START') {
+        /* A friends room needs a second player before it is a race; the auto-pair room does not,
+           because its whole contract is that the machine fills whatever is left. */
+        if (!live.code || live.members.filter((m) => m !== null).length >= 2) this.launchRoom(live);
+        return;
+      }
+      if (msg.type === 'SET_MODE') {
+        live.mode = msg.mode;
+        this.broadcastLobby(live);
+        return;
+      }
+      if (msg.type === 'SET_TEAM') {
+        if (msg.side < live.size) live.teams[msg.side] = msg.team;
+        this.broadcastLobby(live);
+      }
       return;
     }
     if (msg.type === 'RESIGN' || msg.type === 'CANCEL') { this.takeSeatOver(ref); return; }
@@ -1241,6 +1443,11 @@ export class MatchmakerDO {
     const member = ref.live.members[ref.seat];
     if (member) this.refs.delete(member.ws);
     ref.live.members[ref.seat] = null;
+    if (ref.live.code) {
+      /* a friends lobby survives its host: the crown moves, and everyone is told */
+      this.lobbyDepart(ref.live, ref.seat);
+      return;
+    }
     if (ref.live.members.every((m) => m === null)) {
       this.openRooms = this.openRooms.filter((r) => r !== ref.live);
     }

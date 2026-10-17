@@ -9995,6 +9995,8 @@ html.reduced-motion .stars-count::before { animation: none; }
 }
 .gm-body::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .gm-view { flex: none; display: flex; flex-direction: column; gap: var(--gm-gap); }
+/* an author `display: flex` outranks the UA `[hidden]` rule, so every pane has to say it itself */
+.gm-view[hidden] { display: none; }
 .gm-list { display: flex; flex-direction: column; gap: var(--gm-gap); }
 
 /* ---- mode rows: one glass card, a 76px pick, and the option strip inside ---- */
@@ -10336,86 +10338,479 @@ html.reduced-motion .stars-count::before { animation: none; }
 }
 .gm-f-tip.on { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-/* ---- friends sub-screen: create a room, or join one with a 4-digit code ---- */
-.gm-room {
+/* ---- FRIENDS: the entry pane ----
+   Two actions and nothing else: a gold clay commitment, a hairline, a recessed well. The
+   old pane stacked a code block, a coral invite slab and a second form on top of the
+   create key, which is what made it read as three competing screens. */
+.fr {
   display: flex;
   flex-direction: column;
   gap: var(--s3);
   padding: var(--s3);
-  border: 2px solid transparent;
   border-radius: var(--radius-md);
   background-color: #1C2433;
   background-image:
-    linear-gradient(180deg, #202A3E 0%, #1C2433 100%) padding-box,
-    linear-gradient(180deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .04)) border-box;
+    linear-gradient(180deg, #202A3E 0%, #1C2433 100%);
   box-shadow: var(--glass-border-top), var(--glass-border), var(--clay);
 }
-.gm-create { width: 100%; }
-.gm-invite { display: flex; flex-direction: column; gap: var(--s2); }
-.gm-invite[hidden] { display: none; }
-.gm-code-row {
+
+/* the one gold slab on the screen: the only action that creates something */
+.fr-create {
+  --d: 5px;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  min-height: 68px;
+  padding: 12px var(--s3);
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #FFC53D 0%, #F0A81A 58%, #D98E0B 100%);
+  color: #2B1B02;
+  text-align: left;
+  cursor: pointer;
+  box-shadow:
+    0 var(--d) 0 #8A5604,
+    0 calc(var(--d) + 10px) 22px -10px rgba(245, 158, 11, .5),
+    inset 0 2px 2px rgba(255, 255, 255, .55),
+    inset 0 -3px 5px rgba(0, 0, 0, .16);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.fr-create:hover:not(:active) { transform: translateY(-1px); }
+.fr-create:active { transform: translateY(var(--press-y-lg)); --d: 1px; }
+.fr-create:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 3px; }
+.fr-create-ic {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: rgba(43, 27, 2, .14);
+  box-shadow: inset 0 0 0 1px rgba(43, 27, 2, .18);
+}
+.fr-create-ic .ico { width: 20px; height: 20px; }
+.fr-create-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fr-create-t { font-size: var(--t-2); font-weight: 900; letter-spacing: -.01em; line-height: 1.15; }
+.fr-create-s { font-size: 10px; font-weight: 800; letter-spacing: .02em; color: #3A2604; }
+
+/* the divider is a hairline with a word in it, never a second card */
+.fr-or {
   display: flex;
   align-items: center;
   gap: var(--s2);
-  min-height: 44px;
-  padding: var(--s1) var(--s3);
-  border-radius: var(--radius-sm);
-  background: var(--field);
-  box-shadow: var(--inset);
-}
-.gm-code-label { flex: 1 1 auto; min-width: 0; font-size: var(--t-micro); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
-.gm-code {
-  flex: none;
-  font-size: var(--t-1);
-  font-weight: 900;
-  letter-spacing: .18em;
-  color: var(--brand-ink);
-  font-variant-numeric: tabular-nums;
-}
-.gm-copy {
-  appearance: none;
-  border: 0;
-  font: inherit;
-  flex: none;
-  min-height: 44px;
-  min-width: 44px;
-  padding: 0 var(--s3);
-  border-radius: var(--radius-pill);
-  background: var(--brand-soft);
-  color: var(--brand-ink);
-  font-size: var(--t-micro);
-  font-weight: 800;
-  cursor: pointer;
-  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .3);
-  transition: transform var(--motion-fast), opacity var(--motion-fast);
-}
-.gm-copy:active { transform: scale(0.98); opacity: .85; }
-.gm-copy:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-.gm-invite-btn { width: 100%; }
-.gm-link {
   margin: 0;
-  text-align: center;
-  font-size: var(--t-micro);
-  font-weight: 700;
-  color: var(--ink-soft);
-  word-break: break-all;
-  font-variant-numeric: tabular-nums;
-}
-/* join: a label, a 4-digit field and one Join key — no divider anywhere */
-.gm-join { display: flex; flex-direction: column; gap: var(--s2); }
-.gm-join-l {
-  font-size: var(--t-micro);
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: .06em;
+  letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--ink-soft);
 }
-.gm-join-row { display: flex; align-items: center; gap: var(--s2); }
-.gm-join-field { flex: 1 1 auto; min-width: 0; }
-.gm-join-field .input { text-align: center; }
-.gm-join-btn { flex: none; min-width: 88px; }
+.fr-or::before,
+.fr-or::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: rgba(255, 255, 255, .09);
+}
+
+.fr-join { display: flex; align-items: center; gap: var(--s2); }
+/* a carved well: the code is typed into the slab, not onto a floating field */
+.fr-well {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px rgba(255, 255, 255, .05);
+  transition: box-shadow var(--motion-fast);
+}
+.fr-well:focus-within {
+  box-shadow: var(--inset), inset 0 0 0 1px rgba(252, 211, 77, .45);
+}
+.fr-hash { flex: none; font-size: var(--t-micro); font-weight: 900; color: var(--ink-soft); }
+.fr-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-1);
+  font-weight: 800;
+  letter-spacing: .2em;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+.fr-input::placeholder { letter-spacing: .02em; font-size: var(--t-micro); font-weight: 700; color: var(--ink-soft); }
+.fr-join-btn {
+  --d: 4px;
+  flex: none;
+  min-width: 84px;
+  min-height: 52px;
+  padding: 0 16px;
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, #2E3A55 0%, #232E44 100%);
+  color: var(--ink-soft);
+  font-size: var(--t-2);
+  font-weight: 900;
+  cursor: default;
+  box-shadow: 0 var(--d) 0 #0B111C, inset 0 1px 0 rgba(255, 255, 255, .12), var(--clay-ring);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), color var(--motion-fast);
+}
+/* lit only once the well holds a full code — a Join that cannot work never looks pressable */
+.fr-join-btn:not(:disabled) {
+  background: linear-gradient(180deg, #FFC53D 0%, #D98E0B 100%);
+  color: #2B1B02;
+  cursor: pointer;
+  box-shadow:
+    0 var(--d) 0 #8A5604,
+    inset 0 1px 0 rgba(255, 255, 255, .5);
+}
+.fr-join-btn:not(:disabled):active { transform: translateY(var(--press-y)); --d: 1px; }
+.fr-join-btn:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
 .gm-err { margin: 0; font-size: var(--t-micro); font-weight: 700; }
 .gm-err:not([hidden]) { color: var(--danger); }
+
+/* ---- FRIENDS: the live lobby ----
+   Bar (code · invite · count) → format switch → four seats → one action row. Every surface is
+   clay: raised for something held, carved for something waiting to be filled. */
+.lb { display: flex; flex-direction: column; gap: var(--s3); }
+
+.lb-bar { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+/* the code is a key, not a label: one tap copies the invite */
+.lb-code {
+  --d: 3px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, #2C3A57 0%, #222C41 100%);
+  color: var(--honey-ink);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  box-shadow:
+    0 var(--d) 0 #0B111C,
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 0 0 1px rgba(252, 211, 77, .22);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.lb-code:active { transform: translateY(2px); --d: 1px; }
+.lb-code:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
+.lb-hash { font-size: var(--t-micro); font-weight: 900; color: var(--honey-ink); }
+.lb-code b { font-size: var(--t-2); font-weight: 900; letter-spacing: .1em; line-height: 1; }
+.lb-copy-t {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--chip-ink);
+  transition: color var(--motion-fast);
+}
+.lb-code.is-copied .lb-copy-t { color: var(--mint-ink); }
+
+.lb-invite {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 13px;
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: rgba(252, 211, 77, .12);
+  color: var(--honey-ink);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .26);
+  transition: transform var(--motion-fast), background-color var(--motion-fast);
+}
+.lb-invite .ico { width: 15px; height: 15px; }
+.lb-invite:active { transform: scale(.97); }
+.lb-invite:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
+
+.lb-count {
+  margin-left: auto;
+  flex: none;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .02em;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* format: a carved track with one lit thumb — the host's, and read-only for everyone else */
+.lb-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  background: #1A2232;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05), inset 0 0 0 1px rgba(255, 255, 255, .04);
+}
+.lb-seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  padding: 5px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  box-shadow: var(--inset);
+}
+.lb-seg-b {
+  min-height: 44px;
+  padding: 0 8px;
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .01em;
+  cursor: pointer;
+  transition: background var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
+}
+.lb-seg-b[aria-pressed="true"] {
+  background: linear-gradient(180deg, #FFC53D 0%, #E09A0E 100%);
+  color: #2B1B02;
+  box-shadow: 0 2px 0 #8A5604, inset 0 1px 0 rgba(255, 255, 255, .5);
+}
+.lb-seg-b.is-locked { cursor: default; }
+.lb-seg-b.is-locked[aria-pressed="false"] { opacity: .55; }
+.lb-seg-b:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
+.lb-mode-sub {
+  margin: 0;
+  min-height: 15px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+
+/* four seats: two by two. Raised for a person, carved and dashed for a well still open. */
+.lb-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.lb-slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 62px;
+  padding: 8px 10px;
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  cursor: default;
+  background: linear-gradient(180deg, #242F45 0%, #1D2636 100%);
+  box-shadow:
+    0 3px 0 #0C121C,
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 0 0 1px rgba(255, 255, 255, .05);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.lb-slot.is-host {
+  background: linear-gradient(180deg, #2E3C5A 0%, #232E45 100%);
+  box-shadow:
+    0 3px 0 #0C121C,
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 0 0 1px rgba(252, 211, 77, .24);
+}
+.lb-slot.is-you::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .28);
+  pointer-events: none;
+}
+.lb-slot.is-away { opacity: .6; }
+/* a team pill is a control for the host: give the tap a target it can feel */
+.lb-slot[title]:active { transform: translateY(1px); }
+.lb-slot:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
+
+.lb-av {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #3B4A6B 0%, #28334B 100%);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 900;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), inset 0 0 0 1px rgba(255, 255, 255, .08);
+}
+.lb-slot.is-host .lb-av {
+  background: linear-gradient(180deg, #FFD468 0%, #D98E0B 100%);
+  color: #2B1B02;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), inset 0 0 0 1px rgba(43, 27, 2, .2);
+}
+.lb-slot-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
+.lb-name {
+  font-size: var(--t-micro);
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lb-role {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  line-height: 1.2;
+}
+.lb-slot.is-host .lb-role { color: var(--honey-ink); }
+.lb-tags { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex: none; }
+.lb-crown { font-size: 13px; line-height: 1; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); }
+.lb-team {
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: var(--radius-pill);
+  color: var(--blue-ink);
+  background: rgba(59, 130, 246, .18);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, .42);
+}
+.lb-team[data-team="1"] {
+  color: #FCA5A5;
+  background: rgba(239, 68, 68, .16);
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, .42);
+}
+
+/* an open well: dashed, carved, and the one thing on the grid that invites a tap */
+.lb-slot.is-open {
+  justify-content: center;
+  gap: 7px;
+  border: 2px dashed rgba(255, 255, 255, .13);
+  background: rgba(0, 0, 0, .16);
+  box-shadow: var(--inset);
+  cursor: pointer;
+}
+.lb-slot.is-open:hover { border-color: rgba(252, 211, 77, .4); }
+.lb-slot.is-open:active { transform: scale(.985); }
+.lb-plus {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(252, 211, 77, .12);
+  color: var(--honey-ink);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .26);
+}
+.lb-open-t {
+  font-size: var(--t-micro);
+  font-weight: 800;
+  color: var(--ink-soft);
+  letter-spacing: .01em;
+}
+
+/* one action row, always 44px: the picker swaps into the Leave key's place, never below it */
+.lb-actions { display: flex; align-items: stretch; gap: 8px; min-height: 44px; }
+.lb-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 1 1 auto; }
+.lb-pick[hidden] { display: none; }
+.lb-pick-b {
+  min-height: 44px;
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(252, 211, 77, .1);
+  color: var(--honey-ink);
+  font: inherit;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .24);
+  transition: transform var(--motion-fast), background-color var(--motion-fast);
+}
+.lb-pick-b .ico { width: 15px; height: 15px; }
+.lb-pick-b:active { transform: scale(.98); }
+.lb-pick-b:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
+.lb-leave {
+  flex: 1 1 auto;
+  min-height: 44px;
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .02em;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+  transition: color var(--motion-fast), background-color var(--motion-fast);
+}
+.lb-leave:hover { color: var(--ink); background: rgba(255, 255, 255, .04); }
+.lb-leave:active { transform: scale(.99); }
+.lb-leave:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
+
+/* the Start key's three states: gold (host, ready), carved (host, short a player), waiting (guest).
+   The lobby's Start is the screen's one warm slab — the blue CTA belongs to the mode list. */
+.gm-start.is-lobby {
+  background: linear-gradient(180deg, #FFC53D 0%, #F0A81A 58%, #D98E0B 100%);
+  color: #2B1B02;
+  box-shadow:
+    0 var(--d) 0 #8A5604,
+    0 calc(var(--d) + 10px) 20px -10px rgba(245, 158, 11, .5),
+    inset 0 2px 3px rgba(255, 255, 255, .5),
+    inset 0 -3px 6px rgba(0, 0, 0, .18);
+}
+.gm-start[aria-disabled="true"] {
+  background: linear-gradient(180deg, #2A3550 0%, #1F2839 100%);
+  color: var(--ink-soft);
+  box-shadow:
+    0 var(--d) 0 #0B111C,
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+.gm-start.is-idle:active { transform: none; --d: 5px; }
+.gm-start.is-waiting {
+  color: var(--honey-ink);
+  animation: lb-breathe 2.4s ease-in-out infinite;
+}
+@keyframes lb-breathe {
+  0%, 100% { box-shadow: 0 var(--d) 0 #0B111C, inset 0 1px 0 rgba(255, 255, 255, .08), inset 0 0 0 1px rgba(252, 211, 77, .18); }
+  50% { box-shadow: 0 var(--d) 0 #0B111C, inset 0 1px 0 rgba(255, 255, 255, .12), inset 0 0 0 1px rgba(252, 211, 77, .5); }
+}
+html.reduced-motion .gm-start.is-waiting { animation: none; }
 
 /* ---- sticky footer: one reward caption for the selected mode, one Start ---- */
 .gm-foot {
@@ -10424,6 +10819,10 @@ html.reduced-motion .stars-count::before { animation: none; }
   flex-direction: column;
   gap: var(--s2);
 }
+/* the entry pane owns its own actions, and the lobby hides the reward caption: both must actually
+   leave the flow, which an author `display: flex` would otherwise veto */
+.gm-foot[hidden],
+.gm-rewards[hidden] { display: none; }
 /* one centered capsule: WIN +30 (trophy) +65 (coin), never a row of loose numbers */
 .gm-rewards {
   display: flex;
@@ -10499,8 +10898,11 @@ html.reduced-motion .stars-count::before { animation: none; }
   }
   .gm-rewards { min-height: 24px; padding: 2px var(--s3); }
 }
-html.reduced-motion .gm-pick, html.reduced-motion .gm-key, html.reduced-motion .gm-copy, html.reduced-motion .gm-card,
-html.reduced-motion .gm-filters, html.reduced-motion .gm-f-tip { transition: none; }
+html.reduced-motion .gm-pick, html.reduced-motion .gm-key, html.reduced-motion .gm-card,
+html.reduced-motion .gm-filters, html.reduced-motion .gm-f-tip,
+html.reduced-motion .fr-create, html.reduced-motion .fr-join-btn,
+html.reduced-motion .lb-code, html.reduced-motion .lb-invite, html.reduced-motion .lb-slot,
+html.reduced-motion .lb-seg-b, html.reduced-motion .lb-pick-b { transition: none; }
 html.reduced-motion .gm-filters.shake { animation: none; }
 
 
