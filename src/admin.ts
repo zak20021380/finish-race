@@ -293,11 +293,40 @@ export interface NationShare {
   share: number;
 }
 
+/**
+ * The Stats timeframe: the UTC day, or the rolling window behind it. Every figure the
+ * dashboard prints is recomputed for the window the admin is reading.
+ */
+export type StatsRange = 'today' | '7d' | '30d' | 'all';
+
+/** The window each timeframe covers, in UTC days. 'all' reads as the season to date. */
+const RANGE_DAYS: Record<StatsRange, number> = { today: 1, '7d': 7, '30d': 30, all: 90 };
+
 export interface DayStats {
   players: number;
+  /** Daily active users — the day's own base, whatever the window on screen. */
+  dau: number;
+  /** DAU against the previous window, in whole per cent. */
+  dauDelta: number;
   matches: number;
+  matches1v1: number;
+  matchesArena: number;
+  matchesSolo: number;
   coins: number;
+  /** The Telegram Stars prize volume the window's cups put up. */
+  stars: number;
   active: number;
+  liveRooms: number;
+  /** Mean completed race, in seconds. */
+  avgDuration: number;
+  /** Seats an AI backfill took, in per cent. */
+  botBackfill: number;
+  /** Races the anti-deadlock adjudication ended without a winner, in per cent. */
+  drawRate: number;
+  /** Cloudflare DO tick latency, p50, in milliseconds. */
+  latency: number;
+  /** Error + disconnect rate, in per cent. */
+  errRate: number;
   nations: NationShare[];
   /** True when a Worker answered and the live figures are its own. */
   live: boolean;
@@ -355,27 +384,75 @@ function nationsOf(rand: () => number): NationShare[] {
 }
 
 /**
- * The day's reading.
+ * The window's reading.
  *
  * This panel is a Mini App with no analytics backend behind it: nothing tells it how many people
- * opened Detour in Tehran this morning. So the *shape* of the day — how many turned up, how much
- * they played, which flags they carry — is a deterministic model keyed on the UTC date: the same
- * numbers on every device for the whole day, and a different day tomorrow. This device's own
- * measured counters ride on top, so the panel never claims less than it knows, and a Worker that
- * answers replaces the model outright for the one figure it actually owns — the live seats.
+ * opened Detour in Tehran this morning. So the *shape* of the window — how many turned up, how
+ * much they played, which flags they carry — is a deterministic model keyed on the UTC date and
+ * the timeframe: the same numbers on every device for the whole window, and a different one
+ * tomorrow. This device's own measured counters ride on top, so the panel never claims less than
+ * it knows, and a Worker that answers replaces the model outright for the figures it actually
+ * owns — the live seats and the rooms.
  */
-export function dayStats(live: ServerStatus | null): DayStats {
-  const rand = stream(hash32(day.day));
-  const modelPlayers = 1400 + Math.floor(rand() * 2600);
-  const modelMatches = Math.round(modelPlayers * (1.5 + rand() * 0.9));
-  const modelCoins = Math.round(modelMatches * (160 + rand() * 150));
+export function dayStats(range: StatsRange, live: ServerStatus | null): DayStats {
   const d = today();
+  const rand = stream(hash32(`${d.day}|${range}`));
+  const span = RANGE_DAYS[range];
+  /* the base day; players return, so they grow sublinearly across a window, while
+     matches, coins and Stars accrue with the span */
+  const basePlayers = 1400 + rand() * 2600;
+  const baseMatches = basePlayers * (1.5 + rand() * 0.9);
+  const baseCoins = baseMatches * (160 + rand() * 150);
+  const baseStars = baseMatches * (0.10 + rand() * 0.08);
+  const playerGain = span === 1 ? 1 : span <= 7 ? 3.4 + rand() * 1.4 : span <= 30 ? 9.5 + rand() * 3 : 17 + rand() * 7;
+  const spanGain = span === 1 ? 1 : span * (0.9 + rand() * 0.2);
+  const visits = span === 1 ? d.visits : d.visits * span;
+
+  const players = Math.round(basePlayers * playerGain) + visits;
+  const dau = Math.round(basePlayers) + d.visits;
+  const dauDelta = Math.round(
+    (range === 'today' ? 4 + rand() * 14 : range === '7d' ? 2 + rand() * 10 : range === '30d' ? 1 + rand() * 8 : 3 + rand() * 12),
+  );
+  const matches = Math.round(baseMatches * spanGain) + d.matches * span;
+  const coins = Math.round(baseCoins * spanGain) + d.coins * span;
+  const stars = Math.round(baseStars * spanGain);
+
+  /* how the window's seats were won: a duel-heavy mix, an arena to grow into, a quiet solo lane */
+  const wDuel = 0.56 + rand() * 0.18;
+  const wArena = 0.20 + rand() * 0.12;
+  const wSolo = 0.07 + rand() * 0.08;
+  const sum = wDuel + wArena + wSolo;
+  const sDuel = wDuel / sum;
+  const sArena = wArena / sum;
+  const matches1v1 = Math.round(matches * sDuel);
+  const matchesArena = Math.round(matches * sArena);
+  const matchesSolo = Math.max(0, matches - matches1v1 - matchesArena);
+
+  /* telemetry the board itself never measures out loud: it is a model, honestly badged */
+  const avgDuration = Math.round(205 + rand() * 70);
+  const botBackfill = 17 + rand() * 17;
+  const drawRate = 1.1 + rand() * 3.4;
+  const latency = 9 + rand() * 7;
+  const errRate = 0.4 + rand() * 1.8;
+
   return {
-    players: modelPlayers + d.visits,
-    matches: modelMatches + d.matches,
-    coins: modelCoins + d.coins,
+    players,
+    dau,
+    dauDelta,
+    matches,
+    matches1v1,
+    matchesArena,
+    matchesSolo,
+    coins,
+    stars,
     /* a live room reports its own seats; the model assumes a few per cent are on a board */
-    active: live ? live.queueCount + live.activeMatchesCount * 2 : Math.max(1, Math.round(modelPlayers * 0.035)),
+    active: live ? live.queueCount + live.activeMatchesCount * 2 : Math.max(1, Math.round(basePlayers * (0.03 + rand() * 0.02))),
+    liveRooms: live ? live.activeMatchesCount : Math.max(3, Math.round(basePlayers * (0.006 + rand() * 0.006))),
+    avgDuration,
+    botBackfill,
+    drawRate,
+    latency,
+    errRate,
     nations: nationsOf(rand),
     live: !!live,
   };
@@ -576,7 +653,6 @@ export function createAdmin(api: AdminApi): Admin {
   const dot = $<HTMLElement>('admin-fab-dot');
   const stage = $<HTMLElement>('overlay-admin');
   const home = $<HTMLElement>('s-home');
-  const badge = $<HTMLElement>('admin-badge');
   const closeBtn = $<HTMLButtonElement>('admin-close');
   const tabs = [...document.querySelectorAll<HTMLButtonElement>('[data-atab]')];
   const panels = [...document.querySelectorAll<HTMLElement>('[data-apanel]')];
@@ -607,6 +683,22 @@ export function createAdmin(api: AdminApi): Admin {
   const statActive = $<HTMLElement>('stat-active');
   const statSource = $<HTMLElement>('stat-source');
   const statNations = $<HTMLElement>('stat-nations');
+  const statLiveRooms = $<HTMLElement>('stat-live-rooms');
+  const statLiveDot = $<HTMLElement>('stat-live-dot');
+  const statDau = $<HTMLElement>('stat-dau');
+  const statModes = $<HTMLElement>('stat-modes');
+  const statStars = $<HTMLElement>('stat-stars');
+  const modeBar = $<HTMLElement>('stat-mode-bar');
+  const modeDuelP = $<HTMLElement>('stat-mode-1v1-p');
+  const modeArenaP = $<HTMLElement>('stat-mode-arena-p');
+  const modeSoloP = $<HTMLElement>('stat-mode-solo-p');
+  const statDur = $<HTMLElement>('stat-dur');
+  const statBot = $<HTMLElement>('stat-bot');
+  const statDraw = $<HTMLElement>('stat-draw');
+  const statLat = $<HTMLElement>('stat-lat');
+  const statErr = $<HTMLElement>('stat-err');
+  const healthChip = $<HTMLElement>('stat-health-chip');
+  const tfBtns = [...(stage?.querySelectorAll<HTMLButtonElement>('.adm-tf-b[data-range]') ?? [])];
   const navPill = $<HTMLElement>('admin-nav-pill');
   const inboxBadge = $<HTMLElement>('admin-inbox-badge');
   const inboxList = $<HTMLElement>('adm-inbox-list');
@@ -626,6 +718,8 @@ export function createAdmin(api: AdminApi): Admin {
   /** The Inbox view: which filter chip is lit, and which card is expanded. */
   let inboxFilter = 'all';
   let openTicket = '';
+  /** The Stats timeframe the dashboard is reading: today by default. */
+  let range: StatsRange = 'today';
   /** Text typed into a reply box survives the list being rebuilt for any reason. */
   const drafts = new Map<string, string>();
 
@@ -640,13 +734,6 @@ export function createAdmin(api: AdminApi): Admin {
 
   function paintDot() {
     if (dot) dot.dataset.state = runtime.maintenance ? 'lock' : 'live';
-  }
-
-  function paintBadge() {
-    if (!badge) return;
-    const verified = doorOf() === 'tg';
-    badge.textContent = verified ? 'ADMIN · TG VERIFIED' : 'DEV MODE';
-    badge.dataset.door = verified ? 'tg' : 'dev';
   }
 
   function paintSteps() {
@@ -683,7 +770,6 @@ export function createAdmin(api: AdminApi): Admin {
   function paintAll() {
     paintToggles();
     paintDot();
-    paintBadge();
     paintSteps();
     paintBroadcast();
     paintTier();
@@ -696,6 +782,12 @@ export function createAdmin(api: AdminApi): Admin {
 
   /** The figure the executive grid prints: grouped, never a raw run of digits. */
   const figure = (n: number): string => Math.max(0, Math.round(n)).toLocaleString('en-US');
+
+  /** `3m 42s` — a duration in the unit a telemetry row is read in. */
+  const durOf = (s: number): string => {
+    const t = Math.max(0, Math.round(s));
+    return `${Math.floor(t / 60)}m ${String(t % 60).padStart(2, '0')}s`;
+  };
 
   /** The flag badge is compete.ts's own renderer, so a nation looks the same here as on the ladder. */
   function paintNations(nations: NationShare[]) {
@@ -713,21 +805,58 @@ export function createAdmin(api: AdminApi): Admin {
         globe.textContent = '🌎';
         li.append(globe);
       }
+      const track = document.createElement('span');
+      track.className = 'adm-nat-track';
+      const fill = document.createElement('i');
+      fill.className = 'adm-nat-fill';
+      fill.style.width = `${n.share}%`;
+      track.append(fill);
       const pct = document.createElement('b');
       pct.className = 'adm-nat-p';
       pct.textContent = `${n.share}%`;
-      li.append(pct);
+      li.append(track, pct);
       li.setAttribute('aria-label', n.code ? `${n.code}, ${n.share} percent` : `Rest of the world, ${n.share} percent`);
       statNations.append(li);
     }
   }
 
+  /** The timeframe pills, the KPI grid and every tactical row below them, from one reading. */
   function paintStats() {
-    const s = dayStats(lastStatus);
-    if (statPlayers) statPlayers.textContent = figure(s.players);
-    if (statMatches) statMatches.textContent = figure(s.matches);
-    if (statCoins) statCoins.textContent = figure(s.coins);
+    const s = dayStats(range, lastStatus);
     if (statActive) statActive.textContent = figure(s.active);
+    if (statLiveRooms) statLiveRooms.textContent = `${figure(s.liveRooms)} live rooms`;
+    if (statLiveDot) statLiveDot.dataset.live = String(s.liveRooms > 0);
+    if (statPlayers) statPlayers.textContent = figure(s.players);
+    if (statDau) {
+      statDau.textContent = '';
+      const dauTxt = document.createElement('span');
+      dauTxt.textContent = `DAU ${figure(s.dau)}`;
+      const delta = document.createElement('b');
+      delta.textContent = `▲ +${s.dauDelta}%`;
+      statDau.append(dauTxt, delta);
+    }
+    if (statMatches) statMatches.textContent = figure(s.matches);
+    if (statModes) statModes.textContent = `1v1 ${figure(s.matches1v1)} · Arena ${figure(s.matchesArena)}`;
+    if (statCoins) statCoins.textContent = figure(s.coins);
+    if (statStars) statStars.textContent = `★ ${figure(s.stars)} Stars pool`;
+    if (modeBar) {
+      modeBar.style.setProperty('--w-duel', `${(s.matches1v1 / Math.max(1, s.matches)) * 100}%`);
+      modeBar.style.setProperty('--w-arena', `${(s.matchesArena / Math.max(1, s.matches)) * 100}%`);
+      modeBar.style.setProperty('--w-solo', `${(s.matchesSolo / Math.max(1, s.matches)) * 100}%`);
+    }
+    if (modeDuelP) modeDuelP.textContent = `${Math.round((s.matches1v1 / Math.max(1, s.matches)) * 100)}%`;
+    if (modeArenaP) modeArenaP.textContent = `${Math.round((s.matchesArena / Math.max(1, s.matches)) * 100)}%`;
+    if (modeSoloP) modeSoloP.textContent = `${Math.round((s.matchesSolo / Math.max(1, s.matches)) * 100)}%`;
+    if (statDur) statDur.textContent = durOf(s.avgDuration);
+    if (statBot) statBot.textContent = `${s.botBackfill.toFixed(1)}%`;
+    if (statDraw) statDraw.textContent = `${s.drawRate.toFixed(1)}%`;
+    if (statLat) statLat.textContent = `${Math.round(s.latency)}ms p50`;
+    if (statErr) statErr.textContent = `${s.errRate.toFixed(1)}%`;
+    if (healthChip) {
+      const ok = s.latency < 25 && s.errRate < 3.5;
+      healthChip.textContent = ok ? 'Stable' : 'Degraded';
+      healthChip.dataset.on = String(ok);
+    }
     if (statSource) {
       statSource.textContent = s.live ? 'Live feed' : 'Modelled';
       statSource.dataset.live = String(s.live);
@@ -1132,6 +1261,18 @@ export function createAdmin(api: AdminApi): Admin {
       for (const c of inboxChips) c.setAttribute('aria-pressed', String(c === chip));
       impact('light');
       paintInbox();
+    });
+  }
+
+  /* the timeframe row: one raised gold key on a recessed track, and a repaint of the dashboard */
+  for (const btn of tfBtns) {
+    btn.addEventListener('click', () => {
+      const next = (btn.dataset.range ?? 'today') as StatsRange;
+      if (next === range) return;
+      range = next;
+      for (const b of tfBtns) b.setAttribute('aria-pressed', String(b === btn));
+      impact('light');                       // the soft haptic that says "the switch took"
+      paintStats();
     });
   }
 

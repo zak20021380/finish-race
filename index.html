@@ -287,6 +287,10 @@
         </g>
         <circle cx="12" cy="12" r="1.4" fill="currentColor" />
       </symbol>
+      <!-- the Command Center's sculpted close key -->
+      <symbol id="i-close" viewBox="0 0 24 24">
+        <path d="M6.2 6.2 17.8 17.8M17.8 6.2 6.2 17.8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
+      </symbol>
     </svg>
 
     <div class="bg" aria-hidden="true">
@@ -1234,45 +1238,107 @@
             <p class="admin-kicker">COMMAND CENTER</p>
             <h2 class="admin-title" id="admin-title">Detour Admin</h2>
           </div>
-          <span class="admin-badge" id="admin-badge" data-door="dev">DEV MODE</span>
           <button class="admin-close" id="admin-close" type="button" aria-label="Close Admin Command Center">
-            <span aria-hidden="true">×</span>
+            <svg class="ico admin-close-x" aria-hidden="true"><use href="#i-close" /></svg>
           </button>
         </header>
 
         <div class="admin-body" data-scroll tabindex="0">
 
-          <!-- ---------- Stats: the day's telemetry, and the landing tab ---------- -->
+          <!-- ---------- Stats: the analytics dashboard, and the landing tab ---------- -->
           <div class="admin-panel" data-apanel="stats" id="apanel-stats" role="tabpanel" aria-labelledby="atab-stats">
+
+            <!-- timeframe: four pills on a recessed track, the active one a raised gold key -->
+            <div class="adm-tf" role="group" aria-label="Stats timeframe">
+              <button class="adm-tf-b" type="button" data-range="today" aria-pressed="true">Today</button>
+              <button class="adm-tf-b" type="button" data-range="7d" aria-pressed="false">7 Days</button>
+              <button class="adm-tf-b" type="button" data-range="30d" aria-pressed="false">30 Days</button>
+              <button class="adm-tf-b" type="button" data-range="all" aria-pressed="false">All Time</button>
+            </div>
+
+            <!-- primary KPIs: Active Now / Players+DAU / Matches / Stars+Coins -->
             <div class="adm-grid">
               <div class="adm-card">
-                <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-users" /></svg></span>
-                <b class="adm-card-v" id="stat-players">—</b>
-                <span class="adm-card-l">Players Today</span>
-              </div>
-              <div class="adm-card">
-                <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
-                <b class="adm-card-v" id="stat-matches">—</b>
-                <span class="adm-card-l">Matches Today</span>
-              </div>
-              <div class="adm-card">
-                <span class="adm-card-i" aria-hidden="true"><span class="coin" data-coin></span></span>
-                <b class="adm-card-v" id="stat-coins">—</b>
-                <span class="adm-card-l">Coin Volume</span>
-              </div>
-              <div class="adm-card">
-                <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-bolt" /></svg></span>
+                <span class="adm-card-top">
+                  <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-bolt" /></svg></span>
+                  <span class="adm-live-dot" id="stat-live-dot" data-live="false" aria-hidden="true"></span>
+                </span>
                 <b class="adm-card-v" id="stat-active">—</b>
                 <span class="adm-card-l">Active Now</span>
+                <span class="adm-card-s" id="stat-live-rooms">— live rooms</span>
+              </div>
+              <div class="adm-card">
+                <span class="adm-card-top">
+                  <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-users" /></svg></span>
+                </span>
+                <b class="adm-card-v" id="stat-players">—</b>
+                <span class="adm-card-l">Total Players</span>
+                <span class="adm-card-s" id="stat-dau">—</span>
+              </div>
+              <div class="adm-card">
+                <span class="adm-card-top">
+                  <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
+                </span>
+                <b class="adm-card-v" id="stat-matches">—</b>
+                <span class="adm-card-l">Matches Completed</span>
+                <span class="adm-card-s" id="stat-modes">—</span>
+              </div>
+              <div class="adm-card">
+                <span class="adm-card-top">
+                  <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-star" /></svg></span>
+                </span>
+                <b class="adm-card-v" id="stat-coins">—</b>
+                <span class="adm-card-l">Coin Volume</span>
+                <span class="adm-card-s" id="stat-stars">—</span>
               </div>
             </div>
 
+            <!-- mode distribution: one proportional bar over its legend -->
+            <div class="adm-modes">
+              <div class="adm-nations-h">
+                <span class="adm-nations-t">Mode Distribution</span>
+              </div>
+              <div class="adm-modes-bar" id="stat-mode-bar" role="img" aria-label="Matches by mode">
+                <i class="adm-mode-seg" id="stat-mode-1v1" data-mode="duel"></i>
+                <i class="adm-mode-seg" id="stat-mode-arena" data-mode="arena"></i>
+                <i class="adm-mode-seg" id="stat-mode-solo" data-mode="solo"></i>
+              </div>
+              <ul class="adm-modes-legend" id="stat-mode-legend" aria-hidden="true">
+                <li><i data-mode="duel"></i>1v1 Blitz<b id="stat-mode-1v1-p">60%</b></li>
+                <li><i data-mode="arena"></i>4-Seat Arena<b id="stat-mode-arena-p">30%</b></li>
+                <li><i data-mode="solo"></i>Solo/Practice<b id="stat-mode-solo-p">10%</b></li>
+              </ul>
+            </div>
+
+            <!-- match telemetry -->
+            <div class="adm-tele">
+              <p class="adm-sec-h">Match Telemetry</p>
+              <div class="adm-cells">
+                <span class="adm-stat"><b id="stat-dur">—</b><span class="adm-stat-l">Avg Match Duration</span></span>
+                <span class="adm-stat"><b id="stat-bot">—</b><span class="adm-stat-l">Bot Backfill Rate</span></span>
+                <span class="adm-stat"><b id="stat-draw">—</b><span class="adm-stat-l">Draw Rate</span></span>
+              </div>
+            </div>
+
+            <!-- system health -->
+            <div class="adm-health">
+              <div class="adm-nations-h">
+                <span class="adm-nations-t">System Health</span>
+                <span class="adm-health-chip" id="stat-health-chip" data-on="false">Stable</span>
+              </div>
+              <div class="adm-cells">
+                <span class="adm-stat"><b id="stat-lat">—</b><span class="adm-stat-l">DO Tick Latency</span></span>
+                <span class="adm-stat"><b id="stat-err">—</b><span class="adm-stat-l">Disconnect Rate</span></span>
+              </div>
+            </div>
+
+            <!-- top nations: recessed mini meters with the ladder's flag renderer -->
             <div class="adm-nations">
               <div class="adm-nations-h">
                 <span class="adm-nations-t">Top Nations</span>
                 <span class="adm-nations-s" id="stat-source" data-live="false">Modelled</span>
               </div>
-              <ul class="adm-nations-list" id="stat-nations" aria-label="Top player countries"></ul>
+              <ul class="adm-nations-list is-meters" id="stat-nations" aria-label="Top player countries"></ul>
             </div>
           </div>
 

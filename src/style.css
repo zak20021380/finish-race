@@ -11407,55 +11407,63 @@ html.reduced-motion .admin { transition: none; }
 
 .admin-head { flex: none; display: flex; align-items: center; gap: var(--s2); }
 .admin-head-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-/* engraved gold kicker: a dark under-shadow is the whole illusion */
+/* engraved amber kicker: wide warm tracking over a dark under-shadow is the whole illusion */
 .admin-kicker {
   margin: 0;
   font-size: var(--t-micro);
   font-weight: 800;
-  letter-spacing: var(--ls-3);
+  letter-spacing: .18em;
   text-transform: uppercase;
   color: var(--honey-ink);
-  text-shadow: 0 1px 0 rgba(0, 0, 0, .6);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .6), 0 0 12px rgba(245, 158, 11, .28);
 }
-.admin-title { margin: 0; font-size: var(--t-hd); font-weight: var(--w-2); color: var(--ink); }
-.admin-badge {
-  flex: none;
-  padding: 5px 9px;
-  border-radius: var(--radius-pill);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .06em;
-  white-space: nowrap;
-  color: var(--mint-ink);
-  background: var(--mint-soft);
-  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .35);
-}
-.admin-badge[data-door="dev"] {
-  color: var(--brand-ink);
-  background: var(--brand-soft);
-  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, .35);
+/* embossed: the title sits pressed into the slab, one dark chisel under one soft crown */
+.admin-title {
+  margin: 0;
+  font-size: var(--t-hd);
+  font-weight: var(--w-2);
+  color: var(--ink);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .45), 0 -1px 0 rgba(255, 255, 255, .12);
 }
 .admin-close {
+  --d: 3px;
   flex: none;
-  width: 48px;
-  height: 48px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
   padding: 0;
   border: 0;
   appearance: none;
   cursor: pointer;
-  border-radius: 50%;
-  background: var(--clay-face);
+  border-radius: 12px;
+  /* a recessed charcoal pellet: a deep floor, a rim-lit top edge, a sculpted bevel */
+  background:
+    radial-gradient(130% 110% at 50% -26%, rgba(255, 255, 255, .1), transparent 58%),
+    linear-gradient(180deg, #1B2333 0%, #10151F 100%);
   color: var(--ink-soft);
-  font: inherit;
-  font-size: 26px;
-  line-height: 1;
-  box-shadow: 0 var(--lip) 0 #0A0E15, var(--clay-drop), var(--clay-spec), var(--clay-bevel);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+  box-shadow:
+    0 var(--d) 0 #0A0E15,
+    0 10px 20px -6px rgba(0, 0, 0, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 -2px 5px rgba(0, 0, 0, .5),
+    inset 0 0 0 1px rgba(255, 255, 255, .05);
+  transition: transform .18s var(--bounce), box-shadow var(--motion-fast), color var(--motion-fast);
 }
-.admin-close:active { transform: translateY(var(--press-y)); --lip: 1px; }
+.admin-close-x { width: 15px; height: 15px; }
+.admin-close:hover { color: var(--ink); }
+.admin-close:active {
+  transform: translateY(2px) scale(.96);
+  --d: 1px;
+  box-shadow:
+    0 1px 0 #0A0E15,
+    0 4px 10px -4px rgba(0, 0, 0, .5),
+    inset 0 2px 6px rgba(0, 0, 0, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    inset 0 0 0 1px rgba(255, 255, 255, .04);
+}
 .admin-close:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+html.reduced-motion .admin-close { transition: none; }
 
 /* ---- the tactile bottom dock: a recessed clay well with a springy gold pill ----
    Pinned under the scrolling body, above the safe area. Five equal keys, one
@@ -11595,10 +11603,12 @@ html.reduced-motion .admin-tab[aria-selected="true"] .admin-tab-ico { animation:
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
   gap: var(--s2);
-  padding-bottom: var(--s2);
+  /* the dashboard is long now: the tail clears the pinned dock on every phone */
+  padding-bottom: 80px;
 }
 .admin-panel { display: flex; flex-direction: column; gap: var(--s2); }
 
@@ -11616,20 +11626,69 @@ html.reduced-motion .admin-tab[aria-selected="true"] .admin-tab-ico { animation:
 .adm-note { margin: var(--s2) 0 0; font-size: var(--t-micro); line-height: 1.45; color: var(--ink-soft); }
 
 /* ==========================================================================
-   STATS — the executive dashboard: four clay tiles over the nations strip.
-   The panel stretches, so the grid fills the stage on a short phone and the
-   dashboard never reads as a half-empty page.
+   STATS — the analytics dashboard: a timeframe rail, four compact clay KPIs,
+   the mode bar, match telemetry, system health and the nation meters.
+   The body scrolls, so the dashboard reads top-down like any console.
    ========================================================================== */
-.admin-panel[data-apanel="stats"] {
-  flex: 1 1 auto;
-  min-height: 0;
-  justify-content: center;
+.admin-panel[data-apanel="stats"] { flex: 1 1 auto; min-height: 0; }
+
+/* ---- the timeframe rail: a full-width recessed track, the active pill a raised gold key ---- */
+.adm-tf {
+  flex: none;
+  display: flex;
+  gap: 3px;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  background: var(--field);
+  box-shadow:
+    var(--inset),
+    inset 0 0 0 1px var(--hair-off),
+    inset 0 -1px 0 rgba(255, 255, 255, .04);
 }
+.adm-tf-b {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 4px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  border-radius: calc(var(--radius-md) - 4px);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast),
+              background var(--motion-fast), color var(--motion-fast);
+}
+.adm-tf-b:active { transform: translateY(var(--press-y)); }
+.adm-tf-b:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+.adm-tf-b[aria-pressed="false"]:hover { color: var(--brand-ink); }
+/* the chosen window: an elevated gold clay pill, lit the way every gold key is */
+.adm-tf-b[aria-pressed="true"] {
+  background: var(--gold-face);
+  color: #10141D;
+  text-shadow: none;
+  box-shadow:
+    0 2px 0 var(--gold-lip),
+    0 10px 18px -10px rgba(245, 158, 11, .8),
+    inset 0 1px 0 rgba(255, 255, 255, .55),
+    inset 0 -1px 3px rgba(146, 64, 14, .28);
+}
+.adm-tf-b[aria-pressed="true"]:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--gold-lip); }
+
+/* ---- the KPI grid: four compact clay tiles ---- */
 .adm-grid {
-  flex: 0 0 auto;
+  flex: none;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: 178px;
+  grid-auto-rows: minmax(128px, auto);
   gap: var(--s2);
 }
 .adm-card {
@@ -11637,12 +11696,20 @@ html.reduced-motion .admin-tab[aria-selected="true"] .admin-tab-ico { animation:
   flex-direction: column;
   justify-content: space-between;
   gap: 2px;
-  padding: 12px 12px 13px;
+  min-width: 0;
+  padding: 11px 12px 12px;
   border-radius: var(--radius-md);
   background: var(--clay-face);
   box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
 }
-/* the embossed glyph chip: a recessed well, lit by the same sky ink as the rest of the panel */
+/* the icon chip rides the top row, next to the live dot when the card carries one */
+.adm-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  min-height: 32px;
+}
 .adm-card-i,
 .adm-tool-i {
   display: grid;
@@ -11658,9 +11725,28 @@ html.reduced-motion .admin-tab[aria-selected="true"] .admin-tab-ico { animation:
 .adm-tool-i .ico { width: 17px; height: 17px; }
 .adm-card-i .coin,
 .adm-tool-i .coin { width: 17px; height: 17px; }
+/* the pulsing live mark: a mint ember against the slab */
+.adm-live-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-right: 3px;
+  border-radius: 50%;
+  background: var(--mint);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, .18), 0 0 10px 1px rgba(16, 185, 129, .75);
+}
+.adm-live-dot[data-live="false"] { background: var(--ink-soft); box-shadow: 0 0 0 3px rgba(148, 163, 184, .14); }
+@keyframes adm-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(.72); opacity: .55; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .adm-live-dot[data-live="true"] { animation: adm-pulse 1.8s ease-in-out infinite; }
+}
+html.reduced-motion .adm-live-dot { animation: none; }
 /* the figure is the whole point: bold gold, tabular, engraved into the slab */
 .adm-card-v {
-  font-size: clamp(1.5rem, 1.15rem + 2.4vw, 2.05rem);
+  font-size: clamp(1.45rem, 1.1rem + 2.2vw, 2rem);
   font-weight: 900;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -11668,14 +11754,125 @@ html.reduced-motion .admin-tab[aria-selected="true"] .admin-tab-ico { animation:
   text-shadow: 0 1px 0 rgba(0, 0, 0, .55);
 }
 .adm-card-l {
+  min-height: 11px;
   font-size: 9px;
   font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--ink-soft);
 }
+/* the tactical sub-line under the label: the news that earns the card its slot */
+.adm-card-s {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--brand-ink);
+  font-variant-numeric: tabular-nums;
+}
+.adm-card-s b { color: var(--mint-ink); }
 
-/* the nations strip: one clay slab, four recessed flag wells across it */
+/* ---- the slab sections: one clay face each, a title row, content under it ---- */
+.adm-modes,
+.adm-tele,
+.adm-health {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: 11px 12px 12px;
+  border-radius: var(--radius-md);
+  background: var(--clay-face);
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+}
+
+/* ---- mode distribution: one proportional bar over its legend ---- */
+.adm-modes-bar {
+  display: flex;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.adm-mode-seg {
+  display: block;
+  min-width: 4px;
+  height: 100%;
+  transition: width .34s var(--bounce);
+}
+.adm-mode-seg[data-mode="duel"] {
+  width: var(--w-duel, 60%);
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -1px 2px rgba(146, 64, 14, .4);
+}
+.adm-mode-seg[data-mode="arena"] {
+  width: var(--w-arena, 30%);
+  background: linear-gradient(180deg, #38bdf8 0%, #0ea5e9 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), inset 0 -1px 2px rgba(12, 74, 110, .4);
+}
+.adm-mode-seg[data-mode="solo"] {
+  width: var(--w-solo, 10%);
+  background: linear-gradient(180deg, #64748B 0%, #475569 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18);
+}
+html.reduced-motion .adm-mode-seg { transition: none; }
+.adm-modes-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.adm-modes-legend li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.adm-modes-legend i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+  background: var(--ink-soft);
+}
+.adm-modes-legend i[data-mode="duel"] { background: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, .5); }
+.adm-modes-legend i[data-mode="arena"] { background: #0ea5e9; box-shadow: 0 0 8px rgba(14, 165, 233, .5); }
+.adm-modes-legend b {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/* ---- telemetry & health: recessed cells in one row ---- */
+.adm-cells { display: flex; gap: 6px; }
+.adm-cells .adm-stat { flex: 1 1 0; }
+.adm-stat b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-health-chip {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.adm-health-chip[data-on="true"] { color: var(--mint-ink); }
+
+/* the nations strip: one clay slab, four mini meters — flag, filled track, exact share */
 .adm-nations {
   display: flex;
   flex-direction: column;
@@ -11707,29 +11904,45 @@ html.reduced-motion .admin-tab[aria-selected="true"] .admin-tab-ico { animation:
   color: var(--brand-ink);
 }
 .adm-nations-s[data-live="true"] { color: var(--mint-ink); }
-.adm-nations-list {
+.adm-nations-list.is-meters {
   display: flex;
-  align-items: stretch;
-  gap: 6px;
+  flex-direction: column;
+  gap: 7px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .adm-nat {
-  flex: 1 1 0;
-  min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 6px 3px;
-  border-radius: var(--radius-sm);
-  background: var(--field);
-  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  gap: 8px;
+  min-height: 24px;
+  min-width: 0;
 }
 .adm-nat .fp { --fp-d: 20px; }
 .adm-nat .fp-chip { border-radius: 7px; font-size: 8px; }
+/* the recessed track, one gold run of clay along it, the share poured in */
+.adm-nat-track {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  overflow: hidden;
+}
+.adm-nat-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 0 8px rgba(245, 158, 11, .35);
+}
+.adm-nat:last-child .adm-nat-fill { background: linear-gradient(90deg, #64748B 0%, #94A3B8 100%); box-shadow: none; }
 .adm-nat-p {
+  flex: none;
+  min-width: 34px;
+  text-align: right;
   font-size: var(--t-3);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
