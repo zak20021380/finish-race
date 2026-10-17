@@ -23,7 +23,7 @@ import { createShop } from './shop';
 import { createNotifications } from './notifications';
 import { mountCoins, setBalance } from './coin';
 import { menuState, motionReduced } from './settings';
-import { playExplosion, playMove, RIVAL_MOVE_GAIN } from './sound';
+import { audio, SHOVE_RATE } from './audio';
 import { onChange, profile, recordGame, theme } from './storage';
 import { SEAT_RAMPS } from './themes';
 import { detonation, impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
@@ -683,6 +683,7 @@ function playLog(ev: LogEvent, next: GameState) {
   const blocked = ev.stopRow < next.rows - 1;
   rollT0 = strike; rollStop = ev.stopRow;
   renderer.rollLog(ev, t0);
+  audio.play('log', { at: strike });    // the roll's voice is cue'd to the frame the trunk moves
   shake();                              // the board itself trembles for the whole second
   impact('heavy');
   if (!motionReduced()) {
@@ -745,14 +746,14 @@ function play(a: Action, remote = false): boolean {
   const landed = moved === null ? null : ballById(next, moved)?.pos ?? null;
   if (a.kind === 'move' && from && landed) {
     marks[by] = { kind: 'step', from, to: landed };
-    /* one voice per step, whoever took it: the human's own rings at full with a light tap in the
-       hand, a bot or the wire's rival sits behind it. Both are pure side effects — a locked
-       webview or a muted switch must never touch the turn the rules just moved. */
-    if (by === localSide && !remote) { playMove(); impact('light'); }
-    else playMove(RIVAL_MOVE_GAIN);
+    /* one voice per step, whoever took it; a tap in the hand rides along for the local player.
+       Both are pure side effects — a locked webview or a muted switch must never touch the turn
+       the rules just moved. */
+    audio.play('move');
+    if (by === localSide && !remote) impact('light');
   }
-  else if (a.kind === 'wall') { marks[by] = { kind: 'wall', spec: a.wall }; impact('medium'); }
-  if (a.kind === 'mine') mineArmed = false;      // one mine per trip to the key
+  else if (a.kind === 'wall') { marks[by] = { kind: 'wall', spec: a.wall }; audio.play('move'); impact('medium'); }
+  if (a.kind === 'mine') { mineArmed = false; audio.play('move'); }   // one mine per trip to the key
   state = next;
   /* a move this seat made is also a move the rival has to see: the matchmaker relays it */
   if (!remote && active) active.send(a);
@@ -769,7 +770,7 @@ function play(a: Action, remote = false): boolean {
       ? { id: moved, from, to: landed }
       : undefined);
     shake();
-    playExplosion();
+    audio.play('explosion');
     detonation();
     showNote(`Mine! ${TEAM_NAME[by]} ${by === localSide ? 'were' : 'was'} thrown back `
       + `${cells} cell${cells === 1 ? '' : 's'}`, false, 2600);
@@ -1413,6 +1414,7 @@ function frame(now: number) {
     if (gate !== undefined) {
       if (now < gate) continue;         // a rolling log has not reached this ball yet: it stays put
       logWait.delete(b.id);
+      audio.play('move', { rate: SHOVE_RATE });   // the slide-back starts on its sound's own frame
     }
     const tx = b.pos.c + 0.5, ty = b.pos.r + 0.5;
     const sh = logShove.get(b.id);
