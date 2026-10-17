@@ -1,0 +1,186 @@
+/* arena.css — the board's mount and the three beats it calls out.
+   Presentation only: nothing here changes the grid, the canvas or a rule. */
+
+/* The slab is a ring, not a bezel: it is drawn outside the board's own box, so the playfield
+   keeps every pixel it had and the mount may spill into the card's padding (8px) without being
+   clipped by the slot. */
+.board-slot { overflow: visible; }
+
+.board-frame {
+  position: absolute;
+  inset: -7px;
+  border-radius: 24px;
+  pointer-events: none;
+  /* the duel's rim: red down the left edge, blue down the right, over a lifted clay slab */
+  background:
+    linear-gradient(90deg,
+      rgba(224, 38, 79, .60) 0%, rgba(224, 38, 79, 0) 15%,
+      rgba(48, 87, 219, 0) 85%, rgba(48, 87, 219, .60) 100%),
+    linear-gradient(180deg, #303D59 0%, #202A3E 44%, #151C2A 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .07),
+    inset 0 2px 2px rgba(255, 255, 255, .10),
+    inset 0 -3px 4px rgba(0, 0, 0, .45),
+    0 18px 32px -20px rgba(0, 0, 0, .85);
+}
+
+/* The soft inner bevel where the slab meets the grid: shadow above, a lit lip below. It sits on
+   the canvas's own edge, so the recess reads without stealing a row. */
+.board-wrap::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: 17px;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .10),
+    inset 0 2px 5px rgba(0, 0, 0, .5),
+    inset 0 -1px 0 rgba(255, 255, 255, .09);
+}
+.board-wrap canvas { border-radius: 17px; }
+
+/* four metal studs, one per corner, set into the rim */
+.stud {
+  position: absolute;
+  z-index: 3;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle at 34% 28%,
+    #F8FAFC 0%, #CBD5E1 26%, #7C8CA6 58%, #38445A 100%);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, .7),
+    inset 0 0 0 .5px rgba(0, 0, 0, .45);
+}
+.stud.tl { top: -5px; left: -5px; }
+.stud.tr { top: -5px; right: -5px; }
+.stud.bl { bottom: -5px; left: -5px; }
+.stud.br { bottom: -5px; right: -5px; }
+
+/* ---- one caption line under each chip ----
+   A duel only: the captions speak the two team colours, and party modes field seats with names
+   these two lines cannot honestly describe. 12px / 500 as specified; both inks clear 4.5:1 on
+   the dock's clay. */
+.seat-caps {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 0 2px;
+}
+.seat-cap {
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  letter-spacing: .01em;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.seat-cap.cap-0 { color: var(--red-ink); }
+.seat-cap.cap-1 { color: var(--blue-ink); }
+.chips[data-players='3'] .seat-caps,
+.chips[data-players='4'] .seat-caps { display: none; }
+
+/* ---- event callouts: one short beat over the board, never in front of a fingertip ---- */
+.callouts {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+.callout {
+  position: absolute;
+  left: 50%;
+  top: 12%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.co-in {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  transform: scale(.82) rotate(-2deg);
+  transition: opacity .14s ease, transform .22s cubic-bezier(.2, 1.5, .5, 1);
+}
+.callout.show .co-in { opacity: 1; transform: none; }
+.co-t { font: inherit; }
+
+/* MINE! — a red clay pill inside a soft burst */
+.callout.is-mine .co-in {
+  color: #FFF1F4;
+  background: linear-gradient(180deg, #FF5C7C 0%, #C4163C 62%, #8C0F2C 100%);
+  box-shadow:
+    0 6px 14px -8px rgba(224, 38, 79, .9),
+    inset 0 1px 0 rgba(255, 255, 255, .4),
+    inset 0 -2px 0 rgba(0, 0, 0, .35);
+}
+.co-burst {
+  position: absolute;
+  inset: -10px;
+  z-index: -1;
+  background: radial-gradient(ellipse at 50% 48%,
+    rgba(255, 92, 124, .55) 0%, rgba(224, 38, 79, .22) 52%, rgba(224, 38, 79, 0) 74%);
+  clip-path: polygon(
+    50% 0%, 60% 22%, 82% 8%, 74% 32%, 100% 30%, 80% 46%, 96% 66%, 72% 64%,
+    74% 92%, 56% 72%, 44% 96%, 42% 70%, 18% 88%, 28% 60%, 4% 58%, 22% 44%,
+    2% 24%, 30% 30%, 22% 6%, 42% 24%);
+  filter: blur(.5px);
+}
+
+/* LOG! — cut from the same trunk the board rolls */
+.callout.is-log .co-in {
+  color: #FFE9C7;
+  border-radius: 9px;
+  letter-spacing: .16em;
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, .14) 0 2px, rgba(0, 0, 0, 0) 2px 7px),
+    linear-gradient(180deg, #9A6836 0%, #7A4E24 55%, #4E3014 100%);
+  box-shadow:
+    0 6px 14px -8px rgba(0, 0, 0, .9),
+    inset 0 1px 0 rgba(255, 231, 194, .28),
+    inset 0 -2px 0 rgba(0, 0, 0, .45);
+}
+
+/* WALL — a dark clay key with a neon tick */
+.callout.is-wall .co-in {
+  color: #D9FBFF;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #233246 0%, #131C29 100%);
+  box-shadow:
+    0 0 0 1px rgba(103, 232, 249, .55),
+    0 0 16px -2px rgba(34, 211, 238, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .12);
+}
+.co-tick {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: #67E8F9;
+  filter: drop-shadow(0 0 5px rgba(34, 211, 238, .9));
+}
+
+/* reduced motion: the callouts only fade — no scale, no rotation */
+@media (prefers-reduced-motion: reduce) {
+  .co-in { transition: opacity .14s ease; transform: none; }
+}
+html.reduced-motion .co-in { transition: opacity .14s ease; transform: none; }

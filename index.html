@@ -985,7 +985,17 @@
           <main class="card">
             <div class="board-slot">
               <div class="board-wrap" id="board-wrap">
+                <!-- the slab the board is set into: a clay mount with the duel's red|blue rim.
+                     Painted behind the canvas, so it only ever shows as the ring around the grid. -->
+                <span class="board-frame" aria-hidden="true"></span>
                 <canvas id="board" role="img" aria-label="Race board: team tokens race to the gold finish bar along the top row"></canvas>
+                <!-- four metal studs, one per corner, fastening the board into the slab -->
+                <i class="stud tl" aria-hidden="true"></i>
+                <i class="stud tr" aria-hidden="true"></i>
+                <i class="stud bl" aria-hidden="true"></i>
+                <i class="stud br" aria-hidden="true"></i>
+                <!-- event callouts: MINE! / LOG! / WALL, 1.2s each, never in front of a ball -->
+                <div class="callouts" id="callouts" aria-hidden="true"></div>
 
                 <!-- why a slot was refused, or the "tap again" prompt: a toast, no layout space -->
                 <p class="note" id="note" role="status" aria-live="polite"></p>
@@ -1103,6 +1113,12 @@
                     </span>
                   </span>
                 </span>
+              </div>
+              <!-- one caption line under the duel's two chips. Party modes field three or four
+                   seats with different names, so the duel captions stand down there. -->
+              <div class="seat-caps" id="seat-caps" aria-hidden="true">
+                <span class="seat-cap cap-0">Red · You</span>
+                <span class="seat-cap cap-1">Blue · Bot</span>
               </div>
             </footer>
           </main>
@@ -2263,5 +2279,8 @@
     </div>
 
     <script type="module" src="/src/main.ts"></script>
+    <!-- the board's own overlay: event callouts. Kept out of main.ts so the race loop, the
+         renderer and the rules stay untouched by presentation. -->
+    <script type="module" src="/src/callouts.ts"></script>
   </body>
 </html>
