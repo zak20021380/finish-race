@@ -741,7 +741,7 @@ function play(a: Action, remote = false): boolean {
   }
   const next = apply(prev, a);
   if (!next) return false;
-  /* where the ball actually came to rest — after a blast that is three rows further down */
+  /* where the ball actually came to rest — after a blast that is two rows further down */
   const landed = moved === null ? null : ballById(next, moved)?.pos ?? null;
   if (a.kind === 'move' && from && landed) {
     marks[by] = { kind: 'step', from, to: landed };
@@ -764,7 +764,10 @@ function play(a: Action, remote = false): boolean {
   const blast = blastOf(prev, next);
   if (blast) {
     const cells = landed ? landed.r - blast.cell.r : 0;
-    renderer.blast(blast.cell);
+    /* the wave throws the ball that set it off: the renderer arcs it over whatever wall it clears */
+    renderer.blast(blast.cell, moved !== null && from && landed
+      ? { id: moved, from, to: landed }
+      : undefined);
     shake();
     playExplosion();
     detonation();

@@ -5,8 +5,10 @@
  *
  * Covers: the CONFIG tunables, the board the rules pick for 2, 3 and 4 contenders (grid, spaced
  * spawns, wall budgets, the goal-path guard), the placement band (never the top or bottom two rows),
- * occupied cells, the per-team budget, whose turn it is, mines not blocking movement, the 3-cell
- * knockback and each of its three early stops, no chained blasts, friendly fire, and what
+ * occupied cells, the per-team budget, whose turn it is, mines not blocking movement, the 2-row
+ * aerial knockback — horizontal walls jumped, the bottom clamp, and the occupied-square fallbacks
+ * that keep a blast from ever leaving the ball on the charge — no chained blasts, friendly fire,
+ * and what
  * view(state, team) is allowed to reveal — plus 300 randomised playouts that re-check those
  * invariants after every single action. Then the log: a schedule that is a pure function of the
  * seed, a hazard-free opening, the telegraph/resolve round cycle, the wall shield, the lane's three
@@ -52,7 +54,7 @@ const check = (name, fn) => { fn(); run++; console.log('ok -', name); };
 
 check('config', () => {
   assert.equal(CONFIG.MINES_PER_TEAM, 3);
-  assert.equal(CONFIG.KNOCKBACK, 3);
+  assert.equal(CONFIG.KNOCKBACK, 2);
   assert.equal(CONFIG.WALL_LIMIT, 8);
   /* the canonical blitz turn: the Command Center's allowance is seeded from this number, so a
      change here is a change to every race's clock */
@@ -222,12 +224,12 @@ check('mine does not block movement', () => {
   assert.ok(reachable(back, 0).some((p) => p.c === 3 && p.r === 7), 'cell still reachable');
 });
 
-check('trigger: full 3-cell knockback, mine consumed, turn passes', () => {
+check('trigger: full 2-row knockback, mine consumed, turn passes', () => {
   let s = put(newGame([1, 1]), 0, 3, 8);
   s = bury(s, 1, 3, 7);
   s = { ...s, turn: 0 };
   const after = apply(s, { kind: 'move', ball: 0, to: { c: 3, r: 7 } });
-  assert.deepEqual(ball(after), { c: 3, r: 10 }, 'pushed 3 down');
+  assert.deepEqual(ball(after), { c: 3, r: 9 }, 'pushed 2 down');
   assert.equal(after.mines.length, 1);
   assert.equal(after.mines[0].triggered, true);
   assert.equal(liveMines(after).length, 0);
@@ -235,26 +237,39 @@ check('trigger: full 3-cell knockback, mine consumed, turn passes', () => {
   assert.equal(after.winner, null);
 });
 
-check('knockback stops at the bottom edge', () => {
+check('knockback clamps at the bottom edge', () => {
   let s = put(newGame([1, 1]), 0, 3, 10);
   s = bury(s, 1, 3, 9);
   s = { ...s, turn: 0 };
   const after = apply(s, { kind: 'move', ball: 0, to: { c: 3, r: 9 } });
-  assert.deepEqual(ball(after), { c: 3, r: ROWS - 1 }, '2 cells then the wall');
+  assert.deepEqual(ball(after), { c: 3, r: ROWS - 1 }, 'the throw can never run past the last row');
 });
 
-check('knockback stops at a horizontal wall', () => {
-  let s = put(newGame([1, 1]), 0, 3, 8);
-  s = bury(s, 1, 3, 7);
-  s = { ...s, turn: 0 };
-  s = { ...s, walls: [{ o: 'h', x: 3, y: 9, owner: 1 }] }; // line above row 9, covers col 3
-  const after = apply(s, { kind: 'move', ball: 0, to: { c: 3, r: 7 } });
-  assert.deepEqual(ball(after), { c: 3, r: 8 }, 'stopped above the wall');
+check('knockback is aerial: a horizontal wall under the charge is jumped, not a stop', () => {
+  /* the exact bug: step sideways onto a mine roofed by a wall on the line right below it */
+  let s = put(newGame([1, 1]), 0, 4, 5);
+  s = bury(s, 1, 3, 5);
+  s = { ...s, walls: [{ o: 'h', x: 3, y: 6, owner: 1 }], turn: 0 }; // line between rows 5 and 6
+  const after = apply(s, { kind: 'move', ball: 0, to: { c: 3, r: 5 } });
+  assert.deepEqual(ball(after), { c: 3, r: 7 }, 'thrown two rows down, straight over the wall');
+  assert.equal(after.mines[0].triggered, true, 'the charge still went off');
 });
 
-check('knockback stops at another ball', () => {
+check('regression: wall below and a body at r+2 — the blast still throws the ball to r+1', () => {
+  let s = put(newGame([1, 1]), 0, 4, 5);                 // the mover, one column right of the charge
+  s = put(s, 1, 3, 7);                                   // the rival parked exactly at r + 2
+  s = bury(s, 1, 3, 5);
+  s = { ...s, walls: [{ o: 'h', x: 3, y: 6, owner: 1 }], turn: 0 }; // wall directly below the mine
+  const after = apply(s, { kind: 'move', ball: 0, to: { c: 3, r: 5 } });
+  assert.deepEqual(ball(after, 0), { c: 3, r: 6 }, 'fell back to r + 1: off the charge, under the wall');
+  assert.notDeepEqual(ball(after, 0), { c: 3, r: 5 }, 'never left standing on the charge');
+  assert.deepEqual(ball(after, 1), { c: 3, r: 7 }, 'the blocker never moved');
+  assert.equal(after.turn, 1, 'the turn still passes');
+});
+
+check('knockback yields to the body on the landing square', () => {
   let s = put(newGame([1, 1]), 0, 3, 8);
-  s = { ...s, balls: s.balls.map((b) => (b.id === 1 ? { ...b, pos: { c: 3, r: 9 } } : b)) };
+  s = put(s, 1, 3, 9);
   s = bury(s, 1, 3, 7);
   s = { ...s, turn: 0 };
   const after = apply(s, { kind: 'move', ball: 0, to: { c: 3, r: 7 } });
@@ -262,15 +277,38 @@ check('knockback stops at another ball', () => {
   assert.deepEqual(ball(after, 1), { c: 3, r: 9 }, 'the blocker did not move');
 });
 
+check('blast fallback: r + 1 first, then r + 3, then the nearest free flank', () => {
+  /* r + 2 and r + 1 both taken: the wave stretches to r + 3 */
+  let s = put(newGame([1, 1]), 0, 4, 5);
+  s = put(s, 1, 3, 7);
+  s = { ...s, balls: [...s.balls, { id: 2, team: 1, owner: 1, pos: { c: 3, r: 6 } }] };
+  s = bury(s, 1, 3, 5);
+  s = { ...s, turn: 0 };
+  let after = apply(s, { kind: 'move', ball: 0, to: { c: 3, r: 5 } });
+  assert.deepEqual(ball(after, 0), { c: 3, r: 8 }, 'stretched past the pair to r + 3');
+  /* and with that square taken too, it spills to the nearest free square below */
+  let t = put(newGame([1, 1]), 0, 4, 5);
+  t = put(t, 1, 3, 7);
+  t = { ...t, balls: [...t.balls,
+    { id: 2, team: 1, owner: 1, pos: { c: 3, r: 6 } },
+    { id: 3, team: 1, owner: 1, pos: { c: 3, r: 8 } },
+  ] };
+  t = bury(t, 1, 3, 5);
+  t = { ...t, turn: 0 };
+  after = apply(t, { kind: 'move', ball: 0, to: { c: 3, r: 5 } });
+  assert.deepEqual(ball(after, 0), { c: 2, r: 6 }, 'spilled one column left, one row down');
+  assert.deepEqual(ball(after, 1), { c: 3, r: 7 }, 'the blockers never moved');
+});
+
 check('knockback never chains into a second mine', () => {
   let s = put(newGame([1, 1]), 0, 3, 6);
   s = bury(s, 1, 3, 5); // the one we step on
-  s = bury(s, 1, 3, 8); // sitting exactly at the landing square
+  s = bury(s, 1, 3, 7); // sitting exactly at the landing square
   s = { ...s, turn: 0 };
   const after = apply(s, { kind: 'move', ball: 0, to: { c: 3, r: 5 } });
-  assert.deepEqual(ball(after), { c: 3, r: 8 }, 'lands on the second mine');
+  assert.deepEqual(ball(after), { c: 3, r: 7 }, 'lands on the second mine');
   assert.equal(after.mines.filter((m) => m.triggered).length, 1, 'second mine still armed');
-  assert.deepEqual(liveMines(after)[0].cell, { c: 3, r: 8 });
+  assert.deepEqual(liveMines(after)[0].cell, { c: 3, r: 7 });
 });
 
 check('a blast can be friendly fire', () => {
@@ -278,7 +316,7 @@ check('a blast can be friendly fire', () => {
   s = bury(s, 0, 3, 7);
   s = { ...s, turn: 0 };
   const after = apply(s, { kind: 'move', ball: 0, to: { c: 3, r: 7 } });
-  assert.deepEqual(ball(after), { c: 3, r: 10 });
+  assert.deepEqual(ball(after), { c: 3, r: 9 });
   assert.equal(after.mines[0].owner, 0);
 });
 

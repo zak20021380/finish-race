@@ -36,9 +36,12 @@
  *
  * Mines are hidden traps: a team buries one on any cell that holds no ball and no live mine, never
  * in the top two or bottom two rows. They do not block movement — a ball that steps onto one sets
- * it off, is thrown `CONFIG.KNOCKBACK` cells straight down the column (shortened by a horizontal
- * wall, the bottom edge or another ball), and the mine is spent. The blast never chains.
- * Opponent mines are secret: clients get `view(state, team)`, never the raw state.
+ * it off and the aerial shockwave throws it `CONFIG.KNOCKBACK` rows down the column. The blast is
+ * aerial: horizontal walls are jumped, never a stop. The bottom edge clamps the throw, and only a
+ * body on the landing square bends it — first to `r + 1`, then to `r + 3`, then to the nearest free
+ * flank — so a detonation never leaves the ball standing on the charge. The mine is spent and the
+ * blast never chains. Opponent mines are secret: clients get `view(state, team)`, never the raw
+ * state.
  *
  * The wide rolling log (opt-in: `newGame(sizes, { hazards: true, seed })`) is a public hazard on
  * a timetable derived from that seed alone — see `hazards.ts`. A round is one turn per team; rounds
@@ -71,8 +74,8 @@ export const CONFIG = {
   WALL_LIMIT: 8,
   /** Mines each team may bury per race. */
   MINES_PER_TEAM: 3,
-  /** Cells a ball is thrown straight down the column when it sets off a mine. */
-  KNOCKBACK: 3,
+  /** Rows the aerial mine blast throws a ball down its column, jumped clear over any wall. */
+  KNOCKBACK: 2,
   /**
    * Seconds a seat gets to act before `getAutoMove()` plays the turn for it. 8 is the canonical
    * blitz turn: the Command Center's allowance (`DEFAULT_RUNTIME.blitz` in admin.ts) is seeded from
@@ -830,7 +833,7 @@ export function doMove(s: GameState, to: Pos, ballId?: number): GameState | null
   let landed = to;
   const hit = mineAt(s, to);
   if (hit) {
-    landed = blownTo({ ...s, balls }, to);
+    landed = blownTo({ ...s, balls }, to, chosen);
     balls = balls.map((b) => (b.id === chosen ? { ...b, pos: landed } : b));
     mines = s.mines.map((m) => (m === hit ? { ...m, triggered: true } : m));
   }
@@ -838,21 +841,41 @@ export function doMove(s: GameState, to: Pos, ballId?: number): GameState | null
 }
 
 /**
- * Where a ball lands after the blast at `from`: up to `CONFIG.KNOCKBACK` cells straight down the
- * column, cut short by a horizontal wall, the bottom edge or another ball. `s` must already hold
- * the ball standing on the mine. The landing square is never re-checked for a second mine.
+ * Where a ball lands after the blast at `from`: the shockwave is aerial, so it throws the ball
+ * `CONFIG.KNOCKBACK` rows straight down its own column — over any horizontal wall — with the bottom
+ * edge clamping the throw. Only a body can bend it: when the landing square is taken the wave
+ * shortens to `r + 1`, stretches to `r + 3` while the board leaves that open, then spills into the
+ * nearest free square one column to either side — nearest, so `r + 1` before the landing row. A
+ * detonation therefore never leaves the ball standing on the charge; the absolute backstop below
+ * only lets it stay if every downward square on the board is occupied. `s` must already hold the
+ * ball standing on the mine, which is exempt from the occupancy test along with its own id. The
+ * landing square is never re-checked for a second mine.
  */
-function blownTo(s: GameState, from: Pos): Pos {
-  const b = blocks(s.walls);
-  let at = from;
-  for (let i = 0; i < CONFIG.KNOCKBACK; i++) {
-    const next: Pos = { c: at.c, r: at.r + 1 };
-    // canStep already refuses the bottom edge and a horizontal wall on the line below.
-    if (!canStep(b, at.c, at.r, 0, 1, s.cols, s.rows)) break;
-    if (s.balls.some((o) => o.pos.c === next.c && o.pos.r === next.r)) break;
-    at = next;
+function blownTo(s: GameState, from: Pos, ballId: number): Pos {
+  const last = s.rows - 1;
+  const free = (c: number, r: number): boolean =>
+    c >= 0 && c < s.cols && r >= 0 && r < s.rows
+    && !s.balls.some((o) => o.id !== ballId && o.pos.c === c && o.pos.r === r);
+
+  const target = Math.min(from.r + CONFIG.KNOCKBACK, last);
+  if (free(from.c, target)) return { c: from.c, r: target };
+  if (free(from.c, from.r + 1)) return { c: from.c, r: from.r + 1 };
+  if (free(from.c, from.r + 3)) return { c: from.c, r: from.r + 3 };
+  /* the column is body-blocked: the wave spills sideways to the nearest free square below */
+  for (const r of [from.r + 1, target]) {
+    if (free(from.c - 1, r)) return { c: from.c - 1, r };
+    if (free(from.c + 1, r)) return { c: from.c + 1, r };
   }
-  return at;
+  /* the backstop: a legal charge is never at the bottom row, so a board that is not literally
+     full still has a square below to take — the nearest over both columns and rows */
+  for (let dr = 1; from.r + dr <= last; dr++) {
+    if (free(from.c, from.r + dr)) return { c: from.c, r: from.r + dr };
+    for (let dc = 1; dc < s.cols; dc++) {
+      if (free(from.c - dc, from.r + dr)) return { c: from.c - dc, r: from.r + dr };
+      if (free(from.c + dc, from.r + dr)) return { c: from.c + dc, r: from.r + dr };
+    }
+  }
+  return from;
 }
 
 export function doWall(s: GameState, w: Wall): GameState | null {

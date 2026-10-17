@@ -123,6 +123,12 @@ const BALL_R = 0.34;
 const BAR_T = 0.13;
 const SOLID: number[] = [];
 const BLAST_MS = 700;   // the whole mine trigger, flash to last spark
+/** The blast throw: a beat to step onto the charge, then the hop over whatever wall it clears. */
+const KNOCK_MS = 620;
+/** The hop's peak, in cells: tall enough to carry the ball over a wall bar on the line below it. */
+const KNOCK_ARC = 1.15;
+/** Share of the throw spent stepping onto the charge before the shockwave lifts the ball. */
+const KNOCK_STEP = 0.2;
 const DUST_MS = 420;    // the puff a shoved ball kicks up where it comes to rest
 const RIPPLE_MS = 380;  // a tap's ripple
 const STREAK_MS = 300;  // how long a sliding ball's trail takes to fade
@@ -557,6 +563,11 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   const born = new Map<number, number>();                    // wall key → first-seen time (pop-in)
   const pulses: { x: number; y: number; t0: number; p: Player }[] = []; // wall landing rings
   const blasts: { x: number; y: number; t0: number }[] = []; // mine triggers, queued by blast()
+  /**
+   * The throw a trigger puts on the ball that set it off: the step onto the charge, the hop over
+   * the wall it was buried under, and the landing. Renderer-owned, keyed by ball id.
+   */
+  const knocks: { id: number; from: Pos; mine: Pos; to: Pos; t0: number }[] = [];
   /** The rolling log: one entry per warning that landed, and the dust its shove kicks up. */
   const rolls: { left: number; width: number; stopRow: number; t0: number; slam: boolean }[] = [];
   const dust: { x: number; y: number; t0: number }[] = [];
@@ -1934,6 +1945,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     }
 
     // every ball on the board, the nearer one (further down) drawn last so it sits on top
+    for (let i = knocks.length - 1; i >= 0; i--) if (now - knocks[i].t0 >= KNOCK_MS) knocks.splice(i, 1);
     SEATS_N.fill(0);
     for (const b of v.balls) if (b.team < SEAT_COUNT) SEATS_N[b.team]++;
     ORDER.length = 0;
@@ -1942,7 +1954,24 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     for (const i of ORDER) {
       const b = v.balls[i];
       const seat = b.team;
-      const cx = ox + b.pos.x * c, cy = oy + b.pos.y * c;
+      /* a ball the mine is throwing rides its own arc: onto the charge, then up and over the wall.
+         The state's own slide lands underneath it, so the takeover at either end is seamless. */
+      const kn = still ? undefined : knocks.find((k) => k.id === b.id);
+      let cx = ox + b.pos.x * c, cy = oy + b.pos.y * c;
+      if (kn) {
+        const k = Math.max(0, Math.min(1, (now - kn.t0) / KNOCK_MS));
+        if (k <= KNOCK_STEP) {
+          const q = k / KNOCK_STEP;
+          cx = ox + (kn.from.c + (kn.mine.c - kn.from.c) * q + 0.5) * c;
+          cy = oy + (kn.from.r + (kn.mine.r - kn.from.r) * q + 0.5) * c;
+        } else {
+          const q = (k - KNOCK_STEP) / (1 - KNOCK_STEP);
+          const x = kn.mine.c + (kn.to.c - kn.mine.c) * q + 0.5;
+          const y = kn.mine.r + (kn.to.r - kn.mine.r) * q + 0.5 - KNOCK_ARC * Math.sin(Math.PI * q);
+          cx = ox + x * c;
+          cy = oy + y * c;
+        }
+      }
       const r = ballR(c) * (b.sel ? 1.08 : 1);        // the chosen ball lifts off the clay
       /* the tail it is dragging right now: sampled from where it stood last frame */
       const was = prevPos.get(b.id);
@@ -2052,7 +2081,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       resize();
     },
     resetFx: () => {
-      born.clear(); pulses.length = 0; blasts.length = 0;
+      born.clear(); pulses.length = 0; blasts.length = 0; knocks.length = 0;
       ripples.length = 0; streaks.length = 0; prevPos.clear(); mineGhostKey = '';
       rolls.length = 0; dust.length = 0; thump.clear();
       goalAt = -1; goalWait = -1; goalSeat = null; crestK = 1; crestT = 0;
@@ -2078,12 +2107,21 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       if (ripples.length > 12) ripples.shift();
     },
     /**
-     * Queue the trigger for a mine that just went off. The caller owns the moment (only it knows a
-     * trigger happened), the frame loop owns the paint.
+     * Queue the trigger for a mine that just went off, plus the throw it puts on the ball that set
+     * it off. The caller owns the moment (only it knows a trigger happened), the frame loop owns
+     * the paint: the ball steps onto the charge, arcs over whatever wall stands under it, and the
+     * landing kicks up the same dust and micro-bounce a log shove does.
      */
-    blast(at: Cell) {
+    blast(at: Cell, knock?: { id: number; from: Pos; to: Pos }) {
       const { cell: c, ox, oy } = L;
-      blasts.push({ x: ox + (at.c + 0.5) * c, y: oy + (at.r + 0.5) * c, t0: performance.now() });
+      const t0 = performance.now();
+      blasts.push({ x: ox + (at.c + 0.5) * c, y: oy + (at.r + 0.5) * c, t0 });
+      if (knock && (knock.from.c !== knock.to.c || knock.from.r !== knock.to.r)) {
+        for (let i = knocks.length - 1; i >= 0; i--) if (knocks[i].id === knock.id) knocks.splice(i, 1);
+        knocks.push({ id: knock.id, from: knock.from, mine: at, to: knock.to, t0 });
+        dust.push({ x: ox + (knock.to.c + 0.5) * c, y: oy + (knock.to.r + 0.5) * c, t0: t0 + KNOCK_MS });
+        thump.set(knock.id, t0 + KNOCK_MS);
+      }
     },
     /** Equipping repaints the board and every cached gradient once; never per frame. */
     setTheme(t: Theme) {

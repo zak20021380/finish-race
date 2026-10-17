@@ -782,7 +782,7 @@ const TIPS: ReadonlyArray<string> = [
   'The blitz clock runs out and its auto-move will walk you straight into a mine.',
   'Nothing warns you about the rolling log. Rounds 1 and 2 are always clean — cross early.',
   'Input locks while a log rolls. Be where you want to be before the board starts to shake.',
-  'A horizontal wall shortens a mine blast: one under your own ball is cheap insurance.',
+  'The blast is aerial: a horizontal wall never shortens it. The mine throws the ball two rows back.',
 ];
 /** The impact animation that locks the rival in. */
 const IMPACT_MS = 300;
