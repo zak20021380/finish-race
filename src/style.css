@@ -514,32 +514,6 @@ html.reduced-motion .board-wrap.rolling::after { animation: none; opacity: .85; 
 .mine-btn[disabled] { opacity: .42; cursor: default; filter: saturate(.5); }
 .mine-btn[disabled] .ico { animation: none; }
 
-/* the charge capsules: one per mine the seat may still bury. A live one is a lit amber LED sitting
-   proud of its socket; a spent one is the empty socket it left behind. */
-.pips { display: flex; align-items: center; gap: 2px; }
-.pips i {
-  width: 9px;
-  height: 4px;
-  border-radius: 999px;
-  background: #080C16;
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, .95),
-    inset 0 0 0 1px rgba(255, 255, 255, .06);
-  transition: background var(--motion-fast), box-shadow var(--motion-fast);
-}
-.pips i.on {
-  background: linear-gradient(180deg, #FCD34D 0%, #F59E0B 58%, #B45309 100%);
-  box-shadow:
-    0 0 7px -1px rgba(245, 158, 11, .9),
-    inset 0 1px 0 rgba(255, 255, 255, .55),
-    inset 0 0 0 1px rgba(0, 0, 0, .25);
-}
-.mine-btn[aria-pressed="true"] .pips i.on {
-  box-shadow:
-    0 0 10px 0 rgba(251, 191, 36, .95),
-    inset 0 1px 0 rgba(255, 255, 255, .6);
-}
-
 /* ---- level 3: the dock — identity, ammo and the clock, all in the thumb zone ----
    Two seats share one line, and the "YOU" card is the wider of the two because it carries the bomb
    key inside its right side. That is what the extra width buys: the card's text column has to fit a
@@ -14257,87 +14231,221 @@ html.reduced-motion .adm-mode-seg { transition: none; }
 }
 
 /* ============================================================================================
-   RACE DOCK, THIRD PASS — two identical cards, the bomb welded into yours, chat in the gap.
+   RACE DOCK, FOURTH PASS — the cockpit: one carved chat rail, two mirrored resource cards.
 
-   The row is one line of two equal cards (76px, 24px radius, one glass surface each) and nothing
-   else: the bomb is the left card's own end segment behind a 1px divider, and the right card wears
-   the same 56px segment with read-only pips. Quick chat leaves the top bar for a 48px key that
-   straddles the 24px gap above the dock — thumb reach without a third slot in the row.
+   The row is no longer "two cards and a stray key". A 38px console rail spans the dock and holds
+   the quick-chat pill in a slot of its own, so the key never straddles the board's rim and never
+   floats in dead space; the two cards below are the same object mirrored — a 40px avatar well, the
+   seat's name and flag, then a two-cell tactical dock (walls | mines). The local seat's mine cell
+   is the arm key; every rival's is a sealed fog cell (`.mine-fog`), which is what makes the pair
+   read as one cockpit instead of a card and its leftover.
 
-   Width is the scarce axis on a phone. The card is 160px at 360, and 12 + 44 + 8 + 56 leaves 40px
-   for a 14px name, a 16px flag and a 12px pill, which does not fit. So the avatar and the end
-   segment step down (38/48) below 390px and again (34/44, flag retired) below 341px: the name, the
-   flag and the pill keep their sizes, which is what a player actually reads. The 12px band at the
-   top of the dock is what the chat key's lower half lands in, so it never covers a card.
+   The height budget at 360x640 is fixed arithmetic, not a guess: 2px of air + 38px rail + 4px gap
+   + 80px card = 124px — exactly the band the dock already owned (36px margin + 88px), so the board
+   loses nothing. Width: the dock is 328 at 360, so a card is 160 (8 + 40 + 6 + 98 + 8) and each
+   tactical cell 47, which is an icon, a digit and room to breathe.
    ============================================================================================ */
 .chips {
   position: relative;
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;                          /* rail -> cards, then card <-> card */
+  height: auto;
+  margin-top: 10px;                      /* clears the slab's own drop shadow, not just its box */
+  padding: 0;
+}
+
+/* ---- the console rail: the chat key's own carved slot ----
+   A recessed pill, not a floating FAB. It is sunk into the clay with the app's own inset shadow,
+   it is 38px tall at every width (the guaranteed touch target), and two hairlines run from its
+   shoulders to the dock's edges so the band reads as console furniture rather than empty space. */
+.hud-rail {
+  grid-column: 1 / -1;
+  position: relative;
+  height: 38px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 88px;                          /* 12px of chat-key band + the 76px cards */
-  margin-top: 36px;                      /* 12px slab lip + the 24px gap the key bridges */
-  padding: 12px 0 0;
-  row-gap: 0;
+  justify-content: center;
 }
-.chip {
-  flex: 1 1 0;
-  width: auto;
-  min-width: 0;
-  height: 76px;
-  gap: 0;
-  padding: 0 0 0 12px;                   /* no right padding: the end segment is flush */
-  border-radius: 24px;
-  background: var(--tint-glass);
-  overflow: clip;
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--tint) 44%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, .05),
-    0 6px 14px -12px var(--shadow-soft);
-  transition:
-    transform .2s ease, opacity .2s ease, background .2s ease,
-    box-shadow .2s ease, border-color .2s ease;
+.hud-rail::before,
+.hud-rail::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: calc(50% - 78px);               /* the pill's shoulder out to the dock edge */
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, .13));
+  pointer-events: none;
 }
-/* the seat's own glow, cross-faded: no lift, so the row never breathes out of alignment */
-.chip.active {
-  transform: none;
-  background: color-mix(in srgb, var(--tint) 10%, var(--tint-glass));
-  box-shadow:
-    inset 0 0 0 1.5px color-mix(in srgb, var(--tint) 74%, transparent),
-    inset 0 0 24px -14px var(--glow),
-    0 0 22px -8px var(--glow);
-}
-.chip-row { flex: 1 1 auto; min-width: 0; gap: 8px; margin-right: 4px; }
-.chip-txt { gap: 6px; }
-.who-line { gap: 4px; }
-.chip .who {
-  flex: 0 1 auto;
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: .01em;
-}
-/* the flag rides after the name now, so the two read as one identity */
-.chip .flag-badge { flex: none; width: 16px; height: 16px; }
-.chip .flag-badge .fp { --fp-d: 16px; }
-.chip .flag-badge .fp-chip { font-size: 7px; }
+.hud-rail::before { left: 0; }
+.hud-rail::after { right: 0; transform: scaleX(-1); }
 
-/* the avatar: 44px sphere, its 3px clock ring, and the seconds as a badge on its corner */
-.chip-ball { width: 44px; height: 44px; }
-.chip .ball { inset: 2px; width: 40px; height: 40px; }
-.chip .timer { inset: -2px; width: 48px; height: 48px; }
+.chat-key {
+  position: relative;
+  z-index: 1;
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 148px;
+  height: 38px;                          /* 38x148: the target is never a thumb's guess */
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--ink-soft);
+  font: inherit;
+  cursor: pointer;
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, .5),
+    inset 0 -1px 0 rgba(255, 255, 255, .05),
+    inset 0 0 0 1px var(--hair);
+  transition: color var(--motion-fast), box-shadow var(--motion-fast), transform var(--motion-fast);
+}
+.chat-key .ico { width: 16px; height: 16px; flex: none; }
+.chat-key-t {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  line-height: 1;
+  white-space: nowrap;
+}
+.chat-key:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 3px 7px rgba(0, 0, 0, .6),
+    inset 0 0 0 1px var(--hair);
+}
+.chat-key:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.chat-key[disabled] { opacity: .42; filter: saturate(.4); cursor: default; }
+/* the rival said something: the slot warms until the sheet is opened, then goes quiet again */
+.chat-ping {
+  position: absolute;
+  top: 6px;
+  right: 11px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--honey);
+  box-shadow: 0 0 8px -1px var(--honey);
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+.chat-key.is-ping {
+  color: var(--honey-ink);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, .5),
+    inset 0 0 0 1px rgba(245, 158, 11, .42),
+    inset 0 0 14px -6px rgba(245, 158, 11, .9);
+}
+.chat-key.is-ping .chat-ping { opacity: 1; animation: breathe 1.8s ease-in-out infinite; }
+
+/* ---- the card: one slab, one team rim, two rows of reading ---- */
+.chip {
+  position: relative;
+  min-width: 0;
+  width: auto;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-radius: 20px;
+  overflow: clip;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--tint) 7%, var(--solid-a)) 0%,
+    color-mix(in srgb, var(--tint) 3%, var(--solid-b)) 100%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--tint) 36%, transparent),
+    inset 0 1px 0 var(--hair-lit),
+    inset 0 -2px 3px rgba(0, 0, 0, .32),
+    0 6px 14px -12px var(--shadow-soft);
+  transition: transform .2s ease, filter .2s ease, background .2s ease, box-shadow .2s ease;
+}
+/* the seat that is waiting: matte clay, one step back — still legible, visibly idle */
+.chip:not(.active) { filter: saturate(.82) brightness(.94); }
+.chip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--tint) 62%, transparent),
+    0 0 16px -2px var(--glow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .24s ease;
+}
+/* the seat to move: lifted 2px, lit from its own colour, and its rim breathes */
+.chip.active {
+  filter: none;
+  transform: translateY(-2px);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--tint) 13%, var(--solid-a)) 0%,
+    color-mix(in srgb, var(--tint) 6%, var(--solid-b)) 100%);
+  box-shadow:
+    inset 0 0 0 1.5px color-mix(in srgb, var(--tint) 72%, transparent),
+    inset 0 1px 0 var(--hair-lit),
+    inset 0 -2px 3px rgba(0, 0, 0, .3),
+    0 0 20px -6px var(--glow),
+    0 8px 16px -10px var(--shadow-soft);
+}
+.chip.active::after { opacity: 1; animation: chip-rim 2.6s ease-in-out infinite; }
+.chip.thinking::after { opacity: 1; animation: breathe 1.5s ease-in-out infinite; }
+@keyframes chip-rim { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+
+/* ---- the avatar well: a recessed socket, the seat's own ball seated in it ---- */
+.chip-ball {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--field);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .55),
+    inset 0 0 0 1px var(--hair);
+}
+.chip .ball {
+  position: absolute;
+  inset: 2px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 26%, #fff8 0%, var(--tint) 58%, #0004 100%);
+  box-shadow: 0 1px 3px -1px var(--glow), inset 0 0 0 1px rgba(255, 255, 255, .18);
+}
+/* the monogram: engraved on the token, never competing with it */
+.av-in {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .02em;
+  color: #fff;
+  opacity: .82;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .55);
+}
+/* the clock rides the avatar's own well now, so it is drawn in the seat's light ink rather than
+   the app's cyan: a blue halo around a crimson token read as "selected", not as "time left" */
+.chip .timer { inset: 0; width: 40px; height: 40px; }
+.chip .timer-fill { stroke: var(--ink-t); }
 .chip .timer-n {
   position: absolute;
   inset: auto -5px -5px auto;
   display: none;
   place-items: center;
-  min-width: 18px;
-  height: 17px;
+  min-width: 17px;
+  height: 16px;
   padding: 0 4px;
   border-radius: 999px;
   background: var(--tint);
   color: #fff;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   line-height: 1;
   text-shadow: none;
@@ -14347,119 +14455,208 @@ html.reduced-motion .adm-mode-seg { transition: none; }
 }
 .chip.timing .timer-n { display: grid; }
 
-/* the end segment: the same surface as the card, divided by a 1px team line. On the left card it
-   is the bomb key; on the right one it is the same pips, read-only and dimmed. */
-.chip > .mine-btn,
-.chip > .seat-seg {
-  flex: none;
-  align-self: stretch;
-  width: 56px;
-  height: auto;                          /* the card's full 76px: the divider runs edge to edge */
-  padding: 0;
-  display: grid;
-  place-content: center;
-  place-items: center;
+/* ---- the text column: name + flag over the tactical dock ---- */
+.chip-txt {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   gap: 5px;
+}
+.who-line { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.chip .who {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--ink-t);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chip .flag-badge { flex: none; width: 15px; height: 15px; }
+.chip .flag-badge .fp { --fp-d: 15px; }
+.chip .flag-badge .fp-chip { font-size: 7px; }
+.chip .xp { display: none; }             /* the ladder's number is not a HUD reading */
+
+/* ---- the tactical dock: two cells, same order on every card ----
+   Walls on the left in the seat's colour, mines on the right in the app's amber. The cells are
+   recessed wells, so the pair reads as instrument readouts rather than two badges. */
+.res {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  height: 24px;
+  min-width: 0;
+}
+.res-cell {
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 24px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--field);
+  color: var(--ink-t);
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  white-space: nowrap;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .55),
+    inset 0 -1px 0 rgba(255, 255, 255, .05),
+    inset 0 0 0 1px var(--hair);
+}
+.res-cell .ico { width: 13px; height: 13px; flex: none; }
+.res-n { min-width: 1ch; text-align: center; }
+button.res-cell {
+  appearance: none;
   border: 0;
-  border-left: 1px solid color-mix(in srgb, var(--tint) 40%, transparent);
+  font-family: inherit;
+  cursor: pointer;
+  transition: color var(--motion-fast), background var(--motion-fast),
+              box-shadow var(--motion-fast), transform var(--motion-fast);
+}
+button.res-cell:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 1px; }
+
+/* the wall cell: a crisp two-course wall in the seat's own colour.
+   The `#walls-N` element carries `.walls` as well as `.res-cell`, and an older pass sized that
+   class for a standalone pill — so the cell's own geometry is restated here, at the same
+   specificity but later in the sheet, or the wall would sit 4px short of its mine twin. */
+.chip .walls {
+  flex: 1 1 0;
+  width: auto;
+  max-width: none;
+  height: 24px;
+  padding: 0 5px;
+  gap: 3px;
+  border-radius: 8px;
+  font-size: 10.5px;
+  font-weight: 800;
+  display: inline-flex;
+}
+.chip .walls .wall-glyph {
+  width: 13px;
+  height: 13px;
   border-radius: 0;
   background: none;
   box-shadow: none;
-  color: var(--honey-ink);
-  cursor: pointer;
+  color: var(--tint);
+  filter: drop-shadow(0 0 5px var(--glow));
 }
-.chip > .mine-btn .ico {
-  width: 20px;
-  height: 20px;
-  filter: drop-shadow(0 0 6px rgba(245, 158, 11, .45));
-}
-.chip > .mine-btn[aria-pressed="true"] {
-  background: rgba(245, 158, 11, .12);
-  box-shadow: inset 0 0 22px -10px rgba(251, 191, 36, .85);
-  color: #fde68a;
-}
-.chip > .mine-btn:active { background: rgba(255, 255, 255, .05); }
-.chip > .mine-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -4px; }
-.chip > .mine-btn[disabled] { opacity: .4; cursor: default; filter: saturate(.45); }
-.chip > .mine-btn[disabled] .ico { animation: none; }
-.chip > .seat-seg { cursor: default; }
-.chip > .seat-seg .pips { opacity: .5; filter: saturate(.35); }
+.chip .walls.depleted { color: var(--ink-soft); opacity: .62; }
+.chip .walls.depleted .wall-glyph { color: var(--ink-soft); filter: none; }
+.chip .walls.pop { animation: step-pop .34s cubic-bezier(.2, 1.3, .5, 1); }
+.chip .walls.dry-warn { animation: wall-warn .64s ease-out; }
 
-/* ---- quick chat: one clay key in the gap, never over a cell ---- */
-.chat-fab {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% - 12px);             /* 48px tall: 12px onto the slab, 12px into the band */
-  transform: translateX(-50%);
-  z-index: 8;
-  width: 48px;
-  height: 48px;
+/* the mine key: the local seat's own cell, golden and pressable */
+.chip .res .mine-btn { color: var(--honey-ink); }
+.chip .res .mine-btn .ico { filter: drop-shadow(0 0 5px rgba(245, 158, 11, .5)); }
+.chip .res .mine-btn[aria-pressed="true"] {
+  color: #fff3d6;
+  background: linear-gradient(180deg, #4A3110 0%, #2A1B06 100%);
+  box-shadow:
+    inset 0 0 0 2px #fbbf24,
+    inset 0 0 14px -2px rgba(245, 158, 11, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 -3px 0 rgba(0, 0, 0, .5),
+    0 0 16px -4px rgba(245, 158, 11, .75);
+}
+.chip .res .mine-btn[aria-pressed="true"] .ico { animation: breathe 1.6s ease-in-out infinite; }
+.chip .res .mine-btn[disabled] { opacity: .42; cursor: default; filter: saturate(.5); }
+.chip .res .mine-btn[disabled] .ico { animation: none; }
+.chip .res .mine-btn:active { transform: translateY(1px); }
+
+/* ---- fog of war: the rival's stash is sealed, never counted ----
+   The same bomb, the same well, the same amber — only the badge differs: a sculpted clay jewel
+   with a "?" struck into it instead of a number. Nothing in the DOM ever holds their count. */
+.chip .mine-fog { color: var(--honey-ink); cursor: default; }
+.chip .mine-fog .ico { filter: drop-shadow(0 0 5px rgba(245, 158, 11, .38)); }
+.mine-fog .fog-n {
   display: grid;
   place-items: center;
-  padding: 0;
-  border: 0;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
-  background: var(--clay-face);
-  color: var(--ink);
-  cursor: pointer;
+  font-size: 9.5px;
+  font-weight: 900;
+  line-height: 1;
+  color: #fde68a;
+  background: radial-gradient(circle at 34% 26%,
+    rgba(252, 211, 77, .34) 0%, rgba(252, 211, 77, .10) 44%, rgba(0, 0, 0, .34) 100%);
   box-shadow:
-    0 3px 0 #080C14,
-    inset 0 1px 0 rgba(255, 255, 255, .12),
-    inset 0 -2px 4px rgba(0, 0, 0, .42),
-    0 10px 20px -10px rgba(0, 0, 0, .85);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast), opacity var(--motion-fast);
+    inset 0 0 0 1px rgba(252, 211, 77, .38),
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 -2px 3px rgba(0, 0, 0, .45),
+    0 1px 3px -1px rgba(0, 0, 0, .6);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .6);
 }
-.chat-fab .ico { width: 22px; height: 22px; }
-.chat-fab:active { transform: translate(-50%, 2px); }
-.chat-fab:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
-.chat-fab[disabled] { opacity: .4; cursor: default; filter: saturate(.4); }
-
-/* the top bar keeps two 44px boxes and the caption between them, so the caption is centred */
-.g-head-pad { flex: none; width: 44px; height: 44px; }
-
-/* ---- 360: the card is 160 wide. Shrink the two ornaments, never the text ---- */
-@media (max-width: 389px) {
-  .chip-row { gap: 6px; }
-  .chip-ball { width: 38px; height: 38px; }
-  .chip .ball { width: 34px; height: 34px; }
-  .chip .timer { width: 42px; height: 42px; }
-  .chip > .mine-btn,
-  .chip > .seat-seg { width: 48px; }
-}
-/* ---- 320: the card is 140 wide. The flag steps out; the name and the pill stay whole ---- */
-@media (max-width: 340px) {
-  .chip { padding-left: 10px; }
-  .chip-row { gap: 4px; margin-right: 2px; }
-  .chip-ball { width: 34px; height: 34px; }
-  .chip .ball { width: 30px; height: 30px; }
-  .chip .timer { width: 38px; height: 38px; }
-  .chip .timer-n { min-width: 16px; height: 16px; font-size: 11px; right: -4px; bottom: -4px; }
-  .chip > .mine-btn,
-  .chip > .seat-seg { width: 44px; }
-  .chip .flag-badge { display: none; }
-  .chip .walls { padding: 0 6px; gap: 3px; }
+/* provably spent — every charge they buried has already gone off — the well goes cold */
+.chip .mine-fog[data-fog="spent"] { opacity: .5; }
+.mine-fog[data-fog="spent"] .fog-n {
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  text-shadow: none;
 }
 
-/* three and four seats keep the 2-up party grid; the cards just get their own segments */
+/* ---- three and four seats: the same cards, 2-up, one step compact ----
+   The older reflow pass sized these cards for a 52px row with a floating mine key; every rule
+   here carries a .chip step so it outranks that pass and the key comes back into the dock. */
 .chips[data-players="3"],
-.chips[data-players="4"] { padding-right: 0; }
+.chips[data-players="4"] { padding-right: 0; gap: 4px 8px; }
+.chips[data-players="3"] #chip-2 { grid-column: 1 / -1; }
 .chips[data-players="3"] .chip,
-.chips[data-players="4"] .chip { height: 52px; border-radius: 18px; }
-.chips[data-players="3"] .seat-seg,
-.chips[data-players="4"] .seat-seg { display: none; }
-.chips[data-players="3"] #chip-0 .mine-btn,
-.chips[data-players="4"] #chip-0 .mine-btn {
-  position: static;
-  margin: 0;
-  width: 44px;
-  height: auto;
-  padding: 0;
-  border-radius: 0;
+.chips[data-players="4"] .chip { height: 54px; gap: 5px; padding: 0 7px; border-radius: 18px; }
+.chips[data-players="3"] .chip .chip-ball,
+.chips[data-players="4"] .chip .chip-ball { width: 32px; height: 32px; }
+.chips[data-players="3"] .chip .ball,
+.chips[data-players="4"] .chip .ball { inset: 2px; width: 28px; height: 28px; }
+.chips[data-players="3"] .chip .timer,
+.chips[data-players="4"] .chip .timer { inset: 0; width: 32px; height: 32px; }
+.chips[data-players="3"] .chip .av-in,
+.chips[data-players="4"] .chip .av-in { font-size: 11px; }
+.chips[data-players="3"] .chip .chip-txt,
+.chips[data-players="4"] .chip .chip-txt { gap: 3px; }
+.chips[data-players="3"] .chip .who,
+.chips[data-players="4"] .chip .who { font-size: 10.5px; }
+.chips[data-players="3"] .chip .res,
+.chips[data-players="4"] .chip .res { height: 20px; gap: 3px; }
+.chips[data-players="3"] .chip .res-cell,
+.chips[data-players="4"] .chip .res-cell { height: 20px; padding: 0 4px; border-radius: 7px; font-size: 9.5px; }
+.chips[data-players="3"] .chip .res-cell .ico,
+.chips[data-players="4"] .chip .res-cell .ico { width: 11px; height: 11px; }
+/* the key is a cell of the dock in every layout: the old pass parked it in a column of its own */
+.chips[data-players="3"] .chip .mine-btn,
+.chips[data-players="4"] .chip .mine-btn { position: static; margin: 0; width: auto; height: 20px; }
+.chips[data-players="3"] .chip .mine-fog .fog-n,
+.chips[data-players="4"] .chip .mine-fog .fog-n { width: 13px; height: 13px; font-size: 8.5px; }
+
+/* ---- 340: the card is 140 wide. The ornaments give way, never the name or the counts ---- */
+@media (max-width: 340px) {
+  .chip { gap: 5px; padding: 0 7px; }
+  .chip-ball { width: 34px; height: 34px; }
+  .chip .ball { inset: 2px; width: 30px; height: 30px; }
+  .chip .timer { inset: 0; width: 34px; height: 34px; }
+  .chat-key { min-width: 132px; padding: 0 12px; }
+  .hud-rail::before,
+  .hud-rail::after { width: calc(50% - 70px); }
 }
 
-/* the chat key never slides under reduced motion */
-html.reduced-motion .chat-fab,
+/* reduced motion: the rim stops breathing, the slot still warms */
+html.reduced-motion .chat-key,
 html.reduced-motion .chip { transition: none; }
+html.reduced-motion .chip.active::after,
+html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
 @media (prefers-reduced-motion: reduce) {
-  .chat-fab, .chip { transition: none; }
+  .chat-key, .chip { transition: none; }
+  .chip.active::after, .chat-key.is-ping .chat-ping { animation: none; }
 }

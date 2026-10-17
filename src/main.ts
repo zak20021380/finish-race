@@ -142,21 +142,40 @@ function warnNoWalls(p: Player) {
   wallWarnTimer = window.setTimeout(() => el.classList.remove('dry-warn'), 650);
 }
 
-/* the mine key lives on your own chip: three pips, and the whole board while it is armed */
+/* The mine key is the local card's own right-hand resource cell. `seatChrome()` moves it onto
+   whichever card the local seat actually holds, so an online race never arms a mine from the
+   rival's card — the one thing the old welded-in segment could not say. */
 const mineBtn = $<HTMLButtonElement>('mine-btn');
-const minePips = Array.from({ length: CONFIG.MINES_PER_TEAM }, () => {
-  const dot = document.createElement('i');
-  $<HTMLElement>('mine-pips').appendChild(dot);
-  return dot;
-});
+const mineN = $<HTMLElement>('mine-n');
 let shownMines = -1;
-function setMinePips(left: number) {
+function setMineCount(left: number) {
   if (shownMines === left) return;
   shownMines = left;
-  minePips.forEach((el, i) => el.classList.toggle('on', i < left));
+  mineN.textContent = String(left);
   mineBtn.setAttribute('aria-label', left
     ? `Bury a mine — ${left} of ${CONFIG.MINES_PER_TEAM} left`
     : 'Bury a mine — none left');
+}
+
+/**
+ * Fog of war on every card that is not yours: the cell never holds a number. `live` means "there
+ * is a cache in the ground, size unknown"; `spent` is only ever painted when the public record
+ * proves it — every charge that seat buried has already gone off in front of both players. In an
+ * online race the opponent's untriggered mines are stripped by `view()`, so `minesLeft` can only
+ * ever over-report their stash, which is exactly why a zero here is safe to show.
+ */
+const shownFog: (string | null)[] = [null, null, null, null];
+function setFog(p: Player) {
+  const cell = chips[p]?.querySelector<HTMLElement>('.mine-fog');
+  if (!cell) return;
+  const spent = minesLeft(state, p) <= 0;
+  const next = spent ? 'spent' : 'live';
+  if (shownFog[p] === next) return;
+  shownFog[p] = next;
+  cell.dataset.fog = next;
+  const n = cell.querySelector<HTMLElement>('.fog-n');
+  if (n) n.textContent = spent ? '0' : '?';
+  cell.setAttribute('aria-label', spent ? 'Mines: none left' : 'Mines: count concealed');
 }
 
 /* the trigger shakes the board itself, once. Reduced motion never shakes anything. */
@@ -609,7 +628,7 @@ function ui() {
 
   mineBtn.setAttribute('aria-pressed', String(mineArmed));
   mineBtn.disabled = !live || minesLeft(state, localSide) <= 0;
-  setMinePips(minesLeft(state, localSide));
+  setMineCount(minesLeft(state, localSide));
 
   /* whose turn it is rides on the chips now: a clay glow, a lift, and the countdown ring */
   const seat = state.winner ?? state.turn;
@@ -617,6 +636,7 @@ function ui() {
     chips[p]?.classList.toggle('active', state.winner === null && state.turn === p && !paused);
     chips[p]?.classList.toggle('thinking', thinking && p === state.turn);
     setWalls(p, wallsRemaining(state, p));
+    if (p !== localSide) setFog(p);
   }
   /* the flags and the XP pills ride along: both are diffed, so this is a comparison per seat */
   paintSeatIdentity();
@@ -917,6 +937,7 @@ function restart() {
   paintRoster();
   paintSeatIdentity();
   shownMines = -1;
+  shownFog.fill(null);
   turnsPlayed = 0;
   saidTurn = '';
   clearGoalBeat();
@@ -1085,7 +1106,11 @@ function paintNames() {
   for (const p of roster()) {
     const el = document.getElementById(`name-${p}`);
     if (!el) continue;
-    el.textContent = p === localSide ? me : p === rivalSide() ? foe : (TEAM_NAME[p] ?? `BOT ${p}`);
+    const label = p === localSide ? me : p === rivalSide() ? foe : (TEAM_NAME[p] ?? `BOT ${p}`);
+    el.textContent = label;
+    /* the avatar well's monogram: one letter off the same name, so it can never disagree with it */
+    const av = document.getElementById(`av-${p}`);
+    if (av) av.textContent = (label.trim()[0] ?? '?').toUpperCase();
   }
   /* the race names itself where a race is being stopped or judged, not on every frame of play */
   const shape = sizes.length > 2 ? `${sizes.length}-player` : `${sizes[0]}v${sizes[1]}`;
@@ -1106,6 +1131,16 @@ function seatChrome(): void {
   if (!seatBall || !rivalWho || !timerRing || !timerNum) return;
   seatBall.append(timerRing, timerNum);   // this seat's own countdown ring
   rivalWho.appendChild(dots);             // the rival gets the thinking dots
+  /* The tactical dock follows the seat too. The arm key rides your own card, and the sealed cell
+     it displaces goes back to seat 0 — so every rival card still shows one and every card still
+     reads walls-then-mines. Without this an online seat on the right would arm a mine from the
+     card that says BOT. */
+  const myDock = chips[localSide]?.querySelector<HTMLElement>('.res');
+  const seat0Dock = chips[0]?.querySelector<HTMLElement>('.res');
+  const sealed = myDock?.querySelector<HTMLElement>('.mine-fog') ?? null;
+  if (myDock) myDock.append(mineBtn);
+  if (sealed && seat0Dock && localSide !== 0) seat0Dock.append(sealed);
+  shownFog.fill(null);                    // the cells just changed hands: repaint them from scratch
 }
 
 /** How a race starts: the local shape, plus the live seat when the matchmaker paired one. */

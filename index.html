@@ -1006,110 +1006,133 @@
               </div>
             </div>
 
-            <!-- The dock is two identical cards. Each is one glass surface with a 1px team rim:
-                 a 44px sphere (its countdown ring and seconds badge ride on it), the name with its
-                 flag after it, and the wall count in a pill under that. Both cards end in the same
-                 56px segment behind a 1px divider — the left one is the bomb key, the right one is
-                 read-only pips. Quick chat is not in this row at all: its 48px key straddles the
-                 24px gap above the dock. `data-players` (and `data-seats`, kept for older probes)
-                 tells CSS how many cards it is laying out. -->
+            <!-- ---- the cockpit dock ----
+                 One recessed console rail, then two identical cards. The rail is the chat key's own
+                 carved slot — a wide pill sunk into the clay between the slab and the cards, so the
+                 key never straddles the board's rim and never floats in dead space.
+                 Each card is the same object mirrored: a 40px avatar well, the seat's name and flag,
+                 and a two-cell tactical dock underneath — walls, then mines. The local seat's mine
+                 cell is the arm key; every other seat's is a sealed fog cell whose count is a
+                 sculpted "?" and never a number. `data-players` (and `data-seats`, kept for older
+                 probes) tells CSS how many cards it is laying out. -->
             <footer class="chips" id="chips" data-seats="2" data-players="2">
-              <!-- quick chat: one 48px key in the gap between the slab and the dock -->
-              <button class="chat-fab" type="button" id="chat-btn" aria-haspopup="dialog"
-                aria-expanded="false" aria-label="Quick chat">
-                <svg class="ico" aria-hidden="true"><use href="#i-chat" /></svg>
-              </button>
-              <div class="chip red" id="chip-0">
-                <span class="chip-row">
-                  <span class="chip-ball">
-                    <span class="ball" aria-hidden="true"></span>
-                    <svg class="timer" viewBox="0 0 46 46" aria-hidden="true" focusable="false">
-                      <circle class="timer-track" cx="23" cy="23" r="21" />
-                      <circle class="timer-fill" id="timer-fill" cx="23" cy="23" r="21" />
-                    </svg>
-                    <b class="timer-n" id="timer-n" aria-hidden="true">8</b>
-                  </span>
-                  <span class="chip-txt">
-                    <span class="who-line">
-                      <span class="who" id="name-0">YOU</span>
-                      <span class="flag-badge" id="flag-0" aria-hidden="true"></span>
-                      <span class="xp" id="xp-0">
-                        <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
-                        <span class="xp-n">0</span><span class="xp-u">XP</span>
-                      </span>
-                    </span>
-                    <span class="walls" id="walls-0" aria-label="Walls left: 8 of 8">
-                      <span class="wall-glyph" aria-hidden="true">▬</span><span class="wall-n">8</span><span class="wall-w">walls</span>
-                    </span>
-                  </span>
-                </span>
-                <!-- the bomb is the card's own end segment, not a key beside it -->
-                <button class="mine-btn" type="button" id="mine-btn" aria-pressed="false" aria-label="Bury a mine">
-                  <svg class="ico" aria-hidden="true"><use href="#i-bomb" /></svg>
-                  <span class="pips" id="mine-pips" aria-hidden="true"></span>
+              <!-- the console rail: one carved slot, one chat key, nothing floating -->
+              <div class="hud-rail">
+                <button class="chat-key" type="button" id="chat-btn" aria-haspopup="dialog"
+                  aria-expanded="false" aria-label="Quick chat">
+                  <svg class="ico" aria-hidden="true"><use href="#i-chat" /></svg>
+                  <span class="chat-key-t">Quick chat</span>
+                  <i class="chat-ping" aria-hidden="true"></i>
                 </button>
               </div>
-              <div class="chip blue" id="chip-1">
-                <span class="chip-row">
-                  <span class="chip-ball">
-                    <span class="ball" aria-hidden="true"></span>
+              <div class="chip red" id="chip-0">
+                <span class="chip-ball">
+                  <span class="ball" aria-hidden="true"><b class="av-in" id="av-0">Y</b></span>
+                  <svg class="timer" viewBox="0 0 46 46" aria-hidden="true" focusable="false">
+                    <circle class="timer-track" cx="23" cy="23" r="21" />
+                    <circle class="timer-fill" id="timer-fill" cx="23" cy="23" r="21" />
+                  </svg>
+                  <b class="timer-n" id="timer-n" aria-hidden="true">8</b>
+                </span>
+                <span class="chip-txt">
+                  <span class="who-line">
+                    <span class="who" id="name-0">YOU</span>
+                    <span class="flag-badge" id="flag-0" aria-hidden="true"></span>
+                    <span class="xp" id="xp-0">
+                      <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
+                      <span class="xp-n">0</span><span class="xp-u">XP</span>
+                    </span>
                   </span>
-                  <span class="chip-txt">
-                    <span class="who-line">
-                      <span class="who" id="name-1">BOT</span>
-                      <span class="flag-badge" id="flag-1" aria-hidden="true"></span>
-                      <span class="xp" id="xp-1">
-                        <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
-                        <span class="xp-n">0</span><span class="xp-u">XP</span>
-                      </span>
-                      <span class="dots" id="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                  <!-- the tactical dock: the same two cells on every card, in the same order -->
+                  <span class="res" id="res-0">
+                    <span class="res-cell walls" id="walls-0" role="img" aria-label="Walls left: 8 of 8">
+                      <svg class="ico wall-glyph" aria-hidden="true"><use href="#i-wall" /></svg>
+                      <b class="res-n wall-n">8</b>
                     </span>
-                    <span class="walls" id="walls-1" aria-label="Walls left: 8 of 8">
-                      <span class="wall-glyph" aria-hidden="true">▬</span><span class="wall-n">8</span><span class="wall-w">walls</span>
-                    </span>
+                    <button class="res-cell mine-btn" type="button" id="mine-btn"
+                      aria-pressed="false" aria-label="Bury a mine">
+                      <svg class="ico" aria-hidden="true"><use href="#i-bomb" /></svg>
+                      <b class="res-n" id="mine-n">2</b>
+                    </button>
                   </span>
                 </span>
-                <!-- the rival's segment: the same surface and pips, read-only -->
-                <span class="seat-seg" aria-hidden="true">
-                  <span class="pips"><i class="on"></i><i class="on"></i><i class="on"></i></span>
+              </div>
+              <div class="chip blue" id="chip-1">
+                <span class="chip-ball">
+                  <span class="ball" aria-hidden="true"><b class="av-in" id="av-1">B</b></span>
+                </span>
+                <span class="chip-txt">
+                  <span class="who-line">
+                    <span class="who" id="name-1">BOT</span>
+                    <span class="flag-badge" id="flag-1" aria-hidden="true"></span>
+                    <span class="xp" id="xp-1">
+                      <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
+                      <span class="xp-n">0</span><span class="xp-u">XP</span>
+                    </span>
+                    <span class="dots" id="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                  </span>
+                  <span class="res" id="res-1">
+                    <span class="res-cell walls" id="walls-1" role="img" aria-label="Walls left: 8 of 8">
+                      <svg class="ico wall-glyph" aria-hidden="true"><use href="#i-wall" /></svg>
+                      <b class="res-n wall-n">8</b>
+                    </span>
+                    <!-- fog of war: the rival's stash is sealed, never counted -->
+                    <span class="res-cell mine-fog" data-fog="live" role="img"
+                      aria-label="Mines: count concealed">
+                      <svg class="ico" aria-hidden="true"><use href="#i-bomb" /></svg>
+                      <b class="res-n fog-n" aria-hidden="true">?</b>
+                    </span>
+                  </span>
                 </span>
               </div>
               <div class="chip gold" id="chip-2" hidden>
-                <span class="chip-row">
-                  <span class="chip-ball">
-                    <span class="ball" aria-hidden="true"></span>
-                  </span>
-                  <span class="chip-txt">
-                    <span class="who-line">
-                      <span class="who" id="name-2">BOT 2</span>
-                      <span class="flag-badge" id="flag-2" aria-hidden="true"></span>
-                      <span class="xp" id="xp-2">
-                        <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
-                        <span class="xp-n">0</span><span class="xp-u">XP</span>
-                      </span>
+                <span class="chip-ball">
+                  <span class="ball" aria-hidden="true"><b class="av-in" id="av-2">B</b></span>
+                </span>
+                <span class="chip-txt">
+                  <span class="who-line">
+                    <span class="who" id="name-2">BOT 2</span>
+                    <span class="flag-badge" id="flag-2" aria-hidden="true"></span>
+                    <span class="xp" id="xp-2">
+                      <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
+                      <span class="xp-n">0</span><span class="xp-u">XP</span>
                     </span>
-                    <span class="walls" id="walls-2" aria-label="Walls left: 6 of 6">
-                      <span class="wall-glyph" aria-hidden="true">▬</span><span class="wall-n">6</span><span class="wall-w">walls</span>
+                  </span>
+                  <span class="res" id="res-2">
+                    <span class="res-cell walls" id="walls-2" role="img" aria-label="Walls left: 6 of 6">
+                      <svg class="ico wall-glyph" aria-hidden="true"><use href="#i-wall" /></svg>
+                      <b class="res-n wall-n">6</b>
+                    </span>
+                    <span class="res-cell mine-fog" data-fog="live" role="img"
+                      aria-label="Mines: count concealed">
+                      <svg class="ico" aria-hidden="true"><use href="#i-bomb" /></svg>
+                      <b class="res-n fog-n" aria-hidden="true">?</b>
                     </span>
                   </span>
                 </span>
               </div>
               <div class="chip green" id="chip-3" hidden>
-                <span class="chip-row">
-                  <span class="chip-ball">
-                    <span class="ball" aria-hidden="true"></span>
-                  </span>
-                  <span class="chip-txt">
-                    <span class="who-line">
-                      <span class="who" id="name-3">BOT 3</span>
-                      <span class="flag-badge" id="flag-3" aria-hidden="true"></span>
-                      <span class="xp" id="xp-3">
-                        <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
-                        <span class="xp-n">0</span><span class="xp-u">XP</span>
-                      </span>
+                <span class="chip-ball">
+                  <span class="ball" aria-hidden="true"><b class="av-in" id="av-3">B</b></span>
+                </span>
+                <span class="chip-txt">
+                  <span class="who-line">
+                    <span class="who" id="name-3">BOT 3</span>
+                    <span class="flag-badge" id="flag-3" aria-hidden="true"></span>
+                    <span class="xp" id="xp-3">
+                      <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
+                      <span class="xp-n">0</span><span class="xp-u">XP</span>
                     </span>
-                    <span class="walls" id="walls-3" aria-label="Walls left: 5 of 5">
-                      <span class="wall-glyph" aria-hidden="true">▬</span><span class="wall-n">5</span><span class="wall-w">walls</span>
+                  </span>
+                  <span class="res" id="res-3">
+                    <span class="res-cell walls" id="walls-3" role="img" aria-label="Walls left: 5 of 5">
+                      <svg class="ico wall-glyph" aria-hidden="true"><use href="#i-wall" /></svg>
+                      <b class="res-n wall-n">5</b>
+                    </span>
+                    <span class="res-cell mine-fog" data-fog="live" role="img"
+                      aria-label="Mines: count concealed">
+                      <svg class="ico" aria-hidden="true"><use href="#i-bomb" /></svg>
+                      <b class="res-n fog-n" aria-hidden="true">?</b>
                     </span>
                   </span>
                 </span>

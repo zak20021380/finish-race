@@ -103,8 +103,8 @@
   transition: transform .2s cubic-bezier(.22, .61, .36, 1), opacity .2s ease;
 }
 .chat-sheet.open { opacity: 1; transform: none; }
-/* the key above the dock is inert during a log roll or while a mine is armed */
-.chat-fab[disabled] { opacity: .4; filter: saturate(.4); cursor: default; }
+/* the chat pill in the console rail is inert during a log roll or while a mine is armed */
+.chat-key[disabled] { opacity: .4; filter: saturate(.4); cursor: default; }
 .chat-sheet:focus { outline: none; }
 
 .chat-sheet-head { display: flex; align-items: center; gap: 8px; min-height: 44px; }

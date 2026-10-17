@@ -16,7 +16,7 @@ import type { GameState, Player } from './rules';
 import { EMOTES, TAUNTS, type ChatEmote } from './data/phrases';
 
 export interface ChatOptions {
-  /** The 48px key that straddles the gap between the slab and the dock. */
+  /** The recessed pill in the dock's console rail: the one slot chat has ever needed. */
   key: HTMLButtonElement;
   /** The bubble layer: a DOM overlay over the board, pointer-events none. */
   lane: HTMLElement;
@@ -41,8 +41,9 @@ const HOLD_MS = 400;
 const HOLD_SLOP = 8;
 const POLL_MS = 200;
 const MENU_W = 168;
-/** Vertical gaps above the chip a bubble may try, nearest first. */
-const BUBBLE_GAPS = [8, 30, 52, 74, 96, 118];
+/** Vertical gaps above the chip a bubble may try, nearest first. The first one clears the console
+ *  rail (38px) plus the card's own gap, so a bubble never lands on the chat key it was sent from. */
+const BUBBLE_GAPS = [44, 66, 88, 110, 132, 154];
 const SAMPLE_STEP = 4;
 
 type Side = 'me' | 'foe';
@@ -166,6 +167,8 @@ export function createChat(o: ChatOptions): Chat {
     place(side, side === 'me' ? o.localSide() : rivalSide());
     void node.offsetWidth;
     node.classList.add('show');
+    /* a rival's line warms the chat slot until it is opened: the key is where the reply lives */
+    if (side === 'foe') o.key.classList.add('is-ping');
     window.clearTimeout(bubbleTimers[side]);
     bubbleTimers[side] = window.setTimeout(() => hideBubble(side), BUBBLE_MS);
   }
@@ -364,6 +367,7 @@ export function createChat(o: ChatOptions): Chat {
     sheetOpen = true;
     closeMenu();
     paintCool();
+    o.key.classList.remove('is-ping');   // the reply is being written: the slot goes quiet
     sheet.hidden = false;
     scrim.hidden = false;
     void sheet.offsetWidth;              // settle the closed state before sliding up

@@ -74,6 +74,14 @@ Durable index; dated logs beside this file hold the history.
   opens one `rr()+clip()` and closes it last; **clamp every derived radius** (`IndexSizeError` blanks
   the frame). `#chips` is a grid, `data-players` is the seat count; `[data-seats]` is ALSO the drawer's
   Players control — scope to `#sheet-game-modes`. `flagPhoto()` is the only flag renderer.
+- **Dock, fourth pass (the cockpit):** `#chips` = `.hud-rail` (chat pill, `grid-column: 1/-1`) over two
+  mirrored `.chip` cards. Budget at 360x640 is arithmetic: 10 air + 38 rail + 4 gap + 72 card = 124 = the
+  old `36 margin + 88`, so the board never moves. The key must start >=510: the slab's own drop shadow
+  reaches ~8px past the board box. Cards are `.chip-ball` well (40px) + `.av-in` monogram + `.res`
+  (walls | mines, 47x24 wells). `#mine-btn` is the local cell and `seatChrome()` MOVES it into the local
+  seat's dock (pushing the displaced `.mine-fog` to seat 0); rivals get `.mine-fog`, never a number —
+  `setFog()` shows `?` and only prints `0` when `minesLeft()` proves the stash spent. Older chip passes
+  still live in style.css: any new rule needs `.chip` in the selector (0,4,0) or it loses.
 
 ## Design system (style.css)
 - One theme, "Dark Clay": opaque slabs, no live blur. `--clay`/`--clay-ring` raised, `--inset` wells,
