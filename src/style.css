@@ -11457,32 +11457,58 @@ html.reduced-motion .admin { transition: none; }
 .admin-close:active { transform: translateY(var(--press-y)); --lip: 1px; }
 .admin-close:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
-/* ---- the segmented clay track: 56px tall, one recessed well ---- */
-.admin-tabs {
+/* ---- the tactile bottom dock: a recessed clay well with a springy gold pill ----
+   Pinned under the scrolling body, above the safe area. Five equal keys, one
+   absolute gold pill that slides on the bounce curve, and a raised clay cap on
+   the active tab. Every key stays a 48px+ target down to 360px. */
+.admin-nav {
   flex: none;
+  position: relative;
   display: flex;
-  gap: 4px;
-  height: 56px;
-  padding: 4px;
-  border-radius: var(--radius-md);
-  background: var(--field);
-  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  gap: 2px;
+  min-height: 64px;
+  padding: 5px;
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(120% 150% at 50% 0%, rgba(56, 189, 248, .08), rgba(56, 189, 248, 0) 58%),
+    var(--field);
+  box-shadow:
+    var(--inset),
+    inset 0 0 0 1px var(--hair-off),
+    inset 0 -1px 0 rgba(255, 255, 255, .05),
+    0 14px 28px -22px rgba(0, 0, 0, .9);
 }
+.admin-nav-pill {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 5px;
+  width: calc((100% - 10px) / 5);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, rgba(252, 211, 77, .2) 0%, rgba(245, 158, 11, .06) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(252, 211, 77, .26),
+    0 0 20px -6px rgba(245, 158, 11, .65);
+  pointer-events: none;
+  transition: transform .34s var(--bounce);
+}
+html.reduced-motion .admin-nav-pill { transition: none; }
 .admin-tab {
   flex: 1 1 0;
   min-width: 0;
-  min-height: 48px;
+  min-height: 52px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
+  gap: 2px;
   padding: 0 2px;
   appearance: none;
   border: 0;
   font: inherit;
   cursor: pointer;
-  border-radius: var(--radius-sm);
+  position: relative;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--ink-soft);
   font-size: var(--t-micro);
@@ -11491,17 +11517,78 @@ html.reduced-motion .admin { transition: none; }
   transition: transform var(--motion-fast), box-shadow var(--motion-fast),
               background var(--motion-fast), color var(--motion-fast);
 }
-/* the tab glyph is a 13px emoji above the word, so four short names fit a 320px track */
-.admin-tab-g { font-size: 13px; line-height: 1; filter: saturate(.8) brightness(.94); }
+.admin-tab-ico {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  transition: transform var(--motion-fast), filter var(--motion-fast), color var(--motion-fast);
+}
+.admin-tab-l {
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.admin-tab:hover:not([aria-selected="true"]) .admin-tab-ico {
+  color: var(--brand-ink);
+  transform: translateY(-2px);
+  filter: drop-shadow(0 0 6px rgba(125, 211, 252, .55));
+}
 .admin-tab:active { transform: translateY(var(--press-y)); }
+.admin-tab:active .admin-tab-ico { transform: translateY(2px) scale(.92); }
 .admin-tab:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
-/* the live tab is a raised key inside the well, not a colour swap alone */
+/* the live tab is a raised clay cap inside the well, lit by gold ambient glow */
 .admin-tab[aria-selected="true"] {
   background: var(--clay-face);
   color: var(--ink);
-  box-shadow: var(--clay-spec), var(--clay-bevel), inset 0 0 0 1px rgba(56, 189, 248, .28);
+  box-shadow:
+    0 3px 0 #0A0E15,
+    var(--clay-spec), var(--clay-bevel),
+    inset 0 0 0 1px rgba(252, 211, 77, .34),
+    0 0 22px -8px rgba(245, 158, 11, .8);
 }
-.admin-tab[aria-selected="true"] .admin-tab-g { filter: none; }
+.admin-tab[aria-selected="true"] .admin-tab-ico {
+  color: var(--honey-ink);
+  animation: adm-ico-pop .42s var(--bounce) both;
+}
+@keyframes adm-ico-pop {
+  0%   { transform: translateY(1px) scale(.8); }
+  55%  { transform: translateY(-3px) scale(1.14); }
+  100% { transform: translateY(0) scale(1); }
+}
+html.reduced-motion .admin-tab[aria-selected="true"] .admin-tab-ico { animation: none; }
+/* the unread pill: amber clay sitting on the Inbox key's shoulder */
+.admin-nav-badge {
+  position: absolute;
+  top: 4px;
+  left: calc(50% + 7px);
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--gold-face);
+  color: #10141D;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  box-shadow:
+    0 2px 0 var(--gold-lip),
+    0 0 12px -2px rgba(245, 158, 11, .85),
+    inset 0 1px 0 rgba(255, 255, 255, .55);
+}
+.admin-nav-badge[hidden] { display: none; }
+@media (max-height: 660px) {
+  .admin-nav { min-height: 60px; padding: 4px; }
+  .admin-nav-pill { top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / 5); }
+  .admin-tab { min-height: 48px; }
+}
+@media (max-height: 600px) {
+  .admin-tab { min-height: 44px; }
+}
 
 .admin-body {
   flex: 1 1 auto;
@@ -12070,6 +12157,241 @@ html.reduced-motion .admin { transition: none; }
 /* the panel is tall on a short phone: tighten the rows rather than the type */
 @media (max-height: 700px) {
   .adm-server-list { max-height: 168px; }
+}
+
+/* ==========================================================================
+   INBOX — the support desk: filter chips over ticket cards, one expanded
+   card carrying the profile, a deeply recessed reply well and the two keys.
+   ========================================================================== */
+.adm-inbox-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.adm-chip {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  color: var(--ink-soft);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .01em;
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast),
+              background var(--motion-fast), color var(--motion-fast);
+}
+.adm-chip:active { transform: translateY(var(--press-y)); }
+.adm-chip:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.adm-chip[aria-pressed="true"] {
+  background: var(--gold-face);
+  color: #10141D;
+  box-shadow:
+    0 2px 0 var(--gold-lip),
+    inset 0 1px 0 rgba(255, 255, 255, .5),
+    0 0 14px -4px rgba(245, 158, 11, .7);
+}
+
+.adm-inbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.adm-ticket {
+  border-radius: var(--radius-md);
+  background: var(--clay-face);
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+  transition: box-shadow var(--motion-fast);
+}
+.adm-ticket.is-open {
+  box-shadow:
+    var(--clay-drop), var(--clay-spec), var(--clay-bevel),
+    inset 0 0 0 1px rgba(252, 211, 77, .28);
+}
+.adm-ticket-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 11px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--ink);
+}
+.adm-ticket-main:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+.adm-ticket-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.adm-ticket-cat {
+  flex: none;
+  padding: 3px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  color: var(--brand-ink);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+}
+.adm-ticket-cat[data-cat="bug"] { color: var(--red-ink); }
+.adm-ticket-cat[data-cat="stars"] { color: var(--honey-ink); }
+.adm-ticket-who {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  color: var(--ink);
+}
+.adm-ticket-when {
+  flex: none;
+  font-size: 9px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+.adm-ticket-status {
+  flex: none;
+  padding: 3px 7px;
+  border-radius: var(--radius-pill);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  background: var(--field);
+  color: var(--ink-soft);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+}
+.adm-ticket-status[data-status="new"] {
+  background: var(--honey-soft);
+  color: var(--honey-ink);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .4);
+}
+.adm-ticket-status[data-status="replied"] {
+  background: var(--mint-soft);
+  color: var(--mint-ink);
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .4);
+}
+.adm-ticket-snip {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: var(--t-micro);
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.adm-ticket-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 11px 11px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hair);
+}
+.adm-ticket-profile {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.adm-ticket-full {
+  margin: 0;
+  font-size: var(--t-2);
+  line-height: 1.5;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.adm-ticket-prev {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  box-shadow: var(--inset);
+  font-size: var(--t-micro);
+  line-height: 1.45;
+  color: var(--mint-ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* the reply well: deepest recess in the panel, with a faint woven texture */
+.adm-reply-field {
+  display: flex;
+  min-height: 84px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background:
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, .02) 0 6px, rgba(255, 255, 255, 0) 6px 12px),
+    var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.adm-reply {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 68px;
+  resize: none;
+  appearance: none;
+  border: 0;
+  background: none;
+  outline: none;
+  font: inherit;
+  font-size: var(--t-2);
+  line-height: 1.45;
+  color: var(--ink);
+  -webkit-user-select: text;
+  user-select: text;
+}
+.adm-reply::placeholder { color: var(--ink-soft); opacity: .65; }
+.adm-ticket-actions { display: flex; gap: var(--s2); }
+.adm-send { flex: 1 1 auto; }
+.adm-resolve { flex: none; }
+.adm-resolve[aria-pressed="true"] {
+  background: var(--mint-soft);
+  color: var(--mint-ink);
+  box-shadow:
+    0 2px 0 var(--mint-lip),
+    inset 0 0 0 1px rgba(16, 185, 129, .4);
+}
+.adm-btn-gold {
+  background: var(--gold-face);
+  color: #10141D;
+  box-shadow:
+    0 var(--lip) 0 var(--gold-lip),
+    0 12px 24px -12px rgba(245, 158, 11, .6),
+    inset 0 1px 0 rgba(255, 255, 255, .5);
+}
+.adm-inbox-empty {
+  margin: 0;
+  padding: 20px 6px;
+  text-align: center;
+  font-size: var(--t-micro);
+  color: var(--ink-soft);
+}
+/* a short phone: the reply well keeps its depth, the roster did the shrinking already */
+@media (max-height: 700px) {
+  .adm-reply-field { min-height: 76px; }
+  .adm-reply { min-height: 60px; }
 }
 
 /* ==========================================================================

@@ -27,6 +27,7 @@ import {
   onSquadChange, searchSquads, squadLetter,
 } from './squads';
 import { BOT_RAMP, type CosKind } from './themes';
+import { isTicketCategory, submitTicket } from './support';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
 import { impact, languageCode, notify, startParam, tgUser } from './telegram';
@@ -1139,6 +1140,7 @@ export function createMenu(api: MenuApi): Menu {
     if (!supportSheet || !supportMsg || !supportSend || supportBusy) return;
     const text = supportMsg.value.trim();
     if (!text) { impact('light'); supportMsg.focus({ preventScroll: true }); return; }
+    const cat = supportSheet.querySelector<HTMLElement>('.cat-pill[aria-pressed="true"]')?.dataset.cat;
     supportBusy = true;
     supportSend.classList.add('sending');
     supportSend.setAttribute('aria-busy', 'true');
@@ -1147,6 +1149,14 @@ export function createMenu(api: MenuApi): Menu {
     impact('medium');                     /* light Telegram haptic on the send tap itself */
     clearTimeout(supportTimer);
     supportTimer = window.setTimeout(() => {
+      /* the ticket lands in the shared queue the Admin Command Center's Inbox reads */
+      const me = tgUser();
+      submitTicket({
+        category: isTicketCategory(cat) ? cat : 'feedback',
+        message: text,
+        userId: me?.id === undefined ? 'device' : String(me.id),
+        username: me?.username || me?.first_name || '',
+      });
       notify('success');                  /* the haptic + badge pair confirm the send */
       if (supportOk) supportOk.hidden = false;
       clearTimeout(supportTimer);

@@ -10,8 +10,10 @@
  * through the same wrapped door as the save, and `setRuntime` is the only writer — so a toggle
  * takes effect everywhere the instant it flips, with no reload and no second source of truth.
  *
- * **The controller** (`createAdmin`) wires the FAB, the overlay, its four tabs and every control
- * to that config. It owns no game state of its own.
+ * **The controller** (`createAdmin`) wires the FAB, the overlay, its five tabs — Stats, Controls,
+ * Server, Inbox and Tools, on a tactile bottom dock — and every control to that config. It owns no
+ * game state of its own. The Inbox is the support desk: every ticket the client's Contact Support
+ * sheet files lands in the shared queue (src/support.ts) and is read, replied to and resolved here.
  *
  * **The telemetry** (`dayStats`, below) is what the Stats tab is made of: this device's own
  * counters for the UTC day, folded into a population reading that stays stable until the date
@@ -34,6 +36,10 @@ import { earnCoins, earnTiq, onChange, profile, readJson, writeJson } from './st
 import { coinText, mountCoins, setBalance } from './coin';
 import { CONFIG } from './rules';
 import { flagPhoto } from './compete';
+import {
+  agoOf, onTickets, REPLY_MAX, replyTicket, tickets, toggleResolved, unreadCount,
+  type Ticket, type TicketCategory,
+} from './support';
 import { impact, notify, tgInitData, tgUser } from './telegram';
 import type { MindTier } from './matchmaking';
 
@@ -601,6 +607,11 @@ export function createAdmin(api: AdminApi): Admin {
   const statActive = $<HTMLElement>('stat-active');
   const statSource = $<HTMLElement>('stat-source');
   const statNations = $<HTMLElement>('stat-nations');
+  const navPill = $<HTMLElement>('admin-nav-pill');
+  const inboxBadge = $<HTMLElement>('admin-inbox-badge');
+  const inboxList = $<HTMLElement>('adm-inbox-list');
+  const inboxEmpty = $<HTMLElement>('adm-inbox-empty');
+  const inboxChips = [...document.querySelectorAll<HTMLButtonElement>('[data-ifilter]')];
 
   let open = false;
   let hideId = 0;
@@ -612,6 +623,11 @@ export function createAdmin(api: AdminApi): Admin {
   let lastStatus: ServerStatus | null = null;
   /** What the Worker was last told, so an unchanged toggle never sends a pointless call. */
   let lastPushed: ServerConfig | null = null;
+  /** The Inbox view: which filter chip is lit, and which card is expanded. */
+  let inboxFilter = 'all';
+  let openTicket = '';
+  /** Text typed into a reply box survives the list being rebuilt for any reason. */
+  const drafts = new Map<string, string>();
 
   /* ---------- painting ---------- */
 
@@ -673,6 +689,7 @@ export function createAdmin(api: AdminApi): Admin {
     paintTier();
     paintSave();
     paintStats();
+    paintInbox();
   }
 
   /* ---------- the Stats tab ---------- */
@@ -716,6 +733,179 @@ export function createAdmin(api: AdminApi): Admin {
       statSource.dataset.live = String(s.live);
     }
     paintNations(s.nations);
+  }
+
+  /* ---------- the Inbox: the support desk (src/support.ts) ---------- */
+
+  const CAT_LABEL: Record<TicketCategory, string> = {
+    feedback: 'Feedback',
+    bug: 'Bug Report',
+    stars: 'Stars Help',
+  };
+
+  const STATUS_LABEL: Record<Ticket['status'], string> = {
+    new: 'New',
+    replied: 'Replied',
+    resolved: 'Resolved',
+  };
+
+  /** A ticket whose sender had no username shows its id; nobody is anonymous to the admin. */
+  const whoOf = (t: Ticket): string => (t.username ? `@${t.username}` : `#${t.userId}`);
+
+  /** `Apr 3, 14:05` — the precise stamp inside the expanded card. */
+  const stamp = (ms: number): string =>
+    new Date(ms).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  /** The pill on the Inbox tab, and the count the tab announces to a screen reader. */
+  function paintInboxBadge() {
+    const n = unreadCount();
+    if (inboxBadge) {
+      inboxBadge.textContent = n > 99 ? '99+' : String(n);
+      inboxBadge.hidden = n === 0;
+    }
+    for (const t of tabs) {
+      if (t.dataset.atab !== 'inbox') continue;
+      t.setAttribute('aria-label', n === 1 ? 'Inbox, 1 unread ticket' : `Inbox, ${n} unread tickets`);
+    }
+  }
+
+  /** One ticket card: the summary row, and — when expanded — the profile, the reply box and the keys. */
+  function ticketCard(t: Ticket): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = 'adm-ticket';
+    li.dataset.tid = t.id;
+    li.dataset.status = t.status;
+    const expanded = t.id === openTicket;
+    if (expanded) li.classList.add('is-open');
+
+    const main = document.createElement('button');
+    main.type = 'button';
+    main.className = 'adm-ticket-main';
+    main.dataset.open = t.id;
+    main.setAttribute('aria-expanded', String(expanded));
+
+    const top = document.createElement('span');
+    top.className = 'adm-ticket-top';
+    const cat = document.createElement('span');
+    cat.className = 'adm-ticket-cat';
+    cat.dataset.cat = t.category;
+    cat.textContent = CAT_LABEL[t.category];
+    const who = document.createElement('span');
+    who.className = 'adm-ticket-who';
+    who.textContent = whoOf(t);
+    const when = document.createElement('span');
+    when.className = 'adm-ticket-when';
+    when.textContent = agoOf(t.createdAt);
+    const status = document.createElement('span');
+    status.className = 'adm-ticket-status';
+    status.dataset.status = t.status;
+    status.textContent = STATUS_LABEL[t.status];
+    top.append(cat, who, when, status);
+
+    const snip = document.createElement('span');
+    snip.className = 'adm-ticket-snip';
+    snip.textContent = t.message;
+    main.append(top, snip);
+    li.append(main);
+
+    if (!expanded) return li;
+
+    const detail = document.createElement('div');
+    detail.className = 'adm-ticket-detail';
+
+    const profile = document.createElement('p');
+    profile.className = 'adm-ticket-profile';
+    profile.textContent = `${whoOf(t)} · id ${t.userId} · ${stamp(t.createdAt)}`;
+    const full = document.createElement('p');
+    full.className = 'adm-ticket-full';
+    full.textContent = t.message;
+    detail.append(profile, full);
+
+    if (t.reply) {
+      const prev = document.createElement('p');
+      prev.className = 'adm-ticket-prev';
+      prev.textContent = `Your reply: ${t.reply}`;
+      detail.append(prev);
+    }
+
+    const field = document.createElement('label');
+    field.className = 'adm-reply-field';
+    const area = document.createElement('textarea');
+    area.className = 'adm-reply';
+    area.rows = 3;
+    area.maxLength = REPLY_MAX;
+    area.placeholder = 'Type official admin reply...';
+    area.setAttribute('aria-label', `Reply to the ticket from ${whoOf(t)}`);
+    area.value = drafts.get(t.id) ?? '';
+    area.addEventListener('input', () => drafts.set(t.id, area.value));
+    area.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        sendReply(t.id);
+      }
+    });
+    field.append(area);
+
+    const actions = document.createElement('div');
+    actions.className = 'adm-ticket-actions';
+    const send = document.createElement('button');
+    send.type = 'button';
+    send.className = 'adm-btn adm-btn-gold adm-send';
+    send.dataset.send = t.id;
+    send.textContent = 'Send Reply';
+    const resolve = document.createElement('button');
+    resolve.type = 'button';
+    resolve.className = 'adm-btn adm-resolve';
+    resolve.dataset.resolve = t.id;
+    resolve.setAttribute('aria-pressed', String(t.status === 'resolved'));
+    resolve.textContent = t.status === 'resolved' ? 'Resolved' : 'Mark as Resolved';
+    actions.append(send, resolve);
+    detail.append(field, actions);
+    li.append(detail);
+    return li;
+  }
+
+  /** The list and the badge, read off the shared queue for the current filter. */
+  function paintInbox() {
+    paintInboxBadge();
+    if (!inboxList) return;
+    const shown = tickets().filter((t) => {
+      if (inboxFilter === 'all') return true;
+      if (inboxFilter === 'unresolved') return t.status !== 'resolved';
+      return t.category === inboxFilter;
+    });
+    inboxList.textContent = '';
+    for (const t of shown) inboxList.append(ticketCard(t));
+    if (inboxEmpty) inboxEmpty.hidden = shown.length > 0;
+  }
+
+  /** Send the admin's reply: store it, toast it, and repaint the card as Replied. */
+  function sendReply(id: string): void {
+    const area = inboxList?.querySelector<HTMLTextAreaElement>(`.adm-ticket[data-tid="${id}"] .adm-reply`);
+    const text = (drafts.get(id) ?? area?.value ?? '').trim();
+    if (!text) {
+      impact('light');
+      area?.focus({ preventScroll: true });
+      notify('error');
+      api.note('Type a reply before sending.', true, 2200);
+      return;
+    }
+    if (!replyTicket(id, text)) return;
+    drafts.delete(id);
+    impact('medium');
+    notify('success');
+    api.note('Reply sent.', false, 1800);
+    paintInbox();
+  }
+
+  /** The resolve toggle: closing a ticket, or reopening one that was closed too early. */
+  function resolveTicket(id: string): void {
+    const t = toggleResolved(id);
+    if (!t) return;
+    impact('light');
+    notify(t.status === 'resolved' ? 'success' : 'warning');
+    api.note(t.status === 'resolved' ? 'Ticket resolved.' : 'Ticket reopened.', false, 1800);
+    paintInbox();
   }
 
   /* ---------- the live server ---------- */
@@ -902,8 +1092,15 @@ export function createAdmin(api: AdminApi): Admin {
   }
 
   function selectTab(id: string) {
-    for (const t of tabs) t.setAttribute('aria-selected', String(t.dataset.atab === id));
+    let at = 0;
+    for (const t of tabs) {
+      const mine = t.dataset.atab === id;
+      t.setAttribute('aria-selected', String(mine));
+      if (mine) at = tabs.indexOf(t);
+    }
     for (const p of panels) p.hidden = p.dataset.apanel !== id;
+    /* the springy gold pill rides under the active tab; its own width is one step */
+    if (navPill) navPill.style.transform = `translateX(${at * 100}%)`;
   }
 
   /* ---------- wiring ---------- */
@@ -922,8 +1119,50 @@ export function createAdmin(api: AdminApi): Admin {
       /* both of these read the room: the roster and the live seat count are only ever as fresh
          as their last read, so landing on either one asks the Worker again */
       if (id === 'server' || id === 'stats') void refreshServer();
+      /* the Inbox is device-local: a repaint keeps the relative timestamps honest */
+      if (id === 'inbox') paintInbox();
     });
   }
+
+  for (const chip of inboxChips) {
+    chip.addEventListener('click', () => {
+      const next = chip.dataset.ifilter ?? 'all';
+      if (next === inboxFilter) return;
+      inboxFilter = next;
+      for (const c of inboxChips) c.setAttribute('aria-pressed', String(c === chip));
+      impact('light');
+      paintInbox();
+    });
+  }
+
+  /* one delegated listener: the list is rebuilt on every paint, so no handler outlives its card */
+  inboxList?.addEventListener('click', (e) => {
+    const el = e.target as HTMLElement;
+    const send = el.closest<HTMLButtonElement>('[data-send]');
+    if (send) {
+      sendReply(send.dataset.send ?? '');
+      return;
+    }
+    const resolve = el.closest<HTMLButtonElement>('[data-resolve]');
+    if (resolve) {
+      resolveTicket(resolve.dataset.resolve ?? '');
+      return;
+    }
+    const main = el.closest<HTMLButtonElement>('[data-open]');
+    if (!main) return;
+    const id = main.dataset.open ?? '';
+    openTicket = openTicket === id ? '' : id;
+    impact('light');
+    paintInbox();
+  });
+  inboxList?.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && openTicket) {
+      /* the stage's own Escape must not close the whole panel while a card is open */
+      e.stopPropagation();
+      openTicket = '';
+      paintInbox();
+    }
+  });
 
   serverRefresh?.addEventListener('click', () => {
     impact('light');
@@ -1058,6 +1297,11 @@ export function createAdmin(api: AdminApi): Admin {
   // a balance or TIQ moved anywhere else in the app keeps the panel's readouts honest
   onChange(() => {
     if (open) paintSave();
+  });
+  /* the support queue moved — from this panel, or from the Contact Support sheet */
+  onTickets(() => {
+    if (open) paintInbox();
+    else paintInboxBadge();
   });
   onRuntime(() => {
     paintBroadcast();

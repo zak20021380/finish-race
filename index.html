@@ -1224,9 +1224,10 @@
       <div class="scrim" id="scrim" hidden></div>
 
       <!-- ============ Admin Command Center (src/admin.ts) ============
-           A full-viewport Dark Clay stage in four tabs: the Stats dashboard,
-           the live Controls, the Worker and the Tools. Opaque slabs, extruded
-           depth, engraved kicker, zero backdrop-filter, every control >= 48px. -->
+           A full-viewport Dark Clay stage: the Stats dashboard, the live
+           Controls, the Worker, the support Inbox and the Tools, navigated
+           from a tactile bottom dock. Opaque slabs, extruded depth, engraved
+           kicker, zero backdrop-filter, every control >= 48px. -->
       <section class="admin" id="overlay-admin" hidden role="dialog" aria-modal="true" aria-labelledby="admin-title">
         <header class="admin-head">
           <div class="admin-head-txt">
@@ -1238,17 +1239,6 @@
             <span aria-hidden="true">×</span>
           </button>
         </header>
-
-        <div class="admin-tabs" role="tablist" aria-label="Command Center sections">
-          <button class="admin-tab" type="button" role="tab" id="atab-stats" data-atab="stats"
-            aria-selected="true" aria-controls="apanel-stats"><span class="admin-tab-g" aria-hidden="true">📊</span>Stats</button>
-          <button class="admin-tab" type="button" role="tab" id="atab-controls" data-atab="controls"
-            aria-selected="false" aria-controls="apanel-controls"><span class="admin-tab-g" aria-hidden="true">⚙️</span>Controls</button>
-          <button class="admin-tab" type="button" role="tab" id="atab-server" data-atab="server"
-            aria-selected="false" aria-controls="apanel-server"><span class="admin-tab-g" aria-hidden="true">☁️</span>Server</button>
-          <button class="admin-tab" type="button" role="tab" id="atab-tools" data-atab="tools"
-            aria-selected="false" aria-controls="apanel-tools"><span class="admin-tab-g" aria-hidden="true">🛠️</span>Tools</button>
-        </div>
 
         <div class="admin-body" data-scroll tabindex="0">
 
@@ -1449,7 +1439,52 @@
             <button class="adm-btn adm-btn-danger adm-btn-wide" type="button" id="tool-reset">Reset Local Save</button>
             <p class="adm-note">Two taps: the second wipes coins, items, stats, teams and settings on this device.</p>
           </div>
+
+          <!-- ---------- Inbox: the support desk behind Contact Support ---------- -->
+          <div class="admin-panel" data-apanel="inbox" id="apanel-inbox" role="tabpanel"
+            aria-labelledby="atab-inbox" hidden>
+            <div class="adm-inbox-filters" role="group" aria-label="Filter support tickets">
+              <button class="adm-chip" type="button" data-ifilter="all" aria-pressed="true">All</button>
+              <button class="adm-chip" type="button" data-ifilter="feedback" aria-pressed="false">Feedback</button>
+              <button class="adm-chip" type="button" data-ifilter="bug" aria-pressed="false">Bugs</button>
+              <button class="adm-chip" type="button" data-ifilter="stars" aria-pressed="false">Stars Help</button>
+              <button class="adm-chip" type="button" data-ifilter="unresolved" aria-pressed="false">Unresolved</button>
+            </div>
+            <ul class="adm-inbox-list" id="adm-inbox-list" aria-label="Support tickets"></ul>
+            <p class="adm-inbox-empty" id="adm-inbox-empty" hidden>No tickets in this view yet.</p>
+          </div>
         </div>
+
+        <!-- the tactile bottom dock: recessed clay with a springy gold pill -->
+        <nav class="admin-nav" role="tablist" aria-label="Command Center sections">
+          <span class="admin-nav-pill" id="admin-nav-pill" aria-hidden="true"></span>
+          <button class="admin-tab" type="button" role="tab" id="atab-stats" data-atab="stats"
+            aria-selected="true" aria-controls="apanel-stats">
+            <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-users" /></svg>
+            <span class="admin-tab-l">Stats</span>
+          </button>
+          <button class="admin-tab" type="button" role="tab" id="atab-controls" data-atab="controls"
+            aria-selected="false" aria-controls="apanel-controls">
+            <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-tune" /></svg>
+            <span class="admin-tab-l">Controls</span>
+          </button>
+          <button class="admin-tab" type="button" role="tab" id="atab-server" data-atab="server"
+            aria-selected="false" aria-controls="apanel-server">
+            <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-globe" /></svg>
+            <span class="admin-tab-l">Server</span>
+          </button>
+          <button class="admin-tab" type="button" role="tab" id="atab-inbox" data-atab="inbox"
+            aria-selected="false" aria-controls="apanel-inbox">
+            <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-chat" /></svg>
+            <span class="admin-tab-l">Inbox</span>
+            <span class="admin-nav-badge" id="admin-inbox-badge" hidden>0</span>
+          </button>
+          <button class="admin-tab" type="button" role="tab" id="atab-tools" data-atab="tools"
+            aria-selected="false" aria-controls="apanel-tools">
+            <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-shield" /></svg>
+            <span class="admin-tab-l">Tools</span>
+          </button>
+        </nav>
       </section>
 
       <!-- pause sheet -->
