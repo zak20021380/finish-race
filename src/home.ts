@@ -211,11 +211,13 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   }
   window.addEventListener('resize', syncDots);
 
-  /* ---------- Nations Cup: 44px rows + user row / pick-country CTA ----------
-     Layout only — data (getCountryRanking) and handlers (openCountryPicker)
-     are unchanged. Flags are MIT flag-icons SVGs vendored into
-     src/assets/flags (© Lipis, MIT), rendered lazy in a 28px circle with a
-     monogram fallback. The 2-letter code box is never rendered here. */
+  /* ---------- Nations Cup: 30px rows + user row / pick-country CTA ----------
+     Top 5 fill the card to the dots with no dead void (the 40px→30px row is
+     layout only — the row recipe is identical for ranks 1-5). Layout only —
+     data (getCountryRanking) and handlers (openCountryPicker) are unchanged.
+     Flags are MIT flag-icons SVGs vendored into src/assets/flags (© Lipis, MIT),
+     rendered lazy in a 28px circle with a monogram fallback. The 2-letter code
+     box is never rendered here. */
 
   const PODIUM_CLASS = ['gold', 'silver', 'bronze'] as const;
 
@@ -342,9 +344,9 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const list = $('home-countries');
     try {
       const all = await getCountryRanking();
-      const top3 = all.slice(0, 3);
+      const top5 = all.slice(0, 5);
       list.textContent = '';
-      for (const c of top3) {
+      for (const c of top5) {
         list.append(rowEl(c, profile.country === c.code));
       }
       paintNationMine(all);
@@ -439,7 +441,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     try {
       const all = await getPlayerRanking();
       list.textContent = '';
-      for (const p of all.slice(0, 3)) list.append(mindRow(p));
+      for (const p of all.slice(0, 5)) list.append(mindRow(p));
     } catch {
       list.textContent = '';
       const li = document.createElement('li');

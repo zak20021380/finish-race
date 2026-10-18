@@ -26,14 +26,15 @@
  *  - the three slides do not share one exact height (the locked footprint),
  *
  *  - the Nations Cup header is not "NATIONS CUP · S4" with the globe glyph and
- *    a glowing LIVE pill, does not carry gold/silver/bronze rank markers on
- *    three 40px rows with a real flag badge, name and score each, misses the
- *    "Your nation" contribution strip, or misses the 48px "View Cup Table" pill,
+ *    a glowing LIVE pill, does not carry gold/silver/bronze rank markers on the
+ *    Top-5 30px rows (plain markers on 4-5) with a real flag badge, name and
+ *    score each, misses the "Your nation" contribution strip, or misses the
+ *    48px "View Cup Table" pill,
  *  - The Mind Ladder header is not "THE MIND LADDER" with the brain glyph and a
- *    TOP 100 pill, does not carry three 40px podium rows (sphere avatar + flag
+ *    TOP 100 pill, does not carry five 30px podium rows (sphere avatar + flag
  *    badge + name + tier chip + gold TIQ score), misses the "You: Rank #
  *    · TIQ · Top %" standing bar, or misses the 48px "View Full Ladder" pill,
- *  - a CTA pill is under 48px tall, or a nation/podium row under 40px,
+ *  - a CTA pill is under 48px tall, or a nation/podium row under 30px,
  *  - the active carousel dot / aria-selected / .is-active are out of sync with
  *    the scrolled slide,
  *  - any element bottoms out behind the tab dock, the page or #s-home scrolls,
@@ -337,14 +338,18 @@ function checkHomeCarousel() {
       if (!live.querySelector('.live-dot')) fails.push('LIVE pill missing its pulse dot');
     }
     const rows = [...cup.querySelectorAll('.nations-rank .nations-row:not(.is-error)')];
-    if (rows.length !== 3) fails.push(`cup wants exactly 3 nation rows, found ${rows.length}`);
+    if (rows.length !== 5) fails.push(`cup wants Top-5 nation rows, found ${rows.length}`);
     const wantBadge = ['gold', 'silver', 'bronze'];
     rows.forEach((li, i) => {
       const r = li.getBoundingClientRect();
-      if (r.height < 39.5) fails.push(`nation row ${i + 1} height ${Math.round(r.height)} < 40px`);
+      if (r.height < 29.5) fails.push(`nation row ${i + 1} height ${Math.round(r.height)} < 30px`);
       const rk = li.querySelector('.rk');
       if ((rk?.textContent || '').trim() !== String(i + 1)) fails.push(`nation row ${i + 1} rank marker "${(rk?.textContent || '').trim()}" — want "${i + 1}"`);
-      if (!rk?.classList.contains(wantBadge[i])) fails.push(`nation row ${i + 1} rank ${i + 1} missing .${wantBadge[i]} badge`);
+      if (i < 3) {
+        if (!rk?.classList.contains(wantBadge[i])) fails.push(`nation row ${i + 1} rank ${i + 1} missing .${wantBadge[i]} badge`);
+      } else if (rk && wantBadge.some((b) => rk.classList.contains(b))) {
+        fails.push(`nation row ${i + 1} must carry a plain rank marker, not a medal`);
+      }
       const circ = li.querySelector('.flag-circle');
       if (!circ) fails.push(`nation row ${i + 1} missing .flag-circle flag badge`);
       else {
@@ -380,10 +385,10 @@ function checkHomeCarousel() {
     const top = mind.querySelector('.mind-top');
     if (!/top 100/i.test((top?.textContent || '').trim())) fails.push(`ladder status pill "${(top?.textContent || '').trim()}" — want "Top 100"`);
     const rows = [...mind.querySelectorAll('.mind-podium .mind-row:not(.is-error)')];
-    if (rows.length !== 3) fails.push(`ladder wants exactly 3 podium rows, found ${rows.length}`);
+    if (rows.length !== 5) fails.push(`ladder wants Top-5 podium rows, found ${rows.length}`);
     rows.forEach((li, i) => {
       const r = li.getBoundingClientRect();
-      if (r.height < 39.5) fails.push(`podium row ${i + 1} height ${Math.round(r.height)} < 40px`);
+      if (r.height < 29.5) fails.push(`podium row ${i + 1} height ${Math.round(r.height)} < 30px`);
       if (!li.querySelector('.mind-av')) fails.push(`podium row ${i + 1} missing the sphere avatar`);
       if (!li.querySelector('.mind-flag')) fails.push(`podium row ${i + 1} missing the flag badge`);
       if (!(li.querySelector('.mind-nm')?.textContent || '').trim()) fails.push(`podium row ${i + 1} missing the player name`);
