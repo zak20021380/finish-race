@@ -1,6 +1,6 @@
 /**
  * nations-cup-check.js — DOM check for the Home carousel: the three authentic
- * slides — 200 Stars Tournament (slide 0), Nations Cup (slide 1) and The Mind
+ * slides — Channel War (slide 0), Nations Cup (slide 1) and The Mind
  * Ladder (slide 2).
  * Paste into the browser console on any viewport, or run via
  * scripts/verify-nations-cup.mjs which drives it with Playwright.
@@ -14,10 +14,12 @@
  *    does not clip to it,
  *  - anything samples the backdrop (backdrop-filter / blur) — the dark-clay
  *    rule,
- *  - the 200 Stars Tournament header is not "STAR SHOWDOWN · 200★" behind a
- *    24px star pod, misses the HIGH STAKES beacon chip, misses the trophy, the
- *    120/50/30 pool pods or the "Tournament Ends in: NNh NNm" clock, or misses
- *    the 48px "JOIN TOURNAMENT · 200★ POOL" gold key,
+ *  - the Channel War header is not "CHANNEL WAR · 200★" behind a 24px
+ *    star pod, misses the WINNER TAKES ALL beacon chip, misses the bespoke
+ *    #i-star-3d hero gem or its crossed-blades battle frame, still carries the
+ *    120/50/30 pool pods, misses the single 200 STARS vault or the
+ *    "Ends in: NNh NNm" clock, or misses the 48px "FIGHT FOR YOUR CHANNEL
+ *    · 200★" gold key,
  *  - the Nations Cup header is not "NATIONS CUP · S4" with the globe glyph and
  *    a glowing LIVE pill, does not carry gold/silver/bronze rank markers on
  *    three 40px rows with a real flag badge, name and score each, misses the
@@ -78,15 +80,15 @@ function checkHomeCarousel() {
     if (/blur\(/.test(cs.filter || '')) fails.push(`${name} applies blur()`);
   }
 
-  // ---- 4. 200 Stars Tournament (slide 0) ----
+  // ---- 4. Channel War (slide 0) ----
   const tour = cards.find((c) => c.classList.contains('carousel-slide-tournament'));
   if (tour) {
     const kicker = tour.querySelector('.tour-kicker');
     const title = tour.querySelector('.tour-title');
     const ktxt = (title?.textContent || '').replace(/\s+/g, ' ').trim();
-    if (!/star showdown/i.test(ktxt) || !/200/.test(ktxt)) fails.push(`tournament header "${ktxt}" — want "STAR SHOWDOWN · 200★"`);
+    if (!/channel war/i.test(ktxt) || !/200/.test(ktxt)) fails.push(`war header "${ktxt}" — want "CHANNEL WAR · 200★"`);
     const pod = kicker?.querySelector('.tour-star-pod');
-    if (!pod) fails.push('tournament header missing the 24px star pod');
+    if (!pod) fails.push('war header missing the 24px star pod');
     else {
       const pr = pod.getBoundingClientRect();
       if (!near(pr.width, 24, 1.5) || !near(pr.height, 24, 1.5)) {
@@ -96,61 +98,109 @@ function checkHomeCarousel() {
     }
     if (title) {
       const ts = getComputedStyle(title);
-      if (!near(parseFloat(ts.fontSize), 12, .6)) fails.push(`tournament title font-size ${ts.fontSize} — want 12px`);
-      if (Number(ts.fontWeight) < 700) fails.push(`tournament title weight ${ts.fontWeight} — want bold`);
-      if (!/rgb\(248,\s*250,\s*252\)/.test(ts.color)) fails.push(`tournament title colour ${ts.color} — want #F8FAFC`);
+      if (!near(parseFloat(ts.fontSize), 12.5, .6)) fails.push(`war title font-size ${ts.fontSize} — want 12.5px`);
+      if (Number(ts.fontWeight) < 700) fails.push(`war title weight ${ts.fontWeight} — want bold`);
+      if (!/rgb\(248,\s*250,\s*252\)/.test(ts.color)) fails.push(`war title colour ${ts.color} — want #F8FAFC`);
+      if (!near(parseFloat(ts.letterSpacing) || 0, .5, .25)) fails.push(`war title tracking ${ts.letterSpacing} — want +0.5px`);
     }
     const chip = tour.querySelector('.tour-chip');
-    if (!chip) fails.push('tournament missing the HIGH STAKES chip');
+    if (!chip) fails.push('war missing the WINNER TAKES ALL chip');
     else {
-      if (!/high stakes/i.test((chip.textContent || '').replace(/\s+/g, ' '))) fails.push(`chip "${(chip.textContent || '').trim()}" — want "HIGH STAKES"`);
+      if (!/winner takes all|jackpot/i.test((chip.textContent || '').replace(/\s+/g, ' '))) fails.push(`chip "${(chip.textContent || '').trim()}" — want "WINNER TAKES ALL"`);
       const cs = getComputedStyle(chip);
-      if (!/245,\s*158,\s*11/.test(cs.backgroundImage) || !/217,\s*119,\s*6/.test(cs.backgroundImage)) {
-        fails.push('chip must carry the 135deg amber gradient (245,158,11 → 217,119,6)');
+      if (!/220,\s*38,\s*38/.test(cs.backgroundImage) || !/245,\s*158,\s*11/.test(cs.backgroundImage)) {
+        fails.push('chip must carry the 135deg ember gradient (220,38,38 → 245,158,11)');
       }
-      if (!near(parseFloat(cs.borderTopWidth), 1, .3) || !/251,\s*191,\s*36/.test(cs.borderTopColor)) {
-        fails.push(`chip border ${cs.borderTopWidth} ${cs.borderTopColor} — want 1px rgba(251,191,36,.45)`);
+      if (!near(parseFloat(cs.borderTopWidth), 1, .3) || !/245,\s*158,\s*11/.test(cs.borderTopColor)) {
+        fails.push(`chip border ${cs.borderTopWidth} ${cs.borderTopColor} — want 1px rgba(245,158,11,.5)`);
       }
-      if (!near(parseFloat(cs.fontSize), 9, .6)) fails.push(`chip font-size ${cs.fontSize} — want 9px`);
+      if (!near(parseFloat(cs.fontSize), 8.5, .6)) fails.push(`chip font-size ${cs.fontSize} — want 8.5px`);
       const beacon = chip.querySelector('.tour-beacon');
       if (!beacon) fails.push('chip missing the amber beacon dot');
       else if (getComputedStyle(beacon).animationName === 'none') fails.push('beacon dot is not pulsing');
     }
-    const trophy = tour.querySelector('.tour-trophy');
-    if (!trophy) fails.push('tournament missing the trophy');
+    const star = tour.querySelector('.tour-star');
+    if (!star) fails.push('war hero missing the bespoke star');
     else {
-      const tr = trophy.getBoundingClientRect();
-      if (tr.width < 40 || tr.height < 40) fails.push(`trophy is ${Math.round(tr.width)}x${Math.round(tr.height)} — too small to read`);
+      if (!star.querySelector('use[href="#i-star-3d"]')) fails.push('war hero star is not the #i-star-3d gem');
+      const sr = star.getBoundingClientRect();
+      if (sr.width < 44 || sr.height < 44) fails.push(`war star is ${Math.round(sr.width)}x${Math.round(sr.height)} — too small to read`);
+      const sf = getComputedStyle(star).filter || '';
+      if (!/245,\s*158,\s*11/.test(sf) || !/16px/.test(sf)) fails.push(`war star glow "${sf}" — want drop-shadow(0 0 16px rgba(245,158,11,.55))`);
     }
-    const pods = [...tour.querySelectorAll('.tour-pods .tour-pod')];
-    if (pods.length !== 3) fails.push(`tournament wants 3 pool pods, found ${pods.length}`);
-    const wantPlace = ['1ST', '2ND', '3RD'];
-    const wantStars = ['120', '50', '30'];
-    pods.forEach((p, i) => {
-      const k = (p.querySelector('.tour-pod-k')?.textContent || '').trim();
-      if (k !== wantPlace[i]) fails.push(`pool pod ${i + 1} place "${k}" — want "${wantPlace[i]}"`);
-      const v = (p.querySelector('.tour-pod-v')?.textContent || '').replace(/[^\d]/g, '');
-      if (v !== wantStars[i]) fails.push(`pool pod ${i + 1} value "${v}" — want "${wantStars[i]}★"`);
-      if (!p.querySelector('.tour-pod-star')) fails.push(`pool pod ${i + 1} missing its star badge`);
-      const pr = p.getBoundingClientRect();
-      if (pr.height < 36) fails.push(`pool pod ${i + 1} height ${Math.round(pr.height)} < 36px`);
-    });
-    const clock = tour.querySelector('.tour-clock');
-    if (!/tournament ends in:?\s*\d{2}h\s*\d{2}m/i.test((clock?.textContent || '').replace(/\s+/g, ' '))) {
-      fails.push(`tournament clock "${(clock?.textContent || '').trim()}" — want "Tournament Ends in: 02h 45m"`);
+    if (!tour.querySelector('.tour-blades .tour-blade')) fails.push('war hero missing the crossed-blades battle frame');
+    if (tour.querySelector('.tour-pods, .tour-pod')) fails.push('the 3-pod prize split is still in the DOM');
+    const cardText = (tour.innerText || '').replace(/\s+/g, ' ');
+    for (const gone of ['120', '2ND', '3RD']) {
+      if (new RegExp(`\\b${gone}\\b`).test(cardText)) fails.push(`split-prize copy "${gone}" still rendered`);
     }
+    const vault = tour.querySelector('.tour-vault');
+    if (!vault) fails.push('war missing the winner-takes-all vault card');
+    else {
+      const vs = getComputedStyle(vault);
+      if (!/30,\s*41,\s*59/.test(vs.backgroundImage) || !/15,\s*23,\s*42/.test(vs.backgroundImage)) {
+        fails.push('vault must carry the dark-clay gradient (30,41,59 → 15,23,42)');
+      }
+      if (!near(parseFloat(vs.borderTopWidth), 1, .3) || !/245,\s*158,\s*11/.test(vs.borderTopColor)) {
+        fails.push(`vault border ${vs.borderTopWidth} ${vs.borderTopColor} — want 1px rgba(245,158,11,.35)`);
+      }
+      if (!/254,\s*243,\s*199/.test(vs.boxShadow) || !/8px\s+20px/.test(vs.boxShadow)) {
+        fails.push('vault must carry the inset gold line + 0 8px 20px drop');
+      }
+      const vk = vault.querySelector('.tour-vault-k');
+      const ktext = (vk?.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!/1st place channel wins/i.test(ktext)) fails.push(`vault label "${ktext}" — want "1ST PLACE CHANNEL WINS"`);
+      if (vk) {
+        const ks = getComputedStyle(vk);
+        if (!near(parseFloat(ks.fontSize), 9, .6)) fails.push(`vault label font-size ${ks.fontSize} — want 9px`);
+        if (!/251,\s*191,\s*36/.test(ks.color)) fails.push(`vault label colour ${ks.color} — want #FBBF24`);
+      }
+      const vv = vault.querySelector('.tour-vault-v');
+      const vtext = (vv?.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!/200 stars/i.test(vtext)) fails.push(`vault value "${vtext}" — want "200 STARS"`);
+      if (vv) {
+        const vvs = getComputedStyle(vv);
+        if (!near(parseFloat(vvs.fontSize), 22, .6)) fails.push(`vault value font-size ${vvs.fontSize} — want 22px`);
+        if (Number(vvs.fontWeight) < 900) fails.push(`vault value weight ${vvs.fontWeight} — want black`);
+        if (!/linear-gradient/.test(vvs.backgroundImage)) fails.push('vault value must carry the gold gradient fill');
+        if (vvs.backgroundClip !== 'text' && vvs.webkitBackgroundClip !== 'text') fails.push('vault value gold fill must clip to the text');
+        if (!/tabular-nums/.test(vvs.fontVariantNumeric || '')) fails.push('vault value must use tabular numbers');
+      }
+      const vsub = vault.querySelector('.tour-vault-sub');
+      const stext = (vsub?.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!/runners-up get 0/i.test(stext) || !/conquest/i.test(stext)) fails.push(`vault clause "${stext}" — want the runners-up get 0★ clause`);
+      if (vsub) {
+        const ss = getComputedStyle(vsub);
+        if (!near(parseFloat(ss.fontSize), 9, .6)) fails.push(`vault clause font-size ${ss.fontSize} — want 9px`);
+        if (!/100,\s*116,\s*139/.test(ss.color)) fails.push(`vault clause colour ${ss.color} — want #64748B`);
+      }
+    }
+    const ticker = tour.querySelector('.tour-ticker');
+    const leader = ticker?.querySelector('.tour-leader');
+    if (!leader) fails.push('war missing the leader ticker');
+    else {
+      if (!/^leader:\s*@[a-z0-9_]+/i.test((leader.textContent || '').replace(/\s+/g, ' ').trim())) {
+        fails.push(`leader line "${(leader.textContent || '').trim()}" — want "Leader: @Handle"`);
+      }
+      if (!leader.querySelector('.tour-verified use[href="#i-shield"]')) fails.push('leader line missing the verified badge');
+    }
+    const clock = ticker?.querySelector('.tour-clock');
+    if (!/ends in:?\s*\d{2}h\s*\d{2}m/i.test((clock?.textContent || '').replace(/\s+/g, ' '))) {
+      fails.push(`war clock "${(clock?.textContent || '').trim()}" — want "Ends in: 02h 45m"`);
+    }
+    if (clock && !/monospace/.test(getComputedStyle(clock).fontFamily)) fails.push('war clock must stay monospace');
     const btn = document.getElementById('home-tournament-cta');
-    if (!btn) fails.push('tournament missing #home-tournament-cta');
+    if (!btn) fails.push('war missing #home-tournament-cta');
     else {
       const bt = (btn.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!/join tournament/i.test(bt) || !/200/.test(bt) || !/pool/i.test(bt)) {
-        fails.push(`tournament CTA "${bt}" — want "JOIN TOURNAMENT" + "200★ POOL"`);
+      if (!/fight for your channel/i.test(bt) || !/200/.test(bt)) {
+        fails.push(`war CTA "${bt}" — want "FIGHT FOR YOUR CHANNEL" + "200★"`);
       }
       const h = btn.getBoundingClientRect().height;
-      if (h < 47.5) fails.push(`tournament CTA height ${Math.round(h)} < 48px`);
+      if (h < 47.5) fails.push(`war CTA height ${Math.round(h)} < 48px`);
       const bs = getComputedStyle(btn);
-      if (!/245,\s*158,\s*11/.test(bs.backgroundImage) || !/217,\s*119,\s*6/.test(bs.backgroundImage)) {
-        fails.push('tournament CTA must carry the gold gradient (245,158,11 → 217,119,6)');
+      if (!/245,\s*158,\s*11/.test(bs.backgroundImage) || !/180,\s*83,\s*9/.test(bs.backgroundImage)) {
+        fails.push('war CTA must carry the gold chamfer gradient (245,158,11 → 180,83,9)');
       }
     }
   }

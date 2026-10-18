@@ -7,8 +7,8 @@
  * Each slide is 100% of the viewport width inside an overflow-hidden wrap, so
  * only the active slide shows cleanly between the paging dots. `.is-active`
  * marks the slide in focus (state binding preserved, no visual peek).
- * Three slides, in this order: the 200 Stars Tournament (index 0, the hero the
- * Play tab opens on), Nations Cup, The Mind Ladder.
+ * Three slides, in this order: Channel War (index 0, the hero the Play tab
+ * opens on), Nations Cup, The Mind Ladder.
  *
  * Mode selection is one Play button + a "Choose mode" bottom sheet. Play starts
  * immediately with the last setup (default 1v1 Normal). The sheet holds a
@@ -23,6 +23,7 @@ import { getCountryRanking, getPlayerRanking, type CountryRow, type PlayerRow } 
 import { onChange, profile, theme } from './storage';
 import { impact } from './telegram';
 import { flagPhoto } from './compete';
+import { getSquadRanking } from './squads';
 import { newGame } from './rules';
 import { createRenderer, type View } from './render';
 import type { Router } from './router';
@@ -453,11 +454,12 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     api.router.go('ranks');
   });
 
-  /* ---------- 200 Stars Tournament: the hero slide's one door ----------
-     The CTA hands the player to the Arena's own registration flow — the very
-     #stars-cta that opens the "Play for your squad?" seat drawer, or jumps
-     straight to the queue when this device already holds a seat. One
-     registration path, one source of seat truth; Home never duplicates it.
+  /* ---------- Channel War: the hero slide's one door ----------
+     The CTA hands the player to the Arena's own channel leaderboard and
+     registration flow — the very #stars-cta that opens the "Play for your
+     squad?" seat drawer, or jumps straight to the queue when this device
+     already holds a seat. One registration path, one source of seat truth;
+     Home never duplicates it.
 
      The Arena hydrates its cup asynchronously and that key is a no-op until
      the cup lands, so the hand-off knocks until it answers: it stops the
@@ -487,7 +489,17 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     window.setTimeout(handOver, 125);
   });
 
-  /* The pool's clock. Anchored to a real deadline 02h 45m out, so the line
+  /* The leader ticker reads the same ranking feed the Arena's channel ladder
+     ranks, so Home and the cup can never disagree about who leads. The static
+     markup already holds @DogeSquad (the top seed), so this only ever repaints
+     when a custom channel has actually overtaken it. */
+  const leaderHandle = document.getElementById('tour-leader-handle');
+  if (leaderHandle) {
+    const top = getSquadRanking()[0];
+    if (top) leaderHandle.textContent = top.handle;
+  }
+
+  /* The vault's clock. Anchored to a real deadline 02h 45m out, so the line
      reads exactly as authored on arrival and then ticks honestly; it is only
      repainted while the tab is visible. */
   const tourClock = document.getElementById('tour-countdown');

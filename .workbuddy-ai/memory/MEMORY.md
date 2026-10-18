@@ -33,11 +33,13 @@ Durable index; dated logs beside this file hold the history.
   Players control. Dock `#chips`: any new `.chip` rule needs (0,4,0) or it loses to older passes.
 
 ## Home carousel
-- **Three slides: 0 = `.carousel-slide-tournament` (200 Stars, the default hero), 1 =
-  `.nations-cup.carousel-slide-nations`, 2 = `.mind-ladder`.** Boot re-asserts `scrollLeft=0`;
-  `currentSlideIndex` is the single position value. Band is a fixed 320px → card 279 / content 243;
-  the tournament pins `8px 12px 37px`, only its hero flexes, ≤350px shrinks chip+gaps so the title
-  stays whole. `#home-tournament-cta` → `arena` → knocks `#stars-cta` until the seat drawer opens.
+- **Three slides: 0 = `.carousel-slide-tournament` (CHANNEL WAR · 200★, winner-takes-all, the
+  default hero), 1 = `.nations-cup.carousel-slide-nations`, 2 = `.mind-ladder`.** Boot re-asserts
+  `scrollLeft=0`; `currentSlideIndex` is the single position value. Band is a fixed 320px → card
+  280 / content 234; slide 0 pins `8px 12px 37px`, only its hero flexes, ≤350px shrinks chip+gaps
+  so the title stays whole. ONE 200★ vault — no 2nd/3rd pods. Hero = `#i-star-3d` 52px over
+  crossed blades + dark shield; ticker leader hydrates from `getSquadRanking()[0]`.
+  `#home-tournament-cta` → `arena` → knocks `#stars-cta` until the seat drawer opens.
 
 ## Design system
 - One theme "Dark Clay": opaque slabs, no live blur. Reduced motion is `html.reduced-motion`,

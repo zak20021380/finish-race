@@ -14681,16 +14681,19 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
 }
 
 /* ============================================================================================
-   200 STARS TOURNAMENT — the high-stakes hero slide (carousel index 0).
+   CHANNEL WAR — the winner-takes-all hero slide (carousel index 0).
 
-   Same clay slab as its siblings and the same pinned box (8/12/28), so the
+   Same clay slab as its siblings and the same pinned box (8/12/37), so the
    track's scroll geometry, the pager dots and the column budget are untouched
-   by the prepend. The bottom 28px stays empty for the dots; the CTA is the last
+   by the prepend. The bottom 37px stays empty for the dots; the CTA is the last
    child above that reserve, exactly like the other two slides.
 
-   Vertical budget inside the 279px card box: head 22 · hero flex · pods 40 ·
-   clock 16 · CTA 48 with 4px gaps. Only the hero flexes, so the trophy grows
-   into a taller band and shrinks (never clips) into a short one.
+   Pure conquest: no 2nd/3rd split. The bespoke #i-star-3d gem sits on a
+   crossed-blades + shield battle frame, and the whole 200★ vault hangs below in
+   one sculpted dark-clay card. Vertical budget inside the 279px card box: head
+   22 · hero flex · vault 62 · ticker 14 · CTA 48 with 4px gaps. Only the hero
+   flexes, so the emblem grows into a taller band and shrinks (never clips) into
+   a short one.
    ============================================================================================ */
 .car-card.carousel-slide-tournament {
   position: relative;
@@ -14714,7 +14717,7 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
     inset 0 0 0 1px rgba(255, 255, 255, .06);
 }
 
-/* ---- header: a 3D star in a recessed pod, then the tactical chip ---- */
+/* ---- header: a 3D star in a recessed pod, then the war chip ---- */
 .tour-head {
   display: flex;
   align-items: center;
@@ -14728,9 +14731,9 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   color: #F8FAFC;
   gap: 8px;
   min-width: 0;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 700;
-  letter-spacing: .4px;
+  letter-spacing: .5px;
   text-transform: uppercase;
 }
 /* 24x24 recessed well: the star is lit, the pod is in shadow */
@@ -14759,7 +14762,7 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* the tactical chip: amber glass, hairline ring, a breathing beacon */
+/* the war chip: a red-to-amber ember glass, hairline ring, a breathing beacon */
 .tour-chip {
   flex: none;
   display: inline-flex;
@@ -14768,10 +14771,10 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   height: 22px;
   padding: 0 8px 0 7px;
   border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, rgba(245, 158, 11, .25) 0%, rgba(217, 119, 6, .4) 100%);
-  border: 1px solid rgba(251, 191, 36, .45);
+  background: linear-gradient(135deg, rgba(220, 38, 38, .3) 0%, rgba(245, 158, 11, .35) 100%);
+  border: 1px solid rgba(245, 158, 11, .5);
   color: #FDE68A;
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 800;
   letter-spacing: .09em;
   line-height: 1;
@@ -14802,11 +14805,11 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   }
 }
 
-/* ---- the showcase: one lit trophy on a warm ambient backlight ---- */
+/* ---- the showcase: the war emblem on a warm ambient backlight ---- */
 .tour-hero {
   position: relative;
   flex: 1 1 auto;
-  min-height: 54px;
+  min-height: 56px;
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -14817,85 +14820,87 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   background: radial-gradient(48% 58% at 50% 48%, rgba(245, 158, 11, .38) 0%, rgba(245, 158, 11, .13) 46%, rgba(245, 158, 11, 0) 74%);
   pointer-events: none;
 }
-.tour-trophy {
+/* the battle frame: shield + crossed blades stacked under the star */
+.tour-emblem {
   position: relative;
-  display: block;
+  display: grid;
+  place-items: center;
   height: 100%;
-  max-height: 96px;
+  max-height: 82px;
   width: auto;
   aspect-ratio: 1 / 1;
-  filter: drop-shadow(0 7px 12px rgba(0, 0, 0, .5));
+}
+.tour-blades {
+  grid-area: 1 / 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* the bespoke Telegram Star gem: lit, gold, and unmistakably the app's own */
+.tour-star {
+  grid-area: 1 / 1;
+  display: block;
+  width: 52px;
+  height: 52px;
+  filter: drop-shadow(0 0 16px rgba(245, 158, 11, .55)) drop-shadow(0 5px 9px rgba(0, 0, 0, .55));
 }
 
-/* ---- the three inset pods: the pool, split ---- */
-.tour-pods {
+/* ---- the grand vault: one sculpted dark-clay card, no split ---- */
+.tour-vault {
   flex: none;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.tour-pod {
-  position: relative;
-  min-width: 0;
-  height: 40px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 1px;
-  border-radius: 12px;
-  background: var(--field);
-  box-shadow: var(--inset), inset 0 0 0 1px var(--pod-ring, rgba(255, 255, 255, .06));
+  padding: 6px 10px 7px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(30, 41, 59, .8) 0%, rgba(15, 23, 42, .95) 100%);
+  border: 1px solid rgba(245, 158, 11, .35);
+  box-shadow:
+    inset 0 1px 0 rgba(254, 243, 199, .15),
+    0 8px 20px rgba(0, 0, 0, .5);
 }
-.tour-pod.p1 { --pod-accent: #FCD34D; --pod-glow: rgba(252, 211, 77, .9); --pod-ink: #FCD34D; --pod-ring: rgba(252, 211, 77, .3); }
-.tour-pod.p2 { --pod-accent: #E2E8F0; --pod-glow: rgba(203, 213, 225, .7); --pod-ink: #CBD5E1; --pod-ring: rgba(203, 213, 225, .22); }
-.tour-pod.p3 { --pod-accent: #F0A868; --pod-glow: rgba(217, 119, 6, .8); --pod-ink: #DBA277; --pod-ring: rgba(217, 119, 6, .3); }
-.tour-pod-k {
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: .12em;
-  line-height: 1;
-  color: var(--pod-ink);
-}
-.tour-pod-v {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 900;
-  letter-spacing: -.01em;
-  line-height: 1.05;
-  color: #F8FAFC;
-  font-variant-numeric: tabular-nums;
+.tour-vault-k {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  line-height: 1.2;
+  color: #FBBF24;
   white-space: nowrap;
 }
-.tour-pod-v b {
-  font-size: 10px;
+.tour-vault-v {
+  font-size: 22px;
   font-weight: 900;
-  color: var(--pod-accent);
-  text-shadow: 0 0 6px var(--pod-glow);
+  line-height: 1.05;
+  letter-spacing: .01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  background: linear-gradient(180deg, #FFF7D6 0%, #FDE68A 38%, #F59E0B 78%, #B45309 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: #FCD34D;
+  -webkit-text-fill-color: transparent;
 }
-.tour-pod-star {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  color: var(--pod-accent);
-  filter: drop-shadow(0 0 4px var(--pod-glow));
+.tour-vault-sub {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  line-height: 1.2;
+  color: #64748B;
+  white-space: nowrap;
 }
 
-/* ---- the clock: mono, slate, cyan figure ---- */
-.tour-clock {
+/* ---- the ticker: the leading channel on the left, the clock on the right ---- */
+.tour-ticker {
   flex: none;
   margin: 0;
-  height: 16px;
+  height: 14px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 5px;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
   font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
   font-size: 10px;
   font-weight: 700;
@@ -14903,13 +14908,36 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   color: #94A3B8;
   white-space: nowrap;
 }
+.tour-leader {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tour-leader b {
+  font-weight: 800;
+  color: #E2E8F0;
+}
+.tour-verified {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  color: #38BDF8;
+}
+.tour-clock {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 .tour-clock b {
   color: #7DD3FC;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
-
-/* ---- the CTA: gold face, obsidian drop, one tactile press ---- */
+/* ---- the CTA: gold chamfer face, obsidian drop, one tactile press ---- */
 .tour-cta {
   position: relative;
   flex: none;
@@ -14922,7 +14950,7 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   padding: 0 12px;
   border: 0;
   border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #F59E0B 0%, #D97706 100%);
+  background: linear-gradient(180deg, #F59E0B 0%, #B45309 100%);
   color: #1A1206;
   font-size: 14px;
   font-weight: 900;
@@ -14975,14 +15003,15 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
 html.reduced-motion .tour-beacon { animation: none; }
 html.reduced-motion .tour-cta { transition: none; }
 
-/* The 320px floor: the header's three parts are 24px of pod, a 158px title and
-   a 96px chip in a 280px row, which is 14px over. Everything that is NOT the
-   title's 12px/0.4px type gives instead — inset, gaps, chip padding and chip
-   tracking — so "STAR SHOWDOWN · 200★" still reads whole on the smallest phone. */
+/* The 320px floor: pod, title and the longer WINNER TAKES ALL chip share a
+   280px row. Everything that is NOT the title's 12.5px/0.5px type gives
+   instead — inset, gaps, chip padding and chip tracking — so
+   "CHANNEL WAR · 200★" reads whole on the smallest phone. */
 @media (max-width: 350px) {
   .car-card.carousel-slide-tournament { padding-left: 10px; padding-right: 10px; }
   .tour-kicker { gap: 4px; }
   .tour-chip { padding: 0 5px 0 4px; gap: 3px; letter-spacing: 0; }
+  .tour-vault-k { letter-spacing: 1.1px; }
 }
 
 /* ============================================================================================

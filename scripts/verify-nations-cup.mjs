@@ -1,17 +1,16 @@
 /**
  * verify-nations-cup.mjs — Playwright driver for scripts/nations-cup-check.js,
- * which now covers the whole 3-slide Home carousel: 200 Stars Tournament
+ * which now covers the whole 3-slide Home carousel: Channel War
  * (slide 0), Nations Cup (slide 1) and The Mind Ladder (slide 2).
  *
  * No new project dependencies: `playwright-core` is resolved at runtime only.
- * Run without touching package.json:
  *
- *   NODE_PATH="C:\\Users\\PC-Y\\AppData\\Local\\Temp\\opencode\\check\\node_modules" node scripts/verify-nations-cup.mjs
+ *   node scripts/verify-nations-cup.mjs
  *
  * Serves ./dist over 127.0.0.1, then checks 320x640, 360x640 and 390x844 in
  * light + dark, with a long country name injected on the Nations slide
  * (ellipsis, no overflow). Each viewport runs the check on ALL THREE slides —
- * dot 0 (Tournament), dot 1 (Nations Cup) and dot 2 (The Mind Ladder) — plus a
+ * dot 0 (Channel War), dot 1 (Nations Cup) and dot 2 (The Mind Ladder) — plus a
  * country-set (DE) pass and an NG pass (monogram/flag-chip fallback). Saves
  * .shots/nations-360x640-{light,dark}.png on success.
  */
