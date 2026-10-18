@@ -16,8 +16,11 @@ export const coinText = (n: number): string => GROUPS.format(Math.max(0, Math.ro
 
 let seq = 0;
 
-/** One gold coin as inline SVG. Each call is a fresh element, so gradient ids never collide. */
-export function coinSvg(): SVGSVGElement {
+/**
+ * One gold coin as inline SVG. Each call is a fresh element, so gradient ids never collide.
+ * `notched` adds the milled outer rim the command-bar vault wears.
+ */
+export function coinSvg(notched = false): SVGSVGElement {
   const id = `coin${++seq}`;
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
@@ -41,12 +44,20 @@ export function coinSvg(): SVGSVGElement {
         <stop offset=".5" stop-color="#fff" stop-opacity=".9"/>
         <stop offset="1" stop-color="#fff" stop-opacity="0"/>
       </linearGradient>
+      <linearGradient id="${id}-notch" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#FDE68A"/>
+        <stop offset=".45" stop-color="#F59E0B"/>
+        <stop offset="1" stop-color="#B45309"/>
+      </linearGradient>
       <clipPath id="${id}-clip"><circle cx="12" cy="12" r="9.7"/></clipPath>
       <filter id="${id}-soft" x="-40%" y="-40%" width="180%" height="180%">
         <feGaussianBlur stdDeviation=".65"/>
       </filter>
     </defs>
     <ellipse cx="12" cy="13.4" rx="9.2" ry="9.2" fill="#8a5c06" opacity=".3" filter="url(#${id}-soft)"/>
+    ${notched
+      ? `<circle cx="12" cy="12" r="10.9" fill="none" stroke="url(#${id}-notch)" stroke-width="1.7" stroke-dasharray="1 1.35" stroke-linecap="butt"/>`
+      : ''}
     <circle cx="12" cy="12" r="9.7" fill="url(#${id}-rim)"/>
     <circle cx="12" cy="12" r="8.6" fill="url(#${id}-body)"/>
     <circle cx="12" cy="12" r="8.6" fill="none" stroke="#8a5c06" stroke-opacity=".4" stroke-width=".7"/>
@@ -68,7 +79,7 @@ export function coinSvg(): SVGSVGElement {
 /** Fill every `[data-coin]` placeholder under `root` (once) with the shared coin SVG. */
 export function mountCoins(root: ParentNode = document): void {
   for (const el of root.querySelectorAll<HTMLElement>('[data-coin]')) {
-    if (!el.firstElementChild) el.append(coinSvg());
+    if (!el.firstElementChild) el.append(coinSvg(el.dataset.coin === 'notched'));
   }
 }
 

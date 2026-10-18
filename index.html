@@ -498,22 +498,37 @@
           </p>
           <header class="id-card id-compact" id="home-id-card">
             <button class="avatar-btn id-avatar-btn" type="button" id="avatar-btn" aria-label="Open profile, Level 1, 0 of 10 XP">
-              <span class="id-avatar-ring" aria-hidden="true">
-                <svg class="id-ring" viewBox="0 0 56 56" focusable="false">
+              <span class="id-avatar-orb" aria-hidden="true">
+                <svg class="id-ring" viewBox="0 0 48 48" focusable="false">
                   <defs>
-                    <linearGradient id="id-ring-grad" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0" stop-color="#38bdf8" />
-                      <stop offset="1" stop-color="#10b981" />
+                    <linearGradient id="xpGrad" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0" stop-color="#22D3EE" />
+                      <stop offset=".55" stop-color="#34D399" />
+                      <stop offset="1" stop-color="#10B981" />
                     </linearGradient>
                   </defs>
-                  <circle class="id-ring-track" cx="28" cy="28" r="26" />
-                  <circle class="id-ring-fill" id="p-ring" cx="28" cy="28" r="26" />
+                  <circle class="id-ring-track" cx="24" cy="24" r="22" />
+                  <circle class="id-ring-fill" id="p-ring" cx="24" cy="24" r="22" />
                 </svg>
                 <span class="avatar id-avatar" id="avatar">
                   <img id="avatar-img" alt="" hidden />
-                  <span id="avatar-t">P</span>
+                  <span id="avatar-t">PL</span>
                 </span>
-                <span class="id-lvl" aria-hidden="true"><b id="p-level">1</b></span>
+                <span class="id-lvl" aria-hidden="true">
+                  <svg class="id-lvl-crest" viewBox="0 0 20 22" focusable="false">
+                    <defs>
+                      <linearGradient id="lvlFace" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0" stop-color="#38BDF8" />
+                        <stop offset=".48" stop-color="#0284C7" />
+                        <stop offset="1" stop-color="#0369A1" />
+                      </linearGradient>
+                    </defs>
+                    <path class="id-lvl-rim" d="M10 1 18.4 5.1v6.8c0 4.2-3.5 7.2-8.4 8.9-4.9-1.7-8.4-4.7-8.4-8.9V5.1Z" />
+                    <path class="id-lvl-face" d="M10 2.8 16.9 6v5.9c0 3.3-2.8 5.8-6.9 7.3-4.1-1.5-6.9-4-6.9-7.3V6Z" />
+                    <path class="id-lvl-spec" d="M4.4 6.8 10 4l5.6 2.8" />
+                  </svg>
+                  <b id="p-level">1</b>
+                </span>
               </span>
             </button>
             <div class="id-mid">
@@ -521,7 +536,7 @@
                 <button class="id-name-btn" type="button" id="home-profile-btn" aria-label="Open profile">
                   <span class="player-name id-name" id="p-name">Player</span>
                 </button>
-                <span class="id-flag" id="home-flag" hidden aria-hidden="true"><span class="flag" id="home-flag-glyph"></span><span class="flag-code" id="home-flag-code"></span></span>
+                <span class="id-flag" id="home-flag" hidden aria-hidden="true"><span class="id-flag-plate" id="home-flag-glyph"></span><span class="flag-code" id="home-flag-code"></span></span>
               </div>
               <button class="id-team" type="button" id="team-chip" aria-haspopup="dialog" aria-label="Join Squad">
                 <span class="squad-avatar id-team-av" id="squad-avatar" hidden aria-hidden="true">S</span>
@@ -530,9 +545,25 @@
               </button>
             </div>
             <div class="id-side">
-              <button class="coin-pill id-coin" type="button" id="coin-btn" aria-label="Open profile — coin balance"><span class="coin" data-coin aria-hidden="true"></span><span id="p-coins">0</span></button>
+              <button class="coin-pill id-coin" type="button" id="coin-btn" aria-label="Open profile — coin balance"><span class="coin" data-coin="notched" aria-hidden="true"></span><span id="p-coins">0</span></button>
               <button class="icon-btn xs notif-bell id-bell" type="button" id="home-notifs" aria-label="Open notifications">
-                <svg class="ico" aria-hidden="true"><use href="#i-bell" /></svg>
+                <svg class="ico notif-bell-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <defs>
+                    <linearGradient id="bellBody" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stop-color="#E8EEF8" />
+                      <stop offset=".45" stop-color="#B9C6DB" />
+                      <stop offset="1" stop-color="#8595B0" />
+                    </linearGradient>
+                    <linearGradient id="bellRim" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0" stop-color="#F8FAFC" />
+                      <stop offset="1" stop-color="#64748B" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M12 3.1a5.9 5.9 0 0 0-5.9 5.9c0 3.6-1.1 5-1.8 5.7-.3.3-.1.9.3.9h14.8c.4 0 .6-.6.3-.9-.7-.7-1.8-2.1-1.8-5.7A5.9 5.9 0 0 0 12 3.1Z" fill="url(#bellBody)" stroke="url(#bellRim)" stroke-width="1.1" />
+                  <path d="M8.4 8.2a3.6 3.6 0 0 1 3.2-2.9" stroke="#fff" stroke-width="1.1" stroke-linecap="round" opacity=".75" />
+                  <circle cx="12" cy="18.7" r="1.75" fill="url(#bellBody)" stroke="#0B1220" stroke-width=".8" />
+                  <path d="M6.4 14.6h11.2" stroke="#0B1220" stroke-width=".6" opacity=".25" />
+                </svg>
                 <span class="notif-badge" id="notif-badge" hidden></span>
               </button>
             </div>

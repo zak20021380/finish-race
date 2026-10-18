@@ -21,6 +21,7 @@ import { MAX_BALLS, newGame } from './rules';
 import { createPreview, createRenderer, type Preview, type View } from './render';
 import { setBalance } from './coin';
 import { flagOf, guessCountry, nameOf, search } from './countries';
+import { renderCountryFlagSvg } from './flagbadge';
 import { cleanCode, standings, YOU } from './teams';
 import {
   bindSquad, bindSquadById, cleanHandle, getMySquad, leaveSquad,
@@ -998,11 +999,14 @@ export function createMenu(api: MenuApi): Menu {
     setBalance($('pf-coins'), profile.coins);
     for (const id of ['p-level', 'pf-level']) $(id).textContent = String(lv.n);
     $('pf-xp').textContent = `${lv.got} / ${lv.need} XP`;
-    /* Home XP ring (r=26, stroke 3, round caps, accent gradient on muted track): replaces the level pill + XP bar. */
-    const RING_C = 2 * Math.PI * 26;
+    /* Home XP ring (r=22 in a 48 viewBox, round caps, cyan→emerald gradient on a dark track):
+       the arc replaces the level pill + XP bar. Circumference comes from the node itself, so a
+       resize of the orb can never desync the dash math from the painted circle. */
     const pct: number = lv.need > 0 ? Math.min(1, Math.max(0, lv.got / lv.need)) : 0;
     const ring = document.getElementById('p-ring') as unknown as SVGCircleElement | null;
     if (ring) {
+      const radius = ring.r?.baseVal?.value || 22;
+      const RING_C = 2 * Math.PI * radius;
       ring.style.strokeDasharray = String(RING_C);
       ring.style.strokeDashoffset = String(RING_C * (1 - pct));
       ring.setAttribute('aria-hidden', 'true');
@@ -1026,20 +1030,22 @@ export function createMenu(api: MenuApi): Menu {
     setFlag('country-flag', 'country-code', c ?? '');
     $('pf-country-v').textContent = c ? nameOf(c) : 'Add country';
     setFlag('pf-flag', 'pf-code', c ?? '');
-    /* Home name flag: small glyph next to the name when a country is set. */
+    /* Home name flag: a real vector plate next to the name — never a regional-indicator
+       pair, which Windows draws as two bare letters. The code stays in the DOM (hidden)
+       only as the accessible/state hook. */
     const homeFlag = document.getElementById('home-flag');
     const homeGlyph = document.getElementById('home-flag-glyph');
     const homeCode = document.getElementById('home-flag-code');
-    if (homeFlag && homeGlyph && homeCode) {
+    if (homeFlag && homeGlyph) {
       if (c) {
         homeFlag.hidden = false;
-        homeGlyph.textContent = flagOf(c);
-        homeCode.textContent = c;
+        homeGlyph.textContent = '';
+        homeGlyph.append(renderCountryFlagSvg(c));
       } else {
         homeFlag.hidden = true;
         homeGlyph.textContent = '';
-        homeCode.textContent = '';
       }
+      if (homeCode) homeCode.textContent = c ?? '';
     }
     /* country reward state: +100 while unclaimed, verified once set+claimed */
     const cReward = $('pf-country-reward');
