@@ -877,6 +877,19 @@ export function createAdmin(api: AdminApi): Admin {
   const bcPvTitle = $<HTMLElement>('adm-bc-pv-title');
   const bcPvBody = $<HTMLElement>('adm-bc-pv-body');
   const bcPvCta = $<HTMLElement>('adm-bc-pv-cta');
+  const bcCtaPanel = $<HTMLElement>('adm-bc-cta-panel');
+  const bcCtaToggle = $<HTMLButtonElement>('adm-bc-cta-toggle');
+  const bcCtaHint = $<HTMLElement>('adm-bc-cta-hint');
+  const bcCtaGrid = $<HTMLElement>('adm-bc-cta-grid');
+  /* Dispatch feedback: the sticky Dark-Clay banner and the spinner that rides the send key */
+  const bcToast = $<HTMLElement>('adm-bc-toast');
+  const bcToastTxt = $<HTMLElement>('adm-bc-toast-txt');
+  const bcToastOk = $<HTMLElement>('adm-bc-toast-ok');
+  const bcToastBad = $<HTMLElement>('adm-bc-toast-bad');
+  const bcToastDone = $<HTMLButtonElement>('adm-bc-toast-done');
+  const bcSendIco = $<HTMLElement>('adm-bc-send-ico');
+  const bcSendSpin = $<HTMLElement>('adm-bc-spin');
+  const bcSendLabel = $<HTMLElement>('adm-bc-send-label');
   /* The confirm dialog, shared by every destructive key in the stage */
   const confirmEl = $<HTMLElement>('adm-confirm');
   const confirmTitle = $<HTMLElement>('adm-confirm-title');
@@ -931,6 +944,10 @@ export function createAdmin(api: AdminApi): Admin {
   let bcAud: Broadcast['audience']['kind'] = 'all';
   let bcPri: 'urgent' | 'feed' = 'urgent';
   let bcBusy = false;
+  /** The optional action panel: on by default, and switching it off drops the pair for good. */
+  let bcCtaOn = true;
+  /** The dispatch banner's auto-close timer, so a success sweeps the drawer shut by itself. */
+  let bcToastId = 0;
   /** What the confirm dialog's destructive key will run, when it is up. */
   let pendingConfirm: (() => void) | null = null;
   /** One close timer per drawer, so a reopen mid-fade never strands a hidden panel. */
@@ -1661,6 +1678,60 @@ export function createAdmin(api: AdminApi): Admin {
   const bcKicker = (): string =>
     `${bcPri === 'urgent' ? 'Urgent' : 'Feed'} · ${audienceText(bcAud, (bcAudValue?.value ?? '').trim())}`;
 
+  /** The dispatch banner: an emerald check on the way out, a crimson shield on the way back. */
+  function showBcToast(state: 'ok' | 'bad', msg: string, done: boolean) {
+    if (bcToastId) {
+      window.clearTimeout(bcToastId);
+      bcToastId = 0;
+    }
+    if (!bcToast) return;
+    bcToast.dataset.state = state;
+    if (bcToastTxt) bcToastTxt.textContent = msg;
+    if (bcToastOk) bcToastOk.hidden = state !== 'ok';
+    if (bcToastBad) bcToastBad.hidden = state !== 'bad';
+    if (bcToastDone) bcToastDone.hidden = !done;
+    bcToast.hidden = false;                  /* display:none -> flex also restarts the pop-in */
+  }
+
+  /** The banner leaves, and any auto-close it had queued with it. */
+  function hideBcToast() {
+    if (bcToastId) {
+      window.clearTimeout(bcToastId);
+      bcToastId = 0;
+    }
+    if (bcToast) bcToast.hidden = true;
+  }
+
+  /** The Dispatch key while the Worker is being asked: spinner in, label forward, taps swallowed. */
+  function setBcBusy(busy: boolean) {
+    bcBusy = busy;
+    if (bcSend) {
+      bcSend.dataset.busy = String(busy);
+      bcSend.setAttribute('aria-disabled', 'true');   /* paintBcPreview() recomputes it after the wait */
+    }
+    if (bcSendIco) bcSendIco.hidden = busy;
+    if (bcSendSpin) bcSendSpin.hidden = !busy;
+    if (bcSendLabel) bcSendLabel.textContent = busy ? 'Dispatching...' : 'Dispatch';
+  }
+
+  /** The optional action button: off clears the pair, so a half-written CTA never ships. */
+  function setCtaOn(on: boolean) {
+    bcCtaOn = on;
+    if (bcCtaPanel) bcCtaPanel.dataset.on = String(on);
+    if (bcCtaToggle) bcCtaToggle.setAttribute('aria-checked', String(on));
+    if (bcCtaGrid) bcCtaGrid.hidden = !on;
+    if (bcCtaHint) {
+      bcCtaHint.textContent = on
+        ? 'Optional — leave both blanks and the player only gets a plain Dismiss key.'
+        : 'Off — no action button; the player gets a plain Dismiss key.';
+    }
+    if (!on) {
+      if (bcCtaLabel) bcCtaLabel.value = '';
+      if (bcCtaTarget) bcCtaTarget.value = '';
+    }
+    paintBcPreview();
+  }
+
   function paintBcPreview() {
     const title = (bcTitle?.value ?? '').trim();
     const body = (bcBody?.value ?? '').trim();
@@ -1674,7 +1745,7 @@ export function createAdmin(api: AdminApi): Admin {
       bcPvCta.hidden = !has;
       bcPvCta.textContent = has ? label : '';
     }
-    if (bcSend) bcSend.setAttribute('aria-disabled', String(!bcDraftValid()));
+    if (bcSend) bcSend.setAttribute('aria-disabled', String(bcBusy || !bcDraftValid()));
   }
 
   /** The composer's shape check, mirroring the Worker's own guards. */
@@ -1777,6 +1848,7 @@ export function createAdmin(api: AdminApi): Admin {
     for (const b of bcAudBtns) b.setAttribute('aria-pressed', String(b.dataset.aud === 'all'));
     bcPri = 'urgent';
     for (const b of bcPriBtns) b.setAttribute('aria-pressed', String(b.dataset.pri === 'urgent'));
+    setCtaOn(true);
     paintBcPreview();
   }
 
@@ -1785,17 +1857,17 @@ export function createAdmin(api: AdminApi): Admin {
     if (bcBusy || !bcDraftValid()) {
       impact('light');
       notify('error');
-      api.note('Title and message are required — a button needs both halves.', true, 2400);
+      showBcToast('bad', 'Failed to send: title and message are required — a button needs both halves.', false);
       return;
     }
     if (!bcOn) {
       impact('light');
       notify('error');
-      api.note('No Worker answering — the broadcast did not leave this device.', true, 2400);
+      showBcToast('bad', 'Failed to send: no Worker answering — the broadcast did not leave this device.', false);
       return;
     }
-    bcBusy = true;
-    if (bcSend) bcSend.setAttribute('aria-disabled', 'true');
+    hideBcToast();
+    setBcBusy(true);
     const draft: BroadcastDraft = {
       title: (bcTitle?.value ?? '').trim(),
       body: (bcBody?.value ?? '').trim(),
@@ -1806,26 +1878,30 @@ export function createAdmin(api: AdminApi): Admin {
       priority: bcPri,
     };
     const res = await dispatchBroadcast(draft);
-    bcBusy = false;
+    setBcBusy(false);
     if (!res) {
       markBcLocal();
       notify('error');
-      api.note('No answer — nothing was dispatched.', true, 2400);
+      showBcToast('bad', 'Failed to send: no answer — nothing was dispatched. Retry when you like.', false);
+      paintBcPreview();
       return;
     }
     if (!res.ok) {
       notify('error');
-      api.note(BROADCAST_ERROR[res.error ?? ''] ?? 'The Worker refused that broadcast.', true, 2600);
+      showBcToast('bad', `Failed to send: ${BROADCAST_ERROR[res.error ?? ''] ?? 'the Worker refused that broadcast.'}`, false);
       paintBcPreview();
-      return;
+      return;                            /* the draft is untouched, so a retry costs one tap */
     }
     impact('medium');
     notify('success');
-    api.note(`Broadcast dispatched to ${audienceText(bcAud, draft.audienceValue)}.`, false, 2400);
-    hideDrawer(bcDrawer);
+    showBcToast('ok', 'Broadcast Dispatched Successfully! Delivered to online players.', true);
     resetComposer();
     await refreshBroadcasts();
     if (res.broadcast) api.onBroadcast?.(res.broadcast);
+    bcToastId = window.setTimeout(() => {
+      hideBcToast();
+      hideDrawer(bcDrawer);
+    }, 1200);                            /* the banner reads, then the composer sweeps itself away */
   }
 
   /** Archive or restore one announcement, and tell the client engine which way it went. */
@@ -2426,11 +2502,27 @@ export function createAdmin(api: AdminApi): Admin {
 
   bcCompose?.addEventListener('click', () => {
     impact('light');
+    hideBcToast();
     showDrawer(bcDrawer);
     paintBcPreview();
   });
-  bcDrawerX?.addEventListener('click', () => hideDrawer(bcDrawer));
-  bcCancel?.addEventListener('click', () => hideDrawer(bcDrawer));
+  bcDrawerX?.addEventListener('click', () => {
+    hideBcToast();
+    hideDrawer(bcDrawer);
+  });
+  bcCancel?.addEventListener('click', () => {
+    hideBcToast();
+    hideDrawer(bcDrawer);
+  });
+  bcCtaToggle?.addEventListener('click', () => {
+    impact('light');
+    setCtaOn(!bcCtaOn);
+  });
+  bcToastDone?.addEventListener('click', () => {
+    impact('light');
+    hideBcToast();
+    hideDrawer(bcDrawer);
+  });
   for (const el of [bcTitle, bcBody, bcCtaLabel, bcCtaTarget, bcAudValue]) {
     el?.addEventListener('input', () => paintBcPreview());
   }
@@ -2462,10 +2554,11 @@ export function createAdmin(api: AdminApi): Admin {
     });
   }
   bcSend?.addEventListener('click', () => {
+    if (bcBusy) return;                    /* the spinner is up: this tap belongs to the Worker */
     if (bcSend.getAttribute('aria-disabled') === 'true') {
       impact('light');
       notify('error');
-      api.note('Title and message are required — a button needs both halves.', true, 2400);
+      showBcToast('bad', 'Failed to send: title and message are required — a button needs both halves.', false);
       return;
     }
     void sendBroadcast();

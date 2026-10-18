@@ -1953,6 +1953,27 @@
             </button>
           </header>
           <div class="adm-drawer-body" data-scroll tabindex="0">
+            <!-- dispatch feedback: the Dark-Clay success / error banner, sticky over the form -->
+            <div class="adm-bc-toast" id="adm-bc-toast" hidden data-state="ok" role="status"
+              aria-live="polite">
+              <svg class="adm-bc-toast-ico" id="adm-bc-toast-ok" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 2.6a9.4 9.4 0 1 0 0 18.8 9.4 9.4 0 0 0 0-18.8Z" fill="rgba(16,185,129,.16)"
+                  stroke="currentColor" stroke-width="1.4" />
+                <path d="m7.8 12.3 2.9 2.9 5.5-6" fill="none" stroke="currentColor" stroke-width="2.1"
+                  stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <svg class="adm-bc-toast-ico" id="adm-bc-toast-bad" viewBox="0 0 24 24" aria-hidden="true"
+                hidden>
+                <path d="M12 2.7 4.4 5.6v6.1c0 4.4 3.1 8.4 7.6 9.6 4.5-1.2 7.6-5.2 7.6-9.6V5.6L12 2.7Z"
+                  fill="rgba(224,38,79,.16)" stroke="currentColor" stroke-width="1.4"
+                  stroke-linejoin="round" />
+                <path d="M12 8v4.6M12 15.7v.1" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" />
+              </svg>
+              <span class="adm-bc-toast-txt" id="adm-bc-toast-txt"></span>
+              <button class="adm-bc-toast-done" type="button" id="adm-bc-toast-done" hidden>Done</button>
+            </div>
+
             <label class="adm-fld">
               <span class="adm-fld-l">Title</span>
               <input id="adm-bc-title" class="adm-input" type="text" maxlength="80" autocomplete="off"
@@ -1963,18 +1984,30 @@
               <textarea id="adm-bc-body" class="adm-input adm-area" maxlength="600" rows="4"
                 placeholder="The room restarts for a hotfix. Races in progress are saved."></textarea>
             </label>
-            <div class="adm-fld-row">
-              <label class="adm-fld">
-                <span class="adm-fld-l">Button label</span>
-                <input id="adm-bc-cta-label" class="adm-input" type="text" maxlength="24"
-                  autocomplete="off" spellcheck="false" placeholder="Open Shop" />
-              </label>
-              <label class="adm-fld">
-                <span class="adm-fld-l">Button target</span>
-                <input id="adm-bc-cta-target" class="adm-input" type="text" maxlength="200"
-                  autocomplete="off" spellcheck="false" placeholder="shop or https://t.me/…" />
-              </label>
-            </div>
+
+            <!-- the optional action CTA: strictly opt-in, blank means a plain Dismiss button -->
+            <section class="adm-bc-cta" id="adm-bc-cta-panel" data-on="true">
+              <button class="adm-bc-cta-h" type="button" id="adm-bc-cta-toggle" role="switch"
+                aria-checked="true" aria-controls="adm-bc-cta-grid">
+                <span class="adm-bc-cta-t">Attach action button (optional)</span>
+                <span class="adm-micro-sw" aria-hidden="true"><span class="adm-micro-sw-k"></span></span>
+              </button>
+              <p class="adm-bc-cta-hint" id="adm-bc-cta-hint">Off by choice, blank by choice — the player
+                gets a plain Dismiss key.</p>
+              <div class="adm-fld-row" id="adm-bc-cta-grid">
+                <label class="adm-fld">
+                  <span class="adm-fld-l">Button label</span>
+                  <input id="adm-bc-cta-label" class="adm-input" type="text" maxlength="24"
+                    autocomplete="off" spellcheck="false" placeholder="Join Event" />
+                </label>
+                <label class="adm-fld">
+                  <span class="adm-fld-l">Button target</span>
+                  <input id="adm-bc-cta-target" class="adm-input" type="text" maxlength="200"
+                    autocomplete="off" spellcheck="false" placeholder="shop or https://t.me/…" />
+                </label>
+              </div>
+            </section>
+
             <p class="adm-fld-l">Audience</p>
             <div class="adm-seg" role="group" aria-label="Audience" id="adm-bc-audience">
               <button class="adm-seg-b" type="button" data-aud="all" aria-pressed="true">Everyone</button>
@@ -1993,17 +2026,50 @@
             </div>
 
             <p class="adm-fld-l">Preview</p>
+            <!-- a 1:1 scaled mockup of the Frosted Dark-Clay announcement the player receives -->
             <div class="adm-bc-pv" aria-hidden="true">
+              <span class="adm-bc-pv-crest">
+                <svg class="adm-bc-pv-crest-ico" viewBox="0 0 24 24" focusable="false">
+                  <defs>
+                    <linearGradient id="bcCrest" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stop-color="#FDE68A" />
+                      <stop offset=".45" stop-color="#F59E0B" />
+                      <stop offset="1" stop-color="#B45309" />
+                    </linearGradient>
+                    <linearGradient id="bcCrestRim" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0" stop-color="#FEF3C7" />
+                      <stop offset="1" stop-color="#92400E" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M3.6 9.9v4.2c0 .8.6 1.4 1.4 1.4h1.9l7 4.5c.7.4 1.6-.1 1.6-.9V4.9c0-.8-.9-1.3-1.6-.9l-7 4.5H5c-.8 0-1.4.6-1.4 1.4Z"
+                    fill="url(#bcCrest)" stroke="url(#bcCrestRim)" stroke-width="1" />
+                  <path d="M8.8 15.5l1 3.6c.1.4-.2.8-.6.8h-1c-.3 0-.6-.2-.7-.5l-1.1-3.7"
+                    fill="none" stroke="url(#bcCrestRim)" stroke-width="1.4" stroke-linecap="round" />
+                  <path d="M17.6 9.4a3.6 3.6 0 0 1 0 5.2M19.6 7.4a6.4 6.4 0 0 1 0 9.2"
+                    fill="none" stroke="#FCD34D" stroke-width="1.3" stroke-linecap="round" opacity=".85" />
+                  <path d="M5.4 10.6h4.2" stroke="#FEF3C7" stroke-width=".9" stroke-linecap="round"
+                    opacity=".7" />
+                </svg>
+              </span>
+              <span class="adm-bc-pv-badge">Official broadcast</span>
               <span class="adm-bc-pv-kicker" id="adm-bc-pv-kicker">Urgent · Everyone</span>
               <b class="adm-bc-pv-title" id="adm-bc-pv-title">Your title here</b>
               <span class="adm-bc-pv-body" id="adm-bc-pv-body">Your message here.</span>
-              <span class="adm-bc-pv-cta" id="adm-bc-pv-cta" hidden>Open</span>
+              <span class="adm-bc-pv-actions">
+                <span class="adm-bc-pv-cta" id="adm-bc-pv-cta" hidden>Open</span>
+                <span class="adm-bc-pv-dismiss">Confirm &amp; Dismiss</span>
+              </span>
             </div>
           </div>
           <footer class="adm-drawer-foot">
             <button class="adm-btn" type="button" id="adm-bc-cancel">Cancel</button>
             <button class="adm-btn adm-btn-primary" type="button" id="adm-bc-send" aria-disabled="true">
-              <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg><span>Dispatch</span>
+              <svg class="ico" id="adm-bc-send-ico" aria-hidden="true"><use href="#i-send" /></svg>
+              <svg class="adm-bc-spin" id="adm-bc-spin" viewBox="0 0 24 24" aria-hidden="true" hidden>
+                <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="3"
+                  stroke-linecap="round" stroke-dasharray="34 20" />
+              </svg>
+              <span id="adm-bc-send-label">Dispatch</span>
             </button>
           </footer>
         </div>
