@@ -3454,6 +3454,20 @@ html.no-flags .id-flag .flag-code { display: none; }
 }
 .carousel::-webkit-scrollbar { display: none; }
 .carousel:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+/* Strict footprint lock: every slide in the Home track is exactly the track's
+   content box tall, so a content change on one slide can never push the track,
+   the dots or the sibling slides by a single pixel. The container unit falls
+   back to the authored stretch when container queries are unsupported. */
+@supports (container-type: size) {
+  .carousel { container-type: size; }
+  #home-carousel > .car-card { height: 100cqh; }
+}
+/* One dot reserve on every slide: the pager dots sit 8px off the card edge with
+   6px of air above them, so switching slides never moves the pagination row. */
+#home-carousel > .car-card { padding-bottom: 34px; }
+@media (max-height: 620px) {
+  #home-carousel > .car-card { padding-bottom: 32px; }
+}
 /* Contained slider: every card is exactly the viewport width, centred on snap.
    Off-screen cards stay fully off-screen — nothing peeks at the edges.
    Children never shrink: a card that is too short for its own lines overflows
@@ -15208,22 +15222,26 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   white-space: nowrap;
 }
 
-/* ---- the ticker: the leading channel on the left, the clock on the right ---- */
-.tour-ticker {
+/* ---- the telemetry HUD: the leading channel on the left, the tactical clock on
+   the right, both recessed into one smoked dark-clay capsule. 22px tall, hairline
+   ring, inner top shadow — a readout carved into the slab, not a text row. ---- */
+.tour-hud {
   flex: none;
-  margin: 0;
-  height: 12px;
+  height: 22px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   min-width: 0;
-  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .02em;
-  color: #94A3B8;
-  white-space: nowrap;
+  padding: 4px 10px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .5),
+    inset 0 -1px 0 rgba(255, 255, 255, .04);
+  overflow: hidden;
 }
 .tour-leader {
   display: inline-flex;
@@ -15231,28 +15249,55 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   gap: 4px;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
-.tour-leader b {
-  font-weight: 800;
-  color: #E2E8F0;
-}
-.tour-verified {
+/* 12px metallic crown: gold with its own cast so it reads struck, not drawn */
+.tour-leader-ico {
   flex: none;
-  width: 11px;
-  height: 11px;
-  color: #38BDF8;
+  width: 12px;
+  height: 12px;
+  color: #FCD34D;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .65));
+}
+.tour-leader-k {
+  flex: none;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  color: #94A3B8;
+}
+.tour-leader-h {
+  min-width: 0;
+  font-size: 9px;
+  font-weight: 800;
+  color: #F8FAFC;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 0 8px rgba(56, 189, 248, .4);
 }
 .tour-clock {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-}
-.tour-clock b {
-  color: #7DD3FC;
+  gap: 5px;
+  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+  font-size: 10px;
   font-weight: 800;
+  letter-spacing: .02em;
+  color: #FBBF24;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+.tour-clock b { color: #FBBF24; font-weight: 800; }
+/* the charge dot: amber core with a cyan-tinted bloom, breathing in place */
+.tour-clock-dot {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #FBBF24;
+  box-shadow: 0 0 6px rgba(251, 191, 36, .9), 0 0 2px rgba(56, 189, 248, .8);
+  animation: tour-beacon-pulse 1.8s ease-in-out infinite;
 }
 /* ---- the CTA: gold chamfer face, obsidian drop, one tactile press ---- */
 .tour-cta {
@@ -15313,39 +15358,39 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
 }
 .tour-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
-/* ---- the enlistment pod: the channel-admin growth key under the gold CTA ----
-   A 32px smoked-glass pill in Telegram cyan: the crown glyph and one mono-tracked
-   line, recessed into the clay with its own top light and a hairline ring. */
+/* ---- the enlistment micro-chip: the channel-admin growth key under the gold CTA.
+   An ultra-slim 22px smoked-glass pill in Telegram cyan, centered with an auto
+   width and a fine cyan rim — a quiet glass link, never a second block button. */
 .tour-admin {
   flex: none;
-  width: 100%;
-  height: 32px;
-  margin-top: 8px;
+  width: fit-content;
+  max-width: 100%;
+  height: 22px;
+  margin: 6px auto 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 0 10px;
-  border: 1px solid rgba(14, 165, 233, 0.35);
-  border-radius: 10px;
-  background: rgba(14, 165, 233, 0.12);
+  gap: 5px;
+  padding: 0 12px;
+  border: 1px solid rgba(14, 165, 233, 0.28);
+  border-radius: 20px;
+  background: rgba(14, 165, 233, 0.08);
   color: #38BDF8;
   font: inherit;
-  font-size: 9.5px;
-  font-weight: 800;
-  letter-spacing: .6px;
-  text-transform: uppercase;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: .4px;
   white-space: nowrap;
   cursor: pointer;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .08),
-    0 1px 2px rgba(0, 0, 0, .35);
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    0 1px 2px rgba(0, 0, 0, .3);
   transition: transform 90ms ease, background var(--motion-fast), box-shadow 90ms ease;
 }
 .tour-admin-ico {
   flex: none;
-  width: 13px;
-  height: 13px;
+  width: 11px;
+  height: 11px;
   color: #38BDF8;
 }
 .tour-admin-t {
@@ -15353,15 +15398,23 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* hover: the glass warms and picks up a soft cyan halo — a light haptic tap */
+.tour-admin:hover {
+  background: rgba(14, 165, 233, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 0 10px rgba(14, 165, 233, .25);
+}
 .tour-admin:active {
-  transform: scale(.98);
-  background: rgba(14, 165, 233, 0.2);
+  transform: scale(.97);
+  background: rgba(14, 165, 233, 0.16);
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, .35);
 }
 .tour-admin:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
-/* reduced motion: the beacon holds a steady glow, the star rests on its dish */
-html.reduced-motion .tour-beacon { animation: none; }
+/* reduced motion: the beacon and the clock dot hold a steady glow, the star rests on its dish */
+html.reduced-motion .tour-beacon,
+html.reduced-motion .tour-clock-dot { animation: none; }
 html.reduced-motion .tour-cta,
 html.reduced-motion .tour-admin { transition: none; }
 html.reduced-motion .tour-star-img { animation: none; }
@@ -15378,20 +15431,25 @@ html.reduced-motion .tour-star-img { animation: none; }
   .tour-kicker { gap: 4px; }
   .tour-chip { padding: 0 5px 0 4px; gap: 3px; letter-spacing: 0; }
   .tour-vault-k { letter-spacing: 1.1px; }
-  /* the enlistment line stays whole at 320px: a hair less type and tracking
-     rather than an ellipsis on the only sentence that names the bot */
-  .tour-admin { padding: 0 8px; gap: 4px; font-size: 9px; letter-spacing: .4px; }
 }
 
 /* The short-phone floor (<640h, e.g. 320x568): the deck carries one more row
-   than its siblings, so the Star podium gives 12px and the pod tightens its
-   gap — the card still lands whole inside the column with air under the
-   identity card, and the star stays above the 44px legibility floor. */
+   than its siblings, so the Star podium gives 12px — the card still lands whole
+   inside the column with air under the identity card, and the star stays above
+   the 44px legibility floor. */
 @media (max-height: 620px) {
-  .car-card.carousel-slide-tournament { gap: 3px; padding-bottom: 32px; }
+  .car-card.carousel-slide-tournament { gap: 3px; }
   .tour-hero { min-height: 52px; }
   .tour-star-img { width: 52px; height: 52px; }
-  .tour-admin { margin-top: 6px; }
+}
+
+/* The 600px floor: the track is at its shortest here, so the podium gives 8
+   more px and the deck closes to a 2px rhythm — every line still lands whole. */
+@media (max-height: 600px) {
+  .car-card.carousel-slide-tournament { gap: 2px; }
+  .tour-hero { min-height: 44px; }
+  .tour-star-img { width: 48px; height: 48px; }
+  .tour-vault { padding: 3px 10px 4px; }
 }
 
 /* ============================================================================================

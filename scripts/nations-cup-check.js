@@ -19,9 +19,12 @@
  *    Telegram Stars PNG hero (64px, star-float loop, warm rim + obsidian cast)
  *    or its recessed dark-clay pedestal dish, still carries the removed
  *    blades/shield SVG frame or the 120/50/30 pool pods, misses the single
- *    200 STARS vault or the "Ends in: NNh NNm" clock, misses the 48px
- *    "FIGHT FOR YOUR CHANNEL · 200★" gold key, or misses the 32px
- *    "OWN A CHANNEL? ENLIST & ADD BOT" Telegram-cyan enlistment pod,
+ *    200 STARS vault or the recessed telemetry HUD (metallic crown + "LEADER:
+ *    @handle" + the amber monospace "NNh NNm left" clock), misses the 48px
+ *    "FIGHT FOR YOUR CHANNEL · 200★" gold key, or misses the 22px centered
+ *    "Channel admin? Enlist here" Telegram-cyan micro-chip,
+ *  - the three slides do not share one exact height (the locked footprint),
+ *
  *  - the Nations Cup header is not "NATIONS CUP · S4" with the globe glyph and
  *    a glowing LIVE pill, does not carry gold/silver/bronze rank markers on
  *    three 40px rows with a real flag badge, name and score each, misses the
@@ -80,6 +83,21 @@ function checkHomeCarousel() {
     const bf = cs.backdropFilter || cs.webkitBackdropFilter || 'none';
     if (bf !== 'none') fails.push(`${name} samples the backdrop (backdrop-filter ${bf})`);
     if (/blur\(/.test(cs.filter || '')) fails.push(`${name} applies blur()`);
+  }
+  // The one footprint: no slide may be a pixel taller or shorter than its siblings.
+  const heights = cards.map((c) => c.getBoundingClientRect().height);
+  for (let i = 1; i < heights.length; i += 1) {
+    if (Math.abs(heights[i] - heights[0]) > 0.5) {
+      fails.push(`slide ${i} height ${heights[i].toFixed(1)} ≠ slide 0 height ${heights[0].toFixed(1)} — the track must not resize between slides`);
+      break;
+    }
+  }
+  const pads = cards.map((c) => parseFloat(getComputedStyle(c).paddingBottom) || 0);
+  for (let i = 1; i < pads.length; i += 1) {
+    if (Math.abs(pads[i] - pads[0]) > 0.5) {
+      fails.push(`slide ${i} bottom reserve ${pads[i]}px ≠ slide 0 reserve ${pads[0]}px — the dots must keep one bottom margin`);
+      break;
+    }
   }
 
   // ---- 4. Channel War (slide 0) ----
@@ -198,20 +216,63 @@ function checkHomeCarousel() {
         if (!/100,\s*116,\s*139/.test(ss.color)) fails.push(`vault clause colour ${ss.color} — want #64748B`);
       }
     }
-    const ticker = tour.querySelector('.tour-ticker');
-    const leader = ticker?.querySelector('.tour-leader');
-    if (!leader) fails.push('war missing the leader ticker');
+    const hud = tour.querySelector('.tour-hud');
+    const leader = hud?.querySelector('.tour-leader');
+    if (!hud) fails.push('war missing the telemetry HUD capsule');
+    else {
+      const hs = getComputedStyle(hud);
+      if (!near(parseFloat(hs.borderTopWidth), 1, .3) || !/255,\s*255,\s*255/.test(hs.borderTopColor)) {
+        fails.push(`HUD border ${hs.borderTopWidth} ${hs.borderTopColor} — want 1px rgba(255,255,255,.08)`);
+      }
+      if (!/15,\s*23,\s*42/.test(hs.backgroundColor)) fails.push(`HUD fill ${hs.backgroundColor} — want rgba(15,23,42,.7)`);
+      if (!near(parseFloat(hs.borderTopLeftRadius), 8, .6)) fails.push(`HUD radius ${hs.borderTopLeftRadius} — want 8px`);
+      if (!near(parseFloat(hs.paddingTop), 4, .6) || !near(parseFloat(hs.paddingLeft), 10, .6)) {
+        fails.push(`HUD padding ${hs.padding} — want 4px 10px`);
+      }
+      if (!near(parseFloat(hs.marginBottom), 8, .6)) fails.push(`HUD margin-bottom ${hs.marginBottom} — want 8px`);
+    }
+    if (!leader) fails.push('war missing the leader telemetry');
     else {
       if (!/^leader:\s*@[a-z0-9_]+/i.test((leader.textContent || '').replace(/\s+/g, ' ').trim())) {
-        fails.push(`leader line "${(leader.textContent || '').trim()}" — want "Leader: @Handle"`);
+        fails.push(`leader line "${(leader.textContent || '').trim()}" — want "LEADER: @Handle"`);
       }
-      if (!leader.querySelector('.tour-verified use[href="#i-shield"]')) fails.push('leader line missing the verified badge');
+      const crown = leader.querySelector('.tour-leader-ico');
+      if (!crown?.querySelector('use[href="#i-crown"], use[href="#i-shield"]')) {
+        fails.push('leader telemetry missing its crown/shield glyph');
+      } else {
+        const gr = crown.getBoundingClientRect();
+        if (!near(gr.width, 12, 0.6) || !near(gr.height, 12, 0.6)) {
+          fails.push(`leader glyph is ${Math.round(gr.width)}x${Math.round(gr.height)} — want 12x12`);
+        }
+      }
+      const k = leader.querySelector('.tour-leader-k');
+      if (!/^leader:?$/i.test((k?.textContent || '').trim())) fails.push(`leader label "${(k?.textContent || '').trim()}" — want "LEADER:"`);
+      else {
+        const ks = getComputedStyle(k);
+        if (!near(parseFloat(ks.fontSize), 9, 0.5)) fails.push(`leader label font-size ${ks.fontSize} — want 9px`);
+        if (!/148,\s*163,\s*184/.test(ks.color)) fails.push(`leader label colour ${ks.color} — want #94A3B8`);
+      }
+      const handle = leader.querySelector('.tour-leader-h, #tour-leader-handle');
+      if (!handle) fails.push('leader telemetry missing the channel handle');
+      else {
+        const hs = getComputedStyle(handle);
+        if (!near(parseFloat(hs.fontSize), 9, 0.5)) fails.push(`leader handle font-size ${hs.fontSize} — want 9px`);
+        if (!/248,\s*250,\s*252/.test(hs.color)) fails.push(`leader handle colour ${hs.color} — want #F8FAFC`);
+        if (!/56,\s*189,\s*248/.test(hs.textShadow)) fails.push(`leader handle needs the cyan halo (text-shadow ${hs.textShadow})`);
+      }
     }
-    const clock = ticker?.querySelector('.tour-clock');
-    if (!/ends in:?\s*\d{2}h\s*\d{2}m/i.test((clock?.textContent || '').replace(/\s+/g, ' '))) {
-      fails.push(`war clock "${(clock?.textContent || '').trim()}" — want "Ends in: 02h 45m"`);
+    const clock = hud?.querySelector('.tour-clock');
+    if (!/\d{2}h\s\d{2}m left/i.test((clock?.textContent || '').replace(/\s+/g, ' '))) {
+      fails.push(`war clock "${(clock?.textContent || '').trim()}" — want "02h 45m left"`);
     }
-    if (clock && !/monospace/.test(getComputedStyle(clock).fontFamily)) fails.push('war clock must stay monospace');
+    if (clock) {
+      const cs = getComputedStyle(clock);
+      if (!/monospace/.test(cs.fontFamily)) fails.push('war clock must stay monospace');
+      if (!/tabular-nums/.test(cs.fontVariantNumeric || '')) fails.push('war clock must use tabular numbers');
+      if (!near(parseFloat(cs.fontSize), 10, 0.6)) fails.push(`war clock font-size ${cs.fontSize} — want 10px`);
+      if (!/251,\s*191,\s*36/.test(cs.color)) fails.push(`war clock colour ${cs.color} — want #FBBF24`);
+      if (!clock.querySelector('.tour-clock-dot')) fails.push('war clock missing its glowing dot');
+    }
     const btn = document.getElementById('home-tournament-cta');
     if (!btn) fails.push('war missing #home-tournament-cta');
     else {
@@ -233,24 +294,31 @@ function checkHomeCarousel() {
     if (!admin) fails.push('war missing #home-tournament-admin (channel-admin enlistment)');
     else {
       const at = (admin.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!/own a channel/i.test(at) || !/enlist/i.test(at) || !/add bot/i.test(at)) {
-        fails.push(`enlistment CTA "${at}" — want "OWN A CHANNEL? ENLIST & ADD BOT"`);
+      if (!/channel admin/i.test(at) || !/enlist/i.test(at)) {
+        fails.push(`enlistment chip "${at}" — want "Channel admin? Enlist here"`);
       }
-      if (!admin.querySelector('use[href="#i-crown"], use[href="#i-bot"]')) fails.push('enlistment CTA missing its crown/bot glyph');
+      if (!admin.querySelector('use[href="#i-send"], use[href="#i-crown"], use[href="#i-bot"]')) {
+        fails.push('enlistment chip missing its plane/crown glyph');
+      }
       const ab = admin.getBoundingClientRect();
-      if (!near(ab.height, 32, 1.5)) fails.push(`enlistment CTA height ${Math.round(ab.height)} — want 32px`);
-      if (ab.width < tour.getBoundingClientRect().width - 26) fails.push('enlistment CTA must span the card width');
+      if (!near(ab.height, 22, 1.5)) fails.push(`enlistment chip height ${Math.round(ab.height)} — want 22px`);
+      const tourW = tour.getBoundingClientRect().width;
+      if (ab.width >= tourW - 20) fails.push(`enlistment chip spans ${Math.round(ab.width)}px — must stay an auto-width micro-chip`);
+      const chipLeft = ab.left - tour.getBoundingClientRect().left;
+      const chipRight = tour.getBoundingClientRect().right - ab.right;
+      if (Math.abs(chipLeft - chipRight) > 2) fails.push('enlistment chip must be centered in the card');
       const as = getComputedStyle(admin);
-      if (!/14,\s*165,\s*233/.test(as.backgroundColor)) fails.push(`enlistment CTA fill ${as.backgroundColor} — want rgba(14,165,233,.12)`);
+      if (!/14,\s*165,\s*233/.test(as.backgroundColor)) fails.push(`enlistment chip fill ${as.backgroundColor} — want rgba(14,165,233,.08)`);
       if (!near(parseFloat(as.borderTopWidth), 1, .3) || !/14,\s*165,\s*233/.test(as.borderTopColor)) {
-        fails.push(`enlistment CTA border ${as.borderTopWidth} ${as.borderTopColor} — want 1px rgba(14,165,233,.35)`);
+        fails.push(`enlistment chip border ${as.borderTopWidth} ${as.borderTopColor} — want 1px rgba(14,165,233,.28)`);
       }
-      if (!near(parseFloat(as.borderTopLeftRadius), 10, .6)) fails.push(`enlistment CTA radius ${as.borderTopLeftRadius} — want 10px`);
-      if (!near(parseFloat(as.marginTop), 8, .6)) fails.push(`enlistment CTA margin-top ${as.marginTop} — want 8px`);
-      if (!/56,\s*189,\s*248/.test(as.color)) fails.push(`enlistment CTA colour ${as.color} — want #38BDF8`);
-      if (!near(parseFloat(as.fontSize), 9.5, .6)) fails.push(`enlistment CTA font-size ${as.fontSize} — want 9.5px`);
-      if (Number(as.fontWeight) < 700) fails.push(`enlistment CTA weight ${as.fontWeight} — want bold`);
-      if (!near(parseFloat(as.letterSpacing) || 0, .6, .2)) fails.push(`enlistment CTA tracking ${as.letterSpacing} — want +0.6px`);
+      if (!near(parseFloat(as.borderTopLeftRadius), 20, .6)) fails.push(`enlistment chip radius ${as.borderTopLeftRadius} — want 20px`);
+      if (!near(parseFloat(as.marginTop), 6, .6)) fails.push(`enlistment chip margin-top ${as.marginTop} — want 6px`);
+      if (!near(parseFloat(as.paddingLeft), 12, .6)) fails.push(`enlistment chip padding ${as.padding} — want 0 12px`);
+      if (!/56,\s*189,\s*248/.test(as.color)) fails.push(`enlistment chip colour ${as.color} — want #38BDF8`);
+      if (!near(parseFloat(as.fontSize), 9, .5)) fails.push(`enlistment chip font-size ${as.fontSize} — want 9px`);
+      if (Number(as.fontWeight) < 500) fails.push(`enlistment chip weight ${as.fontWeight} — want medium`);
+      if (!near(parseFloat(as.letterSpacing) || 0, .4, .15)) fails.push(`enlistment chip tracking ${as.letterSpacing} — want +0.4px`);
     }
   }
 

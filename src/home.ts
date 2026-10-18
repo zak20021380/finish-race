@@ -515,18 +515,18 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     if (top) leaderHandle.textContent = top.handle;
   }
 
-  /* The vault's clock. Anchored to a real deadline 02h 45m out, so the line
+  /* The HUD's clock. Anchored to a real deadline 02h 45m out, so the capsule
      reads exactly as authored on arrival and then ticks honestly; it is only
      repainted while the tab is visible. */
   const tourClock = document.getElementById('tour-countdown');
   if (tourClock) {
     const endsAt = Date.now() + (2 * 60 + 45) * 60_000;
     const paintClock = (): void => {
-      // Round up: 02h 45m out reads "02h 45m", not "02h 44m", on arrival.
+      // Round up: 02h 45m out reads "02h 45m left", not "02h 44m left", on arrival.
       const totalMin = Math.max(0, Math.ceil((endsAt - Date.now()) / 60_000));
       const hh = Math.floor(totalMin / 60);
       const mm = totalMin % 60;
-      tourClock.textContent = `${String(hh).padStart(2, '0')}h ${String(mm).padStart(2, '0')}m`;
+      tourClock.textContent = `${String(hh).padStart(2, '0')}h ${String(mm).padStart(2, '0')}m left`;
     };
     paintClock();
     window.setInterval(() => {

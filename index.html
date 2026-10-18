@@ -593,10 +593,16 @@
                   <span class="tour-vault-sub">Runners-up get 0★ · Pure Conquest</span>
                 </div>
 
-                <p class="tour-ticker">
-                  <span class="tour-leader">Leader: <b id="tour-leader-handle">@DogeSquad</b><svg class="tour-verified" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-shield" /></svg></span>
-                  <span class="tour-clock">Ends in: <b id="tour-countdown">02h 45m</b></span>
-                </p>
+                <!-- split telemetry: the leading channel on the left, the tactical clock
+                     on the right, recessed into one dark-clay capsule -->
+                <div class="tour-hud">
+                  <span class="tour-leader">
+                    <svg class="tour-leader-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-crown" /></svg>
+                    <span class="tour-leader-k">LEADER:</span>
+                    <b class="tour-leader-h" id="tour-leader-handle">@DogeSquad</b>
+                  </span>
+                  <span class="tour-clock"><i class="tour-clock-dot" aria-hidden="true"></i><b id="tour-countdown">02h 45m left</b></span>
+                </div>
 
                 <button class="tour-cta" type="button" id="home-tournament-cta" aria-haspopup="dialog">
                   <span class="tour-cta-t">FIGHT FOR YOUR CHANNEL</span>
@@ -606,8 +612,8 @@
                 <!-- the growth door: channel / group admins enlist their community so
                      its members can compete — a Telegram bot-admin deeplink, not a route -->
                 <button class="tour-admin" type="button" id="home-tournament-admin">
-                  <svg class="tour-admin-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-crown" /></svg>
-                  <span class="tour-admin-t">OWN A CHANNEL? ENLIST &amp; ADD BOT</span>
+                  <svg class="tour-admin-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-send" /></svg>
+                  <span class="tour-admin-t">Channel admin? Enlist here</span>
                 </button>
               </article>
               <article class="car-card nations-cup carousel-slide-nations" data-slide="1" data-index="1" aria-label="Nations Cup — world standings">

@@ -16,8 +16,8 @@
  *
  * One extra pass at 360x640 audits slide 0's interactivity headlessly: the hero
  * is the bundled telegram_stars.png (naturalWidth > 0, star-float live), the
- * enlistment pod fires its t.me bot-admin deeplink (window.open captured), and
- * the gold key lands on the Arena lobby.
+ * enlistment micro-chip fires its t.me bot-admin deeplink (window.open
+ * captured), and the gold key lands on the Arena lobby.
  */
 import http from 'node:http';
 import fs from 'node:fs';
