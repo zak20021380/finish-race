@@ -15,11 +15,13 @@
  *  - anything samples the backdrop (backdrop-filter / blur) — the dark-clay
  *    rule,
  *  - the Channel War header is not "CHANNEL WAR · 200★" behind a 24px
- *    star pod, misses the WINNER TAKES ALL beacon chip, misses the bespoke
- *    #i-star-3d hero gem or its crossed-blades battle frame, still carries the
- *    120/50/30 pool pods, misses the single 200 STARS vault or the
- *    "Ends in: NNh NNm" clock, or misses the 48px "FIGHT FOR YOUR CHANNEL
- *    · 200★" gold key,
+ *    star pod, misses the WINNER TAKES ALL beacon chip, misses the authentic
+ *    Telegram Stars PNG hero (64px, star-float loop, warm rim + obsidian cast)
+ *    or its recessed dark-clay pedestal dish, still carries the removed
+ *    blades/shield SVG frame or the 120/50/30 pool pods, misses the single
+ *    200 STARS vault or the "Ends in: NNh NNm" clock, misses the 48px
+ *    "FIGHT FOR YOUR CHANNEL · 200★" gold key, or misses the 32px
+ *    "OWN A CHANNEL? ENLIST & ADD BOT" Telegram-cyan enlistment pod,
  *  - the Nations Cup header is not "NATIONS CUP · S4" with the globe glyph and
  *    a glowing LIVE pill, does not carry gold/silver/bronze rank markers on
  *    three 40px rows with a real flag badge, name and score each, misses the
@@ -119,16 +121,37 @@ function checkHomeCarousel() {
       if (!beacon) fails.push('chip missing the amber beacon dot');
       else if (getComputedStyle(beacon).animationName === 'none') fails.push('beacon dot is not pulsing');
     }
-    const star = tour.querySelector('.tour-star');
-    if (!star) fails.push('war hero missing the bespoke star');
+    const star = tour.querySelector('.tour-star-img');
+    if (!star) fails.push('war hero missing the authentic Telegram Star image');
     else {
-      if (!star.querySelector('use[href="#i-star-3d"]')) fails.push('war hero star is not the #i-star-3d gem');
+      if (star.tagName !== 'IMG') fails.push(`war hero star is <${star.tagName.toLowerCase()}> — want the telegram_stars.png <img>`);
+      const src = star.currentSrc || star.src || '';
+      if (!/telegram_stars/i.test(src)) fails.push(`war hero star src "${src}" — want the telegram_stars asset`);
+      if (!star.complete || (star.naturalWidth || 0) < 32 || (star.naturalHeight || 0) < 32) {
+        fails.push(`war hero star asset did not render (complete=${star.complete}, ${star.naturalWidth}x${star.naturalHeight})`);
+      }
       const sr = star.getBoundingClientRect();
-      if (sr.width < 44 || sr.height < 44) fails.push(`war star is ${Math.round(sr.width)}x${Math.round(sr.height)} — too small to read`);
+      if (sr.width < 60 || sr.width > 76 || sr.height < 60 || sr.height > 76) {
+        fails.push(`war star is ${Math.round(sr.width)}x${Math.round(sr.height)} — want ~64px`);
+      }
       const sf = getComputedStyle(star).filter || '';
-      if (!/245,\s*158,\s*11/.test(sf) || !/16px/.test(sf)) fails.push(`war star glow "${sf}" — want drop-shadow(0 0 16px rgba(245,158,11,.55))`);
+      if (!/245,\s*158,\s*11/.test(sf) || !/24px/.test(sf)) fails.push(`war star glow "${sf}" — want drop-shadow(0 0 24px rgba(245,158,11,.6))`);
+      if (!/10px\s+20px/.test(sf) || !/0,\s*0,\s*0/.test(sf)) fails.push(`war star cast "${sf}" — want drop-shadow(0 10px 20px rgba(0,0,0,.75))`);
+      if (getComputedStyle(star).animationName !== 'star-float') fails.push('war star is not levitating (want animation star-float)');
     }
-    if (!tour.querySelector('.tour-blades .tour-blade')) fails.push('war hero missing the crossed-blades battle frame');
+    const dish = tour.querySelector('.tour-pedestal');
+    if (!dish) fails.push('war hero missing the recessed pedestal dish');
+    else {
+      const ds = getComputedStyle(dish);
+      if (!/radial-gradient/.test(ds.backgroundImage) || !/245,\s*158,\s*11/.test(ds.backgroundImage) || !/30,\s*41,\s*59/.test(ds.backgroundImage)) {
+        fails.push(`pedestal "${ds.backgroundImage}" — want the amber-to-dark-clay radial dish`);
+      }
+      const db = dish.getBoundingClientRect();
+      if (db.width < 90 || db.height < 32) fails.push(`pedestal is ${Math.round(db.width)}x${Math.round(db.height)} — too small to read as a dish`);
+    }
+    if (tour.querySelector('.tour-blades, .tour-blade, .tour-shield, svg.tour-star')) {
+      fails.push('the placeholder blades/shield SVG frame is still in the hero');
+    }
     if (tour.querySelector('.tour-pods, .tour-pod')) fails.push('the 3-pod prize split is still in the DOM');
     const cardText = (tour.innerText || '').replace(/\s+/g, ' ');
     for (const gone of ['120', '2ND', '3RD']) {
@@ -160,7 +183,7 @@ function checkHomeCarousel() {
       if (!/200 stars/i.test(vtext)) fails.push(`vault value "${vtext}" — want "200 STARS"`);
       if (vv) {
         const vvs = getComputedStyle(vv);
-        if (!near(parseFloat(vvs.fontSize), 22, .6)) fails.push(`vault value font-size ${vvs.fontSize} — want 22px`);
+        if (!near(parseFloat(vvs.fontSize), 24, .6)) fails.push(`vault value font-size ${vvs.fontSize} — want 24px`);
         if (Number(vvs.fontWeight) < 900) fails.push(`vault value weight ${vvs.fontWeight} — want black`);
         if (!/linear-gradient/.test(vvs.backgroundImage)) fails.push('vault value must carry the gold gradient fill');
         if (vvs.backgroundClip !== 'text' && vvs.webkitBackgroundClip !== 'text') fails.push('vault value gold fill must clip to the text');
@@ -199,9 +222,35 @@ function checkHomeCarousel() {
       const h = btn.getBoundingClientRect().height;
       if (h < 47.5) fails.push(`war CTA height ${Math.round(h)} < 48px`);
       const bs = getComputedStyle(btn);
-      if (!/245,\s*158,\s*11/.test(bs.backgroundImage) || !/180,\s*83,\s*9/.test(bs.backgroundImage)) {
-        fails.push('war CTA must carry the gold chamfer gradient (245,158,11 → 180,83,9)');
+      if (!/245,\s*158,\s*11/.test(bs.backgroundImage) || !/217,\s*119,\s*6/.test(bs.backgroundImage)) {
+        fails.push('war CTA must carry the gold gradient (245,158,11 → 217,119,6)');
       }
+      if (!/217,\s*119,\s*6/.test(bs.boxShadow) || !/254,\s*243,\s*199/.test(bs.boxShadow)) {
+        fails.push(`war CTA shadow "${bs.boxShadow}" — want the amber drop + cream inset line`);
+      }
+    }
+    const admin = document.getElementById('home-tournament-admin');
+    if (!admin) fails.push('war missing #home-tournament-admin (channel-admin enlistment)');
+    else {
+      const at = (admin.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!/own a channel/i.test(at) || !/enlist/i.test(at) || !/add bot/i.test(at)) {
+        fails.push(`enlistment CTA "${at}" — want "OWN A CHANNEL? ENLIST & ADD BOT"`);
+      }
+      if (!admin.querySelector('use[href="#i-crown"], use[href="#i-bot"]')) fails.push('enlistment CTA missing its crown/bot glyph');
+      const ab = admin.getBoundingClientRect();
+      if (!near(ab.height, 32, 1.5)) fails.push(`enlistment CTA height ${Math.round(ab.height)} — want 32px`);
+      if (ab.width < tour.getBoundingClientRect().width - 26) fails.push('enlistment CTA must span the card width');
+      const as = getComputedStyle(admin);
+      if (!/14,\s*165,\s*233/.test(as.backgroundColor)) fails.push(`enlistment CTA fill ${as.backgroundColor} — want rgba(14,165,233,.12)`);
+      if (!near(parseFloat(as.borderTopWidth), 1, .3) || !/14,\s*165,\s*233/.test(as.borderTopColor)) {
+        fails.push(`enlistment CTA border ${as.borderTopWidth} ${as.borderTopColor} — want 1px rgba(14,165,233,.35)`);
+      }
+      if (!near(parseFloat(as.borderTopLeftRadius), 10, .6)) fails.push(`enlistment CTA radius ${as.borderTopLeftRadius} — want 10px`);
+      if (!near(parseFloat(as.marginTop), 8, .6)) fails.push(`enlistment CTA margin-top ${as.marginTop} — want 8px`);
+      if (!/56,\s*189,\s*248/.test(as.color)) fails.push(`enlistment CTA colour ${as.color} — want #38BDF8`);
+      if (!near(parseFloat(as.fontSize), 9.5, .6)) fails.push(`enlistment CTA font-size ${as.fontSize} — want 9.5px`);
+      if (Number(as.fontWeight) < 700) fails.push(`enlistment CTA weight ${as.fontWeight} — want bold`);
+      if (!near(parseFloat(as.letterSpacing) || 0, .6, .2)) fails.push(`enlistment CTA tracking ${as.letterSpacing} — want +0.6px`);
     }
   }
 

@@ -21,7 +21,7 @@ import { menuState, motionReduced, onSettings, saveMenu } from './settings';
 import { nameOf } from './countries';
 import { getCountryRanking, getPlayerRanking, type CountryRow, type PlayerRow } from './data';
 import { onChange, profile, theme } from './storage';
-import { impact } from './telegram';
+import { BOT_HANDLE, impact, openLink } from './telegram';
 import { flagPhoto } from './compete';
 import { getSquadRanking } from './squads';
 import { newGame } from './rules';
@@ -30,6 +30,7 @@ import type { Router } from './router';
 import type { Sheets } from './sheets';
 import type { RaceSetup } from './menu';
 import { onGameModeChange, paintLobby as paintGameLobby, paintSheetState as paintGameSheet, resetSheetView } from './gamemodes';
+import starsImg from './assets/images/telegram_stars.png';
 
 export interface HomeApi {
   router: Router;
@@ -465,6 +466,21 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
      the cup lands, so the hand-off knocks until it answers: it stops the
      moment the drawer opens, the moment a locked seat takes the player out of
      the Arena, and gives up after ~3s rather than knocking forever. */
+
+  /* The hero's Star is the authentic Telegram Stars PNG, bundled by Vite (never a
+     hotlinked URL) and mounted once; the glow, dish and levitation are pure CSS. */
+  const tourStar = document.getElementById('tour-star-img') as HTMLImageElement | null;
+  if (tourStar) tourStar.src = starsImg;
+
+  /* The enlistment pod: the channel-admin growth door. It fires a light haptic and
+     hands off to Telegram's own bot-admin deeplink (`?startchannel`), where the
+     admin picks the channel and grants the rights — inside the client when the SDK
+     is there, the system browser otherwise. */
+  document.getElementById('home-tournament-admin')?.addEventListener('click', () => {
+    impact('light');
+    poke();
+    openLink(`https://t.me/${BOT_HANDLE}?startchannel=true&admin=invite_users+pin_messages`);
+  });
 
   document.getElementById('home-tournament-cta')?.addEventListener('click', () => {
     impact('medium');

@@ -13,6 +13,11 @@
  * dot 0 (Channel War), dot 1 (Nations Cup) and dot 2 (The Mind Ladder) — plus a
  * country-set (DE) pass and an NG pass (monogram/flag-chip fallback). Saves
  * .shots/nations-360x640-{light,dark}.png on success.
+ *
+ * One extra pass at 360x640 audits slide 0's interactivity headlessly: the hero
+ * is the bundled telegram_stars.png (naturalWidth > 0, star-float live), the
+ * enlistment pod fires its t.me bot-admin deeplink (window.open captured), and
+ * the gold key lands on the Arena lobby.
  */
 import http from 'node:http';
 import fs from 'node:fs';
@@ -146,6 +151,81 @@ try {
   for (const theme of THEMES) {
     const tag = `360x640 ${theme} country=NG (flag fallback) slide=1`;
     const { ctx } = await check(tag, 360, 640, theme, 'NG', 1);
+    await ctx.close();
+  }
+
+  /* ---- Channel War interaction audit: the hero asset is a real bundled PNG, and
+     both CTAs answer a click — the enlistment pod fires the t.me bot-admin deeplink
+     (captured by stubbing window.open), the gold key routes to the Arena. ---- */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 360, height: 640 }, hasTouch: true });
+    await ctx.addInitScript(() => {
+      window.__hops = [];
+      window.open = (u) => { window.__hops.push(String(u)); return null; };
+    });
+    const pg = await ctx.newPage();
+    await pg.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'networkidle' });
+    await pg.waitForTimeout(1300);
+    await pg.click('#home-dots .dot[data-dot="0"]');
+    await pg.waitForTimeout(600);
+
+    const asset = await pg.evaluate(() => {
+      const img = document.querySelector('.tour-star-img');
+      if (!img) return null;
+      const cs = getComputedStyle(img);
+      return {
+        src: img.currentSrc || img.src,
+        complete: img.complete,
+        nw: img.naturalWidth,
+        nh: img.naturalHeight,
+        anim: cs.animationName,
+      };
+    });
+    ran += 1;
+    if (asset && /telegram_stars/i.test(asset.src) && asset.complete && asset.nw > 0 && asset.nh > 0) {
+      console.log(`PASS hero asset — ${asset.src.split('/').pop()} ${asset.nw}x${asset.nh}, animation=${asset.anim}`);
+    } else {
+      failed += 1;
+      console.log(`FAIL hero asset — ${JSON.stringify(asset)}`);
+    }
+
+    /* The bundle carries its own Telegram SDK shim, and in a plain browser its
+       `openTelegramLink` leaves the page via location.href — so the deeplink is
+       captured at the SDK boundary too, not only at the `window.open` fallback. */
+    await pg.evaluate(() => {
+      const w = window.Telegram && window.Telegram.WebApp;
+      window.__hops = window.__hops || [];
+      if (w) {
+        w.openTelegramLink = (u) => { window.__hops.push(String(u)); };
+        w.openLink = (u) => { window.__hops.push(String(u)); };
+      }
+    });
+
+    await pg.click('#home-tournament-admin');
+    await pg.waitForTimeout(250);
+    const hops = await pg.evaluate(() => window.__hops || []);
+    ran += 1;
+    if (hops.some((u) => /^https:\/\/t\.me\/[^/]+\?startchannel/.test(u))) {
+      console.log(`PASS admin enlistment deeplink — ${hops[hops.length - 1]}`);
+    } else {
+      failed += 1;
+      console.log(`FAIL admin enlistment deeplink — hops=${JSON.stringify(hops)}`);
+    }
+
+    await pg.click('#home-tournament-cta');
+    await pg.waitForTimeout(1800);
+    const arena = await pg.evaluate(() => {
+      const s = document.getElementById('s-arena');
+      const sheet = document.getElementById('sheet-stars');
+      return { arena: !!s && !s.hidden, sheet: !!sheet && !sheet.hidden && sheet.classList.contains('open') };
+    });
+    ran += 1;
+    if (arena.arena) {
+      console.log(`PASS player CTA routed to the battle lobby (seat drawer ${arena.sheet ? 'open' : 'pending'})`);
+    } else {
+      failed += 1;
+      console.log(`FAIL player CTA — arena=${JSON.stringify(arena)}`);
+    }
     await ctx.close();
   }
 } finally {

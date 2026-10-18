@@ -581,45 +581,10 @@
 
                 <div class="tour-hero" aria-hidden="true">
                   <span class="tour-glow"></span>
-                  <span class="tour-emblem">
-                    <!-- battle frame: crossed blades behind a dark shield, star over both -->
-                    <svg class="tour-blades" viewBox="0 0 120 120" focusable="false" aria-hidden="true">
-                      <defs>
-                        <linearGradient id="tourBlade" gradientUnits="userSpaceOnUse" x1="24" y1="16" x2="96" y2="104">
-                          <stop offset="0" stop-color="#F8FAFC" />
-                          <stop offset=".42" stop-color="#94A3B8" />
-                          <stop offset="1" stop-color="#334155" />
-                        </linearGradient>
-                        <linearGradient id="tourHilt" gradientUnits="userSpaceOnUse" x1="42" y1="60" x2="78" y2="96">
-                          <stop offset="0" stop-color="#FCD34D" />
-                          <stop offset=".55" stop-color="#B45309" />
-                          <stop offset="1" stop-color="#7C2D12" />
-                        </linearGradient>
-                        <radialGradient id="tourShieldFace" cx="50%" cy="38%" r="66%">
-                          <stop offset="0" stop-color="#243146" />
-                          <stop offset=".7" stop-color="#111A2B" />
-                          <stop offset="1" stop-color="#0B1220" />
-                        </radialGradient>
-                      </defs>
-                      <g class="tour-blade" transform="rotate(-45 60 58)">
-                        <path d="M60 -10 64.7 8V70H55.3V8Z" fill="url(#tourBlade)" stroke="#0B1220" stroke-opacity=".5" stroke-width=".9" stroke-linejoin="round" />
-                        <path d="M60 -4v66" stroke="#F8FAFC" stroke-opacity=".6" stroke-width=".9" />
-                        <rect x="48.4" y="70" width="23.2" height="5" rx="2.5" fill="url(#tourHilt)" />
-                        <rect x="57" y="75" width="6" height="13.4" rx="2.6" fill="#1E293B" stroke="#0B1220" stroke-opacity=".55" stroke-width=".7" />
-                        <circle cx="60" cy="91.6" r="4.1" fill="url(#tourHilt)" />
-                      </g>
-                      <g class="tour-blade" transform="rotate(45 60 58)">
-                        <path d="M60 -10 64.7 8V70H55.3V8Z" fill="url(#tourBlade)" stroke="#0B1220" stroke-opacity=".5" stroke-width=".9" stroke-linejoin="round" />
-                        <path d="M60 -4v66" stroke="#F8FAFC" stroke-opacity=".6" stroke-width=".9" />
-                        <rect x="48.4" y="70" width="23.2" height="5" rx="2.5" fill="url(#tourHilt)" />
-                        <rect x="57" y="75" width="6" height="13.4" rx="2.6" fill="#1E293B" stroke="#0B1220" stroke-opacity=".55" stroke-width=".7" />
-                        <circle cx="60" cy="91.6" r="4.1" fill="url(#tourHilt)" />
-                      </g>
-                      <path class="tour-shield" d="M60 7 103 21v32.6c0 25-17.4 42.6-43 52.4-25.6-9.8-43-27.4-43-52.4V21Z" fill="url(#tourShieldFace)" stroke="rgba(245, 158, 11, .3)" stroke-width="1.3" />
-                      <path class="tour-shield-rim" d="M60 12.4 97.6 24.4v28.8c0 21.2-14.8 36.2-37.6 44.8-22.8-8.6-37.6-23.6-37.6-44.8V24.4Z" fill="none" stroke="rgba(148, 163, 184, .22)" stroke-width="1" />
-                    </svg>
-                    <svg class="tour-star" viewBox="0 0 56 56" focusable="false" aria-hidden="true"><use href="#i-star-3d" /></svg>
-                  </span>
+                  <span class="tour-pedestal"></span>
+                  <!-- the authentic Telegram Stars PNG (bundled by Vite, src set in home.ts),
+                       levitating over the recessed dish on the star-float loop -->
+                  <img class="tour-star-img" id="tour-star-img" alt="" width="64" height="64" decoding="async" draggable="false" />
                 </div>
 
                 <div class="tour-vault">
@@ -636,6 +601,13 @@
                 <button class="tour-cta" type="button" id="home-tournament-cta" aria-haspopup="dialog">
                   <span class="tour-cta-t">FIGHT FOR YOUR CHANNEL</span>
                   <span class="tour-cta-tag">200★</span>
+                </button>
+
+                <!-- the growth door: channel / group admins enlist their community so
+                     its members can compete — a Telegram bot-admin deeplink, not a route -->
+                <button class="tour-admin" type="button" id="home-tournament-admin">
+                  <svg class="tour-admin-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-crown" /></svg>
+                  <span class="tour-admin-t">OWN A CHANNEL? ENLIST &amp; ADD BOT</span>
                 </button>
               </article>
               <article class="car-card nations-cup carousel-slide-nations" data-slide="1" data-index="1" aria-label="Nations Cup — world standings">

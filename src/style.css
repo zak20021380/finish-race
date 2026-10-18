@@ -3427,7 +3427,10 @@ html.no-flags .id-flag .flag-code { display: none; }
 .carousel {
   flex: 1 1 auto;
   min-height: 128px;
-  max-height: 320px;
+  /* 360px: the Channel War deck carries the 64px Star podium + vault + ticker +
+     two stacked CTAs, and the track is min-content-driven — the card still pins
+     at 312-320px, so nothing below it moves. */
+  max-height: 360px;
   display: flex;
   align-items: stretch;
   gap: 0;
@@ -14661,26 +14664,26 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
 /* ============================================================================================
    CHANNEL WAR — the winner-takes-all hero slide (carousel index 0).
 
-   Same clay slab as its siblings and the same pinned box (8/12/37), so the
+   Same clay slab as its siblings and the same pinned box (8/12/34), so the
    track's scroll geometry, the pager dots and the column budget are untouched
-   by the prepend. The bottom 37px stays empty for the dots; the CTA is the last
-   child above that reserve, exactly like the other two slides.
+   by the prepend. The bottom 34px stays empty for the dots; the enlistment pod
+   is the last child above that reserve, exactly like the other two slides.
 
-   Pure conquest: no 2nd/3rd split. The bespoke #i-star-3d gem sits on a
-   crossed-blades + shield battle frame, and the whole 200★ vault hangs below in
-   one sculpted dark-clay card. Vertical budget inside the 279px card box: head
-   22 · hero flex · vault 62 · ticker 14 · CTA 48 with 4px gaps. Only the hero
-   flexes, so the emblem grows into a taller band and shrinks (never clips) into
-   a short one.
+   Pure conquest: no 2nd/3rd split. The authentic Telegram Stars PNG levitates
+   on a recessed dark-clay dish under a three-layer golden bloom, and the whole
+   200★ vault hangs below in one sculpted dark-clay card. Vertical budget inside
+   the 312px card box: head 24 · hero flex (min 64) · vault 60 · ticker 12 ·
+   gold CTA 48 · enlistment pod 32+8 with 4px gaps. Only the hero flexes, so the
+   star pod grows into a taller band and shrinks (never clips) into a short one.
    ============================================================================================ */
 .car-card.carousel-slide-tournament {
   position: relative;
   isolation: isolate;
   justify-content: flex-start;
   gap: 4px;
-  /* 37px bottom reserve: the pager dots sit 8px off the card edge and are
-     20px tall, so the gold CTA keeps the same 9px of air its siblings have. */
-  padding: 8px 12px 37px;
+  /* 34px bottom reserve: the pager dots sit 8px off the card edge and are 20px
+     tall, so the enlistment pod keeps 6px of air above them. */
+  padding: 8px 12px 34px;
   overflow: hidden;
   border-radius: var(--r-panel);
   border-top: 1px solid rgba(255, 255, 255, .12);
@@ -14783,44 +14786,69 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   }
 }
 
-/* ---- the showcase: the war emblem on a warm ambient backlight ---- */
+/* ---- the showcase: the authentic Telegram Star on a levitating Dark-Clay podium ----
+   The hero is a 64px PNG, never a flat sticker: a recessed radial dish sits under it,
+   a three-layer golden ambient lights it from behind, and the star itself loops on
+   `star-float` with a warm rim glow over a deep obsidian cast. The stage stays
+   `overflow: visible` so neither the 24px bloom nor the 5px levitation is clipped
+   inside the band — the card's own radius does the clipping. */
 .tour-hero {
   position: relative;
   flex: 1 1 auto;
-  min-height: 56px;
+  min-height: 64px;
   display: grid;
   place-items: center;
-  overflow: hidden;
+  overflow: visible;
 }
+/* three stacked radials: a specular warm core (the backlight), the wide amber bloom,
+   then the deep ember wash that seats the whole pod in the clay. The horizontal bleed
+   stays inside the card's 10px inset: any wider and the card reports scrollWidth >
+   clientWidth, which the carousel contract forbids (it clips to its radius). */
 .tour-glow {
   position: absolute;
-  inset: -6% -10%;
-  background: radial-gradient(48% 58% at 50% 48%, rgba(245, 158, 11, .38) 0%, rgba(245, 158, 11, .13) 46%, rgba(245, 158, 11, 0) 74%);
+  inset: -18% -10px;
+  background:
+    radial-gradient(32% 38% at 50% 44%, rgba(255, 236, 179, .26) 0%, rgba(255, 236, 179, 0) 68%),
+    radial-gradient(46% 56% at 50% 48%, rgba(245, 158, 11, .4) 0%, rgba(245, 158, 11, .14) 46%, rgba(245, 158, 11, 0) 74%),
+    radial-gradient(74% 84% at 50% 56%, rgba(180, 83, 9, .22) 0%, rgba(180, 83, 9, 0) 70%);
   pointer-events: none;
 }
-/* the battle frame: shield + crossed blades stacked under the star */
-.tour-emblem {
+/* the dish: a soft dark-clay well with an amber floor, 20px under the star's centre */
+.tour-pedestal {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 128px;
+  height: 48px;
+  transform: translate(-50%, -50%) translateY(20px);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(245, 158, 11, .28) 0%, rgba(30, 41, 59, .3) 50%, transparent 75%);
+  pointer-events: none;
+}
+/* the bowl carved into the dish — an inner shadow ring so the dish reads as 3D clay,
+   not a painted ellipse */
+.tour-pedestal::after {
+  content: "";
+  position: absolute;
+  inset: 24% 27%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(8, 12, 20, .5) 0%, rgba(8, 12, 20, 0) 74%);
+}
+/* the authentic Star: the app's own Telegram Stars asset, lit from behind and
+   casting a deep obsidian shadow, drifting on a 3s levitation loop */
+.tour-star-img {
   position: relative;
-  display: grid;
-  place-items: center;
-  height: 100%;
-  max-height: 82px;
-  width: auto;
-  aspect-ratio: 1 / 1;
-}
-.tour-blades {
-  grid-area: 1 / 1;
+  z-index: 1;
   display: block;
-  width: 100%;
-  height: 100%;
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 24px rgba(245, 158, 11, 0.6)) drop-shadow(0 10px 20px rgba(0, 0, 0, 0.75));
+  animation: star-float 3s ease-in-out infinite;
 }
-/* the bespoke Telegram Star gem: lit, gold, and unmistakably the app's own */
-.tour-star {
-  grid-area: 1 / 1;
-  display: block;
-  width: 52px;
-  height: 52px;
-  filter: drop-shadow(0 0 16px rgba(245, 158, 11, .55)) drop-shadow(0 5px 9px rgba(0, 0, 0, .55));
+@keyframes star-float {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-5px) scale(1.03); }
 }
 
 /* ---- the grand vault: one sculpted dark-clay card, no split ---- */
@@ -14831,7 +14859,7 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   align-items: center;
   justify-content: center;
   gap: 1px;
-  padding: 6px 10px 7px;
+  padding: 4px 10px 5px;
   border-radius: 14px;
   background: linear-gradient(180deg, rgba(30, 41, 59, .8) 0%, rgba(15, 23, 42, .95) 100%);
   border: 1px solid rgba(245, 158, 11, .35);
@@ -14848,7 +14876,7 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   white-space: nowrap;
 }
 .tour-vault-v {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 900;
   line-height: 1.05;
   letter-spacing: .01em;
@@ -14873,7 +14901,7 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
 .tour-ticker {
   flex: none;
   margin: 0;
-  height: 14px;
+  height: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -14928,7 +14956,7 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   padding: 0 12px;
   border: 0;
   border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #F59E0B 0%, #B45309 100%);
+  background: linear-gradient(180deg, #F59E0B 0%, #D97706 100%);
   color: #1A1206;
   font-size: 14px;
   font-weight: 900;
@@ -14937,10 +14965,8 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   white-space: nowrap;
   cursor: pointer;
   box-shadow:
-    0 4px 0 #7C2D12,
-    0 14px 22px -10px rgba(0, 0, 0, .9),
-    inset 0 2px 0 rgba(255, 255, 255, .52),
-    inset 0 -2px 4px rgba(120, 53, 15, .5);
+    0 4px 14px rgba(217, 119, 6, 0.45),
+    inset 0 1px 0 rgba(254, 243, 199, 0.3);
   transition: transform 90ms ease, box-shadow 90ms ease;
 }
 /* the specular bevel: one lit band across the top third, never a backdrop sample */
@@ -14971,15 +14997,66 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
 .tour-cta:active {
   transform: scale(.97) translateY(2px);
   box-shadow:
-    0 2px 0 #7C2D12,
-    0 6px 12px -6px rgba(0, 0, 0, .85),
-    inset 0 1px 0 rgba(255, 255, 255, .34);
+    0 2px 8px rgba(217, 119, 6, 0.4),
+    inset 0 1px 0 rgba(254, 243, 199, 0.22);
 }
 .tour-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
-/* reduced motion: the beacon holds a steady glow */
+/* ---- the enlistment pod: the channel-admin growth key under the gold CTA ----
+   A 32px smoked-glass pill in Telegram cyan: the crown glyph and one mono-tracked
+   line, recessed into the clay with its own top light and a hairline ring. */
+.tour-admin {
+  flex: none;
+  width: 100%;
+  height: 32px;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid rgba(14, 165, 233, 0.35);
+  border-radius: 10px;
+  background: rgba(14, 165, 233, 0.12);
+  color: #38BDF8;
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 1px 2px rgba(0, 0, 0, .35);
+  transition: transform 90ms ease, background var(--motion-fast), box-shadow 90ms ease;
+}
+.tour-admin-ico {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: #38BDF8;
+}
+.tour-admin-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tour-admin:active {
+  transform: scale(.98);
+  background: rgba(14, 165, 233, 0.2);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .35);
+}
+.tour-admin:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+/* reduced motion: the beacon holds a steady glow, the star rests on its dish */
 html.reduced-motion .tour-beacon { animation: none; }
-html.reduced-motion .tour-cta { transition: none; }
+html.reduced-motion .tour-cta,
+html.reduced-motion .tour-admin { transition: none; }
+html.reduced-motion .tour-star-img { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .tour-star-img { animation: none; }
+}
 
 /* The 320px floor: pod, title and the longer WINNER TAKES ALL chip share a
    280px row. Everything that is NOT the title's 12.5px/0.5px type gives
@@ -14990,6 +15067,20 @@ html.reduced-motion .tour-cta { transition: none; }
   .tour-kicker { gap: 4px; }
   .tour-chip { padding: 0 5px 0 4px; gap: 3px; letter-spacing: 0; }
   .tour-vault-k { letter-spacing: 1.1px; }
+  /* the enlistment line stays whole at 320px: a hair less type and tracking
+     rather than an ellipsis on the only sentence that names the bot */
+  .tour-admin { padding: 0 8px; gap: 4px; font-size: 9px; letter-spacing: .4px; }
+}
+
+/* The short-phone floor (<640h, e.g. 320x568): the deck carries one more row
+   than its siblings, so the Star podium gives 12px and the pod tightens its
+   gap — the card still lands whole inside the column with air under the
+   identity card, and the star stays above the 44px legibility floor. */
+@media (max-height: 620px) {
+  .car-card.carousel-slide-tournament { gap: 3px; padding-bottom: 32px; }
+  .tour-hero { min-height: 52px; }
+  .tour-star-img { width: 52px; height: 52px; }
+  .tour-admin { margin-top: 6px; }
 }
 
 /* ============================================================================================

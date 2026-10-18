@@ -57,6 +57,8 @@ interface TgWebApp {
   setColorScheme?(c: 'light' | 'dark'): void;
   disableVerticalSwipes?(): void;
   viewportStableHeight?: number;
+  openTelegramLink?(url: string): void;
+  openLink?(url: string): void;
   onEvent?(e: string, cb: () => void): void;
 }
 declare global { interface Window { Telegram?: { WebApp?: TgWebApp } } }
@@ -176,6 +178,19 @@ export const impact = (s: 'light' | 'medium' | 'heavy') => {
   if (!settings.haptics) return;
   try { tg?.HapticFeedback?.impactOccurred(s); } catch { /* ignore */ }
 };
+
+/**
+ * Open an external link the Telegram way when there is one available: a `t.me/…` hop rides
+ * `openTelegramLink` (so bot-admin invites stay inside the client), anything else `openLink`;
+ * outside Telegram — or on a client too old for both — the system browser takes it.
+ */
+export function openLink(url: string): void {
+  try {
+    if (url.includes('t.me/') && tg?.openTelegramLink) { tg.openTelegramLink(url); return; }
+    if (tg?.openLink) { tg.openLink(url); return; }
+  } catch { /* outside Telegram */ }
+  try { window.open(url, '_blank', 'noopener'); } catch { /* webview blocked */ }
+}
 
 export const notify = (t: 'success' | 'error' | 'warning') => {
   if (!settings.haptics) return;
