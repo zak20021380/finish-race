@@ -1,6 +1,6 @@
 /**
- * audio.ts — the race's sound engine. One `AudioContext`, three decoded assets (`log.mp3`,
- * `move.wav`, `explosion.mp3`) and one master gain: every voice is a `BufferSource` on the graph,
+ * audio.ts — the race's sound engine. One `AudioContext`, four decoded assets (`log.mp3`,
+ * `move.wav`, `explosion.mp3`, `laugh.mp3`) and one master gain: every voice is a `BufferSource` on the graph,
  * scheduled against the context clock so a step, a wall or a blast lands on the frame that caused it
  * rather than the frame after.
  *
@@ -13,8 +13,9 @@ import { onSettings, settings } from './settings';
 import logMp3 from './assets/sounds/log.mp3';
 import moveWav from './assets/sounds/move.wav';
 import explosionMp3 from './assets/sounds/explosion.mp3';
+import laughMp3 from './assets/sounds/laugh.mp3';
 
-export type SoundName = 'log' | 'move' | 'explosion';
+export type SoundName = 'log' | 'move' | 'explosion' | 'laugh';
 
 /**
  * How far ahead of `currentTime` an immediate play is scheduled: enough for the node graph to be
@@ -28,6 +29,12 @@ const MOVE_GAP_MS = 40;
 
 /** A ball shoved down the board by the log slides at this playback rate. */
 export const SHOVE_RATE = 0.7;
+
+/**
+ * The laugh, one voice among the race's: loud enough to carry over a step trail, a touch under the
+ * blast's full scale so a stacked chorus of taps still leaves the master its headroom.
+ */
+const LAUGH_GAIN = 0.8;
 
 /** The amplitude above which a sample of `log.mp3` counts as sound, when its lead-in is measured. */
 const TRIM_EPS = 1e-3;
@@ -100,6 +107,7 @@ function decode(name: SoundName, url: string): void {
 decode('log', logMp3);
 decode('move', moveWav);
 decode('explosion', explosionMp3);
+decode('laugh', laughMp3);
 
 /** The first gesture anywhere — the Play tap counts — lifts the suspension for the rest of the page. */
 let unlocked = false;
@@ -151,6 +159,8 @@ export interface PlayOptions {
   at?: number;
   /** The buffer's playback rate, e.g. `SHOVE_RATE` for a ball the log is pushing. */
   rate?: number;
+  /** One voice's own level, 0..1, when full scale would not sit in the mix. Omitted is full scale. */
+  gain?: number;
 }
 
 let lastMoveAt = -Infinity;
@@ -179,10 +189,24 @@ function play(name: SoundName, opts: PlayOptions = {}): void {
     const src = ctx.createBufferSource();
     src.buffer = buf;
     if (opts.rate !== undefined) src.playbackRate.value = opts.rate;
-    src.connect(master);
-    src.onended = () => src.disconnect();
+    let voice: GainNode | null = null;
+    if (opts.gain !== undefined && opts.gain !== 1) {
+      voice = ctx.createGain();
+      voice.gain.value = Math.min(1, Math.max(0, opts.gain));
+      src.connect(voice).connect(master);
+    } else src.connect(master);
+    src.onended = () => { src.disconnect(); voice?.disconnect(); };
     src.start(when, name === 'log' ? LOG_TRIM_S : 0);
   } catch { /* a node graph refusal must never take a turn down with it */ }
+}
+
+/**
+ * The "Haha!" emote, fire-and-forget. Every tap gets its own `BufferSource`, so rapid taps stack
+ * as a chorus instead of cutting the last laugh off; the buffer is decoded with the engine, so the
+ * voice is already cached by the time the sheet opens. Muted or locked, the call is a no-op.
+ */
+export function playLaugh(): void {
+  play('laugh', { gain: LAUGH_GAIN });
 }
 
 export const audio = { play, setVolume };

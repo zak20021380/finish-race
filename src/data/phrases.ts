@@ -56,6 +56,13 @@ export const TAUNTS: readonly string[] = [
   'Outplayed.',
 ];
 
+/** Every emote id, in sheet order. The wire and a roaming frame accept nothing outside this list. */
+export const EMOTE_IDS: readonly ChatEmoteId[] = ['laugh', 'fury', 'impatient'];
+
+/** A frame's emote field is only an emote when it names one of the three pods above. */
+export const isChatEmoteId = (v: unknown): v is ChatEmoteId =>
+  typeof v === 'string' && (EMOTE_IDS as readonly string[]).includes(v);
+
 export const EMOTES: readonly ChatEmote[] = [
   {
     id: 'laugh',

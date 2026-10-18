@@ -55,6 +55,9 @@ type ClientMessage =
   | { type: 'WIDEN' }
   | { type: 'CANCEL' }
   | { type: 'MOVE'; action: Action }
+  /* An emote off the quick-chat sheet (`src/data/phrases.ts`): relayed to the other seats as-is,
+     never judged by the board — laughing does not spend a turn. */
+  | { type: 'EMOTE'; emote: string }
   | { type: 'RESIGN' }
   /* The room path: the host starting early, the host's size pick (2v2 / 2v1 / 3p / 4p), and a
      seat's team move — any seat may move itself, the host may move anyone. Everything else a room
@@ -411,12 +414,15 @@ function readAction(raw: unknown, side: number, cols: number, rows: number): Act
 const boardOf = (waiter: Waiter): { cols: number; rows: number } =>
   waiter.race ? waiter.race.state : dimsFor(contendersIn(waiter.sizes));
 
+/** The closed emote vocabulary, mirrored from `src/data/phrases.ts`: nothing else goes on the wire. */
+const EMOTE_IDS: ReadonlySet<string> = new Set(['laugh', 'fury', 'impatient']);
+
 function readMessage(raw: unknown, side: number, cols: number, rows: number): ClientMessage | null {
   if (typeof raw !== 'string') return null;
   try {
     const msg = JSON.parse(raw) as {
       type?: unknown; wide?: unknown; action?: unknown; mode?: unknown; side?: unknown; team?: unknown;
-      format?: unknown;
+      format?: unknown; emote?: unknown;
     };
     if (msg.type === 'QUEUE') return { type: 'QUEUE', wide: msg.wide === true };
     if (msg.type === 'WIDEN') return { type: 'WIDEN' };
@@ -435,6 +441,10 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
     if (msg.type === 'MOVE') {
       const action = readAction(msg.action, side, cols, rows);
       return action ? { type: 'MOVE', action } : null;
+    }
+    if (msg.type === 'EMOTE') {
+      return typeof msg.emote === 'string' && EMOTE_IDS.has(msg.emote)
+        ? { type: 'EMOTE', emote: msg.emote } : null;
     }
   } catch {
     /* not ours: a malformed frame is dropped, never fatal */
@@ -1426,6 +1436,15 @@ export class MatchmakerDO {
       }
       return;
     }
+    if (msg.type === 'EMOTE') {
+      /* Every other seat still in the race sees it; a lobby seat has no opponent bubble yet. */
+      if (!live.driver) return;
+      for (const m of live.members) {
+        if (!m || m.seat === ref.seat) continue;
+        this.postTo(m.ws, JSON.stringify({ type: 'EMOTE', side: ref.seat, emote: msg.emote }));
+      }
+      return;
+    }
     if (msg.type === 'RESIGN' || msg.type === 'CANCEL') { this.takeSeatOver(ref); return; }
     if (msg.type !== 'MOVE') return;
     const result = live.driver.submit(ref.seat, msg.action);
@@ -1537,6 +1556,12 @@ export class MatchmakerDO {
 
     if (msg.type === 'RESIGN') {
       this.endRace(race, seat.side, 'RESIGN');
+      return;
+    }
+    if (msg.type === 'EMOTE') {
+      /* An emote is chat, not a turn: relayed the moment it arrives, whatever the board is doing. */
+      this.deliver(race.seats[seat.side === 0 ? 1 : 0],
+        JSON.stringify({ type: 'EMOTE', side: seat.side, emote: msg.emote }));
       return;
     }
     if (msg.type !== 'MOVE') return;                     // queue traffic on a paired socket: ignored

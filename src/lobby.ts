@@ -25,6 +25,7 @@
  * `MOVE` frames); this module only hands `main.ts` a session shaped like the 1v1 one.
  */
 import { MAX_TEAMS, type Action } from './rules';
+import { isChatEmoteId, type ChatEmoteId } from './data/phrases';
 import { chime, myTier, myTiq, roomSocketUrl, type MindTier, type OpponentData } from './matchmaking';
 import { profile } from './storage';
 import {
@@ -215,9 +216,13 @@ export interface LobbyRace {
   seats: LobbyRaceSeat[];
   opponent: OpponentData;
   send(action: Action): boolean;
+  /** Send one emote to the other seats. False when the socket is gone. */
+  sendEmote(emote: ChatEmoteId): boolean;
   resign(): void;
   close(): void;
   onMove(cb: (action: Action, side: number) => void): void;
+  /** An emote another seat sent. */
+  onEmote(cb: (emote: ChatEmoteId, side: number) => void): void;
   onEnd(cb: (end: { win: boolean; why: 'resign' | 'left' | 'drop' | 'aborted' }) => void): void;
   onReject(cb: (reason: string) => void): void;
 }
@@ -343,6 +348,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   /* The session's subscribers. They live out here because `MOVE` frames arrive after `ROOM_FOUND`
      has handed the race to `main.ts`, and the board wires its handlers on the frame that creates it. */
   const raceMoves: Array<(a: Action, side: number) => void> = [];
+  const raceEmotes: Array<(emote: ChatEmoteId, side: number) => void> = [];
   const raceEnds: Array<(e: { win: boolean; why: 'resign' | 'left' | 'drop' | 'aborted' }) => void> = [];
   const raceRejects: Array<(r: string) => void> = [];
 
@@ -421,9 +427,11 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
             flag: profile.country ?? null,
           },
           send: (a) => send({ type: 'MOVE', action: a }),
+          sendEmote: (emote) => send({ type: 'EMOTE', emote }),
           resign: () => { send({ type: 'RESIGN' }); },
           close: () => { try { sock?.close(); } catch { /* gone */ } },
           onMove: (cb) => { raceMoves.push(cb); },
+          onEmote: (cb) => { raceEmotes.push(cb); },
           onEnd: (cb) => { raceEnds.push(cb); },
           onReject: (cb) => { raceRejects.push(cb); },
         };
@@ -432,6 +440,10 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
       }
       case 'MOVE':
         for (const cb of raceMoves) cb(msg.action as Action, Number(msg.side) || 0);
+        return;
+      case 'EMOTE':
+        if (!isChatEmoteId(msg.emote)) return;
+        for (const cb of raceEmotes) cb(msg.emote, Number(msg.side) || 0);
         return;
       case 'REJECT':
         for (const cb of raceRejects) cb(typeof msg.reason === 'string' ? msg.reason : 'refused');

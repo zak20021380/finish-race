@@ -1196,6 +1196,8 @@ function startGame(setup: StartSetup) {
     session.onMove((action, side) => {
       if (state.winner === null && side === state.turn) play(action, true);
     });
+    /* the rival's emote: the same bubble and the same "Haha!" as a local tap, over their own pawn */
+    session.onEmote((emote) => chat.inboundEmote(emote));
     session.onEnd((end) => endOnline(end));
     session.onReject(() => {
       notify('error');
@@ -1677,10 +1679,12 @@ ui();
 /* Quick chat: the one wiring call. It reads the race through getters — the board's state, the
    local seat, the two moments the rules close chat, and whether the screen is actually live — so
    nothing in the turn loop has to know the wheel exists. */
-createChat({
+const chat = createChat({
   key: $<HTMLButtonElement>('chat-toggle'),
   lane: $<HTMLElement>('chat-lane'),
   chips,
+  /* an online race relays every emote to the rival; offline the bubble is the whole message */
+  onEmote: (id) => { active?.sendEmote(id); },
   state: () => state,
   localSide: () => localSide,
   /* the seat's live pawn: its animated ball centre mapped through the renderer's own layout into

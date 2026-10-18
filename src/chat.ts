@@ -16,7 +16,8 @@
  */
 import './chat.css';
 import type { GameState, Player } from './rules';
-import { EMOTES, TAUNTS, type ChatEmote } from './data/phrases';
+import { EMOTES, TAUNTS, type ChatEmote, type ChatEmoteId } from './data/phrases';
+import { playLaugh } from './audio';
 import { impact, notify } from './telegram';
 
 /** A seat's pawn on screen: its animated centre in viewport px, plus the board's live cell. */
@@ -42,9 +43,13 @@ export interface ChatOptions {
   busy: () => boolean;
   /** The race screen is up, unpaused, with no result card over it. */
   live: () => boolean;
+  /** The wire: an emote this player sent, for an online race to relay. Absent offline. */
+  onEmote?: (id: ChatEmoteId) => void;
 }
 
 export interface Chat {
+  /** An emote the rival sent over the wire: pop their bubble over their pawn, and give it a voice. */
+  inboundEmote(id: ChatEmoteId): void;
   destroy(): void;
 }
 
@@ -191,6 +196,19 @@ export function createChat(o: ChatOptions): Chat {
     return box;
   }
 
+  /**
+   * The rival's emote, arrived over the wire (or played back by the machine): the bubble pops over
+   * their pawn on this frame, and the one face with a voice — the laugh — rings with it. A muted
+   * opponent is as silent as they are invisible, so the whole call is dropped while muted.
+   */
+  function inboundEmote(id: ChatEmoteId): void {
+    if (!o.live() || muted) return;
+    const emote = EMOTES.find((e) => e.id === id);
+    if (!emote) return;
+    if (id === 'laugh') playLaugh();
+    setBubble('foe', emoteNode(emote), true);
+  }
+
   /* ---------- the sheet (built from the closed vocabulary) ---------- */
 
   const scrim = el('div', 'chat-scrim');
@@ -311,7 +329,9 @@ export function createChat(o: ChatOptions): Chat {
   function sendEmote(emote: ChatEmote, btn: HTMLButtonElement) {
     if (!canChat() || isCooling()) return;
     lastSentAt = Date.now();
-    /* the face is the message, so it lands twice: a success chime in the hand, then the thump */
+    /* the face is the message, so it lands three times: the "Haha!" itself, a success chime in the
+       hand, then the thump — and the wire carries the same id to the rival's screen */
+    if (emote.id === 'laugh') playLaugh();
     impact('medium');
     notify('success');
     /* the pod bounces once on the tap that spent it; the class is re-armed on every press */
@@ -320,6 +340,7 @@ export function createChat(o: ChatOptions): Chat {
     btn.classList.add('is-tapped');
     window.setTimeout(() => btn.classList.remove('is-tapped'), 420);
     setBubble('me', emoteNode(emote), true);
+    o.onEmote?.(emote.id);               // the wire, when there is one: the rival sees the same face
     closeSheet(false);
     paintCool();
   }
@@ -520,6 +541,7 @@ export function createChat(o: ChatOptions): Chat {
   const watcher = window.setInterval(tick, POLL_MS);
 
   return {
+    inboundEmote,
     destroy() {
       window.clearInterval(watcher);
       window.clearTimeout(bubbleTimers.me);
