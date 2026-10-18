@@ -1,6 +1,6 @@
 /**
- * audio.ts — the race's sound engine. One `AudioContext`, four decoded assets (`log.mp3`,
- * `move.wav`, `explosion.mp3`, `laugh.mp3`) and one master gain: every voice is a `BufferSource` on the graph,
+ * audio.ts — the race's sound engine. One `AudioContext`, five decoded assets (`log.mp3`,
+ * `move.wav`, `explosion.mp3`, `laugh.mp3`, `angry.wav`) and one master gain: every voice is a `BufferSource` on the graph,
  * scheduled against the context clock so a step, a wall or a blast lands on the frame that caused it
  * rather than the frame after.
  *
@@ -14,8 +14,9 @@ import logMp3 from './assets/sounds/log.mp3';
 import moveWav from './assets/sounds/move.wav';
 import explosionMp3 from './assets/sounds/explosion.mp3';
 import laughMp3 from './assets/sounds/laugh.mp3';
+import angryWav from './assets/sounds/angry.wav';
 
-export type SoundName = 'log' | 'move' | 'explosion' | 'laugh';
+export type SoundName = 'log' | 'move' | 'explosion' | 'laugh' | 'angry';
 
 /**
  * How far ahead of `currentTime` an immediate play is scheduled: enough for the node graph to be
@@ -35,6 +36,15 @@ export const SHOVE_RATE = 0.7;
  * blast's full scale so a stacked chorus of taps still leaves the master its headroom.
  */
 const LAUGH_GAIN = 0.8;
+
+/**
+ * The growl: the laugh's sibling — a touch above it because a grunt carries less than a laugh
+ * at the same level, still under full scale so the blast keeps its headroom.
+ */
+const ANGRY_GAIN = 0.85;
+
+/** Hammering the "Grrr!" pod must not stack into a stutter: one growl per this many milliseconds. */
+const ANGRY_GAP_MS = 150;
 
 /** The amplitude above which a sample of `log.mp3` counts as sound, when its lead-in is measured. */
 const TRIM_EPS = 1e-3;
@@ -56,7 +66,7 @@ try {
   engine = { ctx, master };
 } catch { engine = null; }   // a webview without WebAudio: the board simply races quietly
 
-/** The three voices, decoded once at startup and kept for the session. */
+/** Every voice, decoded once at startup and kept for the session. */
 const buffers: Partial<Record<SoundName, AudioBuffer>> = {};
 
 /**
@@ -108,6 +118,7 @@ decode('log', logMp3);
 decode('move', moveWav);
 decode('explosion', explosionMp3);
 decode('laugh', laughMp3);
+decode('angry', angryWav);
 
 /** The first gesture anywhere — the Play tap counts — lifts the suspension for the rest of the page. */
 let unlocked = false;
@@ -164,11 +175,13 @@ export interface PlayOptions {
 }
 
 let lastMoveAt = -Infinity;
+let lastAngryAt = -Infinity;
 
 /**
  * One voice, fire-and-forget: a fresh `BufferSource` per call, routed through the master gain.
  * A play queued before the first gesture, before its buffer has decoded, or while muted is dropped.
- * `move` is rate-limited so a fast trail of steps reads as a trail, not a stack.
+ * `move` is rate-limited so a fast trail of steps reads as a trail, not a stack; `angry` gets the
+ * same treatment in a longer window, so a mashed "Grrr!" restarts cleanly instead of overlapping.
  */
 function play(name: SoundName, opts: PlayOptions = {}): void {
   const e = engine;
@@ -177,6 +190,11 @@ function play(name: SoundName, opts: PlayOptions = {}): void {
     const now = performance.now();
     if (now - lastMoveAt < MOVE_GAP_MS) return;
     lastMoveAt = now;
+  }
+  if (name === 'angry') {
+    const now = performance.now();
+    if (now - lastAngryAt < ANGRY_GAP_MS) return;
+    lastAngryAt = now;
   }
   const buf = buffers[name];
   if (!buf) return;                    // still decoding: the first tap warms it, the next rings
@@ -207,6 +225,16 @@ function play(name: SoundName, opts: PlayOptions = {}): void {
  */
 export function playLaugh(): void {
   play('laugh', { gain: LAUGH_GAIN });
+}
+
+/**
+ * The "Grrr!" emote, fire-and-forget. The buffer is decoded with the engine, so the growl is
+ * already cached by the time the fury pod is tapped or the rival's bubble arrives; a repeat inside
+ * `ANGRY_GAP_MS` is dropped, so mashing the pod yields one clean growl from sample 0, never a
+ * layered stutter. Muted or locked, the call is a no-op like every other voice.
+ */
+export function playAngrySound(): void {
+  play('angry', { gain: ANGRY_GAIN });
 }
 
 export const audio = { play, setVolume };

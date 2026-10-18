@@ -17,7 +17,7 @@
 import './chat.css';
 import type { GameState, Player } from './rules';
 import { EMOTES, TAUNTS, type ChatEmote, type ChatEmoteId } from './data/phrases';
-import { playLaugh } from './audio';
+import { playLaugh, playAngrySound } from './audio';
 import { impact, notify } from './telegram';
 
 /** A seat's pawn on screen: its animated centre in viewport px, plus the board's live cell. */
@@ -198,14 +198,15 @@ export function createChat(o: ChatOptions): Chat {
 
   /**
    * The rival's emote, arrived over the wire (or played back by the machine): the bubble pops over
-   * their pawn on this frame, and the one face with a voice — the laugh — rings with it. A muted
-   * opponent is as silent as they are invisible, so the whole call is dropped while muted.
+   * their pawn on this frame, and the two faces with a voice — the laugh and the growl — ring with
+   * it. A muted opponent is as silent as they are invisible, so the whole call is dropped while muted.
    */
   function inboundEmote(id: ChatEmoteId): void {
     if (!o.live() || muted) return;
     const emote = EMOTES.find((e) => e.id === id);
     if (!emote) return;
     if (id === 'laugh') playLaugh();
+    else if (id === 'fury') playAngrySound();
     setBubble('foe', emoteNode(emote), true);
   }
 
@@ -329,9 +330,10 @@ export function createChat(o: ChatOptions): Chat {
   function sendEmote(emote: ChatEmote, btn: HTMLButtonElement) {
     if (!canChat() || isCooling()) return;
     lastSentAt = Date.now();
-    /* the face is the message, so it lands three times: the "Haha!" itself, a success chime in the
-       hand, then the thump — and the wire carries the same id to the rival's screen */
+    /* the face is the message, so it lands three times: the "Haha!" / "Grrr!" itself, a success
+       chime in the hand, then the thump — and the wire carries the same id to the rival's screen */
     if (emote.id === 'laugh') playLaugh();
+    else if (emote.id === 'fury') playAngrySound();
     impact('medium');
     notify('success');
     /* the pod bounces once on the tap that spent it; the class is re-armed on every press */
