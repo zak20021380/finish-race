@@ -1,7 +1,7 @@
 /**
  * verify-nations-cup.mjs — Playwright driver for scripts/nations-cup-check.js,
- * which now covers the whole 2-slide Home carousel: Nations Cup (slide 0) and
- * The Mind Ladder (slide 1).
+ * which now covers the whole 3-slide Home carousel: 200 Stars Tournament
+ * (slide 0), Nations Cup (slide 1) and The Mind Ladder (slide 2).
  *
  * No new project dependencies: `playwright-core` is resolved at runtime only.
  * Run without touching package.json:
@@ -10,9 +10,9 @@
  *
  * Serves ./dist over 127.0.0.1, then checks 320x640, 360x640 and 390x844 in
  * light + dark, with a long country name injected on the Nations slide
- * (ellipsis, no overflow). Each viewport runs the check on BOTH slides — dot 0
- * (Nations Cup) and dot 1 (The Mind Ladder) — plus a country-set (DE) pass and
- * an NG pass (monogram/flag-chip fallback). Saves
+ * (ellipsis, no overflow). Each viewport runs the check on ALL THREE slides —
+ * dot 0 (Tournament), dot 1 (Nations Cup) and dot 2 (The Mind Ladder) — plus a
+ * country-set (DE) pass and an NG pass (monogram/flag-chip fallback). Saves
  * .shots/nations-360x640-{light,dark}.png on success.
  */
 import http from 'node:http';
@@ -102,7 +102,7 @@ async function check(tag, w, h, theme, country, slide) {
   await pg.waitForTimeout(700);
   // Long country name on the Nations slide: the ellipse must hold, nothing may
   // spill out of the card.
-  if (slide === 0) {
+  if (slide === 1) {
     await pg.evaluate((name) => {
       const nm = document.querySelector('.nations-rank .nations-row .nm');
       if (nm) {
@@ -128,10 +128,10 @@ try {
   for (const [w, h] of VIEWPORTS) {
     for (const theme of THEMES) {
       for (const country of [null, 'DE']) {
-        for (const slide of [0, 1]) {
+        for (const slide of [0, 1, 2]) {
           const tag = `${w}x${h} ${theme} country=${country ?? 'unset'} slide=${slide}`;
           const { ctx } = await check(tag, w, h, theme, country, slide);
-          if (w === 360 && h === 640 && !country && slide === 0) {
+          if (w === 360 && h === 640 && !country && slide === 1) {
             fs.mkdirSync(SHOTS, { recursive: true });
             const pg = ctx.pages()[0];
             await pg.screenshot({ path: path.join(SHOTS, `nations-360x640-${theme}.png`) });
@@ -145,8 +145,8 @@ try {
   // Flag fallback: NG has no vendored local SVG on the Nations slide, so its
   // flag resolves through the CDN cascade — the row must still render a badge.
   for (const theme of THEMES) {
-    const tag = `360x640 ${theme} country=NG (flag fallback) slide=0`;
-    const { ctx } = await check(tag, 360, 640, theme, 'NG', 0);
+    const tag = `360x640 ${theme} country=NG (flag fallback) slide=1`;
+    const { ctx } = await check(tag, 360, 640, theme, 'NG', 1);
     await ctx.close();
   }
 } finally {

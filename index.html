@@ -571,7 +571,85 @@
 
           <div class="carousel-wrap">
             <div class="carousel" id="home-carousel" data-carousel tabindex="0" aria-roledescription="carousel" aria-label="Highlights">
-              <article class="car-card nations-cup" data-slide="0" data-index="0" aria-label="Nations Cup — world standings">
+              <!-- Slide 0 — the 200 Stars Tournament. Prepended, never a replacement:
+                   Nations Cup and The Mind Ladder keep their own markup, one index
+                   further along, so all three coexist in the same track. -->
+              <article class="car-card carousel-slide-tournament" data-slide="0" data-index="0" aria-label="200 Stars Tournament — high stakes, 200 star prize pool">
+                <div class="car-head tour-head">
+                  <span class="car-kicker tour-kicker">
+                    <span class="tour-star-pod" aria-hidden="true"><svg class="tour-star-ico" viewBox="0 0 56 56" focusable="false" aria-hidden="true"><use href="#i-star-3d" /></svg></span>
+                    <span class="tour-title">STAR SHOWDOWN · 200★</span>
+                  </span>
+                  <span class="tour-chip"><i class="tour-beacon" aria-hidden="true"></i>HIGH STAKES</span>
+                </div>
+
+                <div class="tour-hero" aria-hidden="true">
+                  <span class="tour-glow"></span>
+                  <svg class="tour-trophy" viewBox="12 10 72 72" focusable="false" aria-hidden="true">
+                    <defs>
+                      <linearGradient id="tourGold" gradientUnits="userSpaceOnUse" x1="28" y1="18" x2="70" y2="72">
+                        <stop offset="0" stop-color="#FFF7D6" />
+                        <stop offset=".34" stop-color="#FDE047" />
+                        <stop offset=".72" stop-color="#F59E0B" />
+                        <stop offset="1" stop-color="#B45309" />
+                      </linearGradient>
+                      <linearGradient id="tourGoldD" gradientUnits="userSpaceOnUse" x1="34" y1="20" x2="66" y2="70">
+                        <stop offset="0" stop-color="#F59E0B" />
+                        <stop offset=".55" stop-color="#C2410C" />
+                        <stop offset="1" stop-color="#7C2D12" />
+                      </linearGradient>
+                      <linearGradient id="tourRim" gradientUnits="userSpaceOnUse" x1="30" y1="16" x2="66" y2="60">
+                        <stop offset="0" stop-color="#FFFDF2" />
+                        <stop offset=".5" stop-color="#FCD34D" stop-opacity=".55" />
+                        <stop offset="1" stop-color="#7C2D12" stop-opacity=".8" />
+                      </linearGradient>
+                      <radialGradient id="tourStar" cx="38%" cy="30%" r="72%">
+                        <stop offset="0" stop-color="#FFFEF6" />
+                        <stop offset=".42" stop-color="#FDE68A" />
+                        <stop offset="1" stop-color="#F59E0B" />
+                      </radialGradient>
+                      <radialGradient id="tourFloor" cx="50%" cy="50%" r="50%">
+                        <stop offset="0" stop-color="#7C2D12" stop-opacity=".55" />
+                        <stop offset="1" stop-color="#7C2D12" stop-opacity="0" />
+                      </radialGradient>
+                    </defs>
+                    <ellipse cx="48" cy="82.5" rx="26" ry="6" fill="url(#tourFloor)" />
+                    <path d="M31 25c-8.4 0-11.6 6.4-11.6 11.2 0 4.8 2.8 8.6 7.6 9.4" fill="none" stroke="url(#tourGold)" stroke-width="3.2" stroke-linecap="round" />
+                    <path d="M65 25c8.4 0 11.6 6.4 11.6 11.2 0 4.8-2.8 8.6-7.6 9.4" fill="none" stroke="url(#tourGoldD)" stroke-width="3.2" stroke-linecap="round" />
+                    <path d="M30 22h36v13.6c0 11.4-7.6 18.4-18 18.4s-18-7-18-18.4Z" fill="url(#tourGold)" />
+                    <path d="M48 54c10.4 0 18-7 18-18.4V22h-7.4v13.6c0 10.2-4.2 16.2-10.6 18.4Z" fill="url(#tourGoldD)" opacity=".55" />
+                    <path d="M30 22h36v13.6c0 11.4-7.6 18.4-18 18.4s-18-7-18-18.4Z" fill="none" stroke="url(#tourRim)" stroke-width="1.2" />
+                    <path d="M33.6 26.4c.4 6.6 2.2 12.4 5.4 16.4" fill="none" stroke="#FFFDF2" stroke-width="2" stroke-linecap="round" opacity=".5" />
+                    <rect x="27.6" y="18.4" width="40.8" height="6.4" rx="3.2" fill="url(#tourGold)" />
+                    <rect x="27.6" y="18.4" width="40.8" height="6.4" rx="3.2" fill="none" stroke="url(#tourRim)" stroke-width="1.1" />
+                    <path d="M30.4 20.4h15" stroke="#FFFDF2" stroke-width="1.6" stroke-linecap="round" opacity=".72" />
+                    <path d="M48 25 50.7 32.28 58.46 32.6 52.38 37.42 54.47 44.9 48 40.6 41.53 44.9 43.63 37.42 37.54 32.6 45.3 32.28Z" fill="url(#tourStar)" stroke="#B45309" stroke-opacity=".45" stroke-width=".7" stroke-linejoin="round" />
+                    <path d="M48 25 50.7 32.28 48 35.2 45.3 32.28Z" fill="#FFFEF6" opacity=".85" />
+                    <path d="M44.6 54h6.8v7.2h-6.8z" fill="url(#tourGoldD)" />
+                    <rect x="40" y="60.6" width="16" height="4.6" rx="2.3" fill="url(#tourGold)" />
+                    <rect x="33.4" y="64.6" width="29.2" height="5.4" rx="2.7" fill="url(#tourGold)" />
+                    <rect x="27.4" y="69.6" width="41.2" height="7.4" rx="3.4" fill="url(#tourGoldD)" />
+                    <rect x="27.4" y="69.6" width="41.2" height="7.4" rx="3.4" fill="none" stroke="url(#tourRim)" stroke-width="1.1" />
+                    <path d="M30.2 71.4h18.6" stroke="#FFFDF2" stroke-width="1.5" stroke-linecap="round" opacity=".5" />
+                    <path d="M14 30.6c.6 2.2 1.1 2.7 3.3 3.3-2.2.6-2.7 1.1-3.3 3.3-.6-2.2-1.1-2.7-3.3-3.3 2.2-.6 2.7-1.1 3.3-3.3Z" fill="#FEF3C7" opacity=".85" />
+                    <path d="M79.4 44.6c.5 1.9.9 2.3 2.8 2.8-1.9.5-2.3.9-2.8 2.8-.5-1.9-.9-2.3-2.8-2.8 1.9-.5 2.3-.9 2.8-2.8Z" fill="#FDE68A" opacity=".6" />
+                  </svg>
+                </div>
+
+                <ol class="tour-pods" aria-label="Prize pool split">
+                  <li class="tour-pod p1"><span class="tour-pod-k">1ST</span><span class="tour-pod-v"><svg class="tour-pod-star" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-star" /></svg>120<b>★</b></span></li>
+                  <li class="tour-pod p2"><span class="tour-pod-k">2ND</span><span class="tour-pod-v"><svg class="tour-pod-star" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-star" /></svg>50<b>★</b></span></li>
+                  <li class="tour-pod p3"><span class="tour-pod-k">3RD</span><span class="tour-pod-v"><svg class="tour-pod-star" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-star" /></svg>30<b>★</b></span></li>
+                </ol>
+
+                <p class="tour-clock">Tournament Ends in: <b id="tour-countdown">02h 45m</b></p>
+
+                <button class="tour-cta" type="button" id="home-tournament-cta" aria-haspopup="dialog">
+                  <span class="tour-cta-t">JOIN TOURNAMENT</span>
+                  <span class="tour-cta-tag">200★ POOL</span>
+                </button>
+              </article>
+              <article class="car-card nations-cup carousel-slide-nations" data-slide="1" data-index="1" aria-label="Nations Cup — world standings">
                 <div class="car-head nations-head">
                   <span class="car-kicker nations-kicker"><span class="nations-ico" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-globe" /></svg></span> Nations Cup · S4</span>
                   <span class="pill live pulse cup-live"><i class="live-dot" aria-hidden="true"></i>Live</span>
@@ -584,7 +662,7 @@
                 <p class="nations-mine" id="home-nation-mine"><span class="skel w60"></span></p>
                 <button class="btn card-cta nations-hold" type="button" id="home-cup-table">View Cup Table</button>
               </article>
-              <article class="car-card mind-ladder" data-slide="1" data-index="1" aria-label="The Mind Ladder — top tactical minds">
+              <article class="car-card mind-ladder" data-slide="2" data-index="2" aria-label="The Mind Ladder — top tactical minds">
                 <div class="car-head mind-head">
                   <span class="car-kicker mind-kicker"><span class="mind-ico" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg></span> The Mind Ladder</span>
                   <span class="mind-top" id="mind-top">Top 100</span>
@@ -599,8 +677,9 @@
               </article>
             </div>
             <div class="car-dots" id="home-dots" role="tablist" aria-label="Highlight pages">
-              <button class="dot on" type="button" data-dot="0" role="tab" aria-selected="true" aria-label="Page 1"></button>
-              <button class="dot" type="button" data-dot="1" role="tab" aria-selected="false" aria-label="Page 2"></button>
+              <button class="dot on" type="button" data-dot="0" role="tab" aria-selected="true" aria-label="Page 1 — 200 Stars Tournament"></button>
+              <button class="dot" type="button" data-dot="1" role="tab" aria-selected="false" aria-label="Page 2 — Nations Cup"></button>
+              <button class="dot" type="button" data-dot="2" role="tab" aria-selected="false" aria-label="Page 3 — The Mind Ladder"></button>
             </div>
           </div>
 

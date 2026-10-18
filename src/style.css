@@ -14280,6 +14280,311 @@ html.reduced-motion .adm-mode-seg { transition: none; }
 }
 
 /* ============================================================================================
+   200 STARS TOURNAMENT — the high-stakes hero slide (carousel index 0).
+
+   Same clay slab as its siblings and the same pinned box (8/12/28), so the
+   track's scroll geometry, the pager dots and the column budget are untouched
+   by the prepend. The bottom 28px stays empty for the dots; the CTA is the last
+   child above that reserve, exactly like the other two slides.
+
+   Vertical budget inside the 279px card box: head 22 · hero flex · pods 40 ·
+   clock 16 · CTA 48 with 4px gaps. Only the hero flexes, so the trophy grows
+   into a taller band and shrinks (never clips) into a short one.
+   ============================================================================================ */
+.car-card.carousel-slide-tournament {
+  position: relative;
+  isolation: isolate;
+  justify-content: flex-start;
+  gap: 4px;
+  /* 37px bottom reserve: the pager dots sit 8px off the card edge and are
+     20px tall, so the gold CTA keeps the same 9px of air its siblings have. */
+  padding: 8px 12px 37px;
+  overflow: hidden;
+  border-radius: var(--r-panel);
+  border-top: 1px solid rgba(255, 255, 255, .12);
+  background:
+    radial-gradient(120% 90% at 14% 0%, rgba(245, 158, 11, .17), rgba(245, 158, 11, 0) 58%),
+    radial-gradient(110% 85% at 88% 0%, rgba(217, 119, 6, .13), rgba(217, 119, 6, 0) 62%),
+    linear-gradient(180deg, #232A3D 0%, #1A2130 100%);
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, .22),
+    inset 0 2px 2px rgba(255, 255, 255, .08),
+    inset 0 -3px 3px rgba(0, 0, 0, .35),
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+
+/* ---- header: a 3D star in a recessed pod, then the tactical chip ---- */
+.tour-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  min-width: 0;
+  min-height: 20px;
+}
+.car-card.carousel-slide-tournament .car-kicker::before { content: none; display: none; }
+.tour-kicker {
+  color: #F8FAFC;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+}
+/* 24x24 recessed well: the star is lit, the pod is in shadow */
+.tour-star-pod {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #0C1322 0%, #141D30 100%);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .62),
+    inset 0 -1px 0 rgba(255, 255, 255, .07),
+    inset 0 0 0 1px rgba(251, 191, 36, .16);
+}
+.tour-star-ico {
+  display: block;
+  width: 18px;
+  height: 18px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .55));
+}
+.tour-title {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* the tactical chip: amber glass, hairline ring, a breathing beacon */
+.tour-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px 0 7px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(135deg, rgba(245, 158, 11, .25) 0%, rgba(217, 119, 6, .4) 100%);
+  border: 1px solid rgba(251, 191, 36, .45);
+  color: #FDE68A;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .09em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    0 1px 2px rgba(0, 0, 0, .35);
+}
+.tour-beacon {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #FBBF24;
+  animation: tour-beacon-pulse 1.8s ease-in-out infinite;
+}
+@keyframes tour-beacon-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 0 0 2px rgba(251, 191, 36, .16), 0 0 5px rgba(251, 191, 36, .85);
+  }
+  50% {
+    transform: scale(.8);
+    opacity: .72;
+    box-shadow: 0 0 0 4px rgba(251, 191, 36, .07), 0 0 10px rgba(251, 191, 36, 1);
+  }
+}
+
+/* ---- the showcase: one lit trophy on a warm ambient backlight ---- */
+.tour-hero {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 54px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.tour-glow {
+  position: absolute;
+  inset: -6% -10%;
+  background: radial-gradient(48% 58% at 50% 48%, rgba(245, 158, 11, .38) 0%, rgba(245, 158, 11, .13) 46%, rgba(245, 158, 11, 0) 74%);
+  pointer-events: none;
+}
+.tour-trophy {
+  position: relative;
+  display: block;
+  height: 100%;
+  max-height: 96px;
+  width: auto;
+  aspect-ratio: 1 / 1;
+  filter: drop-shadow(0 7px 12px rgba(0, 0, 0, .5));
+}
+
+/* ---- the three inset pods: the pool, split ---- */
+.tour-pods {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tour-pod {
+  position: relative;
+  min-width: 0;
+  height: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border-radius: 12px;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--pod-ring, rgba(255, 255, 255, .06));
+}
+.tour-pod.p1 { --pod-accent: #FCD34D; --pod-glow: rgba(252, 211, 77, .9); --pod-ink: #FCD34D; --pod-ring: rgba(252, 211, 77, .3); }
+.tour-pod.p2 { --pod-accent: #E2E8F0; --pod-glow: rgba(203, 213, 225, .7); --pod-ink: #CBD5E1; --pod-ring: rgba(203, 213, 225, .22); }
+.tour-pod.p3 { --pod-accent: #F0A868; --pod-glow: rgba(217, 119, 6, .8); --pod-ink: #DBA277; --pod-ring: rgba(217, 119, 6, .3); }
+.tour-pod-k {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  line-height: 1;
+  color: var(--pod-ink);
+}
+.tour-pod-v {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  line-height: 1.05;
+  color: #F8FAFC;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.tour-pod-v b {
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--pod-accent);
+  text-shadow: 0 0 6px var(--pod-glow);
+}
+.tour-pod-star {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  color: var(--pod-accent);
+  filter: drop-shadow(0 0 4px var(--pod-glow));
+}
+
+/* ---- the clock: mono, slate, cyan figure ---- */
+.tour-clock {
+  flex: none;
+  margin: 0;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-family: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: #94A3B8;
+  white-space: nowrap;
+}
+.tour-clock b {
+  color: #7DD3FC;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- the CTA: gold face, obsidian drop, one tactile press ---- */
+.tour-cta {
+  position: relative;
+  flex: none;
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #F59E0B 0%, #D97706 100%);
+  color: #1A1206;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow:
+    0 4px 0 #7C2D12,
+    0 14px 22px -10px rgba(0, 0, 0, .9),
+    inset 0 2px 0 rgba(255, 255, 255, .52),
+    inset 0 -2px 4px rgba(120, 53, 15, .5);
+  transition: transform 90ms ease, box-shadow 90ms ease;
+}
+/* the specular bevel: one lit band across the top third, never a backdrop sample */
+.tour-cta::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  top: 2px;
+  height: 44%;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .4) 0%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+}
+.tour-cta-t { position: relative; }
+.tour-cta-tag {
+  position: relative;
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(26, 18, 6, .84);
+  color: #FDE68A;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14);
+}
+.tour-cta:active {
+  transform: scale(.97) translateY(2px);
+  box-shadow:
+    0 2px 0 #7C2D12,
+    0 6px 12px -6px rgba(0, 0, 0, .85),
+    inset 0 1px 0 rgba(255, 255, 255, .34);
+}
+.tour-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+/* reduced motion: the beacon holds a steady glow */
+html.reduced-motion .tour-beacon { animation: none; }
+html.reduced-motion .tour-cta { transition: none; }
+
+/* The 320px floor: the header's three parts are 24px of pod, a 158px title and
+   a 96px chip in a 280px row, which is 14px over. Everything that is NOT the
+   title's 12px/0.4px type gives instead — inset, gaps, chip padding and chip
+   tracking — so "STAR SHOWDOWN · 200★" still reads whole on the smallest phone. */
+@media (max-width: 350px) {
+  .car-card.carousel-slide-tournament { padding-left: 10px; padding-right: 10px; }
+  .tour-kicker { gap: 4px; }
+  .tour-chip { padding: 0 5px 0 4px; gap: 3px; letter-spacing: 0; }
+}
+
+/* ============================================================================================
    RACE DOCK, SECOND PASS — one clean row: YOUR chip | the mine key | BOT chip.
 
    The chat key no longer floats in the dock (it lives in the top bar), so the dock is a single

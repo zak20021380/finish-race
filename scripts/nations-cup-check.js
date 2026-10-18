@@ -1,17 +1,23 @@
 /**
- * nations-cup-check.js — DOM check for the Home carousel: the two authentic
- * slides — Nations Cup (slide 0) and The Mind Ladder (slide 1).
+ * nations-cup-check.js — DOM check for the Home carousel: the three authentic
+ * slides — 200 Stars Tournament (slide 0), Nations Cup (slide 1) and The Mind
+ * Ladder (slide 2).
  * Paste into the browser console on any viewport, or run via
  * scripts/verify-nations-cup.mjs which drives it with Playwright.
  *
  * Fails when:
- *  - the track is not strictly 2 slides (data-index 0 and 1) with 2 dots, and
- *    no slide carries the removed mock text (Neon Rush / Featured Tournament /
- *    Daily Challenge / Telegram Channel Cup / Fight for Squad),
+ *  - the track is not strictly 3 slides (data-index 0,1,2) with 3 dots in the
+ *    same order, and no slide carries the removed mock text (Neon Rush /
+ *    Featured Tournament / Daily Challenge / Telegram Channel Cup /
+ *    Fight for Squad),
  *  - a card overflows (scrollH/scrollW > clientH/clientW), loses its radius or
  *    does not clip to it,
  *  - anything samples the backdrop (backdrop-filter / blur) — the dark-clay
  *    rule,
+ *  - the 200 Stars Tournament header is not "STAR SHOWDOWN · 200★" behind a
+ *    24px star pod, misses the HIGH STAKES beacon chip, misses the trophy, the
+ *    120/50/30 pool pods or the "Tournament Ends in: NNh NNm" clock, or misses
+ *    the 48px "JOIN TOURNAMENT · 200★ POOL" gold key,
  *  - the Nations Cup header is not "NATIONS CUP · S4" with the globe glyph and
  *    a glowing LIVE pill, does not carry gold/silver/bronze rank markers on
  *    three 40px rows with a real flag badge, name and score each, misses the
@@ -38,14 +44,16 @@ function checkHomeCarousel() {
   const cards = [...track.querySelectorAll('.car-card')];
   const dots = [...document.querySelectorAll('#home-dots .dot')];
 
-  // ---- 1. strictly two slides ----
-  if (cards.length !== 2) fails.push(`want exactly 2 slides, found ${cards.length}`);
-  if (dots.length !== 2) fails.push(`want exactly 2 pagination dots, found ${dots.length}`);
-  if (cards.map((c) => c.dataset.index).join(',') !== '0,1') {
-    fails.push(`slide data-index must be 0,1 — found ${cards.map((c) => c.dataset.index).join(',')}`);
+  // ---- 1. three slides, the tournament first ----
+  if (cards.length !== 3) fails.push(`want exactly 3 slides, found ${cards.length}`);
+  if (dots.length !== 3) fails.push(`want exactly 3 pagination dots, found ${dots.length}`);
+  if (cards.map((c) => c.dataset.index).join(',') !== '0,1,2') {
+    fails.push(`slide data-index must be 0,1,2 — found ${cards.map((c) => c.dataset.index).join(',')}`);
   }
-  if (!cards[0]?.classList.contains('nations-cup')) fails.push('slide 0 must be .car-card.nations-cup');
-  if (!cards[1]?.classList.contains('mind-ladder')) fails.push('slide 1 must be .car-card.mind-ladder');
+  if (!cards[0]?.classList.contains('carousel-slide-tournament')) fails.push('slide 0 must be .car-card.carousel-slide-tournament');
+  if (!cards[1]?.classList.contains('nations-cup')) fails.push('slide 1 must be .car-card.nations-cup');
+  if (!cards[1]?.classList.contains('carousel-slide-nations')) fails.push('slide 1 must also carry .carousel-slide-nations');
+  if (!cards[2]?.classList.contains('mind-ladder')) fails.push('slide 2 must be .car-card.mind-ladder');
 
   // ---- 2. no mock tournament copy anywhere on Home ----
   const homeText = (document.getElementById('s-home')?.innerText || '').replace(/\s+/g, ' ');
@@ -70,7 +78,84 @@ function checkHomeCarousel() {
     if (/blur\(/.test(cs.filter || '')) fails.push(`${name} applies blur()`);
   }
 
-  // ---- 4. Nations Cup (slide 0) ----
+  // ---- 4. 200 Stars Tournament (slide 0) ----
+  const tour = cards.find((c) => c.classList.contains('carousel-slide-tournament'));
+  if (tour) {
+    const kicker = tour.querySelector('.tour-kicker');
+    const title = tour.querySelector('.tour-title');
+    const ktxt = (title?.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!/star showdown/i.test(ktxt) || !/200/.test(ktxt)) fails.push(`tournament header "${ktxt}" — want "STAR SHOWDOWN · 200★"`);
+    const pod = kicker?.querySelector('.tour-star-pod');
+    if (!pod) fails.push('tournament header missing the 24px star pod');
+    else {
+      const pr = pod.getBoundingClientRect();
+      if (!near(pr.width, 24, 1.5) || !near(pr.height, 24, 1.5)) {
+        fails.push(`star pod is ${Math.round(pr.width)}x${Math.round(pr.height)} — want 24x24`);
+      }
+      if (!pod.querySelector('use[href="#i-star-3d"]')) fails.push('star pod missing the 3D star glyph');
+    }
+    if (title) {
+      const ts = getComputedStyle(title);
+      if (!near(parseFloat(ts.fontSize), 12, .6)) fails.push(`tournament title font-size ${ts.fontSize} — want 12px`);
+      if (Number(ts.fontWeight) < 700) fails.push(`tournament title weight ${ts.fontWeight} — want bold`);
+      if (!/rgb\(248,\s*250,\s*252\)/.test(ts.color)) fails.push(`tournament title colour ${ts.color} — want #F8FAFC`);
+    }
+    const chip = tour.querySelector('.tour-chip');
+    if (!chip) fails.push('tournament missing the HIGH STAKES chip');
+    else {
+      if (!/high stakes/i.test((chip.textContent || '').replace(/\s+/g, ' '))) fails.push(`chip "${(chip.textContent || '').trim()}" — want "HIGH STAKES"`);
+      const cs = getComputedStyle(chip);
+      if (!/245,\s*158,\s*11/.test(cs.backgroundImage) || !/217,\s*119,\s*6/.test(cs.backgroundImage)) {
+        fails.push('chip must carry the 135deg amber gradient (245,158,11 → 217,119,6)');
+      }
+      if (!near(parseFloat(cs.borderTopWidth), 1, .3) || !/251,\s*191,\s*36/.test(cs.borderTopColor)) {
+        fails.push(`chip border ${cs.borderTopWidth} ${cs.borderTopColor} — want 1px rgba(251,191,36,.45)`);
+      }
+      if (!near(parseFloat(cs.fontSize), 9, .6)) fails.push(`chip font-size ${cs.fontSize} — want 9px`);
+      const beacon = chip.querySelector('.tour-beacon');
+      if (!beacon) fails.push('chip missing the amber beacon dot');
+      else if (getComputedStyle(beacon).animationName === 'none') fails.push('beacon dot is not pulsing');
+    }
+    const trophy = tour.querySelector('.tour-trophy');
+    if (!trophy) fails.push('tournament missing the trophy');
+    else {
+      const tr = trophy.getBoundingClientRect();
+      if (tr.width < 40 || tr.height < 40) fails.push(`trophy is ${Math.round(tr.width)}x${Math.round(tr.height)} — too small to read`);
+    }
+    const pods = [...tour.querySelectorAll('.tour-pods .tour-pod')];
+    if (pods.length !== 3) fails.push(`tournament wants 3 pool pods, found ${pods.length}`);
+    const wantPlace = ['1ST', '2ND', '3RD'];
+    const wantStars = ['120', '50', '30'];
+    pods.forEach((p, i) => {
+      const k = (p.querySelector('.tour-pod-k')?.textContent || '').trim();
+      if (k !== wantPlace[i]) fails.push(`pool pod ${i + 1} place "${k}" — want "${wantPlace[i]}"`);
+      const v = (p.querySelector('.tour-pod-v')?.textContent || '').replace(/[^\d]/g, '');
+      if (v !== wantStars[i]) fails.push(`pool pod ${i + 1} value "${v}" — want "${wantStars[i]}★"`);
+      if (!p.querySelector('.tour-pod-star')) fails.push(`pool pod ${i + 1} missing its star badge`);
+      const pr = p.getBoundingClientRect();
+      if (pr.height < 36) fails.push(`pool pod ${i + 1} height ${Math.round(pr.height)} < 36px`);
+    });
+    const clock = tour.querySelector('.tour-clock');
+    if (!/tournament ends in:?\s*\d{2}h\s*\d{2}m/i.test((clock?.textContent || '').replace(/\s+/g, ' '))) {
+      fails.push(`tournament clock "${(clock?.textContent || '').trim()}" — want "Tournament Ends in: 02h 45m"`);
+    }
+    const btn = document.getElementById('home-tournament-cta');
+    if (!btn) fails.push('tournament missing #home-tournament-cta');
+    else {
+      const bt = (btn.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!/join tournament/i.test(bt) || !/200/.test(bt) || !/pool/i.test(bt)) {
+        fails.push(`tournament CTA "${bt}" — want "JOIN TOURNAMENT" + "200★ POOL"`);
+      }
+      const h = btn.getBoundingClientRect().height;
+      if (h < 47.5) fails.push(`tournament CTA height ${Math.round(h)} < 48px`);
+      const bs = getComputedStyle(btn);
+      if (!/245,\s*158,\s*11/.test(bs.backgroundImage) || !/217,\s*119,\s*6/.test(bs.backgroundImage)) {
+        fails.push('tournament CTA must carry the gold gradient (245,158,11 → 217,119,6)');
+      }
+    }
+  }
+
+  // ---- 5. Nations Cup (slide 1) ----
   const cup = cards.find((c) => c.classList.contains('nations-cup'));
   if (cup) {
     const kicker = cup.querySelector('.nations-kicker');
@@ -119,7 +204,7 @@ function checkHomeCarousel() {
     }
   }
 
-  // ---- 5. The Mind Ladder (slide 1) ----
+  // ---- 6. The Mind Ladder (slide 2) ----
   const mind = cards.find((c) => c.classList.contains('mind-ladder'));
   if (mind) {
     const kicker = mind.querySelector('.mind-kicker');
@@ -154,7 +239,7 @@ function checkHomeCarousel() {
     }
   }
 
-  // ---- 6. dots: inside the card, synced to the scrolled slide ----
+  // ---- 7. dots: inside the card, synced to the scrolled slide ----
   const dotsBox = document.getElementById('home-dots');
   const active = (() => {
     const step = cards[1] ? cards[1].offsetLeft - cards[0].offsetLeft : 1;
@@ -185,7 +270,7 @@ function checkHomeCarousel() {
     fails.push('missing #home-dots');
   }
 
-  // ---- 7. column fit + nothing behind the dock ----
+  // ---- 8. column fit + nothing behind the dock ----
   const tabs = document.getElementById('tabs');
   const tabTop = tabs ? tabs.getBoundingClientRect().top : Number.POSITIVE_INFINITY;
   const home = document.getElementById('s-home');
@@ -205,7 +290,7 @@ function checkHomeCarousel() {
   const play = document.getElementById('home-play');
   if (play && play.getBoundingClientRect().bottom > tabTop + 1) fails.push('PLAY is pushed behind the dock');
 
-  // ---- 8. no clipped leaf text without ellipsis inside the deck ----
+  // ---- 9. no clipped leaf text without ellipsis inside the deck ----
   for (const c of cards) {
     for (const el of c.querySelectorAll('*')) {
       if (!(el instanceof HTMLElement)) continue;

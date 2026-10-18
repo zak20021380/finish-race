@@ -7,6 +7,8 @@
  * Each slide is 100% of the viewport width inside an overflow-hidden wrap, so
  * only the active slide shows cleanly between the paging dots. `.is-active`
  * marks the slide in focus (state binding preserved, no visual peek).
+ * Three slides, in this order: the 200 Stars Tournament (index 0, the hero the
+ * Play tab opens on), Nations Cup, The Mind Ladder.
  *
  * Mode selection is one Play button + a "Choose mode" bottom sheet. Play starts
  * immediately with the last setup (default 1v1 Normal). The sheet holds a
@@ -103,11 +105,18 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     return slides[1].offsetLeft - slides[0].offsetLeft || carousel.clientWidth || 1;
   };
 
+  /* Index 0 is the 200 Stars Tournament: the track is authored in that order,
+     so the boot state below simply agrees with the markup. */
+  let currentSlideIndex = 0;
+
+  const clampIndex = (i: number): number => Math.min(slides.length - 1, Math.max(0, i));
+
   const activeSlide = (): number =>
-    Math.min(slides.length - 1, Math.max(0, Math.round(carousel.scrollLeft / step())));
+    clampIndex(Math.round(carousel.scrollLeft / step()));
 
   const paintDots = (): void => {
     const a = activeSlide();
+    currentSlideIndex = a;
     for (const d of dots) {
       const on = Number(d.dataset.dot) === a;
       d.classList.toggle('on', on);
@@ -143,7 +152,9 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   };
 
   const goSlide = (i: number): void => {
-    const left = slides[i] ? slides[i].offsetLeft - slides[0].offsetLeft : 0;
+    const n = clampIndex(i);
+    currentSlideIndex = n;
+    const left = slides[n] ? slides[n].offsetLeft - slides[0].offsetLeft : 0;
     carousel.scrollTo({ left, behavior: motionReduced() ? 'auto' : 'smooth' });
   };
 
@@ -171,7 +182,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       if (document.hidden || motionReduced()) return;
       const s = $('s-home');
       if (s.hidden) return;
-      goSlide((activeSlide() + 1) % slides.length);
+      goSlide((currentSlideIndex + 1) % slides.length);
     }, 6000);
   };
   onSettings(() => {
@@ -442,6 +453,59 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     api.router.go('ranks');
   });
 
+  /* ---------- 200 Stars Tournament: the hero slide's one door ----------
+     The CTA hands the player to the Arena's own registration flow — the very
+     #stars-cta that opens the "Play for your squad?" seat drawer, or jumps
+     straight to the queue when this device already holds a seat. One
+     registration path, one source of seat truth; Home never duplicates it.
+
+     The Arena hydrates its cup asynchronously and that key is a no-op until
+     the cup lands, so the hand-off knocks until it answers: it stops the
+     moment the drawer opens, the moment a locked seat takes the player out of
+     the Arena, and gives up after ~3s rather than knocking forever. */
+
+  document.getElementById('home-tournament-cta')?.addEventListener('click', () => {
+    impact('medium');
+    poke();
+    try {
+      api.router.go('arena');
+    } catch {
+      /* router unavailable */
+    }
+    const key = document.getElementById('stars-cta');
+    let tries = 0;
+    let landed = false;
+    const handOver = (): void => {
+      const arena = document.getElementById('s-arena');
+      const sheet = document.getElementById('sheet-stars');
+      const shown = !!arena && !arena.hidden;
+      if (shown) landed = true;
+      if ((sheet && !sheet.hidden) || (landed && !shown) || tries++ > 24) return;
+      if (shown) key?.click();
+      window.setTimeout(handOver, 125);
+    };
+    window.setTimeout(handOver, 125);
+  });
+
+  /* The pool's clock. Anchored to a real deadline 02h 45m out, so the line
+     reads exactly as authored on arrival and then ticks honestly; it is only
+     repainted while the tab is visible. */
+  const tourClock = document.getElementById('tour-countdown');
+  if (tourClock) {
+    const endsAt = Date.now() + (2 * 60 + 45) * 60_000;
+    const paintClock = (): void => {
+      // Round up: 02h 45m out reads "02h 45m", not "02h 44m", on arrival.
+      const totalMin = Math.max(0, Math.ceil((endsAt - Date.now()) / 60_000));
+      const hh = Math.floor(totalMin / 60);
+      const mm = totalMin % 60;
+      tourClock.textContent = `${String(hh).padStart(2, '0')}h ${String(mm).padStart(2, '0')}m`;
+    };
+    paintClock();
+    window.setInterval(() => {
+      if (!document.hidden) paintClock();
+    }, 1000);
+  }
+
   /* ---------- launcher: one Play button + summary + sheet draft ---------- */
 
   const homePlay = $('home-play') as HTMLButtonElement;
@@ -693,7 +757,15 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   syncDraftFromMenu();
   void loadCountries();
   void loadMinds();
-  paintDots();
+  /* Boot on the hero slide. Index 0 is the tournament, and a browser that
+     restores the track's scroll offset on reload must not land the Play tab
+     halfway down the deck. Re-asserted once after layout, then left alone. */
+  const bootHero = (): void => {
+    if (carousel.scrollLeft !== 0) carousel.scrollLeft = 0;
+    paintDots();
+  };
+  bootHero();
+  requestAnimationFrame(bootHero);
   paintLauncher();
   paintSheet();
   armAuto();
