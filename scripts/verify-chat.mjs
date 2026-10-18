@@ -44,6 +44,8 @@ const POD_H = 72;
 const PILL_H = 44;                                  // the phrase pill's floor
 const PHRASES = ['Boom! Nice step.', 'Path closed.', 'Tick tock...', 'Outplayed.'];
 const MICROS = ['Haha!', 'Grrr!', 'Hurry!'];
+/* the keyframe family each face is wired to, in pod order */
+const MOTIONS = ['haha', 'grrr', 'hurry'];
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 
 const srv = http.createServer((req, res) => {
@@ -70,21 +72,30 @@ const PROBE = `(function () {
   const pods = [...sheet.querySelectorAll('.chat-emote-btn')];
   const pills = [...sheet.querySelectorAll('.chat-phrase')];
   const shape = (el) => el ? el.querySelectorAll('svg path, svg circle, svg ellipse, svg rect, svg polygon').length : 0;
+  const board = document.getElementById('board');
   return {
     open: !sheet.hidden && sheet.classList.contains('open'),
     view: { w: innerWidth, h: innerHeight },
     page: sc(document.documentElement),
+    board: board ? box(board) : null,
+    dockTop: document.getElementById('chip-0') ? box(document.getElementById('chip-0')).t : null,
     sheet: { box: box(sheet), sc: sc(sheet) },
     body: sc(body),
     emotes: {
       count: pods.length,
       sc: sc(sheet.querySelector('.chat-emotes')),
       row: box(sheet.querySelector('.chat-emotes')),
-      pods: pods.map((b) => ({
-        box: box(b), sc: sc(b), art: !!b.querySelector('.chat-emote-art svg'),
-        shapes: shape(b), micro: (b.querySelector('.chat-emote-micro') || {}).textContent ?? null,
-        label: b.getAttribute('aria-label'), kind: b.className,
-      })),
+      pods: pods.map((b) => {
+        const art = b.querySelector('.chat-emote-art');
+        return {
+          box: box(b), sc: sc(b), art: !!art && !!art.querySelector('svg'),
+          shapes: shape(b), micro: (b.querySelector('.chat-emote-micro') || {}).textContent ?? null,
+          label: b.getAttribute('aria-label'), kind: b.className,
+          motion: art ? art.className : '',
+          anim: art ? getComputedStyle(art).animationName : 'none',
+          animDur: art ? getComputedStyle(art).animationDuration : '0s',
+        };
+      }),
     },
     phrases: {
       count: pills.length,
@@ -102,12 +113,20 @@ const BUBBLE = `(function () {
   if (!b) return { missing: true };
   const s = document.getElementById('chat-sheet');
   const k = document.getElementById('chat-toggle');
+  const chip = document.getElementById('chip-0');
+  const art = b.querySelector('.chat-emote');
   const r = b.getBoundingClientRect();
   return {
     show: b.classList.contains('show'), hidden: b.hidden,
+    out: b.classList.contains('is-out'),
     text: (b.querySelector('.chat-bubble-t') || {}).textContent ?? null,
     emote: !!b.querySelector('.chat-emote svg'),
-    box: { w: +r.width.toFixed(1), h: +r.height.toFixed(1), t: +r.top.toFixed(1) },
+    shapes: art ? art.querySelectorAll('svg path, svg circle, svg ellipse, svg rect, svg polygon').length : 0,
+    motion: art ? art.className : '',
+    anim: art ? getComputedStyle(art).animationName : 'none',
+    opacity: art ? getComputedStyle(b).opacity : '0',
+    box: { w: +r.width.toFixed(1), h: +r.height.toFixed(1), t: +r.top.toFixed(1), b: +r.bottom.toFixed(1) },
+    chipTop: chip ? +chip.getBoundingClientRect().top.toFixed(1) : null,
     sheetOpen: !!s && !s.hidden && s.classList.contains('open'),
     expanded: k.getAttribute('aria-expanded'),
   };
@@ -135,6 +154,14 @@ for (const [w, h] of VIEWPORTS) {
     const k = document.getElementById('chat-toggle');
     return k && !k.disabled;
   }, null, { timeout: 15000 });
+  /* the board's box before the modal exists — opening a sheet must not move a single pixel of it */
+  const before = await pg.evaluate(() => {
+    const b = document.getElementById('board');
+    const r = b.getBoundingClientRect();
+    return {
+      t: +r.top.toFixed(1), l: +r.left.toFixed(1), w: +r.width.toFixed(1), h: +r.height.toFixed(1),
+    };
+  });
   await pg.click('#chat-toggle');
   await pg.waitForTimeout(360);
 
@@ -153,6 +180,12 @@ for (const [w, h] of VIEWPORTS) {
       if (p.micro !== MICROS[i]) bad.push(`emote ${i} micro-label is ${JSON.stringify(p.micro)}, want ${JSON.stringify(MICROS[i])}`);
       if (!p.label || !/emote/i.test(p.label)) bad.push(`emote ${i} has no labelled button`);
       if (!/is-(laugh|fury|impatient)/.test(p.kind)) bad.push(`emote ${i} carries no tone class: ${p.kind}`);
+      /* the face must be alive in the sheet, not a still */
+      if (!new RegExp(`emote-${MOTIONS[i]}`).test(p.motion)) {
+        bad.push(`emote ${i} art carries no motion class: ${JSON.stringify(p.motion)}`);
+      }
+      if (p.anim === 'none') bad.push(`emote ${i} art has no running CSS animation`);
+      if (parseFloat(p.animDur) <= 0) bad.push(`emote ${i} animation duration is ${p.animDur}`);
     });
     m.phrases.pills.forEach((p, i) => {
       if (p.text !== PHRASES[i]) bad.push(`phrase ${i} is ${JSON.stringify(p.text)}, want ${JSON.stringify(PHRASES[i])}`);
@@ -179,6 +212,14 @@ for (const [w, h] of VIEWPORTS) {
     if (m.sheet.box.t < m.view.h / 2 - 0.5) bad.push(`the sheet starts at ${m.sheet.box.t}px, above the bottom half`);
     if (m.sheet.box.b > m.view.h + 0.5) bad.push(`the sheet leaves the viewport at ${m.sheet.box.b}px`);
     if (m.view.h - m.sheet.box.b > 16.5) bad.push(`the sheet floats ${(m.view.h - m.sheet.box.b).toFixed(1)}px off the app's bottom edge`);
+
+    /* 3b — the arena never moves: a modal may cover the board, never reflow it */
+    if (m.board) {
+      for (const k of ['t', 'l', 'w', 'h']) {
+        const d = m.board[k] - before[k];
+        if (Math.abs(d) > 0.5) bad.push(`the board shifted ${k} by ${d.toFixed(1)}px when the sheet opened`);
+      }
+    }
   }
   if (errors.length) bad.push(`js: ${errors[0]}`);
   await pg.screenshot({ path: path.join(OUT, `chat-open-${tag}.png`) });
@@ -191,10 +232,26 @@ for (const [w, h] of VIEWPORTS) {
   else {
     if (!em.show || em.hidden) bad.push('the emote bubble did not show');
     if (!em.emote) bad.push('the emote bubble carries no art');
+    if (em.shapes < 12) bad.push(`the bubble's face is only ${em.shapes} shapes`);
+    if (!/emote-haha/.test(em.motion)) bad.push(`the bubble carries no motion class: ${JSON.stringify(em.motion)}`);
+    if (em.anim === 'none') bad.push('the bubble face is not animating');
+    if (em.opacity !== '1') bad.push(`the bubble face is at opacity ${em.opacity}`);
+    /* it is anchored above the dock, not over it and not floating in the middle of the board */
+    if (em.chipTop !== null && em.box.b > em.chipTop + 0.5) {
+      bad.push(`the bubble's foot (${em.box.b}) sits below the chip top (${em.chipTop})`);
+    }
+    if (em.box.h < 48) bad.push(`the emote bubble is only ${em.box.h}px tall`);
     if (em.sheetOpen) bad.push('the sheet stayed open after an emote');
     if (em.expanded !== 'false') bad.push(`the chat key still says aria-expanded=${em.expanded}`);
   }
   await pg.screenshot({ path: path.join(OUT, `chat-emote-${tag}.png`) });
+
+  /* 4b — the performance ends on its own: 2.2s of loop, then the fade takes the bubble away */
+  await pg.waitForTimeout(2600);
+  const gone = await pg.evaluate(BUBBLE);
+  if (!gone.missing && !gone.hidden && gone.out !== true) {
+    bad.push('the emote bubble neither faded nor hid after its 2.2s run');
+  }
 
   /* 5 — a phrase, after the 3s cooldown: a text bubble, sheet closed again */
   await pg.waitForTimeout(3300);

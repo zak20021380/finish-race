@@ -15,7 +15,7 @@
 import './chat.css';
 import type { GameState, Player } from './rules';
 import { EMOTES, TAUNTS, type ChatEmote } from './data/phrases';
-import { impact } from './telegram';
+import { impact, notify } from './telegram';
 
 export interface ChatOptions {
   /** The recessed pill in the dock's console rail: the one slot chat has ever needed. */
@@ -37,6 +37,10 @@ export interface Chat {
 }
 
 const BUBBLE_MS = 2500;
+/** An emote is a performance: the face loops at full energy, then the bubble lifts away. */
+const EMOTE_MS = 2200;
+/** The exit: opacity 1 -> 0 while the bubble drifts up 10px. Matches the transition in chat.css. */
+const LEAVE_MS = 240;
 const SEND_GAP_MS = 3000;
 const BOT_GAP_MS = 8000;
 const HOLD_MS = 400;
@@ -150,33 +154,45 @@ export function createChat(o: ChatOptions): Chat {
     bubble.style.top = `${clampedTop - laneBox.top}px`;
   }
 
+  /**
+   * The exit is a fade, not a cut: `is-out` swaps the visible state for `opacity: 0` plus a 10px
+   * lift, and the node is only hidden once that transition has landed.
+   */
   function hideBubble(side: Side) {
     window.clearTimeout(bubbleTimers[side]);
     bubbleTimers[side] = 0;
     const node = bubbles[side];
-    node.classList.remove('show');
+    if (node.hidden) return;
+    node.classList.add('is-out');
     window.setTimeout(() => {
-      if (!node.classList.contains('show')) node.hidden = true;
-    }, 180);
+      if (!node.classList.contains('is-out')) return;   // a fresh message took the slot back
+      node.classList.remove('show', 'is-out');
+      node.hidden = true;
+    }, LEAVE_MS);
   }
 
   function setBubble(side: Side, content: Node, emote = false) {
     if (side === 'foe' && muted) return;
     const node = bubbles[side];
+    window.clearTimeout(bubbleTimers[side]);
+    node.classList.remove('is-out');     // a new message cancels a fade in flight
     node.classList.toggle('is-emote', emote);
     bubbleText[side].replaceChildren(content);
     node.hidden = false;                 // measurable before it is placed
     place(side, side === 'me' ? o.localSide() : rivalSide());
+    /* re-arm the spring: dropping `show` and forcing a reflow restarts the pop keyframes, so a
+       second message pops exactly like the first instead of sliding in from wherever it was */
+    node.classList.remove('show');
     void node.offsetWidth;
     node.classList.add('show');
     /* a rival's line warms the chat slot until it is opened: the key is where the reply lives */
     if (side === 'foe') o.key.classList.add('is-ping');
-    window.clearTimeout(bubbleTimers[side]);
-    bubbleTimers[side] = window.setTimeout(() => hideBubble(side), BUBBLE_MS);
+    bubbleTimers[side] = window.setTimeout(() => hideBubble(side), emote ? EMOTE_MS : BUBBLE_MS);
   }
 
   function emoteNode(emote: ChatEmote): HTMLElement {
-    const box = el('span', 'chat-emote');
+    /* the same `.emote-*` family the pod uses, so the face keeps performing in the bubble */
+    const box = el('span', `chat-emote emote-${emote.motion}`);
     box.innerHTML = emote.svg;           // first-party static markup, never a player's string
     return box;
   }
@@ -218,7 +234,10 @@ export function createChat(o: ChatOptions): Chat {
     b.type = 'button';
     b.setAttribute('aria-label', `Send emote: ${emote.label}`);
     b.title = emote.label;
-    const art = el('span', 'chat-emote-art');
+    b.dataset.motion = emote.motion;
+    /* the art wrapper — never the button — carries the loop, so the tap's own bounce can layer
+       on top of it without the two fighting over one transform */
+    const art = el('span', `chat-emote-art emote-${emote.motion}`);
     art.innerHTML = emote.svg;         // first-party static markup, never a player's string
     b.append(art, el('span', 'chat-emote-micro', emote.micro));
     b.addEventListener('click', () => sendEmote(emote, b));
@@ -298,7 +317,9 @@ export function createChat(o: ChatOptions): Chat {
   function sendEmote(emote: ChatEmote, btn: HTMLButtonElement) {
     if (!canChat() || isCooling()) return;
     lastSentAt = Date.now();
-    impact('medium');                    // a punchy tap: the face is the message
+    /* the face is the message, so it lands twice: a success chime in the hand, then the thump */
+    impact('medium');
+    notify('success');
     /* the pod bounces once on the tap that spent it; the class is re-armed on every press */
     btn.classList.remove('is-tapped');
     void btn.offsetWidth;

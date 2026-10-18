@@ -34,11 +34,29 @@
     0 8px 16px -10px var(--shadow-soft),
     var(--clay-spec), var(--clay-bevel), var(--clay-ring);
   opacity: 0;
-  transform: translateY(5px);
-  transition: opacity .16s ease, transform .16s ease;
+  transform: translateY(4px) scale(.92);
+  /* the tail is the hinge: the pop grows out of the point that touches the seat */
+  transform-origin: 50% 100%;
+  transition: opacity .22s ease, transform .22s ease;
   pointer-events: none;
 }
-.chat-bubble.show { opacity: 1; transform: none; }
+.chat-bubble.show {
+  opacity: 1;
+  transform: none;
+  /* 200ms spring: 0 -> 1.15 -> 1, no fill-mode, so the exit transition below can take the
+     transform back the instant the entry is over */
+  animation: chat-bubble-pop .2s cubic-bezier(.34, 1.56, .64, 1);
+}
+@keyframes chat-bubble-pop {
+  0% { opacity: 0; transform: scale(.2); }
+  60% { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 1; transform: scale(1); }
+}
+/* the exit: a fade plus a 10px lift, applied after the emote has finished performing */
+.chat-bubble.is-out {
+  opacity: 0;
+  transform: translateY(-10px);
+}
 .chat-bubble::after {
   content: '';
   position: absolute;
@@ -62,16 +80,17 @@
 }
 /* an emote is a square tile, no text */
 .chat-bubble.is-emote {
-  width: 48px;
-  min-height: 48px;
+  width: 54px;
+  min-height: 54px;
   max-height: none;
   padding: 0;
   display: grid;
   place-items: center;
-  border-radius: 14px;
+  border-radius: 15px;
 }
 .chat-bubble.is-emote .chat-bubble-t { display: grid; place-items: center; max-height: none; }
-.chat-emote svg { width: 34px; height: 34px; display: block; }
+.chat-emote { display: grid; place-items: center; }
+.chat-emote svg { width: 38px; height: 38px; display: block; }
 
 /* ---- the scrim and the bottom sheet ---- */
 .chat-scrim {
@@ -147,8 +166,9 @@
   min-height: 0;
 }
 
-/* three large emote pods, one row, centred: each a recessed obsidian well with an ambient glow
-   in its own tonality. 88x72 is a landing pad for a thumb, not a toolbar chip. */
+/* three large emote pods, one row, centred: each a recessed obsidian well with a hot core in its
+   own tonality, so a saturated sphere reads against the dark clay instead of sinking into it.
+   88x72 is a landing pad for a thumb, not a toolbar chip. */
 .chat-emotes {
   display: grid;
   grid-template-columns: repeat(3, 88px);
@@ -169,18 +189,26 @@
   border-radius: 18px;
   cursor: pointer;
   background:
-    radial-gradient(120% 85% at 50% 18%, var(--emote-glow) 0%, rgba(0, 0, 0, 0) 62%),
-    var(--field);
+    radial-gradient(62% 54% at 50% 42%, var(--emote-core) 0%, rgba(0, 0, 0, 0) 78%),
+    radial-gradient(128% 92% at 50% 10%, var(--emote-glow) 0%, rgba(0, 0, 0, 0) 64%),
+    linear-gradient(180deg, #131B2E 0%, #0B111E 100%);
   box-shadow:
     0 3px 0 #080C14,
     var(--clay-spec),
     inset 0 -3px 3px rgba(0, 0, 0, .4),
     inset 0 0 0 1px var(--hair),
-    0 10px 22px -14px var(--emote-glow);
+    0 12px 24px -14px var(--emote-glow);
   transition: transform var(--motion-fast), box-shadow var(--motion-fast);
   -webkit-tap-highlight-color: transparent;
 }
-.chat-emote-art { display: grid; place-items: center; min-height: 42px; }
+/* the art floats off the well: a hard shadow under a saturated sphere is what stops it reading
+   as a flat sticker at 42px */
+.chat-emote-art {
+  display: grid;
+  place-items: center;
+  min-height: 42px;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .6));
+}
 .chat-emote-art svg { width: 42px; height: 42px; display: block; }
 .chat-emote-micro {
   font-size: 10px;
@@ -190,15 +218,25 @@
   color: var(--ink-soft);
   text-shadow: 0 1px 0 rgba(0, 0, 0, .5);
 }
-.chat-emote-btn.is-laugh { --emote-glow: rgba(245, 176, 46, .34); }
-.chat-emote-btn.is-fury { --emote-glow: rgba(240, 68, 37, .38); }
-.chat-emote-btn.is-impatient { --emote-glow: rgba(56, 189, 248, .36); }
-.chat-emote-btn.is-laugh .chat-emote-micro { color: var(--honey-ink); }
-.chat-emote-btn.is-fury .chat-emote-micro { color: var(--red-ink); }
-.chat-emote-btn.is-impatient .chat-emote-micro { color: var(--brand-ink); }
+.chat-emote-btn.is-laugh {
+  --emote-glow: rgba(251, 191, 36, .46);
+  --emote-core: rgba(251, 191, 36, .2);
+}
+.chat-emote-btn.is-fury {
+  --emote-glow: rgba(239, 68, 68, .5);
+  --emote-core: rgba(239, 68, 68, .24);
+}
+.chat-emote-btn.is-impatient {
+  --emote-glow: rgba(34, 211, 238, .48);
+  --emote-core: rgba(34, 211, 238, .22);
+}
+.chat-emote-btn.is-laugh .chat-emote-micro { color: #FDE047; }
+.chat-emote-btn.is-fury .chat-emote-micro { color: #FCA5A5; }
+.chat-emote-btn.is-impatient .chat-emote-micro { color: #67E8F9; }
 .chat-emote-btn:active { transform: translateY(2px); }
 .chat-emote-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-/* the pod bounces once on the tap that spent it */
+/* the pod bounces once on the tap that spent it — the button's own transform, kept clear of the
+   art's continuous loop so the two never fight over one property */
 .chat-emote-btn.is-tapped { animation: chat-emote-bounce .38s cubic-bezier(.2, .8, .3, 1); }
 @keyframes chat-emote-bounce {
   0% { transform: translateY(0) scale(1); }
@@ -206,6 +244,85 @@
   62% { transform: translateY(1px) scale(.97); }
   100% { transform: translateY(0) scale(1); }
 }
+
+/* ---- the three loops ----
+   One family per face, hung off the art node itself: `.emote-haha` / `.emote-grrr` /
+   `.emote-hurry` sit on the wrapper inside the pod AND on the node inside the floating bubble,
+   so a face keeps performing for its full 2.2s in the arena exactly as it does in the sheet.
+   Only transforms and opacity, so every loop is compositor-only. */
+.emote-haha {
+  transform-origin: 50% 82%;
+  animation: emote-bounce 1.05s cubic-bezier(.34, 1.56, .64, 1) infinite;
+}
+@keyframes emote-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  25% { transform: translateY(-1.5px) scale(1.03, .98) rotate(-3.5deg); }
+  50% { transform: translateY(-4px) scale(1.08, .95); }
+  75% { transform: translateY(-1.5px) scale(1.03, .98) rotate(3.5deg); }
+}
+
+.emote-grrr {
+  transform-origin: 50% 82%;
+  animation: emote-rage .26s linear infinite;
+}
+@keyframes emote-rage {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-1.5px, 1px); }
+  75% { transform: translate(1.5px, -1px); }
+}
+/* the steam is its own layer: it swells and brightens on top of the body's tremble */
+.emote-grrr .ec-steam {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: emote-steam 1.05s ease-in-out infinite;
+}
+@keyframes emote-steam {
+  0%, 100% { opacity: .5; transform: translateY(0) scaleY(1); }
+  50% { opacity: 1; transform: translateY(-1.6px) scaleY(1.1); }
+}
+
+.emote-hurry {
+  transform-origin: 50% 82%;
+  animation: emote-bob 1.5s ease-in-out infinite;
+}
+@keyframes emote-bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-1.5px) rotate(-1.6deg); }
+}
+/* the hourglass turns a full 180° twice a second and a half — a seamless loop, because 360° is
+   0° and the glass is centred on its own axis at (51, 37.5) in the 64-unit viewBox */
+.emote-hurry .eh-glass {
+  transform-box: view-box;
+  transform-origin: 51px 37.5px;
+  animation: emote-flip 1.5s cubic-bezier(.55, .06, .38, .96) infinite;
+}
+@keyframes emote-flip {
+  0%, 6% { transform: rotate(0deg); }
+  44%, 56% { transform: rotate(180deg); }
+  94%, 100% { transform: rotate(360deg); }
+}
+/* the eye-dart: two flicks left, two right, then back to the clock. Only the pupils move — the
+   sclera stay put, so the glance reads without the whole eye sliding in its socket */
+.emote-hurry .ec-eyes {
+  transform-box: fill-box;
+  animation: emote-dart 2.4s ease-in-out infinite;
+}
+@keyframes emote-dart {
+  0%, 26%, 100% { transform: translateX(0); }
+  36%, 52% { transform: translateX(-1.7px); }
+  62%, 80% { transform: translateX(1.7px); }
+}
+
+/* ---- dispatched: the bubble runs the same families wound hotter ----
+   In the arena the face is the message, so every loop is 40-50% faster than the quiet idle it
+   plays in the sheet, and the bubble's own 200ms spring lands the whole thing as a performance.
+   Only durations change: the geometry of each face stays exactly what the pod shows. */
+.chat-bubble .emote-haha { animation-duration: .62s; }
+.chat-bubble .emote-grrr { animation-duration: .16s; }
+.chat-bubble .emote-grrr .ec-steam { animation-duration: .68s; }
+.chat-bubble .emote-hurry { animation-duration: .95s; }
+.chat-bubble .emote-hurry .eh-glass { animation-duration: .95s; }
+.chat-bubble .emote-hurry .ec-eyes { animation-duration: 1.5s; }
 
 /* the four taunts: a tight 2x2 grid of sculpted pills, 12px bold, one tap each */
 .chat-phrases {
@@ -346,8 +463,16 @@ html.reduced-motion .chat-scrim,
 html.reduced-motion .chat-toast { transition: none; animation: none; }
 html.reduced-motion .chat-wait-n { animation: none; }
 html.reduced-motion .chat-emote-btn.is-tapped { animation: none; }
+html.reduced-motion .emote-haha,
+html.reduced-motion .emote-grrr,
+html.reduced-motion .emote-hurry,
+html.reduced-motion .emote-grrr .ec-steam,
+html.reduced-motion .emote-hurry .eh-glass,
+html.reduced-motion .emote-hurry .ec-eyes { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .chat-sheet, .chat-bubble, .chat-scrim, .chat-toast { transition: none; animation: none; }
   .chat-wait-n { animation: none; }
   .chat-emote-btn.is-tapped { animation: none; }
+  .emote-haha, .emote-grrr, .emote-hurry,
+  .emote-grrr .ec-steam, .emote-hurry .eh-glass, .emote-hurry .ec-eyes { animation: none; }
 }

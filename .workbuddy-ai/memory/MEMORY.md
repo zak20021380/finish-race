@@ -83,6 +83,26 @@ Durable index; dated logs beside this file hold the history.
   `setFog()` shows `?` and only prints `0` when `minesLeft()` proves the stash spent. Older chip passes
   still live in style.css: any new rule needs `.chip` in the selector (0,4,0) or it loses.
 
+## Quick chat emotes (data/phrases.ts + chat.css)
+- A face is read at 38-42px over `--field`: the body gradient's LAST stop must stay SATURATED
+  (#F59E0B/#DC2626/#06B6D4). A dark rim melts into the well — that is what "muddy" means here.
+  Volume comes from a crescent shade painted inside the sphere, never from the rim.
+- The art is glossy 3D sticker vocabulary (Fluent/mobile-game packs), ~14-29 shapes per face:
+  sphere + crescent shade + soft radial gloss + specular dot + bottom-right rim-light arc, then
+  ONE clean feature per face. Laugh: closed-arc `∩` eyes + open smile (tooth band + tongue).
+  Rage: thick angled brow strokes, centered pupils, a single down-curving frown stroke (corners
+  LOW, middle HIGH in y-down coords — the reverse reads as a grin), white-gradient steam wisps.
+  Hurry: raised-arch left brow + flat right brow, flat mouth, knuckle-bump fist at the chin, and
+  a standalone golden hourglass at x43-59 (pinched continuous-outline glass).
+- `ChatEmote.motion` → `emote-haha|grrr|hurry` on BOTH `.chat-emote-art` (pod) and `.chat-emote`
+  (bubble). Only the art node animates; `.chat-emote-btn.is-tapped` owns the button transform.
+  Inner SVG hooks: `.ec-steam` (fill-box), `.eh-glass` (view-box origin 51/37.5), `.ec-eyes`
+  (pupils only — sclera stay put in the hurrry dart).
+- Bubble lifecycle: `chat-bubble-pop` 200ms has NO fill-mode, so `is-out` (opacity 0 +
+  translateY(-10px)) can take the transform back. `setBubble` drops `show` + reflows to re-arm.
+  `EMOTE_MS` 2200 / `BUBBLE_MS` 2500 / `LEAVE_MS` 240. The bubble runs the same loops 40-50%
+  faster (`.chat-bubble .emote-*` duration overrides) — duration only, never geometry.
+
 ## Design system (style.css)
 - One theme, "Dark Clay": opaque slabs, no live blur. `--clay`/`--clay-ring` raised, `--inset` wells,
   `--lip`/`--press-y` controls, gold ink `--honey-ink`. Toasts are `.note`. **Reduced motion is
