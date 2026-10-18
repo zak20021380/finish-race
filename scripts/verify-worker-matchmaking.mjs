@@ -405,8 +405,10 @@ console.log('\n-- rooms: seats, backfill, takeover --');
     && JSON.stringify(fa?.sizes) === '[1,1,1,1]', JSON.stringify(fa?.sizes));
   ok('the room is a live match on /admin/status, with its size and bot count',
     rt.lobby.rooms.size === 1
-    && (await rt.lobby.fetch({ url: 'http://x/admin/status', headers: { get: () => null } })).body
-      .includes('"players":4'));
+    && (await rt.lobby.fetch({
+      url: 'http://127.0.0.1:8787/admin/status',
+      headers: { get: (name) => (name === 'x-detour-admin' ? '1' : null) },
+    })).body.includes('"players":4'));
 
   /* Play it: both people move, and the machine's whole answer rides along in the same batch. The
      board is rebuilt here from the seed the room handed out, which is what the clients do. */

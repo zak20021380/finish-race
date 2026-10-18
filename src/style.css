@@ -14042,6 +14042,407 @@ html.reduced-motion .adm-mode-seg { transition: none; }
 }
 
 /* ==========================================================================
+   ACCESS CONTROL & BROADCASTS — the role registry, the dispatch history, and
+   the two drawers that ride over the stage with a confirm dialog above them.
+   Same one palette: opaque clay slabs, no backdrop-filter, 44px+ targets.
+   ========================================================================== */
+.adm-acl-list,
+.adm-bc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ---- one admin: avatar initial, name + tg id, a role chip, the revoke key ---- */
+.adm-admin {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--clay-face);
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+}
+.adm-admin-av {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #26314A 0%, #1B2333 100%);
+  color: var(--ink);
+  font-size: var(--t-2);
+  font-weight: 900;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), inset 0 -2px 4px rgba(0, 0, 0, .38), var(--clay-ring);
+}
+.adm-admin.is-root .adm-admin-av {
+  background: var(--gold-face);
+  color: #10141D;
+  box-shadow: 0 2px 0 var(--gold-lip), inset 0 1px 0 rgba(255, 255, 255, .5);
+}
+.adm-admin-txt {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.adm-admin-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-2);
+  font-weight: 800;
+  color: var(--ink);
+}
+.adm-admin-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+.adm-admin-role {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  color: var(--brand-ink);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+}
+.adm-admin-role[data-role="superadmin"] {
+  background: var(--honey-soft);
+  color: var(--honey-ink);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .4);
+}
+.adm-admin-role[data-role="root"] {
+  background: var(--gold-face);
+  color: #10141D;
+  box-shadow: 0 2px 0 var(--gold-lip), inset 0 1px 0 rgba(255, 255, 255, .5);
+}
+.adm-admin-x {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  color: var(--red-ink);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  transition: transform var(--motion-fast), filter var(--motion-fast);
+}
+.adm-admin-x .ico { width: 16px; height: 16px; }
+.adm-admin-x:active { transform: translateY(var(--press-y)); }
+.adm-admin-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.adm-admin-x[disabled] { opacity: .35; cursor: default; filter: saturate(.4); }
+.adm-admin-x[disabled]:active { transform: none; }
+
+/* ---- one broadcast: chips over the title, the body, when it went, the flip ---- */
+.adm-bc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 11px;
+  border-radius: var(--radius-md);
+  background: var(--clay-face);
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+}
+.adm-bc-card.is-archived { opacity: .6; }
+.adm-bc-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.adm-bc-chip {
+  flex: none;
+  padding: 3px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  color: var(--ink-soft);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+}
+.adm-bc-chip[data-pri="urgent"] {
+  background: var(--honey-soft);
+  color: var(--honey-ink);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .4);
+}
+.adm-bc-chip[data-state="archived"] { color: var(--red-ink); }
+.adm-bc-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-2);
+  font-weight: 800;
+  color: var(--ink);
+}
+.adm-bc-snip {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: var(--t-micro);
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.adm-bc-meta {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+.adm-bc-actions { display: flex; gap: var(--s2); margin-top: 2px; }
+.adm-bc-actions .adm-btn { flex: 1 1 0; min-height: 44px; padding: 0 10px; font-size: var(--t-micro); }
+.adm-bc-actions .adm-btn.is-restore { color: var(--mint-ink); }
+
+/* ---- the shared segmented key row: recessed track, raised gold key ---- */
+.adm-seg {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.adm-seg-b {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 6px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-soft);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .01em;
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast),
+              background var(--motion-fast), color var(--motion-fast);
+}
+.adm-seg-b:active { transform: translateY(var(--press-y)); }
+.adm-seg-b:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.adm-seg-b[aria-pressed="true"] {
+  background: var(--clay-face);
+  color: var(--ink);
+  box-shadow:
+    0 2px 0 #0A0E15,
+    var(--clay-spec), var(--clay-bevel),
+    inset 0 0 0 1px rgba(252, 211, 77, .34);
+}
+
+/* ---- the drawers: one full-stage slab that springs in over the body ---- */
+.adm-drawer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding:
+    max(var(--s3), env(safe-area-inset-top))
+    max(var(--pad-app-x), env(safe-area-inset-right))
+    max(var(--s3), env(safe-area-inset-bottom))
+    max(var(--pad-app-x), env(safe-area-inset-left));
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(252, 211, 77, .1), rgba(252, 211, 77, 0) 60%),
+    linear-gradient(180deg, var(--bg-m) 0%, var(--bg) 56%, var(--bg-b) 100%);
+  opacity: 0;
+  transform: translate3d(0, 4%, 0);
+  transition: opacity var(--motion-med), transform .3s var(--bounce);
+  pointer-events: none;
+}
+.adm-drawer[hidden] { display: none; }
+.adm-drawer.open { opacity: 1; transform: none; pointer-events: auto; }
+html.reduced-motion .adm-drawer { transition: none; }
+.adm-drawer-head { flex: none; display: flex; align-items: center; gap: var(--s2); }
+.adm-drawer-t {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: var(--t-hd);
+  font-weight: var(--w-2);
+  color: var(--ink);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .45), 0 -1px 0 rgba(255, 255, 255, .12);
+}
+.adm-drawer-x {
+  --d: 3px;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  border-radius: 12px;
+  background:
+    radial-gradient(130% 110% at 50% -26%, rgba(255, 255, 255, .1), transparent 58%),
+    linear-gradient(180deg, #1B2333 0%, #10151F 100%);
+  color: var(--ink-soft);
+  box-shadow:
+    0 var(--d) 0 #0A0E15,
+    0 10px 20px -6px rgba(0, 0, 0, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 -2px 5px rgba(0, 0, 0, .5),
+    inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+.adm-drawer-x .ico { width: 15px; height: 15px; }
+.adm-drawer-x:active { transform: translateY(var(--press-y)); --d: 1px; }
+.adm-drawer-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.adm-drawer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding-bottom: 72px;
+}
+.adm-drawer-foot { flex: none; display: flex; gap: var(--s2); }
+.adm-drawer-foot .adm-btn { flex: 1 1 0; }
+
+/* ---- the stacked field: label over a recessed well, and the hint under it ---- */
+.adm-fld { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.adm-fld-row { display: flex; gap: var(--s2); }
+.adm-fld-row .adm-fld { flex: 1 1 0; }
+.adm-fld-l {
+  margin: 0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.adm-fld .adm-input {
+  min-height: 48px;
+  padding: 0 11px;
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.adm-fld .adm-input:focus-visible {
+  outline: 2px solid var(--brand-2);
+  outline-offset: 1px;
+}
+.adm-area {
+  min-height: 108px;
+  padding: 10px 11px;
+  resize: vertical;
+  line-height: 1.5;
+}
+.adm-hint { margin: 0; font-size: var(--t-micro); line-height: 1.4; color: var(--ink-soft); }
+.adm-hint[data-state="ok"] { color: var(--mint-ink); }
+.adm-hint[data-state="bad"] { color: var(--red-ink); }
+
+/* ---- the live preview: the exact slab the popup will raise ---- */
+.adm-bc-pv {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 13px 14px;
+  border-radius: var(--radius-md);
+  background:
+    radial-gradient(130% 90% at 50% -30%, rgba(252, 211, 77, .12), rgba(252, 211, 77, 0) 60%),
+    rgba(17, 24, 39, .95);
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 158, 11, .5),
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    0 14px 26px -18px rgba(0, 0, 0, .9);
+}
+.adm-bc-pv-kicker {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--honey-ink);
+}
+.adm-bc-pv-title { font-size: var(--t-2); font-weight: 900; color: var(--ink); overflow-wrap: anywhere; }
+.adm-bc-pv-body {
+  font-size: var(--t-micro);
+  line-height: 1.5;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.adm-bc-pv-cta {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 9px 15px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-fill);
+  color: var(--on-brand);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  box-shadow: 0 2px 0 var(--brand-lip);
+}
+.adm-bc-pv-cta[hidden] { display: none; }
+
+/* ---- the confirm dialog: one question above the drawer that asked it ---- */
+.adm-confirm {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  padding: 0 18px;
+  background: rgba(6, 9, 14, .66);
+  opacity: 0;
+  transition: opacity var(--motion-fast);
+  pointer-events: none;
+}
+.adm-confirm[hidden] { display: none; }
+.adm-confirm.open { opacity: 1; pointer-events: auto; }
+.adm-confirm-panel {
+  width: min(100%, 340px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, var(--solid-a) 0%, var(--solid-b) 100%);
+  box-shadow:
+    0 18px 44px -18px rgba(0, 0, 0, .9),
+    inset 0 1px 0 var(--hair-lit),
+    inset 0 0 0 1px rgba(245, 158, 11, .35);
+  transform: scale(.92) translateY(6px);
+  transition: transform .24s var(--bounce);
+}
+.adm-confirm.open .adm-confirm-panel { transform: none; }
+html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { transition: none; }
+.adm-confirm-t { margin: 0; font-size: var(--t-1); font-weight: 900; color: var(--ink); }
+.adm-confirm-b { margin: 0; font-size: var(--t-micro); line-height: 1.5; color: var(--ink-soft); overflow-wrap: anywhere; }
+.adm-confirm-actions { display: flex; gap: var(--s2); margin-top: var(--s2); }
+.adm-confirm-actions .adm-btn { flex: 1 1 0; }
+
+/* a 340 phone: the two-up CTA fields fold, never clip */
+@media (max-width: 359px) {
+  .adm-fld-row { flex-direction: column; }
+}
+
+/* ==========================================================================
    HOME CAROUSEL — the two authentic slides
    Nations Cup (slide 0) is a national-standings showcase; The Mind Ladder
    (slide 1) is the individual TIQ prestige card. Both are opaque Dark Clay
@@ -15632,3 +16033,88 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
   .chat-key { width: 32px; min-width: 32px; height: 32px; }
   .chip .mine-pod { width: 36px; height: 36px; }
 }
+
+/* ==========================================================================
+   ANNOUNCEMENT POPUP — the urgent broadcast (src/broadcasts.ts). One centered
+   Dark Clay slab over a dim veil: z 25, under the admin stage (26), over
+   matchmaking (24) and every sheet (21). Golden specular ring, a spring pop on
+   entry, transform/opacity only — no backdrop-filter anywhere.
+   ========================================================================== */
+.announce {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: grid;
+  place-items: center;
+  padding:
+    max(var(--s4), env(safe-area-inset-top))
+    max(var(--s4), env(safe-area-inset-right))
+    max(var(--s4), env(safe-area-inset-bottom))
+    max(var(--s4), env(safe-area-inset-left));
+  background: rgba(6, 9, 14, .66);
+  opacity: 0;
+  transition: opacity var(--motion-med);
+}
+.announce[hidden] { display: none; }
+.announce.is-open { opacity: 1; }
+.announce-panel {
+  width: min(100%, 360px);
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: 18px 16px 16px;
+  border-radius: 22px;
+  background:
+    radial-gradient(130% 90% at 50% -30%, rgba(252, 211, 77, .12), rgba(252, 211, 77, 0) 60%),
+    rgba(17, 24, 39, .95);
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 158, 11, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    0 24px 60px -24px rgba(0, 0, 0, .95);
+  transform: scale(.85) translateY(10px);
+  opacity: 0;
+  transition: transform .34s var(--bounce), opacity var(--motion-fast);
+}
+.announce.is-open .announce-panel { transform: none; opacity: 1; }
+html.reduced-motion .announce,
+html.reduced-motion .announce-panel { transition: none; }
+.announce-kicker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--honey-ink);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .6), 0 0 12px rgba(245, 158, 11, .28);
+}
+.announce-kicker .ico { width: 13px; height: 13px; flex: none; color: var(--honey); }
+.announce-title {
+  margin: 0;
+  font-size: var(--t-1);
+  font-weight: 900;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.announce-body {
+  margin: 0;
+  font-size: var(--t-2);
+  line-height: 1.55;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+.announce-body strong { color: var(--ink); font-weight: 800; }
+.announce-body code {
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: var(--field);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+  font-size: .92em;
+}
+.announce-actions { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s2); }
+.announce-actions .btn { width: 100%; }

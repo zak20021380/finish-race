@@ -1820,6 +1820,17 @@
                 <span class="adm-tune-b">Reset Defaults</span>
               </button>
             </div>
+
+            <!-- ---------- Access control: the role registry the Worker enforces ---------- -->
+            <p class="adm-sec-h">Access control<span class="adm-bc-live" id="acl-count" data-on="false">—</span></p>
+            <ul class="adm-acl-list" id="adm-acl-list" aria-label="Administrators"></ul>
+            <p class="adm-inbox-empty" id="adm-acl-empty" hidden>The server owns the role registry —
+              with no Worker answering, only this device's dev door opens.</p>
+            <button class="adm-btn adm-btn-primary adm-btn-wide" type="button" id="adm-acl-add">
+              <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg><span>Add Admin</span>
+            </button>
+            <p class="adm-note">Root admins come from the server's <code>ADMIN_IDS</code> allowlist
+              and cannot be revoked here. Everyone else is appointed from this list.</p>
           </div>
 
           <!-- ---------- Server: the Worker behind the room ---------- -->
@@ -1880,9 +1891,18 @@
             <p class="adm-note">Two taps: the second wipes coins, items, stats, teams and settings on this device.</p>
           </div>
 
-          <!-- ---------- Inbox: the support desk behind Contact Support ---------- -->
+          <!-- ---------- Inbox: the broadcast engine, then the support desk ---------- -->
           <div class="admin-panel" data-apanel="inbox" id="apanel-inbox" role="tabpanel"
             aria-labelledby="atab-inbox" hidden>
+            <p class="adm-sec-h">Broadcasts<span class="adm-bc-live" id="adm-bc-count" data-on="false">—</span></p>
+            <button class="adm-btn adm-btn-primary adm-btn-wide" type="button" id="adm-bc-compose">
+              <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg><span>New Broadcast</span>
+            </button>
+            <ul class="adm-bc-list" id="adm-bc-list" aria-label="Broadcast history"></ul>
+            <p class="adm-inbox-empty" id="adm-bc-empty" hidden>Nothing dispatched yet — the first
+              broadcast lands here, and on every player's device.</p>
+
+            <p class="adm-sec-h">Support tickets</p>
             <div class="adm-inbox-filters" role="group" aria-label="Filter support tickets">
               <button class="adm-chip" type="button" data-ifilter="all" aria-pressed="true">All</button>
               <button class="adm-chip" type="button" data-ifilter="feedback" aria-pressed="false">Feedback</button>
@@ -1930,6 +1950,115 @@
             <span class="admin-tab-l">Tools</span>
           </button>
         </nav>
+
+        <!-- the Add Admin drawer: slides over the stage, under the confirm dialog -->
+        <div class="adm-drawer" id="adm-acl-drawer" hidden role="dialog" aria-modal="true"
+          aria-labelledby="acl-drawer-title">
+          <header class="adm-drawer-head">
+            <h3 class="adm-drawer-t" id="acl-drawer-title">Add Admin</h3>
+            <button class="adm-drawer-x" type="button" id="adm-acl-drawer-x" aria-label="Close Add Admin">
+              <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
+            </button>
+          </header>
+          <div class="adm-drawer-body" data-scroll tabindex="0">
+            <label class="adm-fld">
+              <span class="adm-fld-l">Telegram ID or @username</span>
+              <input id="adm-acl-id" class="adm-input" type="text" autocomplete="off" spellcheck="false"
+                placeholder="123456789 or @handle" aria-describedby="adm-acl-id-hint" />
+            </label>
+            <p class="adm-hint" id="adm-acl-id-hint" data-state="idle">A numeric Telegram id, or an
+              @handle to appoint by name.</p>
+            <p class="adm-fld-l">Role</p>
+            <div class="adm-seg" role="group" aria-label="Role" id="adm-acl-role">
+              <button class="adm-seg-b" type="button" data-role="superadmin" aria-pressed="false">SuperAdmin</button>
+              <button class="adm-seg-b" type="button" data-role="moderator" aria-pressed="true">Moderator</button>
+            </div>
+            <p class="adm-note">Moderators read the panel and the directory. SuperAdmins also appoint
+              admins, dispatch broadcasts and command the server.</p>
+          </div>
+          <footer class="adm-drawer-foot">
+            <button class="adm-btn" type="button" id="adm-acl-cancel">Cancel</button>
+            <button class="adm-btn adm-btn-primary" type="button" id="adm-acl-grant" aria-disabled="true">Grant Access</button>
+          </footer>
+        </div>
+
+        <!-- the broadcast composer: title, body, CTA, audience, priority, live preview -->
+        <div class="adm-drawer" id="adm-bc-drawer" hidden role="dialog" aria-modal="true"
+          aria-labelledby="bc-drawer-title">
+          <header class="adm-drawer-head">
+            <h3 class="adm-drawer-t" id="bc-drawer-title">New Broadcast</h3>
+            <button class="adm-drawer-x" type="button" id="adm-bc-drawer-x" aria-label="Close broadcast composer">
+              <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
+            </button>
+          </header>
+          <div class="adm-drawer-body" data-scroll tabindex="0">
+            <label class="adm-fld">
+              <span class="adm-fld-l">Title</span>
+              <input id="adm-bc-title" class="adm-input" type="text" maxlength="80" autocomplete="off"
+                spellcheck="false" placeholder="Server maintenance at 22:00 UTC" />
+            </label>
+            <label class="adm-fld">
+              <span class="adm-fld-l">Message</span>
+              <textarea id="adm-bc-body" class="adm-input adm-area" maxlength="600" rows="4"
+                placeholder="The room restarts for a hotfix. Races in progress are saved."></textarea>
+            </label>
+            <div class="adm-fld-row">
+              <label class="adm-fld">
+                <span class="adm-fld-l">Button label</span>
+                <input id="adm-bc-cta-label" class="adm-input" type="text" maxlength="24"
+                  autocomplete="off" spellcheck="false" placeholder="Open Shop" />
+              </label>
+              <label class="adm-fld">
+                <span class="adm-fld-l">Button target</span>
+                <input id="adm-bc-cta-target" class="adm-input" type="text" maxlength="200"
+                  autocomplete="off" spellcheck="false" placeholder="shop or https://t.me/…" />
+              </label>
+            </div>
+            <p class="adm-fld-l">Audience</p>
+            <div class="adm-seg" role="group" aria-label="Audience" id="adm-bc-audience">
+              <button class="adm-seg-b" type="button" data-aud="all" aria-pressed="true">Everyone</button>
+              <button class="adm-seg-b" type="button" data-aud="country" aria-pressed="false">Country</button>
+              <button class="adm-seg-b" type="button" data-aud="minLevel" aria-pressed="false">Min Level</button>
+            </div>
+            <label class="adm-fld" id="adm-bc-aud-value-wrap" hidden>
+              <span class="adm-fld-l" id="adm-bc-aud-value-l">Country code</span>
+              <input id="adm-bc-aud-value" class="adm-input" type="text" maxlength="8"
+                autocomplete="off" spellcheck="false" placeholder="US" />
+            </label>
+            <p class="adm-fld-l">Priority</p>
+            <div class="adm-seg" role="group" aria-label="Priority" id="adm-bc-priority">
+              <button class="adm-seg-b" type="button" data-pri="urgent" aria-pressed="true">Urgent modal</button>
+              <button class="adm-seg-b" type="button" data-pri="feed" aria-pressed="false">Notification feed</button>
+            </div>
+
+            <p class="adm-fld-l">Preview</p>
+            <div class="adm-bc-pv" aria-hidden="true">
+              <span class="adm-bc-pv-kicker" id="adm-bc-pv-kicker">Urgent · Everyone</span>
+              <b class="adm-bc-pv-title" id="adm-bc-pv-title">Your title here</b>
+              <span class="adm-bc-pv-body" id="adm-bc-pv-body">Your message here.</span>
+              <span class="adm-bc-pv-cta" id="adm-bc-pv-cta" hidden>Open</span>
+            </div>
+          </div>
+          <footer class="adm-drawer-foot">
+            <button class="adm-btn" type="button" id="adm-bc-cancel">Cancel</button>
+            <button class="adm-btn adm-btn-primary" type="button" id="adm-bc-send" aria-disabled="true">
+              <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg><span>Dispatch</span>
+            </button>
+          </footer>
+        </div>
+
+        <!-- the confirm dialog: one question, one destructive key -->
+        <div class="adm-confirm" id="adm-confirm" hidden role="alertdialog" aria-modal="true"
+          aria-labelledby="adm-confirm-title" aria-describedby="adm-confirm-body">
+          <div class="adm-confirm-panel">
+            <h3 class="adm-confirm-t" id="adm-confirm-title">Revoke admin?</h3>
+            <p class="adm-confirm-b" id="adm-confirm-body"></p>
+            <div class="adm-confirm-actions">
+              <button class="adm-btn" type="button" id="adm-confirm-no">Cancel</button>
+              <button class="adm-btn adm-btn-danger" type="button" id="adm-confirm-yes">Revoke</button>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- pause sheet -->
@@ -2644,6 +2773,24 @@
           <span class="notif-empty-ico" aria-hidden="true"><svg class="ico"><use href="#i-bell" /></svg></span>
           <p class="notif-empty-t">All caught up!</p>
           <p class="notif-empty-s">No new alerts.</p>
+        </div>
+      </section>
+
+      <!-- the announcement popup: what an urgent broadcast raises over its own full veil.
+           Dismiss is remembered per device (`dismissed_announcements`), so it comes back only
+           until it has actually been read. -->
+      <section class="announce" id="modal-announcement" hidden role="dialog" aria-modal="true"
+        aria-labelledby="announce-title">
+        <div class="announce-panel">
+          <p class="announce-kicker">
+            <svg class="ico" aria-hidden="true"><use href="#i-bell" /></svg><span>Announcement</span>
+          </p>
+          <h2 class="announce-title" id="announce-title">Announcement</h2>
+          <p class="announce-body" id="announce-body"></p>
+          <div class="announce-actions">
+            <button class="btn btn-primary announce-cta" type="button" id="announce-cta" hidden>Open</button>
+            <button class="btn btn-ghost announce-dismiss" type="button" id="announce-dismiss">Dismiss</button>
+          </div>
         </div>
       </section>
     </div>

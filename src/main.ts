@@ -34,7 +34,8 @@ import type { Lobby, LobbyRace } from './lobby';
 import {
   createMatchmaking, myTier, myTiq, onlineRace, onlineSearch, type OnlineSession, type RaceEnd,
 } from './matchmaking';
-import { createAdmin, onRuntime, recordRace, runtime, type Admin } from './admin';
+import { createAdmin, onRuntime, recordRace, runtime, tiqFrom, type Admin } from './admin';
+import { createAnnouncements } from './broadcasts';
 import {
   MIN_SEATS, ROOM_WAIT_MS, createRoom, difficultyFor, isAutomated, lobbyLine, rewardEligible, seatBadge,
   seatName, sizesOf, startEarly, type BotTier, type Room,
@@ -1512,14 +1513,39 @@ home = createHome({ router, sheets, start: startGame });
 compete = createCompete({ router, sheets, sheet: sheetById, queue: () => queueMatch() });
 createNotifications({ sheets });
 
+/* ---- the announcement engine: urgent broadcasts raise the popup, feed ones the inbox ----
+   The command center hands it every broadcast it dispatches; the same engine syncs the public
+   feed on boot and whenever the app comes back to the foreground. */
+const announcements = createAnnouncements({
+  identity: () => ({
+    country: profile.country,
+    tiq: tiqFrom(profile.stats.wins, profile.stats.games, profile.tiqBonus),
+  }),
+  /* a target that names a screen goes there; anything else the engine treats as a link out */
+  openRoute: (id) => {
+    const target = id === 'compete' ? 'arena' : id;
+    if (!/^[a-z-]{1,24}$/.test(target)) return false;
+    if (!document.querySelector(`.screen[data-screen="${target}"]`)) return false;
+    router.go(target);
+    return true;
+  },
+});
+
 /* ---- Admin Command Center: the Home FAB and the live-ops stage (src/admin.ts) ---- */
 admin = createAdmin({
   note: showNote,
   tier: myTier,
   /* the stage is not a router screen, so it shows the BackButton itself while it is up */
   onToggle: (open) => setBackButton(open || router.current !== 'home'),
+  /* a dispatch lands on this device the same beat it lands anywhere else */
+  onBroadcast: (b) => announcements.receive(b),
+  onBroadcastArchived: (id) => announcements.retract(id),
 });
 admin.mount();
+announcements.sync();
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) announcements.sync();
+});
 /* the shop is the one screen that reads a switch at paint time: repaint it the moment it moves */
 onRuntime(() => shop.refresh());
 

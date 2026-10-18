@@ -23,7 +23,7 @@ import { motionReduced, settings } from './settings';
 import { audioContext } from './sound';
 import type { Sheets } from './sheets';
 
-export type NotificationKind = 'squad' | 'tournament' | 'reward';
+export type NotificationKind = 'squad' | 'tournament' | 'reward' | 'announcement';
 
 export interface AppNotification {
   id: string;
@@ -39,7 +39,7 @@ export interface AppNotification {
 }
 
 export type NewNotification = Omit<AppNotification, 'id' | 'createdAt' | 'read'> &
-  Partial<Pick<AppNotification, 'createdAt' | 'read'>>;
+  Partial<Pick<AppNotification, 'id' | 'createdAt' | 'read'>>;
 
 const KEY = 'detour.notifications.v1';
 const V = 1;
@@ -50,7 +50,7 @@ interface NotifSave {
   items: AppNotification[];
 }
 
-const KINDS: readonly NotificationKind[] = ['squad', 'tournament', 'reward'];
+const KINDS: readonly NotificationKind[] = ['squad', 'tournament', 'reward', 'announcement'];
 
 const isKind = (v: unknown): v is NotificationKind =>
   typeof v === 'string' && (KINDS as readonly string[]).includes(v);
@@ -218,11 +218,19 @@ export function clearAll(): number {
   return gone;
 }
 
-/** Future hook for squad / tournament / reward events. Returns the stored row. */
+/**
+ * The squad / tournament / reward / broadcast hook. A caller-supplied `id` is a dedupe key:
+ * a row that already carries it is returned as-is, so an announcement that syncs twice leaves
+ * one card, not two.
+ */
 export function addNotification(input: NewNotification): AppNotification {
   const now = Date.now();
+  if (input.id) {
+    const hit = items.find((n) => n.id === input.id);
+    if (hit) return { ...hit };
+  }
   const row: AppNotification = {
-    id: `n-${now.toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`,
+    id: input.id ?? `n-${now.toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`,
     kind: input.kind,
     title: input.title.slice(0, 80),
     body: input.body.slice(0, 220),
@@ -294,12 +302,14 @@ const KIND_ICON: Record<NotificationKind, string> = {
   squad: '#i-cup',
   tournament: '#i-flag',
   reward: '#i-gift',
+  announcement: '#i-bell',
 };
 
 const KIND_LABEL: Record<NotificationKind, string> = {
   squad: 'Squad',
   tournament: 'Tournament',
   reward: 'Reward',
+  announcement: 'Announcement',
 };
 
 /**

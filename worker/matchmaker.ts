@@ -44,7 +44,10 @@ import {
   defaultTeam, difficultyFor, formatOfMode, isAutomated, isLobbyFormat, launch, reflowRoom, seatHuman,
   sizesOf, type BotTier, type LobbyFormat, type Room, type RoomDriver, type RoomEvent,
 } from '../src/room';
-import { authenticate, authRequestFrom, type Identity, type MindTier } from './auth';
+import {
+  authenticate, authRequestFrom, identifyAdminRequest, isSuperAdmin,
+  type AdminIdentity, type AdminRole, type Identity, type MindTier,
+} from './auth';
 import { json } from './http';
 import type { Env } from './env';
 
@@ -464,6 +467,106 @@ function foundMessage(matchId: string, seed: number, side: 0 | 1, opponent: Wait
   });
 }
 
+/* ---------- the role registry & the broadcast engine ---------- */
+
+/**
+ * One appointed admin, as `GET /api/admin/roles` reports it. `root` marks the ids seeded from the
+ * `ADMIN_IDS` allowlist: they are the server's owners and cannot be revoked from the panel.
+ */
+export interface AdminUser {
+  id: string;
+  name: string;
+  username: string;
+  role: AdminRole;
+  addedAt: number;
+  addedBy: string;
+  root: boolean;
+}
+
+/** Who a spread announcement is aimed at. The server stores it; the client matches it. */
+export interface BroadcastAudience {
+  /** `all` — everyone; `country` — one ISO 3166-1 alpha-2 code; `minLevel` — a TIQ level floor. */
+  kind: 'all' | 'country' | 'minLevel';
+  /** The ISO code, the level as text, or '' for everyone. */
+  value: string;
+}
+
+/** One announcement, as the composer dispatches it and the client popup reads it. */
+export interface Broadcast {
+  id: string;
+  title: string;
+  /** The body, plain text: the client renders a light markdown subset without ever touching HTML. */
+  body: string;
+  /** Empty when the announcement carries no call to action. */
+  ctaLabel: string;
+  ctaTarget: string;
+  audience: BroadcastAudience;
+  /** `urgent` pops a modal on clients; `feed` lands in the notification centre. */
+  priority: 'urgent' | 'feed';
+  status: 'active' | 'archived';
+  createdAt: number;
+  createdBy: string;
+  archivedAt: number;
+}
+
+const ADMIN_ROLES: readonly AdminRole[] = ['superadmin', 'moderator'];
+const AUDIENCE_KINDS: readonly BroadcastAudience['kind'][] = ['all', 'country', 'minLevel'];
+const BROADCAST_MAX = 500;
+
+/** A registry row folded field by field, so a hand-edited blob is never trusted as it stands. */
+function readAdminUser(raw: unknown): AdminUser | null {
+  const r = raw as Partial<AdminUser> | null | undefined;
+  if (!r || typeof r.id !== 'string' || !r.id) return null;
+  const role = ADMIN_ROLES.includes(r.role as AdminRole) ? (r.role as AdminRole) : 'moderator';
+  const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.slice(0, max) : '');
+  return {
+    id: r.id.slice(0, 40),
+    name: text(r.name, 40) || `Admin ${r.id.slice(0, 12)}`,
+    username: text(r.username, 40),
+    role,
+    addedAt: whole(r.addedAt),
+    addedBy: text(r.addedBy, 40),
+    root: r.root === true,
+  };
+}
+
+/** A broadcast folded field by field; a row without a title or body is dropped. */
+function readBroadcast(raw: unknown): Broadcast | null {
+  const r = raw as Partial<Broadcast> | null | undefined;
+  if (!r || typeof r.id !== 'string' || !r.id) return null;
+  if (typeof r.title !== 'string' || !r.title.trim()) return null;
+  if (typeof r.body !== 'string' || !r.body.trim()) return null;
+  const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.slice(0, max) : '');
+  const kind = AUDIENCE_KINDS.find((k) => k === r.audience?.kind) ?? 'all';
+  return {
+    id: r.id.slice(0, 64),
+    title: text(r.title, 80),
+    body: text(r.body, 600),
+    ctaLabel: text(r.ctaLabel, 24),
+    ctaTarget: text(r.ctaTarget, 200),
+    audience: { kind, value: text(r.audience?.value, 8) },
+    priority: r.priority === 'feed' ? 'feed' : 'urgent',
+    status: r.status === 'archived' ? 'archived' : 'active',
+    createdAt: whole(r.createdAt),
+    createdBy: text(r.createdBy, 40),
+    archivedAt: whole(r.archivedAt),
+  };
+}
+
+/** An id the panel accepts for an appointment: a numeric Telegram id, or an `@handle`. The id
+ *  length stays loose (1-20) so every id the legacy `ADMIN_IDS` door would admit also seeds. */
+const HANDLE = /^@[A-Za-z0-9_]{3,32}$/;
+const TELEGRAM_ID = /^[0-9]{1,20}$/;
+
+/** Normalise whatever the panel typed into one registry id, or '' when it is neither shape. */
+function adminIdOf(raw: unknown): string {
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  if (!value) return '';
+  if (HANDLE.test(value)) return value.toLowerCase();
+  if (TELEGRAM_ID.test(value)) return value;
+  return '';
+}
+
 /* ---------- the Durable Object ---------- */
 
 export class MatchmakerDO {
@@ -491,6 +594,14 @@ export class MatchmakerDO {
   private banned = new Set<string>();
   /** A registry write is already scheduled: many touches, one flush. */
   private dirty = false;
+  /** The appointed admins, by id — the Controls tab's Access Control List. */
+  private admins = new Map<string, AdminUser>();
+  /** Every announcement ever dispatched, active and archived — the broadcast history. */
+  private broadcasts = new Map<string, Broadcast>();
+  /** Roles were seeded from `ADMIN_IDS`: the next read persists them. */
+  private rolesDirty = false;
+  /** A broadcast write is already scheduled: many flips, one flush. */
+  private broadcastsDirty = false;
 
   constructor(private state: DurableObjectState, private env: Env) {
     /* The registry rides the object's own storage, so it survives eviction. A harness that drives
@@ -510,17 +621,70 @@ export class MatchmakerDO {
           if (Array.isArray(bans)) {
             for (const id of bans) if (typeof id === 'string' && id) this.banned.add(id);
           }
+          const roles = await storage.get<unknown[]>('roles');
+          if (Array.isArray(roles)) {
+            for (const raw of roles) {
+              const row = readAdminUser(raw);
+              if (row) this.admins.set(row.id, row);
+            }
+          }
+          const casts = await storage.get<unknown[]>('broadcasts');
+          if (Array.isArray(casts)) {
+            for (const raw of casts) {
+              const row = readBroadcast(raw);
+              if (row) this.broadcasts.set(row.id, row);
+            }
+          }
+          this.seedRoles();
         } catch {
           /* a store that refuses the read: the registry simply starts empty */
         }
       });
     }
+    /* A harness without a storage backend still gets the seeded allowlist, synchronously. */
+    if (!storage) this.seedRoles();
+  }
+
+  /**
+   * The `ADMIN_IDS` allowlist is the root of trust: every id on it starts (and stays) a
+   * SuperAdmin. The reconcile only *adds* roots the store is missing — an appointed admin is
+   * never resurrected by a restart, and a revoked one (never a root) stays gone.
+   */
+  private seedRoles(): void {
+    const now = Date.now();
+    let added = false;
+    for (const id of (this.env.ADMIN_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean)) {
+      if (!TELEGRAM_ID.test(id)) continue;
+      const existing = this.admins.get(id);
+      if (existing?.root && existing.role === 'superadmin') continue;
+      this.admins.set(id, {
+        id,
+        name: existing?.name ?? `Admin ${id.slice(0, 6)}`,
+        username: existing?.username ?? '',
+        role: 'superadmin',
+        addedAt: existing?.addedAt ?? now,
+        addedBy: 'ADMIN_IDS',
+        root: true,
+      });
+      added = true;
+    }
+    if (!added) return;
+    this.rolesDirty = true;
+    this.persistRoles();
   }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
-    /* The worker has already verified the caller on `/admin/*`; these never carry an upgrade. */
-    if (url.pathname.startsWith('/admin/')) return this.admin(request, url);
+    /* The worker has authenticated the caller on `/admin/*` and `/api/admin/*`; the room below
+       authorizes them against its registry. The one public announcement feed rides the same
+       handler. None of these ever carry an upgrade. */
+    if (
+      url.pathname.startsWith('/admin/')
+      || url.pathname.startsWith('/api/admin/')
+      || url.pathname === '/api/client/announcements/active'
+    ) {
+      return this.admin(request, url);
+    }
     if ((request.headers.get('Upgrade') ?? '').toLowerCase() !== 'websocket') {
       return json({ error: 'expected_upgrade', hint: 'GET /ws/matchmake with Upgrade: websocket' }, 426);
     }
@@ -617,31 +781,252 @@ export class MatchmakerDO {
     };
   }
 
-  /** The `/admin/*` routes, already authenticated by the worker in front of this object. */
+  /** Every Command Center route: the public feed first, then the registry decides who is in. */
   private async admin(request: Request, url: URL): Promise<Response> {
-    if (url.pathname === '/admin/status') return json(this.status());
+    /* The one public route in the set: what a client reads to raise its announcement popup. */
+    if (url.pathname === '/api/client/announcements/active') return json(this.activeAnnouncements(), 200, {
+      'cache-control': 'public, max-age=60',
+    });
 
+    /* The edge only proved the signature; membership is this room's call, registry in hand. */
+    const me = await this.adminIdentity(request);
+    if (!me) return json({ error: 'forbidden', hint: 'admin credentials required' }, 403);
+
+    /* What a Moderator reads: the live room, the directory, the registry and the history. */
+    if (url.pathname === '/admin/status') return json(this.status());
+    if (url.pathname === '/admin/players') return json(this.playersPage(url.searchParams));
+    if (url.pathname === '/api/admin/roles') return json(this.rolesView(me));
+    if (url.pathname === '/api/admin/broadcasts') return json(this.broadcastsView());
+
+    /* Everything below commands the server: SuperAdmin only. */
     if (url.pathname === '/admin/config') {
+      if (!this.superDoor(me)) return json({ error: 'forbidden', hint: 'superadmin required' }, 403);
       const body = await readBody(request);
       return json({ ok: true, config: this.configure(body) });
     }
 
     if (url.pathname === '/admin/action') {
+      if (!this.superDoor(me)) return json({ error: 'forbidden', hint: 'superadmin required' }, 403);
       const body = await readBody(request);
       const result = this.act(body);
       return json(result, result.ok ? 200 : 400);
     }
 
     /* The Users tab: one page of the player directory, then one player's moderation/coins. */
-    if (url.pathname === '/admin/players') return json(this.playersPage(url.searchParams));
-
     if (url.pathname === '/admin/player') {
+      if (!this.superDoor(me)) return json({ error: 'forbidden', hint: 'superadmin required' }, 403);
       const body = await readBody(request);
       const result = this.playerAction(body);
       return json(result, result.ok ? 200 : 400);
     }
 
+    if (url.pathname === '/api/admin/roles/grant') {
+      if (!this.superDoor(me)) return json({ error: 'forbidden', hint: 'superadmin required' }, 403);
+      const body = await readBody(request);
+      const result = this.grantRole(body, me);
+      return json(result, result.ok ? 200 : 400);
+    }
+
+    if (url.pathname === '/api/admin/roles/revoke') {
+      if (!this.superDoor(me)) return json({ error: 'forbidden', hint: 'superadmin required' }, 403);
+      const body = await readBody(request);
+      const result = this.revokeRole(body, me);
+      return json(result, result.ok ? 200 : 400);
+    }
+
+    if (url.pathname === '/api/admin/broadcasts/create') {
+      if (!this.superDoor(me)) return json({ error: 'forbidden', hint: 'superadmin required' }, 403);
+      const body = await readBody(request);
+      const result = this.createBroadcast(body, me);
+      return json(result, result.ok ? 200 : 400);
+    }
+
+    const archive = /^\/api\/admin\/broadcasts\/([^/]+)\/archive$/.exec(url.pathname);
+    if (archive) {
+      if (!this.superDoor(me)) return json({ error: 'forbidden', hint: 'superadmin required' }, 403);
+      const body = await readBody(request);
+      const result = this.archiveBroadcast(decodeURIComponent(archive[1]), body);
+      return json(result, result.ok ? 200 : 400);
+    }
+
     return json({ error: 'not_found' }, 404);
+  }
+
+  /* ---------- the role registry ---------- */
+
+  /**
+   * Who is behind this request: the signature is re-proven here (the room enforces its own
+   * doors), and a Telegram caller must then be on the registry this object owns. The dev door
+   * needs nothing more — it only opens for an explicit marker on a loopback host.
+   */
+  private async adminIdentity(request: Request): Promise<AdminIdentity | null> {
+    const me = await identifyAdminRequest(request, this.env);
+    if (!me) return null;
+    if (me.door === 'dev') return me;
+    return this.admins.has(me.userId) ? me : null;
+  }
+
+  /** The authorization middleware: the dev door, or a stored `superadmin` role. */
+  private superDoor(me: AdminIdentity): boolean {
+    return isSuperAdmin(me, this.admins.get(me.userId));
+  }
+
+  /** The Access Control List the Controls tab reads, plus the roles it may appoint. */
+  private rolesView(me: AdminIdentity): { ok: true; admins: AdminUser[]; roles: AdminRole[]; me: string; super: boolean } {
+    const admins = [...this.admins.values()].sort(
+      (a, b) => Number(b.root) - Number(a.root) || a.addedAt - b.addedAt,
+    );
+    return { ok: true, admins, roles: [...ADMIN_ROLES], me: me.userId, super: this.superDoor(me) };
+  }
+
+  /** Appoint (or re-role) one admin, immediately persisted. SuperAdmin only. */
+  private grantRole(body: Record<string, unknown>, me: AdminIdentity): { ok: boolean; error?: string; admin?: AdminUser } {
+    const id = adminIdOf(body.id);
+    if (!id) return { ok: false, error: 'invalid_id' };
+    const role = ADMIN_ROLES.includes(body.role as AdminRole) ? (body.role as AdminRole) : null;
+    if (!role) return { ok: false, error: 'invalid_role' };
+    const existing = this.admins.get(id);
+    if (existing?.root && role !== 'superadmin') return { ok: false, error: 'root_admin' };
+    const username = typeof body.username === 'string' ? body.username.replace(/^@/, '').slice(0, 40) : '';
+    const name = typeof body.name === 'string' && body.name.trim()
+      ? body.name.trim().slice(0, 40)
+      : existing?.name ?? (id.startsWith('@') ? id.slice(1, 41) : `Admin ${id.slice(0, 6)}`);
+    const row: AdminUser = existing
+      ? { ...existing, role, name, username: username || existing.username }
+      : { id, name, username, role, addedAt: Date.now(), addedBy: me.userId, root: false };
+    this.admins.set(id, row);
+    this.rolesDirty = true;
+    this.persistRoles();
+    return { ok: true, admin: row };
+  }
+
+  /** Revoke one appointed admin. A root id cannot go, and the last SuperAdmin never goes. */
+  private revokeRole(body: Record<string, unknown>, _me: AdminIdentity): { ok: boolean; error?: string } {
+    const id = typeof body.id === 'string' ? body.id.trim().toLowerCase() : '';
+    const row = id ? this.admins.get(id) : undefined;
+    if (!row) return { ok: false, error: 'no_such_admin' };
+    if (row.root) return { ok: false, error: 'root_admin' };
+    if (row.role === 'superadmin') {
+      let supers = 0;
+      for (const a of this.admins.values()) if (a.role === 'superadmin') supers++;
+      if (supers <= 1) return { ok: false, error: 'last_superadmin' };
+    }
+    this.admins.delete(id);
+    this.rolesDirty = true;
+    this.persistRoles();
+    return { ok: true };
+  }
+
+  /* ---------- the broadcast engine ---------- */
+
+  /** The whole history, newest first, with how many are live. Any admin may read it. */
+  private broadcastsView(): { ok: true; broadcasts: Broadcast[]; active: number } {
+    const broadcasts = [...this.broadcasts.values()].sort((a, b) => b.createdAt - a.createdAt);
+    return { ok: true, broadcasts, active: broadcasts.filter((b) => b.status === 'active').length };
+  }
+
+  /** Dispatch one announcement. SuperAdmin only; immediately persisted, immediately live. */
+  private createBroadcast(
+    body: Record<string, unknown>,
+    me: AdminIdentity,
+  ): { ok: boolean; error?: string; broadcast?: Broadcast } {
+    const title = typeof body.title === 'string' ? body.title.trim().slice(0, 80) : '';
+    const text = typeof body.body === 'string' ? body.body.trim().slice(0, 600) : '';
+    if (!title) return { ok: false, error: 'missing_title' };
+    if (!text) return { ok: false, error: 'missing_body' };
+    const kind = AUDIENCE_KINDS.find((k) => k === body.audienceKind) ?? 'all';
+    let value = typeof body.audienceValue === 'string' ? body.audienceValue.trim().slice(0, 8) : '';
+    if (kind === 'country') {
+      value = value.toUpperCase();
+      if (!/^[A-Z]{2}$/.test(value)) return { ok: false, error: 'invalid_country' };
+    } else if (kind === 'minLevel') {
+      const level = Number(value);
+      if (!Number.isInteger(level) || level < 1 || level > 999) return { ok: false, error: 'invalid_level' };
+      value = String(level);
+    } else {
+      value = '';
+    }
+    const ctaLabel = typeof body.ctaLabel === 'string' ? body.ctaLabel.trim().slice(0, 24) : '';
+    const ctaTarget = typeof body.ctaTarget === 'string' ? body.ctaTarget.trim().slice(0, 200) : '';
+    if ((ctaLabel && !ctaTarget) || (!ctaLabel && ctaTarget)) return { ok: false, error: 'incomplete_cta' };
+    const row: Broadcast = {
+      id: `bc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      title,
+      body: text,
+      ctaLabel,
+      ctaTarget,
+      audience: { kind, value },
+      priority: body.priority === 'feed' ? 'feed' : 'urgent',
+      status: 'active',
+      createdAt: Date.now(),
+      createdBy: me.userId,
+      archivedAt: 0,
+    };
+    this.broadcasts.set(row.id, row);
+    /* the history is a history, not a leak: the oldest archived rows fall off the end */
+    if (this.broadcasts.size > BROADCAST_MAX) {
+      const dead = [...this.broadcasts.values()]
+        .filter((b) => b.status === 'archived')
+        .sort((a, b) => a.createdAt - b.createdAt);
+      for (const old of dead) {
+        if (this.broadcasts.size <= BROADCAST_MAX) break;
+        this.broadcasts.delete(old.id);
+      }
+    }
+    this.broadcastsDirty = true;
+    this.persistBroadcasts();
+    return { ok: true, broadcast: row };
+  }
+
+  /** Deactivate or restore one announcement. SuperAdmin only. */
+  private archiveBroadcast(
+    id: string,
+    body: Record<string, unknown>,
+  ): { ok: boolean; error?: string; broadcast?: Broadcast } {
+    const row = this.broadcasts.get(id);
+    if (!row) return { ok: false, error: 'no_such_broadcast' };
+    const archived = typeof body.archived === 'boolean' ? body.archived : true;
+    row.status = archived ? 'archived' : 'active';
+    row.archivedAt = archived ? Date.now() : 0;
+    this.broadcastsDirty = true;
+    this.persistBroadcasts();
+    return { ok: true, broadcast: row };
+  }
+
+  /** The client feed: every active broadcast, urgent first and newest first within a band. */
+  private activeAnnouncements(): { ok: true; announcements: Broadcast[]; now: number } {
+    const announcements = [...this.broadcasts.values()]
+      .filter((b) => b.status === 'active')
+      .sort((a, b) => Number(b.priority === 'urgent') - Number(a.priority === 'urgent') || b.createdAt - a.createdAt);
+    return { ok: true, announcements, now: Date.now() };
+  }
+
+  /** Schedule a roles write. Many appointments in one turn still cost one flush. */
+  private persistRoles(): void {
+    if (!this.rolesDirty || !this.state?.storage) return;
+    const storage = this.state.storage;
+    this.rolesDirty = false;
+    void Promise.resolve().then(() => {
+      try {
+        void storage.put('roles', [...this.admins.values()]);
+      } catch {
+        /* a store that refuses the write: the registry stays in memory */
+      }
+    });
+  }
+
+  /** Schedule a broadcasts write, the same one-flush contract the registry keeps. */
+  private persistBroadcasts(): void {
+    if (!this.broadcastsDirty || !this.state?.storage) return;
+    const storage = this.state.storage;
+    this.broadcastsDirty = false;
+    void Promise.resolve().then(() => {
+      try {
+        void storage.put('broadcasts', [...this.broadcasts.values()]);
+      } catch {
+        /* a store that refuses the write: the history stays in memory */
+      }
+    });
   }
 
   /**

@@ -12,9 +12,21 @@
  * explicitly marked dev request — and only then forwarded to the same `MatchmakerDO`, which owns
  * the live config, the player directory, and enforces both. An unauthenticated call never reaches
  * the room: it answers `403`.
+ *
+ * The fourth surface is the same Command Center, under its `/api/*` spelling: the role registry
+ * (`GET /api/admin/roles`, `POST /api/admin/roles/grant|revoke`), the broadcast engine
+ * (`GET /api/admin/broadcasts`, `POST /api/admin/broadcasts/create`, and
+ * `POST /api/admin/broadcasts/:id/archive`) — plus the one public route the players read,
+ * `GET /api/client/announcements/active`.
+ *
+ * Both admin prefixes are only *authenticated* here (`identifyAdminRequest`): a signature that
+ * holds, or the marked dev door. Authorization is the room's, because the role registry lives
+ * there: the DO admits exactly the ids on its registry (or the dev door), routes reads to
+ * members, and puts every mutation behind the `isSuperAdmin` middleware. A caller who is not
+ * on the registry answers `403` from the room, not from the edge.
  */
 import { MatchmakerDO } from './matchmaker';
-import { verifyAdminRequest } from './auth';
+import { identifyAdminRequest } from './auth';
 import { json } from './http';
 import type { Env } from './env';
 
@@ -43,9 +55,15 @@ export default {
       return lobby.fetch(request);
     }
 
-    /* The Command Center's routes: verified here, then handed to the room that enforces them. */
-    if (url.pathname.startsWith('/admin/')) {
-      const admin = await verifyAdminRequest(request, env);
+    /* The one public announcement feed: what a client reads to raise an urgent popup. */
+    if (url.pathname === '/api/client/announcements/active') {
+      const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+      return lobby.fetch(request);
+    }
+
+    /* The Command Center's routes: authenticated here, then handed to the room that authorizes. */
+    if (url.pathname.startsWith('/admin/') || url.pathname.startsWith('/api/admin/')) {
+      const admin = await identifyAdminRequest(request, env);
       if (!admin) return json({ error: 'forbidden', hint: 'admin credentials required' }, 403);
       const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
       return lobby.fetch(request);

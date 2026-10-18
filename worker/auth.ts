@@ -259,6 +259,26 @@ export interface AdminIdentity {
   door: 'tg' | 'dev';
 }
 
+/** The two levels the Command Center appoints: a Moderator reads metrics and users, a SuperAdmin commands. */
+export type AdminRole = 'superadmin' | 'moderator';
+
+/** The role-carrying slice of a registry row, as the authorization middleware reads it. */
+export interface AdminRoleRow {
+  role: AdminRole;
+}
+
+/**
+ * The authorization middleware in front of every role-granting and broadcast mutation. The
+ * development door is always enough — it only opens for an explicit marker on a loopback host —
+ * while a Telegram admin has to carry a stored `superadmin` role. The registry itself lives with
+ * the room (`MatchmakerDO`), which owns the state this reads.
+ */
+export function isSuperAdmin(identity: AdminIdentity | null, row: AdminRoleRow | null | undefined): boolean {
+  if (!identity) return false;
+  if (identity.door === 'dev') return true;
+  return row?.role === 'superadmin';
+}
+
 /** The allowlist, read the way it is written: `ADMIN_IDS` split on commas, blanks dropped. */
 export function adminIds(env: Env): string[] {
   return (env.ADMIN_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -309,26 +329,42 @@ function devMarker(request: AdminRequestLike): boolean {
   }
 }
 
-/**
- * Who is asking to run the live server. A valid Telegram signature naming an id on the allowlist
- * is always enough — that door wins over everything. Failing that, the development door opens for
- * a loopback host (or `DEV_AUTH = "true"`) that carries an explicit admin marker. Anything else is
- * refused, and the caller answers `403`.
- */
-export async function verifyAdminRequest(request: AdminRequestLike, env: Env): Promise<AdminIdentity | null> {
+/** The verified Telegram user id behind an admin request, or '' — the signature only, no allowlist. */
+async function signedAdminId(request: AdminRequestLike, env: Env): Promise<string> {
   const token = env.TELEGRAM_BOT_TOKEN?.trim();
   const initData = adminInitData(request);
+  if (!initData || !token) return '';
+  const fields = await verify(initData, token);
+  if (!fields) return '';
+  const user = parseUser(fields.get('user'));
+  if (user?.id === undefined || user?.id === null) return '';
+  return String(user.id).replace(/[^0-9-]/g, '').slice(0, 20);
+}
 
-  if (initData && token) {
-    const fields = await verify(initData, token);
-    if (fields) {
-      const user = parseUser(fields.get('user'));
-      const id = user?.id === undefined || user?.id === null
-        ? ''
-        : String(user.id).replace(/[^0-9-]/g, '').slice(0, 20);
-      if (id && adminIds(env).includes(id)) return { userId: id, door: 'tg' };
-    }
-  }
+/**
+ * Authentication at the edge: a genuine Telegram signature, whoever it names — the role registry
+ * lives with the room (`MatchmakerDO`), which is the only place that knows who is an admin. When
+ * no signature holds, the explicitly marked development door still opens on a loopback host (or
+ * `DEV_AUTH = "true"`). Anything else is refused.
+ */
+export async function identifyAdminRequest(request: AdminRequestLike, env: Env): Promise<AdminIdentity | null> {
+  const id = await signedAdminId(request, env);
+  if (id) return { userId: id, door: 'tg' };
+
+  const dev = env.DEV_AUTH === 'true' || isLocalhost(hostOf(request.url));
+  if (dev && devMarker(request)) return { userId: 'dev', door: 'dev' };
+  return null;
+}
+
+/**
+ * The legacy allowlist door in front of `/admin/*`. A valid Telegram signature naming an id on
+ * the allowlist is always enough — that door wins over everything. Failing that, the development
+ * door opens for a loopback host (or `DEV_AUTH = "true"`) that carries an explicit admin marker.
+ * Anything else is refused, and the caller answers `403`.
+ */
+export async function verifyAdminRequest(request: AdminRequestLike, env: Env): Promise<AdminIdentity | null> {
+  const id = await signedAdminId(request, env);
+  if (id && adminIds(env).includes(id)) return { userId: id, door: 'tg' };
 
   const dev = env.DEV_AUTH === 'true' || isLocalhost(hostOf(request.url));
   if (dev && devMarker(request)) return { userId: 'dev', door: 'dev' };

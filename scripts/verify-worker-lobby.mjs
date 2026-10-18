@@ -322,7 +322,7 @@ function ok(label, condition, detail = '') {
   await rt.lobby.fetch({
     url: 'http://127.0.0.1:8787/admin/config',
     method: 'POST',
-    headers: { get: () => null },
+    headers: { get: (name) => (name === 'x-detour-admin' ? '1' : null) },
     json: async () => ({ maintenance: true }),
   });
   ok('maintenance sends both seats an ERROR',

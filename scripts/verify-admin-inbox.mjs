@@ -51,9 +51,11 @@ function serve() {
       let p = decodeURIComponent(String(req.url).split('?')[0]);
       if (p === '/') p = '/index.html';
       if (p === '/favicon.ico') { res.writeHead(200, { 'Content-Type': 'image/x-icon' }); res.end(); return; }
-      /* the Server/Stats/Users tabs probe the live room; a static audit has none, and the
-         app itself treats ok:false as "Local"/"Local Index" — answer so the probe is not a 404 */
-      if ((p === '/admin/status' || p === '/admin/players') && req.method === 'GET') {
+      /* the Server/Stats/Users/Inbox/Controls tabs probe the live room; a static audit has none,
+         and the app itself treats ok:false as "Local"/"Local Index" — answer so the probe and the
+         registry/history reads are not 404s */
+      if ((p === '/admin/status' || p === '/admin/players' || p.startsWith('/api/admin/'))
+        && (req.method === 'GET' || req.method === 'POST')) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: false, error: 'no live worker in the static audit' }));
         return;

@@ -26,10 +26,11 @@
  * Worker answering, every call is a no-op, the pill reads Local, and the panel still governs the
  * device — nothing here ever depends on a backend being up.
  *
- * Who may open it: a Telegram user id on the allowlist (`ADMIN_IDS`, extended by `VITE_ADMIN_IDS`)
- * — or the dev door, which opens for any browser outside Telegram or on a loopback host, so the
- * panel is testable without a device. The Worker checks the same allowlist (`ADMIN_IDS` in
- * wrangler.toml) on every `/admin/*` call, so the panel's door is never the server's door.
+ * Who may open it: a Telegram user id on the allowlist (`ADMIN_IDS`, extended by `VITE_ADMIN_IDS`),
+ * a device the server's role registry admits (asked once at boot), or the dev door — any browser
+ * outside Telegram or on a loopback host, so the panel is testable without a device. The Worker
+ * authenticates every `/admin/*` call and the room authorizes it against the registry it owns,
+ * so the panel's door is never the server's door.
  */
 import { motionReduced } from './settings';
 import { earnCoins, earnTiq, onChange, profile, readJson, writeJson } from './storage';
@@ -44,7 +45,9 @@ import { getMySquad } from './squads';
 import {
   directoryAction, directoryPage, liveRow, PAGE_SIZE, YOU_ID, type DirFilter, type DirPlayer,
 } from './players';
-import { impact, notify, tgInitData, tgUser } from './telegram';
+import { detonation, impact, notify, tgUser } from './telegram';
+import { adminFetch, parseJson, postJson } from './adminApi';
+import type { Broadcast } from './broadcasts';
 import type { MindTier } from './matchmaking';
 
 /* ---------- who may open it ---------- */
@@ -74,8 +77,11 @@ export function doorOf(): Door {
   return id !== undefined && ALLOW.has(String(id)) ? 'tg' : 'dev';
 }
 
+/** Set once the server registry answered this device: an appointed admin off the local allowlist. */
+let elevated = false;
+
 export function isAdmin(): boolean {
-  return doorOf() === 'tg' || isDevDoor();
+  return elevated || doorOf() === 'tg' || isDevDoor();
 }
 
 /* ---------- the live runtime config ---------- */
@@ -502,69 +508,15 @@ export interface ServerStatus {
   config: ServerConfig;
 }
 
-/** The Worker base: `VITE_WS_URL` when the app was pointed at one, else this page's own origin. */
-function workerBase(): string {
-  const ws = import.meta.env.VITE_WS_URL?.trim();
-  if (ws) {
-    const base = ws.startsWith('http') ? ws : `https://${ws}`;
-    return base.replace(/^ws/, 'http').replace(/\/+$/, '');
-  }
-  return location.host ? location.origin : '';
-}
-
-/** A Worker route, or `''` when there is no origin to hang one off. */
-function workerUrl(path: string): string {
-  const base = workerBase();
-  return base ? `${base}${path}` : '';
-}
-
-/**
- * What every admin call carries: the Mini App's own `initData` when Telegram handed one over, plus
- * the explicit developer marker. The Worker ignores the marker unless it is on a dev host and a
- * valid signature always wins over it, so sending both is safe and keeps local work possible.
- */
-function adminHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { accept: 'application/json', 'x-admin': '1' };
-  const init = tgInitData();
-  if (init) headers['x-telegram-init-data'] = init;
-  return headers;
-}
-
-/** One admin call on a short leash: a Worker that is not there must never hold the panel up. */
-async function adminFetch(path: string, init: RequestInit = {}): Promise<Response | null> {
-  const url = workerUrl(path);
-  if (!url) return null;
-  const extra = (init.headers ?? {}) as Record<string, string>;
-  const ac = new AbortController();
-  const timer = window.setTimeout(() => ac.abort(), 2500);
-  try {
-    return await fetch(url, { ...init, signal: ac.signal, headers: { ...adminHeaders(), ...extra } });
-  } catch {
-    return null;                              // offline, refused, or too slow: the same answer
-  } finally {
-    window.clearTimeout(timer);
-  }
-}
-
 /** The room's own reading of itself, or null when nothing answers. */
 async function fetchStatus(): Promise<ServerStatus | null> {
-  const res = await adminFetch('/admin/status');
-  if (!res || !res.ok) return null;
-  try {
-    const data = (await res.json()) as ServerStatus;
-    return data && data.ok === true ? data : null;
-  } catch {
-    return null;
-  }
+  const data = await parseJson<ServerStatus>(await adminFetch('/admin/status'));
+  return data && data.ok === true ? data : null;
 }
 
 /** Push a config patch to the live server. False when it could not be delivered. */
 async function pushConfig(patch: ServerConfig): Promise<boolean> {
-  const res = await adminFetch('/admin/config', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(patch),
-  });
+  const res = await postJson('/admin/config', patch);
   return !!res && res.ok;
 }
 
@@ -572,11 +524,7 @@ async function pushConfig(patch: ServerConfig): Promise<boolean> {
 async function serverAction(
   body: { action: 'CLEAR_QUEUE' } | { action: 'ABORT_MATCH'; matchId: string },
 ): Promise<boolean> {
-  const res = await adminFetch('/admin/action', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const res = await postJson('/admin/action', body);
   return !!res && res.ok;
 }
 
@@ -592,14 +540,132 @@ interface PlayersPage {
 /** Read the Worker's directory; null when nothing answers, so the panel can fall back to the index. */
 async function fetchPlayers(q: string, filter: DirFilter, offset: number, limit: number): Promise<PlayersPage | null> {
   const path = `/admin/players?q=${encodeURIComponent(q)}&filter=${filter}&offset=${offset}&limit=${limit}`;
-  const res = await adminFetch(path);
-  if (!res || !res.ok) return null;
+  const data = await parseJson<PlayersPage>(await adminFetch(path));
+  return data && data.ok === true && Array.isArray(data.players) ? data : null;
+}
+
+/* ---------- the role registry & the broadcast engine, over `/api/admin/*` ---------- */
+
+/** The two levels the Command Center appoints. */
+export type AdminRole = 'superadmin' | 'moderator';
+
+/** One appointed admin, as `GET /api/admin/roles` reports it. */
+export interface AdminRow {
+  id: string;
+  name: string;
+  username: string;
+  role: AdminRole;
+  addedAt: number;
+  addedBy: string;
+  /** Seeded from the server's own `ADMIN_IDS` allowlist: never revocable from here. */
+  root: boolean;
+}
+
+interface RolesPage {
+  ok: true;
+  admins: AdminRow[];
+  roles: AdminRole[];
+  /** The caller's own id, so the panel can point at its own row. */
+  me: string;
+  /** True when this viewer may appoint and revoke. */
+  super: boolean;
+}
+
+/** The Access Control List, or null when the Worker is not answering. */
+async function fetchRoles(): Promise<RolesPage | null> {
+  const data = await parseJson<RolesPage>(await adminFetch('/api/admin/roles'));
+  return data && data.ok === true && Array.isArray(data.admins) ? data : null;
+}
+
+/** A mutation's frame: `ok` decided by the Worker, `error` its code, null when it never answered. */
+interface MutationResult {
+  ok: boolean;
+  error?: string;
+  broadcast?: Broadcast;
+}
+
+async function adminMutation(path: string, body: unknown): Promise<MutationResult | null> {
+  const res = await postJson(path, body);
+  if (!res) return null;
   try {
-    const data = (await res.json()) as PlayersPage;
-    return data && data.ok === true && Array.isArray(data.players) ? data : null;
+    const data = (await res.json()) as { ok?: boolean; error?: string; broadcast?: Broadcast };
+    return {
+      ok: data.ok === true,
+      error: typeof data.error === 'string' ? data.error : undefined,
+      broadcast: data.broadcast,
+    };
   } catch {
-    return null;
+    return { ok: res.ok };
   }
+}
+
+/** Appoint (or re-role) one admin. The Worker answers the guards, this side only reports them. */
+const grantRole = (id: string, role: AdminRole): Promise<MutationResult | null> =>
+  adminMutation('/api/admin/roles/grant', { id, role });
+
+/** Revoke one appointed admin. Root ids and the last SuperAdmin never go. */
+const revokeRole = (id: string): Promise<MutationResult | null> =>
+  adminMutation('/api/admin/roles/revoke', { id });
+
+interface HistoryPage {
+  ok: true;
+  broadcasts: Broadcast[];
+  active: number;
+}
+
+/** The broadcast history, newest first, or null when the Worker is not answering. */
+async function fetchBroadcasts(): Promise<HistoryPage | null> {
+  const data = await parseJson<HistoryPage>(await adminFetch('/api/admin/broadcasts'));
+  return data && data.ok === true && Array.isArray(data.broadcasts) ? data : null;
+}
+
+/** What the composer hands the Worker; the server clamps every field again. */
+export interface BroadcastDraft {
+  title: string;
+  body: string;
+  ctaLabel: string;
+  ctaTarget: string;
+  audienceKind: 'all' | 'country' | 'minLevel';
+  audienceValue: string;
+  priority: 'urgent' | 'feed';
+}
+
+/** Dispatch one announcement. A `broadcast` in the answer is the stored row, already live. */
+const dispatchBroadcast = (draft: BroadcastDraft): Promise<MutationResult | null> =>
+  adminMutation('/api/admin/broadcasts/create', draft);
+
+/** Archive or restore one announcement. */
+const flipBroadcast = (id: string, archived: boolean): Promise<MutationResult | null> =>
+  adminMutation(`/api/admin/broadcasts/${encodeURIComponent(id)}/archive`, { archived });
+
+/** The Worker's refusal codes, in the panel's voice. */
+const ROLE_ERROR: Record<string, string> = {
+  invalid_id: 'That is neither a Telegram id nor an @handle.',
+  invalid_role: 'Unknown role.',
+  root_admin: 'Root admins come from the server allowlist and cannot be revoked.',
+  last_superadmin: 'The last SuperAdmin cannot be revoked.',
+  no_such_admin: 'That admin is no longer on the registry.',
+  forbidden: 'SuperAdmin access required.',
+};
+
+const BROADCAST_ERROR: Record<string, string> = {
+  missing_title: 'Give the broadcast a title first.',
+  missing_body: 'Give the broadcast a message first.',
+  invalid_country: 'Country must be a two-letter code, like US.',
+  invalid_level: 'Level must be a whole number from 1 to 999.',
+  incomplete_cta: 'A button needs both a label and a target.',
+  no_such_broadcast: 'That broadcast is no longer on the server.',
+  forbidden: 'SuperAdmin access required.',
+};
+
+/** `SuperAdmin` / `Moderator`, the way the badges read. */
+const ROLE_LABEL = (r: AdminRole): string => (r === 'superadmin' ? 'SuperAdmin' : 'Moderator');
+
+/** `Everyone` / `Country US` / `Level 10+` — one rendering for the history and the preview both. */
+function audienceText(kind: Broadcast['audience']['kind'], value: string): string {
+  if (kind === 'country') return `Country ${value.toUpperCase()}`;
+  if (kind === 'minLevel') return `Level ${value}+`;
+  return 'Everyone';
 }
 
 /** One moderation action on the Worker's registry. The row as the server now holds it, or null. */
@@ -632,6 +698,10 @@ export interface AdminApi {
   tier(): MindTier;
   /** The stage opened or closed: the shell shows the Telegram BackButton while it is up. */
   onToggle(open: boolean): void;
+  /** A broadcast just left the Command Center: the client engine raises it on this device at once. */
+  onBroadcast?(b: Broadcast): void;
+  /** A broadcast was archived: the client engine pulls it from this device's store. */
+  onBroadcastArchived?(id: string): void;
 }
 
 export interface Admin {
@@ -770,6 +840,49 @@ export function createAdmin(api: AdminApi): Admin {
   const usersQ = $<HTMLInputElement>('users-q');
   const usersQClear = $<HTMLButtonElement>('users-q-clear');
   const userChips = [...document.querySelectorAll<HTMLButtonElement>('[data-ufilter]')];
+  /* Access control: the list, the add key, and the appointment drawer */
+  const aclList = $<HTMLElement>('adm-acl-list');
+  const aclEmpty = $<HTMLElement>('adm-acl-empty');
+  const aclCount = $<HTMLElement>('acl-count');
+  const aclAdd = $<HTMLButtonElement>('adm-acl-add');
+  const aclDrawer = $<HTMLElement>('adm-acl-drawer');
+  const aclDrawerX = $<HTMLButtonElement>('adm-acl-drawer-x');
+  const aclCancel = $<HTMLButtonElement>('adm-acl-cancel');
+  const aclId = $<HTMLInputElement>('adm-acl-id');
+  const aclHint = $<HTMLElement>('adm-acl-id-hint');
+  const aclRoles = $<HTMLElement>('adm-acl-role');
+  const aclRoleBtns = [...(aclRoles?.querySelectorAll<HTMLButtonElement>('[data-role]') ?? [])];
+  const aclGrant = $<HTMLButtonElement>('adm-acl-grant');
+  /* The broadcast engine: the compose key, the history, the composer drawer */
+  const bcCompose = $<HTMLButtonElement>('adm-bc-compose');
+  const bcList = $<HTMLElement>('adm-bc-list');
+  const bcEmpty = $<HTMLElement>('adm-bc-empty');
+  const bcCount = $<HTMLElement>('adm-bc-count');
+  const bcDrawer = $<HTMLElement>('adm-bc-drawer');
+  const bcDrawerX = $<HTMLButtonElement>('adm-bc-drawer-x');
+  const bcCancel = $<HTMLButtonElement>('adm-bc-cancel');
+  const bcSend = $<HTMLButtonElement>('adm-bc-send');
+  const bcTitle = $<HTMLInputElement>('adm-bc-title');
+  const bcBody = $<HTMLTextAreaElement>('adm-bc-body');
+  const bcCtaLabel = $<HTMLInputElement>('adm-bc-cta-label');
+  const bcCtaTarget = $<HTMLInputElement>('adm-bc-cta-target');
+  const bcAudWrap = $<HTMLElement>('adm-bc-audience');
+  const bcAudBtns = [...(bcAudWrap?.querySelectorAll<HTMLButtonElement>('[data-aud]') ?? [])];
+  const bcAudValueWrap = $<HTMLElement>('adm-bc-aud-value-wrap');
+  const bcAudValueL = $<HTMLElement>('adm-bc-aud-value-l');
+  const bcAudValue = $<HTMLInputElement>('adm-bc-aud-value');
+  const bcPriWrap = $<HTMLElement>('adm-bc-priority');
+  const bcPriBtns = [...(bcPriWrap?.querySelectorAll<HTMLButtonElement>('[data-pri]') ?? [])];
+  const bcPvKicker = $<HTMLElement>('adm-bc-pv-kicker');
+  const bcPvTitle = $<HTMLElement>('adm-bc-pv-title');
+  const bcPvBody = $<HTMLElement>('adm-bc-pv-body');
+  const bcPvCta = $<HTMLElement>('adm-bc-pv-cta');
+  /* The confirm dialog, shared by every destructive key in the stage */
+  const confirmEl = $<HTMLElement>('adm-confirm');
+  const confirmTitle = $<HTMLElement>('adm-confirm-title');
+  const confirmBody = $<HTMLElement>('adm-confirm-body');
+  const confirmNo = $<HTMLButtonElement>('adm-confirm-no');
+  const confirmYes = $<HTMLButtonElement>('adm-confirm-yes');
 
   let open = false;
   let hideId = 0;
@@ -803,6 +916,25 @@ export function createAdmin(api: AdminApi): Admin {
   let usersSeq = 0;
   let usersTimer = 0;
   let openPlayer = '';
+
+  /** The Access Control view: the registry read, and whether this viewer may change it. */
+  let aclRows: AdminRow[] = [];
+  let aclOn = false;
+  let aclCan = false;
+  let aclAsked = false;
+  let aclRole: AdminRole = 'moderator';
+  let aclTimer = 0;
+  /** The broadcast history: the read, and the composer's working state. */
+  let bcRows: Broadcast[] = [];
+  let bcOn = false;
+  let bcAsked = false;
+  let bcAud: Broadcast['audience']['kind'] = 'all';
+  let bcPri: 'urgent' | 'feed' = 'urgent';
+  let bcBusy = false;
+  /** What the confirm dialog's destructive key will run, when it is up. */
+  let pendingConfirm: (() => void) | null = null;
+  /** One close timer per drawer, so a reopen mid-fade never strands a hidden panel. */
+  const drawerTimers = new Map<HTMLElement, number>();
 
   /* ---------- painting ---------- */
 
@@ -858,6 +990,8 @@ export function createAdmin(api: AdminApi): Admin {
     paintStats();
     paintInbox();
     paintUsers();
+    paintAcl();
+    paintBroadcasts();
   }
 
   /* ---------- the Stats tab ---------- */
@@ -1352,6 +1486,433 @@ export function createAdmin(api: AdminApi): Admin {
     }
   }
 
+  /* ---------- Access control: the role registry (worker/matchmaker.ts) ---------- */
+
+  function paintAcl() {
+    if (aclCount) {
+      aclCount.textContent = aclOn ? `${aclRows.length} admin${aclRows.length === 1 ? '' : 's'}` : '—';
+      aclCount.dataset.on = String(aclOn);
+    }
+    if (!aclList) return;
+    aclList.textContent = '';
+    for (const a of aclRows) {
+      const li = document.createElement('li');
+      li.className = a.root ? 'adm-admin is-root' : 'adm-admin';
+      li.dataset.aid = a.id;
+
+      const av = document.createElement('span');
+      av.className = 'adm-admin-av';
+      av.setAttribute('aria-hidden', 'true');
+      av.textContent = (a.name.charAt(0) || '?').toUpperCase();
+
+      const txt = document.createElement('span');
+      txt.className = 'adm-admin-txt';
+      const nm = document.createElement('span');
+      nm.className = 'adm-admin-name';
+      nm.textContent = a.name || `Admin ${a.id.slice(0, 6)}`;
+      const sub = document.createElement('span');
+      sub.className = 'adm-admin-sub';
+      sub.textContent = `${a.username ? `@${a.username} · ` : ''}#${a.id} · added ${stamp(a.addedAt)}`;
+      txt.append(nm, sub);
+
+      const role = document.createElement('span');
+      role.className = 'adm-admin-role';
+      role.dataset.role = a.root ? 'root' : a.role;
+      role.textContent = a.root ? 'Owner' : a.role === 'superadmin' ? 'Super' : 'Mod';
+
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'adm-admin-x';
+      x.dataset.revoke = a.id;
+      x.setAttribute('aria-label', `Revoke ${a.name || a.id}`);
+      x.append(icon('#i-trash', ''));
+      const locked = a.root || !aclCan;
+      x.disabled = locked;
+      if (a.root) x.title = 'Root admin — comes from the server allowlist';
+
+      li.append(av, txt, role, x);
+      aclList.append(li);
+    }
+    if (aclEmpty) aclEmpty.hidden = aclRows.length > 0;
+    if (aclGrant) aclGrant.setAttribute('aria-disabled', String(!aclCan || !aclIdValid()));
+  }
+
+  /** True when the typed id is one of the two shapes the Worker accepts. */
+  const aclIdValid = (): boolean => {
+    const v = (aclId?.value ?? '').trim();
+    return /^[0-9]{3,20}$/.test(v) || /^@[A-Za-z0-9_]{3,32}$/.test(v);
+  };
+
+  /** The hint under the id field: quiet while typing, then one verdict. */
+  function paintAclHint() {
+    if (!aclHint) return;
+    const v = (aclId?.value ?? '').trim();
+    if (!v) {
+      aclHint.dataset.state = 'idle';
+      aclHint.textContent = 'A numeric Telegram id, or an @handle to appoint by name.';
+    } else if (aclIdValid()) {
+      aclHint.dataset.state = 'ok';
+      aclHint.textContent = /^@/.test(v) ? `Appointing the handle ${v.toLowerCase()}.` : `Appointing Telegram id ${v}.`;
+    } else {
+      aclHint.dataset.state = 'bad';
+      aclHint.textContent = 'That is neither a Telegram id nor an @handle.';
+    }
+    if (aclGrant) aclGrant.setAttribute('aria-disabled', String(!aclCan || !aclIdValid()));
+  }
+
+  /** Read the registry; the rail keeps its last paint when nothing answers. */
+  async function refreshAcl(): Promise<void> {
+    const page = await fetchRoles();
+    aclOn = !!page;
+    aclRows = page?.admins ?? [];
+    aclCan = page?.super ?? false;
+    paintAcl();
+  }
+
+  /** Appoint the typed id with the picked role. */
+  async function grantAdmin(): Promise<void> {
+    const id = (aclId?.value ?? '').trim();
+    if (!aclIdValid()) {
+      impact('light');
+      notify('error');
+      aclId?.focus({ preventScroll: true });
+      api.note('Type a Telegram id or an @handle first.', true, 2200);
+      return;
+    }
+    if (!aclOn) {
+      impact('light');
+      notify('error');
+      api.note('The server owns the role registry — no Worker answering.', true, 2400);
+      return;
+    }
+    if (!aclCan) {
+      impact('light');
+      notify('error');
+      api.note('SuperAdmin access required.', true, 2200);
+      return;
+    }
+    impact('medium');
+    const res = await grantRole(id, aclRole);
+    if (!res) {
+      markAclLocal();
+      notify('error');
+      api.note('No answer — the registry did not change.', true, 2400);
+      return;
+    }
+    if (!res.ok) {
+      notify('error');
+      api.note(ROLE_ERROR[res.error ?? ''] ?? 'The Worker refused that appointment.', true, 2600);
+      return;
+    }
+    notify('success');
+    api.note(`${id} is now ${ROLE_LABEL(aclRole)}.`, false, 2200);
+    hideDrawer(aclDrawer);
+    if (aclId) aclId.value = '';
+    paintAclHint();
+    await refreshAcl();
+  }
+
+  /** Ask, then revoke. The confirm dialog carries the name so a mis-tap changes nothing. */
+  function askRevoke(id: string): void {
+    const a = aclRows.find((r) => r.id === id);
+    if (!a) return;
+    impact('light');
+    openConfirm(
+      'Revoke admin?',
+      `${a.name || a.id} (#${a.id}) stops being ${ROLE_LABEL(a.role)} immediately. Their own device stays signed in until the next check.`,
+      'Revoke',
+      () => void doRevoke(a),
+    );
+  }
+
+  async function doRevoke(a: AdminRow): Promise<void> {
+    if (!aclOn || !aclCan) {
+      notify('error');
+      api.note('SuperAdmin access required.', true, 2200);
+      return;
+    }
+    detonation();                      // the danger buzz: a revocation is not a toggle
+    const res = await revokeRole(a.id);
+    if (!res) {
+      markAclLocal();
+      notify('error');
+      api.note('No answer — nothing was revoked.', true, 2400);
+      return;
+    }
+    if (!res.ok) {
+      notify('error');
+      api.note(ROLE_ERROR[res.error ?? ''] ?? 'The Worker refused that revocation.', true, 2600);
+      return;
+    }
+    notify('success');
+    api.note(`${a.name || a.id} revoked.`, false, 2200);
+    await refreshAcl();
+  }
+
+  /** Nothing answered: the Access Control list steps back to its local note. */
+  function markAclLocal() {
+    aclOn = false;
+    aclCan = false;
+    aclRows = [];
+    paintAcl();
+  }
+
+  /* ---------- the broadcast engine: composer, history, archive ---------- */
+
+  /** `Urgent` / `Feed`, and the audience, as one kicker line. */
+  const bcKicker = (): string =>
+    `${bcPri === 'urgent' ? 'Urgent' : 'Feed'} · ${audienceText(bcAud, (bcAudValue?.value ?? '').trim())}`;
+
+  function paintBcPreview() {
+    const title = (bcTitle?.value ?? '').trim();
+    const body = (bcBody?.value ?? '').trim();
+    const label = (bcCtaLabel?.value ?? '').trim();
+    const target = (bcCtaTarget?.value ?? '').trim();
+    if (bcPvKicker) bcPvKicker.textContent = bcKicker();
+    if (bcPvTitle) bcPvTitle.textContent = title || 'Your title here';
+    if (bcPvBody) bcPvBody.textContent = body || 'Your message here.';
+    if (bcPvCta) {
+      const has = !!label && !!target;
+      bcPvCta.hidden = !has;
+      bcPvCta.textContent = has ? label : '';
+    }
+    if (bcSend) bcSend.setAttribute('aria-disabled', String(!bcDraftValid()));
+  }
+
+  /** The composer's shape check, mirroring the Worker's own guards. */
+  function bcDraftValid(): boolean {
+    const title = (bcTitle?.value ?? '').trim();
+    const body = (bcBody?.value ?? '').trim();
+    const label = (bcCtaLabel?.value ?? '').trim();
+    const target = (bcCtaTarget?.value ?? '').trim();
+    if (!title || !body) return false;
+    if (!!label !== !!target) return false;
+    const value = (bcAudValue?.value ?? '').trim();
+    if (bcAud === 'country' && !/^[A-Za-z]{2}$/.test(value)) return false;
+    if (bcAud === 'minLevel') {
+      const n = Number(value);
+      if (!Number.isInteger(n) || n < 1 || n > 999) return false;
+    }
+    return true;
+  }
+
+  function paintBroadcasts() {
+    const active = bcRows.filter((b) => b.status === 'active').length;
+    if (bcCount) {
+      bcCount.textContent = bcOn ? `${active} live / ${bcRows.length}` : '—';
+      bcCount.dataset.on = String(active > 0);
+    }
+    if (!bcList) return;
+    bcList.textContent = '';
+    for (const b of bcRows) {
+      const li = document.createElement('li');
+      li.className = b.status === 'archived' ? 'adm-bc-card is-archived' : 'adm-bc-card';
+      li.dataset.bcid = b.id;
+
+      const top = document.createElement('div');
+      top.className = 'adm-bc-top';
+      const pri = document.createElement('span');
+      pri.className = 'adm-bc-chip';
+      pri.dataset.pri = b.priority;
+      pri.textContent = b.priority === 'urgent' ? 'Urgent' : 'Feed';
+      const aud = document.createElement('span');
+      aud.className = 'adm-bc-chip';
+      aud.textContent = audienceText(b.audience.kind, b.audience.value);
+      if (b.status === 'archived') {
+        const state = document.createElement('span');
+        state.className = 'adm-bc-chip';
+        state.dataset.state = 'archived';
+        state.textContent = 'Archived';
+        top.append(pri, aud, state);
+      } else {
+        top.append(pri, aud);
+      }
+      const title = document.createElement('span');
+      title.className = 'adm-bc-title';
+      title.textContent = b.title;
+      top.append(title);
+      li.append(top);
+
+      const snip = document.createElement('span');
+      snip.className = 'adm-bc-snip';
+      snip.textContent = b.body;
+      li.append(snip);
+
+      const meta = document.createElement('p');
+      meta.className = 'adm-bc-meta';
+      meta.textContent = `${stamp(b.createdAt)} · by ${b.createdBy}${b.archivedAt ? ` · archived ${stamp(b.archivedAt)}` : ''}`;
+      li.append(meta);
+
+      const actions = document.createElement('div');
+      actions.className = 'adm-bc-actions';
+      const flip = document.createElement('button');
+      flip.type = 'button';
+      flip.className = b.status === 'archived' ? 'adm-btn is-restore' : 'adm-btn';
+      flip.dataset.bcflip = b.id;
+      flip.textContent = b.status === 'archived' ? 'Reactivate' : 'Archive';
+      actions.append(flip);
+      li.append(actions);
+      bcList.append(li);
+    }
+    if (bcEmpty) bcEmpty.hidden = bcRows.length > 0;
+  }
+
+  /** Read the history; the rail keeps its last paint when nothing answers. */
+  async function refreshBroadcasts(): Promise<void> {
+    const page = await fetchBroadcasts();
+    bcOn = !!page;
+    bcRows = page?.broadcasts ?? [];
+    paintBroadcasts();
+  }
+
+  /** Clear the composer back to its defaults, ready for the next dispatch. */
+  function resetComposer() {
+    if (bcTitle) bcTitle.value = '';
+    if (bcBody) bcBody.value = '';
+    if (bcCtaLabel) bcCtaLabel.value = '';
+    if (bcCtaTarget) bcCtaTarget.value = '';
+    if (bcAudValue) bcAudValue.value = '';
+    if (bcAudValueWrap) bcAudValueWrap.hidden = true;
+    if (bcAudValueL) bcAudValueL.textContent = 'Value';
+    if (bcAudValue) bcAudValue.placeholder = '';
+    bcAud = 'all';
+    for (const b of bcAudBtns) b.setAttribute('aria-pressed', String(b.dataset.aud === 'all'));
+    bcPri = 'urgent';
+    for (const b of bcPriBtns) b.setAttribute('aria-pressed', String(b.dataset.pri === 'urgent'));
+    paintBcPreview();
+  }
+
+  /** Dispatch the composer's draft; on success, the client engine raises it right here too. */
+  async function sendBroadcast(): Promise<void> {
+    if (bcBusy || !bcDraftValid()) {
+      impact('light');
+      notify('error');
+      api.note('Title and message are required — a button needs both halves.', true, 2400);
+      return;
+    }
+    if (!bcOn) {
+      impact('light');
+      notify('error');
+      api.note('No Worker answering — the broadcast did not leave this device.', true, 2400);
+      return;
+    }
+    bcBusy = true;
+    if (bcSend) bcSend.setAttribute('aria-disabled', 'true');
+    const draft: BroadcastDraft = {
+      title: (bcTitle?.value ?? '').trim(),
+      body: (bcBody?.value ?? '').trim(),
+      ctaLabel: (bcCtaLabel?.value ?? '').trim(),
+      ctaTarget: (bcCtaTarget?.value ?? '').trim(),
+      audienceKind: bcAud,
+      audienceValue: (bcAudValue?.value ?? '').trim(),
+      priority: bcPri,
+    };
+    const res = await dispatchBroadcast(draft);
+    bcBusy = false;
+    if (!res) {
+      markBcLocal();
+      notify('error');
+      api.note('No answer — nothing was dispatched.', true, 2400);
+      return;
+    }
+    if (!res.ok) {
+      notify('error');
+      api.note(BROADCAST_ERROR[res.error ?? ''] ?? 'The Worker refused that broadcast.', true, 2600);
+      paintBcPreview();
+      return;
+    }
+    impact('medium');
+    notify('success');
+    api.note(`Broadcast dispatched to ${audienceText(bcAud, draft.audienceValue)}.`, false, 2400);
+    hideDrawer(bcDrawer);
+    resetComposer();
+    await refreshBroadcasts();
+    if (res.broadcast) api.onBroadcast?.(res.broadcast);
+  }
+
+  /** Archive or restore one announcement, and tell the client engine which way it went. */
+  async function flipOne(id: string): Promise<void> {
+    const b = bcRows.find((r) => r.id === id);
+    if (!b) return;
+    if (!bcOn) {
+      notify('error');
+      api.note('No Worker answering.', true, 2200);
+      return;
+    }
+    impact('light');
+    const archived = b.status !== 'archived';
+    const res = await flipBroadcast(id, archived);
+    if (!res) {
+      markBcLocal();
+      notify('error');
+      api.note('No answer — the broadcast did not move.', true, 2400);
+      return;
+    }
+    if (!res.ok) {
+      notify('error');
+      api.note(BROADCAST_ERROR[res.error ?? ''] ?? 'The Worker refused that change.', true, 2600);
+      return;
+    }
+    notify('success');
+    api.note(archived ? 'Broadcast archived.' : 'Broadcast is live again.', false, 2000);
+    await refreshBroadcasts();
+    if (res.broadcast) {
+      if (res.broadcast.status === 'archived') api.onBroadcastArchived?.(id);
+      else api.onBroadcast?.(res.broadcast);
+    }
+  }
+
+  /** Nothing answered: the history steps back and says so. */
+  function markBcLocal() {
+    bcOn = false;
+    bcRows = [];
+    paintBroadcasts();
+  }
+
+  /* ---------- the overlays: drawers and the confirm dialog ---------- */
+
+  function showDrawer(el: HTMLElement | null) {
+    if (!el) return;
+    const pending = drawerTimers.get(el);
+    if (pending) {
+      window.clearTimeout(pending);
+      drawerTimers.delete(el);
+    }
+    el.hidden = false;
+    void el.offsetWidth;
+    el.classList.add('open');
+  }
+
+  function hideDrawer(el: HTMLElement | null) {
+    if (!el || el.hidden) return;
+    el.classList.remove('open');
+    const done = () => {
+      el.hidden = true;
+      drawerTimers.delete(el);
+    };
+    if (motionReduced()) {
+      done();
+      return;
+    }
+    const id = window.setTimeout(done, 260);
+    drawerTimers.set(el, id);
+  }
+
+  /** One question, one destructive key. `run` fires after the dialog is out of the way. */
+  function openConfirm(title: string, body: string, yes: string, run: () => void) {
+    pendingConfirm = run;
+    if (confirmTitle) confirmTitle.textContent = title;
+    if (confirmBody) confirmBody.textContent = body;
+    if (confirmYes) confirmYes.textContent = yes;
+    showDrawer(confirmEl);
+    confirmYes?.focus({ preventScroll: true });
+  }
+
+  function closeConfirm() {
+    pendingConfirm = null;
+    hideDrawer(confirmEl);
+  }
+
   /* ---------- the live server ---------- */
 
   /** The local runtime, in the three fields the Worker also enforces. */
@@ -1490,6 +2051,19 @@ export function createAdmin(api: AdminApi): Admin {
 
   /* ---------- the FAB ---------- */
 
+  /**
+   * The registry is the door of record for appointed admins: a device the local allowlist does
+   * not know asks the server once, and only a membership answer opens the Command Center. The
+   * dev door and the local allowlist never wait on it, and no answer at all changes nothing.
+   */
+  async function probeDoor(): Promise<void> {
+    if (isAdmin()) return;
+    const page = await fetchRoles();
+    if (!page) return;
+    elevated = true;
+    if (fab) fab.hidden = false;
+  }
+
   /** Clear the launcher (mode card + PLAY) so the key never sits on top of either. */
   function placeFab() {
     if (!fab || !home) return;
@@ -1563,8 +2137,17 @@ export function createAdmin(api: AdminApi): Admin {
       /* both of these read the room: the roster and the live seat count are only ever as fresh
          as their last read, so landing on either one asks the Worker again */
       if (id === 'server' || id === 'stats') void refreshServer();
-      /* the Inbox is device-local: a repaint keeps the relative timestamps honest */
-      if (id === 'inbox') paintInbox();
+      /* the Inbox is device-local: a repaint keeps the relative timestamps honest, and the
+         broadcast history is read on first sight like the directory */
+      if (id === 'inbox') {
+        paintInbox();
+        if (!bcAsked) {
+          bcAsked = true;
+          void refreshBroadcasts();
+        } else {
+          paintBroadcasts();
+        }
+      }
       /* the directory is read on first sight, not at mount: a panel nobody opened never calls out */
       if (id === 'users') {
         if (!usersAsked) {
@@ -1573,6 +2156,11 @@ export function createAdmin(api: AdminApi): Admin {
         } else {
           paintUsers();
         }
+      }
+      /* the role registry rides the same rule: first sight of Controls reads it */
+      if (id === 'controls' && !aclAsked) {
+        aclAsked = true;
+        void refreshAcl();
       }
     });
   }
@@ -1707,8 +2295,22 @@ export function createAdmin(api: AdminApi): Admin {
     if (btn) void abortMatch(btn.dataset.abort ?? '');
   });
 
+  /* Escape closes one layer at a time: the confirm dialog, then a drawer, then the stage. */
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && open) closeStage();
+    if (e.key !== 'Escape' || !open || e.defaultPrevented) return;
+    if (confirmEl && !confirmEl.hidden) {
+      closeConfirm();
+      return;
+    }
+    if (aclDrawer && !aclDrawer.hidden) {
+      hideDrawer(aclDrawer);
+      return;
+    }
+    if (bcDrawer && !bcDrawer.hidden) {
+      hideDrawer(bcDrawer);
+      return;
+    }
+    closeStage();
   });
 
   for (const el of sws) {
@@ -1765,6 +2367,123 @@ export function createAdmin(api: AdminApi): Admin {
     paintBroadcast();
     impact('light');
     api.note('Broadcast cleared.', false, 1800);
+  });
+
+  /* ---------- Access control: the add key, the drawer, the grant and the revoke ---------- */
+
+  aclAdd?.addEventListener('click', () => {
+    if (!aclOn || !aclCan) {
+      impact('light');
+      notify('error');
+      api.note(
+        aclOn ? 'SuperAdmin access required.' : 'The server owns the role registry — no Worker answering.',
+        true,
+        2400,
+      );
+      return;
+    }
+    impact('light');
+    showDrawer(aclDrawer);
+    paintAclHint();
+    aclId?.focus({ preventScroll: true });
+  });
+  aclDrawerX?.addEventListener('click', () => hideDrawer(aclDrawer));
+  aclCancel?.addEventListener('click', () => hideDrawer(aclDrawer));
+  /* the id field validates on a short leash: one quiet beat after typing stops, never per keystroke */
+  aclId?.addEventListener('input', () => {
+    window.clearTimeout(aclTimer);
+    if (aclHint) {
+      aclHint.dataset.state = 'idle';
+      aclHint.textContent = 'Checking…';
+    }
+    aclTimer = window.setTimeout(paintAclHint, 180);
+  });
+  for (const b of aclRoleBtns) {
+    b.addEventListener('click', () => {
+      const next: AdminRole = b.dataset.role === 'superadmin' ? 'superadmin' : 'moderator';
+      if (next === aclRole) return;
+      aclRole = next;
+      for (const x of aclRoleBtns) x.setAttribute('aria-pressed', String(x === b));
+      impact('light');
+    });
+  }
+  aclGrant?.addEventListener('click', () => {
+    if (aclGrant.getAttribute('aria-disabled') === 'true') {
+      impact('light');
+      notify('error');
+      api.note('Type a Telegram id or an @handle first.', true, 2200);
+      aclId?.focus({ preventScroll: true });
+      return;
+    }
+    void grantAdmin();
+  });
+  /* one delegated listener: the list is rebuilt on every paint */
+  aclList?.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-revoke]');
+    if (btn && !btn.disabled) askRevoke(btn.dataset.revoke ?? '');
+  });
+
+  /* ---------- the broadcast engine: compose, preview, dispatch, archive ---------- */
+
+  bcCompose?.addEventListener('click', () => {
+    impact('light');
+    showDrawer(bcDrawer);
+    paintBcPreview();
+  });
+  bcDrawerX?.addEventListener('click', () => hideDrawer(bcDrawer));
+  bcCancel?.addEventListener('click', () => hideDrawer(bcDrawer));
+  for (const el of [bcTitle, bcBody, bcCtaLabel, bcCtaTarget, bcAudValue]) {
+    el?.addEventListener('input', () => paintBcPreview());
+  }
+  for (const b of bcAudBtns) {
+    b.addEventListener('click', () => {
+      const next = (b.dataset.aud ?? 'all') as Broadcast['audience']['kind'];
+      if (next === bcAud) return;
+      bcAud = next;
+      for (const x of bcAudBtns) x.setAttribute('aria-pressed', String(x === b));
+      if (bcAudValueWrap) bcAudValueWrap.hidden = next === 'all';
+      if (bcAudValueL) bcAudValueL.textContent = next === 'country' ? 'Country code' : 'Minimum level';
+      if (bcAudValue) {
+        bcAudValue.value = '';
+        bcAudValue.placeholder = next === 'country' ? 'US' : next === 'minLevel' ? '10' : '';
+        if (next !== 'all') bcAudValue.focus({ preventScroll: true });
+      }
+      impact('light');
+      paintBcPreview();
+    });
+  }
+  for (const b of bcPriBtns) {
+    b.addEventListener('click', () => {
+      const next: 'urgent' | 'feed' = b.dataset.pri === 'feed' ? 'feed' : 'urgent';
+      if (next === bcPri) return;
+      bcPri = next;
+      for (const x of bcPriBtns) x.setAttribute('aria-pressed', String(x === b));
+      impact('light');
+      paintBcPreview();
+    });
+  }
+  bcSend?.addEventListener('click', () => {
+    if (bcSend.getAttribute('aria-disabled') === 'true') {
+      impact('light');
+      notify('error');
+      api.note('Title and message are required — a button needs both halves.', true, 2400);
+      return;
+    }
+    void sendBroadcast();
+  });
+  bcList?.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-bcflip]');
+    if (btn) void flipOne(btn.dataset.bcflip ?? '');
+  });
+
+  confirmNo?.addEventListener('click', () => closeConfirm());
+  confirmYes?.addEventListener('click', () => {
+    const run = pendingConfirm;
+    closeConfirm();
+    run?.();
+  });
+  confirmEl?.addEventListener('click', (e) => {
+    if (e.target === confirmEl) closeConfirm();
   });
 
   $<HTMLButtonElement>('tool-coins')?.addEventListener('click', () => {
@@ -1869,6 +2588,7 @@ export function createAdmin(api: AdminApi): Admin {
       if (stage) mountCoins(stage);
       recordVisit();                       // the day's first sighting of this device
       paintAll();
+      void probeDoor();                    // an appointed admin's device learns it here
       // the launcher only has a height once the home screen has been laid out
       requestAnimationFrame(() => {
         live = true;
