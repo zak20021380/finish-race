@@ -12543,33 +12543,11 @@ html.reduced-motion .mm-blip { opacity: .5; }
 }
 html.reduced-motion .admin-fab-dot { animation: none; }
 
-/* ---- the pinned broadcast: a gold strip at the top of Home ---- */
-.home-broadcast {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  margin: 0;
-  min-height: 38px;
-  padding: 9px var(--s3);
-  border-radius: var(--radius-sm);
-  background: linear-gradient(180deg, #2A2415 0%, #1F1A10 100%);
-  color: var(--honey-ink);
-  font-size: var(--t-micro);
-  font-weight: 800;
-  box-shadow:
-    var(--clay-spec), var(--clay-bevel),
-    inset 0 0 0 1px rgba(245, 158, 11, .32),
-    0 8px 18px -14px rgba(245, 158, 11, .5);
-}
-.home-broadcast .ico { flex: none; width: 14px; height: 14px; color: var(--honey); }
-.home-broadcast-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
 /* ---- the stage: one full-viewport clay slab ---- */
 .admin {
   position: absolute;
   inset: 0;
-  z-index: 26;                         /* over the dock, the scrim, the sheets and matchmaking */
+  z-index: 1002;                       /* over the dock, the sheets, matchmaking, and the broadcast overlay (1000/1001) */
   display: flex;
   flex-direction: column;
   gap: var(--s3);
@@ -16064,15 +16042,28 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
 }
 
 /* ==========================================================================
-   ANNOUNCEMENT POPUP — the urgent broadcast (src/broadcasts.ts). One centered
-   Dark Clay slab over a dim veil: z 25, under the admin stage (26), over
-   matchmaking (24) and every sheet (21). Golden specular ring, a spring pop on
-   entry, transform/opacity only — no backdrop-filter anywhere.
+   COMMAND DISPATCH — the urgent broadcast overlay (src/broadcasts.ts). A
+   full-viewport frosted scrim (1000) under the centered Dark-Clay transmission
+   modal (1001); the admin stage (1002) alone stays in front. Amber rim, spring
+   pop-in, one tactile acknowledge key.
    ========================================================================== */
+.announce-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(8, 12, 20, .82);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+.announce-scrim[hidden] { display: none; }
+.announce-scrim.is-open { opacity: 1; }
+
 .announce {
   position: fixed;
   inset: 0;
-  z-index: 25;
+  z-index: 1001;
   display: grid;
   place-items: center;
   padding:
@@ -16080,70 +16071,155 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
     max(var(--s4), env(safe-area-inset-right))
     max(var(--s4), env(safe-area-inset-bottom))
     max(var(--s4), env(safe-area-inset-left));
-  background: rgba(6, 9, 14, .66);
   opacity: 0;
-  transition: opacity var(--motion-med);
+  transition: opacity 180ms ease-out;
 }
 .announce[hidden] { display: none; }
 .announce.is-open { opacity: 1; }
+
+/* the transmission surface: a Dark-Clay slab, amber-rimmed and centered */
 .announce-panel {
-  width: min(100%, 360px);
+  width: min(340px, 90vw);
   max-height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
-  padding: 18px 16px 16px;
-  border-radius: 22px;
-  background:
-    radial-gradient(130% 90% at 50% -30%, rgba(252, 211, 77, .12), rgba(252, 211, 77, 0) 60%),
-    rgba(17, 24, 39, .95);
-  box-shadow:
-    inset 0 0 0 1px rgba(245, 158, 11, .55),
-    inset 0 1px 0 rgba(255, 255, 255, .12),
-    0 24px 60px -24px rgba(0, 0, 0, .95);
-  transform: scale(.85) translateY(10px);
-  opacity: 0;
-  transition: transform .34s var(--bounce), opacity var(--motion-fast);
-}
-.announce.is-open .announce-panel { transform: none; opacity: 1; }
-html.reduced-motion .announce,
-html.reduced-motion .announce-panel { transition: none; }
-.announce-kicker {
-  display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 0;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .16em;
-  text-transform: uppercase;
-  color: var(--honey-ink);
-  text-shadow: 0 1px 0 rgba(0, 0, 0, .6), 0 0 12px rgba(245, 158, 11, .28);
+  gap: 8px;
+  padding: 22px 18px;
+  border: 1px solid rgba(251, 191, 36, .35);
+  border-radius: 20px;
+  background: linear-gradient(180deg, #1E273A 0%, #111726 100%);
+  box-shadow:
+    0 20px 48px rgba(0, 0, 0, .8),
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    0 0 24px rgba(245, 158, 11, .15);
+  opacity: 0;
+  transform: scale(.85) translateY(10px);
+  transition: transform .34s var(--bounce), opacity 180ms ease-out;
 }
-.announce-kicker .ico { width: 13px; height: 13px; flex: none; color: var(--honey); }
+@keyframes modal-spring {
+  0% { transform: scale(0.82) translateY(16px); opacity: 0; }
+  70% { transform: scale(1.03) translateY(-2px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+.announce.is-open .announce-panel {
+  transform: none;
+  opacity: 1;
+  animation: modal-spring .42s cubic-bezier(.22, 1.2, .36, 1) both;
+}
+html.reduced-motion .announce-scrim,
+html.reduced-motion .announce { transition: none; }
+html.reduced-motion .announce-panel { transition: none; }
+html.reduced-motion .announce.is-open .announce-panel { animation: none; }
+
+/* the engraved crest: a 40px recessed squircle pod with a warm amber halo */
+.announce-badge {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background:
+    radial-gradient(120% 100% at 50% -20%, rgba(255, 255, 255, .12), rgba(255, 255, 255, 0) 55%),
+    linear-gradient(180deg, #161D2C 0%, #0C111B 100%);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, .65),
+    inset 0 0 0 1px rgba(251, 191, 36, .3),
+    0 0 18px rgba(245, 158, 11, .22),
+    0 1px 0 rgba(255, 255, 255, .06);
+}
+.announce-badge-ico { width: 24px; height: 24px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .7)); }
+
+/* the authority pill under the crest */
+.announce-pill {
+  margin: 2px 0 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, .09);
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, .22);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: #FBBF24;
+}
 .announce-title {
-  margin: 0;
-  font-size: var(--t-1);
-  font-weight: 900;
-  color: var(--ink);
+  margin: 4px 0 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #F8FAFC;
+  text-align: center;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, .6);
   overflow-wrap: anywhere;
 }
 .announce-body {
-  margin: 0;
-  font-size: var(--t-2);
-  line-height: 1.55;
-  color: var(--ink-soft);
+  margin: 12px 0 18px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #CBD5E1;
+  text-align: center;
   overflow-wrap: anywhere;
 }
-.announce-body strong { color: var(--ink); font-weight: 800; }
+.announce-body strong { color: #F8FAFC; font-weight: 800; }
 .announce-body code {
   padding: 1px 5px;
   border-radius: 6px;
-  background: var(--field);
-  box-shadow: inset 0 0 0 1px var(--hair-off);
+  background: rgba(255, 255, 255, .07);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .09);
   font-size: .92em;
 }
-.announce-actions { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s2); }
-.announce-actions .btn { width: 100%; }
+.announce-body a { color: #FCD34D; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.announce-actions { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+
+/* the tactile acknowledge key: amber gradient, specular crown, inset bevel */
+.announce-dismiss,
+.announce-cta {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: 0;
+  appearance: none;
+  cursor: pointer;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #F59E0B 0%, #D97706 100%);
+  color: #2A1602;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .4px;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .5),
+    inset 0 -2px 0 rgba(120, 53, 15, .5),
+    inset 0 0 0 1px rgba(251, 191, 36, .55),
+    0 3px 0 #8A5304,
+    0 12px 24px -10px rgba(245, 158, 11, .65);
+  transition: transform .14s ease, box-shadow .14s ease;
+}
+.announce-dismiss:active,
+.announce-cta:active {
+  transform: translateY(2px) scale(.97);
+  box-shadow:
+    inset 0 2px 5px rgba(120, 53, 15, .55),
+    inset 0 0 0 1px rgba(251, 191, 36, .45),
+    0 1px 0 #8A5304,
+    0 6px 14px -8px rgba(245, 158, 11, .5);
+}
+.announce-dismiss:focus-visible,
+.announce-cta:focus-visible { outline: 2px solid #FCD34D; outline-offset: 2px; }
+html.reduced-motion .announce-dismiss,
+html.reduced-motion .announce-cta { transition: none; }
+/* when a custom action leads, the confirm key steps back to clay so the hierarchy stays clear */
+.announce-cta:not([hidden]) ~ .announce-dismiss {
+  background: linear-gradient(180deg, #263248 0%, #151C2B 100%);
+  color: #CBD5E1;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    inset 0 -2px 0 rgba(0, 0, 0, .4),
+    0 3px 0 #0A0E15,
+    0 10px 20px -10px rgba(0, 0, 0, .7);
+}
+.announce-cta[hidden] { display: none; }

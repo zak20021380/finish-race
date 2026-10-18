@@ -1540,6 +1540,8 @@ admin = createAdmin({
   /* a dispatch lands on this device the same beat it lands anywhere else */
   onBroadcast: (b) => announcements.receive(b),
   onBroadcastArchived: (id) => announcements.retract(id),
+  /* the Controls tab's pinned one-liner raises the Command Dispatch modal on this device */
+  onDispatch: (text) => announcements.dispatch(text),
 });
 admin.mount();
 announcements.sync();

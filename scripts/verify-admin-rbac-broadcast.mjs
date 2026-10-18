@@ -659,14 +659,60 @@ async function main() {
     expect('no CTA means no button', raised.ctaHidden);
     expect('focus lands on the next step (Dismiss)', raised.focus === 'announce-dismiss', raised.focus);
 
+    /* ---- the overhaul: no inline strip, a flush header, a frosted scrim, a centered modal ---- */
+    const shell = await pg.evaluate(() => {
+      const card = document.getElementById('home-id-card');
+      const scrim = document.getElementById('admin-broadcast-scrim');
+      const modal = document.getElementById('admin-broadcast-modal');
+      const scs = scrim ? getComputedStyle(scrim) : null;
+      const mcs = modal ? getComputedStyle(modal) : null;
+      const r = modal?.getBoundingClientRect();
+      return {
+        strip: document.getElementById('home-broadcast'),
+        first: document.getElementById('s-home')?.firstElementChild?.id ?? '',
+        cardTop: card?.getBoundingClientRect().top ?? -1,
+        scrim: scrim && scs ? {
+          open: !scrim.hidden && scrim.classList.contains('is-open'),
+          pos: scs.position,
+          z: scs.zIndex,
+          blur: scs.backdropFilter || scs.webkitBackdropFilter || '',
+          bg: scs.backgroundColor,
+        } : null,
+        modal: modal && mcs && r ? {
+          w: r.width, cx: r.left + r.width / 2, cy: r.top + r.height / 2,
+          radius: mcs.borderRadius, pad: mcs.padding,
+        } : null,
+        pill: document.querySelector('.announce-pill')?.textContent ?? '',
+        crest: !!document.querySelector('.announce-badge-ico'),
+        dismissText: document.getElementById('announce-dismiss')?.textContent ?? '',
+      };
+    });
+    expect('the top inline banner is gone', shell.strip === null && shell.first !== 'home-broadcast');
+    expect('the header sits flush at the top edge', shell.cardTop >= 0 && shell.cardTop <= 24, String(shell.cardTop));
+    expect('the frosted scrim covers the viewport',
+      !!shell.scrim && shell.scrim.open && shell.scrim.pos === 'fixed' && shell.scrim.z === '1000'
+      && /blur\(8px\)/.test(shell.scrim.blur) && /rgba\(8, 12, 20, 0\.82\)/.test(shell.scrim.bg),
+      JSON.stringify(shell.scrim));
+    expect('the Command Dispatch modal is centered and capped at 340px',
+      !!shell.modal && Math.abs(shell.modal.cx - 180) <= 2 && Math.abs(shell.modal.cy - 320) <= 2
+      && shell.modal.w <= 340 && shell.modal.radius === '20px' && shell.modal.pad === '22px 18px',
+      JSON.stringify(shell.modal));
+    expect('it carries the authority pill, engraved crest and acknowledge key',
+      shell.pill === 'OFFICIAL DISPATCH · SYSTEM ADMIN' && shell.crest && shell.dismissText === 'CONFIRM & DISMISS',
+      JSON.stringify({ pill: shell.pill, crest: shell.crest, dismiss: shell.dismissText }));
+
     await pg.click('#announce-dismiss');
     await pg.waitForTimeout(400);
     const dismissed = await pg.evaluate(() => ({
       hidden: document.getElementById('modal-announcement').hidden,
+      scrimHidden: document.getElementById('admin-broadcast-scrim')?.hidden,
       stored: JSON.parse(localStorage.getItem('dismissed_announcements') ?? '[]'),
+      seen: JSON.parse(localStorage.getItem('seen_broadcast_ids') ?? '[]'),
     }));
     expect('Dismiss closes the popup', dismissed.hidden);
+    expect('and the scrim fades out with it', dismissed.scrimHidden === true);
     expect('and remembers the id on the device', dismissed.stored.includes(FEED_URGENT.id), JSON.stringify(dismissed.stored));
+    expect('under the spec key seen_broadcast_ids too', dismissed.seen.includes(FEED_URGENT.id), JSON.stringify(dismissed.seen));
 
     /* ---- the quiet announcement files one feed card ---- */
     await pg.click('#home-notifs');
@@ -891,8 +937,67 @@ async function main() {
     expect('the popup sits fully inside the viewport', big.inside);
     expect('zero page scroll at 430x932', big.pageScroll <= 0, String(big.pageScroll));
     expect('zero horizontal overflow at 430x932', big.hOverflow <= 0, String(big.hOverflow));
+
+    /* the spec's viewport audit: 360x640 up to 430x932, zero overflow, modal centered */
+    const sweep = [];
+    for (const [w, h] of [[360, 640], [390, 844], [412, 915], [430, 932]]) {
+      await pg2.setViewportSize({ width: w, height: h });
+      await pg2.waitForTimeout(150);
+      sweep.push(await pg2.evaluate(() => {
+        const panel = document.getElementById('admin-broadcast-modal');
+        const r = panel?.getBoundingClientRect();
+        return {
+          vp: `${window.innerWidth}x${window.innerHeight}`,
+          pageScroll: document.documentElement.scrollHeight - window.innerHeight,
+          hOverflow: document.documentElement.scrollWidth - window.innerWidth,
+          dx: r ? Math.abs(r.left + r.width / 2 - window.innerWidth / 2) : 999,
+          dy: r ? Math.abs(r.top + r.height / 2 - window.innerHeight / 2) : 999,
+          inside: r ? r.left >= 0 && r.right <= window.innerWidth && r.top >= 0 && r.bottom <= window.innerHeight : false,
+        };
+      }));
+    }
+    expect('zero overflow and a centered modal across 360x640 → 430x932',
+      sweep.every((s) => s.pageScroll <= 0 && s.hOverflow <= 0 && s.dx <= 2 && s.dy <= 2 && s.inside),
+      JSON.stringify(sweep));
     await pg2.screenshot({ path: path.join(SHOTS, 'admin-broadcast-430x932.png') });
     console.log('shot admin-broadcast-430x932.png');
+
+    /* ---- the Controls tab's pinned one-liner rides the same modal ---- */
+    await pg2.click('#announce-dismiss');
+    await pg2.waitForTimeout(400);
+    await pg2.click('#btn-admin-fab');
+    await pg2.waitForTimeout(450);
+    await pg2.evaluate(() => document.getElementById('atab-controls').click());
+    await pg2.waitForTimeout(300);
+    await pg2.fill('#bc-input', 'River maintenance tonight at 21:00');
+    await pg2.click('#bc-publish');
+    await pg2.waitForTimeout(300);
+    const pin = await pg2.evaluate(() => ({
+      title: document.getElementById('announce-title').textContent,
+      body: document.getElementById('announce-body').textContent,
+      live: document.getElementById('bc-live').textContent,
+      liveOn: document.getElementById('bc-live').dataset.on,
+    }));
+    expect('a pinned dispatch raises the Command Dispatch modal',
+      pin.title === 'Command Dispatch' && pin.body === 'River maintenance tonight at 21:00'
+      && pin.live === 'River maintenance tonight at 21:00' && pin.liveOn === 'true', JSON.stringify(pin));
+    await pg2.click('#admin-close');
+    await pg2.waitForTimeout(500);
+    const pinFront = await pg2.evaluate(() => ({
+      open: !document.getElementById('modal-announcement').hidden
+        && document.getElementById('modal-announcement').classList.contains('is-open'),
+      scrim: !document.getElementById('admin-broadcast-scrim').hidden,
+    }));
+    expect('with the stage closed, the pinned dispatch is the front layer',
+      pinFront.open && pinFront.scrim, JSON.stringify(pinFront));
+    await pg2.click('#announce-dismiss');
+    await pg2.waitForTimeout(400);
+    const pinSeen = await pg2.evaluate(() => ({
+      hidden: document.getElementById('modal-announcement').hidden,
+      seen: JSON.parse(localStorage.getItem('seen_broadcast_ids') ?? '[]'),
+    }));
+    expect('acknowledging the pinned dispatch closes it and remembers its id',
+      pinSeen.hidden && pinSeen.seen.some((id) => id.startsWith('pin-')), JSON.stringify(pinSeen));
     await ctx2.close();
   } finally {
     await browser.close();

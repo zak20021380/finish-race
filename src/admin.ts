@@ -93,7 +93,7 @@ export interface AdminRuntime {
   hazards: boolean;
   /** Blocks new match queues with a maintenance toast. */
   maintenance: boolean;
-  /** The live announcement pinned to the top of Home. '' means none. */
+  /** The live announcement raised as the Command Dispatch modal on this device. '' means none. */
   broadcast: string;
   /** TIQ a win is worth, race credit included. */
   winTiq: number;
@@ -702,6 +702,8 @@ export interface AdminApi {
   onBroadcast?(b: Broadcast): void;
   /** A broadcast was archived: the client engine pulls it from this device's store. */
   onBroadcastArchived?(id: string): void;
+  /** The Controls tab's one-liner: raise it as the Command Dispatch modal on this device. */
+  onDispatch?(text: string): void;
 }
 
 export interface Admin {
@@ -791,8 +793,6 @@ export function createAdmin(api: AdminApi): Admin {
   const stepRows = [...(stage?.querySelectorAll<HTMLElement>('[data-step]') ?? [])];
   const bcInput = $<HTMLInputElement>('bc-input');
   const bcLive = $<HTMLElement>('bc-live');
-  const banner = $<HTMLElement>('home-broadcast');
-  const bannerText = $<HTMLElement>('home-broadcast-text');
   const tierRing = $<HTMLElement>('tool-tier-ring');
   const tierLabel = $<HTMLElement>('tool-tier-label');
   const coinsNow = $<HTMLElement>('tool-coins-now');
@@ -960,10 +960,8 @@ export function createAdmin(api: AdminApi): Admin {
 
   function paintBroadcast() {
     const text = runtime.broadcast;
-    if (banner) banner.hidden = !text;
-    if (bannerText) bannerText.textContent = text;
     if (bcLive) {
-      bcLive.textContent = text || 'Nothing pinned';
+      bcLive.textContent = text || 'Nothing dispatched';
       bcLive.dataset.on = String(!!text);
     }
   }
@@ -2356,9 +2354,10 @@ export function createAdmin(api: AdminApi): Admin {
     }
     setRuntime({ broadcast: text });
     paintBroadcast();
+    api.onDispatch?.(text);
     impact('medium');
     notify('success');
-    api.note('Broadcast pinned to Home.', false, 2000);
+    api.note('Command Dispatch raised on this device.', false, 2000);
   });
 
   $<HTMLButtonElement>('bc-clear')?.addEventListener('click', () => {

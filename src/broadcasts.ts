@@ -4,11 +4,15 @@
  * The Command Center dispatches announcements from the Worker (`POST /api/admin/broadcasts/
  * create`); this module is what a player's device does with them. Two shapes ride the same wire:
  *
- *   - `urgent` raises the Dark Clay popup (`#modal-announcement`) the moment it arrives, and keeps
- *     raising it on later launches until its Dismiss is pressed — the dismissal is remembered per
- *     device, so an announcement is never "seen" by accident.
+ *   - `urgent` raises the Command Dispatch modal (`#admin-broadcast-modal` over the frosted
+ *     `#admin-broadcast-scrim`) the moment it arrives, and keeps raising it on later launches
+ *     until its Acknowledge is pressed — the dismissal is remembered per device, so an
+ *     announcement is never "seen" by accident.
  *   - `feed` takes the quiet road into the notification centre, one card per announcement, deduped
  *     by the broadcast's own id so a re-sync never stacks cards.
+ *
+ * The Controls tab's pinned one-liner rides the same modal: `dispatch` raises it on the spot
+ * (no store, no feed card) instead of the old inline strip above the header.
  *
  * Who sees what is decided here, where the player is known: an announcement to everyone, to one
  * country (the code in the save), or to a TIQ level floor (level 1 is 0-99 TIQ, level 2 is 100-199
@@ -19,7 +23,8 @@
  * session that implies the deployed one), never from a bare local page — where the route does not
  * exist and the request would be noise. The last-known list is cached on the device
  * (`detour.broadcasts.v1`) and served from there when offline, so standing instructions survive a
- * dead network. Dismissed ids live under the spec's own key, `dismissed_announcements`.
+ * dead network. Dismissed ids live under `seen_broadcast_ids` (and the legacy
+ * `dismissed_announcements` key, read as a union so nothing dismissed before the rename pops again).
  */
 import { readJson, writeJson } from './storage';
 import { addNotification } from './notifications';
@@ -107,6 +112,7 @@ function isBroadcast(v: unknown): v is Broadcast {
 
 const STORE_KEY = 'detour.broadcasts.v1';
 const DISMISS_KEY = 'dismissed_announcements';
+const SEEN_KEY = 'seen_broadcast_ids';
 
 interface BroadcastSave {
   v: number;
@@ -125,15 +131,26 @@ function setBroadcasts(items: Broadcast[]): void {
   writeJson(STORE_KEY, { v: 1, items } satisfies BroadcastSave);
 }
 
-/** The ids this device has dismissed, as a Set for cheap matching. */
+/**
+ * The ids this device has acknowledged, as a Set for cheap matching. Both the current key
+ * (`seen_broadcast_ids`) and the legacy `dismissed_announcements` are read, so a save written
+ * before the rename is honoured rather than re-popped.
+ */
 export function getDismissedIds(): Set<string> {
-  const raw = readJson<string[]>(DISMISS_KEY);
-  return new Set(Array.isArray(raw) ? raw.filter((v): v is string => typeof v === 'string') : []);
+  const ids = new Set<string>();
+  for (const key of [SEEN_KEY, DISMISS_KEY]) {
+    const raw = readJson<string[]>(key);
+    if (Array.isArray(raw)) {
+      for (const v of raw) if (typeof v === 'string') ids.add(v);
+    }
+  }
+  return ids;
 }
 
 function dismiss(id: string): void {
-  const ids = [...getDismissedIds(), id];
-  writeJson(DISMISS_KEY, ids.slice(-200));
+  const ids = [...getDismissedIds(), id].slice(-200);
+  writeJson(SEEN_KEY, ids);
+  writeJson(DISMISS_KEY, ids);
 }
 
 /* ---------- the public read ---------- */
@@ -184,6 +201,8 @@ export interface Announcements {
   sync(): void;
   /** The Command Center just dispatched one: show it at once, without waiting for a fetch. */
   receive(b: Broadcast): void;
+  /** The Controls tab's pinned one-liner: raise it on this device only, no store, no feed card. */
+  dispatch(text: string): void;
   /** The Command Center just archived one: pull it from the device store and close its popup. */
   retract(id: string): void;
   /** Close the open popup, if any (the admin stage stepping in front of it, for one). */
@@ -194,7 +213,8 @@ export interface Announcements {
 /**
  * Escape first, decorate after — the body is authored by an admin, and "trusted" is not a
  * decoration this module can afford. Only the subset the composer promises is turned back into
- * markup: `**bold**`, `*italic*`, `` `code` `` and newlines.
+ * markup: `**bold**`, `*italic*`, `` `code` ``, bare http(s) links (highlighted gold), and
+ * newlines.
  */
 function renderBody(text: string): string {
   const safe = text
@@ -206,6 +226,7 @@ function renderBody(text: string): string {
     .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>')
     .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    .replace(/\b(https?:\/\/[^\s<]+)/g, '<a class="announce-link" href="$1" target="_blank" rel="noopener">$1</a>')
     .replace(/\n/g, '<br>');
 }
 
@@ -215,6 +236,7 @@ function el<T extends HTMLElement>(id: string): T | null {
 
 export function createAnnouncements(deps: AnnouncementsDeps): Announcements {
   const modal = el<HTMLElement>('modal-announcement');
+  const scrim = el<HTMLElement>('admin-broadcast-scrim');
   const title = el<HTMLElement>('announce-title');
   const body = el<HTMLElement>('announce-body');
   const cta = el<HTMLButtonElement>('announce-cta');
@@ -253,9 +275,11 @@ export function createAnnouncements(deps: AnnouncementsDeps): Announcements {
     }
     restoreFocus = (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     modal.hidden = false;
+    if (scrim) scrim.hidden = false;
     /* a forced reflow so the entry transition always runs from its start state */
     void modal.offsetWidth;
     modal.classList.add('is-open');
+    scrim?.classList.add('is-open');
     impact('medium');
     /* focus the next step, not the close box: the popup is a task, not a dialog to flee */
     window.setTimeout(() => {
@@ -275,8 +299,10 @@ export function createAnnouncements(deps: AnnouncementsDeps): Announcements {
     open = false;
     current = null;
     modal.classList.remove('is-open');
+    scrim?.classList.remove('is-open');
     const done = (): void => {
       modal.hidden = true;
+      if (scrim) scrim.hidden = true;
       restoreFocus?.focus?.();
       restoreFocus = null;
       presentNext();
@@ -288,11 +314,30 @@ export function createAnnouncements(deps: AnnouncementsDeps): Announcements {
     }
   };
 
-  /** The Dismiss path: remember the id so this device is never asked again. */
+  /** The acknowledge path: remember the id so this device is never asked again. */
   const dismissCurrent = (): void => {
     if (current) dismiss(current.id);
-    impact('light');
+    impact('medium');
     close();
+  };
+
+  /** The Controls tab's pinned one-liner: a synthetic urgent broadcast, this device only. */
+  const dispatchPinned = (text: string): void => {
+    const line = text.trim().slice(0, 140);
+    if (!line) return;
+    show({
+      id: `pin-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      title: 'Command Dispatch',
+      body: line,
+      ctaLabel: '',
+      ctaTarget: '',
+      audience: { kind: 'all', value: '' },
+      priority: 'urgent',
+      status: 'active',
+      createdAt: Date.now(),
+      createdBy: 'admin',
+      archivedAt: 0,
+    });
   };
 
   const followCta = (): void => {
@@ -380,6 +425,7 @@ export function createAnnouncements(deps: AnnouncementsDeps): Announcements {
       fileFeed([b]);
       presentNext();
     },
+    dispatch: dispatchPinned,
     retract(id: string): void {
       setBroadcasts(getBroadcasts().filter((x) => x.id !== id));
       if (current?.id === id) close();
