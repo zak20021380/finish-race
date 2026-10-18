@@ -2,14 +2,18 @@
  * verify-equipped-lock.mjs — Playwright driver for scripts/equipped-lock-check.js.
  *
  * Serves ./dist over 127.0.0.1, opens Profile, scrolls the pane to the EQUIPPED
- * section and asserts the locked-slab contract at 360x640 (and 390x844):
+ * section and asserts the locked-slab contract at 360x640, 390x844 and 430x932:
  *  - the three preview cards are inert (pointer-events: none) and frosted,
  *  - the obsidian scrim is the exact radial gradient, clipped to the 20px radius,
- *  - the bronze crest renders centred on the slab, pod 44x44, chip "COMING SOON" 9px/1.2px,
- *  - the overlay adds zero height, bleeds nowhere and the page never scrolls,
- *  - a tap only nudges: toast appears, the save is untouched.
+ *  - the titanium crest renders centred on the slab: pod 42x42 with #i-lock-ti,
+ *    the smoked 6px micro-plate reading "COMING SOON" at 8.5px/1.8px, 19px tall,
+ *  - the overlay adds zero height, bleeds nowhere and the page never scrolls (x or y),
+ *  - a tap only nudges: toast appears, the save is untouched;
+ * then drives checkProfileSettingsGear(): the 36x36 header key with #i-gear-3d opens
+ * #s-settings with zero page overflow.
  *
- * Saves .shots/equipped-lock-<w>x<h>.png. Exits 1 on any failure.
+ * Saves .shots/equipped-lock-<w>x<h>.png and .shots/profile-settings-<w>x<h>.png.
+ * Exits 1 on any failure.
  */
 import http from 'node:http';
 import fs from 'node:fs';
@@ -43,6 +47,7 @@ const checkSrc = fs.readFileSync(CHECK_JS, 'utf8');
 const VIEWPORTS = [
   [360, 640],
   [390, 844],
+  [430, 932],
 ];
 
 const browser = await chromium.launch({ executablePath: EXE, args: ['--no-sandbox'] });
@@ -75,6 +80,18 @@ try {
     fs.mkdirSync(SHOTS, { recursive: true });
     await pg.screenshot({ path: path.join(SHOTS, `equipped-lock-${w}x${h}.png`) });
     console.log(`shot equipped-lock-${w}x${h}.png`);
+
+    // the gear key leads to #s-settings; run it last, it navigates away
+    const gear = await pg.evaluate(`${checkSrc}\ncheckProfileSettingsGear()`);
+    if (gear.pass) {
+      console.log(`PASS profile settings gear ${tag}`);
+    } else {
+      failed += 1;
+      console.log(`FAIL profile settings gear ${tag}\n- ${gear.fails.join('\n- ')}`);
+    }
+    await pg.waitForTimeout(400);
+    await pg.screenshot({ path: path.join(SHOTS, `profile-settings-${w}x${h}.png`) });
+    console.log(`shot profile-settings-${w}x${h}.png`);
     await ctx.close();
   }
 } finally {

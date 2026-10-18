@@ -4,16 +4,22 @@
  * scripts/verify-equipped-lock.mjs which drives it with Playwright.
  *
  * Fails when:
- *  - the document scrolls (scrollHeight > innerHeight) at the checked viewport,
+ *  - the document scrolls or overflows horizontally at the checked viewport,
  *  - #pf-eq-lock / the row / the 3 cards / the scrim / the crest / the pod / the chip are missing,
+ *  - the old cartoon-bronze #i-lock-3d glyph is still in the document or the titanium
+ *    #i-lock-ti glyph is not the pod's icon,
  *  - any card is still hit-testable (pointer-events must be none) or the row lost its frost
  *    (opacity .45, saturate(.6) blur(1.5px)),
  *  - the scrim is not an absolute, 20px-rounded radial-gradient with the exact obsidian stops,
- *  - the crest is not centered on the slab (dx/dy more than 1px) or the pod is not 44x44,
- *  - the chip is not "COMING SOON" at 9px / 1.2px tracking,
+ *  - the crest is not centered on the slab (dx/dy more than 1px) or the pod is not 42x42,
+ *  - the chip is not the smoked graphite micro-plate reading "COMING SOON" at 8.5px / 1.8px
+ *    tracking, 19px tall, with a hairline bronze border,
  *  - the scrim or crest bleeds outside the slab, or the slab changes the row's height,
  *  - anything inside the lock is focusable,
  *  - a tap does not surface the clay toast, or it mutates the save.
+ *
+ * `checkProfileSettingsGear()` covers the header Settings key: a 36x36 squircle carrying
+ * the #i-gear-3d glyph that opens #s-settings with zero page overflow.
  *
  * Returns { pass, fails[] }.
  */
@@ -27,6 +33,11 @@ function checkEquippedLock() {
   if (document.documentElement.scrollHeight > window.innerHeight + 1) {
     fails.push(`doc scrollHeight ${document.documentElement.scrollHeight} > innerHeight ${window.innerHeight}`);
   }
+  if (document.documentElement.scrollWidth > window.innerWidth + 1) {
+    fails.push(`doc scrollWidth ${document.documentElement.scrollWidth} > innerWidth ${window.innerWidth}`);
+  }
+  if (document.getElementById('i-lock-3d')) fails.push('the cartoon-bronze #i-lock-3d glyph must be gone');
+  if (!document.getElementById('i-lock-ti')) fails.push('missing the titanium #i-lock-ti glyph');
 
   const focusable = lock.querySelectorAll('a, button, input, select, textarea, [tabindex]');
   if (focusable.length > 0) fails.push(`${focusable.length} focusable element(s) inside the lock — the section must be inert`);
@@ -90,15 +101,25 @@ function checkEquippedLock() {
   }
   if (pod) {
     const p = rect(pod);
-    if (Math.abs(p.width - 44) > 0.5 || Math.abs(p.height - 44) > 0.5) {
-      fails.push(`lock pod ${p.width.toFixed(1)}x${p.height.toFixed(1)} — want 44x44`);
+    if (Math.abs(p.width - 42) > 0.5 || Math.abs(p.height - 42) > 0.5) {
+      fails.push(`lock pod ${p.width.toFixed(1)}x${p.height.toFixed(1)} — want 42x42`);
     }
+    if (!pod.querySelector('use[href="#i-lock-ti"]')) fails.push('the pod must render the #i-lock-ti glyph');
   }
   if (chip) {
     const cs = getComputedStyle(chip);
     if (!/^coming soon$/i.test((chip.textContent || '').trim())) fails.push(`chip label "${chip.textContent.trim()}" — want "COMING SOON"`);
-    if (cs.fontSize !== '9px') fails.push(`chip font-size ${cs.fontSize} — want 9px`);
-    if (cs.letterSpacing !== '1.2px') fails.push(`chip letter-spacing ${cs.letterSpacing} — want 1.2px`);
+    if (cs.fontSize !== '8.5px') fails.push(`chip font-size ${cs.fontSize} — want 8.5px`);
+    if (cs.letterSpacing !== '1.8px') fails.push(`chip letter-spacing ${cs.letterSpacing} — want 1.8px`);
+    if (cs.textTransform !== 'uppercase') fails.push(`chip text-transform ${cs.textTransform} — want uppercase`);
+    if (cs.whiteSpace !== 'nowrap') fails.push('chip must not wrap');
+    const h = rect(chip).height;
+    if (h < 17.5 || h > 20.5) fails.push(`chip height ${h.toFixed(1)}px — want the 18-20px micro-plate`);
+    if (cs.backgroundColor !== 'rgba(15, 23, 42, 0.85)') fails.push(`chip background ${cs.backgroundColor} — want rgba(15, 23, 42, 0.85)`);
+    if (cs.backgroundImage !== 'none') fails.push('chip must be a flat smoked plate, no gradient');
+    if (cs.borderTopWidth !== '1px') fails.push(`chip border ${cs.borderTopWidth} — want the 1px hairline`);
+    if (!/rgba\(245,\s*158,\s*11,\s*0?\.35\)/.test(cs.borderTopColor)) fails.push(`chip border colour ${cs.borderTopColor} — want the bronze hairline`);
+    if (parseFloat(cs.borderTopLeftRadius) < 5.5 || parseFloat(cs.borderTopLeftRadius) > 6.5) fails.push(`chip radius ${cs.borderTopLeftRadius} — want 6px`);
   }
 
   const pane = document.querySelector('#s-profile .pf-pane');
@@ -121,8 +142,47 @@ function checkEquippedLock() {
   return { pass: fails.length === 0, fails };
 }
 
+/**
+ * checkProfileSettingsGear() — the Profile header's tactile Settings key. Run it AFTER
+ * checkEquippedLock(): the click navigates to #s-settings.
+ * Returns { pass, fails[] }.
+ */
+function checkProfileSettingsGear() {
+  const fails = [];
+  const btn = document.getElementById('profile-settings');
+  if (!btn) return { pass: false, fails: ['missing #profile-settings'] };
+  if (!btn.querySelector('use[href="#i-gear-3d"]')) fails.push('the settings key must render the #i-gear-3d glyph');
+  const r = btn.getBoundingClientRect();
+  if (Math.abs(r.width - 36) > 0.5 || Math.abs(r.height - 36) > 0.5) {
+    fails.push(`settings key ${r.width.toFixed(1)}x${r.height.toFixed(1)} — want 36x36`);
+  }
+  const cs = getComputedStyle(btn);
+  if (parseFloat(cs.borderTopLeftRadius) < 9 || parseFloat(cs.borderTopLeftRadius) > 11) {
+    fails.push(`settings key radius ${cs.borderTopLeftRadius} — want the 10px squircle`);
+  }
+  if (document.documentElement.scrollWidth > window.innerWidth + 1) {
+    fails.push(`profile horizontal overflow: scrollWidth ${document.documentElement.scrollWidth} > innerWidth ${window.innerWidth}`);
+  }
+
+  btn.click();
+  const s = document.getElementById('s-settings');
+  if (!s || s.hidden) {
+    fails.push('tapping the settings key must open #s-settings');
+    return { pass: fails.length === 0, fails };
+  }
+  if (document.documentElement.scrollWidth > window.innerWidth + 1) {
+    fails.push(`settings horizontal overflow: scrollWidth ${document.documentElement.scrollWidth} > innerWidth ${window.innerWidth}`);
+  }
+  if (document.documentElement.scrollHeight > window.innerHeight + 1) {
+    fails.push(`settings doc scrollHeight ${document.documentElement.scrollHeight} > innerHeight ${window.innerHeight}`);
+  }
+  return { pass: fails.length === 0, fails };
+}
+
 // Browser-console usage
 if (typeof window !== 'undefined' && new URLSearchParams(location.search).has('assert')) {
   const r = checkEquippedLock();
+  const g = checkProfileSettingsGear();
   if (!r.pass) throw new Error(`equipped lock:\n- ${r.fails.join('\n- ')}`);
+  if (!g.pass) throw new Error(`profile settings gear:\n- ${g.fails.join('\n- ')}`);
 }

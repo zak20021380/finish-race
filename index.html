@@ -301,32 +301,84 @@
           <circle cx="12" cy="15.2" r="1.3" fill="currentColor" stroke="none" />
         </g>
       </symbol>
-      <!-- the locked loadouts crest: one sculpted bronze padlock, drawn full-colour the
-           way #i-star-3d is — the profile's frosted scrim is the only place it appears.
-           Body and shackle share one light ramp from the upper left; the rim stroke is
-           the specular edge, the top bar and the corner dot are caught highlights. -->
-      <symbol id="i-lock-3d" viewBox="0 0 24 24">
+      <!-- the locked loadouts crest: one architecturally cut titanium padlock (26x30 in the
+           42x42 pod), drawn full-colour the way #i-star-3d is — the profile's frosted scrim
+           is the only place it appears. The shackle is a machined steel arch sharing the
+           body's single upper-left light ramp; the body is a chamfered obsidian block with a
+           specular rim; the only warm note is the amber backlight blooming through the
+           precision keyhole slot. -->
+      <symbol id="i-lock-ti" viewBox="0 0 52 60">
         <defs>
-          <linearGradient id="lk3d-body" gradientUnits="userSpaceOnUse" x1="6.2" y1="10.2" x2="17.8" y2="20.5">
-            <stop offset="0" stop-color="#FFF6CD" /><stop offset=".32" stop-color="#FBD463" />
-            <stop offset=".64" stop-color="#D9950F" /><stop offset="1" stop-color="#8A4B0B" />
+          <linearGradient id="lt-shackle" gradientUnits="userSpaceOnUse" x1="14" y1="12" x2="38" y2="32">
+            <stop offset="0" stop-color="#F8FAFC" /><stop offset=".42" stop-color="#B7C1CF" />
+            <stop offset=".72" stop-color="#798499" /><stop offset="1" stop-color="#3E4757" />
           </linearGradient>
-          <linearGradient id="lk3d-shackle" gradientUnits="userSpaceOnUse" x1="8.4" y1="4.2" x2="15.8" y2="10.6">
-            <stop offset="0" stop-color="#FFF3C4" /><stop offset=".5" stop-color="#F0B429" /><stop offset="1" stop-color="#9A5A0F" />
+          <linearGradient id="lt-body" gradientUnits="userSpaceOnUse" x1="8" y1="24" x2="44" y2="57">
+            <stop offset="0" stop-color="#4C566B" /><stop offset=".36" stop-color="#2B3342" />
+            <stop offset=".76" stop-color="#171D29" /><stop offset="1" stop-color="#0A0E16" />
           </linearGradient>
-          <linearGradient id="lk3d-rim" gradientUnits="userSpaceOnUse" x1="12" y1="10.2" x2="12" y2="20.5">
-            <stop offset="0" stop-color="#FFFBE6" stop-opacity=".95" /><stop offset=".38" stop-color="#FCD34D" stop-opacity=".42" />
-            <stop offset="1" stop-color="#6B3202" stop-opacity=".85" />
+          <linearGradient id="lt-rim" gradientUnits="userSpaceOnUse" x1="26" y1="24" x2="26" y2="57">
+            <stop offset="0" stop-color="#EEF2F8" stop-opacity=".92" /><stop offset=".42" stop-color="#9DA9BB" stop-opacity=".32" />
+            <stop offset="1" stop-color="#05070C" stop-opacity=".85" />
           </linearGradient>
+          <linearGradient id="lt-facet" gradientUnits="userSpaceOnUse" x1="26" y1="24" x2="26" y2="31">
+            <stop offset="0" stop-color="#DCE3EE" stop-opacity=".3" /><stop offset="1" stop-color="#DCE3EE" stop-opacity="0" />
+          </linearGradient>
+          <radialGradient id="lt-amber" cx="50%" cy="50%" r="50%">
+            <stop offset="0" stop-color="#FCD34D" stop-opacity=".95" /><stop offset=".5" stop-color="#F59E0B" stop-opacity=".36" />
+            <stop offset="1" stop-color="#F59E0B" stop-opacity="0" />
+          </radialGradient>
         </defs>
-        <path d="M8.1 10.6V8a3.9 3.9 0 0 1 7.8 0v2.6" fill="none" stroke="#5B2E05" stroke-opacity=".4" stroke-width="2.9" stroke-linecap="round" />
-        <path d="M8.1 10.6V8a3.9 3.9 0 0 1 7.8 0v2.6" fill="none" stroke="url(#lk3d-shackle)" stroke-width="2.1" stroke-linecap="round" />
-        <path d="M8.6 8.4a3.4 3.4 0 0 1 2.1-2.3" fill="none" stroke="#FFFDF0" stroke-opacity=".7" stroke-width=".8" stroke-linecap="round" />
-        <rect x="4.5" y="10.2" width="15" height="10.3" rx="3" fill="url(#lk3d-body)" />
-        <rect x="4.5" y="10.2" width="15" height="10.3" rx="3" fill="none" stroke="url(#lk3d-rim)" stroke-width=".9" />
-        <rect x="6.1" y="11.2" width="11.8" height="1.05" rx=".52" fill="#FFFDF0" opacity=".62" />
-        <path d="M12 13.9a1.55 1.55 0 0 0-.78 2.9l-.14 1.5a.95.95 0 0 0 1.84 0l-.14-1.5A1.55 1.55 0 0 0 12 13.9Z" fill="#3B2404" />
-        <circle cx="6.35" cy="19.1" r=".75" fill="#FFFBEB" opacity=".38" />
+        <path d="M15.6 31V19.4a10.4 10.4 0 0 1 20.8 0V31" fill="none" stroke="#05080E" stroke-opacity=".75" stroke-width="9" stroke-linecap="round" />
+        <path d="M15.6 31V19.4a10.4 10.4 0 0 1 20.8 0V31" fill="none" stroke="url(#lt-shackle)" stroke-width="6.2" stroke-linecap="round" />
+        <path d="M16.9 22.6v-3.2a9 9 0 0 1 4.1-7.5" fill="none" stroke="#FFFFFF" stroke-opacity=".7" stroke-width="1.5" stroke-linecap="round" />
+        <path d="M35.1 23.4v-4a9 9 0 0 0-.8-3.7" fill="none" stroke="#F59E0B" stroke-opacity=".3" stroke-width="1.2" stroke-linecap="round" />
+        <path d="M11 24h30l5 5v22l-5 5H11l-5-5V29Z" fill="url(#lt-body)" />
+        <path d="M11 24h30l5 5v22l-5 5H11l-5-5V29Z" fill="none" stroke="url(#lt-rim)" stroke-width="1.5" stroke-linejoin="round" />
+        <path d="M11 24h30l5 5H6Z" fill="url(#lt-facet)" />
+        <path d="M11 24h30l5 5" fill="none" stroke="#F8FAFC" stroke-opacity=".5" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M6 29v22l5 5" fill="none" stroke="#000000" stroke-opacity=".5" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" />
+        <circle cx="26" cy="39.5" r="6.4" fill="url(#lt-amber)" />
+        <rect x="24" y="32.5" width="4" height="15" rx="2" fill="#03050A" />
+        <rect x="24" y="32.5" width="4" height="15" rx="2" fill="none" stroke="#F59E0B" stroke-opacity=".45" stroke-width=".9" />
+        <circle cx="26" cy="37.4" r="1.5" fill="#FDE68A" />
+      </symbol>
+      <!-- the settings key's glyph: a chiselled 3D cog — eight machined teeth and a beveled
+           race around a recessed bronze-lit hub, all sharing one userSpaceOnUse light ramp
+           from the upper left so the metal reads as one turned part, never a flat decal. -->
+      <symbol id="i-gear-3d" viewBox="0 0 40 40">
+        <defs>
+          <linearGradient id="gr-face" gradientUnits="userSpaceOnUse" x1="8" y1="6" x2="33" y2="35">
+            <stop offset="0" stop-color="#F8FAFC" /><stop offset=".34" stop-color="#C7D0DD" />
+            <stop offset=".66" stop-color="#7E8899" /><stop offset="1" stop-color="#3C4453" />
+          </linearGradient>
+          <linearGradient id="gr-rim" gradientUnits="userSpaceOnUse" x1="20" y1="3" x2="20" y2="37">
+            <stop offset="0" stop-color="#FFFFFF" stop-opacity=".95" /><stop offset=".5" stop-color="#C4CDDA" stop-opacity=".25" />
+            <stop offset="1" stop-color="#05070C" stop-opacity=".8" />
+          </linearGradient>
+          <radialGradient id="gr-spec" cx="42%" cy="34%" r="55%">
+            <stop offset="0" stop-color="#FFFFFF" stop-opacity=".5" /><stop offset="1" stop-color="#FFFFFF" stop-opacity="0" />
+          </radialGradient>
+        </defs>
+        <g fill="url(#gr-face)">
+          <rect x="17.7" y="2.6" width="4.6" height="9" rx="1.5" />
+          <rect x="17.7" y="2.6" width="4.6" height="9" rx="1.5" transform="rotate(45 20 20)" />
+          <rect x="17.7" y="2.6" width="4.6" height="9" rx="1.5" transform="rotate(90 20 20)" />
+          <rect x="17.7" y="2.6" width="4.6" height="9" rx="1.5" transform="rotate(135 20 20)" />
+          <rect x="17.7" y="2.6" width="4.6" height="9" rx="1.5" transform="rotate(180 20 20)" />
+          <rect x="17.7" y="2.6" width="4.6" height="9" rx="1.5" transform="rotate(225 20 20)" />
+          <rect x="17.7" y="2.6" width="4.6" height="9" rx="1.5" transform="rotate(270 20 20)" />
+          <rect x="17.7" y="2.6" width="4.6" height="9" rx="1.5" transform="rotate(315 20 20)" />
+          <circle cx="20" cy="20" r="13.2" />
+        </g>
+        <circle cx="20" cy="20" r="13.2" fill="none" stroke="url(#gr-rim)" stroke-width="1.3" />
+        <circle cx="20" cy="20" r="13.2" fill="url(#gr-spec)" />
+        <circle cx="20" cy="20" r="9.6" fill="none" stroke="#0A0E15" stroke-opacity=".5" stroke-width="3" />
+        <circle cx="20" cy="20" r="9.6" fill="none" stroke="#F59E0B" stroke-opacity=".38" stroke-width="1.4" />
+        <circle cx="20" cy="20" r="7.4" fill="#070B12" />
+        <circle cx="20" cy="20" r="7.4" fill="none" stroke="#F8FAFC" stroke-opacity=".3" stroke-width=".9" />
+        <circle cx="20" cy="20" r="4.4" fill="#F59E0B" opacity=".28" />
+        <circle cx="20" cy="20" r="4.4" fill="none" stroke="#FCD34D" stroke-opacity=".4" stroke-width=".8" />
       </symbol>
       <symbol id="i-medal" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -935,8 +987,8 @@
               <svg class="ico" aria-hidden="true"><use href="#i-back" /></svg>
             </button>
             <h1 class="m-title" id="profile-title">Profile</h1>
-            <button class="icon-btn" type="button" id="profile-settings" aria-label="Open settings">
-              <svg class="ico" aria-hidden="true"><use href="#i-tune" /></svg>
+            <button class="icon-btn pf-set-btn" type="button" id="profile-settings" aria-label="Open settings">
+              <svg class="ico" aria-hidden="true"><use href="#i-gear-3d" /></svg>
             </button>
           </div>
           <div class="pane pf-pane" data-scroll>
@@ -1078,7 +1130,7 @@
                 </div>
                 <span class="pf-eq-scrim" aria-hidden="true"></span>
                 <span class="pf-eq-crest" aria-hidden="true">
-                  <span class="pf-eq-pod"><svg class="ico" focusable="false"><use href="#i-lock-3d" /></svg></span>
+                  <span class="pf-eq-pod"><svg class="ico" focusable="false"><use href="#i-lock-ti" /></svg></span>
                   <span class="pf-eq-chip">Coming Soon</span>
                 </span>
               </div>
