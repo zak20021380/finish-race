@@ -1683,6 +1683,20 @@ createChat({
   chips,
   state: () => state,
   localSide: () => localSide,
+  /* the seat's live pawn: its animated ball centre mapped through the renderer's own layout into
+     viewport px, plus the cell the move dots are drawn from — so a bubble hangs over the token it
+     belongs to and always clears the dot ring. */
+  pawn: (seat) => {
+    const v = ballViews.find((b) => b.team === seat);
+    if (!v) return null;
+    const L = renderer.layout();
+    const box = canvas.getBoundingClientRect();
+    return {
+      x: box.left + L.ox + v.pos.x * L.cell,
+      y: box.top + L.oy + v.pos.y * L.cell,
+      cell: L.cell,
+    };
+  },
   busy: () => rolling || mineArmed,
   live: () => router.current === 'game' && !paused && !overlayOpen && state.winner === null,
 });

@@ -99,9 +99,15 @@ Durable index; dated logs beside this file hold the history.
   Inner SVG hooks: `.ec-steam` (fill-box), `.eh-glass` (view-box origin 51/37.5), `.ec-eyes`
   (pupils only — sclera stay put in the hurrry dart).
 - Bubble lifecycle: `chat-bubble-pop` 200ms has NO fill-mode, so `is-out` (opacity 0 +
-  translateY(-10px)) can take the transform back. `setBubble` drops `show` + reflows to re-arm.
-  `EMOTE_MS` 2200 / `BUBBLE_MS` 2500 / `LEAVE_MS` 240. The bubble runs the same loops 40-50%
+  translateY(-18px)) can take the transform back. `setBubble` drops `show` + reflows to re-arm.
+  `EMOTE_MS` 2000 / `BUBBLE_MS` 2500 / `LEAVE_MS` 360. The bubble runs the same loops 40-50%
   faster (`.chat-bubble .emote-*` duration overrides) — duration only, never geometry.
+- Bubbles are PAWN-anchored in the gameplay zone: `main.ts` passes `pawn(seat)` (animated
+  `ballViews` centre mapped through `renderer.layout()` into viewport px + the cell), chat drops
+  `.pawn-you`/`.pawn-bot` on that point and hangs the bubble `2.4 cells + 24px` above (clears a
+  leap's two-cell dot ring), tail tracking via `--tip`. Emotes are 48x48 frosted capsules with a
+  1px team neon ring (`--pawn-glow`: crimson mine / cyan foe). Layer and marks are
+  `pointer-events: none`. Check: `scripts/verify-emote-overlay.mjs`.
 
 ## Design system (style.css)
 - One theme, "Dark Clay": opaque slabs, no live blur. `--clay`/`--clay-ring` raised, `--inset` wells,

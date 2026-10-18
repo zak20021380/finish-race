@@ -1,19 +1,29 @@
-/* chat.css — quick chat: the key above the dock, its bottom sheet, and the bubbles over the cards.
-   Nothing here changes the board: bubbles are DOM pills placed above a chip, and the sheet is a
-   modal that closes the moment a phrase is sent. */
+/* chat.css — quick chat: the key above the dock, its bottom sheet, and the floating bubbles.
+   Nothing here changes the board: a message is a DOM pill that hangs over its sender's pawn in the
+   gameplay zone, and the sheet is a modal that closes the moment a phrase is sent. */
 
 /* ---- the bubble layer ----
-   Sits over the board box but reaches past it: a bubble is anchored above its sender's chip, so it
-   can hang in the gap under the board. chat.ts samples the canvas before choosing the height, so a
-   bubble never sits on a ball; the layer itself never takes a tap. */
+   Sits over the board box and NEVER takes a tap: pointer-events is none on the layer and on every
+   mark inside it, so a bubble can float across the grid without ever stealing a tile click. The
+   .pawn-you / .pawn-bot points are written by chat.ts from the renderer's live pawn positions. */
 .chat-lane {
   position: absolute;
   inset: 0;
   z-index: 6;
   pointer-events: none;
 }
+.chat-lane,
+.chat-lane * { pointer-events: none; }
 
-/* ---- one message: a short clay bubble, tail down toward the seat ---- */
+/* the point a bubble hangs from: an invisible zero-size marker, dropped on the pawn's centre */
+.pawn-anchor {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+/* ---- one message: a short clay bubble, tail down toward the pawn ---- */
 .chat-bubble {
   position: absolute;
   max-width: 148px;
@@ -34,8 +44,8 @@
     0 8px 16px -10px var(--shadow-soft),
     var(--clay-spec), var(--clay-bevel), var(--clay-ring);
   opacity: 0;
-  transform: translateY(4px) scale(.92);
-  /* the tail is the hinge: the pop grows out of the point that touches the seat */
+  transform: scale(.3) translateY(10px);
+  /* the tail is the hinge: the pop grows out of the point that faces the pawn */
   transform-origin: 50% 100%;
   transition: opacity .22s ease, transform .22s ease;
   pointer-events: none;
@@ -43,31 +53,34 @@
 .chat-bubble.show {
   opacity: 1;
   transform: none;
-  /* 200ms spring: 0 -> 1.15 -> 1, no fill-mode, so the exit transition below can take the
-     transform back the instant the entry is over */
+  /* 200ms spring: .3/+10px -> 1.1/-4px -> 1/0, no fill-mode, so the exit transition below can
+     take the transform back the instant the entry is over */
   animation: chat-bubble-pop .2s cubic-bezier(.34, 1.56, .64, 1);
 }
 @keyframes chat-bubble-pop {
-  0% { opacity: 0; transform: scale(.2); }
-  60% { opacity: 1; transform: scale(1.15); }
-  100% { opacity: 1; transform: scale(1); }
+  0% { opacity: 0; transform: scale(.3) translateY(10px); }
+  55% { opacity: 1; transform: scale(1.1) translateY(-4px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
 }
-/* the exit: a fade plus a 10px lift, applied after the emote has finished performing */
+/* the exit: a soft fade plus an 18px float, applied after the emote has finished performing */
 .chat-bubble.is-out {
   opacity: 0;
-  transform: translateY(-10px);
+  transform: translateY(-18px);
+  transition: opacity .34s ease, transform .34s cubic-bezier(.22, .61, .36, 1);
 }
+/* the downward tip: it tracks the pawn via --tip, even when a board edge nudges the capsule off
+   centre. Subtle by design — a dark clay chip, never a second focal point. */
 .chat-bubble::after {
   content: '';
   position: absolute;
-  left: 50%;
+  left: var(--tip, 50%);
   bottom: -5px;
   margin-left: -5px;
   width: 0;
   height: 0;
   border-left: 5px solid transparent;
   border-right: 5px solid transparent;
-  border-top: 6px solid #1C2433;
+  border-top: 6px solid #1B2333;
 }
 /* the text is what clamps; the tail may hang outside the face */
 .chat-bubble-t {
@@ -78,19 +91,37 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
-/* an emote is a square tile, no text */
+/* ---- an emote: a 48x48 frosted dark-clay capsule, ringed by its team's neon ----
+   No live blur (the design system forbids backdrop-filter): the frost is a fine diagonal grain
+   over a translucent glass gradient, lit from above and pressed in at the base. The ring is one
+   step wide, the bloom is the team's ambient neon: crimson for the player, cyan for the rival. */
+.chat-bubble.is-mine { --pawn-glow: rgba(224, 38, 79, .9); }
+.chat-bubble.is-foe { --pawn-glow: rgba(34, 211, 238, .85); }
 .chat-bubble.is-emote {
-  width: 54px;
-  min-height: 54px;
+  width: 48px;
+  height: 48px;
+  min-height: 48px;
   max-height: none;
   padding: 0;
   display: grid;
   place-items: center;
   border-radius: 15px;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, 0) 56%),
+    repeating-linear-gradient(135deg,
+      rgba(255, 255, 255, .04) 0 1px, rgba(255, 255, 255, 0) 1px 3px),
+    linear-gradient(180deg, rgba(43, 55, 80, .97) 0%, rgba(19, 26, 41, .98) 100%);
+  box-shadow:
+    0 0 0 1px var(--pawn-glow, rgba(255, 255, 255, .16)),
+    0 0 14px -2px var(--pawn-glow, rgba(255, 255, 255, .2)),
+    0 6px 14px -8px rgba(0, 0, 0, .9),
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    inset 0 -3px 5px rgba(0, 0, 0, .45);
 }
+.chat-bubble.is-emote::after { border-top-color: #131A29; }
 .chat-bubble.is-emote .chat-bubble-t { display: grid; place-items: center; max-height: none; }
 .chat-emote { display: grid; place-items: center; }
-.chat-emote svg { width: 38px; height: 38px; display: block; }
+.chat-emote svg { width: 40px; height: 40px; display: block; }
 
 /* ---- the scrim and the bottom sheet ---- */
 .chat-scrim {

@@ -1,5 +1,5 @@
 /**
- * chat.ts — quick chat: the key above the dock, its bottom sheet, and the bubbles over the cards.
+ * chat.ts — quick chat: the key above the dock, its bottom sheet, and the floating bubbles.
  *
  * The vocabulary is closed (`data/phrases.ts`): every send is one of four tactical one-liners or
  * one of three psychological emotes, so there is no input, no parser and nothing a player can
@@ -7,15 +7,25 @@
  * a message is a bubble with a timer, a report is a toast, mute is a boolean that dies with the
  * page. Nothing here opens a socket.
  *
- * The board is read, never written. Bubbles sit in a layer over the board box, but each one is
- * measured against the canvas before it is placed: the layer's slot directly above a chip is the
- * first choice, and a slot with no saturated team pixels (a ball) is preferred, walking upward.
- * That is what keeps a message off a token without the renderer ever knowing chat exists.
+ * The board is read, never written. A message no longer hangs off the sender's HUD card: it
+ * spawns in the gameplay zone, centred over the sender's pawn. The renderer owns the only true
+ * pawn position, so `pawn()` hands chat the live screen point of a seat's ball; chat drops the
+ * `.pawn-you` / `.pawn-bot` marker on that point and hangs the bubble above it, clearing the
+ * move-dot ring (a hint can leap two cells) by the spec's 24px. The layer and every mark in it
+ * are `pointer-events: none`, so the grid underneath keeps every tile tap.
  */
 import './chat.css';
 import type { GameState, Player } from './rules';
 import { EMOTES, TAUNTS, type ChatEmote } from './data/phrases';
 import { impact, notify } from './telegram';
+
+/** A seat's pawn on screen: its animated centre in viewport px, plus the board's live cell. */
+export interface PawnPoint {
+  x: number;
+  y: number;
+  /** the board's own cell size in css px — the metric the move dots are drawn from */
+  cell: number;
+}
 
 export interface ChatOptions {
   /** The recessed pill in the dock's console rail: the one slot chat has ever needed. */
@@ -26,6 +36,8 @@ export interface ChatOptions {
   chips: readonly HTMLElement[];
   state: () => GameState;
   localSide: () => Player;
+  /** The live screen point over a seat's pawn, or null while no ball of that seat is drawn. */
+  pawn: (seat: Player) => PawnPoint | null;
   /** A log is rolling, or a mine is armed: chat is shut for both. */
   busy: () => boolean;
   /** The race screen is up, unpaused, with no result card over it. */
@@ -37,20 +49,22 @@ export interface Chat {
 }
 
 const BUBBLE_MS = 2500;
-/** An emote is a performance: the face loops at full energy, then the bubble lifts away. */
-const EMOTE_MS = 2200;
-/** The exit: opacity 1 -> 0 while the bubble drifts up 10px. Matches the transition in chat.css. */
-const LEAVE_MS = 240;
+/** An emote is a performance: the face loops at full energy for 2s, then the bubble floats out. */
+const EMOTE_MS = 2000;
+/** The exit: opacity 1 -> 0 while the bubble drifts up 18px. Matches the transition in chat.css. */
+const LEAVE_MS = 360;
 const SEND_GAP_MS = 3000;
 const BOT_GAP_MS = 8000;
 const HOLD_MS = 400;
 const HOLD_SLOP = 8;
 const POLL_MS = 200;
 const MENU_W = 168;
-/** Vertical gaps above the chip a bubble may try, nearest first. The first one clears the console
- *  rail (38px) plus the card's own gap, so a bubble never lands on the chat key it was sent from. */
-const BUBBLE_GAPS = [44, 66, 88, 110, 132, 154];
-const SAMPLE_STEP = 4;
+/** How far above the pawn the move-dot ring can reach, in cells: a hint may leap over a body two
+ *  cells away, plus the dot's own halo. The spec's 24px sits above that. */
+const DOT_REACH_CELLS = 2.4;
+const DOT_CLEAR_PX = 24;
+/** The fallback lift when a race has no drawn pawn yet: the bubble still clears the chip it names. */
+const CHIP_GAP_PX = 44;
 
 type Side = 'me' | 'foe';
 
@@ -65,8 +79,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
 
 export function createChat(o: ChatOptions): Chat {
   const root = o.lane.closest<HTMLElement>('.screen') ?? document.body;
-  const found = document.getElementById('board');
-  const canvas = found instanceof HTMLCanvasElement ? found : null;
+  const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 
   /* ---------- the bubbles ---------- */
 
@@ -79,47 +92,17 @@ export function createChat(o: ChatOptions): Chat {
     foe: el('span', 'chat-bubble-t'),
   };
   const bubbleTimers: Record<Side, number> = { me: 0, foe: 0 };
+  /* the pawn markers: invisible points the bubbles hang from, one per side. They carry no box at
+     all, so the layer can map them without the renderer ever knowing chat exists. */
+  const pawnAnchors: Record<Side, HTMLElement> = {
+    me: el('i', 'pawn-anchor pawn-you'),
+    foe: el('i', 'pawn-anchor pawn-bot'),
+  };
   for (const side of ['me', 'foe'] as const) {
+    pawnAnchors[side].setAttribute('aria-hidden', 'true');
     bubbles[side].hidden = true;
     bubbles[side].appendChild(bubbleText[side]);
-    o.lane.appendChild(bubbles[side]);
-  }
-
-  /** How many saturated red/blue pixels (a ball) sit under a page-space rectangle. */
-  function ballUnder(left: number, top: number, w: number, h: number): number {
-    if (!canvas) return 0;
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width < 1 || rect.height < 1 || canvas.width < 1 || canvas.height < 1) return 0;
-    const sx = canvas.width / rect.width;
-    const sy = canvas.height / rect.height;
-    const x0 = Math.max(0, Math.floor((left - rect.left) * sx));
-    const y0 = Math.max(0, Math.floor((top - rect.top) * sy));
-    const x1 = Math.min(canvas.width, Math.ceil((left + w - rect.left) * sx));
-    const y1 = Math.min(canvas.height, Math.ceil((top + h - rect.top) * sy));
-    const bw = x1 - x0;
-    const bh = y1 - y0;
-    if (bw < 2 || bh < 2) return 0;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return 0;
-    let data: Uint8ClampedArray;
-    try {
-      data = ctx.getImageData(x0, y0, bw, bh).data;
-    } catch {
-      return 0;                        // a tainted canvas must not break the HUD
-    }
-    let hits = 0;
-    for (let y = 0; y < bh; y += SAMPLE_STEP) {
-      for (let x = 0; x < bw; x += SAMPLE_STEP) {
-        const i = (y * bw + x) * 4;
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        const red = r > 120 && r - g > 45 && r - b > 30;
-        const blue = b > 100 && b - r > 45 && b - g > 20;
-        if (red || blue) hits++;
-      }
-    }
-    return hits;
+    o.lane.append(pawnAnchors[side], bubbles[side]);
   }
 
   /** The first chip that is not yours — the seat a rival bubble belongs over. */
@@ -130,33 +113,44 @@ export function createChat(o: ChatOptions): Chat {
   }
 
   /**
-   * Put a bubble above a seat: centred on its ball, the nearest clear height first. The bubble's
-   * bottom edge stays at least 8px clear of the chip, so it can never cover the chip itself.
+   * Hang a bubble over its sender's pawn. `o.pawn()` gives the live screen point of the seat's
+   * ball; the `.pawn-you`/`.pawn-bot` marker is dropped exactly there, and the bubble is centred
+   * on it, its foot `DOT_REACH_CELLS` cells plus 24px above the point — clear of the move-dot ring
+   * a hint can draw around the pawn. The tail tracks the pawn even when the capsule is nudged off
+   * centre at a board edge. A race with no drawn ball falls back to a fixed lift over the seat's
+   * HUD chip, so a message always has a mark to hang from.
    */
   function place(side: Side, seat: Player) {
     const bubble = bubbles[side];
-    const chip = o.chips[seat];
-    if (!chip) return;
+    const anchor = pawnAnchors[side];
     const laneBox = o.lane.getBoundingClientRect();
-    const chipBox = chip.getBoundingClientRect();
     const w = bubble.offsetWidth || 120;
     const h = bubble.offsetHeight || 32;
-    const anchor = chipBox.left + Math.min(30, chipBox.width / 2);
-    const left = Math.min(Math.max(anchor - w / 2, laneBox.left + 4), laneBox.right - w - 4);
-    let top = chipBox.top - BUBBLE_GAPS[0] - h;
-    for (const gap of BUBBLE_GAPS) {
-      const candidate = chipBox.top - gap - h;
-      if (candidate < laneBox.top + 4) break;
-      if (ballUnder(left, candidate, w, h) === 0) { top = candidate; break; }
+    const at = o.pawn(seat);
+    if (at) {
+      anchor.style.left = `${at.x - laneBox.left}px`;
+      anchor.style.top = `${at.y - laneBox.top}px`;
+    } else {
+      const chip = o.chips[seat];
+      if (!chip) return;
+      const chipBox = chip.getBoundingClientRect();
+      anchor.style.left = `${chipBox.left + Math.min(30, chipBox.width / 2) - laneBox.left}px`;
+      anchor.style.top = `${chipBox.top - laneBox.top}px`;
     }
-    const clampedTop = Math.max(top, laneBox.top + 4);
-    bubble.style.left = `${left - laneBox.left}px`;
-    bubble.style.top = `${clampedTop - laneBox.top}px`;
+    const ax = Number.parseFloat(anchor.style.left) || 0;
+    const ay = Number.parseFloat(anchor.style.top) || 0;
+    const foot = at ? ay - (at.cell * DOT_REACH_CELLS + DOT_CLEAR_PX) : ay - CHIP_GAP_PX;
+    const left = clamp(ax - w / 2, 4, Math.max(4, laneBox.width - w - 4));
+    const top = Math.max(4, foot - h);
+    bubble.style.left = `${left}px`;
+    bubble.style.top = `${top}px`;
+    /* the tail points at the pawn: it shifts with the capsule when a board edge pushes it */
+    bubble.style.setProperty('--tip', `${clamp(ax - left, 10, w - 10)}px`);
   }
 
   /**
-   * The exit is a fade, not a cut: `is-out` swaps the visible state for `opacity: 0` plus a 10px
-   * lift, and the node is only hidden once that transition has landed.
+   * The exit is a fade, not a cut: `is-out` swaps the visible state for `opacity: 0` plus an 18px
+   * float, and the node is only hidden once that transition has landed.
    */
   function hideBubble(side: Side) {
     window.clearTimeout(bubbleTimers[side]);
