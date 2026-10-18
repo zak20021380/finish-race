@@ -142,9 +142,9 @@ function warnNoWalls(p: Player) {
   wallWarnTimer = window.setTimeout(() => el.classList.remove('dry-warn'), 650);
 }
 
-/* The mine key is the local card's own right-hand resource cell. `seatChrome()` moves it onto
-   whichever card the local seat actually holds, so an online race never arms a mine from the
-   rival's card — the one thing the old welded-in segment could not say. */
+/* The mine key is the local strip's own right-hand tactical pod. `seatChrome()` moves it onto
+   whichever strip the local seat actually holds, so an online race never arms a mine from the
+   rival's strip — the one thing the old welded-in segment could not say. */
 const mineBtn = $<HTMLButtonElement>('mine-btn');
 const mineN = $<HTMLElement>('mine-n');
 let shownMines = -1;
@@ -1131,15 +1131,15 @@ function seatChrome(): void {
   if (!seatBall || !rivalWho || !timerRing || !timerNum) return;
   seatBall.append(timerRing, timerNum);   // this seat's own countdown ring
   rivalWho.appendChild(dots);             // the rival gets the thinking dots
-  /* The tactical dock follows the seat too. The arm key rides your own card, and the sealed cell
-     it displaces goes back to seat 0 — so every rival card still shows one and every card still
-     reads walls-then-mines. Without this an online seat on the right would arm a mine from the
-     card that says BOT. */
-  const myDock = chips[localSide]?.querySelector<HTMLElement>('.res');
-  const seat0Dock = chips[0]?.querySelector<HTMLElement>('.res');
-  const sealed = myDock?.querySelector<HTMLElement>('.mine-fog') ?? null;
-  if (myDock) myDock.append(mineBtn);
-  if (sealed && seat0Dock && localSide !== 0) seat0Dock.append(sealed);
+  /* The tactical mine pod follows the seat too. The arm key rides the right end of your own
+     strip, and the sealed fog pod it displaces goes back to seat 0 — so every rival strip still
+     carries one. Without this an online seat on the right would arm a mine from the strip that
+     says BOT. */
+  const myStrip = chips[localSide];
+  const seat0Strip = chips[0];
+  const sealed = myStrip?.querySelector<HTMLElement>('.mine-fog') ?? null;
+  if (myStrip) myStrip.append(mineBtn);
+  if (sealed && seat0Strip && localSide !== 0) seat0Strip.append(sealed);
   shownFog.fill(null);                    // the cells just changed hands: repaint them from scratch
 }
 
@@ -1678,7 +1678,7 @@ ui();
    local seat, the two moments the rules close chat, and whether the screen is actually live — so
    nothing in the turn loop has to know the wheel exists. */
 createChat({
-  key: $<HTMLButtonElement>('chat-btn'),
+  key: $<HTMLButtonElement>('chat-toggle'),
   lane: $<HTMLElement>('chat-lane'),
   chips,
   state: () => state,

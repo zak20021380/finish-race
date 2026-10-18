@@ -14256,31 +14256,6 @@ html.reduced-motion .adm-mode-seg { transition: none; }
   padding: 0;
 }
 
-/* ---- the console rail: the chat key's own carved slot ----
-   A recessed pill, not a floating FAB. It is sunk into the clay with the app's own inset shadow,
-   it is 38px tall at every width (the guaranteed touch target), and two hairlines run from its
-   shoulders to the dock's edges so the band reads as console furniture rather than empty space. */
-.hud-rail {
-  grid-column: 1 / -1;
-  position: relative;
-  height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.hud-rail::before,
-.hud-rail::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  width: calc(50% - 78px);               /* the pill's shoulder out to the dock edge */
-  height: 1px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, .13));
-  pointer-events: none;
-}
-.hud-rail::before { left: 0; }
-.hud-rail::after { right: 0; transform: scaleX(-1); }
-
 .chat-key {
   position: relative;
   z-index: 1;
@@ -14305,14 +14280,6 @@ html.reduced-motion .adm-mode-seg { transition: none; }
   transition: color var(--motion-fast), box-shadow var(--motion-fast), transform var(--motion-fast);
 }
 .chat-key .ico { width: 16px; height: 16px; flex: none; }
-.chat-key-t {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .09em;
-  text-transform: uppercase;
-  line-height: 1;
-  white-space: nowrap;
-}
 .chat-key:active {
   transform: translateY(1px);
   box-shadow:
@@ -14659,4 +14626,566 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .chat-key, .chip { transition: none; }
   .chip.active::after, .chat-key.is-ping .chat-ping { animation: none; }
+}
+
+/* ============================================================================================
+   RACE DOCK, FIFTH PASS — the ultra-slim cockpit: two 50px strips, one icon-only chat key.
+
+   The rail is gone. The dock is one low row — strip | 38px chat key | strip — so the whole HUD
+   band drops from ~124px to ~60px and the board keeps the difference. Each strip is the same
+   object mirrored: a 34px avatar orb, the seat's name + flag over its wall-count pill, and a
+   dedicated 40px tactical mine pod on the right end behind a 1px engraved groove. The local
+   seat's pod is the arm key; every rival's is the same pod with a sealed "?" corner badge. The
+   chat key carries no text at all — one crisp speech bubble in a 38x38 squircle.
+   ============================================================================================ */
+.chips {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  height: auto;
+  margin-top: 10px;                      /* clears the slab's own drop shadow and bottom lip */
+  padding: 0;
+}
+.chip {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 50px;
+  gap: 4px;
+  padding: 0 4px;
+  border-radius: 14px;
+}
+.chip-txt { gap: 4px; }
+.who-line { gap: 3px; }
+.chip .who {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+.chip .flag-badge { width: 13px; height: 13px; }
+.chip .flag-badge .fp { --fp-d: 13px; }
+
+/* ---- the chat key: zero text, zero rail — a 38x38 tactile squircle in the gap ---- */
+.chat-key {
+  flex: none;
+  align-self: center;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  padding: 0;
+  gap: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #2A3650 0%, #1B2333 100%);
+  color: var(--ink-soft);
+  box-shadow:
+    inset 0 0 0 1px var(--hair),
+    inset 0 1px 0 var(--hair-lit),
+    inset 0 -2px 3px rgba(0, 0, 0, .4),
+    0 4px 10px -6px var(--shadow-soft);
+}
+.chat-key .ico { width: 19px; height: 19px; flex: none; }
+.chat-key .chat-ping { top: 3px; right: 3px; }
+.chat-key:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 0 0 1px var(--hair),
+    inset 0 2px 4px rgba(0, 0, 0, .5),
+    inset 0 -1px 0 rgba(255, 255, 255, .04);
+}
+
+/* ---- the avatar orb: a compact 34px socket with the turn ring around it ---- */
+.chip-ball { width: 34px; height: 34px; }
+.chip .ball { inset: 2px; width: 30px; height: 30px; }
+.chip .timer { inset: 0; width: 34px; height: 34px; }
+.chip .av-in { font-size: 12px; }
+.chip .timer-n { font-size: 12px; }
+
+/* ---- the wall-count pill: fit-content, directly under the name ---- */
+.chip .res {
+  display: flex;
+  align-items: center;
+  height: 18px;
+  min-width: 0;
+}
+.chip .res .walls {
+  flex: none;
+  width: fit-content;
+  max-width: 100%;
+  height: 18px;
+  padding: 0 7px 0 5px;
+  gap: 4px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 800;
+  display: inline-flex;
+}
+.chip .res .walls .wall-glyph { width: 12px; height: 12px; }
+
+/* ---- the tactical mine pod: a dedicated 40px recessed clay key, walled off by a groove ----
+   The pod is the strip's right end: the local seat's is the arm key (`#mine-btn`), every rival's
+   is the sealed `.mine-fog` twin. A 1px engraved groove separates it from the readings; the count
+   lives on a micro-badge anchored to its bottom-right corner — a crisp gold digit for YOU, a
+   sculpted "?" for the rival until the public record proves the stash spent. */
+.chip .mine-pod {
+  position: relative;
+  flex: none;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin: 0 0 0 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #222D43 0%, #161D2B 100%);
+  color: var(--honey-ink);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .55),
+    inset 0 -1px 0 rgba(255, 255, 255, .06),
+    inset 0 0 0 1px color-mix(in srgb, var(--honey) 26%, transparent),
+    0 3px 8px -5px var(--shadow-soft);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast),
+              background var(--motion-fast), opacity var(--motion-fast);
+}
+.chip span.mine-pod { cursor: default; }
+.chip button.mine-pod { cursor: pointer; }
+.chip .mine-pod::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: 7px;
+  bottom: 7px;
+  width: 1px;
+  background: rgba(0, 0, 0, .5);
+  box-shadow: 1px 0 0 rgba(255, 255, 255, .05);
+  pointer-events: none;
+}
+.chip .mine-pod .bomb-ico {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  filter: drop-shadow(0 0 6px rgba(245, 158, 11, .45));
+}
+.chip button.mine-pod:active { transform: translateY(1px); }
+.chip button.mine-pod:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.chip button.mine-pod[aria-pressed="true"] {
+  color: #FFF3D6;
+  background: linear-gradient(180deg, #4A3110 0%, #2A1B06 100%);
+  box-shadow:
+    inset 0 0 0 2px #FBBF24,
+    inset 0 0 14px -2px rgba(245, 158, 11, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    0 0 16px -4px rgba(245, 158, 11, .75);
+}
+.chip button.mine-pod[aria-pressed="true"] .bomb-ico { animation: breathe 1.6s ease-in-out infinite; }
+.chip button.mine-pod[disabled] { opacity: .42; cursor: default; filter: saturate(.5); }
+.chip button.mine-pod[disabled] .bomb-ico { animation: none; }
+
+/* the micro-badge on the pod's corner: both pods wear the same 15px jewel */
+.chip .mine-pod .res-n {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  pointer-events: none;
+}
+.chip .mine-pod .mine-n {
+  color: #FFE9A8;
+  background: radial-gradient(circle at 34% 26%, #6E4C0C 0%, #3A2604 68%, #241703 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(252, 211, 77, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    0 1px 3px -1px rgba(0, 0, 0, .7);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .6);
+}
+.chip .mine-pod .fog-n {
+  color: #FDE68A;
+  background: radial-gradient(circle at 34% 26%,
+    rgba(252, 211, 77, .34) 0%, rgba(252, 211, 77, .10) 44%, rgba(0, 0, 0, .4) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(252, 211, 77, .38),
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    0 1px 3px -1px rgba(0, 0, 0, .6);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .6);
+}
+
+/* the seat to move: the strip's rim breathes in its own colour */
+.chip.active {
+  box-shadow:
+    inset 0 0 0 1.5px color-mix(in srgb, var(--tint) 72%, transparent),
+    inset 0 1px 0 var(--hair-lit),
+    inset 0 -2px 3px rgba(0, 0, 0, .3),
+    0 0 22px -6px var(--glow),
+    0 8px 16px -10px var(--shadow-soft);
+}
+
+/* ---- three and four seats: the same strips, 2-up — strip | chat | strip, then the rest ---- */
+.chips[data-players="3"],
+.chips[data-players="4"] {
+  display: grid;
+  grid-template-columns: 1fr 38px 1fr;
+  gap: 6px;
+  height: auto;
+  padding: 0;
+}
+.chips[data-players="3"] .chat-key,
+.chips[data-players="4"] .chat-key { justify-self: center; }
+.chips[data-players="3"] #chip-2 { grid-column: 1 / -1; grid-row: 2; }
+.chips[data-players="4"] #chip-2 { grid-column: 1; grid-row: 2; }
+.chips[data-players="4"] #chip-3 { grid-column: 3; grid-row: 2; }
+.chips[data-players="3"] .chip,
+.chips[data-players="4"] .chip { height: 50px; gap: 4px; padding: 0 4px; border-radius: 14px; }
+.chips[data-players="3"] #chip-0,
+.chips[data-players="4"] #chip-0 { position: relative; }
+.chips[data-players="3"] #chip-0::after,
+.chips[data-players="4"] #chip-0::after { display: block; }
+/* the pod is a strip's own right end in every layout, never a dock-wide floating column */
+.chips[data-players="3"] .chip .mine-pod,
+.chips[data-players="4"] .chip .mine-pod {
+  position: relative;
+  top: auto;
+  right: auto;
+  left: auto;
+  margin: 0 0 0 4px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 12px;
+}
+.chips[data-players="3"] .chip .chip-ball,
+.chips[data-players="4"] .chip .chip-ball { width: 34px; height: 34px; }
+.chips[data-players="3"] .chip .ball,
+.chips[data-players="4"] .chip .ball { inset: 2px; width: 30px; height: 30px; }
+.chips[data-players="3"] .chip .timer,
+.chips[data-players="4"] .chip .timer { inset: 0; width: 34px; height: 34px; }
+.chips[data-players="3"] .chip .av-in,
+.chips[data-players="4"] .chip .av-in { font-size: 12px; }
+.chips[data-players="3"] .chip .who,
+.chips[data-players="4"] .chip .who { font-size: 11px; }
+.chips[data-players="3"] .chip .res,
+.chips[data-players="4"] .chip .res { height: 18px; gap: 3px; }
+.chips[data-players="3"] .chip .res-cell,
+.chips[data-players="4"] .chip .res-cell { height: 18px; padding: 0 7px 0 5px; border-radius: 6px; font-size: 10.5px; }
+.chips[data-players="3"] .chip .res .wall-glyph,
+.chips[data-players="4"] .chip .res .wall-glyph { width: 12px; height: 12px; }
+.chips[data-players="3"] .chip .mine-fog .fog-n,
+.chips[data-players="4"] .chip .mine-fog .fog-n { min-width: 15px; height: 15px; font-size: 9.5px; }
+
+
+/* ============================================================================================
+   RACE DOCK, SIXTH PASS — the ultra-slim obsidian cockpit: two 46px clay slabs, one 34px chat
+   orb, one 38px mine key per card.
+
+   The surface recipe is now the spec, not a tint wash: a multi-stop obsidian/slate gradient
+   (#1C2333 -> #0E131D) carrying tactile clay bevels — a lit top, a sunk base, an ambient drop —
+   and team identity lives only in the accents (orb, wall glyph, name ink). No painted neon
+   border anywhere: the seat to move wears a soft feathered aura in its own colour. An idle card
+   is matte graphite with a dark inner bevel. Every key (chat orb, mine key) is the same clay
+   material one step smaller, and the mine count is struck into a recessed micro-pill set into
+   the key's base, never a floating corner badge.
+   ============================================================================================ */
+.chips {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  height: 46px;
+  margin-top: 10px;                      /* clears the slab's own drop shadow and bottom lip */
+  padding: 0;
+}
+
+/* ---- the card: 46px of sculpted obsidian clay ---- */
+.chip {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 6px;
+  border-radius: 13px;
+  overflow: clip;
+  background: linear-gradient(180deg, #1C2333 0%, #0E131D 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, .10),
+    inset 0 -1px 2px rgba(0, 0, 0, .6),
+    0 4px 12px rgba(0, 0, 0, .4);
+  transition: transform .2s ease, filter .2s ease, background .2s ease, box-shadow .2s ease;
+}
+/* the seat that is waiting: muted matte graphite, a dark inner bevel, one step back */
+.chip:not(.active) {
+  filter: saturate(.78) brightness(.92);
+  background: linear-gradient(180deg, #171D29 0%, #0B1017 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .05),
+    inset 0 -1px 2px rgba(0, 0, 0, .7),
+    inset 0 0 0 1px rgba(0, 0, 0, .34),
+    0 3px 10px rgba(0, 0, 0, .38);
+}
+/* the seat to move: the same slab lifted 1px and wrapped in a soft feathered aura in its own
+   colour — the glow is the signal, never a 2px stroke */
+.chip.active {
+  filter: none;
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, #1C2333 0%, #0E131D 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, .10),
+    inset 0 -1px 2px rgba(0, 0, 0, .6),
+    0 4px 12px rgba(0, 0, 0, .4),
+    0 0 14px color-mix(in srgb, var(--tint) 42%, transparent);
+}
+/* the old turn ring is retired: the aura carries the turn in every layout */
+.chip::after,
+.chip.active::after,
+.chip.thinking::after,
+.chips[data-players="3"] #chip-0::after,
+.chips[data-players="4"] #chip-0::after { display: none; animation: none; opacity: 0; }
+/* the party reflow's welded-on tint stroke is retired too: the same bevel-led aura everywhere */
+.chips[data-players="3"] #chip-0.active,
+.chips[data-players="4"] #chip-0.active {
+  filter: none;
+  background: linear-gradient(180deg, #1C2333 0%, #0E131D 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, .10),
+    inset 0 -1px 2px rgba(0, 0, 0, .6),
+    0 4px 12px rgba(0, 0, 0, .4),
+    0 0 14px color-mix(in srgb, var(--tint) 42%, transparent);
+}
+
+/* ---- the chat key: a 34px circular clay orb, centered in the gap ---- */
+.chat-key {
+  flex: none;
+  align-self: center;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  gap: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #252F42 0%, #111823 100%);
+  color: var(--ink-soft);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, .12),
+    inset 0 -1px 2px rgba(0, 0, 0, .6),
+    inset 0 0 0 1px rgba(255, 255, 255, .05),
+    0 3px 8px rgba(0, 0, 0, .38);
+  transition: color var(--motion-fast), box-shadow var(--motion-fast), transform var(--motion-fast);
+}
+.chat-key .ico { width: 17px; height: 17px; flex: none; }
+/* a press sinks the orb and lights a soft amber/white rim around it */
+.chat-key:active {
+  transform: translateY(1px);
+  color: #FFE9A8;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 241, 203, .45),
+    inset 0 0 10px -3px rgba(245, 158, 11, .8),
+    0 0 12px rgba(245, 158, 11, .28);
+}
+.chat-key .chat-ping { top: 1px; right: 1px; }
+
+/* ---- the avatar orb: a 32px socket, the turn ring around it ---- */
+.chip-ball { width: 32px; height: 32px; }
+.chip .ball { inset: 2px; width: 28px; height: 28px; }
+.chip .timer { inset: 0; width: 32px; height: 32px; }
+.chip .av-in { font-size: 11px; }
+.chip .timer-n { font-size: 11px; }
+
+/* ---- the text column: name + flag over the engraved wall-count pill ---- */
+.chip-txt { gap: 3px; }
+.who-line { gap: 3px; }
+.chip .who { font-size: 11px; letter-spacing: .07em; }
+.chip .flag-badge { width: 12px; height: 12px; }
+.chip .flag-badge .fp { --fp-d: 12px; }
+
+.chip .res { height: 17px; }
+.chip .res .walls {
+  flex: none;
+  width: fit-content;
+  max-width: 100%;
+  height: 17px;
+  padding: 0 7px 0 5px;
+  gap: 4px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  color: var(--ink-t);
+  background: linear-gradient(180deg, #0A0E15 0%, #151C28 100%);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .8);      /* the engraved digit */
+  box-shadow:
+    inset 0 1.5px 2.5px rgba(0, 0, 0, .72),
+    inset 0 -1px 0 rgba(255, 255, 255, .05),
+    inset 0 0 0 1px rgba(255, 255, 255, .04);
+}
+/* the barricade glyph: a sharp 16x12 fortress course, lit in the seat's own colour */
+.chip .res .walls .wall-glyph { width: 16px; height: 12px; }
+.chip .walls.depleted { color: var(--ink-soft); opacity: .58; background: #0A0E15; }
+.chip .walls.depleted .wall-glyph { color: var(--ink-soft); filter: none; }
+
+/* ---- the tactical mine key: a 38x38 dark-clay trigger filling the card's right end ----
+   An inset clay well with a metallic micro-chamfer; the count is a recessed micro-pill struck
+   into the key's own base — gold for YOU, an embossed "?" for the rival (or a cold 0 once the
+   public record proves the stash spent). */
+.chip .mine-pod {
+  position: relative;
+  flex: none;
+  align-self: center;
+  display: grid;
+  grid-template-rows: none;
+  place-items: center;
+  gap: 0;
+  width: 38px;
+  height: 38px;
+  margin: 0 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 11px;
+  background: linear-gradient(180deg, #232D40 0%, #131A26 62%, #0C1119 100%);
+  color: var(--honey-ink);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, .10),
+    inset 0 -1px 2px rgba(0, 0, 0, .6),
+    inset 0 0 0 1px rgba(255, 255, 255, .05),
+    inset 0 0 12px -3px rgba(0, 0, 0, .85),
+    0 3px 8px rgba(0, 0, 0, .4);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast),
+              background var(--motion-fast), color var(--motion-fast), opacity var(--motion-fast);
+}
+.chip .mine-pod::before { display: none; }     /* the engraved groove is retired */
+.chip .mine-pod .bomb-ico {
+  width: 21px;
+  height: 21px;
+  flex: none;
+  transform: translateY(-2.5px);               /* clears the base badge */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .65)) drop-shadow(0 0 6px rgba(245, 158, 11, .38));
+}
+.chip button.mine-pod:active { transform: translateY(1px); }
+.chip button.mine-pod:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.chip button.mine-pod[aria-pressed="true"] {
+  color: #FFF3D6;
+  background: linear-gradient(180deg, #4A3110 0%, #2A1B06 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(251, 191, 36, .85),
+    inset 0 0 14px -2px rgba(245, 158, 11, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    0 0 16px -2px rgba(245, 158, 11, .55);
+}
+.chip button.mine-pod[aria-pressed="true"] .bomb-ico { animation: breathe 1.6s ease-in-out infinite; }
+.chip button.mine-pod[disabled] { opacity: .45; cursor: default; filter: saturate(.5); }
+.chip button.mine-pod[disabled] .bomb-ico { animation: none; }
+.chip span.mine-pod { cursor: default; }
+
+/* the count micro-pill: recessed into the key base, one geometry for both pods */
+.chip .mine-pod .res-n {
+  position: absolute;
+  left: 50%;
+  right: auto;
+  top: auto;
+  bottom: 2.5px;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  min-width: 15px;
+  height: 11.5px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: 8.5px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  pointer-events: none;
+}
+.chip .mine-pod .mine-n {
+  color: #FFD574;                              /* vibrant warm gold */
+  background: rgba(6, 9, 14, .82);
+  text-shadow: 0 0 6px rgba(245, 158, 11, .45);
+  box-shadow:
+    inset 0 1.5px 2px rgba(0, 0, 0, .9),
+    inset 0 -1px 0 rgba(255, 255, 255, .07),
+    inset 0 0 0 1px rgba(252, 211, 77, .30);
+}
+.chip .mine-pod .fog-n {
+  color: #D8C08C;                              /* the embossed mark */
+  background: rgba(6, 9, 14, .55);
+  text-shadow: 0 -1px 0 rgba(255, 255, 255, .16), 0 1px 0 rgba(0, 0, 0, .9);
+  box-shadow:
+    inset 0 1.5px 2px rgba(0, 0, 0, .8),
+    inset 0 -1px 0 rgba(255, 255, 255, .10),
+    inset 0 0 0 1px rgba(255, 255, 255, .07);
+}
+
+/* ---- three and four seats: the same 46px cards, 2-up around the chat orb ---- */
+.chips[data-players="3"],
+.chips[data-players="4"] {
+  display: grid;
+  grid-template-columns: 1fr 34px 1fr;
+  gap: 6px;
+  height: auto;
+  padding: 0;
+}
+.chips[data-players="3"] .chat-key,
+.chips[data-players="4"] .chat-key { justify-self: center; }
+.chips[data-players="3"] #chip-2 { grid-column: 1 / -1; grid-row: 2; }
+.chips[data-players="4"] #chip-2 { grid-column: 1; grid-row: 2; }
+.chips[data-players="4"] #chip-3 { grid-column: 3; grid-row: 2; }
+.chips[data-players="3"] .chip,
+.chips[data-players="4"] .chip { height: 46px; gap: 5px; padding: 0 6px; border-radius: 13px; }
+.chips[data-players="3"] .chip .chip-ball,
+.chips[data-players="4"] .chip .chip-ball { width: 32px; height: 32px; }
+.chips[data-players="3"] .chip .ball,
+.chips[data-players="4"] .chip .ball { inset: 2px; width: 28px; height: 28px; }
+.chips[data-players="3"] .chip .timer,
+.chips[data-players="4"] .chip .timer { inset: 0; width: 32px; height: 32px; }
+.chips[data-players="3"] .chip .av-in,
+.chips[data-players="4"] .chip .av-in { font-size: 11px; }
+.chips[data-players="3"] .chip .who,
+.chips[data-players="4"] .chip .who { font-size: 11px; }
+.chips[data-players="3"] .chip .res,
+.chips[data-players="4"] .chip .res { height: 17px; gap: 3px; }
+.chips[data-players="3"] .chip .res .walls,
+.chips[data-players="4"] .chip .res .walls { height: 17px; padding: 0 7px 0 5px; border-radius: 5px; font-size: 10px; }
+.chips[data-players="3"] .chip .res .walls .wall-glyph,
+.chips[data-players="4"] .chip .res .walls .wall-glyph { width: 16px; height: 12px; }
+/* the key is the card's own right end in every layout, never a dock-wide floating column */
+.chips[data-players="3"] .chip .mine-pod,
+.chips[data-players="4"] .chip .mine-pod {
+  position: relative;
+  top: auto;
+  right: auto;
+  left: auto;
+  margin: 0 0 0 auto;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 11px;
+}
+.chips[data-players="3"] .chip .mine-pod .fog-n,
+.chips[data-players="4"] .chip .mine-pod .fog-n { min-width: 15px; height: 11.5px; font-size: 8.5px; }
+
+/* ---- 340: the card is ~131 wide — the ornaments give way, never the name or the counts ---- */
+@media (max-width: 340px) {
+  .chip { gap: 4px; padding: 0 5px; }
+  .chat-key { width: 32px; min-width: 32px; height: 32px; }
+  .chip .mine-pod { width: 36px; height: 36px; }
 }

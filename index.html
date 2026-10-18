@@ -99,11 +99,39 @@
       <symbol id="i-minus" viewBox="0 0 24 24">
         <path d="M5.4 12h13.2" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" />
       </symbol>
-      <symbol id="i-wall" viewBox="0 0 24 24">
-        <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3.4" y="6.4" width="17.2" height="4.8" rx="1.7" />
-          <rect x="3.4" y="12.8" width="17.2" height="4.8" rx="1.7" />
+      <!-- the wall glyph: a reinforced fortress course — two staggered bands of chamfered masonry
+           over a mortar bed, every block carrying its own top-lit bevel and a shaded base, with
+           hairline crevices between blocks. Drawn 16x12 so the HUD can read it square-on. -->
+      <symbol id="i-wall" viewBox="0 0 16 12">
+        <defs>
+          <linearGradient id="wall-brick" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#FFFFFF" stop-opacity=".45" />
+            <stop offset=".32" stop-color="#FFFFFF" stop-opacity=".05" />
+            <stop offset=".6" stop-color="#000000" stop-opacity="0" />
+            <stop offset="1" stop-color="#000000" stop-opacity=".42" />
+          </linearGradient>
+        </defs>
+        <!-- the mortar bed: the recess the blocks are laid into -->
+        <rect x=".85" y="1.5" width="14.3" height="9" rx="1.5" fill="currentColor" opacity=".2" />
+        <rect x=".85" y="1.5" width="14.3" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-opacity=".42" stroke-width=".65" />
+        <!-- two courses, staggered: three stretchers over two, the running bond of a real wall -->
+        <g fill="currentColor" opacity=".92">
+          <rect x="1.6" y="2.2" width="3.9" height="3.7" rx=".6" />
+          <rect x="6.05" y="2.2" width="3.9" height="3.7" rx=".6" />
+          <rect x="10.5" y="2.2" width="3.9" height="3.7" rx=".6" />
+          <rect x="1.6" y="6.4" width="6.13" height="3.6" rx=".6" />
+          <rect x="8.27" y="6.4" width="6.13" height="3.6" rx=".6" />
         </g>
+        <!-- the machine bevel: one specular-to-shade ramp per block, then the lit top rail -->
+        <g fill="url(#wall-brick)">
+          <rect x="1.6" y="2.2" width="3.9" height="3.7" rx=".6" />
+          <rect x="6.05" y="2.2" width="3.9" height="3.7" rx=".6" />
+          <rect x="10.5" y="2.2" width="3.9" height="3.7" rx=".6" />
+          <rect x="1.6" y="6.4" width="6.13" height="3.6" rx=".6" />
+          <rect x="8.27" y="6.4" width="6.13" height="3.6" rx=".6" />
+        </g>
+        <path d="M2.5 1.72h11" fill="none" stroke="#FFFFFF" stroke-opacity=".38" stroke-width=".7" stroke-linecap="round" />
+        <path d="M1.5 10.62h13" fill="none" stroke="currentColor" stroke-opacity=".5" stroke-width=".8" stroke-linecap="round" />
       </symbol>
       <symbol id="i-move" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -124,6 +152,57 @@
         <path d="M14.5 10.3 17.1 7.7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" />
         <path d="M17.3 7.5c1.1-1.1 2.6-.8 3.2.4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
         <circle cx="21.1" cy="5.5" r="1.7" fill="currentColor" />
+      </symbol>
+      <!-- the tactical proximity mine: a hexagonal spiked pressure charge — six steel prongs on a
+           machined chamfered plate with hazard grooves struck between its flats, over a plasma
+           core burning amber. Full colour on purpose, like the Star: the HUD's own instrument,
+           it never inherits currentColor. -->
+      <symbol id="i-mine-tactical" viewBox="0 0 24 24">
+        <defs>
+          <linearGradient id="mine-plate" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#9AA7BA" />
+            <stop offset=".24" stop-color="#5A677E" />
+            <stop offset=".6" stop-color="#333E52" />
+            <stop offset="1" stop-color="#1B2330" />
+          </linearGradient>
+          <radialGradient id="mine-core" cx="50%" cy="50%" r="50%">
+            <stop offset="0" stop-color="#FFFBE8" />
+            <stop offset=".38" stop-color="#FDE047" />
+            <stop offset=".72" stop-color="#F59E0B" />
+            <stop offset="1" stop-color="#92400E" />
+          </radialGradient>
+          <radialGradient id="mine-halo" cx="50%" cy="50%" r="50%">
+            <stop offset="0" stop-color="#FBBF24" stop-opacity=".5" />
+            <stop offset=".55" stop-color="#F59E0B" stop-opacity=".18" />
+            <stop offset="1" stop-color="#F59E0B" stop-opacity="0" />
+          </radialGradient>
+        </defs>
+        <path d="M12 3.7V1M19.19 7.85l2.34-1.35M19.19 16.15l2.34 1.35M12 20.3V23M4.81 16.15l-2.34 1.35M4.81 7.85L2.47 6.5"
+          fill="none" stroke="#0A0E15" stroke-width="3.1" stroke-linecap="round" />
+        <path d="M12 3.7V1M19.19 7.85l2.34-1.35M19.19 16.15l2.34 1.35M12 20.3V23M4.81 16.15l-2.34 1.35M4.81 7.85L2.47 6.5"
+          fill="none" stroke="#93A0B5" stroke-width="1.5" stroke-linecap="round" />
+        <g fill="#E9EEF6">
+          <circle cx="12" cy="1" r=".85" />
+          <circle cx="21.53" cy="6.5" r=".85" />
+          <circle cx="21.53" cy="17.5" r=".85" />
+          <circle cx="12" cy="23" r=".85" />
+          <circle cx="2.47" cy="17.5" r=".85" />
+          <circle cx="2.47" cy="6.5" r=".85" />
+        </g>
+        <polygon points="12,3.7 19.19,7.85 19.19,16.15 12,20.3 4.81,16.15 4.81,7.85"
+          fill="url(#mine-plate)" stroke="#0A0E15" stroke-width="1" stroke-linejoin="round" />
+        <polygon points="12,4.95 18.11,8.47 18.11,15.53 12,19.05 5.89,15.53 5.89,8.47"
+          fill="none" stroke="#FFFFFF" stroke-opacity=".16" stroke-width=".7" stroke-linejoin="round" />
+        <path d="M5.35 7.6 12 3.9l6.65 3.7" fill="none" stroke="#FFFFFF" stroke-opacity=".38" stroke-width=".8"
+          stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M17.2 12h2M14.6 7.5l1-1.73M9.4 7.5l-1-1.73M6.8 12h-2M9.4 16.5l-1 1.73M14.6 16.5l1 1.73"
+          fill="none" stroke="#0B1017" stroke-width="1.1" stroke-linecap="round" opacity=".9" />
+        <circle cx="12" cy="12" r="4.9" fill="url(#mine-halo)" />
+        <circle cx="12" cy="12" r="4.3" fill="#0B1017" stroke="#3B4759" stroke-width=".8" />
+        <circle cx="12" cy="12" r="4.3" fill="none" stroke="#F59E0B" stroke-opacity=".45" stroke-width=".6" />
+        <circle cx="12" cy="12" r="3.05" fill="url(#mine-core)" />
+        <circle cx="12" cy="12" r="1.15" fill="#FFFBE8" />
+        <path d="M10 12A2 2 0 0 1 12 10" fill="none" stroke="#FFFDF4" stroke-opacity=".9" stroke-width=".9" stroke-linecap="round" />
       </symbol>
       <symbol id="i-log" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1006,25 +1085,15 @@
               </div>
             </div>
 
-            <!-- ---- the cockpit dock ----
-                 One recessed console rail, then two identical cards. The rail is the chat key's own
-                 carved slot — a wide pill sunk into the clay between the slab and the cards, so the
-                 key never straddles the board's rim and never floats in dead space.
-                 Each card is the same object mirrored: a 40px avatar well, the seat's name and flag,
-                 and a two-cell tactical dock underneath — walls, then mines. The local seat's mine
-                 cell is the arm key; every other seat's is a sealed fog cell whose count is a
-                 sculpted "?" and never a number. `data-players` (and `data-seats`, kept for older
-                 probes) tells CSS how many cards it is laying out. -->
+            <!-- ---- the cockpit dock: one ultra-slim obsidian row ----
+                 Two 46px low-profile cards with a 34px circular chat key in the gap between them.
+                 Each card is the same object mirrored: a 32px avatar orb, the seat's name + flag
+                 over its wall-count pill (barricade glyph + digit), and a 38px tactical mine key
+                 filling the right end, its count struck into a recessed micro-pill at the key's
+                 base. The local seat's key is the arm key; every rival's is a sealed fog key whose
+                 pill reads "?" and never a number. `data-players` (and `data-seats`, kept for
+                 older probes) tells CSS how many cards it is laying out. -->
             <footer class="chips" id="chips" data-seats="2" data-players="2">
-              <!-- the console rail: one carved slot, one chat key, nothing floating -->
-              <div class="hud-rail">
-                <button class="chat-key" type="button" id="chat-btn" aria-haspopup="dialog"
-                  aria-expanded="false" aria-label="Quick chat">
-                  <svg class="ico" aria-hidden="true"><use href="#i-chat" /></svg>
-                  <span class="chat-key-t">Quick chat</span>
-                  <i class="chat-ping" aria-hidden="true"></i>
-                </button>
-              </div>
               <div class="chip red" id="chip-0">
                 <span class="chip-ball">
                   <span class="ball" aria-hidden="true"><b class="av-in" id="av-0">Y</b></span>
@@ -1043,20 +1112,24 @@
                       <span class="xp-n">0</span><span class="xp-u">XP</span>
                     </span>
                   </span>
-                  <!-- the tactical dock: the same two cells on every card, in the same order -->
+                  <!-- the wall-count pill: the barricade glyph over its fixed-width digit -->
                   <span class="res" id="res-0">
                     <span class="res-cell walls" id="walls-0" role="img" aria-label="Walls left: 8 of 8">
                       <svg class="ico wall-glyph" aria-hidden="true"><use href="#i-wall" /></svg>
                       <b class="res-n wall-n">8</b>
                     </span>
-                    <button class="res-cell mine-btn" type="button" id="mine-btn"
-                      aria-pressed="false" aria-label="Bury a mine">
-                      <svg class="ico" aria-hidden="true"><use href="#i-bomb" /></svg>
-                      <b class="res-n" id="mine-n">2</b>
-                    </button>
                   </span>
                 </span>
+                <!-- the tactical mine pod: the local seat's arm key, a 40px recessed clay pod -->
+                <button class="mine-btn mine-pod" type="button" id="mine-btn"
+                  aria-pressed="false" aria-label="Bury a mine">
+                  <svg class="ico bomb-ico" aria-hidden="true"><use href="#i-mine-tactical" /></svg>
+                  <b class="res-n mine-n" id="mine-n">3</b>
+                </button>
               </div>
+              <!-- the chat key: icon-only, zero text, a 38px squircle in the gap between the strips -->
+              <button class="chat-key" type="button" id="chat-toggle" aria-haspopup="dialog"
+                aria-expanded="false" aria-label="Quick chat"><svg class="ico" aria-hidden="true"><use href="#i-chat" /></svg><i class="chat-ping" aria-hidden="true"></i></button>
               <div class="chip blue" id="chip-1">
                 <span class="chip-ball">
                   <span class="ball" aria-hidden="true"><b class="av-in" id="av-1">B</b></span>
@@ -1076,13 +1149,13 @@
                       <svg class="ico wall-glyph" aria-hidden="true"><use href="#i-wall" /></svg>
                       <b class="res-n wall-n">8</b>
                     </span>
-                    <!-- fog of war: the rival's stash is sealed, never counted -->
-                    <span class="res-cell mine-fog" data-fog="live" role="img"
-                      aria-label="Mines: count concealed">
-                      <svg class="ico" aria-hidden="true"><use href="#i-bomb" /></svg>
-                      <b class="res-n fog-n" aria-hidden="true">?</b>
-                    </span>
                   </span>
+                </span>
+                <!-- fog of war: the rival's stash is sealed in the same pod, never counted -->
+                <span class="mine-fog mine-pod" data-fog="live" role="img"
+                  aria-label="Mines: count concealed">
+                  <svg class="ico bomb-ico" aria-hidden="true"><use href="#i-mine-tactical" /></svg>
+                  <b class="res-n fog-n" aria-hidden="true">?</b>
                 </span>
               </div>
               <div class="chip gold" id="chip-2" hidden>
@@ -1103,12 +1176,12 @@
                       <svg class="ico wall-glyph" aria-hidden="true"><use href="#i-wall" /></svg>
                       <b class="res-n wall-n">6</b>
                     </span>
-                    <span class="res-cell mine-fog" data-fog="live" role="img"
-                      aria-label="Mines: count concealed">
-                      <svg class="ico" aria-hidden="true"><use href="#i-bomb" /></svg>
-                      <b class="res-n fog-n" aria-hidden="true">?</b>
-                    </span>
                   </span>
+                </span>
+                <span class="mine-fog mine-pod" data-fog="live" role="img"
+                  aria-label="Mines: count concealed">
+                  <svg class="ico bomb-ico" aria-hidden="true"><use href="#i-mine-tactical" /></svg>
+                  <b class="res-n fog-n" aria-hidden="true">?</b>
                 </span>
               </div>
               <div class="chip green" id="chip-3" hidden>
@@ -1129,12 +1202,12 @@
                       <svg class="ico wall-glyph" aria-hidden="true"><use href="#i-wall" /></svg>
                       <b class="res-n wall-n">5</b>
                     </span>
-                    <span class="res-cell mine-fog" data-fog="live" role="img"
-                      aria-label="Mines: count concealed">
-                      <svg class="ico" aria-hidden="true"><use href="#i-bomb" /></svg>
-                      <b class="res-n fog-n" aria-hidden="true">?</b>
-                    </span>
                   </span>
+                </span>
+                <span class="mine-fog mine-pod" data-fog="live" role="img"
+                  aria-label="Mines: count concealed">
+                  <svg class="ico bomb-ico" aria-hidden="true"><use href="#i-mine-tactical" /></svg>
+                  <b class="res-n fog-n" aria-hidden="true">?</b>
                 </span>
               </div>
             </footer>
