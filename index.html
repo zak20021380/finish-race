@@ -301,6 +301,33 @@
           <circle cx="12" cy="15.2" r="1.3" fill="currentColor" stroke="none" />
         </g>
       </symbol>
+      <!-- the locked loadouts crest: one sculpted bronze padlock, drawn full-colour the
+           way #i-star-3d is — the profile's frosted scrim is the only place it appears.
+           Body and shackle share one light ramp from the upper left; the rim stroke is
+           the specular edge, the top bar and the corner dot are caught highlights. -->
+      <symbol id="i-lock-3d" viewBox="0 0 24 24">
+        <defs>
+          <linearGradient id="lk3d-body" gradientUnits="userSpaceOnUse" x1="6.2" y1="10.2" x2="17.8" y2="20.5">
+            <stop offset="0" stop-color="#FFF6CD" /><stop offset=".32" stop-color="#FBD463" />
+            <stop offset=".64" stop-color="#D9950F" /><stop offset="1" stop-color="#8A4B0B" />
+          </linearGradient>
+          <linearGradient id="lk3d-shackle" gradientUnits="userSpaceOnUse" x1="8.4" y1="4.2" x2="15.8" y2="10.6">
+            <stop offset="0" stop-color="#FFF3C4" /><stop offset=".5" stop-color="#F0B429" /><stop offset="1" stop-color="#9A5A0F" />
+          </linearGradient>
+          <linearGradient id="lk3d-rim" gradientUnits="userSpaceOnUse" x1="12" y1="10.2" x2="12" y2="20.5">
+            <stop offset="0" stop-color="#FFFBE6" stop-opacity=".95" /><stop offset=".38" stop-color="#FCD34D" stop-opacity=".42" />
+            <stop offset="1" stop-color="#6B3202" stop-opacity=".85" />
+          </linearGradient>
+        </defs>
+        <path d="M8.1 10.6V8a3.9 3.9 0 0 1 7.8 0v2.6" fill="none" stroke="#5B2E05" stroke-opacity=".4" stroke-width="2.9" stroke-linecap="round" />
+        <path d="M8.1 10.6V8a3.9 3.9 0 0 1 7.8 0v2.6" fill="none" stroke="url(#lk3d-shackle)" stroke-width="2.1" stroke-linecap="round" />
+        <path d="M8.6 8.4a3.4 3.4 0 0 1 2.1-2.3" fill="none" stroke="#FFFDF0" stroke-opacity=".7" stroke-width=".8" stroke-linecap="round" />
+        <rect x="4.5" y="10.2" width="15" height="10.3" rx="3" fill="url(#lk3d-body)" />
+        <rect x="4.5" y="10.2" width="15" height="10.3" rx="3" fill="none" stroke="url(#lk3d-rim)" stroke-width=".9" />
+        <rect x="6.1" y="11.2" width="11.8" height="1.05" rx=".52" fill="#FFFDF0" opacity=".62" />
+        <path d="M12 13.9a1.55 1.55 0 0 0-.78 2.9l-.14 1.5a.95.95 0 0 0 1.84 0l-.14-1.5A1.55 1.55 0 0 0 12 13.9Z" fill="#3B2404" />
+        <circle cx="6.35" cy="19.1" r=".75" fill="#FFFBEB" opacity=".38" />
+      </symbol>
       <symbol id="i-medal" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="14.5" r="5.2" />
@@ -1038,10 +1065,22 @@
             </div>
             <div class="equips pf-equips">
               <h2 class="eq-h">Equipped</h2>
-              <div class="eq-row pf-eq-row">
-                <figure class="eq pf-eq"><canvas class="cos-pv pf-cos-pv" data-eq="ball" aria-hidden="true"></canvas><figcaption id="eq-ball">Classic</figcaption></figure>
-                <figure class="eq pf-eq"><canvas class="cos-pv pf-cos-pv" data-eq="wall" aria-hidden="true"></canvas><figcaption id="eq-wall">Classic</figcaption></figure>
-                <figure class="eq pf-eq"><canvas class="cos-pv pf-cos-pv" data-eq="board" aria-hidden="true"></canvas><figcaption id="eq-board">Lavender</figcaption></figure>
+              <!-- locked until the cosmetic inventory ships: the three worn previews stay in
+                   place under a frosted obsidian scrim, sealed by the bronze crest. The whole
+                   slab is the target (the cards themselves are pointer-events: none), and a
+                   tap only nudges — no loadout can be focused, toggled or equipped here. -->
+              <div class="pf-eq-lock" id="pf-eq-lock" role="group" aria-disabled="true"
+                aria-label="Equipped cosmetics are locked — coming soon">
+                <div class="eq-row pf-eq-row" aria-hidden="true">
+                  <figure class="eq pf-eq"><canvas class="cos-pv pf-cos-pv" data-eq="ball" aria-hidden="true"></canvas><figcaption id="eq-ball">Classic</figcaption></figure>
+                  <figure class="eq pf-eq"><canvas class="cos-pv pf-cos-pv" data-eq="wall" aria-hidden="true"></canvas><figcaption id="eq-wall">Classic</figcaption></figure>
+                  <figure class="eq pf-eq"><canvas class="cos-pv pf-cos-pv" data-eq="board" aria-hidden="true"></canvas><figcaption id="eq-board">Lavender</figcaption></figure>
+                </div>
+                <span class="pf-eq-scrim" aria-hidden="true"></span>
+                <span class="pf-eq-crest" aria-hidden="true">
+                  <span class="pf-eq-pod"><svg class="ico" focusable="false"><use href="#i-lock-3d" /></svg></span>
+                  <span class="pf-eq-chip">Coming Soon</span>
+                </span>
               </div>
             </div>
             <div class="pf-toast" id="pf-toast" role="status" aria-live="polite" hidden>

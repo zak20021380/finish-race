@@ -165,10 +165,11 @@ export function createMenu(api: MenuApi): Menu {
 
   /* ---------- profile completion toast: animated +100 confirmation ---------- */
   let pfToastTimer = 0;
-  function showPfToast(msg: string) {
+  function showPfToast(msg: string, plain = false) {
     const toast = document.getElementById('pf-toast');
     const label = document.getElementById('pf-toast-t');
     if (!toast || !label) return;
+    toast.classList.toggle('plain', plain); // a plain toast carries a message, not a coin
     label.textContent = msg;
     toast.hidden = false;
     toast.classList.remove('out', 'bump');
@@ -1107,6 +1108,14 @@ export function createMenu(api: MenuApi): Menu {
   onChange(paintProfile);
   paintProfile();
   new ResizeObserver(() => { if (!pfScreen.hidden) paintProfile(); }).observe(pfScreen);
+
+  /* the equipped loadouts stay locked until the cosmetic inventory ships: the cards are
+     pointer-events: none, so the slab itself takes the tap and answers with a warning
+     nudge and a clay toast — nothing here can ever equip, focus or toggle a loadout. */
+  document.getElementById('pf-eq-lock')?.addEventListener('click', () => {
+    notify('warning');
+    showPfToast('Cosmetic loadouts unlock soon!', true);
+  });
 
   /* frame cycle: tapping the avatar steps Default → Auric → Neon; the name reads out via aria-label. */
   document.getElementById('pf-avatar-wrap')?.addEventListener('click', () => {

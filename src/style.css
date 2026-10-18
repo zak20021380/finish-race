@@ -5940,6 +5940,82 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   text-overflow: ellipsis;
 }
 
+/* ---- equipped LOCKED: frosted obsidian scrim + embossed bronze lock crest ----
+   The three worn previews stay in flow (zero layout shift) but read through 1.5px of
+   frost; an absolute scrim owns the section's own radius so nothing bleeds its corners.
+   The crest rides on top: a 44px dark-clay pod with a full-colour bronze padlock and a
+   slim engraved "COMING SOON" chip. Everything under the scrim is inert — the slab takes
+   the tap (a warning nudge + clay toast), never the cards. */
+.pf-eq-lock {
+  position: relative;
+  min-width: 0;
+  border-radius: 20px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.pf-eq-lock .pf-eq-row {
+  opacity: .45;
+  filter: saturate(.6) blur(1.5px);
+}
+.pf-eq-lock .pf-eq-row,
+.pf-eq-scrim,
+.pf-eq-crest { pointer-events: none; }
+.pf-eq-scrim {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at center, rgba(17, 24, 39, .75) 0%, rgba(10, 14, 23, .92) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+.pf-eq-crest {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.pf-eq-pod {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background:
+    radial-gradient(120% 90% at 50% -10%, rgba(252, 211, 77, .2) 0%, rgba(252, 211, 77, 0) 58%),
+    linear-gradient(180deg, #2A3448 0%, #161D2B 100%);
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, .6),
+    inset 0 1px 1px rgba(255, 255, 255, .15),
+    inset 0 0 0 1px rgba(252, 211, 77, .14),
+    0 0 22px -4px rgba(245, 158, 11, .4);
+}
+.pf-eq-pod .ico {
+  width: 22px;
+  height: 22px;
+  filter:
+    drop-shadow(0 1px 0 rgba(0, 0, 0, .6))
+    drop-shadow(0 0 7px rgba(245, 158, 11, .45));
+}
+.pf-eq-chip {
+  padding: 3px 10px 4px;
+  border-radius: var(--radius-pill);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
+  line-height: 1.3;
+  text-transform: uppercase;
+  color: #FDE9AE;
+  background: linear-gradient(180deg, #3A2A0D 0%, #201708 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 0 0 1px rgba(245, 158, 11, .34),
+    0 4px 10px rgba(0, 0, 0, .5);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .55);
+  white-space: nowrap;
+}
+
 /* ---- toast: animated coin reward confirmation ---- */
 .pf-toast {
   position: sticky;
@@ -5975,6 +6051,16 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 .pf-toast.out { opacity: 0; transform: translateY(8px); transition: opacity .25s ease, transform .25s ease; }
+/* a message with no coin behind it (the locked-loadouts nudge): same slab, clay face */
+.pf-toast.plain {
+  background: linear-gradient(180deg, #2A3448 0%, #1C2433 100%);
+  color: var(--ink);
+  box-shadow:
+    0 4px 0 #080C14,
+    0 16px 30px -10px rgba(0, 0, 0, .65),
+    inset 0 1px 0 rgba(255, 255, 255, .12);
+}
+.pf-toast.plain .coin { display: none; }
 
 /* ---- invite & earn: the compact referral trigger in the Profile rhythm ----
    One 60px clay slab: engraved ceramic well (warm-gold gift), title + subtext,
