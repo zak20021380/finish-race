@@ -1,8 +1,9 @@
 /**
  * chat.ts — quick chat: the key above the dock, its bottom sheet, and the bubbles over the cards.
  *
- * The vocabulary is closed (`data/phrases.ts`): every send is one of twelve taunts or one of eight
- * emotes, so there is no input, no parser and nothing a player can type. The transport is local —
+ * The vocabulary is closed (`data/phrases.ts`): every send is one of four tactical one-liners or
+ * one of three psychological emotes, so there is no input, no parser and nothing a player can
+ * type. The transport is local —
  * a message is a bubble with a timer, a report is a toast, mute is a boolean that dies with the
  * page. Nothing here opens a socket.
  *
@@ -14,6 +15,7 @@
 import './chat.css';
 import type { GameState, Player } from './rules';
 import { EMOTES, TAUNTS, type ChatEmote } from './data/phrases';
+import { impact } from './telegram';
 
 export interface ChatOptions {
   /** The recessed pill in the dock's console rail: the one slot chat has ever needed. */
@@ -207,17 +209,22 @@ export function createChat(o: ChatOptions): Chat {
   emoteRow.setAttribute('role', 'group');
   emoteRow.setAttribute('aria-label', 'Emotes');
   const phraseList = el('div', 'chat-phrases');
-  phraseList.setAttribute('data-scroll', '');        // the page never scrolls; this list may
+  phraseList.setAttribute('role', 'group');
+  phraseList.setAttribute('aria-label', 'Taunts');
 
+  /* three large emote pods: a recessed obsidian well, the layered art, the feeling in one word */
   for (const emote of EMOTES) {
-    const b = el('button', 'chat-emote-btn');
+    const b = el('button', `chat-emote-btn is-${emote.id}`);
     b.type = 'button';
     b.setAttribute('aria-label', `Send emote: ${emote.label}`);
     b.title = emote.label;
-    b.innerHTML = emote.svg;
-    b.addEventListener('click', () => sendEmote(emote));
+    const art = el('span', 'chat-emote-art');
+    art.innerHTML = emote.svg;         // first-party static markup, never a player's string
+    b.append(art, el('span', 'chat-emote-micro', emote.micro));
+    b.addEventListener('click', () => sendEmote(emote, b));
     emoteRow.appendChild(b);
   }
+  /* four taunt pills in a 2x2 grid: terse, scannable, one tap each */
   for (const text of TAUNTS) {
     const b = el('button', 'chat-phrase', text);
     b.type = 'button';
@@ -282,14 +289,21 @@ export function createChat(o: ChatOptions): Chat {
   function sendText(text: string) {
     if (!canChat() || isCooling()) return;
     lastSentAt = Date.now();
+    impact('light');                     // a soft tap: the line is short, the jolt should be too
     setBubble('me', document.createTextNode(text));
     closeSheet(false);
     paintCool();
   }
 
-  function sendEmote(emote: ChatEmote) {
+  function sendEmote(emote: ChatEmote, btn: HTMLButtonElement) {
     if (!canChat() || isCooling()) return;
     lastSentAt = Date.now();
+    impact('medium');                    // a punchy tap: the face is the message
+    /* the pod bounces once on the tap that spent it; the class is re-armed on every press */
+    btn.classList.remove('is-tapped');
+    void btn.offsetWidth;
+    btn.classList.add('is-tapped');
+    window.setTimeout(() => btn.classList.remove('is-tapped'), 420);
     setBubble('me', emoteNode(emote), true);
     closeSheet(false);
     paintCool();
@@ -303,10 +317,11 @@ export function createChat(o: ChatOptions): Chat {
     setBubble('foe', document.createTextNode(line));
   }
 
-  /* The two fixed replies are looked up in the taunt list instead of being retyped here, so the
+  /* The three fixed replies are looked up in the taunt list instead of being retyped here, so the
      bot can only ever say a phrase the sheet already offers. */
-  const MINE_REPLY = TAUNTS.find((t) => t === 'Oops, my bad.') ?? null;
-  const LOG_REPLY = TAUNTS.find((t) => t === 'Tick tock.') ?? null;
+  const MINE_REPLY = TAUNTS.find((t) => t === 'Boom! Nice step.') ?? null;
+  const LOG_REPLY = TAUNTS.find((t) => t === 'Tick tock...') ?? null;
+  const WALL_REPLY = TAUNTS.find((t) => t === 'Path closed.') ?? null;
 
   function react(line: string | null, now: number) {
     if (!line) return;
@@ -341,7 +356,7 @@ export function createChat(o: ChatOptions): Chat {
     /* a wall of yours went up */
     if (s.walls.length > prev.walls.length
       && s.walls.slice(prev.walls.length).some((w) => w.owner === local)) {
-      react(TAUNTS[Math.floor(Math.random() * TAUNTS.length)] ?? null, now);
+      react(WALL_REPLY, now);
     }
   }
 

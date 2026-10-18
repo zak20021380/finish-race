@@ -62,15 +62,16 @@
 }
 /* an emote is a square tile, no text */
 .chat-bubble.is-emote {
-  width: 44px;
-  min-height: 44px;
+  width: 48px;
+  min-height: 48px;
+  max-height: none;
   padding: 0;
   display: grid;
   place-items: center;
   border-radius: 14px;
 }
 .chat-bubble.is-emote .chat-bubble-t { display: grid; place-items: center; max-height: none; }
-.chat-emote svg { width: 28px; height: 28px; display: block; }
+.chat-emote svg { width: 34px; height: 34px; display: block; }
 
 /* ---- the scrim and the bottom sheet ---- */
 .chat-scrim {
@@ -93,8 +94,11 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 86%;
-  padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  /* the whole sheet: head + three 72px pods + a 2x2 grid of 44px pills ≈ 246px, so the bottom
+     half of a 360x640 phone holds it with room to spare — and nothing scrolls, ever */
+  max-height: 50%;
+  overflow: hidden;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
   border-radius: 24px 24px 0 0;
   background: var(--clay-face);
   box-shadow: 0 -3px 0 #080C14, var(--clay), var(--clay-ring);
@@ -143,96 +147,122 @@
   min-height: 0;
 }
 
-/* eight emotes on one row. 44px targets need a swipe on a 360px phone, so the row scrolls
-   horizontally and snaps; all eight are there, the last one a short flick away. */
+/* three large emote pods, one row, centred: each a recessed obsidian well with an ambient glow
+   in its own tonality. 88x72 is a landing pad for a thumb, not a toolbar chip. */
 .chat-emotes {
-  display: flex;
-  gap: 6px;
-  padding: 2px 2px 4px;
-  overflow-x: auto;
-  scroll-snap-type: x proximity;
-  overscroll-behavior: contain;
-  touch-action: pan-x;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-.chat-emotes::-webkit-scrollbar { display: none; }
-.chat-emote-btn {
-  flex: none;
-  appearance: none;
-  border: 0;
-  width: 44px;
-  height: 44px;
-  padding: 0;
   display: grid;
-  place-items: center;
-  border-radius: 14px;
-  color: var(--honey-ink);
-  background: var(--solid-a);
-  cursor: pointer;
-  scroll-snap-align: start;
-  box-shadow:
-    0 2px 0 #0B111D,
-    inset 0 0 0 1px var(--hair),
-    inset 0 1px 0 rgba(255, 255, 255, .06);
-  transition: transform var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
+  grid-template-columns: repeat(3, 88px);
+  justify-content: center;
+  gap: 8px;
 }
-.chat-emote-btn svg { width: 26px; height: 26px; display: block; }
-.chat-emote-btn:active { transform: translateY(2px); }
-.chat-emote-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-
-/* the twelve taunts as one column of 48px rows */
-.chat-phrases {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
-  padding-bottom: 2px;
-}
-.chat-phrase {
-  flex: none;
+.chat-emote-btn {
   appearance: none;
   border: 0;
-  min-height: 48px;
-  padding: 8px 12px;
-  text-align: left;
-  border-radius: 14px;
-  background: var(--solid-a);
-  color: var(--ink);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.2;
-  cursor: pointer;
-  box-shadow:
-    0 2px 0 #0B111D,
-    inset 0 0 0 1px var(--hair),
-    inset 0 1px 0 rgba(255, 255, 255, .05);
-  transition: transform var(--motion-fast), background var(--motion-fast);
-}
-.chat-phrase:active { transform: translateY(2px); }
-.chat-phrase:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 1px; }
-
-/* cooling down: the list is replaced by the remaining seconds */
-.chat-wait {
-  display: none;
+  width: 88px;
+  height: 72px;
+  padding: 6px 4px 5px;
+  display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 180px;
-  padding: 24px 12px;
+  gap: 2px;
+  border-radius: 18px;
+  cursor: pointer;
+  background:
+    radial-gradient(120% 85% at 50% 18%, var(--emote-glow) 0%, rgba(0, 0, 0, 0) 62%),
+    var(--field);
+  box-shadow:
+    0 3px 0 #080C14,
+    var(--clay-spec),
+    inset 0 -3px 3px rgba(0, 0, 0, .4),
+    inset 0 0 0 1px var(--hair),
+    0 10px 22px -14px var(--emote-glow);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.chat-emote-art { display: grid; place-items: center; min-height: 42px; }
+.chat-emote-art svg { width: 42px; height: 42px; display: block; }
+.chat-emote-micro {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  line-height: 1;
+  color: var(--ink-soft);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .5);
+}
+.chat-emote-btn.is-laugh { --emote-glow: rgba(245, 176, 46, .34); }
+.chat-emote-btn.is-fury { --emote-glow: rgba(240, 68, 37, .38); }
+.chat-emote-btn.is-impatient { --emote-glow: rgba(56, 189, 248, .36); }
+.chat-emote-btn.is-laugh .chat-emote-micro { color: var(--honey-ink); }
+.chat-emote-btn.is-fury .chat-emote-micro { color: var(--red-ink); }
+.chat-emote-btn.is-impatient .chat-emote-micro { color: var(--brand-ink); }
+.chat-emote-btn:active { transform: translateY(2px); }
+.chat-emote-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+/* the pod bounces once on the tap that spent it */
+.chat-emote-btn.is-tapped { animation: chat-emote-bounce .38s cubic-bezier(.2, .8, .3, 1); }
+@keyframes chat-emote-bounce {
+  0% { transform: translateY(0) scale(1); }
+  35% { transform: translateY(-6px) scale(1.06); }
+  62% { transform: translateY(1px) scale(.97); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+/* the four taunts: a tight 2x2 grid of sculpted pills, 12px bold, one tap each */
+.chat-phrases {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 8px;
+}
+.chat-phrase {
+  appearance: none;
+  border: 0;
+  min-height: 44px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #2B3750 0%, #232E44 100%);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  line-height: 1.1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow:
+    0 3px 0 #0B111D,
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 -2px 3px rgba(0, 0, 0, .3),
+    inset 0 0 0 1px var(--hair);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.chat-phrase:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 #0B111D,
+    inset 0 2px 4px rgba(0, 0, 0, .45),
+    inset 0 0 0 1px var(--hair);
+}
+.chat-phrase:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 1px; }
+
+/* cooling down: the grid is replaced by the remaining seconds, at the same compact height */
+.chat-wait {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 96px;
+  padding: 12px;
   border-radius: 18px;
   background: var(--field);
   box-shadow: var(--inset);
   text-align: center;
 }
 .chat-wait-n {
-  font-size: 44px;
+  font-size: 34px;
   font-weight: 800;
   line-height: 1;
   color: var(--honey-ink);
@@ -315,7 +345,9 @@ html.reduced-motion .chat-bubble,
 html.reduced-motion .chat-scrim,
 html.reduced-motion .chat-toast { transition: none; animation: none; }
 html.reduced-motion .chat-wait-n { animation: none; }
+html.reduced-motion .chat-emote-btn.is-tapped { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .chat-sheet, .chat-bubble, .chat-scrim, .chat-toast { transition: none; animation: none; }
   .chat-wait-n { animation: none; }
+  .chat-emote-btn.is-tapped { animation: none; }
 }
