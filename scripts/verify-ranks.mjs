@@ -8,12 +8,17 @@
  *   - the page itself scrolls vertically (the screen must own its height),
  *   - the old three-box stat cluster (.ranks-stats / .rstat) or the Preview tag
  *     ever comes back,
- *   - the header is no longer one 44px identity line with a "Nd left" capsule,
+ *   - the header loses its championship wordmark (20-22px ultra-bold, tracked
+ *     -0.3px, white with an ambient shadow) or its metallic "SEASON N" badge,
+ *   - the title collides with the countdown capsule, or the capsule loses its
+ *     amber beacon,
  *   - the board tabs lose their borderless pill groove or sliding thumb,
  *   - the podium loses its floating geometry: circular avatars, a taller gold
  *     centre, short rank pills ("GM II"), or the star-glowing TIQ score,
+ *   - the three stepped plinths lose their 38/28/22 heights, their distinct
+ *     gold / titanium / bronze faces, their embossed numerals or the gold aura,
  *   - the You slate loses its gradient/border, its one-row 4-badge micro gauge,
- *     its italic milestone, or the "CLIMB NOW" ember key (gradient, ink, 44px),
+ *     its italic milestone, or regains the bulky "CLIMB NOW" key,
  *   - the podium and the You card cannot both fit a 360x640 screen without
  *     clipping (page scrollbar or cut edges),
  *   - the nations board bar or the mind sheet regress.
@@ -105,20 +110,51 @@ const AUDIT = () => {
   if (!/rgb\(15,\s*20,\s*32\)|#0f1420/i.test(bg)) bad(`obsidian canvas missing: "${bg.slice(0, 120)}"`);
   else out.notes.canvas = 'obsidian gradient ok';
 
-  /* 4. the declutter: the three-box stat cluster and the Preview tag never return */
-  for (const ghost of ['#ranks-stats', '.ranks-stats', '.rstat', '.ml-preview', '.ml-badges']) {
+  /* 4. the declutter: the three-box stat cluster, the Preview tag and the old
+        CLIMB NOW key never return */
+  for (const ghost of ['#ranks-stats', '.ranks-stats', '.rstat', '.ml-preview', '.ml-badges', '.mh-cta']) {
     if (root.querySelector(ghost)) bad(`clutter regression: ${ghost} is still in the DOM`);
   }
+  if (/climb\s*now/i.test(root.textContent ?? '')) bad('CLIMB NOW copy is still on the ranks screen');
 
-  /* 5. the header: one 44px line — wordmark over "Season N", "Nd left" capsule */
+  /* 5. the header: a championship wordmark over a metallic season badge, with
+        the "Nd left" capsule tucked to the right — no collision between them */
   const head = root.querySelector('.ranks-head');
   if (!head || head.getBoundingClientRect().height === 0) bad('ranks head missing/collapsed');
-  const hh = head.getBoundingClientRect().height;
-  if (hh > 52) bad(`ranks head is ${hh.toFixed(1)}px tall — should be one slim line (<= 52)`);
+  else {
+    const hh = head.getBoundingClientRect().height;
+    if (hh > 56) bad(`ranks head is ${hh.toFixed(1)}px tall — should be one slim band (<= 56)`);
+  }
   const title = root.querySelector('.ml-title');
   if (!title || !/mind ladder/i.test(title.textContent)) bad('ml-title missing/wrong');
+  else {
+    const ts = getComputedStyle(title);
+    const fs = parseFloat(ts.fontSize);
+    if (fs < 20 - 0.05 || fs > 22 + 0.05) bad(`title is ${fs}px — want 20-22px display type`);
+    if (parseInt(ts.fontWeight, 10) < 800) bad(`title weight is ${ts.fontWeight}, want ultra-bold`);
+    if (!/rgb\(255,\s*255,\s*255\)/.test(ts.color)) bad(`title ink is ${ts.color}, want #FFFFFF`);
+    if (ts.textShadow === 'none') bad('title has no ambient shadow');
+    if (!near(parseFloat(ts.letterSpacing), -0.3, 0.12)) bad(`title tracking is ${ts.letterSpacing}, want -0.3px`);
+    const pillR = root.querySelector('.ml-season')?.getBoundingClientRect();
+    const titleR = title.getBoundingClientRect();
+    if (pillR && titleR.right > pillR.left - 4) {
+      bad(`title collides with the countdown pill (title right ${titleR.right.toFixed(1)} vs pill left ${pillR.left.toFixed(1)})`);
+    }
+    out.notes.title = `${fs}px / ${ts.fontWeight} / ${ts.letterSpacing}`;
+  }
   const sub = root.querySelector('.ml-sub');
   if (!sub || !/^season \d+/i.test(sub.textContent.trim())) bad(`season subtitle is "${sub?.textContent}"`);
+  else {
+    const ss = getComputedStyle(sub);
+    const sfs = parseFloat(ss.fontSize);
+    if (sfs < 9.5 || sfs > 10.5) bad(`season badge is ${sfs}px — want 10px`);
+    if (parseInt(ss.fontWeight, 10) < 700) bad(`season badge weight is ${ss.fontWeight}, want 700`);
+    if (!near(parseFloat(ss.letterSpacing), 1.2, 0.12)) bad(`season badge tracking is ${ss.letterSpacing}, want +1.2px`);
+    if (ss.textTransform !== 'uppercase') bad(`season badge transform is ${ss.textTransform}, want uppercase`);
+    if (!/rgb\(148,\s*163,\s*184\)/.test(ss.color)) bad(`season badge ink is ${ss.color}, want #94A3B8`);
+    if (!/gradient/.test(ss.backgroundImage)) bad('season badge has no metallic face');
+    out.notes.season = `${sfs}px metallic badge`;
+  }
   const pill = root.querySelector('.ml-season .ml-season-t');
   if (!pill || !/^\d+d left$/.test(pill.textContent.trim())) bad(`countdown pill is "${pill?.textContent}"`);
   const beacon = root.querySelector('.ml-season .ml-pulse');
@@ -142,8 +178,11 @@ const AUDIT = () => {
   /* 7. the floating Top-3 podium */
   const cards = [...root.querySelectorAll('#ranks-podium .pod-card')].filter(visible);
   if (cards.length !== 3) bad(`expected 3 podium cards, saw ${cards.length}`);
-  let secTop = null, secAvTop = null, champ = null;
+  let secAvTop = null, champ = null;
+  const plinthH = {};
+  const footBottoms = [];
   for (const card of cards) {
+    const rank = card.dataset.rank;
     const cr = card.getBoundingClientRect();
     const av = card.querySelector('.pod-av');
     if (!av) { bad('a podium card has no avatar'); continue; }
@@ -159,26 +198,78 @@ const AUDIT = () => {
     const glyph = iq?.querySelector('use')?.getAttribute('href') ?? '';
     if (glyph !== '#i-star') bad(`podium TIQ glyph is ${glyph}, want #i-star`);
     if (getComputedStyle(iq.querySelector('b')).textShadow === 'none') bad('podium TIQ digits are not glowing');
+
+    /* the plinth: exact stepped height, a cut metal face, a stepped cornice,
+       a seated base, an embossed numeral and an aura beneath the base */
     const foot = card.querySelector('.pod-foot');
-    if (!foot || foot.textContent.trim().length === 0) bad('a podium card has no rank plinth');
-    if (card.dataset.rank === '1') {
+    if (!foot || foot.textContent.trim().length === 0) { bad('a podium card has no rank plinth'); continue; }
+    const fr = foot.getBoundingClientRect();
+    const fcs = getComputedStyle(foot);
+    const num = foot.querySelector('b');
+    const ns = num ? getComputedStyle(num) : null;
+    const aura = foot.querySelector('.pod-foot-aura');
+    const cap = getComputedStyle(foot, '::before');
+    const base = getComputedStyle(foot, '::after');
+    plinthH[rank] = fr.height;
+    footBottoms.push(fr.bottom);
+    const want = rank === '1' ? 38 : rank === '2' ? 28 : 22;
+    if (!near(fr.height, want, 0.8)) bad(`rank ${rank} plinth is ${fr.height.toFixed(1)}px tall, want ${want}`);
+    if (parseFloat(fcs.borderTopWidth) < 0.9) bad(`rank ${rank} plinth has no metal rim`);
+    if (cap.content === 'none' || cap.content === '') bad(`rank ${rank} plinth has no stepped cornice`);
+    if (base.content === 'none' || base.content === '') bad(`rank ${rank} plinth has no seated base`);
+    if (!aura || aura.getBoundingClientRect().width < fr.width * 0.9) bad(`rank ${rank} plinth has no aura beneath the base`);
+    if (!num || ns.textShadow === 'none') bad(`rank ${rank} numeral is not embossed`);
+
+    if (rank === '1') {
       champ = { h: cr.height, avTop: ar.top };
       const crown = card.querySelector('.pod-crown');
       if (!crown || crown.getBoundingClientRect().width < 16) bad('gold crown missing/collapsed');
-    } else if (card.dataset.rank === '2') {
-      secTop = foot.getBoundingClientRect().top;
+      if (!/rgb\(42,\s*35,\s*18\)/.test(fcs.backgroundImage) || !/rgb\(23,\s*21,\s*16\)/.test(fcs.backgroundImage)) {
+        bad(`gold plinth gradient is "${fcs.backgroundImage.slice(0, 90)}" — want #2A2312 → #171510`);
+      }
+      if (!/rgba\(245,\s*158,\s*11,\s*0\.45\)/.test(fcs.borderTopColor)) bad(`gold plinth rim is ${fcs.borderTopColor}, want rgba(245,158,11,0.45)`);
+      if (!ns || ns.color !== 'rgb(252, 211, 77)') bad(`gold numeral ink is ${ns?.color}, want #FCD34D`);
+      if (!ns || !near(parseFloat(ns.fontSize), 15, 0.3)) bad(`gold numeral is ${ns?.fontSize}, want 15px`);
+      if (!/rgba\(245,\s*158,\s*11,\s*0\.42\)/.test(getComputedStyle(aura).backgroundImage)) bad('gold plinth aura is not gold');
+    } else if (rank === '2') {
       secAvTop = ar.top;
-    } else if (card.dataset.rank === '3') {
-      const footTop = foot.getBoundingClientRect().top;
-      if (secTop !== null && !near(footTop, secTop, 1.5)) bad('silver and bronze plinths do not bottom-align');
+      if (!/rgb\(30,\s*36,\s*48\)/.test(fcs.backgroundImage) || !/rgb\(18,\s*22,\s*32\)/.test(fcs.backgroundImage)) {
+        bad(`silver plinth gradient is "${fcs.backgroundImage.slice(0, 90)}" — want #1E2430 → #121620`);
+      }
+      if (!/rgba\(148,\s*163,\s*184,\s*0\.35\)/.test(fcs.borderTopColor)) bad(`silver plinth rim is ${fcs.borderTopColor}, want rgba(148,163,184,0.35)`);
+      if (!ns || ns.color !== 'rgb(226, 232, 240)') bad(`silver numeral ink is ${ns?.color}, want titanium #E2E8F0`);
+      if (!ns || !near(parseFloat(ns.fontSize), 13, 0.3)) bad(`silver numeral is ${ns?.fontSize}, want 13px`);
+    } else if (rank === '3') {
+      if (!/rgb\(38,\s*27,\s*18\)/.test(fcs.backgroundImage) || !/rgb\(21,\s*17,\s*14\)/.test(fcs.backgroundImage)) {
+        bad(`bronze plinth gradient is "${fcs.backgroundImage.slice(0, 90)}" — want #261B12 → #15110E`);
+      }
+      if (!/rgba\(217,\s*119,\s*6,\s*0\.35\)/.test(fcs.borderTopColor)) bad(`bronze plinth rim is ${fcs.borderTopColor}, want rgba(217,119,6,0.35)`);
+      if (!ns || ns.color !== 'rgb(253, 186, 116)') bad(`bronze numeral ink is ${ns?.color}, want warm bronze #FDBA74`);
+      if (!ns || !near(parseFloat(ns.fontSize), 13, 0.3)) bad(`bronze numeral is ${ns?.fontSize}, want 13px`);
     }
+
+    /* avatar · name · tier · score chip · pedestal share one vertical axis */
+    const centers = [av, card.querySelector('.pod-name'), tier, iq, foot]
+      .filter(Boolean)
+      .map((el) => {
+        const r = el.getBoundingClientRect();
+        return r.left + r.width / 2;
+      });
+    if (Math.max(...centers) - Math.min(...centers) > 1.5) bad(`rank ${rank} column is not centred over its plinth`);
   }
-  if (champ && champ.h < 140) bad(`gold card is only ${champ.h.toFixed(1)}px tall (want >= 140)`);
+  if (!(plinthH['1'] > plinthH['2'] && plinthH['2'] > plinthH['3'])) {
+    bad(`plinths are not stepped: ${plinthH['1']?.toFixed(0)} / ${plinthH['2']?.toFixed(0)} / ${plinthH['3']?.toFixed(0)}`);
+  }
+  if (footBottoms.length === 3 && Math.max(...footBottoms) - Math.min(...footBottoms) > 1.5) {
+    bad('the three plinths do not share one base line');
+  }
+  if (champ && champ.h < 150) bad(`gold card is only ${champ.h.toFixed(1)}px tall (want >= 150)`);
   if (champ && secAvTop !== null && secAvTop - champ.avTop < 20) bad('gold crest is not elevated above the challengers');
   const band = root.querySelector('.pod-band, #pod-band');
   if (band && visible(band)) bad('the podium band caption is back — the header already carries the season');
 
-  /* 8. the You slate: gradient, bordered, XP ring, one-row micro gauge, ember key */
+  /* 8. the You slate: gradient, bordered, XP ring, one-row micro gauge, and a
+        quiet milestone — no CTA, no nested action, room to breathe */
   const slate = root.querySelector('.solo-standing.mh');
   if (!slate || !visible(slate)) { bad('You slate missing'); return out; }
   const ss = getComputedStyle(slate);
@@ -186,6 +277,12 @@ const AUDIT = () => {
     bad(`You slate gradient is "${ss.backgroundImage.slice(0, 90)}" — want #161F30 → #0F1624`);
   }
   if (!/rgba\(255,\s*255,\s*255,\s*0\.0?7\)/.test(ss.borderTopColor)) bad(`You slate border is ${ss.borderTopColor}, want rgba(255,255,255,0.07)`);
+  if (!near(parseFloat(ss.paddingTop), 12, 0.6) || !near(parseFloat(ss.paddingBottom), 12, 0.6)) {
+    bad(`You slate vertical padding is ${ss.paddingTop} / ${ss.paddingBottom}, want 12px`);
+  }
+  if (!near(parseFloat(ss.paddingLeft), 14, 0.6) || !near(parseFloat(ss.paddingRight), 14, 0.6)) {
+    bad(`You slate side padding is ${ss.paddingLeft} / ${ss.paddingRight}, want 14px`);
+  }
   if (!slate.querySelector('.mh-ring .mh-arc-fill')) bad('XP progress ring missing');
   const line = slate.querySelector('.mh-line');
   if (!line || !/^You · .+/i.test(line.textContent.trim())) bad(`identity line is "${line?.textContent}"`);
@@ -205,18 +302,11 @@ const AUDIT = () => {
   const ptext = slate.querySelector('.mh-ptext');
   if (!ptext || getComputedStyle(ptext).fontStyle !== 'italic') bad('milestone hint is missing/not italic');
   else if (!/wins? to .+ · crest glows on rank-up/i.test(ptext.textContent)) bad(`milestone hint says "${ptext.textContent}"`);
-  const cta = slate.querySelector('.mh-cta');
-  if (!cta) { bad('CLIMB NOW key missing'); return out; }
-  const ch = cta.getBoundingClientRect().height;
-  if (!near(ch, 44, 2)) bad(`CLIMB NOW key is ${ch.toFixed(1)}px tall, want 44`);
-  if (cta.textContent.trim() !== 'CLIMB NOW') bad(`key text is "${cta.textContent.trim()}", want CLIMB NOW`);
-  const ccs = getComputedStyle(cta);
-  if (!/rgb\(245,\s*158,\s*11\)/.test(ccs.backgroundImage) || !/rgb\(180,\s*83,\s*9\)/.test(ccs.backgroundImage)) {
-    bad(`key gradient is "${ccs.backgroundImage.slice(0, 90)}" — want #F59E0B → #B45309`);
-  }
-  if (!/rgb\(255,\s*251,\s*235\)/.test(ccs.color)) bad(`key ink is ${ccs.color}, want #FFFBEB`);
-  if (!near(parseFloat(ccs.letterSpacing), 1.2, 0.05)) bad(`key tracking is ${ccs.letterSpacing}, want 1.2px`);
-  if (!near(parseFloat(ccs.borderTopLeftRadius), 999, 1)) bad(`key radius is ${ccs.borderTopLeftRadius}, want a pill`);
+  if (slate.querySelector('.mh-cta, button')) bad('the You slate still carries an action key');
+  if (/climb\s*now/i.test(slate.textContent ?? '')) bad('CLIMB NOW copy is still inside the You slate');
+  const slateH = slate.getBoundingClientRect().height;
+  if (slateH > 190) bad(`You slate is ${slateH.toFixed(0)}px tall — the freed CTA space was not reclaimed`);
+  out.notes.slate = `${slateH.toFixed(0)}px read-only HUD`;
 
   /* 9. on entry the podium and the You slate must both fit the visible scroller:
         no clipping, no page scrollbar — the ladder below may still scroll itself */
@@ -332,18 +422,19 @@ try {
       }
     }
 
-    /* the key routes home */
+    /* the freed foot of the slate: no CTA, no button, no stale copy */
     await pg.click('.dock-nav .tab[data-tab="ranks"]');
     await pg.waitForTimeout(400);
-    try {
-      await pg.click('.solo-standing .mh-cta', { timeout: 5000 });
-      await pg.waitForTimeout(600);
-      const homeShown = await pg.evaluate(() => !document.getElementById('s-home')?.hidden);
-      if (homeShown) pass(`${tag} cta-routes-home`);
-      else fail(`${tag} cta-routes-home`, 'CLIMB NOW did not reveal #s-home');
-    } catch {
-      fail(`${tag} cta-routes-home`, 'the CLIMB NOW key was not clickable');
-    }
+    const removed = await pg.evaluate(() => {
+      const screen = document.getElementById('s-ranks');
+      return {
+        keys: screen.querySelectorAll('.mh-cta').length,
+        buttons: screen.querySelectorAll('.solo-standing.mh button').length,
+        copy: /climb\s*now/i.test(screen.textContent ?? ''),
+      };
+    });
+    if (removed.keys === 0 && removed.buttons === 0 && !removed.copy) pass(`${tag} cta-removed`);
+    else fail(`${tag} cta-removed`, `keys ${removed.keys}, buttons ${removed.buttons}, copy ${removed.copy}`);
 
     await ctx.close();
   }

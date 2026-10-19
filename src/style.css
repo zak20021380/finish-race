@@ -56,7 +56,7 @@
   --tier-grandmaster: #FCD34D;
   --tier-grandmaster-glow: rgba(252, 211, 77, .5);
   /* Zone A and Zone B own fixed bands so the ladder's budget never drifts. */
-  --ml-head-h: 44px;
+  --ml-head-h: 50px;
   --ml-seg-h: 40px;
 
   /* Result fills keep their deep hues in both themes: the type on them is always white. */
@@ -4729,7 +4729,19 @@ html.reduced-motion .car-card.nations-cup::before { display: none; }
   --pod-metal: #FCD34D;
   --pod-metal-soft: rgba(253, 230, 138, .5);
   --pod-glow: rgba(245, 158, 11, .42);
-  min-height: 116px;
+  /* plinth defaults (rank 3 — warm bronze); the two rank blocks below re-cut
+     every one of these so each pedestal is a single metal recipe. */
+  --plinth-h: 22px;
+  --plinth-w: 84px;
+  --plinth-bg: linear-gradient(180deg, #261B12 0%, #15110E 100%);
+  --plinth-cap: linear-gradient(180deg, #3B2A19 0%, #261B12 100%);
+  --plinth-edge: rgba(217, 119, 6, .35);
+  --plinth-lip: rgba(253, 186, 116, .38);
+  --plinth-radius: 8px 8px 10px 10px;
+  --plinth-num: #FDBA74;
+  --plinth-num-size: 13px;
+  --plinth-aura: rgba(217, 119, 6, .22);
+  min-height: 126px;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -4751,10 +4763,38 @@ html.reduced-motion .car-card.nations-cup::before { display: none; }
   --pod-metal-soft: rgba(253, 186, 116, .38);
   --pod-glow: rgba(217, 119, 6, .32);
 }
-/* #1 stands 34px taller than its neighbours; because the plinth is pinned to the
-   base, that extra height lands in the float between the TIQ chip and the plinth. */
-.pod-card[data-rank="1"] { grid-column: 2; min-height: 150px; z-index: 1; }
-.pod-card[data-rank="2"] { grid-column: 1; }
+/* The three pedestals are the height ladder: 38 / 28 / 22. The card is a flex
+   column with its plinth pinned to the base, so the champion's extra height
+   becomes float above the base instead of a taller block of type. */
+.pod-card[data-rank="1"] {
+  grid-column: 2;
+  min-height: 162px;
+  z-index: 1;
+  --plinth-h: 38px;
+  --plinth-w: 98px;
+  --plinth-bg: linear-gradient(180deg, #2A2312 0%, #171510 100%);
+  --plinth-cap: linear-gradient(180deg, #4A3A15 0%, #2A2312 100%);
+  --plinth-edge: rgba(245, 158, 11, .45);
+  --plinth-lip: rgba(251, 191, 36, .6);
+  --plinth-radius: 8px 8px 12px 12px;
+  --plinth-num: #FCD34D;
+  --plinth-num-size: 15px;
+  --plinth-aura: rgba(245, 158, 11, .42);
+}
+.pod-card[data-rank="2"] {
+  grid-column: 1;
+  min-height: 134px;
+  --plinth-h: 28px;
+  --plinth-w: 90px;
+  --plinth-bg: linear-gradient(180deg, #1E2430 0%, #121620 100%);
+  --plinth-cap: linear-gradient(180deg, #303A4A 0%, #1E2430 100%);
+  --plinth-edge: rgba(148, 163, 184, .35);
+  --plinth-lip: rgba(226, 232, 240, .48);
+  --plinth-radius: 8px 8px 10px 10px;
+  --plinth-num: #E2E8F0;
+  --plinth-num-size: 13px;
+  --plinth-aura: rgba(148, 163, 184, .2);
+}
 .pod-card[data-rank="3"] { grid-column: 3; }
 /* The leader's throne paints its halo behind the content; every child rides above. */
 .pod-card > * { position: relative; z-index: 1; }
@@ -4981,40 +5021,100 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
 .pod-btn:active { transform: translateY(var(--press-y)); --d: 0px; }
 .pod-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
-/* the plinth: one small chamfered slab of dark clay, floating on its own shadow,
-   with a metal hairline on the lit edge and the rank numeral stamped into it.
-   `margin-top:auto` pins it to the base, so the float length (not the content)
-   is what lifts #1. */
+/* ---- the three-step plinth: architectural, not a footer bar -----------------
+   Each card ends in a machined pedestal: a stepped cornice over a beveled metal
+   face, a darker base band under it, and a soft aura pooling on the canvas
+   beneath. Height and every finish are custom properties set on the rank block
+   above, so the trio reads as one family cut in gold, titanium and bronze.
+   `margin-top:auto` pins the base, so the float length (not the content) is what
+   lifts #1. */
 .pod-foot {
   position: relative;
   flex: none;
-  height: 14px;
-  width: min(76%, 86px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--plinth-h);
+  width: min(92%, var(--plinth-w));
   margin: auto auto 0;
-  border-radius: 3px 3px 7px 7px;
-  background: linear-gradient(180deg, #1A2334 0%, #0C121E 100%);
+  border-radius: var(--plinth-radius);
+  background: var(--plinth-bg);
+  border: 1px solid var(--plinth-edge);
   box-shadow:
-    inset 0 1px 0 var(--pod-metal-soft, rgba(255, 255, 255, .16)),
-    inset 0 2px 3px rgba(0, 0, 0, .5),
-    inset 0 -1px 0 rgba(255, 255, 255, .04);
-  /* the chamfer: a sculpted pedestal profile, shadowed by drop-shadow because a
-     clip-path would eat any outer box-shadow */
-  clip-path: polygon(7% 0, 93% 0, 100% 100%, 0 100%);
-  filter: drop-shadow(0 9px 11px rgba(0, 0, 0, .72));
+    inset 0 1px 0 var(--plinth-lip),
+    inset 0 -12px 18px -12px rgba(0, 0, 0, .95),
+    0 12px 18px -12px rgba(0, 0, 0, .9),
+    0 14px 26px -8px var(--plinth-aura),
+    0 0 20px -6px var(--plinth-aura);
 }
-/* the rank stamped into the plinth, inside the metal hairline */
-.pod-foot b {
+/* the stepped cornice: a narrower upper course that catches the light, making
+   the silhouette read as two stacked blocks rather than a single slab */
+.pod-foot::before {
+  content: "";
   position: absolute;
-  inset: 0;
+  z-index: 1;
+  top: -6px;
+  left: 5%;
+  right: 5%;
+  height: 6px;
+  border-radius: 5px 5px 2px 2px;
+  background: var(--plinth-cap);
+  border: 1px solid var(--plinth-edge);
+  border-bottom: 0;
+  box-shadow:
+    inset 0 1px 0 var(--plinth-lip),
+    0 -1px 2px rgba(0, 0, 0, .45);
+}
+/* the foot of the sculpture: one darker, slightly wider band, so the pedestal
+   looks seated on the canvas instead of pasted onto it */
+.pod-foot::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  bottom: -4px;
+  left: -3%;
+  right: -3%;
+  height: 6px;
+  border-radius: 3px 3px 9px 9px;
+  background: linear-gradient(180deg, var(--plinth-edge) 0%, rgba(5, 8, 13, .94) 100%);
+  box-shadow:
+    inset 0 1px 0 var(--plinth-lip),
+    0 4px 8px -4px rgba(0, 0, 0, .85);
+}
+/* the aura is a real child, seated under the base and blooming into the canvas
+   gap; gold blooms widest, the flanking metals keep only a whisper */
+.pod-foot-aura {
+  position: absolute;
+  z-index: 0;
+  left: 50%;
+  bottom: -18px;
+  width: 116%;
+  height: 24px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 38%, var(--plinth-aura) 0%, rgba(245, 158, 11, 0) 72%);
+  filter: blur(3px);
+  pointer-events: none;
+}
+/* the rank embossed into the face: gold 15px, silver and bronze 13px, each with
+   a dark lower edge and a faint upper light so the numeral is struck, not printed */
+.pod-foot b {
+  position: relative;
+  z-index: 2;
   display: grid;
   place-items: center;
-  font-size: 8.5px;
+  width: 100%;
+  height: 100%;
+  font-size: var(--plinth-num-size);
   font-weight: 900;
-  letter-spacing: .06em;
+  letter-spacing: .02em;
   line-height: 1;
   text-align: center;
-  color: var(--pod-metal, var(--ink-soft));
-  opacity: .78;
+  color: var(--plinth-num);
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, .92),
+    0 -1px 0 rgba(255, 255, 255, .16),
+    0 0 12px var(--plinth-aura);
   font-variant-numeric: tabular-nums;
 }
 
@@ -5163,15 +5263,15 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
 
 /* ---- Top Minds hero card: the Floating Slate ----
    One quiet command instrument: the illuminated XP/percent arc · "You" line, the
-   large TIQ read on the right, then one row of four micro-badges, then the
-   milestone whisper, then the one loud key. Nations keeps the one-line
-   .solo-standing form above; only this board grows the card.
+   large TIQ read on the right, one row of four micro-badges, then the milestone
+   whisper. The card is deliberately read-only: no action key, so identity, score,
+   gauges and the next-division hint form one uninterrupted luxury HUD.
    The ring is a real SVG arc on pathLength=100, so the dash *is* the percentage. */
 .solo-standing.mh {
   flex-direction: column;
   align-items: stretch;
   gap: 12px;
-  padding: 14px;
+  padding: 12px 14px;
   min-height: 0;
   border: 1px solid rgba(255, 255, 255, .07);
   border-radius: 18px;
@@ -5315,50 +5415,6 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   transition: width var(--motion-med);
 }
 .mh-ptext { font-size: 10px; font-style: italic; font-weight: 600; line-height: 1.35; color: #8CA0B8; }
-/* The one loud key on this screen: a luxury action key — deep amber ramp over an
-   obsidian shadow, a 1px specular gleam on the top lip, and a tactile scale-down
-   on press (paired with the light haptic in paintMindsStanding). */
-.mh-cta {
-  appearance: none;
-  border: 0;
-  font: inherit;
-  position: relative;
-  flex: none;
-  width: 100%;
-  height: 44px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #F59E0B 0%, #B45309 100%);
-  color: #FFFBEB;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  cursor: pointer;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .38),
-    inset 0 -1px 0 rgba(0, 0, 0, .3),
-    0 12px 22px -8px rgba(0, 0, 0, .8),
-    0 4px 12px -4px rgba(180, 83, 9, .5);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast), filter var(--motion-fast);
-}
-/* the specular gleam: one soft white highlight across the top third */
-.mh-cta::before {
-  content: "";
-  position: absolute;
-  inset: 1px 12% auto;
-  height: 40%;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, rgba(255, 255, 255, .35) 0%, rgba(255, 255, 255, 0) 100%);
-  pointer-events: none;
-}
-.mh-cta:hover:not(:active) { filter: brightness(1.05); }
-.mh-cta:active {
-  transform: scale(.98);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .22),
-    0 5px 12px -6px rgba(0, 0, 0, .8);
-}
-.mh-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
 
 /* ---- Rival watch: the gap made personal, and one tap from the row it names ---- */
 .rival {
@@ -7838,45 +7894,69 @@ html.reduced-motion .notif-dot { animation: none; }
 .ranks-screen { overflow: hidden; max-width: 100%; }
 #s-ranks.ranks-screen { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 10px; }
 
-/* ---- Zone A: one quiet identity line — no stat cluster ----
-   Left: the wordmark over its season line. Right: the countdown capsule. One
-   44px band, so the podium enters a phone screen that much sooner; the old
-   three-box telemetry row is gone because the board below already carries every
-   number it was shouting. The title is engraved, not embossed: the dark shadow
-   falls *under* the glyph and a hair of light sits above it. */
+/* ---- Zone A: one championship identity line — no stat cluster ----
+   Left: a 21px display wordmark with a metallic season badge tucked beneath it.
+   Right: the tight "Nd left" capsule with its amber beacon. The band is 50px so
+   the larger title never crowds the countdown; the old three-box telemetry row
+   is gone because the board below already carries every number it was shouting. */
 .ranks-head {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s2);
+  gap: 10px;
   height: var(--ml-head-h);
   min-width: 0;
   max-width: 100%;
 }
-.ml-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0; }
-/* The wordmark: 16px bold tracked white, carved by a soft bevel — one dark
-   shadow under the glyph, one hair of light above it. */
+.ml-id {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+}
+/* The wordmark: championship-grade display type — 21px ultra-bold, tight
+   optical tracking, pure white, and a deep ambient shadow that lifts it off
+   the obsidian canvas without a plate or a border. */
 .ml-title {
   flex: none;
+  max-width: 100%;
   text-align: left;
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: .06em;
+  font-size: 21px;
+  font-weight: 900;
+  letter-spacing: -.3px;
   text-transform: uppercase;
-  line-height: 1.15;
-  color: #F8FAFC;
-  text-shadow:
-    0 1px 0 rgba(0, 0, 0, .68),
-    0 -1px 0 rgba(255, 255, 255, .06);
+  line-height: 1.02;
+  color: #FFFFFF;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, .5);
 }
+/* The season, re-cut as a small machined badge: brushed steel face, a lit top
+   edge and a hairline of shadow under it. Uppercase is applied here, so the
+   live "Season N" string stays readable to assistive tech. */
 .ml-sub {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
   margin: 0;
   min-width: 0;
-  font-size: 11px;
-  font-weight: 600;
+  padding: 2px 7px 2px 6px;
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .08) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(180deg, #263247 0%, #151D2C 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 0 0 1px rgba(148, 163, 184, .2),
+    0 1px 0 rgba(0, 0, 0, .5);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
   line-height: 1.2;
-  color: #64748B;
+  color: #94A3B8;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7887,18 +7967,19 @@ html.reduced-motion .notif-dot { animation: none; }
 .ml-season {
   display: inline-flex;
   align-items: center;
+  flex: none;
   gap: 5px;
   max-width: 100%;
-  padding: 3px 8px 3px 7px;
+  padding: 4px 9px 4px 8px;
   border-radius: var(--radius-pill);
   background: linear-gradient(180deg, #1D2637 0%, #141A28 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .09),
-    inset 0 0 0 1px rgba(255, 255, 255, .06),
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 0 0 1px rgba(255, 255, 255, .07),
     0 6px 12px -8px var(--shadow);
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: .03em;
+  letter-spacing: .02em;
   line-height: 1.35;
   color: var(--chip-ink);
   white-space: nowrap;
@@ -7935,10 +8016,11 @@ html.reduced-motion .ml-pulse::after { display: none; }
 #ranks-dock[hidden] { display: none !important; }
 @media (max-width: 380px) {
   .solo-standing { padding: var(--s2); gap: var(--s2); }
-  .ml-title { letter-spacing: .045em; }
+  /* 20px is still display-grade at the 360 floor; the full 21px returns above it */
+  .ml-title { font-size: 20px; }
   /* the single-row gauge keeps its four columns on the narrow floor: values sit
      on the header row, so no badge is ever narrower than its own label */
-  .solo-standing.mh { gap: 10px; padding: 12px; }
+  .solo-standing.mh { gap: 10px; padding: 12px 14px; }
   .mh-axes { gap: 4px; }
   .mh-axis small { letter-spacing: .02em; }
   .rival { padding: 6px 8px; }

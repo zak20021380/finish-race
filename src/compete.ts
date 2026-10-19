@@ -1329,12 +1329,17 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (!e.delta) delta.hidden = true;
     else delta.title = `${signed(e.delta)} Tactical IQ this week`;
 
+    /* The plinth is the card's base: an embossed metal slab with a stepped
+       cornice above and its own aura pooling underneath. The aura is a real
+       child so the glow has its own box and never eats the numeral's edge. */
     const step = document.createElement('span');
     step.className = 'pod-foot';
     step.setAttribute('aria-hidden', 'true');
+    const aura = document.createElement('i');
+    aura.className = 'pod-foot-aura';
     const stepN = document.createElement('b');
     stepN.textContent = String(e.rank);
-    step.append(stepN);
+    step.append(aura, stepN);
 
     card.append(av, nm, tier, iq);
     if (e.delta) iq.append(delta);
@@ -1651,8 +1656,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   /**
    * The Top Minds hero card: who you are on this ladder (percentile ring · tier ·
-   * TIQ), the four-axis read of your own play, the next division as a sentence you
-   * can act on, and one coral key that leaves for the launcher.
+   * TIQ), the four-axis read of your own play, and the next division as a quiet
+   * sentence. No action key: the ladder itself is the place to act, and the card
+   * stays a read-only command HUD.
    */
   function paintMindsStanding(rows: PlayerRow[] | null): void {
     const host = soloStandingEl();
@@ -1732,7 +1738,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       axes.append(cell);
     }
 
-    /* progress to the next division, in wins — the unit the CTA can actually deliver */
+    /* progress to the next division, in wins — the milestone whisper, no action key */
     const gap = div.next > tiq ? div.next - tiq : 0;
     const wins = gap > 0 ? Math.ceil(gap / TIQ_PER_WIN) : 0;
     const span = div.next > 0 ? div.next - TIER_BAND[div.tier][0] : 1;
@@ -1751,17 +1757,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       : 'Peak division · hold it against the ladder';
     prog.append(pTrack, pText);
 
-    const cta = document.createElement('button');
-    cta.type = 'button';
-    cta.className = 'mh-cta';
-    cta.textContent = 'CLIMB NOW';
-    cta.setAttribute('aria-label', 'Climb now — go and start a race');
-    cta.addEventListener('pointerdown', () => impact('light'), { passive: true });
-    cta.addEventListener('click', () => {
-      api.router.go('home');
-    });
-
-    host.append(top, axes, prog, cta);
+    host.append(top, axes, prog);
     host.setAttribute('aria-label', `Your Standing: ${youLabel()}, ${div.label}, ${tiq.toLocaleString('en-US')} Tactical IQ, ${pctLine.textContent}`);
 
     /* Loss aversion: the single climber one rung above you, tappable to their row. */
