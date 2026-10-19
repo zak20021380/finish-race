@@ -8251,7 +8251,7 @@ html.reduced-motion .ml-pulse::after { display: none; }
 .pf-avatar-wrap:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; border-radius: 26px; }
 
 .pf-id-v2 { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: var(--s2); }
-.pf-name-row { display: flex; align-items: center; gap: var(--s2); min-width: 0; max-width: 100%; }
+.pf-name-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); min-width: 0; max-width: 100%; }
 .pf-name-row .p-name { flex: 0 1 auto; min-width: 0; font-size: var(--t-1); }
 /* primary equipped badge next to the name: clay pill, accent ring per badge */
 .pf-equipped-badge {
@@ -8259,7 +8259,7 @@ html.reduced-motion .ml-pulse::after { display: none; }
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  max-width: 46%;
+  max-width: 100%;
   padding: 3px 8px 4px;
   border-radius: var(--radius-pill);
   background: linear-gradient(180deg, #2E3A55 0%, #141B2A 100%);
@@ -17040,4 +17040,403 @@ html.reduced-motion .announce-cta { transition: none; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ==========================================================================
+   HONOR & BADGES — the luxury medal sheet.
+   Four sculpted crests (index.html #i-crest-*), each card carrying its TIQ
+   milestone, a live grind meter while locked, and a sealed EQUIPPED state.
+   Dark-clay cards: 12px radius, hairline border, 60px rhythm, transform-only
+   press. No backdrop-filter, no blur — every glow is a shadow or gradient.
+   ========================================================================== */
+.badges-sheet { gap: 10px; }
+.badges-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px 0;
+  text-align: center;
+}
+.badges-sheet .sheet-t {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -.01em;
+  color: #FFFFFF;
+}
+.badges-sheet .badges-sub {
+  margin: 0;
+  max-width: 300px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #8FA0B8;
+}
+.badges-sheet .sheet-actions { margin-top: 2px; }
+
+/* the catalogue: one vertical stack of clay honor cards */
+.badge-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 2px 0;
+  list-style: none;
+}
+.badge-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 60px;
+  padding: 7px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  background: linear-gradient(180deg, #222C40 0%, #171E2C 100%);
+  box-shadow:
+    0 2px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .07);
+  cursor: pointer;
+  transition:
+    transform var(--motion-fast),
+    border-color var(--motion-fast),
+    box-shadow var(--motion-fast),
+    background var(--motion-fast),
+    opacity var(--motion-fast);
+}
+.badge-card:hover:not(:active) { transform: translateY(-1px); border-color: rgba(255, 255, 255, .14); }
+.badge-card:active { transform: scale(.98); }
+.badge-card:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.badge-card.is-locked {
+  opacity: .65;
+  background:
+    linear-gradient(180deg, rgba(38, 48, 66, .84) 0%, rgba(22, 29, 43, .9) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .05),
+    inset 0 2px 6px rgba(0, 0, 0, .35);
+}
+.badge-card.is-equipped {
+  border-color: rgba(56, 189, 248, .48);
+  background: linear-gradient(180deg, #253249 0%, #172235 100%);
+  box-shadow:
+    0 0 12px rgba(56, 189, 248, .25),
+    0 0 22px rgba(252, 211, 77, .1),
+    0 2px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 0 0 1px rgba(252, 211, 77, .18);
+}
+.badge-card-crest {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+}
+.badge-card-crest .badge-crest {
+  width: 44px;
+  height: 44px;
+  display: block;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .5));
+}
+.badge-card.is-locked .badge-card-crest .badge-crest {
+  filter: grayscale(.9) brightness(.62) drop-shadow(0 1px 2px rgba(0, 0, 0, .45));
+}
+.badge-card.is-equipped .badge-card-crest .badge-crest {
+  filter: drop-shadow(0 0 7px rgba(252, 211, 77, .4)) drop-shadow(0 2px 3px rgba(0, 0, 0, .5));
+}
+.badge-card-lock {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #0B1019;
+  box-shadow:
+    inset 0 0 0 1px rgba(148, 163, 184, .52),
+    0 1px 3px rgba(0, 0, 0, .6);
+  color: #A8B6C9;
+}
+.badge-card-lock .ico { width: 10px; height: 10px; }
+.badge-card-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.badge-card-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.badge-card-n {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  line-height: 1.15;
+  color: #FFFFFF;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.badge-card-tag {
+  margin-left: auto;
+  flex: none;
+  padding: 2px 6px 3px;
+  border-radius: 999px;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .05em;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.badge-card-tag.is-equipped {
+  color: #201404;
+  background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 100%);
+  box-shadow:
+    0 1px 0 #7C2D12,
+    0 0 10px rgba(245, 158, 11, .35),
+    inset 0 1px 0 rgba(255, 255, 255, .55);
+}
+.badge-card-tag.is-arm {
+  color: #7DD3FC;
+  background: rgba(56, 189, 248, .1);
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, .24);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .01em;
+}
+.badge-card-tiq {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 2px 7px 3px;
+  border-radius: 999px;
+  background: rgba(252, 211, 77, .09);
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .26);
+  color: #FCD34D;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: .01em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.badge-card-tiq .ico { width: 10px; height: 10px; flex: none; opacity: .9; }
+.badge-card-tiq b { font-weight: 900; }
+.badge-card-tiq span { font-weight: 700; opacity: .78; }
+.badge-card.is-locked .badge-card-tiq {
+  color: #A9B8CD;
+  background: rgba(148, 163, 184, .08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+}
+.badge-card-meter {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 11px;
+}
+.badge-card-bar {
+  flex: 1 1 auto;
+  min-width: 30px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, .14);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, .35);
+  overflow: hidden;
+}
+.badge-card-bar b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22D3EE 0%, #38BDF8 100%);
+  box-shadow: 0 0 6px rgba(56, 189, 248, .55);
+}
+.badge-card-meter-t {
+  flex: none;
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .01em;
+  color: #7DD3FC;
+  font-variant-numeric: tabular-nums;
+}
+.badges-sheet .badges-close {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #232E42 0%, #141B27 100%);
+  box-shadow:
+    0 3px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 -2px 4px rgba(0, 0, 0, .35),
+    inset 0 0 0 1px rgba(255, 255, 255, .07);
+  color: #E2E8F0;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  transition: transform var(--motion-fast), background var(--motion-fast), box-shadow var(--motion-fast), color var(--motion-fast);
+}
+.badges-sheet .badges-close:hover:not(:active) {
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, #2A3750 0%, #17202F 100%);
+  color: #FFFFFF;
+}
+.badges-sheet .badges-close:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 #080C14,
+    inset 0 2px 4px rgba(0, 0, 0, .45),
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+.badges-sheet .badges-close:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+@media (max-width: 380px) {
+  .badge-card { gap: 9px; padding: 7px 9px; }
+  .badge-card-crest, .badge-card-crest .badge-crest { width: 40px; height: 40px; }
+  .badge-card-n { font-size: 13px; }
+  .badge-card-tag.is-arm { font-size: 8.5px; }
+}
+
+/* ---- crests replace the flat hex decals everywhere a badge is worn ---- */
+.badge-chip {
+  position: relative;
+  width: 42px;
+  height: 46px;
+  border-radius: 14px;
+  clip-path: none;
+  background: transparent;
+  box-shadow: none;
+  filter: none;
+}
+.badge-chip::before,
+.badge-chip::after { content: none; display: none; }
+.badge-chip .badge-crest {
+  width: 40px;
+  height: 40px;
+  display: block;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .55));
+  transition: transform var(--motion-fast), filter var(--motion-fast);
+}
+.badge-chip[data-state="locked"] {
+  background: transparent;
+  box-shadow: none;
+  filter: none;
+}
+.badge-chip[data-state="locked"] .badge-crest {
+  opacity: .78;
+  filter: grayscale(.92) brightness(.52) drop-shadow(0 1px 2px rgba(0, 0, 0, .5));
+}
+.badge-slot.is-equipped .badge-chip,
+.badge-pick-row.is-equipped .badge-chip {
+  background: transparent;
+  box-shadow: none;
+  filter: none;
+}
+.badge-slot.is-equipped .badge-chip .badge-crest {
+  filter:
+    drop-shadow(0 0 7px rgba(252, 211, 77, .55))
+    drop-shadow(0 2px 3px rgba(0, 0, 0, .55));
+}
+.badge-chip .badge-lock {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #1C2433;
+  box-shadow:
+    inset 0 0 0 1px rgba(148, 163, 184, .35),
+    0 1px 2px rgba(0, 0, 0, .5);
+}
+.badge-chip .badge-lock .ico-lock {
+  position: static;
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: #94A3B8;
+}
+
+/* the detail drawer's hero medal: crest floating on the clay well */
+.badge-ico-lg {
+  width: 86px;
+  height: 86px;
+  border-radius: 26px;
+  background:
+    radial-gradient(70% 70% at 50% 62%, rgba(255, 255, 255, .08), rgba(255, 255, 255, 0) 70%),
+    linear-gradient(180deg, #2E3A55 0%, #141B2A 100%);
+}
+.badge-ico-lg .badge-crest {
+  width: 68px;
+  height: 68px;
+  display: block;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .55));
+}
+.badge-sheet-hero.is-locked .badge-ico-lg .badge-crest {
+  filter: grayscale(1) brightness(.55) drop-shadow(0 2px 3px rgba(0, 0, 0, .5));
+}
+
+/* the equipped seal beside the player's name wears the same crest */
+.pf-equipped-badge .pf-equipped-crest {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  display: block;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .45));
+}
+.pf-equipped-badge[data-accent="gold"] {
+  color: #FCD34D;
+  box-shadow:
+    0 2px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 0 0 1px rgba(252, 211, 77, .34);
+}
+
+@media (max-width: 380px) {
+  .badge-chip { width: 38px; height: 42px; }
+  .badge-chip .badge-crest { width: 36px; height: 36px; }
+  .badge-ico-lg { width: 80px; height: 80px; }
+  .badge-ico-lg .badge-crest { width: 62px; height: 62px; }
+}
+
+/* the avatar tag carries the equipped crest whenever the player has one */
+.pf-avatar-tag .ico { width: 13px; height: 13px; }
+.pf-avatar-tag[data-accent="gold"] {
+  color: #FCD34D;
+  box-shadow: 0 2px 0 #080C14, inset 0 0 0 1px rgba(252, 211, 77, .45), 0 0 10px rgba(245, 158, 11, .32);
+}
+.pf-avatar-tag[data-accent="sky"] {
+  color: #7DD3FC;
+  box-shadow: 0 2px 0 #080C14, inset 0 0 0 1px rgba(125, 211, 252, .45), 0 0 10px rgba(56, 189, 248, .32);
+}
+.pf-avatar-tag[data-accent="mint"] {
+  color: #6EE7B7;
+  box-shadow: 0 2px 0 #080C14, inset 0 0 0 1px rgba(110, 231, 183, .45), 0 0 10px rgba(16, 185, 129, .32);
+}
+.pf-avatar-tag[data-accent="coral"] {
+  color: #FDA4AF;
+  box-shadow: 0 2px 0 #080C14, inset 0 0 0 1px rgba(253, 164, 175, .45), 0 0 10px rgba(244, 63, 94, .32);
 }

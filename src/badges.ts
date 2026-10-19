@@ -6,24 +6,29 @@
  * equipped badge id persists (profile.badge under detour.save.v2) — the same
  * single-key contract storage.ts already owns.
  *
+ * Every badge is a two-key lock: its own achievement AND a Tactical IQ
+ * milestone. The milestone is what the Honor sheet prints, so the ladder has a
+ * visible number to grind for even before the achievement lands.
+ *
  * Unlock rules (all local-first):
- * - early-adopter: always unlocked — you are here at the start.
- * - squad-warrior: bound to a Telegram squad OR in a team.
- * - streak-master: best win streak of 3+ (bot races).
- * - cup-finalist: 5+ games played (Arena-ready).
+ * - early-adopter: always unlocked — you are here at the start (0 TIQ).
+ * - squad-warrior: bound to a Telegram squad OR in a team, and 1,000 TIQ.
+ * - streak-master: best win streak of 3+ (bot races) and 2,000 TIQ.
+ * - cup-finalist: 5+ games played (Arena-ready) and 3,000 TIQ.
  */
 
 import { myTeam, profile } from './storage';
 import { getMySquad } from './squads';
+import { myTiq } from './matchmaking';
 
 export interface BadgeDef {
   id: string;
   name: string;
   lore: string;
   criteria: string;
-  /** symbol id from index.html, e.g. #i-crown */
-  icon: string;
   accent: 'gold' | 'sky' | 'mint' | 'coral';
+  /** Tactical IQ milestone the badge demands, on the same scale as myTiq(). */
+  tiq: number;
 }
 
 export const BADGES: BadgeDef[] = [
@@ -31,40 +36,41 @@ export const BADGES: BadgeDef[] = [
     id: 'early-adopter',
     name: 'Early Adopter',
     lore: 'One of the first racers to hit the slate. The clay still remembers your first tap.',
-    criteria: 'Join the game — awarded to every pioneer.',
-    icon: '#i-crown',
+    criteria: 'Join the game — awarded to every pioneer. No TIQ minimum.',
     accent: 'gold',
+    tiq: 0,
   },
   {
     id: 'squad-warrior',
     name: 'Squad Warrior',
     lore: 'You fight for more than yourself. Squad points, shared cups, shared glory.',
-    criteria: 'Bind a Telegram squad or join a team.',
-    icon: '#i-users',
+    criteria: 'Bind a Telegram squad or join a team, and bank 1,000 TIQ.',
     accent: 'sky',
+    tiq: 1000,
   },
   {
     id: 'streak-master',
     name: 'Win Streak Master',
     lore: 'Three wins in a row against the machine. Cold, clean, relentless.',
-    criteria: 'Reach a 3-win streak in bot races.',
-    icon: '#i-swords',
+    criteria: 'Reach a 3-win streak in bot races and bank 2,000 TIQ.',
     accent: 'mint',
+    tiq: 2000,
   },
   {
     id: 'cup-finalist',
     name: 'Cup Finalist',
     lore: 'Five races deep. The Arena knows your name and the cup is watching.',
-    criteria: 'Finish 5 races.',
-    icon: '#i-cup',
+    criteria: 'Finish 5 races and bank 3,000 TIQ.',
     accent: 'coral',
+    tiq: 3000,
   },
 ];
 
 export const badgeById = (id: string | null | undefined): BadgeDef | null =>
   BADGES.find((b) => b.id === id) ?? null;
 
-export function isBadgeUnlocked(id: string): boolean {
+/** The badge's own achievement, ignoring its TIQ milestone. */
+function achievementMet(id: string): boolean {
   switch (id) {
     case 'early-adopter':
       return true;
@@ -77,6 +83,23 @@ export function isBadgeUnlocked(id: string): boolean {
     default:
       return false;
   }
+}
+
+export function isBadgeUnlocked(id: string): boolean {
+  const def = badgeById(id);
+  return !!def && achievementMet(def.id) && myTiq() >= def.tiq;
+}
+
+/** TIQ standing against the badge's milestone — the figure the honor cards print. */
+export function badgeTiq(id: string): { tiq: number; got: number; pct: number; met: boolean } {
+  const tiq = badgeById(id)?.tiq ?? 0;
+  const got = Math.max(0, myTiq());
+  return {
+    tiq,
+    got,
+    pct: tiq > 0 ? Math.min(1, got / tiq) : 1,
+    met: got >= tiq,
+  };
 }
 
 /** Completion progress for locked badges (tooltip + sheet meter). */

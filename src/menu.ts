@@ -16,7 +16,7 @@ import {
   dobMaxYear, dobValue, favouriteMode, IDENTITY_REWARD, joinTeam, KINDS, leaveTeam, levelInfo,
   myTeam, onChange, profile, REFERRAL_REWARD, setBadge, setDob, setFrame, theme, validDob,
 } from './storage';
-import { BADGES, badgeProgress, equippedBadge, isBadgeUnlocked, unlockedCount } from './badges';
+import { BADGES, badgeProgress, badgeTiq, equippedBadge, isBadgeUnlocked, unlockedCount } from './badges';
 import { MAX_BALLS, newGame } from './rules';
 import { createPreview, createRenderer, type Preview, type View } from './render';
 import { setBalance } from './coin';
@@ -769,28 +769,37 @@ export function createMenu(api: MenuApi): Menu {
         eqWrap.hidden = false;
         eqWrap.setAttribute('data-accent', eq.accent);
         const use = document.getElementById('pf-equipped-use') as unknown as SVGUseElement | null;
-        if (use) use.setAttribute('href', eq.icon);
+        if (use) use.setAttribute('href', `#i-crest-${eq.accent}`);
         const label = document.getElementById('pf-equipped-t');
         if (label) label.textContent = eq.name;
         eqWrap.setAttribute('aria-label', `Equipped badge: ${eq.name}`);
         eqWrap.setAttribute('title', eq.name);
       }
     }
+    /* the avatar's own crest tag mirrors the equipped badge, so the HUD reads
+       at a glance even when the name pill has to elide beside a long name */
+    const avTag = document.getElementById('pf-avatar-tag');
+    const avUse = document.getElementById('pf-avatar-tag-use') as unknown as SVGUseElement | null;
+    if (avTag && avUse) {
+      avUse.setAttribute('href', eq ? `#i-crest-${eq.accent}` : '#i-crown');
+      avTag.setAttribute('data-accent', eq?.accent ?? 'none');
+    }
   };
 
-  /* Honor & Badges: a slim horizontal tray of circular medal chips — 38px clay
-     coins, unlocked = lit metal, locked = recessed slate + lock glyph. No prose
-     in the tray: the name, lore, criteria and Equip live in the drawer. */
-  const makeChip = (unlocked: boolean, b: { icon: string; accent: string }): HTMLSpanElement => {
+  /* Honor & Badges: a slim horizontal tray of sculpted crest chips — lit metal
+     when unlocked, frosted slate + a lock pin when locked. No prose in the tray:
+     the full card, its TIQ milestone and the equip action live in the View All
+     sheet, and the detail drawer still carries the lore. */
+  const makeChip = (unlocked: boolean, b: { accent: string }): HTMLSpanElement => {
     const chip = document.createElement('span');
     chip.className = 'badge-chip';
     chip.setAttribute('aria-hidden', 'true');
     chip.setAttribute('data-accent', b.accent);
     chip.setAttribute('data-state', unlocked ? 'unlocked' : 'locked');
-    chip.innerHTML = unlocked
-      ? `<svg class="ico" aria-hidden="true"><use href="${b.icon}" /></svg>`
-      : `<span class="badge-lock"><svg class="ico ico-main" aria-hidden="true"><use href="${b.icon}" /></svg>`
-        + `<svg class="ico ico-lock" aria-hidden="true"><use href="#i-lock" /></svg></span>`;
+    chip.innerHTML = `<svg class="badge-crest" viewBox="0 0 56 56" aria-hidden="true">`
+      + `<use href="#i-crest-${b.accent}" /></svg>`
+      + (unlocked ? '' : `<span class="badge-lock"><svg class="ico ico-lock" aria-hidden="true">`
+        + `<use href="#i-lock" /></svg></span>`);
     return chip;
   };
 
@@ -814,7 +823,10 @@ export function createMenu(api: MenuApi): Menu {
         'aria-label',
         `${b.name} — ${unlocked ? (equipped ? 'equipped' : 'unlocked') : `locked, ${prog.label}`}. Open details.`,
       );
-      btn.title = unlocked ? b.name : `${b.name} · ${prog.label}`;
+      const chipTiq = badgeTiq(b.id);
+      btn.title = unlocked
+        ? b.name
+        : `${b.name} · ${chipTiq.met ? prog.label : `${en(chipTiq.tiq)} TIQ required`}`;
       btn.append(chip);
       btn.addEventListener('click', () => openBadge(b.id));
       rack.append(btn);
@@ -823,43 +835,105 @@ export function createMenu(api: MenuApi): Menu {
   };
   paintBadgesRef = paintBadges;
 
-  /* "View All ›" drawer: the full catalogue as a quiet pick list — a row per
-     medal, tap any row for the same detail drawer the tray chip opens. */
+  /* "View All ›" drawer: the full catalogue as sculpted honor cards. Each card
+     carries its crest, its TIQ milestone, and either an EQUIPPED seal or a live
+     meter to the number that still stands between the player and the badge.
+     Tapping an unlocked card equips it on the spot; a locked card opens the lore
+     drawer with the exact requirement and its TIQ progress. */
   function paintBadgeList() {
     const list = document.getElementById('badge-list');
     if (!list) return;
     list.textContent = '';
     for (const b of BADGES) {
       const unlocked = isBadgeUnlocked(b.id);
-      const prog = badgeProgress(b.id);
       const equipped = unlocked && profile.badge === b.id;
+      const tp = badgeTiq(b.id);
+      const ach = badgeProgress(b.id);
+      const achMet = ach.got >= ach.need;
       const li = document.createElement('li');
-      li.className = `badge-pick-row ${unlocked ? 'is-unlocked' : 'is-locked'}${equipped ? ' is-equipped' : ''}`;
+      li.className = `badge-card ${unlocked ? 'is-unlocked' : 'is-locked'}${equipped ? ' is-equipped' : ''}`;
       li.setAttribute('role', 'option');
       li.setAttribute('aria-selected', String(equipped));
+      li.setAttribute('aria-label', `${b.name}. ${
+        equipped ? 'Equipped.'
+          : unlocked ? 'Unlocked. Tap to equip.'
+            : tp.met ? `Locked. ${en(tp.tiq)} TIQ met; ${ach.label}.`
+              : `Locked. ${en(tp.tiq)} TIQ required, you have ${en(tp.got)}.`
+      }`);
       li.tabIndex = 0;
-      const chip = makeChip(unlocked, b);
-      const txt = document.createElement('span');
-      txt.className = 'badge-pick-txt';
+      li.dataset.badge = b.id;
+
+      const crest = document.createElement('span');
+      crest.className = 'badge-card-crest';
+      crest.setAttribute('aria-hidden', 'true');
+      crest.innerHTML = `<svg class="badge-crest" viewBox="0 0 56 56" aria-hidden="true">`
+        + `<use href="#i-crest-${b.accent}" /></svg>`
+        + (unlocked ? '' : '<span class="badge-card-lock"><svg class="ico" aria-hidden="true">'
+          + '<use href="#i-lock" /></svg></span>');
+
+      const main = document.createElement('span');
+      main.className = 'badge-card-main';
+
+      const top = document.createElement('span');
+      top.className = 'badge-card-top';
       const nm = document.createElement('span');
-      nm.className = 'badge-pick-n';
+      nm.className = 'badge-card-n';
       nm.textContent = b.name;
-      const st = document.createElement('span');
-      st.className = 'badge-pick-s';
-      st.textContent = unlocked ? (equipped ? 'Equipped' : 'Unlocked') : prog.label;
-      txt.append(nm, st);
-      const tick = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      tick.setAttribute('class', 'ico tick');
-      tick.setAttribute('aria-hidden', 'true');
-      tick.innerHTML = '<use href="#i-check" />';
-      const open = () => openBadge(b.id);
-      li.addEventListener('click', open);
+      top.append(nm);
+      if (equipped) {
+        const tag = document.createElement('span');
+        tag.className = 'badge-card-tag is-equipped';
+        tag.textContent = '✓ EQUIPPED';
+        top.append(tag);
+      } else if (unlocked) {
+        const tag = document.createElement('span');
+        tag.className = 'badge-card-tag is-arm';
+        tag.textContent = 'Tap to Equip';
+        top.append(tag);
+      }
+
+      const chip = document.createElement('span');
+      chip.className = 'badge-card-tiq';
+      chip.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg>'
+        + (unlocked
+          ? `<b>${en(tp.tiq)} TIQ</b><span>${tp.tiq > 0 ? 'Unlocked' : 'Founding'}</span>`
+          : `<b>${en(tp.tiq)} TIQ</b><span>${tp.met ? 'Met' : 'Required'}</span>`);
+
+      main.append(top, chip);
+
+      if (!unlocked) {
+        const meter = document.createElement('span');
+        meter.className = 'badge-card-meter';
+        const bar = document.createElement('i');
+        bar.className = 'badge-card-bar';
+        const fill = document.createElement('b');
+        const meterPct = tp.met && !achMet
+          ? Math.round((ach.got / Math.max(1, ach.need)) * 100)
+          : Math.round(tp.pct * 100);
+        fill.style.width = `${meterPct}%`;
+        bar.append(fill);
+        const fig = document.createElement('em');
+        fig.className = 'badge-card-meter-t';
+        fig.textContent = tp.met && !achMet ? ach.label : `${en(tp.got)} / ${en(tp.tiq)} TIQ`;
+        meter.append(bar, fig);
+        main.append(meter);
+      }
+      li.append(crest, main);
+
+      const activate = () => {
+        if (!isBadgeUnlocked(b.id)) { impact('light'); openBadge(b.id); return; }
+        if (profile.badge === b.id) return;
+        setBadge(b.id);
+        impact('medium');
+        notify('success');
+        showPfToast(`${b.name} equipped`, true);
+      };
+      li.addEventListener('click', activate);
       li.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter' && e.key !== ' ') return;
         e.preventDefault();
-        open();
+        activate();
       });
-      li.append(chip, txt, tick);
       list.append(li);
     }
   }
@@ -877,8 +951,9 @@ export function createMenu(api: MenuApi): Menu {
       hero.setAttribute('data-accent', def.accent);
       hero.classList.toggle('is-locked', !unlocked);
     }
+    const tp = badgeTiq(id);
     const use = document.getElementById('badge-sheet-use') as unknown as SVGUseElement | null;
-    if (use) use.setAttribute('href', unlocked ? def.icon : '#i-lock');
+    if (use) use.setAttribute('href', `#i-crest-${def.accent}`);
     const title = document.getElementById('badge-title');
     if (title) title.textContent = def.name;
     const lore = document.getElementById('badge-lore');
@@ -886,22 +961,29 @@ export function createMenu(api: MenuApi): Menu {
     const crit = document.getElementById('badge-criteria');
     if (crit) crit.textContent = def.criteria;
     const state = document.getElementById('badge-state');
-    if (state) state.textContent = unlocked ? 'Unlocked' : 'Locked';
+    if (state) state.textContent = unlocked
+      ? `Unlocked · ${en(tp.tiq)} TIQ`
+      : tp.met ? `Locked · ${prog.label}` : `Locked · ${en(tp.got)} / ${en(tp.tiq)} TIQ`;
     const fill = document.getElementById('badge-progress-fill');
     const bar = document.getElementById('badge-progress-bar');
     const label = document.getElementById('badge-progress-t');
-    const pct = prog.need > 0 ? Math.min(100, Math.round((prog.got / prog.need) * 100)) : 100;
+    const tiqLocked = !unlocked && !tp.met;
+    const pct = tiqLocked
+      ? Math.round(tp.pct * 100)
+      : prog.need > 0 ? Math.min(100, Math.round((prog.got / prog.need) * 100)) : 100;
     if (fill) fill.style.width = `${unlocked ? 100 : pct}%`;
     if (bar) {
-      bar.setAttribute('aria-valuenow', String(prog.got));
-      bar.setAttribute('aria-valuemax', String(prog.need));
+      bar.setAttribute('aria-valuenow', String(tiqLocked ? tp.got : prog.got));
+      bar.setAttribute('aria-valuemax', String(tiqLocked ? tp.tiq : prog.need));
     }
-    if (label) label.textContent = unlocked ? 'Complete — ready to equip' : prog.label;
+    if (label) label.textContent = unlocked
+      ? 'Complete — ready to equip'
+      : tiqLocked ? `${en(tp.got)} / ${en(tp.tiq)} TIQ` : prog.label;
     const equip = document.getElementById('badge-equip') as HTMLButtonElement | null;
     if (equip) {
       if (!unlocked) {
         equip.disabled = true;
-        equip.textContent = prog.label;
+        equip.textContent = tiqLocked ? `${en(tp.tiq)} TIQ required` : prog.label;
       } else if (profile.badge === id) {
         equip.disabled = true;
         equip.textContent = 'Equipped';
@@ -1067,8 +1149,6 @@ export function createMenu(api: MenuApi): Menu {
     const sheet = api.sheet('sheet-badges');
     if (!sheet) return;
     paintBadgeList();
-    const sub = document.getElementById('badges-sub');
-    if (sub) sub.textContent = `${unlockedCount()} of ${BADGES.length} unlocked. Tap a medal for its lore and to equip it.`;
     api.sheets.open(sheet);
     impact('light');
   });
