@@ -831,17 +831,24 @@
 
         <!-- ---------------- ranks: dedicated leaderboard ---------------- -->
         <section class="screen menu compete-screen ranks-screen" id="s-ranks" data-screen="ranks" tabindex="-1" hidden aria-labelledby="ranks-title">
-          <!-- Zone A — one quiet identity line: wordmark over the season, and the
-               countdown capsule. The old three-box stat cluster is gone: the board
-               below already carries every number it was shouting. -->
+          <!-- Zone A — the championship plate: a gold-rimmed brain crest, the
+               brushed-metal wordmark over its season badge, and the live countdown.
+               The old three-box stat cluster is gone: the board below already
+               carries every number it was shouting. -->
           <header class="ranks-head" id="ranks-head">
+            <span class="ml-crest" aria-hidden="true">
+              <svg class="ml-crest-ico"><use href="#i-brain" /></svg>
+            </span>
             <div class="ml-id">
-              <h1 class="m-title ml-title" id="ranks-title">The Mind Ladder</h1>
+              <h1 class="m-title ml-title" id="ranks-title"><span class="ml-title-ink">The Mind Ladder</span></h1>
               <span class="ml-sub" id="ranks-sub">Season 5</span>
             </div>
             <span class="ml-season" id="ranks-season" title="Season 5 closes">
               <i class="ml-pulse" aria-hidden="true"></i>
-              <b class="ml-season-t">— left</b>
+              <span class="ml-season-stack">
+                <small class="ml-season-k" aria-hidden="true">Ends in</small>
+                <b class="ml-season-t">— left</b>
+              </span>
             </span>
           </header>
           <!-- Zone B — a slim, borderless pill bar: icon + name, one sliding thumb. -->
