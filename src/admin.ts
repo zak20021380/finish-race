@@ -36,7 +36,7 @@ import { motionReduced } from './settings';
 import { earnCoins, earnTiq, onChange, profile, readJson, writeJson } from './storage';
 import { coinText, mountCoins, setBalance } from './coin';
 import { CONFIG } from './rules';
-import { flagPhoto } from './compete';
+import { flagPhoto } from './flags';
 import {
   agoOf, onTickets, REPLY_MAX, replyTicket, tickets, toggleResolved, unreadCount,
   type Ticket, type TicketCategory,

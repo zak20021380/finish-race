@@ -47,6 +47,7 @@ import {
   type Trend,
 } from './data';
 import { nameOf } from './countries';
+import { flagPhoto } from './flags';
 import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
 import { bindSquadById, cleanChatReference, cleanHandle, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadKind, squadLetter, type RankedSquad } from './squads';
@@ -262,57 +263,8 @@ function percentRing(pct: number, inner: HTMLElement, extraCls = ''): HTMLElemen
 
 /* ---------- flag rendering pipeline ---------- */
 
-/** Only a bare ISO alpha-2 may ever be interpolated into a URL — nothing else. */
-const iso2 = (code: string | null | undefined): string | null =>
-  code && /^[A-Za-z]{2}$/.test(code) ? code.toLowerCase() : null;
-
-/**
- * circle-flags ships as an npm package, so the jsdelivr *gh* path in the brief
- * (…/gh/hats-scripts/circle-flags@latest/flags/us.svg) answers 404 at every casing
- * and ref; the npm resolution of the same library on the same CDN is what serves.
- */
-const FLAG_SVG = (cc: string): string => `https://cdn.jsdelivr.net/npm/circle-flags/flags/${cc}.svg`;
-const FLAG_PNG = (cc: string): string => `https://flagcdn.com/w80/${cc}.png`;
-
-/**
- * Photo flag, three tiers: circle-flags SVG → flagcdn PNG → the clay ISO chip.
- * The chip is in the DOM from the start and the image is layered over it, so a
- * slow or blocked CDN shows a legible code instead of a hole, and a failure needs
- * no layout pass. Every image is lazy and decoded async.
- */
-export function flagPhoto(code: string | null, cls: string): HTMLElement {
-  const wrap = document.createElement('span');
-  wrap.className = `fp ${cls}`;
-  wrap.setAttribute('aria-hidden', 'true');
-
-  const chip = document.createElement('span');
-  chip.className = 'fp-chip';
-  chip.textContent = (code ?? '').slice(0, 3).toUpperCase() || '—';
-  wrap.append(chip);
-
-  const cc = iso2(code);
-  if (!cc) {
-    wrap.classList.add('is-chip');
-    return wrap;
-  }
-
-  const img = document.createElement('img');
-  img.className = 'fp-img';
-  img.alt = '';
-  img.loading = 'lazy';
-  img.decoding = 'async';
-  let tier = 0;
-  img.addEventListener('error', () => {
-    if (tier === 0) { tier = 1; img.src = FLAG_PNG(cc); return; }
-    tier = 2;
-    img.remove();
-    wrap.classList.add('is-chip');
-  });
-  img.addEventListener('load', () => wrap.classList.add('is-photo'));
-  wrap.append(img);
-  img.src = FLAG_SVG(cc);
-  return wrap;
-}
+/* One shared resolver (`flags.ts`) serves the ladder, the HUD, the profile and the
+   picker: flagcdn PNG → circle-flags SVG → the clay ISO chip / globe. */
 
 export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   const boardBtns = [...document.querySelectorAll<HTMLButtonElement>('.ranks-tabs [data-board]')];
@@ -1962,9 +1914,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const hit = rows.find((c) => c.code === code);
     const nm = hit?.name ?? (nameOf(code) || code);
     const rank = document.createElement('span');
-    rank.className = `nh-rank${hit ? ` ${podiumOf(hit.rank)}` : ''}`.trim();
-    rank.textContent = hit ? `#${hit.rank}` : '#—';
-    rank.title = hit ? `Rank ${hit.rank} on Nations IQ` : 'Not on the board yet';
+    rank.className = `nh-rank${hit ? ` ${podiumOf(hit.rank)}` : ' is-new'}`.trim();
+    rank.textContent = hit ? `#${hit.rank}` : 'NEW';
+    rank.title = hit ? `Rank ${hit.rank} on Nations IQ` : 'Unranked — be the first on the board';
 
     const av = document.createElement('span');
     av.className = 'nh-av';
@@ -1978,10 +1930,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     name.title = nm;
     const tag = document.createElement('span');
     tag.className = 'nh-tag';
-    tag.textContent = 'Your Nation';
+    tag.textContent = hit ? 'Your Nation' : 'Your Contribution';
     id.append(name, tag);
 
-    const points = hit?.points ?? 0;
+    /* a freshly picked nation has no ladder row yet: show the player's own
+       contribution (140 TIQ per win) instead of a broken rank and a dead zero */
+    const points = hit?.points ?? profile.stats.wins * 140;
     const score = document.createElement('span');
     score.className = 'nh-score';
     score.append(svgIcon('#i-brain', 'nh-tiq'));
@@ -1992,7 +1946,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     hud.classList.add('is-set');
     hud.append(rank, av, id, score);
-    const seen = `${nm}, ${hit ? `rank ${hit.rank}` : 'not on the board yet'}, ${points.toLocaleString('en-US')} Tactical IQ`;
+    const seen = `${nm}, ${hit ? `rank ${hit.rank}` : 'unranked, your contribution'}, ${points.toLocaleString('en-US')} Tactical IQ`;
     hud.setAttribute('aria-label', `Your Nation: ${seen}. Activate to change your nation.`);
     hud.title = 'Tap to change your nation';
     hud.addEventListener('click', openPicker);

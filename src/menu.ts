@@ -20,9 +20,9 @@ import { BADGES, badgeProgress, badgeTiq, equippedBadge, isBadgeUnlocked, unlock
 import { MAX_BALLS, newGame } from './rules';
 import { createPreview, createRenderer, type Preview, type View } from './render';
 import { setBalance } from './coin';
-import { flagOf, nameOf } from './countries';
+import { nameOf } from './countries';
 import { openCountryPicker } from './countrypick';
-import { renderCountryFlagSvg } from './flagbadge';
+import { flagPhoto } from './flags';
 import { cleanCode, standings, YOU } from './teams';
 import {
   bindSquad, bindSquadById, cleanHandle, getMySquad, leaveSquad,
@@ -704,12 +704,6 @@ export function createMenu(api: MenuApi): Menu {
   /* ---- the record, and what is worn: re-painted whenever the save changes ---- */
   const pfScreen = $<HTMLElement>('s-profile');
   const eqPv = new Map<CosKind, Preview>();
-  const setFlag = (flagId: string, codeId: string, code: string) => {
-    const flagEl = document.getElementById(flagId);
-    if (flagEl) flagEl.textContent = code ? flagOf(code) : '';
-    const codeEl = document.getElementById(codeId);
-    if (codeEl) codeEl.textContent = code;
-  };
 
   /* Avatar frames for the hero slot: persisted as profile.frame (default | auric | neon). */
   const FRAMES: { id: string; name: string }[] = [
@@ -1031,9 +1025,12 @@ export function createMenu(api: MenuApi): Menu {
     document.getElementById('country-chip')?.classList.toggle('unset', !c);
     const countryName = document.getElementById('country-name');
     if (countryName) countryName.textContent = c ? nameOf(c) : 'Add country';
-    setFlag('country-flag', 'country-code', c ?? '');
     $('pf-country-v').textContent = c ? nameOf(c) : 'Add country';
-    setFlag('pf-flag', 'pf-code', c ?? '');
+    const pfFlag = document.getElementById('pf-flag');
+    if (pfFlag) {
+      pfFlag.textContent = '';
+      if (c) pfFlag.append(flagPhoto(c, 'fp-profile'));
+    }
     /* Home name flag: a real vector plate next to the name — never a regional-indicator
        pair, which Windows draws as two bare letters. The code stays in the DOM (hidden)
        only as the accessible/state hook. */
@@ -1044,7 +1041,7 @@ export function createMenu(api: MenuApi): Menu {
       if (c) {
         homeFlag.hidden = false;
         homeGlyph.textContent = '';
-        homeGlyph.append(renderCountryFlagSvg(c));
+        homeGlyph.append(flagPhoto(c, 'fp-home'));
       } else {
         homeFlag.hidden = true;
         homeGlyph.textContent = '';

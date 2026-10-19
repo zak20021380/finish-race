@@ -1,269 +1,29 @@
 /**
- * countries.ts — the country picker's data, with no dependency and no network call.
+ * countries.ts — the country picker's registry, sourced from one standardized
+ * ISO 3166-1 alpha-2 dataset (`data/countries.json`) instead of a hand-typed list.
  *
- * Telegram never tells us where a player is (`initData` has a `language_code`, not a country), so the
- * app lets the player pick one in Profile and remembers. Two details matter on real devices: flag
- * emojis are not drawn on Windows, so every flag has a two-letter code fallback; and the language
- * hint is only a *preselect*, never a silent answer — `pt` may be Brazil or Portugal, and the player
- * is the one who decides.
+ * The JSON is generated from the maintained mledoze/countries dataset and ships
+ * as a static asset, so the app stays offline-first: 250 nations and territories,
+ * one schema `{ code, name, dialCode? }`, no network call at runtime.
+ *
+ * Telegram never tells us where a player is (`initData` has a `language_code`,
+ * not a country), so the app lets the player pick one in Profile and remembers.
+ * Two details matter on real devices: flags are rendered by the shared CDN
+ * resolver (`flags.ts`), and the language hint is only a *preselect*, never a
+ * silent answer — `pt` may be Brazil or Portugal, and the player decides.
  */
 
-/** ISO 3166-1 alpha-2 + English name. The code is also the flag: regional indicators are derived. */
-const LIST = `
-AD Andorra
-AE United Arab Emirates
-AF Afghanistan
-AG Antigua and Barbuda
-AI Anguilla
-AL Albania
-AM Armenia
-AO Angola
-AQ Antarctica
-AR Argentina
-AS American Samoa
-AT Austria
-AU Australia
-AW Aruba
-AX Åland Islands
-AZ Azerbaijan
-BA Bosnia and Herzegovina
-BB Barbados
-BD Bangladesh
-BE Belgium
-BF Burkina Faso
-BG Bulgaria
-BH Bahrain
-BI Burundi
-BJ Benin
-BL Saint Barthélemy
-BM Bermuda
-BN Brunei
-BO Bolivia
-BQ Caribbean Netherlands
-BR Brazil
-BS Bahamas
-BT Bhutan
-BV Bouvet Island
-BW Botswana
-BY Belarus
-BZ Belize
-CA Canada
-CC Cocos (Keeling) Islands
-CD DR Congo
-CF Central African Republic
-CG Congo
-CH Switzerland
-CI Côte d'Ivoire
-CK Cook Islands
-CL Chile
-CM Cameroon
-CN China
-CO Colombia
-CR Costa Rica
-CU Cuba
-CV Cabo Verde
-CW Curaçao
-CX Christmas Island
-CY Cyprus
-CZ Czechia
-DE Germany
-DJ Djibouti
-DK Denmark
-DM Dominica
-DO Dominican Republic
-DZ Algeria
-EC Ecuador
-EE Estonia
-EG Egypt
-EH Western Sahara
-ER Eritrea
-ES Spain
-ET Ethiopia
-FI Finland
-FJ Fiji
-FK Falkland Islands
-FM Micronesia
-FO Faroe Islands
-FR France
-GA Gabon
-GB United Kingdom
-GD Grenada
-GE Georgia
-GF French Guiana
-GH Ghana
-GI Gibraltar
-GL Greenland
-GM Gambia
-GN Guinea
-GP Guadeloupe
-GQ Equatorial Guinea
-GR Greece
-GS South Georgia
-GT Guatemala
-GU Guam
-GW Guinea-Bissau
-GY Guyana
-HK Hong Kong SAR
-HN Honduras
-HR Croatia
-HT Haiti
-HU Hungary
-ID Indonesia
-IE Ireland
-IL Israel
-IM Isle of Man
-IN India
-IQ Iraq
-IR Iran
-IS Iceland
-IT Italy
-JE Jersey
-JM Jamaica
-JO Jordan
-JP Japan
-KE Kenya
-KG Kyrgyzstan
-KH Cambodia
-KI Kiribati
-KM Comoros
-KN Saint Kitts and Nevis
-KP North Korea
-KR South Korea
-KW Kuwait
-KY Cayman Islands
-KZ Kazakhstan
-LA Laos
-LB Lebanon
-LC Saint Lucia
-LI Liechtenstein
-LK Sri Lanka
-LR Liberia
-LS Lesotho
-LT Lithuania
-LU Luxembourg
-LV Latvia
-LY Libya
-MA Morocco
-MC Monaco
-MD Moldova
-ME Montenegro
-MF Saint Martin
-MG Madagascar
-MH Marshall Islands
-MK North Macedonia
-ML Mali
-MM Myanmar
-MN Mongolia
-MO Macau SAR
-MP Northern Mariana Islands
-MQ Martinique
-MR Mauritania
-MS Montserrat
-MT Malta
-MU Mauritius
-MV Maldives
-MW Malawi
-MX Mexico
-MY Malaysia
-MZ Mozambique
-NA Namibia
-NC New Caledonia
-NE Niger
-NF Norfolk Island
-NG Nigeria
-NI Nicaragua
-NL Netherlands
-NO Norway
-NP Nepal
-NR Nauru
-NU Niue
-NZ New Zealand
-OM Oman
-PA Panama
-PE Peru
-PF French Polynesia
-PG Papua New Guinea
-PH Philippines
-PK Pakistan
-PL Poland
-PM Saint Pierre and Miquelon
-PN Pitcairn Islands
-PR Puerto Rico
-PS Palestine
-PT Portugal
-PW Palau
-PY Paraguay
-QA Qatar
-RE Réunion
-RO Romania
-RS Serbia
-RU Russia
-RW Rwanda
-SA Saudi Arabia
-SB Solomon Islands
-SC Seychelles
-SD Sudan
-SE Sweden
-SG Singapore
-SH Saint Helena
-SI Slovenia
-SK Slovakia
-SL Sierra Leone
-SM San Marino
-SN Senegal
-SO Somalia
-SR Suriname
-SS South Sudan
-ST São Tomé and Príncipe
-SV El Salvador
-SX Sint Maarten
-SY Syria
-SZ Eswatini
-TC Turks and Caicos Islands
-TD Chad
-TF French Southern Territories
-TG Togo
-TH Thailand
-TJ Tajikistan
-TK Tokelau
-TL Timor-Leste
-TM Turkmenistan
-TN Tunisia
-TO Tonga
-TR Turkey
-TT Trinidad and Tobago
-TV Tuvalu
-TW Taiwan
-TZ Tanzania
-UA Ukraine
-UG Uganda
-UM US Outlying Islands
-US United States
-UY Uruguay
-UZ Uzbekistan
-VA Vatican City
-VC Saint Vincent and the Grenadines
-VE Venezuela
-VG British Virgin Islands
-VI US Virgin Islands
-VN Vietnam
-VU Vanuatu
-WF Wallis and Futuna
-WS Samoa
-XK Kosovo
-YE Yemen
-YT Mayotte
-ZA South Africa
-ZM Zambia
-ZW Zimbabwe
-`.trim();
+import registry from './data/countries.json';
 
-export interface Country { code: string; name: string }
+export interface Country {
+  code: string;
+  name: string;
+  /** E.164 calling code, present when the source dataset publishes one. */
+  dialCode?: string;
+}
 
-export const COUNTRIES: Country[] = LIST.split('\n').map((line) => ({
-  code: line.slice(0, 2),
-  name: line.slice(3),
-}));
+/** The full ISO-3166-1 registry, alphabetical by English name. */
+export const COUNTRIES: Country[] = registry as Country[];
 
 const BY_CODE = new Map(COUNTRIES.map((c) => [c.code, c]));
 
@@ -282,10 +42,9 @@ export function flagOf(code: string): string {
 }
 
 /**
- * Windows ships no flag glyphs at all: a regional-indicator pair comes out as two letters, and no
- * amount of measuring tells you that reliably (the fallback font is narrower than the letters it
- * stands for). So the platform decides, and the width test is only the backstop for an exotic
- * Android without Noto Color Emoji. Either way the two-letter chip below it always reads.
+ * Windows ships no flag glyphs at all: a regional-indicator pair comes out as two
+ * letters. This guard now only serves the language picker's emoji flags — every
+ * country flag is a CDN image from `flags.ts` and never depends on emoji support.
  */
 export function flagsRender(): boolean {
   const ua = `${navigator.userAgent ?? ''} ${navigator.platform ?? ''}`;
@@ -305,23 +64,72 @@ export function flagsRender(): boolean {
   }
 }
 
-/** Marks the document so CSS swaps every flag for its code chip on platforms that cannot draw one. */
+/** Marks the document so CSS swaps every flag glyph for its code chip on platforms that cannot draw one. */
 export function applyFlagSupport() {
   document.documentElement.classList.toggle('no-flags', !flagsRender());
 }
 
 const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-/** Names, codes and common spellings all answer to the search box. */
-export function search(q: string, limit = 40): Country[] {
-  const k = fold(q.trim());
-  if (!k) return COUNTRIES.slice(0, limit);
-  const hits: Country[] = [];
+/**
+ * Common English spellings that are not the dataset's `name.common` (Ivory
+ * Coast / Côte d'Ivoire, Türkiye / Turkey, …). They are search aliases only —
+ * the registry itself stays exactly the standardized ISO snapshot.
+ */
+const SEARCH_ALIASES: Record<string, readonly string[]> = {
+  CI: ["Côte d'Ivoire", 'Cote dIvoire'],
+  TR: ['Turkey'],
+  CD: ['Democratic Republic of the Congo', 'Congo-Kinshasa'],
+  CG: ['Republic of the Congo', 'Congo-Brazzaville'],
+  KR: ['Republic of Korea', 'Korea, South'],
+  KP: ["Democratic People's Republic of Korea", 'Korea, North'],
+  RU: ['Russian Federation'],
+  SY: ['Syrian Arab Republic'],
+  VN: ['Viet Nam'],
+  BO: ['Plurinational State of Bolivia'],
+  VE: ['Bolivarian Republic of Venezuela'],
+  TZ: ['United Republic of Tanzania'],
+  MD: ['Republic of Moldova'],
+  LA: ["Lao People's Democratic Republic"],
+  IR: ['Islamic Republic of Iran'],
+  US: ['USA', 'United States of America'],
+  GB: ['UK', 'Great Britain'],
+  AE: ['UAE'],
+  CZ: ['Czech Republic'],
+  SZ: ['Swaziland'],
+  MK: ['Macedonia'],
+  MM: ['Burma'],
+  CV: ['Cape Verde'],
+  TL: ['East Timor'],
+  NL: ['Holland'],
+};
+
+/**
+ * Names, codes and common spellings all answer to the search box. The full
+ * registry is returned by default — the picker filters the complete world, not
+ * a truncated first page.
+ */
+export function search(q: string, limit = COUNTRIES.length): Country[] {
+  const raw = q.trim();
+  if (!raw) return COUNTRIES.slice(0, limit);
+  const k = fold(raw);
+  const up = raw.toUpperCase();
+  const scored: { c: Country; rank: number }[] = [];
   for (const c of COUNTRIES) {
-    if (fold(c.name).includes(k) || c.code === k || c.code.startsWith(k)) hits.push(c);
-    if (hits.length >= limit) break;
+    const name = fold(c.name);
+    const aliases = (SEARCH_ALIASES[c.code] ?? []).map(fold);
+    const rank = c.code === up ? 0
+      : name.startsWith(k) ? 1
+        : aliases.some((a) => a.startsWith(k)) ? 2
+          : c.code.startsWith(up) ? 3
+            : name.includes(k) ? 4
+              : aliases.some((a) => a.includes(k)) ? 5
+                : c.dialCode === raw ? 6
+                  : 99;
+    if (rank < 99) scored.push({ c, rank });
   }
-  return hits;
+  scored.sort((a, b) => a.rank - b.rank);
+  return scored.slice(0, limit).map((x) => x.c);
 }
 
 /**

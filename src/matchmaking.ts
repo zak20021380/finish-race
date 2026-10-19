@@ -39,6 +39,7 @@ import { menuState, motionReduced, settings } from './settings';
 import { audioContext } from './sound';
 import { payout, profile } from './storage';
 import { getMySquad } from './squads';
+import { paintFlag } from './flags';
 import { runtime, tiqFrom } from './admin';
 import { impact, notify, tgInitData, tgUser } from './telegram';
 
@@ -187,62 +188,10 @@ export function readFace(fallbackName: string): Face {
   return { name, initial: letter.slice(0, 1).toUpperCase(), avatarUrl };
 }
 
-/* ---------- the corner flag: the ladder's photo cascade, kept live in one host ---------- */
+/* ---------- the corner flag: the shared CDN cascade, kept live in one host ---------- */
 
-/** Only a bare ISO alpha-2 may ever be interpolated into a URL — nothing else. */
-const iso2 = (code: string | null | undefined): string | null =>
-  code && /^[A-Za-z]{2}$/.test(code) ? code.toLowerCase() : null;
-
-/** The same two CDNs `compete.ts` walks; that module keeps its own copy private. */
-const FLAG_SVG = (cc: string): string => `https://cdn.jsdelivr.net/npm/circle-flags/flags/${cc}.svg`;
-const FLAG_PNG = (cc: string): string => `https://flagcdn.com/w80/${cc}.png`;
-
-/**
- * Paint a flag into a pod's corner. The scanner rewrites this host five times a
- * second, so the chip and the image are built once and only their `src` moves —
- * a tick must never churn the DOM or re-fetch a flag the CDN already answered.
- */
-function paintFlag(host: HTMLElement | null, code: string | null | undefined): void {
-  if (!host) return;
-  host.classList.add('fp', 'mm-flag');
-  let chip = host.querySelector<HTMLElement>('.fp-chip');
-  if (!chip) {
-    chip = document.createElement('span');
-    chip.className = 'fp-chip';
-    host.append(chip);
-  }
-  const cc = iso2(code);
-  chip.textContent = (code ?? '').slice(0, 3).toUpperCase() || '—';
-  if (!cc) {
-    host.querySelector('.fp-img')?.remove();
-    host.classList.add('is-chip');
-    return;
-  }
-  let img = host.querySelector<HTMLImageElement>('.fp-img');
-  if (!img) {
-    img = document.createElement('img');
-    img.className = 'fp-img';
-    img.alt = '';
-    img.loading = 'lazy';
-    img.decoding = 'async';
-    img.addEventListener('error', () => {
-      const cur = img?.dataset.cc ?? '';
-      if (img && img.dataset.tier !== '1') {                 // tier 2: the PNG mirror
-        if (img.dataset.tier === '2') return;
-        img.dataset.tier = '1';
-        img.src = FLAG_PNG(cur);
-        return;
-      }
-      if (img) { img.dataset.tier = '2'; host.classList.add('is-chip'); }
-    });
-    host.append(img);
-  }
-  if (img.dataset.cc === cc) return;               // same flag, same pixels: leave it alone
-  img.dataset.cc = cc;
-  img.dataset.tier = '0';
-  host.classList.remove('is-chip');
-  img.src = FLAG_SVG(cc);
-}
+/* `paintFlag` (flags.ts) builds the chip and image once; the scanner's five-a-
+   second repaint only moves `src`, never the DOM. */
 
 /* ---------- online transport: the Worker's waiting room, and the race it turns into ---------- */
 

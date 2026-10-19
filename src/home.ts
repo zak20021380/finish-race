@@ -22,7 +22,7 @@ import { nameOf } from './countries';
 import { getCountryRanking, getPlayerRanking, type CountryRow, type PlayerRow } from './data';
 import { onChange, profile, theme } from './storage';
 import { BOT_HANDLE, impact, openLink } from './telegram';
-import { flagPhoto } from './compete';
+import { flagPhoto } from './flags';
 import { getSquadRanking } from './squads';
 import { newGame } from './rules';
 import { createRenderer, type View } from './render';
@@ -215,62 +215,16 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
      Top 5 fill the card to the dots with no dead void (the 40px→30px row is
      layout only — the row recipe is identical for ranks 1-5). Layout only —
      data (getCountryRanking) and handlers (openCountryPicker) are unchanged.
-     Flags are MIT flag-icons SVGs vendored into src/assets/flags (© Lipis, MIT),
-     rendered lazy in a 28px circle with a monogram fallback. The 2-letter code
-     box is never rendered here. */
+     Flags come from the shared CDN resolver in a 28px circle — no vendored SVG
+     table and no monogram guesswork. */
 
   const PODIUM_CLASS = ['gold', 'silver', 'bronze'] as const;
-
-  const NATIONS_FLAG_SRC: Record<string, string> = {
-    US: new URL('./assets/flags/us.svg', import.meta.url).href,
-    BR: new URL('./assets/flags/br.svg', import.meta.url).href,
-    JP: new URL('./assets/flags/jp.svg', import.meta.url).href,
-    DE: new URL('./assets/flags/de.svg', import.meta.url).href,
-    IN: new URL('./assets/flags/in.svg', import.meta.url).href,
-    FR: new URL('./assets/flags/fr.svg', import.meta.url).href,
-    GB: new URL('./assets/flags/gb.svg', import.meta.url).href,
-    UA: new URL('./assets/flags/ua.svg', import.meta.url).href,
-    TR: new URL('./assets/flags/tr.svg', import.meta.url).href,
-    ES: new URL('./assets/flags/es.svg', import.meta.url).href,
-  };
 
   const monogramOf = (name: string): string => {
     const parts = name.trim().split(/\s+/).filter((p) => p.length > 0);
     if (parts.length === 0) return '•';
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return (parts[0].slice(0, 1) + parts[1].slice(0, 1)).toUpperCase();
-  };
-
-  const flagCircle = (code: string, name: string): HTMLSpanElement => {
-    const wrap = document.createElement('span');
-    wrap.className = 'flag-circle';
-    wrap.setAttribute('aria-hidden', 'true');
-    const src: string | undefined = NATIONS_FLAG_SRC[code.toUpperCase()];
-    if (src) {
-      const img = document.createElement('img');
-      img.className = 'flag-img';
-      img.src = src;
-      img.alt = '';
-      img.loading = 'lazy';
-      img.decoding = 'async';
-      img.draggable = false;
-      img.addEventListener('error', () => {
-        wrap.textContent = '';
-        wrap.classList.add('is-fallback');
-        const mono = document.createElement('span');
-        mono.className = 'flag-mono';
-        mono.textContent = monogramOf(name);
-        wrap.append(mono);
-      });
-      wrap.append(img);
-    } else {
-      wrap.classList.add('is-fallback');
-      const mono = document.createElement('span');
-      mono.className = 'flag-mono';
-      mono.textContent = monogramOf(name);
-      wrap.append(mono);
-    }
-    return wrap;
   };
 
   /** Display-only magnitude for the "▲ N" trend (ranking has no move size). */
@@ -303,7 +257,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const fl = document.createElement('span');
     fl.className = 'fl';
     fl.setAttribute('aria-hidden', 'true');
-    fl.append(flagCircle(c.code, c.name));
+    fl.append(flagPhoto(c.code, 'fp-nation'));
     const nm = document.createElement('span');
     nm.className = 'nm';
     nm.textContent = c.name;
@@ -335,7 +289,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     }
     const mine = rows.find((c) => c.code === code);
     const contributed = profile.stats.wins * 140;
-    const rank = mine ? `#${mine.rank}` : '—';
+    const rank = mine ? `#${mine.rank}` : 'Unranked';
     el.textContent = `Your nation: ${rank} · +${contributed.toLocaleString('en-US')} pts contributed`;
     el.setAttribute('title', `You fight for ${nameOf(code)}`);
   };
