@@ -16836,3 +16836,208 @@ html.reduced-motion .announce-cta { transition: none; }
     0 10px 20px -10px rgba(0, 0, 0, .7);
 }
 .announce-cta[hidden] { display: none; }
+
+/* ==========================================================================
+   SQUAD REGISTRATION � claim a Telegram channel/group
+   ========================================================================== */
+
+.squad-reg-pill {
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #38BDF8;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  border-radius: 999px;
+  padding: 5px 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform var(--motion-fast), background var(--motion-fast);
+}
+.squad-reg-pill:hover { background: rgba(56, 189, 248, 0.19); }
+.squad-reg-pill:active { transform: scale(0.97); }
+.squad-reg-pill:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+.squad-dock:not(.member) .squad-reg-pill { min-height: 30px; padding: 4px 9px; font-size: 10px; }
+@media (max-width: 380px) {
+  .squad-dock:not(.member) .dock-actions { flex-direction: column; align-items: flex-end; gap: 5px; }
+  .squad-dock:not(.member) .dock-btn { min-width: 88px; height: 34px; }
+}
+
+.squad-reg-sheet { gap: 10px; }
+.sqr-head { display: flex; align-items: center; gap: 10px; }
+.sqr-crest {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #38BDF8;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 8px 18px -12px var(--shadow);
+}
+.sqr-crest .ico { width: 20px; height: 20px; }
+.sqr-copy { min-width: 0; }
+.sqr-title { margin: 0; font-size: 16px; font-weight: 700; color: #FFFFFF; text-align: left; }
+.sqr-sub { margin: 2px 0 0; font-size: 12px; font-weight: 600; line-height: 1.4; color: var(--ink-soft); }
+.sqr-field {
+  min-height: 50px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #101827 0%, #161F30 100%);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, .55),
+    inset 0 0 0 1px rgba(125, 211, 252, .16);
+}
+.sqr-field .ico { color: var(--brand-ink); }
+.sqr-reqs {
+  margin-top: 2px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(245, 158, 11, .09);
+  border: 1px solid rgba(245, 158, 11, .24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+.sqr-reqs-t {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--gold-ink);
+}
+.sqr-req-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.sqr-req-list li { display: flex; align-items: flex-start; gap: 8px; }
+.sqr-req-list b { color: var(--ink); font-weight: 800; }
+.sqr-num {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, .18);
+  color: var(--gold-ink);
+  font-size: 10px;
+  font-weight: 900;
+}
+.sqr-error {
+  margin: 2px 0 0;
+  padding: 9px 11px;
+  border-radius: 12px;
+  background: rgba(244, 63, 94, .1);
+  border: 1px solid rgba(244, 63, 94, .28);
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.sqr-error[hidden] { display: none; }
+.squad-reg-cta {
+  --btn-lip: #b45309;
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+  color: #1A1205;
+  box-shadow:
+    0 4px 0 var(--btn-lip),
+    0 14px 28px -12px rgba(245, 158, 11, .7),
+    inset 0 2px 3px rgba(255, 255, 255, .38),
+    inset 0 -2px 3px rgba(0, 0, 0, .16);
+}
+.squad-reg-cta[disabled] { opacity: .72; --d: 2px; }
+.squad-reg-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid rgba(26, 18, 5, .28);
+  border-top-color: #1A1205;
+  animation: sqr-spin .7s linear infinite;
+}
+.squad-reg-spinner[hidden] { display: none; }
+@keyframes sqr-spin { to { transform: rotate(360deg); } }
+
+/* ---- toasts: high-fidelity feedback over the clay ---- */
+.toast-host {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top));
+  left: 50%;
+  z-index: 60;
+  width: min(92%, calc(var(--app-w) - 20px));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #212C40 0%, #141C2B 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 0 0 1px rgba(125, 211, 252, .16),
+    0 16px 30px -18px #000;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  opacity: 0;
+  transform: translateY(-10px) scale(.98);
+  transition: opacity var(--motion-fast), transform var(--motion-fast);
+}
+.toast.in { opacity: 1; transform: none; }
+.toast-mark {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+}
+.toast-success .toast-mark { background: rgba(52, 211, 153, .18); color: #6EE7B7; }
+.toast-error .toast-mark { background: rgba(244, 63, 94, .18); color: #FDA4AF; }
+.toast-warning .toast-mark { background: rgba(245, 158, 11, .18); color: var(--gold-ink); }
+.toast-copy { min-width: 0; }
+.squad-reg-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 4px 0 0;
+  padding: 4px 2px 0;
+}
+.squad-reg-bar[hidden] { display: none; }
+.squad-reg-hint {
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

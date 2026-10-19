@@ -45,10 +45,11 @@ import {
   sizesOf, type BotTier, type LobbyFormat, type Room, type RoomDriver, type RoomEvent,
 } from '../src/room';
 import {
-  authenticate, authRequestFrom, identifyAdminRequest, isSuperAdmin,
+  authenticate, authRequestFrom, identifyAdminRequest, isLocalhost, isSuperAdmin, verifiedTelegramUserId,
   type AdminIdentity, type AdminRole, type Identity, type MindTier,
 } from './auth';
 import { json } from './http';
+import { normalizeChatHandle, readRegisteredSquad, verifyAndBuildSquad, type RegisteredSquad } from './squads';
 import type { Env } from './env';
 
 /* ---------- protocol ---------- */
@@ -615,6 +616,9 @@ export class MatchmakerDO {
   private rolesDirty = false;
   /** A broadcast write is already scheduled: many flips, one flush. */
   private broadcastsDirty = false;
+  /** Registered Telegram channels and groups, by squad id. */
+  private squads = new Map<string, RegisteredSquad>();
+  private squadsDirty = false;
 
   constructor(private state: DurableObjectState, private env: Env) {
     /* The registry rides the object's own storage, so it survives eviction. A harness that drives
@@ -646,6 +650,13 @@ export class MatchmakerDO {
             for (const raw of casts) {
               const row = readBroadcast(raw);
               if (row) this.broadcasts.set(row.id, row);
+            }
+          }
+          const squads = await storage.get<unknown[]>('squads');
+          if (Array.isArray(squads)) {
+            for (const raw of squads) {
+              const row = readRegisteredSquad(raw);
+              if (row) this.squads.set(row.id, row);
             }
           }
           this.seedRoles();
@@ -688,6 +699,7 @@ export class MatchmakerDO {
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === '/api/squads/register') return this.registerSquad(request, url);
     /* The worker has authenticated the caller on `/admin/*` and `/api/admin/*`; the room below
        authorizes them against its registry. The one public announcement feed rides the same
        handler. None of these ever carry an upgrade. */
@@ -741,6 +753,74 @@ export class MatchmakerDO {
       if (!live.driver && now - live.room.openedAt >= live.room.waitMs) this.launchRoom(live);
     }
     this.rearm();
+  }
+
+  /* ---------- registered squads ---------- */
+
+  private async registerSquad(request: Request, url: URL): Promise<Response> {
+    const body = await readBody(request);
+    const rawHandle = typeof body.chatUsername === 'string' ? body.chatUsername : '';
+    const handle = normalizeChatHandle(rawHandle);
+    if (!handle) {
+      return json({
+        ok: false,
+        error: 'invalid_handle',
+        message: 'Enter a channel handle or link like @your_channel.',
+      }, 400);
+    }
+    if ([...this.squads.values()].some((s) => s.handle.toLowerCase() === handle.toLowerCase())) {
+      return json({
+        ok: false,
+        error: 'already_registered',
+        message: 'This channel/group is already registered as a Squad.',
+      }, 409);
+    }
+
+    const initData = request.headers.get('x-telegram-init-data') ?? '';
+    let requester = await verifiedTelegramUserId(initData, this.env);
+    if (!requester) {
+      const dev = this.env.DEV_AUTH === 'true' || isLocalhost(url.hostname);
+      if (dev) {
+        requester = String(body.userTelegramId ?? '').replace(/[^0-9-]/g, '').slice(0, 20);
+      }
+    }
+    if (!requester) {
+      return json({
+        ok: false,
+        error: 'unauthorized',
+        message: 'Telegram verification required.',
+      }, 401);
+    }
+
+    const result = await verifyAndBuildSquad(rawHandle, requester, this.env);
+    if (!result.ok) {
+      return json({ ok: false, error: result.code, message: result.message }, result.status);
+    }
+    if ([...this.squads.values()].some((s) => s.chatId === result.squad.chatId || s.handle.toLowerCase() === result.squad.handle.toLowerCase())) {
+      return json({
+        ok: false,
+        error: 'already_registered',
+        message: 'This channel/group is already registered as a Squad.',
+      }, 409);
+    }
+
+    this.squads.set(result.squad.id, result.squad);
+    this.squadsDirty = true;
+    this.persistSquads();
+    return json({ ok: true, squad: result.squad });
+  }
+
+  private persistSquads(): void {
+    if (!this.squadsDirty || !this.state?.storage) return;
+    const storage = this.state.storage;
+    this.squadsDirty = false;
+    void Promise.resolve().then(() => {
+      try {
+        void storage.put('squads', [...this.squads.values()]);
+      } catch {
+        /* a store that refuses the write: the registry stays in memory */
+      }
+    });
   }
 
   /* ---------- the admin surface ---------- */

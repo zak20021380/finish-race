@@ -329,6 +329,17 @@ function devMarker(request: AdminRequestLike): boolean {
   }
 }
 
+/** The verified Telegram user id carried by an initData query string, or ''. */
+export async function verifiedTelegramUserId(initData: string, env: Env): Promise<string> {
+  const token = env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!initData || !token) return '';
+  const fields = await verify(initData, token);
+  if (!fields) return '';
+  const user = parseUser(fields.get('user'));
+  if (user?.id === undefined || user?.id === null) return '';
+  return String(user.id).replace(/[^0-9-]/g, '').slice(0, 20);
+}
+
 /** The verified Telegram user id behind an admin request, or '' — the signature only, no allowlist. */
 async function signedAdminId(request: AdminRequestLike, env: Env): Promise<string> {
   const token = env.TELEGRAM_BOT_TOKEN?.trim();

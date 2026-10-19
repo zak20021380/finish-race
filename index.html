@@ -870,6 +870,10 @@
               <i class="seg-dot" aria-hidden="true"></i>
             </button>
           </div>
+          <div class="squad-reg-bar" id="squad-reg-bar" hidden>
+            <span class="squad-reg-hint">Own a Telegram channel or group?</span>
+            <button class="squad-reg-pill" id="squad-reg-open" type="button" aria-label="Register Squad: claim a Telegram channel or group">+ Register Squad</button>
+          </div>
           <div class="compete-body ranks-body" data-scroll id="ranks-scroll">
             <section class="podium" id="ranks-podium" role="list" aria-label="Top three" hidden></section>
             <section class="solo-standing" id="solo-standing" aria-label="Your Standing" aria-live="polite" hidden></section>
@@ -1524,6 +1528,7 @@
         <p class="sr-only" id="mm-live" role="status" aria-live="polite"></p>
       </section>
 
+      <div class="toast-host" id="toast-host" role="status" aria-live="polite"></div>
       <div class="scrim" id="scrim" hidden></div>
 
       <!-- ============ Admin Command Center (src/admin.ts) ============
@@ -2366,6 +2371,41 @@
         <div class="sheet-actions">
           <button class="btn btn-ghost" type="button" data-sheet-close>Close</button>
         </div>
+      </section>
+
+      <!-- Register a Telegram channel or group as an official squad. -->
+      <section class="sheet squad-reg-sheet" id="sheet-squad-register" hidden tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="squad-reg-title">
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <header class="sqr-head">
+          <span class="sqr-crest" aria-hidden="true">
+            <svg class="ico" aria-hidden="true"><use href="#i-shield" /></svg>
+          </span>
+          <div class="sqr-copy">
+            <h2 class="sheet-t left sqr-title" id="squad-reg-title">Register Your Squad</h2>
+            <p class="sqr-sub">Turn your Telegram Channel or Group into a competitive Squad.</p>
+          </div>
+        </header>
+        <div class="sheet-body" data-scroll>
+          <label class="field sqr-field">
+            <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
+            <input class="input" id="squad-reg-input" type="text" placeholder="@your_channel or @your_group"
+              autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="go"
+              aria-label="Channel or group handle or link" data-input />
+          </label>
+          <div class="sqr-reqs" role="note">
+            <b class="sqr-reqs-t">Before you register</b>
+            <ol class="sqr-req-list">
+              <li><span class="sqr-num">1</span><span>Add <b id="squad-reg-bot">@detour_game_bot</b> as an admin to your chat.</span></li>
+              <li><span class="sqr-num">2</span><span>You must be an Owner or Administrator of the chat.</span></li>
+            </ol>
+          </div>
+          <p class="sqr-error" id="squad-reg-error" role="alert" hidden></p>
+        </div>
+        <button class="btn squad-reg-cta" id="squad-reg-submit" type="button" aria-live="polite">
+          <span class="squad-reg-spinner" id="squad-reg-spinner" aria-hidden="true" hidden></span>
+          <span class="squad-reg-label" id="squad-reg-label">Verify &amp; Register</span>
+        </button>
+        <button class="btn btn-ghost" type="button" data-sheet-close>Cancel</button>
       </section>
 
       <!-- Mind sheet: the cognitive profile behind one ladder name (Ranks Part 4).

@@ -49,8 +49,10 @@ import {
 import { nameOf } from './countries';
 import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
-import { bindSquadById, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadKind, squadLetter, type RankedSquad } from './squads';
-import { impact, notify, tgUser } from './telegram';
+import { bindSquadById, cleanChatReference, cleanHandle, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadKind, squadLetter, type RankedSquad } from './squads';
+import { BOT_HANDLE, impact, notify, tgUser } from './telegram';
+import { registerSquadWithTelegram } from './squadRegister';
+import { showToast } from './toast';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
 import starsImg from './assets/images/telegram_stars.png';
@@ -411,6 +413,100 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     (document.getElementById('team-chip') as HTMLButtonElement | null)?.click();
   };
 
+  /* ---------- claim a Telegram channel/group as an official squad ---------- */
+
+  const regEls = {
+    sheet: document.getElementById('sheet-squad-register'),
+    input: document.getElementById('squad-reg-input') as HTMLInputElement | null,
+    error: document.getElementById('squad-reg-error'),
+    submit: document.getElementById('squad-reg-submit') as HTMLButtonElement | null,
+    spinner: document.getElementById('squad-reg-spinner'),
+    label: document.getElementById('squad-reg-label'),
+    bot: document.getElementById('squad-reg-bot'),
+  };
+  if (regEls.bot) regEls.bot.textContent = `@${BOT_HANDLE}`;
+  let registering = false;
+
+  function setRegisterBusy(busy: boolean): void {
+    registering = busy;
+    if (regEls.submit) {
+      regEls.submit.disabled = busy;
+      regEls.submit.toggleAttribute('aria-busy', busy);
+    }
+    if (regEls.spinner) regEls.spinner.hidden = !busy;
+    if (regEls.label) regEls.label.textContent = busy ? 'Verifying…' : 'Verify & Register';
+  }
+
+  function showRegisterError(message: string): void {
+    if (!regEls.error) return;
+    regEls.error.textContent = message;
+    regEls.error.hidden = false;
+  }
+
+  function openSquadRegister(): void {
+    if (!regEls.sheet) return;
+    if (regEls.input) regEls.input.value = '';
+    if (regEls.error) regEls.error.hidden = true;
+    setRegisterBusy(false);
+    api.sheets.open(regEls.sheet);
+    impact('light');
+    regEls.input?.focus({ preventScroll: true });
+  }
+
+  function squadRegisterPill(cls = ''): HTMLButtonElement {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = `squad-reg-pill ${cls}`.trim();
+    el.textContent = '+ Register Squad';
+    el.setAttribute('aria-label', 'Register Squad: claim a Telegram channel or group');
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openSquadRegister();
+    });
+    return el;
+  }
+
+  async function submitSquadRegistration(): Promise<void> {
+    if (registering || !regEls.input) return;
+    const raw = regEls.input.value;
+    if (!cleanChatReference(raw)) {
+      const message = 'Enter a channel handle or link like @your_channel.';
+      showRegisterError(message);
+      showToast(message, 'warning');
+      notify('warning');
+      regEls.input.focus({ preventScroll: true });
+      return;
+    }
+    if (regEls.error) regEls.error.hidden = true;
+    setRegisterBusy(true);
+    const result = await registerSquadWithTelegram(raw);
+    setRegisterBusy(false);
+    if (result.ok) {
+      notify('success');
+      impact('medium');
+      showToast('Squad successfully registered!', 'success');
+      api.sheets.close();
+      loadedBoard.guilds = false;
+      selectBoard('guilds');
+      return;
+    }
+    notify('error');
+    impact('light');
+    showToast(result.message, 'error');
+    showRegisterError(result.message);
+  }
+
+  document.getElementById('squad-reg-open')?.addEventListener('click', () => openSquadRegister());
+  regEls.submit?.addEventListener('click', () => { void submitSquadRegistration(); });
+  regEls.input?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    void submitSquadRegistration();
+  });
+  regEls.input?.addEventListener('input', () => {
+    if (regEls.error) regEls.error.hidden = true;
+  });
+
   const inviteSquad = (s: RankedSquad): void => {
     const text = `${s.handle} — join my squad in Detour!`;
     try {
@@ -467,6 +563,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     // The screen's aura keys off your own TIQ, wherever on the ladder the eye is.
     if (ranksScreen) ranksScreen.dataset.tier = tierOf(myTrophyScore());
     // The squad banner belongs EXCLUSIVELY to the Intellect Guilds board.
+    const regBar = document.getElementById('squad-reg-bar');
+    if (regBar) regBar.hidden = board !== 'guilds';
     const dock = squadDock();
     if (dock) dock.hidden = board !== 'guilds';
     if (board === 'guilds') paintSquadDock();
@@ -2246,7 +2344,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
       const actions = document.createElement('span');
       actions.className = 'dock-actions';
-      actions.append(btn);
+      actions.append(squadRegisterPill(), btn);
       dock.append(ico, txt, actions);
       dock.setAttribute('aria-label', 'My Squad Standing: no squad bound. Find a squad to start earning Tactical IQ.');
       return;

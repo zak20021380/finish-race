@@ -50,6 +50,12 @@ export default {
       return json({ ok: true, service: 'detour-referral', code, joins: 0, unclaimed: 0 });
     }
 
+    if (url.pathname === '/api/squads/register') {
+      if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+      const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+      return lobby.fetch(request);
+    }
+
     if (url.pathname === '/ws/matchmake') {
       const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
       return lobby.fetch(request);

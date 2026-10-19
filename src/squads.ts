@@ -28,6 +28,8 @@ export interface Squad {
   trend: SquadTrend;
   /** community type; optional so older saves without it still validate */
   kind?: SquadKind;
+  /** Telegram photo file id, when the Bot API returned one */
+  avatar?: string;
 }
 
 export interface RankedSquad extends Squad {
@@ -65,7 +67,8 @@ function squadOk(s: unknown): s is Squad {
     && typeof x.members === 'number' && Number.isFinite(x.members) && x.members >= 0
     && typeof x.trophies === 'number' && Number.isFinite(x.trophies) && x.trophies >= 0
     && (x.trend === 'up' || x.trend === 'down' || x.trend === 'same')
-    && (x.kind === undefined || x.kind === 'channel' || x.kind === 'group');
+    && (x.kind === undefined || x.kind === 'channel' || x.kind === 'group')
+    && (x.avatar === undefined || (typeof x.avatar === 'string' && x.avatar.length <= 160));
 }
 
 /** Resolve the community type, defaulting deterministically for legacy saves. */
@@ -109,6 +112,16 @@ export function cleanHandle(raw: string): string {
   if (!h.startsWith('@')) h = `@${h}`;
   if (!/^@[A-Za-z0-9_]{4,32}$/.test(h)) return '';
   return h;
+}
+
+export function cleanChatReference(raw: string): string {
+  const direct = cleanHandle(raw);
+  if (direct) return direct;
+  let value = (raw ?? '').trim().split(/[?#]/)[0].replace(/\/+$/, '');
+  const link = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/([A-Za-z0-9_]{4,32})$/i.exec(value);
+  if (!link) return '';
+  value = link[1];
+  return cleanHandle(value);
 }
 
 const displayNameOf = (handle: string): string => {
@@ -168,6 +181,45 @@ export function bindSquad(rawHandle: string): BindResult {
   save.boundId = id;
   flush();
   return was;
+}
+
+export interface RegisteredSquadInput {
+  id?: string;
+  handle: string;
+  name: string;
+  members: number;
+  kind?: SquadKind;
+  avatar?: string;
+}
+
+export type ClaimResult =
+  | { ok: true; squad: RankedSquad }
+  | { ok: false; reason: 'bad-handle' | 'already' };
+
+export function claimRegisteredSquad(input: RegisteredSquadInput): ClaimResult {
+  const handle = cleanHandle(input.handle);
+  if (!handle) return { ok: false, reason: 'bad-handle' };
+  const existing = getSquadRanking().find((s) => s.handle.toLowerCase() === handle.toLowerCase());
+  if (existing) return { ok: false, reason: 'already' };
+  const fallbackId = `sq-${Date.now().toString(36)}-${handle.slice(1, 6).toLowerCase()}`;
+  const id = (input.id ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 48) || fallbackId;
+  if (getSquadRanking().some((s) => s.id === id)) return { ok: false, reason: 'already' };
+  const name = (input.name || displayNameOf(handle)).trim().slice(0, 32) || displayNameOf(handle);
+  const members = Number.isFinite(input.members) && input.members > 0 ? Math.floor(input.members) : 1;
+  const created: Squad = {
+    id,
+    handle,
+    name,
+    members,
+    trophies: 0,
+    trend: 'same',
+    kind: input.kind === 'group' ? 'group' : 'channel',
+    avatar: typeof input.avatar === 'string' ? input.avatar.slice(0, 160) : '',
+  };
+  save.custom = [...save.custom, created].slice(-20);
+  save.boundId = id;
+  flush();
+  return { ok: true, squad: getMySquad() ?? { ...created, rank: getSquadRanking().length } };
 }
 
 export function bindSquadById(id: string): BindResult {

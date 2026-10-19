@@ -11,6 +11,9 @@ export interface Env {
   /** Bot token used to verify Mini App initData. A secret, never a var:
    *  `npx wrangler secret put TELEGRAM_BOT_TOKEN`. */
   TELEGRAM_BOT_TOKEN?: string;
+  /** The bot's numeric id, used to prove it is an administrator of a registered chat. Optional:
+   *  the worker asks `getMe` when it is not set. */
+  TELEGRAM_BOT_ID?: string;
   /** `"true"` opens the guest door for local work (see `DEV_AUTH` in wrangler.toml). */
   DEV_AUTH?: string;
   /** Comma-separated Telegram user ids allowed through the `/admin/*` routes — the server-side
