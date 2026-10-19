@@ -2227,24 +2227,6 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
    56px is the spec band, and it clears the house 48px target with room to spare. */
 .lb-row { cursor: pointer; min-height: 56px; }
 .lb-row.is-open { border-color: rgba(125, 211, 252, .34); }
-/* The rival strip's landing flash — opacity only, drawn over the row's own clay. */
-.lb-row.is-spot::after,
-.pod-card.is-spot::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--brand-soft);
-  box-shadow: inset 0 0 0 2px var(--brand-2);
-  animation: ml-spot 1.4s ease-out forwards;
-  pointer-events: none;
-}
-@keyframes ml-spot {
-  from { opacity: .9; }
-  to { opacity: 0; }
-}
-html.reduced-motion .lb-row.is-spot::after,
-html.reduced-motion .pod-card.is-spot::after { animation: none; opacity: .28; }
 
 /* Col 1 — rank: an extruded clay key. Deliberately NOT a metal — the podium above
    owns gold/silver/bronze, so #4 down read as prestige by shape and lift, not by
@@ -5265,11 +5247,12 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
 .standing-score .tiq { flex: none; width: 16px; height: 16px; color: var(--honey); filter: drop-shadow(0 0 4px rgba(245, 158, 11, .4)); }
 
 /* ---- Top Minds strip: the Floating Slate, cut to one row ----------------------
-   Ringed avatar · "You" · tier crest · percentile chip on the left, the gold TIQ
-   read and its weekly movement on the right. 48px tall and read-only: the four
-   attribute meters and the italic milestone were removed, and the milestone now
-   rides the strip's own title and aria-label rather than a line of height.
-   The ring is a real SVG arc on pathLength=100, so the dash *is* the percentage. */
+   Metal rank key · ringed avatar · "You" · tier crest · percentile chip on the
+   left, the gold TIQ read and its weekly movement on the right. 48px tall and
+   read-only: the four attribute meters and the italic milestone were removed, and
+   the milestone now rides the strip's own title and aria-label rather than a line
+   of height. The ring is a real SVG arc on pathLength=100, so the dash *is* the
+   percentage. */
 .solo-standing.mh {
   gap: 10px;
   min-height: 48px;
@@ -5284,6 +5267,59 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
 /* the strip carries its own 40px ring; the sheet keeps the 56px one */
 .solo-standing.mh .mh-ring { width: 40px; height: 40px; }
 .solo-standing.mh .mh-ring b { width: 30px; height: 30px; font-size: 15px; }
+/* Your place, struck as a key: a crisp graphite face with a metallic rim and the
+   same 900-weight tabular numerals the ladder rows use. The podium owns #1-3, so
+   the strip beneath it always reads #4 or higher — never a duplicated medal. */
+.mh-rank {
+  --rank-face: linear-gradient(180deg, #222B3B 0%, #131A27 100%);
+  --rank-edge: rgba(148, 163, 184, .3);
+  --rank-lip: rgba(226, 232, 240, .3);
+  --rank-ink: #CBD5E1;
+  --rank-glow: rgba(148, 163, 184, .18);
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 30px;
+  height: 26px;
+  padding: 0 5px;
+  border: 1px solid var(--rank-edge);
+  border-radius: 8px;
+  background: var(--rank-face);
+  box-shadow:
+    inset 0 1px 0 var(--rank-lip),
+    inset 0 -8px 12px -10px rgba(0, 0, 0, .95),
+    0 6px 12px -8px var(--rank-glow);
+  color: var(--rank-ink);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: -.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, .8),
+    0 -1px 0 rgba(255, 255, 255, .14);
+}
+.mh-rank.gold {
+  --rank-face: linear-gradient(180deg, #2A2312 0%, #171510 100%);
+  --rank-edge: rgba(245, 158, 11, .45);
+  --rank-lip: rgba(251, 191, 36, .6);
+  --rank-ink: #FCD34D;
+  --rank-glow: rgba(245, 158, 11, .42);
+}
+.mh-rank.silver {
+  --rank-face: linear-gradient(180deg, #1E2430 0%, #121620 100%);
+  --rank-edge: rgba(148, 163, 184, .35);
+  --rank-lip: rgba(226, 232, 240, .48);
+  --rank-ink: #E2E8F0;
+  --rank-glow: rgba(148, 163, 184, .2);
+}
+.mh-rank.bronze {
+  --rank-face: linear-gradient(180deg, #261B12 0%, #15110E 100%);
+  --rank-edge: rgba(217, 119, 6, .35);
+  --rank-lip: rgba(253, 186, 116, .38);
+  --rank-ink: #FDBA74;
+  --rank-glow: rgba(217, 119, 6, .22);
+}
 .mh-ring { position: relative; flex: none; width: 48px; height: 48px; display: grid; place-items: center; }
 .mh-arc { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
 .mh-arc circle { stroke-width: 3; }
@@ -5400,54 +5436,6 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   background: linear-gradient(90deg, var(--honey-lip), var(--honey-ink));
   box-shadow: 0 0 8px -2px rgba(245, 158, 11, .55);
   transition: width var(--motion-med);
-}
-
-/* ---- Rival watch: the gap made personal, and one tap from the row it names ---- */
-.rival {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--s1);
-  width: 100%;
-  min-height: 48px;
-  margin-bottom: var(--s1);
-  padding: 7px 10px;
-  appearance: none;
-  border: 0;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  border-radius: 12px;
-  background:
-    linear-gradient(180deg, rgba(255, 82, 43, .12) 0%, rgba(255, 82, 43, .02) 100%),
-    var(--clay-face);
-  background-color: #1C2433;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 82, 43, .26),
-    inset 0 1px 0 rgba(255, 255, 255, .09),
-    0 6px 14px -12px var(--shadow);
-  color: var(--chip-ink);
-  font-size: var(--t-3);
-  font-weight: 700;
-  line-height: 1.3;
-  transition: transform var(--motion-fast);
-}
-.rival:active { transform: translateY(2px); }
-.rival:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-.rival-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--cta); box-shadow: 0 0 8px rgba(255, 82, 43, .7); }
-.rival-t { flex: 1 1 auto; min-width: 0; }
-.rival-go {
-  flex: none;
-  padding: 3px 8px;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 82, 43, .14);
-  box-shadow: inset 0 0 0 1px rgba(255, 82, 43, .3);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  line-height: 1.2;
-  color: var(--cta-hi);
 }
 
 /* ==========================================================================
@@ -7880,20 +7868,28 @@ html.reduced-motion .notif-dot { animation: none; }
 .ranks-screen { overflow: hidden; max-width: 100%; }
 #s-ranks.ranks-screen { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: 10px; }
 
-/* ---- Zone A: one championship identity line — no stat cluster ----
-   Left: a 21px display wordmark with a metallic season badge tucked beneath it.
-   Right: the tight "Nd left" capsule with its amber beacon. The band is 50px so
-   the larger title never crowds the countdown; the old three-box telemetry row
-   is gone because the board below already carries every number it was shouting. */
+/* ---- Zone A: one championship bar — no stat cluster ----
+   The wordmark and its metallic season badge share the left column; the "Nd left"
+   capsule rides the right. All three sit inside one recessed clay band, so the
+   header reads as a single machined plate rather than three loose labels. The band
+   is 50px: enough for the two-line identity column, short enough that the podium
+   still clears the fold at 360x640. */
 .ranks-head {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  height: var(--ml-head-h);
+  min-height: var(--ml-head-h);
   min-width: 0;
   max-width: 100%;
+  padding: 5px 8px 5px 12px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #151D2C 0%, #101724 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    inset 0 0 0 1px rgba(255, 255, 255, .05),
+    0 10px 20px -16px var(--shadow);
 }
 .ml-id {
   flex: 1 1 auto;
@@ -7902,41 +7898,38 @@ html.reduced-motion .notif-dot { animation: none; }
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
 }
-/* The wordmark: championship-grade display type — 21px ultra-bold, tight
-   optical tracking, pure white, and a deep ambient shadow that lifts it off
-   the obsidian canvas without a plate or a border. */
+/* The wordmark: championship-grade display type — 20px extra-bold, tight optical
+   tracking, pure white, and a soft ambient shadow that lifts it off the band
+   without a plate or a border of its own. */
 .ml-title {
   flex: none;
   max-width: 100%;
   text-align: left;
-  font-size: 21px;
-  font-weight: 900;
+  font-size: 20px;
+  font-weight: 800;
   letter-spacing: -.3px;
   text-transform: uppercase;
   line-height: 1.02;
   color: #FFFFFF;
   text-shadow: 0 2px 10px rgba(0, 0, 0, .5);
 }
-/* The season, re-cut as a small machined badge: brushed steel face, a lit top
-   edge and a hairline of shadow under it. Uppercase is applied here, so the
-   live "Season N" string stays readable to assistive tech. */
+/* The season, re-cut as a dedicated micro-pill directly beneath the wordmark:
+   a translucent graphite face, a hairline rim and a quiet uppercase label.
+   Uppercase is applied here, so the live "Season N" string stays readable to
+   assistive tech. */
 .ml-sub {
   display: inline-flex;
   align-items: center;
   align-self: flex-start;
   margin: 0;
   min-width: 0;
-  padding: 2px 7px 2px 6px;
-  border-radius: 4px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .08) 0%, rgba(255, 255, 255, 0) 52%),
-    linear-gradient(180deg, #263247 0%, #151D2C 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .16),
-    inset 0 0 0 1px rgba(148, 163, 184, .2),
-    0 1px 0 rgba(0, 0, 0, .5);
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 1.2px;
@@ -7947,27 +7940,28 @@ html.reduced-motion .notif-dot { animation: none; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Scarcity: an ultra-compact raised clay pill with a hairline top light — the
-   season's own beacon is the amber pulse, so the capsule itself stays quiet.
-   The pulse is its own layer so the ring can travel on transform/opacity only. */
+/* Scarcity: the countdown is its own tactile amber capsule, aligned to the
+   right of the band. The beacon is the only thing that moves, so the season
+   reads as live without turning the header into a siren. */
 .ml-season {
   display: inline-flex;
   align-items: center;
+  align-self: center;
   flex: none;
-  gap: 5px;
+  gap: 6px;
   max-width: 100%;
-  padding: 4px 9px 4px 8px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #1D2637 0%, #141A28 100%);
+  padding: 4px 10px;
+  border: 1px solid rgba(245, 158, 11, .3);
+  border-radius: 999px;
+  background: rgba(245, 158, 11, .1);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .1),
-    inset 0 0 0 1px rgba(255, 255, 255, .07),
-    0 6px 12px -8px var(--shadow);
-  font-size: 10px;
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    0 1px 0 rgba(0, 0, 0, .4);
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: .02em;
   line-height: 1.35;
-  color: var(--chip-ink);
+  color: #FBBF24;
   white-space: nowrap;
   overflow: hidden;
 }
@@ -8002,16 +7996,13 @@ html.reduced-motion .ml-pulse::after { display: none; }
 #ranks-dock[hidden] { display: none !important; }
 @media (max-width: 380px) {
   .solo-standing { padding: var(--s2); gap: var(--s2); }
-  /* 20px is still display-grade at the 360 floor; the full 21px returns above it */
-  .ml-title { font-size: 20px; }
-  /* the strip keeps one row on the narrow floor: the score gives 2px before a
-     chip is allowed to wrap or the identity column is allowed to clip */
+  /* the strip keeps one row on the narrow floor: the score gives 2px, then the
+     rank badge, before a chip is allowed to wrap or the identity column is cut */
   .solo-standing.mh { gap: 8px; padding: 3px 10px; }
   .solo-standing.mh .mh-score { font-size: 19px; }
   .mh-pill,
   .mh-chip { padding: 1px 5px; letter-spacing: .03em; }
-  .rival { padding: 6px 8px; }
-  .rival-go { padding: 3px 6px; }
+  .mh-rank { min-width: 26px; }
 }
 
 /* ==========================================================================

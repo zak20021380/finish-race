@@ -49,7 +49,6 @@ import {
 } from './data';
 import { nameOf } from './countries';
 import { onChange, profile } from './storage';
-import { motionReduced } from './settings';
 import { bindSquadById, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadKind, squadLetter, type RankedSquad } from './squads';
 import { impact, notify, tgUser } from './telegram';
 import type { Router } from './router';
@@ -1624,21 +1623,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   const myTrend = (): Trend =>
     profile.stats.wins > profile.stats.losses ? 'up' : profile.stats.losses > profile.stats.wins ? 'down' : 'same';
 
-  /** Jump the scroller to a rank and flash it, so a rival chip is a real link. */
-  function spotRank(rank: number): void {
-    const sc = document.getElementById('ranks-scroll');
-    const target = sc?.querySelector<HTMLElement>(`[data-rank="${rank}"]`);
-    if (!sc || !target) return;
-    target.scrollIntoView({ block: 'center', behavior: motionReduced() ? 'auto' : 'smooth' });
-    target.classList.add('is-spot');
-    window.setTimeout(() => target.classList.remove('is-spot'), 1400);
-    impact('light');
-  }
-
   /**
-   * The Top Minds strip: one 48px row reading who you are on the left (ringed
-   * avatar · "You" · tier crest · percentile chip) and what you hold on the right
-   * (TIQ · weekly movement). The next-division milestone is deliberately not a
+   * The Top Minds strip: one 48px row reading where you stand (metal rank badge),
+   * who you are (ringed avatar · "You" · tier crest · percentile chip) and what you
+   * hold (TIQ · weekly movement). The next-division milestone is deliberately not a
    * line of its own — it rides the strip's tooltip and accessible name, so the
    * HUD stays one row without losing the fact.
    */
@@ -1654,9 +1642,18 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const field = rows?.length ?? 0;
     const ahead = rows ? rows.filter((p) => p.points > tiq).length : 0;
     const onBoard = profile.stats.games > 0 && field > 0;
-    const myRank = ahead + 1;
+    /* the podium owns #1-3 outright, so the strip that follows it can never claim
+       one of those places — its standing starts at #4 and counts up from there */
+    const myRank = Math.max(4, ahead + 1);
     const pct = onBoard ? Math.max(1, Math.round((myRank / (field + 1)) * 100)) : 100;
     const delta = deltaOf('you', tiq, myTrend());
+
+    /* the standing as a number: the podium owns 1-3 and the rows carry 4+, so
+       until now the one place that names you was the only place that hid it */
+    const badge = document.createElement('span');
+    badge.className = 'mh-rank';
+    badge.textContent = `#${myRank}`;
+    badge.title = `Rank ${myRank} of ${field + 1} on Top Minds`;
 
     /* ring: one shared arc, so the hero card and the mind sheet fill the same way */
     const av = document.createElement('b');
@@ -1703,6 +1700,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     score.title = `${tiq.toLocaleString('en-US')} Tactical IQ`;
     score.setAttribute('aria-label', `${tiq.toLocaleString('en-US')} Tactical IQ, ${signed(delta)} this week`);
 
+    if (onBoard) host.append(badge);
     host.append(ring, idWrap, score);
 
     const gap = div.next > tiq ? div.next - tiq : 0;
@@ -1710,41 +1708,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const milestone = wins
       ? `${wins} win${wins === 1 ? '' : 's'} to ${divisionOf(div.next).label}`
       : 'Peak division · hold it against the ladder';
-    host.title = `${div.label} · ${chip.title} · ${milestone}`;
+    const where = onBoard ? `Rank ${myRank} of ${field + 1}` : 'Unranked';
+    host.title = `${where} · ${div.label} · ${chip.title} · ${milestone}`;
     host.setAttribute(
       'aria-label',
-      `Your Standing: ${youLabel()}, ${div.label}, ${tiq.toLocaleString('en-US')} Tactical IQ, ${chip.title}, ${milestone}`,
+      `Your Standing: ${youLabel()}, ${where}, ${div.label}, ${tiq.toLocaleString('en-US')} Tactical IQ, ${chip.title}, ${milestone}`,
     );
-
-    /* Loss aversion: the single climber one rung above you, tappable to their row. */
-    const rival = rows && ahead > 0 ? rows[ahead - 1] : null;
-    const strip = rival && rival.points > tiq ? rivalStrip(rival, rival.points - tiq, ahead) : null;
-    const pane = panes.minds;
-    if (pane && strip) {
-      const old = pane.querySelector('.rival');
-      if (old) old.remove();
-      pane.prepend(strip);
-    }
-  }
-
-  /** The gap made personal, and one tap away from the row it names. */
-  function rivalStrip(rival: PlayerRow, gap: number, rank: number): HTMLElement {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'rival';
-    const dot = document.createElement('i');
-    dot.className = 'rival-dot';
-    dot.setAttribute('aria-hidden', 'true');
-    const txt = document.createElement('span');
-    txt.className = 'rival-t';
-    txt.textContent = `${rival.name} is ${gap.toLocaleString('en-US')} TIQ sharper today — close the gap.`;
-    const go = document.createElement('span');
-    go.className = 'rival-go';
-    go.textContent = 'Jump';
-    b.append(dot, txt, go);
-    b.setAttribute('aria-label', `Jump to rank ${rank}, ${rival.name}`);
-    b.addEventListener('click', () => spotRank(rank));
-    return b;
   }
 
   /* ---------- the mind sheet: one ladder name's cognitive profile (bottom clay sheet) ----------

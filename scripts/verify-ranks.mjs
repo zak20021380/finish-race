@@ -9,7 +9,8 @@
  *   - the old three-box stat cluster (.ranks-stats / .rstat) or the Preview tag
  *     ever comes back,
  *   - the header loses its championship wordmark (20-22px ultra-bold, tracked
- *     -0.3px, white with an ambient shadow) or its metallic "SEASON N" badge,
+ *     -0.3px, white with an ambient shadow), its "SEASON N" micro-pill, or the
+ *     recessed clay band that holds the two and the countdown in one bar,
  *   - the title collides with the countdown capsule, or the capsule loses its
  *     amber beacon,
  *   - the board tabs lose their borderless pill groove or sliding thumb,
@@ -20,7 +21,11 @@
  *   - the three stepped plinths lose their 38/28/22 heights, their distinct
  *     gold / titanium / bronze faces, their embossed numerals or the gold aura,
  *   - the You strip regains any of the four attribute meters, the milestone line
- *     or a second row, or stops being a single ~48px gradient-and-border HUD,
+ *     or a second row, or stops being a single ~48px gradient-and-border HUD, or
+ *     a ranked player loses the numeric "#N" key that names their standing, or
+ *     that key claims a podium place (#1-3) directly beneath the Top-3 podium,
+ *   - the rival nudge ticker ("… is N TIQ sharper today … JUMP") comes back in any
+ *     shape — node or copy — between the strip and the ladder,
  *   - the podium and the You card cannot both fit a 360x640 screen without
  *     clipping (page scrollbar or cut edges),
  *   - the nations board bar or the mind sheet regress.
@@ -127,8 +132,13 @@ const AUDIT = () => {
   const head = root.querySelector('.ranks-head');
   if (!head || head.getBoundingClientRect().height === 0) bad('ranks head missing/collapsed');
   else {
-    const hh = head.getBoundingClientRect().height;
-    if (hh > 56) bad(`ranks head is ${hh.toFixed(1)}px tall — should be one slim band (<= 56)`);
+    const hb = head.getBoundingClientRect();
+    const hcs = getComputedStyle(head);
+    if (hb.height > 56) bad(`ranks head is ${hb.height.toFixed(1)}px tall — should be one slim band (<= 56)`);
+    /* one bar, not three loose labels: the plate that carries the wordmark, the
+       season badge and the countdown has to be machined, not transparent */
+    if (parseFloat(hcs.borderTopLeftRadius) < 12) bad(`ranks head is not a band (radius ${hcs.borderTopLeftRadius})`);
+    if (hcs.backgroundImage === 'none' && /rgba\(0, 0, 0, 0\)|transparent/.test(hcs.backgroundColor)) bad('ranks head has no clay plate behind its three parts');
   }
   const title = root.querySelector('.ml-title');
   if (!title || !/mind ladder/i.test(title.textContent)) bad('ml-title missing/wrong');
@@ -157,13 +167,30 @@ const AUDIT = () => {
     if (!near(parseFloat(ss.letterSpacing), 1.2, 0.12)) bad(`season badge tracking is ${ss.letterSpacing}, want +1.2px`);
     if (ss.textTransform !== 'uppercase') bad(`season badge transform is ${ss.textTransform}, want uppercase`);
     if (!/rgb\(148,\s*163,\s*184\)/.test(ss.color)) bad(`season badge ink is ${ss.color}, want #94A3B8`);
-    if (!/gradient/.test(ss.backgroundImage)) bad('season badge has no metallic face');
-    out.notes.season = `${sfs}px metallic badge`;
+    if (!/rgba\(255,\s*255,\s*255,\s*0\.06\)/.test(ss.backgroundColor)) bad(`season badge fill is ${ss.backgroundColor}, want rgba(255,255,255,.06)`);
+    if (!/rgba\(255,\s*255,\s*255,\s*0\.1\)/.test(ss.borderTopColor)) bad(`season badge rim is ${ss.borderTopColor}, want rgba(255,255,255,.1)`);
+    if (!near(parseFloat(ss.borderTopLeftRadius), 6, 0.05)) bad(`season badge radius is ${ss.borderTopLeftRadius}, want 6px`);
+    out.notes.season = `${sfs}px micro-pill`;
   }
   const pill = root.querySelector('.ml-season .ml-season-t');
   if (!pill || !/^\d+d left$/.test(pill.textContent.trim())) bad(`countdown pill is "${pill?.textContent}"`);
   const beacon = root.querySelector('.ml-season .ml-pulse');
   if (!beacon || beacon.getBoundingClientRect().width < 3) bad('season beacon missing/collapsed');
+  else {
+    const bcs = getComputedStyle(beacon);
+    if (!/rgb\(251,\s*191,\s*36\)/.test(bcs.backgroundColor)) bad(`season beacon is ${bcs.backgroundColor}, want amber #FBBF24`);
+    if (getComputedStyle(beacon, '::after').animationName === 'none') bad('the season beacon no longer pulses');
+  }
+  /* the countdown is its own tactile amber capsule with a visible rim and ink */
+  const capsule = root.querySelector('.ml-season');
+  if (capsule) {
+    const kcs = getComputedStyle(capsule);
+    if (parseFloat(kcs.borderTopLeftRadius) < 999) bad(`countdown capsule radius is ${kcs.borderTopLeftRadius}, want a pill`);
+    if (!near(parseFloat(kcs.fontSize), 11, 0.05)) bad(`countdown capsule is ${kcs.fontSize}, want 11px`);
+    if (!/rgba\(245,\s*158,\s*11,\s*0\.1\)/.test(kcs.backgroundColor)) bad(`countdown capsule fill is ${kcs.backgroundColor}, want rgba(245,158,11,.1)`);
+    if (!/rgba\(245,\s*158,\s*11,\s*0\.3\)/.test(kcs.borderTopColor)) bad(`countdown capsule rim is ${kcs.borderTopColor}, want rgba(245,158,11,.3)`);
+    if (!/rgb\(251,\s*191,\s*36\)/.test(kcs.color)) bad(`countdown ink is ${kcs.color}, want #FBBF24`);
+  }
 
   /* 6. the sub-tabs: slim borderless groove + one sliding thumb */
   const tabs = root.querySelector('.ranks-tabs');
@@ -348,7 +375,27 @@ const AUDIT = () => {
   if (/(foresight|tempo|traps|compose)/i.test(slate.textContent ?? '')) bad('an attribute meter label is still printed in the strip');
   if (!/wins? to |peak division/i.test(slate.title)) bad('the next-division milestone was deleted rather than moved to the tooltip');
   if (!/wins? to |peak division/i.test(slate.getAttribute('aria-label') ?? '')) bad('the milestone is missing from the strip aria-label');
-  out.notes.slate = `${slateH.toFixed(0)}px single-row HUD (${crest?.textContent} · ${chip?.textContent})`;
+  /* the numeric standing: the podium owns 1-3 and the rows carry 4+, so the strip
+     is the only place a ranked player can read their own position — and an
+     unranked one must not be handed a number the ladder never granted. */
+  const rankBadge = slate.querySelector('.mh-rank');
+  const unranked = chip && chip.textContent.trim() === 'Unranked';
+  if (unranked) {
+    if (rankBadge) bad('an unranked player is shown a numeric rank badge');
+  } else {
+    if (!rankBadge) bad('the You strip has no numeric rank badge');
+    else if (!/^#\d{1,4}$/.test(rankBadge.textContent.trim())) bad(`rank badge reads "${rankBadge.textContent}"`);
+    else {
+      const shown = parseInt(rankBadge.textContent.replace('#', ''), 10);
+      const podiumShown = !document.getElementById('ranks-podium')?.hidden;
+      if (podiumShown && shown < 4) bad(`rank badge reads "#${shown}" beneath the Top-3 podium — want #4 or lower`);
+      if (!/Rank \d+ of \d+/.test(slate.getAttribute('aria-label') ?? '')) bad('the rank badge is not spoken in the strip aria-label');
+    }
+  }
+  /* the nudge ticker is gone: no node, no copy, and the rows sit under the strip */
+  if (root.querySelector('.rival, .rival-dot, .rival-t, .rival-go')) bad('the rival nudge ticker is back in the DOM');
+  if (/sharper today|close the gap/i.test(root.textContent ?? '')) bad('the rival nudge copy is back on the screen');
+  out.notes.slate = `${slateH.toFixed(0)}px single-row HUD (${rankBadge?.textContent?.trim() ?? '—'} · ${crest?.textContent} · ${chip?.textContent})`;
 
   /* 9. on entry the podium and the You strip must both fit the visible scroller:
         no clipping, no page scrollbar — the ladder below may still scroll itself */
@@ -400,6 +447,16 @@ try {
   for (const [w, h] of VIEWPORTS) {
     const tag = `${w}x${h}`;
     const ctx = await browser.newContext({ viewport: { width: w, height: h } });
+    /* a ranked save: 3400 TIQ puts the player below the seeded Top-3 podium, so
+       the strip must own #4 rather than replay the silver medal above it */
+    await ctx.addInitScript(() => {
+      try {
+        localStorage.setItem('detour.save.v2', JSON.stringify({
+          v: 2,
+          stats: { games: 50, wins: 20, losses: 30, streak: 2, best: 6, modes: { bot: 40, online: 10 } },
+        }));
+      } catch { /* storage unavailable: the audit falls back to the unranked path */ }
+    });
     const pg = await ctx.newPage();
     await pg.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'networkidle' });
     await pg.waitForTimeout(1100);
