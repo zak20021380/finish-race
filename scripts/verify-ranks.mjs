@@ -20,10 +20,12 @@
  *   - the podium crests or the leader's crown lose clearance under the tab bar,
  *   - the three stepped plinths lose their 38/28/22 heights, their distinct
  *     gold / titanium / bronze faces, their embossed numerals or the gold aura,
- *   - the You strip regains any of the four attribute meters, the milestone line
- *     or a second row, or stops being a single ~48px gradient-and-border HUD, or
- *     a ranked player loses the numeric "#N" key that names their standing, or
- *     that key claims a podium place (#1-3) directly beneath the Top-3 podium,
+ *   - the You strip regains the avatar progress ring, any score delta/trend tag,
+ *     any of the four attribute meters, the milestone line or a second row, or
+ *     stops being a single ~48px gradient-and-border HUD, or a ranked player loses
+ *     the numeric "#N" key that names their standing, or that key claims a podium
+ *     place (#1-3) directly beneath the Top-3 podium,
+ *   - any podium or ladder row carries a +/- delta tag or a trend arrow,
  *   - the rival nudge ticker ("… is N TIQ sharper today … JUMP") comes back in any
  *     shape — node or copy — between the strip and the ladder,
  *   - the podium and the You card cannot both fit a 360x640 screen without
@@ -310,6 +312,23 @@ const AUDIT = () => {
     bad(`ladder TIQ icons disagree with the podium: ${[...rowGlyphs].join(', ')}`);
   }
   if (/[☆★]/.test(root.textContent ?? '')) bad('a star glyph is still painted on the ranks screen');
+
+  /* 7b. the delta purge: no +/- tags, no trend arrows, and every score cell is
+        one clean [brain][digits] line in both the podium and the ladder */
+  if (root.querySelector('.lb-delta, .pod-delta')) bad('a score delta tag is still painted on the ranks screen');
+  if (/[▲▼]/.test(root.textContent ?? '')) bad('a trend arrow is still painted on the ranks screen');
+  if (root.querySelector('.rank-row .tr')) bad('a ladder row still carries a trend indicator');
+  if (root.querySelector('.rank-row .lb-act')) bad('a solo ladder row still reserves the old action column');
+  for (const chip of root.querySelectorAll('#ranks-podium .pod-iq')) {
+    if (!/^\d[\d,]*$/.test((chip.textContent ?? '').trim())) bad(`podium score chip is "${chip.textContent?.trim()}" — want digits only`);
+  }
+  for (const cell of root.querySelectorAll('.rank-row .lb-score')) {
+    if (cell.querySelector('small')) bad(`ladder score cell carries an extra line: "${cell.textContent?.trim()}"`);
+    const line = cell.querySelector('.lb-line');
+    const glyphHref = line?.querySelector('use')?.getAttribute('href');
+    if (glyphHref !== '#i-brain') bad(`ladder score glyph is ${glyphHref ?? 'missing'}, want the shared brain`);
+    if (!/^\d[\d,]*$/.test((line?.querySelector('b')?.textContent ?? '').trim())) bad(`ladder score is "${line?.textContent?.trim()}" — want digits only`);
+  }
   const crown = root.querySelector('#ranks-podium .pod-crown');
   const crownBox = crown?.getBoundingClientRect();
   if (!crownBox || crownBox.top < sc.getBoundingClientRect().top + 2) {
@@ -327,9 +346,10 @@ const AUDIT = () => {
   const band = root.querySelector('.pod-band, #pod-band');
   if (band && visible(band)) bad('the podium band caption is back — the header already carries the season');
 
-  /* 8. the You strip: one 48px row — ringed avatar · "You" · tier crest · percentile
-        chip on the left, brain + TIQ + mono delta on the right. No meters, no prose,
-        no action key; the milestone survives only as the strip's own tooltip. */
+  /* 8. the You strip: one 48px row — clean clay avatar · "You" · tier crest ·
+        percentile chip on the left, brain + TIQ on the right. No progress arc, no
+        delta tag, no meters, no prose, no action key; the milestone survives only
+        as the strip's own tooltip. */
   const slate = root.querySelector('.solo-standing.mh');
   if (!slate || !visible(slate)) { bad('You strip missing'); return out; }
   const ss = getComputedStyle(slate);
@@ -347,9 +367,17 @@ const AUDIT = () => {
     return Math.round(b.top + b.height / 2);
   }));
   if (kidMids.size !== 1) bad(`You strip children are not on one row: centres ${[...kidMids].join(', ')}`);
-  if (!slate.querySelector('.mh-ring .mh-arc-fill')) bad('XP progress ring missing');
-  const ringBox = slate.querySelector('.mh-ring')?.getBoundingClientRect();
-  if (!ringBox || ringBox.height > 44) bad(`the strip's ring is ${ringBox?.height.toFixed(1)}px — it must fit inside 48px`);
+  if (slate.querySelector('.mh-ring, .mh-arc')) bad('the avatar progress ring is back in the You strip');
+  const avatar = slate.querySelector('.mh-av');
+  const avatarBox = avatar?.getBoundingClientRect();
+  if (!avatar || !avatarBox) bad('the clean clay avatar is missing from the You strip');
+  else {
+    const acs = getComputedStyle(avatar);
+    if (!near(parseFloat(acs.borderTopWidth), 1, 0.05)) bad(`avatar frame border is ${acs.borderTopWidth}, want 1px`);
+    if (!/rgba\(255,\s*255,\s*255,\s*0\.0?8\)/.test(acs.borderTopColor)) bad(`avatar frame border is ${acs.borderTopColor}, want rgba(255,255,255,0.08)`);
+    if (acs.borderTopLeftRadius !== '50%' && parseFloat(acs.borderTopLeftRadius) < avatarBox.width / 2 - 1) bad('avatar frame is not circular');
+    if (avatarBox.height > 44) bad(`the strip's avatar is ${avatarBox.height.toFixed(1)}px — it must fit inside 48px`);
+  }
   const line = slate.querySelector('.mh-line');
   if (!line || line.textContent.trim() !== 'You') bad(`identity is "${line?.textContent}" — want the bare "You"`);
   const crest = slate.querySelector('.mh-pill');
@@ -361,11 +389,8 @@ const AUDIT = () => {
   const mhScore = slate.querySelector('.mh-score b');
   if (!mhScore || !/^\d[\d,]*$/.test(mhScore.textContent.trim())) bad(`TIQ score is "${mhScore?.textContent}"`);
   if (slate.querySelector('.mh-score use')?.getAttribute('href') !== '#i-brain') bad('the strip does not read TIQ with the shared brain');
-  const mhDelta = slate.querySelector('.mh-score .lb-delta');
-  if (mhDelta) {
-    if (!/^[+\u2212-]?\d+$/.test(mhDelta.textContent.trim())) bad(`delta tag is "${mhDelta.textContent}"`);
-    if (!/mono/i.test(getComputedStyle(mhDelta).fontFamily)) bad('the delta tag is not monospace');
-  }
+  if (slate.querySelector('.mh-score .lb-delta, .mh-score .pod-delta')) bad('a score delta tag is back in the You strip');
+  if (/[▲▼]/.test(slate.textContent ?? '')) bad('a trend arrow is back in the You strip');
 
   /* the clutter ban: the four meters, the milestone line and any action key stay gone */
   for (const ghost of ['.mh-axes', '.mh-axis', '.mh-track', '.mh-prog', '.mh-ptrack', '.mh-ptext', '.mh-top', '.mh-pct', '.mh-cta', 'button']) {

@@ -38,7 +38,6 @@ import {
   getGrandCup,
   getPlayerRanking,
   paidPlaces,
-  trendArrow,
   type ChannelSeed,
   type CountryRow,
   type GrandCup,
@@ -159,17 +158,6 @@ function hashOf(key: string): number {
 }
 
 /**
- * Seeded weekly TIQ delta: stable per player across renders and signed by their own
- * trend, so the chip can never contradict the arrow beside it. Real deltas arrive
- * with the backend; the Preview chip on the HUD already says this board is seeded.
- */
-function deltaOf(key: string, points: number, trend: Trend): number {
-  if (trend === 'same') return 0;
-  const mag = 8 + (hashOf(key) % 71) + Math.round(points * 0.004);
-  return trend === 'up' ? mag : -mag;
-}
-
-/**
  * The seeded country rows carry an aggregate and no roster, so each nation's field
  * is split across a stable head-count and the average is then arithmetic on those
  * two numbers — total, minds and AVG can never disagree. Real rosters land with the
@@ -180,8 +168,6 @@ function fieldOf(code: string, points: number): { minds: number; avg: number } {
   const minds = Math.max(3, Math.round(points / target));
   return { minds, avg: Math.round(points / minds) };
 }
-
-const signed = (n: number): string => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n).toLocaleString('en-US')}`;
 
 /* ---------- mind profile: the four axes, the form strip, the percentile ring ---------- */
 
@@ -222,7 +208,7 @@ function rivalAxes(p: PlayerRow): MindAxis[] {
   ];
 }
 
-/** Weighted by the trend already printed beside the name, so form never fights arrow. */
+/** Weighted by the row's own trend so the seeded form stays internally consistent. */
 function rivalForm(key: string, trend: Trend): FormCell[] {
   const h = hashOf(key);
   const bias = trend === 'up' ? 72 : trend === 'down' ? 40 : 56;
@@ -1265,13 +1251,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     tierLabel?: string;
     /** The spoken rank, spelled out: "Grandmaster II". */
     tierAria?: string;
-    /** Weekly TIQ movement, rendered as a chip rather than left to the trend arrow. */
-    delta?: number;
     onTap?: () => void;
   }
 
   /**
-   * Card order is avatar → name → tier → TIQ(+delta) → plinth. The plinth stays the
+   * Card order is avatar → name → tier → TIQ → plinth. The plinth stays the
    * last child because it is the card's base: appending the join key after it
    * would float the base into the middle of the card.
    */
@@ -1282,11 +1266,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (e.tier) card.dataset.tier = e.tier;
     card.setAttribute('role', 'listitem');
     const tierSaid = e.tierAria ?? e.tierLabel;
-    const said = [
-      tierSaid ? `${tierSaid}, ` : '',
-      `${e.score} Tactical IQ`,
-      e.delta ? `${signed(e.delta)} this week` : '',
-    ].join('');
+    const said = [tierSaid ? `${tierSaid}, ` : '', `${e.score} Tactical IQ`].join('');
     card.setAttribute('aria-label', `Rank ${e.rank}: ${e.name}, ${said}`);
 
     if (e.rank === 1) card.append(svgIcon('#i-crown', 'pod-crown'));
@@ -1318,14 +1298,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     iq.append(iqN);
     iq.title = `${e.score} Tactical IQ`;
 
-    /* the weekly movement rides inside the chip as "(+54)" — one chip, one read,
-       so the meter row never stacks a second pill beside the score */
-    const delta = document.createElement('small');
-    delta.className = e.delta ? `pod-delta ${e.delta > 0 ? 'up' : 'down'}` : 'pod-delta';
-    delta.textContent = e.delta ? `(${signed(e.delta)})` : '';
-    if (!e.delta) delta.hidden = true;
-    else delta.title = `${signed(e.delta)} Tactical IQ this week`;
-
     /* The plinth is the card's base: an embossed metal slab with a stepped
        cornice above and its own aura pooling underneath. The aura is a real
        child so the glow has its own box and never eats the numeral's edge. */
@@ -1338,9 +1310,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     stepN.textContent = String(e.rank);
     step.append(aura, stepN);
 
-    card.append(av, nm, tier, iq);
-    if (e.delta) iq.append(delta);
-    card.append(step);
+    card.append(av, nm, tier, iq, step);
     if (e.onTap) {
       card.classList.add('is-tappable');
       card.tabIndex = 0;
@@ -1370,7 +1340,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     host.hidden = false;
   }
 
-  /** Shared ladder row: rank crest · identity · tabular score · right-edge action. */
+  /** Extruded clay rank key. */
   function rankCrest(rank: number): HTMLElement {
     const rk = document.createElement('span');
     rk.className = 'lb-rank';
@@ -1380,8 +1350,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return rk;
   }
 
-  /** `delta` is optional so the squad ladder keeps its single-line score cell. */
-  function scoreCell(points: string, title: string, delta = 0): HTMLElement {
+  /** One clean right-aligned score cell: brain glyph · tabular TIQ. */
+  function scoreCell(points: string, title: string): HTMLElement {
     const pt = document.createElement('span');
     pt.className = 'lb-score';
     const line = document.createElement('span');
@@ -1391,12 +1361,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     num.textContent = points;
     line.append(num);
     pt.append(line);
-    const d = document.createElement('small');
-    d.className = delta ? `lb-delta ${delta > 0 ? 'up' : 'down'}` : 'lb-delta';
-    d.textContent = delta ? signed(delta) : '';
-    d.title = delta ? `${signed(delta)} Tactical IQ this week` : '';
-    if (!delta) d.hidden = true;
-    pt.append(d);
     pt.title = title;
     return pt;
   }
@@ -1407,16 +1371,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     name: string;
     sub: string | null;
     points: string;
-    /** The numeric TIQ behind `points`: the tier, the delta and the read all derive from it. */
+    /** The numeric TIQ behind `points`: the tier and the read derive from it. */
     tiq: number;
-    trend: Trend;
     me: boolean;
     /** Mind tiers describe a person, not a country aggregate, so boards opt in. */
     tiered?: boolean;
     /** Nations quote a per-mind average under the aggregate the board ranks by. */
     avg?: number;
-    /** Stable key for the seeded weekly delta. */
-    key?: string;
     /** The climber directly above, so inspection can name the gap it has to close. */
     above?: { name: string; tiq: number } | null;
     wins?: number;
@@ -1425,19 +1386,17 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   /**
-   * Shared ladder row: rank crest · identity · tabular score · trend. Tap opens the
+   * Shared ladder row: rank crest · identity · tabular score. Tap opens the
    * inspection read, which is assembled from the row's own numbers — nothing in it
    * is a placeholder waiting for a backend.
    */
   function row(r: LadderRow): HTMLLIElement {
-    const { rank, code, name, points, trend, tiered = false } = r;
+    const { rank, code, name, points, tiered = false } = r;
     const li = document.createElement('li');
     li.className = `rank-row lb-row${r.me ? ' is-you' : ''}`;
     li.dataset.rank = String(rank);
-    const trendLabel = trend === 'up' ? 'rising' : trend === 'down' ? 'falling' : 'steady';
     const div = divisionOf(r.tiq);
-    const delta = deltaOf(r.key ?? String(rank), r.tiq, trend);
-    li.setAttribute('aria-label', `#${rank} ${name} — ${points} Tactical IQ, ${trendLabel}. Activate to inspect.`);
+    li.setAttribute('aria-label', `#${rank} ${name} — ${points} Tactical IQ. Activate to inspect.`);
     if (r.me) li.setAttribute('aria-current', 'true');
     if (tiered) li.dataset.tier = div.tier;
 
@@ -1475,16 +1434,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }
     id.append(txt);
 
-    const act = document.createElement('span');
-    act.className = 'lb-act';
-    const tr = document.createElement('span');
-    tr.className = `tr ${trend}`;
-    tr.textContent = trendArrow(trend);
-    tr.title = trendLabel;
-    tr.setAttribute('aria-hidden', 'true');
-    act.append(tr);
-
-    const cell = scoreCell(points, `${points} Tactical IQ`, r.avg ? 0 : delta);
+    const cell = scoreCell(points, `${points} Tactical IQ`);
     if (r.avg) {
       const avg = document.createElement('small');
       avg.className = 'lb-avg';
@@ -1493,7 +1443,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       cell.append(avg);
     }
 
-    li.append(rankCrest(rank), id, cell, act);
+    li.append(rankCrest(rank), id, cell);
 
     li.tabIndex = 0;
 
@@ -1501,7 +1451,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
        it is an aggregate — so that board keeps the inline inspection read instead. */
     if (r.onOpen) {
       const run = (): void => { r.onOpen?.(); };
-      li.setAttribute('aria-label', `#${rank} ${name} — ${points} Tactical IQ, ${trendLabel}. Activate to open the mind profile.`);
+      li.setAttribute('aria-label', `#${rank} ${name} — ${points} Tactical IQ. Activate to open the mind profile.`);
       li.addEventListener('click', run);
       li.addEventListener('keydown', (ev) => {
         if (ev.key === 'Enter' || ev.key === ' ') {
@@ -1521,7 +1471,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (r.wins !== undefined) facts.push(['Wins', String(r.wins)]);
     if (r.wins && r.wins > 0) facts.push(['TIQ / win', Math.round(r.tiq / r.wins).toLocaleString('en-US')]);
     if (r.above && r.above.tiq > r.tiq) facts.push([`To pass ${r.above.name}`, (r.above.tiq - r.tiq).toLocaleString('en-US')]);
-    facts.push(['Week', delta ? `${signed(delta)} TIQ` : 'flat']);
     for (const [k, v] of facts) {
       const cell = document.createElement('span');
       cell.className = 'lb-fact';
@@ -1616,16 +1565,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return out;
   }
 
-  /** Momentum, since the save has no weekly history of its own to quote. */
-  const myTrend = (): Trend =>
-    profile.stats.wins > profile.stats.losses ? 'up' : profile.stats.losses > profile.stats.wins ? 'down' : 'same';
-
   /**
    * The Top Minds strip: one 48px row reading where you stand (metal rank badge),
-   * who you are (ringed avatar · "You" · tier crest · percentile chip) and what you
-   * hold (TIQ · weekly movement). The next-division milestone is deliberately not a
-   * line of its own — it rides the strip's tooltip and accessible name, so the
-   * HUD stays one row without losing the fact.
+   * who you are (clay avatar · "You" · tier crest · percentile chip) and what you
+   * hold (TIQ). The next-division milestone is deliberately not a line of its own —
+   * it rides the strip's tooltip and accessible name, so the HUD stays one row
+   * without losing the fact.
    */
   function paintMindsStanding(rows: PlayerRow[] | null): void {
     const host = soloStandingEl();
@@ -1643,7 +1588,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
        one of those places — its standing starts at #4 and counts up from there */
     const myRank = Math.max(4, ahead + 1);
     const pct = onBoard ? Math.max(1, Math.round((myRank / (field + 1)) * 100)) : 100;
-    const delta = deltaOf('you', tiq, myTrend());
 
     /* the standing as a number: the podium owns 1-3 and the rows carry 4+, so
        until now the one place that names you was the only place that hid it */
@@ -1652,11 +1596,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     badge.textContent = `#${myRank}`;
     badge.title = `Rank ${myRank} of ${field + 1} on Top Minds`;
 
-    /* ring: one shared arc, so the hero card and the mind sheet fill the same way */
+    /* a clean clay avatar: no arc, no glow — just the recessed circular frame */
     const av = document.createElement('b');
+    av.className = 'mh-av';
     const h = youHandle() ?? 'Y';
     av.textContent = h.replace(/^@/, '').slice(0, 1).toUpperCase() || 'Y';
-    const ring = percentRing(onBoard ? pct : 0, av);
 
     const idWrap = document.createElement('span');
     idWrap.className = 'mh-id';
@@ -1688,17 +1632,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const num = document.createElement('b');
     num.textContent = tiq.toLocaleString('en-US');
     score.append(num);
-    if (delta) {
-      const d = document.createElement('small');
-      d.className = `lb-delta ${delta > 0 ? 'up' : 'down'}`;
-      d.textContent = signed(delta);
-      score.append(d);
-    }
     score.title = `${tiq.toLocaleString('en-US')} Tactical IQ`;
-    score.setAttribute('aria-label', `${tiq.toLocaleString('en-US')} Tactical IQ, ${signed(delta)} this week`);
+    score.setAttribute('aria-label', `${tiq.toLocaleString('en-US')} Tactical IQ`);
 
     if (onBoard) host.append(badge);
-    host.append(ring, idWrap, score);
+    host.append(av, idWrap, score);
 
     const gap = div.next > tiq ? div.next - tiq : 0;
     const wins = gap > 0 ? Math.ceil(gap / TIQ_PER_WIN) : 0;
@@ -1752,7 +1690,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }
   }
 
-  function msHero(points: string, delta: number, pct: number, sub: string): HTMLElement {
+  function msHero(points: string, pct: number, sub: string): HTMLElement {
     const wrap = document.createElement('div');
     wrap.className = 'ms-hero';
     const col = document.createElement('span');
@@ -1763,12 +1701,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const num = document.createElement('b');
     num.textContent = points;
     iq.append(num);
-    if (delta) {
-      const d = document.createElement('small');
-      d.className = `lb-delta ${delta > 0 ? 'up' : 'down'}`;
-      d.textContent = signed(delta);
-      iq.append(d);
-    }
     const line = document.createElement('small');
     line.className = 'ms-hero-sub';
     line.textContent = sub;
@@ -1898,7 +1830,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     el.setAttribute('aria-label', `Mind profile: ${p.name}, ${div.label}, ${tiq} Tactical IQ`);
     body.textContent = '';
     body.append(
-      msHero(tiq, deltaOf(p.id, p.points, p.trend), pct, `#${rank} of ${field} minds · ${p.wins} wins`),
+      msHero(tiq, pct, `#${rank} of ${field} minds · ${p.wins} wins`),
       msSection('Mind profile', msAxisList(rivalAxes(p))),
       msSection('Form', msFormStrip(rivalForm(p.id, p.trend), 'Season preview · newest on the right')),
       msFine(`Beat ${p.name}'s ${tiq} TIQ: Challenge mind starts a race, and every win is 140 TIQ.`),
@@ -1925,7 +1857,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     el.setAttribute('aria-label', `Squad profile: ${label}, ${s.trophies.toLocaleString('en-US')} combined Tactical IQ`);
     body.textContent = '';
     body.append(
-      msHero(s.trophies.toLocaleString('en-US'), 0, pct, `#${s.rank} of ${field} squads`),
+      msHero(s.trophies.toLocaleString('en-US'), pct, `#${s.rank} of ${field} squads`),
       msSection(
         'Squad read',
         msStats([
@@ -2102,7 +2034,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       name: c.name,
       score: c.points.toLocaleString('en-US'),
       code: c.code,
-      delta: deltaOf(c.code, c.points, c.trend),
     })));
     el.textContent = '';
     el.append(nationsHero(rows), nationsPill(natCup));
@@ -2111,18 +2042,15 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     for (const c of rows.slice(3)) {
       const up = rows[c.rank - 2];
       const f = fieldOf(c.code, c.points);
-      const d = deltaOf(c.code, c.points, c.trend);
       ol.append(row({
         rank: c.rank,
         code: c.code,
         name: c.name,
-        sub: `${compactCount(f.minds)} minds${d ? ` · ${signed(d)} wk` : ''}`,
+        sub: `${compactCount(f.minds)} minds`,
         points: c.points.toLocaleString('en-US'),
         tiq: c.points,
-        trend: c.trend,
         me: profile.country === c.code,
         avg: f.avg,
-        key: c.code,
         above: up ? { name: up.name, tiq: up.points } : null,
       }));
     }
@@ -2156,7 +2084,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       tier: tierOf(p.points),
       tierLabel: shortDivisionOf(p.points),
       tierAria: divisionOf(p.points).label,
-      delta: deltaOf(p.id, p.points, p.trend),
       onTap: () => openMind(p, i + 1),
     })));
     el.textContent = '';
@@ -2171,10 +2098,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         sub: `${p.wins} wins`,
         points: p.points.toLocaleString('en-US'),
         tiq: p.points,
-        trend: p.trend,
         me: false,
         tiered: true,
-        key: p.id,
         wins: p.wins,
         above: up ? { name: up.name, tiq: up.points } : null,
         onOpen: () => openMind(p, i + 4),
