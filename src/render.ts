@@ -356,8 +356,9 @@ function capsuleHit(L: Layout, bx: number, by: number, cap: CapsuleAction): 'con
  * of your balls picks up, a legal-move dot's own cell moves, and only a tap that is inside no dot
  * cell and nearer the groove than the nearest dot arms a wall. A tap between the dot and the groove
  * falls back to the nearest legal dot so a sloppy finger still moves rather than starting a wall.
- * One mode is left: while the mine key is armed the board offers mines and nothing else, and the
- * top and bottom two rows are refused outright.
+ * One mode is left: while the mine key is armed the board offers mines and nothing else, except
+ * that a tap inside one of your own balls is that ball — the gesture that lets the key go and
+ * brings the pawn to hand. The top and bottom two rows are refused outright.
  *
  * The groove's own reach is `grooveZone(cell)` rather than a constant: on the wide board it grows
  * until a whole cell snaps to its nearest line, which is what makes a two-span wall on a ten-column
@@ -398,9 +399,19 @@ export function hitTest(L: Layout, px: number, py: number, o: {
   };
 
   if (o.mode === 'mine') {
-    // mines only: ball selection and wall hit-tests are bypassed; empty board space disarms via null
+    // mines for empty squares, but your own ball is always a ball: the caller lets the key go
     const cap = o.capsule ? capsuleHit(L, bx, by, o.capsule) : null;
     if (cap) cand.push({ hit: cap === 'confirm' ? o.capsule!.hit : { kind: 'cancel' }, pri: 0, d: 0 });
+    /* Containment, not the 44px reach: tapping a square beside the pawn must still arm a mine
+       there, while every tap inside the pawn's own square means "give me my piece back". */
+    let ballId: number | null = null, db = Infinity;
+    for (const b of o.balls) {
+      if (b.team !== o.mine) continue;
+      if (bx < b.c || bx > b.c + 1 || by < b.r || by > b.r + 1) continue;
+      const d = Math.hypot(bx - b.c - 0.5, by - b.r - 0.5);
+      if (d < db) { db = d; ballId = b.id; }
+    }
+    if (ballId !== null) cand.push({ hit: { kind: 'ball', id: ballId }, pri: 0, d: db });
     const armed = o.armedMine ? nearest([o.armedMine], reach) : null;
     if (armed) cand.push({ hit: { kind: 'mine-confirm', cell: armed.cell }, pri: 0, d: armed.d });
     const spot = nearest(o.mineHints, reach);

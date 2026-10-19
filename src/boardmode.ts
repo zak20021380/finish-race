@@ -49,6 +49,14 @@ export const holdsBall = <P>(m: BoardMode<P>): boolean => m.selected !== null;
 export const holdMineKey = <P>(m: BoardMode<P>, on: boolean): BoardMode<P> =>
   ({ ...m, mine: on, selected: on ? null : m.selected, preview: on ? null : m.preview });
 
+/**
+ * A tap on one of your own balls while the mine key is down: the key lets go and the ball comes to
+ * hand in the same gesture. This is the board's own way out of the placement band — without it the
+ * only escape is the key itself, and a player who taps their pawn is told nothing at all.
+ */
+export const pickBallFromMine = <P>(m: BoardMode<P>, id: number | null): BoardMode<P> =>
+  ({ ...m, mine: false, preview: null, selected: id });
+
 /** The dots are drawn only while a ball is in hand and nothing else owns the board. */
 export const moveDots = <P>(m: BoardMode<P>): boolean =>
   m.selected !== null && m.preview === null && !m.mine;

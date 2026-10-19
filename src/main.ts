@@ -14,7 +14,9 @@ import {
 } from './render';
 import { createConfetti } from './confetti';
 import { createChat } from './chat';
-import { BOARD_IDLE, holdMineKey, holdsBall, moveDots, pickBall, previewWall, type BoardMode } from './boardmode';
+import {
+  BOARD_IDLE, holdMineKey, holdsBall, moveDots, pickBall, pickBallFromMine, previewWall, type BoardMode,
+} from './boardmode';
 import { createRouter } from './router';
 import { createSheets } from './sheets';
 import { createMenu, type Menu } from './menu';
@@ -528,6 +530,18 @@ function pick(id: number | null) {
   setMode(pickBall(mode(), id));   // the ball comes to hand, and any wall preview goes with it
   clearNote();
   ui();                            // only the picked ball's dots light up
+}
+
+/**
+ * A tap on your own pawn while the mine key is down: the key lets go and the pawn comes to hand in
+ * one gesture, so placement mode can never trap the player. `ui()` drops the key's lit state and
+ * paints the pawn's dots on the same frame.
+ */
+function pickFromMine(id: number) {
+  mineGhost = null;
+  setMode(pickBallFromMine(mode(), id));
+  clearNote();
+  ui();
 }
 
 /** The wall ghost's floating caps: confirm commits the slot, cancel clears it. */
@@ -1311,8 +1325,13 @@ function wallBranch(hit: Hit | null): boolean {
   return false;
 }
 
-/** The two-tap mine flow: one tap arms the square, the next buries it. */
+/**
+ * The mine key's tap branch: your own pawn leaves placement mode and comes to hand, while any other
+ * tap runs the two-tap flow — the first arms the square, the second buries it.
+ */
 function tapMine(hit: Hit | null): boolean {
+  /* your own pawn is the board's way out of placement mode: the key lets go, the pawn is picked */
+  if (hit?.kind === 'ball') { impact('light'); pickFromMine(hit.id); return true; }
   // board background, or the [✕] cap: disarm the mine ghost and its caps
   if (!hit || hit.kind === 'cancel') { mineGhost = null; capsule = null; return true; }
   if (hit.kind === 'mine-confirm') {

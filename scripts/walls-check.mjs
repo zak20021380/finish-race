@@ -34,7 +34,7 @@ const {
   wallsCross, wallsOverlap, wallsRemaining,
 } = await import(HREF.rules);
 const { botAction } = await import(HREF.bot);
-const { BOARD_IDLE, holdMineKey, moveDots, pickBall, previewWall, selectionRing } =
+const { BOARD_IDLE, holdMineKey, moveDots, pickBall, pickBallFromMine, previewWall, selectionRing } =
   await import(pathToFileURL(path.resolve('src', 'boardmode.ts')).href);
 
 let run = 0;
@@ -320,6 +320,20 @@ check('action modes: a tap is the only thing that changes the board, and it is t
     assert.equal(armed.selected, null);
     assert.equal(moveDots(armed), false);
   }
+});
+
+check('action modes: a pawn tap while the mine key is down leaves placement mode', () => {
+  const mining = holdMineKey(BOARD_IDLE, true);
+  const picked = pickBallFromMine(mining, 2);
+  assert.deepEqual(picked, { selected: 2, preview: null, mine: false }, 'the key lets go and the pawn comes to hand');
+  assert.equal(moveDots(picked), true, 'the pawn is live at once');
+  assert.equal(selectionRing(picked, 2), true);
+  /* re-arming the key clears the pick again: the two modes still never share the board */
+  const rearmed = holdMineKey(picked, true);
+  assert.equal(rearmed.selected, null);
+  assert.equal(rearmed.mine, true);
+  /* a neutral pick from the same state still brings the key down without leaving a pick behind */
+  assert.deepEqual(pickBallFromMine(mining, null), { selected: null, preview: null, mine: false });
 });
 
 console.log(`\n${run} wall checks passed`);
