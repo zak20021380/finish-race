@@ -10,11 +10,16 @@
  * milestone. The milestone is what the Honor sheet prints, so the ladder has a
  * visible number to grind for even before the achievement lands.
  *
+ * The roster is the prestige ladder of historical masterminds, one per TIQ
+ * milestone. Ids stay stable across the rename so an already-equipped badge
+ * still resolves from the save (profile.badge is the only persisted key).
+ *
  * Unlock rules (all local-first):
- * - early-adopter: always unlocked — you are here at the start (0 TIQ).
- * - squad-warrior: bound to a Telegram squad OR in a team, and 1,000 TIQ.
- * - streak-master: best win streak of 3+ (bot races) and 2,000 TIQ.
- * - cup-finalist: 5+ games played (Arena-ready) and 3,000 TIQ.
+ * - early-adopter: Da Vinci's Vision — always unlocked, you are here at 0 TIQ.
+ * - squad-warrior: Churchill's Bastion — squad/team bound, and 1,000 TIQ.
+ * - streak-master: Sun Tzu's Shadow — best win streak of 3+, and 2,000 TIQ.
+ * - cup-finalist: Napoleon's Crown — 5+ games played, and 3,000 TIQ.
+ * - apex-immortal: Cyrus the Immortal — the 4,000 TIQ Apex lock itself.
  */
 
 import { myTeam, profile } from './storage';
@@ -34,35 +39,43 @@ export interface BadgeDef {
 export const BADGES: BadgeDef[] = [
   {
     id: 'early-adopter',
-    name: 'Early Adopter',
-    lore: 'One of the first racers to hit the slate. The clay still remembers your first tap.',
-    criteria: 'Join the game — awarded to every pioneer. No TIQ minimum.',
+    name: "Da Vinci's Vision",
+    lore: 'Reads three steps ahead. Master of board geometry.',
+    criteria: 'Join the game — every pioneer begins with vision. No TIQ minimum.',
     accent: 'gold',
     tiq: 0,
   },
   {
     id: 'squad-warrior',
-    name: 'Squad Warrior',
-    lore: 'You fight for more than yourself. Squad points, shared cups, shared glory.',
+    name: "Churchill's Bastion",
+    lore: 'Never surrender. Architect of impenetrable walls.',
     criteria: 'Bind a Telegram squad or join a team, and bank 1,000 TIQ.',
     accent: 'sky',
     tiq: 1000,
   },
   {
     id: 'streak-master',
-    name: 'Win Streak Master',
-    lore: 'Three wins in a row against the machine. Cold, clean, relentless.',
+    name: "Sun Tzu's Shadow",
+    lore: 'Every battle is won before the first pawn moves.',
     criteria: 'Reach a 3-win streak in bot races and bank 2,000 TIQ.',
     accent: 'mint',
     tiq: 2000,
   },
   {
     id: 'cup-finalist',
-    name: 'Cup Finalist',
-    lore: 'Five races deep. The Arena knows your name and the cup is watching.',
+    name: "Napoleon's Crown",
+    lore: 'Relentless tempo. Conquers the board without mercy.',
     criteria: 'Finish 5 races and bank 3,000 TIQ.',
     accent: 'coral',
     tiq: 3000,
+  },
+  {
+    id: 'apex-immortal',
+    name: 'Cyrus the Immortal',
+    lore: 'Supreme Tactical IQ. Sovereign of the Mind Ladder.',
+    criteria: 'Bank 4,000 TIQ — the Apex lock. No other key opens it.',
+    accent: 'gold',
+    tiq: 4000,
   },
 ];
 
@@ -80,6 +93,8 @@ function achievementMet(id: string): boolean {
       return profile.stats.best >= 3;
     case 'cup-finalist':
       return profile.stats.games >= 5;
+    case 'apex-immortal':
+      return true;
     default:
       return false;
   }

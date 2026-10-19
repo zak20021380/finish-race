@@ -7,7 +7,9 @@
     "dev": "vite --host",
     "build": "tsc --noEmit && npm run check:worker && node scripts/build-vite.mjs",
     "check:worker": "tsc -p worker/tsconfig.json",
-    "preview": "vite preview --host"
+    "preview": "vite preview --host",
+    "test": "node scripts/run-tests.mjs",
+    "test:countries": "node scripts/verify-countries.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

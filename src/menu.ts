@@ -572,7 +572,7 @@ export function createMenu(api: MenuApi): Menu {
     if (!squadBoundView.hidden) showSquadBound();
     else paintSquadList(squadQ.value);
   }
-  /* badge rack also answers to squad binds (Squad Warrior unlocks there). */
+  /* badge rack also answers to squad binds (Churchill's Bastion unlocks there). */
   function paintBadgesSafe() {
     try {
       const rack = document.getElementById('pf-badge-rack');
