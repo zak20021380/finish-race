@@ -30,7 +30,8 @@
  *     shape — node or copy — between the strip and the ladder,
  *   - the podium and the You card cannot both fit a 360x640 screen without
  *     clipping (page scrollbar or cut edges),
- *   - the nations board bar or the mind sheet regress.
+ *   - the Nations IQ ticker or a country row's AVG metric comes back, or the
+ *     mind sheet regresses.
  * Screenshots land in .shots/ranks-*.png on success.
  */
 import http from 'node:http';
@@ -458,6 +459,8 @@ const PROBE_NATIONS = () => {
   if (pane.querySelector('.nat-hero, .nat-hero-btn, .nat-foot')) bad('legacy flag card is still in the DOM');
   if (/your flag is not on the board yet/i.test(pane.textContent ?? '')) bad('legacy "Your flag is not on the board yet" copy is back');
   if (/\bset flag\b/i.test(pane.textContent ?? '')) bad('legacy "Set flag" copy is back');
+  if (pane.querySelector('.nat-pill, [data-nat-cup]') || /Nations Cup/i.test(pane.textContent ?? '')) bad('Nations Cup ticker is still present');
+  if (pane.querySelector('.lb-avg') || /\bAVG\b/i.test(pane.textContent ?? '')) bad('AVG metric is still present on country rows');
 
   const hud = pane.querySelector('.nation-hud');
   if (!hud) { bad('nation HUD missing'); return out; }
@@ -491,8 +494,26 @@ const PROBE_NATIONS = () => {
   if (widest > window.innerWidth + 0.5) bad(`nation HUD clips the right edge (${widest.toFixed(1)})`);
   if (hud.scrollWidth > hud.clientWidth + 1) bad(`nation HUD overflows horizontally (${hud.scrollWidth} > ${hud.clientWidth})`);
   if (hud.scrollHeight > hud.clientHeight + 1) bad(`nation HUD overflows vertically (${hud.scrollHeight} > ${hud.clientHeight})`);
-  const pill = pane.querySelector('.nat-pill');
-  if (pill && pill.getBoundingClientRect().top < hud.getBoundingClientRect().bottom - 0.5) bad('event pill overlaps the nation HUD');
+
+  const rows = [...pane.querySelectorAll('.rank-list .lb-row')];
+  if (!rows.length) bad('country ladder rows missing');
+  const first = rows[0];
+  if (first) {
+    const gap = first.getBoundingClientRect().top - hud.getBoundingClientRect().bottom;
+    if (gap < 7 || gap > 10) bad(`gap under the nation HUD is ${gap.toFixed(1)}px — want 8px`);
+    const rowH = first.getBoundingClientRect().height;
+    if (rowH < 48 || rowH > 60) bad(`country row is ${rowH.toFixed(1)}px tall — want 48-60px`);
+    const score = first.querySelector('.lb-score');
+    const cs = score ? getComputedStyle(score) : null;
+    if (!score || score.children.length !== 1 || !score.querySelector('.lb-line')) bad('country score cluster is not one line');
+    if (cs && (cs.alignItems !== 'center' || cs.justifyContent !== 'flex-end')) bad(`score cluster alignment is ${cs.alignItems} / ${cs.justifyContent}`);
+  }
+  for (const r of rows) {
+    const sub = r.querySelector('.lb-sub-t')?.textContent ?? '';
+    if (!/^\d[\d,.]*\s*minds$/i.test(sub)) bad(`country row #${r.dataset.rank} lost its minds count ("${sub}")`);
+    if (r.querySelector('.lb-avg')) bad(`country row #${r.dataset.rank} still carries an AVG line`);
+  }
+
   if (document.scrollingElement.scrollWidth > window.innerWidth + 1) bad('page scrolls horizontally on Nations IQ');
   if (document.scrollingElement.scrollHeight > window.innerHeight + 1) bad('page scrolls vertically on Nations IQ');
   const sc = document.getElementById('ranks-scroll');

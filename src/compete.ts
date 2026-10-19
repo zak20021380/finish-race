@@ -160,14 +160,12 @@ function hashOf(key: string): number {
 
 /**
  * The seeded country rows carry an aggregate and no roster, so each nation's field
- * is split across a stable head-count and the average is then arithmetic on those
- * two numbers — total, minds and AVG can never disagree. Real rosters land with the
- * backend, at which point this function and its caller both go away.
+ * is split across a stable head-count. Real rosters land with the backend, at which
+ * point this function and its caller both go away.
  */
-function fieldOf(code: string, points: number): { minds: number; avg: number } {
+function mindsOf(code: string, points: number): number {
   const target = 1100 + (hashOf(code) % 500);
-  const minds = Math.max(3, Math.round(points / target));
-  return { minds, avg: Math.round(points / minds) };
+  return Math.max(3, Math.round(points / target));
 }
 
 /* ---------- mind profile: the four axes, the form strip, the percentile ring ---------- */
@@ -367,8 +365,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   /** The local player's row inside their own channel's roster, or null if unbound. */
   let myRoster: RosterRow[] | null = null;
   let myRosterKey: string | null = null;
-  /** The same cup behind the Nations IQ event pill, fetched with the country board. */
-  let natCup: GrandCup | null = null;
   /** The last country board, so a flag change repaints before the refetch lands. */
   let nationRows: CountryRow[] | null = null;
   let tick = 0;
@@ -1203,13 +1199,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   function startTick(): void {
     if (tick) return;
     tick = window.setInterval(() => {
-      if (isRanksVisible()) {
-        paintSeason();
-        if (board === 'nations' && natCup) {
-          const pill = document.querySelector<HTMLElement>('[data-nat-cup]');
-          if (pill) pill.textContent = natPillText(natCup);
-        }
-      }
+      if (isRanksVisible()) paintSeason();
       if (isArenaVisible()) tickCup();
     }, 1000);
   }
@@ -1376,8 +1366,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     me: boolean;
     /** Mind tiers describe a person, not a country aggregate, so boards opt in. */
     tiered?: boolean;
-    /** Nations quote a per-mind average under the aggregate the board ranks by. */
-    avg?: number;
     /** The climber directly above, so inspection can name the gap it has to close. */
     above?: { name: string; tiq: number } | null;
     wins?: number;
@@ -1435,14 +1423,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     id.append(txt);
 
     const cell = scoreCell(points, `${points} Tactical IQ`);
-    if (r.avg) {
-      const avg = document.createElement('small');
-      avg.className = 'lb-avg';
-      avg.textContent = `AVG ${r.avg.toLocaleString('en-US')}`;
-      avg.title = `${r.avg.toLocaleString('en-US')} average Tactical IQ per mind`;
-      cell.append(avg);
-    }
-
     li.append(rankCrest(rank), id, cell);
 
     li.tabIndex = 0;
@@ -1849,26 +1829,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     selectBoard('guilds');
   });
 
-  /** A one-line event banner; the countdown is the Grand Cup's own kickoff. */
-  const natPillText = (event: GrandCup | null): string =>
-    event
-      ? `Nations Cup · ${formatCountdown(event.startsAt)} · wins count double`
-      : 'Nations Cup · bracket soon · wins count double';
-
-  function nationsPill(cup: GrandCup | null): HTMLElement {
-    const p = document.createElement('p');
-    p.className = 'nat-pill';
-    const dot = document.createElement('i');
-    dot.className = 'ml-pulse';
-    dot.setAttribute('aria-hidden', 'true');
-    const t = document.createElement('span');
-    t.className = 'nat-pill-t';
-    t.dataset.natCup = '1';
-    t.textContent = natPillText(cup);
-    p.append(dot, t);
-    return p;
-  }
-
   /**
    * The Nations HUD: one 48px strip that either asks for a flag or wears the
    * chosen nation's standing. Both states are the same button, so the picker
@@ -1941,11 +1901,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return hud;
   }
 
-  /** The whole Nations pane from a row set: podium, HUD, event pill and ladder. */
-  function paintNations(rows: CountryRow[], event: GrandCup | null): void {
+  /** The whole Nations pane from a row set: podium, HUD and ladder. */
+  function paintNations(rows: CountryRow[]): void {
     const el = panes.nations;
     if (!el) return;
-    natCup = event;
     paintPodium(rows.slice(0, 3).map((c) => ({
       rank: c.rank,
       name: c.name,
@@ -1953,21 +1912,19 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       code: c.code,
     })));
     el.textContent = '';
-    el.append(nationsHud(rows), nationsPill(natCup));
+    el.append(nationsHud(rows));
     const ol = document.createElement('ol');
     ol.className = 'rank-list';
     for (const c of rows.slice(3)) {
       const up = rows[c.rank - 2];
-      const f = fieldOf(c.code, c.points);
       ol.append(row({
         rank: c.rank,
         code: c.code,
         name: c.name,
-        sub: `${compactCount(f.minds)} minds`,
+        sub: `${compactCount(mindsOf(c.code, c.points))} minds`,
         points: c.points.toLocaleString('en-US'),
         tiq: c.points,
         me: profile.country === c.code,
-        avg: f.avg,
         above: up ? { name: up.name, tiq: up.points } : null,
       }));
     }
@@ -1979,11 +1936,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (!el) return;
     if (!loadedBoard.nations && !nationRows) el.innerHTML = skel(6);
     let rows: CountryRow[];
-    let event: GrandCup;
     try {
-      const pair = await Promise.all([getCountryRanking(), getGrandCup()]);
-      rows = pair[0];
-      event = pair[1];
+      rows = await getCountryRanking();
     } catch {
       if (!nationRows) el.innerHTML = empty('Rankings unavailable. Check your connection and try again.');
       return;
@@ -1993,7 +1947,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       return;
     }
     nationRows = rows;
-    paintNations(rows, event);
+    paintNations(rows);
   }
 
   async function loadMinds(): Promise<void> {
@@ -2372,7 +2326,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (isRanksVisible()) {
       paintRanks();
       if (board === 'nations' && nationRows) {
-        paintNations(nationRows, natCup);
+        paintNations(nationRows);
         void loadNations();
       } else {
         void loadBoard(board);
