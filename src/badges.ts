@@ -31,7 +31,8 @@ export interface BadgeDef {
   name: string;
   lore: string;
   criteria: string;
-  accent: 'gold' | 'sky' | 'mint' | 'coral';
+  /** Names the sculpted crest in index.html (#i-crest-<accent>) and its CSS aura. */
+  accent: 'gold' | 'sky' | 'mint' | 'coral' | 'obsidian';
   /** Tactical IQ milestone the badge demands, on the same scale as myTiq(). */
   tiq: number;
 }
@@ -74,7 +75,7 @@ export const BADGES: BadgeDef[] = [
     name: 'Cyrus the Immortal',
     lore: 'Supreme Tactical IQ. Sovereign of the Mind Ladder.',
     criteria: 'Bank 4,000 TIQ — the Apex lock. No other key opens it.',
-    accent: 'gold',
+    accent: 'obsidian',
     tiq: 4000,
   },
 ];

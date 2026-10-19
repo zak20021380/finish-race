@@ -5265,6 +5265,22 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   line-height: 1;
 }
 .mh-id { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; }
+/* the equipped honor, cut in the same metal as the Honor sheet and worn here
+   beside the avatar so the ladder reads the rank and the honour at a glance */
+.mh-badge {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+}
+.mh-badge[hidden] { display: none; }
+.mh-badge .badge-crest {
+  width: 24px;
+  height: 24px;
+  display: block;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .55));
+}
 .mh-line {
   flex: none;
   font-size: 13px;
@@ -17066,9 +17082,9 @@ html.reduced-motion .announce-cta { transition: none; }
   position: relative;
   display: flex;
   align-items: center;
-  gap: 11px;
-  min-height: 60px;
-  padding: 7px 10px;
+  gap: 10px;
+  min-height: 74px;
+  padding: 8px 10px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, .08);
   background: linear-gradient(180deg, #222C40 0%, #171E2C 100%);
@@ -17145,38 +17161,56 @@ html.reduced-motion .announce-cta { transition: none; }
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
-.badge-card-top {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
+/* the title: the name of the mind the badge carries */
 .badge-card-n {
-  flex: 0 1 auto;
-  min-width: 0;
-  font-size: 13.5px;
+  display: block;
+  font-size: 14.5px;
   font-weight: 800;
   letter-spacing: -.01em;
-  line-height: 1.15;
+  line-height: 1.2;
   color: #FFFFFF;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.badge-card-tag {
-  margin-left: auto;
+/* the lore: one line of italic quiet — the tactical motto under the title.
+   It wraps rather than truncates: a half-read motto is worse than two lines. */
+.badge-card-lore {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  margin-top: 2px;
+  font-size: 11px;
+  font-style: italic;
+  font-weight: 500;
+  line-height: 1.35;
+  color: #94A3B8;
+  overflow: hidden;
+  overflow-wrap: break-word;
+}
+/* the right rail: one pill that carries the whole state of the badge */
+.badge-card-rail {
   flex: none;
-  padding: 2px 6px 3px;
+  align-self: center;
+  display: flex;
+  align-items: center;
+}
+.badge-card-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
   border-radius: 999px;
-  font-size: 8.5px;
+  font-size: 9px;
   font-weight: 900;
   letter-spacing: .05em;
   line-height: 1.2;
   white-space: nowrap;
 }
-.badge-card-tag.is-equipped {
+.badge-card-pill .ico { width: 11px; height: 11px; flex: none; }
+.badge-card-pill.is-equipped {
   color: #201404;
   background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 100%);
   box-shadow:
@@ -17184,13 +17218,18 @@ html.reduced-motion .announce-cta { transition: none; }
     0 0 10px rgba(245, 158, 11, .35),
     inset 0 1px 0 rgba(255, 255, 255, .55);
 }
-.badge-card-tag.is-arm {
+.badge-card-pill.is-arm {
   color: #7DD3FC;
   background: rgba(56, 189, 248, .1);
-  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, .24);
-  font-size: 9px;
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, .26);
+  font-size: 9.5px;
   font-weight: 800;
   letter-spacing: .01em;
+}
+.badge-card-pill.is-locked {
+  color: #94A3B8;
+  background: rgba(15, 23, 42, .7);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .24);
 }
 .badge-card-tiq {
   display: inline-flex;
@@ -17198,6 +17237,7 @@ html.reduced-motion .announce-cta { transition: none; }
   gap: 4px;
   align-self: flex-start;
   max-width: 100%;
+  margin-top: 3px;
   padding: 2px 7px 3px;
   border-radius: 999px;
   background: rgba(252, 211, 77, .09);
@@ -17224,6 +17264,7 @@ html.reduced-motion .announce-cta { transition: none; }
   gap: 7px;
   min-width: 0;
   height: 11px;
+  margin-top: 4px;
 }
 .badge-card-bar {
   flex: 1 1 auto;
@@ -17284,10 +17325,12 @@ html.reduced-motion .announce-cta { transition: none; }
 .badges-sheet .badges-close:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
 @media (max-width: 380px) {
-  .badge-card { gap: 9px; padding: 7px 9px; }
+  .badge-card { gap: 9px; padding: 8px 9px; }
   .badge-card-crest, .badge-card-crest .badge-crest { width: 40px; height: 40px; }
-  .badge-card-n { font-size: 13px; }
-  .badge-card-tag.is-arm { font-size: 8.5px; }
+  .badge-card-n { font-size: 14px; }
+  .badge-card-lore { font-size: 10.5px; }
+  .badge-card-pill { padding: 4px 7px; font-size: 8.5px; }
+  .badge-card-pill.is-arm { font-size: 8.5px; }
 }
 
 /* ---- crests replace the flat hex decals everywhere a badge is worn ---- */
@@ -17389,6 +17432,16 @@ html.reduced-motion .announce-cta { transition: none; }
     inset 0 1px 0 rgba(255, 255, 255, .14),
     inset 0 0 0 1px rgba(252, 211, 77, .34);
 }
+/* the apex tier is cut in obsidian and lit with gold — the seal reads the same
+   way, so the crest never fights the pill it sits in */
+.pf-equipped-badge[data-accent="obsidian"] {
+  color: #FBBF24;
+  box-shadow:
+    0 2px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 0 0 1px rgba(251, 191, 36, .42),
+    0 0 12px rgba(168, 85, 247, .22);
+}
 
 @media (max-width: 380px) {
   .badge-chip { width: 38px; height: 42px; }
@@ -17414,6 +17467,10 @@ html.reduced-motion .announce-cta { transition: none; }
 .pf-avatar-tag[data-accent="coral"] {
   color: #FDA4AF;
   box-shadow: 0 2px 0 #080C14, inset 0 0 0 1px rgba(253, 164, 175, .45), 0 0 10px rgba(244, 63, 94, .32);
+}
+.pf-avatar-tag[data-accent="obsidian"] {
+  color: #FBBF24;
+  box-shadow: 0 2px 0 #080C14, inset 0 0 0 1px rgba(251, 191, 36, .5), 0 0 12px rgba(168, 85, 247, .34);
 }
 
 /* ==========================================================================

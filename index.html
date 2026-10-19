@@ -387,11 +387,17 @@
         </g>
       </symbol>
       <!-- ==== Honor & Badges crests =====================================================
-           Four sculpted metal medals, not flat glyphs. Each one is a layered crest:
+           Five sculpted metal medals, not flat glyphs. Each one is a layered crest:
            an ambient under-glow, a dark extrusion silhouette, a 135° metal face, a
            single-userSpace specular rim so the whole piece catches one light from the
            upper left, then its emblem cut on top. Full colour on purpose — these
-           never inherit currentColor. -->
+           never inherit currentColor.
+             i-crest-gold     — Da Vinci's Vision: the all-seeing eye in a compass ring
+             i-crest-sky      — Churchill's Bastion: the lion of the iron fortress
+             i-crest-mint     — Sun Tzu's Shadow: the jade dragon over crossed blades
+             i-crest-coral    — Napoleon's Crown: the imperial eagle beneath the crown
+             i-crest-obsidian — Cyrus the Immortal: the radiant gold winged sun
+           -->
       <symbol id="i-crest-gold" viewBox="0 0 56 56">
         <defs>
           <radialGradient id="bcg-glow" cx="50%" cy="74%" r="56%">
@@ -411,10 +417,16 @@
             <stop offset=".42" stop-color="#FDE68A" stop-opacity=".22" />
             <stop offset="1" stop-color="#7C2D12" stop-opacity=".72" />
           </linearGradient>
-          <linearGradient id="bcg-crown" gradientUnits="userSpaceOnUse" x1="19" y1="18" x2="37" y2="35">
-            <stop offset="0" stop-color="#FFFDF2" />
-            <stop offset=".5" stop-color="#FEF3C7" />
-            <stop offset="1" stop-color="#FCD34D" />
+          <radialGradient id="bcg-iris" cx="38%" cy="30%" r="72%">
+            <stop offset="0" stop-color="#FEF3C7" />
+            <stop offset=".36" stop-color="#FBBF24" />
+            <stop offset=".76" stop-color="#B45309" />
+            <stop offset="1" stop-color="#78350F" />
+          </radialGradient>
+          <linearGradient id="bcg-ring" gradientUnits="userSpaceOnUse" x1="28" y1="14" x2="28" y2="42">
+            <stop offset="0" stop-color="#FFFDF2" stop-opacity=".95" />
+            <stop offset=".5" stop-color="#FDE68A" stop-opacity=".3" />
+            <stop offset="1" stop-color="#7C2D12" stop-opacity=".8" />
           </linearGradient>
           <radialGradient id="bcg-spec" cx="36%" cy="24%" r="30%">
             <stop offset="0" stop-color="#FFFDF2" stop-opacity=".7" />
@@ -434,71 +446,102 @@
           fill="none" stroke="url(#bcg-rim)" stroke-width="1.5" stroke-linejoin="round" />
         <path d="M28 5.7 44.4 11.4v13.7c0 10.4-7.2 17-16.4 21.4-9.2-4.4-16.4-11-16.4-21.4V11.4Z"
           fill="url(#bcg-spec)" />
-        <path d="M18.3 33.1 20 20.4l5.3 6.5L28 18.4l2.7 8.5 5.3-6.5 1.7 12.7Z"
-          fill="url(#bcg-crown)" stroke="#92400E" stroke-opacity=".8" stroke-width="1"
-          stroke-linejoin="round" />
-        <path d="M19.1 34.6h17.8" stroke="#7C2D12" stroke-width="2.3" stroke-linecap="round" opacity=".62" />
-        <circle cx="28" cy="15.2" r="1.35" fill="#FFFDF2" />
-        <path d="M22 27.4c2-1 4-1 6 0s4 1 6 0" fill="none" stroke="#FFF7D6" stroke-opacity=".55"
+        <!-- the compass ring: a reticle of ticks and dashes around the eye -->
+        <circle cx="28" cy="28" r="12.8" fill="#78350F" fill-opacity=".24"
+          stroke="#7C2D12" stroke-opacity=".55" stroke-width="1" />
+        <circle cx="28" cy="28" r="12.8" fill="none" stroke="url(#bcg-ring)" stroke-width="1.4"
+          stroke-dasharray="1.4 3.6" stroke-linecap="round" />
+        <path d="M28 12.2v3.6M28 40.2v3.6M12.2 28h3.6M40.2 28h3.6"
+          stroke="#FFF7D6" stroke-opacity=".8" stroke-width="1.4" stroke-linecap="round" />
+        <path d="M16.6 16.6 19 19M39.4 16.6 37 19M16.6 39.4 19 37M39.4 39.4 37 37"
+          stroke="#FFF7D6" stroke-opacity=".42" stroke-width="1" stroke-linecap="round" />
+        <!-- the all-seeing eye: a compass needle set where the pupil would be -->
+        <path d="M16.4 28c2.9-5.1 7.1-7.6 11.6-7.6s8.7 2.5 11.6 7.6c-2.9 5.1-7.1 7.6-11.6 7.6S19.3 33.1 16.4 28Z"
+          fill="#FEF9E7" stroke="#78350F" stroke-opacity=".85" stroke-width="1.1" stroke-linejoin="round" />
+        <circle cx="28" cy="28" r="5.5" fill="url(#bcg-iris)" stroke="#92400E" stroke-opacity=".6" stroke-width=".9" />
+        <path d="M28 22.3 30.6 28 28 33.7 25.4 28Z" fill="#7C2D12" />
+        <circle cx="25.9" cy="25.5" r="1.4" fill="#FFFFFF" opacity=".9" />
+        <path d="M19.4 25.4c1.6-1.3 3.5-1.9 5.4-1.9" fill="none" stroke="#FFFFFF" stroke-opacity=".5"
           stroke-width=".9" stroke-linecap="round" />
-        <path d="M16 17.8v6.4" stroke="#FFFDF2" stroke-opacity=".55" stroke-width="1.1" stroke-linecap="round" />
       </symbol>
       <symbol id="i-crest-sky" viewBox="0 0 56 56">
         <defs>
-          <radialGradient id="bcs-glow" cx="50%" cy="58%" r="54%">
-            <stop offset="0" stop-color="#38BDF8" stop-opacity=".58" />
-            <stop offset=".58" stop-color="#0EA5E9" stop-opacity=".16" />
+          <radialGradient id="bcs-glow" cx="50%" cy="60%" r="56%">
+            <stop offset="0" stop-color="#38BDF8" stop-opacity=".5" />
+            <stop offset=".58" stop-color="#0EA5E9" stop-opacity=".14" />
             <stop offset="1" stop-color="#0EA5E9" stop-opacity="0" />
           </radialGradient>
-          <linearGradient id="bcs-face" gradientUnits="userSpaceOnUse" x1="8" y1="6" x2="48" y2="50">
-            <stop offset="0" stop-color="#BAE6FD" />
-            <stop offset=".26" stop-color="#38BDF8" />
-            <stop offset=".66" stop-color="#0284C7" />
-            <stop offset="1" stop-color="#075985" />
+          <linearGradient id="bcs-iron" gradientUnits="userSpaceOnUse" x1="12" y1="8" x2="44" y2="46">
+            <stop offset="0" stop-color="#6B7A90" />
+            <stop offset=".22" stop-color="#3A4759" />
+            <stop offset=".6" stop-color="#1C2533" />
+            <stop offset="1" stop-color="#090E17" />
           </linearGradient>
-          <linearGradient id="bcs-rim" gradientUnits="userSpaceOnUse" x1="28" y1="3" x2="28" y2="53">
-            <stop offset="0" stop-color="#F0F9FF" stop-opacity=".95" />
-            <stop offset=".45" stop-color="#7DD3FC" stop-opacity=".2" />
-            <stop offset="1" stop-color="#082F49" stop-opacity=".8" />
+          <linearGradient id="bcs-rim" gradientUnits="userSpaceOnUse" x1="28" y1="7" x2="28" y2="48">
+            <stop offset="0" stop-color="#F1F5F9" stop-opacity=".95" />
+            <stop offset=".44" stop-color="#94A3B8" stop-opacity=".26" />
+            <stop offset="1" stop-color="#0B1220" stop-opacity=".85" />
           </linearGradient>
-          <linearGradient id="bcs-plate" gradientUnits="userSpaceOnUse" x1="18" y1="14" x2="40" y2="44">
-            <stop offset="0" stop-color="#233246" />
-            <stop offset=".5" stop-color="#111C2C" />
-            <stop offset="1" stop-color="#070F1A" />
+          <linearGradient id="bcs-lion" gradientUnits="userSpaceOnUse" x1="20" y1="19" x2="37" y2="36">
+            <stop offset="0" stop-color="#F8FAFC" />
+            <stop offset=".22" stop-color="#E2E8F0" />
+            <stop offset=".5" stop-color="#7DD3FC" />
+            <stop offset=".78" stop-color="#0284C7" />
+            <stop offset="1" stop-color="#0C4A6E" />
           </linearGradient>
-          <radialGradient id="bcs-core" cx="50%" cy="46%" r="50%">
-            <stop offset="0" stop-color="#F0FDFF" />
-            <stop offset=".34" stop-color="#A5F3FC" />
-            <stop offset=".7" stop-color="#22D3EE" />
-            <stop offset="1" stop-color="#0369A1" />
-          </radialGradient>
-          <radialGradient id="bcs-spec" cx="36%" cy="22%" r="32%">
-            <stop offset="0" stop-color="#FFFFFF" stop-opacity=".65" />
+          <linearGradient id="bcs-mane" gradientUnits="userSpaceOnUse" x1="16" y1="15" x2="40" y2="39">
+            <stop offset="0" stop-color="#5A6A80" />
+            <stop offset=".34" stop-color="#27354A" />
+            <stop offset=".72" stop-color="#121A28" />
+            <stop offset="1" stop-color="#070C14" />
+          </linearGradient>
+          <radialGradient id="bcs-spec" cx="36%" cy="18%" r="30%">
+            <stop offset="0" stop-color="#FFFFFF" stop-opacity=".45" />
             <stop offset="1" stop-color="#FFFFFF" stop-opacity="0" />
           </radialGradient>
         </defs>
-        <ellipse cx="28" cy="35" rx="21" ry="16" fill="url(#bcs-glow)" />
-        <polygon points="28,2.6 50.1,15.3 50.1,40.7 28,53.4 5.9,40.7 5.9,15.3"
-          fill="#071827" stroke="#04101C" stroke-width="1.3" stroke-linejoin="round" />
-        <polygon points="28,5 47.8,16.4 47.8,39.6 28,51 8.2,39.6 8.2,16.4" fill="url(#bcs-face)" />
-        <polygon points="28,5 47.8,16.4 28,27.8 8.2,16.4" fill="#E0F2FE" opacity=".14" />
-        <polygon points="28,27.8 47.8,16.4 47.8,39.6 28,51" fill="#082F49" opacity=".22" />
-        <polygon points="28,5 47.8,16.4 47.8,39.6 28,51 8.2,39.6 8.2,16.4" fill="none"
-          stroke="url(#bcs-rim)" stroke-width="1.6" stroke-linejoin="round" />
-        <polygon points="28,5 47.8,16.4 47.8,39.6 28,51 8.2,39.6 8.2,16.4" fill="url(#bcs-spec)" />
-        <polygon points="28,12.6 40.6,19.4 40.6,35 28,41.8 15.4,35 15.4,19.4"
-          fill="url(#bcs-plate)" stroke="#7DD3FC" stroke-opacity=".45" stroke-width="1"
-          stroke-linejoin="round" />
-        <polygon points="28,15 38.4,20.6 38.4,33.8 28,39.4 17.6,33.8 17.6,20.6"
-          fill="none" stroke="#FFFFFF" stroke-opacity=".12" stroke-width=".7" stroke-linejoin="round" />
-        <path d="M28 10.6 33.2 19.4 28 28.2 22.8 19.4Z" fill="#7DD3FC" opacity=".2" />
-        <circle cx="28" cy="27" r="9.4" fill="url(#bcs-glow)" />
-        <circle cx="28" cy="27" r="6.1" fill="url(#bcs-core)" />
-        <circle cx="28" cy="27" r="2.5" fill="#ECFEFF" />
-        <path d="M25.2 25.4A3.4 3.4 0 0 1 28 23" fill="none" stroke="#FFFFFF" stroke-opacity=".9"
-          stroke-width="1" stroke-linecap="round" />
-        <path d="M16.2 21.1 28 14.2l11.8 6.9" fill="none" stroke="#E0F2FE" stroke-opacity=".5"
-          stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" />
+        <ellipse cx="28" cy="39" rx="21" ry="15" fill="url(#bcs-glow)" />
+        <!-- the fortress: one silhouette cut with a merloned bastion wall on top -->
+        <path d="M13 13.6V8h6.8v3.6h4.6V8h6.8v3.6h4.6V8h6.8v5.6v12.4c0 10.4-6 16.4-14.8 21.2C18.4 42.4 13 36.4 13 26Z"
+          fill="#060F1B" stroke="#040D18" stroke-width="1.3" stroke-linejoin="round" />
+        <path d="M15.4 15.2v-3.2h5.4v2.6h4.2v-2.6h5.4v2.6h4.2v-2.6h5.4v3.2v10.2c0 9-5.4 14.2-13 18.4C20.8 40 15.4 34.8 15.4 25.4Z"
+          fill="url(#bcs-iron)" />
+        <path d="M15.4 15.2v-3.2h5.4v2.6h4.2v-2.6h5.4v2.6h4.2v-2.6h5.4v3.2v10.2c0 9-5.4 14.2-13 18.4C20.8 40 15.4 34.8 15.4 25.4Z"
+          fill="none" stroke="url(#bcs-rim)" stroke-width="1.5" stroke-linejoin="round" />
+        <path d="M15.4 15.2v-3.2h5.4v2.6h4.2v-2.6h5.4v2.6h4.2v-2.6h5.4v3.2v10.2c0 9-5.4 14.2-13 18.4C20.8 40 15.4 34.8 15.4 25.4Z"
+          fill="url(#bcs-spec)" />
+        <path d="M17.2 19.4 27.8 16l10.6 3.4" fill="none" stroke="#E2E8F0" stroke-opacity=".3"
+          stroke-width="1.1" stroke-linecap="round" />
+        <!-- the lion: a ruff of iron tufts around a titanium-and-cyan face -->
+        <g fill="url(#bcs-mane)">
+          <circle cx="28" cy="18.4" r="3.5" />
+          <circle cx="33.2" cy="20" r="3.5" />
+          <circle cx="36.4" cy="24.4" r="3.5" />
+          <circle cx="36.4" cy="29.8" r="3.5" />
+          <circle cx="33.2" cy="34.2" r="3.5" />
+          <circle cx="28" cy="35.8" r="3.5" />
+          <circle cx="22.8" cy="34.2" r="3.5" />
+          <circle cx="19.6" cy="29.8" r="3.5" />
+          <circle cx="19.6" cy="24.4" r="3.5" />
+          <circle cx="22.8" cy="20" r="3.5" />
+        </g>
+        <ellipse cx="28" cy="27" rx="5.8" ry="5.4" fill="url(#bcs-lion)" stroke="#06121C"
+          stroke-opacity=".55" stroke-width=".9" />
+        <path d="M22.6 25.6c1.6-1.6 3.4-2.2 4.8-1.8M33.4 25.6c-1.6-1.6-3.4-2.2-4.8-1.8"
+          fill="none" stroke="#0B1B2A" stroke-opacity=".6" stroke-width="1.2" stroke-linecap="round" />
+        <path d="M23.8 26.6c1.4-1.2 3-1.4 4.2-.6M32.2 26.6c-1.4-1.2-3-1.4-4.2-.6"
+          fill="none" stroke="#0B1B2A" stroke-width="1.2" stroke-linecap="round" />
+        <circle cx="25.9" cy="26" r="1" fill="#ECFEFF" />
+        <circle cx="30.1" cy="26" r="1" fill="#ECFEFF" />
+        <circle cx="25.9" cy="26" r=".45" fill="#062032" />
+        <circle cx="30.1" cy="26" r=".45" fill="#062032" />
+        <path d="M25.4 28.4h5.2c.3 1.7-.6 3-2.6 3s-2.9-1.3-2.6-3Z"
+          fill="#F1F5F9" fill-opacity=".95" />
+        <path d="M26.7 27.9h2.6L28 29.3Z" fill="#06121C" />
+        <path d="M28 29.3v1.4M25.8 29.4c.3 1.2 1.1 1.8 2.2 1.8M30.2 29.4c-.3 1.2-1.1 1.8-2.2 1.8"
+          fill="none" stroke="#06121C" stroke-opacity=".6" stroke-width=".8" stroke-linecap="round" />
+        <path d="M22.2 29.6 18.6 30.4M33.8 29.6 37.4 30.4" stroke="#E0F2FE" stroke-opacity=".45"
+          stroke-width=".8" stroke-linecap="round" />
       </symbol>
       <symbol id="i-crest-mint" viewBox="0 0 56 56">
         <defs>
@@ -524,6 +567,18 @@
             <stop offset=".72" stop-color="#94A3B8" />
             <stop offset="1" stop-color="#64748B" />
           </linearGradient>
+          <linearGradient id="bcm-jade" gradientUnits="userSpaceOnUse" x1="14" y1="38" x2="44" y2="20">
+            <stop offset="0" stop-color="#ECFDF5" />
+            <stop offset=".36" stop-color="#A7F3D0" />
+            <stop offset=".72" stop-color="#34D399" />
+            <stop offset="1" stop-color="#047857" />
+          </linearGradient>
+          <linearGradient id="bcm-dragon" gradientUnits="userSpaceOnUse" x1="28" y1="10" x2="46" y2="32">
+            <stop offset="0" stop-color="#F0FDFA" />
+            <stop offset=".38" stop-color="#A7F3D0" />
+            <stop offset=".74" stop-color="#34D399" />
+            <stop offset="1" stop-color="#047857" />
+          </linearGradient>
           <radialGradient id="bcm-spec" cx="36%" cy="23%" r="32%">
             <stop offset="0" stop-color="#FFFFFF" stop-opacity=".6" />
             <stop offset="1" stop-color="#FFFFFF" stop-opacity="0" />
@@ -542,30 +597,65 @@
           fill="none" stroke="url(#bcm-rim)" stroke-width="1.5" stroke-linejoin="round" />
         <path d="M28 5.7 44.5 11.2v13.4c0 10.7-7.4 17.6-16.5 22.4-9.1-4.8-16.5-11.7-16.5-22.4V11.2Z"
           fill="url(#bcm-spec)" />
-        <g transform="rotate(45 28 28)">
-          <path d="M28 10.2 30.7 16v13.7h-5.4V16Z" fill="url(#bcm-steel)" stroke="#0F172A"
-            stroke-opacity=".55" stroke-width=".8" stroke-linejoin="round" />
-          <path d="M28 13.6v14.8" stroke="#FFFFFF" stroke-opacity=".55" stroke-width=".8"
-            stroke-linecap="round" />
-          <rect x="20.6" y="29.2" width="14.8" height="2.5" rx="1.25" fill="#D1FAE5" stroke="#065F46"
-            stroke-opacity=".5" stroke-width=".7" />
-          <rect x="26.3" y="31.3" width="3.4" height="6.1" rx="1.6" fill="#065F46" />
-          <circle cx="28" cy="39.2" r="1.9" fill="#A7F3D0" stroke="#065F46" stroke-opacity=".5"
-            stroke-width=".7" />
+        <!-- the crossed blades: two tempered edges set behind the dragon -->
+        <g transform="translate(7.28 7.28) scale(.74)" opacity=".92">
+          <g transform="rotate(45 28 28)">
+            <path d="M28 10.2 30.7 16v13.7h-5.4V16Z" fill="url(#bcm-steel)" stroke="#0F172A"
+              stroke-opacity=".55" stroke-width=".8" stroke-linejoin="round" />
+            <path d="M28 13.6v14.8" stroke="#FFFFFF" stroke-opacity=".55" stroke-width=".8"
+              stroke-linecap="round" />
+            <rect x="20.6" y="29.2" width="14.8" height="2.5" rx="1.25" fill="#D1FAE5" stroke="#065F46"
+              stroke-opacity=".5" stroke-width=".7" />
+            <rect x="26.3" y="31.3" width="3.4" height="6.1" rx="1.6" fill="#065F46" />
+            <circle cx="28" cy="39.2" r="1.9" fill="#A7F3D0" stroke="#065F46" stroke-opacity=".5"
+              stroke-width=".7" />
+          </g>
+          <g transform="rotate(-45 28 28)">
+            <path d="M28 10.2 30.7 16v13.7h-5.4V16Z" fill="url(#bcm-steel)" stroke="#0F172A"
+              stroke-opacity=".55" stroke-width=".8" stroke-linejoin="round" />
+            <path d="M28 13.6v14.8" stroke="#FFFFFF" stroke-opacity=".55" stroke-width=".8"
+              stroke-linecap="round" />
+            <rect x="20.6" y="29.2" width="14.8" height="2.5" rx="1.25" fill="#D1FAE5" stroke="#065F46"
+              stroke-opacity=".5" stroke-width=".7" />
+            <rect x="26.3" y="31.3" width="3.4" height="6.1" rx="1.6" fill="#065F46" />
+            <circle cx="28" cy="39.2" r="1.9" fill="#A7F3D0" stroke="#065F46" stroke-opacity=".5"
+              stroke-width=".7" />
+          </g>
         </g>
-        <g transform="rotate(-45 28 28)">
-          <path d="M28 10.2 30.7 16v13.7h-5.4V16Z" fill="url(#bcm-steel)" stroke="#0F172A"
-            stroke-opacity=".55" stroke-width=".8" stroke-linejoin="round" />
-          <path d="M28 13.6v14.8" stroke="#FFFFFF" stroke-opacity=".55" stroke-width=".8"
+        <!-- the jade dragon: a serpent coiled across the blades, horned and awake -->
+        <path d="M13.2 24.6c2.8 7 8.8 10.8 15 10.8 6.2 0 11.8-3.6 14.4-9.8" fill="none"
+          stroke="#022C22" stroke-opacity=".6" stroke-width="6.4" stroke-linecap="round" />
+        <path d="M13.2 24.6c2.8 7 8.8 10.8 15 10.8 6.2 0 11.8-3.6 14.4-9.8" fill="none"
+          stroke="url(#bcm-jade)" stroke-width="4.4" stroke-linecap="round" />
+        <path d="M14.4 25.4c2.4 5.2 7.4 8.2 13 8.4" fill="none" stroke="#A7F3D0" stroke-opacity=".45"
+          stroke-width="1.1" stroke-linecap="round" />
+        <path d="M15.4 28.4 17.8 27.4 16.6 24.2Z
+                 M18.6 32 21.2 31.4 20.8 28.2Z
+                 M23.4 34.6 26 34.6 26.2 31.4Z
+                 M31.4 34.8 33.8 35.4 35 32.4Z
+                 M35.6 32 38 33 39.8 30.4Z
+                 M39.4 28.6 41.6 30 43.8 28Z"
+          fill="#A7F3D0" stroke="#022C22" stroke-opacity=".5" stroke-width=".6" stroke-linejoin="round" />
+        <path d="M13.2 24.6c-2.8.6-5 2.4-6 5 1.6-.8 3.2-1 4.8-.6l-.6-2.4Z"
+          fill="#34D399" stroke="#022C22" stroke-opacity=".5" stroke-width=".6" stroke-linejoin="round" />
+        <g transform="translate(42.6 25.6) rotate(-124) scale(.56)">
+          <path d="M.6 1.4C1.4-1.8 3.6-4.4 6.6-5.2 9.2-5.9 11.2-5.1 12.4-3.3L19.4-1.2 12.4 1.2
+            C11.6 3.3 9.6 4.5 7.2 4.7 4 4.9 1.2 3.5.6 1.4Z"
+            fill="url(#bcm-dragon)" stroke="#022C22" stroke-opacity=".7" stroke-width="1.2" stroke-linejoin="round" />
+          <path d="M6.6-5.2 3.4-10.4 9.2-7.2Z" fill="#A7F3D0" stroke="#022C22" stroke-opacity=".6"
+            stroke-width="1" stroke-linejoin="round" />
+          <path d="M2.4-4.4-.4-8.6 4.6-6.2Z" fill="#6EE7B7" stroke="#022C22" stroke-opacity=".55"
+            stroke-width=".9" stroke-linejoin="round" />
+          <path d="M1.6-1.8-1.6-4.6 2.6-3.2Z" fill="#6EE7B7" stroke="#022C22" stroke-opacity=".55"
+            stroke-width=".9" stroke-linejoin="round" />
+          <path d="M10.2 1.1 17.6.2" stroke="#022C22" stroke-opacity=".45" stroke-width=".9"
             stroke-linecap="round" />
-          <rect x="20.6" y="29.2" width="14.8" height="2.5" rx="1.25" fill="#D1FAE5" stroke="#065F46"
-            stroke-opacity=".5" stroke-width=".7" />
-          <rect x="26.3" y="31.3" width="3.4" height="6.1" rx="1.6" fill="#065F46" />
-          <circle cx="28" cy="39.2" r="1.9" fill="#A7F3D0" stroke="#065F46" stroke-opacity=".5"
-            stroke-width=".7" />
+          <circle cx="8.4" cy="-1.2" r="1.25" fill="#022C22" />
+          <circle cx="8" cy="-1.6" r=".45" fill="#D1FAE5" />
+          <circle cx="16.4" cy="-1.6" r=".5" fill="#022C22" />
+          <path d="M18.6.4c1.8.6 3 1.8 3.6 3.4" fill="none" stroke="#A7F3D0" stroke-width="1.1"
+            stroke-linecap="round" />
         </g>
-        <circle cx="28" cy="28" r="3.1" fill="#ECFDF5" opacity=".85" />
-        <circle cx="28" cy="28" r="5.2" fill="none" stroke="#6EE7B7" stroke-opacity=".35" stroke-width="1" />
       </symbol>
       <symbol id="i-crest-coral" viewBox="0 0 56 56">
         <defs>
@@ -590,10 +680,22 @@
             <stop offset=".5" stop-color="#FB7185" stop-opacity=".35" />
             <stop offset="1" stop-color="#BE123C" stop-opacity=".1" />
           </linearGradient>
-          <linearGradient id="bcr-cup" gradientUnits="userSpaceOnUse" x1="20" y1="16" x2="36" y2="40">
+          <linearGradient id="bcr-crown" gradientUnits="userSpaceOnUse" x1="20" y1="11" x2="36" y2="23">
             <stop offset="0" stop-color="#FFF1F2" />
             <stop offset=".45" stop-color="#FDA4AF" />
-            <stop offset="1" stop-color="#F43F5E" />
+            <stop offset="1" stop-color="#E11D48" />
+          </linearGradient>
+          <linearGradient id="bcr-wing" gradientUnits="userSpaceOnUse" x1="10" y1="20" x2="46" y2="30">
+            <stop offset="0" stop-color="#FFF1F2" />
+            <stop offset=".32" stop-color="#FDA4AF" />
+            <stop offset=".68" stop-color="#FB7185" />
+            <stop offset="1" stop-color="#E11D48" />
+          </linearGradient>
+          <linearGradient id="bcr-eagle" gradientUnits="userSpaceOnUse" x1="10" y1="20" x2="46" y2="42">
+            <stop offset="0" stop-color="#FFF1F2" />
+            <stop offset=".28" stop-color="#FDA4AF" />
+            <stop offset=".64" stop-color="#F43F5E" />
+            <stop offset="1" stop-color="#9F1239" />
           </linearGradient>
           <radialGradient id="bcr-spec" cx="36%" cy="23%" r="32%">
             <stop offset="0" stop-color="#FFFFFF" stop-opacity=".65" />
@@ -613,19 +715,140 @@
           fill="none" stroke="url(#bcr-rim)" stroke-width="1.5" stroke-linejoin="round" />
         <path d="M28 5.8 44.4 11.3v13.3c0 10.6-7.4 17.4-16.4 22.2-9-4.8-16.4-11.6-16.4-22.2V11.3Z"
           fill="url(#bcr-spec)" />
-        <path d="M19 17.2h18v6.2a9 9 0 0 1-18 0Z" fill="url(#bcr-cup)" stroke="#4C0519"
-          stroke-opacity=".6" stroke-width=".9" stroke-linejoin="round" />
-        <path d="M19 19h-3.7a4.7 4.7 0 0 0 4.9 5.5M37 19h3.7a4.7 4.7 0 0 1-4.9 5.5"
-          fill="none" stroke="#FDA4AF" stroke-width="1.7" stroke-linecap="round" />
-        <path d="M26.8 32.4v4.9h2.4v-4.9" fill="#F43F5E" stroke="#4C0519" stroke-opacity=".4"
-          stroke-width=".7" />
-        <path d="M21.9 39.3h12.2" stroke="#FDA4AF" stroke-width="2.6" stroke-linecap="round" />
-        <path d="M23.6 42.2h8.8" stroke="#F43F5E" stroke-opacity=".65" stroke-width="1.4"
-          stroke-linecap="round" />
-        <path d="M23.4 20.2c1.5-.8 3-.8 4.6 0" fill="none" stroke="#FFF1F2" stroke-opacity=".8"
-          stroke-width="1.1" stroke-linecap="round" />
-        <path d="M33.2 14.4c.35 1.25.62 1.52 1.87 1.87-1.25.35-1.52.62-1.87 1.87-.35-1.25-.62-1.52-1.87-1.87 1.25-.35 1.52-.62 1.87-1.87Z"
-          fill="#FFE4E6" opacity=".9" />
+        <!-- the sovereign crown -->
+        <path d="M19.6 19.4 20.8 11.6 24.6 14.4 28 9.8 31.4 14.4 35.2 11.6 36.4 19.4Z"
+          fill="url(#bcr-crown)" stroke="#4C0519" stroke-opacity=".8" stroke-width="1"
+          stroke-linejoin="round" />
+        <path d="M20.2 20.6h15.6" stroke="#FDE68A" stroke-width="2.4" stroke-linecap="round" opacity=".9" />
+        <path d="M20.2 20.6h15.6" stroke="#FFFFFF" stroke-width=".8" stroke-linecap="round" opacity=".5" />
+        <circle cx="28" cy="9" r="1.4" fill="#FFE4E6" />
+        <circle cx="21" cy="10.6" r=".95" fill="#FFE4E6" opacity=".9" />
+        <circle cx="35" cy="10.6" r=".95" fill="#FFE4E6" opacity=".9" />
+        <!-- the imperial eagle: four blades to a wing, doubled by symmetry -->
+        <g fill="url(#bcr-wing)" stroke="#4C0519" stroke-opacity=".65" stroke-width=".85"
+          stroke-linejoin="round">
+          <path d="M29.2 25.4c4.6-3.6 10.6-5 16.4-3.2-3.6 1.6-6.6 3.8-8.8 6.6z" />
+          <path d="M29 26.8c4-3.2 8.8-4.2 13.4-2.4-3.4 1.6-6 3.8-7.8 6.4z" />
+          <path d="M28.8 28.2c3.4-2.4 7.2-3 11-1.4-2.8 1.4-5 3.2-6.6 5.6z" />
+          <path d="M28.6 29.6c2.8-1.8 5.8-2 8.6-.6-2.4 1.2-4.2 2.6-5.4 4.4z" />
+        </g>
+        <g transform="translate(56 0) scale(-1 1)" fill="url(#bcr-wing)" stroke="#4C0519"
+          stroke-opacity=".65" stroke-width=".85" stroke-linejoin="round">
+          <path d="M29.2 25.4c4.6-3.6 10.6-5 16.4-3.2-3.6 1.6-6.6 3.8-8.8 6.6z" />
+          <path d="M29 26.8c4-3.2 8.8-4.2 13.4-2.4-3.4 1.6-6 3.8-7.8 6.4z" />
+          <path d="M28.8 28.2c3.4-2.4 7.2-3 11-1.4-2.8 1.4-5 3.2-6.6 5.6z" />
+          <path d="M28.6 29.6c2.8-1.8 5.8-2 8.6-.6-2.4 1.2-4.2 2.6-5.4 4.4z" />
+        </g>
+        <path d="M28 24.8c2.1 0 3.6 2 3.6 4.6 0 3.4-1.1 6-3.6 8.6-2.5-2.6-3.6-5.2-3.6-8.6 0-2.6 1.5-4.6 3.6-4.6Z"
+          fill="url(#bcr-eagle)" stroke="#4C0519" stroke-opacity=".5" stroke-width=".8" />
+        <circle cx="28" cy="22.6" r="2.5" fill="url(#bcr-eagle)" stroke="#4C0519"
+          stroke-opacity=".5" stroke-width=".75" />
+        <path d="M30 21.8 33.2 22.9 30 24Z" fill="#FDE68A" stroke="#4C0519"
+          stroke-opacity=".45" stroke-width=".5" stroke-linejoin="round" />
+        <circle cx="28.7" cy="22" r=".8" fill="#4C0519" />
+        <circle cx="28.4" cy="21.8" r=".3" fill="#FFF1F2" />
+        <path d="M25.4 36.4h5.2l-2.6 6.4z" fill="url(#bcr-eagle)" stroke="#4C0519"
+          stroke-opacity=".55" stroke-width=".75" stroke-linejoin="round" />
+        <path d="M24.2 35.4 25.3 42.6l2.1-4.6z" fill="url(#bcr-eagle)" stroke="#4C0519"
+          stroke-opacity=".55" stroke-width=".75" stroke-linejoin="round" />
+        <path d="M31.8 35.4 30.7 42.6l-2.1-4.6z" fill="url(#bcr-eagle)" stroke="#4C0519"
+          stroke-opacity=".55" stroke-width=".75" stroke-linejoin="round" />
+        <path d="M26.6 26.2c.8-.9 1.7-1.3 2.4-1.2M29.4 26.2c-.8-.9-1.7-1.3-2.4-1.2"
+          fill="none" stroke="#FFF1F2" stroke-opacity=".5" stroke-width=".8" stroke-linecap="round" />
+      </symbol>
+      <!-- the apex tier: obsidian cut for a sun that never sets. Same layered crest
+           recipe, but the face is volcanic glass — near-black, faintly violet in the
+           shadow — and every bright note on it is gold. -->
+      <symbol id="i-crest-obsidian" viewBox="0 0 56 56">
+        <defs>
+          <radialGradient id="bco-glow" cx="50%" cy="72%" r="56%">
+            <stop offset="0" stop-color="#F59E0B" stop-opacity=".5" />
+            <stop offset=".52" stop-color="#A855F7" stop-opacity=".16" />
+            <stop offset="1" stop-color="#A855F7" stop-opacity="0" />
+          </radialGradient>
+          <linearGradient id="bco-face" gradientUnits="userSpaceOnUse" x1="9" y1="6" x2="47" y2="51">
+            <stop offset="0" stop-color="#2A3040" />
+            <stop offset=".24" stop-color="#171B27" />
+            <stop offset=".62" stop-color="#0C0E16" />
+            <stop offset="1" stop-color="#05060B" />
+          </linearGradient>
+          <linearGradient id="bco-rim" gradientUnits="userSpaceOnUse" x1="28" y1="4" x2="28" y2="52">
+            <stop offset="0" stop-color="#FFFBEB" stop-opacity=".95" />
+            <stop offset=".38" stop-color="#FCD34D" stop-opacity=".42" />
+            <stop offset=".78" stop-color="#B45309" stop-opacity=".55" />
+            <stop offset="1" stop-color="#1C1408" stop-opacity=".9" />
+          </linearGradient>
+          <linearGradient id="bco-sun" gradientUnits="userSpaceOnUse" x1="21" y1="20" x2="36" y2="34">
+            <stop offset="0" stop-color="#FFFBEB" />
+            <stop offset=".34" stop-color="#FDE68A" />
+            <stop offset=".72" stop-color="#F59E0B" />
+            <stop offset="1" stop-color="#92400E" />
+          </linearGradient>
+          <linearGradient id="bco-ray" gradientUnits="userSpaceOnUse" x1="18" y1="17" x2="38" y2="37">
+            <stop offset="0" stop-color="#FEF3C7" />
+            <stop offset=".55" stop-color="#F59E0B" />
+            <stop offset="1" stop-color="#B45309" />
+          </linearGradient>
+          <linearGradient id="bco-wing" gradientUnits="userSpaceOnUse" x1="32" y1="18" x2="47" y2="32">
+            <stop offset="0" stop-color="#FEF3C7" />
+            <stop offset=".44" stop-color="#E0A63A" />
+            <stop offset="1" stop-color="#78350F" />
+          </linearGradient>
+          <radialGradient id="bco-spec" cx="34%" cy="22%" r="32%">
+            <stop offset="0" stop-color="#C4B5FD" stop-opacity=".38" />
+            <stop offset="1" stop-color="#C4B5FD" stop-opacity="0" />
+          </radialGradient>
+        </defs>
+        <ellipse cx="28" cy="42" rx="20" ry="12" fill="url(#bco-glow)" />
+        <path d="M28 3.5 46.5 9.8v15.4c0 12.1-8.4 19.6-18.5 24.8C17.9 44.8 9.5 37.3 9.5 25.2V9.8Z"
+          fill="#0A0A12" stroke="#03030A" stroke-width="1.4" stroke-linejoin="round" />
+        <path d="M28 5.7 44.4 11.4v13.7c0 10.4-7.2 17-16.4 21.4-9.2-4.4-16.4-11-16.4-21.4V11.4Z"
+          fill="url(#bco-face)" />
+        <path d="M28 8.6 41.7 13.2v11.7c0 8.6-6 14.4-13.7 18.2-7.7-3.8-13.7-9.6-13.7-18.2V13.2Z"
+          fill="none" stroke="#F59E0B" stroke-opacity=".3" stroke-width=".9" />
+        <path d="M15.3 14.2 28 9.6l12.7 4.6" fill="none" stroke="#EDE9FE" stroke-opacity=".5"
+          stroke-width="1.4" stroke-linecap="round" />
+        <path d="M28 5.7 44.4 11.4v13.7c0 10.4-7.2 17-16.4 21.4-9.2-4.4-16.4-11-16.4-21.4V11.4Z"
+          fill="none" stroke="url(#bco-rim)" stroke-width="1.7" stroke-linejoin="round" />
+        <path d="M28 5.7 44.4 11.4v13.7c0 10.4-7.2 17-16.4 21.4-9.2-4.4-16.4-11-16.4-21.4V11.4Z"
+          fill="url(#bco-spec)" />
+        <!-- the sun: twelve rays struck from one disc -->
+        <g fill="url(#bco-ray)" stroke="#78350F" stroke-opacity=".4" stroke-width=".4"
+          stroke-linejoin="round">
+          <path d="M26.6 20.6 29.4 20.6 28 17.2Z" />
+          <path d="M32.41 22.16 29.99 20.76 32.9 18.51Z" />
+          <path d="M34.24 25.01 32.84 22.59 36.49 22.1Z" />
+          <path d="M34.4 25.6 34.4 28.4 37.8 27Z" />
+          <path d="M32.84 31.41 34.24 28.99 36.49 31.9Z" />
+          <path d="M29.99 33.24 32.41 31.84 32.9 35.49Z" />
+          <path d="M26.6 33.4 29.4 33.4 28 36.8Z" />
+          <path d="M23.59 31.84 26.01 33.24 23.1 35.49Z" />
+          <path d="M21.76 28.99 23.16 31.41 19.51 31.9Z" />
+          <path d="M21.6 25.6 21.6 28.4 18.2 27Z" />
+          <path d="M23.16 22.59 21.76 25.01 19.51 22.1Z" />
+          <path d="M26.01 20.76 23.59 22.16 23.1 18.51Z" />
+        </g>
+        <!-- the wings: three blades to a side, doubled by symmetry -->
+        <g fill="url(#bco-wing)" stroke="#78350F" stroke-opacity=".5" stroke-width=".7"
+          stroke-linejoin="round">
+          <path d="M33.4 24.2c3.4-3.8 8-5.8 12.8-5.6-3 1.8-5.4 4.2-7.2 7z" />
+          <path d="M33 26c3.2-3.2 7.4-4.8 11.6-4.4-2.8 1.6-5 3.8-6.6 6.4z" />
+          <path d="M32.6 27.8c2.6-2.4 6-3.4 9.4-3-2.2 1.4-4 3.2-5.2 5.4z" />
+        </g>
+        <g transform="translate(56 0) scale(-1 1)" fill="url(#bco-wing)" stroke="#78350F"
+          stroke-opacity=".5" stroke-width=".7" stroke-linejoin="round">
+          <path d="M33.4 24.2c3.4-3.8 8-5.8 12.8-5.6-3 1.8-5.4 4.2-7.2 7z" />
+          <path d="M33 26c3.2-3.2 7.4-4.8 11.6-4.4-2.8 1.6-5 3.8-6.6 6.4z" />
+          <path d="M32.6 27.8c2.6-2.4 6-3.4 9.4-3-2.2 1.4-4 3.2-5.2 5.4z" />
+        </g>
+        <circle cx="28" cy="27" r="7.4" fill="#F59E0B" opacity=".22" />
+        <circle cx="28" cy="27" r="6.2" fill="url(#bco-sun)" stroke="#78350F" stroke-opacity=".55"
+          stroke-width=".9" />
+        <circle cx="28" cy="27" r="3" fill="#FFFBEB" />
+        <path d="M25.4 24.4A3.4 3.4 0 0 1 28 23.6" fill="none" stroke="#FFFFFF" stroke-opacity=".9"
+          stroke-width="1" stroke-linecap="round" />
+        <path d="M14.4 27.4h-2.6M41.6 27.4h2.6" stroke="#FCD34D" stroke-opacity=".4"
+          stroke-width="1" stroke-linecap="round" />
       </symbol>
       <!-- TIQ: the two-lobe brain is the hero metric's glyph; the cup is a season prize, never a score. -->
       <symbol id="i-brain" viewBox="0 0 24 24">

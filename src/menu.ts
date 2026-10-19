@@ -830,10 +830,11 @@ export function createMenu(api: MenuApi): Menu {
   paintBadgesRef = paintBadges;
 
   /* "View All ›" drawer: the full catalogue as sculpted honor cards. Each card
-     carries its crest, its TIQ milestone, and either an EQUIPPED seal or a live
-     meter to the number that still stands between the player and the badge.
-     Tapping an unlocked card equips it on the spot; a locked card opens the lore
-     drawer with the exact requirement and its TIQ progress. */
+     carries its crest, its title and one-line lore, its TIQ milestone, and either
+     an EQUIPPED seal, a Tap to Equip pill or a locked pill over a live meter to
+     the number that still stands between the player and the badge. Tapping an
+     unlocked card equips it on the spot; a locked card opens the lore drawer
+     with the exact requirement and its TIQ progress. */
   function paintBadgeList() {
     const list = document.getElementById('badge-list');
     if (!list) return;
@@ -848,7 +849,7 @@ export function createMenu(api: MenuApi): Menu {
       li.className = `badge-card ${unlocked ? 'is-unlocked' : 'is-locked'}${equipped ? ' is-equipped' : ''}`;
       li.setAttribute('role', 'option');
       li.setAttribute('aria-selected', String(equipped));
-      li.setAttribute('aria-label', `${b.name}. ${
+      li.setAttribute('aria-label', `${b.name}. ${b.lore} ${
         equipped ? 'Equipped.'
           : unlocked ? 'Unlocked. Tap to equip.'
             : tp.met ? `Locked. ${en(tp.tiq)} TIQ met; ${ach.label}.`
@@ -868,32 +869,26 @@ export function createMenu(api: MenuApi): Menu {
       const main = document.createElement('span');
       main.className = 'badge-card-main';
 
-      const top = document.createElement('span');
-      top.className = 'badge-card-top';
+      /* the title and its one line of lore: the title names the mind, the lore
+         says what that mind did */
       const nm = document.createElement('span');
       nm.className = 'badge-card-n';
       nm.textContent = b.name;
-      top.append(nm);
-      if (equipped) {
-        const tag = document.createElement('span');
-        tag.className = 'badge-card-tag is-equipped';
-        tag.textContent = '✓ EQUIPPED';
-        top.append(tag);
-      } else if (unlocked) {
-        const tag = document.createElement('span');
-        tag.className = 'badge-card-tag is-arm';
-        tag.textContent = 'Tap to Equip';
-        top.append(tag);
-      }
+      const lore = document.createElement('span');
+      lore.className = 'badge-card-lore';
+      lore.textContent = b.lore;
 
+      /* the requirement chip: the TIQ milestone, met or not */
       const chip = document.createElement('span');
       chip.className = 'badge-card-tiq';
       chip.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg>'
         + (unlocked
-          ? `<b>${en(tp.tiq)} TIQ</b><span>${tp.tiq > 0 ? 'Unlocked' : 'Founding'}</span>`
-          : `<b>${en(tp.tiq)} TIQ</b><span>${tp.met ? 'Met' : 'Required'}</span>`);
+          ? tp.tiq > 0
+            ? `<b>${en(tp.tiq)} TIQ</b><span>Unlocked</span>`
+            : '<b>0 TIQ</b><span>Founding</span>'
+          : `<b>${en(tp.got)} / ${en(tp.tiq)} TIQ</b>`);
 
-      main.append(top, chip);
+      main.append(nm, lore, chip);
 
       if (!unlocked) {
         const meter = document.createElement('span');
@@ -908,11 +903,31 @@ export function createMenu(api: MenuApi): Menu {
         bar.append(fill);
         const fig = document.createElement('em');
         fig.className = 'badge-card-meter-t';
-        fig.textContent = tp.met && !achMet ? ach.label : `${en(tp.got)} / ${en(tp.tiq)} TIQ`;
+        /* the chip already prints the TIQ figures, so the meter either names the
+           achievement that is actually blocking the badge or reads as a percentage */
+        fig.textContent = tp.met && !achMet ? ach.label : `${meterPct}%`;
         meter.append(bar, fig);
         main.append(meter);
       }
-      li.append(crest, main);
+
+      /* the right rail: one pill that says the whole state of the badge */
+      const rail = document.createElement('span');
+      rail.className = 'badge-card-rail';
+      const pill = document.createElement('span');
+      pill.className = 'badge-card-pill';
+      if (equipped) {
+        pill.classList.add('is-equipped');
+        pill.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><b>EQUIPPED</b>';
+      } else if (unlocked) {
+        pill.classList.add('is-arm');
+        pill.textContent = 'Tap to Equip';
+      } else {
+        pill.classList.add('is-locked');
+        pill.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg><b>Locked</b>';
+      }
+      rail.append(pill);
+
+      li.append(crest, main, rail);
 
       const activate = () => {
         if (!isBadgeUnlocked(b.id)) { impact('light'); openBadge(b.id); return; }

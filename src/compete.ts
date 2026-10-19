@@ -47,6 +47,7 @@ import {
   type Trend,
 } from './data';
 import { nameOf } from './countries';
+import { equippedBadge } from './badges';
 import { flagPhoto } from './flags';
 import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
@@ -1608,6 +1609,19 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         : `Top ${pct}% of minds`;
     idWrap.append(line, crest, chip);
 
+    /* the equipped badge rides the strip: the same sculpted crest the Honor
+       sheet shows, so the honor is legible on the ladder itself */
+    const eq = equippedBadge();
+    let eqCrest: HTMLElement | null = null;
+    if (eq) {
+      eqCrest = document.createElement('span');
+      eqCrest.className = 'mh-badge';
+      eqCrest.setAttribute('aria-label', `Equipped badge: ${eq.name}`);
+      eqCrest.title = eq.name;
+      eqCrest.innerHTML = `<svg class="badge-crest" viewBox="0 0 56 56" aria-hidden="true">`
+        + `<use href="#i-crest-${eq.accent}" /></svg>`;
+    }
+
     const score = document.createElement('span');
     score.className = 'mh-score';
     score.append(svgIcon('#i-brain', 'tiq'));
@@ -1618,7 +1632,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     score.setAttribute('aria-label', `${tiq.toLocaleString('en-US')} Tactical IQ`);
 
     if (onBoard) host.append(badge);
-    host.append(av, idWrap, score);
+    host.append(av);
+    if (eqCrest) host.append(eqCrest);
+    host.append(idWrap, score);
 
     const gap = div.next > tiq ? div.next - tiq : 0;
     const wins = gap > 0 ? Math.ceil(gap / TIQ_PER_WIN) : 0;
@@ -1626,10 +1642,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       ? `${wins} win${wins === 1 ? '' : 's'} to ${divisionOf(div.next).label}`
       : 'Peak division · hold it against the ladder';
     const where = onBoard ? `Rank ${myRank} of ${field + 1}` : 'Unranked';
-    host.title = `${where} · ${div.label} · ${chip.title} · ${milestone}`;
+    const honor = eq ? ` · ${eq.name}` : '';
+    host.title = `${where} · ${div.label} · ${chip.title} · ${milestone}${honor}`;
     host.setAttribute(
       'aria-label',
-      `Your Standing: ${youLabel()}, ${where}, ${div.label}, ${tiq.toLocaleString('en-US')} Tactical IQ, ${chip.title}, ${milestone}`,
+      `Your Standing: ${youLabel()}, ${where}, ${div.label}, ${tiq.toLocaleString('en-US')} Tactical IQ, ${chip.title}, ${milestone}${honor}`,
     );
   }
 
@@ -2376,6 +2393,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     loadedBoard.minds = false;
     loadedBoard.guilds = false;
     if (isRanksVisible()) {
+      /* the standing strip carries the equipped badge, so it repaints on the same
+         beat the save lands — a new honor shows on the ladder without a reload */
+      paintMindsStanding(mindsField.length ? mindsField : null);
       paintRanks();
       if (board === 'nations' && nationRows) {
         paintNations(nationRows);
