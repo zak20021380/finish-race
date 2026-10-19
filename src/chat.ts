@@ -1,11 +1,12 @@
 /**
- * chat.ts — quick chat: the key above the dock, its bottom sheet, and the floating bubbles.
+ * chat.ts — quick chat: the key above the dock, its centred banter sheet, and the floating bubbles.
  *
- * The vocabulary is closed (`data/phrases.ts`): every send is one of four tactical one-liners or
- * one of three psychological emotes, so there is no input, no parser and nothing a player can
- * type. The transport is local —
- * a message is a bubble with a timer, a report is a toast, mute is a boolean that dies with the
- * page. Nothing here opens a socket.
+ * The vocabulary is closed (`data/phrases.ts`): every send is one of six tactical one-liners — in
+ * English or Persian, whichever way the header's EN | FA pill is leaning — or one of three
+ * psychological emotes, so there is no input, no parser and nothing a player can type. A phrase
+ * rides the wire as a `(lang, index)` pair and is looked back up in the same closed table on the
+ * far side; an emote rides as its own id. The sheet's tongue lives in the save (`activeChatLang`),
+ * so it is the same tongue the next time it opens.
  *
  * The board is read, never written. A message no longer hangs off the sender's HUD card: it
  * spawns in the gameplay zone, centred over the sender's pawn. The renderer owns the only true
@@ -16,9 +17,13 @@
  */
 import './chat.css';
 import type { GameState, Player } from './rules';
-import { EMOTES, TAUNTS, type ChatEmote, type ChatEmoteId } from './data/phrases';
+import {
+  CHAT_LANGS, CHAT_PHRASES, EMOTES, PHRASE_COUNT, isChatLang, phraseLine,
+  type ChatEmote, type ChatEmoteId, type ChatLang,
+} from './data/phrases';
 import { playLaugh, playAngrySound } from './audio';
 import { impact, notify } from './telegram';
+import { readJson, writeJson } from './storage';
 
 /** A seat's pawn on screen: its animated centre in viewport px, plus the board's live cell. */
 export interface PawnPoint {
@@ -45,11 +50,15 @@ export interface ChatOptions {
   live: () => boolean;
   /** The wire: an emote this player sent, for an online race to relay. Absent offline. */
   onEmote?: (id: ChatEmoteId) => void;
+  /** The wire: a phrase this player sent, as its `(lang, index)`. Absent offline. */
+  onPhrase?: (lang: ChatLang, index: number) => void;
 }
 
 export interface Chat {
   /** An emote the rival sent over the wire: pop their bubble over their pawn, and give it a voice. */
   inboundEmote(id: ChatEmoteId): void;
+  /** A phrase the rival sent: the closed table turns `(lang, index)` back into a line and pops it. */
+  inboundPhrase(lang: ChatLang, index: number): void;
   destroy(): void;
 }
 
@@ -58,12 +67,16 @@ const BUBBLE_MS = 2500;
 const EMOTE_MS = 2000;
 /** The exit: opacity 1 -> 0 while the bubble drifts up 18px. Matches the transition in chat.css. */
 const LEAVE_MS = 360;
-const SEND_GAP_MS = 3000;
+/** The anti-spam gate: one message per player per 1.5s, so a phrase cannot machine-gun the wire. */
+const SEND_GAP_MS = 1500;
 const BOT_GAP_MS = 8000;
 const HOLD_MS = 400;
 const HOLD_SLOP = 8;
 const POLL_MS = 200;
 const MENU_W = 168;
+/** Where the sheet's tongue is remembered: the save's own wrapped door, so a webview with no
+ *  localStorage still gets a working toggle (it just forgets between pages). */
+const LANG_KEY = 'detour.chat.lang.v1';
 /** How far above the pawn the move-dot ring can reach, in cells: a hint may leap over a body two
  *  cells away, plus the dot's own halo. The spec's 24px sits above that. */
 const DOT_REACH_CELLS = 2.4;
@@ -80,6 +93,12 @@ function el<K extends keyof HTMLElementTagNameMap>(
   if (cls) node.className = cls;
   if (text !== undefined) node.textContent = text;
   return node;
+}
+
+/** The tongue the sheet last spoke, out of the save; EN when nothing (or nonsense) is stored. */
+function readChatLang(): ChatLang {
+  const raw = readJson<{ lang?: unknown }>(LANG_KEY);
+  return isChatLang(raw?.lang) ? raw.lang : 'EN';
 }
 
 export function createChat(o: ChatOptions): Chat {
@@ -210,6 +229,18 @@ export function createChat(o: ChatOptions): Chat {
     setBubble('foe', emoteNode(emote), true);
   }
 
+  /**
+   * The rival's phrase, arrived over the wire: their `(lang, index)` pair is looked back up in the
+   * same closed table — no text ever crosses the socket — and popped over their pawn. A muted
+   * opponent is as silent as they are invisible, so the whole call is dropped while muted.
+   */
+  function inboundPhrase(lang: ChatLang, index: number): void {
+    if (!o.live() || muted) return;
+    const line = phraseLine(lang, index);
+    if (!line) return;
+    setBubble('foe', document.createTextNode(line));
+  }
+
   /* ---------- the sheet (built from the closed vocabulary) ---------- */
 
   const scrim = el('div', 'chat-scrim');
@@ -222,16 +253,34 @@ export function createChat(o: ChatOptions): Chat {
   sheet.tabIndex = -1;
   sheet.setAttribute('role', 'dialog');
   sheet.setAttribute('aria-modal', 'true');
-  sheet.setAttribute('aria-label', 'Quick chat');
+  sheet.setAttribute('aria-label', 'Tactical banter');
 
   const head = el('div', 'chat-sheet-head');
-  const title = el('p', 'chat-sheet-t', 'Quick chat');
+  const title = el('p', 'chat-sheet-t', 'Tactical Banter');
+  /* the tongue pill: a recessed two-slot track with the sliding thumb, sat between the title and
+     the close key. It repaints the six tiles in place — same grid, same tiles, new words. */
+  const langPill = el('div', 'chat-lang');
+  langPill.setAttribute('role', 'group');
+  langPill.setAttribute('aria-label', 'Chat language');
+  const langKeys = {} as Record<ChatLang, HTMLButtonElement>;
+  for (const lang of CHAT_LANGS) {
+    const b = el('button', 'chat-lang-b', lang);
+    b.type = 'button';
+    b.dataset.lang = lang;
+    b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', () => setChatLang(lang));
+    langKeys[lang] = b;
+    langPill.appendChild(b);
+  }
+  const langSlide = el('span', 'chat-lang-slide');
+  langSlide.setAttribute('aria-hidden', 'true');
+  langPill.appendChild(langSlide);
   const closeKey = el('button', 'chat-sheet-x');
   closeKey.type = 'button';
-  closeKey.setAttribute('aria-label', 'Close quick chat');
+  closeKey.setAttribute('aria-label', 'Close tactical banter');
   closeKey.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>';
   closeKey.addEventListener('click', () => closeSheet());
-  head.append(title, closeKey);
+  head.append(title, langPill, closeKey);
 
   const body = el('div', 'chat-body');
   const emoteRow = el('div', 'chat-emotes');
@@ -256,18 +305,23 @@ export function createChat(o: ChatOptions): Chat {
     b.addEventListener('click', () => sendEmote(emote, b));
     emoteRow.appendChild(b);
   }
-  /* four taunt pills in a 2x2 grid: terse, scannable, one tap each */
-  for (const text of TAUNTS) {
-    const b = el('button', 'chat-phrase', text);
+  /* six taunt tiles in a balanced 2x3 grid: every line has a slot in both tongues, so the toggle
+     only rewrites textContent and the grid never moves a pixel */
+  const phraseKeys: HTMLButtonElement[] = [];
+  for (let i = 0; i < PHRASE_COUNT; i++) {
+    const b = el('button', 'chat-phrase');
     b.type = 'button';
-    b.addEventListener('click', () => sendText(text));
+    b.dir = 'auto';
+    b.dataset.index = String(i);
+    b.addEventListener('click', () => sendPhrase(i));
+    phraseKeys.push(b);
     phraseList.appendChild(b);
   }
   body.append(emoteRow, phraseList);
 
   const wait = el('div', 'chat-wait');
   const waitN = el('b', 'chat-wait-n', '0');
-  const waitL = el('span', 'chat-wait-l', 'One message every 3 seconds');
+  const waitL = el('span', 'chat-wait-l', 'One message every 1.5 seconds');
   wait.append(waitN, waitL);
 
   sheet.append(head, body, wait);
@@ -312,17 +366,58 @@ export function createChat(o: ChatOptions): Chat {
   let prevState: GameState | null = null;
   let keyOff: boolean | null = null;
   let cooling = false;
+  /* The tongue the six tiles speak. It starts from the save and is written back on every flip, so
+     the pill is exactly where the player left it the next time the sheet opens. */
+  let activeChatLang: ChatLang = readChatLang();
 
   const canChat = (): boolean => o.live() && !o.busy();
   const isCooling = (): boolean => Date.now() < lastSentAt + SEND_GAP_MS;
 
+  /* ---------- the tongue ---------- */
+
+  /** Repaint the six tiles out of the active tongue's set, in place: same slots, new words. */
+  function paintPhrases() {
+    phraseList.dataset.lang = activeChatLang;
+    for (let i = 0; i < phraseKeys.length; i++) {
+      const line = CHAT_PHRASES[activeChatLang][i] ?? '';
+      if (phraseKeys[i].textContent !== line) phraseKeys[i].textContent = line;
+    }
+  }
+
+  /** The pill itself: the slide lands on the active slot and the two keys swap their lit state. */
+  function paintLang() {
+    langPill.dataset.lang = activeChatLang;
+    sheet.dataset.lang = activeChatLang;
+    for (const lang of CHAT_LANGS) {
+      const b = langKeys[lang];
+      const on = lang === activeChatLang;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-pressed', String(on));
+    }
+  }
+
+  function setChatLang(lang: ChatLang) {
+    if (lang === activeChatLang) return;
+    activeChatLang = lang;
+    writeJson(LANG_KEY, { lang });
+    paintLang();
+    paintPhrases();
+  }
+
   /* ---------- sending ---------- */
 
-  function sendText(text: string) {
+  /**
+   * A phrase tile: the line goes up locally, and online the same `(lang, index)` pair rides the
+   * wire — the rival's client looks it back up in the same closed table, so no text crosses over.
+   */
+  function sendPhrase(index: number) {
     if (!canChat() || isCooling()) return;
+    const line = phraseLine(activeChatLang, index);
+    if (!line) return;
     lastSentAt = Date.now();
     impact('light');                     // a soft tap: the line is short, the jolt should be too
-    setBubble('me', document.createTextNode(text));
+    setBubble('me', document.createTextNode(line));
+    o.onPhrase?.(activeChatLang, index); // the wire, when there is one
     closeSheet(false);
     paintCool();
   }
@@ -355,11 +450,12 @@ export function createChat(o: ChatOptions): Chat {
     setBubble('foe', document.createTextNode(line));
   }
 
-  /* The three fixed replies are looked up in the taunt list instead of being retyped here, so the
-     bot can only ever say a phrase the sheet already offers. */
-  const MINE_REPLY = TAUNTS.find((t) => t === 'Boom! Nice step.') ?? null;
-  const LOG_REPLY = TAUNTS.find((t) => t === 'Tick tock...') ?? null;
-  const WALL_REPLY = TAUNTS.find((t) => t === 'Path closed.') ?? null;
+  /**
+   * The machine's three fixed replies are looked up in the same closed vocabulary, in whichever
+   * tongue the sheet is currently speaking, so the bot can only ever say a line the player could
+   * have tapped: 1 the trap, 2 the clock, 3 the blueprint.
+   */
+  const botReply = (index: number): string | null => phraseLine(activeChatLang, index);
 
   function react(line: string | null, now: number) {
     if (!line) return;
@@ -379,7 +475,7 @@ export function createChat(o: ChatOptions): Chat {
       for (let i = 0; i < s.mines.length; i++) {
         const mine = s.mines[i];
         if (mine && mine.triggered && !prev.mines[i]?.triggered && mine.owner !== local) {
-          react(MINE_REPLY, now);
+          react(botReply(1), now);
         }
       }
     }
@@ -388,13 +484,13 @@ export function createChat(o: ChatOptions): Chat {
     const log = s.lastEvent;
     if (log && log !== prev.lastEvent && log.type === 'log') {
       const shoved = log.moves.some((m) => s.balls.some((b) => b.id === m.ballId && b.team === local));
-      if (shoved) react(LOG_REPLY, now);
+      if (shoved) react(botReply(2), now);
     }
 
     /* a wall of yours went up */
     if (s.walls.length > prev.walls.length
       && s.walls.slice(prev.walls.length).some((w) => w.owner === local)) {
-      react(WALL_REPLY, now);
+      react(botReply(3), now);
     }
   }
 
@@ -540,10 +636,13 @@ export function createChat(o: ChatOptions): Chat {
 
   syncKey();
   paintCool();
+  paintLang();
+  paintPhrases();
   const watcher = window.setInterval(tick, POLL_MS);
 
   return {
     inboundEmote,
+    inboundPhrase,
     destroy() {
       window.clearInterval(watcher);
       window.clearTimeout(bubbleTimers.me);

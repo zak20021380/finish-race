@@ -61,6 +61,9 @@ type ClientMessage =
   /* An emote off the quick-chat sheet (`src/data/phrases.ts`): relayed to the other seats as-is,
      never judged by the board — laughing does not spend a turn. */
   | { type: 'EMOTE'; emote: string }
+  /* One of the six tactical lines, also off the sheet: a tongue plus a tile index, relayed as a
+     pair and looked back up in the receiver's own closed table — no text crosses this wire. */
+  | { type: 'PHRASE'; lang: string; index: number }
   | { type: 'RESIGN' }
   /* The room path: the host starting early, the host's size pick (2v2 / 2v1 / 3p / 4p), and a
      seat's team move — any seat may move itself, the host may move anyone. Everything else a room
@@ -420,12 +423,16 @@ const boardOf = (waiter: Waiter): { cols: number; rows: number } =>
 /** The closed emote vocabulary, mirrored from `src/data/phrases.ts`: nothing else goes on the wire. */
 const EMOTE_IDS: ReadonlySet<string> = new Set(['laugh', 'fury', 'impatient']);
 
+/** The phrase vocabulary's shape, mirrored from `src/data/phrases.ts`: two tongues, six lines. */
+const PHRASE_LANGS: ReadonlySet<string> = new Set(['EN', 'FA']);
+const PHRASE_COUNT = 6;
+
 function readMessage(raw: unknown, side: number, cols: number, rows: number): ClientMessage | null {
   if (typeof raw !== 'string') return null;
   try {
     const msg = JSON.parse(raw) as {
       type?: unknown; wide?: unknown; action?: unknown; mode?: unknown; side?: unknown; team?: unknown;
-      format?: unknown; emote?: unknown;
+      format?: unknown; emote?: unknown; lang?: unknown; index?: unknown;
     };
     if (msg.type === 'QUEUE') return { type: 'QUEUE', wide: msg.wide === true };
     if (msg.type === 'WIDEN') return { type: 'WIDEN' };
@@ -448,6 +455,12 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
     if (msg.type === 'EMOTE') {
       return typeof msg.emote === 'string' && EMOTE_IDS.has(msg.emote)
         ? { type: 'EMOTE', emote: msg.emote } : null;
+    }
+    if (msg.type === 'PHRASE') {
+      return typeof msg.lang === 'string' && PHRASE_LANGS.has(msg.lang)
+        && typeof msg.index === 'number' && Number.isInteger(msg.index)
+        && msg.index >= 0 && msg.index < PHRASE_COUNT
+        ? { type: 'PHRASE', lang: msg.lang, index: msg.index } : null;
     }
   } catch {
     /* not ours: a malformed frame is dropped, never fatal */
@@ -1830,6 +1843,15 @@ export class MatchmakerDO {
       }
       return;
     }
+    if (msg.type === 'PHRASE') {
+      /* A phrase rides the same way an emote does: every other seat, as the (lang, index) pair. */
+      if (!live.driver) return;
+      for (const m of live.members) {
+        if (!m || m.seat === ref.seat) continue;
+        this.postTo(m.ws, JSON.stringify({ type: 'PHRASE', side: ref.seat, lang: msg.lang, index: msg.index }));
+      }
+      return;
+    }
     if (msg.type === 'RESIGN' || msg.type === 'CANCEL') { this.takeSeatOver(ref); return; }
     if (msg.type !== 'MOVE') return;
     const result = live.driver.submit(ref.seat, msg.action);
@@ -1947,6 +1969,12 @@ export class MatchmakerDO {
       /* An emote is chat, not a turn: relayed the moment it arrives, whatever the board is doing. */
       this.deliver(race.seats[seat.side === 0 ? 1 : 0],
         JSON.stringify({ type: 'EMOTE', side: seat.side, emote: msg.emote }));
+      return;
+    }
+    if (msg.type === 'PHRASE') {
+      /* A phrase is chat too: the rival looks the pair back up in the closed table on their side. */
+      this.deliver(race.seats[seat.side === 0 ? 1 : 0],
+        JSON.stringify({ type: 'PHRASE', side: seat.side, lang: msg.lang, index: msg.index }));
       return;
     }
     if (msg.type !== 'MOVE') return;                     // queue traffic on a paired socket: ignored

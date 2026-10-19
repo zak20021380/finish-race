@@ -1,4 +1,4 @@
-/* chat.css — quick chat: the key above the dock, its bottom sheet, and the floating bubbles.
+/* chat.css — quick chat: the key above the dock, its centred banter sheet, and the floating bubbles.
    Nothing here changes the board: a message is a DOM pill that hangs over its sender's pawn in the
    gameplay zone, and the sheet is a modal that closes the moment a phrase is sent. */
 
@@ -123,7 +123,7 @@
 .chat-emote { display: grid; place-items: center; }
 .chat-emote svg { width: 40px; height: 40px; display: block; }
 
-/* ---- the scrim and the bottom sheet ---- */
+/* ---- the scrim and the centred banter sheet ---- */
 .chat-scrim {
   position: absolute;
   inset: 0;
@@ -135,59 +135,122 @@
 }
 .chat-scrim.open { opacity: 1; }
 
+/* A snug centred dialog: ~336px wide and never taller than 300px, floating over the scrim in the
+   middle of the screen instead of hanging off the bottom edge. The same clay face and bottom lip
+   as the rest of the shell, ringed by the hairline. */
 .chat-sheet {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 50%;
+  top: 50%;
   z-index: 15;
+  width: min(336px, calc(100vw - 20px));
+  max-height: min(300px, calc(100vh - 24px));
   display: flex;
   flex-direction: column;
   gap: 8px;
-  /* the whole sheet: head + three 72px pods + a 2x2 grid of 44px pills ≈ 246px, so the bottom
-     half of a 360x640 phone holds it with room to spare — and nothing scrolls, ever */
-  max-height: 50%;
   overflow: hidden;
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
-  border-radius: 24px 24px 0 0;
+  padding: 10px 12px;
+  border-radius: 20px;
   background: var(--clay-face);
-  box-shadow: 0 -3px 0 #080C14, var(--clay), var(--clay-ring);
+  box-shadow: 0 -2px 0 #080C14, var(--clay), var(--clay-ring);
   opacity: 0;
-  transform: translateY(24px);
+  /* translate stays on the transform so the centred anchor survives every keyframe */
+  transform: translate(-50%, -46%) scale(.96);
   transition: transform .2s cubic-bezier(.22, .61, .36, 1), opacity .2s ease;
 }
-.chat-sheet.open { opacity: 1; transform: none; }
+.chat-sheet.open { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 /* the chat pill in the console rail is inert during a log roll or while a mine is armed */
 .chat-key[disabled] { opacity: .4; filter: saturate(.4); cursor: default; }
 .chat-sheet:focus { outline: none; }
 
-.chat-sheet-head { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.chat-sheet-head { display: flex; align-items: center; gap: 8px; min-height: 34px; }
 .chat-sheet-t {
   flex: 1 1 auto;
   min-width: 0;
   margin: 0;
-  color: var(--ink);
-  font-size: 16px;
-  font-weight: 800;
+  color: #F8FAFC;
+  font-size: 14px;
+  font-weight: 700;
   letter-spacing: .01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+
+/* ---- the EN | FA tongue pill: a recessed track with a sliding clay thumb ---- */
+.chat-lang {
+  position: relative;
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 78px;
+  height: 28px;
+  padding: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #0B111D 0%, #141C2B 100%);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .55),
+    inset 0 0 0 1px rgba(255, 255, 255, .07);
+}
+.chat-lang-slide {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  height: calc(100% - 6px);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #2B3750 0%, #1D2739 100%);
+  box-shadow:
+    0 2px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    0 0 10px -2px rgba(34, 211, 238, .38);
+  transition: transform .18s cubic-bezier(.22, .61, .36, 1);
+}
+.chat-lang[data-lang="FA"] .chat-lang-slide { transform: translateX(100%); }
+.chat-lang-b {
+  position: relative;
+  z-index: 1;
+  appearance: none;
+  border: 0;
+  padding: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  cursor: pointer;
+  transition: color .14s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.chat-lang-b.is-on { color: #F8FAFC; }
+.chat-lang-b:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 1px; }
+
+/* the close key: a recessed circular well, not a flat square chip */
 .chat-sheet-x {
   flex: none;
   appearance: none;
   border: 0;
-  width: 44px;
-  height: 44px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
   padding: 0;
-  border-radius: 14px;
-  background: var(--field);
+  border-radius: 50%;
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, 0) 60%),
+    var(--field);
   color: var(--ink-soft);
   cursor: pointer;
-  box-shadow: inset 0 0 0 1px var(--hair), var(--inset);
+  box-shadow:
+    inset 0 0 0 1px var(--hair),
+    inset 0 2px 4px rgba(0, 0, 0, .5),
+    0 1px 0 rgba(255, 255, 255, .05);
+  transition: transform .12s ease;
 }
-.chat-sheet-x .ico { width: 18px; height: 18px; }
-.chat-sheet-x:active { transform: translateY(1px); }
+.chat-sheet-x .ico { width: 14px; height: 14px; }
+.chat-sheet-x:active { transform: scale(.94); }
 .chat-sheet-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
 .chat-body {
@@ -355,46 +418,58 @@
 .chat-bubble .emote-hurry .eh-glass { animation-duration: .95s; }
 .chat-bubble .emote-hurry .ec-eyes { animation-duration: 1.5s; }
 
-/* the four taunts: a tight 2x2 grid of sculpted pills, 12px bold, one tap each */
+/* the six taunts: a balanced 2x3 grid of dark-clay chips, 12px radius, one tap each. The rows are
+   fixed, so flipping the tongue rewrites text in place and the grid never shifts a pixel. */
 .chat-phrases {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 44px;
   gap: 6px 8px;
 }
 .chat-phrase {
   appearance: none;
-  border: 0;
+  min-width: 0;
   min-height: 44px;
-  padding: 0 10px;
+  padding: 0 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #2B3750 0%, #232E44 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  background: linear-gradient(180deg, #1A2333 0%, #101725 100%);
   color: var(--ink);
   font-family: inherit;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: .01em;
-  line-height: 1.1;
-  white-space: nowrap;
+  line-height: 1.15;
+  text-align: center;
+  overflow-wrap: anywhere;
+  overflow: hidden;
   cursor: pointer;
   box-shadow:
-    0 3px 0 #0B111D,
-    inset 0 1px 0 rgba(255, 255, 255, .1),
-    inset 0 -2px 3px rgba(0, 0, 0, .3),
-    inset 0 0 0 1px var(--hair);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+    0 2px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    inset 0 -2px 3px rgba(0, 0, 0, .32);
+  transition: transform .1s ease, box-shadow .14s ease, border-color .14s ease;
   -webkit-tap-highlight-color: transparent;
 }
+/* the tap sinks it into the clay and flashes the amber/cyan rim — momentary, then gone */
 .chat-phrase:active {
-  transform: translateY(2px);
+  transform: scale(.97);
+  border-color: rgba(251, 191, 36, .65);
   box-shadow:
-    0 1px 0 #0B111D,
-    inset 0 2px 4px rgba(0, 0, 0, .45),
-    inset 0 0 0 1px var(--hair);
+    0 0 0 1px rgba(251, 191, 36, .65),
+    0 0 14px -2px rgba(34, 211, 238, .55),
+    inset 0 2px 5px rgba(0, 0, 0, .5);
 }
 .chat-phrase:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 1px; }
+/* the Persian tongue: Vazirmatn when the device has it, then the system's own Persian fallbacks */
+.chat-phrases[data-lang="FA"] .chat-phrase {
+  font-family: 'Vazirmatn', 'Vazir', 'Segoe UI', Tahoma, 'Noto Naskh Arabic', system-ui, sans-serif;
+  font-size: 12.5px;
+  letter-spacing: 0;
+}
 
 /* cooling down: the grid is replaced by the remaining seconds, at the same compact height */
 .chat-wait {
@@ -492,6 +567,7 @@ html.reduced-motion .chat-sheet,
 html.reduced-motion .chat-bubble,
 html.reduced-motion .chat-scrim,
 html.reduced-motion .chat-toast { transition: none; animation: none; }
+html.reduced-motion .chat-lang-slide { transition: none; }
 html.reduced-motion .chat-wait-n { animation: none; }
 html.reduced-motion .chat-emote-btn.is-tapped { animation: none; }
 html.reduced-motion .emote-haha,
@@ -502,6 +578,7 @@ html.reduced-motion .emote-hurry .eh-glass,
 html.reduced-motion .emote-hurry .ec-eyes { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .chat-sheet, .chat-bubble, .chat-scrim, .chat-toast { transition: none; animation: none; }
+  .chat-lang-slide { transition: none; }
   .chat-wait-n { animation: none; }
   .chat-emote-btn.is-tapped { animation: none; }
   .emote-haha, .emote-grrr, .emote-hurry,

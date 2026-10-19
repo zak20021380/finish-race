@@ -1213,6 +1213,8 @@ function startGame(setup: StartSetup) {
     });
     /* the rival's emote: the same bubble and the same "Haha!" as a local tap, over their own pawn */
     session.onEmote((emote) => chat.inboundEmote(emote));
+    /* the rival's tactical line: their (lang, index) pair looked back up in the same closed table */
+    session.onPhrase((lang, index) => chat.inboundPhrase(lang, index));
     session.onEnd((end) => endOnline(end));
     session.onReject(() => {
       notify('error');
@@ -1732,6 +1734,8 @@ const chat = createChat({
   chips,
   /* an online race relays every emote to the rival; offline the bubble is the whole message */
   onEmote: (id) => { active?.sendEmote(id); },
+  /* and every phrase too, as the closed (lang, index) pair the sheet is built from */
+  onPhrase: (lang, index) => { active?.sendPhrase(lang, index); },
   state: () => state,
   localSide: () => localSide,
   /* the seat's live pawn: its animated ball centre mapped through the renderer's own layout into

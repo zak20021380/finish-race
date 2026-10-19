@@ -34,7 +34,7 @@
  * reduced-motion block stills the sweep, the pulses and the flash.
  */
 import { contendersIn, dimsFor, type Action } from './rules';
-import { isChatEmoteId, type ChatEmoteId } from './data/phrases';
+import { PHRASE_COUNT, isChatEmoteId, isChatLang, type ChatEmoteId, type ChatLang } from './data/phrases';
 import { menuState, motionReduced, settings } from './settings';
 import { audioContext } from './sound';
 import { payout, profile } from './storage';
@@ -281,6 +281,8 @@ export interface OnlineSession extends OnlineMatch {
   send(action: Action): boolean;
   /** Send one emote to the rival. False when the socket is gone. */
   sendEmote(emote: ChatEmoteId): boolean;
+  /** Send one tactical line to the rival, as its closed `(lang, index)` pair. */
+  sendPhrase(lang: ChatLang, index: number): boolean;
   /** Forfeit: the rival wins immediately. */
   resign(): void;
   /** Let the socket go (no forfeit): the session is done being a race. */
@@ -289,6 +291,8 @@ export interface OnlineSession extends OnlineMatch {
   onMove(cb: (action: Action, side: number) => void): void;
   /** An emote the rival sent. */
   onEmote(cb: (emote: ChatEmoteId, side: number) => void): void;
+  /** A tactical line the rival sent, as the pair they tapped. */
+  onPhrase(cb: (lang: ChatLang, index: number, side: number) => void): void;
   /** The race ended without a finish line. */
   onEnd(cb: (end: RaceEnd) => void): void;
   /** The matchmaker refused a move: the two boards have drifted apart. */
@@ -301,6 +305,7 @@ type RaceFrame =
       opponent: { name: string; tiq: number; tier: string; flag: string } }
   | { type: 'MOVE'; side: 0 | 1; action: Action }
   | { type: 'EMOTE'; side: 0 | 1; emote: ChatEmoteId }
+  | { type: 'PHRASE'; side: 0 | 1; lang: ChatLang; index: number }
   | { type: 'REJECT'; reason: string }
   | { type: 'RESIGN' | 'OPPONENT_LEFT'; side: 0 | 1 }
   /* The two the Admin Command Center's server half sends: a refused queue, and a pulled room. */
@@ -468,6 +473,11 @@ function parseFrame(raw: string, sizes?: readonly number[]): RaceFrame | null {
       return action ? { type: 'MOVE', side, action } : null;
     }
     if (msg.type === 'EMOTE') return isChatEmoteId(msg.emote) ? { type: 'EMOTE', side, emote: msg.emote } : null;
+    if (msg.type === 'PHRASE') {
+      return isChatLang(msg.lang) && typeof msg.index === 'number' && Number.isInteger(msg.index)
+        && msg.index >= 0 && msg.index < PHRASE_COUNT
+        ? { type: 'PHRASE', side, lang: msg.lang, index: msg.index } : null;
+    }
     if (msg.type === 'REJECT') return { type: 'REJECT', reason: typeof msg.reason === 'string' ? msg.reason : 'refused' };
     if (msg.type === 'RESIGN' || msg.type === 'OPPONENT_LEFT') return { type: msg.type, side };
     if (msg.type === 'ERROR') return { type: 'ERROR', reason: typeof msg.reason === 'string' ? msg.reason : 'REFUSED' };
@@ -492,10 +502,13 @@ let raceMove: ((action: Action, side: 0 | 1) => void) | null = null;
 let raceEnd: ((end: RaceEnd) => void) | null = null;
 let raceReject: ((reason: string) => void) | null = null;
 let raceEmote: ((emote: ChatEmoteId, side: number) => void) | null = null;
+let racePhrase: ((lang: ChatLang, index: number, side: number) => void) | null = null;
 /** Moves that landed between the match and the race screen: replayed the moment it subscribes. */
 let raceQueue: Array<{ action: Action; side: 0 | 1 }> = [];
 /** Same for an emote: a rival can laugh at the match-found flash before the board subscribes. */
 let raceEmoteQueue: Array<{ emote: ChatEmoteId; side: number }> = [];
+/** And same for a phrase: the line waits with its pair instead of being dropped. */
+let racePhraseQueue: Array<{ lang: ChatLang; index: number; side: number }> = [];
 
 /** The seat the stage just locked in, for the race that follows it. Null until there is one. */
 export const onlineRace = (): OnlineSession | null => race;
@@ -515,8 +528,10 @@ function forget(sock: WebSocket): void {
     raceEnd = null;
     raceReject = null;
     raceEmote = null;
+    racePhrase = null;
     raceQueue = [];
     raceEmoteQueue = [];
+    racePhraseQueue = [];
   }
   try {
     sock.close(1000, 'done');
@@ -534,8 +549,10 @@ function endRace(sock: WebSocket, win: boolean, why: RaceEnd['why']): void {
   raceEnd = null;
   raceReject = null;
   raceEmote = null;
+  racePhrase = null;
   raceQueue = [];
   raceEmoteQueue = [];
+  racePhraseQueue = [];
   ended?.({ win, why });
 }
 
@@ -565,6 +582,15 @@ function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_F
         return false;
       }
     },
+    sendPhrase(lang, index) {
+      if (race?.socket !== sock || sock.readyState !== 1) return false;
+      try {
+        sock.send(JSON.stringify({ type: 'PHRASE', lang, index }));
+        return true;
+      } catch {
+        return false;
+      }
+    },
     resign() {
       post(sock, JSON.stringify({ type: 'RESIGN' }));
     },
@@ -582,6 +608,12 @@ function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_F
       const queued = raceEmoteQueue;
       raceEmoteQueue = [];
       for (const e of queued) cb(e.emote, e.side);
+    },
+    onPhrase(cb) {
+      racePhrase = cb;
+      const queued = racePhraseQueue;
+      racePhraseQueue = [];
+      for (const p of queued) cb(p.lang, p.index, p.side);
     },
     onEnd(cb) {
       raceEnd = cb;
@@ -674,6 +706,9 @@ function wire(sock: WebSocket): void {
     } else if (frame.type === 'EMOTE') {
       if (raceEmote) raceEmote(frame.emote, frame.side);
       else raceEmoteQueue.push({ emote: frame.emote, side: frame.side });
+    } else if (frame.type === 'PHRASE') {
+      if (racePhrase) racePhrase(frame.lang, frame.index, frame.side);
+      else racePhraseQueue.push({ lang: frame.lang, index: frame.index, side: frame.side });
     } else if (frame.type === 'REJECT') {
       raceReject?.(frame.reason);
     } else if (frame.type === 'ABORTED') {

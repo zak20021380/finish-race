@@ -1,10 +1,15 @@
 /**
  * phrases.ts — the entire vocabulary of quick chat.
  *
- * There is no free text anywhere in `chat.ts`: every message a player can send is one of the
- * four tactical one-liners or one of the three psychological emote pods below. Both lists are
- * closed and about the board only — no names, no appearance, no nationality, nothing about the
- * person on the other side. Anything that did not ship in this file cannot be said.
+ * There is no free text anywhere in `chat.ts`: every message a player can send is one of the six
+ * tactical one-liners — in either tongue the sheet speaks — or one of the three psychological emote
+ * pods below. Both lists are closed and about the board only — no names, no appearance, no
+ * nationality, nothing about the person on the other side. Anything that did not ship in this file
+ * cannot be said.
+ *
+ * A phrase travels the wire as a `(lang, index)` pair, never as text: the sender's tongue picks the
+ * set, the index picks the line, and the receiver renders it out of this same closed table. A
+ * hand-crafted frame can therefore not smuggle a string onto a rival's screen.
  *
  * Emotes are inline SVG (never emoji), drawn as glossy 3D sticker icons in the language of
  * Fluent / AAA mobile-game emote packs: one large saturated sphere with a polished radial light,
@@ -46,15 +51,51 @@ export interface ChatEmote {
 }
 
 /**
- * The four tactical taunts — one per psychological beat: the mine, the wall, the clock, the ego.
- * Order is fixed: the sheet paints them into a 2×2 grid in exactly this order.
+ * The two tongues the banter sheet speaks. EN first: it is the default tile order and the toggle's
+ * left slot, so the pill and the grid always agree on what "first" means.
  */
-export const TAUNTS: readonly string[] = [
-  'Boom! Nice step.',
-  'Path closed.',
-  'Tick tock...',
-  'Outplayed.',
-];
+export type ChatLang = 'EN' | 'FA';
+
+/** Every tongue the sheet can speak, in toggle order. */
+export const CHAT_LANGS: readonly ChatLang[] = ['EN', 'FA'];
+
+/**
+ * The six tactical lines, one index per psychological beat — the trap, the clock, the blueprint,
+ * the read, the luck jab, the salute. The sets are count-matched so flipping the toggle repaints
+ * tiles in place: same six slots, same order, only the words change.
+ */
+export const CHAT_PHRASES: Record<ChatLang, readonly string[]> = {
+  EN: [
+    'Calculated.',
+    'Right into my trap!',
+    'Tick-tock, genius...',
+    'All part of the plan.',
+    'Predictable.',
+    'Respect. Nice move!',
+  ],
+  FA: [
+    'نقشه بود داداش!',
+    'دقیقاً رفتی تو تله!',
+    'فکر کن، عجله نکن...',
+    'دستت رو خونده بودم!',
+    'شانس آوردی!',
+    'ایول، قشنگ بود!',
+  ],
+};
+
+/** How many tiles the sheet paints — one per line, in every tongue. */
+export const PHRASE_COUNT = CHAT_PHRASES.EN.length;
+
+/** A language code that is one of the two the vocabulary ships. */
+export const isChatLang = (v: unknown): v is ChatLang => v === 'EN' || v === 'FA';
+
+/** A tile index the closed vocabulary accepts, in any tongue. */
+export const isPhraseIndex = (v: unknown): v is number =>
+  typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < PHRASE_COUNT;
+
+/** The line behind a `(lang, index)` pair, or null when either half is outside the vocabulary. */
+export const phraseLine = (lang: ChatLang, index: number): string | null =>
+  isPhraseIndex(index) ? CHAT_PHRASES[lang]?.[index] ?? null : null;
 
 /** Every emote id, in sheet order. The wire and a roaming frame accept nothing outside this list. */
 export const EMOTE_IDS: readonly ChatEmoteId[] = ['laugh', 'fury', 'impatient'];
