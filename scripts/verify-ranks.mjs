@@ -446,20 +446,57 @@ const AUDIT = () => {
   return out;
 };
 
-/* Nations board probe: a bound country gets the ~5px gap bar; an unbound one
-   asks for a flag. Either shape must render inside .nat-hero without overflow. */
+/* Nations board probe: the 48px HUD is either the dashed invitation or the
+   chosen nation's rank / flag / total. The old Set-flag card must stay gone. */
 const PROBE_NATIONS = () => {
-  const out = { pass: true, fails: [] };
-  const hero = document.querySelector('#ranks-nations .nat-hero');
-  if (!hero) { out.pass = false; out.fails.push('nations hero missing'); return out; }
-  const bar = hero.querySelector('.mh-ptrack');
-  const pointed = hero.querySelector('.nat-hero-btn');
-  if (bar) {
-    const h = bar.getBoundingClientRect().height;
-    if (h < 4.5 || h > 6.5) { out.pass = false; out.fails.push(`nations bar ${h.toFixed(1)}px, want ~5px`); }
-  } else if (!pointed) {
-    out.pass = false; out.fails.push('nations hero has neither a gap bar nor a set-flag key');
+  const out = { pass: true, fails: [], state: '' };
+  const bad = (m) => { out.pass = false; out.fails.push(m); };
+  const near = (a, b, tol) => Math.abs(a - b) <= tol;
+  const pane = document.getElementById('ranks-nations');
+  if (!pane) { bad('nations pane missing'); return out; }
+
+  if (pane.querySelector('.nat-hero, .nat-hero-btn, .nat-foot')) bad('legacy flag card is still in the DOM');
+  if (/your flag is not on the board yet/i.test(pane.textContent ?? '')) bad('legacy "Your flag is not on the board yet" copy is back');
+  if (/\bset flag\b/i.test(pane.textContent ?? '')) bad('legacy "Set flag" copy is back');
+
+  const hud = pane.querySelector('.nation-hud');
+  if (!hud) { bad('nation HUD missing'); return out; }
+  const h = hud.getBoundingClientRect().height;
+  if (!near(h, 48, 1.5)) bad(`nation HUD is ${h.toFixed(1)}px tall — want 48px`);
+  if (hud.querySelector('.nh-av')?.getBoundingClientRect().height > 44) bad('nation HUD avatar is taller than the strip');
+
+  if (hud.classList.contains('is-unset')) {
+    out.state = 'unset';
+    const cs = getComputedStyle(hud);
+    if (cs.borderTopStyle !== 'dashed') bad(`unset HUD border is ${cs.borderTopStyle}, want dashed`);
+    if (!/rgba\(15,\s*22,\s*36,\s*0\.7\)/.test(cs.backgroundColor)) bad(`unset HUD fill is ${cs.backgroundColor}, want rgba(15,22,36,0.7)`);
+    if (!/No nation selected/i.test(hud.textContent ?? '')) bad(`unset HUD copy is "${hud.textContent?.trim()}"`);
+    if (!/Tap to represent your flag/i.test(hud.textContent ?? '')) bad('unset HUD is missing the tactical hint');
+    if (!hud.querySelector('.nh-globe use[href="#i-globe"]')) bad('unset HUD globe icon missing');
+    const pill = hud.querySelector('.nh-pill');
+    if (!pill || !/^Select Flag$/i.test(pill.textContent?.trim() ?? '')) bad(`unset HUD pill is "${pill?.textContent}"`);
+  } else if (hud.classList.contains('is-set')) {
+    out.state = 'selected';
+    const rank = hud.querySelector('.nh-rank');
+    if (!rank || !/^#\d+$/.test(rank.textContent?.trim() ?? '')) bad(`selected HUD rank is "${rank?.textContent}"`);
+    if (!hud.querySelector('.nh-av .fp')) bad('selected HUD flag avatar missing');
+    if (!hud.querySelector('.nh-tag') || !/your nation/i.test(hud.querySelector('.nh-tag').textContent ?? '')) bad('selected HUD YOUR NATION tag missing');
+    if (!hud.querySelector('.nh-score use[href="#i-brain"]')) bad('selected HUD TIQ is not the shared brain token');
+    if (!/^\d[\d,]*$/.test(hud.querySelector('.nh-score b')?.textContent?.trim() ?? '')) bad(`selected HUD score is "${hud.querySelector('.nh-score b')?.textContent}"`);
+    if (!/^#?\d/.test(rank?.textContent?.trim() ?? '')) bad('selected HUD has no numeric rank');
+  } else {
+    bad('nation HUD is neither unset nor selected');
   }
+  const widest = hud.getBoundingClientRect().right;
+  if (widest > window.innerWidth + 0.5) bad(`nation HUD clips the right edge (${widest.toFixed(1)})`);
+  if (hud.scrollWidth > hud.clientWidth + 1) bad(`nation HUD overflows horizontally (${hud.scrollWidth} > ${hud.clientWidth})`);
+  if (hud.scrollHeight > hud.clientHeight + 1) bad(`nation HUD overflows vertically (${hud.scrollHeight} > ${hud.clientHeight})`);
+  const pill = pane.querySelector('.nat-pill');
+  if (pill && pill.getBoundingClientRect().top < hud.getBoundingClientRect().bottom - 0.5) bad('event pill overlaps the nation HUD');
+  if (document.scrollingElement.scrollWidth > window.innerWidth + 1) bad('page scrolls horizontally on Nations IQ');
+  if (document.scrollingElement.scrollHeight > window.innerHeight + 1) bad('page scrolls vertically on Nations IQ');
+  const sc = document.getElementById('ranks-scroll');
+  if (sc && sc.scrollWidth > sc.clientWidth + 1) bad(`#ranks-scroll overflows on Nations IQ: ${sc.scrollWidth} > ${sc.clientWidth}`);
   return out;
 };
 
@@ -528,25 +565,64 @@ try {
     await pg.click('.ranks-tabs [data-board="minds"]');
     await pg.waitForTimeout(400);
 
+    /* the thumb slides to the active board */
+    const thumbBefore = w === 360
+      ? await pg.evaluate(() => document.querySelector('.ranks-tabs .mode-thumb').getBoundingClientRect().left)
+      : null;
+    await pg.click('.ranks-tabs [data-board="nations"]');
+    await pg.waitForTimeout(800);
     if (w === 360) {
-      /* the thumb slides to the active board */
-      const before = await pg.evaluate(() => document.querySelector('.ranks-tabs .mode-thumb').getBoundingClientRect().left);
-      await pg.click('.ranks-tabs [data-board="nations"]');
-      await pg.waitForTimeout(500);
       const after = await pg.evaluate(() => document.querySelector('.ranks-tabs .mode-thumb').getBoundingClientRect().left);
-      if (after > before + 40) pass(`${tag} thumb-slides`);
-      else fail(`${tag} thumb-slides`, `thumb left ${before.toFixed(0)} → ${after.toFixed(0)}`);
+      if (after > thumbBefore + 40) pass(`${tag} thumb-slides`);
+      else fail(`${tag} thumb-slides`, `thumb left ${thumbBefore.toFixed(0)} → ${after.toFixed(0)}`);
+    }
 
-      /* boards: nations hero bar */
-      const nat = await pg.evaluate(`(${PROBE_NATIONS.toString()})()`);
-      if (nat.pass) {
-        pass(`${tag} nations`);
-        await pg.screenshot({ path: path.join(SHOTS, `ranks-${tag}-nations.png`) });
-      } else fail(`${tag} nations`, nat.fails.join('\n- '));
+    /* 1) unset HUD: the dashed invitation replaces the old Set-flag card */
+    const unset = await pg.evaluate(`(${PROBE_NATIONS.toString()})()`);
+    if (unset.pass && unset.state === 'unset') {
+      pass(`${tag} nations-unset`);
+      await pg.screenshot({ path: path.join(SHOTS, `ranks-${tag}-nations.png`) });
+    } else fail(`${tag} nations-unset`, unset.fails.join('\n- ') || `state ${unset.state}`);
 
-      /* back to minds, then the mind sheet from a runner row */
-      await pg.click('.ranks-tabs [data-board="minds"]');
-      await pg.waitForTimeout(400);
+    /* 2) the HUD opens the native picker in place, and the pick lands at once */
+    await pg.click('#ranks-nations .nation-hud');
+    await pg.waitForTimeout(350);
+    const pickerOpen = await pg.evaluate(() => {
+      const s = document.getElementById('sheet-country');
+      return !!s && !s.hidden && s.getBoundingClientRect().height > 0;
+    });
+    if (pickerOpen) pass(`${tag} nation-picker-opens`);
+    else fail(`${tag} nation-picker-opens`, 'country sheet did not open');
+    await pg.fill('#country-q', 'Germany');
+    await pg.waitForTimeout(150);
+    await pg.click('#country-list .pick-row[data-code="DE"]');
+    await pg.waitForTimeout(1100);
+
+    const selected = await pg.evaluate(`(${PROBE_NATIONS.toString()})()`);
+    if (selected.pass && selected.state === 'selected') {
+      pass(`${tag} nations-selected`);
+      await pg.screenshot({ path: path.join(SHOTS, `ranks-${tag}-nations-selected.png`) });
+    } else fail(`${tag} nations-selected`, selected.fails.join('\n- ') || `state ${selected.state}`);
+
+    const germany = await pg.evaluate(() => {
+      const hud = document.querySelector('#ranks-nations .nation-hud');
+      return {
+        rank: hud?.querySelector('.nh-rank')?.textContent?.trim() ?? '',
+        name: hud?.querySelector('.nh-name')?.textContent?.trim() ?? '',
+        score: hud?.querySelector('.nh-score b')?.textContent?.trim() ?? '',
+        tag: hud?.querySelector('.nh-tag')?.textContent?.trim() ?? '',
+        sheet: !document.getElementById('sheet-country')?.hidden,
+        avatar: !!hud?.querySelector('.nh-av .fp'),
+      };
+    });
+    if (germany.rank === '#4' && germany.name === 'Germany' && germany.score === '9,920'
+      && /your nation/i.test(germany.tag) && !germany.sheet && germany.avatar) pass(`${tag} nations-pick-live`);
+    else fail(`${tag} nations-pick-live`, `rank ${germany.rank}, name "${germany.name}", score ${germany.score}, tag "${germany.tag}", sheet open ${germany.sheet}, avatar ${germany.avatar}`);
+
+    /* back to minds, then the mind sheet from a runner row */
+    await pg.click('.ranks-tabs [data-board="minds"]');
+    await pg.waitForTimeout(400);
+    if (w === 360) {
       try {
         await pg.click('#ranks-minds .rank-row.lb-row', { timeout: 4000 });
         await pg.waitForTimeout(600);

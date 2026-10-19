@@ -47,6 +47,7 @@ import {
   type Trend,
 } from './data';
 import { nameOf } from './countries';
+import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
 import { bindSquadById, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadKind, squadLetter, type RankedSquad } from './squads';
 import { impact, notify, tgUser } from './telegram';
@@ -368,6 +369,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   let myRosterKey: string | null = null;
   /** The same cup behind the Nations IQ event pill, fetched with the country board. */
   let natCup: GrandCup | null = null;
+  /** The last country board, so a flag change repaints before the refetch lands. */
+  let nationRows: CountryRow[] | null = null;
   let tick = 0;
 
   /** Clean user handle: "@username" when Telegram provides one, else first name, else null. */
@@ -399,9 +402,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   const myTrophyScore = (): number =>
     Math.max(0, profile.stats.wins * 120 + profile.stats.games * 20);
-
-  const myRecord = (): string =>
-    `${profile.stats.wins}W · ${profile.stats.losses}L`;
 
   const soloStandingEl = (): HTMLElement | null =>
     document.getElementById('solo-standing');
@@ -465,9 +465,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       const pane = panes[k];
       if (pane) pane.hidden = k !== board;
     }
-    // "Your Standing" is a player fact — it belongs to the two IQ boards, never to a guild.
+    // "Your Standing" is the Top Minds HUD. Nations paints its own nation strip.
     const standing = soloStandingEl();
-    if (standing) standing.hidden = board === 'guilds';
+    if (standing) standing.hidden = board !== 'minds';
     // The screen's aura keys off your own TIQ, wherever on the ladder the eye is.
     if (ranksScreen) ranksScreen.dataset.tier = tierOf(myTrophyScore());
     // The squad banner belongs EXCLUSIVELY to the Intellect Guilds board.
@@ -1500,54 +1500,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return li;
   }
 
-  /** The compact "Your Standing" row — used by Nations IQ, where the hero strip is
-      the nation's card and this one stays personal. */
-  function paintSoloStanding(opts: {
-    rankText: string;
-    percentText: string | null;
-    score: number;
-    extraSub: string | null;
-  }): void {
-    const host = soloStandingEl();
-    if (!host) return;
-    host.hidden = false;
-    host.textContent = '';
-    // The compact row is the nations form; Top Minds paints the tall hero card.
-    host.classList.remove('mh');
-
-    const av = document.createElement('span');
-    av.className = 'standing-avatar';
-    av.setAttribute('aria-hidden', 'true');
-    const h = youHandle() ?? 'Y';
-    av.textContent = h.replace(/^@/, '').slice(0, 1).toUpperCase() || 'Y';
-
-    const main = document.createElement('span');
-    main.className = 'standing-main';
-    const name = document.createElement('b');
-    name.className = 'standing-name';
-    name.textContent = youLabel();
-    name.title = youLabel();
-    const sub = document.createElement('small');
-    sub.className = 'standing-sub';
-    const detail = [opts.rankText !== '-' ? opts.rankText : '', opts.percentText ?? '', myRecord(), opts.extraSub ?? '']
-      .filter((p) => p.length > 0)
-      .join(' · ');
-    sub.textContent = detail;
-    main.append(name, sub);
-
-    const score = document.createElement('span');
-    score.className = 'standing-score';
-    score.append(svgIcon('#i-brain', 'tiq'));
-    const num = document.createElement('b');
-    num.textContent = opts.score.toLocaleString('en-US');
-    score.append(num);
-    score.title = `${opts.score.toLocaleString('en-US')} Tactical IQ`;
-    score.setAttribute('aria-label', `${opts.score.toLocaleString('en-US')} Tactical IQ, ${detail}`);
-
-    host.append(av, main, score);
-    host.setAttribute('aria-label', `Your Standing: ${youLabel()}, ${detail}, ${opts.score.toLocaleString('en-US')} Tactical IQ`);
-  }
-
   /**
    * Your last five, read from the only history the save keeps: a win streak is bounded
    * by the loss that ended the one before it, so everything past it is unrecorded
@@ -1897,34 +1849,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     selectBoard('guilds');
   });
 
-  /**
-   * On Nations IQ the hero strip above already carries the flag, the rank and the
-   * gap, so this card stops repeating them and states the only fact that is
-   * genuinely personal: your own record and your own TIQ. With no country bound the
-   * hero asks for one, so the card steps out entirely.
-   */
-  function paintNationsStanding(rows: CountryRow[] | null): void {
-    const host = soloStandingEl();
-    if (!host) return;
-    const code = profile.country;
-    const hit = code && rows ? rows.find((c) => c.code === code) : undefined;
-    if (!code || !hit) {
-      host.hidden = true;
-      return;
-    }
-    paintSoloStanding({
-      rankText: '-',
-      percentText: null,
-      score: myTrophyScore(),
-      extraSub: null,
-    });
-  }
-
   /** A one-line event banner; the countdown is the Grand Cup's own kickoff. */
   const natPillText = (event: GrandCup | null): string =>
     event
-      ? `Nations Cup · ${formatCountdown(event.startsAt)} to kickoff · wins count double for your flag.`
-      : 'Nations Cup · bracket opens soon · wins count double for your flag.';
+      ? `Nations Cup · ${formatCountdown(event.startsAt)} · wins count double`
+      : 'Nations Cup · bracket soon · wins count double';
 
   function nationsPill(cup: GrandCup | null): HTMLElement {
     const p = document.createElement('p');
@@ -1941,93 +1870,81 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   /**
-   * Own-nation strip: where the flag sits, how far the nation above it is, and what
-   * the bar means. With no country bound it asks for one rather than showing an
-   * empty row — the same route the compact standing card uses.
+   * The Nations HUD: one 48px strip that either asks for a flag or wears the
+   * chosen nation's standing. Both states are the same button, so the picker
+   * opens in place and switching the flag never leaves the ladder.
    */
-  function nationsHero(rows: CountryRow[]): HTMLElement {
-    const card = document.createElement('section');
-    card.className = 'nat-hero';
+  function nationsHud(rows: CountryRow[]): HTMLElement {
+    const hud = document.createElement('button');
+    hud.type = 'button';
+    hud.className = 'nation-hud';
     const code = profile.country;
+    const openPicker = (): void => {
+      impact('light');
+      openCountryPicker(api.sheets);
+    };
 
     if (!code) {
-      card.append(flagPhoto(null, 'fp-lg'));
-      const txt = document.createElement('span');
-      txt.className = 'nat-hero-txt';
-      const b = document.createElement('b');
-      b.textContent = 'Your flag is not on the board yet';
-      const s = document.createElement('small');
-      s.textContent = 'Pick a country and every race you win starts counting for it.';
-      txt.append(b, s);
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'nat-hero-btn';
-      btn.textContent = 'Set flag';
-      btn.setAttribute('aria-label', 'Pick your country in Profile');
-      btn.addEventListener('click', () => { impact('light'); api.router.go('profile'); });
-      card.append(txt, btn);
-      return card;
+      hud.classList.add('is-unset');
+      hud.setAttribute('aria-label', 'No nation selected. Tap to represent your flag.');
+      const globe = document.createElement('span');
+      globe.className = 'nh-globe';
+      globe.append(svgIcon('#i-globe', 'nh-globe-ico'));
+      const copy = document.createElement('span');
+      copy.className = 'nh-copy';
+      copy.textContent = 'No nation selected • Tap to represent your flag';
+      const pill = document.createElement('span');
+      pill.className = 'nh-pill';
+      pill.textContent = 'Select Flag';
+      hud.append(globe, copy, pill);
+      hud.addEventListener('click', openPicker);
+      return hud;
     }
 
     const hit = rows.find((c) => c.code === code);
-    const above = hit ? rows.find((c) => c.rank === hit.rank - 1) : undefined;
-    const nm = nameOf(code) || code;
+    const nm = hit?.name ?? (nameOf(code) || code);
+    const rank = document.createElement('span');
+    rank.className = `nh-rank${hit ? ` ${podiumOf(hit.rank)}` : ''}`.trim();
+    rank.textContent = hit ? `#${hit.rank}` : '#—';
+    rank.title = hit ? `Rank ${hit.rank} on Nations IQ` : 'Not on the board yet';
 
-    card.append(flagPhoto(code, 'fp-lg'));
-    const txt = document.createElement('span');
-    txt.className = 'nat-hero-txt';
-    const b = document.createElement('b');
-    b.textContent = hit
-      ? `${nm}'s minds rank #${hit.rank} — every win you take raises the average`
-      : `${nm} is warming up — no ranked races yet`;
-    const s = document.createElement('small');
-    s.textContent = hit
-      ? (above ? `${(above.points - hit.points).toLocaleString('en-US')} TIQ behind ${above.name}` : 'No nation above you — hold the line.')
-      : 'Race to put your country on the ladder.';
-    txt.append(b, s);
-    card.append(txt);
+    const av = document.createElement('span');
+    av.className = 'nh-av';
+    av.append(flagPhoto(code, 'fp-nation'));
 
-    if (hit) {
-      const bar = document.createElement('span');
-      bar.className = 'mh-ptrack is-cyan';
-      const fill = document.createElement('i');
-      fill.style.width = above
-        ? `${Math.max(4, Math.min(100, Math.round((hit.points / above.points) * 100)))}%`
-        : '100%';
-      bar.append(fill);
-      bar.setAttribute('role', 'presentation');
-      card.append(bar);
-    }
-    return card;
+    const id = document.createElement('span');
+    id.className = 'nh-id';
+    const name = document.createElement('b');
+    name.className = 'nh-name';
+    name.textContent = nm;
+    name.title = nm;
+    const tag = document.createElement('span');
+    tag.className = 'nh-tag';
+    tag.textContent = 'Your Nation';
+    id.append(name, tag);
+
+    const points = hit?.points ?? 0;
+    const score = document.createElement('span');
+    score.className = 'nh-score';
+    score.append(svgIcon('#i-brain', 'nh-tiq'));
+    const num = document.createElement('b');
+    num.textContent = points.toLocaleString('en-US');
+    score.append(num);
+    score.title = `${points.toLocaleString('en-US')} Tactical IQ`;
+
+    hud.classList.add('is-set');
+    hud.append(rank, av, id, score);
+    const seen = `${nm}, ${hit ? `rank ${hit.rank}` : 'not on the board yet'}, ${points.toLocaleString('en-US')} Tactical IQ`;
+    hud.setAttribute('aria-label', `Your Nation: ${seen}. Activate to change your nation.`);
+    hud.title = 'Tap to change your nation';
+    hud.addEventListener('click', openPicker);
+    return hud;
   }
 
-  function nationsFoot(): HTMLElement {
-    const p = document.createElement('p');
-    p.className = 'nat-foot';
-    p.textContent = 'Sharpest nations. Your flag needs your brain.';
-    return p;
-  }
-
-  async function loadNations(): Promise<void> {
+  /** The whole Nations pane from a row set: podium, HUD, event pill and ladder. */
+  function paintNations(rows: CountryRow[], event: GrandCup | null): void {
     const el = panes.nations;
     if (!el) return;
-    if (!loadedBoard.nations) el.innerHTML = skel(6);
-    let rows: CountryRow[];
-    let event: GrandCup;
-    try {
-      const pair = await Promise.all([getCountryRanking(), getGrandCup()]);
-      rows = pair[0];
-      event = pair[1];
-    } catch {
-      el.innerHTML = empty('Rankings unavailable. Check your connection and try again.');
-      paintNationsStanding(null);
-      return;
-    }
-    if (!rows.length) {
-      el.innerHTML = empty('No countries ranked yet.');
-      paintNationsStanding([]);
-      return;
-    }
     natCup = event;
     paintPodium(rows.slice(0, 3).map((c) => ({
       rank: c.rank,
@@ -2036,7 +1953,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       code: c.code,
     })));
     el.textContent = '';
-    el.append(nationsHero(rows), nationsPill(natCup));
+    el.append(nationsHud(rows), nationsPill(natCup));
     const ol = document.createElement('ol');
     ol.className = 'rank-list';
     for (const c of rows.slice(3)) {
@@ -2054,8 +1971,29 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         above: up ? { name: up.name, tiq: up.points } : null,
       }));
     }
-    el.append(ol, nationsFoot());
-    paintNationsStanding(rows);
+    el.append(ol);
+  }
+
+  async function loadNations(): Promise<void> {
+    const el = panes.nations;
+    if (!el) return;
+    if (!loadedBoard.nations && !nationRows) el.innerHTML = skel(6);
+    let rows: CountryRow[];
+    let event: GrandCup;
+    try {
+      const pair = await Promise.all([getCountryRanking(), getGrandCup()]);
+      rows = pair[0];
+      event = pair[1];
+    } catch {
+      if (!nationRows) el.innerHTML = empty('Rankings unavailable. Check your connection and try again.');
+      return;
+    }
+    if (!rows.length) {
+      if (!nationRows) el.innerHTML = empty('No countries ranked yet.');
+      return;
+    }
+    nationRows = rows;
+    paintNations(rows, event);
   }
 
   async function loadMinds(): Promise<void> {
@@ -2433,7 +2371,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     loadedBoard.guilds = false;
     if (isRanksVisible()) {
       paintRanks();
-      void loadBoard(board);
+      if (board === 'nations' && nationRows) {
+        paintNations(nationRows, natCup);
+        void loadNations();
+      } else {
+        void loadBoard(board);
+      }
     } else if (isArenaVisible()) {
       paintArena();
       void loadCup();

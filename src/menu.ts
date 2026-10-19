@@ -14,13 +14,14 @@ import {
 import {
   ageLocked, claimIdentityReward, claimReferralRewards, createTeam, daysInMonth, DOB_MIN_YEAR,
   dobMaxYear, dobValue, favouriteMode, IDENTITY_REWARD, joinTeam, KINDS, leaveTeam, levelInfo,
-  myTeam, onChange, profile, REFERRAL_REWARD, setBadge, setCountry, setDob, setFrame, theme, validDob,
+  myTeam, onChange, profile, REFERRAL_REWARD, setBadge, setDob, setFrame, theme, validDob,
 } from './storage';
 import { BADGES, badgeProgress, equippedBadge, isBadgeUnlocked, unlockedCount } from './badges';
 import { MAX_BALLS, newGame } from './rules';
 import { createPreview, createRenderer, type Preview, type View } from './render';
 import { setBalance } from './coin';
-import { flagOf, guessCountry, nameOf, search } from './countries';
+import { flagOf, nameOf } from './countries';
+import { openCountryPicker } from './countrypick';
 import { renderCountryFlagSvg } from './flagbadge';
 import { cleanCode, standings, YOU } from './teams';
 import {
@@ -34,7 +35,7 @@ import { BOT_RAMP, type CosKind } from './themes';
 import { isTicketCategory, submitTicket } from './support';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
-import { impact, languageCode, notify, startParam, tgUser } from './telegram';
+import { impact, notify, startParam, tgUser } from './telegram';
 
 export interface MenuApi {
   router: Router;
@@ -56,17 +57,6 @@ export interface RaceSetup { difficulty: Difficulty; sizes: [number, number] }
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const en = (n: number) => n.toLocaleString('en-US');
-
-const PICK_ROW = '<span class="flag" aria-hidden="true"></span><span class="flag-code" aria-hidden="true"></span>'
-  + '<span class="pick-n"></span>'
-  + '<svg class="ico tick" aria-hidden="true"><use href="#i-check" /></svg>';
-
-const make = (cls: string, html: string) => {
-  const el = document.createElement('li');
-  el.className = cls;
-  el.innerHTML = html;
-  return el;
-};
 
 export function createMenu(api: MenuApi): Menu {
   const tabs = [...document.querySelectorAll<HTMLElement>('.tab[data-tab]')];
@@ -90,78 +80,6 @@ export function createMenu(api: MenuApi): Menu {
     if (u?.photo_url) { photo.src = u.photo_url; photo.hidden = false; $(av).style.background = 'none'; }
     /* a photo that fails to load must not leave a blank disc behind */
     photo.addEventListener('error', () => { photo.hidden = true; $(av).style.background = ''; });
-  }
-
-  /* ---------- country ---------- */
-  const countrySheet = api.sheet('sheet-country');
-  const countryList = $<HTMLElement>('country-list');
-  const countryEmpty = $<HTMLElement>('country-empty');
-  const countryQ = <HTMLInputElement>$('country-q');
-  let pickIdx = 0;
-
-  function paintCountryList(q: string) {
-    const hits = search(q);
-    countryList.textContent = '';
-    for (const c of hits) {
-      const li = make('pick-row', PICK_ROW);
-      li.dataset.code = c.code;
-      li.setAttribute('role', 'option');
-      li.tabIndex = -1;
-      li.setAttribute('aria-selected', String(c.code === profile.country));
-      const kids = li.children;
-      kids[0].textContent = flagOf(c.code);
-      kids[1].textContent = c.code;
-      kids[2].textContent = c.name;
-      countryList.append(li);
-    }
-    countryEmpty.hidden = hits.length > 0;
-    pickIdx = Math.max(0, hits.findIndex((c) => c.code === (profile.country ?? guessCountry(languageCode()))));
-  }
-
-  /** The row the picker would answer with, moved by the arrow keys. */
-  function focusPick(move: number) {
-    const items = [...countryList.querySelectorAll<HTMLElement>('.pick-row')];
-    if (!items.length) return;
-    pickIdx = Math.min(items.length - 1, Math.max(0, pickIdx + move));
-    items[pickIdx].focus({ preventScroll: true });
-    items[pickIdx].scrollIntoView({ block: 'nearest' });
-  }
-
-  function chooseCountry(code: string) {
-    setCountry(code);
-    const paid = claimIdentityReward('country');
-    notify('success');
-    api.sheets.close();
-    if (paid > 0) showPfToast(`+${paid} Coins · Country set`);
-  }
-
-  countryQ.addEventListener('input', () => paintCountryList(countryQ.value));
-  countryQ.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { const f = countryList.querySelector<HTMLElement>('.pick-row'); if (f) chooseCountry(f.dataset.code!); }
-    if (e.key === 'ArrowDown') { e.preventDefault(); focusPick(1); }
-  });
-  countryList.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); focusPick(1); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); focusPick(-1); }
-    else if (e.key === 'Enter') { const r = document.activeElement as HTMLElement | null; const c = r?.dataset.code; if (c) chooseCountry(c); }
-  });
-  countryList.addEventListener('click', (e) => {
-    const row = (e.target as HTMLElement | null)?.closest<HTMLElement>('.pick-row');
-    if (!row) return;
-    impact('light');
-    chooseCountry(row.dataset.code!);
-  });
-
-  function openCountry() {
-    if (!countrySheet) return;
-    const seed = profile.country || guessCountry(languageCode());
-    countryQ.value = '';
-    paintCountryList('');
-    api.sheets.open(countrySheet);
-    /* land the list on the guess, so the common case is one tap */
-    const want = seed ? countryList.querySelector<HTMLElement>(`[data-code=${JSON.stringify(seed)}]`) : null;
-    if (want) { want.scrollIntoView({ block: 'center' }); want.focus({ preventScroll: true }); }
-    impact('light');
   }
 
   /* ---------- profile completion toast: animated +100 confirmation ---------- */
@@ -666,7 +584,11 @@ export function createMenu(api: MenuApi): Menu {
 
   /* ---- the entry points: country now lives only in Profile (header pill removed) ---- */
   document.getElementById('country-chip')?.addEventListener('click', () => { impact('light'); api.router.go('profile'); });
-  $('pf-country').addEventListener('click', openCountry);
+  $('pf-country').addEventListener('click', () => {
+    openCountryPicker(api.sheets, (_code, paid) => {
+      if (paid > 0) showPfToast(`+${paid} Coins · Country set`);
+    });
+  });
   $('pf-age').addEventListener('click', openAge);
   for (const el of dobFields) {
     el.addEventListener('keydown', onDobKeydown);

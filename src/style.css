@@ -5484,88 +5484,212 @@ html.reduced-motion .mh-arc-fill { animation: none; }
 .gh-score small { font-size: 8.5px; font-weight: 700; line-height: 1.2; color: var(--ink-soft); white-space: nowrap; }
 
 /* ==========================================================================
-   ZONE C3 — NATIONS IQ: your flag's standing, the live event, the hook
+   ZONE C3 — NATIONS IQ: one compact HUD, the live event, the ladder
    ========================================================================== */
-.nat-hero {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  column-gap: var(--s2);
-  row-gap: 6px;
-  padding: var(--s2);
-  margin-bottom: var(--s1);
-  border-radius: 16px;
-  background:
-    linear-gradient(180deg, rgba(56, 189, 248, .07) 0%, rgba(255, 255, 255, 0) 46%),
-    var(--clay-face);
-  background-color: #1E2739;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .16),
-    inset 0 -1px 0 rgba(0, 0, 0, .34),
-    inset 0 0 0 1px rgba(125, 211, 252, .22),
-    0 1px 0 #0A0F1A,
-    0 12px 22px -16px var(--shadow);
-}
-.nat-hero .fp-lg { grid-row: 1; }
-.nat-hero-txt { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.nat-hero-txt b { font-size: var(--t-2); font-weight: 900; line-height: 1.3; color: var(--ink); }
-.nat-hero-txt small { font-size: 10px; font-weight: 700; line-height: 1.3; color: var(--ink-soft); }
-.nat-hero .mh-ptrack { grid-column: 1 / -1; height: 5px; }
-.nat-hero-btn {
-  --d: 3px;
-  position: relative;
+
+/* The HUD carries the whole flag flow: a recessed invitation until a nation is
+   chosen, then that nation's standing in the same 48px slot. Both states are
+   one button, so the picker opens in place and switching never leaves the board. */
+.nation-hud {
   appearance: none;
-  border: 0;
+  -webkit-tap-highlight-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  height: 48px;
+  min-height: 48px;
+  margin: 0 0 var(--s1);
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #161F30 0%, #0F1624 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .05),
+    0 18px 32px -14px rgba(0, 0, 0, .85);
+  color: var(--ink);
   font: inherit;
-  justify-self: start;
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--motion-fast), border-color var(--motion-fast);
+}
+.nation-hud:active { transform: scale(.98); }
+.nation-hud:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+/* A — unset: a dashed recessed slate, tactical copy and the cyan picker pill. */
+.nation-hud.is-unset {
+  border: 1px dashed rgba(255, 255, 255, .15);
+  border-radius: 12px;
+  background: rgba(15, 22, 36, .7);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .03);
+}
+.nh-globe {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  color: #94A3B8;
+}
+.nh-globe-ico { width: 18px; height: 18px; }
+.nh-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.25;
+  color: #94A3B8;
+  overflow: hidden;
+}
+.nh-pill {
+  flex: none;
   display: inline-flex;
   align-items: center;
-  height: 40px;
-  padding: 0 14px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, var(--cta-hi) 0%, var(--cta) 100%);
-  color: var(--on-brand);
-  font-size: var(--t-3);
-  font-weight: 900;
-  cursor: pointer;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .3),
-    0 var(--d) 0 var(--cta-lip);
-  transition: transform var(--motion-fast);
+  justify-content: center;
+  min-height: 26px;
+  padding: 5px 12px;
+  border: 1px solid rgba(56, 189, 248, .35);
+  border-radius: 999px;
+  background: rgba(56, 189, 248, .1);
+  color: #38BDF8;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
 }
-/* 40px face + a 4px band reaches the house 48px target without eating the strip */
-.nat-hero-btn::after { content: ""; position: absolute; inset: -4px 0; }
-.nat-hero-btn:active { transform: translateY(var(--press-y)); --d: 0px; }
-.nat-hero-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+
+/* B — selected: the quiet clay of the "You" strip, with the nation's rank key,
+   a circular flag avatar, the cyan YOUR NATION tag and the gold TIQ read. */
+.nation-hud.is-set {
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #161F30 0%, #0F1624 100%);
+}
+.nh-rank {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 30px;
+  height: 26px;
+  padding: 0 5px;
+  border: 1px solid rgba(148, 163, 184, .3);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #222B3B 0%, #131A27 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(226, 232, 240, .3),
+    inset 0 -8px 12px -10px rgba(0, 0, 0, .95);
+  color: #CBD5E1;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: -.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.nh-rank.gold {
+  border-color: rgba(245, 158, 11, .45);
+  background: linear-gradient(180deg, #2A2312 0%, #171510 100%);
+  box-shadow: inset 0 1px 0 rgba(251, 191, 36, .6), inset 0 -8px 12px -10px rgba(0, 0, 0, .95);
+  color: #FCD34D;
+}
+.nh-rank.silver {
+  border-color: rgba(148, 163, 184, .35);
+  background: linear-gradient(180deg, #1E2430 0%, #121620 100%);
+  box-shadow: inset 0 1px 0 rgba(226, 232, 240, .48), inset 0 -8px 12px -10px rgba(0, 0, 0, .95);
+  color: #E2E8F0;
+}
+.nh-rank.bronze {
+  border-color: rgba(217, 119, 6, .35);
+  background: linear-gradient(180deg, #261B12 0%, #15110E 100%);
+  box-shadow: inset 0 1px 0 rgba(253, 186, 116, .38), inset 0 -8px 12px -10px rgba(0, 0, 0, .95);
+  color: #FDBA74;
+}
+.nh-av {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, .08);
+  background: radial-gradient(circle at 32% 26%, #2E3A54 0%, #0D1422 72%);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .5), inset 0 -1px 0 rgba(255, 255, 255, .05);
+}
+.nh-av .fp { --fp-d: 26px; border-radius: 50%; overflow: hidden; }
+.nh-av .fp-chip { border-radius: 50%; font-size: 8px; }
+.nh-av .fp-img { border-radius: 50%; box-shadow: none; }
+.nh-id {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.nh-name {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  line-height: 1.2;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nh-tag {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(56, 189, 248, .1);
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, .35);
+  color: #38BDF8;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.nh-score {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--tiq);
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 14px rgba(245, 158, 11, .28);
+}
+.nh-tiq {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--honey);
+  filter: drop-shadow(0 0 4px rgba(245, 158, 11, .45));
+}
 
 /* Live event: the cup's own deadline, ticking in the same coral language as the
-   season capsule up in the HUD. */
+   season capsule up in the HUD. Kept short so the first ladder row breathes. */
 .nat-pill {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 11px 6px 9px;
+  gap: 7px;
+  padding: 4px 9px 4px 8px;
   margin-bottom: var(--s1);
   border-radius: var(--radius-pill);
   background: var(--field);
   box-shadow: var(--inset), inset 0 0 0 1px rgba(255, 82, 43, .24);
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 800;
-  line-height: 1.35;
+  line-height: 1.3;
   color: var(--chip-ink);
 }
 .nat-pill-t { min-width: 0; }
-
-.nat-foot {
-  padding: 12px 4px 2px;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  text-align: center;
-  line-height: 1.4;
-  color: var(--ink-soft);
-}
 .mh-ptrack.is-cyan i {
   background: linear-gradient(90deg, var(--brand-1), var(--brand-3));
   box-shadow: 0 0 12px -2px var(--brand-glow);
