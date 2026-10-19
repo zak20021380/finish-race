@@ -455,6 +455,9 @@ try {
           v: 2,
           stats: { games: 50, wins: 20, losses: 30, streak: 2, best: 6, modes: { bot: 40, online: 10 } },
         }));
+        localStorage.setItem('detour.squads.v1', JSON.stringify({
+          boundId: 'sq-doge', custom: [], bonus: {},
+        }));
       } catch { /* storage unavailable: the audit falls back to the unranked path */ }
     });
     const pg = await ctx.newPage();
@@ -467,6 +470,38 @@ try {
     if (res.pass) pass(tag, `audited (${res.notes.podium}; ${res.notes.slate}; ${res.notes.fit})`);
     else fail(tag, res.fails.join('\n- '));
     await pg.screenshot({ path: path.join(SHOTS, `ranks-${tag}.png`) });
+
+    /* Squad IQ: the tab reads "Squad IQ", the hero is a compact button-free
+       strip and the podium is a pure showcase (no Join / Invite keys). */
+    await pg.click('.ranks-tabs [data-board="guilds"]');
+    await pg.waitForTimeout(500);
+    const guilds = await pg.evaluate(() => {
+      const cards = [...document.querySelectorAll('#ranks-podium .pod-card')]
+        .filter((c) => c.getBoundingClientRect().height > 0);
+      const tab = document.querySelector('.ranks-tabs [data-board="guilds"] .seg-t')?.textContent?.trim() ?? '';
+      const hero = document.getElementById('guild-hero');
+      const heroVisible = !!hero && !hero.hidden && hero.getBoundingClientRect().height > 0;
+      const heroText = heroVisible ? hero.textContent ?? '' : '';
+      return {
+        cards: cards.length,
+        keys: cards.filter((c) => c.querySelector('.pod-btn, button')).length,
+        feet: cards.filter((c) => (c.querySelector('.pod-foot')?.textContent ?? '').trim().length > 0).length,
+        tab,
+        hero: heroVisible,
+        heroH: heroVisible ? Math.round(hero.getBoundingClientRect().height) : 0,
+        heroButtons: heroVisible ? hero.querySelectorAll('button').length : 0,
+        heroCta: /invite|\bview\b/i.test(heroText),
+        podiumCta: /invite|\bjoin\b/i.test(document.getElementById('ranks-podium')?.textContent ?? ''),
+      };
+    });
+    if (guilds.cards === 3 && guilds.keys === 0 && guilds.feet === 3 && guilds.tab === 'Squad IQ'
+      && guilds.hero && guilds.heroButtons === 0 && !guilds.heroCta && !guilds.podiumCta
+      && guilds.heroH >= 48 && guilds.heroH <= 52) pass(`${tag} squad-iq`);
+    else fail(`${tag} squad-iq`, `cards ${guilds.cards}, podium keys ${guilds.keys}, plinths ${guilds.feet}, tab "${guilds.tab}", hero ${guilds.hero ? `${guilds.heroH}px` : 'hidden'}, hero buttons ${guilds.heroButtons}, hero cta ${guilds.heroCta}, podium cta ${guilds.podiumCta}`);
+    await pg.screenshot({ path: path.join(SHOTS, `ranks-${tag}-guilds.png`) });
+
+    await pg.click('.ranks-tabs [data-board="minds"]');
+    await pg.waitForTimeout(400);
 
     if (w === 360) {
       /* the thumb slides to the active board */
@@ -483,22 +518,6 @@ try {
         pass(`${tag} nations`);
         await pg.screenshot({ path: path.join(SHOTS, `ranks-${tag}-nations.png`) });
       } else fail(`${tag} nations`, nat.fails.join('\n- '));
-
-      /* guilds: the same floating podium, with each crest's Join / Invite key */
-      await pg.click('.ranks-tabs [data-board="guilds"]');
-      await pg.waitForTimeout(500);
-      const guilds = await pg.evaluate(() => {
-        const cards = [...document.querySelectorAll('#ranks-podium .pod-card')]
-          .filter((c) => c.getBoundingClientRect().height > 0);
-        return {
-          cards: cards.length,
-          keys: cards.filter((c) => c.querySelector('.pod-btn')).length,
-          feet: cards.filter((c) => (c.querySelector('.pod-foot')?.textContent ?? '').trim().length > 0).length,
-        };
-      });
-      if (guilds.cards === 3 && guilds.keys === 3 && guilds.feet === 3) pass(`${tag} guilds`);
-      else fail(`${tag} guilds`, `cards ${guilds.cards}, join keys ${guilds.keys}, plinths ${guilds.feet}`);
-      await pg.screenshot({ path: path.join(SHOTS, `ranks-${tag}-guilds.png`) });
 
       /* back to minds, then the mind sheet from a runner row */
       await pg.click('.ranks-tabs [data-board="minds"]');

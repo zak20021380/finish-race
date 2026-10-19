@@ -1267,8 +1267,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     tierAria?: string;
     /** Weekly TIQ movement, rendered as a chip rather than left to the trend arrow. */
     delta?: number;
-    /** The ladder no longer carries #1-3, so a board whose rows have actions must move them up here. */
-    action?: HTMLElement;
     onTap?: () => void;
   }
 
@@ -1342,7 +1340,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     card.append(av, nm, tier, iq);
     if (e.delta) iq.append(delta);
-    if (e.action) card.append(e.action);
     card.append(step);
     if (e.onTap) {
       card.classList.add('is-tappable');
@@ -1367,7 +1364,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       host.hidden = true;
       return;
     }
-    const boardName = board === 'guilds' ? 'Intellect Guilds' : board === 'nations' ? 'Nations IQ' : 'Top Minds';
+    const boardName = board === 'guilds' ? 'Squad IQ' : board === 'nations' ? 'Nations IQ' : 'Top Minds';
     host.setAttribute('aria-label', `Top ${top.length} on ${boardName}`);
     host.append(...top.map(podiumCard));
     host.hidden = false;
@@ -1883,7 +1880,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       ch.setAttribute('aria-label', hint);
     }
     if (gu) {
-      gu.setAttribute('aria-label', kind === 'guild' ? 'View this guild in the squad sheet' : 'View the Intellect Guilds board');
+      gu.setAttribute('aria-label', kind === 'guild' ? 'View this squad in the squad sheet' : 'View the Squad IQ board');
     }
   }
 
@@ -1925,12 +1922,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     msPending = { kind: 'guild', squad: s };
     delete el.dataset.tier;
     msHead(squadLetter(s), null, label, `${kind === 'channel' ? 'Telegram channel' : 'Telegram group'} · #${s.rank}`);
-    el.setAttribute('aria-label', `Guild profile: ${label}, ${s.trophies.toLocaleString('en-US')} combined Tactical IQ`);
+    el.setAttribute('aria-label', `Squad profile: ${label}, ${s.trophies.toLocaleString('en-US')} combined Tactical IQ`);
     body.textContent = '';
     body.append(
-      msHero(s.trophies.toLocaleString('en-US'), 0, pct, `#${s.rank} of ${field} guilds`),
+      msHero(s.trophies.toLocaleString('en-US'), 0, pct, `#${s.rank} of ${field} squads`),
       msSection(
-        'Guild read',
+        'Squad read',
         msStats([
           ['Members', s.members.toLocaleString('en-US')],
           ['AVG per mind', avgOf(s).toLocaleString('en-US')],
@@ -1938,7 +1935,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
           ['Yours', contrib > 0 ? contrib.toLocaleString('en-US') : '—'],
         ]),
       ),
-      msFine('A guild carries no mind tier — its TIQ is the sum of the minds inside it.'),
+      msFine('A squad carries no mind tier — its TIQ is the sum of the minds inside it.'),
     );
     msActions('guild', act.label === 'Invite' ? 'Invite squad' : `Join ${label}`, act.hint);
     impact('light');
@@ -2289,7 +2286,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     host.hidden = false;
     host.textContent = '';
 
-    const mine = getMyContribution();
     host.append(hexCrest(squadLetter(me), 'gh-crest'));
 
     const txt = document.createElement('span');
@@ -2298,23 +2294,19 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     top.className = 'gh-top';
     const kick = document.createElement('small');
     kick.className = 'gh-kick';
-    kick.textContent = 'My guild';
+    kick.textContent = 'My squad';
     const rank = document.createElement('b');
     rank.className = 'gh-rank';
     rank.textContent = `#${me.rank}`;
     top.append(kick, rank);
+    const sub = document.createElement('span');
+    sub.className = 'gh-sub';
     const nm = document.createElement('b');
     nm.className = 'gh-name';
     nm.textContent = me.name || me.handle.replace(/^@/, '');
     nm.title = `${me.name} · ${me.handle}`;
-    const sub = document.createElement('span');
-    sub.className = 'gh-sub';
-    /* The stack already carries the head-count, so the density line says only what
-       the count cannot: what one mind in this guild is worth on average. */
-    const density = document.createElement('small');
-    density.textContent = `AVG ${avgOf(me).toLocaleString('en-US')} TIQ per mind`;
-    sub.append(memberStack(me.members), density);
-    txt.append(top, nm, sub);
+    sub.append(nm, memberStack(me.members));
+    txt.append(top, sub);
 
     const score = document.createElement('span');
     score.className = 'gh-score';
@@ -2324,29 +2316,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const num = document.createElement('b');
     num.textContent = me.trophies.toLocaleString('en-US');
     line.append(num);
-    const csub = document.createElement('small');
-    csub.textContent = mine > 0 ? `+${mine.toLocaleString('en-US')} yours` : 'fight to contribute';
-    score.append(line, csub);
+    const density = document.createElement('small');
+    density.textContent = `AVG ${avgOf(me).toLocaleString('en-US')} IQ`;
+    density.title = `${avgOf(me).toLocaleString('en-US')} Tactical IQ per mind across ${me.members.toLocaleString('en-US')} members`;
+    score.append(line, density);
     score.title = `${me.trophies.toLocaleString('en-US')} combined Tactical IQ`;
 
-    const acts = document.createElement('span');
-    acts.className = 'gh-acts';
-    const invite = document.createElement('button');
-    invite.type = 'button';
-    invite.className = 'gh-btn is-coral';
-    invite.textContent = 'Invite';
-    invite.setAttribute('aria-label', `Invite to ${me.handle}: copy squad invite`);
-    invite.addEventListener('click', (e) => { e.stopPropagation(); inviteSquad(me); });
-    const view = document.createElement('button');
-    view.type = 'button';
-    view.className = 'gh-btn';
-    view.textContent = 'View';
-    view.setAttribute('aria-label', `View ${me.handle} squad details`);
-    view.addEventListener('click', (e) => { e.stopPropagation(); impact('light'); openSquadSheet(); });
-    acts.append(invite, view);
-
-    host.append(txt, score, acts);
-    host.setAttribute('aria-label', `My guild: ${me.name}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} combined Tactical IQ, ${me.members.toLocaleString('en-US')} minds.`);
+    host.append(txt, score);
+    host.setAttribute('aria-label', `My squad: ${me.name}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} combined Tactical IQ, ${me.members.toLocaleString('en-US')} minds.`);
   }
 
   function squadRow(s: RankedSquad, mine: boolean): HTMLLIElement {
@@ -2356,7 +2333,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     li.dataset.id = s.id;
     const label = s.name || s.handle.replace(/^@/, '');
     li.title = `${label} · ${s.handle}`;
-    li.setAttribute('aria-label', `${label}, ${s.handle}, rank ${s.rank}, ${s.trophies.toLocaleString('en-US')} Tactical IQ. Activate to open the guild profile.`);
+    li.setAttribute('aria-label', `${label}, ${s.handle}, rank ${s.rank}, ${s.trophies.toLocaleString('en-US')} Tactical IQ. Activate to open the squad profile.`);
     if (mine) li.setAttribute('aria-current', 'true');
 
     /* Identity column: hex crest, then the name — which owns the flexible width.
@@ -2413,7 +2390,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   function paintSquadDock(): void {
     const dock = squadDock();
     if (!dock) return;
-    // Squad dock is exclusive to the Intellect Guilds board — never on an IQ board.
+    // Squad dock is exclusive to the Squad IQ board — never on an IQ board.
     if (!isRanksVisible() || board !== 'guilds') {
       dock.hidden = true;
       return;
@@ -2433,7 +2410,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       txt.className = 'dock-txt';
       const t = document.createElement('b');
       t.className = 'dock-name';
-      t.textContent = 'Join a guild to earn Tactical IQ';
+      t.textContent = 'Join a squad to earn Tactical IQ';
       const s = document.createElement('small');
       s.className = 'dock-sub';
       s.textContent = 'Race points count for your channel or group';
@@ -2454,11 +2431,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       actions.className = 'dock-actions';
       actions.append(btn);
       dock.append(ico, txt, actions);
-      dock.setAttribute('aria-label', 'My Squad Standing: no squad bound. Find a guild to start earning Tactical IQ.');
+      dock.setAttribute('aria-label', 'My Squad Standing: no squad bound. Find a squad to start earning Tactical IQ.');
       return;
     }
-
-    const mine = getMyContribution();
 
     const av = document.createElement('span');
     av.className = 'dock-av';
@@ -2488,36 +2463,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const num = document.createElement('b');
     num.textContent = me.trophies.toLocaleString('en-US');
     const sub = document.createElement('small');
-    sub.textContent = mine > 0 ? `+${mine.toLocaleString('en-US')} yours` : 'fight to contribute';
+    sub.textContent = `AVG ${avgOf(me).toLocaleString('en-US')} IQ`;
     score.append(num, sub);
     score.title = `${me.trophies.toLocaleString('en-US')} squad Tactical IQ`;
 
-    const invite = document.createElement('button');
-    invite.type = 'button';
-    invite.className = 'dock-btn is-primary';
-    invite.textContent = 'Invite';
-    invite.setAttribute('aria-label', `Invite to ${me.handle}: copy squad invite`);
-    invite.addEventListener('click', (e) => {
-      e.stopPropagation();
-      inviteSquad(me);
-    });
-
-    const view = document.createElement('button');
-    view.type = 'button';
-    view.className = 'dock-btn';
-    view.textContent = 'View';
-    view.setAttribute('aria-label', `View ${me.handle} squad details`);
-    view.addEventListener('click', (e) => {
-      e.stopPropagation();
-      impact('light');
-      openSquadSheet();
-    });
-
-    const actions = document.createElement('span');
-    actions.className = 'dock-actions';
-    actions.append(invite, view);
-
-    dock.append(av, txt, score, actions);
+    dock.append(av, txt, score);
     dock.setAttribute('aria-label', `My Squad Standing: ${me.handle}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} Tactical IQ.`);
   }
 
@@ -2539,11 +2489,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       name: s.name || s.handle.replace(/^@/, ''),
       score: s.trophies.toLocaleString('en-US'),
       letter: squadLetter(s),
-      action: squadKey(squadAction(s, me?.id === s.id), 'pod-btn'),
-      onTap: () => {
-        impact('light');
-        openSquadSheet();
-      },
     })));
     el.textContent = '';
     const ol = document.createElement('ol');

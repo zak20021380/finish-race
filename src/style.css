@@ -4964,48 +4964,6 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
 .pod-delta.down { color: var(--danger); }
 .pod-delta[hidden] { display: none; }
 
-/* the join / invite key only the guild board brings; same frosted clay as the ladder */
-.pod-btn {
-  --d: 2px;
-  position: relative;
-  appearance: none;
-  border: 0;
-  font: inherit;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 48px;
-  height: 32px;
-  padding: 0 12px;
-  border-radius: var(--radius-pill);
-  font-size: var(--t-micro);
-  font-weight: 800;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .09) 0%, rgba(255, 255, 255, .02) 100%),
-    #222C42;
-  color: var(--chip-ink);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, .09),
-    inset 0 1px 0 rgba(255, 255, 255, .14),
-    0 var(--d) 0 #0B111C;
-  transition: transform var(--motion-fast), background var(--motion-fast), color var(--motion-fast);
-}
-/* 32px face + an 8px vertical band reaches the house 48px target without height */
-.pod-btn::after { content: ""; position: absolute; inset: -8px 0; }
-.pod-btn.is-invite {
-  color: var(--brand-ink);
-  box-shadow:
-    inset 0 0 0 1px rgba(125, 211, 252, .3),
-    inset 0 1px 0 rgba(255, 255, 255, .14),
-    0 var(--d) 0 #0B111C;
-}
-.pod-btn:active { transform: translateY(var(--press-y)); --d: 0px; }
-.pod-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-
 /* ---- the three-step plinth: architectural, not a footer bar -----------------
    Each card ends in a machined pedestal: a stepped cornice over a beveled metal
    face, a darker base band under it, and a soft aura pooling on the canvas
@@ -5490,18 +5448,19 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   font-variant-numeric: tabular-nums;
 }
 
-/* The pinned own-guild hero. A flex sibling above the scroller, so it is genuinely
-   pinned without covering a row — and it replaces the bottom dock when bound. */
+/* The pinned own-squad strip. A flex sibling above the scroller, so it is genuinely
+   pinned without covering a row — and it replaces the bottom dock when bound. One
+   compact tactical strip: crest | name + members | total IQ + density. */
 .gh {
   flex: none;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  column-gap: var(--s2);
-  row-gap: 6px;
+  column-gap: 8px;
   max-width: 100%;
-  padding: var(--s2);
-  border-radius: 16px;
+  min-height: 50px;
+  padding: 6px 10px;
+  border-radius: 14px;
   background:
     linear-gradient(180deg, rgba(56, 189, 248, .08) 0%, rgba(255, 255, 255, 0) 46%),
     var(--clay-face);
@@ -5514,89 +5473,44 @@ html.reduced-motion .mh-arc-fill { animation: none; }
     0 12px 22px -16px var(--shadow);
 }
 .gh[hidden] { display: none; }
-.gh-crest { grid-row: 1; width: 46px; height: 40px; }
-.gh-crest .hex-face b { font-size: 17px; }
-.gh-txt { grid-row: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.gh-top { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.gh-crest { width: 36px; height: 32px; }
+.gh-crest .hex-face b { font-size: 14px; }
+.gh-txt { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.gh-top { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
 .gh-kick {
-  font-size: 8.5px;
+  font-size: 8px;
   font-weight: 900;
   letter-spacing: .12em;
   text-transform: uppercase;
   color: var(--brand-ink);
+  white-space: nowrap;
 }
-.gh-rank { font-size: 10px; font-weight: 900; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.gh-rank { font-size: 9.5px; font-weight: 900; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.gh-sub { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .gh-name {
+  flex: 0 1 auto;
   min-width: 0;
-  font-size: var(--t-1);
+  font-size: 13px;
   font-weight: 900;
   letter-spacing: -.01em;
-  line-height: 1.2;
+  line-height: 1.15;
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.gh-sub { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.gh-sub small {
-  min-width: 0;
-  font-size: 9.5px;
-  font-weight: 700;
-  line-height: 1.2;
-  color: var(--ink-soft);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .gh-score {
-  grid-row: 1;
   flex: none;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 1px;
+  gap: 0;
   color: var(--tiq);
   font-variant-numeric: tabular-nums;
 }
-.gh-line { display: flex; align-items: center; gap: 4px; font-size: var(--t-1); font-weight: 900; }
-.gh-line .tiq { flex: none; width: 14px; height: 14px; color: var(--honey); filter: drop-shadow(0 0 4px rgba(245, 158, 11, .4)); }
-.gh-score small { font-size: 9px; font-weight: 700; color: var(--ink-soft); white-space: nowrap; }
-.gh-acts { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: var(--s1); }
-.gh-btn {
-  --d: 3px;
-  appearance: none;
-  border: 0;
-  font: inherit;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 48px;
-  border-radius: var(--radius-pill);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .09) 0%, rgba(255, 255, 255, .02) 100%),
-    #222C42;
-  color: var(--chip-ink);
-  font-size: var(--t-3);
-  font-weight: 900;
-  letter-spacing: .01em;
-  cursor: pointer;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, .09),
-    inset 0 1px 0 rgba(255, 255, 255, .14),
-    0 var(--d) 0 #0B111C;
-  transition: transform var(--motion-fast);
-}
-.gh-btn.is-coral {
-  background: linear-gradient(180deg, var(--cta-hi) 0%, var(--cta) 100%);
-  color: var(--on-brand);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .3),
-    inset 0 -2px 3px rgba(0, 0, 0, .18),
-    0 var(--d) 0 var(--cta-lip);
-}
-.gh-btn:active { transform: translateY(var(--press-y)); --d: 0px; }
-.gh-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+.gh-line { display: flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 900; line-height: 1.15; }
+.gh-line .tiq { flex: none; width: 13px; height: 13px; color: var(--honey); filter: drop-shadow(0 0 4px rgba(245, 158, 11, .4)); }
+.gh-score small { font-size: 8.5px; font-weight: 700; line-height: 1.2; color: var(--ink-soft); white-space: nowrap; }
 
 /* ==========================================================================
    ZONE C3 — NATIONS IQ: your flag's standing, the live event, the hook
@@ -5731,6 +5645,7 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   box-shadow: 0 0 12px rgba(56, 189, 248, .55);
 }
 .squad-dock[hidden] { display: none; }
+.squad-dock.member { grid-template-columns: var(--dock-rank) minmax(0, 1fr) var(--dock-score); }
 .squad-dock:active { transform: translateY(1px); }
 .dock-av {
   flex: none;
