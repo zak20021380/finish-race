@@ -135,6 +135,20 @@ function divisionOf(tiq: number): { tier: MindTier; label: string; next: number 
   return { tier, label: `${TIER_NAME[tier]} ${DIVISION[div]}`, next: Math.ceil(next) };
 }
 
+/** The one-word crest of each tier — "GM II" is what fits a podium pill at 360. */
+const TIER_ABBR: Record<MindTier, string> = {
+  rookie: 'RK',
+  tactician: 'TAC',
+  strategist: 'STR',
+  grandmaster: 'GM',
+};
+
+/** "Grandmaster II" → "GM II": the podium pill's budget is a rank, not a biography. */
+function shortDivisionOf(tiq: number): string {
+  const d = divisionOf(tiq);
+  return `${TIER_ABBR[d.tier]} ${d.label.slice(d.label.lastIndexOf(' ') + 1)}`;
+}
+
 /** A win is worth 120 TIQ and it also lands a game (+20) — the same formula myTrophyScore uses. */
 const TIQ_PER_WIN = 140;
 
@@ -316,11 +330,11 @@ export function flagPhoto(code: string | null, cls: string): HTMLElement {
 
 export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   const boardBtns = [...document.querySelectorAll<HTMLButtonElement>('.ranks-tabs [data-board]')];
-  const ranksStats = document.getElementById('ranks-stats');
   const boardSwitch = document.querySelector<HTMLElement>('.ranks-tabs');
   const ranksScreen = document.getElementById('s-ranks');
   const seasonChip = document.getElementById('ranks-season');
   const seasonText = seasonChip?.querySelector<HTMLElement>('.ml-season-t') ?? null;
+  const seasonSub = document.getElementById('ranks-sub');
   /** The Cup showcase's own parts: one card, hydrated in place, never rebuilt. */
   const cupEls = {
     card: document.getElementById('stars-card'),
@@ -352,11 +366,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   let board: Board = 'minds';
   let loadedBoard: Partial<Record<Board, boolean>> = {};
-  /** Aggregate of the last ladder each solo board loaded — the stat chips quote it. */
-  const boardStats: Record<'minds' | 'nations', { loaded: boolean; rows: number; points: number }> = {
-    minds: { loaded: false, rows: 0, points: 0 },
-    nations: { loaded: false, rows: 0, points: 0 },
-  };
   /** The staged championship. `null` until `getGrandCup()` answers — the markup
    *  already carries the showcase skeleton, so nothing has to be rebuilt. */
   let cup: GrandCup | null = null;
@@ -474,7 +483,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     // "Your Standing" is a player fact — it belongs to the two IQ boards, never to a guild.
     const standing = soloStandingEl();
     if (standing) standing.hidden = board === 'guilds';
-    paintRanksStats();
+    // The screen's aura keys off your own TIQ, wherever on the ladder the eye is.
+    if (ranksScreen) ranksScreen.dataset.tier = tierOf(myTrophyScore());
     // The squad banner belongs EXCLUSIVELY to the Intellect Guilds board.
     const dock = squadDock();
     if (dock) dock.hidden = board !== 'guilds';
@@ -482,61 +492,18 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     paintGuildHero();
   }
 
-  /** One quick-stat chip: sprite icon + value over a muted label. */
-  function setChip(key: 'a' | 'b' | 'c', icon: string, value: string, label: string): void {
-    const chip = ranksStats?.querySelector<HTMLElement>(`[data-stat="${key}"]`);
-    if (!chip) return;
-    chip.querySelector('use')?.setAttribute('href', icon);
-    const n = chip.querySelector<HTMLElement>('.rstat-n');
-    const l = chip.querySelector<HTMLElement>('.rstat-l');
-    if (n) n.textContent = value;
-    if (l) l.textContent = label;
-  }
-
-  const quietChips = (): void => {
-    setChip('a', '#i-brain', '—', 'Tactical Minds');
-    setChip('b', '#i-brain', '—', 'Combined TIQ');
-    setChip('c', '#i-star', '—', 'Your TIQ');
-  };
-
   /**
-   * The pills read as a headcount, a field total and your own number. Only the two
-   * TIQ pills carry gold digits — the brain is the score's glyph now, so the cup is
-   * free to mean a season prize alone. Which population each counts follows the
-   * visible board: quoting guild totals while the user reads the solo ladder is what
-   * the old single-sentence stat bar got wrong.
+   * The season line and its capsule: the subtitle names the season, the pill counts
+   * it down in days. Both are recomputed on entry and on every tick, so the beacon
+   * never pulses beside a figure that has quietly gone stale.
    */
-  function paintRanksStats(): void {
-    if (!ranksStats) return;
-    if (ranksScreen) ranksScreen.dataset.tier = tierOf(myTrophyScore());
-    // The coral rim means "this number is yours", so it can only sit on the pill that carries it.
-    ranksStats.querySelector<HTMLElement>('[data-stat="c"]')?.classList.toggle('is-you', board !== 'guilds');
-    if (board === 'guilds') {
-      try {
-        const rows = getSquadRanking();
-        setChip('a', '#i-shield', String(rows.length), 'Mind Guilds');
-        setChip('b', '#i-brain', compactCount(rows.reduce((n, s) => n + s.members, 0)), 'Tactical Minds');
-        setChip('c', '#i-brain', compactCount(rows.reduce((n, s) => n + s.trophies, 0)), 'Combined TIQ');
-      } catch {
-        quietChips();
-      }
-      return;
-    }
-    const nations = board === 'nations';
-    const st = boardStats[nations ? 'nations' : 'minds'];
-    setChip('a', nations ? '#i-globe' : '#i-brain', st.loaded ? String(st.rows) : '—', nations ? 'Nations' : 'Tactical Minds');
-    setChip('b', '#i-brain', st.loaded ? compactCount(st.points) : '—', 'Combined TIQ');
-    setChip('c', '#i-star', compactCount(myTrophyScore()), 'Your TIQ');
-  }
-
-  /** The season capsule: "S4 · 3d 14h left", recomputed on entry and every tick. */
   function paintSeason(): void {
-    if (!seasonText) return;
     const t = Date.now();
     const s = seasonOf(t);
-    const left = formatCountdown(s.endsAt, t);
-    seasonText.textContent = `S${s.no} · ${left} left`;
-    seasonChip?.setAttribute('title', `Season ${s.no} closes in ${left}`);
+    const days = Math.max(0, Math.ceil((s.endsAt - t) / 86400_000));
+    if (seasonText) seasonText.textContent = `${days}d left`;
+    if (seasonSub) seasonSub.textContent = `Season ${s.no}`;
+    seasonChip?.setAttribute('title', `Season ${s.no} closes in ${formatCountdown(s.endsAt, t)}`);
   }
 
   function selectBoard(next: Board): void {
@@ -1295,7 +1262,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     letter?: string;
     /** Mind tiers only exist on the personal boards — a guild's 18k is not a mind. */
     tier?: MindTier;
+    /** The pill's short rank: "GM II". */
     tierLabel?: string;
+    /** The spoken rank, spelled out: "Grandmaster II". */
+    tierAria?: string;
     /** Weekly TIQ movement, rendered as a chip rather than left to the trend arrow. */
     delta?: number;
     /** The ladder no longer carries #1-3, so a board whose rows have actions must move them up here. */
@@ -1304,9 +1274,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   /**
-   * Card order is avatar → name → tier → TIQ → delta → pillar. The pillar stays the
-   * last child because it is the card's base: appending the join key after it floats
-   * the step into the middle of the card.
+   * Card order is avatar → name → tier → TIQ(+delta) → plinth. The plinth stays the
+   * last child because it is the card's base: appending the join key after it
+   * would float the base into the middle of the card.
    */
   function podiumCard(e: PodiumEntry): HTMLElement {
     const card = document.createElement('div');
@@ -1314,19 +1284,15 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     card.dataset.rank = String(e.rank);
     if (e.tier) card.dataset.tier = e.tier;
     card.setAttribute('role', 'listitem');
+    const tierSaid = e.tierAria ?? e.tierLabel;
     const said = [
-      e.tierLabel ? `${e.tierLabel}, ` : '',
+      tierSaid ? `${tierSaid}, ` : '',
       `${e.score} Tactical IQ`,
       e.delta ? `${signed(e.delta)} this week` : '',
     ].join('');
     card.setAttribute('aria-label', `Rank ${e.rank}: ${e.name}, ${said}`);
 
-    if (e.rank === 1) {
-      const holo = document.createElement('span');
-      holo.className = 'pod-holo';
-      holo.setAttribute('aria-hidden', 'true');
-      card.append(holo, svgIcon('#i-crown', 'pod-crown'));
-    }
+    if (e.rank === 1) card.append(svgIcon('#i-crown', 'pod-crown'));
 
     const av = document.createElement('span');
     av.className = 'pod-av';
@@ -1349,27 +1315,29 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     const iq = document.createElement('span');
     iq.className = 'pod-iq';
-    iq.append(svgIcon('#i-brain', 'pod-tiq'));
+    iq.append(svgIcon('#i-star', 'pod-tiq'));
     const iqN = document.createElement('b');
     iqN.textContent = e.score;
     iq.append(iqN);
     iq.title = `${e.score} Tactical IQ`;
 
-    const delta = document.createElement('span');
+    /* the weekly movement rides inside the chip as "(+54)" — one chip, one read,
+       so the meter row never stacks a second pill beside the score */
+    const delta = document.createElement('small');
     delta.className = e.delta ? `pod-delta ${e.delta > 0 ? 'up' : 'down'}` : 'pod-delta';
-    delta.textContent = e.delta ? signed(e.delta) : '';
+    delta.textContent = e.delta ? `(${signed(e.delta)})` : '';
     if (!e.delta) delta.hidden = true;
     else delta.title = `${signed(e.delta)} Tactical IQ this week`;
 
     const step = document.createElement('span');
-    step.className = 'pod-step';
+    step.className = 'pod-foot';
     step.setAttribute('aria-hidden', 'true');
     const stepN = document.createElement('b');
     stepN.textContent = String(e.rank);
     step.append(stepN);
 
     card.append(av, nm, tier, iq);
-    if (e.delta) card.append(delta);
+    if (e.delta) iq.append(delta);
     if (e.action) card.append(e.action);
     card.append(step);
     if (e.onTap) {
@@ -1386,36 +1354,17 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return card;
   }
 
-  /** "PEAK MINDS · SEASON 4" — the band's caption, kept outside the role=list it labels. */
-  function podBand(): HTMLElement | null {
-    const host = podiumEl;
-    if (!host) return null;
-    const existing = document.getElementById('pod-band');
-    if (existing) return existing;
-    const t = document.createElement('h2');
-    t.id = 'pod-band';
-    t.className = 'pod-band';
-    host.parentNode?.insertBefore(t, host);
-    return t;
-  }
-
   function paintPodium(entries: PodiumEntry[]): void {
     const host = podiumEl;
     if (!host) return;
     host.textContent = '';
-    const band = podBand();
     const top = entries.filter((e) => e.rank >= 1 && e.rank <= 3);
     if (!top.length) {
       host.hidden = true;
-      if (band) band.hidden = true;
       return;
     }
     const boardName = board === 'guilds' ? 'Intellect Guilds' : board === 'nations' ? 'Nations IQ' : 'Top Minds';
     host.setAttribute('aria-label', `Top ${top.length} on ${boardName}`);
-    if (band) {
-      band.textContent = `Peak minds · Season ${seasonOf(Date.now()).no}`;
-      band.hidden = false;
-    }
     host.append(...top.map(podiumCard));
     host.hidden = false;
   }
@@ -1766,14 +1715,19 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       const cell = document.createElement('span');
       cell.className = 'mh-axis';
       cell.title = a.hint;
+      const head = document.createElement('span');
+      head.className = 'mh-axis-h';
       const label = document.createElement('small');
       label.textContent = a.label;
+      const val = document.createElement('b');
+      val.textContent = `${a.pct}%`;
+      head.append(label, val);
       const track = document.createElement('span');
       track.className = 'mh-track';
       const fill = document.createElement('i');
       fill.style.width = `${a.pct}%`;
       track.append(fill);
-      cell.append(label, track);
+      cell.append(head, track);
       cell.setAttribute('aria-label', `${a.label} ${a.pct} percent, ${a.hint}`);
       axes.append(cell);
     }
@@ -1793,17 +1747,17 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const pText = document.createElement('small');
     pText.className = 'mh-ptext';
     pText.textContent = wins
-      ? `${wins} win${wins === 1 ? '' : 's'} to ${divisionOf(div.next).label} — your crest starts glowing.`
-      : 'Peak division. Hold it against the ladder.';
+      ? `${wins} win${wins === 1 ? '' : 's'} to ${divisionOf(div.next).label} · crest glows on rank-up`
+      : 'Peak division · hold it against the ladder';
     prog.append(pTrack, pText);
 
     const cta = document.createElement('button');
     cta.type = 'button';
     cta.className = 'mh-cta';
-    cta.textContent = 'Climb now';
+    cta.textContent = 'CLIMB NOW';
     cta.setAttribute('aria-label', 'Climb now — go and start a race');
+    cta.addEventListener('pointerdown', () => impact('light'), { passive: true });
     cta.addEventListener('click', () => {
-      impact('medium');
       api.router.go('home');
     });
 
@@ -2255,9 +2209,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       }));
     }
     el.append(ol, nationsFoot());
-    boardStats.nations = { loaded: true, rows: rows.length, points: rows.reduce((n, c) => n + c.points, 0) };
     paintNationsStanding(rows);
-    paintRanksStats();
   }
 
   async function loadMinds(): Promise<void> {
@@ -2284,7 +2236,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       score: p.points.toLocaleString('en-US'),
       code: p.countryCode,
       tier: tierOf(p.points),
-      tierLabel: divisionOf(p.points).label,
+      tierLabel: shortDivisionOf(p.points),
+      tierAria: divisionOf(p.points).label,
       delta: deltaOf(p.id, p.points, p.trend),
       onTap: () => openMind(p, i + 1),
     })));
@@ -2310,9 +2263,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       }));
     });
     el.append(ol);
-    boardStats.minds = { loaded: true, rows: rows.length, points: rows.reduce((n, p) => n + p.points, 0) };
     paintMindsStanding(rows);
-    paintRanksStats();
   }
 
   /* ---------- Intellect Guilds: Telegram channel / community ranking ---------- */
@@ -2658,7 +2609,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       el.innerHTML = empty('No squads ranked yet.');
       paintPodium([]);
       paintSquadDock();
-      paintRanksStats();
       return;
     }
     const me = getMySquad();
@@ -2683,7 +2633,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     el.append(ol);
     paintSquadDock();
     paintGuildHero();
-    paintRanksStats();
     loadedBoard.guilds = true;
   }
 
@@ -2702,7 +2651,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   onSquadChange(() => {
     loadedBoard.guilds = false;
-    paintRanksStats();
     if (isRanksVisible() && board === 'guilds') {
       loadSquads();
     }
