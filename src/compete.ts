@@ -1315,7 +1315,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     const iq = document.createElement('span');
     iq.className = 'pod-iq';
-    iq.append(svgIcon('#i-star', 'pod-tiq'));
+    iq.append(svgIcon('#i-brain', 'pod-tiq'));
     const iqN = document.createElement('b');
     iqN.textContent = e.score;
     iq.append(iqN);
@@ -1604,25 +1604,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   /**
-   * The four mind axes, each read from a signal the local save actually carries —
-   * win rate, volume, how many of those races were against a person rather than the
-   * bot, and how much streak survived the losses. `Traps` is the honest weak point:
-   * the save counts opponents, not mines placed, so it is a proxy until the backend
-   * reports hazard play.
-   */
-  function mindAxes(): MindAxis[] {
-    const s = profile.stats;
-    const g = Math.max(0, s.games);
-    const online = s.modes.online ?? 0;
-    return [
-      { label: 'Foresight', icon: '#i-brain', pct: clampPct(g ? s.wins / g : 0), value: `${s.wins}/${g} races won`, hint: 'Win rate across every race' },
-      { label: 'Tempo', icon: '#i-move', pct: clampPct(g / 40), value: `${g} races played`, hint: 'Races played — 40 fills the bar' },
-      { label: 'Traps', icon: '#i-mine', pct: clampPct(g ? online / g : 0), value: `${online} vs a mind`, hint: 'Share of races against real minds' },
-      { label: 'Compose', icon: '#i-shield', pct: clampPct(s.best + s.losses > 0 ? s.best / (s.best + s.losses) : 0), value: `${s.best}W streak · ${s.losses}L`, hint: 'Best streak held against losses' },
-    ];
-  }
-
-  /**
    * Your last five, read from the only history the save keeps: a win streak is bounded
    * by the loss that ended the one before it, so everything past it is unrecorded
    * rather than invented.
@@ -1655,10 +1636,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   /**
-   * The Top Minds hero card: who you are on this ladder (percentile ring · tier ·
-   * TIQ), the four-axis read of your own play, and the next division as a quiet
-   * sentence. No action key: the ladder itself is the place to act, and the card
-   * stays a read-only command HUD.
+   * The Top Minds strip: one 48px row reading who you are on the left (ringed
+   * avatar · "You" · tier crest · percentile chip) and what you hold on the right
+   * (TIQ · weekly movement). The next-division milestone is deliberately not a
+   * line of its own — it rides the strip's tooltip and accessible name, so the
+   * HUD stays one row without losing the fact.
    */
   function paintMindsStanding(rows: PlayerRow[] | null): void {
     const host = soloStandingEl();
@@ -1686,15 +1668,25 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     idWrap.className = 'mh-id';
     const line = document.createElement('b');
     line.className = 'mh-line';
-    line.textContent = `You · ${div.label}`;
-    const pctLine = document.createElement('small');
-    pctLine.className = 'mh-pct';
-    pctLine.textContent = !onBoard
-      ? 'Unranked · play to climb'
+    line.textContent = 'You';
+    const crest = document.createElement('span');
+    crest.className = 'mh-pill';
+    crest.textContent = shortDivisionOf(tiq);
+    crest.title = div.label;
+    const pctText = !onBoard
+      ? 'Unranked'
+      : pct >= 100
+        ? 'Bottom'
+        : `Top ${pct}%`;
+    const chip = document.createElement('span');
+    chip.className = 'mh-chip';
+    chip.textContent = pctText;
+    chip.title = !onBoard
+      ? 'Play a race to take a place on the ladder'
       : pct >= 100
         ? `Below the top ${field}`
         : `Top ${pct}% of minds`;
-    idWrap.append(line, pctLine);
+    idWrap.append(line, crest, chip);
 
     const score = document.createElement('span');
     score.className = 'mh-score';
@@ -1711,54 +1703,18 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     score.title = `${tiq.toLocaleString('en-US')} Tactical IQ`;
     score.setAttribute('aria-label', `${tiq.toLocaleString('en-US')} Tactical IQ, ${signed(delta)} this week`);
 
-    const top = document.createElement('span');
-    top.className = 'mh-top';
-    top.append(ring, idWrap, score);
+    host.append(ring, idWrap, score);
 
-    const axes = document.createElement('span');
-    axes.className = 'mh-axes';
-    for (const a of mindAxes()) {
-      const cell = document.createElement('span');
-      cell.className = 'mh-axis';
-      cell.title = a.hint;
-      const head = document.createElement('span');
-      head.className = 'mh-axis-h';
-      const label = document.createElement('small');
-      label.textContent = a.label;
-      const val = document.createElement('b');
-      val.textContent = `${a.pct}%`;
-      head.append(label, val);
-      const track = document.createElement('span');
-      track.className = 'mh-track';
-      const fill = document.createElement('i');
-      fill.style.width = `${a.pct}%`;
-      track.append(fill);
-      cell.append(head, track);
-      cell.setAttribute('aria-label', `${a.label} ${a.pct} percent, ${a.hint}`);
-      axes.append(cell);
-    }
-
-    /* progress to the next division, in wins — the milestone whisper, no action key */
     const gap = div.next > tiq ? div.next - tiq : 0;
     const wins = gap > 0 ? Math.ceil(gap / TIQ_PER_WIN) : 0;
-    const span = div.next > 0 ? div.next - TIER_BAND[div.tier][0] : 1;
-    const through = span > 0 ? Math.max(0, Math.min(100, Math.round(((tiq - TIER_BAND[div.tier][0]) / span) * 100))) : 100;
-    const prog = document.createElement('span');
-    prog.className = 'mh-prog';
-    const pTrack = document.createElement('span');
-    pTrack.className = 'mh-ptrack';
-    const pFill = document.createElement('i');
-    pFill.style.width = `${through}%`;
-    pTrack.append(pFill);
-    const pText = document.createElement('small');
-    pText.className = 'mh-ptext';
-    pText.textContent = wins
-      ? `${wins} win${wins === 1 ? '' : 's'} to ${divisionOf(div.next).label} · crest glows on rank-up`
+    const milestone = wins
+      ? `${wins} win${wins === 1 ? '' : 's'} to ${divisionOf(div.next).label}`
       : 'Peak division · hold it against the ladder';
-    prog.append(pTrack, pText);
-
-    host.append(top, axes, prog);
-    host.setAttribute('aria-label', `Your Standing: ${youLabel()}, ${div.label}, ${tiq.toLocaleString('en-US')} Tactical IQ, ${pctLine.textContent}`);
+    host.title = `${div.label} · ${chip.title} · ${milestone}`;
+    host.setAttribute(
+      'aria-label',
+      `Your Standing: ${youLabel()}, ${div.label}, ${tiq.toLocaleString('en-US')} Tactical IQ, ${chip.title}, ${milestone}`,
+    );
 
     /* Loss aversion: the single climber one rung above you, tappable to their row. */
     const rival = rows && ahead > 0 ? rows[ahead - 1] : null;

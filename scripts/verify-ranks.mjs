@@ -14,11 +14,13 @@
  *     amber beacon,
  *   - the board tabs lose their borderless pill groove or sliding thumb,
  *   - the podium loses its floating geometry: circular avatars, a taller gold
- *     centre, short rank pills ("GM II"), or the star-glowing TIQ score,
+ *     centre, short rank pills ("GM II"), or a TIQ score that is not the shared
+ *     #i-brain token the ladder rows use,
+ *   - the podium crests or the leader's crown lose clearance under the tab bar,
  *   - the three stepped plinths lose their 38/28/22 heights, their distinct
  *     gold / titanium / bronze faces, their embossed numerals or the gold aura,
- *   - the You slate loses its gradient/border, its one-row 4-badge micro gauge,
- *     its italic milestone, or regains the bulky "CLIMB NOW" key,
+ *   - the You strip regains any of the four attribute meters, the milestone line
+ *     or a second row, or stops being a single ~48px gradient-and-border HUD,
  *   - the podium and the You card cannot both fit a 360x640 screen without
  *     clipping (page scrollbar or cut edges),
  *   - the nations board bar or the mind sheet regress.
@@ -88,6 +90,9 @@ const AUDIT = () => {
     bad(`page scrolls vertically: ${document.scrollingElement.scrollHeight} > ${window.innerHeight}`);
   }
   const sc = document.getElementById('ranks-scroll');
+  /* every geometry gate below is a rest-state gate: the podium lives inside this
+     scroller, so a stray scroll would report the avatars as clipped */
+  if (sc) sc.scrollTop = 0;
   if (!sc || sc.scrollWidth > sc.clientWidth + 1) bad(`#ranks-scroll overflow: ${sc?.scrollWidth} > ${sc?.clientWidth}`);
 
   /* 2. every visible element inside ranks stays inside the viewport */
@@ -196,8 +201,18 @@ const AUDIT = () => {
     const iq = card.querySelector('.pod-iq');
     if (!iq || !/\d/.test(iq.textContent)) bad('TIQ chip missing/empty on a podium card');
     const glyph = iq?.querySelector('use')?.getAttribute('href') ?? '';
-    if (glyph !== '#i-star') bad(`podium TIQ glyph is ${glyph}, want #i-star`);
+    if (glyph !== '#i-brain') bad(`podium TIQ glyph is ${glyph}, want the shared #i-brain`);
     if (getComputedStyle(iq.querySelector('b')).textShadow === 'none') bad('podium TIQ digits are not glowing');
+
+    /* the crest must sit whole inside the scroller, not tucked under the tab bar */
+    const scTop = sc.getBoundingClientRect().top;
+    if (ar.top < scTop + 0.5) {
+      bad(`rank ${rank} avatar is clipped by the scroller: top ${ar.top.toFixed(1)} vs ${scTop.toFixed(1)}`);
+    }
+    const tabsBottom = root.querySelector('.ranks-tabs')?.getBoundingClientRect().bottom ?? 0;
+    if (ar.top < tabsBottom + 8) {
+      bad(`rank ${rank} avatar has no breathing room under the tabs (${(ar.top - tabsBottom).toFixed(1)}px)`);
+    }
 
     /* the plinth: exact stepped height, a cut metal face, a stepped cornice,
        a seated base, an embossed numeral and an aura beneath the base */
@@ -257,6 +272,23 @@ const AUDIT = () => {
       });
     if (Math.max(...centers) - Math.min(...centers) > 1.5) bad(`rank ${rank} column is not centred over its plinth`);
   }
+  /* one TIQ token across the whole ladder: podium and rows must agree, and no
+     star glyph may survive anywhere on the screen */
+  const podGlyphs = new Set([...root.querySelectorAll('#ranks-podium .pod-iq use')].map((u) => u.getAttribute('href')));
+  if (podGlyphs.size !== 1 || !podGlyphs.has('#i-brain')) {
+    bad(`podium TIQ icons are not unified: ${[...podGlyphs].join(', ') || 'none'}`);
+  }
+  const rowGlyphs = new Set([...root.querySelectorAll('#ranks-minds .lb-line use')].map((u) => u.getAttribute('href')));
+  if (rowGlyphs.size && !(rowGlyphs.size === 1 && rowGlyphs.has('#i-brain'))) {
+    bad(`ladder TIQ icons disagree with the podium: ${[...rowGlyphs].join(', ')}`);
+  }
+  if (/[☆★]/.test(root.textContent ?? '')) bad('a star glyph is still painted on the ranks screen');
+  const crown = root.querySelector('#ranks-podium .pod-crown');
+  const crownBox = crown?.getBoundingClientRect();
+  if (!crownBox || crownBox.top < sc.getBoundingClientRect().top + 2) {
+    bad(`the leader's crown has no clearance: top ${crownBox?.top.toFixed(1)} vs scroller ${sc.getBoundingClientRect().top.toFixed(1)}`);
+  }
+  out.notes.podium = `3 brains, crown top ${crownBox?.top.toFixed(0)}, avatar top ${Math.min(...cards.map((c) => c.querySelector('.pod-av').getBoundingClientRect().top)).toFixed(0)}`;
   if (!(plinthH['1'] > plinthH['2'] && plinthH['2'] > plinthH['3'])) {
     bad(`plinths are not stepped: ${plinthH['1']?.toFixed(0)} / ${plinthH['2']?.toFixed(0)} / ${plinthH['3']?.toFixed(0)}`);
   }
@@ -268,51 +300,61 @@ const AUDIT = () => {
   const band = root.querySelector('.pod-band, #pod-band');
   if (band && visible(band)) bad('the podium band caption is back — the header already carries the season');
 
-  /* 8. the You slate: gradient, bordered, XP ring, one-row micro gauge, and a
-        quiet milestone — no CTA, no nested action, room to breathe */
+  /* 8. the You strip: one 48px row — ringed avatar · "You" · tier crest · percentile
+        chip on the left, brain + TIQ + mono delta on the right. No meters, no prose,
+        no action key; the milestone survives only as the strip's own tooltip. */
   const slate = root.querySelector('.solo-standing.mh');
-  if (!slate || !visible(slate)) { bad('You slate missing'); return out; }
+  if (!slate || !visible(slate)) { bad('You strip missing'); return out; }
   const ss = getComputedStyle(slate);
   if (!/rgb\(22,\s*31,\s*48\)/.test(ss.backgroundImage) || !/rgb\(15,\s*22,\s*36\)/.test(ss.backgroundImage)) {
-    bad(`You slate gradient is "${ss.backgroundImage.slice(0, 90)}" — want #161F30 → #0F1624`);
+    bad(`You strip gradient is "${ss.backgroundImage.slice(0, 90)}" — want #161F30 → #0F1624`);
   }
-  if (!/rgba\(255,\s*255,\s*255,\s*0\.0?7\)/.test(ss.borderTopColor)) bad(`You slate border is ${ss.borderTopColor}, want rgba(255,255,255,0.07)`);
-  if (!near(parseFloat(ss.paddingTop), 12, 0.6) || !near(parseFloat(ss.paddingBottom), 12, 0.6)) {
-    bad(`You slate vertical padding is ${ss.paddingTop} / ${ss.paddingBottom}, want 12px`);
-  }
-  if (!near(parseFloat(ss.paddingLeft), 14, 0.6) || !near(parseFloat(ss.paddingRight), 14, 0.6)) {
-    bad(`You slate side padding is ${ss.paddingLeft} / ${ss.paddingRight}, want 14px`);
-  }
+  if (!/rgba\(255,\s*255,\s*255,\s*0\.0?7\)/.test(ss.borderTopColor)) bad(`You strip border is ${ss.borderTopColor}, want rgba(255,255,255,0.07)`);
+  const slateH = slate.getBoundingClientRect().height;
+  if (!near(slateH, 48, 1.5)) bad(`You strip is ${slateH.toFixed(1)}px tall — want the single 48px row`);
+  if (ss.flexDirection !== 'row') bad(`You strip lays out as ${ss.flexDirection}, want one row`);
+  /* one row = one shared centre line; the three children differ in height, so
+     comparing tops would fail a correctly centred strip */
+  const kidMids = new Set([...slate.children].map((c) => {
+    const b = c.getBoundingClientRect();
+    return Math.round(b.top + b.height / 2);
+  }));
+  if (kidMids.size !== 1) bad(`You strip children are not on one row: centres ${[...kidMids].join(', ')}`);
   if (!slate.querySelector('.mh-ring .mh-arc-fill')) bad('XP progress ring missing');
+  const ringBox = slate.querySelector('.mh-ring')?.getBoundingClientRect();
+  if (!ringBox || ringBox.height > 44) bad(`the strip's ring is ${ringBox?.height.toFixed(1)}px — it must fit inside 48px`);
   const line = slate.querySelector('.mh-line');
-  if (!line || !/^You · .+/i.test(line.textContent.trim())) bad(`identity line is "${line?.textContent}"`);
+  if (!line || line.textContent.trim() !== 'You') bad(`identity is "${line?.textContent}" — want the bare "You"`);
+  const crest = slate.querySelector('.mh-pill');
+  if (!crest || !/^(RK|TAC|STR|GM) (I|II|III)$/.test(crest.textContent.trim())) {
+    bad(`tier crest is "${crest?.textContent}" — want a short pill like "GM II"`);
+  }
+  const chip = slate.querySelector('.mh-chip');
+  if (!chip || !/^(Top \d+%|Unranked|Bottom)$/.test(chip.textContent.trim())) bad(`percentile chip is "${chip?.textContent}"`);
   const mhScore = slate.querySelector('.mh-score b');
   if (!mhScore || !/^\d[\d,]*$/.test(mhScore.textContent.trim())) bad(`TIQ score is "${mhScore?.textContent}"`);
-  const axes = [...slate.querySelectorAll('.mh-axes .mh-axis')].filter(visible);
-  if (axes.length !== 4) bad(`attribute gauge shows ${axes.length} badges, want 4`);
-  if (axes.length === 4) {
-    const tops = axes.map((a) => a.getBoundingClientRect().top);
-    if (Math.max(...tops) - Math.min(...tops) > 1.5) bad('attribute badges are not on a single row');
-    if (axes.some((a) => !/^\d+%$/.test(a.querySelector('b')?.textContent ?? ''))) bad('a micro-badge has no percentage chip');
-    const gh = slate.querySelector('.mh-axes').getBoundingClientRect().height;
-    if (gh > 24) bad(`attribute row is ${gh.toFixed(1)}px tall — want < 24`);
-    const cols = new Set(axes.map((a) => Math.round(a.getBoundingClientRect().left)));
-    if (cols.size !== 4) bad(`attribute gauge is not one row of 4 (${cols.size} columns)`);
+  if (slate.querySelector('.mh-score use')?.getAttribute('href') !== '#i-brain') bad('the strip does not read TIQ with the shared brain');
+  const mhDelta = slate.querySelector('.mh-score .lb-delta');
+  if (mhDelta) {
+    if (!/^[+\u2212-]?\d+$/.test(mhDelta.textContent.trim())) bad(`delta tag is "${mhDelta.textContent}"`);
+    if (!/mono/i.test(getComputedStyle(mhDelta).fontFamily)) bad('the delta tag is not monospace');
   }
-  const ptext = slate.querySelector('.mh-ptext');
-  if (!ptext || getComputedStyle(ptext).fontStyle !== 'italic') bad('milestone hint is missing/not italic');
-  else if (!/wins? to .+ · crest glows on rank-up/i.test(ptext.textContent)) bad(`milestone hint says "${ptext.textContent}"`);
-  if (slate.querySelector('.mh-cta, button')) bad('the You slate still carries an action key');
-  if (/climb\s*now/i.test(slate.textContent ?? '')) bad('CLIMB NOW copy is still inside the You slate');
-  const slateH = slate.getBoundingClientRect().height;
-  if (slateH > 190) bad(`You slate is ${slateH.toFixed(0)}px tall — the freed CTA space was not reclaimed`);
-  out.notes.slate = `${slateH.toFixed(0)}px read-only HUD`;
 
-  /* 9. on entry the podium and the You slate must both fit the visible scroller:
+  /* the clutter ban: the four meters, the milestone line and any action key stay gone */
+  for (const ghost of ['.mh-axes', '.mh-axis', '.mh-track', '.mh-prog', '.mh-ptrack', '.mh-ptext', '.mh-top', '.mh-pct', '.mh-cta', 'button']) {
+    if (slate.querySelector(ghost)) bad(`You strip clutter is back: ${ghost}`);
+  }
+  if (/climb\s*now/i.test(slate.textContent ?? '')) bad('CLIMB NOW copy is still inside the You strip');
+  if (/(foresight|tempo|traps|compose)/i.test(slate.textContent ?? '')) bad('an attribute meter label is still printed in the strip');
+  if (!/wins? to |peak division/i.test(slate.title)) bad('the next-division milestone was deleted rather than moved to the tooltip');
+  if (!/wins? to |peak division/i.test(slate.getAttribute('aria-label') ?? '')) bad('the milestone is missing from the strip aria-label');
+  out.notes.slate = `${slateH.toFixed(0)}px single-row HUD (${crest?.textContent} · ${chip?.textContent})`;
+
+  /* 9. on entry the podium and the You strip must both fit the visible scroller:
         no clipping, no page scrollbar — the ladder below may still scroll itself */
   sc.scrollTop = 0;
   const visibleBottom = sc.getBoundingClientRect().bottom;
-  for (const [name, el] of [['podium', root.querySelector('#ranks-podium')], ['You slate', slate]]) {
+  for (const [name, el] of [['podium', root.querySelector('#ranks-podium')], ['You strip', slate]]) {
     if (!el || !visible(el)) continue;
     const r = el.getBoundingClientRect();
     if (r.top < sc.getBoundingClientRect().top - 0.5) bad(`${name} starts above the scroller`);
@@ -365,7 +407,7 @@ try {
     await pg.waitForTimeout(800);
 
     const res = await pg.evaluate(`(${AUDIT.toString()})()`);
-    if (res.pass) pass(tag, `audited (${res.notes.widest}; ${res.notes.fit}; ${res.notes.tabs})`);
+    if (res.pass) pass(tag, `audited (${res.notes.podium}; ${res.notes.slate}; ${res.notes.fit})`);
     else fail(tag, res.fails.join('\n- '));
     await pg.screenshot({ path: path.join(SHOTS, `ranks-${tag}.png`) });
 

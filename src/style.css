@@ -4721,7 +4721,7 @@ html.reduced-motion .car-card.nations-cup::before { display: none; }
   column-gap: 10px;
   min-width: 0;
   max-width: 100%;
-  padding-top: 18px; /* the crown hangs above the leader's crest */
+  padding-top: 26px; /* the crown hangs above the leader's crest, and bobs 4px */
 }
 .podium[hidden] { display: none; }
 .pod-card {
@@ -4916,7 +4916,8 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
 }
 .pod-card.gold .pod-name { color: #FEF3C7; }
 
-/* the Tactical IQ chip: one recessed, glowing well — ★ 3,420 (+54) */
+/* the Tactical IQ chip: one recessed, glowing well — [brain] 3,420 (+54). The glyph
+   is the same #i-brain the ladder rows carry, so every TIQ read shares one token. */
 .pod-iq {
   display: flex;
   align-items: center;
@@ -4943,7 +4944,9 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
   text-overflow: ellipsis;
   text-shadow: 0 0 10px rgba(252, 211, 77, .45);
 }
-.pod-tiq { flex: none; width: 11px; height: 11px; color: var(--honey); filter: drop-shadow(0 0 3px rgba(245, 158, 11, .65)); }
+/* one size up from the old star's 11px: #i-brain is a stroked outline, so it needs
+   the extra pixel to keep its folds legible inside the chip */
+.pod-tiq { flex: none; width: 13px; height: 13px; color: var(--honey); filter: drop-shadow(0 0 3px rgba(245, 158, 11, .65)); }
 
 /* the rank pill: "GM II" in the tier's own aura, one quiet capsule — no slab */
 .pod-tier {
@@ -5261,26 +5264,26 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
 }
 .standing-score .tiq { flex: none; width: 16px; height: 16px; color: var(--honey); filter: drop-shadow(0 0 4px rgba(245, 158, 11, .4)); }
 
-/* ---- Top Minds hero card: the Floating Slate ----
-   One quiet command instrument: the illuminated XP/percent arc · "You" line, the
-   large TIQ read on the right, one row of four micro-badges, then the milestone
-   whisper. The card is deliberately read-only: no action key, so identity, score,
-   gauges and the next-division hint form one uninterrupted luxury HUD.
+/* ---- Top Minds strip: the Floating Slate, cut to one row ----------------------
+   Ringed avatar · "You" · tier crest · percentile chip on the left, the gold TIQ
+   read and its weekly movement on the right. 48px tall and read-only: the four
+   attribute meters and the italic milestone were removed, and the milestone now
+   rides the strip's own title and aria-label rather than a line of height.
    The ring is a real SVG arc on pathLength=100, so the dash *is* the percentage. */
 .solo-standing.mh {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 12px;
-  padding: 12px 14px;
-  min-height: 0;
+  gap: 10px;
+  min-height: 48px;
+  padding: 3px 12px;
   border: 1px solid rgba(255, 255, 255, .07);
-  border-radius: 18px;
+  border-radius: 16px;
   background: linear-gradient(180deg, #161F30 0%, #0F1624 100%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .05),
     0 18px 32px -14px rgba(0, 0, 0, .85);
 }
-.mh-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* the strip carries its own 40px ring; the sheet keeps the 56px one */
+.solo-standing.mh .mh-ring { width: 40px; height: 40px; }
+.solo-standing.mh .mh-ring b { width: 30px; height: 30px; font-size: 15px; }
 .mh-ring { position: relative; flex: none; width: 48px; height: 48px; display: grid; place-items: center; }
 .mh-arc { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
 .mh-arc circle { stroke-width: 3; }
@@ -5308,29 +5311,39 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   font-weight: 900;
   line-height: 1;
 }
-.mh-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.mh-id { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; }
 .mh-line {
+  flex: none;
   font-size: 13px;
   font-weight: 800;
   letter-spacing: -.01em;
   line-height: 1.2;
   color: var(--ink);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-/* the standing whisper: TOP 22% OF MINDS — a muted micro-caption, no capsule */
-.mh-pct {
+/* the two crest chips: your division in your own tier aura, your slice of the
+   field in quiet slate — one pair, no capsule stacked on top of another */
+.mh-pill,
+.mh-chip {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
   font-size: 8.5px;
-  font-weight: 700;
-  letter-spacing: .1em;
+  font-weight: 800;
+  letter-spacing: .05em;
   text-transform: uppercase;
-  line-height: 1.3;
-  color: #64748B;
+  line-height: 1.5;
   white-space: nowrap;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+.mh-pill {
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  color: var(--ml-aura, var(--ink-soft));
+}
+.mh-chip {
+  background: rgba(0, 0, 0, .26);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
+  color: #8CA0B8;
 }
 /* the hero read: large, crisp, gold; the weekly movement is a quiet mono small */
 .mh-score {
@@ -5353,33 +5366,8 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   line-height: 1.2;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
-/* ---- the attribute matrix: one row of four micro-badges, under 24px tall ----
-   Each badge is a label + percentage on one line, over a 3px hairline. Together
-   the four hairlines read as one segmented gauge — measurement without meters. */
-.mh-axes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; min-width: 0; }
-.mh-axis { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.mh-axis-h { display: flex; align-items: baseline; justify-content: space-between; gap: 3px; min-width: 0; }
-.mh-axis small {
-  min-width: 0;
-  font-size: 7.5px;
-  font-weight: 800;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  line-height: 1.1;
-  color: #7C8BA1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mh-axis b {
-  flex: none;
-  font-size: 9px;
-  font-weight: 800;
-  line-height: 1.1;
-  color: #E2E8F0;
-  font-variant-numeric: tabular-nums;
-}
-/* the micro-tracker: 3px well, rounded caps, cyan→emerald fill */
+/* the micro-tracker: 3px well, rounded caps, cyan→emerald fill. The mind sheet's
+   axes are the only meters left on this screen. */
 .mh-track {
   position: relative;
   height: 3px;
@@ -5398,7 +5386,6 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   box-shadow: 0 0 6px -1px rgba(56, 189, 248, .55);
   transition: width var(--motion-med);
 }
-.mh-prog { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .mh-ptrack {
   height: 3px;
   border-radius: var(--radius-pill);
@@ -5414,7 +5401,6 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   box-shadow: 0 0 8px -2px rgba(245, 158, 11, .55);
   transition: width var(--motion-med);
 }
-.mh-ptext { font-size: 10px; font-style: italic; font-weight: 600; line-height: 1.35; color: #8CA0B8; }
 
 /* ---- Rival watch: the gap made personal, and one tap from the row it names ---- */
 .rival {
@@ -8018,11 +8004,12 @@ html.reduced-motion .ml-pulse::after { display: none; }
   .solo-standing { padding: var(--s2); gap: var(--s2); }
   /* 20px is still display-grade at the 360 floor; the full 21px returns above it */
   .ml-title { font-size: 20px; }
-  /* the single-row gauge keeps its four columns on the narrow floor: values sit
-     on the header row, so no badge is ever narrower than its own label */
-  .solo-standing.mh { gap: 10px; padding: 12px 14px; }
-  .mh-axes { gap: 4px; }
-  .mh-axis small { letter-spacing: .02em; }
+  /* the strip keeps one row on the narrow floor: the score gives 2px before a
+     chip is allowed to wrap or the identity column is allowed to clip */
+  .solo-standing.mh { gap: 8px; padding: 3px 10px; }
+  .solo-standing.mh .mh-score { font-size: 19px; }
+  .mh-pill,
+  .mh-chip { padding: 1px 5px; letter-spacing: .03em; }
   .rival { padding: 6px 8px; }
   .rival-go { padding: 3px 6px; }
 }
