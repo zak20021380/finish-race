@@ -17,7 +17,7 @@ import {
   IDENTITY_REWARD, joinTeam, KINDS, leaveTeam, levelInfo, myTeam, onChange, profile,
   REFERRAL_REWARD, setBadge, setDisplayName, setDob, setFrame, theme, validDob,
 } from './storage';
-import { BADGES, badgeProgress, badgeTiq, equippedBadge, isBadgeUnlocked, unlockedCount } from './badges';
+import { BADGES, badgeProgress, equippedBadge, isBadgeUnlocked, unlockedCount, type BadgeDef } from './badges';
 import { MAX_BALLS, newGame } from './rules';
 import { createPreview, createRenderer, type Preview, type View } from './render';
 import { setBalance } from './coin';
@@ -503,7 +503,6 @@ export function createMenu(api: MenuApi): Menu {
   }
 
   /* ---------- squad: Telegram channel binding (header pill owns this sheet) ---------- */
-  let paintBadgesRef: (() => void) | null = null;
   const squadSheet = api.sheet('sheet-squad');
   const squadQ = $('squad-q') as HTMLInputElement;
   const squadList = $<HTMLElement>('squad-list');
@@ -668,19 +667,10 @@ export function createMenu(api: MenuApi): Menu {
     paintSquadPill();
     showSquadSearch();
   });
-  onSquadChange(() => { paintSquadPill(); if (squadSheet && !squadSheet.hidden) showSquadBoundRefresh(); paintBadgesSafe(); });
+  onSquadChange(() => { paintSquadPill(); if (squadSheet && !squadSheet.hidden) showSquadBoundRefresh(); });
   function showSquadBoundRefresh() {
     if (!squadBoundView.hidden) showSquadBound();
     else paintSquadList(squadQ.value);
-  }
-  /* badge rack also answers to squad binds (Churchill's Bastion unlocks there). */
-  function paintBadgesSafe() {
-    try {
-      const rack = document.getElementById('pf-badge-rack');
-      if (!rack) return;
-      /* paintBadges is defined below — call it late so squad events never race init. */
-      (paintBadgesRef as (() => void) | null)?.();
-    } catch { /* rack paints on next profile repaint */ }
   }
 
   /* ---- the entry points: country now lives only in Profile (header pill removed) ---- */
@@ -873,79 +863,151 @@ export function createMenu(api: MenuApi): Menu {
       wrap.setAttribute('aria-label', label);
       wrap.setAttribute('title', label);
     }
-    /* primary equipped badge next to the name */
+    /* the equipped honor, pinned to the avatar: its metal names it, its tap spots it */
     const eq = equippedBadge();
-    const eqWrap = document.getElementById('pf-equipped-badge');
+    const eqWrap = document.getElementById('pf-equipped-badge') as HTMLButtonElement | null;
     if (eqWrap) {
       if (!eq) {
         eqWrap.hidden = true;
+        eqWrap.removeAttribute('data-accent');
+        eqWrap.removeAttribute('aria-label');
+        eqWrap.removeAttribute('title');
       } else {
         eqWrap.hidden = false;
         eqWrap.setAttribute('data-accent', eq.accent);
         const use = document.getElementById('pf-equipped-use') as unknown as SVGUseElement | null;
         if (use) use.setAttribute('href', `#i-crest-${eq.accent}`);
-        /* the emblem carries no lettering: its metal, title and spoken label name it */
-        eqWrap.setAttribute('aria-label', `Equipped badge: ${eq.name}`);
-        eqWrap.setAttribute('title', eq.name);
+        eqWrap.setAttribute('aria-label', `Equipped badge: ${eq.name}. ${eq.archetype}, ${eq.pillar}. Spotlight it.`);
+        eqWrap.title = `${eq.name} · ${eq.archetype} · ${eq.pillar}`;
       }
     }
   };
 
-  /* Honor & Badges: a slim horizontal tray of sculpted crest chips — lit metal
-     when unlocked, frosted slate + a lock pin when locked. No prose in the tray:
-     the full card, its TIQ milestone and the equip action live in the View All
-     sheet, and the detail drawer still carries the lore. */
-  const makeChip = (unlocked: boolean, b: { accent: string }): HTMLSpanElement => {
-    const chip = document.createElement('span');
-    chip.className = 'badge-chip';
-    chip.setAttribute('aria-hidden', 'true');
-    chip.setAttribute('data-accent', b.accent);
-    chip.setAttribute('data-state', unlocked ? 'unlocked' : 'locked');
-    chip.innerHTML = `<svg class="badge-crest" viewBox="0 0 56 56" aria-hidden="true">`
+  /* Honor & Badges: the Genius Triad on one focused shelf. Three archetype
+     tiles — crest, title, archetype — and the tile itself is the equip control:
+     an unlocked tap swaps the active honor, a locked tap opens its lore. The
+     shelf's note line and the avatar pin share one spotlight, so a badge can
+     always name its title and archetype in words. */
+  const badgeMetricIcon = (b: BadgeDef): string =>
+    b.accent === 'quantum' ? 'i-brain' : b.accent === 'titanium' ? 'i-shield' : 'i-swords';
+
+  const makeSlot = (b: BadgeDef, unlocked: boolean, equipped: boolean, label: string): HTMLButtonElement => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `badge-slot ${unlocked ? 'is-unlocked' : 'is-locked'}${equipped ? ' is-equipped' : ''}`;
+    btn.dataset.badge = b.id;
+    btn.dataset.accent = b.accent;
+    btn.setAttribute('role', 'radio');
+    btn.setAttribute('aria-checked', String(equipped));
+    btn.setAttribute(
+      'aria-label',
+      `${b.name}. ${b.archetype}, ${b.pillar}. ${unlocked
+        ? equipped ? 'Equipped. Tap for details.' : 'Unlocked. Tap to equip.'
+        : `Locked. ${label}. Tap for details.`}`,
+    );
+    btn.title = unlocked
+      ? `${b.name} · ${b.archetype} · ${b.description}`
+      : `${b.name} · Locked · ${label}`;
+
+    const crest = document.createElement('span');
+    crest.className = 'badge-slot-crest';
+    crest.setAttribute('aria-hidden', 'true');
+    crest.innerHTML = `<svg class="badge-crest" viewBox="0 0 56 56" aria-hidden="true">`
       + `<use href="#i-crest-${b.accent}" /></svg>`
-      + (unlocked ? '' : `<span class="badge-lock"><svg class="ico ico-lock" aria-hidden="true">`
-        + `<use href="#i-lock" /></svg></span>`);
-    return chip;
+      + (unlocked ? '' : '<span class="badge-slot-lock"><svg class="ico" aria-hidden="true">'
+        + '<use href="#i-lock" /></svg></span>');
+    const name = document.createElement('span');
+    name.className = 'badge-slot-n';
+    name.textContent = b.name;
+    const arch = document.createElement('span');
+    arch.className = 'badge-slot-a';
+    arch.textContent = b.archetype;
+    btn.append(crest, name, arch);
+
+    if (equipped) {
+      const check = document.createElement('span');
+      check.className = 'badge-slot-check';
+      check.setAttribute('aria-hidden', 'true');
+      check.innerHTML = '<svg class="ico"><use href="#i-check" /></svg>';
+      btn.append(check);
+    }
+
+    btn.addEventListener('click', () => {
+      /* the shelf is the quick-equip control; a second tap on the active honor
+         opens its sheet instead of re-equipping it */
+      if (!isBadgeUnlocked(b.id) || profile.badge === b.id) { impact('light'); openBadge(b.id); return; }
+      setBadge(b.id);
+      impact('medium');
+      notify('success');
+      showPfToast(`${b.name} equipped`, true);
+    });
+    return btn;
   };
 
+  let spotlightTimer = 0;
+  function spotlightBadge(id: string): void {
+    const rack = document.getElementById('honor-badges-rack');
+    const note = document.getElementById('pf-badge-note');
+    const tile = rack?.querySelector<HTMLButtonElement>(`[data-badge="${id}"]`);
+    const b = BADGES.find((x) => x.id === id);
+    if (!rack || !tile || !b) return;
+    if (note) {
+      note.textContent = `${b.archetype} · ${b.pillar} — ${b.description}`;
+      note.dataset.accent = b.accent;
+      note.hidden = false;
+      note.classList.remove('is-lit');
+    }
+    tile.classList.remove('is-spotlit');
+    void tile.offsetWidth;
+    tile.classList.add('is-spotlit');
+    note?.classList.add('is-lit');
+    rack.scrollIntoView({ behavior: motionReduced() ? 'auto' : 'smooth', block: 'center' });
+    tile.focus({ preventScroll: true });
+    window.clearTimeout(spotlightTimer);
+    spotlightTimer = window.setTimeout(() => {
+      tile.classList.remove('is-spotlit');
+      note?.classList.remove('is-lit');
+    }, 1800);
+  }
+
   const paintBadges = () => {
-    const rack = document.getElementById('pf-badge-rack');
+    const rack = document.getElementById('honor-badges-rack');
     const count = document.getElementById('pf-badge-count');
     if (count) count.textContent = `(${unlockedCount()}/${BADGES.length})`;
+    const sub = document.getElementById('badges-sub');
+    if (sub) sub.textContent = `${unlockedCount()} of ${BADGES.length} honors unlocked. Equip the mind that races like you.`;
     if (!rack) return;
     rack.textContent = '';
     for (const b of BADGES) {
       const unlocked = isBadgeUnlocked(b.id);
       const prog = badgeProgress(b.id);
-      const equipped = unlocked && profile.badge === b.id;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = `badge-slot ${unlocked ? 'is-unlocked' : 'is-locked'}${equipped ? ' is-equipped' : ''}`;
-      btn.setAttribute('role', 'listitem');
-      btn.dataset.badge = b.id;
-      const chip = makeChip(unlocked, b);
-      btn.setAttribute(
-        'aria-label',
-        `${b.name} — ${unlocked ? (equipped ? 'equipped' : 'unlocked') : `locked, ${prog.label}`}. Open details.`,
-      );
-      const chipTiq = badgeTiq(b.id);
-      btn.title = unlocked
-        ? b.name
-        : `${b.name} · ${chipTiq.met ? prog.label : `${en(chipTiq.tiq)} TIQ required`}`;
-      btn.append(chip);
-      btn.addEventListener('click', () => openBadge(b.id));
-      rack.append(btn);
+      rack.append(makeSlot(b, unlocked, unlocked && profile.badge === b.id, prog.label));
+    }
+    /* the note under the shelf always names the equipped honor's archetype */
+    const note = document.getElementById('pf-badge-note');
+    const eq = equippedBadge();
+    if (note) {
+      if (eq) {
+        const text = `${eq.archetype} · ${eq.pillar} — ${eq.description}`;
+        if (note.textContent !== text) note.textContent = text;
+        note.hidden = false;
+        note.dataset.badge = eq.id;
+        note.dataset.accent = eq.accent;
+      } else {
+        note.hidden = true;
+        note.textContent = '';
+        delete note.dataset.badge;
+        delete note.dataset.accent;
+      }
     }
     paintBadgeList();
   };
-  paintBadgesRef = paintBadges;
 
-  /* "View All ›" drawer: the full catalogue as sculpted honor cards. Each card
-     carries its crest, its title and one-line lore, its TIQ milestone, and either
-     an EQUIPPED seal, a Tap to Equip pill or a locked pill over a live meter to
-     the number that still stands between the player and the badge. Tapping an
-     unlocked card equips it on the spot; a locked card opens the lore drawer
-     with the exact requirement and its TIQ progress. */
+  /* "View All ›" drawer: the Genius Triad as three honor cards. Each card
+     carries its crest, title, archetype/pillar line, one-line archetype
+     description and its requirement meter, with an EQUIPPED seal, a Details
+     pill or a locked pill. A card opens the detail drawer, where the full
+     requirement, progress and the equip action live. */
   function paintBadgeList() {
     const list = document.getElementById('badge-list');
     if (!list) return;
@@ -953,21 +1015,18 @@ export function createMenu(api: MenuApi): Menu {
     for (const b of BADGES) {
       const unlocked = isBadgeUnlocked(b.id);
       const equipped = unlocked && profile.badge === b.id;
-      const tp = badgeTiq(b.id);
-      const ach = badgeProgress(b.id);
-      const achMet = ach.got >= ach.need;
+      const prog = badgeProgress(b.id);
       const li = document.createElement('li');
       li.className = `badge-card ${unlocked ? 'is-unlocked' : 'is-locked'}${equipped ? ' is-equipped' : ''}`;
       li.setAttribute('role', 'option');
       li.setAttribute('aria-selected', String(equipped));
-      li.setAttribute('aria-label', `${b.name}. ${b.lore} ${
-        equipped ? 'Equipped.'
-          : unlocked ? 'Unlocked. Tap to equip.'
-            : tp.met ? `Locked. ${en(tp.tiq)} TIQ met; ${ach.label}.`
-              : `Locked. ${en(tp.tiq)} TIQ required, you have ${en(tp.got)}.`
-      }`);
+      li.setAttribute('aria-label', `${b.name}. ${b.archetype}, ${b.pillar}. ${b.description} ${
+        equipped ? 'Equipped.' : unlocked ? 'Unlocked.' : `Locked. ${prog.label}.`
+      } Open details.`);
+      li.title = `${b.name} · ${b.archetype} — ${b.description}`;
       li.tabIndex = 0;
       li.dataset.badge = b.id;
+      li.dataset.accent = b.accent;
 
       const crest = document.createElement('span');
       crest.className = 'badge-card-crest';
@@ -980,26 +1039,27 @@ export function createMenu(api: MenuApi): Menu {
       const main = document.createElement('span');
       main.className = 'badge-card-main';
 
-      /* the title and its one line of lore: the title names the mind, the lore
-         says what that mind did */
       const nm = document.createElement('span');
       nm.className = 'badge-card-n';
       nm.textContent = b.name;
-      const lore = document.createElement('span');
-      lore.className = 'badge-card-lore';
-      lore.textContent = b.lore;
+      const arch = document.createElement('span');
+      arch.className = 'badge-card-arch';
+      arch.textContent = `${b.archetype} · ${b.pillar}`;
+      const desc = document.createElement('span');
+      desc.className = 'badge-card-lore';
+      desc.textContent = b.description;
 
-      /* the requirement chip: the TIQ milestone, met or not */
+      /* the requirement chip: the archetype's own proof, met or not */
       const chip = document.createElement('span');
       chip.className = 'badge-card-tiq';
-      chip.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg>'
-        + (unlocked
-          ? tp.tiq > 0
-            ? `<b>${en(tp.tiq)} TIQ</b><span>Unlocked</span>`
-            : '<b>0 TIQ</b><span>Founding</span>'
-          : `<b>${en(tp.got)} / ${en(tp.tiq)} TIQ</b>`);
+      chip.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#${badgeMetricIcon(b)}" /></svg>`;
+      const fig = document.createElement('b');
+      fig.textContent = unlocked ? 'Unlocked' : prog.label;
+      const unit = document.createElement('span');
+      unit.textContent = unlocked ? b.pillar : 'Locked';
+      chip.append(fig, unit);
 
-      main.append(nm, lore, chip);
+      main.append(nm, arch, desc, chip);
 
       if (!unlocked) {
         const meter = document.createElement('span');
@@ -1007,17 +1067,13 @@ export function createMenu(api: MenuApi): Menu {
         const bar = document.createElement('i');
         bar.className = 'badge-card-bar';
         const fill = document.createElement('b');
-        const meterPct = tp.met && !achMet
-          ? Math.round((ach.got / Math.max(1, ach.need)) * 100)
-          : Math.round(tp.pct * 100);
-        fill.style.width = `${meterPct}%`;
+        const pct = Math.round(prog.pct * 100);
+        fill.style.width = `${pct}%`;
         bar.append(fill);
-        const fig = document.createElement('em');
-        fig.className = 'badge-card-meter-t';
-        /* the chip already prints the TIQ figures, so the meter either names the
-           achievement that is actually blocking the badge or reads as a percentage */
-        fig.textContent = tp.met && !achMet ? ach.label : `${meterPct}%`;
-        meter.append(bar, fig);
+        const label = document.createElement('em');
+        label.className = 'badge-card-meter-t';
+        label.textContent = `${pct}%`;
+        meter.append(bar, label);
         main.append(meter);
       }
 
@@ -1031,7 +1087,7 @@ export function createMenu(api: MenuApi): Menu {
         pill.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><b>EQUIPPED</b>';
       } else if (unlocked) {
         pill.classList.add('is-arm');
-        pill.textContent = 'Tap to Equip';
+        pill.textContent = 'Details';
       } else {
         pill.classList.add('is-locked');
         pill.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg><b>Locked</b>';
@@ -1040,14 +1096,7 @@ export function createMenu(api: MenuApi): Menu {
 
       li.append(crest, main, rail);
 
-      const activate = () => {
-        if (!isBadgeUnlocked(b.id)) { impact('light'); openBadge(b.id); return; }
-        if (profile.badge === b.id) return;
-        setBadge(b.id);
-        impact('medium');
-        notify('success');
-        showPfToast(`${b.name} equipped`, true);
-      };
+      const activate = () => { impact('light'); openBadge(b.id); };
       li.addEventListener('click', activate);
       li.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -1071,39 +1120,37 @@ export function createMenu(api: MenuApi): Menu {
       hero.setAttribute('data-accent', def.accent);
       hero.classList.toggle('is-locked', !unlocked);
     }
-    const tp = badgeTiq(id);
     const use = document.getElementById('badge-sheet-use') as unknown as SVGUseElement | null;
     if (use) use.setAttribute('href', `#i-crest-${def.accent}`);
     const title = document.getElementById('badge-title');
     if (title) title.textContent = def.name;
+    const arch = document.getElementById('badge-archetype');
+    if (arch) arch.textContent = `${def.archetype} · ${def.pillar}`;
+    const desc = document.getElementById('badge-description');
+    if (desc) desc.textContent = def.description;
+    const palette = document.getElementById('badge-palette');
+    if (palette) palette.textContent = def.palette;
     const lore = document.getElementById('badge-lore');
     if (lore) lore.textContent = def.lore;
     const crit = document.getElementById('badge-criteria');
     if (crit) crit.textContent = def.criteria;
     const state = document.getElementById('badge-state');
-    if (state) state.textContent = unlocked
-      ? `Unlocked · ${en(tp.tiq)} TIQ`
-      : tp.met ? `Locked · ${prog.label}` : `Locked · ${en(tp.got)} / ${en(tp.tiq)} TIQ`;
+    if (state) state.textContent = unlocked ? 'Unlocked' : `Locked · ${prog.label}`;
     const fill = document.getElementById('badge-progress-fill');
     const bar = document.getElementById('badge-progress-bar');
     const label = document.getElementById('badge-progress-t');
-    const tiqLocked = !unlocked && !tp.met;
-    const pct = tiqLocked
-      ? Math.round(tp.pct * 100)
-      : prog.need > 0 ? Math.min(100, Math.round((prog.got / prog.need) * 100)) : 100;
+    const pct = Math.round(prog.pct * 100);
     if (fill) fill.style.width = `${unlocked ? 100 : pct}%`;
     if (bar) {
-      bar.setAttribute('aria-valuenow', String(tiqLocked ? tp.got : prog.got));
-      bar.setAttribute('aria-valuemax', String(tiqLocked ? tp.tiq : prog.need));
+      bar.setAttribute('aria-valuenow', String(prog.got));
+      bar.setAttribute('aria-valuemax', String(prog.need));
     }
-    if (label) label.textContent = unlocked
-      ? 'Complete — ready to equip'
-      : tiqLocked ? `${en(tp.got)} / ${en(tp.tiq)} TIQ` : prog.label;
+    if (label) label.textContent = unlocked ? 'Complete — ready to equip' : prog.label;
     const equip = document.getElementById('badge-equip') as HTMLButtonElement | null;
     if (equip) {
       if (!unlocked) {
         equip.disabled = true;
-        equip.textContent = tiqLocked ? `${en(tp.tiq)} TIQ required` : prog.label;
+        equip.textContent = 'Requirement not met';
       } else if (profile.badge === id) {
         equip.disabled = true;
         equip.textContent = 'Equipped';
@@ -1284,6 +1331,14 @@ export function createMenu(api: MenuApi): Menu {
     setFrame(next === 'default' ? null : next);
     impact('light');
     notify('success');
+  });
+  /* the pin itself is the shortcut to the honor: scroll the shelf into place,
+     pulse the equipped tile and name its archetype in the note below */
+  document.getElementById('pf-equipped-badge')?.addEventListener('click', () => {
+    const eq = equippedBadge();
+    if (!eq) return;
+    spotlightBadge(eq.id);
+    impact('light');
   });
   document.getElementById('badge-equip')?.addEventListener('click', () => {
     if (!badgeDraft || !isBadgeUnlocked(badgeDraft)) return;

@@ -1,141 +1,138 @@
 /**
- * badges.ts — gamified player identity: Honor & Badges showcase.
+ * badges.ts — the Genius Triad: three prestige honors, one per player archetype.
  *
- * The catalogue is static; unlock state is derived from the live save so a
- * half-written localStorage blob can never smuggle a badge in. Only the
+ * The catalogue is static and the unlock state is derived from the live save, so
+ * a half-written localStorage blob can never smuggle a badge in. Only the
  * equipped badge id persists (profile.badge under detour.save.v2) — the same
  * single-key contract storage.ts already owns.
  *
- * Every badge is a two-key lock: its own achievement AND a Tactical IQ
- * milestone. The milestone is what the Honor sheet prints, so the ladder has a
- * visible number to grind for even before the achievement lands.
+ * Each archetype answers to a different proof:
+ * - Churchill's Bastion  — Resilience: a 3-win streak, holding the line.
+ * - Einstein's Singularity — Pure Intellect: the 1,500 TIQ threshold.
+ * - Heisenberg's Formula — Calculated Precision: a 60% win rate over 5+ races.
  *
- * The roster is the prestige ladder of historical masterminds, one per TIQ
- * milestone. Ids stay stable across the rename so an already-equipped badge
- * still resolves from the save (profile.badge is the only persisted key).
- *
- * Unlock rules (all local-first):
- * - early-adopter: Da Vinci's Vision — always unlocked, you are here at 0 TIQ.
- * - squad-warrior: Churchill's Bastion — squad/team bound, and 1,000 TIQ.
- * - streak-master: Sun Tzu's Shadow — best win streak of 3+, and 2,000 TIQ.
- * - cup-finalist: Napoleon's Crown — 5+ games played, and 3,000 TIQ.
- * - apex-immortal: Cyrus the Immortal — the 4,000 TIQ Apex lock itself.
+ * Ids are stable; the crest symbol and the CSS aura are both keyed by `accent`,
+ * so a badge is one data row plus one #i-crest-<accent> in index.html.
  */
 
-import { myTeam, profile } from './storage';
-import { getMySquad } from './squads';
+import { profile } from './storage';
 import { myTiq } from './matchmaking';
+
+export type BadgeAccent = 'titanium' | 'quantum' | 'frost';
 
 export interface BadgeDef {
   id: string;
   name: string;
+  /** The shortened archetype name printed on the shelf tile. */
+  archetype: string;
+  /** The psychological pillar the archetype represents. */
+  pillar: string;
+  /** One sentence of archetype copy, used by the pin spotlight and detail sheet. */
+  description: string;
+  /** Flavor — the legend the detail sheet prints under the title. */
   lore: string;
+  /** The unlock requirement in player-facing words. */
   criteria: string;
-  /** Names the sculpted crest in index.html (#i-crest-<accent>) and its CSS aura. */
-  accent: 'gold' | 'sky' | 'mint' | 'coral' | 'obsidian';
-  /** Tactical IQ milestone the badge demands, on the same scale as myTiq(). */
-  tiq: number;
+  /** Names the sculpted crest (#i-crest-<accent>) and its CSS aura. */
+  accent: BadgeAccent;
+  /** The metal + aura palette, as metadata and as sheet copy. */
+  palette: string;
 }
 
-export const BADGES: BadgeDef[] = [
+export const GENIUS_TRIAD: readonly BadgeDef[] = [
   {
-    id: 'early-adopter',
-    name: "Da Vinci's Vision",
-    lore: 'Reads three steps ahead. Master of board geometry.',
-    criteria: 'Join the game — every pioneer begins with vision. No TIQ minimum.',
-    accent: 'gold',
-    tiq: 0,
-  },
-  {
-    id: 'squad-warrior',
+    id: 'churchill_bastion',
     name: "Churchill's Bastion",
-    lore: 'Never surrender. Architect of impenetrable walls.',
-    criteria: 'Bind a Telegram squad or join a team, and bank 1,000 TIQ.',
-    accent: 'sky',
-    tiq: 1000,
+    archetype: 'The Ironclad',
+    pillar: 'Resilience',
+    description: 'Unyielding defence and comeback mastery. Holds the line until the board breaks.',
+    lore: 'Never surrender. The wall is not a tactic; it is a promise.',
+    criteria: 'Reach a 3-win streak. High-resilience runs and clutch comebacks forge the Bastion.',
+    accent: 'titanium',
+    palette: 'Brushed Titanium #94A3B8 · Deep Cyan #06B6D4',
   },
   {
-    id: 'streak-master',
-    name: "Sun Tzu's Shadow",
-    lore: 'Every battle is won before the first pawn moves.',
-    criteria: 'Reach a 3-win streak in bot races and bank 2,000 TIQ.',
-    accent: 'mint',
-    tiq: 2000,
+    id: 'einstein_singularity',
+    name: "Einstein's Singularity",
+    archetype: 'The Mastermind',
+    pillar: 'Pure Intellect',
+    description: 'Spatial foresight and zero-error calculation. Sees the whole board before the first move.',
+    lore: 'The board is not a race. It is a proof.',
+    criteria: 'Bank 1,500 Tactical IQ. Pure calculation bends the board into a single answer.',
+    accent: 'quantum',
+    palette: 'Deep Obsidian · Quantum Gold #F59E0B / #FDE047',
   },
   {
-    id: 'cup-finalist',
-    name: "Napoleon's Crown",
-    lore: 'Relentless tempo. Conquers the board without mercy.',
-    criteria: 'Finish 5 races and bank 3,000 TIQ.',
-    accent: 'coral',
-    tiq: 3000,
-  },
-  {
-    id: 'apex-immortal',
-    name: 'Cyrus the Immortal',
-    lore: 'Supreme Tactical IQ. Sovereign of the Mind Ladder.',
-    criteria: 'Bank 4,000 TIQ — the Apex lock. No other key opens it.',
-    accent: 'obsidian',
-    tiq: 4000,
+    id: 'heisenberg_formula',
+    name: "Heisenberg's Formula",
+    archetype: 'The Strategist',
+    pillar: 'Calculated Precision',
+    description: 'Flawless tactical execution and cold dominance. Wins before the race begins.',
+    lore: 'No wasted moves. No luck. Only the formula.',
+    criteria: 'Win 60% of at least 5 races. Ruthless precision, never chance.',
+    accent: 'frost',
+    palette: 'Cold Slate #334155 · Frost Emerald #10B981 / Cyan #38BDF8',
   },
 ];
+
+/** Back-compat alias: the catalogue is the triad. */
+export const BADGES = GENIUS_TRIAD;
 
 export const badgeById = (id: string | null | undefined): BadgeDef | null =>
   BADGES.find((b) => b.id === id) ?? null;
 
-/** The badge's own achievement, ignoring its TIQ milestone. */
-function achievementMet(id: string): boolean {
+const en = (n: number) => n.toLocaleString('en-US');
+
+export interface BadgeProgress {
+  got: number;
+  need: number;
+  /** 0..1, ready for meters and aria-valuenow ratios. */
+  pct: number;
+  /** The requirement's own unit, e.g. "2/3 win streak" or "62% win rate". */
+  label: string;
+  met: boolean;
+}
+
+/** Live progress against a badge's requirement — the same read the shelf and sheet use. */
+export function badgeProgress(id: string): BadgeProgress {
+  const s = profile.stats;
   switch (id) {
-    case 'early-adopter':
-      return true;
-    case 'squad-warrior':
-      return getMySquad() !== null || myTeam() !== null;
-    case 'streak-master':
-      return profile.stats.best >= 3;
-    case 'cup-finalist':
-      return profile.stats.games >= 5;
-    case 'apex-immortal':
-      return true;
+    case 'churchill_bastion': {
+      const got = Math.min(Math.max(0, s.best), 3);
+      return { got, need: 3, pct: got / 3, label: `${got}/3 win streak`, met: got >= 3 };
+    }
+    case 'einstein_singularity': {
+      const need = 1500;
+      const got = Math.max(0, myTiq());
+      return {
+        got,
+        need,
+        pct: Math.min(1, got / need),
+        label: `${en(got)} / ${en(need)} TIQ`,
+        met: got >= need,
+      };
+    }
+    case 'heisenberg_formula': {
+      if (s.games < 5) {
+        const got = Math.min(Math.max(0, s.games), 5);
+        return { got, need: 5, pct: got / 5, label: `${got}/5 races`, met: false };
+      }
+      const rate = Math.round((s.wins / s.games) * 100);
+      return {
+        got: rate,
+        need: 60,
+        pct: Math.min(1, rate / 60),
+        label: `${rate}% / 60% wins`,
+        met: rate >= 60,
+      };
+    }
     default:
-      return false;
+      return { got: 0, need: 1, pct: 0, label: 'Locked', met: false };
   }
 }
 
 export function isBadgeUnlocked(id: string): boolean {
-  const def = badgeById(id);
-  return !!def && achievementMet(def.id) && myTiq() >= def.tiq;
-}
-
-/** TIQ standing against the badge's milestone — the figure the honor cards print. */
-export function badgeTiq(id: string): { tiq: number; got: number; pct: number; met: boolean } {
-  const tiq = badgeById(id)?.tiq ?? 0;
-  const got = Math.max(0, myTiq());
-  return {
-    tiq,
-    got,
-    pct: tiq > 0 ? Math.min(1, got / tiq) : 1,
-    met: got >= tiq,
-  };
-}
-
-/** Completion progress for locked badges (tooltip + sheet meter). */
-export function badgeProgress(id: string): { got: number; need: number; label: string } {
-  switch (id) {
-    case 'squad-warrior':
-      return getMySquad() !== null || myTeam() !== null
-        ? { got: 1, need: 1, label: 'Squad bound' }
-        : { got: 0, need: 1, label: 'Join a squad or team' };
-    case 'streak-master': {
-      const got = Math.min(profile.stats.best, 3);
-      return { got, need: 3, label: `${got}/3 streak` };
-    }
-    case 'cup-finalist': {
-      const got = Math.min(profile.stats.games, 5);
-      return { got, need: 5, label: `${got}/5 races` };
-    }
-    default:
-      return { got: 1, need: 1, label: 'Unlocked' };
-  }
+  return badgeById(id) !== null && badgeProgress(id).met;
 }
 
 export function unlockedCount(): number {
