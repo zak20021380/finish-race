@@ -47,7 +47,7 @@ import {
   type Trend,
 } from './data';
 import { nameOf } from './countries';
-import { equippedBadge } from './badges';
+import { badgeCrestHtml, equippedBadge } from './badges';
 import { flagPhoto } from './flags';
 import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
@@ -1618,8 +1618,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       eqCrest.className = 'mh-badge';
       eqCrest.setAttribute('aria-label', `Equipped badge: ${eq.name}`);
       eqCrest.title = eq.name;
-      eqCrest.innerHTML = `<svg class="badge-crest" viewBox="0 0 56 56" aria-hidden="true">`
-        + `<use href="#i-crest-${eq.accent}" /></svg>`;
+      eqCrest.innerHTML = badgeCrestHtml(eq);
     }
 
     const score = document.createElement('span');

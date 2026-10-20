@@ -18,9 +18,9 @@ import {
   REFERRAL_REWARD, setBadge, setDisplayName, setDob, setFrame, theme, validDob,
 } from './storage';
 import {
-  BADGES, badgeEdition, badgeProgress, editionLabel, editionSerialLabel, editionSpeech, editionSyncState,
-  equippedBadge, hasEditionClaim, isBadgeUnlocked, onEditionChange, refreshBadgeEditions, unlockedCount,
-  type BadgeDef,
+  BADGES, badgeCrestHtml, badgeEdition, badgeProgress, editionLabel, editionSerialLabel, editionSpeech,
+  editionSyncState, equippedBadge, hasEditionClaim, isBadgeUnlocked, onEditionChange, refreshBadgeEditions,
+  unlockedCount, type BadgeDef,
 } from './badges';
 import { MAX_BALLS, newGame } from './rules';
 import { createPreview, createRenderer, type Preview, type View } from './render';
@@ -881,8 +881,11 @@ export function createMenu(api: MenuApi): Menu {
       } else {
         eqWrap.hidden = false;
         eqWrap.setAttribute('data-accent', eq.accent);
-        const use = document.getElementById('pf-equipped-use') as unknown as SVGUseElement | null;
-        if (use) use.setAttribute('href', `#i-crest-${eq.accent}`);
+        /* the pin carries the honor's own metal: rendered art when it ships, else the crest */
+        if (eqWrap.dataset.badge !== eq.id) {
+          eqWrap.innerHTML = badgeCrestHtml(eq, 'badge-crest pf-equipped-crest');
+          eqWrap.dataset.badge = eq.id;
+        }
         const ed = badgeEdition(eq.id);
         eqWrap.setAttribute(
           'aria-label',
@@ -936,8 +939,7 @@ export function createMenu(api: MenuApi): Menu {
     const crest = document.createElement('span');
     crest.className = 'badge-slot-crest';
     crest.setAttribute('aria-hidden', 'true');
-    crest.innerHTML = `<svg class="badge-crest" viewBox="0 0 56 56" aria-hidden="true">`
-      + `<use href="#i-crest-${b.accent}" /></svg>`
+    crest.innerHTML = badgeCrestHtml(b)
       + (unlocked ? '' : '<span class="badge-slot-lock"><svg class="ico" aria-hidden="true">'
         + '<use href="#i-lock" /></svg></span>');
     const name = document.createElement('span');
@@ -1073,8 +1075,7 @@ export function createMenu(api: MenuApi): Menu {
       const crest = document.createElement('span');
       crest.className = 'badge-card-crest';
       crest.setAttribute('aria-hidden', 'true');
-      crest.innerHTML = `<svg class="badge-crest" viewBox="0 0 56 56" aria-hidden="true">`
-        + `<use href="#i-crest-${b.accent}" /></svg>`
+      crest.innerHTML = badgeCrestHtml(b)
         + (unlocked ? '' : '<span class="badge-card-lock"><svg class="ico" aria-hidden="true">'
           + '<use href="#i-lock" /></svg></span>');
 
@@ -1179,8 +1180,8 @@ export function createMenu(api: MenuApi): Menu {
       hero.setAttribute('data-accent', def.accent);
       hero.classList.toggle('is-locked', !unlocked);
     }
-    const use = document.getElementById('badge-sheet-use') as unknown as SVGUseElement | null;
-    if (use) use.setAttribute('href', `#i-crest-${def.accent}`);
+    const crest = document.getElementById('badge-sheet-ico-wrap');
+    if (crest) crest.innerHTML = badgeCrestHtml(def);
     const title = document.getElementById('badge-title');
     if (title) title.textContent = def.name;
     const arch = document.getElementById('badge-archetype');

@@ -18,13 +18,15 @@
  * while it tries again.
  *
  * Ids are stable; the crest symbol and the CSS aura are both keyed by `accent`,
- * so a badge is one data row plus one #i-crest-<accent> in index.html.
+ * so a badge is one data row plus one #i-crest-<accent> in index.html. A badge
+ * that ships rendered art paints that medallion instead, on every surface.
  */
 
 import { cacheBadgeClaim, cacheBadgeSupply, profile, type EditionClaim, type EditionSupply } from './storage';
 import { myTiq } from './matchmaking';
 import { workerUrl } from './adminApi';
 import { tgInitData } from './telegram';
+import heisenbergMedallion from './assets/images/Heisenberg Chrome Medallion.png';
 
 export type BadgeAccent = 'titanium' | 'quantum' | 'frost';
 
@@ -43,8 +45,10 @@ export interface BadgeDef {
   lore: string;
   /** The unlock requirement in player-facing words. */
   criteria: string;
-  /** Names the sculpted crest (#i-crest-<accent>) and its CSS aura. */
+  /** Names the sculpted crest (#i-crest-<accent>), its CSS aura, and the art fallback. */
   accent: BadgeAccent;
+  /** Rendered medallion art; when set it replaces the vector crest everywhere the honor is worn. */
+  art?: string;
   /** The metal + aura palette, as metadata and as sheet copy. */
   palette: string;
   /** Hard edition cap. Mirrors `BADGE_CAPS` in worker/badges.ts; never mint above it. */
@@ -88,6 +92,7 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
     lore: 'No wasted moves. No luck. Only the formula.',
     criteria: 'Win 60% of at least 5 races. Ruthless precision, never chance.',
     accent: 'frost',
+    art: heisenbergMedallion,
     palette: 'Matte Graphite · Frost Emerald #10B981 / #34D399',
     cap: 25,
   },
@@ -98,6 +103,18 @@ export const BADGES = GENIUS_TRIAD;
 
 export const badgeById = (id: string | null | undefined): BadgeDef | null =>
   BADGES.find((b) => b.id === id) ?? null;
+
+/**
+ * The honor's crest as markup: its rendered medallion when one ships, else the
+ * vector silhouette keyed by accent. Decorative — every host names the badge.
+ */
+export function badgeCrestHtml(def: BadgeDef, className = 'badge-crest'): string {
+  if (def.art) {
+    return `<img class="${className} badge-crest-art" src="${def.art}" alt="" aria-hidden="true" draggable="false" decoding="async" />`;
+  }
+  return `<svg class="${className}" viewBox="0 0 56 56" aria-hidden="true">`
+    + `<use href="#i-crest-${def.accent}" /></svg>`;
+}
 
 const en = (n: number) => n.toLocaleString('en-US');
 
