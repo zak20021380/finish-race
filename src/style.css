@@ -386,6 +386,15 @@ html, body {
   100% { transform: translate3d(0, 0, 0); }
 }
 .board-wrap.shake { animation: board-shake .5s cubic-bezier(.36, .07, .19, .97) both; }
+/* a mine is a smaller event than a log slamming the slab: 2px, not 4 */
+.board-wrap.shake.micro { animation: board-shake-micro .32s cubic-bezier(.36, .07, .19, .97) both; }
+@keyframes board-shake-micro {
+  0%   { transform: translate3d(0, 0, 0); }
+  24%  { transform: translate3d(-2px, 1px, 0); }
+  52%  { transform: translate3d(2px, -1px, 0); }
+  78%  { transform: translate3d(-1px, 1px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
 /* While a log is rolling the board is inert: the same lock that parks the opponent parks the
    finger, and the frame wears the lane's amber so the wait reads as weight, not as a frozen app. */
 .board-wrap.rolling { pointer-events: none; }

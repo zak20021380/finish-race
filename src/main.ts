@@ -182,15 +182,17 @@ function setFog(p: Player) {
   cell.setAttribute('aria-label', spent ? 'Mines: none left' : 'Mines: count concealed');
 }
 
-/* the trigger shakes the board itself, once. Reduced motion never shakes anything. */
+/* the trigger shakes the board itself, once. A mine is a 2px micro-shake, a log the full 4px.
+   Reduced motion never shakes anything. */
 let shakeTimer = 0;
-function shake() {
+function shake(micro = false) {
   if (motionReduced()) return;
-  wrap.classList.remove('shake');
+  wrap.classList.remove('shake', 'micro');
   void wrap.offsetWidth;                 // restarting the animation needs a reflow in between
+  if (micro) wrap.classList.add('micro');
   wrap.classList.add('shake');
   clearTimeout(shakeTimer);
-  shakeTimer = window.setTimeout(() => wrap.classList.remove('shake'), 700);
+  shakeTimer = window.setTimeout(() => wrap.classList.remove('shake', 'micro'), micro ? 400 : 700);
 }
 
 /* the toast over the lower board: why a slot was refused, "tap again to place", an event alert.
@@ -807,7 +809,7 @@ function play(a: Action, remote = false): boolean {
     renderer.blast(blast.cell, moved !== null && from && landed
       ? { id: moved, from, to: landed }
       : undefined);
-    shake();
+    shake(true);
     audio.play('explosion');
     detonation();
     showNote(`Mine! ${TEAM_NAME[by]} ${by === localSide ? 'were' : 'was'} thrown back `

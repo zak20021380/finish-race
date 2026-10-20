@@ -123,6 +123,10 @@ const BALL_R = 0.34;
 const BAR_T = 0.13;
 const SOLID: number[] = [];
 const BLAST_MS = 700;   // the whole mine trigger, flash to last spark
+/** How long the scorched tile's fracture knots keep smouldering before they are cold carbon. */
+const EMBER_MS = 2600;
+/** Tooth marks behind a wounded ball: recent, previous, third gait, then the tile is clean again. */
+const TRAIL_STEPS = 3;
 /** The blast throw: a beat to step onto the charge, then the hop over whatever wall it clears. */
 const KNOCK_MS = 620;
 /** The hop's peak, in cells: tall enough to carry the ball over a wall bar on the line below it. */
@@ -522,6 +526,241 @@ function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: n
   ctx.closePath();
 }
 
+/* ---------- mine scars and the blood trail ----------
+ * The board is one canvas, so the brief's tile classes have no DOM to live in. Each state is a
+ * small stamp struck at the current cell size and blitted once per marked tile: the per-frame
+ * cost is a drawImage, with no per-decal nodes, path building or gradient allocation.
+ */
+
+/** Deterministic PRNG for the stamps and the droplet scatter, so a board paints the same twice. */
+function rng32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** The scar / droplet shape a cell wears: stable for the cell, chosen once at build time. */
+const decalVariant = (c: number, r: number): number => (c * 7 + r * 13) % 3;
+
+interface DecalArt {
+  scorch: HTMLCanvasElement[];
+  /** Warm knots along each variant's fractures, in tile fractions. */
+  embers: { x: number; y: number }[][];
+  /** The soft smoulder each knot is painted with — never a hard dot, so it cannot read as blood. */
+  ember: HTMLCanvasElement;
+  wet: HTMLCanvasElement[];
+  dry: HTMLCanvasElement[];
+  smoke: HTMLCanvasElement;
+}
+
+/**
+ * Build the tile-sized art once per layout. The three scorch faces share the spec's charcoal
+ * (`#0B0F19`), a deep inset shadow and a procedural fracture web; the six droplet faces are the
+ * same three shapes in a wet arterial ruby and a dried carbon red, so a trail can age by swapping
+ * stamps rather than by repainting a path.
+ */
+function buildDecalArt(cell: number, dpr: number): DecalArt {
+  const gap = Math.max(1, cell * 0.03);
+  const tw = Math.max(2, cell - gap);
+  const tr = Math.min(cell * 0.15, tw / 2);
+  const scorch: HTMLCanvasElement[] = [];
+  const embers: { x: number; y: number }[][] = [];
+  for (let v = 0; v < 3; v++) {
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(tw * dpr));
+    cv.height = cv.width;
+    const g = cv.getContext('2d')!;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const rand = rng32(0x5eed + v * 977);
+    const px = tw * (0.4 + rand() * 0.2), py = tw * (0.38 + rand() * 0.2);
+    const base = g.createRadialGradient(px, py, tw * 0.04, tw * 0.5, tw * 0.5, tw * 0.74);
+    base.addColorStop(0, '#161E2C');
+    base.addColorStop(0.45, '#0B0F19');
+    base.addColorStop(1, '#04060B');
+    rr(g, 0, 0, tw, tw, tr);
+    g.fillStyle = base;
+    g.fill();
+
+    /* the spec's inset 0 4px 10px rgba(0,0,0,.85), scaled with the tile */
+    g.save();
+    rr(g, 0, 0, tw, tw, tr);
+    g.clip();
+    g.shadowColor = 'rgba(0,0,0,.85)';
+    g.shadowBlur = tw * 0.26;
+    g.shadowOffsetY = tw * 0.1;
+    g.lineWidth = Math.max(2, tw * 0.1);
+    g.strokeStyle = 'rgba(0,0,0,.9)';
+    rr(g, 0, 0, tw, tw, tr);
+    g.stroke();
+    /* the crater's own falloff: the lip is cold, the floor holds a whisper of light, and the
+       bottom edge catches a thin line of the board's glow */
+    const shade = g.createLinearGradient(0, 0, 0, tw);
+    shade.addColorStop(0, 'rgba(0,0,0,.72)');
+    shade.addColorStop(0.3, 'rgba(0,0,0,.18)');
+    shade.addColorStop(0.62, 'rgba(0,0,0,0)');
+    shade.addColorStop(1, 'rgba(0,0,0,.28)');
+    g.fillStyle = shade;
+    g.fillRect(0, 0, tw, tw);
+    const lip = g.createLinearGradient(0, tw * 0.7, 0, tw);
+    lip.addColorStop(0, 'rgba(226,214,196,0)');
+    lip.addColorStop(1, 'rgba(226,214,196,.12)');
+    g.fillStyle = lip;
+    g.fillRect(0, 0, tw, tw);
+    g.restore();
+
+    /* a hair of cool light on the crater lip, so the dark square reads as a hole */
+    g.strokeStyle = 'rgba(148,163,184,.12)';
+    g.lineWidth = Math.max(1, tw * 0.018);
+    rr(g, tw * 0.035, tw * 0.035, tw * 0.93, tw * 0.93, Math.max(0, tr - tw * 0.02));
+    g.stroke();
+
+    const pit = g.createRadialGradient(px, py, 0, px, py, tw * 0.36);
+    pit.addColorStop(0, 'rgba(0,0,0,.6)');
+    pit.addColorStop(0.55, 'rgba(0,0,0,.22)');
+    pit.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = pit;
+    g.beginPath(); g.arc(px, py, tw * 0.36, 0, TAU); g.fill();
+
+    const anchors: { x: number; y: number }[] = [];
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    for (let k = 0; k < 5; k++) {
+      let ang = rand() * TAU;
+      let x = px, y = py;
+      const segs = 4 + Math.floor(rand() * 3);
+      const path = new Path2D();
+      path.moveTo(x, y);
+      for (let s = 0; s < segs; s++) {
+        ang += (rand() - 0.5) * 1.15;
+        const len = tw * (0.06 + rand() * 0.1);
+        x = clamp(x + Math.cos(ang) * len, tw * 0.08, tw * 0.92);
+        y = clamp(y + Math.sin(ang) * len, tw * 0.08, tw * 0.92);
+        path.lineTo(x, y);
+        if (k < 3 && s === 3) anchors.push({ x: x / tw, y: y / tw });
+      }
+      g.strokeStyle = 'rgba(0,0,0,.68)';
+      g.lineWidth = Math.max(1, tw * (0.016 + rand() * 0.018));
+      g.stroke(path);
+      g.strokeStyle = 'rgba(203,213,225,.12)';
+      g.lineWidth = Math.max(0.6, tw * 0.007);
+      g.stroke(path);
+      if (k < 3) {
+        g.fillStyle = 'rgba(148,163,184,.07)';
+        g.beginPath();
+        g.moveTo(x, y);
+        g.lineTo(x + tw * 0.03, y - tw * 0.015);
+        g.lineTo(x + tw * 0.015, y + tw * 0.03);
+        g.closePath();
+        g.fill();
+      }
+    }
+    g.fillStyle = 'rgba(148,163,184,.05)';
+    for (let k = 0; k < 10; k++) {
+      g.beginPath();
+      g.arc(tw * (0.1 + rand() * 0.8), tw * (0.1 + rand() * 0.8), Math.max(0.4, tw * 0.006), 0, TAU);
+      g.fill();
+    }
+    scorch.push(cv);
+    embers.push(anchors);
+  }
+
+  const box = Math.max(4, cell * 0.26);
+  const drop = (variant: number, dried: boolean): HTMLCanvasElement => {
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(box * dpr));
+    cv.height = cv.width;
+    const g = cv.getContext('2d')!;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const cx = box * 0.5, cy = box * 0.52;
+    const rad = box * 0.25;
+    const stain = g.createRadialGradient(cx, cy, 0, cx, cy, box * 0.48);
+    stain.addColorStop(0, dried ? 'rgba(45,5,5,.32)' : 'rgba(64,8,8,.34)');
+    stain.addColorStop(1, 'rgba(45,5,5,0)');
+    g.fillStyle = stain;
+    g.fillRect(0, 0, box, box);
+    const body = g.createRadialGradient(cx - rad * 0.35, cy - rad * 0.4, 0, cx, cy, rad * 1.15);
+    if (dried) {
+      body.addColorStop(0, '#5C0F0F');
+      body.addColorStop(0.55, '#450A0A');
+      body.addColorStop(1, '#2B0606');
+    } else {
+      body.addColorStop(0, '#B91C1C');
+      body.addColorStop(0.5, '#991B1B');
+      body.addColorStop(1, '#7F1D1D');
+    }
+    const bead = (x: number, y: number, r0: number) => {
+      g.beginPath();
+      g.ellipse(x, y, r0, r0 * 0.9, 0, 0, TAU);
+      g.fill();
+    };
+    g.fillStyle = body;
+    if (variant === 0) {
+      bead(cx, cy, rad);
+      bead(cx + rad * 0.95, cy + rad * 0.7, rad * 0.2);
+    } else if (variant === 1) {
+      bead(cx, cy, rad * 0.88);
+      bead(cx - rad * 0.95, cy - rad * 0.9, rad * 0.34);
+      bead(cx - rad * 1.55, cy - rad * 1.45, rad * 0.17);
+    } else {
+      bead(cx, cy, rad * 0.78);
+      bead(cx + rad * 0.9, cy - rad * 0.25, rad * 0.24);
+      bead(cx - rad * 0.7, cy + rad * 0.8, rad * 0.19);
+      bead(cx + rad * 0.25, cy + rad * 1.05, rad * 0.13);
+    }
+    /* high specular contrast: a hard white bead, not a soft sheen */
+    if (!dried) {
+      g.fillStyle = 'rgba(255,240,240,.75)';
+      g.beginPath();
+      g.ellipse(cx - rad * 0.32, cy - rad * 0.36, rad * 0.3, rad * 0.17, -0.65, 0, TAU);
+      g.fill();
+      g.fillStyle = 'rgba(255,255,255,.3)';
+      g.beginPath(); g.arc(cx + rad * 0.32, cy + rad * 0.3, rad * 0.1, 0, TAU); g.fill();
+    } else {
+      g.fillStyle = 'rgba(255,190,190,.16)';
+      g.beginPath();
+      g.ellipse(cx - rad * 0.3, cy - rad * 0.34, rad * 0.24, rad * 0.13, -0.65, 0, TAU);
+      g.fill();
+    }
+    return cv;
+  };
+  const wet = [0, 1, 2].map((v) => drop(v, false));
+  const dry = [0, 1, 2].map((v) => drop(v, true));
+
+  const ember = document.createElement('canvas');
+  const ebox = Math.max(6, cell * 0.46);
+  ember.width = Math.max(1, Math.round(ebox * dpr));
+  ember.height = ember.width;
+  const eg = ember.getContext('2d')!;
+  eg.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const glow = eg.createRadialGradient(ebox / 2, ebox / 2, 0, ebox / 2, ebox / 2, ebox / 2);
+  glow.addColorStop(0, 'rgba(194,65,12,.82)');
+  glow.addColorStop(0.3, 'rgba(124,45,18,.5)');
+  glow.addColorStop(0.68, 'rgba(124,45,18,.14)');
+  glow.addColorStop(1, 'rgba(124,45,18,0)');
+  eg.fillStyle = glow;
+  eg.fillRect(0, 0, ebox, ebox);
+
+  const smoke = document.createElement('canvas');
+  const sbox = Math.max(8, cell * 0.95);
+  smoke.width = Math.max(1, Math.round(sbox * dpr));
+  smoke.height = smoke.width;
+  const sg = smoke.getContext('2d')!;
+  sg.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const puff = sg.createRadialGradient(sbox / 2, sbox / 2, 0, sbox / 2, sbox / 2, sbox / 2);
+  puff.addColorStop(0, 'rgba(214,202,190,.5)');
+  puff.addColorStop(0.45, 'rgba(148,152,160,.24)');
+  puff.addColorStop(1, 'rgba(120,125,135,0)');
+  sg.fillStyle = puff;
+  sg.fillRect(0, 0, sbox, sbox);
+
+  return { scorch, embers, ember, wet, dry, smoke };
+}
+
 /**
  * The start squares of the game on screen, taken from the same helper the rules place the balls
  * with, so the tint under a ball can never drift away from the ball.
@@ -588,6 +827,16 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   /** Sliding balls leave a short comet tail: pooled, reused, and dropped as they fade. */
   const streaks: { x0: number; y0: number; x1: number; y1: number; t0: number; p: Player }[] = [];
   const prevPos = new Map<number, Vec>();                    // ball id → where it was last frame
+  /** Tile-surface art, struck once per layout; every scar and droplet blits from here. */
+  let decal: DecalArt | null = null;
+  /** Mine bursts still smouldering at their fracture intersections. */
+  const embers: { c: number; r: number; t0: number; v: number }[] = [];
+  /** ball id → its logical steps, whether the blast wounded it, and the cell it last stood on. */
+  const stride = new Map<number, number>();
+  const wounds = new Set<number>();
+  const stood = new Map<number, { c: number; r: number }>();
+  /** Blood shed on the tiles behind a wounded ball, in board units. */
+  const blood: { x: number; y: number; v: number; s: number; ball: number; born: number }[] = [];
   let bg: HTMLCanvasElement | null = null;                   // static board layer, rebuilt on resize
   /* The trunk's pre-rendered layers, built once per resize like the board itself: an unrolled bark
      strip (one full circumference plus the visible window), one end-grain cap, its contact smudge. */
@@ -877,6 +1126,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     bg2.addColorStop(0.42, 'rgba(255,90,20,.34)');
     bg2.addColorStop(1, 'rgba(255,90,20,0)');
     blastGlow = bg2;
+    decal = buildDecalArt(c, dpr);
     buildLogArt();
     buildCrest(bw);
   }
@@ -1263,7 +1513,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     blob(-0.36 * r, -0.42 * r, -0.72, 0.26, 0.14, 0.92);
   }
 
-  function drawBall(cx: number, cy: number, r: number, i: number, badge = 0) {
+  function drawBall(cx: number, cy: number, r: number, i: number, badge = 0, wounded = false) {
     const s = sides[i], fx = ballFx[i];
     ctx.save();
     ctx.translate(cx, cy);
@@ -1300,7 +1550,39 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.strokeStyle = s.ramp.edge; ctx.lineWidth = 1; ctx.stroke();
 
     shine(s, r);
+    if (wounded) drawWoundMark(r);
     if (badge > 0) drawBadge(r, badge);
+    ctx.restore();
+  }
+
+  /**
+   * The wound itself, inside the ball's own transform: a dark bite chipped out of the upper-left
+   * rim with a crimson cut and a bead. Kept small — the pulse ring is the state, this is the story.
+   */
+  function drawWoundMark(r: number) {
+    ctx.save();
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.clip();
+    const mid = -2.34;                       // centre of the bite, upper left
+    ctx.fillStyle = 'rgba(8,10,17,.58)';
+    ctx.beginPath();
+    ctx.arc(0, 0, r, mid - 0.3, mid + 0.3);
+    ctx.lineTo(Math.cos(mid) * r * 0.66, Math.sin(mid) * r * 0.66);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(153,27,27,.9)';
+    ctx.lineWidth = Math.max(1, r * 0.13);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.56, -r * 0.28);
+    ctx.quadraticCurveTo(-r * 0.04, -r * 0.04, r * 0.28, r * 0.5);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(122,16,16,.95)';
+    ctx.lineWidth = Math.max(0.6, r * 0.05);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(220,38,38,.95)';
+    ctx.beginPath(); ctx.arc(-r * 0.46, -r * 0.2, Math.max(0.8, r * 0.07), 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.55)';
+    ctx.beginPath(); ctx.arc(-r * 0.48, -r * 0.23, Math.max(0.3, r * 0.025), 0, TAU); ctx.fill();
     ctx.restore();
   }
 
@@ -1353,6 +1635,19 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.setLineDash([c * 0.15, c * 0.12]);
     ctx.lineDashOffset = still ? 0 : -now / 40;
     ctx.beginPath(); ctx.arc(cx, cy, r * 1.6, 0, TAU); ctx.stroke();
+    ctx.restore();
+  }
+
+  /** A wounded piece wears a slow crimson pulse: 25% at its brightest, under everything else. */
+  function drawWoundedRing(cx: number, cy: number, r: number, now: number, still: boolean) {
+    const c = L.cell;
+    const beat = still ? 1 : 0.5 + 0.5 * Math.sin(now / 360);
+    ctx.save();
+    ctx.strokeStyle = `rgba(220,38,38,${(0.13 + 0.12 * beat).toFixed(3)})`;
+    ctx.lineWidth = Math.max(1.5, c * 0.042);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * (1.42 + 0.07 * beat), 0, TAU);
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -1643,6 +1938,106 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.restore();
   }
 
+  /**
+   * A wound is cosmetic, so it lives here rather than in `rules.ts`: the single `blast()` door
+   * marks the ball the rules threw, and this watches the rules' own positions for the tiles it
+   * leaves behind. `stride` is per ball, so the trail ages by that piece's own steps.
+   */
+  function observeTrail(v: View) {
+    for (const b of v.state.balls) {
+      const was = stood.get(b.id);
+      if (!was) { stood.set(b.id, { c: b.pos.c, r: b.pos.r }); continue; }
+      if (was.c === b.pos.c && was.r === b.pos.r) continue;
+      const step = (stride.get(b.id) ?? 0) + 1;
+      stride.set(b.id, step);
+      if (wounds.has(b.id)) spill(b.id, was, b.pos, step);
+      stood.set(b.id, { c: b.pos.c, r: b.pos.r });
+    }
+    for (let i = blood.length - 1; i >= 0; i--) {
+      const d = blood[i];
+      if ((stride.get(d.ball) ?? d.born) - d.born >= TRAIL_STEPS) blood.splice(i, 1);
+    }
+  }
+
+  /** One to three droplets on every tile the piece just vacated; a side step sheds on its origin. */
+  function spill(ball: number, from: Pos, to: Pos, step: number) {
+    const cells: Pos[] = [from];
+    if (from.c === to.c && Math.abs(to.r - from.r) > 1) {
+      const dir = to.r > from.r ? 1 : -1;
+      for (let r = from.r + dir; r !== to.r; r += dir) cells.push({ c: from.c, r });
+    }
+    for (const cell of cells) {
+      const rand = rng32((Math.imul(ball + 1, 0x9e3779b1) ^ Math.imul(step, 0x85ebca6b)
+        ^ Math.imul(cell.c * 17 + cell.r * 31 + 1, 0xc2b2ae35)) >>> 0);
+      const n = 1 + Math.floor(rand() * 3);
+      for (let k = 0; k < n; k++) {
+        const a = rand() * TAU;
+        const d = 0.07 + rand() * 0.23;
+        blood.push({
+          x: clamp(cell.c + 0.5 + Math.cos(a) * d, cell.c + 0.16, cell.c + 0.84),
+          y: clamp(cell.r + 0.5 + Math.sin(a) * d * 0.82, cell.r + 0.16, cell.r + 0.84),
+          v: Math.floor(rand() * 3),
+          s: 0.75 + rand() * 0.5,
+          ball, born: step,
+        });
+      }
+    }
+    /* keep each piece's last three gaits, never a carpet */
+    let own = 0;
+    for (let i = blood.length - 1; i >= 0; i--) {
+      if (blood[i].ball !== ball) continue;
+      if (++own > 24) blood.splice(i, 1);
+    }
+  }
+
+  /** Past scars, newest embers: tile furniture, so it sits under walls, dots and balls. */
+  function drawScars(v: View, now: number, still: boolean) {
+    const art = decal;
+    if (!art) return;
+    const { cell: c, ox, oy } = L;
+    const gap = Math.max(1, c * 0.03);
+    const tw = Math.max(2, c - gap);
+    for (const m of v.state.mines) {
+      if (!m.triggered) continue;
+      ctx.drawImage(art.scorch[decalVariant(m.cell.c, m.cell.r)],
+        ox + m.cell.c * c + gap / 2, oy + m.cell.r * c + gap / 2, tw, tw);
+    }
+    for (let i = embers.length - 1; i >= 0; i--) {
+      const e = embers[i];
+      const t = (now - e.t0) / EMBER_MS;
+      if (t >= 1) { embers.splice(i, 1); continue; }
+      const anchors = art.embers[e.v];
+      const x0 = ox + e.c * c + gap / 2, y0 = oy + e.r * c + gap / 2;
+      const cool = (1 - t) * (1 - t);
+      const size = c * 0.4;
+      ctx.save();
+      for (let k = 0; k < anchors.length; k++) {
+        const flicker = still ? 1 : 0.78 + 0.22 * Math.sin(now / 90 + k * 2.3 + i);
+        ctx.globalAlpha = 0.8 * cool * flicker;
+        ctx.drawImage(art.ember, x0 + anchors[k].x * tw - size / 2,
+          y0 + anchors[k].y * tw - size / 2, size, size);
+      }
+      ctx.restore();
+    }
+  }
+
+  /** The blood trail: glossy fresh, dried and 60% on the previous gait, a faint third, then gone. */
+  function drawBloodTrail() {
+    const art = decal;
+    if (!art || !blood.length) return;
+    const { cell: c, ox, oy } = L;
+    ctx.save();
+    for (const d of blood) {
+      const age = (stride.get(d.ball) ?? d.born) - d.born;
+      if (age < 0 || age >= TRAIL_STEPS) continue;
+      const img = (age === 0 ? art.wet : art.dry)[d.v] ?? art.wet[0];
+      const w = c * 0.26 * d.s;
+      ctx.globalAlpha = age === 0 ? 1 : age === 1 ? 0.6 : 0.24;
+      ctx.drawImage(img, ox + d.x * c - w / 2, oy + d.y * c - w / 2, w, w);
+    }
+    ctx.restore();
+  }
+
   function draw(v: View, now: number) {
     /* Self-heal the fit before painting. `setBoard` re-fits on every race, but a board built while
        its screen was still hidden measures a zero box and keeps that degenerate cell forever: the
@@ -1652,6 +2047,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     if (canvas.clientWidth !== lastW || canvas.clientHeight !== lastH) resize();
     const { cell: c, ox, oy } = L;
     const still = motionReduced();
+    observeTrail(v);
     /*
      * The goal was crossed. The rules land a winner the moment the ball *lands*, but the ball is
      * still gliding there, so the crown waits for it to touch the line — and if it never does (a
@@ -1752,6 +2148,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       }
       ctx.restore();
     }
+
+    /* the surface the race has already marked: cold craters under the live traps, then the trail */
+    drawScars(v, now, still);
+    drawBloodTrail();
 
     /* a tap just landed: a quick ripple in the colour of the seat that plays it */
     for (let i = ripples.length - 1; i >= 0; i--) {
@@ -1891,10 +2291,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     }
 
     /*
-     * The trigger: a white flash, a warm core, one expanding shockwave and 14 sparks, all inside
-     * BLAST_MS. Painted in the mine's own warning red — the board surface may be pale, and a mine
-     * must never read as a team colour. Reduced motion keeps the flash and the ring, drops the
-     * sparks.
+     * The trigger: a white flash, a warm core, one expanding shockwave, amber sparks and a ring of
+     * smoke, all inside BLAST_MS. The ring stays in the mine's own warning red — the board surface
+     * may be pale, and a mine must never read as a team colour. Reduced motion keeps the flash and
+     * the ring, drops the sparks and the smoke.
      */
     for (let i = blasts.length - 1; i >= 0; i--) {
       const f = blasts[i];
@@ -1923,17 +2323,35 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.lineWidth = Math.max(1.5, c * 0.11 * (1 - t));
       ctx.beginPath(); ctx.arc(f.x, f.y, c * (0.4 + 1.9 * ease), 0, TAU); ctx.stroke();
       if (!still) {
-        ctx.lineCap = 'round';
-        ctx.strokeStyle = MINE_RAMP.light;
-        ctx.lineWidth = Math.max(1, c * 0.05 * (1 - t));
-        ctx.beginPath();
-        for (let n = 0; n < SPARK_N; n++) {
-          const r0 = c * (0.3 + 1.2 * ease) * SPARK_L[n];
-          const r1 = r0 + c * 0.45 * (1 - t) * SPARK_L[n];
-          ctx.moveTo(f.x + SPARK_C[n] * r0, f.y + SPARK_S[n] * r0);
-          ctx.lineTo(f.x + SPARK_C[n] * r1, f.y + SPARK_S[n] * r1);
+        /* the smoke ring, thrown with the sparks and thinning into the clay */
+        if (decal) {
+          const sw = c * 0.95;
+          for (let n = 0; n < 6; n++) {
+            const a = (n / 6) * TAU + 0.5;
+            const d = c * (0.32 + 1.05 * ease);
+            ctx.globalAlpha = 0.17 * (1 - t) * (1 - t);
+            ctx.drawImage(decal.smoke, f.x + Math.cos(a) * d - sw / 2,
+              f.y + Math.sin(a) * d * 0.72 - c * 0.4 * ease - sw / 2, sw, sw);
+          }
         }
-        ctx.stroke();
+        ctx.lineCap = 'round';
+        ctx.lineWidth = Math.max(1, c * 0.05 * (1 - t));
+        const fan = (warm: boolean) => {
+          ctx.beginPath();
+          for (let n = 0; n < SPARK_N; n++) {
+            if ((n % 3 === 0) !== warm) continue;
+            const r0 = c * (0.3 + 1.2 * ease) * SPARK_L[n];
+            const r1 = r0 + c * 0.45 * (1 - t) * SPARK_L[n];
+            ctx.moveTo(f.x + SPARK_C[n] * r0, f.y + SPARK_S[n] * r0);
+            ctx.lineTo(f.x + SPARK_C[n] * r1, f.y + SPARK_S[n] * r1);
+          }
+          ctx.stroke();
+        };
+        ctx.globalAlpha = 0.85 * (1 - t);
+        ctx.strokeStyle = MINE_RAMP.light;
+        fan(false);
+        ctx.strokeStyle = '#f59e0b';
+        fan(true);
       }
       ctx.restore();
     }
@@ -2000,6 +2418,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       if (active || v.state.winner === seat) {
         drawGlow(cx, cy, r, seat, still ? 0.6 : 0.5 + 0.5 * Math.sin(now / 260));
       }
+      const hurt = wounds.has(b.id);
+      if (hurt) drawWoundedRing(cx, cy, r, now, still);
       // the chosen one stands out further than its side's turn halo does
       if (b.sel) drawSel(cx, cy, r, seat, now, still);
       let n = 1;
@@ -2018,7 +2438,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         ctx.scale(1 + sq, 1 - sq);
         ctx.translate(-cx, -cy);
       }
-      drawBall(cx, cy, r, seat, SEATS_N[seat] > 1 ? n : 0);
+      drawBall(cx, cy, r, seat, SEATS_N[seat] > 1 ? n : 0, hurt);
       if (sq !== 0) ctx.restore();
     }
 
@@ -2095,6 +2515,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       born.clear(); pulses.length = 0; blasts.length = 0; knocks.length = 0;
       ripples.length = 0; streaks.length = 0; prevPos.clear(); mineGhostKey = '';
       rolls.length = 0; dust.length = 0; thump.clear();
+      embers.length = 0; stride.clear(); wounds.clear(); stood.clear(); blood.length = 0;
       goalAt = -1; goalWait = -1; goalSeat = null; crestK = 1; crestT = 0;
     },
     /**
@@ -2127,11 +2548,19 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const { cell: c, ox, oy } = L;
       const t0 = performance.now();
       blasts.push({ x: ox + (at.c + 0.5) * c, y: oy + (at.r + 0.5) * c, t0 });
-      if (knock && (knock.from.c !== knock.to.c || knock.from.r !== knock.to.r)) {
-        for (let i = knocks.length - 1; i >= 0; i--) if (knocks[i].id === knock.id) knocks.splice(i, 1);
-        knocks.push({ id: knock.id, from: knock.from, mine: at, to: knock.to, t0 });
-        dust.push({ x: ox + (knock.to.c + 0.5) * c, y: oy + (knock.to.r + 0.5) * c, t0: t0 + KNOCK_MS });
-        thump.set(knock.id, t0 + KNOCK_MS);
+      embers.push({ c: at.c, r: at.r, t0, v: decalVariant(at.c, at.r) });
+      if (knock) {
+        /* the ball that set the charge off is the one the rules threw — it stays wounded. The
+           state jumps from its last square straight to the landing, so the wound's first footprint
+           is planted on the charge itself, not on the square it stepped from before the blast. */
+        wounds.add(knock.id);
+        stood.set(knock.id, { c: at.c, r: at.r });
+        if (knock.from.c !== knock.to.c || knock.from.r !== knock.to.r) {
+          for (let i = knocks.length - 1; i >= 0; i--) if (knocks[i].id === knock.id) knocks.splice(i, 1);
+          knocks.push({ id: knock.id, from: knock.from, mine: at, to: knock.to, t0 });
+          dust.push({ x: ox + (knock.to.c + 0.5) * c, y: oy + (knock.to.r + 0.5) * c, t0: t0 + KNOCK_MS });
+          thump.set(knock.id, t0 + KNOCK_MS);
+        }
       }
     },
     /** Equipping repaints the board and every cached gradient once; never per frame. */
