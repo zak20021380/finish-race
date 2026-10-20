@@ -79,8 +79,8 @@
         </g>
       </symbol>
       <symbol id="i-edit" viewBox="0 0 24 24">
-        <path d="M4 20h4.2L19 9.2 14.8 5 4 15.8V20Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" />
-        <path d="m13.4 6.4 4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" />
+        <path d="M4 20h4.2L19 9.2 14.8 5 4 15.8V20Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+        <path d="m13.4 6.4 4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
       </symbol>
       <symbol id="i-user" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -1529,27 +1529,29 @@
             <div class="p-card wide pf-hero pf-hero-v2">
               <span class="pf-hero-aurora" aria-hidden="true"></span>
 
-              <!-- tier 1 · identity: avatar · name + one honor emblem · competitive division -->
+              <!-- tier 1 · identity: avatar + equipped crest pin · name · competitive division -->
               <div class="pf-hero-top">
-                <button class="pf-avatar-wrap" type="button" id="pf-avatar-wrap" data-frame="default">
-                  <span class="pf-avatar-glow" aria-hidden="true"></span>
-                  <span class="avatar big pf-avatar-frame" id="pf-avatar" aria-hidden="true">
-                    <img id="pf-avatar-img" alt="" hidden />
-                    <span id="pf-avatar-t">P</span>
+                <div class="pf-avatar-slot">
+                  <button class="pf-avatar-wrap" type="button" id="pf-avatar-wrap" data-frame="default">
+                    <span class="pf-avatar-glow" aria-hidden="true"></span>
+                    <span class="avatar big pf-avatar-frame" id="pf-avatar" aria-hidden="true">
+                      <img id="pf-avatar-img" alt="" hidden />
+                      <span id="pf-avatar-t">P</span>
+                    </span>
+                  </button>
+                  <!-- the equipped honor rides the avatar's bottom-right corner as a prestige pin -->
+                  <span class="pf-equipped-badge" id="pf-equipped-badge" role="img" hidden>
+                    <svg class="pf-equipped-crest" viewBox="0 0 56 56" aria-hidden="true"><use id="pf-equipped-use" href="#i-crest-gold" /></svg>
                   </span>
-                </button>
+                </div>
                 <div class="p-id pf-id-v2">
                   <div class="pf-name-row" id="pf-name-row">
                     <p class="p-name" id="pf-name">Player</p>
-                    <!-- the one name key: a brushed pencil, never a whole edit bar -->
+                    <!-- the one name key: a ghost pencil hugging the name, never a whole edit bar -->
                     <button class="pf-name-edit" type="button" id="pf-name-edit"
                       aria-label="Edit display name" title="Edit display name">
                       <svg class="ico" aria-hidden="true"><use href="#i-edit" /></svg>
                     </button>
-                    <!-- the equipped honor is a 28px 3D crest pin beside the name: no prestige word in the header -->
-                    <span class="pf-equipped-badge" id="pf-equipped-badge" role="img" hidden>
-                      <svg class="pf-equipped-crest" viewBox="0 0 56 56" aria-hidden="true"><use id="pf-equipped-use" href="#i-crest-gold" /></svg>
-                    </span>
                   </div>
                   <!-- inline rename: one Dark-Clay field, a live counter and Save / Cancel -->
                   <form class="pf-name-form" id="pf-name-form" novalidate hidden>

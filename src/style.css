@@ -17882,7 +17882,7 @@ html.reduced-motion .announce-cta { transition: none; }
 /* ---- identity tier: name + pencil, one wrapped line, never an ellipsis ---- */
 #s-profile .pf-name-row {
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   row-gap: 6px;
   flex-wrap: wrap;
   min-height: 28px;
@@ -17901,8 +17901,9 @@ html.reduced-motion .announce-cta { transition: none; }
   overflow-wrap: anywhere;
   text-shadow: 0 1px 0 rgba(0, 0, 0, .55);
 }
-/* the pencil: a small brushed key, never a full edit bar */
+/* the pencil: a ghost key that hugs the name — no plate, no pill, no glow at rest */
 .pf-name-edit {
+  position: relative;
   flex: none;
   width: 26px;
   height: 26px;
@@ -17911,23 +17912,28 @@ html.reduced-motion .announce-cta { transition: none; }
   appearance: none;
   padding: 0;
   border: 0;
-  border-radius: 9px;
+  border-radius: 8px;
   cursor: pointer;
-  color: #7DD3FC;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, 0) 58%),
-    linear-gradient(180deg, #26314A 0%, #121A28 100%);
-  box-shadow:
-    0 2px 0 #080C14,
-    inset 0 1px 0 rgba(255, 255, 255, .2),
-    inset 0 0 0 1px rgba(125, 211, 252, .26),
-    0 0 12px -5px rgba(34, 211, 238, .7);
-  transition: transform var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
+  color: #A9B8CC;
+  background: none;
+  opacity: .4;
+  transition: opacity var(--motion-fast), color var(--motion-fast);
 }
-.pf-name-edit .ico { width: 13px; height: 13px; filter: drop-shadow(0 0 5px rgba(34, 211, 238, .45)); }
-.pf-name-edit:hover:not(:active) { transform: translateY(-1px); color: #E0F2FE; }
-.pf-name-edit:active { transform: translateY(1px); }
-.pf-name-edit:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+/* the 48px house target without growing the visible key */
+.pf-name-edit::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 48px;
+  height: 48px;
+  transform: translate(-50%, -50%);
+}
+.pf-name-edit .ico { width: 15px; height: 15px; }
+.pf-name-edit:hover,
+.pf-name-edit:active,
+.pf-name-edit:focus-visible { opacity: 1; color: #E2E8F0; }
+.pf-name-edit:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
 #s-profile .pf-name-row[data-editing] .pf-name-edit { display: none; }
 
 /* the inline editor: recessed field, live counter, amber save + slate cancel */
@@ -18050,6 +18056,12 @@ html.reduced-motion .announce-cta { transition: none; }
 }
 
 /* ---- avatar: the Telegram photo fills the clay squircle, initials stay underneath ---- */
+/* the slot owns the pin, so the crest can break the frame without leaving the avatar box */
+#s-profile .pf-avatar-slot {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+}
 #s-profile .pf-avatar-frame.avatar.big > img {
   position: absolute;
   inset: 0;
@@ -18080,21 +18092,26 @@ html.reduced-motion .announce-cta { transition: none; }
 }
 #s-profile .pf-avatar-glow { opacity: .62; }
 
-/* ---- equipped honor: a 28px beveled crest in a titanium-and-gold socket ---- */
+/* ---- equipped honor: a 24px embossed pin seated on the avatar's bottom-right corner.
+   The 1.5px dark-clay ring is what makes it read as part of the frame, not a sticker. ---- */
 #s-profile .pf-equipped-badge {
-  position: relative;
-  width: 28px;
-  height: 28px;
-  border-radius: 9px;
+  position: absolute;
+  right: -8px;
+  bottom: -8px;
+  z-index: 3;
+  width: 24px;
+  height: 24px;
+  border: 1.5px solid #0F172A;
+  border-radius: 8px;
   background:
-    radial-gradient(80% 80% at 30% 18%, rgba(255, 255, 255, .22) 0%, rgba(255, 255, 255, 0) 58%),
+    radial-gradient(80% 80% at 30% 18%, rgba(255, 255, 255, .24) 0%, rgba(255, 255, 255, 0) 58%),
     linear-gradient(180deg, #303B4F 0%, #0D1320 100%);
   box-shadow:
-    0 3px 0 #060A11,
-    inset 0 1px 0 rgba(255, 255, 255, .34),
-    inset 0 -2px 3px rgba(0, 0, 0, .55),
-    inset 0 0 0 1px var(--eq-rim),
-    0 0 16px -4px rgba(var(--eq-aura), .8);
+    0 2px 6px rgba(0, 0, 0, .6),
+    inset 0 1px 0 rgba(255, 255, 255, .3),
+    inset 0 -1px 2px rgba(0, 0, 0, .5),
+    0 0 10px -4px rgba(var(--eq-aura), .7);
+  pointer-events: none;
 }
 #s-profile .pf-equipped-badge::before {
   content: "";
@@ -18119,9 +18136,9 @@ html.reduced-motion .announce-cta { transition: none; }
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .75), transparent);
 }
 #s-profile .pf-equipped-badge .pf-equipped-crest {
-  width: 22px;
-  height: 22px;
-  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .6)) drop-shadow(0 0 4px rgba(var(--eq-aura), .35));
+  width: 18px;
+  height: 18px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .6)) drop-shadow(0 0 3px rgba(var(--eq-aura), .35));
 }
 
 /* ---- competitive division: a crest, not a text pill ---- */
@@ -18434,8 +18451,11 @@ html.reduced-motion .announce-cta { transition: none; }
   #s-profile .pf-chip-ico .ico { width: 19px; height: 19px; }
   #s-profile .pf-chip .pf-chip-v { font-size: 13px; }
   #s-profile .pf-chip-meta { font-size: 8.5px; letter-spacing: .055em; }
-  #s-profile .pf-equipped-badge { width: 26px; height: 26px; border-radius: 8.5px; }
-  #s-profile .pf-equipped-badge .pf-equipped-crest { width: 20px; height: 20px; }
+  /* the narrow floor buys the pin breathing room: a 6px overhang and a 12px column
+     gap keep it clear of the GRANDMASTER crest, which starts under the name */
+  #s-profile .pf-hero-top { gap: 12px; }
+  #s-profile .pf-equipped-badge { width: 22px; height: 22px; border-radius: 7.5px; right: -6px; bottom: -6px; }
+  #s-profile .pf-equipped-badge .pf-equipped-crest { width: 16px; height: 16px; }
   #s-profile .pf-tier-badge { min-height: 27px; padding: 0 10px 0 8px; font-size: 10.5px; }
   #s-profile .pf-name-act { width: 32px; height: 32px; }
   #s-profile .pf-name-field { height: 36px; }
