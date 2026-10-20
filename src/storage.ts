@@ -97,6 +97,11 @@ export interface Save {
   /** Tactile avatar frame id (default | auric | neon), persisted for the hero frame slot. */
   frame: string | null;
   /**
+   * The player's chosen display name, or null to follow the Telegram profile
+   * (first + last name, then @username, then "Player"). 3-16 characters when set.
+   */
+  displayName: string | null;
+  /**
    * TIQ the player has been granted outside a race (Admin Command Center, future
    * events). Added on top of the ladder's own formula — `myTiq()` in matchmaking.ts.
    */
@@ -108,6 +113,9 @@ export interface Save {
 /** The three starter items are owned before the first race; the wallet starts stocked for the demo. */
 const STARTERS: Record<CosKind, string> = { ball: CLASSIC_BALL.id, wall: CLASSIC_WALL.id, board: CLASSIC_BOARD.id };
 export const START_COINS = 1850;
+/** The edited display name's window; the Telegram fallback is shown whole. */
+export const DISPLAY_NAME_MIN = 3;
+export const DISPLAY_NAME_MAX = 16;
 /** Completion reward paid once per identity field (country, age). */
 export const IDENTITY_REWARD = 100;
 export const AGE_MIN = 7;
@@ -133,6 +141,7 @@ function fresh(): Save {
     teams: seedTeams(),
     badge: null,
     frame: null,
+    displayName: null,
     tiqBonus: 0,
     referral: { joins: 0, unclaimed: 0, welcome: false, via: null },
   };
@@ -269,6 +278,12 @@ function migrate(raw: Partial<Save> | null): Save {
     s.frame = raw.frame;
   } else if (raw.frame === null) {
     s.frame = null;
+  }
+  if (typeof raw.displayName === 'string') {
+    const name = cleanDisplayName(raw.displayName);
+    if (name.length >= DISPLAY_NAME_MIN) s.displayName = name;
+  } else if (raw.displayName === null) {
+    s.displayName = null;
   }
   if (whole(raw.tiqBonus)) s.tiqBonus = Math.max(0, Math.floor(raw.tiqBonus));
   const ref = raw.referral as Partial<ReferralState> | undefined;
@@ -494,6 +509,34 @@ export function setBadge(id: string | null) {
 export function setFrame(id: string | null) {
   profile.frame = id && id.length > 0 && id.length <= 24 ? id : null;
   flush();
+}
+
+/* ---------- display name ---------- */
+
+/**
+ * The one normalisation every display name passes through: control characters out,
+ * runs of whitespace folded to one space, ends trimmed, 16 characters maximum.
+ * Emoji and non-Latin scripts are welcome; markup is just text here, because the
+ * name is always written with `textContent`.
+ */
+export function cleanDisplayName(raw: string): string {
+  return (raw ?? '')
+    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, DISPLAY_NAME_MAX);
+}
+
+/**
+ * Set the player's own display name. Rejects anything under 3 characters after
+ * normalisation, and returns whether the save took it.
+ */
+export function setDisplayName(raw: string): boolean {
+  const name = cleanDisplayName(raw);
+  if (name.length < DISPLAY_NAME_MIN) return false;
+  profile.displayName = name;
+  flush();
+  return true;
 }
 
 export type IdentityKind = 'country' | 'age';

@@ -12,9 +12,10 @@ import {
   menuState, saveMenu, settings, setSetting, onSettings, type LangCode, type Settings,
 } from './settings';
 import {
-  ageLocked, claimIdentityReward, claimReferralRewards, createTeam, daysInMonth, DOB_MIN_YEAR,
-  dobMaxYear, dobValue, favouriteMode, IDENTITY_REWARD, joinTeam, KINDS, leaveTeam, levelInfo,
-  myTeam, onChange, profile, REFERRAL_REWARD, setBadge, setDob, setFrame, theme, validDob,
+  ageLocked, claimIdentityReward, claimReferralRewards, cleanDisplayName, createTeam, daysInMonth,
+  DISPLAY_NAME_MAX, DISPLAY_NAME_MIN, DOB_MIN_YEAR, dobMaxYear, dobValue, favouriteMode,
+  IDENTITY_REWARD, joinTeam, KINDS, leaveTeam, levelInfo, myTeam, onChange, profile,
+  REFERRAL_REWARD, setBadge, setDisplayName, setDob, setFrame, theme, validDob,
 } from './storage';
 import { BADGES, badgeProgress, badgeTiq, equippedBadge, isBadgeUnlocked, unlockedCount } from './badges';
 import { MAX_BALLS, newGame } from './rules';
@@ -68,20 +69,119 @@ export function createMenu(api: MenuApi): Menu {
   /* ---- who is playing ---- */
   const u = tgUser();
   const full = [u?.first_name, u?.last_name].filter(Boolean).join(' ').trim();
-  const name = (full || u?.username || 'Player').slice(0, 18);
-  const initials = (full ? full.split(/\s+/).map((w) => w[0]).join('') : name.slice(0, 2))
-    .replace(/[^0-9A-Za-z]/g, '').toUpperCase().slice(0, 2) || 'PL';
-  for (const [av, img, t, nm] of [
-    ['avatar', 'avatar-img', 'avatar-t', 'p-name'],
-    ['pf-avatar', 'pf-avatar-img', 'pf-avatar-t', 'pf-name'],
-  ] as const) {
-    $(nm).textContent = name;
-    $(t).textContent = initials;
+  /** Telegram's own name is shown whole — the 3–16 window only governs an edited name. */
+  const telegramName = (full || u?.username || 'Player').trim() || 'Player';
+  /** No custom name yet means the Telegram identity is the name. */
+  const playerName = (): string => profile.displayName || telegramName;
+  const initialsOf = (raw: string): string => {
+    const words = raw.trim().split(/\s+/).filter(Boolean);
+    const source = words.length > 1 ? words.map((w) => w[0]).join('') : raw.slice(0, 2);
+    return source.replace(/[^0-9A-Za-z]/g, '').toUpperCase().slice(0, 2) || 'PL';
+  };
+  const photoBroken = new Set<string>();
+  const FACES = [
+    ['avatar-img', 'avatar-t', 'p-name'],
+    ['pf-avatar-img', 'pf-avatar-t', 'pf-name'],
+  ] as const;
+  /* one error listener per face, not one per paint: the resizer repaints this screen */
+  for (const [img] of FACES) {
     const photo = $(img) as unknown as HTMLImageElement;
-    if (u?.photo_url) { photo.src = u.photo_url; photo.hidden = false; $(av).style.background = 'none'; }
-    /* a photo that fails to load must not leave a blank disc behind */
-    photo.addEventListener('error', () => { photo.hidden = true; $(av).style.background = ''; });
+    photo.addEventListener('error', () => {
+      photoBroken.add(img);
+      photo.hidden = true;
+    });
   }
+
+  /* One paint for every face on the app: Home's small token and Profile's hero squircle.
+     The photo sits over the initials, so a slow or blocked CDN still shows a player,
+     never a blank disc or a broken-image glyph. */
+  function paintFaces() {
+    const name = playerName();
+    const initials = initialsOf(name);
+    for (const [img, t, nm] of FACES) {
+      $(nm).textContent = name;
+      $(t).textContent = initials;
+      const photo = $(img) as unknown as HTMLImageElement;
+      const url = u?.photo_url ?? '';
+      if (!url || photoBroken.has(img)) {
+        photo.hidden = true;
+        photo.removeAttribute('src');
+        continue;
+      }
+      if (photo.getAttribute('src') !== url) photo.src = url;
+      photo.hidden = false;
+    }
+  }
+  paintFaces();
+
+  /* ---- inline rename: the pencil swaps the name row's key for one clay field ---- */
+  const nameRow = document.getElementById('pf-name-row');
+  const nameForm = document.getElementById('pf-name-form') as HTMLFormElement | null;
+  const nameInput = document.getElementById('pf-name-input') as HTMLInputElement | null;
+  const nameLen = document.getElementById('pf-name-len');
+  const nameHint = document.getElementById('pf-name-hint');
+  const nameEdit = document.getElementById('pf-name-edit') as HTMLButtonElement | null;
+
+  function closeNameEditor(refocus = false) {
+    if (!nameForm || !nameRow || nameForm.hidden) return;
+    nameForm.hidden = true;
+    nameRow.removeAttribute('data-editing');
+    if (refocus) nameEdit?.focus({ preventScroll: true });
+  }
+
+  function paintNameLen() {
+    if (!nameInput || !nameLen || !nameHint) return;
+    const clean = cleanDisplayName(nameInput.value);
+    nameLen.textContent = `${clean.length}/${DISPLAY_NAME_MAX}`;
+    const bad = clean.length > 0 && clean.length < DISPLAY_NAME_MIN;
+    nameInput.classList.toggle('is-invalid', bad);
+    nameHint.textContent = bad
+      ? `At least ${DISPLAY_NAME_MIN} characters`
+      : `${DISPLAY_NAME_MIN}–${DISPLAY_NAME_MAX} characters`;
+    nameHint.classList.toggle('is-warn', bad);
+  }
+
+  nameEdit?.addEventListener('click', () => {
+    if (!nameForm || !nameInput || !nameRow) return;
+    nameInput.value = playerName().slice(0, DISPLAY_NAME_MAX);
+    nameForm.hidden = false;
+    nameRow.setAttribute('data-editing', '1');
+    paintNameLen();
+    impact('light');
+    requestAnimationFrame(() => {
+      nameInput.focus({ preventScroll: true });
+      nameInput.select();
+    });
+  });
+  nameInput?.addEventListener('input', paintNameLen);
+  nameInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); closeNameEditor(true); }
+  });
+  document.getElementById('pf-name-cancel')?.addEventListener('click', () => {
+    impact('light');
+    closeNameEditor(true);
+  });
+  nameForm?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!nameInput) return;
+    const next = cleanDisplayName(nameInput.value);
+    if (next.length < DISPLAY_NAME_MIN) {
+      if (nameHint) {
+        nameHint.textContent = `At least ${DISPLAY_NAME_MIN} characters`;
+        nameHint.classList.add('is-warn');
+      }
+      nameInput.classList.add('is-invalid');
+      nameInput.focus({ preventScroll: true });
+      impact('light');
+      return;
+    }
+    if (!setDisplayName(next)) return;
+    paintFaces();
+    closeNameEditor(true);
+    impact('medium');
+    notify('success');
+    showPfToast('Name updated', true);
+  });
 
   /* ---------- profile completion toast: animated +100 confirmation ---------- */
   let pfToastTimer = 0;
@@ -360,7 +460,7 @@ export function createMenu(api: MenuApi): Menu {
 
   $('team-create').addEventListener('click', () => {
     const raw = $<HTMLInputElement>('team-new').value;
-    const r = createTeam(raw, name);
+    const r = createTeam(raw, playerName());
     if (r === 'short-name') return teamError('Give the team at least two characters.');
     if (r === 'already-in') return teamError('You are already in a team — leave it first.');
     if (r === 'full') return teamError('Could not mint a join code. Try again.');
@@ -372,7 +472,7 @@ export function createMenu(api: MenuApi): Menu {
 
   $('team-join').addEventListener('click', () => {
     const raw = $<HTMLInputElement>('team-code').value;
-    const r = joinTeam(raw, name);
+    const r = joinTeam(raw, playerName());
     if (r === 'no-code') return teamError(`No team on this device answers to ${cleanCode(raw) || 'that code'}.`);
     if (r === 'already-in') return teamError('You are already in a team — leave it first.');
     $<HTMLInputElement>('team-code').value = '';
@@ -1017,6 +1117,7 @@ export function createMenu(api: MenuApi): Menu {
   }
 
   const paintIdentity = (): void => {
+    paintFaces();
     const lv = levelInfo();
     setBalance($('p-coins'), profile.coins);
     setBalance($('pf-coins'), profile.coins);
@@ -1052,12 +1153,32 @@ export function createMenu(api: MenuApi): Menu {
     if (countryName) countryName.textContent = c ? nameOf(c) : 'Add country';
     $('pf-country-v').textContent = c ? nameOf(c) : 'Add country';
     const pfFlag = document.getElementById('pf-flag');
-    if (pfFlag) {
+    if (pfFlag && pfFlag.dataset.cc !== (c ?? '')) {
       pfFlag.textContent = '';
       if (c) pfFlag.append(flagPhoto(c, 'fp-slot'));
+      pfFlag.dataset.cc = c ?? '';
+    }
+    /* the flag itself, blurred to a wash, is the nation card's ambient light —
+       repainted only when the nation changes, never on a resize */
+    const pfAura = document.getElementById('pf-country-aura');
+    if (pfAura && pfAura.dataset.cc !== (c ?? '')) {
+      pfAura.textContent = '';
+      if (c) pfAura.append(flagPhoto(c, 'fp-slot'));
+      pfAura.dataset.cc = c ?? '';
     }
     document.getElementById('pf-country-ico')?.classList.toggle('has-flag', !!c);
-    $('pf-country').setAttribute('aria-label', c ? `${nameOf(c)}. Change nation` : 'Choose your nation');
+    const countryCard = document.getElementById('pf-country');
+    countryCard?.classList.toggle('is-set', !!c);
+    const countryMeta = document.getElementById('pf-country-meta');
+    if (countryMeta) {
+      countryMeta.textContent = c
+        ? `${c} · ${profile.rewards.country ? 'National division' : 'Reward ready'}`
+        : `+${IDENTITY_REWARD} Coins when set`;
+    }
+    const countryLabel = c
+      ? `${nameOf(c)}. ${profile.rewards.country ? 'National division' : 'Completion reward ready'}. Change nation`
+      : `Choose your nation. Earn ${IDENTITY_REWARD} coins`;
+    $('pf-country').setAttribute('aria-label', countryLabel);
     /* Home name flag: a real vector plate next to the name — never a regional-indicator
        pair, which Windows draws as two bare letters. The code stays in the DOM (hidden)
        only as the accessible/state hook. */
@@ -1097,7 +1218,16 @@ export function createMenu(api: MenuApi): Menu {
     paintSquadPill();
     const squad = getMySquad();
     $('pf-team-v').textContent = squad ? squad.name : 'Join a Squad';
-    $('pf-team').setAttribute('aria-label', squad ? `${squad.name}. Open squad` : 'Join a Squad');
+    const squadMeta = document.getElementById('pf-team-meta');
+    if (squadMeta) {
+      squadMeta.textContent = squad
+        ? `#${squad.rank} · ${en(squad.members)} Members`
+        : 'Community squads';
+    }
+    document.getElementById('pf-team')?.classList.toggle('is-set', !!squad);
+    $('pf-team').setAttribute('aria-label', squad
+      ? `${squad.name}. Rank ${squad.rank}, ${en(squad.members)} members. Open squad`
+      : 'Join a Squad');
   };
   const paintProfile = () => {
     const s = profile.stats;

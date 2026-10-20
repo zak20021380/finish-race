@@ -78,6 +78,10 @@
           <path d="M9.2 8.6V7a2.8 2.8 0 0 1 5.6 0v1.6" />
         </g>
       </symbol>
+      <symbol id="i-edit" viewBox="0 0 24 24">
+        <path d="M4 20h4.2L19 9.2 14.8 5 4 15.8V20Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" />
+        <path d="m13.4 6.4 4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" />
+      </symbol>
       <symbol id="i-user" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="8.4" r="3.7" />
@@ -1535,13 +1539,35 @@
                   </span>
                 </button>
                 <div class="p-id pf-id-v2">
-                  <div class="pf-name-row">
+                  <div class="pf-name-row" id="pf-name-row">
                     <p class="p-name" id="pf-name">Player</p>
-                    <!-- the equipped honor is a 26px 3D crest pin beside the name: no prestige word in the header -->
+                    <!-- the one name key: a brushed pencil, never a whole edit bar -->
+                    <button class="pf-name-edit" type="button" id="pf-name-edit"
+                      aria-label="Edit display name" title="Edit display name">
+                      <svg class="ico" aria-hidden="true"><use href="#i-edit" /></svg>
+                    </button>
+                    <!-- the equipped honor is a 28px 3D crest pin beside the name: no prestige word in the header -->
                     <span class="pf-equipped-badge" id="pf-equipped-badge" role="img" hidden>
                       <svg class="pf-equipped-crest" viewBox="0 0 56 56" aria-hidden="true"><use id="pf-equipped-use" href="#i-crest-gold" /></svg>
                     </span>
                   </div>
+                  <!-- inline rename: one Dark-Clay field, a live counter and Save / Cancel -->
+                  <form class="pf-name-form" id="pf-name-form" novalidate hidden>
+                    <label class="pf-name-field">
+                      <span class="pf-name-sr">Display name</span>
+                      <input class="pf-name-input" id="pf-name-input" name="display-name" type="text"
+                        autocomplete="nickname" autocapitalize="words" enterkeyhint="done"
+                        maxlength="16" minlength="3" spellcheck="false" aria-describedby="pf-name-hint" />
+                      <span class="pf-name-len" id="pf-name-len" aria-hidden="true">0/16</span>
+                    </label>
+                    <span class="pf-name-hint" id="pf-name-hint" role="status" aria-live="polite">3–16 characters</span>
+                    <button class="pf-name-act save" type="submit" id="pf-name-save" aria-label="Save display name">
+                      <svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>
+                    </button>
+                    <button class="pf-name-act cancel" type="button" id="pf-name-cancel" aria-label="Cancel name edit">
+                      <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
+                    </button>
+                  </form>
                   <!-- the competitive division is the identity's one capsule -->
                   <span class="pf-tier-badge" id="pf-tier-badge" data-tier="rookie">
                     <svg class="ico" aria-hidden="true"><use href="#i-shield" /></svg>
@@ -1568,7 +1594,9 @@
 
               <!-- tier 3 · actions: two equal pills -->
               <div class="pf-hero-chip-row">
-                <button class="pf-chip" type="button" id="pf-country" aria-haspopup="dialog" aria-label="Choose your nation">
+                <button class="pf-chip pf-chip-nation" type="button" id="pf-country" aria-haspopup="dialog" aria-label="Choose your nation">
+                  <!-- the flag's own colours, blurred behind the card, are its ambient light -->
+                  <span class="pf-chip-aura" id="pf-country-aura" aria-hidden="true"></span>
                   <span class="pf-chip-ico pf-chip-ico-country" id="pf-country-ico" aria-hidden="true">
                     <svg class="ico pf-chip-globe"><use href="#i-globe" /></svg>
                     <span class="pf-flag-slot" id="pf-flag"></span>
@@ -1576,14 +1604,16 @@
                   <span class="pf-chip-txt">
                     <span class="pf-chip-k">Nation</span>
                     <span class="pf-chip-v"><span id="pf-country-v">Add country</span></span>
+                    <span class="pf-chip-meta" id="pf-country-meta">+100 Coins when set</span>
                   </span>
                   <span class="pf-chip-action" aria-hidden="true"><svg class="ico"><use href="#i-next" /></svg></span>
                 </button>
-                <button class="pf-chip" type="button" id="pf-team" aria-haspopup="dialog" aria-label="Join a Squad">
+                <button class="pf-chip pf-chip-squad" type="button" id="pf-team" aria-haspopup="dialog" aria-label="Join a Squad">
                   <span class="pf-chip-ico pf-chip-ico-squad" aria-hidden="true"><svg class="ico"><use href="#i-shield" /></svg></span>
                   <span class="pf-chip-txt">
                     <span class="pf-chip-k">Squad</span>
                     <span class="pf-chip-v"><span id="pf-team-v">Join a Squad</span></span>
+                    <span class="pf-chip-meta" id="pf-team-meta">Community squads</span>
                   </span>
                   <span class="pf-chip-action" aria-hidden="true"><svg class="ico"><use href="#i-next" /></svg></span>
                 </button>

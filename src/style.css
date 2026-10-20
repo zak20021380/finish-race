@@ -17852,3 +17852,599 @@ html.reduced-motion .announce-cta { transition: none; }
   font-size: 10px;
   letter-spacing: .06em;
 }
+
+/* ==========================================================================
+   PROFILE V4 — PRESTIGE IDENTITY HUB.
+   One padding scale (#s-profile), a photographic squircle over the initials,
+   an inline rename field, sculpted rank/crest metal, and twin Nation / Squad
+   tiles with real metadata and flag-colour ambient light.
+   Everything is overridden at the #s-profile scope so the older v2/v3 blocks
+   stay intact and the shared clay recipe is never forked.
+   ========================================================================== */
+
+#s-profile {
+  /* the only two inside-card paddings on this screen */
+  --pf-card-pad: 16px;
+  --pf-card-pad-dense: 12px;
+  --pf-card-gap: 8px;
+}
+
+/* ---- one internal rhythm: hero, quest, invite, rows and rack all read the tokens ---- */
+#s-profile .pf-hero.pf-hero-v2 { padding: var(--pf-card-pad); gap: var(--pf-card-pad-dense); }
+#s-profile .pf-quest { padding: var(--pf-card-pad); }
+#s-profile .pf-invite { padding: var(--pf-card-pad-dense) var(--pf-card-pad); }
+#s-profile .pf-tile.row { padding: var(--pf-card-pad-dense) var(--pf-card-pad); }
+#s-profile .badge-rack { padding: var(--pf-card-pad-dense); }
+#s-profile .pf-stats.p-stats.quad { padding: var(--pf-card-pad-dense); }
+#s-profile .pf-eq-lock { border-radius: 20px; }
+#s-profile .pf-eq-row { padding: 0; }
+
+/* ---- identity tier: name + pencil, one wrapped line, never an ellipsis ---- */
+#s-profile .pf-name-row {
+  align-items: center;
+  gap: 8px;
+  row-gap: 6px;
+  flex-wrap: wrap;
+  min-height: 28px;
+}
+#s-profile .pf-name-row .p-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  font-size: clamp(1.0625rem, 1rem + .4vw, 1.3125rem);
+  font-weight: 900;
+  letter-spacing: -.015em;
+  line-height: 1.12;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .55);
+}
+/* the pencil: a small brushed key, never a full edit bar */
+.pf-name-edit {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  appearance: none;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+  color: #7DD3FC;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, 0) 58%),
+    linear-gradient(180deg, #26314A 0%, #121A28 100%);
+  box-shadow:
+    0 2px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .2),
+    inset 0 0 0 1px rgba(125, 211, 252, .26),
+    0 0 12px -5px rgba(34, 211, 238, .7);
+  transition: transform var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
+}
+.pf-name-edit .ico { width: 13px; height: 13px; filter: drop-shadow(0 0 5px rgba(34, 211, 238, .45)); }
+.pf-name-edit:hover:not(:active) { transform: translateY(-1px); color: #E0F2FE; }
+.pf-name-edit:active { transform: translateY(1px); }
+.pf-name-edit:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+#s-profile .pf-name-row[data-editing] .pf-name-edit { display: none; }
+
+/* the inline editor: recessed field, live counter, amber save + slate cancel */
+.pf-name-form {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  animation: pf-name-in .18s var(--bounce) both;
+}
+.pf-name-form[hidden] { display: none; }
+@keyframes pf-name-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.pf-name-field {
+  position: relative;
+  flex: 1 1 132px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 46px 0 11px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #0A0F1C 0%, #131C2B 100%);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, .6),
+    inset 0 -1px 0 rgba(255, 255, 255, .06),
+    inset 0 0 0 1px rgba(255, 255, 255, .08);
+}
+.pf-name-field:focus-within {
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, .6),
+    inset 0 -1px 0 rgba(255, 255, 255, .06),
+    inset 0 0 0 1px rgba(34, 211, 238, .55),
+    0 0 14px -5px rgba(34, 211, 238, .65);
+}
+.pf-name-input {
+  width: 100%;
+  min-width: 0;
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  outline: 0;
+}
+.pf-name-input.is-invalid { color: #FDA4AF; }
+.pf-name-len {
+  position: absolute;
+  right: 10px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  color: #64748B;
+  font-variant-numeric: tabular-nums;
+}
+.pf-name-hint {
+  flex: 1 1 100%;
+  order: 3;
+  font-size: 9px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #64748B;
+}
+.pf-name-hint.is-warn { color: #FDA4AF; }
+.pf-name-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.pf-name-act {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  appearance: none;
+  border: 0;
+  padding: 0;
+  border-radius: 11px;
+  cursor: pointer;
+  transition: transform var(--motion-fast), filter var(--motion-fast);
+}
+.pf-name-act .ico { width: 14px; height: 14px; }
+.pf-name-act:hover:not(:active) { transform: translateY(-1px); filter: brightness(1.06); }
+.pf-name-act:active { transform: translateY(1px); }
+.pf-name-act:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.pf-name-act.save {
+  color: #06202B;
+  background: linear-gradient(180deg, #67E8F9 0%, #22D3EE 48%, #0891B2 100%);
+  box-shadow:
+    0 2px 0 #063A48,
+    inset 0 1px 0 rgba(255, 255, 255, .55),
+    inset 0 -2px 3px rgba(6, 58, 72, .45),
+    0 0 14px -6px rgba(34, 211, 238, .8);
+}
+.pf-name-act.cancel {
+  color: #94A3B8;
+  background: linear-gradient(180deg, #26314A 0%, #121A28 100%);
+  box-shadow:
+    0 2px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 0 0 1px rgba(148, 163, 184, .22);
+}
+
+/* ---- avatar: the Telegram photo fills the clay squircle, initials stay underneath ---- */
+#s-profile .pf-avatar-frame.avatar.big > img {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+#s-profile .pf-avatar-frame.avatar.big > span { position: relative; z-index: 0; }
+#s-profile .pf-avatar-frame.avatar.big::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 2px rgba(8, 12, 20, .55),
+    inset 0 0 0 3px rgba(255, 255, 255, .07),
+    inset 0 2px 5px rgba(255, 255, 255, .18);
+}
+#s-profile .pf-avatar-wrap[data-frame="default"] {
+  --ring-a: #06b6d4;
+  --ring-b: #0891b2;
+  --ring-c: #0e7490;
+  --ring-glow: rgba(6, 182, 212, .55);
+}
+#s-profile .pf-avatar-glow { opacity: .62; }
+
+/* ---- equipped honor: a 28px beveled crest in a titanium-and-gold socket ---- */
+#s-profile .pf-equipped-badge {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background:
+    radial-gradient(80% 80% at 30% 18%, rgba(255, 255, 255, .22) 0%, rgba(255, 255, 255, 0) 58%),
+    linear-gradient(180deg, #303B4F 0%, #0D1320 100%);
+  box-shadow:
+    0 3px 0 #060A11,
+    inset 0 1px 0 rgba(255, 255, 255, .34),
+    inset 0 -2px 3px rgba(0, 0, 0, .55),
+    inset 0 0 0 1px var(--eq-rim),
+    0 0 16px -4px rgba(var(--eq-aura), .8);
+}
+#s-profile .pf-equipped-badge::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, .5) 0%, rgba(255, 255, 255, 0) 34%),
+    linear-gradient(315deg, rgba(255, 255, 255, .14) 0%, rgba(255, 255, 255, 0) 40%);
+  mix-blend-mode: screen;
+}
+#s-profile .pf-equipped-badge::after {
+  content: "";
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  top: 2px;
+  height: 1px;
+  border-radius: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .75), transparent);
+}
+#s-profile .pf-equipped-badge .pf-equipped-crest {
+  width: 22px;
+  height: 22px;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .6)) drop-shadow(0 0 4px rgba(var(--eq-aura), .35));
+}
+
+/* ---- competitive division: a crest, not a text pill ---- */
+#s-profile .pf-tier-badge {
+  position: relative;
+  min-height: 28px;
+  padding: 0 12px 0 9px;
+  gap: 7px;
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, 0) 46%),
+    linear-gradient(180deg, #283346 0%, #0F1623 100%);
+  box-shadow:
+    0 3px 0 #070B12,
+    inset 0 1px 0 rgba(255, 255, 255, .26),
+    inset 0 -2px 4px rgba(0, 0, 0, .55),
+    inset 0 0 0 1px rgba(203, 213, 225, .34),
+    inset 0 0 0 2px rgba(252, 211, 77, .08),
+    0 0 18px -8px var(--aura-glow, rgba(252, 211, 77, .55));
+  color: var(--aura, #FBBF24);
+  font-size: 11px;
+  letter-spacing: .11em;
+  overflow: hidden;
+}
+#s-profile .pf-tier-badge::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: conic-gradient(
+    from 200deg,
+    #E2E8F0 0%, #64748B 16%, #FDE68A 30%, #A16207 46%,
+    #F8FAFC 62%, #475569 78%, #E2E8F0 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: .62;
+}
+#s-profile .pf-tier-badge::after {
+  content: "";
+  position: absolute;
+  left: 16%;
+  right: 16%;
+  top: 1px;
+  height: 1px;
+  border-radius: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .65), transparent);
+}
+#s-profile .pf-tier-badge .ico {
+  width: 12px;
+  height: 12px;
+  color: currentColor;
+  filter: drop-shadow(0 0 5px var(--aura-glow, rgba(252, 211, 77, .4)));
+}
+#s-profile .pf-tier-badge .pf-tier-n { position: relative; z-index: 1; }
+#s-profile .pf-tier-badge[data-tier="grandmaster"] {
+  color: #FDE047;
+  box-shadow:
+    0 3px 0 #070B12,
+    inset 0 1px 0 rgba(255, 255, 255, .3),
+    inset 0 -2px 4px rgba(0, 0, 0, .55),
+    inset 0 0 0 1px rgba(252, 211, 77, .5),
+    inset 0 0 0 2px rgba(245, 158, 11, .14),
+    0 0 22px -7px rgba(245, 158, 11, .85);
+}
+#s-profile .pf-tier-badge[data-tier="grandmaster"] .pf-tier-n {
+  background: linear-gradient(180deg, #FEF9C3 0%, #FDE047 28%, #F59E0B 68%, #FCD34D 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .55));
+}
+#s-profile .pf-tier-badge[data-tier="grandmaster"] .ico {
+  color: #FDE047;
+  filter: drop-shadow(0 0 6px rgba(245, 158, 11, .85));
+}
+
+/* ---- Nation / Squad: identical twin crest tiles, 16px on all four sides ---- */
+#s-profile .pf-hero-chip-row {
+  gap: var(--pf-card-gap);
+  align-items: stretch;
+}
+#s-profile .pf-chip {
+  position: relative;
+  isolation: isolate;
+  height: 100%;
+  min-height: 108px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "ico action"
+    "txt txt";
+  align-items: center;
+  gap: 8px var(--pf-card-gap);
+  padding: var(--pf-card-pad);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, .07);
+  overflow: hidden;
+  text-align: left;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .05) 0%, rgba(255, 255, 255, 0) 42%),
+    linear-gradient(180deg, #1B2537 0%, #0F1623 100%);
+  box-shadow:
+    0 3px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 -10px 18px -14px rgba(0, 0, 0, .9),
+    inset 0 0 0 1px rgba(255, 255, 255, .04);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast),
+    border-color var(--motion-fast), filter var(--motion-fast);
+}
+#s-profile .pf-chip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+#s-profile .pf-chip:hover:not(:active) {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, .13);
+  filter: brightness(1.04);
+}
+#s-profile .pf-chip:active {
+  transform: translateY(1px) scale(.98);
+  filter: brightness(1.1);
+  box-shadow:
+    0 1px 0 #080C14,
+    inset 0 2px 6px rgba(0, 0, 0, .5),
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+#s-profile .pf-chip:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+#s-profile .pf-chip-ico,
+#s-profile .pf-chip-txt,
+#s-profile .pf-chip-action { position: relative; z-index: 1; }
+
+/* the flag's own pixels, blurred behind the card: national ambient light */
+#s-profile .pf-chip-aura {
+  position: absolute;
+  inset: -48% -28% 18%;
+  z-index: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  opacity: .3;
+  filter: blur(18px) saturate(1.55);
+  transform: scale(1.25);
+}
+#s-profile .pf-chip-aura .fp {
+  --fp-d: 74px;
+  width: 74px;
+  height: 74px;
+  overflow: hidden;
+  border-radius: 50%;
+}
+#s-profile .pf-chip-aura .fp-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 0;
+  box-shadow: none;
+}
+#s-profile .pf-chip-aura .fp-chip { display: none; }
+#s-profile .pf-chip-nation.is-set { border-color: rgba(125, 211, 252, .14); }
+#s-profile .pf-chip-nation.is-set::after {
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .12), inset 0 -24px 30px -26px rgba(34, 211, 238, .7);
+}
+
+/* the micro 3D pedestal: a glass-beveled well that seats the flag */
+#s-profile .pf-chip-ico {
+  grid-area: ico;
+  justify-self: start;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+}
+#s-profile .pf-chip-ico-country {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(180deg, #253149 0%, #0A101C 100%);
+  box-shadow:
+    0 3px 0 #060A11,
+    inset 0 2px 3px rgba(255, 255, 255, .2),
+    inset 0 -3px 5px rgba(0, 0, 0, .6),
+    inset 0 0 0 1px rgba(203, 213, 225, .24),
+    0 0 16px -5px rgba(34, 211, 238, .45);
+}
+#s-profile .pf-chip-ico-country .pf-flag-slot {
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, .55));
+}
+#s-profile .pf-chip-ico-squad {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  color: #67E8F9;
+  background:
+    radial-gradient(120% 120% at 30% 12%, rgba(56, 189, 248, .24) 0%, rgba(56, 189, 248, 0) 58%),
+    linear-gradient(180deg, #182E45 0%, #0A1220 100%);
+  box-shadow:
+    0 3px 0 #060A11,
+    inset 0 2px 3px rgba(255, 255, 255, .18),
+    inset 0 -3px 5px rgba(0, 0, 0, .6),
+    inset 0 0 0 1px rgba(103, 232, 249, .38),
+    0 0 20px -4px rgba(34, 211, 238, .65);
+}
+#s-profile .pf-chip-ico-squad .ico {
+  width: 21px;
+  height: 21px;
+  filter: drop-shadow(0 0 7px rgba(34, 211, 238, .8)) drop-shadow(0 2px 2px rgba(0, 0, 0, .6));
+}
+#s-profile .pf-chip-squad.is-set .pf-chip-ico-squad {
+  box-shadow:
+    0 3px 0 #060A11,
+    inset 0 2px 3px rgba(255, 255, 255, .2),
+    inset 0 -3px 5px rgba(0, 0, 0, .6),
+    inset 0 0 0 1px rgba(103, 232, 249, .55),
+    0 0 26px -3px rgba(34, 211, 238, .85);
+}
+
+#s-profile .pf-chip-txt {
+  grid-area: txt;
+  align-items: flex-start;
+  gap: 3px;
+  overflow: hidden;
+}
+#s-profile .pf-chip-k {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .16em;
+  color: #7C8CA5;
+}
+#s-profile .pf-chip .pf-chip-v {
+  font-size: 14px;
+  line-height: 1.15;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  max-width: 100%;
+}
+#s-profile .pf-chip .pf-chip-v > span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+#s-profile .pf-chip-meta {
+  max-width: 100%;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 9px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: #5C6B82;
+  font-variant-numeric: tabular-nums;
+}
+#s-profile .pf-chip.is-set .pf-chip-meta { color: #93A4BC; }
+#s-profile .pf-chip-nation.is-set .pf-chip-meta { color: rgba(186, 230, 253, .8); }
+#s-profile .pf-chip-squad.is-set .pf-chip-meta {
+  color: #7DD3FC;
+  text-shadow: 0 0 10px rgba(34, 211, 238, .35);
+}
+
+/* the chevron: a milled metal key, not a glass square */
+#s-profile .pf-chip-action {
+  grid-area: action;
+  justify-self: end;
+  align-self: start;
+  width: 20px;
+  height: 20px;
+  border-radius: 7px;
+  border: 1px solid rgba(226, 232, 240, .26);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .2) 0%, rgba(255, 255, 255, .04) 100%),
+    linear-gradient(180deg, #2B3547 0%, #141B28 100%);
+  color: #D7E0EC;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .35),
+    0 1px 0 rgba(0, 0, 0, .6);
+}
+#s-profile .pf-chip-action .ico {
+  width: 11px;
+  height: 11px;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .55));
+}
+#s-profile .pf-chip:hover .pf-chip-action {
+  color: #F8FAFC;
+  border-color: rgba(255, 255, 255, .4);
+}
+
+/* ---- 360px: keep 16px padding and twin parity; shrink the type, never the token ---- */
+@media (max-width: 380px) {
+  #s-profile .pf-chip { min-height: 106px; }
+  #s-profile .pf-chip-ico,
+  #s-profile .pf-chip-ico-squad { width: 34px; height: 34px; }
+  #s-profile .pf-chip-ico .ico { width: 19px; height: 19px; }
+  #s-profile .pf-chip .pf-chip-v { font-size: 13px; }
+  #s-profile .pf-chip-meta { font-size: 8.5px; letter-spacing: .055em; }
+  #s-profile .pf-equipped-badge { width: 26px; height: 26px; border-radius: 8.5px; }
+  #s-profile .pf-equipped-badge .pf-equipped-crest { width: 20px; height: 20px; }
+  #s-profile .pf-tier-badge { min-height: 27px; padding: 0 10px 0 8px; font-size: 10.5px; }
+  #s-profile .pf-name-act { width: 32px; height: 32px; }
+  #s-profile .pf-name-field { height: 36px; }
+}
+
+@media (max-height: 700px) {
+  #s-profile .pf-hero.pf-hero-v2 { padding: var(--pf-card-pad); }
+}
+
+html.reduced-motion .pf-name-form,
+html.reduced-motion .pf-name-edit,
+html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
