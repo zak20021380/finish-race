@@ -538,3 +538,40 @@ export function equippedBadge(): BadgeDef | null {
   if (!def) return null;
   return isBadgeUnlocked(def.id) ? def : null;
 }
+
+/** An honor as it is worn: the catalogue row plus the ledger's serial, when one exists. */
+export interface WornEdition {
+  def: BadgeDef;
+  serial: number | null;
+}
+
+/** The honor this device wears, with its server-confirmed serial if the ledger has answered. */
+export function wornEdition(): WornEdition | null {
+  const def = equippedBadge();
+  if (!def) return null;
+  return { def, serial: claimOf(def.id)?.serial ?? null };
+}
+
+/** Generic ledger names that must never be mistaken for a ladder player. */
+const HOLDER_SKIP = new Set(['', 'unlisted', 'player', 'you', 'available']);
+
+/**
+ * A ladder player's minted honor, read from the public holder index.
+ *
+ * The ledger publishes who holds which serial, not which honor is currently equipped,
+ * so the rarest cap is the strongest honor it can honestly attribute to that name.
+ * Returns null until a live supply reading has landed, or when no holder carries the name.
+ */
+export function holderEdition(name: string): WornEdition | null {
+  const key = name.trim().toLowerCase();
+  if (HOLDER_SKIP.has(key)) return null;
+  let best: WornEdition | null = null;
+  for (const def of BADGES) {
+    const holders = liveHolders.get(def.id);
+    if (!holders) continue;
+    const hit = holders.find((h) => h.name.trim().toLowerCase() === key);
+    if (!hit) continue;
+    if (!best || def.cap < best.def.cap) best = { def, serial: hit.serial };
+  }
+  return best;
+}

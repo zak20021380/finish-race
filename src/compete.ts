@@ -47,7 +47,7 @@ import {
   type Trend,
 } from './data';
 import { nameOf } from './countries';
-import { badgeCrestHtml, equippedBadge } from './badges';
+import { badgeCrestHtml, editionSerialLabel, holderEdition, refreshBadgeEditions, wornEdition, type WornEdition } from './badges';
 import { flagPhoto } from './flags';
 import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
@@ -136,20 +136,6 @@ function divisionOf(tiq: number): { tier: MindTier; label: string; next: number 
   const div = Math.min(DIVISION.length - 1, Math.floor(Math.max(0, tiq - lo) / step));
   const next = div === DIVISION.length - 1 && tier === 'grandmaster' ? 0 : lo + step * (div + 1);
   return { tier, label: `${TIER_NAME[tier]} ${DIVISION[div]}`, next: Math.ceil(next) };
-}
-
-/** The one-word crest of each tier — "GM II" is what fits a podium pill at 360. */
-const TIER_ABBR: Record<MindTier, string> = {
-  rookie: 'RK',
-  tactician: 'TAC',
-  strategist: 'STR',
-  grandmaster: 'GM',
-};
-
-/** "Grandmaster II" → "GM II": the podium pill's budget is a rank, not a biography. */
-function shortDivisionOf(tiq: number): string {
-  const d = divisionOf(tiq);
-  return `${TIER_ABBR[d.tier]} ${d.label.slice(d.label.lastIndexOf(' ') + 1)}`;
 }
 
 /** A win is worth 120 TIQ and it also lands a game (+20) — the same formula myTrophyScore uses. */
@@ -270,7 +256,6 @@ function percentRing(pct: number, inner: HTMLElement, extraCls = ''): HTMLElemen
 export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   const boardBtns = [...document.querySelectorAll<HTMLButtonElement>('.ranks-tabs [data-board]')];
   const boardSwitch = document.querySelector<HTMLElement>('.ranks-tabs');
-  const ranksScreen = document.getElementById('s-ranks');
   const seasonChip = document.getElementById('ranks-season');
   const seasonText = seasonChip?.querySelector<HTMLElement>('.ml-season-t') ?? null;
   const seasonSub = document.getElementById('ranks-sub');
@@ -323,6 +308,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   /** The last country board, so a flag change repaints before the refetch lands. */
   let nationRows: CountryRow[] | null = null;
   let tick = 0;
+  /** Last time the public holder index was fetched, so route re-entry is not a re-fetch loop. */
+  let medalsFetchedAt = 0;
 
   /** Clean user handle: "@username" when Telegram provides one, else first name, else null. */
   const youHandle = (): string | null => {
@@ -513,8 +500,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     // "Your Standing" is the Top Minds HUD. Nations paints its own nation strip.
     const standing = soloStandingEl();
     if (standing) standing.hidden = board !== 'minds';
-    // The screen's aura keys off your own TIQ, wherever on the ladder the eye is.
-    if (ranksScreen) ranksScreen.dataset.tier = tierOf(myTrophyScore());
     // The squad banner belongs EXCLUSIVELY to the Intellect Guilds board.
     const regBar = document.getElementById('squad-reg-bar');
     if (regBar) regBar.hidden = board !== 'guilds';
@@ -1286,29 +1271,51 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     code?: string;
     /** Guild / player entry: a single-letter clay medallion. */
     letter?: string;
-    /** Mind tiers only exist on the personal boards — a guild's 18k is not a mind. */
-    tier?: MindTier;
-    /** The pill's short rank: "GM II". */
-    tierLabel?: string;
-    /** The spoken rank, spelled out: "Grandmaster II". */
-    tierAria?: string;
+    /** A minted prestige honor the rider wears; its metal also lights the pedestal rim. */
+    medal?: WornEdition;
     onTap?: () => void;
   }
 
+  /** The minted coin, pinned to the avatar rim. Decorative — the host speaks the honor. */
+  function medalPin(w: WornEdition, cls: string): HTMLElement {
+    const pin = document.createElement('span');
+    pin.className = `medal-pin ${cls}`.trim();
+    pin.dataset.accent = w.def.accent;
+    pin.setAttribute('aria-hidden', 'true');
+    pin.title = w.serial !== null ? `${w.def.name} · ${editionSerialLabel(w.serial)}` : w.def.name;
+    pin.innerHTML = badgeCrestHtml(w.def, 'badge-crest medal-coin');
+    return pin;
+  }
+
+  /** The ledger's serial as a recessed micro tag; null until a real serial exists. */
+  function serialChip(w: WornEdition, cls: string, withCap = false): HTMLElement | null {
+    if (w.serial === null) return null;
+    const chip = document.createElement('span');
+    chip.className = `medal-serial ${cls}`.trim();
+    chip.dataset.accent = w.def.accent;
+    chip.textContent = withCap
+      ? `${editionSerialLabel(w.serial)} / ${w.def.cap}`
+      : editionSerialLabel(w.serial);
+    chip.title = `${w.def.name} · ${editionSerialLabel(w.serial)} of ${w.def.cap}`;
+    return chip;
+  }
+
   /**
-   * Card order is avatar → name → tier → TIQ → plinth. The plinth stays the
+   * Card order is avatar → name → serial → TIQ → plinth. The plinth stays the
    * last child because it is the card's base: appending the join key after it
-   * would float the base into the middle of the card.
+   * would float the base into the middle of the card. Only a minted honor earns
+   * the serial line, so a card without one keeps the clean two-line silhouette.
    */
   function podiumCard(e: PodiumEntry): HTMLElement {
     const card = document.createElement('div');
     card.className = `pod-card ${podiumOf(e.rank)}`;
     card.dataset.rank = String(e.rank);
-    if (e.tier) card.dataset.tier = e.tier;
+    if (e.medal) card.dataset.medal = e.medal.def.accent;
     card.setAttribute('role', 'listitem');
-    const tierSaid = e.tierAria ?? e.tierLabel;
-    const said = [tierSaid ? `${tierSaid}, ` : '', `${e.score} Tactical IQ`].join('');
-    card.setAttribute('aria-label', `Rank ${e.rank}: ${e.name}, ${said}`);
+    const honor = e.medal
+      ? `, ${e.medal.def.name}${e.medal.serial !== null ? ` edition ${e.medal.serial}` : ''}`
+      : '';
+    card.setAttribute('aria-label', `Rank ${e.rank}: ${e.name}${honor}, ${e.score} Tactical IQ`);
 
     if (e.rank === 1) card.append(svgIcon('#i-crown', 'pod-crown'));
 
@@ -1320,16 +1327,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     } else {
       av.textContent = (e.letter ?? e.name).replace(/^@/, '').slice(0, 1).toUpperCase();
     }
+    if (e.medal) av.append(medalPin(e.medal, 'pod-medal'));
 
     const nm = document.createElement('span');
     nm.className = 'pod-name';
     nm.textContent = e.name;
     nm.title = e.name;
 
-    const tier = document.createElement('span');
-    tier.className = 'pod-tier';
-    tier.textContent = e.tierLabel ?? '';
-    if (!e.tierLabel) tier.hidden = true;
+    const serial = e.medal ? serialChip(e.medal, 'pod-serial') : null;
 
     const iq = document.createElement('span');
     iq.className = 'pod-iq';
@@ -1349,9 +1354,17 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     aura.className = 'pod-foot-aura';
     const stepN = document.createElement('b');
     stepN.textContent = String(e.rank);
-    step.append(aura, stepN);
+    step.append(aura);
+    if (e.medal) {
+      const glow = document.createElement('i');
+      glow.className = 'pod-foot-medal';
+      step.append(glow);
+    }
+    step.append(stepN);
 
-    card.append(av, nm, tier, iq, step);
+    card.append(av, nm);
+    if (serial) card.append(serial);
+    card.append(iq, step);
     if (e.onTap) {
       card.classList.add('is-tappable');
       card.tabIndex = 0;
@@ -1415,11 +1428,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     /** The numeric TIQ behind `points`: the tier and the read derive from it. */
     tiq: number;
     me: boolean;
-    /** Mind tiers describe a person, not a country aggregate, so boards opt in. */
-    tiered?: boolean;
     /** The climber directly above, so inspection can name the gap it has to close. */
     above?: { name: string; tiq: number } | null;
     wins?: number;
+    /** A minted prestige honor this name holds, read from the ledger's holder index. */
+    medal?: WornEdition;
     /** A mind opens its profile sheet; without this a row keeps the inline read. */
     onOpen?: () => void;
   }
@@ -1430,18 +1443,23 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
    * is a placeholder waiting for a backend.
    */
   function row(r: LadderRow): HTMLLIElement {
-    const { rank, code, name, points, tiered = false } = r;
+    const { rank, code, name, points } = r;
     const li = document.createElement('li');
     li.className = `rank-row lb-row${r.me ? ' is-you' : ''}`;
     li.dataset.rank = String(rank);
-    const div = divisionOf(r.tiq);
-    li.setAttribute('aria-label', `#${rank} ${name} — ${points} Tactical IQ. Activate to inspect.`);
+    const honor = r.medal
+      ? `, ${r.medal.def.name}${r.medal.serial !== null ? ` edition ${r.medal.serial}` : ''}`
+      : '';
+    li.setAttribute('aria-label', `#${rank} ${name}${honor} — ${points} Tactical IQ. Activate to inspect.`);
     if (r.me) li.setAttribute('aria-current', 'true');
-    if (tiered) li.dataset.tier = div.tier;
 
     const id = document.createElement('span');
     id.className = 'lb-id';
-    id.append(flagBadge(code));
+    const avWrap = document.createElement('span');
+    avWrap.className = 'lb-avwrap';
+    avWrap.append(flagBadge(code));
+    if (r.medal) avWrap.append(medalPin(r.medal, 'lb-medal'));
+    id.append(avWrap);
     const txt = document.createElement('span');
     txt.className = 'lb-txt';
     const nmLine = document.createElement('span');
@@ -1451,24 +1469,18 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     nm.textContent = name;
     nm.title = name;
     nmLine.append(nm);
+    /* The serial sits on the name line, and the only other line is the win count:
+       two clean tiers, no third chip wedged between the name and the score. */
+    const serial = r.medal ? serialChip(r.medal, 'lb-serial') : null;
+    if (serial) nmLine.append(serial);
     txt.append(nmLine);
-    /* The tier rides the second line, ahead of the detail: at 320 the identity
-       column is ~90px, and a clipped name is a worse trade than a clipped win count. */
-    if (tiered || r.sub) {
+    if (r.sub) {
       const s = document.createElement('span');
       s.className = 'lb-sub';
-      if (tiered) {
-        const tier = document.createElement('span');
-        tier.className = 'lb-tier';
-        tier.textContent = div.label;
-        s.append(tier);
-      }
-      if (r.sub) {
-        const st = document.createElement('span');
-        st.className = 'lb-sub-t';
-        st.textContent = r.sub;
-        s.append(st);
-      }
+      const st = document.createElement('span');
+      st.className = 'lb-sub-t';
+      st.textContent = r.sub;
+      s.append(st);
       txt.append(s);
     }
     id.append(txt);
@@ -1482,7 +1494,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
        it is an aggregate — so that board keeps the inline inspection read instead. */
     if (r.onOpen) {
       const run = (): void => { r.onOpen?.(); };
-      li.setAttribute('aria-label', `#${rank} ${name} — ${points} Tactical IQ. Activate to open the mind profile.`);
+      li.setAttribute('aria-label', `#${rank} ${name}${honor} — ${points} Tactical IQ. Activate to open the mind profile.`);
       li.addEventListener('click', run);
       li.addEventListener('keydown', (ev) => {
         if (ev.key === 'Enter' || ev.key === ' ') {
@@ -1493,12 +1505,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       return li;
     }
 
-    /* ---- inspection read: the four numbers a row can honestly tell you ---- */
+    /* ---- inspection read: the numbers a row can honestly tell you ---- */
     const peek = document.createElement('span');
     peek.className = 'lb-peek';
     peek.hidden = true;
     const facts: string[][] = [];
-    if (tiered) facts.push(['Tier', div.label]);
     if (r.wins !== undefined) facts.push(['Wins', String(r.wins)]);
     if (r.wins && r.wins > 0) facts.push(['TIQ / win', Math.round(r.tiq / r.wins).toLocaleString('en-US')]);
     if (r.above && r.above.tiq > r.tiq) facts.push([`To pass ${r.above.name}`, (r.above.tiq - r.tiq).toLocaleString('en-US')]);
@@ -1550,10 +1561,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   /**
    * The Top Minds strip: one 48px row reading where you stand (metal rank badge),
-   * who you are (clay avatar · "You" · tier crest · percentile chip) and what you
-   * hold (TIQ). The next-division milestone is deliberately not a line of its own —
-   * it rides the strip's tooltip and accessible name, so the HUD stays one row
-   * without losing the fact.
+   * who you are (clay avatar · "You" · minted serial · percentile chip) and what
+   * you hold (TIQ). The next-division milestone is deliberately not a line of its
+   * own — it rides the strip's tooltip and accessible name, so the HUD stays one
+   * row without losing the fact.
    */
   function paintMindsStanding(rows: PlayerRow[] | null): void {
     const host = soloStandingEl();
@@ -1585,15 +1596,20 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const h = youHandle() ?? 'Y';
     av.textContent = h.replace(/^@/, '').slice(0, 1).toUpperCase() || 'Y';
 
+    /* the equipped honor is pinned to the avatar rim and its real ledger serial
+       rides the identity line — the same coin the Honor sheet and Profile show */
+    const own = wornEdition();
+    const avWrap = document.createElement('span');
+    avWrap.className = 'mh-avwrap';
+    avWrap.append(av);
+    if (own) avWrap.append(medalPin(own, 'mh-medal'));
+
     const idWrap = document.createElement('span');
     idWrap.className = 'mh-id';
     const line = document.createElement('b');
     line.className = 'mh-line';
     line.textContent = 'You';
-    const crest = document.createElement('span');
-    crest.className = 'mh-pill';
-    crest.textContent = shortDivisionOf(tiq);
-    crest.title = div.label;
+    const serial = own ? serialChip(own, 'mh-serial', true) : null;
     const pctText = !onBoard
       ? 'Unranked'
       : pct >= 100
@@ -1607,19 +1623,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       : pct >= 100
         ? `Below the top ${field}`
         : `Top ${pct}% of minds`;
-    idWrap.append(line, crest, chip);
-
-    /* the equipped badge rides the strip: the same sculpted crest the Honor
-       sheet shows, so the honor is legible on the ladder itself */
-    const eq = equippedBadge();
-    let eqCrest: HTMLElement | null = null;
-    if (eq) {
-      eqCrest = document.createElement('span');
-      eqCrest.className = 'mh-badge';
-      eqCrest.setAttribute('aria-label', `Equipped badge: ${eq.name}`);
-      eqCrest.title = eq.name;
-      eqCrest.innerHTML = badgeCrestHtml(eq);
-    }
+    idWrap.append(line);
+    if (serial) idWrap.append(serial);
+    idWrap.append(chip);
 
     const score = document.createElement('span');
     score.className = 'mh-score';
@@ -1630,10 +1636,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     score.title = `${tiq.toLocaleString('en-US')} Tactical IQ`;
     score.setAttribute('aria-label', `${tiq.toLocaleString('en-US')} Tactical IQ`);
 
+    host.classList.toggle('has-medal', serial !== null);
     if (onBoard) host.append(badge);
-    host.append(av);
-    if (eqCrest) host.append(eqCrest);
-    host.append(idWrap, score);
+    host.append(avWrap, idWrap, score);
 
     const gap = div.next > tiq ? div.next - tiq : 0;
     const wins = gap > 0 ? Math.ceil(gap / TIQ_PER_WIN) : 0;
@@ -1641,7 +1646,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       ? `${wins} win${wins === 1 ? '' : 's'} to ${divisionOf(div.next).label}`
       : 'Peak division · hold it against the ladder';
     const where = onBoard ? `Rank ${myRank} of ${field + 1}` : 'Unranked';
-    const honor = eq ? ` · ${eq.name}` : '';
+    const honor = own
+      ? ` · ${own.def.name}${own.serial !== null ? ` edition ${own.serial} of ${own.def.cap}` : ''}`
+      : '';
     host.title = `${where} · ${div.label} · ${chip.title} · ${milestone}${honor}`;
     host.setAttribute(
       'aria-label',
@@ -2018,10 +2025,61 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     paintNations(rows);
   }
 
+  /** Paint the Top Minds podium, ladder and your strip from one loaded field. */
+  function paintMinds(rows: PlayerRow[]): void {
+    paintPodium(rows.slice(0, 3).map((p, i) => ({
+      rank: i + 1,
+      name: p.name,
+      score: p.points.toLocaleString('en-US'),
+      code: p.countryCode,
+      medal: holderEdition(p.name) ?? undefined,
+      onTap: () => openMind(p, i + 1),
+    })));
+    const el = panes.minds;
+    if (!el) return;
+    el.textContent = '';
+    const ol = document.createElement('ol');
+    ol.className = 'rank-list';
+    rows.slice(3).forEach((p, i) => {
+      const up = rows[i + 2];
+      ol.append(row({
+        rank: i + 4,
+        code: p.countryCode,
+        name: p.name,
+        sub: `${p.wins} wins`,
+        points: p.points.toLocaleString('en-US'),
+        tiq: p.points,
+        me: false,
+        medal: holderEdition(p.name) ?? undefined,
+        wins: p.wins,
+        above: up ? { name: up.name, tiq: up.points } : null,
+        onOpen: () => openMind(p, i + 4),
+      }));
+    });
+    el.append(ol);
+    paintMindsStanding(rows);
+  }
+
+  /**
+   * The ledger's holder index is what names the coins on the podium and rows. It is
+   * fetched on entry (not in loadMinds, whose save-driven relaunches would loop with
+   * the supply cache write), then the ladder repaints once it lands.
+   */
+  function refreshLadderMedals(): void {
+    const now = Date.now();
+    if (now - medalsFetchedAt < 60_000) return;
+    medalsFetchedAt = now;
+    void refreshBadgeEditions().then(() => {
+      if (isRanksVisible() && board === 'minds' && mindsField.length) paintMinds(mindsField);
+    });
+  }
+
   async function loadMinds(): Promise<void> {
     const el = panes.minds;
     if (!el) return;
-    if (!loadedBoard.minds) el.innerHTML = skel(6);
+    /* a supply refresh can relaunch this load: keep the painted ladder up instead
+       of flashing a skeleton under the player's eyes */
+    if (!loadedBoard.minds && !mindsField.length) el.innerHTML = skel(6);
     let rows: PlayerRow[];
     try {
       rows = await getPlayerRanking();
@@ -2036,37 +2094,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       return;
     }
     mindsField = rows;
-    paintPodium(rows.slice(0, 3).map((p, i) => ({
-      rank: i + 1,
-      name: p.name,
-      score: p.points.toLocaleString('en-US'),
-      code: p.countryCode,
-      tier: tierOf(p.points),
-      tierLabel: shortDivisionOf(p.points),
-      tierAria: divisionOf(p.points).label,
-      onTap: () => openMind(p, i + 1),
-    })));
-    el.textContent = '';
-    const ol = document.createElement('ol');
-    ol.className = 'rank-list';
-    rows.slice(3).forEach((p, i) => {
-      const up = rows[i + 2];
-      ol.append(row({
-        rank: i + 4,
-        code: p.countryCode,
-        name: p.name,
-        sub: `${p.wins} wins`,
-        points: p.points.toLocaleString('en-US'),
-        tiq: p.points,
-        me: false,
-        tiered: true,
-        wins: p.wins,
-        above: up ? { name: up.name, tiq: up.points } : null,
-        onOpen: () => openMind(p, i + 4),
-      }));
-    });
-    el.append(ol);
-    paintMindsStanding(rows);
+    paintMinds(rows);
   }
 
   /* ---------- Intellect Guilds: Telegram channel / community ranking ---------- */
@@ -2434,6 +2462,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       } else if (id === 'ranks') {
         paintRanks();
         startTick();
+        refreshLadderMedals();
         void loadBoard(board);
       }
     },

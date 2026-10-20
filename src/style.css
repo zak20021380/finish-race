@@ -2181,6 +2181,65 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
 .lb-pill.on .ico { color: var(--brand-ink); }
 .lb-seg { flex: none; }
 
+/* ---- Prestige medallions: a real minted coin pinned to the avatar rim --------
+   The coin is the same crest the Honor sheet ships, in a dark bezel ringed by the
+   honor's own metal. The serial is a recessed micro tag, never a local guess. */
+.medal-pin {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid #05090F;
+  border-radius: 50%;
+  background: #070C15;
+  box-shadow:
+    0 2px 5px rgba(0, 0, 0, .75),
+    0 0 0 1px var(--medal-rim, rgba(148, 163, 184, .32)),
+    0 0 10px -2px var(--medal-aura, rgba(148, 163, 184, .35));
+  pointer-events: none;
+}
+.medal-pin .medal-coin {
+  width: 17px;
+  height: 17px;
+  display: block;
+  border-radius: 50%;
+  filter: saturate(1.05) contrast(1.04) drop-shadow(0 1px 1px rgba(0, 0, 0, .65));
+}
+.medal-pin .medal-coin.badge-crest-art { width: 17px; height: 17px; }
+.medal-serial {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 14px;
+  padding: 0 5px;
+  border-radius: 4.5px;
+  background: linear-gradient(180deg, #0B111C 0%, #060A11 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, .95),
+    inset 0 0 0 1px rgba(255, 255, 255, .07),
+    0 0 0 1px var(--medal-rim, rgba(148, 163, 184, .24)),
+    0 0 8px -3px var(--medal-aura, transparent);
+  color: var(--medal-ink, #CBD5E1);
+  font-family: var(--ml-mono, ui-monospace, Menlo, Consolas, monospace);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* cyan = Churchill titanium · amber = Einstein gold · emerald = Heisenberg chrome */
+.medal-pin[data-accent="titanium"],
+.medal-serial[data-accent="titanium"] { --medal-aura: rgba(34, 211, 238, .6); --medal-rim: rgba(34, 211, 238, .46); --medal-ink: #A5F3FC; }
+.medal-pin[data-accent="quantum"],
+.medal-serial[data-accent="quantum"] { --medal-aura: rgba(245, 158, 11, .68); --medal-rim: rgba(245, 158, 11, .52); --medal-ink: #FDE047; }
+.medal-pin[data-accent="frost"],
+.medal-serial[data-accent="frost"] { --medal-aura: rgba(52, 211, 153, .6); --medal-rim: rgba(52, 211, 153, .48); --medal-ink: #6EE7B7; }
+
 /* ---- Leaderboard ladder: one strict grid for both boards ----
    rank crest | identity | tabular score | right-edge action. Solo boards drop the
    action column; only the identity column flexes, so nothing drifts row to row and
@@ -2260,8 +2319,18 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
 }
 .lb-rank > * { grid-area: 1 / 1; }
 
-/* Col 2 — avatar + identity. The name owns every pixel the fixed columns leave. */
+/* Col 2 — avatar + identity. The name owns every pixel the fixed columns leave.
+   The avatar wrapper is the coordinate space for a medallion pinned over its rim. */
 .lb-id { display: flex; align-items: center; gap: var(--lb-gap); min-width: 0; }
+.lb-avwrap,
+.mh-avwrap {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+}
 .lb-av {
   flex: none;
   width: 36px;
@@ -2276,49 +2345,34 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
   font-weight: 800;
   line-height: 1;
 }
-.lb-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-/* name line: the name shrinks first, the tier never does — the tier is the point */
+.lb-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+/* name line: the name shrinks first, the serial chip never does */
 .lb-nm { display: flex; align-items: center; gap: 5px; min-width: 0; }
-.lb-tier {
-  flex: none;
-  margin-right: 4px;
-  padding: 1px 5px;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, .05);
-  box-shadow: inset 0 0 0 1px var(--hair);
-  font-size: 8.5px;
-  font-weight: 800;
-  letter-spacing: .05em;
-  line-height: 1.45;
-  text-transform: uppercase;
-  color: var(--aura, var(--ink-soft));
-  white-space: nowrap;
-}
-.lb-row[data-tier="rookie"] { --aura: var(--tier-rookie); }
-.lb-row[data-tier="tactician"] { --aura: var(--tier-tactician); }
-.lb-row[data-tier="strategist"] { --aura: var(--tier-strategist); }
-.lb-row[data-tier="grandmaster"] { --aura: var(--tier-grandmaster); }
 .lb-name {
   min-width: 0;
   font-size: var(--t-2);
   font-weight: 800;
   letter-spacing: -.01em;
-  line-height: 1.25;
+  line-height: 1.2;
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* the only second line on a mind row: a quiet monospaced win count */
 .lb-sub {
   display: flex;
   align-items: center;
   gap: 4px;
   min-width: 0;
-  font-size: 11px;
+  font-family: var(--ml-mono, ui-monospace, Menlo, Consolas, monospace);
+  font-size: 10.5px;
   font-weight: 600;
-  line-height: 1.3;
-  color: var(--ink-soft);
+  letter-spacing: .01em;
+  line-height: 1.25;
+  color: #8CA0B8;
 }
+.lb-serial { margin-right: 1px; }
 .lb-sub-t { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .lb-kind { flex: none; width: 11px; height: 11px; opacity: .55; }
 /* Country identity: a photo flag on a three-tier cascade — circle-flags SVG, then
@@ -2384,6 +2438,14 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
   flex-direction: row;
   align-items: center;
   justify-content: flex-end;
+}
+/* every TIQ read on the board is one grid of tabular digits, pinned to the right */
+.rank-row .lb-score b,
+.pod-iq b,
+.mh-score b {
+  font-family: var(--ml-mono, ui-monospace, Menlo, Consolas, monospace);
+  font-weight: 800;
+  letter-spacing: -.02em;
 }
 /* the density metric: TIQ per mind, under the aggregate the board ranks by */
 .lb-avg {
@@ -2495,6 +2557,7 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
 /* 380px floor: shave the fixed columns first so the name is the last thing to lose */
 @media (max-width: 380px) {
   .lb-row { --lb-rank: 30px; --lb-score: 72px; --lb-act: 56px; --lb-gap: 6px; padding: 8px 6px; }
+  .lb-avwrap { width: 32px; height: 32px; }
   .lb-av, .lb-hex, .lb-id .fp-badge { width: 32px; height: 32px; border-radius: 10px; --fp-d: 32px; }
   .lb-av { font-size: 13px; }
 }
@@ -4751,11 +4814,11 @@ html.reduced-motion .car-card.nations-cup::before { display: none; }
 .pod-card[data-rank="3"] { grid-column: 3; }
 /* The leader's throne paints its halo behind the content; every child rides above. */
 .pod-card > * { position: relative; z-index: 1; }
-/* Tier auras: the ring, the tier word and the progress arc all read one pair. */
-.pod-card[data-tier="rookie"] { --aura: var(--tier-rookie); --aura-glow: var(--tier-rookie-glow); }
-.pod-card[data-tier="tactician"] { --aura: var(--tier-tactician); --aura-glow: var(--tier-tactician-glow); }
-.pod-card[data-tier="strategist"] { --aura: var(--tier-strategist); --aura-glow: var(--tier-strategist-glow); }
-.pod-card[data-tier="grandmaster"] { --aura: var(--tier-grandmaster); --aura-glow: var(--tier-grandmaster-glow); }
+/* A minted honor lights the pedestal with its own metal: cyan Churchill, amber
+   Einstein, emerald Heisenberg — a rim underglow, never a second rank badge. */
+.pod-card[data-medal="titanium"] { --medal-aura: rgba(34, 211, 238, .5); --medal-rim: rgba(34, 211, 238, .42); }
+.pod-card[data-medal="quantum"] { --medal-aura: rgba(245, 158, 11, .5); --medal-rim: rgba(245, 158, 11, .44); }
+.pod-card[data-medal="frost"] { --medal-aura: rgba(52, 211, 153, .48); --medal-rim: rgba(52, 211, 153, .42); }
 /* Rank order in the DOM + explicit columns send the sparse auto-placement cursor
    forward, which would drop silver and bronze onto a second row. Pin the row. */
 .pod-card { grid-row: 1; }
@@ -4851,6 +4914,13 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
 .pod-av .fp-badge { --fp-d: 36px; }
 .pod-card[data-rank="1"] .pod-av .fp-badge { --fp-d: 46px; }
 .pod-av .fp-chip { border-radius: 50%; font-size: 9px; }
+/* the minted coin sits on the crest's rim, one size up on the champion */
+.pod-medal { right: -4px; bottom: -4px; width: 22px; height: 22px; }
+.pod-medal .medal-coin,
+.pod-medal .medal-coin.badge-crest-art { width: 18px; height: 18px; }
+.pod-card[data-rank="1"] .pod-medal { width: 24px; height: 24px; }
+.pod-card[data-rank="1"] .pod-medal .medal-coin,
+.pod-card[data-rank="1"] .pod-medal .medal-coin.badge-crest-art { width: 20px; height: 20px; }
 
 .pod-name {
   min-width: 0;
@@ -4901,25 +4971,13 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
    the extra pixel to keep its folds legible inside the chip */
 .pod-tiq { flex: none; width: 13px; height: 13px; color: var(--honey); filter: drop-shadow(0 0 3px rgba(245, 158, 11, .65)); }
 
-/* the rank pill: "GM II" in the tier's own aura, one quiet capsule — no slab */
-.pod-tier {
-  max-width: 100%;
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, .05);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
-  font-size: 8.5px;
-  font-weight: 800;
-  letter-spacing: .09em;
-  text-transform: uppercase;
-  line-height: 1.3;
-  text-align: center;
-  color: var(--aura, var(--pod-metal));
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* a minted champion's serial, in the slot the legacy rank pill used to occupy */
+.pod-serial {
+  height: 14px;
+  padding: 0 4px;
+  font-size: 7.5px;
+  letter-spacing: .03em;
 }
-.pod-tier[hidden] { display: none; }
 
 /* ---- the three-step plinth: architectural, not a footer bar -----------------
    Each card ends in a machined pedestal: a stepped cornice over a beveled metal
@@ -4996,6 +5054,20 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
   filter: blur(3px);
   pointer-events: none;
 }
+/* a minted medal adds one accent hairline and a soft bloom around the pedestal,
+   seated between the plinth's base and its embossed numeral */
+.pod-foot-medal {
+  position: absolute;
+  z-index: 1;
+  inset: -2px;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 1px var(--medal-rim),
+    0 0 16px -3px var(--medal-aura),
+    0 10px 26px -8px var(--medal-aura);
+  opacity: .85;
+  pointer-events: none;
+}
 /* the rank embossed into the face: gold 15px, silver and bronze 13px, each with
    a dark lower edge and a faint upper light so the numeral is struck, not printed */
 .pod-foot b {
@@ -5042,6 +5114,7 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
    the glow paints above this layer's own background and below every child. */
 #s-ranks,
 .ranks-screen {
+  --ml-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -5170,11 +5243,12 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
   gap: 10px;
   min-height: 48px;
   padding: 3px 12px;
-  border: 1px solid rgba(255, 255, 255, .07);
+  border: 1px solid rgba(148, 163, 184, .22);
   border-radius: 16px;
   background: linear-gradient(180deg, #161F30 0%, #0F1624 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .05),
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    inset 0 0 0 1px rgba(255, 255, 255, .025),
     0 18px 32px -14px rgba(0, 0, 0, .85);
 }
 /* clean recessed clay avatar — the strip carries no progress arc */
@@ -5273,23 +5347,9 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   font-weight: 900;
   line-height: 1;
 }
+.solo-standing.mh .mh-avwrap { width: 36px; height: 36px; }
+.solo-standing.mh .mh-medal { right: -4px; bottom: -4px; }
 .mh-id { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; }
-/* the equipped honor, cut in the same metal as the Honor sheet and worn here
-   beside the avatar so the ladder reads the rank and the honour at a glance */
-.mh-badge {
-  flex: none;
-  width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-}
-.mh-badge[hidden] { display: none; }
-.mh-badge .badge-crest {
-  width: 24px;
-  height: 24px;
-  display: block;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .55));
-}
 .mh-line {
   flex: none;
   font-size: 13px;
@@ -5299,9 +5359,9 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   color: var(--ink);
   white-space: nowrap;
 }
-/* the two crest chips: your division in your own tier aura, your slice of the
-   field in quiet slate — one pair, no capsule stacked on top of another */
-.mh-pill,
+/* the minted serial reads as a tag, not another rank pill: no uppercase, no tier hue */
+.mh-serial { height: 15px; font-size: 8.5px; padding: 0 4px; }
+/* your slice of the field, in quiet slate — one capsule, never a stack */
 .mh-chip {
   flex: none;
   padding: 1px 6px;
@@ -5312,13 +5372,6 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   text-transform: uppercase;
   line-height: 1.5;
   white-space: nowrap;
-}
-.mh-pill {
-  background: rgba(255, 255, 255, .05);
-  box-shadow: inset 0 0 0 1px var(--hair);
-  color: var(--ml-aura, var(--ink-soft));
-}
-.mh-chip {
   background: rgba(0, 0, 0, .26);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
   color: #8CA0B8;
@@ -8133,16 +8186,15 @@ html.reduced-motion .notif-dot { animation: none; }
 }
 html.reduced-motion .ml-pulse::after { display: none; }
 @media (max-width: 359px) {
-  .ranks-head { gap: 8px; padding: 6px 8px; }
-  .ml-crest { width: 34px; height: 34px; border-radius: 11px; }
-  .ml-crest-ico { width: 18px; height: 18px; }
-  .ml-title { font-size: 18px; }
-  .ml-season { gap: 6px; padding: 4px 8px 4px 7px; }
+  /* 320px budget: the full wordmark wins. The crest gives 6px, the gaps give 4px,
+     and the beacon sits inside the capsule's own padding instead of beside it. */
+  .ranks-head { gap: 6px; padding: 6px 4px; }
+  .ml-crest { width: 28px; height: 28px; border-radius: 10px; }
+  .ml-crest-ico { width: 16px; height: 16px; }
+  .ml-season { position: relative; gap: 0; padding: 4px 6px 4px 16px; }
+  .ml-season-k { display: none; }
+  .ml-pulse { position: absolute; left: 5px; top: 50%; transform: translateY(-50%); }
 }
-#s-ranks[data-tier="rookie"]      { --ml-aura: var(--tier-rookie); }
-#s-ranks[data-tier="tactician"]   { --ml-aura: var(--tier-tactician); }
-#s-ranks[data-tier="strategist"]  { --ml-aura: var(--tier-strategist); }
-#s-ranks[data-tier="grandmaster"] { --ml-aura: var(--tier-grandmaster); }
 /* Squad banner never leaks onto an IQ board (JS hides via the hidden attr). */
 #ranks-dock[hidden] { display: none !important; }
 @media (max-width: 380px) {
@@ -8151,9 +8203,14 @@ html.reduced-motion .ml-pulse::after { display: none; }
      rank badge, before a chip is allowed to wrap or the identity column is cut */
   .solo-standing.mh { gap: 8px; padding: 3px 10px; }
   .solo-standing.mh .mh-score { font-size: 19px; }
-  .mh-pill,
   .mh-chip { padding: 1px 5px; letter-spacing: .03em; }
+  .mh-serial { font-size: 8px; padding: 0 3px; }
   .mh-rank { min-width: 26px; }
+}
+@media (max-width: 359px) {
+  /* a minted serial is the rarer fact: on the narrowest strip it takes the space
+     the percentile chip used, leaving one clean line of rank · honor · TIQ */
+  .solo-standing.mh.has-medal .mh-chip { display: none; }
 }
 
 /* ==========================================================================

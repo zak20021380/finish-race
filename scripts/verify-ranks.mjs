@@ -2,8 +2,8 @@
  * verify-ranks.mjs — headless audit of the Mind Ladder (#s-ranks) "Zen Luxury"
  * Dark-Clay overhaul.
  *
- * Serves ./dist over 127.0.0.1, drives the ranks screen at 360x640, 390x844 and
- * 430x932, and fails (exit 1) when:
+ * Serves ./dist over 127.0.0.1, drives the ranks screen at 320x568, 360x640,
+ * 390x844 and 430x932 with a mocked badge ledger, and fails (exit 1) when:
  *   - anything overflows horizontally (page, scroller, or a visible element),
  *   - the page itself scrolls vertically (the screen must own its height),
  *   - the old three-box stat cluster (.ranks-stats / .rstat) or the Preview tag
@@ -15,14 +15,21 @@
  *     amber beacon,
  *   - the board tabs lose their borderless pill groove or sliding thumb,
  *   - the podium loses its floating geometry: circular avatars, a taller gold
- *     centre, short rank pills ("GM II"), or a TIQ score that is not the shared
- *     #i-brain token the ladder rows use,
+ *     centre, or a TIQ score that is not the shared #i-brain token the ladder
+ *     rows use,
+ *   - any legacy rank pill ("GM II", "STRATEGIST III", "TAC I", "RK II") comes
+ *     back on the podium, a ladder row or the You strip,
+ *   - a minted honor loses its coin pin, its real serial tag, or the pedestal's
+ *     matching cyan/amber/emerald underglow; a serial that was never minted appears,
+ *   - a mind row loses its two-line hierarchy (name + serial / monospaced win count)
+ *     or its right-aligned monospaced TIQ column,
  *   - the podium crests or the leader's crown lose clearance under the tab bar,
  *   - the three stepped plinths lose their 38/28/22 heights, their distinct
  *     gold / titanium / bronze faces, their embossed numerals or the gold aura,
  *   - the You strip regains the avatar progress ring, any score delta/trend tag,
  *     any of the four attribute meters, the milestone line or a second row, or
- *     stops being a single ~48px gradient-and-border HUD, or a ranked player loses
+ *     stops being a single ~48px gradient-and-border HUD, loses the equipped
+ *     medallion pin and its real "#007 / 50" serial, or a ranked player loses
  *     the numeric "#N" key that names their standing, or that key claims a podium
  *     place (#1-3) directly beneath the Top-3 podium,
  *   - any podium or ladder row carries a +/- delta tag or a trend arrow,
@@ -76,7 +83,7 @@ function serve() {
 }
 
 const EXE = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-const VIEWPORTS = [[360, 640], [390, 844], [430, 932]];
+const VIEWPORTS = [[320, 568], [360, 640], [390, 844], [430, 932]];
 
 let failed = 0;
 const fail = (tag, msg) => { failed += 1; console.log(`FAIL ${tag}\n- ${msg}`); };
@@ -129,6 +136,14 @@ const AUDIT = () => {
     if (root.querySelector(ghost)) bad(`clutter regression: ${ghost} is still in the DOM`);
   }
   if (/climb\s*now/i.test(root.textContent ?? '')) bad('CLIMB NOW copy is still on the ranks screen');
+  /* the legacy rank language is banned on every leaderboard surface */
+  if (root.querySelector('.pod-tier, .lb-tier, .mh-pill, .mh-badge')) {
+    bad('a legacy rank pill is still painted on the ranks screen');
+  }
+  if (/\b(?:GM|STR|TAC|RK)\s+(?:I|II|III)\b/i.test(root.textContent ?? '')
+    || /strategist\s+(?:I|II|III)\b/i.test(root.textContent ?? '')) {
+    bad(`legacy rank-pill copy is back: "${(root.textContent ?? '').match(/\b(?:GM|STR|TAC|RK)\s+(?:I|II|III)\b/i)?.[0] ?? 'STRATEGIST…'}"`);
+  }
 
   /* 5. the header: a championship wordmark over a metallic season badge, with
         the "Nd left" capsule tucked to the right — no collision between them */
@@ -153,6 +168,7 @@ const AUDIT = () => {
     if (!/rgb\(255,\s*255,\s*255\)/.test(ts.color)) bad(`title ink is ${ts.color}, want #FFFFFF`);
     if (ts.textShadow === 'none') bad('title has no ambient shadow');
     if (!near(parseFloat(ts.letterSpacing), -0.3, 0.12)) bad(`title tracking is ${ts.letterSpacing}, want -0.3px`);
+    if (title.scrollWidth > title.clientWidth + 1) bad(`wordmark truncates at this width (${title.scrollWidth} > ${title.clientWidth})`);
     const pillR = root.querySelector('.ml-season')?.getBoundingClientRect();
     const titleR = title.getBoundingClientRect();
     if (pillR && titleR.right > pillR.left - 4) {
@@ -224,10 +240,38 @@ const AUDIT = () => {
     const ar = av.getBoundingClientRect();
     const radius = parseFloat(getComputedStyle(av).borderTopLeftRadius);
     if (!Number.isFinite(radius) || radius < ar.width / 2 - 1) bad(`avatar is not circular (radius ${radius} on ${ar.width.toFixed(0)}px)`);
-    const tier = card.querySelector('.pod-tier');
-    if (!tier || !/^(RK|TAC|STR|GM) (I|II|III)$/.test(tier.textContent.trim())) {
-      bad(`rank pill is "${tier?.textContent}" — want a short crest like "GM II"`);
+
+    /* the equipped medallion: coin pin on the avatar rim, real serial tag, and a
+       pedestal underglow in the honor's own metal (Amara/Einstein amber,
+       Sofia/Churchill cyan, Kenji/Heisenberg emerald in the mocked ledger) */
+    if (card.querySelector('.pod-tier')) bad(`rank ${rank} still carries a legacy rank pill`);
+    const medal = card.querySelector('.pod-medal');
+    const serial = card.querySelector('.pod-serial');
+    const footMedal = card.querySelector('.pod-foot-medal');
+    if (!medal) bad(`rank ${rank} lost its minted medallion pin`);
+    else {
+      const pin = medal.getBoundingClientRect();
+      if (pin.width < 19.5 || pin.width > 25) bad(`rank ${rank} medal pin is ${pin.width.toFixed(1)}px — want 20-24`);
+      if (!medal.querySelector('.badge-crest')) bad(`rank ${rank} medal pin has no coin art`);
+      const pcx = pin.left + pin.width / 2;
+      const pcy = pin.top + pin.height / 2;
+      if (Math.abs(pcx - ar.right) > 10 || Math.abs(pcy - ar.bottom) > 10) {
+        bad(`rank ${rank} medal pin is not seated on the avatar rim (${(pcx - ar.right).toFixed(1)}, ${(pcy - ar.bottom).toFixed(1)})`);
+      }
     }
+    if (!serial || !/^#\d{3}$/.test(serial.textContent.trim())) {
+      bad(`rank ${rank} serial tag is "${serial?.textContent}" — want a real "#007" serial`);
+    }
+    const wantAccent = rank === '1' ? 'quantum' : rank === '2' ? 'titanium' : 'frost';
+    if (card.dataset.medal !== wantAccent) bad(`rank ${rank} wears ${card.dataset.medal ?? 'no accent'} — want ${wantAccent}`);
+    if (!footMedal) bad(`rank ${rank} medal holder has no pedestal underglow`);
+    else {
+      const want = rank === '1' ? '245, 158, 11' : rank === '2' ? '34, 211, 238' : '52, 211, 153';
+      const shadow = getComputedStyle(footMedal).boxShadow;
+      if (!new RegExp(`rgba\\(${want}`).test(shadow)) bad(`rank ${rank} pedestal underglow is "${shadow.slice(0, 70)}" — want rgb(${want})`);
+    }
+    out.notes.medals = `${out.notes.medals ? `${out.notes.medals} · ` : ''}#${rank} ${card.dataset.medal}:${serial?.textContent?.trim() ?? '—'}`;
+
     const iq = card.querySelector('.pod-iq');
     if (!iq || !/\d/.test(iq.textContent)) bad('TIQ chip missing/empty on a podium card');
     const glyph = iq?.querySelector('use')?.getAttribute('href') ?? '';
@@ -293,8 +337,8 @@ const AUDIT = () => {
       if (!ns || !near(parseFloat(ns.fontSize), 13, 0.3)) bad(`bronze numeral is ${ns?.fontSize}, want 13px`);
     }
 
-    /* avatar · name · tier · score chip · pedestal share one vertical axis */
-    const centers = [av, card.querySelector('.pod-name'), tier, iq, foot]
+    /* avatar · name · serial · score chip · pedestal share one vertical axis */
+    const centers = [av, card.querySelector('.pod-name'), serial, iq, foot]
       .filter(Boolean)
       .map((el) => {
         const r = el.getBoundingClientRect();
@@ -330,6 +374,49 @@ const AUDIT = () => {
     if (glyphHref !== '#i-brain') bad(`ladder score glyph is ${glyphHref ?? 'missing'}, want the shared brain`);
     if (!/^\d[\d,]*$/.test((line?.querySelector('b')?.textContent ?? '').trim())) bad(`ladder score is "${line?.textContent?.trim()}" — want digits only`);
   }
+
+  /* 7c. the mind ladder's clean two-line hierarchy and right-aligned mono TIQ */
+  const mindRows = [...root.querySelectorAll('#ranks-minds .rank-row')];
+  if (mindRows.length < 3) bad('Top Minds ladder rows missing');
+  const scoreRights = [];
+  let rowSerials = 0;
+  for (const r of mindRows) {
+    if (r.querySelector('.lb-tier')) bad(`row #${r.dataset.rank} still carries a legacy tier tag`);
+    const sub = r.querySelector('.lb-sub');
+    const subText = r.querySelector('.lb-sub-t')?.textContent?.trim() ?? '';
+    if (!/^\d+\s+wins?$/.test(subText)) bad(`row #${r.dataset.rank} second line is "${subText}" — want a win count`);
+    if (!sub || !/mono/i.test(getComputedStyle(sub).fontFamily)) bad(`row #${r.dataset.rank} win count is not monospaced`);
+    if (sub && !near(parseFloat(getComputedStyle(sub).fontSize), 10.5, 0.3)) {
+      bad(`row #${r.dataset.rank} win count is ${getComputedStyle(sub).fontSize}, want 10.5px`);
+    }
+    const txt = r.querySelector('.lb-txt');
+    if (txt && txt.children.length !== 2) bad(`row #${r.dataset.rank} has ${txt.children.length} identity lines — want exactly two`);
+    const serial = r.querySelector('.lb-serial');
+    if (serial) {
+      rowSerials += 1;
+      if (!/^#\d{3}$/.test(serial.textContent.trim())) bad(`row #${r.dataset.rank} serial is "${serial.textContent.trim()}"`);
+      if (serial.closest('.lb-nm') === null) bad(`row #${r.dataset.rank} serial is not on the name line`);
+      if (!/^(titanium|quantum|frost)$/.test(serial.dataset.accent ?? '')) bad(`row #${r.dataset.rank} serial has no honor metal`);
+    }
+    const score = r.querySelector('.lb-score');
+    const scoreB = score?.querySelector('b');
+    if (!scoreB || !/mono/i.test(getComputedStyle(scoreB).fontFamily)) bad(`row #${r.dataset.rank} TIQ digits are not monospaced`);
+    if (score) {
+      const rr = r.getBoundingClientRect();
+      const sr = score.getBoundingClientRect();
+      scoreRights.push(sr.right);
+      if (Math.abs(sr.right - (rr.right - parseFloat(getComputedStyle(r).paddingRight))) > 1.2) {
+        bad(`row #${r.dataset.rank} TIQ is not pinned to the right edge (${(rr.right - sr.right).toFixed(1)}px inset)`);
+      }
+    }
+    const h = r.getBoundingClientRect().height;
+    if (h < 52 || h > 60) bad(`row #${r.dataset.rank} is ${h.toFixed(1)}px tall — want the 56px band`);
+  }
+  if (scoreRights.length && Math.max(...scoreRights) - Math.min(...scoreRights) > 0.6) {
+    bad(`TIQ column is not uniform: ${scoreRights.map((n) => n.toFixed(1)).join(' / ')}`);
+  }
+  if (rowSerials < 2) bad(`only ${rowSerials} ladder rows wear their minted serial — want Priya and Lucas from the mocked ledger`);
+  out.notes.rows = `${mindRows.length} rows · ${rowSerials} serials · TIQ right edges uniform`;
   const crown = root.querySelector('#ranks-podium .pod-crown');
   const crownBox = crown?.getBoundingClientRect();
   if (!crownBox || crownBox.top < sc.getBoundingClientRect().top + 2) {
@@ -347,17 +434,17 @@ const AUDIT = () => {
   const band = root.querySelector('.pod-band, #pod-band');
   if (band && visible(band)) bad('the podium band caption is back — the header already carries the season');
 
-  /* 8. the You strip: one 48px row — clean clay avatar · "You" · tier crest ·
-        percentile chip on the left, brain + TIQ on the right. No progress arc, no
-        delta tag, no meters, no prose, no action key; the milestone survives only
-        as the strip's own tooltip. */
+  /* 8. the You strip: one 48px row — clean clay avatar with its equipped medallion ·
+        "You" · real minted serial · percentile chip on the left, brain + TIQ on the
+        right. No progress arc, no delta tag, no meters, no prose, no action key;
+        the milestone survives only as the strip's own tooltip. */
   const slate = root.querySelector('.solo-standing.mh');
   if (!slate || !visible(slate)) { bad('You strip missing'); return out; }
   const ss = getComputedStyle(slate);
   if (!/rgb\(22,\s*31,\s*48\)/.test(ss.backgroundImage) || !/rgb\(15,\s*22,\s*36\)/.test(ss.backgroundImage)) {
     bad(`You strip gradient is "${ss.backgroundImage.slice(0, 90)}" — want #161F30 → #0F1624`);
   }
-  if (!/rgba\(255,\s*255,\s*255,\s*0\.0?7\)/.test(ss.borderTopColor)) bad(`You strip border is ${ss.borderTopColor}, want rgba(255,255,255,0.07)`);
+  if (!/rgba\(148,\s*163,\s*184,\s*0?\.22\)/.test(ss.borderTopColor)) bad(`You strip border is ${ss.borderTopColor}, want the metallic rgba(148,163,184,0.22) rim`);
   const slateH = slate.getBoundingClientRect().height;
   if (!near(slateH, 48, 1.5)) bad(`You strip is ${slateH.toFixed(1)}px tall — want the single 48px row`);
   if (ss.flexDirection !== 'row') bad(`You strip lays out as ${ss.flexDirection}, want one row`);
@@ -381,9 +468,28 @@ const AUDIT = () => {
   }
   const line = slate.querySelector('.mh-line');
   if (!line || line.textContent.trim() !== 'You') bad(`identity is "${line?.textContent}" — want the bare "You"`);
-  const crest = slate.querySelector('.mh-pill');
-  if (!crest || !/^(RK|TAC|STR|GM) (I|II|III)$/.test(crest.textContent.trim())) {
-    bad(`tier crest is "${crest?.textContent}" — want a short pill like "GM II"`);
+  if (slate.querySelector('.mh-pill, .mh-badge')) bad('a legacy tier crest is still worn in the You strip');
+  /* the equipped medallion: a 20px coin on the avatar rim plus the real server serial */
+  const stripMedal = slate.querySelector('.mh-medal');
+  const stripSerial = slate.querySelector('.mh-serial');
+  if (!stripMedal) bad('the equipped medallion is not pinned to the You avatar');
+  else {
+    const pin = stripMedal.getBoundingClientRect();
+    if (pin.width < 19.5 || pin.width > 24.5) bad(`You-strip medal pin is ${pin.width.toFixed(1)}px — want 20-24`);
+    if (!stripMedal.querySelector('.badge-crest')) bad('the You-strip medal has no coin art');
+    if (stripMedal.dataset.accent !== 'quantum') bad(`You-strip medal accent is ${stripMedal.dataset.accent ?? 'missing'} — want the equipped quantum honor`);
+    if (avatarBox) {
+      const pcx = pin.left + pin.width / 2;
+      const pcy = pin.top + pin.height / 2;
+      if (Math.abs(pcx - avatarBox.right) > 10 || Math.abs(pcy - avatarBox.bottom) > 10) {
+        bad(`You-strip medal is not on the avatar rim (${(pcx - avatarBox.right).toFixed(1)}, ${(pcy - avatarBox.bottom).toFixed(1)})`);
+      }
+    }
+  }
+  if (!stripSerial || stripSerial.textContent.trim() !== '#007 / 50') {
+    bad(`You-strip serial is "${stripSerial?.textContent}" — want the real "#007 / 50"`);
+  } else if (stripSerial.dataset.accent !== 'quantum') {
+    bad(`You-strip serial accent is ${stripSerial.dataset.accent ?? 'missing'} — want quantum`);
   }
   const chip = slate.querySelector('.mh-chip');
   if (!chip || !/^(Top \d+%|Unranked|Bottom)$/.test(chip.textContent.trim())) bad(`percentile chip is "${chip?.textContent}"`);
@@ -421,7 +527,7 @@ const AUDIT = () => {
   /* the nudge ticker is gone: no node, no copy, and the rows sit under the strip */
   if (root.querySelector('.rival, .rival-dot, .rival-t, .rival-go')) bad('the rival nudge ticker is back in the DOM');
   if (/sharper today|close the gap/i.test(root.textContent ?? '')) bad('the rival nudge copy is back on the screen');
-  out.notes.slate = `${slateH.toFixed(0)}px single-row HUD (${rankBadge?.textContent?.trim() ?? '—'} · ${crest?.textContent} · ${chip?.textContent})`;
+  out.notes.slate = `${slateH.toFixed(0)}px single-row HUD (${rankBadge?.textContent?.trim() ?? '—'} · ${stripSerial?.textContent?.trim() ?? 'no serial'} · ${chip?.textContent})`;
 
   /* 9. on entry the podium and the You strip must both fit the visible scroller:
         no clipping, no page scrollbar — the ladder below may still scroll itself */
@@ -530,13 +636,53 @@ try {
   for (const [w, h] of VIEWPORTS) {
     const tag = `${w}x${h}`;
     const ctx = await browser.newContext({ viewport: { width: w, height: h } });
+    /* the public badge ledger, mocked at the wire: three minted podium holders and
+       two ladder holders, so the coin pins and serial tags have real data to read */
+    await ctx.route('**/api/badges/**', async (route) => {
+      const url = route.request().url();
+      const json = (body) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+      if (url.endsWith('/supply')) {
+        return json({
+          success: true,
+          badges: {
+            churchill_bastion: {
+              cap: 100, minted: 21, remaining: 79,
+              holders: [{ serial: 4, name: 'Priya' }, { serial: 21, name: 'Sofia' }],
+            },
+            einstein_singularity: {
+              cap: 50, minted: 12, remaining: 38,
+              holders: [{ serial: 7, name: 'You' }, { serial: 12, name: 'Amara' }],
+            },
+            heisenberg_formula: {
+              cap: 25, minted: 13, remaining: 12,
+              holders: [{ serial: 3, name: 'Kenji' }, { serial: 13, name: 'Lucas' }],
+            },
+          },
+        });
+      }
+      if (url.endsWith('/progress')) return json({ success: true });
+      if (url.endsWith('/mint')) {
+        const id = route.request().postDataJSON()?.badgeId ?? '';
+        const cap = id === 'einstein_singularity' ? 50 : id === 'heisenberg_formula' ? 25 : 100;
+        const serial = id === 'einstein_singularity' ? 7 : 1;
+        return json({ success: true, serial, cap, mintedAt: '2026-10-20T00:00:00.000Z' });
+      }
+      return route.fulfill({ status: 404, body: 'not mocked' });
+    });
     /* a ranked save: 3400 TIQ puts the player below the seeded Top-3 podium, so
-       the strip must own #4 rather than replay the silver medal above it */
+       the strip must own #4 rather than replay the silver medal above it. The
+       equipped Einstein edition is a server-confirmed #007 / 50. */
     await ctx.addInitScript(() => {
       try {
         localStorage.setItem('detour.save.v2', JSON.stringify({
           v: 2,
-          stats: { games: 50, wins: 20, losses: 30, streak: 2, best: 6, modes: { bot: 40, online: 10 } },
+          stats: { games: 50, wins: 20, losses: 30, streak: 2, best: 2, modes: { bot: 40, online: 10 } },
+          badge: 'einstein_singularity',
+          editions: {
+            claims: { einstein_singularity: { serial: 7, cap: 50, mintedAt: '2026-10-20T00:00:00.000Z' } },
+            supply: {},
+            syncedAt: 0,
+          },
         }));
         localStorage.setItem('detour.squads.v1', JSON.stringify({
           boundId: 'sq-doge', custom: [], bonus: {},
@@ -547,10 +693,11 @@ try {
     await pg.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'networkidle' });
     await pg.waitForTimeout(1100);
     await pg.click('.dock-nav .tab[data-tab="ranks"]');
-    await pg.waitForTimeout(800);
+    /* ladder fetch (380ms) + the mocked ledger roundtrip + the medal repaint */
+    await pg.waitForTimeout(1400);
 
     const res = await pg.evaluate(`(${AUDIT.toString()})()`);
-    if (res.pass) pass(tag, `audited (${res.notes.podium}; ${res.notes.slate}; ${res.notes.fit})`);
+    if (res.pass) pass(tag, `audited (${res.notes.podium}; ${res.notes.medals}; ${res.notes.rows}; ${res.notes.slate}; ${res.notes.fit})`);
     else fail(tag, res.fails.join('\n- '));
     await pg.screenshot({ path: path.join(SHOTS, `ranks-${tag}.png`) });
 
