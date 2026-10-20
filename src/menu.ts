@@ -600,7 +600,7 @@ export function createMenu(api: MenuApi): Menu {
   $('dob-cancel').addEventListener('click', cancelAgeConfirm);
   $('dob-lock').addEventListener('click', lockAge);
   $('team-chip').addEventListener('click', openSquad);
-  $('pf-team').addEventListener('click', openTeam);
+  $('pf-team').addEventListener('click', openSquad);
   document.getElementById('profile-settings')?.addEventListener('click', () => {
     impact('light');
     api.router.go('settings');
@@ -1007,7 +1007,6 @@ export function createMenu(api: MenuApi): Menu {
 
   const paintIdentity = (): void => {
     const lv = levelInfo();
-    const t = myTeam();
     setBalance($('p-coins'), profile.coins);
     setBalance($('pf-coins'), profile.coins);
     for (const id of ['p-level', 'pf-level']) $(id).textContent = String(lv.n);
@@ -1044,8 +1043,10 @@ export function createMenu(api: MenuApi): Menu {
     const pfFlag = document.getElementById('pf-flag');
     if (pfFlag) {
       pfFlag.textContent = '';
-      if (c) pfFlag.append(flagPhoto(c, 'fp-profile'));
+      if (c) pfFlag.append(flagPhoto(c, 'fp-slot'));
     }
+    document.getElementById('pf-country-ico')?.classList.toggle('has-flag', !!c);
+    $('pf-country').setAttribute('aria-label', c ? `${nameOf(c)}. Change nation` : 'Choose your nation');
     /* Home name flag: a real vector plate next to the name — never a regional-indicator
        pair, which Windows draws as two bare letters. The code stays in the DOM (hidden)
        only as the accessible/state hook. */
@@ -1063,13 +1064,6 @@ export function createMenu(api: MenuApi): Menu {
       }
       if (homeCode) homeCode.textContent = c ?? '';
     }
-    /* country reward state: +100 while unclaimed, verified once set+claimed */
-    const cReward = $('pf-country-reward');
-    const cDone = $('pf-country-done');
-    if (cReward) cReward.hidden = profile.rewards.country;
-    if (cDone) cDone.hidden = !(c && profile.rewards.country);
-    $('pf-country').classList.toggle('claimed', !!c);
-
     /* the age row: once the birthdate is locked the row seals — badge on, chevron gone, tap dead */
     const age = profile.age;
     const locked = ageLocked();
@@ -1090,7 +1084,9 @@ export function createMenu(api: MenuApi): Menu {
     else aRow.removeAttribute('aria-disabled');
 
     paintSquadPill();
-    $('pf-team-v').textContent = t ? `${t.name} · ${t.members.length}` : 'Join a team';
+    const squad = getMySquad();
+    $('pf-team-v').textContent = squad ? squad.name : 'Join a Squad';
+    $('pf-team').setAttribute('aria-label', squad ? `${squad.name}. Open squad` : 'Join a Squad');
   };
   const paintProfile = () => {
     const s = profile.stats;

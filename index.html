@@ -1556,23 +1556,24 @@
 
               <!-- tier 3 · actions: two equal pills -->
               <div class="pf-hero-chip-row">
-                <button class="pf-chip" type="button" id="pf-country" aria-haspopup="dialog">
-                  <span class="pf-chip-ico" aria-hidden="true"><svg class="ico"><use href="#i-flag" /></svg></span>
-                  <span class="pf-chip-txt">
-                    <span class="pf-chip-line">
-                      <span class="pf-chip-k">Country</span>
-                      <span class="pf-chip-reward reward-badge" id="pf-country-reward">+100</span>
-                      <span class="pf-chip-reward verified-badge" id="pf-country-done" hidden><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Set</span>
-                    </span>
-                    <span class="pf-chip-v"><span class="pf-flag-slot" id="pf-flag" aria-hidden="true"></span><span id="pf-country-v">Add country</span></span>
+                <button class="pf-chip" type="button" id="pf-country" aria-haspopup="dialog" aria-label="Choose your nation">
+                  <span class="pf-chip-ico pf-chip-ico-country" id="pf-country-ico" aria-hidden="true">
+                    <svg class="ico pf-chip-globe"><use href="#i-globe" /></svg>
+                    <span class="pf-flag-slot" id="pf-flag"></span>
                   </span>
+                  <span class="pf-chip-txt">
+                    <span class="pf-chip-k">Nation</span>
+                    <span class="pf-chip-v"><span id="pf-country-v">Add country</span></span>
+                  </span>
+                  <span class="pf-chip-action" aria-hidden="true"><svg class="ico"><use href="#i-next" /></svg></span>
                 </button>
-                <button class="pf-chip" type="button" id="pf-team" aria-haspopup="dialog">
-                  <span class="pf-chip-ico" aria-hidden="true"><svg class="ico"><use href="#i-shield" /></svg></span>
+                <button class="pf-chip" type="button" id="pf-team" aria-haspopup="dialog" aria-label="Join a Squad">
+                  <span class="pf-chip-ico pf-chip-ico-squad" aria-hidden="true"><svg class="ico"><use href="#i-shield" /></svg></span>
                   <span class="pf-chip-txt">
-                    <span class="pf-chip-line"><span class="pf-chip-k">Team</span></span>
-                    <span class="pf-chip-v"><span id="pf-team-v">Join a team</span></span>
+                    <span class="pf-chip-k">Squad</span>
+                    <span class="pf-chip-v"><span id="pf-team-v">Join a Squad</span></span>
                   </span>
+                  <span class="pf-chip-action" aria-hidden="true"><svg class="ico"><use href="#i-next" /></svg></span>
                 </button>
               </div>
             </div>

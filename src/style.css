@@ -8322,34 +8322,34 @@ html.reduced-motion .ml-pulse::after { display: none; }
   text-shadow: 0 0 10px rgba(34, 211, 238, .35);
 }
 
-/* tier 3: two equal-width interactive pills; nothing inside may push a track wide */
+/* tier 3: twin identity tiles — nation and squad. Identical 56px clay frames,
+   recessed icon wells and one chevron affordance each; nothing inside may push
+   a track wide or wrap to a second line. */
 .pf-hero-chip-row { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); min-width: 0; }
 .pf-chip {
   --d: 3px;
   appearance: none;
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, .06);
   font: inherit;
   cursor: pointer;
   min-width: 0;
-  min-height: 48px;
+  height: 56px;
   display: flex;
   align-items: center;
-  gap: var(--s2);
-  padding: 10px;
+  gap: 4px;
+  padding: 0 6px;
   border-radius: 16px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, .02) 100%),
-    var(--clay-face);
+  background: linear-gradient(180deg, #1A2333 0%, #111827 100%);
   color: var(--ink);
   text-align: left;
   overflow: hidden;
-  box-shadow: 0 var(--d) 0 #080C14, inset 0 1px 0 rgba(255, 255, 255, .08), var(--clay-ring);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+  box-shadow: 0 var(--d) 0 #080C14, inset 0 1px 0 rgba(255, 255, 255, .07);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), border-color var(--motion-fast);
 }
-.pf-chip:hover:not(:active) { transform: translateY(-1px); }
+.pf-chip:hover:not(:active) { transform: translateY(-1px); border-color: rgba(255, 255, 255, .11); }
 .pf-chip:active { transform: translateY(var(--press-y)); --d: 1px; }
 .pf-chip:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-/* slate, not cyan: these are secondary actions, not progression */
+/* slate recessed well: the nation flag or globe sits inside it */
 .pf-chip-ico {
   flex: none;
   width: 30px;
@@ -8358,53 +8358,77 @@ html.reduced-motion .ml-pulse::after { display: none; }
   place-items: center;
   border-radius: 10px;
   background: var(--field);
-  color: var(--chip-ink);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .5), inset 0 0 0 1px var(--hair);
+  color: #64748B;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(255, 255, 255, .06);
 }
-.pf-chip-ico .ico { width: 16px; height: 16px; }
-.pf-chip-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-/* label + reward share the top line so the value row gets the full width */
-.pf-chip-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.pf-chip-line > .pf-chip-reward { margin-left: auto; }
-.pf-chip-k {
-  flex: 0 1 auto;
+.pf-chip-ico .ico { width: 17px; height: 17px; }
+/* the globe is the unselected state; the flag photo replaces it when set */
+.pf-chip-ico.has-flag .pf-chip-globe { display: none; }
+.pf-chip-ico:not(.has-flag) .pf-flag-slot { display: none; }
+/* the squad well keeps the same recess, lit by one cyan specular */
+.pf-chip-ico-squad {
+  color: #38BDF8;
+  background:
+    radial-gradient(120% 120% at 30% 12%, rgba(56, 189, 248, .16) 0%, rgba(56, 189, 248, 0) 58%),
+    var(--field);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .55),
+    inset 0 0 0 1px rgba(56, 189, 248, .22);
+  text-shadow: 0 0 9px rgba(56, 189, 248, .55);
+}
+.pf-chip-txt {
+  flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  overflow: hidden;
+}
+.pf-chip-k {
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 9.5px;
-  font-weight: 800;
-  letter-spacing: .1em;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: .8px;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: #64748B;
 }
 .pf-chip-v {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+  width: 100%;
   min-width: 0;
-  font-size: var(--t-3);
-  font-weight: 800;
-  color: var(--ink);
-}
-/* a long country or team name takes a second line before it ellipsises, so the
-   2-up pills never cut one in half — the ellipsis stays only as the overflow net */
-.pf-chip-v > span:last-child {
-  min-width: 0;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  line-clamp: 2;
-  -webkit-line-clamp: 2;
+  font-size: 14px;
+  line-height: 1.15;
+  font-weight: 700;
+  color: #F8FAFC;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.25;
 }
-.pf-chip-reward { flex: none; }
-/* the in-chip badges are narrow: a compact gold key, and "Set" needs no tick */
-.pf-chip .reward-badge { padding: 2px 7px 3px; font-size: 9.5px; }
-.pf-chip .verified-badge { padding: 2px 7px 3px; font-size: 9.5px; }
-.pf-chip .verified-badge .ico { display: none; }
-/* claimed reads from the "Set" badge alone: the icon keeps one slate colour */
-.pf-chip.claimed { box-shadow: 0 var(--d) 0 #080C14, inset 0 1px 0 rgba(255, 255, 255, .08), var(--clay-ring), inset 0 0 0 1px rgba(110, 231, 183, .18); }
+.pf-chip-v > span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* one compact glass key: the chevron says "opens a picker", nothing more */
+.pf-chip-action {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  background: rgba(255, 255, 255, .05);
+  color: #94A3B8;
+}
+.pf-chip-action .ico { width: 11px; height: 11px; }
+.pf-chip:hover .pf-chip-action { color: #CBD5E1; border-color: rgba(255, 255, 255, .16); }
 
 /* ---- arcade HUD stats: embossed module with dividing grooves ---- */
 .pf-hud.p-stats.quad {
@@ -8793,7 +8817,6 @@ html.reduced-motion .ml-pulse::after { display: none; }
   .pf-hero.pf-hero-v2 { padding: var(--s3); }
   .pf-hero-top { gap: var(--s2); }
   .pf-avatar-wrap { --av: 60px; }
-  .pf-chip { padding: var(--s2); }
   .badge-rack { gap: 4px; padding: 6px 8px; }
   .badge-chip { width: 36px; height: 36px; }
   .badge-chip .ico { width: 16px; height: 16px; }
@@ -11573,8 +11596,9 @@ html.reduced-motion .badge-chip[data-state="locked"]::after,
 html.reduced-motion .dock-nav .tab[aria-current="page"] .ico,
 html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none; }
 
-/* one column below 361px: the pills are half-width, so a long country name needs the whole row */
-@media (max-width: 360px) {
+/* the twin tiles stay 50/50 down to the 360px floor; below it a long nation name
+   borrows the whole row rather than ellipsising mid-word */
+@media (max-width: 359px) {
   .pf-hero-chip-row { grid-template-columns: minmax(0, 1fr); }
   .pf-rank-badge { font-size: 9.5px; }
 }
@@ -17489,14 +17513,20 @@ html.reduced-motion .announce-cta { transition: none; }
   font-size: 13px;
   color: #94A3B8;
 }
-.fp-profile { --fp-d: 16px; }
-.fp-profile .fp-chip { border-radius: 50%; font-size: 6px; letter-spacing: 0; }
+.fp-slot { --fp-d: 28px; }
+.fp-slot .fp-chip { border-radius: 50%; font-size: 8px; letter-spacing: 0; }
+.fp-slot .fp-img {
+  border: 1px solid rgba(255, 255, 255, .15);
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .3), 0 1px 3px rgba(0, 0, 0, .45);
+}
 .pf-flag-slot {
   flex: none;
   display: grid;
   place-items: center;
-  width: 16px;
-  height: 16px;
+  width: 28px;
+  height: 28px;
   line-height: 0;
 }
 .id-flag .id-flag-plate {
