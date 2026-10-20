@@ -5859,6 +5859,9 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   flex: 1 1 auto;
   min-height: 0;
   max-width: 100%;
+  /* one rhythm for the whole screen: section gap · block gap. Both are pinned on
+     #s-profile, so the short-phone --s3 collapse can never split the scale. */
+  gap: var(--pf-rhythm, var(--s3));
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
@@ -5871,7 +5874,14 @@ html.reduced-motion .mh-arc-fill { animation: none; }
 }
 /* no document-level sideways drift: every direct child is width-capped */
 .pf-pane > * { max-width: 100%; min-width: 0; }
-#s-profile { overflow: hidden; max-width: 100%; }
+#s-profile {
+  --pf-rhythm: 16px;
+  --pf-rhythm-tight: 8px;
+  overflow: hidden;
+  max-width: 100%;
+  /* the page header sits on the same 16px beat as every profile section */
+  gap: var(--pf-rhythm);
+}
 #s-profile .m-head { max-width: 100%; }
 
 /* ---- hero: same clay recipe, slightly roomier ---- */
@@ -5921,8 +5931,8 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- sections ---- */
-.pf-sec { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; max-width: 100%; }
+/* ---- sections: heading → content rides the tight half of the rhythm ---- */
+.pf-sec { display: flex; flex-direction: column; gap: var(--pf-rhythm-tight, var(--s2)); min-width: 0; max-width: 100%; }
 .pf-sec-h {
   display: flex;
   align-items: baseline;
@@ -6028,7 +6038,7 @@ html.reduced-motion .mh-arc-fill { animation: none; }
 .pf-set-btn.icon-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
 
 /* ---- equipped: neat previews with proper aspect ratio ---- */
-.pf-equips { flex: none; display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
+.pf-equips { flex: none; display: flex; flex-direction: column; gap: var(--pf-rhythm-tight, var(--s2)); min-width: 0; }
 .pf-eq-row { gap: var(--s2); }
 .pf-eq.eq {
   margin: 0;
@@ -6193,7 +6203,7 @@ html.reduced-motion .mh-arc-fill { animation: none; }
    One 60px clay slab: engraved ceramic well (warm-gold gift), title + subtext,
    and the amber clay key on the right. The whole card is the button, so the tap
    target is the card and the key is its visible affordance. */
-.pf-invite-sec { gap: 0; }
+.pf-invite-sec { gap: var(--pf-rhythm-tight, 0); }
 .pf-invite {
   --d: 3px;
   appearance: none;
