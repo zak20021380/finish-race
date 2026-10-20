@@ -8702,69 +8702,573 @@ html.reduced-motion .ml-pulse::after { display: none; }
 }
 .pf-id-card.claimed { box-shadow: 0 var(--d) 0 #080C14, var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring), inset 0 0 0 1px rgba(110,231,183,.14); }
 
-/* ---- badge drawer: clean clay lore + criteria + progress + equip ---- */
-.badge-sheet { gap: var(--s2); }
-.badge-sheet-hero {
+/* ---- badge sheet: luxury medallion showcase, scarcity ledger, hall of fame, CTA ----
+   The coin is never dimmed: a locked honor still shows its chrome in full, and the
+   state lives in the pill. Accent tokens feed the aura, supply meter and metallic rim. */
+.badge-sheet {
+  padding-top: var(--s4);
+  overflow: hidden;
+  --bd-accent: #22D3EE;
+  --bd-metal: #A5F3FC;
+  --bd-glow: rgba(6, 182, 212, .25);
+  --bd-coin: clamp(110px, 30vw, 120px);
+  --bd-pedestal: calc(var(--bd-coin) + 26px);
+}
+.badge-sheet[data-accent="quantum"] {
+  --bd-accent: #FBBF24;
+  --bd-metal: #FDE047;
+  --bd-glow: rgba(245, 158, 11, .25);
+}
+.badge-sheet[data-accent="frost"] {
+  --bd-accent: #34D399;
+  --bd-metal: #6EE7B7;
+  --bd-glow: rgba(16, 185, 129, .25);
+}
+.bd-x {
+  position: absolute;
+  top: 12px;
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 2;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  appearance: none;
+  background: rgba(9, 14, 24, .55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07), inset 0 1px 0 rgba(255, 255, 255, .06);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform var(--motion-fast), color var(--motion-fast);
+}
+.bd-x:active { transform: scale(.94); }
+.bd-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+.bd-hero {
+  flex: none;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--s2);
-  padding-top: var(--s1);
+  gap: 6px;
+  padding: 0 0 2px;
 }
-.badge-ico-lg {
-  width: 76px;
-  height: 76px;
+.bd-hero-art {
+  position: relative;
+  width: var(--bd-pedestal);
+  height: var(--bd-pedestal);
   display: grid;
   place-items: center;
-  border-radius: 26px;
-  background: linear-gradient(180deg, #2E3A55 0%, #141B2A 100%);
-  box-shadow:
-    0 4px 0 #080C14,
-    inset 0 2px 2px rgba(255, 255, 255, .14),
-    inset 0 -2px 4px rgba(0, 0, 0, .4),
-    inset 0 0 0 1px rgba(255, 255, 255, .08);
-  color: var(--chip-ink);
+  margin-bottom: 2px;
+  animation: bd-medallion-float 6.4s ease-in-out infinite alternate;
 }
-.badge-ico-lg .ico { width: 36px; height: 36px; }
-.badge-sheet-hero[data-accent="gold"] .badge-ico-lg { color: #FCD34D; box-shadow: 0 4px 0 #080C14, inset 0 2px 2px rgba(255,255,255,.16), inset 0 -2px 4px rgba(0,0,0,.4), inset 0 0 0 1px rgba(252,211,77,.4), 0 0 22px rgba(245,158,11,.35); }
-.badge-sheet-hero[data-accent="sky"] .badge-ico-lg { color: var(--brand-ink); box-shadow: 0 4px 0 #080C14, inset 0 2px 2px rgba(255,255,255,.16), inset 0 -2px 4px rgba(0,0,0,.4), inset 0 0 0 1px rgba(125,211,252,.4), 0 0 22px rgba(56,189,248,.35); }
-.badge-sheet-hero[data-accent="mint"] .badge-ico-lg { color: var(--mint-ink); box-shadow: 0 4px 0 #080C14, inset 0 2px 2px rgba(255,255,255,.16), inset 0 -2px 4px rgba(0,0,0,.4), inset 0 0 0 1px rgba(110,231,183,.4), 0 0 22px rgba(16,185,129,.35); }
-.badge-sheet-hero[data-accent="coral"] .badge-ico-lg { color: #FFB59D; box-shadow: 0 4px 0 #080C14, inset 0 2px 2px rgba(255,255,255,.16), inset 0 -2px 4px rgba(0,0,0,.4), inset 0 0 0 1px rgba(255,82,43,.42), 0 0 22px rgba(255,82,43,.35); }
-.badge-sheet-hero.is-locked .badge-ico-lg { color: #475569; box-shadow: 0 4px 0 #080C14, inset 0 2px 4px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.06); }
-.badge-sheet-state {
-  padding: 3px 12px 4px;
+.bd-aura {
+  position: absolute;
+  inset: -30px -26px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side at 50% 50%, var(--bd-glow) 0%, rgba(0, 0, 0, 0) 74%);
+  filter: blur(9px);
+  opacity: 1;
+  animation: bd-aura-breathe 5.2s ease-in-out infinite;
+  pointer-events: none;
+}
+.badge-ico-lg {
+  position: relative;
+  width: var(--bd-pedestal);
+  height: var(--bd-pedestal);
+  display: grid;
+  place-items: center;
+  border-radius: 34%;
+  background:
+    radial-gradient(78% 66% at 50% 26%, rgba(255, 255, 255, .1), rgba(255, 255, 255, 0) 62%),
+    radial-gradient(120% 100% at 50% 118%, rgba(0, 0, 0, .62), rgba(0, 0, 0, 0) 60%),
+    linear-gradient(180deg, #263248 0%, #121A29 100%);
+  box-shadow:
+    var(--clay-drop),
+    inset 0 2px 2px rgba(255, 255, 255, .13),
+    inset 0 -4px 6px rgba(0, 0, 0, .52),
+    inset 0 0 0 1px rgba(255, 255, 255, .08),
+    inset 0 0 0 2px rgba(0, 0, 0, .3),
+    0 0 24px -6px var(--bd-glow);
+}
+.badge-ico-lg::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .045), inset 0 1px 1px rgba(255, 255, 255, .08);
+  pointer-events: none;
+}
+.badge-ico-lg .badge-crest {
+  position: relative;
+  width: var(--bd-coin);
+  height: var(--bd-coin);
+  display: block;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .55)) drop-shadow(0 0 14px var(--bd-glow));
+}
+@keyframes bd-medallion-float {
+  from { transform: translate3d(0, 1px, 0); }
+  to { transform: translate3d(0, -4px, 0); }
+}
+@keyframes bd-aura-breathe {
+  0%, 100% { opacity: .75; transform: scale(.96); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+.bd-state {
+  max-width: 100%;
+  padding: 4px 11px 5px;
   border-radius: var(--radius-pill);
-  background: var(--mint-soft);
-  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .35);
-  color: var(--mint-ink);
-  font-size: var(--t-micro);
+  background: rgba(9, 14, 24, .62);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
+  color: var(--ink-soft);
+  font-size: 9px;
+  line-height: 1.2;
+  font-weight: 900;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.bd-state[data-state="minted"],
+.bd-state[data-state="open"],
+.bd-state[data-state="minting"] {
+  color: var(--bd-metal);
+  background: rgba(9, 14, 24, .7);
+  text-shadow: 0 0 10px var(--bd-glow);
+  box-shadow:
+    inset 0 0 0 1px var(--bd-glow),
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    0 0 16px -6px var(--bd-glow);
+}
+.bd-title {
+  margin: 2px 0 0;
+  font-size: 20px;
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -.015em;
+  color: var(--ink);
+  text-align: center;
+}
+.bd-moniker {
+  max-width: 100%;
+  margin: 2px 0 0;
+  padding: 5px 11px 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, .18);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+  color: var(--bd-metal);
+  font-size: 9px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* the scrolling middle: lore -> scarcity + hall of fame -> requirement */
+.bd-body {
+  gap: 10px;
+  margin: 0 1px;
+  padding: 1px 1px 2px;
+  -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0) 0, #000 10px, #000 calc(100% - 10px), rgba(0, 0, 0, 0) 100%);
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0) 0, #000 10px, #000 calc(100% - 10px), rgba(0, 0, 0, 0) 100%);
+}
+/* fixed-height sections: without this a flex column silently squeezes the requirement
+   card instead of letting the body scroll (scrollHeight === clientHeight lies). */
+.bd-body > * { flex: 0 0 auto; }
+.bd-lore {
+  margin: 0;
+  padding: 0 6px;
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.6;
+  font-weight: 500;
+  color: #CBD5E1;
+}
+.bd-lore::before {
+  content: '';
+  display: block;
+  width: 26px;
+  height: 2px;
+  margin: 0 auto 9px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0), var(--bd-accent), rgba(0, 0, 0, 0));
+  opacity: .8;
+}
+
+.bd-scarcity,
+.bd-req {
+  position: relative;
+  padding: 12px 13px 13px;
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .025), rgba(255, 255, 255, 0) 44%),
+    var(--field);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .5),
+    inset 0 -1px 0 rgba(255, 255, 255, .05),
+    inset 0 0 0 1px rgba(255, 255, 255, .05);
+  overflow: hidden;
+}
+.bd-scarcity::before {
+  content: '';
+  position: absolute;
+  top: -46px;
+  left: 12%;
+  right: 12%;
+  height: 96px;
+  background: radial-gradient(60% 100% at 50% 0%, var(--bd-glow) 0%, rgba(0, 0, 0, 0) 72%);
+  opacity: .85;
+  pointer-events: none;
+}
+.bd-kicker {
+  font-size: 8.5px;
+  line-height: 1.2;
+  font-weight: 900;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: #7D8DA5;
+}
+.bd-scar-head,
+.bd-req-head {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.bd-scar-cap {
+  color: var(--bd-metal);
+  font-size: 10px;
+  line-height: 1.1;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  text-shadow: 0 0 14px var(--bd-glow);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bd-scar-cap span { font-size: 16px; letter-spacing: .02em; }
+.bd-scar-track {
+  position: relative;
+  height: 10px;
+  margin: 10px 0 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, .4);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .6), inset 0 -1px 0 rgba(255, 255, 255, .05);
+  overflow: hidden;
+}
+.bd-scar-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--bd-accent) 0%, var(--bd-metal) 100%);
+  box-shadow: 0 0 12px var(--bd-glow), inset 0 1px 0 rgba(255, 255, 255, .55);
+  transition: width .55s ease;
+}
+.bd-scar-track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg,
+    rgba(9, 14, 24, 0) 0,
+    rgba(9, 14, 24, 0) calc(100% / var(--bd-cap, 25) - 1px),
+    rgba(9, 14, 24, .72) calc(100% / var(--bd-cap, 25) - 1px),
+    rgba(9, 14, 24, .72) calc(100% / var(--bd-cap, 25)));
+  pointer-events: none;
+}
+.bd-scar-line {
+  position: relative;
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.3;
+  font-weight: 900;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: #CBD5E1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bd-scar-line[data-state="mine"] { color: var(--bd-metal); text-shadow: 0 0 10px var(--bd-glow); }
+.bd-scar-line[data-state="closed"] { color: #FDA4AF; }
+.bd-scar-line[data-state="syncing"] { color: #7D8DA5; }
+
+.bd-hof {
+  position: relative;
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, .06);
+}
+.bd-hof-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.bd-hof-sub {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #7D8DA5;
+  font-variant-numeric: tabular-nums;
+}
+.bd-hof-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.bd-hof-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 27px;
+  padding: 3px 8px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .025);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .03);
+}
+.bd-hof-serial {
+  flex: none;
+  min-width: 36px;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: .06em;
+  font-variant-numeric: tabular-nums;
+  color: var(--bd-metal);
+}
+.bd-hof-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #D3DDEA;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bd-hof-tag {
+  flex: none;
+  padding: 2px 6px 3px;
+  border-radius: var(--radius-pill);
+  background: var(--bd-metal);
+  color: #08111A;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .1em;
   text-transform: uppercase;
 }
-.badge-sheet-hero.is-locked .badge-sheet-state {
-  background: var(--field);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
-  color: var(--ink-soft);
+.bd-hof-row.is-open {
+  background: rgba(0, 0, 0, .16);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .04);
 }
-.badge-criteria {
-  padding: var(--s3);
-  border-radius: var(--radius-md);
-  background: var(--field);
-  box-shadow: var(--inset);
-}
-.badge-criteria-k {
-  display: block;
-  font-size: var(--t-micro);
+.bd-hof-row.is-open .bd-hof-serial { color: #7D8DA5; }
+.bd-hof-row.is-open .bd-hof-name {
+  color: #7D8DA5;
+  font-size: 9px;
   font-weight: 800;
-  letter-spacing: .08em;
+  letter-spacing: .12em;
   text-transform: uppercase;
-  color: var(--ink-soft);
 }
-.badge-criteria p { margin: 4px 0 0; font-size: var(--t-3); font-weight: 600; line-height: 1.45; color: var(--ink); }
-.badge-progress { display: flex; flex-direction: column; gap: var(--s1); }
-.badge-progress .cap-track { height: 8px; }
-.badge-progress .cap-label { font-size: var(--t-micro); font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+.bd-hof-empty {
+  padding: 10px 8px 9px;
+  margin-bottom: 2px;
+  border-radius: 10px;
+  text-align: center;
+  background: rgba(0, 0, 0, .2);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .04);
+}
+.bd-hof-empty b {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--bd-metal);
+  text-shadow: 0 0 12px var(--bd-glow);
+}
+.bd-hof-empty span {
+  display: block;
+  margin-top: 3px;
+  font-size: 10px;
+  line-height: 1.35;
+  font-weight: 600;
+  color: #7D8DA5;
+}
+
+.bd-req-count {
+  color: var(--bd-metal);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bd-req-copy {
+  position: relative;
+  margin: 6px 0 10px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: var(--ink);
+}
+.bd-req-track {
+  position: relative;
+  display: block;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, .45);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .6), inset 0 -1px 0 rgba(255, 255, 255, .05);
+  overflow: hidden;
+}
+.bd-req-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--bd-accent) 0%, var(--bd-metal) 100%);
+  box-shadow: 0 0 12px var(--bd-glow), inset 0 1px 0 rgba(255, 255, 255, .6);
+  transition: width .55s ease;
+}
+.bd-req-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 7px;
+}
+.bd-req-foot span {
+  min-width: 0;
+  font-size: 10px;
+  font-weight: 800;
+  color: #CBD5E1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bd-req-foot em {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: var(--bd-metal);
+  text-align: right;
+}
+.bd-req[data-met="true"] .bd-req-foot em { color: var(--mint-ink); }
+
+.bd-actions { flex: none; padding-top: 2px; }
+.bd-cta {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  min-height: 52px;
+  padding: 13px 18px;
+  border: 0;
+  border-radius: 16px;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 900;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--ink);
+  cursor: pointer;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, 0) 40%),
+    linear-gradient(180deg, #27344A 0%, #151D2C 100%);
+  box-shadow:
+    0 5px 0 #080C14,
+    0 14px 22px -12px rgba(0, 0, 0, .85),
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 -2px 0 rgba(0, 0, 0, .38);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.bd-cta::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(180deg, var(--bd-metal) 0%, rgba(255, 255, 255, .25) 36%, var(--bd-accent) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: .8;
+  pointer-events: none;
+  z-index: 1;
+}
+.bd-cta .ico {
+  position: relative;
+  z-index: 2;
+  width: 15px;
+  height: 15px;
+  filter: drop-shadow(0 0 6px var(--bd-glow));
+}
+.bd-cta #badge-cta-label { position: relative; z-index: 2; }
+.bd-cta[data-mode="play"],
+.bd-cta[data-mode="equip"] {
+  color: var(--bd-metal);
+  text-shadow: 0 0 12px var(--bd-glow);
+  background:
+    radial-gradient(80% 140% at 50% 120%, var(--bd-glow) 0%, rgba(0, 0, 0, 0) 65%),
+    linear-gradient(180deg, #2A3850 0%, #141C2B 100%);
+  box-shadow:
+    0 5px 0 #080C14,
+    0 16px 26px -14px var(--bd-glow),
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    inset 0 -2px 0 rgba(0, 0, 0, .38);
+}
+.bd-cta[data-mode="equip"] { color: var(--ink); }
+.bd-cta:active:not([disabled]) {
+  transform: translateY(3px);
+  box-shadow:
+    0 2px 0 #080C14,
+    0 8px 14px -10px rgba(0, 0, 0, .8),
+    inset 0 1px 0 rgba(255, 255, 255, .14);
+}
+.bd-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+.bd-cta[disabled] {
+  cursor: default;
+  color: #8FA0B8;
+  opacity: .72;
+}
+.bd-cta[data-mode="equipped"]::before { opacity: .26; }
+.bd-cta[data-mode="equipped"] .ico { filter: none; }
+
+html.reduced-motion .bd-hero-art,
+html.reduced-motion .bd-aura { animation: none; }
+html.reduced-motion .bd-scar-fill,
+html.reduced-motion .bd-req-fill { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .bd-hero-art, .bd-aura { animation: none; }
+  .bd-scar-fill, .bd-req-fill { transition: none; }
+}
 
 /* ---- "View All" drawer: the full catalogue as a quiet pick list ---- */
 .badges-sheet .pick { max-height: none; }
@@ -17416,21 +17920,6 @@ html.reduced-motion .announce-cta { transition: none; }
   color: #94A3B8;
 }
 
-/* the detail drawer's hero medal: crest floating on the clay well */
-.badge-ico-lg {
-  width: 86px;
-  height: 86px;
-  border-radius: 26px;
-  background:
-    radial-gradient(70% 70% at 50% 62%, rgba(255, 255, 255, .08), rgba(255, 255, 255, 0) 70%),
-    linear-gradient(180deg, #2E3A55 0%, #141B2A 100%);
-}
-.badge-ico-lg .badge-crest {
-  width: 68px;
-  height: 68px;
-  display: block;
-  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .55));
-}
 /* rendered medallion art is a coin on a transparent canvas: cover + a 50% clip
    strips the anti-aliased fringe and keeps the chrome rim dead-centre */
 .badge-crest-art {
@@ -17440,9 +17929,6 @@ html.reduced-motion .announce-cta { transition: none; }
   clip-path: circle(50% at 50% 50%);
   -webkit-user-select: none;
   user-select: none;
-}
-.badge-sheet-hero.is-locked .badge-ico-lg .badge-crest {
-  filter: grayscale(1) brightness(.55) drop-shadow(0 2px 3px rgba(0, 0, 0, .5));
 }
 
 /* the equipped seal beside the player's name wears the same crest */
@@ -17474,8 +17960,6 @@ html.reduced-motion .announce-cta { transition: none; }
 @media (max-width: 380px) {
   .badge-chip { width: 38px; height: 42px; }
   .badge-chip .badge-crest { width: 36px; height: 36px; }
-  .badge-ico-lg { width: 80px; height: 80px; }
-  .badge-ico-lg .badge-crest { width: 62px; height: 62px; }
 }
 
 /* the avatar tag carries the equipped crest whenever the player has one */
@@ -18920,73 +19404,6 @@ html.reduced-motion #s-profile .badge-slot.is-spotlit::after { animation: none; 
 html.reduced-motion #s-profile .badge-slot.is-minting .badge-slot-serial,
 html.reduced-motion .badge-card.is-minting .badge-card-ser,
 html.reduced-motion #s-profile .pf-badge-sync-dot { animation: none; opacity: 1; }
-
-/* ---- the triad's detail sheet: archetype, edition serial, description and palette ---- */
-.badge-archetype {
-  margin: calc(var(--s1) * -1) 0 0;
-  font-size: 9.5px;
-  line-height: 1.2;
-  font-weight: 900;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-  color: var(--brand-ink);
-}
-.badge-edition {
-  margin: 2px 0 0;
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
-  font-size: 9.5px;
-  line-height: 1.2;
-  font-weight: 800;
-  letter-spacing: .13em;
-  text-transform: uppercase;
-  font-variant-numeric: tabular-nums;
-  color: #8FA0B8;
-}
-.badge-edition[data-state="minted"][data-accent="titanium"] {
-  color: #A5F3FC;
-  text-shadow: 0 0 8px rgba(6, 182, 212, .42);
-}
-.badge-edition[data-state="minted"][data-accent="quantum"] {
-  color: #FDE047;
-  text-shadow: 0 0 8px rgba(245, 158, 11, .42);
-}
-.badge-edition[data-state="minted"][data-accent="frost"] {
-  color: #6EE7B7;
-  text-shadow: 0 0 8px rgba(16, 185, 129, .42);
-}
-.badge-desc { margin-top: 0; }
-.badge-palette {
-  margin: 0;
-  font-size: 9.5px;
-  line-height: 1.3;
-  font-weight: 800;
-  letter-spacing: .04em;
-  color: #94A3B8;
-}
-.badge-sheet-hero[data-accent="titanium"] .badge-ico-lg {
-  box-shadow:
-    0 4px 0 #080C14,
-    inset 0 2px 2px rgba(255, 255, 255, .16),
-    inset 0 -2px 4px rgba(0, 0, 0, .4),
-    inset 0 0 0 1px rgba(148, 163, 184, .48),
-    0 0 22px rgba(6, 182, 212, .35);
-}
-.badge-sheet-hero[data-accent="quantum"] .badge-ico-lg {
-  box-shadow:
-    0 4px 0 #080C14,
-    inset 0 2px 2px rgba(255, 255, 255, .16),
-    inset 0 -2px 4px rgba(0, 0, 0, .4),
-    inset 0 0 0 1px rgba(245, 158, 11, .5),
-    0 0 22px rgba(245, 158, 11, .38);
-}
-.badge-sheet-hero[data-accent="frost"] .badge-ico-lg {
-  box-shadow:
-    0 4px 0 #080C14,
-    inset 0 2px 2px rgba(255, 255, 255, .16),
-    inset 0 -2px 4px rgba(0, 0, 0, .4),
-    inset 0 0 0 1px rgba(16, 185, 129, .48),
-    0 0 22px rgba(56, 189, 248, .32);
-}
 
 /* ---- the View All cards carry the archetype, the edition serial and its metal ---- */
 .badge-card {

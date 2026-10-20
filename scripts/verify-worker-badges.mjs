@@ -72,6 +72,16 @@ function runtime(vars = {}) {
             store.set(key, value);
           }
         },
+        async list({ prefix = '', limit = 1000 } = {}) {
+          await tick();
+          const out = new Map();
+          for (const [k, v] of store) {
+            if (!k.startsWith(prefix)) continue;
+            out.set(k, v);
+            if (out.size >= limit) break;
+          }
+          return out;
+        },
       },
     };
     badge = new BadgeMintDO(state, env);
@@ -256,6 +266,38 @@ function ok(label, condition, detail = '') {
     method: 'POST', headers: devHeaders('alice'), body: JSON.stringify({ badgeId: 'not_a_badge' }),
   }));
   ok('an unknown badge id answers 400', unknown.status === 400);
+
+  const hall = await read(await supply(rt));
+  const holderRow = hall.body?.badges?.churchill_bastion?.holders;
+  ok('supply publishes serial + holder name in the hall of fame',
+    Array.isArray(holderRow) && holderRow.length === 1
+    && holderRow[0]?.serial === 1 && holderRow[0]?.name === 'alice',
+    JSON.stringify(holderRow));
+  ok('the holder index never leaks the player id',
+    JSON.stringify(holderRow).includes('guest-') === false);
+}
+
+/* the verified Telegram name reaches the public index (including non-Latin scripts) */
+{
+  const rt = runtime({ TELEGRAM_BOT_TOKEN: TOKEN });
+  const init = signed({
+    auth_date: '1700000000',
+    user: JSON.stringify({ id: 9, first_name: 'Хайзенберг', language_code: 'ru' }),
+    query_id: 'AAA',
+  });
+  const headers = { 'content-type': 'application/json', 'x-telegram-init-data': init };
+  const host = 'detour.example.com';
+  await rt.route('/api/badges/progress', {
+    method: 'POST', headers, body: JSON.stringify(progress()),
+  }, host);
+  const minted = await read(await rt.route('/api/badges/mint', {
+    method: 'POST', headers, body: JSON.stringify({ badgeId: 'heisenberg_formula' }),
+  }, host));
+  const s = await read(await supply(rt));
+  const holder = s.body?.badges?.heisenberg_formula?.holders?.[0];
+  ok('a verified Telegram name survives the edge header intact',
+    minted.status === 200 && holder?.serial === 1 && holder?.name === 'Хайзенберг',
+    JSON.stringify(holder));
 }
 
 /* idempotency */
@@ -305,6 +347,12 @@ function ok(label, condition, detail = '') {
   ok('supply reports 25 minted / 0 remaining', s.body.badges.heisenberg_formula.minted === 25
     && s.body.badges.heisenberg_formula.remaining === 0);
 
+  const hall = s.body.badges.heisenberg_formula.holders;
+  ok('the hall of fame lists exactly the 25 winning holders, in serial order',
+    Array.isArray(hall) && hall.length === 25
+    && hall.every((h, i) => h.serial === i + 1 && typeof h.name === 'string' && h.name.length > 0),
+    JSON.stringify(hall?.slice(-3)));
+
   const winner = winners[0].body;
   const holder = players[results.findIndex((r) => r.status === 200)];
   const retry = await read(await mint(rt, holder, 'heisenberg_formula'));
@@ -330,6 +378,18 @@ function ok(label, condition, detail = '') {
   const retry = await read(await mint(rt, 'dora'));
   ok('counters survive an eviction', s.body.badges.churchill_bastion.minted === 1);
   ok('claims survive an eviction', retry.status === 200 && retry.body.serial === first.body.serial);
+  ok('the holder index survives an eviction',
+    s.body.badges.churchill_bastion.holders?.[0]?.serial === 1
+    && s.body.badges.churchill_bastion.holders?.[0]?.name === 'dora');
+
+  /* a ledger minted before the holder index existed: delete the index, evict, rebuild */
+  rt.store.delete('badge:holders:churchill_bastion');
+  rt.restart();
+  const rebuilt = await read(await supply(rt));
+  const rows = rebuilt.body.badges.churchill_bastion.holders;
+  ok('a pre-index ledger rebuilds its hall from the claims',
+    Array.isArray(rows) && rows.length === 1 && rows[0].serial === 1 && rows[0].name === 'Unlisted',
+    JSON.stringify(rows));
 }
 
 /* ---------- summary ---------- */

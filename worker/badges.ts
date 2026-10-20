@@ -119,21 +119,61 @@ const readClaim = (raw: unknown, cap: number): StoredClaim | null => {
   };
 };
 
+interface StoredHolder {
+  serial: number;
+  /** Verified Telegram name; '' when the claim predates the holder index. */
+  name: string;
+}
+
 interface SupplyRow {
   cap: number;
   minted: number;
   remaining: number;
+  /** Serial + holder name, ascending. A public hall of fame, never a player id. */
+  holders: StoredHolder[];
 }
 
 type Storage = NonNullable<DurableObjectState['storage']>;
 
 const counterKey = (id: BadgeId) => `badge:counter:${id}`;
 const claimKey = (id: BadgeId, player: string) => `badge:claim:${id}:${player}`;
+const claimPrefix = (id: BadgeId) => `badge:claim:${id}:`;
+const holdersKey = (id: BadgeId) => `badge:holders:${id}`;
 const progressKey = (player: string) => `badge:progress:${player}`;
+
+/** A display name safe to publish: one line, no markup, bounded to 20 characters. */
+const holderName = (raw: unknown): string =>
+  typeof raw === 'string'
+    ? raw.replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 20)
+    : '';
+
+const readHolders = (raw: unknown, cap: number): StoredHolder[] => {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<number>();
+  const rows: StoredHolder[] = [];
+  for (const value of raw) {
+    if (!value || typeof value !== 'object') continue;
+    const row = value as { serial?: unknown; name?: unknown };
+    const serial = row.serial;
+    if (typeof serial !== 'number' || !Number.isInteger(serial) || serial < 1 || serial > cap) continue;
+    if (seen.has(serial)) continue;
+    seen.add(serial);
+    rows.push({ serial, name: holderName(row.name) || 'Unlisted' });
+  }
+  return rows.sort((a, b) => a.serial - b.serial);
+};
 
 /** What the Worker's edge puts on the request after it has verified initData. */
 const playerOf = (request: Request): string =>
   (request.headers.get('x-detour-player') ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
+
+/** The edge's URI-encoded holder name; malformed escapes and markup never reach storage. */
+const playerNameOf = (request: Request): string => {
+  const raw = request.headers.get('x-detour-player-name') ?? '';
+  let decoded = raw;
+  try { decoded = decodeURIComponent(raw); } catch { /* keep the raw header */ }
+  return holderName(decoded);
+};
 
 async function readBody(request: Request): Promise<Record<string, unknown>> {
   try {
@@ -153,6 +193,8 @@ export class BadgeMintDO {
   /** Claims and progress read during this instance's life; storage remains the authority. */
   private readonly claims = new Map<string, StoredClaim>();
   private readonly progress = new Map<string, BadgeProgress>();
+  /** The public holder index per badge, built lazily for ledgers written before it existed. */
+  private readonly holders = new Map<BadgeId, StoredHolder[]>();
   /** Initialization gate: no request may read a zero counter before storage has spoken. */
   private readonly ready: Promise<void>;
   /** One tail for every mutation: the whole object is a single critical section. */
@@ -174,7 +216,30 @@ export class BadgeMintDO {
         ? Math.min(BADGE_CAPS[id], Math.max(0, Math.floor(raw)))
         : 0;
       this.counters.set(id, n);
+
+      const index = await storage.get<unknown>(holdersKey(id));
+      if (Array.isArray(index)) {
+        this.holders.set(id, readHolders(index, BADGE_CAPS[id]));
+      } else if (n > 0) {
+        /* Ledgers written before the holder index still deserve a hall of fame; name the
+           serials we can, and let the next mint persist the rebuilt index. */
+        this.holders.set(id, await this.holdersFromClaims(id));
+      }
     }
+  }
+
+  private async holdersFromClaims(id: BadgeId): Promise<StoredHolder[]> {
+    const storage = this.storage;
+    if (!storage || typeof storage.list !== 'function') return [];
+    const cap = BADGE_CAPS[id];
+    const listed = await storage.list<unknown>({ prefix: claimPrefix(id), limit: cap + 25 });
+    const rows: StoredHolder[] = [];
+    for (const value of listed.values()) {
+      const claim = readClaim(value, cap);
+      if (!claim) continue;
+      rows.push({ serial: claim.serial, name: holderName((value as { name?: unknown } | null)?.name) || 'Unlisted' });
+    }
+    return rows.sort((a, b) => a.serial - b.serial);
   }
 
   /** Run a mutation after every earlier one, whether that one settled or failed. */
@@ -189,7 +254,12 @@ export class BadgeMintDO {
     for (const id of BADGE_IDS) {
       const cap = BADGE_CAPS[id];
       const minted = this.counters.get(id) ?? 0;
-      out[id] = { cap, minted, remaining: Math.max(0, cap - minted) };
+      out[id] = {
+        cap,
+        minted,
+        remaining: Math.max(0, cap - minted),
+        holders: (this.holders.get(id) ?? []).map((h) => ({ serial: h.serial, name: h.name })),
+      };
     }
     return out;
   }
@@ -251,13 +321,13 @@ export class BadgeMintDO {
       const body = await readBody(request);
       const badgeId = body.badgeId;
       if (!isBadgeId(badgeId)) return json({ success: false, error: 'UNKNOWN_BADGE' }, 400);
-      return await this.sequence(() => this.mint(player, badgeId));
+      return await this.sequence(() => this.mint(player, badgeId, playerNameOf(request)));
     } catch {
       return json({ error: 'storage_unavailable' }, 500);
     }
   }
 
-  private async mint(player: string, badgeId: BadgeId): Promise<Response> {
+  private async mint(player: string, badgeId: BadgeId, name: string): Promise<Response> {
     const cap = BADGE_CAPS[badgeId];
 
     /* Idempotency wins over everything: a player who already holds this honor always gets
@@ -285,11 +355,18 @@ export class BadgeMintDO {
 
     const serial = minted + 1;
     const claim: StoredClaim = { serial, cap, mintedAt: new Date().toISOString() };
+    const nextHolders = [...(this.holders.get(badgeId) ?? []), { serial, name: name || 'Unlisted' }]
+      .sort((a, b) => a.serial - b.serial);
     if (this.storage) {
-      await this.storage.put({ [counterKey(badgeId)]: serial, [claimKey(badgeId, player)]: claim });
+      await this.storage.put({
+        [counterKey(badgeId)]: serial,
+        [claimKey(badgeId, player)]: claim,
+        [holdersKey(badgeId)]: nextHolders,
+      });
     }
     this.counters.set(badgeId, serial);
     this.claims.set(claimKey(badgeId, player), claim);
+    this.holders.set(badgeId, nextHolders);
 
     return json({
       success: true,

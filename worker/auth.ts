@@ -329,15 +329,21 @@ function devMarker(request: AdminRequestLike): boolean {
   }
 }
 
+/** The verified Telegram identity carried by an initData query string, or null. */
+async function verifiedTelegramUser(initData: string, env: Env): Promise<{ id: string; name: string } | null> {
+  const token = env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!initData || !token) return null;
+  const fields = await verify(initData, token);
+  if (!fields) return null;
+  const user = parseUser(fields.get('user'));
+  if (user?.id === undefined || user?.id === null) return null;
+  const id = String(user.id).replace(/[^0-9-]/g, '').slice(0, 20);
+  return id ? { id, name: displayName(user, '') } : null;
+}
+
 /** The verified Telegram user id carried by an initData query string, or ''. */
 export async function verifiedTelegramUserId(initData: string, env: Env): Promise<string> {
-  const token = env.TELEGRAM_BOT_TOKEN?.trim();
-  if (!initData || !token) return '';
-  const fields = await verify(initData, token);
-  if (!fields) return '';
-  const user = parseUser(fields.get('user'));
-  if (user?.id === undefined || user?.id === null) return '';
-  return String(user.id).replace(/[^0-9-]/g, '').slice(0, 20);
+  return (await verifiedTelegramUser(initData, env))?.id ?? '';
 }
 
 /* ---------- the player door: badge minting and its progress ledger ---------- */
@@ -347,13 +353,16 @@ export interface PlayerAuth {
   playerId: string;
   tgId: string;
   guest: boolean;
+  /** Public display name for the holder ledger; derived from verified initData, never a request body. */
+  name: string;
 }
 
 /** The stable seat a local developer gets, optionally named to test two accounts at once. */
 function devPlayer(request: AdminRequestLike): PlayerAuth {
   const raw = request.headers.get('x-detour-dev-player') ?? '';
   const id = raw.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32);
-  return { playerId: `guest-${id || 'dev'}`, tgId: '', guest: true };
+  const seat = id || 'dev';
+  return { playerId: `guest-${seat}`, tgId: '', guest: true, name: seat };
 }
 
 /**
@@ -368,8 +377,8 @@ export async function identifyPlayerRequest(
 ): Promise<PlayerAuth | null> {
   const initData = initDataOf(request);
   if (initData) {
-    const id = await verifiedTelegramUserId(initData, env);
-    return id ? { playerId: `tg-${id}`, tgId: id, guest: false } : null;
+    const who = await verifiedTelegramUser(initData, env);
+    return who ? { playerId: `tg-${who.id}`, tgId: who.id, guest: false, name: who.name } : null;
   }
   const dev = env.DEV_AUTH === 'true' || isLocalhost(hostOf(request.url));
   return dev ? devPlayer(request) : null;

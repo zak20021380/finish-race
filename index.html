@@ -2740,32 +2740,66 @@
         </div>
       </section>
 
-      <!-- badge: lore, criteria, progress + equip to profile -->
-      <section class="sheet badge-sheet" id="sheet-badge" hidden role="dialog" aria-modal="true" aria-labelledby="badge-title">
+      <!-- badge: luxury medallion hero, lore, global scarcity + hall of fame, requirement + CTA -->
+      <section class="sheet tall badge-sheet" id="sheet-badge" hidden role="dialog" aria-modal="true" aria-labelledby="badge-title">
         <span class="sheet-grip" aria-hidden="true"></span>
-        <div class="badge-sheet-hero" id="badge-sheet-hero" data-accent="titanium">
-          <span class="badge-ico-lg" id="badge-sheet-ico-wrap" aria-hidden="true"></span>
-          <span class="badge-sheet-state" id="badge-state">Unlocked</span>
+        <button class="bd-x" type="button" data-sheet-close aria-label="Close badge details">
+          <span aria-hidden="true">&times;</span>
+        </button>
+
+        <div class="bd-hero">
+          <span class="bd-hero-art">
+            <span class="bd-aura" aria-hidden="true"></span>
+            <span class="badge-ico-lg" id="badge-sheet-ico-wrap" aria-hidden="true"></span>
+          </span>
+          <span class="bd-state" id="badge-state" data-state="locked">Locked</span>
+          <h2 class="bd-title" id="badge-title">Badge</h2>
+          <p class="bd-moniker" id="badge-archetype">The Bastion • Resilience</p>
         </div>
-        <h2 class="sheet-t" id="badge-title">Badge</h2>
-        <p class="badge-archetype" id="badge-archetype">The Bastion · Resilience</p>
-        <p class="badge-edition" id="badge-edition">Edition #042 / 100</p>
-        <p class="sheet-p badge-desc" id="badge-description">Archetype description.</p>
-        <p class="badge-palette" id="badge-palette"></p>
-        <p class="sheet-p" id="badge-lore">Lore</p>
-        <div class="badge-criteria">
-          <span class="badge-criteria-k">How to earn</span>
-          <p id="badge-criteria">Criteria</p>
+
+        <div class="sheet-body bd-body" id="badge-sheet-body" data-scroll>
+          <p class="bd-lore" id="badge-lore">Lore</p>
+
+          <section class="bd-scarcity">
+            <header class="bd-scar-head">
+              <span class="bd-kicker">Limited edition:</span>
+              <b class="bd-scar-cap"><span id="badge-scar-cap">25</span> globally</b>
+            </header>
+            <div class="bd-scar-track" id="badge-scar-track" aria-hidden="true">
+              <i class="bd-scar-fill" id="badge-supply-fill"></i>
+            </div>
+            <p class="bd-scar-line" id="badge-edition" data-state="syncing">— / 25 claimed • syncing</p>
+            <div class="bd-hof">
+              <div class="bd-hof-head">
+                <span class="bd-kicker">Hall of fame</span>
+                <span class="bd-hof-sub" id="badge-hof-sub">25 serials</span>
+              </div>
+              <ol class="bd-hof-list" id="badge-hof-list" aria-label="Edition holders"></ol>
+            </div>
+          </section>
+
+          <section class="bd-req" id="badge-req" data-met="false">
+            <div class="bd-req-head">
+              <span class="bd-kicker">Requirement</span>
+              <span class="bd-req-count" id="badge-req-count">0 / 1</span>
+            </div>
+            <p class="bd-req-copy" id="badge-criteria">Criteria</p>
+            <span class="bd-req-track" role="progressbar" id="badge-progress-bar" aria-label="Badge progress" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0">
+              <i class="bd-req-fill" id="badge-progress-fill"></i>
+            </span>
+            <div class="bd-req-foot">
+              <span id="badge-progress-t"></span>
+              <em id="badge-req-delta"></em>
+            </div>
+          </section>
         </div>
-        <div class="badge-progress" id="badge-progress-wrap">
-          <span class="cap-track" role="progressbar" id="badge-progress-bar" aria-label="Badge progress" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><i class="cap-fill" id="badge-progress-fill"></i></span>
-          <span class="cap-label" id="badge-progress-t"></span>
+
+        <div class="bd-actions">
+          <button class="bd-cta" type="button" id="badge-equip" data-autofocus data-mode="play">
+            <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg>
+            <span id="badge-cta-label">Play now to claim</span>
+          </button>
         </div>
-        <div class="sheet-actions split">
-          <button class="btn btn-ghost" type="button" data-sheet-close>Close</button>
-          <button class="btn btn-primary" type="button" id="badge-equip" data-autofocus>Equip to Profile</button>
-        </div>
-        <p class="fine">Equipped badge pins to your avatar and leads the Honor shelf.</p>
       </section>
 
       <!-- all badges: the full honor catalogue as a quiet pick list -->

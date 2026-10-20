@@ -86,6 +86,9 @@ async function badges(request: Request, env: Env, url: URL): Promise<Response> {
     const headers = new Headers(request.headers);
     headers.delete('x-detour-player');
     headers.set('x-detour-player', auth.playerId);
+    /* URI-encoded so a non-Latin Telegram name survives the header's byte string. */
+    headers.delete('x-detour-player-name');
+    headers.set('x-detour-player-name', encodeURIComponent(auth.name));
     return withBadgeCors(await ledger.fetch(new Request(request, { headers })));
   }
 

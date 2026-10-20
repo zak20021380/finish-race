@@ -54,6 +54,8 @@ interface DurableObjectState {
     put<T>(key: string, value: T): Promise<void>;
     /** The entries form is one atomic write: a counter and its claim land together, or not at all. */
     put(entries: Record<string, unknown>): Promise<void>;
+    /** Prefix scans rebuild an index written by an older version of a Durable Object. */
+    list<T>(options?: { prefix?: string; limit?: number }): Promise<Map<string, T>>;
   };
 }
 

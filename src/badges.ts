@@ -25,7 +25,7 @@
 import { cacheBadgeClaim, cacheBadgeSupply, profile, type EditionClaim, type EditionSupply } from './storage';
 import { myTiq } from './matchmaking';
 import { workerUrl } from './adminApi';
-import { tgInitData } from './telegram';
+import { tgInitData, tgUser } from './telegram';
 import heisenbergMedallion from './assets/images/Heisenberg Chrome Medallion.png';
 
 export type BadgeAccent = 'titanium' | 'quantum' | 'frost';
@@ -49,8 +49,6 @@ export interface BadgeDef {
   accent: BadgeAccent;
   /** Rendered medallion art; when set it replaces the vector crest everywhere the honor is worn. */
   art?: string;
-  /** The metal + aura palette, as metadata and as sheet copy. */
-  palette: string;
   /** Hard edition cap. Mirrors `BADGE_CAPS` in worker/badges.ts; never mint above it. */
   cap: number;
 }
@@ -66,7 +64,6 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
     lore: 'Never surrender. The wall is not a tactic; it is a promise.',
     criteria: 'Reach a 3-win streak. High-resilience runs and clutch comebacks forge the Bastion.',
     accent: 'titanium',
-    palette: 'Brushed Titanium #94A3B8 · Deep Cyan #06B6D4',
     cap: 100,
   },
   {
@@ -79,7 +76,6 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
     lore: 'The board is not a race. It is a proof.',
     criteria: 'Bank 1,500 Tactical IQ. Pure calculation bends the board into a single answer.',
     accent: 'quantum',
-    palette: 'Deep Obsidian · Amber #F59E0B / Champagne #FDE047',
     cap: 50,
   },
   {
@@ -89,11 +85,10 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
     archetype: 'The Formula',
     pillar: 'Calculated Precision',
     description: 'Flawless tactical execution and cold dominance. Wins before the race begins.',
-    lore: 'No wasted moves. No luck. Only the formula.',
-    criteria: 'Win 60% of at least 5 races. Ruthless precision, never chance.',
+    lore: "No wasted moves. No reliance on luck. Pure, cold chemical dominance. You don't just win the board; you claim territory before the first move is made.",
+    criteria: 'Win 60% of at least 5 competitive matches.',
     accent: 'frost',
     art: heisenbergMedallion,
-    palette: 'Matte Graphite · Frost Emerald #10B981 / #34D399',
     cap: 25,
   },
 ];
@@ -170,14 +165,51 @@ export function isBadgeUnlocked(id: string): boolean {
   return badgeById(id) !== null && badgeProgress(id).met;
 }
 
+/** The next step in the requirement's own unit — "Needs 3 more wins in a row". */
+export function badgeDelta(id: string): string {
+  const p = badgeProgress(id);
+  if (p.met) return 'Requirement met';
+  switch (id) {
+    case 'churchill_bastion': {
+      const n = Math.max(1, 3 - Math.max(0, profile.stats.best));
+      return `Needs ${n} more consecutive win${n === 1 ? '' : 's'}`;
+    }
+    case 'einstein_singularity': {
+      const n = Math.max(1, 1500 - Math.max(0, myTiq()));
+      return `Needs ${en(n)} more TIQ`;
+    }
+    case 'heisenberg_formula': {
+      const games = Math.max(0, profile.stats.games);
+      const wins = Math.max(0, Math.min(games, profile.stats.wins));
+      if (games < 5) {
+        const n = 5 - games;
+        return `Needs ${n} more race${n === 1 ? '' : 's'} to qualify`;
+      }
+      /* A win without a loss closes the rate gap fastest: (wins+k)/(games+k) >= .6. */
+      const k = Math.max(0, Math.ceil(games * 1.5 - wins * 2.5));
+      return k > 0 ? `Needs ${k} more win${k === 1 ? '' : 's'} in a row` : 'Requirement met';
+    }
+    default:
+      return 'Locked';
+  }
+}
+
 /* ---------- server-minted editions ---------- */
 
 export type EditionSyncState = 'idle' | 'syncing' | 'live' | 'offline';
+
+export interface EditionHolder {
+  serial: number;
+  /** Verified Telegram display name from the ledger; never a player id. */
+  name: string;
+}
 
 export interface BadgeEdition {
   cap: number;
   /** The player's server-confirmed serial, or null until the ledger answers. */
   serial: number | null;
+  /** Serials already claimed globally, or null before the first supply reading. */
+  minted: number | null;
   /** Unclaimed serials left in the edition, or null before the first supply reading. */
   remaining: number | null;
   /** A mint roundtrip is in flight for this honor. */
@@ -188,7 +220,7 @@ export interface BadgeEdition {
   exhausted: boolean;
 }
 
-interface WireSupplyRow { cap?: unknown; minted?: unknown; remaining?: unknown }
+interface WireSupplyRow { cap?: unknown; minted?: unknown; remaining?: unknown; holders?: unknown }
 interface WireMint {
   success?: unknown;
   serial?: unknown;
@@ -210,6 +242,8 @@ const minting = new Set<string>();
 const exhausted = new Set<string>();
 /** Honors verified by the Worker during this page's life, so a route revisit is not a re-mint. */
 const confirmed = new Set<string>();
+/** The public holder index from the last live supply reading; never persisted or invented. */
+const liveHolders = new Map<string, EditionHolder[]>();
 const listeners = new Set<() => void>();
 
 /** Subscribe to cache/mint transitions; returns the unsubscribe. */
@@ -225,6 +259,41 @@ function editionChanged(): void {
 }
 
 export const editionSyncState = (): EditionSyncState => syncState;
+
+/** The last live hall of fame for an honor, or null when this session has not read it. */
+export function editionHolders(id: string): readonly EditionHolder[] | null {
+  return liveHolders.get(id) ?? null;
+}
+
+function readHolders(raw: unknown, cap: number): EditionHolder[] | null {
+  if (!Array.isArray(raw)) return null;
+  const seen = new Set<number>();
+  const rows: EditionHolder[] = [];
+  for (const value of raw) {
+    if (!value || typeof value !== 'object') continue;
+    const row = value as { serial?: unknown; name?: unknown };
+    if (typeof row.serial !== 'number' || !Number.isInteger(row.serial) || row.serial < 1 || row.serial > cap) continue;
+    if (seen.has(row.serial)) continue;
+    seen.add(row.serial);
+    const name = typeof row.name === 'string' ? row.name.replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 20) : '';
+    rows.push({ serial: row.serial, name: name || 'Unlisted' });
+  }
+  return rows.sort((a, b) => a.serial - b.serial);
+}
+
+/** The same name the Worker derives from verified initData, so an optimistic row cannot disagree. */
+function localHolderName(): string {
+  const u = tgUser();
+  const full = [u?.first_name, u?.last_name].filter(Boolean).join(' ').trim();
+  return (full || u?.username || 'Player').slice(0, 20) || 'Player';
+}
+
+/** Add this player's fresh serial to a live index without waiting for the next supply read. */
+function noteOwnHolder(id: string, serial: number): void {
+  const current = liveHolders.get(id);
+  if (!current || current.some((h) => h.serial === serial)) return;
+  liveHolders.set(id, [...current, { serial, name: localHolderName() }].sort((a, b) => a.serial - b.serial));
+}
 
 const num = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -265,6 +334,9 @@ function readSupply(raw: unknown): Record<string, EditionSupply> | null {
     const m = Math.max(0, Math.min(def.cap, Math.floor(minted ?? def.cap - (remaining ?? 0))));
     const r = Math.max(0, Math.min(def.cap, Math.floor(remaining ?? def.cap - m)));
     out[def.id] = { cap: def.cap, minted: m, remaining: r };
+    const holders = readHolders(row.holders, def.cap);
+    if (holders) liveHolders.set(def.id, holders);
+    else liveHolders.delete(def.id);
     found = true;
   }
   return found ? out : null;
@@ -292,7 +364,7 @@ function writeSupplyRow(def: BadgeDef, minted: number) {
 export function badgeEdition(id: string): BadgeEdition {
   const def = badgeById(id);
   if (!def) {
-    return { cap: 0, serial: null, remaining: null, minting: false, awaiting: false, exhausted: false };
+    return { cap: 0, serial: null, minted: null, remaining: null, minting: false, awaiting: false, exhausted: false };
   }
   const claim = claimOf(def.id);
   const supply = supplyOf(def);
@@ -301,6 +373,7 @@ export function badgeEdition(id: string): BadgeEdition {
   return {
     cap: def.cap,
     serial: claim?.serial ?? null,
+    minted: supply?.minted ?? null,
     remaining: supply?.remaining ?? null,
     minting: minting.has(def.id) || (syncState === 'syncing' && unlocked && !claim && !drained),
     awaiting: unlocked && !claim && !drained,
@@ -427,6 +500,7 @@ export async function refreshBadgeEditions(): Promise<void> {
           const claim = readMinted(reply.body, def.cap);
           if (claim) {
             cacheBadgeClaim(def.id, claim);
+            noteOwnHolder(def.id, claim.serial);
             confirmed.add(def.id);
             writeSupplyRow(def, Math.max(claim.serial, supplyOf(def)?.minted ?? 0));
           } else {

@@ -18,9 +18,9 @@ import {
   REFERRAL_REWARD, setBadge, setDisplayName, setDob, setFrame, theme, validDob,
 } from './storage';
 import {
-  BADGES, badgeCrestHtml, badgeEdition, badgeProgress, editionLabel, editionSerialLabel, editionSpeech,
-  editionSyncState, equippedBadge, hasEditionClaim, isBadgeUnlocked, onEditionChange, refreshBadgeEditions,
-  unlockedCount, type BadgeDef,
+  BADGES, badgeCrestHtml, badgeDelta, badgeEdition, badgeProgress, editionHolders, editionLabel,
+  editionSerialLabel, editionSpeech, editionSyncState, equippedBadge, hasEditionClaim, isBadgeUnlocked,
+  onEditionChange, refreshBadgeEditions, unlockedCount, type BadgeDef, type BadgeEdition,
 } from './badges';
 import { MAX_BALLS, newGame } from './rules';
 import { createPreview, createRenderer, type Preview, type View } from './render';
@@ -1154,17 +1154,177 @@ export function createMenu(api: MenuApi): Menu {
     }
   }
 
-  function paintBadgeSheetEdition(id: string) {
+  function holderRow(serial: number, name: string, opts: { open?: boolean; you?: boolean } = {}): HTMLElement {
+    const li = document.createElement('li');
+    li.className = `bd-hof-row${opts.open ? ' is-open' : ''}${opts.you ? ' is-you' : ''}`;
+    const key = document.createElement('span');
+    key.className = 'bd-hof-serial';
+    key.textContent = editionSerialLabel(serial);
+    const who = document.createElement('span');
+    who.className = 'bd-hof-name';
+    who.textContent = name;
+    li.append(key, who);
+    if (opts.you) {
+      const tag = document.createElement('span');
+      tag.className = 'bd-hof-tag';
+      tag.textContent = 'You';
+      li.append(tag);
+    }
+    return li;
+  }
+
+  /* The hall is a preview of the first serials: named holders, unlisted legacy claims, then
+     the next open slots. The player's own serial is pinned when it falls past the preview. */
+  function paintBadgeHall(def: BadgeDef, edition: BadgeEdition): void {
+    const list = document.getElementById('badge-hof-list');
+    if (!list) return;
+    list.textContent = '';
+    const live = editionHolders(def.id);
+    const named = new Map((live ?? []).map((h) => [h.serial, h.name]));
+    const minted = edition.minted ?? (edition.serial ?? 0);
+    const known = live !== null || edition.remaining !== null || edition.serial !== null;
+    const sub = document.getElementById('badge-hof-sub');
+    if (sub) {
+      sub.textContent = live !== null
+        ? `${live.length} holder${live.length === 1 ? '' : 's'}`
+        : `${edition.cap} serials`;
+    }
+
+    if (known && minted === 0 && edition.serial === null) {
+      const empty = document.createElement('li');
+      empty.className = 'bd-hof-empty';
+      const first = document.createElement('b');
+      first.textContent = 'Be the first to claim serial #001';
+      const hint = document.createElement('span');
+      hint.textContent = 'The first mint is reserved for the fastest formula.';
+      empty.append(first, hint);
+      list.append(empty);
+      for (let serial = 1; serial <= Math.min(3, def.cap); serial++) {
+        list.append(holderRow(serial, 'Available', { open: true }));
+      }
+      return;
+    }
+
+    const preview = Math.min(def.cap, 7);
+    for (let serial = 1; serial <= preview; serial++) {
+      const name = named.get(serial);
+      if (name !== undefined) {
+        list.append(holderRow(serial, name, { you: edition.serial === serial }));
+      } else if (serial <= minted) {
+        list.append(holderRow(serial, known ? 'Unlisted' : 'Claimed', { you: edition.serial === serial }));
+      } else if (known) {
+        list.append(holderRow(serial, 'Available', { open: true }));
+      } else {
+        list.append(holderRow(serial, 'Syncing…', { open: true }));
+      }
+    }
+    if (edition.serial !== null && edition.serial > preview) {
+      list.append(holderRow(edition.serial, named.get(edition.serial) ?? 'You', { you: true }));
+    }
+  }
+
+  function paintBadgeSheet(id: string): void {
     const def = BADGES.find((b) => b.id === id);
-    const edLine = document.getElementById('badge-edition');
-    if (!def || !edLine) return;
+    const sheet = document.getElementById('sheet-badge');
+    if (!def || !sheet) return;
+    const unlocked = isBadgeUnlocked(id);
+    const prog = badgeProgress(id);
     const edition = badgeEdition(id);
-    edLine.dataset.state = edition.serial !== null ? 'minted' : 'open';
-    edLine.dataset.accent = def.accent;
-    if (edition.serial !== null) edLine.textContent = `Edition ${editionLabel(edition)}`;
-    else if (edition.minting) edLine.textContent = 'Minting your edition…';
-    else if (edition.exhausted) edLine.textContent = `All ${edition.cap} editions claimed`;
-    else edLine.textContent = `${edition.remaining ?? '—'} of ${edition.cap} editions remaining`;
+    const pct = Math.round(prog.pct * 100);
+
+    sheet.dataset.accent = def.accent;
+    const title = document.getElementById('badge-title');
+    if (title) title.textContent = def.name;
+    const arch = document.getElementById('badge-archetype');
+    if (arch) arch.textContent = `${def.archetype} • ${def.pillar}`;
+
+    const state = document.getElementById('badge-state');
+    if (state) {
+      if (!unlocked) {
+        state.textContent = `Locked • ${prog.label}`;
+        state.dataset.state = 'locked';
+      } else if (edition.serial !== null) {
+        state.textContent = `Serial ${editionSerialLabel(edition.serial)} of ${edition.cap}`;
+        state.dataset.state = 'minted';
+      } else if (edition.minting) {
+        state.textContent = 'Unlocked • minting';
+        state.dataset.state = 'minting';
+      } else {
+        state.textContent = 'Unlocked';
+        state.dataset.state = 'open';
+      }
+    }
+
+    const lore = document.getElementById('badge-lore');
+    if (lore) lore.textContent = def.lore;
+    const crit = document.getElementById('badge-criteria');
+    if (crit) crit.textContent = def.criteria;
+
+    const capEl = document.getElementById('badge-scar-cap');
+    if (capEl) capEl.textContent = String(def.cap);
+    const supplyTrack = document.getElementById('badge-scar-track');
+    supplyTrack?.style.setProperty('--bd-cap', String(def.cap));
+    const supplyFill = document.getElementById('badge-supply-fill');
+    const minted = edition.minted ?? (edition.serial !== null ? edition.serial : null);
+    if (supplyFill) {
+      supplyFill.style.width = `${def.cap > 0 ? Math.min(100, ((minted ?? 0) / def.cap) * 100) : 0}%`;
+    }
+    const edLine = document.getElementById('badge-edition');
+    if (edLine) {
+      edLine.dataset.state = edition.serial !== null ? 'mine'
+        : edition.remaining === null ? 'syncing'
+          : edition.remaining <= 0 ? 'closed' : 'open';
+      if (edition.remaining !== null && minted !== null) {
+        edLine.textContent = `${minted} / ${edition.cap} claimed • ${edition.remaining} remaining`;
+      } else if (edition.serial !== null) {
+        edLine.textContent = `${edition.serial} / ${edition.cap} claimed • syncing`;
+      } else {
+        edLine.textContent = `— / ${edition.cap} claimed • syncing`;
+      }
+    }
+    paintBadgeHall(def, edition);
+
+    const req = document.getElementById('badge-req');
+    req?.setAttribute('data-met', String(prog.met));
+    const fill = document.getElementById('badge-progress-fill');
+    const bar = document.getElementById('badge-progress-bar');
+    const label = document.getElementById('badge-progress-t');
+    if (fill) fill.style.width = `${unlocked ? 100 : pct}%`;
+    if (bar) {
+      bar.setAttribute('aria-valuenow', String(Math.min(prog.got, prog.need)));
+      bar.setAttribute('aria-valuemax', String(prog.need));
+      bar.setAttribute('aria-valuetext', prog.label);
+    }
+    if (label) label.textContent = unlocked ? 'Complete — ready to equip' : prog.label;
+    const count = document.getElementById('badge-req-count');
+    if (count) count.textContent = `${en(prog.got)} / ${en(prog.need)}`;
+    const delta = document.getElementById('badge-req-delta');
+    if (delta) delta.textContent = badgeDelta(id);
+
+    const cta = document.getElementById('badge-equip') as HTMLButtonElement | null;
+    const ctaLabel = document.getElementById('badge-cta-label');
+    if (cta && ctaLabel) {
+      const use = cta.querySelector('use');
+      if (!unlocked) {
+        cta.disabled = false;
+        cta.dataset.mode = 'play';
+        ctaLabel.textContent = 'Play now to claim';
+        use?.setAttribute('href', '#i-play');
+        cta.setAttribute('aria-label', `Play a race to unlock ${def.name}`);
+      } else if (profile.badge === id) {
+        cta.disabled = true;
+        cta.dataset.mode = 'equipped';
+        ctaLabel.textContent = 'Medallion equipped';
+        use?.setAttribute('href', '#i-check');
+        cta.setAttribute('aria-label', `${def.name} is equipped`);
+      } else {
+        cta.disabled = false;
+        cta.dataset.mode = 'equip';
+        ctaLabel.textContent = 'Equip medallion';
+        use?.setAttribute('href', '#i-check');
+        cta.setAttribute('aria-label', `Equip ${def.name} to your profile`);
+      }
+    }
   }
 
   let badgeDraft: string | null = null;
@@ -1173,54 +1333,14 @@ export function createMenu(api: MenuApi): Menu {
     const sheet = api.sheet('sheet-badge');
     if (!def || !sheet) return;
     badgeDraft = id;
-    const unlocked = isBadgeUnlocked(id);
-    const prog = badgeProgress(id);
-    const hero = document.getElementById('badge-sheet-hero');
-    if (hero) {
-      hero.setAttribute('data-accent', def.accent);
-      hero.classList.toggle('is-locked', !unlocked);
-    }
     const crest = document.getElementById('badge-sheet-ico-wrap');
     if (crest) crest.innerHTML = badgeCrestHtml(def);
-    const title = document.getElementById('badge-title');
-    if (title) title.textContent = def.name;
-    const arch = document.getElementById('badge-archetype');
-    if (arch) arch.textContent = `${def.archetype} · ${def.pillar}`;
-    paintBadgeSheetEdition(id);
-    const desc = document.getElementById('badge-description');
-    if (desc) desc.textContent = def.description;
-    const palette = document.getElementById('badge-palette');
-    if (palette) palette.textContent = def.palette;
-    const lore = document.getElementById('badge-lore');
-    if (lore) lore.textContent = def.lore;
-    const crit = document.getElementById('badge-criteria');
-    if (crit) crit.textContent = def.criteria;
-    const state = document.getElementById('badge-state');
-    if (state) state.textContent = unlocked ? 'Unlocked' : `Locked · ${prog.label}`;
-    const fill = document.getElementById('badge-progress-fill');
-    const bar = document.getElementById('badge-progress-bar');
-    const label = document.getElementById('badge-progress-t');
-    const pct = Math.round(prog.pct * 100);
-    if (fill) fill.style.width = `${unlocked ? 100 : pct}%`;
-    if (bar) {
-      bar.setAttribute('aria-valuenow', String(prog.got));
-      bar.setAttribute('aria-valuemax', String(prog.need));
-    }
-    if (label) label.textContent = unlocked ? 'Complete — ready to equip' : prog.label;
-    const equip = document.getElementById('badge-equip') as HTMLButtonElement | null;
-    if (equip) {
-      if (!unlocked) {
-        equip.disabled = true;
-        equip.textContent = 'Requirement not met';
-      } else if (profile.badge === id) {
-        equip.disabled = true;
-        equip.textContent = 'Equipped';
-      } else {
-        equip.disabled = false;
-        equip.textContent = 'Equip to Profile';
-      }
-    }
+    paintBadgeSheet(id);
+    void refreshBadgeEditions();
     api.sheets.open(sheet);
+    /* the sheet must be laid out before scrollTop can reset: a hidden element ignores it */
+    const body = document.getElementById('badge-sheet-body');
+    if (body) body.scrollTop = 0;
     impact('light');
   }
 
@@ -1380,7 +1500,7 @@ export function createMenu(api: MenuApi): Menu {
   onEditionChange(() => {
     paintHeroExtras(levelInfo());
     paintBadges();
-    if (badgeDraft) paintBadgeSheetEdition(badgeDraft);
+    if (badgeDraft) paintBadgeSheet(badgeDraft);
   });
 
   /* Unlocking an honor schedules one refresh (and therefore one idempotent mint) right after the
@@ -1428,7 +1548,15 @@ export function createMenu(api: MenuApi): Menu {
     impact('light');
   });
   document.getElementById('badge-equip')?.addEventListener('click', () => {
-    if (!badgeDraft || !isBadgeUnlocked(badgeDraft)) return;
+    if (!badgeDraft) return;
+    if (!isBadgeUnlocked(badgeDraft)) {
+      const setup: RaceSetup = { difficulty: menuState.difficulty, sizes: [...menuState.sizes] };
+      impact('light');
+      api.sheets.close();
+      saveMenu({ mode: 'bot' });
+      window.setTimeout(() => api.start(setup), motionReduced() ? 0 : 280);
+      return;
+    }
     setBadge(badgeDraft);
     notify('success');
     impact('medium');
