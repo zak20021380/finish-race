@@ -11,6 +11,12 @@
  * - Einstein's Singularity — Pure Intellect: the 1,500 TIQ threshold.
  * - Heisenberg's Formula — Calculated Precision: a 60% win rate over 5+ races.
  *
+ * Each honor is also a numbered edition. The cap is fixed; the claimed ledger is
+ * the sealed launch figure this build ships with, and this device mints the next
+ * serial the moment the requirement is met. Without a mint server, the serial is
+ * derived from the catalogue rather than assigned by a network, so it stays
+ * stable across reloads and never needs a second storage key.
+ *
  * Ids are stable; the crest symbol and the CSS aura are both keyed by `accent`,
  * so a badge is one data row plus one #i-crest-<accent> in index.html.
  */
@@ -23,6 +29,8 @@ export type BadgeAccent = 'titanium' | 'quantum' | 'frost';
 export interface BadgeDef {
   id: string;
   name: string;
+  /** The character the medal carries: the card's first line. */
+  figure: string;
   /** The shortened archetype name printed on the shelf tile. */
   archetype: string;
   /** The psychological pillar the archetype represents. */
@@ -37,41 +45,49 @@ export interface BadgeDef {
   accent: BadgeAccent;
   /** The metal + aura palette, as metadata and as sheet copy. */
   palette: string;
+  /** Hard edition cap. The serial is minted inside this number, never above it. */
+  cap: number;
 }
 
 export const GENIUS_TRIAD: readonly BadgeDef[] = [
   {
     id: 'churchill_bastion',
     name: "Churchill's Bastion",
-    archetype: 'The Ironclad',
+    figure: 'Churchill',
+    archetype: 'The Bastion',
     pillar: 'Resilience',
     description: 'Unyielding defence and comeback mastery. Holds the line until the board breaks.',
     lore: 'Never surrender. The wall is not a tactic; it is a promise.',
     criteria: 'Reach a 3-win streak. High-resilience runs and clutch comebacks forge the Bastion.',
     accent: 'titanium',
     palette: 'Brushed Titanium #94A3B8 · Deep Cyan #06B6D4',
+    cap: 100,
   },
   {
     id: 'einstein_singularity',
     name: "Einstein's Singularity",
-    archetype: 'The Mastermind',
+    figure: 'Einstein',
+    archetype: 'The Singularity',
     pillar: 'Pure Intellect',
     description: 'Spatial foresight and zero-error calculation. Sees the whole board before the first move.',
     lore: 'The board is not a race. It is a proof.',
     criteria: 'Bank 1,500 Tactical IQ. Pure calculation bends the board into a single answer.',
     accent: 'quantum',
-    palette: 'Deep Obsidian · Quantum Gold #F59E0B / #FDE047',
+    palette: 'Deep Obsidian · Amber #F59E0B / Champagne #FDE047',
+    cap: 50,
   },
   {
     id: 'heisenberg_formula',
     name: "Heisenberg's Formula",
-    archetype: 'The Strategist',
+    figure: 'Heisenberg',
+    archetype: 'The Formula',
     pillar: 'Calculated Precision',
     description: 'Flawless tactical execution and cold dominance. Wins before the race begins.',
     lore: 'No wasted moves. No luck. Only the formula.',
     criteria: 'Win 60% of at least 5 races. Ruthless precision, never chance.',
     accent: 'frost',
-    palette: 'Cold Slate #334155 · Frost Emerald #10B981 / Cyan #38BDF8',
+    palette: 'Matte Graphite · Frost Emerald #10B981 / #34D399',
+    cap: 25,
   },
 ];
 
@@ -133,6 +149,53 @@ export function badgeProgress(id: string): BadgeProgress {
 
 export function isBadgeUnlocked(id: string): boolean {
   return badgeById(id) !== null && badgeProgress(id).met;
+}
+
+/**
+ * The claimed ledger sealed into this build. The next serial is one past the last
+ * claimed number, which is why the honors mint at #042 / 100, #018 / 50 and
+ * #007 / 25 — and why a locked card can count the slots this ledger has left.
+ */
+const CLAIMED_EDITIONS: Record<BadgeAccent, number> = {
+  titanium: 41,
+  quantum: 17,
+  frost: 6,
+};
+
+export interface BadgeEdition {
+  cap: number;
+  /** The player's minted serial once earned, else null. */
+  serial: number | null;
+  /** Unclaimed serials left before this device mints its own. */
+  remaining: number;
+}
+
+export function badgeEdition(id: string): BadgeEdition {
+  const def = badgeById(id);
+  if (!def) return { cap: 0, serial: null, remaining: 0 };
+  const claimed = CLAIMED_EDITIONS[def.accent];
+  const serial = isBadgeUnlocked(def.id) ? claimed + 1 : null;
+  return {
+    cap: def.cap,
+    serial,
+    remaining: Math.max(0, def.cap - claimed - (serial !== null ? 1 : 0)),
+  };
+}
+
+const pad3 = (n: number) => String(n).padStart(3, '0');
+
+/** The card's third line: "#042 / 100" once minted, "59 / 100 REMAINING" until then. */
+export function editionLabel(ed: BadgeEdition): string {
+  return ed.serial !== null
+    ? `#${pad3(ed.serial)} / ${ed.cap}`
+    : `${ed.remaining} / ${ed.cap} REMAINING`;
+}
+
+/** The same state, spelled for a screen reader. */
+export function editionSpeech(ed: BadgeEdition): string {
+  return ed.serial !== null
+    ? `Edition ${ed.serial} of ${ed.cap}.`
+    : `${ed.remaining} of ${ed.cap} editions remaining.`;
 }
 
 export function unlockedCount(): number {

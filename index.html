@@ -391,228 +391,253 @@
         </g>
       </symbol>
       <!-- ==== Honor & Badges crests =====================================================
-           The Genius Triad: three sculpted metal medals, not flat glyphs. Each is a layered
-           crest — an ambient under-glow, a dark extrusion silhouette, a 135° metal face, a
-           single-userSpace specular rim so the whole piece catches one light from the upper
-           left, then its emblem cut on top. Full colour on purpose — these never inherit
-           currentColor.
-             i-crest-titanium — Churchill's Bastion: the beveled battlement keep, cyan heart
-             i-crest-quantum  — Einstein's Singularity: the gold nexus and its orbital rings
-             i-crest-frost    — Heisenberg's Formula: the pork pie silhouette and frame glasses
+           The Genius Triad: three numbered character medallions, not flat glyphs. Each is a
+           heavy coin/seal — a deep prestige under-glow, a dark-extruded silhouette, a brushed
+           face, one 135° metal ramp and a specular rim that catches a single light from the
+           upper left. Full colour on purpose — these never inherit currentColor.
+             i-crest-titanium — Churchill: Homburg and bow tie on brushed titanium, cyan glow
+             i-crest-quantum  — Einstein: wild hair and orbit lines on obsidian, amber bevels
+             i-crest-frost    — Heisenberg: pork pie and wire optics on graphite, emerald frost
            -->
       <symbol id="i-crest-titanium" viewBox="0 0 56 56">
         <defs>
-          <radialGradient id="bct-glow" cx="50%" cy="72%" r="58%">
-            <stop offset="0" stop-color="#06B6D4" stop-opacity=".6" />
+          <radialGradient id="bct-glow" cx="50%" cy="80%" r="58%">
+            <stop offset="0" stop-color="#06B6D4" stop-opacity=".62" />
             <stop offset=".55" stop-color="#0891B2" stop-opacity=".16" />
             <stop offset="1" stop-color="#06B6D4" stop-opacity="0" />
           </radialGradient>
-          <linearGradient id="bct-face" gradientUnits="userSpaceOnUse" x1="11" y1="7" x2="45" y2="48">
-            <stop offset="0" stop-color="#E2E8F0" />
-            <stop offset=".16" stop-color="#B6C2D1" />
-            <stop offset=".4" stop-color="#7B8BA1" />
-            <stop offset=".68" stop-color="#46566C" />
-            <stop offset="1" stop-color="#1E293B" />
+          <linearGradient id="bct-rim" gradientUnits="userSpaceOnUse" x1="9" y1="5" x2="47" y2="51">
+            <stop offset="0" stop-color="#FFFFFF" />
+            <stop offset=".18" stop-color="#DCE5EE" />
+            <stop offset=".46" stop-color="#7C8DA4" />
+            <stop offset=".76" stop-color="#334155" />
+            <stop offset="1" stop-color="#080E17" />
           </linearGradient>
-          <linearGradient id="bct-rim" gradientUnits="userSpaceOnUse" x1="28" y1="6" x2="28" y2="50">
-            <stop offset="0" stop-color="#FFFFFF" stop-opacity=".95" />
-            <stop offset=".38" stop-color="#CBD5E1" stop-opacity=".34" />
-            <stop offset=".74" stop-color="#94A3B8" stop-opacity=".3" />
-            <stop offset="1" stop-color="#020617" stop-opacity=".9" />
+          <radialGradient id="bct-face" cx="33%" cy="22%" r="82%">
+            <stop offset="0" stop-color="#3A4960" />
+            <stop offset=".52" stop-color="#1B2536" />
+            <stop offset="1" stop-color="#080E17" />
+          </radialGradient>
+          <linearGradient id="bct-metal" gradientUnits="userSpaceOnUse" x1="18" y1="12" x2="40" y2="47">
+            <stop offset="0" stop-color="#F8FAFC" />
+            <stop offset=".34" stop-color="#D5DEE9" />
+            <stop offset=".66" stop-color="#94A3B8" />
+            <stop offset="1" stop-color="#5B6B80" />
           </linearGradient>
-          <linearGradient id="bct-gate" gradientUnits="userSpaceOnUse" x1="28" y1="29" x2="28" y2="42">
-            <stop offset="0" stop-color="#A5F3FC" />
-            <stop offset=".5" stop-color="#22D3EE" />
-            <stop offset="1" stop-color="#0E7490" />
-          </linearGradient>
-          <radialGradient id="bct-spec" cx="34%" cy="18%" r="36%">
-            <stop offset="0" stop-color="#FFFFFF" stop-opacity=".55" />
+          <radialGradient id="bct-spec" cx="30%" cy="14%" r="42%">
+            <stop offset="0" stop-color="#FFFFFF" stop-opacity=".4" />
             <stop offset="1" stop-color="#FFFFFF" stop-opacity="0" />
           </radialGradient>
+          <clipPath id="bct-clip"><circle cx="28" cy="28" r="19.6" /></clipPath>
         </defs>
-        <ellipse cx="28" cy="42" rx="21" ry="12" fill="url(#bct-glow)" />
-        <path d="M12 13.4V7.4h7.2v3.5h4.4V7.4h7.2v3.5h4.4V7.4H43v6v12.8c0 11-6.6 17.2-15 22C19.6 43.4 12 37 12 26.2Z"
-          fill="#080E17" stroke="#02060B" stroke-width="1.4" stroke-linejoin="round" />
-        <path d="M14.6 15.2V11h5.2v2.5h4.6V11h5.2v2.5h4.6V11H39.4v4.2v10.4c0 9.2-5.6 14.6-11.8 18.8-6.2-4.2-13-9.6-13-18.8Z"
-          fill="url(#bct-face)" />
-        <path d="M14.6 15.2V11h5.2v2.5h4.6V11h5.2v2.5h4.6V11H39.4v4.2v10.4c0 9.2-5.6 14.6-11.8 18.8-6.2-4.2-13-9.6-13-18.8Z"
-          fill="none" stroke="url(#bct-rim)" stroke-width="1.5" stroke-linejoin="round" />
-        <path d="M14.6 15.2V11h5.2v2.5h4.6V11h5.2v2.5h4.6V11H39.4v4.2v10.4c0 9.2-5.6 14.6-11.8 18.8-6.2-4.2-13-9.6-13-18.8Z"
-          fill="url(#bct-spec)" />
-        <path d="M14.6 15.2V11h5.2v2.5h4.6V11h5.2v2.5h4.6V11H39.4v4.2" fill="none"
-          stroke="#F8FAFC" stroke-opacity=".6" stroke-width="1.2" stroke-linejoin="round" />
-        <path d="M15.2 16.5h23.4" stroke="#F8FAFC" stroke-opacity=".28" stroke-width="1" stroke-linecap="round" />
-        <g stroke="#0B1420" stroke-opacity=".72" stroke-width="1" stroke-linecap="round">
-          <path d="M18 24.4h20" />
-          <path d="M20.6 30.8h17.2" />
-          <path d="M23 37h13.8" />
-          <path d="M23.4 24.4v6.4M32.8 24.4v6.4M20.6 30.8v6.2M28.8 30.8v6.2M36 30.8v6.2" />
+        <ellipse cx="28" cy="44" rx="21" ry="10" fill="url(#bct-glow)" />
+        <circle cx="28" cy="29" r="23" fill="#02060C" />
+        <circle cx="28" cy="28" r="23" fill="url(#bct-rim)" />
+        <circle cx="28" cy="28" r="19.6" fill="url(#bct-face)" />
+        <circle cx="28" cy="28" r="19.6" fill="none" stroke="#02060C" stroke-opacity=".85" stroke-width=".9" />
+        <circle cx="28" cy="28" r="17.9" fill="none" stroke="url(#bct-rim)" stroke-opacity=".34" stroke-width=".7" />
+        <g clip-path="url(#bct-clip)" fill="none" stroke="#E2E8F0" stroke-linecap="round">
+          <circle cx="28" cy="28" r="22" stroke-opacity=".08" />
+          <circle cx="28" cy="28" r="21.2" stroke-opacity=".06" />
+          <path d="M10 18.4h36M10 37.6h36" stroke-opacity=".035" />
+          <path d="M11.2 23h33.6M11.2 33h33.6" stroke-opacity=".025" />
         </g>
-        <g stroke="#E2E8F0" stroke-opacity=".24" stroke-width=".8" stroke-linecap="round">
-          <path d="M18 23.4h19.6" />
-          <path d="M20.6 29.8h16.8" />
-          <path d="M23.2 36h13.2" />
+        <!-- Churchill, facing right: Homburg crown and brim, moustached profile, bow tie -->
+        <g clip-path="url(#bct-clip)">
+          <g transform="translate(.7 1.05)" fill="#02060C" fill-opacity=".9">
+            <path d="M12.6 22.8c.2-.9.9-1.5 1.8-1.6l6.7-.5c-.4-2.3.6-4.6 2.5-6 2.6-2 6.3-2.4 9.3-1 2.2 1.1 3.7 3.1 4.2 5.3l.5 1.9 4.8.3c1 .1 1.6.8 1.5 1.7-.1.9-.9 1.5-1.8 1.5l-27.5.2c-1.1 0-2-.7-2-1.8Z" />
+            <path d="M21.8 23.5c.3-2.3 2-4.1 4.3-4.5 3.3-.7 6.8.1 9.1 2.2 1.1 1 1.8 2.2 2.1 3.5l1.3 1.8 3.2 1-2.5 1.6.9 1.1-1.4.9.5 1.9c.2 1.4-.6 2.7-1.9 3.4-.5.6-.7 1.3-.5 2.1l.6 5.6c-3.2 1-6.3.9-9-.2l-1.6-5.1c-1.8-2.1-2.8-4.7-3-7.6-.2-2.6-.9-5.3-1.9-7.7Z" />
+            <path d="M24.6 41.4c2.2 1.1 4.6 1.5 7 1.2 2.1-.2 4.1-.8 6-1.7l1 6.2H23.7Z" fill="#050B12" fill-opacity=".85" />
+            <path d="M28.4 42.2 21.9 39.5l-1.1 5.7 6.9 1.4Z" stroke="#050B12" stroke-opacity=".55" stroke-width=".45" />
+            <path d="M28.4 42.2l6.5-2.7 1.1 5.7-6.9 1.4Z" stroke="#050B12" stroke-opacity=".55" stroke-width=".45" />
+            <rect x="27.1" y="41.2" width="2.8" height="5.6" rx="1" stroke="#050B12" stroke-opacity=".55" stroke-width=".45" />
+          </g>
+          <g fill="url(#bct-metal)">
+            <path d="M12.6 22.8c.2-.9.9-1.5 1.8-1.6l6.7-.5c-.4-2.3.6-4.6 2.5-6 2.6-2 6.3-2.4 9.3-1 2.2 1.1 3.7 3.1 4.2 5.3l.5 1.9 4.8.3c1 .1 1.6.8 1.5 1.7-.1.9-.9 1.5-1.8 1.5l-27.5.2c-1.1 0-2-.7-2-1.8Z" />
+            <path d="M21.8 23.5c.3-2.3 2-4.1 4.3-4.5 3.3-.7 6.8.1 9.1 2.2 1.1 1 1.8 2.2 2.1 3.5l1.3 1.8 3.2 1-2.5 1.6.9 1.1-1.4.9.5 1.9c.2 1.4-.6 2.7-1.9 3.4-.5.6-.7 1.3-.5 2.1l.6 5.6c-3.2 1-6.3.9-9-.2l-1.6-5.1c-1.8-2.1-2.8-4.7-3-7.6-.2-2.6-.9-5.3-1.9-7.7Z" />
+            <path d="M24.6 41.4c2.2 1.1 4.6 1.5 7 1.2 2.1-.2 4.1-.8 6-1.7l1 6.2H23.7Z" fill="#050B12" fill-opacity=".85" />
+            <path d="M28.4 42.2 21.9 39.5l-1.1 5.7 6.9 1.4Z" stroke="#050B12" stroke-opacity=".55" stroke-width=".45" />
+            <path d="M28.4 42.2l6.5-2.7 1.1 5.7-6.9 1.4Z" stroke="#050B12" stroke-opacity=".55" stroke-width=".45" />
+            <rect x="27.1" y="41.2" width="2.8" height="5.6" rx="1" stroke="#050B12" stroke-opacity=".55" stroke-width=".45" />
+          </g>
+          <g fill="none" stroke="#0B1420" stroke-opacity=".62" stroke-width=".7" stroke-linecap="round">
+            <path d="M21.4 20.9c3.3-.5 9.7-.5 14.8.2" />
+            <path d="M27.3 13.8c.8-.4 1.8-.6 2.8-.6" />
+            <path d="M33.6 28.9c-1.1.2-1.9.9-2.2 1.9" />
+            <path d="M31.2 26.4a.7.7 0 1 0 0 .1" />
+            <path d="M35 32.2c-1.4.2-2.6.1-3.7-.2" />
+            <path d="M27.6 43.9c.5-.4 1.5-.4 2 0" />
+          </g>
+          <path d="M22.2 20.7c3.6-.6 9.4-.6 14.2.1" fill="none" stroke="#F8FAFC" stroke-opacity=".38" stroke-width=".6" stroke-linecap="round" />
         </g>
-        <path d="M24.4 41.4v-8.6c0-2.2 1.5-3.7 3.6-3.7s3.6 1.5 3.6 3.7v8.6Z"
-          fill="#07121C" stroke="#0E7490" stroke-opacity=".8" stroke-width="1" />
-        <path d="M26.2 41v-8.1c0-1.2.8-2 1.8-2s1.8.8 1.8 2V41" fill="none"
-          stroke="url(#bct-gate)" stroke-width="1.2" stroke-linecap="round" />
-        <path d="M28 33.4v7.2M25.2 37.2h5.6" stroke="#67E8F9" stroke-opacity=".55" stroke-width=".8" />
-        <circle cx="28" cy="31.6" r="2.2" fill="#22D3EE" opacity=".22" />
-        <circle cx="28" cy="31.6" r="1.15" fill="#A5F3FC" />
-        <circle cx="18.2" cy="18.4" r="1.1" fill="#DCE5EE" fill-opacity=".8" />
-        <circle cx="37.8" cy="18.4" r="1.1" fill="#DCE5EE" fill-opacity=".8" />
-        <circle cx="18.2" cy="18.4" r="1.8" fill="none" stroke="#0B1420" stroke-opacity=".5" stroke-width=".6" />
-        <circle cx="37.8" cy="18.4" r="1.8" fill="none" stroke="#0B1420" stroke-opacity=".5" stroke-width=".6" />
-        <path d="M16.8 20.2 17.8 19.4M39.2 20.2 38.2 19.4" stroke="#FFFFFF" stroke-opacity=".35"
-          stroke-width=".8" stroke-linecap="round" />
+        <circle cx="28" cy="28" r="23" fill="url(#bct-spec)" />
+        <path d="M9.5 20.4A20.6 20.6 0 0 1 22.2 8.1" fill="none" stroke="#FFFFFF" stroke-opacity=".55" stroke-width="1.1" stroke-linecap="round" />
       </symbol>
       <symbol id="i-crest-quantum" viewBox="0 0 56 56">
         <defs>
-          <radialGradient id="bcq-glow" cx="50%" cy="70%" r="60%">
+          <radialGradient id="bcq-glow" cx="50%" cy="78%" r="60%">
             <stop offset="0" stop-color="#F59E0B" stop-opacity=".7" />
             <stop offset=".5" stop-color="#F59E0B" stop-opacity=".18" />
             <stop offset="1" stop-color="#F59E0B" stop-opacity="0" />
           </radialGradient>
-          <linearGradient id="bcq-face" gradientUnits="userSpaceOnUse" x1="9" y1="6" x2="47" y2="51">
-            <stop offset="0" stop-color="#2B2A33" />
-            <stop offset=".28" stop-color="#15151C" />
-            <stop offset=".66" stop-color="#090A10" />
-            <stop offset="1" stop-color="#05060A" />
+          <linearGradient id="bcq-rim" gradientUnits="userSpaceOnUse" x1="9" y1="5" x2="47" y2="51">
+            <stop offset="0" stop-color="#FFFBEB" />
+            <stop offset=".2" stop-color="#FDE047" />
+            <stop offset=".5" stop-color="#F59E0B" />
+            <stop offset=".78" stop-color="#92400E" />
+            <stop offset="1" stop-color="#1C1408" />
           </linearGradient>
-          <linearGradient id="bcq-rim" gradientUnits="userSpaceOnUse" x1="28" y1="4" x2="28" y2="52">
-            <stop offset="0" stop-color="#FFFBEB" stop-opacity=".95" />
-            <stop offset=".3" stop-color="#FDE047" stop-opacity=".55" />
-            <stop offset=".7" stop-color="#B45309" stop-opacity=".45" />
-            <stop offset="1" stop-color="#1C1408" stop-opacity=".9" />
-          </linearGradient>
-          <radialGradient id="bcq-core" cx="38%" cy="32%" r="70%">
+          <radialGradient id="bcq-face" cx="32%" cy="20%" r="84%">
+            <stop offset="0" stop-color="#2C2C35" />
+            <stop offset=".4" stop-color="#14141B" />
+            <stop offset=".8" stop-color="#08090E" />
+            <stop offset="1" stop-color="#030407" />
+          </radialGradient>
+          <linearGradient id="bcq-metal" gradientUnits="userSpaceOnUse" x1="18" y1="10" x2="42" y2="46">
             <stop offset="0" stop-color="#FFFBEB" />
             <stop offset=".3" stop-color="#FDE047" />
-            <stop offset=".68" stop-color="#F59E0B" />
-            <stop offset="1" stop-color="#92400E" />
-          </radialGradient>
-          <linearGradient id="bcq-orbit" gradientUnits="userSpaceOnUse" x1="14" y1="14" x2="42" y2="40">
-            <stop offset="0" stop-color="#FFFBEB" />
-            <stop offset=".4" stop-color="#FDE047" />
-            <stop offset=".75" stop-color="#F59E0B" />
-            <stop offset="1" stop-color="#92400E" />
+            <stop offset=".62" stop-color="#F59E0B" />
+            <stop offset="1" stop-color="#B45309" />
           </linearGradient>
-          <radialGradient id="bcq-spec" cx="36%" cy="20%" r="34%">
-            <stop offset="0" stop-color="#FDE68A" stop-opacity=".32" />
+          <radialGradient id="bcq-spec" cx="30%" cy="14%" r="40%">
+            <stop offset="0" stop-color="#FDE68A" stop-opacity=".3" />
             <stop offset="1" stop-color="#FDE68A" stop-opacity="0" />
           </radialGradient>
+          <clipPath id="bcq-clip"><circle cx="28" cy="28" r="19.6" /></clipPath>
         </defs>
-        <ellipse cx="28" cy="39" rx="21" ry="14" fill="url(#bcq-glow)" />
-        <path d="M28 3.5 46.5 9.8v15.4c0 12.1-8.4 19.6-18.5 24.8C17.9 44.8 9.5 37.3 9.5 25.2V9.8Z"
-          fill="#07070C" stroke="#020207" stroke-width="1.4" stroke-linejoin="round" />
-        <path d="M28 5.7 44.4 11.4v13.7c0 10.4-7.2 17-16.4 21.4-9.2-4.4-16.4-11-16.4-21.4V11.4Z"
-          fill="url(#bcq-face)" />
-        <path d="M28 8.6 41.7 13.2v11.7c0 8.6-6 14.4-13.7 18.2-7.7-3.8-13.7-9.6-13.7-18.2V13.2Z"
-          fill="none" stroke="#F59E0B" stroke-opacity=".26" stroke-width=".9" />
-        <path d="M15.3 14.2 28 9.6l12.7 4.6" fill="none" stroke="#FEF3C7" stroke-opacity=".55"
-          stroke-width="1.4" stroke-linecap="round" />
-        <path d="M28 5.7 44.4 11.4v13.7c0 10.4-7.2 17-16.4 21.4-9.2-4.4-16.4-11-16.4-21.4V11.4Z"
-          fill="none" stroke="url(#bcq-rim)" stroke-width="1.6" stroke-linejoin="round" />
-        <path d="M28 5.7 44.4 11.4v13.7c0 10.4-7.2 17-16.4 21.4-9.2-4.4-16.4-11-16.4-21.4V11.4Z"
-          fill="url(#bcq-spec)" />
-        <path d="M28 11.2 40 17.4 39 34.6 28 44.2 17 34.6 16 17.4Z" fill="none"
-          stroke="#F59E0B" stroke-opacity=".14" stroke-width=".8" />
-        <g fill="none" stroke="url(#bcq-orbit)" stroke-linecap="round">
-          <ellipse cx="28" cy="27" rx="14.4" ry="5.1" transform="rotate(-24 28 27)" stroke-width="1.15" opacity=".92" />
-          <ellipse cx="28" cy="27" rx="13.6" ry="4.7" transform="rotate(34 28 27)" stroke-width=".95" opacity=".7" />
-          <ellipse cx="28" cy="27" rx="8.6" ry="13.4" transform="rotate(16 28 27)" stroke-width=".8" opacity=".55" />
+        <ellipse cx="28" cy="43" rx="21" ry="11" fill="url(#bcq-glow)" />
+        <circle cx="28" cy="29" r="23" fill="#07060A" />
+        <circle cx="28" cy="28" r="23" fill="url(#bcq-rim)" />
+        <circle cx="28" cy="28" r="19.6" fill="url(#bcq-face)" />
+        <circle cx="28" cy="28" r="19.6" fill="none" stroke="#07060A" stroke-opacity=".9" stroke-width=".9" />
+        <circle cx="28" cy="28" r="17.9" fill="none" stroke="url(#bcq-rim)" stroke-opacity=".42" stroke-width=".7" />
+        <g clip-path="url(#bcq-clip)" fill="none" stroke="url(#bcq-metal)" stroke-linecap="round">
+          <ellipse cx="28" cy="27" rx="16.4" ry="5.1" transform="rotate(-26 28 27)" stroke-width=".8" stroke-opacity=".34" />
+          <ellipse cx="28" cy="27" rx="15.2" ry="4.5" transform="rotate(38 28 27)" stroke-width=".65" stroke-opacity=".24" />
+          <ellipse cx="28" cy="27" rx="6.4" ry="15.8" transform="rotate(14 28 27)" stroke-width=".5" stroke-opacity=".16" />
         </g>
-        <circle cx="15.4" cy="21.4" r="1.35" fill="#FDE047" />
-        <circle cx="39.8" cy="20.8" r="1.1" fill="#F59E0B" />
-        <circle cx="33.6" cy="40" r="1" fill="#FDE047" opacity=".8" />
-        <circle cx="28" cy="27" r="8.2" fill="#F59E0B" opacity=".18" />
-        <circle cx="28" cy="27" r="5.7" fill="url(#bcq-core)" stroke="#78350F" stroke-opacity=".65" stroke-width=".9" />
-        <circle cx="28" cy="27" r="2.3" fill="#FFFBEB" />
-        <path d="M25.9 24.9A3 3 0 0 1 28 24" fill="none" stroke="#FFFFFF" stroke-opacity=".9"
-          stroke-width=".9" stroke-linecap="round" />
-        <path d="M28 10.6v5.2M28 38.2v4.4M15.8 27h4.2M36 27h4.2" stroke="#FDE047" stroke-opacity=".45"
-          stroke-width=".9" stroke-linecap="round" />
+        <circle cx="13.2" cy="23.1" r="1" fill="#FDE047" opacity=".9" />
+        <circle cx="43.1" cy="31.6" r=".8" fill="#FDE047" opacity=".75" />
+        <circle cx="33.9" cy="41.8" r=".7" fill="#FDE047" opacity=".55" />
+        <!-- Einstein, facing right: wild swept hair, moustached profile, thought lines -->
+        <g clip-path="url(#bcq-clip)">
+          <g transform="translate(.7 1)" fill="#0B0803" fill-opacity=".9">
+            <path d="M22.9 24.3C20.4 25.1 17.4 24.2 15.7 22 14.3 20.2 14.4 17.8 15.8 16.1 13.9 14.2 14.2 11.2 16.5 9.7 16.1 7.1 18.4 4.8 21 4.9 22 2.5 25 1.7 26.9 3.3 28.2 1.3 31.2 1.5 32.3 3.6 34.5 2.2 37.4 3.4 38.1 5.9 40.7 5.4 43.1 7.5 43.1 10.2 45.7 10.9 47 13.9 45.6 16.2 47.5 18 47.4 21 45.6 22.7 46.5 25 45 27.6 42.6 28.2 42.6 30.7 40.5 32.6 38 32.3L34.2 31.9 32.6 27.8 30.2 26.3Z" />
+            <path d="M25.5 23.3C26.1 20.8 28.2 19 30.9 18.9 33.7 18.8 36.2 20.3 37.4 22.7 38.1 24.1 38.4 25.6 38.2 27.1L39.2 28 42.6 28.8 39.8 30.3 40.6 31.4 39.1 32.4 39.4 34.2C39.5 35.7 38.5 37 37 37.5L35.3 37.2 34.6 33.9 32.1 33.5 30.2 29.2 27.3 27.8Z" />
+            <path d="M31.2 33.8 35.2 34.2 35.9 39.8 37.4 45C34.1 46.2 30.7 46 28 44.8L26.9 39.4C28.8 37.9 30.4 36 31.2 33.8Z" />
+          </g>
+          <g fill="url(#bcq-metal)">
+            <path d="M22.9 24.3C20.4 25.1 17.4 24.2 15.7 22 14.3 20.2 14.4 17.8 15.8 16.1 13.9 14.2 14.2 11.2 16.5 9.7 16.1 7.1 18.4 4.8 21 4.9 22 2.5 25 1.7 26.9 3.3 28.2 1.3 31.2 1.5 32.3 3.6 34.5 2.2 37.4 3.4 38.1 5.9 40.7 5.4 43.1 7.5 43.1 10.2 45.7 10.9 47 13.9 45.6 16.2 47.5 18 47.4 21 45.6 22.7 46.5 25 45 27.6 42.6 28.2 42.6 30.7 40.5 32.6 38 32.3L34.2 31.9 32.6 27.8 30.2 26.3Z" />
+            <path d="M25.5 23.3C26.1 20.8 28.2 19 30.9 18.9 33.7 18.8 36.2 20.3 37.4 22.7 38.1 24.1 38.4 25.6 38.2 27.1L39.2 28 42.6 28.8 39.8 30.3 40.6 31.4 39.1 32.4 39.4 34.2C39.5 35.7 38.5 37 37 37.5L35.3 37.2 34.6 33.9 32.1 33.5 30.2 29.2 27.3 27.8Z" />
+            <path d="M31.2 33.8 35.2 34.2 35.9 39.8 37.4 45C34.1 46.2 30.7 46 28 44.8L26.9 39.4C28.8 37.9 30.4 36 31.2 33.8Z" />
+          </g>
+          <g fill="none" stroke="#140D03" stroke-opacity=".55" stroke-width=".65" stroke-linecap="round">
+            <path d="M19.1 15.8c2-1.9 4.8-2.5 7.2-1.6" />
+            <path d="M24.4 11.7c1.9-1.4 4.5-1.5 6.6-.4" />
+            <path d="M31.3 9.8c1.7-.7 3.6-.5 5.1.5" />
+            <path d="M15.4 22.2c-1-1.7-.5-3.9 1.2-5" />
+            <path d="M41.5 18.4c1.1.9 1.6 2.4 1.3 3.8" />
+            <path d="M18.6 23.2c-.9-.5-1.5-1.4-1.7-2.4" />
+            <path d="M40.8 24.1c.8-.8 1.1-2 1-3.1" />
+            <path d="M27.4 22.6c2.1-1.2 4.6-1.1 6.6.2 1.4.8 2.5 2 3.2 3.4" />
+            <path d="M31.9 24.7c1.2-.4 2.4-.2 3.4.4" />
+            <path d="M33.4 26a.65.65 0 1 0 0 .1" />
+            <path d="M34.9 31.2c1.3-.2 2.6.1 3.6.8" />
+            <path d="M33.9 29.2c-.8.3-1.4.8-1.8 1.5" />
+            <path d="M36.6 33.2c-.8.2-1.5.1-2.2-.1" />
+            <path d="M30.8 43.9c.6-.4 1.6-.4 2.2 0" />
+          </g>
+          <path d="M23.4 12.6c2.1-1.1 4.6-1.2 6.7-.3" fill="none" stroke="#FFFBEB" stroke-opacity=".38" stroke-width=".55" stroke-linecap="round" />
+        </g>
+        <circle cx="28" cy="28" r="23" fill="url(#bcq-spec)" />
+        <path d="M9.5 20.4A20.6 20.6 0 0 1 22.2 8.1" fill="none" stroke="#FFFBEB" stroke-opacity=".55" stroke-width="1.1" stroke-linecap="round" />
       </symbol>
       <symbol id="i-crest-frost" viewBox="0 0 56 56">
         <defs>
-          <radialGradient id="bcf-glow" cx="50%" cy="70%" r="60%">
-            <stop offset="0" stop-color="#10B981" stop-opacity=".55" />
-            <stop offset=".5" stop-color="#38BDF8" stop-opacity=".2" />
-            <stop offset="1" stop-color="#38BDF8" stop-opacity="0" />
+          <radialGradient id="bcf-glow" cx="50%" cy="78%" r="60%">
+            <stop offset="0" stop-color="#10B981" stop-opacity=".58" />
+            <stop offset=".5" stop-color="#34D399" stop-opacity=".18" />
+            <stop offset="1" stop-color="#10B981" stop-opacity="0" />
           </radialGradient>
-          <linearGradient id="bcf-face" gradientUnits="userSpaceOnUse" x1="11" y1="7" x2="45" y2="50">
-            <stop offset="0" stop-color="#64748B" />
-            <stop offset=".24" stop-color="#3E4D62" />
-            <stop offset=".62" stop-color="#1E293B" />
+          <linearGradient id="bcf-rim" gradientUnits="userSpaceOnUse" x1="9" y1="5" x2="47" y2="51">
+            <stop offset="0" stop-color="#ECFEFF" />
+            <stop offset=".22" stop-color="#A7F3D0" />
+            <stop offset=".5" stop-color="#10B981" />
+            <stop offset=".78" stop-color="#065F46" />
+            <stop offset="1" stop-color="#020B09" />
+          </linearGradient>
+          <radialGradient id="bcf-face" cx="32%" cy="20%" r="86%">
+            <stop offset="0" stop-color="#334155" />
+            <stop offset=".46" stop-color="#182332" />
+            <stop offset=".82" stop-color="#0A111C" />
+            <stop offset="1" stop-color="#04080E" />
+          </radialGradient>
+          <linearGradient id="bcf-hat" gradientUnits="userSpaceOnUse" x1="20" y1="13" x2="36" y2="29">
+            <stop offset="0" stop-color="#CBD5E1" />
+            <stop offset=".34" stop-color="#64748B" />
+            <stop offset=".74" stop-color="#253244" />
             <stop offset="1" stop-color="#0B1220" />
           </linearGradient>
-          <linearGradient id="bcf-rim" gradientUnits="userSpaceOnUse" x1="28" y1="6" x2="28" y2="50">
-            <stop offset="0" stop-color="#ECFEFF" stop-opacity=".95" />
-            <stop offset=".34" stop-color="#38BDF8" stop-opacity=".55" />
-            <stop offset=".68" stop-color="#10B981" stop-opacity=".5" />
-            <stop offset="1" stop-color="#022C22" stop-opacity=".9" />
+          <linearGradient id="bcf-head" gradientUnits="userSpaceOnUse" x1="22" y1="26" x2="34" y2="43">
+            <stop offset="0" stop-color="#8FA0B5" />
+            <stop offset=".38" stop-color="#475569" />
+            <stop offset=".78" stop-color="#1E293B" />
+            <stop offset="1" stop-color="#0A111C" />
           </linearGradient>
-          <linearGradient id="bcf-hat" gradientUnits="userSpaceOnUse" x1="20" y1="20" x2="36" y2="33">
-            <stop offset="0" stop-color="#94A3B8" />
-            <stop offset=".35" stop-color="#475569" />
-            <stop offset="1" stop-color="#111A27" />
-          </linearGradient>
-          <radialGradient id="bcf-lens" cx="36%" cy="28%" r="72%">
-            <stop offset="0" stop-color="#164E63" />
-            <stop offset=".58" stop-color="#0B2532" />
-            <stop offset="1" stop-color="#050D16" />
-          </radialGradient>
-          <linearGradient id="bcf-crystal" gradientUnits="userSpaceOnUse" x1="24" y1="9" x2="32" y2="21">
-            <stop offset="0" stop-color="#ECFEFF" />
-            <stop offset=".35" stop-color="#67E8F9" />
-            <stop offset=".7" stop-color="#10B981" />
-            <stop offset="1" stop-color="#064E3B" />
-          </linearGradient>
-          <radialGradient id="bcf-spec" cx="34%" cy="18%" r="34%">
-            <stop offset="0" stop-color="#ECFEFF" stop-opacity=".42" />
+          <radialGradient id="bcf-spec" cx="30%" cy="14%" r="40%">
+            <stop offset="0" stop-color="#ECFEFF" stop-opacity=".34" />
             <stop offset="1" stop-color="#ECFEFF" stop-opacity="0" />
           </radialGradient>
+          <clipPath id="bcf-clip"><circle cx="28" cy="28" r="19.6" /></clipPath>
         </defs>
-        <ellipse cx="28" cy="41" rx="21" ry="13" fill="url(#bcf-glow)" />
-        <path d="M28 3.5 46.6 9.7v14.9c0 12.3-8.6 20.2-18.6 26C18 44.8 9.4 36.9 9.4 24.6v-14.9Z"
-          fill="#070C14" stroke="#02060B" stroke-width="1.4" stroke-linejoin="round" />
-        <path d="M28 5.8 44.4 11.3v13.3c0 10.6-7.4 17.4-16.4 22.2-9-4.8-16.4-11.6-16.4-22.2V11.3Z"
-          fill="url(#bcf-face)" />
-        <path d="M15.4 14.2 28 9.8l12.6 4.4" fill="none" stroke="#ECFEFF" stroke-opacity=".55"
-          stroke-width="1.4" stroke-linecap="round" />
-        <path d="M28 5.8 44.4 11.3v13.3c0 10.6-7.4 17.4-16.4 22.2-9-4.8-16.4-11.6-16.4-22.2V11.3Z"
-          fill="none" stroke="url(#bcf-rim)" stroke-width="1.6" stroke-linejoin="round" />
-        <path d="M28 5.8 44.4 11.3v13.3c0 10.6-7.4 17.4-16.4 22.2-9-4.8-16.4-11.6-16.4-22.2V11.3Z"
-          fill="url(#bcf-spec)" />
-        <g fill="none" stroke="#38BDF8" stroke-opacity=".16" stroke-width=".8">
-          <path d="M17 32.4 28 12.2l11 20.2L28 44Z" />
-          <path d="M28 12.2v31.8M17 32.4l11-4.4 11 4.4" />
+        <ellipse cx="28" cy="43" rx="21" ry="11" fill="url(#bcf-glow)" />
+        <circle cx="28" cy="29" r="23" fill="#03090D" />
+        <circle cx="28" cy="28" r="23" fill="url(#bcf-rim)" />
+        <circle cx="28" cy="28" r="19.6" fill="url(#bcf-face)" />
+        <circle cx="28" cy="28" r="19.6" fill="none" stroke="#03090D" stroke-opacity=".9" stroke-width=".9" />
+        <circle cx="28" cy="28" r="17.9" fill="none" stroke="url(#bcf-rim)" stroke-opacity=".34" stroke-width=".7" />
+        <!-- the formula: a cold hex lattice, cut clean -->
+        <g clip-path="url(#bcf-clip)" fill="none" stroke="#34D399" stroke-linecap="round">
+          <path d="M28 8.4 44.4 18v20L28 47.6 11.6 38V18Z" stroke-opacity=".16" stroke-width=".65" />
+          <path d="M28 13.2 40.5 20.6v14.8L28 42.8 15.5 35.4V20.6Z" stroke-opacity=".1" stroke-width=".55" />
+          <path d="M28 8.4v39.2M11.6 18l32.8 20M44.4 18 11.6 38" stroke-opacity=".055" stroke-width=".5" />
         </g>
-        <path d="M28 8.8 31.9 15.2 28 21.2 24.1 15.2Z" fill="url(#bcf-crystal)"
-          stroke="#064E3B" stroke-opacity=".7" stroke-width=".8" stroke-linejoin="round" />
-        <path d="M28 8.8v12.4M24.1 15.2h7.8" stroke="#ECFEFF" stroke-opacity=".45" stroke-width=".7" />
-        <path d="M21 31.8v-8.2c0-1.4 1-2.5 2.4-2.7L28 20.4l4.6.5c1.4.2 2.4 1.3 2.4 2.7v8.2Z"
-          fill="url(#bcf-hat)" stroke="#060C15" stroke-opacity=".7" stroke-width=".9" />
-        <path d="M21.4 24.4 28 23.2l6.6 1.2" stroke="#A7F3D0" stroke-opacity=".55" stroke-width="1" />
-        <ellipse cx="28" cy="31.9" rx="11.4" ry="3.3" fill="url(#bcf-hat)"
-          stroke="#060C15" stroke-opacity=".8" stroke-width="1" />
-        <path d="M17 31.6c2.6-1.2 6.6-1.9 11-1.9s8.4.7 11 1.9" fill="none"
-          stroke="#38BDF8" stroke-opacity=".62" stroke-width=".9" stroke-linecap="round" />
-        <g fill="url(#bcf-lens)" stroke="#A7F3D0" stroke-width="1.1">
-          <circle cx="23.2" cy="38.6" r="4.1" />
-          <circle cx="32.8" cy="38.6" r="4.1" />
+        <path d="M37.1 8.6 39.4 11l-.8 3.1-2.7-2.2Z" fill="#34D399" opacity=".3" />
+        <path d="M14.6 40.4 16.7 41l.4 2.2-1.9-.7Z" fill="#34D399" opacity=".2" />
+        <!-- Heisenberg, front on: pork pie hat, calculated jaw, wire-rimmed optics -->
+        <g clip-path="url(#bcf-clip)">
+          <g transform="translate(.6 1)" fill="#02070B" fill-opacity=".9">
+            <path d="M19.6 24.4 20.4 15.5c.1-1.4 1.2-2.4 2.6-2.4h10c1.4 0 2.5 1 2.6 2.4l.8 8.9Z" />
+            <path d="M10.8 25.2c4.8-1.6 11-2.4 17.2-2.4s12.4.8 17.2 2.4c-4.8 1.8-11 2.7-17.2 2.7s-12.4-.9-17.2-2.7Z" />
+            <path d="M22.6 27.2c0-.8.7-1.4 1.5-1.4h7.8c.8 0 1.5.6 1.5 1.4v9.4c0 3.1-2.3 5.6-5.4 5.6s-5.4-2.5-5.4-5.6Z" />
+            <path d="M25 40.8h6l.3 3.4 4.9 1.6c-2.5 1-5.2 1.4-8.2 1.4s-5.7-.4-8.2-1.4l4.9-1.6Z" />
+          </g>
+          <path d="M19.6 24.4 20.4 15.5c.1-1.4 1.2-2.4 2.6-2.4h10c1.4 0 2.5 1 2.6 2.4l.8 8.9Z" fill="url(#bcf-hat)" stroke="#03090D" stroke-opacity=".8" stroke-width=".5" />
+          <path d="M20.6 21h14.8v2.1H20.6Z" fill="#08111B" />
+          <path d="M20.6 21h14.8" stroke="#34D399" stroke-opacity=".45" stroke-width=".45" />
+          <path d="M10.8 25.2c4.8-1.6 11-2.4 17.2-2.4s12.4.8 17.2 2.4c-4.8 1.8-11 2.7-17.2 2.7s-12.4-.9-17.2-2.7Z" fill="url(#bcf-hat)" stroke="#03090D" stroke-opacity=".85" stroke-width=".55" />
+          <ellipse cx="21.8" cy="32.6" rx="1.5" ry="2.2" fill="url(#bcf-head)" />
+          <ellipse cx="34.2" cy="32.6" rx="1.5" ry="2.2" fill="url(#bcf-head)" />
+          <path d="M22.6 27.2c0-.8.7-1.4 1.5-1.4h7.8c.8 0 1.5.6 1.5 1.4v9.4c0 3.1-2.3 5.6-5.4 5.6s-5.4-2.5-5.4-5.6Z" fill="url(#bcf-head)" stroke="#03090D" stroke-opacity=".7" stroke-width=".5" />
+          <path d="M25 40.8h6l.3 3.4 4.9 1.6c-2.5 1-5.2 1.4-8.2 1.4s-5.7-.4-8.2-1.4l4.9-1.6Z" fill="url(#bcf-head)" stroke="#03090D" stroke-opacity=".7" stroke-width=".5" />
+          <path d="M24.2 26.4c2.5-.6 5.1-.6 7.6 0" fill="none" stroke="#ECFEFF" stroke-opacity=".22" stroke-width=".5" stroke-linecap="round" />
+          <path d="M26.8 40.2c.7.6 1.7.6 2.4 0l-.4 2.3c-.5.5-1.1.5-1.6 0Z" fill="#040A10" fill-opacity=".7" />
+          <path d="M26.3 37.8c1.1.5 2.3.5 3.4 0" fill="none" stroke="#040A10" stroke-opacity=".55" stroke-width=".7" stroke-linecap="round" />
+          <path d="M28 33.6v2.5c0 .8.5 1.4 1.3 1.6" fill="none" stroke="#040A10" stroke-opacity=".55" stroke-width=".7" stroke-linecap="round" />
+          <g fill="#061019" fill-opacity=".62" stroke="#34D399" stroke-linecap="round">
+            <circle cx="24.2" cy="33.2" r="3.3" stroke-width="1.05" />
+            <circle cx="31.8" cy="33.2" r="3.3" stroke-width="1.05" />
+          </g>
+          <g fill="none" stroke="#10B981" stroke-opacity=".25" stroke-linecap="round" stroke-width="2.4">
+            <circle cx="24.2" cy="33.2" r="3.3" />
+            <circle cx="31.8" cy="33.2" r="3.3" />
+          </g>
+          <path d="M27.5 33.1c.3-.4.7-.4 1 0M20.9 32.8l-1.7-.7M35.1 32.8l1.7-.7" fill="none" stroke="#34D399" stroke-width="1" stroke-linecap="round" />
+          <path d="M22.6 31.8c.5-.9 1.4-1.4 2.4-1.5M30.2 31.8c.5-.9 1.4-1.4 2.4-1.5" fill="none" stroke="#ECFEFF" stroke-opacity=".55" stroke-width=".55" stroke-linecap="round" />
+          <path d="M28 5.8v4.4" fill="none" stroke="#A7F3D0" stroke-opacity=".35" stroke-width=".6" stroke-linecap="round" />
         </g>
-        <path d="M27.3 38.3c.4-.4.9-.4 1.4 0" fill="none" stroke="#A7F3D0" stroke-width="1" stroke-linecap="round" />
-        <path d="M19.1 37.8 16.4 36.6M36.9 37.8 39.6 36.6" fill="none" stroke="#A7F3D0"
-          stroke-width=".9" stroke-linecap="round" />
-        <path d="M21.4 37.2c.7-.9 1.9-1.1 2.8-.4" fill="none" stroke="#ECFEFF" stroke-opacity=".55"
-          stroke-width=".8" stroke-linecap="round" />
-        <path d="M31 37.2c.7-.9 1.9-1.1 2.8-.4" fill="none" stroke="#ECFEFF" stroke-opacity=".45"
-          stroke-width=".8" stroke-linecap="round" />
-        <circle cx="23.2" cy="39" r="1.1" fill="#10B981" opacity=".5" />
-        <circle cx="32.8" cy="39" r="1.1" fill="#10B981" opacity=".5" />
-        <path d="M28 32.8v2.2" stroke="#38BDF8" stroke-opacity=".35" stroke-width=".8" />
+        <circle cx="28" cy="28" r="23" fill="url(#bcf-spec)" />
+        <path d="M9.5 20.4A20.6 20.6 0 0 1 22.2 8.1" fill="none" stroke="#ECFEFF" stroke-opacity=".5" stroke-width="1.1" stroke-linecap="round" />
       </symbol>
       <!-- TIQ: the two-lobe brain is the hero metric's glyph; the cup is a season prize, never a score. -->
       <symbol id="i-brain" viewBox="0 0 24 24">
@@ -2722,7 +2747,8 @@
           <span class="badge-sheet-state" id="badge-state">Unlocked</span>
         </div>
         <h2 class="sheet-t" id="badge-title">Badge</h2>
-        <p class="badge-archetype" id="badge-archetype">The Ironclad · Resilience</p>
+        <p class="badge-archetype" id="badge-archetype">The Bastion · Resilience</p>
+        <p class="badge-edition" id="badge-edition">Edition #042 / 100</p>
         <p class="sheet-p badge-desc" id="badge-description">Archetype description.</p>
         <p class="badge-palette" id="badge-palette"></p>
         <p class="sheet-p" id="badge-lore">Lore</p>

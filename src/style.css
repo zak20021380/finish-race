@@ -17864,7 +17864,7 @@ html.reduced-motion .announce-cta { transition: none; }
 
 #s-profile {
   /* the only two inside-card paddings on this screen */
-  --pf-card-pad: 16px;
+  --pf-card-pad: 14px;
   --pf-card-pad-dense: 12px;
   --pf-card-gap: 8px;
 }
@@ -18471,10 +18471,10 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
 
 /* ==========================================================================
    PROFILE V5 — THE GENIUS TRIAD.
-   One focused three-column honor shelf, twelve-pixel rhythm, and the same
-   archetype carried from the avatar pin to the shelf to the detail sheet.
-   The rack is a recessed tray; each tile is a sculpted plaque whose metal,
-   aura and check answer to its own accent.
+   One focused three-column honor shelf, a compact ten-pixel rhythm, and the
+   same character carried from the avatar pin to the shelf to the detail sheet.
+   The rack is a recessed tray; each tile is a numbered medallion whose metal,
+   aura and serial answer to its own accent.
    ========================================================================== */
 
 #s-profile .badge-rack {
@@ -18482,12 +18482,12 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
   justify-content: normal;
-  gap: var(--pf-card-pad-dense, 12px);
+  gap: 10px;
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  padding: var(--pf-card-pad-dense, 12px);
-  border-radius: 20px;
+  padding: 10px;
+  border-radius: 18px;
   background:
     radial-gradient(120% 80% at 50% 0%, rgba(148, 163, 184, .07) 0%, rgba(148, 163, 184, 0) 58%),
     linear-gradient(180deg, #0A0F1C 0%, var(--field) 100%);
@@ -18506,23 +18506,23 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
   min-height: 0;
-  padding: 10px 7px 11px;
+  padding: 9px 6px 8px;
   border: 0;
-  border-radius: 15px;
+  border-radius: 13px;
   appearance: none;
   cursor: pointer;
   color: #F1F5F9;
   background:
-    radial-gradient(130% 95% at 50% 0%, rgba(var(--badge-aura), .17) 0%, rgba(var(--badge-aura), 0) 60%),
+    radial-gradient(130% 95% at 50% 0%, rgba(var(--badge-aura), .15) 0%, rgba(var(--badge-aura), 0) 60%),
     linear-gradient(180deg, #2A3549 0%, #131B29 100%);
   box-shadow:
     0 3px 0 #080C14,
     inset 0 1px 0 rgba(255, 255, 255, .16),
     inset 0 -2px 4px rgba(0, 0, 0, .4),
-    inset 0 0 0 1px rgba(var(--badge-aura), .3);
+    inset 0 0 0 1px rgba(255, 255, 255, .07);
   transition:
     transform var(--motion-fast),
     box-shadow var(--motion-fast),
@@ -18537,28 +18537,26 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
 #s-profile .badge-slot:active { transform: scale(.96); }
 #s-profile .badge-slot:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
-/* equipped: one step higher out of the tray, its own aura in the ring */
+/* equipped: a hairline metal rim and one inner shadow — no neon cage */
 #s-profile .badge-slot.is-equipped {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   background:
-    radial-gradient(130% 100% at 50% 0%, rgba(var(--badge-aura), .32) 0%, rgba(var(--badge-aura), 0) 64%),
-    linear-gradient(180deg, #33415A 0%, #172133 100%);
+    radial-gradient(120% 95% at 50% 0%, rgba(var(--badge-aura), .2) 0%, rgba(var(--badge-aura), 0) 62%),
+    linear-gradient(180deg, #2C374B 0%, #141D2C 100%);
   box-shadow:
-    0 5px 0 #060A11,
-    0 10px 20px -12px rgba(0, 0, 0, .95),
-    inset 0 1px 0 rgba(255, 255, 255, .24),
-    inset 0 -2px 4px rgba(0, 0, 0, .42),
-    0 0 0 1.5px rgba(var(--badge-aura), .85),
-    0 0 22px -4px rgba(var(--badge-aura), .75),
-    inset 0 0 0 1px rgba(255, 255, 255, .08);
+    0 3px 0 #060A11,
+    0 8px 16px -14px rgba(0, 0, 0, .9),
+    inset 0 1px 0 rgba(255, 255, 255, .2),
+    inset 0 -2px 4px rgba(0, 0, 0, .4),
+    inset 0 0 0 1px rgba(var(--badge-aura), .62),
+    inset 0 0 16px -8px rgba(var(--badge-aura), .3);
 }
-#s-profile .badge-slot.is-equipped:active { transform: translateY(-1px) scale(.96); }
-#s-profile .badge-slot.is-equipped:hover:not(:active) { transform: translateY(-3px); }
+#s-profile .badge-slot.is-equipped:active { transform: translateY(0) scale(.96); }
+#s-profile .badge-slot.is-equipped:hover:not(:active) { transform: translateY(-2px); }
 
-/* locked: dark matte clay at exactly 40% — the crest is a silhouette, the lock
-   is the only bright thing left */
+/* locked: dark matte clay — dimmed, but the serial counter stays legible */
 #s-profile .badge-slot.is-locked {
-  opacity: .4;
+  opacity: .7;
   cursor: pointer;
   background: linear-gradient(180deg, #1B2333 0%, #0B111C 100%);
   box-shadow:
@@ -18566,35 +18564,35 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
     inset 0 2px 5px rgba(0, 0, 0, .55),
     inset 0 0 0 1px rgba(255, 255, 255, .05);
 }
-#s-profile .badge-slot.is-locked:hover:not(:active) { opacity: .65; transform: translateY(-1px); }
-#s-profile .badge-slot.is-locked:focus-visible { opacity: .8; }
+#s-profile .badge-slot.is-locked:hover:not(:active) { opacity: .88; transform: translateY(-1px); }
+#s-profile .badge-slot.is-locked:focus-visible { opacity: .95; }
 #s-profile .badge-slot.is-locked .badge-crest {
-  filter: grayscale(1) brightness(.5) contrast(.9);
+  filter: grayscale(1) brightness(.7) contrast(.92);
 }
-#s-profile .badge-slot.is-locked .badge-slot-n { color: #94A3B8; }
-#s-profile .badge-slot.is-locked .badge-slot-a { color: #64748B; }
+#s-profile .badge-slot.is-locked .badge-slot-n { color: #C4D0DF; }
+#s-profile .badge-slot.is-locked .badge-slot-a { color: #71819A; }
 
 #s-profile .badge-slot-crest {
   position: relative;
   flex: none;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
 }
 #s-profile .badge-slot-crest .badge-crest {
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
   display: block;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .55));
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .6));
   transition: transform var(--motion-fast), filter var(--motion-fast);
 }
 #s-profile .badge-slot.is-unlocked:hover:not(:active) .badge-slot-crest .badge-crest {
   transform: translateY(-1px) scale(1.03);
-  filter: drop-shadow(0 0 8px rgba(var(--badge-aura), .5)) drop-shadow(0 2px 3px rgba(0, 0, 0, .55));
+  filter: drop-shadow(0 0 8px rgba(var(--badge-aura), .5)) drop-shadow(0 3px 4px rgba(0, 0, 0, .6));
 }
 #s-profile .badge-slot.is-equipped .badge-slot-crest .badge-crest {
-  filter: drop-shadow(0 0 7px rgba(var(--badge-aura), .65)) drop-shadow(0 2px 3px rgba(0, 0, 0, .55));
+  filter: drop-shadow(0 0 6px rgba(var(--badge-aura), .55)) drop-shadow(0 3px 4px rgba(0, 0, 0, .6));
 }
 
 #s-profile .badge-slot-lock {
@@ -18615,19 +18613,18 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
 #s-profile .badge-slot-lock .ico { width: 9px; height: 9px; }
 
 #s-profile .badge-slot-n {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  display: block;
   width: 100%;
-  min-height: 24px;
+  min-height: 0;
   overflow: hidden;
-  font-size: 11px;
-  line-height: 1.1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  line-height: 1.15;
   font-weight: 800;
-  letter-spacing: -.005em;
+  letter-spacing: .005em;
   text-align: center;
   color: #F1F5F9;
-  overflow-wrap: anywhere;
 }
 #s-profile .badge-slot-a {
   display: block;
@@ -18635,31 +18632,73 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 8px;
+  font-size: 7.5px;
   line-height: 1;
   font-weight: 900;
-  letter-spacing: .08em;
+  letter-spacing: .09em;
   text-transform: uppercase;
-  color: var(--badge-ink);
+  color: #7C8CA4;
 }
+#s-profile .badge-slot-serial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  height: 16px;
+  margin-top: 3px;
+  padding: 0 6px;
+  border-radius: 5px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: .1em;
+  font-variant-numeric: tabular-nums;
+  color: #A4B3C7;
+  background: linear-gradient(180deg, #070C15 0%, #111927 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, .85),
+    inset 0 -1px 0 rgba(255, 255, 255, .05),
+    inset 0 0 0 1px rgba(255, 255, 255, .055);
+  transition: color var(--motion-fast), box-shadow var(--motion-fast);
+}
+#s-profile .badge-slot.is-locked .badge-slot-serial {
+  font-size: 7.5px;
+  letter-spacing: .03em;
+  color: #8595AB;
+  background: linear-gradient(180deg, #060A12 0%, #0D1420 100%);
+}
+#s-profile .badge-slot.is-equipped .badge-slot-serial {
+  color: var(--badge-ink);
+  background:
+    linear-gradient(180deg, rgba(var(--badge-aura), .2) 0%, rgba(var(--badge-aura), .06) 55%, rgba(7, 12, 21, .72) 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, .72),
+    inset 0 0 0 1px rgba(var(--badge-aura), .44),
+    0 0 8px -2px rgba(var(--badge-aura), .4);
+  text-shadow: 0 0 6px rgba(var(--badge-aura), .42);
+}
+
 #s-profile .badge-slot-check {
   position: absolute;
-  top: 7px;
-  right: 7px;
+  top: 6px;
+  right: 6px;
   z-index: 1;
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: linear-gradient(180deg, #FFFFFF 0%, rgba(var(--badge-aura), .96) 52%, rgba(var(--badge-aura), .8) 100%);
-  color: #06121C;
+  background: linear-gradient(180deg, #090E18 0%, #141C2B 100%);
+  color: rgb(var(--badge-aura));
   box-shadow:
-    0 0 0 1px rgba(var(--badge-aura), .9),
-    0 0 10px rgba(var(--badge-aura), .65),
-    inset 0 1px 0 rgba(255, 255, 255, .6);
+    inset 0 1px 2px rgba(0, 0, 0, .9),
+    inset 0 0 0 1px rgba(var(--badge-aura), .48),
+    0 0 6px -1px rgba(var(--badge-aura), .3);
 }
-#s-profile .badge-slot-check .ico { width: 10px; height: 10px; }
+#s-profile .badge-slot-check .ico { width: 8px; height: 8px; }
 
 /* the spotlight: a transient accent ring around the tile the pin just named */
 #s-profile .badge-slot.is-spotlit::after {
@@ -18667,7 +18706,7 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
   position: absolute;
   inset: -3px;
   z-index: 2;
-  border-radius: 18px;
+  border-radius: 15px;
   border: 2px solid rgba(var(--badge-aura), .92);
   box-shadow: 0 0 18px rgba(var(--badge-aura), .55);
   pointer-events: none;
@@ -18762,12 +18801,15 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
 }
 
 @media (max-width: 380px) {
-  #s-profile .badge-rack { gap: var(--pf-card-pad-dense, 12px); }
-  #s-profile .badge-slot { padding: 9px 5px 10px; gap: 5px; }
-  #s-profile .badge-slot-crest { width: 44px; height: 44px; }
-  #s-profile .badge-slot-crest .badge-crest { width: 42px; height: 42px; }
-  #s-profile .badge-slot-n { font-size: 10.5px; }
-  #s-profile .badge-slot-a { font-size: 7.5px; letter-spacing: .06em; }
+  #s-profile .badge-rack { gap: 8px; padding: 8px; }
+  #s-profile .badge-slot { padding: 8px 5px 7px; gap: 3px; }
+  #s-profile .badge-slot-crest { width: 40px; height: 40px; }
+  #s-profile .badge-slot-crest .badge-crest { width: 40px; height: 40px; }
+  #s-profile .badge-slot-n { font-size: 11.5px; }
+  #s-profile .badge-slot-a { font-size: 7px; letter-spacing: .05em; }
+  #s-profile .badge-slot-serial { margin-top: 2px; padding: 0 5px; }
+  #s-profile .badge-slot-check { top: 5px; right: 5px; width: 14px; height: 14px; }
+  #s-profile .badge-slot-check .ico { width: 7.5px; height: 7.5px; }
   #s-profile .pf-equipped-badge {
     width: 24px;
     height: 24px;
@@ -18785,7 +18827,7 @@ html.reduced-motion #s-profile .pf-badge-note,
 html.reduced-motion #s-profile .pf-badge-note::before { transition: none; }
 html.reduced-motion #s-profile .badge-slot.is-spotlit::after { animation: none; opacity: 1; }
 
-/* ---- the triad's detail sheet: archetype, description and palette ---- */
+/* ---- the triad's detail sheet: archetype, edition serial, description and palette ---- */
 .badge-archetype {
   margin: calc(var(--s1) * -1) 0 0;
   font-size: 9.5px;
@@ -18794,6 +18836,29 @@ html.reduced-motion #s-profile .badge-slot.is-spotlit::after { animation: none; 
   letter-spacing: .14em;
   text-transform: uppercase;
   color: var(--brand-ink);
+}
+.badge-edition {
+  margin: 2px 0 0;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 9.5px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: #8FA0B8;
+}
+.badge-edition[data-state="minted"][data-accent="titanium"] {
+  color: #A5F3FC;
+  text-shadow: 0 0 8px rgba(6, 182, 212, .42);
+}
+.badge-edition[data-state="minted"][data-accent="quantum"] {
+  color: #FDE047;
+  text-shadow: 0 0 8px rgba(245, 158, 11, .42);
+}
+.badge-edition[data-state="minted"][data-accent="frost"] {
+  color: #6EE7B7;
+  text-shadow: 0 0 8px rgba(16, 185, 129, .42);
 }
 .badge-desc { margin-top: 0; }
 .badge-palette {
@@ -18829,7 +18894,14 @@ html.reduced-motion #s-profile .badge-slot.is-spotlit::after { animation: none; 
     0 0 22px rgba(56, 189, 248, .32);
 }
 
-/* ---- the View All cards carry the archetype line above the description ---- */
+/* ---- the View All cards carry the archetype, the edition serial and its metal ---- */
+.badge-card {
+  --card-aura: 148, 163, 184;
+  --card-ink: #CBD5E1;
+}
+.badge-card[data-accent="titanium"] { --card-aura: 6, 182, 212; --card-ink: #A5F3FC; }
+.badge-card[data-accent="quantum"]  { --card-aura: 245, 158, 11; --card-ink: #FDE047; }
+.badge-card[data-accent="frost"]    { --card-aura: 16, 185, 129; --card-ink: #6EE7B7; }
 .badge-card-arch {
   display: block;
   font-size: 8.5px;
@@ -18843,9 +18915,43 @@ html.reduced-motion #s-profile .badge-slot.is-spotlit::after { animation: none; 
 .badge-card[data-accent="quantum"]  .badge-card-arch { color: #FDE047; }
 .badge-card[data-accent="frost"]    .badge-card-arch { color: #6EE7B7; }
 .badge-card.is-locked .badge-card-arch { color: #94A3B8; }
+.badge-card-ser {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  height: 16px;
+  margin-top: 2px;
+  padding: 0 6px;
+  border-radius: 5px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: .1em;
+  font-variant-numeric: tabular-nums;
+  color: #A4B3C7;
+  background: linear-gradient(180deg, #070C15 0%, #111927 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, .85),
+    inset 0 -1px 0 rgba(255, 255, 255, .05),
+    inset 0 0 0 1px rgba(255, 255, 255, .055);
+}
+.badge-card.is-locked .badge-card-ser { color: #7C8CA5; }
+.badge-card.is-equipped .badge-card-ser {
+  color: var(--card-ink);
+  background: linear-gradient(180deg, rgba(var(--card-aura), .2) 0%, rgba(var(--card-aura), .06) 55%, rgba(7, 12, 21, .72) 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, .72),
+    inset 0 0 0 1px rgba(var(--card-aura), .5),
+    0 0 8px -2px rgba(var(--card-aura), .45);
+  text-shadow: 0 0 6px rgba(var(--card-aura), .5);
+}
 .badge-card-lore { font-style: normal; }
 .badge-card.is-locked .badge-card-lore { color: #7C8CA5; }
 
 @media (max-width: 380px) {
   .badge-card-arch { font-size: 8px; letter-spacing: .08em; }
+  .badge-card-ser { font-size: 8.5px; }
 }

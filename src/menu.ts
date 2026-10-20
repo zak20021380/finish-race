@@ -17,7 +17,10 @@ import {
   IDENTITY_REWARD, joinTeam, KINDS, leaveTeam, levelInfo, myTeam, onChange, profile,
   REFERRAL_REWARD, setBadge, setDisplayName, setDob, setFrame, theme, validDob,
 } from './storage';
-import { BADGES, badgeProgress, equippedBadge, isBadgeUnlocked, unlockedCount, type BadgeDef } from './badges';
+import {
+  BADGES, badgeEdition, badgeProgress, editionLabel, editionSpeech, equippedBadge,
+  isBadgeUnlocked, unlockedCount, type BadgeDef,
+} from './badges';
 import { MAX_BALLS, newGame } from './rules';
 import { createPreview, createRenderer, type Preview, type View } from './render';
 import { setBalance } from './coin';
@@ -877,8 +880,12 @@ export function createMenu(api: MenuApi): Menu {
         eqWrap.setAttribute('data-accent', eq.accent);
         const use = document.getElementById('pf-equipped-use') as unknown as SVGUseElement | null;
         if (use) use.setAttribute('href', `#i-crest-${eq.accent}`);
-        eqWrap.setAttribute('aria-label', `Equipped badge: ${eq.name}. ${eq.archetype}, ${eq.pillar}. Spotlight it.`);
-        eqWrap.title = `${eq.name} · ${eq.archetype} · ${eq.pillar}`;
+        const ed = badgeEdition(eq.id);
+        eqWrap.setAttribute(
+          'aria-label',
+          `Equipped badge: ${eq.name}. ${editionSpeech(ed)} ${eq.archetype}, ${eq.pillar}. Spotlight it.`,
+        );
+        eqWrap.title = `${eq.name} · ${editionLabel(ed)} · ${eq.archetype}`;
       }
     }
   };
@@ -892,6 +899,7 @@ export function createMenu(api: MenuApi): Menu {
     b.accent === 'quantum' ? 'i-brain' : b.accent === 'titanium' ? 'i-shield' : 'i-swords';
 
   const makeSlot = (b: BadgeDef, unlocked: boolean, equipped: boolean, label: string): HTMLButtonElement => {
+    const edition = badgeEdition(b.id);
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = `badge-slot ${unlocked ? 'is-unlocked' : 'is-locked'}${equipped ? ' is-equipped' : ''}`;
@@ -901,13 +909,13 @@ export function createMenu(api: MenuApi): Menu {
     btn.setAttribute('aria-checked', String(equipped));
     btn.setAttribute(
       'aria-label',
-      `${b.name}. ${b.archetype}, ${b.pillar}. ${unlocked
+      `${b.figure}. ${b.archetype}, ${b.pillar}. ${editionSpeech(edition)} ${unlocked
         ? equipped ? 'Equipped. Tap for details.' : 'Unlocked. Tap to equip.'
         : `Locked. ${label}. Tap for details.`}`,
     );
     btn.title = unlocked
-      ? `${b.name} · ${b.archetype} · ${b.description}`
-      : `${b.name} · Locked · ${label}`;
+      ? `${b.figure} · ${b.archetype} · ${editionLabel(edition)} · ${b.description}`
+      : `${b.figure} · ${b.archetype} · Locked · ${label}`;
 
     const crest = document.createElement('span');
     crest.className = 'badge-slot-crest';
@@ -918,11 +926,15 @@ export function createMenu(api: MenuApi): Menu {
         + '<use href="#i-lock" /></svg></span>');
     const name = document.createElement('span');
     name.className = 'badge-slot-n';
-    name.textContent = b.name;
+    name.textContent = b.figure;
     const arch = document.createElement('span');
     arch.className = 'badge-slot-a';
     arch.textContent = b.archetype;
-    btn.append(crest, name, arch);
+    const serial = document.createElement('span');
+    serial.className = 'badge-slot-serial';
+    serial.setAttribute('aria-hidden', 'true');
+    serial.textContent = editionLabel(edition);
+    btn.append(crest, name, arch, serial);
 
     if (equipped) {
       const check = document.createElement('span');
@@ -1016,14 +1028,15 @@ export function createMenu(api: MenuApi): Menu {
       const unlocked = isBadgeUnlocked(b.id);
       const equipped = unlocked && profile.badge === b.id;
       const prog = badgeProgress(b.id);
+      const edition = badgeEdition(b.id);
       const li = document.createElement('li');
       li.className = `badge-card ${unlocked ? 'is-unlocked' : 'is-locked'}${equipped ? ' is-equipped' : ''}`;
       li.setAttribute('role', 'option');
       li.setAttribute('aria-selected', String(equipped));
-      li.setAttribute('aria-label', `${b.name}. ${b.archetype}, ${b.pillar}. ${b.description} ${
+      li.setAttribute('aria-label', `${b.figure}. ${b.archetype}, ${b.pillar}. ${editionSpeech(edition)} ${b.description} ${
         equipped ? 'Equipped.' : unlocked ? 'Unlocked.' : `Locked. ${prog.label}.`
       } Open details.`);
-      li.title = `${b.name} · ${b.archetype} — ${b.description}`;
+      li.title = `${b.figure} · ${b.archetype} · ${editionLabel(edition)} — ${b.description}`;
       li.tabIndex = 0;
       li.dataset.badge = b.id;
       li.dataset.accent = b.accent;
@@ -1045,6 +1058,10 @@ export function createMenu(api: MenuApi): Menu {
       const arch = document.createElement('span');
       arch.className = 'badge-card-arch';
       arch.textContent = `${b.archetype} · ${b.pillar}`;
+      const ser = document.createElement('span');
+      ser.className = 'badge-card-ser';
+      ser.setAttribute('aria-hidden', 'true');
+      ser.textContent = editionLabel(edition);
       const desc = document.createElement('span');
       desc.className = 'badge-card-lore';
       desc.textContent = b.description;
@@ -1059,7 +1076,7 @@ export function createMenu(api: MenuApi): Menu {
       unit.textContent = unlocked ? b.pillar : 'Locked';
       chip.append(fig, unit);
 
-      main.append(nm, arch, desc, chip);
+      main.append(nm, arch, ser, desc, chip);
 
       if (!unlocked) {
         const meter = document.createElement('span');
@@ -1126,6 +1143,15 @@ export function createMenu(api: MenuApi): Menu {
     if (title) title.textContent = def.name;
     const arch = document.getElementById('badge-archetype');
     if (arch) arch.textContent = `${def.archetype} · ${def.pillar}`;
+    const edition = badgeEdition(id);
+    const edLine = document.getElementById('badge-edition');
+    if (edLine) {
+      edLine.textContent = unlocked
+        ? `Edition ${editionLabel(edition)}`
+        : `${edition.remaining} of ${edition.cap} editions remaining`;
+      edLine.dataset.state = unlocked ? 'minted' : 'open';
+      edLine.dataset.accent = def.accent;
+    }
     const desc = document.getElementById('badge-description');
     if (desc) desc.textContent = def.description;
     const palette = document.getElementById('badge-palette');
