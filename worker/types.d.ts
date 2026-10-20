@@ -52,6 +52,8 @@ interface DurableObjectState {
     deleteAlarm(): void;
     get<T>(key: string): Promise<T | undefined>;
     put<T>(key: string, value: T): Promise<void>;
+    /** The entries form is one atomic write: a counter and its claim land together, or not at all. */
+    put(entries: Record<string, unknown>): Promise<void>;
   };
 }
 

@@ -7,12 +7,20 @@
  */
 import { tgInitData } from './telegram';
 
-/** The Worker base: `VITE_WS_URL` when the app was pointed at one, else this page's own origin. */
+/**
+ * The Worker origin: `VITE_WS_URL` when the app was pointed at one, else this page's own origin.
+ * The documented env value is the whole socket URL (`ws://host/ws/matchmake`), so only its origin
+ * is kept — every backend route is root-relative.
+ */
 export function workerBase(): string {
   const ws = import.meta.env.VITE_WS_URL?.trim();
   if (ws) {
-    const base = ws.startsWith('http') ? ws : `https://${ws}`;
-    return base.replace(/^ws/, 'http').replace(/\/+$/, '');
+    try {
+      const http = ws.replace(/^wss:/i, 'https:').replace(/^ws:/i, 'http:');
+      return new URL(http.startsWith('http') ? http : `https://${http}`).origin;
+    } catch {
+      return '';
+    }
   }
   return location.host ? location.origin : '';
 }

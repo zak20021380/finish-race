@@ -303,10 +303,10 @@ function hostOf(url: string): string {
 }
 
 /**
- * The signed initData an admin request carries, from wherever the caller put it: the
+ * The signed initData a request carries, from wherever the caller put it: the
  * `X-Telegram-Init-Data` header, Telegram's `Authorization: tma <initData>`, or `?initData=`.
  */
-function adminInitData(request: AdminRequestLike): string {
+export function initDataOf(request: AdminRequestLike): string {
   const header = request.headers.get('x-telegram-init-data')?.trim();
   if (header) return header;
   const auth = request.headers.get('authorization')?.trim() ?? '';
@@ -340,10 +340,45 @@ export async function verifiedTelegramUserId(initData: string, env: Env): Promis
   return String(user.id).replace(/[^0-9-]/g, '').slice(0, 20);
 }
 
+/* ---------- the player door: badge minting and its progress ledger ---------- */
+
+export interface PlayerAuth {
+  /** `tg-<user id>` for a verified Mini App player, `guest-<name>` on the dev fallback. */
+  playerId: string;
+  tgId: string;
+  guest: boolean;
+}
+
+/** The stable seat a local developer gets, optionally named to test two accounts at once. */
+function devPlayer(request: AdminRequestLike): PlayerAuth {
+  const raw = request.headers.get('x-detour-dev-player') ?? '';
+  const id = raw.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32);
+  return { playerId: `guest-${id || 'dev'}`, tgId: '', guest: true };
+}
+
+/**
+ * Who may mint. A Telegram signature is the only identity a deployed host accepts — a forged
+ * one is refused with 401 even on a development host. With no initData, the same guest door the
+ * matchmaker uses opens on a loopback host (or `DEV_AUTH = "true"`); the optional
+ * `x-detour-dev-player` header gives those guests distinct, stable seats for local tests.
+ */
+export async function identifyPlayerRequest(
+  request: AdminRequestLike,
+  env: Env,
+): Promise<PlayerAuth | null> {
+  const initData = initDataOf(request);
+  if (initData) {
+    const id = await verifiedTelegramUserId(initData, env);
+    return id ? { playerId: `tg-${id}`, tgId: id, guest: false } : null;
+  }
+  const dev = env.DEV_AUTH === 'true' || isLocalhost(hostOf(request.url));
+  return dev ? devPlayer(request) : null;
+}
+
 /** The verified Telegram user id behind an admin request, or '' — the signature only, no allowlist. */
 async function signedAdminId(request: AdminRequestLike, env: Env): Promise<string> {
   const token = env.TELEGRAM_BOT_TOKEN?.trim();
-  const initData = adminInitData(request);
+  const initData = initDataOf(request);
   if (!initData || !token) return '';
   const fields = await verify(initData, token);
   if (!fields) return '';

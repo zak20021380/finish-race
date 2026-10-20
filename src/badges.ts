@@ -11,18 +11,20 @@
  * - Einstein's Singularity — Pure Intellect: the 1,500 TIQ threshold.
  * - Heisenberg's Formula — Calculated Precision: a 60% win rate over 5+ races.
  *
- * Each honor is also a numbered edition. The cap is fixed; the claimed ledger is
- * the sealed launch figure this build ships with, and this device mints the next
- * serial the moment the requirement is met. Without a mint server, the serial is
- * derived from the catalogue rather than assigned by a network, so it stays
- * stable across reloads and never needs a second storage key.
+ * Each honor is also a numbered edition. The cap is fixed, and the serial is minted by
+ * the Worker's singleton ledger (`GET /api/badges/supply`, `POST /api/badges/mint`) — never
+ * invented on this device. The save only caches the last server-confirmed serial and supply
+ * reading, so an offline shelf still shows the truth it last heard and a subtle syncing state
+ * while it tries again.
  *
  * Ids are stable; the crest symbol and the CSS aura are both keyed by `accent`,
  * so a badge is one data row plus one #i-crest-<accent> in index.html.
  */
 
-import { profile } from './storage';
+import { cacheBadgeClaim, cacheBadgeSupply, profile, type EditionClaim, type EditionSupply } from './storage';
 import { myTiq } from './matchmaking';
+import { workerUrl } from './adminApi';
+import { tgInitData } from './telegram';
 
 export type BadgeAccent = 'titanium' | 'quantum' | 'frost';
 
@@ -45,7 +47,7 @@ export interface BadgeDef {
   accent: BadgeAccent;
   /** The metal + aura palette, as metadata and as sheet copy. */
   palette: string;
-  /** Hard edition cap. The serial is minted inside this number, never above it. */
+  /** Hard edition cap. Mirrors `BADGE_CAPS` in worker/badges.ts; never mint above it. */
   cap: number;
 }
 
@@ -151,51 +153,288 @@ export function isBadgeUnlocked(id: string): boolean {
   return badgeById(id) !== null && badgeProgress(id).met;
 }
 
-/**
- * The claimed ledger sealed into this build. The next serial is one past the last
- * claimed number, which is why the honors mint at #042 / 100, #018 / 50 and
- * #007 / 25 — and why a locked card can count the slots this ledger has left.
- */
-const CLAIMED_EDITIONS: Record<BadgeAccent, number> = {
-  titanium: 41,
-  quantum: 17,
-  frost: 6,
-};
+/* ---------- server-minted editions ---------- */
+
+export type EditionSyncState = 'idle' | 'syncing' | 'live' | 'offline';
 
 export interface BadgeEdition {
   cap: number;
-  /** The player's minted serial once earned, else null. */
+  /** The player's server-confirmed serial, or null until the ledger answers. */
   serial: number | null;
-  /** Unclaimed serials left before this device mints its own. */
-  remaining: number;
+  /** Unclaimed serials left in the edition, or null before the first supply reading. */
+  remaining: number | null;
+  /** A mint roundtrip is in flight for this honor. */
+  minting: boolean;
+  /** Earned locally, but this device has no confirmed serial yet. */
+  awaiting: boolean;
+  /** The ledger says every slot is gone and this player holds none of them. */
+  exhausted: boolean;
+}
+
+interface WireSupplyRow { cap?: unknown; minted?: unknown; remaining?: unknown }
+interface WireMint {
+  success?: unknown;
+  serial?: unknown;
+  cap?: unknown;
+  mintedAt?: unknown;
+  minted?: unknown;
+  error?: unknown;
+}
+
+const BADGE_TIMEOUT = 4000;
+const pad3 = (n: number) => String(n).padStart(3, '0');
+
+/** "#042" — the serial as every surface prints it. */
+export const editionSerialLabel = (serial: number): string => `#${pad3(serial)}`;
+
+let syncState: EditionSyncState = 'idle';
+let inFlight: Promise<void> | null = null;
+const minting = new Set<string>();
+const exhausted = new Set<string>();
+/** Honors verified by the Worker during this page's life, so a route revisit is not a re-mint. */
+const confirmed = new Set<string>();
+const listeners = new Set<() => void>();
+
+/** Subscribe to cache/mint transitions; returns the unsubscribe. */
+export function onEditionChange(cb: () => void): () => void {
+  listeners.add(cb);
+  return () => { listeners.delete(cb); };
+}
+
+function editionChanged(): void {
+  for (const cb of listeners) {
+    try { cb(); } catch { /* one listener must not stop the rest */ }
+  }
+}
+
+export const editionSyncState = (): EditionSyncState => syncState;
+
+const num = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+function claimOf(id: string): EditionClaim | null {
+  const def = badgeById(id);
+  if (!def) return null;
+  const claim = profile.editions.claims[id];
+  if (!claim || !Number.isFinite(claim.serial) || claim.serial < 1 || claim.serial > def.cap) return null;
+  return claim;
+}
+
+function supplyOf(def: BadgeDef): EditionSupply | null {
+  const row = profile.editions.supply[def.id];
+  if (!row || !Number.isFinite(row.minted) || !Number.isFinite(row.remaining)) return null;
+  return {
+    cap: def.cap,
+    minted: Math.max(0, Math.min(def.cap, Math.floor(row.minted))),
+    remaining: Math.max(0, Math.min(def.cap, Math.floor(row.remaining))),
+  };
+}
+
+export const hasEditionClaim = (id: string): boolean => claimOf(id) !== null;
+
+/** A live supply payload, folded to the catalogue; null when it held none of our three ids. */
+function readSupply(raw: unknown): Record<string, EditionSupply> | null {
+  const badges = raw && typeof raw === 'object' ? (raw as { badges?: unknown }).badges : null;
+  if (!badges || typeof badges !== 'object' || Array.isArray(badges)) return null;
+  const table = badges as Record<string, WireSupplyRow>;
+  const out: Record<string, EditionSupply> = {};
+  let found = false;
+  for (const def of BADGES) {
+    const row = table[def.id];
+    if (!row || typeof row !== 'object') continue;
+    const minted = num(row.minted);
+    const remaining = num(row.remaining);
+    if (minted === null && remaining === null) continue;
+    const m = Math.max(0, Math.min(def.cap, Math.floor(minted ?? def.cap - (remaining ?? 0))));
+    const r = Math.max(0, Math.min(def.cap, Math.floor(remaining ?? def.cap - m)));
+    out[def.id] = { cap: def.cap, minted: m, remaining: r };
+    found = true;
+  }
+  return found ? out : null;
+}
+
+function readMinted(raw: unknown, cap: number): EditionClaim | null {
+  const body = raw && typeof raw === 'object' ? (raw as WireMint) : null;
+  const serial = num(body?.serial);
+  if (serial === null || !Number.isInteger(serial) || serial < 1 || serial > cap) return null;
+  return {
+    serial,
+    cap,
+    mintedAt: typeof body?.mintedAt === 'string' ? body.mintedAt.slice(0, 40) : '',
+  };
+}
+
+function writeSupplyRow(def: BadgeDef, minted: number) {
+  const capped = Math.max(0, Math.min(def.cap, Math.floor(minted)));
+  cacheBadgeSupply({
+    ...profile.editions.supply,
+    [def.id]: { cap: def.cap, minted: capped, remaining: def.cap - capped },
+  }, profile.editions.syncedAt);
 }
 
 export function badgeEdition(id: string): BadgeEdition {
   const def = badgeById(id);
-  if (!def) return { cap: 0, serial: null, remaining: 0 };
-  const claimed = CLAIMED_EDITIONS[def.accent];
-  const serial = isBadgeUnlocked(def.id) ? claimed + 1 : null;
+  if (!def) {
+    return { cap: 0, serial: null, remaining: null, minting: false, awaiting: false, exhausted: false };
+  }
+  const claim = claimOf(def.id);
+  const supply = supplyOf(def);
+  const unlocked = isBadgeUnlocked(def.id);
+  const drained = exhausted.has(def.id) || (supply !== null && supply.remaining <= 0);
   return {
     cap: def.cap,
-    serial,
-    remaining: Math.max(0, def.cap - claimed - (serial !== null ? 1 : 0)),
+    serial: claim?.serial ?? null,
+    remaining: supply?.remaining ?? null,
+    minting: minting.has(def.id) || (syncState === 'syncing' && unlocked && !claim && !drained),
+    awaiting: unlocked && !claim && !drained,
+    exhausted: !claim && drained,
   };
 }
 
-const pad3 = (n: number) => String(n).padStart(3, '0');
-
-/** The card's third line: "#042 / 100" once minted, "59 / 100 REMAINING" until then. */
+/** The card's third line: "#042 / 100", "MINTING…", or "59 / 100 REMAINING". */
 export function editionLabel(ed: BadgeEdition): string {
-  return ed.serial !== null
-    ? `#${pad3(ed.serial)} / ${ed.cap}`
-    : `${ed.remaining} / ${ed.cap} REMAINING`;
+  if (ed.serial !== null) return `${editionSerialLabel(ed.serial)} / ${ed.cap}`;
+  if (ed.minting) return 'MINTING…';
+  if (ed.remaining !== null) return `${ed.remaining} / ${ed.cap} REMAINING`;
+  if (ed.awaiting) return 'PENDING…';
+  return `— / ${ed.cap} REMAINING`;
 }
 
 /** The same state, spelled for a screen reader. */
 export function editionSpeech(ed: BadgeEdition): string {
-  return ed.serial !== null
-    ? `Edition ${ed.serial} of ${ed.cap}.`
-    : `${ed.remaining} of ${ed.cap} editions remaining.`;
+  if (ed.serial !== null) return `Edition ${ed.serial} of ${ed.cap}.`;
+  if (ed.minting) return `Minting your edition of ${ed.cap}.`;
+  if (ed.exhausted) return `All ${ed.cap} editions are claimed.`;
+  if (ed.remaining !== null) return `${ed.remaining} of ${ed.cap} editions remaining.`;
+  if (ed.awaiting) return 'Edition not minted yet.';
+  return 'Edition supply syncing.';
+}
+
+/* ---------- the wire ---------- */
+
+interface BadgeReply { ok: boolean; status: number; body: unknown }
+
+async function badgeCall(path: string, init: RequestInit): Promise<BadgeReply | null> {
+  const url = workerUrl('/api/badges');
+  if (!url) return null;
+  const headers: Record<string, string> = { accept: 'application/json' };
+  if (init.headers) Object.assign(headers, init.headers as Record<string, string>);
+  const initData = tgInitData();
+  if (initData) headers['x-telegram-init-data'] = initData;
+
+  const ac = new AbortController();
+  const timer = window.setTimeout(() => ac.abort(), BADGE_TIMEOUT);
+  try {
+    const res = await fetch(`${url}${path}`, { ...init, headers, signal: ac.signal });
+    let body: unknown = null;
+    let parsed = false;
+    try { body = await res.json(); parsed = true; } catch { /* empty or not JSON */ }
+    /* A static host's SPA fallback answers 200 with index.html; that is not a ledger. */
+    return { ok: res.ok && parsed, status: res.status, body };
+  } catch {
+    return null;                // offline, refused, or too slow: cached state stays up
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+/**
+ * Fetch the live supply, push this player's progress snapshot, then mint every locally
+ * unlocked honor the Worker has not confirmed this session. A failed call only flips the
+ * sync state; it never throws and never clears the cached snapshot.
+ */
+export async function refreshBadgeEditions(): Promise<void> {
+  if (inFlight) return inFlight;
+  syncState = 'syncing';
+  editionChanged();
+
+  const snapshot = {
+    tiq: myTiq(),
+    games: profile.stats.games,
+    wins: profile.stats.wins,
+    streak: profile.stats.streak,
+    best: profile.stats.best,
+  };
+
+  inFlight = (async () => {
+    const [supplyReply, progressReply] = await Promise.all([
+      badgeCall('/supply', { method: 'GET' }),
+      badgeCall('/progress', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(snapshot),
+      }),
+    ]);
+
+    let supplyLive = false;
+    if (supplyReply?.ok) {
+      const live = readSupply(supplyReply.body);
+      if (live) {
+        cacheBadgeSupply({ ...profile.editions.supply, ...live }, Date.now());
+        supplyLive = true;
+      }
+    }
+
+    const progressLive = progressReply?.ok
+      && Boolean(progressReply.body && typeof progressReply.body === 'object'
+        && (progressReply.body as { success?: unknown }).success === true);
+
+    /* A refused mint is not a transport failure: 403 is the ledger's criteria answer and 409 is
+       an edition that is simply gone. Anything else means the roundtrip itself did not land. */
+    let mintBroken = false;
+
+    if (progressLive) {
+      for (const def of BADGES) {
+        if (!isBadgeUnlocked(def.id) || confirmed.has(def.id) || exhausted.has(def.id)) continue;
+        const supply = supplyOf(def);
+        if (supply !== null && supply.remaining <= 0 && !claimOf(def.id)) {
+          exhausted.add(def.id);
+          continue;
+        }
+
+        minting.add(def.id);
+        editionChanged();
+        const reply = await badgeCall('/mint', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ badgeId: def.id }),
+        });
+        minting.delete(def.id);
+
+        if (!reply) {
+          mintBroken = true;
+          editionChanged();
+          break;
+        }
+        if (reply.ok) {
+          const claim = readMinted(reply.body, def.cap);
+          if (claim) {
+            cacheBadgeClaim(def.id, claim);
+            confirmed.add(def.id);
+            writeSupplyRow(def, Math.max(claim.serial, supplyOf(def)?.minted ?? 0));
+          } else {
+            mintBroken = true;          // a 200 that is not a serial cannot be trusted
+          }
+        } else if (reply.status === 409) {
+          exhausted.add(def.id);
+          writeSupplyRow(def, num((reply.body as WireMint | null)?.minted) ?? def.cap);
+        } else if (reply.status !== 403) {
+          mintBroken = true;
+        }
+        editionChanged();
+      }
+    }
+
+    syncState = supplyLive && progressLive && !mintBroken ? 'live' : 'offline';
+    editionChanged();
+  })().catch(() => {
+    syncState = 'offline';
+    editionChanged();
+  }).finally(() => {
+    inFlight = null;
+  });
+
+  return inFlight;
 }
 
 export function unlockedCount(): number {

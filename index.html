@@ -1330,6 +1330,8 @@
                     aria-label="Equipped badge">
                     <svg class="pf-equipped-crest" viewBox="0 0 56 56" aria-hidden="true"><use id="pf-equipped-use" href="#i-crest-titanium" /></svg>
                   </button>
+                  <!-- the pin's server-confirmed edition number; hidden until the ledger answers -->
+                  <span class="pf-equipped-serial" id="pf-equipped-serial" aria-hidden="true" hidden></span>
                 </div>
                 <div class="p-id pf-id-v2">
                   <div class="pf-name-row" id="pf-name-row">
@@ -1451,6 +1453,9 @@
               </h2>
               <div class="badge-rack" id="honor-badges-rack" role="radiogroup"
                 aria-label="Genius Triad honor badges"></div>
+              <p class="pf-badge-sync" id="pf-badge-sync" role="status" aria-live="polite" hidden>
+                <span class="pf-badge-sync-dot" aria-hidden="true"></span><span>Syncing…</span>
+              </p>
               <p class="pf-badge-note" id="pf-badge-note" role="status" aria-live="polite" hidden></p>
             </div>
             <div class="pf-sec">

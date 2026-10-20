@@ -156,12 +156,14 @@ Telegram only loads **HTTPS** URLs.
 | `src/main.ts` | Game wiring: input (tap-to-arm / confirm, mouse hover + click), loop, chips, status, payout, overlay, pause |
 | `src/room.ts` | The multi-seat lobby (2–4 seats), the bot backfill, the takeover, and the `RoomDriver` that plays every machine seat |
 | `src/style.css` | Tokens, mesh background, clay panels, board frame, menu shell, shop and profile |
-| `wrangler.toml` | The Worker: `MATCHMAKER` → `MatchmakerDO`, SQLite Durable Object migration |
-| `worker/index.ts` | `GET /health` and `GET /ws/matchmake`, forwarded to the singleton Durable Object |
-| `worker/auth.ts` | Telegram `initData` verified with `crypto.subtle` HMAC-SHA256, plus the dev guest door |
+| `wrangler.toml` | The Worker: `MATCHMAKER` → `MatchmakerDO`, `BADGES` → `BadgeMintDO`, SQLite Durable Object migrations |
+| `worker/index.ts` | `/health`, `/ws/matchmake` and the `/api/badges/*` surface |
+| `worker/auth.ts` | Telegram `initData` verified with `crypto.subtle` HMAC-SHA256, plus the dev guest door and the badge player door |
 | `worker/matchmaker.ts` | The waiting room: the queue, the 250/600 pairing radii, `MATCH_FOUND`, and the 2–4 seat rooms |
+| `worker/badges.ts` | The edition ledger: hard caps, sequential serials, idempotent claims and per-player progress |
 | `scripts/verify-worker-matchmaking.mjs` | Drives the whole queueing protocol in plain Node, no wrangler needed |
 | `scripts/verify-worker-race.mjs` | Drives two clients through a whole relayed race, resignations and disconnects |
+| `scripts/verify-worker-badges.mjs` | Auth, criteria, idempotency, cap exhaustion and 80 concurrent mints in plain Node |
 | `scripts/room-check.mjs` | The corridor leap, the anti-oscillation guard, and whole 4-seat mixed rooms, on the real rules |
 
 ## Matchmaking backend
@@ -181,7 +183,33 @@ VITE_WS_URL=ws://127.0.0.1:8787/ws/matchmake npm run dev
 npm run check:worker                   # the worker's own strict typecheck (in `npm run build`)
 node scripts/verify-worker-matchmaking.mjs
 node scripts/verify-worker-race.mjs
+node scripts/verify-worker-badges.mjs
 ```
+
+### Badge editions
+
+The Genius Triad's serials are minted by one singleton Durable Object (`BADGES`), so the caps are
+global rather than per device. Its three public routes are:
+
+| Route | Auth | Result |
+| --- | --- | --- |
+| `GET /api/badges/supply` | none | `{ badges: { id: { cap, minted, remaining } } }` |
+| `POST /api/badges/progress` | Telegram `initData` | Records a monotonic progress snapshot for the mint gate |
+| `POST /api/badges/mint` | Telegram `initData` | `{ success, badgeId, serial, cap, mintedAt }` |
+
+Caps are `churchill_bastion` 100, `einstein_singularity` 50 and `heisenberg_formula` 25. Every
+mutation runs through one promise queue and commits the counter and the claim in a single atomic
+storage write; a second mint from the same player returns the existing serial unchanged, and a
+full edition answers `409 { error: "CAP_EXHAUSTED" }`. The progress route is the server's criteria
+ledger: the app's solo races settle locally, so the client reports their high-water stats, while
+the mint itself (cap, serial, claim, eligibility decision) is always the Worker's.
+
+The client (`src/badges.ts`) fetches supply and syncs progress on Profile mount, mints each locally
+unlocked honor once per session, caches the confirmed serial in `detour.save.v2` (under
+`editions`), and paints the shelf, the View All list and the avatar pin. If the Worker is absent or
+slow, those cached numbers stay on screen behind a quiet `Syncing…` line. Deploying this build
+applies the `v2` migration that creates `BadgeMintDO`; the ledger starts empty, at serial 1 for
+each honor.
 
 ### The race, on the same socket
 

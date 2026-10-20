@@ -75,6 +75,27 @@ export interface ReferralState {
   via: string | null;
 }
 
+/** A server-confirmed edition, cached so the shelf can speak without the Worker. */
+export interface EditionClaim {
+  serial: number;
+  cap: number;
+  mintedAt: string;
+}
+
+/** The last global supply reading: the counts every locked card counts down. */
+export interface EditionSupply {
+  cap: number;
+  minted: number;
+  remaining: number;
+}
+
+export interface EditionsCache {
+  claims: Record<string, EditionClaim>;
+  supply: Record<string, EditionSupply>;
+  /** Epoch ms of the last successful supply read; 0 means this device has never synced. */
+  syncedAt: number;
+}
+
 export interface Save {
   v: number;
   coins: number;
@@ -108,6 +129,8 @@ export interface Save {
   tiqBonus: number;
   /** Referral engine: invited friends, claimable referral coins, welcome-bonus state. */
   referral: ReferralState;
+  /** Server-minted badge serials and the last live supply snapshot. */
+  editions: EditionsCache;
 }
 
 /** The three starter items are owned before the first race; the wallet starts stocked for the demo. */
@@ -144,6 +167,7 @@ function fresh(): Save {
     displayName: null,
     tiqBonus: 0,
     referral: { joins: 0, unclaimed: 0, welcome: false, via: null },
+    editions: { claims: {}, supply: {}, syncedAt: 0 },
   };
 }
 
@@ -294,6 +318,45 @@ function migrate(raw: Partial<Save> | null): Save {
     if (whole(ref.unclaimed)) s.referral.unclaimed = Math.max(0, Math.min(99999999, Math.floor(ref.unclaimed)));
     if (ref.welcome === true) s.referral.welcome = true;
     if (typeof ref.via === 'string' && /^[A-Za-z0-9_-]{1,32}$/.test(ref.via)) s.referral.via = ref.via;
+  }
+
+  /* Edition cache: the Worker is the authority, so this is only the last confirmed reading.
+     Ids are the catalogue's own snake_case keys; every number is clamped to a cap. */
+  const editions = raw.editions as Partial<EditionsCache> | undefined;
+  if (editions) {
+    const claims = editions.claims;
+    if (claims && typeof claims === 'object') {
+      for (const [id, value] of Object.entries(claims)) {
+        if (!/^[a-z0-9_]{1,32}$/.test(id)) continue;
+        const c = value as Partial<EditionClaim> | null;
+        if (!c || !whole(c.serial) || !whole(c.cap)) continue;
+        const serial = Math.floor(c.serial);
+        const cap = Math.floor(c.cap);
+        if (serial < 1 || cap < 1 || cap > 100000 || serial > cap) continue;
+        s.editions.claims[id] = {
+          serial,
+          cap,
+          mintedAt: typeof c.mintedAt === 'string' ? c.mintedAt.slice(0, 40) : '',
+        };
+      }
+    }
+    const supply = editions.supply;
+    if (supply && typeof supply === 'object') {
+      for (const [id, value] of Object.entries(supply)) {
+        if (!/^[a-z0-9_]{1,32}$/.test(id)) continue;
+        const row = value as Partial<EditionSupply> | null;
+        if (!row || !whole(row.cap) || !whole(row.minted) || !whole(row.remaining)) continue;
+        const cap = Math.floor(row.cap);
+        if (cap < 1 || cap > 100000) continue;
+        const minted = Math.max(0, Math.min(cap, Math.floor(row.minted)));
+        s.editions.supply[id] = {
+          cap,
+          minted,
+          remaining: Math.max(0, Math.min(cap, Math.floor(row.remaining))),
+        };
+      }
+    }
+    if (whole(editions.syncedAt)) s.editions.syncedAt = Math.max(0, Math.floor(editions.syncedAt));
   }
   return s;
 }
@@ -502,6 +565,20 @@ export function setAge(n: number | null) {
 /** Equipped profile badge id (opaque here — badges.ts owns the catalogue). */
 export function setBadge(id: string | null) {
   profile.badge = id && id.length > 0 && id.length <= 32 ? id : null;
+  flush();
+}
+
+/** Cache the Worker's live edition supply so an offline shelf still counts down. */
+export function cacheBadgeSupply(supply: Record<string, EditionSupply>, at: number) {
+  profile.editions.supply = { ...supply };
+  profile.editions.syncedAt = Math.max(0, Math.floor(at));
+  flush();
+}
+
+/** Cache one server-confirmed serial. The mint endpoint is idempotent, so this is safe to rewrite. */
+export function cacheBadgeClaim(id: string, claim: EditionClaim) {
+  if (!/^[a-z0-9_]{1,32}$/.test(id)) return;
+  profile.editions.claims[id] = { ...claim };
   flush();
 }
 

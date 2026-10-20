@@ -24,20 +24,79 @@
  * there: the DO admits exactly the ids on its registry (or the dev door), routes reads to
  * members, and puts every mutation behind the `isSuperAdmin` middleware. A caller who is not
  * on the registry answers `403` from the room, not from the edge.
+ *
+ * The fifth surface is the Genius Triad's edition ledger: `GET /api/badges/supply` is public,
+ * while `POST /api/badges/progress` and `POST /api/badges/mint` pass the player door above and
+ * are forwarded to the singleton `BadgeMintDO`. The edge owns the identity header; the ledger
+ * owns the caps, counters and claims.
  */
 import { MatchmakerDO } from './matchmaker';
-import { identifyAdminRequest } from './auth';
+import { BadgeMintDO } from './badges';
+import { identifyAdminRequest, identifyPlayerRequest } from './auth';
 import { json } from './http';
 import type { Env } from './env';
 
-export { MatchmakerDO };
+export { MatchmakerDO, BadgeMintDO };
 
 /** One waiting room for everyone: that is the whole point of the singleton. */
 const LOBBY = 'global';
+/** One edition ledger for everyone: the caps are global, so the counter has one home. */
+const LEDGER = 'global';
+
+/* The client is served from Vite on another port during local work, and from the same origin in
+   production. The badge API is token-authenticated (not cookie-authenticated), so a wildcard
+   origin is enough and keeps `npm run dev` + `wrangler dev` working without a proxy. */
+const BADGE_CORS: Record<string, string> = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, POST, OPTIONS',
+  'access-control-allow-headers': 'content-type, x-telegram-init-data, authorization, x-detour-dev-player',
+  'access-control-max-age': '86400',
+};
+
+const badgeJson = (body: unknown, status = 200): Response => json(body, status, BADGE_CORS);
+
+function withBadgeCors(response: Response): Response {
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(BADGE_CORS)) headers.set(key, value);
+  return new Response(response.body, { status: response.status, headers });
+}
+
+/**
+ * The edition surface: `GET /api/badges/supply` is public, while minting and the progress
+ * snapshot require a verified player. The edge strips any client-supplied identity header
+ * before handing the request to the singleton ledger; the object trusts only this door.
+ */
+async function badges(request: Request, env: Env, url: URL): Promise<Response> {
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: BADGE_CORS });
+  }
+  if (!env.BADGES) return badgeJson({ error: 'badges_unavailable' }, 503);
+
+  const ledger = env.BADGES.get(env.BADGES.idFromName(LEDGER));
+
+  if (url.pathname === '/api/badges/supply') {
+    if (request.method !== 'GET') return badgeJson({ error: 'method_not_allowed' }, 405);
+    return withBadgeCors(await ledger.fetch(request));
+  }
+
+  if (url.pathname === '/api/badges/mint' || url.pathname === '/api/badges/progress') {
+    if (request.method !== 'POST') return badgeJson({ error: 'method_not_allowed' }, 405);
+    const auth = await identifyPlayerRequest(request, env);
+    if (!auth) return badgeJson({ success: false, error: 'UNAUTHORIZED' }, 401);
+    const headers = new Headers(request.headers);
+    headers.delete('x-detour-player');
+    headers.set('x-detour-player', auth.playerId);
+    return withBadgeCors(await ledger.fetch(new Request(request, { headers })));
+  }
+
+  return badgeJson({ error: 'not_found' }, 404);
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname.startsWith('/api/badges/')) return badges(request, env, url);
 
     if (url.pathname === '/health') {
       return json({ ok: true, service: 'detour-matchmaking', time: Date.now() });

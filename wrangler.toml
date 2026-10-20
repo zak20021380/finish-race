@@ -16,11 +16,23 @@ compatibility_date = "2025-09-01"
 name = "MATCHMAKER"
 class_name = "MatchmakerDO"
 
+# One singleton edition ledger: hard caps, sequential serials and one claim per player per badge.
+# The object serializes every mint, so no two callers can ever read the same counter value.
+[[durable_objects.bindings]]
+name = "BADGES"
+class_name = "BadgeMintDO"
+
 # The modern (SQLite-backed) Durable Object migration. The waiting queue itself is in memory —
 # the storage engine is only what the class is declared on.
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["MatchmakerDO"]
+
+# The badge ledger persists counters and claims in the object's own storage, so it survives
+# eviction; the queue inside `BadgeMintDO` is what makes each counter read-and-increment atomic.
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["BadgeMintDO"]
 
 [vars]
 # `true` lets a local browser queue as a guest with no valid initData. Deployed: keep it false,

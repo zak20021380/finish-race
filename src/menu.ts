@@ -18,8 +18,9 @@ import {
   REFERRAL_REWARD, setBadge, setDisplayName, setDob, setFrame, theme, validDob,
 } from './storage';
 import {
-  BADGES, badgeEdition, badgeProgress, editionLabel, editionSpeech, equippedBadge,
-  isBadgeUnlocked, unlockedCount, type BadgeDef,
+  BADGES, badgeEdition, badgeProgress, editionLabel, editionSerialLabel, editionSpeech, editionSyncState,
+  equippedBadge, hasEditionClaim, isBadgeUnlocked, onEditionChange, refreshBadgeEditions, unlockedCount,
+  type BadgeDef,
 } from './badges';
 import { MAX_BALLS, newGame } from './rules';
 import { createPreview, createRenderer, type Preview, type View } from './render';
@@ -869,12 +870,14 @@ export function createMenu(api: MenuApi): Menu {
     /* the equipped honor, pinned to the avatar: its metal names it, its tap spots it */
     const eq = equippedBadge();
     const eqWrap = document.getElementById('pf-equipped-badge') as HTMLButtonElement | null;
+    const serialTag = document.getElementById('pf-equipped-serial');
     if (eqWrap) {
       if (!eq) {
         eqWrap.hidden = true;
         eqWrap.removeAttribute('data-accent');
         eqWrap.removeAttribute('aria-label');
         eqWrap.removeAttribute('title');
+        if (serialTag) { serialTag.hidden = true; serialTag.textContent = ''; }
       } else {
         eqWrap.hidden = false;
         eqWrap.setAttribute('data-accent', eq.accent);
@@ -886,6 +889,18 @@ export function createMenu(api: MenuApi): Menu {
           `Equipped badge: ${eq.name}. ${editionSpeech(ed)} ${eq.archetype}, ${eq.pillar}. Spotlight it.`,
         );
         eqWrap.title = `${eq.name} · ${editionLabel(ed)} · ${eq.archetype}`;
+        /* the pin's serial tag is the server-confirmed number, not a local best guess */
+        if (serialTag) {
+          if (ed.serial !== null) {
+            serialTag.hidden = false;
+            serialTag.textContent = editionSerialLabel(ed.serial);
+            serialTag.setAttribute('data-accent', eq.accent);
+          } else {
+            serialTag.hidden = true;
+            serialTag.textContent = '';
+            serialTag.removeAttribute('data-accent');
+          }
+        }
       }
     }
   };
@@ -902,7 +917,8 @@ export function createMenu(api: MenuApi): Menu {
     const edition = badgeEdition(b.id);
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = `badge-slot ${unlocked ? 'is-unlocked' : 'is-locked'}${equipped ? ' is-equipped' : ''}`;
+    btn.className = `badge-slot ${unlocked ? 'is-unlocked' : 'is-locked'}`
+      + `${equipped ? ' is-equipped' : ''}${edition.minting ? ' is-minting' : ''}`;
     btn.dataset.badge = b.id;
     btn.dataset.accent = b.accent;
     btn.setAttribute('role', 'radio');
@@ -982,6 +998,17 @@ export function createMenu(api: MenuApi): Menu {
     }, 1800);
   }
 
+  /* The only thing the shelf says about the network: a quiet line under the rack. While a
+     refresh is in flight, or after it failed and the cached counts are all we have, it stays
+     visible; a successful sync hides it again. */
+  const paintBadgeStatus = () => {
+    const el = document.getElementById('pf-badge-sync');
+    if (!el) return;
+    const state = editionSyncState();
+    el.hidden = state !== 'syncing' && state !== 'offline';
+    el.title = state === 'offline' ? 'Offline — showing the last confirmed editions' : '';
+  };
+
   const paintBadges = () => {
     const rack = document.getElementById('honor-badges-rack');
     const count = document.getElementById('pf-badge-count');
@@ -1013,6 +1040,7 @@ export function createMenu(api: MenuApi): Menu {
       }
     }
     paintBadgeList();
+    paintBadgeStatus();
   };
 
   /* "View All ›" drawer: the Genius Triad as three honor cards. Each card
@@ -1030,7 +1058,8 @@ export function createMenu(api: MenuApi): Menu {
       const prog = badgeProgress(b.id);
       const edition = badgeEdition(b.id);
       const li = document.createElement('li');
-      li.className = `badge-card ${unlocked ? 'is-unlocked' : 'is-locked'}${equipped ? ' is-equipped' : ''}`;
+      li.className = `badge-card ${unlocked ? 'is-unlocked' : 'is-locked'}`
+        + `${equipped ? ' is-equipped' : ''}${edition.minting ? ' is-minting' : ''}`;
       li.setAttribute('role', 'option');
       li.setAttribute('aria-selected', String(equipped));
       li.setAttribute('aria-label', `${b.figure}. ${b.archetype}, ${b.pillar}. ${editionSpeech(edition)} ${b.description} ${
@@ -1124,6 +1153,19 @@ export function createMenu(api: MenuApi): Menu {
     }
   }
 
+  function paintBadgeSheetEdition(id: string) {
+    const def = BADGES.find((b) => b.id === id);
+    const edLine = document.getElementById('badge-edition');
+    if (!def || !edLine) return;
+    const edition = badgeEdition(id);
+    edLine.dataset.state = edition.serial !== null ? 'minted' : 'open';
+    edLine.dataset.accent = def.accent;
+    if (edition.serial !== null) edLine.textContent = `Edition ${editionLabel(edition)}`;
+    else if (edition.minting) edLine.textContent = 'Minting your edition…';
+    else if (edition.exhausted) edLine.textContent = `All ${edition.cap} editions claimed`;
+    else edLine.textContent = `${edition.remaining ?? '—'} of ${edition.cap} editions remaining`;
+  }
+
   let badgeDraft: string | null = null;
   function openBadge(id: string) {
     const def = BADGES.find((b) => b.id === id);
@@ -1143,15 +1185,7 @@ export function createMenu(api: MenuApi): Menu {
     if (title) title.textContent = def.name;
     const arch = document.getElementById('badge-archetype');
     if (arch) arch.textContent = `${def.archetype} · ${def.pillar}`;
-    const edition = badgeEdition(id);
-    const edLine = document.getElementById('badge-edition');
-    if (edLine) {
-      edLine.textContent = unlocked
-        ? `Edition ${editionLabel(edition)}`
-        : `${edition.remaining} of ${edition.cap} editions remaining`;
-      edLine.dataset.state = unlocked ? 'minted' : 'open';
-      edLine.dataset.accent = def.accent;
-    }
+    paintBadgeSheetEdition(id);
     const desc = document.getElementById('badge-description');
     if (desc) desc.textContent = def.description;
     const palette = document.getElementById('badge-palette');
@@ -1338,6 +1372,32 @@ export function createMenu(api: MenuApi): Menu {
     }
   };
   onChange(paintProfile);
+
+  /* Cache writes already flush the whole save; this listener is for the states a flush cannot
+     signal — the first "syncing" frame, each mint starting and settling, and the final offline
+     state. It repaints only the badge surfaces, never the cosmetics previews. */
+  onEditionChange(() => {
+    paintHeroExtras(levelInfo());
+    paintBadges();
+    if (badgeDraft) paintBadgeSheetEdition(badgeDraft);
+  });
+
+  /* Unlocking an honor schedules one refresh (and therefore one idempotent mint) right after the
+     race settles, so the serial is already on the shelf when Profile opens. Cache-only flushes
+     leave the stats signature unchanged and schedule nothing. */
+  const statsSignature = (): string =>
+    `${myTiq()}/${profile.stats.games}/${profile.stats.wins}/${profile.stats.streak}/${profile.stats.best}`;
+  let lastStats = statsSignature();
+  let badgeRefreshTimer = 0;
+  onChange(() => {
+    const next = statsSignature();
+    if (next === lastStats) return;
+    lastStats = next;
+    if (!BADGES.some((b) => isBadgeUnlocked(b.id) && !hasEditionClaim(b.id))) return;
+    window.clearTimeout(badgeRefreshTimer);
+    badgeRefreshTimer = window.setTimeout(() => { void refreshBadgeEditions(); }, 900);
+  });
+
   paintProfile();
   new ResizeObserver(() => { if (!pfScreen.hidden) paintProfile(); }).observe(pfScreen);
 
@@ -1749,7 +1809,10 @@ export function createMenu(api: MenuApi): Menu {
   return {
     setRoute(id) {
       tabbar.hidden = id === 'game';
-      if (id === 'profile') paintProfile();       // the equipped row is only laid out once it is showing
+      if (id === 'profile') {
+        paintProfile();                           // the equipped row is only laid out once it is showing
+        void refreshBadgeEditions();              // cached serials paint now; the ledger refreshes behind them
+      }
       /* Home commits the strength live to menuState, so repaint whenever these screens come forward */
       if (id === 'modes' || id === 'custom') {
         paintDiff();

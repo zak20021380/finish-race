@@ -22,6 +22,7 @@ const SUITES = [
   { name: 'bot tiers', script: 'bot-tiers-check.mjs', stripTypes: true },
   { name: 'ranks', script: 'verify-ranks.mjs', stripTypes: false },
   { name: 'squad register', script: 'verify-squad-register.mjs', stripTypes: false },
+  { name: 'worker badges', script: 'verify-worker-badges.mjs', stripTypes: false },
 ];
 
 const green = (s) => `\x1b[32m${s}\x1b[0m`;

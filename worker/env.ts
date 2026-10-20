@@ -8,6 +8,8 @@
 export interface Env {
   /** The Durable Object namespace bound as `MATCHMAKER` in wrangler.toml. */
   MATCHMAKER: DurableObjectNamespace;
+  /** The singleton edition ledger: caps, counters and serialized badge claims. */
+  BADGES: DurableObjectNamespace;
   /** Bot token used to verify Mini App initData. A secret, never a var:
    *  `npx wrangler secret put TELEGRAM_BOT_TOKEN`. */
   TELEGRAM_BOT_TOKEN?: string;
