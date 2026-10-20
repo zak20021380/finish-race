@@ -559,15 +559,15 @@ interface DecalArt {
 }
 
 /**
- * Build the tile-sized art once per layout. The three scorch faces share the spec's charcoal
- * (`#0B0F19`), a deep inset shadow and a procedural fracture web; the six droplet faces are the
- * same three shapes in a wet arterial ruby and a dried carbon red, so a trail can age by swapping
- * stamps rather than by repainting a path.
+ * Build the tile-sized art once per layout. The three scorch faces are confined, transparent-
+ * backed crater decals: the base tile's clay, border and corners show through untouched, and only
+ * a centred blast burn (about half the tile's area) is painted over it. The six droplet faces are
+ * the same three shapes in a wet arterial ruby and a dried carbon red, so a trail can age by
+ * swapping stamps rather than by repainting a path.
  */
 function buildDecalArt(cell: number, dpr: number): DecalArt {
   const gap = Math.max(1, cell * 0.03);
   const tw = Math.max(2, cell - gap);
-  const tr = Math.min(cell * 0.15, tw / 2);
   const scorch: HTMLCanvasElement[] = [];
   const embers: { x: number; y: number }[][] = [];
   for (let v = 0; v < 3; v++) {
@@ -577,93 +577,80 @@ function buildDecalArt(cell: number, dpr: number): DecalArt {
     const g = cv.getContext('2d')!;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     const rand = rng32(0x5eed + v * 977);
-    const px = tw * (0.4 + rand() * 0.2), py = tw * (0.38 + rand() * 0.2);
-    const base = g.createRadialGradient(px, py, tw * 0.04, tw * 0.5, tw * 0.5, tw * 0.74);
-    base.addColorStop(0, '#161E2C');
-    base.addColorStop(0.45, '#0B0F19');
-    base.addColorStop(1, '#04060B');
-    rr(g, 0, 0, tw, tw, tr);
-    g.fillStyle = base;
-    g.fill();
+    const cx = tw * 0.5, cy = tw * 0.5;
 
-    /* the spec's inset 0 4px 10px rgba(0,0,0,.85), scaled with the tile */
-    g.save();
-    rr(g, 0, 0, tw, tw, tr);
-    g.clip();
-    g.shadowColor = 'rgba(0,0,0,.85)';
-    g.shadowBlur = tw * 0.26;
-    g.shadowOffsetY = tw * 0.1;
-    g.lineWidth = Math.max(2, tw * 0.1);
-    g.strokeStyle = 'rgba(0,0,0,.9)';
-    rr(g, 0, 0, tw, tw, tr);
-    g.stroke();
-    /* the crater's own falloff: the lip is cold, the floor holds a whisper of light, and the
-       bottom edge catches a thin line of the board's glow */
-    const shade = g.createLinearGradient(0, 0, 0, tw);
-    shade.addColorStop(0, 'rgba(0,0,0,.72)');
-    shade.addColorStop(0.3, 'rgba(0,0,0,.18)');
-    shade.addColorStop(0.62, 'rgba(0,0,0,0)');
-    shade.addColorStop(1, 'rgba(0,0,0,.28)');
-    g.fillStyle = shade;
+    /* the brief's radial cavity, exactly: near-black heart, slate falloff, clear by 70%. At this
+       reach the burn covers just under half the tile; the outer frame stays bare clay. */
+    const core = g.createRadialGradient(cx, cy, 0, cx, cy, tw * 0.56);
+    core.addColorStop(0, 'rgba(10,10,15,.9)');
+    core.addColorStop(0.45, 'rgba(15,23,42,.6)');
+    core.addColorStop(0.7, 'rgba(15,23,42,0)');
+    core.addColorStop(1, 'rgba(15,23,42,0)');
+    g.fillStyle = core;
     g.fillRect(0, 0, tw, tw);
-    const lip = g.createLinearGradient(0, tw * 0.7, 0, tw);
-    lip.addColorStop(0, 'rgba(226,214,196,0)');
-    lip.addColorStop(1, 'rgba(226,214,196,.12)');
-    g.fillStyle = lip;
-    g.fillRect(0, 0, tw, tw);
-    g.restore();
 
-    /* a hair of cool light on the crater lip, so the dark square reads as a hole */
-    g.strokeStyle = 'rgba(148,163,184,.12)';
-    g.lineWidth = Math.max(1, tw * 0.018);
-    rr(g, tw * 0.035, tw * 0.035, tw * 0.93, tw * 0.93, Math.max(0, tr - tw * 0.02));
-    g.stroke();
-
-    const pit = g.createRadialGradient(px, py, 0, px, py, tw * 0.36);
-    pit.addColorStop(0, 'rgba(0,0,0,.6)');
-    pit.addColorStop(0.55, 'rgba(0,0,0,.22)');
-    pit.addColorStop(1, 'rgba(0,0,0,0)');
+    /* a smaller, deeper cavity so the burn has a floor rather than a flat wash */
+    const pit = g.createRadialGradient(cx, cy, 0, cx, cy, tw * 0.22);
+    pit.addColorStop(0, 'rgba(2,3,6,.6)');
+    pit.addColorStop(0.55, 'rgba(2,3,6,.24)');
+    pit.addColorStop(1, 'rgba(2,3,6,0)');
     g.fillStyle = pit;
-    g.beginPath(); g.arc(px, py, tw * 0.36, 0, TAU); g.fill();
+    g.beginPath(); g.arc(cx, cy, tw * 0.22, 0, TAU); g.fill();
 
-    const anchors: { x: number; y: number }[] = [];
+    /* carbon speckle inside the crater, never out at the tile's edge */
+    for (let k = 0; k < 12; k++) {
+      const a = rand() * TAU, d = Math.sqrt(rand()) * tw * 0.33;
+      g.fillStyle = `rgba(8,10,16,${(0.06 + rand() * 0.1).toFixed(3)})`;
+      g.beginPath();
+      g.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, Math.max(0.4, tw * 0.006), 0, TAU);
+      g.fill();
+    }
+
+    /* a broken carbon rim: short, faint arcs, never a perfect ring */
     g.lineCap = 'round';
-    g.lineJoin = 'round';
     for (let k = 0; k < 5; k++) {
-      let ang = rand() * TAU;
-      let x = px, y = py;
+      const a0 = rand() * TAU, a1 = a0 + 0.35 + rand() * 0.65;
+      g.strokeStyle = `rgba(8,10,16,${(0.1 + rand() * 0.1).toFixed(3)})`;
+      g.lineWidth = Math.max(0.8, tw * (0.007 + rand() * 0.007));
+      g.beginPath();
+      g.arc(cx, cy, tw * (0.30 + rand() * 0.06), a0, a1);
+      g.stroke();
+    }
+
+    /* radial fractures feather out toward the intact clay. The clamp is radial, not a box:
+       a diagonal crack can never reach a corner, so the tile's whole outer frame stays clean. */
+    const anchors: { x: number; y: number }[] = [];
+    const rMax = tw * 0.36;
+    g.lineJoin = 'round';
+    for (let k = 0; k < 6; k++) {
+      let ang = (k / 6) * TAU + (rand() - 0.5) * 0.5;
+      let x = cx + Math.cos(ang) * tw * 0.05;
+      let y = cy + Math.sin(ang) * tw * 0.05;
       const segs = 4 + Math.floor(rand() * 3);
       const path = new Path2D();
       path.moveTo(x, y);
+      let tipX = x, tipY = y;
       for (let s = 0; s < segs; s++) {
-        ang += (rand() - 0.5) * 1.15;
-        const len = tw * (0.06 + rand() * 0.1);
-        x = clamp(x + Math.cos(ang) * len, tw * 0.08, tw * 0.92);
-        y = clamp(y + Math.sin(ang) * len, tw * 0.08, tw * 0.92);
+        ang += (rand() - 0.5) * 0.95;
+        const len = tw * (0.045 + rand() * 0.065);
+        let nx = x + Math.cos(ang) * len, ny = y + Math.sin(ang) * len;
+        const dx = nx - cx, dy = ny - cy, dist = Math.hypot(dx, dy);
+        if (dist > rMax) { nx = cx + (dx / dist) * rMax; ny = cy + (dy / dist) * rMax; }
+        x = nx; y = ny;
         path.lineTo(x, y);
-        if (k < 3 && s === 3) anchors.push({ x: x / tw, y: y / tw });
+        tipX = x; tipY = y;
+        if (k < 3 && s === 2) anchors.push({ x: x / tw, y: y / tw });
       }
-      g.strokeStyle = 'rgba(0,0,0,.68)';
-      g.lineWidth = Math.max(1, tw * (0.016 + rand() * 0.018));
+      const fade = g.createLinearGradient(cx, cy, tipX, tipY);
+      fade.addColorStop(0, 'rgba(4,6,10,.6)');
+      fade.addColorStop(0.6, 'rgba(24,22,24,.34)');
+      fade.addColorStop(1, 'rgba(60,45,35,0)');
+      g.strokeStyle = fade;
+      g.lineWidth = Math.max(1, tw * (0.011 + rand() * 0.011));
       g.stroke(path);
-      g.strokeStyle = 'rgba(203,213,225,.12)';
-      g.lineWidth = Math.max(0.6, tw * 0.007);
+      g.strokeStyle = 'rgba(124,45,18,.11)';
+      g.lineWidth = Math.max(0.6, tw * 0.005);
       g.stroke(path);
-      if (k < 3) {
-        g.fillStyle = 'rgba(148,163,184,.07)';
-        g.beginPath();
-        g.moveTo(x, y);
-        g.lineTo(x + tw * 0.03, y - tw * 0.015);
-        g.lineTo(x + tw * 0.015, y + tw * 0.03);
-        g.closePath();
-        g.fill();
-      }
-    }
-    g.fillStyle = 'rgba(148,163,184,.05)';
-    for (let k = 0; k < 10; k++) {
-      g.beginPath();
-      g.arc(tw * (0.1 + rand() * 0.8), tw * (0.1 + rand() * 0.8), Math.max(0.4, tw * 0.006), 0, TAU);
-      g.fill();
     }
     scorch.push(cv);
     embers.push(anchors);
@@ -2009,8 +1996,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const anchors = art.embers[e.v];
       const x0 = ox + e.c * c + gap / 2, y0 = oy + e.r * c + gap / 2;
       const cool = (1 - t) * (1 - t);
-      const size = c * 0.4;
+      const size = c * 0.36;
       ctx.save();
+      /* the smoulder stays inside the crater: no warmth is allowed to reach the tile's edge */
+      ctx.beginPath(); ctx.arc(x0 + tw / 2, y0 + tw / 2, tw * 0.39, 0, TAU); ctx.clip();
       for (let k = 0; k < anchors.length; k++) {
         const flicker = still ? 1 : 0.78 + 0.22 * Math.sin(now / 90 + k * 2.3 + i);
         ctx.globalAlpha = 0.8 * cool * flicker;
