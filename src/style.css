@@ -8271,30 +8271,6 @@ html.reduced-motion .ml-pulse::after { display: none; }
 .pf-equipped-badge[data-accent="coral"] { color: #FFB59D; box-shadow: 0 2px 0 #080C14, inset 0 1px 0 rgba(255,255,255,.14), inset 0 0 0 1px rgba(255,82,43,.35); }
 .pf-equipped-badge[hidden] { display: none; }
 
-/* one badge carries level and rank: cyan glass, the progression hue, no metallic tiers */
-.pf-rank-badge {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 100%;
-  min-height: 26px;
-  padding: 0 10px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, rgba(34, 211, 238, .16) 0%, rgba(2, 132, 199, .07) 100%);
-  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, .32), 0 0 14px -6px rgba(34, 211, 238, .6);
-  color: var(--brand-ink);
-  font-size: var(--t-micro);
-  font-weight: 800;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-}
-.pf-rank-k { letter-spacing: .06em; text-transform: uppercase; }
-.pf-rank-badge b { font-size: var(--t-3); font-weight: 900; color: var(--ink); }
-.pf-rank-dot { opacity: .45; }
-.pf-rank-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; letter-spacing: .05em; text-transform: uppercase; }
 .pf-coin-pill { flex: none; max-width: 100%; }
 
 /* tier 2: a single recessed line and a single label */
@@ -11600,7 +11576,6 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
    borrows the whole row rather than ellipsising mid-word */
 @media (max-width: 359px) {
   .pf-hero-chip-row { grid-template-columns: minmax(0, 1fr); }
-  .pf-rank-badge { font-size: 9.5px; }
 }
 
 /* ==========================================================================
@@ -17503,68 +17478,45 @@ html.reduced-motion .announce-cta { transition: none; }
    then the twin gold stats (TIQ / Coins); then the XP rail; then Nation / Squad.
    Gold is reserved for TIQ, the purse and the equipped badge's own metal.
    ========================================================================== */
-.pf-hero.pf-hero-v2 { gap: 12px; }
+.pf-hero.pf-hero-v2 { gap: 14px; }
 .pf-hero-top { align-items: center; }
 .pf-avatar-tag { display: none; }
-.pf-id-v2 { gap: 7px; }
-.pf-name-row { align-items: center; gap: 6px; }
-.pf-rank-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-width: 0;
-  max-width: 100%;
-}
-
-/* level: a dark-clay key with a machined metal rim — no cosmetic tier word */
-.pf-rank-badge {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 26px;
-  padding: 0 10px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #293346 0%, #151C2A 100%);
-  box-shadow:
-    0 2px 0 #080C14,
-    inset 0 1px 0 rgba(255, 255, 255, .16),
-    inset 0 -2px 3px rgba(0, 0, 0, .42),
-    inset 0 0 0 1px rgba(255, 255, 255, .12);
-  color: #CBD5E1;
-  font-size: 10px;
+.pf-id-v2 { gap: 8px; }
+.pf-name-row { align-items: center; gap: 8px; min-height: 26px; }
+/* the player's name is the loudest thing in the card — nothing competes with it */
+.pf-name-row .p-name {
+  font-size: clamp(1.125rem, 1.06rem + .35vw, 1.3125rem);
   font-weight: 900;
-  letter-spacing: .1em;
-  line-height: 1;
-  text-transform: uppercase;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
+  letter-spacing: -.015em;
+  line-height: 1.05;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .5);
 }
-.pf-rank-badge .pf-rank-k { font-size: 9px; letter-spacing: .14em; color: #94A3B8; }
-.pf-rank-badge b { font-size: 13px; font-weight: 900; line-height: 1; color: var(--ink); text-shadow: 0 1px 0 rgba(0, 0, 0, .55); }
-.pf-rank-dot { display: none; }
 
-/* the real competitive division, read from TIQ and lit with that tier's aura */
+/* the competitive division: one dark-clay capsule under the name — a brushed
+   titanium hairline with a whisper of gold inside it, lit by its tier's aura */
 .pf-tier-badge {
   flex: 0 1 auto;
   min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  min-height: 26px;
-  padding: 0 9px;
+  gap: 6px;
+  min-height: 27px;
+  padding: 0 11px 0 9px;
   border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, rgba(148, 163, 184, .13) 0%, rgba(148, 163, 184, .035) 100%);
+  background:
+    linear-gradient(180deg, rgba(226, 232, 240, .10) 0%, rgba(226, 232, 240, 0) 46%),
+    linear-gradient(180deg, #232C3D 0%, #121927 100%);
   box-shadow:
     0 2px 0 #080C14,
-    inset 0 1px 0 rgba(255, 255, 255, .12),
-    inset 0 0 0 1px rgba(148, 163, 184, .28);
-  color: var(--aura, #94A3B8);
-  font-size: 10px;
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    inset 0 -2px 3px rgba(0, 0, 0, .4),
+    inset 0 0 0 1px rgba(203, 213, 225, .26),
+    inset 0 0 0 2px rgba(252, 211, 77, .075),
+    0 0 16px -8px rgba(252, 211, 77, .6);
+  color: var(--aura, #CBD5E1);
+  font-size: 10.5px;
   font-weight: 900;
-  letter-spacing: .08em;
+  letter-spacing: .1em;
   line-height: 1;
   text-transform: uppercase;
   white-space: nowrap;
@@ -17582,34 +17534,30 @@ html.reduced-motion .announce-cta { transition: none; }
 }
 .pf-tier-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
-/* the equipped badge: one luxury 3D crest capsule beside the name (no avatar pin) */
+/* the equipped honor: one 26px sculpted crest in a clay socket — the name row's
+   only jewel. The badge speaks through its metal and its tooltip, never a word. */
 .pf-equipped-badge {
   --eq-aura: 245, 158, 11;
   --eq-ink: #FDE68A;
   --eq-rim: rgba(252, 211, 77, .36);
-  flex: 0 1 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 100%;
-  padding: 3px 10px 3px 4px;
-  border-radius: var(--radius-pill);
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 9px;
   background:
-    radial-gradient(120% 160% at 12% 0%, rgba(var(--eq-aura), .18) 0%, rgba(var(--eq-aura), 0) 62%),
-    linear-gradient(180deg, #2B3549 0%, #121826 100%);
+    radial-gradient(70% 70% at 32% 22%, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, 0) 62%),
+    linear-gradient(180deg, #2A3446 0%, #121826 100%);
   box-shadow:
     0 2px 0 #080C14,
-    inset 0 1px 0 rgba(255, 255, 255, .18),
+    inset 0 1px 0 rgba(255, 255, 255, .2),
     inset 0 -2px 3px rgba(0, 0, 0, .42),
     inset 0 0 0 1px var(--eq-rim),
-    0 0 16px -5px rgba(var(--eq-aura), .65);
+    0 0 14px -5px rgba(var(--eq-aura), .7);
   color: var(--eq-ink);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .015em;
-  line-height: 1.2;
-  white-space: nowrap;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, .45);
+  line-height: 0;
 }
 .pf-equipped-badge[data-accent="gold"]     { --eq-aura: 245, 158, 11;  --eq-ink: #FDE68A; --eq-rim: rgba(252, 211, 77, .36); }
 .pf-equipped-badge[data-accent="sky"]      { --eq-aura: 56, 189, 248;  --eq-ink: #BAE6FD; --eq-rim: rgba(125, 211, 252, .4); }
@@ -17617,8 +17565,8 @@ html.reduced-motion .announce-cta { transition: none; }
 .pf-equipped-badge[data-accent="coral"]    { --eq-aura: 244, 63, 94;   --eq-ink: #FECDD3; --eq-rim: rgba(253, 164, 175, .4); }
 .pf-equipped-badge[data-accent="obsidian"] { --eq-aura: 168, 85, 247;  --eq-ink: #FCD34D; --eq-rim: rgba(251, 191, 36, .44); }
 .pf-equipped-badge .pf-equipped-crest {
-  width: 20px;
-  height: 20px;
+  width: 21px;
+  height: 21px;
   flex: none;
   display: block;
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .55));
@@ -17630,44 +17578,45 @@ html.reduced-motion .announce-cta { transition: none; }
 .pf-equipped-badge[data-accent="sky"] .pf-equipped-crest {
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .55)) drop-shadow(0 0 6px rgba(56, 189, 248, .32));
 }
-.pf-equipped-badge span {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: clip;
-}
 .pf-equipped-badge[hidden] { display: none; }
 
-/* flagship TIQ + purse share one balanced stat line above the XP rail */
+/* twin gold capsules: identical height, padding, radius and token size, so TIQ
+   and the purse read as one pair. TIQ prints amber; the purse prints white. */
 .pf-stat-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
   width: 100%;
   min-width: 0;
 }
-.pf-stat-row .pf-coin-pill { flex: none; min-height: 32px; }
+.pf-stat-row .pf-coin-pill,
 .pf-tiq-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
   min-width: 0;
-  min-height: 32px;
-  padding: 0 12px 0 4px;
+  height: 36px;
+  padding: 0 12px 0 5px;
   border-radius: var(--radius-pill);
   background:
-    radial-gradient(120% 160% at 10% 0%, rgba(251, 191, 36, .22) 0%, rgba(251, 191, 36, 0) 58%),
-    linear-gradient(180deg, #2A2418 0%, #151109 100%);
+    radial-gradient(120% 170% at 12% 0%, rgba(245, 158, 11, .17) 0%, rgba(245, 158, 11, 0) 58%),
+    linear-gradient(180deg, #232C3D 0%, #121927 100%);
   box-shadow:
     0 3px 0 #080C14,
-    inset 0 1px 0 rgba(255, 255, 255, .2),
-    inset 0 -2px 3px rgba(0, 0, 0, .46),
-    inset 0 0 0 1px rgba(245, 158, 11, .38),
-    0 0 20px -6px rgba(245, 158, 11, .6);
-  color: #F59E0B;
+    inset 0 1px 0 rgba(255, 255, 255, .17),
+    inset 0 -2px 3px rgba(0, 0, 0, .42),
+    inset 0 0 0 1px rgba(245, 158, 11, .3),
+    0 0 18px -7px rgba(245, 158, 11, .6);
+  color: #FBBF24;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
+/* the purse is a readout on Profile, not the Home button: no press travel */
+.pf-stat-row .pf-coin-pill { cursor: default; transition: none; }
+.pf-stat-row .pf-coin-pill:hover:not(:active),
+.pf-stat-row .pf-coin-pill:active { transform: none; }
 .pf-tiq-token {
   flex: none;
   display: grid;
@@ -17684,27 +17633,110 @@ html.reduced-motion .announce-cta { transition: none; }
     0 0 10px rgba(245, 158, 11, .35);
 }
 .pf-tiq-token .ico { width: 14px; height: 14px; }
-.pf-tiq-pill b {
-  font-size: 16px;
+/* the purse token takes the same 24px seat, so both capsules weigh the same */
+.pf-coin-token {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+}
+.pf-coin-token .coin {
+  width: 21px;
+  height: 21px;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .55)) drop-shadow(0 0 6px rgba(245, 158, 11, .35));
+}
+.pf-tiq-pill b,
+.pf-coin-pill #pf-coins {
+  font-size: 15px;
   line-height: 1;
   font-weight: 900;
   letter-spacing: -.01em;
   color: #FBBF24;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 12px rgba(245, 158, 11, .42), 0 1px 0 rgba(0, 0, 0, .45);
 }
+.pf-tiq-pill b { text-shadow: 0 0 12px rgba(245, 158, 11, .42), 0 1px 0 rgba(0, 0, 0, .45); }
+.pf-coin-pill #pf-coins { color: var(--ink); text-shadow: 0 1px 0 rgba(0, 0, 0, .5); }
 .pf-tiq-k {
-  font-size: 9px;
+  font-size: 8.5px;
   line-height: 1;
   font-weight: 900;
-  letter-spacing: .12em;
+  letter-spacing: .14em;
   text-transform: uppercase;
   color: #F59E0B;
-  opacity: .92;
+  opacity: .9;
 }
-.pf-xp-block { gap: 6px; }
+/* one XP rail: LVL left and XP right, both above the track — nothing below it */
+.pf-xp-block {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  min-width: 0;
+}
+.pf-xp-block .pf-stat-row { margin-bottom: 12px; }
+.pf-xp-meta-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+  min-width: 0;
+  margin-bottom: 6px;
+}
+.pf-xp-lvl {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  font-size: 9.5px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: #94A3B8;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.pf-xp-lvl b {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  color: #E2E8F0;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .5);
+}
+.pf-xp-meta {
+  align-self: baseline;
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: .02em;
+  color: var(--brand-ink);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 10px rgba(34, 211, 238, .35);
+}
 .pf-xp-bar.bar { width: 100%; }
-.pf-xp-meta { line-height: 1.15; }
+
+/* 360px: the pair keeps its parity, only the money type steps down a notch */
+@media (max-width: 380px) {
+  .pf-name-row .p-name { font-size: 1.0625rem; }
+  .pf-equipped-badge { width: 24px; height: 24px; border-radius: 8px; }
+  .pf-equipped-badge .pf-equipped-crest { width: 19px; height: 19px; }
+  .pf-stat-row { gap: 8px; }
+  .pf-stat-row .pf-coin-pill,
+  .pf-tiq-pill { height: 34px; padding: 0 9px 0 4px; gap: 6px; }
+  .pf-tiq-token,
+  .pf-coin-token { width: 22px; height: 22px; }
+  .pf-coin-token .coin { width: 19px; height: 19px; }
+  .pf-tiq-pill b,
+  .pf-coin-pill #pf-coins { font-size: 14px; }
+  .pf-tiq-k { font-size: 8px; letter-spacing: .1em; }
+}
 
 /* ==========================================================================
    NATIONS & FLAGS — one CDN resolver, one full ISO registry.

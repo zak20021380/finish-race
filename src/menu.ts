@@ -754,8 +754,9 @@ export function createMenu(api: MenuApi): Menu {
       tiqPill.setAttribute('aria-label', label);
       tiqPill.setAttribute('title', label);
     }
-    const rankBadge = document.getElementById('pf-rank-badge');
-    if (rankBadge) rankBadge.setAttribute('aria-label', `Level ${lv.n}`);
+    /* the level lives in the XP rail's left label now — it is the same figure the bar fills */
+    const levelCaption = document.getElementById('pf-xp-lvl');
+    if (levelCaption) levelCaption.setAttribute('aria-label', `Level ${lv.n}`);
     const tierBadge = document.getElementById('pf-tier-badge');
     if (tierBadge) {
       tierBadge.dataset.tier = division.tier;
@@ -783,8 +784,7 @@ export function createMenu(api: MenuApi): Menu {
         eqWrap.setAttribute('data-accent', eq.accent);
         const use = document.getElementById('pf-equipped-use') as unknown as SVGUseElement | null;
         if (use) use.setAttribute('href', `#i-crest-${eq.accent}`);
-        const label = document.getElementById('pf-equipped-t');
-        if (label) label.textContent = eq.name;
+        /* the emblem carries no lettering: its metal, title and spoken label name it */
         eqWrap.setAttribute('aria-label', `Equipped badge: ${eq.name}`);
         eqWrap.setAttribute('title', eq.name);
       }
