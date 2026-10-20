@@ -851,13 +851,6 @@ export function createMenu(api: MenuApi): Menu {
     /* the level lives in the XP rail's left label now — it is the same figure the bar fills */
     const levelCaption = document.getElementById('pf-xp-lvl');
     if (levelCaption) levelCaption.setAttribute('aria-label', `Level ${lv.n}`);
-    const tierBadge = document.getElementById('pf-tier-badge');
-    if (tierBadge) {
-      tierBadge.dataset.tier = division.tier;
-      tierBadge.setAttribute('aria-label', `${division.label} division, ${en(tiq)} Tactical IQ`);
-    }
-    const rankTag = document.getElementById('pf-rank-tag');
-    if (rankTag) rankTag.textContent = division.label;
     /* the avatar is the frame control: its name reads out instead of a caption pill */
     const wrap = document.getElementById('pf-avatar-wrap');
     if (wrap) {
@@ -1449,7 +1442,7 @@ export function createMenu(api: MenuApi): Menu {
     const squadMeta = document.getElementById('pf-team-meta');
     if (squadMeta) {
       squadMeta.textContent = squad
-        ? `#${squad.rank} · ${en(squad.members)} Members`
+        ? `#${squad.rank} • ${en(squad.members)} Members`
         : 'Community squads';
     }
     document.getElementById('pf-team')?.classList.toggle('is-set', !!squad);
