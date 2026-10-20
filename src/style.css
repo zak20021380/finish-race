@@ -8145,10 +8145,10 @@ html.reduced-motion .ml-pulse::after { display: none; }
    ========================================================================== */
 
 /* ---- hero identity card: three stacked tiers, one accent each ------------
-   Tier 1 identity + wallet (cyan rank · gold purse)
-   Tier 2 progression      (one line, one label)
+   Tier 1 identity         (avatar · name + equipped crest · level + division)
+   Tier 2 standing         (gold TIQ · gold purse, then one XP line)
    Tier 3 actions          (two equal slate/glass pills)
-   Hue discipline: cyan = progression, gold = coins/rewards, slate = actions. */
+   Hue discipline: cyan = progression, gold = TIQ/coins/rewards, slate = actions. */
 .pf-hero.pf-hero-v2 {
   position: relative;
   overflow: hidden;
@@ -17496,6 +17496,215 @@ html.reduced-motion .announce-cta { transition: none; }
   color: #FBBF24;
   box-shadow: 0 2px 0 #080C14, inset 0 0 0 1px rgba(251, 191, 36, .5), 0 0 12px rgba(168, 85, 247, .34);
 }
+
+/* ==========================================================================
+   PROFILE HEADER HUD v3 — TIQ flagship, Mind Ladder division, 3D honor crest.
+   Reading order: avatar · name + equipped crest · level + real TIQ division;
+   then the twin gold stats (TIQ / Coins); then the XP rail; then Nation / Squad.
+   Gold is reserved for TIQ, the purse and the equipped badge's own metal.
+   ========================================================================== */
+.pf-hero.pf-hero-v2 { gap: 12px; }
+.pf-hero-top { align-items: center; }
+.pf-avatar-tag { display: none; }
+.pf-id-v2 { gap: 7px; }
+.pf-name-row { align-items: center; gap: 6px; }
+.pf-rank-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* level: a dark-clay key with a machined metal rim — no cosmetic tier word */
+.pf-rank-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #293346 0%, #151C2A 100%);
+  box-shadow:
+    0 2px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 -2px 3px rgba(0, 0, 0, .42),
+    inset 0 0 0 1px rgba(255, 255, 255, .12);
+  color: #CBD5E1;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  line-height: 1;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.pf-rank-badge .pf-rank-k { font-size: 9px; letter-spacing: .14em; color: #94A3B8; }
+.pf-rank-badge b { font-size: 13px; font-weight: 900; line-height: 1; color: var(--ink); text-shadow: 0 1px 0 rgba(0, 0, 0, .55); }
+.pf-rank-dot { display: none; }
+
+/* the real competitive division, read from TIQ and lit with that tier's aura */
+.pf-tier-badge {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, rgba(148, 163, 184, .13) 0%, rgba(148, 163, 184, .035) 100%);
+  box-shadow:
+    0 2px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    inset 0 0 0 1px rgba(148, 163, 184, .28);
+  color: var(--aura, #94A3B8);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.pf-tier-badge[data-tier="rookie"]      { --aura: var(--tier-rookie);      --aura-glow: var(--tier-rookie-glow); }
+.pf-tier-badge[data-tier="tactician"]   { --aura: var(--tier-tactician);   --aura-glow: var(--tier-tactician-glow); }
+.pf-tier-badge[data-tier="strategist"]  { --aura: var(--tier-strategist);  --aura-glow: var(--tier-strategist-glow); }
+.pf-tier-badge[data-tier="grandmaster"] { --aura: var(--tier-grandmaster); --aura-glow: var(--tier-grandmaster-glow); }
+.pf-tier-badge .ico {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  filter: drop-shadow(0 0 5px var(--aura-glow, rgba(148, 163, 184, .3)));
+}
+.pf-tier-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* the equipped badge: one luxury 3D crest capsule beside the name (no avatar pin) */
+.pf-equipped-badge {
+  --eq-aura: 245, 158, 11;
+  --eq-ink: #FDE68A;
+  --eq-rim: rgba(252, 211, 77, .36);
+  flex: 0 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 3px 10px 3px 4px;
+  border-radius: var(--radius-pill);
+  background:
+    radial-gradient(120% 160% at 12% 0%, rgba(var(--eq-aura), .18) 0%, rgba(var(--eq-aura), 0) 62%),
+    linear-gradient(180deg, #2B3549 0%, #121826 100%);
+  box-shadow:
+    0 2px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    inset 0 -2px 3px rgba(0, 0, 0, .42),
+    inset 0 0 0 1px var(--eq-rim),
+    0 0 16px -5px rgba(var(--eq-aura), .65);
+  color: var(--eq-ink);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .015em;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .45);
+}
+.pf-equipped-badge[data-accent="gold"]     { --eq-aura: 245, 158, 11;  --eq-ink: #FDE68A; --eq-rim: rgba(252, 211, 77, .36); }
+.pf-equipped-badge[data-accent="sky"]      { --eq-aura: 56, 189, 248;  --eq-ink: #BAE6FD; --eq-rim: rgba(125, 211, 252, .4); }
+.pf-equipped-badge[data-accent="mint"]     { --eq-aura: 16, 185, 129;  --eq-ink: #A7F3D0; --eq-rim: rgba(110, 231, 183, .4); }
+.pf-equipped-badge[data-accent="coral"]    { --eq-aura: 244, 63, 94;   --eq-ink: #FECDD3; --eq-rim: rgba(253, 164, 175, .4); }
+.pf-equipped-badge[data-accent="obsidian"] { --eq-aura: 168, 85, 247;  --eq-ink: #FCD34D; --eq-rim: rgba(251, 191, 36, .44); }
+.pf-equipped-badge .pf-equipped-crest {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  display: block;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .55));
+}
+.pf-equipped-badge[data-accent="gold"] .pf-equipped-crest,
+.pf-equipped-badge[data-accent="obsidian"] .pf-equipped-crest {
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .55)) drop-shadow(0 0 5px rgba(245, 158, 11, .28));
+}
+.pf-equipped-badge[data-accent="sky"] .pf-equipped-crest {
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .55)) drop-shadow(0 0 6px rgba(56, 189, 248, .32));
+}
+.pf-equipped-badge span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: clip;
+}
+.pf-equipped-badge[hidden] { display: none; }
+
+/* flagship TIQ + purse share one balanced stat line above the XP rail */
+.pf-stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  width: 100%;
+  min-width: 0;
+}
+.pf-stat-row .pf-coin-pill { flex: none; min-height: 32px; }
+.pf-tiq-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 12px 0 4px;
+  border-radius: var(--radius-pill);
+  background:
+    radial-gradient(120% 160% at 10% 0%, rgba(251, 191, 36, .22) 0%, rgba(251, 191, 36, 0) 58%),
+    linear-gradient(180deg, #2A2418 0%, #151109 100%);
+  box-shadow:
+    0 3px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .2),
+    inset 0 -2px 3px rgba(0, 0, 0, .46),
+    inset 0 0 0 1px rgba(245, 158, 11, .38),
+    0 0 20px -6px rgba(245, 158, 11, .6);
+  color: #F59E0B;
+  white-space: nowrap;
+}
+.pf-tiq-token {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: radial-gradient(75% 75% at 34% 24%, #FEF3C7 0%, #FBBF24 38%, #F59E0B 68%, #B45309 100%);
+  color: #7C2D12;
+  box-shadow:
+    0 2px 3px rgba(0, 0, 0, .55),
+    inset 0 1px 1px rgba(255, 255, 255, .65),
+    inset 0 -2px 3px rgba(120, 53, 15, .55),
+    0 0 10px rgba(245, 158, 11, .35);
+}
+.pf-tiq-token .ico { width: 14px; height: 14px; }
+.pf-tiq-pill b {
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  color: #FBBF24;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 12px rgba(245, 158, 11, .42), 0 1px 0 rgba(0, 0, 0, .45);
+}
+.pf-tiq-k {
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #F59E0B;
+  opacity: .92;
+}
+.pf-xp-block { gap: 6px; }
+.pf-xp-bar.bar { width: 100%; }
+.pf-xp-meta { line-height: 1.15; }
 
 /* ==========================================================================
    NATIONS & FLAGS — one CDN resolver, one full ISO registry.

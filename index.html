@@ -1525,7 +1525,7 @@
             <div class="p-card wide pf-hero pf-hero-v2">
               <span class="pf-hero-aurora" aria-hidden="true"></span>
 
-              <!-- tier 1 · identity + wallet -->
+              <!-- tier 1 · identity + equipped honor crest -->
               <div class="pf-hero-top">
                 <button class="pf-avatar-wrap" type="button" id="pf-avatar-wrap" data-frame="default">
                   <span class="pf-avatar-glow" aria-hidden="true"></span>
@@ -1533,7 +1533,6 @@
                     <img id="pf-avatar-img" alt="" hidden />
                     <span id="pf-avatar-t">P</span>
                   </span>
-                  <span class="pf-avatar-tag" id="pf-avatar-tag" data-accent="none" aria-hidden="true"><svg class="ico"><use id="pf-avatar-tag-use" href="#i-crown" /></svg></span>
                 </button>
                 <div class="p-id pf-id-v2">
                   <div class="pf-name-row">
@@ -1543,13 +1542,25 @@
                       <span id="pf-equipped-t">Da Vinci's Vision</span>
                     </span>
                   </div>
-                  <span class="pf-rank-badge" id="pf-rank-badge" data-rank="rookie"><span class="pf-rank-k">Lvl</span><b id="pf-level">1</b><span class="pf-rank-dot" aria-hidden="true">•</span><span class="pf-rank-n" id="pf-rank-tag">Rookie</span></span>
+                  <div class="pf-rank-row">
+                    <span class="pf-rank-badge" id="pf-rank-badge"><span class="pf-rank-k">Lvl</span><b id="pf-level">1</b></span>
+                    <span class="pf-tier-badge" id="pf-tier-badge" data-tier="rookie">
+                      <svg class="ico" aria-hidden="true"><use href="#i-shield" /></svg>
+                      <span class="pf-tier-n" id="pf-rank-tag">Rookie I</span>
+                    </span>
+                  </div>
                 </div>
-                <span class="coin-pill pf-coin-pill"><span class="coin" data-coin aria-hidden="true"></span><span id="pf-coins">0</span></span>
               </div>
 
-              <!-- tier 2 · progression: one line, one label -->
+              <!-- tier 2 · Mind Ladder standing + wallet, then progression -->
               <div class="pf-xp-block">
+                <div class="pf-stat-row">
+                  <span class="pf-tiq-pill" id="pf-tiq-pill" aria-label="Tactical IQ 0">
+                    <span class="pf-tiq-token" aria-hidden="true"><svg class="ico"><use href="#i-brain" /></svg></span>
+                    <b id="pf-tiq">0</b><span class="pf-tiq-k">TIQ</span>
+                  </span>
+                  <span class="coin-pill pf-coin-pill"><span class="coin" data-coin aria-hidden="true"></span><span id="pf-coins">0</span></span>
+                </div>
                 <span class="bar pf-xp-bar" role="progressbar" id="pf-bar" aria-label="Progress to the next level" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><i id="pf-fill"></i></span>
                 <span class="pf-xp-meta" id="pf-xp">0 / 10 XP</span>
               </div>

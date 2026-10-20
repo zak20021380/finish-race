@@ -29,6 +29,7 @@ import {
   onSquadChange, searchSquads, squadLetter,
 } from './squads';
 import { copyText } from './gamemodes';
+import { myTiq, TIER_NAME, tierOf, type MindTier } from './matchmaking';
 import { claimWelcomeBonus, pullReferral, referralLink, referralShareUrl } from './referral';
 import { playReward } from './sound';
 import { BOT_RAMP, type CosKind } from './themes';
@@ -714,16 +715,23 @@ export function createMenu(api: MenuApi): Menu {
   const frameName = (id: string | null): string =>
     FRAMES.find((f) => f.id === id)?.name ?? 'Default';
 
-  /* Rank tiers: cosmetic tags driven by level, so the hero reads like a gamer card. */
-  const RANKS: { min: number; id: string; name: string }[] = [
-    { min: 1, id: 'rookie', name: 'Rookie' },
-    { min: 3, id: 'bronze', name: 'Bronze' },
-    { min: 6, id: 'silver', name: 'Silver' },
-    { min: 10, id: 'gold', name: 'Gold' },
-    { min: 16, id: 'elite', name: 'Elite' },
-    { min: 24, id: 'legend', name: 'Legend' },
-  ];
-  const rankFor = (n: number) => [...RANKS].reverse().find((r) => n >= r.min) ?? RANKS[0];
+  /* Competitive division mirrors the Mind Ladder bands exactly:
+     0-999 Rookie, 1000-1999 Tactician, 2000-2999 Strategist, 3000+ Grandmaster,
+     each split into I / II / III. TIQ is the only source, never the XP level. */
+  const TIER_BAND: Record<MindTier, [number, number]> = {
+    rookie: [0, 1000],
+    tactician: [1000, 2000],
+    strategist: [2000, 3000],
+    grandmaster: [3000, 4000],
+  };
+  const DIVISION = ['I', 'II', 'III'] as const;
+  const divisionFor = (tiq: number): { tier: MindTier; label: string } => {
+    const tier = tierOf(tiq);
+    const [lo, hi] = TIER_BAND[tier];
+    const step = (hi - lo) / DIVISION.length;
+    const slot = Math.min(DIVISION.length - 1, Math.floor(Math.max(0, tiq - lo) / step));
+    return { tier, label: `${TIER_NAME[tier]} ${DIVISION[slot]}` };
+  };
 
   const paintHeroExtras = (lv: { n: number; got: number; need: number }) => {
     /* recessed profile XP bar mirrors Home's bar (same levelInfo source). */
@@ -735,15 +743,26 @@ export function createMenu(api: MenuApi): Menu {
       pfBar.setAttribute('aria-valuemax', String(lv.need));
       pfBar.setAttribute('aria-valuetext', `Level ${lv.n}, ${lv.got} of ${lv.need} XP`);
     }
-    const rankBadge = document.getElementById('pf-rank-badge');
-    const rankName = rankFor(lv.n);
-    if (rankBadge) {
-      rankBadge.dataset.rank = rankName.id;
-      rankBadge.setAttribute('aria-label', `Level ${lv.n}, ${rankName.name} rank`);
+    /* TIQ is the flagship stat: the number, and the real Mind Ladder division it buys. */
+    const tiq = myTiq();
+    const division = divisionFor(tiq);
+    const tiqValue = document.getElementById('pf-tiq');
+    if (tiqValue) tiqValue.textContent = en(tiq);
+    const tiqPill = document.getElementById('pf-tiq-pill');
+    if (tiqPill) {
+      const label = `${en(tiq)} Tactical IQ, ${division.label}`;
+      tiqPill.setAttribute('aria-label', label);
+      tiqPill.setAttribute('title', label);
     }
-    /* the rank name lives inside the merged badge */
+    const rankBadge = document.getElementById('pf-rank-badge');
+    if (rankBadge) rankBadge.setAttribute('aria-label', `Level ${lv.n}`);
+    const tierBadge = document.getElementById('pf-tier-badge');
+    if (tierBadge) {
+      tierBadge.dataset.tier = division.tier;
+      tierBadge.setAttribute('aria-label', `${division.label} division, ${en(tiq)} Tactical IQ`);
+    }
     const rankTag = document.getElementById('pf-rank-tag');
-    if (rankTag) rankTag.textContent = rankName.name;
+    if (rankTag) rankTag.textContent = division.label;
     /* the avatar is the frame control: its name reads out instead of a caption pill */
     const wrap = document.getElementById('pf-avatar-wrap');
     if (wrap) {
@@ -769,14 +788,6 @@ export function createMenu(api: MenuApi): Menu {
         eqWrap.setAttribute('aria-label', `Equipped badge: ${eq.name}`);
         eqWrap.setAttribute('title', eq.name);
       }
-    }
-    /* the avatar's own crest tag mirrors the equipped badge, so the HUD reads
-       at a glance even when the name pill has to elide beside a long name */
-    const avTag = document.getElementById('pf-avatar-tag');
-    const avUse = document.getElementById('pf-avatar-tag-use') as unknown as SVGUseElement | null;
-    if (avTag && avUse) {
-      avUse.setAttribute('href', eq ? `#i-crest-${eq.accent}` : '#i-crown');
-      avTag.setAttribute('data-accent', eq?.accent ?? 'none');
     }
   };
 
