@@ -14525,10 +14525,10 @@ html.reduced-motion .adm-mode-seg { transition: none; }
 .adm-search-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .adm-search-x[hidden] { display: none; }
 
-/* ---- the query toolbar: three recessed keys, each with a native select laid over its face ----
-   The face is ours (a flag and a short code, or the age/sort reading). The real <select> is
-   transparent and covers it, so the menu is the platform's own popup: full-width on a phone and
-   never clipped by the scrolling panel's overflow. */
+/* ---- the query toolbar: three recessed clay keys that open bespoke floating menus ----
+   The menu is portalled to the Admin stage by admin.ts, so the scrolling body can never clip it.
+   It is anchored under its trigger at z-index 100, flips above near the stage floor, and owns a
+   260px scroll well of its own. */
 .adm-adv {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -14539,21 +14539,44 @@ html.reduced-motion .adm-mode-seg { transition: none; }
   min-width: 0;
   min-height: 52px;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 3px;
-  padding: 6px 9px;
   border-radius: var(--radius-sm);
   background: var(--field);
   box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
-  cursor: pointer;
   transition: background var(--motion-fast), box-shadow var(--motion-fast);
+}
+.adm-fn:hover {
+  box-shadow: var(--inset), inset 0 0 0 1px rgba(148, 163, 184, .22);
 }
 .adm-fn[data-on="true"] {
   background: linear-gradient(180deg, rgba(252, 211, 77, .09) 0%, rgba(252, 211, 77, .02) 100%), var(--field);
   box-shadow: var(--inset), inset 0 0 0 1px rgba(252, 211, 77, .34);
 }
+.adm-fn[data-open="true"] {
+  box-shadow:
+    var(--inset),
+    inset 0 0 0 1px rgba(252, 211, 77, .52),
+    0 0 0 3px rgba(245, 158, 11, .10);
+}
 .adm-fn:focus-within { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.adm-fn-trigger {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px 9px;
+  appearance: none;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.adm-fn-trigger:focus { outline: none; }
 .adm-fn-k {
   display: block;
   font-size: 8.5px;
@@ -14563,7 +14586,8 @@ html.reduced-motion .adm-mode-seg { transition: none; }
   text-transform: uppercase;
   color: var(--ink-soft);
 }
-.adm-fn[data-on="true"] .adm-fn-k { color: var(--honey-ink); }
+.adm-fn[data-on="true"] .adm-fn-k,
+.adm-fn[data-open="true"] .adm-fn-k { color: var(--honey-ink); }
 .adm-fn-face {
   display: flex;
   align-items: center;
@@ -14593,27 +14617,188 @@ html.reduced-motion .adm-mode-seg { transition: none; }
   height: 10px;
   color: var(--ink-soft);
   transform: rotate(90deg);
+  transition: transform var(--motion-fast), color var(--motion-fast);
 }
-.adm-fn[data-on="true"] .adm-fn-chev { color: var(--honey-ink); }
-.adm-fn-sel {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  appearance: none;
-  opacity: 0;
-  cursor: pointer;
-  font: inherit;
-  font-size: 16px;                     /* iOS keeps the page still when the native menu takes focus */
-}
-.adm-fn-sel:focus { outline: none; }
+.adm-fn[data-on="true"] .adm-fn-chev,
+.adm-fn[data-open="true"] .adm-fn-chev { color: var(--honey-ink); }
+.adm-fn[data-open="true"] .adm-fn-chev { transform: rotate(-90deg); }
 @media (max-width: 339px) {
   .adm-adv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .adm-fn[data-uadv="sort"] { grid-column: 1 / -1; }
+}
+
+/* ---- the floating menu: deep frosted slate, one razor rim, one soft ambient shadow ---- */
+.custom-select-menu {
+  position: absolute;
+  z-index: 100;
+  max-height: 260px;
+  padding: 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(13, 19, 31, 0.94);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, .34) transparent;
+  opacity: 0;
+  transform: translateY(-4px) scale(.985);
+  transform-origin: top center;
+  transition: opacity .15s ease, transform .18s cubic-bezier(.22, .61, .36, 1);
+}
+.custom-select-menu[hidden] { display: none; }
+.custom-select-menu[data-flip="true"] {
+  transform: translateY(4px) scale(.985);
+  transform-origin: bottom center;
+}
+.custom-select-menu.is-open { opacity: 1; transform: none; }
+.custom-select-menu::-webkit-scrollbar { width: 6px; }
+.custom-select-menu::-webkit-scrollbar-track { background: transparent; }
+.custom-select-menu::-webkit-scrollbar-thumb {
+  border: 1px solid transparent;
+  border-radius: 99px;
+  background: rgba(148, 163, 184, .34);
+  background-clip: padding-box;
+}
+.custom-select-menu::-webkit-scrollbar-thumb:hover {
+  border: 1px solid transparent;
+  background: rgba(252, 211, 77, .5);
+  background-clip: padding-box;
+}
+
+/* one option per row: a quiet slate voice that wakes to white under the finger */
+.custom-select-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 38px;
+  padding: 10px 14px;
+  appearance: none;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #94A3B8;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+.custom-select-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 9px;
+  bottom: 9px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--honey);
+  opacity: 0;
+  transition: opacity var(--motion-fast);
+}
+.custom-select-item:hover,
+.custom-select-item:focus {
+  background: rgba(255, 255, 255, 0.05);
+  color: #F8FAFC;
+  outline: none;
+}
+.custom-select-item:hover::before,
+.custom-select-item:focus::before { opacity: .8; }
+.custom-select-item[aria-selected="true"] {
+  color: #F8FAFC;
+  background: linear-gradient(90deg, rgba(245, 158, 11, .10), rgba(245, 158, 11, .035));
+}
+.custom-select-item[aria-selected="true"]::before {
+  opacity: 1;
+  box-shadow: 0 0 8px rgba(245, 158, 11, .7);
+}
+.custom-select-ico {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--honey-ink);
+}
+.custom-select-flag {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+}
+.custom-select-flag .fp { --fp-d: 18px; }
+.custom-select-flag .fp-chip { border-radius: 50%; font-size: 7px; letter-spacing: 0; }
+.custom-select-flag .fp-img {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, .16),
+    inset 0 0 0 1px rgba(0, 0, 0, .35);
+}
+.custom-select-code {
+  flex: none;
+  min-width: 22px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  color: var(--honey-ink);
+  font-variant-numeric: tabular-nums;
+}
+.custom-select-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.custom-select-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 50px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 7px;
+  background: rgba(148, 163, 184, .12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
+  color: #CBD5E1;
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  transition: background var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
+}
+.custom-select-item:hover .custom-select-chip,
+.custom-select-item:focus .custom-select-chip {
+  background: rgba(148, 163, 184, .18);
+  color: #F8FAFC;
+}
+.custom-select-item[aria-selected="true"] .custom-select-chip {
+  background: rgba(245, 158, 11, .12);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .28);
+  color: var(--honey-ink);
+}
+.custom-select-check {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--honey-ink);
+  opacity: 0;
+  transform: scale(.55);
+  filter: drop-shadow(0 0 6px rgba(245, 158, 11, .7));
+  transition: opacity var(--motion-fast), transform .18s var(--bounce);
+}
+.custom-select-check .ico { width: 14px; height: 14px; }
+.custom-select-item[aria-selected="true"] .custom-select-check {
+  opacity: 1;
+  transform: none;
 }
 
 .adm-users-meta {

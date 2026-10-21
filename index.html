@@ -703,6 +703,13 @@
       <symbol id="i-bolt" viewBox="0 0 24 24">
         <path d="M13.6 2.8 5.4 13.4h5.1l-.9 7.8 8.4-10.8h-5.2Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
       </symbol>
+      <!-- newest joined: a clean calendar day -->
+      <symbol id="i-calendar" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3.5" y="5.2" width="17" height="15.3" rx="3.2" />
+          <path d="M8 2.8v4.4M16 2.8v4.4M3.5 10h17" />
+        </g>
+      </symbol>
       <symbol id="i-target" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
           <circle cx="12" cy="12" r="8.2" />
@@ -1967,44 +1974,43 @@
               <button class="adm-chip" type="button" data-ufilter="flagged" aria-pressed="false">Flagged</button>
             </div>
             <div class="adm-adv" role="group" aria-label="Filter and sort players">
-              <label class="adm-fn" data-uadv="country">
-                <span class="adm-fn-k" aria-hidden="true">Country</span>
-                <span class="adm-fn-face" aria-hidden="true">
-                  <span class="adm-fn-flag" id="users-country-flag"></span>
-                  <span class="adm-fn-v" id="users-country-v">ALL</span>
-                  <svg class="ico adm-fn-chev"><use href="#i-next" /></svg>
-                </span>
-                <select class="adm-fn-sel" id="users-country" aria-label="Filter by country">
-                  <option value="">Every country</option>
-                </select>
-              </label>
-              <label class="adm-fn" data-uadv="age">
-                <span class="adm-fn-k" aria-hidden="true">Age</span>
-                <span class="adm-fn-face" aria-hidden="true">
-                  <span class="adm-fn-v" id="users-age-v">All ages</span>
-                  <svg class="ico adm-fn-chev"><use href="#i-next" /></svg>
-                </span>
-                <select class="adm-fn-sel" id="users-age" aria-label="Filter by age range">
-                  <option value="all">All ages</option>
-                  <option value="u18">Under 18</option>
-                  <option value="18-24">18–24</option>
-                  <option value="25-34">25–34</option>
-                  <option value="35p">35+</option>
-                </select>
-              </label>
-              <label class="adm-fn" data-uadv="sort">
-                <span class="adm-fn-k" aria-hidden="true">Sort</span>
-                <span class="adm-fn-face" aria-hidden="true">
-                  <span class="adm-fn-v" id="users-sort-v">Default</span>
-                  <svg class="ico adm-fn-chev"><use href="#i-next" /></svg>
-                </span>
-                <select class="adm-fn-sel" id="users-sort" aria-label="Sort players">
-                  <option value="default">Default order</option>
-                  <option value="lastPlayed">Last played</option>
-                  <option value="joined">Newest joined</option>
-                  <option value="tiq">Highest TIQ</option>
-                </select>
-              </label>
+              <div class="adm-fn" data-uadv="country">
+                <button class="custom-select-trigger adm-fn-trigger" type="button" id="users-country-trigger"
+                  aria-haspopup="listbox" aria-expanded="false" aria-controls="users-country-menu"
+                  aria-label="Country: all countries">
+                  <span class="adm-fn-k" aria-hidden="true">Country</span>
+                  <span class="adm-fn-face" aria-hidden="true">
+                    <span class="adm-fn-flag" id="users-country-flag"></span>
+                    <span class="adm-fn-v" id="users-country-v">ALL</span>
+                    <svg class="ico adm-fn-chev"><use href="#i-next" /></svg>
+                  </span>
+                </button>
+                <div class="custom-select-menu" id="users-country-menu" role="listbox" aria-label="Country" hidden></div>
+              </div>
+              <div class="adm-fn" data-uadv="age">
+                <button class="custom-select-trigger adm-fn-trigger" type="button" id="users-age-trigger"
+                  aria-haspopup="listbox" aria-expanded="false" aria-controls="users-age-menu"
+                  aria-label="Age: all ages">
+                  <span class="adm-fn-k" aria-hidden="true">Age</span>
+                  <span class="adm-fn-face" aria-hidden="true">
+                    <span class="adm-fn-v" id="users-age-v">All ages</span>
+                    <svg class="ico adm-fn-chev"><use href="#i-next" /></svg>
+                  </span>
+                </button>
+                <div class="custom-select-menu" id="users-age-menu" role="listbox" aria-label="Age band" hidden></div>
+              </div>
+              <div class="adm-fn" data-uadv="sort">
+                <button class="custom-select-trigger adm-fn-trigger" type="button" id="users-sort-trigger"
+                  aria-haspopup="listbox" aria-expanded="false" aria-controls="users-sort-menu"
+                  aria-label="Sort: default order">
+                  <span class="adm-fn-k" aria-hidden="true">Sort</span>
+                  <span class="adm-fn-face" aria-hidden="true">
+                    <span class="adm-fn-v" id="users-sort-v">Default</span>
+                    <svg class="ico adm-fn-chev"><use href="#i-next" /></svg>
+                  </span>
+                </button>
+                <div class="custom-select-menu" id="users-sort-menu" role="listbox" aria-label="Sort order" hidden></div>
+              </div>
             </div>
             <div class="adm-users-meta">
               <span id="users-total" aria-live="polite">—</span>

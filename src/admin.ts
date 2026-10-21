@@ -741,6 +741,286 @@ function icon(href: string, cls: string): SVGSVGElement {
   return svg;
 }
 
+/** One row of a custom select: a value, its printed label, and at most one leading visual. */
+interface CustomSelectOption {
+  value: string;
+  label: string;
+  /** Sprite glyph href for a leading icon (globe, bolt, brain...). */
+  icon?: string;
+  /** ISO alpha-2 for a leading circular flag. */
+  flag?: string;
+  /** Short code printed between the flag and the full name. */
+  code?: string;
+  /** Small pill printed in place of an icon (the age buckets). */
+  chip?: string;
+}
+
+interface CustomSelectHandle {
+  /** Repaint the selected checkmarks after the owning state changes. */
+  refresh(): void;
+  close(returnFocus?: boolean): void;
+}
+
+/** The one open menu across the toolbar pods: opening another closes this one first. */
+let closeActiveMenu: (() => void) | null = null;
+
+/**
+ * A select-only listbox: a clay trigger and a floating menu. The menu is moved out to `host`
+ * (the Admin stage), so the scrolling panel body can never clip it. It is then absolutely
+ * positioned against the stage, flips above the trigger near the floor, follows scroll/resize,
+ * and closes on outside press, Esc, Tab or blur.
+ */
+function makeCustomSelect(
+  host: HTMLElement | null,
+  cfg: {
+    trigger: HTMLButtonElement;
+    menu: HTMLElement;
+    options: () => CustomSelectOption[];
+    selected: () => string;
+    onPick: (value: string) => void;
+  },
+): CustomSelectHandle {
+  const { trigger, menu } = cfg;
+  const root = trigger.closest<HTMLElement>('.adm-fn');
+  let items: HTMLButtonElement[] = [];
+  let open = false;
+  let openFrame = 0;
+  let moveFrame = 0;
+  let hideTimer = 0;
+
+  if (host && menu.parentElement !== host) host.append(menu);
+
+  const closeSelf = (): void => close(false);
+
+  function optionNode(opt: CustomSelectOption, index: number): HTMLButtonElement {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'custom-select-item';
+    b.dataset.value = opt.value;
+    b.id = `${menu.id}-opt-${index}`;
+    b.setAttribute('role', 'option');
+    b.setAttribute('aria-selected', String(opt.value === cfg.selected()));
+    b.tabIndex = -1;
+
+    if (opt.flag) {
+      const flag = document.createElement('span');
+      flag.className = 'custom-select-flag';
+      flag.append(flagPhoto(opt.flag, ''));
+      b.append(flag);
+    } else if (opt.icon) {
+      b.append(icon(opt.icon, 'custom-select-ico'));
+    }
+    if (opt.code) {
+      const code = document.createElement('span');
+      code.className = 'custom-select-code';
+      code.textContent = opt.code;
+      b.append(code);
+    }
+    if (opt.chip) {
+      const chip = document.createElement('span');
+      chip.className = 'custom-select-chip';
+      chip.textContent = opt.chip;
+      b.append(chip);
+    }
+    const label = document.createElement('span');
+    label.className = 'custom-select-label';
+    label.textContent = opt.label;
+    b.append(label);
+
+    const check = document.createElement('span');
+    check.className = 'custom-select-check';
+    check.setAttribute('aria-hidden', 'true');
+    check.append(icon('#i-check', ''));
+    b.append(check);
+    return b;
+  }
+
+  function build(): void {
+    items = cfg.options().map(optionNode);
+    menu.textContent = '';
+    menu.append(...items);
+  }
+
+  function focusItem(index: number): void {
+    const item = items[index];
+    if (!item) return;
+    item.focus({ preventScroll: true });
+    item.scrollIntoView({ block: 'nearest' });
+  }
+
+  function step(delta: number): void {
+    if (!items.length) return;
+    const at = items.indexOf(document.activeElement as HTMLButtonElement);
+    const next = at < 0 ? (delta > 0 ? 0 : items.length - 1) : (at + delta + items.length) % items.length;
+    focusItem(next);
+  }
+
+  /** Anchor under the trigger, clamped to the stage; flip above when the floor is nearer. */
+  function position(): void {
+    if (!host || !open) return;
+    const sr = host.getBoundingClientRect();
+    const tr = trigger.getBoundingClientRect();
+    if (tr.bottom < sr.top || tr.top > sr.bottom) {
+      close(false);
+      return;
+    }
+
+    const edge = 8;
+    const gap = 6;
+    const width = Math.min(264, Math.max(0, sr.width - edge * 2));
+    menu.style.width = `${width}px`;
+    menu.style.maxHeight = '';
+
+    const natural = menu.offsetHeight;
+    const below = sr.bottom - tr.bottom - gap - edge;
+    const above = tr.top - sr.top - gap - edge;
+    let side: 'below' | 'above';
+    if (below >= natural) side = 'below';
+    else if (above >= natural) side = 'above';
+    else side = above > below ? 'above' : 'below';
+
+    const room = Math.max(0, side === 'below' ? below : above);
+    const cap = Math.min(260, room);
+    menu.style.maxHeight = `${cap}px`;
+    const height = Math.min(natural, cap);
+
+    const left = Math.min(Math.max(edge, tr.left - sr.left), Math.max(edge, sr.width - width - edge));
+    const rawTop = side === 'below'
+      ? tr.bottom - sr.top + gap
+      : tr.top - sr.top - gap - height;
+    const top = Math.min(Math.max(edge, rawTop), Math.max(edge, sr.height - height - edge));
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+    menu.dataset.flip = String(side === 'above');
+  }
+
+  function onViewportChange(): void {
+    if (!open) return;
+    cancelAnimationFrame(moveFrame);
+    moveFrame = requestAnimationFrame(position);
+  }
+
+  function onPointerDown(e: PointerEvent): void {
+    const target = e.target as Node | null;
+    if (target && (menu.contains(target) || trigger.contains(target))) return;
+    close(false);
+  }
+
+  function onBlur(): void {
+    close(false);
+  }
+
+  function close(returnFocus = false): void {
+    if (!open) return;
+    open = false;
+    if (closeActiveMenu === closeSelf) closeActiveMenu = null;
+    menu.classList.remove('is-open');
+    trigger.setAttribute('aria-expanded', 'false');
+    root?.removeAttribute('data-open');
+    document.removeEventListener('pointerdown', onPointerDown, true);
+    document.removeEventListener('scroll', onViewportChange, true);
+    window.removeEventListener('resize', onViewportChange);
+    window.removeEventListener('blur', onBlur);
+    cancelAnimationFrame(openFrame);
+    cancelAnimationFrame(moveFrame);
+    window.clearTimeout(hideTimer);
+    hideTimer = window.setTimeout(() => {
+      if (!open) menu.hidden = true;
+    }, motionReduced() ? 0 : 150);
+    if (returnFocus) trigger.focus({ preventScroll: true });
+  }
+
+  function openMenu(end?: 'last'): void {
+    if (open) return;
+    closeActiveMenu?.();
+    open = true;
+    closeActiveMenu = closeSelf;
+    window.clearTimeout(hideTimer);
+    build();
+    menu.hidden = false;
+    menu.classList.remove('is-open');
+    trigger.setAttribute('aria-expanded', 'true');
+    root?.setAttribute('data-open', 'true');
+    position();
+    const selected = items.findIndex((item) => item.dataset.value === cfg.selected());
+    focusItem(end === 'last' ? items.length - 1 : Math.max(0, selected));
+    openFrame = requestAnimationFrame(() => {
+      if (open) menu.classList.add('is-open');
+    });
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('scroll', onViewportChange, true);
+    window.addEventListener('resize', onViewportChange);
+    window.addEventListener('blur', onBlur);
+  }
+
+  function choose(value: string): void {
+    const changed = value !== cfg.selected();
+    close(true);
+    if (changed) cfg.onPick(value);
+  }
+
+  menu.addEventListener('click', (e) => {
+    const item = (e.target as HTMLElement).closest<HTMLButtonElement>('.custom-select-item');
+    if (!item || !menu.contains(item)) return;
+    choose(item.dataset.value ?? '');
+  });
+
+  menu.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      step(1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      step(-1);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      focusItem(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      focusItem(items.length - 1);
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      const active = document.activeElement as HTMLElement | null;
+      if (active && menu.contains(active)) active.click();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      close(true);
+    } else if (e.key === 'Tab') {
+      /* tab out of the listbox, not through 250 hidden options: continue from the trigger */
+      close(true);
+    }
+  });
+
+  trigger.addEventListener('click', () => {
+    if (open) close(true);
+    else openMenu();
+  });
+
+  trigger.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      openMenu();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      openMenu('last');
+    } else if (e.key === 'Escape' && open) {
+      e.preventDefault();
+      close(true);
+    }
+  });
+
+  return {
+    refresh(): void {
+      if (!open) return;
+      for (const item of items) {
+        item.setAttribute('aria-selected', String(item.dataset.value === cfg.selected()));
+      }
+    },
+    close,
+  };
+}
+
 /** One stepper: read the live value, compute the next, write it back, label it. */
 interface Knob {
   get(): number;
@@ -852,15 +1132,21 @@ export function createAdmin(api: AdminApi): Admin {
   const usersQ = $<HTMLInputElement>('users-q');
   const usersQClear = $<HTMLButtonElement>('users-q-clear');
   const userChips = [...document.querySelectorAll<HTMLButtonElement>('[data-ufilter]')];
-  const usersCountrySel = $<HTMLSelectElement>('users-country');
-  const usersAgeSel = $<HTMLSelectElement>('users-age');
-  const usersSortSel = $<HTMLSelectElement>('users-sort');
+  const usersCountryTrig = $<HTMLButtonElement>('users-country-trigger');
+  const usersAgeTrig = $<HTMLButtonElement>('users-age-trigger');
+  const usersSortTrig = $<HTMLButtonElement>('users-sort-trigger');
+  const usersCountryMenu = $<HTMLElement>('users-country-menu');
+  const usersAgeMenu = $<HTMLElement>('users-age-menu');
+  const usersSortMenu = $<HTMLElement>('users-sort-menu');
   const usersCountryFlag = $<HTMLElement>('users-country-flag');
   const usersCountryV = $<HTMLElement>('users-country-v');
   const usersAgeV = $<HTMLElement>('users-age-v');
   const usersSortV = $<HTMLElement>('users-sort-v');
   const usersReset = $<HTMLButtonElement>('users-reset');
   const usersAdvPods = [...document.querySelectorAll<HTMLElement>('[data-uadv]')];
+  let usersCountrySelect: CustomSelectHandle | null = null;
+  let usersAgeSelect: CustomSelectHandle | null = null;
+  let usersSortSelect: CustomSelectHandle | null = null;
   /* Access control: the list, the add key, and the appointment drawer */
   const aclList = $<HTMLElement>('adm-acl-list');
   const aclEmpty = $<HTMLElement>('adm-acl-empty');
@@ -1339,8 +1625,17 @@ export function createAdmin(api: AdminApi): Admin {
   const AGE_LABEL: Record<AgeBand, string> = {
     all: 'All ages', u18: 'Under 18', '18-24': '18–24', '25-34': '25–34', '35p': '35+',
   };
+  const AGE_CHIP: Record<AgeBand, string> = {
+    all: 'All', u18: '<18', '18-24': '18-24', '25-34': '25-34', '35p': '35+',
+  };
   const SORT_LABEL: Record<DirSort, string> = {
     default: 'Default', lastPlayed: 'Last played', joined: 'Newest', tiq: 'Top TIQ',
+  };
+  const SORT_MENU: Record<DirSort, { label: string; icon: string }> = {
+    default: { label: 'Default order', icon: '#i-tune' },
+    lastPlayed: { label: 'Last played', icon: '#i-bolt' },
+    joined: { label: 'Newest joined', icon: '#i-calendar' },
+    tiq: { label: 'Highest TIQ', icon: '#i-brain' },
   };
   const AGE_BANDS = Object.keys(AGE_LABEL) as AgeBand[];
   const SORTS = Object.keys(SORT_LABEL) as DirSort[];
@@ -1349,35 +1644,20 @@ export function createAdmin(api: AdminApi): Admin {
     (typeof p.age === 'number' && Number.isFinite(p.age) ? Math.max(0, Math.floor(p.age)) : 0);
 
   /** The two-letter codes the picker can offer honestly: the index plus whatever the live page shows. */
-  function ensureCountryOptions(): void {
-    if (!usersCountrySel) return;
+  function countryOptions(): CustomSelectOption[] {
     const codes = new Set(directoryCountries());
     for (const p of usersRows) if (/^[A-Z]{2}$/.test(p.country)) codes.add(p.country);
     if (profile.country && /^[A-Z]{2}$/i.test(profile.country)) codes.add(profile.country.toUpperCase());
     if (usersCountry) codes.add(usersCountry);
     const list = [...codes].sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
-    const key = list.join(',');
-    if (usersCountrySel.dataset.key === key) return;
-    usersCountrySel.textContent = '';
-    const every = document.createElement('option');
-    every.value = '';
-    every.textContent = 'Every country';
-    usersCountrySel.append(every);
-    for (const code of list) {
-      const opt = document.createElement('option');
-      opt.value = code;
-      opt.textContent = `${code} — ${nameOf(code)}`;
-      usersCountrySel.append(opt);
-    }
-    usersCountrySel.dataset.key = key;
-    usersCountrySel.value = usersCountry;
+    return [
+      { value: '', label: 'Every country', icon: '#i-globe' },
+      ...list.map((code) => ({ value: code, label: nameOf(code), code, flag: code })),
+    ];
   }
 
   /** Keep the three closed faces (and the gold "filter is on" rims) in step with the state. */
   function syncAdvanced(): void {
-    if (usersCountrySel) usersCountrySel.value = usersCountry;
-    if (usersAgeSel) usersAgeSel.value = usersAge;
-    if (usersSortSel) usersSortSel.value = usersSort;
     if (usersCountryFlag && usersCountryFlag.dataset.cc !== usersCountry) {
       usersCountryFlag.textContent = '';
       usersCountryFlag.append(
@@ -1388,6 +1668,14 @@ export function createAdmin(api: AdminApi): Admin {
     if (usersCountryV) usersCountryV.textContent = usersCountry || 'ALL';
     if (usersAgeV) usersAgeV.textContent = AGE_LABEL[usersAge];
     if (usersSortV) usersSortV.textContent = SORT_LABEL[usersSort];
+    usersCountryTrig?.setAttribute(
+      'aria-label', `Country: ${usersCountry ? nameOf(usersCountry) : 'all countries'}`,
+    );
+    usersAgeTrig?.setAttribute('aria-label', `Age: ${AGE_LABEL[usersAge]}`);
+    usersSortTrig?.setAttribute('aria-label', `Sort: ${SORT_LABEL[usersSort]}`);
+    usersCountrySelect?.refresh();
+    usersAgeSelect?.refresh();
+    usersSortSelect?.refresh();
     for (const pod of usersAdvPods) {
       const key = pod.dataset.uadv;
       const on = key === 'country' ? !!usersCountry : key === 'age' ? usersAge !== 'all' : usersSort !== 'default';
@@ -1583,7 +1871,6 @@ export function createAdmin(api: AdminApi): Admin {
         : '—';
     }
     if (usersMore) usersMore.hidden = !usersReady || usersRows.length >= usersTotal;
-    if (usersCountrySel && !usersCountrySel.dataset.key) ensureCountryOptions();
     syncAdvanced();
     if (!usersList) return;
     usersList.textContent = '';
@@ -1636,7 +1923,6 @@ export function createAdmin(api: AdminApi): Admin {
       usersRows = reset ? live.players : [...usersRows, ...live.players];
       usersTotal = live.total;
       usersReady = true;
-      ensureCountryOptions();
       paintUsers();
       return;
     }
@@ -2341,8 +2627,16 @@ export function createAdmin(api: AdminApi): Admin {
     impact('medium');
   }
 
+  /** A stage close or a tab move must never leave a menu floating over the next panel. */
+  function closeCustomSelects(): void {
+    usersCountrySelect?.close(false);
+    usersAgeSelect?.close(false);
+    usersSortSelect?.close(false);
+  }
+
   function closeStage() {
     if (!stage || !open) return;
+    closeCustomSelects();
     open = false;
     stage.classList.remove('open');
     document.documentElement.classList.remove('admin-open');
@@ -2359,6 +2653,7 @@ export function createAdmin(api: AdminApi): Admin {
   }
 
   function selectTab(id: string) {
+    closeCustomSelects();
     let at = 0;
     for (const t of tabs) {
       const mine = t.dataset.atab === id;
@@ -2471,37 +2766,62 @@ export function createAdmin(api: AdminApi): Admin {
     });
   }
 
-  usersCountrySel?.addEventListener('change', () => {
-    const code = usersCountrySel.value.trim().toUpperCase();
-    usersCountry = /^[A-Z]{2}$/.test(code) ? code : '';
-    openPlayer = '';
-    impact('light');
-    syncAdvanced();
-    scheduleAdvRefresh();
-  });
+  /* the three advanced pods: custom listboxes whose menus live in the stage, never in the scroll body */
+  if (usersCountryTrig && usersCountryMenu) {
+    usersCountrySelect = makeCustomSelect(stage, {
+      trigger: usersCountryTrig,
+      menu: usersCountryMenu,
+      options: countryOptions,
+      selected: () => usersCountry,
+      onPick: (value) => {
+        const code = value.trim().toUpperCase();
+        usersCountry = /^[A-Z]{2}$/.test(code) ? code : '';
+        openPlayer = '';
+        impact('light');
+        syncAdvanced();
+        scheduleAdvRefresh();
+      },
+    });
+  }
 
-  usersAgeSel?.addEventListener('change', () => {
-    const next = usersAgeSel.value as AgeBand;
-    usersAge = AGE_BANDS.includes(next) ? next : 'all';
-    openPlayer = '';
-    impact('light');
-    syncAdvanced();
-    scheduleAdvRefresh();
-  });
+  if (usersAgeTrig && usersAgeMenu) {
+    usersAgeSelect = makeCustomSelect(stage, {
+      trigger: usersAgeTrig,
+      menu: usersAgeMenu,
+      options: () => AGE_BANDS.map((value) => ({ value, label: AGE_LABEL[value], chip: AGE_CHIP[value] })),
+      selected: () => usersAge,
+      onPick: (value) => {
+        const next = value as AgeBand;
+        usersAge = AGE_BANDS.includes(next) ? next : 'all';
+        openPlayer = '';
+        impact('light');
+        syncAdvanced();
+        scheduleAdvRefresh();
+      },
+    });
+  }
 
-  usersSortSel?.addEventListener('change', () => {
-    const next = usersSortSel.value as DirSort;
-    usersSort = SORTS.includes(next) ? next : 'default';
-    /* the Top TIQ chip is only a shortcut: choosing another order leaves it for All Players */
-    if (usersFilter === 'tiq' && usersSort !== 'tiq') {
-      usersFilter = 'all';
-      paintChipState();
-    }
-    openPlayer = '';
-    impact('light');
-    syncAdvanced();
-    scheduleAdvRefresh();
-  });
+  if (usersSortTrig && usersSortMenu) {
+    usersSortSelect = makeCustomSelect(stage, {
+      trigger: usersSortTrig,
+      menu: usersSortMenu,
+      options: () => SORTS.map((value) => ({ value, label: SORT_MENU[value].label, icon: SORT_MENU[value].icon })),
+      selected: () => usersSort,
+      onPick: (value) => {
+        const next = value as DirSort;
+        usersSort = SORTS.includes(next) ? next : 'default';
+        /* the Top TIQ chip is only a shortcut: choosing another order leaves it for All Players */
+        if (usersFilter === 'tiq' && usersSort !== 'tiq') {
+          usersFilter = 'all';
+          paintChipState();
+        }
+        openPlayer = '';
+        impact('light');
+        syncAdvanced();
+        scheduleAdvRefresh();
+      },
+    });
+  }
 
   usersReset?.addEventListener('click', resetUserFilters);
 
