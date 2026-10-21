@@ -1,33 +1,55 @@
 /**
  * squadRoster.ts — the member list behind the squad hub.
  *
- * A squad only stores its handle, headcount and trophy total, so the roster is a
- * deterministic read of those three numbers: names, roles and contributions are
- * derived from a per-squad seed and never persisted. The local player is merged in
- * at their real banked contribution (`getMyContribution`), and every other row's
- * contribution is sliced from the trophies the squad has not earned on this device.
- * Reloading, rebinding or leaving therefore never re-rolls the table.
+ * A squad stores its handle, headcount and a legacy points pool, but no roster and no per-member
+ * ratings. The hub therefore derives a deterministic ladder of individual TIQs around the squad's
+ * own standing: the local player is merged in at their real TIQ (the same `myTiq()` the Mind
+ * Ladder prints) and every other row is a stable read of the squad id. The average the hub quotes
+ * is the mean of the rows it actually paints, never a typed number.
  *
- * Only the player's own honor is worn from the real save; another row may show a
- * medallion only when the Worker's public holder index names that exact member.
+ * Arena standing is a second read of that same TIQ: a six-tier ladder with three divisions each
+ * and a global place. It is presentation data for a local-first mock; a real tournament feed
+ * replaces `arenaStandingOf()` without touching the roster shape.
+ *
+ * Only the player's own honor is worn from the real save; another row may show a medallion only
+ * when the Worker's public holder index names that exact member.
  */
 
 import { holderEdition, wornEdition, type WornEdition } from './badges';
+import { myTiq } from './matchmaking';
 import { getMyContribution, type RankedSquad } from './squads';
 import { profile } from './storage';
 import { tgUser } from './telegram';
 
 export type SquadRole = 'leader' | 'admin' | 'member';
-export type SquadRosterSort = 'trophies' | 'name';
+export type SquadRosterSort = 'tiq' | 'arena' | 'name';
+
+export type ArenaTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'challenger';
+export type ArenaDivision = 'I' | 'II' | 'III';
+
+export interface ArenaStanding {
+  tier: ArenaTier;
+  tierName: string;
+  division: ArenaDivision;
+  /** "Diamond I" */
+  divisionLabel: string;
+  /** "Diamond Arena Div I" */
+  badge: string;
+  /** Global Arena place. 0 means the player has not scored a TIQ yet. */
+  rank: number;
+  /** Tournament wins this season, derived from the same TIQ. */
+  wins: number;
+}
 
 export interface SquadMember {
-  /** 0-based display rank in contribution order; search/name sorts never overwrite it. */
+  /** 0-based display rank in TIQ order; search/name sorts never overwrite it. */
   rank: number;
   id: string;
   name: string;
   role: SquadRole;
-  /** Trophies this member banked for the squad. */
-  contribution: number;
+  /** The member's own Tactical IQ — the number the ladder ranks. */
+  tiq: number;
+  arena: ArenaStanding;
   isYou: boolean;
   initials: string;
   /** Avatar tint, picked from a restrained palette so 1,200 rows stay calm. */
@@ -40,13 +62,77 @@ export interface SquadRoster {
   members: SquadMember[];
   /** The headcount the hub quotes (at least one: the player). */
   count: number;
-  /** Sum of every row's contribution. */
-  trophies: number;
+  /** Sum(Member TIQ) / Total Members, read off the rows above. */
+  avgTiq: number;
+  totalTiq: number;
   yourRank: number;
+  yourTiq: number;
+  /** Squad TIQ banked on this device this season. */
   yourContribution: number;
   yourRole: SquadRole;
   yourMedal: WornEdition | null;
   youName: string;
+  yourArena: ArenaStanding;
+  /** The tier the whole squad wears, read off `avgTiq`. */
+  squadArena: ArenaStanding;
+}
+
+/** The championship the Arena stages; the card names it beside your place. */
+export const ARENA_CUP = 'Grand Cup';
+
+/** The #1 squad's average in the seeded field; every next rank is 85 TIQ lower. */
+const AVG_TOP = 3_420;
+const AVG_STEP = 85;
+const AVG_FLOOR = 1_800;
+const ARENA_FIELD = 250_000;
+
+interface ArenaTierSpec {
+  id: ArenaTier;
+  name: string;
+  hi: number;
+  /** Upper TIQ of Div III and Div II; anything above the second cut is Div I. */
+  cuts: readonly [number, number];
+}
+
+const ARENA_TIERS: readonly ArenaTierSpec[] = [
+  { id: 'bronze', name: 'Bronze', hi: 1_200, cuts: [400, 800] },
+  { id: 'silver', name: 'Silver', hi: 1_800, cuts: [1_400, 1_600] },
+  { id: 'gold', name: 'Gold', hi: 2_400, cuts: [2_000, 2_200] },
+  { id: 'platinum', name: 'Platinum', hi: 3_000, cuts: [2_600, 2_800] },
+  { id: 'diamond', name: 'Diamond', hi: 4_000, cuts: [3_200, 3_400] },
+  { id: 'challenger', name: 'Challenger', hi: Infinity, cuts: [4_500, 5_000] },
+];
+
+/**
+ * The global Arena place for a TIQ. Anchored so the brief's reference mind (3,740) sits at
+ * #42 and a 5,804 sits inside the top five; the tail is clamped to a 250k field.
+ */
+export function arenaRankOf(tiq: number): number {
+  if (tiq <= 0) return 0;
+  const place = 42 * Math.pow(3_740 / tiq, 5.35);
+  if (!Number.isFinite(place)) return ARENA_FIELD;
+  return Math.max(1, Math.min(ARENA_FIELD, Math.round(place)));
+}
+
+/** The tier + division a TIQ buys, plus the place and tourney wins that follow from it. */
+export function arenaStandingOf(tiq: number): ArenaStanding {
+  const value = Math.max(0, Math.floor(tiq));
+  const spec = ARENA_TIERS.find((t) => value < t.hi) ?? ARENA_TIERS[ARENA_TIERS.length - 1];
+  const division: ArenaDivision = value < spec.cuts[0] ? 'III' : value < spec.cuts[1] ? 'II' : 'I';
+  return {
+    tier: spec.id,
+    tierName: spec.name,
+    division,
+    divisionLabel: `${spec.name} ${division}`,
+    badge: `${spec.name} Arena Div ${division}`,
+    rank: arenaRankOf(value),
+    wins: Math.max(0, Math.round((value - 1_000) / 170)),
+  };
+}
+
+/** The average a squad is built around, by its global place in the seeded field. */
+export function squadTargetAvg(rank: number): number {
+  return Math.max(AVG_FLOOR, AVG_TOP - (Math.max(1, rank) - 1) * AVG_STEP);
 }
 
 const FIRSTS = [
@@ -101,34 +187,82 @@ function nameOf(seed: number, index: number): string {
 }
 
 /**
- * A long-tail split of `total` over `count` members. Every row has at least one
- * trophy when the squad can afford it, the first rows carry the bulk, and the
- * floors plus the leftover are handed back so the row sum is exactly `total`.
+ * A two-tier split of `total` TIQ over `count` synthetic members, in descending order.
+ *
+ * The top ~3% are the squad's stars: a linear tail whose mean is ~1.42x the squad average,
+ * from ~1.7x down to ~1.13x. Everyone else is a tight core just under the average. That is
+ * the shape a real top squad has — a few carriers and a large bench — and it makes the
+ * personal Arena place (a smooth read of TIQ) land coherently inside the roster. A small
+ * deterministic jitter keeps 1,200 rows from reading like a printed ruler; the rounding
+ * remainder is handed back so the mean is exact before the local player is merged in.
  */
-function splitContributions(total: number, count: number): number[] {
+function splitTiq(squadId: string, total: number, count: number, fullCount: number): number[] {
+  if (count <= 0 || total <= 0) return new Array<number>(Math.max(0, count)).fill(0);
+
+  const elite = Math.min(count, Math.max(1, Math.round(fullCount * 0.03)));
+  const bulk = count - elite;
+  const eliteShare = bulk <= 0 ? 1 : (elite * 1.415) / fullCount;
+  const eliteTotal = Math.round(total * eliteShare);
+  const bulkTotal = total - eliteTotal;
+  const eliteMean = eliteTotal / elite;
+  const bulkMean = bulk > 0 ? bulkTotal / bulk : 0;
+
   const rows = new Array<number>(count).fill(0);
-  if (count <= 0 || total <= 0) return rows;
-
-  const weights = new Float64Array(count);
-  let weightSum = 0;
-  for (let i = 0; i < count; i++) {
-    const w = 1 / Math.pow(i + 1, 1.4);
-    weights[i] = w;
-    weightSum += w;
+  for (let i = 0; i < elite; i++) {
+    const t = elite === 1 ? 0 : i / (elite - 1);
+    const shape = elite === 1 ? 1 : 1.2 - 0.4 * t;
+    const jitter = 0.994 + ((hash32(`${squadId}|elite|${i}`) % 1000) / 1000) * 0.012;
+    rows[i] = Math.max(0, Math.round(eliteMean * shape * jitter));
   }
-
-  const floor = total >= count ? 1 : 0;
-  const free = total - floor * count;
-  let placed = 0;
-  for (let i = 0; i < count; i++) {
-    const share = Math.floor((free * weights[i]) / weightSum);
-    rows[i] = floor + share;
-    placed += share;
+  for (let i = 0; i < bulk; i++) {
+    const t = bulk === 1 ? 0 : i / (bulk - 1);
+    const shape = bulk === 1 ? 1 : 1.025 - 0.05 * t;
+    const jitter = 0.996 + ((hash32(`${squadId}|core|${i}`) % 1000) / 1000) * 0.008;
+    rows[elite + i] = Math.max(0, Math.round(bulkMean * shape * jitter));
   }
+  rows.sort((a, b) => b - a);
 
-  let rest = free - placed;
-  for (let i = 0; rest > 0; i++, rest--) rows[i] += 1;
+  let placed = rows.reduce((sum, n) => sum + n, 0);
+  let rest = total - placed;
+  const guard = count * 3;
+  for (let i = 0, n = 0; rest > 0 && n < guard; i = (i + 1) % count, n++, rest--) rows[i] += 1;
+  for (let i = count - 1, n = 0; rest < 0 && n < guard; i = (i - 1 + count) % count, n++) {
+    if (rows[i] > 0) { rows[i] -= 1; rest += 1; }
+  }
   return rows;
+}
+
+/**
+ * Arena places are a global ladder, so two squadmates may share a rounded place.
+ * Resolve ties in TIQ order; the local player keeps the place the formula quotes.
+ * Then swap a deterministic set of adjacent pairs — the podium and the player are
+ * never swapped — so "sort by Arena rank" is a genuinely different order from
+ * "sort by TIQ", and every place shown on a row is the place it sorts by.
+ */
+function settleArenaRanks(squadId: string, members: SquadMember[]): void {
+  const used = new Set<number>();
+  const you = members.find((m) => m.isYou);
+  if (you && you.arena.rank > 0) used.add(you.arena.rank);
+
+  let last = 0;
+  for (const member of members) {
+    if (member.isYou || member.arena.rank <= 0) continue;
+    let rank = Math.max(member.arena.rank, last + 1);
+    while (used.has(rank)) rank++;
+    member.arena.rank = rank;
+    used.add(rank);
+    last = rank;
+  }
+
+  for (let i = 3; i + 1 < members.length; i += 2) {
+    const a = members[i];
+    const b = members[i + 1];
+    if (a.isYou || b.isYou || a.rank <= 3 || b.rank <= 3) continue;
+    if ((hash32(`${squadId}|swap|${a.id}`) & 1) === 1) continue;
+    const rank = a.arena.rank;
+    a.arena.rank = b.arena.rank;
+    b.arena.rank = rank;
+  }
 }
 
 function roleFor(index: number, playerRole: SquadRole): SquadRole {
@@ -137,7 +271,7 @@ function roleFor(index: number, playerRole: SquadRole): SquadRole {
   return index === 1 || index === 4 ? 'admin' : 'member';
 }
 
-/** Count of synthetic contributions strictly above the player's, in a descending table. */
+/** Count of synthetic TIQs strictly above the player's, in a descending table. */
 function insertionIndex(rows: number[], value: number): number {
   let lo = 0;
   let hi = rows.length;
@@ -151,17 +285,19 @@ function insertionIndex(rows: number[], value: number): number {
 
 export function buildSquadRoster(squad: RankedSquad): SquadRoster {
   const count = Math.max(1, Math.floor(squad.members) || 1);
+  const yourTiq = Math.max(0, Math.floor(myTiq()));
   const yourContribution = Math.max(0, Math.floor(getMyContribution()));
   const syntheticCount = count - 1;
-  const syntheticTotal = Math.max(0, Math.floor(squad.trophies) - yourContribution);
-  const contributions = splitContributions(syntheticTotal, syntheticCount);
-  const youAt = insertionIndex(contributions, yourContribution);
+  const targetTotal = Math.round(squadTargetAvg(squad.rank) * count);
+  const syntheticTotal = Math.max(0, targetTotal - yourTiq);
+  const tiqs = splitTiq(squad.id, syntheticTotal, syntheticCount, count);
+  const youAt = insertionIndex(tiqs, yourTiq);
   const tab = hash32(`${squad.id}|${squad.handle}`);
   const yourRole: SquadRole = squad.owned ? 'leader' : 'member';
   const youName = myName();
   const youKey = youName.trim().toLowerCase();
 
-  const synthetic = contributions.map((contribution, i): SquadMember => {
+  const synthetic = tiqs.map((tiq, i): SquadMember => {
     const generated = nameOf(tab, i);
     // The local player is merged in separately; never print their name twice.
     const name = generated.toLowerCase() === youKey ? `${generated} 2` : generated;
@@ -170,7 +306,8 @@ export function buildSquadRoster(squad: RankedSquad): SquadRoster {
       id: `${squad.id}:${i}`,
       name,
       role: roleFor(i, yourRole),
-      contribution,
+      tiq,
+      arena: arenaStandingOf(tiq),
       isYou: false,
       initials: initialsOf(name),
       hue: AVATAR_HUES[hash32(`${squad.id}:${name}`) % AVATAR_HUES.length],
@@ -183,7 +320,8 @@ export function buildSquadRoster(squad: RankedSquad): SquadRoster {
     id: `${squad.id}:you`,
     name: youName,
     role: yourRole,
-    contribution: yourContribution,
+    tiq: yourTiq,
+    arena: arenaStandingOf(yourTiq),
     isYou: true,
     initials: initialsOf(youName),
     hue: 198,
@@ -196,16 +334,24 @@ export function buildSquadRoster(squad: RankedSquad): SquadRoster {
     if (i < synthetic.length) members.push(synthetic[i]);
   }
   for (let i = 0; i < members.length; i++) members[i].rank = i + 1;
+  settleArenaRanks(squad.id, members);
+
+  const totalTiq = members.reduce((sum, m) => sum + m.tiq, 0);
+  const avgTiq = Math.round(totalTiq / Math.max(1, members.length));
 
   return {
     members,
     count,
-    trophies: yourContribution + contributions.reduce((sum, n) => sum + n, 0),
+    avgTiq,
+    totalTiq,
     yourRank: youAt + 1,
+    yourTiq,
     yourContribution,
     yourRole,
     yourMedal: you.medal,
     youName,
+    yourArena: you.arena,
+    squadArena: arenaStandingOf(avgTiq),
   };
 }
 
@@ -219,5 +365,11 @@ export function arrangeRoster(
   let rows = roster.members;
   if (needle) rows = rows.filter((m) => m.name.toLowerCase().includes(needle));
   if (sort === 'name') rows = rows.slice().sort((a, b) => a.name.localeCompare(b.name));
+  else if (sort === 'arena') {
+    rows = rows.slice().sort((a, b) =>
+      (a.arena.rank || Infinity) - (b.arena.rank || Infinity)
+      || b.tiq - a.tiq
+      || a.name.localeCompare(b.name));
+  }
   return rows;
 }

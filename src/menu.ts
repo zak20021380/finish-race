@@ -34,7 +34,7 @@ import {
   onSquadChange, searchSquads, squadLetter,
 } from './squads';
 import {
-  arrangeRoster, buildSquadRoster,
+  ARENA_CUP, arrangeRoster, buildSquadRoster, squadTargetAvg,
   type SquadMember, type SquadRole, type SquadRoster, type SquadRosterSort,
 } from './squadRoster';
 import { copyText } from './gamemodes';
@@ -521,7 +521,8 @@ export function createMenu(api: MenuApi): Menu {
   const squadScroll = $<HTMLElement>('squad-hub-scroll');
   const squadRosterEl = $<HTMLOListElement>('squad-roster');
   const squadMemberQ = $<HTMLInputElement>('squad-member-q');
-  const squadSortBtn = $<HTMLButtonElement>('squad-sort');
+  const squadSortSel = $<HTMLSelectElement>('squad-sort');
+  const squadSortWrap = $<HTMLElement>('squad-sort-wrap');
   const squadSortLabel = $<HTMLElement>('squad-sort-label');
   const squadCountEl = $<HTMLElement>('squad-roster-count');
   const squadRosterEmpty = $<HTMLElement>('squad-roster-empty');
@@ -529,9 +530,9 @@ export function createMenu(api: MenuApi): Menu {
 
   let squadView: SquadRoster | null = null;
   let squadRows: SquadMember[] = [];
-  let squadSort: SquadRosterSort = 'trophies';
+  let squadSort: SquadRosterSort = 'tiq';
   let squadQuery = '';
-  let squadRowH = 56;
+  let squadRowH = 48;
   const squadRowEls = new Map<number, HTMLElement>();
   let squadRange = { start: -1, end: -1, rows: -1 };
   let squadFrame = 0;
@@ -589,19 +590,41 @@ export function createMenu(api: MenuApi): Menu {
     return wrap;
   }
 
+  /** The Arena tag under a row's name: the exact place the Arena sort orders by. */
+  function squadArenaTag(member: SquadMember): HTMLElement {
+    const tag = document.createElement('span');
+    tag.className = 'sq-arena-tag';
+    tag.dataset.tier = member.arena.tier;
+    const place = member.arena.rank;
+    const wins = `${en(member.arena.wins)} tournament win${member.arena.wins === 1 ? '' : 's'}`;
+    tag.title = place > 0
+      ? `${member.arena.divisionLabel} · ${wins}`
+      : `${member.arena.divisionLabel} · unranked in the arena`;
+    const text = document.createElement('span');
+    text.className = 'sq-arena-t';
+    text.textContent = place > 0 ? `Arena #${en(place)}` : 'Arena unranked';
+    tag.append(squadSvg('#i-gem'), text);
+    return tag;
+  }
+
   function paintSquadYou(): void {
     const roster = squadView;
     if (!roster) return;
     const member = roster.members.find((m) => m.isYou);
     if (!member) return;
     squadYouEl.textContent = '';
+    squadYouEl.dataset.tier = roster.yourArena.tier;
 
     const top = document.createElement('div');
     top.className = 'sq-you-top';
     const kicker = document.createElement('span');
     kicker.className = 'sq-you-kicker';
     kicker.textContent = 'Your standing';
-    top.append(kicker);
+    const name = document.createElement('span');
+    name.className = 'sq-you-name';
+    name.textContent = roster.youName;
+    name.title = roster.youName;
+    top.append(kicker, name);
     const role = squadRolePill(roster.yourRole);
     if (role) top.append(role);
     if (roster.yourMedal && roster.yourMedal.serial !== null) {
@@ -617,34 +640,62 @@ export function createMenu(api: MenuApi): Menu {
     main.className = 'sq-you-main';
     const identity = document.createElement('span');
     identity.className = 'sq-you-id';
+
     const rankLine = document.createElement('span');
     rankLine.className = 'sq-you-rank';
     const rank = document.createElement('b');
     rank.textContent = `#${en(roster.yourRank)}`;
     const of = document.createElement('small');
     of.textContent = `of ${en(roster.count)}`;
-    rankLine.append(rank, of);
-    const name = document.createElement('span');
-    name.className = 'sq-you-name';
-    name.textContent = roster.youName;
-    identity.append(rankLine, name);
+    const where = document.createElement('em');
+    where.textContent = 'SQUAD';
+    rankLine.append(rank, of, where);
 
-    const contrib = document.createElement('span');
-    contrib.className = 'sq-you-contrib';
-    const amount = document.createElement('b');
-    amount.append(document.createTextNode(`+${en(roster.yourContribution)}`), squadSvg('#i-cup'));
+    const detail = document.createElement('span');
+    detail.className = 'sq-you-detail';
+    const tiq = document.createElement('span');
+    tiq.className = 'sq-you-tiq';
+    tiq.append(squadSvg('#i-brain'));
+    const tiqValue = document.createElement('b');
+    tiqValue.textContent = `${en(roster.yourTiq)} TIQ`;
+    tiq.append(tiqValue);
+    const arena = document.createElement('span');
+    arena.className = 'sq-you-arena';
+    arena.dataset.tier = roster.yourArena.tier;
+    const place = roster.yourArena.rank > 0
+      ? `Arena #${en(roster.yourArena.rank)}`
+      : 'Arena unranked';
+    const arenaText = document.createElement('span');
+    arenaText.className = 'sq-you-arena-t';
+    arenaText.textContent = place;
+    const arenaCup = document.createElement('span');
+    arenaCup.className = 'sq-you-arena-cup';
+    arenaCup.textContent = ` · ${ARENA_CUP}`;
+    arena.append(squadSvg('#i-gem'), arenaText, arenaCup);
+    detail.append(tiq, arena);
+    identity.append(rankLine, detail);
+
+    const season = document.createElement('span');
+    season.className = `sq-you-season${roster.yourContribution <= 0 ? ' is-zero' : ''}`;
+    const gain = document.createElement('b');
+    gain.textContent = `+${en(roster.yourContribution)}`;
     const caption = document.createElement('small');
-    caption.textContent = 'contributed';
-    contrib.append(amount, caption);
-    main.append(squadAvatar(member, 'sq-you-av'), identity, contrib);
+    caption.textContent = 'TIQ this season';
+    season.append(gain, caption);
+
+    main.append(squadAvatar(member, 'sq-you-av'), identity, season);
     squadYouEl.append(top, main);
 
     const honor = roster.yourMedal
       ? `, wearing ${roster.yourMedal.def.name}${roster.yourMedal.serial !== null ? ` edition ${roster.yourMedal.serial}` : ''}`
       : '';
+    const arenaSpeech = roster.yourArena.rank > 0
+      ? `arena rank ${roster.yourArena.rank} in the ${ARENA_CUP}`
+      : 'unranked in the arena';
     squadYouEl.setAttribute(
       'aria-label',
-      `Your standing: rank ${roster.yourRank} of ${roster.count}, ${roster.yourContribution} trophies contributed${honor}.`,
+      `Your standing: rank ${roster.yourRank} of ${roster.count}, ${roster.yourTiq} Tactical IQ, `
+      + `${arenaSpeech}, ${roster.yourContribution} TIQ this season${honor}.`,
     );
   }
 
@@ -679,28 +730,39 @@ export function createMenu(api: MenuApi): Menu {
 
     const id = document.createElement('span');
     id.className = 'sq-id';
+    const nameLine = document.createElement('span');
+    nameLine.className = 'sq-name-line';
     const name = document.createElement('span');
     name.className = 'sq-name';
     name.textContent = member.name;
     name.title = member.name;
-    id.append(name);
+    nameLine.append(name);
     const role = squadRolePill(member.role);
-    if (role) id.append(role);
+    if (role) nameLine.append(role);
+    id.append(nameLine, squadArenaTag(member));
 
     const score = document.createElement('span');
-    score.className = `sq-score${member.contribution <= 0 ? ' is-zero' : ''}`;
+    score.className = `sq-score${member.tiq <= 0 ? ' is-zero' : ''}`;
     const amount = document.createElement('b');
-    amount.textContent = en(member.contribution);
-    score.append(amount, squadSvg('#i-cup'));
-    score.title = `${en(member.contribution)} trophies contributed`;
+    amount.textContent = en(member.tiq);
+    const unit = document.createElement('small');
+    unit.textContent = 'TIQ';
+    score.append(squadSvg('#i-brain'), amount, unit);
+    score.title = `${en(member.tiq)} Tactical IQ · `
+      + (member.arena.rank > 0 ? `Arena #${en(member.arena.rank)}` : 'Arena unranked')
+      + ` · ${member.arena.divisionLabel}`;
 
     const roleSpeech = member.role === 'leader' ? ', leader' : member.role === 'admin' ? ', admin' : '';
     const honor = member.medal
       ? `, wearing ${member.medal.def.name}${member.medal.serial !== null ? ` edition ${member.medal.serial}` : ''}`
       : '';
+    const arenaSpeech = member.arena.rank > 0
+      ? `arena rank ${member.arena.rank}`
+      : 'unranked in the arena';
     li.setAttribute(
       'aria-label',
-      `Rank ${member.rank}: ${member.name}${roleSpeech} — ${member.contribution} trophies contributed${member.isYou ? ', you' : ''}${honor}.`,
+      `Rank ${member.rank}: ${member.name}${roleSpeech} — ${member.tiq} Tactical IQ, `
+      + `${arenaSpeech}, ${member.arena.wins} tournament wins${member.isYou ? ', you' : ''}${honor}.`,
     );
     li.append(rank, squadAvatar(member), id, score);
     return li;
@@ -759,15 +821,23 @@ export function createMenu(api: MenuApi): Menu {
     if (!roster) return;
     squadRows = arrangeRoster(roster, squadSort, squadQuery);
     const filtered = squadQuery.trim().length > 0;
+    const membersWord = roster.count === 1 ? 'member' : 'members';
     squadCountEl.textContent = en(squadRows.length);
     squadCountEl.setAttribute('aria-label', filtered
-      ? `${squadRows.length} of ${en(roster.count)} members match`
-      : `${en(roster.count)} members`);
-    squadSortLabel.textContent = squadSort === 'trophies' ? 'Trophies' : 'A–Z';
-    squadSortBtn.dataset.sort = squadSort;
-    squadSortBtn.setAttribute('aria-label', squadSort === 'trophies'
-      ? 'Sorted by trophies. Activate to sort A to Z.'
-      : 'Sorted A to Z. Activate to sort by trophies.');
+      ? `${en(squadRows.length)} of ${en(roster.count)} ${membersWord} shown`
+      : `${en(roster.count)} ${membersWord}`);
+    const sortLabel = squadSort === 'tiq' ? 'TIQ' : squadSort === 'arena' ? 'Arena rank' : 'A–Z';
+    squadSortLabel.textContent = sortLabel;
+    squadSortWrap.dataset.sort = squadSort;
+    squadSortSel.value = squadSort;
+    squadRosterEl.setAttribute(
+      'aria-label',
+      squadSort === 'tiq'
+        ? 'Squad leaderboard sorted by TIQ'
+        : squadSort === 'arena'
+          ? 'Squad leaderboard sorted by Arena rank'
+          : 'Squad leaderboard sorted A to Z',
+    );
 
     squadRosterEmpty.hidden = squadRows.length > 0;
     squadRosterEl.hidden = squadRows.length === 0;
@@ -785,9 +855,19 @@ export function createMenu(api: MenuApi): Menu {
     squadView = buildSquadRoster(me);
     $<HTMLElement>('squad-view-avatar').textContent = squadLetter(me);
     $<HTMLElement>('squad-view-name').textContent = me.handle;
-    $<HTMLElement>('squad-view-rank').textContent = `#${en(me.rank)} GLOBAL`;
-    $<HTMLElement>('squad-view-points').textContent = en(squadView.trophies);
+    const global = $<HTMLElement>('squad-view-rank');
+    global.textContent = `#${en(me.rank)} GLOBAL SQUAD`;
+    global.dataset.rank = String(me.rank);
+    $<HTMLElement>('squad-view-avg').textContent = en(squadView.avgTiq);
     $<HTMLElement>('squad-view-members').textContent = en(squadView.count);
+    $<HTMLElement>('squad-view-members-label').textContent = squadView.count === 1 ? 'Member' : 'Members';
+    const tier = squadView.squadArena;
+    const tierHost = $<HTMLElement>('squad-view-tier');
+    tierHost.dataset.tier = tier.tier;
+    tierHost.title = `${tier.badge} · squad average ${en(squadView.avgTiq)} TIQ`;
+    tierHost.setAttribute('aria-label', `${tier.badge}, squad average ${en(squadView.avgTiq)} TIQ`);
+    $<HTMLElement>('squad-view-tier-full').textContent = tier.badge;
+    $<HTMLElement>('squad-view-tier-short').textContent = tier.divisionLabel;
     paintSquadYou();
     paintSquadRoster();
   }
@@ -822,6 +902,12 @@ export function createMenu(api: MenuApi): Menu {
     }
   }
 
+  /** The average a squad shows in the picker once this player is in it. */
+  const squadPreviewAvg = (s: { rank: number; members: number }): number =>
+    s.members <= 1
+      ? myTiq()
+      : Math.round((squadTargetAvg(s.rank) * (s.members - 1) + myTiq()) / s.members);
+
   function paintSquadList(q: string) {
     const rows = searchSquads(q);
     const me = getMySquad();
@@ -842,7 +928,7 @@ export function createMenu(api: MenuApi): Menu {
       nm.className = 'pick-n';
       nm.textContent = `Bind ${needle}`;
       const sub = document.createElement('small');
-      sub.textContent = 'New channel · starts at 0 trophies';
+      sub.textContent = 'New channel · starts a fresh roster';
       nm.append(sub);
       li.append(av, nm);
       squadList.append(li);
@@ -861,7 +947,7 @@ export function createMenu(api: MenuApi): Menu {
       nm.className = 'pick-n';
       nm.textContent = `${s.handle} · ${s.name}`;
       const sub = document.createElement('small');
-      sub.textContent = `#${s.rank} · ${en(s.members)} members · ${en(s.trophies)} trophies`;
+      sub.textContent = `#${s.rank} · ${en(s.members)} member${s.members === 1 ? '' : 's'} · ${en(squadPreviewAvg(s))} avg TIQ`;
       nm.append(sub);
       const tick = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       tick.setAttribute('class', 'ico tick');
@@ -884,7 +970,8 @@ export function createMenu(api: MenuApi): Menu {
     squadRows = [];
     squadQuery = '';
     squadMemberQ.value = '';
-    squadSort = 'trophies';
+    squadSort = 'tiq';
+    squadSortSel.value = 'tiq';
     paintSquadList(squadQ.value);
   }
 
@@ -897,7 +984,8 @@ export function createMenu(api: MenuApi): Menu {
     $('squad-title').textContent = 'Your Squad';
     squadQuery = '';
     squadMemberQ.value = '';
-    squadSort = 'trophies';
+    squadSort = 'tiq';
+    squadSortSel.value = 'tiq';
     paintSquadHub();
     squadScroll.scrollTop = 0;
     scheduleSquadWindow(true);
@@ -908,7 +996,8 @@ export function createMenu(api: MenuApi): Menu {
     squadQ.value = '';
     squadQuery = '';
     squadMemberQ.value = '';
-    squadSort = 'trophies';
+    squadSort = 'tiq';
+    squadSortSel.value = 'tiq';
     const me = getMySquad();
     if (me) showSquadBound();
     else showSquadSearch();
@@ -964,8 +1053,9 @@ export function createMenu(api: MenuApi): Menu {
       squadScroll.scrollTop = 0;
     }, 90);
   });
-  squadSortBtn.addEventListener('click', () => {
-    squadSort = squadSort === 'trophies' ? 'name' : 'trophies';
+  squadSortSel.addEventListener('change', () => {
+    const next = squadSortSel.value;
+    squadSort = next === 'arena' ? 'arena' : next === 'name' ? 'name' : 'tiq';
     impact('light');
     if (squadBoundView.hidden) return;
     paintSquadRoster();
