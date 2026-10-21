@@ -9693,14 +9693,32 @@ html.reduced-motion .pf-xp-bar.bar i, html.reduced-motion .reward-badge { animat
   gap: 5px;
   min-width: 0;
 }
-/* band two: the switch holds the left, the clock the right. The strip is only as tall as
-   its tallest tenant, so a shorter phone shrinks the whole control row at once. */
+/* Band two is one machined console, not two loose pills. The board switch holds the
+   left of the capsule, the live chronograph the right, and a hairline seam divides them.
+   Keeping the clock INSIDE the deck is what gives the labels room: at 360 the content
+   band is only 317px, and the old separate clock capsule spent 8px on a gap plus its own
+   padding and rim — leaving the switch 195px for two keys. Here the clock spends ~90px,
+   the keys split the rest, and the header reads as one instrument instead of three
+   controls stacked by accident. */
 .stars-strip {
+  position: relative;
   flex: none;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: stretch;
+  gap: 6px;
+  height: 36px;
   min-width: 0;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 999px;
+  background:
+    radial-gradient(130% 260% at 50% -70%, rgba(255, 255, 255, .13) 0%, rgba(255, 255, 255, 0) 58%),
+    linear-gradient(180deg, rgba(7, 11, 20, .62) 0%, rgba(10, 16, 28, .46) 48%, rgba(23, 32, 51, .42) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 -2px 5px rgba(2, 6, 16, .5),
+    inset 0 0 14px rgba(2, 6, 16, .34),
+    0 1px 0 rgba(255, 255, 255, .045);
 }
 /* the Star floats bare on the clay: the box, the rim and the jewel face are gone,
    and the PNG's own alpha carries the emblem. Its weight comes from a warm amber
@@ -9843,46 +9861,42 @@ html.reduced-motion .pf-xp-bar.bar i, html.reduced-motion .reward-badge { animat
 }
 .stars-info:active { transform: translateY(1px) scale(.96); }
 .stars-info:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-/* the board switch: a machined recess in the card, not a dark bar laid on it. Three
-   things do the work — the card's own light lands just inside the top edge (a bright
-   hairline, because that inner edge faces up), the body stays translucent smoked glass
-   so the clay reads through it, and the shadow pools along the bottom of the recess
-   instead of hanging off the top. The capsule shape is what lets the lit key slide like
-   a lozenge under the labels. */
+/* the switch zone: two equal keys under one travelling lit key. It is a bare child of
+   the deck now — the deck itself owns the recess, the rim and the smoked glass, so the
+   switch has no capsule of its own to fight with the clock's. */
 .stars-tabs {
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  height: 32px;
-  padding: 3px;
-  border: 1px solid rgba(255, 255, 255, .08);
-  border-radius: 999px;
-  background:
-    /* a whisper of sky at the crown, then glass over the clay, warming at the floor */
-    radial-gradient(130% 260% at 50% -70%, rgba(255, 255, 255, .13) 0%, rgba(255, 255, 255, 0) 58%),
-    linear-gradient(180deg, rgba(7, 11, 20, .62) 0%, rgba(10, 16, 28, .46) 48%, rgba(23, 32, 51, .42) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .1),
-    inset 0 -2px 5px rgba(2, 6, 16, .5),
-    inset 0 0 14px rgba(2, 6, 16, .34),
-    0 1px 0 rgba(255, 255, 255, .045);
 }
-/* an abspos grid child resolves `top`/`left` against the PADDING box, which the
-   1px rim already holds 1px in — so 3px here lands the key 4px from the edge,
-   and the calc fills the 8px content box (H - 8) exactly. */
-.stars-tabs .mode-thumb {
-  top: 3px;
-  left: 3px;
-  width: calc((100% - 6px) / 2);
-  height: calc(100% - 6px);
+/* the seam between the two zones: a lit hairline that dies at both ends, so the deck
+   reads as one machined piece rather than two boxes butted together */
+.stars-tabs::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  right: 0;
+  width: 1px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(148, 178, 224, .2) 18%, rgba(148, 178, 224, .2) 82%, rgba(255, 255, 255, 0) 100%);
+}
+/* The lit key travels UNDER the labels. `position: absolute` is load-bearing: as a grid
+   child it would occupy the first column, pushing "Top Players" onto a second row that
+   spills out of the 36px deck — which is exactly how this control broke before. */
+.stars-thumb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 50%;
   border-radius: 999px;
-  /* the lit key, made like the rest of the card's metal: a glass sheen across its
-     upper half, a cool slab body, a bright top edge, and warm gold tucked in at the rim
-     and along the underside — enough to read as lit without becoming a second gold slab
-     competing with the CTA. Its outer bloom warms the recess around it, so the half of
-     the track it sits on reads as the live half. */
+  /* made like the rest of the card's metal: a glass sheen across its upper half, a cool
+     slab body, a bright top edge, and warm gold tucked in at the rim and along the
+     underside — enough to read as lit without becoming a second gold slab competing with
+     the CTA. Its outer bloom warms the recess around it, so the live half reads live. */
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .26) 0%, rgba(255, 255, 255, .07) 46%, rgba(255, 255, 255, 0) 100%),
     linear-gradient(180deg, #4C608C 0%, #2E3A56 58%, #242D43 100%);
@@ -9896,64 +9910,82 @@ html.reduced-motion .pf-xp-bar.bar i, html.reduced-motion .reward-badge { animat
   /* a spring on the slide: it settles rather than arrives */
   transition: transform .42s cubic-bezier(.22, 1, .36, 1);
 }
-.stars-tabs[data-active="players"] .mode-thumb { transform: translateX(100%); }
-.stars-tabs .mode-seg {
-  flex-direction: row;
-  gap: 0;
-  padding: 0 3px;
+.stars-tabs[data-active="players"] .stars-thumb { transform: translateX(100%); }
+/* The keys are self-contained now. Every piece of native chrome is reset here rather
+   than inherited from another screen's switch: an appearance, border or font-family
+   left unpainted is what made the previous version render as two outlined system
+   buttons. */
+.stars-key {
+  position: relative;
+  z-index: 1;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  margin: 0;
+  padding: 0 2px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   border-radius: 999px;
-  /* the unpressed key is nothing but a label: no face, no depth. The type is set
-     like the card's other micro-labels — uppercase, widely tracked, tabular — so
-     the switch reads as one engraved control instead of two loose words. */
   background: transparent;
   box-shadow: none;
-  color: #93A2BA;
-  font-size: 10.5px;
+  color: #8C9DB6;
+  font: inherit;
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: .1em;
+  letter-spacing: .075em;
   text-transform: uppercase;
   white-space: nowrap;
-  transition: color var(--motion-fast), text-shadow var(--motion-fast);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color var(--motion-fast), transform var(--motion-fast);
 }
-/* the face is 22px inside the 30px track; the band is what reaches 48px.
-   Vertical only — the keys are flush, so a side band would let a neighbour
-   steal the other's tap. */
-.stars-tabs .mode-seg::after { inset: -13px 0; }
-.stars-tabs .mode-seg[aria-pressed="true"] {
+.stars-key-ico {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  opacity: .72;
+  transition: opacity var(--motion-fast), filter var(--motion-fast);
+}
+.stars-key-t { display: block; min-width: 0; }
+/* the face is 28px inside the 36px deck; the band is what reaches 48px. Vertical only —
+   the keys are flush, so a side band would let a neighbour steal the other's tap. */
+.stars-key::after { content: ""; position: absolute; inset: -10px 0; }
+.stars-key[aria-pressed="true"] {
   color: #FDE68A;
   /* the lit label sits IN the key: a dark seat under it, a warm bloom around it */
   text-shadow: 0 0 12px rgba(245, 158, 11, .46), 0 1px 0 #05070C;
 }
-.stars-tabs .mode-seg:active { transform: translateY(1px); }
-/* the bracket clock, built as an instrument rather than a chip. A 24px recessed well
-   with a gold hairline sits in the title row; inside it each unit of the countdown is
-   its own dark window — `01` `44` `58` — with the colons kept between them, so the
-   number reads as three registers at a glance instead of one run of eight glyphs. The
-   numerals are cut from the same warm metal as the Star. A bead breathes at the left;
-   it is the only thing in the band that moves, so the countdown needs no extra word.
-
-   Height is the whole constraint here: the row is 26px tall (the Star sets it), so the
-   plates are 15px and the well 24px and the header never grows. */
+.stars-key[aria-pressed="true"] .stars-key-ico {
+  opacity: 1;
+  filter: drop-shadow(0 0 5px rgba(245, 158, 11, .32));
+}
+.stars-key:active { transform: translateY(1px) scale(.985); }
+.stars-key:focus-visible { outline: 2px solid rgba(252, 211, 77, .9); outline-offset: -2px; }
+@media (hover: hover) {
+  .stars-key:not([aria-pressed="true"]):hover { color: #DCE6F6; }
+}
+/* THE LIVE CHRONOGRAPH — engraved into the right end of the deck, not encased in a
+   second capsule. What makes it read as an instrument is not a box: it is the monospaced
+   tabular gold, the dimmed colons grouping the countdown into three registers, the warm
+   halo the bead throws, and the fact that it is the only thing in the header that moves.
+   The readout is still split into unit plates by src/compete.ts; the plates are stripped
+   bare here so eight glyphs stay narrow enough to leave the switch two real keys. */
 .stars-count {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 1px;
-  padding: 4px 7px 5px;
-  border: 1px solid rgba(245, 158, 11, .34);
-  border-radius: 999px;
-  background:
-    radial-gradient(130% 190% at 8% 0%, rgba(252, 211, 77, .2) 0%, rgba(252, 211, 77, 0) 58%),
-    linear-gradient(180deg, rgba(27, 35, 54, .84) 0%, rgba(8, 12, 21, .86) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .1),
-    inset 0 -1px 0 rgba(245, 158, 11, .18),
-    inset 0 3px 6px rgba(2, 6, 16, .62),
-    0 0 16px -6px rgba(245, 158, 11, .95),
-    0 1px 2px rgba(2, 6, 16, .4);
+  gap: 0;
+  padding: 0 7px 0 2px;
+  border: 0;
+  border-radius: 0;
+  background: radial-gradient(120% 170% at 16% 50%, rgba(245, 158, 11, .09) 0%, rgba(245, 158, 11, 0) 66%);
+  box-shadow: none;
   color: #FDE68A;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
@@ -9962,25 +9994,19 @@ html.reduced-motion .pf-xp-bar.bar i, html.reduced-motion .reward-badge { animat
   line-height: 1;
   text-shadow: 0 0 9px rgba(245, 158, 11, .42), 0 1px 0 #05070C;
 }
-/* a unit's window: a dark plate sunk into the well, its numerals lit from the top.
-   Symmetric padding, so digits and separators share one baseline and nothing shifts
-   sub-pixel as the clock ticks. */
+/* the unit plate, stripped to a bare numeral: no window, no rim, no padding — the
+   deck's glass is the only surface between the digits and the light */
 .stars-count > b {
   display: block;
-  padding: 3px;
-  border-radius: 7px;
-  background: linear-gradient(180deg, rgba(3, 7, 14, .68) 0%, rgba(3, 7, 14, .4) 100%);
-  box-shadow:
-    inset 0 1px 2px rgba(2, 6, 16, .85),
-    inset 0 -1px 0 rgba(255, 255, 255, .05);
+  padding: 0;
+  background: none;
+  box-shadow: none;
   font-weight: 900;
   line-height: 1;
 }
 .stars-count > b > span { line-height: 1; }
 /* the same guarded metal the wordmark uses: a working text clip turns the numerals to
-   polished gold, and a browser without one keeps the flat lit amber. The glow rides on
-   the numerals alone — on the plate it would light the window from behind and leave
-   nothing recessed. */
+   polished gold, and a browser without one keeps the flat lit amber */
 @supports ((-webkit-background-clip: text) or (background-clip: text)) {
   .stars-count > b > span {
     background-image: linear-gradient(180deg, #EFF6FF 0%, #FDE9A9 34%, #FBBF24 68%, #D99413 100%);
@@ -9997,19 +10023,21 @@ html.reduced-motion .pf-xp-bar.bar i, html.reduced-motion .reward-badge { animat
    dimmed to a separator rather than a third register */
 .stars-count > i {
   display: block;
-  color: rgba(253, 230, 138, .42);
-  font-size: 15px;
+  margin: 0 1px;
+  color: rgba(253, 230, 138, .38);
+  font-size: 14px;
   font-style: normal;
   font-weight: 900;
   line-height: 1;
   text-shadow: none;
 }
-/* the states that are not a clock — `Bracket live` — are a word, not a readout, and
-   must stay small enough to sit beside the wordmark without crowding it */
+/* the states that are not a clock — `Bracket live` — are a word, not a readout; the
+   micro-label treatment keeps them in the console's vocabulary */
 .stars-count[data-shape="text"] {
-  gap: 5px;
-  padding: 5px 9px 6px;
-  font-size: 11px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
 }
 /* the pulse bead — the same gold as the Star, one twentieth the size. It throws a ring
    on the beat, so the countdown reads as live from across the card. */
@@ -10018,7 +10046,7 @@ html.reduced-motion .pf-xp-bar.bar i, html.reduced-motion .reward-badge { animat
   flex: none;
   width: 5px;
   height: 5px;
-  margin: 0 3px 0 1px;
+  margin: 0 5px 0 0;
   border-radius: 50%;
   background: radial-gradient(circle at 34% 30%, #FFFDF3 0%, #FBBF24 52%, #B45309 100%);
   animation: cup-clock 2s ease-out infinite;
@@ -10537,15 +10565,18 @@ html.reduced-motion .pf-xp-bar.bar i, html.reduced-motion .reward-badge { animat
   /* the 320s pay for the bigger lockup out of the card's own rhythm: everything that
      does not carry information gives back the 6px the taller header took */
   .stars-card { gap: 4px; padding-top: 5px; }
+  /* the two header bands sit closer instead of the deck losing key height */
+  .stars-head { gap: 3px; }
   .stars-emblem { width: 26px; height: 26px; }
   .stars-info { width: 22px; height: 22px; font-size: 12px; }
   .stars-name { font-size: 18px; }
-  .stars-tabs { height: 28px; }
-  .stars-count { font-size: 13px; padding: 3px 6px 4px; }
-  .stars-count > b { padding: 2px; }
-  .stars-count > i { font-size: 13px; }
-  /* the face is 20px inside the 28px track here, so the band carries 28px of it */
-  .stars-tabs .mode-seg::after { inset: -14px 0; }
+  .stars-strip { height: 32px; }
+  .stars-key { font-size: 9px; gap: 3px; }
+  .stars-key-ico { width: 12px; height: 12px; }
+  /* the face is 24px inside the 32px deck here, so the band carries 24px of it */
+  .stars-key::after { inset: -12px 0; }
+  .stars-count { font-size: 12px; padding-right: 5px; }
+  .stars-count > i { font-size: 12px; }
   .stars-pod { padding: 6px 4px 5px; }
   .stars-pod[data-rank="1"] { padding-top: 13px; padding-bottom: 11px; }
   .stars-pod-prize { font-size: 10px; padding: 3px 6px 4px; }
@@ -10557,10 +10588,11 @@ html.reduced-motion .pf-xp-bar.bar i, html.reduced-motion .reward-badge { animat
   .stars-emblem { width: 26px; height: 26px; }
   .stars-info { width: 22px; height: 22px; font-size: 11.5px; }
   .stars-name { font-size: 18px; }
-  .stars-tabs { height: 28px; }
-  .stars-tabs .mode-seg { font-size: 8.5px; }
-  /* the face is 20px inside the 28px track here, so the band carries 28px of it */
-  .stars-tabs .mode-seg::after { inset: -14px 0; }
+  .stars-strip { height: 32px; }
+  .stars-key { font-size: 8.5px; letter-spacing: .055em; gap: 3px; }
+  .stars-key-ico { width: 11px; height: 11px; }
+  /* the face is 24px inside the 32px deck here, so the band carries 24px of it */
+  .stars-key::after { inset: -12px 0; }
   .stars-pod { padding: 6px 4px 5px; }
   .stars-pod-tiq { font-size: 9px; }
   .stars-pod-prize { font-size: 10px; padding: 3px 6px 4px; }
@@ -10570,21 +10602,23 @@ html.reduced-motion .pf-xp-bar.bar i, html.reduced-motion .reward-badge { animat
   .stars-run-pay { font-size: 9px; padding: 4px 6px 5px; }
   .stars-squad-chip { font-size: 8.5px; padding: 5px 6px 6px; }
   .stars-cta { letter-spacing: .02em; }
-  /* the clock keeps its bead and its three registers, and pays for the strip's width in
-     type: smaller numerals, tighter plates, and the switch beside it still reads */
-  .stars-count { font-size: 11px; padding: 3px 5px 4px; }
-  .stars-count > b { padding: 2px; }
+  /* the clock keeps its bead and its three registers, and pays for the deck's width in
+     type: smaller numerals, tighter seam, and the switch beside it still reads */
+  .stars-count { font-size: 11px; padding-right: 4px; }
   .stars-count > i { font-size: 11px; }
+  .stars-count::before { width: 4px; height: 4px; margin-right: 4px; }
 }
 /* a tall phone: the celebration scales up rather than leaving slack above the key */
 @media (min-height: 780px) {
   .stars-card { gap: 12px; padding: 18px 18px; border-radius: 24px; }
   .stars-name { font-size: 26px; }
-  .stars-tabs { height: 34px; }
+  .stars-strip { height: 40px; }
+  .stars-key { font-size: 11px; gap: 5px; }
+  .stars-key-ico { width: 15px; height: 15px; }
+  /* the face is 32px inside the 40px deck; 8px each side keeps the 48px target */
+  .stars-key::after { inset: -8px 0; }
   .stars-count { font-size: 16px; }
-  .stars-count > b { padding: 4px 3px; }
   .stars-count > i { font-size: 16px; }
-  .stars-tabs .mode-seg { font-size: 11px; }
   .stars-pod { padding: 11px 8px 10px; gap: 4px; }
   .stars-pod[data-rank="1"] { padding-top: 25px; padding-bottom: 22px; }
   .stars-pod .stars-ch-av, .stars-pod .stars-av { width: 42px; height: 42px; }
@@ -10593,7 +10627,7 @@ html.reduced-motion .pf-xp-bar.bar i, html.reduced-motion .reward-badge { animat
   .stars-cta { min-height: 56px; border-radius: 20px; font-size: var(--t-1); }
 }
 html.reduced-motion .stars-cta, html.reduced-motion .stars-pod, html.reduced-motion .stars-run, html.reduced-motion .stars-squad { transition: none; }
-html.reduced-motion .stars-tabs .mode-thumb { transition: none; }
+html.reduced-motion .stars-thumb { transition: none; }
 html.reduced-motion .stars-count::before { animation: none; }
 
 /* ==========================================================================

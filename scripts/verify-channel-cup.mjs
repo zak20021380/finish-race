@@ -8,14 +8,17 @@
  *   node scripts/verify-channel-cup.mjs
  *
  * One phone, 360x640, because that is the fit the card has to hold:
- *  - the header is two bands — the championship lockup over a control strip — inside a
+ *  - the header is two bands — the championship lockup over a control deck — inside a
  *    budget of 78px at 360x640. Band one: the bare Star floating on the clay with its
  *    amber ambient glow (no box, no rim, no jewel face) at 30-42px, inline beside the
  *    big embossed platinum wordmark "200 STARS CUP" (never clipping), with the round
- *    glass help key closing the right edge. Band two: one strip, the two-way switch
- *    (>=48px keys, sliding thumb, no clipped label) holding the left and the live
- *    HH:MM:SS clock — a smoked-glass capsule with a warm hairline, three recessed
- *    registers and a breathing gold bead — holding the right.
+ *    glass help key closing the right edge. Band two: ONE machined console — a
+ *    two-key segmented switch (icon + label, sliding lit key, >=48px keys) on the left,
+ *    a hairline seam, and the live HH:MM:SS chronograph (gold tabular registers and a
+ *    breathing bead) engraved into the right. The keys carry no native button chrome,
+ *    and the thumb is absolutely positioned: as a grid child it would eat the first
+ *    column and push "Top Players" out of the 36px deck — the regression this harness
+ *    now pins down.
  *
  *    The clock used to share band one, and the budget used to be 60px. It moved on
  *    purpose: at 360px the card is only ~317px wide, and a wordmark worth the name, a
@@ -110,8 +113,10 @@ const PROBE = `(function () {
   const headBox = box(head), titlebarBox = box(titlebar), tabsHostBox = box(tabsHost), podiumHeadBox = box(podiumEl);
   const stripBox = box(document.querySelector('.stars-strip'));
   const countBox = box(document.querySelector('.stars-count'));
-  const headFills = ['.stars-head', '.stars-titlebar', '.stars-emblem', '.stars-count', '#stars-tabs', '#stars-tabs .mode-thumb', '#stars-tabs .mode-seg']
+  const headFills = ['.stars-head', '.stars-titlebar', '.stars-emblem', '.stars-strip', '.stars-count', '#stars-tabs', '#stars-tabs .stars-thumb', '#stars-tabs .stars-key']
     .map((sel) => { const el = document.querySelector(sel); return { sel, bg: el ? getComputedStyle(el).backgroundColor : null }; });
+  const thumbElPre = document.querySelector('#stars-tabs .stars-thumb');
+  const seamCs = getComputedStyle(document.getElementById('stars-tabs'), '::after');
   const emblemCs = emblem ? getComputedStyle(emblem) : null;
 
   const pods = [...document.querySelectorAll('.stars-pod')].map((li) => ({
@@ -150,32 +155,45 @@ const PROBE = `(function () {
     h: +li.getBoundingClientRect().height.toFixed(1),
   }));
 
-  /* the board switch: two keys on a sliding clay thumb. The face is 30px here,
+  /* the board switch: two keys on a sliding lit thumb. The face is 28px here,
      so the ::after band is what has to carry the tap target to 48px. */
   const band = (el) => {
     const cs = getComputedStyle(el, '::after');
+    if (!cs || cs.content === 'none') return +el.getBoundingClientRect().height.toFixed(1);
     const v = (p) => (cs[p] && cs[p] !== 'auto' ? -parseFloat(cs[p]) : 0);
     return +(el.getBoundingClientRect().height + v('top') + v('bottom')).toFixed(1);
   };
   const tabsEl = document.getElementById('stars-tabs');
+  const tabsBox = box(tabsEl);
   const tabs = {
     active: tabsEl?.dataset.active ?? '',
-    keys: [...document.querySelectorAll('#stars-tabs .mode-seg')].map((b) => ({
+    box: tabsBox,
+    keys: [...document.querySelectorAll('#stars-tabs .stars-key')].map((b) => ({
       view: b.dataset.view ?? '',
       pressed: b.getAttribute('aria-pressed') ?? '',
-      t: b.textContent.trim(),
-      spill: spill(b),
+      t: b.querySelector('.stars-key-t')?.textContent.trim() ?? b.textContent.trim(),
+      spill: spill(b.querySelector('.stars-key-t') ?? b),
       tap: band(b),
+      icon: !!b.querySelector('.stars-key-ico'),
+      border: getComputedStyle(b).borderTopWidth,
+      appearance: getComputedStyle(b).appearance,
+      bg: getComputedStyle(b).backgroundColor,
+      box: box(b),
     })),
-    thumb: !!tabsEl?.querySelector('.mode-thumb'),
+    thumb: !!tabsEl?.querySelector('.stars-thumb'),
+    thumbBox: box(thumbElPre),
+    thumbPosition: thumbElPre ? getComputedStyle(thumbElPre).position : null,
+    seam: { content: seamCs.content, width: seamCs.width, bg: seamCs.backgroundImage },
   };
 
   const emblemImg = document.querySelector('.stars-emblem-img');
   const clockEl = document.querySelector('.stars-count');
-  const thumbEl = document.querySelector('#stars-tabs .mode-thumb');
+  const clockDigit = document.querySelector('.stars-count > b > span');
+  const thumbEl = document.querySelector('#stars-tabs .stars-thumb');
   const beadCs = clockEl ? getComputedStyle(clockEl, '::before') : null;
   const nameCs = nameEl ? getComputedStyle(nameEl) : null;
   const thumbCs = thumbEl ? getComputedStyle(thumbEl) : null;
+  const digitCs = clockDigit ? getComputedStyle(clockDigit) : null;
   const gold = /245,\\s*158,\\s*11|251,\\s*191,\\s*36|252,\\s*211,\\s*77|253,\\s*230,\\s*138/;
 
   /* clay only: every painted node on the screen and its sheet */
@@ -223,22 +241,26 @@ const PROBE = `(function () {
         color: nameCs?.color ?? null,
         gold: nameCs ? gold.test(nameCs.backgroundImage) : false,
       },
-      /* the clock is a dark glass capsule with a gold hairline and a breathing bead */
+      /* the clock is engraved into the deck: no capsule, gold tabular registers,
+         a dimmed colon between them and one breathing bead */
       clock: {
         bg: clockEl ? getComputedStyle(clockEl).backgroundColor : null,
-        border: clockEl ? getComputedStyle(clockEl).borderTopColor : null,
-        goldBorder: clockEl ? gold.test(getComputedStyle(clockEl).borderTopColor) : false,
-        goldBloom: clockEl ? gold.test(getComputedStyle(clockEl).boxShadow) : false,
+        border: clockEl ? getComputedStyle(clockEl).borderTopWidth : null,
+        digitsGold: digitCs ? gold.test(digitCs.backgroundImage) : false,
+        digitsClip: digitCs ? (digitCs.webkitBackgroundClip ?? digitCs.backgroundClip) : null,
+        hasDivider: seamCs.content !== 'none' && parseFloat(seamCs.width) === 1,
         bead: beadCs?.content ?? null,
         beadGold: beadCs ? gold.test(beadCs.backgroundImage) : false,
         beadAnim: beadCs?.animationName ?? null,
         w: clockEl ? +clockEl.getBoundingClientRect().width.toFixed(1) : null,
+        box: box(clockEl),
       },
       /* the lit key keeps a hairline gold rim without becoming a second gold slab */
       thumb: {
         rimGold: thumbCs ? gold.test(thumbCs.boxShadow) : false,
         bg: thumbCs?.backgroundColor ?? null,
         transition: thumbCs?.transitionProperty ?? null,
+        position: thumbCs?.position ?? null,
       },
     },
     header: {
@@ -251,9 +273,11 @@ const PROBE = `(function () {
       stripBox, countBox, podiumHeadBox,
       bandOrder: !!stripBox && stripBox.t >= titlebarBox.b - 0.5,
       stripSpans: !!stripBox && Math.abs(stripBox.w - headBox.w) <= 1,
-      /* inside the strip the switch holds the majority and the clock closes the right edge */
+      /* inside the deck the switch holds the majority and the clock closes the right:
+         its element stops at the deck's 4px inner edge (1px rim + 3px padding) */
       switchShare: stripBox?.w ? +(tabsHostBox.w / stripBox.w).toFixed(3) : 0,
-      clockFlush: !!stripBox && !!countBox && Math.abs(countBox.r - stripBox.r) <= 1,
+      clockInset: stripBox && countBox ? +(stripBox.r - countBox.r).toFixed(1) : null,
+      clockAfterSwitch: !!tabsHostBox && !!countBox && countBox.l >= tabsHostBox.r,
       fills: headFills,
     },
     pods, runs,
@@ -385,8 +409,9 @@ if (!m.header.inlineStar) fail('the Star is not inline beside the wordmark in th
 if (m.header.headH > 78) fail(`the header is ${m.header.headH}px tall, want <= 78`);
 if (!m.header.bandOrder) fail('the control strip does not sit under the lockup');
 if (!m.header.stripSpans) fail(`the strip spans ${m.header.stripBox?.w}px of the ${m.header.headBox?.w}px header, want full width`);
-if (m.header.switchShare < 0.55) fail(`the switch holds only ${m.header.switchShare} of the strip — the countdown has taken the row`);
-if (!m.header.clockFlush) fail('the clock is not flush with the right edge of the strip');
+if (m.header.switchShare < 0.55) fail(`the switch holds only ${m.header.switchShare} of the deck — the countdown has taken the row`);
+if (m.header.clockInset === null || m.header.clockInset > 5) fail(`the clock stops ${m.header.clockInset}px short of the deck's right edge, want <=5`);
+if (!m.header.clockAfterSwitch) fail('the clock is not to the right of the switch');
 /* the black-cutout audit: no header element paints a solid black fill, the
    wrappers stay bare, and the track and clock are translucent by construction */
 for (const f of m.header.fills) {
@@ -397,7 +422,8 @@ const fillOf = (sel) => m.header.fills.find((f) => f.sel === sel)?.bg ?? 'rgb(0,
 if (rgba(fillOf('.stars-head')).a !== 0 || rgba(fillOf('.stars-titlebar')).a !== 0) {
   fail('a header wrapper paints a fill instead of sitting on the card');
 }
-if (rgba(fillOf('#stars-tabs')).a >= 0.99) fail(`the switch track is an opaque box (${fillOf('#stars-tabs')})`);
+if (rgba(fillOf('.stars-strip')).a >= 0.99) fail(`the control deck is an opaque box (${fillOf('.stars-strip')})`);
+if (rgba(fillOf('#stars-tabs')).a >= 0.99) fail(`the switch zone is an opaque box (${fillOf('#stars-tabs')})`);
 if (rgba(fillOf('.stars-count')).a >= 0.99) fail(`the clock cuts an opaque box (${fillOf('.stars-count')})`);
 
 /* the Star floats bare on the clay: no fill, no border, and its weight carried by
@@ -430,17 +456,29 @@ if (m.hero.wordmark.clip !== 'text' || !/gradient/.test(m.hero.wordmark.img ?? '
 }
 if (m.hero.wordmark.gold) fail(`the wordmark went gold (${m.hero.wordmark.img})`);
 
-/* the clock: a dark glass capsule, a gold hairline, and the one thing in the band
-   that moves — the bead */
-if (m.hero.clock.bg === null || rgba(m.hero.clock.bg).a >= 0.99) fail(`the clock is an opaque capsule (${m.hero.clock.bg})`);
-if (!m.hero.clock.goldBorder) fail(`the clock has no gold hairline (${m.hero.clock.border})`);
-if (!m.hero.clock.goldBloom) fail(`the clock carries no warm bloom (${m.hero.clock.goldBloom})`);
+/* the clock: engraved into the deck — no capsule of its own, gold tabular registers,
+   a hairline seam from the switch, and the one thing in the band that moves — the bead */
+if (m.hero.clock.bg === null || rgba(m.hero.clock.bg).a >= 0.99) fail(`the clock paints an opaque capsule (${m.hero.clock.bg})`);
+if (m.hero.clock.border !== '0px') fail(`the clock has its own rim again (${m.hero.clock.border}) — it belongs to the deck`);
+if (!m.hero.clock.digitsGold) fail(`the clock digits are not gold metal (${m.hero.clock.digitsGold})`);
+if (m.hero.clock.digitsClip !== 'text') fail(`the clock digits are not clipped metal (${m.hero.clock.digitsClip})`);
+if (!m.hero.clock.hasDivider) fail('the switch and the clock are not divided by a 1px seam');
+if (!m.hero.clock.w || m.hero.clock.w > 110) fail(`the clock is ${m.hero.clock.w}px wide — it is eating the switch's room`);
 if (m.hero.clock.bead === 'none' || !m.hero.clock.bead) fail('the clock has no pulse bead');
 if (!m.hero.clock.beadGold) fail(`the clock's bead is not gold (${m.hero.clock.beadGold})`);
 if (m.hero.clock.beadAnim !== 'cup-clock') fail(`the clock's bead does not breathe (${m.hero.clock.beadAnim})`);
 
 if (m.view !== 'channels') fail(`the card opens on the "${m.view}" board, want channels`);
-if (!m.tabs.thumb) fail('the board switch has no sliding clay thumb');
+if (!m.tabs.thumb) fail('the board switch has no sliding lit thumb');
+/* the regression that shipped: as a grid child the thumb occupied column one and
+   pushed the second key under the deck. Absolute positioning + one shared row pin it. */
+if (m.hero.thumb.position !== 'absolute') fail(`the sliding thumb is "${m.hero.thumb.position}" — it must be absolute, never a grid cell`);
+if (!m.tabs.thumbBox || !m.tabs.box) fail('the sliding thumb has no box');
+else {
+  const t = m.tabs.thumbBox;
+  if (t.t < m.tabs.box.t - 0.5 || t.b > m.tabs.box.b + 0.5) fail('the sliding thumb spills out of its deck');
+  if (Math.abs(t.b - t.t - (m.tabs.box.b - m.tabs.box.t)) > 1) fail(`the thumb is ${t.h}px tall in a ${m.tabs.box.h}px switch zone, want full height`);
+}
 if (!m.hero.thumb.rimGold) fail('the lit key has no gold rim');
 if (m.hero.thumb.bg !== 'rgba(0, 0, 0, 0)') fail(`the lit key is a flat fill, not a gradient cap (${m.hero.thumb.bg})`);
 if (m.tabs.active !== 'channels') fail(`the switch is on "${m.tabs.active}"`);
@@ -449,7 +487,25 @@ for (const k of m.tabs.keys) {
   if (k.spill > 0.5) fail(`the "${k.t}" key spills ${k.spill}px — a clipped label is what the switch replaced`);
   if (k.tap < 48) fail(`the "${k.t}" key is a ${k.tap}px tap target, want >=48`);
   if (k.pressed !== String(k.view === 'channels')) fail(`the "${k.t}" key reports aria-pressed="${k.pressed}"`);
+  if (!k.icon) fail(`the "${k.t}" key has no glyph — the board switch should read at a glance`);
+  /* native button chrome is what made the old keys render as two outlined system
+     controls; resetting it inside this self-contained component is the fix */
+  if (k.border !== '0px' || k.appearance !== 'none' || k.bg !== 'rgba(0, 0, 0, 0)') {
+    fail(`the "${k.t}" key still wears native chrome (border ${k.border} / ${k.appearance} / ${k.bg})`);
+  }
+  if (k.box.t < m.tabs.box.t - 0.5 || k.box.b > m.tabs.box.b + 0.5) {
+    fail(`the "${k.t}" key sits outside the switch row (${k.box.t}-${k.box.b} in ${m.tabs.box.t}-${m.tabs.box.b})`);
+  }
 }
+/* both keys share one row, and the lit key covers the pressed one */
+const [keyA, keyB] = m.tabs.keys;
+if (keyA?.box && keyB?.box && (Math.abs(keyA.box.t - keyB.box.t) > 0.5 || Math.abs(keyA.box.b - keyB.box.b) > 0.5)) {
+  fail('the two switch keys are not on the same row');
+}
+const pressedKey = m.tabs.keys.find((k) => k.view === 'channels');
+if (pressedKey?.box && m.tabs.thumbBox && (
+  m.tabs.thumbBox.l > pressedKey.box.l + 1 || m.tabs.thumbBox.r < pressedKey.box.r - 1
+)) fail('the lit key does not sit under the pressed label');
 
 /* 2 — the channels board: three squads, no sigils, no counts, no roster cues */
 if (m.pods.length !== 3) fail(`podium shows ${m.pods.length} channels, want 3`);
