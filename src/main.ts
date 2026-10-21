@@ -29,7 +29,7 @@ import { mountCoins, setBalance } from './coin';
 import { menuState, motionReduced } from './settings';
 import { audio, SHOVE_RATE } from './audio';
 import {
-  completeTutorial, hasCompletedTutorial, onChange, profile, recordGame, theme,
+  completeTutorial, hasCompletedTutorial, onChange, profile, recordGame, resetTutorialState, theme,
 } from './storage';
 import { createTutorial, type Tutorial, type TutorialForward, type TutorialRect, type TutorialSpot } from './tutorial';
 import { SEAT_RAMPS } from './themes';
@@ -1189,10 +1189,10 @@ interface StartSetup {
 
 function startGame(setup: StartSetup) {
   cancelTutorial();
-  /* First run teaches on the board it is actually describing: a local bot race. An online or
-     private-room seat is another person's turn clock too, so it never gets frozen behind an
-     onboarding card — the lesson waits for the first solo-style match instead. */
-  const wantsTutorial = !hasCompletedTutorial() && !setup.online && !setup.room;
+  /* DEV OVERRIDE — the onboarding test phase wants the lesson on every entry, online seats and
+     private rooms included: `hasCompletedTutorial()` is hard-wired false in storage.ts. Restore
+     its save read (and the `!setup.online && !setup.room` guards) before shipping. */
+  const wantsTutorial = !hasCompletedTutorial();
   /* menuState.difficulty is the single source: the Choose-mode sheet persists it live,
      so every start path (vs Bot card, Play) runs the level the sheet shows. */
   difficulty = menuState.difficulty;
@@ -1566,6 +1566,13 @@ tutorial = createTutorial({
     if (wantsOpponent()) void runOpponent();
   },
 });
+
+/* DEV TRIGGER — console: `window.resetTutorial()` clears the saved lesson flag (and the bare
+   `tutorial_completed` key from the brief) and reloads into a clean first run. */
+(window as Window & { resetTutorial?: () => void }).resetTutorial = () => {
+  resetTutorialState();
+  location.reload();
+};
 
 again.addEventListener('click', () => {
   impact('light');

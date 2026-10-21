@@ -451,14 +451,30 @@ export function recordGame(r: { difficulty: Difficulty; won: boolean }, mult = 1
   return coins;
 }
 
-/** True once the first-match coach marks have been finished or skipped on this save. */
-export const hasCompletedTutorial = (): boolean => profile.tutorialCompleted;
+/**
+ * DEV OVERRIDE (onboarding test phase) — every match is a first run, whatever the save, room
+ * mode or URL says. Restore the `profile.tutorialCompleted` read before shipping.
+ */
+export const hasCompletedTutorial = (): boolean => false;
 
-/** The lesson is over for good, whether it was read to the last card or skipped. */
+/** DEV OVERRIDE — completion is deliberately never written, so reloads can never lock it out. */
 export function completeTutorial(): void {
-  if (profile.tutorialCompleted) return;
-  profile.tutorialCompleted = true;
-  flush();
+  /* no-op while onboarding is forced on for every match */
+}
+
+/**
+ * `window.resetTutorial()`'s storage half: forget the saved flag (and the bare
+ * `tutorial_completed` key named in the test brief) so the next load starts clean even after
+ * the hard override is removed.
+ */
+export function resetTutorialState(): void {
+  try {
+    const raw = readJson<Save>(KEY) ?? { v: V };
+    raw.v = V;
+    raw.tutorialCompleted = false;
+    writeJson(KEY, raw);
+    window.localStorage.removeItem('tutorial_completed');
+  } catch { /* storage denied: the hard override still forces the lesson */ }
 }
 
 /** Tournament entries and daily rewards move the same wallet the shop reads. */
