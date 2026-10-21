@@ -20,7 +20,7 @@ import {
 import {
   BADGES, badgeCrestHtml, badgeDelta, badgeEdition, badgeProgress, editionHolders, editionLabel,
   editionSerialLabel, editionSpeech, editionSyncState, equippedBadge, hasEditionClaim, isBadgeUnlocked,
-  onEditionChange, refreshBadgeEditions, unlockedCount, type BadgeDef, type BadgeEdition,
+  onEditionChange, refreshBadgeEditions, unlockedCount, type BadgeDef, type BadgeEdition, type WornEdition,
 } from './badges';
 import { MAX_BALLS, newGame } from './rules';
 import { createPreview, createRenderer, type Preview, type View } from './render';
@@ -33,6 +33,10 @@ import {
   bindSquad, bindSquadById, cleanHandle, getMySquad, leaveSquad,
   onSquadChange, searchSquads, squadLetter,
 } from './squads';
+import {
+  arrangeRoster, buildSquadRoster,
+  type SquadMember, type SquadRole, type SquadRoster, type SquadRosterSort,
+} from './squadRoster';
 import { copyText } from './gamemodes';
 import { myTiq, TIER_NAME, tierOf, type MindTier } from './matchmaking';
 import { claimWelcomeBonus, pullReferral, referralLink, referralShareUrl } from './referral';
@@ -514,11 +518,278 @@ export function createMenu(api: MenuApi): Menu {
   const squadErr = $<HTMLElement>('squad-err');
   const squadSearchView = $<HTMLElement>('squad-search-view');
   const squadBoundView = $<HTMLElement>('squad-bound-view');
+  const squadScroll = $<HTMLElement>('squad-hub-scroll');
+  const squadRosterEl = $<HTMLOListElement>('squad-roster');
+  const squadMemberQ = $<HTMLInputElement>('squad-member-q');
+  const squadSortBtn = $<HTMLButtonElement>('squad-sort');
+  const squadSortLabel = $<HTMLElement>('squad-sort-label');
+  const squadCountEl = $<HTMLElement>('squad-roster-count');
+  const squadRosterEmpty = $<HTMLElement>('squad-roster-empty');
+  const squadYouEl = $<HTMLElement>('squad-you');
+
+  let squadView: SquadRoster | null = null;
+  let squadRows: SquadMember[] = [];
+  let squadSort: SquadRosterSort = 'trophies';
+  let squadQuery = '';
+  let squadRowH = 56;
+  const squadRowEls = new Map<number, HTMLElement>();
+  let squadRange = { start: -1, end: -1, rows: -1 };
+  let squadFrame = 0;
+  let squadForce = false;
+  let squadSearchTimer = 0;
 
   function squadError(msg: string) {
     squadErr.textContent = msg;
     squadErr.hidden = false;
     notify('warning');
+  }
+
+  const squadSvg = (href: string): SVGSVGElement => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'ico');
+    svg.setAttribute('aria-hidden', 'true');
+    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    use.setAttribute('href', href);
+    svg.append(use);
+    return svg;
+  };
+
+  function squadRolePill(role: SquadRole): HTMLElement | null {
+    if (role === 'member') return null;        // members stay clean typography, by design
+    const pill = document.createElement('span');
+    pill.className = 'sq-role';
+    pill.dataset.role = role;
+    pill.append(squadSvg(role === 'leader' ? '#i-crown' : '#i-shield'));
+    pill.append(document.createTextNode(role === 'leader' ? 'Leader' : 'Admin'));
+    return pill;
+  }
+
+  function squadMedalPin(medal: WornEdition, cls: string): HTMLElement {
+    const pin = document.createElement('span');
+    pin.className = `medal-pin ${cls}`.trim();
+    pin.dataset.accent = medal.def.accent;
+    pin.setAttribute('aria-hidden', 'true');
+    pin.title = medal.serial !== null
+      ? `${medal.def.name} · ${editionSerialLabel(medal.serial)}`
+      : medal.def.name;
+    pin.innerHTML = badgeCrestHtml(medal.def, 'badge-crest medal-coin');
+    return pin;
+  }
+
+  function squadAvatar(member: SquadMember, cls = ''): HTMLElement {
+    const wrap = document.createElement('span');
+    wrap.className = `sq-avwrap${cls ? ` ${cls}` : ''}`;
+    const av = document.createElement('span');
+    av.className = 'sq-av';
+    av.style.setProperty('--sq-hue', String(member.hue));
+    av.setAttribute('aria-hidden', 'true');
+    av.textContent = member.initials;
+    wrap.append(av);
+    if (member.medal) wrap.append(squadMedalPin(member.medal, 'sq-medal'));
+    return wrap;
+  }
+
+  function paintSquadYou(): void {
+    const roster = squadView;
+    if (!roster) return;
+    const member = roster.members.find((m) => m.isYou);
+    if (!member) return;
+    squadYouEl.textContent = '';
+
+    const top = document.createElement('div');
+    top.className = 'sq-you-top';
+    const kicker = document.createElement('span');
+    kicker.className = 'sq-you-kicker';
+    kicker.textContent = 'Your standing';
+    top.append(kicker);
+    const role = squadRolePill(roster.yourRole);
+    if (role) top.append(role);
+    if (roster.yourMedal && roster.yourMedal.serial !== null) {
+      const serial = document.createElement('span');
+      serial.className = 'medal-serial sq-you-serial';
+      serial.dataset.accent = roster.yourMedal.def.accent;
+      serial.textContent = editionSerialLabel(roster.yourMedal.serial);
+      serial.title = `${roster.yourMedal.def.name} · ${editionSerialLabel(roster.yourMedal.serial)} of ${roster.yourMedal.def.cap}`;
+      top.append(serial);
+    }
+
+    const main = document.createElement('div');
+    main.className = 'sq-you-main';
+    const identity = document.createElement('span');
+    identity.className = 'sq-you-id';
+    const rankLine = document.createElement('span');
+    rankLine.className = 'sq-you-rank';
+    const rank = document.createElement('b');
+    rank.textContent = `#${en(roster.yourRank)}`;
+    const of = document.createElement('small');
+    of.textContent = `of ${en(roster.count)}`;
+    rankLine.append(rank, of);
+    const name = document.createElement('span');
+    name.className = 'sq-you-name';
+    name.textContent = roster.youName;
+    identity.append(rankLine, name);
+
+    const contrib = document.createElement('span');
+    contrib.className = 'sq-you-contrib';
+    const amount = document.createElement('b');
+    amount.append(document.createTextNode(`+${en(roster.yourContribution)}`), squadSvg('#i-cup'));
+    const caption = document.createElement('small');
+    caption.textContent = 'contributed';
+    contrib.append(amount, caption);
+    main.append(squadAvatar(member, 'sq-you-av'), identity, contrib);
+    squadYouEl.append(top, main);
+
+    const honor = roster.yourMedal
+      ? `, wearing ${roster.yourMedal.def.name}${roster.yourMedal.serial !== null ? ` edition ${roster.yourMedal.serial}` : ''}`
+      : '';
+    squadYouEl.setAttribute(
+      'aria-label',
+      `Your standing: rank ${roster.yourRank} of ${roster.count}, ${roster.yourContribution} trophies contributed${honor}.`,
+    );
+  }
+
+  function measureSquadRow(): number {
+    const raw = parseFloat(getComputedStyle(squadRosterEl).getPropertyValue('--sq-row-h'));
+    squadRowH = Number.isFinite(raw) && raw > 0 ? raw : 56;
+    return squadRowH;
+  }
+
+  function squadRow(member: SquadMember, index: number): HTMLElement {
+    const li = document.createElement('li');
+    li.className = `sq-row${member.isYou ? ' is-you' : ''}`;
+    li.dataset.rank = String(member.rank);
+    li.dataset.index = String(index);
+    li.setAttribute('aria-setsize', String(squadRows.length));
+    li.setAttribute('aria-posinset', String(index + 1));
+    if (member.isYou) li.setAttribute('aria-current', 'true');
+
+    const rank = document.createElement('span');
+    rank.setAttribute('aria-hidden', 'true');
+    if (member.rank <= 3) {
+      rank.className = 'sq-rank is-metal';
+      rank.dataset.metal = member.rank === 1 ? 'gold' : member.rank === 2 ? 'silver' : 'bronze';
+      const n = document.createElement('b');
+      n.textContent = String(member.rank);
+      rank.append(n);
+    } else {
+      rank.className = 'sq-rank is-plain';
+      if (member.rank >= 100000) rank.classList.add('is-wide');
+      rank.textContent = String(member.rank);
+    }
+
+    const id = document.createElement('span');
+    id.className = 'sq-id';
+    const name = document.createElement('span');
+    name.className = 'sq-name';
+    name.textContent = member.name;
+    name.title = member.name;
+    id.append(name);
+    const role = squadRolePill(member.role);
+    if (role) id.append(role);
+
+    const score = document.createElement('span');
+    score.className = `sq-score${member.contribution <= 0 ? ' is-zero' : ''}`;
+    const amount = document.createElement('b');
+    amount.textContent = en(member.contribution);
+    score.append(amount, squadSvg('#i-cup'));
+    score.title = `${en(member.contribution)} trophies contributed`;
+
+    const roleSpeech = member.role === 'leader' ? ', leader' : member.role === 'admin' ? ', admin' : '';
+    const honor = member.medal
+      ? `, wearing ${member.medal.def.name}${member.medal.serial !== null ? ` edition ${member.medal.serial}` : ''}`
+      : '';
+    li.setAttribute(
+      'aria-label',
+      `Rank ${member.rank}: ${member.name}${roleSpeech} — ${member.contribution} trophies contributed${member.isYou ? ', you' : ''}${honor}.`,
+    );
+    li.append(rank, squadAvatar(member), id, score);
+    return li;
+  }
+
+  function paintSquadWindow(force: boolean): void {
+    squadFrame = 0;
+    if (!squadView || squadBoundView.hidden) return;
+    if (!squadRows.length) {
+      for (const el of squadRowEls.values()) el.remove();
+      squadRowEls.clear();
+      squadRange = { start: 0, end: 0, rows: 0 };
+      return;
+    }
+    const viewport = squadScroll.clientHeight;
+    if (viewport <= 0) return;
+    const rowH = squadRowH;
+    const y = squadScroll.scrollTop - squadRosterEl.offsetTop;
+    const start = Math.max(0, Math.floor(y / rowH) - 6);
+    const end = Math.min(squadRows.length, Math.max(start, Math.ceil((y + viewport) / rowH) + 6));
+    if (!force && squadRange.start === start && squadRange.end === end && squadRange.rows === squadRows.length) return;
+    squadRange = { start, end, rows: squadRows.length };
+
+    for (const [index, el] of squadRowEls) {
+      if (index < start || index >= end) {
+        el.remove();
+        squadRowEls.delete(index);
+      }
+    }
+    let anchor: HTMLElement | null = null;
+    for (let index = end - 1; index >= start; index--) {
+      let el = squadRowEls.get(index);
+      if (!el) {
+        el = squadRow(squadRows[index], index);
+        squadRowEls.set(index, el);
+        if (anchor) squadRosterEl.insertBefore(el, anchor);
+        else squadRosterEl.append(el);
+      }
+      el.style.top = `${index * rowH}px`;
+      anchor = el;
+    }
+  }
+
+  function scheduleSquadWindow(force = false): void {
+    if (force) squadForce = true;
+    if (squadFrame) return;
+    squadFrame = requestAnimationFrame(() => {
+      const forced = squadForce;
+      squadForce = false;
+      paintSquadWindow(forced);
+    });
+  }
+
+  function paintSquadRoster(): void {
+    const roster = squadView;
+    if (!roster) return;
+    squadRows = arrangeRoster(roster, squadSort, squadQuery);
+    const filtered = squadQuery.trim().length > 0;
+    squadCountEl.textContent = en(squadRows.length);
+    squadCountEl.setAttribute('aria-label', filtered
+      ? `${squadRows.length} of ${en(roster.count)} members match`
+      : `${en(roster.count)} members`);
+    squadSortLabel.textContent = squadSort === 'trophies' ? 'Trophies' : 'A–Z';
+    squadSortBtn.dataset.sort = squadSort;
+    squadSortBtn.setAttribute('aria-label', squadSort === 'trophies'
+      ? 'Sorted by trophies. Activate to sort A to Z.'
+      : 'Sorted A to Z. Activate to sort by trophies.');
+
+    squadRosterEmpty.hidden = squadRows.length > 0;
+    squadRosterEl.hidden = squadRows.length === 0;
+    const rowH = measureSquadRow();
+    squadRosterEl.style.height = `${squadRows.length * rowH}px`;
+    squadRosterEl.textContent = '';
+    squadRowEls.clear();
+    squadRange = { start: -1, end: -1, rows: -1 };
+    scheduleSquadWindow(true);
+  }
+
+  function paintSquadHub(): void {
+    const me = getMySquad();
+    if (!me) { showSquadSearch(); return; }
+    squadView = buildSquadRoster(me);
+    $<HTMLElement>('squad-view-avatar').textContent = squadLetter(me);
+    $<HTMLElement>('squad-view-name').textContent = me.handle;
+    $<HTMLElement>('squad-view-rank').textContent = `#${en(me.rank)} GLOBAL`;
+    $<HTMLElement>('squad-view-points').textContent = en(squadView.trophies);
+    $<HTMLElement>('squad-view-members').textContent = en(squadView.count);
+    paintSquadYou();
+    paintSquadRoster();
   }
 
   function paintSquadPill(): void {
@@ -606,8 +877,14 @@ export function createMenu(api: MenuApi): Menu {
   function showSquadSearch() {
     squadSearchView.hidden = false;
     squadBoundView.hidden = true;
+    squadSheet?.classList.remove('is-hub');
     $('squad-title').textContent = 'Join Squad';
     squadErr.hidden = true;
+    squadView = null;
+    squadRows = [];
+    squadQuery = '';
+    squadMemberQ.value = '';
+    squadSort = 'trophies';
     paintSquadList(squadQ.value);
   }
 
@@ -616,24 +893,28 @@ export function createMenu(api: MenuApi): Menu {
     if (!me) { showSquadSearch(); return; }
     squadSearchView.hidden = true;
     squadBoundView.hidden = false;
+    squadSheet?.classList.add('is-hub');
     $('squad-title').textContent = 'Your Squad';
-    $<HTMLElement>('squad-view-avatar').textContent = squadLetter(me);
-    $<HTMLElement>('squad-view-name').textContent = me.handle;
-    $<HTMLElement>('squad-view-rank').textContent = `#${me.rank}`;
-    $<HTMLElement>('squad-view-sub').textContent = `${me.name} · ${en(me.members)} members cheer for this channel.`;
-    $<HTMLElement>('squad-view-members').textContent = en(me.members);
-    $<HTMLElement>('squad-view-points').textContent = en(me.trophies);
-    $<HTMLElement>('squad-view-pos').textContent = `#${me.rank}`;
+    squadQuery = '';
+    squadMemberQ.value = '';
+    squadSort = 'trophies';
+    paintSquadHub();
+    squadScroll.scrollTop = 0;
+    scheduleSquadWindow(true);
   }
 
   function openSquad() {
     if (!squadSheet) return;
     squadQ.value = '';
+    squadQuery = '';
+    squadMemberQ.value = '';
+    squadSort = 'trophies';
     const me = getMySquad();
     if (me) showSquadBound();
     else showSquadSearch();
     api.sheets.open(squadSheet);
     impact('light');
+    requestAnimationFrame(() => scheduleSquadWindow(true));
   }
 
   function commitBind(handleOrId: string, isId: boolean) {
@@ -664,6 +945,33 @@ export function createMenu(api: MenuApi): Menu {
     if (row.dataset.squad) commitBind(row.dataset.squad, true);
     else if (row.dataset.handle) commitBind(row.dataset.handle, false);
   });
+
+  /* The roster is windowed: a scroll frame paints only the rows around the
+     viewport, so the DOM stays at ~20 rows no matter how many members there are. */
+  squadScroll.addEventListener('scroll', () => scheduleSquadWindow(), { passive: true });
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(() => scheduleSquadWindow(true)).observe(squadScroll);
+  } else {
+    window.addEventListener('resize', () => scheduleSquadWindow(true));
+  }
+
+  squadMemberQ.addEventListener('input', () => {
+    squadQuery = squadMemberQ.value;
+    window.clearTimeout(squadSearchTimer);
+    squadSearchTimer = window.setTimeout(() => {
+      if (squadBoundView.hidden) return;
+      paintSquadRoster();
+      squadScroll.scrollTop = 0;
+    }, 90);
+  });
+  squadSortBtn.addEventListener('click', () => {
+    squadSort = squadSort === 'trophies' ? 'name' : 'trophies';
+    impact('light');
+    if (squadBoundView.hidden) return;
+    paintSquadRoster();
+    squadScroll.scrollTop = 0;
+  });
+
   $('squad-switch').addEventListener('click', () => { impact('light'); showSquadSearch(); squadQ.focus({ preventScroll: true }); });
   $('squad-leave').addEventListener('click', () => {
     leaveSquad();
@@ -671,11 +979,12 @@ export function createMenu(api: MenuApi): Menu {
     paintSquadPill();
     showSquadSearch();
   });
-  onSquadChange(() => { paintSquadPill(); if (squadSheet && !squadSheet.hidden) showSquadBoundRefresh(); });
-  function showSquadBoundRefresh() {
-    if (!squadBoundView.hidden) showSquadBound();
+  onSquadChange(() => {
+    paintSquadPill();
+    if (!squadSheet || squadSheet.hidden) return;
+    if (!squadBoundView.hidden) paintSquadHub();
     else paintSquadList(squadQ.value);
-  }
+  });
 
   /* ---- the entry points: country now lives only in Profile (header pill removed) ---- */
   document.getElementById('country-chip')?.addEventListener('click', () => { impact('light'); api.router.go('profile'); });
@@ -1494,6 +1803,7 @@ export function createMenu(api: MenuApi): Menu {
     paintHeroExtras(levelInfo());
     paintBadges();
     if (badgeDraft) paintBadgeSheet(badgeDraft);
+    if (squadSheet && !squadSheet.hidden && !squadBoundView.hidden) paintSquadHub();
   });
 
   /* Unlocking an honor schedules one refresh (and therefore one idempotent mint) right after the

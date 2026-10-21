@@ -34,6 +34,12 @@ export interface Squad {
 
 export interface RankedSquad extends Squad {
   rank: number;
+  /**
+   * True when this device created the squad (a bound handle or a verified
+   * Telegram claim). Custom squads live only on this device, so the local
+   * player is their leader; seed squads belong to the wider community.
+   */
+  owned: boolean;
 }
 
 const KEY = 'detour.squads.v1';
@@ -131,9 +137,9 @@ const displayNameOf = (handle: string): string => {
 
 /** Seeds + customs + earned bonus, sorted by trophies, ranked 1..n. Pure. */
 export function getSquadRanking(): RankedSquad[] {
-  const all: Squad[] = [
-    ...SEEDS.map((s) => ({ ...s, trophies: s.trophies + (save.bonus[s.id] ?? 0) })),
-    ...save.custom.map((s) => ({ ...s, trophies: s.trophies + (save.bonus[s.id] ?? 0) })),
+  const all: (Squad & { owned: boolean })[] = [
+    ...SEEDS.map((s) => ({ ...s, trophies: s.trophies + (save.bonus[s.id] ?? 0), owned: false })),
+    ...save.custom.map((s) => ({ ...s, trophies: s.trophies + (save.bonus[s.id] ?? 0), owned: true })),
   ];
   all.sort((a, b) => b.trophies - a.trophies || b.members - a.members || a.handle.localeCompare(b.handle));
   return all.map((s, i) => ({ ...s, rank: i + 1 }));
@@ -219,7 +225,7 @@ export function claimRegisteredSquad(input: RegisteredSquadInput): ClaimResult {
   save.custom = [...save.custom, created].slice(-20);
   save.boundId = id;
   flush();
-  return { ok: true, squad: getMySquad() ?? { ...created, rank: getSquadRanking().length } };
+  return { ok: true, squad: getMySquad() ?? { ...created, rank: getSquadRanking().length, owned: true } };
 }
 
 export function bindSquadById(id: string): BindResult {

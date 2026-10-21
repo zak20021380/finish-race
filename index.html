@@ -2629,11 +2629,18 @@
         </div>
       </section>
 
-      <!-- squad: bind a Telegram channel/chat, view stats, leave or switch -->
+      <!-- squad: bind a Telegram channel, then the hub — banner, your standing,
+           roster leaderboard, and two quiet exits. The standing card and the
+           actions stay pinned while the roster between them scrolls. -->
       <section class="sheet tall" id="sheet-squad" hidden role="dialog" aria-modal="true" aria-labelledby="squad-title">
-        <h2 class="sheet-t" id="squad-title">Join Squad</h2>
+        <header class="sq-top">
+          <h2 class="sq-title" id="squad-title">Your Squad</h2>
+          <button class="ms-x sq-x" type="button" data-sheet-close aria-label="Close squad" data-autofocus>
+            <span class="ms-x-g" aria-hidden="true">&times;</span>
+          </button>
+        </header>
 
-        <div class="sheet-body" id="squad-search-view" data-scroll>
+        <div class="sheet-body sq-search-view" id="squad-search-view" data-scroll>
           <p class="sheet-p">Bind a Telegram channel. Race points count for you and your squad.</p>
           <label class="field">
             <svg class="ico" aria-hidden="true"><use href="#i-search" /></svg>
@@ -2645,27 +2652,60 @@
           <p class="pick-empty squad-err" id="squad-err" role="status" hidden></p>
         </div>
 
-        <div class="sheet-body" id="squad-bound-view" data-scroll hidden>
-          <p class="team-head squad-head">
-            <span class="squad-avatar lg" id="squad-view-avatar" aria-hidden="true">S</span>
-            <b id="squad-view-name">Squad</b>
-            <span class="rank-pill" id="squad-view-rank">#1</span>
-          </p>
-          <p class="sheet-p left" id="squad-view-sub"></p>
-          <dl class="p-stats triple tight">
-            <div class="stat"><dt>Members</dt><dd id="squad-view-members">0</dd></div>
-            <div class="stat"><dt>Trophies</dt><dd id="squad-view-points">0</dd></div>
-            <div class="stat"><dt>Rank</dt><dd id="squad-view-pos">#—</dd></div>
-          </dl>
-          <div class="sheet-actions">
-            <button class="btn btn-ghost" type="button" id="squad-switch">Switch squad</button>
-            <button class="btn btn-ghost warn" type="button" id="squad-leave">Leave squad</button>
-          </div>
-          <p class="fine">Wins add trophies to your squad in the 200 Stars Cup.</p>
-        </div>
+        <div class="sheet-body sq-hub" id="squad-bound-view" hidden>
+          <header class="sq-banner">
+            <span class="sq-crest" aria-hidden="true">
+              <b class="sq-crest-t" id="squad-view-avatar">S</b>
+            </span>
+            <span class="sq-banner-id">
+              <span class="sq-banner-line">
+                <b class="sq-handle" id="squad-view-name">@Squad</b>
+                <span class="sq-global" id="squad-view-rank">#1 GLOBAL</span>
+              </span>
+              <span class="sq-banner-stats">
+                <span class="sq-metric">
+                  <b id="squad-view-points">0</b>
+                  <svg class="ico" aria-hidden="true"><use href="#i-cup" /></svg>
+                  <small>Trophies</small>
+                </span>
+                <i class="sq-dot" aria-hidden="true"></i>
+                <span class="sq-metric">
+                  <b id="squad-view-members">0</b>
+                  <small>Members</small>
+                </span>
+              </span>
+            </span>
+          </header>
 
-        <div class="sheet-actions">
-          <button class="btn btn-ghost" type="button" data-sheet-close>Close</button>
+          <section class="sq-you" id="squad-you" aria-label="Your standing"></section>
+
+          <div class="sq-scroll" id="squad-hub-scroll" data-scroll tabindex="0" role="region" aria-label="Squad roster">
+            <div class="sq-roster-head">
+              <div class="sq-roster-title-row">
+                <h3 class="sq-roster-title">Roster &amp; Leaderboard</h3>
+                <span class="sq-count" id="squad-roster-count" aria-live="polite">0</span>
+              </div>
+              <div class="sq-tools">
+                <label class="sq-search">
+                  <svg class="ico" aria-hidden="true"><use href="#i-search" /></svg>
+                  <input id="squad-member-q" type="search" placeholder="Search members" autocomplete="off"
+                    spellcheck="false" aria-label="Search squad members" />
+                </label>
+                <button class="sq-sort" id="squad-sort" type="button" aria-label="Sort roster by trophies">
+                  <svg class="ico" aria-hidden="true"><use href="#i-swap" /></svg>
+                  <span id="squad-sort-label">Trophies</span>
+                </button>
+              </div>
+            </div>
+
+            <ol class="sq-roster" id="squad-roster" aria-label="Squad leaderboard"></ol>
+            <p class="sq-roster-empty" id="squad-roster-empty" hidden>No members match that search.</p>
+          </div>
+
+          <footer class="sq-foot">
+            <button class="sq-secondary" type="button" id="squad-switch">Switch squad</button>
+            <button class="sq-secondary is-danger" type="button" id="squad-leave">Leave squad</button>
+          </footer>
         </div>
       </section>
 

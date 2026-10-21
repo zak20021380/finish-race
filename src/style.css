@@ -4218,12 +4218,6 @@ html.reduced-motion .mode-hero-dot::after { animation: none; opacity: 0; }
   font-weight: 800;
   line-height: 1;
 }
-.squad-avatar.lg {
-  width: 40px;
-  height: 40px;
-  font-size: var(--t-1);
-  border-radius: 34%;
-}
 .squad-pill.bound { color: var(--ink); }
 .squad-pill.bound #squad-ico { display: none; }
 .squad-pill:not(.bound) #squad-avatar { display: none; }
@@ -4239,9 +4233,6 @@ html.reduced-motion .mode-hero-dot::after { animation: none; opacity: 0; }
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.squad-head { gap: var(--s2); }
-.squad-head b { max-width: 46vw; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-
 /* ---- chunky Coral 3D CTA: the squad action, same extrusion language as .btn-primary ---- */
 .btn-coral {
   --btn-lip: var(--cta-lip);
@@ -5099,7 +5090,7 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
 .squad-pick .pick-row { min-height: 52px; }
 .squad-pick .pick-n small { display: block; font-size: var(--t-micro); font-weight: 600; color: var(--ink-soft); }
 .squad-err { color: var(--danger); }
-#sheet-squad .sheet-body { max-height: 52vh; }
+#sheet-squad .sq-search-view { max-height: 52vh; }
 /* No height / max-height caps on the boards — the screen scroll owns scrolling,
    so a row is never half-cut at the bottom of a nested overflow box. */
 
@@ -19558,4 +19549,761 @@ html.reduced-motion #s-profile .pf-badge-sync-dot { animation: none; opacity: 1;
 @media (max-width: 380px) {
   .badge-card-arch { font-size: 8px; letter-spacing: .08em; }
   .badge-card-ser { font-size: 8.5px; }
+}
+
+/* ==========================================================================
+   SQUAD HUB — compact frosted squad banner, an anchored "your standing" card,
+   and a windowed roster. The panel is a fixed-height column while the hub is
+   bound: banner + standing card frame the scroll, the roster virtualizes
+   against that scroll, and the two exits stay anchored at the panel's foot.
+   ========================================================================== */
+#sheet-squad {
+  padding-top: 16px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  gap: var(--s2);
+}
+#sheet-squad.is-hub {
+  height: calc(86vh - env(safe-area-inset-top));
+  height: calc(86dvh - env(safe-area-inset-top));
+  max-height: calc(86vh - env(safe-area-inset-top));
+  max-height: calc(86dvh - env(safe-area-inset-top));
+}
+.sq-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  min-height: 48px;
+}
+.sq-title {
+  margin: 0;
+  text-align: left;
+  font-size: var(--t-micro);
+  font-weight: 900;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.sq-x { flex: none; }
+.sq-search-view { flex: 1 1 auto; min-height: 0; }
+
+/* ---- the compact frost banner: cyan-lit crest · handle · global rank · two metrics ---- */
+.sq-hub {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: var(--s2);
+}
+.sq-banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 11px;
+  border-radius: 17px;
+  background:
+    radial-gradient(120% 180% at 0% 0%, rgba(56, 189, 248, .12) 0%, rgba(56, 189, 248, 0) 52%),
+    linear-gradient(180deg, rgba(42, 55, 82, .88) 0%, rgba(27, 36, 53, .96) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .11),
+    inset 0 0 0 1px rgba(255, 255, 255, .065),
+    0 12px 22px -18px rgba(0, 0, 0, .9);
+}
+.sq-crest {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #293A55 0%, #121A27 100%);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(125, 211, 252, .46),
+    inset 0 1px 1px rgba(255, 255, 255, .15),
+    0 0 18px -4px rgba(34, 211, 238, .58);
+  color: #BAE6FD;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 0 12px rgba(34, 211, 238, .45);
+}
+.sq-banner-id {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sq-banner-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.sq-handle {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--t-2);
+  font-weight: 900;
+  letter-spacing: -.015em;
+  line-height: 1.15;
+  color: var(--ink);
+}
+.sq-global {
+  flex: none;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  background: rgba(2, 132, 199, .18);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .28);
+  color: var(--brand-ink);
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .05em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sq-banner-stats {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.sq-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.sq-metric b {
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.sq-metric small {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  line-height: 1;
+  color: var(--ink-soft);
+}
+.sq-metric .ico {
+  width: 11px;
+  height: 11px;
+  color: var(--honey-ink);
+  opacity: .9;
+}
+.sq-dot {
+  flex: none;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, .5);
+}
+
+/* ---- the single scroller: sticky standing → roster head → windowed rows ---- */
+.sq-scroll {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+/* ---- your standing: the card that never leaves the top of the roster ----
+   It sits above the scroller rather than inside it, so rows clip cleanly at
+   the scroll edge instead of ghosting under a rounded sticky tile. */
+.sq-you {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 9px 11px 10px;
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 160% at 0% 0%, rgba(56, 189, 248, .1) 0%, rgba(56, 189, 248, 0) 55%),
+    linear-gradient(180deg, #243550 0%, #1A2436 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    inset 0 0 0 1px rgba(125, 211, 252, .22),
+    0 12px 26px -18px rgba(0, 0, 0, .95),
+    0 0 22px -14px rgba(34, 211, 238, .55);
+}
+.sq-you-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.sq-you-kicker {
+  flex: none;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--brand-ink);
+  white-space: nowrap;
+}
+.sq-you-serial { margin-left: auto; }
+.sq-you-main {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.sq-you .sq-av {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+.sq-you-id {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.sq-you-rank {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.sq-you-rank b {
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: -.025em;
+  line-height: 1.05;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.sq-you-rank small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.sq-you-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  line-height: 1.25;
+  color: var(--ink-soft);
+}
+.sq-you-contrib {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  text-align: right;
+}
+.sq-you-contrib b {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  line-height: 1.1;
+  color: var(--honey-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sq-you-contrib .ico {
+  width: 12px;
+  height: 12px;
+  opacity: .92;
+}
+.sq-you-contrib small {
+  font-size: 7.5px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* ---- role micro-pills: gold crown · frosted shield · quiet members ---- */
+.sq-role {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 14px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  font-size: 7.5px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.sq-role .ico {
+  width: 9px;
+  height: 9px;
+}
+.sq-role[data-role="leader"] {
+  background: linear-gradient(180deg, rgba(245, 158, 11, .24) 0%, rgba(245, 158, 11, .1) 100%);
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .34);
+  color: var(--gold-ink);
+}
+.sq-role[data-role="admin"] {
+  background: rgba(14, 165, 233, .13);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .26);
+  color: var(--brand-ink);
+}
+
+/* ---- roster header: title, live count, member search + two-state sort ---- */
+.sq-roster-head {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+.sq-roster-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.sq-roster-title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.sq-count {
+  flex: none;
+  min-width: 36px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, .45),
+    inset 0 0 0 1px var(--hair);
+  color: var(--ink);
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .01em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sq-tools {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+}
+.sq-search {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: var(--field);
+  box-shadow:
+    inset 0 0 0 1px var(--hair-off),
+    inset 0 2px 4px rgba(0, 0, 0, .3);
+  transition: box-shadow var(--motion-fast);
+}
+.sq-search::after {
+  content: "";
+  position: absolute;
+  inset: -2px 0;
+  border-radius: 14px;
+  pointer-events: none;
+}
+.sq-search:focus-within {
+  box-shadow:
+    inset 0 0 0 1.5px rgba(125, 211, 252, .48),
+    inset 0 2px 4px rgba(0, 0, 0, .3);
+}
+.sq-search .ico {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--ink-soft);
+}
+.sq-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .01em;
+}
+.sq-search input::placeholder { color: var(--ink-soft); opacity: .82; }
+.sq-search input::-webkit-search-cancel-button,
+.sq-search input::-webkit-search-decoration { appearance: none; -webkit-appearance: none; }
+.sq-sort {
+  position: relative;
+  flex: none;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--clay-face);
+  box-shadow:
+    0 2px 0 #080C14,
+    inset 0 0 0 1px var(--hair),
+    inset 0 1px 0 rgba(255, 255, 255, .08);
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform var(--motion-fast), color var(--motion-fast);
+}
+.sq-sort::after {
+  content: "";
+  position: absolute;
+  inset: -2px 0;
+  pointer-events: none;
+}
+.sq-sort .ico { width: 12px; height: 12px; }
+.sq-sort:active { transform: translateY(1px); }
+.sq-sort:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.sq-sort[data-sort="name"] { color: var(--brand-ink); }
+
+/* ---- the virtualized list: rows are absolute; the <ol> owns the real height ---- */
+.sq-roster {
+  --sq-row-h: 56px;
+  position: relative;
+  min-height: var(--sq-row-h);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(30, 39, 57, .92) 0%, rgba(22, 29, 43, .96) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .055),
+    inset 0 0 0 1px var(--hair);
+}
+.sq-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--sq-row-h);
+  display: grid;
+  grid-template-columns: 34px 34px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  padding: 0 10px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .024) 0%, rgba(255, 255, 255, 0) 54%);
+  box-shadow: inset 0 -1px 0 var(--hair);
+  contain: layout paint;
+}
+.sq-row[data-rank="1"] {
+  background:
+    linear-gradient(90deg, rgba(245, 158, 11, .085) 0%, rgba(245, 158, 11, .012) 44%, rgba(255, 255, 255, 0) 74%),
+    linear-gradient(180deg, rgba(255, 255, 255, .024) 0%, rgba(255, 255, 255, 0) 54%);
+}
+.sq-row[data-rank="2"] {
+  background:
+    linear-gradient(90deg, rgba(226, 232, 240, .065) 0%, rgba(226, 232, 240, .01) 44%, rgba(255, 255, 255, 0) 74%),
+    linear-gradient(180deg, rgba(255, 255, 255, .024) 0%, rgba(255, 255, 255, 0) 54%);
+}
+.sq-row[data-rank="3"] {
+  background:
+    linear-gradient(90deg, rgba(217, 119, 6, .075) 0%, rgba(217, 119, 6, .01) 44%, rgba(255, 255, 255, 0) 74%),
+    linear-gradient(180deg, rgba(255, 255, 255, .024) 0%, rgba(255, 255, 255, 0) 54%);
+}
+.sq-row.is-you {
+  background:
+    linear-gradient(90deg, rgba(56, 189, 248, .13) 0%, rgba(56, 189, 248, .026) 42%, rgba(255, 255, 255, 0) 76%),
+    linear-gradient(180deg, rgba(255, 255, 255, .024) 0%, rgba(255, 255, 255, 0) 54%);
+  box-shadow:
+    inset 2px 0 0 var(--brand-2),
+    inset 0 -1px 0 var(--hair);
+}
+
+/* rank: metal for the podium three, plain tabular numbers for everyone else */
+.sq-rank {
+  width: 34px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  justify-self: start;
+  font-variant-numeric: tabular-nums;
+}
+.sq-rank.is-plain {
+  color: #7C8CA3;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .01em;
+}
+.sq-rank.is-plain.is-wide {
+  font-size: 9px;
+  letter-spacing: -.03em;
+}
+.sq-rank.is-metal {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #FFF7D6 0%, #D9A227 48%, #8A5A06 100%);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, .72),
+    0 0 0 1px rgba(0, 0, 0, .5),
+    0 0 11px -3px rgba(245, 158, 11, .65);
+}
+.sq-rank.is-metal::before {
+  content: "";
+  position: absolute;
+  inset: 1.5px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #FEF3C7 0%, #FBBF24 48%, #B45309 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, .72),
+    inset 0 -1px 2px rgba(0, 0, 0, .5);
+}
+.sq-rank.is-metal b {
+  position: relative;
+  z-index: 1;
+  font-size: 9.5px;
+  font-weight: 900;
+  line-height: 1;
+  color: #3B2503;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .36);
+}
+.sq-rank.is-metal[data-metal="silver"] {
+  background: linear-gradient(180deg, #FFFFFF 0%, #C7D2E0 48%, #64748B 100%);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, .72),
+    0 0 0 1px rgba(0, 0, 0, .5),
+    0 0 11px -3px rgba(203, 213, 225, .55);
+}
+.sq-rank.is-metal[data-metal="silver"]::before {
+  background: linear-gradient(180deg, #FFFFFF 0%, #E2E8F0 44%, #94A3B8 100%);
+}
+.sq-rank.is-metal[data-metal="silver"] b { color: #1E293B; }
+.sq-rank.is-metal[data-metal="bronze"] {
+  background: linear-gradient(180deg, #FFE5C7 0%, #C9803C 48%, #7C2D12 100%);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, .72),
+    0 0 0 1px rgba(0, 0, 0, .5),
+    0 0 11px -3px rgba(217, 119, 6, .6);
+}
+.sq-rank.is-metal[data-metal="bronze"]::before {
+  background: linear-gradient(180deg, #FED7AA 0%, #D97706 48%, #9A3412 100%);
+}
+.sq-rank.is-metal[data-metal="bronze"] b { color: #2A1407; }
+
+/* avatar: slate squircle with a restrained identity tint and a medal on its rim */
+.sq-avwrap {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+}
+.sq-av {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background:
+    radial-gradient(120% 120% at 28% 10%, hsla(var(--sq-hue, 198), 62%, 58%, .26) 0%, hsla(var(--sq-hue, 198), 62%, 58%, 0) 58%),
+    linear-gradient(180deg, #2A354C 0%, #141B2A 100%);
+  box-shadow:
+    inset 0 0 0 1px hsla(var(--sq-hue, 198), 72%, 72%, .23),
+    inset 0 1px 1px rgba(255, 255, 255, .12);
+  color: hsl(var(--sq-hue, 198), 88%, 84%);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .01em;
+  line-height: 1;
+}
+.sq-row[data-rank="1"] .sq-av { box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .34), inset 0 1px 1px rgba(255, 255, 255, .14); }
+.sq-row[data-rank="2"] .sq-av { box-shadow: inset 0 0 0 1px rgba(203, 213, 225, .3), inset 0 1px 1px rgba(255, 255, 255, .14); }
+.sq-row[data-rank="3"] .sq-av { box-shadow: inset 0 0 0 1px rgba(217, 119, 6, .34), inset 0 1px 1px rgba(255, 255, 255, .14); }
+.sq-medal {
+  right: -4px;
+  bottom: -4px;
+  width: 18px;
+  height: 18px;
+}
+.sq-medal .medal-coin,
+.sq-medal .medal-coin.badge-crest-art {
+  width: 15px;
+  height: 15px;
+}
+
+/* identity: name on top, role pill only where a role exists */
+.sq-id {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
+}
+.sq-name {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--t-3);
+  font-weight: 800;
+  letter-spacing: -.005em;
+  line-height: 1.2;
+  color: var(--ink);
+}
+.sq-score {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sq-score .ico {
+  width: 12px;
+  height: 12px;
+  color: var(--honey-ink);
+  opacity: .86;
+}
+.sq-score.is-zero { color: var(--ink-soft); }
+
+.sq-roster-empty {
+  margin: 2px 0 0;
+  padding: 20px 12px;
+  border-radius: 14px;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair);
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+/* ---- anchored footer: two quiet keys, no bulky CTAs ---- */
+.sq-foot {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hair);
+}
+.sq-secondary {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 42px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .035);
+  box-shadow: inset 0 0 0 1px var(--hair), inset 0 1px 0 rgba(255, 255, 255, .04);
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform var(--motion-fast), color var(--motion-fast), background var(--motion-fast);
+}
+.sq-secondary::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+  pointer-events: none;
+}
+.sq-secondary:active { transform: translateY(1px); }
+.sq-secondary:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.sq-secondary.is-danger {
+  color: var(--red-ink);
+  background: rgba(224, 38, 79, .055);
+  box-shadow: inset 0 0 0 1px rgba(224, 38, 79, .18), inset 0 1px 0 rgba(255, 255, 255, .04);
+}
+
+@media (max-width: 340px) {
+  .sq-banner { padding: 8px 9px; gap: 8px; }
+  .sq-crest { width: 40px; height: 40px; border-radius: 13px; font-size: 16px; }
+  .sq-banner-stats { gap: 5px; }
+  .sq-metric { gap: 3px; }
+  .sq-metric small { font-size: 8.5px; }
+  .sq-row { column-gap: 7px; padding: 0 8px; }
+  .sq-sort { padding: 0 8px; }
+}
+
+.sq-you .sq-avwrap {
+  width: 38px;
+  height: 38px;
+}
+
+.sq-scroll:focus { outline: none; }
+.sq-scroll:focus-visible {
+  outline: 3px solid var(--brand-2);
+  outline-offset: -2px;
+  border-radius: 14px;
 }
