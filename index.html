@@ -1720,6 +1720,48 @@
         </button>
       </nav>
 
+      <!-- ---------------- first-match tutorial ----------------
+           Four coach marks over the live board and dock. The dim layer is clipped by
+           #tut-clip, so the active target stays sharp and unblurred while the rest of
+           the race takes the slate mask. Geometry is handed in by main.ts; see
+           src/tutorial.ts for the flow and copy. -->
+      <div class="tutorial" id="tutorial" role="dialog" aria-modal="true"
+        aria-labelledby="tut-title" aria-describedby="tut-body" hidden>
+        <svg class="tut-svg" aria-hidden="true" focusable="false">
+          <defs>
+            <clipPath id="tut-clip" clipPathUnits="userSpaceOnUse">
+              <path id="tut-clip-path" clip-rule="evenodd" d="M0 0H0V0H0Z" />
+            </clipPath>
+          </defs>
+        </svg>
+        <div class="tut-scrim" aria-hidden="true"></div>
+        <span class="tut-spot" id="tut-spot" aria-hidden="true"></span>
+        <div class="tut-block" aria-hidden="true"></div>
+        <div class="tut-pointer" id="tut-pointer" aria-hidden="true">
+          <span class="tut-pointer-ring"></span>
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M9 11.24V7.5C9 6.12 10.12 5 11.5 5S14 6.12 14 7.5v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74zm9.84 4.63l-4.54-2.26c-.17-.07-.35-.11-.54-.11H13v-6c0-.83-.67-1.5-1.5-1.5S10 6.67 10 7.5v10.74l-3.43-.72c-.08-.01-.15-.03-.24-.03-.31 0-.59.13-.79.33l-.79.8 4.94 4.94c.27.27.65.44 1.06.44h6.79c.75 0 1.33-.55 1.44-1.28l.75-5.27c.01-.07.02-.14.02-.2 0-.62-.38-1.16-.91-1.38z" />
+          </svg>
+        </div>
+        <button class="tut-forward" id="tut-forward" type="button"
+          aria-label="Tap the forward tile" hidden></button>
+        <div class="tut-card" id="tut-card" tabindex="-1" data-tone="goal">
+          <div class="tut-head">
+            <span class="tut-ico" aria-hidden="true">
+              <svg class="ico" focusable="false"><use id="tut-ico-use" href="#i-flag" /></svg>
+            </span>
+            <div class="tut-head-txt">
+              <p class="tut-kicker" id="tut-step">STEP 1 OF 4</p>
+              <h2 class="tut-title" id="tut-title">GOAL</h2>
+            </div>
+          </div>
+          <p class="tut-body" id="tut-body">Reach the FINISH line at the top before your opponent does!</p>
+          <button class="tut-next" id="tut-next" type="button">Next</button>
+        </div>
+        <button class="tut-skip" id="tut-skip" type="button">Skip Tutorial</button>
+        <p class="sr-only" id="tut-live" role="status" aria-live="polite"></p>
+      </div>
+
       <!-- matchmaking: the full-viewport searching stage Quick match opens (src/matchmaking.ts).
            Clay only — no backdrop-filter anywhere on it. -->
       <section class="mm" id="overlay-matchmaking" hidden role="dialog" aria-modal="true" aria-labelledby="mm-title">

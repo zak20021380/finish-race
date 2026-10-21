@@ -28,7 +28,10 @@ import { createNotifications } from './notifications';
 import { mountCoins, setBalance } from './coin';
 import { menuState, motionReduced } from './settings';
 import { audio, SHOVE_RATE } from './audio';
-import { onChange, profile, recordGame, theme } from './storage';
+import {
+  completeTutorial, hasCompletedTutorial, onChange, profile, recordGame, theme,
+} from './storage';
+import { createTutorial, type Tutorial, type TutorialForward, type TutorialRect, type TutorialSpot } from './tutorial';
 import { SEAT_RAMPS } from './themes';
 import { detonation, impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
@@ -296,7 +299,7 @@ const router = createRouter($('screens'), (id) => {
   compete?.setRoute(id);
   // Telegram BackButton on every screen except Home; always functional via onBack fallback.
   setBackButton(id !== 'home');
-  if (id !== 'game') pauseGame();     // the board only ticks while it is on screen
+  if (id !== 'game') { cancelTutorial(); pauseGame(); }   // the board only ticks while it is on screen
   if (id === 'home') admin?.relayout();   // the launcher only has a height once Home is up
   syncLoop();
 });
@@ -306,6 +309,9 @@ const setBackButton = onBackPress(() => onBack());
 
 function onBack() {
   impact('light');
+  /* the coach marks own the board until they are read or skipped: back is the same door as the
+     skip key, never a pause sheet opening underneath the overlay */
+  if (tutorialActive) { tutorial?.skip(); return; }
   // the Command Center is a full-viewport stage above every sheet: it unwinds first
   if (admin?.isOpen) { admin.close(); return; }
   // the searching stage sits above every sheet, so it unwinds first
@@ -470,7 +476,13 @@ let turnsPlayed = 0;
 let saidTurn = '';
 const waiting: (() => void)[] = [];            // bot thinks parked by the pause sheet
 
-const canAct = () => state.winner === null && state.turn === localSide && !paused && !rolling;
+/** The first-match coach marks hold the whole race: no clock, no bot, no board taps but the one
+ *  forward tile the movement card hands to the player. */
+let tutorialActive = false;
+let tutorial: Tutorial | null = null;
+
+const canAct = () => state.winner === null && state.turn === localSide && !paused && !rolling
+  && !tutorialActive;
 const clearGhost = () => { mineGhost = null; setMode({ ...mode(), preview: null }); clearNote(); };
 
 /**
@@ -640,12 +652,14 @@ function ui() {
   if (mineGhost && !mineHints.some((h) => sameCell(h, mineGhost))) mineGhost = null;
   armCapsules();
   /* the rival's dots tick for a bot's think time and for a person's just the same */
-  const thinking = rivalTurn() && !paused;
+  const thinking = rivalTurn() && !paused && !tutorialActive;
 
   dots.classList.toggle('on', thinking);
 
   mineBtn.setAttribute('aria-pressed', String(mineArmed));
-  mineBtn.disabled = !live || minesLeft(state, localSide) <= 0;
+  /* the tutorial dims the board but never the instrument it is pointing at: step four's mine
+     key stays lit even while the bot's turn is held behind the overlay */
+  mineBtn.disabled = !tutorialActive && (!live || minesLeft(state, localSide) <= 0);
   setMineCount(minesLeft(state, localSide));
 
   /* whose turn it is rides on the chips now: a clay glow, a lift, and the countdown ring */
@@ -683,7 +697,7 @@ const untilRoll = () => (rolling
   : Promise.resolve());
 
 async function runOpponent() {
-  if (state.winner !== null || !wantsOpponent()) return;
+  if (state.winner !== null || !wantsOpponent() || tutorialActive) return;
   const token = ++gen;
   await untilRoll();                    // it does not think over the top of a trunk, let alone move
   if (token !== gen) return;
@@ -820,7 +834,7 @@ function play(a: Action, remote = false): boolean {
   ui();
   startClock();          // the turn has moved on: the next seat gets its own allowance
   if (state.winner !== null) notify(state.winner === localSide ? 'success' : 'error');
-  else if (wantsOpponent()) void runOpponent();
+  else if (wantsOpponent() && !tutorialActive) void runOpponent();
   return true;
 }
 
@@ -853,7 +867,7 @@ let ringFrac = -1;
 
 /** Is the countdown this seat's to lose? */
 const clockLive = () => !paused && !overlayOpen && !document.hidden && router.current === 'game'
-  && state.winner === null && state.turn === localSide && !rolling;
+  && state.winner === null && state.turn === localSide && !rolling && !tutorialActive;
 
 /** Park the countdown: the interval is gone, and the chip stops advertising a clock it isn't running. */
 function stopClock() {
@@ -920,6 +934,7 @@ function timeoutMove() {
 }
 
 function restart() {
+  cancelTutorial();
   gen++;
   /* Every local race rolls a fresh seed so no two telegraph the same lanes; an online race takes
      the seed the matchmaker handed both sides, so the logs and the hazards are the same board. */
@@ -1173,6 +1188,11 @@ interface StartSetup {
 }
 
 function startGame(setup: StartSetup) {
+  cancelTutorial();
+  /* First run teaches on the board it is actually describing: a local bot race. An online or
+     private-room seat is another person's turn clock too, so it never gets frozen behind an
+     onboarding card — the lesson waits for the first solo-style match instead. */
+  const wantsTutorial = !hasCompletedTutorial() && !setup.online && !setup.room;
   /* menuState.difficulty is the single source: the Choose-mode sheet persists it live,
      so every start path (vs Bot card, Play) runs the level the sheet shows. */
   difficulty = menuState.difficulty;
@@ -1226,6 +1246,7 @@ function startGame(setup: StartSetup) {
   }
 
   router.go('game');
+  if (wantsTutorial) beginTutorial();
 }
 
 /**
@@ -1265,6 +1286,7 @@ function resumeGame() {
 }
 
 function quitToMenu() {
+  cancelTutorial();                 // leaving mid-lesson does not count as having read it
   /* a race that ended inside the goal beat still has to be paid out before the board goes away */
   if (goalBeat) { clearGoalBeat(); showOverlay(); }
   sheets.close();
@@ -1440,6 +1462,111 @@ canvas.addEventListener('pointerleave', () => {
 
 mineBtn.addEventListener('click', () => { armMine(!mineArmed); });
 
+/* ---------- first-match tutorial: live targets and the held race behind them ---------- */
+
+/**
+ * A viewport rect for a cell block on the canvas. The renderer publishes its layout in CSS px,
+ * but the canvas box is re-read every time so the screen's slide-in transform can never leave
+ * the spotlight welded to where the board used to be.
+ */
+function boardRect(c: number, r: number, w = 1, h = 1): TutorialRect {
+  const box = canvas.getBoundingClientRect();
+  const L = renderer.layout();
+  const sx = box.width / Math.max(1, L.w);
+  const sy = box.height / Math.max(1, L.h);
+  return {
+    left: box.left + (L.ox + c * L.cell) * sx,
+    top: box.top + (L.oy + r * L.cell) * sy,
+    width: w * L.cell * sx,
+    height: h * L.cell * sy,
+  };
+}
+
+/** A dock element's own box, padded just enough to read as a cut-out around it. */
+function elementSpot(el: Element | null | undefined, pad: number): TutorialSpot | null {
+  const r = el?.getBoundingClientRect();
+  if (!r || r.width < 1 || r.height < 1) return null;
+  return {
+    rect: { left: r.left - pad, top: r.top - pad, width: r.width + pad * 2, height: r.height + pad * 2 },
+    radius: 12,
+  };
+}
+
+/** The pawn the movement card is talking about: the one in hand, or the turn's first. */
+const tutorialBall = (): Ball | null => {
+  if (state.winner !== null) return null;
+  if (selected !== null) return ballById(state, selected);
+  return firstBall(state, state.turn);
+};
+
+/** The forward dot, and a tap that commits it for real. Falls back to the nearest legal step
+ *  that shortens the path if the straight-ahead square is walled off. */
+function tutorialForward(): TutorialForward | null {
+  if (state.turn !== localSide || state.winner !== null) return null;
+  const ball = tutorialBall();
+  if (!ball) return null;
+  let picked: Pos | null = null;
+  for (const h of hints) {
+    if (h.r >= ball.pos.r) continue;
+    if (h.c === ball.pos.c && h.r === ball.pos.r - 1) { picked = h; break; }
+    if (!picked || h.r > picked.r
+      || (h.r === picked.r && Math.abs(h.c - ball.pos.c) < Math.abs(picked.c - ball.pos.c))) {
+      picked = h;
+    }
+  }
+  if (!picked) return null;
+  const cell = picked;
+  return {
+    rect: boardRect(cell.c, cell.r),
+    tap: () => {
+      renderer.ripple(cell.c + 0.5, cell.r + 0.5, localSide);
+      return play({ kind: 'move', ball: ball.id, to: cell });
+    },
+  };
+}
+
+function beginTutorial() {
+  if (!tutorial || tutorial.active) return;
+  tutorialActive = true;      // before stopClock: clockLive reads this flag
+  stopClock();
+  tutorial.start();
+}
+
+/** Leaving the race, or starting another one, ends the lesson without marking it read. */
+function cancelTutorial() {
+  if (!tutorialActive) return;
+  tutorial?.cancel();
+  tutorialActive = false;
+}
+
+tutorial = createTutorial({
+  finish: () => ({ rect: boardRect(0, 0, state.cols, 1), radius: 18 }),
+  moves: () => {
+    const ball = tutorialBall();
+    if (!ball) return null;
+    let c0 = ball.pos.c, r0 = ball.pos.r, c1 = c0 + 1, r1 = r0 + 1;
+    for (const h of hints) {
+      c0 = Math.min(c0, h.c);
+      r0 = Math.min(r0, h.r);
+      c1 = Math.max(c1, h.c + 1);
+      r1 = Math.max(r1, h.r + 1);
+    }
+    return { rect: boardRect(c0, r0, c1 - c0, r1 - r0), radius: 16 };
+  },
+  forward: tutorialForward,
+  walls: () => elementSpot(wallBadges[localSide], 6),
+  mines: () => elementSpot(mineBtn, 6),
+  end(result) {
+    tutorialActive = false;
+    if (result === 'cancelled') return;
+    completeTutorial();       // read to the end or skipped: either way, not first-run again
+    $<HTMLElement>('s-game').focus({ preventScroll: true });
+    ui();
+    startClock();
+    if (wantsOpponent()) void runOpponent();
+  },
+});
+
 again.addEventListener('click', () => {
   impact('light');
   /* a networked seat is not ours to restart: Play again means queue again */
@@ -1506,7 +1633,7 @@ function frame(now: number) {
   view.mineGhost = mineGhost;
   view.capsule = capsule;
   view.last = marks;
-  view.thinking = wantsOpponent() && !paused ? state.turn : null;
+  view.thinking = wantsOpponent() && !paused && !tutorialActive ? state.turn : null;
   renderer.draw(view, now);
   confetti.tick(dt, now);
   raf = requestAnimationFrame(frame);

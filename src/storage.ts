@@ -131,6 +131,11 @@ export interface Save {
   referral: ReferralState;
   /** Server-minted badge serials and the last live supply snapshot. */
   editions: EditionsCache;
+  /**
+   * The first-match coach marks. False until the player finishes or skips them; it rides the save
+   * so a cleared race history is not the only thing that brings the tutorial back.
+   */
+  tutorialCompleted: boolean;
 }
 
 /** The three starter items are owned before the first race; the wallet starts stocked for the demo. */
@@ -168,6 +173,7 @@ function fresh(): Save {
     tiqBonus: 0,
     referral: { joins: 0, unclaimed: 0, welcome: false, via: null },
     editions: { claims: {}, supply: {}, syncedAt: 0 },
+    tutorialCompleted: false,
   };
 }
 
@@ -310,6 +316,7 @@ function migrate(raw: Partial<Save> | null): Save {
     s.displayName = null;
   }
   if (whole(raw.tiqBonus)) s.tiqBonus = Math.max(0, Math.floor(raw.tiqBonus));
+  if (raw.tutorialCompleted === true) s.tutorialCompleted = true;
   const ref = raw.referral as Partial<ReferralState> | undefined;
   if (ref) {
     /* A save from before the referral engine simply keeps the fresh zeroes. Anything hand-edited is
@@ -442,6 +449,16 @@ export function recordGame(r: { difficulty: Difficulty; won: boolean }, mult = 1
   profile.coins += coins;
   flush();
   return coins;
+}
+
+/** True once the first-match coach marks have been finished or skipped on this save. */
+export const hasCompletedTutorial = (): boolean => profile.tutorialCompleted;
+
+/** The lesson is over for good, whether it was read to the last card or skipped. */
+export function completeTutorial(): void {
+  if (profile.tutorialCompleted) return;
+  profile.tutorialCompleted = true;
+  flush();
 }
 
 /** Tournament entries and daily rewards move the same wallet the shop reads. */
