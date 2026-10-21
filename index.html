@@ -2906,10 +2906,9 @@
         </div>
       </section>
 
-      <!-- squad: bind a Telegram channel, then the hub — an AVG-TIQ banner, your
-           TIQ / Arena standing, an arena-tagged roster, and two quiet exits. The
-           standing card and the actions stay pinned while the roster between them
-           scrolls. TIQ is the only score on this sheet, for the squad and for you. -->
+      <!-- squad: bind a Telegram channel, then the hub — a prestige crest over the
+           squad's rank and Arena tier, your standing, and a clean TiQ roster. The
+           crest and actions stay pinned while the roster between them scrolls. -->
       <section class="sheet tall" id="sheet-squad" hidden role="dialog" aria-modal="true" aria-labelledby="squad-title">
         <header class="sq-top">
           <h2 class="sq-title" id="squad-title">Your Squad</h2>
@@ -2932,30 +2931,35 @@
 
         <div class="sheet-body sq-hub" id="squad-bound-view" hidden>
           <header class="sq-banner">
-            <span class="sq-crest" aria-hidden="true">
-              <b class="sq-crest-t" id="squad-view-avatar">S</b>
+            <span class="sq-crest" id="squad-view-crest" data-tier="bronze" aria-hidden="true">
+              <i class="sq-crest-aura"></i>
+              <span class="sq-crest-coin">
+                <span class="sq-crest-face">
+                  <b class="sq-crest-t" id="squad-view-avatar">S</b>
+                </span>
+              </span>
             </span>
             <span class="sq-banner-id">
-              <span class="sq-banner-line">
-                <b class="sq-handle" id="squad-view-name">@Squad</b>
+              <b class="sq-handle" id="squad-view-name">@Squad</b>
+              <span class="sq-banner-pills">
                 <span class="sq-global" id="squad-view-rank">#1 GLOBAL SQUAD</span>
+                <span class="sq-tier" id="squad-view-tier" data-tier="bronze"
+                  title="Bronze Division III">
+                  <svg class="ico" aria-hidden="true"><use href="#i-gem" /></svg>
+                  <b class="sq-tier-full" id="squad-view-tier-full">Bronze Division III</b>
+                  <b class="sq-tier-short" id="squad-view-tier-short">Division III</b>
+                </span>
               </span>
               <span class="sq-banner-stats">
-                <span class="sq-metric sq-metric-avg">
+                <span class="sq-stat sq-stat-avg">
                   <svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg>
-                  <small>AVG TIQ</small>
                   <b id="squad-view-avg">0</b>
+                  <small>AVG TIQ</small>
                 </span>
-                <i class="sq-dot" aria-hidden="true"></i>
-                <span class="sq-metric">
+                <span class="sq-stat">
+                  <svg class="ico" aria-hidden="true"><use href="#i-users" /></svg>
                   <b id="squad-view-members">0</b>
                   <small id="squad-view-members-label">Members</small>
-                </span>
-                <span class="sq-tier" id="squad-view-tier" data-tier="bronze"
-                  title="Bronze Arena Division III">
-                  <svg class="ico" aria-hidden="true"><use href="#i-gem" /></svg>
-                  <b class="sq-tier-full" id="squad-view-tier-full">Bronze Arena Div III</b>
-                  <b class="sq-tier-short" id="squad-view-tier-short">Bronze III</b>
                 </span>
               </span>
             </span>
@@ -2966,7 +2970,7 @@
           <div class="sq-scroll" id="squad-hub-scroll" data-scroll tabindex="0" role="region" aria-label="Squad roster">
             <div class="sq-roster-head">
               <div class="sq-roster-title-row">
-                <h3 class="sq-roster-title">Roster &amp; Leaderboard</h3>
+                <h3 class="sq-roster-title">Roster</h3>
                 <span class="sq-count" id="squad-roster-count" aria-live="polite">0</span>
               </div>
               <div class="sq-tools">
@@ -2974,16 +2978,6 @@
                   <svg class="ico" aria-hidden="true"><use href="#i-search" /></svg>
                   <input id="squad-member-q" type="search" placeholder="Search members" autocomplete="off"
                     spellcheck="false" aria-label="Search squad members" />
-                </label>
-                <label class="sq-sort" id="squad-sort-wrap" for="squad-sort">
-                  <svg class="ico" aria-hidden="true"><use href="#i-swap" /></svg>
-                  <span id="squad-sort-label">TIQ</span>
-                  <svg class="ico sq-sort-chev" aria-hidden="true"><use href="#i-next" /></svg>
-                  <select class="sq-sort-sel" id="squad-sort" aria-label="Sort roster">
-                    <option value="tiq">TIQ</option>
-                    <option value="arena">Arena rank</option>
-                    <option value="name">A–Z</option>
-                  </select>
                 </label>
               </div>
             </div>
@@ -2993,8 +2987,7 @@
           </div>
 
           <footer class="sq-foot">
-            <button class="sq-secondary" type="button" id="squad-switch">Switch squad</button>
-            <button class="sq-secondary is-danger" type="button" id="squad-leave">Leave squad</button>
+            <button class="sq-leave" type="button" id="squad-leave" aria-live="polite">Leave squad</button>
           </footer>
         </div>
       </section>
