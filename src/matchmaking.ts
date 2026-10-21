@@ -41,6 +41,7 @@ import { payout, profile } from './storage';
 import { getMySquad } from './squads';
 import { paintFlag } from './flags';
 import { runtime, tiqFrom } from './admin';
+import { adoptArena, arena, claimArenaAward, type ArenaState } from './arenaState';
 import { impact, notify, tgInitData, tgUser } from './telegram';
 
 /* ---------- TIQ: the same reading the ladder prints ---------- */
@@ -259,7 +260,8 @@ type RaceFrame =
   | { type: 'RESIGN' | 'OPPONENT_LEFT'; side: 0 | 1 }
   /* The two the Admin Command Center's server half sends: a refused queue, and a pulled room. */
   | { type: 'ERROR'; reason: string }
-  | { type: 'ABORTED'; matchId: string };
+  | { type: 'ABORTED'; matchId: string }
+  | { type: 'ARENA'; arena: ArenaState; reason: string; award: unknown };
 
 /**
  * A refusal is not a dead socket. A socket that dies means the local search may take over — that is
@@ -432,6 +434,15 @@ function parseFrame(raw: string, sizes?: readonly number[]): RaceFrame | null {
     if (msg.type === 'RESIGN' || msg.type === 'OPPONENT_LEFT') return { type: msg.type, side };
     if (msg.type === 'ERROR') return { type: 'ERROR', reason: typeof msg.reason === 'string' ? msg.reason : 'REFUSED' };
     if (msg.type === 'ABORTED') return { type: 'ABORTED', matchId: typeof msg.matchId === 'string' ? msg.matchId : '' };
+    if (msg.type === 'ARENA') {
+      if (!msg.arena || typeof msg.arena !== 'object') return null;
+      return {
+        type: 'ARENA',
+        arena: msg.arena as unknown as ArenaState,
+        reason: typeof msg.reason === 'string' ? msg.reason : '',
+        award: msg.award ?? null,
+      };
+    }
     return null;
   } catch {
     return null;                       // not ours: a frame we cannot read is a frame we ignore
@@ -631,6 +642,13 @@ function wire(sock: WebSocket): void {
   sock.addEventListener('message', (ev) => {
     const frame = parseFrame(String(ev.data), race?.sizes);
     if (!frame) return;
+
+    /* a tournament state broadcast: update the mirror even mid-race, without touching the board */
+    if (frame.type === 'ARENA') {
+      adoptArena(frame.arena);
+      if (frame.award) claimArenaAward(frame.award);
+      return;
+    }
 
     if (frame.type === 'ERROR') {
       if (race?.socket === sock) endRace(sock, false, 'aborted');
@@ -999,8 +1017,8 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
     if (stakeEls.gold) {
       stakeEls.gold.textContent = String(payout({ difficulty: menuState.difficulty, won: true }, runtime.coinMult));
     }
-    /* the ladder's own capsule is the season's only source; it prints "S4 · 3d left" */
-    const season = /S\d+/.exec(domText('ranks-season', ''))?.[0] ?? '';
+    /* the same Command Center season the Mind Ladder capsule counts down */
+    const season = `S${arena().seasonNo}`;
     if (stakeEls.season) {
       stakeEls.season.textContent = season;
       stakeEls.season.closest('.mm-stakes-c')?.toggleAttribute('hidden', season === '');

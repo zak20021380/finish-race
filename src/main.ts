@@ -41,6 +41,7 @@ import {
   createMatchmaking, myTier, myTiq, onlineRace, onlineSearch, type OnlineSession, type RaceEnd,
 } from './matchmaking';
 import { createAdmin, onRuntime, recordRace, runtime, tiqFrom, type Admin } from './admin';
+import { arena, arenaLocked, onAward, startArenaSync } from './arenaState';
 import { createAnnouncements } from './broadcasts';
 import {
   MIN_SEATS, ROOM_WAIT_MS, createRoom, difficultyFor, isAutomated, lobbyLine, rewardEligible, seatBadge,
@@ -266,9 +267,13 @@ const matchmaking = createMatchmaking({
   onRefused: (reason) => {
     impact('light');
     notify('warning');
-    showNote(reason === 'MAINTENANCE'
-      ? 'Maintenance in progress — matchmaking is paused.'
-      : 'The server closed the queue. Try again in a moment.', false, 2600);
+    showNote(reason === 'MATCHING_LOCKED'
+      ? 'The arena is locked — new matches are paused.'
+      : reason === 'SEASON_ENDED'
+        ? 'The season ended — standings are final.'
+        : reason === 'MAINTENANCE'
+          ? 'Maintenance in progress — matchmaking is paused.'
+          : 'The server closed the queue. Try again in a moment.', false, 2600);
     const drawer = sheetById('sheet-game-modes');
     if (drawer) sheets.open(drawer);
   },
@@ -284,6 +289,16 @@ function queueMatch() {
     impact('light');
     notify('warning');
     showNote('Maintenance in progress — matchmaking is paused.', false, 2600);
+    return;
+  }
+  /* the Command Center's own lock, mirrored from the server: new entries stop, live races play out */
+  const board = arena();
+  if (arenaLocked(board)) {
+    impact('light');
+    notify('warning');
+    showNote(board.status === 'finale' || board.endsAt <= Date.now()
+      ? 'The season is closed — standings are final.'
+      : 'The arena is locked — new matches are paused.', false, 2600);
     return;
   }
   matchmaking.open();
@@ -1702,6 +1717,13 @@ admin = createAdmin({
   onDispatch: (text) => announcements.dispatch(text),
 });
 admin.mount();
+startArenaSync();
+onAward((award) => {
+  impact('medium');
+  notify('success');
+  const label = award.badge.toLowerCase().startsWith('season ') ? award.badge : `Season ${award.seasonNo} ${award.badge}`;
+  showNote(`${label} — +${award.tiq} TIQ.`, false, 3600);
+});
 announcements.sync();
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) announcements.sync();

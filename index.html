@@ -2099,6 +2099,178 @@
               </button>
             </div>
 
+            <!-- ---------- Arena & tournament: the season machine, clock, divisions, emergency keys ---------- -->
+            <p class="adm-sec-h">Arena &amp; tournament<span class="adm-bc-live" id="arena-head-chip" data-on="true">OPEN</span></p>
+            <section class="adm-arena" id="adm-arena" data-state="active" data-lock="false"
+              aria-label="Arena and tournament management">
+
+              <!-- the master state: three tactile keys and the queue lock -->
+              <div class="adm-arena-card">
+                <div class="adm-arena-head">
+                  <span class="adm-arena-ico" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
+                  <span class="adm-arena-copy">
+                    <b>Arena state</b>
+                    <small id="arena-state-sub">Open · new matches queue</small>
+                  </span>
+                  <span class="adm-arena-beacon" id="arena-beacon" aria-hidden="true"></span>
+                </div>
+                <div class="adm-arena-seg" role="radiogroup" aria-label="Arena state">
+                  <button class="adm-state-key" type="button" role="radio" data-arena-state="active"
+                    data-tone="emerald" aria-checked="true">
+                    <i aria-hidden="true"></i><span>Active</span>
+                  </button>
+                  <button class="adm-state-key" type="button" role="radio" data-arena-state="maintenance"
+                    data-tone="crimson" aria-checked="false">
+                    <i aria-hidden="true"></i><span>Locked</span>
+                  </button>
+                  <button class="adm-state-key" type="button" role="radio" data-arena-state="finale"
+                    data-tone="amber" aria-checked="false">
+                    <i aria-hidden="true"></i><span>Finale</span>
+                  </button>
+                </div>
+                <button class="adm-sw adm-arena-lock" type="button" role="switch" data-arena-lock
+                  aria-checked="false" aria-label="Lock matchmaking">
+                  <span class="adm-sw-i" aria-hidden="true"><svg class="ico"><use href="#i-lock" /></svg></span>
+                  <span class="adm-sw-t">Lock matchmaking</span>
+                  <span class="adm-knob" aria-hidden="true"><i></i></span>
+                </button>
+                <p class="adm-arena-fine">A lock refuses new entries and dismisses the queue.
+                  Races already on a board play out.</p>
+              </div>
+
+              <!-- season title and the Bronze → Challenger thresholds -->
+              <div class="adm-arena-card">
+                <div class="adm-arena-head">
+                  <span class="adm-arena-ico" aria-hidden="true"><svg class="ico"><use href="#i-cup" /></svg></span>
+                  <span class="adm-arena-copy">
+                    <b>Season &amp; divisions</b>
+                    <small id="arena-season-chip">Season 5</small>
+                  </span>
+                </div>
+                <label class="adm-arena-fld">
+                  <span class="adm-arena-k">Season title</span>
+                  <input id="arena-season-name" class="adm-input" type="text" maxlength="60"
+                    autocomplete="off" spellcheck="false" aria-label="Season title"
+                    placeholder="Season 5: Mind Clash" />
+                </label>
+                <div class="adm-divs" role="group" aria-label="Arena division thresholds">
+                  <p class="adm-arena-k adm-divs-h">Division thresholds <span>minimum TIQ</span></p>
+                  <label class="adm-div">
+                    <i class="adm-div-dot" data-div="bronze" aria-hidden="true"></i>
+                    <span>Bronze</span>
+                    <input class="adm-div-i" type="number" inputmode="numeric" min="0" max="1000000"
+                      step="50" value="0" data-div-min="bronze" aria-label="Bronze minimum TIQ" readonly />
+                  </label>
+                  <label class="adm-div">
+                    <i class="adm-div-dot" data-div="silver" aria-hidden="true"></i>
+                    <span>Silver</span>
+                    <input class="adm-div-i" type="number" inputmode="numeric" min="1" max="1000000"
+                      step="50" value="1200" data-div-min="silver" aria-label="Silver minimum TIQ" />
+                  </label>
+                  <label class="adm-div">
+                    <i class="adm-div-dot" data-div="gold" aria-hidden="true"></i>
+                    <span>Gold</span>
+                    <input class="adm-div-i" type="number" inputmode="numeric" min="1" max="1000000"
+                      step="50" value="1800" data-div-min="gold" aria-label="Gold minimum TIQ" />
+                  </label>
+                  <label class="adm-div">
+                    <i class="adm-div-dot" data-div="platinum" aria-hidden="true"></i>
+                    <span>Platinum</span>
+                    <input class="adm-div-i" type="number" inputmode="numeric" min="1" max="1000000"
+                      step="50" value="2400" data-div-min="platinum" aria-label="Platinum minimum TIQ" />
+                  </label>
+                  <label class="adm-div">
+                    <i class="adm-div-dot" data-div="diamond" aria-hidden="true"></i>
+                    <span>Diamond</span>
+                    <input class="adm-div-i" type="number" inputmode="numeric" min="1" max="1000000"
+                      step="50" value="3000" data-div-min="diamond" aria-label="Diamond minimum TIQ" />
+                  </label>
+                  <label class="adm-div">
+                    <i class="adm-div-dot" data-div="challenger" aria-hidden="true"></i>
+                    <span>Challenger</span>
+                    <input class="adm-div-i" type="number" inputmode="numeric" min="1" max="1000000"
+                      step="50" value="4000" data-div-min="challenger" aria-label="Challenger minimum TIQ" />
+                  </label>
+                </div>
+              </div>
+
+              <!-- the live clock, its presets, an exact end, and the player-facing capsule -->
+              <div class="adm-arena-card">
+                <div class="adm-arena-head">
+                  <span class="adm-arena-ico" aria-hidden="true"><svg class="ico"><use href="#i-calendar" /></svg></span>
+                  <span class="adm-arena-copy">
+                    <b>Season countdown</b>
+                    <small id="arena-clock-zone">Local time</small>
+                  </span>
+                </div>
+                <div class="adm-count" id="arena-count" role="timer" aria-live="off">— —</div>
+                <div class="adm-presets" role="group" aria-label="Extend the season countdown">
+                  <button class="adm-preset" type="button" data-preset="6">+6 Hours</button>
+                  <button class="adm-preset" type="button" data-preset="24">+24 Hours</button>
+                  <button class="adm-preset" type="button" data-preset="72">+3 Days</button>
+                  <button class="adm-preset" type="button" data-preset="168">+7 Days</button>
+                </div>
+                <div class="adm-expiry">
+                  <label class="adm-arena-fld adm-expiry-fld">
+                    <span class="adm-arena-k">Exact end</span>
+                    <input id="arena-ends" class="adm-input" type="datetime-local" step="60"
+                      aria-label="Exact season end" />
+                  </label>
+                  <button class="adm-btn adm-expiry-set" type="button" id="arena-ends-apply">Set</button>
+                </div>
+                <!-- the exact capsule the Mind Ladder header renders -->
+                <div class="adm-pv" aria-label="Mind Ladder countdown preview">
+                  <div class="adm-pv-top">
+                    <span class="adm-pv-crest" aria-hidden="true"><svg class="ico"><use href="#i-brain" /></svg></span>
+                    <span class="adm-pv-title">
+                      <b>The Mind Ladder</b>
+                      <small id="arena-pv-season">Season 5</small>
+                    </span>
+                    <span class="ml-season adm-pv-pill" id="arena-pv-pill" data-tone="live" title="Season countdown">
+                      <i class="ml-pulse" aria-hidden="true"></i>
+                      <span class="ml-season-stack">
+                        <small class="ml-season-k" id="arena-pv-kicker">Ends in</small>
+                        <b class="ml-season-t" id="arena-pv-value">— left</b>
+                      </span>
+                    </span>
+                  </div>
+                  <p class="adm-pv-note" id="arena-pv-note">What players see on the Mind Ladder right now.</p>
+                </div>
+              </div>
+
+              <!-- the last finalized season, kept as an audit read -->
+              <div class="adm-arena-card" id="arena-snap-card" hidden>
+                <div class="adm-arena-head">
+                  <span class="adm-arena-ico" aria-hidden="true"><svg class="ico"><use href="#i-crown" /></svg></span>
+                  <span class="adm-arena-copy">
+                    <b>Last snapshot</b>
+                    <small id="arena-snap-meta">—</small>
+                  </span>
+                </div>
+                <ul class="adm-arena-snap" id="arena-snap-list" aria-label="Final season standings"></ul>
+              </div>
+
+              <!-- the two keys that must feel dangerous -->
+              <div class="adm-arena-card is-danger">
+                <div class="adm-arena-head">
+                  <span class="adm-arena-ico" aria-hidden="true"><svg class="ico"><use href="#i-restart" /></svg></span>
+                  <span class="adm-arena-copy">
+                    <b>Emergency</b>
+                    <small id="arena-awards-meta">No prizes pushed</small>
+                  </span>
+                </div>
+                <button class="adm-btn adm-btn-danger adm-reset" type="button" id="arena-reset">
+                  Force Season Reset
+                </button>
+                <button class="adm-btn adm-btn-danger adm-stop" type="button" id="arena-stop">
+                  <svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg><span>Emergency Force-Stop</span>
+                </button>
+                <p class="adm-arena-fine">Reset finalizes the ladder, banks a snapshot, pushes
+                  every player's TIQ award and badge, then opens the next season. Force-stop freezes
+                  the arena, dismisses the queue and notifies every connected client.</p>
+              </div>
+            </section>
+
             <p class="adm-sec-h">Broadcast<span class="adm-bc-live" id="bc-live" data-on="false">Nothing dispatched</span></p>
             <div class="adm-bc">
               <label class="adm-field">

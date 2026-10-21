@@ -16,6 +16,7 @@
  */
 
 import { holderEdition, wornEdition, type WornEdition } from './badges';
+import { ARENA_TIER_NAMES, arena, type ArenaTierId } from './arenaState';
 import { myTiq } from './matchmaking';
 import { getMyContribution, type RankedSquad } from './squads';
 import { profile } from './storage';
@@ -24,7 +25,7 @@ import { tgUser } from './telegram';
 export type SquadRole = 'leader' | 'admin' | 'member';
 export type SquadRosterSort = 'tiq' | 'arena' | 'name';
 
-export type ArenaTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'challenger';
+export type ArenaTier = ArenaTierId;
 export type ArenaDivision = 'I' | 'II' | 'III';
 
 export interface ArenaStanding {
@@ -94,14 +95,32 @@ interface ArenaTierSpec {
   cuts: readonly [number, number];
 }
 
-const ARENA_TIERS: readonly ArenaTierSpec[] = [
-  { id: 'bronze', name: 'Bronze', hi: 1_200, cuts: [400, 800] },
-  { id: 'silver', name: 'Silver', hi: 1_800, cuts: [1_400, 1_600] },
-  { id: 'gold', name: 'Gold', hi: 2_400, cuts: [2_000, 2_200] },
-  { id: 'platinum', name: 'Platinum', hi: 3_000, cuts: [2_600, 2_800] },
-  { id: 'diamond', name: 'Diamond', hi: 4_000, cuts: [3_200, 3_400] },
-  { id: 'challenger', name: 'Challenger', hi: Infinity, cuts: [4_500, 5_000] },
-];
+/**
+ * The divisions the Command Center publishes, turned into the same six-band ladder.
+ * A live edit to the thresholds re-cuts every tier's three divisions without a reload;
+ * the last tier keeps a 1,000-TIQ spread because it has no upper neighbour.
+ */
+let tierCacheKey = '';
+let tierCache: readonly ArenaTierSpec[] = [];
+
+function arenaTierSpecs(): readonly ArenaTierSpec[] {
+  const rules = arena().divisions;
+  const key = rules.map((r) => r.min).join('|');
+  if (key === tierCacheKey) return tierCache;
+  tierCacheKey = key;
+  tierCache = rules.map((rule, i) => {
+    const next = rules[i + 1]?.min;
+    const hi = next ?? Infinity;
+    const span = Number.isFinite(hi) ? hi - rule.min : 1_000;
+    return {
+      id: rule.id,
+      name: ARENA_TIER_NAMES[rule.id],
+      hi,
+      cuts: [rule.min + span / 3, rule.min + (span * 2) / 3] as const,
+    };
+  });
+  return tierCache;
+}
 
 /**
  * The global Arena place for a TIQ. Anchored so the brief's reference mind (3,740) sits at
@@ -117,7 +136,8 @@ export function arenaRankOf(tiq: number): number {
 /** The tier + division a TIQ buys, plus the place and tourney wins that follow from it. */
 export function arenaStandingOf(tiq: number): ArenaStanding {
   const value = Math.max(0, Math.floor(tiq));
-  const spec = ARENA_TIERS.find((t) => value < t.hi) ?? ARENA_TIERS[ARENA_TIERS.length - 1];
+  const tiers = arenaTierSpecs();
+  const spec = tiers.find((t) => value < t.hi) ?? tiers[tiers.length - 1];
   const division: ArenaDivision = value < spec.cuts[0] ? 'III' : value < spec.cuts[1] ? 'II' : 'I';
   return {
     tier: spec.id,

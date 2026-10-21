@@ -173,6 +173,62 @@ export interface ServerConfig {
   wideRadius: number;
 }
 
+/* ---------- the arena & tournament state ---------- */
+
+export type ArenaStatus = 'active' | 'maintenance' | 'finale';
+export type ArenaTierId = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'challenger';
+
+export interface ArenaDivisionRule {
+  id: ArenaTierId;
+  /** The lowest TIQ that wears this tier. */
+  min: number;
+}
+
+export interface ArenaSnapshotEntry {
+  rank: number;
+  id: string;
+  name: string;
+  tiq: number;
+  wins: number;
+}
+
+/** The final read of a season, banked on the room before the counter rolls. */
+export interface ArenaSnapshot {
+  seasonNo: number;
+  seasonName: string;
+  takenAt: number;
+  total: number;
+  entries: ArenaSnapshotEntry[];
+}
+
+/** One player's seasonal honor. The client claims `tiq` once per season. */
+export interface SeasonAward {
+  seasonNo: number;
+  seasonName: string;
+  rank: number;
+  tiq: number;
+  badge: string;
+  awardedAt: number;
+}
+
+/**
+ * The Admin Command Center's tournament board. Persisted under `arena` in the room's own
+ * storage, so a season clock, a lock and a prize rollover survive an eviction. Matchmaking
+ * reads `matchLocked` and `status` on every QUEUE — the panel only asks.
+ */
+export interface ArenaState {
+  status: ArenaStatus;
+  /** New queue entries are refused; races already under way resolve untouched. */
+  matchLocked: boolean;
+  seasonNo: number;
+  seasonName: string;
+  endsAt: number;
+  divisions: ArenaDivisionRule[];
+  updatedAt: number;
+  lastSnapshot: ArenaSnapshot | null;
+  awardsCount: number;
+}
+
 /** One seat waiting in the room, as `/admin/status` reports it. */
 export interface QueuedPlayer {
   id: string;
@@ -206,6 +262,7 @@ export interface ServerStatus {
   queuedPlayers: QueuedPlayer[];
   activeRooms: ActiveRoom[];
   config: ServerConfig;
+  arena: ArenaState;
 }
 
 /* ---------- the player directory: who the room has seen ---------- */
@@ -248,6 +305,8 @@ export interface PlayerRecord {
   muted: boolean;
   /** True while the player holds a seat on a live board or sits in a room that is filling. */
   inMatch: boolean;
+  /** Seasonal honors the Command Center pushed, newest last (at most six). */
+  awards?: SeasonAward[];
 }
 
 /** The directory views the Users tab's filter chips select. */
@@ -330,6 +389,7 @@ function freshPlayer(identity: Identity, now: number): PlayerRecord {
     banned: false,
     muted: false,
     inMatch: false,
+    awards: [],
   };
 }
 
@@ -362,6 +422,7 @@ function readPlayer(raw: unknown): PlayerRecord | null {
     muted: r.muted === true,
     /* a fresh instance has no live boards: nothing can be mid-match across an eviction */
     inMatch: false,
+    awards: readAwards(r.awards),
   };
 }
 
@@ -375,6 +436,197 @@ async function readBody(request: Request): Promise<Record<string, unknown>> {
   } catch {
     return {};
   }
+}
+
+/* ---------- the arena board: defaults, validation and the prize bands ---------- */
+
+const ARENA_TIER_IDS: readonly ArenaTierId[] = [
+  'bronze', 'silver', 'gold', 'platinum', 'diamond', 'challenger',
+];
+const ARENA_STATUSES: readonly ArenaStatus[] = ['active', 'maintenance', 'finale'];
+const TIER_DEFAULTS: Record<ArenaTierId, number> = {
+  bronze: 0, silver: 1_200, gold: 1_800, platinum: 2_400, diamond: 3_000, challenger: 4_000,
+};
+const SEASON_ANCHOR = Date.UTC(2026, 9, 16, 14, 0);
+const SEASON_MS = 28 * 86400_000;
+const SNAPSHOT_MAX = 50;
+const AWARDS_KEEP = 6;
+
+function arenaSeason(now: number): { no: number; endsAt: number } {
+  const k = Math.ceil((now - SEASON_ANCHOR) / SEASON_MS);
+  return { no: Math.max(1, 4 + k), endsAt: SEASON_ANCHOR + k * SEASON_MS };
+}
+
+function seasonNameFor(no: number): string {
+  return `Season ${no}: Mind Clash`;
+}
+
+function defaultDivisions(): ArenaDivisionRule[] {
+  return ARENA_TIER_IDS.map((id) => ({ id, min: TIER_DEFAULTS[id] }));
+}
+
+function defaultArena(now = Date.now()): ArenaState {
+  const s = arenaSeason(now);
+  return {
+    status: 'active',
+    matchLocked: false,
+    seasonNo: s.no,
+    seasonName: seasonNameFor(s.no),
+    endsAt: s.endsAt,
+    divisions: defaultDivisions(),
+    updatedAt: 0,
+    lastSnapshot: null,
+    awardsCount: 0,
+  };
+}
+
+const arenaText = (v: unknown, max: number): string => {
+  if (typeof v !== 'string') return '';
+  let out = '';
+  for (const ch of v) {
+    const c = ch.charCodeAt(0);
+    if (c >= 32 && c !== 127) out += ch;
+  }
+  return out.trim().slice(0, max);
+};
+
+function readDivisions(raw: unknown, fallback = defaultDivisions()): ArenaDivisionRule[] {
+  const rows = Array.isArray(raw) ? raw : [];
+  let prev = 0;
+  return ARENA_TIER_IDS.map((id, i) => {
+    const found = rows.find((r) => r && typeof r === 'object' && (r as { id?: unknown }).id === id);
+    const value = found ? (found as { min?: unknown }).min : undefined;
+    const base = i === 0
+      ? 0
+      : Math.max(prev + 1, typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : fallback[i].min);
+    prev = base;
+    return { id, min: clamp(base, 0, 1_000_000) };
+  });
+}
+
+function readSnapshot(raw: unknown): ArenaSnapshot | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Partial<ArenaSnapshot>;
+  if (typeof r.seasonNo !== 'number' || !Number.isFinite(r.seasonNo)) return null;
+  if (typeof r.takenAt !== 'number' || !Number.isFinite(r.takenAt)) return null;
+  const entries: ArenaSnapshotEntry[] = [];
+  for (const row of Array.isArray(r.entries) ? r.entries : []) {
+    if (!row || typeof row !== 'object') continue;
+    const e = row as Partial<ArenaSnapshotEntry>;
+    if (typeof e.id !== 'string' || !e.id) continue;
+    entries.push({
+      rank: Math.max(1, whole(e.rank)),
+      id: e.id.slice(0, 64),
+      name: arenaText(e.name, 40) || 'Player',
+      tiq: whole(e.tiq),
+      wins: whole(e.wins),
+    });
+    if (entries.length >= SNAPSHOT_MAX) break;
+  }
+  const seasonNo = clamp(Math.floor(r.seasonNo), 1, 999);
+  return {
+    seasonNo,
+    seasonName: arenaText(r.seasonName, 60) || seasonNameFor(seasonNo),
+    takenAt: whole(r.takenAt),
+    total: whole(r.total),
+    entries,
+  };
+}
+
+function readAward(raw: unknown): SeasonAward | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Partial<SeasonAward>;
+  if (typeof r.seasonNo !== 'number' || typeof r.tiq !== 'number') return null;
+  const seasonNo = clamp(whole(r.seasonNo), 1, 999);
+  return {
+    seasonNo,
+    seasonName: arenaText(r.seasonName, 60),
+    rank: Math.max(1, whole(r.rank)),
+    tiq: clamp(whole(r.tiq), 0, 1_000_000),
+    badge: arenaText(r.badge, 40) || 'Contender',
+    awardedAt: whole(r.awardedAt),
+  };
+}
+
+function readAwards(raw: unknown): SeasonAward[] {
+  const out: SeasonAward[] = [];
+  for (const row of Array.isArray(raw) ? raw : []) {
+    const award = readAward(row);
+    if (award) out.push(award);
+  }
+  return out.slice(-AWARDS_KEEP);
+}
+
+/** A stored board folded field by field; null when there is nothing trustworthy to fold. */
+function readArena(raw: unknown): ArenaState | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Partial<ArenaState>;
+  const now = Date.now();
+  const seasonNo = typeof r.seasonNo === 'number' && Number.isFinite(r.seasonNo)
+    ? clamp(whole(r.seasonNo), 1, 999)
+    : arenaSeason(now).no;
+  return {
+    status: ARENA_STATUSES.includes(r.status as ArenaStatus) ? (r.status as ArenaStatus) : 'active',
+    matchLocked: r.matchLocked === true,
+    seasonNo,
+    seasonName: arenaText(r.seasonName, 60) || seasonNameFor(seasonNo),
+    endsAt: typeof r.endsAt === 'number' && Number.isFinite(r.endsAt)
+      ? clamp(whole(r.endsAt), 0, now + 10 * 366 * 86400_000)
+      : arenaSeason(now).endsAt,
+    divisions: readDivisions(r.divisions),
+    updatedAt: whole(r.updatedAt),
+    lastSnapshot: readSnapshot(r.lastSnapshot),
+    awardsCount: whole(r.awardsCount),
+  };
+}
+
+/** Only the fields the Command Center actually sent move; the rest of the board is untouched. */
+function arenaPatch(base: ArenaState, raw: unknown, now = Date.now()): ArenaState {
+  if (!raw || typeof raw !== 'object') return base;
+  const p = raw as Partial<ArenaState>;
+  const next: ArenaState = { ...base, divisions: [...base.divisions], updatedAt: now };
+  if (ARENA_STATUSES.includes(p.status as ArenaStatus)) next.status = p.status as ArenaStatus;
+  if (typeof p.matchLocked === 'boolean') next.matchLocked = p.matchLocked;
+  if (typeof p.seasonName === 'string') {
+    const name = arenaText(p.seasonName, 60);
+    if (name) {
+      next.seasonName = name;
+      const m = /^s(?:eason)?\s*(\d+)/i.exec(name);
+      if (m) next.seasonNo = clamp(Number(m[1]), 1, 999);
+    }
+  }
+  if (typeof p.seasonNo === 'number' && Number.isFinite(p.seasonNo)) {
+    next.seasonNo = clamp(whole(p.seasonNo), 1, 999);
+  }
+  if (typeof p.endsAt === 'number' && Number.isFinite(p.endsAt)) {
+    next.endsAt = clamp(Math.floor(p.endsAt), 0, now + 10 * 366 * 86400_000);
+  }
+  if (Array.isArray(p.divisions)) next.divisions = readDivisions(p.divisions, base.divisions);
+  return next;
+}
+
+function nextSeasonName(name: string, no: number): string {
+  if (/^season\s+\d+/i.test(name)) return name.replace(/^season\s+\d+/i, `Season ${no}`);
+  if (/^s\d+/i.test(name)) return name.replace(/^s\d+/i, `S${no}`);
+  return `Season ${no}: ${name || 'Mind Clash'}`;
+}
+
+function rewardFor(rank: number): number {
+  if (rank === 1) return 500;
+  if (rank === 2) return 300;
+  if (rank === 3) return 200;
+  if (rank <= 10) return 100;
+  if (rank <= 50) return 50;
+  return 20;
+}
+
+function badgeFor(rank: number, seasonNo: number): string {
+  if (rank === 1) return `Season ${seasonNo} Champion`;
+  if (rank === 2) return 'Runner-up';
+  if (rank === 3) return 'Third Place';
+  if (rank <= 10) return 'Top 10';
+  if (rank <= 50) return 'Top 50';
+  return 'Contender';
 }
 
 /** FNV-1a, 32 bit: the match id and the race seed both have to be identical on both sides. */
@@ -629,6 +881,8 @@ export class MatchmakerDO {
   private refs = new Map<WebSocket, RoomRef>();
   /** The admin's maintenance lock: nobody new gets in while it is on. */
   private maintenance = false;
+  /** The tournament board: season clock, divisions, lock and the last finalized snapshot. */
+  private arena: ArenaState = defaultArena();
   /** The live pairing bands — the defaults until `/admin/config` moves them. */
   private normalRadius = TIER_RADIUS;
   private wideRadius = WIDE_RADIUS;
@@ -689,7 +943,10 @@ export class MatchmakerDO {
               if (row) this.squads.set(row.id, row);
             }
           }
+          const arena = readArena(await storage.get<unknown>('arena'));
+          if (arena) this.arena = arena;
           this.seedRoles();
+          this.rearm();
         } catch {
           /* a store that refuses the read: the registry simply starts empty */
         }
@@ -737,6 +994,7 @@ export class MatchmakerDO {
       url.pathname.startsWith('/admin/')
       || url.pathname.startsWith('/api/admin/')
       || url.pathname === '/api/client/announcements/active'
+      || url.pathname === '/api/client/arena/state'
     ) {
       return this.admin(request, url);
     }
@@ -752,6 +1010,24 @@ export class MatchmakerDO {
       return json({ error: 'banned', hint: 'matchmaking is restricted for this account' }, 403);
     }
     this.touch(identity);
+
+    /* The tournament gate sits before the queue, not inside the panel: a socket that connects
+       while the arena is locked is told why and let go, while races already on a board resolve. */
+    if (this.maintenance || this.arenaLocked()) {
+      const gate = new WebSocketPair();
+      const denied = gate[1];
+      denied.accept();
+      try {
+        denied.send(JSON.stringify({
+          type: 'ERROR',
+          reason: this.maintenance ? 'MAINTENANCE' : 'MATCHING_LOCKED',
+        }));
+        denied.close(1000, 'locked');
+      } catch {
+        /* the socket is already gone */
+      }
+      return new Response(null, { status: 101, webSocket: gate[0] });
+    }
 
     const pair = new WebSocketPair();
     const client = pair[0];
@@ -781,6 +1057,14 @@ export class MatchmakerDO {
     const now = Date.now();
     for (const live of [...this.openRooms]) {
       if (!live.driver && now - live.room.openedAt >= live.room.waitMs) this.launchRoom(live);
+    }
+    /* The season clock is an alarm too: at the boundary the arena closes itself and tells
+       everyone, rather than waiting for the next admin to notice. */
+    if (this.arena.status === 'active' && this.arena.endsAt <= now) {
+      this.arena = { ...this.arena, status: 'finale', matchLocked: true, updatedAt: now };
+      this.evictAll('SEASON_ENDED');
+      this.persistArena();
+      this.broadcastArena('SEASON_ENDED');
     }
     this.rearm();
   }
@@ -885,6 +1169,7 @@ export class MatchmakerDO {
         ...[...this.rooms.values()].map((live) => this.roomSummary(live)),
       ],
       config: this.config(),
+      arena: this.arena,
     };
   }
 
@@ -906,10 +1191,13 @@ export class MatchmakerDO {
 
   /** Every Command Center route: the public feed first, then the registry decides who is in. */
   private async admin(request: Request, url: URL): Promise<Response> {
-    /* The one public route in the set: what a client reads to raise its announcement popup. */
+    /* The two public routes in the set: the announcement popup, and the tournament clock. */
     if (url.pathname === '/api/client/announcements/active') return json(this.activeAnnouncements(), 200, {
       'cache-control': 'public, max-age=60',
     });
+    if (url.pathname === '/api/client/arena/state') {
+      return json(await this.clientArena(request), 200, { 'cache-control': 'no-store' });
+    }
 
     /* The edge only proved the signature; membership is this room's call, registry in hand. */
     const me = await this.adminIdentity(request);
@@ -932,6 +1220,14 @@ export class MatchmakerDO {
       if (!this.superDoor(me)) return json({ error: 'forbidden', hint: 'superadmin required' }, 403);
       const body = await readBody(request);
       const result = this.act(body);
+      return json(result, result.ok ? 200 : 400);
+    }
+
+    /* The Arena tab: one state patch, or one of its two emergency commands. */
+    if (url.pathname === '/admin/arena') {
+      if (!this.superDoor(me)) return json({ error: 'forbidden', hint: 'superadmin required' }, 403);
+      const body = await readBody(request);
+      const result = this.arenaCommand(body);
       return json(result, result.ok ? 200 : 400);
     }
 
@@ -1192,6 +1488,179 @@ export class MatchmakerDO {
       return { ok: false, error: 'no_such_match' };
     }
     return { ok: false, error: 'unknown_action' };
+  }
+
+  /* ---------- the arena & tournament board ---------- */
+
+  /** What any player reads: the clock and statuses, with only the snapshot's head exposed. */
+  private arenaPublicView(): ArenaState {
+    const snap = this.arena.lastSnapshot;
+    return {
+      ...this.arena,
+      lastSnapshot: snap ? { ...snap, entries: snap.entries.slice(0, 3) } : null,
+    };
+  }
+
+  /**
+   * The public mirror. A valid initData signature names the seat whose award rides along; no
+   * signature means the tournament clock only. The header alone can never claim an award.
+   */
+  private async clientArena(
+    request: Request,
+  ): Promise<{ ok: true; arena: ArenaState; award: SeasonAward | null }> {
+    const init = request.headers.get('x-telegram-init-data') ?? '';
+    const tgId = init ? await verifiedTelegramUserId(init, this.env) : '';
+    const playerId = tgId ? `tg-${tgId}` : '';
+    const awards = playerId ? this.players.get(playerId)?.awards ?? [] : [];
+    return {
+      ok: true,
+      arena: this.arenaPublicView(),
+      award: awards.length ? awards[awards.length - 1] : null,
+    };
+  }
+
+  /** The Arena tab's write door: one patch, or one of the two emergency commands. */
+  private arenaCommand(body: Record<string, unknown>): {
+    ok: boolean;
+    error?: string;
+    arena?: ArenaState;
+    dismissed?: number;
+    awards?: number;
+    snapshot?: ArenaSnapshot;
+  } {
+    const action = typeof body.action === 'string' ? body.action : '';
+    if (action === 'FORCE_STOP') return this.forceStop();
+    if (action === 'SEASON_RESET') return this.resetSeason();
+    if (action) return { ok: false, error: 'unknown_action' };
+    const patch = body.patch && typeof body.patch === 'object' ? body.patch : body;
+    return { ok: true, arena: this.configureArena(patch) };
+  }
+
+  /**
+   * A season, lock or division edit. A lock stops new queue entries and dismisses everyone still
+   * waiting, but never touches a race already under way: that is somebody's game.
+   */
+  private configureArena(raw: unknown): ArenaState {
+    const wasLocked = this.arenaLocked();
+    this.arena = arenaPatch(this.arena, raw);
+    this.persistArena();
+    if (!wasLocked && this.arenaLocked()) this.evictAll('MATCHING_LOCKED');
+    if (!this.arenaLocked()) this.pairNow();
+    this.rearm();
+    this.broadcastArena('STATE');
+    return this.arena;
+  }
+
+  /** Freeze the arena and pull every waiting seat, then tell every connected client why. */
+  private forceStop(): { ok: true; arena: ArenaState; dismissed: number } {
+    const dismissed = this.queue.length;
+    this.arena = { ...this.arena, status: 'maintenance', matchLocked: true, updatedAt: Date.now() };
+    this.evictAll('FORCE_STOP');
+    this.persistArena();
+    this.broadcastArena('FORCE_STOP');
+    return { ok: true, arena: this.arena, dismissed };
+  }
+
+  /**
+   * Finalize the season: rank the registry, bank the snapshot, push every player an award, and
+   * roll the counter to N+1 with a fresh 28-day clock. The snapshot is the audit record; the
+   * awards are what the client claims once per season.
+   */
+  private resetSeason(): { ok: true; arena: ArenaState; snapshot: ArenaSnapshot; awards: number } {
+    const now = Date.now();
+    const old = this.arena;
+    const ranked = [...this.players.values()]
+      .filter((p) => !p.banned)
+      .sort((a, b) => b.tiq - a.tiq || b.wins - a.wins || a.id.localeCompare(b.id));
+    const entries = ranked.slice(0, SNAPSHOT_MAX).map((p, i): ArenaSnapshotEntry => ({
+      rank: i + 1,
+      id: p.id,
+      name: p.name,
+      tiq: p.tiq,
+      wins: p.wins,
+    }));
+    const snapshot: ArenaSnapshot = {
+      seasonNo: old.seasonNo,
+      seasonName: old.seasonName,
+      takenAt: now,
+      total: ranked.length,
+      entries,
+    };
+    ranked.forEach((p, i) => {
+      const rank = i + 1;
+      const award: SeasonAward = {
+        seasonNo: old.seasonNo,
+        seasonName: old.seasonName,
+        rank,
+        tiq: rewardFor(rank),
+        badge: badgeFor(rank, old.seasonNo),
+        awardedAt: now,
+      };
+      p.awards = [...(p.awards ?? []), award].slice(-AWARDS_KEEP);
+    });
+
+    const nextNo = clamp(old.seasonNo + 1, 1, 999);
+    this.arena = {
+      ...old,
+      status: 'active',
+      matchLocked: false,
+      seasonNo: nextNo,
+      seasonName: nextSeasonName(old.seasonName, nextNo),
+      endsAt: now + SEASON_MS,
+      updatedAt: now,
+      lastSnapshot: snapshot,
+      awardsCount: ranked.length,
+    };
+    this.persist();
+    this.persistArena();
+    this.pairNow();
+    this.rearm();
+    this.broadcastArena('SEASON_RESET');
+    return { ok: true, arena: this.arena, snapshot, awards: ranked.length };
+  }
+
+  private persistArena(): void {
+    const storage = this.state?.storage;
+    if (!storage) return;
+    try {
+      void storage.put('arena', this.arena);
+    } catch {
+      /* a store that refuses the write: the board stays in memory */
+    }
+  }
+
+  /**
+   * Tell every socket the board moved: waiters, live racers, and rooms still filling. Each frame
+   * carries that seat's newest award, so a prize rollover lands mid-socket without waiting for the
+   * next public read.
+   */
+  private broadcastArena(reason: string): void {
+    const view = this.arenaPublicView();
+    const sockets = new Map<WebSocket, string>();
+    for (const w of this.queue) sockets.set(w.ws, w.id);
+    for (const race of this.races.values()) for (const seat of race.seats) sockets.set(seat.ws, seat.id);
+    for (const room of this.rooms.values()) for (const m of room.members) if (m) sockets.set(m.ws, m.id);
+    for (const room of this.openRooms) for (const m of room.members) if (m) sockets.set(m.ws, m.id);
+    for (const lobby of this.lobbies.values()) for (const m of lobby.members) if (m) sockets.set(m.ws, m.id);
+    for (const [ws, id] of sockets) {
+      const awards = this.players.get(id)?.awards ?? [];
+      const payload = JSON.stringify({
+        type: 'ARENA',
+        arena: view,
+        reason,
+        award: awards.length ? awards[awards.length - 1] : null,
+      });
+      try {
+        ws.send(payload);
+      } catch {
+        /* the socket is already gone */
+      }
+    }
+  }
+
+  /** The room's own gate: new entries stop, in-flight boards carry on. An expired clock is closed. */
+  private arenaLocked(): boolean {
+    return this.arena.matchLocked || this.arena.status !== 'active' || this.arena.endsAt <= Date.now();
   }
 
   /* ---------- the directory ---------- */
@@ -1497,6 +1966,15 @@ export class MatchmakerDO {
       }
       return;
     }
+    if (this.arenaLocked()) {
+      this.deliver(waiter, JSON.stringify({ type: 'ERROR', reason: 'MATCHING_LOCKED' }));
+      try {
+        waiter.ws.close(1000, 'locked');
+      } catch {
+        /* the socket is already gone */
+      }
+      return;
+    }
     /* a socket that connected before the ban is told at the door too, not silently held */
     if (this.restricted(waiter.id)) {
       this.deliver(waiter, JSON.stringify({ type: 'ERROR', reason: 'BANNED' }));
@@ -1543,6 +2021,7 @@ export class MatchmakerDO {
   /* ---------- pairing ---------- */
 
   private pairNow(): void {
+    if (this.maintenance || this.arenaLocked()) return;
     for (let next = this.take(); next; next = this.take()) this.announce(next[0], next[1]);
   }
 
@@ -1624,6 +2103,7 @@ export class MatchmakerDO {
       }
       return;
     }
+    if (this.arenaLocked()) { this.rejectSocket(ws, 'MATCHING_LOCKED'); return; }
     let live = this.openRooms.find((r) => !r.driver && r.size === size && this.freeSeat(r) >= 0);
     if (!live) {
       live = {
@@ -1677,6 +2157,7 @@ export class MatchmakerDO {
    */
   private joinLobby(ws: WebSocket, identity: Identity, code: string, host: boolean, tier: BotTier): void {
     if (this.maintenance) { this.rejectSocket(ws, 'MAINTENANCE'); return; }
+    if (this.arenaLocked()) { this.rejectSocket(ws, 'MATCHING_LOCKED'); return; }
     let live = this.lobbies.get(code) ?? null;
     if (live?.driver) { this.rejectSocket(ws, 'room_started'); return; }
     if (!live) {
@@ -1861,6 +2342,7 @@ export class MatchmakerDO {
       if (live.driver) continue;
       soonest = Math.min(soonest, live.room.openedAt + live.room.waitMs);
     }
+    if (this.arena.status === 'active') soonest = Math.min(soonest, this.arena.endsAt);
     if (soonest === Infinity) storage.deleteAlarm();
     else storage.setAlarm(soonest);
   }

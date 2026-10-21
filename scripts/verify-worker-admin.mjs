@@ -571,5 +571,154 @@ console.log('\n-- the player directory --');
     odd.status === 400 && bodyOf(odd).error === 'unknown_action', odd.body);
 }
 
+/* ---------- 9. the arena & tournament board ---------- */
+
+console.log('\n-- the arena & tournament board --');
+{
+  const rt = runtime({ DEV_AUTH: 'true', TELEGRAM_BOT_TOKEN: TOKEN, ADMIN_IDS });
+  const headers = { 'x-admin': '1' };
+  const arenaCall = async (payload) =>
+    bodyOf(await call(rt, '/admin/arena', { method: 'POST', body: payload, headers }));
+
+  const base = await status(rt, headers);
+  ok('a fresh room reports an active arena board',
+    base.arena?.status === 'active' && base.arena.matchLocked === false, JSON.stringify(base.arena));
+  ok('with a live season number and a future clock',
+    base.arena.seasonNo >= 1 && base.arena.endsAt > Date.now(), JSON.stringify(base.arena));
+  ok('and six division thresholds from Bronze to Challenger',
+    base.arena.divisions.length === 6
+      && base.arena.divisions[0].id === 'bronze' && base.arena.divisions[0].min === 0
+      && base.arena.divisions[5].id === 'challenger',
+    JSON.stringify(base.arena.divisions));
+
+  const publicBase = bodyOf(await call(rt, '/api/client/arena/state'));
+  ok('the public mirror answers without admin credentials',
+    publicBase.ok === true && publicBase.arena?.status === 'active', JSON.stringify(publicBase));
+
+  const edited = await arenaCall({
+    patch: {
+      seasonName: 'Season 9: Iron Gambit',
+      endsAt: Date.now() + 6 * 3600_000,
+      divisions: [
+        { id: 'bronze', min: 0 }, { id: 'silver', min: 900 }, { id: 'gold', min: 1500 },
+        { id: 'platinum', min: 2100 }, { id: 'diamond', min: 2800 }, { id: 'challenger', min: 3800 },
+      ],
+    },
+  });
+  ok('POST /admin/arena moves the title and the clock',
+    edited.ok === true && edited.arena.seasonName === 'Season 9: Iron Gambit', JSON.stringify(edited));
+  ok('a title starting with a season number also moves the counter',
+    edited.arena.seasonNo === 9, String(edited.arena.seasonNo));
+  ok('the division thresholds come back as sent',
+    edited.arena.divisions[1].min === 900 && edited.arena.divisions[5].min === 3800,
+    JSON.stringify(edited.arena.divisions));
+
+  /* pair a race first, then lock: the board resolves, the queue does not */
+  const racerA = await open(rt, { tiq: 1000, name: 'LockA' });
+  const racerB = await open(rt, { tiq: 1050, name: 'LockB' });
+  send(racerA.socket, { type: 'QUEUE', wide: false });
+  send(racerB.socket, { type: 'QUEUE', wide: false });
+  ok('the two seats find a board before the lock', !!matchOf(racerA.socket));
+
+  const waiterA = await open(rt, { tiq: 1000, name: 'WaitA' });
+  const waiterB = await open(rt, { tiq: 3000, name: 'WaitB' });
+  send(waiterA.socket, { type: 'QUEUE', wide: false });
+  send(waiterB.socket, { type: 'QUEUE', wide: false });
+
+  const locked = await arenaCall({ patch: { matchLocked: true } });
+  ok('the matchmaking lock is accepted', locked.ok === true && locked.arena.matchLocked === true);
+  ok('waiting seats are told the arena locked',
+    errorOf(waiterA.socket)?.reason === 'MATCHING_LOCKED' && errorOf(waiterB.socket)?.reason === 'MATCHING_LOCKED',
+    JSON.stringify([errorOf(waiterA.socket), errorOf(waiterB.socket)]));
+  ok('and the queue is empty afterwards', (await status(rt, headers)).queueCount === 0);
+  ok('the live board is untouched by the lock', racerA.socket.ended === false && racerB.socket.ended === false);
+  ok('and its socket was sent the new arena frame',
+    messages(racerA.socket).some((m) => m.type === 'ARENA' && m.arena.matchLocked === true));
+
+  const late = await open(rt, { tiq: 1000, name: 'Late' });
+  send(late.socket, { type: 'QUEUE', wide: false });
+  ok('a new queue while locked is refused', errorOf(late.socket)?.reason === 'MATCHING_LOCKED');
+  ok('and that socket is let go', late.socket.ended === true);
+
+  await arenaCall({ patch: { matchLocked: false } });
+  const openA = await open(rt, { tiq: 1000, name: 'OpenA' });
+  const openB = await open(rt, { tiq: 1000, name: 'OpenB' });
+  send(openA.socket, { type: 'QUEUE', wide: false });
+  send(openB.socket, { type: 'QUEUE', wide: false });
+  ok('releasing the lock lets the queue pair again', !!matchOf(openA.socket) && !!matchOf(openB.socket));
+
+  /* a signed player so the season award has a stable owner */
+  const awardData = signed({ auth_date: '1700000000', user: JSON.stringify(user(9182, 'Prize', 'prize')), query_id: 'PRIZE' });
+  const prizeSeat = await open(rt, { initData: awardData, name: 'Prize', tiq: 2400 });
+  ok('the prize seat is registered', prizeSeat.status === 101, `status ${prizeSeat.status}`);
+
+  const beforeNo = (await status(rt, headers)).arena.seasonNo;
+  const reset = await arenaCall({ action: 'SEASON_RESET' });
+  ok('SEASON_RESET finalizes and rolls the counter',
+    reset.ok === true && reset.arena.seasonNo === beforeNo + 1, JSON.stringify(reset));
+  ok('it banks a snapshot with the head of the field',
+    reset.snapshot && reset.snapshot.entries.length > 0 && reset.snapshot.entries[0].rank === 1,
+    JSON.stringify(reset.snapshot));
+  ok('the snapshot keeps the old season name',
+    reset.snapshot.seasonNo === beforeNo && reset.snapshot.seasonName === 'Season 9: Iron Gambit',
+    JSON.stringify(reset.snapshot));
+  ok('every ranked player is awarded', reset.awards > 0, String(reset.awards));
+  ok('the new season opens with a fresh 28-day clock',
+    reset.arena.status === 'active' && reset.arena.matchLocked === false
+      && reset.arena.endsAt > Date.now() + 27 * 86400_000,
+    JSON.stringify(reset.arena));
+  ok('the title follows the counter without losing its name',
+    reset.arena.seasonName === 'Season 10: Iron Gambit', reset.arena.seasonName);
+
+  const awardState = bodyOf(await call(rt, '/api/client/arena/state', {
+    headers: { 'x-telegram-init-data': awardData },
+  }));
+  ok('the player mirror carries that seat season award',
+    awardState.ok === true && awardState.award?.seasonNo === beforeNo && awardState.award.tiq >= 20,
+    JSON.stringify(awardState.award));
+  ok('and names the badge band', typeof awardState.award.badge === 'string' && awardState.award.badge.length > 0);
+
+  /* the force-stop: dismisses the queue, tells the board, keeps the board */
+  const stopA = await open(rt, { tiq: 1000, name: 'StopA' });
+  const stopB = await open(rt, { tiq: 1000, name: 'StopB' });
+  send(stopA.socket, { type: 'QUEUE', wide: false });
+  send(stopB.socket, { type: 'QUEUE', wide: false });
+  const stopWait = await open(rt, { tiq: 3000, name: 'StopWait' });
+  send(stopWait.socket, { type: 'QUEUE', wide: false });
+
+  const stopped = await arenaCall({ action: 'FORCE_STOP' });
+  ok('FORCE_STOP freezes the arena immediately',
+    stopped.ok === true && stopped.arena.status === 'maintenance' && stopped.arena.matchLocked === true,
+    JSON.stringify(stopped));
+  ok('the waiting seat is dismissed', errorOf(stopWait.socket)?.reason === 'FORCE_STOP' && stopWait.socket.ended === true);
+  ok('the live board survives the stop', stopA.socket.ended === false && stopB.socket.ended === false);
+  ok('and is notified over its socket',
+    messages(stopA.socket).some((m) => m.type === 'ARENA' && m.reason === 'FORCE_STOP' && m.arena.status === 'maintenance'));
+
+  const denied = await call(rt, '/api/client/arena/state');
+  ok('the public clock never exposes a player award to an anonymous read', denied.status === 200 && bodyOf(denied).award === null);
+  ok('POST /admin/arena is behind the admin gate',
+    (await call(rt, '/admin/arena', { method: 'POST', body: { patch: {} } })).status === 403);
+  const unknownAction = await arenaCall({ action: 'EXPLODE' });
+  ok('an unknown arena action is refused', unknownAction.ok === false && unknownAction.error === 'unknown_action',
+    JSON.stringify(unknownAction));
+
+  /* the clock is an alarm: an expired season closes itself even with no admin watching */
+  const expiry = runtime({ DEV_AUTH: 'true' });
+  const expiryHeaders = { 'x-admin': '1' };
+  const expired = bodyOf(await call(expiry, '/admin/arena', {
+    method: 'POST', body: { patch: { endsAt: Date.now() - 1_000 } }, headers: expiryHeaders,
+  }));
+  ok('setting a past end closes the queue immediately', expired.ok === true, JSON.stringify(expired));
+  const closed = await open(expiry, { tiq: 1000, name: 'Closed' });
+  send(closed.socket, { type: 'QUEUE', wide: false });
+  ok('an expired clock refuses the queue', errorOf(closed.socket)?.reason === 'MATCHING_LOCKED');
+  await expiry.lobby.alarm();
+  const afterAlarm = await status(expiry, expiryHeaders);
+  ok('the alarm flips the season to finale',
+    afterAlarm.arena.status === 'finale' && afterAlarm.arena.matchLocked === true,
+    JSON.stringify(afterAlarm.arena));
+}
+
 console.log(`\n${ran - failed}/${ran} admin checks passed`);
 if (failed > 0) process.exit(1);

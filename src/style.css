@@ -14361,6 +14361,481 @@ html.reduced-motion .adm-mode-seg { transition: none; }
 }
 
 /* ==========================================================================
+   ARENA & TOURNAMENT — the season machine inside Controls.
+   Frosted slate cards (a translucent #0D131F face with a 1px razor edge, no
+   backdrop-filter), tactile state keys with an emerald / crimson / amber glow,
+   a monospaced instrument clock, and the player's own Mind Ladder capsule
+   rendered with the real .ml-season classes so the preview cannot drift.
+   ========================================================================== */
+.adm-arena { display: flex; flex-direction: column; gap: 6px; }
+.adm-arena-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(148, 163, 184, .18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .035) 0%, rgba(255, 255, 255, 0) 42%),
+    rgba(13, 19, 31, .85);
+  box-shadow:
+    0 16px 32px -26px rgba(0, 0, 0, .95),
+    inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+.adm-arena-card.is-danger {
+  border-color: rgba(224, 38, 79, .32);
+  background:
+    linear-gradient(180deg, rgba(224, 38, 79, .09) 0%, rgba(224, 38, 79, 0) 46%),
+    rgba(13, 19, 31, .85);
+}
+.adm-arena-head { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.adm-arena-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--field);
+  color: var(--brand-ink);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.adm-arena-ico .ico { width: 16px; height: 16px; }
+.adm-arena-card.is-danger .adm-arena-ico { color: var(--red-ink); }
+.adm-arena-copy { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.adm-arena-copy b { font-size: var(--t-2); font-weight: 800; color: var(--ink); }
+.adm-arena-copy small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.adm-arena-beacon {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-right: 3px;
+  border-radius: 50%;
+  background: #64748B;
+  box-shadow: 0 0 0 3px rgba(100, 116, 139, .16);
+  transition: background var(--motion-fast), box-shadow var(--motion-fast);
+}
+#adm-arena[data-state="active"] .adm-arena-beacon {
+  background: var(--mint);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, .18), 0 0 12px 1px rgba(16, 185, 129, .8);
+}
+#adm-arena[data-state="maintenance"] .adm-arena-beacon {
+  background: var(--red);
+  box-shadow: 0 0 0 3px rgba(224, 38, 79, .18), 0 0 12px 1px rgba(224, 38, 79, .8);
+}
+#adm-arena[data-state="finale"] .adm-arena-beacon {
+  background: var(--honey);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, .18), 0 0 12px 1px rgba(245, 158, 11, .8);
+}
+#adm-arena[data-lock="true"] .adm-arena-beacon {
+  background: var(--red);
+  box-shadow: 0 0 0 3px rgba(224, 38, 79, .2), 0 0 12px 1px rgba(224, 38, 79, .85);
+}
+@media (prefers-reduced-motion: no-preference) {
+  #adm-arena[data-state="active"][data-lock="false"] .adm-arena-beacon { animation: adm-pulse 2.2s ease-in-out infinite; }
+}
+html.reduced-motion .adm-arena-beacon { animation: none; }
+
+/* ---- the three state keys: one recessed track, the live one lit ---- */
+.adm-arena-seg {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.adm-state-key {
+  position: relative;
+  min-width: 0;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 4px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .01em;
+  cursor: pointer;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink-soft);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast),
+              background var(--motion-fast), color var(--motion-fast);
+}
+.adm-state-key i {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #64748B;
+  box-shadow: 0 0 0 2px rgba(100, 116, 139, .16);
+  transition: background var(--motion-fast), box-shadow var(--motion-fast);
+}
+.adm-state-key:active { transform: translateY(var(--press-y)); }
+.adm-state-key:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+.adm-state-key[aria-checked="true"] { color: var(--ink); }
+.adm-state-key[data-tone="emerald"][aria-checked="true"] {
+  background: linear-gradient(180deg, rgba(16, 185, 129, .3) 0%, rgba(5, 150, 105, .12) 100%);
+  color: var(--mint-ink);
+  box-shadow:
+    inset 0 0 0 1px rgba(52, 211, 153, .5),
+    0 2px 0 #064E3B,
+    0 0 20px -7px rgba(16, 185, 129, .85);
+}
+.adm-state-key[data-tone="emerald"][aria-checked="true"] i {
+  background: #34D399;
+  box-shadow: 0 0 9px 1px rgba(52, 211, 153, .9);
+}
+.adm-state-key[data-tone="crimson"][aria-checked="true"] {
+  background: linear-gradient(180deg, rgba(224, 38, 79, .32) 0%, rgba(179, 18, 60, .12) 100%);
+  color: var(--red-ink);
+  box-shadow:
+    inset 0 0 0 1px rgba(251, 113, 133, .48),
+    0 2px 0 #7F0B2A,
+    0 0 20px -7px rgba(224, 38, 79, .9);
+}
+.adm-state-key[data-tone="crimson"][aria-checked="true"] i {
+  background: #FB7185;
+  box-shadow: 0 0 9px 1px rgba(251, 113, 133, .9);
+}
+.adm-state-key[data-tone="amber"][aria-checked="true"] {
+  background: linear-gradient(180deg, rgba(245, 158, 11, .32) 0%, rgba(180, 83, 9, .12) 100%);
+  color: var(--honey-ink);
+  box-shadow:
+    inset 0 0 0 1px rgba(252, 211, 77, .48),
+    0 2px 0 #78350F,
+    0 0 20px -7px rgba(245, 158, 11, .9);
+}
+.adm-state-key[data-tone="amber"][aria-checked="true"] i {
+  background: #FCD34D;
+  box-shadow: 0 0 9px 1px rgba(252, 211, 77, .9);
+}
+
+/* the queue lock reads crimson the moment it is armed */
+.adm-arena-lock[aria-checked="true"] {
+  box-shadow:
+    var(--clay-drop), var(--clay-spec), var(--clay-bevel),
+    inset 0 0 0 1px rgba(224, 38, 79, .42),
+    0 0 22px -8px rgba(224, 38, 79, .8);
+}
+.adm-arena-lock[aria-checked="true"] .adm-knob {
+  background: rgba(224, 38, 79, .2);
+  box-shadow: var(--inset), inset 0 0 0 1px rgba(224, 38, 79, .45);
+}
+.adm-arena-lock[aria-checked="true"] .adm-knob i {
+  background: linear-gradient(180deg, #FB7185 0%, #E0264F 100%);
+  box-shadow: 0 2px 0 #7F0B2A, 0 0 14px rgba(224, 38, 79, .8), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+.adm-arena-fine {
+  margin: 0;
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+/* ---- season title + the division ladder ---- */
+.adm-arena-fld { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.adm-arena-k {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.adm-arena-k span { color: #64748B; letter-spacing: .04em; }
+.adm-arena-fld .adm-input {
+  min-height: 48px;
+  padding: 0 11px;
+  border-radius: 9px;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  color: var(--ink);
+}
+.adm-arena-fld .adm-input:focus-visible {
+  outline: 3px solid var(--brand-2);
+  outline-offset: -1px;
+}
+.adm-divs { display: flex; flex-direction: column; gap: 4px; }
+.adm-divs-h { margin-bottom: 1px; }
+.adm-div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 48px;
+  padding: 0 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(148, 163, 184, .1);
+  background: rgba(255, 255, 255, .025);
+  cursor: text;
+}
+.adm-div > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--t-3);
+  font-weight: 800;
+  color: var(--ink);
+}
+.adm-div-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94A3B8;
+  box-shadow: 0 0 0 2px rgba(148, 163, 184, .14);
+}
+.adm-div-dot[data-div="bronze"] { background: #C98A5B; box-shadow: 0 0 0 2px rgba(201, 138, 91, .18); }
+.adm-div-dot[data-div="silver"] { background: #CBD5E1; box-shadow: 0 0 0 2px rgba(203, 213, 225, .18); }
+.adm-div-dot[data-div="gold"] { background: #FCD34D; box-shadow: 0 0 0 2px rgba(252, 211, 77, .18); }
+.adm-div-dot[data-div="platinum"] { background: #67E8F9; box-shadow: 0 0 0 2px rgba(103, 232, 249, .18); }
+.adm-div-dot[data-div="diamond"] { background: #93C5FD; box-shadow: 0 0 0 2px rgba(147, 197, 253, .18); }
+.adm-div-dot[data-div="challenger"] { background: #F0ABFC; box-shadow: 0 0 0 2px rgba(240, 171, 252, .2); }
+.adm-div-i {
+  flex: none;
+  width: 86px;
+  height: 48px;
+  appearance: textfield;
+  -moz-appearance: textfield;
+  border: 0;
+  background: transparent;
+  outline: none;
+  text-align: right;
+  font: inherit;
+  font-size: var(--t-2);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--honey-ink);
+  -webkit-user-select: text;
+  user-select: text;
+}
+.adm-div-i::-webkit-outer-spin-button,
+.adm-div-i::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.adm-div-i[readonly] { color: var(--ink-soft); }
+.adm-div-i:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid var(--brand-2);
+  outline-offset: 2px;
+}
+
+/* ---- the clock: one monospaced instrument ---- */
+.adm-count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 58px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(245, 158, 11, .22);
+  background: linear-gradient(180deg, #0A111E 0%, #0E1526 100%);
+  box-shadow:
+    var(--inset),
+    inset 0 0 0 1px rgba(255, 255, 255, .03),
+    0 0 26px -16px rgba(245, 158, 11, .8);
+  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
+  font-size: clamp(1rem, .84rem + 1.4vw, 1.28rem);
+  font-weight: 800;
+  letter-spacing: .035em;
+  font-variant-numeric: tabular-nums;
+  color: var(--honey-ink);
+  text-align: center;
+  text-shadow: 0 0 14px rgba(245, 158, 11, .32);
+  white-space: nowrap;
+  overflow: hidden;
+}
+#adm-arena[data-state="maintenance"] .adm-count {
+  border-color: rgba(224, 38, 79, .28);
+  color: var(--red-ink);
+  text-shadow: 0 0 14px rgba(224, 38, 79, .3);
+}
+.adm-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.adm-preset {
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 2px;
+  appearance: none;
+  border: 1px solid rgba(148, 163, 184, .14);
+  cursor: pointer;
+  border-radius: 9px;
+  background: var(--field);
+  color: var(--brand-ink);
+  font: inherit;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .01em;
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), color var(--motion-fast);
+}
+.adm-preset:hover { color: var(--ink); }
+.adm-preset:active { transform: translateY(var(--press-y)); }
+.adm-preset:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+.adm-expiry { display: flex; align-items: flex-end; gap: 6px; }
+.adm-expiry-fld { flex: 1 1 auto; }
+.adm-expiry .adm-input { color: var(--ink); color-scheme: dark; }
+.adm-expiry-set { flex: none; min-height: 48px; padding: 0 16px; }
+
+/* ---- the Mind Ladder preview: the real capsule, in player colours ---- */
+.adm-pv {
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(245, 158, 11, .16);
+  background:
+    radial-gradient(120% 130% at 0% 0%, rgba(245, 158, 11, .07) 0%, transparent 58%),
+    rgba(9, 14, 23, .72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+.adm-pv-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.adm-pv-crest {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  border: 1px solid rgba(252, 211, 77, .28);
+  background: rgba(245, 158, 11, .1);
+  color: var(--tiq);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.adm-pv-crest .ico { width: 16px; height: 16px; }
+.adm-pv-title { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.adm-pv-title b {
+  font-size: var(--t-3);
+  font-weight: 800;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.adm-pv-title small {
+  min-width: 0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.adm-pv .ml-season { flex: none; }
+.adm-pv-note { margin: 8px 0 0; font-size: 9px; line-height: 1.45; color: var(--ink-soft); }
+
+/* the capsule's live states, shared with the real ladder header */
+.ml-season[data-tone="ending"] {
+  border-color: rgba(252, 211, 77, .55);
+  background:
+    radial-gradient(130% 180% at 0% 0%, rgba(251, 191, 36, .28) 0%, transparent 58%),
+    rgba(245, 158, 11, .14);
+  color: #FDE68A;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 0 0 1px rgba(255, 255, 255, .04),
+    0 1px 0 rgba(0, 0, 0, .4),
+    0 0 20px -10px rgba(245, 158, 11, .95);
+}
+.ml-season[data-tone="ending"] .ml-season-k { color: rgba(253, 230, 138, .75); }
+.ml-season[data-tone="locked"] {
+  border-color: rgba(251, 113, 133, .42);
+  background:
+    radial-gradient(130% 180% at 0% 0%, rgba(251, 113, 133, .2) 0%, transparent 58%),
+    rgba(224, 38, 79, .12);
+  color: var(--red-ink);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    inset 0 0 0 1px rgba(255, 255, 255, .03),
+    0 1px 0 rgba(0, 0, 0, .4),
+    0 0 20px -12px rgba(224, 38, 79, .9);
+}
+.ml-season[data-tone="locked"] .ml-season-k { color: rgba(253, 164, 175, .72); }
+.ml-season[data-tone="locked"] .ml-pulse {
+  background: #FB7185;
+  box-shadow: 0 0 0 3px rgba(251, 113, 133, .14), 0 0 8px rgba(224, 38, 79, .9), inset 0 0 1px #FFE4E6;
+}
+.ml-season[data-tone="closed"] {
+  border-color: rgba(148, 163, 184, .28);
+  background: rgba(148, 163, 184, .09);
+  color: #CBD5E1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 1px 0 rgba(0, 0, 0, .4);
+}
+.ml-season[data-tone="closed"] .ml-season-k { color: rgba(203, 213, 225, .62); }
+.ml-season[data-tone="closed"] .ml-pulse {
+  background: #94A3B8;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, .14), 0 0 6px rgba(148, 163, 184, .55);
+}
+.ml-season[data-tone="closed"] .ml-pulse::after { display: none; }
+
+/* ---- the final snapshot ---- */
+.adm-arena-snap { display: flex; flex-direction: column; gap: 0; margin: 0; padding: 0; list-style: none; }
+.adm-snap-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  border-top: 1px solid rgba(148, 163, 184, .09);
+  font-size: var(--t-3);
+}
+.adm-snap-row:first-child { border-top: 0; }
+.adm-snap-rank {
+  flex: none;
+  width: 24px;
+  font-size: 10px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+.adm-snap-row:nth-child(1) .adm-snap-rank { color: var(--honey-ink); }
+.adm-snap-row:nth-child(2) .adm-snap-rank { color: #CBD5E1; }
+.adm-snap-row:nth-child(3) .adm-snap-rank { color: #C98A5B; }
+.adm-snap-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+  color: var(--ink);
+}
+.adm-snap-tiq {
+  flex: none;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--honey-ink);
+}
+.adm-reset, .adm-stop { width: 100%; margin: 0; }
+.adm-stop { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.adm-stop .ico { width: 16px; height: 16px; }
+
+@media (max-width: 380px) {
+  .adm-arena-card { padding: 10px; gap: 8px; }
+  .adm-preset { font-size: 9px; }
+  .adm-count { font-size: 1rem; letter-spacing: 0; }
+  .adm-div-i { width: 72px; }
+  .adm-pv .ml-season { padding: 4px 8px; }
+}
+
+/* ==========================================================================
    TOOLS — the grants, the ladder preview and the two resets.
    ========================================================================== */
 .adm-tools { display: flex; gap: var(--s2); }

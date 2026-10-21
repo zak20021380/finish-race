@@ -51,6 +51,7 @@ import { badgeCrestHtml, editionSerialLabel, holderEdition, refreshBadgeEditions
 import { flagPhoto } from './flags';
 import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
+import { arena, countdownPill, fullCountdown, seasonLabel } from './arenaState';
 import { bindSquadById, cleanChatReference, cleanHandle, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadKind, squadLetter, type RankedSquad } from './squads';
 import { BOT_HANDLE, impact, notify, tgUser } from './telegram';
 import { registerSquadWithTelegram } from './squadRegister';
@@ -86,17 +87,6 @@ function pickEl(id: string, legacy: string): HTMLElement {
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /* ---------- Mind Ladder identity: the season clock and the TIQ tiers ---------- */
-
-/** Season 4 closes 2026-10-16 14:00Z. Anchoring to a fixed boundary and rolling it
- *  every 28 days keeps the scarcity chip a real countdown after that date instead
- *  of a frozen string that quietly stops matching the pulsing dot beside it. */
-const SEASON_ANCHOR = Date.UTC(2026, 9, 16, 14, 0);
-const SEASON_MS = 28 * 86400_000;
-
-function seasonOf(t: number): { no: number; endsAt: number } {
-  const k = Math.ceil((t - SEASON_ANCHOR) / SEASON_MS);
-  return { no: 4 + k, endsAt: SEASON_ANCHOR + k * SEASON_MS };
-}
 
 /** TIQ bands. The tier is an aura colour, never a badge word on the ladder. */
 type MindTier = 'rookie' | 'tactician' | 'strategist' | 'grandmaster';
@@ -258,6 +248,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   const boardSwitch = document.querySelector<HTMLElement>('.ranks-tabs');
   const seasonChip = document.getElementById('ranks-season');
   const seasonText = seasonChip?.querySelector<HTMLElement>('.ml-season-t') ?? null;
+  const seasonKicker = seasonChip?.querySelector<HTMLElement>('.ml-season-k') ?? null;
   const seasonSub = document.getElementById('ranks-sub');
   /** The Cup showcase's own parts: one card, hydrated in place, never rebuilt. */
   const cupEls = {
@@ -510,17 +501,21 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   /**
-   * The season line and its capsule: the subtitle names the season, the pill counts
-   * it down in days. Both are recomputed on entry and on every tick, so the beacon
-   * never pulses beside a figure that has quietly gone stale.
+   * The season line and its capsule: the subtitle carries the Command Center's season
+   * title, the pill switches from days to hours inside the last two, and both are
+   * recomputed on every tick so the beacon never pulses beside a stale figure.
    */
   function paintSeason(): void {
+    const a = arena();
     const t = Date.now();
-    const s = seasonOf(t);
-    const days = Math.max(0, Math.ceil((s.endsAt - t) / 86400_000));
-    if (seasonText) seasonText.textContent = `${days}d left`;
-    if (seasonSub) seasonSub.textContent = `Season ${s.no}`;
-    seasonChip?.setAttribute('title', `Season ${s.no} closes in ${formatCountdown(s.endsAt, t)}`);
+    const pill = countdownPill(a, t);
+    if (seasonText) seasonText.textContent = pill.value;
+    if (seasonKicker) seasonKicker.textContent = pill.kicker;
+    if (seasonSub) seasonSub.textContent = seasonLabel(a);
+    if (seasonChip) {
+      seasonChip.dataset.tone = pill.tone;
+      seasonChip.setAttribute('title', `${seasonLabel(a)} — ${fullCountdown(a, t)}`);
+    }
   }
 
   function selectBoard(next: Board): void {

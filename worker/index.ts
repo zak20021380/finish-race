@@ -129,6 +129,13 @@ export default {
       return lobby.fetch(request);
     }
 
+    /* The public tournament clock. The room verifies any initData itself, so the award that
+       rides along is never keyed off a client-supplied identity header. */
+    if (url.pathname === '/api/client/arena/state') {
+      const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+      return lobby.fetch(request);
+    }
+
     /* The Command Center's routes: authenticated here, then handed to the room that authorizes. */
     if (url.pathname.startsWith('/admin/') || url.pathname.startsWith('/api/admin/')) {
       const admin = await identifyAdminRequest(request, env);
