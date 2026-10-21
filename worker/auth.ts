@@ -46,6 +46,8 @@ export interface Identity {
   tiq: number;
   tier: MindTier;
   flag: string;
+  /** Player-declared age, or 0 when the profile has never asked. */
+  age: number;
   /** True only when the guest door was used. */
   guest: boolean;
   /** Wallet reading the client reported for the directory, clamped. Never an authority. */
@@ -69,6 +71,8 @@ export interface AuthRequest {
   tiq: number | null;
   tier: string;
   flag: string;
+  /** Profile age, already clamped to the same ceiling the directory filter reads. */
+  age: number;
   name: string;
   /** Economy / social telemetry the client reports for the admin directory, all clamped. */
   coins: number;
@@ -104,6 +108,7 @@ export function authRequestFrom(url: URL): AuthRequest {
     tiq: whole(p.get('tiq')),
     tier: p.get('tier') ?? '',
     flag: flagOf(p.get('flag') ?? ''),
+    age: capped(p.get('age'), 120),
     name: cleanName(p.get('name') ?? ''),
     coins: capped(p.get('coins'), 100_000_000),
     stars: capped(p.get('stars'), 10_000_000),
@@ -192,6 +197,7 @@ function guestSeat(req: AuthRequest, tier: MindTier): Identity {
     tiq: req.tiq ?? 0,
     tier,
     flag: req.flag,
+    age: req.age,
     guest: true,
     coins: req.coins,
     stars: req.stars,
@@ -225,6 +231,7 @@ export async function authenticate(req: AuthRequest, env: Env): Promise<Identity
         tiq,
         tier,
         flag: req.flag,
+        age: req.age,
         guest: false,
         coins: req.coins,
         stars: req.stars,

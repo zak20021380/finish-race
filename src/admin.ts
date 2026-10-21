@@ -43,8 +43,10 @@ import {
 } from './support';
 import { getMySquad } from './squads';
 import {
-  directoryAction, directoryPage, liveRow, PAGE_SIZE, YOU_ID, type DirFilter, type DirPlayer,
+  directoryAction, directoryCountries, directoryPage, liveRow, PAGE_SIZE, YOU_ID,
+  type AgeBand, type DirFilter, type DirPlayer, type DirSort,
 } from './players';
+import { nameOf } from './countries';
 import { detonation, impact, notify, tgUser } from './telegram';
 import { adminFetch, parseJson, postJson } from './adminApi';
 import type { Broadcast } from './broadcasts';
@@ -538,9 +540,19 @@ interface PlayersPage {
 }
 
 /** Read the Worker's directory; null when nothing answers, so the panel can fall back to the index. */
-async function fetchPlayers(q: string, filter: DirFilter, offset: number, limit: number): Promise<PlayersPage | null> {
-  const path = `/admin/players?q=${encodeURIComponent(q)}&filter=${filter}&offset=${offset}&limit=${limit}`;
-  const data = await parseJson<PlayersPage>(await adminFetch(path));
+async function fetchPlayers(
+  q: string,
+  filter: DirFilter,
+  country: string,
+  age: AgeBand,
+  sort: DirSort,
+  offset: number,
+  limit: number,
+): Promise<PlayersPage | null> {
+  const params = new URLSearchParams({ q, filter, country, age, sort });
+  params.set('offset', String(offset));
+  params.set('limit', String(limit));
+  const data = await parseJson<PlayersPage>(await adminFetch(`/admin/players?${params.toString()}`));
   return data && data.ok === true && Array.isArray(data.players) ? data : null;
 }
 
@@ -840,6 +852,15 @@ export function createAdmin(api: AdminApi): Admin {
   const usersQ = $<HTMLInputElement>('users-q');
   const usersQClear = $<HTMLButtonElement>('users-q-clear');
   const userChips = [...document.querySelectorAll<HTMLButtonElement>('[data-ufilter]')];
+  const usersCountrySel = $<HTMLSelectElement>('users-country');
+  const usersAgeSel = $<HTMLSelectElement>('users-age');
+  const usersSortSel = $<HTMLSelectElement>('users-sort');
+  const usersCountryFlag = $<HTMLElement>('users-country-flag');
+  const usersCountryV = $<HTMLElement>('users-country-v');
+  const usersAgeV = $<HTMLElement>('users-age-v');
+  const usersSortV = $<HTMLElement>('users-sort-v');
+  const usersReset = $<HTMLButtonElement>('users-reset');
+  const usersAdvPods = [...document.querySelectorAll<HTMLElement>('[data-uadv]')];
   /* Access control: the list, the add key, and the appointment drawer */
   const aclList = $<HTMLElement>('adm-acl-list');
   const aclEmpty = $<HTMLElement>('adm-acl-empty');
@@ -918,16 +939,23 @@ export function createAdmin(api: AdminApi): Admin {
   /** The Users view: the filter chip, the search text, the rows held, and the open card. */
   let usersFilter: DirFilter = 'all';
   let usersQuery = '';
+  let usersCountry = '';
+  let usersAge: AgeBand = 'all';
+  let usersSort: DirSort = 'default';
   let usersRows: DirPlayer[] = [];
   let usersTotal = 0;
-  let usersLimit = PAGE_SIZE;
   /** True once `/admin/players` has answered this session: the panel is governing a real registry. */
   let usersOn = false;
+  /** The Worker has been asked at least once; after a refusal every filter stays on the fast local index. */
+  let usersProbed = false;
   /** The tab has been opened at least once — the directory is read lazily, on first sight. */
   let usersAsked = false;
+  /** At least one read has landed: before that the panel shows "—" rather than a false empty state. */
+  let usersReady = false;
   /** The newest read is the only one allowed to paint: typing fires reads faster than they land. */
   let usersSeq = 0;
   let usersTimer = 0;
+  let usersAdvTimer = 0;
   let openPlayer = '';
 
   /** The Access Control view: the registry read, and whether this viewer may change it. */
@@ -1306,6 +1334,101 @@ export function createAdmin(api: AdminApi): Admin {
     return s;
   }
 
+  /* ---- the advanced toolbar: country, age and the explicit audit sort ---- */
+
+  const AGE_LABEL: Record<AgeBand, string> = {
+    all: 'All ages', u18: 'Under 18', '18-24': '18–24', '25-34': '25–34', '35p': '35+',
+  };
+  const SORT_LABEL: Record<DirSort, string> = {
+    default: 'Default', lastPlayed: 'Last played', joined: 'Newest', tiq: 'Top TIQ',
+  };
+  const AGE_BANDS = Object.keys(AGE_LABEL) as AgeBand[];
+  const SORTS = Object.keys(SORT_LABEL) as DirSort[];
+
+  const ageOf = (p: DirPlayer): number =>
+    (typeof p.age === 'number' && Number.isFinite(p.age) ? Math.max(0, Math.floor(p.age)) : 0);
+
+  /** The two-letter codes the picker can offer honestly: the index plus whatever the live page shows. */
+  function ensureCountryOptions(): void {
+    if (!usersCountrySel) return;
+    const codes = new Set(directoryCountries());
+    for (const p of usersRows) if (/^[A-Z]{2}$/.test(p.country)) codes.add(p.country);
+    if (profile.country && /^[A-Z]{2}$/i.test(profile.country)) codes.add(profile.country.toUpperCase());
+    if (usersCountry) codes.add(usersCountry);
+    const list = [...codes].sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+    const key = list.join(',');
+    if (usersCountrySel.dataset.key === key) return;
+    usersCountrySel.textContent = '';
+    const every = document.createElement('option');
+    every.value = '';
+    every.textContent = 'Every country';
+    usersCountrySel.append(every);
+    for (const code of list) {
+      const opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = `${code} — ${nameOf(code)}`;
+      usersCountrySel.append(opt);
+    }
+    usersCountrySel.dataset.key = key;
+    usersCountrySel.value = usersCountry;
+  }
+
+  /** Keep the three closed faces (and the gold "filter is on" rims) in step with the state. */
+  function syncAdvanced(): void {
+    if (usersCountrySel) usersCountrySel.value = usersCountry;
+    if (usersAgeSel) usersAgeSel.value = usersAge;
+    if (usersSortSel) usersSortSel.value = usersSort;
+    if (usersCountryFlag && usersCountryFlag.dataset.cc !== usersCountry) {
+      usersCountryFlag.textContent = '';
+      usersCountryFlag.append(
+        usersCountry ? flagPhoto(usersCountry, 'fp-adm-sel') : icon('#i-globe', 'adm-fn-globe'),
+      );
+      usersCountryFlag.dataset.cc = usersCountry;
+    }
+    if (usersCountryV) usersCountryV.textContent = usersCountry || 'ALL';
+    if (usersAgeV) usersAgeV.textContent = AGE_LABEL[usersAge];
+    if (usersSortV) usersSortV.textContent = SORT_LABEL[usersSort];
+    for (const pod of usersAdvPods) {
+      const key = pod.dataset.uadv;
+      const on = key === 'country' ? !!usersCountry : key === 'age' ? usersAge !== 'all' : usersSort !== 'default';
+      pod.dataset.on = String(on);
+    }
+  }
+
+  type Recency = 'live' | 'hot' | 'warm' | 'cold';
+
+  const recencyOf = (ms: number, now: number): Recency => {
+    const age = now - ms;
+    return age <= 60 * 60 * 1000 ? 'hot' : age <= 24 * 60 * 60 * 1000 ? 'warm' : 'cold';
+  };
+
+  /** Always a relative stamp on the audit line: `12d ago`, never a calendar date. */
+  function relAgo(ms: number, now = Date.now()): string {
+    const s = Math.max(0, Math.round((now - ms) / 1000));
+    if (s < 45) return 'just now';
+    const m = Math.round(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.round(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.round(h / 24);
+    return d < 30 ? `${d}d ago` : `${Math.round(d / 30)}mo ago`;
+  }
+
+  /**
+   * The relative activity stamp the card prints: a settled race is the latest event when its end
+   * coincides with the last sighting, otherwise the last sighting is the honest "Active" reading.
+   */
+  function activityOf(p: DirPlayer): { text: string; tone: Recency; at: number } {
+    const now = Date.now();
+    if (p.lastPlayed > 0 && p.lastPlayed >= p.lastSeen - 2000) {
+      return { text: `Match ended ${relAgo(p.lastPlayed, now)}`, tone: recencyOf(p.lastPlayed, now), at: p.lastPlayed };
+    }
+    if (p.lastSeen > 0) {
+      return { text: `Active ${relAgo(p.lastSeen, now)}`, tone: p.inMatch ? 'live' : recencyOf(p.lastSeen, now), at: p.lastSeen };
+    }
+    return { text: 'No activity yet', tone: 'cold', at: 0 };
+  }
+
   /**
    * One directory row: the summary line always, the telemetry and moderation keys when the card
    * is the open one. The structure mirrors the Inbox card — one delegated listener, no per-row
@@ -1334,6 +1457,14 @@ export function createAdmin(api: AdminApi): Admin {
 
     const txt = document.createElement('span');
     txt.className = 'adm-user-txt';
+
+    const nameRow = document.createElement('span');
+    nameRow.className = 'adm-user-nr';
+    const flag = document.createElement('span');
+    flag.className = 'adm-user-fl';
+    if (/^[A-Z]{2}$/.test(p.country)) flag.append(flagPhoto(p.country, 'fp-adm'));
+    else flag.append(icon('#i-globe', 'adm-user-fl-i'));
+
     const nm = document.createElement('span');
     nm.className = 'adm-user-n';
     nm.textContent = p.name;
@@ -1343,10 +1474,25 @@ export function createAdmin(api: AdminApi): Admin {
       you.textContent = 'YOU';
       nm.append(' ', you);
     }
+    nameRow.append(flag, nm);
+
     const sub = document.createElement('span');
     sub.className = 'adm-user-m';
     sub.textContent = `${userWho(p)} · TIQ ${figure(p.tiq)}`;
-    txt.append(nm, sub);
+
+    const activity = activityOf(p);
+    const act = document.createElement('span');
+    act.className = 'adm-user-act';
+    act.dataset.tone = activity.tone;
+    if (activity.at) act.title = new Date(activity.at).toISOString();
+    const actDot = document.createElement('i');
+    actDot.className = 'adm-user-act-dot';
+    actDot.setAttribute('aria-hidden', 'true');
+    const actText = document.createElement('span');
+    actText.textContent = activity.text;
+    act.append(actDot, actText);
+
+    txt.append(nameRow, sub, act);
 
     const side = document.createElement('span');
     side.className = 'adm-user-side';
@@ -1365,7 +1511,8 @@ export function createAdmin(api: AdminApi): Admin {
 
     const meta = document.createElement('p');
     meta.className = 'adm-user-id';
-    meta.textContent = `id ${p.tgId || p.id} · first seen ${agoOf(p.firstSeen)} · last seen ${agoOf(p.lastSeen)}`;
+    const age = ageOf(p);
+    meta.textContent = `id ${p.tgId || p.id} · first seen ${agoOf(p.firstSeen)} · last seen ${agoOf(p.lastSeen)} · age ${age || '—'}`;
     detail.append(meta);
 
     const grid = document.createElement('div');
@@ -1431,15 +1578,19 @@ export function createAdmin(api: AdminApi): Admin {
       usersSourceEl.dataset.live = String(usersOn);
     }
     if (usersTotalEl) {
-      usersTotalEl.textContent = usersRows.length
+      usersTotalEl.textContent = usersReady
         ? `${figure(usersTotal)} ${usersTotal === 1 ? 'player' : 'players'}`
         : '—';
     }
-    if (usersMore) usersMore.hidden = usersRows.length >= usersTotal;
+    if (usersMore) usersMore.hidden = !usersReady || usersRows.length >= usersTotal;
+    if (usersCountrySel && !usersCountrySel.dataset.key) ensureCountryOptions();
+    syncAdvanced();
     if (!usersList) return;
     usersList.textContent = '';
-    for (const p of usersRows) usersList.append(playerCard(p));
-    if (usersEmpty) usersEmpty.hidden = usersRows.length > 0;
+    const frag = document.createDocumentFragment();
+    for (const p of usersRows) frag.append(playerCard(p));
+    usersList.append(frag);
+    if (usersEmpty) usersEmpty.hidden = !usersReady || usersRows.length > 0;
   }
 
   /**
@@ -1449,23 +1600,47 @@ export function createAdmin(api: AdminApi): Admin {
    */
   async function refreshUsers(reset: boolean): Promise<void> {
     const run = ++usersSeq;
-    if (reset) usersLimit = PAGE_SIZE;
     const offset = reset ? 0 : usersRows.length;
-    const live = await fetchPlayers(usersQuery, usersFilter, offset, usersLimit);
+
+    /* Both sources page the same way: one PAGE_SIZE window at the rows already held. That keeps
+       Load More honest on the local index instead of re-reading the first window forever. */
+    const paintLocal = () => {
+      const page = directoryPage(
+        {
+          q: usersQuery, filter: usersFilter, country: usersCountry, age: usersAge, sort: usersSort,
+          offset, limit: PAGE_SIZE,
+        },
+        liveSeat(),
+      );
+      usersRows = reset ? page.players : [...usersRows, ...page.players];
+      usersTotal = page.total;
+      usersReady = true;
+      paintUsers();
+    };
+
+    /* Once the Worker has refused, the local index is the authority. Filtering 1,160 rows is a
+       synchronous pass, so every toolbar move repaints inside a frame instead of waiting on a
+       fetch that has already failed once this session. */
+    if (usersProbed && !usersOn) {
+      paintLocal();
+      return;
+    }
+
+    const live = await fetchPlayers(
+      usersQuery, usersFilter, usersCountry, usersAge, usersSort, offset, PAGE_SIZE,
+    );
     if (run !== usersSeq) return;                 // a newer read has already been asked for
+    usersProbed = true;
     usersOn = !!live;
     if (live) {
       usersRows = reset ? live.players : [...usersRows, ...live.players];
       usersTotal = live.total;
-    } else {
-      const page = directoryPage(
-        { q: usersQuery, filter: usersFilter, offset: 0, limit: usersLimit },
-        liveSeat(),
-      );
-      usersRows = page.players;
-      usersTotal = page.total;
+      usersReady = true;
+      ensureCountryOptions();
+      paintUsers();
+      return;
     }
-    paintUsers();
+    paintLocal();
   }
 
   /** BAN / UNBAN / GRANT_COINS, on the Worker when there is one, on the local index otherwise. */
@@ -2250,23 +2425,91 @@ export function createAdmin(api: AdminApi): Admin {
     });
   }
 
-  /* the Users tab: the filter chips, the search field, the cards and Load More */
+  /* the Users tab: the filter chips, the advanced toolbar, the search, the cards and Load More */
+  const paintChipState = () => {
+    for (const c of userChips) {
+      c.setAttribute('aria-pressed', String((c.dataset.ufilter ?? 'all') === usersFilter));
+    }
+  };
+
+  /** A toolbar move repaints on the local index immediately; the zero-delay task only folds doubles. */
+  const scheduleAdvRefresh = () => {
+    window.clearTimeout(usersAdvTimer);
+    usersAdvTimer = window.setTimeout(() => void refreshUsers(true), 0);
+  };
+
+  function resetUserFilters(): void {
+    usersFilter = 'all';
+    usersQuery = '';
+    usersCountry = '';
+    usersAge = 'all';
+    usersSort = 'default';
+    openPlayer = '';
+    window.clearTimeout(usersTimer);
+    window.clearTimeout(usersAdvTimer);
+    if (usersQ) usersQ.value = '';
+    if (usersQClear) usersQClear.hidden = true;
+    paintChipState();
+    syncAdvanced();
+    impact('light');
+    void refreshUsers(true);
+  }
+
   for (const chip of userChips) {
     chip.addEventListener('click', () => {
       const next = (chip.dataset.ufilter ?? 'all') as DirFilter;
       if (next === usersFilter) return;
+      const previous = usersFilter;
       usersFilter = next;
+      if (next === 'tiq') usersSort = 'tiq';
+      else if (previous === 'tiq') usersSort = 'default';
       openPlayer = '';
-      for (const c of userChips) c.setAttribute('aria-pressed', String(c === chip));
+      paintChipState();
+      syncAdvanced();
       impact('light');
       void refreshUsers(true);
     });
   }
 
+  usersCountrySel?.addEventListener('change', () => {
+    const code = usersCountrySel.value.trim().toUpperCase();
+    usersCountry = /^[A-Z]{2}$/.test(code) ? code : '';
+    openPlayer = '';
+    impact('light');
+    syncAdvanced();
+    scheduleAdvRefresh();
+  });
+
+  usersAgeSel?.addEventListener('change', () => {
+    const next = usersAgeSel.value as AgeBand;
+    usersAge = AGE_BANDS.includes(next) ? next : 'all';
+    openPlayer = '';
+    impact('light');
+    syncAdvanced();
+    scheduleAdvRefresh();
+  });
+
+  usersSortSel?.addEventListener('change', () => {
+    const next = usersSortSel.value as DirSort;
+    usersSort = SORTS.includes(next) ? next : 'default';
+    /* the Top TIQ chip is only a shortcut: choosing another order leaves it for All Players */
+    if (usersFilter === 'tiq' && usersSort !== 'tiq') {
+      usersFilter = 'all';
+      paintChipState();
+    }
+    openPlayer = '';
+    impact('light');
+    syncAdvanced();
+    scheduleAdvRefresh();
+  });
+
+  usersReset?.addEventListener('click', resetUserFilters);
+
   /* typing is debounced once: a query read per keystroke would race the rows that are landing */
   usersQ?.addEventListener('input', () => {
     usersQuery = usersQ.value.trim().slice(0, 64);
     if (usersQClear) usersQClear.hidden = !usersQuery;
+    openPlayer = '';
     window.clearTimeout(usersTimer);
     usersTimer = window.setTimeout(() => void refreshUsers(true), 180);
   });

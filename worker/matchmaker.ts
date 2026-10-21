@@ -226,6 +226,8 @@ export interface PlayerRecord {
   username: string;
   /** ISO 3166-1 alpha-2, or ''. */
   country: string;
+  /** Player-declared age, or 0 when their profile has never set one. */
+  age: number;
   tiq: number;
   /** The first and last time the room saw this player, in ms. */
   firstSeen: number;
@@ -256,6 +258,32 @@ const FILTERS: readonly PlayerFilter[] = ['all', 'active', 'tiq', 'flagged'];
 const filterOf = (raw: string | null): PlayerFilter =>
   (FILTERS as readonly string[]).includes(raw ?? '') ? (raw as PlayerFilter) : 'all';
 
+/** The demographic cohorts behind the Age picker. `age` 0 never matches a named band. */
+export type AgeBand = 'all' | 'u18' | '18-24' | '25-34' | '35p';
+
+const AGE_BANDS: readonly AgeBand[] = ['all', 'u18', '18-24', '25-34', '35p'];
+
+const ageBandOf = (raw: string | null): AgeBand =>
+  (AGE_BANDS as readonly string[]).includes(raw ?? '') ? (raw as AgeBand) : 'all';
+
+const inAgeBand = (age: number, band: AgeBand): boolean => {
+  if (band === 'all') return true;
+  if (age <= 0) return false;
+  if (band === 'u18') return age < 18;
+  if (band === '18-24') return age >= 18 && age <= 24;
+  if (band === '25-34') return age >= 25 && age <= 34;
+  return age >= 35;
+};
+
+/** How the directory orders the rows that survive its filters. */
+export type PlayerSort = 'default' | 'lastPlayed' | 'joined' | 'tiq';
+
+const SORTS: readonly PlayerSort[] = ['default', 'lastPlayed', 'joined', 'tiq'];
+
+/** Null when the client sent no sort at all, so the filter's own legacy order can stand. */
+const sortOf = (raw: string | null): PlayerSort | null =>
+  (SORTS as readonly string[]).includes(raw ?? '') ? (raw as PlayerSort) : null;
+
 /** One page of the directory: the window, its total, and the rows. */
 export interface PlayersPage {
   ok: true;
@@ -285,6 +313,7 @@ function freshPlayer(identity: Identity, now: number): PlayerRecord {
     name: identity.player.name.slice(0, 40),
     username: identity.player.username.slice(0, 40),
     country: identity.flag.slice(0, 2),
+    age: Math.min(120, Math.max(0, Math.floor(identity.age))),
     tiq: Math.max(0, Math.floor(identity.tiq)),
     firstSeen: now,
     lastSeen: now,
@@ -315,6 +344,7 @@ function readPlayer(raw: unknown): PlayerRecord | null {
     name: text(r.name, 40) || 'Player',
     username: text(r.username, 40),
     country: text(r.country, 2).toUpperCase(),
+    age: Math.min(120, whole(r.age)),
     tiq: whole(r.tiq),
     firstSeen: whole(r.firstSeen),
     lastSeen: whole(r.lastSeen),
@@ -1184,6 +1214,7 @@ export class MatchmakerDO {
     p.name = identity.player.name || p.name;
     p.username = identity.player.username || p.username;
     p.country = identity.flag || p.country;
+    if (identity.age > 0) p.age = Math.min(120, Math.floor(identity.age));
     p.tiq = Math.max(0, Math.floor(identity.tiq));
     p.lastSeen = now;
     p.coins = Math.max(p.coins, identity.coins);
@@ -1262,6 +1293,10 @@ export class MatchmakerDO {
   private playersPage(params: URLSearchParams): PlayersPage {
     const q = (params.get('q') ?? '').trim().toLowerCase().slice(0, 64);
     const filter = filterOf(params.get('filter'));
+    const countryRaw = (params.get('country') ?? '').trim().toUpperCase();
+    const country = /^[A-Z]{2}$/.test(countryRaw) ? countryRaw : '';
+    const age = ageBandOf(params.get('age'));
+    const sort = sortOf(params.get('sort')) ?? (filter === 'tiq' ? 'tiq' : 'default');
     const offset = Math.max(0, Math.floor(Number(params.get('offset')) || 0));
     const limit = Math.min(PLAYERS_LIMIT, Math.max(1, Math.floor(Number(params.get('limit')) || 40)));
     const now = Date.now();
@@ -1275,9 +1310,14 @@ export class MatchmakerDO {
     }
     if (filter === 'active') rows = rows.filter((p) => p.inMatch || now - p.lastSeen <= ACTIVE_MS);
     if (filter === 'flagged') rows = rows.filter((p) => p.banned || p.muted);
-    /* flagged first when the filter asks for it; otherwise live boards, then the freshest seats */
-    if (filter === 'flagged') rows.sort((a, b) => Number(b.banned) - Number(a.banned) || b.lastSeen - a.lastSeen);
-    else if (filter === 'tiq') rows.sort((a, b) => b.tiq - a.tiq || b.lastSeen - a.lastSeen);
+    if (country) rows = rows.filter((p) => p.country === country);
+    if (age !== 'all') rows = rows.filter((p) => inAgeBand(p.age, age));
+    /* the default order reads like the room: flagged first when that is the view, else live boards,
+       then the freshest seats. The three explicit sorts answer an audit question instead. */
+    if (sort === 'lastPlayed') rows.sort((a, b) => b.lastPlayed - a.lastPlayed || b.lastSeen - a.lastSeen);
+    else if (sort === 'joined') rows.sort((a, b) => b.firstSeen - a.firstSeen);
+    else if (sort === 'tiq') rows.sort((a, b) => b.tiq - a.tiq || b.lastSeen - a.lastSeen);
+    else if (filter === 'flagged') rows.sort((a, b) => Number(b.banned) - Number(a.banned) || b.lastSeen - a.lastSeen);
     else rows.sort((a, b) => Number(b.inMatch) - Number(a.inMatch) || b.lastSeen - a.lastSeen);
     const total = rows.length;
     return { ok: true, total, offset, limit, players: rows.slice(offset, offset + limit) };

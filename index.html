@@ -1960,12 +1960,57 @@
               <button class="adm-chip" type="button" data-ufilter="tiq" aria-pressed="false">Top TIQ</button>
               <button class="adm-chip" type="button" data-ufilter="flagged" aria-pressed="false">Flagged</button>
             </div>
+            <div class="adm-adv" role="group" aria-label="Filter and sort players">
+              <label class="adm-fn" data-uadv="country">
+                <span class="adm-fn-k" aria-hidden="true">Country</span>
+                <span class="adm-fn-face" aria-hidden="true">
+                  <span class="adm-fn-flag" id="users-country-flag"></span>
+                  <span class="adm-fn-v" id="users-country-v">ALL</span>
+                  <svg class="ico adm-fn-chev"><use href="#i-next" /></svg>
+                </span>
+                <select class="adm-fn-sel" id="users-country" aria-label="Filter by country">
+                  <option value="">Every country</option>
+                </select>
+              </label>
+              <label class="adm-fn" data-uadv="age">
+                <span class="adm-fn-k" aria-hidden="true">Age</span>
+                <span class="adm-fn-face" aria-hidden="true">
+                  <span class="adm-fn-v" id="users-age-v">All ages</span>
+                  <svg class="ico adm-fn-chev"><use href="#i-next" /></svg>
+                </span>
+                <select class="adm-fn-sel" id="users-age" aria-label="Filter by age range">
+                  <option value="all">All ages</option>
+                  <option value="u18">Under 18</option>
+                  <option value="18-24">18–24</option>
+                  <option value="25-34">25–34</option>
+                  <option value="35p">35+</option>
+                </select>
+              </label>
+              <label class="adm-fn" data-uadv="sort">
+                <span class="adm-fn-k" aria-hidden="true">Sort</span>
+                <span class="adm-fn-face" aria-hidden="true">
+                  <span class="adm-fn-v" id="users-sort-v">Default</span>
+                  <svg class="ico adm-fn-chev"><use href="#i-next" /></svg>
+                </span>
+                <select class="adm-fn-sel" id="users-sort" aria-label="Sort players">
+                  <option value="default">Default order</option>
+                  <option value="lastPlayed">Last played</option>
+                  <option value="joined">Newest joined</option>
+                  <option value="tiq">Highest TIQ</option>
+                </select>
+              </label>
+            </div>
             <div class="adm-users-meta">
               <span id="users-total" aria-live="polite">—</span>
               <span class="adm-users-src" id="users-source" data-live="false">LOCAL INDEX</span>
             </div>
             <ul class="adm-users-list" id="adm-users-list" aria-label="Player directory"></ul>
-            <p class="adm-inbox-empty" id="adm-users-empty" hidden>No players match this view.</p>
+            <div class="adm-users-empty" id="adm-users-empty" hidden>
+              <span class="adm-users-empty-i" aria-hidden="true"><svg class="ico"><use href="#i-users" /></svg></span>
+              <p class="adm-users-empty-t">No players match the selected criteria</p>
+              <p class="adm-users-empty-s">Widen the country, age or activity window and try again.</p>
+              <button class="adm-btn adm-btn-primary adm-users-reset" type="button" id="users-reset">Reset Filters</button>
+            </div>
             <button class="adm-btn adm-btn-wide" type="button" id="users-more" hidden>Load More</button>
           </div>
 

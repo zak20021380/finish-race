@@ -14525,6 +14525,97 @@ html.reduced-motion .adm-mode-seg { transition: none; }
 .adm-search-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .adm-search-x[hidden] { display: none; }
 
+/* ---- the query toolbar: three recessed keys, each with a native select laid over its face ----
+   The face is ours (a flag and a short code, or the age/sort reading). The real <select> is
+   transparent and covers it, so the menu is the platform's own popup: full-width on a phone and
+   never clipped by the scrolling panel's overflow. */
+.adm-adv {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.adm-fn {
+  position: relative;
+  min-width: 0;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px 9px;
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  cursor: pointer;
+  transition: background var(--motion-fast), box-shadow var(--motion-fast);
+}
+.adm-fn[data-on="true"] {
+  background: linear-gradient(180deg, rgba(252, 211, 77, .09) 0%, rgba(252, 211, 77, .02) 100%), var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px rgba(252, 211, 77, .34);
+}
+.adm-fn:focus-within { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.adm-fn-k {
+  display: block;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.adm-fn[data-on="true"] .adm-fn-k { color: var(--honey-ink); }
+.adm-fn-face {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  height: 18px;
+}
+.adm-fn-flag { flex: none; display: grid; place-items: center; width: 15px; height: 15px; }
+.adm-fn-flag .fp { --fp-d: 15px; }
+.adm-fn-flag .fp-chip { border-radius: 50%; font-size: 6px; letter-spacing: 0; }
+.adm-fn-globe { width: 14px; height: 14px; color: var(--honey); }
+.adm-fn-v {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.adm-fn-chev {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  color: var(--ink-soft);
+  transform: rotate(90deg);
+}
+.adm-fn[data-on="true"] .adm-fn-chev { color: var(--honey-ink); }
+.adm-fn-sel {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  appearance: none;
+  opacity: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 16px;                     /* iOS keeps the page still when the native menu takes focus */
+}
+.adm-fn-sel:focus { outline: none; }
+@media (max-width: 339px) {
+  .adm-adv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .adm-fn[data-uadv="sort"] { grid-column: 1 / -1; }
+}
+
 .adm-users-meta {
   display: flex;
   align-items: center;
@@ -14556,6 +14647,44 @@ html.reduced-motion .adm-mode-seg { transition: none; }
   padding: 0;
   list-style: none;
 }
+/* zero results still read like a console state, not a dead end: a key returns every filter home */
+.adm-users-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 22px 14px 18px;
+  border-radius: var(--radius-md);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  text-align: center;
+}
+.adm-users-empty[hidden] { display: none; }
+.adm-users-empty-i {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--clay-face);
+  color: var(--honey-ink);
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+}
+.adm-users-empty-i .ico { width: 20px; height: 20px; }
+.adm-users-empty-t {
+  margin: 0;
+  font-size: var(--t-2);
+  font-weight: 800;
+  color: var(--ink);
+}
+.adm-users-empty-s {
+  margin: 0;
+  max-width: 280px;
+  font-size: var(--t-micro);
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.adm-users-reset { margin-top: 4px; }
 .adm-user {
   border-radius: var(--radius-md);
   background: var(--clay-face);
@@ -14623,8 +14752,27 @@ html.reduced-motion .adm-mode-seg { transition: none; }
   flex-direction: column;
   gap: 2px;
 }
+.adm-user-nr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+.adm-user-fl {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+}
+.adm-user-fl .fp { --fp-d: 16px; }
+.adm-user-fl .fp-chip { border-radius: 50%; font-size: 6.5px; letter-spacing: 0; }
+.adm-user-fl-i { width: 15px; height: 15px; color: var(--honey); }
 .adm-user-n {
+  flex: 0 1 auto;
   display: block;
+  min-width: 0;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -14654,6 +14802,46 @@ html.reduced-motion .adm-mode-seg { transition: none; }
   font-weight: 700;
   color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
+}
+/* the activity audit: one dot and one relative stamp under the telemetry */
+.adm-user-act {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.adm-user-act > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.adm-user-act-dot {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #64748B;
+}
+.adm-user-act[data-tone="hot"],
+.adm-user-act[data-tone="live"] { color: var(--mint-ink); }
+.adm-user-act[data-tone="hot"] .adm-user-act-dot,
+.adm-user-act[data-tone="live"] .adm-user-act-dot {
+  background: var(--mint);
+  box-shadow: 0 0 6px rgba(16, 185, 129, .8);
+}
+.adm-user-act[data-tone="warm"] { color: var(--honey-ink); }
+.adm-user-act[data-tone="warm"] .adm-user-act-dot {
+  background: var(--honey);
+  box-shadow: 0 0 6px rgba(245, 158, 11, .72);
 }
 .adm-user-side {
   flex: none;

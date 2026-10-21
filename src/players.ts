@@ -21,6 +21,8 @@ export interface DirPlayer {
   name: string;
   username: string;
   country: string;
+  /** Player-declared age, or 0 when their profile has never set one. */
+  age: number;
   tiq: number;
   firstSeen: number;
   lastSeen: number;
@@ -42,11 +44,30 @@ export interface DirPlayer {
 /** The four directory views behind the filter chips. */
 export type DirFilter = 'all' | 'active' | 'tiq' | 'flagged';
 
+/** The demographic cohorts behind the Age picker. `age` 0 never matches a named band. */
+export type AgeBand = 'all' | 'u18' | '18-24' | '25-34' | '35p';
+
+/** How the directory orders the rows that survive its filters. */
+export type DirSort = 'default' | 'lastPlayed' | 'joined' | 'tiq';
+
 export interface DirQuery {
   q: string;
   filter: DirFilter;
+  /** ISO 3166-1 alpha-2, or '' for every country. */
+  country: string;
+  age: AgeBand;
+  sort: DirSort;
   offset: number;
   limit: number;
+}
+
+function inAgeBand(age: number, band: AgeBand): boolean {
+  if (band === 'all') return true;
+  if (!(age > 0)) return false;
+  if (band === 'u18') return age < 18;
+  if (band === '18-24') return age >= 18 && age <= 24;
+  if (band === '25-34') return age >= 25 && age <= 34;
+  return age >= 35;
 }
 
 export interface DirPage {
@@ -79,10 +100,11 @@ const LAST = [
 ] as const;
 
 const COUNTRY = [
-  'PL', 'NO', 'BG', 'KZ', 'GB', 'JP', 'IL', 'DE', 'BR', 'IN',
-  'NG', 'TR', 'FR', 'ES', 'IT', 'SE', 'NL', 'FI', 'UA', 'RO',
-  'PT', 'GR', 'EG', 'ZA', 'KE', 'MA', 'AE', 'SA', 'ID', 'PH',
-  'KR', 'VN', 'TH', 'AU', 'NZ', 'CA', 'US', 'MX', 'AR', 'CL',
+  'IR', 'PL', 'NO', 'BG', 'KZ', 'GB', 'JP', 'IL', 'DE', 'BR',
+  'IN', 'NG', 'TR', 'FR', 'ES', 'IT', 'SE', 'NL', 'FI', 'UA',
+  'RO', 'PT', 'GR', 'EG', 'ZA', 'KE', 'MA', 'AE', 'SA', 'ID',
+  'PH', 'KR', 'VN', 'TH', 'AU', 'NZ', 'CA', 'US', 'MX', 'AR',
+  'CL', 'PK', 'BD',
 ] as const;
 
 const SQUADS = [
@@ -113,6 +135,15 @@ function generate(now: number): DirPlayer[] {
     const last = rnd() < 0.45 ? ` ${pick(rnd, LAST)}` : '';
     const name = `${first}${last}`;
     const username = rnd() < 0.72 ? `${first.toLowerCase()}${last ? last.trim().replace('.', '').toLowerCase() : ''}${Math.floor(rnd() * 90) + 10}` : '';
+    /* the age mix a global board actually gets: a young tail, a 25–34 centre, older veterans */
+    const ageRoll = rnd();
+    const age = ageRoll < 0.13
+      ? 13 + Math.floor(rnd() * 5)
+      : ageRoll < 0.40
+        ? 18 + Math.floor(rnd() * 7)
+        : ageRoll < 0.77
+          ? 25 + Math.floor(rnd() * 10)
+          : 35 + Math.floor(rnd() * 24);
     const tiq = Math.round(130 + Math.pow(rnd(), 1.8) * 3320);
     const matches = Math.floor(Math.pow(rnd(), 1.4) * 420);
     const wins = Math.min(matches, Math.round(matches * (0.32 + rnd() * 0.44)));
@@ -126,6 +157,7 @@ function generate(now: number): DirPlayer[] {
       name,
       username,
       country: rnd() < 0.92 ? pick(rnd, COUNTRY) : '',
+      age,
       tiq,
       firstSeen: lastSeen - Math.floor(rnd() * 180 * 24 * 3600 * 1000),
       lastSeen,
@@ -162,6 +194,7 @@ function readRow(raw: unknown): DirPlayer | null {
     name: text(r.name, 40) || 'Player',
     username: text(r.username, 40),
     country: text(r.country, 2).toUpperCase(),
+    age: Math.min(120, whole(r.age)),
     tiq: whole(r.tiq),
     firstSeen: whole(r.firstSeen),
     lastSeen: whole(r.lastSeen),
@@ -181,11 +214,32 @@ function readRow(raw: unknown): DirPlayer | null {
   };
 }
 
+/**
+ * A deterministic age for a roster written before the demographic filter existed. Keeps the
+ * installed rows (and the moderation on them) instead of re-seeding the whole directory.
+ */
+function seededAge(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (Math.imul(h, 33) + id.charCodeAt(i)) >>> 0;
+  const r = h % 100;
+  if (r < 13) return 13 + (h % 5);
+  if (r < 40) return 18 + (h % 7);
+  if (r < 77) return 25 + (h % 10);
+  return 35 + (h % 25);
+}
+
 function load(): DirPlayer[] {
   const raw = readJson<{ v: number; players: unknown[] }>(KEY);
   if (raw && raw.v === V && Array.isArray(raw.players) && raw.players.length >= 100) {
     const rows = raw.players.map(readRow).filter((p): p is DirPlayer => p !== null);
-    if (rows.length >= 100) return rows;
+    if (rows.length >= 100) {
+      const hadNoAge = raw.players.some((r) => typeof (r as { age?: unknown } | null)?.age !== 'number');
+      if (hadNoAge) {
+        for (const p of rows) if (!p.age) p.age = seededAge(p.id);
+        writeJson(KEY, { v: V, players: rows });
+      }
+      return rows;
+    }
   }
   const fresh = generate(Date.now());
   writeJson(KEY, { v: V, players: fresh });
@@ -197,6 +251,14 @@ const store = load();
 /** The row behind an id, or null. The live seat reads its own ban state through this. */
 export function directoryPlayer(id: string): DirPlayer | null {
   return store.find((p) => p.id === id) ?? null;
+}
+
+/** The country codes the directory can honestly offer, with the operator's own profile folded in. */
+export function directoryCountries(): string[] {
+  const set = new Set<string>();
+  for (const p of store) if (/^[A-Z]{2}$/.test(p.country)) set.add(p.country);
+  if (profile.country && /^[A-Z]{2}$/i.test(profile.country)) set.add(profile.country.toUpperCase());
+  return [...set].sort();
 }
 
 /**
@@ -254,6 +316,11 @@ export function directoryPage(query: DirQuery, live: DirPlayer | null): DirPage 
   const rows = withLive(store, live);
   const tokens = query.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const now = Date.now();
+  const rawCountry = (query.country ?? '').trim().toUpperCase();
+  const country = /^[A-Z]{2}$/.test(rawCountry) ? rawCountry : '';
+  const age = query.age ?? 'all';
+  /* the Top TIQ chip is a sort shortcut, but an explicit pick from the Sort control wins */
+  const sort = query.filter === 'tiq' && query.sort === 'default' ? 'tiq' : (query.sort ?? 'default');
   let out = rows;
   if (tokens.length) {
     out = out.filter((p) => {
@@ -263,12 +330,16 @@ export function directoryPage(query: DirQuery, live: DirPlayer | null): DirPage 
   }
   if (query.filter === 'active') out = out.filter((p) => p.inMatch || now - p.lastSeen <= ACTIVE_MS);
   if (query.filter === 'flagged') out = out.filter((p) => p.banned || p.muted);
+  if (country) out = out.filter((p) => p.country === country);
+  if (age !== 'all') out = out.filter((p) => inAgeBand(p.age, age));
   const rank = [...out];
-  if (query.filter === 'flagged') rank.sort((a, b) => Number(b.banned) - Number(a.banned) || b.lastSeen - a.lastSeen);
-  else if (query.filter === 'tiq') rank.sort((a, b) => b.tiq - a.tiq || b.lastSeen - a.lastSeen);
+  if (sort === 'lastPlayed') rank.sort((a, b) => b.lastPlayed - a.lastPlayed || b.lastSeen - a.lastSeen);
+  else if (sort === 'joined') rank.sort((a, b) => b.firstSeen - a.firstSeen);
+  else if (sort === 'tiq') rank.sort((a, b) => b.tiq - a.tiq || b.lastSeen - a.lastSeen);
+  else if (query.filter === 'flagged') rank.sort((a, b) => Number(b.banned) - Number(a.banned) || b.lastSeen - a.lastSeen);
   else rank.sort((a, b) => Number(b.inMatch) - Number(a.inMatch) || b.lastSeen - a.lastSeen);
-  /* the operator's own seat leads the default view: it is the row they look for first */
-  if (query.filter === 'all') {
+  /* the operator's own seat leads the untouched default view: it is the row they look for first */
+  if (query.filter === 'all' && sort === 'default' && !country && age === 'all') {
     const me = rank.findIndex((p) => p.id === YOU_ID);
     if (me > 0) rank.unshift(rank.splice(me, 1)[0]);
   }
@@ -291,6 +362,7 @@ export function liveRow(face: { name: string; tiq: number; squad: string }): Dir
     name: face.name || 'You',
     username: '',
     country: profile.country ?? '',
+    age: profile.age ?? 0,
     tiq: face.tiq,
     firstSeen: stored?.firstSeen || now,
     lastSeen: now,

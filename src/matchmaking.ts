@@ -318,6 +318,7 @@ function socketParams(wide: boolean): string {
   params.set('tiq', String(tiq));
   params.set('tier', myTier());
   params.set('flag', profile.country ?? '');
+  params.set('age', String(profile.age ?? 0));
   params.set('name', readFace('Player').name);
   params.set('wide', wide ? '1' : '0');
   /* the board this search is for: the matchmaker only pairs two seats playing the same game */
