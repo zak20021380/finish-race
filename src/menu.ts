@@ -1726,7 +1726,11 @@ export function createMenu(api: MenuApi): Menu {
     if (!def || !sheet) return;
     badgeDraft = id;
     const crest = document.getElementById('badge-sheet-ico-wrap');
-    if (crest) crest.innerHTML = badgeCrestHtml(def);
+    if (crest) {
+      crest.dataset.badge = def.id;
+      crest.dataset.accent = def.accent;
+      crest.innerHTML = badgeCrestHtml(def);
+    }
     paintBadgeSheet(id);
     void refreshBadgeEditions();
     api.sheets.open(sheet);

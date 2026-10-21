@@ -26,6 +26,8 @@ import { cacheBadgeClaim, cacheBadgeSupply, profile, type EditionClaim, type Edi
 import { myTiq } from './matchmaking';
 import { workerUrl } from './adminApi';
 import { tgInitData, tgUser } from './telegram';
+import einsteinMedallion from './assets/images/einstein.png';
+import churchillMedallion from './assets/images/Futuristic Churchill Steel Medallion.png';
 import heisenbergMedallion from './assets/images/Heisenberg Chrome Medallion.png';
 
 export type BadgeAccent = 'titanium' | 'quantum' | 'frost';
@@ -64,6 +66,7 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
     lore: 'Never surrender. The wall is not a tactic; it is a promise.',
     criteria: 'Reach a 3-win streak. High-resilience runs and clutch comebacks forge the Bastion.',
     accent: 'titanium',
+    art: churchillMedallion,
     cap: 100,
   },
   {
@@ -76,6 +79,7 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
     lore: 'The board is not a race. It is a proof.',
     criteria: 'Bank 1,500 Tactical IQ. Pure calculation bends the board into a single answer.',
     accent: 'quantum',
+    art: einsteinMedallion,
     cap: 50,
   },
   {
@@ -105,7 +109,9 @@ export const badgeById = (id: string | null | undefined): BadgeDef | null =>
  */
 export function badgeCrestHtml(def: BadgeDef, className = 'badge-crest'): string {
   if (def.art) {
-    return `<img class="${className} badge-crest-art" src="${def.art}" alt="" aria-hidden="true" draggable="false" decoding="async" />`;
+    return `<img class="${className} badge-crest-art" src="${def.art}" alt="" aria-hidden="true" draggable="false" decoding="async"`
+      + ` data-badge="${def.id}" data-accent="${def.accent}" />`
+      + `<span class="medal-sheen" data-badge="${def.id}" style="--medal-mask:url('${def.art}')" aria-hidden="true"></span>`;
   }
   return `<svg class="${className}" viewBox="0 0 56 56" aria-hidden="true">`
     + `<use href="#i-crest-${def.accent}" /></svg>`;

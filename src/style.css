@@ -8992,6 +8992,8 @@ html.reduced-motion .ml-pulse::after { display: none; }
   --bd-accent: #22D3EE;
   --bd-metal: #A5F3FC;
   --bd-glow: rgba(6, 182, 212, .25);
+  --bd-halo: rgba(6, 182, 212, .40);
+  --bd-halo-strong: rgba(6, 182, 212, .58);
   --bd-coin: clamp(110px, 30vw, 120px);
   --bd-pedestal: calc(var(--bd-coin) + 26px);
 }
@@ -8999,11 +9001,15 @@ html.reduced-motion .ml-pulse::after { display: none; }
   --bd-accent: #FBBF24;
   --bd-metal: #FDE047;
   --bd-glow: rgba(245, 158, 11, .25);
+  --bd-halo: rgba(245, 158, 11, .35);
+  --bd-halo-strong: rgba(245, 158, 11, .55);
 }
 .badge-sheet[data-accent="frost"] {
   --bd-accent: #34D399;
   --bd-metal: #6EE7B7;
   --bd-glow: rgba(16, 185, 129, .25);
+  --bd-halo: rgba(16, 185, 129, .35);
+  --bd-halo-strong: rgba(16, 185, 129, .55);
 }
 .bd-x {
   position: absolute;
@@ -9090,7 +9096,26 @@ html.reduced-motion .ml-pulse::after { display: none; }
   height: var(--bd-coin);
   display: block;
   filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .55)) drop-shadow(0 0 14px var(--bd-glow));
+  transition: transform var(--motion-fast), filter var(--motion-fast);
 }
+/* the pedestal's own ambient halo: the medallion's metal, breathing on its rim */
+.badge-ico-lg::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  box-shadow: 0 0 24px var(--bd-halo);
+  pointer-events: none;
+  animation: bd-medal-halo 5.6s ease-in-out infinite;
+}
+@keyframes bd-medal-halo {
+  0%, 100% { box-shadow: 0 0 24px var(--bd-halo); }
+  50%      { box-shadow: 0 0 32px var(--bd-halo-strong); }
+}
+.badge-ico-lg:hover .badge-crest,
+.badge-ico-lg:active .badge-crest { transform: scale(1.05); }
+.badge-ico-lg:hover::after,
+.badge-ico-lg:active::after { animation-duration: 1.6s; }
 @keyframes bd-medallion-float {
   from { transform: translate3d(0, 1px, 0); }
   to { transform: translate3d(0, -4px, 0); }
@@ -18608,15 +18633,118 @@ html.reduced-motion .announce-cta { transition: none; }
   color: #94A3B8;
 }
 
-/* rendered medallion art is a coin on a transparent canvas: cover + a 50% clip
-   strips the anti-aliased fringe and keeps the chrome rim dead-centre */
+/* rendered medallion art is a coin on a transparent canvas: contain keeps the
+   full silhouette and native aspect at every size, and the pre-matted alpha
+   edge means no circular clip (which used to shave the top hardware boss) */
 .badge-crest-art {
-  border-radius: 50%;
-  object-fit: cover;
+  object-fit: contain;
   object-position: center;
-  clip-path: circle(50% at 50% 50%);
   -webkit-user-select: none;
   user-select: none;
+}
+
+/* ---- Genius medallion finish: one alpha-true shine overlay shared by the
+   profile shelf and the detail sheet. The halo is the honor's own metal, the
+   ::before is the metallic sweep, and each badge gets one signature motion. ---- */
+.medal-sheen { display: none; }
+
+#s-profile .badge-slot-crest .medal-sheen,
+.badge-ico-lg .medal-sheen {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: block;
+  border-radius: 50%;
+  overflow: hidden;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  -webkit-mask-image: var(--medal-mask);
+  mask-image: var(--medal-mask);
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+.badge-ico-lg .medal-sheen {
+  width: var(--bd-coin);
+  height: var(--bd-coin);
+  margin: auto;
+  transition: transform var(--motion-fast);
+}
+.badge-ico-lg:hover .medal-sheen,
+.badge-ico-lg:active .medal-sheen { transform: scale(1.05); }
+
+#s-profile .medal-sheen::before,
+.badge-ico-lg .medal-sheen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(115deg,
+    rgba(255, 255, 255, 0) 34%,
+    rgba(255, 255, 255, .45) 47%,
+    rgba(255, 255, 255, .12) 53%,
+    rgba(255, 255, 255, 0) 66%);
+  background-size: 280% 100%;
+  background-position: 160% 0;
+  opacity: 0;
+}
+
+@keyframes sheen {
+  0%   { background-position: 160% 0; opacity: 0; }
+  12%  { opacity: .9; }
+  70%  { opacity: .78; }
+  100% { background-position: -60% 0; opacity: 0; }
+}
+
+/* Einstein: a warm gleam orbiting the metallic relief */
+.medal-sheen[data-badge="einstein_singularity"]::after {
+  content: "";
+  position: absolute;
+  inset: -22%;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg,
+    rgba(255, 220, 130, 0) 0deg 264deg,
+    rgba(255, 220, 130, .38) 288deg,
+    rgba(255, 246, 218, .66) 300deg,
+    rgba(255, 220, 130, .18) 314deg,
+    rgba(255, 220, 130, 0) 334deg 360deg);
+  opacity: .8;
+  animation: medal-gleam-orbit 9s linear infinite;
+}
+
+/* Churchill: a cold, high-contrast reflection turning on the titanium rim */
+.medal-sheen[data-badge="churchill_bastion"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 210deg,
+    rgba(236, 254, 255, .9) 0deg,
+    rgba(236, 254, 255, 0) 44deg 150deg,
+    rgba(34, 211, 238, .66) 196deg,
+    rgba(34, 211, 238, 0) 230deg 296deg,
+    rgba(255, 255, 255, .74) 322deg,
+    rgba(255, 255, 255, 0) 350deg 360deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
+  opacity: .92;
+  animation: medal-edge-turn 13s linear infinite;
+}
+
+@keyframes medal-gleam-orbit { to { transform: rotate(1turn); } }
+@keyframes medal-edge-turn { to { transform: rotate(-1turn); } }
+
+#s-profile .badge-slot.is-locked .medal-sheen { display: none; }
+
+#s-profile .badge-slot.is-unlocked:hover .medal-sheen::before,
+#s-profile .badge-slot.is-unlocked:focus-visible .medal-sheen::before,
+#s-profile .badge-slot.is-unlocked:active .medal-sheen::before,
+.badge-ico-lg:hover .medal-sheen::before,
+.badge-ico-lg:active .medal-sheen::before {
+  animation: sheen 1.15s ease-in-out infinite;
 }
 
 /* the equipped seal beside the player's name wears the same crest */
@@ -19768,8 +19896,23 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
 #s-profile .badge-slot[data-accent="quantum"]  { --badge-aura: 245, 158, 11; --badge-ink: #FDE047; }
 #s-profile .badge-slot[data-accent="frost"]    { --badge-aura: 16, 185, 129; --badge-ink: #6EE7B7; }
 
+/* each honor's own metal, at the exact ambient glow its medallion carries */
+#s-profile .badge-slot[data-badge="churchill_bastion"] {
+  --medal-halo: rgba(6, 182, 212, .40);
+  --medal-halo-strong: rgba(6, 182, 212, .58);
+}
+#s-profile .badge-slot[data-badge="einstein_singularity"] {
+  --medal-halo: rgba(245, 158, 11, .35);
+  --medal-halo-strong: rgba(245, 158, 11, .55);
+}
+#s-profile .badge-slot[data-badge="heisenberg_formula"] {
+  --medal-halo: rgba(16, 185, 129, .35);
+  --medal-halo-strong: rgba(16, 185, 129, .55);
+}
+
 #s-profile .badge-slot:hover:not(:active) { transform: translateY(-2px); }
-#s-profile .badge-slot:active { transform: scale(.96); }
+#s-profile .badge-slot.is-unlocked:active { transform: translateY(0) scale(1); }
+#s-profile .badge-slot.is-locked:active { transform: scale(.96); }
 #s-profile .badge-slot:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
 /* equipped: a hairline metal rim and one inner shadow — no neon cage */
@@ -19787,6 +19930,7 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
     inset 0 0 16px -8px rgba(var(--badge-aura), .3);
 }
 #s-profile .badge-slot.is-equipped:active { transform: translateY(0) scale(.96); }
+#s-profile .badge-slot.is-unlocked.is-equipped:active { transform: translateY(0) scale(1); }
 #s-profile .badge-slot.is-equipped:hover:not(:active) { transform: translateY(-2px); }
 
 /* locked: dark matte clay — dimmed, but the serial counter stays legible */
@@ -19814,6 +19958,16 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
   height: 48px;
   display: grid;
   place-items: center;
+  border-radius: 50%;
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+#s-profile .badge-slot.is-unlocked .badge-slot-crest {
+  box-shadow: 0 0 24px var(--medal-halo);
+  animation: medal-halo 5.6s ease-in-out infinite;
+}
+@keyframes medal-halo {
+  0%, 100% { box-shadow: 0 0 24px var(--medal-halo); }
+  50%      { box-shadow: 0 0 30px var(--medal-halo-strong); }
 }
 #s-profile .badge-slot-crest .badge-crest {
   width: 48px;
@@ -19822,8 +19976,17 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
   filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .6));
   transition: transform var(--motion-fast), filter var(--motion-fast);
 }
+#s-profile .badge-slot.is-unlocked:hover:not(:active) .badge-slot-crest,
+#s-profile .badge-slot.is-unlocked:focus-visible .badge-slot-crest,
+#s-profile .badge-slot.is-unlocked:active .badge-slot-crest {
+  transform: scale(1.05);
+}
+#s-profile .badge-slot.is-unlocked:hover .badge-slot-crest,
+#s-profile .badge-slot.is-unlocked:focus-visible .badge-slot-crest,
+#s-profile .badge-slot.is-unlocked:active .badge-slot-crest {
+  animation-duration: 1.6s;
+}
 #s-profile .badge-slot.is-unlocked:hover:not(:active) .badge-slot-crest .badge-crest {
-  transform: translateY(-1px) scale(1.03);
   filter: drop-shadow(0 0 8px rgba(var(--badge-aura), .5)) drop-shadow(0 3px 4px rgba(0, 0, 0, .6));
 }
 #s-profile .badge-slot.is-equipped .badge-slot-crest .badge-crest {
@@ -20120,10 +20283,16 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
 }
 
 html.reduced-motion #s-profile .badge-slot,
+html.reduced-motion #s-profile .badge-slot-crest,
 html.reduced-motion #s-profile .badge-slot-crest .badge-crest,
 html.reduced-motion #s-profile .pf-equipped-badge,
 html.reduced-motion #s-profile .pf-badge-note,
 html.reduced-motion #s-profile .pf-badge-note::before { transition: none; }
+html.reduced-motion #s-profile .badge-slot-crest,
+html.reduced-motion .badge-ico-lg::after,
+html.reduced-motion .badge-ico-lg .badge-crest,
+html.reduced-motion .medal-sheen::before,
+html.reduced-motion .medal-sheen::after { animation: none; }
 html.reduced-motion #s-profile .badge-slot.is-spotlit::after { animation: none; opacity: 1; }
 html.reduced-motion #s-profile .badge-slot.is-minting .badge-slot-serial,
 html.reduced-motion .badge-card.is-minting .badge-card-ser,
