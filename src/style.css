@@ -2524,10 +2524,9 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
 .lb-row:active { transform: translateY(2px); }
 .lb-row:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
 .lb-row.is-you { border-color: rgba(125, 211, 252, .4); }
-/* Every ladder row is a control now: it opens its own inspection read.
+/* Every ladder row is a control now: it opens the mind profile or nation roster.
    56px is the spec band, and it clears the house 48px target with room to spare. */
 .lb-row { cursor: pointer; min-height: 56px; }
-.lb-row.is-open { border-color: rgba(125, 211, 252, .34); }
 
 /* Col 1 — rank: an extruded clay key. Deliberately NOT a metal — the podium above
    owns gold/silver/bronze, so #4 down read as prestige by shape and lift, not by
@@ -2607,6 +2606,8 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
 }
 .lb-serial { margin-right: 1px; }
 .lb-sub-t { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* nation rows print a real head-count in the brief's muted slate */
+.lb-sub.nd-count { color: #94A3B8; }
 .lb-kind { flex: none; width: 11px; height: 11px; opacity: .55; }
 /* Country identity: a photo flag on a three-tier cascade — circle-flags SVG, then
    flagcdn PNG, then the clay ISO chip. The chip sits underneath from the first
@@ -2751,38 +2752,6 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
 .lb-btn:active { transform: translateY(var(--press-y)); --d: 0px; }
 .lb-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .rank-row.is-you .lb-name { color: var(--brand-ink); }
-/* ---- inspection read: a second grid row inside the same clay card ----
-   It spans every column, so the four fixed columns keep their x-positions and the
-   facts simply appear underneath them. Nothing here is a placeholder: each fact is
-   computed from the row's own numbers. */
-.lb-peek {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px 12px;
-  padding-top: 8px;
-  margin-top: 8px;
-  border-top: 1px solid var(--sep);
-}
-.lb-peek[hidden] { display: none; }
-.lb-fact { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.lb-fact small {
-  font-size: 8.5px;
-  font-weight: 800;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  line-height: 1.2;
-  color: var(--ink-soft);
-  white-space: nowrap;
-}
-.lb-fact b {
-  font-size: var(--t-3);
-  font-weight: 900;
-  line-height: 1.2;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
 /* short phones keep the cup CTA and squad rows on their targets */
 @media (max-height: 700px) {
   .lb-row { padding-top: 8px; padding-bottom: 8px; }
@@ -5047,6 +5016,10 @@ html.reduced-motion .car-card.nations-cup::before { display: none; }
    forward, which would drop silver and bronze onto a second row. Pin the row. */
 .pod-card { grid-row: 1; }
 .pod-card.is-tappable { cursor: pointer; }
+/* a pillar that opens the nation roster answers the pointer before the press */
+@media (hover: hover) {
+  .pod-card.is-tappable:hover { transform: translateY(-2px) scale(1.012); filter: brightness(1.05); }
+}
 /* micro-press: sink *and* squeeze, so a card reads as soft clay under the thumb */
 .pod-card:active { transform: translateY(2px) scale(.972); filter: brightness(1.07); }
 .pod-card:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
@@ -21884,4 +21857,564 @@ html.reduced-motion #s-profile .pf-badge-sync-dot { animation: none; opacity: 1;
   outline: 3px solid var(--brand-2);
   outline-offset: -2px;
   border-radius: 14px;
+}
+
+/* ==========================================================================
+   NATION PRESTIGE ROSTER — the Nations IQ drill-down (2026-10-21).
+   Every country row and podium pillar opens #sheet-nation-detail: a frosted
+   Dark-Clay panel whose minted flag medallion takes its aura from the standing
+   (#1 gold, #2 silver, #3 bronze, the rest cobalt), then lists that nation's
+   top players. The list is sliced to the same 20-50 head-count the row prints,
+   so the sheet can never promise more players than the ladder named.
+   ========================================================================== */
+
+/* ---- the sheet: 20px corners, one razor rim, frosted over the scrim ---- */
+.sheet.nation-sheet {
+  --nd-aura: rgba(56, 189, 248, .44);
+  --nd-glow: rgba(14, 165, 233, .3);
+  --nd-ring: rgba(56, 189, 248, .62);
+  --nd-metal-hi: #E0F2FE;
+  --nd-metal: #38BDF8;
+  --nd-metal-lo: #0369A1;
+  --nd-deep: #082F49;
+  gap: var(--s2);
+  max-height: 85vh;
+  max-height: 85dvh;
+  padding-top: var(--s3);
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-bottom: 0;
+  border-radius: 20px 20px 0 0;
+  background: rgba(13, 19, 31, .95);
+  -webkit-backdrop-filter: blur(16px) saturate(1.05);
+  backdrop-filter: blur(16px) saturate(1.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    0 -24px 54px -22px rgba(0, 0, 0, .9);
+  overflow: hidden;
+}
+.nation-sheet[data-aura="gold"] {
+  --nd-aura: rgba(245, 158, 11, .48);
+  --nd-glow: rgba(245, 158, 11, .32);
+  --nd-ring: rgba(251, 191, 36, .72);
+  --nd-metal-hi: #FEF3C7;
+  --nd-metal: #FBBF24;
+  --nd-metal-lo: #B45309;
+  --nd-deep: #3B1D06;
+}
+.nation-sheet[data-aura="silver"] {
+  --nd-aura: rgba(203, 213, 225, .36);
+  --nd-glow: rgba(148, 163, 184, .28);
+  --nd-ring: rgba(226, 232, 240, .66);
+  --nd-metal-hi: #F8FAFC;
+  --nd-metal: #CBD5E1;
+  --nd-metal-lo: #64748B;
+  --nd-deep: #1E293B;
+}
+.nation-sheet[data-aura="bronze"] {
+  --nd-aura: rgba(217, 119, 6, .42);
+  --nd-glow: rgba(217, 119, 6, .3);
+  --nd-ring: rgba(253, 186, 116, .64);
+  --nd-metal-hi: #FFEDD5;
+  --nd-metal: #FDBA74;
+  --nd-metal-lo: #C2410C;
+  --nd-deep: #431407;
+}
+
+/* ---- fixed header: rank key, identity, 48px dismiss ---- */
+.nd-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  touch-action: none;            /* the header is the swipe-down handle */
+  cursor: grab;
+}
+.nd-rank {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 42px;
+  height: 34px;
+  padding: 0 7px;
+  border: 1px solid var(--nd-ring);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(180deg, #222E44 0%, var(--nd-deep) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .3),
+    0 2px 0 rgba(5, 9, 15, .9),
+    0 0 18px -7px var(--nd-aura);
+  color: var(--nd-metal-hi);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: -.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .55);
+}
+.nd-head-id {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nd-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -.015em;
+  line-height: 1.15;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nd-kicker {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: var(--nd-metal-hi);
+  text-shadow: 0 0 10px var(--nd-aura);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nd-x { margin-left: auto; }
+
+/* ---- scrolling body ---- */
+.sheet-body.nd-body { gap: 14px; padding-right: 2px; }
+
+/* ---- hero: a flag minted inside a bevelled ring, floating on a glass rim ---- */
+.nd-hero {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 0 2px;
+}
+.nd-aura {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 230px;
+  height: 158px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side at 50% 46%, var(--nd-glow) 0%, rgba(0, 0, 0, 0) 74%);
+  filter: blur(10px);
+  transform: translateX(-50%);
+  animation: nd-breathe 5.2s ease-in-out infinite;
+  pointer-events: none;
+}
+.nd-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 118px;
+  height: 118px;
+  animation: nd-float 6.4s ease-in-out infinite alternate;
+}
+.nd-coin {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  border-radius: 50%;
+  background:
+    radial-gradient(58% 58% at 32% 24%, rgba(255, 255, 255, .55) 0%, rgba(255, 255, 255, 0) 54%),
+    conic-gradient(from 205deg,
+      var(--nd-deep) 0deg,
+      var(--nd-metal-lo) 26deg,
+      var(--nd-metal) 74deg,
+      var(--nd-metal-hi) 112deg,
+      var(--nd-metal) 150deg,
+      var(--nd-metal-lo) 196deg,
+      var(--nd-deep) 232deg,
+      var(--nd-metal-lo) 274deg,
+      var(--nd-metal-hi) 314deg,
+      var(--nd-metal) 344deg,
+      var(--nd-deep) 360deg);
+  box-shadow:
+    0 7px 0 var(--nd-deep),
+    0 16px 28px -10px rgba(0, 0, 0, .82),
+    0 0 32px -2px var(--nd-aura),
+    inset 0 1px 1px rgba(255, 255, 255, .55),
+    inset 0 -2px 3px rgba(0, 0, 0, .5),
+    0 0 0 1px rgba(0, 0, 0, .55);
+}
+/* the recessed groove between the metal ring and the flag well */
+.nd-coin::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: 7px;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .72),
+    inset 0 -1px 1px rgba(255, 255, 255, .3),
+    0 1px 0 rgba(255, 255, 255, .24);
+  pointer-events: none;
+}
+.nd-coin-face {
+  position: absolute;
+  inset: 12px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #0B1019;
+  box-shadow:
+    inset 0 0 0 2px rgba(0, 0, 0, .62),
+    inset 0 3px 9px rgba(0, 0, 0, .72);
+}
+.nd-coin-face .fp { width: 100%; height: 100%; }
+.nd-coin-face .fp-img { box-shadow: none; }
+.nd-coin-face .fp-chip { border-radius: 50%; font-size: 18px; }
+.nd-gleam {
+  position: absolute;
+  z-index: 1;
+  inset: 12px;
+  border-radius: 50%;
+  overflow: hidden;
+  pointer-events: none;
+}
+.nd-gleam::before {
+  content: "";
+  position: absolute;
+  top: -30%;
+  bottom: -30%;
+  left: -70%;
+  width: 46%;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, .52) 48%, rgba(255, 255, 255, 0) 100%);
+  transform: rotate(18deg);
+  animation: nd-sheen 4.8s ease-in-out infinite;
+}
+.nd-pedestal {
+  width: 146px;
+  height: 14px;
+  margin-top: -12px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, .04) 48%, rgba(0, 0, 0, .4) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .26),
+    0 12px 20px -12px var(--nd-aura);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+@keyframes nd-sheen {
+  0%, 58% { transform: translate3d(0, 0, 0) rotate(18deg); }
+  100% { transform: translate3d(300%, 0, 0) rotate(18deg); }
+}
+@keyframes nd-float {
+  from { transform: translate3d(0, 1px, 0); }
+  to { transform: translate3d(0, -4px, 0); }
+}
+@keyframes nd-breathe {
+  0%, 100% { opacity: .75; transform: translateX(-50%) scale(.96); }
+  50% { opacity: 1; transform: translateX(-50%) scale(1.05); }
+}
+
+/* ---- the counter pill: nation TIQ · active players ---- */
+.nd-totals {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .045);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    0 8px 18px -12px rgba(0, 0, 0, .8);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.nd-total { display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; }
+.nd-total b { font-size: 14px; font-weight: 900; line-height: 1; color: var(--ink); }
+.nd-total small {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  line-height: 1;
+  color: #94A3B8;
+}
+.nd-total.is-tiq b { color: var(--tiq); }
+.nd-total-ico { flex: none; align-self: center; width: 13px; height: 13px; color: var(--nd-metal-hi); }
+.nd-total-tiq { color: var(--tiq); filter: drop-shadow(0 0 4px rgba(245, 158, 11, .55)); }
+.nd-split { width: 1px; height: 14px; background: rgba(255, 255, 255, .14); }
+.nd-caption {
+  margin: 0;
+  text-align: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: #94A3B8;
+}
+
+/* ---- roster ---- */
+.nd-roster { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.nd-rhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+}
+.nd-rh {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: #CBD5E1;
+}
+.nd-rh-count { flex: none; font-size: 10px; font-weight: 800; color: #94A3B8; font-variant-numeric: tabular-nums; }
+.nd-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.nd-row {
+  display: grid;
+  grid-template-columns: 30px 34px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  min-height: 48px;
+  min-width: 0;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 255, 255, .06);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .045) 0%, rgba(255, 255, 255, 0) 48%),
+    #1C2433;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    inset 0 -1px 0 rgba(0, 0, 0, .3),
+    0 1px 0 #0A0F1A;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.nd-row.is-you {
+  border-color: rgba(56, 189, 248, .45);
+  background:
+    linear-gradient(180deg, rgba(56, 189, 248, .14) 0%, rgba(56, 189, 248, .03) 62%),
+    #172131;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 -1px 0 rgba(0, 0, 0, .32),
+    0 0 18px -10px rgba(56, 189, 248, .85);
+}
+.nd-row.is-skel { grid-template-columns: 30px minmax(0, 1fr) 60px; }
+.nd-row.is-skel .skel { height: 12px; border-radius: 6px; }
+.nd-rk {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #28334C 0%, #1A2233 100%);
+  box-shadow:
+    0 2px 0 #0A0F1A,
+    inset 0 1px 0 rgba(255, 255, 255, .15),
+    inset 0 0 0 1px rgba(255, 255, 255, .05);
+  color: #CBD5E1;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+.nd-rk.t1 {
+  background: linear-gradient(180deg, #4A3A15 0%, #2A2312 56%, #171510 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(251, 191, 36, .7),
+    inset 0 0 0 1px rgba(245, 158, 11, .45),
+    0 2px 0 #0A0F1A,
+    0 0 12px -4px rgba(245, 158, 11, .8);
+  color: #FCD34D;
+  text-shadow: 0 0 8px rgba(245, 158, 11, .6);
+}
+.nd-rk.t2 {
+  background: linear-gradient(180deg, #3B4658 0%, #222A38 56%, #121721 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(248, 250, 252, .6),
+    inset 0 0 0 1px rgba(203, 213, 225, .4),
+    0 2px 0 #0A0F1A,
+    0 0 12px -4px rgba(203, 213, 225, .6);
+  color: #F1F5F9;
+}
+.nd-rk.t3 {
+  background: linear-gradient(180deg, #4A2A15 0%, #2C1810 56%, #180D08 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(253, 186, 116, .62),
+    inset 0 0 0 1px rgba(217, 119, 6, .42),
+    0 2px 0 #0A0F1A,
+    0 0 12px -4px rgba(217, 119, 6, .65);
+  color: #FDBA74;
+}
+.nd-avwrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+}
+.nd-av {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background:
+    radial-gradient(70% 70% at 32% 24%, rgba(255, 255, 255, .22), rgba(255, 255, 255, 0) 58%),
+    linear-gradient(180deg, hsl(var(--nd-hue, 198) 42% 30%) 0%, hsl(var(--nd-hue, 198) 48% 15%) 100%);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(148, 163, 184, .38),
+    inset 0 1px 1px rgba(255, 255, 255, .16),
+    0 2px 0 #0A0F1A;
+  color: #F8FAFC;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .02em;
+  line-height: 1;
+}
+.nd-medal { width: 18px; height: 18px; right: -4px; bottom: -4px; }
+.nd-medal .medal-coin,
+.nd-medal .medal-coin.badge-crest-art { width: 15px; height: 15px; }
+.nd-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nd-nm { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.nd-pname {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  line-height: 1.2;
+}
+.nd-you-tag {
+  flex: none;
+  height: 14px;
+  padding: 0 5px;
+  border-radius: 5px;
+  background: rgba(56, 189, 248, .16);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .35);
+  color: #BAE6FD;
+  font-size: 7.5px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  line-height: 14px;
+}
+.nd-sub {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--ml-mono, ui-monospace, Menlo, Consolas, monospace);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  line-height: 1.2;
+  color: #94A3B8;
+}
+.nd-score {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--tiq);
+  font-weight: 900;
+}
+.nd-score b {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.nd-score-ico { flex: none; width: 13px; height: 13px; color: var(--honey); filter: drop-shadow(0 0 4px rgba(245, 158, 11, .6)); }
+
+/* ---- your standing card, pinned above the roster ---- */
+.nd-you {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 9px;
+  min-height: 54px;
+  padding: 7px 10px;
+  border: 1px solid rgba(56, 189, 248, .4);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(56, 189, 248, .14) 0%, rgba(56, 189, 248, .02) 72%),
+    #172131;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    0 8px 20px -14px rgba(56, 189, 248, .8);
+}
+.nd-you-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nd-you-k {
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #7DD3FC;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nd-you-line {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nd-you-score b { color: var(--tiq); }
+
+.nd-empty {
+  display: grid;
+  place-items: center;
+  min-height: 96px;
+  padding: 16px;
+  border: 1px dashed rgba(255, 255, 255, .12);
+  border-radius: 12px;
+  text-align: center;
+  color: #94A3B8;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ---- 320px: shrink the medal and the fixed columns, never the name ---- */
+@media (max-width: 359px) {
+  .nd-head { gap: 8px; }
+  .nd-rank { min-width: 38px; height: 32px; font-size: 12px; }
+  .nd-title { font-size: 16px; }
+  .nd-mark { width: 100px; height: 100px; }
+  .nd-coin-face, .nd-gleam { inset: 10px; }
+  .nd-pedestal { width: 126px; }
+  .nd-totals { gap: 7px; padding: 0 10px; }
+  .nd-row { grid-template-columns: 28px 32px minmax(0, 1fr) auto; column-gap: 6px; padding: 5px 7px; }
+  .nd-rk { width: 28px; height: 28px; border-radius: 8px; font-size: 11px; }
+  .nd-avwrap, .nd-av { width: 32px; height: 32px; }
+  .nd-you { grid-template-columns: 32px minmax(0, 1fr) auto; column-gap: 7px; }
+  .nd-pname { font-size: 12.5px; }
+}
+
+html.reduced-motion .nd-mark,
+html.reduced-motion .nd-aura,
+html.reduced-motion .nd-gleam::before { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .nd-mark, .nd-aura, .nd-gleam::before { animation: none; }
 }

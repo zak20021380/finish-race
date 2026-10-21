@@ -37,8 +37,10 @@
  *     shape — node or copy — between the strip and the ladder,
  *   - the podium and the You card cannot both fit a 360x640 screen without
  *     clipping (page scrollbar or cut edges),
- *   - the Nations IQ ticker or a country row's AVG metric comes back, or the
- *     mind sheet regresses.
+ *   - the Nations IQ ticker or a country row's AVG metric comes back, a country
+ *     row loses its player count, a podium pillar is not tappable, or the nation
+ *     drill-down loses its medallion, its 20-50 player roster or Your standing,
+ *     or the mind sheet regresses.
  * Screenshots land in .shots/ranks-*.png on success.
  */
 import http from 'node:http';
@@ -616,14 +618,98 @@ const PROBE_NATIONS = () => {
   }
   for (const r of rows) {
     const sub = r.querySelector('.lb-sub-t')?.textContent ?? '';
-    if (!/^\d[\d,.]*\s*minds$/i.test(sub)) bad(`country row #${r.dataset.rank} lost its minds count ("${sub}")`);
+    if (!/^\d[\d,.]*\s*players?$/i.test(sub)) bad(`country row #${r.dataset.rank} lost its player count ("${sub}")`);
     if (r.querySelector('.lb-avg')) bad(`country row #${r.dataset.rank} still carries an AVG line`);
+    if (!r.getAttribute('aria-label')?.includes('nation roster')) bad(`country row #${r.dataset.rank} does not announce the nation roster`);
+  }
+  const pods = [...document.querySelectorAll('#ranks-podium .pod-card')];
+  if (pods.length !== 3) bad(`nation podium has ${pods.length} cards — want 3`);
+  for (const p of pods) {
+    if (!p.classList.contains('is-tappable')) bad(`podium #${p.dataset.rank} is not tappable`);
+    if (!p.hasAttribute('tabindex')) bad(`podium #${p.dataset.rank} is not keyboard reachable`);
   }
 
   if (document.scrollingElement.scrollWidth > window.innerWidth + 1) bad('page scrolls horizontally on Nations IQ');
   if (document.scrollingElement.scrollHeight > window.innerHeight + 1) bad('page scrolls vertically on Nations IQ');
   const sc = document.getElementById('ranks-scroll');
   if (sc && sc.scrollWidth > sc.clientWidth + 1) bad(`#ranks-scroll overflows on Nations IQ: ${sc.scrollWidth} > ${sc.clientWidth}`);
+  return out;
+};
+
+/* Nation sheet probe: the drilled-down country, its minted medallion and the
+   full national roster. The list must stay inside the sheet at every width and
+   must never claim a head-count outside the 20-50 band the data layer slices. */
+const PROBE_NATION_SHEET = (wantAura) => {
+  const out = { pass: true, fails: [], state: {} };
+  const bad = (m) => { out.pass = false; out.fails.push(m); };
+  const sheet = document.getElementById('sheet-nation-detail');
+  if (!sheet || sheet.hidden || sheet.getBoundingClientRect().height === 0) {
+    bad('nation sheet is not open');
+    return out;
+  }
+  const body = document.getElementById('nd-body');
+  const head = document.getElementById('nd-head');
+  if (!body) {
+    bad('nation sheet body is missing');
+    return out;
+  }
+  const rows = [...body.querySelectorAll('.nd-list .nd-row:not(.is-skel)')];
+  out.state = {
+    aura: sheet.dataset.aura ?? '',
+    rows: rows.length,
+    name: document.getElementById('nd-name')?.textContent?.trim() ?? '',
+    kicker: document.getElementById('nd-kicker')?.textContent?.trim() ?? '',
+    totals: body.querySelector('.nd-totals')?.textContent?.trim() ?? '',
+    you: !!body.querySelector('.nd-you'),
+  };
+
+  if (!wantAura || out.state.aura !== wantAura) bad(`nation aura is "${out.state.aura}" — want "${wantAura}"`);
+  if (!out.state.name) bad('nation sheet has no country name');
+  if (!/^#\d+\s+worldwide$/i.test(out.state.kicker)) bad(`nation kicker is "${out.state.kicker}" — want "#N worldwide"`);
+  if (!/\d[\d,]*\s*TIQ/i.test(out.state.totals)) bad(`nation totals lost the TIQ counter ("${out.state.totals}")`);
+  if (!/\d[\d,]*\s*Players/i.test(out.state.totals)) bad(`nation totals lost the player counter ("${out.state.totals}")`);
+  if (!body.querySelector('.nd-coin .nd-coin-face .fp-img, .nd-coin .nd-coin-face .fp-chip')) {
+    bad('nation medallion has no flag');
+  }
+  if (rows.length < 20 || rows.length > 50) bad(`nation roster has ${rows.length} rows — want 20-50`);
+  for (const r of rows) {
+    const h = r.getBoundingClientRect().height;
+    if (h < 46) bad(`roster row #${r.dataset.rank} is ${h.toFixed(1)}px tall — want >= 48 (46 tolerance)`);
+    if (!/\d[\d,]*/.test(r.querySelector('.nd-score b')?.textContent ?? '')) bad(`roster row #${r.dataset.rank} lost its TIQ`);
+    if (!r.getAttribute('aria-label')?.includes('Tactical IQ')) bad(`roster row #${r.dataset.rank} lost its accessible score`);
+  }
+  if (!body.querySelector('.nd-rk.t1') || !body.querySelector('.nd-rk.t2') || !body.querySelector('.nd-rk.t3')) {
+    bad('roster top three lost their metal micro-badges');
+  }
+  if (out.state.you) {
+    const own = body.querySelector('.nd-row.is-you');
+    if (!own) bad('Your standing card is present but the player row is not highlighted');
+    if (!body.querySelector('.nd-you .nd-score b')) bad('Your standing card lost its TIQ');
+  }
+  /* every row the sheet promises is reachable: the body owns the gesture */
+  if (rows.length > 6) {
+    if (body.scrollHeight <= body.clientHeight + 1) bad('nation roster is taller than the sheet but the body does not scroll');
+    body.scrollTop = body.scrollHeight;
+    const last = rows[rows.length - 1].getBoundingClientRect();
+    const bb = body.getBoundingClientRect();
+    if (last.bottom > bb.bottom + 1) bad('last roster row is not reachable by scrolling');
+    body.scrollTop = 0;
+  }
+  if (sheet.scrollWidth > sheet.clientWidth + 1) bad(`nation sheet overflows horizontally: ${sheet.scrollWidth} > ${sheet.clientWidth}`);
+  if (body.scrollWidth > body.clientWidth + 1) bad(`nation body overflows horizontally: ${body.scrollWidth} > ${body.clientWidth}`);
+  if (document.scrollingElement.scrollWidth > window.innerWidth + 1) bad('page scrolls horizontally with the nation sheet open');
+  if (document.scrollingElement.scrollHeight > window.innerHeight + 1) bad('page scrolls vertically with the nation sheet open');
+  const close = sheet.querySelector('[data-sheet-close]');
+  if (!close) bad('nation sheet has no close key');
+  else {
+    const cr = close.getBoundingClientRect();
+    if (cr.width < 47.5 || cr.height < 47.5) bad(`nation close key is ${cr.width.toFixed(0)}x${cr.height.toFixed(0)} — want 48x48`);
+  }
+  const hr = head?.getBoundingClientRect();
+  if (!hr || hr.height < 44) bad(`nation header is ${hr?.height?.toFixed(0) ?? 'missing'}px tall`);
+  const firstTop = rows[0]?.getBoundingClientRect().top ?? 0;
+  if (hr && firstTop && firstTop < hr.bottom - 1) bad('nation roster overlaps the fixed header');
+  out.pass = out.pass && out.fails.length === 0;
   return out;
 };
 
@@ -786,6 +872,75 @@ try {
     if (germany.rank === '#4' && germany.name === 'Germany' && germany.score === '9,920'
       && /your nation/i.test(germany.tag) && !germany.sheet && germany.avatar) pass(`${tag} nations-pick-live`);
     else fail(`${tag} nations-pick-live`, `rank ${germany.rank}, name "${germany.name}", score ${germany.score}, tag "${germany.tag}", sheet open ${germany.sheet}, avatar ${germany.avatar}`);
+
+    /* 3) a country row drills into the prestige roster: cobalt for #4, the full
+       national field, and the player's own highlighted row + standing card */
+    await pg.click('#ranks-nations .rank-row[data-rank="4"]');
+    await pg.waitForTimeout(750);
+    const nationSheet = await pg.evaluate(`(${PROBE_NATION_SHEET.toString()})('cobalt')`);
+    if (nationSheet.pass && nationSheet.state.you && nationSheet.state.name === 'Germany') {
+      pass(`${tag} nation-sheet`, `${nationSheet.state.rows} players, ${nationSheet.state.aura} aura`);
+      await pg.screenshot({ path: path.join(SHOTS, `ranks-${tag}-nation-sheet.png`) });
+    } else {
+      fail(`${tag} nation-sheet`, nationSheet.fails.join('\n- ') || JSON.stringify(nationSheet.state));
+    }
+    await pg.click('#sheet-nation-detail .nd-x');
+    await pg.waitForTimeout(450);
+
+    if (w === 360) {
+      /* India's mocked ledger holder (Priya) proves the minted pin rides a roster row */
+      await pg.click('#ranks-nations .rank-row[data-rank="5"]');
+      await pg.waitForTimeout(300);
+      await pg
+        .waitForFunction(() => document.querySelectorAll('#nd-body .nd-list .nd-row:not(.is-skel)').length > 0, undefined, { timeout: 4000 })
+        .catch(() => {});
+      const pins = await pg.evaluate(() => ({
+        rows: document.querySelectorAll('#nd-body .nd-list .nd-row:not(.is-skel)').length,
+        skel: document.querySelectorAll('#nd-body .nd-list .nd-row.is-skel').length,
+        empty: document.querySelector('#nd-body .nd-list .nd-empty')?.textContent?.trim() ?? '',
+        pins: document.querySelectorAll('#nd-body .nd-list .nd-medal').length,
+      }));
+      if (pins.pins >= 1) pass(`${tag} nation-medals`, `${pins.pins} pinned of ${pins.rows}`);
+      else fail(`${tag} nation-medals`, `no minted pin in the India roster (${pins.rows} rows, ${pins.skel} skeletons, empty "${pins.empty}")`);
+      await pg.click('#sheet-nation-detail .nd-x');
+      await pg.waitForTimeout(450);
+
+      /* the champion pillar opens the same sheet, wearing the gold aura */
+      await pg.click('#ranks-podium .pod-card[data-rank="1"]');
+      await pg.waitForTimeout(750);
+      const gold = await pg.evaluate(`(${PROBE_NATION_SHEET.toString()})('gold')`);
+      if (gold.pass && gold.state.name === 'United States') pass(`${tag} nation-podium`);
+      else fail(`${tag} nation-podium`, gold.fails.join('\n- ') || JSON.stringify(gold.state));
+      await pg.screenshot({ path: path.join(SHOTS, `ranks-${tag}-nation-podium.png`) });
+
+      /* the header is the drag handle: pull it down, the sheet dismisses */
+      const hb = await pg.evaluate(() => {
+        const r = document.getElementById('nd-head').getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      });
+      await pg.mouse.move(hb.x, hb.y);
+      await pg.mouse.down();
+      await pg.mouse.move(hb.x, hb.y + 120, { steps: 8 });
+      await pg.mouse.up();
+      await pg.waitForTimeout(550);
+      const gone = await pg.evaluate(() => {
+        const s = document.getElementById('sheet-nation-detail');
+        return !s || s.hidden || s.getBoundingClientRect().height === 0;
+      });
+      if (gone) pass(`${tag} nation-swipe`);
+      else fail(`${tag} nation-swipe`, 'header drag did not dismiss the sheet');
+
+      /* silver and bronze are distinct recipes, not a recoloured cobalt */
+      for (const [rank, aura, expected] of [[2, 'silver', 'Brazil'], [3, 'bronze', 'Japan']]) {
+        await pg.click(`#ranks-podium .pod-card[data-rank="${rank}"]`);
+        await pg.waitForTimeout(650);
+        const tier = await pg.evaluate(`(${PROBE_NATION_SHEET.toString()})('${aura}')`);
+        if (tier.pass && tier.state.name === expected) pass(`${tag} nation-aura-${aura}`);
+        else fail(`${tag} nation-aura-${aura}`, tier.fails.join('\n- ') || JSON.stringify(tier.state));
+        await pg.click('#sheet-nation-detail .nd-x');
+        await pg.waitForTimeout(420);
+      }
+    }
 
     /* back to minds, then the mind sheet from a runner row */
     await pg.click('.ranks-tabs [data-board="minds"]');

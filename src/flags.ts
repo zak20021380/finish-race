@@ -26,7 +26,7 @@ export const flagSvgUrl = (cc: string): string => `https://cdn.jsdelivr.net/npm/
 const GLOBE = '🌐';
 
 /** A fresh image walking the PNG → SVG → globe cascade. */
-function makeImage(cc: string, wrap: HTMLElement, chip: HTMLElement): HTMLImageElement {
+function makeImage(cc: string, wrap: HTMLElement, chip: HTMLElement, px: number): HTMLImageElement {
   const img = document.createElement('img');
   img.className = 'fp-img';
   img.alt = '';
@@ -49,15 +49,16 @@ function makeImage(cc: string, wrap: HTMLElement, chip: HTMLElement): HTMLImageE
     chip.textContent = GLOBE;
   });
   img.addEventListener('load', () => wrap.classList.add('is-photo'));
-  img.src = flagPngUrl(cc);
+  img.src = px > 80 ? `https://flagcdn.com/w${px}/${cc}.png` : flagPngUrl(cc);
   return img;
 }
 
 /**
  * A complete flag node: `.fp` wrapper, clay ISO chip underneath, photo on top.
- * `cls` is the consumer's size/variant hook (e.g. `fp-badge`, `fp-country`).
+ * `cls` is the consumer's size/variant hook (e.g. `fp-badge`, `fp-country`);
+ * `px` opts into a wider CDN source for a hero medallion (80 is the row size).
  */
-export function flagPhoto(code: string | null | undefined, cls: string): HTMLElement {
+export function flagPhoto(code: string | null | undefined, cls: string, px = 80): HTMLElement {
   const wrap = document.createElement('span');
   wrap.className = `fp ${cls}`.trim();
   wrap.setAttribute('aria-hidden', 'true');
@@ -72,7 +73,7 @@ export function flagPhoto(code: string | null | undefined, cls: string): HTMLEle
     wrap.classList.add('is-chip');
     return wrap;
   }
-  wrap.append(makeImage(cc, wrap, chip));
+  wrap.append(makeImage(cc, wrap, chip, px));
   return wrap;
 }
 
@@ -107,7 +108,7 @@ export function paintFlag(host: HTMLElement | null, code: string | null | undefi
   chip.textContent = code!.slice(0, 2).toUpperCase();
   let img = host.querySelector<HTMLImageElement>('.fp-img');
   if (!img) {
-    img = makeImage(cc, host, chip);
+    img = makeImage(cc, host, chip, 80);
     host.append(img);
     return;
   }

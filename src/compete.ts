@@ -36,11 +36,14 @@ import {
   getChannelRoster,
   getCountryRanking,
   getGrandCup,
+  getNationRoster,
   getPlayerRanking,
+  nationPlayersOf,
   paidPlaces,
   type ChannelSeed,
   type CountryRow,
   type GrandCup,
+  type NationMember,
   type PlayerRow,
   type RosterRow,
   type RosterYou,
@@ -136,16 +139,6 @@ function hashOf(key: string): number {
   let h = 216613261;
   for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
   return Math.abs(h);
-}
-
-/**
- * The seeded country rows carry an aggregate and no roster, so each nation's field
- * is split across a stable head-count. Real rosters land with the backend, at which
- * point this function and its caller both go away.
- */
-function mindsOf(code: string, points: number): number {
-  const target = 1100 + (hashOf(code) % 500);
-  return Math.max(3, Math.round(points / target));
 }
 
 /* ---------- mind profile: the four axes, the form strip, the percentile ring ---------- */
@@ -1269,6 +1262,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     /** A minted prestige honor the rider wears; its metal also lights the pedestal rim. */
     medal?: WornEdition;
     onTap?: () => void;
+    /** What the tap opens, spoken by the accessible name. */
+    tapHint?: string;
   }
 
   /** The minted coin, pinned to the avatar rim. Decorative — the host speaks the honor. */
@@ -1310,7 +1305,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const honor = e.medal
       ? `, ${e.medal.def.name}${e.medal.serial !== null ? ` edition ${e.medal.serial}` : ''}`
       : '';
-    card.setAttribute('aria-label', `Rank ${e.rank}: ${e.name}${honor}, ${e.score} Tactical IQ`);
+    card.setAttribute(
+      'aria-label',
+      `Rank ${e.rank}: ${e.name}${honor}, ${e.score} Tactical IQ${e.onTap ? `. Activate to ${e.tapHint ?? 'inspect'}.` : ''}`,
+    );
 
     if (e.rank === 1) card.append(svgIcon('#i-crown', 'pod-crown'));
 
@@ -1420,22 +1418,20 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     name: string;
     sub: string | null;
     points: string;
-    /** The numeric TIQ behind `points`: the tier and the read derive from it. */
-    tiq: number;
     me: boolean;
-    /** The climber directly above, so inspection can name the gap it has to close. */
-    above?: { name: string; tiq: number } | null;
-    wins?: number;
     /** A minted prestige honor this name holds, read from the ledger's holder index. */
     medal?: WornEdition;
-    /** A mind opens its profile sheet; without this a row keeps the inline read. */
-    onOpen?: () => void;
+    /** Every ladder row is a control: it opens its own detail sheet. */
+    onOpen: () => void;
+    /** What the row opens, spoken by the accessible name. */
+    openHint: string;
+    /** Optional second-line modifier (nation counts use the brief's #94A3B8). */
+    subClass?: string;
   }
 
   /**
-   * Shared ladder row: rank crest · identity · tabular score. Tap opens the
-   * inspection read, which is assembled from the row's own numbers — nothing in it
-   * is a placeholder waiting for a backend.
+   * Shared ladder row: rank crest · identity · tabular score. The tap is always
+   * spent on the row's own detail sheet — the mind profile or the nation roster.
    */
   function row(r: LadderRow): HTMLLIElement {
     const { rank, code, name, points } = r;
@@ -1445,7 +1441,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const honor = r.medal
       ? `, ${r.medal.def.name}${r.medal.serial !== null ? ` edition ${r.medal.serial}` : ''}`
       : '';
-    li.setAttribute('aria-label', `#${rank} ${name}${honor} — ${points} Tactical IQ. Activate to inspect.`);
+    li.setAttribute('aria-label', `#${rank} ${name}${honor} — ${points} Tactical IQ. Activate to ${r.openHint}.`);
     if (r.me) li.setAttribute('aria-current', 'true');
 
     const id = document.createElement('span');
@@ -1464,14 +1460,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     nm.textContent = name;
     nm.title = name;
     nmLine.append(nm);
-    /* The serial sits on the name line, and the only other line is the win count:
+    /* The serial sits on the name line, and the only other line is the sub read:
        two clean tiers, no third chip wedged between the name and the score. */
     const serial = r.medal ? serialChip(r.medal, 'lb-serial') : null;
     if (serial) nmLine.append(serial);
     txt.append(nmLine);
     if (r.sub) {
       const s = document.createElement('span');
-      s.className = 'lb-sub';
+      s.className = `lb-sub${r.subClass ? ` ${r.subClass}` : ''}`;
       const st = document.createElement('span');
       st.className = 'lb-sub-t';
       st.textContent = r.sub;
@@ -1484,54 +1480,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     li.append(rankCrest(rank), id, cell);
 
     li.tabIndex = 0;
-
-    /* A mind has a profile to open, so its row goes straight there. A nation does not —
-       it is an aggregate — so that board keeps the inline inspection read instead. */
-    if (r.onOpen) {
-      const run = (): void => { r.onOpen?.(); };
-      li.setAttribute('aria-label', `#${rank} ${name}${honor} — ${points} Tactical IQ. Activate to open the mind profile.`);
-      li.addEventListener('click', run);
-      li.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter' || ev.key === ' ') {
-          ev.preventDefault();
-          run();
-        }
-      });
-      return li;
-    }
-
-    /* ---- inspection read: the numbers a row can honestly tell you ---- */
-    const peek = document.createElement('span');
-    peek.className = 'lb-peek';
-    peek.hidden = true;
-    const facts: string[][] = [];
-    if (r.wins !== undefined) facts.push(['Wins', String(r.wins)]);
-    if (r.wins && r.wins > 0) facts.push(['TIQ / win', Math.round(r.tiq / r.wins).toLocaleString('en-US')]);
-    if (r.above && r.above.tiq > r.tiq) facts.push([`To pass ${r.above.name}`, (r.above.tiq - r.tiq).toLocaleString('en-US')]);
-    for (const [k, v] of facts) {
-      const cell = document.createElement('span');
-      cell.className = 'lb-fact';
-      const key = document.createElement('small');
-      key.textContent = k;
-      const val = document.createElement('b');
-      val.textContent = v;
-      cell.append(key, val);
-      peek.append(cell);
-    }
-    li.append(peek);
-
-    const open = (on: boolean): void => {
-      li.classList.toggle('is-open', on);
-      peek.hidden = !on;
-      li.setAttribute('aria-expanded', String(on));
-    };
-    li.setAttribute('aria-expanded', 'false');
-    li.addEventListener('click', () => { impact('light'); open(!li.classList.contains('is-open')); });
+    const run = (): void => { r.onOpen(); };
+    li.addEventListener('click', run);
     li.addEventListener('keydown', (ev) => {
       if (ev.key === 'Enter' || ev.key === ' ') {
         ev.preventDefault();
-        impact('light');
-        open(!li.classList.contains('is-open'));
+        run();
       }
     });
     return li;
@@ -1874,6 +1828,316 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     api.sheets.open(el);
   }
 
+  /* ---------- the nation sheet: prestige medallion + national top players ----------
+     Every Nations IQ row and podium pillar opens this panel. The medallion carries
+     the country's own flag inside a minted ring and its aura follows the standing
+     (#1 gold, #2 silver, #3 bronze, everyone else cobalt). The roster is sliced to
+     the same head-count the country row prints, so the sheet can never promise
+     more players than the ladder named. */
+
+  const ndEls = {
+    sheet: document.getElementById('sheet-nation-detail'),
+    head: document.getElementById('nd-head'),
+    rank: document.getElementById('nd-rank'),
+    name: document.getElementById('nd-name'),
+    kicker: document.getElementById('nd-kicker'),
+    body: document.getElementById('nd-body'),
+  };
+  /** A nation's roster is immutable per points + local standing, so re-entry is instant. */
+  const nationRosters = new Map<string, NationMember[]>();
+  let nationSeq = 0;
+
+  const nationAuraOf = (rank: number): 'gold' | 'silver' | 'bronze' | 'cobalt' =>
+    rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : 'cobalt';
+
+  function nationHero(c: CountryRow): HTMLElement {
+    const total = nationPlayersOf(c.code, c.points);
+    const hero = document.createElement('div');
+    hero.className = 'nd-hero';
+
+    const aura = document.createElement('span');
+    aura.className = 'nd-aura';
+    aura.setAttribute('aria-hidden', 'true');
+
+    const mark = document.createElement('span');
+    mark.className = 'nd-mark';
+    const coin = document.createElement('span');
+    coin.className = 'nd-coin';
+    coin.setAttribute('aria-hidden', 'true');
+    const face = document.createElement('span');
+    face.className = 'nd-coin-face';
+    face.append(flagPhoto(c.code, 'fp-medal', 320));
+    const gleam = document.createElement('span');
+    gleam.className = 'nd-gleam';
+    coin.append(face, gleam);
+    mark.append(coin);
+
+    const pedestal = document.createElement('span');
+    pedestal.className = 'nd-pedestal';
+    pedestal.setAttribute('aria-hidden', 'true');
+
+    const totals = document.createElement('div');
+    totals.className = 'nd-totals';
+    totals.setAttribute('aria-label', `${c.points.toLocaleString('en-US')} nation Tactical IQ · ${total.toLocaleString('en-US')} players`);
+    const tiq = document.createElement('span');
+    tiq.className = 'nd-total is-tiq';
+    tiq.append(svgIcon('#i-brain', 'nd-total-ico nd-total-tiq'));
+    const tiqN = document.createElement('b');
+    tiqN.textContent = c.points.toLocaleString('en-US');
+    const tiqK = document.createElement('small');
+    tiqK.textContent = 'TIQ';
+    tiq.append(tiqN, tiqK);
+    const split = document.createElement('i');
+    split.className = 'nd-split';
+    split.setAttribute('aria-hidden', 'true');
+    const people = document.createElement('span');
+    people.className = 'nd-total is-people';
+    people.append(svgIcon('#i-users', 'nd-total-ico'));
+    const peopleN = document.createElement('b');
+    peopleN.textContent = total.toLocaleString('en-US');
+    const peopleK = document.createElement('small');
+    peopleK.textContent = 'Players';
+    people.append(peopleN, peopleK);
+    totals.append(tiq, split, people);
+
+    const caption = document.createElement('p');
+    caption.className = 'nd-caption';
+    caption.textContent = `Rank ${c.rank} of ${nationRows?.length ?? 10} nations worldwide`;
+
+    hero.append(aura, mark, pedestal, totals, caption);
+    return hero;
+  }
+
+  function nationRosterHead(c: CountryRow): HTMLElement {
+    const head = document.createElement('header');
+    head.className = 'nd-rhead';
+    const h = document.createElement('h3');
+    h.className = 'nd-rh';
+    h.textContent = 'Top players';
+    const count = document.createElement('span');
+    count.className = 'nd-rh-count';
+    count.textContent = `${nationPlayersOf(c.code, c.points).toLocaleString('en-US')} players`;
+    head.append(h, count);
+    return head;
+  }
+
+  function nationSkeleton(rows: number): DocumentFragment {
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < rows; i++) {
+      const li = document.createElement('li');
+      li.className = 'nd-row is-skel';
+      for (const w of ['w20', 'w60', 'w20']) {
+        const s = document.createElement('span');
+        s.className = `skel ${w}`;
+        li.append(s);
+      }
+      frag.append(li);
+    }
+    return frag;
+  }
+
+  /** The row's own avatar: initials tinted from its id, with a real minted pin when held. */
+  function nationAvatar(m: NationMember): HTMLElement {
+    const wrap = document.createElement('span');
+    wrap.className = 'nd-avwrap';
+    const av = document.createElement('b');
+    av.className = 'nd-av';
+    av.textContent = initials(m.name);
+    av.style.setProperty('--nd-hue', String(188 + (hashOf(m.id) % 116)));
+    wrap.append(av);
+    const honor = m.isYou ? wornEdition() : holderEdition(m.name);
+    if (honor) wrap.append(medalPin(honor, 'nd-medal'));
+    return wrap;
+  }
+
+  function nationRow(m: NationMember): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = `nd-row${m.isYou ? ' is-you' : ''}`;
+    li.dataset.rank = String(m.rank);
+    const rk = document.createElement('span');
+    rk.className = `nd-rk${m.rank <= 3 ? ` t${m.rank}` : ''}`;
+    rk.textContent = String(m.rank);
+    rk.setAttribute('aria-hidden', 'true');
+
+    const id = document.createElement('span');
+    id.className = 'nd-id';
+    const line = document.createElement('span');
+    line.className = 'nd-nm';
+    const nm = document.createElement('b');
+    nm.className = 'nd-pname';
+    nm.textContent = m.name;
+    nm.title = m.name;
+    line.append(nm);
+    if (m.isYou && m.name.trim().toLowerCase() !== 'you') {
+      const tag = document.createElement('span');
+      tag.className = 'nd-you-tag';
+      tag.textContent = 'You';
+      line.append(tag);
+    }
+    const sub = document.createElement('small');
+    sub.className = 'nd-sub';
+    sub.textContent = `${m.wins.toLocaleString('en-US')} wins`;
+    id.append(line, sub);
+
+    const score = document.createElement('span');
+    score.className = 'nd-score';
+    score.append(svgIcon('#i-brain', 'nd-score-ico'));
+    const num = document.createElement('b');
+    num.textContent = m.tiq.toLocaleString('en-US');
+    score.append(num);
+
+    li.append(rk, nationAvatar(m), id, score);
+    li.setAttribute(
+      'aria-label',
+      `#${m.rank} ${m.name}${m.isYou ? ', you' : ''} — ${m.tiq.toLocaleString('en-US')} Tactical IQ, ${m.wins.toLocaleString('en-US')} wins`,
+    );
+    return li;
+  }
+
+  function nationYouCard(c: CountryRow, m: NationMember, count: number): HTMLElement {
+    const card = document.createElement('div');
+    card.className = 'nd-you';
+    const txt = document.createElement('span');
+    txt.className = 'nd-you-txt';
+    const kick = document.createElement('small');
+    kick.className = 'nd-you-k';
+    kick.textContent = `Your standing · Top ${Math.max(1, Math.round((m.rank / Math.max(1, count)) * 100))}%`;
+    const line = document.createElement('b');
+    line.className = 'nd-you-line';
+    line.textContent = `#${m.rank} in ${c.name}`;
+    txt.append(kick, line);
+    const score = document.createElement('span');
+    score.className = 'nd-score nd-you-score';
+    score.append(svgIcon('#i-brain', 'nd-score-ico'));
+    const num = document.createElement('b');
+    num.textContent = m.tiq.toLocaleString('en-US');
+    score.append(num);
+    card.append(nationAvatar(m), txt, score);
+    card.setAttribute(
+      'aria-label',
+      `Your standing: #${m.rank} in ${c.name}, ${m.tiq.toLocaleString('en-US')} Tactical IQ, top ${Math.max(1, Math.round((m.rank / Math.max(1, count)) * 100))} percent of ${count} players`,
+    );
+    return card;
+  }
+
+  function paintNationList(c: CountryRow, list: HTMLElement, host: HTMLElement, rows: NationMember[] | null): void {
+    list.textContent = '';
+    if (!rows || !rows.length) {
+      const empty = document.createElement('li');
+      empty.className = 'nd-empty';
+      empty.textContent = 'The nation roster is unavailable right now.';
+      list.append(empty);
+      return;
+    }
+    const you = rows.find((m) => m.isYou);
+    if (you) host.insertBefore(nationYouCard(c, you, rows.length), list);
+    const frag = document.createDocumentFragment();
+    for (const m of rows) frag.append(nationRow(m));
+    list.append(frag);
+  }
+
+  async function openNation(c: CountryRow): Promise<void> {
+    const el = ndEls.sheet;
+    const body = ndEls.body;
+    if (!el || !body) return;
+    const total = nationPlayersOf(c.code, c.points);
+    el.dataset.aura = nationAuraOf(c.rank);
+    if (ndEls.rank) ndEls.rank.textContent = `#${c.rank}`;
+    if (ndEls.name) {
+      ndEls.name.textContent = c.name;
+      ndEls.name.title = c.name;
+    }
+    if (ndEls.kicker) ndEls.kicker.textContent = `#${c.rank} worldwide`;
+    el.setAttribute(
+      'aria-label',
+      `Nation roster: ${c.name}, #${c.rank} worldwide, ${c.points.toLocaleString('en-US')} Tactical IQ, ${total.toLocaleString('en-US')} players`,
+    );
+
+    body.textContent = '';
+    body.scrollTop = 0;
+    const roster = document.createElement('section');
+    roster.className = 'nd-roster';
+    const list = document.createElement('ol');
+    list.className = 'nd-list';
+    list.setAttribute('aria-label', `Top players in ${c.name}`);
+    list.append(nationSkeleton(6));
+    roster.append(nationRosterHead(c), list);
+    body.append(nationHero(c), roster);
+    api.sheets.open(el);
+    impact('light');
+
+    const seq = ++nationSeq;
+    const mine = profile.country === c.code
+      ? { name: youName(), countryCode: c.code, tiq: myTrophyScore(), wins: profile.stats.wins }
+      : null;
+    const key = `${c.code}|${c.points}|${profile.country ?? '-'}|${mine ? mine.tiq : '-'}|${mine ? mine.wins : '-'}`;
+    let rows = nationRosters.get(key) ?? null;
+    if (!rows) {
+      try {
+        rows = await getNationRoster(c, mine);
+      } catch {
+        rows = null;
+      }
+      if (seq !== nationSeq) return;
+      if (rows) nationRosters.set(key, rows);
+    }
+    if (seq !== nationSeq) return;
+    paintNationList(c, list, roster, rows);
+  }
+
+  /** Pull the header down to dismiss, the way a native sheet moves under the thumb. */
+  function bindNationSwipe(panel: HTMLElement, handle: HTMLElement): void {
+    const LIMIT = 78;
+    let startY = 0;
+    let dy = 0;
+    let active = false;
+    let pointerId = -1;
+    let resetTimer = 0;
+
+    const reset = (): void => {
+      window.clearTimeout(resetTimer);
+      panel.style.transition = '';
+      panel.style.transform = '';
+    };
+
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if ((e.target as HTMLElement | null)?.closest('button, a, input, textarea, select')) return;
+      active = true;
+      pointerId = e.pointerId;
+      startY = e.clientY;
+      dy = 0;
+      try { handle.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+    });
+    handle.addEventListener('pointermove', (e) => {
+      if (!active || e.pointerId !== pointerId) return;
+      dy = Math.max(0, e.clientY - startY);
+      if (dy > 0) {
+        panel.style.transition = 'none';
+        panel.style.transform = `translate3d(0, ${Math.min(dy, 160)}px, 0)`;
+      }
+    });
+    const finish = (e: PointerEvent): void => {
+      if (!active || e.pointerId !== pointerId) return;
+      active = false;
+      window.clearTimeout(resetTimer);
+      panel.style.transition = 'transform 180ms ease-out';
+      if (dy > LIMIT) {
+        panel.style.transform = 'translate3d(0, 102%, 0)';
+        api.sheets.close();
+        resetTimer = window.setTimeout(reset, 320);
+      } else {
+        panel.style.transform = '';
+        resetTimer = window.setTimeout(reset, 200);
+      }
+      dy = 0;
+    };
+    handle.addEventListener('pointerup', finish);
+    handle.addEventListener('pointercancel', finish);
+  }
+
+  if (ndEls.sheet && ndEls.head) bindNationSwipe(ndEls.sheet, ndEls.head);
+
   msEls.challenge?.addEventListener('click', () => {
     const p = msPending;
     if (!p) return;
@@ -1980,22 +2244,24 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       name: c.name,
       score: c.points.toLocaleString('en-US'),
       code: c.code,
+      onTap: () => openNation(c),
+      tapHint: 'open the nation roster',
     })));
     el.textContent = '';
     el.append(nationsHud(rows));
     const ol = document.createElement('ol');
     ol.className = 'rank-list';
     for (const c of rows.slice(3)) {
-      const up = rows[c.rank - 2];
       ol.append(row({
         rank: c.rank,
         code: c.code,
         name: c.name,
-        sub: `${compactCount(mindsOf(c.code, c.points))} minds`,
+        sub: `${nationPlayersOf(c.code, c.points).toLocaleString('en-US')} players`,
+        subClass: 'nd-count',
         points: c.points.toLocaleString('en-US'),
-        tiq: c.points,
         me: profile.country === c.code,
-        above: up ? { name: up.name, tiq: up.points } : null,
+        onOpen: () => openNation(c),
+        openHint: 'open the nation roster',
       }));
     }
     el.append(ol);
@@ -2036,19 +2302,16 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const ol = document.createElement('ol');
     ol.className = 'rank-list';
     rows.slice(3).forEach((p, i) => {
-      const up = rows[i + 2];
       ol.append(row({
         rank: i + 4,
         code: p.countryCode,
         name: p.name,
         sub: `${p.wins} wins`,
         points: p.points.toLocaleString('en-US'),
-        tiq: p.points,
         me: false,
         medal: holderEdition(p.name) ?? undefined,
-        wins: p.wins,
-        above: up ? { name: up.name, tiq: up.points } : null,
         onOpen: () => openMind(p, i + 4),
+        openHint: 'open the mind profile',
       }));
     });
     el.append(ol);

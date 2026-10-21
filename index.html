@@ -3065,6 +3065,25 @@
         </div>
       </section>
 
+      <!-- Nation Prestige Roster: every Nations IQ row and podium pillar opens this
+           sheet. The header stays fixed; the minted flag medallion and the national
+           top-player list scroll as one body. -->
+      <section class="sheet tall nation-sheet" id="sheet-nation-detail" hidden tabindex="-1" data-autofocus
+        role="dialog" aria-modal="true" aria-labelledby="nd-name">
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <header class="nd-head" id="nd-head">
+          <span class="nd-rank" id="nd-rank" aria-hidden="true">#1</span>
+          <span class="nd-head-id">
+            <h2 class="nd-title" id="nd-name">Nation</h2>
+            <small class="nd-kicker" id="nd-kicker">#1 worldwide</small>
+          </span>
+          <button class="ms-x nd-x" type="button" data-sheet-close aria-label="Close nation roster">
+            <span class="ms-x-g" aria-hidden="true">&times;</span>
+          </button>
+        </header>
+        <div class="sheet-body nd-body" id="nd-body" data-scroll></div>
+      </section>
+
       <!-- badge: luxury medallion hero, lore, global scarcity + hall of fame, requirement + CTA -->
       <section class="sheet tall badge-sheet" id="sheet-badge" hidden role="dialog" aria-modal="true" aria-labelledby="badge-title">
         <span class="sheet-grip" aria-hidden="true"></span>

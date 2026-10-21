@@ -52,11 +52,13 @@ export interface ChannelSeed {
   tiq: number;
 }
 
-/** The local player, merged into the roster of the squad they are bound to. */
+/** The local player, merged into the roster of the squad or nation they belong to. */
 export interface RosterYou {
   name: string;
   countryCode: string;
   tiq: number;
+  /** The real win count when the caller has it; derived from TIQ otherwise. */
+  wins?: number;
 }
 
 /**
@@ -82,6 +84,20 @@ export interface CountryRow {
   points: number;
   trend: Trend;
   rank: number;
+}
+
+/**
+ * One contributor inside a nation's roster. The nation aggregate has no real
+ * per-player feed yet, so these rows are seeded around the country's own TIQ;
+ * the ladder's real players are folded in where the seed has one.
+ */
+export interface NationMember {
+  rank: number;
+  id: string;
+  name: string;
+  tiq: number;
+  wins: number;
+  isYou: boolean;
 }
 
 export interface PlayerRow {
@@ -226,6 +242,65 @@ function hash32(s: string): number {
 }
 
 /**
+ * The stable head-count behind a nation's aggregate. One function feeds both the
+ * "N players" label under a country row and the roster sheet, so the count and
+ * the rows painted can never disagree. Only real rosters from the backend should
+ * replace this; until then the split targets 280-379 TIQ per player, which keeps
+ * every seeded nation between 20 and 50 contributors.
+ */
+export function nationPlayersOf(code: string, points: number): number {
+  const target = 280 + (hash32(code) % 100);
+  return Math.max(20, Math.min(50, Math.round(points / target)));
+}
+
+/** National name pool; the seed is the country code, so a roster never re-rolls. */
+const NATION_FIRSTS = [
+  'Aarav', 'Elif', 'Mateo', 'Lena', 'Kwame', 'Yuki', 'Noor', 'Diego', 'Mira', 'Tomas',
+  'Aiko', 'Omar', 'Anouk', 'Ravi', 'Zara', 'Felix', 'Ines', 'Pavel', 'Sana', 'Theo',
+  'Mila', 'Hugo', 'Leila', 'Jonas', 'Imani', 'Ivan', 'Amara', 'Nina', 'Marco', 'Freya',
+  'Arjun', 'Dana', 'Bilal', 'Chloe', 'Rafael', 'Mei', 'Nils', 'Alba', 'Tariq', 'Ida',
+] as const;
+
+const NATION_LASTS = [
+  'Okafor', 'Weber', 'Silva', 'Tanaka', 'Sharma', 'Haddad', 'Novak', 'Kim', 'Rossi', 'Moreau',
+  'Kowalski', 'Patel', 'Mensah', 'Sato', 'Cruz', 'Visser', 'Demir', 'Duarte', 'Park', 'Ali',
+] as const;
+
+const NATION_COMBOS = NATION_FIRSTS.length * NATION_LASTS.length;
+
+function nationName(seed: number, index: number): string {
+  const k = (seed + index * 131) % NATION_COMBOS;
+  return `${NATION_FIRSTS[k % NATION_FIRSTS.length]} ${NATION_LASTS[Math.floor(k / NATION_FIRSTS.length)]}`;
+}
+
+/**
+ * A descending TIQ curve across `count` players whose sum is the nation points
+ * not already held by real ladder names. A Zipf-shaped field gives a national
+ * ladder its real cliff — the top player is roughly a quarter of the aggregate,
+ * the next half of that, then a long tail — instead of a flat roster whose top
+ * score cannot compete with the real names on the ladder.
+ */
+function splitNationTiq(code: string, total: number, count: number): number[] {
+  if (count <= 0) return [];
+  const weights: number[] = [];
+  let sum = 0;
+  for (let i = 0; i < count; i++) {
+    const shape = 1 / Math.pow(i + 1, 1.1);
+    const jitter = 0.97 + ((hash32(`${code}|tiq|${i}`) % 1000) / 1000) * 0.06;
+    const w = shape * jitter;
+    weights.push(w);
+    sum += w;
+  }
+  const rows = weights.map((w) => Math.max(40, Math.round((Math.max(0, total) * w) / sum)));
+  let rest = Math.max(0, total) - rows.reduce((a, b) => a + b, 0);
+  for (let i = 0; rest > 0 && i < rows.length * 4; i = (i + 1) % rows.length, rest--) rows[i] += 1;
+  for (let i = rows.length - 1; rest < 0 && i >= 0; i--) {
+    if (rows[i] > 40) { rows[i] -= 1; rest += 1; }
+  }
+  return rows;
+}
+
+/**
  * The contributors behind one channel, ranked by TIQ.
  *
  * Ten rows is what the sheet shows, but the local player is merged in at their
@@ -252,6 +327,66 @@ export async function getChannelRoster(ch: ChannelSeed, you: RosterYou | null = 
   }
   rows.sort((a, b) => b.tiq - a.tiq || Number(b.isYou) - Number(a.isYou));
   return rows.map((r, i): RosterRow => ({ ...r, rank: i + 1, stars: GRAND_CUP_PRIZES[i]?.stars ?? 0 }));
+}
+
+/**
+ * The top players behind one nation. The ladder's real seeded names for that
+ * country are folded in at their real TIQ; the remaining places are a stable
+ * split of the nation's aggregate. The local player joins at their own TIQ when
+ * the country is theirs, and always keeps a place inside the quoted count.
+ */
+export async function getNationRoster(country: CountryRow, you: RosterYou | null = null): Promise<NationMember[]> {
+  await sleep(240);
+  const count = nationPlayersOf(country.code, country.points);
+  const mine = you && you.countryCode === country.code ? you : null;
+  const mineKey = mine?.name.trim().toLowerCase() ?? '';
+  const actual = seeding().players
+    .filter((p) => p.countryCode === country.code && p.name.toLowerCase() !== mineKey)
+    .sort((a, b) => b.points - a.points)
+    .slice(0, count);
+  const actualTotal = actual.reduce((sum, p) => sum + p.points, 0);
+  const synthCount = Math.max(0, count - actual.length);
+  const tiqs = splitNationTiq(country.code, Math.max(0, country.points - actualTotal), synthCount);
+  const seed = hash32(country.code);
+  const taken = new Set(actual.map((p) => p.name.toLowerCase()));
+  if (mineKey) taken.add(mineKey);
+
+  const rows: NationMember[] = actual.map((p) => ({
+    rank: 0, id: p.id, name: p.name, tiq: p.points, wins: p.wins, isYou: false,
+  }));
+  for (let i = 0; i < synthCount; i++) {
+    let name = nationName(seed, i);
+    for (let lap = 2; taken.has(name.toLowerCase()); lap++) name = `${nationName(seed, i)} ${lap}`;
+    taken.add(name.toLowerCase());
+    const tiq = tiqs[i] ?? 0;
+    rows.push({
+      rank: 0,
+      id: `n-${country.code.toLowerCase()}-${i}`,
+      name,
+      tiq,
+      wins: Math.max(1, Math.round(tiq / 145)),
+      isYou: false,
+    });
+  }
+
+  if (mine) {
+    rows.push({
+      rank: 0,
+      id: `n-${country.code.toLowerCase()}-you`,
+      name: mine.name,
+      tiq: Math.max(0, Math.round(mine.tiq)),
+      wins: mine.wins ?? Math.max(0, Math.round(mine.tiq / 145)),
+      isYou: true,
+    });
+  }
+
+  rows.sort((a, b) => b.tiq - a.tiq || a.name.localeCompare(b.name));
+  const kept = rows.slice(0, count);
+  if (mine && !kept.some((r) => r.isYou)) {
+    kept[kept.length - 1] = rows.find((r) => r.isYou) ?? kept[kept.length - 1];
+  }
+  kept.forEach((r, i) => { r.rank = i + 1; });
+  return kept;
 }
 
 export async function getCountryRanking(): Promise<CountryRow[]> {
