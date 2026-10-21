@@ -18813,7 +18813,6 @@ html.reduced-motion .announce-cta { transition: none; }
 .badge-card:active { transform: scale(.98); }
 .badge-card:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .badge-card.is-locked {
-  opacity: .65;
   background:
     linear-gradient(180deg, rgba(38, 48, 66, .84) 0%, rgba(22, 29, 43, .9) 100%);
   box-shadow:
@@ -18837,6 +18836,8 @@ html.reduced-motion .announce-cta { transition: none; }
   height: 44px;
   display: grid;
   place-items: center;
+  border-radius: 50%;
+  box-shadow: 0 0 20px rgba(var(--card-aura, 148, 163, 184), .28);
 }
 .badge-card-crest .badge-crest {
   width: 44px;
@@ -18844,28 +18845,9 @@ html.reduced-motion .announce-cta { transition: none; }
   display: block;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .5));
 }
-.badge-card.is-locked .badge-card-crest .badge-crest {
-  filter: grayscale(.9) brightness(.62) drop-shadow(0 1px 2px rgba(0, 0, 0, .45));
-}
 .badge-card.is-equipped .badge-card-crest .badge-crest {
-  filter: drop-shadow(0 0 7px rgba(252, 211, 77, .4)) drop-shadow(0 2px 3px rgba(0, 0, 0, .5));
+  filter: drop-shadow(0 0 7px rgba(var(--card-aura, 252, 211, 77), .4)) drop-shadow(0 2px 3px rgba(0, 0, 0, .5));
 }
-.badge-card-lock {
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-  width: 18px;
-  height: 18px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: #0B1019;
-  box-shadow:
-    inset 0 0 0 1px rgba(148, 163, 184, .52),
-    0 1px 3px rgba(0, 0, 0, .6);
-  color: #A8B6C9;
-}
-.badge-card-lock .ico { width: 10px; height: 10px; }
 .badge-card-main {
   flex: 1 1 auto;
   min-width: 0;
@@ -19212,14 +19194,41 @@ html.reduced-motion .announce-cta { transition: none; }
 @keyframes medal-gleam-orbit { to { transform: rotate(1turn); } }
 @keyframes medal-edge-turn { to { transform: rotate(-1turn); } }
 
-#s-profile .badge-slot.is-locked .medal-sheen { display: none; }
-
 #s-profile .badge-slot.is-unlocked:hover .medal-sheen::before,
 #s-profile .badge-slot.is-unlocked:focus-visible .medal-sheen::before,
 #s-profile .badge-slot.is-unlocked:active .medal-sheen::before,
 .badge-ico-lg:hover .medal-sheen::before,
 .badge-ico-lg:active .medal-sheen::before {
   animation: sheen 1.15s ease-in-out infinite;
+}
+
+/* Heisenberg: a cold chemical sheen crossing the chrome relief, even while unowned.
+   The band is oversized and translated, so the sweep stays on the compositor. */
+#s-profile .medal-sheen[data-badge="heisenberg_formula"] { mix-blend-mode: normal; }
+#s-profile .medal-sheen[data-badge="heisenberg_formula"]::before {
+  inset: -20% -110%;
+  background: linear-gradient(115deg,
+    rgba(209, 250, 229, 0) 40%,
+    rgba(167, 243, 208, .32) 45%,
+    rgba(240, 253, 250, .68) 49%,
+    rgba(52, 211, 153, .34) 53%,
+    rgba(209, 250, 229, 0) 60%);
+  background-size: 100% 100%;
+  transform: translateX(-60%);
+  will-change: transform, opacity;
+  animation: shimmer 6.4s ease-in-out 1.1s infinite;
+}
+#s-profile .badge-slot[data-badge="heisenberg_formula"]:hover .medal-sheen::before,
+#s-profile .badge-slot[data-badge="heisenberg_formula"]:focus-visible .medal-sheen::before,
+#s-profile .badge-slot[data-badge="heisenberg_formula"]:active .medal-sheen::before {
+  animation: shimmer 1.7s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0%   { transform: translateX(-60%); opacity: 0; }
+  8%   { opacity: .82; }
+  52%  { opacity: .55; }
+  60%  { transform: translateX(60%); opacity: 0; }
+  100% { transform: translateX(60%); opacity: 0; }
 }
 
 /* the equipped seal beside the player's name wears the same crest */
@@ -20348,7 +20357,7 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
   min-width: 0;
   min-height: 0;
   padding: 9px 6px 8px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 13px;
   appearance: none;
   cursor: pointer;
@@ -20373,16 +20382,13 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
 
 /* each honor's own metal, at the exact ambient glow its medallion carries */
 #s-profile .badge-slot[data-badge="churchill_bastion"] {
-  --medal-halo: rgba(6, 182, 212, .40);
-  --medal-halo-strong: rgba(6, 182, 212, .58);
+  --medal-halo: rgba(6, 182, 212, .35);
 }
 #s-profile .badge-slot[data-badge="einstein_singularity"] {
   --medal-halo: rgba(245, 158, 11, .35);
-  --medal-halo-strong: rgba(245, 158, 11, .55);
 }
 #s-profile .badge-slot[data-badge="heisenberg_formula"] {
   --medal-halo: rgba(16, 185, 129, .35);
-  --medal-halo-strong: rgba(16, 185, 129, .55);
 }
 
 #s-profile .badge-slot:hover:not(:active) { transform: translateY(-2px); }
@@ -20393,6 +20399,7 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
 /* equipped: a hairline metal rim and one inner shadow — no neon cage */
 #s-profile .badge-slot.is-equipped {
   transform: translateY(-1px);
+  border-color: rgba(var(--badge-aura), .6);
   background:
     radial-gradient(120% 95% at 50% 0%, rgba(var(--badge-aura), .2) 0%, rgba(var(--badge-aura), 0) 62%),
     linear-gradient(180deg, #2C374B 0%, #141D2C 100%);
@@ -20401,30 +20408,27 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
     0 8px 16px -14px rgba(0, 0, 0, .9),
     inset 0 1px 0 rgba(255, 255, 255, .2),
     inset 0 -2px 4px rgba(0, 0, 0, .4),
-    inset 0 0 0 1px rgba(var(--badge-aura), .62),
     inset 0 0 16px -8px rgba(var(--badge-aura), .3);
 }
 #s-profile .badge-slot.is-equipped:active { transform: translateY(0) scale(.96); }
 #s-profile .badge-slot.is-unlocked.is-equipped:active { transform: translateY(0) scale(1); }
 #s-profile .badge-slot.is-equipped:hover:not(:active) { transform: translateY(-2px); }
 
-/* locked: dark matte clay — dimmed, but the serial counter stays legible */
+/* unowned: a matte tray, never a dimmed medal — the status tag carries the state */
 #s-profile .badge-slot.is-locked {
-  opacity: .7;
   cursor: pointer;
-  background: linear-gradient(180deg, #1B2333 0%, #0B111C 100%);
+  background:
+    radial-gradient(130% 95% at 50% 0%, rgba(var(--badge-aura), .1) 0%, rgba(var(--badge-aura), 0) 60%),
+    linear-gradient(180deg, #202A3B 0%, #0E1522 100%);
   box-shadow:
     0 2px 0 #05080D,
-    inset 0 2px 5px rgba(0, 0, 0, .55),
-    inset 0 0 0 1px rgba(255, 255, 255, .05);
+    inset 0 2px 5px rgba(0, 0, 0, .5),
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
 }
-#s-profile .badge-slot.is-locked:hover:not(:active) { opacity: .88; transform: translateY(-1px); }
-#s-profile .badge-slot.is-locked:focus-visible { opacity: .95; }
-#s-profile .badge-slot.is-locked .badge-crest {
-  filter: grayscale(1) brightness(.7) contrast(.92);
-}
-#s-profile .badge-slot.is-locked .badge-slot-n { color: #C4D0DF; }
-#s-profile .badge-slot.is-locked .badge-slot-a { color: #71819A; }
+#s-profile .badge-slot.is-locked:hover:not(:active) { transform: translateY(-1px); }
+#s-profile .badge-slot.is-locked:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+#s-profile .badge-slot.is-locked .badge-slot-n { color: #EAF0F8; }
+#s-profile .badge-slot.is-locked .badge-slot-a { color: #8495AC; }
 
 #s-profile .badge-slot-crest {
   position: relative;
@@ -20434,16 +20438,18 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
   display: grid;
   place-items: center;
   border-radius: 50%;
+  box-shadow: 0 0 20px var(--medal-halo);
   transition: transform var(--motion-fast), box-shadow var(--motion-fast);
 }
-#s-profile .badge-slot.is-unlocked .badge-slot-crest {
-  box-shadow: 0 0 24px var(--medal-halo);
-  animation: medal-halo 5.6s ease-in-out infinite;
+/* Churchill: an industrial cyan pulse on the steel rim */
+#s-profile .badge-slot[data-badge="churchill_bastion"] .badge-slot-crest {
+  animation: churchill-pulse 4.6s ease-in-out infinite;
 }
-@keyframes medal-halo {
-  0%, 100% { box-shadow: 0 0 24px var(--medal-halo); }
-  50%      { box-shadow: 0 0 30px var(--medal-halo-strong); }
+@keyframes churchill-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(6, 182, 212, .35); }
+  50%      { box-shadow: 0 0 30px rgba(6, 182, 212, .55); }
 }
+/* Einstein keeps a still amber backlight; Heisenberg's chrome carries the shimmer below */
 #s-profile .badge-slot-crest .badge-crest {
   width: 48px;
   height: 48px;
@@ -20467,23 +20473,6 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
 #s-profile .badge-slot.is-equipped .badge-slot-crest .badge-crest {
   filter: drop-shadow(0 0 6px rgba(var(--badge-aura), .55)) drop-shadow(0 3px 4px rgba(0, 0, 0, .6));
 }
-
-#s-profile .badge-slot-lock {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 17px;
-  height: 17px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: #0B111B;
-  box-shadow:
-    inset 0 0 0 1px rgba(148, 163, 184, .42),
-    0 1px 3px rgba(0, 0, 0, .65);
-  color: #A8B6C9;
-}
-#s-profile .badge-slot-lock .ico { width: 9px; height: 9px; }
 
 #s-profile .badge-slot-n {
   display: block;
@@ -20537,11 +20526,30 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
     inset 0 0 0 1px rgba(255, 255, 255, .055);
   transition: color var(--motion-fast), box-shadow var(--motion-fast);
 }
-#s-profile .badge-slot.is-locked .badge-slot-serial {
+#s-profile .badge-slot-serial.is-serial {
+  color: #DCE7F3;
+  background: linear-gradient(180deg, #0A111C 0%, #172233 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, .85),
+    inset 0 -1px 0 rgba(255, 255, 255, .05),
+    inset 0 0 0 1px rgba(var(--badge-aura), .26);
+}
+#s-profile .badge-slot-serial.is-unlocked {
+  color: var(--badge-ink);
+  background: linear-gradient(180deg, rgba(var(--badge-aura), .18) 0%, rgba(7, 12, 21, .72) 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, .72),
+    inset 0 0 0 1px rgba(var(--badge-aura), .4);
+  text-shadow: 0 0 6px rgba(var(--badge-aura), .35);
+}
+#s-profile .badge-slot-serial.is-editions {
   font-size: 7.5px;
-  letter-spacing: .03em;
-  color: #8595AB;
+  letter-spacing: .04em;
+  color: #C3D2E4;
   background: linear-gradient(180deg, #060A12 0%, #0D1420 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, .8),
+    inset 0 0 0 1px rgba(var(--badge-aura), .18);
 }
 #s-profile .badge-slot.is-equipped .badge-slot-serial {
   color: var(--badge-ink);
@@ -20552,6 +20560,16 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
     inset 0 0 0 1px rgba(var(--badge-aura), .44),
     0 0 8px -2px rgba(var(--badge-aura), .4);
   text-shadow: 0 0 6px rgba(var(--badge-aura), .42);
+}
+#s-profile .badge-slot-serial.is-equipped::before {
+  content: "";
+  flex: none;
+  width: 5px;
+  height: 5px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
 }
 
 /* the mint roundtrip: one quiet pulse on the serial line, never a spinner over the crest */
@@ -20793,7 +20811,6 @@ html.reduced-motion #s-profile .pf-badge-sync-dot { animation: none; opacity: 1;
 .badge-card[data-accent="titanium"] .badge-card-arch { color: #A5F3FC; }
 .badge-card[data-accent="quantum"]  .badge-card-arch { color: #FDE047; }
 .badge-card[data-accent="frost"]    .badge-card-arch { color: #6EE7B7; }
-.badge-card.is-locked .badge-card-arch { color: #94A3B8; }
 .badge-card-ser {
   display: inline-flex;
   align-self: flex-start;
@@ -20817,7 +20834,29 @@ html.reduced-motion #s-profile .pf-badge-sync-dot { animation: none; opacity: 1;
     inset 0 -1px 0 rgba(255, 255, 255, .05),
     inset 0 0 0 1px rgba(255, 255, 255, .055);
 }
-.badge-card.is-locked .badge-card-ser { color: #7C8CA5; }
+.badge-card-ser.is-serial {
+  color: #DCE7F3;
+  background: linear-gradient(180deg, #0B1420 0%, #172131 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, .85),
+    inset 0 -1px 0 rgba(255, 255, 255, .06),
+    inset 0 0 0 1px rgba(var(--card-aura), .3);
+}
+.badge-card-ser.is-unlocked {
+  color: var(--card-ink);
+  background: linear-gradient(180deg, rgba(var(--card-aura), .18) 0%, rgba(7, 12, 21, .72) 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, .72),
+    inset 0 0 0 1px rgba(var(--card-aura), .42);
+  text-shadow: 0 0 6px rgba(var(--card-aura), .4);
+}
+.badge-card-ser.is-editions {
+  color: #C3D2E4;
+  background: linear-gradient(180deg, #0A111B 0%, #121B28 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, .8),
+    inset 0 0 0 1px rgba(var(--card-aura), .18);
+}
 .badge-card.is-equipped .badge-card-ser {
   color: var(--card-ink);
   background: linear-gradient(180deg, rgba(var(--card-aura), .2) 0%, rgba(var(--card-aura), .06) 55%, rgba(7, 12, 21, .72) 100%);
@@ -20828,7 +20867,6 @@ html.reduced-motion #s-profile .pf-badge-sync-dot { animation: none; opacity: 1;
   text-shadow: 0 0 6px rgba(var(--card-aura), .5);
 }
 .badge-card-lore { font-style: normal; }
-.badge-card.is-locked .badge-card-lore { color: #7C8CA5; }
 
 @media (max-width: 380px) {
   .badge-card-arch { font-size: 8px; letter-spacing: .08em; }

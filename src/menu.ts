@@ -18,7 +18,7 @@ import {
   REFERRAL_REWARD, setBadge, setDisplayName, setDob, setFrame, theme, validDob,
 } from './storage';
 import {
-  BADGES, badgeCrestHtml, badgeDelta, badgeEdition, badgeProgress, editionHolders, editionLabel,
+  BADGES, badgeCrestHtml, badgeDelta, badgeEdition, badgeProgress, badgeStatus, editionHolders,
   editionSerialLabel, editionSpeech, editionSyncState, equippedBadge, hasEditionClaim, isBadgeUnlocked,
   onEditionChange, refreshBadgeEditions, unlockedCount, type BadgeDef, type BadgeEdition, type WornEdition,
 } from './badges';
@@ -1283,7 +1283,7 @@ export function createMenu(api: MenuApi): Menu {
           'aria-label',
           `Equipped badge: ${eq.name}. ${editionSpeech(ed)} ${eq.archetype}, ${eq.pillar}. Spotlight it.`,
         );
-        eqWrap.title = `${eq.name} · ${editionLabel(ed)} · ${eq.archetype}`;
+        eqWrap.title = `${eq.name} · ${badgeStatus(eq.id, true).text} · ${eq.archetype}`;
         /* the pin's serial tag is the server-confirmed number, not a local best guess */
         if (serialTag) {
           if (ed.serial !== null) {
@@ -1310,6 +1310,7 @@ export function createMenu(api: MenuApi): Menu {
 
   const makeSlot = (b: BadgeDef, unlocked: boolean, equipped: boolean, label: string): HTMLButtonElement => {
     const edition = badgeEdition(b.id);
+    const tag = badgeStatus(b.id, equipped);
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = `badge-slot ${unlocked ? 'is-unlocked' : 'is-locked'}`
@@ -1325,26 +1326,24 @@ export function createMenu(api: MenuApi): Menu {
         : `Locked. ${label}. Tap for details.`}`,
     );
     btn.title = unlocked
-      ? `${b.figure} · ${b.archetype} · ${editionLabel(edition)} · ${b.description}`
-      : `${b.figure} · ${b.archetype} · Locked · ${label}`;
+      ? `${b.figure} · ${b.archetype} · ${tag.text} · ${b.description}`
+      : `${b.figure} · ${b.archetype} · ${tag.text} · ${label}`;
 
     const crest = document.createElement('span');
     crest.className = 'badge-slot-crest';
     crest.setAttribute('aria-hidden', 'true');
-    crest.innerHTML = badgeCrestHtml(b)
-      + (unlocked ? '' : '<span class="badge-slot-lock"><svg class="ico" aria-hidden="true">'
-        + '<use href="#i-lock" /></svg></span>');
+    crest.innerHTML = badgeCrestHtml(b);
     const name = document.createElement('span');
     name.className = 'badge-slot-n';
     name.textContent = b.figure;
     const arch = document.createElement('span');
     arch.className = 'badge-slot-a';
     arch.textContent = b.archetype;
-    const serial = document.createElement('span');
-    serial.className = 'badge-slot-serial';
-    serial.setAttribute('aria-hidden', 'true');
-    serial.textContent = editionLabel(edition);
-    btn.append(crest, name, arch, serial);
+    const status = document.createElement('span');
+    status.className = `badge-slot-serial is-${tag.kind}`;
+    status.setAttribute('aria-hidden', 'true');
+    status.textContent = tag.text;
+    btn.append(crest, name, arch, status);
 
     if (equipped) {
       const check = document.createElement('span');
@@ -1451,6 +1450,8 @@ export function createMenu(api: MenuApi): Menu {
       const equipped = unlocked && profile.badge === b.id;
       const prog = badgeProgress(b.id);
       const edition = badgeEdition(b.id);
+      /* the rail owns EQUIPPED; this line owns the honor's own mint */
+      const tag = badgeStatus(b.id, false);
       const li = document.createElement('li');
       li.className = `badge-card ${unlocked ? 'is-unlocked' : 'is-locked'}`
         + `${equipped ? ' is-equipped' : ''}${edition.minting ? ' is-minting' : ''}`;
@@ -1459,7 +1460,7 @@ export function createMenu(api: MenuApi): Menu {
       li.setAttribute('aria-label', `${b.figure}. ${b.archetype}, ${b.pillar}. ${editionSpeech(edition)} ${b.description} ${
         equipped ? 'Equipped.' : unlocked ? 'Unlocked.' : `Locked. ${prog.label}.`
       } Open details.`);
-      li.title = `${b.figure} · ${b.archetype} · ${editionLabel(edition)} — ${b.description}`;
+      li.title = `${b.figure} · ${b.archetype} · ${tag.text} — ${b.description}`;
       li.tabIndex = 0;
       li.dataset.badge = b.id;
       li.dataset.accent = b.accent;
@@ -1467,9 +1468,7 @@ export function createMenu(api: MenuApi): Menu {
       const crest = document.createElement('span');
       crest.className = 'badge-card-crest';
       crest.setAttribute('aria-hidden', 'true');
-      crest.innerHTML = badgeCrestHtml(b)
-        + (unlocked ? '' : '<span class="badge-card-lock"><svg class="ico" aria-hidden="true">'
-          + '<use href="#i-lock" /></svg></span>');
+      crest.innerHTML = badgeCrestHtml(b);
 
       const main = document.createElement('span');
       main.className = 'badge-card-main';
@@ -1481,9 +1480,9 @@ export function createMenu(api: MenuApi): Menu {
       arch.className = 'badge-card-arch';
       arch.textContent = `${b.archetype} · ${b.pillar}`;
       const ser = document.createElement('span');
-      ser.className = 'badge-card-ser';
+      ser.className = `badge-card-ser is-${tag.kind}`;
       ser.setAttribute('aria-hidden', 'true');
-      ser.textContent = editionLabel(edition);
+      ser.textContent = tag.text;
       const desc = document.createElement('span');
       desc.className = 'badge-card-lore';
       desc.textContent = b.description;
@@ -1529,7 +1528,7 @@ export function createMenu(api: MenuApi): Menu {
         pill.textContent = 'Details';
       } else {
         pill.classList.add('is-locked');
-        pill.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg><b>Locked</b>';
+        pill.textContent = 'Locked';
       }
       rail.append(pill);
 

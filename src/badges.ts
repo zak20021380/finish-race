@@ -387,13 +387,28 @@ export function badgeEdition(id: string): BadgeEdition {
   };
 }
 
-/** The card's third line: "#042 / 100", "MINTING…", or "59 / 100 REMAINING". */
-export function editionLabel(ed: BadgeEdition): string {
-  if (ed.serial !== null) return `${editionSerialLabel(ed.serial)} / ${ed.cap}`;
-  if (ed.minting) return 'MINTING…';
-  if (ed.remaining !== null) return `${ed.remaining} / ${ed.cap} REMAINING`;
-  if (ed.awaiting) return 'PENDING…';
-  return `— / ${ed.cap} REMAINING`;
+export type BadgeStatusKind = 'equipped' | 'serial' | 'unlocked' | 'minting' | 'editions';
+
+export interface BadgeStatus {
+  kind: BadgeStatusKind;
+  /** The card's third line: "EQUIPPED", "#042 / 100", "UNLOCKED" or "25 EDITIONS". */
+  text: string;
+}
+
+/**
+ * What the player holds, in the card's own words — never a network state.
+ * Equipped outranks the serial; an earned honor with no confirmed mint reads
+ * UNLOCKED, and an unowned one offers its edition cap as a rarity tag.
+ */
+export function badgeStatus(id: string, equipped: boolean): BadgeStatus {
+  const def = badgeById(id);
+  if (!def) return { kind: 'editions', text: '—' };
+  if (equipped) return { kind: 'equipped', text: 'EQUIPPED' };
+  const ed = badgeEdition(def.id);
+  if (ed.serial !== null) return { kind: 'serial', text: `${editionSerialLabel(ed.serial)} / ${ed.cap}` };
+  if (ed.minting) return { kind: 'minting', text: 'MINTING…' };
+  if (isBadgeUnlocked(def.id)) return { kind: 'unlocked', text: 'UNLOCKED' };
+  return { kind: 'editions', text: `${def.cap} EDITIONS` };
 }
 
 /** The same state, spelled for a screen reader. */
