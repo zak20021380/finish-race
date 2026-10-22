@@ -530,7 +530,8 @@ export function createMenu(api: MenuApi): Menu {
   let squadView: SquadRoster | null = null;
   let squadRows: SquadMember[] = [];
   let squadQuery = '';
-  let squadRowH = 52;
+  let squadPitch = 62;
+  let squadGap = 8;
   let squadLeaveTimer = 0;
   const squadRowEls = new Map<number, HTMLElement>();
   let squadRange = { start: -1, end: -1, rows: -1 };
@@ -584,24 +585,9 @@ export function createMenu(api: MenuApi): Menu {
     av.style.setProperty('--sq-hue', String(member.hue));
     av.setAttribute('aria-hidden', 'true');
     av.textContent = member.initials;
-    wrap.append(av);
+    wrap.append(av, flagPhoto(member.country, 'sq-av-flag'));
     if (member.medal) wrap.append(squadMedalPin(member.medal, 'sq-medal'));
     return wrap;
-  }
-
-  /** The Arena division micro-pill worn beside a member's TIQ. */
-  function squadArenaPill(member: SquadMember): HTMLElement {
-    const pill = document.createElement('span');
-    pill.className = 'sq-arena-pill';
-    pill.dataset.tier = member.arena.tier;
-    const wins = `${en(member.arena.wins)} tournament win${member.arena.wins === 1 ? '' : 's'}`;
-    pill.title = member.arena.rank > 0
-      ? `${member.arena.divisionLabel} · Arena #${en(member.arena.rank)} · ${wins}`
-      : `${member.arena.divisionLabel} · unranked in the arena`;
-    const label = document.createElement('span');
-    label.textContent = `Div ${member.arena.division}`;
-    pill.append(squadSvg('#i-gem'), label);
-    return pill;
   }
 
   function paintSquadYou(): void {
@@ -610,13 +596,12 @@ export function createMenu(api: MenuApi): Menu {
     const member = roster.members.find((m) => m.isYou);
     if (!member) return;
     squadYouEl.textContent = '';
-    squadYouEl.dataset.tier = roster.yourArena.tier;
+
+    const avatar = squadAvatar(member, 'sq-you-av');
 
     const identity = document.createElement('span');
     identity.className = 'sq-you-id';
 
-    const top = document.createElement('span');
-    top.className = 'sq-you-top';
     const rankBox = document.createElement('span');
     rankBox.className = 'sq-you-rank';
     const rank = document.createElement('b');
@@ -640,30 +625,18 @@ export function createMenu(api: MenuApi): Menu {
       serial.title = `${roster.yourMedal.def.name} · ${editionSerialLabel(roster.yourMedal.serial)} of ${roster.yourMedal.def.cap}`;
       nameWrap.append(serial);
     }
-    top.append(rankBox, nameWrap);
+    identity.append(rankBox, nameWrap);
 
-    const detail = document.createElement('span');
-    detail.className = 'sq-you-detail';
-    const tiq = document.createElement('span');
-    tiq.className = 'sq-you-tiq';
-    tiq.append(squadSvg('#i-brain'));
-    const tiqValue = document.createElement('b');
-    tiqValue.textContent = en(roster.yourTiq);
-    const tiqUnit = document.createElement('small');
-    tiqUnit.textContent = 'TIQ';
-    tiq.append(tiqValue, tiqUnit);
-    detail.append(tiq, squadArenaPill(member));
-    identity.append(top, detail);
+    const score = document.createElement('span');
+    score.className = `sq-you-score${roster.yourTiq <= 0 ? ' is-zero' : ''}`;
+    score.append(squadSvg('#i-brain'));
+    const amount = document.createElement('b');
+    amount.textContent = en(roster.yourTiq);
+    const unit = document.createElement('small');
+    unit.textContent = 'TIQ';
+    score.append(amount, unit);
 
-    const season = document.createElement('span');
-    season.className = `sq-you-season${roster.yourContribution <= 0 ? ' is-zero' : ''}`;
-    const gain = document.createElement('b');
-    gain.textContent = `+${en(roster.yourContribution)}`;
-    const caption = document.createElement('small');
-    caption.textContent = 'Season';
-    season.append(gain, caption);
-
-    squadYouEl.append(squadAvatar(member, 'sq-you-av'), identity, season);
+    squadYouEl.append(avatar, identity, score);
 
     const honor = roster.yourMedal
       ? `, wearing ${roster.yourMedal.def.name}${roster.yourMedal.serial !== null ? ` edition ${roster.yourMedal.serial}` : ''}`
@@ -674,14 +647,20 @@ export function createMenu(api: MenuApi): Menu {
     squadYouEl.setAttribute(
       'aria-label',
       `Your standing: rank ${roster.yourRank} of ${roster.count}, ${roster.yourTiq} Tactical IQ, `
-      + `${arenaSpeech}, ${roster.yourContribution} TIQ this season${honor}.`,
+      + `${arenaSpeech}, representing ${nameOf(member.country)}${honor}.`,
     );
   }
 
-  function measureSquadRow(): number {
-    const raw = parseFloat(getComputedStyle(squadRosterEl).getPropertyValue('--sq-row-h'));
-    squadRowH = Number.isFinite(raw) && raw > 0 ? raw : 52;
-    return squadRowH;
+  function measureSquadPitch(): number {
+    const css = getComputedStyle(squadRosterEl);
+    const row = parseFloat(css.getPropertyValue('--sq-row-h'));
+    const gap = parseFloat(css.getPropertyValue('--sq-row-gap'));
+    const pitch = parseFloat(css.getPropertyValue('--sq-row-pitch'));
+    squadGap = Number.isFinite(gap) && gap >= 0 ? gap : 8;
+    squadPitch = Number.isFinite(pitch) && pitch > 0
+      ? pitch
+      : (Number.isFinite(row) && row > 0 ? row : 54) + squadGap;
+    return squadPitch;
   }
 
   function squadRow(member: SquadMember, index: number): HTMLElement {
@@ -722,9 +701,8 @@ export function createMenu(api: MenuApi): Menu {
     unit.textContent = 'TIQ';
     score.append(squadSvg('#i-brain'), amount, unit);
     score.title = `${en(member.tiq)} Tactical IQ · `
-      + (member.arena.rank > 0 ? `Arena #${en(member.arena.rank)}` : 'Arena unranked')
-      + ` · ${member.arena.divisionLabel}`;
-    right.append(score, squadArenaPill(member));
+      + (member.arena.rank > 0 ? `Arena #${en(member.arena.rank)}` : 'Arena unranked');
+    right.append(score);
 
     const roleSpeech = member.role === 'leader' ? ', leader' : member.role === 'admin' ? ', admin' : '';
     const honor = member.medal
@@ -735,8 +713,9 @@ export function createMenu(api: MenuApi): Menu {
       : 'unranked in the arena';
     li.setAttribute(
       'aria-label',
-      `Rank ${member.rank}: ${member.name}${roleSpeech} — ${member.tiq} Tactical IQ, `
-      + `${arenaSpeech}, ${member.arena.wins} tournament wins${member.isYou ? ', you' : ''}${honor}.`,
+      `Rank ${member.rank}: ${member.name}${roleSpeech}, representing ${nameOf(member.country)} — `
+      + `${member.tiq} Tactical IQ, ${arenaSpeech}, ${member.arena.wins} tournament wins`
+      + `${member.isYou ? ', you' : ''}${honor}.`,
     );
     li.append(rank, squadAvatar(member), id, right);
     return li;
@@ -753,10 +732,10 @@ export function createMenu(api: MenuApi): Menu {
     }
     const viewport = squadScroll.clientHeight;
     if (viewport <= 0) return;
-    const rowH = squadRowH;
+    const pitch = squadPitch;
     const y = squadScroll.scrollTop - squadRosterEl.offsetTop;
-    const start = Math.max(0, Math.floor(y / rowH) - 6);
-    const end = Math.min(squadRows.length, Math.max(start, Math.ceil((y + viewport) / rowH) + 6));
+    const start = Math.max(0, Math.floor(y / pitch) - 6);
+    const end = Math.min(squadRows.length, Math.max(start, Math.ceil((y + viewport) / pitch) + 6));
     if (!force && squadRange.start === start && squadRange.end === end && squadRange.rows === squadRows.length) return;
     squadRange = { start, end, rows: squadRows.length };
 
@@ -775,7 +754,7 @@ export function createMenu(api: MenuApi): Menu {
         if (anchor) squadRosterEl.insertBefore(el, anchor);
         else squadRosterEl.append(el);
       }
-      el.style.top = `${index * rowH}px`;
+      el.style.top = `${index * pitch}px`;
       anchor = el;
     }
   }
@@ -804,8 +783,8 @@ export function createMenu(api: MenuApi): Menu {
 
     squadRosterEmpty.hidden = squadRows.length > 0;
     squadRosterEl.hidden = squadRows.length === 0;
-    const rowH = measureSquadRow();
-    squadRosterEl.style.height = `${squadRows.length * rowH}px`;
+    const pitch = measureSquadPitch();
+    squadRosterEl.style.height = `${Math.max(0, squadRows.length * pitch - squadGap)}px`;
     squadRosterEl.textContent = '';
     squadRowEls.clear();
     squadRange = { start: -1, end: -1, rows: -1 };
@@ -824,15 +803,7 @@ export function createMenu(api: MenuApi): Menu {
     $<HTMLElement>('squad-view-avg').textContent = en(squadView.avgTiq);
     $<HTMLElement>('squad-view-members').textContent = en(squadView.count);
     $<HTMLElement>('squad-view-members-label').textContent = squadView.count === 1 ? 'Member' : 'Members';
-    const tier = squadView.squadArena;
-    const tierName = `${tier.tierName} Division ${tier.division}`;
-    squadCrest.dataset.tier = tier.tier;
-    const tierHost = $<HTMLElement>('squad-view-tier');
-    tierHost.dataset.tier = tier.tier;
-    tierHost.title = `${tierName} · squad average ${en(squadView.avgTiq)} TIQ`;
-    tierHost.setAttribute('aria-label', `${tierName}, squad average ${en(squadView.avgTiq)} TIQ`);
-    $<HTMLElement>('squad-view-tier-full').textContent = tierName;
-    $<HTMLElement>('squad-view-tier-short').textContent = `Division ${tier.division}`;
+    squadCrest.dataset.tier = squadView.squadArena.tier;
     paintSquadYou();
     paintSquadRoster();
   }

@@ -18,7 +18,7 @@
 import { holderEdition, wornEdition, type WornEdition } from './badges';
 import { ARENA_TIER_NAMES, arena, type ArenaTierId } from './arenaState';
 import { myTiq } from './matchmaking';
-import { getMyContribution, type RankedSquad } from './squads';
+import type { RankedSquad } from './squads';
 import { profile } from './storage';
 import { tgUser } from './telegram';
 
@@ -50,6 +50,8 @@ export interface SquadMember {
   role: SquadRole;
   /** The member's own Tactical IQ — the number the ladder ranks. */
   tiq: number;
+  /** ISO 3166-1 alpha-2 for the flag badge; the loaded save wins for the local player. */
+  country: string;
   arena: ArenaStanding;
   isYou: boolean;
   initials: string;
@@ -68,8 +70,6 @@ export interface SquadRoster {
   totalTiq: number;
   yourRank: number;
   yourTiq: number;
-  /** Squad TIQ banked on this device this season. */
-  yourContribution: number;
   yourRole: SquadRole;
   yourMedal: WornEdition | null;
   youName: string;
@@ -206,6 +206,34 @@ function nameOf(seed: number, index: number): string {
   return lap ? `${base} ${lap + 1}` : base;
 }
 
+/** Surnames the generator uses, mapped to the nation a global roster would plausibly show. */
+const SURNAME_COUNTRY: Record<string, string> = {
+  Okafor: 'NG', Laurent: 'FR', Tanaka: 'JP', Sharma: 'IN', Almeida: 'BR', Haddad: 'LB',
+  Bennett: 'GB', Kim: 'KR', Volkov: 'RU', Weber: 'DE', Castillo: 'ES', Sato: 'JP',
+  Rahman: 'BD', Silva: 'BR', Kowalski: 'PL', Osei: 'GH', Demir: 'TR', Novak: 'CZ',
+  Chen: 'CN', Malik: 'PK', Visser: 'NL', Patel: 'IN', Moreau: 'FR', Toure: 'ML',
+  Rossi: 'IT', Levi: 'IL', Nakamura: 'JP', Cruz: 'MX', Ivanov: 'RU', Green: 'GB',
+  Mensah: 'GH', Kaya: 'TR', Park: 'KR', Duarte: 'PT', Ellis: 'GB', Yamada: 'JP',
+};
+
+/** A spread that keeps the roster reading global even when a surname is not mapped. */
+const FLAG_POOL = [
+  'US', 'GB', 'CA', 'BR', 'MX', 'AR', 'DE', 'FR', 'ES', 'PT', 'IT', 'NL', 'SE', 'NO',
+  'FI', 'PL', 'CZ', 'RO', 'GR', 'UA', 'TR', 'IN', 'PK', 'BD', 'CN', 'JP', 'KR', 'PH',
+  'ID', 'VN', 'TH', 'AU', 'NZ', 'NG', 'GH', 'KE', 'ZA', 'EG', 'MA', 'AE', 'SA', 'IL',
+] as const;
+
+function countryFor(seed: string, name: string): string {
+  const surname = name.trim().split(/\s+/)[1] ?? '';
+  return SURNAME_COUNTRY[surname] ?? FLAG_POOL[hash32(`${seed}|flag|${name}`) % FLAG_POOL.length];
+}
+
+/** The save's own alpha-2 wins; a seeded read keeps the mock roster from showing an empty badge. */
+function playerCountry(seed: string, name: string): string {
+  const saved = profile.country;
+  return saved && /^[A-Za-z]{2}$/.test(saved) ? saved.toUpperCase() : countryFor(seed, name);
+}
+
 /**
  * A two-tier split of `total` TIQ over `count` synthetic members, in descending order.
  *
@@ -306,7 +334,6 @@ function insertionIndex(rows: number[], value: number): number {
 export function buildSquadRoster(squad: RankedSquad): SquadRoster {
   const count = Math.max(1, Math.floor(squad.members) || 1);
   const yourTiq = Math.max(0, Math.floor(myTiq()));
-  const yourContribution = Math.max(0, Math.floor(getMyContribution()));
   const syntheticCount = count - 1;
   const targetTotal = Math.round(squadTargetAvg(squad.rank) * count);
   const syntheticTotal = Math.max(0, targetTotal - yourTiq);
@@ -327,6 +354,7 @@ export function buildSquadRoster(squad: RankedSquad): SquadRoster {
       name,
       role: roleFor(i, yourRole),
       tiq,
+      country: countryFor(squad.id, name),
       arena: arenaStandingOf(tiq),
       isYou: false,
       initials: initialsOf(name),
@@ -341,6 +369,7 @@ export function buildSquadRoster(squad: RankedSquad): SquadRoster {
     name: youName,
     role: yourRole,
     tiq: yourTiq,
+    country: playerCountry(`${squad.id}:you`, youName),
     arena: arenaStandingOf(yourTiq),
     isYou: true,
     initials: initialsOf(youName),
@@ -366,7 +395,6 @@ export function buildSquadRoster(squad: RankedSquad): SquadRoster {
     totalTiq,
     yourRank: youAt + 1,
     yourTiq,
-    yourContribution,
     yourRole,
     yourMedal: you.medal,
     youName,
