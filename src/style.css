@@ -1060,6 +1060,7 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
   0%        { transform: scale(.94); opacity: .95; }
   70%, 100% { transform: scale(1.08); opacity: 0; }
 }
+.tutorial[data-tone="goal"] .tut-spot,
 .tutorial[data-tone="select"] .tut-spot,
 .tutorial[data-tone="mine"] .tut-spot {
   --tut-ring: rgba(252, 211, 77, .98);
@@ -1112,10 +1113,10 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
   70%      { filter: brightness(.92); }
 }
 
-/* ---- the tactical touch pointer: a frosted-glass beacon, not an emoji ----------
+/* ---- the touch pointer: a porcelain-white human hand, not a beacon and not an emoji ----
    The container's origin IS the contact point. The sonar rings stay pinned there;
-   the SVG is offset by its own tip so the glowing fingertip lands on the exact
-   pixel, and the press animation moves the beacon while the rings hold the surface. */
+   the SVG is offset by its own fingertip so the index tip lands on the exact pixel,
+   and the press animation dips the hand while the rings hold the surface. */
 .tut-pointer {
   position: absolute;
   z-index: 3;
@@ -1135,18 +1136,18 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 1.5px solid rgba(56, 189, 248, .72);
+  border: 1.5px solid rgba(255, 255, 255, .78);
   box-shadow:
-    0 0 14px rgba(56, 189, 248, .34),
-    inset 0 0 12px rgba(56, 189, 248, .18);
+    0 0 14px rgba(255, 255, 255, .34),
+    inset 0 0 12px rgba(255, 255, 255, .18);
   opacity: 0;
   animation: tutPulseRing 1.5s cubic-bezier(.2, .62, .28, 1) infinite;
 }
 .tut-sonar i:nth-child(2) {
-  border-color: rgba(252, 211, 77, .58);
+  border-color: rgba(252, 211, 77, .62);
   box-shadow:
-    0 0 14px rgba(252, 211, 77, .26),
-    inset 0 0 12px rgba(252, 211, 77, .14);
+    0 0 14px rgba(252, 211, 77, .28),
+    inset 0 0 12px rgba(252, 211, 77, .16);
   animation-delay: .5s;
 }
 .tut-sonar i:nth-child(3) { animation-delay: 1s; }
@@ -1163,7 +1164,7 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
   height: 88px;
   overflow: visible;
   shape-rendering: geometricPrecision;
-  filter: drop-shadow(0 6px 16px rgba(56, 189, 248, 0.45));
+  filter: drop-shadow(0 7px 14px rgba(2, 6, 23, .55));
   transform-origin: 32px 10px;
   animation: tutTapPress 1.5s cubic-bezier(.4, 0, .2, 1) infinite;
   will-change: transform;
@@ -1207,6 +1208,7 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
   --tut-accent: var(--brand-ink);
   --tut-accent-soft: var(--brand-soft);
 }
+.tut-card[data-tone="goal"],
 .tut-card[data-tone="select"] {
   --tut-accent: var(--gold-ink);
   --tut-accent-soft: rgba(245, 158, 11, .15);
@@ -1265,50 +1267,34 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
   color: var(--ink-soft);
 }
 
-/* ---- the 1.2s finish banner: gold crest, dark clay, then the board is live ---- */
-.tut-done {
-  position: absolute;
-  z-index: 7;
-  left: 50%;
-  top: 50%;
-  width: min(320px, calc(100vw - 40px));
-  padding: 16px 20px 17px;
-  display: flex;
-  flex-direction: column;
+/* ---- step 1's door: one compact gold key inside the card, never a floating overlay ---- */
+.tut-next {
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
-  transform: translate(-50%, -50%) scale(.96);
-  border: 1px solid rgba(252, 211, 77, .5);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(24, 33, 52, .96), rgba(12, 18, 30, .97));
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow:
-    0 24px 50px -20px rgba(0, 0, 0, .92),
-    0 0 40px -8px rgba(245, 158, 11, .48),
-    inset 0 1px 0 rgba(255, 255, 255, .1);
-  text-align: center;
-  pointer-events: none;
-  opacity: 0;
-}
-.tut-done.show { animation: tut-done .32s cubic-bezier(.2, 1.2, .4, 1) forwards; }
-@keyframes tut-done {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(.92); }
-  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-}
-.tut-done-kick {
-  font-size: 15px;
-  font-weight: 900;
-  letter-spacing: .09em;
+  min-height: 38px;
+  margin-top: 10px;
+  padding: 0 15px;
+  border: 1px solid rgba(252, 211, 77, .48);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(252, 211, 77, .24), rgba(245, 158, 11, .12));
   color: var(--gold-ink);
-  text-shadow: 0 0 18px rgba(245, 158, 11, .55);
-}
-.tut-done-line {
-  font-size: 10.5px;
+  font: inherit;
+  font-size: 12px;
   font-weight: 800;
-  letter-spacing: .1em;
-  color: var(--ink-soft);
+  letter-spacing: .03em;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    0 10px 20px -14px rgba(0, 0, 0, .9);
+  transition: transform var(--motion-fast), filter var(--motion-fast);
 }
+.tut-next .ico { width: 13px; height: 13px; }
+.tut-next:active { transform: translateY(1px); filter: brightness(1.12); }
+.tut-next:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.tut-next[hidden] { display: none; }
 
 /* ---- skip: quiet, top-right, still a 48px target ---- */
 .tut-skip {
@@ -1349,7 +1335,7 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
   .tut-card { padding-top: 9px; padding-bottom: 10px; }
   .tut-ico { width: 24px; height: 24px; border-radius: 8px; }
   .tut-body { margin-top: 5px; line-height: 1.35; }
-  .tut-done { padding: 13px 16px 14px; }
+  .tut-next { min-height: 36px; margin-top: 8px; }
 }
 
 /* ==========================================================================

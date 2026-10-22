@@ -32,11 +32,10 @@ import {
   completeTutorial, hasCompletedTutorial, onChange, pieceColor, profile, recordGame, resetTutorialState, theme,
 } from './storage';
 import {
-  createTutorial, shouldAutoStartTutorial, tutorialSpotHas,
+  createTutorial, shouldAutoStartTutorial, tutorialSpotHas, TUTORIAL_LIVE_STEPS,
   type Tutorial, type TutorialAction, type TutorialRect, type TutorialSpot, type TutorialStage,
   type TutorialTargetMine, type TutorialTargetMove, type TutorialTargetSelect, type TutorialTargetWall,
 } from './tutorial';
-import { pickMineDemo, twoStepPath, type MineDemoPlan, type StepsFor } from './tutorialDemo';
 import { perspectiveRamps } from './themes';
 import { detonation, impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
@@ -724,6 +723,9 @@ function ui() {
     menuBtn.disabled = false;
   }
   if (state.winner !== null) armGoalBeat();
+  /* the wall's live-play intermission ends on the board's own terms: two real rival rows, then
+     this seat's turn. Called last so a resumed lesson's own repaint is the final word. */
+  if (waitingForMineTrigger) resumeMineLesson();
 }
 
 /** A bot turn parked until the board is clear of a rolling log. */
@@ -844,6 +846,8 @@ function play(a: Action, remote = false): boolean {
   else if (a.kind === 'wall') { marks[by] = { kind: 'wall', spec: a.wall }; audio.play('move'); impact('medium'); }
   if (a.kind === 'mine') { mineArmed = false; audio.play('move'); }   // one mine per trip to the key
   state = next;
+  /* the mine lesson's intermission gate reads real plays, never a scripted walk */
+  if (waitingForMineTrigger) countMineStride();
   /* a move this seat made is also a move the rival has to see: the matchmaker relays it */
   if (!remote && active) active.send(a);
   turnsPlayed++;                 // one seat has acted; the round caption counts them
@@ -1475,6 +1479,19 @@ function isTutorialActionAllowed(action: TutorialAction): boolean {
  * canvas receives this tap exactly as it would after the lesson.
  */
 function tutorialTap(p: Vec) {
+  /* Step 1 is the GOAL, not a board action: the FINISH banner is the target, and a tap anywhere
+     inside its spotlight (or the card's Next key, wired in tutorial.ts) opens step 2. */
+  if (tutorialStage() === 'finish') {
+    const goal = tutorialFinishTarget();
+    const box = canvas.getBoundingClientRect();
+    if (goal && tutorialSpotHas(goal, box.left + p.x, box.top + p.y)) {
+      impact('light');
+      tutorial?.advance();
+    } else {
+      tutorial?.nudge();
+    }
+    return;
+  }
   let action = tutorialHitAction(at(p));
   /* Step 3 is forgiving by design: the whole spotlight — not just the hairline groove — is the
      wall's hit area. A tap anywhere inside it snaps to the live target and commits in one tap;
@@ -1624,7 +1641,7 @@ function elementSpot(el: Element | null | undefined, pad: number): TutorialSpot 
   };
 }
 
-/** Step 1's real target: the local player's first pawn, with nothing picked yet. */
+/** Step 2's first half: the local player's first pawn, with nothing picked yet. */
 function tutorialSelectTarget(): TutorialTargetSelect | null {
   if (state.turn !== localSide || state.winner !== null) return null;
   const ball = firstBall(state, localSide);
@@ -1701,106 +1718,48 @@ function tutorialWallTarget(): TutorialTargetWall | null {
   return null;
 }
 
-/** Step 4B's real target: a mine square the rival can reach in exactly two steps. */
+/**
+ * Step 4's real target: the tile directly in the rival's forward path. It must be a legal mine
+ * cell from the rules' own list, so the lesson never points at a square the action would refuse —
+ * and it is read from the rival's LIVE position, never from a scripted route.
+ */
 function tutorialMineTarget(): TutorialTargetMine | null {
   if (state.turn !== localSide || state.winner !== null) return null;
   const cells = mineCells(state, localSide);
   if (!cells.length) return null;
   const rival = tutorialRival();
+  const wanted: Cell[] = [];
+  const want = (c: Cell) => { if (!wanted.some((w) => sameCell(w, c))) wanted.push(c); };
   if (rival) {
-    /* The demonstration has to be true: pick a square the rival can walk onto in two legal steps.
-       The search prefers a straight two-row advance, so the beat reads "forward, forward, boom". */
-    const plan = pickMineDemo(state, rival, cells, tutorialSteps);
-    if (plan) return { cell: plan.cell, spot: { rect: boardRect(plan.cell.c, plan.cell.r), radius: 16 } };
+    want({ c: rival.pos.c, r: rival.pos.r - 1 });
+    want({ c: rival.pos.c - 1, r: rival.pos.r - 1 });
+    want({ c: rival.pos.c + 1, r: rival.pos.r - 1 });
+    want({ c: rival.pos.c, r: rival.pos.r - 2 });
   }
-  /* Fallback for a board with no two-step approach: the old nearest-forward square. */
-  let best = cells[0];
+  for (const cell of wanted) {
+    const legal = cells.find((c) => sameCell(c, cell));
+    if (legal) return { cell: legal, spot: { rect: boardRect(legal.c, legal.r), radius: 16 } };
+  }
+  /* every square ahead is spoken for: the nearest forward cell the rules still allow */
+  const ahead = rival ? cells.filter((c) => c.r < rival.pos.r) : cells;
+  const pool = ahead.length ? ahead : cells;
+  let best = pool[0];
   if (rival) {
     let score = Infinity;
-    for (const cell of cells) {
-      const s = Math.abs(cell.r - (rival.pos.r - 1)) * 3 + Math.abs(cell.c - rival.pos.c)
-        + (cell.r >= rival.pos.r ? 12 : 0);
+    for (const cell of pool) {
+      const s = Math.abs(cell.c - rival.pos.c) * 4 + Math.abs(cell.r - (rival.pos.r - 1)) * 2;
       if (s < score) { score = s; best = cell; }
     }
   }
   return { cell: best, spot: { rect: boardRect(best.c, best.r), radius: 16 } };
 }
 
-/** The rules' own move list, handed to the pure demo planner. */
-const tutorialSteps: StepsFor = (s, team) => teamSteps(s, team);
-
-/** The charge planted in step 4B — the newest live mine of the local seat. */
-function tutorialPlantedMine(): Mine | null {
-  for (let i = state.mines.length - 1; i >= 0; i--) {
-    const mine = state.mines[i];
-    if (mine.owner === localSide && !mine.triggered) return mine;
-  }
-  return null;
-}
-
-/** The planted mine and the two real moves that carry the rival onto it. */
-function tutorialMinePlan(): MineDemoPlan | null {
-  const mine = tutorialPlantedMine();
-  const rival = tutorialRival();
-  if (!mine || !rival) return null;
-  const path = twoStepPath(state, rival, mine.cell, tutorialSteps);
-  return path ? { cell: mine.cell, path } : null;
-}
-
-/** The board window the watch beat reveals: the rival, every step and the charge. */
-function tutorialMineDemoSpot(): TutorialSpot | null {
-  const plan = tutorialMinePlan();
-  const rival = tutorialRival();
-  if (!plan?.path || !rival) return null;
-  const cells: Cell[] = [rival.pos, ...plan.path.map((step) => step.to), plan.cell];
-  const minC = Math.min(...cells.map((c) => c.c));
-  const maxC = Math.max(...cells.map((c) => c.c));
-  const minR = Math.min(...cells.map((c) => c.r));
-  const maxR = Math.max(...cells.map((c) => c.r));
-  return {
-    rect: boardRect(minC, minR, maxC - minC + 1, maxR - minR + 1),
-    radius: 18,
-  };
-}
-
 /**
- * Step 4B's payoff, timed like a short cutscene: the card changes first, the rival advances one
- * legal step at a time (350ms), the local seat yields between those steps, and the second step lands
- * on the charge. `play()` owns the real detonation, so the blast, shake, haptic and wound are the
- * same ones a live mine gets. Every await re-checks the run token and the lesson flag, so a skip or
- * a restart can never resurrect a half-finished demo.
+ * The gold FINISH banner: step 1's own target, and the re-pulse that answers the forward step.
+ * Exactly the top row, so the guidance is the board's real goal line and never a floating band.
  */
-const WATCH_BEAT_MS = 420;
-const DEMO_STEP_MS = 350;
-const DEMO_PASS_MS = 120;
-const DEMO_BLAST_MS = 900;
-let mineDemoRun = 0;
-const waitMs = (ms: number) => new Promise<void>((res) => window.setTimeout(res, ms));
-
-async function tutorialMineDemo(): Promise<void> {
-  const run = ++mineDemoRun;
-  const plan = tutorialMinePlan();
-  if (!plan) return;
-  const alive = () => run === mineDemoRun && tutorialActive;
-  await waitMs(WATCH_BEAT_MS);
-  if (!alive()) return;
-  tutorial?.say('Opponent advancing — step 1 of 2.');
-  if (!play({ kind: 'move', ball: plan.path[0].ball, to: plan.path[0].to })) return;
-  await waitMs(DEMO_STEP_MS);
-  if (!alive()) return;
-  /* The rival's walk is the lesson's: yield the local turn without asking for a tap. */
-  play({ kind: 'pass' });
-  await waitMs(DEMO_PASS_MS);
-  if (!alive()) return;
-  tutorial?.say('Opponent advancing — step 2 of 2.');
-  if (!play({ kind: 'move', ball: plan.path[1].ball, to: plan.path[1].to })) return;
-  /* Hold the line while the blast, the throw and the wound play out. */
-  await waitMs(DEMO_BLAST_MS);
-  if (!alive()) return;
-  tutorial?.say("Direct hit! Mine detonated — you're ready to race.");
-}
-
-const tutorialFinishTarget = (): TutorialSpot => ({ rect: boardRect(0, 0, state.cols, 1), radius: 18 });
+const tutorialFinishTarget = (): TutorialSpot | null =>
+  state.winner === null ? { rect: boardRect(0, 0, state.cols, 1), radius: 18 } : null;
 
 /** The lesson's one bot beat: each machine seat steps once, deterministically, and hands back. */
 async function tutorialReply(): Promise<void> {
@@ -1830,9 +1789,72 @@ function syncTutorialUI(stage: TutorialStage | null) {
   ui();
 }
 
+/* ---------- the live-play intermission before the mine lesson ---------- */
+
+/**
+ * Step 3 has just put the wall up. The lesson has stepped aside; from here until the mine is
+ * planted the board is ordinary live play. The two numbers below are the only gate: the rival's
+ * real forward rows, counted off `play()`, and whose turn it is. Nothing is scripted, and nothing
+ * opens while the rival is still parked on its starting row.
+ */
+let waitingForMineTrigger = false;
+let mineStrides = 0;
+let mineGateBall: number | null = null;
+let mineGateRow = 0;
+
+/** The wall stands: close the overlay, release the gate, and let the match actually play. */
+function beginMineIntermission() {
+  tutorialActive = false;
+  document.body.classList.remove('tutorial-live');
+  const rival = tutorialRival();
+  mineGateBall = rival?.id ?? null;
+  mineGateRow = rival?.pos.r ?? state.rows - 1;
+  mineStrides = 0;
+  waitingForMineTrigger = true;
+  ui();
+  startClock();
+  if (wantsOpponent()) void runOpponent();
+}
+
+/** One real forward step of the gated rival, counted once per row gained. */
+function countMineStride() {
+  const ball = mineGateBall === null ? tutorialRival()
+    : state.balls.find((b) => b.id === mineGateBall) ?? tutorialRival();
+  if (!ball || ball.pos.r >= mineGateRow) return;
+  mineGateRow = ball.pos.r;
+  mineStrides++;
+}
+
+/**
+ * The intermission is over: the rival has genuinely gained its two rows and the local seat is up.
+ * Re-open the overlay on the mine half of step 4. A settled race ends the lesson instead.
+ */
+function resumeMineLesson() {
+  if (!waitingForMineTrigger || tutorialActive || paused || overlayOpen || rolling) return;
+  if (state.winner !== null) {
+    waitingForMineTrigger = false;
+    tutorial?.cancel();
+    return;
+  }
+  if (state.turn !== localSide || mineStrides < TUTORIAL_LIVE_STEPS) return;
+  waitingForMineTrigger = false;
+  /* the player spent every charge during live play: there is no mine lesson left to teach */
+  if (minesLeft(state, localSide) <= 0) { tutorial?.skip(); return; }
+  mineArmed = false;
+  mineGhost = null;
+  selected = null;
+  autoPicked = null;
+  setMode(BOARD_IDLE);
+  tutorialActive = true;      // before stopClock: clockLive reads this flag
+  stopClock();
+  tutorial?.resume();         // render() refreshes the board through syncTutorialUI -> ui()
+}
+
 function beginTutorial() {
   if (!tutorial || tutorial.active || active || room) return;
-  mineDemoRun++;              // a fresh lesson invalidates any demo still waiting on a timer
+  waitingForMineTrigger = false;
+  mineStrides = 0;
+  mineGateBall = null;
   tutorialActive = true;      // before stopClock: clockLive reads this flag
   stopClock();
   /* step one is the player's own pick: clear the auto-pick the race painted before the lesson */
@@ -1847,13 +1869,16 @@ function beginTutorial() {
 
 /** Leaving the race, or starting another one, ends the lesson without marking it read. */
 function cancelTutorial() {
-  if (!tutorialActive) return;
-  mineDemoRun++;
+  if (!tutorialActive && !waitingForMineTrigger) return;
+  waitingForMineTrigger = false;
+  mineStrides = 0;
+  mineGateBall = null;
   tutorial?.cancel();
   tutorialActive = false;
 }
 
 tutorial = createTutorial({
+  goal: tutorialFinishTarget,
   select: tutorialSelectTarget,
   move: tutorialMoveTarget,
   wall: tutorialWallTarget,
@@ -1861,8 +1886,7 @@ tutorial = createTutorial({
   minePlace: tutorialMineTarget,
   finish: tutorialFinishTarget,
   reply: tutorialReply,
-  mineDemo: tutorialMineDemo,
-  mineDemoSpot: tutorialMineDemoSpot,
+  handoff: beginMineIntermission,
   refresh: syncTutorialUI,
   end(result) {
     tutorialActive = false;

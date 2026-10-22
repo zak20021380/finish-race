@@ -2,10 +2,13 @@
  * tutorial-check.mjs — the hands-on lesson's pure half, plus the save it writes.
  *
  * Asserts:
- *  - the lesson is exactly five stages over four visible steps, in the eyes-on-the-board order;
+ *  - the lesson opens on the GOAL (the FINISH banner), then pick + move as one visible step,
+ *    the wall as step 3 and the two mine halves as step 4;
+ *  - the wall is the handoff stage: after it the overlay leaves for two live turns and the mine
+ *    lesson is what re-opens;
  *  - each stage's gate accepts only its exact target (right pawn, right tile, right groove,
- *    right mine cell) and refuses every other action;
- *  - the NEXT_STAGE chain walks select → move → wall → mine-arm → mine-place → done;
+ *    right mine cell) and refuses every other action — step 1 has no board action at all;
+ *  - the NEXT_STAGE chain walks finish → select → move → wall → mine-arm → mine-place → done;
  *  - online seats, private rooms and completed saves never auto-start the lesson;
  *  - completeTutorial() persists `tutorialCompleted` through the real storage module, survives a
  *    module reload, and resetTutorialState() clears it (and the legacy bare key).
@@ -30,32 +33,47 @@ const check = async (name, fn) => {
 
 /* tutorial.ts imports only types from ./rules, so Node's type stripping can load it directly. */
 const {
-  TUTORIAL_STEPS, NEXT_STAGE, tutorialAllows, tutorialSpotBox, tutorialSpotHas,
-  shouldAutoStartTutorial,
+  TUTORIAL_STEPS, NEXT_STAGE, TUTORIAL_HANDOFF, TUTORIAL_RESUME_STAGE, TUTORIAL_LIVE_STEPS,
+  tutorialAllows, tutorialSpotBox, tutorialSpotHas, shouldAutoStartTutorial,
 } = await import(pathToFileURL(path.resolve('src/tutorial.ts')).href);
 
 /* ---------- the four-step lesson ---------- */
 
-await check('the lesson is five stages over four visible steps', () => {
+await check('the lesson is six stages over four visible steps, opening on the GOAL', () => {
   assert.deepEqual(TUTORIAL_STEPS.map((s) => s.stage),
-    ['select', 'move', 'wall', 'mine-arm', 'mine-place']);
-  assert.deepEqual(TUTORIAL_STEPS.map((s) => s.group), [1, 2, 3, 4, 4]);
-  assert.equal(TUTORIAL_STEPS[0].title, 'SELECT YOUR PIECE');
-  assert.equal(TUTORIAL_STEPS[0].body, 'Tap your glowing piece to start.');
-  assert.equal(TUTORIAL_STEPS[1].title, 'MOVE TO FINISH');
-  assert.equal(TUTORIAL_STEPS[2].title, 'PLACE A WALL');
-  assert.equal(TUTORIAL_STEPS[3].title, 'ARM A TRAP');
-  assert.equal(TUTORIAL_STEPS[4].title, 'PLANT THE MINE');
-  /* no stage carries a "next" action: the only way forward is the action itself */
+    ['finish', 'select', 'move', 'wall', 'mine-arm', 'mine-place']);
+  assert.deepEqual(TUTORIAL_STEPS.map((s) => s.group), [1, 2, 2, 3, 4, 4]);
+  assert.equal(TUTORIAL_STEPS[0].title, 'GOAL');
+  assert.equal(TUTORIAL_STEPS[0].body,
+    'First player to reach the FINISH line at the top wins! Tap Next or the FINISH line to continue.');
+  assert.equal(TUTORIAL_STEPS[0].tone, 'goal');
+  assert.equal(TUTORIAL_STEPS[1].title, 'SELECT YOUR PIECE');
+  assert.equal(TUTORIAL_STEPS[1].body, 'Tap your glowing piece to select it.');
+  assert.equal(TUTORIAL_STEPS[2].title, 'MOVE TO FINISH');
+  assert.equal(TUTORIAL_STEPS[2].body, 'Tap the glowing tile ahead to move toward FINISH!');
+  assert.equal(TUTORIAL_STEPS[3].title, 'PLACE A WALL');
+  assert.equal(TUTORIAL_STEPS[3].body, 'Tap this slot to block your opponent with a wall!');
+  assert.equal(TUTORIAL_STEPS[4].title, 'ARM A HIDDEN MINE');
+  assert.equal(TUTORIAL_STEPS[4].body, 'Tap the Mine button to arm a hidden trap!');
+  assert.equal(TUTORIAL_STEPS[5].title, 'PLANT THE MINE');
+  assert.equal(TUTORIAL_STEPS[5].body, 'Tap this tile ahead of your opponent to hide the mine!');
+  /* no stage carries a "next" action: only step 1 is taken by a key, everything else by its act */
   assert.equal(TUTORIAL_STEPS.every((s) => s.title.length > 0 && !('action' in s)), true);
 });
 
-await check('the forward chain is select → move → wall → arm → plant → done', () => {
+await check('the forward chain is finish → select → move → wall → arm → plant → done', () => {
+  assert.equal(NEXT_STAGE.finish, 'select');
   assert.equal(NEXT_STAGE.select, 'move');
   assert.equal(NEXT_STAGE.move, 'wall');
   assert.equal(NEXT_STAGE.wall, 'mine-arm');
   assert.equal(NEXT_STAGE['mine-arm'], 'mine-place');
   assert.equal(NEXT_STAGE['mine-place'], 'done');
+});
+
+await check('the wall hands the board back for two live rival rows before the mine', () => {
+  assert.equal(TUTORIAL_HANDOFF, 'wall');
+  assert.equal(TUTORIAL_RESUME_STAGE, 'mine-arm');
+  assert.equal(TUTORIAL_LIVE_STEPS, 2);
 });
 
 const targets = {
@@ -66,14 +84,22 @@ const targets = {
   mine: { c: 5, r: 9 },
 };
 
-await check('step 1 accepts only the local pawn', () => {
+await check('step 1 is the banner: no board action belongs to it', () => {
+  assert.equal(tutorialAllows('finish', targets, { kind: 'select', ball: 7 }), false);
+  assert.equal(tutorialAllows('finish', targets, { kind: 'move', to: targets.move }), false);
+  assert.equal(tutorialAllows('finish', targets, { kind: 'wall', spec: targets.wall }), false);
+  assert.equal(tutorialAllows('finish', targets, { kind: 'mine-arm' }), false);
+  assert.equal(tutorialAllows('finish', targets, { kind: 'mine', cell: targets.mine }), false);
+});
+
+await check('step 2A accepts only the local pawn', () => {
   assert.equal(tutorialAllows('select', targets, { kind: 'select', ball: 7 }), true);
   assert.equal(tutorialAllows('select', targets, { kind: 'select', ball: 8 }), false);
   assert.equal(tutorialAllows('select', targets, { kind: 'move', to: { c: 2, r: 10 } }), false);
   assert.equal(tutorialAllows('select', targets, { kind: 'mine-arm' }), false);
 });
 
-await check('step 2 accepts only the glowing forward tile', () => {
+await check('step 2B accepts only the glowing forward tile', () => {
   assert.equal(tutorialAllows('move', targets, { kind: 'move', to: { c: 2, r: 10 } }), true);
   assert.equal(tutorialAllows('move', targets, { kind: 'move', to: { c: 2, r: 9 } }), false);
   assert.equal(tutorialAllows('move', targets, { kind: 'move', to: { c: 3, r: 10 } }), false);
@@ -172,43 +198,6 @@ const map = { themes: themesHref, countries: countriesHref, teams: teamsHref };
 const storageHref = writeTwin('storage-under-test.ts',
   fs.readFileSync('src/storage.ts', 'utf8')
     .replace(/from '\.\/(themes|countries|teams)'/g, (_m, name) => `from '${map[name]}'`));
-
-/* rules + the pure mine-demo planner: Node cannot resolve the extensionless './hazards' import,
-   so the rules module is loaded through twins exactly as the mines suite does. */
-const hazardsHref = writeTwin('hazards-under-test.ts',
-  fs.readFileSync('src/hazards.ts', 'utf8').replaceAll("from './rules'", "from './rules-under-test.ts'"));
-const rulesHref = writeTwin('rules-under-test.ts',
-  fs.readFileSync('src/rules.ts', 'utf8').replaceAll("from './hazards'", `from '${hazardsHref}'`));
-const rules = await import(rulesHref);
-const { pickMineDemo } = await import(pathToFileURL(path.resolve('src/tutorialDemo.ts')).href);
-
-await check('step 4 plants a mine two legal steps ahead, and the second step detonates it', () => {
-  const fresh = rules.newGame([1, 1], { hazards: false, seed: 7 });
-  /* the board the tutorial reaches after the wall reply: the rival sits one row up and to the
-     right of its start square, with the local seat to move */
-  const board = {
-    ...fresh,
-    turn: 0,
-    balls: fresh.balls.map((b) => (b.team === 1 ? { ...b, pos: { c: 5, r: 10 } } : b)),
-  };
-  const rival = board.balls.find((b) => b.team === 1);
-  const plan = pickMineDemo(board, rival, rules.mineCells(board, 0), (s, team) => rules.steps(s, team));
-  assert.ok(plan, 'no mine square had a two-step approach');
-  assert.deepEqual(plan.cell, { c: 5, r: 8 });
-  assert.deepEqual(plan.path.map((p) => p.to), [{ c: 5, r: 9 }, { c: 5, r: 8 }]);
-
-  let game = rules.apply(board, { kind: 'mine', cell: plan.cell });
-  assert.equal(game.turn, 1);
-  assert.equal(game.mines[0].triggered, false);
-  game = rules.apply(game, { kind: 'move', ball: plan.path[0].ball, to: plan.path[0].to });
-  assert.equal(game.mines[0].triggered, false, 'the first step must not reach the charge');
-  game = rules.apply(game, { kind: 'pass' });                 // the lesson yields the local turn
-  game = rules.apply(game, { kind: 'move', ball: plan.path[1].ball, to: plan.path[1].to });
-  assert.equal(game.mines[0].triggered, true, 'the second step did not set the mine off');
-  const thrown = game.balls.find((b) => b.team === 1);
-  assert.ok(thrown.pos.r > plan.cell.r, 'the blast did not throw the rival back');
-  assert.equal(game.turn, 0, 'the demonstration must hand the lesson back to the local seat');
-});
 
 const storage = await import(storageHref);
 

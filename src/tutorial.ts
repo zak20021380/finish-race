@@ -1,10 +1,15 @@
 /**
  * tutorial.ts — the first-match hands-on lesson.
  *
- * There are no Next buttons. Each of the four units (the mine one is a two-part flow) owns one
- * real board action: select the pawn, step it forward, place a wall, arm the mine key, plant the
- * mine. The module never mutates the game itself — `main.ts` performs the action, then calls
- * `notify()`; the action gate here is what told it the tap was the right one.
+ * Six stages over four visible steps. Step 1 shows the GOAL: the FINISH banner is the live target, so
+ * the player sees where the race ends before touching a pawn. Step 2 is the pick and the forward
+ * step, step 3 the wall. Then the lesson deliberately steps OUT of the way: the wall stands, the
+ * overlay closes, and the board is normal live play for two rival steps. When the rival has gained
+ * those two rows and the local seat is up again, the lesson re-opens on its own for step 4 — the
+ * mine — and gets out of the way for good the instant the charge is planted.
+ *
+ * The module never mutates the game itself — `main.ts` performs the action, then calls `notify()`;
+ * the action gate here is what told it the tap was the right one.
  *
  * The scrim and the input blocker share one SVG cut-out, so the spotlight is sharp and — just as
  * important — the blocker is physically absent inside it. Taps land on the real canvas or the real
@@ -22,7 +27,7 @@ export interface TutorialSpot {
   radius?: number;
 }
 
-export type TutorialStage = 'select' | 'move' | 'wall' | 'mine-arm' | 'mine-place';
+export type TutorialStage = 'finish' | 'select' | 'move' | 'wall' | 'mine-arm' | 'mine-place';
 export type TutorialPhase = TutorialStage | 'done';
 export type TutorialResult = 'finished' | 'skipped' | 'cancelled';
 
@@ -49,46 +54,51 @@ export interface TutorialTargetWall { spot: TutorialSpot; spec: WallSpec }
 export interface TutorialTargetMine { spot: TutorialSpot; cell: Cell }
 
 export interface TutorialHooks {
+  /** Step 1's own target: the gold FINISH band across the top of the board. */
+  goal(): TutorialSpot | null;
   select(): TutorialTargetSelect | null;
   move(): TutorialTargetMove | null;
   wall(): TutorialTargetWall | null;
   mineArm(): TutorialSpot | null;
   minePlace(): TutorialTargetMine | null;
-  /** The gold FINISH band, pulsed while the movement step is up. */
+  /** The gold FINISH band, re-pulsed while the movement step is up. */
   finish(): TutorialSpot | null;
   /** One fast, deterministic reply per bot seat; resolves when the local seat is on turn again. */
   reply(): Promise<void>;
   /**
-   * Step 4B's payoff: the rival walks onto the planted charge, step by step, and the blast plays
-   * out. Resolves once the impact has been seen; the lesson then shows its ready banner.
+   * The wall is up: the overlay is about to step aside so the race can be played for real. The
+   * board releases the lesson's input gate, runs the live turns, and re-opens it at the mine.
    */
-  mineDemo(): Promise<void>;
-  /** The board area the watch beat should reveal: the rival, the path and the planted mine. */
-  mineDemoSpot(): TutorialSpot | null;
+  handoff(): void;
   /** A stage began (or the lesson closed, with null): re-derive hints and the mine key. */
   refresh(stage: TutorialStage | null): void;
   end(result: TutorialResult): void;
 }
 
 export interface Tutorial {
+  /** The overlay is up and the action gate is live. False during the live-play intermission. */
   readonly active: boolean;
+  /** The lesson is between sittings: the wall is placed and the board is being played for real. */
+  readonly suspended: boolean;
   readonly stage: TutorialStage | null;
   start(): void;
+  /** Step 1 was taken: the FINISH banner was tapped, or the card's Next key was pressed. */
+  advance(): void;
+  /** The intermission is over: re-open the overlay on the mine lesson. */
+  resume(): void;
   skip(): void;
   cancel(): void;
   allows(action: TutorialAction): boolean;
   notify(action: TutorialAction): void;
   nudge(): void;
-  /** Update the screen-reader live line during a scripted beat (the mine demonstration). */
-  say(text: string): void;
 }
 
 export interface TutorialStepDef {
   stage: TutorialStage;
-  /** The visible step number: the two mine halves are both step 4 of 4. */
+  /** The visible step number: pick + move are both step 2, the two mine halves both step 4. */
   group: number;
   icon: string;
-  tone: 'select' | 'move' | 'wall' | 'mine';
+  tone: 'goal' | 'select' | 'move' | 'wall' | 'mine';
   title: string;
   body: string;
 }
@@ -96,40 +106,54 @@ export interface TutorialStepDef {
 /** The whole lesson, in order. Copy is deliberately five words where five words will do. */
 export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
   {
-    stage: 'select', group: 1, icon: '#i-target', tone: 'select',
+    stage: 'finish', group: 1, icon: '#i-flag', tone: 'goal',
+    title: 'GOAL',
+    body: 'First player to reach the FINISH line at the top wins! '
+      + 'Tap Next or the FINISH line to continue.',
+  },
+  {
+    stage: 'select', group: 2, icon: '#i-target', tone: 'select',
     title: 'SELECT YOUR PIECE',
-    body: 'Tap your glowing piece to start.',
+    body: 'Tap your glowing piece to select it.',
   },
   {
     stage: 'move', group: 2, icon: '#i-move', tone: 'move',
     title: 'MOVE TO FINISH',
-    body: 'Tap the glowing tile ahead to step toward the FINISH line!',
+    body: 'Tap the glowing tile ahead to move toward FINISH!',
   },
   {
     stage: 'wall', group: 3, icon: '#i-wall', tone: 'wall',
     title: 'PLACE A WALL',
-    body: 'Tap the glowing slot in front of your opponent to block their path!',
+    body: 'Tap this slot to block your opponent with a wall!',
   },
   {
     stage: 'mine-arm', group: 4, icon: '#i-mine-tactical', tone: 'mine',
-    title: 'ARM A TRAP',
-    body: 'Tap the MINE button below.',
+    title: 'ARM A HIDDEN MINE',
+    body: 'Tap the Mine button to arm a hidden trap!',
   },
   {
     stage: 'mine-place', group: 4, icon: '#i-mine-tactical', tone: 'mine',
     title: 'PLANT THE MINE',
-    body: 'Now tap the glowing tile on the board to hide your mine!',
+    body: 'Tap this tile ahead of your opponent to hide the mine!',
   },
 ];
 
-/** What comes after each successful action. The mine flow celebrates from its last stage. */
+/** What comes after each successful action. The mine flow gets out of the way from its last stage. */
 export const NEXT_STAGE: Readonly<Record<TutorialStage, TutorialStage | 'done'>> = {
+  finish: 'select',
   select: 'move',
   move: 'wall',
   wall: 'mine-arm',
   'mine-arm': 'mine-place',
   'mine-place': 'done',
 };
+
+/** The stage that hands the board back: the wall is up and the overlay leaves for live play. */
+export const TUTORIAL_HANDOFF: TutorialStage = 'wall';
+/** Where the lesson re-opens on its own once live play has run its course. */
+export const TUTORIAL_RESUME_STAGE: TutorialStage = 'mine-arm';
+/** Forward rows the rival must take in live play before the mine lesson re-opens. */
+export const TUTORIAL_LIVE_STEPS = 2;
 
 /** Only local bot races teach; a person or a private room never sees the lesson. */
 export function shouldAutoStartTutorial(o: { online: boolean; room: boolean; completed: boolean }): boolean {
@@ -144,7 +168,7 @@ export const sameWall = (a: WallSpec | null, b: WallSpec | null): boolean =>
 
 /**
  * The one rule the lesson enforces: a stage only accepts the exact target it is pointing at.
- * Pure, so the five-stage flow and every mismatch can be asserted without a browser.
+ * Pure, so the whole flow and every mismatch can be asserted without a browser.
  */
 export function tutorialAllows(
   stage: TutorialPhase | null,
@@ -153,6 +177,9 @@ export function tutorialAllows(
 ): boolean {
   if (stage === null || stage === 'done') return false;
   switch (stage) {
+    case 'finish':
+      /* step 1 is the banner (or the card's Next key): no board action belongs to it */
+      return false;
     case 'select':
       return action.kind === 'select' && targets.select !== null && action.ball === targets.select;
     case 'move':
@@ -220,7 +247,6 @@ const setBox = (el: HTMLElement, r: TutorialRect) => {
 };
 
 const REPLY_BEAT_MS = 200;      // let the player's own move read, then the rival answers at once
-const CELEBRATE_MS = 1200;      // the "YOU'RE READY" banner, then live play
 
 export function createTutorial(hooks: TutorialHooks): Tutorial {
   const root = byId<HTMLElement>('tutorial');
@@ -233,25 +259,23 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const titleEl = byId<HTMLElement>('tut-title');
   const bodyEl = byId<HTMLElement>('tut-body');
   const iconUse = byId<SVGUseElement>('tut-ico-use');
-  const doneEl = byId<HTMLElement>('tut-done');
   const skipBtn = byId<HTMLButtonElement>('tut-skip');
+  const nextBtn = byId<HTMLButtonElement>('tut-next');
   const liveEl = byId<HTMLElement>('tut-live');
 
   let open = false;
-  let celebrating = false;
-  /** Step 4B's payoff: the board is the show, so the spotlight widens and taps are refused. */
-  let watching = false;
+  /** The wall is up and the board is being played for real: no overlay, no gate, step held. */
+  let suspended = false;
   let stepIndex = 0;
   let trackId = 0;
   let trackUntil = 0;
   let transitionTimer = 0;
-  let closeTimer = 0;
   let nudgeTimer = 0;
   /** Every stage change and close bumps this, so a stale bot reply can never advance the lesson. */
   let flow = 0;
 
   const stage = (): TutorialStage | null =>
-    open && !celebrating ? TUTORIAL_STEPS[stepIndex].stage : null;
+    open ? TUTORIAL_STEPS[stepIndex].stage : null;
 
   const targets = (): TutorialTargets => {
     const s = stage();
@@ -266,6 +290,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
 
   const spotFor = (s: TutorialStage): TutorialSpot | null => {
     switch (s) {
+      case 'finish': return hooks.goal();
       case 'select': return hooks.select()?.spot ?? null;
       case 'move': return hooks.move()?.spot ?? null;
       case 'wall': return hooks.wall()?.spot ?? null;
@@ -277,6 +302,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   /** The secondary highlight: the gold FINISH band on step 2, the groove on 3, the tile on 4. */
   const aidFor = (s: TutorialStage): TutorialSpot | null => {
     switch (s) {
+      case 'finish': return hooks.goal();
       case 'select': return hooks.select()?.spot ?? null;
       case 'move': return hooks.finish();
       case 'wall': return hooks.wall()?.spot ?? null;
@@ -320,7 +346,8 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const placeAid = (s: TutorialStage, spot: TutorialSpot | null) => {
     aidEl.hidden = !spot;
     if (!spot) return;
-    aidEl.dataset.kind = s === 'move' ? 'finish' : s === 'wall' ? 'wall' : 'tile';
+    aidEl.dataset.kind = s === 'finish' || s === 'move' ? 'finish'
+      : s === 'wall' ? 'wall' : 'tile';
     setBox(aidEl, spot.rect);
     aidEl.style.borderRadius = `${spot.radius ?? 14}px`;
   };
@@ -330,6 +357,13 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     const edge = 12, gap = 12;
     const cw = card.offsetWidth || 280;
     const ch = card.offsetHeight || 110;
+    /* Step 1's target is the top of the screen, and the hand hangs BELOW its fingertip: park the
+       card low so the pointer is never hidden under the card explaining it. */
+    if (TUTORIAL_STEPS[stepIndex]?.stage === 'finish') {
+      card.style.left = `${clamp((vw - cw) / 2, edge, Math.max(edge, vw - cw - edge))}px`;
+      card.style.top = `${clamp(vh * 0.56, edge, Math.max(edge, vh - ch - edge))}px`;
+      return;
+    }
     let left = (vw - cw) / 2;
     let top = (vh - ch) / 2;
     if (hole) {
@@ -353,7 +387,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   };
 
   const place = () => {
-    if (!open || celebrating || watching) return;
+    if (!open) return;
     const def = TUTORIAL_STEPS[stepIndex];
     const spot = spotFor(def.stage);
     if (!spot) {
@@ -394,13 +428,11 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
 
   const clearTimers = () => {
     if (transitionTimer) { window.clearTimeout(transitionTimer); transitionTimer = 0; }
-    if (closeTimer) { window.clearTimeout(closeTimer); closeTimer = 0; }
     if (nudgeTimer) { window.clearTimeout(nudgeTimer); nudgeTimer = 0; }
   };
 
   const render = () => {
-    if (!open || celebrating) return;
-    watching = false;
+    if (!open) return;
     const def = TUTORIAL_STEPS[stepIndex];
     /* a target can disappear with the board (a rival walked, a corner sealed): step past it, and
        finish the lesson rather than freeze on a card that asks for an impossible tap */
@@ -419,9 +451,9 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     iconUse.setAttribute('href', def.icon);
     card.dataset.tone = def.tone;
     card.hidden = false;
-    doneEl.hidden = true;
-    doneEl.classList.remove('show');
     skipBtn.hidden = false;
+    /* Next is step 1's door and only step 1's: every other step moves by its real action */
+    nextBtn.hidden = def.stage !== 'finish';
     liveEl.textContent = `Step ${def.group} of 4. ${def.title}. ${def.body}`;
     hooks.refresh(def.stage);
     place();
@@ -433,84 +465,42 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   };
 
   const go = (next: TutorialStage) => {
-    if (!open || celebrating) return;
+    if (!open) return;
     const at = TUTORIAL_STEPS.findIndex((s) => s.stage === next);
     if (at < 0) { close('finished'); return; }
     stepIndex = at;
     render();
   };
 
-  const celebrate = () => {
-    if (!open || celebrating) return;
-    celebrating = true;
-    watching = false;
-    flow++;
-    clearTimers();
-    drawMask(null, 0);
-    aidEl.hidden = true;
-    pointer.style.display = 'none';
-    card.hidden = true;
-    doneEl.hidden = false;
-    void doneEl.offsetWidth;
-    doneEl.classList.add('show');
-    liveEl.textContent = "You're ready! Reach the FINISH line!";
-    hooks.refresh(null);
-    closeTimer = window.setTimeout(() => { closeTimer = 0; close('finished'); }, CELEBRATE_MS);
+  /** Step 1's door: the FINISH banner itself, or the card's Next key. */
+  const advance = () => {
+    if (!open) return;
+    if (TUTORIAL_STEPS[stepIndex].stage !== 'finish') return;
+    go('select');
+  };
+
+  const attach = () => {
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    window.visualViewport?.addEventListener('resize', onResize);
+    document.addEventListener('keydown', onKeydown, true);
+  };
+  const detach = () => {
+    window.removeEventListener('resize', onResize);
+    window.removeEventListener('orientationchange', onResize);
+    window.visualViewport?.removeEventListener('resize', onResize);
+    document.removeEventListener('keydown', onKeydown, true);
   };
 
   /**
-   * Step 4B's watch beat. The card swaps to the payoff line and the spotlight widens to the
-   * rival's route; the input gate stays shut until `mineDemo()` resolves with the blast played.
-   * The card update happens before the first frame of the demonstration, exactly as the beat reads.
+   * The live-play intermission. The wall stands, so the lesson takes its overlay AND its input gate
+   * down and holds its place: step, timers and targets are kept, and `resume()` re-opens directly on
+   * the mine. Nothing here ends the lesson — only the mine (or a skip) does that.
    */
-  const watchMine = () => {
-    if (!open || celebrating) return;
-    watching = true;
-    flow++;
-    const def = TUTORIAL_STEPS[stepIndex];
-    stepEl.textContent = `STEP ${def.group} OF 4`;
-    titleEl.textContent = 'WATCH THIS!';
-    bodyEl.textContent = 'Your opponent is advancing into your trap...';
-    iconUse.setAttribute('href', def.icon);
-    card.dataset.tone = def.tone;
-    card.hidden = false;
-    doneEl.hidden = true;
-    doneEl.classList.remove('show');
-    skipBtn.hidden = false;
-    liveEl.textContent = 'Watch this! Your opponent is advancing into your trap.';
-    const spot = hooks.mineDemoSpot();
-    if (spot) {
-      const hole = clampRect(atLeast(padRect(spot.rect, TUTORIAL_SPOT_PAD), 48, 48));
-      drawMask(hole, spot.radius ?? 18);
-      pointer.style.display = 'none';
-      aidEl.hidden = true;
-      placeCard(hole);
-    } else {
-      drawMask(null, 0);
-      pointer.style.display = 'none';
-      aidEl.hidden = true;
-      placeCard(null);
-    }
-    card.classList.remove('pop');
-    void card.offsetWidth;
-    card.classList.add('pop');
-    card.focus({ preventScroll: true });
-    trackFor(420);
-    const token = flow;
-    void Promise.resolve(hooks.mineDemo())
-      .catch(() => undefined)
-      .then(() => {
-        if (!open || token !== flow || !watching) return;
-        watching = false;
-        celebrate();
-      });
-  };
-
-  function close(result: TutorialResult) {
+  const suspend = () => {
     if (!open) return;
     open = false;
-    celebrating = false;
-    watching = false;
+    suspended = true;
     flow++;
     clearTimers();
     if (trackId) { cancelAnimationFrame(trackId); trackId = 0; }
@@ -519,60 +509,98 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     root.removeAttribute('data-stage');
     root.removeAttribute('data-tone');
     document.body.classList.remove('tutorial-live');
-    window.removeEventListener('resize', onResize);
-    window.removeEventListener('orientationchange', onResize);
-    window.visualViewport?.removeEventListener('resize', onResize);
-    document.removeEventListener('keydown', onKeydown, true);
+    /* no paint of the lesson survives the intermission: a hidden overlay must never leave a
+       stale spotlight box behind for a tester (or a screen) to read */
+    drawMask(null, 0);
+    aidEl.hidden = true;
+    pointer.style.display = 'none';
+    detach();
+    hooks.refresh(null);
+  };
+
+  function close(result: TutorialResult) {
+    if (!open && !suspended) return;
+    open = false;
+    suspended = false;
+    flow++;
+    clearTimers();
+    if (trackId) { cancelAnimationFrame(trackId); trackId = 0; }
+    trackUntil = 0;
+    root.hidden = true;
+    root.removeAttribute('data-stage');
+    root.removeAttribute('data-tone');
+    document.body.classList.remove('tutorial-live');
+    detach();
     hooks.refresh(null);
     hooks.end(result);
   }
 
   skipBtn.addEventListener('click', () => close('skipped'));
+  nextBtn.addEventListener('click', () => advance());
 
   return {
     get active() { return open; },
+    get suspended() { return suspended; },
     get stage() { return stage(); },
     start() {
       if (open) return;
       open = true;
-      celebrating = false;
+      suspended = false;
       stepIndex = 0;
       root.hidden = false;
       document.body.classList.add('tutorial-live');
-      window.addEventListener('resize', onResize);
-      window.addEventListener('orientationchange', onResize);
-      window.visualViewport?.addEventListener('resize', onResize);
-      document.addEventListener('keydown', onKeydown, true);
+      attach();
       render();
       trackFor(460);   // the screen is still sliding in; follow the target's real box
+    },
+    advance,
+    resume() {
+      if (open || !suspended) return;
+      suspended = false;
+      open = true;
+      const at = TUTORIAL_STEPS.findIndex((s) => s.stage === TUTORIAL_RESUME_STAGE);
+      if (at >= 0) stepIndex = at;
+      root.hidden = false;
+      document.body.classList.add('tutorial-live');
+      attach();
+      render();
+      trackFor(460);
     },
     skip() { close('skipped'); },
     cancel() { close('cancelled'); },
     allows(action) {
-      if (watching) return false;
       return tutorialAllows(stage(), targets(), action);
     },
     notify(action) {
-      if (!open || celebrating || watching) return;
+      if (!open) return;
       const now = TUTORIAL_STEPS[stepIndex].stage;
       /* The exact target was gated BEFORE the action ran. Re-running that target check here would
          fail every move/wall/mine: the action itself changed whose turn it is. Kind is enough. */
-      const kind: TutorialAction['kind'] = now === 'select' ? 'select'
+      const kind: TutorialAction['kind'] | null = now === 'finish' ? null
+        : now === 'select' ? 'select'
         : now === 'move' ? 'move'
         : now === 'wall' ? 'wall'
         : now === 'mine-arm' ? 'mine-arm' : 'mine';
-      if (action.kind !== kind) return;
+      if (kind === null || action.kind !== kind) return;
+      if (now === TUTORIAL_HANDOFF) {
+        /* The wall is up, so the lesson gets out of the way at once: the player plays the next
+           turns for real and `main.ts` calls resume() when the rival has gained its ground. */
+        suspend();
+        hooks.handoff();
+        return;
+      }
       if (now === 'mine-place') {
-        /* The trap is down. Do not celebrate yet: the rival is about to walk onto it. */
-        watchMine();
+        /* The mine is buried: the overlay and the lesson are done, immediately and for good. The
+           rival walks onto the charge as part of the live match, not a scripted watch beat. */
+        close('finished');
         return;
       }
       if (now === 'mine-arm') { go('mine-place'); return; }
       if (now === 'select') { go('move'); return; }
-      /* move and wall hand the turn to the machine: one instant, deterministic reply, then the
-         local player is up again for the next physical action */
+      /* the forward step hands the turn to the machine: one reply through the normal door, then
+         the player is up again for the wall */
       const next = NEXT_STAGE[now];
-      if (next === 'done') { celebrate(); return; }
+      if (next === 'done') { close('finished'); return; }
       const token = ++flow;
       transitionTimer = window.setTimeout(() => {
         transitionTimer = 0;
@@ -585,7 +613,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       }, REPLY_BEAT_MS);
     },
     nudge() {
-      if (!open || celebrating || watching) return;
+      if (!open) return;
       liveEl.textContent = 'Tap the glowing target.';
       spotEl.classList.remove('nudge');
       aidEl.classList.remove('nudge');
@@ -598,10 +626,6 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
         spotEl.classList.remove('nudge');
         aidEl.classList.remove('nudge');
       }, 380);
-    },
-    say(text: string) {
-      if (!open || celebrating) return;
-      liveEl.textContent = text;
     },
   };
 }
