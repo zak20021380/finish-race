@@ -6,6 +6,9 @@
     <meta name="theme-color" content="#10141D" />
     <meta name="color-scheme" content="dark" />
     <title>Detour</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;800&display=swap" rel="stylesheet" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
@@ -1748,10 +1751,11 @@
 
       <!-- ---------------- first-match hands-on tutorial ----------------
            Four steps, all performed on the REAL board: see the GOAL, pick and move the
-           pawn, place a wall, then (after two live turns) plant a mine. The scrim and the
-           .tut-block guard share one SVG cut-out, so the live target is sharp AND receives
-           the tap; everything outside the hole is swallowed. Only step 1 has a Next key.
-           Geometry and the action gate are handed in by main.ts; see src/tutorial.ts. -->
+           pawn, place a wall in ONE tap, then (after two live turns) plant a mine. The
+           scrim and the .tut-block guard share one SVG cut-out, so the live target is sharp
+           AND receives the tap; everything outside the hole is swallowed. Only step 1 has a
+           Next key. The top bar carries a live EN / فارسی / RU switcher; copy and RTL live
+           in src/tutorial.ts. Geometry and the action gate are handed in by main.ts. -->
       <div class="tutorial" id="tutorial" role="dialog"
         aria-labelledby="tut-title" aria-describedby="tut-body" hidden>
         <svg class="tut-svg" aria-hidden="true" focusable="false">
@@ -1784,17 +1788,26 @@
             </span>
             <div class="tut-head-txt">
               <p class="tut-kicker" id="tut-step">STEP 1 OF 4</p>
-              <h2 class="tut-title" id="tut-title">GOAL</h2>
+              <h2 class="tut-title" id="tut-title">THE GOAL</h2>
             </div>
           </div>
-          <p class="tut-body" id="tut-body">First player to reach the FINISH line at the top wins! Tap Next or the FINISH line to continue.</p>
+          <p class="tut-body" id="tut-body">First player to reach the FINISH line at the top wins! Tap the FINISH line or Next to start.</p>
           <button class="tut-next" id="tut-next" type="button">
-            <span>Next</span>
+            <span id="tut-next-label">Next</span>
             <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-next" /></svg>
           </button>
         </div>
         <button class="tut-skip" id="tut-skip" type="button">Skip Tutorial</button>
+        <div class="tut-lang" id="tut-lang" role="group" aria-label="Tutorial language">
+          <button class="tut-lang-btn" type="button" data-tut-lang="en" aria-pressed="true">EN</button>
+          <button class="tut-lang-btn" type="button" data-tut-lang="fa" aria-pressed="false">فارسی</button>
+          <button class="tut-lang-btn" type="button" data-tut-lang="ru" aria-pressed="false">RU</button>
+        </div>
         <p class="sr-only" id="tut-live" role="status" aria-live="polite"></p>
+      </div>
+      <div class="tut-ready" id="tut-ready" data-lang="en" dir="ltr" role="status" aria-live="polite" hidden>
+        <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-flag" /></svg>
+        <span id="tut-ready-txt">YOU'RE READY! REACH THE FINISH LINE!</span>
       </div>
 
       <!-- matchmaking: the full-viewport searching stage Quick match opens (src/matchmaking.ts).

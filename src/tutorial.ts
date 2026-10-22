@@ -1,16 +1,20 @@
 /**
  * tutorial.ts — the first-match hands-on lesson.
  *
- * Seven stages over four visible steps. Step 1 shows the GOAL: the FINISH banner is the live target,
+ * Six stages over four visible steps. Step 1 shows the GOAL: the FINISH banner is the live target,
  * so the player sees where the race ends before touching a pawn. Step 2 is the pick and the forward
- * step, step 3 the real two-tap wall: the first groove tap previews it, the second confirms it. Then
- * the lesson deliberately steps OUT of the way: the wall stands, the overlay closes, and the board
- * is normal live play for two rival steps. When the rival has gained those two rows and the local
- * seat is up again, the lesson re-opens on its own for step 4 — the mine — and gets out of the way
- * for good the instant the charge is planted.
+ * step, step 3 the single-tap wall: one tap anywhere in the highlighted groove commits it. Then the
+ * lesson deliberately steps OUT of the way: the wall stands, the overlay closes, and the board is
+ * normal live play for two rival steps. When the rival has gained those two rows and the local seat
+ * is up again, the lesson re-opens on its own for step 4 — the mine — and gets out of the way for
+ * good the instant the charge is planted.
  *
  * The module never mutates the game itself — `main.ts` performs the action, then calls `notify()`;
  * the action gate here is what told it the tap was the right one.
+ *
+ * Copy ships in English, Persian and Russian. The segmented switcher in the top bar repaints the
+ * current step in place, persists the choice as `tactix_tut_lang`, and flips the card + ready toast
+ * to RTL with Vazirmatn for Persian.
  *
  * The scrim and the input blocker share one SVG cut-out, so the spotlight is sharp and — just as
  * important — the blocker is physically absent inside it. Taps land on the real canvas or the real
@@ -29,11 +33,43 @@ export interface TutorialSpot {
 }
 
 export type TutorialStage =
-  | 'finish' | 'select' | 'move'
-  | 'wall-preview' | 'wall-confirm'
+  | 'goal' | 'select' | 'move'
+  | 'wall'
   | 'mine-arm' | 'mine-place';
 export type TutorialPhase = TutorialStage | 'done';
 export type TutorialResult = 'finished' | 'skipped' | 'cancelled';
+export type TutorialLang = 'en' | 'fa' | 'ru';
+
+export const TUTORIAL_LANGS: readonly TutorialLang[] = ['en', 'fa', 'ru'];
+export const TUT_LANG_KEY = 'tactix_tut_lang';
+
+/** Every word the lesson speaks, in one language, for one stage. */
+export interface TutorialStepCopy {
+  step: string;
+  title: string;
+  body: string;
+  /** Only step 1 carries a key action; every other step moves by its real board action. */
+  action?: string;
+}
+
+export interface TutorialChromeCopy {
+  skip: string;
+  ready: string;
+}
+
+export const TUTORIAL_CHROME: Readonly<Record<TutorialLang, TutorialChromeCopy>> = {
+  en: { skip: 'Skip Tutorial', ready: "YOU'RE READY! REACH THE FINISH LINE!" },
+  fa: { skip: 'رد کردن آموزش', ready: 'حله، راه افتادی! حالا برو تا خط پایان!' },
+  ru: { skip: 'Пропустить', ready: 'ВСЁ ГОТОВО! ВПЕРЁД К ФИНИШУ!' },
+};
+
+/** Anything unknown (missing save, stale value) falls back to English. */
+export function normalizeTutLang(value: string | null | undefined): TutorialLang {
+  return value === 'fa' || value === 'ru' || value === 'en' ? value : 'en';
+}
+
+export const tutorialDir = (lang: TutorialLang): 'rtl' | 'ltr' =>
+  lang === 'fa' ? 'rtl' : 'ltr';
 
 /** What a tap asked the board to do, in the tutorial's own vocabulary. */
 export type TutorialAction =
@@ -99,67 +135,137 @@ export interface Tutorial {
 
 export interface TutorialStepDef {
   stage: TutorialStage;
-  /** The visible step number: pick + move are step 2, both wall halves step 3, both mine halves 4. */
+  /** The visible step number: pick + move are step 2, the wall is step 3, both mine halves 4. */
   group: number;
   icon: string;
   tone: 'goal' | 'select' | 'move' | 'wall' | 'mine';
-  title: string;
-  body: string;
+  copy: Readonly<Record<TutorialLang, TutorialStepCopy>>;
 }
 
-/** The whole lesson, in order. Copy is deliberately five words where five words will do. */
+/** The whole lesson, in order, in every language. Copy is deliberately short where it can be. */
 export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
   {
-    stage: 'finish', group: 1, icon: '#i-flag', tone: 'goal',
-    title: 'GOAL',
-    body: 'First player to reach the FINISH line at the top wins! '
-      + 'Tap Next or the FINISH line to continue.',
+    stage: 'goal', group: 1, icon: '#i-flag', tone: 'goal',
+    copy: {
+      en: {
+        step: 'STEP 1 OF 4', title: 'THE GOAL',
+        body: 'First player to reach the FINISH line at the top wins! '
+          + 'Tap the FINISH line or Next to start.',
+        action: 'Next',
+      },
+      fa: {
+        step: 'قدم ۱ از ۴', title: 'هدف بازی',
+        body: 'هرکی زودتر مهره‌ش رو به خط پایان (FINISH) اون بالا برسونه برنده‌ست! بزن بریم.',
+        action: 'بزن بریم',
+      },
+      ru: {
+        step: 'ШАГ 1 ИЗ 4', title: 'ЦЕЛЬ ИГРЫ',
+        body: 'Тот, кто первым доведёт фишку до линии FINISH наверху — побеждает! Нажми далее.',
+        action: 'Далее',
+      },
+    },
   },
   {
     stage: 'select', group: 2, icon: '#i-target', tone: 'select',
-    title: 'SELECT YOUR PIECE',
-    body: 'Tap your glowing piece to select it.',
+    copy: {
+      en: {
+        step: 'STEP 2 OF 4', title: 'SELECT YOUR PIECE',
+        body: 'Tap your glowing piece to see where you can move.',
+      },
+      fa: {
+        step: 'قدم ۲ از ۴', title: 'انتخاب مهره',
+        body: 'رو مهره درخشان خودت بزن تا ببینی کجاها می‌تونی حرکت کنی.',
+      },
+      ru: {
+        step: 'ШАГ 2 ИЗ 4', title: 'ВЫБЕРИ ФИШКУ',
+        body: 'Нажми на свою светящуюся фишку, чтобы увидеть доступные ходы.',
+      },
+    },
   },
   {
     stage: 'move', group: 2, icon: '#i-move', tone: 'move',
-    title: 'MOVE TO FINISH',
-    body: 'Tap the glowing tile ahead to move toward FINISH!',
+    copy: {
+      en: {
+        step: 'STEP 2 OF 4', title: 'MOVE FORWARD',
+        body: 'Tap the glowing tile ahead to move one step closer to FINISH!',
+      },
+      fa: {
+        step: 'قدم ۲ از ۴', title: 'حرکت به جلو',
+        body: 'حالا رو خونه جلویی بزن تا یه قدم به خط پایان نزدیک‌تر بشی!',
+      },
+      ru: {
+        step: 'ШАГ 2 ИЗ 4', title: 'ХОД ВПЕРЁД',
+        body: 'Нажми на светящуюся клетку впереди, чтобы шагнуть к финишу!',
+      },
+    },
   },
   {
-    stage: 'wall-preview', group: 3, icon: '#i-wall', tone: 'wall',
-    title: 'PREVIEW A WALL',
-    body: 'Tap the gap between tiles to preview a WALL.',
-  },
-  {
-    stage: 'wall-confirm', group: 3, icon: '#i-wall', tone: 'wall',
-    title: 'CONFIRM THE WALL',
-    body: 'Tap the same slot again to lock the wall in place and block your opponent!',
+    stage: 'wall', group: 3, icon: '#i-wall', tone: 'wall',
+    copy: {
+      en: {
+        step: 'STEP 3 OF 4', title: 'PLACE A WALL',
+        body: 'Tap the glowing line in front of your opponent to put up a wall '
+          + 'and block their path!',
+      },
+      fa: {
+        step: 'قدم ۳ از ۴', title: 'دیوار بکش!',
+        body: 'رو این خطِ نورانی جلوی حریفت بزن تا یه دیوار بذاری و راهشو ببندی!',
+      },
+      ru: {
+        step: 'ШАГ 3 ИЗ 4', title: 'ПОСТАВЬ СТЕНУ',
+        body: 'Нажми на светящуюся линию перед соперником, чтобы преградить ему путь стеной!',
+      },
+    },
   },
   {
     stage: 'mine-arm', group: 4, icon: '#i-mine-tactical', tone: 'mine',
-    title: 'ARM A HIDDEN MINE',
-    body: 'Tap the Mine button to arm a hidden trap!',
+    copy: {
+      en: {
+        step: 'STEP 4 OF 4', title: 'ARM A TRAP',
+        body: 'Tap the Mine button below to prepare a hidden trap!',
+      },
+      fa: {
+        step: 'قدم ۴ از ۴', title: 'آماده‌سازی تله',
+        body: 'رو دکمه مین اون پایین بزن تا یه تله مخفی رو آماده کنی!',
+      },
+      ru: {
+        step: 'ШАГ 4 ИЗ 4', title: 'ПОДГОТОВЬ МИНУ',
+        body: 'Нажми на кнопку мины внизу, чтобы подготовить скрытую ловушку!',
+      },
+    },
   },
   {
     stage: 'mine-place', group: 4, icon: '#i-mine-tactical', tone: 'mine',
-    title: 'PLANT THE MINE',
-    body: 'Tap this tile ahead of your opponent to hide the mine!',
+    copy: {
+      en: {
+        step: 'STEP 4 OF 4', title: 'PLANT THE MINE',
+        body: 'Tap the glowing tile ahead of your opponent to hide the mine in their path!',
+      },
+      fa: {
+        step: 'قدم ۴ از ۴', title: 'کاشتن مین!',
+        body: 'حالا رو خونه جلوی حریف بزن تا مین رو سر راهش قایم کنی! '
+          + 'بره روش حسابی عقب می‌افته!',
+      },
+      ru: {
+        step: 'ШАГ 4 ИЗ 4', title: 'УСТАНОВИ МИНУ',
+        body: 'Нажми на клетку перед соперником, чтобы спрятать мину на его пути!',
+      },
+    },
   },
 ];
 
 /** What comes after each successful action. The mine flow gets out of the way from its last stage. */
 export const NEXT_STAGE: Readonly<Record<TutorialStage, TutorialStage | 'done'>> = {
-  finish: 'select',
+  goal: 'select',
   select: 'move',
-  move: 'wall-preview',
-  'wall-preview': 'wall-confirm',
-  'wall-confirm': 'mine-arm',
+  move: 'wall',
+  wall: 'mine-arm',
   'mine-arm': 'mine-place',
   'mine-place': 'done',
 };
 
-/** The stage that hands the board back: the wall is confirmed and the overlay leaves for live play. */
-export const TUTORIAL_HANDOFF: TutorialStage = 'wall-confirm';
+/** The stage that hands the board back: the wall is up and the overlay leaves for live play. */
+export const TUTORIAL_HANDOFF: TutorialStage = 'wall';
 /** Where the lesson re-opens on its own once live play has run its course. */
 export const TUTORIAL_RESUME_STAGE: TutorialStage = 'mine-arm';
 /** Forward rows the rival must take in live play before the mine lesson re-opens. */
@@ -187,20 +293,21 @@ export function tutorialAllows(
 ): boolean {
   if (stage === null || stage === 'done') return false;
   switch (stage) {
-    case 'finish':
+    case 'goal':
       /* step 1 is the banner (or the card's Next key): no board action belongs to it */
       return false;
     case 'select':
       return action.kind === 'select' && targets.select !== null && action.ball === targets.select;
     case 'move':
       return action.kind === 'move' && sameCell(action.to, targets.move);
-    case 'wall-preview':
-    case 'wall-confirm':
+    case 'wall':
       return action.kind === 'wall' && sameWall(action.spec, targets.wall);
     case 'mine-arm':
       return action.kind === 'mine-arm' && targets.mineArm;
     case 'mine-place':
       return action.kind === 'mine' && sameCell(action.cell, targets.mine);
+    default:
+      return false;
   }
 }
 
@@ -259,6 +366,13 @@ const setBox = (el: HTMLElement, r: TutorialRect) => {
 
 const REPLY_BEAT_MS = 200;      // let the player's own move read, then the rival answers at once
 
+function readStoredLang(): string | null {
+  try { return window.localStorage.getItem(TUT_LANG_KEY); } catch { return null; }
+}
+function writeStoredLang(value: TutorialLang): void {
+  try { window.localStorage.setItem(TUT_LANG_KEY, value); } catch { /* storage is optional */ }
+}
+
 export function createTutorial(hooks: TutorialHooks): Tutorial {
   const root = byId<HTMLElement>('tutorial');
   const clipPath = byId<SVGPathElement>('tut-clip-path');
@@ -272,7 +386,12 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const iconUse = byId<SVGUseElement>('tut-ico-use');
   const skipBtn = byId<HTMLButtonElement>('tut-skip');
   const nextBtn = byId<HTMLButtonElement>('tut-next');
+  const nextLabel = byId<HTMLElement>('tut-next-label');
   const liveEl = byId<HTMLElement>('tut-live');
+  const langEl = byId<HTMLElement>('tut-lang');
+  const langBtns = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-tut-lang]'));
+  const readyEl = byId<HTMLElement>('tut-ready');
+  const readyTxt = byId<HTMLElement>('tut-ready-txt');
 
   let open = false;
   /** The wall is up and the board is being played for real: no overlay, no gate, step held. */
@@ -284,6 +403,8 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   let nudgeTimer = 0;
   /** Every stage change and close bumps this, so a stale bot reply can never advance the lesson. */
   let flow = 0;
+  let lang: TutorialLang = normalizeTutLang(readStoredLang());
+  let readyTimer = 0;
 
   const stage = (): TutorialStage | null =>
     open ? TUTORIAL_STEPS[stepIndex].stage : null;
@@ -293,7 +414,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     return {
       select: s === 'select' ? hooks.select()?.ball ?? null : null,
       move: s === 'move' ? hooks.move()?.to ?? null : null,
-      wall: s === 'wall-preview' || s === 'wall-confirm' ? hooks.wall()?.spec ?? null : null,
+      wall: s === 'wall' ? hooks.wall()?.spec ?? null : null,
       mineArm: s === 'mine-arm' && hooks.mineArm() !== null,
       mine: s === 'mine-place' ? hooks.minePlace()?.cell ?? null : null,
     };
@@ -301,11 +422,10 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
 
   const spotFor = (s: TutorialStage): TutorialSpot | null => {
     switch (s) {
-      case 'finish': return hooks.goal();
+      case 'goal': return hooks.goal();
       case 'select': return hooks.select()?.spot ?? null;
       case 'move': return hooks.move()?.spot ?? null;
-      case 'wall-preview':
-      case 'wall-confirm': return hooks.wall()?.spot ?? null;
+      case 'wall': return hooks.wall()?.spot ?? null;
       case 'mine-arm': return hooks.mineArm();
       case 'mine-place': return hooks.minePlace()?.spot ?? null;
     }
@@ -314,14 +434,83 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   /** The secondary highlight: the gold FINISH band on step 2, the groove on 3, the tile on 4. */
   const aidFor = (s: TutorialStage): TutorialSpot | null => {
     switch (s) {
-      case 'finish': return hooks.goal();
+      case 'goal': return hooks.goal();
       case 'select': return hooks.select()?.spot ?? null;
       case 'move': return hooks.finish();
-      case 'wall-preview':
-      case 'wall-confirm': return hooks.wall()?.spot ?? null;
+      case 'wall': return hooks.wall()?.spot ?? null;
       case 'mine-arm': return hooks.mineArm();
       case 'mine-place': return hooks.minePlace()?.spot ?? null;
     }
+  };
+
+  const paintLang = () => {
+    const dir = tutorialDir(lang);
+    card.dataset.lang = lang;
+    card.dir = dir;
+    card.lang = lang;
+    skipBtn.dataset.lang = lang;
+    skipBtn.dir = dir;
+    skipBtn.lang = lang;
+    readyEl.dataset.lang = lang;
+    readyEl.dir = dir;
+    readyEl.lang = lang;
+    root.dataset.lang = lang;
+    for (const btn of langBtns) {
+      btn.setAttribute('aria-pressed', String(btn.dataset.tutLang === lang));
+    }
+  };
+
+  /** Repaint every word of the current step in the active language, without moving the flow. */
+  const paintCopy = (animate = false) => {
+    const def = TUTORIAL_STEPS[stepIndex];
+    const copy = def.copy[lang];
+    stepEl.textContent = copy.step;
+    titleEl.textContent = copy.title;
+    bodyEl.textContent = copy.body;
+    nextLabel.textContent = copy.action ?? 'Next';
+    skipBtn.textContent = TUTORIAL_CHROME[lang].skip;
+    readyTxt.textContent = TUTORIAL_CHROME[lang].ready;
+    liveEl.textContent = `${copy.step}. ${copy.title}. ${copy.body}`;
+    if (!animate) return;
+    card.classList.remove('lang-swap');
+    root.classList.remove('lang-swap');
+    void card.offsetWidth;
+    card.classList.add('lang-swap');
+    root.classList.add('lang-swap');
+  };
+
+  const switchLang = (next: TutorialLang, animate: boolean) => {
+    if (next === lang && animate) return;
+    lang = next;
+    paintLang();
+    paintCopy(animate);
+    if (animate) {
+      writeStoredLang(next);
+      if (open) { place(); trackFor(260); }
+    }
+  };
+
+  const hideReady = () => {
+    if (readyTimer) { window.clearTimeout(readyTimer); readyTimer = 0; }
+    readyEl.classList.remove('show');
+    readyEl.hidden = true;
+  };
+
+  const showReady = () => {
+    readyTxt.textContent = TUTORIAL_CHROME[lang].ready;
+    readyEl.dataset.lang = lang;
+    readyEl.dir = tutorialDir(lang);
+    readyEl.lang = lang;
+    readyEl.hidden = false;
+    readyEl.classList.remove('show');
+    void readyEl.offsetWidth;
+    readyEl.classList.add('show');
+    if (readyTimer) window.clearTimeout(readyTimer);
+    readyTimer = window.setTimeout(() => {
+      readyTimer = 0;
+      readyEl.classList.remove('show');
+      readyEl.hidden = true;
+    }, 3200);
   };
 
   const fullPath = (): string =>
@@ -359,8 +548,8 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const placeAid = (s: TutorialStage, spot: TutorialSpot | null) => {
     aidEl.hidden = !spot;
     if (!spot) return;
-    aidEl.dataset.kind = s === 'finish' || s === 'move' ? 'finish'
-      : s === 'wall-preview' || s === 'wall-confirm' ? 'wall' : 'tile';
+    aidEl.dataset.kind = s === 'goal' || s === 'move' ? 'finish'
+      : s === 'wall' ? 'wall' : 'tile';
     setBox(aidEl, spot.rect);
     aidEl.style.borderRadius = `${spot.radius ?? 14}px`;
   };
@@ -372,7 +561,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     const ch = card.offsetHeight || 110;
     /* Step 1's target is the top of the screen, and the hand hangs BELOW its fingertip: park the
        card low so the pointer is never hidden under the card explaining it. */
-    if (TUTORIAL_STEPS[stepIndex]?.stage === 'finish') {
+    if (TUTORIAL_STEPS[stepIndex]?.stage === 'goal') {
       card.style.left = `${clamp((vw - cw) / 2, edge, Math.max(edge, vw - cw - edge))}px`;
       card.style.top = `${clamp(vh * 0.56, edge, Math.max(edge, vh - ch - edge))}px`;
       return;
@@ -390,10 +579,12 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       else if (above >= edge) top = above;
       else top = clamp(below, edge, vh - ch - edge);
     }
-    /* the skip key owns the top-right corner: the card never parks on top of it */
-    const skip = skipBtn.getBoundingClientRect();
-    if (left + cw > skip.left - 8 && left < skip.right + 8 && top < skip.bottom + 8) {
-      top = Math.max(top, skip.bottom + 8);
+    /* the top bar owns both corners: the card never parks on the skip key or the language pill */
+    for (const barEl of [skipBtn, langEl]) {
+      const bar = barEl.getBoundingClientRect();
+      if (left + cw > bar.left - 8 && left < bar.right + 8 && top < bar.bottom + 8) {
+        top = Math.max(top, bar.bottom + 8);
+      }
     }
     card.style.left = `${left}px`;
     card.style.top = `${clamp(top, edge, Math.max(edge, vh - ch - edge))}px`;
@@ -458,16 +649,14 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     flow++;
     root.dataset.stage = def.stage;
     root.dataset.tone = def.tone;
-    stepEl.textContent = `STEP ${def.group} OF 4`;
-    titleEl.textContent = def.title;
-    bodyEl.textContent = def.body;
     iconUse.setAttribute('href', def.icon);
     card.dataset.tone = def.tone;
     card.hidden = false;
     skipBtn.hidden = false;
+    langEl.hidden = false;
     /* Next is step 1's door and only step 1's: every other step moves by its real action */
-    nextBtn.hidden = def.stage !== 'finish';
-    liveEl.textContent = `Step ${def.group} of 4. ${def.title}. ${def.body}`;
+    nextBtn.hidden = def.stage !== 'goal';
+    paintCopy();
     hooks.refresh(def.stage);
     place();
     card.classList.remove('pop');
@@ -488,7 +677,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   /** Step 1's door: the FINISH banner itself, or the card's Next key. */
   const advance = () => {
     if (!open) return;
-    if (TUTORIAL_STEPS[stepIndex].stage !== 'finish') return;
+    if (TUTORIAL_STEPS[stepIndex].stage !== 'goal') return;
     go('select');
   };
 
@@ -542,14 +731,27 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     root.hidden = true;
     root.removeAttribute('data-stage');
     root.removeAttribute('data-tone');
+    card.classList.remove('lang-swap');
+    root.classList.remove('lang-swap');
     document.body.classList.remove('tutorial-live');
     detach();
+    if (result === 'finished') showReady();
+    else hideReady();
     hooks.refresh(null);
     hooks.end(result);
   }
 
   skipBtn.addEventListener('click', () => close('skipped'));
   nextBtn.addEventListener('click', () => advance());
+  for (const btn of langBtns) {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      switchLang(normalizeTutLang(btn.dataset.tutLang), true);
+      btn.focus({ preventScroll: true });
+    });
+  }
+  switchLang(lang, false);
 
   return {
     get active() { return open; },
@@ -560,6 +762,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       open = true;
       suspended = false;
       stepIndex = 0;
+      hideReady();
       root.hidden = false;
       document.body.classList.add('tutorial-live');
       attach();
@@ -589,23 +792,17 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       const now = TUTORIAL_STEPS[stepIndex].stage;
       /* The exact target was gated BEFORE the action ran. Re-running that target check here would
          fail every move/wall/mine: the action itself changed whose turn it is. Kind is enough. */
-      const kind: TutorialAction['kind'] | null = now === 'finish' ? null
+      const kind: TutorialAction['kind'] | null = now === 'goal' ? null
         : now === 'select' ? 'select'
         : now === 'move' ? 'move'
-        : now === 'wall-preview' || now === 'wall-confirm' ? 'wall'
+        : now === 'wall' ? 'wall'
         : now === 'mine-arm' ? 'mine-arm' : 'mine';
       if (kind === null || action.kind !== kind) return;
       if (now === TUTORIAL_HANDOFF) {
-        /* The wall is confirmed, so the lesson gets out of the way at once: the player plays the
-           next turns for real and `main.ts` calls resume() when the rival has gained its ground. */
+        /* One tap committed the wall, so the lesson gets out of the way at once: the player plays
+           the next turns for real and `main.ts` calls resume() when the rival has gained ground. */
         suspend();
         hooks.handoff();
-        return;
-      }
-      if (now === 'wall-preview') {
-        /* The first groove tap put the ghost up: hold the same groove and ask for the second tap.
-           No rival reply belongs between the two halves of one wall. */
-        go('wall-confirm');
         return;
       }
       if (now === 'mine-place') {
@@ -633,7 +830,9 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     },
     nudge() {
       if (!open) return;
-      liveEl.textContent = 'Tap the glowing target.';
+      liveEl.textContent = lang === 'fa' ? 'رو هدف نورانی بزن.'
+        : lang === 'ru' ? 'Нажми на светящуюся цель.'
+        : 'Tap the glowing target.';
       spotEl.classList.remove('nudge');
       aidEl.classList.remove('nudge');
       void spotEl.offsetWidth;

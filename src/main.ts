@@ -1481,7 +1481,7 @@ function isTutorialActionAllowed(action: TutorialAction): boolean {
 function tutorialTap(p: Vec) {
   /* Step 1 is the GOAL, not a board action: the FINISH banner is the target, and a tap anywhere
      inside its spotlight (or the card's Next key, wired in tutorial.ts) opens step 2. */
-  if (tutorialStage() === 'finish') {
+  if (tutorialStage() === 'goal') {
     const goal = tutorialFinishTarget();
     const box = canvas.getBoundingClientRect();
     if (goal && tutorialSpotHas(goal, box.left + p.x, box.top + p.y)) {
@@ -1494,9 +1494,9 @@ function tutorialTap(p: Vec) {
   }
   const stage = tutorialStage();
   let action = tutorialHitAction(at(p));
-  /* Step 3 is forgiving by design: both halves accept a tap anywhere in the spotlight — not only
-     the hairline groove. The first tap previews; the second commits, exactly as live play does. */
-  if (stage === 'wall-preview' || stage === 'wall-confirm') {
+  /* Step 3 is forgiving by design: one tap anywhere in the spotlight — not only the hairline
+     groove — commits the wall, so the lesson is a single decisive action. */
+  if (stage === 'wall') {
     const target = tutorialWallTarget();
     const box = canvas.getBoundingClientRect();
     if (target && tutorialSpotHas(target.spot, box.left + p.x, box.top + p.y)) {
@@ -1518,13 +1518,6 @@ function tutorialTap(p: Vec) {
       break;
     case 'wall': {
       const wall: Wall = { ...action.spec, owner: state.turn };
-      if (stage === 'wall-preview') {
-        /* the first tap only shows the real dashed ghost — the wall is not spent until tap two */
-        if (!wallOk(state, wall)) { tutorial?.nudge(); return; }
-        impact('light');
-        setMode(previewWall(mode(), { spec: action.spec, ok: true, armed: false, p: state.turn }));
-        break;
-      }
       if (!wallOk(state, wall) || !play({ kind: 'wall', wall })) { tutorial?.nudge(); return; }
       break;
     }
@@ -1780,22 +1773,12 @@ async function tutorialReply(): Promise<void> {
 }
 
 /**
- * Stage change from the lesson: clear the preview when a wall stage ends, keep the player's own
- * ghost up on the confirm half, and let `ui()` re-derive the dots and the mine key's state.
+ * Stage change from the lesson: clear every hover preview so the board stays bare behind the card,
+ * then let `ui()` re-derive the dots and the mine key's state.
  */
-function syncTutorialUI(stage: TutorialStage | null) {
+function syncTutorialUI() {
   if (!tutorialActive) return;
-  const wallStage = stage === 'wall-preview' || stage === 'wall-confirm';
-  if (!wallStage && ghost) setMode({ ...mode(), preview: null });
-  /* 3A must start on a bare groove: the preview is the player's first tap, never a freebie */
-  if (stage === 'wall-preview' && ghost) setMode({ ...mode(), preview: null });
-  if (stage === 'wall-confirm') {
-    const target = tutorialWallTarget();
-    const wall: Wall | null = target ? { ...target.spec, owner: localSide } : null;
-    setMode(previewWall(mode(), wall && wallOk(state, wall)
-      ? { spec: target!.spec, ok: true, armed: false, p: localSide }
-      : null));
-  }
+  if (ghost) setMode({ ...mode(), preview: null });
   ui();
 }
 

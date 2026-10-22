@@ -9,17 +9,20 @@
  *    to the target centre;
  *  - any step cannot be completed by its real target, or the spotlight is smaller than a 48px thumb,
  *    or the HUD card covers it;
- *  - the wall step does not show a preview after tap one (or spends the wall there), does not
- *    CLOSE the overlay after the confirm tap, or the mine lesson re-opens before the rival has
- *    actually gained two rows, or never re-opens;
- *  - a tap near either wall spotlight EDGE is not accepted by that half of the flow;
+ *  - the wall needs more than ONE tap: a single tap near the spotlight edge must commit the wall
+ *    (8 → 7) and close the overlay into live play. No wall-confirm stage may ever appear;
+ *  - the mine lesson re-opens before the rival has actually gained two rows, or never re-opens;
+ *  - the EN / فارسی / RU switcher is not above the input guard, does not repaint the current step
+ *    instantly, does not persist `tactix_tut_lang`, or does not flip the card + ready toast to
+ *    `dir="rtl"` with Vazirmatn / letter-spacing 0 / line-height 1.65 for Persian;
+ *  - any language causes horizontal overflow at 360, 390 or 430 CSS px;
  *  - the mine step points at a tile behind the rival, and planting it does not close the lesson
  *    immediately and permanently (no WATCH THIS freeze);
  *  - the client-side red/blue perspective does not swap both pawns and HUD chips, or the choice
  *    does not survive a reload;
  *  - the wall counter or mine counter does not move, or the save never records completion;
  *  - a completed save re-shows the lesson on the next local race;
- *  - Skip Tutorial is missing, covered, or does not persist completion.
+ *  - Skip / Пропустить / رد کردن آموزش is missing, covered, or does not persist completion.
  *
  * Run: npm run build && node scripts/verify-tutorial.mjs
  */
@@ -84,6 +87,15 @@ const read = (pg) => pg.evaluate(() => {
   const tap = document.querySelector('.tut-tap');
   const hand = document.querySelector('.tut-tap .tut-hand');
   const pointer = document.getElementById('tut-pointer');
+  const lang = document.getElementById('tut-lang');
+  const langBtns = [...document.querySelectorAll('#tut-lang [data-tut-lang]')];
+  const block = document.querySelector('.tut-block');
+  const ready = document.getElementById('tut-ready');
+  const readyTxt = document.getElementById('tut-ready-txt');
+  const step = document.getElementById('tut-step');
+  const title = document.getElementById('tut-title');
+  const body = document.getElementById('tut-body');
+  const bodyCs = getComputedStyle(body);
   /* layout offsets, not the live rect: the press animation translates the SVG every frame */
   const tip = (() => {
     if (!tap) return null;
@@ -97,14 +109,17 @@ const read = (pg) => pg.evaluate(() => {
     hidden: root.hidden,
     stage: root.dataset.stage ?? null,
     tone: root.dataset.tone ?? null,
-    kicker: document.getElementById('tut-step').textContent,
-    title: document.getElementById('tut-title').textContent,
-    body: document.getElementById('tut-body').textContent,
+    kicker: step.textContent,
+    title: title.textContent,
+    body: body.textContent,
     spot: root.hidden || spot.hidden ? null : rect(spot),
     aid: root.hidden || aid.hidden ? null : { kind: aid.dataset.kind, ...rect(aid) },
     card: rect(card),
     skip: rect(skip),
     skipEvents: getComputedStyle(skip).pointerEvents,
+    skipText: skip.textContent.trim(),
+    skipFont: getComputedStyle(skip).fontFamily,
+    skipDir: skip.getAttribute('dir'),
     nextHidden: next.hidden,
     nextLabel: next.textContent.replace(/\s+/g, ' ').trim(),
     nextHeight: next.getBoundingClientRect().height,
@@ -114,6 +129,41 @@ const read = (pg) => pg.evaluate(() => {
     wallCount: document.querySelector('#walls-0 .wall-n')?.textContent ?? null,
     note: document.getElementById('note')?.textContent ?? '',
     live: document.getElementById('tut-live')?.textContent ?? '',
+    cardDir: card.getAttribute('dir'),
+    cardLang: card.getAttribute('data-lang'),
+    cardFont: getComputedStyle(card).fontFamily,
+    kickerSpacing: getComputedStyle(step).letterSpacing,
+    titleSpacing: getComputedStyle(title).letterSpacing,
+    bodySpacing: bodyCs.letterSpacing,
+    bodyLine: parseFloat(bodyCs.lineHeight) / parseFloat(bodyCs.fontSize),
+    lang: lang ? {
+      events: getComputedStyle(lang).pointerEvents,
+      z: getComputedStyle(lang).zIndex,
+      box: rect(lang),
+      buttons: langBtns.map((b) => {
+        const r = b.getBoundingClientRect();
+        return {
+          code: b.dataset.tutLang,
+          pressed: b.getAttribute('aria-pressed'),
+          x: r.x,
+          w: r.width,
+          h: r.height,
+          font: getComputedStyle(b).fontFamily,
+        };
+      }),
+    } : null,
+    blockZ: block ? getComputedStyle(block).zIndex : '',
+    readyText: readyTxt?.textContent ?? '',
+    readyHidden: ready?.hidden ?? true,
+    readyDir: ready?.getAttribute('dir') ?? null,
+    readyLang: ready?.getAttribute('data-lang') ?? null,
+    readyFont: ready ? getComputedStyle(ready).fontFamily : '',
+    readyBox: ready && !ready.hidden ? rect(ready) : null,
+    storedLang: (() => {
+      try { return localStorage.getItem('tactix_tut_lang'); } catch { return null; }
+    })(),
+    scrollW: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+    viewportW: window.innerWidth,
     legacyButtons: document.querySelectorAll('#tut-forward, #tut-skip-next').length,
     handCount: document.querySelectorAll('.tut-tap .tut-hand').length,
     handPathCount: document.querySelectorAll('.tut-tap path').length,
@@ -177,6 +227,25 @@ const waitTitle = (pg, title) => pg.waitForFunction(
 );
 const waitHidden = (pg) => pg.waitForSelector('#tutorial', { state: 'hidden', timeout: 4000 });
 
+/** Switch the live lesson language and read the repainted HUD. */
+const pickLang = async (pg, code) => {
+  await pg.click(`#tut-lang [data-tut-lang="${code}"]`);
+  await pg.waitForTimeout(220);
+  return read(pg);
+};
+
+const withinViewport = (r, w) => !!r && r.x >= -0.5 && r.x + r.w <= w + 0.5;
+
+/** Chrome serialises a computed zero letter-spacing as `normal`; both mean no tracking. */
+const tracking = (value) => (value === 'normal' ? 0 : parseFloat(value));
+
+/** Zero horizontal overflow: the document and every live tutorial surface fit the viewport. */
+const fitsViewport = (s) => s.scrollW <= s.viewportW
+  && withinViewport(s.card, s.viewportW)
+  && withinViewport(s.lang?.box, s.viewportW)
+  && withinViewport(s.skip, s.viewportW)
+  && (!s.readyBox || withinViewport(s.readyBox, s.viewportW));
+
 /**
  * The local pawn's cell, read off the real canvas: the cell centre closest to this seat's own tint.
  * Used during the live-play intermission, where the player takes ordinary turns and the test has no
@@ -216,7 +285,7 @@ let failed = 0;
 const rows = [];
 const check = async (label, fn) => {
   try { await fn(); rows.push(`  ok  ${label}`); }
-  catch (e) { failed++; rows.push(`  FAIL ${label}\n       ${e.message.split('\n')[0]}`); }
+  catch (e) { failed++; rows.push(`  FAIL ${label}\n       ${e.message.split('\n').join('\n       ')}`); }
 };
 
 const browser = await chromium.launch({ executablePath: EXE, args: ['--no-sandbox'] });
@@ -277,17 +346,31 @@ await check('choosing blue persists it and leaves the game record alone', () => 
 
   const s1 = await read(pg);
   const c1 = await colors(pg);
-await check('step 1 is the GOAL spotlighting the top FINISH banner', () => {
-    assert.equal(s1.stage, 'finish');
+await check('step 1 is THE GOAL spotlighting the top FINISH banner', () => {
+    assert.equal(s1.stage, 'goal');
     assert.equal(s1.kicker, 'STEP 1 OF 4');
-    assert.equal(s1.title, 'GOAL');
+    assert.equal(s1.title, 'THE GOAL');
     assert.equal(s1.body,
-      'First player to reach the FINISH line at the top wins! Tap Next or the FINISH line to continue.');
+      'First player to reach the FINISH line at the top wins! Tap the FINISH line or Next to start.');
     assert.equal(s1.tone, 'goal');
     assert.equal(s1.aid?.kind, 'finish');
     assert.ok(s1.spot && s1.spot.w > 100, `spot ${s1.spot?.w}×${s1.spot?.h}`);
     assert.ok(s1.spot.cy < h * 0.4, `FINISH spotlight at y ${s1.spot?.cy}`);
     assert.equal(s1.legacyButtons, 0, 'a stale forward proxy is back in the DOM');
+    assert.ok(fitsViewport(s1), `EN overflows: ${s1.scrollW}/${s1.viewportW}`);
+  });
+await check('the EN / فارسی / RU switcher sits above the input guard and starts on EN', () => {
+    assert.ok(s1.lang, 'the language switcher is missing');
+    assert.equal(s1.lang.events, 'auto');
+    assert.ok(Number(s1.lang.z) > Number(s1.blockZ),
+      `switcher z ${s1.lang.z} must beat the guard z ${s1.blockZ}`);
+    assert.ok(s1.lang.box.h >= 44, `switcher pill ${s1.lang.box.h}px tall`);
+    assert.deepEqual(s1.lang.buttons.map((b) => b.code), ['en', 'fa', 'ru']);
+    assert.deepEqual(s1.lang.buttons.map((b) => b.pressed), ['true', 'false', 'false']);
+    assert.ok(s1.lang.buttons.every((b) => b.h >= 38 && b.w >= 34),
+      `segments ${s1.lang.buttons.map((b) => `${b.w}x${b.h}`).join(' ')}`);
+    assert.match(s1.lang.buttons[1].font, /Vazirmatn/);
+    assert.equal(s1.storedLang, null, 'a clean context must not carry a stored language');
   });
 await check('the pointer is one standard 24px Material-style hand with a dark outline', () => {
     assert.equal(s1.tapSvg, true, 'the tutorial pointer SVG is missing');
@@ -344,7 +427,72 @@ await check('step 1 carries the one Next key; the card does not cover the banner
   });
 await check('Skip Tutorial is present and interactive', () => {
     assert.equal(s1.skipEvents, 'auto');
+    assert.equal(s1.skipText, 'Skip Tutorial');
     assert.ok(s1.skip.h >= 48 && s1.skip.y >= 0);
+  });
+
+  /* ---- live language switching: Persian RTL first, Russian, then back to English ---- */
+  const fa1 = await pickLang(pg, 'fa');
+await check('فارسی repaints the current GOAL step instantly in true RTL', () => {
+    assert.equal(fa1.stage, 'goal', 'a language switch must not move the stage');
+    assert.equal(fa1.kicker, 'قدم ۱ از ۴');
+    assert.equal(fa1.title, 'هدف بازی');
+    assert.equal(fa1.body,
+      'هرکی زودتر مهره‌ش رو به خط پایان (FINISH) اون بالا برسونه برنده‌ست! بزن بریم.');
+    assert.equal(fa1.nextLabel, 'بزن بریم');
+    assert.equal(fa1.skipText, 'رد کردن آموزش');
+    assert.equal(fa1.readyText, 'حله، راه افتادی! حالا برو تا خط پایان!');
+    assert.equal(fa1.cardDir, 'rtl');
+    assert.equal(fa1.cardLang, 'fa');
+    assert.equal(fa1.skipDir, 'rtl');
+    assert.equal(fa1.readyDir, 'rtl');
+    assert.equal(fa1.readyLang, 'fa');
+    assert.equal(fa1.readyHidden, true, 'the ready toast must wait for the final tap');
+    assert.match(fa1.cardFont, /Vazirmatn/);
+    assert.match(fa1.skipFont, /Vazirmatn/);
+    assert.match(fa1.readyFont, /Vazirmatn/);
+    assert.equal(tracking(fa1.kickerSpacing), 0, `kicker spacing ${fa1.kickerSpacing}`);
+    assert.equal(tracking(fa1.titleSpacing), 0, `title spacing ${fa1.titleSpacing}`);
+    assert.equal(tracking(fa1.bodySpacing), 0, `body spacing ${fa1.bodySpacing}`);
+    assert.ok(Math.abs(fa1.bodyLine - 1.65) < 0.05, `Persian body line-height ${fa1.bodyLine}`);
+    assert.equal(fa1.storedLang, 'fa');
+    assert.equal(fa1.lang.buttons.find((b) => b.code === 'fa').pressed, 'true');
+    assert.equal(fa1.lang.buttons.find((b) => b.code === 'en').pressed, 'false');
+    assert.ok(fitsViewport(fa1), `FA overflows: ${fa1.scrollW}/${fa1.viewportW}`);
+  });
+
+  const ru1 = await pickLang(pg, 'ru');
+await check('RU repaints the same step with the Cyrillic stack and LTR flow', () => {
+    assert.equal(ru1.stage, 'goal');
+    assert.equal(ru1.kicker, 'ШАГ 1 ИЗ 4');
+    assert.equal(ru1.title, 'ЦЕЛЬ ИГРЫ');
+    assert.equal(ru1.body,
+      'Тот, кто первым доведёт фишку до линии FINISH наверху — побеждает! Нажми далее.');
+    assert.equal(ru1.nextLabel, 'Далее');
+    assert.equal(ru1.skipText, 'Пропустить');
+    assert.equal(ru1.readyText, 'ВСЁ ГОТОВО! ВПЕРЁД К ФИНИШУ!');
+    assert.equal(ru1.cardDir, 'ltr');
+    assert.equal(ru1.cardLang, 'ru');
+    assert.equal(ru1.skipDir, 'ltr');
+    assert.equal(ru1.readyDir, 'ltr');
+    assert.match(ru1.cardFont, /Inter/);
+    assert.match(ru1.cardFont, /Rubik/);
+    assert.equal(ru1.storedLang, 'ru');
+    assert.equal(ru1.lang.buttons.find((b) => b.code === 'en').pressed, 'false');
+    assert.ok(fitsViewport(ru1), `RU overflows: ${ru1.scrollW}/${ru1.viewportW}`);
+  });
+
+  const en1 = await pickLang(pg, 'en');
+await check('EN restores the exact English copy and LTR flow', () => {
+    assert.equal(en1.stage, 'goal');
+    assert.equal(en1.title, 'THE GOAL');
+    assert.equal(en1.nextLabel, 'Next');
+    assert.equal(en1.skipText, 'Skip Tutorial');
+    assert.equal(en1.cardDir, 'ltr');
+    assert.equal(en1.cardLang, 'en');
+    assert.equal(en1.readyText, "YOU'RE READY! REACH THE FINISH LINE!");
+    assert.equal(en1.storedLang, 'en');
+    assert.ok(fitsViewport(en1), `EN overflows after switching: ${en1.scrollW}/${en1.viewportW}`);
   });
 
   /* a tap outside the spotlight is swallowed and does not advance the lesson */
@@ -352,8 +500,8 @@ await check('Skip Tutorial is present and interactive', () => {
   await pg.waitForTimeout(180);
   const blocked = await read(pg);
 await check('a wrong tap cannot advance or act', () => {
-    assert.equal(blocked.stage, 'finish');
-    assert.equal(blocked.title, 'GOAL');
+    assert.equal(blocked.stage, 'goal');
+    assert.equal(blocked.title, 'THE GOAL');
   });
 
   /* 1 — the banner itself on the narrowest phone, the card's Next key on the others */
@@ -366,20 +514,22 @@ await check('a wrong tap cannot advance or act', () => {
 await check('step 1 hands over to SELECT YOUR PIECE (step 2 of 4)', () => {
     assert.equal(s2.stage, 'select');
     assert.equal(s2.kicker, 'STEP 2 OF 4');
-    assert.equal(s2.body, 'Tap your glowing piece to select it.');
+    assert.equal(s2.title, 'SELECT YOUR PIECE');
+    assert.equal(s2.body, 'Tap your glowing piece to see where you can move.');
     assert.equal(s2.nextHidden, true, 'the Next key must belong to step 1 only');
     assert.equal(overlaps(s2.spot, s2.card), false);
   });
 
   /* 2A — select the pawn */
   await pg.mouse.click(s2.spot.cx, s2.spot.cy);
-  await waitTitle(pg, 'MOVE TO FINISH');
+  await waitTitle(pg, 'MOVE FORWARD');
   await pg.waitForTimeout(80);
   const s3 = await read(pg);
 await check('tapping the pawn moves the spotlight to the forward tile', () => {
     assert.equal(s3.stage, 'move');
     assert.equal(s3.kicker, 'STEP 2 OF 4');
-    assert.equal(s3.body, 'Tap the glowing tile ahead to move toward FINISH!');
+    assert.equal(s3.title, 'MOVE FORWARD');
+    assert.equal(s3.body, 'Tap the glowing tile ahead to move one step closer to FINISH!');
     assert.equal(s3.aid?.kind, 'finish');
     assert.ok(s3.aid.w > 100 && s3.aid.y < h * 0.4, 'FINISH aid is not the top band');
     assert.equal(overlaps(s3.spot, s3.card), false);
@@ -388,50 +538,51 @@ await check('tapping the pawn moves the spotlight to the forward tile', () => {
   /* 2B — tap the glowing forward tile */
   const tap2 = await read(pg);
   await pg.mouse.click(tap2.spot.cx, tap2.spot.cy);
-  await waitTitle(pg, 'PREVIEW A WALL');
+  await waitTitle(pg, 'PLACE A WALL');
   await pg.waitForTimeout(80);
   const s4 = await read(pg);
-await check('step 3A highlights the groove between tiles and asks for a preview', () => {
-    assert.equal(s4.stage, 'wall-preview');
+await check('step 3 highlights the groove between tiles for a single-tap wall', () => {
+    assert.equal(s4.stage, 'wall');
     assert.equal(s4.kicker, 'STEP 3 OF 4');
-    assert.equal(s4.title, 'PREVIEW A WALL');
-    assert.equal(s4.body, 'Tap the gap between tiles to preview a WALL.');
+    assert.equal(s4.title, 'PLACE A WALL');
+    assert.equal(s4.body,
+      'Tap the glowing line in front of your opponent to put up a wall and block their path!');
     assert.equal(s4.aid?.kind, 'wall');
     assert.ok(parseFloat(s4.aidLine) >= 2, `the seam highlight is ${s4.aidLine} tall`);
     assert.ok(s4.spot.h >= 48, 'the groove cut-out is under a thumb');
     assert.equal(overlaps(s4.spot, s4.card), false);
+    assert.equal(s4.wallCount, '8', 'the wall must still be unspent when step 3 opens');
   });
 
-  /* 3A — tap the spotlight near its padded top edge, well above the hairline groove: the
-     forgiving hit zone must preview the wall on the live target without spending it */
+  /* the switcher must be live on step 3 without spending the wall or moving the lesson */
+  const faWall = await pickLang(pg, 'fa');
+await check('the switcher is live on step 3 without spending the wall', () => {
+    assert.equal(faWall.stage, 'wall');
+    assert.equal(faWall.title, 'دیوار بکش!');
+    assert.equal(faWall.body, 'رو این خطِ نورانی جلوی حریفت بزن تا یه دیوار بذاری و راهشو ببندی!');
+    assert.equal(faWall.cardDir, 'rtl');
+    assert.equal(faWall.wallCount, s4.wallCount, 'switching language spent a wall');
+    assert.equal(faWall.hidden, false, 'switching language closed the lesson');
+    assert.ok(faWall.spot && Math.abs(faWall.spot.cx - s4.spot.cx) <= 2,
+      'the spotlight moved off the groove');
+    assert.ok(fitsViewport(faWall), `FA wall overflows: ${faWall.scrollW}/${faWall.viewportW}`);
+  });
+  const enWall = await pickLang(pg, 'en');
+await check('switching back restores the English wall step in place', () => {
+    assert.equal(enWall.stage, 'wall');
+    assert.equal(enWall.title, 'PLACE A WALL');
+    assert.equal(enWall.kicker, 'STEP 3 OF 4');
+    assert.equal(enWall.wallCount, '8');
+    assert.equal(enWall.storedLang, 'en');
+  });
+
+  /* one forgiving tap near the spotlight's padded top edge commits the wall outright */
   const tap3 = await read(pg);
   await pg.mouse.click(tap3.spot.cx, tap3.spot.y + 4);
-  await waitTitle(pg, 'CONFIRM THE WALL');
-  await pg.waitForTimeout(120);
-  const preview = await read(pg);
-await check('the first tap leaves a preview on the same groove without spending the wall', () => {
-    assert.equal(preview.stage, 'wall-confirm');
-    assert.equal(preview.kicker, 'STEP 3 OF 4');
-    assert.equal(preview.title, 'CONFIRM THE WALL');
-    assert.equal(preview.body,
-      'Tap the same slot again to lock the wall in place and block your opponent!');
-    assert.equal(preview.aid?.kind, 'wall');
-    assert.equal(preview.hidden, false, 'the preview tap closed the overlay');
-    assert.equal(preview.liveClass, true, 'the tutorial input guard was released too early');
-    assert.equal(preview.wallCount, s4.wallCount, 'the preview spent a wall');
-    for (const k of ['x', 'y', 'w', 'h']) {
-      assert.ok(Math.abs(preview.spot[k] - s4.spot[k]) <= 2,
-        `the spotlight moved off the previewed groove (${k}: ${preview.spot[k]} vs ${s4.spot[k]})`);
-    }
-    assert.equal(overlaps(preview.spot, preview.card), false);
-  });
-
-  /* 3B — a second tap anywhere in the same spotlight, near its bottom edge, confirms it */
-  await pg.mouse.click(preview.spot.cx, preview.spot.y + preview.spot.h - 4);
   await waitHidden(pg);
   const live = await read(pg);
-await check('the confirmed wall lands (8 → 7) and the overlay exits into live play', () => {
-    assert.equal(live.hidden, true, 'the confirm tap did not close the overlay');
+await check('ONE tap commits the wall (8 → 7) and exits straight into live play', () => {
+    assert.equal(live.hidden, true, 'the single wall tap did not close the overlay');
     assert.equal(live.stage, null);
     assert.equal(live.liveClass, false, 'the tutorial input guard is still latched');
     assert.equal(live.wallCount, '7');
@@ -483,14 +634,28 @@ await check('live play is actually live (the mine key obeys normal turns)', asyn
 await check('the re-opened step is 4A on the mine key', () => {
     assert.equal(mine.stage, 'mine-arm');
     assert.equal(mine.kicker, 'STEP 4 OF 4');
-    assert.equal(mine.title, 'ARM A HIDDEN MINE');
-    assert.equal(mine.body, 'Tap the Mine button to arm a hidden trap!');
+    assert.equal(mine.title, 'ARM A TRAP');
+    assert.equal(mine.body, 'Tap the Mine button below to prepare a hidden trap!');
     assert.equal(mine.liveClass, true);
     assert.equal(mine.mineDisabled, false, 'the mine key is not armed for 4A');
   });
 await check('the HUD card does not cover the mine key spotlight', () => {
     assert.equal(overlaps(mine.spot, mine.card), false);
   });
+
+  /* the switcher is live on step 4A too, and a repaint must not disarm the mine key */
+  const ruMine = await pickLang(pg, 'ru');
+await check('RU repaints step 4A without disturbing the armed mine key', () => {
+    assert.equal(ruMine.stage, 'mine-arm');
+    assert.equal(ruMine.kicker, 'ШАГ 4 ИЗ 4');
+    assert.equal(ruMine.title, 'ПОДГОТОВЬ МИНУ');
+    assert.equal(ruMine.body, 'Нажми на кнопку мины внизу, чтобы подготовить скрытую ловушку!');
+    assert.equal(ruMine.cardDir, 'ltr');
+    assert.equal(ruMine.mineDisabled, false);
+    assert.equal(ruMine.mineCount, mine.mineCount);
+    assert.ok(fitsViewport(ruMine), `RU mine overflows: ${ruMine.scrollW}/${ruMine.viewportW}`);
+  });
+  await pickLang(pg, 'en');
 
   /* 4A — tap the real mine key in the dock */
   const tap4 = await read(pg);
@@ -502,12 +667,40 @@ await check('the HUD card does not cover the mine key spotlight', () => {
 await check('step 4B points at a single tile ahead of the rival', () => {
     assert.equal(s5.stage, 'mine-place');
     assert.equal(s5.aid?.kind, 'tile');
-    assert.equal(s5.body, 'Tap this tile ahead of your opponent to hide the mine!');
+    assert.equal(s5.title, 'PLANT THE MINE');
+    assert.equal(s5.body,
+      'Tap the glowing tile ahead of your opponent to hide the mine in their path!');
     assert.equal(s5.mineDisabled, true, 'the mine key should stand down once armed');
     assert.ok(s5.spot.w < s5.board.cell * 1.6, `mine tile spotlight ${s5.spot.w}px is not one cell`);
     /* two rows up from the duel's baseline is row 9: its forward path lands on row 8 or above */
     assert.ok(tileRow >= 0 && tileRow <= 8, `mine tile row ${tileRow} — the lesson ran too early`);
     assert.equal(overlaps(s5.spot, s5.card), false);
+  });
+
+  /* 4B — فارسی must repaint the final step and pre-language the ready toast */
+  const faMine = await pickLang(pg, 'fa');
+await check('فارسی repaints the final step and pre-languages the ready toast', () => {
+    assert.equal(faMine.stage, 'mine-place');
+    assert.equal(faMine.kicker, 'قدم ۴ از ۴');
+    assert.equal(faMine.title, 'کاشتن مین!');
+    assert.equal(faMine.body,
+      'حالا رو خونه جلوی حریف بزن تا مین رو سر راهش قایم کنی! بره روش حسابی عقب می‌افته!');
+    assert.equal(faMine.cardDir, 'rtl');
+    assert.equal(faMine.readyText, 'حله، راه افتادی! حالا برو تا خط پایان!');
+    assert.equal(faMine.readyDir, 'rtl');
+    assert.equal(faMine.readyLang, 'fa');
+    assert.equal(faMine.readyHidden, true);
+    assert.equal(faMine.mineCount, '3', 'switching language planted a mine');
+    assert.ok(fitsViewport(faMine), `FA mine overflows: ${faMine.scrollW}/${faMine.viewportW}`);
+  });
+  const enMine = await pickLang(pg, 'en');
+await check('EN returns the final step to the exact English copy', () => {
+    assert.equal(enMine.stage, 'mine-place');
+    assert.equal(enMine.title, 'PLANT THE MINE');
+    assert.equal(enMine.body,
+      'Tap the glowing tile ahead of your opponent to hide the mine in their path!');
+    assert.equal(enMine.cardDir, 'ltr');
+    assert.equal(enMine.storedLang, 'en');
   });
 
   /* 4B — plant it: the overlay must be gone at once and stay gone, with no watch beat */
@@ -522,6 +715,11 @@ await check('planting the mine closes the lesson immediately and permanently', a
     assert.equal(after.liveClass, false);
     assert.equal(after.mineCount, '2');
     assert.ok(Date.now() - plantedAt < 2500, 'the lesson did not close immediately');
+    assert.equal(after.readyHidden, false, 'the ready toast never appeared');
+    assert.equal(after.readyText, "YOU'RE READY! REACH THE FINISH LINE!");
+    assert.equal(after.readyDir, 'ltr');
+    assert.equal(after.readyLang, 'en');
+    assert.ok(fitsViewport(after), `ready toast overflows: ${after.scrollW}/${after.viewportW}`);
     await pg.waitForTimeout(1200);
     const still = await read(pg);
     assert.equal(still.hidden, true, 'the overlay came back while the race was live');
@@ -550,10 +748,11 @@ await check('no page errors during the lesson', () => {
     const replay = await read(pg);
     await check('Pause → Replay tutorial restarts the lesson on the goal', () => {
       assert.equal(replayVisible, true);
-      assert.equal(replay.stage, 'finish');
-      assert.equal(replay.title, 'GOAL');
+      assert.equal(replay.stage, 'goal');
+      assert.equal(replay.title, 'THE GOAL');
       assert.equal(replay.wallCount, '8');
       assert.equal(replay.mineCount, '3');
+      assert.equal(replay.readyHidden, true, 'the old ready toast stayed over the replay');
     });
     await pg.click('#tut-skip');
     await pg.waitForSelector('#tutorial', { state: 'hidden', timeout: 3000 });
@@ -580,24 +779,34 @@ await check('the blue perspective survives a reload into the next race', () => {
   await ctx.close();
 }
 
-/* the skip door, on a clean save, also persists completion */
+/* the skip door, on a clean save, also persists the chosen language and completion */
 {
   const ctx = await browser.newContext({ viewport: { width: 430, height: 932 } });
   const pg = await ctx.newPage();
   await pg.goto(base, { waitUntil: 'networkidle' });
   await pg.waitForTimeout(900);
+  await pg.evaluate(() => localStorage.setItem('tactix_tut_lang', 'fa'));
+  await pg.reload({ waitUntil: 'networkidle' });
+  await pg.waitForTimeout(900);
   await pg.click('#home-play');
   await pg.waitForSelector('#tutorial:not([hidden])', { timeout: 5000 });
+  await pg.waitForTimeout(520);
   const first = await read(pg);
   rows.push('\n── skip ──');
-await check('the skipped door starts on the GOAL, not the pawn', () => {
-    assert.equal(first.stage, 'finish');
-    assert.equal(first.title, 'GOAL');
+await check('a stored tactix_tut_lang reopens the lesson in فارسی RTL', () => {
+    assert.equal(first.stage, 'goal');
+    assert.equal(first.title, 'هدف بازی');
+    assert.equal(first.cardDir, 'rtl');
+    assert.equal(first.cardLang, 'fa');
+    assert.equal(first.skipText, 'رد کردن آموزش');
+    assert.equal(first.storedLang, 'fa');
+    assert.match(first.cardFont, /Vazirmatn/);
+    assert.ok(fitsViewport(first), `FA start overflows: ${first.scrollW}/${first.viewportW}`);
   });
   await pg.click('#tut-skip');
   await pg.waitForSelector('#tutorial', { state: 'hidden', timeout: 3000 });
   const raw = await pg.evaluate(() => JSON.parse(localStorage.getItem('detour.save.v2') || 'null'));
-await check('Skip Tutorial closes the lesson and marks it complete', () => {
+await check('رد کردن آموزش closes the lesson and marks it complete', () => {
     assert.equal(raw?.tutorialCompleted, true);
   });
   await ctx.close();
