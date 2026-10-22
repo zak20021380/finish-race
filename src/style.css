@@ -1112,28 +1112,78 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
   70%      { filter: brightness(.92); }
 }
 
-/* ---- the hand: the emoji's fingertip sits on the exact tap pixel, the body bobs below ---- */
+/* ---- the tactical touch pointer: a frosted-glass beacon, not an emoji ----------
+   The container's origin IS the contact point. The sonar rings stay pinned there;
+   the SVG is offset by its own tip so the glowing fingertip lands on the exact
+   pixel, and the press animation moves the beacon while the rings hold the surface. */
 .tut-pointer {
   position: absolute;
   z-index: 3;
   width: 0;
   height: 0;
   pointer-events: none;
-  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .5));
 }
-.tut-hand {
+.tut-sonar {
   position: absolute;
-  left: 0;
-  top: -4px;
-  transform: translate(-50%, 0);
-  font-size: 34px;
-  line-height: 1;
-  user-select: none;
-  animation: tut-hand-bob 1.05s ease-in-out infinite;
+  left: -30px;
+  top: -30px;
+  width: 60px;
+  height: 60px;
+  pointer-events: none;
 }
-@keyframes tut-hand-bob {
-  0%, 100% { transform: translate(-50%, 0) rotate(-4deg); }
-  50%      { transform: translate(-50%, -8px) rotate(2deg); }
+.tut-sonar i {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(56, 189, 248, .72);
+  box-shadow:
+    0 0 14px rgba(56, 189, 248, .34),
+    inset 0 0 12px rgba(56, 189, 248, .18);
+  opacity: 0;
+  animation: tutPulseRing 1.5s cubic-bezier(.2, .62, .28, 1) infinite;
+}
+.tut-sonar i:nth-child(2) {
+  border-color: rgba(252, 211, 77, .58);
+  box-shadow:
+    0 0 14px rgba(252, 211, 77, .26),
+    inset 0 0 12px rgba(252, 211, 77, .14);
+  animation-delay: .5s;
+}
+.tut-sonar i:nth-child(3) { animation-delay: 1s; }
+@keyframes tutPulseRing {
+  0%   { transform: scale(.2); opacity: .95; }
+  62%  { opacity: .32; }
+  100% { transform: scale(1); opacity: 0; }
+}
+.tut-tap {
+  position: absolute;
+  left: -32px;
+  top: -10px;
+  width: 64px;
+  height: 88px;
+  overflow: visible;
+  shape-rendering: geometricPrecision;
+  filter: drop-shadow(0 6px 16px rgba(56, 189, 248, 0.45));
+  transform-origin: 32px 10px;
+  animation: tutTapPress 1.5s cubic-bezier(.4, 0, .2, 1) infinite;
+  will-change: transform;
+}
+@keyframes tutTapPress {
+  0%, 100% { transform: translateY(-2px); }
+  16%      { transform: translateY(4px); }
+  31%      { transform: translateY(1px); }
+  48%      { transform: translateY(-2px); }
+}
+.tut-tap-tip {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: tutTipPress 1.5s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+@keyframes tutTipPress {
+  0%, 100% { transform: scale(1); }
+  16%      { transform: scale(.76, .9); }
+  31%      { transform: scale(.96, 1.03); }
+  48%      { transform: scale(1.06); }
 }
 
 /* ---- the floating HUD card: compact dark clay, never a middle-of-the-board modal ---- */
@@ -1291,7 +1341,8 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
   .tut-card { width: calc(100vw - 24px); padding: 10px 12px 11px; border-radius: 15px; }
   .tut-title { font-size: 13px; }
   .tut-body { margin-top: 6px; font-size: 12px; line-height: 1.38; }
-  .tut-hand { font-size: 30px; }
+  .tut-tap { left: -28px; top: -8.75px; width: 56px; height: 77px; transform-origin: 28px 8.75px; }
+  .tut-sonar { left: -26px; top: -26px; width: 52px; height: 52px; }
   .tut-skip { padding: 0 12px; font-size: 10.5px; }
 }
 @media (max-height: 620px) {
@@ -7130,6 +7181,70 @@ html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: no
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* ---- piece colour: a recessed two-key perspective switch ------------------
+   The whole row is information; only the two keys take input. Each key is a
+   full 48px thumb and wears its own family when chosen, so the control says
+   red/blue without relying on the small label alone. */
+.pcolor-row { cursor: default; }
+.set-rows .pcolor-row:active { background: transparent; }
+.pcolor {
+  flex: none;
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, .55),
+    inset 0 -1px 0 rgba(255, 255, 255, .06);
+}
+.pcolor-b {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 50px;
+  min-height: 48px;
+  padding: 0 9px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  cursor: pointer;
+  transition: transform var(--motion-fast), background var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
+}
+.pcolor-b:active { transform: translateY(1px); }
+.pcolor-b:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.pcolor-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45);
+}
+.pcolor-dot.red { background: var(--red); }
+.pcolor-dot.blue { background: var(--blue); }
+.pcolor-b[data-pcolor="red"][aria-pressed="true"] {
+  background: linear-gradient(180deg, rgba(224, 38, 79, .38), rgba(128, 9, 42, .5));
+  color: #FFE2E9;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    inset 0 0 0 1px rgba(255, 111, 141, .55),
+    0 4px 12px -7px rgba(224, 38, 79, .9);
+}
+.pcolor-b[data-pcolor="blue"][aria-pressed="true"] {
+  background: linear-gradient(180deg, rgba(48, 87, 219, .4), rgba(18, 39, 112, .55));
+  color: #E4EAFF;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    inset 0 0 0 1px rgba(119, 148, 255, .55),
+    0 4px 12px -7px rgba(48, 87, 219, .95);
 }
 .chev.tactile, .ext {
   flex: none;

@@ -164,7 +164,7 @@ try {
   expect('Contact Admin subtext', st.adminSub === 'Direct help, inquiries & feedback');
   expect('admin chat pill with icon', st.adminPill);
   expect('tactile headset icon', st.headset);
-  expect('5 rows (3 gameplay + 2 community)', st.rows === 5);
+  expect('6 rows (4 gameplay + 2 community)', st.rows === 6);
   expect('zero page scroll at 360x640', st.pageScroll <= 0);
   expect('zero stack scroll at 360x640', st.stackScroll <= 0);
 

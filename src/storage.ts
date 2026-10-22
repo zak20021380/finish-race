@@ -12,7 +12,7 @@
  */
 import type { Difficulty } from './bot';
 import type { Mode } from './settings';
-import { CLASSIC_BALL, CLASSIC_BOARD, CLASSIC_WALL, known, themeOf, type CosKind, type Theme } from './themes';
+import { CLASSIC_BALL, CLASSIC_BOARD, CLASSIC_WALL, known, themeOf, type CosKind, type PieceColor, type Theme } from './themes';
 import { knownCountry } from './countries';
 import {
   addMember, cleanCode, cleanName, dropMember, inTeam, makeTeam, seedTeams, YOU, type Team,
@@ -136,6 +136,11 @@ export interface Save {
    * so a cleared race history is not the only thing that brings the tutorial back.
    */
   tutorialCompleted: boolean;
+  /**
+   * The colour this screen paints its own pieces in. Local presentation only: the opponent takes
+   * the opposite family on this device, and the rules never read this field.
+   */
+  pieceColor: PieceColor;
 }
 
 /** The three starter items are owned before the first race; the wallet starts stocked for the demo. */
@@ -174,6 +179,7 @@ function fresh(): Save {
     referral: { joins: 0, unclaimed: 0, welcome: false, via: null },
     editions: { claims: {}, supply: {}, syncedAt: 0 },
     tutorialCompleted: false,
+    pieceColor: 'red',
   };
 }
 
@@ -317,6 +323,7 @@ function migrate(raw: Partial<Save> | null): Save {
   }
   if (whole(raw.tiqBonus)) s.tiqBonus = Math.max(0, Math.floor(raw.tiqBonus));
   if (raw.tutorialCompleted === true) s.tutorialCompleted = true;
+  if (raw.pieceColor === 'blue' || raw.pieceColor === 'red') s.pieceColor = raw.pieceColor;
   const ref = raw.referral as Partial<ReferralState> | undefined;
   if (ref) {
     /* A save from before the referral engine simply keeps the fresh zeroes. Anything hand-edited is
@@ -453,6 +460,21 @@ export function recordGame(r: { difficulty: Difficulty; won: boolean }, mult = 1
 
 /** Read the saved lesson flag. A refused storage backend simply answers false. */
 export const hasCompletedTutorial = (): boolean => profile.tutorialCompleted === true;
+
+/**
+ * The colour this device paints its own pieces in. Kept beside the cosmetics because it is a
+ * preference, not game state: no rules query and no network payload ever reads it.
+ */
+export const pieceColor = (): PieceColor => profile.pieceColor;
+
+/** Choose red or blue for the local perspective; the opponent is painted in the other one. */
+export function setPieceColor(color: PieceColor): boolean {
+  const next: PieceColor = color === 'blue' ? 'blue' : 'red';
+  if (profile.pieceColor === next) return false;
+  profile.pieceColor = next;
+  flush();
+  return true;
+}
 
 /**
  * Persist completion in the one save. Called when the lesson is finished or skipped — a skip is

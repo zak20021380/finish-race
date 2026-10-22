@@ -14,8 +14,8 @@ import {
 import {
   ageLocked, claimIdentityReward, claimReferralRewards, cleanDisplayName, createTeam, daysInMonth,
   DISPLAY_NAME_MAX, DISPLAY_NAME_MIN, DOB_MIN_YEAR, dobMaxYear, dobValue, favouriteMode,
-  IDENTITY_REWARD, joinTeam, KINDS, leaveTeam, levelInfo, myTeam, onChange, profile,
-  REFERRAL_REWARD, setBadge, setDisplayName, setDob, setFrame, theme, validDob,
+  IDENTITY_REWARD, joinTeam, KINDS, leaveTeam, levelInfo, myTeam, onChange, pieceColor, profile,
+  REFERRAL_REWARD, setBadge, setDisplayName, setDob, setFrame, setPieceColor, theme, validDob,
 } from './storage';
 import {
   BADGES, badgeCrestHtml, badgeDelta, badgeEdition, badgeProgress, badgeStatus, editionHolders,
@@ -41,7 +41,7 @@ import { copyText } from './gamemodes';
 import { myTiq, TIER_NAME, tierOf, type MindTier } from './matchmaking';
 import { claimWelcomeBonus, pullReferral, referralLink, referralShareUrl } from './referral';
 import { playReward } from './sound';
-import { BOT_RAMP, type CosKind } from './themes';
+import { perspectiveRamps, type CosKind, type PieceColor } from './themes';
 import { isTicketCategory, submitTicket } from './support';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
@@ -1962,6 +1962,7 @@ export function createMenu(api: MenuApi): Menu {
     if (customScreen.hidden || !customDrawn) return;      // a hidden canvas has no width to lay out
     if (!teamPv) teamPv = createRenderer(customPv, { theme });
     teamPv.setTheme(theme());
+    teamPv.setPerspective({ local: 0, rival: 1, color: pieceColor() });
     teamPv.resize();
     const s = newGame(custom);
     const v: View = {
@@ -1975,10 +1976,12 @@ export function createMenu(api: MenuApi): Menu {
     teamPv.draw(v, t + 600);             // settle the pop-in clocks past their first frame
   }
 
-  /** Each side's colour family, taken from the same data the board draws with. */
+  /** Each side's colour family, read off the same perspective plan the race draws with. */
   const paintSwatches = () => {
-    customSwatch[0].style.setProperty('--tint', theme().ball.ramp.mid);
-    customSwatch[1].style.setProperty('--tint', BOT_RAMP.mid);
+    const ramps = perspectiveRamps(0, 1, pieceColor());
+    customSwatch[0].style.setProperty('--tint', (ramps[0] ?? theme().ball.ramp).mid);
+    customSwatch[1].style.setProperty('--tint', (ramps[1] ?? theme().ball.ramp).mid);
+    paintCustomPv();                    // the preview itself follows the same perspective
   };
 
   function paintCustom() {
@@ -2029,6 +2032,22 @@ export function createMenu(api: MenuApi): Menu {
     });
   }
   onSettings(paintSettings);
+
+  /* ---- piece colour: the client-side red/blue perspective -----------------
+     This is a save preference, never a rule: the race still seats, turns and scores
+     exactly the same, only the two families this screen paints are swapped. */
+  const pcolorKeys = [...document.querySelectorAll<HTMLButtonElement>('[data-pcolor]')];
+  const paintPieceColor = () => {
+    for (const key of pcolorKeys) key.setAttribute('aria-pressed', String(key.dataset.pcolor === pieceColor()));
+  };
+  for (const key of pcolorKeys) {
+    key.addEventListener('click', () => {
+      if (setPieceColor((key.dataset.pcolor === 'blue' ? 'blue' : 'red') as PieceColor)) impact('light');
+      paintPieceColor();
+    });
+  }
+  onChange(paintPieceColor);
+  paintPieceColor();
 
   /* ---- settings overhaul: language drawer + community/admin rows ---- */
   const CHANNEL_URL = 'https://t.me/detour_game';

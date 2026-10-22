@@ -22,8 +22,8 @@ import {
 } from './rules';
 import { motionReduced } from './settings';
 import {
-  CLASSIC_BALL, CLASSIC_WALL, DEFAULT_THEME, ERR_RAMP, MINE_RAMP, NO_RAMP, OK_RAMP, SEAT_RAMPS,
-  type BallSkin, type CosKind, type Ramp, type Stop, type Theme, type WallStyle,
+  CLASSIC_BALL, CLASSIC_WALL, DEFAULT_THEME, ERR_RAMP, MINE_RAMP, NO_RAMP, OK_RAMP, perspectiveRamps,
+  SEAT_RAMPS, type BallSkin, type CosKind, type PieceColor, type Ramp, type Stop, type Theme, type WallStyle,
 } from './themes';
 
 export interface Vec { x: number; y: number }
@@ -67,6 +67,17 @@ export interface View {
 export interface Layout {
   w: number; h: number; cell: number; ox: number; oy: number; dpr: number;
   cols: number; rows: number;
+}
+
+/**
+ * How this client paints the two sides of a duel. `local` wears the player's chosen family, the
+ * `rival` seat wears the opposite one, and every other seat keeps the fixed gold / emerald order.
+ * It is presentation only — the rules keep their own `turn`, seats and colours.
+ */
+export interface Perspective {
+  local: Player;
+  rival: Player;
+  color: PieceColor;
 }
 
 export interface RendererOptions {
@@ -224,6 +235,10 @@ for (let i = 0; i < SPL_N; i++) {
  * Board palettes author every fading colour as an rgba() literal, so this only has to read one.
  */
 const clear = (col: string) => (col.startsWith('rgb') ? col.replace(/[\d.]+\)\s*$/, '0)') : col);
+
+/** The same colour at a new alpha; hex tokens (the crest metal) are left alone. */
+const withAlpha = (col: string, a: number) =>
+  (col.startsWith('rgb') ? col.replace(/[\d.]+\)\s*$/, `${a})`) : col);
 
 /** A stop's colour may name a ramp slot ("mid") or be literal; board stops are always literal. */
 const resolve = (ramp: Ramp | null, list: Stop[]): Stop[] => {
@@ -467,17 +482,14 @@ export function hitTest(L: Layout, px: number, py: number, o: {
 
 /**
  * One seat: its colours, its ball material, its wall material. Seats 0..3 play, seat 4 refuses.
- * Seat 0 wears whatever skin the player equipped; seats 1..3 are the fixed families — cobalt, solar
- * gold, emerald — and seat 4 is the refusal red that owns no side. `SEAT_RAMPS` is the single source
- * of the fixed order, shared with `main.ts` so the HUD chips cannot drift from the spheres.
+ * Without a perspective the local seat wears the equipped skin and seats 1..3 keep the fixed
+ * families; with one, the local seat wears the player's chosen red/blue and its rival the other.
  */
 interface Side { ramp: Ramp; ball: BallSkin; wall: WallStyle }
 
 /** Every seat the rules allow, plus the refusal palette that owns no side. */
 const SEAT_COUNT = MAX_TEAMS + 1;
 const ERR = MAX_TEAMS;
-/** Fixed families for the seats that are never themed: seats 1, 2, 3, then "no". */
-const FIXED: Ramp[] = [...SEAT_RAMPS, ERR_RAMP];
 
 /**
  * The wall's own numbering: how many tick bands a seat's bar wears. Colour already separates the
@@ -795,6 +807,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   let cols = opts.cols ?? COLS, rows = opts.rows ?? ROWS;
   let L = computeLayout(1, 1, 1, cols, rows);
   let th: Theme = opts.theme ? opts.theme() : DEFAULT_THEME;
+  /** The client-side colour perspective, or null for previews that show the authored theme. */
+  let perspective: Perspective | null = null;
   /** seat 0 wears the equipped skin and style; every other seat keeps its fixed family. */
   let sides: Side[] = seats(th);
   const born = new Map<number, number>();                    // wall key → first-seen time (pop-in)
@@ -869,11 +883,23 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   /** the seat the rules have crowned, and the moment they did it, while its ball finishes travelling */
   let goalWait = -1, goalSeat: Player | null = null;
 
-  /** The player's seat plus every fixed one, from one theme. */
+  /** The player's seat plus every fixed one, from one theme and the live perspective. */
   function seats(t: Theme): Side[] {
-    const out: Side[] = [{ ramp: t.ball.ramp, ball: t.ball, wall: t.wall }];
-    for (let i = 1; i < SEAT_COUNT; i++) {
-      out.push({ ramp: FIXED[i - 1] ?? ERR_RAMP, ball: CLASSIC_BALL, wall: CLASSIC_WALL });
+    /* Without a perspective this is the authored board: seat 0 wears the skin, 1..3 stay fixed.
+       With one, both sides of the duel are the player's own red/blue pair, whatever the seat
+       numbers say. The material stays the seat's: your equipped ball/wall, the rival's Classic. */
+    const ramps = perspective
+      ? perspectiveRamps(perspective.local, perspective.rival, perspective.color)
+      : [t.ball.ramp, ...SEAT_RAMPS, ERR_RAMP];
+    const local = perspective ? perspective.local : 0;
+    const out: Side[] = [];
+    for (let i = 0; i < SEAT_COUNT; i++) {
+      const mine = i === local;
+      out.push({
+        ramp: ramps[i] ?? ERR_RAMP,
+        ball: mine ? t.ball : CLASSIC_BALL,
+        wall: mine ? t.wall : CLASSIC_WALL,
+      });
     }
     return out;
   }
@@ -1021,8 +1047,18 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
     /* the light the goal zone throws down onto the arrival tiles: the emerald wash the arena is
        themed with, and its warm amber partner, both starting below the line so they never wash the
-       checks out. This is what takes the hard seam out of the join with row 1. */
-    for (const stops of [b.glow, b.spill]) {
+       checks out. This is what takes the hard seam out of the join with row 1. On a coloured
+       perspective the emerald wash becomes the local player's own family, so the finish glow is
+       theirs even though the gold crown and the kerb never change. */
+    const localWash: Stop[] | null = perspective
+      ? (() => {
+        const glow = sides[perspective.local]?.ramp.glow;
+        return glow
+          ? [[0, withAlpha(glow, 0.2)], [0.45, withAlpha(glow, 0.07)], [1, withAlpha(glow, 0)]]
+          : null;
+      })()
+      : null;
+    for (const stops of [localWash ?? b.glow, b.spill]) {
       const fg = g.createLinearGradient(0, oy + c, 0, oy + 3.6 * c);
       for (const [t, col] of resolve(null, stops)) fg.addColorStop(t, col);
       g.fillStyle = fg;
@@ -2557,6 +2593,20 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       if (t.ball === th.ball && t.wall === th.wall && t.board === th.board) return;
       th = t;
       sides = seats(t);
+      buildStatic();
+    },
+    /**
+     * Repaint this client's two sides in its own red/blue perspective. Purely visual: the rules,
+     * the seats and the turn order are untouched. Passing null restores the authored seat colours
+     * for a preview.
+     */
+    setPerspective(p: Perspective | null) {
+      const same = (!p && !perspective)
+        || (!!p && !!perspective && p.local === perspective.local
+          && p.rival === perspective.rival && p.color === perspective.color);
+      if (same) return;
+      perspective = p ? { ...p } : null;
+      sides = seats(th);
       buildStatic();
     },
   };

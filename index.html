@@ -1257,6 +1257,20 @@
                   <span class="row-txt"><span class="row-t" data-i18n="haptics">Haptics</span></span>
                   <span class="switch" aria-hidden="true"></span>
                 </button>
+                <!-- client-side perspective: your pawns/walls/HUD and the finish wash wear the
+                     chosen family; the rival automatically wears the opposite one. Purely local —
+                     two players who both pick red still see themselves in red. -->
+                <div class="row set-row pcolor-row" role="group" aria-labelledby="pcolor-label">
+                  <span class="set-ico sm sky" aria-hidden="true"><svg class="ico"><use href="#i-target" /></svg></span>
+                  <span class="row-txt">
+                    <span class="row-t" id="pcolor-label" data-i18n="pieceColor">Piece Color</span>
+                    <span class="row-s" data-i18n="pieceColorSub">Your pieces · the rival takes the other colour</span>
+                  </span>
+                  <span class="pcolor">
+                    <button class="pcolor-b" type="button" data-pcolor="red" aria-pressed="true" aria-label="Play red pieces"><i class="pcolor-dot red" aria-hidden="true"></i>RED</button>
+                    <button class="pcolor-b" type="button" data-pcolor="blue" aria-pressed="false" aria-label="Play blue pieces"><i class="pcolor-dot blue" aria-hidden="true"></i>BLUE</button>
+                  </span>
+                </div>
               </div>
             </section>
 
@@ -1752,7 +1766,57 @@
         <span class="tut-spot" id="tut-spot" aria-hidden="true" hidden></span>
         <div class="tut-block" aria-hidden="true"></div>
         <div class="tut-pointer" id="tut-pointer" aria-hidden="true">
-          <span class="tut-hand">👆</span>
+          <span class="tut-sonar" aria-hidden="true"><i></i><i></i><i></i></span>
+          <svg class="tut-tap" viewBox="0 0 64 88" focusable="false" aria-hidden="true">
+            <defs>
+              <linearGradient id="tutTapBody" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#E8FBFF" stop-opacity=".96" />
+                <stop offset=".1" stop-color="#7DD3FC" stop-opacity=".82" />
+                <stop offset=".3" stop-color="#0EA5E9" stop-opacity=".55" />
+                <stop offset=".62" stop-color="#0B3A5C" stop-opacity=".86" />
+                <stop offset="1" stop-color="#060C18" stop-opacity=".97" />
+              </linearGradient>
+              <linearGradient id="tutTapEdge" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#F0FDFF" stop-opacity=".95" />
+                <stop offset=".55" stop-color="#38BDF8" stop-opacity=".55" />
+                <stop offset="1" stop-color="#0EA5E9" stop-opacity=".22" />
+              </linearGradient>
+              <linearGradient id="tutTapGold" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#F59E0B" stop-opacity=".08" />
+                <stop offset=".5" stop-color="#FDE68A" stop-opacity=".95" />
+                <stop offset="1" stop-color="#F59E0B" stop-opacity=".08" />
+              </linearGradient>
+              <radialGradient id="tutTapCore" cx=".38" cy=".4" r=".62">
+                <stop offset="0" stop-color="#FFFFFF" />
+                <stop offset=".38" stop-color="#E0F2FE" />
+                <stop offset=".72" stop-color="#38BDF8" />
+                <stop offset="1" stop-color="#0284C7" />
+              </radialGradient>
+              <filter id="tutTapGlow" x="-220%" y="-220%" width="540%" height="540%">
+                <feGaussianBlur stdDeviation="3" result="b" />
+                <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
+            </defs>
+            <g class="tut-tap-tip">
+              <circle cx="32" cy="10" r="12.5" fill="rgba(56,189,248,.12)" />
+              <circle cx="32" cy="10" r="6.6" fill="url(#tutTapCore)" filter="url(#tutTapGlow)" />
+              <circle cx="32" cy="10" r="2.7" fill="#F8FAFC" />
+            </g>
+            <g class="tut-tap-body">
+              <path d="M32 15.5 C38.4 15.5 42.4 20.2 42.4 27 L42.4 54.5 C42.4 64.8 40.2 73.4 37.2 77.4 L32 82 L26.8 77.4 C23.8 73.4 21.6 64.8 21.6 54.5 L21.6 27 C21.6 20.2 25.6 15.5 32 15.5 Z"
+                fill="rgba(4,10,22,.58)" transform="translate(1.4 1.2)" />
+              <path d="M32 14.5 C37.9 14.5 41.6 19.3 41.6 26 L41.6 54 C41.6 64.2 39.7 72.8 36.8 76.9 L32 81.2 L27.2 76.9 C24.3 72.8 22.4 64.2 22.4 54 L22.4 26 C22.4 19.3 26.1 14.5 32 14.5 Z"
+                fill="url(#tutTapBody)" stroke="url(#tutTapEdge)" stroke-width="1.15" />
+              <path d="M32 19.4 C35.5 19.4 37.7 22.4 37.7 26.6 L37.7 52.4 C37.7 60.8 36.6 67.3 34.8 71.3 L32 74.4 L29.2 71.3 C27.4 67.3 26.3 60.8 26.3 52.4 L26.3 26.6 C26.3 22.4 28.5 19.4 32 19.4 Z"
+                fill="rgba(224,251,255,.11)" stroke="rgba(240,253,255,.24)" stroke-width=".7" />
+              <path d="M23.4 50.8 H40.6" stroke="url(#tutTapGold)" stroke-width="2.1" stroke-linecap="round" />
+              <path d="M25.4 56.2 H38.6" stroke="rgba(252,211,77,.22)" stroke-width=".9" stroke-linecap="round" />
+              <path d="M32 24.4 V43.2" stroke="rgba(240,253,255,.92)" stroke-width="1.35" stroke-linecap="round" />
+              <circle cx="32" cy="46.6" r="1.7" fill="#FDE68A" />
+              <path d="M28.6 62.4 C29.4 66.4 30.4 69.2 32 71.7 C33.6 69.2 34.6 66.4 35.4 62.4"
+                fill="none" stroke="rgba(125,211,252,.34)" stroke-width=".9" stroke-linecap="round" />
+            </g>
+          </svg>
         </div>
         <div class="tut-card" id="tut-card" tabindex="-1" data-tone="select">
           <div class="tut-head">

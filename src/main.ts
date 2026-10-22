@@ -10,7 +10,7 @@ import { botAction, botThinkMs, type Difficulty } from './bot';
 import {
   createRenderer, hitTest, logArriveMs, logFaceRow, logRollMs, wallCentre, LOG_ALERT_MS,
   type BallView, type CapsuleAction, type Ghost, type Hit,
-  type Mark, type Vec, type View,
+  type Mark, type Perspective, type Vec, type View,
 } from './render';
 import { createConfetti } from './confetti';
 import { createChat } from './chat';
@@ -29,14 +29,15 @@ import { mountCoins, setBalance } from './coin';
 import { menuState, motionReduced } from './settings';
 import { audio, SHOVE_RATE } from './audio';
 import {
-  completeTutorial, hasCompletedTutorial, onChange, profile, recordGame, resetTutorialState, theme,
+  completeTutorial, hasCompletedTutorial, onChange, pieceColor, profile, recordGame, resetTutorialState, theme,
 } from './storage';
 import {
-  createTutorial, shouldAutoStartTutorial,
+  createTutorial, shouldAutoStartTutorial, tutorialSpotHas,
   type Tutorial, type TutorialAction, type TutorialRect, type TutorialSpot, type TutorialStage,
   type TutorialTargetMine, type TutorialTargetMove, type TutorialTargetSelect, type TutorialTargetWall,
 } from './tutorial';
-import { SEAT_RAMPS } from './themes';
+import { pickMineDemo, twoStepPath, type MineDemoPlan, type StepsFor } from './tutorialDemo';
+import { perspectiveRamps } from './themes';
 import { detonation, impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
 import { createRoomCode, getGameMode, gmBack, initGameModes, onGameModeChange, setGameMode } from './gamemodes';
@@ -364,6 +365,8 @@ let active: OnlineSession | LobbyRace | null = null;
 /** Why an online race ended without a finish line, for the panel's own caption. */
 let forfeit: RaceEnd['why'] | null = null;
 const rivalSide = (): Player => (localSide === 0 ? 1 : 0);
+/** The two sides this screen actually paints: the player's chosen colour, the rival in the other. */
+const currentPerspective = (): Perspective => ({ local: localSide, rival: rivalSide(), color: pieceColor() });
 /** `You`, and the name on each other chip: local names in a bot race, the player's in an online one. */
 const TEAM_NAME: Record<number, string> = { 0: 'You', 1: 'Bot' };
 
@@ -972,6 +975,9 @@ function restart() {
      the seed the matchmaker handed both sides, so the logs and the hazards are the same board. */
   raceSeed = active ? active.seed : (Math.random() * 0x7fffffff) | 0;
   state = newGame(sizes, { hazards: runtime.hazards && !tutorialRace, seed: raceSeed });
+  /* This screen's colours are client-side: the local seat wears the save's red/blue choice and the
+     rival wears the other one. Set before the first paint of the new board. */
+  renderer.setPerspective(currentPerspective());
   /* The grid the rules picked for this race — a duel keeps 8 columns, a 3- or 4-contender race gets
      10 — and the wall budget that goes with it. Both are read off the board, never assumed, so a
      menu change between races cannot leave the canvas painting the wrong lattice. `fitBoard` hands
@@ -1029,16 +1035,23 @@ function paintRoster(): void {
      that name and it costs a string. Both say the same thing: how many chips the dock is laying out. */
   chipsEl.dataset.players = String(n);
   chipsEl.dataset.seats = String(n);
+  /* The chip's class is the colour it wears on THIS screen: the local seat gets the player's
+     chosen family, its rival the opposite, then the fixed gold / green order for extra seats.
+     Online, the local seat can be seat 1 — the class follows the perspective, not the index. */
+  const rivals = rivalSide();
+  const extras = [0, 1, 2, 3].filter((p) => p !== localSide && p !== rivals);
   for (let p = 0; p < chips.length; p++) {
     const el = chips[p];
     if (!el) continue;
     const on = p < n;
     el.hidden = !on;
-    /* the chip's colour class follows the seat, so a revealed seat is tinted before its first paint */
-    el.classList.toggle('red', p === 0);
-    el.classList.toggle('blue', p === 1);
-    el.classList.toggle('gold', p === 2);
-    el.classList.toggle('green', p === 3);
+    const color = p === localSide ? pieceColor()
+      : p === rivals ? (pieceColor() === 'red' ? 'blue' : 'red')
+      : extras.indexOf(p) === 0 ? 'gold' : 'green';
+    el.classList.toggle('red', color === 'red');
+    el.classList.toggle('blue', color === 'blue');
+    el.classList.toggle('gold', color === 'gold');
+    el.classList.toggle('green', color === 'green');
     /* and it says who is holding it: `bot` for a seat the machine was backfilled into, `takeover`
        for one a person walked out of and the machine finished. Both are machine-controlled seats,
        and the dock never lets one read as a person. */
@@ -1143,13 +1156,13 @@ function paintSeatIdentity(): void {
 }
 
 /**
- * The four chip swatches, in seat order. Seat 0 wears the equipped skin; seats 1..3 wear the fixed
- * seat ramps — the very array `render.ts` draws their spheres and wall bars from, so the token on
- * the board and the swatch on the chip can never disagree about who is who. The mine key is dock
- * furniture rather than a chip's child now, so it wears the local seat's colour from here too.
+ * The four chip swatches, in perspective order. `perspectiveRamps` is the same plan `render.ts`
+ * draws the spheres and wall bars from, so the token on the board and the swatch on the chip can
+ * never disagree about who is who. The mine key is dock furniture rather than a chip's child, so it
+ * wears the local seat's colour from here too.
  */
 function paintSeatTints(): void {
-  const ramps = [theme().ball.ramp, ...SEAT_RAMPS];
+  const ramps = perspectiveRamps(localSide, rivalSide(), pieceColor());
   for (let i = 0; i < chips.length; i++) {
     const r = ramps[i];
     if (!r) continue;
@@ -1462,7 +1475,17 @@ function isTutorialActionAllowed(action: TutorialAction): boolean {
  * canvas receives this tap exactly as it would after the lesson.
  */
 function tutorialTap(p: Vec) {
-  const action = tutorialHitAction(at(p));
+  let action = tutorialHitAction(at(p));
+  /* Step 3 is forgiving by design: the whole spotlight — not just the hairline groove — is the
+     wall's hit area. A tap anywhere inside it snaps to the live target and commits in one tap;
+     there is no preview/confirm second tap in the lesson. */
+  if (tutorialStage() === 'wall') {
+    const target = tutorialWallTarget();
+    const box = canvas.getBoundingClientRect();
+    if (target && tutorialSpotHas(target.spot, box.left + p.x, box.top + p.y)) {
+      action = { kind: 'wall', spec: target.spec };
+    }
+  }
   if (!action || !isTutorialActionAllowed(action)) { tutorial?.nudge(); return; }
   const L = renderer.layout();
   renderer.ripple((p.x - L.ox) / L.cell, (p.y - L.oy) / L.cell, localSide);
@@ -1678,12 +1701,19 @@ function tutorialWallTarget(): TutorialTargetWall | null {
   return null;
 }
 
-/** Step 4B's real target: the legal mine square closest to directly ahead of the rival. */
+/** Step 4B's real target: a mine square the rival can reach in exactly two steps. */
 function tutorialMineTarget(): TutorialTargetMine | null {
   if (state.turn !== localSide || state.winner !== null) return null;
   const cells = mineCells(state, localSide);
   if (!cells.length) return null;
   const rival = tutorialRival();
+  if (rival) {
+    /* The demonstration has to be true: pick a square the rival can walk onto in two legal steps.
+       The search prefers a straight two-row advance, so the beat reads "forward, forward, boom". */
+    const plan = pickMineDemo(state, rival, cells, tutorialSteps);
+    if (plan) return { cell: plan.cell, spot: { rect: boardRect(plan.cell.c, plan.cell.r), radius: 16 } };
+  }
+  /* Fallback for a board with no two-step approach: the old nearest-forward square. */
   let best = cells[0];
   if (rival) {
     let score = Infinity;
@@ -1694,6 +1724,80 @@ function tutorialMineTarget(): TutorialTargetMine | null {
     }
   }
   return { cell: best, spot: { rect: boardRect(best.c, best.r), radius: 16 } };
+}
+
+/** The rules' own move list, handed to the pure demo planner. */
+const tutorialSteps: StepsFor = (s, team) => teamSteps(s, team);
+
+/** The charge planted in step 4B — the newest live mine of the local seat. */
+function tutorialPlantedMine(): Mine | null {
+  for (let i = state.mines.length - 1; i >= 0; i--) {
+    const mine = state.mines[i];
+    if (mine.owner === localSide && !mine.triggered) return mine;
+  }
+  return null;
+}
+
+/** The planted mine and the two real moves that carry the rival onto it. */
+function tutorialMinePlan(): MineDemoPlan | null {
+  const mine = tutorialPlantedMine();
+  const rival = tutorialRival();
+  if (!mine || !rival) return null;
+  const path = twoStepPath(state, rival, mine.cell, tutorialSteps);
+  return path ? { cell: mine.cell, path } : null;
+}
+
+/** The board window the watch beat reveals: the rival, every step and the charge. */
+function tutorialMineDemoSpot(): TutorialSpot | null {
+  const plan = tutorialMinePlan();
+  const rival = tutorialRival();
+  if (!plan?.path || !rival) return null;
+  const cells: Cell[] = [rival.pos, ...plan.path.map((step) => step.to), plan.cell];
+  const minC = Math.min(...cells.map((c) => c.c));
+  const maxC = Math.max(...cells.map((c) => c.c));
+  const minR = Math.min(...cells.map((c) => c.r));
+  const maxR = Math.max(...cells.map((c) => c.r));
+  return {
+    rect: boardRect(minC, minR, maxC - minC + 1, maxR - minR + 1),
+    radius: 18,
+  };
+}
+
+/**
+ * Step 4B's payoff, timed like a short cutscene: the card changes first, the rival advances one
+ * legal step at a time (350ms), the local seat yields between those steps, and the second step lands
+ * on the charge. `play()` owns the real detonation, so the blast, shake, haptic and wound are the
+ * same ones a live mine gets. Every await re-checks the run token and the lesson flag, so a skip or
+ * a restart can never resurrect a half-finished demo.
+ */
+const WATCH_BEAT_MS = 420;
+const DEMO_STEP_MS = 350;
+const DEMO_PASS_MS = 120;
+const DEMO_BLAST_MS = 900;
+let mineDemoRun = 0;
+const waitMs = (ms: number) => new Promise<void>((res) => window.setTimeout(res, ms));
+
+async function tutorialMineDemo(): Promise<void> {
+  const run = ++mineDemoRun;
+  const plan = tutorialMinePlan();
+  if (!plan) return;
+  const alive = () => run === mineDemoRun && tutorialActive;
+  await waitMs(WATCH_BEAT_MS);
+  if (!alive()) return;
+  tutorial?.say('Opponent advancing — step 1 of 2.');
+  if (!play({ kind: 'move', ball: plan.path[0].ball, to: plan.path[0].to })) return;
+  await waitMs(DEMO_STEP_MS);
+  if (!alive()) return;
+  /* The rival's walk is the lesson's: yield the local turn without asking for a tap. */
+  play({ kind: 'pass' });
+  await waitMs(DEMO_PASS_MS);
+  if (!alive()) return;
+  tutorial?.say('Opponent advancing — step 2 of 2.');
+  if (!play({ kind: 'move', ball: plan.path[1].ball, to: plan.path[1].to })) return;
+  /* Hold the line while the blast, the throw and the wound play out. */
+  await waitMs(DEMO_BLAST_MS);
+  if (!alive()) return;
+  tutorial?.say("Direct hit! Mine detonated — you're ready to race.");
 }
 
 const tutorialFinishTarget = (): TutorialSpot => ({ rect: boardRect(0, 0, state.cols, 1), radius: 18 });
@@ -1728,6 +1832,7 @@ function syncTutorialUI(stage: TutorialStage | null) {
 
 function beginTutorial() {
   if (!tutorial || tutorial.active || active || room) return;
+  mineDemoRun++;              // a fresh lesson invalidates any demo still waiting on a timer
   tutorialActive = true;      // before stopClock: clockLive reads this flag
   stopClock();
   /* step one is the player's own pick: clear the auto-pick the race painted before the lesson */
@@ -1743,6 +1848,7 @@ function beginTutorial() {
 /** Leaving the race, or starting another one, ends the lesson without marking it read. */
 function cancelTutorial() {
   if (!tutorialActive) return;
+  mineDemoRun++;
   tutorial?.cancel();
   tutorialActive = false;
 }
@@ -1755,6 +1861,8 @@ tutorial = createTutorial({
   minePlace: tutorialMineTarget,
   finish: tutorialFinishTarget,
   reply: tutorialReply,
+  mineDemo: tutorialMineDemo,
+  mineDemoSpot: tutorialMineDemoSpot,
   refresh: syncTutorialUI,
   end(result) {
     tutorialActive = false;
@@ -2120,9 +2228,12 @@ router.start('home');
 setBackButton(false);
 menu.afterStart();
 
-/* equipping repaints the board, and the chip swatch that stands for your ball */
+/* equipping repaints the board, and the chip swatch that stands for your ball; choosing a piece
+   colour repaints the whole perspective (both sides, the finish wash and every chip) */
 const paintTheme = () => {
   renderer.setTheme(theme());
+  renderer.setPerspective(currentPerspective());
+  paintRoster();
   paintSeatTints();
 };
 onChange(paintTheme);

@@ -58,6 +58,13 @@ export interface TutorialHooks {
   finish(): TutorialSpot | null;
   /** One fast, deterministic reply per bot seat; resolves when the local seat is on turn again. */
   reply(): Promise<void>;
+  /**
+   * Step 4B's payoff: the rival walks onto the planted charge, step by step, and the blast plays
+   * out. Resolves once the impact has been seen; the lesson then shows its ready banner.
+   */
+  mineDemo(): Promise<void>;
+  /** The board area the watch beat should reveal: the rival, the path and the planted mine. */
+  mineDemoSpot(): TutorialSpot | null;
   /** A stage began (or the lesson closed, with null): re-derive hints and the mine key. */
   refresh(stage: TutorialStage | null): void;
   end(result: TutorialResult): void;
@@ -72,6 +79,8 @@ export interface Tutorial {
   allows(action: TutorialAction): boolean;
   notify(action: TutorialAction): void;
   nudge(): void;
+  /** Update the screen-reader live line during a scripted beat (the mine demonstration). */
+  say(text: string): void;
 }
 
 export interface TutorialStepDef {
@@ -176,6 +185,25 @@ const atLeast = (r: TutorialRect, minW: number, minH: number): TutorialRect => {
     height,
   };
 };
+
+/** The spotlight's pad: the groove is a hairline, the cut-out around it is a thumb. */
+export const TUTORIAL_SPOT_PAD = 7;
+
+/**
+ * The exact tap box the lesson paints and cuts out for a target: its own rect, padded, floored at
+ * a 48px thumb. Exported because the action layer has to accept the SAME box — a tap anywhere
+ * inside the spotlight is a tap on the thing it is pointing at, not only a tap on the hairline.
+ */
+export function tutorialSpotBox(spot: TutorialSpot): TutorialRect {
+  return atLeast(padRect(spot.rect, TUTORIAL_SPOT_PAD), 48, 48);
+}
+
+/** Is a viewport point inside the live spotlight? Used by the step-3 forgiving wall tap. */
+export function tutorialSpotHas(spot: TutorialSpot, x: number, y: number): boolean {
+  const r = tutorialSpotBox(spot);
+  return x >= r.left && x <= r.left + r.width && y >= r.top && y <= r.top + r.height;
+}
+
 const roundRectPath = (r: TutorialRect, radius: number): string => {
   const x = r.left, y = r.top, w = Math.max(0, r.width), h = Math.max(0, r.height);
   const k = Math.min(radius, w / 2, h / 2);
@@ -211,6 +239,8 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
 
   let open = false;
   let celebrating = false;
+  /** Step 4B's payoff: the board is the show, so the spotlight widens and taps are refused. */
+  let watching = false;
   let stepIndex = 0;
   let trackId = 0;
   let trackUntil = 0;
@@ -279,8 +309,8 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   };
 
   const placePointer = (rect: TutorialRect) => {
-    /* the emoji's fingertip is its top edge: anchoring the glyph's top at the target centre puts
-       the finger on the exact pixel the player must hit, with the hand body below it */
+    /* the SVG's contact tip sits at the container's origin: anchoring it on the target centre
+       puts the glowing fingertip on the exact pixel the player must hit, with the body below it */
     const x = clamp(rect.left + rect.width / 2, 22, window.innerWidth - 22);
     const y = clamp(rect.top + rect.height / 2, 20, window.innerHeight - 20);
     pointer.style.left = `${x}px`;
@@ -323,7 +353,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   };
 
   const place = () => {
-    if (!open || celebrating) return;
+    if (!open || celebrating || watching) return;
     const def = TUTORIAL_STEPS[stepIndex];
     const spot = spotFor(def.stage);
     if (!spot) {
@@ -333,7 +363,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       placeCard(null);
       return;
     }
-    const pad = def.stage === 'mine-arm' ? 8 : 7;
+    const pad = def.stage === 'mine-arm' ? 8 : TUTORIAL_SPOT_PAD;
     const hole = clampRect(atLeast(padRect(spot.rect, pad), 48, 48));
     drawMask(hole, spot.radius ?? 16);
     placeAid(def.stage, aidFor(def.stage));
@@ -370,6 +400,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
 
   const render = () => {
     if (!open || celebrating) return;
+    watching = false;
     const def = TUTORIAL_STEPS[stepIndex];
     /* a target can disappear with the board (a rival walked, a corner sealed): step past it, and
        finish the lesson rather than freeze on a card that asks for an impossible tap */
@@ -412,6 +443,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const celebrate = () => {
     if (!open || celebrating) return;
     celebrating = true;
+    watching = false;
     flow++;
     clearTimers();
     drawMask(null, 0);
@@ -426,10 +458,59 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     closeTimer = window.setTimeout(() => { closeTimer = 0; close('finished'); }, CELEBRATE_MS);
   };
 
+  /**
+   * Step 4B's watch beat. The card swaps to the payoff line and the spotlight widens to the
+   * rival's route; the input gate stays shut until `mineDemo()` resolves with the blast played.
+   * The card update happens before the first frame of the demonstration, exactly as the beat reads.
+   */
+  const watchMine = () => {
+    if (!open || celebrating) return;
+    watching = true;
+    flow++;
+    const def = TUTORIAL_STEPS[stepIndex];
+    stepEl.textContent = `STEP ${def.group} OF 4`;
+    titleEl.textContent = 'WATCH THIS!';
+    bodyEl.textContent = 'Your opponent is advancing into your trap...';
+    iconUse.setAttribute('href', def.icon);
+    card.dataset.tone = def.tone;
+    card.hidden = false;
+    doneEl.hidden = true;
+    doneEl.classList.remove('show');
+    skipBtn.hidden = false;
+    liveEl.textContent = 'Watch this! Your opponent is advancing into your trap.';
+    const spot = hooks.mineDemoSpot();
+    if (spot) {
+      const hole = clampRect(atLeast(padRect(spot.rect, TUTORIAL_SPOT_PAD), 48, 48));
+      drawMask(hole, spot.radius ?? 18);
+      pointer.style.display = 'none';
+      aidEl.hidden = true;
+      placeCard(hole);
+    } else {
+      drawMask(null, 0);
+      pointer.style.display = 'none';
+      aidEl.hidden = true;
+      placeCard(null);
+    }
+    card.classList.remove('pop');
+    void card.offsetWidth;
+    card.classList.add('pop');
+    card.focus({ preventScroll: true });
+    trackFor(420);
+    const token = flow;
+    void Promise.resolve(hooks.mineDemo())
+      .catch(() => undefined)
+      .then(() => {
+        if (!open || token !== flow || !watching) return;
+        watching = false;
+        celebrate();
+      });
+  };
+
   function close(result: TutorialResult) {
     if (!open) return;
     open = false;
     celebrating = false;
+    watching = false;
     flow++;
     clearTimers();
     if (trackId) { cancelAnimationFrame(trackId); trackId = 0; }
@@ -468,10 +549,11 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     skip() { close('skipped'); },
     cancel() { close('cancelled'); },
     allows(action) {
+      if (watching) return false;
       return tutorialAllows(stage(), targets(), action);
     },
     notify(action) {
-      if (!open || celebrating) return;
+      if (!open || celebrating || watching) return;
       const now = TUTORIAL_STEPS[stepIndex].stage;
       /* The exact target was gated BEFORE the action ran. Re-running that target check here would
          fail every move/wall/mine: the action itself changed whose turn it is. Kind is enough. */
@@ -480,7 +562,11 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
         : now === 'wall' ? 'wall'
         : now === 'mine-arm' ? 'mine-arm' : 'mine';
       if (action.kind !== kind) return;
-      if (now === 'mine-place') { celebrate(); return; }
+      if (now === 'mine-place') {
+        /* The trap is down. Do not celebrate yet: the rival is about to walk onto it. */
+        watchMine();
+        return;
+      }
       if (now === 'mine-arm') { go('mine-place'); return; }
       if (now === 'select') { go('move'); return; }
       /* move and wall hand the turn to the machine: one instant, deterministic reply, then the
@@ -499,7 +585,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       }, REPLY_BEAT_MS);
     },
     nudge() {
-      if (!open || celebrating) return;
+      if (!open || celebrating || watching) return;
       liveEl.textContent = 'Tap the glowing target.';
       spotEl.classList.remove('nudge');
       aidEl.classList.remove('nudge');
@@ -512,6 +598,10 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
         spotEl.classList.remove('nudge');
         aidEl.classList.remove('nudge');
       }, 380);
+    },
+    say(text: string) {
+      if (!open || celebrating) return;
+      liveEl.textContent = text;
     },
   };
 }

@@ -129,7 +129,7 @@ export type CosKind = 'ball' | 'wall' | 'board';
 /* ---------- the two fixed sides ---------- */
 
 /** Yours, with the Classic skin: the look the app shipped with. */
-const RED: Ramp = {
+export const RED_RAMP: Ramp = {
   light: '#ffa3b7', mid: '#e0264f', dark: '#80092a', glow: 'rgba(224,38,79,.55)', shade: '90,20,50',
   wl: '#ff6f8d', wd: '#b4113b', edge: 'rgba(90,20,50,.28)', ol: 'rgba(224,38,79,.5)', os: 'rgba(224,38,79,.95)',
 };
@@ -173,6 +173,44 @@ export const TEAM3_RAMP: Ramp = {
 export const SEAT_RAMPS: readonly Ramp[] = [BOT_RAMP, GOLD_RAMP, TEAM2_RAMP];
 
 /**
+ * The two colours a player may call their own. The choice is local to this device: it decides how
+ * THIS screen paints its own seat and its opponent, never who owns seat 0 or what the rules do.
+ * Both ramps are the fixed families the board has always used, so a perspective swap cannot make
+ * an unknown colour appear.
+ */
+export type PieceColor = 'red' | 'blue';
+
+export const PIECE_RAMPS: Readonly<Record<PieceColor, Ramp>> = {
+  red: RED_RAMP,
+  blue: BOT_RAMP,
+};
+
+export const oppositeColor = (color: PieceColor): PieceColor => (color === 'red' ? 'blue' : 'red');
+
+/**
+ * The ramps each logical seat wears on THIS client. The local seat gets the player's chosen family,
+ * its opponent gets the opposite one, and any further seats keep the fixed gold / emerald order.
+ * Both the canvas and the HUD read this same plan, so a sphere and its chip can never disagree.
+ *
+ * Index 4 is the refusal palette that owns no side. Four is the rules' team ceiling; it is spelled
+ * out here so this data module stays free of a runtime import on the pure rules module.
+ */
+export function perspectiveRamps(localSeat: number, rivalSeat: number, color: PieceColor): Ramp[] {
+  const chosen = PIECE_RAMPS[color];
+  const foe = PIECE_RAMPS[oppositeColor(color)];
+  const spare = [GOLD_RAMP, TEAM2_RAMP, TEAM3_RAMP];
+  const out: Ramp[] = [];
+  let k = 0;
+  for (let seat = 0; seat < 4; seat++) {
+    if (seat === localSeat) out.push(chosen);
+    else if (seat === rivalSeat) out.push(foe);
+    else out.push(spare[k++] ?? GOLD_RAMP);
+  }
+  out.push(ERR_RAMP);
+  return out;
+}
+
+/**
  * A mine in the ground you put there yourself: warm warning red, never a team colour, so a buried
  * trap can never be mistaken for a wall or a ball. Opponent mines have no palette at all — they
  * are never drawn (see `view()` in rules.ts).
@@ -212,7 +250,7 @@ export const NO_RAMP: Ramp = {
 export const BALLS: BallSkin[] = [
   {
     id: 'classic', name: 'Classic', price: 0, desc: 'The house red. What the race started with.',
-    ramp: RED,
+    ramp: RED_RAMP,
     stops: [[0, 'light'], [0.4, 'mid'], [1, 'dark']],
     halo: 1, bounce: 0.28, gloss: 1, ring: 0, shine: 'soft',
   },

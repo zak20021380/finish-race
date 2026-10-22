@@ -141,6 +141,8 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     sound: 'Sound',
     haptics: 'Haptics',
     communitySupport: 'Community & Support',
+    pieceColor: 'Piece Color',
+    pieceColorSub: 'Your pieces · the rival takes the other colour',
     tgChannel: 'Official Telegram Channel',
     tgChannelSub: 'News, cups and squad events',
     contactAdmin: 'Contact Admin',
