@@ -34,6 +34,11 @@ interface DurableObjectNamespace {
   get(id: DurableObjectId): DurableObjectStub;
 }
 
+/** Any `fetch`-shaped binding; static assets (`ASSETS`) is the one this Worker uses. */
+interface Fetcher {
+  fetch(request: Request): Promise<Response>;
+}
+
 interface DurableObjectState {
   readonly id: DurableObjectId;
   acceptWebSocket(socket: WebSocket): void;

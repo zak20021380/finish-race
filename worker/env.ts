@@ -10,6 +10,9 @@ export interface Env {
   MATCHMAKER: DurableObjectNamespace;
   /** The singleton edition ledger: caps, counters and serialized badge claims. */
   BADGES: DurableObjectNamespace;
+  /** The built frontend in `dist/`, bound as `ASSETS` in wrangler.toml. Absent only in the
+   *  bare Node harness that drives the Worker without wrangler. */
+  ASSETS?: Fetcher;
   /** Bot token used to verify Mini App initData. A secret, never a var:
    *  `npx wrangler secret put TELEGRAM_BOT_TOKEN`. */
   TELEGRAM_BOT_TOKEN?: string;

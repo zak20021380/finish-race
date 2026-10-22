@@ -10,6 +10,10 @@ name = "detour-matchmaking"
 main = "worker/index.ts"
 compatibility_date = "2025-09-01"
 
+# The built Mini App (`npm run build` -> dist/): served from the same Worker on `/` and the
+# hashed asset paths, while `/api/*`, `/ws/*`, `/admin/*` and `/health` stay with the script.
+assets = { directory = "./dist", binding = "ASSETS" }
+
 # One singleton instance holds the whole waiting room, so every socket that asks for a 1v1 lands
 # on the same object and pairing is a local lookup rather than a fan-out across many instances.
 [[durable_objects.bindings]]

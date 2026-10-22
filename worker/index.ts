@@ -144,6 +144,14 @@ export default {
       return lobby.fetch(request);
     }
 
+    /* Everything that is not a backend surface is the Mini App itself: `/`, the hashed bundles
+       and any other page the client asks for. A missing backend route stays a JSON 404 rather
+       than quietly answering with the game's HTML. */
+    if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/ws/')) {
+      return json({ error: 'not_found' }, 404);
+    }
+    if (env.ASSETS) return env.ASSETS.fetch(request);
+
     return json({ error: 'not_found' }, 404);
   },
 };
