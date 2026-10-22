@@ -1272,17 +1272,26 @@ export function createMenu(api: MenuApi): Menu {
     crest.className = 'badge-slot-crest';
     crest.setAttribute('aria-hidden', 'true');
     crest.innerHTML = badgeCrestHtml(b);
+    const pedestal = document.createElement('span');
+    pedestal.className = 'badge-slot-pedestal';
+    pedestal.setAttribute('aria-hidden', 'true');
+    const stage = document.createElement('span');
+    stage.className = 'badge-slot-stage';
+    stage.append(crest, pedestal);
     const name = document.createElement('span');
     name.className = 'badge-slot-n';
     name.textContent = b.figure;
     const arch = document.createElement('span');
     arch.className = 'badge-slot-a';
     arch.textContent = b.archetype;
+    const main = document.createElement('span');
+    main.className = 'badge-slot-main';
+    main.append(name, arch);
     const status = document.createElement('span');
     status.className = `badge-slot-serial is-${tag.kind}`;
     status.setAttribute('aria-hidden', 'true');
     status.textContent = tag.text;
-    btn.append(crest, name, arch, status);
+    btn.append(stage, main, status);
 
     if (equipped) {
       const check = document.createElement('span');
