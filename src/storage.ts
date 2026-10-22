@@ -451,30 +451,29 @@ export function recordGame(r: { difficulty: Difficulty; won: boolean }, mult = 1
   return coins;
 }
 
-/**
- * DEV OVERRIDE (onboarding test phase) — every match is a first run, whatever the save, room
- * mode or URL says. Restore the `profile.tutorialCompleted` read before shipping.
- */
-export const hasCompletedTutorial = (): boolean => false;
+/** Read the saved lesson flag. A refused storage backend simply answers false. */
+export const hasCompletedTutorial = (): boolean => profile.tutorialCompleted === true;
 
-/** DEV OVERRIDE — completion is deliberately never written, so reloads can never lock it out. */
+/**
+ * Persist completion in the one save. Called when the lesson is finished or skipped — a skip is
+ * still a decision to play, and re-showing the lesson on the next race would be a nag, not help.
+ */
 export function completeTutorial(): void {
-  /* no-op while onboarding is forced on for every match */
+  if (profile.tutorialCompleted) return;
+  profile.tutorialCompleted = true;
+  flush();
 }
 
 /**
  * `window.resetTutorial()`'s storage half: forget the saved flag (and the bare
- * `tutorial_completed` key named in the test brief) so the next load starts clean even after
- * the hard override is removed.
+ * `tutorial_completed` key older builds wrote) so the next local race starts the lesson again.
  */
 export function resetTutorialState(): void {
+  profile.tutorialCompleted = false;
+  flush();
   try {
-    const raw = readJson<Save>(KEY) ?? { v: V };
-    raw.v = V;
-    raw.tutorialCompleted = false;
-    writeJson(KEY, raw);
     window.localStorage.removeItem('tutorial_completed');
-  } catch { /* storage denied: the hard override still forces the lesson */ }
+  } catch { /* storage denied: the in-memory flag is false for this session */ }
 }
 
 /** Tournament entries and daily rewards move the same wallet the shop reads. */

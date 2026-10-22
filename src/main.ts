@@ -31,7 +31,11 @@ import { audio, SHOVE_RATE } from './audio';
 import {
   completeTutorial, hasCompletedTutorial, onChange, profile, recordGame, resetTutorialState, theme,
 } from './storage';
-import { createTutorial, type Tutorial, type TutorialForward, type TutorialRect, type TutorialSpot } from './tutorial';
+import {
+  createTutorial, shouldAutoStartTutorial,
+  type Tutorial, type TutorialAction, type TutorialRect, type TutorialSpot, type TutorialStage,
+  type TutorialTargetMine, type TutorialTargetMove, type TutorialTargetSelect, type TutorialTargetWall,
+} from './tutorial';
 import { SEAT_RAMPS } from './themes';
 import { detonation, impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
@@ -491,13 +495,16 @@ let turnsPlayed = 0;
 let saidTurn = '';
 const waiting: (() => void)[] = [];            // bot thinks parked by the pause sheet
 
-/** The first-match coach marks hold the whole race: no clock, no bot, no board taps but the one
- *  forward tile the movement card hands to the player. */
+/** The first-match hands-on lesson holds the clock and the full bot dispatcher, but never the
+ *  board itself: its stage gate decides which real tap is live. */
 let tutorialActive = false;
 let tutorial: Tutorial | null = null;
+/** The first local race is also the lesson: its board is built without the rolling log. */
+let tutorialRace = false;
+const tutorialStage = (): TutorialStage | null => (tutorialActive ? tutorial?.stage ?? null : null);
 
-const canAct = () => state.winner === null && state.turn === localSide && !paused && !rolling
-  && !tutorialActive;
+/** The turn's own gate. The lesson layers on top of this through `isTutorialActionAllowed()`. */
+const canAct = () => state.winner === null && state.turn === localSide && !paused && !rolling;
 const clearGhost = () => { mineGhost = null; setMode({ ...mode(), preview: null }); clearNote(); };
 
 /**
@@ -651,18 +658,29 @@ function ui() {
   if (selected !== null && (state.winner !== null || state.turn !== localSide
     || !state.balls.some((b) => b.id === selected))) selected = null;
   const live = canAct();
+  const stage = tutorialStage();
   /* the key only ever covers one turn, and only while there is still a mine to bury */
   if (!live || minesLeft(state, localSide) <= 0) mineArmed = false;
   /* at the start of a human turn, put that turn's first ball in hand so the dots light up at once —
-     unless a wall preview is already up, since that owns the board until it is confirmed or dropped */
-  if (live && !mineArmed && !ghost && selected === null && autoPicked !== state.turn) {
+     unless a wall preview is already up, since that owns the board until it is confirmed or dropped.
+     The lesson's first step is the player's own pick, so it never auto-picks behind the card. */
+  if (live && !tutorialActive && !mineArmed && !ghost && selected === null && autoPicked !== state.turn) {
     const auto = selectionFor(state);
     if (auto) { selected = auto.id; autoPicked = state.turn; }
   }
   /* the dots belong to the ball in hand and to nothing else: a wall preview or the mine key
      suppresses them outright, so a dashed bar is never drawn under a selection ring */
   hints = dotsFor(mode());
+  if (stage === 'select') hints = [];
+  else if (stage === 'move') {
+    const step = tutorialMoveTarget();
+    hints = step ? [step.to] : [];
+  }
   mineHints = live && mineArmed ? mineCells(state, localSide) : [];
+  if (stage === 'mine-place' && mineArmed) {
+    const target = tutorialMineTarget();
+    mineHints = target ? [target.cell] : [];
+  }
   /* an armed cell that is no longer placeable — the turn moved on, or a ball rolled over it */
   if (mineGhost && !mineHints.some((h) => sameCell(h, mineGhost))) mineGhost = null;
   armCapsules();
@@ -672,9 +690,8 @@ function ui() {
   dots.classList.toggle('on', thinking);
 
   mineBtn.setAttribute('aria-pressed', String(mineArmed));
-  /* the tutorial dims the board but never the instrument it is pointing at: step four's mine
-     key stays lit even while the bot's turn is held behind the overlay */
-  mineBtn.disabled = !tutorialActive && (!live || minesLeft(state, localSide) <= 0);
+  /* the lesson leaves exactly one live key per stage: only the ARM step enables the mine pod */
+  mineBtn.disabled = tutorialActive ? stage !== 'mine-arm' : (!live || minesLeft(state, localSide) <= 0);
   setMineCount(minesLeft(state, localSide));
 
   /* whose turn it is rides on the chips now: a clay glow, a lift, and the countdown ring */
@@ -954,7 +971,7 @@ function restart() {
   /* Every local race rolls a fresh seed so no two telegraph the same lanes; an online race takes
      the seed the matchmaker handed both sides, so the logs and the hazards are the same board. */
   raceSeed = active ? active.seed : (Math.random() * 0x7fffffff) | 0;
-  state = newGame(sizes, { hazards: runtime.hazards, seed: raceSeed });
+  state = newGame(sizes, { hazards: runtime.hazards && !tutorialRace, seed: raceSeed });
   /* The grid the rules picked for this race — a duel keeps 8 columns, a 3- or 4-contender race gets
      10 — and the wall budget that goes with it. Both are read off the board, never assumed, so a
      menu change between races cannot leave the canvas painting the wrong lattice. `fitBoard` hands
@@ -1204,10 +1221,15 @@ interface StartSetup {
 
 function startGame(setup: StartSetup) {
   cancelTutorial();
-  /* DEV OVERRIDE — the onboarding test phase wants the lesson on every entry, online seats and
-     private rooms included: `hasCompletedTutorial()` is hard-wired false in storage.ts. Restore
-     its save read (and the `!setup.online && !setup.room` guards) before shipping. */
-  const wantsTutorial = !hasCompletedTutorial();
+  /* Only a local bot race teaches, and only until the lesson has been finished or skipped. An
+     online seat or a private room is somebody else's board: the lesson never covers it. */
+  const wantsTutorial = shouldAutoStartTutorial({
+    online: !!setup.online,
+    room: !!setup.room,
+    completed: hasCompletedTutorial(),
+  });
+  /* the lesson race is deterministic by design: no log may interrupt a hands-on step */
+  tutorialRace = wantsTutorial;
   /* menuState.difficulty is the single source: the Choose-mode sheet persists it live,
      so every start path (vs Bot card, Play) runs the level the sheet shows. */
   difficulty = menuState.difficulty;
@@ -1241,6 +1263,8 @@ function startGame(setup: StartSetup) {
   paintSeatIdentity();
   /* a networked board cannot be restarted into the same seat: the pause sheet only offers leaving */
   $('pause-restart').hidden = !!active;
+  /* replaying the lesson is a local-bot privilege only; a person or a private room owns the board */
+  $('pause-tutorial').hidden = !!active || !!room;
 
   if (active) {
     const session = active;
@@ -1262,6 +1286,7 @@ function startGame(setup: StartSetup) {
 
   router.go('game');
   if (wantsTutorial) beginTutorial();
+  tutorialRace = false;       // the board already has (or has not) its log for this race
 }
 
 /**
@@ -1407,6 +1432,64 @@ function tapWall(hit: { kind: 'wall' | 'confirm'; spec: WallSpec }) {
   if (ok) { impact('light'); showNote('Tap again to place', false, 0); } else refuse(wall);
 }
 
+/** The lesson's vocabulary for a hit-test result. */
+function tutorialHitAction(hit: Hit | null): TutorialAction | null {
+  if (!hit) return null;
+  switch (hit.kind) {
+    case 'ball': return { kind: 'select', ball: hit.id };
+    case 'move': return { kind: 'move', to: hit.to };
+    case 'wall':
+    case 'confirm': return { kind: 'wall', spec: hit.spec };
+    case 'mine':
+    case 'mine-confirm': return { kind: 'mine', cell: hit.cell };
+    default: return null;
+  }
+}
+
+/**
+ * The tutorial action gate. Every door that can change the board asks this first; while the lesson
+ * is up only the exact target its current stage is pointing at may pass. Outside the lesson every
+ * door is open, so the normal game never pays for the check.
+ */
+function isTutorialActionAllowed(action: TutorialAction): boolean {
+  if (!tutorialActive) return true;
+  return tutorial?.allows(action) ?? false;
+}
+
+/**
+ * The lesson's own tap: hit-test the REAL board, refuse anything but the live target, then perform
+ * the real action. There is no proxy button — the spotlight is a hole in the input blocker, so the
+ * canvas receives this tap exactly as it would after the lesson.
+ */
+function tutorialTap(p: Vec) {
+  const action = tutorialHitAction(at(p));
+  if (!action || !isTutorialActionAllowed(action)) { tutorial?.nudge(); return; }
+  const L = renderer.layout();
+  renderer.ripple((p.x - L.ox) / L.cell, (p.y - L.oy) / L.cell, localSide);
+  switch (action.kind) {
+    case 'select':
+      impact('light');
+      pick(action.ball);
+      break;
+    case 'move':
+      disarmWall();
+      impact('light');
+      if (!play({ kind: 'move', ball: selected ?? undefined, to: action.to })) return;
+      break;
+    case 'wall': {
+      const wall: Wall = { ...action.spec, owner: state.turn };
+      if (!wallOk(state, wall) || !play({ kind: 'wall', wall })) { tutorial?.nudge(); return; }
+      break;
+    }
+    case 'mine':
+      if (!play({ kind: 'mine', cell: action.cell })) { tutorial?.nudge(); return; }
+      break;
+    case 'mine-arm':
+      return;   // the arm key is a dock button, never a board tap
+  }
+  tutorial?.notify(action);
+}
+
 /**
  * Touch: whatever the live key offers is what a tap acts on — the ghost caps, a ball, a line, or a
  * square. An armed wall ghost owns the tap first; otherwise the strict move/groove arbitration wins.
@@ -1461,6 +1544,7 @@ canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   if (!canAct()) return;
   const p = local(e);
+  if (tutorialActive) { tutorialTap(p); return; }
   const L = renderer.layout();
   renderer.ripple((p.x - L.ox) / L.cell, (p.y - L.oy) / L.cell, localSide);   // the tap answers at once
   if (e.pointerType === 'mouse') onMouse(p, true);
@@ -1468,14 +1552,24 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 
 canvas.addEventListener('pointermove', (e) => {
-  if (e.pointerType !== 'mouse') return;
+  if (tutorialActive || e.pointerType !== 'mouse') return;
   onMouse(local(e), false);
 });
 canvas.addEventListener('pointerleave', () => {
+  if (tutorialActive) return;
   if (ghost && !ghost.armed) setMode({ ...mode(), preview: null });
 });
 
-mineBtn.addEventListener('click', () => { armMine(!mineArmed); });
+mineBtn.addEventListener('click', () => {
+  if (tutorialActive) {
+    const action: TutorialAction = { kind: 'mine-arm' };
+    if (!isTutorialActionAllowed(action)) { tutorial?.nudge(); return; }
+    armMine(true);
+    tutorial?.notify(action);
+    return;
+  }
+  armMine(!mineArmed);
+});
 
 /* ---------- first-match tutorial: live targets and the held race behind them ---------- */
 
@@ -1507,43 +1601,142 @@ function elementSpot(el: Element | null | undefined, pad: number): TutorialSpot 
   };
 }
 
-/** The pawn the movement card is talking about: the one in hand, or the turn's first. */
-const tutorialBall = (): Ball | null => {
-  if (state.winner !== null) return null;
-  if (selected !== null) return ballById(state, selected);
-  return firstBall(state, state.turn);
-};
-
-/** The forward dot, and a tap that commits it for real. Falls back to the nearest legal step
- *  that shortens the path if the straight-ahead square is walled off. */
-function tutorialForward(): TutorialForward | null {
+/** Step 1's real target: the local player's first pawn, with nothing picked yet. */
+function tutorialSelectTarget(): TutorialTargetSelect | null {
   if (state.turn !== localSide || state.winner !== null) return null;
-  const ball = tutorialBall();
+  const ball = firstBall(state, localSide);
   if (!ball) return null;
-  let picked: Pos | null = null;
-  for (const h of hints) {
-    if (h.r >= ball.pos.r) continue;
-    if (h.c === ball.pos.c && h.r === ball.pos.r - 1) { picked = h; break; }
-    if (!picked || h.r > picked.r
-      || (h.r === picked.r && Math.abs(h.c - ball.pos.c) < Math.abs(picked.c - ball.pos.c))) {
-      picked = h;
-    }
-  }
-  if (!picked) return null;
-  const cell = picked;
+  return { ball: ball.id, spot: { rect: boardRect(ball.pos.c, ball.pos.r), radius: 18 } };
+}
+
+/**
+ * The forward step the lesson points at: straight ahead when the lane is open, otherwise the legal
+ * step that gains the most ground. It is the same rules query the board uses, never a special case.
+ */
+function tutorialForwardStep(): { ball: Ball; to: Pos } | null {
+  if (state.turn !== localSide || state.winner !== null) return null;
+  const ball = selected !== null ? ballById(state, selected) : firstBall(state, localSide);
+  if (!ball) return null;
+  const opts = reachableBall(state, ball.id);
+  if (!opts.length) return null;
+  const straight = opts.find((p) => p.c === ball.pos.c && p.r === ball.pos.r - 1);
+  if (straight) return { ball, to: straight };
+  const forward = opts.filter((p) => p.r < ball.pos.r);
+  const pool = forward.length ? forward : opts;
+  const to = pool.reduce((a, b) => (
+    b.r < a.r || (b.r === a.r && Math.abs(b.c - ball.pos.c) < Math.abs(a.c - ball.pos.c)) ? b : a
+  ));
+  return { ball, to };
+}
+
+function tutorialMoveTarget(): TutorialTargetMove | null {
+  const step = tutorialForwardStep();
+  return step ? { to: step.to, spot: { rect: boardRect(step.to.c, step.to.r), radius: 18 } } : null;
+}
+
+/** The groove under the spotlight: two cells wide, a band high, centred on the wall line. */
+function grooveSpot(spec: WallSpec): TutorialSpot {
   return {
-    rect: boardRect(cell.c, cell.r),
-    tap: () => {
-      renderer.ripple(cell.c + 0.5, cell.r + 0.5, localSide);
-      return play({ kind: 'move', ball: ball.id, to: cell });
-    },
+    rect: spec.o === 'h'
+      ? boardRect(spec.x, spec.y - 0.24, 2, 0.48)
+      : boardRect(spec.x - 0.24, spec.y, 0.48, 2),
+    radius: 10,
   };
 }
 
+/** The rival the wall and mine steps are aimed at. */
+const tutorialRival = (): Ball | null =>
+  firstBall(state, rivalSide()) ?? state.balls.find((b) => b.team !== localSide) ?? null;
+
+/**
+ * Step 3's real target: a legal horizontal groove directly above the rival's pawn. The candidates
+ * are tried nearest-first, then the whole lattice, so a crowded party board still finds a groove
+ * that is genuinely legal instead of pointing at a refused slot.
+ */
+function tutorialWallTarget(): TutorialTargetWall | null {
+  if (state.turn !== localSide || state.winner !== null) return null;
+  if (wallsRemaining(state, localSide) <= 0) return null;
+  const rival = tutorialRival();
+  if (!rival) return null;
+  const seen = new Set<string>();
+  const candidates: WallSpec[] = [];
+  const push = (spec: WallSpec) => {
+    const key = `${spec.o}${spec.x},${spec.y}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push(spec);
+  };
+  for (const y of [rival.pos.r, rival.pos.r - 1, rival.pos.r - 2]) {
+    for (const x of [rival.pos.c - 1, rival.pos.c, rival.pos.c - 2]) push({ o: 'h', x, y });
+  }
+  for (let y = 1; y < state.rows; y++) {
+    for (let x = 0; x <= state.cols - 2; x++) push({ o: 'h', x, y });
+  }
+  for (const spec of candidates) {
+    if (wallOk(state, { ...spec, owner: localSide })) return { spec, spot: grooveSpot(spec) };
+  }
+  return null;
+}
+
+/** Step 4B's real target: the legal mine square closest to directly ahead of the rival. */
+function tutorialMineTarget(): TutorialTargetMine | null {
+  if (state.turn !== localSide || state.winner !== null) return null;
+  const cells = mineCells(state, localSide);
+  if (!cells.length) return null;
+  const rival = tutorialRival();
+  let best = cells[0];
+  if (rival) {
+    let score = Infinity;
+    for (const cell of cells) {
+      const s = Math.abs(cell.r - (rival.pos.r - 1)) * 3 + Math.abs(cell.c - rival.pos.c)
+        + (cell.r >= rival.pos.r ? 12 : 0);
+      if (s < score) { score = s; best = cell; }
+    }
+  }
+  return { cell: best, spot: { rect: boardRect(best.c, best.r), radius: 16 } };
+}
+
+const tutorialFinishTarget = (): TutorialSpot => ({ rect: boardRect(0, 0, state.cols, 1), radius: 18 });
+
+/** The lesson's one bot beat: each machine seat steps once, deterministically, and hands back. */
+async function tutorialReply(): Promise<void> {
+  for (let guard = 0; guard < 8; guard++) {
+    if (!tutorialActive || state.winner !== null || state.turn === localSide) return;
+    const seat = state.turn;
+    await new Promise<void>((res) => window.setTimeout(res, 50));
+    if (!tutorialActive || state.winner !== null || state.turn !== seat) return;
+    if (!play(getAutoMove(state, seat)) && !play({ kind: 'pass' })) return;
+  }
+}
+
+/**
+ * Stage change from the lesson: grant the wall preview its real ghost, drop a preview that belongs
+ * to a stage we just left, and let `ui()` re-derive the dots, mine band and the mine key's state.
+ */
+function syncTutorialUI(stage: TutorialStage | null) {
+  if (!tutorialActive) return;
+  if (stage !== 'wall' && ghost && !ghost.armed) setMode({ ...mode(), preview: null });
+  if (stage === 'wall') {
+    const target = tutorialWallTarget();
+    const wall: Wall | null = target ? { ...target.spec, owner: localSide } : null;
+    setMode(previewWall(mode(), wall && wallOk(state, wall)
+      ? { spec: target!.spec, ok: true, armed: false, p: localSide }
+      : null));
+  }
+  ui();
+}
+
 function beginTutorial() {
-  if (!tutorial || tutorial.active) return;
+  if (!tutorial || tutorial.active || active || room) return;
   tutorialActive = true;      // before stopClock: clockLive reads this flag
   stopClock();
+  /* step one is the player's own pick: clear the auto-pick the race painted before the lesson */
+  selected = null;
+  autoPicked = null;
+  mineArmed = false;
+  mineGhost = null;
+  setMode(BOARD_IDLE);
+  ui();
   tutorial.start();
 }
 
@@ -1555,24 +1748,20 @@ function cancelTutorial() {
 }
 
 tutorial = createTutorial({
-  finish: () => ({ rect: boardRect(0, 0, state.cols, 1), radius: 18 }),
-  moves: () => {
-    const ball = tutorialBall();
-    if (!ball) return null;
-    let c0 = ball.pos.c, r0 = ball.pos.r, c1 = c0 + 1, r1 = r0 + 1;
-    for (const h of hints) {
-      c0 = Math.min(c0, h.c);
-      r0 = Math.min(r0, h.r);
-      c1 = Math.max(c1, h.c + 1);
-      r1 = Math.max(r1, h.r + 1);
-    }
-    return { rect: boardRect(c0, r0, c1 - c0, r1 - r0), radius: 16 };
-  },
-  forward: tutorialForward,
-  walls: () => elementSpot(wallBadges[localSide], 6),
-  mines: () => elementSpot(mineBtn, 6),
+  select: tutorialSelectTarget,
+  move: tutorialMoveTarget,
+  wall: tutorialWallTarget,
+  mineArm: () => elementSpot(mineBtn, 8),
+  minePlace: tutorialMineTarget,
+  finish: tutorialFinishTarget,
+  reply: tutorialReply,
+  refresh: syncTutorialUI,
   end(result) {
     tutorialActive = false;
+    document.body.classList.remove('tutorial-live');
+    setMode(BOARD_IDLE);
+    mineGhost = null;
+    autoPicked = null;
     if (result === 'cancelled') return;
     completeTutorial();       // read to the end or skipped: either way, not first-run again
     $<HTMLElement>('s-game').focus({ preventScroll: true });
@@ -1580,6 +1769,19 @@ tutorial = createTutorial({
     startClock();
     if (wantsOpponent()) void runOpponent();
   },
+});
+
+/* The visible replay door: Pause → Replay tutorial restarts this local board with the lesson,
+   without needing the console. It is hidden for online seats and private rooms. */
+$('pause-tutorial').addEventListener('click', () => {
+  impact('light');
+  resetTutorialState();
+  sheets.close();
+  resumeGame();
+  tutorialRace = true;         // a rehearsal is deterministic too: no rolling log
+  restart();
+  tutorialRace = false;
+  beginTutorial();
 });
 
 /* DEV TRIGGER — console: `window.resetTutorial()` clears the saved lesson flag (and the bare
@@ -1597,7 +1799,7 @@ again.addEventListener('click', () => {
 });
 toMenu.addEventListener('click', () => { impact('light'); quitToMenu(); });
 menuBtn.addEventListener('click', () => {
-  if (state.winner !== null) return;
+  if (tutorialActive || state.winner !== null) return;
   impact('light');
   pauseGame();
   sheets.open(sheetPause);

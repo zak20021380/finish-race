@@ -20,6 +20,8 @@ const SUITES = [
   { name: 'walls', script: 'walls-check.mjs', stripTypes: true },
   { name: 'room', script: 'room-check.mjs', stripTypes: true },
   { name: 'bot tiers', script: 'bot-tiers-check.mjs', stripTypes: true },
+  { name: 'tutorial', script: 'tutorial-check.mjs', stripTypes: true },
+  { name: 'tutorial walkthrough', script: 'verify-tutorial.mjs', stripTypes: false },
   { name: 'ranks', script: 'verify-ranks.mjs', stripTypes: false },
   { name: 'squad register', script: 'verify-squad-register.mjs', stripTypes: false },
   { name: 'worker badges', script: 'verify-worker-badges.mjs', stripTypes: false },

@@ -990,12 +990,12 @@ html.reduced-motion .chip[data-timer="red"] .timer-fill { animation: none; opaci
 .lose .cta:not(.ghost):focus-visible { outline-color: var(--lose-1); }
 
 /* ==========================================================================
-   FIRST-MATCH TUTORIAL — four coach marks over the live board.
+   FIRST-MATCH HANDS-ON TUTORIAL — real board actions, no Next buttons.
 
-   The dim layer is one scrim clipped by #tut-clip: the hole is subtracted with
-   even-odd, so the target is genuinely unblurred instead of having a bright box
-   pasted on top of a blurred mask. A transparent block owns every tap; the only
-   thing above it is the forward tile's 48px proxy button in step 2.
+   The scrim and the .tut-block guard share #tut-clip. The hole is subtracted with
+   even-odd, so the target is sharp; because the guard is clipped by the same path,
+   the hole is also the one place taps reach the real canvas or mine key. Nothing
+   else on the page can be pressed while the lesson is up.
    ========================================================================== */
 .tutorial {
   position: fixed;
@@ -1003,6 +1003,7 @@ html.reduced-motion .chip[data-timer="red"] .timer-fill { animation: none; opaci
   z-index: 55;
   overflow: hidden;
   touch-action: none;
+  pointer-events: none;          /* only the guard, card and skip take input */
   animation: tut-in .24s ease-out both;
 }
 @keyframes tut-in { from { opacity: 0; } }
@@ -1011,195 +1012,272 @@ html.reduced-motion .chip[data-timer="red"] .timer-fill { animation: none; opaci
 .tut-scrim {
   position: absolute;
   inset: 0;
+  pointer-events: none;
   background: rgba(10, 15, 26, .78);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   clip-path: url(#tut-clip);
 }
+
+/* the input guard: present everywhere EXCEPT the cut-out, so the spotlight is a real door */
 .tut-block {
   position: absolute;
   inset: 0;
   z-index: 2;
+  pointer-events: auto;
+  touch-action: none;
+  clip-path: url(#tut-clip);
 }
+/* the chat key sits beside the mine pod, close enough that a generous mine cut-out could reach it */
+body.tutorial-live #chat-toggle { pointer-events: none; }
+
+/* ---- spotlight: a dual neon ring around the exact live target ---- */
 .tut-spot {
   position: absolute;
   z-index: 1;
   pointer-events: none;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, .22),
-    0 0 0 5px rgba(56, 189, 248, .08),
-    0 0 32px rgba(56, 189, 248, .24),
-    inset 0 0 24px rgba(56, 189, 248, .08);
+  border-radius: 16px;
+  --tut-ring: rgba(56, 189, 248, .95);
+  --tut-ring-soft: rgba(56, 189, 248, .42);
+}
+.tut-spot::before,
+.tut-spot::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border: 2px solid var(--tut-ring);
+  border-radius: inherit;
+  box-shadow: 0 0 18px var(--tut-ring-soft), inset 0 0 18px var(--tut-ring-soft);
+  animation: tut-ring 1.6s ease-out infinite;
+}
+.tut-spot::after {
+  inset: -11px;
+  border-width: 1px;
+  opacity: .55;
+  animation-delay: .45s;
+}
+@keyframes tut-ring {
+  0%        { transform: scale(.94); opacity: .95; }
+  70%, 100% { transform: scale(1.08); opacity: 0; }
+}
+.tutorial[data-tone="select"] .tut-spot,
+.tutorial[data-tone="mine"] .tut-spot {
+  --tut-ring: rgba(252, 211, 77, .98);
+  --tut-ring-soft: rgba(245, 158, 11, .45);
+}
+.tutorial[data-tone="wall"] .tut-spot {
+  --tut-ring: rgba(252, 211, 77, .98);
+  --tut-ring-soft: rgba(56, 189, 248, .5);
 }
 
-/* the pointer gesture: a crisp hand over its own tap ripple. Motion is transform-only,
-   and the global reduced-motion rules leave the hand parked on the target. */
+/* ---- the secondary aid: gold FINISH band, cyan/gold groove, gold mine tile ---- */
+.tut-aid {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: 12px;
+}
+.tut-aid[data-kind="finish"] {
+  background: linear-gradient(180deg, rgba(245, 158, 11, .04), rgba(245, 158, 11, .2), rgba(245, 158, 11, .04));
+  box-shadow:
+    0 0 0 1px rgba(252, 211, 77, .55),
+    0 0 28px rgba(245, 158, 11, .34),
+    inset 0 0 24px rgba(245, 158, 11, .2);
+  animation: tut-finish-pulse 1.5s ease-in-out infinite;
+}
+.tut-aid[data-kind="wall"] {
+  background: linear-gradient(90deg, rgba(56, 189, 248, .05), rgba(252, 211, 77, .32), rgba(56, 189, 248, .05));
+  box-shadow: 0 0 0 1px rgba(252, 211, 77, .72), 0 0 26px rgba(56, 189, 248, .48);
+  animation: tut-wall-pulse 1.3s ease-in-out infinite;
+}
+.tut-aid[data-kind="tile"] {
+  background: radial-gradient(ellipse at center, rgba(252, 211, 77, .3), rgba(245, 158, 11, .07) 62%, transparent 75%);
+  box-shadow: inset 0 0 0 2px rgba(252, 211, 77, .78), 0 0 26px rgba(245, 158, 11, .4);
+  animation: tut-tile-pulse 1.25s ease-in-out infinite;
+}
+@keyframes tut-finish-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes tut-wall-pulse {
+  0%, 100% { opacity: .62; filter: brightness(1); }
+  50%      { opacity: 1; filter: brightness(1.2); }
+}
+@keyframes tut-tile-pulse {
+  0%, 100% { opacity: .62; transform: scale(.985); }
+  50%      { opacity: 1; transform: scale(1.015); }
+}
+.tut-spot.nudge,
+.tut-aid.nudge { animation: tut-nudge .38s ease; }
+@keyframes tut-nudge {
+  0%, 100% { filter: brightness(1); }
+  35%      { filter: brightness(1.55); }
+  70%      { filter: brightness(.92); }
+}
+
+/* ---- the hand: the emoji's fingertip sits on the exact tap pixel, the body bobs below ---- */
 .tut-pointer {
   position: absolute;
   z-index: 3;
-  width: 38px;
-  height: 38px;
-  margin: -19px 0 0 -19px;
-  color: var(--ink);
+  width: 0;
+  height: 0;
   pointer-events: none;
-  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, .55));
-  animation: tut-bob 1.15s ease-in-out infinite;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .5));
 }
-.tut-pointer svg { position: relative; display: block; width: 100%; height: 100%; fill: currentColor; }
-.tut-pointer-ring {
+.tut-hand {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 34px;
-  height: 34px;
-  margin: -17px 0 0 -17px;
-  border: 2px solid var(--brand-3);
-  border-radius: 50%;
-  opacity: 0;
-  animation: tut-ping 1.15s ease-out infinite;
+  left: 0;
+  top: -4px;
+  transform: translate(-50%, 0);
+  font-size: 34px;
+  line-height: 1;
+  user-select: none;
+  animation: tut-hand-bob 1.05s ease-in-out infinite;
 }
-@keyframes tut-bob {
-  0%, 100% { transform: translateY(0) scale(1); }
-  48%      { transform: translateY(-5px) scale(.94); }
-}
-@keyframes tut-ping {
-  0%        { transform: scale(.45); opacity: .8; }
-  72%, 100% { transform: scale(1.3); opacity: 0; }
+@keyframes tut-hand-bob {
+  0%, 100% { transform: translate(-50%, 0) rotate(-4deg); }
+  50%      { transform: translate(-50%, -8px) rotate(2deg); }
 }
 
-.tut-forward {
-  position: absolute;
-  z-index: 4;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 14px;
-  background: transparent;
-  cursor: pointer;
-}
-.tut-forward:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
-
-/* ---- the coach card: matte clay, a 1px hairline, one accent glow ---- */
+/* ---- the floating HUD card: compact dark clay, never a middle-of-the-board modal ---- */
 .tut-card {
   position: absolute;
   z-index: 5;
-  width: min(340px, calc(100vw - 28px));
-  padding: 15px 16px 16px;
-  border: 1px solid rgba(255, 255, 255, .08);
-  border-radius: 20px;
-  background: linear-gradient(180deg, #202A3E 0%, #172031 100%);
+  width: min(300px, calc(100vw - 32px));
+  padding: 11px 13px 12px;
+  border: 1px solid rgba(56, 189, 248, .35);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, .88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   color: var(--ink);
   outline: none;
+  pointer-events: auto;
   box-shadow:
-    inset 0 1px 0 var(--hair-lit),
-    0 22px 44px -22px rgba(0, 0, 0, .85),
-    0 0 30px -12px var(--tut-accent-glow, rgba(56, 189, 248, .3));
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    0 18px 38px -20px rgba(0, 0, 0, .9),
+    0 0 28px -12px rgba(56, 189, 248, .42);
   --tut-accent: var(--brand-ink);
   --tut-accent-soft: var(--brand-soft);
-  --tut-accent-glow: rgba(56, 189, 248, .3);
 }
-.tut-card[data-tone="goal"] {
+.tut-card[data-tone="select"] {
   --tut-accent: var(--gold-ink);
   --tut-accent-soft: rgba(245, 158, 11, .15);
-  --tut-accent-glow: rgba(232, 168, 12, .3);
-}
-.tut-card[data-tone="move"] {
-  --tut-accent: var(--brand-ink);
-  --tut-accent-soft: var(--brand-soft);
-  --tut-accent-glow: rgba(56, 189, 248, .3);
+  border-color: rgba(252, 211, 77, .38);
 }
 .tut-card[data-tone="wall"] {
-  --tut-accent: var(--red-ink);
-  --tut-accent-soft: rgba(224, 38, 79, .14);
-  --tut-accent-glow: rgba(224, 38, 79, .28);
+  --tut-accent: var(--honey-ink);
+  --tut-accent-soft: rgba(245, 158, 11, .13);
+  border-color: rgba(252, 211, 77, .32);
 }
 .tut-card[data-tone="mine"] {
   --tut-accent: var(--honey-ink);
   --tut-accent-soft: var(--honey-soft);
-  --tut-accent-glow: rgba(245, 158, 11, .3);
+  border-color: rgba(245, 158, 11, .4);
 }
 .tut-card.pop { animation: tut-card-pop .26s cubic-bezier(.2, 1.2, .4, 1) both; }
 @keyframes tut-card-pop {
   from { opacity: 0; transform: translateY(6px) scale(.985); }
 }
 
-.tut-head { display: flex; align-items: center; gap: 10px; }
+.tut-head { display: flex; align-items: center; gap: 9px; }
 .tut-ico {
   flex: none;
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
+  width: 27px;
+  height: 27px;
+  border-radius: 9px;
   background: var(--tut-accent-soft);
   color: var(--tut-accent);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
 }
-.tut-ico .ico { width: 17px; height: 17px; }
+.tut-ico .ico { width: 15px; height: 15px; }
 .tut-head-txt { min-width: 0; }
 .tut-kicker {
-  margin: 0 0 2px;
-  font-size: 9px;
+  margin: 0 0 1px;
+  font-size: 8.5px;
   font-weight: 800;
-  letter-spacing: .12em;
+  letter-spacing: .14em;
   text-transform: uppercase;
   color: var(--tut-accent);
 }
 .tut-title {
   margin: 0;
   font-size: 14px;
-  font-weight: 800;
-  line-height: 1.2;
-  letter-spacing: .02em;
+  font-weight: 900;
+  line-height: 1.15;
+  letter-spacing: .025em;
   color: var(--ink);
 }
 .tut-body {
-  margin: 9px 0 0;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.5;
+  margin: 7px 0 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
   color: var(--ink-soft);
 }
-.tut-next {
-  appearance: none;
-  border: 0;
-  width: 100%;
-  min-height: 48px;
-  margin-top: 14px;
-  padding: 0 16px;
-  border-radius: 14px;
-  background: var(--brand-fill);
-  color: var(--on-brand);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: .01em;
-  cursor: pointer;
+
+/* ---- the 1.2s finish banner: gold crest, dark clay, then the board is live ---- */
+.tut-done {
+  position: absolute;
+  z-index: 7;
+  left: 50%;
+  top: 50%;
+  width: min(320px, calc(100vw - 40px));
+  padding: 16px 20px 17px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  transform: translate(-50%, -50%) scale(.96);
+  border: 1px solid rgba(252, 211, 77, .5);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(24, 33, 52, .96), rgba(12, 18, 30, .97));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .18),
-    0 8px 16px -10px rgba(2, 132, 199, .75);
-  transition: transform var(--motion-fast), opacity var(--motion-fast);
+    0 24px 50px -20px rgba(0, 0, 0, .92),
+    0 0 40px -8px rgba(245, 158, 11, .48),
+    inset 0 1px 0 rgba(255, 255, 255, .1);
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
 }
-.tut-next:active { transform: translateY(1px); opacity: .94; }
-.tut-next:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.tut-done.show { animation: tut-done .32s cubic-bezier(.2, 1.2, .4, 1) forwards; }
+@keyframes tut-done {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(.92); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+.tut-done-kick {
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: .09em;
+  color: var(--gold-ink);
+  text-shadow: 0 0 18px rgba(245, 158, 11, .55);
+}
+.tut-done-line {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  color: var(--ink-soft);
+}
 
 /* ---- skip: quiet, top-right, still a 48px target ---- */
 .tut-skip {
   position: absolute;
-  z-index: 6;
+  z-index: 8;
   top: max(10px, env(safe-area-inset-top));
   right: max(10px, calc((100vw - var(--app-w)) / 2 + 10px));
   min-height: 48px;
   padding: 0 14px;
   border: 1px solid rgba(255, 255, 255, .08);
   border-radius: 14px;
-  background: rgba(16, 22, 35, .72);
+  background: rgba(16, 22, 35, .78);
   color: var(--ink-soft);
   font: inherit;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: .02em;
   cursor: pointer;
+  pointer-events: auto;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .06),
     0 8px 18px -12px rgba(0, 0, 0, .8);
@@ -1210,16 +1288,17 @@ html.reduced-motion .chip[data-timer="red"] .timer-fill { animation: none; opaci
 
 /* the shortest phones: the same card, a tighter vertical rhythm */
 @media (max-width: 380px) {
-  .tut-card { width: calc(100vw - 24px); padding: 13px 14px 14px; border-radius: 18px; }
-  .tut-body { margin-top: 7px; line-height: 1.45; }
-  .tut-next { margin-top: 11px; }
+  .tut-card { width: calc(100vw - 24px); padding: 10px 12px 11px; border-radius: 15px; }
+  .tut-title { font-size: 13px; }
+  .tut-body { margin-top: 6px; font-size: 12px; line-height: 1.38; }
+  .tut-hand { font-size: 30px; }
   .tut-skip { padding: 0 12px; font-size: 10.5px; }
 }
 @media (max-height: 620px) {
-  .tut-card { padding-top: 11px; padding-bottom: 12px; }
-  .tut-ico { width: 26px; height: 26px; border-radius: 9px; }
-  .tut-body { margin-top: 6px; line-height: 1.4; }
-  .tut-next { margin-top: 9px; }
+  .tut-card { padding-top: 9px; padding-bottom: 10px; }
+  .tut-ico { width: 24px; height: 24px; border-radius: 8px; }
+  .tut-body { margin-top: 5px; line-height: 1.35; }
+  .tut-done { padding: 13px 16px 14px; }
 }
 
 /* ==========================================================================
