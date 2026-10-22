@@ -1,12 +1,13 @@
 /**
  * tutorial.ts — the first-match hands-on lesson.
  *
- * Six stages over four visible steps. Step 1 shows the GOAL: the FINISH banner is the live target, so
- * the player sees where the race ends before touching a pawn. Step 2 is the pick and the forward
- * step, step 3 the wall. Then the lesson deliberately steps OUT of the way: the wall stands, the
- * overlay closes, and the board is normal live play for two rival steps. When the rival has gained
- * those two rows and the local seat is up again, the lesson re-opens on its own for step 4 — the
- * mine — and gets out of the way for good the instant the charge is planted.
+ * Seven stages over four visible steps. Step 1 shows the GOAL: the FINISH banner is the live target,
+ * so the player sees where the race ends before touching a pawn. Step 2 is the pick and the forward
+ * step, step 3 the real two-tap wall: the first groove tap previews it, the second confirms it. Then
+ * the lesson deliberately steps OUT of the way: the wall stands, the overlay closes, and the board
+ * is normal live play for two rival steps. When the rival has gained those two rows and the local
+ * seat is up again, the lesson re-opens on its own for step 4 — the mine — and gets out of the way
+ * for good the instant the charge is planted.
  *
  * The module never mutates the game itself — `main.ts` performs the action, then calls `notify()`;
  * the action gate here is what told it the tap was the right one.
@@ -27,7 +28,10 @@ export interface TutorialSpot {
   radius?: number;
 }
 
-export type TutorialStage = 'finish' | 'select' | 'move' | 'wall' | 'mine-arm' | 'mine-place';
+export type TutorialStage =
+  | 'finish' | 'select' | 'move'
+  | 'wall-preview' | 'wall-confirm'
+  | 'mine-arm' | 'mine-place';
 export type TutorialPhase = TutorialStage | 'done';
 export type TutorialResult = 'finished' | 'skipped' | 'cancelled';
 
@@ -95,7 +99,7 @@ export interface Tutorial {
 
 export interface TutorialStepDef {
   stage: TutorialStage;
-  /** The visible step number: pick + move are both step 2, the two mine halves both step 4. */
+  /** The visible step number: pick + move are step 2, both wall halves step 3, both mine halves 4. */
   group: number;
   icon: string;
   tone: 'goal' | 'select' | 'move' | 'wall' | 'mine';
@@ -122,9 +126,14 @@ export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
     body: 'Tap the glowing tile ahead to move toward FINISH!',
   },
   {
-    stage: 'wall', group: 3, icon: '#i-wall', tone: 'wall',
-    title: 'PLACE A WALL',
-    body: 'Tap this slot to block your opponent with a wall!',
+    stage: 'wall-preview', group: 3, icon: '#i-wall', tone: 'wall',
+    title: 'PREVIEW A WALL',
+    body: 'Tap the gap between tiles to preview a WALL.',
+  },
+  {
+    stage: 'wall-confirm', group: 3, icon: '#i-wall', tone: 'wall',
+    title: 'CONFIRM THE WALL',
+    body: 'Tap the same slot again to lock the wall in place and block your opponent!',
   },
   {
     stage: 'mine-arm', group: 4, icon: '#i-mine-tactical', tone: 'mine',
@@ -142,14 +151,15 @@ export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
 export const NEXT_STAGE: Readonly<Record<TutorialStage, TutorialStage | 'done'>> = {
   finish: 'select',
   select: 'move',
-  move: 'wall',
-  wall: 'mine-arm',
+  move: 'wall-preview',
+  'wall-preview': 'wall-confirm',
+  'wall-confirm': 'mine-arm',
   'mine-arm': 'mine-place',
   'mine-place': 'done',
 };
 
-/** The stage that hands the board back: the wall is up and the overlay leaves for live play. */
-export const TUTORIAL_HANDOFF: TutorialStage = 'wall';
+/** The stage that hands the board back: the wall is confirmed and the overlay leaves for live play. */
+export const TUTORIAL_HANDOFF: TutorialStage = 'wall-confirm';
 /** Where the lesson re-opens on its own once live play has run its course. */
 export const TUTORIAL_RESUME_STAGE: TutorialStage = 'mine-arm';
 /** Forward rows the rival must take in live play before the mine lesson re-opens. */
@@ -184,7 +194,8 @@ export function tutorialAllows(
       return action.kind === 'select' && targets.select !== null && action.ball === targets.select;
     case 'move':
       return action.kind === 'move' && sameCell(action.to, targets.move);
-    case 'wall':
+    case 'wall-preview':
+    case 'wall-confirm':
       return action.kind === 'wall' && sameWall(action.spec, targets.wall);
     case 'mine-arm':
       return action.kind === 'mine-arm' && targets.mineArm;
@@ -282,7 +293,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     return {
       select: s === 'select' ? hooks.select()?.ball ?? null : null,
       move: s === 'move' ? hooks.move()?.to ?? null : null,
-      wall: s === 'wall' ? hooks.wall()?.spec ?? null : null,
+      wall: s === 'wall-preview' || s === 'wall-confirm' ? hooks.wall()?.spec ?? null : null,
       mineArm: s === 'mine-arm' && hooks.mineArm() !== null,
       mine: s === 'mine-place' ? hooks.minePlace()?.cell ?? null : null,
     };
@@ -293,7 +304,8 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       case 'finish': return hooks.goal();
       case 'select': return hooks.select()?.spot ?? null;
       case 'move': return hooks.move()?.spot ?? null;
-      case 'wall': return hooks.wall()?.spot ?? null;
+      case 'wall-preview':
+      case 'wall-confirm': return hooks.wall()?.spot ?? null;
       case 'mine-arm': return hooks.mineArm();
       case 'mine-place': return hooks.minePlace()?.spot ?? null;
     }
@@ -305,7 +317,8 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       case 'finish': return hooks.goal();
       case 'select': return hooks.select()?.spot ?? null;
       case 'move': return hooks.finish();
-      case 'wall': return hooks.wall()?.spot ?? null;
+      case 'wall-preview':
+      case 'wall-confirm': return hooks.wall()?.spot ?? null;
       case 'mine-arm': return hooks.mineArm();
       case 'mine-place': return hooks.minePlace()?.spot ?? null;
     }
@@ -347,7 +360,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     aidEl.hidden = !spot;
     if (!spot) return;
     aidEl.dataset.kind = s === 'finish' || s === 'move' ? 'finish'
-      : s === 'wall' ? 'wall' : 'tile';
+      : s === 'wall-preview' || s === 'wall-confirm' ? 'wall' : 'tile';
     setBox(aidEl, spot.rect);
     aidEl.style.borderRadius = `${spot.radius ?? 14}px`;
   };
@@ -579,14 +592,20 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       const kind: TutorialAction['kind'] | null = now === 'finish' ? null
         : now === 'select' ? 'select'
         : now === 'move' ? 'move'
-        : now === 'wall' ? 'wall'
+        : now === 'wall-preview' || now === 'wall-confirm' ? 'wall'
         : now === 'mine-arm' ? 'mine-arm' : 'mine';
       if (kind === null || action.kind !== kind) return;
       if (now === TUTORIAL_HANDOFF) {
-        /* The wall is up, so the lesson gets out of the way at once: the player plays the next
-           turns for real and `main.ts` calls resume() when the rival has gained its ground. */
+        /* The wall is confirmed, so the lesson gets out of the way at once: the player plays the
+           next turns for real and `main.ts` calls resume() when the rival has gained its ground. */
         suspend();
         hooks.handoff();
+        return;
+      }
+      if (now === 'wall-preview') {
+        /* The first groove tap put the ghost up: hold the same groove and ask for the second tap.
+           No rival reply belongs between the two halves of one wall. */
+        go('wall-confirm');
         return;
       }
       if (now === 'mine-place') {

@@ -1492,11 +1492,11 @@ function tutorialTap(p: Vec) {
     }
     return;
   }
+  const stage = tutorialStage();
   let action = tutorialHitAction(at(p));
-  /* Step 3 is forgiving by design: the whole spotlight — not just the hairline groove — is the
-     wall's hit area. A tap anywhere inside it snaps to the live target and commits in one tap;
-     there is no preview/confirm second tap in the lesson. */
-  if (tutorialStage() === 'wall') {
+  /* Step 3 is forgiving by design: both halves accept a tap anywhere in the spotlight — not only
+     the hairline groove. The first tap previews; the second commits, exactly as live play does. */
+  if (stage === 'wall-preview' || stage === 'wall-confirm') {
     const target = tutorialWallTarget();
     const box = canvas.getBoundingClientRect();
     if (target && tutorialSpotHas(target.spot, box.left + p.x, box.top + p.y)) {
@@ -1518,6 +1518,13 @@ function tutorialTap(p: Vec) {
       break;
     case 'wall': {
       const wall: Wall = { ...action.spec, owner: state.turn };
+      if (stage === 'wall-preview') {
+        /* the first tap only shows the real dashed ghost — the wall is not spent until tap two */
+        if (!wallOk(state, wall)) { tutorial?.nudge(); return; }
+        impact('light');
+        setMode(previewWall(mode(), { spec: action.spec, ok: true, armed: false, p: state.turn }));
+        break;
+      }
       if (!wallOk(state, wall) || !play({ kind: 'wall', wall })) { tutorial?.nudge(); return; }
       break;
     }
@@ -1773,13 +1780,16 @@ async function tutorialReply(): Promise<void> {
 }
 
 /**
- * Stage change from the lesson: grant the wall preview its real ghost, drop a preview that belongs
- * to a stage we just left, and let `ui()` re-derive the dots, mine band and the mine key's state.
+ * Stage change from the lesson: clear the preview when a wall stage ends, keep the player's own
+ * ghost up on the confirm half, and let `ui()` re-derive the dots and the mine key's state.
  */
 function syncTutorialUI(stage: TutorialStage | null) {
   if (!tutorialActive) return;
-  if (stage !== 'wall' && ghost && !ghost.armed) setMode({ ...mode(), preview: null });
-  if (stage === 'wall') {
+  const wallStage = stage === 'wall-preview' || stage === 'wall-confirm';
+  if (!wallStage && ghost) setMode({ ...mode(), preview: null });
+  /* 3A must start on a bare groove: the preview is the player's first tap, never a freebie */
+  if (stage === 'wall-preview' && ghost) setMode({ ...mode(), preview: null });
+  if (stage === 'wall-confirm') {
     const target = tutorialWallTarget();
     const wall: Wall | null = target ? { ...target.spec, owner: localSide } : null;
     setMode(previewWall(mode(), wall && wallOk(state, wall)

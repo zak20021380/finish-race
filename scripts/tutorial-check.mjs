@@ -3,12 +3,13 @@
  *
  * Asserts:
  *  - the lesson opens on the GOAL (the FINISH banner), then pick + move as one visible step,
- *    the wall as step 3 and the two mine halves as step 4;
- *  - the wall is the handoff stage: after it the overlay leaves for two live turns and the mine
- *    lesson is what re-opens;
+ *    the wall as a two-tap step 3 (preview, then confirm) and the two mine halves as step 4;
+ *  - the wall is confirmed before the handoff: the overlay leaves for two live turns and the
+ *    mine lesson is what re-opens;
  *  - each stage's gate accepts only its exact target (right pawn, right tile, right groove,
  *    right mine cell) and refuses every other action — step 1 has no board action at all;
- *  - the NEXT_STAGE chain walks finish → select → move → wall → mine-arm → mine-place → done;
+ *  - the NEXT_STAGE chain walks finish → select → move → wall-preview → wall-confirm →
+ *    mine-arm → mine-place → done;
  *  - online seats, private rooms and completed saves never auto-start the lesson;
  *  - completeTutorial() persists `tutorialCompleted` through the real storage module, survives a
  *    module reload, and resetTutorialState() clears it (and the legacy bare key).
@@ -39,10 +40,10 @@ const {
 
 /* ---------- the four-step lesson ---------- */
 
-await check('the lesson is six stages over four visible steps, opening on the GOAL', () => {
+await check('the lesson is seven stages over four visible steps, opening on the GOAL', () => {
   assert.deepEqual(TUTORIAL_STEPS.map((s) => s.stage),
-    ['finish', 'select', 'move', 'wall', 'mine-arm', 'mine-place']);
-  assert.deepEqual(TUTORIAL_STEPS.map((s) => s.group), [1, 2, 2, 3, 4, 4]);
+    ['finish', 'select', 'move', 'wall-preview', 'wall-confirm', 'mine-arm', 'mine-place']);
+  assert.deepEqual(TUTORIAL_STEPS.map((s) => s.group), [1, 2, 2, 3, 3, 4, 4]);
   assert.equal(TUTORIAL_STEPS[0].title, 'GOAL');
   assert.equal(TUTORIAL_STEPS[0].body,
     'First player to reach the FINISH line at the top wins! Tap Next or the FINISH line to continue.');
@@ -51,27 +52,34 @@ await check('the lesson is six stages over four visible steps, opening on the GO
   assert.equal(TUTORIAL_STEPS[1].body, 'Tap your glowing piece to select it.');
   assert.equal(TUTORIAL_STEPS[2].title, 'MOVE TO FINISH');
   assert.equal(TUTORIAL_STEPS[2].body, 'Tap the glowing tile ahead to move toward FINISH!');
-  assert.equal(TUTORIAL_STEPS[3].title, 'PLACE A WALL');
-  assert.equal(TUTORIAL_STEPS[3].body, 'Tap this slot to block your opponent with a wall!');
-  assert.equal(TUTORIAL_STEPS[4].title, 'ARM A HIDDEN MINE');
-  assert.equal(TUTORIAL_STEPS[4].body, 'Tap the Mine button to arm a hidden trap!');
-  assert.equal(TUTORIAL_STEPS[5].title, 'PLANT THE MINE');
-  assert.equal(TUTORIAL_STEPS[5].body, 'Tap this tile ahead of your opponent to hide the mine!');
+  assert.equal(TUTORIAL_STEPS[3].title, 'PREVIEW A WALL');
+  assert.equal(TUTORIAL_STEPS[3].body, 'Tap the gap between tiles to preview a WALL.');
+  assert.equal(TUTORIAL_STEPS[4].title, 'CONFIRM THE WALL');
+  assert.equal(TUTORIAL_STEPS[4].body,
+    'Tap the same slot again to lock the wall in place and block your opponent!');
+  assert.equal(TUTORIAL_STEPS[3].tone, 'wall');
+  assert.equal(TUTORIAL_STEPS[4].tone, 'wall');
+  assert.equal(TUTORIAL_STEPS[5].title, 'ARM A HIDDEN MINE');
+  assert.equal(TUTORIAL_STEPS[5].body, 'Tap the Mine button to arm a hidden trap!');
+  assert.equal(TUTORIAL_STEPS[6].title, 'PLANT THE MINE');
+  assert.equal(TUTORIAL_STEPS[6].body, 'Tap this tile ahead of your opponent to hide the mine!');
   /* no stage carries a "next" action: only step 1 is taken by a key, everything else by its act */
   assert.equal(TUTORIAL_STEPS.every((s) => s.title.length > 0 && !('action' in s)), true);
 });
 
-await check('the forward chain is finish → select → move → wall → arm → plant → done', () => {
+await check('the forward chain is finish → select → move → preview → confirm → arm → plant → done', () => {
   assert.equal(NEXT_STAGE.finish, 'select');
   assert.equal(NEXT_STAGE.select, 'move');
-  assert.equal(NEXT_STAGE.move, 'wall');
-  assert.equal(NEXT_STAGE.wall, 'mine-arm');
+  assert.equal(NEXT_STAGE.move, 'wall-preview');
+  assert.equal(NEXT_STAGE['wall-preview'], 'wall-confirm');
+  assert.equal(NEXT_STAGE['wall-confirm'], 'mine-arm');
   assert.equal(NEXT_STAGE['mine-arm'], 'mine-place');
   assert.equal(NEXT_STAGE['mine-place'], 'done');
 });
 
-await check('the wall hands the board back for two live rival rows before the mine', () => {
-  assert.equal(TUTORIAL_HANDOFF, 'wall');
+await check('the confirmed wall hands the board back for two live rival rows before the mine', () => {
+  assert.equal(TUTORIAL_HANDOFF, 'wall-confirm');
+  assert.notEqual(TUTORIAL_HANDOFF, 'wall-preview');
   assert.equal(TUTORIAL_RESUME_STAGE, 'mine-arm');
   assert.equal(TUTORIAL_LIVE_STEPS, 2);
 });
@@ -106,15 +114,17 @@ await check('step 2B accepts only the glowing forward tile', () => {
   assert.equal(tutorialAllows('move', targets, { kind: 'wall', spec: targets.wall }), false);
 });
 
-await check('step 3 accepts only the highlighted groove', () => {
-  assert.equal(tutorialAllows('wall', targets, { kind: 'wall', spec: { o: 'h', x: 4, y: 10 } }), true);
-  assert.equal(tutorialAllows('wall', targets, { kind: 'wall', spec: { o: 'h', x: 5, y: 10 } }), false);
-  assert.equal(tutorialAllows('wall', targets, { kind: 'wall', spec: { o: 'h', x: 4, y: 9 } }), false);
-  assert.equal(tutorialAllows('wall', targets, { kind: 'wall', spec: { o: 'v', x: 4, y: 10 } }), false);
-  assert.equal(tutorialAllows('wall', targets, { kind: 'mine', cell: targets.mine }), false);
-});
+for (const stage of ['wall-preview', 'wall-confirm']) {
+  await check(`step 3 (${stage}) accepts only the highlighted groove`, () => {
+    assert.equal(tutorialAllows(stage, targets, { kind: 'wall', spec: { o: 'h', x: 4, y: 10 } }), true);
+    assert.equal(tutorialAllows(stage, targets, { kind: 'wall', spec: { o: 'h', x: 5, y: 10 } }), false);
+    assert.equal(tutorialAllows(stage, targets, { kind: 'wall', spec: { o: 'h', x: 4, y: 9 } }), false);
+    assert.equal(tutorialAllows(stage, targets, { kind: 'wall', spec: { o: 'v', x: 4, y: 10 } }), false);
+    assert.equal(tutorialAllows(stage, targets, { kind: 'mine', cell: targets.mine }), false);
+  });
+}
 
-await check('step 3 is a single tap anywhere inside the spotlight, not only the groove', () => {
+await check('both wall halves accept a tap anywhere inside the spotlight, not only the groove', () => {
   /* a groove spot is a hairline: 30x8 padded by 7 and floored at a 48px thumb */
   const spot = { rect: { left: 100, top: 200, width: 30, height: 8 }, radius: 10 };
   const box = tutorialSpotBox(spot);

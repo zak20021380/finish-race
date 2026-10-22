@@ -5,12 +5,14 @@
  * the actual spotlight hole at 360, 390 and 430 CSS px. Fails (exit 1) when:
  *  - step 1 is not the GOAL spotlighting the top FINISH banner, or cannot be taken by the banner
  *    itself AND by the card's Next key;
- *  - the pointer is still the cyan capsule, or is not the white human hand with its dark outline;
+ *  - the pointer is not the standard 24px Material-style hand, or its fingertip is not anchored
+ *    to the target centre;
  *  - any step cannot be completed by its real target, or the spotlight is smaller than a 48px thumb,
  *    or the HUD card covers it;
- *  - the wall step does not CLOSE the overlay into live play, or the mine lesson re-opens before the
- *    rival has actually gained two rows, or never re-opens;
- *  - a step-3 tap near the spotlight EDGE does not commit the wall in one tap;
+ *  - the wall step does not show a preview after tap one (or spends the wall there), does not
+ *    CLOSE the overlay after the confirm tap, or the mine lesson re-opens before the rival has
+ *    actually gained two rows, or never re-opens;
+ *  - a tap near either wall spotlight EDGE is not accepted by that half of the flow;
  *  - the mine step points at a tile behind the rival, and planting it does not close the lesson
  *    immediately and permanently (no WATCH THIS freeze);
  *  - the client-side red/blue perspective does not swap both pawns and HUD chips, or the choice
@@ -80,7 +82,17 @@ const read = (pg) => pg.evaluate(() => {
   const skip = document.getElementById('tut-skip');
   const next = document.getElementById('tut-next');
   const tap = document.querySelector('.tut-tap');
-  const handBody = document.querySelector('.tut-hand-body');
+  const hand = document.querySelector('.tut-tap .tut-hand');
+  const pointer = document.getElementById('tut-pointer');
+  /* layout offsets, not the live rect: the press animation translates the SVG every frame */
+  const tip = (() => {
+    if (!tap) return null;
+    const cs = getComputedStyle(tap);
+    return {
+      dx: parseFloat(cs.left) + 11.5 / 24 * parseFloat(cs.width),
+      dy: parseFloat(cs.top) + 5 / 24 * parseFloat(cs.height),
+    };
+  })();
   return {
     hidden: root.hidden,
     stage: root.dataset.stage ?? null,
@@ -104,12 +116,21 @@ const read = (pg) => pg.evaluate(() => {
     live: document.getElementById('tut-live')?.textContent ?? '',
     legacyButtons: document.querySelectorAll('#tut-forward, #tut-skip-next').length,
     handCount: document.querySelectorAll('.tut-tap .tut-hand').length,
-    handStroke: handBody?.getAttribute('stroke') ?? '',
-    handFill: handBody?.getAttribute('fill') ?? '',
+    handPathCount: document.querySelectorAll('.tut-tap path').length,
+    handFingerCount: document.querySelectorAll('.tut-hand-finger').length,
+    handGradient: /tutHandFill|tutHandShade|tutHandSilhouette/.test(tap?.outerHTML ?? ''),
+    handStroke: hand?.getAttribute('stroke') ?? '',
+    handFill: hand?.getAttribute('fill') ?? '',
+    handStrokeWidth: Number(hand?.getAttribute('stroke-width') ?? 0),
+    handJoin: hand?.getAttribute('stroke-linejoin') ?? '',
     handCyan: /38BDF8|0EA5E9|7DD3FC|0284C7/i.test(tap?.outerHTML ?? ''),
     tapSvg: !!tap,
+    tapViewBox: tap?.getAttribute('viewBox') ?? '',
+    pointer: pointer ? rect(pointer) : null,
+    tapTip: tip,
     tapFilter: tap ? getComputedStyle(tap).filter : '',
     tapAnim: tap ? getComputedStyle(tap).animationName : '',
+    aidLine: aid && !aid.hidden ? getComputedStyle(aid, '::before').height : '',
     sonarAnim: document.querySelector('.tut-sonar i')
       ? getComputedStyle(document.querySelector('.tut-sonar i')).animationName : '',
     board: { left: cr.left + ox, top: cr.top + oy, cell },
@@ -268,16 +289,32 @@ await check('step 1 is the GOAL spotlighting the top FINISH banner', () => {
     assert.ok(s1.spot.cy < h * 0.4, `FINISH spotlight at y ${s1.spot?.cy}`);
     assert.equal(s1.legacyButtons, 0, 'a stale forward proxy is back in the DOM');
   });
-await check('the blue capsule is gone and a white human hand points at the goal', () => {
-    assert.equal(s1.handCount, 1, 'the human hand silhouette is missing');
-    assert.equal(s1.handStroke.toUpperCase(), '#0F172A');
-    assert.match(s1.handFill, /^url\(#tutHand/);
-    assert.equal(s1.handCyan, false, 'cyan capsule colours are still in the pointer SVG');
+await check('the pointer is one standard 24px Material-style hand with a dark outline', () => {
     assert.equal(s1.tapSvg, true, 'the tutorial pointer SVG is missing');
+    assert.equal(s1.tapViewBox, '0 0 24 24');
+    assert.equal(s1.handCount, 1, 'the standard hand path is missing');
+    assert.equal(s1.handPathCount, 1, 'the hand must be one clean silhouette, not a finger collage');
+    assert.equal(s1.handFingerCount, 0, 'the old sausage-finger paths are back');
+    assert.equal(s1.handGradient, false, 'the old multi-part hand gradients are back');
+    assert.equal(s1.handFill.toUpperCase(), '#FFFFFF');
+    assert.equal(s1.handStroke.toUpperCase(), '#0F172A');
+    assert.equal(s1.handStrokeWidth, 1.5);
+    assert.equal(s1.handJoin, 'round');
+    assert.equal(s1.handCyan, false, 'cyan capsule colours are still in the pointer SVG');
     assert.match(s1.tapFilter, /drop-shadow/);
     assert.doesNotMatch(s1.tapFilter, /56,\s*189,\s*248/);
     assert.equal(s1.tapAnim, 'tutTapPress');
     assert.equal(s1.sonarAnim, 'tutPulseRing');
+  });
+await check('the index fingertip (11.5, 5) is anchored on the target centre', () => {
+    assert.ok(s1.tapTip, 'the hand geometry is missing');
+    assert.ok(Math.abs(s1.tapTip.dx) <= 0.25, `fingertip dx ${s1.tapTip.dx}px`);
+    assert.ok(Math.abs(s1.tapTip.dy) <= 0.25, `fingertip dy ${s1.tapTip.dy}px`);
+    assert.ok(s1.pointer && s1.spot, 'the pointer or its target is missing');
+    assert.ok(Math.abs(s1.pointer.cx - s1.spot.cx) <= 2,
+      `pointer x ${s1.pointer.cx} vs target ${s1.spot.cx}`);
+    assert.ok(Math.abs(s1.pointer.cy - s1.spot.cy) <= 2,
+      `pointer y ${s1.pointer.cy} vs target ${s1.spot.cy}`);
   });
 await check(`the client-side perspective paints ${expected} local / the opposite rival`, () => {
     if (expected === 'blue') {
@@ -351,25 +388,50 @@ await check('tapping the pawn moves the spotlight to the forward tile', () => {
   /* 2B — tap the glowing forward tile */
   const tap2 = await read(pg);
   await pg.mouse.click(tap2.spot.cx, tap2.spot.cy);
-  await waitTitle(pg, 'PLACE A WALL');
+  await waitTitle(pg, 'PREVIEW A WALL');
   await pg.waitForTimeout(80);
   const s4 = await read(pg);
-await check('step 3 highlights a wall groove in front of the rival', () => {
-    assert.equal(s4.stage, 'wall');
+await check('step 3A highlights the groove between tiles and asks for a preview', () => {
+    assert.equal(s4.stage, 'wall-preview');
     assert.equal(s4.kicker, 'STEP 3 OF 4');
+    assert.equal(s4.title, 'PREVIEW A WALL');
+    assert.equal(s4.body, 'Tap the gap between tiles to preview a WALL.');
     assert.equal(s4.aid?.kind, 'wall');
+    assert.ok(parseFloat(s4.aidLine) >= 2, `the seam highlight is ${s4.aidLine} tall`);
     assert.ok(s4.spot.h >= 48, 'the groove cut-out is under a thumb');
     assert.equal(overlaps(s4.spot, s4.card), false);
   });
 
-  /* 3 — one tap anywhere inside the spotlight, near its padded top edge and well above the
-     hairline groove: the forgiving hit zone must snap it onto the live target and commit */
+  /* 3A — tap the spotlight near its padded top edge, well above the hairline groove: the
+     forgiving hit zone must preview the wall on the live target without spending it */
   const tap3 = await read(pg);
   await pg.mouse.click(tap3.spot.cx, tap3.spot.y + 4);
+  await waitTitle(pg, 'CONFIRM THE WALL');
+  await pg.waitForTimeout(120);
+  const preview = await read(pg);
+await check('the first tap leaves a preview on the same groove without spending the wall', () => {
+    assert.equal(preview.stage, 'wall-confirm');
+    assert.equal(preview.kicker, 'STEP 3 OF 4');
+    assert.equal(preview.title, 'CONFIRM THE WALL');
+    assert.equal(preview.body,
+      'Tap the same slot again to lock the wall in place and block your opponent!');
+    assert.equal(preview.aid?.kind, 'wall');
+    assert.equal(preview.hidden, false, 'the preview tap closed the overlay');
+    assert.equal(preview.liveClass, true, 'the tutorial input guard was released too early');
+    assert.equal(preview.wallCount, s4.wallCount, 'the preview spent a wall');
+    for (const k of ['x', 'y', 'w', 'h']) {
+      assert.ok(Math.abs(preview.spot[k] - s4.spot[k]) <= 2,
+        `the spotlight moved off the previewed groove (${k}: ${preview.spot[k]} vs ${s4.spot[k]})`);
+    }
+    assert.equal(overlaps(preview.spot, preview.card), false);
+  });
+
+  /* 3B — a second tap anywhere in the same spotlight, near its bottom edge, confirms it */
+  await pg.mouse.click(preview.spot.cx, preview.spot.y + preview.spot.h - 4);
   await waitHidden(pg);
   const live = await read(pg);
-await check('the wall lands (8 → 7) and the overlay exits into live play', () => {
-    assert.equal(live.hidden, true, 'the wall step did not close the overlay');
+await check('the confirmed wall lands (8 → 7) and the overlay exits into live play', () => {
+    assert.equal(live.hidden, true, 'the confirm tap did not close the overlay');
     assert.equal(live.stage, null);
     assert.equal(live.liveClass, false, 'the tutorial input guard is still latched');
     assert.equal(live.wallCount, '7');
