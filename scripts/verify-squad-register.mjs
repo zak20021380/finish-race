@@ -50,6 +50,18 @@ globalThis.fetch = async (url, init = {}) => {
     if (body.chat_id === '@MissingChat') {
       return reply({ ok: false, error_code: 400, description: 'Bad Request: chat not found' }, 400);
     }
+    if (body.chat_id === '@NamedSquad') {
+      return reply({
+        ok: true,
+        result: {
+          id: -100555000111,
+          type: 'supergroup',
+          title: 'Named Squad HQ',
+          username: 'NamedSquad',
+          photo: { small_file_id: 'named-photo-id' },
+        },
+      });
+    }
     return reply({
       ok: true,
       result: {
@@ -142,7 +154,8 @@ console.log('\n-- squad registration --');
   ok('the squad is populated from getChat metadata',
     data.ok === true && data.squad?.name === 'Test Squad HQ' && data.squad?.handle === '@TestSquad'
       && data.squad?.members === 321 && data.squad?.kind === 'channel'
-      && data.squad?.avatar === 'small-photo-id' && data.squad?.ownerId === '42',
+      && data.squad?.avatar === 'small-photo-id' && data.squad?.ownerId === '42'
+      && data.squad?.tag === '',
     JSON.stringify(data.squad));
   ok('getChatMember was asked about the requester and the bot',
     calls.some((c) => c.method === 'getChatMember' && c.body.user_id === '42')
@@ -176,6 +189,30 @@ console.log('\n-- squad registration --');
   ok('an unknown chat is refused with 404', missing.status === 404 && missingData.error === 'chat_not_found');
   const get = await route({}, 'GET');
   ok('a non-POST method is refused with 405', get.status === 405);
+}
+
+{
+  const badTag = await route({
+    chatUsername: '@NamedSquad',
+    squadName: 'Night Shift',
+    squadTag: 'X',
+    userTelegramId: '42',
+  });
+  const data = await bodyOf(badTag);
+  ok('a one-character tag is refused with 400', badTag.status === 400 && data.error === 'invalid_tag',
+    JSON.stringify(data));
+
+  const named = await route({
+    chatUsername: '@NamedSquad',
+    squadName: 'Night Shift',
+    squadTag: 'ns',
+    userTelegramId: '42',
+  });
+  const namedData = await bodyOf(named);
+  ok('a custom name and tag are verified and stored',
+    named.status === 200 && namedData.squad?.name === 'Night Shift' && namedData.squad?.tag === 'NS'
+      && namedData.squad?.handle === '@NamedSquad',
+    JSON.stringify(namedData.squad));
 }
 
 console.log(`\n${ran - failed}/${ran} checks passed`);

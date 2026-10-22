@@ -9,6 +9,11 @@ export interface SquadRegistrationResult {
   message: string;
 }
 
+export interface SquadIdentity {
+  name: string;
+  tag: string;
+}
+
 interface RegisterResponse {
   ok?: boolean;
   error?: string;
@@ -20,6 +25,7 @@ interface RegisterResponse {
     members?: number;
     kind?: SquadKind;
     avatar?: string;
+    tag?: string;
   };
 }
 
@@ -29,7 +35,10 @@ const BOT = 'Bot is not added as an administrator to this chat.';
 
 const failure = (error: string, message: string): SquadRegistrationResult => ({ ok: false, error, message });
 
-export async function registerSquadWithTelegram(handle: string): Promise<SquadRegistrationResult> {
+export async function registerSquadWithTelegram(
+  handle: string,
+  identity: SquadIdentity,
+): Promise<SquadRegistrationResult> {
   const url = workerUrl('/api/squads/register');
   if (!url) return failure('offline', 'Verification is unavailable right now. Try again shortly.');
 
@@ -50,6 +59,8 @@ export async function registerSquadWithTelegram(handle: string): Promise<SquadRe
       signal: controller.signal,
       body: JSON.stringify({
         chatUsername: handle,
+        squadName: identity.name,
+        squadTag: identity.tag,
         userTelegramId: tgUser()?.id === undefined ? '' : String(tgUser()?.id),
       }),
     });
@@ -72,6 +83,7 @@ export async function registerSquadWithTelegram(handle: string): Promise<SquadRe
     if (code === 'already_registered') return failure(code, ALREADY);
     if (code === 'bot_not_admin') return failure(code, BOT);
     if (code === 'invalid_handle') return failure(code, data?.message ?? 'Enter a channel handle like @your_channel.');
+    if (code === 'invalid_tag') return failure(code, data?.message ?? 'Tag must be 2–3 letters or numbers.');
     if (code === 'chat_not_found') return failure(code, 'Channel or group not found.');
     return failure(code, data?.message ?? 'Verification failed. Try again shortly.');
   }
@@ -79,10 +91,11 @@ export async function registerSquadWithTelegram(handle: string): Promise<SquadRe
   const claimed = claimRegisteredSquad({
     id: data.squad.id,
     handle: data.squad.handle ?? handle,
-    name: data.squad.name ?? handle,
+    name: data.squad.name ?? identity.name,
     members: typeof data.squad.members === 'number' ? data.squad.members : 0,
     kind: data.squad.kind,
     avatar: data.squad.avatar,
+    tag: data.squad.tag ?? identity.tag,
   });
   if (!claimed.ok) {
     return failure(

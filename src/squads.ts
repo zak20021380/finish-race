@@ -30,6 +30,8 @@ export interface Squad {
   kind?: SquadKind;
   /** Telegram photo file id, when the Bot API returned one */
   avatar?: string;
+  /** 2–3 character call sign stamped on the squad crest */
+  tag?: string;
 }
 
 export interface RankedSquad extends Squad {
@@ -74,7 +76,8 @@ function squadOk(s: unknown): s is Squad {
     && typeof x.trophies === 'number' && Number.isFinite(x.trophies) && x.trophies >= 0
     && (x.trend === 'up' || x.trend === 'down' || x.trend === 'same')
     && (x.kind === undefined || x.kind === 'channel' || x.kind === 'group')
-    && (x.avatar === undefined || (typeof x.avatar === 'string' && x.avatar.length <= 160));
+    && (x.avatar === undefined || (typeof x.avatar === 'string' && x.avatar.length <= 160))
+    && (x.tag === undefined || (typeof x.tag === 'string' && /^[A-Z0-9]{2,3}$/.test(x.tag)));
 }
 
 /** Resolve the community type, defaulting deterministically for legacy saves. */
@@ -120,6 +123,12 @@ export function cleanHandle(raw: string): string {
   return h;
 }
 
+/** Normalise a crest call sign to 2–3 uppercase alphanumerics, or '' when invalid. */
+export function cleanTag(raw: string): string {
+  const tag = (raw ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+  return /^[A-Z0-9]{2,3}$/.test(tag) ? tag : '';
+}
+
 export function cleanChatReference(raw: string): string {
   const direct = cleanHandle(raw);
   if (direct) return direct;
@@ -130,10 +139,16 @@ export function cleanChatReference(raw: string): string {
   return cleanHandle(value);
 }
 
-const displayNameOf = (handle: string): string => {
+export const displayNameOf = (handle: string): string => {
   const base = handle.slice(1).replace(/[_]+/g, ' ').trim() || 'Squad';
   return base.split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ').slice(0, 32);
 };
+
+/** The glyph on a squad crest: its call sign when registered, else the name's initial. */
+export function squadMark(s: Pick<Squad, 'name' | 'handle' | 'tag'>): string {
+  const tag = typeof s.tag === 'string' ? cleanTag(s.tag) : '';
+  return tag || squadLetter(s);
+}
 
 /** Seeds + customs + earned bonus, sorted by trophies, ranked 1..n. Pure. */
 export function getSquadRanking(): RankedSquad[] {
@@ -196,6 +211,7 @@ export interface RegisteredSquadInput {
   members: number;
   kind?: SquadKind;
   avatar?: string;
+  tag?: string;
 }
 
 export type ClaimResult =
@@ -212,6 +228,7 @@ export function claimRegisteredSquad(input: RegisteredSquadInput): ClaimResult {
   if (getSquadRanking().some((s) => s.id === id)) return { ok: false, reason: 'already' };
   const name = (input.name || displayNameOf(handle)).trim().slice(0, 32) || displayNameOf(handle);
   const members = Number.isFinite(input.members) && input.members > 0 ? Math.floor(input.members) : 1;
+  const tag = cleanTag(input.tag ?? '');
   const created: Squad = {
     id,
     handle,
@@ -221,6 +238,7 @@ export function claimRegisteredSquad(input: RegisteredSquadInput): ClaimResult {
     trend: 'same',
     kind: input.kind === 'group' ? 'group' : 'channel',
     avatar: typeof input.avatar === 'string' ? input.avatar.slice(0, 160) : '',
+    ...(tag ? { tag } : {}),
   };
   save.custom = [...save.custom, created].slice(-20);
   save.boundId = id;

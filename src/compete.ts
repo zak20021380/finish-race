@@ -23,9 +23,10 @@
  * Ranks is "The Mind Ladder": one three-way clay switch over Top Minds (solo
  * champions), Intellect Guilds (Telegram channels & groups) and Nations IQ
  * (aggregate country score). Above the ladder sits the Top 3 clay podium, so the
- * list itself starts at #4; the guild board carries its Join / Invite keys there.
- * The squad dock ("My Squad Standing" / join prompt) belongs EXCLUSIVELY to the
- * guild board, and the "Your Standing" module to the two IQ boards.
+ * list itself starts at #4; the guild board carries its Join keys there, and the
+ * pinned own-squad hero replaces the dock once bound. The squad dock ("My Squad
+ * Standing" / join prompt) belongs EXCLUSIVELY to the guild board, and the
+ * "Your Standing" module to the two IQ boards.
  * Identity: TIQ (Tactical IQ) is the hero metric — gold digits with the brain
  * glyph, on the HUD pills, the podium and the ladder. #i-cup is reserved for
  * season prizes. The four mind tiers (Rookie / Tactician / Strategist /
@@ -55,7 +56,7 @@ import { flagPhoto } from './flags';
 import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
 import { arena, countdownPill, fullCountdown, seasonLabel } from './arenaState';
-import { bindSquadById, cleanChatReference, cleanHandle, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadKind, squadLetter, type RankedSquad } from './squads';
+import { bindSquadById, cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadKind, squadLetter, squadMark, type RankedSquad } from './squads';
 import { BOT_HANDLE, impact, notify, tgUser } from './telegram';
 import { registerSquadWithTelegram } from './squadRegister';
 import { showToast } from './toast';
@@ -337,11 +338,29 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     (document.getElementById('team-chip') as HTMLButtonElement | null)?.click();
   };
 
-  /* ---------- claim a Telegram channel/group as an official squad ---------- */
+  /* ---------- claim a Telegram channel/group as an official squad ----------
+     Two steps, not one form: the link is verified before the identity is asked
+     for, and step 2 carries a live row in the exact ladder grammar. The name and
+     crest tag travel with the request; the worker verifies ownership exactly as
+     before and persists both. */
 
   const regEls = {
     sheet: document.getElementById('sheet-squad-register'),
+    body: document.querySelector<HTMLElement>('#sheet-squad-register .sheet-body'),
     input: document.getElementById('squad-reg-input') as HTMLInputElement | null,
+    name: document.getElementById('squad-reg-name') as HTMLInputElement | null,
+    tag: document.getElementById('squad-reg-tag') as HTMLInputElement | null,
+    stepLabel: document.getElementById('squad-reg-step'),
+    step1: document.getElementById('squad-reg-step-1'),
+    step2: document.getElementById('squad-reg-step-2'),
+    back: document.getElementById('squad-reg-back') as HTMLButtonElement | null,
+    track: [...document.querySelectorAll<HTMLElement>('#sheet-squad-register .sqr-track i')],
+    detect: document.getElementById('squad-reg-detect'),
+    detectText: document.getElementById('squad-reg-detect-t'),
+    previewMark: document.getElementById('squad-reg-preview-mark'),
+    previewName: document.getElementById('squad-reg-preview-name'),
+    previewMembers: document.getElementById('squad-reg-preview-members'),
+    previewNote: document.getElementById('squad-reg-preview-note'),
     error: document.getElementById('squad-reg-error'),
     submit: document.getElementById('squad-reg-submit') as HTMLButtonElement | null,
     spinner: document.getElementById('squad-reg-spinner'),
@@ -350,6 +369,35 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   };
   if (regEls.bot) regEls.bot.textContent = `@${BOT_HANDLE}`;
   let registering = false;
+  let regStep: 1 | 2 = 1;
+  let tagTouched = false;
+
+  const registerHandle = (): string => cleanChatReference(regEls.input?.value ?? '');
+
+  function showRegisterError(message: string): void {
+    if (!regEls.error) return;
+    regEls.error.textContent = message;
+    regEls.error.hidden = false;
+    regEls.error.scrollIntoView({ block: 'nearest' });
+  }
+
+  function clearRegisterError(): void {
+    if (regEls.error) regEls.error.hidden = true;
+  }
+
+  function setRegisterStep(step: 1 | 2, focus = false): void {
+    regStep = step;
+    if (regEls.step1) regEls.step1.hidden = step !== 1;
+    if (regEls.step2) regEls.step2.hidden = step !== 2;
+    if (regEls.stepLabel) {
+      regEls.stepLabel.textContent = `${step} / 2`;
+      regEls.stepLabel.setAttribute('aria-label', `Step ${step} of 2`);
+    }
+    for (const [i, seg] of regEls.track.entries()) seg.classList.toggle('is-on', i < step);
+    if (regEls.back) regEls.back.hidden = step !== 2;
+    if (regEls.label && !registering) regEls.label.textContent = step === 1 ? 'Continue' : 'Launch Squad';
+    if (focus) (step === 1 ? regEls.input : regEls.name)?.focus({ preventScroll: true });
+  }
 
   function setRegisterBusy(busy: boolean): void {
     registering = busy;
@@ -357,53 +405,115 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       regEls.submit.disabled = busy;
       regEls.submit.toggleAttribute('aria-busy', busy);
     }
+    if (regEls.back) regEls.back.disabled = busy;
     if (regEls.spinner) regEls.spinner.hidden = !busy;
-    if (regEls.label) regEls.label.textContent = busy ? 'Verifying…' : 'Verify & Register';
+    if (regEls.label) regEls.label.textContent = busy ? 'Launching…' : regStep === 1 ? 'Continue' : 'Launch Squad';
   }
 
-  function showRegisterError(message: string): void {
-    if (!regEls.error) return;
-    regEls.error.textContent = message;
-    regEls.error.hidden = false;
+  function updateRegisterDetection(): void {
+    const handle = registerHandle();
+    if (regEls.detect) regEls.detect.hidden = !handle;
+    if (regEls.detectText) regEls.detectText.textContent = handle;
+  }
+
+  function syncRegisterPreview(): void {
+    const handle = registerHandle();
+    const typed = (regEls.name?.value ?? '').trim();
+    const name = typed || 'Your squad';
+    const tag = cleanTag(regEls.tag?.value ?? '');
+    const mark = tag || (name.charAt(0) || 'S').toUpperCase();
+    if (regEls.previewMark) {
+      regEls.previewMark.textContent = mark;
+      regEls.previewMark.dataset.len = String(mark.length);
+    }
+    if (regEls.previewName) regEls.previewName.textContent = name;
+    if (regEls.previewMembers) regEls.previewMembers.textContent = '— members';
+    if (regEls.previewNote) {
+      regEls.previewNote.textContent = handle
+        ? `${handle} · members and TIQ sync when you launch.`
+        : 'Members and TIQ sync when you launch.';
+    }
+  }
+
+  function suggestTag(name: string, handle: string): string {
+    const initials = name
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .split(/[^A-Za-z0-9]+/)
+      .filter(Boolean)
+      .map((word) => word.charAt(0))
+      .join('')
+      .toUpperCase();
+    if (initials.length >= 2) return cleanTag(initials) || cleanTag(initials.slice(0, 2));
+    const fromHandle = handle.replace(/^@/, '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (initials.length === 1) {
+      return cleanTag(initials + fromHandle.charAt(0)) || cleanTag(fromHandle.slice(0, 2)) || 'SQ';
+    }
+    return cleanTag(fromHandle.slice(0, 2)) || 'SQ';
   }
 
   function openSquadRegister(): void {
     if (!regEls.sheet) return;
     if (regEls.input) regEls.input.value = '';
-    if (regEls.error) regEls.error.hidden = true;
+    if (regEls.name) regEls.name.value = '';
+    if (regEls.tag) regEls.tag.value = '';
+    tagTouched = false;
+    clearRegisterError();
+    updateRegisterDetection();
+    syncRegisterPreview();
     setRegisterBusy(false);
+    setRegisterStep(1);
     api.sheets.open(regEls.sheet);
+    if (regEls.body) regEls.body.scrollTop = 0;
     impact('light');
     regEls.input?.focus({ preventScroll: true });
   }
 
-  function squadRegisterPill(cls = ''): HTMLButtonElement {
-    const el = document.createElement('button');
-    el.type = 'button';
-    el.className = `squad-reg-pill ${cls}`.trim();
-    el.textContent = '+ Register Squad';
-    el.setAttribute('aria-label', 'Register Squad: claim a Telegram channel or group');
-    el.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openSquadRegister();
-    });
-    return el;
-  }
-
-  async function submitSquadRegistration(): Promise<void> {
-    if (registering || !regEls.input) return;
-    const raw = regEls.input.value;
-    if (!cleanChatReference(raw)) {
+  function goToRegisterIdentity(): void {
+    const handle = registerHandle();
+    if (!handle) {
       const message = 'Enter a channel handle or link like @your_channel.';
       showRegisterError(message);
       showToast(message, 'warning');
       notify('warning');
-      regEls.input.focus({ preventScroll: true });
+      regEls.input?.focus({ preventScroll: true });
       return;
     }
-    if (regEls.error) regEls.error.hidden = true;
+    if (regEls.input) regEls.input.value = handle;
+    updateRegisterDetection();
+    clearRegisterError();
+    if (regEls.name && !regEls.name.value.trim()) regEls.name.value = displayNameOf(handle);
+    if (regEls.tag && !tagTouched) regEls.tag.value = suggestTag(regEls.name?.value ?? '', handle);
+    syncRegisterPreview();
+    setRegisterStep(2, true);
+    if (regEls.body) regEls.body.scrollTop = 0;
+  }
+
+  async function submitSquadRegistration(): Promise<void> {
+    if (registering) return;
+    if (regStep === 1) { goToRegisterIdentity(); return; }
+
+    const handle = registerHandle();
+    if (!handle) {
+      setRegisterStep(1, true);
+      showRegisterError('Enter a channel handle or link like @your_channel.');
+      return;
+    }
+    const name = (regEls.name?.value ?? '').trim().slice(0, 32);
+    const tag = cleanTag(regEls.tag?.value ?? '');
+    if (!name) {
+      showRegisterError('Give your squad a name.');
+      regEls.name?.focus({ preventScroll: true });
+      return;
+    }
+    if (!tag) {
+      showRegisterError('Pick a 2–3 letter tag for the crest.');
+      regEls.tag?.focus({ preventScroll: true });
+      return;
+    }
+    if (regEls.tag) regEls.tag.value = tag;
+    clearRegisterError();
     setRegisterBusy(true);
-    const result = await registerSquadWithTelegram(raw);
+    const result = await registerSquadWithTelegram(handle, { name, tag });
     setRegisterBusy(false);
     if (result.ok) {
       notify('success');
@@ -417,18 +527,53 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     notify('error');
     impact('light');
     showToast(result.message, 'error');
+    if (result.error === 'invalid_tag') {
+      showRegisterError(result.message);
+      regEls.tag?.focus({ preventScroll: true });
+      return;
+    }
+    setRegisterStep(1, true);
     showRegisterError(result.message);
   }
 
   document.getElementById('squad-reg-open')?.addEventListener('click', () => openSquadRegister());
   regEls.submit?.addEventListener('click', () => { void submitSquadRegistration(); });
+  regEls.back?.addEventListener('click', () => {
+    clearRegisterError();
+    setRegisterStep(1, true);
+  });
   regEls.input?.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
     void submitSquadRegistration();
   });
+  regEls.name?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    regEls.tag?.focus({ preventScroll: true });
+    regEls.tag?.select();
+  });
+  regEls.tag?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    void submitSquadRegistration();
+  });
   regEls.input?.addEventListener('input', () => {
-    if (regEls.error) regEls.error.hidden = true;
+    clearRegisterError();
+    updateRegisterDetection();
+    syncRegisterPreview();
+  });
+  regEls.name?.addEventListener('input', () => {
+    if (!tagTouched && regEls.tag) regEls.tag.value = suggestTag(regEls.name?.value ?? '', registerHandle());
+    clearRegisterError();
+    syncRegisterPreview();
+  });
+  regEls.tag?.addEventListener('input', () => {
+    const clean = (regEls.tag?.value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+    if (regEls.tag && regEls.tag.value !== clean) regEls.tag.value = clean;
+    tagTouched = true;
+    clearRegisterError();
+    syncRegisterPreview();
   });
 
   const inviteSquad = (s: RankedSquad): void => {
@@ -1257,8 +1402,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     score: string;
     /** Nation entry: the flag photo, with the ISO chip as its own fallback. */
     code?: string;
-    /** Guild / player entry: a single-letter clay medallion. */
+    /** Guild / player entry: a clay medallion carrying the squad mark. */
     letter?: string;
+    /** Guild entry only: the member line under the name. */
+    members?: number;
     /** A minted prestige honor the rider wears; its metal also lights the pedestal rim. */
     medal?: WornEdition;
     onTap?: () => void;
@@ -1305,9 +1452,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const honor = e.medal
       ? `, ${e.medal.def.name}${e.medal.serial !== null ? ` edition ${e.medal.serial}` : ''}`
       : '';
+    const membership = typeof e.members === 'number' ? `, ${membersLine(e.members)}` : '';
     card.setAttribute(
       'aria-label',
-      `Rank ${e.rank}: ${e.name}${honor}, ${e.score} Tactical IQ${e.onTap ? `. Activate to ${e.tapHint ?? 'inspect'}.` : ''}`,
+      `Rank ${e.rank}: ${e.name}${honor}${membership}, ${e.score} Tactical IQ${e.onTap ? `. Activate to ${e.tapHint ?? 'inspect'}.` : ''}`,
     );
 
     if (e.rank === 1) card.append(svgIcon('#i-crown', 'pod-crown'));
@@ -1318,7 +1466,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (e.code) {
       av.append(flagBadge(e.code));
     } else {
-      av.textContent = (e.letter ?? e.name).replace(/^@/, '').slice(0, 1).toUpperCase();
+      const mark = (e.letter ?? e.name).replace(/^@/, '').slice(0, 3).toUpperCase();
+      av.textContent = mark;
+      av.dataset.len = String(mark.length);
     }
     if (e.medal) av.append(medalPin(e.medal, 'pod-medal'));
 
@@ -1326,6 +1476,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     nm.className = 'pod-name';
     nm.textContent = e.name;
     nm.title = e.name;
+
+    let membersEl: HTMLElement | null = null;
+    if (typeof e.members === 'number') {
+      membersEl = document.createElement('span');
+      membersEl.className = 'pod-members';
+      membersEl.textContent = membersLine(e.members);
+      membersEl.title = `${e.members.toLocaleString('en-US')} members`;
+    }
 
     const serial = e.medal ? serialChip(e.medal, 'pod-serial') : null;
 
@@ -1356,6 +1514,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     step.append(stepN);
 
     card.append(av, nm);
+    if (membersEl) card.append(membersEl);
     if (serial) card.append(serial);
     card.append(iq, step);
     if (e.onTap) {
@@ -1629,7 +1788,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   function msHead(letter: string, code: string | null, name: string, tier: string): void {
     const { av, flag, name: nm, tier: tr } = msEls;
-    if (av) av.textContent = letter;
+    if (av) {
+      av.textContent = letter;
+      av.dataset.len = String(letter.length);
+    }
     if (flag) {
       flag.textContent = '';
       if (code) flag.append(flagPhoto(code, 'fp-ms'));
@@ -1807,7 +1969,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const contrib = mine ? getMyContribution() : 0;
     msPending = { kind: 'guild', squad: s };
     delete el.dataset.tier;
-    msHead(squadLetter(s), null, label, `${kind === 'channel' ? 'Telegram channel' : 'Telegram group'} · #${s.rank}`);
+    msHead(squadMark(s), null, label, `${kind === 'channel' ? 'Telegram channel' : 'Telegram group'} · #${s.rank}`);
     el.setAttribute('aria-label', `Squad profile: ${label}, ${s.trophies.toLocaleString('en-US')} combined Tactical IQ`);
     body.textContent = '';
     body.append(
@@ -1816,9 +1978,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         'Squad read',
         msStats([
           ['Members', s.members.toLocaleString('en-US')],
-          ['AVG per mind', avgOf(s).toLocaleString('en-US')],
           ['Rank', `#${s.rank}`],
           ['Yours', contrib > 0 ? contrib.toLocaleString('en-US') : '—'],
+          ['Handle', s.handle],
         ]),
       ),
       msFine('A squad carries no mind tier — its TIQ is the sum of the minds inside it.'),
@@ -2403,30 +2565,16 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     face.className = 'hex-face';
     const b = document.createElement('b');
     b.textContent = letter;
+    b.dataset.len = String(letter.length);
     face.append(b);
     wrap.append(face);
     return wrap;
   }
 
-  /**
-   * A stack of minds, not a roster of faces: the seeded guilds carry a member count
-   * and no identities, so the discs read as density and the number says the rest.
-   */
-  function memberStack(members: number): HTMLElement {
-    const s = document.createElement('span');
-    s.className = 'gstack';
-    s.setAttribute('aria-hidden', 'true');
-    const shown = Math.max(1, Math.min(3, members));
-    for (let i = 0; i < shown; i++) s.append(document.createElement('i'));
-    const rest = document.createElement('b');
-    rest.textContent = members > shown ? `+${compactCount(members - shown)}` : String(members);
-    s.append(rest);
-    return s;
-  }
+  /** "809 members" / "1.2k members" — the one line under a squad name. */
+  const membersLine = (members: number): string =>
+    `${compactCount(members)} ${members === 1 ? 'member' : 'members'}`;
 
-  /** The squad's own TIQ per mind — the density metric a head-count alone hides. */
-  const avgOf = (s: { trophies: number; members: number }): number =>
-    Math.round(s.trophies / Math.max(1, s.members));
 
   const guildHeroEl = (): HTMLElement | null => {
     const existing = document.getElementById('guild-hero');
@@ -2457,7 +2605,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     host.hidden = false;
     host.textContent = '';
 
-    host.append(hexCrest(squadLetter(me), 'gh-crest'));
+    host.append(hexCrest(squadMark(me), 'gh-crest'));
 
     const txt = document.createElement('span');
     txt.className = 'gh-txt';
@@ -2476,7 +2624,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     nm.className = 'gh-name';
     nm.textContent = me.name || me.handle.replace(/^@/, '');
     nm.title = `${me.name} · ${me.handle}`;
-    sub.append(nm, memberStack(me.members));
+    const members = document.createElement('small');
+    members.className = 'gh-members';
+    members.textContent = membersLine(me.members);
+    members.title = `${me.members.toLocaleString('en-US')} members · ${me.handle}`;
+    sub.append(nm, members);
     txt.append(top, sub);
 
     const score = document.createElement('span');
@@ -2487,10 +2639,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const num = document.createElement('b');
     num.textContent = me.trophies.toLocaleString('en-US');
     line.append(num);
-    const density = document.createElement('small');
-    density.textContent = `AVG ${avgOf(me).toLocaleString('en-US')} IQ`;
-    density.title = `${avgOf(me).toLocaleString('en-US')} Tactical IQ per mind across ${me.members.toLocaleString('en-US')} members`;
-    score.append(line, density);
+    score.append(line);
     score.title = `${me.trophies.toLocaleString('en-US')} combined Tactical IQ`;
 
     host.append(txt, score);
@@ -2503,17 +2652,17 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     li.tabIndex = 0;
     li.dataset.id = s.id;
     const label = s.name || s.handle.replace(/^@/, '');
+    const members = membersLine(s.members);
     li.title = `${label} · ${s.handle}`;
-    li.setAttribute('aria-label', `${label}, ${s.handle}, rank ${s.rank}, ${s.trophies.toLocaleString('en-US')} Tactical IQ. Activate to open the squad profile.`);
+    li.setAttribute('aria-label', `${label}, ${s.handle}, rank ${s.rank}, ${s.members.toLocaleString('en-US')} members, ${s.trophies.toLocaleString('en-US')} Tactical IQ.${mine ? ' You are in this squad.' : ''} Activate to open the squad profile.`);
     if (mine) li.setAttribute('aria-current', 'true');
 
-    /* Identity column: hex crest, then the name — which owns the flexible width.
-       The @handle lives in the title and the accessible name: at 320 the identity
-       column is ~86px, and handle + member stack together is what used to squeeze
-       the guild name into "Doge…". */
+    /* Identity column: rank key · crest · name over its member line. The name owns
+       every leftover pixel and ellipsises first; the score and the Join key never
+       move. Nothing else rides on the row. */
     const id = document.createElement('span');
     id.className = 'lb-id';
-    const av = hexCrest(squadLetter(s), 'lb-hex');
+    const av = hexCrest(squadMark(s), 'lb-hex');
     const txt = document.createElement('span');
     txt.className = 'lb-txt';
     const nm = document.createElement('span');
@@ -2521,28 +2670,27 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     nm.textContent = label;
     nm.title = `${label} · ${s.handle}`;
     const sub = document.createElement('span');
-    sub.className = 'lb-sub';
-    const k = squadKind(s);
-    sub.append(svgIcon(k === 'channel' ? '#i-send' : '#i-users', 'lb-kind'));
-    const stack = memberStack(s.members);
-    stack.title = `${k === 'channel' ? 'Telegram channel' : 'Telegram group'} · ${s.handle} · ${s.members.toLocaleString('en-US')} members`;
-    sub.append(stack);
+    sub.className = 'lb-sub nd-count';
+    sub.textContent = members;
+    sub.title = `${s.members.toLocaleString('en-US')} members · ${s.handle}`;
     txt.append(nm, sub);
     id.append(av, txt);
 
-    /* Action column: one capsule pinned to the right edge — coral to invite your own
-       guild, frosted clay to join somebody else's. Only one row per board is coral,
-       so the ladder never becomes the wall of CTAs it used to be. */
+    /* Action column: Joined is a quiet stamp on your own row, never a second key;
+       every other row carries the one cyan glass Join capsule. */
     const act = document.createElement('span');
     act.className = 'lb-act';
-    act.append(squadKey(squadAction(s, mine), 'lb-btn'));
+    if (mine) {
+      const joined = document.createElement('span');
+      joined.className = 'lb-btn is-joined';
+      joined.textContent = 'Joined';
+      joined.setAttribute('aria-hidden', 'true');
+      act.append(joined);
+    } else {
+      act.append(squadKey(squadAction(s, false), 'lb-btn'));
+    }
 
     const cell = scoreCell(s.trophies.toLocaleString('en-US'), `${s.trophies.toLocaleString('en-US')} squad Tactical IQ`);
-    const avg = document.createElement('small');
-    avg.className = 'lb-avg';
-    avg.textContent = `AVG ${avgOf(s).toLocaleString('en-US')}`;
-    avg.title = `${avgOf(s).toLocaleString('en-US')} Tactical IQ per mind across ${s.members.toLocaleString('en-US')} members`;
-    cell.append(avg);
 
     li.append(rankCrest(s.rank), id, cell, act);
 
@@ -2600,7 +2748,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
       const actions = document.createElement('span');
       actions.className = 'dock-actions';
-      actions.append(squadRegisterPill(), btn);
+      actions.append(btn);
       dock.append(ico, txt, actions);
       dock.setAttribute('aria-label', 'My Squad Standing: no squad bound. Find a squad to start earning Tactical IQ.');
       return;
@@ -2608,7 +2756,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     const av = document.createElement('span');
     av.className = 'dock-av';
-    av.textContent = squadLetter(me);
+    const mark = squadMark(me);
+    av.textContent = mark;
+    av.dataset.len = String(mark.length);
     av.setAttribute('aria-hidden', 'true');
 
     const txt = document.createElement('span');
@@ -2633,9 +2783,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     score.append(svgIcon('#i-brain', 'dock-tiq'));
     const num = document.createElement('b');
     num.textContent = me.trophies.toLocaleString('en-US');
-    const sub = document.createElement('small');
-    sub.textContent = `AVG ${avgOf(me).toLocaleString('en-US')} IQ`;
-    score.append(num, sub);
+    score.append(num);
     score.title = `${me.trophies.toLocaleString('en-US')} squad Tactical IQ`;
 
     dock.append(av, txt, score);
@@ -2659,7 +2807,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       rank: s.rank,
       name: s.name || s.handle.replace(/^@/, ''),
       score: s.trophies.toLocaleString('en-US'),
-      letter: squadLetter(s),
+      letter: squadMark(s),
+      members: s.members,
     })));
     el.textContent = '';
     const ol = document.createElement('ol');

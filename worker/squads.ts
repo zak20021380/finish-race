@@ -10,6 +10,8 @@ export interface RegisteredSquad {
   members: number;
   kind: SquadKind;
   avatar: string;
+  /** 2–3 character call sign stamped on the squad crest. */
+  tag: string;
   ownerId: string;
   createdAt: number;
 }
@@ -70,6 +72,11 @@ export function normalizeChatHandle(raw: string): string {
   return `@${value}`;
 }
 
+export function normalizeSquadTag(raw: unknown): string {
+  const tag = text(raw, 8).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+  return /^[A-Z0-9]{2,3}$/.test(tag) ? tag : '';
+}
+
 export function readRegisteredSquad(raw: unknown): RegisteredSquad | null {
   const row = raw as Partial<RegisteredSquad> | null | undefined;
   if (!row) return null;
@@ -87,6 +94,7 @@ export function readRegisteredSquad(raw: unknown): RegisteredSquad | null {
     members: Number.isFinite(members) && members >= 0 ? Math.floor(members) : 0,
     kind: row.kind === 'channel' ? 'channel' : 'group',
     avatar: text(row.avatar, AVATAR_TEXT),
+    tag: normalizeSquadTag(row.tag),
     ownerId: text(row.ownerId, 24),
     createdAt: Number.isFinite(createdAt) && createdAt > 0 ? Math.floor(createdAt) : Date.now(),
   };
@@ -153,10 +161,16 @@ export async function verifyAndBuildSquad(
   rawHandle: string,
   userId: string,
   env: Env,
+  identity?: { name?: string; tag?: string },
 ): Promise<SquadRegistration> {
   const handle = normalizeChatHandle(rawHandle);
   if (!handle) {
     return { ok: false, status: 400, code: 'invalid_handle', message: 'Enter a channel handle or link like @your_channel.' };
+  }
+  const wantedTag = typeof identity?.tag === 'string' ? identity.tag : '';
+  const tag = normalizeSquadTag(wantedTag);
+  if (wantedTag.trim() && !tag) {
+    return { ok: false, status: 400, code: 'invalid_tag', message: 'Tag must be 2–3 letters or numbers.' };
   }
   const requester = text(userId, 24).replace(/[^0-9-]/g, '');
   if (!requester) {
@@ -245,10 +259,11 @@ export async function verifyAndBuildSquad(
       id: `sq-tg-${chatId.replace(/[^0-9]/g, '') || canonical.slice(1).toLowerCase()}`.slice(0, 48),
       chatId,
       handle: canonical,
-      name: title,
+      name: text(identity?.name, MEMBER_TEXT) || title,
       members,
       kind: type === 'channel' ? 'channel' : 'group',
       avatar: text(chat.photo?.small_file_id ?? chat.photo?.big_file_id, AVATAR_TEXT),
+      tag,
       ownerId: requester,
       createdAt: Date.now(),
     },

@@ -2608,7 +2608,6 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
 .lb-sub-t { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 /* nation rows print a real head-count in the brief's muted slate */
 .lb-sub.nd-count { color: #94A3B8; }
-.lb-kind { flex: none; width: 11px; height: 11px; opacity: .55; }
 /* Country identity: a photo flag on a three-tier cascade — circle-flags SVG, then
    flagcdn PNG, then the clay ISO chip. The chip sits underneath from the first
    frame, so a blocked CDN costs a photo and never moves a row. */
@@ -2681,18 +2680,6 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
   font-weight: 800;
   letter-spacing: -.02em;
 }
-/* the density metric: TIQ per mind, under the aggregate the board ranks by */
-.lb-avg {
-  display: block;
-  text-align: right;
-  font-size: 9px;
-  font-weight: 800;
-  line-height: 1.2;
-  letter-spacing: .01em;
-  font-variant-numeric: tabular-nums;
-  color: var(--honey);
-  opacity: .85;
-}
 .lb-tiq {
   flex: none;
   width: 15px;
@@ -2737,9 +2724,35 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
 }
 /* 32px face + an 8px vertical band reaches the house 48px target for free */
 .lb-btn::after { content: ""; position: absolute; inset: -8px 0; }
-/* Join keeps the frosted clay — eight identical bright keys is what used to turn this
-   ladder into a wall of CTAs. Invite is coral because it is the one capsule on the
-   board sitting on a row that is already yours, and there is exactly one such row. */
+/* Join is the one cyan-glass key in the row: a quiet tinted capsule, not an
+   extruded slab. Joined is the same silhouette stamped flat into the clay. */
+.lb-btn.is-join {
+  border: 1px solid rgba(56, 189, 248, .3);
+  background: rgba(56, 189, 248, .1);
+  color: #38BDF8;
+  font-weight: 600;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+  transition: transform var(--motion-fast), background var(--motion-fast), box-shadow var(--motion-fast);
+}
+.lb-btn.is-join:hover:not(:active) {
+  background: rgba(56, 189, 248, .17);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 0 14px -4px rgba(56, 189, 248, .55);
+}
+.lb-btn.is-join:active {
+  transform: translateY(1px) scale(.97);
+  background: rgba(56, 189, 248, .2);
+  --d: 0px;
+}
+.lb-btn.is-joined {
+  border: 1px solid rgba(148, 163, 184, .18);
+  background: rgba(148, 163, 184, .08);
+  color: #94A3B8;
+  font-weight: 600;
+  cursor: default;
+  box-shadow: none;
+  opacity: .82;
+  pointer-events: none;
+}
 .lb-btn.is-invite {
   background: linear-gradient(180deg, var(--cta-hi) 0%, var(--cta) 100%);
   color: var(--on-brand);
@@ -2767,16 +2780,6 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
    clean to the card edge. Declared after the width query above, which would
    otherwise win at equal specificity. */
 .rank-row { grid-template-columns: var(--lb-rank) minmax(0, 1fr) var(--lb-score); }
-/* 320px floor: the guild row is the only one that carries a crest, a member stack
-   and a capsule, and its name was the thing that lost. The score column only ever
-   holds "13,150" and "AVG 16" here, so it hands 14px back to the name, the channel
-   icon (already in the row's accessible name) steps out, and the crest shrugs 6px. */
-@media (max-width: 340px) {
-  .squad-row { --lb-score: 58px; --lb-rank: 28px; }
-  .squad-row .lb-hex { width: 32px; height: 28px; }
-  .squad-row .lb-kind { display: none; }
-  .squad-row .lb-name { font-size: 12px; }
-}
 /* Legacy floating "you" bar (pre-refactor .rank-pinned): never float again.
    If old markup lingers, it renders as a normal in-flow card — no overlap. */
 .rank-pinned {
@@ -5107,6 +5110,10 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
 /* the challengers sit slightly recessed: a touch smaller and a touch dimmer */
 .pod-card[data-rank="2"] .pod-av,
 .pod-card[data-rank="3"] .pod-av { opacity: .94; }
+.pod-av[data-len="2"] { font-size: 13px; }
+.pod-av[data-len="3"] { font-size: 10px; letter-spacing: -.01em; }
+.pod-card[data-rank="1"] .pod-av[data-len="2"] { font-size: 15px; }
+.pod-card[data-rank="1"] .pod-av[data-len="3"] { font-size: 11px; letter-spacing: -.01em; }
 /* nations ride the same photo cascade as the ladder, sized to the crest well */
 .pod-av .fp-badge { --fp-d: 36px; }
 .pod-card[data-rank="1"] .pod-av .fp-badge { --fp-d: 46px; }
@@ -5135,6 +5142,21 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
   text-overflow: ellipsis;
 }
 .pod-card.gold .pod-name { color: #FEF3C7; }
+
+/* the guild podium's second line: the only other fact a squad owns */
+.pod-members {
+  max-width: 100%;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+  color: #94A3B8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.pod-card.gold .pod-members { color: rgba(254, 243, 199, .66); }
 
 /* the Tactical IQ chip: one recessed, glowing well — [brain] 3,420. The glyph
    is the same #i-brain the ladder rows carry, so every TIQ read shares one token. */
@@ -5287,9 +5309,41 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- Telegram Squads ladder: the 4-column .lb-row grid, plus its own cursor ----
-   Rows reuse the shared ladder above; only the tap affordance is squad-specific. */
-.squad-row { cursor: pointer; }
+/* ---- Telegram Squads ladder: rank · crest/name/members · TIQ · Join ----
+   Rows reuse the shared 56px ladder grid. The member count is the only second
+   line; the score and the action keep fixed widths so a long name truncates
+   instead of shoving either off the card. */
+.squad-row {
+  --lb-rank: 34px;
+  --lb-score: 72px;
+  --lb-act: 62px;
+  --lb-gap: 8px;
+  cursor: pointer;
+}
+.squad-row .lb-score {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+}
+.squad-row .lb-sub {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: #94A3B8;
+}
+.squad-row .lb-act { align-items: center; }
+.squad-row.is-preview { cursor: default; }
+@media (max-width: 380px) {
+  .squad-row { --lb-rank: 32px; --lb-score: 68px; --lb-act: 60px; --lb-gap: 7px; padding: 8px; }
+  .squad-row .lb-hex { width: 34px; height: 32px; }
+  .squad-row .lb-name { font-size: 13px; }
+}
+@media (max-width: 340px) {
+  .squad-row { --lb-rank: 28px; --lb-score: 64px; --lb-act: 58px; --lb-gap: 6px; padding: 8px 6px; }
+  .squad-row .lb-hex { width: 32px; height: 28px; }
+  .squad-row .lb-name { font-size: 12px; }
+}
 
 /* ---- squad picker rows inside the sheet: same press language, viewport-safe ---- */
 .squad-pick { max-height: 30vh; }
@@ -5656,25 +5710,9 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   color: var(--brand-ink);
   font-variant-numeric: tabular-nums;
 }
-
-/* A stack of minds, not a roster: the discs read as density, the number is real. */
-.gstack { flex: none; display: inline-flex; align-items: center; }
-.gstack i {
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  background: linear-gradient(180deg, #33405C 0%, #1A2233 100%);
-  box-shadow: 0 0 0 1.5px #10141D, inset 0 1px 0 rgba(255, 255, 255, .18);
-}
-.gstack i + i { margin-left: -5px; }
-.gstack b {
-  margin-left: 5px;
-  font-size: 9.5px;
-  font-weight: 800;
-  line-height: 1.2;
-  color: var(--ink-soft);
-  font-variant-numeric: tabular-nums;
-}
+/* a registered squad stamps its 2–3 character call sign on the crest */
+.hex .hex-face b[data-len="2"] { font-size: 11px; letter-spacing: .01em; }
+.hex .hex-face b[data-len="3"] { font-size: 9px; letter-spacing: -.01em; }
 
 /* The pinned own-squad strip. A flex sibling above the scroller, so it is genuinely
    pinned without covering a row — and it replaces the bottom dock when bound. One
@@ -5726,6 +5764,15 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.gh-members {
+  flex: none;
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #94A3B8;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .gh-score {
   flex: none;
@@ -5996,6 +6043,8 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   font-weight: 800;
   line-height: 1;
 }
+.dock-av[data-len="2"] { font-size: 13px; }
+.dock-av[data-len="3"] { font-size: 10px; letter-spacing: -.01em; }
 .dock-av.is-empty { color: var(--ink-soft); box-shadow: var(--inset); }
 .dock-ico { width: 20px; height: 20px; }
 .dock-txt { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -12462,6 +12511,8 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
   font-weight: 900;
   line-height: 1;
 }
+.ms-av[data-len="2"] { font-size: 16px; }
+.ms-av[data-len="3"] { font-size: 12px; letter-spacing: -.01em; }
 .ms-flag { position: absolute; right: -3px; bottom: -3px; }
 .fp-ms { --fp-d: 24px; }
 .fp-ms .fp-chip { border-radius: 9px; font-size: 8px; box-shadow: inset 0 0 0 1px #0A0F1A, 0 0 0 2px #1C2433; }
@@ -18512,38 +18563,52 @@ html.reduced-motion .announce-cta { transition: none; }
 .announce-cta[hidden] { display: none; }
 
 /* ==========================================================================
-   SQUAD REGISTRATION � claim a Telegram channel/group
+   SQUAD REGISTRATION — Found a Squad banner + two-step claim flow
    ========================================================================== */
 
+/* Banner key: solid cyan on its own lip. A 34px face plus a 7px band clears
+   the house 48px target without inflating the compact banner. */
 .squad-reg-pill {
+  --d: 2px;
+  position: relative;
   appearance: none;
   -webkit-tap-highlight-color: transparent;
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.4);
-  color: #38BDF8;
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.2;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 0;
   border-radius: 999px;
-  padding: 5px 12px;
+  background: linear-gradient(180deg, #7DD3FC 0%, #38BDF8 100%);
+  color: #061826;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  line-height: 1;
   white-space: nowrap;
   cursor: pointer;
-  transition: transform var(--motion-fast), background var(--motion-fast);
+  box-shadow:
+    0 var(--d) 0 #0B6E99,
+    0 10px 20px -10px rgba(56, 189, 248, .8),
+    inset 0 1px 0 rgba(255, 255, 255, .55);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast);
 }
-.squad-reg-pill:hover { background: rgba(56, 189, 248, 0.19); }
-.squad-reg-pill:active { transform: scale(0.97); }
-.squad-reg-pill:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-
-.squad-dock:not(.member) .squad-reg-pill { min-height: 30px; padding: 4px 9px; font-size: 10px; }
-@media (max-width: 380px) {
-  .squad-dock:not(.member) .dock-actions { flex-direction: column; align-items: flex-end; gap: 5px; }
-  .squad-dock:not(.member) .dock-btn { min-width: 88px; height: 34px; }
+.squad-reg-pill::after { content: ""; position: absolute; inset: -7px -4px; }
+.squad-reg-pill:hover:not(:active) {
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, #A5E5FF 0%, #52C7FA 100%);
 }
+.squad-reg-pill:active {
+  transform: translateY(var(--press-y));
+  --d: 0px;
+  box-shadow:
+    0 4px 10px -6px rgba(56, 189, 248, .7),
+    inset 0 1px 0 rgba(255, 255, 255, .45);
+}
+.squad-reg-pill:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
 
 .squad-reg-sheet { gap: 10px; }
 .sqr-head { display: flex; align-items: center; gap: 10px; }
@@ -18554,15 +18619,67 @@ html.reduced-motion .announce-cta { transition: none; }
   display: grid;
   place-items: center;
   border-radius: 13px;
-  background: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.4);
-  color: #38BDF8;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 8px 18px -12px var(--shadow);
+  background:
+    radial-gradient(120% 120% at 30% 10%, rgba(125, 211, 252, .22), rgba(56, 189, 248, 0) 60%),
+    rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.34);
+  color: #7DD3FC;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    0 8px 18px -12px var(--shadow),
+    0 0 16px -8px rgba(56, 189, 248, .55);
 }
 .sqr-crest .ico { width: 20px; height: 20px; }
-.sqr-copy { min-width: 0; }
+.sqr-copy { flex: 1 1 auto; min-width: 0; }
 .sqr-title { margin: 0; font-size: 16px; font-weight: 700; color: #FFFFFF; text-align: left; }
 .sqr-sub { margin: 2px 0 0; font-size: 12px; font-weight: 600; line-height: 1.4; color: var(--ink-soft); }
+.sqr-step {
+  flex: none;
+  min-width: 38px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, .1);
+  border: 1px solid rgba(56, 189, 248, .26);
+  color: #7DD3FC;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sqr-track {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 0 1px;
+}
+.sqr-track i {
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .08);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .4);
+  transition: background var(--motion-fast), box-shadow var(--motion-fast);
+}
+.sqr-track i.is-on {
+  background: linear-gradient(90deg, #7DD3FC 0%, #38BDF8 100%);
+  box-shadow: 0 0 10px -2px rgba(56, 189, 248, .65);
+}
+.sqr-stepbody { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.sqr-stepbody[hidden] { display: none; }
+.sqr-label {
+  display: block;
+  padding-left: 2px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
 .sqr-field {
   min-height: 50px;
   border-radius: 14px;
@@ -18570,8 +18687,42 @@ html.reduced-motion .announce-cta { transition: none; }
   box-shadow:
     inset 0 2px 5px rgba(0, 0, 0, .55),
     inset 0 0 0 1px rgba(125, 211, 252, .16);
+  transition: box-shadow var(--motion-fast);
+}
+.sqr-field:focus-within {
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, .55),
+    inset 0 0 0 1px rgba(56, 189, 248, .55),
+    0 0 0 3px rgba(56, 189, 248, .14);
 }
 .sqr-field .ico { color: var(--brand-ink); }
+.sqr-detect {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin: 0;
+  max-width: 100%;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(52, 211, 153, .09);
+  border: 1px solid rgba(52, 211, 153, .22);
+  color: #6EE7B7;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.sqr-detect[hidden] { display: none; }
+.sqr-detect .ico { flex: none; width: 12px; height: 12px; }
+.sqr-detect span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sqr-detect small {
+  flex: none;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: rgba(110, 231, 183, .62);
+}
 .sqr-reqs {
   margin-top: 2px;
   padding: 10px 12px;
@@ -18615,6 +18766,111 @@ html.reduced-motion .announce-cta { transition: none; }
   font-size: 10px;
   font-weight: 900;
 }
+.sqr-back {
+  position: relative;
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 2px;
+  color: var(--brand-ink);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  line-height: 1;
+  cursor: pointer;
+}
+.sqr-back::after { content: ""; position: absolute; inset: -8px -6px; }
+.sqr-back .ico { width: 12px; height: 12px; }
+.sqr-back[hidden] { display: none; }
+.sqr-back:disabled { opacity: .5; cursor: default; }
+.sqr-back:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; border-radius: 6px; }
+.sqr-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 74px;
+  gap: 8px;
+}
+.sqr-fieldcol { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.sqr-fieldcol .field { min-height: 46px; }
+.sqr-fieldcol .input { text-overflow: ellipsis; }
+.sqr-fieldcol-tag .field { justify-content: center; }
+.sqr-tag {
+  flex: 0 1 auto;
+  width: 100%;
+  padding-left: 4px;
+  padding-right: 4px;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font-weight: 900;
+}
+.sqr-taghint {
+  margin: -2px 0 0;
+  padding-right: 2px;
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: right;
+  color: var(--ink-soft);
+}
+.sqr-preview {
+  margin-top: 2px;
+  padding: 9px 9px 10px;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(245, 158, 11, .05) 0%, rgba(255, 255, 255, 0) 58%),
+    rgba(9, 13, 21, .55);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .07),
+    inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+.sqr-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+  padding: 0 2px;
+}
+.sqr-preview-head b {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.sqr-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #7DD3FC;
+}
+.sqr-live i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #38BDF8;
+  box-shadow: 0 0 6px #38BDF8;
+}
+.sqr-preview-list { gap: 0; }
+.sqr-preview .lb-row { pointer-events: none; }
+.sqr-preview-rank b { font-size: 9px; letter-spacing: .06em; }
+.sqr-preview-note {
+  margin: 7px 2px 0;
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #94A3B8;
+}
 .sqr-error {
   margin: 2px 0 0;
   padding: 9px 11px;
@@ -18627,6 +18883,7 @@ html.reduced-motion .announce-cta { transition: none; }
   line-height: 1.4;
 }
 .sqr-error[hidden] { display: none; }
+.sqr-foot { flex: none; display: flex; flex-direction: column; gap: 8px; }
 .squad-reg-cta {
   --btn-lip: #b45309;
   background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
@@ -18648,6 +18905,13 @@ html.reduced-motion .announce-cta { transition: none; }
 }
 .squad-reg-spinner[hidden] { display: none; }
 @keyframes sqr-spin { to { transform: rotate(360deg); } }
+@media (max-width: 380px) {
+  .sqr-fields { grid-template-columns: minmax(0, 1fr) 66px; }
+  .sqr-crest { width: 38px; height: 38px; border-radius: 12px; }
+  .sqr-title { font-size: 15px; }
+  .sqr-sub { font-size: 11px; }
+  .squad-dock:not(.member) .dock-btn { min-width: 88px; height: 34px; }
+}
 
 /* ---- toasts: high-fidelity feedback over the clay ---- */
 .toast-host {
@@ -18696,24 +18960,77 @@ html.reduced-motion .announce-cta { transition: none; }
 .toast-error .toast-mark { background: rgba(244, 63, 94, .18); color: #FDA4AF; }
 .toast-warning .toast-mark { background: rgba(245, 158, 11, .18); color: var(--gold-ink); }
 .toast-copy { min-width: 0; }
+/* Found a Squad: one clay invitation between the tabs and the ladder. The icon,
+   the two-line promise and the single cyan key share one card; no loose caption. */
 .squad-reg-bar {
   flex: none;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
-  margin: 4px 0 0;
-  padding: 4px 2px 0;
+  margin: 2px 0 0;
+  padding: 8px 9px 8px 10px;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(56, 189, 248, .08) 0%, rgba(255, 255, 255, 0) 54%),
+    var(--clay-face);
+  background-color: #1E2739;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 -1px 0 rgba(0, 0, 0, .34),
+    inset 0 0 0 1px rgba(125, 211, 252, .2),
+    0 1px 0 #0A0F1A,
+    0 12px 22px -16px var(--shadow);
 }
 .squad-reg-bar[hidden] { display: none; }
-.squad-reg-hint {
+.squad-reg-badge {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background:
+    radial-gradient(120% 120% at 30% 10%, rgba(125, 211, 252, .2), rgba(56, 189, 248, 0) 62%),
+    rgba(56, 189, 248, .1);
+  border: 1px solid rgba(56, 189, 248, .28);
+  color: #7DD3FC;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    0 0 14px -8px rgba(56, 189, 248, .6);
+}
+.squad-reg-badge .ico { width: 17px; height: 17px; }
+.squad-reg-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--ink-soft);
+}
+.squad-reg-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  line-height: 1.15;
+  color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.squad-reg-hint {
+  min-width: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #94A3B8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 340px) {
+  .squad-reg-bar { gap: 8px; padding: 7px 8px; }
+  .squad-reg-badge { width: 32px; height: 32px; border-radius: 10px; }
+  .squad-reg-hint { font-size: 10px; }
+  .squad-reg-pill { padding: 0 11px; font-size: 11px; }
 }
 
 /* ==========================================================================

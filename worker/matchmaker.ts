@@ -1106,7 +1106,10 @@ export class MatchmakerDO {
       }, 401);
     }
 
-    const result = await verifyAndBuildSquad(rawHandle, requester, this.env);
+    const result = await verifyAndBuildSquad(rawHandle, requester, this.env, {
+      name: typeof body.squadName === 'string' ? body.squadName : '',
+      tag: typeof body.squadTag === 'string' ? body.squadTag : '',
+    });
     if (!result.ok) {
       return json({ ok: false, error: result.code, message: result.message }, result.status);
     }
