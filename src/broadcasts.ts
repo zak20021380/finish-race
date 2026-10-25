@@ -161,7 +161,7 @@ function dismiss(id: string): void {
  * announcements route — so it never asks, and never shows up as a 404 in the console.
  */
 function canFetch(): boolean {
-  if ((import.meta.env.VITE_WS_URL ?? '').trim()) return true;
+  if ((import.meta.env?.VITE_WS_URL ?? '').trim()) return true;
   return !!tgInitData();
 }
 

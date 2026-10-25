@@ -300,7 +300,7 @@ const asTier = (value: string, tiq: number): MindTier =>
   (TIERS as readonly string[]).includes(value) ? (value as MindTier) : tierOf(tiq);
 
 /** `VITE_WS_URL`, or same-origin `/ws/matchmake`. '' means there is no origin to hang one off. */
-const WS_URL = import.meta.env.VITE_WS_URL?.trim() ?? '';
+const WS_URL = import.meta.env?.VITE_WS_URL?.trim() ?? '';
 
 function socketUrl(): string {
   if (WS_URL) {

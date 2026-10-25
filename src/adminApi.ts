@@ -13,7 +13,7 @@ import { tgInitData } from './telegram';
  * is kept — every backend route is root-relative.
  */
 export function workerBase(): string {
-  const ws = import.meta.env.VITE_WS_URL?.trim();
+  const ws = import.meta.env?.VITE_WS_URL?.trim();
   if (ws) {
     try {
       const http = ws.replace(/^wss:/i, 'https:').replace(/^ws:/i, 'http:');

@@ -63,7 +63,10 @@ import {
 /** The built-in allowlist. Add Telegram user ids here, or to `VITE_ADMIN_IDS`. */
 export const ADMIN_IDS: readonly string[] = ['1', '1000001'];
 
-const envIds = (import.meta.env.VITE_ADMIN_IDS ?? '')
+const rawAdminIds =
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ADMIN_IDS) || '';
+
+const envIds = rawAdminIds
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);

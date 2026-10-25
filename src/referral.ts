@@ -63,7 +63,7 @@ export function claimWelcomeBonus(): number {
 
 /** The Worker base for the referral ledger, or '' when the app runs without one. */
 function workerBase(): string {
-  const ws = import.meta.env.VITE_WS_URL?.trim();
+  const ws = import.meta.env?.VITE_WS_URL?.trim();
   if (!ws) return '';
   const base = ws.startsWith('http') ? ws : `https://${ws}`;
   return base.replace(/^ws/, 'http').replace(/\/+$/, '');
