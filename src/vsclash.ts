@@ -24,7 +24,7 @@ import { myTier, myTiq, readFace, TIER_NAME, type MindTier } from './matchmaking
 import { profile } from './storage';
 import { impact, languageCode } from './telegram';
 import { lang, motionReduced } from './settings';
-import { playExplosion } from './sound';
+import { playSwoosh } from './audio';
 import {
   botPersona, clashCopy, rivalPersona, resolveNation, squadTag,
   type ClashCopy, type ClashTier,
@@ -349,7 +349,7 @@ export function showVsClash(rivals: readonly VsRival[], stakes: VsStakes, onReve
   function clash(): void {
     host.classList.add('is-clash');
     impact('heavy');
-    playExplosion();
+    playSwoosh();
   }
 
   host.addEventListener('pointerdown', () => {

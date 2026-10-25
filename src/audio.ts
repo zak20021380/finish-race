@@ -1,6 +1,6 @@
 /**
- * audio.ts — the race's sound engine. One `AudioContext`, five decoded assets (`log.mp3`,
- * `move.wav`, `explosion.mp3`, `laugh.mp3`, `angry.wav`) and one master gain: every voice is a `BufferSource` on the graph,
+ * audio.ts — the race's sound engine. One `AudioContext`, six decoded assets (`log.mp3`,
+ * `move.wav`, `explosion.mp3`, `laugh.mp3`, `angry.wav`, `swoosh.mp3`) and one master gain: every voice is a `BufferSource` on the graph,
  * scheduled against the context clock so a step, a wall or a blast lands on the frame that caused it
  * rather than the frame after.
  *
@@ -15,8 +15,9 @@ import moveWav from './assets/sounds/move.wav';
 import explosionMp3 from './assets/sounds/explosion.mp3';
 import laughMp3 from './assets/sounds/laugh.mp3';
 import angryWav from './assets/sounds/angry.wav';
+import swooshMp3 from './assets/sounds/swoosh.mp3';
 
-export type SoundName = 'log' | 'move' | 'explosion' | 'laugh' | 'angry';
+export type SoundName = 'log' | 'move' | 'explosion' | 'laugh' | 'angry' | 'swoosh';
 
 /**
  * How far ahead of `currentTime` an immediate play is scheduled: enough for the node graph to be
@@ -45,6 +46,12 @@ const ANGRY_GAIN = 0.85;
 
 /** Hammering the "Grrr!" pod must not stack into a stutter: one growl per this many milliseconds. */
 const ANGRY_GAP_MS = 150;
+
+/**
+ * The clash swoosh: the VS cards landing on the crest, a touch under full scale so it owns the
+ * moment without out-shouting the blast it replaces.
+ */
+const SWOOSH_GAIN = 0.9;
 
 /** The amplitude above which a sample of `log.mp3` counts as sound, when its lead-in is measured. */
 const TRIM_EPS = 1e-3;
@@ -119,6 +126,7 @@ decode('move', moveWav);
 decode('explosion', explosionMp3);
 decode('laugh', laughMp3);
 decode('angry', angryWav);
+decode('swoosh', swooshMp3);
 
 /** The first gesture anywhere — the Play tap counts — lifts the suspension for the rest of the page. */
 let unlocked = false;
@@ -225,6 +233,14 @@ function play(name: SoundName, opts: PlayOptions = {}): void {
  */
 export function playLaugh(): void {
   play('laugh', { gain: LAUGH_GAIN });
+}
+
+/**
+ * The VS clash swoosh, fire-and-forget: fired the frame the two cards meet at the crest. Gated by
+ * the Sound switch and the master volume like every other voice.
+ */
+export function playSwoosh(): void {
+  play('swoosh', { gain: SWOOSH_GAIN });
 }
 
 /**
