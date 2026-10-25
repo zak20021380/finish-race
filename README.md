@@ -158,13 +158,16 @@ Telegram only loads **HTTPS** URLs.
 | `src/room.ts` | The multi-seat lobby (2–4 seats), the bot backfill, the takeover, and the `RoomDriver` that plays every machine seat |
 | `src/style.css` | Tokens, mesh background, clay panels, board frame, menu shell, shop and profile |
 | `wrangler.toml` | The Worker: `MATCHMAKER` → `MatchmakerDO`, `BADGES` → `BadgeMintDO`, SQLite Durable Object migrations |
-| `worker/index.ts` | `/health`, `/ws/matchmake` and the `/api/badges/*` surface |
+| `worker/index.ts` | `/health`, `/ws/matchmake`, the `/api/badges/*` and the `/telegram/*` surface |
 | `worker/auth.ts` | Telegram `initData` verified with `crypto.subtle` HMAC-SHA256, plus the dev guest door and the badge player door |
+| `worker/bot.ts` | The bot's own chat: `/start` `/lang` `/play` `/rules`, the inline keyboards, and the route that registers the webhook, the command list and the menu button |
+| `worker/bot-copy.ts` | Every word the bot says in English, Persian and Arabic, its keyboards, and the `**bold**` → HTML renderer |
 | `worker/matchmaker.ts` | The waiting room: the queue, the 250/600 pairing radii, `MATCH_FOUND`, and the 2–4 seat rooms |
 | `worker/badges.ts` | The edition ledger: hard caps, sequential serials, idempotent claims and per-player progress |
 | `scripts/verify-worker-matchmaking.mjs` | Drives the whole queueing protocol in plain Node, no wrangler needed |
 | `scripts/verify-worker-race.mjs` | Drives two clients through a whole relayed race, resignations and disconnects |
 | `scripts/verify-worker-badges.mjs` | Auth, criteria, idempotency, cap exhaustion and 80 concurrent mints in plain Node |
+| `scripts/verify-worker-telegram.mjs` | Drives the whole bot conversation in plain Node: language first, every menu, the referral hop and the webhook setup |
 | `scripts/room-check.mjs` | The corridor leap, the anti-oscillation guard, and whole 4-seat mixed rooms, on the real rules |
 
 ## Matchmaking backend
@@ -185,6 +188,7 @@ npm run check:worker                   # the worker's own strict typecheck (in `
 node scripts/verify-worker-matchmaking.mjs
 node scripts/verify-worker-race.mjs
 node scripts/verify-worker-badges.mjs
+node scripts/verify-worker-telegram.mjs
 ```
 
 ### Badge editions
@@ -212,7 +216,56 @@ slow, those cached numbers stay on screen behind a quiet `Syncing…` line. Depl
 applies the `v2` migration that creates `BadgeMintDO`; the ledger starts empty, at serial 1 for
 each honor.
 
+### The bot's chat surface
+
+Before the Mini App opens, the bot itself (`worker/bot.ts`) is the front door, and it speaks three
+languages: English, Persian and Arabic.
+
+| Route | Auth | Role |
+| --- | --- | --- |
+| `POST /telegram/webhook` | `secret_token` when configured | Receives Telegram updates and answers the player |
+| `GET\|POST /telegram/setup-webhook` | `ADMIN_IDS` allowlist (or the dev door) | Registers the webhook, the command list and the chat menu button |
+
+Language always comes first: `/start` and `/lang` answer with one trilingual greeting and a three-row
+picker (`lang:en`, `lang:fa`, `lang:ar`). Tapping a language **edits** that message into the main menu
+of the language chosen — one `web_app` PLAY button, `📖 How to Play` and `🤝 Invite Friends` side by
+side, and `🌐 Change Language` below — so no screen is ever stacked on the last. Every callback carries
+its own language (`menu:rules:fa`), which is why a menu redraws correctly on a worker that has never
+seen the player. The rules card answers with the four things a turn can be, and offers PLAY and a way
+back; the invite card prints a personal `https://t.me/<bot>?start=ref_u<id>` link with a share-sheet
+button and a `switch_inline_query` button, whose inline answer is the same card dropped into any chat.
+
+`/play` and `/rules` skip straight to their card, in the language that player last chose — or, if this
+worker has never met them, in the language their Telegram client reports. An ordinary word in a private
+chat opens the menu; in a group, only commands answer.
+
+A `/start` payload is remembered rather than dropped: arrive on `?start=ref_u9001`, choose Arabic, and
+the PLAY button still opens `https://finish-race.deadeye-game.workers.dev/?startapp=ref_u9001`, which
+is what `src/referral.ts` reads on the other side to pay the inviter.
+
+Two details make it behave: replies are sent as **HTML** (copy is authored with `**bold**` and escaped
+before it is substituted, so the invite link in the text cannot break the parse), and the webhook
+answers `200` to anything it can parse — a blocked player or an old callback is never a reason for
+Telegram to retry and back off.
+
+**To wire a deployed bot up**, call setup from that host with admin credentials:
+
+```bash
+npx wrangler secret put TELEGRAM_BOT_TOKEN
+npx wrangler secret put TELEGRAM_WEBHOOK_SECRET   # optional, but it is what stops strangers posting updates
+# then, from inside the Mini App (or on loopback with DEV_AUTH=true):
+curl -s -H "X-Telegram-Init-Data: <signed initData>" \
+  https://finish-race.deadeye-game.workers.dev/telegram/setup-webhook
+```
+
+It registers `POST /telegram/webhook` on the origin it was called from — so the same call on
+`127.0.0.1:8787` wires up `wrangler dev` — localises the `/` command list for `fa` and `ar`, points the
+chat menu button at the Mini App, and reads the bot's own handle from `getMe` so every invite link
+survives a rename. `WEBAPP_URL` overrides where those buttons land; unset, the bot launches its own
+origin.
+
 ### The race, on the same socket
+
 
 The socket that queued is the socket that plays. Both seats are handed the same `seed` and the same
 board size, so `newGame(sizes, { hazards: true, seed })` builds the identical board on both screens

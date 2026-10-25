@@ -29,10 +29,17 @@
  * while `POST /api/badges/progress` and `POST /api/badges/mint` pass the player door above and
  * are forwarded to the singleton `BadgeMintDO`. The edge owns the identity header; the ledger
  * owns the caps, counters and claims.
+ *
+ * The sixth surface is the bot's own chat, before the Mini App ever opens: Telegram posts updates to
+ * `POST /telegram/webhook`, while `GET|POST /telegram/setup-webhook` registers that webhook, the
+ * localised `/` command list and the chat menu button — behind the `ADMIN_IDS` door, because it
+ * points a bot at a host. Both are answered at the edge (`worker/bot.ts`): no room state is
+ * involved, so there is no reason to wake the Durable Object.
  */
 import { MatchmakerDO } from './matchmaker';
 import { BadgeMintDO } from './badges';
 import { identifyAdminRequest, identifyPlayerRequest } from './auth';
+import { telegramSetup, telegramWebhook } from './bot';
 import { json } from './http';
 import type { Env } from './env';
 
@@ -136,6 +143,14 @@ export default {
       return lobby.fetch(request);
     }
 
+    /* The bot's chat surface. Telegram is the only caller of the webhook; the setup route is the
+       operator's, and answers 403 until it carries admin credentials. */
+    if (url.pathname === '/telegram/webhook') {
+      if (request.method !== 'POST') return json({ error: 'method_not_allowed', hint: 'Telegram posts updates' }, 405);
+      return telegramWebhook(request, env);
+    }
+    if (url.pathname === '/telegram/setup-webhook') return telegramSetup(request, env);
+
     /* The Command Center's routes: authenticated here, then handed to the room that authorizes. */
     if (url.pathname.startsWith('/admin/') || url.pathname.startsWith('/api/admin/')) {
       const admin = await identifyAdminRequest(request, env);
@@ -147,7 +162,7 @@ export default {
     /* Everything that is not a backend surface is the Mini App itself: `/`, the hashed bundles
        and any other page the client asks for. A missing backend route stays a JSON 404 rather
        than quietly answering with the game's HTML. */
-    if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/ws/')) {
+    if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/ws/') || url.pathname.startsWith('/telegram/')) {
       return json({ error: 'not_found' }, 404);
     }
     if (env.ASSETS) return env.ASSETS.fetch(request);

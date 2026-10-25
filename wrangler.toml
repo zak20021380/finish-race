@@ -51,3 +51,15 @@ DEV_AUTH = "false"
 # An empty value closes the Telegram door entirely; `/admin/status` still answers a dev-marked
 # loopback request while `DEV_AUTH = "true"` or the caller is on localhost.
 ADMIN_IDS = "1350508522"
+
+# The bot's chat surface (`worker/bot.ts`): `POST /telegram/webhook` for Telegram's updates and
+# `GET|POST /telegram/setup-webhook` to register them. Leave WEBAPP_URL unset to have the bot launch
+# the Mini App from its own origin — which is this Worker, `https://finish-race.deadeye-game.workers.dev`
+# once deployed and the app under edit locally. Set it only to point the bot's buttons elsewhere.
+#
+#   WEBAPP_URL = "https://finish-race.deadeye-game.workers.dev"
+#
+# TELEGRAM_WEBHOOK_SECRET is a secret, not a var: `npx wrangler secret put TELEGRAM_WEBHOOK_SECRET`.
+# Once it is set, `/telegram/setup-webhook` registers it as the webhook's `secret_token` and the
+# webhook refuses any update that does not carry it back — so nobody else can post messages through
+# this bot. Unset, the webhook is open to whatever arrives at the URL.
