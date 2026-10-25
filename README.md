@@ -1,4 +1,4 @@
-# Detour — Telegram Mini App
+# Tactix — Telegram Mini App
 
 Vite + TypeScript + Canvas 2D, plus a small Cloudflare Workers backend in `worker/`. A 1v1 quick
 match can be played for real against another player — the matchmaker pairs the two seats and the
@@ -59,7 +59,7 @@ server yet, so the registry lives in the save and ships with a handful of demo c
 see the flow — the sheet says "local mock" rather than pretending otherwise.
 
 The shape is what makes the future cheap: every team carries `startParam` and a reserved `chatId`,
-so `t.me/<bot>/detour?startapp=team-<code>` is already a link the app understands — opening Detour
+so `t.me/<bot>/detour?startapp=team-<code>` is already a link the app understands — opening Tactix
 from one pre-fills the join field. Binding a team to a real Telegram group is a server change, not a
 schema change.
 
@@ -131,7 +131,7 @@ Telegram only loads **HTTPS** URLs.
    - Quick test: `npx cloudflared tunnel --url http://localhost:5173` (or `ngrok http 5173`), or
    - Deploy `dist/` to any static host (Netlify, Vercel, Cloudflare Pages, GitHub Pages).
 2. In Telegram, open [@BotFather](https://t.me/BotFather) → `/newapp`.
-3. Pick your bot, then send: title (`Detour`), description, a 640×360 photo, (optional GIF, `/empty` to skip), and your **HTTPS URL**, then a short name.
+3. Pick your bot, then send: title (`Tactix`), description, a 640×360 photo, (optional GIF, `/empty` to skip), and your **HTTPS URL**, then a short name.
 4. BotFather replies with a link like `https://t.me/<bot>/<short_name>`. Open it to play.
    - Alternative: `/mybots` → your bot → Bot Settings → Menu Button → set the URL.
 

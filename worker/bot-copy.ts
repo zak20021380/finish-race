@@ -89,9 +89,9 @@ export const COPY: Record<BotLang, Copy> = {
     welcome: '🏁 **WELCOME TO THE ARENA!**\n\n'
       + 'Outsmart your rival in real-time 1v1 tactical races! Block paths with walls, plant sneaky '
       + 'mines on the finish line, dodge rolling logs, and claim victory.\n\n'
-      + '⚡ **Are you fast enough to find the Detour?**\n'
+      + '⚡ **Are you fast enough to master Tactix?**\n'
       + 'Tap below to jump straight into the action!',
-    rules: '📖 **HOW TO PLAY DETOUR**\n\n'
+    rules: '📖 **HOW TO PLAY Tactix**\n\n'
       + '🎯 **Goal:** Be the first to reach the **FINISH** row at the top!\n\n'
       + '🕹️ **On Your Turn:**\n'
       + '• **Move:** Step 1 tile in any direction (or sidestep around your opponent).\n'
@@ -106,7 +106,7 @@ export const COPY: Record<BotLang, Copy> = {
       + 'and let the arena do the rest.\n\n'
       + '🔗 {link}\n\n'
       + '🎁 You both get 500 coins when a friend joins through it.',
-    pitch: 'Race me on Detour — we both get 500 coins when you join!',
+    pitch: 'Race me on Tactix — we both get 500 coins when you join!',
     launch: '⚡ **THE ARENA IS OPEN**\n\n'
       + 'One tap and you are in the race. Walls, mines, rolling logs — beat your rival to the '
       + 'FINISH line!',
@@ -129,12 +129,12 @@ export const COPY: Record<BotLang, Copy> = {
   fa: {
     native: 'فارسی',
     flag: '🇮🇷',
-    welcome: '🏁 **به میدان نبرد DETOUR خوش اومدی!**\n\n'
+    welcome: '🏁 **به میدان نبرد Tactix خوش اومدی!**\n\n'
       + 'توی یه رقابت سرعتی و تاکتیکی ۱ به ۱، حریفت رو غافلگیر کن! جلوی مسیرش دیوار بکش، روی خط '
       + 'پایان مین کار بذار، از تنه‌های درخت جاخالی بده و اول از همه به خط پایان برس!\n\n'
       + '⚡ **آماده‌ای نشون بدی کی باهوش‌تره؟**\n'
       + 'روی دکمه زیر بزن و مستقیم وارد بازی شو!',
-    rules: '📖 **قوانین و راهنمای بازی**\n\n'
+    rules: '📖 **قوانین و راهنمای Tactix**\n\n'
       + '🎯 **هدف:** اولین نفری باش که گوی خودش رو به خط **FINISH** در بالای صفحه می‌رسونه!\n\n'
       + '🕹️ **در هر نوبت می‌تونی یکی از این کارها رو انجام بدی:**\n'
       + '• **حرکت مهره:** یک خانه به جلو، عقب یا طرفین حرکت کن (پرش از روی حریف وجود نداره و باید '
@@ -149,7 +149,7 @@ export const COPY: Record<BotLang, Copy> = {
       + 'با میدان نبرد!\n\n'
       + '🔗 {link}\n\n'
       + '🎁 با هر دعوت، تو و دوستت ۵۰۰ سکه می‌گیرید!',
-    pitch: 'توی DETOUR با من مسابقه بده — وقتی بیای، هر دوتون ۵۰۰ سکه می‌گیرید!',
+    pitch: 'توی Tactix با من مسابقه بده — وقتی بیای، هر دوتون ۵۰۰ سکه می‌گیرید!',
     launch: '⚡ **میدان نبرد آماده‌ست!**\n\n'
       + 'یه ضربه و توی بازی هستی. دیوار، مین، تنه‌های درخت — زودتر از حریفت به خط پایان برس!',
     play: '▶️ شروع بازی (PLAY)',
@@ -171,12 +171,12 @@ export const COPY: Record<BotLang, Copy> = {
   ar: {
     native: 'العربية',
     flag: '🇸🇦',
-    welcome: '🏁 **مرحباً بك في ساحة DETOUR!**\n\n'
+    welcome: '🏁 **مرحباً بك في ساحة Tactix!**\n\n'
       + 'تفوّق على خصمك في سباقات تكتيكية حماسية ١ ضد ١ في الوقت الفعلي! أغلق الطرق بالجدران، '
       + 'ازرع الألغام الذكية عند خط النهاية، وتفادَ الجذوع المتدحرجة لتنتزع الفوز.\n\n'
       + '⚡ **هل تملك السرعة والذكاء للوصول أولاً؟**\n'
       + 'اضغط بالأسفل وابدأ التحدي الآن!',
-    rules: '📖 **طريقة اللعب والقوانين**\n\n'
+    rules: '📖 **طريقة اللعب والقوانين في Tactix**\n\n'
       + '🎯 **الهدف:** كن أول من يصل إلى خط النهاية (**FINISH**) في أعلى اللوحة!\n\n'
       + '🕹️ **في دورك يمكنك:**\n'
       + '• **التحرك:** تحرك مربعاً واحداً في أي اتجاه (لا يمكنك القفز فوق خصمك، بل الالتفاف حوله).\n'
@@ -188,7 +188,7 @@ export const COPY: Record<BotLang, Copy> = {
       + 'الفوز على شخص مجهول ممتع، لكن الفوز على من يعرفك أحلى. أرسل رابطك واترك الباقي للساحة.\n\n'
       + '🔗 {link}\n\n'
       + '🎁 تحصلان معاً على ٥٠٠ عملة عندما ينضم صديقك عبر هذا الرابط!',
-    pitch: 'تحدّني في سباق DETOUR — عند انضمامك نحصل على ٥٠٠ عملة!',
+    pitch: 'تحدّني في سباق Tactix — عند انضمامك نحصل على ٥٠٠ عملة!',
     launch: '⚡ **الساحة جاهزة!**\n\n'
       + 'ضغطة واحدة وتكون في قلب السباق. جدران، ألغام، وجذوع متدحرجة — كن أول من يبلغ خط النهاية!',
     play: '▶️ العب الآن (PLAY)',
@@ -212,7 +212,7 @@ export const COPY: Record<BotLang, Copy> = {
  * The multilingual greeting that opens every conversation. Deliberately trilingual and never
  * localised: it is the screen a player sees *before* they have a language.
  */
-export const GREETING = '🌐 **Welcome to DETOUR!**\n'
+export const GREETING = '🌐 **Welcome to Tactix!**\n'
   + 'Please select your language to continue:\n\n'
   + '🇮🇷 لطفاً زبان خود را انتخاب کنید:\n'
   + '🇸🇦 يرجى اختيار لغتك للمتابعة:';

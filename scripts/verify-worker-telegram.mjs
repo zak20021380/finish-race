@@ -282,7 +282,7 @@ console.log('\n-- the language picker --');
 
   const greeting = last('sendMessage');
   ok('/start sends exactly one message', calls.length === 1, JSON.stringify(calls.map((c) => c.method)));
-  ok('with the trilingual welcome', greeting.text.includes('Welcome to DETOUR'));
+  ok('with the trilingual welcome', greeting.text.includes('Welcome to Tactix'));
   ok('and asks in Persian and Arabic too',
     greeting.text.includes('لطفاً زبان خود را انتخاب کنید')
       && greeting.text.includes('يرجى اختيار لغتك للمتابعة'));
@@ -299,7 +299,7 @@ console.log('\n-- the language picker --');
 
   resetApi();
   await rt.webhook(message('/lang', { from: EN_USER }));
-  ok('/lang opens the same picker', last('sendMessage')?.text.includes('Welcome to DETOUR'));
+  ok('/lang opens the same picker', last('sendMessage')?.text.includes('Welcome to Tactix'));
 
   resetApi();
   await rt.webhook(message('/start', { from: EN_USER, chat: -4400, type: 'group' }));
@@ -323,8 +323,8 @@ console.log('\n-- choosing a language --');
 
   const menu = last('editMessageText');
   ok('on the message the player tapped', String(menu.message_id) === '77' && String(menu.chat_id) === '-1001');
-  ok('with the Persian headline', menu.text.includes('به میدان نبرد DETOUR خوش اومدی'), menu.text?.slice(0, 40));
-  ok('and the pitch to find the Detour', menu.text.includes('آماده‌ای نشون بدی کی باهوش‌تره'));
+  ok('with the Persian headline', menu.text.includes('به میدان نبرد Tactix خوش اومدی'), menu.text?.slice(0, 40));
+  ok('and the pitch to master Tactix', menu.text.includes('آماده‌ای نشون بدی کی باهوش‌تره'));
   ok('as HTML', menu.parse_mode === 'HTML');
   ok('row 1 launches the Mini App',
     playUrl(menu) === `${LIVE}/` || playUrl(menu) === LIVE, playUrl(menu));
@@ -340,7 +340,7 @@ console.log('\n-- choosing a language --');
   resetApi();
   await rt.webhook(callback('lang:ar', { from: NEW_USER, messageId: 90 }));
   const arabic = last('editMessageText');
-  ok('the Arabic menu reads as Arabic', arabic.text.includes('مرحباً بك في ساحة DETOUR'));
+  ok('the Arabic menu reads as Arabic', arabic.text.includes('مرحباً بك في ساحة Tactix'));
   ok('with the Arabic call to action', arabic.text.includes('هل تملك السرعة والذكاء للوصول أولاً'));
   ok('and its own button labels', button(arabic, 'العب الآن') !== null && button(arabic, 'طريقة اللعب') !== null);
   withinLimits(arabic, 'the Arabic menu');
@@ -354,7 +354,7 @@ console.log('\n-- rules and invite --');
 
   await rt.webhook(callback('menu:rules:en', { messageId: 12 }));
   const rules = last('editMessageText');
-  ok('the English rules card', rules.text.includes('HOW TO PLAY DETOUR'));
+  ok('the English rules card', rules.text.includes('HOW TO PLAY Tactix'));
   ok('states the goal and the four turn options',
     rules.text.includes('Be the first to reach the') && rules.text.includes('Place a Wall')
       && rules.text.includes('Plant Mines') && rules.text.includes('Watch for Logs'));
@@ -366,12 +366,12 @@ console.log('\n-- rules and invite --');
 
   resetApi();
   await rt.webhook(callback('menu:rules:fa'));
-  ok('the Persian rules card', last('editMessageText').text.includes('قوانین و راهنمای بازی'));
+  ok('the Persian rules card', last('editMessageText').text.includes('قوانین و راهنمای Tactix'));
   ok('with the back button in Persian', button(last('editMessageText'), 'بازگشت')?.callback_data === 'lang:fa');
 
   resetApi();
   await rt.webhook(callback('menu:rules:ar'));
-  ok('the Arabic rules card', last('editMessageText').text.includes('طريقة اللعب والقوانين'));
+  ok('the Arabic rules card', last('editMessageText').text.includes('طريقة اللعب والقوانين في Tactix'));
   ok('and its PLAY button still opens the app', playUrl(last('editMessageText')).startsWith(LIVE));
 
   resetApi();
@@ -407,7 +407,7 @@ console.log('\n-- rules and invite --');
   ok('Change Language puts the picker back on the same message',
     calls.map((c) => c.method).includes('editMessageText')
       && last('editMessageText').message_id === 31
-      && last('editMessageText').text.includes('Welcome to DETOUR'));
+      && last('editMessageText').text.includes('Welcome to Tactix'));
 }
 
 /* ---------- 5. the referral survives the menu ---------- */
@@ -417,7 +417,7 @@ console.log('\n-- the referral payload --');
   const rt = runtime();
 
   await rt.webhook(message('/start ref_u9001', { from: 500005 }));
-  ok('a payload start still opens on the picker', last('sendMessage').text.includes('Welcome to DETOUR'));
+  ok('a payload start still opens on the picker', last('sendMessage').text.includes('Welcome to Tactix'));
 
   resetApi();
   await rt.webhook(callback('lang:en', { from: 500005 }));
@@ -456,7 +456,7 @@ console.log('\n-- commands --');
   await rt.webhook(callback('lang:fa', { from: 600000 }));
   await rt.webhook(message('/rules', { from: 600000 }));
   ok('a bare /rules answers in the language the player last chose',
-    last('sendMessage').text.includes('قوانین و راهنمای بازی'), last('sendMessage').text?.slice(0, 40));
+    last('sendMessage').text.includes('قوانین و راهنمای Tactix'), last('sendMessage').text?.slice(0, 40));
 
   resetApi();
   await rt.webhook(message('/play', { from: 600000 }));
@@ -466,7 +466,7 @@ console.log('\n-- commands --');
   resetApi();
   await rt.webhook(message('/rules@detour_game_bot', { from: 600001, lang: 'ar' }));
   ok('a bare /rules for a new Arabic client uses their client language',
-    last('sendMessage').text.includes('طريقة اللعب والقوانين'));
+    last('sendMessage').text.includes('طريقة اللعب والقوانين في Tactix'));
   ok('and the handle suffix is not part of the command', calls.length === 1, JSON.stringify(calls));
 
   resetApi();
@@ -535,7 +535,7 @@ console.log('\n-- resilience --');
     calls.some((c) => c.method === 'editMessageText') && calls.some((c) => c.method === 'sendMessage'),
     JSON.stringify(calls.map((c) => c.method)));
   ok('and the fallback says the same thing in the same language',
-    last('sendMessage').text.includes('مرحباً بك في ساحة DETOUR'));
+    last('sendMessage').text.includes('مرحباً بك في ساحة Tactix'));
 
   resetApi();
   failNext('answerCallbackQuery', 400, 'Bad Request: query is too old and response timeout expired');

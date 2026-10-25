@@ -176,7 +176,7 @@ try {
   expect('the DEV MODE badge is gone from the stage entirely', !head.devBadge);
   expect('left side keeps the COMMAND CENTER kicker with warm amber tracking',
     head.kicker === 'COMMAND CENTER' && head.kickerSpacing >= 1.2 && head.kickerColor.startsWith('rgb(252, 211, 77'));
-  expect('embossed "Detour Admin" title intact', head.title === 'Detour Admin');
+  expect('embossed "Tactix Admin" title intact', head.title === 'Tactix Admin');
   expect('sculpted close key is a 38x38 rounded clay pill',
     head.close && head.closeW === 38 && head.closeH === 38 && head.closeRadius >= 10);
   expect('close key carries rim light + deep charcoal bevel + tactile lip',

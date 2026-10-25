@@ -577,7 +577,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   });
 
   const inviteSquad = (s: RankedSquad): void => {
-    const text = `${s.handle} — join my squad in Detour!`;
+    const text = `${s.handle} — join my squad in Tactix!`;
     try {
       if (navigator.clipboard?.writeText) {
         void navigator.clipboard.writeText(text).then(

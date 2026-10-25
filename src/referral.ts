@@ -41,7 +41,7 @@ export function referralLink(): string {
 /** The Telegram share-sheet URL for the personal link. */
 export function referralShareUrl(): string {
   const url = encodeURIComponent(referralLink());
-  const text = encodeURIComponent('Race me on Detour — we both get 500 coins when you join!');
+  const text = encodeURIComponent('Race me on Tactix — we both get 500 coins when you join!');
   return `https://t.me/share/url?url=${url}&text=${text}`;
 }
 

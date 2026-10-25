@@ -353,7 +353,7 @@ export interface DayStats {
   live: boolean;
 }
 
-/** The markets a Detour board actually fills from. The player's own code is added by `nationsOf`. */
+/** The markets a Tactix board actually fills from. The player's own code is added by `nationsOf`. */
 const NATION_POOL: readonly string[] = [
   'IR', 'DE', 'RU', 'US', 'BR', 'IN', 'TR', 'ID', 'EG', 'NG', 'VN', 'PH', 'UA', 'PL', 'FR',
   'IT', 'ES', 'MX', 'AR', 'PK', 'BD', 'TH', 'MY', 'SA', 'IQ', 'MA', 'DZ', 'KE', 'ZA', 'GB',
@@ -408,7 +408,7 @@ function nationsOf(rand: () => number): NationShare[] {
  * The window's reading.
  *
  * This panel is a Mini App with no analytics backend behind it: nothing tells it how many people
- * opened Detour in Tehran this morning. So the *shape* of the window — how many turned up, how
+ * opened Tactix in Tehran this morning. So the *shape* of the window — how many turned up, how
  * much they played, which flags they carry — is a deterministic model keyed on the UTC date and
  * the timeframe: the same numbers on every device for the whole window, and a different one
  * tomorrow. This device's own measured counters ride on top, so the panel never claims less than

@@ -217,7 +217,7 @@ export function buildInviteLink(code: string): string {
 
 export function buildShareUrl(code: string): string {
   const url = encodeURIComponent(buildInviteLink(code));
-  const text = encodeURIComponent(`Join my Detour room ${code} — 1 tap to race!`);
+  const text = encodeURIComponent(`Join my Tactix room ${code} — 1 tap to race!`);
   return `https://t.me/share/url?url=${url}&text=${text}`;
 }
 
