@@ -51,7 +51,9 @@ import {
   MIN_SEATS, ROOM_WAIT_MS, createRoom, difficultyFor, isAutomated, lobbyLine, rewardEligible, seatBadge,
   seatName, sizesOf, startEarly, type BotTier, type Room,
 } from './room';
+import { initSplash, splashReady } from './splash';
 
+initSplash();
 initTelegram();
 applyFlagSupport();
 
@@ -2302,3 +2304,6 @@ themeToggle.addEventListener('click', () => {
   if (!page.startViewTransition || motionReduced()) { commit(); return; }
   page.startViewTransition(commit);
 });
+
+/* the arena is staged: the neural boot screen may lift on its own clock */
+splashReady();
