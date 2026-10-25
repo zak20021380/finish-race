@@ -865,6 +865,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   const dash = { trail: [] as number[], last: [] as number[], ghost: [] as number[], armed: [] as number[] };
   const ballFx: { shadow: CanvasGradient; body: CanvasGradient; bounce: CanvasGradient }[] = [];
   const glowG: CanvasGradient[] = [];
+  /** The wide, soft light each pawn pools on the tiles around it, in the seat's own colour. */
+  const lampG: CanvasGradient[] = [];
   /** Light sweep over the finish strip: one gradient per resize, moved with the canvas transform. */
   const sweep = { grad: null as CanvasGradient | null, band: 0 };
   /**
@@ -974,34 +976,98 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     for (let i = 1; i < rows; i++) { const y = snap(oy + i * c); g.moveTo(ox, y); g.lineTo(ox + bw, y); }
     g.stroke();
 
-    /* inset clay tiles: a faint two-tone checker with a 1px tactile gap, each square shaded
-       darker at its top and lighter at its foot, which is what reads as "pressed in" */
+    /* two tile finishes, both painted over the same slab. The dark arenas wear polished glass:
+       every square is a translucent sapphire key, its face catching the ceiling light along the
+       crown and deepening toward its foot, with a soft specular bloom where the overhead beams
+       land and a crisp 1px top/left catch. Pale boards keep their inset clay checks. */
     const gap = Math.max(1, c * 0.03);
-    const tw = c - gap, tr = Math.min(c * 0.15, tw / 2);
-    const shade = g.createLinearGradient(0, 0, 0, c);
-    shade.addColorStop(0, b.bevel[1]);
-    shade.addColorStop(0.42, clear(b.bevel[1]));
-    shade.addColorStop(0.78, clear(b.bevel[0]));
-    shade.addColorStop(1, b.bevel[0]);
-    const rimW = Math.max(1, c * 0.022);
-    const rimLit = withAlpha(b.bevel[0], 0.22);
-    g.lineWidth = Math.max(1, c * 0.035);
-    g.strokeStyle = shade;
-    for (let r0 = 1; r0 < rows; r0++) {            // row 0 belongs to the finish bar, not the tiles
-      for (let c0 = 0; c0 < cols; c0++) {
-        const tx = ox + c0 * c + gap / 2, ty = oy + r0 * c + gap / 2;
-        rr(g, tx, ty, tw, tw, tr);
-        g.fillStyle = (c0 + r0) % 2 === 0 ? b.tile[0] : b.tile[1];
-        g.fill();
-        g.save();
-        g.translate(tx, ty);              // the shared shade gradient follows the tile
-        rr(g, 0, 0, tw, tw, tr);
-        g.stroke();
-        g.lineWidth = rimW;               // a crisp light rim lifts every square off the groove
-        g.strokeStyle = rimLit;
-        rr(g, rimW / 2, rimW / 2, tw - rimW, tw - rimW, Math.max(0, tr - rimW / 2));
-        g.stroke();
-        g.restore();
+    const tw = c - gap, tr = Math.min(c * (b.glass ? 0.18 : 0.15), tw / 2);
+    if (b.glass) {
+      /* the glass light: one lit-crown-to-dark-foot gradient shared by every tile */
+      const glass = g.createLinearGradient(0, 0, 0, tw);
+      glass.addColorStop(0, 'rgba(255,255,255,.11)');
+      glass.addColorStop(0.34, 'rgba(255,255,255,.035)');
+      glass.addColorStop(0.6, 'rgba(255,255,255,0)');
+      glass.addColorStop(0.82, 'rgba(0,0,0,.1)');
+      glass.addColorStop(1, 'rgba(0,0,0,.24)');
+      /* the rim: lit along the crown, shaded into the bottom lip. The first stop is the brief's
+         `inset 0 1px 0 rgba(255,255,255,.18)`, drawn as the top edge of the stroked tile. */
+      const tileRim = g.createLinearGradient(0, 0, 0, tw);
+      tileRim.addColorStop(0, 'rgba(255,255,255,.18)');
+      tileRim.addColorStop(0.2, 'rgba(255,255,255,.06)');
+      tileRim.addColorStop(0.52, 'rgba(255,255,255,0)');
+      tileRim.addColorStop(0.8, 'rgba(0,0,0,.16)');
+      tileRim.addColorStop(1, 'rgba(0,0,0,.42)');
+      /* the overhead lights, held in the glass: a soft crown bloom repeated on every pad */
+      const spec = g.createRadialGradient(tw * 0.3, tw * 0.12, 0, tw * 0.3, tw * 0.12, tw * 0.82);
+      spec.addColorStop(0, 'rgba(255,255,255,.32)');
+      spec.addColorStop(0.24, 'rgba(255,255,255,.14)');
+      spec.addColorStop(0.6, 'rgba(255,255,255,.035)');
+      spec.addColorStop(1, 'rgba(255,255,255,0)');
+      const rimW = Math.max(1, c * 0.022);
+      const hair = Math.max(1, c * 0.018);
+      for (let r0 = 1; r0 < rows; r0++) {          // row 0 belongs to the finish bar, not the tiles
+        /* the rows under the finish sit in the beams, so their glass answers with a stronger glint */
+        const glint = r0 <= 3 ? 0.38 - (r0 - 1) * 0.08 : 0.075;
+        for (let c0 = 0; c0 < cols; c0++) {
+          const tx = ox + c0 * c + gap / 2, ty = oy + r0 * c + gap / 2;
+          g.save();
+          g.translate(tx, ty);            // the shared gradients follow the tile
+          rr(g, 0, 0, tw, tw, tr);
+          g.fillStyle = (c0 + r0) % 2 === 0 ? b.tile[0] : b.tile[1];
+          g.fill();
+          g.fillStyle = glass;
+          g.fill();
+          /* the specular sits on the face, clipped so no light leaks into the groove */
+          g.save();
+          g.clip();
+          g.globalAlpha = glint;
+          g.fillStyle = spec;
+          g.fillRect(0, 0, tw, tw);
+          g.restore();
+          /* a fine lit rim around the pad: bright along the top, dark under the bottom lip */
+          rr(g, 0, 0, tw, tw, tr);
+          g.lineWidth = rimW;
+          g.strokeStyle = tileRim;
+          g.stroke();
+          /* the left edge keeps its own catch, like the top's inset highlight */
+          g.lineWidth = hair;
+          g.strokeStyle = 'rgba(255,255,255,.14)';
+          g.beginPath();
+          g.moveTo(hair / 2, tr);
+          g.lineTo(hair / 2, tw - tr);
+          g.stroke();
+          g.restore();
+        }
+      }
+    } else {
+      /* inset clay tiles: a faint two-tone checker with a 1px tactile gap, each square shaded
+         darker at its top and lighter at its foot, which is what reads as "pressed in" */
+      const shade = g.createLinearGradient(0, 0, 0, c);
+      shade.addColorStop(0, b.bevel[1]);
+      shade.addColorStop(0.42, clear(b.bevel[1]));
+      shade.addColorStop(0.78, clear(b.bevel[0]));
+      shade.addColorStop(1, b.bevel[0]);
+      const rimW = Math.max(1, c * 0.022);
+      const rimLit = withAlpha(b.bevel[0], 0.22);
+      g.lineWidth = Math.max(1, c * 0.035);
+      g.strokeStyle = shade;
+      for (let r0 = 1; r0 < rows; r0++) {          // row 0 belongs to the finish bar, not the tiles
+        for (let c0 = 0; c0 < cols; c0++) {
+          const tx = ox + c0 * c + gap / 2, ty = oy + r0 * c + gap / 2;
+          rr(g, tx, ty, tw, tw, tr);
+          g.fillStyle = (c0 + r0) % 2 === 0 ? b.tile[0] : b.tile[1];
+          g.fill();
+          g.save();
+          g.translate(tx, ty);            // the shared shade gradient follows the tile
+          rr(g, 0, 0, tw, tw, tr);
+          g.stroke();
+          g.lineWidth = rimW;             // a crisp light rim lifts every square off the groove
+          g.strokeStyle = rimLit;
+          rr(g, rimW / 2, rimW / 2, tw - rimW, tw - rimW, Math.max(0, tr - rimW / 2));
+          g.stroke();
+          g.restore();
+        }
       }
     }
 
@@ -1128,6 +1194,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     for (const m of barG) m.clear();
     ballFx.length = 0;
     glowG.length = 0;
+    lampG.length = 0;
     sweep.band = c * 2.4;
     const sg = ctx.createLinearGradient(0, 0, sweep.band, 0);
     sg.addColorStop(0, `rgba(255,236,178,0)`);
@@ -1152,6 +1219,13 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       glow.addColorStop(0, s.ramp.glow);
       glow.addColorStop(1, 'rgba(255,255,255,0)');
       glowG.push(glow);
+      const lamp = ctx.createRadialGradient(0, 0, br * 0.4, 0, 0, c * 2.5);
+      lamp.addColorStop(0, s.ramp.glow);
+      lamp.addColorStop(0.18, tint(s.ramp.light, 0.5));
+      lamp.addColorStop(0.5, withAlpha(s.ramp.glow, 0.16));
+      lamp.addColorStop(0.8, withAlpha(s.ramp.glow, 0.05));
+      lamp.addColorStop(1, 'rgba(255,255,255,0)');
+      lampG.push(lamp);
     }
 
     /* the mine's two paint servers: a dim warm sphere and the glow that goes with it */
@@ -1648,6 +1722,24 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.beginPath(); ctx.arc(-r * 0.46, -r * 0.2, Math.max(0.8, r * 0.07), 0, TAU); ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,.55)';
     ctx.beginPath(); ctx.arc(-r * 0.48, -r * 0.23, Math.max(0.3, r * 0.025), 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+
+  /**
+   * The wide coloured pool a pawn throws across the tiles around it. Additive and kept below the
+   * finish row, so red and blue light warms the grid without ever tinting the crown or its beams.
+   * `k` is the active-seat beat; a resting pawn still casts a quiet version of the same light.
+   */
+  function drawLamp(cx: number, cy: number, i: number, k: number) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(L.ox, L.oy + L.cell, L.cols * L.cell, (L.rows - 1) * L.cell);
+    ctx.clip();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = (1 - 0.25 * k) * sides[i].ball.halo;
+    ctx.translate(cx, cy);
+    ctx.fillStyle = lampG[i];
+    ctx.beginPath(); ctx.arc(0, 0, L.cell * 2.5, 0, TAU); ctx.fill();
     ctx.restore();
   }
 
@@ -2500,9 +2592,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         was.x = b.pos.x; was.y = b.pos.y;
       } else prevPos.set(b.id, { x: b.pos.x, y: b.pos.y });
       const active = v.state.winner === null && v.state.turn === seat;
-      if (active || v.state.winner === seat) {
-        drawGlow(cx, cy, r, seat, still ? 0.6 : 0.5 + 0.5 * Math.sin(now / 260));
-      }
+      const lit = active || v.state.winner === seat;
+      const beat = still ? 0.6 : 0.5 + 0.5 * Math.sin(now / 260);
+      drawLamp(cx, cy, seat, lit ? beat : 0);
+      if (lit) drawGlow(cx, cy, r, seat, beat);
       const hurt = wounds.has(b.id);
       if (hurt) drawWoundedRing(cx, cy, r, now, still);
       // the chosen one stands out further than its side's turn halo does

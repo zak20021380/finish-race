@@ -90,6 +90,12 @@ export interface BoardTheme {
   grid: string;
   /** inset clay tiles: [lit square, shaded square] of the faint two-tone checker */
   tile: [string, string];
+  /**
+   * The tile finish. True gives the dark arenas a polished glass face — a crown specular, a
+   * lit top/left catch and a deep bottom lip — while pale boards keep the classic inset clay
+   * squares they were drawn with.
+   */
+  glass?: boolean;
   /** the slab's inner bevel, lit from above: [top highlight, bottom shade] */
   bevel: [string, string];
   /** border ring: green at FINISH easing into the board's own trim */
@@ -321,11 +327,14 @@ const CREST: Stop[] = [
  */
 export const BOARDS: BoardTheme[] = [
   {
-    id: 'indigo', name: 'Indigo', price: 0, desc: 'Bright frosted slate. The arena the race ships with.',
-    surface: [[0, '#6674a2'], [0.14, '#566389'], [0.58, '#47537a'], [1, '#3c4767']],
-    drop: 'rgba(4,6,20,.6)', grid: 'rgba(8,12,30,.58)',
-    tile: ['rgba(255,255,255,.14)', 'rgba(255,255,255,.06)'],
-    bevel: ['rgba(255,255,255,.42)', 'rgba(8,12,30,.42)'],
+    id: 'indigo', name: 'Indigo', price: 0, desc: 'Polished midnight sapphire. The arena the race ships with.',
+    surface: [
+      [0, 'rgba(42,60,118,.96)'], [0.16, 'rgba(28,43,93,.96)'],
+      [0.55, 'rgba(17,28,66,.97)'], [1, 'rgba(7,11,28,.98)'],
+    ],
+    drop: 'rgba(2,4,14,.72)', grid: 'rgba(132,177,255,.42)',
+    tile: ['rgba(153,188,255,.13)', 'rgba(112,148,235,.07)'], glass: true,
+    bevel: ['rgba(255,255,255,.36)', 'rgba(1,4,14,.66)'],
     ring: [[0, '#7bffd2'], [0.06, '#45eab1'], [0.16, '#62c7f5'], [0.34, '#9aabf0'], [0.62, '#8b9ce0'], [1, '#a9bafb']],
     kerb: ['#2bd99c', '#0b6d50'], crest: CREST,
     spill: [[0, 'rgba(255,206,122,.30)'], [0.5, 'rgba(255,176,64,.12)'], [1, 'rgba(255,166,54,0)']],
@@ -359,8 +368,8 @@ export const BOARDS: BoardTheme[] = [
   },
   {
     id: 'midnight', name: 'Midnight', price: 340, desc: 'Near-black indigo. The line burns brighter against it.',
-    surface: '#171c3c', drop: 'rgba(2,3,14,.65)', grid: 'rgba(0,0,0,.45)',
-    tile: ['rgba(255,255,255,.045)', 'rgba(255,255,255,.012)'],
+    surface: '#171c3c', drop: 'rgba(2,3,14,.65)', grid: 'rgba(88,124,210,.22)',
+    tile: ['rgba(255,255,255,.055)', 'rgba(255,255,255,.018)'], glass: true,
     bevel: ['rgba(255,255,255,.14)', 'rgba(0,0,0,.55)'],
     ring: [[0, '#43e3a2'], [0.06, '#2fae7c'], [0.16, '#26507f'], [0.34, '#222a52'], [0.62, '#1e2547'], [1, '#242c52']],
     kerb: ['#0f5f42', '#05231b'], crest: CREST,

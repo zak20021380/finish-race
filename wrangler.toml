@@ -9,8 +9,6 @@
 name = "finish-race"
 main = "worker/index.ts"
 compatibility_date = "2025-09-01"
-[vars]
-ADMIN_IDS = "1350508522"
 
 # The built Mini App (`npm run build` -> dist/): served from the same Worker on `/` and the
 # hashed asset paths, while `/api/*`, `/ws/*`, `/admin/*` and `/health` stay with the script.
@@ -52,4 +50,4 @@ DEV_AUTH = "false"
 # A comma-separated list of Telegram user ids, mirroring the panel's own `ADMIN_IDS` allowlist.
 # An empty value closes the Telegram door entirely; `/admin/status` still answers a dev-marked
 # loopback request while `DEV_AUTH = "true"` or the caller is on localhost.
-ADMIN_IDS = ""
+ADMIN_IDS = "1350508522"
