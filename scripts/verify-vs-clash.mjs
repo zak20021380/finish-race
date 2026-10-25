@@ -13,7 +13,7 @@
  *      read here with no DOM.
  *   2. THE STAGE (real Chrome). The clash must mount for a person, carry a flag, a squad, a rating
  *      and a stakes pill for both fighters, spill no pixel sideways at 320px, hand the board over
- *      when it is done, answer a tap after 600ms, stay out of the way before it, and read as a
+ *      when it is done, answer a tap after 1s, stay out of the way before it, and read as a
  *      high-contrast stage in BOTH finishes. Then the contract every other suite in this repo
  *      depends on: with `navigator.webdriver` untouched, Play must reach the board in under 50ms
  *      with no overlay node in the document at all.
@@ -331,15 +331,18 @@ for (const [a, b, note] of [[dark, pearl, 'veil and plate are identical in both 
 /* ---- B. the hand-off: the board takes over whether or not the player taps ---- */
 {
   const { ctx, pg, errors } = await open({ lang: 'en', appearance: 'dark', w: 390, h: 844 });
+  const openedAt = Date.now();
   await pg.click('#home-play');
-  /* a tap at 180ms is the tap that opened the drawer: it must not skip and must not reach the board */
-  await pg.waitForTimeout(180);
+  /* a tap inside the 1s lockout is the tap that opened the drawer: no skip, and no board behind it */
+  await pg.waitForTimeout(700);
   await pg.mouse.click(195, 420);
   if (!(await pg.evaluate(() => !!document.getElementById('vs-clash')))) {
-    errors.push('a tap at 180ms skipped the face-off, before the 600ms window');
+    errors.push('a tap at 700ms skipped the face-off, before the 1000ms window');
   }
   await pg.waitForFunction(() => !document.getElementById('vs-clash'), null, { timeout: 10000 })
     .catch(() => errors.push('the face-off never left the document'));
+  const lifeMs = Date.now() - openedAt;
+  if (lifeMs < 3000) errors.push(`the face-off left after ${lifeMs}ms; the hold is too short`);
   const after = await pg.evaluate(() => ({
     game: !document.getElementById('s-game').hidden,
     leftover: document.querySelectorAll('.vsc').length,
@@ -358,8 +361,9 @@ for (const [a, b, note] of [[dark, pearl, 'veil and plate are identical in both 
   const { ctx, pg, errors } = await open({ lang: 'en', appearance: 'dark', w: 390, h: 844 });
   await pg.click('#home-play');
   await pg.waitForFunction(() => !!document.getElementById('vs-clash'), null, { timeout: 6000 });
+  /* past the 1s lockout, but well before the ~3.05s automatic reveal */
+  await pg.waitForTimeout(1200);
   const t0 = await pg.evaluate(() => performance.now());
-  await pg.waitForTimeout(700);
   await pg.mouse.click(195, 420);
   const skipped = await pg.evaluate((start) => ({
     leaving: !document.getElementById('vs-clash')
@@ -367,9 +371,9 @@ for (const [a, b, note] of [[dark, pearl, 'veil and plate are identical in both 
     game: !document.getElementById('s-game').hidden,
     ms: Math.round(performance.now() - start),
   }), t0);
-  if (!skipped.leaving) errors.push(`a tap at ${skipped.ms}ms did not skip the face-off`);
+  if (!skipped.leaving) errors.push('a tap after the 1000ms window did not skip the face-off');
   if (!skipped.game) errors.push('skipping left the player outside the board');
-  if (skipped.ms > 1500) errors.push(`skipping took ${skipped.ms}ms to hand the board over`);
+  if (skipped.ms > 500) errors.push(`skipping took ${skipped.ms}ms to hand the board over`);
   rows.push({ tag: 'tap-to-skip', bad: errors.slice() });
   await ctx.close();
 }

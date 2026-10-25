@@ -1,5 +1,5 @@
 /**
- * vsclash.ts — the pre-match face-off: two nations, two squads, one crest, ~2.2 seconds.
+ * vsclash.ts — the pre-match face-off: two nations, two squads, one crest, ~3.5 seconds.
  *
  * Every start path already funnels through `startGame()` in main.ts, so this is the one place a
  * match can be announced. The overlay is a *reveal gate*, not a pause: the board is staged the
@@ -32,19 +32,19 @@ import {
 
 /** Cards are flying from 0; the crest lands here, and that is the beat the haptic answers to. */
 const CLASH_AT_MS = 350;
-/** How long the face-off stays readable after the crest lands. */
-const HOLD_MS = 1500;
+/** How long the face-off stays readable after the crest lands: 2.7s to take in flags, squads and calls. */
+const HOLD_MS = 2700;
 /** The fly-away: the board is revealed under it, so the two overlap rather than queue. */
-const EXIT_MS = 300;
-/** The reduced-motion cut: the same information, none of the movement. */
-const QUIET_REVEAL_MS = 1000;
+const EXIT_MS = 400;
+/** The reduced-motion cut: the same information, none of the movement, but the same reading time. */
+const QUIET_REVEAL_MS = 2800;
 const QUIET_EXIT_MS = 80;
-/** A tap before this does nothing: it would be the tap that opened the drawer. */
-const SKIP_AFTER_MS = 600;
-/** One psychological line at a time. */
-const LINE_MS = 620;
+/** A tap before this does nothing: the matchup has not been on screen long enough to be seen. */
+const SKIP_AFTER_MS = 1000;
+/** One psychological line at a time, slow enough to read on a longer hold. */
+const LINE_MS = 900;
 /** If a webview throttles our timers, the race still has to start. */
-const WATCHDOG_MS = 4000;
+const WATCHDOG_MS = 5000;
 
 /** A seat the local player may be facing. Bots carry their level, people carry their profile. */
 export interface VsRival {

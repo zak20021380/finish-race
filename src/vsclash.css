@@ -1,4 +1,4 @@
-/* vsclash.css — the pre-match face-off: two nations, one crest, ~2.2 seconds.
+/* vsclash.css — the pre-match face-off: two nations, one crest, ~3.5 seconds.
    Presentation only. Nothing here moves a token, a rule or the board.
 
    The screen is a vertical diagonal split, which is the brief's "rival top-right, you bottom-left"
@@ -23,7 +23,7 @@
   --vsc-hair: rgba(255, 255, 255, .14);
   --vsc-base: #05070C;
   --vsc-veil: radial-gradient(120% 92% at 50% 46%, rgba(10, 16, 28, .96) 0%, rgba(3, 6, 11, 1) 100%);
-  --vsc-exit: 300ms;
+  --vsc-exit: 400ms; /* keep in step with EXIT_MS in vsclash.ts */
 
   position: fixed;
   inset: 0;
@@ -435,8 +435,8 @@
 .vsc-side--rival { transform: translate3d(118%, -18%, 0) rotate(4deg); opacity: 0; }
 .vsc-side--you { transform: translate3d(-118%, 18%, 0) rotate(-4deg); opacity: 0; }
 
-.vsc.is-in .vsc-side--rival { animation: vsc-slam-r 400ms cubic-bezier(.14, 1.16, .32, 1) both; }
-.vsc.is-in .vsc-side--you { animation: vsc-slam-l 400ms cubic-bezier(.14, 1.16, .32, 1) 30ms both; }
+.vsc.is-in .vsc-side--rival { animation: vsc-slam-r 350ms cubic-bezier(.14, 1.16, .32, 1) both; }
+.vsc.is-in .vsc-side--you { animation: vsc-slam-l 350ms cubic-bezier(.14, 1.16, .32, 1) 30ms both; }
 .vsc.is-in .vsc-seam { animation: vsc-seam-draw 340ms ease-out 110ms both; }
 .vsc.is-in .vsc-vs { animation: vsc-land 420ms cubic-bezier(.2, 1.32, .28, 1) 300ms both; }
 .vsc.is-in .vsc-aura-you,
@@ -452,7 +452,7 @@
 .vsc.is-clash .vsc-crest-bolt { animation: vsc-bolt-in 380ms ease-out 60ms both; }
 .vsc.is-clash .vsc-stakes { animation: vsc-rise 300ms ease-out 130ms both; }
 .vsc.is-clash .vsc-banner { animation: vsc-rise 320ms ease-out 230ms both; }
-.vsc.is-clash .vsc-skip { animation: vsc-rise 300ms ease-out 400ms both; }
+.vsc.is-clash .vsc-skip { animation: vsc-rise 300ms ease-out 650ms both; }
 
 /* ---- the hand-off: the crest breaks, the halves peel apart, the board is already under them ---- */
 .vsc.is-leaving { background: transparent; animation: vsc-veil-out var(--vsc-exit) ease-in both; }
