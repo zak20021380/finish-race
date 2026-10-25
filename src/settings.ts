@@ -8,12 +8,16 @@ import { readJson, writeJson } from './storage';
 export type Mode = 'bot' | 'online';
 /** Which tier of the launcher is showing: a solo race, or two sides. */
 export type ModeTab = 'solo' | 'party';
+/** The race stage's finish: the classic midnight arena, or the pearl chessboard. */
+export type Appearance = 'dark' | 'light';
 
 export interface Settings {
   /** the engine's step, wall and blast effects and the matchmaking chime */
   sound: boolean;
   haptics: boolean;
   reducedMotion: boolean;
+  /** Light Mode is a race-stage finish, not an app-wide skin: the arena turns pearl, the shell stays. */
+  appearance: Appearance;
 }
 
 export type LangCode = 'en' | 'fa' | 'ru' | 'ar' | 'es';
@@ -49,7 +53,7 @@ export interface MenuState {
 
 const S_KEY = 'detour.settings.v1';
 const M_KEY = 'detour.menu.v1';
-const DEFAULT_SETTINGS: Settings = { sound: true, haptics: true, reducedMotion: false };
+const DEFAULT_SETTINGS: Settings = { sound: true, haptics: true, reducedMotion: false, appearance: 'dark' };
 const DEFAULT_MENU: MenuState = { mode: 'bot', tab: 'solo', difficulty: 'normal', sizes: [1, 1] };
 
 const motion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -58,6 +62,7 @@ try { motion.addEventListener('change', (e) => { systemReduce = e.matches; }); }
 
 export const settings: Settings = { ...DEFAULT_SETTINGS, ...readJson<Settings>(S_KEY) };
 export const menuState: MenuState = { ...DEFAULT_MENU, ...readJson<MenuState>(M_KEY) };
+if (settings.appearance !== 'light') settings.appearance = 'dark';
 if (menuState.difficulty !== 'easy' && menuState.difficulty !== 'hard') menuState.difficulty = 'normal';
 if (menuState.mode !== 'bot') menuState.mode = 'bot';
 if (menuState.tab !== 'party') menuState.tab = 'solo';
@@ -285,6 +290,49 @@ export function setSetting<K extends keyof Settings>(key: K, value: Settings[K])
 
 export function onSettings(w: (s: Settings) => void) { watchers.push(w); }
 
+/* ---------- the race stage's light / dark finish ---------- */
+
+type AppearanceWatcher = (mode: Appearance) => void;
+const appearanceWatchers: AppearanceWatcher[] = [];
+
+const appearance = (): Appearance => settings.appearance;
+
+/**
+ * Publishes the saved finish to CSS. It is written on the root, so the Light Mode selectors can
+ * reach both the stage and the game head, while the shell outside the race stays on its dark clay.
+ */
+function paintAppearance() {
+  try { document.documentElement.dataset.theme = settings.appearance; } catch { /* headless */ }
+}
+
+export function setAppearance(mode: Appearance) {
+  const next: Appearance = mode === 'light' ? 'light' : 'dark';
+  if (settings.appearance === next) return;
+  settings.appearance = next;
+  writeJson(S_KEY, settings);
+  paintAppearance();
+  for (const w of appearanceWatchers) { try { w(next); } catch { /* watcher threw */ } }
+  try {
+    window.dispatchEvent(new CustomEvent<Appearance>('detour:appearance', { detail: next }));
+  } catch { /* no window */ }
+}
+
+export function onAppearance(w: AppearanceWatcher) {
+  appearanceWatchers.push(w);
+  return () => {
+    const i = appearanceWatchers.indexOf(w);
+    if (i >= 0) appearanceWatchers.splice(i, 1);
+  };
+}
+
+export function toggleAppearance(): Appearance {
+  const next: Appearance = settings.appearance === 'light' ? 'dark' : 'light';
+  setAppearance(next);
+  return next;
+}
+
+export { appearance };
+
 export function saveMenu(patch: Partial<MenuState>) {
   Object.assign(menuState, patch);
   writeJson(M_KEY, menuState);
@@ -292,3 +340,4 @@ export function saveMenu(patch: Partial<MenuState>) {
 
 paintLangAttrs();
 applyMotion();
+paintAppearance();

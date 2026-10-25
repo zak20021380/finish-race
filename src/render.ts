@@ -976,13 +976,123 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     for (let i = 1; i < rows; i++) { const y = snap(oy + i * c); g.moveTo(ox, y); g.lineTo(ox + bw, y); }
     g.stroke();
 
-    /* two tile finishes, both painted over the same slab. The dark arenas wear polished glass:
+    /* Three tile finishes, all painted over the same slab. The dark arenas wear polished glass:
        every square is a translucent sapphire key, its face catching the ceiling light along the
        crown and deepening toward its foot, with a soft specular bloom where the overhead beams
-       land and a crisp 1px top/left catch. Pale boards keep their inset clay checks. */
+       land and a crisp 1px top/left catch. The light arena is a chessboard cut in pearl and
+       platinum: a gloss-ivory pad beside a cool metallic one, each its own raised piece with a
+       crisp groove between, a lit top/left inset and a shaded foot. Pale shop boards keep their
+       inset clay checks. */
     const gap = Math.max(1, c * 0.03);
     const tw = c - gap, tr = Math.min(c * (b.glass ? 0.18 : 0.15), tw / 2);
-    if (b.glass) {
+    if (b.pearl) {
+      /* ---- pearl | platinum: the modern chessboard ----
+         A hidden board can report a one-pixel cell before its screen is revealed; every derived
+         length is floored so a boot with Light Mode saved can never build a negative gradient. */
+      const pGap = Math.min(c * 0.35, Math.max(1.2, c * 0.034));
+      const pw = Math.max(1, c - pGap);
+      const pr = Math.max(1, Math.min(pw * 0.1, c * 0.12));
+      const rimW = Math.max(1, c * 0.018);
+
+      /* the light every pad catches: a soft crown bloom in the upper-left, held inside the face */
+      const bloom = g.createRadialGradient(pw * 0.27, pw * 0.15, 0, pw * 0.27, pw * 0.15, Math.max(0.5, pw * 0.95));
+      bloom.addColorStop(0, 'rgba(255,255,255,.78)');
+      bloom.addColorStop(0.32, 'rgba(255,255,255,.28)');
+      bloom.addColorStop(0.68, 'rgba(255,255,255,.06)');
+      bloom.addColorStop(1, 'rgba(255,255,255,0)');
+
+      /* one broad glass reflection raked across the upper-left of the ivory squares */
+      const gloss = g.createLinearGradient(0, 0, pw, pw);
+      gloss.addColorStop(0, 'rgba(255,255,255,.62)');
+      gloss.addColorStop(0.34, 'rgba(255,255,255,.16)');
+      gloss.addColorStop(0.62, 'rgba(255,255,255,0)');
+      gloss.addColorStop(1, 'rgba(116,126,140,.05)');
+
+      /* the foot of a pad: a faint cool pool, so the square reads pressed into the slab */
+      const foot = g.createLinearGradient(0, 0, 0, pw);
+      foot.addColorStop(0, 'rgba(54,64,78,0)');
+      foot.addColorStop(0.72, 'rgba(54,64,78,0)');
+      foot.addColorStop(0.92, 'rgba(54,64,78,.06)');
+      foot.addColorStop(1, 'rgba(45,55,68,.16)');
+
+      /* the beveled rim: lit along the crown, cooling into a fine slate line at the foot */
+      const padRim = g.createLinearGradient(0, 0, 0, pw);
+      padRim.addColorStop(0, 'rgba(255,255,255,.95)');
+      padRim.addColorStop(0.42, 'rgba(255,255,255,.22)');
+      padRim.addColorStop(0.72, 'rgba(92,101,114,.08)');
+      padRim.addColorStop(1, 'rgba(64,73,86,.3)');
+
+      const ivory = g.createLinearGradient(0, 0, 0, pw);
+      ivory.addColorStop(0, '#fffefb');
+      ivory.addColorStop(0.5, '#faf6ee');
+      ivory.addColorStop(1, '#efe9dc');
+
+      /* the platinum square is a brushed cool metal: brightest at the crown, slate at the foot */
+      const platinum = g.createLinearGradient(0, 0, pw, pw);
+      platinum.addColorStop(0, '#f3f5f8');
+      platinum.addColorStop(0.34, '#e3e7ec');
+      platinum.addColorStop(0.7, '#d2d8df');
+      platinum.addColorStop(1, '#c5ccd6');
+
+      const topCatch = 'rgba(255,255,255,.9)';
+      const bottomShade = 'rgba(67,76,90,.18)';
+      for (let r0 = 1; r0 < rows; r0++) {          // row 0 belongs to the finish bar, not the tiles
+        for (let c0 = 0; c0 < cols; c0++) {
+          const tx = ox + c0 * c + pGap / 2, ty = oy + r0 * c + pGap / 2;
+          const pearlTile = (c0 + r0) % 2 === 0;
+          g.save();
+          g.translate(tx, ty);
+          g.shadowColor = 'rgba(72,60,40,.17)';    // each pad casts its own short contact shadow
+          g.shadowBlur = Math.max(1, c * 0.04);
+          g.shadowOffsetY = Math.max(0.5, c * 0.02);
+          rr(g, 0, 0, pw, pw, pr);
+          g.fillStyle = pearlTile ? ivory : platinum;
+          g.fill();
+          g.restore();
+
+          g.save();
+          g.translate(tx, ty);
+          rr(g, 0, 0, pw, pw, pr);
+          g.clip();
+          g.fillStyle = bloom;
+          g.globalAlpha = pearlTile ? 1 : 0.58;
+          g.fillRect(0, 0, pw, pw);
+          if (pearlTile) {
+            g.globalAlpha = 0.8;
+            g.fillStyle = gloss;
+            g.fillRect(0, 0, pw, pw);
+          }
+          g.globalAlpha = 1;
+          g.fillStyle = foot;
+          g.fillRect(0, 0, pw, pw);
+          g.restore();
+
+          /* the crisp cut: one lit crown/left catch over a cool shaded foot */
+          g.save();
+          g.translate(tx, ty);
+          rr(g, rimW / 2, rimW / 2, pw - rimW, pw - rimW, Math.max(0, pr - rimW / 2));
+          g.lineWidth = rimW;
+          g.strokeStyle = padRim;
+          g.stroke();
+          g.lineWidth = Math.max(1, rimW * 0.8);
+          g.strokeStyle = topCatch;
+          g.beginPath();
+          g.moveTo(pr, rimW * 0.35);
+          g.lineTo(pw - pr, rimW * 0.35);
+          g.moveTo(rimW * 0.35, pr);
+          g.lineTo(rimW * 0.35, pw - pr);
+          g.stroke();
+          g.strokeStyle = bottomShade;
+          g.beginPath();
+          g.moveTo(pr, pw - rimW * 0.35);
+          g.lineTo(pw - pr, pw - rimW * 0.35);
+          g.moveTo(pw - rimW * 0.35, pr);
+          g.lineTo(pw - rimW * 0.35, pw - pr);
+          g.stroke();
+          g.restore();
+        }
+      }
+    } else if (b.glass) {
       /* the glass light: one lit-crown-to-dark-foot gradient shared by every tile */
       const glass = g.createLinearGradient(0, 0, 0, tw);
       glass.addColorStop(0, 'rgba(255,255,255,.11)');
@@ -1206,8 +1316,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     for (let i = 0; i < MAX_TEAMS; i++) {
       const s = sides[i];
       const shadow = ctx.createRadialGradient(0, 0, 0, 0, 0, br * 1.3);
-      shadow.addColorStop(0, `rgba(${s.ramp.shade},.58)`);
-      shadow.addColorStop(0.55, `rgba(${s.ramp.shade},.26)`);
+      shadow.addColorStop(0, `rgba(${s.ramp.shade},${b.pearl ? 0.78 : 0.58})`);
+      shadow.addColorStop(0.55, `rgba(${s.ramp.shade},${b.pearl ? 0.38 : 0.26})`);
       shadow.addColorStop(1, `rgba(${s.ramp.shade},0)`);
       const body = ctx.createRadialGradient(-0.34 * br, -0.4 * br, br * 0.06, -0.08 * br, -0.08 * br, br * 1.12);
       for (const [t, col] of resolve(s.ramp, s.ball.stops)) body.addColorStop(t, col);
@@ -1329,7 +1439,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     strike(0);
     g.shadowBlur = 0;
     g.lineJoin = 'round';
-    g.strokeStyle = 'rgba(3,37,26,.8)';
+    g.strokeStyle = th.board.pearl ? 'rgba(52,34,7,.86)' : 'rgba(3,37,26,.8)';
     g.lineWidth = Math.max(1, fs * 0.06);
     outline(0);
     g.fillStyle = body;
@@ -1537,16 +1647,22 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     if (w.o === 'v') { ctx.translate(0, 2 * c); ctx.rotate(-Math.PI / 2); }
     ctx.lineCap = st.caps;
     ctx.globalAlpha = alpha * st.alpha;
+    const pearl = !!th.board.pearl;
     /* a dark contact outline keeps the bar's silhouette crisp on the bright tiles */
-    ctx.lineWidth = t + Math.max(1.5, c * 0.05);
-    ctx.strokeStyle = `rgba(${s.ramp.shade},.42)`;
+    ctx.lineWidth = t + Math.max(1.5, c * (pearl ? 0.072 : 0.05));
+    ctx.strokeStyle = `rgba(${s.ramp.shade},${pearl ? 0.6 : 0.42})`;
     ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 + len, 0); ctx.stroke();
     ctx.lineWidth = t;
     ctx.strokeStyle = barGrad(pi, t);
-    if (glow && st.glow > 0) { ctx.shadowColor = s.ramp.glow; ctx.shadowBlur = c * 0.16 * st.glow * dpr; }
+    if (glow && st.glow > 0) {
+      ctx.shadowColor = pearl ? `rgba(${s.ramp.shade},.62)` : s.ramp.glow;
+      ctx.shadowBlur = c * (pearl ? 0.2 : 0.16) * st.glow * dpr;
+      if (pearl) ctx.shadowOffsetY = c * 0.05 * dpr;
+    }
     ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 + len, 0); ctx.stroke();
 
     ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
     ctx.shadowColor = 'transparent';
     if (st.gloss > 0) {                                       // highlight, by default on the lit (upper) side
       ctx.strokeStyle = `rgba(255,255,255,${st.gloss})`;
@@ -1662,6 +1778,14 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.fillStyle = fx.shadow;
     ctx.beginPath(); ctx.arc(0, 0, r * 1.1, 0, TAU); ctx.fill();
     ctx.restore();
+    if (th.board.pearl) {              // a tight dark contact shadow, so the token lifts off pearl
+      ctx.save();
+      ctx.translate(0, r * 0.9);
+      ctx.scale(1, 0.24);
+      ctx.fillStyle = 'rgba(38,31,22,.26)';
+      ctx.beginPath(); ctx.arc(0, 0, r * 1.12, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
 
     ctx.fillStyle = fx.body;           // body
     ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
@@ -1731,12 +1855,14 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
    * `k` is the active-seat beat; a resting pawn still casts a quiet version of the same light.
    */
   function drawLamp(cx: number, cy: number, i: number, k: number) {
+    const pearl = !!th.board.pearl;
     ctx.save();
     ctx.beginPath();
     ctx.rect(L.ox, L.oy + L.cell, L.cols * L.cell, (L.rows - 1) * L.cell);
     ctx.clip();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = (1 - 0.25 * k) * sides[i].ball.halo;
+    /* additive light is invisible on ivory; pearl boards take a normal-blended, punchier pool */
+    ctx.globalCompositeOperation = pearl ? 'source-over' : 'lighter';
+    ctx.globalAlpha = (1 - 0.25 * k) * sides[i].ball.halo * (pearl ? 0.42 : 1);
     ctx.translate(cx, cy);
     ctx.fillStyle = lampG[i];
     ctx.beginPath(); ctx.arc(0, 0, L.cell * 2.5, 0, TAU); ctx.fill();
@@ -1745,9 +1871,11 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
   /** Halo under the balls of the seat to move (or of the winner) — the one light on the slab. */
   function drawGlow(cx: number, cy: number, r: number, i: number, k: number) {
+    const pearl = !!th.board.pearl;
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.globalAlpha = Math.min(1, (0.42 + 0.34 * k) * sides[i].ball.halo);
+    if (pearl) ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = Math.min(1, (0.42 + 0.34 * k) * sides[i].ball.halo * (pearl ? 0.72 : 1));
     ctx.fillStyle = glowG[i];
     ctx.beginPath(); ctx.arc(0, 0, r * 2.3, 0, TAU); ctx.fill();
     ctx.restore();
@@ -1784,7 +1912,9 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const pulse = still ? 1 : 0.5 + 0.5 * Math.sin(now / 300);      // the ring swells and settles
     ctx.save();
     ctx.lineCap = 'round';
-    ctx.strokeStyle = `rgba(255,255,255,${0.88 + 0.12 * pulse})`;
+    ctx.strokeStyle = th.board.pearl
+      ? `rgba(28,34,44,${0.5 + 0.22 * pulse})`
+      : `rgba(255,255,255,${0.88 + 0.12 * pulse})`;
     ctx.lineWidth = Math.max(2, c * 0.08);
     ctx.beginPath(); ctx.arc(cx, cy, r * 1.3 * (1 + 0.05 * pulse), 0, TAU); ctx.stroke();
     ctx.setLineDash([c * 0.15, c * 0.12]);
@@ -2375,7 +2505,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const pulse = still ? 0.5 : 0.5 + 0.5 * Math.sin(now / 380);
     const dotR = Math.max(6, c * 0.17 + c * 0.014 * pulse);
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,.96)';
+    ctx.strokeStyle = th.board.pearl ? 'rgba(24,30,40,.78)' : 'rgba(255,255,255,.96)';
     ctx.lineWidth = Math.max(1.75, c * 0.045);
     ctx.fillStyle = side.ramp.mid;
     ctx.shadowColor = side.ramp.glow;                 // the dots carry a little glow of their own

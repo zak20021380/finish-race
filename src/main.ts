@@ -26,7 +26,7 @@ import { flagPhoto } from './flags';
 import { createShop } from './shop';
 import { createNotifications } from './notifications';
 import { mountCoins, setBalance } from './coin';
-import { menuState, motionReduced } from './settings';
+import { appearance, menuState, motionReduced, onAppearance, toggleAppearance } from './settings';
 import { audio, SHOVE_RATE } from './audio';
 import {
   completeTutorial, hasCompletedTutorial, onChange, pieceColor, profile, recordGame, resetTutorialState, theme,
@@ -36,7 +36,7 @@ import {
   type Tutorial, type TutorialAction, type TutorialRect, type TutorialSpot, type TutorialStage,
   type TutorialTargetMine, type TutorialTargetMove, type TutorialTargetSelect, type TutorialTargetWall,
 } from './tutorial';
-import { perspectiveRamps } from './themes';
+import { PEARL_BOARD, perspectiveRamps, type Theme } from './themes';
 import { detonation, impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
 import { createRoomCode, getGameMode, gmBack, initGameModes, onGameModeChange, setGameMode } from './gamemodes';
@@ -316,6 +316,8 @@ const router = createRouter($('screens'), (id) => {
   shop.setRoute(id);
   home?.setRoute(id);
   compete?.setRoute(id);
+  // the light finish is a race-stage skin: it comes and goes with the board, never with the shell
+  document.documentElement.classList.toggle('light-game', appearance() === 'light' && id === 'game');
   // Telegram BackButton on every screen except Home; always functional via onBack fallback.
   setBackButton(id !== 'home');
   if (id !== 'game') { cancelTutorial(); pauseGame(); }   // the board only ticks while it is on screen
@@ -424,7 +426,17 @@ function wallIssue(s: GameState, w: Wall): keyof typeof REASON {
   return s.balls.some((b) => d[b.pos.r * s.cols + b.pos.c] < 0) ? 'blocked' : 'overlap';
 }
 
-const renderer = createRenderer(canvas, { theme });
+/**
+ * The arena on screen right now. The equipped cosmetics still own the pawn and walls; Light Mode
+ * only swaps the slab under them for the pearl chessboard, so toggling a finish can never change
+ * what a player owns or how a seat reads.
+ */
+const liveTheme = (): Theme => {
+  const base = theme();
+  return appearance() === 'light' ? { ...base, board: PEARL_BOARD } : base;
+};
+
+const renderer = createRenderer(canvas, { theme: liveTheme });
 const confetti = createConfetti(confettiEl);
 const toVec = (p: Pos): Vec => ({ x: p.c + 0.5, y: p.r + 0.5 });
 
@@ -1577,6 +1589,9 @@ function onMouse(p: Vec, click: boolean) {
     play({ kind: 'move', ball: selected ?? undefined, to: hit.to });
     return;
   }
+  /* A click on neutral board space puts the picked pawn back down and drops any hovered ghost —
+     the same cancel a touch gets. Nothing is committed until a dot or a slot is chosen. */
+  if (!hit) { pick(null); return; }
   clearGhost();
 }
 
@@ -2248,7 +2263,7 @@ menu.afterStart();
 /* equipping repaints the board, and the chip swatch that stands for your ball; choosing a piece
    colour repaints the whole perspective (both sides, the finish wash and every chip) */
 const paintTheme = () => {
-  renderer.setTheme(theme());
+  renderer.setTheme(liveTheme());
   renderer.setPerspective(currentPerspective());
   paintRoster();
   paintSeatTints();
@@ -2259,3 +2274,31 @@ onChange(paintTheme);
 onChange(paintSeatIdentity);
 paintTheme();
 paintSeatIdentity();
+
+/* ---------- the finish switch: Dark Sapphire <-> Pearl Chessboard ---------- */
+
+const themeToggle = $<HTMLButtonElement>('theme-toggle');
+
+function paintThemeToggle() {
+  const light = appearance() === 'light';
+  themeToggle.setAttribute('aria-checked', String(light));
+  document.documentElement.classList.toggle('light-game', light && router.current === 'game');
+}
+
+onAppearance(() => {
+  paintTheme();
+  paintThemeToggle();
+});
+paintThemeToggle();
+
+themeToggle.addEventListener('click', () => {
+  impact('light');
+  const commit = () => { toggleAppearance(); };
+  /* a document cross-fade takes the whole stage from one finish to the other; older webviews
+     simply commit the swap, and the toggle's own thumb still glides on its CSS clock. */
+  const page = document as Document & {
+    startViewTransition?: (cb: () => void | Promise<void>) => { finished: Promise<void> };
+  };
+  if (!page.startViewTransition || motionReduced()) { commit(); return; }
+  page.startViewTransition(commit);
+});

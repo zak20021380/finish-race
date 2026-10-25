@@ -96,6 +96,11 @@ export interface BoardTheme {
    * squares they were drawn with.
    */
   glass?: boolean;
+  /**
+   * The light chess finish: glossy pearl and platinum pads with a crisp inset catch, drawn by the
+   * renderer's own pearl branch. Light Mode's board only — never sold, never equipped.
+   */
+  pearl?: boolean;
   /** the slab's inner bevel, lit from above: [top highlight, bottom shade] */
   bevel: [string, string];
   /** border ring: green at FINISH easing into the board's own trim */
@@ -379,6 +384,35 @@ export const BOARDS: BoardTheme[] = [
     beam: 'rgba(120,255,205,.18)', startTint: 0.18,
   },
 ];
+
+/**
+ * The light arena: a modern chessboard struck in pearl and platinum. It is not a shop item — it is
+ * the board Light Mode always lays down, so one toggle swaps the whole stage without touching the
+ * cosmetic a player has equipped. The checkers stay a real two-tone board (a gloss-white ivory pad
+ * beside a cool metallic silver one) and the goal row turns from dark emerald to a warm champagne
+ * bronze, which keeps the gold crest legible while making the top of the board glow rather than
+ * loom. Pale tiles get a crisp gap and a lit rim so each square reads as its own cut piece.
+ */
+export const PEARL_BOARD: BoardTheme = {
+  id: 'pearl', name: 'Pearl', price: 0,
+  desc: 'Glossy ivory and platinum chess squares, cut for the light.',
+  surface: [
+    [0, '#f3f0e9'], [0.3, '#e7e5e0'],
+    [0.62, '#d7dadd'], [1, '#c2c7ce'],
+  ],
+  drop: 'rgba(78,66,46,.34)', grid: 'rgba(108,114,124,.34)',
+  tile: ['#fffdf8', '#dde2e9'], pearl: true,
+  bevel: ['rgba(255,255,255,.98)', 'rgba(82,88,100,.34)'],
+  ring: [
+    [0, '#d1a95f'], [0.06, '#b98f45'], [0.16, '#f4ecdc'],
+    [0.34, '#fffdf8'], [0.62, '#e6e3dc'], [1, '#f8f3e9'],
+  ],
+  kerb: ['#c49a50', '#78551c'], crest: CREST,
+  spill: [[0, 'rgba(255,210,128,.22)'], [0.5, 'rgba(255,192,96,.08)'], [1, 'rgba(255,184,76,0)']],
+  glow: [[0, 'rgba(255,201,98,.32)'], [0.45, 'rgba(255,190,84,.11)'], [1, 'rgba(255,182,66,0)']],
+  rule: 'rgba(255,230,164,.78)', edge: 'rgba(255,255,255,.94)', sweep: 0.5,
+  beam: 'rgba(255,214,138,.26)', startTint: 0.12,
+};
 
 export const CLASSIC_BALL = BALLS[0];
 export const CLASSIC_WALL = WALLS[0];

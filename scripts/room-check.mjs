@@ -1,14 +1,13 @@
 /**
- * room-check.mjs — the corridor leap, the anti-oscillation ledger, and 4-seat mixed rooms.
+ * room-check.mjs — the corridor rule, the anti-oscillation ledger, and 4-seat mixed rooms.
  * Run: node --experimental-strip-types scripts/room-check.mjs
  *
  * Two behaviours, both of them things a race used to get wrong:
  *
- *   1. THE CORRIDOR. Two balls that meet head-on in a one-wide walled lane used to have nothing to
- *      do but shuffle: neither could pass the other, so the race never ended. The leap is the fix —
- *      a ball in the way is a stepping stone, not a wall — and the ledger is the backstop for the
- *      lanes geometry still cannot open (a corridor whose far end is sealed). Both are checked here
- *      on real boards, driven by the real bot, until somebody crosses FINISH.
+ *   1. THE CORRIDOR. A ball may not walk into another ball and may no longer jump straight over a
+ *      rival that blocks its way to FINISH: the rival's flanks are the way around, and when the lane
+ *      itself is sealed the ledger ends the shuffle. Both are checked here on real boards, driven by
+ *      the real bot, until somebody crosses FINISH.
  *   2. THE ROOM. A four-seat room used to stall whenever fewer than four people turned up. It now
  *      backfills every vacant seat with a bot when the wait runs out, ladders those bots across
  *      Normal and Hard, plays them itself, takes a seat over when its person leaves, and pays only
@@ -85,13 +84,27 @@ function corridor({ sealedMouth = true } = {}) {
   return { ...s, walls };
 }
 
-/* ---------- 1. the leap itself ---------- */
+/* ---------- 1. the leap rules ---------- */
 
-check('leap: a body in the way is a stepping stone, not a wall', () => {
-  const s = corridor({ sealedMouth: false });
+check('leap: a rival ahead blocks the straight leap, and its flanks are the way around', () => {
+  let s = put(newGame([1, 1]), 0, 3, 8);
+  s = put(s, 1, 3, 7);
   const list = targets(s, 0, 0);
-  assert.ok(has(list, 3, 6), `expected the leap over the body to (3,6), got ${show(list)}`);
+  assert.ok(!has(list, 3, 6), `the trailing ball jumped the rival ahead: ${show(list)}`);
+  assert.ok(has(list, 2, 7) && has(list, 4, 7), `expected both flank hops around the rival, got ${show(list)}`);
   assert.ok(!has(list, 3, 7), 'the leap must not land on the body itself');
+});
+
+check('leap: a team-mate ahead is still a stepping stone', () => {
+  let s = put(newGame([1, 1]), 0, 3, 8);
+  s = put(s, 1, 3, 7);
+  s = {
+    ...s,
+    teams: [{ balls: 2 }, { balls: 0 }],
+    balls: s.balls.map((b) => ({ ...b, team: 0, owner: 0 })),
+  };
+  const list = targets(s, 0, 0);
+  assert.ok(has(list, 3, 6), `an own-team body was treated as a rival wall: ${show(list)}`);
 });
 
 check('leap: a walled back becomes a sidestep onto the body\'s flank', () => {
@@ -149,13 +162,17 @@ check('leap: never two balls on one square — every landing is empty', () => {
   }
 });
 
-check('stepField: a body is one action to leap, not a wall to walk round', () => {
+check('stepField: a rival ahead is not a one-action bridge, but a flank hop still is', () => {
   const s = corridor({ sealedMouth: false });
-  const d = stepField(s);
-  /* the ball at (3,8) reaches (3,6) in one action — over the body — where the bare board needs two */
-  assert.equal(d[6 * s.cols + 3], 6, 'the leap over the body was not counted as one action');
+  const d = stepField(s, 0);
+  /* the ball at (3,8) can no longer leap the rival at (3,7): it must walk all the way round */
+  assert.ok(pathOn(d, { c: 3, r: 8 }, s.cols) > 7, 'the leap shortcut was still counted as one action');
   assert.ok(Number.isFinite(pathOn(d, { c: 3, r: 8 }, s.cols)), 'the mover has no route at all');
   assert.ok(pathOn(d, { c: 3, r: 7 }, s.cols) >= 0, 'a body cell has no distance of its own');
+  /* put the same two balls on an open board: the flank hop around the rival is one action */
+  const open = put(put(newGame([1, 1]), 0, 3, 8), 1, 3, 7);
+  assert.equal(pathOn(stepField(open, 0), { c: 3, r: 8 }, open.cols), 8,
+    'a flank hop should still count as one action, not a wall');
   /* and a sealed corridor really is sealed: the bare board still reaches FINISH from inside */
   const sealed = corridor();
   assert.ok(Number.isFinite(pathOn(distField(sealed.walls, sealed.cols, sealed.rows), { c: 3, r: 7 }, sealed.cols)),
@@ -186,12 +203,12 @@ function race(s, cap = 400) {
   return { state: s, turns, leaps, forcedAt };
 }
 
-check('corridor: two balls head-on in a one-wide lane leap past each other', () => {
+check('corridor: the trailing ball follows the leader out instead of leaping it', () => {
   const r = race(corridor({ sealedMouth: false }));
   assert.ok(r.state.winner !== null, `the lane never opened: ${r.turns} turns, no winner`);
-  assert.ok(r.leaps.length > 0, 'the leap was never played: two balls in a lane could not pass');
+  assert.equal(r.leaps.length, 0, 'a trailing ball jumped a rival ahead of it');
   assert.ok(r.turns < 200, `the lane took ${r.turns} turns — that is a shuffle, not a race`);
-  console.log(`   (open lane: ${r.turns} turns, ${r.leaps.length} leaps, first at turn ${r.leaps[0].turn})`);
+  console.log(`   (open lane: ${r.turns} turns, ${r.leaps.length} leaps, finished without a jump)`);
 });
 
 check('corridor: a lane whose far end is sealed cannot trap the race either', () => {

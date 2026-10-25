@@ -18,9 +18,10 @@
  *   hard   — the same, plus a top-K 2-ply reply check and a tighter softmax band.
  *
  * Leaps are part of the move set, not a special case: the candidates come from `steps()`, so a hop
- * over a rival is a candidate like any other, and the ground it gains is measured on `stepField` —
- * the distance that counts a body as one action to leap rather than a wall to walk around. That is
- * what lets the bot commit to a one-wide corridor instead of refusing it as impassable.
+ * around a rival's flank is a candidate like any other, and the ground it gains is measured on
+ * `stepField()` — the distance that counts a body as one action to go around rather than a wall to
+ * walk around. A rival directly ahead is never jumped straight over (the engine withholds that
+ * leap), which is exactly what the bot sees too: no illegal hop is ever priced.
  *
  * It is fed `view(state, seat)` by the caller, so everything here reasons only about what a real
  * player could know: the opponent's hidden mines are not in `s`, and neither is the bot's answer.
@@ -207,8 +208,8 @@ function moveCandidates(
     if (!Number.isFinite(after)) continue;               // a sealed pocket is never a move
     const from = Number.isFinite(before) ? before : after;
     /* Ground is measured with the rivals' bodies on the board, not on the bare one: the walk counts
-       a body as one action to leap, so a step that walks into a spot only a rival's own square can
-       reach the line from is not ground gained. */
+       a body as one action to go around (a rival straight ahead is never jumped), so a step that
+       walks into a spot only a rival's own square can reach the line from is not ground gained. */
     const oppFrom = dfOpp[b.pos.r * s.cols + b.pos.c];
     const oppTo = dfOpp[st.to.r * s.cols + st.to.c];
     let sc: number;
@@ -581,8 +582,9 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
   const myD = teamField(s, me, d);
   const foes = contenders(s, me, d);
   /* the board as it stands with every rival body on it — the metric the moves are judged on. It is
-     `stepField`, not a fence: a body is a square to leap, not a wall to walk round, so a corridor
-     two balls are wedged in is one action wide and the bot commits to it instead of refusing. */
+     `stepField`, not a fence: a body is a square to go around (never a rival jumped straight ahead),
+     so a corridor two balls are wedged in is one action wide and the bot commits to it instead of
+     refusing. */
   const dfOpp = stepField(s);
   const hz = s.hazard;
   const hazardOn = !!hz;

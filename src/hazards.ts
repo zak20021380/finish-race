@@ -3,7 +3,8 @@
  *
  * The whole timetable is a pure function of (seed, hazard number), so the server and every online
  * client derive the identical schedule without exchanging it — nothing here depends on move history
- * or on a hidden PRNG stream. Rounds are 1-based and rounds 1 and 2 stay hazard-free.
+ * or on a hidden PRNG stream. Rounds are 1-based and rounds 1 and 2 stay hazard-free. A race deploys
+ * at most `MAX_LOGS` (2) rolling logs; the schedule stops there, so no seat can face a third.
  *
  * There is deliberately no telegraph any more: the lane is drawn from the schedule at the instant its
  * round closes, so a seat learns about a log the same moment it is announced — one second of strike
@@ -20,6 +21,9 @@
 import { COLS, ROWS } from './rules';
 import type { Ball, GameState, Player, Pos, Wall } from './rules';
 
+/** The hard cap on rolling logs in one race: a board never deploys more than two. */
+export const MAX_LOGS = 2;
+
 /** Engine tunables for the log, in one place so the server and the client never disagree. */
 export const HAZARD = {
   /** The earliest round a log may drop in. */
@@ -31,6 +35,8 @@ export const HAZARD = {
   knockback: 3,
   /** Adjacent columns the wide trunk spans. */
   logWidth: 3,
+  /** Rolling logs one race may deploy; after the second the clock keeps time but no trunk falls. */
+  maxLogs: MAX_LOGS,
 } as const;
 
 /** Rounds 1..2 are safe whatever `firstHitRound` is tuned to. */
@@ -85,9 +91,10 @@ export function hazardAt(seed: number, k: number, cols: number = COLS): Lane & {
   return { left, width: HAZARD.logWidth, hitRound: hit };
 }
 
-/** The first `count` hazards of a seed — the whole schedule, recomputed any time, identically. */
+/** The first `count` hazards of a seed, capped at `MAX_LOGS` — the whole schedule a race can deploy. */
 export function hazardSchedule(seed: number, count: number, cols: number = COLS): (Lane & { hitRound: number; k: number })[] {
-  return Array.from({ length: count }, (_, k) => ({ k, ...hazardAt(seed, k, cols) }));
+  const n = Math.max(0, Math.min(count, MAX_LOGS));
+  return Array.from({ length: n }, (_, k) => ({ k, ...hazardAt(seed, k, cols) }));
 }
 
 /** A fresh phase: round 1, nothing announced, hazard 0 already timed. */
@@ -161,16 +168,24 @@ export function runLog(s: GameState, lane: Lane): { balls: Ball[]; event: LogEve
  * One turn hand-off: `s` already carries the next `turn` and `played` is the seat that just acted.
  * The round closes when the hand-off wraps past `played`, and if that round is the one the schedule
  * timed, the log drops right there — its lane is drawn from the seed at this instant, so nothing
- * earlier could have read it. The next strike is then timed for the round after it.
+ * earlier could have read it. The next strike is then timed for the round after it. A race deploys
+ * at most `MAX_LOGS` trunks: once the second has fallen the clock still advances but is never armed
+ * again, so no seat can be chased by a third log.
  */
 export function tickHazard(s: GameState, played: Player): GameState {
   const hz = s.hazard;
   if (!hz || s.winner !== null) return s;
   if (!(s.turn !== played && s.turn <= played)) return s;   // the round is still open
   const next: HazardPhase = { ...hz, round: hz.round + 1 };
+  if (next.emitted >= HAZARD.maxLogs) {
+    next.nextHitRound = Number.POSITIVE_INFINITY;
+    return { ...s, hazard: next };
+  }
   if (next.round < next.nextHitRound) return { ...s, hazard: next };
   const swept = runLog(s, hazardAt(hz.seed, hz.emitted, s.cols));
   next.emitted += 1;
-  next.nextHitRound = hazardAt(hz.seed, next.emitted, s.cols).hitRound;
+  next.nextHitRound = next.emitted >= HAZARD.maxLogs
+    ? Number.POSITIVE_INFINITY
+    : hazardAt(hz.seed, next.emitted, s.cols).hitRound;
   return { ...s, balls: swept.balls, hazard: next, lastEvent: swept.event };
 }

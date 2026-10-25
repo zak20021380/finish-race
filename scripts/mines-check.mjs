@@ -4,15 +4,16 @@
  * Run: node --experimental-strip-types scripts/mines-check.mjs
  *
  * Covers: the CONFIG tunables, the board the rules pick for 2, 3 and 4 contenders (grid, spaced
- * spawns, wall budgets, the goal-path guard), the placement band (never the top or bottom two rows),
- * occupied cells, the per-team budget, whose turn it is, mines not blocking movement, the 2-row
- * aerial knockback — horizontal walls jumped, the bottom clamp, and the occupied-square fallbacks
- * that keep a blast from ever leaving the ball on the charge — no chained blasts, friendly fire,
- * and what
+ * spawns, wall budgets, the goal-path guard), the placement band (the finish row is legal, the
+ * bottom two rows are not), occupied cells, the per-team budget, whose turn it is, mines not
+ * blocking movement, the 2-row aerial knockback — horizontal walls jumped, the bottom clamp, and
+ * the occupied-square fallbacks that keep a blast from ever leaving the ball on the charge — no
+ * chained blasts, friendly fire, and what
  * view(state, team) is allowed to reveal — plus 300 randomised playouts that re-check those
  * invariants after every single action. Then the log: a schedule that is a pure function of the
- * seed, a hazard-free opening, the telegraph/resolve round cycle, the wall shield, the lane's three
- * early stops, multi-ball and own-team hits, mines that never arm under a shove, and the bot.
+ * seed and deploys at most MAX_LOGS trunks, a hazard-free opening, the telegraph/resolve round
+ * cycle, the wall shield, the lane's three early stops, multi-ball and own-team hits, mines that
+ * never arm under a shove, and the bot.
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -32,7 +33,7 @@ for (const n of NAMES) {
   fs.writeFileSync(new URL(HREF[n]), src);
 }
 const {
-  CONFIG, COLS, ROWS, WIDE_COLS, WIDE_ROWS, HAZARD, MAX_TEAMS, allWalls, apply, contendersIn,
+  CONFIG, COLS, ROWS, WIDE_COLS, WIDE_ROWS, HAZARD, MAX_LOGS, MAX_TEAMS, allWalls, apply, contendersIn,
   dimsFor, doMine, doWall, hasPathToFinish, logStopRow, mineCells, mineOk, newGame, reachable, spawnColumns,
   startLayout, steps, view, liveMines, minesLeft, wallBudget, wallOk, wallsRemaining,
 } = await import(HREF.rules);
@@ -154,9 +155,10 @@ check('path: the goal-path guard follows the board it is standing on', () => {
 check('mines: the placement band follows the wide board', () => {
   const s = newGame([1, 1, 1]);                  // 10 columns, 12 rows
   assert.equal(s.cols, 10);
-  assert.equal(mineCells(s, 0).length, 10 * (12 - 4));
+  assert.equal(mineCells(s, 0).length, 10 * (12 - 2));
   assert.equal(mineOk(s, { c: 9, r: 2 }), true, 'the tenth column is on the board');
   assert.equal(mineOk(s, { c: 10, r: 2 }), false, 'and the eleventh is not');
+  assert.equal(mineOk(s, { c: 9, r: 0 }), true, 'the finish row is on the wide board too');
 });
 
 check('log: the lane and its stop line follow the wide board too', () => {
@@ -174,19 +176,20 @@ check('newGame starts with no mines', () => {
   assert.deepEqual(newGame([1, 1]).mines, []);
 });
 
-check('placement band: rows 2..ROWS-3 only', () => {
+check('placement band: the finish row down to the row above the start zone', () => {
   const s = newGame([1, 1]);
-  assert.equal(mineOk(s, { c: 3, r: 0 }), false, 'finish row');
-  assert.equal(mineOk(s, { c: 3, r: 1 }), false, 'top 2 rows');
+  assert.equal(mineOk(s, { c: 3, r: 0 }), true, 'the finish row accepts a charge');
+  assert.equal(mineOk(s, { c: 3, r: 1 }), true, 'and so does the row below it');
   assert.equal(mineOk(s, { c: 3, r: ROWS - 2 }), false, 'bottom 2 rows');
   assert.equal(mineOk(s, { c: 3, r: ROWS - 1 }), false, 'start row');
-  assert.equal(mineOk(s, { c: 0, r: 2 }), true, 'first legal row');
+  assert.equal(mineOk(s, { c: 0, r: 0 }), true, 'the finish row corner is legal');
   assert.equal(mineOk(s, { c: COLS - 1, r: ROWS - 3 }), true, 'last legal row');
   assert.equal(mineOk(s, { c: -1, r: 5 }), false);
   assert.equal(mineOk(s, { c: COLS, r: 5 }), false);
   const cells = mineCells(s, 0);
-  assert.equal(cells.length, COLS * (ROWS - 4));
-  assert.ok(cells.every((c) => c.r >= 2 && c.r <= ROWS - 3));
+  assert.equal(cells.length, COLS * (ROWS - 2));
+  assert.ok(cells.every((c) => c.r >= 0 && c.r <= ROWS - 3));
+  assert.ok(cells.some((c) => c.r === 0), 'the finish row must be offered to the UI');
 });
 
 check('occupied cells reject: ball, then mine', () => {
@@ -460,7 +463,7 @@ check('fuzz: 300 random playouts keep every invariant', () => {
       const armed = new Set();
       for (const m of liveMines(s)) {
         assert.ok(m.cell.c >= 0 && m.cell.c < s.cols, 'mine off board');
-        assert.ok(m.cell.r >= 2 && m.cell.r <= s.rows - 3, 'mine in a banned row');
+        assert.ok(m.cell.r >= 0 && m.cell.r <= s.rows - 3, 'mine in a banned row');
         const k = m.cell.r * s.cols + m.cell.c;
         assert.ok(!armed.has(k), 'two live mines on one cell');
         armed.add(k);
@@ -502,13 +505,18 @@ const closeRound = (s, a = { kind: 'pass' }) => apply({ ...s, turn: s.teams.leng
 const moveTo = (ev, id) => ev.moves.find((m) => m.ballId === id)?.to;
 
 check('hazard config', () => {
-  assert.deepEqual({ ...HAZARD }, { firstHitRound: 3, minGap: 3, maxGap: 9, knockback: 3, logWidth: 3 });});
+  assert.equal(MAX_LOGS, 2, 'a race deploys at most two rolling logs');
+  assert.deepEqual({ ...HAZARD }, {
+    firstHitRound: 3, minGap: 3, maxGap: 9, knockback: 3, logWidth: 3, maxLogs: MAX_LOGS,
+  });
+});
 
-check('hazard: the schedule is a pure function of the seed', () => {
+check('hazard: the schedule is a pure function of the seed, capped at MAX_LOGS', () => {
   assert.deepEqual(hazardSchedule(7, 30), hazardSchedule(7, 30));
-  assert.deepEqual(hazardSchedule(7, 30).map((h) => h.k), Array.from({ length: 30 }, (_, i) => i));
+  assert.equal(hazardSchedule(7, 30).length, MAX_LOGS, 'the schedule may not plan more trunks than a race deploys');
+  assert.deepEqual(hazardSchedule(7, 30).map((h) => h.k), Array.from({ length: MAX_LOGS }, (_, i) => i));
   assert.notDeepEqual(hazardSchedule(7, 30), hazardSchedule(8, 30), 'a new seed must retime the board');
-  assert.deepEqual({ k: 4, ...hazardAt(7, 4) }, hazardSchedule(7, 5)[4]);
+  assert.deepEqual({ k: 1, ...hazardAt(7, 1) }, hazardSchedule(7, 5)[1]);
   // nothing about the moves so far can shift it: the same k from the same seed, whatever the state
   const a = newGame([1, 1], { hazards: true, seed: 7 });
   const b = apply(apply(a, { kind: 'pass' }), { kind: 'pass' });
@@ -566,13 +574,18 @@ check('hazard: nothing is telegraphed — the lane drops the instant its round c
       assert.ok(next.lastEvent.stopRow < ROWS);
       assert.equal(view(next, 1).lastEvent.left, due.left, 'the strike is public the moment it lands');
       hits.push(now.round);
+      if (now.emitted >= MAX_LOGS) {
+        assert.equal(now.nextHitRound, Infinity, 'the clock stands down after the last log');
+      }
     } else {
       assert.equal(now.nextHitRound, was.nextHitRound, 'a quiet round must not retime the next strike');
+      if (was.emitted >= MAX_LOGS) assert.equal(next.lastEvent, s.lastEvent, 'a log fell after the cap');
     }
+    assert.ok(now.emitted <= MAX_LOGS, 'a race deployed more logs than MAX_LOGS');
     assert.ok(now.round >= 3 || hits.length === 0, 'no strike in rounds 1 or 2');
     s = next;
   }
-  assert.ok(hits.length >= 4, 'only ' + hits.length + ' hazards in 280 turns');
+  assert.equal(hits.length, MAX_LOGS, `expected exactly ${MAX_LOGS} hazards in 280 turns, saw ${hits.length}`);
   assert.ok(hits.every((r, i) => i === 0 || r > hits[i - 1]), 'the strike clock must never run backwards');
 });
 

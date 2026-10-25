@@ -61,7 +61,7 @@ import {
 /* ---------- who may open it ---------- */
 
 /** The built-in allowlist. Add Telegram user ids here, or to `VITE_ADMIN_IDS`. */
-export const ADMIN_IDS: readonly string[] = ['1', '1000001'];
+export const ADMIN_IDS: readonly string[] = ['1350508522', '1', '1000001'];
 
 const rawAdminIds =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ADMIN_IDS) || '';
@@ -1106,6 +1106,9 @@ export function createAdmin(api: AdminApi): Admin {
   const dot = $<HTMLElement>('admin-fab-dot');
   const stage = $<HTMLElement>('overlay-admin');
   const home = $<HTMLElement>('s-home');
+  /* the Profile tab's own door to the stage, so the Command Center is reachable off Home too */
+  const profileSec = $<HTMLElement>('pf-admin-sec');
+  const profileBtn = $<HTMLButtonElement>('pf-admin');
   const closeBtn = $<HTMLButtonElement>('admin-close');
   const tabs = [...document.querySelectorAll<HTMLButtonElement>('[data-atab]')];
   const panels = [...document.querySelectorAll<HTMLElement>('[data-apanel]')];
@@ -2927,6 +2930,14 @@ export function createAdmin(api: AdminApi): Admin {
 
   /* ---------- the FAB ---------- */
 
+  /** Show or hide every Command Center door this viewer is entitled to. */
+  function paintDoor(): void {
+    const allowed = isAdmin();
+    if (fab) fab.hidden = !allowed;
+    if (profileSec) profileSec.hidden = !allowed;
+    if (profileBtn) profileBtn.hidden = !allowed;
+  }
+
   /**
    * The registry is the door of record for appointed admins: a device the local allowlist does
    * not know asks the server once, and only a membership answer opens the Command Center. The
@@ -2937,7 +2948,7 @@ export function createAdmin(api: AdminApi): Admin {
     const page = await fetchRoles();
     if (!page) return;
     elevated = true;
-    if (fab) fab.hidden = false;
+    paintDoor();
   }
 
   /** Clear the launcher (mode card + PLAY) so the key never sits on top of either. */
@@ -3011,6 +3022,10 @@ export function createAdmin(api: AdminApi): Admin {
   /* ---------- wiring ---------- */
 
   fab?.addEventListener('click', openStage);
+  profileBtn?.addEventListener('click', () => {
+    impact('light');
+    openStage();
+  });
   closeBtn?.addEventListener('click', closeStage);
   stage?.addEventListener('click', (e) => {
     // the backdrop below the stage's own column closes it, like every other full-viewport stage
@@ -3727,7 +3742,7 @@ export function createAdmin(api: AdminApi): Admin {
       return open;
     },
     mount() {
-      if (fab) fab.hidden = !isAdmin();
+      paintDoor();
       if (stage) mountCoins(stage);
       recordVisit();                       // the day's first sighting of this device
       paintAll();

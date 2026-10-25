@@ -21,6 +21,11 @@
  * is offered over ANY other ball, not only a rival's: a team's own balls jam a corridor exactly the
  * same way, and in a four-way free-for-all "the opponent" is not a single seat.
  *
+ * One exception: a ball NEVER leaps straight over a rival that is between it and FINISH. The trailing
+ * ball's forward path stops at the rival's square; it may sidestep around the body's flank, follow
+ * when the lane opens, or take another route, but it may not jump the rival on the way up the board.
+ * Own-team balls are still stepping stones.
+ *
  * Anti-oscillation: `repeat` is a small deterministic ledger of the boards the last few turns left
  * behind. Once a race shuffles back onto a board it has already been in `REPEAT_LIMIT` turns
  * running, `steps()` narrows to the steps that actually gain ground; if that still cannot break the
@@ -35,27 +40,28 @@
  * vertex into a `+`. See `wallsOverlap` / `wallsCross`.
  *
  * Mines are hidden traps: a team buries one on any cell that holds no ball and no live mine, never
- * in the top two or bottom two rows. They do not block movement — a ball that steps onto one sets
- * it off and the aerial shockwave throws it `CONFIG.KNOCKBACK` rows down the column. The blast is
- * aerial: horizontal walls are jumped, never a stop. The bottom edge clamps the throw, and only a
- * body on the landing square bends it — first to `r + 1`, then to `r + 3`, then to the nearest free
- * flank — so a detonation never leaves the ball standing on the charge. The mine is spent and the
- * blast never chains. Opponent mines are secret: clients get `view(state, team)`, never the raw
- * state.
+ * in the bottom two start rows. Every row above them is legal, the finish line included — a charge
+ * planted on the line can throw a ball back off it. They do not block movement — a ball that steps
+ * onto one sets it off and the aerial shockwave throws it `CONFIG.KNOCKBACK` rows down the column.
+ * The blast is aerial: horizontal walls are jumped, never a stop. The bottom edge clamps the throw,
+ * and only a body on the landing square bends it — first to `r + 1`, then to `r + 3`, then to the
+ * nearest free flank — so a detonation never leaves the ball standing on the charge. The mine is
+ * spent and the blast never chains. Opponent mines are secret: clients get `view(state, team)`,
+ * never the raw state.
  *
  * The wide rolling log (opt-in: `newGame(sizes, { hazards: true, seed })`) is a public hazard on
  * a timetable derived from that seed alone — see `hazards.ts`. A round is one turn per team; rounds
- * 1 and 2 stay hazard-free. Nothing is telegraphed: when the last team of a timed round acts, the
- * lane is drawn from the seed and drops on the spot, shoving every ball above the first blocking
- * wall back down its own column. Ranked and normal play pass no `hazards` flag and behave exactly
- * as before.
+ * 1 and 2 stay hazard-free, and a race deploys at most two logs. Nothing is telegraphed: when the
+ * last team of a timed round acts, the lane is drawn from the seed and drops on the spot, shoving
+ * every ball above the first blocking wall back down its own column. Ranked and normal play pass no
+ * `hazards` flag and behave exactly as before.
  *
  * Multiplayer later: send an `Action` over the wire and feed whatever comes back into `apply()`.
  */
 import { initPhase, tickHazard } from './hazards';
 import type { HazardPhase, LogEvent } from './hazards';
 
-export { HAZARD, logStopRow } from './hazards';
+export { HAZARD, MAX_LOGS, logStopRow } from './hazards';
 export type { HazardPhase, Lane, LogEvent, LogMove } from './hazards';
 
 
@@ -84,7 +90,7 @@ export const CONFIG = {
    */
   TURN_TIME_LIMIT: 8,
 } as const;
-/** A mine may not be buried in the top or bottom this-many rows: no free wins, no point-blank traps. */
+/** A mine may not be buried in the bottom this-many rows: no point-blank traps on the start line. */
 const MINE_ZONE = 2;
 
 /** A team index — the seat a ball, wall, turn or win belongs to. */
@@ -382,7 +388,8 @@ function cellFree(s: GameState, c: number, r: number, body?: Uint8Array): boolea
  * it, the leap becomes a sidestep: the mover hops to one of the two squares flanking the body, so
  * long as the board leaves that flank open and no wall runs between the body and it. Nothing at all
  * when the body is hemmed in on all three sides — a body wedged in a sealed one-wide pocket is a
- * wall.
+ * wall. `blockStraight` withholds the far landing but keeps the flank hops: a trailing ball may go
+ * around the rival in front of it, never over it.
  *
  * The landings are reported to a sink rather than collected into an array: `stepField` walks every
  * cell of the board with this, and a landing list per body was the single largest source of garbage
@@ -390,10 +397,10 @@ function cellFree(s: GameState, c: number, r: number, body?: Uint8Array): boolea
  */
 function eachLeapTarget(
   s: GameState, b: Blocks, over: Pos, dc: number, dr: number,
-  sink: (c: number, r: number) => void, body?: Uint8Array,
+  sink: (c: number, r: number) => void, blockStraight = false, body?: Uint8Array,
 ): void {
   const bc = over.c + dc, br = over.r + dr;
-  if (cellFree(s, bc, br, body) && canStep(b, over.c, over.r, dc, dr, s.cols, s.rows)) {
+  if (!blockStraight && cellFree(s, bc, br, body) && canStep(b, over.c, over.r, dc, dr, s.cols, s.rows)) {
     sink(bc, br);
     return;                                       // the straight leap lands: no sidestep is offered
   }
@@ -406,9 +413,9 @@ function eachLeapTarget(
 }
 
 /** The same rule, as a list — what `steps()` reads, where a leap is rare and clarity is worth more. */
-function leapTargets(s: GameState, b: Blocks, over: Pos, dc: number, dr: number): Pos[] {
+function leapTargets(s: GameState, b: Blocks, over: Pos, dc: number, dr: number, blockStraight = false): Pos[] {
   const out: Pos[] = [];
-  eachLeapTarget(s, b, over, dc, dr, (c, r) => out.push({ c, r }));
+  eachLeapTarget(s, b, over, dc, dr, (c, r) => out.push({ c, r }), blockStraight);
   return out;
 }
 
@@ -534,8 +541,10 @@ export interface Step { ball: number; to: Pos }
 
 /**
  * Every step a team's balls have on the bare board: each ball's 4-neighbourhood, with walls and the
- * board's edge blocking, and a ball in the way turned into a leap rather than a refusal. No
- * anti-oscillation filter — this is the raw move set `steps()` narrows.
+ * board's edge blocking, and a ball in the way turned into a leap rather than a refusal. A rival
+ * standing between the mover and FINISH is the exception: the straight leap over it is withheld,
+ * while its flank hops stay as the way around. No anti-oscillation filter — this is the raw move set
+ * `steps()` narrows.
  */
 function rawSteps(s: GameState, team: Player): Step[] {
   const b = blocks(s.walls);
@@ -545,24 +554,26 @@ function rawSteps(s: GameState, team: Player): Step[] {
     for (const [dc, dr] of DIRS) {
       if (!canStep(b, ball.pos.c, ball.pos.r, dc, dr, s.cols, s.rows)) continue;
       const to: Pos = { c: ball.pos.c + dc, r: ball.pos.r + dr };
-      let blocked = false;
+      let blocker: Ball | null = null;
       for (const o of s.balls) {
-        if (o.id !== ball.id && o.pos.c === to.c && o.pos.r === to.r) { blocked = true; break; }
+        if (o.id !== ball.id && o.pos.c === to.c && o.pos.r === to.r) { blocker = o; break; }
       }
-      if (!blocked) { out.push({ ball: ball.id, to }); continue; }
-      for (const land of leapTargets(s, b, to, dc, dr)) out.push({ ball: ball.id, to: land });
+      if (!blocker) { out.push({ ball: ball.id, to }); continue; }
+      const blockStraight = dr === -1 && blocker.team !== ball.team;
+      for (const land of leapTargets(s, b, to, dc, dr, blockStraight)) out.push({ ball: ball.id, to: land });
     }
   }
   return out;
 }
 
 /**
- * Every legal step for the team: each ball's 4-neighbourhood — walls block, and a ball in the way
- * is leapt — or, while the race is caught in a repetition (`REPEAT_LIMIT`), only the steps that
- * actually gain ground on FINISH. The narrowing is the anti-oscillation rule, and it lives here so
- * that every door into the engine (a tap, the bot, the blitz auto-move, a message off the wire)
- * obeys it without having to know about it. A team with no forward step keeps the plain set, so the
- * rule can slow a shuffle but never freeze a race.
+ * Every legal step for the team: each ball's 4-neighbourhood — walls block, a ball in the way is
+ * leapt (a rival directly ahead may only be gone around, never straight over) — or, while the race
+ * is caught in a repetition (`REPEAT_LIMIT`), only the steps that actually gain ground on FINISH.
+ * The narrowing is the anti-oscillation rule, and it lives here so that every door into the engine
+ * (a tap, the bot, the blitz auto-move, a message off the wire) obeys it without having to know
+ * about it. A team with no forward step keeps the plain set, so the rule can slow a shuffle but
+ * never freeze a race.
  */
 export function steps(s: GameState, team: Player = s.turn): Step[] {
   if (s.winner !== null) return [];
@@ -588,6 +599,7 @@ let _revPre = new Int32Array(0);
 let _stepDist = new Int16Array(0);
 let _stepQ = new Int32Array(0);
 let _body = new Uint8Array(0);
+let _bodyTeam = new Uint8Array(0);
 
 /** Grow the scratch to fit a board of `n` cells. Done once per board size, never per call. */
 function growStepScratch(n: number): void {
@@ -597,6 +609,7 @@ function growStepScratch(n: number): void {
   _stepDist = new Int16Array(n);
   _stepQ = new Int32Array(n);
   _body = new Uint8Array(n);
+  _bodyTeam = new Uint8Array(n);
 }
 
 /**
@@ -604,24 +617,31 @@ function growStepScratch(n: number): void {
  * where it is: the BFS walks the same step graph `steps()` offers — one cell, or a leap over a body
  * — so a corridor two balls are wedged in is one action wide instead of sealed, which is what the
  * bot needs to judge a lane honestly. Only walls and the board's edge can shut a lane here; a body
- * is something to step over. Every ball is a body, the mover's own included, exactly as `steps()`
- * treats them, and a body's own cell is a source like any other — a mover looks out *from* where it
- * stands — but never a target, because a mover may not walk into a body, only over it. -1 = out of
- * reach.
+ * is something to step over. A rival ahead of the mover is not: its square withholds the straight
+ * forward leap exactly as `steps()` does, leaving only the flank hop around it. Every ball is a
+ * body, the mover's own included, exactly as `steps()` treats them, and a body's own cell is a
+ * source like any other — a mover looks out *from* where it stands — but never a target, because a
+ * mover may not walk into a body, only over it. -1 = out of reach.
  *
  * The graph is built backwards, one bucket per cell, because a sidestep is a one-way edge: it lands
  * the mover beside a body and nothing walks it back the same way. The field is a shared scratch
  * buffer reused on the next call — read it, do not keep it.
  */
-export function stepField(s: GameState): Int16Array {
+export function stepField(s: GameState, team: Player = s.turn): Int16Array {
   const { cols, rows } = s;
   const n = cols * rows;
   const b = blocks(s.walls);
 
   growStepScratch(n);
   const body = _body;
+  const bodyTeam = _bodyTeam;
   body.fill(0, 0, n);
-  for (const o of s.balls) body[o.pos.r * cols + o.pos.c] = 1;
+  bodyTeam.fill(255, 0, n);
+  for (const o of s.balls) {
+    const at = o.pos.r * cols + o.pos.c;
+    body[at] = 1;
+    bodyTeam[at] = o.team;
+  }
 
   _revOff.fill(0, 0, n + 1);
   /** File `from` among `to`'s predecessors — the reverse of one legal step. */
@@ -638,7 +658,9 @@ export function stepField(s: GameState): Int16Array {
       const nc = c + dc, nr = r + dr;
       const over = nr * cols + nc;
       if (!body[over]) { link(from, over); continue; }
-      eachLeapTarget(s, b, { c: nc, r: nr }, dc, dr, (lc, lr) => link(from, lr * cols + lc), body);
+      const blockStraight = dr === -1 && bodyTeam[over] !== team;
+      eachLeapTarget(s, b, { c: nc, r: nr }, dc, dr, (lc, lr) => link(from, lr * cols + lc),
+        blockStraight, body);
     }
   };
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) edges(r * cols + c, c, r);
@@ -728,17 +750,17 @@ export function minesLeft(s: GameState, team: Player): number {
 export function mineCells(s: GameState, owner: Player = s.turn): Cell[] {
   if (s.winner !== null || minesLeft(s, owner) <= 0) return [];
   const out: Cell[] = [];
-  for (let r = MINE_ZONE; r < s.rows - MINE_ZONE; r++) {
+  for (let r = 0; r < s.rows - MINE_ZONE; r++) {
     for (let c = 0; c < s.cols; c++) if (mineOk(s, { c, r }, owner)) out.push({ c, r });
   }
   return out;
 }
 
-/** Is this mine legal? Within the owner's budget, off the finish and the start, on an empty cell. */
+/** Is this mine legal? Within budget, on the board (the finish row included), on an empty cell. */
 export function mineOk(s: GameState, cell: Cell, owner: Player = s.turn): boolean {
   if (s.winner !== null) return false;
   if (minesLeft(s, owner) <= 0) return false;
-  if (cell.c < 0 || cell.c >= s.cols || cell.r < MINE_ZONE || cell.r >= s.rows - MINE_ZONE) return false;
+  if (cell.c < 0 || cell.c >= s.cols || cell.r < 0 || cell.r >= s.rows - MINE_ZONE) return false;
   if (s.balls.some((b) => b.pos.c === cell.c && b.pos.r === cell.r)) return false;
   return mineAt(s, cell) === null;
 }

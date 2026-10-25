@@ -22994,3 +22994,318 @@ html.reduced-motion .nd-gleam::before { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .nd-mark, .nd-aura, .nd-gleam::before { animation: none; }
 }
+
+/* ============================================================================================
+   FINISH SWITCH + LIGHT MODE — the pearl chessboard stage.
+
+   Dark Mode is untouched: every rule below keys off `html[data-theme="light"]`, and the page wash
+   only joins in while the race screen is live (`html.light-game`, set by main.ts). The shell, the
+   menus and every sheet keep their midnight clay. Inside the race, the canvas swaps to the pearl
+   board theme and the chrome turns into warm porcelain + cool platinum: pearl/ivory panels, a
+   champagne light from above, and team inks deepened so red and blue still clear the pale surfaces.
+   ============================================================================================ */
+
+/* ---- the head: menu | centred round | sun-moon switch ---- */
+.g-head { position: relative; justify-content: space-between; }
+.g-head .g-round {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: calc(100% - 156px);
+}
+
+.theme-toggle {
+  position: relative;
+  flex: none;
+  margin-left: auto;
+  width: 64px;
+  height: 32px;
+  padding: 3px;
+  border: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  justify-items: center;
+  border-radius: 999px;
+  cursor: pointer;
+  isolation: isolate;
+  background: linear-gradient(180deg, #0B111B 0%, #1D2839 100%);
+  color: #94A3B8;
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, .13),
+    inset 0 -2px 3px rgba(0, 0, 0, .6),
+    inset 0 0 0 1px rgba(255, 255, 255, .06),
+    0 3px 8px -4px rgba(0, 0, 0, .75);
+  transition: background .3s ease, box-shadow .3s ease;
+}
+.theme-toggle::after { content: ""; position: absolute; inset: -6px; border-radius: inherit; }
+.theme-toggle .ico {
+  position: relative;
+  z-index: 1;
+  width: 15px;
+  height: 15px;
+  flex: none;
+  transition: color .28s ease, opacity .28s ease, filter .28s ease;
+}
+.theme-toggle .tt-sun { color: #64748B; opacity: .72; }
+.theme-toggle .tt-moon { color: #EEF2F8; opacity: 1; filter: drop-shadow(0 0 4px rgba(186, 208, 255, .6)); }
+.theme-toggle-thumb {
+  position: absolute;
+  z-index: 0;
+  top: 3px;
+  left: 3px;
+  width: 28px;
+  height: 26px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 34% 24%, #6C7B95 0%, #334158 46%, #101824 100%);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, .65),
+    inset 0 1px 1px rgba(255, 255, 255, .3);
+  transform: translateX(30px);
+  transition:
+    transform .32s cubic-bezier(.34, 1.4, .64, 1),
+    background .3s ease, box-shadow .3s ease;
+}
+.theme-toggle[aria-checked="true"] .theme-toggle-thumb {
+  transform: translateX(0);
+  background: radial-gradient(circle at 34% 24%, #FFFDF7 0%, #F1E7D3 48%, #D8C39A 100%);
+  box-shadow:
+    0 1px 3px rgba(88, 70, 36, .45),
+    inset 0 1px 1px rgba(255, 255, 255, .95);
+}
+.theme-toggle[aria-checked="true"] .tt-sun { color: #A4690A; opacity: 1; filter: drop-shadow(0 0 5px rgba(245, 187, 66, .65)); }
+.theme-toggle[aria-checked="true"] .tt-moon { color: #7A8492; opacity: .62; filter: none; }
+.theme-toggle:active .theme-toggle-thumb { transform: translateX(30px) scale(.92); }
+.theme-toggle[aria-checked="true"]:active .theme-toggle-thumb { transform: translateX(0) scale(.92); }
+.theme-toggle:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+html[data-theme="light"] .theme-toggle {
+  background: linear-gradient(180deg, #FDFBF6 0%, #E9E2D5 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, .95),
+    inset 0 -2px 3px rgba(122, 101, 66, .2),
+    inset 0 0 0 1px rgba(255, 255, 255, .72),
+    0 3px 8px -5px rgba(84, 67, 38, .5);
+}
+
+/* ---- the page wash joins the light only while the race is on screen ---- */
+html.light-game .bg {
+  background:
+    radial-gradient(58% 42% at 50% -4%, rgba(255, 250, 235, .96) 0%, rgba(255, 248, 228, 0) 72%),
+    linear-gradient(162deg, #F6F2E8 0%, #EFEDE7 38%, #DFE4E9 100%);
+}
+html.light-game .blob.a { background: radial-gradient(closest-side, rgba(224, 184, 106, .24), transparent); }
+html.light-game .blob.b { background: radial-gradient(closest-side, rgba(124, 154, 187, .22), transparent); }
+html.light-game .blob.c { background: radial-gradient(closest-side, rgba(255, 205, 142, .2), transparent); }
+html.light-game .grain { opacity: .022; }
+html.light-game .vignette {
+  background: radial-gradient(120% 88% at 50% 34%, rgba(255, 255, 255, 0) 40%, rgba(94, 82, 60, .2) 100%);
+}
+
+/* ---- the race screen's porcelain tokens ---- */
+html[data-theme="light"] .screen.game {
+  --ink: #1F2835;
+  --ink-soft: #5E6876;
+  --chip-ink: #4B5666;
+  --hair: rgba(42, 51, 64, .1);
+  --hair-lit: rgba(255, 255, 255, .96);
+  --field: #E8E3D8;
+  --solid-a: #FDFBF6;
+  --solid-b: #EDE7DC;
+  --tint-glass: #F5F1E9;
+  --sep: rgba(42, 51, 64, .1);
+  --shadow: rgba(88, 73, 48, .34);
+  --shadow-soft: rgba(88, 73, 48, .22);
+  --clay-face: linear-gradient(180deg, #FFFDF8 0%, #EDE7DC 100%);
+  --red-ink: #B01438;
+  --blue-ink: #1F45B5;
+  --green-ink: #0A6E47;
+  --gold-ink: #865B00;
+  --honey-ink: #865B00;
+  --brand-ink: #0B6F9E;
+  --coin: rgba(202, 151, 41, .13);
+  --coin-line: rgba(154, 108, 16, .28);
+  --coin-ink: #7A5200;
+  --pill: rgba(30, 36, 46, .92);
+  --pill-ink: #FFFFFF;
+}
+html[data-theme="light"] .screen.game .g-round { color: #5E6876; text-shadow: 0 1px 0 rgba(255, 255, 255, .75); }
+html[data-theme="light"] .screen.game .icon-btn {
+  color: #33404F;
+  background: linear-gradient(180deg, #FFFDF8 0%, #EDE7DC 100%);
+  box-shadow:
+    0 3px 0 #C8BFB0,
+    0 8px 14px -9px rgba(84, 67, 38, .45),
+    inset 0 2px 2px rgba(255, 255, 255, .95),
+    inset 0 -2px 3px rgba(102, 84, 55, .18),
+    inset 0 0 0 1px rgba(255, 255, 255, .7);
+}
+html[data-theme="light"] .screen.game .icon-btn:hover:not(:active) {
+  box-shadow:
+    0 3px 0 #C8BFB0,
+    0 10px 16px -9px rgba(84, 67, 38, .5),
+    inset 0 2px 2px rgba(255, 255, 255, .95),
+    inset 0 0 0 1px rgba(255, 255, 255, .8);
+}
+
+/* ---- the card: warm porcelain, lit along the crown, grounded by a soft umber drop ---- */
+html[data-theme="light"] .screen.game .card {
+  background:
+    radial-gradient(120% 76% at 50% -4%, rgba(255, 255, 255, .92) 0%, rgba(255, 255, 255, 0) 58%),
+    linear-gradient(180deg, #FCF9F3 0%, #F3EFE7 54%, #E9E4DA 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .92),
+    inset 0 2px 2px rgba(255, 255, 255, .98),
+    inset 0 -3px 7px rgba(95, 80, 55, .11),
+    0 26px 50px -22px rgba(79, 65, 42, .42);
+}
+
+/* ---- the board's mount: pearl metal between a ruby and a sapphire edge ---- */
+html[data-theme="light"] .screen.game .board-frame {
+  background:
+    linear-gradient(90deg,
+      rgba(206, 40, 78, .88) 0%, rgba(214, 64, 98, .34) 7%, rgba(214, 64, 98, 0) 22%,
+      rgba(88, 126, 214, 0) 78%, rgba(107, 141, 230, .34) 93%, rgba(112, 148, 242, .88) 100%),
+    linear-gradient(180deg, #FEFBF5 0%, #F1ECE2 46%, #DCD6CA 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .92),
+    inset 0 2px 3px rgba(255, 255, 255, .98),
+    inset 0 -3px 4px rgba(108, 89, 59, .22),
+    -9px 0 22px -10px rgba(206, 40, 78, .48),
+    9px 0 22px -10px rgba(88, 126, 214, .48),
+    0 18px 34px -18px rgba(79, 64, 40, .52);
+}
+html[data-theme="light"] .screen.game .board-wrap::before {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .9),
+    inset 0 2px 6px rgba(112, 96, 70, .2),
+    inset 0 -1px 0 rgba(255, 255, 255, .82);
+}
+html[data-theme="light"] .screen.game .stud {
+  background: radial-gradient(circle at 34% 28%, #FFFEF8 0%, #F3EAD8 24%, #C7AB72 58%, #7C6130 100%);
+  box-shadow:
+    0 1px 2px rgba(70, 55, 25, .45),
+    inset 0 0 0 .5px rgba(72, 52, 18, .55);
+}
+
+/* ---- the dock: porcelain strips and a platinum chat orb ---- */
+html[data-theme="light"] .screen.game .chip {
+  background: linear-gradient(180deg, #FFFDF8 0%, #E9E3D9 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, .98),
+    inset 0 -1px 2px rgba(98, 82, 54, .24),
+    0 4px 12px rgba(84, 68, 42, .18);
+}
+html[data-theme="light"] .screen.game .chip:not(.active) {
+  filter: saturate(.82) brightness(.995);
+  background: linear-gradient(180deg, #F7F3EB 0%, #E4DDD2 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .95),
+    inset 0 -1px 2px rgba(98, 82, 54, .28),
+    inset 0 0 0 1px rgba(255, 255, 255, .5),
+    0 3px 10px rgba(84, 68, 42, .16);
+}
+html[data-theme="light"] .screen.game .chip.active {
+  filter: none;
+  background: linear-gradient(180deg, #FFFEFA 0%, #EFE9DF 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, .98),
+    inset 0 -1px 2px rgba(98, 82, 54, .24),
+    0 0 16px color-mix(in srgb, var(--tint) 30%, transparent),
+    0 4px 12px rgba(84, 68, 42, .2);
+}
+html[data-theme="light"] .screen.game .chip-ball {
+  background: linear-gradient(180deg, #E4DED2 0%, #F6F2EA 100%);
+  box-shadow:
+    inset 0 2px 4px rgba(90, 75, 50, .34),
+    inset 0 -1px 0 rgba(255, 255, 255, .7),
+    inset 0 0 0 1px rgba(255, 255, 255, .55);
+}
+html[data-theme="light"] .screen.game .flag-badge {
+  background: #EFEADF;
+  box-shadow: 0 0 0 1.5px #F8F4EC, inset 0 0 0 1px rgba(62, 72, 86, .14);
+}
+html[data-theme="light"] .screen.game .res .walls {
+  color: var(--ink-t);
+  background: linear-gradient(180deg, #F8F4EC 0%, #E6DFD3 100%);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .8);
+  box-shadow:
+    inset 0 1.5px 2.5px rgba(92, 75, 48, .2),
+    inset 0 -1px 0 rgba(255, 255, 255, .8),
+    inset 0 0 0 1px rgba(80, 90, 104, .1);
+}
+html[data-theme="light"] .screen.game .chip .walls.depleted { background: #E9E3D8; }
+html[data-theme="light"] .screen.game .chip .mine-pod {
+  color: #865B00;
+  background: linear-gradient(180deg, #FFFCF4 0%, #EFE5D0 62%, #E1D3B6 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, .95),
+    inset 0 -1px 2px rgba(128, 98, 44, .28),
+    inset 0 0 0 1px rgba(176, 130, 35, .24),
+    0 3px 8px -4px rgba(84, 67, 38, .5);
+}
+html[data-theme="light"] .screen.game .chip .mine-pod .bomb-ico {
+  filter: drop-shadow(0 1px 1px rgba(120, 88, 20, .35)) drop-shadow(0 0 6px rgba(245, 158, 11, .35));
+}
+html[data-theme="light"] .screen.game .chip button.mine-pod[aria-pressed="true"] {
+  color: #FFF3D6;
+  background: linear-gradient(180deg, #6A4914 0%, #3B2807 100%);
+  box-shadow:
+    inset 0 0 0 1.5px #E7B84A,
+    inset 0 0 14px -2px rgba(245, 158, 11, .6),
+    0 0 16px -3px rgba(245, 158, 11, .6);
+}
+html[data-theme="light"] .screen.game .chip .mine-pod .fog-n {
+  color: #6B4A08;
+  background: radial-gradient(circle at 34% 26%, #FFF8E4 0%, #F0DDAF 58%, #D6B978 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(122, 88, 20, .3),
+    inset 0 1px 0 rgba(255, 255, 255, .8),
+    0 1px 3px -1px rgba(94, 71, 20, .45);
+  text-shadow: none;
+}
+html[data-theme="light"] .screen.game .chat-key {
+  color: #5B6573;
+  background: linear-gradient(180deg, #FFFDF8 0%, #E4DED3 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, .98),
+    inset 0 -1px 2px rgba(98, 82, 54, .3),
+    inset 0 0 0 1px rgba(255, 255, 255, .6),
+    0 3px 8px rgba(84, 68, 42, .22);
+}
+html[data-theme="light"] .screen.game .chat-key:active {
+  color: #865B00;
+  box-shadow:
+    inset 0 0 0 1px rgba(176, 130, 35, .35),
+    inset 0 2px 4px rgba(98, 82, 54, .28),
+    inset 0 -1px 0 rgba(255, 255, 255, .7);
+}
+
+/* ---- the result card over a soft daylight scrim ---- */
+html[data-theme="light"] .screen.game .overlay {
+  background: rgba(63, 53, 36, .38);
+  -webkit-backdrop-filter: blur(10px) saturate(.94) brightness(1.06);
+  backdrop-filter: blur(10px) saturate(.94) brightness(1.06);
+}
+html[data-theme="light"] .screen.game .panel {
+  background:
+    radial-gradient(100% 60% at 50% 0%, rgba(255, 255, 255, .95) 0%, rgba(255, 255, 255, 0) 68%),
+    linear-gradient(180deg, #FFFDF8 0%, #EDE7DC 100%);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, .98),
+    inset 0 0 0 1px rgba(255, 255, 255, .8),
+    0 30px 60px -20px rgba(62, 50, 30, .55);
+}
+html[data-theme="light"] .screen.game .cta.ghost {
+  background: linear-gradient(180deg, #FFFDF8 0%, #EAE3D7 100%);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px rgba(62, 72, 86, .14), 0 4px 10px -8px rgba(84, 68, 42, .4);
+}
+
+/* the switch's own glide is enough motion when the client asks for less */
+html.reduced-motion .theme-toggle-thumb { transition: background .2s ease; }
+html.reduced-motion .theme-toggle[aria-checked="true"] .theme-toggle-thumb { transition: background .2s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle-thumb { transition: background .2s ease; }
+  .theme-toggle .ico { transition: none; }
+}

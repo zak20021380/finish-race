@@ -1,10 +1,19 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#10141D" />
     <meta name="color-scheme" content="dark" />
+    <!-- the saved finish is published before first paint, so a reload never flashes the other board -->
+    <script>
+      try {
+        var saved = JSON.parse(localStorage.getItem('detour.settings.v1') || '{}');
+        document.documentElement.dataset.theme = saved && saved.appearance === 'light' ? 'light' : 'dark';
+      } catch (e) {
+        document.documentElement.dataset.theme = 'dark';
+      }
+    </script>
     <title>Detour</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -40,6 +49,17 @@
       </symbol>
       <symbol id="i-menu" viewBox="0 0 24 24">
         <path d="M4.6 7.4h14.8M4.6 12h14.8M4.6 16.6h14.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      </symbol>
+      <!-- the finish switch: a warm sun for the pearl board, a cool crescent for the midnight one -->
+      <symbol id="i-sun" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="4.1" fill="currentColor" />
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+          <path d="M12 2.5v2.3M12 19.2v2.3M2.5 12h2.3M19.2 12h2.3" />
+          <path d="m5.2 5.2 1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6" />
+        </g>
+      </symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24">
+        <path d="M20.2 14.35A8.62 8.62 0 0 1 9.65 3.8a8.7 8.7 0 1 0 10.55 10.55Z" fill="currentColor" />
       </symbol>
       <symbol id="i-restart" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1519,6 +1539,22 @@
                 </div>
               </div>
             </div>
+            <!-- live-ops door: allowlisted admins get this row (and the Home FAB); everyone
+                 else never sees the section at all -->
+            <div class="pf-sec" id="pf-admin-sec" hidden>
+              <h2 class="eq-h pf-sec-h"><span>Operations</span><span class="pf-sec-sub">Admin only</span></h2>
+              <div class="pf-tiles rows tight pf-rows">
+                <button class="pf-tile row edit" type="button" id="pf-admin" aria-haspopup="dialog">
+                  <span class="pf-tile-ico" aria-hidden="true"><svg class="ico"><use href="#i-shield" /></svg></span>
+                  <span class="row-txt">
+                    <span class="row-t">Admin Command Center</span>
+                    <span class="row-s">Live ops, players, broadcasts &amp; server</span>
+                  </span>
+                  <span class="row-v">Open</span>
+                  <svg class="ico chev" aria-hidden="true"><use href="#i-next" /></svg>
+                </button>
+              </div>
+            </div>
             <div class="equips pf-equips">
               <h2 class="eq-h">Equipped</h2>
               <!-- locked until the cosmetic inventory ships: the three worn previews stay in
@@ -1553,8 +1589,13 @@
             </button>
             <!-- the round is the only thing the top bar says; whose turn is on the cards below -->
             <p class="g-round" id="round-label">Round 1</p>
-            <!-- a menu key's worth of nothing on the right, so the caption sits on the screen's centre -->
-            <span class="g-head-pad" aria-hidden="true"></span>
+            <!-- the finish switch: sun (pearl board) / moon (midnight board), persisted locally -->
+            <button class="theme-toggle" type="button" id="theme-toggle" role="switch"
+              aria-checked="false" aria-label="Light board theme" title="Switch board theme">
+              <span class="theme-toggle-thumb" aria-hidden="true"></span>
+              <svg class="ico tt-sun" aria-hidden="true" focusable="false"><use href="#i-sun" /></svg>
+              <svg class="ico tt-moon" aria-hidden="true" focusable="false"><use href="#i-moon" /></svg>
+            </button>
           </div>
 
           <main class="card">
