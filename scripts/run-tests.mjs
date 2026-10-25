@@ -26,6 +26,7 @@ const SUITES = [
   { name: 'squad register', script: 'verify-squad-register.mjs', stripTypes: false },
   { name: 'worker badges', script: 'verify-worker-badges.mjs', stripTypes: false },
   { name: 'worker telegram bot', script: 'verify-worker-telegram.mjs', stripTypes: false },
+  { name: 'vs clash', script: 'verify-vs-clash.mjs', stripTypes: true },
 ];
 
 const green = (s) => `\x1b[32m${s}\x1b[0m`;

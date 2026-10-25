@@ -52,6 +52,7 @@ import {
   seatName, sizesOf, startEarly, type BotTier, type Room,
 } from './room';
 import { initSplash, splashReady } from './splash';
+import { showVsClash, type VsRival, type VsStakes } from './vsclash';
 
 initSplash();
 initTelegram();
@@ -1250,6 +1251,44 @@ interface StartSetup {
   room?: Room | null;
 }
 
+/**
+ * The seats the face-off puts on the other side of the crest. A live pairing brings its own rival;
+ * a room's machine seats and a plain bot race are dressed by the clash itself, because "Hard bot"
+ * is a setting and "Kestrel of the Obsidian Cortex, IR" is a reason to win.
+ */
+function clashRivals(): VsRival[] {
+  const out: VsRival[] = [];
+  if (active) {
+    if ('seats' in active) {
+      for (const seat of active.seats) {
+        if (seat.side === localSide) continue;
+        out.push(seat.bot
+          ? { id: `${active.code}:${seat.side}`, bot: room ? difficultyFor(room, seat.side) : difficulty }
+          : { id: seat.id, name: seat.name });
+      }
+    }
+    if (!out.length) {
+      const o = active.opponent;
+      out.push({ id: o.id, name: o.name, avatarUrl: o.avatarUrl, country: o.flag ?? null, tiq: o.tiq, tier: o.tier });
+    }
+    return out;
+  }
+  if (room) {
+    for (let p = 0; p < sizes.length; p++) {
+      if (p === localSide) continue;
+      out.push(isAutomated(room, p)
+        ? { id: `${room.code}:${p}`, bot: difficultyFor(room, p) }
+        : { id: `seat:${p}`, name: seatName(room, p) });
+    }
+    return out;
+  }
+  for (let p = 0; p < sizes.length; p++) {
+    if (p === localSide) continue;
+    out.push({ id: `bot:${p}`, bot: difficulty });
+  }
+  return out;
+}
+
 function startGame(setup: StartSetup) {
   cancelTutorial();
   /* Only a local bot race teaches, and only until the lesson has been finished or skipped. An
@@ -1315,9 +1354,25 @@ function startGame(setup: StartSetup) {
     });
   }
 
-  router.go('game');
-  if (wantsTutorial) beginTutorial();
-  tutorialRace = false;       // the board already has (or has not) its log for this race
+  /* The face-off owns the reveal, and the reveal is the only thing it owns. Routing is deferred to
+     its callback, so the board never ticks behind the crest — `syncLoop()` runs frames and the turn
+     clock only while the game screen is up. An automated browser and the lesson both get the
+     original synchronous path: the clash answers `onReveal` before it returns. */
+  const rivals = wantsTutorial ? [] : clashRivals();
+  let revealed = false;
+  const reveal = () => {
+    if (revealed) return;
+    revealed = true;
+    router.go('game');
+    if (wantsTutorial) beginTutorial();
+    tutorialRace = false;       // the board already has (or has not) its log for this race
+  };
+  showVsClash(rivals, {
+    kind: active ? 'ranked' : room ? 'room' : 'bot',
+    tier: rivals.find((r) => r.bot)?.bot ?? undefined,
+    seats: sizes.length,
+    nonce: raceSeed,
+  }, reveal);
 }
 
 /**
