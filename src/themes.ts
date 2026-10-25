@@ -82,8 +82,8 @@ export interface BoardTheme {
   name: string;
   desc: string;
   price: number;
-  /** the clay slab's face */
-  surface: string;
+  /** the clay slab's face: one flat token, or a top-to-bottom gradient for a lit arena surface */
+  surface: string | Stop[];
   /** shadow the slab casts on the card */
   drop: string;
   /** the tactile groove between two tiles */
@@ -311,7 +311,7 @@ export const WALLS: WallStyle[] = [
  * wherever it is carved and gold is the only warm note the identity already spends on value.
  */
 const CREST: Stop[] = [
-  [0, '#fff6d0'], [0.26, '#ffdf85'], [0.54, '#e8a80c'], [0.78, '#8f5f06'], [1, '#d69a17'],
+  [0, '#fffdf2'], [0.3, '#fff0a8'], [0.6, '#ffd94e'], [0.85, '#f5b314'], [1, '#ffe98a'],
 ];
 
 /**
@@ -321,16 +321,17 @@ const CREST: Stop[] = [
  */
 export const BOARDS: BoardTheme[] = [
   {
-    id: 'indigo', name: 'Indigo', price: 0, desc: 'Deep indigo clay. The arena the race ships with.',
-    surface: '#2b3157', drop: 'rgba(5,7,22,.55)', grid: 'rgba(8,10,28,.35)',
-    tile: ['rgba(255,255,255,.055)', 'rgba(255,255,255,.018)'],
-    bevel: ['rgba(255,255,255,.18)', 'rgba(4,6,20,.45)'],
-    ring: [[0, '#3ad194'], [0.06, '#2fae7c'], [0.16, '#2c6a9a'], [0.34, '#3b4874'], [0.62, '#39436c'], [1, '#414b78']],
-    kerb: ['#1b4b3d', '#08201b'], crest: CREST,
-    spill: [[0, 'rgba(255,182,84,.17)'], [0.5, 'rgba(255,150,40,.06)'], [1, 'rgba(255,150,40,0)']],
-    glow: [[0, 'rgba(56,220,150,.30)'], [0.45, 'rgba(56,220,150,.10)'], [1, 'rgba(56,220,150,0)']],
-    rule: 'rgba(190,255,225,.24)', edge: 'rgba(255,255,255,.22)', sweep: 0.4,
-    beam: 'rgba(140,255,205,.16)', startTint: 0.16,
+    id: 'indigo', name: 'Indigo', price: 0, desc: 'Bright frosted slate. The arena the race ships with.',
+    surface: [[0, '#6674a2'], [0.14, '#566389'], [0.58, '#47537a'], [1, '#3c4767']],
+    drop: 'rgba(4,6,20,.6)', grid: 'rgba(8,12,30,.58)',
+    tile: ['rgba(255,255,255,.14)', 'rgba(255,255,255,.06)'],
+    bevel: ['rgba(255,255,255,.42)', 'rgba(8,12,30,.42)'],
+    ring: [[0, '#7bffd2'], [0.06, '#45eab1'], [0.16, '#62c7f5'], [0.34, '#9aabf0'], [0.62, '#8b9ce0'], [1, '#a9bafb']],
+    kerb: ['#2bd99c', '#0b6d50'], crest: CREST,
+    spill: [[0, 'rgba(255,206,122,.30)'], [0.5, 'rgba(255,176,64,.12)'], [1, 'rgba(255,166,54,0)']],
+    glow: [[0, 'rgba(80,240,176,.42)'], [0.45, 'rgba(70,232,164,.16)'], [1, 'rgba(60,220,150,0)']],
+    rule: 'rgba(255,233,170,.6)', edge: 'rgba(255,255,255,.38)', sweep: 0.52,
+    beam: 'rgba(255,205,112,.27)', startTint: 0.34,
   },
   {
     id: 'lavender', name: 'Lavender', price: 0, desc: 'Soft lilac clay slab, lit from above.',

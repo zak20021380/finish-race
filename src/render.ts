@@ -512,7 +512,7 @@ const CREST_MIN = 24;
 const crestFont = (px: number) =>
   `900 ${px}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif`;
 /** Tracking between the crest's letters, in ems: wide enough to read as an inscription, not a word. */
-const CREST_TRACK = 0.26;
+const CREST_TRACK = 0.22;
 /** How long the arrival pulse runs, and how long the crown waits for a ball to reach the line. */
 const GOAL_MS = 1150;
 const GOAL_WAIT_MS = 420;
@@ -934,7 +934,12 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     g.shadowBlur = 18 * dpr;
     g.shadowOffsetY = 5 * dpr;
     rr(g, ox, oy, bw, bh, R);
-    g.fillStyle = b.surface;
+    if (typeof b.surface === 'string') g.fillStyle = b.surface;
+    else {
+      const face = g.createLinearGradient(0, oy, 0, oy + bh);
+      for (const [t, col] of b.surface) face.addColorStop(t, col);
+      g.fillStyle = face;
+    }
     g.fill();
     g.restore();
 
@@ -978,6 +983,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     shade.addColorStop(0.42, clear(b.bevel[1]));
     shade.addColorStop(0.78, clear(b.bevel[0]));
     shade.addColorStop(1, b.bevel[0]);
+    const rimW = Math.max(1, c * 0.022);
+    const rimLit = withAlpha(b.bevel[0], 0.22);
     g.lineWidth = Math.max(1, c * 0.035);
     g.strokeStyle = shade;
     for (let r0 = 1; r0 < rows; r0++) {            // row 0 belongs to the finish bar, not the tiles
@@ -989,6 +996,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         g.save();
         g.translate(tx, ty);              // the shared shade gradient follows the tile
         rr(g, 0, 0, tw, tw, tr);
+        g.stroke();
+        g.lineWidth = rimW;               // a crisp light rim lifts every square off the groove
+        g.strokeStyle = rimLit;
+        rr(g, rimW / 2, rimW / 2, tw - rimW, tw - rimW, Math.max(0, tr - rimW / 2));
         g.stroke();
         g.restore();
       }
@@ -1005,22 +1016,32 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const gold = resolve(null, b.crest);
     const core = gold[(gold.length / 2) | 0][1];   // the crest's own metal, shared with its rim
 
-    /* the bar itself: one recessed band of dark clay, lit along its crown and gathering shade
+    /* the bar itself: one recessed band of emerald clay, lit along its crown and gathering shade
        toward its foot */
     const kerb = g.createLinearGradient(0, oy, 0, oy + kh);
     kerb.addColorStop(0, b.kerb[0]);
-    kerb.addColorStop(0.55, b.kerb[1]);
+    kerb.addColorStop(0.62, b.kerb[1]);
     kerb.addColorStop(1, b.kerb[1]);
     g.fillStyle = kerb;
     g.fillRect(ox, oy, bw, kh);
 
+    /* a warm gold sheen across the crown, so the emerald reads as a lit ceremonial band */
+    const sheen = g.createLinearGradient(ox, 0, ox + bw, 0);
+    sheen.addColorStop(0, 'rgba(255,205,92,0)');
+    sheen.addColorStop(0.24, 'rgba(255,216,122,.06)');
+    sheen.addColorStop(0.5, 'rgba(255,229,156,.14)');
+    sheen.addColorStop(0.76, 'rgba(255,216,122,.06)');
+    sheen.addColorStop(1, 'rgba(255,205,92,0)');
+    g.fillStyle = sheen;
+    g.fillRect(ox, oy, bw, kh);
+
     /* the warm-gold ambient the title sits in: one soft centred radial, so the middle of the bar
-       carries a quiet glow the crest is struck into */
+       carries a bright glow the crest is struck into */
     const gx = ox + bw / 2, gy = oy + kh * 0.52;
-    const amb = g.createRadialGradient(gx, gy, 0, gx, gy, Math.max(c * 2.2, bw * 0.3));
-    amb.addColorStop(0, 'rgba(255,208,116,.22)');
-    amb.addColorStop(0.5, 'rgba(255,192,92,.08)');
-    amb.addColorStop(1, 'rgba(255,192,92,0)');
+    const amb = g.createRadialGradient(gx, gy, 0, gx, gy, Math.max(c * 2.2, bw * 0.34));
+    amb.addColorStop(0, 'rgba(255,216,130,.24)');
+    amb.addColorStop(0.5, 'rgba(255,198,96,.09)');
+    amb.addColorStop(1, 'rgba(255,198,96,0)');
     g.fillStyle = amb;
     g.fillRect(ox, oy, bw, kh);
 
@@ -1028,8 +1049,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
        fading into the clay so the crown reads lit rather than outlined */
     const rimH = Math.max(2, c * 0.14);
     const rim = g.createLinearGradient(0, oy, 0, oy + rimH);
-    rim.addColorStop(0, 'rgba(255,244,206,.85)');
-    rim.addColorStop(0.4, tint(core, 0.55));
+    rim.addColorStop(0, 'rgba(255,251,226,.96)');
+    rim.addColorStop(0.4, tint(core, 0.72));
     rim.addColorStop(1, tint(core, 0));
     g.fillStyle = rim;
     g.fillRect(ox, oy, bw, rimH);
@@ -1039,11 +1060,11 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const lip = Math.max(2, c * 0.2);
     const foot = g.createLinearGradient(0, oy + kh - lip, 0, oy + kh);
     foot.addColorStop(0, 'rgba(0,0,0,0)');
-    foot.addColorStop(1, 'rgba(0,0,0,.5)');
+    foot.addColorStop(1, 'rgba(0,0,0,.4)');
     g.fillStyle = foot;
     g.fillRect(ox, oy + kh - lip, bw, lip);
     g.fillStyle = b.rule;
-    g.fillRect(ox, px(oy + c) - Math.max(1, c * 0.02), bw, Math.max(1, c * 0.02));
+    g.fillRect(ox, px(oy + c) - Math.max(1, c * 0.022), bw, Math.max(1, c * 0.022));
 
     /* the light the goal zone throws down onto the arrival tiles: the emerald wash the arena is
        themed with, and its warm amber partner, both starting below the line so they never wash the
@@ -1065,22 +1086,24 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       g.fillRect(ox, oy + c, bw, 2.6 * c);
     }
 
-    /* three soft beams falling out of the finish, gone by the fourth row */
+    /* three warm beams falling out of the finish, still bright on the fourth row */
     if (b.beam) {
-      const top = oy + c, bot = oy + c * 3.5;
+      const top = oy + c, bot = oy + c * 4.6;
       const beam = g.createLinearGradient(0, top, 0, bot);
       beam.addColorStop(0, b.beam);
-      beam.addColorStop(0.55, clear(b.beam));
+      beam.addColorStop(0.62, clear(b.beam));
       beam.addColorStop(1, clear(b.beam));
       g.fillStyle = beam;
+      g.globalCompositeOperation = 'lighter';
       for (let i = 0; i < 3; i++) {
-        const cx = ox + (bw * (i + 0.5)) / 3, w0 = c * 0.5, w1 = c * 1.45;
+        const cx = ox + (bw * (i + 0.5)) / 3, w0 = c * 0.62, w1 = c * 1.9;
         g.beginPath();
         g.moveTo(cx - w0, top); g.lineTo(cx + w0, top);
         g.lineTo(cx + w1, bot); g.lineTo(cx - w1, bot);
         g.closePath();
         g.fill();
       }
+      g.globalCompositeOperation = 'source-over';
     }
     g.restore();
 
@@ -1115,9 +1138,9 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const br = ballR(c);
     for (let i = 0; i < MAX_TEAMS; i++) {
       const s = sides[i];
-      const shadow = ctx.createRadialGradient(0, 0, 0, 0, 0, br * 1.1);
-      shadow.addColorStop(0, `rgba(${s.ramp.shade},.42)`);
-      shadow.addColorStop(0.55, `rgba(${s.ramp.shade},.18)`);
+      const shadow = ctx.createRadialGradient(0, 0, 0, 0, 0, br * 1.3);
+      shadow.addColorStop(0, `rgba(${s.ramp.shade},.58)`);
+      shadow.addColorStop(0.55, `rgba(${s.ramp.shade},.26)`);
       shadow.addColorStop(1, `rgba(${s.ramp.shade},0)`);
       const body = ctx.createRadialGradient(-0.34 * br, -0.4 * br, br * 0.06, -0.08 * br, -0.08 * br, br * 1.12);
       for (const [t, col] of resolve(s.ramp, s.ball.stops)) body.addColorStop(t, col);
@@ -1173,7 +1196,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     for (const ch of CREST_WORD) units += m.measureText(ch).width + CREST_TRACK * 100;
     units -= CREST_TRACK * 100;
     /* the inscription leaves the bar's own ends bare, so the band still reads as one moulding */
-    const fs = Math.min(kh * 0.42, ((bw - c * 2.6) / units) * 100);
+    const fs = Math.min(kh * 0.5, ((bw - c * 2.6) / units) * 100);
     if (fs < 6) return;
     const track = fs * CREST_TRACK;
     m.font = crestFont(fs);
@@ -1181,7 +1204,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     let tw = 0;
     for (const ch of CREST_WORD) { const w = m.measureText(ch).width; wds.push(w); tw += w + track; }
     tw -= track;
-    const rule = fs * 1.5, gap = fs * 0.6, H = fs * 1.7, W = tw + 2 * (rule + gap);
+    const rule = fs * 1.5, gap = fs * 0.6, H = fs * 1.9, W = tw + 2 * (rule + gap);
     const cv = document.createElement('canvas');
     cv.width = Math.max(1, Math.ceil(W * dpr));
     cv.height = Math.max(1, Math.ceil(H * dpr));
@@ -1194,6 +1217,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const strike = (dy: number) => {
       let x = cx - tw / 2;
       for (let i = 0; i < wds.length; i++) { g.fillText(CREST_WORD[i], x, mid + dy); x += wds[i] + track; }
+    };
+    const outline = (dy: number) => {
+      let x = cx - tw / 2;
+      for (let i = 0; i < wds.length; i++) { g.strokeText(CREST_WORD[i], x, mid + dy); x += wds[i] + track; }
     };
     for (const sgn of [-1, 1]) {
       const x0 = cx + sgn * (tw / 2 + gap), x1 = x0 + sgn * rule;
@@ -1217,10 +1244,20 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     }
     g.fillStyle = 'rgba(0,0,0,.65)';                 // the crisp drop the raised metal casts
     strike(fs * 0.09);
-    g.fillStyle = 'rgba(255,248,220,.38)';           // a hair of light along each glyph's crown
+    g.fillStyle = 'rgba(255,248,220,.5)';            // a hair of light along each glyph's crown
     strike(-fs * 0.035);
     const body = g.createLinearGradient(0, mid - fs * 0.52, 0, mid + fs * 0.52);
     for (const [t, col] of gold) body.addColorStop(t, col);
+    /* a warm halo first, then a dark emerald keyline, then the crisp gold face on top */
+    g.fillStyle = body;
+    g.shadowColor = 'rgba(255,196,84,.95)';
+    g.shadowBlur = fs * 0.65 * dpr;
+    strike(0);
+    g.shadowBlur = 0;
+    g.lineJoin = 'round';
+    g.strokeStyle = 'rgba(3,37,26,.8)';
+    g.lineWidth = Math.max(1, fs * 0.06);
+    outline(0);
     g.fillStyle = body;
     strike(0);
     crestArt = cv;
@@ -1426,6 +1463,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     if (w.o === 'v') { ctx.translate(0, 2 * c); ctx.rotate(-Math.PI / 2); }
     ctx.lineCap = st.caps;
     ctx.globalAlpha = alpha * st.alpha;
+    /* a dark contact outline keeps the bar's silhouette crisp on the bright tiles */
+    ctx.lineWidth = t + Math.max(1.5, c * 0.05);
+    ctx.strokeStyle = `rgba(${s.ramp.shade},.42)`;
+    ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 + len, 0); ctx.stroke();
     ctx.lineWidth = t;
     ctx.strokeStyle = barGrad(pi, t);
     if (glow && st.glow > 0) { ctx.shadowColor = s.ramp.glow; ctx.shadowBlur = c * 0.16 * st.glow * dpr; }
@@ -1566,11 +1607,12 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.restore();
     }
 
-    /* the crisp edge: the 1px stroke's own centre-line, pulled inside the silhouette so the ring
-       does not feather past it. On a cramped board `r` can fall under half a pixel, so the inset
-       is clamped to zero — a hairline ring on a 1px ball, never a negative radius (which throws). */
-    ctx.beginPath(); ctx.arc(0, 0, Math.max(0, r - 0.5), 0, TAU);
-    ctx.strokeStyle = s.ramp.edge; ctx.lineWidth = 1; ctx.stroke();
+    /* the crisp edge: a stroke thick enough to silhouette the ball on the lit tiles, its
+       centre-line pulled inside the silhouette so the ring does not feather past it. On a cramped
+       board `r` can fall under half a pixel, so the inset is clamped to zero. */
+    const edge = Math.max(1, r * 0.09);
+    ctx.beginPath(); ctx.arc(0, 0, Math.max(0, r - edge / 2), 0, TAU);
+    ctx.strokeStyle = s.ramp.edge; ctx.lineWidth = edge; ctx.stroke();
 
     shine(s, r);
     if (wounded) drawWoundMark(r);
@@ -1650,13 +1692,16 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const pulse = still ? 1 : 0.5 + 0.5 * Math.sin(now / 300);      // the ring swells and settles
     ctx.save();
     ctx.lineCap = 'round';
-    ctx.strokeStyle = `rgba(255,255,255,${0.7 + 0.26 * pulse})`;
-    ctx.lineWidth = Math.max(2, c * 0.075);
+    ctx.strokeStyle = `rgba(255,255,255,${0.88 + 0.12 * pulse})`;
+    ctx.lineWidth = Math.max(2, c * 0.08);
     ctx.beginPath(); ctx.arc(cx, cy, r * 1.3 * (1 + 0.05 * pulse), 0, TAU); ctx.stroke();
-    ctx.strokeStyle = sides[i].ramp.mid;
-    ctx.lineWidth = Math.max(1.5, c * 0.045);
     ctx.setLineDash([c * 0.15, c * 0.12]);
     ctx.lineDashOffset = still ? 0 : -now / 40;
+    ctx.strokeStyle = `rgba(${sides[i].ramp.shade},.6)`;   // dark backing keeps the dashes legible
+    ctx.lineWidth = Math.max(3, c * 0.085);
+    ctx.beginPath(); ctx.arc(cx, cy, r * 1.6, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = sides[i].ramp.mid;
+    ctx.lineWidth = Math.max(1.5, c * 0.05);
     ctx.beginPath(); ctx.arc(cx, cy, r * 1.6, 0, TAU); ctx.stroke();
     ctx.restore();
   }
@@ -2160,16 +2205,31 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.restore();
     }
 
-    /* each team's own start squares wear a whisper of its colour, so a race reads from the bottom up */
+    /* each team's own start squares glow in its colour, so a race reads from the bottom up */
     if (rows === ROWS && th.board.startTint > 0) {
       const key = `${v.state.cols}x${v.state.rows}:${v.state.teams.map((t) => t.balls).join(',')}`;
       if (key !== startKey) { startKey = key; starts = startBoard(v.state); }
+      const tintA = th.board.startTint;
+      const sw = c * 0.9, rad = c * 0.16, rimW = Math.max(1.5, c * 0.04);
       ctx.save();
-      ctx.globalAlpha = th.board.startTint;
       for (const s0 of starts) {
-        ctx.fillStyle = sides[s0.t].ramp.mid;
-        rr(ctx, ox + s0.c * c + c * 0.05, oy + s0.r * c + c * 0.05, c * 0.9, c * 0.9, c * 0.16);
+        const sprint = sides[s0.t].ramp;
+        const sx = ox + s0.c * c + c * 0.05, sy = oy + s0.r * c + c * 0.05;
+        ctx.globalAlpha = tintA;
+        ctx.fillStyle = sprint.mid;
+        rr(ctx, sx, sy, sw, sw, rad);
         ctx.fill();
+        ctx.globalAlpha = Math.min(1, tintA * 2.2);
+        ctx.save();
+        ctx.translate(sx + sw / 2, sy + sw / 2);
+        ctx.fillStyle = glowG[s0.t];
+        ctx.beginPath(); ctx.arc(0, 0, c * 0.45, 0, TAU); ctx.fill();
+        ctx.restore();
+        ctx.globalAlpha = Math.min(1, tintA * 2.8);
+        ctx.strokeStyle = sprint.light;
+        ctx.lineWidth = rimW;
+        rr(ctx, sx + rimW / 2, sy + rimW / 2, sw - rimW, sw - rimW, Math.max(0, rad - rimW / 2));
+        ctx.stroke();
       }
       ctx.restore();
     }
@@ -2223,8 +2283,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const pulse = still ? 0.5 : 0.5 + 0.5 * Math.sin(now / 380);
     const dotR = Math.max(6, c * 0.17 + c * 0.014 * pulse);
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,.9)';
-    ctx.lineWidth = Math.max(1.5, c * 0.035);
+    ctx.strokeStyle = 'rgba(255,255,255,.96)';
+    ctx.lineWidth = Math.max(1.75, c * 0.045);
     ctx.fillStyle = side.ramp.mid;
     ctx.shadowColor = side.ramp.glow;                 // the dots carry a little glow of their own
     ctx.shadowBlur = c * 0.4 * (0.6 + 0.4 * pulse);
@@ -2233,7 +2293,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const x = ox + (h.c + 0.5) * c, y = oy + (h.r + 0.5) * c;
       ctx.globalAlpha = 0.1 + 0.06 * pulse;
       ctx.beginPath(); ctx.arc(x, y, dotR * 1.75, 0, TAU); ctx.fill();
-      ctx.globalAlpha = 0.72 + 0.12 * pulse;
+      ctx.globalAlpha = 0.9 + 0.1 * pulse;
       ctx.beginPath(); ctx.arc(x, y, dotR, 0, TAU); ctx.fill();
       ctx.stroke();
     }

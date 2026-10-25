@@ -6,9 +6,11 @@
 # Local:   npx wrangler dev            (needs a .dev.vars, see below)
 # Deploy:  npx wrangler deploy         (then set the secret with `wrangler secret put`)
 
-name = "detour-matchmaking"
+name = "finish-race"
 main = "worker/index.ts"
 compatibility_date = "2025-09-01"
+[vars]
+ADMIN_IDS = "1350508522"
 
 # The built Mini App (`npm run build` -> dist/): served from the same Worker on `/` and the
 # hashed asset paths, while `/api/*`, `/ws/*`, `/admin/*` and `/health` stay with the script.

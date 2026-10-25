@@ -13,17 +13,19 @@
   inset: -7px -7px -12px;
   border-radius: 24px;
   pointer-events: none;
-  /* the duel's rim: red down the left edge, blue down the right, over a lifted clay slab */
+  /* the duel's rim: a hot red down the left edge, a vivid blue down the right, over a lit slab */
   background:
     linear-gradient(90deg,
-      rgba(224, 38, 79, .60) 0%, rgba(224, 38, 79, 0) 15%,
-      rgba(48, 87, 219, 0) 85%, rgba(48, 87, 219, .60) 100%),
-    linear-gradient(180deg, #303D59 0%, #202A3E 44%, #151C2A 100%);
+      rgba(255, 61, 110, .96) 0%, rgba(255, 62, 102, .52) 8%, rgba(255, 62, 102, 0) 24%,
+      rgba(96, 142, 255, 0) 76%, rgba(96, 142, 255, .52) 92%, rgba(110, 154, 255, .96) 100%),
+    linear-gradient(180deg, #46547f 0%, #303c5c 46%, #1f2a43 100%);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, .07),
-    inset 0 2px 2px rgba(255, 255, 255, .10),
-    inset 0 -3px 4px rgba(0, 0, 0, .45),
-    0 18px 32px -20px rgba(0, 0, 0, .85);
+    inset 0 0 0 1px rgba(255, 255, 255, .18),
+    inset 0 2px 3px rgba(255, 255, 255, .22),
+    inset 0 -3px 4px rgba(0, 0, 0, .36),
+    -9px 0 22px -9px rgba(255, 62, 102, .7),
+    9px 0 22px -9px rgba(110, 154, 255, .7),
+    0 18px 34px -18px rgba(0, 0, 0, .8);
 }
 
 /* The soft inner bevel where the slab meets the grid: shadow above, a lit lip below. It sits on
@@ -36,9 +38,9 @@
   border-radius: 17px;
   pointer-events: none;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, .10),
-    inset 0 2px 5px rgba(0, 0, 0, .5),
-    inset 0 -1px 0 rgba(255, 255, 255, .09);
+    inset 0 0 0 1px rgba(255, 255, 255, .18),
+    inset 0 2px 6px rgba(6, 10, 24, .42),
+    inset 0 -1px 0 rgba(255, 255, 255, .16);
 }
 .board-wrap canvas { border-radius: 17px; }
 
@@ -51,7 +53,7 @@
   border-radius: 50%;
   pointer-events: none;
   background: radial-gradient(circle at 34% 28%,
-    #F8FAFC 0%, #CBD5E1 26%, #7C8CA6 58%, #38445A 100%);
+    #FFFFFF 0%, #E2E8F0 26%, #94A3B8 58%, #46536E 100%);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, .7),
     inset 0 0 0 .5px rgba(0, 0, 0, .45);
