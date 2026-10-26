@@ -45,7 +45,8 @@ import {
   sizesOf, type BotTier, type LobbyFormat, type Room, type RoomDriver, type RoomEvent,
 } from '../src/room';
 import {
-  authenticate, authRequestFrom, identifyAdminRequest, isLocalhost, isSuperAdmin, verifiedTelegramUserId,
+  authenticate, authRequestFrom, identifyAdminRequest, isLocalhost, isSuperAdmin, METRICS_ADMIN_ID,
+  METRICS_HEADER, verifiedTelegramUserId,
   type AdminIdentity, type AdminRole, type Identity, type MindTier,
 } from './auth';
 import { json } from './http';
@@ -126,6 +127,8 @@ interface LiveRoom {
   /** The lobby: seats, the wait timer, the backfill. Frozen once `launched`. */
   room: Room;
   size: number;
+  /** True once this board has been added to the durable completed-match counter. */
+  counted: boolean;
   /** Indexed by seat: the socket holding it, or null while the machine holds it. */
   members: (RoomMember | null)[];
   /** Minted at launch, so both seats of every pairing derive the same numbers. */
@@ -263,6 +266,60 @@ export interface ServerStatus {
   activeRooms: ActiveRoom[];
   config: ServerConfig;
   arena: ArenaState;
+}
+
+/** The measured server-side telemetry `/api/admin/metrics` returns. Every number is real. */
+export interface ServerMetrics {
+  ok: true;
+  /** The room's clock when the reading was taken. */
+  timestamp: number;
+  /** `production`, `development`, or the deployment's own `WORKER_ENV` label. */
+  environment: string;
+  /** Added by the worker edge: the real round trip through this Durable Object. */
+  pingMs?: number;
+  /** Launched boards: 1v1 races plus multi-seat rooms. */
+  activeRooms: number;
+  /** Seats sitting in the 1v1 pairing queue. */
+  queueLength: number;
+  /** 1v1 boards still being played. */
+  active1v1: number;
+  /** Rows the room currently holds in its player registry. */
+  totalUsers: number;
+  /** Distinct verified Telegram user ids in that registry. */
+  telegramUsers: number;
+  /** Boards that reached a winner since this counter was introduced. */
+  matchesCompleted: number;
+  /** Mine actions accepted by the authoritative board. */
+  minesPlaced: number;
+  /** Hazard logs the timetable deployed. */
+  logsSpawned: number;
+  /** Referral joins reported across the registry. */
+  referrals: number;
+  /** Registry players credited with at least one referral. */
+  referringPlayers: number;
+}
+
+/* ---------- durable gameplay counters ---------- */
+
+/** The counters that outlive an eviction; empty storage means exact zeroes. */
+interface GameMetrics {
+  matchesCompleted: number;
+  minesPlaced: number;
+  logsSpawned: number;
+}
+
+const GAME_METRICS_KEY = 'game-metrics.v1';
+
+const zeroGameMetrics = (): GameMetrics => ({ matchesCompleted: 0, minesPlaced: 0, logsSpawned: 0 });
+
+/** A stored counter blob, clamped field by field; anything missing is zero. */
+function readGameMetrics(raw: unknown): GameMetrics {
+  const r = raw as Partial<GameMetrics> | null | undefined;
+  return {
+    matchesCompleted: whole(r?.matchesCompleted),
+    minesPlaced: whole(r?.minesPlaced),
+    logsSpawned: whole(r?.logsSpawned),
+  };
 }
 
 /* ---------- the player directory: who the room has seen ---------- */
@@ -903,6 +960,10 @@ export class MatchmakerDO {
   /** Registered Telegram channels and groups, by squad id. */
   private squads = new Map<string, RegisteredSquad>();
   private squadsDirty = false;
+  /** Durable board counters, seeded from storage and written back as they move. */
+  private gameMetrics: GameMetrics = zeroGameMetrics();
+  /** A counter write is already scheduled: many moves, one flush. */
+  private metricsDirty = false;
 
   constructor(private state: DurableObjectState, private env: Env) {
     /* The registry rides the object's own storage, so it survives eviction. A harness that drives
@@ -945,6 +1006,7 @@ export class MatchmakerDO {
           }
           const arena = readArena(await storage.get<unknown>('arena'));
           if (arena) this.arena = arena;
+          this.gameMetrics = readGameMetrics(await storage.get<unknown>(GAME_METRICS_KEY));
           this.seedRoles();
           this.rearm();
         } catch {
@@ -1176,6 +1238,40 @@ export class MatchmakerDO {
     };
   }
 
+  /**
+   * The measured telemetry reading. Population figures come from the registry, the live figures
+   * from the in-memory room maps, and the totals from the durable counters — empty is exact zero.
+   */
+  private metrics(hostname: string): ServerMetrics {
+    let referrals = 0;
+    let referringPlayers = 0;
+    const telegram = new Set<string>();
+    for (const p of this.players.values()) {
+      if (p.tgId) telegram.add(p.tgId);
+      if (p.referrals > 0) {
+        referrals += p.referrals;
+        referringPlayers++;
+      }
+    }
+    const environment = this.env.WORKER_ENV?.trim()
+      || (this.env.DEV_AUTH === 'true' || isLocalhost(hostname) ? 'development' : 'production');
+    return {
+      ok: true,
+      timestamp: Date.now(),
+      environment,
+      activeRooms: this.races.size + this.rooms.size,
+      queueLength: this.queue.length,
+      active1v1: this.races.size,
+      totalUsers: this.players.size,
+      telegramUsers: telegram.size,
+      matchesCompleted: this.gameMetrics.matchesCompleted,
+      minesPlaced: this.gameMetrics.minesPlaced,
+      logsSpawned: this.gameMetrics.logsSpawned,
+      referrals,
+      referringPlayers,
+    };
+  }
+
   /** One launched room as a status row: the first two seats by name, and how many the machine holds. */
   private roomSummary(live: LiveRoom): ActiveRoom {
     const roster = live.driver?.room ?? live.room;
@@ -1200,6 +1296,14 @@ export class MatchmakerDO {
     });
     if (url.pathname === '/api/client/arena/state') {
       return json(await this.clientArena(request), 200, { 'cache-control': 'no-store' });
+    }
+
+    /* The private telemetry route: only a request the edge marked after the strict operator check. */
+    if (url.pathname === '/api/admin/metrics') {
+      if (request.headers.get(METRICS_HEADER) !== METRICS_ADMIN_ID) {
+        return json({ error: 'Unauthorized' }, 403);
+      }
+      return json(this.metrics(url.hostname));
     }
 
     /* The edge only proved the signature; membership is this room's call, registry in hand. */
@@ -1730,6 +1834,48 @@ export class MatchmakerDO {
     p.lastSeen = Date.now();
   }
 
+  /** Count what the authoritative board actually did between two states. */
+  private countBoard(before: GameState, after: GameState): void {
+    const mines = after.mines.length - before.mines.length;
+    const logs = (after.hazard?.emitted ?? 0) - (before.hazard?.emitted ?? 0);
+    this.bumpMetrics({ minesPlaced: mines, logsSpawned: logs });
+  }
+
+  /** Add to the durable gameplay counters; a missing or negative delta is exactly zero. */
+  private bumpMetrics(delta: Partial<GameMetrics>): void {
+    const matches = whole(delta.matchesCompleted);
+    const mines = whole(delta.minesPlaced);
+    const logs = whole(delta.logsSpawned);
+    if (!matches && !mines && !logs) return;
+    this.gameMetrics.matchesCompleted += matches;
+    this.gameMetrics.minesPlaced += mines;
+    this.gameMetrics.logsSpawned += logs;
+    this.persistMetrics();
+  }
+
+  /** One completed room credits the match counter once, however it reached its winner. */
+  private completeRoom(live: LiveRoom): void {
+    if (live.counted) return;
+    live.counted = true;
+    this.bumpMetrics({ matchesCompleted: 1 });
+  }
+
+  /** Schedule a counter write; many moves in one turn still cost one flush. */
+  private persistMetrics(): void {
+    if (this.metricsDirty || !this.state?.storage) return;
+    this.metricsDirty = true;
+    void Promise.resolve().then(() => {
+      this.metricsDirty = false;
+      const storage = this.state.storage;
+      if (!storage) return;
+      try {
+        void storage.put(GAME_METRICS_KEY, this.gameMetrics);
+      } catch {
+        /* a store that refuses the write: the counters stay live for this object's lifetime */
+      }
+    });
+  }
+
   /**
    * Pull a banned seat out of matchmaking: any queue waiter is told why and let go, any room that
    * is still filling loses the seat and reopens it. A board already under way is somebody's game
@@ -2112,6 +2258,7 @@ export class MatchmakerDO {
       live = {
         room: createRoom({ code: this.mintRoomCode(), seats: size, waitMs: ROOM_WAIT_MS, botTier: tier, now: Date.now() }),
         size,
+        counted: false,
         members: Array.from({ length: size }, () => null),
         matchId: '',
         seed: 0,
@@ -2170,6 +2317,7 @@ export class MatchmakerDO {
       live = {
         room: createRoom({ code, seats: size, waitMs: ROOM_WAIT_MS, botTier: tier, now: Date.now() }),
         size,
+        counted: false,
         members: Array.from({ length: size }, () => null),
         matchId: '',
         seed: 0,
@@ -2373,7 +2521,9 @@ export class MatchmakerDO {
     }
     /* Seat 0 is the host, so a person normally opens — but a takeover or an odd roster can put the
        machine on turn before anybody has moved, and the room must not wait for a human to start it. */
+    const opening = live.driver.state;
     this.pushRoomEvents(live, live.driver.runBots());
+    this.countBoard(opening, live.driver.state);
   }
 
   /** `ROOM_FOUND`: the seat, the shared race, and every seat's name and owner. */
@@ -2459,12 +2609,14 @@ export class MatchmakerDO {
     }
     if (msg.type === 'RESIGN' || msg.type === 'CANCEL') { this.takeSeatOver(ref); return; }
     if (msg.type !== 'MOVE') return;
+    const before = live.driver.state;
     const result = live.driver.submit(ref.seat, msg.action);
     if (!result.ok) {
       const member = live.members[ref.seat];
       if (member) this.postTo(member.ws, JSON.stringify({ type: 'REJECT', reason: result.reason }));
       return;
     }
+    this.countBoard(before, live.driver.state);
     this.pushRoomEvents(live, result.events);
     if (live.driver.state.winner !== null) {
       this.finishRoom(live, live.driver.state.winner);
@@ -2478,6 +2630,7 @@ export class MatchmakerDO {
    * registry and claims nothing — the same rule the dock's standings already play by.
    */
   private finishRoom(live: LiveRoom, winner: number): void {
+    this.completeRoom(live);
     for (let i = 0; i < live.members.length; i++) {
       const m = live.members[i];
       if (m) this.verdict(m.id, i === winner);
@@ -2528,8 +2681,13 @@ export class MatchmakerDO {
     for (const m of live.members) {
       if (m) this.postTo(m.ws, JSON.stringify({ type: 'SEAT_BOT', side: ref.seat, name }));
     }
+    const before = driver.state;
     this.pushRoomEvents(live, driver.runBots());
-    if (driver.state.winner !== null) this.rooms.delete(live.matchId);
+    this.countBoard(before, driver.state);
+    if (driver.state.winner !== null) {
+      this.completeRoom(live);
+      this.rooms.delete(live.matchId);
+    }
   }
 
   /** A socket went away. In a room that means the machine finishes the seat; in the queue, goodbye. */
@@ -2589,9 +2747,10 @@ export class MatchmakerDO {
       return;
     }
 
+    const before = race.state;
     let next: GameState | null = null;
     try {
-      next = apply(race.state, msg.action);
+      next = apply(before, msg.action);
     } catch {
       next = null;                                       // a frame shaped to throw is a frame refused
     }
@@ -2601,6 +2760,7 @@ export class MatchmakerDO {
     }
 
     race.state = next;
+    this.countBoard(before, next);
     this.deliver(race.seats[seat.side === 0 ? 1 : 0], JSON.stringify({ type: 'MOVE', side: seat.side, action: msg.action }));
     /* The board is decided: both clients can see the winner for themselves, so the room just
        stops being a race rather than guessing what the loser's screen does next. */
@@ -2627,8 +2787,11 @@ export class MatchmakerDO {
    * recorded here — a client can claim anything, but only the board it played decides.
    */
   private settle(race: Race, winner: number | null = null): void {
+    if (race.over) return;
     race.over = true;
     this.races.delete(race.matchId);
+    /* An abort has no winner and is not a completed match; every other settle is. */
+    if (winner !== null) this.bumpMetrics({ matchesCompleted: 1 });
     for (const seat of race.seats) {
       if (seat.race === race) seat.race = null;
       this.verdict(seat.id, winner === null ? null : seat.side === winner);

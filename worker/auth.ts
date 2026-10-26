@@ -337,15 +337,27 @@ function devMarker(request: AdminRequestLike): boolean {
 }
 
 /** The verified Telegram identity carried by an initData query string, or null. */
+async function verifiedTelegramUserWith(
+  initData: string,
+  secrets: readonly string[],
+): Promise<{ id: string; name: string } | null> {
+  if (!initData) return null;
+  for (const secret of secrets) {
+    if (!secret) continue;
+    const fields = await verify(initData, secret);
+    if (!fields) continue;
+    const user = parseUser(fields.get('user'));
+    if (user?.id === undefined || user?.id === null) return null;
+    const id = String(user.id).replace(/[^0-9-]/g, '').slice(0, 20);
+    return id ? { id, name: displayName(user, '') } : null;
+  }
+  return null;
+}
+
+/** The verified Telegram identity carried by an initData query string, signed with the bot token. */
 async function verifiedTelegramUser(initData: string, env: Env): Promise<{ id: string; name: string } | null> {
   const token = env.TELEGRAM_BOT_TOKEN?.trim();
-  if (!initData || !token) return null;
-  const fields = await verify(initData, token);
-  if (!fields) return null;
-  const user = parseUser(fields.get('user'));
-  if (user?.id === undefined || user?.id === null) return null;
-  const id = String(user.id).replace(/[^0-9-]/g, '').slice(0, 20);
-  return id ? { id, name: displayName(user, '') } : null;
+  return token ? verifiedTelegramUserWith(initData, [token]) : null;
 }
 
 /** The verified Telegram user id carried by an initData query string, or ''. */
@@ -389,6 +401,32 @@ export async function identifyPlayerRequest(
   }
   const dev = env.DEV_AUTH === 'true' || isLocalhost(hostOf(request.url));
   return dev ? devPlayer(request) : null;
+}
+
+/* ---------- the metrics door: one operator, no development fallback ---------- */
+
+/** The only Telegram id allowed to read the Worker's server telemetry. */
+export const METRICS_ADMIN_ID = '1350508522';
+
+/** The edge marks an authenticated metrics request with this header; the room refuses unmarked calls. */
+export const METRICS_HEADER = 'x-detour-metrics-admin';
+
+/**
+ * The server metrics door: a genuine Telegram Web App signature naming `METRICS_ADMIN_ID`.
+ * `TELEGRAM_BOT_TOKEN` is the documented signer; `TELEGRAM_WEBHOOK_SECRET` is accepted as the
+ * deployment fallback the operator may hold instead. There is deliberately no dev fallback.
+ */
+export async function identifyMetricsAdmin(
+  request: AdminRequestLike,
+  env: Env,
+): Promise<AdminIdentity | null> {
+  const initData = initDataOf(request);
+  if (!initData) return null;
+  const secrets = [env.TELEGRAM_BOT_TOKEN?.trim(), env.TELEGRAM_WEBHOOK_SECRET?.trim()]
+    .filter((secret): secret is string => !!secret);
+  if (!secrets.length) return null;
+  const who = await verifiedTelegramUserWith(initData, secrets);
+  return who?.id === METRICS_ADMIN_ID ? { userId: METRICS_ADMIN_ID, door: 'tg' } : null;
 }
 
 /** The verified Telegram user id behind an admin request, or '' — the signature only, no allowlist. */

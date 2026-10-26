@@ -19,6 +19,10 @@
  * `POST /api/admin/broadcasts/:id/archive`) — plus the one public route the players read,
  * `GET /api/client/announcements/active`.
  *
+ * `GET /api/admin/metrics` is a stricter door than that surface: exactly one Telegram id, proven
+ * by initData with no development fallback. It reads the room's live counts and durable counters
+ * and answers exact zeroes for empty state.
+ *
  * Both admin prefixes are only *authenticated* here (`identifyAdminRequest`): a signature that
  * holds, or the marked dev door. Authorization is the room's, because the role registry lives
  * there: the DO admits exactly the ids on its registry (or the dev door), routes reads to
@@ -38,7 +42,9 @@
  */
 import { MatchmakerDO } from './matchmaker';
 import { BadgeMintDO } from './badges';
-import { identifyAdminRequest, identifyPlayerRequest } from './auth';
+import {
+  identifyAdminRequest, identifyMetricsAdmin, identifyPlayerRequest, METRICS_ADMIN_ID, METRICS_HEADER,
+} from './auth';
 import { telegramSetup, telegramWebhook } from './bot';
 import { json } from './http';
 import type { Env } from './env';
@@ -66,6 +72,32 @@ function withBadgeCors(response: Response): Response {
   const headers = new Headers(response.headers);
   for (const [key, value] of Object.entries(BADGE_CORS)) headers.set(key, value);
   return new Response(response.body, { status: response.status, headers });
+}
+
+/**
+ * The server telemetry door. Unlike `/admin/*`, this route has no development fallback and no
+ * role registry: only the one operator id may read it, proven by the initData signature at the
+ * edge. The room re-checks the internal marker before it hands anything back.
+ */
+async function serverMetrics(request: Request, env: Env): Promise<Response> {
+  const admin = await identifyMetricsAdmin(request, env);
+  if (!admin) return json({ error: 'Unauthorized' }, 403);
+  if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+
+  const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+  const headers = new Headers(request.headers);
+  headers.set(METRICS_HEADER, METRICS_ADMIN_ID);
+  /* The ping is the real round trip this request takes through the Durable Object. */
+  const started = Date.now();
+  const reply = await lobby.fetch(new Request(request.url, { method: 'GET', headers }));
+  const pingMs = Math.max(0, Date.now() - started);
+  if (!reply.ok) return json({ error: 'metrics_unavailable' }, 502);
+  try {
+    const body = (await reply.json()) as Record<string, unknown>;
+    return json({ ...body, pingMs });
+  } catch {
+    return json({ error: 'metrics_unavailable' }, 502);
+  }
 }
 
 /**
@@ -150,6 +182,9 @@ export default {
       return telegramWebhook(request, env);
     }
     if (url.pathname === '/telegram/setup-webhook') return telegramSetup(request, env);
+
+    /* The server telemetry route is stricter than the rest of the admin surface: one id, no dev door. */
+    if (url.pathname === '/api/admin/metrics') return serverMetrics(request, env);
 
     /* The Command Center's routes: authenticated here, then handed to the room that authorizes. */
     if (url.pathname.startsWith('/admin/') || url.pathname.startsWith('/api/admin/')) {
