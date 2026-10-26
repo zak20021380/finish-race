@@ -15,9 +15,12 @@
  * game state of its own. The Inbox is the support desk: every ticket the client's Contact Support
  * sheet files lands in the shared queue (src/support.ts) and is read, replied to and resolved here.
  *
- * **The telemetry** (`dayStats`, below) is what the Stats tab is made of: this device's own
- * counters for the UTC day and the Worker's live seat counts. Nothing is modelled — figures the
- * device cannot measure render as an em dash.
+ * **The telemetry** is the Worker's own measured reading: `GET /api/admin/metrics` answers the
+ * live room counts, the registry population, the durable gameplay counters and the real round
+ * trip through the Durable Object. The Stats tab refreshes it on demand and on a slow beat. That
+ * door is stricter than the rest of the admin surface — one Telegram id, no development fallback
+ * — so a refusal shows the Unauthorized card and never substitutes a local or demo figure. The
+ * device's own UTC-day counters still ride beneath the dashboard, labelled as such.
  *
  * **The server** is the fourth half. The Worker (`worker/index.ts`, `worker/matchmaker.ts`) owns the
  * same three knobs for the live room — the maintenance lock and both queue radii — and enforces
@@ -47,7 +50,7 @@ import {
   type AgeBand, type DirFilter, type DirPlayer, type DirSort,
 } from './players';
 import { nameOf } from './countries';
-import { detonation, impact, notify, tgUser } from './telegram';
+import { detonation, impact, notify, tgInitData, tgUser } from './telegram';
 import { adminFetch, parseJson, postJson } from './adminApi';
 import type { Broadcast } from './broadcasts';
 import type { MindTier } from './matchmaking';
@@ -237,11 +240,12 @@ export function tiqFrom(wins: number, games: number, bonus: number): number {
   return Math.max(0, wins * Math.max(0, runtime.winTiq - RACE_TIQ) + games * RACE_TIQ + bonus);
 }
 
-/* ---------- the day's telemetry: what the Stats tab is made of ---------- */
+/* ---------- the device's own day: a labelled footnote under the live dashboard ---------- */
 
 /**
- * The counters this device keeps for itself, one UTC day at a time. They are the only population
- * figures the panel has; everything it cannot measure is shown as an em dash.
+ * The counters this device keeps for itself, one UTC day at a time. They never feed the executive
+ * KPI grid — that grid is the Worker's measured reading — and the footnote under it names the
+ * device as their source. A figure neither side measures prints as an em dash.
  */
 interface DayCounters {
   /** The UTC date these counters belong to, `YYYY-MM-DD`. */
@@ -308,45 +312,6 @@ export function recordCoins(n: number): void {
   saveDay();
 }
 
-/**
- * The Stats timeframe. Only the UTC day has retained counters on this device, so wider windows
- * have no history behind them and read as em dashes.
- */
-export type StatsRange = 'today' | '7d' | '30d' | 'all';
-
-export interface DayStats {
-  /** Sessions recorded on this device, or null for a window it does not retain. */
-  players: number | null;
-  /** Today's sessions — the only active-user reading the device can measure. */
-  dau: number | null;
-  matches: number | null;
-  coins: number | null;
-  /** Seats queued or racing on the Worker, else 0. */
-  active: number;
-  liveRooms: number;
-  /** True when a Worker answered and the seat figures are its own. */
-  live: boolean;
-}
-
-/**
- * The window's reading. There is no analytics backend behind this Mini App: every number here is
- * either a counter this device measured today or a figure the Worker reported. Nothing is
- * modelled or generated, and a metric with no reading stays null so the panel can print `—`.
- */
-export function dayStats(range: StatsRange, live: ServerStatus | null): DayStats {
-  const d = today();
-  const measured = range === 'today';
-  return {
-    players: measured ? d.visits : null,
-    dau: measured ? d.visits : null,
-    matches: measured ? d.matches : null,
-    coins: measured ? d.coins : null,
-    active: live ? live.queueCount + live.activeMatchesCount * 2 : 0,
-    liveRooms: live ? live.activeMatchesCount : 0,
-    live: !!live,
-  };
-}
-
 /* ---------- the live server: the Worker is the other half of this panel ---------- */
 
 /**
@@ -392,6 +357,50 @@ export interface ServerStatus {
 async function fetchStatus(): Promise<ServerStatus | null> {
   const data = await parseJson<ServerStatus>(await adminFetch('/admin/status'));
   return data && data.ok === true ? data : null;
+}
+
+/**
+ * The Worker's measured telemetry, exactly as `GET /api/admin/metrics` frames it. The route is
+ * stricter than `/admin/*`: one Telegram id, proven by a genuine Mini App signature, with no
+ * development fallback. Every field is measured server-side; empty state is exact zeroes.
+ */
+export interface ServerMetrics {
+  ok: true;
+  /** The room's clock when the reading was taken. */
+  timestamp: number;
+  /** `production`, `development`, or the deployment's own label. */
+  environment: string;
+  /** The real round trip through the Durable Object, added by the Worker edge. */
+  pingMs?: number;
+  activeRooms: number;
+  queueLength: number;
+  active1v1: number;
+  totalUsers: number;
+  telegramUsers: number;
+  matchesCompleted: number;
+  minesPlaced: number;
+  logsSpawned: number;
+  referrals: number;
+  referringPlayers: number;
+}
+
+/** The three answers the strict metrics door can give this panel. */
+type MetricsResult =
+  | { state: 'ok'; metrics: ServerMetrics }
+  | { state: 'unauthorized' }
+  | { state: 'error' };
+
+/**
+ * Read the Worker's measured telemetry. `adminFetch` already carries the Mini App's signed
+ * `initData` (and the dev marker, which this route ignores). A 401/403 is the operator door
+ * refusing this account — never a cue to fall back to a device-local or demo reading.
+ */
+async function fetchMetrics(): Promise<MetricsResult> {
+  const res = await adminFetch('/api/admin/metrics');
+  if (!res) return { state: 'error' };
+  if (res.status === 401 || res.status === 403) return { state: 'unauthorized' };
+  const data = await parseJson<ServerMetrics>(res);
+  return data && data.ok === true ? { state: 'ok', metrics: data } : { state: 'error' };
 }
 
 /** Push a config patch to the live server. False when it could not be delivered. */
@@ -1024,28 +1033,36 @@ export function createAdmin(api: AdminApi): Admin {
   const arenaAwardsMeta = $<HTMLElement>('arena-awards-meta');
   const arenaResetBtn = $<HTMLButtonElement>('arena-reset');
   const arenaStopBtn = $<HTMLButtonElement>('arena-stop');
-  const statPlayers = $<HTMLElement>('stat-players');
-  const statMatches = $<HTMLElement>('stat-matches');
-  const statCoins = $<HTMLElement>('stat-coins');
+  /* the Stats dashboard: the strict live reading from `GET /api/admin/metrics` */
+  const statsPanel = stage?.querySelector<HTMLElement>('[data-apanel="stats"]') ?? null;
   const statActive = $<HTMLElement>('stat-active');
-  const statSource = $<HTMLElement>('stat-source');
-  const statNations = $<HTMLElement>('stat-nations');
   const statLiveRooms = $<HTMLElement>('stat-live-rooms');
   const statLiveDot = $<HTMLElement>('stat-live-dot');
+  const statPlayers = $<HTMLElement>('stat-players');
   const statDau = $<HTMLElement>('stat-dau');
+  const statMatches = $<HTMLElement>('stat-matches');
   const statModes = $<HTMLElement>('stat-modes');
-  const statStars = $<HTMLElement>('stat-stars');
+  const statReferrals = $<HTMLElement>('stat-referrals');
+  const statReferrers = $<HTMLElement>('stat-referrers');
   const modeBar = $<HTMLElement>('stat-mode-bar');
+  const modeDuel = $<HTMLElement>('stat-mode-1v1');
+  const modeArena = $<HTMLElement>('stat-mode-arena');
   const modeDuelP = $<HTMLElement>('stat-mode-1v1-p');
   const modeArenaP = $<HTMLElement>('stat-mode-arena-p');
-  const modeSoloP = $<HTMLElement>('stat-mode-solo-p');
-  const statDur = $<HTMLElement>('stat-dur');
-  const statBot = $<HTMLElement>('stat-bot');
-  const statDraw = $<HTMLElement>('stat-draw');
+  const statMines = $<HTMLElement>('stat-mines');
+  const statLogs = $<HTMLElement>('stat-logs');
+  const statRefPlayers = $<HTMLElement>('stat-ref-players');
   const statLat = $<HTMLElement>('stat-lat');
-  const statErr = $<HTMLElement>('stat-err');
+  const statEnv = $<HTMLElement>('stat-env');
   const healthChip = $<HTMLElement>('stat-health-chip');
-  const tfBtns = [...(stage?.querySelectorAll<HTMLButtonElement>('.adm-tf-b[data-range]') ?? [])];
+  const statConn = $<HTMLElement>('stat-conn');
+  const statUpdated = $<HTMLElement>('stat-updated');
+  const statRefresh = $<HTMLButtonElement>('stat-refresh');
+  const statAlert = $<HTMLElement>('stat-alert');
+  const statAlertIco = $<HTMLElement>('stat-alert-ico');
+  const statAlertTitle = $<HTMLElement>('stat-alert-title');
+  const statAlertBody = $<HTMLElement>('stat-alert-body');
+  const statDevice = $<HTMLElement>('stat-device');
   const navPill = $<HTMLElement>('admin-nav-pill');
   const inboxBadge = $<HTMLElement>('admin-inbox-badge');
   const inboxList = $<HTMLElement>('adm-inbox-list');
@@ -1137,15 +1154,22 @@ export function createAdmin(api: AdminApi): Admin {
   let live = false;
   /** True once `/admin/status` has answered: the panel is governing a real room. */
   let serverOn = false;
-  /** The last reading of the room, so the Stats tab can paint before the next fetch lands. */
+  /** The last reading of the room, so the Server tab can paint before the next fetch lands. */
   let lastStatus: ServerStatus | null = null;
   /** What the Worker was last told, so an unchanged toggle never sends a pointless call. */
   let lastPushed: ServerConfig | null = null;
   /** The Inbox view: which filter chip is lit, and which card is expanded. */
   let inboxFilter = 'all';
   let openTicket = '';
-  /** The Stats timeframe the dashboard is reading: today by default. */
-  let range: StatsRange = 'today';
+  /**
+   * The live telemetry: the last completed reading, the latest attempt's verdict, and the slow
+   * beat that keeps the Stats tab honest while it is open. `lastMetrics` is only ever a payload
+   * the Worker actually answered — a refusal clears it rather than leaving a comfortable memory.
+   */
+  let lastMetrics: ServerMetrics | null = null;
+  let metricsPhase: 'idle' | 'ok' | 'unauthorized' | 'error' = 'idle';
+  let metricsBusy = false;
+  let metricsTimer = 0;
   /** Text typed into a reply box survives the list being rebuilt for any reason. */
   const drafts = new Map<string, string>();
 
@@ -1392,47 +1416,170 @@ export function createAdmin(api: AdminApi): Admin {
   /** The figure the executive grid prints: grouped, never a raw run of digits. */
   const figure = (n: number): string => Math.max(0, Math.round(n)).toLocaleString('en-US');
 
-  /** The timeframe pills, the KPI grid and every tactical row below them, from one reading. */
+  /** `14:05:22` — the exact clock of a reading, in this device's timezone. */
+  const clockOf = (ms: number): string => new Date(ms).toLocaleTimeString('en-US', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  });
+
+  /**
+   * The live bar, the alert card and every counter, from the last completed reading. A Worker
+   * that refused the signature clears the board; one that cannot be reached keeps the last
+   * genuine reading but flags it stale. Nothing is ever modelled or substituted.
+   */
   function paintStats() {
-    const s = dayStats(range, lastStatus);
-    const metric = (n: number | null): string => (n == null ? '—' : figure(n));
-    if (statActive) statActive.textContent = figure(s.active);
-    if (statLiveRooms) statLiveRooms.textContent = `${figure(s.liveRooms)} live rooms`;
-    if (statLiveDot) statLiveDot.dataset.live = String(s.liveRooms > 0);
-    if (statPlayers) statPlayers.textContent = metric(s.players);
-    if (statDau) statDau.textContent = s.dau == null ? '—' : `DAU ${figure(s.dau)}`;
-    if (statMatches) statMatches.textContent = metric(s.matches);
-    if (statModes) statModes.textContent = '1v1 — · Arena —';
-    if (statCoins) statCoins.textContent = metric(s.coins);
-    if (statStars) statStars.textContent = '—';
+    const m = lastMetrics;
+    const pending = metricsBusy && !m;
+    const denied = metricsPhase === 'unauthorized';
+    const failed = metricsPhase === 'error';
+    const metric = (n: number | null | undefined): string =>
+      n == null ? (pending ? '…' : '—') : figure(n);
+
+    if (statsPanel) statsPanel.setAttribute('aria-busy', String(metricsBusy));
+
+    const concurrency = m ? m.activeRooms + m.queueLength : null;
+    if (statActive) statActive.textContent = metric(concurrency);
+    if (statLiveRooms) {
+      statLiveRooms.textContent = m
+        ? `${figure(m.activeRooms)} rooms · ${figure(m.queueLength)} queued`
+        : '— rooms · — queued';
+    }
+    if (statLiveDot) statLiveDot.dataset.live = String(!!m && (m.activeRooms > 0 || m.queueLength > 0));
+
+    if (statPlayers) statPlayers.textContent = metric(m?.totalUsers);
+    if (statDau) statDau.textContent = m ? `${figure(m.telegramUsers)} Telegram` : '— Telegram';
+    if (statMatches) statMatches.textContent = metric(m?.matchesCompleted);
+    if (statModes) statModes.textContent = m ? `${figure(m.active1v1)} live 1v1` : '— live 1v1';
+    if (statReferrals) statReferrals.textContent = metric(m?.referrals);
+    if (statReferrers) statReferrers.textContent = m ? `${figure(m.referringPlayers)} referrers` : '— referrers';
+
+    const boards = m ? Math.max(0, m.activeRooms) : 0;
+    const duel = m ? Math.min(boards, Math.max(0, m.active1v1)) : 0;
+    const multi = Math.max(0, boards - duel);
+    const share = (n: number): number => (boards ? Math.round((n / boards) * 100) : 0);
     if (modeBar) {
-      modeBar.style.setProperty('--w-duel', '0%');
-      modeBar.style.setProperty('--w-arena', '0%');
-      modeBar.style.setProperty('--w-solo', '0%');
+      modeBar.dataset.empty = String(boards === 0);
+      modeBar.style.setProperty('--w-duel', `${share(duel)}%`);
+      modeBar.style.setProperty('--w-arena', `${share(multi)}%`);
     }
-    if (modeDuelP) modeDuelP.textContent = '—';
-    if (modeArenaP) modeArenaP.textContent = '—';
-    if (modeSoloP) modeSoloP.textContent = '—';
-    if (statDur) statDur.textContent = '—';
-    if (statBot) statBot.textContent = '—';
-    if (statDraw) statDraw.textContent = '—';
-    if (statLat) statLat.textContent = '—';
-    if (statErr) statErr.textContent = '—';
+    if (modeDuel) modeDuel.style.visibility = duel > 0 ? '' : 'hidden';
+    if (modeArena) modeArena.style.visibility = multi > 0 ? '' : 'hidden';
+    if (modeDuelP) modeDuelP.textContent = m ? `${figure(duel)} · ${share(duel)}%` : '—';
+    if (modeArenaP) modeArenaP.textContent = m ? `${figure(multi)} · ${share(multi)}%` : '—';
+
+    if (statMines) statMines.textContent = metric(m?.minesPlaced);
+    if (statLogs) statLogs.textContent = metric(m?.logsSpawned);
+    if (statRefPlayers) statRefPlayers.textContent = metric(m?.referringPlayers);
+
+    if (statLat) {
+      statLat.textContent = m && m.pingMs != null ? `${Math.round(m.pingMs)} ms` : pending ? '…' : '—';
+    }
+    if (statEnv) statEnv.textContent = m ? m.environment : '—';
+
     if (healthChip) {
-      healthChip.textContent = '—';
-      healthChip.dataset.on = 'false';
+      const online = metricsPhase === 'ok' && !!m;
+      const stale = metricsPhase === 'error' && !!m;
+      const state = pending ? 'loading'
+        : denied ? 'locked'
+          : online ? 'online'
+            : stale ? 'stale'
+              : metricsPhase === 'error' ? 'offline' : 'idle';
+      healthChip.textContent = state === 'loading' ? 'SYNCING'
+        : state === 'locked' ? 'LOCKED'
+          : state === 'online' ? 'ONLINE'
+            : state === 'stale' ? 'STALE'
+              : state === 'offline' ? 'OFFLINE' : '—';
+      healthChip.dataset.on = String(online);
+      healthChip.dataset.state = state;
     }
-    if (statSource) {
-      statSource.textContent = s.live ? 'Live feed' : '—';
-      statSource.dataset.live = String(s.live);
+
+    if (statConn) {
+      const state = metricsBusy ? 'loading'
+        : denied ? 'locked'
+          : metricsPhase === 'ok' && m ? 'live'
+            : metricsPhase === 'error' ? (m ? 'stale' : 'offline')
+              : 'idle';
+      statConn.dataset.state = state;
+      statConn.textContent = state === 'loading' ? 'SYNCING'
+        : state === 'live' ? 'LIVE'
+          : state === 'locked' ? 'LOCKED'
+            : state === 'stale' ? 'STALE'
+              : state === 'offline' ? 'OFFLINE' : 'CONNECTING';
     }
-    if (statNations) {
-      statNations.textContent = '';
-      const empty = document.createElement('li');
-      empty.className = 'adm-nat adm-nat-empty';
-      empty.textContent = '—';
-      statNations.append(empty);
+
+    if (statUpdated) {
+      statUpdated.textContent = m
+        ? `${metricsBusy ? 'Syncing · last reading' : 'Updated'} ${clockOf(m.timestamp)}`
+        : metricsBusy ? 'Reading the Worker…'
+          : denied ? 'No live reading'
+            : metricsPhase === 'error' ? 'Worker unreachable'
+              : 'Awaiting telemetry';
     }
+
+    if (statRefresh) {
+      statRefresh.dataset.busy = String(metricsBusy);
+      statRefresh.setAttribute('aria-disabled', String(metricsBusy));
+    }
+
+    if (statAlert) {
+      statAlert.hidden = !(denied || failed);
+      if (denied || failed) {
+        statAlert.dataset.kind = denied ? 'denied' : 'offline';
+        statAlertIco?.setAttribute('href', denied ? '#i-lock' : '#i-help');
+        const title = denied ? 'Unauthorized Admin Access' : 'Live Telemetry Unreachable';
+        const body = denied
+          ? (tgInitData()
+            ? 'The metrics door refused this session. Live telemetry is restricted to the operator Telegram account — open the Mini App as that account. The live counters stay blank; no demo or modelled figures are substituted.'
+            : 'Telegram initData is missing. Open this Command Center inside Telegram as the metrics operator to read live telemetry; no demo or modelled figures are substituted.')
+          : (m
+            ? `The Worker stopped answering. The figures above are its last genuine reading at ${clockOf(m.timestamp)}. Refresh to try again.`
+            : 'The Worker did not answer, so there are no live figures to show. Check the deployment and refresh.');
+        /* role=alert announces a text change, so an unrelated repaint must not repeat it */
+        if (statAlertTitle && statAlertTitle.textContent !== title) statAlertTitle.textContent = title;
+        if (statAlertBody && statAlertBody.textContent !== body) statAlertBody.textContent = body;
+      }
+    }
+
+    if (statDevice) {
+      const d = today();
+      statDevice.textContent = `Device today: ${figure(d.visits)} sessions · ${figure(d.matches)} races · ${figure(d.coins)} coins measured on this device.`;
+    }
+  }
+
+  /**
+   * One telemetry attempt. A refusal clears the board and shows the Unauthorized card; an
+   * unreachable Worker keeps the last genuine reading, marked stale. Nothing is invented.
+   */
+  async function refreshMetrics(): Promise<void> {
+    if (metricsBusy) return;
+    metricsBusy = true;
+    paintStats();
+    const result = await fetchMetrics();
+    metricsBusy = false;
+    if (result.state === 'ok') {
+      lastMetrics = result.metrics;
+      metricsPhase = 'ok';
+    } else if (result.state === 'unauthorized') {
+      lastMetrics = null;
+      metricsPhase = 'unauthorized';
+    } else {
+      metricsPhase = 'error';
+    }
+    paintStats();
+  }
+
+  /** A slow beat, alive only while the stage is open, that polls only the visible Stats tab. */
+  function startTelemetry() {
+    stopTelemetry();
+    metricsTimer = window.setInterval(() => {
+      if (!open || document.hidden || statsPanel?.hidden) return;
+      void refreshMetrics();
+    }, 30_000);
+  }
+
+  function stopTelemetry() {
+    if (!metricsTimer) return;
+    window.clearInterval(metricsTimer);
+    metricsTimer = 0;
   }
 
   /* ---------- the Inbox: the support desk (src/support.ts) ---------- */
@@ -2489,7 +2636,6 @@ export function createAdmin(api: AdminApi): Admin {
     serverOn = false;
     lastStatus = null;
     paintServer(null);
-    paintStats();
   }
 
   /** `12s` / `1m 20s`: a wait in the unit somebody would actually say it in. */
@@ -2564,7 +2710,6 @@ export function createAdmin(api: AdminApi): Admin {
     serverOn = !!status;
     lastStatus = status;
     paintServer(status);
-    paintStats();
     if (status?.arena) {
       adoptArena(status.arena, true);
       paintArena();
@@ -2804,7 +2949,9 @@ export function createAdmin(api: AdminApi): Admin {
     document.documentElement.classList.add('admin-open');
     paintAll();
     startArenaClock();
-    void refreshServer();                 // the Server KPI is read off `/admin/status`, not `/health`
+    startTelemetry();
+    void refreshMetrics();                // the Stats tab reads the strict metrics door
+    void refreshServer();                 // the Server tab reads `/admin/status`
     closeBtn?.focus({ preventScroll: true });
     api.onToggle(true);
     impact('medium');
@@ -2821,6 +2968,7 @@ export function createAdmin(api: AdminApi): Admin {
     if (!stage || !open) return;
     closeCustomSelects();
     stopArenaClock();
+    stopTelemetry();
     open = false;
     stage.classList.remove('open');
     document.documentElement.classList.remove('admin-open');
@@ -2866,9 +3014,12 @@ export function createAdmin(api: AdminApi): Admin {
       impact('light');
       const id = t.dataset.atab ?? 'stats';
       selectTab(id);
-      /* both of these read the room: the roster and the live seat count are only ever as fresh
-         as their last read, so landing on either one asks the Worker again */
-      if (id === 'server' || id === 'stats') void refreshServer();
+      /* the Server tab reads the roster; the Stats tab reads the strict telemetry route */
+      if (id === 'server') void refreshServer();
+      if (id === 'stats') {
+        paintStats();
+        void refreshMetrics();
+      }
       /* the Inbox is device-local: a repaint keeps the relative timestamps honest, and the
          broadcast history is read on first sight like the directory */
       if (id === 'inbox') {
@@ -3068,17 +3219,12 @@ export function createAdmin(api: AdminApi): Admin {
     }
   });
 
-  /* the timeframe row: one raised gold key on a recessed track, and a repaint of the dashboard */
-  for (const btn of tfBtns) {
-    btn.addEventListener('click', () => {
-      const next = (btn.dataset.range ?? 'today') as StatsRange;
-      if (next === range) return;
-      range = next;
-      for (const b of tfBtns) b.setAttribute('aria-pressed', String(b === btn));
-      impact('light');                       // the soft haptic that says "the switch took"
-      paintStats();
-    });
-  }
+  /* the telemetry key: one reading at a time, with the spinner riding the same flag */
+  statRefresh?.addEventListener('click', () => {
+    if (metricsBusy) return;
+    impact('light');
+    void refreshMetrics();
+  });
 
   /* one delegated listener: the list is rebuilt on every paint, so no handler outlives its card */
   inboxList?.addEventListener('click', (e) => {
@@ -3563,7 +3709,11 @@ export function createAdmin(api: AdminApi): Admin {
     const launcher = home.querySelector<HTMLElement>('.launcher');
     if (launcher) ro.observe(launcher);
   }
-  document.addEventListener('visibilitychange', onResize);
+  document.addEventListener('visibilitychange', () => {
+    onResize();
+    /* coming back to the Mini App: spend one read rather than trusting a reading from minutes ago */
+    if (document.visibilityState === 'visible' && open && !statsPanel?.hidden) void refreshMetrics();
+  });
 
   return {
     open: openStage,

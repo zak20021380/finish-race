@@ -3137,15 +3137,25 @@
           <!-- ---------- Stats: the analytics dashboard, and the landing tab ---------- -->
           <div class="admin-panel" data-apanel="stats" id="apanel-stats" role="tabpanel" aria-labelledby="atab-stats">
 
-            <!-- timeframe: four pills on a recessed track, the active one a raised gold key -->
-            <div class="adm-tf" role="group" aria-label="Stats timeframe">
-              <button class="adm-tf-b" type="button" data-range="today" aria-pressed="true">Today</button>
-              <button class="adm-tf-b" type="button" data-range="7d" aria-pressed="false">7 Days</button>
-              <button class="adm-tf-b" type="button" data-range="30d" aria-pressed="false">30 Days</button>
-              <button class="adm-tf-b" type="button" data-range="all" aria-pressed="false">All Time</button>
+            <!-- live telemetry: the Worker's own reading, its exact capture time and the refresh key -->
+            <div class="adm-live" id="stat-livebar" data-state="idle">
+              <span class="adm-live-state" id="stat-conn" data-state="idle">CONNECTING</span>
+              <span class="adm-live-stamp" id="stat-updated" role="status" aria-live="polite">Awaiting telemetry</span>
+              <button class="adm-live-refresh" type="button" id="stat-refresh" aria-label="Refresh live telemetry">
+                <svg class="ico" aria-hidden="true"><use href="#i-restart" /></svg>
+              </button>
             </div>
 
-            <!-- primary KPIs: Active Now / Players+DAU / Matches / Stars+Coins -->
+            <!-- the strict metrics door refused: name it, never substitute a local or demo reading -->
+            <div class="adm-alert" id="stat-alert" role="alert" hidden>
+              <span class="adm-alert-i" aria-hidden="true"><svg class="ico"><use id="stat-alert-ico" href="#i-lock" /></svg></span>
+              <span class="adm-alert-txt">
+                <b id="stat-alert-title">Unauthorized Admin Access</b>
+                <span id="stat-alert-body">Live telemetry is restricted to the metrics operator.</span>
+              </span>
+            </div>
+
+            <!-- primary KPIs: Live Concurrency / Players+Telegram / Matches / Referrals -->
             <div class="adm-grid">
               <div class="adm-card">
                 <span class="adm-card-top">
@@ -3153,8 +3163,8 @@
                   <span class="adm-live-dot" id="stat-live-dot" data-live="false" aria-hidden="true"></span>
                 </span>
                 <b class="adm-card-v" id="stat-active">—</b>
-                <span class="adm-card-l">Active Now</span>
-                <span class="adm-card-s" id="stat-live-rooms">— live rooms</span>
+                <span class="adm-card-l">Live Concurrency</span>
+                <span class="adm-card-s" id="stat-live-rooms">— rooms · — queued</span>
               </div>
               <div class="adm-card">
                 <span class="adm-card-top">
@@ -3162,7 +3172,7 @@
                 </span>
                 <b class="adm-card-v" id="stat-players">—</b>
                 <span class="adm-card-l">Total Players</span>
-                <span class="adm-card-s" id="stat-dau">—</span>
+                <span class="adm-card-s" id="stat-dau">— Telegram</span>
               </div>
               <div class="adm-card">
                 <span class="adm-card-top">
@@ -3170,65 +3180,58 @@
                 </span>
                 <b class="adm-card-v" id="stat-matches">—</b>
                 <span class="adm-card-l">Matches Completed</span>
-                <span class="adm-card-s" id="stat-modes">—</span>
+                <span class="adm-card-s" id="stat-modes">— live 1v1</span>
               </div>
               <div class="adm-card">
                 <span class="adm-card-top">
-                  <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-star" /></svg></span>
+                  <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-gift" /></svg></span>
                 </span>
-                <b class="adm-card-v" id="stat-coins">—</b>
-                <span class="adm-card-l">Coin Volume</span>
-                <span class="adm-card-s" id="stat-stars">—</span>
+                <b class="adm-card-v" id="stat-referrals">—</b>
+                <span class="adm-card-l">Referral Joins</span>
+                <span class="adm-card-s" id="stat-referrers">— referrers</span>
               </div>
             </div>
 
-            <!-- mode distribution: one proportional bar over its legend -->
+            <!-- live board mix: 1v1 races against multi-seat rooms, both measured by the room -->
             <div class="adm-modes">
               <div class="adm-nations-h">
-                <span class="adm-nations-t">Mode Distribution</span>
+                <span class="adm-nations-t">Live Board Mix</span>
               </div>
-              <div class="adm-modes-bar" id="stat-mode-bar" role="img" aria-label="Matches by mode">
+              <div class="adm-modes-bar" id="stat-mode-bar" role="img" aria-label="Live boards by format"
+                data-empty="true">
                 <i class="adm-mode-seg" id="stat-mode-1v1" data-mode="duel"></i>
                 <i class="adm-mode-seg" id="stat-mode-arena" data-mode="arena"></i>
-                <i class="adm-mode-seg" id="stat-mode-solo" data-mode="solo"></i>
               </div>
               <ul class="adm-modes-legend" id="stat-mode-legend" aria-hidden="true">
-                <li><i data-mode="duel"></i>1v1 Blitz<b id="stat-mode-1v1-p">—</b></li>
-                <li><i data-mode="arena"></i>4-Seat Arena<b id="stat-mode-arena-p">—</b></li>
-                <li><i data-mode="solo"></i>Solo/Practice<b id="stat-mode-solo-p">—</b></li>
+                <li><i data-mode="duel"></i>1v1 Races<b id="stat-mode-1v1-p">—</b></li>
+                <li><i data-mode="arena"></i>Multi-Seat Rooms<b id="stat-mode-arena-p">—</b></li>
               </ul>
             </div>
 
-            <!-- match telemetry -->
+            <!-- durable gameplay counters the Worker has measured -->
             <div class="adm-tele">
-              <p class="adm-sec-h">Match Telemetry</p>
+              <p class="adm-sec-h">Gameplay Counters</p>
               <div class="adm-cells">
-                <span class="adm-stat"><b id="stat-dur">—</b><span class="adm-stat-l">Avg Match Duration</span></span>
-                <span class="adm-stat"><b id="stat-bot">—</b><span class="adm-stat-l">Bot Backfill Rate</span></span>
-                <span class="adm-stat"><b id="stat-draw">—</b><span class="adm-stat-l">Draw Rate</span></span>
+                <span class="adm-stat"><b id="stat-mines">—</b><span class="adm-stat-l">Mines Placed</span></span>
+                <span class="adm-stat"><b id="stat-logs">—</b><span class="adm-stat-l">Logs Spawned</span></span>
+                <span class="adm-stat"><b id="stat-ref-players">—</b><span class="adm-stat-l">Referring Players</span></span>
               </div>
             </div>
 
-            <!-- system health -->
+            <!-- system health: the real round trip through the Durable Object -->
             <div class="adm-health">
               <div class="adm-nations-h">
                 <span class="adm-nations-t">System Health</span>
                 <span class="adm-health-chip" id="stat-health-chip" data-on="false">—</span>
               </div>
               <div class="adm-cells">
-                <span class="adm-stat"><b id="stat-lat">—</b><span class="adm-stat-l">DO Tick Latency</span></span>
-                <span class="adm-stat"><b id="stat-err">—</b><span class="adm-stat-l">Disconnect Rate</span></span>
+                <span class="adm-stat"><b id="stat-lat">—</b><span class="adm-stat-l">Worker Round-Trip</span></span>
+                <span class="adm-stat"><b id="stat-env">—</b><span class="adm-stat-l">Environment</span></span>
               </div>
             </div>
 
-            <!-- top nations: recessed mini meters with the ladder's flag renderer -->
-            <div class="adm-nations">
-              <div class="adm-nations-h">
-                <span class="adm-nations-t">Top Nations</span>
-                <span class="adm-nations-s" id="stat-source" data-live="false">—</span>
-              </div>
-              <ul class="adm-nations-list is-meters" id="stat-nations" aria-label="Top player countries"></ul>
-            </div>
+            <!-- this device's own counters: labelled, never folded into the Worker's grid -->
+            <p class="adm-note adm-stat-device" id="stat-device">Device today: — sessions · — races · — coins measured on this device.</p>
           </div>
 
           <!-- ---------- Users: the player directory, searched, filtered and moderated ---------- -->
