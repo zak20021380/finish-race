@@ -28,7 +28,7 @@ import {
 
 export interface Vec { x: number; y: number }
 
-/** Wall ghost under construction. `armed` = already tapped once, waiting for a confirm tap. */
+/** Wall ghost under construction. `armed` = the floating toolbar is up, waiting for its confirm key. */
 export interface Ghost { spec: WallSpec; ok: boolean; armed: boolean; p: Player }
 
 /** What a player did last, so both sides' moves stay readable. */
@@ -60,7 +60,7 @@ export interface View {
   mineHints: Cell[];
   /** the cell already tapped in the two-tap mine flow, waiting for the confirm tap */
   mineGhost: Cell | null;
-  /** the [✓]/[✕] caps a wall or mine ghost draws, or null when no ghost is armed */
+  /** the floating action controls a wall or mine ghost draws, or null when no ghost is armed */
   capsule: CapsuleAction | null;
 }
 
@@ -100,12 +100,16 @@ export type Hit =
   | { kind: 'ball'; id: number }
   | { kind: 'confirm'; spec: WallSpec }
   | { kind: 'wall'; spec: WallSpec }
+  | { kind: 'rotate'; from: 'wall' | 'capsule' }
   | { kind: 'mine'; cell: Cell }
   | { kind: 'mine-confirm'; cell: Cell }
   | { kind: 'move'; to: Pos }
   | { kind: 'cancel' };
 
-/** The on-canvas [✓]/[✕] caps a ghost draws: their board anchor plus the hit a tap confirms. */
+/**
+ * The floating controls a ghost draws: their board anchor plus the hit its confirm key actuates.
+ * A wall ghost draws the three-key glass toolbar; a mine ghost keeps the compact ✓/✕ pair.
+ */
 export interface CapsuleAction {
   ax: number;
   ay: number;
@@ -255,16 +259,28 @@ function distToWall(bx: number, by: number, w: WallSpec, along: number): number 
   return Math.abs(bx - w.x);
 }
 
-/** The board-space centre of a wall's body, used to anchor its floating action capsules. */
+/** The board-space centre of a wall's body, used to anchor its floating action toolbar. */
 export function wallCentre(w: WallSpec): Vec {
   return w.o === 'h' ? { x: w.x + 1, y: w.y } : { x: w.x, y: w.y + 1 };
 }
 
 /**
- * Radius of a floating action capsule (the [✓] / [✕] chips), in cells, on a board whose cells are
- * `cell` px across. `CAP_R` is what a roomy board draws; on a cramped one the chip grows until it
- * is a thumb's worth of pixels, and stops at `CAP_R_MAX` so the pair still fits beside a wall
- * without the two chips touching. It only ever grows — a 430px phone draws the classic size.
+ * The slot a wall snaps to while its ghost is being dragged. Unlike `slotNear` there is no magnet
+ * zone: the finger owns the bar for the whole gesture, so it slides along the nearest line of its
+ * own orientation all the way across the board instead of dropping out between grooves.
+ */
+export function dragWallSlot(L: Layout, px: number, py: number, o: 'h' | 'v'): WallSpec {
+  const bx = (px - L.ox) / L.cell, by = (py - L.oy) / L.cell;
+  if (o === 'h') {
+    return { o, x: clamp(Math.round(bx) - 1, 0, L.cols - 2), y: clamp(Math.round(by), 1, L.rows - 1) };
+  }
+  return { o, x: clamp(Math.round(bx), 1, L.cols - 1), y: clamp(Math.round(by) - 1, 0, L.rows - 2) };
+}
+
+/**
+ * Radius of a mine ghost's compact ✓/✕ capsule, in cells, on a board whose cells are `cell` px
+ * across. `CAP_R` is what a roomy board draws; on a cramped one the chip grows until it is a
+ * thumb's worth of pixels, and stops at `CAP_R_MAX` so the pair still fits beside the square.
  */
 const CAP_R = 0.3;
 const CAP_R_MAX = 0.34;
@@ -290,8 +306,66 @@ export const capsuleConfirmPos = (L: Layout, ax: number, ay: number): Vec => cap
 /** The centre of the cancel ([✕]) capsule beside a board anchor, in board units. */
 export const capsuleCancelPos = (L: Layout, ax: number, ay: number): Vec => capsulePos(L, ax, ay, 'cancel');
 
-/** Which capsule, if either, a tap at (bx, by) lands on. Board coords in, capsule name out. */
-function capsuleHit(L: Layout, bx: number, by: number, cap: CapsuleAction): 'confirm' | 'cancel' | null {
+/**
+ * The wall toolbar's metrics, in css px. `TOOL_OFFSET` puts the glass strip 46px clear of the
+ * wall's centre — far enough that neither the bar nor its glow is covered — and every key is a full
+ * 44px thumb target with a little daylight between them.
+ */
+const TOOL_OFFSET = 46;
+const TOOL_BTN = 44;
+const TOOL_GAP = 6;
+const TOOL_PAD = 5;
+const TOOL_W = TOOL_BTN * 3 + TOOL_GAP * 2 + TOOL_PAD * 2;
+const TOOL_H = TOOL_BTN + TOOL_PAD * 2;
+const TOOL_EDGE = 3;
+
+interface ToolbarBox { x: number; y: number; w: number; h: number; below: boolean }
+
+/**
+ * Where the three-key toolbar sits: 46px clear of the wall's nearest end, centred above the bar,
+ * flipping to the wall's other side when the top of the board would clip it, and clamped inside the
+ * canvas horizontally. Centre coords, css px.
+ */
+function toolbarBox(L: Layout, ax: number, ay: number, o: 'h' | 'v'): ToolbarBox {
+  const cx = L.ox + ax * L.cell, cy = L.oy + ay * L.cell;
+  /* a vertical wall reaches a whole cell either side of its centre: clear that end, not the middle */
+  const half = o === 'v' ? L.cell : 0;
+  const above = cy - half - TOOL_OFFSET;
+  const below = above - TOOL_H / 2 < L.oy + TOOL_EDGE;
+  const minX = TOOL_W / 2 + TOOL_EDGE, maxX = Math.max(minX, L.w - TOOL_W / 2 - TOOL_EDGE);
+  const minY = TOOL_H / 2 + TOOL_EDGE, maxY = Math.max(minY, L.h - TOOL_H / 2 - TOOL_EDGE);
+  return {
+    x: clamp(cx, minX, maxX),
+    y: clamp(below ? cy + half + TOOL_OFFSET : above, minY, maxY),
+    w: TOOL_W,
+    h: TOOL_H,
+    below,
+  };
+}
+
+/** The centre of toolbar key `i` (0 = cancel, 1 = rotate, 2 = confirm), in css px. */
+const toolKeyX = (b: ToolbarBox, i: number) => b.x + (i - 1) * (TOOL_BTN + TOOL_GAP);
+
+/** Which wall-toolbar key a canvas point lands on, if any. */
+function toolbarHit(
+  L: Layout, px: number, py: number, ax: number, ay: number, o: 'h' | 'v',
+): 'confirm' | 'cancel' | 'rotate' | null {
+  const b = toolbarBox(L, ax, ay, o);
+  const r2 = (TOOL_BTN / 2 + 1) * (TOOL_BTN / 2 + 1);
+  for (let i = 0; i < 3; i++) {
+    const dx = px - toolKeyX(b, i), dy = py - b.y;
+    if (dx * dx + dy * dy <= r2) return i === 0 ? 'cancel' : i === 1 ? 'rotate' : 'confirm';
+  }
+  return null;
+}
+
+/** Which floating control, if any, a tap at (px, py) lands on. Canvas coords in. */
+function capsuleHit(
+  L: Layout, px: number, py: number, cap: CapsuleAction,
+): 'confirm' | 'cancel' | 'rotate' | null {
+  /* a wall ghost owns the glass toolbar; a mine keeps the compact pair beside its square */
+  if (cap.hit.kind === 'confirm') return toolbarHit(L, px, py, cap.ax, cap.ay, cap.hit.spec.o);
+  const bx = (px - L.ox) / L.cell, by = (py - L.oy) / L.cell;
   const r = capR(L.cell), r2 = r * r;
   const c = capsuleConfirmPos(L, cap.ax, cap.ay);
   if ((bx - c.x) * (bx - c.x) + (by - c.y) * (by - c.y) <= r2) return 'confirm';
@@ -302,13 +376,13 @@ function capsuleHit(L: Layout, bx: number, by: number, cap: CapsuleAction): 'con
 
 /**
  * Pointer (CSS px, canvas-local) → the thing to act on.
- * Priority, not raw distance: an armed ghost (or the on-canvas action capsules) confirms first, one
- * of your balls picks up, a legal-move dot's own cell moves, and only a tap that is inside no dot
- * cell and nearer the groove than the nearest dot arms a wall. A tap between the dot and the groove
- * falls back to the nearest legal dot so a sloppy finger still moves rather than starting a wall.
- * One mode is left: while the mine key is armed the board offers mines and nothing else, except
- * that a tap inside one of your own balls is that ball — the gesture that lets the key go and
- * brings the pawn to hand. The top and bottom two rows are refused outright.
+ * Priority, not raw distance: the floating toolbar and your own balls come first, then the centre
+ * of an armed wall (which turns it 90°), then a legal-move dot's own cell, and only a tap that is
+ * inside no dot cell and nearer the groove than the nearest dot repositions a wall. A tap between
+ * the dot and the groove falls back to the nearest legal dot so a sloppy finger still moves rather
+ * than starting a wall. One mode is left: while the mine key is armed the board offers mines and
+ * nothing else, except that a tap inside one of your own balls is that ball — the gesture that lets
+ * the key go and brings the pawn to hand. The top and bottom two rows are refused outright.
  *
  * The groove's own reach is `grooveZone(cell)` rather than a constant: on the wide board it grows
  * until a whole cell snaps to its nearest line, which is what makes a two-span wall on a ten-column
@@ -327,7 +401,7 @@ export function hitTest(L: Layout, px: number, py: number, o: {
   mineHints: Cell[];
   /** the cell waiting for its confirm tap — read only while `mode` is 'mine' */
   armedMine: Cell | null;
-  /** the outcome a tap on an on-canvas action capsule should act on, if drawn */
+  /** the outcome a tap on a floating action control should act on, if drawn */
   capsule?: CapsuleAction | null;
 }): Hit | null {
   const c = L.cell;
@@ -338,6 +412,11 @@ export function hitTest(L: Layout, px: number, py: number, o: {
   const cand: { hit: Hit; pri: number; d: number }[] = [];
   const reach = Math.max(0.5, MIN_TOUCH / 2 / c);   // 44px target, in cells
   const gz = grooveZone(c);                         // the groove's own reach on this board, in cells
+  /** The hit a floating control's own key actuates. */
+  const capHit = (key: 'confirm' | 'cancel' | 'rotate'): Hit =>
+    key === 'confirm' ? o.capsule!.hit
+      : key === 'rotate' ? { kind: 'rotate', from: 'capsule' }
+        : { kind: 'cancel' };
   /** the nearest of these cells to the tap, with the distance. `maxD` gates what counts as the aim. */
   const nearest = (cells: readonly Pos[], maxD: number) => {
     let best: Pos | null = null, d = Infinity;
@@ -350,8 +429,8 @@ export function hitTest(L: Layout, px: number, py: number, o: {
 
   if (o.mode === 'mine') {
     // mines for empty squares, but your own ball is always a ball: the caller lets the key go
-    const cap = o.capsule ? capsuleHit(L, bx, by, o.capsule) : null;
-    if (cap) cand.push({ hit: cap === 'confirm' ? o.capsule!.hit : { kind: 'cancel' }, pri: 0, d: 0 });
+    const cap = o.capsule ? capsuleHit(L, px, py, o.capsule) : null;
+    if (cap) cand.push({ hit: capHit(cap), pri: 0, d: 0 });
     /* Containment, not the 44px reach: tapping a square beside the pawn must still arm a mine
        there, while every tap inside the pawn's own square means "give me my piece back". */
     let ballId: number | null = null, db = Infinity;
@@ -367,11 +446,11 @@ export function hitTest(L: Layout, px: number, py: number, o: {
     const spot = nearest(o.mineHints, reach);
     if (spot) cand.push({ hit: { kind: 'mine', cell: spot.cell }, pri: 1, d: spot.d });
   } else {
-    /* Priority order (lower number wins): the action capsules and your own ball, then a move dot
-       inside 0.15 cells, then the armed ghost confirming, then a groove, then a far move fallback.
-       A dot within the move zone is pushed on its own, so no groove can ever be offered there. */
-    const cap = o.capsule ? capsuleHit(L, bx, by, o.capsule) : null;
-    if (cap) cand.push({ hit: cap === 'confirm' ? o.capsule!.hit : { kind: 'cancel' }, pri: 0, d: 0 });
+    /* Priority order (lower number wins): the floating keys and your own ball, the ghost's centre
+       (rotate), a move dot inside 0.15 cells, then a groove, then a far move fallback. A dot within
+       the move zone is pushed on its own, so no groove can ever be offered there. */
+    const cap = o.capsule ? capsuleHit(L, px, py, o.capsule) : null;
+    if (cap) cand.push({ hit: capHit(cap), pri: 0, d: 0 });
 
     let ballId: number | null = null, db = Infinity;
     for (const b of o.balls) {
@@ -380,6 +459,14 @@ export function hitTest(L: Layout, px: number, py: number, o: {
       if (d < db) { db = d; ballId = b.id; }
     }
     if (ballId !== null && db <= reach) cand.push({ hit: { kind: 'ball', id: ballId }, pri: 0, d: db });
+
+    /* The centre of the live ghost is its rotate handle: a tap there turns the bar in place, while
+       every other groove is a move. The handle is a thumb-sized disc, not the old confirm body. */
+    if (o.armed) {
+      const centre = wallCentre(o.armed);
+      const d = Math.hypot(bx - centre.x, by - centre.y);
+      if (d <= Math.max(0.36, 20 / c)) cand.push({ hit: { kind: 'rotate', from: 'wall' }, pri: 1, d });
+    }
 
     /* A ball in hand makes every legal-move cell a target in its own right, and the containment
        test is what enforces it: a tap inside one is that move, full stop, and the groove is never
@@ -395,13 +482,6 @@ export function hitTest(L: Layout, px: number, py: number, o: {
       const wd = s ? distToWall(bx, by, s, 1.25) : Infinity;
       if (s && wd <= (spot ? spot.d : Infinity)) cand.push({ hit: { kind: 'wall', spec: s }, pri: 3, d: wd });
       if (spot) cand.push({ hit: { kind: 'move', to: spot.cell }, pri: 4, d: spot.d });
-    }
-
-    if (o.armed) {
-      /* The confirm tap commits, so it reaches a little further than the preview that armed it did:
-         the same thumb that found the slot lands on the same slot again without re-aiming. */
-      const d = distToWall(bx, by, o.armed, 0.5);
-      if (d <= Math.min(0.5, gz + 0.08)) cand.push({ hit: { kind: 'confirm', spec: o.armed }, pri: 2, d });
     }
   }
 
@@ -1502,6 +1582,40 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.restore();
   }
 
+  /**
+   * The two glowing caps on a valid wall ghost. They pin the bar's ends to the exact vertices the
+   * partition runs between, so the preview reads as a complete two-tile wall even with its action
+   * keys now floating clear of it.
+   */
+  function drawGhostCaps(w: WallSpec, pi: number, alpha: number, still: boolean) {
+    const { cell: c, ox, oy } = L;
+    const s = sides[pi];
+    const ends = w.o === 'h'
+      ? [{ x: ox + w.x * c, y: oy + w.y * c }, { x: ox + (w.x + 2) * c, y: oy + w.y * c }]
+      : [{ x: ox + w.x * c, y: oy + w.y * c }, { x: ox + w.x * c, y: oy + (w.y + 2) * c }];
+    const breath = still ? 0.6 : 0.6 + 0.4 * Math.sin(performance.now() / 420);
+    ctx.save();
+    for (const e of ends) {
+      const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, c * 0.26);
+      g.addColorStop(0, 'rgba(255,255,255,.95)');
+      g.addColorStop(0.3, s.ramp.light);
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.globalAlpha = alpha * 0.8;
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(e.x, e.y, c * 0.26, 0, TAU); ctx.fill();
+      if (!still) {
+        ctx.globalAlpha = alpha * 0.26 * breath;
+        ctx.strokeStyle = s.ramp.light;
+        ctx.lineWidth = Math.max(1, c * 0.035);
+        ctx.beginPath(); ctx.arc(e.x, e.y, c * (0.16 + 0.035 * breath), 0, TAU); ctx.stroke();
+      }
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = 'rgba(255,255,255,.96)';
+      ctx.beginPath(); ctx.arc(e.x, e.y, Math.max(1.4, c * 0.045), 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+
   /** The specular stack, which is what tells these materials apart at 34px. */
   function shine(s: Side, r: number) {
     const g = s.ball.gloss;
@@ -1760,10 +1874,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   }
 
   /**
-   * A single floating action capsule: a dark disc so it reads on any board, a coloured inner chip,
-   * a bevel rim and a white glyph. The chip's own ramp decides its colour — emerald for confirm,
-   * crimson for cancel (OK_RAMP / NO_RAMP) — so the pair says yes/no the same way for every seat
-   * and on every board. Anchored beside an armed ghost and clamped to the canvas.
+   * A mine ghost's compact action capsule: a dark disc so it reads on any board, a coloured inner
+   * chip, a bevel rim and a white glyph. The chip's own ramp decides its colour — emerald for
+   * confirm, crimson for cancel (OK_RAMP / NO_RAMP) — so the pair says yes/no the same way for
+   * every seat and on every board.
    */
   function drawCapsule(cx: number, cy: number, kind: 'confirm' | 'cancel', ramp: Ramp, c: number, still: boolean) {
     const r = capR(c) * c;
@@ -1797,17 +1911,141 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.restore();
   }
 
-  /**
-   * The floating [✓]/[✕] pair anchored beside an armed ghost, clamped inside the canvas. Which seat
-   * armed the ghost makes no difference to the pair: the ramps are OK_RAMP and NO_RAMP.
-   */
-  function drawCapsules(ax: number, ay: number, still: boolean) {
+  /** The compact [✓]/[✕] pair a mine ghost keeps beside its square. */
+  function drawMineCapsules(ax: number, ay: number, still: boolean) {
     const { cell: c, ox, oy } = L;
     const confirm = capsuleConfirmPos(L, ax, ay);
     const cancel = capsuleCancelPos(L, ax, ay);
-    /* semantics, not the placing seat: green tick, red cross, whatever p is wearing */
     drawCapsule(ox + confirm.x * c, oy + confirm.y * c, 'confirm', OK_RAMP, c, still);
     drawCapsule(ox + cancel.x * c, oy + cancel.y * c, 'cancel', NO_RAMP, c, still);
+  }
+
+  /** Wall-toolbar key colours: semantics first — red cancels, cyan turns, green commits. */
+  const TOOL_COLORS = {
+    cancel: { light: '#fda4af', mid: '#e11d48', dark: '#881337', glow: 'rgba(244,63,94,.55)' },
+    rotate: { light: '#a5f3fc', mid: '#0891b2', dark: '#155e75', glow: 'rgba(34,211,238,.55)' },
+    confirm: { light: '#a7f3d0', mid: '#059669', dark: '#065f46', glow: 'rgba(16,185,129,.55)' },
+  } as const;
+
+  type ToolKind = keyof typeof TOOL_COLORS;
+
+  /** One 44px glass-toolbar key: a coloured lens, a crisp rim, and a vector glyph. */
+  function drawToolKey(cx: number, cy: number, kind: ToolKind, still: boolean, dim = false) {
+    const r = TOOL_BTN / 2 - 1;
+    const pal = TOOL_COLORS[kind];
+    ctx.save();
+    ctx.translate(cx, cy);
+    if (dim) ctx.globalAlpha = 0.42;
+    ctx.shadowColor = 'rgba(2,6,14,.62)';
+    ctx.shadowBlur = 7;
+    ctx.shadowOffsetY = 2.5;
+    const body = ctx.createRadialGradient(-r * 0.38, -r * 0.48, r * 0.08, 0, 0, r * 1.12);
+    body.addColorStop(0, pal.light);
+    body.addColorStop(0.46, pal.mid);
+    body.addColorStop(1, pal.dark);
+    ctx.fillStyle = body;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.strokeStyle = 'rgba(255,255,255,.34)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(0, 0, r - 0.5, 0, TAU); ctx.stroke();
+    /* top lens highlight: the glass reads as convex even at 44px */
+    const sheen = ctx.createLinearGradient(0, -r, 0, r * 0.35);
+    sheen.addColorStop(0, 'rgba(255,255,255,.4)');
+    sheen.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = sheen;
+    ctx.beginPath(); ctx.arc(0, 0, r - 1.5, Math.PI, TAU); ctx.closePath(); ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255,255,255,.97)';
+    ctx.fillStyle = 'rgba(255,255,255,.97)';
+    ctx.lineWidth = Math.max(2.1, r * 0.13);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (kind === 'cancel') {
+      const g = r * 0.34;
+      ctx.beginPath();
+      ctx.moveTo(-g, -g); ctx.lineTo(g, g);
+      ctx.moveTo(g, -g); ctx.lineTo(-g, g);
+      ctx.stroke();
+    } else if (kind === 'confirm') {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.42, r * 0.02);
+      ctx.lineTo(-r * 0.1, r * 0.31);
+      ctx.lineTo(r * 0.45, -r * 0.34);
+      ctx.stroke();
+    } else {
+      const rad = r * 0.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, rad, Math.PI * 0.35, Math.PI * 1.8);
+      ctx.stroke();
+      const a = Math.PI * 1.8;
+      const ex = Math.cos(a) * rad, ey = Math.sin(a) * rad;
+      const tx = -Math.sin(a), ty = Math.cos(a);
+      const nx = Math.cos(a), ny = Math.sin(a);
+      ctx.beginPath();
+      ctx.moveTo(ex + tx * r * 0.28, ey + ty * r * 0.28);
+      ctx.lineTo(ex + nx * r * 0.19 - tx * r * 0.03, ey + ny * r * 0.19 - ty * r * 0.03);
+      ctx.lineTo(ex - nx * r * 0.19 - tx * r * 0.03, ey - ny * r * 0.19 - ty * r * 0.03);
+      ctx.closePath();
+      ctx.fill();
+    }
+    if (!still) {                                   // the keys breathe together, never apart
+      ctx.globalAlpha = (dim ? 0.16 : 0.3) + 0.14 * Math.sin(performance.now() / 480);
+      ctx.strokeStyle = pal.glow;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(0, 0, r + 2.5, 0, TAU); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /**
+   * The floating wall toolbar: a glass pill with Cancel / Rotate / Confirm, parked clear of the
+   * wall's centre (above it, or below when the top boundary would clip). None of the three touches
+   * the ghost, so the whole two-tile preview and its glowing caps stay readable.
+   */
+  function drawWallToolbar(ax: number, ay: number, o: 'h' | 'v', ok: boolean, still: boolean) {
+    const b = toolbarBox(L, ax, ay, o);
+    const left = b.x - b.w / 2, top = b.y - b.h / 2;
+    ctx.save();
+    /* the glass is dark and translucent; a wide soft shadow separates it from the clay tiles */
+    ctx.shadowColor = 'rgba(3,7,15,.58)';
+    ctx.shadowBlur = 16;
+    ctx.shadowOffsetY = 6;
+    const glass = ctx.createLinearGradient(0, top, 0, top + b.h);
+    glass.addColorStop(0, 'rgba(36,44,64,.78)');
+    glass.addColorStop(0.52, 'rgba(17,23,38,.78)');
+    glass.addColorStop(1, 'rgba(9,13,23,.84)');
+    ctx.fillStyle = glass;
+    rr(ctx, left, top, b.w, b.h, b.h / 2);
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    /* a frosted rim: bright catch-light above, cool hairline below */
+    ctx.strokeStyle = 'rgba(255,255,255,.26)';
+    ctx.lineWidth = 1;
+    rr(ctx, left + 0.5, top + 0.5, b.w - 1, b.h - 1, (b.h - 1) / 2);
+    ctx.stroke();
+    const sheen = ctx.createLinearGradient(0, top, 0, top + b.h * 0.52);
+    sheen.addColorStop(0, 'rgba(255,255,255,.16)');
+    sheen.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = sheen;
+    rr(ctx, left + 2, top + 2, b.w - 4, b.h * 0.5, b.h * 0.25);
+    ctx.fill();
+    /* a tiny stem marks which wall the strip belongs to */
+    ctx.strokeStyle = 'rgba(255,255,255,.28)';
+    ctx.lineWidth = Math.max(1.5, b.h * 0.045);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.below ? top : top + b.h);
+    ctx.lineTo(b.x, b.below ? top - 5 : top + b.h + 5);
+    ctx.stroke();
+    drawToolKey(toolKeyX(b, 0), b.y, 'cancel', still);
+    drawToolKey(toolKeyX(b, 1), b.y, 'rotate', still);
+    drawToolKey(toolKeyX(b, 2), b.y, 'confirm', still, !ok);
+    ctx.restore();
   }
 
   /** Where a thrown ball comes to rest: a soft clay ring and a few motes. Dust, never fire. */
@@ -2137,18 +2375,15 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     if (v.ghost) {
       const gp = sides[v.ghost.p].ramp;
       if (v.ghost.ok) {
-        drawBar(v.ghost.spec, v.ghost.p, v.ghost.armed ? 0.85 : 0.42, 1, false);
+        drawBar(v.ghost.spec, v.ghost.p, v.ghost.armed ? 0.9 : 0.5, 1, true);
         outline(v.ghost.spec, v.ghost.armed ? gp.os : gp.ol,
           Math.max(1.5, c * 0.045), v.ghost.armed ? dash.armed : dash.ghost, still ? 0 : -now / 26, v.ghost.p);
+        drawGhostCaps(v.ghost.spec, v.ghost.p, v.ghost.armed ? 0.95 : 0.5, still);
       } else {
         // solid ring + cross: unmistakably "not here", unlike the dashed ghost above
         drawBar(v.ghost.spec, ERR, 0.3, 1, false);
         outline(v.ghost.spec, 'rgba(255,45,85,.95)', Math.max(2, c * 0.06), SOLID, 0, ERR);
         cross(v.ghost.spec, '#fff', c * 0.19);
-      }
-      if (v.ghost.armed) {
-        const centre = wallCentre(v.ghost.spec);
-        drawCapsules(centre.x, centre.y, still);
       }
     }
 
@@ -2161,7 +2396,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const gp = sides[v.state.turn].ramp;
       cellRing(v.mineGhost, gp.os, Math.max(1.5, c * 0.045), dash.armed, still ? 0 : -now / 26);
       drawMine(ox + (v.mineGhost.c + 0.5) * c, oy + (v.mineGhost.r + 0.5) * c, 'ghost', pulse, drop, now, still);
-      drawCapsules(v.mineGhost.c + 0.5, v.mineGhost.r + 0.5, still);
+      drawMineCapsules(v.mineGhost.c + 0.5, v.mineGhost.r + 0.5, still);
     } else mineGhostKey = '';
 
     // placed walls (pop-in + landing pulse); walls are never removed mid-game
@@ -2383,6 +2618,13 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     }
 
     ctx.restore();                     // the slab clip opened at the top of this frame
+
+    /* The wall toolbar is chrome, not board furniture: it floats above the clip so its glass edge
+       can ride over the slab rim instead of being cut off by it. */
+    if (v.ghost?.armed) {
+      const centre = wallCentre(v.ghost.spec);
+      drawWallToolbar(centre.x, centre.y, v.ghost.spec.o, v.ghost.ok, still);
+    }
   }
 
   return {

@@ -2,13 +2,13 @@ import './style.css';
 import {
   CONFIG, MAX_TEAMS, apply, ballById, distField, firstBall, getAutoMove, mineCells, minesLeft, newGame,
   reachableBall, steps as teamSteps, view as fogOfWar, wallBudget, wallOk, wallsCross, wallsOverlap,
-  wallsRemaining,
+  wallsRemaining, rotateWall,
   type Action, type Ball, type Cell, type GameState, type Mine, type Player,
   type Pos, type Wall, type WallSpec,
 } from './rules';
 import { botAction, botThinkMs, type Difficulty } from './bot';
 import {
-  createRenderer, hitTest, wallCentre,
+  createRenderer, dragWallSlot, hitTest, wallCentre,
   type BallView, type CapsuleAction, type Ghost, type Hit,
   type Mark, type Perspective, type Vec, type View,
 } from './render';
@@ -190,7 +190,9 @@ function setFog(p: Player) {
   cell.dataset.fog = next;
   const n = cell.querySelector<HTMLElement>('.fog-n');
   if (n) n.textContent = spent ? '0' : '?';
-  cell.setAttribute('aria-label', spent ? 'Mines: none left' : 'Mines: count concealed');
+  cell.setAttribute('aria-label', spent
+    ? 'Mines: none left'
+    : `Mines: ${CONFIG.MINES_PER_TEAM} per player — count concealed`);
 }
 
 /* the trigger shakes the board itself, once. A mine is a 2px micro-shake; reduced motion never
@@ -206,7 +208,7 @@ function shake(micro = false) {
   shakeTimer = window.setTimeout(() => wrap.classList.remove('shake', 'micro'), micro ? 400 : 700);
 }
 
-/* the toast over the lower board: why a slot was refused, "tap again to place", an event alert.
+/* the toast over the lower board: why a slot was refused, the wall's drag hint, an event alert.
    Only the screen that is actually up takes the message, so a refusal in the shop never leaks
    onto the board behind it (and vice versa). */
 let noteTimer = 0;
@@ -482,9 +484,15 @@ let mineHints: Cell[] = [];
 /** The cell tapped once in the two-tap mine flow, waiting for its confirm tap. */
 let mineGhost: Cell | null = null;
 const sameCell = (a: Cell | null, b: Cell | null) => !!a && !!b && a.c === b.c && a.r === b.r;
-let ghost: Ghost | null = null;                 // wall preview; armed = waiting for a confirm tap
-/** The on-canvas [✓]/[✕] caps anchored beside an armed ghost, or null. */
+let ghost: Ghost | null = null;                 // wall preview; armed = toolbar up, ready to confirm
+/** The floating Cancel / Rotate / Confirm toolbar anchored to an armed wall or mine ghost. */
 let capsule: CapsuleAction | null = null;
+/**
+ * The finger currently carrying a wall ghost. A press that never travels is a tap — on the bar's
+ * centre that means rotate — while a press that crosses `DRAG_SLOP` slides the whole bar instead.
+ */
+let wallDrag: { id: number; x: number; y: number; moved: boolean; tap: 'centre' | 'groove' } | null = null;
+const DRAG_SLOP = 6;                             // css px before a press becomes a drag
 /** One entry per seat: what that seat did last. Sized to the live roster in `restart()`. */
 const marks: (Mark | null)[] = Array.from({ length: state.teams.length }, () => null);
 /** Reused every frame: the loop must not allocate. */
@@ -524,8 +532,9 @@ function setMode(next: BoardMode<Ghost>) {
   selected = next.selected;
   ghost = next.preview;
   mineArmed = next.mine;
+  if (!next.preview) wallDrag = null;   // no bar to carry once the ghost is gone
   hints = dotsFor(next);         // derived, so it is rebuilt the moment the mode moves — never stale
-  armCapsules();                 // the [✓]/[✕] caps hang off the preview, so they follow it
+  armCapsules();                 // the floating keys hang off the preview, so they follow it
 }
 
 /**
@@ -584,7 +593,7 @@ function pickFromMine(id: number) {
   ui();
 }
 
-/** The wall ghost's floating caps: confirm commits the slot, cancel clears it. */
+/** The ghost's floating controls: a wall gets the three-key toolbar, a mine the compact ✓/✕ pair. */
 function armCapsules() {
   if (ghost?.armed) {
     const centre = wallCentre(ghost.spec);
@@ -1364,23 +1373,79 @@ const at = (p: Vec) => hitTest(renderer.layout(), p.x, p.y, {
   capsule,
 });
 
-/** Clear the wall ghost and anything it was holding (the caps included). */
-function disarmWall() { setMode({ ...mode(), preview: null }); clearNote(); }
+/** Clear the wall ghost and anything it was holding (its toolbar included). */
+function disarmWall() {
+  wallDrag = null;
+  setMode({ ...mode(), preview: null });
+  clearNote();
+}
 
 /**
- * The wall ghost's input branch: [✓] commits, [✕] cancels, another groove relocates the ghost, and
- * a ball or a legal-move dot immediately drops the ghost and plays that move.
+ * Put the wall ghost up at `spec`, armed and wearing its toolbar. Nothing is committed here: only
+ * the toolbar's green key (or the tutorial's single-tap lesson) actually spends a wall.
+ */
+function previewWallAt(spec: WallSpec): boolean {
+  const wall: Wall = { ...spec, owner: state.turn };
+  if (wallsRemaining(state, wall.owner) <= 0) {
+    setMode({ ...mode(), preview: null });
+    refuse(wall);
+    return false;
+  }
+  const ok = wallOk(state, wall);
+  setMode(previewWall(mode(), { spec, ok, armed: true, p: state.turn }));
+  if (ok) {
+    impact('light');
+    showNote('Drag to aim · tap the centre to rotate', false, 0);
+  } else refuse(wall);
+  return true;
+}
+
+/** Slide an already-armed ghost without re-firing the placement toast on every drag frame. */
+function slideWall(spec: WallSpec) {
+  const wall: Wall = { ...spec, owner: state.turn };
+  const ok = wallOk(state, wall);
+  setMode(previewWall(mode(), { spec, ok, armed: true, p: state.turn }));
+  if (ok) clearNote();             // a refusal from the slot the finger just left is now stale
+}
+
+/** Turn the armed ghost 90° about its centre. An illegal turn stays up, ready to be turned back. */
+function rotateGhost() {
+  if (!ghost) return;
+  const spec = rotateWall(ghost.spec);
+  const wall: Wall = { ...spec, owner: state.turn };
+  const ok = wallOk(state, wall);
+  setMode(previewWall(mode(), { spec, ok, armed: true, p: state.turn }));
+  impact('light');
+  if (ok) showNote('Drag to aim · tap the centre to rotate', false, 0);
+  else refuse(wall);
+}
+
+/** The toolbar's green key: the one door that spends a wall. */
+function commitWall() {
+  if (!ghost) return;
+  const wall: Wall = { ...ghost.spec, owner: state.turn };
+  if (!wallOk(state, wall)) { refuse(wall); return; }
+  play({ kind: 'wall', wall });
+}
+
+/**
+ * The wall ghost's input branch: the toolbar commits, rotates or cancels; another groove moves the
+ * ghost without committing; a ball or a legal-move dot drops the ghost and plays that move.
  * Returns true when the tap was handled here.
  */
 function wallBranch(hit: Hit | null): boolean {
-  if (!ghost?.armed) {
-    if (hit?.kind === 'cancel') { disarmWall(); return true; }
-    if (hit?.kind === 'wall') { tapWall(hit); return true; }   // open the two-tap wall here
-    return false;
-  }
-  if (hit?.kind === 'confirm') { tapWall(hit); return true; }
+  if (hit?.kind === 'confirm') { commitWall(); return true; }
+  if (hit?.kind === 'rotate') { rotateGhost(); return true; }
   if (hit?.kind === 'cancel') { disarmWall(); return true; }
-  if (hit?.kind === 'wall') { tapWall(hit); return true; }   // relocate to the new slot
+  if (hit?.kind === 'wall') {
+    /* tapping the bar away from its centre is dead space: the centre is the rotate handle, and the
+       rest of that groove is already the ghost's own slot */
+    const same = ghost?.armed && ghost.spec.o === hit.spec.o
+      && ghost.spec.x === hit.spec.x && ghost.spec.y === hit.spec.y;
+    if (!same) previewWallAt(hit.spec);
+    return true;
+  }
+  if (!ghost?.armed) return false;
   if (hit?.kind === 'ball') { disarmWall(); impact('light'); pick(hit.id === selected ? null : hit.id); return true; }
   if (!hit) { disarmWall(); pick(null); return true; }        // neutral board space cancels
   return false;
@@ -1405,25 +1470,6 @@ function tapMine(hit: Hit | null): boolean {
   impact('light');
   showNote('Tap again to bury', false, 0);
   return true;
-}
-
-/** The two-tap wall flow: one tap arms the slot, the next puts the wall up. */
-function tapWall(hit: { kind: 'wall' | 'confirm'; spec: WallSpec }) {
-  const wall: Wall = { ...hit.spec, owner: state.turn };
-  const ok = wallOk(state, wall);
-  /* a spent budget disallows the preview entirely: refuse the tap and pulse the badge instead */
-  if (wallsRemaining(state, wall.owner) <= 0) {
-    setMode({ ...mode(), preview: null });
-    refuse(wall);
-    return;
-  }
-  if (hit.kind === 'confirm') {
-    if (ok) play({ kind: 'wall', wall }); else refuse(wall);
-    return;
-  }
-  /* arming the slot takes the board: a dashed bar and a ball's move dots are never both up */
-  setMode(previewWall(mode(), { spec: hit.spec, ok, armed: true, p: state.turn }));
-  if (ok) { impact('light'); showNote('Tap again to place', false, 0); } else refuse(wall);
 }
 
 /** The lesson's vocabulary for a hit-test result. */
@@ -1508,8 +1554,8 @@ function tutorialTap(p: Vec) {
 }
 
 /**
- * Touch: whatever the live key offers is what a tap acts on — the ghost caps, a ball, a line, or a
- * square. An armed wall ghost owns the tap first; otherwise the strict move/groove arbitration wins.
+ * Touch: whatever the live key offers is what a tap acts on — the floating keys, a ball, a line, or
+ * a square. An armed wall ghost owns the tap first; otherwise the strict move/groove arbitration wins.
  */
 function onTouch(p: Vec) {
   const hit = at(p);
@@ -1521,9 +1567,7 @@ function onTouch(p: Vec) {
     disarmWall();
     impact('light');
     play({ kind: 'move', ball: selected ?? undefined, to: hit.to });
-    return;
   }
-  if (hit.kind === 'confirm') tapWall(hit);
 }
 
 /** Mouse: hovering a groove previews the wall there; mines arm on click, like everywhere else. */
@@ -1540,7 +1584,7 @@ function onMouse(p: Vec, click: boolean) {
        dots and cancel the pick mid-travel. A picked ball owns the pointer until it is played or put
        down; a groove opens a wall on an explicit tap instead. */
     if (holdsBall(mode()) || ghost?.armed) return;
-    /* an armed ghost keeps its slot and its caps, and a spent budget shows none */
+    /* an armed ghost keeps its slot and its toolbar, and a spent budget shows none */
     const spec = hit && hit.kind === 'wall' && wallsRemaining(state, state.turn) > 0 ? hit.spec : null;
     const wall: Wall | null = spec ? { ...spec, owner: state.turn } : null;
     setMode(previewWall(mode(), wall ? { spec: wall, ok: wallOk(state, wall), armed: false, p: state.turn } : null));
@@ -1560,6 +1604,27 @@ function onMouse(p: Vec, click: boolean) {
   clearGhost();
 }
 
+/** Begin carrying the ghost: a short press is a tap, travel past `DRAG_SLOP` is a slide. */
+function startWallDrag(e: PointerEvent, p: Vec, tap: 'centre' | 'groove') {
+  wallDrag = { id: e.pointerId, x: p.x, y: p.y, moved: false, tap };
+  try { canvas.setPointerCapture(e.pointerId); } catch { /* best-effort: pointerup still lands */ }
+}
+
+/** Release the ghost. An unmoved press on the bar's centre turns it; a dragged slot is left armed. */
+function endWallDrag(e: PointerEvent, release: boolean) {
+  const drag = wallDrag;
+  if (!drag || e.pointerId !== drag.id) return;
+  wallDrag = null;
+  try {
+    if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+  } catch { /* the capture may already have been dropped by the browser */ }
+  if (!drag.moved) {
+    if (release && drag.tap === 'centre') rotateGhost();
+    return;
+  }
+  if (release && ghost && !ghost.ok) refuse({ ...ghost.spec, owner: state.turn });
+}
+
 canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   if (!canAct()) return;
@@ -1567,16 +1632,53 @@ canvas.addEventListener('pointerdown', (e) => {
   if (tutorialActive) { tutorialTap(p); return; }
   const L = renderer.layout();
   renderer.ripple((p.x - L.ox) / L.cell, (p.y - L.oy) / L.cell, localSide);   // the tap answers at once
+  if (mineArmed) { tapMine(at(p)); return; }
+  const hit = at(p);
+  /* the toolbar's rotate key fires on press; the ghost's own centre waits for pointerup so the
+     same press can turn into a drag instead of rotating under the finger */
+  if (hit?.kind === 'rotate' && hit.from === 'capsule') { rotateGhost(); return; }
+  if (ghost?.armed && (hit?.kind === 'rotate' || hit?.kind === 'wall')) {
+    if (hit.kind === 'wall') {
+      const same = ghost.spec.o === hit.spec.o && ghost.spec.x === hit.spec.x && ghost.spec.y === hit.spec.y;
+      if (!same && !previewWallAt(hit.spec)) return;
+    }
+    startWallDrag(e, p, hit.kind === 'rotate' ? 'centre' : 'groove');
+    return;
+  }
+  if (hit?.kind === 'wall') {
+    if (!previewWallAt(hit.spec)) return;
+    startWallDrag(e, p, 'groove');
+    return;
+  }
   if (e.pointerType === 'mouse') onMouse(p, true);
   else onTouch(p);
 });
 
 canvas.addEventListener('pointermove', (e) => {
-  if (tutorialActive || e.pointerType !== 'mouse') return;
-  onMouse(local(e), false);
-});
-canvas.addEventListener('pointerleave', () => {
   if (tutorialActive) return;
+  const p = local(e);
+  if (wallDrag) {
+    if (e.pointerId !== wallDrag.id) return;
+    if (!wallDrag.moved) {
+      const dx = p.x - wallDrag.x, dy = p.y - wallDrag.y;
+      if (dx * dx + dy * dy < DRAG_SLOP * DRAG_SLOP) return;
+      wallDrag.moved = true;
+    }
+    if (ghost?.armed) {
+      /* the bar keeps the orientation it has and follows the nearest line of that family; turns
+         are the centre tap's or the toolbar's job */
+      const spec = dragWallSlot(renderer.layout(), p.x, p.y, ghost.spec.o);
+      if (spec.x !== ghost.spec.x || spec.y !== ghost.spec.y) slideWall(spec);
+    }
+    return;
+  }
+  if (e.pointerType !== 'mouse') return;
+  onMouse(p, false);
+});
+canvas.addEventListener('pointerup', (e) => endWallDrag(e, true));
+canvas.addEventListener('pointercancel', (e) => endWallDrag(e, false));
+canvas.addEventListener('pointerleave', () => {
+  if (tutorialActive || wallDrag) return;
   if (ghost && !ghost.armed) setMode({ ...mode(), preview: null });
 });
 

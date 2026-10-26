@@ -65,7 +65,7 @@ export const CONFIG = {
   /** Walls each team may place per race in a two-contender duel — the classic budget. */
   WALL_LIMIT: 8,
   /** Mines each team may bury per race. */
-  MINES_PER_TEAM: 3,
+  MINES_PER_TEAM: 2,
   /** Rows the aerial mine blast throws a ball down its column, jumped clear over any wall. */
   KNOCKBACK: 2,
   /**
@@ -468,6 +468,14 @@ export function wallVertices(w: WallSpec): [Vertex, Vertex, Vertex] {
  */
 export const wallPivot = (w: WallSpec): Vertex =>
   (w.o === 'h' ? { x: w.x + 1, y: w.y } : { x: w.x, y: w.y + 1 });
+
+/**
+ * The same wall turned 90° about its centre vertex. The centre and the pivot stay put, so a
+ * horizontal bar at (x, y) becomes the vertical one crossing that same point, and vice versa:
+ * every legal wall rotates to another in-bounds wall on the same board.
+ */
+export const rotateWall = (w: WallSpec): WallSpec =>
+  (w.o === 'h' ? { o: 'v', x: w.x + 1, y: w.y - 1 } : { o: 'h', x: w.x - 1, y: w.y + 1 });
 
 /** Vertical edge segments are keyed above the horizontal ones, so the two families never collide. */
 const SEG_V = LATTICE_C * LATTICE_R;
