@@ -88,7 +88,7 @@ export const COPY: Record<BotLang, Copy> = {
     flag: '🇬🇧',
     welcome: '🏁 **WELCOME TO THE ARENA!**\n\n'
       + 'Outsmart your rival in real-time 1v1 tactical races! Block paths with walls, plant sneaky '
-      + 'mines on the finish line, dodge rolling logs, and claim victory.\n\n'
+      + 'mines on the finish line, and claim victory.\n\n'
       + '⚡ **Are you fast enough to master Tactix?**\n'
       + 'Tap below to jump straight into the action!',
     rules: '📖 **HOW TO PLAY Tactix**\n\n'
@@ -99,7 +99,6 @@ export const COPY: Record<BotLang, Copy> = {
       + 'lock them in!).\n'
       + '• **Plant Mines:** Set hidden traps—even right on the finish line—to blast your opponent '
       + 'backward!\n'
-      + '• **Watch for Logs:** Maximum 2 rolling logs sweep down the board. Step out of their lane!\n\n'
       + '🏆 Win matches, climb the Ranks, and conquer the Channel Wars!',
     invite: '🤝 **INVITE FRIENDS**\n\n'
       + 'Beating a stranger is satisfying. Beating someone who knows you is better. Send your link '
@@ -108,7 +107,7 @@ export const COPY: Record<BotLang, Copy> = {
       + '🎁 You both get 500 coins when a friend joins through it.',
     pitch: 'Race me on Tactix — we both get 500 coins when you join!',
     launch: '⚡ **THE ARENA IS OPEN**\n\n'
-      + 'One tap and you are in the race. Walls, mines, rolling logs — beat your rival to the '
+      + 'One tap and you are in the race. Walls and mines — beat your rival to the '
       + 'FINISH line!',
     play: '▶️ PLAY NOW',
     rulesBtn: '📖 How to Play',

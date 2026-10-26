@@ -3,7 +3,7 @@
  *
  * Quick match no longer drops straight onto the board: the mode drawer hands the
  * seat to this module, which owns one full-viewport clay stage — a telemetry rail
- * (seat, pairing radius, hazards), two extruded contender pods (you on a team-blue
+ * (seat, pairing radius), two extruded contender pods (you on a team-blue
  * sphere, the rival a live scanner on the right), the tactical radar core and its
  * VS medallion between them, then the search console, the stakes and a mind tip.
  *
@@ -837,15 +837,12 @@ const SCAN_FACES: ReadonlyArray<string> = ['#i-user', '#i-bot', '#i-users'];
 const TIP_MS = 4000;
 /**
  * Every line here is a rule the board enforces: unlimited walls, the mine blast's
- * knockback (`rules.ts`), the 8s blitz hand-off, and a log that is never telegraphed
- * and locks input while it rolls (`hazards.ts`, `render.ts`).
+ * knockback (`rules.ts`) and the 8s blitz hand-off.
  */
 const TIPS: ReadonlyArray<string> = [
   'Walls are unlimited — seal the lane your rival needs, not the one they are standing in.',
   'A mine throws a ball straight down its column. Bury it where the rival must land.',
   'The blitz clock runs out and its auto-move will walk you straight into a mine.',
-  'Nothing warns you about the rolling log. Rounds 1 and 2 are always clean — cross early.',
-  'Input locks while a log rolls. Be where you want to be before the board starts to shake.',
   'The blast is aerial: a horizontal wall never shortens it. The mine throws the ball two rows back.',
 ];
 /** The impact animation that locks the rival in. */

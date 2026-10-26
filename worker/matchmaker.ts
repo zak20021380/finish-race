@@ -250,8 +250,6 @@ export interface ActiveRoom {
   p1: string;
   /** Whose turn the authoritative board is on. */
   turn: number;
-  /** The hazard round the room is in; 1 when the board runs no rolling log. */
-  round: number;
   /** How many seats the race fields — 2 for a duel, up to `MAX_TEAMS` for a room. */
   players?: number;
   /** How many of those seats the machine is holding. */
@@ -291,7 +289,7 @@ export interface ServerMetrics {
   matchesCompleted: number;
   /** Mine actions accepted by the authoritative board. */
   minesPlaced: number;
-  /** Hazard logs the timetable deployed. */
+  /** Retired rolling-log counter; always 0. */
   logsSpawned: number;
   /** Referral joins reported across the registry. */
   referrals: number;
@@ -305,12 +303,11 @@ export interface ServerMetrics {
 interface GameMetrics {
   matchesCompleted: number;
   minesPlaced: number;
-  logsSpawned: number;
 }
 
 const GAME_METRICS_KEY = 'game-metrics.v1';
 
-const zeroGameMetrics = (): GameMetrics => ({ matchesCompleted: 0, minesPlaced: 0, logsSpawned: 0 });
+const zeroGameMetrics = (): GameMetrics => ({ matchesCompleted: 0, minesPlaced: 0 });
 
 /** A stored counter blob, clamped field by field; anything missing is zero. */
 function readGameMetrics(raw: unknown): GameMetrics {
@@ -318,7 +315,6 @@ function readGameMetrics(raw: unknown): GameMetrics {
   return {
     matchesCompleted: whole(r?.matchesCompleted),
     minesPlaced: whole(r?.minesPlaced),
-    logsSpawned: whole(r?.logsSpawned),
   };
 }
 
@@ -1229,7 +1225,6 @@ export class MatchmakerDO {
           p0: r.seats[0].name,
           p1: r.seats[1].name,
           turn: r.state.turn,
-          round: r.state.hazard?.round ?? 1,
         })),
         ...[...this.rooms.values()].map((live) => this.roomSummary(live)),
       ],
@@ -1266,7 +1261,7 @@ export class MatchmakerDO {
       telegramUsers: telegram.size,
       matchesCompleted: this.gameMetrics.matchesCompleted,
       minesPlaced: this.gameMetrics.minesPlaced,
-      logsSpawned: this.gameMetrics.logsSpawned,
+      logsSpawned: 0,
       referrals,
       referringPlayers,
     };
@@ -1282,7 +1277,6 @@ export class MatchmakerDO {
       p0: roster.seats[0]?.name ?? '',
       p1: roster.seats[1]?.name ?? '',
       turn: live.driver?.state.turn ?? 0,
-      round: live.driver?.state.hazard?.round ?? 1,
       players: roster.seats.length,
       bots,
     };
@@ -1837,19 +1831,16 @@ export class MatchmakerDO {
   /** Count what the authoritative board actually did between two states. */
   private countBoard(before: GameState, after: GameState): void {
     const mines = after.mines.length - before.mines.length;
-    const logs = (after.hazard?.emitted ?? 0) - (before.hazard?.emitted ?? 0);
-    this.bumpMetrics({ minesPlaced: mines, logsSpawned: logs });
+    this.bumpMetrics({ minesPlaced: mines });
   }
 
   /** Add to the durable gameplay counters; a missing or negative delta is exactly zero. */
   private bumpMetrics(delta: Partial<GameMetrics>): void {
     const matches = whole(delta.matchesCompleted);
     const mines = whole(delta.minesPlaced);
-    const logs = whole(delta.logsSpawned);
-    if (!matches && !mines && !logs) return;
+    if (!matches && !mines) return;
     this.gameMetrics.matchesCompleted += matches;
     this.gameMetrics.minesPlaced += mines;
-    this.gameMetrics.logsSpawned += logs;
     this.persistMetrics();
   }
 
@@ -2211,9 +2202,7 @@ export class MatchmakerDO {
       seed,
       sizes,
       seats: [first, second],
-      /* The room plays the same deterministic board the clients do, from the same seed — that is
-         what makes an authoritative relay possible at all. */
-      state: newGame(sizes, { hazards: true, seed }),
+      state: newGame(sizes),
       over: false,
     };
     first.race = race;
@@ -2508,7 +2497,7 @@ export class MatchmakerDO {
     live.room = launch(backfill(live.room));
     live.seed = hash(`${live.room.code}|${live.members.map((m) => m?.id ?? 'bot').join('|')}|${this.paired}`);
     live.matchId = `r${hash(`${live.room.code}|${++this.paired}`).toString(36)}`;
-    live.driver = createRoomDriver(live.room, { hazards: true, seed: live.seed });
+    live.driver = createRoomDriver(live.room);
     this.openRooms = this.openRooms.filter((r) => r !== live);
     this.lobbies.delete(live.room.code);
     this.rooms.set(live.matchId, live);

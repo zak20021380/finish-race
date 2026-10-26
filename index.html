@@ -1375,12 +1375,6 @@
         <circle cx="12" cy="12" r="1.15" fill="#FFFBE8" />
         <path d="M10 12A2 2 0 0 1 12 10" fill="none" stroke="#FFFDF4" stroke-opacity=".9" stroke-width=".9" stroke-linecap="round" />
       </symbol>
-      <symbol id="i-log" viewBox="0 0 24 24">
-        <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6.6 5.6h8.4a3 6.4 0 0 1 0 12.8H6.6a3 6.4 0 0 1 0-12.8Z" />
-          <path d="M11.2 8v8" opacity=".55" />
-        </g>
-      </symbol>
       <symbol id="i-users" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="8" r="3.1" />
@@ -2761,7 +2755,7 @@
                 <i class="stud tr" aria-hidden="true"></i>
                 <i class="stud bl" aria-hidden="true"></i>
                 <i class="stud br" aria-hidden="true"></i>
-                <!-- event callouts: MINE! / LOG! / WALL, 1.2s each, never in front of a ball -->
+                <!-- event callouts: MINE! / WALL, 1.2s each, never in front of a ball -->
                 <div class="callouts" id="callouts" aria-hidden="true"></div>
                 <!-- chat bubbles: pawn-anchored over the sender's token, pointer-events none -->
                 <div class="chat-lane" id="chat-lane" role="log" aria-live="polite"
@@ -3011,11 +3005,10 @@
         </header>
 
         <div class="mm-stage">
-          <!-- what this arena is actually running: seat, pairing radius, hazards -->
+          <!-- what this arena is actually running: seat and pairing radius -->
           <div class="mm-tele" aria-hidden="true">
             <span class="mm-tele-c"><svg class="ico"><use href="#i-bolt" /></svg>1v1 Arena</span>
             <span class="mm-tele-c is-range" id="mm-range"><svg class="ico"><use href="#i-target" /></svg>TIQ range <b>±250</b></span>
-            <span class="mm-tele-c"><svg class="ico"><use href="#i-mine" /></svg>Hazards <b>ON</b></span>
           </div>
 
           <div class="mm-arena">
@@ -3220,7 +3213,6 @@
               <p class="adm-sec-h">Gameplay Counters</p>
               <div class="adm-cells">
                 <span class="adm-stat"><b id="stat-mines">—</b><span class="adm-stat-l">Mines Placed</span></span>
-                <span class="adm-stat"><b id="stat-logs">—</b><span class="adm-stat-l">Logs Spawned</span></span>
                 <span class="adm-stat"><b id="stat-ref-players">—</b><span class="adm-stat-l">Referring Players</span></span>
               </div>
             </div>
@@ -3320,12 +3312,6 @@
                 aria-label="Shop Store">
                 <span class="adm-sw-i" aria-hidden="true"><svg class="ico"><use href="#i-bag" /></svg></span>
                 <span class="adm-sw-t">Shop Store</span>
-                <span class="adm-knob" aria-hidden="true"><i></i></span>
-              </button>
-              <button class="adm-sw" type="button" role="switch" data-tog="hazards" aria-checked="true"
-                aria-label="Hazards">
-                <span class="adm-sw-i" aria-hidden="true"><svg class="ico"><use href="#i-mine" /></svg></span>
-                <span class="adm-sw-t">Hazards</span>
                 <span class="adm-knob" aria-hidden="true"><i></i></span>
               </button>
               <button class="adm-sw" type="button" role="switch" data-tog="maintenance" aria-checked="false"

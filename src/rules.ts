@@ -49,22 +49,8 @@
  * spent and the blast never chains. Opponent mines are secret: clients get `view(state, team)`,
  * never the raw state.
  *
- * The wide rolling log (opt-in: `newGame(sizes, { hazards: true, seed })`) is a public hazard on
- * a timetable derived from that seed alone — see `hazards.ts`. A round is one turn per team; rounds
- * 1 and 2 stay hazard-free, and a race deploys at most two logs. Nothing is telegraphed: when the
- * last team of a timed round acts, the lane is drawn from the seed and drops on the spot, shoving
- * every ball above the first blocking wall back down its own column. Ranked and normal play pass no
- * `hazards` flag and behave exactly as before.
- *
  * Multiplayer later: send an `Action` over the wire and feed whatever comes back into `apply()`.
  */
-import { initPhase, tickHazard } from './hazards';
-import type { HazardPhase, LogEvent } from './hazards';
-
-export { HAZARD, MAX_LOGS, logStopRow } from './hazards';
-export type { HazardPhase, Lane, LogEvent, LogMove } from './hazards';
-
-
 /** The classic duel board: 8 columns, 12 rows, FINISH on row 0. */
 export const COLS = 8;
 export const ROWS = 12;
@@ -115,14 +101,6 @@ export interface Ball {
 
 export interface TeamMeta { balls: number }
 
-/** What a seat may ask for when the race is set up. Every switch defaults to plain, ranked play. */
-export interface GameSetup {
-  /** Opt the race into the rolling log. Off keeps the rules byte-for-byte the old ones. */
-  hazards?: boolean;
-  /** The log timetable is derived from this alone, so a server and its clients can agree on it. */
-  seed?: number;
-}
-
 export type Action =
   | { kind: 'move'; ball?: number; to: Pos }
   | { kind: 'wall'; wall: Wall }
@@ -145,10 +123,6 @@ export interface GameState {
   winner: Player | null;
   /** True when the win came from the anti-oscillation adjudication, not from a ball crossing FINISH. */
   adjudicated?: boolean;
-  /** The rolling log's clock; absent unless the race was set up with `hazards`. */
-  hazard?: HazardPhase;
-  /** The log that last went off, kept so the UI can animate it. Public info, unlike `mines`. */
-  lastEvent?: LogEvent | null;
   /** The anti-oscillation ledger. Public to every seat — it carries no hidden information. */
   repeat?: RepeatTrack;
 }
@@ -283,7 +257,7 @@ export function startLayout(sizes: readonly number[], cols: number = COLS, rows:
   return out;
 }
 
-export function newGame(sizes: readonly number[] = [1, 1], setup: GameSetup = {}): GameState {
+export function newGame(sizes: readonly number[] = [1, 1]): GameState {
   const n = sizes.slice(0, MAX_TEAMS).map(clampSize);
   const contenders = n.reduce((a, b) => a + b, 0);
   const { cols, rows } = dimsFor(contenders);
@@ -305,9 +279,7 @@ export function newGame(sizes: readonly number[] = [1, 1], setup: GameSetup = {}
     mines: [],
     turn: 0,
     winner: null,
-    lastEvent: null,
   };
-  if (setup.hazards) s.hazard = initPhase(setup.seed ?? 0, cols);
   s.repeat = { seen: [boardFingerprint(s)], streak: 0 };
   return s;
 }
@@ -732,7 +704,7 @@ export function allWalls(owner: Player, cols: number = COLS, rows: number = ROWS
 
 /* ---------- mines ---------- */
 
-/** Mines still in the ground — the spent ones are kept for the log but no longer count. */
+/** Mines still in the ground — the spent ones are kept for the record but no longer count. */
 export const liveMines = (s: GameState): Mine[] => s.mines.filter((m) => !m.triggered);
 
 /** The live mine buried on a cell, if any. */
@@ -817,9 +789,8 @@ function adjudicate(s: GameState, track: RepeatTrack): GameState {
 }
 
 /**
- * Hand the turn to the next side that can act, then let the log clock move with it: a hand-off that
- * wraps past the acting team closes the round, and closing a round is what brings down a warning.
- * The board the turn leaves behind goes into the shuffle ledger on the way out.
+ * Hand the turn to the next side that can act. The board the turn leaves behind goes into the
+ * shuffle ledger on the way out.
  */
 function endTurn(s: GameState, played: Player): GameState {
   if (s.winner !== null) return s;
@@ -835,13 +806,13 @@ function endTurn(s: GameState, played: Player): GameState {
 }
 
 /**
- * File the board and let the log clock move on. A `pass` never comes through here: it is a seat
- * declining, not a board the race has been in, and filing it would let a table of passers trip the
- * anti-oscillation rule without a single ball having moved.
+ * File the board. A `pass` never comes through here: it is a seat declining, not a board the race
+ * has been in, and filing it would let a table of passers trip the anti-oscillation rule without a
+ * single ball having moved.
  */
 function recordTurn(s: GameState, played: Player): GameState {
   const track = noteBoard(s);
-  return adjudicate(tickHazard({ ...s, repeat: track }, played), track);
+  return adjudicate({ ...s, repeat: track }, track);
 }
 
 export function doMove(s: GameState, to: Pos, ballId?: number): GameState | null {
@@ -918,9 +889,7 @@ export function apply(s: GameState, a: Action): GameState | null {
     case 'move': return doMove(s, a.to, a.ball);
     case 'wall': return doWall(s, a.wall);
     case 'mine': return doMine(s, a.cell);
-    case 'pass': return s.winner === null
-      ? tickHazard({ ...s, turn: nextTeam(s, s.turn) }, s.turn)
-      : null;
+    case 'pass': return s.winner === null ? { ...s, turn: nextTeam(s, s.turn) } : null;
   }
 }
 
@@ -953,8 +922,7 @@ export function getAutoMove(s: GameState, team: Player = s.turn): Action {
 /**
  * The state as one team is allowed to see it: its own mines plus the ones already set off, with
  * every opponent mine still in the ground stripped out. Nothing else changes, so the projection is
- * still a valid `GameState` the client can run the same queries against. The log is the opposite of
- * a mine — `hazard` and `lastEvent` are public and go to every seat untouched.
+ * still a valid `GameState` the client can run the same queries against.
  *
  * SECURITY: the server must only ever send `view(state, team)` to a client — never the raw state,
  * which carries the hidden mines.

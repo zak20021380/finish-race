@@ -268,10 +268,8 @@ origin.
 
 
 The socket that queued is the socket that plays. Both seats are handed the same `seed` and the same
-board size, so `newGame(sizes, { hazards: true, seed })` builds the identical board on both screens
-— the hazards and the rolling-log timetable are pure functions of that seed, and a race deploys at
-most `MAX_LOGS` (2) logs. The room keeps its own authoritative copy of the board (it imports
-`src/rules.ts`, the module the client plays):
+board size, and the room keeps its own authoritative copy of the board (it imports `src/rules.ts`,
+the module the client plays):
 
 - `{ type: 'MOVE', action }` is judged against the real state before it is relayed to the other
   seat as `{ type: 'MOVE', side, action }`. A wall is stamped with the sender's seat, never with
@@ -282,8 +280,8 @@ most `MAX_LOGS` (2) logs. The room keeps its own authoritative copy of the board
   in the end panel.
 
 The client applies its own move the moment it is played and sends it on; the rival's moves come
-back through the same `play()` door the bot uses, so walls, mines, thrown-back balls, log strikes
-and the blitz clock behave exactly as they do offline. `onlineRace()` in `src/matchmaking.ts` is
+back through the same `play()` door the bot uses, so walls, mines, thrown-back balls and the blitz
+clock behave exactly as they do offline. `onlineRace()` in `src/matchmaking.ts` is
 that seat — `send()`, `onMove()`, `onEnd()`, `resign()` — and it is null when the search fell back
 to the local simulation, which is how the offline board keeps working with no Worker at all.
 

@@ -450,11 +450,6 @@ export interface RoomDriver {
  */
 export const BOT_TURN_BUDGET = 8;
 
-export interface RoomDriverInit {
-  seed: number;
-  hazards?: boolean;
-}
-
 /**
  * Put a room on the board. The driver owns the authoritative `GameState` — the same rules module
  * the clients run, from the same seed — so every action it accepts has already been judged.
@@ -464,11 +459,11 @@ export interface RoomDriverInit {
  * never has to hand the turn back to a timer, a socket or a client to keep moving, and the clock
  * that governs a person's turn is never charged for the machine's.
  */
-export function createRoomDriver(room: Room, init: RoomDriverInit): RoomDriver {
+export function createRoomDriver(room: Room): RoomDriver {
   /* Launching here is deliberate: a driver is only ever asked for by a room that is about to be
      played, and a seat nobody took must be the machine's before a turn can land on it. */
   let current = backfill(launch(room));
-  let state = newGame(sizesOf(current), { hazards: init.hazards, seed: init.seed });
+  let state = newGame(sizesOf(current));
 
   const mineSeat = (seat: Player) => !isHuman(current, seat);
 

@@ -1,6 +1,6 @@
 /**
- * audio.ts — the race's sound engine. One `AudioContext`, six decoded assets (`log.mp3`,
- * `move.wav`, `explosion.mp3`, `laugh.mp3`, `angry.wav`, `swoosh.mp3`) and one master gain: every voice is a `BufferSource` on the graph,
+ * audio.ts — the race's sound engine. One `AudioContext`, five decoded assets (`move.wav`,
+ * `explosion.mp3`, `laugh.mp3`, `angry.wav`, `swoosh.mp3`) and one master gain: every voice is a `BufferSource` on the graph,
  * scheduled against the context clock so a step, a wall or a blast lands on the frame that caused it
  * rather than the frame after.
  *
@@ -10,14 +10,13 @@
  * or leak into gameplay.
  */
 import { onSettings, settings } from './settings';
-import logMp3 from './assets/sounds/log.mp3';
 import moveWav from './assets/sounds/move.wav';
 import explosionMp3 from './assets/sounds/explosion.mp3';
 import laughMp3 from './assets/sounds/laugh.mp3';
 import angryWav from './assets/sounds/angry.wav';
 import swooshMp3 from './assets/sounds/swoosh.mp3';
 
-export type SoundName = 'log' | 'move' | 'explosion' | 'laugh' | 'angry' | 'swoosh';
+export type SoundName = 'move' | 'explosion' | 'laugh' | 'angry' | 'swoosh';
 
 /**
  * How far ahead of `currentTime` an immediate play is scheduled: enough for the node graph to be
@@ -28,9 +27,6 @@ const SCHEDULE_LEAD_S = 0.03;
 
 /** Fast moves must not machine-gun: `move.wav` is limited to one play per this many milliseconds. */
 const MOVE_GAP_MS = 40;
-
-/** A ball shoved down the board by the log slides at this playback rate. */
-export const SHOVE_RATE = 0.7;
 
 /**
  * The laugh, one voice among the race's: loud enough to carry over a step trail, a touch under the
@@ -53,9 +49,6 @@ const ANGRY_GAP_MS = 150;
  */
 const SWOOSH_GAIN = 0.9;
 
-/** The amplitude above which a sample of `log.mp3` counts as sound, when its lead-in is measured. */
-const TRIM_EPS = 1e-3;
-
 /** Where the volume lives. The mute half is `settings.sound`, persisted by `settings.ts`. */
 const VOLUME_KEY = 'detour.audio.volume.v1';
 
@@ -77,26 +70,11 @@ try {
 const buffers: Partial<Record<SoundName, AudioBuffer>> = {};
 
 /**
- * The silent lead-in measured off `log.mp3` the moment it finishes decoding — the log's roll starts
- * on the frame its first sample is audible, so playback starts this far into the buffer.
- */
-export let LOG_TRIM_S = 0;
-
-/**
  * The context's own output latency, read when the context starts running and subtracted from every
  * start time so the sound leaves the speaker with the frame, not a headset's worth of milliseconds
  * after it. 0 when the browser does not report one.
  */
 export let OUTPUT_LATENCY_S = 0;
-
-function measureTrim(buf: AudioBuffer): number {
-  const channels: Float32Array[] = [];
-  for (let ch = 0; ch < buf.numberOfChannels; ch++) channels.push(buf.getChannelData(ch));
-  for (let i = 0; i < buf.length; i++) {
-    for (const data of channels) if (Math.abs(data[i]) > TRIM_EPS) return i / buf.sampleRate;
-  }
-  return 0;                  // an all-silent file is played as-is rather than muted entirely
-}
 
 function readLatency(ctx: AudioContext): number {
   try {
@@ -114,14 +92,10 @@ function decode(name: SoundName, url: string): void {
       return r.arrayBuffer();
     })
     .then((raw) => e.ctx.decodeAudioData(raw))
-    .then((buf) => {
-      buffers[name] = buf;
-      if (name === 'log') LOG_TRIM_S = measureTrim(buf);
-    })
+    .then((buf) => { buffers[name] = buf; })
     .catch(() => { /* a missing or undecodable asset is a silent voice, never a broken game */ });
 }
 
-decode('log', logMp3);
 decode('move', moveWav);
 decode('explosion', explosionMp3);
 decode('laugh', laughMp3);
@@ -171,13 +145,6 @@ export function setVolume(v: number): void {
 /* ---------- the voices ---------- */
 
 export interface PlayOptions {
-  /**
-   * The `performance.now()` frame this sound belongs to. Omitted for a play computed on the spot;
-   * given for the log, whose roll is scheduled `LOG_ALERT_MS` ahead of the handler that starts it.
-   */
-  at?: number;
-  /** The buffer's playback rate, e.g. `SHOVE_RATE` for a ball the log is pushing. */
-  rate?: number;
   /** One voice's own level, 0..1, when full scale would not sit in the mix. Omitted is full scale. */
   gain?: number;
 }
@@ -208,13 +175,10 @@ function play(name: SoundName, opts: PlayOptions = {}): void {
   if (!buf) return;                    // still decoding: the first tap warms it, the next rings
   const { ctx, master } = e;
   if (ctx.state !== 'running') void ctx.resume().catch(() => { /* still locked */ });
-  const delay = opts.at === undefined ? 0 : Math.max(0, (opts.at - performance.now()) / 1000);
-  const cue = opts.at === undefined ? SCHEDULE_LEAD_S : delay;
-  const when = Math.max(ctx.currentTime, ctx.currentTime + cue - OUTPUT_LATENCY_S);
+  const when = Math.max(ctx.currentTime, ctx.currentTime + SCHEDULE_LEAD_S - OUTPUT_LATENCY_S);
   try {
     const src = ctx.createBufferSource();
     src.buffer = buf;
-    if (opts.rate !== undefined) src.playbackRate.value = opts.rate;
     let voice: GainNode | null = null;
     if (opts.gain !== undefined && opts.gain !== 1) {
       voice = ctx.createGain();
@@ -222,7 +186,7 @@ function play(name: SoundName, opts: PlayOptions = {}): void {
       src.connect(voice).connect(master);
     } else src.connect(master);
     src.onended = () => { src.disconnect(); voice?.disconnect(); };
-    src.start(when, name === 'log' ? LOG_TRIM_S : 0);
+    src.start(when);
   } catch { /* a node graph refusal must never take a turn down with it */ }
 }
 

@@ -4,17 +4,14 @@
  * The engine reads the board once and reasons about *every* contender, not just "the other side":
  * it ranks all opponents by their distance to FINISH (a primary threat and its trailing rivals),
  * prices each wall by what it costs the whole field, and keeps its wall budget for the moment a
- * wall actually bites. It understands the rolling log the way a human does — from the public clock
- * only (`hazard.on` / `round` / `nextHitRound`) and the board's geometry, never from the seed: a log
- * with no telegraph cannot be dodged, but a horizontal wall that blocks the trunk can be sheltered
- * behind, and a wall that forces a rival out of cover can be aimed for. Mines are buried on the
- * chokepoints several near-optimal routes share rather than on one deterministic line.
+ * wall actually bites. Mines are buried on the chokepoints several near-optimal routes share rather
+ * than on one deterministic line.
  *
  * Difficulty decides how the same evaluation is played, never the anti-stalemate invariant, which
  * every level obeys: it may only place a wall that leaves every ball a path to FINISH (`wallOk`), so
  * no number of walls can freeze a race.
  *   easy   — races greedily, walls rarely, wanders on a plain random step.
- *   normal — full multi-contender + hazard evaluation, softmax over near-optimal actions.
+ *   normal — full multi-contender evaluation, softmax over near-optimal actions.
  *   hard   — the same, plus a top-K 2-ply reply check and a tighter softmax band.
  *
  * Leaps are part of the move set, not a special case: the candidates come from `steps()`, so a hop
@@ -30,7 +27,7 @@
  * budget on the widest, busiest board. `scripts/bot-tiers-check.mjs` measures it.
  */
 import {
-  allWalls, apply, ballById, distField, HAZARD, mineCells, pathOn, stepField, steps,
+  allWalls, apply, ballById, distField, mineCells, pathOn, stepField, steps,
   wallBudget, wallOk, wallsClash, wallsRemaining,
   type Action, type Ball, type Cell, type GameState, type Player, type Pos, type Wall,
 } from './rules';
@@ -127,22 +124,6 @@ function contenders(s: GameState, me: Player, d: Int16Array): Contender[] {
 /** How much a contender's progress matters: the nearer FINISH, the more a step there is worth. */
 const threatWeight = (dist: number) => (Number.isFinite(dist) ? 1 / (1 + Math.max(0, dist)) : 0);
 
-/* ---------- rolling-log intelligence (public clock + geometry only) ---------- */
-
-/**
- * Is a cell under the trunk's cover? A log stops above the first horizontal wall blocking any lane
- * column, and a lane spans `logWidth` columns, so a ball in column `c` is sheltered when a
- * horizontal wall at or above its row covers a column within `logWidth - 1` of it. Never a peek at
- * the seed: the lane is unknown until it drops, so this reads the board, not the timetable.
- */
-function isSheltered(walls: readonly Wall[], cols: number, c: number, r: number, extra?: Wall): boolean {
-  const reach = HAZARD.logWidth - 1;
-  const covers = (w: Wall) => w.o === 'h' && w.y <= r
-    && (Math.abs(c - w.x) <= reach || Math.abs(c - (w.x + 1)) <= reach);
-  for (const w of walls) if (covers(w)) return true;
-  return extra !== undefined && covers(extra);
-}
-
 /**
  * Cells a side will not step onto if it can help it: only its own mines still in the ground. A mine
  * that has already gone off is spent and harmless, so treating it as a hazard would make the bot
@@ -189,7 +170,6 @@ function bestStepCount(s: GameState, d: Int16Array, team: Player): number {
 
 function moveCandidates(
   s: GameState, me: Player, d: Int16Array, dfOpp: Int16Array, myD: number, foes: Contender[],
-  hazardOn: boolean, imminent: boolean,
 ): Cand[] {
   const out: Cand[] = [];
   const opts = steps(s, me);
@@ -197,9 +177,6 @@ function moveCandidates(
   const danger = dangerCells(s, me);
   const K = (c: number, r: number) => key(c, r, s.cols);
   const blockFor = foes.map((f) => blockTargets(s, d, f.team));
-  /* the log can only be sheltered behind when a horizontal wall exists to duck under */
-  const cover = hazardOn && imminent && s.walls.some((w) => w.o === 'h');
-  const half = Math.floor(s.rows / 2);
   for (const st of opts) {
     const b = ballById(s, st.ball);
     if (!b) continue;
@@ -222,11 +199,6 @@ function moveCandidates(
     }
     /* develop the second ball when the one in the lead is not the one moving */
     if (before > myD) sc += 0.15 * (from - after);
-    /* the log: duck under cover, and do not walk an exposed ball into the upper rows unprotected */
-    if (cover) {
-      if (isSheltered(s.walls, s.cols, st.to.c, st.to.r)) sc += 0.5;
-      else if (after < from && st.to.r <= half) sc -= 0.35;
-    }
     out.push({ a: { kind: 'move', ball: st.ball, to: st.to }, s: sc, danger: danger.has(K(st.to.c, st.to.r)) });
   }
   return out;
@@ -253,20 +225,16 @@ function wallThreshold(s: GameState, me: Player, foes: Contender[], demand: numb
  * A candidate wall, scored across the whole field. A wall only bites when it costs the *leader* a
  * step or traps somebody in a severe detour; every contender it slows adds a little more, and the
  * threat ranking makes sure a wall that hands the race to a rival is not paid for. `self` is the
- * price paid in the bot's own steps, so it is never bought at that cost. Hazard bonuses are folded
- * in only when the log is on the clock: a dual-purpose wall that slows a rival and roofs the bot's
- * own advanced ball, or one that funnels a sheltered leader into an open lane.
+ * price paid in the bot's own steps, so it is never bought at that cost.
  */
 function wallCandidates(
   s: GameState, me: Player, d0: Int16Array, myD0: number, foes: Contender[],
-  hazardOn: boolean, imminent: boolean,
 ): Cand[] {
   const out: Cand[] = [];
   if (wallsRemaining(s, me) <= 0) return out;
   const cols = s.cols, rows = s.rows;
   const leadFoe0 = foes.length ? foes[0].dist : Infinity;
   const foeFreedom0 = foes.map((f) => bestStepCount(s, d0, f.team));
-  const myAdvanced = s.balls.filter((b) => b.team === me);
   /* The edges a shortest route can use: neighbours whose distance to FINISH differs by one. A wall
      that blocks none of them cannot lengthen any ball's route — on an open board a vertical wall is
      pure scenery, and even in a maze only a handful of slots bite — so it is skipped before the
@@ -333,16 +301,7 @@ function wallCandidates(
     /* funnel: strip a contender of the one-step squares it was counting on */
     for (let i = 0; i < foes.length; i++) {
       const after = bestStepCount(s, d1, foes[i].team);
-      if (after < foeFreedom0[i]) sc += (0.25 + (imminent ? 0.35 : 0)) / (1 + i);
-    }
-    /* shield: roof the bot's own advanced balls so a log cannot shove them back down */
-    if (hazardOn && imminent) {
-      let roofed = 0;
-      for (const b of myAdvanced) {
-        if (!isSheltered(s.walls, cols, b.pos.c, b.pos.r)
-          && isSheltered(s.walls, cols, b.pos.c, b.pos.r, w)) roofed++;
-      }
-      if (roofed) sc += (o === 'h' ? 0.7 : 0.4) * roofed;
+      if (after < foeFreedom0[i]) sc += 0.25 / (1 + i);
     }
     out.push({ a: { kind: 'wall', wall: w }, s: sc });
   }
@@ -466,22 +425,14 @@ function bestMine(s: GameState, me: Player, d: Int16Array, foes: Contender[]): {
 interface Cand { a: Action; s: number; danger?: boolean }
 
 /**
- * A clone with the log clock stripped. A simulated turn must not tick the hazard: the round close
- * would draw the next lane from the seed, and reading it back is exactly the telegraph the game
- * refuses to give anyone. Anything the bot simulates sees walls and balls only — never the future.
- */
-const quiet = (s: GameState): GameState => (s.hazard ? { ...s, hazard: undefined, lastEvent: null } : s);
-
-/**
  * One full round played out after a candidate: the bot acts, then every rival answers with the step
  * that walks its nearest ball furthest toward FINISH, in turn order, until the race comes back to
  * the bot. In a three- or four-way there is never just one reply, so modelling all of them — not
  * merely the next seat — is what stops a candidate that answers one rival from feeding another.
- * It is the second ply of Hard's search, and all of it runs on the clock-free clone: no simulated
- * turn may peek at the next log.
+ * It is the second ply of Hard's search.
  */
 function rolloutAdvantage(s: GameState, me: Player, a: Action): number | null {
-  let t = apply(quiet(s), a);
+  let t = apply(s, a);
   if (!t) return null;
   if (t.winner === me) return 1e3;
   if (t.winner !== null) return -1e3;
@@ -494,7 +445,7 @@ function rolloutAdvantage(s: GameState, me: Player, a: Action): number | null {
       if (v < bestVal) { bestVal = v; best = st; }
     }
     if (!best) break;                                    // the rival cannot advance: nothing more to model
-    const moved = apply(quiet(t), { kind: 'move', ball: best.ball, to: best.to });
+    const moved = apply(t, { kind: 'move', ball: best.ball, to: best.to });
     if (!moved) break;
     t = moved;
   }
@@ -586,11 +537,6 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
      so a corridor two balls are wedged in is one action wide and the bot commits to it instead of
      refusing. */
   const dfOpp = stepField(s);
-  const hz = s.hazard;
-  const hazardOn = !!hz;
-  /* the round cadence is public: a strike is imminent when the next hit round is this one or the
-     next. Which lane it is stays unknown — the bot plans cover and tempo, never a peek at the seed. */
-  const imminent = hazardOn && (hz!.nextHitRound - hz!.round) <= 1;
 
   /* Easy wanders: a plain random legal step, exactly as it always has, keeps it forgiving */
   if (p.noise > 0 && Math.random() < p.noise) {
@@ -610,9 +556,9 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
   if (Math.random() < p.wallRate) {
     /* the budget speaks here: a wall that does not clear the threshold is not worth the spend */
     const thr = wallThreshold(s, me, foes, p.wallDemand);
-    for (const c of wallCandidates(s, me, d, myD, foes, hazardOn, imminent)) if (c.s >= thr) pool.push(c);
+    for (const c of wallCandidates(s, me, d, myD, foes)) if (c.s >= thr) pool.push(c);
   }
-  pool.push(...moveCandidates(s, me, d, dfOpp, myD, foes, hazardOn, imminent));
+  pool.push(...moveCandidates(s, me, d, dfOpp, myD, foes));
 
   if (!pool.length) {
     if (mine) return mine.a;

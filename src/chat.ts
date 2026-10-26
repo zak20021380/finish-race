@@ -44,7 +44,7 @@ export interface ChatOptions {
   localSide: () => Player;
   /** The live screen point over a seat's pawn, or null while no ball of that seat is drawn. */
   pawn: (seat: Player) => PawnPoint | null;
-  /** A log is rolling, or a mine is armed: chat is shut for both. */
+  /** A mine is armed: chat is shut while the board owns the tap. */
   busy: () => boolean;
   /** The race screen is up, unpaused, with no result card over it. */
   live: () => boolean;
@@ -478,13 +478,6 @@ export function createChat(o: ChatOptions): Chat {
           react(botReply(1), now);
         }
       }
-    }
-
-    /* a log: `lastEvent` is a fresh object per roll */
-    const log = s.lastEvent;
-    if (log && log !== prev.lastEvent && log.type === 'log') {
-      const shoved = log.moves.some((m) => s.balls.some((b) => b.id === m.ballId && b.team === local));
-      if (shoved) react(botReply(2), now);
     }
 
     /* a wall of yours went up */

@@ -3,12 +3,12 @@ import {
   CONFIG, MAX_TEAMS, apply, ballById, distField, firstBall, getAutoMove, mineCells, minesLeft, newGame,
   reachableBall, steps as teamSteps, view as fogOfWar, wallBudget, wallOk, wallsCross, wallsOverlap,
   wallsRemaining,
-  type Action, type Ball, type Cell, type GameState, type LogEvent, type Mine, type Player,
+  type Action, type Ball, type Cell, type GameState, type Mine, type Player,
   type Pos, type Wall, type WallSpec,
 } from './rules';
 import { botAction, botThinkMs, type Difficulty } from './bot';
 import {
-  createRenderer, hitTest, logArriveMs, logFaceRow, logRollMs, wallCentre, LOG_ALERT_MS,
+  createRenderer, hitTest, wallCentre,
   type BallView, type CapsuleAction, type Ghost, type Hit,
   type Mark, type Perspective, type Vec, type View,
 } from './render';
@@ -27,7 +27,7 @@ import { createShop } from './shop';
 import { createNotifications } from './notifications';
 import { mountCoins, setBalance } from './coin';
 import { appearance, menuState, motionReduced, onAppearance, toggleAppearance } from './settings';
-import { audio, SHOVE_RATE } from './audio';
+import { audio } from './audio';
 import {
   completeTutorial, hasCompletedTutorial, onChange, pieceColor, profile, recordGame, resetTutorialState, theme,
 } from './storage';
@@ -193,8 +193,8 @@ function setFog(p: Player) {
   cell.setAttribute('aria-label', spent ? 'Mines: none left' : 'Mines: count concealed');
 }
 
-/* the trigger shakes the board itself, once. A mine is a 2px micro-shake, a log the full 4px.
-   Reduced motion never shakes anything. */
+/* the trigger shakes the board itself, once. A mine is a 2px micro-shake; reduced motion never
+   shakes anything. */
 let shakeTimer = 0;
 function shake(micro = false) {
   if (motionReduced()) return;
@@ -459,19 +459,7 @@ function fitBoard(c: number, r: number) {
   boardCard.style.setProperty('--board-rows', String(r));
 }
 
-/** Hands, the opponent's brain and the blitz clock all stand down while a log is on its way. */
-let rolling = false;
-/** Bot turns parked by a roll, in the order they arrived. */
-const rollHeld: (() => void)[] = [];
-/** `lastEvent` stays on the state, so the object's identity is what marks it as already played. */
-let playedLog: LogEvent | null = null;
-/** ball id → the moment the log reaches it, so a shoved ball only starts sliding when it is hit. */
-const logWait = new Map<number, number>();
-/** ball id → the rows a shove carries it between: the ball rides the trunk's face, not a lerp. */
-const logShove = new Map<number, { y0: number; y1: number }>();
-/** the roll's own clock, so the face the balls follow and the sprite are the same curve */
-let rollT0 = 0, rollStop = 0, rumbleId = 0;
-let state: GameState = newGame(sizes, { hazards: runtime.hazards, seed: (Math.random() * 0x7fffffff) | 0 });
+let state: GameState = newGame(sizes);
 /**
  * The seats this race actually fields, in seat order. Read off the live board rather than assumed:
  * the same screen runs a two-seat duel and a four-seat party, and every loop that used to walk the
@@ -516,12 +504,10 @@ const waiting: (() => void)[] = [];            // bot thinks parked by the pause
  *  board itself: its stage gate decides which real tap is live. */
 let tutorialActive = false;
 let tutorial: Tutorial | null = null;
-/** The first local race is also the lesson: its board is built without the rolling log. */
-let tutorialRace = false;
 const tutorialStage = (): TutorialStage | null => (tutorialActive ? tutorial?.stage ?? null : null);
 
 /** The turn's own gate. The lesson layers on top of this through `isTutorialActionAllowed()`. */
-const canAct = () => state.winner === null && state.turn === localSide && !paused && !rolling;
+const canAct = () => state.winner === null && state.turn === localSide && !paused;
 const clearGhost = () => { mineGhost = null; setMode({ ...mode(), preview: null }); clearNote(); };
 
 /**
@@ -727,9 +713,6 @@ function ui() {
 
   /* one turn per seat makes a round; the counter is the UI's, the rules keep none */
   roundLabel.textContent = `Round ${Math.floor(turnsPlayed / Math.max(1, state.teams.length)) + 1}`;
-  /* the strike badge is painted at the heart of the finish crown, so the crest yields to it from
-     inside the renderer — the board is visibly inert while a trunk is on it */
-  wrap.classList.toggle('rolling', rolling);
   paintClock();
 
   if (state.winner === null && overlayOpen) {
@@ -743,15 +726,9 @@ function ui() {
   if (waitingForMineTrigger) resumeMineLesson();
 }
 
-/** A bot turn parked until the board is clear of a rolling log. */
-const untilRoll = () => (rolling
-  ? new Promise<void>((res) => { rollHeld.push(res); })
-  : Promise.resolve());
-
 async function runOpponent() {
   if (state.winner !== null || !wantsOpponent() || tutorialActive) return;
   const token = ++gen;
-  await untilRoll();                    // it does not think over the top of a trunk, let alone move
   if (token !== gen) return;
   if (paused) await new Promise<void>((res) => waiting.push(res));   // parked until Resume
   if (token !== gen) return;
@@ -771,64 +748,6 @@ function blastOf(prev: GameState, next: GameState): Mine | null {
     if (m.triggered && !prev.mines[i]?.triggered) return m;
   }
   return null;
-}
-
-/**
- * A log has just dropped, and it is the only warning anyone gets: one second of tremor and a
- * blinking badge, then the trunk is away. Nothing may move across all of that — taps are refused,
- * the bot parks, the blitz clock stays stopped — so the strike cannot be walked out of. The sprite
- * and every beat inside it are timed by `render.ts`, so the board and this lock cannot disagree.
- */
-function playLog(ev: LogEvent, next: GameState) {
-  playedLog = ev;
-  rolling = true;
-  const token = gen;                    // restart() bumps it, so a stale roll cannot unlock the new race
-  const t0 = performance.now();
-  const strike = t0 + LOG_ALERT_MS;     // the trunk leaves the top edge when the alert ends
-  const T = logRollMs(ev.stopRow);
-  const blocked = ev.stopRow < next.rows - 1;
-  rollT0 = strike; rollStop = ev.stopRow;
-  renderer.rollLog(ev, t0);
-  audio.play('log', { at: strike });    // the roll's voice is cue'd to the frame the trunk moves
-  shake();                              // the board itself trembles for the whole second
-  impact('heavy');
-  if (!motionReduced()) {
-    for (const m of ev.moves) {
-      const hit = strike + logArriveMs(m.from.r, ev.stopRow);
-      logWait.set(m.ballId, hit);
-      logShove.set(m.ballId, { y0: m.from.r, y1: m.to.r });
-      window.setTimeout(() => { if (token === gen) impact('heavy'); }, hit - t0);
-    }
-  }
-  /* the log meets the top-most ball first, so that is the shove the note reports */
-  let hit: LogEvent['moves'][number] | undefined = ev.moves[0];
-  for (const m of ev.moves) if (hit && m.from.r < hit.from.r) hit = m;
-  const team = hit ? ballById(next, hit.ballId)?.team ?? localSide : localSide;
-  const thrown = hit ? hit.to.r - hit.from.r : 0;
-  const msg = hit
-    ? `Log! ${TEAM_NAME[team] ?? 'Ball'} pushed back ${thrown} cell${thrown === 1 ? '' : 's'}`
-    : blocked ? 'Log blocked by a wall' : 'Log rolled down an empty lane';
-  notify('warning');
-  showNote(msg, false, Math.max(2600, LOG_ALERT_MS + T));
-  /* a trunk this heavy is felt the whole way down: a soft thud every 140ms once it is rolling */
-  window.setTimeout(() => {
-    if (token !== gen) return;
-    rumbleId = window.setInterval(() => impact('light'), 140);
-  }, LOG_ALERT_MS);
-  /* and if a wall took it, the board shakes where it hit, not when it started */
-  if (blocked) window.setTimeout(() => { if (token === gen) { shake(); impact('heavy'); } }, strike - t0 + T);
-  window.setTimeout(() => {
-    window.clearInterval(rumbleId);
-    rumbleId = 0;
-    if (token !== gen) return;          // the race restarted: that lock belongs to the new one
-    rolling = false;
-    logWait.clear();                    // anything still held is released, never left frozen
-    logShove.clear();
-    while (rollHeld.length) rollHeld.shift()!();
-    if (paused || state.winner !== null) return;
-    ui();
-    startClock();                       // the seat gets its allowance back once the board is clear
-  }, strike - t0 + T + 240);
 }
 
 /**
@@ -883,8 +802,6 @@ function play(a: Action, remote = false): boolean {
     showNote(`Mine! ${TEAM_NAME[by]} ${by === localSide ? 'were' : 'was'} thrown back `
       + `${cells} cell${cells === 1 ? '' : 's'}`, false, 2600);
   }
-  /* a log that just landed is a fresh object every time, so identity is the play-once flag */
-  if (next.lastEvent && next.lastEvent !== playedLog) playLog(next.lastEvent, next);
   ui();
   startClock();          // the turn has moved on: the next seat gets its own allowance
   if (state.winner !== null) notify(state.winner === localSide ? 'success' : 'error');
@@ -921,7 +838,7 @@ let ringFrac = -1;
 
 /** Is the countdown this seat's to lose? */
 const clockLive = () => !paused && !overlayOpen && !document.hidden && router.current === 'game'
-  && state.winner === null && state.turn === localSide && !rolling && !tutorialActive;
+  && state.winner === null && state.turn === localSide && !tutorialActive;
 
 /** Park the countdown: the interval is gone, and the chip stops advertising a clock it isn't running. */
 function stopClock() {
@@ -990,10 +907,10 @@ function timeoutMove() {
 function restart() {
   cancelTutorial();
   gen++;
-  /* Every local race rolls a fresh seed so no two telegraph the same lanes; an online race takes
-     the seed the matchmaker handed both sides, so the logs and the hazards are the same board. */
+  /* A fresh draw per race keeps the rivals' flags and XP stable for this board; an online race
+     uses the seed the matchmaker handed both sides. */
   raceSeed = active ? active.seed : (Math.random() * 0x7fffffff) | 0;
-  state = newGame(sizes, { hazards: runtime.hazards && !tutorialRace, seed: raceSeed });
+  state = newGame(sizes);
   /* This screen's colours are client-side: the local seat wears the save's red/blue choice and the
      rival wears the other one. Set before the first paint of the new board. */
   renderer.setPerspective(currentPerspective());
@@ -1004,12 +921,6 @@ function restart() {
   renderer.setBoard(state.cols, state.rows);
   fitBoard(state.cols, state.rows);
   wallsEach = wallBudget(state.balls.length);
-  rolling = false;
-  window.clearInterval(rumbleId);
-  rumbleId = 0;
-  playedLog = null;
-  logWait.clear();
-  logShove.clear();
   ballViews.length = 0;
   syncBalls();
   setMode(BOARD_IDLE);
@@ -1298,8 +1209,6 @@ function startGame(setup: StartSetup) {
     room: !!setup.room,
     completed: hasCompletedTutorial(),
   });
-  /* the lesson race is deterministic by design: no log may interrupt a hands-on step */
-  tutorialRace = wantsTutorial;
   /* menuState.difficulty is the single source: the Choose-mode sheet persists it live,
      so every start path (vs Bot card, Play) runs the level the sheet shows. */
   difficulty = menuState.difficulty;
@@ -1338,8 +1247,8 @@ function startGame(setup: StartSetup) {
 
   if (active) {
     const session = active;
-    /* the rival's moves come through the same door the bot's do, so walls, mines, log strikes and
-       the blitz hand-off all animate exactly as they do offline */
+    /* the rival's moves come through the same door the bot's do, so walls, mines and the blitz
+       hand-off all animate exactly as they do offline */
     session.onMove((action, side) => {
       if (state.winner === null && side === state.turn) play(action, true);
     });
@@ -1365,7 +1274,6 @@ function startGame(setup: StartSetup) {
     revealed = true;
     router.go('game');
     if (wantsTutorial) beginTutorial();
-    tutorialRace = false;       // the board already has (or has not) its log for this race
   };
   showVsClash(rivals, {
     kind: active ? 'ranked' : room ? 'room' : 'bot',
@@ -1895,7 +1803,7 @@ function countMineStride() {
  * Re-open the overlay on the mine half of step 4. A settled race ends the lesson instead.
  */
 function resumeMineLesson() {
-  if (!waitingForMineTrigger || tutorialActive || paused || overlayOpen || rolling) return;
+  if (!waitingForMineTrigger || tutorialActive || paused || overlayOpen) return;
   if (state.winner !== null) {
     waitingForMineTrigger = false;
     tutorial?.cancel();
@@ -1975,9 +1883,7 @@ $('pause-tutorial').addEventListener('click', () => {
   resetTutorialState();
   sheets.close();
   resumeGame();
-  tutorialRace = true;         // a rehearsal is deterministic too: no rolling log
   restart();
-  tutorialRace = false;
   beginTutorial();
 });
 
@@ -2024,24 +1930,9 @@ function frame(now: number) {
   const m = mode(), dots = moveDots(m);
   for (let i = 0; i < state.balls.length; i++) {
     const b = state.balls[i], v = ballViews[i];
-    const gate = logWait.get(b.id);
-    if (gate !== undefined) {
-      if (now < gate) continue;         // a rolling log has not reached this ball yet: it stays put
-      logWait.delete(b.id);
-      audio.play('move', { rate: SHOVE_RATE });   // the slide-back starts on its sound's own frame
-    }
     const tx = b.pos.c + 0.5, ty = b.pos.r + 0.5;
-    const sh = logShove.get(b.id);
-    if (sh) {
-      /* the trunk is pushing it, so it rides the face: never ahead of it, never behind it either */
-      const y = Math.min(sh.y1, Math.max(sh.y0, logFaceRow(rollStop, now - rollT0)));
-      v.pos.x += (tx - v.pos.x) * k;
-      v.pos.y = y + 0.5;
-      if (y >= sh.y1) logShove.delete(b.id);
-    } else {
-      v.pos.x += (tx - v.pos.x) * k;
-      v.pos.y += (ty - v.pos.y) * k;
-    }
+    v.pos.x += (tx - v.pos.x) * k;
+    v.pos.y += (ty - v.pos.y) * k;
     if (Math.abs(tx - v.pos.x) < 0.002) v.pos.x = tx;
     if (Math.abs(ty - v.pos.y) < 0.002) v.pos.y = ty;
     v.sel = dots && v.id === m.selected;
@@ -2310,7 +2201,7 @@ const chat = createChat({
       cell: L.cell,
     };
   },
-  busy: () => rolling || mineArmed,
+  busy: () => mineArmed,
   live: () => router.current === 'game' && !paused && !overlayOpen && state.winner === null,
 });
 router.start('home');

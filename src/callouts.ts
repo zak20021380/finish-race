@@ -1,11 +1,11 @@
 /**
  * callouts.ts — the board's three beats, spoken in the DOM instead of on the canvas.
  *
- * A mine going off, a log starting its roll and a wall landing all already have a line in the
- * board's toast; this overlay gives them a 1.2s mark over the grid as well, without touching
- * `render.ts` or the turn loop. It is a separate module entry (index.html loads it beside
- * `main.ts`), so the race code stays completely unaware of it: it watches the DOM the HUD already
- * writes — the rolling class, the "Mine!" note and each chip's wall count.
+ * A mine going off and a wall landing already have a line in the board's toast; this overlay gives
+ * them a 1.2s mark over the grid as well, without touching `render.ts` or the turn loop. It is a
+ * separate module entry (index.html loads it beside `main.ts`), so the race code stays completely
+ * unaware of it: it watches the DOM the HUD already writes — the "Mine!" note and each chip's
+ * wall count.
  *
  * NEVER OVER A BALL. The overlay has no model of the board, and the board is a canvas. So before a
  * callout is placed it samples the painted canvas under each candidate slot and takes the first
@@ -21,7 +21,7 @@ const REPEAT_MS = 250;
 /** Pixel stride when sampling a slot. */
 const SAMPLE_STEP = 4;
 
-type Kind = 'mine' | 'log' | 'wall';
+type Kind = 'mine' | 'wall';
 
 interface Spot { x: number; y: number }
 
@@ -42,7 +42,6 @@ const TICK = '<svg class="co-tick" viewBox="0 0 24 24" aria-hidden="true" focusa
 const MARKUP: Record<Kind, string> = {
   mine: '<span class="co-in"><span class="co-burst" aria-hidden="true"></span>'
     + '<b class="co-t">MINE!</b></span>',
-  log: '<span class="co-in"><b class="co-t">LOG!</b></span>',
   wall: `<span class="co-in">${TICK}<b class="co-t">WALL</b></span>`,
 };
 
@@ -61,7 +60,7 @@ function boot(): void {
   layer.appendChild(box);
 
   let hideTimer = 0;
-  const lastAt: Record<Kind, number> = { mine: 0, log: 0, wall: 0 };
+  const lastAt: Record<Kind, number> = { mine: 0, wall: 0 };
 
   /**
    * How much of a board patch reads as a ball body: saturated red or blue, the two team hues.
@@ -140,15 +139,6 @@ function boot(): void {
     box.classList.add('show');
     hideTimer = window.setTimeout(() => box.classList.remove('show'), SHOW_MS);
   }
-
-  /* ---- LOG: the board wraps itself in the rolling class for the whole roll ---- */
-  let rolling = boardWrap.classList.contains('rolling');
-  const rollWatch = new MutationObserver(() => {
-    const next = boardWrap.classList.contains('rolling');
-    if (next && !rolling) show('log');
-    rolling = next;
-  });
-  rollWatch.observe(boardWrap, { attributes: true, attributeFilter: ['class'] });
 
   /* ---- MINE: the board's own alert is the only place the blast is named ---- */
   const note = document.getElementById('note');

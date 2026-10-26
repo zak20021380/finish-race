@@ -28,7 +28,7 @@ const COPY: Record<SplashLang, SplashCopy> = {
       'Spatial Intelligence & Foresight — Calculating multi-step paths and wall blocks actively trains your prefrontal cortex.',
       'Split-Second Decision Making — Real-time 1v1 tactical pressure sharpens cognitive agility and pattern recognition.',
       'Adaptive Counter-Strategy — Reading rival traps and rerouting on the fly builds elite mental flexibility.',
-      'Working Memory & Deep Focus — Tracking hidden mines, rolling logs, and wall budgets boosts concentration.',
+      'Working Memory & Deep Focus — Tracking hidden mines and wall budgets boosts concentration.',
     ],
   },
   fa: {

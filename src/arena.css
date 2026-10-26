@@ -118,20 +118,6 @@
   filter: blur(.5px);
 }
 
-/* LOG! — cut from the same trunk the board rolls */
-.callout.is-log .co-in {
-  color: #FFE9C7;
-  border-radius: 9px;
-  letter-spacing: .16em;
-  background:
-    repeating-linear-gradient(90deg, rgba(0, 0, 0, .14) 0 2px, rgba(0, 0, 0, 0) 2px 7px),
-    linear-gradient(180deg, #9A6836 0%, #7A4E24 55%, #4E3014 100%);
-  box-shadow:
-    0 6px 14px -8px rgba(0, 0, 0, .9),
-    inset 0 1px 0 rgba(255, 231, 194, .28),
-    inset 0 -2px 0 rgba(0, 0, 0, .45);
-}
-
 /* WALL — a dark clay key with a neon tick */
 .callout.is-wall .co-in {
   color: #D9FBFF;

@@ -5,7 +5,7 @@
  * Two halves, on purpose.
  *
  * **The runtime config** (`runtime`, below) is the one live source every other module reads:
- * whether the shop is selling, whether a race carries the rolling log, the blitz allowance, the
+ * whether the shop is selling, the blitz allowance, the
  * TIQ win reward, the coin payout multiplier and the two queue radii. It persists to the device
  * through the same wrapped door as the save, and `setRuntime` is the only writer — so a toggle
  * takes effect everywhere the instant it flips, with no reload and no second source of truth.
@@ -103,8 +103,6 @@ export function isAdmin(): boolean {
 export interface AdminRuntime {
   /** Shop sales: off parks every card in the inert "Not for sale" showcase state. */
   salesOpen: boolean;
-  /** The rolling log on upcoming boards. */
-  hazards: boolean;
   /** Blocks new match queues with a maintenance toast. */
   maintenance: boolean;
   /** The live announcement raised as the Command Dispatch modal on this device. '' means none. */
@@ -134,7 +132,6 @@ export const BLITZ_STEPS: readonly number[] = [6, 8, 10, 12];
 
 export const DEFAULT_RUNTIME: AdminRuntime = {
   salesOpen: false,
-  hazards: true,
   maintenance: false,
   broadcast: '',
   winTiq: 140,
@@ -175,7 +172,6 @@ function loadRuntime(): AdminRuntime {
   if (!raw) return { ...d };
   return {
     salesOpen: pickBool(raw.salesOpen, d.salesOpen),
-    hazards: pickBool(raw.hazards, d.hazards),
     maintenance: pickBool(raw.maintenance, d.maintenance),
     broadcast: typeof raw.broadcast === 'string' ? raw.broadcast.slice(0, 140) : d.broadcast,
     winTiq: Math.round(pickNum(raw.winTiq, d.winTiq, 0, 1000)),
@@ -340,7 +336,6 @@ export interface ActiveRoom {
   p0: string;
   p1: string;
   turn: number;
-  round: number;
 }
 
 export interface ServerStatus {
@@ -379,6 +374,7 @@ export interface ServerMetrics {
   telegramUsers: number;
   matchesCompleted: number;
   minesPlaced: number;
+  /** Retired rolling-log counter; the Worker always reports 0. */
   logsSpawned: number;
   referrals: number;
   referringPlayers: number;
@@ -975,7 +971,7 @@ const KNOBS: Record<string, Knob> = {
   },
 };
 
-const TOGGLES = ['salesOpen', 'hazards', 'maintenance'] as const;
+const TOGGLES = ['salesOpen', 'maintenance'] as const;
 type ToggleKey = (typeof TOGGLES)[number];
 
 export function createAdmin(api: AdminApi): Admin {
@@ -1050,7 +1046,6 @@ export function createAdmin(api: AdminApi): Admin {
   const modeDuelP = $<HTMLElement>('stat-mode-1v1-p');
   const modeArenaP = $<HTMLElement>('stat-mode-arena-p');
   const statMines = $<HTMLElement>('stat-mines');
-  const statLogs = $<HTMLElement>('stat-logs');
   const statRefPlayers = $<HTMLElement>('stat-ref-players');
   const statLat = $<HTMLElement>('stat-lat');
   const statEnv = $<HTMLElement>('stat-env');
@@ -1467,7 +1462,6 @@ export function createAdmin(api: AdminApi): Admin {
     if (modeArenaP) modeArenaP.textContent = m ? `${figure(multi)} · ${share(multi)}%` : '—';
 
     if (statMines) statMines.textContent = metric(m?.minesPlaced);
-    if (statLogs) statLogs.textContent = metric(m?.logsSpawned);
     if (statRefPlayers) statRefPlayers.textContent = metric(m?.referringPlayers);
 
     if (statLat) {
@@ -2698,7 +2692,7 @@ export function createAdmin(api: AdminApi): Admin {
     for (const r of status.activeRooms) {
       serverList.append(rosterRow(
         `${r.p0} vs ${r.p1}`,
-        `#${r.matchId} · turn ${r.turn} · round ${r.round}`,
+        `#${r.matchId} · turn ${r.turn}`,
         r.matchId,
       ));
     }
@@ -3437,7 +3431,7 @@ export function createAdmin(api: AdminApi): Admin {
       paintToggles();
       paintDot();
       paintArena();
-      const label = key === 'salesOpen' ? 'Shop Store' : key === 'hazards' ? 'Hazards' : 'Maintenance Lock';
+      const label = key === 'salesOpen' ? 'Shop Store' : 'Maintenance Lock';
       api.note(`${label}: ${runtime[key] ? 'on' : 'off'}`, false, 1800);
       notify(runtime[key] ? 'success' : 'warning');
     });
