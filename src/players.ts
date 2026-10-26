@@ -1,16 +1,15 @@
 /**
- * players.ts — the Admin Command Center's player directory, held on the device.
+ * players.ts — the Admin Command Center's on-device player directory.
  *
  * The Users tab reads the matchmaker's own registry when a Worker is behind the page
- * (`GET /admin/players`). When there is none — a static preview, a `file://` tab, a refused
- * request — the tab still has to be a working directory, so this module stands in for the server:
- * one deterministic roster of a thousand-odd players, generated from a fixed seed (the same page
- * load shows the same court twice), persisted to localStorage so moderation survives a reload.
+ * (`GET /admin/players`). The device keeps only the rows it actually knows: the operator's own
+ * seat and the moderation flags stored against it. No roster is generated — with no Worker
+ * behind the page, the directory holds just that seat.
  *
  * The shape of a record is deliberately the Worker's `PlayerRecord`, field for field — `admin.ts`
  * renders both sources through one card, and a row that arrives from the wire lands here without
- * translation. The device's own player rides the roster as row `you`, folded in by the caller so
- * the directory always shows the operator what everyone else would see.
+ * translation. The device's own player rides the directory as row `you`, folded in by the caller
+ * so the operator sees the same numbers the rest of the app shows.
  */
 import { profile, readJson, writeJson } from './storage';
 
@@ -77,107 +76,16 @@ export interface DirPage {
   players: DirPlayer[];
 }
 
-/** The device's own seat id: stable across reloads, distinct from every seeded row. */
+/** The device's own seat id: stable across reloads, distinct from every registry id. */
 export const YOU_ID = 'you';
 
 const KEY = 'detour.players.v1';
-const V = 1;
-const ROSTER = 1160;
+/** v2 dropped the generated roster; v1 blobs are read once to keep the live seat's flags. */
+const V = 2;
 const PAGE = 40;
 const ACTIVE_MS = 24 * 60 * 60 * 1000;
-
-const FIRST = [
-  'Nadia', 'Rune', 'Ivo', 'Mira', 'Sable', 'Kenji', 'Lior', 'Ada', 'Tomas', 'Anya',
-  'Diego', 'Priya', 'Omar', 'Lena', 'Kofi', 'Yuki', 'Mateo', 'Zoya', 'Felix', 'Ines',
-  'Aarav', 'Noor', 'Emil', 'Talia', 'Hugo', 'Sana', 'Ravi', 'Elsa', 'Bram', 'Mei',
-  'Jonas', 'Dalia', 'Piet', 'Nia', 'Cem', 'Alba', 'Raj', 'Liv', 'Nils', 'Farah',
-  'Oskar', 'Rania', 'Theo', 'Vera', 'Malik', 'Ida', 'Sami', 'June', 'Arno', 'Leila',
-] as const;
-
-const LAST = [
-  'K.', 'Petrov', 'W.', 'N.', 'Silva', 'Okafor', 'Haddad', 'Tanaka', 'Novak', 'Berg',
-  'Costa', 'Ivanov', 'Kaur', 'Moreau', 'Sato', 'Lindqvist', 'Diallo', 'Weiss', 'Reyes', 'Vargas',
-] as const;
-
-const COUNTRY = [
-  'IR', 'PL', 'NO', 'BG', 'KZ', 'GB', 'JP', 'IL', 'DE', 'BR',
-  'IN', 'NG', 'TR', 'FR', 'ES', 'IT', 'SE', 'NL', 'FI', 'UA',
-  'RO', 'PT', 'GR', 'EG', 'ZA', 'KE', 'MA', 'AE', 'SA', 'ID',
-  'PH', 'KR', 'VN', 'TH', 'AU', 'NZ', 'CA', 'US', 'MX', 'AR',
-  'CL', 'PK', 'BD',
-] as const;
-
-const SQUADS = [
-  'claycourt', 'hazardclub', 'wallbuilders', 'closed_lines', 'finalgate', 'minewatch',
-  'nightligue', 'firstblood', 'the_commons', 'detour_daily', 'northblock', 'stonegarden',
-] as const;
-
-/** A small deterministic generator: the same seed draws the same court on every load. */
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-const pick = <T>(rnd: () => number, pool: readonly T[]): T => pool[Math.floor(rnd() * pool.length)];
-
-/** A plausible roster minted from the seed, newest faces first. */
-function generate(now: number): DirPlayer[] {
-  const rnd = mulberry32(0x0d37_0a17);
-  const rows: DirPlayer[] = [];
-  for (let i = 0; i < ROSTER; i++) {
-    const first = pick(rnd, FIRST);
-    const last = rnd() < 0.45 ? ` ${pick(rnd, LAST)}` : '';
-    const name = `${first}${last}`;
-    const username = rnd() < 0.72 ? `${first.toLowerCase()}${last ? last.trim().replace('.', '').toLowerCase() : ''}${Math.floor(rnd() * 90) + 10}` : '';
-    /* the age mix a global board actually gets: a young tail, a 25–34 centre, older veterans */
-    const ageRoll = rnd();
-    const age = ageRoll < 0.13
-      ? 13 + Math.floor(rnd() * 5)
-      : ageRoll < 0.40
-        ? 18 + Math.floor(rnd() * 7)
-        : ageRoll < 0.77
-          ? 25 + Math.floor(rnd() * 10)
-          : 35 + Math.floor(rnd() * 24);
-    const tiq = Math.round(130 + Math.pow(rnd(), 1.8) * 3320);
-    const matches = Math.floor(Math.pow(rnd(), 1.4) * 420);
-    const wins = Math.min(matches, Math.round(matches * (0.32 + rnd() * 0.44)));
-    const losses = matches - wins;
-    const streak = rnd() < 0.6 ? Math.floor(rnd() * Math.min(14, wins + 1)) : 0;
-    const lastSeen = now - Math.floor(Math.pow(rnd(), 2.2) * 40 * 24 * 3600 * 1000) - (rnd() < 0.05 ? 0 : Math.floor(rnd() * 3600 * 1000));
-    const banned = rnd() < 0.03;
-    rows.push({
-      id: `lp-${(i + 1).toString(36)}-${Math.floor(rnd() * 1e6).toString(36)}`,
-      tgId: String(Math.floor(1e8 + rnd() * 2e9)),
-      name,
-      username,
-      country: rnd() < 0.92 ? pick(rnd, COUNTRY) : '',
-      age,
-      tiq,
-      firstSeen: lastSeen - Math.floor(rnd() * 180 * 24 * 3600 * 1000),
-      lastSeen,
-      lastPlayed: matches > 0 ? lastSeen - Math.floor(rnd() * 3 * 24 * 3600 * 1000) : 0,
-      matches,
-      wins,
-      losses,
-      streak,
-      best: Math.max(streak, Math.floor(rnd() * Math.min(24, wins + 1))),
-      coins: Math.round(150 + Math.pow(rnd(), 1.6) * 52000),
-      stars: rnd() < 0.35 ? Math.floor(Math.pow(rnd(), 2) * 2400) : 0,
-      referrals: rnd() < 0.4 ? Math.floor(rnd() * 34) : 0,
-      squad: rnd() < 0.3 ? pick(rnd, SQUADS) : '',
-      banned,
-      muted: banned,
-      inMatch: !banned && rnd() < 0.02,
-    });
-  }
-  return rows;
-}
+/** Ids the old seeded roster minted. They are never real players and are discarded on load. */
+const LEGACY_MOCK_ID = /^lp-[0-9a-z]+-[0-9a-z]+$/i;
 
 /* ---------- the store ---------- */
 
@@ -214,36 +122,14 @@ function readRow(raw: unknown): DirPlayer | null {
   };
 }
 
-/**
- * A deterministic age for a roster written before the demographic filter existed. Keeps the
- * installed rows (and the moderation on them) instead of re-seeding the whole directory.
- */
-function seededAge(id: string): number {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (Math.imul(h, 33) + id.charCodeAt(i)) >>> 0;
-  const r = h % 100;
-  if (r < 13) return 13 + (h % 5);
-  if (r < 40) return 18 + (h % 7);
-  if (r < 77) return 25 + (h % 10);
-  return 35 + (h % 25);
-}
-
 function load(): DirPlayer[] {
   const raw = readJson<{ v: number; players: unknown[] }>(KEY);
-  if (raw && raw.v === V && Array.isArray(raw.players) && raw.players.length >= 100) {
-    const rows = raw.players.map(readRow).filter((p): p is DirPlayer => p !== null);
-    if (rows.length >= 100) {
-      const hadNoAge = raw.players.some((r) => typeof (r as { age?: unknown } | null)?.age !== 'number');
-      if (hadNoAge) {
-        for (const p of rows) if (!p.age) p.age = seededAge(p.id);
-        writeJson(KEY, { v: V, players: rows });
-      }
-      return rows;
-    }
-  }
-  const fresh = generate(Date.now());
-  writeJson(KEY, { v: V, players: fresh });
-  return fresh;
+  if (!raw || !Array.isArray(raw.players)) return [];
+  const rows = raw.players
+    .map(readRow)
+    .filter((p): p is DirPlayer => p !== null && !LEGACY_MOCK_ID.test(p.id));
+  if (raw.v !== V || rows.length !== raw.players.length) writeJson(KEY, { v: V, players: rows });
+  return rows;
 }
 
 const store = load();
@@ -289,7 +175,7 @@ export function directoryAction(id: string, action: string, coins = 0): DirPlaye
 /* ---------- reading the directory ---------- */
 
 /**
- * Fold the live seat into the roster. Its identity and race record come from the save the moment
+ * Fold the live seat into the directory. Its identity and race record come from the save the moment
  * it is asked for — the operator sees the same numbers the rest of the app does — while its
  * moderation flags stay the stored row's, so a ban survives a reload.
  */

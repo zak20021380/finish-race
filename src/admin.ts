@@ -16,8 +16,8 @@
  * sheet files lands in the shared queue (src/support.ts) and is read, replied to and resolved here.
  *
  * **The telemetry** (`dayStats`, below) is what the Stats tab is made of: this device's own
- * counters for the UTC day, folded into a population reading that stays stable until the date
- * rolls. It is the only part of the panel that describes rather than commands.
+ * counters for the UTC day and the Worker's live seat counts. Nothing is modelled — figures the
+ * device cannot measure render as an em dash.
  *
  * **The server** is the fourth half. The Worker (`worker/index.ts`, `worker/matchmaker.ts`) owns the
  * same three knobs for the live room — the maintenance lock and both queue radii — and enforces
@@ -240,8 +240,8 @@ export function tiqFrom(wins: number, games: number, bonus: number): number {
 /* ---------- the day's telemetry: what the Stats tab is made of ---------- */
 
 /**
- * The counters this device keeps for itself, one UTC day at a time. Everything else on the Stats
- * tab is a model (see `dayStats`); this part is measured, and it is the only part that is.
+ * The counters this device keeps for itself, one UTC day at a time. They are the only population
+ * figures the panel has; everything it cannot measure is shown as an em dash.
  */
 interface DayCounters {
   /** The UTC date these counters belong to, `YYYY-MM-DD`. */
@@ -308,173 +308,41 @@ export function recordCoins(n: number): void {
   saveDay();
 }
 
-/** One row of the Top Nations strip. An empty code is the globe: everybody else. */
-export interface NationShare {
-  code: string;
-  share: number;
-}
-
 /**
- * The Stats timeframe: the UTC day, or the rolling window behind it. Every figure the
- * dashboard prints is recomputed for the window the admin is reading.
+ * The Stats timeframe. Only the UTC day has retained counters on this device, so wider windows
+ * have no history behind them and read as em dashes.
  */
 export type StatsRange = 'today' | '7d' | '30d' | 'all';
 
-/** The window each timeframe covers, in UTC days. 'all' reads as the season to date. */
-const RANGE_DAYS: Record<StatsRange, number> = { today: 1, '7d': 7, '30d': 30, all: 90 };
-
 export interface DayStats {
-  players: number;
-  /** Daily active users — the day's own base, whatever the window on screen. */
-  dau: number;
-  /** DAU against the previous window, in whole per cent. */
-  dauDelta: number;
-  matches: number;
-  matches1v1: number;
-  matchesArena: number;
-  matchesSolo: number;
-  coins: number;
-  /** The Telegram Stars prize volume the window's cups put up. */
-  stars: number;
+  /** Sessions recorded on this device, or null for a window it does not retain. */
+  players: number | null;
+  /** Today's sessions — the only active-user reading the device can measure. */
+  dau: number | null;
+  matches: number | null;
+  coins: number | null;
+  /** Seats queued or racing on the Worker, else 0. */
   active: number;
   liveRooms: number;
-  /** Mean completed race, in seconds. */
-  avgDuration: number;
-  /** Seats an AI backfill took, in per cent. */
-  botBackfill: number;
-  /** Races the anti-deadlock adjudication ended without a winner, in per cent. */
-  drawRate: number;
-  /** Cloudflare DO tick latency, p50, in milliseconds. */
-  latency: number;
-  /** Error + disconnect rate, in per cent. */
-  errRate: number;
-  nations: NationShare[];
-  /** True when a Worker answered and the live figures are its own. */
+  /** True when a Worker answered and the seat figures are its own. */
   live: boolean;
 }
 
-/** The markets a Tactix board actually fills from. The player's own code is added by `nationsOf`. */
-const NATION_POOL: readonly string[] = [
-  'IR', 'DE', 'RU', 'US', 'BR', 'IN', 'TR', 'ID', 'EG', 'NG', 'VN', 'PH', 'UA', 'PL', 'FR',
-  'IT', 'ES', 'MX', 'AR', 'PK', 'BD', 'TH', 'MY', 'SA', 'IQ', 'MA', 'DZ', 'KE', 'ZA', 'GB',
-  'NL', 'RO', 'CZ', 'SE', 'PT', 'GR', 'AE', 'CA', 'AU', 'JP', 'KR', 'SG', 'CO', 'PE', 'CL',
-  'KZ', 'UZ', 'AZ', 'GE', 'AM', 'BY', 'BG', 'HU', 'RS', 'HR', 'SK', 'LT', 'LV', 'EE', 'FI',
-  'NO', 'DK', 'CH', 'AT', 'BE', 'IE', 'NZ',
-];
-
-/** FNV-1a over the date: one seed per UTC day, the same on every device. */
-function hash32(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-/** xorshift32, so a day's numbers are stable without walking a visible line. */
-function stream(seed: number): () => number {
-  let s = seed || 0x9e3779b9;
-  return () => {
-    s ^= s << 13; s >>>= 0;
-    s ^= s >>> 17;
-    s ^= s << 5; s >>>= 0;
-    return s / 4294967296;
-  };
-}
-
-/** A lopsided top three and a globe for the rest, with the player's own flag pinned in. */
-function nationsOf(rand: () => number): NationShare[] {
-  const picked: string[] = [];
-  const mine = profile.country && NATION_POOL.includes(profile.country) ? profile.country : null;
-  if (mine) picked.push(mine);
-  while (picked.length < 3) {
-    const code = NATION_POOL[Math.floor(rand() * NATION_POOL.length)];
-    if (!picked.includes(code)) picked.push(code);
-  }
-  const lead = 24 + Math.round(rand() * 18);
-  const second = Math.max(6, Math.round(lead * (0.42 + rand() * 0.3)));
-  const third = Math.max(4, Math.round(second * (0.5 + rand() * 0.4)));
-  const rest = Math.max(5, 100 - lead - second - third);
-  return [
-    { code: picked[0], share: lead },
-    { code: picked[1], share: second },
-    { code: picked[2], share: third },
-    { code: '', share: rest },
-  ];
-}
-
 /**
- * The window's reading.
- *
- * This panel is a Mini App with no analytics backend behind it: nothing tells it how many people
- * opened Tactix in Tehran this morning. So the *shape* of the window — how many turned up, how
- * much they played, which flags they carry — is a deterministic model keyed on the UTC date and
- * the timeframe: the same numbers on every device for the whole window, and a different one
- * tomorrow. This device's own measured counters ride on top, so the panel never claims less than
- * it knows, and a Worker that answers replaces the model outright for the figures it actually
- * owns — the live seats and the rooms.
+ * The window's reading. There is no analytics backend behind this Mini App: every number here is
+ * either a counter this device measured today or a figure the Worker reported. Nothing is
+ * modelled or generated, and a metric with no reading stays null so the panel can print `—`.
  */
 export function dayStats(range: StatsRange, live: ServerStatus | null): DayStats {
   const d = today();
-  const rand = stream(hash32(`${d.day}|${range}`));
-  const span = RANGE_DAYS[range];
-  /* the base day; players return, so they grow sublinearly across a window, while
-     matches, coins and Stars accrue with the span */
-  const basePlayers = 1400 + rand() * 2600;
-  const baseMatches = basePlayers * (1.5 + rand() * 0.9);
-  const baseCoins = baseMatches * (160 + rand() * 150);
-  const baseStars = baseMatches * (0.10 + rand() * 0.08);
-  const playerGain = span === 1 ? 1 : span <= 7 ? 3.4 + rand() * 1.4 : span <= 30 ? 9.5 + rand() * 3 : 17 + rand() * 7;
-  const spanGain = span === 1 ? 1 : span * (0.9 + rand() * 0.2);
-  const visits = span === 1 ? d.visits : d.visits * span;
-
-  const players = Math.round(basePlayers * playerGain) + visits;
-  const dau = Math.round(basePlayers) + d.visits;
-  const dauDelta = Math.round(
-    (range === 'today' ? 4 + rand() * 14 : range === '7d' ? 2 + rand() * 10 : range === '30d' ? 1 + rand() * 8 : 3 + rand() * 12),
-  );
-  const matches = Math.round(baseMatches * spanGain) + d.matches * span;
-  const coins = Math.round(baseCoins * spanGain) + d.coins * span;
-  const stars = Math.round(baseStars * spanGain);
-
-  /* how the window's seats were won: a duel-heavy mix, an arena to grow into, a quiet solo lane */
-  const wDuel = 0.56 + rand() * 0.18;
-  const wArena = 0.20 + rand() * 0.12;
-  const wSolo = 0.07 + rand() * 0.08;
-  const sum = wDuel + wArena + wSolo;
-  const sDuel = wDuel / sum;
-  const sArena = wArena / sum;
-  const matches1v1 = Math.round(matches * sDuel);
-  const matchesArena = Math.round(matches * sArena);
-  const matchesSolo = Math.max(0, matches - matches1v1 - matchesArena);
-
-  /* telemetry the board itself never measures out loud: it is a model, honestly badged */
-  const avgDuration = Math.round(205 + rand() * 70);
-  const botBackfill = 17 + rand() * 17;
-  const drawRate = 1.1 + rand() * 3.4;
-  const latency = 9 + rand() * 7;
-  const errRate = 0.4 + rand() * 1.8;
-
+  const measured = range === 'today';
   return {
-    players,
-    dau,
-    dauDelta,
-    matches,
-    matches1v1,
-    matchesArena,
-    matchesSolo,
-    coins,
-    stars,
-    /* a live room reports its own seats; the model assumes a few per cent are on a board */
-    active: live ? live.queueCount + live.activeMatchesCount * 2 : Math.max(1, Math.round(basePlayers * (0.03 + rand() * 0.02))),
-    liveRooms: live ? live.activeMatchesCount : Math.max(3, Math.round(basePlayers * (0.006 + rand() * 0.006))),
-    avgDuration,
-    botBackfill,
-    drawRate,
-    latency,
-    errRate,
-    nations: nationsOf(rand),
+    players: measured ? d.visits : null,
+    dau: measured ? d.visits : null,
+    matches: measured ? d.matches : null,
+    coins: measured ? d.coins : null,
+    active: live ? live.queueCount + live.activeMatchesCount * 2 : 0,
+    liveRooms: live ? live.activeMatchesCount : 0,
     live: !!live,
   };
 }
@@ -570,7 +438,7 @@ interface PlayersPage {
   players: DirPlayer[];
 }
 
-/** Read the Worker's directory; null when nothing answers, so the panel can fall back to the index. */
+/** Read the Worker's directory; null when nothing answers, so the panel can show the device's own seat. */
 async function fetchPlayers(
   q: string,
   filter: DirFilter,
@@ -1291,7 +1159,7 @@ export function createAdmin(api: AdminApi): Admin {
   let usersTotal = 0;
   /** True once `/admin/players` has answered this session: the panel is governing a real registry. */
   let usersOn = false;
-  /** The Worker has been asked at least once; after a refusal every filter stays on the fast local index. */
+  /** The Worker has been asked at least once; after a refusal every filter stays on the device's own directory. */
   let usersProbed = false;
   /** The tab has been opened at least once — the directory is read lazily, on first sight. */
   let usersAsked = false;
@@ -1524,85 +1392,47 @@ export function createAdmin(api: AdminApi): Admin {
   /** The figure the executive grid prints: grouped, never a raw run of digits. */
   const figure = (n: number): string => Math.max(0, Math.round(n)).toLocaleString('en-US');
 
-  /** `3m 42s` — a duration in the unit a telemetry row is read in. */
-  const durOf = (s: number): string => {
-    const t = Math.max(0, Math.round(s));
-    return `${Math.floor(t / 60)}m ${String(t % 60).padStart(2, '0')}s`;
-  };
-
-  /** The flag badge is compete.ts's own renderer, so a nation looks the same here as on the ladder. */
-  function paintNations(nations: NationShare[]) {
-    if (!statNations) return;
-    statNations.textContent = '';
-    for (const n of nations) {
-      const li = document.createElement('li');
-      li.className = 'adm-nat';
-      if (n.code) {
-        li.append(flagPhoto(n.code, 'fp-stat'));
-      } else {
-        const globe = document.createElement('span');
-        globe.className = 'adm-nat-globe';
-        globe.setAttribute('aria-hidden', 'true');
-        globe.textContent = '🌎';
-        li.append(globe);
-      }
-      const track = document.createElement('span');
-      track.className = 'adm-nat-track';
-      const fill = document.createElement('i');
-      fill.className = 'adm-nat-fill';
-      fill.style.width = `${n.share}%`;
-      track.append(fill);
-      const pct = document.createElement('b');
-      pct.className = 'adm-nat-p';
-      pct.textContent = `${n.share}%`;
-      li.append(track, pct);
-      li.setAttribute('aria-label', n.code ? `${n.code}, ${n.share} percent` : `Rest of the world, ${n.share} percent`);
-      statNations.append(li);
-    }
-  }
-
   /** The timeframe pills, the KPI grid and every tactical row below them, from one reading. */
   function paintStats() {
     const s = dayStats(range, lastStatus);
+    const metric = (n: number | null): string => (n == null ? '—' : figure(n));
     if (statActive) statActive.textContent = figure(s.active);
     if (statLiveRooms) statLiveRooms.textContent = `${figure(s.liveRooms)} live rooms`;
     if (statLiveDot) statLiveDot.dataset.live = String(s.liveRooms > 0);
-    if (statPlayers) statPlayers.textContent = figure(s.players);
-    if (statDau) {
-      statDau.textContent = '';
-      const dauTxt = document.createElement('span');
-      dauTxt.textContent = `DAU ${figure(s.dau)}`;
-      const delta = document.createElement('b');
-      delta.textContent = `▲ +${s.dauDelta}%`;
-      statDau.append(dauTxt, delta);
-    }
-    if (statMatches) statMatches.textContent = figure(s.matches);
-    if (statModes) statModes.textContent = `1v1 ${figure(s.matches1v1)} · Arena ${figure(s.matchesArena)}`;
-    if (statCoins) statCoins.textContent = figure(s.coins);
-    if (statStars) statStars.textContent = `★ ${figure(s.stars)} Stars pool`;
+    if (statPlayers) statPlayers.textContent = metric(s.players);
+    if (statDau) statDau.textContent = s.dau == null ? '—' : `DAU ${figure(s.dau)}`;
+    if (statMatches) statMatches.textContent = metric(s.matches);
+    if (statModes) statModes.textContent = '1v1 — · Arena —';
+    if (statCoins) statCoins.textContent = metric(s.coins);
+    if (statStars) statStars.textContent = '—';
     if (modeBar) {
-      modeBar.style.setProperty('--w-duel', `${(s.matches1v1 / Math.max(1, s.matches)) * 100}%`);
-      modeBar.style.setProperty('--w-arena', `${(s.matchesArena / Math.max(1, s.matches)) * 100}%`);
-      modeBar.style.setProperty('--w-solo', `${(s.matchesSolo / Math.max(1, s.matches)) * 100}%`);
+      modeBar.style.setProperty('--w-duel', '0%');
+      modeBar.style.setProperty('--w-arena', '0%');
+      modeBar.style.setProperty('--w-solo', '0%');
     }
-    if (modeDuelP) modeDuelP.textContent = `${Math.round((s.matches1v1 / Math.max(1, s.matches)) * 100)}%`;
-    if (modeArenaP) modeArenaP.textContent = `${Math.round((s.matchesArena / Math.max(1, s.matches)) * 100)}%`;
-    if (modeSoloP) modeSoloP.textContent = `${Math.round((s.matchesSolo / Math.max(1, s.matches)) * 100)}%`;
-    if (statDur) statDur.textContent = durOf(s.avgDuration);
-    if (statBot) statBot.textContent = `${s.botBackfill.toFixed(1)}%`;
-    if (statDraw) statDraw.textContent = `${s.drawRate.toFixed(1)}%`;
-    if (statLat) statLat.textContent = `${Math.round(s.latency)}ms p50`;
-    if (statErr) statErr.textContent = `${s.errRate.toFixed(1)}%`;
+    if (modeDuelP) modeDuelP.textContent = '—';
+    if (modeArenaP) modeArenaP.textContent = '—';
+    if (modeSoloP) modeSoloP.textContent = '—';
+    if (statDur) statDur.textContent = '—';
+    if (statBot) statBot.textContent = '—';
+    if (statDraw) statDraw.textContent = '—';
+    if (statLat) statLat.textContent = '—';
+    if (statErr) statErr.textContent = '—';
     if (healthChip) {
-      const ok = s.latency < 25 && s.errRate < 3.5;
-      healthChip.textContent = ok ? 'Stable' : 'Degraded';
-      healthChip.dataset.on = String(ok);
+      healthChip.textContent = '—';
+      healthChip.dataset.on = 'false';
     }
     if (statSource) {
-      statSource.textContent = s.live ? 'Live feed' : 'Modelled';
+      statSource.textContent = s.live ? 'Live feed' : '—';
       statSource.dataset.live = String(s.live);
     }
-    paintNations(s.nations);
+    if (statNations) {
+      statNations.textContent = '';
+      const empty = document.createElement('li');
+      empty.className = 'adm-nat adm-nat-empty';
+      empty.textContent = '—';
+      statNations.append(empty);
+    }
   }
 
   /* ---------- the Inbox: the support desk (src/support.ts) ---------- */
@@ -2058,7 +1888,7 @@ export function createAdmin(api: AdminApi): Admin {
   /** The list, the count, the source chip and the Load More key, from the rows currently held. */
   function paintUsers() {
     if (usersSourceEl) {
-      usersSourceEl.textContent = usersOn ? 'LIVE REGISTRY' : 'LOCAL INDEX';
+      usersSourceEl.textContent = usersOn ? 'LIVE REGISTRY' : 'NO REGISTRY';
       usersSourceEl.dataset.live = String(usersOn);
     }
     if (usersTotalEl) {
@@ -2078,15 +1908,15 @@ export function createAdmin(api: AdminApi): Admin {
 
   /**
    * Read one window of the directory. The Worker's registry is asked first and wins when it
-   * answers; with nothing behind the page the local index (players.ts) answers instead, so the
-   * tab is never empty for want of a server. Only the newest read paints.
+   * answers; with nothing behind the page, players.ts can still show this device's own seat.
+   * Only the newest read paints.
    */
   async function refreshUsers(reset: boolean): Promise<void> {
     const run = ++usersSeq;
     const offset = reset ? 0 : usersRows.length;
 
     /* Both sources page the same way: one PAGE_SIZE window at the rows already held. That keeps
-       Load More honest on the local index instead of re-reading the first window forever. */
+       Load More honest instead of re-reading the first window forever. */
     const paintLocal = () => {
       const page = directoryPage(
         {
@@ -2101,9 +1931,9 @@ export function createAdmin(api: AdminApi): Admin {
       paintUsers();
     };
 
-    /* Once the Worker has refused, the local index is the authority. Filtering 1,160 rows is a
-       synchronous pass, so every toolbar move repaints inside a frame instead of waiting on a
-       fetch that has already failed once this session. */
+    /* Once the Worker has refused, the on-device directory is the authority. Filtering it is a
+       synchronous pass over the rows the device actually holds, so every toolbar move repaints
+       inside a frame instead of waiting on a fetch that has already failed this session. */
     if (usersProbed && !usersOn) {
       paintLocal();
       return;
@@ -2825,7 +2655,7 @@ export function createAdmin(api: AdminApi): Admin {
     return false;
   }
 
-  /** The season as the local directory sees it, for a reset with no Worker behind the page. */
+  /** The season as the on-device directory sees it, for a reset with no Worker behind the page. */
   function localSeasonReset(): ArenaReply & { ok: true } {
     const page = directoryPage({
       q: '', filter: 'all', country: '', age: 'all', sort: 'tiq', offset: 0, limit: 50,
