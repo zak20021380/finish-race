@@ -2026,13 +2026,18 @@
                   <span class="tour-vault-sub">Runners-up get 0★ · Pure Conquest</span>
                 </div>
 
-                <!-- split telemetry: the leading channel on the left, the tactical clock
-                     on the right, recessed into one dark-clay capsule -->
+                <!-- the champion banner: an illuminated crown badge and metallic handle
+                     on the left, the live deadline in a glowing gold pill on the right,
+                     all set in one obsidian glass strip with a gold micro-border -->
                 <div class="tour-hud">
                   <span class="tour-leader">
-                    <svg class="tour-leader-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-crown" /></svg>
-                    <span class="tour-leader-k">LEADER:</span>
-                    <b class="tour-leader-h" id="tour-leader-handle">@DogeSquad</b>
+                    <span class="tour-leader-medal" aria-hidden="true">
+                      <svg class="tour-leader-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-crown" /></svg>
+                    </span>
+                    <span class="tour-leader-copy">
+                      <span class="tour-leader-k">REIGNING CHAMPION</span>
+                      <b class="tour-leader-h" id="tour-leader-handle">@DogeSquad</b>
+                    </span>
                   </span>
                   <span class="tour-clock"><i class="tour-clock-dot" aria-hidden="true"></i><b id="tour-countdown">02h 45m left</b></span>
                 </div>
@@ -2045,7 +2050,9 @@
                 <!-- the growth door: channel / group admins enlist their community so
                      its members can compete — a Telegram bot-admin deeplink, not a route -->
                 <button class="tour-admin" type="button" id="home-tournament-admin">
-                  <svg class="tour-admin-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-send" /></svg>
+                  <span class="tour-admin-ico-wrap" aria-hidden="true">
+                    <svg class="tour-admin-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-send" /></svg>
+                  </span>
                   <span class="tour-admin-t">Channel admin? Enlist here</span>
                 </button>
               </article>
