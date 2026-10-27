@@ -51,7 +51,7 @@ import {
 } from './players';
 import { nameOf } from './countries';
 import { detonation, impact, notify, tgInitData, tgUser } from './telegram';
-import { adminFetch, parseJson, postJson } from './adminApi';
+import { adminFetch, adminHeaders, parseJson, postJson, workerUrl } from './adminApi';
 import type { Broadcast } from './broadcasts';
 import type { MindTier } from './matchmaking';
 import {
@@ -487,16 +487,42 @@ type MetricsResult =
   | { state: 'error' };
 
 /**
- * Read the Worker's measured telemetry. `adminFetch` already carries the Mini App's signed
+ * Read the Worker's measured telemetry. `adminHeaders` already carries the Mini App's signed
  * `initData` (and the dev marker, which this route ignores). A 401/403 is the operator door
  * refusing this account — never a cue to fall back to a device-local or demo reading.
+ *
+ * The whole request — headers, body and JSON parse — sits inside one six-second abort window.
+ * A Worker (or proxy) that accepts the connection but never finishes its body must not leave the
+ * Stats tab reading forever: the timeout turns into the same clean `error` verdict as an outage.
  */
+const METRICS_TIMEOUT_MS = 6_000;
+
 async function fetchMetrics(): Promise<MetricsResult> {
-  const res = await adminFetch('/api/admin/metrics', { cache: 'no-store' });
-  if (!res) return { state: 'error' };
-  if (res.status === 401 || res.status === 403) return { state: 'unauthorized' };
-  const data = await parseJson<ServerMetrics>(res);
-  return data && data.ok === true ? { state: 'ok', metrics: data } : { state: 'error' };
+  const url = workerUrl('/api/admin/metrics');
+  if (!url) return { state: 'error' };
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), METRICS_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      cache: 'no-store',
+      headers: adminHeaders(),
+      signal: controller.signal,
+    });
+    if (res.status === 401 || res.status === 403) return { state: 'unauthorized' };
+    if (res.status !== 200) return { state: 'error' };
+    let data: ServerMetrics | null = null;
+    try {
+      data = (await res.json()) as ServerMetrics;
+    } catch {
+      return { state: 'error' };
+    }
+    return data && data.ok === true ? { state: 'ok', metrics: data } : { state: 'error' };
+  } catch {
+    /* offline, timed out, aborted, or a body that never completed: the same actionable verdict */
+    return { state: 'error' };
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 /**
@@ -1692,6 +1718,7 @@ export function createAdmin(api: AdminApi): Admin {
         anchor: anchorAt(k, labels.length),
       }));
     }
+    if (n < 1) return [];
     const count = Math.max(2, Math.min(trendRange === '7d' ? 7 : 5, n));
     const out: { x: number; text: string; anchor: string }[] = [];
     for (let k = 0; k < count; k++) {
@@ -1713,7 +1740,22 @@ export function createAdmin(api: AdminApi): Admin {
     if (!m) return [];
     const list = trendRange === '24h' ? m.series24h : trendRange === '7d' ? m.series7d : m.series30d;
     if (!Array.isArray(list)) return [];
-    return list.filter((p): p is SeriesPoint => !!p && Number.isFinite(p?.t));
+    /** A missing, null or non-finite count is a measured zero, never a reason to break the chart. */
+    const countOf = (v: unknown): number =>
+      typeof v === 'number' && Number.isFinite(v) ? Math.max(0, v) : 0;
+    const points: SeriesPoint[] = [];
+    for (const row of list as unknown[]) {
+      if (!row || typeof row !== 'object') continue;
+      const p = row as Partial<SeriesPoint>;
+      if (typeof p.t !== 'number' || !Number.isFinite(p.t)) continue;
+      points.push({
+        t: p.t,
+        signups: countOf(p.signups),
+        active: countOf(p.active),
+        matches: countOf(p.matches),
+      });
+    }
+    return points;
   }
 
   /** What the empty plot says instead of a line: the reason there is nothing to draw. */
@@ -1730,7 +1772,7 @@ export function createAdmin(api: AdminApi): Admin {
    * range or the visible series change; a pointer move repaints the cursor layer on its own, so
    * hovering a phone-width chart never re-renders the whole SVG.
    */
-  function paintTrend() {
+  function renderTrend() {
     if (!statTrendSvg) return;
     const m = lastMetrics;
     const points = trendPoints(m);
@@ -1748,20 +1790,14 @@ export function createAdmin(api: AdminApi): Admin {
 
     const drawn = points.length > 0;
     if (statTrendEmpty) {
+      /* An empty window still draws its zero baseline beneath this note; it is never a blank card. */
       statTrendEmpty.hidden = drawn;
       if (!drawn) statTrendEmpty.textContent = trendEmptyText(m);
     }
-    statTrendSvg.classList.toggle('is-blank', !drawn);
+    statTrendSvg.classList.remove('is-blank');
     statTrendSvg.setAttribute('aria-label', drawn
       ? `${TREND_WINDOW[trendRange]}: ${trendTotalsText(points)}.`
       : trendEmptyText(m));
-
-    if (!drawn) {
-      statTrendSvg.textContent = '';
-      paintTrendTotals([]);
-      paintTrendRead();
-      return;
-    }
 
     const n = points.length;
     let peak = 0;
@@ -1798,14 +1834,14 @@ export function createAdmin(api: AdminApi): Admin {
       `<g class="adm-trend-axis">${yLabel(0)}${yLabel(trendCeil / 2)}${yLabel(trendCeil)}</g>`,
     ];
 
-    if (trendOn.active) {
+    if (drawn && trendOn.active) {
       parts.push(`<path fill="url(#adm-trend-fill)" d="${trendArea(activePts)}" />`);
       parts.push(`<path class="adm-trend-line" data-s="active" d="${trendPath(activePts)}" />`);
     }
-    if (trendOn.matches) {
+    if (drawn && trendOn.matches) {
       parts.push(`<path class="adm-trend-line" data-s="matches" d="${trendPath(matchPts)}" />`);
     }
-    if (trendOn.signups) {
+    if (drawn && trendOn.signups) {
       parts.push(`<path class="adm-trend-line" data-s="signups" d="${trendPath(signupPts)}" />`);
       /* the dots are the signup line's own markers, so a flat zero stretch still reads as measured */
       parts.push('<g class="adm-trend-dots">' + signupPts.map((p) =>
@@ -1828,15 +1864,49 @@ export function createAdmin(api: AdminApi): Admin {
     paintTrendCursor();
   }
 
+  /**
+   * The chart's guarded door. A malformed reading, a missing node or any unexpected DOM error must
+   * never escape into the Stats refresh and leave the whole tab locked on its loading state.
+   */
+  function paintTrend(): void {
+    try {
+      renderTrend();
+    } catch {
+      trendData = [];
+      trendFocus = -1;
+      trendCeil = 4;
+      try {
+        if (statTrendSvg) {
+          statTrendSvg.classList.remove('is-blank');
+          statTrendSvg.innerHTML = '<g class="adm-trend-grid">'
+            + `<line x1="${TREND_PAD.l}" y1="${fx(TREND_BASE)}"`
+            + ` x2="${fx(TREND_PAD.l + TREND_IW)}" y2="${fx(TREND_BASE)}" />`
+            + '</g>';
+          statTrendSvg.setAttribute('aria-label', 'No chart data available.');
+        }
+        if (statTrendEmpty) {
+          statTrendEmpty.hidden = false;
+          statTrendEmpty.textContent = 'No chart data available.';
+        }
+        paintTrendTotals([]);
+        paintTrendRead();
+      } catch {
+        /* a chart that cannot be drawn still must not lock the rest of the panel */
+      }
+    }
+  }
+
   /** The window's three sums, from the buckets on screen and nothing else. */
   function trendTotals(points: readonly SeriesPoint[]): { signups: number; active: number; matches: number } {
     let signups = 0;
     let active = 0;
     let matches = 0;
+    const countOf = (v: unknown): number =>
+      typeof v === 'number' && Number.isFinite(v) ? Math.max(0, v) : 0;
     for (const p of points) {
-      signups += Math.max(0, p.signups);
-      active += Math.max(0, p.active);
-      matches += Math.max(0, p.matches);
+      signups += countOf(p.signups);
+      active += countOf(p.active);
+      matches += countOf(p.matches);
     }
     return { signups, active, matches };
   }
@@ -2061,24 +2131,39 @@ export function createAdmin(api: AdminApi): Admin {
 
   /**
    * One telemetry attempt. A refusal clears the board and shows the Unauthorized card; an
-   * unreachable Worker keeps the last genuine reading, marked stale. Nothing is invented.
+   * unreachable Worker keeps the last genuine reading, marked stale. Nothing is invented. The
+   * busy flag is released in `finally`, so no timeout or render fault can leave the tab syncing.
    */
   async function refreshMetrics(): Promise<void> {
     if (metricsBusy) return;
     metricsBusy = true;
-    paintStats();
-    const result = await fetchMetrics();
-    metricsBusy = false;
-    if (result.state === 'ok') {
-      lastMetrics = result.metrics;
-      metricsPhase = 'ok';
-    } else if (result.state === 'unauthorized') {
-      lastMetrics = null;
-      metricsPhase = 'unauthorized';
-    } else {
-      metricsPhase = 'error';
+    try {
+      paintStats();
+    } catch {
+      /* a render fault must not prevent the fetch below from running */
     }
-    paintStats();
+    try {
+      const result = await fetchMetrics();
+      if (result.state === 'ok') {
+        lastMetrics = result.metrics;
+        metricsPhase = 'ok';
+      } else if (result.state === 'unauthorized') {
+        lastMetrics = null;
+        metricsPhase = 'unauthorized';
+      } else {
+        metricsPhase = 'error';
+      }
+    } catch {
+      /* fetchMetrics already catches; this is the last line of defence for the UI lock */
+      metricsPhase = 'error';
+    } finally {
+      metricsBusy = false;
+      try {
+        paintStats();
+      } catch {
+        /* never leave SYNCING / READING THE WORKER... pinned by a paint failure */
+      }
+    }
   }
 
   /** A slow beat, alive only while the stage is open, that polls only the visible Stats tab. */
