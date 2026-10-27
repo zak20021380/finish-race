@@ -1749,7 +1749,7 @@ html.no-flags .flag-code { display: inline-block; }
 
 /* ---- Home owns its column: it never scrolls, and the carousel is the flexible row.
    Column fills 100vh naturally: identity (fixed) → carousel (flexible) →
-   Active Mode Card + hero PLAY (fixed) → dock. No scroll, no cutoff. ---- */
+   the Play Dock (fixed) → tab dock. No scroll, no cutoff. ---- */
 .screen.home {
   gap: var(--s3);
   padding-top: var(--s2);
@@ -3082,7 +3082,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 
 /* ==========================================================================
    HOME — one section, one vertical budget.
-   Column: identity → highlights carousel → Active Mode Card + hero PLAY → dock.
+   Column: identity → highlights carousel → the Play Dock → tab dock.
    The screen never scrolls. The carousel band is the only flexible row, so a
    taller phone spends the extra height on the highlights, not on a gap.
 
@@ -4191,30 +4191,55 @@ html.no-flags .id-flag .flag-code { display: none; }
   box-shadow: 0 2px 0 #075985, inset 0 1px 0 rgba(255, 255, 255, .5);
 }
 
-/* ---- launcher: Active Mode Card + anchored hero PLAY (Brawl-Stars pattern) ----
-   One tactile Dark Clay card names the mode; the massive Coral PLAY sits 12px
-   beneath it as the final bottom-most action directly above the dock.
-   No bottom strip, no dead gap — the column fills 100vh naturally. */
+/* ---- Play Dock: one capsule, two zones (the Supercell split action) ----
+   A single pill carries the whole lobby action area: the mode switcher holds the left
+   third, the launch holds the right two thirds, and one hairline seam runs down the
+   capsule between them. No second box, no external borders — the two halves read as
+   one deck, and the mode can never be missed or mistaken for a rival CTA. */
 .launcher {
+  --dock-face: #121A24;
+  --dock-top: #1A2431;
+  --dock-ink-1: #00B4D8;
+  --dock-ink-2: #0077B6;
   flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  /* the old launcher was itself a clay card — the new pattern is transparent:
-     the Active Mode Card owns the surface, PLAY docks 12px beneath it. */
-  background: transparent;
-  background-color: transparent;
-  box-shadow: none;
-  border: 0;
-  border-radius: 0;
+  position: relative;
+  display: grid;
+  grid-template-columns: 32fr 68fr;
+  align-items: stretch;
+  gap: 0;
+  width: 100%;
+  min-height: 72px;
   padding: 0;
+  border: 0;
+  border-radius: 9999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, 0) 42%),
+    linear-gradient(180deg, var(--dock-top) 0%, var(--dock-face) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .11),
+    inset 0 -1px 0 rgba(0, 0, 0, .5),
+    0 1px 0 #0A0F1A,
+    0 16px 30px -18px rgba(0, 0, 0, .95);
+  overflow: hidden;
+  isolation: isolate;
+}
+/* the seam: one faint hairline across the capsule, drawn above both zones so neither
+   half needs a border of its own (it fades out before the rounded caps) */
+.launcher::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 32%;
+  width: 1px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, .12) 24%, rgba(255, 255, 255, .12) 76%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
 }
 
-/* ---- Active Mode Card: one tappable clay slab that names the mode ----
-   The medallion, the words and the swap key are the card's *contents*, not three
-   competing affordances — the whole slab opens the drawer. `--mode-*` is the
-   accent the selected mode owns (set by `data-gmode`); the ring and the
-   medallion glow read as one neon trim rather than as decoration. */
+/* ---- left zone: the mode switcher — a whisper of light on the capsule ----
+   Emblem · the mode's name · the CHANGE badge: the whole zone opens the Game Mode
+   drawer. `--mode-*` is the accent the selected mode owns (set by `data-gmode`) and
+   it lives only in the emblem's glow and ink — no ring, no second border. */
 .mode-hero {
   --mode-accent: var(--brand-2);
   --mode-ink: var(--brand-ink);
@@ -4223,188 +4248,193 @@ html.no-flags .id-flag .flag-code { display: none; }
   border: 0;
   font: inherit;
   text-align: left;
-  flex: none;
-  width: 100%;
+  position: relative;
+  min-width: 0;
+  min-height: 72px;
+  padding: 8px 12px;
   display: flex;
   align-items: center;
-  gap: var(--s2);
-  min-height: 76px;
-  padding: 13px 14px;
-  border-radius: var(--radius-lg);
-  background:
-    radial-gradient(130% 88% at 50% -42%, rgba(255, 255, 255, .09), transparent 62%),
-    var(--clay-face);
+  gap: 8px;
+  border-radius: 9999px 0 0 9999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .05) 0%, rgba(255, 255, 255, 0) 58%);
   color: var(--ink);
   cursor: pointer;
-  box-shadow:
-    var(--clay-drop),
-    var(--clay-spec),
-    var(--clay-bevel),
-    inset 0 0 0 1px var(--mode-glow),
-    0 0 26px -8px var(--mode-glow);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+  transition: background var(--motion-fast);
 }
 .mode-hero[data-gmode="duel_1v1"] { --mode-accent: var(--honey); --mode-ink: var(--honey-ink); --mode-glow: rgba(245, 158, 11, .34); }
 .mode-hero[data-gmode="party_2v2"] { --mode-accent: var(--brand-2); --mode-ink: var(--brand-ink); --mode-glow: rgba(14, 165, 233, .34); }
 .mode-hero[data-gmode="bot"] { --mode-accent: var(--brand-3); --mode-ink: var(--brand-ink); --mode-glow: rgba(56, 189, 248, .34); }
 .mode-hero[data-gmode="room"] { --mode-accent: var(--cta); --mode-ink: #FFB59D; --mode-glow: rgba(255, 82, 43, .3); }
-.mode-hero:hover:not(:active) { transform: translateY(-1px); }
-/* the micro-press: the slab gives 2% rather than sliding, so the type never reflows */
-.mode-hero:active { transform: scale(.98); }
-.mode-hero:focus-visible { outline: 3px solid var(--mode-accent); outline-offset: 3px; }
-/* embossed clay medallion: recessed field, lit from above, mode colour bleeding out */
+/* the left half brightens on hover: the cue that this side is a switch, not the launch */
+.mode-hero:hover:not(:active) {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .11) 0%, rgba(255, 255, 255, .02) 58%);
+}
+.mode-hero:active {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .02) 0%, rgba(255, 255, 255, 0) 58%);
+}
+.mode-hero:focus-visible { outline: 3px solid var(--mode-accent); outline-offset: -3px; }
+/* the emblem: a soft-lit chip, its glow and ink carrying the mode's accent */
 .mode-hero-ico {
   flex: none;
-  width: 50px;
-  height: 50px;
+  width: 26px;
+  height: 26px;
   display: grid;
   place-items: center;
-  border-radius: var(--r-chip);
+  border-radius: 50%;
   background:
-    radial-gradient(72% 66% at 50% 20%, var(--mode-glow), transparent 74%),
-    linear-gradient(180deg, #0A0F1C 0%, var(--field) 100%);
+    radial-gradient(80% 80% at 50% 18%, var(--mode-glow), transparent 78%),
+    rgba(255, 255, 255, .06);
   color: var(--mode-ink);
-  box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, .62),
-    inset 0 -1px 0 rgba(255, 255, 255, .1),
-    inset 0 0 0 1px rgba(255, 255, 255, .07);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
 }
-.mode-hero-ico .ico { width: 25px; height: 25px; }
+.mode-hero-ico .ico { width: 14px; height: 14px; }
 .mode-hero-txt {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  align-items: flex-start;
+  gap: 2px;
 }
 .mode-hero-title {
   min-width: 0;
-  font-size: var(--t-1);
+  max-width: 100%;
+  font-size: 12px;
   font-weight: 900;
-  letter-spacing: -.015em;
-  line-height: 1.15;
+  letter-spacing: .04em;
+  line-height: 1.1;
+  text-transform: uppercase;
   color: var(--ink);
-  text-shadow: 0 1px 0 rgba(0, 0, 0, .4);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.mode-hero-sub {
-  display: flex;
+/* the tight phones: the badge gives a little room rather than ellipsing the mode name */
+@media (max-width: 400px) {
+  .mode-hero { padding: 8px 10px; gap: 6px; }
+  .mode-hero-ico { width: 22px; height: 22px; }
+  .mode-hero-ico .ico { width: 12px; height: 12px; }
+}
+@media (max-width: 340px) {
+  .mode-hero-ico { display: none; }
+}
+/* the sleek switch badge: one micro pill with a CSS caret — no extra icon, no clutter */
+.mode-hero-badge {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-/* status dot: the mode's live state, so it never has to be spelled out in words.
-   The box is the pulse's full travel, so the ring never overflows the text row. */
-.mode-hero-dot {
-  --dot: var(--mint);
-  --dot-glow: rgba(16, 185, 129, .6);
-  position: relative;
-  flex: none;
-  width: 14px;
-  height: 14px;
-  display: grid;
-  place-items: center;
-}
-.mode-hero-dot::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--dot);
-  box-shadow: 0 0 0 2px rgba(8, 12, 20, .5), 0 0 10px 1px var(--dot-glow);
-}
-.mode-hero-dot[data-status="practice"] { --dot: var(--brand-3); --dot-glow: rgba(56, 189, 248, .62); }
-.mode-hero-dot[data-status="private"] { --dot: var(--cta); --dot-glow: rgba(255, 82, 43, .58); }
-.mode-hero-dot::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 1.5px solid var(--dot-glow);
-  animation: mode-dot-ping 2.2s cubic-bezier(.22, .61, .36, 1) infinite;
-}
-@keyframes mode-dot-ping {
-  0% { transform: scale(.58); opacity: .85; }
-  70%, 100% { transform: scale(1); opacity: 0; }
-}
-.mode-hero-vs {
-  min-width: 0;
-  font-size: var(--t-micro);
-  font-weight: 700;
-  letter-spacing: .02em;
-  line-height: 1.3;
+  gap: 3px;
+  max-width: 100%;
+  padding: 1px 5px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .07);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
   color: var(--ink-soft);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  line-height: 1.5;
+  text-transform: uppercase;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-/* trailing affordance: a recessed clay key that says "this is a selector" */
-.mode-hero-key {
-  flex: none;
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: 12px;
-  color: var(--mode-ink);
-  background: linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .02));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .12),
-    inset 0 0 0 1px rgba(255, 255, 255, .07);
-  transition: transform var(--motion-fast);
+.mode-hero-badge::after {
+  content: "";
+  width: 0;
+  height: 0;
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-top: 4px solid currentColor;
 }
-.mode-hero-key .ico { width: 17px; height: 17px; }
-.mode-hero:active .mode-hero-key { transform: scale(.9); }
-/* the ring is the pulse; the dot itself never moves, so a still card still reads live */
-@media (prefers-reduced-motion: reduce) {
-  .mode-hero-dot::after { animation: none; opacity: 0; }
-}
-html.reduced-motion .mode-hero-dot::after { animation: none; opacity: 0; }
 
-/* ---- the one loud element: massive tactile Coral-Orange PLAY ----
-   Coral face #FF522B → hi #FF7A4D on Dark Clay #1C2433, lip #B83010.
-   Bold, physical, ready to launch the displayed mode. Press travels down. */
+/* ---- right zone: the launch — electric cyan, the neon the active dock tab wears ----
+   A flush inner face on the capsule's right cap: the action word on top, the win it
+   pays right beneath it. The pill is the lip, so a press scales the whole half into
+   the deck instead of travelling out of the capsule. */
 .btn-hero {
-  --d: 6px;
   position: relative;
   overflow: hidden;
   width: 100%;
-  min-height: 64px;
-  padding: var(--s2) var(--s4);
-  display: inline-flex;
+  min-width: 0;
+  min-height: 72px;
+  padding: 9px 18px;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--s2);
-  border-radius: 24px;
+  gap: 4px;
+  border-radius: 0 9999px 9999px 0;
   font-weight: 800;
-  background: linear-gradient(180deg, var(--cta-hi) 0%, var(--cta) 100%);
-  color: var(--on-brand);
+  background: linear-gradient(180deg, var(--dock-ink-1, #00B4D8) 0%, var(--dock-ink-2, #0077B6) 100%);
+  color: #fff;
+  /* the divider stays put on a press, so the half shrinks inwards from the seam */
+  transform-origin: 0% 50%;
   box-shadow:
-    0 var(--d) 0 var(--cta-lip),
-    0 calc(var(--d) + 10px) 22px -10px var(--cta-shadow),
-    inset 0 2px 3px rgba(255, 255, 255, .35),
-    inset 0 -2px 3px rgba(0, 0, 0, .18);
+    inset 0 1px 0 rgba(255, 255, 255, .38),
+    inset 0 -3px 7px rgba(0, 0, 0, .22);
+  transition: filter var(--motion-fast), transform var(--motion-fast);
 }
-.btn-hero:hover:not(:active) { transform: translateY(-1px); }
-.btn-hero:active { transform: translateY(var(--press-y-lg)); --d: 2px; }
-.btn-hero:focus-visible { outline: 4px solid var(--cta); outline-offset: 3px; }
+.btn-hero:hover:not(:active) { filter: brightness(1.07); }
+.btn-hero:active { transform: scale(.98); filter: brightness(.95); }
+.btn-hero:focus-visible { outline: 3px solid #7DE3F4; outline-offset: -3px; }
 .btn-hero::before {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
   top: 0;
-  height: 46%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .34), rgba(255, 255, 255, 0));
+  height: 42%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .3), rgba(255, 255, 255, 0));
   pointer-events: none;
 }
 .btn-hero .ico { width: 1.25em; height: 1.25em; }
 /* single-line wordmark: bold white Play, punchy and centred */
-.hero-t { font-size: 22px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; color: var(--on-brand); line-height: 1; }
+.hero-t {
+  min-width: 0;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--on-brand);
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* the launch face: play mark + the action word, one line */
+.pd-go-face {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+}
+.pd-go-face .ico { width: 22px; height: 22px; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .3)); }
+/* the win it pays, on the button face: +30 (cup) +65 (coin), tabular and precise */
+.pd-rw {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  max-width: 100%;
+  padding-top: 1px;
+  font-size: var(--t-micro);
+  font-weight: 900;
+  letter-spacing: .04em;
+  line-height: 1;
+  color: #EAF9FF;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .22);
+}
+.pd-rw-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.pd-rw .ico { width: 13px; height: 13px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
+.pd-rw .coin { width: 13px; height: 13px; }
 
-/* legacy Play summary slot: kept for compat, hidden — the card owns the mode line now */
+/* legacy Play summary slot: kept for compat, hidden — the dock owns the mode line now */
 .play-meta {
   display: none;
 }
@@ -4570,8 +4600,8 @@ html.reduced-motion .mode-hero-dot::after { animation: none; opacity: 0; }
 
 /* ---- the vertical budget, and who gives way first ----
    The highlight card is the one thing that must never be cut, so the chrome and the
-   launcher compact before it does. The Active Mode Card + hero PLAY is the
-   fixed cost; the carousel is the only flexible row. */
+   Play Dock compact before it does. The dock is the fixed cost; the carousel is
+   the only flexible row. */
 
 /* Any phone-height column: tighten the card's own internals first.
    Dots stay inside the card (30px bottom reserve preserved). */
@@ -4589,11 +4619,10 @@ html.reduced-motion .mode-hero-dot::after { animation: none; opacity: 0; }
   .screen.home { gap: var(--s2); }
   .id-card { gap: var(--s1); padding: var(--s2) var(--s4) var(--s3); }
   .id-card.user-bar { gap: 12px; padding: 16px; border-radius: 20px; }
-  .launcher { gap: var(--s2); }
-  .mode-hero { min-height: 68px; padding: 11px 13px; }
-  .mode-hero-ico { width: 45px; height: 45px; }
+  .launcher { min-height: 66px; }
+  .mode-hero { min-height: 66px; }
+  .btn-hero { min-height: 66px; }
   .car-card { padding: var(--s2) var(--s4) 30px; }
-  .btn-hero { min-height: 56px; --d: 5px; }
   .hero-t { font-size: 19px; }
   .mode-pv-wrap { height: 60px; }
 }
@@ -4602,33 +4631,28 @@ html.reduced-motion .mode-hero-dot::after { animation: none; opacity: 0; }
    every fixed band gives a few pixels so the highlight card keeps its title.
    user-bar keeps full padding — its 2 rows are already the compact form. */
 @media (max-height: 660px) {
-  .btn-hero { min-height: 52px; }
+  .btn-hero { min-height: 62px; }
   .mini-rank li:not(.nations-row) { min-height: 22px; }
   .screen.home { gap: var(--s1); }
   .id-card { padding-bottom: var(--s2); }
   .id-card.user-bar { padding: 16px; gap: 12px; border-radius: 20px; }
-  .launcher { gap: var(--s2); }
-  .mode-hero { min-height: 62px; padding: 10px 12px; }
-  .mode-hero-ico { width: 42px; height: 42px; }
+  .launcher { min-height: 62px; }
+  .mode-hero { min-height: 62px; }
   .tabs { padding: 4px; min-height: 60px; }
   .tab { min-height: 48px; }
 }
 
-/* The floor: 600px of height with the Active Mode Card + PLAY launcher is a
-   ~140px launcher, inside dots (no extra row) and a card that still has four
-   lines to show. Everything here is chrome — no control drops below its 44px
-   target. user-bar never collapses below 12px gaps. */
+/* The floor: 600px of height with the split-action Play Dock is a ~58px launcher,
+   inside dots (no extra row) and a card that still has four lines to show.
+   Everything here is chrome — no control drops below its 44px target. user-bar
+   never collapses below 12px gaps. */
 @media (max-height: 600px) {
   .screen.home { gap: 2px; }
   .id-card { gap: 2px; padding-bottom: var(--s1); }
   .id-card.user-bar { gap: 12px; padding: 16px; border-radius: 20px; }
-  .launcher { gap: var(--s2); }
+  .launcher { min-height: 58px; }
   .mode-hero { min-height: 58px; }
-  .mode-hero-ico { width: 38px; height: 38px; border-radius: 14px; }
-  .mode-hero-ico .ico { width: 20px; height: 20px; }
-  .mode-hero-key { width: 30px; height: 30px; border-radius: 11px; }
-  .mode-hero-key .ico { width: 15px; height: 15px; }
-  .btn-hero { min-height: 48px; --d: 4px; }
+  .btn-hero { min-height: 58px; padding: 6px 14px; }
   .mini-rank li:not(.nations-row) { min-height: 20px; }
   .car-card { gap: 2px; padding-bottom: 30px; }
   .car-card.nations-cup { gap: 6px; }

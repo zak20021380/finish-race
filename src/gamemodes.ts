@@ -1,8 +1,9 @@
 /**
  * gamemodes.ts — Game Mode Selector: lobby state, bottom sheet wiring, custom rooms.
  *
- * The lobby stays clean: one tappable clay card (icon · title · status dot ·
- * short subtitle) that opens the drawer. The
+ * The lobby keeps one split-action Play Dock: its left zone is the mode card
+ * (emblem · name · CHANGE badge) that opens the drawer, and its right zone is the
+ * one-tap launch, wearing the selected mode's win. The
  * `#sheet-game-modes` drawer holds exactly three rows — Quick match, Play with
  * friends and Practice vs Bot — plus one reward caption and one sticky Start.
  * Selecting a mode updates the lobby instantly and persists to the device; the
@@ -72,6 +73,18 @@ const START_LABEL: Record<GameModeId, string> = {
   party_2v2: 'Start 2v2 match',
   bot: 'Start practice match',
   room: 'Start private match',
+};
+
+/**
+ * The home Play Dock's left zone: the mode the capsule will launch, named in one
+ * crisp word (or two) so the tap that changes it is unmistakable. The full title and
+ * status still live on the zone's `aria-label`, which is what a screen reader reads.
+ */
+const DOCK_LABEL: Record<GameModeId, string> = {
+  duel_1v1: '1v1',
+  party_2v2: '2v2',
+  bot: 'VS BOT',
+  room: 'FRIENDS',
 };
 
 interface RewardLine {
@@ -272,8 +285,14 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
-/* ---------- the home lobby card (same IDs home.ts owns) ---------- */
+/* ---------- the home Play Dock (same IDs home.ts owns) ---------- */
 
+/**
+ * Repaint both zones of the dock from the one selection: the left zone names the mode
+ * it would switch to (emblem · label · the CHANGE badge) and the right zone wears the
+ * win the launch pays. Nothing here reads the DOM as state — every value comes from
+ * `getLobbyDisplay()` plus the drawer's own `REWARD` line.
+ */
 export function paintLobby(): void {
   const lobby = getLobbyDisplay();
   const card = document.getElementById('mode-hero');
@@ -282,13 +301,31 @@ export function paintLobby(): void {
     card.setAttribute('aria-label', `Change game mode. Currently ${lobby.title} — ${lobby.sub}`);
   }
   const titleEl = document.getElementById('home-play-title');
-  if (titleEl) titleEl.textContent = lobby.title;
-  const dotEl = document.getElementById('mode-hero-dot');
-  if (dotEl) dotEl.setAttribute('data-status', lobby.status);
+  if (titleEl) titleEl.textContent = DOCK_LABEL[lobby.id];
   const useEl = document.getElementById('mode-hero-use') as unknown as SVGUseElement | null;
   if (useEl) useEl.setAttribute('href', lobby.icon);
+  /* the mode's own line, kept as the dock's spoken description rather than a third row */
   const subEl = document.getElementById('home-play-sub');
   if (subEl) subEl.textContent = lobby.sub;
+
+  const reward = REWARD[lobby.id];
+  const n = (v: string): string => v.replace('+', '');
+  const rw = document.getElementById('home-play-rw');
+  if (rw) {
+    rw.setAttribute('aria-label', reward.trophy === null
+      ? `${reward.lead} pays ${n(reward.coin)} coins`
+      : `${reward.lead} pays ${n(reward.trophy)} trophies and ${n(reward.coin)} coins`);
+  }
+  /* practice pays no trophies, so the chip leaves the face instead of reading "+0" */
+  const trophy = document.getElementById('home-play-rw-trophy');
+  const trophyN = document.getElementById('home-play-rw-trophy-n');
+  if (trophy) {
+    trophy.hidden = reward.trophy === null;
+    if (reward.trophy && trophyN) trophyN.textContent = reward.trophy;
+  }
+  const coinN = document.getElementById('home-play-rw-coin-n');
+  if (coinN) coinN.textContent = reward.coin;
+
   const play = document.getElementById('home-play') as HTMLButtonElement | null;
   if (play) play.setAttribute('aria-label', `Play ${lobby.title} — ${lobby.sub}`);
 }

@@ -2082,25 +2082,36 @@
             </div>
           </div>
 
+          <!-- The Play Dock: one capsule, two zones. The left third is the mode
+               switcher (its own door into the Game Mode drawer), the right two thirds
+               is the one-tap launch for the mode it names. One pill, one hairline
+               seam, no second CTA competing with the launch. -->
           <div class="launcher">
             <button class="mode-hero" type="button" id="mode-hero" data-gmode="duel_1v1" aria-haspopup="dialog">
               <span class="mode-hero-ico" aria-hidden="true">
-                <svg class="ico" aria-hidden="true"><use id="mode-hero-use" href="#i-swords" /></svg>
+                <svg class="ico" aria-hidden="true" focusable="false"><use id="mode-hero-use" href="#i-swords" /></svg>
               </span>
               <span class="mode-hero-txt">
-                <span class="mode-hero-title" id="home-play-title">1v1 Duel</span>
-                <span class="mode-hero-sub">
-                  <span class="mode-hero-dot" id="mode-hero-dot" data-status="online" aria-hidden="true"></span>
-                  <span class="mode-hero-vs" id="home-play-sub" aria-live="polite">Ranked · ~5s queue</span>
+                <span class="mode-hero-title" id="home-play-title">1v1</span>
+                <span class="mode-hero-badge">Change</span>
+              </span>
+              <span class="sr-only" id="home-play-sub" aria-live="polite">Ranked · ~5s queue</span>
+            </button>
+            <button class="btn btn-hero" id="home-play" type="button" aria-describedby="home-play-sub">
+              <span class="pd-go-face">
+                <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-play" /></svg>
+                <span class="hero-t">PLAY</span>
+              </span>
+              <span class="pd-rw" id="home-play-rw" role="img" aria-label="Win 30 trophies and 65 coins">
+                <span class="pd-rw-item" id="home-play-rw-trophy">
+                  <b id="home-play-rw-trophy-n">+30</b>
+                  <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-cup" /></svg>
+                </span>
+                <span class="pd-rw-item">
+                  <b id="home-play-rw-coin-n">+65</b>
+                  <span class="coin" data-coin aria-hidden="true"></span>
                 </span>
               </span>
-              <span class="mode-hero-key" aria-hidden="true">
-                <svg class="ico" aria-hidden="true"><use href="#i-swap" /></svg>
-              </span>
-            </button>
-            <button class="btn btn-hero btn-coral" id="home-play" type="button" aria-describedby="home-play-sub">
-              <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg>
-              <span class="hero-t">Play</span>
             </button>
           </div>
 

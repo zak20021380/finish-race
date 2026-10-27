@@ -2074,7 +2074,7 @@ menu = createMenu({ router, sheets, sheet: sheetById, start: startGame, onBack }
 const shop = createShop({
   sheets, sheet: sheetById, note: showNote, salesOpen: () => runtime.salesOpen,
 });
-home = createHome({ router, sheets, start: startGame });
+home = createHome({ router, sheets, start: startGame, launch: launchSelectedMode });
 compete = createCompete({ router, sheets, sheet: sheetById, queue: () => queueMatch() });
 createNotifications({ sheets });
 
@@ -2238,24 +2238,30 @@ function roomFromRoster(
   };
 }
 
+/**
+ * The one launch both the Play Dock's right zone and the drawer's Start run: the selection
+ * decides the door. Quick match is online, so it queues on the searching stage first;
+ * practice and a private room have nobody to wait for, so they open their roster and start
+ * right away — on the seat count the Practice card is showing. Practice plays the level the
+ * drawer shows on every seat; a private room ladders its machine seats instead, which is the
+ * dynamic difficulty a room setting buys.
+ */
+function launchSelectedMode(): void {
+  const sel = getGameMode();
+  if (sel.id === 'duel_1v1' || sel.id === 'party_2v2') { queueMatch(); return; }
+  const botTier: BotTier = sel.id === 'room' ? 'mixed' : menuState.difficulty;
+  const lobby = openLocalRoom(botTier);
+  showNote(lobbyLine(lobby, Date.now()), false, 2200, true);
+  startGame({ difficulty: menuState.difficulty, sizes: sizesOf(lobby), room: lobby });
+}
+
 /* The drawer repaints its own Start label inside its own `onGameModeChange` handler, and
    subscribers fire in registration order — so this one is registered *after* `initGameModes`
    below, never before it. Registered first it would name the seat count and then be silently
    overwritten by `paintSheetState`, which is exactly the "Start practice match" bug. */
 initGameModes(sheets, {
   /* the drawer already persisted sizes + difficulty, so the race it names is the race it runs */
-  onStart: () => {
-    const sel = getGameMode();
-    /* Quick match is online: it queues on the searching stage first. Practice and a private
-       room have nobody to wait for, so they start the race right away — on the seat count the
-       Practice card is showing. Practice plays the level the drawer shows on every seat; a private
-       room ladders its machine seats instead, which is the dynamic difficulty a room setting buys. */
-    if (sel.id === 'duel_1v1' || sel.id === 'party_2v2') { queueMatch(); return; }
-    const botTier: BotTier = sel.id === 'room' ? 'mixed' : menuState.difficulty;
-    const lobby = openLocalRoom(botTier);
-    showNote(lobbyLine(lobby, Date.now()), false, 2200, true);
-    startGame({ difficulty: menuState.difficulty, sizes: sizesOf(lobby), room: lobby });
-  },
+  onStart: launchSelectedMode,
   /* The friends lobby's Start. A lobby with a socket behind it has already asked the worker to
      launch, and the race arrives on `onRoomRace`; one without a socket plays its own roster here. */
   onRoomStart: (lobby: Lobby) => {

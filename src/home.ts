@@ -10,11 +10,12 @@
  * Three slides, in this order: Channel War (index 0, the hero the Play tab
  * opens on), Nations Cup, The Mind Ladder.
  *
- * Mode selection is one Play button + a "Choose mode" bottom sheet. Play starts
- * immediately with the last setup (default 1v1 Normal). The sheet holds a
- * 2-column grid of preset cards with live renderer previews, a Custom entry
- * that opens the team builder, a disabled Online entry, a Bot level segmented
- * control and a sticky Start button whose label updates live.
+ * Mode selection is one split-action Play Dock: the left zone opens the "Select
+ * Game Mode" drawer, the right zone launches whatever that zone names, in one tap
+ * (see gamemodes.ts / main.ts `launchSelectedMode`). The legacy "Choose mode" sheet
+ * is still wired for the team presets: a 2-column grid of preset cards with live
+ * renderer previews, a Custom entry that opens the team builder and a sticky Start
+ * button whose label updates live.
  */
 import type { Difficulty } from './bot';
 import { menuState, motionReduced, onSettings, saveMenu } from './settings';
@@ -36,6 +37,8 @@ export interface HomeApi {
   router: Router;
   sheets: Sheets;
   start(setup: RaceSetup): void;
+  /** The Play Dock's right zone: launch whatever mode the dock is showing, in one tap. */
+  launch(): void;
 }
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -710,14 +713,12 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   /* ---------- launcher input ---------- */
 
+  /* The dock's right zone launches whatever mode its left zone names: quick match queues on
+     the searching stage, practice and a private room open their roster first. `api.launch` is
+     the same door the drawer's Start uses, so the label and the race can never disagree. */
   homePlay.addEventListener('click', () => {
     impact('light');
-    try {
-      saveMenu({ mode: 'bot' });
-    } catch {
-      /* stay in memory */
-    }
-    api.start({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] });
+    api.launch();
   });
 
   onChange(() => {
