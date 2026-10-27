@@ -10,6 +10,11 @@ export interface Env {
   MATCHMAKER: DurableObjectNamespace;
   /** The singleton edition ledger: caps, counters and serialized badge claims. */
   BADGES: DurableObjectNamespace;
+  /** The singleton referral ledger: permanent codes, pending invites and credited rewards.
+   *  Optional in harnesses that drive unrelated routes, required in `wrangler.toml`. */
+  REFERRALS?: DurableObjectNamespace;
+  /** The channel the forced-join gate checks. Defaults to the shared community channel. */
+  REQUIRED_CHANNEL?: string;
   /** The built frontend in `dist/`, bound as `ASSETS` in wrangler.toml. Absent only in the
    *  bare Node harness that drives the Worker without wrangler. */
   ASSETS?: Fetcher;

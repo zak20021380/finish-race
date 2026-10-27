@@ -18,6 +18,7 @@
  * nothing has to be remembered in order to draw the next screen. The remembered language is only
  * ever a convenience for a bare `/rules` or `/play`.
  */
+import { botAppLink, referralAppLink, telegramShareLink } from '../shared/config';
 
 export type BotLang = 'en' | 'fa' | 'ar';
 
@@ -322,11 +323,11 @@ export function commandScope(lang: BotLang): { commands: { command: string; desc
   return { commands: COMMAND_NAMES.map((name) => ({ command: name, description: c.commands[name] })) };
 }
 
-export function inviteLink(handle: string, userId: string): string {
-  return `https://t.me/${handle}?start=ref_u${userId}`;
+export function inviteLink(code: string): string {
+  return code ? referralAppLink(code) : botAppLink();
 }
 
 /** The share-sheet link: the personal invite plus the language's own one-line pitch. */
 export function shareUrl(invite: string, pitch: string): string {
-  return `https://t.me/share/url?url=${encodeURIComponent(invite)}&text=${encodeURIComponent(pitch)}`;
+  return telegramShareLink(invite, pitch);
 }

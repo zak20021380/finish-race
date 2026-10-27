@@ -66,11 +66,10 @@ declare global { interface Window { Telegram?: { WebApp?: TgWebApp } } }
 const tg = window.Telegram?.WebApp;
 
 /**
- * The Mini App's bot handle: what every deep link is built on — room invites (`?start=room_XXXX`)
- * and the referral engine's personal links (`?start=ref_<code>`). One source, so the two features
- * can never drift apart.
+ * The Mini App's bot handle: what every deep link is built on. Re-exported from the shared config
+ * so the client, the Worker and the harnesses can never drift apart.
  */
-export const BOT_HANDLE = 'detour_game_bot';
+export { BOT_HANDLE } from '../shared/config';
 
 export const tgUser = (): TgUser | undefined => tg?.initDataUnsafe?.user;
 
@@ -98,7 +97,7 @@ export function languageCode(): string {
   return navigator.language || '';
 }
 
-/** `t.me/<bot>/detour?startapp=<x>` — what a team invite link carries, for when teams go online. */
+/** `t.me/<bot>/app?startapp=<x>` — what a team invite link carries, for when teams go online. */
 export function startParam(): string {
   const fromTg = tg?.initDataUnsafe?.start_param ?? tg?.startParam ?? tg?.start_param;
   if (fromTg) return fromTg;

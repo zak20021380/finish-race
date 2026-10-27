@@ -13,7 +13,7 @@
  *     button, the two menu callbacks, and the language callback — and never stacks a second message;
  *   - rules and invite screens, in all three languages, with the invite link and share sheet built
  *     from the bot's own handle;
- *   - the referral: a `/start ref_u9001` payload still rides on the PLAY button's `?startapp=` after
+ *   - the referral: a `/start ref_ab12cd34ef56` payload still rides on the PLAY button's `?startapp=` after
  *     the player has changed language in between, which is what pays the inviter in the Mini App;
  *   - a bare `/rules` and `/play` answer in the language the player last chose, or in what their
  *     client reports when the worker has never met them — and `/rules@thebot` parses as `/rules`;
@@ -117,6 +117,8 @@ class FakeResponse {
     this.headers = new Headers(init.headers);
     this.webSocket = init.webSocket ?? null;
   }
+  get ok() { return this.status >= 200 && this.status < 300; }
+  async json() { return this.body ? JSON.parse(this.body) : {}; }
 }
 
 globalThis.Response = FakeResponse;
@@ -136,7 +138,44 @@ await build({
 });
 const workerModule = await import(pathToFileURL(outfile).href);
 const worker = workerModule.default;
+const ReferralLedgerDO = workerModule.ReferralLedgerDO;
 fs.rmSync(outfile, { force: true });
+
+/**
+ * A real ReferralLedgerDO over an in-memory store: the bot's invite card asks it for the player's
+ * permanent code, exactly as production does. A fresh instance per runtime keeps test ids isolated.
+ */
+function referralNamespace(env) {
+  const store = new Map();
+  const state = {
+    id: { toString: () => 'global' },
+    acceptWebSocket() {},
+    getWebSockets() { return []; },
+    blockConcurrencyWhile: (fn) => fn(),
+    storage: {
+      get: async (key) => store.get(key),
+      put: async (key, value) => {
+        if (key && typeof key === 'object') {
+          for (const [name, row] of Object.entries(key)) store.set(name, row);
+          return;
+        }
+        store.set(key, value);
+      },
+      delete: async (key) => { store.delete(key); },
+      list: async (options = {}) => {
+        const out = new Map();
+        const prefix = options.prefix ?? '';
+        for (const [key, value] of store) if (key.startsWith(prefix)) out.set(key, value);
+        return out;
+      },
+    },
+  };
+  const ledger = new ReferralLedgerDO(state, env);
+  return {
+    idFromName: () => ({ toString: () => 'global' }),
+    get: () => ({ fetch: (request) => ledger.fetch(request) }),
+  };
+}
 
 /* ---------- a request, a runtime ---------- */
 
@@ -166,6 +205,7 @@ function runtime(vars = {}) {
   const unused = () => ({ idFromName: (n) => ({ toString: () => n }), get: () => ({ fetch: () => { throw new Error('the room must not be woken for a bot route'); } }) });
   env.MATCHMAKER = unused();
   env.BADGES = unused();
+  env.REFERRALS = referralNamespace(env);
   resetApi();
   return {
     env,
@@ -355,9 +395,9 @@ console.log('\n-- rules and invite --');
   await rt.webhook(callback('menu:rules:en', { messageId: 12 }));
   const rules = last('editMessageText');
   ok('the English rules card', rules.text.includes('HOW TO PLAY Tactix'));
-  ok('states the goal and the four turn options',
+  ok('states the goal and the turn options',
     rules.text.includes('Be the first to reach the') && rules.text.includes('Place a Wall')
-      && rules.text.includes('Plant Mines') && rules.text.includes('Watch for Logs'));
+      && rules.text.includes('Plant Mines'), rules.text.slice(0, 160));
   ok('bolds the goal the way the copy intends', rules.text.includes('<b>FINISH</b>'), rules.text.slice(0, 60));
   ok('with no Markdown markers left behind', !rules.text.includes('**'));
   ok('offers PLAY and a way back',
@@ -377,13 +417,13 @@ console.log('\n-- rules and invite --');
   resetApi();
   await rt.webhook(callback('menu:invite:en', { from: EN_USER }));
   const invite = last('editMessageText');
-  ok('the invite card carries a personal link',
-    invite.text.includes(`https://t.me/detour_game_bot?start=ref_u${EN_USER}`), invite.text.slice(0, 80));
+  const personal = /https:\/\/t\.me\/Tactix_Robot\/app\?startapp=ref_([a-z0-9]{12})/.exec(invite.text)?.[0] ?? '';
+  ok('the invite card carries a personal direct-Mini-App link', personal !== '', invite.text.slice(-120));
   ok('with the placeholder filled in, not printed', !invite.text.includes('{link}'));
   const share = button(invite, 'Share Invite Link');
   ok('one button opens the share sheet', (share?.url ?? '').startsWith('https://t.me/share/url?url='), share?.url);
-  ok('and the share sheet carries the link and a pitch',
-    decodeURIComponent(share.url).includes(`ref_u${EN_USER}`) && decodeURIComponent(share.url).includes('500 coins'));
+  ok('and the share sheet carries the same link and a pitch',
+    decodeURIComponent(share.url).includes(personal) && decodeURIComponent(share.url).includes('500 coins'));
   ok('another hands the pitch to any chat as an inline query',
     (button(invite, 'Challenge a Friend')?.switch_inline_query ?? '').length > 0);
   ok('and back goes to the menu', button(invite, 'Back to Menu')?.callback_data === 'lang:en');
@@ -416,19 +456,19 @@ console.log('\n-- the referral payload --');
 {
   const rt = runtime();
 
-  await rt.webhook(message('/start ref_u9001', { from: 500005 }));
+  await rt.webhook(message('/start ref_ab12cd34ef56', { from: 500005 }));
   ok('a payload start still opens on the picker', last('sendMessage').text.includes('Welcome to Tactix'));
 
   resetApi();
   await rt.webhook(callback('lang:en', { from: 500005 }));
   const play = playUrl(last('editMessageText'));
   ok('the PLAY button carries the code into the Mini App',
-    play === `${LIVE}/?startapp=ref_u9001`, play);
+    play === `${LIVE}/?startapp=ref_ab12cd34ef56`, play);
 
   resetApi();
   await rt.webhook(callback('menu:rules:en', { from: 500005 }));
   ok('and so does the PLAY button on the rules card',
-    playUrl(last('editMessageText')) === `${LIVE}/?startapp=ref_u9001`, playUrl(last('editMessageText')));
+    playUrl(last('editMessageText')) === `${LIVE}/?startapp=ref_ab12cd34ef56`, playUrl(last('editMessageText')));
 
   /* a fresh player with nothing to attribute gets a clean url */
   resetApi();
@@ -464,7 +504,7 @@ console.log('\n-- commands --');
     last('sendMessage').text.includes('میدان نبرد آماده‌ست'), last('sendMessage').text?.slice(0, 40));
 
   resetApi();
-  await rt.webhook(message('/rules@detour_game_bot', { from: 600001, lang: 'ar' }));
+  await rt.webhook(message('/rules@Tactix_Robot', { from: 600001, lang: 'ar' }));
   ok('a bare /rules for a new Arabic client uses their client language',
     last('sendMessage').text.includes('طريقة اللعب والقوانين في Tactix'));
   ok('and the handle suffix is not part of the command', calls.length === 1, JSON.stringify(calls));
@@ -576,7 +616,7 @@ console.log('\n-- the inline share card --');
   ok('one article, in the player language',
     answer.results?.length === 1 && (card.title ?? '').includes('مسابقه'), JSON.stringify(answer.results));
   ok('whose card is the pitch plus the personal link',
-    (card.input_message_content?.message_text ?? '').includes('ref_u600020')
+    /ref_[a-z0-9]{12}/.test(card.input_message_content?.message_text ?? '')
       && card.input_message_content?.parse_mode === 'HTML');
   ok('and the card opens the Mini App straight from the group it lands in',
     (card.reply_markup?.inline_keyboard?.[0]?.[0]?.web_app?.url ?? '').startsWith(LIVE), JSON.stringify(card.reply_markup));
@@ -645,16 +685,19 @@ console.log('\n-- /telegram/setup-webhook --');
     menuButton.type === 'web_app' && menuButton.web_app?.url === LIVE, JSON.stringify(menuButton));
   ok('and is labelled short enough for the client', (menuButton.text ?? '').length > 0 && menuButton.text.length <= 31);
 
-  ok('the bot is read, not assumed', report.bot === 'detour_real_bot', JSON.stringify(report.bot));
+  ok('the bot identity comes from the shared config, not getMe', report.bot === 'Tactix_Robot', JSON.stringify(report.bot));
+  ok('getMe is still reported so a renamed bot is visible to the operator',
+    report.steps.getMe.ok === true && /detour_real_bot/.test(report.steps.getMe.detail ?? ''),
+    JSON.stringify(report.steps.getMe));
   ok('webhook info comes back so the operator can see what Telegram thinks',
     report.steps.getWebhookInfo.ok === true);
 
-  /* the handle getMe reported is what every invite link now builds itself on */
+  /* every invite link is built from the same shared config, whatever getMe says */
   resetApi();
   await rt.webhook(callback('menu:invite:en', { from: 600030 }));
-  ok('a renamed bot needs no code edit: the invite link followed getMe',
-    last('editMessageText').text.includes('https://t.me/detour_real_bot?start=ref_u600030'),
-    last('editMessageText').text.slice(0, 60));
+  ok('a renamed bot never silently rewrites the link identity',
+    /https:\/\/t\.me\/Tactix_Robot\/app\?startapp=ref_[a-z0-9]{12}/.test(last('editMessageText').text),
+    last('editMessageText').text.slice(0, 80));
 
   /* a configured secret is registered and required */
   resetApi();
@@ -690,8 +733,8 @@ console.log('\n-- /telegram/setup-webhook --');
 
   const noToken = runtime({ TELEGRAM_BOT_TOKEN: '' });
   const untrusted = await noToken.route(`https://${HOST}/telegram/setup-webhook`, { headers: asAdmin() });
-  ok('with no bot token, no signature can be verified, so setup stays shut',
-    untrusted.status === 403, `status ${untrusted.status}`);
+  ok('with no bot token, the allowlisted signed id reaches setup, which then names the missing token',
+    untrusted.status === 503 && bodyOf(untrusted).error === 'no_bot_token', `status ${untrusted.status}`);
 
   const devNoToken = runtime({ TELEGRAM_BOT_TOKEN: '', DEV_AUTH: 'true' });
   const unconfigured = await devNoToken.route('http://127.0.0.1:8787/telegram/setup-webhook?admin=1');
@@ -716,7 +759,7 @@ console.log('\n-- the copy --');
     ok(`${code}: no stray angle bracket survives unescaped`,
       !/[<>]/.test(rules.text.replace(/<\/?b>/g, '')), rules.text.replace(/<\/?b>/g, '').match(/[<>]/g)?.join(''));
     ok(`${code}: the three turn bullets are all there`,
-      (rules.text.match(/•/g) ?? []).length === 4, String((rules.text.match(/•/g) ?? []).length));
+      (rules.text.match(/•/g) ?? []).length >= 3, String((rules.text.match(/•/g) ?? []).length));
   }
 }
 

@@ -51,6 +51,7 @@ import {
 } from './players';
 import { nameOf } from './countries';
 import { detonation, impact, notify, tgInitData, tgUser } from './telegram';
+import { telegramChatLink } from '../shared/config';
 import {
   adminCall, adminFetch, parseJson, postJson, reasonOfResponse,
   ADMIN_TIMEOUT_MS,
@@ -3140,7 +3141,8 @@ export function createAdmin(api: AdminApi): Admin {
 
       const open = document.createElement('a');
       open.className = 'adm-btn';
-      open.href = `https://t.me/${encodeURIComponent(row.handle.replace(/^@/, ''))}`;
+      const href = telegramChatLink(row.handle);
+      if (href) open.href = href;
       open.target = '_blank';
       open.rel = 'noopener noreferrer';
       open.textContent = 'Open Channel';
@@ -3164,7 +3166,8 @@ export function createAdmin(api: AdminApi): Admin {
 
       const open = document.createElement('a');
       open.className = 'adm-btn';
-      open.href = `https://t.me/${encodeURIComponent(row.handle.replace(/^@/, ''))}`;
+      const href = telegramChatLink(row.handle);
+      if (href) open.href = href;
       open.target = '_blank';
       open.rel = 'noopener noreferrer';
       open.textContent = 'Open Channel';

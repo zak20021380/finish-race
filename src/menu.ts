@@ -39,13 +39,14 @@ import {
 } from './squadRoster';
 import { copyText } from './gamemodes';
 import { myTiq, TIER_NAME, tierOf, type MindTier } from './matchmaking';
-import { claimWelcomeBonus, pullReferral, referralLink, referralShareUrl } from './referral';
+import { refreshReferral, referralCode, referralLink, referralShareUrl } from './referral';
 import { playReward } from './sound';
 import { perspectiveRamps, type CosKind, type PieceColor } from './themes';
 import { isTicketCategory, submitTicket } from './support';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
-import { impact, notify, startParam, tgUser } from './telegram';
+import { BOT_HANDLE, impact, notify, startParam, tgUser } from './telegram';
+import { CHANNEL_URL } from '../shared/config';
 
 export interface MenuApi {
   router: Router;
@@ -1046,6 +1047,7 @@ export function createMenu(api: MenuApi): Menu {
   const refSheet = api.sheet('sheet-referral');
   const refLinkEl = document.getElementById('ref-link') as HTMLInputElement | null;
   let refCopyTimer = 0;
+  let refPoll = 0;
 
   function paintReferral() {
     const r = profile.referral;
@@ -1072,13 +1074,37 @@ export function createMenu(api: MenuApi): Menu {
         ? `Claim ${en(r.unclaimed)} referral coins`
         : 'No referral rewards to claim yet');
     }
-    if (refLinkEl) refLinkEl.value = referralLink();
-    /* the invitee's welcome: the toast lives on this screen, so hold it until the screen shows
-       (createMenu paints the profile once at boot even while Home is the visible route) */
-    if (pendingWelcome > 0 && !pfScreen.hidden) {
-      showPfToast(`+${en(pendingWelcome)} Coins · Welcome bonus`);
-      pendingWelcome = 0;
+    /* The modal previews the real handle and the server-issued code, never a guessed id. */
+    const code = referralCode();
+    const handle = document.getElementById('ref-handle');
+    if (handle) handle.textContent = `@${BOT_HANDLE}`;
+    const codeEl = document.getElementById('ref-code');
+    if (codeEl) codeEl.textContent = code ? `ref_${code}` : 'ref_…';
+    const link = referralLink();
+    if (refLinkEl) {
+      refLinkEl.value = link;
+      refLinkEl.placeholder = link ? '' : 'Preparing your invite link…';
     }
+    const copy = document.getElementById('ref-copy') as HTMLButtonElement | null;
+    if (copy) copy.disabled = !link;
+    const share = document.getElementById('ref-share') as HTMLButtonElement | null;
+    if (share) share.disabled = !link;
+  }
+
+  function stopRefPoll() {
+    if (!refPoll) return;
+    window.clearInterval(refPoll);
+    refPoll = 0;
+  }
+
+  function startRefPoll() {
+    stopRefPoll();
+    refPoll = window.setInterval(() => {
+      if (!refSheet?.classList.contains('open')) { stopRefPoll(); return; }
+      void refreshReferral().then(() => {
+        if (refSheet?.classList.contains('open')) paintReferral();
+      });
+    }, 3000);
   }
 
   function openReferral() {
@@ -1086,8 +1112,9 @@ export function createMenu(api: MenuApi): Menu {
     paintReferral();
     api.sheets.open(refSheet);
     impact('light');
-    /* the Worker's ledger when the app was pointed at one; resolve to the local save otherwise */
-    void pullReferral().then((moved) => { if (moved) paintReferral(); });
+    /* the Worker's live ledger; the local save paints instantly and the delta folds in after */
+    void refreshReferral().then(() => { if (refSheet.classList.contains('open')) paintReferral(); });
+    startRefPoll();
   }
 
   document.getElementById('pf-invite')?.addEventListener('click', openReferral);
@@ -1096,8 +1123,10 @@ export function createMenu(api: MenuApi): Menu {
 
   document.getElementById('ref-copy')?.addEventListener('click', () => {
     const btn = document.getElementById('ref-copy');
+    const link = referralLink();
+    if (!link) { impact('light'); return; }
     impact('light');
-    void copyText(referralLink()).then((ok) => {
+    void copyText(link).then((ok) => {
       notify(ok ? 'success' : 'warning');
       if (!btn || !ok) return;
       const label = btn.querySelector<HTMLElement>('.ref-copy-t');
@@ -1114,6 +1143,7 @@ export function createMenu(api: MenuApi): Menu {
   document.getElementById('ref-share')?.addEventListener('click', () => {
     impact('medium');
     const share = referralShareUrl();
+    if (!share) return;
     try {
       const w = window as unknown as { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void } } };
       if (w.Telegram?.WebApp?.openTelegramLink) { w.Telegram.WebApp.openTelegramLink(share); return; }
@@ -1131,8 +1161,8 @@ export function createMenu(api: MenuApi): Menu {
     paintReferral();
   });
 
-  /* the invitee's side: a launch that carried `?start=ref_...` banks its welcome bonus once */
-  let pendingWelcome = claimWelcomeBonus();
+  /* the ledger fold lands on a save flush; repaint the card and the open sheet on that beat */
+  onChange(paintReferral);
 
   /* ---- the record, and what is worn: re-painted whenever the save changes ---- */
   const pfScreen = $<HTMLElement>('s-profile');
@@ -2050,7 +2080,6 @@ export function createMenu(api: MenuApi): Menu {
   paintPieceColor();
 
   /* ---- settings overhaul: language drawer + community/admin rows ---- */
-  const CHANNEL_URL = 'https://t.me/detour_game';
 
   const paintI18n = () => {
     for (const el of document.querySelectorAll<HTMLElement>('[data-i18n]')) {

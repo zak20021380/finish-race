@@ -8,8 +8,9 @@
  *   1. the compact invite card: gift well, live sub line (`Earn +500 Coins per invite`), the
  *      `Invite` pill, inside the pane, zero horizontal overflow, 54–70px tall;
  *   2. the sheet: engraved ✕, gold-bannered reward line fed by the REFERRAL_REWARD constant, the
- *      personal link (`https://t.me/detour_game_bot?start=ref_u<id>`), Copy key, gold Share key,
- *      the two counters and the disabled mint Claim key;
+ *      identity preview (`@Tactix_Robot` + `ref_<code>`), the direct-Mini-App link
+ *      (`https://t.me/Tactix_Robot/app?startapp=ref_<code>`), Copy key, gold Share key, the two
+ *      counters and the disabled mint Claim key;
  *   3. Copy: label swings to "Copied! ✔" with the .copied state and lands the link on the real
  *      clipboard, then reverts after ~1.4s;
  *   4. Share: openTelegramLink receives the t.me/share/url hop (URL + text) — no window.open;
@@ -17,9 +18,8 @@
  *      3,350 coins on the claim, zeroes the counter, disables the key, chimes + medium impact +
  *      success notification, shows the "+1,500 Coins · Referral rewards" toast, persists all of
  *      it, and shifts no layout (card rect and pane scrollTop identical);
- *   6. Welcome bonus: a `?start=ref_u9999` launch banks +500 once (2,350 coins, welcome:true,
- *      via `u9999`), shows "+500 Coins · Welcome bonus" on first Profile paint, and a reload
- *      never pays twice;
+ *   6. Server authority: a `?startapp=ref_...` launch with no Worker never mints coins locally
+ *      (the Worker's ledger, not this device, pays the referral);
  *   7. zero document scroll and zero console errors at 360x640 and 430x932.
  * Screenshots: .shots/referral-*.png · exit 1 on any failure.
  */
@@ -65,8 +65,8 @@ function serve() {
 }
 
 const UID = 4242;
-const CODE = `u${UID}`;
-const LINK = `https://t.me/detour_game_bot?start=ref_${CODE}`;
+const CODE = 'a1b2c3d4e5f6';
+const LINK = `https://t.me/Tactix_Robot/app?startapp=ref_${CODE}`;
 
 /** Telegram WebApp stub installed BEFORE the bundle loads — src/telegram.ts binds its `tg`
  *  reference at module init, so a post-load stub would never receive the haptics. Locked so the
@@ -115,6 +115,17 @@ async function makeContext(browser, w, h, uid, startParam = '') {
 }
 
 const openProfile = async (pg) => {
+  /* cache the server-issued code the way a real Mini App does after its first ledger read */
+  await pg.addInitScript((code) => {
+    try {
+      const raw = localStorage.getItem('detour.save.v2');
+      const save = raw ? JSON.parse(raw) : { v: 2 };
+      if (save && save.v === 2) {
+        save.referral = { ...(save.referral ?? {}), code };
+        localStorage.setItem('detour.save.v2', JSON.stringify(save));
+      }
+    } catch { /* about:blank and friends have no storage */ }
+  }, CODE);
   await pg.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'networkidle' });
   await pg.waitForTimeout(1200);
   await pg.click('.dock-nav .tab[data-tab="profile"]');
@@ -196,6 +207,8 @@ const sheetSnapshot = (pg) => pg.evaluate(() => {
     close: !!sheet.querySelector('.referral-x'),
     banner: document.getElementById('ref-banner').textContent.trim(),
     link: document.getElementById('ref-link').value,
+    handle: document.getElementById('ref-handle').textContent.trim(),
+    code: document.getElementById('ref-code').textContent.trim(),
     copyLabel: document.querySelector('#ref-copy .ref-copy-t').textContent.trim(),
     shareLabel: document.querySelector('#ref-share span').textContent.trim(),
     claimLabel: document.querySelector('#ref-claim span').textContent.trim(),
@@ -230,6 +243,8 @@ try {
     expect(`banner fed by the constant (${sheet.banner})`,
       sheet.banner === 'Get 500 Coins for you & your friend upon joining!');
     expect(`personal link = ${LINK}`, sheet.link === LINK);
+    expect(`identity preview = @Tactix_Robot · ref_${CODE} (${sheet.handle} · ${sheet.code})`,
+      sheet.handle === '@Tactix_Robot' && sheet.code === `ref_${CODE}`);
     expect(`copy key reads Copy (${sheet.copyLabel})`, sheet.copyLabel === 'Copy');
     expect(`share key reads Share Link via Telegram (${sheet.shareLabel})`, sheet.shareLabel === 'Share Link via Telegram');
     expect(`claim key present + disabled at zero (${sheet.claimLabel})`, sheet.claimGift && sheet.claimLabel === 'Claim Rewards' && sheet.claimDisabled);
@@ -262,7 +277,7 @@ try {
     const shareCalls = await pg.evaluate((n) => window.__tgCalls.slice(n), beforeShare);
     const hop = shareCalls.find(([k]) => k === 'tglink')?.[1] ?? '';
     expect(`share → openTelegramLink(t.me/share/url…) `, hop.startsWith('https://t.me/share/url?url=')
-      && hop.includes(encodeURIComponent(LINK)) && hop.includes('detour_game_bot'));
+      && hop.includes(encodeURIComponent(LINK)) && hop.includes('Tactix_Robot'));
     expect('share fires a medium haptic', shareCalls.some(([k, s]) => k === 'impact' && s === 'medium'));
 
     await pg.keyboard.press('Escape');
@@ -271,7 +286,7 @@ try {
     expect('Escape closes the referral sheet', closed);
 
     /* the seeded ledger: 3 friends, 1,500 claimable */
-    await seedReferral(pg, { joins: 3, unclaimed: 1500, welcome: false, via: null });
+    await seedReferral(pg, { joins: 3, unclaimed: 1500, earned: 1500, code: CODE, welcome: false, via: null });
     const seeded = await profileSnapshot(pg);
     expect(`seeded card pill = 3 Invited (${seeded.pill})`, seeded.pill === '3 Invited');
     await pg.click('#pf-invite');
@@ -342,7 +357,7 @@ try {
   {
     const { ctx, pg, errors } = await makeContext(browser, 430, 932, 7777);
     await openProfile(pg);
-    await seedReferral(pg, { joins: 2, unclaimed: 1000, welcome: false, via: null });
+    await seedReferral(pg, { joins: 2, unclaimed: 1000, earned: 1000, code: CODE, welcome: false, via: null });
     const prof = await profileSnapshot(pg);
     expect('430: card inside the pane, no horizontal overflow', prof.card.inPane && prof.worstOverflow <= 0.5 && prof.paneOverX <= 0);
     expect('430: zero document scroll', prof.docScroll <= 0);
@@ -363,17 +378,19 @@ try {
     await ctx.close();
   }
 
-  /* ================= the invitee: ?start=ref_u9999 ================= */
+  /* ================= the invitee: a ref launch is server-authoritative ================= */
   {
-    const { ctx, pg, errors } = await makeContext(browser, 360, 640, UID, 'ref_u9999');
+    const { ctx, pg, errors } = await makeContext(browser, 360, 640, UID, 'ref_a1b2c3d4e5f6');
     await pg.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'networkidle' });
     await pg.waitForTimeout(1200);
     const landed = await pg.evaluate(() => {
       const save = JSON.parse(localStorage.getItem('detour.save.v2'));
       return { coins: document.getElementById('p-coins').textContent.trim(), ref: save.referral, saveCoins: save.coins };
     });
-    expect(`welcome launch pays +500 (${landed.coins})`, landed.coins === '2,350' && landed.saveCoins === 2350);
-    expect(`welcome banks once with via=${landed.ref.via}`, landed.ref.welcome === true && landed.ref.via === 'u9999');
+    expect(`no Worker means no local welcome payout (${landed.coins})`,
+      landed.coins === '1,850' && landed.saveCoins === 1850);
+    expect('the ref launch does not mint a local welcome flag',
+      landed.ref.welcome !== true && landed.ref.via === null);
 
     await pg.click('.dock-nav .tab[data-tab="profile"]');
     await pg.waitForTimeout(800);
@@ -381,7 +398,7 @@ try {
       shown: !document.getElementById('pf-toast').hidden,
       text: document.getElementById('pf-toast-t').textContent.trim(),
     }));
-    expect(`welcome toast greets on Profile (${toast.text})`, toast.shown && toast.text === '+500 Coins · Welcome bonus');
+    expect('no referral toast is fabricated without the ledger', !toast.shown);
 
     await pg.reload({ waitUntil: 'networkidle' });
     await pg.waitForTimeout(1200);
@@ -389,7 +406,7 @@ try {
       const save = JSON.parse(localStorage.getItem('detour.save.v2'));
       return { coins: document.getElementById('p-coins').textContent.trim(), welcome: save.referral.welcome };
     });
-    expect(`reload never pays twice (${again.coins})`, again.coins === '2,350' && again.welcome === true);
+    expect(`reload never pays a local bonus (${again.coins})`, again.coins === '1,850' && again.welcome !== true);
     expect(`zero console errors on the invitee path (${errors.slice(0, 2).join(' | ')})`, errors.length === 0);
     await ctx.close();
   }

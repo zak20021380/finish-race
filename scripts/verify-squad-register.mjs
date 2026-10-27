@@ -82,7 +82,7 @@ globalThis.fetch = async (url, init = {}) => {
     return reply({ ok: true, result: { status: 'member' } });
   }
   if (method === 'getChatMemberCount') return reply({ ok: true, result: 321 });
-  if (method === 'getMe') return reply({ ok: true, result: { id: BOT_ID, username: 'detour_game_bot' } });
+  if (method === 'getMe') return reply({ ok: true, result: { id: BOT_ID, username: 'Tactix_Robot' } });
   return reply({ ok: false, error_code: 404, description: 'Not Found' }, 404);
 };
 

@@ -17,6 +17,7 @@ import { knownCountry } from './countries';
 import {
   addMember, cleanCode, cleanName, dropMember, inTeam, makeTeam, seedTeams, YOU, type Team,
 } from './teams';
+import { REFERRAL_CODE_RE, REFERRAL_REWARD as SHARED_REFERRAL_REWARD } from '../shared/config';
 
 /* ---------- the door ---------- */
 
@@ -61,17 +62,19 @@ export interface Stats {
 }
 
 /**
- * The referral / invite-to-earn record. It rides the save so the counters persist exactly like the
- * wallet does, and it is what the Profile's Referral Hub reads and writes: friends who joined
- * through this player's link, the referral coins credited but not yet claimed into the wallet, the
- * one-time welcome bonus flag for arriving through someone else's link, and that inbound code.
+ * The referral / invite-to-earn record. The Worker's ledger is the authority: `code` is the
+ * player's permanent server-owned code, and `earned` is the lifetime total the client has already
+ * folded into the unclaimed pool. `joins` and `unclaimed` are what the Hub paints.
  */
 export interface ReferralState {
   joins: number;
   unclaimed: number;
-  /** The invitee's side: the welcome bonus is paid once, on the launch that carried the link. */
+  /** Total coins the server has credited this player, already reflected in `unclaimed`. */
+  earned: number;
+  /** The server-created permanent code, cached so the link paints before the next read. */
+  code: string | null;
+  /** Legacy local-welcome fields: kept so older saves migrate without losing the blob. */
   welcome: boolean;
-  /** The inbound referral code this device joined through, or null. */
   via: string | null;
 }
 
@@ -156,8 +159,9 @@ export const AGE_MAX = 99;
 /** The birthdate picker's earliest year; the latest year is derived from AGE_MIN, measured today. */
 export const DOB_MIN_YEAR = 1940;
 /** What one invited friend pays: the inviter banks it as unclaimed, the friend gets it on join. */
-export const REFERRAL_REWARD = 500;
-export const REFERRAL_WELCOME = 500;
+export const REFERRAL_REWARD = SHARED_REFERRAL_REWARD;
+/** Legacy name for the same reward; kept so older code reads the shared constant. */
+export const REFERRAL_WELCOME = SHARED_REFERRAL_REWARD;
 
 function fresh(): Save {
   return {
@@ -176,7 +180,7 @@ function fresh(): Save {
     frame: null,
     displayName: null,
     tiqBonus: 0,
-    referral: { joins: 0, unclaimed: 0, welcome: false, via: null },
+    referral: { joins: 0, unclaimed: 0, earned: 0, code: null, welcome: false, via: null },
     editions: { claims: {}, supply: {}, syncedAt: 0 },
     tutorialCompleted: false,
     pieceColor: 'red',
@@ -330,6 +334,8 @@ function migrate(raw: Partial<Save> | null): Save {
        clamped — a blob can only ever make the counters smaller, never mint an absurd payout. */
     if (whole(ref.joins)) s.referral.joins = Math.max(0, Math.min(99999, Math.floor(ref.joins)));
     if (whole(ref.unclaimed)) s.referral.unclaimed = Math.max(0, Math.min(99999999, Math.floor(ref.unclaimed)));
+    if (whole(ref.earned)) s.referral.earned = Math.max(0, Math.min(99999999, Math.floor(ref.earned)));
+    if (typeof ref.code === 'string' && REFERRAL_CODE_RE.test(ref.code)) s.referral.code = ref.code;
     if (ref.welcome === true) s.referral.welcome = true;
     if (typeof ref.via === 'string' && /^[A-Za-z0-9_-]{1,32}$/.test(ref.via)) s.referral.via = ref.via;
   }
@@ -525,17 +531,39 @@ export function earnTiq(n: number): number {
 /* ---------- referral / invite-to-earn ---------- */
 
 /**
- * One friend joined through this player's link: the joins counter moves and the payout is banked
- * as unclaimed, never straight into the wallet — the Hub's Claim key is the only door into coins.
- * Returns the coins credited to the unclaimed balance.
+ * Fold a server ledger reading into the save. The Worker owns the lifetime total (`earned`), so
+ * only the *delta* since the last fold is added to the unclaimed pool — a local Claim can empty
+ * the pool without the next poll paying the same coins again. `joins` only ever moves forward.
+ * Returns true when the Hub's face actually changed.
  */
-export function creditReferralJoin(n = 1): number {
-  const joins = Math.max(0, Math.min(99999, Math.floor(n)));
-  if (!joins) return 0;
-  profile.referral.joins += joins;
-  profile.referral.unclaimed += joins * REFERRAL_REWARD;
-  flush();
-  return joins * REFERRAL_REWARD;
+export function syncReferralLedger(reading: {
+  code?: string | null;
+  joins?: number;
+  earned?: number;
+}): boolean {
+  let moved = false;
+  const code = typeof reading.code === 'string' && REFERRAL_CODE_RE.test(reading.code) ? reading.code : '';
+  if (code && profile.referral.code !== code) {
+    profile.referral.code = code;
+    moved = true;
+  }
+  const joins = typeof reading.joins === 'number' && Number.isFinite(reading.joins)
+    ? Math.max(0, Math.min(99999, Math.floor(reading.joins)))
+    : 0;
+  if (joins > profile.referral.joins) {
+    profile.referral.joins = joins;
+    moved = true;
+  }
+  const earned = typeof reading.earned === 'number' && Number.isFinite(reading.earned)
+    ? Math.max(0, Math.min(99999999, Math.floor(reading.earned)))
+    : 0;
+  if (earned > profile.referral.earned) {
+    profile.referral.unclaimed += earned - profile.referral.earned;
+    profile.referral.earned = earned;
+    moved = true;
+  }
+  if (moved) flush();
+  return moved;
 }
 
 /** The Hub's Claim tap: moves the whole unclaimed balance into the wallet in one flush. */
@@ -546,19 +574,6 @@ export function claimReferralRewards(): number {
   profile.coins += due;
   flush();
   return due;
-}
-
-/**
- * The invitee's side of a `ref_` link, paid once per save: the caller passes the inbound code and
- * gets back the welcome coins, or 0 when there was no code or the bonus was already paid.
- */
-export function markReferralWelcome(via: string): number {
-  if (profile.referral.welcome) return 0;
-  profile.referral.welcome = true;
-  profile.referral.via = /^[A-Za-z0-9_-]{1,32}$/.test(via) ? via : null;
-  profile.coins += REFERRAL_WELCOME;
-  flush();
-  return REFERRAL_WELCOME;
 }
 
 /** The mode raced most, for the profile card. */

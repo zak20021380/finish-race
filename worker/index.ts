@@ -43,17 +43,25 @@
  * Every refusal on every one of these surfaces answers JSON, with a reason in the body. An opaque
  * error page is the one thing a Command Center can only report as an offline Worker — and this
  * backend is not offline.
+ *
+ * The seventh surface is the referral ledger: `GET /api/referral/me` issues the caller's permanent
+ * random code and reads its counters, while `POST /api/referral/gate` binds a pending invite, checks
+ * channel membership, and settles the credit in that same request. `GET /referral/state?code=...`
+ * is the public, non-enumerable read kept for older clients. All three are answered by the
+ * singleton `REFERRALS` Durable Object.
  */
 import { MatchmakerDO } from './matchmaker';
 import { BadgeMintDO } from './badges';
+import { ReferralLedgerDO, channelMembership, referralContact, referralLookup, referralMe, referralSettle } from './referrals';
 import {
   identifyAdminRequest, identifyMetricsAdmin, identifyPlayerRequest, METRICS_HEADER,
 } from './auth';
 import { telegramSetup, telegramWebhook } from './bot';
 import { json, reasonOf } from './http';
+import { referralAppLink } from '../shared/config';
 import type { Env } from './env';
 
-export { MatchmakerDO, BadgeMintDO };
+export { MatchmakerDO, BadgeMintDO, ReferralLedgerDO };
 
 /** One waiting room for everyone: that is the whole point of the singleton. */
 const LOBBY = 'global';
@@ -174,6 +182,91 @@ async function badges(request: Request, env: Env, url: URL): Promise<Response> {
   return badgeJson({ error: 'not_found' }, 404);
 }
 
+/** The referral surface is token-authenticated, so a wildcard origin is enough. */
+const REFERRAL_CORS: Record<string, string> = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, POST, OPTIONS',
+  'access-control-allow-headers': 'content-type, x-telegram-init-data, authorization, x-detour-dev-player',
+  'access-control-max-age': '86400',
+};
+
+const referralJson = (body: unknown, status = 200): Response => json(body, status, REFERRAL_CORS);
+
+/**
+ * The referral surface. Three doors:
+ *
+ *   - `POST /api/referral/gate` is the forced-join gate. The caller's signed initData names the
+ *     invitee; the ref payload (when present) binds PENDING on first contact; the channel check
+ *     runs here; a joined invitee is settled in the same request cycle, so the inviter's counter
+ *     and both unclaimed pools move before this response leaves the Worker.
+ *   - `GET /api/referral/me` is the modal's live stats read and creates the caller's permanent
+ *     code on first open.
+ *   - `GET /referral/state?code=...` is the public, code-addressed stats read kept for older
+ *     clients; the code itself is random and non-enumerable.
+ */
+async function referrals(request: Request, env: Env, url: URL): Promise<Response> {
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: REFERRAL_CORS });
+
+  if (url.pathname === '/referral/state') {
+    if (request.method !== 'GET') return referralJson({ error: 'method_not_allowed' }, 405);
+    if (!env.REFERRALS) return referralJson({ ok: false, error: 'referrals_unavailable' }, 503);
+    const found = await referralLookup(env, url.searchParams.get('code') ?? '');
+    return referralJson(found ?? { ok: false, error: 'referrals_unavailable' }, found ? 200 : 503);
+  }
+
+  if (url.pathname === '/api/referral/me' || url.pathname === '/api/referral/gate') {
+    if (!env.REFERRALS) return referralJson({ ok: false, error: 'referrals_unavailable' }, 503);
+    const gate = url.pathname === '/api/referral/gate';
+    if (gate && request.method !== 'POST') return referralJson({ error: 'method_not_allowed' }, 405);
+    if (!gate && request.method !== 'GET') return referralJson({ error: 'method_not_allowed' }, 405);
+
+    const auth = await identifyPlayerRequest(request, env);
+    if (!auth) return referralJson({ ok: false, error: 'unauthorized' }, 401);
+    if (!auth.tgId) {
+      /* The dev door has no Telegram identity to key a ledger row on. Say so plainly instead of
+         inventing a code or a credit. */
+      return referralJson({ ok: false, error: 'telegram_required' }, 403);
+    }
+
+    let body: Record<string, unknown> = {};
+    if (gate) {
+      body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    }
+    const bodyRef = typeof body.ref === 'string' ? body.ref : '';
+    const refRaw = bodyRef || url.searchParams.get('ref') || url.searchParams.get('startapp') || '';
+
+    if (refRaw) await referralContact(env, auth.tgId, refRaw);
+    const state = await referralMe(env, auth.tgId);
+    if (!state) return referralJson({ ok: false, error: 'referrals_unavailable' }, 503);
+
+    if (!gate) {
+      return referralJson({ ...state, link: referralAppLink(state.code) });
+    }
+
+    const joined = await channelMembership(env, auth.tgId);
+    if (joined !== true) {
+      const unavailable = joined === null;
+      return referralJson({
+        ...state,
+        link: referralAppLink(state.code),
+        joined: false,
+        ...(unavailable ? { unavailable: true } : {}),
+      });
+    }
+    const settled = await referralSettle(env, auth.tgId);
+    const after = settled ?? state;
+    return referralJson({
+      ...after,
+      link: referralAppLink(after.code),
+      joined: true,
+      credited: settled?.creditedNow === true,
+      alreadyCredited: settled?.alreadyCredited === true,
+    });
+  }
+
+  return referralJson({ error: 'not_found' }, 404);
+}
+
 /** The whole routing table, in surface order. */
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
@@ -184,11 +277,10 @@ async function route(request: Request, env: Env): Promise<Response> {
     return json({ ok: true, service: 'detour-matchmaking', time: Date.now() });
   }
 
-  /* The referral hub's ledger seam. Device-local today, so the mock answers zeroes for every
-     code; a real referral ledger slots in here with the same shape `referral.ts` merges. */
-  if (url.pathname === '/referral/state') {
-    const code = (url.searchParams.get('code') ?? '').slice(0, 32);
-    return json({ ok: true, service: 'detour-referral', code, joins: 0, unclaimed: 0 });
+  /* The referral surface: the forced-join gate, the modal's live stats, and the public
+     code-addressed read. The ledger is the singleton `REFERRALS` object. */
+  if (url.pathname === '/referral/state' || url.pathname.startsWith('/api/referral/')) {
+    return referrals(request, env, url);
   }
 
   if (url.pathname === '/api/squads/register') {

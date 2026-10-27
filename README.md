@@ -63,7 +63,7 @@ server yet, so the registry lives in the save and ships with a handful of demo c
 see the flow — the sheet says "local mock" rather than pretending otherwise.
 
 The shape is what makes the future cheap: every team carries `startParam` and a reserved `chatId`,
-so `t.me/<bot>/detour?startapp=team-<code>` is already a link the app understands — opening Tactix
+so `t.me/Tactix_Robot/app?startapp=team-<code>` is already a link the app understands — opening Tactix
 from one pre-fills the join field. Binding a team to a real Telegram group is a server change, not a
 schema change.
 
@@ -168,10 +168,14 @@ Telegram only loads **HTTPS** URLs.
 | `worker/bot-copy.ts` | Every word the bot says in English, Persian and Arabic, its keyboards, and the `**bold**` → HTML renderer |
 | `worker/matchmaker.ts` | The waiting room: the queue, the 250/600 pairing radii, `MATCH_FOUND`, and the 2–4 seat rooms |
 | `worker/badges.ts` | The edition ledger: hard caps, sequential serials, idempotent claims and per-player progress |
+| `worker/referrals.ts` | The singleton referral ledger: permanent random codes, pending → credited settle, Telegram channel membership |
+| `shared/config.ts` | The single bot identity (`Tactix_Robot`), channel handle, referral reward and every deep-link builder |
+| `src/joinGate.ts` | The forced-join gate: Join Channel, Verify, same-request referral credit, fail-open when verification is unavailable |
 | `scripts/verify-worker-matchmaking.mjs` | Drives the whole queueing protocol in plain Node, no wrangler needed |
 | `scripts/verify-worker-race.mjs` | Drives two clients through a whole relayed race, resignations and disconnects |
 | `scripts/verify-worker-badges.mjs` | Auth, criteria, idempotency, cap exhaustion and 80 concurrent mints in plain Node |
 | `scripts/verify-worker-telegram.mjs` | Drives the whole bot conversation in plain Node: language first, every menu, the referral hop and the webhook setup |
+| `scripts/verify-referral-ledger.mjs` | Fresh invite → gate → both +500, double pass, forged code, self/loop, existing user, bot path, concurrency and no clawback |
 | `scripts/room-check.mjs` | The corridor leap, the anti-oscillation guard, and whole 4-seat mixed rooms, on the real rules |
 
 ## Matchmaking backend
@@ -220,6 +224,33 @@ slow, those cached numbers stay on screen behind a quiet `Syncing…` line. Depl
 applies the `v2` migration that creates `BadgeMintDO`; the ledger starts empty, at serial 1 for
 each honor.
 
+### Referral ledger
+
+Every player gets one permanent, random 12-character code from the singleton `REFERRALS` Durable
+Object (`ReferralLedgerDO`). The share link is built by the shared config and opens the Mini App
+directly:
+
+```text
+https://t.me/Tactix_Robot/app?startapp=ref_<code>
+```
+
+The bot's `/start ref_<code>` path binds the same pending row, so landing in the chat first and
+landing in the Mini App first resolve to the same attribution.
+
+| Route | Auth | Result |
+| --- | --- | --- |
+| `GET /api/referral/me` | Telegram `initData` | `{ code, link, joins, earned, unclaimed }`; creates the code on first open |
+| `POST /api/referral/gate` | Telegram `initData` | Binds PENDING on first contact, verifies `getChatMember`, and settles CREDITED in the same request |
+| `GET /referral/state?code=...` | none | Public code-addressed `{ valid, joins, earned }`; the random code is not enumerable |
+
+An invitee credits one inviter exactly once: the row carries a `creditedFrom` stamp, so a second
+gate pass, a self-referral, a loop, a forged code, or a user who existed before the link credits
+nothing. The bot must be a member of `REQUIRED_CHANNEL` (default `@detour_game`) for `getChatMember`
+to answer. The inviter's `joins` and `earned` move with the gate response; the client folds the
+`earned` delta into the unclaimed pool, which keeps the existing Claim tap as the only door into
+the wallet (a refresh after a claim cannot pay the same coins twice). Deploying this build applies
+the `v3` migration that creates `ReferralLedgerDO`.
+
 ### The bot's chat surface
 
 Before the Mini App opens, the bot itself (`worker/bot.ts`) is the front door, and it speaks three
@@ -236,16 +267,20 @@ of the language chosen — one `web_app` PLAY button, `📖 How to Play` and `�
 side, and `🌐 Change Language` below — so no screen is ever stacked on the last. Every callback carries
 its own language (`menu:rules:fa`), which is why a menu redraws correctly on a worker that has never
 seen the player. The rules card answers with the four things a turn can be, and offers PLAY and a way
-back; the invite card prints a personal `https://t.me/<bot>?start=ref_u<id>` link with a share-sheet
-button and a `switch_inline_query` button, whose inline answer is the same card dropped into any chat.
+back; the invite card prints a personal `https://t.me/Tactix_Robot/app?startapp=ref_<code>` link with
+a share-sheet button and a `switch_inline_query` button, whose inline answer is the same card dropped
+into any chat. The code is random and server-issued; the old `ref_u<id>` shape is not accepted.
 
 `/play` and `/rules` skip straight to their card, in the language that player last chose — or, if this
 worker has never met them, in the language their Telegram client reports. An ordinary word in a private
 chat opens the menu; in a group, only commands answer.
 
-A `/start` payload is remembered rather than dropped: arrive on `?start=ref_u9001`, choose Arabic, and
-the PLAY button still opens `https://finish-race.deadeye-game.workers.dev/?startapp=ref_u9001`, which
-is what `src/referral.ts` reads on the other side to pay the inviter.
+A `/start` payload is remembered rather than dropped: arrive on `?start=ref_ab12cd34ef56`, choose
+Arabic, and the PLAY button still opens
+`https://finish-race.deadeye-game.workers.dev/?startapp=ref_ab12cd34ef56`, which is what
+`src/referral.ts` reads on the other side. The payload also binds a PENDING referral in the
+`REFERRALS` ledger immediately; the forced-join gate credits it — inviter +1 friend, both unclaimed
+pools +500 — in the same request that verifies channel membership.
 
 Two details make it behave: replies are sent as **HTML** (copy is authored with `**bold**` and escaped
 before it is substituted, so the invite link in the text cannot break the parse), and the webhook
@@ -264,8 +299,9 @@ curl -s -H "X-Telegram-Init-Data: <signed initData>" \
 
 It registers `POST /telegram/webhook` on the origin it was called from — so the same call on
 `127.0.0.1:8787` wires up `wrangler dev` — localises the `/` command list for `fa` and `ar`, points the
-chat menu button at the Mini App, and reads the bot's own handle from `getMe` so every invite link
-survives a rename. `WEBAPP_URL` overrides where those buttons land; unset, the bot launches its own
+chat menu button at the Mini App. Every deep link is built from the shared `BOT_HANDLE` config, so a
+bot rename is a one-line change rather than a code hunt. `WEBAPP_URL` overrides where those buttons
+land; unset, the bot launches its own
 origin.
 
 ### The race, on the same socket

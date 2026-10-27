@@ -26,6 +26,12 @@ class_name = "MatchmakerDO"
 name = "BADGES"
 class_name = "BadgeMintDO"
 
+# One singleton referral ledger: permanent codes, pending invites, and the atomic credit that
+# fires the instant the forced-join gate verifies membership.
+[[durable_objects.bindings]]
+name = "REFERRALS"
+class_name = "ReferralLedgerDO"
+
 # The modern (SQLite-backed) Durable Object migration. The waiting queue itself is in memory —
 # the storage engine is only what the class is declared on.
 [[migrations]]
@@ -37,6 +43,12 @@ new_sqlite_classes = ["MatchmakerDO"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["BadgeMintDO"]
+
+# The referral ledger keeps its rows in the object's own storage; the singleton makes every
+# pending -> credited flip and its two counter writes one serialized event.
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["ReferralLedgerDO"]
 
 [vars]
 # `true` lets a local browser queue as a guest with no valid initData. Deployed: keep it false,
@@ -51,6 +63,10 @@ DEV_AUTH = "false"
 # An empty value closes the Telegram door entirely; `/admin/status` still answers a dev-marked
 # loopback request while `DEV_AUTH = "true"` or the caller is on localhost.
 ADMIN_IDS = "1350508522"
+
+# The channel the forced-join gate verifies with `getChatMember`. Unset, the shared config's
+# `CHANNEL_HANDLE` is used. Set it to a numeric id when the channel has no public username:
+#   REQUIRED_CHANNEL = "-1001234567890"
 
 # The bot's chat surface (`worker/bot.ts`): `POST /telegram/webhook` for Telegram's updates and
 # `GET|POST /telegram/setup-webhook` to register them. Leave WEBAPP_URL unset to have the bot launch

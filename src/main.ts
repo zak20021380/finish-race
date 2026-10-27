@@ -52,11 +52,15 @@ import {
   seatName, sizesOf, startEarly, type BotTier, type Room,
 } from './room';
 import { initSplash, splashReady } from './splash';
+import { initJoinGate } from './joinGate';
 import { showVsClash, type VsRival, type VsStakes } from './vsclash';
 
 initSplash();
 initTelegram();
 applyFlagSupport();
+/* The mandatory channel check runs in the background; the neural boot screen still owns the
+   first two seconds, and a gate that cannot be answered fails open. */
+initJoinGate();
 
 /* ---------- no zoom / no scroll ---------- */
 

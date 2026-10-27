@@ -30,6 +30,10 @@
 import type { Env } from './env';
 import { isLocalhost, verifyAdminRequest } from './auth';
 import { json } from './http';
+import { BOT_HANDLE } from '../shared/config';
+import {
+  ensureReferralCode, readReferralPayload, referralContact, touchReferralUser,
+} from './referrals';
 import {
   COPY, GREETING, type BotLang, commandScope, inviteLink, inviteMenu, isBotLang,
   langFromTelegramCode, launchCard, launchUrl, languagePicker, mainMenu, playOnly, render, rulesMenu,
@@ -40,9 +44,6 @@ const TELEGRAM_BASE = 'https://api.telegram.org/bot';
 
 /** The deployed Mini App. `WEBAPP_URL` overrides it; a loopback request overrides that. */
 const LIVE_APP_URL = 'https://finish-race.deadeye-game.workers.dev';
-
-/** Mirrors `BOT_HANDLE` in `src/telegram.ts`. Replaced by `getMe` every time setup runs. */
-let botHandle = 'detour_game_bot';
 
 /* ---------- what Telegram sends, narrowed to the fields this bot reads ---------- */
 
@@ -170,13 +171,13 @@ function idOf(value: number | string | undefined): string {
   return String(value).replace(/[^0-9-]/g, '').slice(0, 32);
 }
 
-/** A start payload is a code, not a sentence: `ref_u123`, `team-AB12`, nothing messier. */
+/** A start payload is a code, not a sentence: `ref_ab12cd34ef56`, `team-AB12`, nothing messier. */
 function payloadOf(text: string): string {
   const arg = text.trim().split(/\s+/).slice(1).join(' ');
   return /^[A-Za-z0-9_-]{1,64}$/.test(arg) ? arg : '';
 }
 
-/** `/rules`, `/rules@detour_game_bot` — the handle a group appends is not part of the command. */
+/** `/rules`, `/rules@<bot>` — the handle a group appends is not part of the command. */
 const COMMAND = /^\/([A-Za-z_]{1,32})(?:@\w{3,64})?/;
 
 function commandOf(text: string): string {
@@ -293,11 +294,23 @@ async function handleMessage(message: TgMessageLike, token: string, origin: stri
   const copy = COPY[seat.lang];
   const play = playUrlFor(env, origin, seat);
 
+  /* Any command is contact: a player who knew this bot before the link can never become a new
+     invitee later. `/start` does the same inside its own branch, with a ref payload when present. */
+  if (command !== 'start') await touchReferralUser(env, userId).catch(() => '');
+
   if (command === 'start') {
-    /* A `/start ref_u123` off a friend's link: bank the code now, so the PLAY button can carry it
-       into the Mini App after this player picks a language. */
+    /* A `/start ref_<code>` off a friend's link: bind the pending referral server-side now, so
+       both launch paths (bot chat and `?startapp=`) resolve to the same attribution. A start
+       without a payload still records that this player existed before any later link arrives. */
     const payload = payloadOf(raw);
-    if (payload) remember(userId, { startParam: payload }, message.from?.language_code ?? '');
+    if (payload) {
+      remember(userId, { startParam: payload }, message.from?.language_code ?? '');
+      const ref = readReferralPayload(payload);
+      if (ref) await referralContact(env, userId, ref).catch(() => null);
+      else await touchReferralUser(env, userId).catch(() => '');
+    } else {
+      await touchReferralUser(env, userId).catch(() => '');
+    }
     await send(token, chatId, render(GREETING), languagePicker());
     return;
   }
@@ -363,7 +376,9 @@ async function handleCallback(callback: TgCallbackLike, token: string, origin: s
     : remember(userId, { lang: screen.lang });
   const play = playUrlFor(env, origin, seat);
   const copy = COPY[seat.lang];
-  const invite = inviteLink(botHandle, userId);
+  /* The code is the ledger's random, server-owned code — never the Telegram id. */
+  const code = await ensureReferralCode(env, userId).catch(() => '');
+  const invite = inviteLink(code);
 
   const text = screen.kind === 'greeting' ? render(GREETING)
     : screen.kind === 'menu' ? render(copy.welcome)
@@ -382,7 +397,8 @@ async function handleInlineQuery(query: TgInlineQueryLike, token: string, origin
   const userId = idOf(query.from?.id);
   const seat = seatOf(userId, query.from?.language_code ?? '');
   const copy = COPY[seat.lang];
-  const invite = inviteLink(botHandle, userId);
+  const code = await ensureReferralCode(env, userId).catch(() => '');
+  const invite = inviteLink(code);
   try {
     await api(token, 'answerInlineQuery', {
       inline_query_id: query.id,
@@ -449,13 +465,15 @@ export async function telegramSetup(request: Request, env: Env): Promise<Respons
     setWebhook: await attempt(token, 'setWebhook', webhookParams),
   };
 
-  /* The handle every invite link is built on, read from the bot itself rather than trusted from a
-     var: one setup call fixes every link if the bot is ever renamed. */
+  /* Read the live username for the operator's report, but never let it rewrite the links: the
+     shared config is the single source of truth for every deep link. */
   try {
     const me = await api<{ username?: string }>(token, 'getMe', {});
-    const clean = (me.username ?? '').replace(/^@/, '').replace(/[^A-Za-z0-9_]/g, '');
-    if (clean) botHandle = clean;
-    steps.getMe = { ok: true, detail: botHandle };
+    const live = (me.username ?? '').replace(/^@/, '').replace(/[^A-Za-z0-9_]/g, '');
+    steps.getMe = {
+      ok: true,
+      detail: live && live !== BOT_HANDLE ? `${live} (links use ${BOT_HANDLE})` : BOT_HANDLE,
+    };
   } catch (error) {
     steps.getMe = { ok: false, detail: error instanceof TelegramError ? error.description : 'failed' };
   }
@@ -483,7 +501,7 @@ export async function telegramSetup(request: Request, env: Env): Promise<Respons
   const failed = Object.entries(steps).filter(([, step]) => !step.ok).map(([name]) => name);
   return json({
     ok: failed.length === 0,
-    bot: botHandle,
+    bot: BOT_HANDLE,
     webhook,
     app_url: app,
     admin: admin.userId,

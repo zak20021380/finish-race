@@ -19,7 +19,8 @@
  */
 import { readJson, writeJson } from './storage';
 import { menuState, saveMenu } from './settings';
-import { BOT_HANDLE, impact, notify } from './telegram';
+import { impact, notify } from './telegram';
+import { botStartLink, telegramShareLink } from '../shared/config';
 import type { Sheets } from './sheets';
 import {
   FORMAT_LINE, canStart, isHost, nextTeam, occupied, openLobby, startHint,
@@ -218,20 +219,18 @@ export function joinRoomCode(raw: string): { ok: true; code: string } | { ok: fa
   return { ok: true, code };
 }
 
-/** Display form: `t.me/bot?start=room_XXXX` shape (uses the app bot handle). */
+/** Display form: `t.me/<bot>?start=room_XXXX` shape (the shared config owns the handle). */
 export function buildInviteDisplay(code: string): string {
-  return `t.me/${BOT_HANDLE}?start=room_${code}`;
+  return botStartLink(`room_${code}`).replace(/^https:\/\//, '');
 }
 
 /** Full URL the Invite button opens / shares. */
 export function buildInviteLink(code: string): string {
-  return `https://t.me/${BOT_HANDLE}?start=room_${code}`;
+  return botStartLink(`room_${code}`);
 }
 
 export function buildShareUrl(code: string): string {
-  const url = encodeURIComponent(buildInviteLink(code));
-  const text = encodeURIComponent(`Join my Tactix room ${code} — 1 tap to race!`);
-  return `https://t.me/share/url?url=${url}&text=${text}`;
+  return telegramShareLink(buildInviteLink(code), `Join my Tactix room ${code} — 1 tap to race!`);
 }
 
 function openInvite(code: string): void {

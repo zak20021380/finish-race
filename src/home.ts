@@ -24,7 +24,8 @@ import { getCountryRanking, type CountryRow } from './data';
 import { fetchMindLadder, type MindFeed, type MindRowData } from './minds';
 import { myTiq } from './matchmaking';
 import { onChange, profile, theme } from './storage';
-import { BOT_HANDLE, impact, openLink } from './telegram';
+import { impact, openLink } from './telegram';
+import { botChannelAdminLink } from '../shared/config';
 import { flagPhoto } from './flags';
 import { getSquadRanking } from './squads';
 import { newGame } from './rules';
@@ -572,7 +573,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   document.getElementById('home-tournament-admin')?.addEventListener('click', () => {
     impact('light');
     poke();
-    openLink(`https://t.me/${BOT_HANDLE}?startchannel=true&admin=invite_users+pin_messages`);
+    openLink(botChannelAdminLink());
   });
 
   document.getElementById('home-tournament-cta')?.addEventListener('click', () => {

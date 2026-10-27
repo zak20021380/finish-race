@@ -4590,7 +4590,7 @@
             <div class="sqr-reqs" role="note">
               <b class="sqr-reqs-t">Before you register</b>
               <ol class="sqr-req-list">
-                <li><span class="sqr-num">1</span><span>Add <b id="squad-reg-bot">@detour_game_bot</b> as an admin to your chat.</span></li>
+                <li><span class="sqr-num">1</span><span>Add <b id="squad-reg-bot"></b> as an admin to your chat.</span></li>
                 <li><span class="sqr-num">2</span><span>You must be an Owner or Administrator of the chat.</span></li>
               </ol>
             </div>
@@ -4828,6 +4828,11 @@
           <span class="referral-banner-ico" aria-hidden="true"><svg class="ico"><use href="#i-gift" /></svg></span>
           <p id="ref-banner">Get <b>500 Coins</b> for you &amp; your friend upon joining!</p>
         </div>
+        <p class="referral-preview" aria-label="Your personal referral code">
+          <b id="ref-handle"></b>
+          <span class="referral-preview-dot" aria-hidden="true">·</span>
+          <code id="ref-code">ref_…</code>
+        </p>
         <div class="referral-link-row">
           <input class="referral-input" id="ref-link" type="text" readonly value="" spellcheck="false"
             aria-label="Your personal referral link" />
@@ -5173,6 +5178,30 @@
         </div>
       </section>
     </div>
+
+    <!-- forced-join gate: shown only when the Worker verified the player's Telegram identity
+         and said the mandatory channel membership is missing. It covers the app until the
+         gate re-check passes; an unavailable check fails open so the arena never locks out. -->
+    <section class="join-gate" id="join-gate" hidden role="dialog" aria-modal="true"
+      aria-labelledby="join-gate-title" aria-describedby="join-gate-body">
+      <div class="join-gate-card">
+        <span class="join-gate-mark" aria-hidden="true"><svg class="ico"><use href="#i-shield" /></svg></span>
+        <p class="join-gate-kicker">One step before the arena</p>
+        <h2 class="join-gate-title" id="join-gate-title">Join the Tactix channel</h2>
+        <p class="join-gate-body" id="join-gate-body">Channel membership unlocks the arena and
+          verifies your invite rewards instantly.</p>
+        <p class="join-gate-reward" id="join-gate-reward">
+          <svg class="ico" aria-hidden="true"><use href="#i-gift" /></svg>
+          <span>Join through a friend’s link and you both get <b>500 Coins</b>.</span>
+        </p>
+        <button class="btn btn-primary join-gate-join" type="button" id="join-gate-join">Join Channel</button>
+        <button class="btn btn-ghost join-gate-verify" type="button" id="join-gate-verify">
+          <span class="join-gate-verify-t">I’ve joined — Verify</span>
+        </button>
+        <p class="join-gate-status" id="join-gate-status" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+    <div class="join-gate-toast" id="join-gate-toast" hidden role="status" aria-live="polite"></div>
 
     <script type="module" src="/src/main.ts"></script>
     <!-- the board's own overlay: event callouts. Kept out of main.ts so the race loop, the
