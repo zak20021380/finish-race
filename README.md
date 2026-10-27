@@ -10,9 +10,13 @@ local search exactly as it always did.
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173 (also on your LAN)
+npm run dev:all    # Worker on 127.0.0.1:8787 + Vite on http://localhost:5173
 npm run build      # client + worker type-check, then the production build in dist/
 ```
+
+`npm run dev` alone starts only the client. To run the two halves in separate terminals, use
+`npm run dev:worker` (the Worker) and `npm run dev` (Vite). On Windows PowerShell, if `.ps1`
+scripts are blocked by the execution policy, use `npm.cmd run dev:all` instead.
 
 Works in a normal browser too (the Telegram SDK is optional).
 
@@ -182,8 +186,8 @@ local search, so the stage is playable either way. The Worker verifies Telegram 
 `src/` imports `worker/`: wrangler bundles the backend on its own.
 
 ```bash
-npx wrangler dev                       # local workerd, http://127.0.0.1:8787
-VITE_WS_URL=ws://127.0.0.1:8787/ws/matchmake npm run dev
+npm run dev:worker                     # local workerd, http://127.0.0.1:8787
+npm run dev                            # Vite, proxying /api /admin /health /ws to 8787
 npm run check:worker                   # the worker's own strict typecheck (in `npm run build`)
 node scripts/verify-worker-matchmaking.mjs
 node scripts/verify-worker-race.mjs
