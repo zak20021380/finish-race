@@ -373,11 +373,31 @@ export interface ServerMetrics {
   totalUsers: number;
   telegramUsers: number;
   matchesCompleted: number;
+  /** Matches that settled in the rolling last 24 hours. */
+  matches24h: number;
   minesPlaced: number;
   /** Retired rolling-log counter; the Worker always reports 0. */
   logsSpawned: number;
   referrals: number;
   referringPlayers: number;
+  /** Players whose last activity falls inside the rolling last 24 hours. */
+  dau: number;
+  /** Players whose last activity falls inside the rolling last 7 days. */
+  wau: number;
+  /** Registry entries first seen in the rolling last 24 hours. */
+  newSignups24h: number;
+  /** Registry entries first seen in the rolling last 7 days. */
+  newSignups7d: number;
+  /** Completed matches per registered player, rounded to one decimal. */
+  avgMatchesPerPlayer: number;
+  /** % of registered players who finished at least one match. */
+  activationRate: number;
+  /** % of registered players who finished three or more matches. */
+  coreRetention: number;
+  /** DAU as a % of the registered playerbase. */
+  dailyActiveRatio: number;
+  /** Referral joins as a % of the registered playerbase, capped at 100. */
+  viralShare: number;
 }
 
 /** The three answers the strict metrics door can give this panel. */
@@ -1038,17 +1058,26 @@ export function createAdmin(api: AdminApi): Admin {
   const statLiveDot = $<HTMLElement>('stat-live-dot');
   const statPlayers = $<HTMLElement>('stat-players');
   const statDau = $<HTMLElement>('stat-dau');
+  const statNew24h = $<HTMLElement>('stat-new-24h');
+  const statNew7d = $<HTMLElement>('stat-new-7d');
   const statMatches = $<HTMLElement>('stat-matches');
-  const statModes = $<HTMLElement>('stat-modes');
+  const statMatches24h = $<HTMLElement>('stat-matches-24h');
+  const statAvgMatches = $<HTMLElement>('stat-avg-matches');
   const statReferrals = $<HTMLElement>('stat-referrals');
-  const statReferrers = $<HTMLElement>('stat-referrers');
-  const modeBar = $<HTMLElement>('stat-mode-bar');
-  const modeDuel = $<HTMLElement>('stat-mode-1v1');
-  const modeArena = $<HTMLElement>('stat-mode-arena');
-  const modeDuelP = $<HTMLElement>('stat-mode-1v1-p');
-  const modeArenaP = $<HTMLElement>('stat-mode-arena-p');
-  const statMines = $<HTMLElement>('stat-mines');
-  const statRefPlayers = $<HTMLElement>('stat-ref-players');
+  const statViralShare = $<HTMLElement>('stat-viral-share');
+  const statGrowthMeta = $<HTMLElement>('stat-growth-meta');
+  const statActivation = $<HTMLElement>('stat-activation');
+  const statActivationBar = $<HTMLElement>('stat-activation-bar');
+  const statActivationFill = $<HTMLElement>('stat-activation-fill');
+  const statActivationNote = $<HTMLElement>('stat-activation-note');
+  const statCore = $<HTMLElement>('stat-core');
+  const statCoreBar = $<HTMLElement>('stat-core-bar');
+  const statCoreFill = $<HTMLElement>('stat-core-fill');
+  const statCoreNote = $<HTMLElement>('stat-core-note');
+  const statDauRatio = $<HTMLElement>('stat-dau-ratio');
+  const statDauRatioBar = $<HTMLElement>('stat-dau-ratio-bar');
+  const statDauRatioFill = $<HTMLElement>('stat-dau-ratio-fill');
+  const statDauRatioNote = $<HTMLElement>('stat-dau-ratio-note');
   const statLat = $<HTMLElement>('stat-lat');
   const statEnv = $<HTMLElement>('stat-env');
   const healthChip = $<HTMLElement>('stat-health-chip');
@@ -1416,6 +1445,9 @@ export function createAdmin(api: AdminApi): Admin {
   /** The figure the executive grid prints: grouped, never a raw run of digits. */
   const figure = (n: number): string => Math.max(0, Math.round(n)).toLocaleString('en-US');
 
+  /** A server-computed percentage, printed as a whole number. */
+  const rateText = (n: number): string => `${Math.max(0, Math.min(100, Math.round(n)))}%`;
+
   /** `14:05:22` — the exact clock of a reading, in this device's timezone. */
   const clockOf = (ms: number): string => new Date(ms).toLocaleTimeString('en-US', {
     hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
@@ -1446,28 +1478,68 @@ export function createAdmin(api: AdminApi): Admin {
     if (statLiveDot) statLiveDot.dataset.live = String(!!m && (m.activeRooms > 0 || m.queueLength > 0));
 
     if (statPlayers) statPlayers.textContent = metric(m?.totalUsers);
-    if (statDau) statDau.textContent = m ? `${figure(m.telegramUsers)} Telegram` : '— Telegram';
+
+    const gain = (el: HTMLElement | null, n: number | undefined, suffix: string): void => {
+      if (!el) return;
+      if (m == null || n == null) {
+        el.textContent = `— ${suffix}`;
+        el.dataset.positive = 'false';
+        return;
+      }
+      el.textContent = `+${figure(n)} ${suffix}`;
+      el.dataset.positive = String(n > 0);
+    };
+    gain(statNew24h, m?.newSignups24h, 'today (24h)');
+    gain(statNew7d, m?.newSignups7d, 'this week');
+
+    if (statDau) statDau.textContent = m ? `${figure(m.dau ?? 0)} active users · 24h` : '— active users · 24h';
+
     if (statMatches) statMatches.textContent = metric(m?.matchesCompleted);
-    if (statModes) statModes.textContent = m ? `${figure(m.active1v1)} live 1v1` : '— live 1v1';
-    if (statReferrals) statReferrals.textContent = metric(m?.referrals);
-    if (statReferrers) statReferrers.textContent = m ? `${figure(m.referringPlayers)} referrers` : '— referrers';
-
-    const boards = m ? Math.max(0, m.activeRooms) : 0;
-    const duel = m ? Math.min(boards, Math.max(0, m.active1v1)) : 0;
-    const multi = Math.max(0, boards - duel);
-    const share = (n: number): number => (boards ? Math.round((n / boards) * 100) : 0);
-    if (modeBar) {
-      modeBar.dataset.empty = String(boards === 0);
-      modeBar.style.setProperty('--w-duel', `${share(duel)}%`);
-      modeBar.style.setProperty('--w-arena', `${share(multi)}%`);
+    if (statMatches24h) statMatches24h.textContent = m ? `${figure(m.matches24h ?? 0)} · 24h` : '— · 24h';
+    if (statAvgMatches) {
+      statAvgMatches.textContent = m
+        ? `${(m.avgMatchesPerPlayer ?? 0).toFixed(1)} avg / player`
+        : '— avg / player';
     }
-    if (modeDuel) modeDuel.style.visibility = duel > 0 ? '' : 'hidden';
-    if (modeArena) modeArena.style.visibility = multi > 0 ? '' : 'hidden';
-    if (modeDuelP) modeDuelP.textContent = m ? `${figure(duel)} · ${share(duel)}%` : '—';
-    if (modeArenaP) modeArenaP.textContent = m ? `${figure(multi)} · ${share(multi)}%` : '—';
 
-    if (statMines) statMines.textContent = metric(m?.minesPlaced);
-    if (statRefPlayers) statRefPlayers.textContent = metric(m?.referringPlayers);
+    if (statReferrals) statReferrals.textContent = metric(m?.referrals);
+    if (statViralShare) {
+      statViralShare.textContent = m ? `${rateText(m.viralShare ?? 0)} of playerbase` : '— of playerbase';
+    }
+
+    if (statGrowthMeta) statGrowthMeta.textContent = m ? `${figure(m.totalUsers)} registered` : '— registered';
+
+    const paintRate = (
+      value: HTMLElement | null,
+      bar: HTMLElement | null,
+      fill: HTMLElement | null,
+      note: HTMLElement | null,
+      pct: number | undefined,
+      noteText: string,
+    ): void => {
+      const live = m != null && pct != null && Number.isFinite(pct);
+      const clipped = live ? Math.max(0, Math.min(100, pct)) : 0;
+      if (value) value.textContent = live ? rateText(clipped) : pending ? '…' : '—';
+      if (bar) {
+        bar.dataset.empty = String(!live || clipped <= 0);
+        bar.setAttribute('aria-valuenow', String(Math.round(clipped)));
+        bar.setAttribute('aria-valuetext', live ? `${rateText(clipped)} — ${noteText}` : 'No reading yet');
+      }
+      if (fill) fill.style.width = `${clipped}%`;
+      if (note) note.textContent = noteText;
+    };
+    paintRate(
+      statActivation, statActivationBar, statActivationFill, statActivationNote,
+      m?.activationRate, 'of registered players · played 1+ match',
+    );
+    paintRate(
+      statCore, statCoreBar, statCoreFill, statCoreNote,
+      m?.coreRetention, 'of registered players · played 3+ matches',
+    );
+    paintRate(
+      statDauRatio, statDauRatioBar, statDauRatioFill, statDauRatioNote,
+      m?.dailyActiveRatio, 'DAU / total players · last 24h',
+    );
 
     if (statLat) {
       statLat.textContent = m && m.pingMs != null ? `${Math.round(m.pingMs)} ms` : pending ? '…' : '—';

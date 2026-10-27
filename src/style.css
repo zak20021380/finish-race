@@ -14288,7 +14288,7 @@ html.reduced-motion .adm-live-refresh[data-busy="true"] .ico { animation-duratio
   flex: none;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: minmax(128px, auto);
+  grid-auto-rows: minmax(142px, auto);
   gap: var(--s2);
 }
 .adm-card {
@@ -14377,10 +14377,40 @@ html.reduced-motion .adm-live-dot { animation: none; }
   font-variant-numeric: tabular-nums;
 }
 .adm-card-s b { color: var(--mint-ink); }
+/* the acquisition badges on the players card: mint pills, greyed at an exact zero */
+.adm-card-gains {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+}
+.adm-gain {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--mint-ink);
+  background: rgba(16, 185, 129, .13);
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .34), 0 1px 0 rgba(0, 0, 0, .22);
+}
+.adm-gain[data-positive="false"] {
+  color: var(--ink-soft);
+  background: var(--field);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+}
 
 /* ---- the slab sections: one clay face each, a title row, content under it ---- */
-.adm-modes,
-.adm-tele,
+.adm-growth,
 .adm-health {
   display: flex;
   flex-direction: column;
@@ -14391,66 +14421,76 @@ html.reduced-motion .adm-live-dot { animation: none; }
   box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
 }
 
-/* ---- the live board mix: one proportional bar over its legend ---- */
-.adm-modes-bar {
+/* ---- growth & retention health: three measured progress bars ---- */
+.adm-prog-row {
   display: flex;
-  height: 14px;
-  border-radius: 7px;
+  flex-direction: column;
+  gap: 4px;
+}
+.adm-prog-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+  min-width: 0;
+}
+.adm-prog-l {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.adm-prog-v {
+  flex: none;
+  font-size: 11px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: var(--honey-ink);
+}
+.adm-prog {
+  height: 8px;
+  border-radius: 999px;
   overflow: hidden;
   background: var(--field);
   box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
 }
-.adm-modes-bar[data-empty="true"] .adm-mode-seg { visibility: hidden; }
-.adm-mode-seg {
+.adm-prog i {
   display: block;
-  min-width: 4px;
+  width: 0;
   height: 100%;
+  border-radius: inherit;
   transition: width .34s var(--bounce);
 }
-.adm-mode-seg[data-mode="duel"] {
-  width: var(--w-duel, 0%);
-  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -1px 2px rgba(146, 64, 14, .4);
+.adm-prog[data-tone="mint"] i {
+  background: linear-gradient(90deg, #10b981, #34d399);
+  box-shadow: 0 0 10px rgba(16, 185, 129, .55);
 }
-.adm-mode-seg[data-mode="arena"] {
-  width: var(--w-arena, 0%);
-  background: linear-gradient(180deg, #38bdf8 0%, #0ea5e9 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), inset 0 -1px 2px rgba(12, 74, 110, .4);
+.adm-prog[data-tone="honey"] i {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  box-shadow: 0 0 10px rgba(245, 158, 11, .5);
 }
-html.reduced-motion .adm-mode-seg { transition: none; }
-.adm-modes-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.adm-prog[data-tone="sky"] i {
+  background: linear-gradient(90deg, #0ea5e9, #38bdf8);
+  box-shadow: 0 0 10px rgba(14, 165, 233, .5);
 }
-.adm-modes-legend li {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+.adm-prog[data-empty="true"] i { visibility: hidden; }
+.adm-prog-note {
   min-width: 0;
-  font-size: 9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 8.5px;
   font-weight: 800;
   letter-spacing: .04em;
+  line-height: 1.35;
   text-transform: uppercase;
-  color: var(--ink-soft);
-  white-space: nowrap;
+  color: var(--brand-ink);
 }
-.adm-modes-legend i {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 3px;
-  background: var(--ink-soft);
-}
-.adm-modes-legend i[data-mode="duel"] { background: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, .5); }
-.adm-modes-legend i[data-mode="arena"] { background: #0ea5e9; box-shadow: 0 0 8px rgba(14, 165, 233, .5); }
-.adm-modes-legend b {
-  font-variant-numeric: tabular-nums;
-  color: var(--ink);
-}
+html.reduced-motion .adm-prog i { transition: none; }
 
 /* ---- telemetry & health: recessed cells in one row ---- */
 .adm-cells { display: flex; gap: 6px; }

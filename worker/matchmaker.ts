@@ -287,6 +287,8 @@ export interface ServerMetrics {
   telegramUsers: number;
   /** Boards that reached a winner since this counter was introduced. */
   matchesCompleted: number;
+  /** Matches that settled in the rolling last 24 hours. */
+  matches24h: number;
   /** Mine actions accepted by the authoritative board. */
   minesPlaced: number;
   /** Retired rolling-log counter; always 0. */
@@ -295,6 +297,24 @@ export interface ServerMetrics {
   referrals: number;
   /** Registry players credited with at least one referral. */
   referringPlayers: number;
+  /** Players whose last activity falls inside the rolling last 24 hours. */
+  dau: number;
+  /** Players whose last activity falls inside the rolling last 7 days. */
+  wau: number;
+  /** Registry entries first seen in the rolling last 24 hours. */
+  newSignups24h: number;
+  /** Registry entries first seen in the rolling last 7 days. */
+  newSignups7d: number;
+  /** Completed matches per registered player, rounded to one decimal. */
+  avgMatchesPerPlayer: number;
+  /** % of registered players who finished at least one match (0-100). */
+  activationRate: number;
+  /** % of registered players who finished three or more matches (0-100). */
+  coreRetention: number;
+  /** DAU as a % of the registered playerbase (0-100). */
+  dailyActiveRatio: number;
+  /** Referral joins as a % of the registered playerbase, capped at 100. */
+  viralShare: number;
 }
 
 /* ---------- durable gameplay counters ---------- */
@@ -303,11 +323,36 @@ export interface ServerMetrics {
 interface GameMetrics {
   matchesCompleted: number;
   minesPlaced: number;
+  /**
+   * Match completions bucketed by UTC hour (`Math.floor(ms / 3600000)` as the key). The rolling
+   * 24-hour figure is read back from these buckets, so the number is a genuine timestamped count
+   * rather than a single "today" counter that forgets the previous afternoon.
+   */
+  matchesByHour: Record<string, number>;
 }
 
 const GAME_METRICS_KEY = 'game-metrics.v1';
+/** The width of one match bucket, and how many hours of buckets stay in storage. */
+const HOUR_MS = 3_600_000;
+const MATCH_BUCKET_KEEP_HOURS = 8 * 24;
 
-const zeroGameMetrics = (): GameMetrics => ({ matchesCompleted: 0, minesPlaced: 0 });
+const zeroGameMetrics = (): GameMetrics => ({ matchesCompleted: 0, minesPlaced: 0, matchesByHour: {} });
+
+/** A stored bucket map, clamped and pruned: only whole counts in the retained window survive. */
+function readMatchHours(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const newestHour = Math.floor(Date.now() / HOUR_MS);
+  const oldestHour = newestHour - MATCH_BUCKET_KEEP_HOURS;
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!/^\d{1,12}$/.test(key)) continue;
+    const hour = Number(key);
+    if (hour < oldestHour || hour > newestHour) continue;
+    const count = whole(value);
+    if (count > 0) out[String(hour)] = count;
+  }
+  return out;
+}
 
 /** A stored counter blob, clamped field by field; anything missing is zero. */
 function readGameMetrics(raw: unknown): GameMetrics {
@@ -315,6 +360,7 @@ function readGameMetrics(raw: unknown): GameMetrics {
   return {
     matchesCompleted: whole(r?.matchesCompleted),
     minesPlaced: whole(r?.minesPlaced),
+    matchesByHour: readMatchHours(r?.matchesByHour),
   };
 }
 
@@ -411,8 +457,14 @@ const PLAYERS_MAX = 2000;
 const PLAYERS_LIMIT = 100;
 /** A day in ms: what "Active Today" means on both sides of the wire. */
 const ACTIVE_MS = 24 * 60 * 60 * 1000;
+/** A week in ms: the WAU / new-signup window. */
+const WEEK_MS = 7 * ACTIVE_MS;
 
 const whole = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0);
+
+/** One decimal of a percentage, with an empty population reading exactly zero. */
+const percentOf = (part: number, total: number): number =>
+  total > 0 ? Math.min(100, Math.round((part / total) * 1000) / 10) : 0;
 
 /** The numeric id behind a seat id, so the panel can search by the number a support ticket quotes. */
 const tgIdOf = (id: string): string => (id.startsWith('tg-') ? id.replace(/[^0-9]/g, '').slice(0, 20) : '');
@@ -1235,11 +1287,22 @@ export class MatchmakerDO {
 
   /**
    * The measured telemetry reading. Population figures come from the registry, the live figures
-   * from the in-memory room maps, and the totals from the durable counters — empty is exact zero.
+   * from the in-memory room maps, the match total from the durable counter and the 24-hour match
+   * window from its own timestamped hourly buckets — empty is exact zero.
    */
   private metrics(hostname: string): ServerMetrics {
+    const now = Date.now();
+    const dayAgo = now - ACTIVE_MS;
+    const weekAgo = now - WEEK_MS;
     let referrals = 0;
     let referringPlayers = 0;
+    let totalMatches = 0;
+    let activatedPlayers = 0;
+    let corePlayers = 0;
+    let dau = 0;
+    let wau = 0;
+    let newSignups24h = 0;
+    let newSignups7d = 0;
     const telegram = new Set<string>();
     for (const p of this.players.values()) {
       if (p.tgId) telegram.add(p.tgId);
@@ -1247,23 +1310,41 @@ export class MatchmakerDO {
         referrals += p.referrals;
         referringPlayers++;
       }
+      totalMatches += p.matches;
+      if (p.matches >= 1) activatedPlayers++;
+      if (p.matches >= 3) corePlayers++;
+      if (p.lastSeen >= dayAgo) dau++;
+      if (p.lastSeen >= weekAgo) wau++;
+      if (p.firstSeen >= dayAgo) newSignups24h++;
+      if (p.firstSeen >= weekAgo) newSignups7d++;
     }
+    const totalUsers = this.players.size;
     const environment = this.env.WORKER_ENV?.trim()
       || (this.env.DEV_AUTH === 'true' || isLocalhost(hostname) ? 'development' : 'production');
     return {
       ok: true,
-      timestamp: Date.now(),
+      timestamp: now,
       environment,
       activeRooms: this.races.size + this.rooms.size,
       queueLength: this.queue.length,
       active1v1: this.races.size,
-      totalUsers: this.players.size,
+      totalUsers,
       telegramUsers: telegram.size,
       matchesCompleted: this.gameMetrics.matchesCompleted,
+      matches24h: this.matchesInWindow(ACTIVE_MS, now),
       minesPlaced: this.gameMetrics.minesPlaced,
       logsSpawned: 0,
       referrals,
       referringPlayers,
+      dau,
+      wau,
+      newSignups24h,
+      newSignups7d,
+      avgMatchesPerPlayer: totalUsers ? Math.round((totalMatches / totalUsers) * 10) / 10 : 0,
+      activationRate: percentOf(activatedPlayers, totalUsers),
+      coreRetention: percentOf(corePlayers, totalUsers),
+      dailyActiveRatio: percentOf(dau, totalUsers),
+      viralShare: percentOf(Math.min(referrals, totalUsers), totalUsers),
     };
   }
 
@@ -1851,6 +1932,33 @@ export class MatchmakerDO {
     this.bumpMetrics({ minesPlaced: mines });
   }
 
+  /**
+   * Stamp completed matches into their UTC-hour buckets. Only the retained window is kept, so the
+   * blob stays small while the rolling 24-hour figure stays exact.
+   */
+  private stampMatchesByHour(matches: number, now = Date.now()): void {
+    if (matches <= 0) return;
+    const hour = Math.floor(now / HOUR_MS);
+    const key = String(hour);
+    this.gameMetrics.matchesByHour[key] = whole(this.gameMetrics.matchesByHour[key]) + matches;
+    const oldest = hour - MATCH_BUCKET_KEEP_HOURS;
+    for (const stored of Object.keys(this.gameMetrics.matchesByHour)) {
+      if (Number(stored) < oldest) delete this.gameMetrics.matchesByHour[stored];
+    }
+  }
+
+  /** Matches stamped inside a rolling window, read back from the hourly buckets. */
+  private matchesInWindow(windowMs: number, now = Date.now()): number {
+    const oldest = Math.floor((now - windowMs) / HOUR_MS);
+    const newest = Math.floor(now / HOUR_MS);
+    let total = 0;
+    for (const [key, value] of Object.entries(this.gameMetrics.matchesByHour)) {
+      const hour = Number(key);
+      if (hour >= oldest && hour <= newest) total += value;
+    }
+    return total;
+  }
+
   /** Add to the durable gameplay counters; a missing or negative delta is exactly zero. */
   private bumpMetrics(delta: Partial<GameMetrics>): void {
     const matches = whole(delta.matchesCompleted);
@@ -1858,6 +1966,7 @@ export class MatchmakerDO {
     if (!matches && !mines) return;
     this.gameMetrics.matchesCompleted += matches;
     this.gameMetrics.minesPlaced += mines;
+    if (matches) this.stampMatchesByHour(matches);
     this.persistMetrics();
   }
 

@@ -3150,7 +3150,8 @@
               </span>
             </div>
 
-            <!-- primary KPIs: Live Concurrency / Players+Telegram / Matches / Referrals -->
+            <!-- primary KPIs: live concurrency + DAU / players + acquisition /
+                 match velocity / viral acquisition -->
             <div class="adm-grid">
               <div class="adm-card">
                 <span class="adm-card-top">
@@ -3160,6 +3161,7 @@
                 <b class="adm-card-v" id="stat-active">—</b>
                 <span class="adm-card-l">Live Concurrency</span>
                 <span class="adm-card-s" id="stat-live-rooms">— rooms · — queued</span>
+                <span class="adm-card-s adm-card-s-soft" id="stat-dau">— active users · 24h</span>
               </div>
               <div class="adm-card">
                 <span class="adm-card-top">
@@ -3167,48 +3169,71 @@
                 </span>
                 <b class="adm-card-v" id="stat-players">—</b>
                 <span class="adm-card-l">Total Players</span>
-                <span class="adm-card-s" id="stat-dau">— Telegram</span>
+                <span class="adm-card-gains">
+                  <span class="adm-gain" id="stat-new-24h" data-positive="false">— today (24h)</span>
+                  <span class="adm-gain" id="stat-new-7d" data-positive="false">— this week</span>
+                </span>
               </div>
               <div class="adm-card">
                 <span class="adm-card-top">
                   <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
                 </span>
                 <b class="adm-card-v" id="stat-matches">—</b>
-                <span class="adm-card-l">Matches Completed</span>
-                <span class="adm-card-s" id="stat-modes">— live 1v1</span>
+                <span class="adm-card-l">Match Velocity</span>
+                <span class="adm-card-s" id="stat-matches-24h">— · 24h</span>
+                <span class="adm-card-s adm-card-s-soft" id="stat-avg-matches">— avg / player</span>
               </div>
               <div class="adm-card">
                 <span class="adm-card-top">
                   <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-gift" /></svg></span>
                 </span>
                 <b class="adm-card-v" id="stat-referrals">—</b>
-                <span class="adm-card-l">Referral Joins</span>
-                <span class="adm-card-s" id="stat-referrers">— referrers</span>
+                <span class="adm-card-l">Viral Acquisition</span>
+                <span class="adm-card-s" id="stat-viral-share">— of playerbase</span>
               </div>
             </div>
 
-            <!-- live board mix: 1v1 races against multi-seat rooms, both measured by the room -->
-            <div class="adm-modes">
+            <!-- growth & retention health: every bar is a server-measured registry ratio -->
+            <div class="adm-growth">
               <div class="adm-nations-h">
-                <span class="adm-nations-t">Live Board Mix</span>
+                <span class="adm-nations-t">Growth &amp; Retention Health</span>
+                <span class="adm-nations-s" id="stat-growth-meta">— registered</span>
               </div>
-              <div class="adm-modes-bar" id="stat-mode-bar" role="img" aria-label="Live boards by format"
-                data-empty="true">
-                <i class="adm-mode-seg" id="stat-mode-1v1" data-mode="duel"></i>
-                <i class="adm-mode-seg" id="stat-mode-arena" data-mode="arena"></i>
+              <div class="adm-prog-row">
+                <div class="adm-prog-head">
+                  <span class="adm-prog-l">Activation Rate</span>
+                  <b class="adm-prog-v" id="stat-activation">—</b>
+                </div>
+                <div class="adm-prog" id="stat-activation-bar" data-tone="mint" role="progressbar"
+                  aria-label="Activation rate: registered players who completed at least one match"
+                  aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                  <i id="stat-activation-fill"></i>
+                </div>
+                <span class="adm-prog-note" id="stat-activation-note">of registered players · played 1+ match</span>
               </div>
-              <ul class="adm-modes-legend" id="stat-mode-legend" aria-hidden="true">
-                <li><i data-mode="duel"></i>1v1 Races<b id="stat-mode-1v1-p">—</b></li>
-                <li><i data-mode="arena"></i>Multi-Seat Rooms<b id="stat-mode-arena-p">—</b></li>
-              </ul>
-            </div>
-
-            <!-- durable gameplay counters the Worker has measured -->
-            <div class="adm-tele">
-              <p class="adm-sec-h">Gameplay Counters</p>
-              <div class="adm-cells">
-                <span class="adm-stat"><b id="stat-mines">—</b><span class="adm-stat-l">Mines Placed</span></span>
-                <span class="adm-stat"><b id="stat-ref-players">—</b><span class="adm-stat-l">Referring Players</span></span>
+              <div class="adm-prog-row">
+                <div class="adm-prog-head">
+                  <span class="adm-prog-l">Core Player Stickiness</span>
+                  <b class="adm-prog-v" id="stat-core">—</b>
+                </div>
+                <div class="adm-prog" id="stat-core-bar" data-tone="honey" role="progressbar"
+                  aria-label="Core player stickiness: players who completed at least three matches"
+                  aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                  <i id="stat-core-fill"></i>
+                </div>
+                <span class="adm-prog-note" id="stat-core-note">of registered players · played 3+ matches</span>
+              </div>
+              <div class="adm-prog-row">
+                <div class="adm-prog-head">
+                  <span class="adm-prog-l">Daily Active Ratio</span>
+                  <b class="adm-prog-v" id="stat-dau-ratio">—</b>
+                </div>
+                <div class="adm-prog" id="stat-dau-ratio-bar" data-tone="sky" role="progressbar"
+                  aria-label="Daily active ratio: players active in the last 24 hours divided by total players"
+                  aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                  <i id="stat-dau-ratio-fill"></i>
+                </div>
+                <span class="adm-prog-note" id="stat-dau-ratio-note">DAU / total players · last 24h</span>
               </div>
             </div>
 
