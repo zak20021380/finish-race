@@ -2045,34 +2045,44 @@
                 </button>
               </article>
               <article class="car-card nations-cup carousel-slide-nations" data-slide="1" data-index="1" aria-label="Nations Cup — world standings">
-                <div class="car-head nations-head">
-                  <span class="car-kicker nations-kicker"><span class="nations-ico" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-globe" /></svg></span> Nations Cup · S4</span>
-                  <span class="pill live pulse cup-live"><i class="live-dot" aria-hidden="true"></i>Live</span>
+                <!-- one inner column: header on top, standings in the band, foot pinned -->
+                <div class="slide-inner">
+                  <div class="car-head nations-head">
+                    <span class="car-kicker nations-kicker"><span class="nations-ico" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-globe" /></svg></span> Nations Cup · S4</span>
+                    <span class="pill live pulse cup-live"><i class="live-dot" aria-hidden="true"></i>Live</span>
+                  </div>
+                  <ol class="mini-rank nations-rank" id="home-countries">
+                    <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
+                    <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
+                    <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
+                    <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
+                    <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
+                  </ol>
+                  <div class="slide-foot">
+                    <p class="nations-mine" id="home-nation-mine"><span class="skel w60"></span></p>
+                    <button class="btn card-cta nations-hold" type="button" id="home-cup-table">View Cup Table</button>
+                  </div>
                 </div>
-                <ol class="mini-rank nations-rank" id="home-countries">
-                  <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
-                  <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
-                  <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
-                  <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
-                  <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
-                </ol>
-                <p class="nations-mine" id="home-nation-mine"><span class="skel w60"></span></p>
-                <button class="btn card-cta nations-hold" type="button" id="home-cup-table">View Cup Table</button>
               </article>
               <article class="car-card mind-ladder" data-slide="2" data-index="2" aria-label="The Mind Ladder — top tactical minds">
-                <div class="car-head mind-head">
-                  <span class="car-kicker mind-kicker"><span class="mind-ico" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg></span> The Mind Ladder</span>
-                  <span class="mind-top" id="mind-top">Top 100</span>
+                <!-- one inner column: header on top, standings in the band, foot pinned -->
+                <div class="slide-inner">
+                  <div class="car-head mind-head">
+                    <span class="car-kicker mind-kicker"><span class="mind-ico" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg></span> The Mind Ladder</span>
+                    <span class="mind-top" id="mind-top">Top 100</span>
+                  </div>
+                  <ol class="mind-podium" id="home-minds">
+                    <li class="mind-row"><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
+                    <li class="mind-row"><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
+                    <li class="mind-row"><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
+                    <li class="mind-row"><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
+                    <li class="mind-row"><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
+                  </ol>
+                  <div class="slide-foot">
+                    <p class="mind-mine" id="home-mind-mine"><span class="skel w60"></span></p>
+                    <button class="btn card-cta mind-cta" type="button" id="home-mind-cta">View Full Ladder</button>
+                  </div>
                 </div>
-                <ol class="mind-podium" id="home-minds">
-                  <li class="mind-row"><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
-                  <li class="mind-row"><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
-                  <li class="mind-row"><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
-                  <li class="mind-row"><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
-                  <li class="mind-row"><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
-                </ol>
-                <p class="mind-mine" id="home-mind-mine"><span class="skel w60"></span></p>
-                <button class="btn card-cta mind-cta" type="button" id="home-mind-cta">View Full Ladder</button>
               </article>
             </div>
             <div class="car-dots" id="home-dots" role="tablist" aria-label="Highlight pages">

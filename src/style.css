@@ -4897,17 +4897,16 @@ html.no-flags .id-flag .flag-code { display: none; }
 }
 
 /* ---- Nations Cup: Global Nations showcase (slide 1) ----
-   Mobile-first, 360x640 reference. Content always fits inside the card's
-   bottom padding (30px reserves the inside dots); the card keeps its full
-   26px radius via overflow:hidden. Track + wrap stay transparent, the card
-   carries a soft low-alpha 0 8px 20px drop. Top-5 rows are 30px with 4px
-   gaps on one consistent surface; the user row adds an accent border. */
+   Mobile-first, 360x640 reference. The card is a frame for one inner column
+   (`.slide-inner`): it owns the padding and splits the height — header on top,
+   the standings in the band, the standing strip + CTA pinned to the bottom edge.
+   Top-5 rows breathe on one consistent surface; the user row adds an accent border. */
 .car-card.nations-cup {
   position: relative;
   isolation: isolate;
-  justify-content: flex-start;
-  gap: 4px;
-  padding: 8px 12px 28px;
+  justify-content: stretch;
+  gap: 0;
+  padding: 0 0 16px;
   overflow: hidden;
   border-radius: var(--r-panel);
   border-top: 1px solid rgba(255, 255, 255, 0.12);
@@ -4965,24 +4964,25 @@ html.no-flags .id-flag .flag-code { display: none; }
   color: var(--ink-soft);
   white-space: nowrap;
 }
-/* standings: one consistent surface, Top-5 rows at 30px, 4px gaps */
+/* standings: one consistent surface, Top-5 rows that grow into the band */
 .mini-rank.nations-rank {
   background: transparent;
   box-shadow: none;
-  gap: 4px;
+  gap: 8px;
   overflow: visible;
   border-radius: 0;
   margin: 0;
 }
-.mini-rank.nations-rank li.nations-row {
+.mini-rank.nations-rank > li {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  height: 30px;
-  min-height: 30px;
-  max-height: 30px;
-  padding: 0 10px;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 38px;
+  max-height: 64px;
+  padding: 6px 10px;
   border-radius: 12px;
   background: rgba(255, 255, 255, .045);
   border-top: 1px solid rgba(255, 255, 255, 0.06);
@@ -4995,7 +4995,7 @@ html.no-flags .id-flag .flag-code { display: none; }
   border-top-color: rgba(125, 211, 252, .35);
   box-shadow: inset 0 0 0 1.5px var(--brand-2);
 }
-.mini-rank.nations-rank li.is-error { justify-content: center; color: var(--ink-soft); font-weight: 700; height: 30px; min-height: 30px; }
+.mini-rank.nations-rank li.is-error { justify-content: center; color: var(--ink-soft); font-weight: 700; flex: none; height: 30px; min-height: 30px; max-height: 30px; }
 /* rank: gold / silver / bronze for 1-3, plain number otherwise */
 .mini-rank.nations-rank .rk {
   flex: none;
@@ -5165,25 +5165,8 @@ html.no-flags .id-flag .flag-code { display: none; }
 }
 .nations-cta-reward .coin { width: 1em; height: 1em; }
 .nations-cta-reward b { font-weight: 900; font-variant-numeric: tabular-nums; }
-/* compact density below 620px: tighten chrome, never the row recipe */
-@media (max-width: 620px) {
-  .car-card.nations-cup { gap: 4px; padding: 8px 12px 28px; }
-  .mini-rank.nations-rank { gap: 4px; }
-  .mini-rank.nations-rank li.nations-row { height: 30px; min-height: 30px; max-height: 30px; }
-}
-/* short columns: rows stay 30px — only gaps and chrome compact */
-@media (max-height: 900px) {
-  .car-card.nations-cup { gap: 4px; }
-  .mini-rank.nations-rank { gap: 4px; }
-}
-@media (max-height: 660px) {
-  .car-card.nations-cup { gap: 4px; padding-top: 8px; }
-  .mini-rank.nations-rank { gap: 4px; }
-}
-@media (max-height: 600px) {
-  .car-card.nations-cup { gap: 4px; padding-top: 8px; }
-  .mini-rank.nations-rank { gap: 4px; }
-}
+/* The Nations Cup slide now shares one balanced column with The Mind Ladder —
+   its layout, row recipe and compact tiers live with that shared block below. */
 html.reduced-motion .car-card.nations-cup::before { display: none; }
 
 /* ---- Leaderboard board tabs: a slim, borderless pill over a quiet groove ----
@@ -18108,9 +18091,10 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
 .card-cta:active { transform: translateY(2px); --d: 1px; }
 .card-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .car-card .card-cta { width: 100%; }
-/* 8px air between the own-standing strip and the one CTA (4px card gap + 4px) */
+/* the one CTA per leaderboard slide: the foot block owns the 8px air, so the
+   button itself carries no extra margin */
 .car-card.nations-cup .nations-hold,
-.car-card.mind-ladder .mind-cta { margin-top: 4px; }
+.car-card.mind-ladder .mind-cta { margin-top: 0; }
 .car-card.nations-cup .nations-hold { color: var(--honey-ink); }
 .car-card.mind-ladder .mind-cta { color: #C4B5FD; }
 
@@ -18133,13 +18117,16 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- The Mind Ladder: TIQ hero card ---- */
+/* ---- The Mind Ladder: TIQ hero card ----
+   Same frame as Nations Cup: the card hosts one inner column (`.slide-inner`)
+   that owns the padding and splits the height between the podium band and the
+   pinned foot. */
 .car-card.mind-ladder {
   position: relative;
   isolation: isolate;
-  justify-content: flex-start;
-  gap: 4px;
-  padding: 8px 12px 28px;
+  justify-content: stretch;
+  gap: 0;
+  padding: 0 0 16px;
   overflow: hidden;
   border-radius: var(--r-panel);
   border-top: 1px solid rgba(255, 255, 255, .12);
@@ -18192,14 +18179,14 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   white-space: nowrap;
   box-shadow: 0 2px 0 #7c2d12, inset 0 1px 0 rgba(255, 255, 255, .6);
 }
-/* podium: Top-5 rows at 30px — 3D sphere avatar, flag badge, tier, TIQ */
+/* podium: Top-5 rows that grow into the band — 3D sphere avatar, flag badge, tier, TIQ */
 .mind-podium {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   min-height: 0;
 }
 .mind-row {
@@ -18207,10 +18194,11 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   align-items: center;
   gap: 8px;
   min-width: 0;
-  height: 30px;
-  min-height: 30px;
-  max-height: 30px;
-  padding: 0 10px;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 38px;
+  max-height: 64px;
+  padding: 6px 10px;
   border-radius: 12px;
   background: rgba(255, 255, 255, .045);
   border-top: 1px solid rgba(255, 255, 255, .06);
@@ -18218,7 +18206,7 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   overflow: hidden;
   box-sizing: border-box;
 }
-.mind-row.is-error { justify-content: center; color: var(--ink-soft); font-weight: 700; }
+.mind-row.is-error { justify-content: center; color: var(--ink-soft); font-weight: 700; flex: none; height: 30px; min-height: 30px; max-height: 30px; }
 .mind-av {
   position: relative;
   flex: none;
@@ -18298,19 +18286,80 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   font-variant-numeric: tabular-nums;
 }
 
-/* short columns: tighten chrome, never the 30px rows */
-@media (max-width: 620px) {
-  .car-card.mind-ladder { gap: 4px; padding: 8px 12px 28px; }
+/* ============================================================================================
+   LEADERBOARD SLIDES — Nations Cup + The Mind Ladder.
+
+   Both cards are the same pinned box (the track's content box), so they now run one
+   shared column instead of two hand-tuned stacks:
+
+     · `.slide-inner` owns the padding and splits the height three ways — the header
+       on the top edge, the five standings rows across the upper-to-mid band, and the
+       standing strip + the one CTA pinned to the bottom edge;
+     · the rows keep their own air (a 38px floor, 6-8px gaps) and grow into the band,
+       so the list reads tactile and legible instead of squished;
+     · the CTA is a full-width key that sits just above the card's bottom edge with
+       the pager dots below it — the dead void under the button is gone.
+   ============================================================================================ */
+
+/* the card is a frame for that column: it keeps only the bottom reserve the pager
+   dots live in (16px here + the column's 14px = 30px of air under the CTA) */
+#home-carousel > .car-card.nations-cup,
+#home-carousel > .car-card.mind-ladder {
+  justify-content: stretch;
+  gap: 0;
+  padding: 0 0 16px;
 }
-@media (max-height: 660px) {
-  .car-card.mind-ladder { gap: 4px; padding-top: 8px; }
+
+/* the one inner column: padding owner + height split */
+.car-card.nations-cup > .slide-inner,
+.car-card.mind-ladder > .slide-inner {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  gap: 8px;
 }
-@media (max-height: 600px) {
-  .car-card.mind-ladder { gap: 4px; padding-top: 8px; }
+
+/* the standings band: five rows that grow into the space they are given */
+.mini-rank.nations-rank,
+.mind-podium {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 8px;
+  justify-content: space-between;
 }
-/* short columns: the card box shrinks with the column, so the Top-5 list sheds
-   its tail rows by height — 5 rows live at 640+, 4 below 600, 3 below 550 —
-   the card itself never grows and never clips a row or the CTA. */
+
+/* the foot: standing strip + the one CTA, pinned to the bottom edge */
+.car-card.nations-cup .slide-foot,
+.car-card.mind-ladder .slide-foot {
+  flex: none;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* the CTA: a full-width key with a comfortable face */
+.car-card.nations-cup .nations-hold,
+.car-card.mind-ladder .mind-cta {
+  min-height: 40px;
+  padding: 11px 16px;
+}
+
+/* short columns: the chrome gives up first, the five rows keep their floor */
+@media (max-height: 700px) {
+  .car-card.nations-cup > .slide-inner,
+  .car-card.mind-ladder > .slide-inner { padding: 10px 14px 14px; gap: 6px; }
+  .mini-rank.nations-rank,
+  .mind-podium { gap: 6px; }
+  .mini-rank.nations-rank > li,
+  .mind-podium .mind-row { min-height: 34px; padding: 4px 10px; }
+}
+/* the floor: 600px of height is a card that still has four lines to show, so the
+   Top-5 list sheds its tail row by height — the card itself never grows and never
+   clips a row or the CTA. */
 @media (max-height: 600px) {
   .mini-rank.nations-rank li.nations-row:nth-child(5),
   .mind-podium .mind-row:nth-child(5) { display: none; }
