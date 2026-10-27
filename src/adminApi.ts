@@ -11,8 +11,13 @@ import { tgInitData } from './telegram';
  * The Worker origin: `VITE_WS_URL` when the app was pointed at one, else this page's own origin.
  * The documented env value is the whole socket URL (`ws://host/ws/matchmake`), so only its origin
  * is kept — every backend route is root-relative.
+ *
+ * During `vite dev` the backend prefixes are proxied to `wrangler dev`, so admin calls always stay
+ * same-origin: a direct loopback URL would otherwise be held up by browser CORS even when the
+ * Worker is running. Production keeps honouring `VITE_WS_URL` for a separately hosted Worker.
  */
 export function workerBase(): string {
+  if (import.meta.env.DEV && location.host) return location.origin;
   const ws = import.meta.env?.VITE_WS_URL?.trim();
   if (ws) {
     try {

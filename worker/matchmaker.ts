@@ -102,6 +102,8 @@ interface Race {
   seats: [Waiter, Waiter];
   /** The real state — every relayed move has been through it. */
   state: GameState;
+  /** When the pairing was announced: the inspector's match clock starts here. */
+  startedAt: number;
   over: boolean;
 }
 
@@ -134,6 +136,8 @@ interface LiveRoom {
   /** Minted at launch, so both seats of every pairing derive the same numbers. */
   matchId: string;
   seed: number;
+  /** When the board launched: the inspector's match clock starts here. 0 while still a lobby. */
+  startedAt: number;
   /** The authoritative race. Null until the room launches. */
   driver: RoomDriver | null;
   /** The seat wearing the crown. A code lobby migrates it when the host walks out. */
@@ -254,14 +258,42 @@ export interface ActiveRoom {
   players?: number;
   /** How many of those seats the machine is holding. */
   bots?: number;
+  /** `1v1` for a duel, `room` for a multi-seat board. */
+  kind?: '1v1' | 'room';
+  /** When the board started, in ms. The inspector ticks the match clock from this. */
+  startedAt?: number;
+  /** Watchers attached to the board. The engine has no spectator relay yet, so this is 0. */
+  spectators?: number;
+}
+
+/** One room still filling its seats, as the Server tab's lobby inspector reports it. */
+export interface OpenLobby {
+  /** The 4-digit invite code. */
+  code: string;
+  /** Seats the room fields. */
+  size: number;
+  /** Seats a person is already holding. */
+  joined: number;
+  /** When the lobby opened, in ms. */
+  openedAt: number;
+  /** How long the lobby waits for more people. */
+  waitMs: number;
+  /** True for a code-based friends lobby, false for the auto-pair room. */
+  friends: boolean;
 }
 
 export interface ServerStatus {
   ok: true;
+  /** The room's clock when this reading was taken. */
+  timestamp: number;
   queueCount: number;
   activeMatchesCount: number;
+  /** Duels still being played. */
+  active1v1: number;
   queuedPlayers: QueuedPlayer[];
   activeRooms: ActiveRoom[];
+  /** Rooms that have not launched yet. */
+  openLobbies: OpenLobby[];
   config: ServerConfig;
   arena: ArenaState;
 }
@@ -1257,13 +1289,25 @@ export class MatchmakerDO {
     return { maintenance: this.maintenance, normalRadius: this.normalRadius, wideRadius: this.wideRadius };
   }
 
-  /** Everything a live server knows about itself: the queue, the rooms, and the config. */
+  /** Everything a live server knows about itself: the queue, the rooms, the lobbies and the config. */
   private status(): ServerStatus {
     const now = Date.now();
+    const lobbies: OpenLobby[] = [
+      ...[...this.openRooms, ...this.lobbies.values()].map((live) => ({
+        code: live.room.code,
+        size: live.size,
+        joined: live.members.reduce((n, m) => n + (m ? 1 : 0), 0),
+        openedAt: live.room.openedAt,
+        waitMs: live.room.waitMs,
+        friends: live.code,
+      })),
+    ];
     return {
       ok: true,
+      timestamp: now,
       queueCount: this.queue.length,
       activeMatchesCount: this.races.size + this.rooms.size,
+      active1v1: this.races.size,
       queuedPlayers: this.queue.map((w) => ({
         id: w.id,
         name: w.name,
@@ -1277,9 +1321,15 @@ export class MatchmakerDO {
           p0: r.seats[0].name,
           p1: r.seats[1].name,
           turn: r.state.turn,
+          players: 2,
+          bots: 0,
+          kind: '1v1' as const,
+          startedAt: r.startedAt,
+          spectators: 0,
         })),
         ...[...this.rooms.values()].map((live) => this.roomSummary(live)),
       ],
+      openLobbies: lobbies,
       config: this.config(),
       arena: this.arena,
     };
@@ -1360,6 +1410,9 @@ export class MatchmakerDO {
       turn: live.driver?.state.turn ?? 0,
       players: roster.seats.length,
       bots,
+      kind: 'room',
+      startedAt: live.startedAt || live.room.openedAt,
+      spectators: 0,
     };
   }
 
@@ -1387,6 +1440,11 @@ export class MatchmakerDO {
 
     /* What a Moderator reads: the live room, the directory, the registry and the history. */
     if (url.pathname === '/admin/status') return json(this.status());
+    /* The Server tab's dedicated telemetry door: the same live room, never cached. The edge has
+       already authenticated the caller, and `adminIdentity` above checked the role registry. */
+    if (url.pathname === '/api/admin/matchmaking') {
+      return json(this.status(), 200, { 'cache-control': 'no-store' });
+    }
     if (url.pathname === '/admin/players') {
       return json(this.playersPage(url.searchParams), 200, { 'cache-control': 'no-store' });
     }
@@ -2333,6 +2391,7 @@ export class MatchmakerDO {
       sizes,
       seats: [first, second],
       state: newGame(sizes),
+      startedAt: Date.now(),
       over: false,
     };
     first.race = race;
@@ -2381,6 +2440,7 @@ export class MatchmakerDO {
         members: Array.from({ length: size }, () => null),
         matchId: '',
         seed: 0,
+        startedAt: 0,
         driver: null,
         hostSeat: 0,
         format: formatForSize(size),
@@ -2441,6 +2501,7 @@ export class MatchmakerDO {
         members: Array.from({ length: size }, () => null),
         matchId: '',
         seed: 0,
+        startedAt: 0,
         driver: null,
         hostSeat: 0,
         format,
@@ -2629,6 +2690,7 @@ export class MatchmakerDO {
     live.room = launch(backfill(live.room));
     live.seed = hash(`${live.room.code}|${live.members.map((m) => m?.id ?? 'bot').join('|')}|${this.paired}`);
     live.matchId = `r${hash(`${live.room.code}|${++this.paired}`).toString(36)}`;
+    live.startedAt = Date.now();
     live.driver = createRoomDriver(live.room);
     this.openRooms = this.openRooms.filter((r) => r !== live);
     this.lobbies.delete(live.room.code);

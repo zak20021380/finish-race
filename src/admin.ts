@@ -330,28 +330,79 @@ export interface QueuedPlayer {
   waitedMs: number;
 }
 
-/** One live 1v1, as `/admin/status` reports it. */
+/** One live 1v1, as the matchmaking telemetry reports it. */
 export interface ActiveRoom {
   matchId: string;
   p0: string;
   p1: string;
   turn: number;
+  /** How many seats the race fields — 2 for a duel, up to four for a room. */
+  players?: number;
+  /** How many of those seats the machine is holding. */
+  bots?: number;
+  /** `1v1` for a duel, `room` for a multi-seat board. */
+  kind?: '1v1' | 'room';
+  /** When the board started, in ms; the inspector ticks its clock from here. */
+  startedAt?: number;
+  /** Watchers attached to the board. The engine has no spectator relay yet, so 0. */
+  spectators?: number;
+}
+
+/** One room still filling its seats, as the lobby inspector reports it. */
+export interface OpenLobby {
+  code: string;
+  size: number;
+  joined: number;
+  openedAt: number;
+  waitMs: number;
+  friends: boolean;
 }
 
 export interface ServerStatus {
   ok: true;
+  /** The Worker's clock when the reading was taken. */
+  timestamp?: number;
   queueCount: number;
   activeMatchesCount: number;
+  /** Duels still being played. */
+  active1v1?: number;
   queuedPlayers: QueuedPlayer[];
   activeRooms: ActiveRoom[];
+  /** Rooms that have not launched yet. */
+  openLobbies?: OpenLobby[];
   config: ServerConfig;
   arena: ArenaState;
 }
 
-/** The room's own reading of itself, or null when nothing answers. */
-async function fetchStatus(): Promise<ServerStatus | null> {
-  const data = await parseJson<ServerStatus>(await adminFetch('/admin/status'));
-  return data && data.ok === true ? data : null;
+/** One telemetry read: the live room and its round trip, a refusal, or no answer at all. */
+type ServerReading =
+  | { state: 'ok'; status: ServerStatus; pingMs: number }
+  | { state: 'denied' }
+  | { state: 'error' };
+
+/**
+ * The room's own reading of itself. The dedicated `/api/admin/matchmaking` door is tried first:
+ * it is the Server tab's live telemetry, never cached. `/admin/status` remains the fallback for a
+ * Worker deployed before that route existed.
+ *
+ * A 401/403 is the registry refusing this session, not a dead Worker — it must never paint the
+ * offline card that tells the operator to start `wrangler dev`.
+ */
+async function fetchStatus(): Promise<ServerReading> {
+  const started = Date.now();
+  const res = await adminFetch('/api/admin/matchmaking', { cache: 'no-store' });
+  /* No response at all: the Worker is offline, so do not burn a second timeout on the old door. */
+  if (!res) return { state: 'error' };
+  /* A refusal is a decision, not an outage: do not ask the older door behind it. */
+  if (res.status === 401 || res.status === 403) return { state: 'denied' };
+  let data = await parseJson<ServerStatus>(res);
+  if (!data || data.ok !== true) {
+    const legacy = await adminFetch('/admin/status', { cache: 'no-store' });
+    if (legacy && (legacy.status === 401 || legacy.status === 403)) return { state: 'denied' };
+    data = await parseJson<ServerStatus>(legacy);
+  }
+  if (!data || data.ok !== true) return { state: 'error' };
+  return { state: 'ok', status: data, pingMs: Math.max(0, Date.now() - started) };
 }
 
 /**
@@ -412,17 +463,30 @@ type MetricsResult =
  * refusing this account — never a cue to fall back to a device-local or demo reading.
  */
 async function fetchMetrics(): Promise<MetricsResult> {
-  const res = await adminFetch('/api/admin/metrics');
+  const res = await adminFetch('/api/admin/metrics', { cache: 'no-store' });
   if (!res) return { state: 'error' };
   if (res.status === 401 || res.status === 403) return { state: 'unauthorized' };
   const data = await parseJson<ServerMetrics>(res);
   return data && data.ok === true ? { state: 'ok', metrics: data } : { state: 'error' };
 }
 
-/** Push a config patch to the live server. False when it could not be delivered. */
-async function pushConfig(patch: ServerConfig): Promise<boolean> {
+/**
+ * Push a config patch to the live server. `denied` is the role registry refusing a Moderator —
+ * the Worker is still live, so it must never be painted as offline. `error` is no answer at all.
+ */
+type ConfigPush =
+  | { state: 'ok'; config: ServerConfig }
+  | { state: 'denied' }
+  | { state: 'error' };
+
+async function pushConfig(patch: ServerConfig): Promise<ConfigPush> {
   const res = await postJson('/admin/config', patch);
-  return !!res && res.ok;
+  if (!res) return { state: 'error' };
+  if (res.status === 401 || res.status === 403) return { state: 'denied' };
+  const data = await parseJson<{ ok?: boolean; config?: ServerConfig }>(res);
+  return data?.ok === true && data.config
+    ? { state: 'ok', config: data.config }
+    : { state: 'error' };
 }
 
 /** The Arena tab's answer: the board as the room now holds it, or the refusal code. */
@@ -446,12 +510,20 @@ async function pushArena(body: unknown): Promise<ArenaReply | null> {
   }
 }
 
-/** One moderation action. False when the server refused it or never answered. */
+/**
+ * One moderation action. `denied` is the SuperAdmin door refusing this account, `refused` is the
+ * room rejecting the command (a board may have closed since the last poll) — both mean the Worker
+ * is live. Only `error` is no answer at all.
+ */
+type ActionReply = 'ok' | 'denied' | 'refused' | 'error';
+
 async function serverAction(
   body: { action: 'CLEAR_QUEUE' } | { action: 'ABORT_MATCH'; matchId: string },
-): Promise<boolean> {
+): Promise<ActionReply> {
   const res = await postJson('/admin/action', body);
-  return !!res && res.ok;
+  if (!res) return 'error';
+  if (res.status === 401 || res.status === 403) return 'denied';
+  return res.ok ? 'ok' : 'refused';
 }
 
 /** One page of the Worker's player directory, as `GET /admin/players` frames it. */
@@ -1019,13 +1091,24 @@ export function createAdmin(api: AdminApi): Admin {
   const coinsNow = $<HTMLElement>('tool-coins-now');
   const tiqNow = $<HTMLElement>('tool-tiq-now');
   const resetBtn = $<HTMLButtonElement>('tool-reset');
+  const serverPanel = stage?.querySelector<HTMLElement>('[data-apanel="server"]') ?? null;
   const serverCard = $<HTMLElement>('adm-server');
   const serverChip = $<HTMLElement>('adm-server-chip');
+  const serverState = $<HTMLElement>('srv-state');
+  const serverStateSub = $<HTMLElement>('srv-state-sub');
+  const serverPing = $<HTMLElement>('srv-ping');
   const serverQueue = $<HTMLElement>('srv-queue');
   const serverRooms = $<HTMLElement>('srv-rooms');
+  const serverTotalRooms = $<HTMLElement>('srv-total-rooms');
+  const serverLobbies = $<HTMLElement>('srv-lobbies');
   const serverList = $<HTMLElement>('srv-list');
   const serverRefresh = $<HTMLButtonElement>('srv-refresh');
+  const serverRefreshLabel = $<HTMLElement>('srv-refresh-label');
   const serverClear = $<HTMLButtonElement>('srv-clear');
+  const serverMaintenance = $<HTMLButtonElement>('srv-maintenance');
+  const serverMaintState = $<HTMLElement>('srv-maintenance-state');
+  const serverOffline = $<HTMLElement>('srv-offline');
+  const serverMeta = $<HTMLElement>('srv-meta');
   /* Arena & tournament board */
   const arenaRoot = $<HTMLElement>('adm-arena');
   const arenaHeadChip = $<HTMLElement>('arena-head-chip');
@@ -1179,10 +1262,18 @@ export function createAdmin(api: AdminApi): Admin {
   let hideId = 0;
   let resetId = 0;
   let live = false;
-  /** True once `/admin/status` has answered: the panel is governing a real room. */
+  /** True once the matchmaking telemetry door has answered: the panel is governing a real room. */
   let serverOn = false;
+  /** The registry refused this session: telemetry is gated, but the Worker is not offline. */
+  let serverDenied = false;
   /** The last reading of the room, so the Server tab can paint before the next fetch lands. */
   let lastStatus: ServerStatus | null = null;
+  /** The last measured round trip to the Worker, in ms. */
+  let serverPingMs: number | null = null;
+  /** One telemetry read at a time: the manual key and the live beat share this flag. */
+  let serverBusy = false;
+  /** The Server tab's live beat, alive only while the stage is open. */
+  let serverTimer = 0;
   /** What the Worker was last told, so an unchanged toggle never sends a pointless call. */
   let lastPushed: ServerConfig | null = null;
   /** The Inbox view: which filter chip is lit, and which card is expanded. */
@@ -2729,19 +2820,33 @@ export function createAdmin(api: AdminApi): Admin {
   /** Nothing answered: the panel governs this device alone, and says so. */
   function markLocal() {
     serverOn = false;
+    serverDenied = false;
     lastStatus = null;
+    serverPingMs = null;
+    paintServer(null);
+  }
+
+  /** The registry refused this session: show the refusal, never the "start wrangler dev" card. */
+  function markDenied() {
+    serverOn = false;
+    serverDenied = true;
+    lastStatus = null;
+    serverPingMs = null;
     paintServer(null);
   }
 
   /** `12s` / `1m 20s`: a wait in the unit somebody would actually say it in. */
   function waited(ms: number): string {
     const s = Math.max(0, Math.round(ms / 1000));
-    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+    if (s < 60) return `${s}s`;
+    if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
+    return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
   }
 
-  function rosterRow(name: string, meta: string, matchId?: string): HTMLLIElement {
+  /** One roster line: a name, a metadata line, and the Abort key for a live match. */
+  function rosterRow(name: string, meta: string, matchId?: string, cls = ''): HTMLLIElement {
     const li = document.createElement('li');
-    li.className = matchId ? 'adm-server-row is-room' : 'adm-server-row';
+    li.className = ['adm-server-row', matchId ? 'is-room' : '', cls].filter(Boolean).join(' ');
     const txt = document.createElement('span');
     txt.className = 'adm-server-txt';
     const n = document.createElement('span');
@@ -2764,6 +2869,15 @@ export function createAdmin(api: AdminApi): Admin {
     return li;
   }
 
+  /** A non-interactive heading inside the inspector well. */
+  function groupRow(text: string): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = 'adm-server-group';
+    li.setAttribute('role', 'presentation');
+    li.textContent = text;
+    return li;
+  }
+
   function emptyRow(text: string): HTMLLIElement {
     const li = document.createElement('li');
     li.className = 'adm-server-empty';
@@ -2771,74 +2885,276 @@ export function createAdmin(api: AdminApi): Admin {
     return li;
   }
 
-  /** The chip, the two counters and the roster, all from one status payload (or its absence). */
-  function paintServer(status: ServerStatus | null) {
-    if (serverCard) serverCard.dataset.state = status ? 'live' : 'local';
-    if (serverChip) serverChip.textContent = status ? 'LIVE SERVER' : 'LOCAL MODE';
+  /** The Refresh key's spinner and label, on the one flag both the key and the beat share. */
+  function paintServerBusy() {
+    if (serverRefresh) {
+      serverRefresh.dataset.busy = String(serverBusy);
+      serverRefresh.setAttribute('aria-disabled', String(serverBusy));
+    }
+    if (serverRefreshLabel) serverRefreshLabel.textContent = serverBusy ? 'Refreshing…' : 'Refresh';
+  }
+
+  /**
+   * The whole Server tab from one reading (or its absence): the glowing LIVE WORKER lamp, the
+   * round trip, the four counters, the maintenance switch and the room/lobby/queue inspector.
+   */
+  function paintServer(status: ServerStatus | null, pingMs: number | null = serverPingMs) {
+    const live = !!status;
+    const denied = !live && !serverBusy && serverDenied;
+    const maint = status ? status.config.maintenance : runtime.maintenance;
+    if (serverCard) serverCard.dataset.state = live ? 'live' : denied ? 'denied' : serverBusy ? 'connecting' : 'offline';
+    if (serverChip) {
+      serverChip.textContent = live ? 'LIVE WORKER' : denied ? 'ACCESS DENIED' : serverBusy ? 'CONNECTING' : 'OFFLINE';
+    }
+    if (serverOffline) serverOffline.hidden = live || serverBusy || denied;
+
+    if (serverState) {
+      serverState.textContent = live ? 'LIVE WORKER' : denied ? 'Admin access required' : serverBusy ? 'Connecting' : 'Worker offline';
+    }
+    if (serverStateSub) {
+      serverStateSub.textContent = live
+        ? `${status.config.maintenance ? 'Maintenance lock on' : 'Matchmaking open'} · synced ${clockOf(status.timestamp ?? Date.now())}`
+        : denied
+          ? 'The role registry refused this session — sign in as an administrator.'
+          : serverBusy
+            ? 'Reading the Durable Object…'
+            : 'No telemetry from the Durable Object';
+    }
+    if (serverPing) {
+      serverPing.textContent = live && pingMs !== null ? String(Math.max(0, Math.round(pingMs))) : '—';
+      serverPing.dataset.tone = !live || pingMs === null ? 'off' : pingMs < 80 ? 'good' : pingMs < 220 ? 'warm' : 'bad';
+    }
+
+    const oneVsOne = status
+      ? (status.active1v1 ?? (status.activeRooms ?? []).filter((r) => (r.kind ?? ((r.players ?? 2) > 2 ? 'room' : '1v1')) === '1v1').length)
+      : null;
     if (serverQueue) serverQueue.textContent = status ? String(status.queueCount) : '—';
-    if (serverRooms) serverRooms.textContent = status ? String(status.activeMatchesCount) : '—';
+    if (serverRooms) serverRooms.textContent = oneVsOne !== null ? String(oneVsOne) : '—';
+    if (serverTotalRooms) serverTotalRooms.textContent = status ? String(status.activeMatchesCount) : '—';
+    if (serverLobbies) serverLobbies.textContent = status ? String(status.openLobbies?.length ?? 0) : '—';
+
+    if (serverMaintenance) {
+      serverMaintenance.setAttribute('aria-checked', String(maint));
+      serverMaintenance.dataset.on = String(maint);
+    }
+    if (serverMaintState) serverMaintState.textContent = maint ? 'On' : 'Off';
+    if (serverMeta) {
+      serverMeta.textContent = live
+        ? `${status.activeRooms?.length ?? 0} live · ${status.openLobbies?.length ?? 0} lobbies · ${status.queueCount} queued`
+        : denied
+          ? 'Access denied'
+          : 'Offline';
+    }
+
     if (!serverList) return;
     serverList.textContent = '';
     if (!status) {
-      serverList.append(emptyRow('No telemetry — the Worker is not answering.'));
+      if (denied) serverList.append(emptyRow('Live telemetry requires an administrator session.'));
+      else if (!serverBusy) serverList.append(emptyRow('The inspector wakes when the Worker answers.'));
       return;
     }
-    if (!status.queuedPlayers.length && !status.activeRooms.length) {
-      serverList.append(emptyRow('Nobody is waiting, and no room is running.'));
+
+    const rooms = status.activeRooms ?? [];
+    const lobbies = status.openLobbies ?? [];
+    const queue = status.queuedPlayers ?? [];
+    if (!rooms.length && !lobbies.length && !queue.length) {
+      serverList.append(emptyRow('Engine idle — no live rooms, no open lobbies, nobody waiting.'));
       return;
     }
-    for (const p of status.queuedPlayers) {
-      serverList.append(rosterRow(p.name, `TIQ ${p.tiq} · ${p.wide ? 'wide' : 'normal'} · ${waited(p.waitedMs)}`));
+
+    if (rooms.length) {
+      serverList.append(groupRow(`Live rooms · ${rooms.length}`));
+      const now = Date.now();
+      for (const r of rooms) {
+        const kind = r.kind ?? ((r.players ?? 2) > 2 ? 'room' : '1v1');
+        const started = r.startedAt ?? status.timestamp ?? now;
+        const seats = r.players && r.players > 2 ? `${r.players}p` : '1v1';
+        const bots = r.bots ? ` · ${r.bots} bot${r.bots === 1 ? '' : 's'}` : '';
+        const head = `${r.p0} vs ${r.p1}${r.players && r.players > 2 ? ` +${r.players - 2}` : ''}`;
+        serverList.append(rosterRow(
+          head,
+          `#${r.matchId} · ${seats} · ${waited(Math.max(0, now - started))} · ${r.spectators ?? 0} watching · turn ${r.turn}${bots}`,
+          r.matchId,
+          kind === 'room' ? 'is-multi' : 'is-duel',
+        ));
+      }
     }
-    for (const r of status.activeRooms) {
-      serverList.append(rosterRow(
-        `${r.p0} vs ${r.p1}`,
-        `#${r.matchId} · turn ${r.turn}`,
-        r.matchId,
-      ));
+
+    if (lobbies.length) {
+      serverList.append(groupRow(`Open lobbies · ${lobbies.length}`));
+      const now = Date.now();
+      for (const l of lobbies) {
+        serverList.append(rosterRow(
+          `${l.friends ? 'Friends lobby' : 'Auto room'} ${l.code}`,
+          `${l.joined}/${l.size} seats · open ${waited(Math.max(0, now - l.openedAt))} · fills in ${waited(Math.max(0, l.openedAt + l.waitMs - now))}`,
+          undefined,
+          'is-lobby',
+        ));
+      }
+    }
+
+    if (queue.length) {
+      serverList.append(groupRow(`Queue · ${queue.length} waiting`));
+      for (const p of queue) {
+        serverList.append(rosterRow(
+          p.name,
+          `TIQ ${p.tiq} · ${p.wide ? 'wide net' : 'normal net'} · waiting ${waited(p.waitedMs)}`,
+        ));
+      }
     }
   }
 
   /** Read the room, paint it, and remember whether the Worker is really there. */
   async function refreshServer(): Promise<void> {
-    const status = await fetchStatus();
-    serverOn = !!status;
-    lastStatus = status;
-    paintServer(status);
-    if (status?.arena) {
-      adoptArena(status.arena, true);
-      paintArena();
-    } else {
+    if (serverBusy) return;
+    serverBusy = true;
+    paintServerBusy();
+    if (!lastStatus) paintServer(null, null);       // connecting, not yet a dead Worker
+    const reading = await fetchStatus();
+    serverBusy = false;
+    paintServerBusy();
+    if (reading.state === 'denied') {
+      markDenied();
       /* the admin door may be shut while the public mirror is open: read the clock anyway */
       void syncArena().then(() => paintArena());
+      return;
     }
-    if (serverOn) await syncConfig();
+    if (reading.state === 'error') {
+      markLocal();
+      void syncArena().then(() => paintArena());
+      return;
+    }
+    serverOn = true;
+    serverDenied = false;
+    lastStatus = reading.status;
+    serverPingMs = reading.pingMs;
+    paintServer(reading.status, reading.pingMs);
+    if (reading.status.arena) {
+      adoptArena(reading.status.arena, true);
+      paintArena();
+    } else {
+      void syncArena().then(() => paintArena());
+    }
+    await syncConfig();
   }
 
   /**
    * Keep the Worker's own enforcement in step with the local runtime. Only the three fields the
    * server also owns travel; anything else the panel changes is a device-local matter. With no
-   * Worker answering there is nothing to sync, and the panel simply stays in Local mode.
+   * Worker answering there is nothing to sync, and the panel simply stays offline.
    */
   async function syncConfig(): Promise<void> {
     if (!serverOn) return;
     const want = serverConfig();
     if (sameConfig(lastPushed, want)) return;
-    if (await pushConfig(want)) lastPushed = want;
-    else markLocal();
+    const applied = await pushConfig(want);
+    if (applied.state === 'ok') {
+      lastPushed = applied.config;
+      if (lastStatus) lastStatus = { ...lastStatus, config: applied.config };
+    } else if (applied.state === 'denied') {
+      /* A Moderator cannot change the Worker's knobs, but the Worker is still answering: keep the
+         live reading and remember the attempt so the beat does not retry the same refused patch. */
+      lastPushed = want;
+    } else {
+      markLocal();
+    }
+  }
+
+  /** The Server tab's live beat. It only reads while the stage is open and this panel is visible. */
+  function startServerPolling() {
+    stopServerPolling();
+    serverTimer = window.setInterval(() => {
+      if (!open || document.hidden || serverPanel?.hidden) return;
+      void refreshServer();
+    }, 5_000);
+  }
+
+  function stopServerPolling() {
+    if (!serverTimer) return;
+    window.clearInterval(serverTimer);
+    serverTimer = 0;
+  }
+
+  /** Pause or resume the matchmaker. Offline, the same switch parks this device's own queue. */
+  async function toggleServerMaintenance(): Promise<void> {
+    const current = lastStatus?.config.maintenance ?? runtime.maintenance;
+    const next = !current;
+    if (!serverOn && serverDenied) {
+      notify('error');
+      api.note('SuperAdmin access required to change the maintenance lock.', true, 2800);
+      return;
+    }
+    if (!serverOn) {
+      setRuntime({ maintenance: next });
+      paintToggles();
+      paintDot();
+      paintArena();
+      paintServer(lastStatus, serverPingMs);
+      notify(next ? 'warning' : 'success');
+      api.note(`Maintenance ${next ? 'ON' : 'OFF'} on this device — the Worker is offline.`, false, 2600);
+      return;
+    }
+    if (serverBusy) return;
+    impact(next ? 'medium' : 'light');
+    serverBusy = true;
+    paintServerBusy();
+    const applied = await pushConfig({ ...serverConfig(), maintenance: next });
+    serverBusy = false;
+    paintServerBusy();
+    if (applied.state === 'denied') {
+      notify('error');
+      api.note('SuperAdmin access required to change the maintenance lock.', true, 2800);
+      paintServer(lastStatus, serverPingMs);
+      return;
+    }
+    if (applied.state === 'error') {
+      markLocal();
+      notify('error');
+      api.note('The maintenance lock did not reach the Worker.', true, 2800);
+      return;
+    }
+    lastPushed = applied.config;
+    setRuntime({ maintenance: applied.config.maintenance });
+    paintToggles();
+    paintDot();
+    paintArena();
+    if (lastStatus) lastStatus = { ...lastStatus, config: applied.config };
+    paintServer(lastStatus, serverPingMs);
+    notify(applied.config.maintenance ? 'warning' : 'success');
+    api.note(
+      applied.config.maintenance
+        ? 'Maintenance ON — new queues are paused and waiting seats dismissed.'
+        : 'Maintenance OFF — matchmaking resumed.',
+      false,
+      2800,
+    );
+    await refreshServer();
   }
 
   /** Empty the room's queue on the server, then read it back so the roster agrees. */
   async function clearQueue(): Promise<void> {
     impact('medium');
-    if (!(await serverAction({ action: 'CLEAR_QUEUE' }))) {
+    const result = await serverAction({ action: 'CLEAR_QUEUE' });
+    if (result === 'denied') {
+      notify('error');
+      api.note('SuperAdmin access required to flush the queue.', true, 2800);
+      paintServer(lastStatus, serverPingMs);
+      return;
+    }
+    if (result === 'refused') {
+      notify('warning');
+      api.note('The Worker refused the queue flush.', true, 2400);
+      await refreshServer();
+      return;
+    }
+    if (result === 'error') {
       markLocal();
       notify('error');
-      api.note('Clear Queue failed — the Worker is not answering.', true, 2400);
+      api.note('Flush Queue failed — the Worker is not answering.', true, 2400);
       return;
     }
     notify('success');
-    api.note('Queue cleared on the server.', false, 2000);
+    api.note('Queue flushed on the server.', false, 2000);
     await refreshServer();
   }
 
@@ -2846,7 +3162,20 @@ export function createAdmin(api: AdminApi): Admin {
   async function abortMatch(matchId: string): Promise<void> {
     if (!matchId) return;
     impact('medium');
-    if (!(await serverAction({ action: 'ABORT_MATCH', matchId }))) {
+    const result = await serverAction({ action: 'ABORT_MATCH', matchId });
+    if (result === 'denied') {
+      notify('error');
+      api.note('SuperAdmin access required to abort a room.', true, 2800);
+      paintServer(lastStatus, serverPingMs);
+      return;
+    }
+    if (result === 'refused') {
+      notify('warning');
+      api.note('That room is no longer live — the board has already closed.', false, 2400);
+      await refreshServer();
+      return;
+    }
+    if (result === 'error') {
       markLocal();
       notify('error');
       api.note('Abort failed — the Worker is not answering.', true, 2400);
@@ -3045,8 +3374,9 @@ export function createAdmin(api: AdminApi): Admin {
     paintAll();
     startArenaClock();
     startTelemetry();
+    startServerPolling();
     void refreshMetrics();                // the Stats tab reads the strict metrics door
-    void refreshServer();                 // the Server tab reads `/admin/status`
+    void refreshServer();                 // the Server tab reads `/api/admin/matchmaking`
     closeBtn?.focus({ preventScroll: true });
     api.onToggle(true);
     impact('medium');
@@ -3064,6 +3394,7 @@ export function createAdmin(api: AdminApi): Admin {
     closeCustomSelects();
     stopArenaClock();
     stopTelemetry();
+    stopServerPolling();
     open = false;
     stage.classList.remove('open');
     document.documentElement.classList.remove('admin-open');
@@ -3364,6 +3695,7 @@ export function createAdmin(api: AdminApi): Admin {
     void refreshServer();
   });
   serverClear?.addEventListener('click', () => { void clearQueue(); });
+  serverMaintenance?.addEventListener('click', () => { void toggleServerMaintenance(); });
   /* every Abort is delegated: the roster is rebuilt on each read, so no handler outlives its row */
   serverList?.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-abort]');
@@ -3816,7 +4148,9 @@ export function createAdmin(api: AdminApi): Admin {
   document.addEventListener('visibilitychange', () => {
     onResize();
     /* coming back to the Mini App: spend one read rather than trusting a reading from minutes ago */
-    if (document.visibilityState === 'visible' && open && !statsPanel?.hidden) void refreshMetrics();
+    if (document.visibilityState !== 'visible' || !open) return;
+    if (!statsPanel?.hidden) void refreshMetrics();
+    if (!serverPanel?.hidden) void refreshServer();
   });
 
   return {

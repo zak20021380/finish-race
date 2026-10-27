@@ -15372,8 +15372,13 @@ html.reduced-motion .adm-arena-beacon { animation: none; }
 .adm-tier-txt b { font-size: var(--t-2); font-weight: 800; color: var(--ink); }
 .adm-tier-s { font-size: var(--t-micro); line-height: 1.25; color: var(--ink-soft); }
 
-/* ---- live server: one raised slab holding the counters, the roster and the two actions ---- */
+/* ---- live server: the hero matrix, the action bar and the room inspector ----
+   The panel takes the rest of the stage, and the inspector's well takes the rest of
+   the panel, so a quiet server still reads as a working console rather than a void. */
+.admin-panel[data-apanel="server"] { flex: 1 1 auto; min-height: 0; }
 .adm-server {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--s2);
@@ -15393,12 +15398,125 @@ html.reduced-motion .adm-arena-beacon { animation: none; }
   letter-spacing: .08em;
   text-transform: uppercase;
   background: var(--field);
+  color: var(--ink-soft);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  transition: color var(--motion-fast), background var(--motion-fast), box-shadow var(--motion-fast);
+}
+.adm-server[data-state="live"] .adm-server-chip {
+  color: var(--mint-ink);
+  background: rgba(16, 185, 129, .14);
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .42), 0 0 16px -4px rgba(16, 185, 129, .8);
+}
+.adm-server[data-state="connecting"] .adm-server-chip {
   color: var(--honey-ink);
+  background: var(--honey-soft);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .34);
+}
+.adm-server[data-state="offline"] .adm-server-chip {
+  color: var(--red-ink);
+  background: rgba(224, 38, 79, .12);
+  box-shadow: inset 0 0 0 1px rgba(224, 38, 79, .34);
+}
+.adm-server[data-state="denied"] .adm-server-chip {
+  color: var(--honey-ink);
+  background: var(--honey-soft);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .34);
+}
+
+/* ---- hero matrix: the live lamp and round trip over four measured counters ---- */
+.adm-server-hero { display: grid; grid-template-columns: minmax(0, 1fr) 82px; gap: 6px; }
+.adm-srv-state {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 58px;
+  padding: 9px 11px;
+  border-radius: var(--radius-sm);
+  background: var(--field);
   box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
 }
-.adm-server[data-state="live"] .adm-server-chip { color: var(--mint-ink); }
+.adm-srv-lamp {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ink-soft);
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, .13);
+  transition: background var(--motion-fast), box-shadow var(--motion-fast);
+}
+.adm-server[data-state="live"] .adm-srv-lamp {
+  background: var(--mint);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, .18), 0 0 12px 2px rgba(16, 185, 129, .78);
+}
+.adm-server[data-state="connecting"] .adm-srv-lamp {
+  background: var(--honey);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, .18);
+}
+.adm-server[data-state="offline"] .adm-srv-lamp {
+  background: var(--bad-1);
+  box-shadow: 0 0 0 3px rgba(224, 38, 79, .16);
+}
+.adm-server[data-state="denied"] .adm-srv-lamp {
+  background: var(--honey);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, .18);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .adm-server[data-state="live"] .adm-srv-lamp { animation: adm-dot 2.4s ease-in-out infinite; }
+}
+html.reduced-motion .adm-srv-lamp { animation: none; }
+.adm-srv-state-txt { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.adm-srv-state-txt b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-2);
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.adm-server[data-state="live"] .adm-srv-state-txt b { color: var(--mint-ink); }
+.adm-server[data-state="offline"] .adm-srv-state-txt b { color: var(--red-ink); }
+.adm-server[data-state="denied"] .adm-srv-state-txt b { color: var(--honey-ink); }
+.adm-srv-state-txt span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-micro);
+  color: var(--ink-soft);
+}
+.adm-srv-ping {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.adm-srv-ping b {
+  font-size: var(--t-3);
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--mint-ink);
+}
+.adm-srv-ping[data-tone="warm"] b { color: var(--honey-ink); }
+.adm-srv-ping[data-tone="bad"] b { color: var(--red-ink); }
+.adm-srv-ping[data-tone="off"] b { color: var(--ink-soft); }
+.adm-srv-ping span {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
 
-.adm-server-stats { display: flex; gap: var(--s2); }
+.adm-server-matrix { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .adm-stat {
   flex: 1 1 0;
   min-width: 0;
@@ -15416,6 +15534,7 @@ html.reduced-motion .adm-arena-beacon { animation: none; }
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
+.adm-stat-hero b { color: var(--brand-ink); }
 .adm-stat-l {
   font-size: 9px;
   font-weight: 800;
@@ -15424,20 +15543,130 @@ html.reduced-motion .adm-arena-beacon { animation: none; }
   color: var(--ink-soft);
 }
 
-/* the roster: a recessed well that scrolls rather than pushing the panel past the fold */
+/* ---- operational actions: refresh with a spinner, flush, and the maintenance lock ---- */
+.adm-server-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.adm-server-actions .adm-btn { min-height: 52px; padding: 0 8px; font-size: 9px; }
+.adm-srv-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.adm-srv-refresh .ico { flex: none; width: 14px; height: 14px; }
+.adm-srv-refresh[data-busy="true"] { cursor: progress; color: var(--mint-ink); }
+.adm-srv-refresh[data-busy="true"] .ico { animation: adm-live-spin .75s linear infinite; }
+html.reduced-motion .adm-srv-refresh[data-busy="true"] .ico { animation-duration: 1.8s; }
+.adm-srv-maint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+}
+.adm-srv-maint-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+.adm-srv-maint-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.adm-srv-maint-copy b { font-size: var(--t-micro); font-weight: 900; color: var(--ink); }
+.adm-srv-maint[data-on="true"] .adm-srv-maint-copy b { color: var(--honey-ink); }
+.adm-srv-knob {
+  flex: none;
+  width: 30px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  transition: background var(--motion-fast), box-shadow var(--motion-fast);
+}
+.adm-srv-knob i {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #64748B 0%, #475569 100%);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .25);
+  transition: transform var(--motion-fast), background var(--motion-fast);
+}
+.adm-srv-maint[data-on="true"] .adm-srv-knob {
+  background: var(--honey-soft);
+  box-shadow: var(--inset), inset 0 0 0 1px rgba(245, 158, 11, .4);
+}
+.adm-srv-maint[data-on="true"] .adm-srv-knob i {
+  transform: translateX(12px);
+  background: var(--gold-face);
+  box-shadow: 0 1px 0 var(--gold-lip), inset 0 1px 0 rgba(255, 255, 255, .5);
+}
+@media (prefers-reduced-motion: reduce) { .adm-srv-knob i { transition: none; } }
+
+/* ---- the lower half: live rooms, filling lobbies and every waiting seat ---- */
+.adm-server-inspector {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.adm-server-inspector-head { display: flex; align-items: baseline; gap: 8px; padding: 0 2px; }
+.adm-server-inspector-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.adm-server-inspector-meta {
+  flex: none;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--brand-ink);
+  font-variant-numeric: tabular-nums;
+}
 .adm-server-list {
+  flex: 1 1 auto;
+  min-height: 110px;
   display: flex;
   flex-direction: column;
   gap: 4px;
   margin: 0;
   padding: 6px;
-  max-height: 208px;
   overflow-y: auto;
   overscroll-behavior: contain;
   list-style: none;
   border-radius: var(--radius-sm);
   background: var(--field);
   box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.adm-server-group {
+  padding: 4px 4px 3px;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--honey-ink);
 }
 .adm-server-row {
   display: flex;
@@ -15449,7 +15678,10 @@ html.reduced-motion .adm-arena-beacon { animation: none; }
   background: var(--clay-face);
   box-shadow: var(--clay-spec), inset 0 0 0 1px var(--hair-off);
 }
-.adm-server-row.is-room { box-shadow: var(--clay-spec), inset 0 0 0 1px rgba(56, 189, 248, .28); }
+.adm-server-row.is-room,
+.adm-server-row.is-duel { box-shadow: var(--clay-spec), inset 0 0 0 1px rgba(56, 189, 248, .28); }
+.adm-server-row.is-multi { box-shadow: var(--clay-spec), inset 0 0 0 1px rgba(16, 185, 129, .28); }
+.adm-server-row.is-lobby { box-shadow: var(--clay-spec), inset 0 0 0 1px rgba(245, 158, 11, .28); }
 .adm-server-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .adm-server-n {
   overflow: hidden;
@@ -15468,7 +15700,12 @@ html.reduced-motion .adm-arena-beacon { animation: none; }
   color: var(--ink-soft);
 }
 .adm-server-empty {
-  padding: 12px 4px;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 84px;
+  padding: 12px 8px;
   text-align: center;
   font-size: var(--t-micro);
   color: var(--ink-soft);
@@ -15480,12 +15717,21 @@ html.reduced-motion .adm-arena-beacon { animation: none; }
   padding: 0 10px;
   font-size: var(--t-micro);
 }
-.adm-server-actions { display: flex; gap: var(--s2); }
-.adm-server-actions .adm-btn { flex: 1 1 0; }
+.adm-code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, .28);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+  color: var(--honey-ink);
+  font-size: .95em;
+  white-space: nowrap;
+}
 
-/* the panel is tall on a short phone: tighten the rows rather than the type */
+/* a short phone: the well gives up height before the controls do */
 @media (max-height: 700px) {
-  .adm-server-list { max-height: 168px; }
+  .adm-server-list { min-height: 92px; }
+  .adm-server-hero { grid-template-columns: minmax(0, 1fr) 74px; }
+  .adm-srv-state { min-height: 52px; padding: 7px 9px; }
 }
 
 /* ==========================================================================

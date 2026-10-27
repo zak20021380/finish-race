@@ -7,11 +7,11 @@
  * `WebSocket` cannot be passed through `fetch`, only the upgrade request can.
  *
  * The third surface is the Admin Command Center's, and it is not public: `GET /admin/status`,
- * `POST /admin/config`, `POST /admin/action`, `GET /admin/players` and `POST /admin/player` are
- * checked by `verifyAdminRequest` here — a Telegram signature on the `ADMIN_IDS` allowlist, or an
- * explicitly marked dev request — and only then forwarded to the same `MatchmakerDO`, which owns
- * the live config, the player directory, and enforces both. An unauthenticated call never reaches
- * the room: it answers `403`.
+ * `GET /api/admin/matchmaking`, `POST /admin/config`, `POST /admin/action`, `GET /admin/players`
+ * and `POST /admin/player` are checked by `verifyAdminRequest` here — a Telegram signature on the
+ * `ADMIN_IDS` allowlist, or an explicitly marked dev request — and only then forwarded to the same
+ * `MatchmakerDO`, which owns the live config, the player directory, and enforces both. An
+ * unauthenticated call never reaches the room: it answers `403`.
  *
  * The fourth surface is the same Command Center, under its `/api/*` spelling: the role registry
  * (`GET /api/admin/roles`, `POST /api/admin/roles/grant|revoke`), the broadcast engine
