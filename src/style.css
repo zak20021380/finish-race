@@ -15372,94 +15372,124 @@ html.reduced-motion .adm-arena-beacon { animation: none; }
 .adm-tier-txt b { font-size: var(--t-2); font-weight: 800; color: var(--ink); }
 .adm-tier-s { font-size: var(--t-micro); line-height: 1.25; color: var(--ink-soft); }
 
-/* ---- live server: the hero matrix, the action bar and the room inspector ----
-   The panel takes the rest of the stage, and the inspector's well takes the rest of
-   the panel, so a quiet server still reads as a working console rather than a void. */
-.admin-panel[data-apanel="server"] { flex: 1 1 auto; min-height: 0; }
+/* ---- live server: one readable stack — status, counters, controls, inspector ----
+   Four clay groups on the stage instead of one crowded slab: a status card that
+   says what the backend is doing, four tactile counters, an operation card and
+   the inspector well. The stage body is the only scroll area. */
 .adm-server {
-  flex: 1 1 auto;
-  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
-  padding: 11px 12px 12px;
-  border-radius: var(--radius-md);
-  background: var(--clay-face);
-  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+  gap: 10px;
+  min-width: 0;
 }
-.adm-server-head { display: flex; align-items: center; gap: var(--s2); }
-.adm-server-t { flex: 1 1 auto; min-width: 0; font-size: var(--t-2); font-weight: 800; color: var(--ink); }
+
+/* the section masthead: the name and the raw connection state */
+.adm-server-head { display: flex; align-items: center; gap: var(--s2); padding: 0 2px; }
+.adm-server-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--t-1);
+  font-weight: 800;
+  letter-spacing: -.01em;
+  color: var(--ink);
+}
 .adm-server-chip {
   flex: none;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .08em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .09em;
   text-transform: uppercase;
-  background: var(--field);
   color: var(--ink-soft);
-  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  background: var(--field);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .45), inset 0 0 0 1px var(--hair-off);
   transition: color var(--motion-fast), background var(--motion-fast), box-shadow var(--motion-fast);
+}
+.adm-server-chip::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px 1px currentColor;
 }
 .adm-server[data-state="live"] .adm-server-chip {
   color: var(--mint-ink);
-  background: rgba(16, 185, 129, .14);
-  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .42), 0 0 16px -4px rgba(16, 185, 129, .8);
+  background: rgba(16, 185, 129, .12);
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .38), inset 0 2px 4px rgba(0, 0, 0, .35);
 }
-.adm-server[data-state="connecting"] .adm-server-chip {
+.adm-server[data-state="connecting"] .adm-server-chip,
+.adm-server[data-state="denied"] .adm-server-chip {
   color: var(--honey-ink);
   background: var(--honey-soft);
-  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .34);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .34), inset 0 2px 4px rgba(0, 0, 0, .35);
 }
 .adm-server[data-state="offline"] .adm-server-chip {
   color: var(--red-ink);
   background: rgba(224, 38, 79, .12);
-  box-shadow: inset 0 0 0 1px rgba(224, 38, 79, .34);
-}
-.adm-server[data-state="denied"] .adm-server-chip {
-  color: var(--honey-ink);
-  background: var(--honey-soft);
-  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .34);
+  box-shadow: inset 0 0 0 1px rgba(224, 38, 79, .34), inset 0 2px 4px rgba(0, 0, 0, .35);
 }
 
-/* ---- hero matrix: the live lamp and round trip over four measured counters ---- */
-.adm-server-hero { display: grid; grid-template-columns: minmax(0, 1fr) 82px; gap: 6px; }
-.adm-srv-state {
-  min-width: 0;
-  display: flex;
+/* ---- the status card: a soft clay slab tinted by the room's own state ---- */
+.adm-srv-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 9px;
-  min-height: 58px;
-  padding: 9px 11px;
-  border-radius: var(--radius-sm);
-  background: var(--field);
-  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  gap: 12px;
+  padding: 14px 14px 14px 16px;
+  border-radius: 22px;
+  background:
+    radial-gradient(120% 160% at 0% 0%, rgba(16, 185, 129, .17), rgba(16, 185, 129, 0) 56%),
+    var(--clay-face);
+  box-shadow:
+    0 18px 30px -24px rgba(0, 0, 0, .95),
+    inset 0 2px 2px rgba(255, 255, 255, .1),
+    inset 0 -4px 7px rgba(0, 0, 0, .28),
+    inset 0 0 0 1px rgba(255, 255, 255, .055);
+}
+.adm-server[data-state="connecting"] .adm-srv-hero,
+.adm-server[data-state="denied"] .adm-srv-hero {
+  background:
+    radial-gradient(120% 160% at 0% 0%, rgba(245, 158, 11, .15), rgba(245, 158, 11, 0) 56%),
+    var(--clay-face);
+}
+.adm-server[data-state="offline"] .adm-srv-hero {
+  background:
+    radial-gradient(120% 160% at 0% 0%, rgba(224, 38, 79, .16), rgba(224, 38, 79, 0) 56%),
+    var(--clay-face);
 }
 .adm-srv-lamp {
   flex: none;
-  width: 10px;
-  height: 10px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   background: var(--ink-soft);
-  box-shadow: 0 0 0 3px rgba(148, 163, 184, .13);
+  box-shadow:
+    0 0 0 4px rgba(148, 163, 184, .12),
+    0 0 0 8px rgba(148, 163, 184, .05);
   transition: background var(--motion-fast), box-shadow var(--motion-fast);
 }
 .adm-server[data-state="live"] .adm-srv-lamp {
   background: var(--mint);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, .18), 0 0 12px 2px rgba(16, 185, 129, .78);
+  box-shadow:
+    0 0 0 4px rgba(16, 185, 129, .16),
+    0 0 0 8px rgba(16, 185, 129, .06),
+    0 0 16px 3px rgba(16, 185, 129, .6);
 }
-.adm-server[data-state="connecting"] .adm-srv-lamp {
+.adm-server[data-state="connecting"] .adm-srv-lamp,
+.adm-server[data-state="denied"] .adm-srv-lamp {
   background: var(--honey);
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, .18);
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, .16), 0 0 12px 2px rgba(245, 158, 11, .35);
 }
 .adm-server[data-state="offline"] .adm-srv-lamp {
   background: var(--bad-1);
-  box-shadow: 0 0 0 3px rgba(224, 38, 79, .16);
-}
-.adm-server[data-state="denied"] .adm-srv-lamp {
-  background: var(--honey);
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, .18);
+  box-shadow: 0 0 0 4px rgba(224, 38, 79, .14), 0 0 12px 2px rgba(224, 38, 79, .3);
 }
 @media (prefers-reduced-motion: no-preference) {
   .adm-server[data-state="live"] .adm-srv-lamp { animation: adm-dot 2.4s ease-in-out infinite; }
@@ -15470,38 +15500,46 @@ html.reduced-motion .adm-srv-lamp { animation: none; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--t-2);
+  font-size: 17px;
   font-weight: 900;
-  letter-spacing: .04em;
-  text-transform: uppercase;
+  letter-spacing: -.01em;
   color: var(--ink);
 }
 .adm-server[data-state="live"] .adm-srv-state-txt b { color: var(--mint-ink); }
+.adm-server[data-state="live"][data-maint="true"] .adm-srv-state-txt b { color: var(--honey-ink); }
+.adm-server[data-state="live"][data-maint="true"] .adm-srv-hero {
+  background:
+    radial-gradient(120% 160% at 0% 0%, rgba(245, 158, 11, .15), rgba(245, 158, 11, 0) 56%),
+    var(--clay-face);
+}
 .adm-server[data-state="offline"] .adm-srv-state-txt b { color: var(--red-ink); }
 .adm-server[data-state="denied"] .adm-srv-state-txt b { color: var(--honey-ink); }
 .adm-srv-state-txt span {
+  display: -webkit-box;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--t-micro);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
   color: var(--ink-soft);
 }
 .adm-srv-ping {
-  min-width: 0;
+  min-width: 68px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  padding: 6px;
-  border-radius: var(--radius-sm);
-  background: var(--field);
-  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  gap: 0;
+  padding: 8px 10px;
+  border-radius: 16px;
+  background: rgba(8, 13, 24, .55);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(255, 255, 255, .055);
 }
 .adm-srv-ping b {
-  font-size: var(--t-3);
+  font-size: 21px;
   font-weight: 900;
-  line-height: 1;
+  line-height: 1.05;
   font-variant-numeric: tabular-nums;
   color: var(--mint-ink);
 }
@@ -15516,90 +15554,173 @@ html.reduced-motion .adm-srv-lamp { animation: none; }
   color: var(--ink-soft);
 }
 
-.adm-server-matrix { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-.adm-stat {
-  flex: 1 1 0;
-  min-width: 0;
+/* ---- the counters: two-up clay tiles, one icon and one plain-language label ---- */
+.adm-srv-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.adm-srv-stat {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--field);
-  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 11px 12px;
+  border-radius: 18px;
+  background: var(--clay-face);
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
 }
-.adm-stat b {
-  font-size: var(--t-3);
-  font-weight: 800;
+.adm-srv-stat-i {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 13px;
+  background: var(--field);
+  color: var(--brand-ink);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .48), inset 0 0 0 1px var(--hair-off);
+}
+.adm-srv-stat-i .ico { width: 17px; height: 17px; }
+.adm-srv-stat[data-tone="mint"] .adm-srv-stat-i { color: var(--mint-ink); }
+.adm-srv-stat[data-tone="brand"] .adm-srv-stat-i { color: var(--chip-ink); }
+.adm-srv-stat[data-tone="honey"] .adm-srv-stat-i { color: var(--honey-ink); }
+.adm-srv-stat-txt { min-width: 0; display: flex; flex-direction: column; gap: 0; }
+.adm-srv-stat-txt b {
+  font-size: 23px;
+  font-weight: 900;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
-.adm-stat-hero b { color: var(--brand-ink); }
-.adm-stat-l {
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .08em;
-  text-transform: uppercase;
+.adm-srv-stat-l {
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.25;
   color: var(--ink-soft);
 }
 
-/* ---- operational actions: refresh with a spinner, flush, and the maintenance lock ---- */
-.adm-server-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.adm-server-actions .adm-btn { min-height: 52px; padding: 0 8px; font-size: 9px; }
-.adm-srv-refresh {
+/* ---- controls: two keys and the maintenance lock in one clay card ---- */
+.adm-srv-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 22px;
+  background: var(--clay-face);
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+}
+.adm-srv-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.adm-srv-buttons .adm-btn {
+  min-height: 50px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 8px;
+  padding: 0 10px;
+  font-size: var(--t-2);
 }
-.adm-srv-refresh .ico { flex: none; width: 14px; height: 14px; }
+.adm-srv-buttons .ico { flex: none; width: 16px; height: 16px; }
+.adm-srv-refresh .ico { color: var(--honey-ink); }
 .adm-srv-refresh[data-busy="true"] { cursor: progress; color: var(--mint-ink); }
-.adm-srv-refresh[data-busy="true"] .ico { animation: adm-live-spin .75s linear infinite; }
+.adm-srv-refresh[data-busy="true"] .ico { color: var(--mint-ink); animation: adm-live-spin .75s linear infinite; }
 html.reduced-motion .adm-srv-refresh[data-busy="true"] .ico { animation-duration: 1.8s; }
+/* destructive, but still a clay key: red ink and a red rim, never a neon block */
+.adm-srv-flush {
+  color: var(--red-ink);
+  background: linear-gradient(180deg, rgba(224, 38, 79, .16) 0%, rgba(140, 20, 48, .14) 100%), var(--clay-face);
+  box-shadow:
+    0 var(--lip) 0 rgba(90, 8, 28, .6),
+    var(--clay-spec), var(--clay-bevel),
+    inset 0 0 0 1px rgba(224, 38, 79, .32);
+}
+.adm-srv-flush .ico { color: var(--red-ink); }
+.adm-srv-hint { margin: 0; padding: 0 2px; font-size: 10.5px; line-height: 1.4; color: var(--ink-soft); }
+
+/* the maintenance row: a recessed track with the lock, a plain-language caption and the knob */
 .adm-srv-maint {
-  display: flex;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 5px;
+  gap: 10px;
+  min-height: 58px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: var(--field);
+  color: var(--ink);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  transition: box-shadow var(--motion-fast);
 }
-.adm-srv-maint-copy {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
+.adm-srv-maint:active { transform: translateY(1px); }
+.adm-srv-maint:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.adm-srv-maint-i {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, .1);
+  color: var(--ink-soft);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .4), inset 0 0 0 1px var(--hair-off);
+  transition: color var(--motion-fast), background var(--motion-fast);
 }
-.adm-srv-maint-copy span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: .05em;
+.adm-srv-maint-i .ico { width: 16px; height: 16px; }
+.adm-srv-maint-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.adm-srv-maint-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.adm-srv-maint-top b { font-size: var(--t-2); font-weight: 800; color: var(--ink); }
+.adm-srv-maint-state {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: rgba(148, 163, 184, .14);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .06em;
   text-transform: uppercase;
   color: var(--ink-soft);
+  transition: color var(--motion-fast), background var(--motion-fast);
 }
-.adm-srv-maint-copy b { font-size: var(--t-micro); font-weight: 900; color: var(--ink); }
-.adm-srv-maint[data-on="true"] .adm-srv-maint-copy b { color: var(--honey-ink); }
+.adm-srv-maint-sub {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+.adm-srv-maint[data-on="true"] .adm-srv-maint-i {
+  background: var(--honey-soft);
+  color: var(--honey-ink);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .32);
+}
+.adm-srv-maint[data-on="true"] .adm-srv-maint-state {
+  background: var(--honey-soft);
+  color: var(--honey-ink);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .3);
+}
 .adm-srv-knob {
   flex: none;
-  width: 30px;
-  height: 18px;
+  width: 44px;
+  height: 26px;
   display: flex;
   align-items: center;
-  padding: 2px;
-  border-radius: 999px;
-  background: var(--field);
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: rgba(8, 12, 20, .6);
   box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
   transition: background var(--motion-fast), box-shadow var(--motion-fast);
 }
 .adm-srv-knob i {
   display: block;
-  width: 14px;
-  height: 14px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: linear-gradient(180deg, #64748B 0%, #475569 100%);
-  box-shadow: 0 1px 0 rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .25);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .25);
   transition: transform var(--motion-fast), background var(--motion-fast);
 }
 .adm-srv-maint[data-on="true"] .adm-srv-knob {
@@ -15607,82 +15728,107 @@ html.reduced-motion .adm-srv-refresh[data-busy="true"] .ico { animation-duration
   box-shadow: var(--inset), inset 0 0 0 1px rgba(245, 158, 11, .4);
 }
 .adm-srv-maint[data-on="true"] .adm-srv-knob i {
-  transform: translateX(12px);
+  transform: translateX(18px);
   background: var(--gold-face);
-  box-shadow: 0 1px 0 var(--gold-lip), inset 0 1px 0 rgba(255, 255, 255, .5);
+  box-shadow: 0 2px 0 var(--gold-lip), inset 0 1px 0 rgba(255, 255, 255, .5);
 }
 @media (prefers-reduced-motion: reduce) { .adm-srv-knob i { transition: none; } }
 
-/* ---- the lower half: live rooms, filling lobbies and every waiting seat ---- */
-.adm-server-inspector {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.adm-server-inspector-head { display: flex; align-items: baseline; gap: 8px; padding: 0 2px; }
+/* ---- the inspector: a heading with its reading, then a recessed well of clay rows ---- */
+.adm-server-inspector { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.adm-server-inspector-head { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 6px 10px; padding: 0 2px; }
+.adm-server-inspector-copy { flex: 1 1 150px; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .adm-server-inspector-t {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: var(--ink);
 }
+.adm-server-inspector-sub { font-size: 10.5px; font-weight: 600; color: var(--ink-soft); }
 .adm-server-inspector-meta {
   flex: none;
-  max-width: 60%;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 9px;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .4), inset 0 0 0 1px var(--hair-off);
+  font-size: 10px;
   font-weight: 800;
-  color: var(--brand-ink);
+  color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
 }
+.adm-server[data-state="live"] .adm-server-inspector-meta { color: var(--mint-ink); }
 .adm-server-list {
-  flex: 1 1 auto;
-  min-height: 110px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   margin: 0;
-  padding: 6px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  padding: 7px;
   list-style: none;
-  border-radius: var(--radius-sm);
+  border-radius: 20px;
   background: var(--field);
-  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  box-shadow:
+    inset 0 3px 8px rgba(0, 0, 0, .55),
+    inset 0 -1px 0 rgba(255, 255, 255, .05),
+    inset 0 0 0 1px var(--hair-off);
 }
 .adm-server-group {
-  padding: 4px 4px 3px;
-  font-size: 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 6px 2px;
+  font-size: 9px;
   font-weight: 900;
   letter-spacing: .09em;
   text-transform: uppercase;
-  color: var(--honey-ink);
+  color: var(--mint-ink);
+}
+.adm-server-group[data-tone="sky"] { color: var(--brand-ink); }
+.adm-server-group[data-tone="honey"] { color: var(--honey-ink); }
+.adm-server-group b {
+  flex: none;
+  min-width: 19px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .08);
+  color: var(--ink);
+  font-size: 9.5px;
+  text-align: center;
 }
 .adm-server-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--s2);
-  min-height: 48px;
-  padding: 4px 4px 4px 9px;
-  border-radius: var(--radius-sm);
+  gap: 10px;
+  min-height: 58px;
+  padding: 8px 8px 8px 9px;
+  border-radius: 16px;
   background: var(--clay-face);
-  box-shadow: var(--clay-spec), inset 0 0 0 1px var(--hair-off);
+  box-shadow:
+    0 8px 16px -14px rgba(0, 0, 0, .9),
+    inset 0 1px 1px rgba(255, 255, 255, .07),
+    inset 0 -2px 3px rgba(0, 0, 0, .25),
+    inset 0 0 0 1px rgba(255, 255, 255, .05);
 }
-.adm-server-row.is-room,
-.adm-server-row.is-duel { box-shadow: var(--clay-spec), inset 0 0 0 1px rgba(56, 189, 248, .28); }
-.adm-server-row.is-multi { box-shadow: var(--clay-spec), inset 0 0 0 1px rgba(16, 185, 129, .28); }
-.adm-server-row.is-lobby { box-shadow: var(--clay-spec), inset 0 0 0 1px rgba(245, 158, 11, .28); }
-.adm-server-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.adm-server-i {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--field);
+  color: var(--brand-ink);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, .5), inset 0 0 0 1px var(--hair-off);
+}
+.adm-server-i .ico { width: 17px; height: 17px; }
+.adm-server-row.is-multi .adm-server-i { color: var(--mint-ink); }
+.adm-server-row.is-lobby .adm-server-i { color: var(--honey-ink); }
+.adm-server-txt { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .adm-server-n {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -15692,30 +15838,57 @@ html.reduced-motion .adm-srv-refresh[data-busy="true"] .ico { animation-duration
   color: var(--ink);
 }
 .adm-server-m {
+  display: -webkit-box;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--t-micro);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.35;
   font-variant-numeric: tabular-nums;
   color: var(--ink-soft);
 }
 .adm-server-empty {
-  flex: 1 1 auto;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 84px;
-  padding: 12px 8px;
+  gap: 3px;
+  min-height: 148px;
+  padding: 22px 16px;
   text-align: center;
-  font-size: var(--t-micro);
-  color: var(--ink-soft);
 }
+.adm-server-empty-i {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 5px;
+  border-radius: 16px;
+  background: var(--clay-face);
+  color: var(--ink-soft);
+  box-shadow: var(--clay-spec), var(--clay-bevel), var(--clay-ring), 0 10px 18px -16px rgba(0, 0, 0, .9);
+}
+.adm-server-empty-i .ico { width: 19px; height: 19px; }
+.adm-server[data-state="connecting"] .adm-server-empty-i .ico { animation: adm-live-spin 1.6s linear infinite; }
+html.reduced-motion .adm-server[data-state="connecting"] .adm-server-empty-i .ico { animation: none; }
+.adm-server-empty b { font-size: var(--t-2); font-weight: 800; color: var(--ink); }
+.adm-server-empty-b { max-width: 250px; font-size: 10.5px; line-height: 1.45; color: var(--ink-soft); }
 /* the one action a roster row carries, still a full 48px key */
 .adm-abort {
   flex: none;
-  min-width: 64px;
-  padding: 0 10px;
-  font-size: var(--t-micro);
+  min-width: 66px;
+  min-height: 48px;
+  padding: 0 12px;
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--red-ink);
+  background: linear-gradient(180deg, rgba(224, 38, 79, .14) 0%, rgba(140, 20, 48, .12) 100%), var(--clay-face);
+  box-shadow:
+    0 var(--lip) 0 rgba(90, 8, 28, .55),
+    var(--clay-spec), var(--clay-bevel),
+    inset 0 0 0 1px rgba(224, 38, 79, .3);
 }
 .adm-code {
   padding: 1px 4px;
@@ -15725,13 +15898,6 @@ html.reduced-motion .adm-srv-refresh[data-busy="true"] .ico { animation-duration
   color: var(--honey-ink);
   font-size: .95em;
   white-space: nowrap;
-}
-
-/* a short phone: the well gives up height before the controls do */
-@media (max-height: 700px) {
-  .adm-server-list { min-height: 92px; }
-  .adm-server-hero { grid-template-columns: minmax(0, 1fr) 74px; }
-  .adm-srv-state { min-height: 52px; padding: 7px 9px; }
 }
 
 /* ==========================================================================

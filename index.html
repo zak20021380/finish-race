@@ -3621,51 +3621,74 @@
                 <span class="adm-server-chip" id="adm-server-chip">CONNECTING</span>
               </div>
 
-              <!-- hero matrix: the live lamp, the measured round trip, and the four counters -->
-              <div class="adm-server-hero">
-                <span class="adm-srv-state">
-                  <span class="adm-srv-lamp" aria-hidden="true"></span>
-                  <span class="adm-srv-state-txt">
-                    <b id="srv-state">Connecting</b>
-                    <span id="srv-state-sub">Reading the Durable Object…</span>
-                  </span>
+              <!-- the live reading: one lamp, one plain-language state, the measured round trip -->
+              <div class="adm-srv-hero">
+                <span class="adm-srv-lamp" aria-hidden="true"></span>
+                <span class="adm-srv-state-txt">
+                  <b id="srv-state">Connecting…</b>
+                  <span id="srv-state-sub">Reading the Durable Object…</span>
                 </span>
                 <span class="adm-srv-ping" title="Round trip to the matchmaker Durable Object">
                   <b id="srv-ping">—</b>
                   <span>ms ping</span>
                 </span>
               </div>
-              <div class="adm-server-matrix">
-                <span class="adm-stat adm-stat-hero">
-                  <b id="srv-queue">—</b>
-                  <span class="adm-stat-l">Active Queue</span>
+
+              <!-- what the room holds right now, one clay tile per counter -->
+              <div class="adm-srv-stats">
+                <span class="adm-srv-stat" data-tone="sky">
+                  <span class="adm-srv-stat-i" aria-hidden="true"><svg class="ico"><use href="#i-target" /></svg></span>
+                  <span class="adm-srv-stat-txt">
+                    <b id="srv-queue">—</b>
+                    <span class="adm-srv-stat-l">Players waiting</span>
+                  </span>
                 </span>
-                <span class="adm-stat adm-stat-hero">
-                  <b id="srv-rooms">—</b>
-                  <span class="adm-stat-l">Active 1v1</span>
+                <span class="adm-srv-stat" data-tone="mint">
+                  <span class="adm-srv-stat-i" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
+                  <span class="adm-srv-stat-txt">
+                    <b id="srv-rooms">—</b>
+                    <span class="adm-srv-stat-l">Live 1v1s</span>
+                  </span>
                 </span>
-                <span class="adm-stat">
-                  <b id="srv-total-rooms">—</b>
-                  <span class="adm-stat-l">All Rooms</span>
+                <span class="adm-srv-stat" data-tone="brand">
+                  <span class="adm-srv-stat-i" aria-hidden="true"><svg class="ico"><use href="#i-flag" /></svg></span>
+                  <span class="adm-srv-stat-txt">
+                    <b id="srv-total-rooms">—</b>
+                    <span class="adm-srv-stat-l">All rooms</span>
+                  </span>
                 </span>
-                <span class="adm-stat">
-                  <b id="srv-lobbies">—</b>
-                  <span class="adm-stat-l">Open Lobbies</span>
+                <span class="adm-srv-stat" data-tone="honey">
+                  <span class="adm-srv-stat-i" aria-hidden="true"><svg class="ico"><use href="#i-globe" /></svg></span>
+                  <span class="adm-srv-stat-txt">
+                    <b id="srv-lobbies">—</b>
+                    <span class="adm-srv-stat-l">Open lobbies</span>
+                  </span>
                 </span>
               </div>
 
-              <!-- operational actions: refresh with a spinner, flush the queue, pause matchmaking -->
-              <div class="adm-server-actions">
-                <button class="adm-btn adm-srv-refresh" type="button" id="srv-refresh" data-busy="false">
-                  <svg class="ico" aria-hidden="true"><use href="#i-restart" /></svg>
-                  <span id="srv-refresh-label">Refresh</span>
-                </button>
-                <button class="adm-btn adm-btn-danger" type="button" id="srv-clear">Flush Queue</button>
-                <button class="adm-btn adm-srv-maint" type="button" id="srv-maintenance" role="switch"
+              <!-- the operational keys: read again, flush the queue, hold the maintenance lock -->
+              <div class="adm-srv-controls">
+                <div class="adm-srv-buttons">
+                  <button class="adm-btn adm-srv-refresh" type="button" id="srv-refresh" data-busy="false">
+                    <svg class="ico" aria-hidden="true"><use href="#i-restart" /></svg>
+                    <span id="srv-refresh-label">Refresh</span>
+                  </button>
+                  <button class="adm-btn adm-srv-flush" type="button" id="srv-clear">
+                    <svg class="ico" aria-hidden="true"><use href="#i-trash" /></svg>
+                    <span>Flush queue</span>
+                  </button>
+                </div>
+                <p class="adm-srv-hint">Flush only clears waiting players — live races keep playing.</p>
+
+                <button class="adm-srv-maint" type="button" id="srv-maintenance" role="switch"
                   aria-checked="false" data-on="false">
+                  <span class="adm-srv-maint-i" aria-hidden="true"><svg class="ico"><use href="#i-lock" /></svg></span>
                   <span class="adm-srv-maint-copy">
-                    <span>Maintenance</span>
-                    <b id="srv-maintenance-state">Off</b>
+                    <span class="adm-srv-maint-top">
+                      <b>Maintenance</b>
+                      <span class="adm-srv-maint-state" id="srv-maintenance-state">Off</span>
+                    </span>
+                    <span class="adm-srv-maint-sub">Pause new queues and clear waiting players</span>
                   </span>
                   <span class="adm-srv-knob" aria-hidden="true"><i></i></span>
                 </button>
@@ -3675,8 +3698,8 @@
               <div class="adm-alert" id="srv-offline" data-kind="offline" role="alert" hidden>
                 <span class="adm-alert-i" aria-hidden="true"><svg class="ico"><use href="#i-lock" /></svg></span>
                 <span class="adm-alert-txt">
-                  <b>Worker offline</b>
-                  <span>Start the matchmaker with <code class="adm-code">npx wrangler dev</code> —
+                  <b>Start the matchmaker</b>
+                  <span>Run <code class="adm-code">npx wrangler dev</code> —
                     it listens on <code class="adm-code">127.0.0.1:8787</code>. Vite proxies
                     <code class="adm-code">/api</code> and <code class="adm-code">/admin</code> to it in
                     development. Then tap Refresh.</span>
@@ -3686,15 +3709,15 @@
               <!-- the lower half: live duels, filling lobbies, and every waiting seat -->
               <div class="adm-server-inspector">
                 <div class="adm-server-inspector-head">
-                  <span class="adm-server-inspector-t">Live room inspector</span>
+                  <span class="adm-server-inspector-copy">
+                    <span class="adm-server-inspector-t">Live room inspector</span>
+                    <span class="adm-server-inspector-sub">Auto-refresh every 5 seconds</span>
+                  </span>
                   <span class="adm-server-inspector-meta" id="srv-meta">Awaiting telemetry</span>
                 </div>
                 <ul class="adm-server-list" id="srv-list" aria-label="Live rooms, lobbies and queue"></ul>
               </div>
             </div>
-            <p class="adm-note">The inspector polls the live Durable Object every five seconds.
-              Maintenance pauses new queues and dismisses waiting seats; Flush Queue empties the
-              queue without touching a race already on a board.</p>
           </div>
 
           <!-- ---------- Tools: grants, the ladder preview, the two resets ---------- -->

@@ -2843,10 +2843,34 @@ export function createAdmin(api: AdminApi): Admin {
     return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
   }
 
-  /** One roster line: a name, a metadata line, and the Abort key for a live match. */
+  const ICON_NS = 'http://www.w3.org/2000/svg';
+
+  /** One sprite glyph as a live node, for the rows built outside the static HTML. */
+  function iconNode(id: string): SVGSVGElement {
+    const svg = document.createElementNS(ICON_NS, 'svg');
+    svg.setAttribute('class', 'ico');
+    svg.setAttribute('aria-hidden', 'true');
+    const use = document.createElementNS(ICON_NS, 'use');
+    use.setAttribute('href', `#${id}`);
+    svg.append(use);
+    return svg;
+  }
+
+  /** The glyph that reads a roster line's kind at a glance. */
+  function rosterIcon(cls: string, matchId?: string): string {
+    if (matchId) return cls === 'is-multi' ? 'i-users' : 'i-swords';
+    if (cls === 'is-lobby') return 'i-globe';
+    return 'i-target';
+  }
+
+  /** One roster line: a kind glyph, a name, a metadata line, and the Abort key for a live match. */
   function rosterRow(name: string, meta: string, matchId?: string, cls = ''): HTMLLIElement {
     const li = document.createElement('li');
     li.className = ['adm-server-row', matchId ? 'is-room' : '', cls].filter(Boolean).join(' ');
+    const icon = document.createElement('span');
+    icon.className = 'adm-server-i';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.append(iconNode(rosterIcon(cls, matchId)));
     const txt = document.createElement('span');
     txt.className = 'adm-server-txt';
     const n = document.createElement('span');
@@ -2856,11 +2880,11 @@ export function createAdmin(api: AdminApi): Admin {
     m.className = 'adm-server-m';
     m.textContent = meta;
     txt.append(n, m);
-    li.append(txt);
+    li.append(icon, txt);
     if (matchId) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'adm-btn adm-btn-danger adm-abort';
+      btn.className = 'adm-btn adm-abort';
       btn.dataset.abort = matchId;
       btn.textContent = 'Abort';
       btn.setAttribute('aria-label', `Abort room ${matchId}`);
@@ -2869,19 +2893,34 @@ export function createAdmin(api: AdminApi): Admin {
     return li;
   }
 
-  /** A non-interactive heading inside the inspector well. */
-  function groupRow(text: string): HTMLLIElement {
+  /** A non-interactive heading inside the inspector well, with its own count. */
+  function groupRow(label: string, count: number, tone: 'mint' | 'sky' | 'honey' = 'mint'): HTMLLIElement {
     const li = document.createElement('li');
     li.className = 'adm-server-group';
+    li.dataset.tone = tone;
     li.setAttribute('role', 'presentation');
-    li.textContent = text;
+    const t = document.createElement('span');
+    t.textContent = label;
+    const b = document.createElement('b');
+    b.textContent = String(count);
+    li.append(t, b);
     return li;
   }
 
-  function emptyRow(text: string): HTMLLIElement {
+  /** The well's quiet state: one emblem, one plain sentence of what it means. */
+  function emptyRow(title: string, body: string, icon = 'i-bolt'): HTMLLIElement {
     const li = document.createElement('li');
     li.className = 'adm-server-empty';
-    li.textContent = text;
+    const chip = document.createElement('span');
+    chip.className = 'adm-server-empty-i';
+    chip.setAttribute('aria-hidden', 'true');
+    chip.append(iconNode(icon));
+    const b = document.createElement('b');
+    b.textContent = title;
+    const p = document.createElement('span');
+    p.className = 'adm-server-empty-b';
+    p.textContent = body;
+    li.append(chip, b, p);
     return li;
   }
 
@@ -2902,18 +2941,23 @@ export function createAdmin(api: AdminApi): Admin {
     const live = !!status;
     const denied = !live && !serverBusy && serverDenied;
     const maint = status ? status.config.maintenance : runtime.maintenance;
-    if (serverCard) serverCard.dataset.state = live ? 'live' : denied ? 'denied' : serverBusy ? 'connecting' : 'offline';
+    if (serverCard) {
+      serverCard.dataset.state = live ? 'live' : denied ? 'denied' : serverBusy ? 'connecting' : 'offline';
+      serverCard.dataset.maint = String(maint);
+    }
     if (serverChip) {
-      serverChip.textContent = live ? 'LIVE WORKER' : denied ? 'ACCESS DENIED' : serverBusy ? 'CONNECTING' : 'OFFLINE';
+      serverChip.textContent = live ? 'LIVE' : denied ? 'DENIED' : serverBusy ? 'CONNECTING' : 'OFFLINE';
     }
     if (serverOffline) serverOffline.hidden = live || serverBusy || denied;
 
     if (serverState) {
-      serverState.textContent = live ? 'LIVE WORKER' : denied ? 'Admin access required' : serverBusy ? 'Connecting' : 'Worker offline';
+      serverState.textContent = live
+        ? (status.config.maintenance ? 'Matchmaking paused' : 'Accepting players')
+        : denied ? 'Admin access required' : serverBusy ? 'Connecting…' : 'Worker offline';
     }
     if (serverStateSub) {
       serverStateSub.textContent = live
-        ? `${status.config.maintenance ? 'Maintenance lock on' : 'Matchmaking open'} · synced ${clockOf(status.timestamp ?? Date.now())}`
+        ? `Updated ${clockOf(status.timestamp ?? Date.now())}`
         : denied
           ? 'The role registry refused this session — sign in as an administrator.'
           : serverBusy
@@ -2939,8 +2983,9 @@ export function createAdmin(api: AdminApi): Admin {
     }
     if (serverMaintState) serverMaintState.textContent = maint ? 'On' : 'Off';
     if (serverMeta) {
+      const lobbyCount = status?.openLobbies?.length ?? 0;
       serverMeta.textContent = live
-        ? `${status.activeRooms?.length ?? 0} live · ${status.openLobbies?.length ?? 0} lobbies · ${status.queueCount} queued`
+        ? `${status.activeRooms?.length ?? 0} live · ${lobbyCount} ${lobbyCount === 1 ? 'lobby' : 'lobbies'} · ${status.queueCount} queued`
         : denied
           ? 'Access denied'
           : 'Offline';
@@ -2949,8 +2994,9 @@ export function createAdmin(api: AdminApi): Admin {
     if (!serverList) return;
     serverList.textContent = '';
     if (!status) {
-      if (denied) serverList.append(emptyRow('Live telemetry requires an administrator session.'));
-      else if (!serverBusy) serverList.append(emptyRow('The inspector wakes when the Worker answers.'));
+      if (denied) serverList.append(emptyRow('Access denied', 'Live telemetry requires an administrator session.', 'i-lock'));
+      else if (serverBusy) serverList.append(emptyRow('Reading the room…', 'Waiting for the Durable Object to answer.', 'i-restart'));
+      else serverList.append(emptyRow('No signal yet', 'The inspector wakes when the Worker answers.'));
       return;
     }
 
@@ -2958,12 +3004,12 @@ export function createAdmin(api: AdminApi): Admin {
     const lobbies = status.openLobbies ?? [];
     const queue = status.queuedPlayers ?? [];
     if (!rooms.length && !lobbies.length && !queue.length) {
-      serverList.append(emptyRow('Engine idle — no live rooms, no open lobbies, nobody waiting.'));
+      serverList.append(emptyRow('Engine idle', 'No live rooms, open lobbies, or waiting players.'));
       return;
     }
 
     if (rooms.length) {
-      serverList.append(groupRow(`Live rooms · ${rooms.length}`));
+      serverList.append(groupRow('Live rooms', rooms.length));
       const now = Date.now();
       for (const r of rooms) {
         const kind = r.kind ?? ((r.players ?? 2) > 2 ? 'room' : '1v1');
@@ -2981,7 +3027,7 @@ export function createAdmin(api: AdminApi): Admin {
     }
 
     if (lobbies.length) {
-      serverList.append(groupRow(`Open lobbies · ${lobbies.length}`));
+      serverList.append(groupRow('Open lobbies', lobbies.length, 'honey'));
       const now = Date.now();
       for (const l of lobbies) {
         serverList.append(rosterRow(
@@ -2994,11 +3040,13 @@ export function createAdmin(api: AdminApi): Admin {
     }
 
     if (queue.length) {
-      serverList.append(groupRow(`Queue · ${queue.length} waiting`));
+      serverList.append(groupRow('Queue', queue.length, 'sky'));
       for (const p of queue) {
         serverList.append(rosterRow(
           p.name,
           `TIQ ${p.tiq} · ${p.wide ? 'wide net' : 'normal net'} · waiting ${waited(p.waitedMs)}`,
+          undefined,
+          'is-queue',
         ));
       }
     }
