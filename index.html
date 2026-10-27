@@ -1811,6 +1811,28 @@
           <path d="M12 18V5" />
         </g>
       </symbol>
+      <!-- TIQ brain, neon edition: the Nations Cup score token.
+           Same two-lobe silhouette as #i-brain, cut deeper and painted with its
+           own cyan→violet ramp instead of currentColor, so at 18px it reads as a
+           brain and not as a smudge. The ramp lives in the symbol's own defs,
+           exactly like #i-star-3d, so <use> resolves it in the host document. -->
+      <symbol id="i-brain-neon" viewBox="0 0 24 24">
+        <defs>
+          <linearGradient id="bn-ramp" gradientUnits="userSpaceOnUse" x1="3.5" y1="3" x2="20.5" y2="21">
+            <stop offset="0" stop-color="#A5F3FC" />
+            <stop offset=".42" stop-color="#22D3EE" />
+            <stop offset="1" stop-color="#A855F7" />
+          </linearGradient>
+        </defs>
+        <g fill="none" stroke="url(#bn-ramp) #22D3EE" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
+          <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
+          <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" />
+          <path d="M17.598 6.5A3 3 0 0 0 12 5a3 3 0 0 0-5.598 1.5" />
+          <path d="M9.999 19.5A3 3 0 0 0 12 18a3 3 0 0 0 2.001 1.5" />
+          <path d="M12 18V5" />
+        </g>
+      </symbol>
       <symbol id="i-gem" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
           <path d="M7.2 4.2h9.6L21 9.4 12 20.4 3 9.4l4.2-5.2Z" />

@@ -246,13 +246,13 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     return '•';
   };
 
-  /** The TIQ brand mark worn by a nation's score: the same brain sprite the Mind Ladder uses. */
+  /** The TIQ brand mark worn by a nation's score: the neon brain sprite. */
   const brainIcon = (cls: string): SVGSVGElement => {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('class', cls);
     svg.setAttribute('viewBox', '0 0 24 24');
     const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-    use.setAttribute('href', '#i-brain');
+    use.setAttribute('href', '#i-brain-neon');
     svg.append(use);
     svg.setAttribute('aria-hidden', 'true');
     return svg;

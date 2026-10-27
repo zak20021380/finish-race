@@ -136,6 +136,9 @@
   --t-micro: clamp(0.625rem, 0.61rem + .2vw, 0.75rem);    /* steps caption, micro labels */
   --t-hd: clamp(1.0625rem, .975rem + .7vw, 1.375rem);     /* screen titles */
   --t-title: clamp(1.5rem, 1.32rem + 1.4vw, 1.875rem);    /* win / lose verdict */
+  /* readouts (a TIQ score) are set in a monospace stack so the digits sit on a
+     fixed pitch and two scores of the same length stay the same width */
+  --font-numeric: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
   --w-1: 700; --w-2: 800; --w-3: 800;
   --ls-3: .08em;
 
@@ -5004,10 +5007,14 @@ html.no-flags .id-flag .flag-code { display: none; }
   border-radius: 0;
   margin: 0;
 }
+/* one row, one grid: rank | flag | name | delta | TIQ. Every track is fixed, so the
+   rank badges, flags, deltas and scores land in the same columns on all five rows,
+   however long a nation name or score runs. */
 .mini-rank.nations-rank > li {
-  display: flex;
+  display: grid;
+  grid-template-columns: 24px 28px minmax(0, 1fr) 36px 100px;
   align-items: center;
-  gap: 8px;
+  column-gap: 8px;
   min-width: 0;
   flex: 1 1 auto;
   height: auto;
@@ -5026,7 +5033,7 @@ html.no-flags .id-flag .flag-code { display: none; }
   border-top-color: rgba(125, 211, 252, .35);
   box-shadow: inset 0 0 0 1.5px var(--brand-2);
 }
-.mini-rank.nations-rank li.is-error { justify-content: center; color: var(--ink-soft); font-weight: 700; flex: none; height: 30px; min-height: 30px; max-height: 30px; }
+.mini-rank.nations-rank li.is-error { grid-template-columns: 1fr; text-align: center; color: var(--ink-soft); font-weight: 700; flex: none; height: 30px; min-height: 30px; max-height: 30px; }
 /* rank: gold / silver / bronze for 1-3, plain number otherwise */
 .mini-rank.nations-rank .rk {
   flex: none;
@@ -5077,7 +5084,6 @@ html.no-flags .id-flag .flag-code { display: none; }
 .car-card.nations-cup .flag-code { display: none !important; }
 /* name: 14/600 ellipsis owns the slack */
 .mini-rank.nations-rank .nm {
-  flex: 1 1 auto;
   min-width: 0;
   font-size: 14px;
   font-weight: 600;
@@ -5089,22 +5095,24 @@ html.no-flags .id-flag .flag-code { display: none; }
 }
 .mini-rank.nations-rank li.me .nm { color: var(--brand-ink); }
 /* the national rating is a branded TIQ lockup — value, unit, then the neon brain
-   token — never a bare number */
+   token — never a bare number. The lockup owns the row's last fixed track and
+   hugs its right edge, so every score ends on the same pixel. */
 .mini-rank.nations-rank .nation-score-wrap {
-  flex: none;
   min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  justify-content: flex-end;
+  gap: 4px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 .mini-rank.nations-rank .score-val {
   font-size: 15px;
-  font-weight: 900;
+  font-weight: 800;
   line-height: 1;
   letter-spacing: -.02em;
-  color: #FCD34D;
+  font-family: monospace, var(--font-numeric);
+  color: var(--honey-ink);
   text-shadow:
     0 1px 0 rgba(0, 0, 0, .5),
     0 0 10px rgba(252, 211, 77, .18);
@@ -5112,33 +5120,25 @@ html.no-flags .id-flag .flag-code { display: none; }
 .mini-rank.nations-rank .score-tiq {
   flex: none;
   align-self: center;
-  font-size: 8.5px;
+  font-size: 9px;
   font-weight: 900;
   line-height: 1;
   letter-spacing: .1em;
-  color: var(--violet);
-  text-shadow: 0 0 8px rgba(167, 139, 250, .4);
+  color: #22D3EE;
+  text-shadow: 0 0 8px rgba(34, 211, 238, .5);
 }
 .mini-rank.nations-rank .score-brain-icon {
   flex: none;
-  width: 16px;
-  height: 16px;
-  box-sizing: border-box;
-  padding: 3px;
-  border-radius: 5px;
-  color: #E4F6FF;
-  background: linear-gradient(180deg, rgba(167, 139, 250, .34) 0%, rgba(34, 211, 238, .22) 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(196, 181, 253, .36),
-    0 0 8px rgba(139, 92, 246, .3),
-    0 0 6px rgba(34, 211, 238, .18);
-  filter: drop-shadow(0 0 2.5px rgba(103, 232, 249, .4));
+  width: 18px;
+  height: 18px;
+  color: #22D3EE;
+  filter: drop-shadow(0 0 6px rgba(168, 85, 247, .6));
 }
-/* trend: a quiet colored delta in its own right-aligned column, sitting beside
-   the score lockup rather than competing with it */
+/* trend: a quiet colored delta in its own fixed column, centered in it and
+   sitting beside the score lockup rather than competing with it */
 .mini-rank.nations-rank .tr {
-  flex: none;
-  min-width: 32px;
+  width: 36px;
+  min-width: 0;
   display: inline-block;
   padding: 0;
   background: none;
@@ -5147,7 +5147,7 @@ html.no-flags .id-flag .flag-code { display: none; }
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
-  text-align: right;
+  text-align: center;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   opacity: .92;
@@ -18721,20 +18721,11 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
 .car-card.mind-ladder .slide-foot {
   flex: none;
   margin-top: auto;
+  margin-bottom: 0;
+  padding-bottom: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-/* Nations Cup's base: the foot bleeds its own background down to the card's bottom
-   edge, so the 30px pager-dots band reads as a plinth instead of a black void. The
-   bleed is pure background — the matching padding-bottom holds the CTA on exactly
-   the line it already sat on, so the card's geometry and the dots' clearance are
-   untouched (the column already spans the card, so no side bleed is needed). */
-.car-card.nations-cup .slide-foot {
-  margin-bottom: -30px;
-  padding-bottom: 30px;
-  background: linear-gradient(180deg, rgba(10, 14, 24, 0) 0%, rgba(10, 14, 24, .34) 46%, rgba(8, 11, 20, .58) 100%);
 }
 
 /* the CTA: a full-width key with a comfortable face */
