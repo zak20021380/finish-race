@@ -361,9 +361,12 @@ function checkHomeCarousel() {
       const nm = li.querySelector('.nm');
       if (!(nm?.textContent || '').trim()) fails.push(`nation row ${i + 1} missing a country name`);
       if (nm && getComputedStyle(nm).textOverflow !== 'ellipsis') fails.push(`nation row ${i + 1} name must ellipsize`);
-      const pt = li.querySelector('.pt b');
+      const wrap = li.querySelector('.nation-score-wrap');
+      const pt = wrap && wrap.querySelector('.score-val');
       if (!/^[\d,]+$/.test((pt?.textContent || '').trim())) fails.push(`nation row ${i + 1} missing a numeric score`);
-      if (!/tabular-nums/.test(getComputedStyle(li.querySelector('.pt')).fontVariantNumeric || '')) fails.push(`nation row ${i + 1} score must use tabular numbers`);
+      if ((wrap?.querySelector('.score-tiq')?.textContent || '').trim() !== 'TIQ') fails.push(`nation row ${i + 1} score must carry the TIQ unit`);
+      if (!wrap?.querySelector('svg.score-brain-icon')) fails.push(`nation row ${i + 1} score must wear the brain token`);
+      if (wrap && !/tabular-nums/.test(getComputedStyle(wrap).fontVariantNumeric || '')) fails.push(`nation row ${i + 1} score must use tabular numbers`);
     });
     const mine = document.getElementById('home-nation-mine');
     if (!mine || !/^your nation:/i.test((mine.textContent || '').trim())) fails.push('cup missing the "Your nation" contribution strip');

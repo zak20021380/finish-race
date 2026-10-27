@@ -246,6 +246,33 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     return '•';
   };
 
+  /** The TIQ brand mark worn by a nation's score: the same brain sprite the Mind Ladder uses. */
+  const brainIcon = (cls: string): SVGSVGElement => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', cls);
+    svg.setAttribute('viewBox', '0 0 24 24');
+    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    use.setAttribute('href', '#i-brain');
+    svg.append(use);
+    svg.setAttribute('aria-hidden', 'true');
+    return svg;
+  };
+
+  /** The national rating as a branded lockup: value + TIQ unit + neon brain, never a bare number. */
+  const nationScore = (pts: string): HTMLDivElement => {
+    const wrap = document.createElement('div');
+    wrap.className = 'nation-score-wrap';
+    const val = document.createElement('span');
+    val.className = 'score-val';
+    val.textContent = pts;
+    const unit = document.createElement('span');
+    unit.className = 'score-tiq';
+    unit.textContent = 'TIQ';
+    unit.setAttribute('aria-hidden', 'true');
+    wrap.append(val, unit, brainIcon('score-brain-icon'));
+    return wrap;
+  };
+
   const rowEl = (c: CountryRow, me: boolean): HTMLLIElement => {
     const li = document.createElement('li');
     li.classList.add('nations-row');
@@ -253,7 +280,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     if (me) li.classList.add('me');
     const pts = c.points.toLocaleString('en-US');
     const trendLabel = c.trend === 'up' ? 'rising' : c.trend === 'down' ? 'dropping' : 'steady';
-    li.setAttribute('aria-label', `#${c.rank} ${c.name} — ${pts} points, ${trendLabel}`);
+    li.setAttribute('aria-label', `#${c.rank} ${c.name} — ${pts} TIQ, ${trendLabel}`);
     const rk = document.createElement('span');
     const podium = c.rank >= 1 && c.rank <= 3 ? PODIUM_CLASS[c.rank - 1] : '';
     rk.className = podium ? `rk rank-${c.rank} ${podium}` : `rk rank-${c.rank}`;
@@ -267,18 +294,14 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     nm.className = 'nm';
     nm.textContent = c.name;
     nm.title = c.name;
-    const pt = document.createElement('span');
-    pt.className = 'pt';
-    const num = document.createElement('b');
-    num.textContent = pts;
-    pt.append(num);
-    pt.title = `${pts} points`;
+    const pt = nationScore(pts);
+    pt.title = `${pts} TIQ`;
     const tr = document.createElement('span');
     tr.className = `tr ${c.trend}`;
     tr.textContent = trendTextOf(c);
     tr.title = trendLabel;
     tr.setAttribute('aria-hidden', 'true');
-    li.append(rk, fl, nm, pt, tr);
+    li.append(rk, fl, nm, tr, pt);
     return li;
   };
 
