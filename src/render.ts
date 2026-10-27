@@ -307,24 +307,27 @@ export const capsuleConfirmPos = (L: Layout, ax: number, ay: number): Vec => cap
 export const capsuleCancelPos = (L: Layout, ax: number, ay: number): Vec => capsulePos(L, ax, ay, 'cancel');
 
 /**
- * The wall toolbar's metrics, in css px. `TOOL_OFFSET` puts the glass strip 46px clear of the
- * wall's centre — far enough that neither the bar nor its glow is covered — and every key is a full
- * 44px thumb target with a little daylight between them.
+ * The wall toolbar's metrics, in css px. A compact capsule: 27px lenses with only a few px of
+ * daylight between them, so the whole three-key strip hugs roughly 1.7 board tiles. `TOOL_OFFSET`
+ * leaves about 30px of clearance between the wall and the pill's near edge — clear of the bar and
+ * its glow without floating off across the board. The touch targets stay larger than the lenses.
  */
-const TOOL_OFFSET = 46;
-const TOOL_BTN = 44;
-const TOOL_GAP = 6;
-const TOOL_PAD = 5;
+const TOOL_OFFSET = 45;
+const TOOL_BTN = 27;
+const TOOL_GAP = 4;
+const TOOL_PAD = 3;
 const TOOL_W = TOOL_BTN * 3 + TOOL_GAP * 2 + TOOL_PAD * 2;
 const TOOL_H = TOOL_BTN + TOOL_PAD * 2;
 const TOOL_EDGE = 3;
+/** Generous tap radius per key, resolved by nearest centre so neighbouring keys never steal a tap. */
+const TOOL_HIT = 19;
 
 interface ToolbarBox { x: number; y: number; w: number; h: number; below: boolean }
 
 /**
- * Where the three-key toolbar sits: 46px clear of the wall's nearest end, centred above the bar,
- * flipping to the wall's other side when the top of the board would clip it, and clamped inside the
- * canvas horizontally. Centre coords, css px.
+ * Where the three-key toolbar sits: `TOOL_OFFSET` clear of the wall's nearest end, centred above
+ * the bar, flipping to the wall's other side when the top of the board would clip it, and clamped
+ * inside the canvas horizontally. Centre coords, css px.
  */
 function toolbarBox(L: Layout, ax: number, ay: number, o: 'h' | 'v'): ToolbarBox {
   const cx = L.ox + ax * L.cell, cy = L.oy + ay * L.cell;
@@ -351,12 +354,15 @@ function toolbarHit(
   L: Layout, px: number, py: number, ax: number, ay: number, o: 'h' | 'v',
 ): 'confirm' | 'cancel' | 'rotate' | null {
   const b = toolbarBox(L, ax, ay, o);
-  const r2 = (TOOL_BTN / 2 + 1) * (TOOL_BTN / 2 + 1);
+  const r2 = TOOL_HIT * TOOL_HIT;
+  let best = -1, bestD = r2;
   for (let i = 0; i < 3; i++) {
     const dx = px - toolKeyX(b, i), dy = py - b.y;
-    if (dx * dx + dy * dy <= r2) return i === 0 ? 'cancel' : i === 1 ? 'rotate' : 'confirm';
+    const d = dx * dx + dy * dy;
+    /* nearest centre wins, so the generous radii may overlap without stealing a neighbour's tap */
+    if (d <= bestD) { best = i; bestD = d; }
   }
-  return null;
+  return best === 0 ? 'cancel' : best === 1 ? 'rotate' : best === 2 ? 'confirm' : null;
 }
 
 /** Which floating control, if any, a tap at (px, py) lands on. Canvas coords in. */
@@ -1929,7 +1935,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
   type ToolKind = keyof typeof TOOL_COLORS;
 
-  /** One 44px glass-toolbar key: a coloured lens, a crisp rim, and a vector glyph. */
+  /** One compact glass-toolbar key: a coloured lens, a crisp rim, and a proportional vector glyph. */
   function drawToolKey(cx: number, cy: number, kind: ToolKind, still: boolean, dim = false) {
     const r = TOOL_BTN / 2 - 1;
     const pal = TOOL_COLORS[kind];
@@ -1937,8 +1943,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.translate(cx, cy);
     if (dim) ctx.globalAlpha = 0.42;
     ctx.shadowColor = 'rgba(2,6,14,.62)';
-    ctx.shadowBlur = 7;
-    ctx.shadowOffsetY = 2.5;
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetY = 1.5;
     const body = ctx.createRadialGradient(-r * 0.38, -r * 0.48, r * 0.08, 0, 0, r * 1.12);
     body.addColorStop(0, pal.light);
     body.addColorStop(0.46, pal.mid);
@@ -1949,18 +1955,18 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.shadowBlur = 0;
     ctx.shadowOffsetY = 0;
     ctx.strokeStyle = 'rgba(255,255,255,.34)';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(0, 0, r - 0.5, 0, TAU); ctx.stroke();
-    /* top lens highlight: the glass reads as convex even at 44px */
+    ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.arc(0, 0, r - 0.4, 0, TAU); ctx.stroke();
+    /* top lens highlight: the glass still reads as convex at this size */
     const sheen = ctx.createLinearGradient(0, -r, 0, r * 0.35);
     sheen.addColorStop(0, 'rgba(255,255,255,.4)');
     sheen.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = sheen;
-    ctx.beginPath(); ctx.arc(0, 0, r - 1.5, Math.PI, TAU); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, r - 1, Math.PI, TAU); ctx.closePath(); ctx.fill();
 
     ctx.strokeStyle = 'rgba(255,255,255,.97)';
     ctx.fillStyle = 'rgba(255,255,255,.97)';
-    ctx.lineWidth = Math.max(2.1, r * 0.13);
+    ctx.lineWidth = Math.max(1.45, r * 0.125);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     if (kind === 'cancel') {
@@ -1994,8 +2000,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     if (!still) {                                   // the keys breathe together, never apart
       ctx.globalAlpha = (dim ? 0.16 : 0.3) + 0.14 * Math.sin(performance.now() / 480);
       ctx.strokeStyle = pal.glow;
-      ctx.lineWidth = 1.4;
-      ctx.beginPath(); ctx.arc(0, 0, r + 2.5, 0, TAU); ctx.stroke();
+      ctx.lineWidth = 1.1;
+      ctx.beginPath(); ctx.arc(0, 0, r + 2, 0, TAU); ctx.stroke();
     }
     ctx.restore();
   }
@@ -2009,10 +2015,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const b = toolbarBox(L, ax, ay, o);
     const left = b.x - b.w / 2, top = b.y - b.h / 2;
     ctx.save();
-    /* the glass is dark and translucent; a wide soft shadow separates it from the clay tiles */
+    /* the glass is dark and translucent; a soft shadow separates it from the clay tiles */
     ctx.shadowColor = 'rgba(3,7,15,.58)';
-    ctx.shadowBlur = 16;
-    ctx.shadowOffsetY = 6;
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 4;
     const glass = ctx.createLinearGradient(0, top, 0, top + b.h);
     glass.addColorStop(0, 'rgba(36,44,64,.78)');
     glass.addColorStop(0.52, 'rgba(17,23,38,.78)');
@@ -2025,22 +2031,22 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.shadowOffsetY = 0;
     /* a frosted rim: bright catch-light above, cool hairline below */
     ctx.strokeStyle = 'rgba(255,255,255,.26)';
-    ctx.lineWidth = 1;
-    rr(ctx, left + 0.5, top + 0.5, b.w - 1, b.h - 1, (b.h - 1) / 2);
+    ctx.lineWidth = 0.8;
+    rr(ctx, left + 0.4, top + 0.4, b.w - 0.8, b.h - 0.8, (b.h - 0.8) / 2);
     ctx.stroke();
     const sheen = ctx.createLinearGradient(0, top, 0, top + b.h * 0.52);
     sheen.addColorStop(0, 'rgba(255,255,255,.16)');
     sheen.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = sheen;
-    rr(ctx, left + 2, top + 2, b.w - 4, b.h * 0.5, b.h * 0.25);
+    rr(ctx, left + 1.4, top + 1.4, b.w - 2.8, b.h * 0.5, b.h * 0.25);
     ctx.fill();
-    /* a tiny stem marks which wall the strip belongs to */
+    /* a short, subtle stem marks which wall the strip belongs to */
     ctx.strokeStyle = 'rgba(255,255,255,.28)';
-    ctx.lineWidth = Math.max(1.5, b.h * 0.045);
+    ctx.lineWidth = Math.max(1, b.h * 0.035);
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(b.x, b.below ? top : top + b.h);
-    ctx.lineTo(b.x, b.below ? top - 5 : top + b.h + 5);
+    ctx.lineTo(b.x, b.below ? top - 4 : top + b.h + 4);
     ctx.stroke();
     drawToolKey(toolKeyX(b, 0), b.y, 'cancel', still);
     drawToolKey(toolKeyX(b, 1), b.y, 'rotate', still);
