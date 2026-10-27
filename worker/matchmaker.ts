@@ -1306,7 +1306,9 @@ export class MatchmakerDO {
 
     /* What a Moderator reads: the live room, the directory, the registry and the history. */
     if (url.pathname === '/admin/status') return json(this.status());
-    if (url.pathname === '/admin/players') return json(this.playersPage(url.searchParams));
+    if (url.pathname === '/admin/players') {
+      return json(this.playersPage(url.searchParams), 200, { 'cache-control': 'no-store' });
+    }
     if (url.pathname === '/api/admin/roles') return json(this.rolesView(me));
     if (url.pathname === '/api/admin/broadcasts') return json(this.broadcastsView());
 
@@ -1800,22 +1802,36 @@ export class MatchmakerDO {
     this.persist();
   }
 
+  /**
+   * Stamp one seat's activity the moment the room hears from it. `touch` only sees a socket
+   * connect; a player who keeps the app open and plays for hours must not still read "Active 16h
+   * ago" in the Command Center. Every queue move, room join, board move and finish comes through
+   * here, and the write rides the same debounced flush as the rest of the registry.
+   */
+  private markActive(id: string): void {
+    const p = this.players.get(id);
+    if (!p) return;
+    p.lastSeen = Date.now();
+    this.persist();
+  }
+
   /** The seat's board came to rest: count it. `winner` null means nobody won — an admin abort. */
   private verdict(id: string, won: boolean | null): void {
     const p = this.players.get(id);
     if (!p) return;
     p.inMatch = false;
     p.lastSeen = Date.now();
-    if (won === null) return;
-    p.matches++;
-    p.lastPlayed = p.lastSeen;
-    if (won) {
-      p.wins++;
-      p.streak++;
-      p.best = Math.max(p.best, p.streak);
-    } else {
-      p.losses++;
-      p.streak = 0;
+    if (won !== null) {
+      p.matches++;
+      p.lastPlayed = p.lastSeen;
+      if (won) {
+        p.wins++;
+        p.streak++;
+        p.best = Math.max(p.best, p.streak);
+      } else {
+        p.losses++;
+        p.streak = 0;
+      }
     }
     this.persist();
   }
@@ -1826,6 +1842,7 @@ export class MatchmakerDO {
     if (!p) return;
     p.inMatch = on;
     p.lastSeen = Date.now();
+    this.persist();
   }
 
   /** Count what the authoritative board actually did between two states. */
@@ -2125,6 +2142,8 @@ export class MatchmakerDO {
       }
       return;
     }
+    /* a queue frame is live activity: stamp before pairing so a long queued seat reads fresh */
+    this.markActive(waiter.id);
     const at = this.queue.indexOf(waiter);
     if (at === -1) {
       waiter.wide = wide;
@@ -2140,6 +2159,7 @@ export class MatchmakerDO {
   private widen(waiter: Waiter): void {
     const at = this.queue.indexOf(waiter);
     if (at === -1) return;
+    this.markActive(waiter.id);
     this.queue[at].wide = true;
     this.pairNow();
   }
@@ -2147,6 +2167,7 @@ export class MatchmakerDO {
   /** Out of the room. A CANCEL closes the socket; a dead socket is just forgotten — and either
    *  way a player who was racing hands the win to the seat opposite. */
   private leave(waiter: Waiter, close: boolean): void {
+    this.markActive(waiter.id);
     const at = this.queue.indexOf(waiter);
     if (at !== -1) this.queue.splice(at, 1);
     if (waiter.race) this.endRace(waiter.race, waiter.side, 'LEFT');
@@ -2270,6 +2291,7 @@ export class MatchmakerDO {
       kind: 'human', id: identity.player.id, name: identity.player.name,
     });
     this.refs.set(ws, { live, seat });
+    this.markActive(identity.player.id);
 
     ws.addEventListener('message', (ev: MessageEvent) => {
       const ref = this.refs.get(ws);
@@ -2333,6 +2355,7 @@ export class MatchmakerDO {
       kind: 'human', id: identity.player.id, name: identity.player.name,
     });
     this.refs.set(ws, { live, seat });
+    this.markActive(identity.player.id);
 
     ws.addEventListener('message', (ev: MessageEvent) => {
       const ref = this.refs.get(ws);
@@ -2540,6 +2563,8 @@ export class MatchmakerDO {
   /** A frame from a seat in a room: the host's early start, a move, or a resignation. */
   private roomFrame(ref: RoomRef, msg: ClientMessage): void {
     const live = ref.live;
+    const member = live.members[ref.seat];
+    if (member) this.markActive(member.id);
     if (!live.driver) {
       /* Before the launch the only vocabulary a lobby has is the host's start and size pick, and
          a seat's own team move. Any seat may leave at any time. */
@@ -2682,8 +2707,9 @@ export class MatchmakerDO {
   /** A socket went away. In a room that means the machine finishes the seat; in the queue, goodbye. */
   private roomLeave(ref: RoomRef | undefined): void {
     if (!ref) return;
-    if (ref.live.driver) { this.takeSeatOver(ref); return; }
     const member = ref.live.members[ref.seat];
+    if (member) this.markActive(member.id);
+    if (ref.live.driver) { this.takeSeatOver(ref); return; }
     if (member) this.refs.delete(member.ws);
     ref.live.members[ref.seat] = null;
     if (ref.live.code) {
@@ -2713,6 +2739,7 @@ export class MatchmakerDO {
     const race = seat.race;
     if (!race || race.over) return;
 
+    this.markActive(seat.id);
     if (msg.type === 'RESIGN') {
       this.endRace(race, seat.side, 'RESIGN');
       return;

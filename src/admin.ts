@@ -456,7 +456,9 @@ async function fetchPlayers(
   const params = new URLSearchParams({ q, filter, country, age, sort });
   params.set('offset', String(offset));
   params.set('limit', String(limit));
-  const data = await parseJson<PlayersPage>(await adminFetch(`/admin/players?${params.toString()}`));
+  const data = await parseJson<PlayersPage>(
+    await adminFetch(`/admin/players?${params.toString()}`, { cache: 'no-store' }),
+  );
   return data && data.ok === true && Array.isArray(data.players) ? data : null;
 }
 
@@ -1067,6 +1069,7 @@ export function createAdmin(api: AdminApi): Admin {
   const usersEmpty = $<HTMLElement>('adm-users-empty');
   const usersTotalEl = $<HTMLElement>('users-total');
   const usersSourceEl = $<HTMLElement>('users-source');
+  const usersRefresh = $<HTMLButtonElement>('users-refresh');
   const usersMore = $<HTMLButtonElement>('users-more');
   const usersQ = $<HTMLInputElement>('users-q');
   const usersQClear = $<HTMLButtonElement>('users-q-clear');
@@ -1186,6 +1189,8 @@ export function createAdmin(api: AdminApi): Admin {
   let usersReady = false;
   /** The newest read is the only one allowed to paint: typing fires reads faster than they land. */
   let usersSeq = 0;
+  /** Reads in flight: the refresh key spins while any one of them is still out. */
+  let usersPending = 0;
   let usersTimer = 0;
   let usersAdvTimer = 0;
   let openPlayer = '';
@@ -1857,29 +1862,34 @@ export function createAdmin(api: AdminApi): Admin {
     return age <= 60 * 60 * 1000 ? 'hot' : age <= 24 * 60 * 60 * 1000 ? 'warm' : 'cold';
   };
 
-  /** Always a relative stamp on the audit line: `12d ago`, never a calendar date. */
-  function relAgo(ms: number, now = Date.now()): string {
-    const s = Math.max(0, Math.round((now - ms) / 1000));
-    if (s < 45) return 'just now';
-    const m = Math.round(s / 60);
-    if (m < 60) return `${m}m ago`;
-    const h = Math.round(m / 60);
-    if (h < 24) return `${h}h ago`;
-    const d = Math.round(h / 24);
-    return d < 30 ? `${d}d ago` : `${Math.round(d / 30)}mo ago`;
+  /**
+   * The Users row's activity line, measured against the real clock at paint time. Flooring each
+   * band keeps "just now" to a true minute and stops 59 minutes reading as "1h ago" early.
+   */
+  function activeAgo(ms: number, now = Date.now()): string {
+    const s = Math.max(0, Math.floor((now - ms) / 1000));
+    if (s < 60) return 'Active just now';
+    const m = Math.floor(s / 60);
+    if (m < 60) return `Active ${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `Active ${h}h ago`;
+    const d = Math.floor(h / 24);
+    return d < 30 ? `Active ${d}d ago` : `Active ${Math.floor(d / 30)}mo ago`;
   }
 
   /**
-   * The relative activity stamp the card prints: a settled race is the latest event when its end
-   * coincides with the last sighting, otherwise the last sighting is the honest "Active" reading.
+   * The relative activity stamp the card prints: the freshest of the last sighting and the last
+   * settled race, so a registry written by an older Worker still reads honestly.
    */
   function activityOf(p: DirPlayer): { text: string; tone: Recency; at: number } {
     const now = Date.now();
-    if (p.lastPlayed > 0 && p.lastPlayed >= p.lastSeen - 2000) {
-      return { text: `Match ended ${relAgo(p.lastPlayed, now)}`, tone: recencyOf(p.lastPlayed, now), at: p.lastPlayed };
-    }
-    if (p.lastSeen > 0) {
-      return { text: `Active ${relAgo(p.lastSeen, now)}`, tone: p.inMatch ? 'live' : recencyOf(p.lastSeen, now), at: p.lastSeen };
+    const seen = Math.max(p.lastSeen, p.lastPlayed);
+    if (seen > 0) {
+      return {
+        text: activeAgo(seen, now),
+        tone: p.inMatch ? 'live' : recencyOf(seen, now),
+        at: seen,
+      };
     }
     return { text: 'No activity yet', tone: 'cold', at: 0 };
   }
@@ -2047,53 +2057,72 @@ export function createAdmin(api: AdminApi): Admin {
     if (usersEmpty) usersEmpty.hidden = !usersReady || usersRows.length > 0;
   }
 
+  /** The refresh key: a spinner while any read is still out, and no spam clicks behind it. */
+  function syncUsersRefresh(): void {
+    if (!usersRefresh) return;
+    const busy = usersPending > 0;
+    usersRefresh.dataset.busy = String(busy);
+    usersRefresh.disabled = busy;
+    usersRefresh.setAttribute('aria-busy', String(busy));
+    usersRefresh.setAttribute('aria-label', busy ? 'Refreshing player directory' : 'Refresh player directory');
+    usersRefresh.title = busy ? 'Refreshing player directory…' : 'Refresh player directory';
+  }
+
   /**
    * Read one window of the directory. The Worker's registry is asked first and wins when it
    * answers; with nothing behind the page, players.ts can still show this device's own seat.
    * Only the newest read paints.
    */
-  async function refreshUsers(reset: boolean): Promise<void> {
+  async function refreshUsers(reset: boolean, force = false): Promise<void> {
     const run = ++usersSeq;
     const offset = reset ? 0 : usersRows.length;
+    usersPending++;
+    syncUsersRefresh();
 
-    /* Both sources page the same way: one PAGE_SIZE window at the rows already held. That keeps
-       Load More honest instead of re-reading the first window forever. */
-    const paintLocal = () => {
-      const page = directoryPage(
-        {
-          q: usersQuery, filter: usersFilter, country: usersCountry, age: usersAge, sort: usersSort,
-          offset, limit: PAGE_SIZE,
-        },
-        liveSeat(),
+    try {
+      /* Both sources page the same way: one PAGE_SIZE window at the rows already held. That keeps
+         Load More honest instead of re-reading the first window forever. */
+      const paintLocal = () => {
+        const page = directoryPage(
+          {
+            q: usersQuery, filter: usersFilter, country: usersCountry, age: usersAge, sort: usersSort,
+            offset, limit: PAGE_SIZE,
+          },
+          liveSeat(),
+        );
+        usersRows = reset ? page.players : [...usersRows, ...page.players];
+        usersTotal = page.total;
+        usersReady = true;
+        paintUsers();
+      };
+
+      /* Once the Worker has refused, the on-device directory is the authority. Filtering it is a
+         synchronous pass over the rows the device actually holds, so every toolbar move repaints
+         inside a frame instead of waiting on a fetch that has already failed this session. A
+         manual refresh forces one fresh probe, because "on demand" must still try the Worker. */
+      if (!force && usersProbed && !usersOn) {
+        paintLocal();
+        return;
+      }
+
+      const live = await fetchPlayers(
+        usersQuery, usersFilter, usersCountry, usersAge, usersSort, offset, PAGE_SIZE,
       );
-      usersRows = reset ? page.players : [...usersRows, ...page.players];
-      usersTotal = page.total;
-      usersReady = true;
-      paintUsers();
-    };
-
-    /* Once the Worker has refused, the on-device directory is the authority. Filtering it is a
-       synchronous pass over the rows the device actually holds, so every toolbar move repaints
-       inside a frame instead of waiting on a fetch that has already failed this session. */
-    if (usersProbed && !usersOn) {
+      if (run !== usersSeq) return;                 // a newer read has already been asked for
+      usersProbed = true;
+      usersOn = !!live;
+      if (live) {
+        usersRows = reset ? live.players : [...usersRows, ...live.players];
+        usersTotal = live.total;
+        usersReady = true;
+        paintUsers();
+        return;
+      }
       paintLocal();
-      return;
+    } finally {
+      usersPending = Math.max(0, usersPending - 1);
+      syncUsersRefresh();
     }
-
-    const live = await fetchPlayers(
-      usersQuery, usersFilter, usersCountry, usersAge, usersSort, offset, PAGE_SIZE,
-    );
-    if (run !== usersSeq) return;                 // a newer read has already been asked for
-    usersProbed = true;
-    usersOn = !!live;
-    if (live) {
-      usersRows = reset ? live.players : [...usersRows, ...live.players];
-      usersTotal = live.total;
-      usersReady = true;
-      paintUsers();
-      return;
-    }
-    paintLocal();
   }
 
   /** BAN / UNBAN / GRANT_COINS, on the Worker when there is one, on the local index otherwise. */
@@ -3181,6 +3210,15 @@ export function createAdmin(api: AdminApi): Admin {
     impact('light');
     void refreshUsers(false);
   });
+  /* the directory's own refresh key: one full first-page read, never a second click mid-flight */
+  usersRefresh?.addEventListener('click', () => {
+    if (usersPending > 0) return;
+    window.clearTimeout(usersTimer);
+    window.clearTimeout(usersAdvTimer);
+    impact('light');
+    void refreshUsers(true, true);
+  });
+  syncUsersRefresh();
 
   /* one delegated listener for the whole directory: the list is rebuilt on every paint */
   usersList?.addEventListener('click', (e) => {

@@ -3286,7 +3286,13 @@
             </div>
             <div class="adm-users-meta">
               <span id="users-total" aria-live="polite">—</span>
-              <span class="adm-users-src" id="users-source" data-live="false">NO REGISTRY</span>
+              <span class="adm-users-meta-r">
+                <span class="adm-users-src" id="users-source" data-live="false">NO REGISTRY</span>
+                <button class="adm-users-refresh" type="button" id="users-refresh"
+                  aria-label="Refresh player directory" title="Refresh player directory">
+                  <svg class="ico" aria-hidden="true"><use href="#i-restart" /></svg>
+                </button>
+              </span>
             </div>
             <ul class="adm-users-list" id="adm-users-list" aria-label="Player directory"></ul>
             <div class="adm-users-empty" id="adm-users-empty" hidden>
