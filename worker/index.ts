@@ -8,8 +8,8 @@
  *
  * The third surface is the Admin Command Center's, and it is not public: `GET /admin/status`,
  * `GET /api/admin/matchmaking`, `POST /admin/config`, `POST /admin/action`, `GET /admin/players`
- * and `POST /admin/player` are checked by `verifyAdminRequest` here — a Telegram signature on the
- * `ADMIN_IDS` allowlist, or an explicitly marked dev request — and only then forwarded to the same
+ * and `POST /admin/player` are checked by `identifyAdminRequest` here — an operator key, a held
+ * Telegram signature, or an explicitly marked dev request — and only then forwarded to the same
  * `MatchmakerDO`, which owns the live config, the player directory, and enforces both. An
  * unauthenticated call never reaches the room: it answers `403`.
  *
@@ -19,15 +19,15 @@
  * `POST /api/admin/broadcasts/:id/archive`) — plus the public routes the players read,
  * `GET /api/client/announcements/active` and the live Mind Ladder at `GET /api/client/minds`.
  *
- * `GET /api/admin/metrics` is a stricter door than that surface: exactly one Telegram id, proven
- * by initData with no development fallback. It reads the room's live counts and durable counters
- * and answers exact zeroes for empty state.
+ * `GET /api/admin/metrics` is a stricter door than that surface: only an id on the operator set —
+ * the metrics operator plus the deployment's `ADMIN_IDS` — proven by a credential, with no
+ * development fallback. It reads the room's live counts and durable counters and answers exact
+ * zeroes for empty state.
  *
- * Both admin prefixes are only *authenticated* here (`identifyAdminRequest`): a signature that
- * holds, or the marked dev door. Authorization is the room's, because the role registry lives
- * there: the DO admits exactly the ids on its registry (or the dev door), routes reads to
- * members, and puts every mutation behind the `isSuperAdmin` middleware. A caller who is not
- * on the registry answers `403` from the room, not from the edge.
+ * Both admin prefixes are only *authenticated* here. Authorization is the room's, because the role
+ * registry lives there: the DO admits exactly the ids on its registry (or the dev and operator-key
+ * doors), routes reads to members, and puts every mutation behind the `isSuperAdmin` middleware. A
+ * caller who is not on the registry answers `403` from the room, not from the edge.
  *
  * The fifth surface is the Genius Triad's edition ledger: `GET /api/badges/supply` is public,
  * while `POST /api/badges/progress` and `POST /api/badges/mint` pass the player door above and
@@ -39,14 +39,18 @@
  * localised `/` command list and the chat menu button — behind the `ADMIN_IDS` door, because it
  * points a bot at a host. Both are answered at the edge (`worker/bot.ts`): no room state is
  * involved, so there is no reason to wake the Durable Object.
+ *
+ * Every refusal on every one of these surfaces answers JSON, with a reason in the body. An opaque
+ * error page is the one thing a Command Center can only report as an offline Worker — and this
+ * backend is not offline.
  */
 import { MatchmakerDO } from './matchmaker';
 import { BadgeMintDO } from './badges';
 import {
-  identifyAdminRequest, identifyMetricsAdmin, identifyPlayerRequest, METRICS_ADMIN_ID, METRICS_HEADER,
+  identifyAdminRequest, identifyMetricsAdmin, identifyPlayerRequest, METRICS_HEADER,
 } from './auth';
 import { telegramSetup, telegramWebhook } from './bot';
-import { json } from './http';
+import { json, reasonOf } from './http';
 import type { Env } from './env';
 
 export { MatchmakerDO, BadgeMintDO };
@@ -74,30 +78,66 @@ function withBadgeCors(response: Response): Response {
   return new Response(response.body, { status: response.status, headers });
 }
 
+/** The one answer that may honestly be read as an outage: a call to the room that never returned. */
+const unreachable = (err: unknown, extra: Record<string, unknown> = {}): Response =>
+  json({ error: 'matchmaker_unreachable', hint: reasonOf(err), code: 'do_unreachable', ...extra }, 503);
+
 /**
- * The server telemetry door. Unlike `/admin/*`, this route has no development fallback and no
- * role registry: only the one operator id may read it, proven by the initData signature at the
- * edge. The room re-checks the internal marker before it hands anything back.
+ * The server telemetry door. Unlike `/admin/*`, this route has no development fallback: only an id
+ * on the operator set may read it, proven by whatever credential opens the door — the initData
+ * signature while the deployment holds a bot token, the operator key, or (only when there is no
+ * secret left to sign with) a declared id the `ADMIN_IDS` allowlist recognises. The room re-checks
+ * the internal marker before it hands anything back.
+ *
+ * Every answer carries a reason, and the room's own refusals keep their status: a credential the
+ * operator set does not recognise has to read as a refusal, never as an outage.
  */
 async function serverMetrics(request: Request, env: Env): Promise<Response> {
   const admin = await identifyMetricsAdmin(request, env);
-  if (!admin) return json({ error: 'Unauthorized' }, 403);
+  if (!admin) {
+    return json({ error: 'unauthorized', hint: 'metrics operator required', code: 'admin_unauthorized' }, 403);
+  }
   if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+  if (!env.MATCHMAKER) return json({ error: 'matchmaker_unbound' }, 503);
 
   const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
   const headers = new Headers(request.headers);
-  headers.set(METRICS_HEADER, METRICS_ADMIN_ID);
+  headers.set(METRICS_HEADER, admin.userId);
+  /* The forwarded call is a GET with no body, so the caller's entity headers must not ride along. */
+  headers.delete('content-length');
+  headers.delete('content-type');
+
   /* The ping is the real round trip this request takes through the Durable Object. */
   const started = Date.now();
-  const reply = await lobby.fetch(new Request(request.url, { method: 'GET', headers }));
-  const pingMs = Math.max(0, Date.now() - started);
-  if (!reply.ok) return json({ error: 'metrics_unavailable' }, 502);
+  let reply: Response;
   try {
-    const body = (await reply.json()) as Record<string, unknown>;
-    return json({ ...body, pingMs });
-  } catch {
-    return json({ error: 'metrics_unavailable' }, 502);
+    reply = await lobby.fetch(new Request(request.url, { method: 'GET', headers }));
+  } catch (err) {
+    return unreachable(err, { pingMs: Math.max(0, Date.now() - started) });
   }
+  const pingMs = Math.max(0, Date.now() - started);
+  const body = await reply.json().catch((): null => null) as Record<string, unknown> | null;
+
+  if (!reply.ok) {
+    /* A 4xx is a decision the room made, not an outage: pass its status and its reason through. */
+    const status = reply.status >= 400 && reply.status < 500 ? reply.status : 502;
+    return json({
+      error: typeof body?.error === 'string' ? body.error : 'metrics_unavailable',
+      hint: typeof body?.hint === 'string' ? body.hint : `room answered ${reply.status}`,
+      code: 'room_refused',
+      roomStatus: reply.status,
+      pingMs,
+    }, status);
+  }
+  if (!body || body.ok !== true) {
+    return json({
+      error: 'metrics_bad_response',
+      hint: 'the room answered 200 without a metrics body',
+      code: 'room_malformed',
+      pingMs,
+    }, 502);
+  }
+  return json({ ...body, pingMs });
 }
 
 /**
@@ -134,81 +174,99 @@ async function badges(request: Request, env: Env, url: URL): Promise<Response> {
   return badgeJson({ error: 'not_found' }, 404);
 }
 
+/** The whole routing table, in surface order. */
+async function route(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+
+  if (url.pathname.startsWith('/api/badges/')) return badges(request, env, url);
+
+  if (url.pathname === '/health') {
+    return json({ ok: true, service: 'detour-matchmaking', time: Date.now() });
+  }
+
+  /* The referral hub's ledger seam. Device-local today, so the mock answers zeroes for every
+     code; a real referral ledger slots in here with the same shape `referral.ts` merges. */
+  if (url.pathname === '/referral/state') {
+    const code = (url.searchParams.get('code') ?? '').slice(0, 32);
+    return json({ ok: true, service: 'detour-referral', code, joins: 0, unclaimed: 0 });
+  }
+
+  if (url.pathname === '/api/squads/register') {
+    if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    return lobby.fetch(request);
+  }
+
+  if (url.pathname === '/ws/matchmake') {
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    return lobby.fetch(request);
+  }
+
+  /* The one public announcement feed: what a client reads to raise an urgent popup. */
+  if (url.pathname === '/api/client/announcements/active') {
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    return lobby.fetch(request);
+  }
+
+  /* The public tournament clock. The room verifies any initData itself, so the award that
+     rides along is never keyed off a client-supplied identity header. */
+  if (url.pathname === '/api/client/arena/state') {
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    return lobby.fetch(request);
+  }
+
+  /* The public Mind Ladder: the room's own TIQ registry, ranked. Read-only and never cached. */
+  if (url.pathname === '/api/client/minds') {
+    if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    return lobby.fetch(request);
+  }
+
+  /* The bot's chat surface. Telegram is the only caller of the webhook; the setup route is the
+     operator's, and answers 403 until it carries admin credentials. */
+  if (url.pathname === '/telegram/webhook') {
+    if (request.method !== 'POST') return json({ error: 'method_not_allowed', hint: 'Telegram posts updates' }, 405);
+    return telegramWebhook(request, env);
+  }
+  if (url.pathname === '/telegram/setup-webhook') return telegramSetup(request, env);
+
+  /* The server telemetry route is stricter than the rest of the admin surface: the operator set,
+     and no dev door. */
+  if (url.pathname === '/api/admin/metrics') return serverMetrics(request, env);
+
+  /* The Command Center's routes: authenticated here, then handed to the room that authorizes.
+     A refusal names itself, so the panel never has to guess between a door and an outage. */
+  if (url.pathname.startsWith('/admin/') || url.pathname.startsWith('/api/admin/')) {
+    const admin = await identifyAdminRequest(request, env);
+    if (!admin) return json({ error: 'forbidden', hint: 'admin credentials required', code: 'admin_unauthorized' }, 403);
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    try {
+      return await lobby.fetch(request);
+    } catch (err) {
+      return unreachable(err);
+    }
+  }
+
+  /* Everything that is not a backend surface is the Mini App itself: `/`, the hashed bundles
+     and any other page the client asks for. A missing backend route stays a JSON 404 rather
+     than quietly answering with the game's HTML. */
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/ws/') || url.pathname.startsWith('/telegram/')) {
+    return json({ error: 'not_found', hint: `no route for ${url.pathname}`, code: 'no_route' }, 404);
+  }
+  if (env.ASSETS) return env.ASSETS.fetch(request);
+
+  return json({ error: 'not_found' }, 404);
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-
-    if (url.pathname.startsWith('/api/badges/')) return badges(request, env, url);
-
-    if (url.pathname === '/health') {
-      return json({ ok: true, service: 'detour-matchmaking', time: Date.now() });
+    /* No route may answer as a bare Cloudflare error page. A body the panel cannot parse is, on
+       the client, indistinguishable from a Worker that is not there at all — and that is how a
+       live backend ends up reported offline. */
+    try {
+      return await route(request, env);
+    } catch (err) {
+      return json({ error: 'worker_error', hint: reasonOf(err), code: 'worker_exception' }, 500);
     }
-
-    /* The referral hub's ledger seam. Device-local today, so the mock answers zeroes for every
-       code; a real referral ledger slots in here with the same shape `referral.ts` merges. */
-    if (url.pathname === '/referral/state') {
-      const code = (url.searchParams.get('code') ?? '').slice(0, 32);
-      return json({ ok: true, service: 'detour-referral', code, joins: 0, unclaimed: 0 });
-    }
-
-    if (url.pathname === '/api/squads/register') {
-      if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
-      const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
-      return lobby.fetch(request);
-    }
-
-    if (url.pathname === '/ws/matchmake') {
-      const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
-      return lobby.fetch(request);
-    }
-
-    /* The one public announcement feed: what a client reads to raise an urgent popup. */
-    if (url.pathname === '/api/client/announcements/active') {
-      const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
-      return lobby.fetch(request);
-    }
-
-    /* The public tournament clock. The room verifies any initData itself, so the award that
-       rides along is never keyed off a client-supplied identity header. */
-    if (url.pathname === '/api/client/arena/state') {
-      const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
-      return lobby.fetch(request);
-    }
-
-    /* The public Mind Ladder: the room's own TIQ registry, ranked. Read-only and never cached. */
-    if (url.pathname === '/api/client/minds') {
-      if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
-      const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
-      return lobby.fetch(request);
-    }
-
-    /* The bot's chat surface. Telegram is the only caller of the webhook; the setup route is the
-       operator's, and answers 403 until it carries admin credentials. */
-    if (url.pathname === '/telegram/webhook') {
-      if (request.method !== 'POST') return json({ error: 'method_not_allowed', hint: 'Telegram posts updates' }, 405);
-      return telegramWebhook(request, env);
-    }
-    if (url.pathname === '/telegram/setup-webhook') return telegramSetup(request, env);
-
-    /* The server telemetry route is stricter than the rest of the admin surface: one id, no dev door. */
-    if (url.pathname === '/api/admin/metrics') return serverMetrics(request, env);
-
-    /* The Command Center's routes: authenticated here, then handed to the room that authorizes. */
-    if (url.pathname.startsWith('/admin/') || url.pathname.startsWith('/api/admin/')) {
-      const admin = await identifyAdminRequest(request, env);
-      if (!admin) return json({ error: 'forbidden', hint: 'admin credentials required' }, 403);
-      const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
-      return lobby.fetch(request);
-    }
-
-    /* Everything that is not a backend surface is the Mini App itself: `/`, the hashed bundles
-       and any other page the client asks for. A missing backend route stays a JSON 404 rather
-       than quietly answering with the game's HTML. */
-    if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/ws/') || url.pathname.startsWith('/telegram/')) {
-      return json({ error: 'not_found' }, 404);
-    }
-    if (env.ASSETS) return env.ASSETS.fetch(request);
-
-    return json({ error: 'not_found' }, 404);
   },
 };

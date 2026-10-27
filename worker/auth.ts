@@ -261,9 +261,15 @@ export interface AdminRequestLike {
 }
 
 export interface AdminIdentity {
-  /** The verified Telegram user id, or `dev` when the development door was the way in. */
+  /** The verified Telegram user id, `operator` on the key door, or `dev` when the dev door was used. */
   userId: string;
-  door: 'tg' | 'dev';
+  /**
+   * How the caller proved themselves: a held Telegram signature (`tg`), the deployment's operator
+   * key (`key`), the marked development door (`dev`), or an unsigned initData id that is on
+   * `ADMIN_IDS` (`tg-unsigned`) — only ever reached when the deployment has no bot token to
+   * verify with at all. Every one of these is still subject to the room's own role registry.
+   */
+  door: 'tg' | 'tg-unsigned' | 'dev' | 'key';
 }
 
 /** The two levels the Command Center appoints: a Moderator reads metrics and users, a SuperAdmin commands. */
@@ -276,13 +282,14 @@ export interface AdminRoleRow {
 
 /**
  * The authorization middleware in front of every role-granting and broadcast mutation. The
- * development door is always enough — it only opens for an explicit marker on a loopback host —
- * while a Telegram admin has to carry a stored `superadmin` role. The registry itself lives with
- * the room (`MatchmakerDO`), which owns the state this reads.
+ * development door and the operator key are always enough — the first only opens for an explicit
+ * marker on a dev host, the second only when the deployment holds the secret — while a Telegram
+ * admin has to carry a stored `superadmin` role. The registry itself lives with the room
+ * (`MatchmakerDO`), which owns the state this reads.
  */
 export function isSuperAdmin(identity: AdminIdentity | null, row: AdminRoleRow | null | undefined): boolean {
   if (!identity) return false;
-  if (identity.door === 'dev') return true;
+  if (identity.door === 'dev' || identity.door === 'key') return true;
   return row?.role === 'superadmin';
 }
 
@@ -403,35 +410,66 @@ export async function identifyPlayerRequest(
   return dev ? devPlayer(request) : null;
 }
 
-/* ---------- the metrics door: one operator, no development fallback ---------- */
+/* ---------- the admin doors: operator key, then signature, then allowlist ---------- */
 
-/** The only Telegram id allowed to read the Worker's server telemetry. */
+/** The operator id that opens server telemetry when `ADMIN_IDS` says nothing else. */
 export const METRICS_ADMIN_ID = '1350508522';
 
 /** The edge marks an authenticated metrics request with this header; the room refuses unmarked calls. */
 export const METRICS_HEADER = 'x-detour-metrics-admin';
 
+/** The seat an operator key signs in as: not a Telegram id, so only the key door can produce it. */
+const OPERATOR_USER = 'operator';
+
+/** The one secret that can prove an initData signature, per Telegram's documented scheme. */
+function signingSecret(env: Env): string {
+  return env.TELEGRAM_BOT_TOKEN?.trim() ?? '';
+}
+
+/** Equal length and equal bytes, with no early exit on the first difference. */
+function sameText(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 /**
- * The server metrics door: a genuine Telegram Web App signature naming `METRICS_ADMIN_ID`.
- * `TELEGRAM_BOT_TOKEN` is the documented signer; `TELEGRAM_WEBHOOK_SECRET` is accepted as the
- * deployment fallback the operator may hold instead. There is deliberately no dev fallback.
+ * The last reading of an initData payload: the `user.id` it *declares*, accepted only when the
+ * deployment holds no bot token to check a signature with and the declared id is on `ADMIN_IDS`.
+ * A verified credential always outranks a declared one, so this branch can never run while
+ * `TELEGRAM_BOT_TOKEN` is configured — it exists so a deployment without one degrades to an
+ * allowlist-gated panel instead of a permanently shut one. An empty `ADMIN_IDS` closes it entirely.
  */
-export async function identifyMetricsAdmin(
-  request: AdminRequestLike,
-  env: Env,
-): Promise<AdminIdentity | null> {
+function declaredAdminId(request: AdminRequestLike, env: Env): string {
+  if (signingSecret(env)) return '';
+  const list = adminIds(env);
+  if (!list.length) return '';
   const initData = initDataOf(request);
-  if (!initData) return null;
-  const secrets = [env.TELEGRAM_BOT_TOKEN?.trim(), env.TELEGRAM_WEBHOOK_SECRET?.trim()]
-    .filter((secret): secret is string => !!secret);
-  if (!secrets.length) return null;
-  const who = await verifiedTelegramUserWith(initData, secrets);
-  return who?.id === METRICS_ADMIN_ID ? { userId: METRICS_ADMIN_ID, door: 'tg' } : null;
+  if (!initData) return '';
+  const user = parseUser(new URLSearchParams(initData).get('user'));
+  if (user?.id === undefined || user?.id === null) return '';
+  const id = String(user.id).replace(/[^0-9-]/g, '').slice(0, 20);
+  return id && list.includes(id) ? id : '';
+}
+
+/**
+ * The operator's escape door: `ADMIN_ACCESS_TOKEN` (a secret) presented as `x-admin-key` or
+ * `Authorization: Bearer <token>`. It stays closed unless the deployment sets the secret, so no
+ * Mini App session can walk through it — and it is what keeps the owner in when the thing that
+ * broke is the Telegram signature itself.
+ */
+function operatorKeyDoor(request: AdminRequestLike, env: Env): AdminIdentity | null {
+  const secret = env.ADMIN_ACCESS_TOKEN?.trim();
+  if (!secret) return null;
+  const bearer = /^bearer\s+(.+)$/i.exec(request.headers.get('authorization')?.trim() ?? '');
+  const sent = request.headers.get('x-admin-key')?.trim() || bearer?.[1]?.trim() || '';
+  return sent && sameText(sent, secret) ? { userId: OPERATOR_USER, door: 'key' } : null;
 }
 
 /** The verified Telegram user id behind an admin request, or '' — the signature only, no allowlist. */
 async function signedAdminId(request: AdminRequestLike, env: Env): Promise<string> {
-  const token = env.TELEGRAM_BOT_TOKEN?.trim();
+  const token = signingSecret(env);
   const initData = initDataOf(request);
   if (!initData || !token) return '';
   const fields = await verify(initData, token);
@@ -442,14 +480,24 @@ async function signedAdminId(request: AdminRequestLike, env: Env): Promise<strin
 }
 
 /**
- * Authentication at the edge: a genuine Telegram signature, whoever it names — the role registry
- * lives with the room (`MatchmakerDO`), which is the only place that knows who is an admin. When
- * no signature holds, the explicitly marked development door still opens on a loopback host (or
- * `DEV_AUTH = "true"`). Anything else is refused.
+ * Authentication at the edge, weakest door last: the operator key, then a genuine Telegram
+ * signature — whoever it names, because the role registry lives with the room (`MatchmakerDO`)
+ * and is the only place that knows who is an admin — then a declared id on `ADMIN_IDS` when the
+ * deployment holds no bot token to sign with, then the explicitly marked development door on a
+ * dev host. Anything else is refused.
  */
-export async function identifyAdminRequest(request: AdminRequestLike, env: Env): Promise<AdminIdentity | null> {
-  const id = await signedAdminId(request, env);
-  if (id) return { userId: id, door: 'tg' };
+export async function identifyAdminRequest(
+  request: AdminRequestLike,
+  env: Env,
+): Promise<AdminIdentity | null> {
+  const key = operatorKeyDoor(request, env);
+  if (key) return key;
+
+  const signed = await signedAdminId(request, env);
+  if (signed) return { userId: signed, door: 'tg' };
+
+  const declared = declaredAdminId(request, env);
+  if (declared) return { userId: declared, door: 'tg-unsigned' };
 
   const dev = env.DEV_AUTH === 'true' || isLocalhost(hostOf(request.url));
   if (dev && devMarker(request)) return { userId: 'dev', door: 'dev' };
@@ -458,15 +506,42 @@ export async function identifyAdminRequest(request: AdminRequestLike, env: Env):
 
 /**
  * The legacy allowlist door in front of `/admin/*`. A valid Telegram signature naming an id on
- * the allowlist is always enough — that door wins over everything. Failing that, the development
- * door opens for a loopback host (or `DEV_AUTH = "true"`) that carries an explicit admin marker.
- * Anything else is refused, and the caller answers `403`.
+ * the allowlist is always enough — that door wins over everything — and so are the operator key
+ * and the no-secret allowlist reading, both of which exist precisely so the owner is never locked
+ * out. Failing those, the development door opens for a loopback host (or `DEV_AUTH = "true"`) that
+ * carries an explicit admin marker. Anything else is refused, and the caller answers `403`.
  */
 export async function verifyAdminRequest(request: AdminRequestLike, env: Env): Promise<AdminIdentity | null> {
-  const id = await signedAdminId(request, env);
-  if (id && adminIds(env).includes(id)) return { userId: id, door: 'tg' };
+  const door = await identifyAdminRequest(request, env);
+  if (!door) return null;
+  if (door.door !== 'tg') return door;
+  return adminIds(env).includes(door.userId) ? door : null;
+}
 
-  const dev = env.DEV_AUTH === 'true' || isLocalhost(hostOf(request.url));
-  if (dev && devMarker(request)) return { userId: 'dev', door: 'dev' };
-  return null;
+/* ---------- the metrics door: the operator set, however it signed in ---------- */
+
+/** Who may read server telemetry: the operator id, plus every id the deployment calls an admin. */
+function isMetricsOperator(id: string, env: Env): boolean {
+  return id === METRICS_ADMIN_ID || adminIds(env).includes(id);
+}
+
+/**
+ * The server metrics door. The operator key opens it directly; otherwise the caller needs a
+ * credential naming an id on the operator set. There is deliberately no development fallback —
+ * but there is also no longer a door that shuts the operator out because a signature is missing.
+ */
+export async function identifyMetricsAdmin(
+  request: AdminRequestLike,
+  env: Env,
+): Promise<AdminIdentity | null> {
+  const key = operatorKeyDoor(request, env);
+  if (key) return key;
+  const door = await identifyAdminRequest(request, env);
+  if (!door || door.door === 'dev') return null;
+  return isMetricsOperator(door.userId, env) ? door : null;
+}
+
+/** Does this `METRICS_HEADER` value name someone the room may serve telemetry to? */
+export function isMetricsMark(value: string, env: Env): boolean {
+  return value === OPERATOR_USER || isMetricsOperator(value, env);
 }

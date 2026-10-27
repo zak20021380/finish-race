@@ -51,7 +51,11 @@ import {
 } from './players';
 import { nameOf } from './countries';
 import { detonation, impact, notify, tgInitData, tgUser } from './telegram';
-import { adminFetch, adminHeaders, parseJson, postJson, workerUrl } from './adminApi';
+import {
+  adminCall, adminFetch, parseJson, postJson, reasonOfResponse,
+  ADMIN_TIMEOUT_MS,
+  type AdminFailure,
+} from './adminApi';
 import type { Broadcast } from './broadcasts';
 import type { MindTier } from './matchmaking';
 import {
@@ -374,40 +378,83 @@ export interface ServerStatus {
   arena: ArenaState;
 }
 
-/** One telemetry read: the live room and its round trip, a refusal, or no answer at all. */
+/**
+ * What "there is no response to read" means, kept in three pieces because the remedies differ:
+ * no origin to call, a Worker that is thinking too long, and a request that never left the device.
+ */
+const failureText = (failure: AdminFailure): string => {
+  if (failure === 'no-origin') return 'this page has no Worker origin to call';
+  if (failure === 'timeout') return `the Worker did not answer within ${Math.round(ADMIN_TIMEOUT_MS / 1000)}s`;
+  return 'the request never reached the Worker (network)';
+};
+
+/**
+ * How a metrics or status attempt failed. These have to stay apart: `timeout` is a live Worker
+ * behind a cold start, `offline` and `no-origin` are the only cases that may be called unreachable,
+ * and `http` or `bad-body` are a Worker that answered and was wrong.
+ */
+type FailureReason = AdminFailure | 'http' | 'bad-body';
+
+/**
+ * The state lamp for a failed reading. A last genuine figure still on the board reads SLOW or
+ * STALE rather than OFFLINE, because this Worker was answering moments ago.
+ */
+const connStateOf = (held: boolean, reason: FailureReason): string => {
+  if (!held) return reason === 'offline' || reason === 'no-origin' ? 'offline' : 'error';
+  return reason === 'timeout' ? 'slow' : 'stale';
+};
+
+/** A reason the Worker wrote, made safe to open a sentence with. */
+const capFirst = (text: string): string => (text ? text[0].toUpperCase() + text.slice(1) : text);
+
+/** One telemetry read: the live room and its round trip, a refusal, or no answer and why. */
 type ServerReading =
   | { state: 'ok'; status: ServerStatus; pingMs: number }
-  | { state: 'denied' }
-  | { state: 'error' };
+  | { state: 'denied'; detail: string }
+  | { state: 'error'; reason: AdminFailure | 'http'; detail: string };
 
 /**
  * The room's own reading of itself. The dedicated `/api/admin/matchmaking` door is tried first:
  * it is the Server tab's live telemetry, never cached. `/admin/status` remains the fallback for a
  * Worker deployed before that route existed.
  *
- * A 401/403 is the registry refusing this session, not a dead Worker — it must never paint the
- * offline card that tells the operator to start `wrangler dev`.
+ * A 401/403 is the registry refusing this session and a 404 is a route this deployment never
+ * had; neither is an outage, and none of them may paint the offline card that tells the operator
+ * to start `wrangler dev`. Only a call that never got an answer is.
  */
 async function fetchStatus(): Promise<ServerReading> {
   const started = Date.now();
-  const res = await adminFetch('/api/admin/matchmaking', { cache: 'no-store' });
-  /* No response at all: the Worker is offline, so do not burn a second timeout on the old door. */
-  if (!res) return { state: 'error' };
+  const first = await adminCall('/api/admin/matchmaking', { cache: 'no-store' });
+  /* No response at all: do not burn a second timeout on the older door behind it. */
+  if ('failure' in first) return { state: 'error', reason: first.failure, detail: failureText(first.failure) };
+  const res = first.res;
   /* A refusal is a decision, not an outage: do not ask the older door behind it. */
-  if (res.status === 401 || res.status === 403) return { state: 'denied' };
+  if (res.status === 401 || res.status === 403) {
+    return { state: 'denied', detail: await reasonOfResponse(res) };
+  }
   let data = await parseJson<ServerStatus>(res);
   if (!data || data.ok !== true) {
-    const legacy = await adminFetch('/admin/status', { cache: 'no-store' });
-    if (legacy && (legacy.status === 401 || legacy.status === 403)) return { state: 'denied' };
-    data = await parseJson<ServerStatus>(legacy);
+    const legacy = await adminCall('/admin/status', { cache: 'no-store' });
+    if ('failure' in legacy) {
+      return { state: 'error', reason: legacy.failure, detail: failureText(legacy.failure) };
+    }
+    if (legacy.res.status === 401 || legacy.res.status === 403) {
+      return { state: 'denied', detail: await reasonOfResponse(legacy.res) };
+    }
+    if (legacy.res.status === 404) {
+      return { state: 'error', reason: 'http', detail: await reasonOfResponse(legacy.res) };
+    }
+    data = await parseJson<ServerStatus>(legacy.res);
+    if (!data || data.ok !== true) {
+      return { state: 'error', reason: 'http', detail: await reasonOfResponse(legacy.res) };
+    }
   }
-  if (!data || data.ok !== true) return { state: 'error' };
   return { state: 'ok', status: data, pingMs: Math.max(0, Date.now() - started) };
 }
 
 /**
  * The Worker's measured telemetry, exactly as `GET /api/admin/metrics` frames it. The route is
- * stricter than `/admin/*`: one Telegram id, proven by a genuine Mini App signature, with no
+ * stricter than `/admin/*`: an id on the operator set, proven by a real credential, with no
  * development fallback. Every field is measured server-side; empty state is exact zeroes.
  */
 export interface ServerMetrics {
@@ -465,6 +512,8 @@ export interface ServerMetrics {
   series7d: SeriesPoint[];
   /** The last 30 daily buckets, oldest first: the trend chart's Monthly window. */
   series30d: SeriesPoint[];
+  /** Sections the room could not read, each reporting its own exact zeroes. Empty when all is well. */
+  degraded?: string[];
 }
 
 /**
@@ -480,49 +529,43 @@ export interface SeriesPoint {
   matches: number;
 }
 
-/** The three answers the strict metrics door can give this panel. */
+/** The answers the operator's telemetry door can give this panel, and how it failed when it did. */
 type MetricsResult =
   | { state: 'ok'; metrics: ServerMetrics }
-  | { state: 'unauthorized' }
-  | { state: 'error' };
+  | { state: 'unauthorized'; detail: string }
+  | { state: 'error'; reason: AdminFailure | 'http' | 'bad-body'; detail: string };
 
 /**
  * Read the Worker's measured telemetry. `adminHeaders` already carries the Mini App's signed
  * `initData` (and the dev marker, which this route ignores). A 401/403 is the operator door
  * refusing this account — never a cue to fall back to a device-local or demo reading.
  *
- * The whole request — headers, body and JSON parse — sits inside one six-second abort window.
- * A Worker (or proxy) that accepts the connection but never finishes its body must not leave the
- * Stats tab reading forever: the timeout turns into the same clean `error` verdict as an outage.
+ * The ways this call fails are separate facts and the panel says which one happened: a Worker that
+ * answered 500 is live and broken, a Worker that answered 404 has no such route, a Worker that took
+ * too long is behind a cold Durable Object, and only a request that never got a response is an
+ * outage. Collapsing all four into "unreachable" is what made a live backend read as OFFLINE.
  */
-const METRICS_TIMEOUT_MS = 6_000;
+const METRICS_TIMEOUT_MS = 20_000;
 
 async function fetchMetrics(): Promise<MetricsResult> {
-  const url = workerUrl('/api/admin/metrics');
-  if (!url) return { state: 'error' };
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), METRICS_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      cache: 'no-store',
-      headers: adminHeaders(),
-      signal: controller.signal,
-    });
-    if (res.status === 401 || res.status === 403) return { state: 'unauthorized' };
-    if (res.status !== 200) return { state: 'error' };
-    let data: ServerMetrics | null = null;
-    try {
-      data = (await res.json()) as ServerMetrics;
-    } catch {
-      return { state: 'error' };
-    }
-    return data && data.ok === true ? { state: 'ok', metrics: data } : { state: 'error' };
-  } catch {
-    /* offline, timed out, aborted, or a body that never completed: the same actionable verdict */
-    return { state: 'error' };
-  } finally {
-    window.clearTimeout(timer);
+  const called = await adminCall('/api/admin/metrics', { cache: 'no-store' }, METRICS_TIMEOUT_MS);
+  if ('failure' in called) {
+    return { state: 'error', reason: called.failure, detail: failureText(called.failure) };
   }
+  const res = called.res;
+  /* Reading the reason consumes the body, so it is only spent on an answer worth explaining. */
+  const detail = res.ok ? '' : await reasonOfResponse(res);
+  if (res.status === 401 || res.status === 403) return { state: 'unauthorized', detail };
+  if (res.status !== 200) return { state: 'error', reason: 'http', detail };
+  let data: ServerMetrics | null = null;
+  try {
+    data = (await res.json()) as ServerMetrics;
+  } catch {
+    return { state: 'error', reason: 'bad-body', detail: 'the Worker answered 200 with a body that is not JSON' };
+  }
+  return data && data.ok === true
+    ? { state: 'ok', metrics: data }
+    : { state: 'error', reason: 'bad-body', detail: 'the Worker answered without a metrics payload' };
 }
 
 /**
@@ -1493,6 +1536,8 @@ export function createAdmin(api: AdminApi): Admin {
   let serverOn = false;
   /** The registry refused this session: telemetry is gated, but the Worker is not offline. */
   let serverDenied = false;
+  /** Whatever the Server door last said when it did not answer with a room: shown, never guessed. */
+  let serverDetail = '';
   /** The last reading of the room, so the Server tab can paint before the next fetch lands. */
   let lastStatus: ServerStatus | null = null;
   /** The last measured round trip to the Worker, in ms. */
@@ -1513,6 +1558,10 @@ export function createAdmin(api: AdminApi): Admin {
    */
   let lastMetrics: ServerMetrics | null = null;
   let metricsPhase: 'idle' | 'ok' | 'unauthorized' | 'error' = 'idle';
+  /** Why the last metrics attempt failed, in the Worker's own words where it had any. */
+  let metricsDetail = '';
+  /** And which kind of failure that was, so the lamp never has to guess between slow and gone. */
+  let metricsReason: FailureReason = 'offline';
   let metricsBusy = false;
   let metricsTimer = 0;
   /** Text typed into a reply box survives the list being rebuilt for any reason. */
@@ -1947,9 +1996,14 @@ export function createAdmin(api: AdminApi): Admin {
   function trendEmptyText(m: ServerMetrics | null): string {
     if (metricsPhase === 'unauthorized') return 'The metrics door refused this session — no trend to plot.';
     if (m) return 'The Worker reported no buckets for this window yet.';
-    return metricsPhase === 'error'
-      ? 'The Worker did not answer — no trend to plot.'
-      : "Awaiting the Worker's first reading.";
+    if (metricsPhase === 'error') {
+      return metricsReason === 'offline' || metricsReason === 'no-origin'
+        ? 'The Worker never answered — no trend to plot.'
+        : metricsReason === 'timeout'
+          ? 'The Worker did not answer in time — no trend to plot.'
+          : 'The Worker answered without a reading — no trend to plot.';
+    }
+    return "Awaiting the Worker's first reading.";
   }
 
   /**
@@ -2192,14 +2246,16 @@ export function createAdmin(api: AdminApi): Admin {
 
   /**
    * The live bar, the alert card and every counter, from the last completed reading. A Worker
-   * that refused the signature clears the board; one that cannot be reached keeps the last
-   * genuine reading but flags it stale. Nothing is ever modelled or substituted.
+   * that refused the credential clears the board; one that is slow, broken or gone keeps the last
+   * genuine reading and says which of the three it is. Nothing is ever modelled or substituted.
    */
   function paintStats() {
     const m = lastMetrics;
     const pending = metricsBusy && !m;
     const denied = metricsPhase === 'unauthorized';
     const failed = metricsPhase === 'error';
+    const isSlow = metricsReason === 'timeout';
+    const isGone = metricsReason === 'offline' || metricsReason === 'no-origin';
     const metric = (n: number | null | undefined): string =>
       n == null ? (pending ? '…' : '—') : figure(n);
 
@@ -2268,22 +2324,29 @@ export function createAdmin(api: AdminApi): Admin {
       const state = metricsBusy ? 'loading'
         : denied ? 'locked'
           : metricsPhase === 'ok' && m ? 'live'
-            : metricsPhase === 'error' ? (m ? 'stale' : 'offline')
+            : metricsPhase === 'error' ? connStateOf(!!m, metricsReason)
               : 'idle';
       statConn.dataset.state = state;
       statConn.textContent = state === 'loading' ? 'SYNCING'
         : state === 'live' ? 'LIVE'
           : state === 'locked' ? 'LOCKED'
             : state === 'stale' ? 'STALE'
-              : state === 'offline' ? 'OFFLINE' : 'CONNECTING';
+              : state === 'slow' ? 'SLOW'
+                : state === 'error' ? 'ERROR'
+                  : state === 'offline' ? 'OFFLINE' : 'CONNECTING';
     }
 
     if (statUpdated) {
+      /* A reading the room could only build in part says which part is missing. */
+      const partial = m?.degraded?.length ? ` · partial: ${m.degraded.join(', ')}` : '';
       statUpdated.textContent = m
-        ? `${metricsBusy ? 'Syncing · last reading' : 'Updated'} ${clockOf(m.timestamp)}`
+        ? `${metricsBusy ? 'Syncing · last reading' : 'Updated'} ${clockOf(m.timestamp)}${partial}`
         : metricsBusy ? 'Reading the Worker…'
           : denied ? 'No live reading'
-            : metricsPhase === 'error' ? 'Worker unreachable'
+            : metricsPhase === 'error'
+              ? metricsReason === 'timeout' ? 'Worker slow, not gone'
+                : metricsReason === 'offline' || metricsReason === 'no-origin' ? 'Worker unreachable'
+                  : 'Worker answered with an error'
               : 'Awaiting telemetry';
     }
 
@@ -2295,16 +2358,27 @@ export function createAdmin(api: AdminApi): Admin {
     if (statAlert) {
       statAlert.hidden = !(denied || failed);
       if (denied || failed) {
-        statAlert.dataset.kind = denied ? 'denied' : 'offline';
-        statAlertIco?.setAttribute('href', denied ? '#i-lock' : '#i-help');
-        const title = denied ? 'Unauthorized Admin Access' : 'Live Telemetry Unreachable';
+        statAlert.dataset.kind = denied ? 'denied' : isSlow ? 'offline' : 'error';
+        statAlertIco?.setAttribute('href', denied ? '#i-lock' : isSlow ? '#i-restart' : isGone ? '#i-help' : '#i-bolt');
+        const title = denied ? 'Unauthorized Admin Access'
+          : isSlow ? 'Telemetry Still In Flight'
+            : isGone ? 'Live Telemetry Unreachable'
+              : 'Worker Answered With An Error';
         const body = denied
           ? (tgInitData()
-            ? 'The metrics door refused this session. Live telemetry is restricted to the operator Telegram account — open the Mini App as that account. The live counters stay blank; no demo or modelled figures are substituted.'
+            ? `The metrics door refused this session (${metricsDetail || 'no reason given'}). Live telemetry is restricted to the operator Telegram account — open the Mini App as that account. The live counters stay blank; no demo or modelled figures are substituted.`
             : 'Telegram initData is missing. Open this Command Center inside Telegram as the metrics operator to read live telemetry; no demo or modelled figures are substituted.')
-          : (m
-            ? `The Worker stopped answering. The figures above are its last genuine reading at ${clockOf(m.timestamp)}. Refresh to try again.`
-            : 'The Worker did not answer, so there are no live figures to show. Check the deployment and refresh.');
+          : failed
+            ? `${capFirst(metricsDetail || 'the call produced no answer')}. ${
+                isGone
+                  ? (m
+                    ? `The figures above are its last genuine reading at ${clockOf(m.timestamp)}. Refresh to try again.`
+                    : 'There are no live figures to show until one answers.')
+                  : (m
+                    ? `The figures above are its last genuine reading at ${clockOf(m.timestamp)}. It is deployed and running: refresh, then read the route's own reply.`
+                    : 'The Worker is deployed and running — this is a broken reply, not a missing one. Refresh, then read the route\'s own reply.')
+              }`
+            : '';
         /* role=alert announces a text change, so an unrelated repaint must not repeat it */
         if (statAlertTitle && statAlertTitle.textContent !== title) statAlertTitle.textContent = title;
         if (statAlertBody && statAlertBody.textContent !== body) statAlertBody.textContent = body;
@@ -2329,6 +2403,7 @@ export function createAdmin(api: AdminApi): Admin {
     }
     try {
       const result = await fetchMetrics();
+      metricsDetail = result.state === 'ok' ? '' : result.detail;
       if (result.state === 'ok') {
         lastMetrics = result.metrics;
         metricsPhase = 'ok';
@@ -2337,10 +2412,13 @@ export function createAdmin(api: AdminApi): Admin {
         metricsPhase = 'unauthorized';
       } else {
         metricsPhase = 'error';
+        metricsReason = result.reason;
       }
     } catch {
       /* fetchMetrics already catches; this is the last line of defence for the UI lock */
       metricsPhase = 'error';
+      metricsReason = 'bad-body';
+      metricsDetail = 'the panel could not complete the reading';
     } finally {
       metricsBusy = false;
       try {
@@ -3797,19 +3875,21 @@ export function createAdmin(api: AdminApi): Admin {
   const sameConfig = (a: ServerConfig | null, b: ServerConfig): boolean =>
     !!a && a.maintenance === b.maintenance && a.normalRadius === b.normalRadius && a.wideRadius === b.wideRadius;
 
-  /** Nothing answered: the panel governs this device alone, and says so. */
-  function markLocal() {
+  /** Nothing answered: the panel governs this device alone, and says what the call really did. */
+  function markLocal(detail = serverDetail) {
     serverOn = false;
     serverDenied = false;
+    serverDetail = detail;
     lastStatus = null;
     serverPingMs = null;
     paintServer(null);
   }
 
   /** The registry refused this session: show the refusal, never the "start wrangler dev" card. */
-  function markDenied() {
+  function markDenied(detail = '') {
     serverOn = false;
     serverDenied = true;
+    serverDetail = detail;
     lastStatus = null;
     serverPingMs = null;
     paintServer(null);
@@ -3920,29 +4000,38 @@ export function createAdmin(api: AdminApi): Admin {
   function paintServer(status: ServerStatus | null, pingMs: number | null = serverPingMs) {
     const live = !!status;
     const denied = !live && !serverBusy && serverDenied;
+    /* A Worker that answered at all - even to refuse or to fail - is a live Worker. */
+    const gone = !!serverDetail && (serverDetail === failureText('offline') || serverDetail === failureText('no-origin'));
     const maint = status ? status.config.maintenance : runtime.maintenance;
     if (serverCard) {
       serverCard.dataset.state = live ? 'live' : denied ? 'denied' : serverBusy ? 'connecting' : 'offline';
       serverCard.dataset.maint = String(maint);
     }
     if (serverChip) {
-      serverChip.textContent = live ? 'LIVE' : denied ? 'DENIED' : serverBusy ? 'CONNECTING' : 'OFFLINE';
+      serverChip.textContent = live ? 'LIVE'
+        : denied ? 'DENIED'
+          : serverBusy ? 'CONNECTING'
+            : gone ? 'OFFLINE' : 'ERROR';
     }
     if (serverOffline) serverOffline.hidden = live || serverBusy || denied;
 
     if (serverState) {
       serverState.textContent = live
         ? (status.config.maintenance ? 'Matchmaking paused' : 'Accepting players')
-        : denied ? 'Admin access required' : serverBusy ? 'Connecting…' : 'Worker offline';
+        : denied ? 'Admin access required'
+          : serverBusy ? 'Connecting…'
+            : gone ? 'Worker offline' : 'Worker answered with an error';
     }
     if (serverStateSub) {
       serverStateSub.textContent = live
         ? `Updated ${clockOf(status.timestamp ?? Date.now())}`
         : denied
-          ? 'The role registry refused this session — sign in as an administrator.'
+          ? `The role registry refused this session${serverDetail ? ` (${serverDetail})` : ''} — sign in as an administrator.`
           : serverBusy
             ? 'Reading the Durable Object…'
-            : 'No telemetry from the Durable Object';
+            : serverDetail
+              ? capFirst(serverDetail)
+              : 'No telemetry from the Durable Object';
     }
     if (serverPing) {
       serverPing.textContent = live && pingMs !== null ? String(Math.max(0, Math.round(pingMs))) : '—';
@@ -4042,13 +4131,13 @@ export function createAdmin(api: AdminApi): Admin {
     serverBusy = false;
     paintServerBusy();
     if (reading.state === 'denied') {
-      markDenied();
+      markDenied(reading.detail);
       /* the admin door may be shut while the public mirror is open: read the clock anyway */
       void syncArena().then(() => paintArena());
       return;
     }
     if (reading.state === 'error') {
-      markLocal();
+      markLocal(reading.detail);
       void syncArena().then(() => paintArena());
       return;
     }

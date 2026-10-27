@@ -14356,16 +14356,21 @@ html.reduced-motion .admin-tab[aria-selected="true"] .admin-tab-ico { animation:
   box-shadow: 0 0 0 3px rgba(16, 185, 129, .18), 0 0 10px 1px rgba(16, 185, 129, .75);
 }
 .adm-live-state[data-state="loading"],
-.adm-live-state[data-state="stale"] { color: var(--honey-ink); }
+.adm-live-state[data-state="stale"],
+.adm-live-state[data-state="slow"] { color: var(--honey-ink); }
 .adm-live-state[data-state="loading"]::before,
-.adm-live-state[data-state="stale"]::before {
+.adm-live-state[data-state="stale"]::before,
+.adm-live-state[data-state="slow"]::before {
   background: var(--honey);
   box-shadow: 0 0 0 3px rgba(245, 158, 11, .18);
 }
+/* `error` is a Worker that answered and was wrong; only `offline` is one that never answered. */
 .adm-live-state[data-state="locked"],
-.adm-live-state[data-state="offline"] { color: var(--red-ink); }
+.adm-live-state[data-state="offline"],
+.adm-live-state[data-state="error"] { color: var(--red-ink); }
 .adm-live-state[data-state="locked"]::before,
-.adm-live-state[data-state="offline"]::before {
+.adm-live-state[data-state="offline"]::before,
+.adm-live-state[data-state="error"]::before {
   background: var(--bad-1);
   box-shadow: 0 0 0 3px rgba(224, 38, 79, .18);
 }

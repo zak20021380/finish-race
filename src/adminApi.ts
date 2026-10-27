@@ -49,22 +49,50 @@ export function adminHeaders(): Record<string, string> {
 }
 
 /**
- * One admin call on a short leash: a Worker that is not there must never hold the panel up.
- * The extra headers the caller passed win over the defaults.
+ * How long a Command Center call may take before the panel is allowed to say the Worker did not
+ * answer. Measured cold round trips on the deployed Worker — isolate start plus the Durable
+ * Object's `blockConcurrencyWhile` registry read — reach seven seconds, so the two-and-a-half
+ * second leash this panel used to run was aborting requests the backend was still serving, and
+ * every one of those aborts painted as OFFLINE.
  */
-export async function adminFetch(path: string, init: RequestInit = {}): Promise<Response | null> {
+export const ADMIN_TIMEOUT_MS = 15_000;
+
+/** Why an admin call produced no response at all. These three are not the same outage. */
+export type AdminFailure = 'no-origin' | 'timeout' | 'offline';
+
+/** An admin call that reports *why* it failed, for the routes that paint a connection state. */
+export async function adminCall(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs = ADMIN_TIMEOUT_MS,
+): Promise<{ res: Response } | { failure: AdminFailure }> {
   const url = workerUrl(path);
-  if (!url) return null;
+  if (!url) return { failure: 'no-origin' };
   const extra = (init.headers ?? {}) as Record<string, string>;
   const ac = new AbortController();
-  const timer = window.setTimeout(() => ac.abort(), 2500);
+  const timer = window.setTimeout(() => ac.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...init, signal: ac.signal, headers: { ...adminHeaders(), ...extra } });
+    return { res: await fetch(url, { ...init, signal: ac.signal, headers: { ...adminHeaders(), ...extra } }) };
   } catch {
-    return null;                              // offline, refused, or too slow: the same answer
+    /* an abort is a slow Worker; anything else is a request that never left the device */
+    return { failure: ac.signal.aborted ? 'timeout' : 'offline' };
   } finally {
     window.clearTimeout(timer);
   }
+}
+
+/**
+ * One admin call on a leash long enough for a cold Worker. The extra headers the caller passed win
+ * over the defaults; a null answer means there was no response to read, and says nothing about
+ * *why* — callers that report a connection state use `adminCall` instead.
+ */
+export async function adminFetch(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs = ADMIN_TIMEOUT_MS,
+): Promise<Response | null> {
+  const out = await adminCall(path, init, timeoutMs);
+  return 'res' in out ? out.res : null;
 }
 
 /** Read a JSON body off a response: null when it is missing, failed, or not JSON at all. */
@@ -74,6 +102,21 @@ export async function parseJson<T>(res: Response | null): Promise<T | null> {
     return (await res.json()) as T;
   } catch {
     return null;
+  }
+}
+
+/**
+ * What a non-2xx answer actually said, in as many words as the Worker is willing to give: its own
+ * `error` and `hint` when it has them, the bare status when it answered with HTML or nothing.
+ */
+export async function reasonOfResponse(res: Response): Promise<string> {
+  const head = `HTTP ${res.status}`;
+  try {
+    const body = (await res.json()) as { error?: string; hint?: string; code?: string };
+    const detail = [body?.error, body?.hint].filter((part) => typeof part === 'string' && part).join(' · ');
+    return detail ? `${head} ${detail}` : head;
+  } catch {
+    return head;
   }
 }
 

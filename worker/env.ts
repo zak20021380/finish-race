@@ -29,6 +29,11 @@ export interface Env {
    *  half of the Command Center's allowlist (`ADMIN_IDS` in `src/admin.ts`). A var, not a secret:
    *  `ADMIN_IDS = "123456789,987654321"`. An empty value closes the Telegram door entirely. */
   ADMIN_IDS?: string;
+  /** The operator's escape key for the whole admin surface, presented as `x-admin-key` or
+   *  `Authorization: Bearer <key>`. A secret, and closed while unset:
+   *  `npx wrangler secret put ADMIN_ACCESS_TOKEN`. It exists so a broken initData signature can
+   *  never lock the owner out of their own Command Center. */
+  ADMIN_ACCESS_TOKEN?: string;
   /** The Mini App the bot's `web_app` buttons and chat menu button open. Unset, the bot uses its own
    *  origin — which is right in production (the app and the API are one Worker) and right locally
    *  (a loopback origin is the app under development). Set it only to point the bot somewhere else. */

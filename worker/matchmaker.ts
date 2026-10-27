@@ -45,11 +45,11 @@ import {
   sizesOf, type BotTier, type LobbyFormat, type Room, type RoomDriver, type RoomEvent,
 } from '../src/room';
 import {
-  authenticate, authRequestFrom, identifyAdminRequest, isLocalhost, isSuperAdmin, METRICS_ADMIN_ID,
+  authenticate, authRequestFrom, identifyAdminRequest, isLocalhost, isMetricsMark, isSuperAdmin,
   METRICS_HEADER, verifiedTelegramUserId,
   type AdminIdentity, type AdminRole, type Identity, type MindTier,
 } from './auth';
-import { json } from './http';
+import { json, reasonOf } from './http';
 import {
   normalizeChatHandle, readRegisteredSquad, verifyAndBuildSquad,
   type RegisteredSquad, type SquadVerification,
@@ -369,7 +369,51 @@ export interface ServerMetrics {
   series7d: SeriesPoint[];
   /** The last 30 daily buckets, oldest first: the chart's Monthly window. */
   series30d: SeriesPoint[];
+  /** The sections of this reading that failed to compute and are reporting their own exact zeroes. */
+  degraded: string[];
 }
+
+/**
+ * Every population figure `/api/admin/metrics` reports, folded from the room's own player records.
+ * Its own type because the reading is built behind a guard: a sweep that throws has to be
+ * replaceable with the same shape of zeroes, not with an exception that shuts the endpoint down.
+ */
+type PopulationReading = Pick<
+  ServerMetrics,
+  | 'totalUsers' | 'telegramUsers' | 'referrals' | 'referringPlayers'
+  | 'dau' | 'wau' | 'mau' | 'returningUsersToday' | 'returningShare'
+  | 'signupsToday' | 'signupsWeek' | 'signupsMonth' | 'retentionRateD1'
+  | 'avgMatchesPerPlayer' | 'activationRate' | 'coreRetention' | 'dailyActiveRatio' | 'viralShare'
+>;
+
+/** The population sweep, unread: exact zeroes, and no substituted number. */
+const NO_POPULATION: PopulationReading = {
+  totalUsers: 0,
+  telegramUsers: 0,
+  referrals: 0,
+  referringPlayers: 0,
+  dau: 0,
+  wau: 0,
+  mau: 0,
+  returningUsersToday: 0,
+  returningShare: 0,
+  signupsToday: 0,
+  signupsWeek: 0,
+  signupsMonth: 0,
+  retentionRateD1: 0,
+  avgMatchesPerPlayer: 0,
+  activationRate: 0,
+  coreRetention: 0,
+  dailyActiveRatio: 0,
+  viralShare: 0,
+};
+
+/** The three growth windows, unbuilt: empty series plot an empty stretch, never a modelled one. */
+const NO_SERIES: Pick<ServerMetrics, 'series24h' | 'series7d' | 'series30d'> = {
+  series24h: [],
+  series7d: [],
+  series30d: [],
+};
 
 /**
  * One plotted bucket of the growth chart. Every count is a real measurement the room stamped or
@@ -1342,7 +1386,14 @@ export class MatchmakerDO {
       || url.pathname === '/api/client/arena/state'
       || url.pathname === '/api/client/minds'
     ) {
-      return this.admin(request, url);
+      /* A throw anywhere in this surface would otherwise reach the edge as an opaque Durable
+         Object failure, and the panel can only report that as telemetry being unavailable. Answer
+         JSON with what actually broke, so the operator reads a reason instead of a guess. */
+      try {
+        return await this.admin(request, url);
+      } catch (err) {
+        return json({ error: 'room_error', hint: reasonOf(err) }, 500);
+      }
     }
     if ((request.headers.get('Upgrade') ?? '').toLowerCase() !== 'websocket') {
       return json({ error: 'expected_upgrade', hint: 'GET /ws/matchmake with Upgrade: websocket' }, 426);
@@ -1661,13 +1712,56 @@ export class MatchmakerDO {
   }
 
   /**
-   * The measured telemetry reading. Population figures come from the registry, the live figures
-   * from the in-memory room maps, the match total from the durable counter and the 24-hour match
-   * window from its own timestamped hourly buckets — empty is exact zero. Acquisition cohorts and
-   * retention are folded from each record's `firstSeen` / `lastSeen`; nothing is modelled.
+   * The measured telemetry reading, with every failure contained. Population figures come from the
+   * registry, the live figures from the in-memory room maps, the match total from the durable
+   * counter and the 24-hour window from its own timestamped hourly buckets; acquisition cohorts and
+   * retention are folded from each record's `firstSeen` / `lastSeen`. Nothing is modelled.
+   *
+   * Each section is read behind its own guard, because one bad section used to be enough to shut
+   * the operator's whole Stats tab: a throw here reaches the edge as a 500, and the edge can only
+   * report it as telemetry being unavailable. A section that cannot be read reports its own exact
+   * zeroes and names itself in `degraded`, so the panel still shows the rest of the truth.
    */
   private metrics(hostname: string): ServerMetrics {
     const now = Date.now();
+    const degraded: string[] = [];
+    const guarded = <T>(name: string, build: () => T, empty: T): T => {
+      try {
+        return build();
+      } catch {
+        degraded.push(name);
+        return empty;
+      }
+    };
+    const live = guarded('live', () => ({
+      activeRooms: this.races.size + this.rooms.size,
+      queueLength: this.queue.length,
+      active1v1: this.races.size,
+    }), { activeRooms: 0, queueLength: 0, active1v1: 0 });
+    const counters = guarded('counters', () => ({
+      matchesCompleted: this.gameMetrics.matchesCompleted,
+      matches24h: this.matchesInWindow(ACTIVE_MS, now),
+      minesPlaced: this.gameMetrics.minesPlaced,
+    }), { matchesCompleted: 0, matches24h: 0, minesPlaced: 0 });
+    const population = guarded('population', () => this.populationReading(now), NO_POPULATION);
+    const series = guarded('series', () => this.growthWindows(now), NO_SERIES);
+    const environment = this.env.WORKER_ENV?.trim()
+      || (this.env.DEV_AUTH === 'true' || isLocalhost(hostname) ? 'development' : 'production');
+    return {
+      ok: true,
+      timestamp: now,
+      environment,
+      ...live,
+      ...population,
+      ...counters,
+      logsSpawned: 0,
+      ...series,
+      degraded,
+    };
+  }
+
+  /** The registry sweep behind the population figures: one pass, every cohort, no allocation. */
+  private populationReading(now: number): PopulationReading {
     const dayAgo = now - ACTIVE_MS;
     const weekAgo = now - WEEK_MS;
     const monthAgo = now - MONTH_MS;
@@ -1709,21 +1803,9 @@ export class MatchmakerDO {
       if (p.firstSeen >= monthAgo) signupsMonth++;
     }
     const totalUsers = this.players.size;
-    const environment = this.env.WORKER_ENV?.trim()
-      || (this.env.DEV_AUTH === 'true' || isLocalhost(hostname) ? 'development' : 'production');
     return {
-      ok: true,
-      timestamp: now,
-      environment,
-      activeRooms: this.races.size + this.rooms.size,
-      queueLength: this.queue.length,
-      active1v1: this.races.size,
       totalUsers,
       telegramUsers: telegram.size,
-      matchesCompleted: this.gameMetrics.matchesCompleted,
-      matches24h: this.matchesInWindow(ACTIVE_MS, now),
-      minesPlaced: this.gameMetrics.minesPlaced,
-      logsSpawned: 0,
       referrals,
       referringPlayers,
       dau,
@@ -1740,7 +1822,6 @@ export class MatchmakerDO {
       coreRetention: percentOf(corePlayers, totalUsers),
       dailyActiveRatio: percentOf(dau, totalUsers),
       viralShare: percentOf(Math.min(referrals, totalUsers), totalUsers),
-      ...this.growthWindows(now),
     };
   }
 
@@ -1776,10 +1857,12 @@ export class MatchmakerDO {
       return json(await this.mindsBoard(request, url), 200, { 'cache-control': 'no-store' });
     }
 
-    /* The private telemetry route: only a request the edge marked after the strict operator check. */
+    /* The private telemetry route: only a request the edge marked after the operator check. The
+       mark names whoever was let through, so an appointed admin reads the same door the operator
+       does - and a call the edge never marked stays shut here, whatever the client sent. */
     if (url.pathname === '/api/admin/metrics') {
-      if (request.headers.get(METRICS_HEADER) !== METRICS_ADMIN_ID) {
-        return json({ error: 'Unauthorized' }, 403);
+      if (!isMetricsMark(request.headers.get(METRICS_HEADER) ?? '', this.env)) {
+        return json({ error: 'unauthorized', hint: 'metrics operator required' }, 403);
       }
       return json(this.metrics(url.hostname));
     }
@@ -1879,14 +1962,15 @@ export class MatchmakerDO {
   /* ---------- the role registry ---------- */
 
   /**
-   * Who is behind this request: the signature is re-proven here (the room enforces its own
-   * doors), and a Telegram caller must then be on the registry this object owns. The dev door
-   * needs nothing more — it only opens for an explicit marker on a loopback host.
+   * Who is behind this request: the credential is re-proven here (the room enforces its own
+   * doors), and a Telegram caller must then be on the registry this object owns. The operator key
+   * and the dev door need nothing more — the first only works with the secret set, the second only
+   * opens for an explicit marker on a loopback host.
    */
   private async adminIdentity(request: Request): Promise<AdminIdentity | null> {
     const me = await identifyAdminRequest(request, this.env);
     if (!me) return null;
-    if (me.door === 'dev') return me;
+    if (me.door === 'dev' || me.door === 'key') return me;
     return this.admins.has(me.userId) ? me : null;
   }
 
