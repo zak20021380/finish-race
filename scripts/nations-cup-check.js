@@ -391,10 +391,14 @@ function checkHomeCarousel() {
       if (r.height < 29.5) fails.push(`podium row ${i + 1} height ${Math.round(r.height)} < 30px`);
       if (!li.querySelector('.mind-av')) fails.push(`podium row ${i + 1} missing the sphere avatar`);
       if (!li.querySelector('.mind-flag')) fails.push(`podium row ${i + 1} missing the flag badge`);
+      const rk = li.querySelector('.mind-rank');
+      if (!/^\d+$/.test((rk?.textContent || '').replace('#', '').trim())) fails.push(`podium row ${i + 1} missing the rank emblem`);
+      if (li.querySelector('.mind-tier')) fails.push(`podium row ${i + 1} still wears a deprecated tier pill`);
       if (!(li.querySelector('.mind-nm')?.textContent || '').trim()) fails.push(`podium row ${i + 1} missing the player name`);
-      if (!(li.querySelector('.mind-tier')?.textContent || '').trim()) fails.push(`podium row ${i + 1} missing the tier chip`);
+      if (!(li.querySelector('.mind-trend')?.textContent || '').trim()) fails.push(`podium row ${i + 1} missing the trend delta`);
       const sc = li.querySelector('.mind-score');
       if (!/^[\d,]+$/.test((sc?.textContent || '').trim())) fails.push(`podium row ${i + 1} missing a numeric TIQ score`);
+      if (!sc?.querySelector('use[href="#i-cup"]')) fails.push(`podium row ${i + 1} score has no trophy marker`);
       const col = sc ? getComputedStyle(sc).color : '';
       if (!/rgb\(252,\s*211,\s*77\)/.test(col)) fails.push(`podium row ${i + 1} TIQ score not gold (${col})`);
     });

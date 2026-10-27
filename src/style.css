@@ -40,10 +40,11 @@
   --honey-soft: rgba(245, 158, 11, .18);
 
   /* ---- Mind Ladder: TIQ is the hero metric, the cup is a season prize ----
-     A TIQ reading is always gold + the brain glyph; #i-cup never stands in for a
-     score. The four mind tiers each own one aura (ring colour + bloom), so a
-     Grandmaster and a Rookie are separable without a badge word. Violet is the
-     aura hue; cyan stays "active", coral stays "the one loud action". */
+     A TIQ reading is always gold; on the home podium #i-cup trails the digits as a
+     unit marker, never a stand-in for the number. The four mind tiers each own one
+     aura (ring colour + bloom) on the ladder sheet, so a Grandmaster and a Rookie
+     are separable without a badge word. Violet is the aura hue; cyan stays
+     "active", coral stays "the one loud action". */
   --tiq: #FCD34D;
   --violet: #A78BFA;
   --violet-soft: rgba(167, 139, 250, .16);
@@ -18179,26 +18180,26 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   white-space: nowrap;
   box-shadow: 0 2px 0 #7c2d12, inset 0 1px 0 rgba(255, 255, 255, .6);
 }
-/* podium: Top-5 rows that grow into the band — 3D sphere avatar, flag badge, tier, TIQ */
+/* podium: Top-5 rows that grow into the band — rank emblem, sphere avatar + flag, trend delta, TIQ */
 .mind-podium {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   min-height: 0;
 }
 .mind-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
   flex: 1 1 auto;
   height: auto;
-  min-height: 38px;
+  min-height: 40px;
   max-height: 64px;
-  padding: 6px 10px;
+  padding: 7px 10px;
   border-radius: 12px;
   background: rgba(255, 255, 255, .045);
   border-top: 1px solid rgba(255, 255, 255, .06);
@@ -18207,6 +18208,46 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   box-sizing: border-box;
 }
 .mind-row.is-error { justify-content: center; color: var(--ink-soft); font-weight: 700; flex: none; height: 30px; min-height: 30px; max-height: 30px; }
+/* rank emblem: the medal itself — gold / silver / bronze on the podium, slate below it */
+.mind-rank {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #2B3548 0%, #1B2233 100%);
+  color: #A9B6CC;
+  box-shadow:
+    0 2px 0 rgba(8, 12, 20, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    inset 0 0 0 1px rgba(255, 255, 255, .08);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+}
+.mind-rank.gold {
+  background: linear-gradient(180deg, #fde68a 0%, #fbbf24 45%, #f59e0b 100%);
+  color: #10141D;
+  box-shadow:
+    0 2px 0 rgba(120, 53, 15, .8),
+    inset 0 1px 0 rgba(255, 255, 255, .65);
+}
+.mind-rank.silver {
+  background: linear-gradient(180deg, #f1f5f9 0%, #cbd5e1 45%, #94a3b8 100%);
+  color: #10141D;
+  box-shadow:
+    0 2px 0 rgba(51, 65, 85, .8),
+    inset 0 1px 0 rgba(255, 255, 255, .7);
+}
+.mind-rank.bronze {
+  background: linear-gradient(180deg, #fed7aa 0%, #fdba74 45%, #c2703d 100%);
+  color: #10141D;
+  box-shadow:
+    0 2px 0 rgba(124, 45, 18, .8),
+    inset 0 1px 0 rgba(255, 255, 255, .6);
+}
 .mind-av {
   position: relative;
   flex: none;
@@ -18246,20 +18287,40 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.mind-tier {
+/* trend delta: a fixed-width pill so the score column never shifts between rows */
+.mind-trend {
   flex: none;
-  padding: 3px 8px 4px;
+  min-width: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 4px 4px;
   border-radius: var(--radius-pill);
-  background: rgba(167, 139, 250, .16);
-  color: #C4B5FD;
-  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, .45);
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .10);
+  color: var(--ink-soft);
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: .02em;
+  line-height: 1;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
+.mind-trend.up {
+  background: rgba(16, 185, 129, .16);
+  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .34);
+  color: var(--mint-ink);
+}
+.mind-trend.down {
+  background: rgba(244, 63, 94, .16);
+  box-shadow: inset 0 0 0 1px rgba(253, 164, 175, .34);
+  color: var(--red-ink);
+}
+/* score lockup: the rating, then the trophy that gives it its weight */
 .mind-score {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 15px;
   font-weight: 900;
   letter-spacing: -.01em;
@@ -18267,6 +18328,12 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   font-variant-numeric: tabular-nums;
   text-shadow: 0 1px 0 rgba(0, 0, 0, .5);
   white-space: nowrap;
+}
+.mind-cup {
+  display: block;
+  width: 13px;
+  height: 13px;
+  opacity: .85;
 }
 /* your own standing: one recessed strip, the psychological hook */
 .mind-mine {
@@ -18295,7 +18362,7 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
      · `.slide-inner` owns the padding and splits the height three ways — the header
        on the top edge, the five standings rows across the upper-to-mid band, and the
        standing strip + the one CTA pinned to the bottom edge;
-     · the rows keep their own air (a 38px floor, 6-8px gaps) and grow into the band,
+     · the rows keep their own air (a 40px floor, 6-8px gaps) and grow into the band,
        so the list reads tactile and legible instead of squished;
      · the CTA is a full-width key that sits just above the card's bottom edge with
        the pager dots below it — the dead void under the button is gone.
@@ -18327,9 +18394,10 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
 .mind-podium {
   flex: 1 1 auto;
   min-height: 0;
-  gap: 8px;
   justify-content: space-between;
 }
+.mini-rank.nations-rank { gap: 8px; }
+.mind-podium { gap: 7px; }
 
 /* the foot: standing strip + the one CTA, pinned to the bottom edge */
 .car-card.nations-cup .slide-foot,
@@ -18344,8 +18412,8 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
 /* the CTA: a full-width key with a comfortable face */
 .car-card.nations-cup .nations-hold,
 .car-card.mind-ladder .mind-cta {
-  min-height: 40px;
-  padding: 11px 16px;
+  min-height: 48px;
+  padding: 12px 16px;
 }
 
 /* short columns: the chrome gives up first, the five rows keep their floor */

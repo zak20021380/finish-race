@@ -333,19 +333,9 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   });
 
   /* ---------- The Mind Ladder: top minds + your cognitive standing ----------
-     Individual TIQ prestige. TIQ is the hero metric: bold gold digits, a tier
-     chip drawn from the same bands the ladder uses, and the player's own
-     percentile strip below the podium. No countdown, no capacity meter. */
-
-  const MIND_TIERS: ReadonlyArray<{ min: number; name: string }> = [
-    { min: 3000, name: 'Grandmaster' },
-    { min: 2000, name: 'Strategist' },
-    { min: 1000, name: 'Tactician' },
-    { min: 0, name: 'Rookie' },
-  ];
-
-  const mindTier = (tiq: number): string =>
-    (MIND_TIERS.find((t) => tiq >= t.min) ?? MIND_TIERS[MIND_TIERS.length - 1]).name;
+     Individual TIQ prestige. Rank, name and the gold score lockup carry the row:
+     a medal emblem on the left, the trend delta beside the TIQ on the right. No
+     tier words, no countdown, no capacity meter. */
 
   /** Your TIQ: 120 a win plus 20 a race — the exact formula the ladder reads. */
   const myTiq = (): number => Math.max(0, profile.stats.wins * 120 + profile.stats.games * 20);
@@ -357,12 +347,36 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     return { rank, pct: Math.min(100, Math.max(1, Math.round((rank / MIND_POOL) * 100))) };
   };
 
-  const mindRow = (p: PlayerRow): HTMLLIElement => {
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+
+  /** The trophy that closes the score lockup — house sprite artwork, never an emoji. */
+  const mindCup = (): SVGSVGElement => {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'mind-cup');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    const use = document.createElementNS(SVG_NS, 'use');
+    use.setAttribute('href', '#i-cup');
+    svg.append(use);
+    return svg;
+  };
+
+  const mindTrendText = (p: PlayerRow): string => {
+    if (p.trend === 'up') return `▲ ${trendDeltaOf(p.id)}`;
+    if (p.trend === 'down') return `▼ ${trendDeltaOf(p.id)}`;
+    return '•';
+  };
+
+  const mindRow = (p: PlayerRow, rank: number): HTMLLIElement => {
     const li = document.createElement('li');
     li.className = 'mind-row';
-    const tier = mindTier(p.points);
     const score = p.points.toLocaleString('en-US');
-    li.setAttribute('aria-label', `${p.name} — ${tier}, ${score} TIQ`);
+    const trendWord = p.trend === 'up' ? 'rising' : p.trend === 'down' ? 'dropping' : 'steady';
+    li.setAttribute('aria-label', `#${rank} ${p.name} — ${score} TIQ, ${trendWord}`);
+    const rk = document.createElement('span');
+    rk.className = `mind-rank ${rank <= 3 ? PODIUM_CLASS[rank - 1] : 'slate'}`;
+    rk.textContent = `#${rank}`;
+    rk.setAttribute('aria-hidden', 'true');
     const av = document.createElement('span');
     av.className = 'mind-av';
     av.setAttribute('aria-hidden', 'true');
@@ -374,13 +388,18 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     nm.className = 'mind-nm';
     nm.textContent = p.name;
     nm.title = p.name;
-    const chip = document.createElement('span');
-    chip.className = 'mind-tier';
-    chip.textContent = tier;
+    const tr = document.createElement('span');
+    tr.className = `mind-trend ${p.trend}`;
+    tr.textContent = mindTrendText(p);
+    tr.title = trendWord;
+    tr.setAttribute('aria-hidden', 'true');
     const sc = document.createElement('span');
     sc.className = 'mind-score';
-    sc.textContent = score;
-    li.append(av, nm, chip, sc);
+    sc.title = `${score} TIQ`;
+    const num = document.createElement('b');
+    num.textContent = score;
+    sc.append(num, mindCup());
+    li.append(rk, av, nm, tr, sc);
     return li;
   };
 
@@ -398,7 +417,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     try {
       const all = await getPlayerRanking();
       list.textContent = '';
-      for (const p of all.slice(0, 5)) list.append(mindRow(p));
+      all.slice(0, 5).forEach((p, i) => list.append(mindRow(p, i + 1)));
     } catch {
       list.textContent = '';
       const li = document.createElement('li');
