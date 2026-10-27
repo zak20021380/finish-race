@@ -2396,6 +2396,15 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   color: var(--ink-soft);
 }
 .help b { font-weight: 800; color: var(--ink); }
+/* the first-run invitation's kicker: one small warm line above the sheet title */
+.tut-invite-kicker {
+  margin: 0 0 2px;
+  font-size: var(--t-micro);
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--honey-ink);
+}
 
 /* ---- pickers inside sheets: a field, a scrollable list, and nothing else ----
    The app itself never scrolls, so the list owns the gesture: touch-action + the `data-scroll`
@@ -4262,11 +4271,12 @@ html.no-flags .id-flag .flag-code { display: none; }
   box-shadow: 0 2px 0 #075985, inset 0 1px 0 rgba(255, 255, 255, .5);
 }
 
-/* ---- Play Dock: one capsule, two zones (the Supercell split action) ----
+/* ---- Play Dock: one capsule, three zones (the Supercell split action) ----
    A single pill carries the whole lobby action area: the mode switcher holds the left
-   third, the launch holds the right two thirds, and one hairline seam runs down the
-   capsule between them. No second box, no external borders — the two halves read as
-   one deck, and the mode can never be missed or mistaken for a rival CTA. */
+   third, the launch holds the rest, and the help key closes the right cap. One hairline
+   seam runs down the capsule between the mode and the launch. No second box, no external
+   borders — the zones read as one deck, and the mode can never be missed or mistaken
+   for a rival CTA. */
 .launcher {
   --dock-face: #121A24;
   --dock-top: #1A2431;
@@ -4275,7 +4285,7 @@ html.no-flags .id-flag .flag-code { display: none; }
   flex: none;
   position: relative;
   display: grid;
-  grid-template-columns: 32fr 68fr;
+  grid-template-columns: 34% 1fr 50px;
   align-items: stretch;
   gap: 0;
   width: 100%;
@@ -4301,10 +4311,42 @@ html.no-flags .id-flag .flag-code { display: none; }
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 32%;
+  left: 34%;
   width: 1px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, .12) 24%, rgba(255, 255, 255, .12) 76%, rgba(255, 255, 255, 0) 100%);
   pointer-events: none;
+}
+
+/* ---- the dock's third key: the permanent tutorial door ----
+   A small engraved help key closing the capsule's right cap. It is its own button — never a
+   second action inside the launch — so the hands-on lesson is one thumb away on every visit
+   and PLAY stays exactly where the thumb expects it. Same clay recipe as the dock, one step
+   darker, with its own hairline so the launch still ends cleanly. */
+.dock-tut {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 100%;
+  border-radius: 0 9999px 9999px 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, 0) 58%);
+  color: #9FB0C6;
+  cursor: pointer;
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, .09);
+  transition: background var(--motion-fast), color var(--motion-fast), transform var(--motion-fast);
+}
+.dock-tut .ico { width: 19px; height: 19px; }
+.dock-tut:hover:not(:active) { background: rgba(255, 255, 255, .1); color: #F8FAFC; }
+.dock-tut:active { background: rgba(0, 0, 0, .3); transform: translateY(1px); }
+.dock-tut:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -4px; }
+@media (max-width: 352px) {
+  .launcher { grid-template-columns: 34% 1fr 44px; }
+  .dock-tut .ico { width: 17px; height: 17px; }
 }
 
 /* ---- left zone: the mode switcher — a whisper of light on the capsule ----
@@ -4432,7 +4474,7 @@ html.no-flags .id-flag .flag-code { display: none; }
   align-items: center;
   justify-content: center;
   gap: 4px;
-  border-radius: 0 9999px 9999px 0;
+  border-radius: 0;
   font-weight: 800;
   background: linear-gradient(180deg, var(--dock-ink-1, #00B4D8) 0%, var(--dock-ink-2, #0077B6) 100%);
   color: #fff;

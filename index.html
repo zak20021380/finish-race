@@ -2146,6 +2146,12 @@
                 </span>
               </span>
             </button>
+            <!-- the permanent lesson door: a glass help key on the dock's own face, so the
+                 tutorial is one thumb away on every visit, finished or not. -->
+            <button class="dock-tut" id="home-tutorial" type="button"
+              aria-label="Tutorial — how to play, launch the hands-on lesson">
+              <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-help" /></svg>
+            </button>
           </div>
 
           <!-- Admin Command Center key: shown only to an allowlisted Telegram id (or a dev door),
@@ -3033,6 +3039,20 @@
         <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-flag" /></svg>
         <span id="tut-ready-txt">YOU'RE READY! REACH THE FINISH LINE!</span>
       </div>
+
+      <!-- first-run invitation: the lobby's own door into the lesson, shown once per session
+           while the completion flag is unset. The splash owns the stage at boot, so this is
+           opened behind it and is already waiting when the veil lifts. -->
+      <section class="sheet" id="sheet-tut-invite" hidden role="dialog" aria-modal="true"
+        aria-labelledby="tut-invite-title">
+        <p class="tut-invite-kicker">First time here?</p>
+        <h2 class="sheet-t" id="tut-invite-title">Learn the board in four taps</h2>
+        <p class="sheet-p">Reach the FINISH line, wall off a rival and arm a hidden mine on a real board — about 30 seconds. You can replay it any time from the Play Dock.</p>
+        <div class="sheet-actions split">
+          <button class="btn btn-ghost" type="button" data-sheet-close data-autofocus>Later</button>
+          <button class="btn btn-primary" type="button" id="invite-tutorial">Start tutorial</button>
+        </div>
+      </section>
 
       <!-- matchmaking: the full-viewport searching stage Quick match opens (src/matchmaking.ts).
            Clay only — no backdrop-filter anywhere on it. -->
@@ -4255,9 +4275,14 @@
             <li><b>Move</b> — tap one of your balls, then tap a glowing dot beside it. One step per turn; teams alternate and each may move any one of their balls.</li>
             <li><b>Wall</b> — tap a grid line, then tap the ghost wall again to place it. Each side brings 8 walls to a race; the counters under the board show what is left.</li>
             <li><b>Legal only</b> — a wall must leave every ball a path to the line, and can't share a stretch of line.</li>
+            <li><b>Mine</b> — the Mine key arms one hidden trap in a square ahead of your rival; the first ball over it is thrown back two rows.</li>
             <li><b>Finish</b> — the first ball of any team onto the gold finish row wins.</li>
+            <li><b>TIQ</b> — every race moves your tactical rating: win to climb, lose to slide. The ladder pairs you with minds within ±250.</li>
           </ol>
-        <button class="btn btn-primary" type="button" data-sheet-close data-autofocus>Got it</button>
+        <div class="sheet-actions split">
+          <button class="btn btn-ghost" type="button" data-sheet-close data-autofocus>Got it</button>
+          <button class="btn btn-primary" type="button" id="help-tutorial">Play tutorial</button>
+        </div>
       </section>
 
       <!-- country: Profile owns the picker; the language may suggest a row, nothing is forced -->

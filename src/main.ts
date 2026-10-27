@@ -512,6 +512,8 @@ const waiting: (() => void)[] = [];            // bot thinks parked by the pause
  *  board itself: its stage gate decides which real tap is live. */
 let tutorialActive = false;
 let tutorial: Tutorial | null = null;
+/** Set by the lobby's own doors: the lesson opens on the next race even if it was read before. */
+let tutorialRequested = false;
 const tutorialStage = (): TutorialStage | null => (tutorialActive ? tutorial?.stage ?? null : null);
 
 /** The turn's own gate. The lesson layers on top of this through `isTutorialActionAllowed()`. */
@@ -1213,11 +1215,12 @@ function startGame(setup: StartSetup) {
   cancelTutorial();
   /* Only a local bot race teaches, and only until the lesson has been finished or skipped. An
      online seat or a private room is somebody else's board: the lesson never covers it. */
-  const wantsTutorial = shouldAutoStartTutorial({
+  const wantsTutorial = tutorialRequested || shouldAutoStartTutorial({
     online: !!setup.online,
     room: !!setup.room,
     completed: hasCompletedTutorial(),
   });
+  tutorialRequested = false;
   /* menuState.difficulty is the single source: the Choose-mode sheet persists it live,
      so every start path (vs Bot card, Play) runs the level the sheet shows. */
   difficulty = menuState.difficulty;
@@ -1942,6 +1945,18 @@ function beginTutorial() {
   tutorial.start();
 }
 
+/**
+ * The lobby's own door into the lesson: a fresh local duel with the overlay forced on, for a
+ * player who has already read it as much as for a first-timer. `beginTutorial` itself refuses a
+ * live seat or a private room, so the setup is deliberately a plain 1v1 bot race — the exact
+ * board the four steps were written against.
+ */
+function startTutorial() {
+  if (sheets.isOpen) sheets.close();
+  tutorialRequested = true;
+  startGame({ difficulty: menuState.difficulty, sizes: [1, 1] });
+}
+
 /** Leaving the race, or starting another one, ends the lesson without marking it read. */
 function cancelTutorial() {
   if (!tutorialActive && !waitingForMineTrigger) return;
@@ -1977,6 +1992,13 @@ tutorial = createTutorial({
     if (wantsOpponent()) void runOpponent();
   },
 });
+
+/* The permanent lobby doors: the Play Dock's help key, the first-run invitation and the rules
+   sheet all enter the same lesson. None of them depends on the completion flag, so a player can
+   replay at any time. */
+for (const id of ['home-tutorial', 'invite-tutorial', 'help-tutorial']) {
+  $(id).addEventListener('click', () => { impact('light'); startTutorial(); });
+}
 
 /* The visible replay door: Pause → Replay tutorial restarts this local board with the lesson,
    without needing the console. It is hidden for online seats and private rooms. */
@@ -2315,6 +2337,17 @@ const chat = createChat({
 router.start('home');
 setBackButton(false);
 menu.afterStart();
+
+/* First run: the lobby invites a new player into the lesson once. It opens behind the boot
+   screen, so it is already waiting on Home when the veil lifts. "Later" only quiets it for
+   this session — the completion flag is what retires it. */
+if (!hasCompletedTutorial()) {
+  window.setTimeout(() => {
+    if (hasCompletedTutorial() || router.current !== 'home' || sheets.isOpen) return;
+    const invite = document.getElementById('sheet-tut-invite');
+    if (invite) sheets.open(invite);
+  }, 1400);
+}
 
 /* equipping repaints the board, and the chip swatch that stands for your ball; choosing a piece
    colour repaints the whole perspective (both sides, the finish wash and every chip) */
