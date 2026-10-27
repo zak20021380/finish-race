@@ -2001,44 +2001,38 @@
                 <div class="car-head tour-head">
                   <span class="car-kicker tour-kicker">
                     <span class="tour-star-pod" aria-hidden="true"><svg class="tour-star-ico" viewBox="0 0 56 56" focusable="false" aria-hidden="true"><use href="#i-star-3d" /></svg></span>
-                    <span class="tour-title">CHANNEL WAR · 200★</span>
+                    <span class="tour-title">CHANNEL WAR</span>
                   </span>
-                  <span class="tour-chip"><i class="tour-beacon" aria-hidden="true"></i>WINNER TAKES ALL</span>
+                  <span class="tour-clock"><i class="tour-clock-dot" aria-hidden="true"></i><b id="tour-countdown">02h 45m left</b></span>
                 </div>
 
-                <div class="tour-hero" aria-hidden="true">
-                  <span class="tour-glow"></span>
-                  <span class="tour-pedestal"></span>
-                  <!-- the authentic Telegram Stars PNG (bundled by Vite, src set in home.ts),
-                       levitating over the recessed dish on the star-float loop -->
-                  <img class="tour-star-img" id="tour-star-img" alt="" width="64" height="64" decoding="async" draggable="false" />
+                <!-- one open hero: the authentic Telegram Stars PNG (bundled by Vite,
+                     src set in home.ts) levitating over the prize it pays out -->
+                <div class="tour-hero">
+                  <span class="tour-glow" aria-hidden="true"></span>
+                  <span class="tour-star-stage" aria-hidden="true">
+                    <span class="tour-pedestal"></span>
+                    <img class="tour-star-img" id="tour-star-img" alt="" width="64" height="64" decoding="async" draggable="false" />
+                  </span>
+                  <div class="tour-vault">
+                    <span class="tour-vault-v">200 STARS</span>
+                    <span class="tour-vault-sub">🏆 1ST PLACE CHANNEL WINS ALL · PURE CONQUEST</span>
+                  </div>
                 </div>
 
-                <div class="tour-vault">
-                  <span class="tour-vault-k">🏆 1ST PLACE CHANNEL WINS</span>
-                  <span class="tour-vault-v">200 STARS</span>
-                  <span class="tour-vault-sub">Runners-up get 0★ · Pure Conquest</span>
-                </div>
-
-                <!-- the champion banner: an illuminated crown badge and metallic handle
-                     on the left, the live deadline in a glowing gold pill on the right,
-                     all set in one obsidian glass strip with a gold micro-border -->
+                <!-- the reigning channel, in one compact glass pill -->
                 <div class="tour-hud">
                   <span class="tour-leader">
                     <span class="tour-leader-medal" aria-hidden="true">
                       <svg class="tour-leader-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-crown" /></svg>
                     </span>
-                    <span class="tour-leader-copy">
-                      <span class="tour-leader-k">REIGNING CHAMPION</span>
-                      <b class="tour-leader-h" id="tour-leader-handle">@DogeSquad</b>
-                    </span>
+                    <span class="tour-leader-k">REIGNING CHAMPION</span>
+                    <b class="tour-leader-h" id="tour-leader-handle">@DogeSquad</b>
                   </span>
-                  <span class="tour-clock"><i class="tour-clock-dot" aria-hidden="true"></i><b id="tour-countdown">02h 45m left</b></span>
                 </div>
 
                 <button class="tour-cta" type="button" id="home-tournament-cta" aria-haspopup="dialog">
                   <span class="tour-cta-t">FIGHT FOR YOUR CHANNEL</span>
-                  <span class="tour-cta-tag">200★</span>
                 </button>
 
                 <!-- the growth door: channel / group admins enlist their community so
@@ -2047,7 +2041,8 @@
                   <span class="tour-admin-ico-wrap" aria-hidden="true">
                     <svg class="tour-admin-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-send" /></svg>
                   </span>
-                  <span class="tour-admin-t">Channel admin? Enlist here</span>
+                  <span class="tour-admin-t">CHANNEL ADMIN? ENLIST HERE</span>
+                  <span class="tour-admin-chev" aria-hidden="true">›</span>
                 </button>
               </article>
               <article class="car-card nations-cup carousel-slide-nations" data-slide="1" data-index="1" aria-label="Nations Cup — world standings">
