@@ -14136,9 +14136,11 @@ html.reduced-motion .admin-tab[aria-selected="true"] .admin-tab-ico { animation:
 .adm-note { margin: var(--s2) 0 0; font-size: var(--t-micro); line-height: 1.45; color: var(--ink-soft); }
 
 /* ==========================================================================
-   STATS — the live telemetry dashboard: the Worker's measured reading under a
-   state bar, four compact clay KPIs, the live board mix, gameplay counters and
-   system health. The body scrolls, so the dashboard reads top-down.
+   STATS — the executive telemetry dashboard: a state rail, three sections
+   (live engagement pulse, new-player inflow, retention & loyalty), each with
+   its own accent and clay slab, over one quiet latency badge. Every number is
+   the Worker's measured registry reading; the body scrolls, so it reads
+   top-down in three seconds.
    ========================================================================== */
 .admin-panel[data-apanel="stats"] { flex: 1 1 auto; min-height: 0; }
 
@@ -14280,24 +14282,79 @@ html.reduced-motion .adm-live-refresh[data-busy="true"] .ico { animation-duratio
 .adm-alert[data-kind="offline"] .adm-alert-txt b { color: var(--honey-ink); }
 .adm-alert-txt span { font-size: var(--t-micro); line-height: 1.45; color: var(--ink-soft); }
 
-/* the device's own measured day, set apart from the Worker's grid */
-.adm-stat-device { margin: 0; padding: 0 2px; }
+/* ---- the executive sections: accent tick, high-contrast title, quiet meta ---- */
+.adm-block {
+  --adm-accent: var(--brand-ink);
+  --adm-accent-soft: rgba(125, 211, 252, .2);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.adm-block[data-accent="sky"] {
+  --adm-accent: #38bdf8;
+  --adm-accent-soft: rgba(56, 189, 248, .22);
+}
+.adm-block[data-accent="mint"] {
+  --adm-accent: var(--mint-ink);
+  --adm-accent-soft: rgba(16, 185, 129, .24);
+}
+.adm-block[data-accent="violet"] {
+  --adm-accent: var(--violet);
+  --adm-accent-soft: rgba(167, 139, 250, .24);
+}
+.adm-block-h { display: flex; align-items: baseline; gap: var(--s2); padding: 0 2px; }
+.adm-block-t {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.adm-block-t::before {
+  content: '';
+  flex: none;
+  width: 3px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--adm-accent);
+  box-shadow: 0 0 8px var(--adm-accent-soft), 0 0 0 1px rgba(0, 0, 0, .25);
+}
+.adm-block-s {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
 
-/* ---- the KPI grid: four compact clay tiles ---- */
+/* ---- the pulse grid: three compact clay tiles across the phone column ---- */
 .adm-grid {
   flex: none;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: minmax(142px, auto);
-  gap: var(--s2);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
 }
 .adm-card {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
-  padding: 11px 12px 12px;
+  min-height: 142px;
+  padding: 10px 9px 11px;
   border-radius: var(--radius-md);
   background: var(--clay-face);
   box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
@@ -14346,7 +14403,7 @@ html.reduced-motion .adm-live-refresh[data-busy="true"] .ico { animation-duratio
 html.reduced-motion .adm-live-dot { animation: none; }
 /* the figure is the whole point: bold gold, tabular, engraved into the slab */
 .adm-card-v {
-  font-size: clamp(1.45rem, 1.1rem + 2.2vw, 2rem);
+  font-size: clamp(1.3rem, 1rem + 1.6vw, 1.7rem);
   font-weight: 900;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -14354,21 +14411,21 @@ html.reduced-motion .adm-live-dot { animation: none; }
   text-shadow: 0 1px 0 rgba(0, 0, 0, .55);
 }
 .adm-card-l {
-  min-height: 11px;
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 800;
-  letter-spacing: .08em;
+  letter-spacing: .06em;
+  line-height: 1.3;
   text-transform: uppercase;
   color: var(--ink-soft);
 }
 /* the tactical sub-line under the label: the news that earns the card its slot */
 .adm-card-s {
-  display: flex;
-  align-items: center;
+  display: block;
   min-width: 0;
-  font-size: 9.5px;
+  font-size: 8.5px;
   font-weight: 800;
-  letter-spacing: .05em;
+  letter-spacing: .03em;
+  line-height: 1.3;
   text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
@@ -14377,48 +14434,213 @@ html.reduced-motion .adm-live-dot { animation: none; }
   font-variant-numeric: tabular-nums;
 }
 .adm-card-s b { color: var(--mint-ink); }
-/* the acquisition badges on the players card: mint pills, greyed at an exact zero */
-.adm-card-gains {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  min-width: 0;
-}
-.adm-gain {
-  display: inline-flex;
-  align-items: center;
-  max-width: 100%;
-  padding: 2px 7px;
-  border-radius: 999px;
-  font-size: 8.5px;
-  font-weight: 900;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--mint-ink);
-  background: rgba(16, 185, 129, .13);
-  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .34), 0 1px 0 rgba(0, 0, 0, .22);
-}
-.adm-gain[data-positive="false"] {
-  color: var(--ink-soft);
-  background: var(--field);
-  box-shadow: inset 0 0 0 1px var(--hair-off);
-}
 
-/* ---- the slab sections: one clay face each, a title row, content under it ---- */
-.adm-growth,
-.adm-health {
+/* ---- one clay slab under each executive section: title row, content beneath ---- */
+.adm-slab {
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
-  padding: 11px 12px 12px;
+  gap: 10px;
+  padding: 12px;
   border-radius: var(--radius-md);
   background: var(--clay-face);
   box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+}
+
+/* ---- acquisition: three tone-coded inflow pills under one card title ---- */
+.adm-inflow-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+  min-width: 0;
+}
+.adm-inflow-t {
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.adm-inflow-s {
+  flex: none;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.adm-inflow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.adm-inflow-pill {
+  --tone: var(--mint-ink);
+  --tone-soft: rgba(16, 185, 129, .18);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 10px 8px 10px 11px;
+  border-radius: 13px;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.adm-inflow-pill::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--tone);
+  opacity: .9;
+}
+.adm-inflow-pill[data-window="today"] {
+  --tone: #34d399;
+  --tone-soft: rgba(52, 211, 153, .18);
+}
+.adm-inflow-pill[data-window="week"] {
+  --tone: #fbbf24;
+  --tone-soft: rgba(251, 191, 36, .18);
+}
+.adm-inflow-pill[data-window="month"] {
+  --tone: var(--violet);
+  --tone-soft: var(--violet-soft);
+}
+.adm-inflow-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tone);
+  box-shadow: 0 0 0 3px var(--tone-soft), 0 0 8px var(--tone);
+}
+.adm-inflow-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.adm-inflow-l {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.adm-inflow-v {
+  font-size: clamp(1.15rem, 1rem + 1.1vw, 1.45rem);
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--tone);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .5);
+}
+
+/* ---- retention: the returning-veteran row over two measured bars ---- */
+.adm-ret-return {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--hair-off);
+}
+.adm-ret-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.adm-ret-l {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.adm-ret-note {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+.adm-ret-fig {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.adm-ret-fig b {
+  font-size: clamp(1.3rem, 1.1rem + 1.3vw, 1.7rem);
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--violet);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .5);
+}
+.adm-ret-pct {
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--violet);
+  background: var(--violet-soft);
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, .34);
+}
+
+/* ---- system footer: one quiet latency badge under the dashboard ---- */
+.adm-sysfoot {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  padding: 2px 0 0;
+}
+.adm-sysfoot-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  line-height: 1;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, .02);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+}
+.adm-sysfoot-badge b { font-weight: 900; color: var(--brand-ink); }
+.adm-sysfoot-sep { opacity: .5; }
+
+/* the narrowest phones: keep all three time windows on one row without clipping a count */
+@media (max-width: 400px) {
+  .adm-card { padding: 9px 7px 10px; }
+  .adm-card-l { font-size: 8px; letter-spacing: .04em; }
+  .adm-inflow { gap: 4px; }
+  .adm-inflow-pill { gap: 5px; padding: 9px 6px 9px 9px; }
+  .adm-inflow-l { font-size: 7.5px; letter-spacing: .03em; }
+  .adm-inflow-dot {
+    width: 6px;
+    height: 6px;
+    box-shadow: 0 0 0 2px var(--tone-soft), 0 0 6px var(--tone);
+  }
 }
 
 /* ---- growth & retention health: three measured progress bars ---- */
@@ -14492,25 +14714,10 @@ html.reduced-motion .adm-live-dot { animation: none; }
 }
 html.reduced-motion .adm-prog i { transition: none; }
 
-/* ---- telemetry & health: recessed cells in one row ---- */
+/* ---- recessed cells: shared by the player card's mini readouts ---- */
 .adm-cells { display: flex; gap: 6px; }
 .adm-cells .adm-stat { flex: 1 1 0; }
 .adm-stat b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.adm-health-chip {
-  flex: 1 1 auto;
-  min-width: 0;
-  text-align: right;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-.adm-health-chip[data-on="true"] { color: var(--mint-ink); }
-.adm-health-chip[data-state="loading"],
-.adm-health-chip[data-state="stale"] { color: var(--honey-ink); }
-.adm-health-chip[data-state="locked"],
-.adm-health-chip[data-state="offline"] { color: var(--red-ink); }
 
 /* the nations strip: one clay slab, four mini meters — flag, filled track, exact share */
 .adm-nations {

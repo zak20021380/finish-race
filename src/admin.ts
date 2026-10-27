@@ -435,10 +435,20 @@ export interface ServerMetrics {
   dau: number;
   /** Players whose last activity falls inside the rolling last 7 days. */
   wau: number;
+  /** Players whose last activity falls inside the rolling last 30 days. */
+  mau: number;
+  /** Active in the last 24 hours, first seen before that window: today's returning veterans. */
+  returningUsersToday: number;
+  /** `returningUsersToday` as a % of `dau`. */
+  returningShare: number;
   /** Registry entries first seen in the rolling last 24 hours. */
-  newSignups24h: number;
+  signupsToday: number;
   /** Registry entries first seen in the rolling last 7 days. */
-  newSignups7d: number;
+  signupsWeek: number;
+  /** Registry entries first seen in the rolling last 30 days. */
+  signupsMonth: number;
+  /** % of players first seen 24h+ ago who came back a full day or more after their first visit. */
+  retentionRateD1: number;
   /** Completed matches per registered player, rounded to one decimal. */
   avgMatchesPerPlayer: number;
   /** % of registered players who finished at least one match. */
@@ -1139,31 +1149,24 @@ export function createAdmin(api: AdminApi): Admin {
   const statActive = $<HTMLElement>('stat-active');
   const statLiveRooms = $<HTMLElement>('stat-live-rooms');
   const statLiveDot = $<HTMLElement>('stat-live-dot');
-  const statPlayers = $<HTMLElement>('stat-players');
   const statDau = $<HTMLElement>('stat-dau');
-  const statNew24h = $<HTMLElement>('stat-new-24h');
-  const statNew7d = $<HTMLElement>('stat-new-7d');
-  const statMatches = $<HTMLElement>('stat-matches');
-  const statMatches24h = $<HTMLElement>('stat-matches-24h');
-  const statAvgMatches = $<HTMLElement>('stat-avg-matches');
-  const statReferrals = $<HTMLElement>('stat-referrals');
-  const statViralShare = $<HTMLElement>('stat-viral-share');
+  const statMau = $<HTMLElement>('stat-mau');
+  const statNewToday = $<HTMLElement>('stat-new-today');
+  const statNewWeek = $<HTMLElement>('stat-new-week');
+  const statNewMonth = $<HTMLElement>('stat-new-month');
+  const statReturning = $<HTMLElement>('stat-returning');
+  const statReturningPct = $<HTMLElement>('stat-returning-pct');
+  const statD1 = $<HTMLElement>('stat-d1');
+  const statD1Bar = $<HTMLElement>('stat-d1-bar');
+  const statD1Fill = $<HTMLElement>('stat-d1-fill');
+  const statD1Note = $<HTMLElement>('stat-d1-note');
   const statGrowthMeta = $<HTMLElement>('stat-growth-meta');
-  const statActivation = $<HTMLElement>('stat-activation');
-  const statActivationBar = $<HTMLElement>('stat-activation-bar');
-  const statActivationFill = $<HTMLElement>('stat-activation-fill');
-  const statActivationNote = $<HTMLElement>('stat-activation-note');
   const statCore = $<HTMLElement>('stat-core');
   const statCoreBar = $<HTMLElement>('stat-core-bar');
   const statCoreFill = $<HTMLElement>('stat-core-fill');
   const statCoreNote = $<HTMLElement>('stat-core-note');
-  const statDauRatio = $<HTMLElement>('stat-dau-ratio');
-  const statDauRatioBar = $<HTMLElement>('stat-dau-ratio-bar');
-  const statDauRatioFill = $<HTMLElement>('stat-dau-ratio-fill');
-  const statDauRatioNote = $<HTMLElement>('stat-dau-ratio-note');
   const statLat = $<HTMLElement>('stat-lat');
   const statEnv = $<HTMLElement>('stat-env');
-  const healthChip = $<HTMLElement>('stat-health-chip');
   const statConn = $<HTMLElement>('stat-conn');
   const statUpdated = $<HTMLElement>('stat-updated');
   const statRefresh = $<HTMLButtonElement>('stat-refresh');
@@ -1171,7 +1174,6 @@ export function createAdmin(api: AdminApi): Admin {
   const statAlertIco = $<HTMLElement>('stat-alert-ico');
   const statAlertTitle = $<HTMLElement>('stat-alert-title');
   const statAlertBody = $<HTMLElement>('stat-alert-body');
-  const statDevice = $<HTMLElement>('stat-device');
   const navPill = $<HTMLElement>('admin-nav-pill');
   const inboxBadge = $<HTMLElement>('admin-inbox-badge');
   const inboxList = $<HTMLElement>('adm-inbox-list');
@@ -1559,6 +1561,7 @@ export function createAdmin(api: AdminApi): Admin {
 
     if (statsPanel) statsPanel.setAttribute('aria-busy', String(metricsBusy));
 
+    /* ---- pulse: live concurrency, then the two active-population windows ---- */
     const concurrency = m ? m.activeRooms + m.queueLength : null;
     if (statActive) statActive.textContent = metric(concurrency);
     if (statLiveRooms) {
@@ -1567,38 +1570,22 @@ export function createAdmin(api: AdminApi): Admin {
         : '— rooms · — queued';
     }
     if (statLiveDot) statLiveDot.dataset.live = String(!!m && (m.activeRooms > 0 || m.queueLength > 0));
+    if (statDau) statDau.textContent = metric(m?.dau);
+    if (statMau) statMau.textContent = metric(m?.mau);
 
-    if (statPlayers) statPlayers.textContent = metric(m?.totalUsers);
-
-    const gain = (el: HTMLElement | null, n: number | undefined, suffix: string): void => {
-      if (!el) return;
-      if (m == null || n == null) {
-        el.textContent = `— ${suffix}`;
-        el.dataset.positive = 'false';
-        return;
-      }
-      el.textContent = `+${figure(n)} ${suffix}`;
-      el.dataset.positive = String(n > 0);
-    };
-    gain(statNew24h, m?.newSignups24h, 'today (24h)');
-    gain(statNew7d, m?.newSignups7d, 'this week');
-
-    if (statDau) statDau.textContent = m ? `${figure(m.dau ?? 0)} active users · 24h` : '— active users · 24h';
-
-    if (statMatches) statMatches.textContent = metric(m?.matchesCompleted);
-    if (statMatches24h) statMatches24h.textContent = m ? `${figure(m.matches24h ?? 0)} · 24h` : '— · 24h';
-    if (statAvgMatches) {
-      statAvgMatches.textContent = m
-        ? `${(m.avgMatchesPerPlayer ?? 0).toFixed(1)} avg / player`
-        : '— avg / player';
-    }
-
-    if (statReferrals) statReferrals.textContent = metric(m?.referrals);
-    if (statViralShare) {
-      statViralShare.textContent = m ? `${rateText(m.viralShare ?? 0)} of playerbase` : '— of playerbase';
-    }
-
+    /* ---- acquisition: rolling first-seen cohorts, plus the registry size for context ---- */
     if (statGrowthMeta) statGrowthMeta.textContent = m ? `${figure(m.totalUsers)} registered` : '— registered';
+    if (statNewToday) statNewToday.textContent = metric(m?.signupsToday);
+    if (statNewWeek) statNewWeek.textContent = metric(m?.signupsWeek);
+    if (statNewMonth) statNewMonth.textContent = metric(m?.signupsMonth);
+
+    /* ---- retention: returning veterans, D1 cohort retention, core stickiness ---- */
+    if (statReturning) statReturning.textContent = metric(m?.returningUsersToday);
+    if (statReturningPct) {
+      statReturningPct.textContent = m && m.returningShare != null
+        ? `${rateText(m.returningShare)} of today's active`
+        : "— of today's active";
+    }
 
     const paintRate = (
       value: HTMLElement | null,
@@ -1620,39 +1607,18 @@ export function createAdmin(api: AdminApi): Admin {
       if (note) note.textContent = noteText;
     };
     paintRate(
-      statActivation, statActivationBar, statActivationFill, statActivationNote,
-      m?.activationRate, 'of registered players · played 1+ match',
+      statD1, statD1Bar, statD1Fill, statD1Note,
+      m?.retentionRateD1, 'players signed up 24h+ ago · returned a day later',
     );
     paintRate(
       statCore, statCoreBar, statCoreFill, statCoreNote,
-      m?.coreRetention, 'of registered players · played 3+ matches',
-    );
-    paintRate(
-      statDauRatio, statDauRatioBar, statDauRatioFill, statDauRatioNote,
-      m?.dailyActiveRatio, 'DAU / total players · last 24h',
+      m?.coreRetention, 'registered players · 3+ matches played',
     );
 
     if (statLat) {
       statLat.textContent = m && m.pingMs != null ? `${Math.round(m.pingMs)} ms` : pending ? '…' : '—';
     }
     if (statEnv) statEnv.textContent = m ? m.environment : '—';
-
-    if (healthChip) {
-      const online = metricsPhase === 'ok' && !!m;
-      const stale = metricsPhase === 'error' && !!m;
-      const state = pending ? 'loading'
-        : denied ? 'locked'
-          : online ? 'online'
-            : stale ? 'stale'
-              : metricsPhase === 'error' ? 'offline' : 'idle';
-      healthChip.textContent = state === 'loading' ? 'SYNCING'
-        : state === 'locked' ? 'LOCKED'
-          : state === 'online' ? 'ONLINE'
-            : state === 'stale' ? 'STALE'
-              : state === 'offline' ? 'OFFLINE' : '—';
-      healthChip.dataset.on = String(online);
-      healthChip.dataset.state = state;
-    }
 
     if (statConn) {
       const state = metricsBusy ? 'loading'
@@ -1699,11 +1665,6 @@ export function createAdmin(api: AdminApi): Admin {
         if (statAlertTitle && statAlertTitle.textContent !== title) statAlertTitle.textContent = title;
         if (statAlertBody && statAlertBody.textContent !== body) statAlertBody.textContent = body;
       }
-    }
-
-    if (statDevice) {
-      const d = today();
-      statDevice.textContent = `Device today: ${figure(d.visits)} sessions · ${figure(d.matches)} races · ${figure(d.coins)} coins measured on this device.`;
     }
   }
 

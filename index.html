@@ -3150,107 +3150,130 @@
               </span>
             </div>
 
-            <!-- primary KPIs: live concurrency + DAU / players + acquisition /
-                 match velocity / viral acquisition -->
-            <div class="adm-grid">
-              <div class="adm-card">
-                <span class="adm-card-top">
-                  <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-bolt" /></svg></span>
-                  <span class="adm-live-dot" id="stat-live-dot" data-live="false" aria-hidden="true"></span>
-                </span>
-                <b class="adm-card-v" id="stat-active">—</b>
-                <span class="adm-card-l">Live Concurrency</span>
-                <span class="adm-card-s" id="stat-live-rooms">— rooms · — queued</span>
-                <span class="adm-card-s adm-card-s-soft" id="stat-dau">— active users · 24h</span>
+            <!-- A. live engagement pulse: real concurrency, then both active-population windows -->
+            <section class="adm-block" data-accent="sky" aria-labelledby="stat-pulse-title">
+              <div class="adm-block-h">
+                <h3 class="adm-block-t" id="stat-pulse-title">Live Engagement Pulse</h3>
+                <span class="adm-block-s">Rolling windows</span>
               </div>
-              <div class="adm-card">
-                <span class="adm-card-top">
-                  <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-users" /></svg></span>
-                </span>
-                <b class="adm-card-v" id="stat-players">—</b>
-                <span class="adm-card-l">Total Players</span>
-                <span class="adm-card-gains">
-                  <span class="adm-gain" id="stat-new-24h" data-positive="false">— today (24h)</span>
-                  <span class="adm-gain" id="stat-new-7d" data-positive="false">— this week</span>
-                </span>
+              <div class="adm-grid">
+                <div class="adm-card">
+                  <span class="adm-card-top">
+                    <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-bolt" /></svg></span>
+                    <span class="adm-live-dot" id="stat-live-dot" data-live="false" aria-hidden="true"></span>
+                  </span>
+                  <b class="adm-card-v" id="stat-active">—</b>
+                  <span class="adm-card-l">Live Concurrency</span>
+                  <span class="adm-card-s" id="stat-live-rooms">— rooms · — queued</span>
+                </div>
+                <div class="adm-card">
+                  <span class="adm-card-top">
+                    <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-users" /></svg></span>
+                  </span>
+                  <b class="adm-card-v" id="stat-dau">—</b>
+                  <span class="adm-card-l">DAU</span>
+                  <span class="adm-card-s">24h active</span>
+                </div>
+                <div class="adm-card">
+                  <span class="adm-card-top">
+                    <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-calendar" /></svg></span>
+                  </span>
+                  <b class="adm-card-v" id="stat-mau">—</b>
+                  <span class="adm-card-l">MAU</span>
+                  <span class="adm-card-s">30d active</span>
+                </div>
               </div>
-              <div class="adm-card">
-                <span class="adm-card-top">
-                  <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>
-                </span>
-                <b class="adm-card-v" id="stat-matches">—</b>
-                <span class="adm-card-l">Match Velocity</span>
-                <span class="adm-card-s" id="stat-matches-24h">— · 24h</span>
-                <span class="adm-card-s adm-card-s-soft" id="stat-avg-matches">— avg / player</span>
-              </div>
-              <div class="adm-card">
-                <span class="adm-card-top">
-                  <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-gift" /></svg></span>
-                </span>
-                <b class="adm-card-v" id="stat-referrals">—</b>
-                <span class="adm-card-l">Viral Acquisition</span>
-                <span class="adm-card-s" id="stat-viral-share">— of playerbase</span>
-              </div>
-            </div>
+            </section>
 
-            <!-- growth & retention health: every bar is a server-measured registry ratio -->
-            <div class="adm-growth">
-              <div class="adm-nations-h">
-                <span class="adm-nations-t">Growth &amp; Retention Health</span>
-                <span class="adm-nations-s" id="stat-growth-meta">— registered</span>
+            <!-- B. acquisition: first-seen cohorts as three tone-coded inflow pills -->
+            <section class="adm-block" data-accent="mint" aria-labelledby="stat-acquire-title">
+              <div class="adm-block-h">
+                <h3 class="adm-block-t" id="stat-acquire-title">Player Acquisition</h3>
+                <span class="adm-block-s" id="stat-growth-meta">— registered</span>
               </div>
-              <div class="adm-prog-row">
-                <div class="adm-prog-head">
-                  <span class="adm-prog-l">Activation Rate</span>
-                  <b class="adm-prog-v" id="stat-activation">—</b>
+              <div class="adm-slab">
+                <div class="adm-inflow-h">
+                  <span class="adm-inflow-t">New Player Inflow</span>
+                  <span class="adm-inflow-s">First-time signups</span>
                 </div>
-                <div class="adm-prog" id="stat-activation-bar" data-tone="mint" role="progressbar"
-                  aria-label="Activation rate: registered players who completed at least one match"
-                  aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-                  <i id="stat-activation-fill"></i>
+                <div class="adm-inflow">
+                  <div class="adm-inflow-pill" data-window="today">
+                    <span class="adm-inflow-dot" aria-hidden="true"></span>
+                    <span class="adm-inflow-txt">
+                      <span class="adm-inflow-l">Today (24h)</span>
+                      <b class="adm-inflow-v" id="stat-new-today">—</b>
+                    </span>
+                  </div>
+                  <div class="adm-inflow-pill" data-window="week">
+                    <span class="adm-inflow-dot" aria-hidden="true"></span>
+                    <span class="adm-inflow-txt">
+                      <span class="adm-inflow-l">This Week (7d)</span>
+                      <b class="adm-inflow-v" id="stat-new-week">—</b>
+                    </span>
+                  </div>
+                  <div class="adm-inflow-pill" data-window="month">
+                    <span class="adm-inflow-dot" aria-hidden="true"></span>
+                    <span class="adm-inflow-txt">
+                      <span class="adm-inflow-l">This Month (30d)</span>
+                      <b class="adm-inflow-v" id="stat-new-month">—</b>
+                    </span>
+                  </div>
                 </div>
-                <span class="adm-prog-note" id="stat-activation-note">of registered players · played 1+ match</span>
               </div>
-              <div class="adm-prog-row">
-                <div class="adm-prog-head">
-                  <span class="adm-prog-l">Core Player Stickiness</span>
-                  <b class="adm-prog-v" id="stat-core">—</b>
-                </div>
-                <div class="adm-prog" id="stat-core-bar" data-tone="honey" role="progressbar"
-                  aria-label="Core player stickiness: players who completed at least three matches"
-                  aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-                  <i id="stat-core-fill"></i>
-                </div>
-                <span class="adm-prog-note" id="stat-core-note">of registered players · played 3+ matches</span>
-              </div>
-              <div class="adm-prog-row">
-                <div class="adm-prog-head">
-                  <span class="adm-prog-l">Daily Active Ratio</span>
-                  <b class="adm-prog-v" id="stat-dau-ratio">—</b>
-                </div>
-                <div class="adm-prog" id="stat-dau-ratio-bar" data-tone="sky" role="progressbar"
-                  aria-label="Daily active ratio: players active in the last 24 hours divided by total players"
-                  aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-                  <i id="stat-dau-ratio-fill"></i>
-                </div>
-                <span class="adm-prog-note" id="stat-dau-ratio-note">DAU / total players · last 24h</span>
-              </div>
-            </div>
+            </section>
 
-            <!-- system health: the real round trip through the Durable Object -->
-            <div class="adm-health">
-              <div class="adm-nations-h">
-                <span class="adm-nations-t">System Health</span>
-                <span class="adm-health-chip" id="stat-health-chip" data-on="false">—</span>
+            <!-- C. retention: returning veterans, the D1 cohort bar and core stickiness -->
+            <section class="adm-block" data-accent="violet" aria-labelledby="stat-retain-title">
+              <div class="adm-block-h">
+                <h3 class="adm-block-t" id="stat-retain-title">Player Retention &amp; Loyalty</h3>
+                <span class="adm-block-s">Cohort health</span>
               </div>
-              <div class="adm-cells">
-                <span class="adm-stat"><b id="stat-lat">—</b><span class="adm-stat-l">Worker Round-Trip</span></span>
-                <span class="adm-stat"><b id="stat-env">—</b><span class="adm-stat-l">Environment</span></span>
+              <div class="adm-slab">
+                <div class="adm-ret-return">
+                  <span class="adm-ret-copy">
+                    <span class="adm-ret-l">Returning Players (24h)</span>
+                    <span class="adm-ret-note">Veterans active today, first seen before the window</span>
+                  </span>
+                  <span class="adm-ret-fig">
+                    <b id="stat-returning">—</b>
+                    <span class="adm-ret-pct" id="stat-returning-pct">— of today's active</span>
+                  </span>
+                </div>
+                <div class="adm-prog-row">
+                  <div class="adm-prog-head">
+                    <span class="adm-prog-l">Day-1 Retention Rate</span>
+                    <b class="adm-prog-v" id="stat-d1">—</b>
+                  </div>
+                  <div class="adm-prog" id="stat-d1-bar" data-tone="mint" role="progressbar"
+                    aria-label="Day-1 retention: new players who came back a full day after signing up"
+                    aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                    <i id="stat-d1-fill"></i>
+                  </div>
+                  <span class="adm-prog-note" id="stat-d1-note">players signed up 24h+ ago · returned a day later</span>
+                </div>
+                <div class="adm-prog-row">
+                  <div class="adm-prog-head">
+                    <span class="adm-prog-l">Core Stickiness</span>
+                    <b class="adm-prog-v" id="stat-core">—</b>
+                  </div>
+                  <div class="adm-prog" id="stat-core-bar" data-tone="honey" role="progressbar"
+                    aria-label="Core stickiness: registered players who completed at least three matches"
+                    aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                    <i id="stat-core-fill"></i>
+                  </div>
+                  <span class="adm-prog-note" id="stat-core-note">registered players · 3+ matches played</span>
+                </div>
               </div>
-            </div>
+            </section>
 
-            <!-- this device's own counters: labelled, never folded into the Worker's grid -->
-            <p class="adm-note adm-stat-device" id="stat-device">Device today: — sessions · — races · — coins measured on this device.</p>
+            <!-- D. system footer: one quiet latency badge, nothing else -->
+            <footer class="adm-sysfoot" aria-label="System status">
+              <span class="adm-sysfoot-badge">
+                <b id="stat-lat">—</b>
+                <span class="adm-sysfoot-sep" aria-hidden="true">·</span>
+                <span id="stat-env">—</span>
+              </span>
+            </footer>
           </div>
 
           <!-- ---------- Users: the player directory, searched, filtered and moderated ---------- -->

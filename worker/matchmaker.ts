@@ -333,10 +333,23 @@ export interface ServerMetrics {
   dau: number;
   /** Players whose last activity falls inside the rolling last 7 days. */
   wau: number;
+  /** Players whose last activity falls inside the rolling last 30 days. */
+  mau: number;
+  /** Active in the last 24 hours, first seen before that window: today's returning veterans. */
+  returningUsersToday: number;
+  /** `returningUsersToday` as a % of `dau` (0-100). */
+  returningShare: number;
   /** Registry entries first seen in the rolling last 24 hours. */
-  newSignups24h: number;
+  signupsToday: number;
   /** Registry entries first seen in the rolling last 7 days. */
-  newSignups7d: number;
+  signupsWeek: number;
+  /** Registry entries first seen in the rolling last 30 days. */
+  signupsMonth: number;
+  /**
+   * Day-1 retention: % of players first seen at least 24 hours ago whose last activity came a
+   * full day or more after that first sighting. Read from `firstSeen` / `lastSeen`, never modelled.
+   */
+  retentionRateD1: number;
   /** Completed matches per registered player, rounded to one decimal. */
   avgMatchesPerPlayer: number;
   /** % of registered players who finished at least one match (0-100). */
@@ -491,6 +504,8 @@ const PLAYERS_LIMIT = 100;
 const ACTIVE_MS = 24 * 60 * 60 * 1000;
 /** A week in ms: the WAU / new-signup window. */
 const WEEK_MS = 7 * ACTIVE_MS;
+/** Thirty days in ms: the MAU / monthly-signup window. */
+const MONTH_MS = 30 * ACTIVE_MS;
 
 const whole = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0);
 
@@ -1338,12 +1353,14 @@ export class MatchmakerDO {
   /**
    * The measured telemetry reading. Population figures come from the registry, the live figures
    * from the in-memory room maps, the match total from the durable counter and the 24-hour match
-   * window from its own timestamped hourly buckets — empty is exact zero.
+   * window from its own timestamped hourly buckets — empty is exact zero. Acquisition cohorts and
+   * retention are folded from each record's `firstSeen` / `lastSeen`; nothing is modelled.
    */
   private metrics(hostname: string): ServerMetrics {
     const now = Date.now();
     const dayAgo = now - ACTIVE_MS;
     const weekAgo = now - WEEK_MS;
+    const monthAgo = now - MONTH_MS;
     let referrals = 0;
     let referringPlayers = 0;
     let totalMatches = 0;
@@ -1351,8 +1368,13 @@ export class MatchmakerDO {
     let corePlayers = 0;
     let dau = 0;
     let wau = 0;
-    let newSignups24h = 0;
-    let newSignups7d = 0;
+    let mau = 0;
+    let returningUsersToday = 0;
+    let retainedCohort = 0;
+    let retainedD1 = 0;
+    let signupsToday = 0;
+    let signupsWeek = 0;
+    let signupsMonth = 0;
     const telegram = new Set<string>();
     for (const p of this.players.values()) {
       if (p.tgId) telegram.add(p.tgId);
@@ -1365,8 +1387,16 @@ export class MatchmakerDO {
       if (p.matches >= 3) corePlayers++;
       if (p.lastSeen >= dayAgo) dau++;
       if (p.lastSeen >= weekAgo) wau++;
-      if (p.firstSeen >= dayAgo) newSignups24h++;
-      if (p.firstSeen >= weekAgo) newSignups7d++;
+      if (p.lastSeen >= monthAgo) mau++;
+      if (p.firstSeen > 0 && p.firstSeen < dayAgo) {
+        if (p.lastSeen >= dayAgo) returningUsersToday++;
+        /* the D1 cohort has had its full first day: did it ever come back a day later? */
+        retainedCohort++;
+        if (p.lastSeen >= p.firstSeen + ACTIVE_MS) retainedD1++;
+      }
+      if (p.firstSeen >= dayAgo) signupsToday++;
+      if (p.firstSeen >= weekAgo) signupsWeek++;
+      if (p.firstSeen >= monthAgo) signupsMonth++;
     }
     const totalUsers = this.players.size;
     const environment = this.env.WORKER_ENV?.trim()
@@ -1388,8 +1418,13 @@ export class MatchmakerDO {
       referringPlayers,
       dau,
       wau,
-      newSignups24h,
-      newSignups7d,
+      mau,
+      returningUsersToday,
+      returningShare: percentOf(returningUsersToday, dau),
+      signupsToday,
+      signupsWeek,
+      signupsMonth,
+      retentionRateD1: percentOf(retainedD1, retainedCohort),
       avgMatchesPerPlayer: totalUsers ? Math.round((totalMatches / totalUsers) * 10) / 10 : 0,
       activationRate: percentOf(activatedPlayers, totalUsers),
       coreRetention: percentOf(corePlayers, totalUsers),
