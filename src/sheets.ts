@@ -54,7 +54,7 @@ export function createSheets(scrim: HTMLElement): Sheets {
       panel.classList.remove('open');
       scrim.classList.remove('open');
       panel.style.pointerEvents = 'none';   // the slide-out must not swallow taps
-      timer = setTimeout(() => settle(true), motionReduced() ? 0 : MS);
+      timer = window.setTimeout(() => settle(true), motionReduced() ? 0 : MS);
     },
     get isOpen() { return panel !== null; },
   };

@@ -223,7 +223,7 @@ function showNote(msg: string, error: boolean, ttl: number, timeout = false) {
     el.classList.add('show');
   }
   clearTimeout(noteTimer);
-  if (ttl) noteTimer = setTimeout(() => { for (const el of noteEls) el.classList.remove('show'); }, ttl);
+  if (ttl) noteTimer = window.setTimeout(() => { for (const el of noteEls) el.classList.remove('show'); }, ttl);
 }
 const clearNote = () => {
   clearTimeout(noteTimer);
