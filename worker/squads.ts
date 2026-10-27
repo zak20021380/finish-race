@@ -2,6 +2,9 @@ import type { Env } from './env';
 
 export type SquadKind = 'channel' | 'group';
 
+/** The audit state the Command Center shows: confirmed admin, awaiting review, or pulled. */
+export type SquadVerification = 'verified' | 'pending' | 'revoked';
+
 export interface RegisteredSquad {
   id: string;
   chatId: string;
@@ -14,6 +17,14 @@ export interface RegisteredSquad {
   tag: string;
   ownerId: string;
   createdAt: number;
+  /** `verified` — the bot proved the submitter is an admin; `pending` — awaits an audit. */
+  verification: SquadVerification;
+  verifiedAt: number;
+  verifiedBy: string;
+  revokedAt: number;
+  /** Pulled from the Channel War by an admin. The row stays for the audit trail. */
+  banned: boolean;
+  bannedAt: number;
 }
 
 export type SquadRegistration =
@@ -56,6 +67,21 @@ class TelegramError extends Error {
 const text = (value: unknown, max: number): string =>
   typeof value === 'string' ? value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max) : '';
 
+const stampOf = (value: unknown): number => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+};
+
+/**
+ * A stored audit state is one of the three known values. A row persisted before the audit fields
+ * existed was Telegram-verified at registration, so it keeps the verified badge; an unrecognised
+ * value is treated as an un-reviewed claim rather than silently trusted.
+ */
+const verificationOf = (value: unknown): SquadVerification => {
+  if (value === 'verified' || value === 'pending' || value === 'revoked') return value;
+  return value === undefined ? 'verified' : 'pending';
+};
+
 const memberStatus = (value: unknown): string => {
   const result = (value ?? {}) as TelegramMember;
   return typeof result.status === 'string' ? result.status : '';
@@ -97,6 +123,12 @@ export function readRegisteredSquad(raw: unknown): RegisteredSquad | null {
     tag: normalizeSquadTag(row.tag),
     ownerId: text(row.ownerId, 24),
     createdAt: Number.isFinite(createdAt) && createdAt > 0 ? Math.floor(createdAt) : Date.now(),
+    verification: verificationOf(row.verification),
+    verifiedAt: stampOf(row.verifiedAt),
+    verifiedBy: text(row.verifiedBy, 40),
+    revokedAt: stampOf(row.revokedAt),
+    banned: row.banned === true,
+    bannedAt: stampOf(row.bannedAt),
   };
 }
 
@@ -266,6 +298,13 @@ export async function verifyAndBuildSquad(
       tag,
       ownerId: requester,
       createdAt: Date.now(),
+      /* The bot just proved both sides against Telegram, so a fresh registration starts verified. */
+      verification: 'verified',
+      verifiedAt: Date.now(),
+      verifiedBy: 'telegram',
+      revokedAt: 0,
+      banned: false,
+      bannedAt: 0,
     },
   };
 }

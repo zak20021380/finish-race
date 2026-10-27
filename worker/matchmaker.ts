@@ -50,7 +50,10 @@ import {
   type AdminIdentity, type AdminRole, type Identity, type MindTier,
 } from './auth';
 import { json } from './http';
-import { normalizeChatHandle, readRegisteredSquad, verifyAndBuildSquad, type RegisteredSquad } from './squads';
+import {
+  normalizeChatHandle, readRegisteredSquad, verifyAndBuildSquad,
+  type RegisteredSquad, type SquadVerification,
+} from './squads';
 import type { Env } from './env';
 
 /* ---------- protocol ---------- */
@@ -1049,6 +1052,67 @@ export interface AdminUser {
   root: boolean;
 }
 
+/** One registered squad, as the Command Center's Squads tab audits it. */
+export interface SquadWarRow {
+  id: string;
+  chatId: string;
+  handle: string;
+  name: string;
+  kind: 'channel' | 'group';
+  avatar: string;
+  tag: string;
+  members: number;
+  ownerId: string;
+  /** Resolved from the player registry when that owner has connected; '' otherwise. */
+  ownerName: string;
+  ownerUsername: string;
+  createdAt: number;
+  verification: SquadVerification;
+  verifiedAt: number;
+  verifiedBy: string;
+  revokedAt: number;
+  banned: boolean;
+  bannedAt: number;
+  /** TIQ the registry's players contribute to this squad's war effort. */
+  warTiq: number;
+  /** How many registered players report this squad. */
+  contributors: number;
+}
+
+/** The Squads tab's KPI pulse: bounded counts folded from the registry rows. */
+export interface SquadTotals {
+  total: number;
+  channels: number;
+  groups: number;
+  verified: number;
+  pending: number;
+  revoked: number;
+  banned: number;
+  members: number;
+  /** War TIQ from squads that have not been purged. */
+  tiq: number;
+  contributors: number;
+}
+
+/** `GET /api/admin/squads`: the whole registry and its aggregates, newest first. */
+export interface SquadRegistry {
+  ok: true;
+  timestamp: number;
+  totals: SquadTotals;
+  squads: SquadWarRow[];
+}
+
+/**
+ * The key a player's reported squad handle and a registered handle share. Player handles come in
+ * as `@name` or a bare name, so both are folded to the same lower-case `@name` shape.
+ */
+function squadKeyOf(raw: string): string {
+  const normalized = normalizeChatHandle(raw);
+  if (normalized) return normalized.toLowerCase();
+  const plain = raw.trim().replace(/^@+/, '').toLowerCase();
+  return /^[a-z0-9_]{4,32}$/.test(plain) ? `@${plain}` : '';
+}
+
 /** Who a spread announcement is aimed at. The server stores it; the client matches it. */
 export interface BroadcastAudience {
   /** `all` — everyone; `country` — one ISO 3166-1 alpha-2 code; `minLevel` — a TIQ level floor. */
@@ -1422,6 +1486,127 @@ export class MatchmakerDO {
     });
   }
 
+  /** The war contribution of each registered handle: TIQ and how many players report it. */
+  private squadWarIndex(): Map<string, { tiq: number; contributors: number }> {
+    const war = new Map<string, { tiq: number; contributors: number }>();
+    for (const p of this.players.values()) {
+      const key = squadKeyOf(p.squad);
+      if (!key) continue;
+      const entry = war.get(key) ?? { tiq: 0, contributors: 0 };
+      entry.tiq += Math.max(0, Math.floor(p.tiq));
+      entry.contributors += 1;
+      war.set(key, entry);
+    }
+    return war;
+  }
+
+  /** Owners are resolved through the player registry's Telegram ids, when they have connected. */
+  private squadOwners(): Map<string, PlayerRecord> {
+    const owners = new Map<string, PlayerRecord>();
+    for (const p of this.players.values()) {
+      if (p.tgId) owners.set(p.tgId, p);
+    }
+    return owners;
+  }
+
+  private squadRowOf(
+    squad: RegisteredSquad,
+    war: Map<string, { tiq: number; contributors: number }> = this.squadWarIndex(),
+    owners: Map<string, PlayerRecord> = this.squadOwners(),
+  ): SquadWarRow {
+    const key = squadKeyOf(squad.handle);
+    const contribution = key ? war.get(key) : undefined;
+    const owner = owners.get(squad.ownerId);
+    return {
+      id: squad.id,
+      chatId: squad.chatId,
+      handle: squad.handle,
+      name: squad.name,
+      kind: squad.kind,
+      avatar: squad.avatar,
+      tag: squad.tag,
+      members: squad.members,
+      ownerId: squad.ownerId,
+      ownerName: owner?.name ?? '',
+      ownerUsername: owner?.username ?? '',
+      createdAt: squad.createdAt,
+      verification: squad.verification,
+      verifiedAt: squad.verifiedAt,
+      verifiedBy: squad.verifiedBy,
+      revokedAt: squad.revokedAt,
+      banned: squad.banned,
+      bannedAt: squad.bannedAt,
+      warTiq: contribution?.tiq ?? 0,
+      contributors: contribution?.contributors ?? 0,
+    };
+  }
+
+  /** The whole registry with its KPI aggregates. Empty state is exact zeroes. */
+  private squadsView(): SquadRegistry {
+    const war = this.squadWarIndex();
+    const owners = this.squadOwners();
+    const totals: SquadTotals = {
+      total: 0, channels: 0, groups: 0, verified: 0, pending: 0, revoked: 0, banned: 0,
+      members: 0, tiq: 0, contributors: 0,
+    };
+    const squads = [...this.squads.values()]
+      .map((squad) => this.squadRowOf(squad, war, owners))
+      .sort((a, b) => b.createdAt - a.createdAt || a.name.localeCompare(b.name));
+    for (const row of squads) {
+      totals.total++;
+      if (row.kind === 'channel') totals.channels++;
+      else totals.groups++;
+      if (row.verification === 'verified') totals.verified++;
+      else if (row.verification === 'revoked') totals.revoked++;
+      else totals.pending++;
+      if (row.banned) totals.banned++;
+      totals.members += row.members;
+      /* A purged squad stays in the audit list but contributes nothing to the war pool. */
+      if (!row.banned) {
+        totals.tiq += row.warTiq;
+        totals.contributors += row.contributors;
+      }
+    }
+    return { ok: true, timestamp: Date.now(), totals, squads };
+  }
+
+  /** Verify, revoke, purge or restore one squad. The caller is already a proven SuperAdmin. */
+  private squadAction(
+    body: Record<string, unknown>,
+    me: AdminIdentity,
+  ): { ok: boolean; error?: string; squad?: SquadWarRow } {
+    const id = typeof body.id === 'string' ? body.id.trim().slice(0, 48) : '';
+    const action = typeof body.action === 'string' ? body.action.trim().toUpperCase() : '';
+    const squad = id ? this.squads.get(id) : undefined;
+    if (!squad) return { ok: false, error: 'no_such_squad' };
+    const now = Date.now();
+    if (action === 'VERIFY') {
+      squad.verification = 'verified';
+      squad.verifiedAt = now;
+      squad.verifiedBy = me.userId;
+      squad.revokedAt = 0;
+    } else if (action === 'REVOKE') {
+      squad.verification = 'revoked';
+      squad.revokedAt = now;
+    } else if (action === 'BAN') {
+      squad.banned = true;
+      squad.bannedAt = now;
+      squad.verification = 'revoked';
+      squad.revokedAt = now;
+    } else if (action === 'UNBAN') {
+      squad.banned = false;
+      squad.bannedAt = 0;
+      /* A restored squad is not automatically trusted again: it re-enters the review queue. */
+      squad.verification = 'pending';
+      squad.revokedAt = 0;
+    } else {
+      return { ok: false, error: 'invalid_action' };
+    }
+    this.squadsDirty = true;
+    this.persistSquads();
+    return { ok: true, squad: this.squadRowOf(squad) };
+  }
+
   /* ---------- the admin surface ---------- */
 
   /** The three live knobs, as the panel reads them back. */
@@ -1615,6 +1800,10 @@ export class MatchmakerDO {
     }
     if (url.pathname === '/api/admin/roles') return json(this.rolesView(me));
     if (url.pathname === '/api/admin/broadcasts') return json(this.broadcastsView());
+    if (url.pathname === '/api/admin/squads') {
+      if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+      return json(this.squadsView(), 200, { 'cache-control': 'no-store' });
+    }
 
     /* Everything below commands the server: SuperAdmin only. */
     if (url.pathname === '/admin/config') {
@@ -1657,6 +1846,15 @@ export class MatchmakerDO {
       if (!this.superDoor(me)) return json({ error: 'forbidden', hint: 'superadmin required' }, 403);
       const body = await readBody(request);
       const result = this.revokeRole(body, me);
+      return json(result, result.ok ? 200 : 400);
+    }
+
+    /* The Squads tab's audit actions: verify, revoke, purge or restore one registry row. */
+    if (url.pathname === '/api/admin/squad-action') {
+      if (!this.superDoor(me)) return json({ error: 'forbidden', hint: 'superadmin required' }, 403);
+      if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+      const body = await readBody(request);
+      const result = this.squadAction(body, me);
       return json(result, result.ok ? 200 : 400);
     }
 

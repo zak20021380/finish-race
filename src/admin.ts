@@ -754,6 +754,159 @@ async function pushPlayerAction(
   }
 }
 
+/* ---------- the squad registry, over `/api/admin/squads` ---------- */
+
+export type SquadChatKind = 'channel' | 'group';
+export type SquadVerification = 'verified' | 'pending' | 'revoked';
+
+/** One registered squad, exactly as the Worker frames it for the Squads tab. */
+export interface SquadRow {
+  id: string;
+  chatId: string;
+  handle: string;
+  name: string;
+  kind: SquadChatKind;
+  avatar: string;
+  tag: string;
+  members: number;
+  ownerId: string;
+  ownerName: string;
+  ownerUsername: string;
+  createdAt: number;
+  verification: SquadVerification;
+  verifiedAt: number;
+  verifiedBy: string;
+  revokedAt: number;
+  banned: boolean;
+  bannedAt: number;
+  warTiq: number;
+  contributors: number;
+}
+
+/** The four KPI tiles' source figures. */
+export interface SquadTotals {
+  total: number;
+  channels: number;
+  groups: number;
+  verified: number;
+  pending: number;
+  revoked: number;
+  banned: number;
+  members: number;
+  tiq: number;
+  contributors: number;
+}
+
+/** Fold rows into aggregates, so the pulse always agrees with the cards on screen. */
+function foldSquadTotals(rows: readonly SquadRow[]): SquadTotals {
+  const totals: SquadTotals = {
+    total: 0, channels: 0, groups: 0, verified: 0, pending: 0, revoked: 0, banned: 0,
+    members: 0, tiq: 0, contributors: 0,
+  };
+  for (const row of rows) {
+    totals.total++;
+    if (row.kind === 'channel') totals.channels++;
+    else totals.groups++;
+    if (row.verification === 'verified') totals.verified++;
+    else if (row.verification === 'revoked') totals.revoked++;
+    else totals.pending++;
+    if (row.banned) totals.banned++;
+    totals.members += row.members;
+    if (!row.banned) {
+      totals.tiq += row.warTiq;
+      totals.contributors += row.contributors;
+    }
+  }
+  return totals;
+}
+
+const squadText = (value: unknown, max: number): string =>
+  typeof value === 'string'
+    ? value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max)
+    : '';
+
+const squadCount = (value: unknown): number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+
+/** A registry row folded field by field: a missing or hand-edited entry is never trusted. */
+function readSquadRow(raw: unknown): SquadRow | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Partial<SquadRow>;
+  const id = squadText(r.id, 48);
+  const handle = squadText(r.handle, 64);
+  if (!id || !handle) return null;
+  return {
+    id,
+    chatId: squadText(r.chatId, 32),
+    handle,
+    name: squadText(r.name, 64) || handle,
+    kind: r.kind === 'channel' ? 'channel' : 'group',
+    avatar: squadText(r.avatar, 160),
+    tag: squadText(r.tag, 8),
+    members: squadCount(r.members),
+    ownerId: squadText(r.ownerId, 24),
+    ownerName: squadText(r.ownerName, 40),
+    ownerUsername: squadText(r.ownerUsername, 40),
+    createdAt: squadCount(r.createdAt) || Date.now(),
+    verification: r.verification === 'verified' || r.verification === 'revoked'
+      ? r.verification
+      : 'pending',
+    verifiedAt: squadCount(r.verifiedAt),
+    verifiedBy: squadText(r.verifiedBy, 40),
+    revokedAt: squadCount(r.revokedAt),
+    banned: r.banned === true,
+    bannedAt: squadCount(r.bannedAt),
+    warTiq: squadCount(r.warTiq),
+    contributors: squadCount(r.contributors),
+  };
+}
+
+interface SquadRegistryPage {
+  ok: true;
+  timestamp: number;
+  totals: SquadTotals;
+  squads: SquadRow[];
+}
+
+/** The whole registry, or null when the Worker is not answering. */
+async function fetchSquads(): Promise<SquadRegistryPage | null> {
+  const data = await parseJson<{ ok?: boolean; timestamp?: number; squads?: unknown[] }>(
+    await adminFetch('/api/admin/squads', { cache: 'no-store' }),
+  );
+  if (!data || data.ok !== true || !Array.isArray(data.squads)) return null;
+  const squads: SquadRow[] = [];
+  for (const raw of data.squads) {
+    const row = readSquadRow(raw);
+    if (row) squads.push(row);
+  }
+  const timestamp = typeof data.timestamp === 'number' && Number.isFinite(data.timestamp)
+    ? data.timestamp
+    : Date.now();
+  return { ok: true, timestamp, totals: foldSquadTotals(squads), squads };
+}
+
+type SquadAction = 'VERIFY' | 'REVOKE' | 'BAN' | 'UNBAN';
+
+/** One audit action's answer: the updated row, a refusal code, or no answer at all. */
+type SquadActionResult =
+  | { state: 'ok'; squad: SquadRow }
+  | { state: 'denied' }
+  | { state: 'refused'; error: string }
+  | { state: 'error' };
+
+async function pushSquadAction(id: string, action: SquadAction): Promise<SquadActionResult> {
+  const res = await postJson('/api/admin/squad-action', { id, action });
+  if (!res) return { state: 'error' };
+  if (res.status === 401 || res.status === 403) return { state: 'denied' };
+  try {
+    const data = (await res.json()) as { ok?: boolean; error?: string; squad?: SquadRow };
+    if (data?.ok === true && data.squad) return { state: 'ok', squad: data.squad };
+    return { state: 'refused', error: typeof data?.error === 'string' ? data.error : '' };
+  } catch {
+    return { state: 'refused', error: '' };
+  }
+}
+
 /* ---------- the controller ---------- */
 
 export interface AdminApi {
@@ -1255,6 +1408,26 @@ export function createAdmin(api: AdminApi): Admin {
   let usersCountrySelect: CustomSelectHandle | null = null;
   let usersAgeSelect: CustomSelectHandle | null = null;
   let usersSortSelect: CustomSelectHandle | null = null;
+  /* Squads: the registry KPI pulse, the real-time filter bar and the audit cards */
+  const squadsPanel = stage?.querySelector<HTMLElement>('[data-apanel="squads"]') ?? null;
+  const squadsList = $<HTMLElement>('adm-squads-list');
+  const squadsEmpty = $<HTMLElement>('adm-squads-empty');
+  const squadsTotalEl = $<HTMLElement>('squads-total');
+  const squadsSourceEl = $<HTMLElement>('squads-source');
+  const squadsRefresh = $<HTMLButtonElement>('squads-refresh');
+  const squadsQ = $<HTMLInputElement>('squads-q');
+  const squadsQClear = $<HTMLButtonElement>('squads-q-clear');
+  const squadsReset = $<HTMLButtonElement>('squads-reset');
+  const squadTypeChips = [...document.querySelectorAll<HTMLButtonElement>('[data-sqtype]')];
+  const squadStatusChips = [...document.querySelectorAll<HTMLButtonElement>('[data-sqstatus]')];
+  const squadKpiTotal = $<HTMLElement>('squad-kpi-total');
+  const squadKpiTotalSub = $<HTMLElement>('squad-kpi-total-sub');
+  const squadKpiTypes = $<HTMLElement>('squad-kpi-types');
+  const squadKpiTypesSub = $<HTMLElement>('squad-kpi-types-sub');
+  const squadKpiVerified = $<HTMLElement>('squad-kpi-verified');
+  const squadKpiVerifiedSub = $<HTMLElement>('squad-kpi-verified-sub');
+  const squadKpiMembers = $<HTMLElement>('squad-kpi-members');
+  const squadKpiMembersSub = $<HTMLElement>('squad-kpi-members-sub');
   /* Access control: the list, the add key, and the appointment drawer */
   const aclList = $<HTMLElement>('adm-acl-list');
   const aclEmpty = $<HTMLElement>('adm-acl-empty');
@@ -1368,6 +1541,17 @@ export function createAdmin(api: AdminApi): Admin {
   let usersTimer = 0;
   let usersAdvTimer = 0;
   let openPlayer = '';
+
+  /** The Squads view: the registry read, the two filter axes, the search, and the last answer. */
+  let squadsRows: SquadRow[] = [];
+  let squadsTotals: SquadTotals | null = null;
+  let squadsType: 'all' | SquadChatKind = 'all';
+  let squadsStatus: 'all' | SquadVerification = 'all';
+  let squadsQuery = '';
+  let squadsOn = false;
+  let squadsAsked = false;
+  let squadsReady = false;
+  let squadsBusy = false;
 
   /** The Access Control view: the registry read, and whether this viewer may change it. */
   let aclRows: AdminRow[] = [];
@@ -1581,6 +1765,7 @@ export function createAdmin(api: AdminApi): Admin {
     paintStats();
     paintInbox();
     paintUsers();
+    paintSquads();
     paintAcl();
     paintBroadcasts();
   }
@@ -2756,6 +2941,364 @@ export function createAdmin(api: AdminApi): Admin {
       earnCoins(coins);
       paintSave();
     }
+  }
+
+  /* ---------- Squads: the registered channels & groups at war (worker/matchmaker.ts) ---------- */
+
+  const SQUAD_ACTION_ERROR: Record<string, string> = {
+    no_such_squad: 'That squad is no longer on the registry.',
+    invalid_action: 'The Worker did not recognise that command.',
+    forbidden: 'SuperAdmin access required.',
+  };
+
+  const SQUAD_STATUS_TEXT: Record<SquadVerification, string> = {
+    verified: 'Verified Admin',
+    pending: 'Pending Review',
+    revoked: 'Revoked',
+  };
+
+  const squadsEmptyTitle = squadsEmpty?.querySelector<HTMLElement>('.adm-users-empty-t') ?? null;
+  const squadsEmptySub = squadsEmpty?.querySelector<HTMLElement>('.adm-users-empty-s') ?? null;
+
+  /** True when a row survives the type, verification and search filters. */
+  function squadMatches(row: SquadRow): boolean {
+    if (squadsType !== 'all' && row.kind !== squadsType) return false;
+    if (squadsStatus !== 'all' && row.verification !== squadsStatus) return false;
+    const q = squadsQuery.trim().toLowerCase();
+    if (!q) return true;
+    return [row.name, row.handle, row.chatId, row.ownerId, row.ownerName, row.ownerUsername]
+      .some((value) => value.toLowerCase().includes(q));
+  }
+
+  function squadCell(value: string, label: string, title = ''): HTMLElement {
+    const cell = document.createElement('span');
+    cell.className = 'adm-squad-cell';
+    const figureEl = document.createElement('b');
+    figureEl.textContent = value;
+    const labelEl = document.createElement('span');
+    labelEl.textContent = label;
+    cell.append(figureEl, labelEl);
+    if (title) cell.title = title;
+    return cell;
+  }
+
+  /** One audit card: chat identity, ownership badge, the two war figures, and the keys. */
+  function squadCard(row: SquadRow): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = 'adm-squad';
+    li.dataset.squad = row.id;
+    li.dataset.banned = String(row.banned);
+
+    const head = document.createElement('div');
+    head.className = 'adm-squad-head';
+    const glyph = document.createElement('span');
+    glyph.className = 'adm-squad-ico';
+    glyph.setAttribute('aria-hidden', 'true');
+    glyph.textContent = row.kind === 'channel' ? '📢' : '👥';
+    const txt = document.createElement('span');
+    txt.className = 'adm-squad-txt';
+    const name = document.createElement('span');
+    name.className = 'adm-squad-name';
+    name.textContent = row.name || row.handle;
+    const handle = document.createElement('span');
+    handle.className = 'adm-squad-handle';
+    handle.textContent = `${row.handle} · ${row.kind === 'channel' ? 'Channel' : 'Group'}`
+      + (row.chatId ? ` · ${row.chatId}` : '');
+    handle.title = handle.textContent ?? '';
+    txt.append(name, handle);
+
+    const badges = document.createElement('span');
+    badges.className = 'adm-squad-badges';
+    const status = document.createElement('span');
+    status.className = 'adm-squad-st';
+    status.dataset.status = row.verification;
+    status.textContent = SQUAD_STATUS_TEXT[row.verification];
+    status.title = row.verification === 'revoked'
+      ? 'Revoked / mismatch — ownership is no longer confirmed'
+      : row.verification === 'pending'
+        ? 'Pending review / unverified — an admin has not audited this claim'
+        : 'Confirmed through the Telegram Bot API or an admin decision';
+    badges.append(status);
+    if (row.banned) {
+      const purged = document.createElement('span');
+      purged.className = 'adm-squad-purged';
+      purged.textContent = 'Purged';
+      badges.append(purged);
+    }
+    head.append(glyph, txt, badges);
+
+    const owner = document.createElement('p');
+    owner.className = 'adm-squad-owner';
+    const ownerName = document.createElement('b');
+    ownerName.textContent = row.ownerName
+      || (row.ownerUsername ? `@${row.ownerUsername}` : 'Unknown owner');
+    const ownerMeta = `${row.ownerName && row.ownerUsername ? ` (@${row.ownerUsername})` : ''}`
+      + ` · ID ${row.ownerId || '—'} · ${stamp(row.createdAt)}`;
+    owner.append('Submitted by ', ownerName, ownerMeta);
+
+    const cells = document.createElement('div');
+    cells.className = 'adm-squad-cells';
+    cells.append(
+      squadCell(figure(row.members), 'Members', `${row.members.toLocaleString('en-US')} members`),
+      squadCell(
+        figure(row.warTiq),
+        'War TIQ',
+        `${row.warTiq.toLocaleString('en-US')} TIQ from ${row.contributors} contributor${row.contributors === 1 ? '' : 's'}`,
+      ),
+    );
+
+    const actions = document.createElement('div');
+    actions.className = 'adm-squad-actions';
+    if (!row.banned) {
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = row.verification === 'verified'
+        ? 'adm-btn adm-squad-verify'
+        : 'adm-btn adm-btn-primary adm-squad-verify';
+      toggle.dataset.squadAction = row.verification === 'verified' ? 'REVOKE' : 'VERIFY';
+      toggle.textContent = row.verification === 'verified' ? 'Revoke Verification' : 'Verify Admin';
+      toggle.disabled = squadsBusy;
+      actions.append(toggle);
+
+      const open = document.createElement('a');
+      open.className = 'adm-btn';
+      open.href = `https://t.me/${encodeURIComponent(row.handle.replace(/^@/, ''))}`;
+      open.target = '_blank';
+      open.rel = 'noopener noreferrer';
+      open.textContent = 'Open Channel';
+      actions.append(open);
+
+      const purge = document.createElement('button');
+      purge.type = 'button';
+      purge.className = 'adm-btn adm-squad-purge';
+      purge.dataset.squadAction = 'BAN';
+      purge.textContent = 'Purge from War';
+      purge.disabled = squadsBusy;
+      actions.append(purge);
+    } else {
+      const restore = document.createElement('button');
+      restore.type = 'button';
+      restore.className = 'adm-btn adm-btn-primary adm-squad-verify';
+      restore.dataset.squadAction = 'UNBAN';
+      restore.textContent = 'Restore to War';
+      restore.disabled = squadsBusy;
+      actions.append(restore);
+
+      const open = document.createElement('a');
+      open.className = 'adm-btn';
+      open.href = `https://t.me/${encodeURIComponent(row.handle.replace(/^@/, ''))}`;
+      open.target = '_blank';
+      open.rel = 'noopener noreferrer';
+      open.textContent = 'Open Channel';
+      actions.append(open);
+    }
+
+    li.append(head, owner, cells, actions);
+    return li;
+  }
+
+  /** Paint the KPI pulse, the filter state, the source chip and the visible cards. */
+  function paintSquads(): void {
+    if (squadsPanel) squadsPanel.setAttribute('aria-busy', String(squadsBusy));
+    const t = squadsTotals;
+    const pending = squadsBusy && !squadsReady;
+    const figureOr = (value: number | undefined): string =>
+      value == null ? (pending ? '…' : '—') : figure(value);
+
+    if (squadKpiTotal) squadKpiTotal.textContent = figureOr(t?.total);
+    if (squadKpiTotalSub) {
+      squadKpiTotalSub.textContent = t
+        ? t.banned > 0 ? `${figure(t.banned)} purged` : 'all in the war'
+        : '—';
+    }
+    if (squadKpiTypes) {
+      squadKpiTypes.textContent = t ? `${figure(t.channels)} / ${figure(t.groups)}` : (pending ? '…' : '—');
+    }
+    if (squadKpiTypesSub) {
+      squadKpiTypesSub.textContent = t
+        ? `${figure(t.channels)} channels · ${figure(t.groups)} groups`
+        : '—';
+    }
+    if (squadKpiVerified) squadKpiVerified.textContent = figureOr(t?.verified);
+    if (squadKpiVerifiedSub) {
+      squadKpiVerifiedSub.textContent = t
+        ? `${figure(t.pending)} pending · ${figure(t.revoked)} revoked`
+        : '—';
+    }
+    if (squadKpiMembers) squadKpiMembers.textContent = figureOr(t?.members);
+    if (squadKpiMembersSub) {
+      squadKpiMembersSub.textContent = t ? `${figure(t.tiq)} war TIQ` : '—';
+      squadKpiMembersSub.title = t ? `${figure(t.contributors)} contributors across the war` : '';
+    }
+
+    for (const chip of squadTypeChips) {
+      chip.setAttribute('aria-pressed', String((chip.dataset.sqtype ?? 'all') === squadsType));
+    }
+    for (const chip of squadStatusChips) {
+      chip.setAttribute('aria-pressed', String((chip.dataset.sqstatus ?? 'all') === squadsStatus));
+    }
+    if (squadsQClear) squadsQClear.hidden = !squadsQuery;
+
+    if (squadsSourceEl) {
+      squadsSourceEl.textContent = squadsBusy && !squadsReady
+        ? 'READING…'
+        : squadsOn ? 'LIVE REGISTRY' : 'NO REGISTRY';
+      squadsSourceEl.dataset.live = String(squadsOn);
+    }
+    if (squadsRefresh) {
+      squadsRefresh.dataset.busy = String(squadsBusy);
+      squadsRefresh.disabled = squadsBusy;
+      squadsRefresh.setAttribute('aria-busy', String(squadsBusy));
+      squadsRefresh.setAttribute('aria-label', squadsBusy ? 'Refreshing squad registry' : 'Refresh squad registry');
+      squadsRefresh.title = squadsBusy ? 'Refreshing squad registry…' : 'Refresh squad registry';
+    }
+
+    const visible = squadsRows.filter(squadMatches);
+    if (squadsTotalEl) {
+      squadsTotalEl.textContent = !squadsReady
+        ? '—'
+        : visible.length === squadsRows.length
+          ? `${figure(squadsRows.length)} ${squadsRows.length === 1 ? 'squad' : 'squads'}`
+          : `${figure(visible.length)} of ${figure(squadsRows.length)} squads`;
+    }
+
+    if (squadsList) {
+      squadsList.textContent = '';
+      const frag = document.createDocumentFragment();
+      for (const row of visible) frag.append(squadCard(row));
+      squadsList.append(frag);
+    }
+
+    if (squadsEmpty) {
+      const show = !squadsReady || visible.length === 0;
+      squadsEmpty.hidden = !show;
+      squadsEmpty.setAttribute('aria-busy', String(squadsBusy));
+      if (show) {
+        if (!squadsReady) {
+          if (squadsEmptyTitle) {
+            squadsEmptyTitle.textContent = squadsBusy
+              ? 'Reading the squad registry…'
+              : 'Squad registry unavailable';
+          }
+          if (squadsEmptySub) {
+            squadsEmptySub.textContent = squadsBusy
+              ? 'The Worker is being asked for its live registry.'
+              : 'The Worker did not answer. No local or demo registry is substituted — refresh once it is reachable.';
+          }
+        } else {
+          if (squadsEmptyTitle) squadsEmptyTitle.textContent = 'No squads in this view';
+          if (squadsEmptySub) {
+            squadsEmptySub.textContent = squadsRows.length === 0
+              ? 'No channel or group has enlisted yet. The first registration lands here.'
+              : 'Widen the type or verification filter, or clear the search.';
+          }
+        }
+        if (squadsReset) squadsReset.hidden = !squadsReady;
+      }
+    }
+  }
+
+  /** Read the whole registry. The last good rows stay on screen when nothing answers. */
+  async function refreshSquads(announce = false): Promise<boolean> {
+    if (squadsBusy) return false;
+    squadsBusy = true;
+    paintSquads();
+    try {
+      const page = await fetchSquads();
+      squadsOn = !!page;
+      if (page) {
+        squadsRows = page.squads;
+        squadsTotals = page.totals;
+        squadsReady = true;
+      }
+      if (!page && announce) {
+        notify('error');
+        api.note('The squad registry is not answering — no local or demo rows are substituted.', true, 3000);
+      }
+      return !!page;
+    } finally {
+      squadsBusy = false;
+      paintSquads();
+    }
+  }
+
+  /** One audit command: the row updates in place, then the pulse folds from the rows held. */
+  async function runSquadAction(id: string, action: SquadAction): Promise<void> {
+    if (squadsBusy) return;
+    const row = squadsRows.find((s) => s.id === id);
+    if (!row) return;
+    squadsBusy = true;
+    impact('medium');
+    paintSquads();
+    try {
+      const result = await pushSquadAction(id, action);
+      if (result.state === 'ok') {
+        squadsRows = squadsRows.map((s) => (s.id === result.squad.id ? result.squad : s));
+        squadsTotals = foldSquadTotals(squadsRows);
+        squadsOn = true;
+        squadsReady = true;
+        if (action === 'VERIFY') {
+          notify('success');
+          api.note(`${row.name} verified — admin ownership confirmed.`, false, 2600);
+        } else if (action === 'REVOKE') {
+          notify('warning');
+          api.note(`${row.name} verification revoked. War TIQ keeps counting until purged.`, false, 3000);
+        } else if (action === 'BAN') {
+          notify('warning');
+          api.note(`${row.name} purged from the Channel War.`, false, 2600);
+        } else {
+          notify('success');
+          api.note(`${row.name} restored to the war — back in the pending review queue.`, false, 3000);
+        }
+      } else {
+        notify('error');
+        if (result.state === 'denied') {
+          api.note('SuperAdmin access required — this session can read the registry only.', true, 3200);
+        } else if (result.state === 'refused') {
+          api.note(SQUAD_ACTION_ERROR[result.error] ?? 'The Worker refused that command.', true, 3000);
+        } else {
+          api.note('The Worker is not answering — no change was made.', true, 3000);
+        }
+      }
+    } finally {
+      squadsBusy = false;
+      paintSquads();
+    }
+  }
+
+  /** Ban and revoke ask first; verify and restore are one tap. */
+  function requestSquadAction(id: string, action: SquadAction): void {
+    const row = squadsRows.find((s) => s.id === id);
+    if (!row || squadsBusy) return;
+    if (action === 'BAN') {
+      openConfirm(
+        'Purge squad from war?',
+        `${row.name} will stop contributing War TIQ immediately. The registry row stays for the audit trail.`,
+        'Purge from War',
+        () => void runSquadAction(id, action),
+      );
+      return;
+    }
+    if (action === 'REVOKE') {
+      openConfirm(
+        'Revoke verification?',
+        `The verified admin badge on ${row.name} will be revoked. Its War TIQ keeps counting until you purge it.`,
+        'Revoke Verification',
+        () => void runSquadAction(id, action),
+      );
+      return;
+    }
+    void runSquadAction(id, action);
+  }
+
+  function resetSquadFilters(): void {
+    squadsType = 'all';
+    squadsStatus = 'all';
+    squadsQuery = '';
+    if (squadsQ) squadsQ.value = '';
+    if (squadsQClear) squadsQClear.hidden = true;
+    impact('light');
+    paintSquads();
   }
 
   /* ---------- Access control: the role registry (worker/matchmaker.ts) ---------- */
@@ -3955,6 +4498,15 @@ export function createAdmin(api: AdminApi): Admin {
           paintUsers();
         }
       }
+      /* the squad registry is read on first sight too, then filtered entirely on this device */
+      if (id === 'squads') {
+        if (!squadsAsked) {
+          squadsAsked = true;
+          void refreshSquads();
+        } else {
+          paintSquads();
+        }
+      }
       /* the role registry rides the same rule: first sight of Controls reads it */
       if (id === 'controls' && !aclAsked) {
         aclAsked = true;
@@ -4141,6 +4693,57 @@ export function createAdmin(api: AdminApi): Admin {
       openPlayer = '';
       paintUsers();
     }
+  });
+
+  /* the Squads tab: real-time search, two filter axes, and one delegated audit listener */
+  squadsQ?.addEventListener('input', () => {
+    squadsQuery = squadsQ.value.slice(0, 80);
+    if (squadsQClear) squadsQClear.hidden = !squadsQuery;
+    paintSquads();
+  });
+  squadsQClear?.addEventListener('click', () => {
+    squadsQuery = '';
+    if (squadsQ) {
+      squadsQ.value = '';
+      squadsQ.focus({ preventScroll: true });
+    }
+    if (squadsQClear) squadsQClear.hidden = true;
+    impact('light');
+    paintSquads();
+  });
+  for (const chip of squadTypeChips) {
+    chip.addEventListener('click', () => {
+      const next = chip.dataset.sqtype;
+      if (next !== 'all' && next !== 'channel' && next !== 'group') return;
+      if (next === squadsType) return;
+      squadsType = next;
+      impact('light');
+      paintSquads();
+    });
+  }
+  for (const chip of squadStatusChips) {
+    chip.addEventListener('click', () => {
+      const next = chip.dataset.sqstatus;
+      if (next !== 'all' && next !== 'verified' && next !== 'pending' && next !== 'revoked') return;
+      if (next === squadsStatus) return;
+      squadsStatus = next;
+      impact('light');
+      paintSquads();
+    });
+  }
+  squadsReset?.addEventListener('click', resetSquadFilters);
+  squadsRefresh?.addEventListener('click', () => {
+    if (squadsBusy) return;
+    impact('light');
+    void refreshSquads(true);
+  });
+  squadsList?.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-squad-action]');
+    if (!btn) return;
+    const card = btn.closest<HTMLElement>('[data-squad]');
+    const action = btn.dataset.squadAction;
+    if (!card || (action !== 'VERIFY' && action !== 'REVOKE' && action !== 'BAN' && action !== 'UNBAN')) return;
+    requestSquadAction(card.dataset.squad ?? '', action);
   });
 
   /* the telemetry key: one reading at a time, with the spinner riding the same flag */

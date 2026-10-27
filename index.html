@@ -3426,6 +3426,96 @@
             <button class="adm-btn adm-btn-wide" type="button" id="users-more" hidden>Load More</button>
           </div>
 
+          <!-- ---------- Squads: registered Telegram channels & groups at war ---------- -->
+          <div class="admin-panel" data-apanel="squads" id="apanel-squads" role="tabpanel"
+            aria-labelledby="atab-squads" hidden>
+            <section class="adm-block" data-accent="mint" aria-labelledby="squad-pulse-title">
+              <div class="adm-block-h">
+                <h3 class="adm-block-t" id="squad-pulse-title">Squad Registry Pulse</h3>
+                <span class="adm-block-s">Squads &amp; Channel War</span>
+              </div>
+              <div class="adm-grid adm-grid-squads">
+                <div class="adm-card">
+                  <span class="adm-card-top">
+                    <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-flag" /></svg></span>
+                  </span>
+                  <b class="adm-card-v" id="squad-kpi-total">—</b>
+                  <span class="adm-card-l">Registered Squads</span>
+                  <span class="adm-card-s" id="squad-kpi-total-sub">—</span>
+                </div>
+                <div class="adm-card">
+                  <span class="adm-card-top">
+                    <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-users" /></svg></span>
+                  </span>
+                  <b class="adm-card-v" id="squad-kpi-types">—</b>
+                  <span class="adm-card-l">Channels vs Groups</span>
+                  <span class="adm-card-s" id="squad-kpi-types-sub">—</span>
+                </div>
+                <div class="adm-card">
+                  <span class="adm-card-top">
+                    <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-shield" /></svg></span>
+                  </span>
+                  <b class="adm-card-v" id="squad-kpi-verified">—</b>
+                  <span class="adm-card-l">Verified Admins</span>
+                  <span class="adm-card-s" id="squad-kpi-verified-sub">—</span>
+                </div>
+                <div class="adm-card">
+                  <span class="adm-card-top">
+                    <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-cup" /></svg></span>
+                  </span>
+                  <b class="adm-card-v" id="squad-kpi-members">—</b>
+                  <span class="adm-card-l">Aggregated Members</span>
+                  <span class="adm-card-s" id="squad-kpi-members-sub">—</span>
+                </div>
+              </div>
+            </section>
+
+            <div class="adm-search">
+              <svg class="ico" aria-hidden="true"><use href="#i-search" /></svg>
+              <input id="squads-q" class="adm-input" type="search" autocomplete="off" spellcheck="false"
+                placeholder="Search title, @handle, chat id or owner" aria-label="Search squads" enterkeyhint="search" />
+              <button class="adm-search-x" type="button" id="squads-q-clear" aria-label="Clear squad search" hidden>
+                <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
+              </button>
+            </div>
+
+            <div class="adm-inbox-filters" role="group" aria-label="Filter squads by chat type">
+              <button class="adm-chip" type="button" data-sqtype="all" aria-pressed="true"
+                aria-label="All squad types">All Types</button>
+              <button class="adm-chip" type="button" data-sqtype="channel" aria-pressed="false">Channels</button>
+              <button class="adm-chip" type="button" data-sqtype="group" aria-pressed="false">Groups</button>
+            </div>
+            <div class="adm-inbox-filters" role="group" aria-label="Filter squads by verification">
+              <button class="adm-chip" type="button" data-sqstatus="all" aria-pressed="true"
+                aria-label="All verification states">All</button>
+              <button class="adm-chip" type="button" data-sqstatus="verified" aria-pressed="false"
+                aria-label="Verified admins">Verified</button>
+              <button class="adm-chip" type="button" data-sqstatus="pending" aria-pressed="false"
+                aria-label="Pending verification">Pending</button>
+              <button class="adm-chip" type="button" data-sqstatus="revoked" aria-pressed="false"
+                aria-label="Rejected or unverified">Rejected</button>
+            </div>
+
+            <div class="adm-users-meta">
+              <span id="squads-total" aria-live="polite">—</span>
+              <span class="adm-users-meta-r">
+                <span class="adm-users-src" id="squads-source" data-live="false">NO REGISTRY</span>
+                <button class="adm-users-refresh" type="button" id="squads-refresh"
+                  aria-label="Refresh squad registry" title="Refresh squad registry">
+                  <svg class="ico" aria-hidden="true"><use href="#i-restart" /></svg>
+                </button>
+              </span>
+            </div>
+
+            <ul class="adm-squads-list" id="adm-squads-list" aria-label="Registered squads"></ul>
+            <div class="adm-users-empty" id="adm-squads-empty" hidden>
+              <span class="adm-users-empty-i" aria-hidden="true"><svg class="ico"><use href="#i-flag" /></svg></span>
+              <p class="adm-users-empty-t">No squads in this view</p>
+              <p class="adm-users-empty-s">Widen the type or verification filter, or register the first channel from the Squad hub.</p>
+              <button class="adm-btn adm-btn-primary adm-users-reset" type="button" id="squads-reset">Reset Filters</button>
+            </div>
+          </div>
+
           <!-- ---------- Controls: the live switches, the broadcast, the tuning ---------- -->
           <div class="admin-panel" data-apanel="controls" id="apanel-controls" role="tabpanel"
             aria-labelledby="atab-controls" hidden>
@@ -3875,33 +3965,38 @@
         <nav class="admin-nav" role="tablist" aria-label="Command Center sections">
           <span class="admin-nav-pill" id="admin-nav-pill" aria-hidden="true"></span>
           <button class="admin-tab" type="button" role="tab" id="atab-stats" data-atab="stats"
-            aria-selected="true" aria-controls="apanel-stats">
+            aria-selected="true" aria-controls="apanel-stats" aria-label="Stats">
             <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-users" /></svg>
             <span class="admin-tab-l">Stats</span>
           </button>
           <button class="admin-tab" type="button" role="tab" id="atab-users" data-atab="users"
-            aria-selected="false" aria-controls="apanel-users">
+            aria-selected="false" aria-controls="apanel-users" aria-label="Users">
             <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-user" /></svg>
             <span class="admin-tab-l">Users</span>
           </button>
+          <button class="admin-tab" type="button" role="tab" id="atab-squads" data-atab="squads"
+            aria-selected="false" aria-controls="apanel-squads" aria-label="Squads">
+            <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-flag" /></svg>
+            <span class="admin-tab-l">Squads</span>
+          </button>
           <button class="admin-tab" type="button" role="tab" id="atab-controls" data-atab="controls"
-            aria-selected="false" aria-controls="apanel-controls">
+            aria-selected="false" aria-controls="apanel-controls" aria-label="Controls">
             <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-tune" /></svg>
             <span class="admin-tab-l">Controls</span>
           </button>
           <button class="admin-tab" type="button" role="tab" id="atab-server" data-atab="server"
-            aria-selected="false" aria-controls="apanel-server">
+            aria-selected="false" aria-controls="apanel-server" aria-label="Server">
             <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-globe" /></svg>
             <span class="admin-tab-l">Server</span>
           </button>
           <button class="admin-tab" type="button" role="tab" id="atab-inbox" data-atab="inbox"
-            aria-selected="false" aria-controls="apanel-inbox">
+            aria-selected="false" aria-controls="apanel-inbox" aria-label="Inbox">
             <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-chat" /></svg>
             <span class="admin-tab-l">Inbox</span>
             <span class="admin-nav-badge" id="admin-inbox-badge" hidden>0</span>
           </button>
           <button class="admin-tab" type="button" role="tab" id="atab-tools" data-atab="tools"
-            aria-selected="false" aria-controls="apanel-tools">
+            aria-selected="false" aria-controls="apanel-tools" aria-label="Tools">
             <svg class="ico admin-tab-ico" aria-hidden="true"><use href="#i-shield" /></svg>
             <span class="admin-tab-l">Tools</span>
           </button>

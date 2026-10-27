@@ -14077,7 +14077,7 @@ html.reduced-motion .admin { transition: none; }
 html.reduced-motion .admin-close { transition: none; }
 
 /* ---- the tactile bottom dock: a recessed clay well with a springy gold pill ----
-   Pinned under the scrolling body, above the safe area. Five equal keys, one
+   Pinned under the scrolling body, above the safe area. Seven equal keys, one
    absolute gold pill that slides on the bounce curve, and a raised clay cap on
    the active tab. Every key stays a 48px+ target down to 360px. */
 .admin-nav {
@@ -14102,7 +14102,7 @@ html.reduced-motion .admin-close { transition: none; }
   top: 5px;
   bottom: 5px;
   left: 5px;
-  width: calc((100% - 10px) / 6);
+  width: calc((100% - 22px) / 7);
   border-radius: var(--radius-md);
   background: linear-gradient(180deg, rgba(252, 211, 77, .2) 0%, rgba(245, 158, 11, .06) 100%);
   box-shadow:
@@ -14121,7 +14121,7 @@ html.reduced-motion .admin-nav-pill { transition: none; }
   align-items: center;
   justify-content: center;
   gap: 2px;
-  padding: 0 2px;
+  padding: 0;
   appearance: none;
   border: 0;
   font: inherit;
@@ -14202,11 +14202,17 @@ html.reduced-motion .admin-tab[aria-selected="true"] .admin-tab-ico { animation:
 .admin-nav-badge[hidden] { display: none; }
 @media (max-height: 660px) {
   .admin-nav { min-height: 60px; padding: 4px; }
-  .admin-nav-pill { top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / 6); }
+  .admin-nav-pill { top: 4px; bottom: 4px; left: 4px; width: calc((100% - 20px) / 7); }
   .admin-tab { min-height: 48px; }
 }
 @media (max-height: 600px) {
   .admin-tab { min-height: 44px; }
+}
+/* Seven keys get tight on a 320px phone: drop the printed labels, keep every
+   accessible name via aria-label, and let the icons centre in the well. */
+@media (max-width: 359px) {
+  .admin-tab-l { display: none; }
+  .admin-tab-ico { width: 22px; height: 22px; }
 }
 
 .admin-body {
@@ -17338,6 +17344,204 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
 .adm-ugrant .coin { width: 15px; height: 15px; flex: none; }
 @media (max-width: 359px) {
   .adm-user-cells { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ==========================================================================
+   SQUADS & CHANNEL WAR — the registry audit. Four compact pulse tiles over a
+   real-time filter bar, then one card per registered channel or group with its
+   ownership badge, war contribution and the three tactical keys.
+   ========================================================================== */
+.adm-grid-squads { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.adm-grid-squads .adm-card { min-height: 116px; }
+.adm-grid-squads .adm-card-l { font-size: 9.5px; letter-spacing: .045em; }
+.adm-grid-squads .adm-card-s { font-size: 9.5px; }
+.adm-squads-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.adm-squad {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+  padding: 11px 11px 12px;
+  border-radius: var(--radius-md);
+  background: var(--clay-face);
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+}
+.adm-squad[data-banned="true"] {
+  box-shadow:
+    var(--clay-drop), var(--clay-spec), var(--clay-bevel),
+    inset 0 0 0 1px rgba(244, 63, 94, .34);
+}
+.adm-squad-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+.adm-squad-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  font-size: 18px;
+  line-height: 1;
+}
+.adm-squad-txt {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.adm-squad-name {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-2);
+  font-weight: 800;
+  color: var(--ink);
+}
+.adm-squad-handle {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-micro);
+  font-weight: 700;
+  color: var(--brand-ink);
+  font-variant-numeric: tabular-nums;
+}
+.adm-squad-badges {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.adm-squad-st {
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: var(--field);
+  color: var(--ink-soft);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+}
+.adm-squad-st[data-status="verified"] {
+  background: var(--mint-soft);
+  color: var(--mint-ink);
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .4);
+}
+.adm-squad-st[data-status="pending"] {
+  background: var(--honey-soft);
+  color: var(--honey-ink);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .4);
+}
+.adm-squad-st[data-status="revoked"] {
+  background: linear-gradient(180deg, var(--bad-1) 0%, var(--bad-2) 100%);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18);
+}
+.adm-squad-purged {
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--bad-ink, #fecdd3);
+  box-shadow: inset 0 0 0 1px rgba(244, 63, 94, .45);
+}
+.adm-squad-owner {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.adm-squad-owner b { color: var(--ink); font-weight: 800; }
+.adm-squad-cells {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.adm-squad-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.adm-squad-cell b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-2);
+  font-weight: 800;
+  color: var(--honey-ink);
+  font-variant-numeric: tabular-nums;
+}
+.adm-squad-cell span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.adm-squad-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.adm-squad-actions .adm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 48px;
+  padding: 0 12px;
+  font-size: var(--t-micro);
+  text-decoration: none;
+}
+.adm-squad-actions .adm-squad-verify { flex: 1 1 auto; }
+/* the purge is a quiet crimson key: it never competes with Verify as a second loud action */
+.adm-squad-actions .adm-squad-purge {
+  color: #FECDD3;
+  background: var(--clay-face);
+  box-shadow:
+    0 var(--lip) 0 #0A0E15,
+    var(--clay-drop), var(--clay-spec), var(--clay-bevel),
+    inset 0 0 0 1px rgba(244, 63, 94, .38);
+}
+.adm-squad-actions .adm-btn[disabled] { opacity: .45; cursor: not-allowed; }
+@media (max-width: 359px) {
+  .adm-squad-cells { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ==========================================================================
