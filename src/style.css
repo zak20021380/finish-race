@@ -18323,17 +18323,16 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
 /* ============================================================================================
    CHANNEL WAR — the winner-takes-all hero slide (carousel index 0).
 
-   Same clay slab as its siblings and the same pinned card box. The bottom reserve
+   Same clay slab and the same pinned card box as its siblings. The bottom reserve
    runs a little deeper than the other two slides (36px, 44px on short columns) so
    the pager dots and the floating admin shield both stay clear of the full-width
    command.
 
-   One composed poster, read top to bottom: a quiet header row, a horizontal prize
-   band (the authentic Telegram Stars PNG on the left, the jackpot type beside it),
-   a hairline-ruled champion line, then the gold primary and a ghost secondary.
-   Vertical budget inside the 320px card box: head 22 · prize band flexes · champion
-   29 · gold CTA 48 · ghost key 42 on a 10px rhythm. Only the prize band flexes, so
-   the star row grows into a tall band and shrinks (never clips) into a short one.
+   One composed poster, read top to bottom: a quiet header row, a centered reward
+   stage (the authentic Telegram Stars PNG floating over the metallic jackpot), a
+   translucent tactical champion pill, then the tactile gold command and its glass
+   twin. The stage is the only flexible row: head and actions stay pinned to their
+   edges while the stage absorbs the column's spare height around a centered lockup.
    ============================================================================================ */
 .car-card.carousel-slide-tournament {
   position: relative;
@@ -18405,23 +18404,27 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   50% { opacity: .55; box-shadow: 0 0 0 3px rgba(251, 191, 36, 0); }
 }
 
-/* ---- the prize band: the authentic Star on the left, the jackpot type beside it.
-   One focal row instead of a centered tower; the bloom lives on the stage so the
-   track never reports horizontal overflow. ---- */
+/* ---- the reward stage: one centered lockup, lit from behind the Star. The soft
+   radial is the stage floor, so the flexible height around the lockup reads as
+   deliberate air rather than a dead band. ---- */
 .tour-hero {
   position: relative;
   flex: 1 1 auto;
-  min-height: 76px;
+  min-height: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 14px;
+  justify-content: center;
+  gap: 6px;
   min-width: 0;
+  text-align: center;
+  background: radial-gradient(58% 54% at 50% 40%, rgba(251, 191, 36, .12), rgba(251, 191, 36, 0) 72%);
 }
 .tour-star-stage {
   position: relative;
   flex: none;
-  width: 64px;
-  height: 64px;
+  width: 112px;
+  height: 112px;
   display: grid;
   place-items: center;
 }
@@ -18429,19 +18432,19 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
 .tour-star-stage::before {
   content: "";
   position: absolute;
-  inset: -10px;
+  inset: -14px;
   border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(251, 191, 36, .24) 0%, rgba(251, 191, 36, 0) 74%);
+  background: radial-gradient(closest-side, rgba(255, 196, 60, .3) 0%, rgba(255, 196, 60, .1) 48%, rgba(255, 196, 60, 0) 74%);
   pointer-events: none;
 }
 /* the authentic Star: the app's own Telegram Stars asset on a slow levitation loop */
 .tour-star-img {
   position: relative;
   display: block;
-  width: 56px;
-  height: 56px;
+  width: 104px;
+  height: 104px;
   object-fit: contain;
-  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, .5));
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, .55));
   animation: star-float 3.4s ease-in-out infinite;
 }
 @keyframes star-float {
@@ -18449,59 +18452,70 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   50% { transform: translateY(-4px); }
 }
 
-/* ---- the prize type: metallic headline, then a rule line you can actually read ---- */
+/* ---- the prize type: the jackpot and its rule, both centered under the Star ---- */
 .tour-vault {
-  flex: 1 1 auto;
+  flex: none;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 5px;
 }
 .tour-vault-v {
-  font-size: 30px;
+  font-size: 44px;
   font-weight: 900;
-  line-height: 1;
-  letter-spacing: .04em;
+  line-height: .96;
+  letter-spacing: .05em;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  background: linear-gradient(180deg, #FFF7D6 0%, #FDE68A 38%, #F5A70B 76%, #B45309 100%);
+  background: linear-gradient(180deg, #FFF9E3 0%, #FFE9A8 30%, #FFC135 60%, #F59E0B 80%, #B45309 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: #FCD34D;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, .35));
+  filter: drop-shadow(0 2px 1px rgba(0, 0, 0, .55)) drop-shadow(0 5px 14px rgba(245, 158, 11, .22));
 }
-/* sentence case at a readable size: the rule is information, not decoration */
+/* a refined micro-caption: high-contrast slate, balanced under the jackpot */
 .tour-vault-sub {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
   gap: 6px;
   min-width: 0;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 600;
   line-height: 1.35;
-  letter-spacing: .01em;
-  color: #AEBBD0;
+  letter-spacing: .015em;
+  color: #CBD5E1;
 }
 .tour-vault-sub > span { min-width: 0; }
 .tour-cup-ico {
   flex: none;
   width: 12px;
   height: 12px;
-  margin-top: 1px;
+  margin-top: -1px;
   color: #FBBF24;
 }
 
-/* ---- the reigning champion: one quiet line under a hairline rule, no third box ---- */
+/* ---- the reigning champion: a tactical glass pill, no hairline rule ---- */
 .tour-hud {
   flex: none;
-  display: flex;
+  align-self: center;
+  display: inline-flex;
   align-items: center;
   gap: 7px;
-  min-width: 0;
-  padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, .07);
+  max-width: 100%;
+  padding: 4px 12px 4px 5px;
+  border: 1px solid rgba(255, 215, 0, .15);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, rgba(255, 215, 0, .08) 0%, rgba(255, 215, 0, .03) 100%);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    inset 0 -1px 0 rgba(0, 0, 0, .18),
+    0 4px 12px rgba(0, 0, 0, .16);
+  overflow: hidden;
 }
 /* the crown medallion: a struck gold token with a steady light */
 .tour-leader-medal {
@@ -18511,42 +18525,40 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   display: grid;
   place-items: center;
   border-radius: 50%;
-  border: 1px solid rgba(251, 191, 36, .35);
+  border: 1px solid rgba(255, 215, 0, .3);
   background:
-    radial-gradient(100% 100% at 50% 0%, rgba(254, 240, 138, .26) 0%, rgba(120, 53, 15, .2) 58%, rgba(8, 12, 20, .5) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14);
+    radial-gradient(100% 100% at 50% 0%, rgba(254, 240, 138, .28) 0%, rgba(120, 53, 15, .22) 58%, rgba(8, 12, 20, .5) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16);
 }
 .tour-leader-ico {
   flex: none;
   width: 10px;
   height: 10px;
-  color: #FDE68A;
+  color: #E8DBA8;
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .6));
 }
 .tour-leader-k {
   flex: none;
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 800;
-  letter-spacing: .1em;
+  letter-spacing: .13em;
   line-height: 1;
-  color: #8FA0B8;
+  color: #BDB69F;
   text-transform: uppercase;
   white-space: nowrap;
 }
-/* crisp metallic handle: a polished white-gold face, clipped from the type itself */
+/* bold glowing handle: solid gold so the warm halo lands on the letterforms */
 .tour-leader-h {
   flex: 0 1 auto;
   min-width: 0;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 800;
-  line-height: 1.05;
+  line-height: 1;
   letter-spacing: .01em;
-  background: linear-gradient(180deg, #FFFDF4 0%, #FEF3C7 42%, #FCD34D 72%, #D97706 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: #FCD34D;
-  -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .6));
+  color: #FFD76A;
+  text-shadow:
+    0 0 10px rgba(255, 199, 54, .6),
+    0 0 22px rgba(255, 199, 54, .28);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -18580,71 +18592,85 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   background: #FBBF24;
   animation: tour-beacon-pulse 2.4s ease-in-out infinite;
 }
-/* ---- the CTA: the card's one loud key. Gold face, tight drop, one tactile press ---- */
+/* ---- the primary command: a premium 3D game key. Warm gold face, lit top edge,
+   dark type and a soft amber bloom; one tactile press ---- */
 .tour-cta {
   position: relative;
   flex: none;
   width: 100%;
-  min-height: 48px;
+  min-height: 50px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 0 12px;
+  padding: 0 14px;
   border: 0;
   border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #FCD34D 0%, #F59E0B 52%, #D97706 100%);
-  color: #1A1206;
+  background: linear-gradient(180deg, #ffb703, #fb8500);
+  color: #2A1902;
   font: inherit;
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 900;
-  letter-spacing: .05em;
+  letter-spacing: .055em;
   text-transform: uppercase;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .18);
   white-space: nowrap;
   cursor: pointer;
   box-shadow:
-    0 5px 14px rgba(217, 119, 6, .32),
-    inset 0 1px 0 rgba(254, 243, 199, .4);
-  transition: transform 90ms ease, box-shadow 90ms ease;
+    0 10px 24px -6px rgba(251, 133, 0, .5),
+    0 4px 10px rgba(251, 133, 0, .2),
+    inset 0 2px 0 rgba(255, 255, 255, .45),
+    inset 0 -2px 0 rgba(146, 64, 14, .32);
+  transition: transform 90ms ease, box-shadow 120ms ease, filter 120ms ease;
 }
 /* the specular bevel: one lit band across the top half */
 .tour-cta::before {
   content: "";
   position: absolute;
-  left: 8px;
-  right: 8px;
+  left: 7px;
+  right: 7px;
   top: 2px;
-  height: 46%;
+  height: 45%;
   border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, rgba(255, 255, 255, .3) 0%, rgba(255, 255, 255, 0) 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .28) 0%, rgba(255, 255, 255, 0) 100%);
   pointer-events: none;
 }
 .tour-cta-t { position: relative; }
-.tour-cta:active {
-  transform: scale(.97) translateY(2px);
+.tour-cta:hover {
+  filter: brightness(1.04);
+  transform: translateY(-1px);
   box-shadow:
-    0 2px 8px rgba(217, 119, 6, .3),
-    inset 0 1px 0 rgba(254, 243, 199, .2);
+    0 12px 28px -6px rgba(251, 133, 0, .55),
+    0 5px 12px rgba(251, 133, 0, .22),
+    inset 0 2px 0 rgba(255, 255, 255, .5),
+    inset 0 -2px 0 rgba(146, 64, 14, .32);
+}
+.tour-cta:active {
+  transform: translateY(2px) scale(.985);
+  filter: none;
+  box-shadow:
+    0 3px 8px rgba(251, 133, 0, .28),
+    inset 0 1px 0 rgba(255, 255, 255, .22),
+    inset 0 -1px 0 rgba(146, 64, 14, .24);
 }
 .tour-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
-/* ---- the ghost key: the channel-admin growth door under the gold CTA. Deliberately
-   quiet — translucent fill, hairline rim, no halo — so the card keeps exactly one
-   primary action. ---- */
+/* ---- the secondary command: slate glass, crisp rim, quiet enough to keep exactly
+   one primary action on the card ---- */
 .tour-admin {
   position: relative;
   flex: none;
   width: 100%;
-  min-height: 42px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   gap: 9px;
   margin: 0;
   padding: 0 14px;
-  border: 1px solid rgba(148, 163, 184, .22);
+  border: 1px solid rgba(148, 163, 184, .3);
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, .045);
-  color: #C6D2E2;
+  background: linear-gradient(180deg, rgba(148, 163, 184, .14) 0%, rgba(15, 23, 42, .38) 100%);
+  color: #D8E1ED;
   font: inherit;
   font-size: 10.5px;
   font-weight: 800;
@@ -18653,7 +18679,12 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
-  transition: transform 90ms ease, border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    0 2px 8px rgba(0, 0, 0, .16);
+  transition: transform 90ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, color 140ms ease;
   overflow: hidden;
 }
 .tour-admin-ico {
@@ -18679,12 +18710,20 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   transition: transform 140ms ease, color 140ms ease;
 }
 .tour-admin:hover {
-  border-color: rgba(125, 211, 252, .45);
-  background: rgba(56, 189, 248, .08);
-  color: #EAF6FE;
+  border-color: rgba(203, 213, 225, .45);
+  background: linear-gradient(180deg, rgba(148, 163, 184, .2) 0%, rgba(15, 23, 42, .42) 100%);
+  color: #F1F5F9;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    0 4px 12px rgba(0, 0, 0, .2);
 }
 .tour-admin:hover .tour-admin-chev { transform: translateX(2px); color: #7DD3FC; }
-.tour-admin:active { transform: scale(.985); }
+.tour-admin:active {
+  transform: translateY(1px) scale(.99);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    0 1px 4px rgba(0, 0, 0, .18);
+}
 .tour-admin:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
 /* reduced motion: the beacon holds steady and the star rests in its bloom */
@@ -18698,40 +18737,39 @@ html.reduced-motion .tour-star-img { animation: none; }
 }
 
 /* The 320px floor: the star pod, CHANNEL WAR and the clock share the header row;
-   the prize band narrows, so the jackpot type and the rule line give first. */
+   the centered stage narrows, so the jackpot type and its rule line give first. */
 @media (max-width: 350px) {
   .car-card.carousel-slide-tournament { padding-left: 10px; padding-right: 10px; gap: 8px; }
   .tour-kicker { gap: 5px; font-size: 12px; letter-spacing: .05em; }
   .tour-clock { height: 21px; padding: 0 6px; gap: 4px; font-size: 9px; }
-  .tour-hero { gap: 10px; }
-  .tour-star-stage { width: 56px; height: 56px; }
-  .tour-star-img { width: 48px; height: 48px; }
-  .tour-vault-v { font-size: 26px; }
+  .tour-hero { gap: 4px; }
   .tour-vault-sub { font-size: 10px; }
   .tour-admin { gap: 7px; padding: 0 10px; font-size: 10px; letter-spacing: .04em; }
   .tour-admin-chev { font-size: 15px; }
 }
 
 /* On shorter columns the floating admin shield rides higher into the card, so
-   the ghost key takes a matching extra slice of bottom air; the prize band gives
-   back the same pixels so nothing crowds. */
+   the glass key takes a matching extra slice of bottom air; the stage gives back
+   the same pixels so nothing crowds. */
 @media (max-height: 760px) {
   #home-carousel > .car-card.carousel-slide-tournament { padding-bottom: 44px; }
-  .tour-hero { min-height: 68px; }
-  .tour-star-stage { width: 56px; height: 56px; }
-  .tour-star-img { width: 50px; height: 50px; }
-  .tour-vault-v { font-size: 28px; }
+  .tour-hero { gap: 4px; }
+  .tour-star-stage { width: 68px; height: 68px; }
+  .tour-star-img { width: 60px; height: 60px; }
+  .tour-vault-v { font-size: 32px; }
+  .tour-vault-sub { font-size: 10.5px; }
 }
 
-/* The short-phone floor (<640h, e.g. 320x568): the deck carries the prize band plus
-   two full-width keys, so the stage and the action heights give a few pixels and
-   the card still lands whole inside the column. */
+/* The short-phone floor (<640h, e.g. 320x568): the stage and the two action
+   heights give a few pixels so the stacked lockup still lands whole. */
 @media (max-height: 620px) {
   .car-card.carousel-slide-tournament { gap: 8px; }
-  .tour-hero { min-height: 60px; }
-  .tour-star-stage { width: 52px; height: 52px; }
-  .tour-star-img { width: 46px; height: 46px; }
-  .tour-vault-v { font-size: 26px; }
+  .tour-hero { gap: 3px; }
+  .tour-star-stage { width: 56px; height: 56px; }
+  .tour-star-img { width: 50px; height: 50px; }
+  .tour-vault { gap: 4px; }
+  .tour-vault-v { font-size: 28px; }
+  .tour-vault-sub { font-size: 10px; }
   .tour-cta { min-height: 46px; }
   .tour-admin { min-height: 40px; }
 }
@@ -18740,10 +18778,12 @@ html.reduced-motion .tour-star-img { animation: none; }
    slice and the deck closes its rhythm — every line still lands whole. */
 @media (max-height: 600px) {
   .car-card.carousel-slide-tournament { gap: 6px; }
-  .tour-hero { min-height: 54px; }
+  .tour-hero { gap: 1px; }
   .tour-star-stage { width: 46px; height: 46px; }
-  .tour-star-img { width: 42px; height: 42px; }
+  .tour-star-img { width: 40px; height: 40px; }
+  .tour-vault { gap: 3px; }
   .tour-vault-v { font-size: 24px; }
+  .tour-vault-sub { font-size: 9.5px; }
   .tour-cta { min-height: 44px; }
   .tour-admin { min-height: 38px; }
 }
