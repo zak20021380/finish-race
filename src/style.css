@@ -1747,14 +1747,25 @@ html.no-flags .flag-code { display: inline-block; }
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- Home owns its column: it never scrolls, and the carousel is the flexible row.
-   Column fills 100vh naturally: identity (fixed) → carousel (flexible) →
-   the Play Dock (fixed) → tab dock. No scroll, no cutoff. ---- */
+/* ---- Home owns its column in three proportional zones ----
+   TOP: the identity card. CENTER: the highlights carousel — the one flexible row, so
+   the hero takes whatever the viewport gives it instead of pinning short and opening
+   a void under itself. BOTTOM: the Play Dock, then the tab dock, one tight stack.
+   The rhythm between zones is viewport-relative (`clamp`), never a fixed band, so
+   360x640 and 414x896 both land without a scrollbar. Height follows `--app-h`
+   (Telegram's stable viewport, set in telegram.ts); `100dvh` is the plain-browser
+   safety net. ---- */
 .screen.home {
-  gap: var(--s3);
+  height: 100%;
+  /* the plain-browser cap: never taller than the visible viewport, never taller than
+     the app column Telegram's own --app-h defines */
+  max-height: min(100%, 100dvh);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: clamp(8px, 1.8vh, 16px);
   padding-top: var(--s2);
   overflow: hidden;
-  justify-content: flex-start;
   background: transparent;
   box-shadow: none;
 }
@@ -3430,14 +3441,16 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   min-height: 58px;
   box-sizing: border-box;
   padding: 6px 10px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #1E2638 0%, #131824 100%);
-  background-color: #131824;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  /* the clay dock: a generous radius over a matte slate face lit from the top-left,
+     with a thick bottom pool instead of a flat bar */
+  border-radius: 24px;
+  background: linear-gradient(145deg, #1B2636 0%, #141D2A 100%);
+  background-color: #141D2A;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow:
-    0 10px 24px -4px rgba(0, 0, 0, 0.65),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.5);
+    0 10px 24px -4px rgba(0, 0, 0, 0.5),
+    inset 0 2px 3px rgba(255, 255, 255, 0.12),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.4);
   overflow: visible;                   /* the shield crest may overhang the face */
   min-width: 0;
   max-width: 100%;
@@ -3447,7 +3460,11 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: radial-gradient(130% 170% at 6% -30%, rgba(148, 197, 255, 0.16) 0%, rgba(148, 197, 255, 0) 58%);
+  /* the clay read: a cool wash pooling in from the top-left, a soft shade gathering
+     under the bottom-right — the same two lights the avatar rim and the dock share */
+  background:
+    radial-gradient(130% 170% at 6% -30%, rgba(148, 197, 255, 0.18) 0%, rgba(148, 197, 255, 0) 58%),
+    radial-gradient(120% 150% at 104% 150%, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0) 62%);
   pointer-events: none;
 }
 /* legacy two-row scaffolding is gone with the old markup — never show it */
@@ -3492,6 +3509,14 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   display: block;
   width: 44px;
   height: 44px;
+  border-radius: 50%;
+  /* the puffy clay rim the disc sits in: one ambient drop, a soft top-left inner
+     glow where the key light lands, and a deep bottom-right inset pooling under it */
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, .5),
+    inset 2px 3px 6px rgba(255, 255, 255, .16),
+    inset -3px -4px 7px rgba(0, 0, 0, .58),
+    inset 0 0 0 1px rgba(255, 255, 255, .07);
 }
 .id-ring {
   position: absolute;
@@ -3527,11 +3552,12 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   overflow: hidden;
   border: 0;
   background: radial-gradient(circle at 30% 25%, #60A5FA 0%, #2563EB 55%, #1D4ED8 100%);
+  /* puffy clay rim: light trapped inside the top-left, a deep pool in the bottom-right */
   box-shadow:
-    inset 0 2px 3px rgba(255, 255, 255, .38),
-    inset 0 -3px 5px rgba(2, 6, 23, .52),
+    inset 1px 2px 4px rgba(255, 255, 255, .42),
+    inset -3px -4px 7px rgba(2, 6, 23, .6),
     inset 0 0 0 1px rgba(2, 6, 23, .55),
-    0 2px 5px rgba(0, 0, 0, .45);
+    0 3px 7px rgba(0, 0, 0, .5);
   color: #fff;
   font-size: 14px;
   font-weight: 800;
@@ -3546,33 +3572,34 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 /* 3D shield crest: dark rim, metallic blue face, specular top edge, bold white level. */
 .id-lvl {
   position: absolute;
-  right: -3px;
-  bottom: -3px;
+  right: -4px;
+  bottom: -4px;
   z-index: 3;
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 22px;
+  width: 21px;
+  height: 23px;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: none;
   pointer-events: none;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .65));
+  /* embossed token: a hard drop that seats it on the rim, plus a bloom off the face */
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .7)) drop-shadow(0 0 6px rgba(56, 189, 248, .45));
 }
 .id-lvl-crest {
   position: absolute;
   inset: 0;
   display: block;
-  width: 20px;
-  height: 22px;
+  width: 21px;
+  height: 23px;
 }
 .id-lvl-rim { fill: #0F172A; }
 .id-lvl-face { fill: url(#lvlFace); }
 .id-lvl-spec {
   fill: none;
-  stroke: rgba(255, 255, 255, .55);
-  stroke-width: 1;
+  stroke: rgba(255, 255, 255, .62);
+  stroke-width: 1.1;
   stroke-linecap: round;
 }
 .id-lvl b {
@@ -3584,7 +3611,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: #fff;
-  text-shadow: 0 1px 1px rgba(2, 6, 23, .9);
+  text-shadow: 0 1px 1px rgba(2, 6, 23, .95), 0 0 7px rgba(125, 211, 252, .55);
 }
 /* COL 2, TEXT — name on top, squad badge underneath.
    No overflow on the column itself: both rows carry vertical tap bands that reach
@@ -3679,24 +3706,26 @@ html.no-flags .id-flag .flag-code { display: none; }
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 4px;
+  gap: 5px;
   min-width: 0;
   max-width: 100%;
-  min-height: 20px;
-  height: 20px;
-  padding: 0 7px;
+  min-height: 22px;
+  height: 22px;
+  padding: 0 9px;
   margin: 0;
   cursor: pointer;
-  border-radius: 6px;
+  /* a mini clay pill: same radius family and the same two lights as the dock above it */
+  border-radius: 9999px;
   text-align: left;
-  color: #94A3B8;
+  color: #A9B7CA;
   font-size: 11px;
-  font-weight: 500;
-  background: rgba(9, 13, 22, 0.75);
+  font-weight: 600;
+  background: linear-gradient(145deg, #202B3C 0%, #161E2C 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .05),
-    inset 0 -1px 2px rgba(0, 0, 0, .5);
-  transition: transform var(--motion-fast), opacity var(--motion-fast);
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    inset 0 -2px 4px rgba(0, 0, 0, .45),
+    0 2px 6px rgba(0, 0, 0, .35);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast);
 }
 .id-team::after {
   content: "";
@@ -3707,8 +3736,22 @@ html.no-flags .id-flag .flag-code { display: none; }
   outline: 3px solid var(--brand-2);
   outline-offset: 1px;
 }
-.id-team:hover:not(:active) { transform: translateY(-1px); }
-.id-team:active { transform: translateY(1px); opacity: 0.8; }
+.id-team:hover:not(:active) {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, .14);
+  background: linear-gradient(145deg, #253145 0%, #18202F 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    inset 0 -2px 4px rgba(0, 0, 0, .4),
+    0 4px 10px rgba(0, 0, 0, .42);
+}
+/* the pill sinks into the clay rather than fading out */
+.id-team:active {
+  transform: translateY(1px) scale(.98);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .04);
+}
 /* mini clan emblem: a 13px cyan-beveled chip, lit from above, so it reads as a crest */
 .id-team-av.squad-avatar {
   width: 13px;
@@ -3749,9 +3792,9 @@ html.no-flags .id-flag .flag-code { display: none; }
   flex: 0 1 auto;
   min-width: 0;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.3;
-  color: #94A3B8;
+  color: #A9B7CA;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3780,7 +3823,7 @@ html.no-flags .id-flag .flag-code { display: none; }
 .id-team.bound .id-team-ico { display: none; }
 .id-team:not(.bound) .id-team-av { display: none; }
 .id-team:not(.bound) .id-team-t { color: var(--ink-soft); }
-.id-team:not(.bound) { padding-left: 7px; }
+.id-team:not(.bound) { padding-left: 9px; }
 /* COL 3, ACTIONS */
 .id-side {
   flex: none;
@@ -3795,26 +3838,29 @@ html.no-flags .id-flag .flag-code { display: none; }
   height: 38px;
   min-height: 38px;
   max-height: 38px;
-  padding: 0 11px 0 6px;
-  gap: 5px;
-  font-size: 13.5px;
+  padding: 0 12px 0 5px;
+  gap: 6px;
+  font-size: 14px;
   font-weight: 800;
-  border-radius: 12px;
+  /* golden-amber clay capsule: a pill, so it reads as pressed clay and not a chip */
+  border-radius: 9999px;
   background:
-    radial-gradient(120% 140% at 15% 50%, rgba(245, 158, 11, .28) 0%, rgba(15, 23, 42, .95) 65%),
-    #0D121D;
+    radial-gradient(118% 145% at 14% 50%, rgba(245, 158, 11, .3) 0%, rgba(15, 23, 42, .96) 66%),
+    #0C111B;
   color: #FEF3C7;
   font-variant-numeric: tabular-nums;  /* Latin digits, fixed advance, no jitter */
-  letter-spacing: .01em;
+  letter-spacing: .02em;
   flex: none;
   max-width: 108px;
   overflow: visible;                   /* its own box clips the ::after tap band otherwise */
   position: relative;
   border: 1px solid rgba(251, 191, 36, .42);
+  /* dual-tone clay inset: gold light trapped along the top, shadow pooling below,
+     then one ambient drop so the capsule floats off the dock */
   box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, .65),
-    inset 0 1px 0 rgba(254, 243, 199, .22),
-    0 4px 12px rgba(0, 0, 0, .4);
+    inset 0 2px 4px rgba(255, 215, 0, .2),
+    inset 0 -2px 4px rgba(0, 0, 0, .6),
+    0 4px 10px rgba(0, 0, 0, .35);
 }
 .id-coin.coin-pill::after {
   content: "";
@@ -3823,9 +3869,14 @@ html.no-flags .id-flag .flag-code { display: none; }
 }
 .id-coin.coin-pill:hover:not(:active) {
   border-color: rgba(251, 191, 36, .58);
+  box-shadow:
+    inset 0 2px 4px rgba(255, 215, 0, .28),
+    inset 0 -2px 4px rgba(0, 0, 0, .55),
+    0 6px 14px rgba(0, 0, 0, .4),
+    0 0 16px -4px rgba(245, 158, 11, .5);
 }
 .id-coin.coin-pill:active {
-  transform: translateY(1px);
+  transform: translateY(1px) scale(.98);
   box-shadow:
     inset 0 3px 7px rgba(0, 0, 0, .72),
     inset 0 1px 0 rgba(254, 243, 199, .14);
@@ -3836,14 +3887,16 @@ html.no-flags .id-flag .flag-code { display: none; }
   overflow: hidden;
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, .8);
+  /* crisp, warm-lit numerals: hard seat plus the faintest gold bloom */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .85), 0 0 10px rgba(251, 191, 36, .25);
 }
 /* 3D milled coin: warm halo, then a crisp drop so it lifts off the obsidian. */
 .id-coin.coin-pill .coin {
   width: 26px;
   height: 26px;
   flex: none;
-  filter: drop-shadow(0 2px 5px rgba(245, 158, 11, .45));
+  /* glowing 3D coin: a warm halo under the milled face */
+  filter: drop-shadow(0 2px 5px rgba(245, 158, 11, .5)) drop-shadow(0 0 9px rgba(251, 191, 36, .4));
 }
 /* Bell: a 38px sculpted squircle, silver-blue 3D bell with a clapper, sunk socket press. */
 .id-bell.icon-btn.xs {
@@ -3852,13 +3905,16 @@ html.no-flags .id-flag .flag-code { display: none; }
   height: 38px;
   min-width: 38px;
   min-height: 38px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, .1);
-  background: linear-gradient(180deg, #252F45 0%, #151C2C 100%);
+  /* squircle clay key: the dock's own face recipe, one step lighter */
+  border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  background: linear-gradient(145deg, #26313F 0%, #151C2C 100%);
   box-shadow:
     0 5px 12px rgba(0, 0, 0, .45),
-    inset 0 1px 0 rgba(255, 255, 255, .18);
+    inset 0 2px 3px rgba(255, 255, 255, .14),
+    inset 0 -3px 6px rgba(0, 0, 0, .4);
   color: #C7D3E8;
+  transition: transform .2s var(--bounce), box-shadow var(--motion-fast), border-color var(--motion-fast);
 }
 .id-bell.icon-btn.xs::after { content: ""; position: absolute; inset: -5px; }
 .id-bell.icon-btn.xs .ico { width: 18px; height: 18px; }
@@ -3867,10 +3923,12 @@ html.no-flags .id-flag .flag-code { display: none; }
   border-color: rgba(255, 255, 255, .16);
   box-shadow:
     0 7px 15px rgba(0, 0, 0, .5),
-    inset 0 1px 0 rgba(255, 255, 255, .26);
+    inset 0 2px 3px rgba(255, 255, 255, .22),
+    inset 0 -3px 6px rgba(0, 0, 0, .38);
 }
+/* puffy press: the key sinks and squashes, then bounces back on the dock's curve */
 .id-bell.icon-btn.xs:active {
-  transform: translateY(1px);
+  transform: translateY(2px) scale(.96);
   box-shadow:
     inset 0 3px 7px rgba(0, 0, 0, .75),
     inset 0 1px 0 rgba(255, 255, 255, .06);
@@ -3894,7 +3952,7 @@ html.no-flags .id-flag .flag-code { display: none; }
    cut-off. Horizontal clipping lives on the track (overflow-x: auto); the
    wrap stays visible vertically so card shadows paint instead of clipping.
    Shadow fix: the scroll container clips card drop shadows at its padding
-   box, so it carries 24px of vertical breathing room (cancelled with an
+   box, so it carries 20px of vertical breathing room (cancelled with an
    equal negative margin, so the column budget is unchanged). The wrap stays
    transparent and lets that breathing room paint instead of clipping it. */
 .carousel-wrap {
@@ -3903,8 +3961,15 @@ html.no-flags .id-flag .flag-code { display: none; }
   min-height: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: center;          /* the hero sits in the middle of its own zone */
+  /* Leftover height (a very tall viewport) is pushed ABOVE the hero: the dock never
+     drifts away from the card, and the dots keep hugging its bottom edge. */
+  margin-top: auto;
+  max-height: min(100%, 620px);
   gap: 0;
+  /* a whisper of internal air; the gap to the Play Dock stays the screen's clamp */
+  padding-top: clamp(0px, .6vh, 6px);
+  padding-bottom: 0;
   overflow: visible;
   background: transparent;
   background-color: transparent;
@@ -3914,10 +3979,11 @@ html.no-flags .id-flag .flag-code { display: none; }
 .carousel {
   flex: 1 1 auto;
   min-height: 128px;
-  /* 360px: the Channel War deck carries the 64px Star podium + vault + ticker +
-     two stacked CTAs, and the track is min-content-driven — the card still pins
-     at 312-320px, so nothing below it moves. */
-  max-height: 360px;
+  /* No fixed ceiling: the track takes the whole center zone, so the card is as tall as
+     the phone allows and spreads its own lines (`.car-card` is space-between) rather
+     than leaving a band of dead space between the highlights and the dock. A slide is
+     still exactly the track's content box tall — see the container-query lock below. */
+  max-height: 100%;
   display: flex;
   align-items: stretch;
   gap: 0;
@@ -4136,14 +4202,15 @@ html.no-flags .id-flag .flag-code { display: none; }
 .btn.sm::after { content: ""; position: absolute; inset: -6px 0; }
 
 /* dots sit inside the card, centered, 8px from the bottom edge.
-   The wrap is relative; the row is absolute over the carousel's 24px shadow
-   padding (24 + 8 = 32px from the wrap bottom = 8px from the card edge).
+   The wrap is relative; the row is absolute over the carousel's 20px shadow
+   padding (20 + 8 = 28px from the wrap bottom = 8px from the card edge, because
+   the filling track's box ends exactly on the wrap's own edges).
    Cards reserve bottom padding so content never slides under the dots. */
 .car-dots {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 37px;
+  bottom: 28px;
   z-index: 3;
   display: flex;
   align-items: center;
@@ -7952,12 +8019,16 @@ html.reduced-motion .support-send.sending .send-spin { animation: none; }
   box-shadow:
     0 5px 12px rgba(0, 0, 0, .45),
     0 0 18px -2px rgba(251, 146, 60, .4),
-    inset 0 1px 0 rgba(255, 255, 255, .2);
+    inset 0 2px 3px rgba(255, 255, 255, .18),
+    inset 0 -3px 6px rgba(0, 0, 0, .4);
 }
-.icon-btn.xs.notif-bell.has-unread:active { transform: translateY(1px); }
+.icon-btn.xs.notif-bell.has-unread:active { transform: translateY(2px) scale(.96); }
 .icon-btn.xs.notif-bell.has-unread .notif-badge {
-  background: #F97316;
-  box-shadow: 0 0 8px rgba(249, 115, 22, .9), 0 0 2px rgba(253, 186, 116, .9);
+  background: radial-gradient(circle at 34% 30%, #FED7AA 0%, #F97316 50%, #EA580C 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .55),
+    0 0 8px rgba(249, 115, 22, .95),
+    0 0 16px -2px rgba(249, 115, 22, .6);
 }
 /* the fresh-unread chime: one gentle idle wiggle on mount, 3 beats, then still */
 .notif-bell.ring .ico {
@@ -7985,22 +8056,44 @@ html.reduced-motion .support-send.sending .send-spin { animation: none; }
   min-width: 7px;
   padding: 0;
   border-radius: 50%;
+  /* the pip is lit clay too: a hot core, a falloff, and a hairline of top light */
   border: 2px solid #151C2C;
-  background: #F97316;
+  background: radial-gradient(circle at 34% 30%, #FDBA74 0%, #F97316 52%, #EA580C 100%);
   color: transparent;
   font-size: 0;
   line-height: 0;
   white-space: nowrap;
   overflow: hidden;
-  box-shadow: 0 0 8px rgba(249, 115, 22, .75);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .5),
+    0 0 8px rgba(249, 115, 22, .8),
+    0 0 14px -2px rgba(249, 115, 22, .5);
   animation: notif-dot-pulse 1.8s ease-out infinite;
   pointer-events: none;
 }
 .notif-badge[hidden] { display: none; }
 @keyframes notif-dot-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, .55), 0 0 8px rgba(249, 115, 22, .75); }
-  70% { box-shadow: 0 0 0 5px rgba(249, 115, 22, 0), 0 0 8px rgba(249, 115, 22, .75); }
-  100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0), 0 0 8px rgba(249, 115, 22, .75); }
+  0% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .5),
+      0 0 0 0 rgba(249, 115, 22, .55),
+      0 0 8px rgba(249, 115, 22, .8),
+      0 0 14px -2px rgba(249, 115, 22, .5);
+  }
+  70% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .5),
+      0 0 0 5px rgba(249, 115, 22, 0),
+      0 0 8px rgba(249, 115, 22, .8),
+      0 0 14px -2px rgba(249, 115, 22, .5);
+  }
+  100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .5),
+      0 0 0 0 rgba(249, 115, 22, 0),
+      0 0 8px rgba(249, 115, 22, .8),
+      0 0 14px -2px rgba(249, 115, 22, .5);
+  }
 }
 
 /* ---- drawer: clay face, 24px top corners, glowing top rim highlight ---- */

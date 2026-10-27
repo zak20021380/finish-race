@@ -3835,7 +3835,11 @@ export function createAdmin(api: AdminApi): Admin {
     paintDoor();
   }
 
-  /** Clear the launcher (mode card + PLAY) so the key never sits on top of either. */
+  /**
+   * Rest the key on the Play Dock's top edge, right-aligned. The dock is the anchor —
+   * close enough that the shield reads as part of the bottom action stack rather than
+   * floating in whatever gap the column happens to leave above it.
+   */
   function placeFab() {
     if (!fab || !home) return;
     const launcher = home.querySelector<HTMLElement>('.launcher');
@@ -3843,7 +3847,7 @@ export function createAdmin(api: AdminApi): Admin {
     const hr = home.getBoundingClientRect();
     const lr = launcher.getBoundingClientRect();
     if (!hr.height || !lr.height) return;
-    fab.style.bottom = `${Math.max(12, Math.round(hr.bottom - lr.top + 12))}px`;
+    fab.style.bottom = `${Math.max(4, Math.round(hr.bottom - lr.top + 4))}px`;
   }
 
   /* ---------- open / close ---------- */
