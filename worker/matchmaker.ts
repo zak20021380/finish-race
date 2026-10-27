@@ -360,6 +360,27 @@ export interface ServerMetrics {
   dailyActiveRatio: number;
   /** Referral joins as a % of the registered playerbase, capped at 100. */
   viralShare: number;
+  /** The last 24 hourly buckets, oldest first: the chart's Daily window. */
+  series24h: SeriesPoint[];
+  /** The last 7 daily buckets, oldest first: the chart's Weekly window. */
+  series7d: SeriesPoint[];
+  /** The last 30 daily buckets, oldest first: the chart's Monthly window. */
+  series30d: SeriesPoint[];
+}
+
+/**
+ * One plotted bucket of the growth chart. Every count is a real measurement the room stamped or
+ * folded from its own registry — a bucket the room never saw is an exact zero, never a model.
+ */
+export interface SeriesPoint {
+  /** The bucket's opening edge in epoch ms: a UTC hour for `series24h`, a UTC day for the rest. */
+  t: number;
+  /** Players whose `firstSeen` falls in this bucket. */
+  signups: number;
+  /** Distinct players counted active in this bucket. */
+  active: number;
+  /** Boards that reached a verdict in this bucket. */
+  matches: number;
 }
 
 /* ---------- durable gameplay counters ---------- */
@@ -407,6 +428,101 @@ function readGameMetrics(raw: unknown): GameMetrics {
     minesPlaced: whole(r?.minesPlaced),
     matchesByHour: readMatchHours(r?.matchesByHour),
   };
+}
+
+/* ---------- the growth ring buffers: bounded time-series telemetry ---------- */
+
+/**
+ * One time-series bucket as three whole counts: `[signups, active, matches]`. A tuple keeps the
+ * stored blob near half the size a keyed object would, which is what lets the whole series live
+ * inside a couple of hundred bytes.
+ */
+type GrowthBucket = [number, number, number];
+
+/**
+ * The room's entire plotted history: 24 hourly rows plus 30 daily rows and nothing else. Both maps
+ * are pruned on every write, so the blob is bounded by construction — it cannot grow with the
+ * playerbase, and it stays well under 2 KB however many years the object lives.
+ */
+interface GrowthSeries {
+  /** Keyed by UTC hour index (`Math.floor(ms / HOUR_MS)`); at most `HOURLY_KEEP` rows. */
+  hourly: Record<string, GrowthBucket>;
+  /** Keyed by UTC calendar day (`YYYY-MM-DD`); at most `DAILY_KEEP` rows. */
+  daily: Record<string, GrowthBucket>;
+}
+
+const GROWTH_KEY = 'growth-series.v1';
+const DAY_MS = 86_400_000;
+/** The ring widths: one day of hours, one month of days. Anything older is dropped on write. */
+const HOURLY_KEEP = 24;
+const DAILY_KEEP = 30;
+
+const zeroGrowth = (): GrowthSeries => ({ hourly: {}, daily: {} });
+
+/** A UTC day index as the `YYYY-MM-DD` key the daily ring is stored under. */
+const dayKeyOf = (index: number): string => new Date(index * DAY_MS).toISOString().slice(0, 10);
+
+/** The UTC day index a timestamp falls in. */
+const dayIndexOf = (ms: number): number => Math.floor(ms / DAY_MS);
+
+/** A stored `YYYY-MM-DD` key back to its day index; a malformed key is `NaN` and gets pruned. */
+function dayKeyIndex(key: string): number {
+  return /^\d{4}-\d{2}-\d{2}$/.test(key)
+    ? Math.floor(Date.parse(`${key}T00:00:00Z`) / DAY_MS)
+    : Number.NaN;
+}
+
+/** A stored bucket, clamped: only three finite whole counts ever come back out. */
+function readBucket(raw: unknown): GrowthBucket | null {
+  if (!Array.isArray(raw) || raw.length !== 3) return null;
+  return [whole(raw[0]), whole(raw[1]), whole(raw[2])];
+}
+
+/**
+ * Drop every row outside `[oldest, newest]`, then cap the map at `keep` rows by evicting the
+ * oldest. The window check is what prunes in normal operation; the cap is the backstop that stops
+ * a hand-edited or clock-skewed blob from ever outgrowing the ring.
+ */
+function trimRing(
+  map: Record<string, GrowthBucket>,
+  indexOf: (key: string) => number,
+  oldest: number,
+  newest: number,
+  keep: number,
+): void {
+  for (const key of Object.keys(map)) {
+    const index = indexOf(key);
+    if (!Number.isFinite(index) || index < oldest || index > newest) delete map[key];
+  }
+  const surplus = Object.keys(map).length - keep;
+  if (surplus <= 0) return;
+  const ordered = Object.keys(map).sort((a, b) => indexOf(a) - indexOf(b));
+  for (let i = 0; i < surplus; i++) delete map[ordered[i]];
+}
+
+/** A stored series blob, clamped and pruned to the retained window. */
+function readGrowthSeries(raw: unknown, now = Date.now()): GrowthSeries {
+  const r = raw as Partial<GrowthSeries> | null | undefined;
+  const read = (source: unknown): Record<string, GrowthBucket> => {
+    const out: Record<string, GrowthBucket> = {};
+    if (!source || typeof source !== 'object' || Array.isArray(source)) return out;
+    for (const [key, value] of Object.entries(source as Record<string, unknown>)) {
+      const bucket = readBucket(value);
+      if (bucket && (bucket[0] || bucket[1] || bucket[2])) out[key.slice(0, 12)] = bucket;
+    }
+    return out;
+  };
+  const growth: GrowthSeries = { hourly: read(r?.hourly), daily: read(r?.daily) };
+  pruneGrowth(growth, now);
+  return growth;
+}
+
+/** Both rings trimmed against one clock reading, so a load and a write prune identically. */
+function pruneGrowth(growth: GrowthSeries, now: number): void {
+  const hour = Math.floor(now / HOUR_MS);
+  trimRing(growth.hourly, Number, hour - HOURLY_KEEP + 1, hour, HOURLY_KEEP);
+  const day = dayIndexOf(now);
+  trimRing(growth.daily, dayKeyIndex, day - DAILY_KEEP + 1, day, DAILY_KEEP);
 }
 
 /* ---------- the player directory: who the room has seen ---------- */
@@ -1057,6 +1173,11 @@ export class MatchmakerDO {
   private squadsDirty = false;
   /** Durable board counters, seeded from storage and written back as they move. */
   private gameMetrics: GameMetrics = zeroGameMetrics();
+  /** The bounded growth rings behind the Stats tab's trend chart. */
+  private growth: GrowthSeries = zeroGrowth();
+  /** The last UTC day the rings formatted a key for, and the key itself. */
+  private memoDayIndex = -1;
+  private memoDayKey = '';
   /** A counter write is already scheduled: many moves, one flush. */
   private metricsDirty = false;
 
@@ -1102,6 +1223,7 @@ export class MatchmakerDO {
           const arena = readArena(await storage.get<unknown>('arena'));
           if (arena) this.arena = arena;
           this.gameMetrics = readGameMetrics(await storage.get<unknown>(GAME_METRICS_KEY));
+          this.growth = readGrowthSeries(await storage.get<unknown>(GROWTH_KEY));
           this.seedRoles();
           this.rearm();
         } catch {
@@ -1430,6 +1552,7 @@ export class MatchmakerDO {
       coreRetention: percentOf(corePlayers, totalUsers),
       dailyActiveRatio: percentOf(dau, totalUsers),
       viralShare: percentOf(Math.min(referrals, totalUsers), totalUsers),
+      ...this.growthWindows(now),
     };
   }
 
@@ -1948,6 +2071,19 @@ export class MatchmakerDO {
   }
 
   /**
+   * Move a seat's `lastSeen` forward and credit the growth rings for whichever buckets that just
+   * carried it into. Every player-driven `lastSeen` write goes through here, so the rings can
+   * never drift from the registry they are read back against. An admin action on a seat is not
+   * player activity and deliberately does not.
+   */
+  private stampSeen(p: PlayerRecord, at: number): void {
+    const prev = p.lastSeen;
+    if (at <= prev) return;
+    p.lastSeen = at;
+    this.creditActive(prev, at);
+  }
+
+  /**
    * Fold a connection into the registry. The room is the authority for race telemetry, but the
    * profile and economy figures come from the seat's own client — the same query string that
    * seeded the queue. Figures only ever climb here: a stale client reporting a spent wallet must
@@ -1956,13 +2092,21 @@ export class MatchmakerDO {
   private touch(identity: Identity): void {
     const now = Date.now();
     const id = identity.player.id;
+    const isNew = !this.players.has(id);
     const p = this.players.get(id) ?? freshPlayer(identity, now);
     p.name = identity.player.name || p.name;
     p.username = identity.player.username || p.username;
     p.country = identity.flag || p.country;
     if (identity.age > 0) p.age = Math.min(120, Math.floor(identity.age));
     p.tiq = Math.max(0, Math.floor(identity.tiq));
-    p.lastSeen = now;
+    /* A first sighting is a signup and an active player at once, and `freshPlayer` has already
+       stamped its clock; every later one just moves the seat forward through the rings. */
+    if (isNew) {
+      this.creditSignup(now);
+      this.creditActive(0, now);
+    } else {
+      this.stampSeen(p, now);
+    }
     p.coins = Math.max(p.coins, identity.coins);
     p.stars = Math.max(p.stars, identity.stars);
     p.referrals = Math.max(p.referrals, identity.referrals);
@@ -1985,7 +2129,7 @@ export class MatchmakerDO {
   private markActive(id: string): void {
     const p = this.players.get(id);
     if (!p) return;
-    p.lastSeen = Date.now();
+    this.stampSeen(p, Date.now());
     this.persist();
   }
 
@@ -1994,7 +2138,7 @@ export class MatchmakerDO {
     const p = this.players.get(id);
     if (!p) return;
     p.inMatch = false;
-    p.lastSeen = Date.now();
+    this.stampSeen(p, Date.now());
     if (won !== null) {
       p.matches++;
       p.lastPlayed = p.lastSeen;
@@ -2015,7 +2159,7 @@ export class MatchmakerDO {
     const p = this.players.get(id);
     if (!p) return;
     p.inMatch = on;
-    p.lastSeen = Date.now();
+    this.stampSeen(p, Date.now());
     this.persist();
   }
 
@@ -2052,6 +2196,155 @@ export class MatchmakerDO {
     return total;
   }
 
+  /* ---------- the growth rings: what the Stats tab's trend chart plots ---------- */
+
+  /**
+   * Fold one real event into both rings. `slot` is the count it moves: 0 signups, 1 active,
+   * 2 matches. `dedupeFrom` is the timestamp this seat was last counted at — a player only credits
+   * `active` when the event carries them into a bucket they have not been counted in yet, so an
+   * hour of continuous play reads as one active player rather than forty. That dedupe survives an
+   * eviction because it reads the record's own persisted `lastSeen`, not an in-memory set.
+   *
+   * The rings are pruned whenever a bucket is first opened, which is the only moment they can
+   * grow: 24 hourly rows and 30 daily rows is the ceiling, forever.
+   */
+  private creditGrowth(slot: 0 | 1 | 2, at: number, by = 1, dedupeFrom = -1): void {
+    if (by <= 0) return;
+    const hour = Math.floor(at / HOUR_MS);
+    const day = dayIndexOf(at);
+    const freshHour = dedupeFrom < 0 || Math.floor(dedupeFrom / HOUR_MS) !== hour;
+    const freshDay = dedupeFrom < 0 || dayIndexOf(dedupeFrom) !== day;
+    /* the hot path: a seat already counted in both buckets costs nothing at all, and no key is
+       formatted — this runs on every board move, so allocation here would be pure waste */
+    if (!freshHour && !freshDay) return;
+    let opened = false;
+    const stamp = (map: Record<string, GrowthBucket>, key: string): void => {
+      const bucket = map[key];
+      if (bucket) {
+        bucket[slot] = whole(bucket[slot]) + by;
+        return;
+      }
+      const row: GrowthBucket = [0, 0, 0];
+      row[slot] = by;
+      map[key] = row;
+      opened = true;
+    };
+    if (freshHour) stamp(this.growth.hourly, String(hour));
+    if (freshDay) stamp(this.growth.daily, this.growthDayKey(day));
+    if (opened) pruneGrowth(this.growth, at);
+    this.persistMetrics();
+  }
+
+  /** The UTC day key, memoised: the calendar turns once a day, board moves turn thousands of times. */
+  private growthDayKey(index: number): string {
+    if (index !== this.memoDayIndex) {
+      this.memoDayIndex = index;
+      this.memoDayKey = dayKeyOf(index);
+    }
+    return this.memoDayKey;
+  }
+
+  /** A first-time registration, counted in the bucket it actually landed in. */
+  private creditSignup(at: number): void {
+    this.creditGrowth(0, at);
+  }
+
+  /** A seat's `lastSeen` moving forward: one more active player in any bucket not yet credited. */
+  private creditActive(prevSeen: number, at: number): void {
+    this.creditGrowth(1, at, 1, prevSeen > 0 ? prevSeen : -1);
+  }
+
+  /** Boards that reached a verdict. Every one of them counts, so there is nothing to dedupe. */
+  private creditMatches(matches: number, at = Date.now()): void {
+    this.creditGrowth(2, at, matches);
+  }
+
+  /** Matches settled on one UTC day, summed from the eight-day-deep hourly match buckets. */
+  private matchesOnDay(dayIndex: number): number {
+    let total = 0;
+    for (let hour = 0; hour < 24; hour++) {
+      total += whole(this.gameMetrics.matchesByHour[String(dayIndex * 24 + hour)]);
+    }
+    return total;
+  }
+
+  /**
+   * Signup and active counts folded straight out of the registry's own timestamps. `firstSeen`
+   * never moves once written, so the signup column this produces is exact across the whole
+   * retained window; `lastSeen` only survives a seat's most recent visit, so the active column is
+   * a floor the ring buffers build on. A seat the room has already trimmed contributes nothing —
+   * there is no estimate anywhere in here.
+   */
+  private foldRegistry(hour: number, day: number): {
+    hourly: Map<number, GrowthBucket>;
+    daily: Map<number, GrowthBucket>;
+  } {
+    const hourly = new Map<number, GrowthBucket>();
+    const daily = new Map<number, GrowthBucket>();
+    const oldestHour = hour - HOURLY_KEEP + 1;
+    const oldestDay = day - DAILY_KEEP + 1;
+    const credit = (
+      map: Map<number, GrowthBucket>, index: number, oldest: number, newest: number, slot: 0 | 1,
+    ): void => {
+      if (index < oldest || index > newest) return;
+      const bucket = map.get(index) ?? [0, 0, 0] as GrowthBucket;
+      bucket[slot]++;
+      map.set(index, bucket);
+    };
+    for (const p of this.players.values()) {
+      if (p.firstSeen > 0) {
+        credit(hourly, Math.floor(p.firstSeen / HOUR_MS), oldestHour, hour, 0);
+        credit(daily, dayIndexOf(p.firstSeen), oldestDay, day, 0);
+      }
+      if (p.lastSeen > 0) {
+        credit(hourly, Math.floor(p.lastSeen / HOUR_MS), oldestHour, hour, 1);
+        credit(daily, dayIndexOf(p.lastSeen), oldestDay, day, 1);
+      }
+    }
+    return { hourly, daily };
+  }
+
+  /**
+   * The three ready-to-plot windows, oldest point first. Each bucket is the larger of two real
+   * measurements: what the rings stamped as events arrived, and what the registry's own
+   * timestamps (plus the hourly match buckets) fold back for the same span. Taking the larger
+   * invents nothing — both sides are measured — and it is what lets the chart carry real history
+   * on the very first reading after a deploy, before the rings have had any time to fill.
+   */
+  private growthWindows(now: number): Pick<ServerMetrics, 'series24h' | 'series7d' | 'series30d'> {
+    const hour = Math.floor(now / HOUR_MS);
+    const day = dayIndexOf(now);
+    const folded = this.foldRegistry(hour, day);
+
+    const series24h: SeriesPoint[] = [];
+    for (let back = HOURLY_KEEP - 1; back >= 0; back--) {
+      const index = hour - back;
+      const stamped = this.growth.hourly[String(index)];
+      const registry = folded.hourly.get(index);
+      series24h.push({
+        t: index * HOUR_MS,
+        signups: Math.max(stamped?.[0] ?? 0, registry?.[0] ?? 0),
+        active: Math.max(stamped?.[1] ?? 0, registry?.[1] ?? 0),
+        matches: Math.max(stamped?.[2] ?? 0, whole(this.gameMetrics.matchesByHour[String(index)])),
+      });
+    }
+
+    const series30d: SeriesPoint[] = [];
+    for (let back = DAILY_KEEP - 1; back >= 0; back--) {
+      const index = day - back;
+      const stamped = this.growth.daily[dayKeyOf(index)];
+      const registry = folded.daily.get(index);
+      series30d.push({
+        t: index * DAY_MS,
+        signups: Math.max(stamped?.[0] ?? 0, registry?.[0] ?? 0),
+        active: Math.max(stamped?.[1] ?? 0, registry?.[1] ?? 0),
+        matches: Math.max(stamped?.[2] ?? 0, this.matchesOnDay(index)),
+      });
+    }
+
+    return { series24h, series7d: series30d.slice(-7), series30d };
+  }
+
   /** Add to the durable gameplay counters; a missing or negative delta is exactly zero. */
   private bumpMetrics(delta: Partial<GameMetrics>): void {
     const matches = whole(delta.matchesCompleted);
@@ -2059,7 +2352,10 @@ export class MatchmakerDO {
     if (!matches && !mines) return;
     this.gameMetrics.matchesCompleted += matches;
     this.gameMetrics.minesPlaced += mines;
-    if (matches) this.stampMatchesByHour(matches);
+    if (matches) {
+      this.stampMatchesByHour(matches);
+      this.creditMatches(matches);
+    }
     this.persistMetrics();
   }
 
@@ -2079,7 +2375,11 @@ export class MatchmakerDO {
       const storage = this.state.storage;
       if (!storage) return;
       try {
-        void storage.put(GAME_METRICS_KEY, this.gameMetrics);
+        /* one atomic write: the counters and the pruned rings land together, or not at all */
+        void storage.put({
+          [GAME_METRICS_KEY]: this.gameMetrics,
+          [GROWTH_KEY]: this.growth,
+        });
       } catch {
         /* a store that refuses the write: the counters stay live for this object's lifetime */
       }
@@ -2172,6 +2472,8 @@ export class MatchmakerDO {
     } else {
       return { ok: false, error: 'unknown_action' };
     }
+    /* an admin's hand on a seat is not that player's own activity: the record's clock refreshes,
+       but the growth rings are not told anything happened */
     p.lastSeen = Date.now();
     this.persist();
     return { ok: true, player: p };

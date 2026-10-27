@@ -14525,16 +14525,19 @@ html.reduced-motion .adm-live-dot { animation: none; }
   gap: 3px;
   min-width: 0;
 }
+/* The label wraps instead of ellipsising. On a 320px phone three columns cannot hold
+   "This Month · 30D" on one line, and clipping it to "This Month (…" hides which window the
+   pill measures. Two short lines fit inside the height the big count already sets, so the row
+   stays a row, the type stays readable and nothing is ever cut off. */
 .adm-inflow-l {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: 8px;
   font-weight: 900;
+  line-height: 1.25;
   letter-spacing: .05em;
   text-transform: uppercase;
   color: var(--ink-soft);
+  overflow-wrap: break-word;
 }
 .adm-inflow-v {
   font-size: clamp(1.15rem, 1rem + 1.1vw, 1.45rem);
@@ -14543,6 +14546,252 @@ html.reduced-motion .adm-live-dot { animation: none; }
   font-variant-numeric: tabular-nums;
   color: var(--tone);
   text-shadow: 0 1px 0 rgba(0, 0, 0, .5);
+}
+
+/* ---- trends: one bounded window of the Worker's growth rings, drawn as inline SVG ---- */
+.adm-trend { gap: 9px; }
+.adm-trend-h {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.adm-trend-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.adm-trend-t {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.adm-trend-s {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* the timeframe switch: three quiet segments, the selected one carrying the block's sky accent */
+.adm-trend-keys {
+  flex: none;
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.adm-trend-key {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-soft);
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+.adm-trend-key b {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  line-height: 1.1;
+}
+.adm-trend-key span {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  opacity: .78;
+}
+.adm-trend-key:active { transform: translateY(1px); }
+.adm-trend-key:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+.adm-trend-key[aria-pressed="true"] {
+  background: rgba(56, 189, 248, .16);
+  color: var(--brand-ink);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .34);
+}
+.adm-trend-key[aria-pressed="true"] span { opacity: 1; }
+
+/* the plot: a recessed band the SVG fills edge to edge, scaling its own viewBox uniformly */
+.adm-trend-plot {
+  position: relative;
+  min-height: 96px;
+  padding: 4px 2px 2px;
+  border-radius: 13px;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.adm-trend-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* horizontal drags inspect the chart; the vertical swipe still scrolls the panel */
+  touch-action: pan-y;
+  cursor: crosshair;
+}
+.adm-trend-svg.is-blank { visibility: hidden; }
+.adm-trend-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 12px 16px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: center;
+  color: var(--ink-soft);
+}
+.adm-trend-empty[hidden] { display: none; }
+
+/* the drawing itself: hairline grid, one gradient-filled series, one dotted series */
+.adm-trend-grid line {
+  stroke: rgba(148, 163, 184, .18);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.adm-trend-axis text {
+  font-size: 10px;
+  font-weight: 800;
+  fill: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+/* the gutter labels sit in a fixed slice of the viewBox, so they run a touch smaller */
+.adm-trend-y { font-size: 9.5px; letter-spacing: .01em; }
+.adm-trend-x { letter-spacing: .02em; }
+.adm-trend-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.adm-trend-line[data-s="active"] { stroke: #22d3ee; }
+.adm-trend-line[data-s="signups"] { stroke: #34d399; }
+.adm-trend-line[data-s="matches"] {
+  stroke: var(--violet);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+.adm-trend-dots circle {
+  fill: #34d399;
+  stroke: #0E1526;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.adm-trend-guide {
+  stroke: rgba(226, 232, 240, .34);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+.adm-trend-mark {
+  stroke: #0E1526;
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+.adm-trend-mark[data-s="active"] { fill: #22d3ee; }
+.adm-trend-mark[data-s="signups"] { fill: #34d399; }
+.adm-trend-mark[data-s="matches"] { fill: var(--violet); }
+.adm-trend-hit { fill: transparent; }
+
+/* the legend: three quiet chips, each carrying its own sum across the window on screen */
+.adm-trend-legend {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+.adm-trend-chip {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: 11px;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  transition: opacity var(--motion-fast), box-shadow var(--motion-fast);
+}
+.adm-trend-chip:active { transform: translateY(1px); }
+.adm-trend-chip:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
+.adm-trend-chip[aria-pressed="false"] { opacity: .45; }
+.adm-trend-chip[aria-pressed="false"] .adm-trend-dot { background: var(--ink-soft); box-shadow: none; }
+.adm-trend-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tone, var(--ink-soft));
+}
+.adm-trend-chip[data-gseries="active"] { --tone: #22d3ee; }
+.adm-trend-chip[data-gseries="signups"] { --tone: #34d399; }
+.adm-trend-chip[data-gseries="matches"] { --tone: var(--violet); }
+.adm-trend-chip-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.adm-trend-chip-v {
+  flex: none;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--tone, var(--ink));
+}
+
+/* the one line under the plot: the window's sums, or the exact bucket under the finger */
+.adm-trend-read {
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--hair-off);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+.adm-trend-read[data-focused="true"] { color: var(--ink); }
+
+/* the copy column takes the whole row when the switch cannot sit beside it, rather than
+   squeezing the title into a two-word column */
+@media (max-width: 380px) {
+  .adm-trend-h { flex-wrap: wrap; }
+  .adm-trend-copy { flex: 1 1 100%; }
+  .adm-trend-keys { margin-left: auto; }
+  .adm-trend-key { padding: 4px 7px; }
 }
 
 /* ---- retention: the returning-veteran row over two measured bars ---- */
@@ -14629,13 +14878,13 @@ html.reduced-motion .adm-live-dot { animation: none; }
 .adm-sysfoot-badge b { font-weight: 900; color: var(--brand-ink); }
 .adm-sysfoot-sep { opacity: .5; }
 
-/* the narrowest phones: keep all three time windows on one row without clipping a count */
+/* the narrowest phones: keep all three time windows on one row, each label free to wrap */
 @media (max-width: 400px) {
   .adm-card { padding: 9px 7px 10px; }
   .adm-card-l { font-size: 8px; letter-spacing: .04em; }
   .adm-inflow { gap: 4px; }
   .adm-inflow-pill { gap: 5px; padding: 9px 6px 9px 9px; }
-  .adm-inflow-l { font-size: 7.5px; letter-spacing: .03em; }
+  .adm-inflow-l { letter-spacing: .02em; }
   .adm-inflow-dot {
     width: 6px;
     height: 6px;

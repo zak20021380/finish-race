@@ -459,6 +459,25 @@ export interface ServerMetrics {
   dailyActiveRatio: number;
   /** Referral joins as a % of the registered playerbase, capped at 100. */
   viralShare: number;
+  /** The last 24 hourly buckets, oldest first: the trend chart's Daily window. */
+  series24h: SeriesPoint[];
+  /** The last 7 daily buckets, oldest first: the trend chart's Weekly window. */
+  series7d: SeriesPoint[];
+  /** The last 30 daily buckets, oldest first: the trend chart's Monthly window. */
+  series30d: SeriesPoint[];
+}
+
+/**
+ * One plotted bucket of the trend chart. The Worker folds these from its own bounded ring buffers
+ * and the registry's real `firstSeen` / `lastSeen` timestamps; a bucket nothing happened in is an
+ * exact zero, so an empty stretch of the chart means an empty stretch of the game.
+ */
+export interface SeriesPoint {
+  /** The bucket's opening edge in epoch ms: a UTC hour for `series24h`, a UTC day for the rest. */
+  t: number;
+  signups: number;
+  active: number;
+  matches: number;
 }
 
 /** The three answers the strict metrics door can give this panel. */
@@ -1161,6 +1180,13 @@ export function createAdmin(api: AdminApi): Admin {
   const statD1Fill = $<HTMLElement>('stat-d1-fill');
   const statD1Note = $<HTMLElement>('stat-d1-note');
   const statGrowthMeta = $<HTMLElement>('stat-growth-meta');
+  /* the trend chart: the Worker's bounded growth rings, drawn as native inline SVG */
+  const statTrendWindow = $<HTMLElement>('stat-trend-window');
+  const statTrendKeys = [...(stage?.querySelectorAll<HTMLButtonElement>('[data-grange]') ?? [])];
+  const statTrendSeries = [...(stage?.querySelectorAll<HTMLButtonElement>('[data-gseries]') ?? [])];
+  const statTrendSvg = document.getElementById('stat-trend-svg') as unknown as SVGSVGElement | null;
+  const statTrendRead = $<HTMLElement>('stat-trend-read');
+  const statTrendEmpty = $<HTMLElement>('stat-trend-empty');
   const statCore = $<HTMLElement>('stat-core');
   const statCoreBar = $<HTMLElement>('stat-core-bar');
   const statCoreFill = $<HTMLElement>('stat-core-fill');
@@ -1546,6 +1572,369 @@ export function createAdmin(api: AdminApi): Admin {
     hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
   });
 
+  /* ---------- the trend chart: three real series, one bounded window, plain inline SVG ---------- */
+
+  /** The windows the switch selects; each maps to its own ready-to-plot array from the Worker. */
+  type TrendRange = '24h' | '7d' | '30d';
+
+  /** The series the legend can switch on. Active and Signups start on: that is the dual line. */
+  type TrendSeries = 'active' | 'signups' | 'matches';
+
+  const TREND_W = 320;
+  const TREND_H = 154;
+  const TREND_PAD = { l: 28, r: 8, t: 10, b: 20 };
+  const TREND_IW = TREND_W - TREND_PAD.l - TREND_PAD.r;
+  const TREND_IH = TREND_H - TREND_PAD.t - TREND_PAD.b;
+  /** The zero line: every series is a count, so nothing is ever drawn below it. */
+  const TREND_BASE = TREND_PAD.t + TREND_IH;
+
+  const TREND_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const TREND_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  const TREND_WINDOW: Record<TrendRange, string> = {
+    '24h': 'Daily · last 24 hours',
+    '7d': 'Weekly · last 7 days',
+    '30d': 'Monthly · last 30 days',
+  };
+
+  let trendRange: TrendRange = '24h';
+  /** The bucket under the pointer, or -1 while nothing is being inspected. */
+  let trendFocus = -1;
+  /** The window actually on screen, kept so a pointer move can price it without a repaint. */
+  let trendData: SeriesPoint[] = [];
+  /** The Y ceiling that window was scaled to; the cursor layer has to agree with the lines. */
+  let trendCeil = 4;
+  const trendOn: Record<TrendSeries, boolean> = { active: true, signups: true, matches: false };
+
+  /** Two decimals, no trailing zeroes: small numbers keep the SVG markup small. */
+  const fx = (n: number): string => String(Math.round(n * 100) / 100);
+
+  /**
+   * A Y-axis label, abbreviated once it would no longer fit the left gutter. The gutter is a fixed
+   * slice of a fixed viewBox, so a five-figure peak has to read `12k` rather than push the plot off
+   * the canvas — the exact counts are on the legend chips and in the bucket readout.
+   */
+  const axisNum = (v: number): string => {
+    const n = Math.max(0, Math.round(v));
+    if (n < 1000) return String(n);
+    if (n < 10_000) return `${Math.round(n / 100) / 10}k`;
+    return `${Math.round(n / 1000)}k`;
+  };
+
+  /** The x of bucket `i` out of `n`, spread edge to edge across the plot band. */
+  const trendX = (i: number, n: number): number =>
+    TREND_PAD.l + (n <= 1 ? TREND_IW / 2 : (TREND_IW * i) / (n - 1));
+
+  /** The y of a count against a ceiling. Clamped, so a line can never leave the plot band. */
+  const trendY = (v: number, ceil: number): number =>
+    TREND_BASE - (Math.max(0, Math.min(v, ceil)) / ceil) * TREND_IH;
+
+  /**
+   * A Y ceiling on a round number, so the peak / mid / zero labels are all whole counts. An empty
+   * window still gets a short axis rather than a divide by zero.
+   */
+  function trendCeilOf(peak: number): number {
+    if (peak <= 0) return 4;
+    const mag = 10 ** Math.floor(Math.log10(peak));
+    for (const step of [1, 2, 5, 10]) {
+      const candidate = step * mag;
+      if (candidate >= peak) return candidate % 2 === 0 ? candidate : candidate + 1;
+    }
+    return 10 * mag;
+  }
+
+  /**
+   * A smooth cubic path through the plotted points: Catmull-Rom tangents flattened to Bezier
+   * control points. Every control point is clamped back inside the band, because a lone spike
+   * would otherwise bulge the curve past the axis it is drawn against.
+   */
+  function trendPath(pts: readonly { x: number; y: number }[]): string {
+    if (pts.length === 0) return '';
+    if (pts.length === 1) return `M${fx(pts[0].x)},${fx(pts[0].y)}`;
+    let d = `M${fx(pts[0].x)},${fx(pts[0].y)}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i - 1] ?? pts[i];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[i + 2] ?? p2;
+      const c1y = Math.min(TREND_BASE, Math.max(TREND_PAD.t, p1.y + (p2.y - p0.y) / 6));
+      const c2y = Math.min(TREND_BASE, Math.max(TREND_PAD.t, p2.y - (p3.y - p1.y) / 6));
+      d += `C${fx(p1.x + (p2.x - p0.x) / 6)},${fx(c1y)}`
+        + ` ${fx(p2.x - (p3.x - p1.x) / 6)},${fx(c2y)}`
+        + ` ${fx(p2.x)},${fx(p2.y)}`;
+    }
+    return d;
+  }
+
+  /** The same curve closed down onto the zero line: the soft fill under the active series. */
+  function trendArea(pts: readonly { x: number; y: number }[]): string {
+    const line = trendPath(pts);
+    if (!line || pts.length < 2) return line;
+    return `${line}L${fx(pts[pts.length - 1].x)},${fx(TREND_BASE)}`
+      + `L${fx(pts[0].x)},${fx(TREND_BASE)}Z`;
+  }
+
+  /**
+   * The X-axis ticks for the window on screen. The hourly window is labelled against the span
+   * (`-24h .. Now`); the daily windows name the buckets themselves, in the UTC days the Worker
+   * keys them by, so a label always means the same 24 hours the count was measured over.
+   */
+  function trendTicks(points: readonly SeriesPoint[]): { x: number; text: string; anchor: string }[] {
+    const n = points.length;
+    const anchorAt = (k: number, count: number): string =>
+      k === 0 ? 'start' : k === count - 1 ? 'end' : 'middle';
+    if (trendRange === '24h') {
+      const labels = ['-24h', '-18h', '-12h', '-6h', 'Now'];
+      return labels.map((text, k) => ({
+        x: TREND_PAD.l + (TREND_IW * k) / (labels.length - 1),
+        text,
+        anchor: anchorAt(k, labels.length),
+      }));
+    }
+    const count = Math.max(2, Math.min(trendRange === '7d' ? 7 : 5, n));
+    const out: { x: number; text: string; anchor: string }[] = [];
+    for (let k = 0; k < count; k++) {
+      const f = k / (count - 1);
+      const d = new Date(points[Math.min(n - 1, Math.round(f * (n - 1)))].t);
+      out.push({
+        x: TREND_PAD.l + TREND_IW * f,
+        text: trendRange === '7d'
+          ? TREND_WEEKDAYS[d.getUTCDay()]
+          : `${TREND_MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`,
+        anchor: anchorAt(k, count),
+      });
+    }
+    return out;
+  }
+
+  /** The window's own array, or an empty one: a Worker that predates the series must not throw. */
+  function trendPoints(m: ServerMetrics | null): SeriesPoint[] {
+    if (!m) return [];
+    const list = trendRange === '24h' ? m.series24h : trendRange === '7d' ? m.series7d : m.series30d;
+    if (!Array.isArray(list)) return [];
+    return list.filter((p): p is SeriesPoint => !!p && Number.isFinite(p?.t));
+  }
+
+  /** What the empty plot says instead of a line: the reason there is nothing to draw. */
+  function trendEmptyText(m: ServerMetrics | null): string {
+    if (metricsPhase === 'unauthorized') return 'The metrics door refused this session — no trend to plot.';
+    if (m) return 'The Worker reported no buckets for this window yet.';
+    return metricsPhase === 'error'
+      ? 'The Worker did not answer — no trend to plot.'
+      : "Awaiting the Worker's first reading.";
+  }
+
+  /**
+   * Draw the window. The static half (grid, axes, lines, dots) is rebuilt only when the data, the
+   * range or the visible series change; a pointer move repaints the cursor layer on its own, so
+   * hovering a phone-width chart never re-renders the whole SVG.
+   */
+  function paintTrend() {
+    if (!statTrendSvg) return;
+    const m = lastMetrics;
+    const points = trendPoints(m);
+    trendData = points;
+
+    for (const key of statTrendKeys) {
+      key.setAttribute('aria-pressed', String(key.dataset.grange === trendRange));
+    }
+    for (const chip of statTrendSeries) {
+      const on = trendOn[chip.dataset.gseries as TrendSeries] ?? false;
+      chip.setAttribute('aria-pressed', String(on));
+    }
+    if (statTrendWindow) statTrendWindow.textContent = TREND_WINDOW[trendRange];
+    if (trendFocus >= points.length) trendFocus = -1;
+
+    const drawn = points.length > 0;
+    if (statTrendEmpty) {
+      statTrendEmpty.hidden = drawn;
+      if (!drawn) statTrendEmpty.textContent = trendEmptyText(m);
+    }
+    statTrendSvg.classList.toggle('is-blank', !drawn);
+    statTrendSvg.setAttribute('aria-label', drawn
+      ? `${TREND_WINDOW[trendRange]}: ${trendTotalsText(points)}.`
+      : trendEmptyText(m));
+
+    if (!drawn) {
+      statTrendSvg.textContent = '';
+      paintTrendTotals([]);
+      paintTrendRead();
+      return;
+    }
+
+    const n = points.length;
+    let peak = 0;
+    for (const p of points) {
+      if (trendOn.active) peak = Math.max(peak, p.active);
+      if (trendOn.signups) peak = Math.max(peak, p.signups);
+      if (trendOn.matches) peak = Math.max(peak, p.matches);
+    }
+    trendCeil = trendCeilOf(peak);
+
+    const plot = (key: TrendSeries): { x: number; y: number }[] =>
+      points.map((p, i) => ({ x: trendX(i, n), y: trendY(p[key], trendCeil) }));
+
+    const yLabel = (v: number): string =>
+      `<text class="adm-trend-y" x="${TREND_PAD.l - 5}" y="${fx(trendY(v, trendCeil) + 3)}"`
+      + ` text-anchor="end">${axisNum(v)}</text>`;
+    const gridLine = (v: number): string =>
+      `<line x1="${TREND_PAD.l}" y1="${fx(trendY(v, trendCeil))}"`
+      + ` x2="${fx(TREND_PAD.l + TREND_IW)}" y2="${fx(trendY(v, trendCeil))}" />`;
+
+    const activePts = plot('active');
+    const signupPts = plot('signups');
+    const matchPts = plot('matches');
+
+    const parts: string[] = [
+      '<defs>',
+      '<linearGradient id="adm-trend-fill" x1="0" y1="0" x2="0" y2="1">',
+      '<stop offset="0%" stop-color="#22d3ee" stop-opacity=".30" />',
+      '<stop offset="62%" stop-color="#22d3ee" stop-opacity=".07" />',
+      '<stop offset="100%" stop-color="#22d3ee" stop-opacity="0" />',
+      '</linearGradient>',
+      '</defs>',
+      `<g class="adm-trend-grid">${gridLine(0)}${gridLine(trendCeil / 2)}${gridLine(trendCeil)}</g>`,
+      `<g class="adm-trend-axis">${yLabel(0)}${yLabel(trendCeil / 2)}${yLabel(trendCeil)}</g>`,
+    ];
+
+    if (trendOn.active) {
+      parts.push(`<path fill="url(#adm-trend-fill)" d="${trendArea(activePts)}" />`);
+      parts.push(`<path class="adm-trend-line" data-s="active" d="${trendPath(activePts)}" />`);
+    }
+    if (trendOn.matches) {
+      parts.push(`<path class="adm-trend-line" data-s="matches" d="${trendPath(matchPts)}" />`);
+    }
+    if (trendOn.signups) {
+      parts.push(`<path class="adm-trend-line" data-s="signups" d="${trendPath(signupPts)}" />`);
+      /* the dots are the signup line's own markers, so a flat zero stretch still reads as measured */
+      parts.push('<g class="adm-trend-dots">' + signupPts.map((p) =>
+        `<circle cx="${fx(p.x)}" cy="${fx(p.y)}" r="1.9" />`).join('') + '</g>');
+    }
+
+    const ticks = trendTicks(points);
+    parts.push('<g class="adm-trend-axis">' + ticks.map((tick) =>
+      `<text class="adm-trend-x" x="${fx(tick.x)}" y="${TREND_H - 6}" text-anchor="${tick.anchor}">${tick.text}</text>`
+    ).join('') + '</g>');
+
+    /* the inspection layer, kept last so the guide and the markers sit over every line */
+    parts.push('<g class="adm-trend-cursor"></g>');
+    /* one transparent target the pointer can hit anywhere in the band, including the flat parts */
+    parts.push(`<rect class="adm-trend-hit" x="${TREND_PAD.l}" y="${TREND_PAD.t}"`
+      + ` width="${TREND_IW}" height="${TREND_IH}" />`);
+
+    statTrendSvg.innerHTML = parts.join('');
+    paintTrendTotals(points);
+    paintTrendCursor();
+  }
+
+  /** The window's three sums, from the buckets on screen and nothing else. */
+  function trendTotals(points: readonly SeriesPoint[]): { signups: number; active: number; matches: number } {
+    let signups = 0;
+    let active = 0;
+    let matches = 0;
+    for (const p of points) {
+      signups += Math.max(0, p.signups);
+      active += Math.max(0, p.active);
+      matches += Math.max(0, p.matches);
+    }
+    return { signups, active, matches };
+  }
+
+  const trendTotalsText = (points: readonly SeriesPoint[]): string => {
+    const t = trendTotals(points);
+    return `${figure(t.signups)} signups, ${figure(t.active)} active, ${figure(t.matches)} matches`;
+  };
+
+  /** The legend chips: each series' own sum across the window that is on screen. */
+  function paintTrendTotals(points: readonly SeriesPoint[]): void {
+    const t = trendTotals(points);
+    for (const chip of statTrendSeries) {
+      const slot = chip.querySelector<HTMLElement>('[data-gtotal]');
+      if (!slot) continue;
+      const key = chip.dataset.gseries as TrendSeries;
+      slot.textContent = points.length ? figure(t[key]) : '—';
+    }
+  }
+
+  /** The guide line and the enlarged markers over the bucket being inspected. */
+  function paintTrendCursor(): void {
+    /* looked up rather than held: a rebuild replaces the node, and a stale ref would draw nothing */
+    const cursor = statTrendSvg?.querySelector<SVGGElement>('.adm-trend-cursor') ?? null;
+    if (!cursor) return;
+    const p = trendFocus >= 0 ? trendData[trendFocus] : undefined;
+    if (!p) {
+      cursor.textContent = '';
+      paintTrendRead();
+      return;
+    }
+    const n = trendData.length;
+    const x = fx(trendX(trendFocus, n));
+    const marks: string[] = [
+      `<line class="adm-trend-guide" x1="${x}" y1="${TREND_PAD.t}" x2="${x}" y2="${fx(TREND_BASE)}" />`,
+    ];
+    const dot = (key: TrendSeries): string => {
+      if (!trendOn[key]) return '';
+      return `<circle class="adm-trend-mark" data-s="${key}" cx="${x}"`
+        + ` cy="${fx(trendY(p[key], trendCeil))}" r="3.4" />`;
+    };
+    marks.push(dot('active'), dot('matches'), dot('signups'));
+    cursor.innerHTML = marks.join('');
+    paintTrendRead();
+  }
+
+  /**
+   * The one line under the plot: the window's sums while nothing is being inspected, the exact
+   * bucket under the finger the moment there is. Both readings come from the same real buckets.
+   */
+  function paintTrendRead(): void {
+    if (!statTrendRead) return;
+    const points = trendData;
+    if (!points.length) {
+      statTrendRead.textContent = '—';
+      return;
+    }
+    const p = trendFocus >= 0 ? points[trendFocus] : undefined;
+    if (!p) {
+      statTrendRead.textContent = `Window total · ${trendTotalsText(points)}`;
+      statTrendRead.dataset.focused = 'false';
+      return;
+    }
+    statTrendRead.dataset.focused = 'true';
+    const d = new Date(p.t);
+    const when = trendRange === '24h'
+      ? `${TREND_WEEKDAYS[d.getUTCDay()]} ${String(d.getUTCHours()).padStart(2, '0')}:00 UTC`
+      : `${TREND_WEEKDAYS[d.getUTCDay()]} ${TREND_MONTHS[d.getUTCMonth()]} ${d.getUTCDate()} UTC`;
+    statTrendRead.textContent = `${when} · ${figure(p.signups)} signups ·`
+      + ` ${figure(p.active)} active · ${figure(p.matches)} matches`;
+  }
+
+  /** The bucket under a pointer, mapped back through the SVG's own uniform scale. */
+  function trendIndexAt(clientX: number): number {
+    const svg = statTrendSvg;
+    const n = trendData.length;
+    if (!svg || n < 1 || svg.classList.contains('is-blank')) return -1;
+    const rect = svg.getBoundingClientRect();
+    if (rect.width <= 0) return -1;
+    const x = ((clientX - rect.left) / rect.width) * TREND_W;
+    const i = Math.round(((x - TREND_PAD.l) / TREND_IW) * (n - 1));
+    return i < 0 || i > n - 1 ? -1 : i;
+  }
+
+  function setTrendFocus(index: number): void {
+    if (index === trendFocus) return;
+    trendFocus = index;
+    paintTrendCursor();
+  }
+
+  function setTrendRange(range: TrendRange): void {
+    if (range === trendRange) return;
+    trendRange = range;
+    trendFocus = -1;
+    impact('light');
+    paintTrend();
+  }
+
   /**
    * The live bar, the alert card and every counter, from the last completed reading. A Worker
    * that refused the signature clears the board; one that cannot be reached keeps the last
@@ -1666,6 +2055,8 @@ export function createAdmin(api: AdminApi): Admin {
         if (statAlertBody && statAlertBody.textContent !== body) statAlertBody.textContent = body;
       }
     }
+
+    paintTrend();
   }
 
   /**
@@ -3669,6 +4060,30 @@ export function createAdmin(api: AdminApi): Admin {
     impact('light');
     void refreshMetrics();
   });
+
+  /* the trend chart: a timeframe switch, a series legend and one pointer over the plot */
+  for (const key of statTrendKeys) {
+    key.addEventListener('click', () => {
+      const range = key.dataset.grange;
+      if (range === '24h' || range === '7d' || range === '30d') setTrendRange(range);
+    });
+  }
+  for (const chip of statTrendSeries) {
+    chip.addEventListener('click', () => {
+      const series = chip.dataset.gseries;
+      if (series !== 'active' && series !== 'signups' && series !== 'matches') return;
+      trendOn[series] = !trendOn[series];
+      impact('light');
+      paintTrend();
+    });
+  }
+  statTrendSvg?.addEventListener('pointerdown', (e) => setTrendFocus(trendIndexAt(e.clientX)));
+  statTrendSvg?.addEventListener('pointermove', (e) => setTrendFocus(trendIndexAt(e.clientX)));
+  statTrendSvg?.addEventListener('pointerleave', (e) => {
+    /* a lifted finger leaves its reading on screen; only a mouse leaving the plot clears it */
+    if (e.pointerType === 'mouse') setTrendFocus(-1);
+  });
+  statTrendSvg?.addEventListener('pointercancel', () => setTrendFocus(-1));
 
   /* one delegated listener: the list is rebuilt on every paint, so no handler outlives its card */
   inboxList?.addEventListener('click', (e) => {

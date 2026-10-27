@@ -3199,25 +3199,79 @@
                   <div class="adm-inflow-pill" data-window="today">
                     <span class="adm-inflow-dot" aria-hidden="true"></span>
                     <span class="adm-inflow-txt">
-                      <span class="adm-inflow-l">Today (24h)</span>
+                      <span class="adm-inflow-l">Today · 24H</span>
                       <b class="adm-inflow-v" id="stat-new-today">—</b>
                     </span>
                   </div>
                   <div class="adm-inflow-pill" data-window="week">
                     <span class="adm-inflow-dot" aria-hidden="true"></span>
                     <span class="adm-inflow-txt">
-                      <span class="adm-inflow-l">This Week (7d)</span>
+                      <span class="adm-inflow-l">This Week · 7D</span>
                       <b class="adm-inflow-v" id="stat-new-week">—</b>
                     </span>
                   </div>
                   <div class="adm-inflow-pill" data-window="month">
                     <span class="adm-inflow-dot" aria-hidden="true"></span>
                     <span class="adm-inflow-txt">
-                      <span class="adm-inflow-l">This Month (30d)</span>
+                      <span class="adm-inflow-l">This Month · 30D</span>
                       <b class="adm-inflow-v" id="stat-new-month">—</b>
                     </span>
                   </div>
                 </div>
+              </div>
+            </section>
+
+            <!-- B2. trends: the Worker's bounded growth rings, drawn as native inline SVG. Every
+                 point is a real bucket it stamped or folded from its own registry timestamps. -->
+            <section class="adm-block" data-accent="sky" aria-labelledby="stat-trend-title">
+              <div class="adm-block-h">
+                <h3 class="adm-block-t" id="stat-trend-title">Growth &amp; Activity Trends</h3>
+                <span class="adm-block-s">Bucketed · UTC</span>
+              </div>
+              <div class="adm-slab adm-trend">
+                <div class="adm-trend-h">
+                  <span class="adm-trend-copy">
+                    <span class="adm-trend-t">Signups &amp; Active Players</span>
+                    <span class="adm-trend-s" id="stat-trend-window">Daily · last 24 hours</span>
+                  </span>
+                  <div class="adm-trend-keys" role="group" aria-label="Chart timeframe">
+                    <button class="adm-trend-key" type="button" data-grange="24h" aria-pressed="true">
+                      <b>24H</b><span>Daily</span>
+                    </button>
+                    <button class="adm-trend-key" type="button" data-grange="7d" aria-pressed="false">
+                      <b>7D</b><span>Weekly</span>
+                    </button>
+                    <button class="adm-trend-key" type="button" data-grange="30d" aria-pressed="false">
+                      <b>30D</b><span>Monthly</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="adm-trend-plot">
+                  <svg class="adm-trend-svg" id="stat-trend-svg" viewBox="0 0 320 154" role="img"
+                    aria-label="Awaiting the Worker's first reading."></svg>
+                  <p class="adm-trend-empty" id="stat-trend-empty" hidden>Awaiting the Worker's first reading.</p>
+                </div>
+
+                <div class="adm-trend-legend" role="group" aria-label="Chart series">
+                  <button class="adm-trend-chip" type="button" data-gseries="active" aria-pressed="true">
+                    <span class="adm-trend-dot" aria-hidden="true"></span>
+                    <span class="adm-trend-chip-t">Active</span>
+                    <b class="adm-trend-chip-v" data-gtotal>—</b>
+                  </button>
+                  <button class="adm-trend-chip" type="button" data-gseries="signups" aria-pressed="true">
+                    <span class="adm-trend-dot" aria-hidden="true"></span>
+                    <span class="adm-trend-chip-t">Signups</span>
+                    <b class="adm-trend-chip-v" data-gtotal>—</b>
+                  </button>
+                  <button class="adm-trend-chip" type="button" data-gseries="matches" aria-pressed="false">
+                    <span class="adm-trend-dot" aria-hidden="true"></span>
+                    <span class="adm-trend-chip-t">Matches</span>
+                    <b class="adm-trend-chip-v" data-gtotal>—</b>
+                  </button>
+                </div>
+
+                <p class="adm-trend-read" id="stat-trend-read" data-focused="false">—</p>
               </div>
             </section>
 
