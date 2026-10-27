@@ -616,6 +616,8 @@ export interface PlayersPage {
 const PLAYERS_MAX = 2000;
 /** The directory's own page ceiling: the panel asks for 40 at a time, a script could ask for more. */
 const PLAYERS_LIMIT = 100;
+/** The public Mind Ladder's read ceiling: one screen asks for five, the full board for a hundred. */
+const MINDS_LIMIT = 100;
 /** A day in ms: what "Active Today" means on both sides of the wire. */
 const ACTIVE_MS = 24 * 60 * 60 * 1000;
 /** A week in ms: the WAU / new-signup window. */
@@ -1274,6 +1276,7 @@ export class MatchmakerDO {
       || url.pathname.startsWith('/api/admin/')
       || url.pathname === '/api/client/announcements/active'
       || url.pathname === '/api/client/arena/state'
+      || url.pathname === '/api/client/minds'
     ) {
       return this.admin(request, url);
     }
@@ -1582,6 +1585,10 @@ export class MatchmakerDO {
     });
     if (url.pathname === '/api/client/arena/state') {
       return json(await this.clientArena(request), 200, { 'cache-control': 'no-store' });
+    }
+    if (url.pathname === '/api/client/minds') {
+      if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+      return json(await this.mindsBoard(request, url), 200, { 'cache-control': 'no-store' });
     }
 
     /* The private telemetry route: only a request the edge marked after the strict operator check. */
@@ -1917,6 +1924,74 @@ export class MatchmakerDO {
       arena: this.arenaPublicView(),
       award: awards.length ? awards[awards.length - 1] : null,
     };
+  }
+
+  /**
+   * The public Mind Ladder: the room's own TIQ registry, ranked live. A banned seat is never
+   * published, and a zero-TIQ seat has not earned a place yet. The caller's own reading —
+   * verified initData when the Mini App supplies one, or the explicit `tiq` the Home card
+   * sends — is ranked by the same comparator, so the strip under the board and the rows above
+   * it can never disagree.
+   */
+  private async mindsBoard(request: Request, url: URL): Promise<{
+    ok: true;
+    updatedAt: number;
+    total: number;
+    players: Array<{
+      rank: number; id: string; name: string; country: string; tiq: number; wins: number; isYou: boolean;
+    }>;
+    you: { rank: number; tiq: number; total: number; inBoard: boolean } | null;
+  }> {
+    const askedLimit = url.searchParams.get('limit');
+    const rawLimit = askedLimit === null ? 5 : Number(askedLimit);
+    const limit = Number.isFinite(rawLimit) ? clamp(Math.floor(rawLimit), 1, MINDS_LIMIT) : 5;
+
+    const init = request.headers.get('x-telegram-init-data') ?? '';
+    const tgId = init ? await verifiedTelegramUserId(init, this.env) : '';
+    const mineId = tgId ? `tg-${tgId}` : '';
+    const mine = mineId ? this.players.get(mineId) : undefined;
+    const rawTiq = Number(url.searchParams.get('tiq'));
+    const reported = Number.isFinite(rawTiq) ? clamp(Math.floor(rawTiq), 0, 10_000_000) : 0;
+    const myTiq = Math.max(0, Math.floor(mine?.tiq ?? 0), reported);
+    const myWins = Math.max(0, Math.floor(mine?.wins ?? 0));
+    const selfBanned = mineId ? this.banned.has(mineId) || mine?.banned === true : false;
+
+    const field = [...this.players.values()]
+      .filter((p) => !p.banned && !this.banned.has(p.id))
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        country: p.country,
+        wins: p.id === mineId ? myWins : p.wins,
+        tiq: p.id === mineId ? myTiq : p.tiq,
+      }))
+      .filter((p) => p.tiq > 0)
+      .sort((a, b) => b.tiq - a.tiq || b.wins - a.wins || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+
+    const inField = !!mineId && field.some((p) => p.id === mineId);
+    const total = field.length + (myTiq > 0 && !inField && !selfBanned ? 1 : 0);
+    const players = field.slice(0, limit).map((p, i) => ({
+      rank: i + 1,
+      id: p.id,
+      name: p.name,
+      country: p.country,
+      tiq: p.tiq,
+      wins: p.wins,
+      isYou: !!mineId && p.id === mineId,
+    }));
+
+    let you: { rank: number; tiq: number; total: number; inBoard: boolean } | null = null;
+    if (myTiq > 0 && !selfBanned) {
+      /* The caller's own live reading may be newer than the record the room last saw; rank it
+         against the field rather than trusting its stored seat, then say whether that rank landed
+         inside the rows just returned. */
+      const ahead = field.filter(
+        (p) => p.id !== mineId && (p.tiq > myTiq || (p.tiq === myTiq && p.wins > myWins)),
+      ).length;
+      you = { rank: ahead + 1, tiq: myTiq, total, inBoard: players.some((p) => p.isYou) };
+    }
+
+    return { ok: true, updatedAt: Date.now(), total, players, you };
   }
 
   /** The Arena tab's write door: one patch, or one of the two emergency commands. */

@@ -16,8 +16,8 @@
  * The fourth surface is the same Command Center, under its `/api/*` spelling: the role registry
  * (`GET /api/admin/roles`, `POST /api/admin/roles/grant|revoke`), the broadcast engine
  * (`GET /api/admin/broadcasts`, `POST /api/admin/broadcasts/create`, and
- * `POST /api/admin/broadcasts/:id/archive`) — plus the one public route the players read,
- * `GET /api/client/announcements/active`.
+ * `POST /api/admin/broadcasts/:id/archive`) — plus the public routes the players read,
+ * `GET /api/client/announcements/active` and the live Mind Ladder at `GET /api/client/minds`.
  *
  * `GET /api/admin/metrics` is a stricter door than that surface: exactly one Telegram id, proven
  * by initData with no development fallback. It reads the room's live counts and durable counters
@@ -171,6 +171,13 @@ export default {
     /* The public tournament clock. The room verifies any initData itself, so the award that
        rides along is never keyed off a client-supplied identity header. */
     if (url.pathname === '/api/client/arena/state') {
+      const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+      return lobby.fetch(request);
+    }
+
+    /* The public Mind Ladder: the room's own TIQ registry, ranked. Read-only and never cached. */
+    if (url.pathname === '/api/client/minds') {
+      if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
       const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
       return lobby.fetch(request);
     }

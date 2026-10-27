@@ -174,7 +174,7 @@ function grandCupSeed(): GrandCup {
   };
 }
 
-function seeding(): { cup: GrandCup; countries: CountryRow[]; players: PlayerRow[]; teams: TeamRow[] } {
+function seeding(): { cup: GrandCup; countries: CountryRow[]; teams: TeamRow[] } {
   const cup = grandCupSeed();
   const countries: CountryRow[] = [
     { code: 'US', name: 'United States', points: 12840, trend: 'up', rank: 1 },
@@ -188,16 +188,6 @@ function seeding(): { cup: GrandCup; countries: CountryRow[]; players: PlayerRow
     { code: 'TR', name: 'Turkey', points: 7210, trend: 'down', rank: 9 },
     { code: 'ES', name: 'Spain', points: 6980, trend: 'same', rank: 10 },
   ];
-  const players: PlayerRow[] = [
-    { id: 'u-amara', name: 'Amara', countryCode: 'NG', points: 3420, wins: 34, trend: 'up' },
-    { id: 'u-sofia', name: 'Sofia', countryCode: 'ES', points: 3180, wins: 31, trend: 'up' },
-    { id: 'u-kenji', name: 'Kenji', countryCode: 'JP', points: 3050, wins: 29, trend: 'down' },
-    { id: 'u-priya', name: 'Priya', countryCode: 'IN', points: 2910, wins: 26, trend: 'up' },
-    { id: 'u-lucas', name: 'Lucas', countryCode: 'BR', points: 2740, wins: 22, trend: 'same' },
-    { id: 'u-noor', name: 'Noor', countryCode: 'SA', points: 2610, wins: 21, trend: 'down' },
-    { id: 'u-owen', name: 'Owen', countryCode: 'US', points: 2480, wins: 23, trend: 'same' },
-    { id: 'u-hana', name: 'Hana', countryCode: 'KR', points: 2330, wins: 17, trend: 'up' },
-  ];
   const teams: TeamRow[] = [
     { id: 'seed-0', name: 'Night Circuits', code: 'NIGHT', points: 5210, members: 5, trend: 'up', rank: 1 },
     { id: 'seed-1', name: 'Violet Rampart', code: 'VIOL1', points: 4870, members: 4, trend: 'down', rank: 2 },
@@ -205,7 +195,7 @@ function seeding(): { cup: GrandCup; countries: CountryRow[]; players: PlayerRow
     { id: 'seed-3', name: 'Checkpoint Twelve', code: 'CHK12', points: 3960, members: 3, trend: 'same', rank: 4 },
     { id: 'seed-4', name: 'Open Road', code: 'OPEN3', points: 3120, members: 2, trend: 'up', rank: 5 },
   ];
-  return { cup, countries, players, teams };
+  return { cup, countries, teams };
 }
 
 /** The championship behind the Arena screen. One cup, staged in full. */
@@ -330,31 +320,23 @@ export async function getChannelRoster(ch: ChannelSeed, you: RosterYou | null = 
 }
 
 /**
- * The top players behind one nation. The ladder's real seeded names for that
- * country are folded in at their real TIQ; the remaining places are a stable
- * split of the nation's aggregate. The local player joins at their own TIQ when
- * the country is theirs, and always keeps a place inside the quoted count.
+ * The top players behind one nation: a stable split of the nation's aggregate, with the local
+ * player joined at their own TIQ when the country is theirs and always kept inside the quoted
+ * count. The real player registry lives on the Worker; this national board has no per-player
+ * feed yet, so it never dresses another screen's seed up as a real head.
  */
 export async function getNationRoster(country: CountryRow, you: RosterYou | null = null): Promise<NationMember[]> {
   await sleep(240);
   const count = nationPlayersOf(country.code, country.points);
   const mine = you && you.countryCode === country.code ? you : null;
   const mineKey = mine?.name.trim().toLowerCase() ?? '';
-  const actual = seeding().players
-    .filter((p) => p.countryCode === country.code && p.name.toLowerCase() !== mineKey)
-    .sort((a, b) => b.points - a.points)
-    .slice(0, count);
-  const actualTotal = actual.reduce((sum, p) => sum + p.points, 0);
-  const synthCount = Math.max(0, count - actual.length);
-  const tiqs = splitNationTiq(country.code, Math.max(0, country.points - actualTotal), synthCount);
+  const tiqs = splitNationTiq(country.code, country.points, count);
   const seed = hash32(country.code);
-  const taken = new Set(actual.map((p) => p.name.toLowerCase()));
+  const taken = new Set<string>();
   if (mineKey) taken.add(mineKey);
 
-  const rows: NationMember[] = actual.map((p) => ({
-    rank: 0, id: p.id, name: p.name, tiq: p.points, wins: p.wins, isYou: false,
-  }));
-  for (let i = 0; i < synthCount; i++) {
+  const rows: NationMember[] = [];
+  for (let i = 0; i < count; i++) {
     let name = nationName(seed, i);
     for (let lap = 2; taken.has(name.toLowerCase()); lap++) name = `${nationName(seed, i)} ${lap}`;
     taken.add(name.toLowerCase());
@@ -397,11 +379,6 @@ export async function getCountryRanking(): Promise<CountryRow[]> {
 export async function getTopCountries(limit = 5): Promise<CountryRow[]> {
   const all = await getCountryRanking();
   return all.slice(0, limit);
-}
-
-export async function getPlayerRanking(): Promise<PlayerRow[]> {
-  await sleep(LATENCY);
-  return seeding().players.map((p) => ({ ...p }));
 }
 
 export async function getTeamRanking(): Promise<TeamRow[]> {

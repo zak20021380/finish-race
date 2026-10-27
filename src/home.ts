@@ -20,7 +20,9 @@
 import type { Difficulty } from './bot';
 import { menuState, motionReduced, onSettings, saveMenu } from './settings';
 import { nameOf } from './countries';
-import { getCountryRanking, getPlayerRanking, type CountryRow, type PlayerRow } from './data';
+import { getCountryRanking, type CountryRow } from './data';
+import { fetchMindLadder, type MindFeed, type MindRowData } from './minds';
+import { myTiq } from './matchmaking';
 import { onChange, profile, theme } from './storage';
 import { BOT_HANDLE, impact, openLink } from './telegram';
 import { flagPhoto } from './flags';
@@ -332,50 +334,74 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     }, 80);
   });
 
-  /* ---------- The Mind Ladder: top minds + your cognitive standing ----------
-     Individual TIQ prestige. Rank, name and the gold score lockup carry the row:
-     a medal emblem on the left, the trend delta beside the TIQ on the right. No
-     tier words, no countdown, no capacity meter. */
+  /* ---------- The Mind Ladder: live TIQ telemetry + your cognitive standing ----------
+     The card reads the Worker's own registry, so the mind on top of this card is the mind on
+     top of the full ladder. Five slots are always painted: real players fill from rank 1 and
+     the rest stay as identical, dimmed "Awaiting Challenger" rows, so the band never collapses
+     on a quiet server. The score lockup is [score] [TIQ] [brain], never a trophy. */
 
-  /** Your TIQ: 120 a win plus 20 a race — the exact formula the ladder reads. */
-  const myTiq = (): number => Math.max(0, profile.stats.wins * 120 + profile.stats.games * 20);
-
-  /** Nominal ladder pool + a monotone, deterministic rank/percentile (Preview data). */
-  const MIND_POOL = 2400;
-  const mindStanding = (tiq: number): { rank: number; pct: number } => {
-    const rank = Math.min(MIND_POOL, Math.max(1, Math.round(MIND_POOL - (tiq / 3600) * (MIND_POOL - 1))));
-    return { rank, pct: Math.min(100, Math.max(1, Math.round((rank / MIND_POOL) * 100))) };
-  };
-
+  const MIND_SLOTS = 5;
   const SVG_NS = 'http://www.w3.org/2000/svg';
+  let mindFeed: MindFeed | null = null;
+  let mindLoad = 0;
 
-  /** The trophy that closes the score lockup — house sprite artwork, never an emoji. */
-  const mindCup = (): SVGSVGElement => {
+  /** The signature brain token: the same sprite the card's kicker wears. */
+  const brainToken = (): HTMLElement => {
+    const wrap = document.createElement('span');
+    wrap.className = 'mind-brain';
+    wrap.setAttribute('aria-hidden', 'true');
     const svg = document.createElementNS(SVG_NS, 'svg');
-    svg.setAttribute('class', 'mind-cup');
+    svg.setAttribute('class', 'mind-brain-ico');
     svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('aria-hidden', 'true');
     const use = document.createElementNS(SVG_NS, 'use');
-    use.setAttribute('href', '#i-cup');
+    use.setAttribute('href', '#i-brain');
     svg.append(use);
-    return svg;
+    wrap.append(svg);
+    return wrap;
   };
 
-  const mindTrendText = (p: PlayerRow): string => {
-    if (p.trend === 'up') return `▲ ${trendDeltaOf(p.id)}`;
-    if (p.trend === 'down') return `▼ ${trendDeltaOf(p.id)}`;
-    return '•';
+  /** A seat with no nation yet still wears an emblem: the tactix globe, not a blank chip. */
+  const globeFlag = (): HTMLElement => {
+    const flag = document.createElement('span');
+    flag.className = 'mind-flag mind-flag-none';
+    flag.setAttribute('aria-hidden', 'true');
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'mind-flag-ico');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    const use = document.createElementNS(SVG_NS, 'use');
+    use.setAttribute('href', '#i-globe');
+    svg.append(use);
+    flag.append(svg);
+    return flag;
   };
 
-  const mindRow = (p: PlayerRow, rank: number): HTMLLIElement => {
+  const scoreCell = (score: string, empty: boolean): HTMLElement => {
+    const sc = document.createElement('span');
+    sc.className = 'mind-score';
+    sc.title = empty ? 'No TIQ yet' : `${score} TIQ`;
+    const num = document.createElement('b');
+    num.textContent = score;
+    const unit = document.createElement('span');
+    unit.className = 'mind-tiq-k';
+    unit.textContent = 'TIQ';
+    unit.setAttribute('aria-hidden', 'true');
+    sc.append(num, unit, brainToken());
+    return sc;
+  };
+
+  const mindRow = (p: MindRowData): HTMLLIElement => {
     const li = document.createElement('li');
     li.className = 'mind-row';
-    const score = p.points.toLocaleString('en-US');
-    const trendWord = p.trend === 'up' ? 'rising' : p.trend === 'down' ? 'dropping' : 'steady';
-    li.setAttribute('aria-label', `#${rank} ${p.name} — ${score} TIQ, ${trendWord}`);
+    const score = p.tiq.toLocaleString('en-US');
+    const trendWord = p.trend === 'up'
+      ? `rising ${p.delta}`
+      : p.trend === 'down'
+        ? `dropping ${Math.abs(p.delta)}`
+        : 'steady';
+    li.setAttribute('aria-label', `#${p.rank} ${p.name} — ${score} TIQ, ${trendWord}`);
     const rk = document.createElement('span');
-    rk.className = `mind-rank ${rank <= 3 ? PODIUM_CLASS[rank - 1] : 'slate'}`;
-    rk.textContent = `#${rank}`;
+    rk.className = `mind-rank ${p.rank <= 3 ? PODIUM_CLASS[p.rank - 1] : 'slate'}`;
+    rk.textContent = `#${p.rank}`;
     rk.setAttribute('aria-hidden', 'true');
     const av = document.createElement('span');
     av.className = 'mind-av';
@@ -383,54 +409,120 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const ini = document.createElement('b');
     ini.className = 'mind-ini';
     ini.textContent = monogramOf(p.name);
-    av.append(ini, flagPhoto(p.countryCode, 'mind-flag'));
+    av.append(ini, p.countryCode ? flagPhoto(p.countryCode, 'mind-flag') : globeFlag());
     const nm = document.createElement('span');
     nm.className = 'mind-nm';
     nm.textContent = p.name;
     nm.title = p.name;
     const tr = document.createElement('span');
     tr.className = `mind-trend ${p.trend}`;
-    tr.textContent = mindTrendText(p);
+    tr.textContent = p.trend === 'up' ? `▲ ${p.delta}` : p.trend === 'down' ? `▼ ${Math.abs(p.delta)}` : '•';
     tr.title = trendWord;
     tr.setAttribute('aria-hidden', 'true');
-    const sc = document.createElement('span');
-    sc.className = 'mind-score';
-    sc.title = `${score} TIQ`;
-    const num = document.createElement('b');
-    num.textContent = score;
-    sc.append(num, mindCup());
-    li.append(rk, av, nm, tr, sc);
+    li.append(rk, av, nm, tr, scoreCell(score, false));
     return li;
   };
 
-  const paintMindMine = (): void => {
+  /** One unoccupied rank: the exact same row skeleton, dimmed — never a shorter row or a gap. */
+  const emptyMindRow = (rank: number): HTMLLIElement => {
+    const li = document.createElement('li');
+    li.className = 'mind-row is-empty';
+    li.setAttribute('aria-label', `#${rank} — Awaiting Challenger, no TIQ yet`);
+    const rk = document.createElement('span');
+    rk.className = 'mind-rank slate';
+    rk.textContent = `#${rank}`;
+    rk.setAttribute('aria-hidden', 'true');
+    const av = document.createElement('span');
+    av.className = 'mind-av mind-av-empty';
+    av.setAttribute('aria-hidden', 'true');
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'mind-av-ico');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    const use = document.createElementNS(SVG_NS, 'use');
+    use.setAttribute('href', '#i-brain');
+    svg.append(use);
+    av.append(svg);
+    const nm = document.createElement('span');
+    nm.className = 'mind-nm';
+    nm.textContent = 'Awaiting Challenger';
+    const tr = document.createElement('span');
+    tr.className = 'mind-trend same';
+    tr.textContent = '•';
+    tr.setAttribute('aria-hidden', 'true');
+    li.append(rk, av, nm, tr, scoreCell('—', true));
+    return li;
+  };
+
+  const paintMindTop = (feed: MindFeed | null): void => {
+    const el = document.getElementById('mind-top');
+    if (!el) return;
+    if (feed?.live && feed.total > 0) {
+      el.textContent = `${feed.total.toLocaleString('en-US')} ${feed.total === 1 ? 'Mind' : 'Minds'}`;
+    } else {
+      el.textContent = 'TIQ Live';
+    }
+  };
+
+  const paintMindMine = (feed: MindFeed | null): void => {
     const el = document.getElementById('home-mind-mine');
     if (!el) return;
-    const tiq = myTiq();
-    const { rank, pct } = mindStanding(tiq);
-    el.textContent = `You: Rank #${rank} · TIQ ${tiq.toLocaleString('en-US')} · Top ${pct}% Global Mind`;
+    const tiq = myTiq().toLocaleString('en-US');
+    if (feed?.live && feed.standing) {
+      el.textContent = `You: Rank #${feed.standing.rank} · TIQ ${tiq} · Top ${feed.standing.pct}% Global Mind`;
+      el.title = `Rank ${feed.standing.rank} of ${feed.standing.total.toLocaleString('en-US')} minds`;
+      return;
+    }
+    if (feed?.live) {
+      el.textContent = `You: Unranked · TIQ ${tiq} · Win a live race to rank`;
+      el.title = 'Your TIQ enters the ladder after your first live TIQ';
+      return;
+    }
+    el.textContent = `You: Unranked · TIQ ${tiq} · Live ladder offline`;
+    el.removeAttribute('title');
+  };
+
+  const paintMinds = (feed: MindFeed | null): void => {
+    const list = document.getElementById('home-minds');
+    if (!list) return;
+    list.textContent = '';
+    const rows = feed?.rows ?? [];
+    for (let i = 0; i < MIND_SLOTS; i++) {
+      const row = rows[i];
+      list.append(row ? mindRow(row) : emptyMindRow(i + 1));
+    }
+    paintMindTop(feed);
+    paintMindMine(feed);
   };
 
   const loadMinds = async (): Promise<void> => {
-    const list = $('home-minds');
-    paintMindMine();
-    try {
-      const all = await getPlayerRanking();
-      list.textContent = '';
-      all.slice(0, 5).forEach((p, i) => list.append(mindRow(p, i + 1)));
-    } catch {
-      list.textContent = '';
-      const li = document.createElement('li');
-      li.className = 'mind-row is-error';
-      li.textContent = 'Ladder unavailable';
-      list.append(li);
+    const seq = ++mindLoad;
+    if (mindFeed) paintMindMine(mindFeed);
+    const next = await fetchMindLadder(myTiq(), MIND_SLOTS);
+    if (seq !== mindLoad) return;
+    /* A failed read keeps the last real board; a first read paints the five placeholder slots. */
+    if (next.live || !mindFeed) {
+      mindFeed = next;
+      paintMinds(next);
+      return;
     }
+    paintMindMine(mindFeed);
   };
 
   document.getElementById('home-mind-cta')?.addEventListener('click', () => {
     impact('light');
     poke();
     api.router.go('ranks');
+  });
+
+  /* The card stays fresh while it is on screen: a slow poll, plus the save watcher above which
+     already fires after every race. A hidden tab costs no network. */
+  window.setInterval(() => {
+    const home = document.getElementById('s-home');
+    if (!document.hidden && home && !home.hidden) void loadMinds();
+  }, 30_000);
+  document.addEventListener('visibilitychange', () => {
+    const home = document.getElementById('s-home');
+    if (!document.hidden && home && !home.hidden) void loadMinds();
   });
 
   /* ---------- Channel War: the hero slide's one door ----------

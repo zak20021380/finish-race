@@ -39,11 +39,11 @@
   --honey-ink: #FCD34D;
   --honey-soft: rgba(245, 158, 11, .18);
 
-  /* ---- Mind Ladder: TIQ is the hero metric, the cup is a season prize ----
-     A TIQ reading is always gold; on the home podium #i-cup trails the digits as a
-     unit marker, never a stand-in for the number. The four mind tiers each own one
-     aura (ring colour + bloom) on the ladder sheet, so a Grandmaster and a Rookie
-     are separable without a badge word. Violet is the aura hue; cyan stays
+  /* ---- Mind Ladder: TIQ is the hero metric, the brain is its token ----
+     A TIQ reading is always gold; on the home podium the explicit "TIQ" unit and
+     the brain badge close the digits, never a trophy. The four mind tiers each own
+     one aura (ring colour + bloom) on the ladder sheet, so a Grandmaster and a
+     Rookie are separable without a badge word. Violet is the aura hue; cyan stays
      "active", coral stays "the one loud action". */
   --tiq: #FCD34D;
   --violet: #A78BFA;
@@ -18207,7 +18207,6 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   overflow: hidden;
   box-sizing: border-box;
 }
-.mind-row.is-error { justify-content: center; color: var(--ink-soft); font-weight: 700; flex: none; height: 30px; min-height: 30px; max-height: 30px; }
 /* rank emblem: the medal itself — gold / silver / bronze on the podium, slate below it */
 .mind-rank {
   flex: none;
@@ -18315,26 +18314,76 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   box-shadow: inset 0 0 0 1px rgba(253, 164, 175, .34);
   color: var(--red-ink);
 }
-/* score lockup: the rating, then the trophy that gives it its weight */
+/* score lockup: the rating, the explicit unit, then the signature brain token */
 .mind-score {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   font-size: 15px;
   font-weight: 900;
   letter-spacing: -.01em;
   color: var(--honey-ink);
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, .5);
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, .5),
+    0 0 10px rgba(252, 211, 77, .16);
   white-space: nowrap;
 }
-.mind-cup {
-  display: block;
-  width: 13px;
-  height: 13px;
-  opacity: .85;
+.mind-tiq-k {
+  flex: none;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  line-height: 1;
+  color: var(--violet);
+  text-shadow: 0 0 8px rgba(167, 139, 250, .35);
 }
+.mind-brain {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  color: #EDE9FE;
+  background: linear-gradient(180deg, rgba(167, 139, 250, .34) 0%, rgba(124, 58, 237, .26) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(196, 181, 253, .34),
+    0 0 7px rgba(139, 92, 246, .28);
+}
+.mind-brain-ico { display: block; width: 10px; height: 10px; }
+/* an unoccupied rank: the same row skeleton, quieter clay — never a shorter row */
+.mind-row.is-empty {
+  background: rgba(255, 255, 255, .02);
+  border-top-color: transparent;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .035);
+}
+.mind-row.is-empty .mind-rank { color: rgba(169, 182, 204, .55); }
+.mind-row.is-empty .mind-nm { color: var(--ink-soft); font-weight: 600; opacity: .62; }
+.mind-row.is-empty .mind-trend { opacity: .35; }
+.mind-row.is-empty .mind-score { color: rgba(252, 211, 77, .42); text-shadow: none; }
+.mind-row.is-empty .mind-tiq-k { color: rgba(196, 181, 253, .45); text-shadow: none; }
+.mind-row.is-empty .mind-brain {
+  color: rgba(237, 233, 254, .45);
+  background: rgba(255, 255, 255, .04);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+}
+.mind-av.mind-av-empty {
+  background: rgba(255, 255, 255, .035);
+  color: rgba(196, 181, 253, .42);
+  box-shadow:
+    inset 0 0 0 1px rgba(196, 181, 253, .18),
+    inset 0 -2px 4px rgba(0, 0, 0, .28);
+}
+.mind-av-ico { display: block; width: 14px; height: 14px; }
+.mind-av .mind-flag-none {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, #39445C 0%, #232C3E 100%);
+  color: #A9B6CC;
+}
+.mind-flag-ico { display: block; width: 9px; height: 9px; }
 /* your own standing: one recessed strip, the psychological hook */
 .mind-mine {
   flex: none;

@@ -38,7 +38,6 @@ import {
   getCountryRanking,
   getGrandCup,
   getNationRoster,
-  getPlayerRanking,
   nationPlayersOf,
   paidPlaces,
   type ChannelSeed,
@@ -50,6 +49,8 @@ import {
   type RosterYou,
   type Trend,
 } from './data';
+import { fetchMindLadder, type MindFeed } from './minds';
+import { myTiq } from './matchmaking';
 import { nameOf } from './countries';
 import { badgeCrestHtml, editionSerialLabel, holderEdition, refreshBadgeEditions, wornEdition, type WornEdition } from './badges';
 import { flagPhoto } from './flags';
@@ -323,8 +324,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return 'You';
   };
 
-  const myTrophyScore = (): number =>
-    Math.max(0, profile.stats.wins * 120 + profile.stats.games * 20);
+  const myTrophyScore = (): number => myTiq();
 
   const soloStandingEl = (): HTMLElement | null =>
     document.getElementById('solo-standing');
@@ -2500,15 +2500,30 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     /* a supply refresh can relaunch this load: keep the painted ladder up instead
        of flashing a skeleton under the player's eyes */
     if (!loadedBoard.minds && !mindsField.length) el.innerHTML = skel(6);
-    let rows: PlayerRow[];
+    let feed: MindFeed | null = null;
     try {
-      rows = await getPlayerRanking();
+      feed = await fetchMindLadder(100, myTrophyScore());
     } catch {
-      el.innerHTML = empty('Rankings unavailable. Check your connection and try again.');
-      paintMindsStanding(null);
+      feed = null;
+    }
+    if (!feed?.live) {
+      /* a quiet Worker keeps the last real board; a first read says why it is blank */
+      if (!mindsField.length) {
+        el.innerHTML = empty('Rankings unavailable. Check your connection and try again.');
+        paintMindsStanding(null);
+      }
       return;
     }
+    const rows: PlayerRow[] = feed.rows.map((p) => ({
+      id: p.id,
+      name: p.name,
+      countryCode: p.countryCode,
+      points: p.tiq,
+      wins: p.wins,
+      trend: p.trend,
+    }));
     if (!rows.length) {
+      mindsField = [];
       el.innerHTML = empty('No players ranked yet.');
       paintMindsStanding(null);
       return;
