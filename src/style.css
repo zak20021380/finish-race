@@ -111,6 +111,7 @@
   --gold-ink: #FCD34D;
   --ink: #F8FAFC;                      /* crisp clean white */
   --ink-soft: #94A3B8;                 /* slate silver secondary */
+  --text-dim: #8B99B2;                 /* tertiary micro labels: dimmer than --ink-soft, still AA */
   --chip-ink: #CBD5E1;
   --badge-bg: var(--brand-soft);       /* the two-letter code chip and the team code */
   --badge-ink: var(--brand-ink);
@@ -15208,10 +15209,54 @@ html.reduced-motion .adm-live-dot { animation: none; }
 }
 html.reduced-motion .adm-prog i { transition: none; }
 
-/* ---- recessed cells: shared by the player card's mini readouts ---- */
-.adm-cells { display: flex; gap: 6px; }
-.adm-cells .adm-stat { flex: 1 1 0; }
-.adm-stat b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* ---- bento metric tiles: shared by the player card's mini readouts ---- */
+.adm-cells {
+  display: grid;
+  gap: 6px;
+}
+.adm-cells .adm-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px 10px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, .07);
+  background: rgba(255, 255, 255, .03);
+}
+.adm-stat-v {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-numeric), monospace;
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.adm-stat-vt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adm-stat-v .coin { width: 15px; height: 15px; }
+.adm-stat-i { flex: none; width: 15px; height: 15px; color: var(--tiq); }
+.adm-stat-l {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .68rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
 
 /* the nations strip: one clay slab, four mini meters — flag, filled track, exact share */
 .adm-nations {
@@ -17352,17 +17397,52 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
   font-weight: 900;
   letter-spacing: .06em;
 }
+.adm-user-vb {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--mint-soft);
+  color: var(--mint-ink);
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .38);
+}
+.adm-user-vb-i { width: 9px; height: 9px; }
 .adm-user-m {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: var(--t-micro);
   font-weight: 700;
   color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
 }
+.adm-user-h {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adm-user-tiq {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px 1px 5px;
+  border-radius: var(--radius-pill);
+  background: rgba(252, 211, 77, .08);
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .18);
+  color: var(--tiq);
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .02em;
+  line-height: 1.5;
+}
+.adm-user-tiq-i { width: 10px; height: 10px; }
+.adm-user-tiq-v { font-variant-numeric: tabular-nums; }
 /* the activity audit: one dot and one relative stamp under the telemetry */
 .adm-user-act {
   display: flex;
@@ -17453,12 +17533,49 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
   border-top: 1px solid var(--hair);
 }
 .adm-user-id {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
   margin: 0;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+}
+.adm-user-id-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.adm-user-id-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, .06);
+  background: rgba(255, 255, 255, .03);
+}
+.adm-user-id-k {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.adm-user-id-v {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--chip-ink);
+}
+.adm-user-id-dot {
+  padding: 0 2px;
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--text-dim);
 }
 .adm-user-cells {
   display: grid;
@@ -17466,20 +17583,79 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
   gap: 6px;
 }
 .adm-user-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, .06);
 }
-.adm-user-actions .adm-uban { flex: 1 1 auto; }
+.adm-user-ban {
+  appearance: none;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(244, 63, 94, .3);
+  background: rgba(244, 63, 94, .06);
+  color: var(--red-ink);
+  font: inherit;
+  font-size: var(--t-micro);
+  font-weight: 800;
+  letter-spacing: .02em;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+  transition: background var(--motion-fast), border-color var(--motion-fast),
+    box-shadow var(--motion-fast), transform var(--motion-fast), color var(--motion-fast);
+}
+.adm-user-ban:hover {
+  border-color: rgba(251, 113, 133, .5);
+  background: rgba(244, 63, 94, .12);
+  box-shadow: 0 8px 20px -12px rgba(224, 38, 79, .75), inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+.adm-user-ban:active { transform: translateY(1px); }
+.adm-user-ban:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.adm-user-ban[data-banned="true"] {
+  border-color: rgba(110, 231, 183, .3);
+  background: rgba(16, 185, 129, .08);
+  color: var(--mint-ink);
+}
+.adm-user-ban[data-banned="true"]:hover {
+  border-color: rgba(110, 231, 183, .5);
+  background: rgba(16, 185, 129, .14);
+  box-shadow: 0 8px 20px -12px rgba(16, 185, 129, .7), inset 0 1px 0 rgba(255, 255, 255, .06);
+}
 .adm-user-actions .adm-ugrant {
-  flex: none;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
-  padding: 0 13px;
+  min-height: 42px;
+  padding: 0 12px;
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .04);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-micro);
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+  transition: background var(--motion-fast), border-color var(--motion-fast),
+    transform var(--motion-fast);
 }
-.adm-ugrant .coin { width: 15px; height: 15px; flex: none; }
+.adm-user-actions .adm-ugrant:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, .16);
+  background: rgba(255, 255, 255, .07);
+}
+.adm-user-actions .adm-ugrant:active { transform: translateY(1px); }
+.adm-user-actions .adm-ugrant:focus-visible {
+  outline: 3px solid var(--brand-2);
+  outline-offset: 2px;
+}
+.adm-ugrant .coin { width: 14px; height: 14px; flex: none; }
 @media (max-width: 359px) {
   .adm-user-cells { grid-template-columns: minmax(0, 1fr); }
 }

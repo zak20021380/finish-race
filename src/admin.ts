@@ -2643,12 +2643,24 @@ export function createAdmin(api: AdminApi): Admin {
     return s;
   }
 
-  /** One telemetry cell inside the expanded card. */
-  function userStat(v: string, l: string): HTMLElement {
+  /** One bento telemetry tile inside the expanded card: a bold readout over a micro label. */
+  function userStat(v: string, l: string, glyph?: 'coin' | 'star'): HTMLElement {
     const s = document.createElement('span');
     s.className = 'adm-stat';
     const b = document.createElement('b');
-    b.textContent = v;
+    b.className = 'adm-stat-v';
+    if (glyph === 'coin') {
+      const coin = document.createElement('span');
+      coin.className = 'coin';
+      coin.dataset.coin = '';
+      b.append(coin);
+    } else if (glyph === 'star') {
+      b.append(icon('#i-star', 'adm-stat-i'));
+    }
+    const value = document.createElement('span');
+    value.className = 'adm-stat-vt';
+    value.textContent = v;
+    b.append(value);
     const t = document.createElement('span');
     t.className = 'adm-stat-l';
     t.textContent = l;
@@ -2804,10 +2816,30 @@ export function createAdmin(api: AdminApi): Admin {
       nm.append(' ', you);
     }
     nameRow.append(flag, nm);
+    if (p.tgId) {
+      const verified = document.createElement('span');
+      verified.className = 'adm-user-vb';
+      verified.title = 'Telegram identity linked';
+      verified.setAttribute('role', 'img');
+      verified.setAttribute('aria-label', 'Telegram identity linked');
+      verified.append(icon('#i-check', 'adm-user-vb-i'));
+      nameRow.append(verified);
+    }
 
     const sub = document.createElement('span');
     sub.className = 'adm-user-m';
-    sub.textContent = `${userWho(p)} · TIQ ${figure(p.tiq)}`;
+    const handle = document.createElement('span');
+    handle.className = 'adm-user-h';
+    handle.textContent = userWho(p);
+    handle.title = handle.textContent;
+    const tiqPill = document.createElement('span');
+    tiqPill.className = 'adm-user-tiq';
+    tiqPill.append(icon('#i-brain', 'adm-user-tiq-i'));
+    const tiqValue = document.createElement('span');
+    tiqValue.className = 'adm-user-tiq-v';
+    tiqValue.textContent = `TIQ ${figure(p.tiq)}`;
+    tiqPill.append(tiqValue);
+    sub.append(handle, document.createTextNode(' '), tiqPill);
 
     const activity = activityOf(p);
     const act = document.createElement('span');
@@ -2841,49 +2873,66 @@ export function createAdmin(api: AdminApi): Admin {
     const meta = document.createElement('p');
     meta.className = 'adm-user-id';
     const age = ageOf(p);
-    meta.textContent = `id ${p.tgId || p.id} · first seen ${agoOf(p.firstSeen)} · last seen ${agoOf(p.lastSeen)} · age ${age || '—'}`;
+    const stamps: [string, string][] = [
+      ['id', p.tgId || p.id],
+      ['first seen', agoOf(p.firstSeen)],
+      ['last seen', agoOf(p.lastSeen)],
+    ];
+    if (age) stamps.push(['age', String(age)]);
+    stamps.forEach(([label, value], i) => {
+      const group = document.createElement('span');
+      group.className = 'adm-user-id-group';
+      const chip = document.createElement('span');
+      chip.className = 'adm-user-id-chip';
+      const key = document.createElement('span');
+      key.className = 'adm-user-id-k';
+      key.textContent = label;
+      const val = document.createElement('span');
+      val.className = 'adm-user-id-v';
+      val.textContent = value;
+      chip.append(key, document.createTextNode(' '), val);
+      group.append(chip);
+      if (i < stamps.length - 1) {
+        const dot = document.createElement('span');
+        dot.className = 'adm-user-id-dot';
+        dot.setAttribute('aria-hidden', 'true');
+        dot.textContent = ' · ';
+        group.append(dot);
+      }
+      meta.append(group);
+    });
     detail.append(meta);
 
     const grid = document.createElement('div');
     grid.className = 'adm-cells adm-user-cells';
+    const rate = p.matches ? Math.round((p.wins / p.matches) * 100) : 0;
+    const coinsCell = userStat(coinText(p.coins), 'Total Coins', 'coin');
+    coinsCell.classList.add('adm-user-wallet');
     grid.append(
-      userStat(figure(p.matches), 'Matches'),
-      userStat(p.matches ? `${Math.round((p.wins / p.matches) * 100)}%` : '—', `Win Rate · ${p.wins}W ${p.losses}L`),
-      userStat(String(p.streak), `Streak · best ${p.best}`),
-      userStat(p.lastPlayed ? agoOf(p.lastPlayed) : 'never', 'Last Played'),
+      userStat(figure(p.matches), 'Matches Played'),
+      userStat(`${rate}% · ${p.wins}W ${p.losses}L`, 'Win Rate · Record'),
+      userStat(`${p.streak} · ${p.best}`, 'Streak · Best'),
+      userStat(p.lastPlayed ? agoOf(p.lastPlayed) : 'Never', 'Last Played'),
+      coinsCell,
+      userStat(figure(p.stars), 'Stars Won', 'star'),
+      userStat(figure(p.referrals), 'Invited Friends'),
+      userStat(p.squad || '—', 'Squad / Channel'),
     );
     detail.append(grid);
-
-    const wallet = document.createElement('div');
-    wallet.className = 'adm-cells adm-user-cells';
-    const coinsCell = document.createElement('span');
-    coinsCell.className = 'adm-stat adm-user-wallet';
-    const coinsB = document.createElement('b');
-    coinsB.textContent = coinText(p.coins);
-    const coinsL = document.createElement('span');
-    coinsL.className = 'adm-stat-l';
-    coinsL.textContent = 'Coins';
-    coinsCell.append(coinsB, coinsL);
-    wallet.append(
-      coinsCell,
-      userStat(`★ ${figure(p.stars)}`, 'Stars Won'),
-      userStat(String(p.referrals), 'Invited Friends'),
-      userStat(p.squad || '—', 'Squad'),
-    );
-    detail.append(wallet);
 
     const actions = document.createElement('div');
     actions.className = 'adm-user-actions';
     const ban = document.createElement('button');
     ban.type = 'button';
-    ban.className = p.banned ? 'adm-btn adm-btn-danger adm-uban' : 'adm-btn adm-uban';
+    ban.className = 'adm-user-ban adm-uban';
     ban.dataset.uban = p.id;
+    ban.dataset.banned = String(p.banned);
     ban.setAttribute('aria-pressed', String(p.banned));
     ban.textContent = p.banned ? 'Unban Player' : 'Ban Player';
     const grant = (n: number): HTMLButtonElement => {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'adm-btn adm-ugrant';
+      b.className = 'adm-ugrant';
       b.dataset.ugrant = String(n);
       b.dataset.uid = p.id;
       b.setAttribute('aria-label', `Grant ${n} coins to ${p.name}`);
