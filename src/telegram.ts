@@ -217,6 +217,17 @@ export function openLink(url: string): void {
   try { window.open(url, '_blank', 'noopener'); } catch { /* webview blocked */ }
 }
 
+/**
+ * Hand a `t.me/share/url` page to Telegram's own link handler, which answers with the native
+ * recipient picker on mobile and desktop. Outside Telegram the browser takes the same URL.
+ */
+export function openTelegramShare(shareUrl: string): void {
+  try {
+    if (tg?.openTelegramLink) { tg.openTelegramLink(shareUrl); return; }
+  } catch { /* outside Telegram */ }
+  try { window.open(shareUrl, '_blank'); } catch { /* webview blocked */ }
+}
+
 export const notify = (t: 'success' | 'error' | 'warning') => {
   if (!haptics()) return;
   try { tg?.HapticFeedback?.notificationOccurred(t); } catch { /* ignore */ }

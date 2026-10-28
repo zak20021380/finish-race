@@ -1411,6 +1411,13 @@
           <path d="M15.4 5.9V5a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6.4a2 2 0 0 0 2 2h.9" />
         </g>
       </symbol>
+      <!-- the lobby's copy-link key: two chain links -->
+      <symbol id="i-link" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.2 13.8a4 4 0 0 0 5.7 0l3-3a4 4 0 1 0-5.7-5.7L11.6 6.7" />
+          <path d="M13.8 10.2a4 4 0 0 0-5.7 0l-3 3a4 4 0 1 0 5.7 5.7l1.6-1.6" />
+        </g>
+      </symbol>
       <symbol id="i-cup" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
           <path d="M7 4h10v5a5 5 0 0 1-10 0Z" />
@@ -5160,9 +5167,12 @@
           <div class="gm-view" id="gm-view-lobby" hidden>
             <div class="lb">
               <div class="lb-bar">
-                <button class="lb-code" type="button" id="lb-copy" aria-label="Copy room code">
+                <span class="lb-code" id="lb-code-tag" aria-label="Room code">
                   <span class="lb-hash" aria-hidden="true">#</span><b id="lb-code">0000</b>
-                  <span class="lb-copy-t" id="lb-copy-t">Copy</span>
+                </span>
+                <button class="lb-copy-link" type="button" id="lb-copy-link" aria-label="Copy invite link">
+                  <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-link" /></svg>
+                  <span class="lb-copy-link-t">Copy Link</span>
                 </button>
                 <button class="lb-invite" type="button" id="lb-invite">
                   <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-send" /></svg>

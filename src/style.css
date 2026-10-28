@@ -12237,46 +12237,53 @@ html.reduced-motion .stars-count::before { animation: none; }
 .gm-err:not([hidden]) { color: var(--danger); }
 
 /* ---- FRIENDS: the live lobby ----
-   Bar (code · invite · count) → format switch → four seats → one action row. Every surface is
-   clay: raised for something held, carved for something waiting to be filled. */
+   Bar (code · copy link · invite · count) → format switch → four seats → one action row. Every
+   surface is clay: raised for something held, carved for something waiting to be filled. */
 .lb { display: flex; flex-direction: column; gap: var(--s3); }
 
-.lb-bar { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
-/* the code is a key, not a label: one tap copies the invite */
+.lb-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0; }
+/* the code is a display tag, not a key: the copy action sits beside it, named */
 .lb-code {
-  --d: 3px;
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-height: 44px;
-  padding: 0 12px;
-  appearance: none;
-  border: 0;
+  padding: 0 11px;
   border-radius: var(--radius-sm);
   background: linear-gradient(180deg, #2C3A57 0%, #222C41 100%);
   color: var(--honey-ink);
-  cursor: pointer;
   font-variant-numeric: tabular-nums;
+  user-select: all;
   box-shadow:
-    0 var(--d) 0 #0B111C,
     inset 0 1px 0 rgba(255, 255, 255, .14),
     inset 0 0 0 1px rgba(252, 211, 77, .22);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
 }
-.lb-code:active { transform: translateY(2px); --d: 1px; }
-.lb-code:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
 .lb-hash { font-size: var(--t-micro); font-weight: 900; color: var(--honey-ink); }
 .lb-code b { font-size: var(--t-2); font-weight: 900; letter-spacing: .1em; line-height: 1; }
-.lb-copy-t {
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--chip-ink);
-  transition: color var(--motion-fast);
+
+.lb-copy-link {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  padding: 0 10px;
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .06);
+  color: var(--ink-soft);
+  font-size: var(--t-micro);
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .13);
+  transition: transform var(--motion-fast), background-color var(--motion-fast), color var(--motion-fast);
 }
-.lb-code.is-copied .lb-copy-t { color: var(--mint-ink); }
+.lb-copy-link .ico { width: 14px; height: 14px; color: var(--honey-ink); }
+.lb-copy-link:hover { background: rgba(255, 255, 255, .1); color: var(--ink); }
+.lb-copy-link:active { transform: scale(.97); }
+.lb-copy-link:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
 
 .lb-invite {
   flex: none;
@@ -12284,7 +12291,7 @@ html.reduced-motion .stars-count::before { animation: none; }
   align-items: center;
   gap: 6px;
   min-height: 44px;
-  padding: 0 13px;
+  padding: 0 10px;
   appearance: none;
   border: 0;
   border-radius: var(--radius-pill);
@@ -12830,7 +12837,7 @@ html.reduced-motion .gm-start.is-waiting { animation: none; }
 html.reduced-motion .gm-pick, html.reduced-motion .gm-key, html.reduced-motion .gm-card,
 html.reduced-motion .gm-filters, html.reduced-motion .gm-f-tip,
 html.reduced-motion .fr-create, html.reduced-motion .fr-join-btn,
-html.reduced-motion .lb-code, html.reduced-motion .lb-invite, html.reduced-motion .lb-slot,
+html.reduced-motion .lb-code, html.reduced-motion .lb-copy-link, html.reduced-motion .lb-invite, html.reduced-motion .lb-slot,
 html.reduced-motion .lb-fmt, html.reduced-motion .lb-pick-b, html.reduced-motion .lb-leave { transition: none; }
 html.reduced-motion .gm-filters.shake { animation: none; }
 

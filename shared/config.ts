@@ -48,6 +48,12 @@ export function botStartLink(payload = ''): string {
   return clean ? `https://t.me/${BOT_HANDLE}?start=${clean}` : `https://t.me/${BOT_HANDLE}`;
 }
 
+/** `https://t.me/Tactix_Robot?startapp=<payload>` — the main Mini App, one tap, no bot-chat hop. */
+export function botMainAppLink(payload = ''): string {
+  const clean = cleanStartPayload(payload);
+  return clean ? `https://t.me/${BOT_HANDLE}?startapp=${clean}` : `https://t.me/${BOT_HANDLE}`;
+}
+
 /** `https://t.me/Tactix_Robot?startchannel=true&admin=...` — the channel-admin enlistment door. */
 export function botChannelAdminLink(rights = 'invite_users+pin_messages'): string {
   return `https://t.me/${BOT_HANDLE}?startchannel=true&admin=${rights}`;

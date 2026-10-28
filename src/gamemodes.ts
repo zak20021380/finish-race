@@ -13,14 +13,15 @@
  * The room UI lives on its own sub-screen behind a back arrow, never in the list.
  *
  * Rooms are local-first: Create mints a 4-digit code and reveals a 1-tap
- * "Invite via Telegram" deep-link (`t.me/<bot>?start=room_XXXX`). Join validates
+ * "Invite via Telegram" deep-link (`t.me/<bot>?startapp=room_XXXX`). Join validates
  * a 4-digit code. Online races still start as local bot races with matching
  * sizes until netplay lands — the lobby is the contract, the starter is a stub.
  */
 import { readJson, writeJson } from './storage';
 import { menuState, saveMenu } from './settings';
-import { impact, notify } from './telegram';
-import { botStartLink, telegramShareLink } from '../shared/config';
+import { impact, notify, openTelegramShare } from './telegram';
+import { showToast } from './toast';
+import { botMainAppLink, telegramShareLink } from '../shared/config';
 import type { Sheets } from './sheets';
 import {
   FORMAT_LINE, canStart, isHost, nextTeam, occupied, openLobby, startHint,
@@ -219,43 +220,26 @@ export function joinRoomCode(raw: string): { ok: true; code: string } | { ok: fa
   return { ok: true, code };
 }
 
-/** Display form: `t.me/<bot>?start=room_XXXX` shape (the shared config owns the handle). */
+/** Display form: `t.me/<bot>?startapp=room_XXXX` (the shared config owns the handle). */
 export function buildInviteDisplay(code: string): string {
-  return botStartLink(`room_${code}`).replace(/^https:\/\//, '');
+  return botMainAppLink(`room_${code}`).replace(/^https:\/\//, '');
 }
 
-/** Full URL the Invite button opens / shares. */
+/** The one-tap joinable Mini App URL every invite carries. */
 export function buildInviteLink(code: string): string {
-  return botStartLink(`room_${code}`);
+  return botMainAppLink(`room_${code}`);
 }
 
+/** What the invite carries into Telegram's own share sheet. */
+const SHARE_TEXT = '⚔️ Join my duel in Tactix! Tap the link to enter the room:';
+
+/** Telegram's native share page for a room: the recipient picker opens on top of the chat. */
 export function buildShareUrl(code: string): string {
-  return telegramShareLink(buildInviteLink(code), `Join my Tactix room ${code} — 1 tap to race!`);
+  return telegramShareLink(buildInviteLink(code), SHARE_TEXT);
 }
 
 function openInvite(code: string): void {
-  const href = buildInviteLink(code);
-  try {
-    const w = window as unknown as {
-      Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void; openLink?: (u: string) => void } };
-    };
-    const tg = w.Telegram?.WebApp;
-    if (tg?.openTelegramLink) {
-      tg.openTelegramLink(href);
-      return;
-    }
-    if (tg?.openLink) {
-      tg.openLink(buildShareUrl(code));
-      return;
-    }
-  } catch {
-    /* fall through to window.open */
-  }
-  try {
-    window.open(buildShareUrl(code), '_blank', 'noopener');
-  } catch {
-    /* webview blocked — the code itself is still copyable */
-  }
+  openTelegramShare(buildShareUrl(code));
 }
 
 /** Clipboard write with a legacy fallback: the room invite and the referral hub share this door. */
@@ -464,7 +448,9 @@ function paintSlots(l: Lobby): void {
 function paintLobbyPane(l: Lobby): void {
   const codeEl = document.getElementById('lb-code');
   if (codeEl) codeEl.textContent = l.code;
-  document.getElementById('lb-copy')?.setAttribute('aria-label', `Copy room code ${l.code}`);
+  const codeTag = document.getElementById('lb-code-tag');
+  if (codeTag) codeTag.setAttribute('aria-label', `Room code ${l.code}`);
+  document.getElementById('lb-copy-link')?.setAttribute('aria-label', `Copy invite link for room ${l.code}`);
 
   const count = document.getElementById('lb-count');
   if (count) count.textContent = `${occupied(l)}/${l.capacity} Players`;
@@ -832,24 +818,18 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     syncJoin();
   });
 
-  /* ---- lobby: the code bar ---- */
-  document.getElementById('lb-copy')?.addEventListener('click', async () => {
+  /* ---- lobby: the code bar. Copy takes the full link; Invite opens Telegram's picker ---- */
+  document.getElementById('lb-copy-link')?.addEventListener('click', async () => {
     const code = handle?.lobby.code;
     if (!code) return;
     impact('light');
     const ok = await copyText(buildInviteLink(code));
-    notify(ok ? 'success' : 'warning');
-    if (!ok) return;
-    const t = document.getElementById('lb-copy-t');
-    const btn = document.getElementById('lb-copy');
-    if (!t || !btn) return;
-    t.textContent = 'Copied! ✓';
-    btn.classList.add('is-copied');
-    window.setTimeout(() => {
-      if (t.textContent !== 'Copied! ✓') return;
-      t.textContent = 'Copy';
-      btn.classList.remove('is-copied');
-    }, 1400);
+    if (ok) {
+      showToast('Invite link copied!', 'success');
+      return;
+    }
+    showToast('Could not copy the invite link.', 'error');
+    notify('warning');
   });
 
   const invite = (): void => {
