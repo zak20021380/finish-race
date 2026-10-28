@@ -527,6 +527,11 @@ export function createMenu(api: MenuApi): Menu {
   const squadRosterEmpty = $<HTMLElement>('squad-roster-empty');
   const squadYouEl = $<HTMLElement>('squad-you');
   const squadCrest = $<HTMLElement>('squad-view-crest');
+  const squadLeaderEl = $<HTMLElement>('squad-view-leader');
+  const squadLeaderNameEl = $<HTMLElement>('squad-view-leader-name');
+  const squadExploreBtn = $<HTMLButtonElement>('squad-explore');
+  const squadExploreT = $<HTMLElement>('squad-explore-t');
+  const squadExploreIco = $<HTMLElement>('squad-explore-ico');
   const squadLeaveBtn = $<HTMLButtonElement>('squad-leave');
 
   /* The inspection step: a card opens this sheet; the full-width key is the only
@@ -630,9 +635,11 @@ export function createMenu(api: MenuApi): Menu {
 
     const rankBox = document.createElement('span');
     rankBox.className = 'sq-you-rank';
+    const rankCap = document.createElement('small');
+    rankCap.textContent = 'Your rank';
     const rank = document.createElement('b');
     rank.textContent = `#${en(roster.yourRank)}`;
-    rankBox.append(rank);
+    rankBox.append(rankCap, rank);
 
     const nameWrap = document.createElement('span');
     nameWrap.className = 'sq-you-namewrap';
@@ -805,7 +812,7 @@ export function createMenu(api: MenuApi): Menu {
     squadCountEl.setAttribute('aria-label', filtered
       ? `${en(squadRows.length)} of ${en(roster.count)} ${membersWord} shown`
       : `${en(roster.count)} ${membersWord}`);
-    squadRosterEl.setAttribute('aria-label', 'Squad leaderboard sorted by TIQ');
+    squadRosterEl.setAttribute('aria-label', 'Squad members sorted by TIQ');
 
     squadRosterEmpty.hidden = squadRows.length > 0;
     squadRosterEl.hidden = squadRows.length === 0;
@@ -815,6 +822,19 @@ export function createMenu(api: MenuApi): Menu {
     squadRowEls.clear();
     squadRange = { start: -1, end: -1, rows: -1 };
     scheduleSquadWindow(true);
+  }
+
+  /* The founder is the one name worth reading without scrolling, so the hero wears
+     it — the roster's leader row, or "You" when this device owns the squad. */
+  function paintSquadLeader(roster: SquadRoster): void {
+    const leader = roster.members.find((m) => m.role === 'leader');
+    squadLeaderEl.classList.toggle('is-on', !!leader);
+    if (!leader) return;
+    squadLeaderNameEl.textContent = leader.isYou ? 'You' : leader.name;
+    squadLeaderNameEl.title = leader.isYou ? 'You' : leader.name;
+    squadLeaderEl.setAttribute('aria-label', leader.isYou
+      ? 'You founded this squad.'
+      : `Founded by ${leader.name}.`);
   }
 
   function paintSquadHub(): void {
@@ -830,6 +850,7 @@ export function createMenu(api: MenuApi): Menu {
     $<HTMLElement>('squad-view-members').textContent = en(squadView.count);
     $<HTMLElement>('squad-view-members-label').textContent = squadView.count === 1 ? 'Member' : 'Members';
     squadCrest.dataset.tier = squadView.squadArena.tier;
+    paintSquadLeader(squadView);
     paintSquadYou();
     paintSquadRoster();
   }
@@ -1088,6 +1109,19 @@ export function createMenu(api: MenuApi): Menu {
     squadLeaveBtn.setAttribute('aria-label', 'Leave squad');
   }
 
+  /* One key, both directions: from the hub it opens the field, from the field it
+     goes home. It only exists once a squad is bound, so a first-run player still
+     lands on a discovery screen with a single loud action. */
+  function paintSquadExplore(): void {
+    const bound = !!getMySquad();
+    squadExploreBtn.classList.toggle('is-on', bound);
+    if (!bound) return;
+    const hub = !squadBoundView.hidden;
+    squadExploreT.textContent = hub ? 'Explore Squads' : 'Your Squad';
+    squadExploreIco.setAttribute('href', hub ? '#i-globe' : '#i-back');
+    squadExploreBtn.setAttribute('aria-label', hub ? 'Explore all squads' : 'Back to your squad');
+  }
+
   function showSquadSearch() {
     squadSearchView.hidden = false;
     squadBoundView.hidden = true;
@@ -1100,6 +1134,7 @@ export function createMenu(api: MenuApi): Menu {
     squadMemberQ.value = '';
     resetSquadLeave();
     paintSquadList(squadQ.value);
+    paintSquadExplore();
   }
 
   function showSquadBound() {
@@ -1115,6 +1150,7 @@ export function createMenu(api: MenuApi): Menu {
     paintSquadHub();
     squadScroll.scrollTop = 0;
     scheduleSquadWindow(true);
+    paintSquadExplore();
   }
 
   function openSquad() {
@@ -1170,6 +1206,12 @@ export function createMenu(api: MenuApi): Menu {
   $('squad-create').addEventListener('click', () => {
     impact('light');
     window.dispatchEvent(new CustomEvent('detour:squad-register'));
+  });
+
+  squadExploreBtn.addEventListener('click', () => {
+    impact('light');
+    if (squadBoundView.hidden) showSquadBound();
+    else showSquadSearch();
   });
 
   /* The roster is windowed: a scroll frame paints only the rows around the

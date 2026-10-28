@@ -4476,15 +4476,22 @@
       </section>
 
       <!-- squad: bind a Telegram channel, then the hub — a prestige crest over the
-           squad's rank, your standing, and a clean TiQ roster. The crest and actions
-           stay pinned while the roster between them scrolls. The search view is the
+           squad's rank, its founder and your standing, above a TIQ-ordered member
+           list. The crest and actions stay pinned while the members between them
+           scroll; the header key trades the hub for the field. The search view is the
            alliance board: hero + Create Squad key pinned, only the bento list scrolls. -->
       <section class="sheet tall" id="sheet-squad" hidden role="dialog" aria-modal="true" aria-labelledby="squad-title">
         <header class="sq-top">
           <h2 class="sq-title" id="squad-title">Your Squad</h2>
-          <button class="ms-x sq-x" type="button" data-sheet-close aria-label="Close squad" data-autofocus>
-            <span class="ms-x-g" aria-hidden="true">&times;</span>
-          </button>
+          <div class="sq-top-actions">
+            <button class="sq-explore" type="button" id="squad-explore" aria-label="Explore all squads">
+              <svg class="ico" aria-hidden="true"><use id="squad-explore-ico" href="#i-globe" /></svg>
+              <span id="squad-explore-t">Explore Squads</span>
+            </button>
+            <button class="ms-x sq-x" type="button" data-sheet-close aria-label="Close squad" data-autofocus>
+              <span class="ms-x-g" aria-hidden="true">&times;</span>
+            </button>
+          </div>
         </header>
 
         <div class="sheet-body sq-search-view" id="squad-search-view">
@@ -4527,6 +4534,11 @@
               <b class="sq-handle" id="squad-view-name">@Squad</b>
               <span class="sq-banner-pills">
                 <span class="sq-global" id="squad-view-rank">#1 GLOBAL SQUAD</span>
+                <span class="sq-leader" id="squad-view-leader">
+                  <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
+                  <b>Leader</b>
+                  <span class="sq-leader-name" id="squad-view-leader-name">—</span>
+                </span>
               </span>
               <span class="sq-banner-stats">
                 <span class="sq-stat sq-stat-avg">
@@ -4534,7 +4546,7 @@
                   <b id="squad-view-avg">0</b>
                   <small>AVG TIQ</small>
                 </span>
-                <span class="sq-stat">
+                <span class="sq-stat sq-stat-mem">
                   <svg class="ico" aria-hidden="true"><use href="#i-users" /></svg>
                   <b id="squad-view-members">0</b>
                   <small id="squad-view-members-label">Members</small>
@@ -4545,10 +4557,10 @@
 
           <section class="sq-you" id="squad-you" aria-label="Your standing"></section>
 
-          <div class="sq-scroll" id="squad-hub-scroll" data-scroll tabindex="0" role="region" aria-label="Squad roster">
+          <div class="sq-scroll" id="squad-hub-scroll" data-scroll tabindex="0" role="region" aria-label="Squad members">
             <div class="sq-roster-head">
               <div class="sq-roster-title-row">
-                <h3 class="sq-roster-title">Roster</h3>
+                <h3 class="sq-roster-title">Members</h3>
                 <span class="sq-count" id="squad-roster-count" aria-live="polite">0</span>
               </div>
               <div class="sq-tools">

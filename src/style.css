@@ -23401,6 +23401,10 @@ html.reduced-motion #s-profile .pf-badge-sync-dot { animation: none; opacity: 1;
 }
 .sq-title {
   margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   text-align: left;
   font-size: 10px;
   font-weight: 900;
@@ -23408,6 +23412,54 @@ html.reduced-motion #s-profile .pf-badge-sync-dot { animation: none; opacity: 1;
   text-transform: uppercase;
   color: var(--ink-soft);
 }
+.sq-top-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* The seam between the two squad views, shown only once a squad is bound. It stays
+   a ghost key — hairline rim, no fill, no bloom — so it never competes with the
+   close disc or the sheet's real primary action. */
+.sq-explore {
+  display: none;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: rgba(148, 197, 255, .06);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    inset 0 0 0 1px rgba(125, 211, 252, .24);
+  color: var(--brand-ink);
+  font-family: inherit;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast),
+    box-shadow var(--motion-fast),
+    color var(--motion-fast),
+    transform var(--motion-fast);
+}
+.sq-explore.is-on { display: inline-flex; }
+.sq-explore .ico { flex: none; width: 12px; height: 12px; }
+.sq-explore:hover {
+  background: rgba(148, 197, 255, .11);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 0 0 1px rgba(125, 211, 252, .38);
+  color: #E0F2FE;
+}
+.sq-explore:active { transform: translateY(1px); }
+.sq-explore:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .sq-x { flex: none; }
 .sq-search-view { flex: 1 1 auto; min-height: 0; }
 .sq-hub {
@@ -23423,16 +23475,18 @@ html.reduced-motion #s-profile .pf-badge-sync-dot { animation: none; opacity: 1;
   align-items: center;
   gap: 10px;
   min-width: 0;
-  padding: 10px 12px 10px 10px;
+  padding: 11px 12px 11px 10px;
   border: 1px solid rgba(255, 255, 255, .08);
+  border-top-color: rgba(255, 255, 255, .14);
   border-radius: 18px;
   background:
-    radial-gradient(120% 190% at 0% 0%, rgba(56, 189, 248, .1) 0%, rgba(56, 189, 248, 0) 56%),
-    rgba(15, 23, 42, .72);
+    radial-gradient(120% 190% at 0% 0%, rgba(56, 189, 248, .12) 0%, rgba(56, 189, 248, 0) 56%),
+    linear-gradient(180deg, rgba(30, 41, 59, .78) 0%, rgba(15, 23, 42, .82) 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .08),
-    inset 0 0 0 1px rgba(255, 255, 255, .015),
-    0 18px 36px -32px rgba(0, 0, 0, .95);
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 -1px 0 rgba(0, 0, 0, .5),
+    0 1px 0 rgba(0, 0, 0, .35),
+    0 20px 38px -30px rgba(0, 0, 0, .98);
   -webkit-backdrop-filter: blur(18px) saturate(1.08);
   backdrop-filter: blur(18px) saturate(1.08);
 }
@@ -23601,6 +23655,53 @@ html.reduced-motion .sq-crest-aura { animation: none; }
   gap: 5px;
   min-width: 0;
 }
+/* The founder badge: gold crown and rank word on a cool glass body, so it reads
+   as the squad's one named authority without turning the hero into two golds. */
+.sq-leader {
+  display: none;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  height: 20px;
+  padding: 0 8px 0 6px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, rgba(252, 211, 77, .13) 0%, rgba(56, 189, 248, .07) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(252, 211, 77, .27),
+    inset 0 1px 0 rgba(255, 255, 255, .1);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  line-height: 1;
+  white-space: nowrap;
+}
+.sq-leader.is-on { display: inline-flex; }
+.sq-leader .ico {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  color: var(--gold-ink);
+  filter: drop-shadow(0 0 4px rgba(252, 211, 77, .45));
+}
+.sq-leader b {
+  flex: none;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--gold-ink);
+}
+.sq-leader-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 5px;
+  border-left: 1px solid rgba(252, 211, 77, .24);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  color: #F1F5F9;
+}
 .sq-global {
   flex: none;
   display: inline-flex;
@@ -23633,23 +23734,27 @@ html.reduced-motion .sq-crest-aura { animation: none; }
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 20px;
-  padding: 0 8px;
+  height: 22px;
+  padding: 0 9px;
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, .04);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .075) 0%, rgba(255, 255, 255, .02) 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .06),
-    inset 0 0 0 1px rgba(255, 255, 255, .06);
+    inset 0 1px 0 rgba(255, 255, 255, .13),
+    inset 0 0 0 1px rgba(255, 255, 255, .07),
+    0 3px 8px -5px rgba(0, 0, 0, .85);
+  -webkit-backdrop-filter: blur(10px) saturate(1.25);
+  backdrop-filter: blur(10px) saturate(1.25);
 }
 .sq-stat b {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 900;
   line-height: 1;
+  letter-spacing: -.01em;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 .sq-stat small {
-  font-size: 7px;
+  font-size: 7.5px;
   font-weight: 800;
   letter-spacing: .07em;
   line-height: 1;
@@ -23657,17 +23762,32 @@ html.reduced-motion .sq-crest-aura { animation: none; }
   color: var(--ink-soft);
 }
 .sq-stat .ico {
-  width: 10px;
-  height: 10px;
+  width: 11px;
+  height: 11px;
   color: var(--ink-soft);
   opacity: .9;
 }
-.sq-stat-avg .ico { color: var(--tiq); }
+/* Each metric owns one hue so the two chips separate without a second border. */
+.sq-stat-avg { box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .13),
+    inset 0 0 0 1px rgba(252, 211, 77, .2),
+    0 3px 8px -5px rgba(0, 0, 0, .85); }
+.sq-stat-avg .ico {
+  color: var(--tiq);
+  filter: drop-shadow(0 0 5px rgba(252, 211, 77, .55));
+}
 .sq-stat-avg b {
   color: var(--tiq);
   text-shadow: 0 0 10px rgba(252, 211, 77, .25);
 }
-.sq-stat-avg small { color: rgba(252, 211, 77, .6); }
+.sq-stat-avg small { color: rgba(252, 211, 77, .62); }
+.sq-stat-mem { box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .13),
+    inset 0 0 0 1px rgba(125, 211, 252, .18),
+    0 3px 8px -5px rgba(0, 0, 0, .85); }
+.sq-stat-mem .ico { color: var(--brand-ink); }
+.sq-stat-mem b { color: #E0F2FE; }
+.sq-stat-mem small { color: rgba(125, 211, 252, .6); }
 
 .sq-scroll {
   position: relative;
@@ -23688,17 +23808,33 @@ html.reduced-motion .sq-crest-aura { animation: none; }
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  min-height: 58px;
+  min-height: 60px;
   margin: 0;
-  padding: 7px 12px 7px 9px;
-  border: 1px solid rgba(255, 255, 255, .08);
+  padding: 7px 12px 7px 15px;
+  overflow: hidden;
+  border: 1px solid rgba(125, 211, 252, .22);
   border-radius: 16px;
-  background: rgba(15, 23, 42, .7);
+  background:
+    linear-gradient(90deg, rgba(56, 189, 248, .14) 0%, rgba(56, 189, 248, .025) 44%, rgba(15, 23, 42, .6) 100%),
+    rgba(15, 23, 42, .74);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .045),
-    inset 0 2px 10px rgba(0, 0, 0, .34);
-  -webkit-backdrop-filter: blur(14px) saturate(1.04);
-  backdrop-filter: blur(14px) saturate(1.04);
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    inset 0 2px 10px rgba(0, 0, 0, .34),
+    0 12px 26px -22px rgba(56, 189, 248, .9);
+  -webkit-backdrop-filter: blur(14px) saturate(1.08);
+  backdrop-filter: blur(14px) saturate(1.08);
+}
+/* The lit rail is what makes the row read as "yours" before the name is parsed. */
+.sq-you::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, #7DD3FC 0%, #0EA5E9 100%);
+  box-shadow: 0 0 12px -2px rgba(56, 189, 248, .7);
 }
 .sq-you .sq-avwrap,
 .sq-you .sq-av {
@@ -23738,21 +23874,30 @@ html.reduced-motion .sq-crest-aura { animation: none; }
 .sq-you-rank {
   flex: none;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  min-width: 40px;
-  padding: 3px 6px;
-  border: 1px solid rgba(56, 189, 248, .4);
-  border-radius: 9px;
-  background: linear-gradient(180deg, rgba(56, 189, 248, .14) 0%, rgba(14, 165, 233, .04) 100%);
+  gap: 2px;
+  min-width: 46px;
+  padding: 4px 7px 5px;
+  border: 1px solid rgba(56, 189, 248, .42);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(56, 189, 248, .16) 0%, rgba(14, 165, 233, .04) 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .1),
-    0 0 14px -9px rgba(56, 189, 248, .9);
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    0 0 16px -10px rgba(56, 189, 248, .95);
   line-height: 1;
   white-space: nowrap;
 }
+.sq-you-rank small {
+  font-size: 7.5px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  line-height: 1;
+  text-transform: uppercase;
+  color: rgba(186, 230, 253, .74);
+}
 .sq-you-rank b {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 900;
   letter-spacing: -.03em;
   line-height: 1;
@@ -23800,6 +23945,7 @@ html.reduced-motion .sq-crest-aura { animation: none; }
   width: 14px;
   height: 14px;
   opacity: .95;
+  filter: drop-shadow(0 0 5px rgba(252, 211, 77, .5));
 }
 .sq-you-score b {
   font-size: inherit;
@@ -23820,11 +23966,11 @@ html.reduced-motion .sq-crest-aura { animation: none; }
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  height: 13px;
-  padding: 0 4px;
+  gap: 3px;
+  height: 15px;
+  padding: 0 6px 0 5px;
   border-radius: var(--radius-pill);
-  font-size: 6.5px;
+  font-size: 7.5px;
   font-weight: 900;
   letter-spacing: .06em;
   line-height: 1;
@@ -23832,17 +23978,23 @@ html.reduced-motion .sq-crest-aura { animation: none; }
   white-space: nowrap;
 }
 .sq-role .ico {
-  width: 8px;
-  height: 8px;
+  flex: none;
+  width: 9px;
+  height: 9px;
 }
 .sq-role[data-role="leader"] {
-  background: linear-gradient(180deg, rgba(245, 158, 11, .24) 0%, rgba(245, 158, 11, .1) 100%);
-  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .34);
+  background: linear-gradient(180deg, rgba(245, 158, 11, .26) 0%, rgba(245, 158, 11, .1) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(252, 211, 77, .36),
+    inset 0 1px 0 rgba(255, 255, 255, .12);
   color: var(--gold-ink);
 }
+.sq-role[data-role="leader"] .ico { filter: drop-shadow(0 0 3px rgba(252, 211, 77, .55)); }
 .sq-role[data-role="admin"] {
-  background: rgba(14, 165, 233, .13);
-  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .26);
+  background: linear-gradient(180deg, rgba(14, 165, 233, .17) 0%, rgba(14, 165, 233, .07) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(125, 211, 252, .28),
+    inset 0 1px 0 rgba(255, 255, 255, .1);
   color: var(--brand-ink);
 }
 .sq-roster-head {
@@ -23865,28 +24017,28 @@ html.reduced-motion .sq-crest-aura { animation: none; }
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 8.5px;
+  font-size: 9.5px;
   font-weight: 900;
-  letter-spacing: .14em;
+  letter-spacing: .13em;
   line-height: 1.2;
   text-transform: uppercase;
   color: var(--ink-soft);
 }
 .sq-count {
   flex: none;
-  min-width: 32px;
-  height: 18px;
+  min-width: 34px;
+  height: 19px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 7px;
+  padding: 0 8px;
   border-radius: var(--radius-pill);
-  background: var(--field);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .07) 0%, rgba(255, 255, 255, .02) 100%);
   box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, .45),
-    inset 0 0 0 1px var(--hair);
+    inset 0 0 0 1px rgba(125, 211, 252, .18),
+    inset 0 1px 0 rgba(255, 255, 255, .1);
   color: var(--ink);
-  font-size: 9px;
+  font-size: 9.5px;
   font-weight: 900;
   letter-spacing: .01em;
   line-height: 1;
@@ -23979,7 +24131,10 @@ html.reduced-motion .sq-crest-aura { animation: none; }
   border-top-color: rgba(255, 255, 255, .1);
   border-radius: 14px;
   background: rgba(15, 23, 42, .55);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .055),
+    0 1px 0 rgba(6, 10, 18, .5),
+    0 10px 18px -16px rgba(0, 0, 0, .9);
   contain: layout paint;
   transition: background var(--motion-fast), border-color var(--motion-fast);
 }
@@ -24016,9 +24171,54 @@ html.reduced-motion .sq-crest-aura { animation: none; }
   font-size: 8.5px;
   letter-spacing: -.04em;
 }
-.sq-row[data-rank="1"] .sq-rank { color: #FCD34D; text-shadow: 0 0 10px rgba(245, 158, 11, .38); }
-.sq-row[data-rank="2"] .sq-rank { color: #E2E8F0; text-shadow: 0 0 10px rgba(203, 213, 225, .28); }
-.sq-row[data-rank="3"] .sq-rank { color: #E8B48A; text-shadow: 0 0 10px rgba(217, 119, 6, .3); }
+/* Rows borrow the discovery cards' metal, but only the podium gets a filled key —
+   1,200 chips would turn a list into a wall. Scoped so the card rank stays intact. */
+.sq-row .sq-rank {
+  height: 26px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .035);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .055);
+  color: #7C8BA5;
+  font-size: 9.5px;
+  font-weight: 900;
+}
+.sq-row .sq-rank.is-wide {
+  font-size: 8.5px;
+  letter-spacing: -.045em;
+}
+.sq-row[data-rank="1"] .sq-rank {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, .62) 0%, rgba(255, 255, 255, 0) 48%),
+    linear-gradient(160deg, #FFE9A8 0%, #F2BE4C 48%, #B7791F 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .8),
+    inset 0 -1px 0 rgba(87, 52, 8, .4),
+    0 2px 8px -5px rgba(245, 158, 11, .8);
+  color: #3B2400;
+  text-shadow: none;
+}
+.sq-row[data-rank="2"] .sq-rank {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, .8) 0%, rgba(255, 255, 255, 0) 48%),
+    linear-gradient(160deg, #F8FAFC 0%, #CBD5E1 48%, #8798AB 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .85),
+    inset 0 -1px 0 rgba(30, 41, 59, .35),
+    0 2px 8px -5px rgba(148, 163, 184, .7);
+  color: #1E293B;
+  text-shadow: none;
+}
+.sq-row[data-rank="3"] .sq-rank {
+  background:
+    linear-gradient(135deg, rgba(255, 237, 213, .7) 0%, rgba(255, 255, 255, 0) 48%),
+    linear-gradient(160deg, #F5CFA6 0%, #E8B48A 46%, #9A4A1B 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .7),
+    inset 0 -1px 0 rgba(59, 29, 6, .4),
+    0 2px 8px -5px rgba(217, 119, 6, .7);
+  color: #3B1D06;
+  text-shadow: none;
+}
 .sq-avwrap {
   position: relative;
   flex: none;
@@ -24106,9 +24306,10 @@ html.reduced-motion .sq-crest-aura { animation: none; }
 }
 .sq-score .ico {
   align-self: center;
-  width: 10px;
-  height: 10px;
-  opacity: .92;
+  width: 11px;
+  height: 11px;
+  opacity: .95;
+  filter: drop-shadow(0 0 4px rgba(252, 211, 77, .45));
 }
 .sq-score b {
   font-size: inherit;
@@ -24117,9 +24318,9 @@ html.reduced-motion .sq-crest-aura { animation: none; }
 }
 .sq-score small {
   align-self: center;
-  font-size: 6px;
+  font-size: 7px;
   font-weight: 900;
-  letter-spacing: .09em;
+  letter-spacing: .08em;
   color: rgba(252, 211, 77, .62);
 }
 .sq-score.is-zero { color: var(--ink-soft); text-shadow: none; }
