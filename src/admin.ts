@@ -53,7 +53,7 @@ import { nameOf } from './countries';
 import { detonation, impact, notify, tgInitData, tgUser } from './telegram';
 import { telegramChatLink } from '../shared/config';
 import {
-  adminCall, adminFetch, parseJson, postJson, reasonOfResponse,
+  adminCall, adminFetch, bodySnippet, parseJson, postJson, reasonOfResponse,
   ADMIN_TIMEOUT_MS,
   type AdminFailure,
 } from './adminApi';
@@ -383,11 +383,15 @@ export interface ServerStatus {
  * What "there is no response to read" means, kept in three pieces because the remedies differ:
  * no origin to call, a Worker that is thinking too long, and a request that never left the device.
  */
-const failureText = (failure: AdminFailure): string => {
+const failureText = (failure: AdminFailure, timeoutMs = ADMIN_TIMEOUT_MS): string => {
   if (failure === 'no-origin') return 'this page has no Worker origin to call';
-  if (failure === 'timeout') return `the Worker did not answer within ${Math.round(ADMIN_TIMEOUT_MS / 1000)}s`;
+  if (failure === 'timeout') return `the Worker did not answer within ${Math.round(timeoutMs / 1000)}s`;
   return 'the request never reached the Worker (network)';
 };
+
+/** A failed call, named by the route it tried, why it failed, and what the client itself threw. */
+const routeFailure = (route: string, failure: AdminFailure, thrown?: string): string =>
+  [`${route} → ${failureText(failure)}`, thrown].filter((part): part is string => !!part).join(' · ');
 
 /**
  * How a metrics or status attempt failed. These have to stay apart: `timeout` is a live Worker
@@ -427,27 +431,29 @@ async function fetchStatus(): Promise<ServerReading> {
   const started = Date.now();
   const first = await adminCall('/api/admin/matchmaking', { cache: 'no-store' });
   /* No response at all: do not burn a second timeout on the older door behind it. */
-  if ('failure' in first) return { state: 'error', reason: first.failure, detail: failureText(first.failure) };
+  if ('failure' in first) {
+    return { state: 'error', reason: first.failure, detail: routeFailure('GET /api/admin/matchmaking', first.failure, first.detail) };
+  }
   const res = first.res;
   /* A refusal is a decision, not an outage: do not ask the older door behind it. */
   if (res.status === 401 || res.status === 403) {
-    return { state: 'denied', detail: await reasonOfResponse(res) };
+    return { state: 'denied', detail: await reasonOfResponse(res, 'GET /api/admin/matchmaking') };
   }
   let data = await parseJson<ServerStatus>(res);
   if (!data || data.ok !== true) {
     const legacy = await adminCall('/admin/status', { cache: 'no-store' });
     if ('failure' in legacy) {
-      return { state: 'error', reason: legacy.failure, detail: failureText(legacy.failure) };
+      return { state: 'error', reason: legacy.failure, detail: routeFailure('GET /admin/status', legacy.failure, legacy.detail) };
     }
     if (legacy.res.status === 401 || legacy.res.status === 403) {
-      return { state: 'denied', detail: await reasonOfResponse(legacy.res) };
+      return { state: 'denied', detail: await reasonOfResponse(legacy.res, 'GET /admin/status') };
     }
     if (legacy.res.status === 404) {
-      return { state: 'error', reason: 'http', detail: await reasonOfResponse(legacy.res) };
+      return { state: 'error', reason: 'http', detail: await reasonOfResponse(legacy.res, 'GET /admin/status') };
     }
     data = await parseJson<ServerStatus>(legacy.res);
     if (!data || data.ok !== true) {
-      return { state: 'error', reason: 'http', detail: await reasonOfResponse(legacy.res) };
+      return { state: 'error', reason: 'http', detail: await reasonOfResponse(legacy.res, 'GET /admin/status') };
     }
   }
   return { state: 'ok', status: data, pingMs: Math.max(0, Date.now() - started) };
@@ -537,6 +543,80 @@ type MetricsResult =
   | { state: 'error'; reason: AdminFailure | 'http' | 'bad-body'; detail: string };
 
 /**
+ * A finite count, or the exact zero this dashboard shows for a section that reported nothing.
+ * Telemetry is additive: a Worker that has not shipped one of these fields yet must cost that
+ * field alone, never the whole reading.
+ */
+const metricCount = (value: unknown): number =>
+  typeof value === 'number' && Number.isFinite(value) ? value : 0;
+
+/** One plotted series, reconciled point by point; a non-array is an empty chart, not a failure. */
+const metricSeries = (value: unknown): SeriesPoint[] =>
+  Array.isArray(value)
+    ? value
+      .filter((row): row is Record<string, unknown> => !!row && typeof row === 'object' && !Array.isArray(row))
+      .map((row) => ({
+        t: metricCount(row.t),
+        signups: metricCount(row.signups),
+        active: metricCount(row.active),
+        matches: metricCount(row.matches),
+      }))
+    : [];
+
+/** The fields a genuine reading always carries; at least one must be present to accept a body. */
+const METRIC_FIELDS = ['timestamp', 'activeRooms', 'totalUsers', 'matchesCompleted', 'series24h'] as const;
+
+/**
+ * Reconcile an answered body against `ServerMetrics`. The Worker owns every field and its own
+ * shape, but the panel must not reject a whole reading because one field is missing, null or a
+ * string: each falls back to its exact-zero / empty equivalent, and only a body that does not
+ * look like telemetry at all is refused.
+ */
+function normalizeMetrics(raw: unknown): ServerMetrics | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const row = raw as Record<string, unknown>;
+  const shaped = row.ok === true || METRIC_FIELDS.some((field) => field in row);
+  if (row.ok === false || !shaped) return null;
+  return {
+    ok: true,
+    timestamp: metricCount(row.timestamp) || Date.now(),
+    environment: typeof row.environment === 'string' && row.environment ? row.environment : 'unknown',
+    pingMs: typeof row.pingMs === 'number' && Number.isFinite(row.pingMs) ? row.pingMs : undefined,
+    activeRooms: metricCount(row.activeRooms),
+    queueLength: metricCount(row.queueLength),
+    active1v1: metricCount(row.active1v1),
+    totalUsers: metricCount(row.totalUsers),
+    telegramUsers: metricCount(row.telegramUsers),
+    matchesCompleted: metricCount(row.matchesCompleted),
+    matches24h: metricCount(row.matches24h),
+    minesPlaced: metricCount(row.minesPlaced),
+    logsSpawned: metricCount(row.logsSpawned),
+    referrals: metricCount(row.referrals),
+    referringPlayers: metricCount(row.referringPlayers),
+    dau: metricCount(row.dau),
+    wau: metricCount(row.wau),
+    mau: metricCount(row.mau),
+    returningUsersToday: metricCount(row.returningUsersToday),
+    returningShare: metricCount(row.returningShare),
+    signupsToday: metricCount(row.signupsToday),
+    signupsWeek: metricCount(row.signupsWeek),
+    signupsMonth: metricCount(row.signupsMonth),
+    retentionRateD1: metricCount(row.retentionRateD1),
+    avgMatchesPerPlayer: metricCount(row.avgMatchesPerPlayer),
+    activationRate: metricCount(row.activationRate),
+    coreRetention: metricCount(row.coreRetention),
+    dailyActiveRatio: metricCount(row.dailyActiveRatio),
+    viralShare: metricCount(row.viralShare),
+    series24h: metricSeries(row.series24h),
+    series7d: metricSeries(row.series7d),
+    series30d: metricSeries(row.series30d),
+    degraded: Array.isArray(row.degraded)
+      ? row.degraded.filter((part): part is string => typeof part === 'string' && part !== '')
+      : [],
+  };
+}
+
+/**
  * Read the Worker's measured telemetry. `adminHeaders` already carries the Mini App's signed
  * `initData` (and the dev marker, which this route ignores). A 401/403 is the operator door
  * refusing this account — never a cue to fall back to a device-local or demo reading.
@@ -545,28 +625,64 @@ type MetricsResult =
  * answered 500 is live and broken, a Worker that answered 404 has no such route, a Worker that took
  * too long is behind a cold Durable Object, and only a request that never got a response is an
  * outage. Collapsing all four into "unreachable" is what made a live backend read as OFFLINE.
+ *
+ * The whole read is guarded: the endpoint, the status and the body it actually sent travel in
+ * every failure detail, and a client-side throw is caught here rather than escaping as an opaque
+ * "the panel could not complete the reading".
  */
+const METRICS_ROUTE = 'GET /api/admin/metrics';
 const METRICS_TIMEOUT_MS = 20_000;
 
 async function fetchMetrics(): Promise<MetricsResult> {
-  const called = await adminCall('/api/admin/metrics', { cache: 'no-store' }, METRICS_TIMEOUT_MS);
-  if ('failure' in called) {
-    return { state: 'error', reason: called.failure, detail: failureText(called.failure) };
-  }
-  const res = called.res;
-  /* Reading the reason consumes the body, so it is only spent on an answer worth explaining. */
-  const detail = res.ok ? '' : await reasonOfResponse(res);
-  if (res.status === 401 || res.status === 403) return { state: 'unauthorized', detail };
-  if (res.status !== 200) return { state: 'error', reason: 'http', detail };
-  let data: ServerMetrics | null = null;
   try {
-    data = (await res.json()) as ServerMetrics;
-  } catch {
-    return { state: 'error', reason: 'bad-body', detail: 'the Worker answered 200 with a body that is not JSON' };
+    const called = await adminCall('/api/admin/metrics', { cache: 'no-store' }, METRICS_TIMEOUT_MS);
+    if ('failure' in called) {
+      return {
+        state: 'error',
+        reason: called.failure,
+        detail: routeFailure(METRICS_ROUTE, called.failure, called.detail),
+      };
+    }
+    const res = called.res;
+    /* Reading the body consumes it, so each branch reads it exactly once. */
+    if (res.status === 401 || res.status === 403) {
+      return { state: 'unauthorized', detail: await reasonOfResponse(res, METRICS_ROUTE) };
+    }
+    if (res.status !== 200) {
+      return { state: 'error', reason: 'http', detail: await reasonOfResponse(res, METRICS_ROUTE) };
+    }
+    let text = '';
+    try {
+      text = await res.text();
+    } catch {
+      /* a stream that broke before its body arrived: the empty text is reported below */
+    }
+    let raw: unknown = null;
+    try {
+      raw = text ? JSON.parse(text) : null;
+    } catch {
+      return {
+        state: 'error',
+        reason: 'bad-body',
+        detail: `${METRICS_ROUTE} → HTTP 200 · the body is not JSON${text ? ` · ${bodySnippet(text)}` : ' (empty body)'}`,
+      };
+    }
+    const metrics = normalizeMetrics(raw);
+    return metrics
+      ? { state: 'ok', metrics }
+      : {
+        state: 'error',
+        reason: 'bad-body',
+        detail: `${METRICS_ROUTE} → HTTP 200 · the body carries no metrics payload${text ? ` · ${bodySnippet(text)}` : ' (empty body)'}`,
+      };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    return {
+      state: 'error',
+      reason: 'bad-body',
+      detail: `${METRICS_ROUTE} → the panel could not complete the reading (${bodySnippet(reason)})`,
+    };
   }
-  return data && data.ok === true
-    ? { state: 'ok', metrics: data }
-    : { state: 'error', reason: 'bad-body', detail: 'the Worker answered without a metrics payload' };
 }
 
 /**
@@ -1539,6 +1655,8 @@ export function createAdmin(api: AdminApi): Admin {
   let serverDenied = false;
   /** Whatever the Server door last said when it did not answer with a room: shown, never guessed. */
   let serverDetail = '';
+  /** The last reading got no answer at all — the one case that may be painted OFFLINE. */
+  let serverUnreachable = false;
   /** The last reading of the room, so the Server tab can paint before the next fetch lands. */
   let lastStatus: ServerStatus | null = null;
   /** The last measured round trip to the Worker, in ms. */
@@ -2415,11 +2533,12 @@ export function createAdmin(api: AdminApi): Admin {
         metricsPhase = 'error';
         metricsReason = result.reason;
       }
-    } catch {
+    } catch (err) {
       /* fetchMetrics already catches; this is the last line of defence for the UI lock */
       metricsPhase = 'error';
       metricsReason = 'bad-body';
-      metricsDetail = 'the panel could not complete the reading';
+      const thrown = err instanceof Error ? err.message : String(err);
+      metricsDetail = `${METRICS_ROUTE} → the panel could not complete the reading (${bodySnippet(thrown)})`;
     } finally {
       metricsBusy = false;
       try {
@@ -4053,7 +4172,7 @@ export function createAdmin(api: AdminApi): Admin {
     const live = !!status;
     const denied = !live && !serverBusy && serverDenied;
     /* A Worker that answered at all - even to refuse or to fail - is a live Worker. */
-    const gone = !!serverDetail && (serverDetail === failureText('offline') || serverDetail === failureText('no-origin'));
+    const gone = !live && !denied && !serverBusy && serverUnreachable;
     const maint = status ? status.config.maintenance : runtime.maintenance;
     if (serverCard) {
       serverCard.dataset.state = live ? 'live' : denied ? 'denied' : serverBusy ? 'connecting' : 'offline';
@@ -4183,18 +4302,21 @@ export function createAdmin(api: AdminApi): Admin {
     serverBusy = false;
     paintServerBusy();
     if (reading.state === 'denied') {
+      serverUnreachable = false;
       markDenied(reading.detail);
       /* the admin door may be shut while the public mirror is open: read the clock anyway */
       void syncArena().then(() => paintArena());
       return;
     }
     if (reading.state === 'error') {
+      serverUnreachable = reading.reason === 'offline' || reading.reason === 'no-origin';
       markLocal(reading.detail);
       void syncArena().then(() => paintArena());
       return;
     }
     serverOn = true;
     serverDenied = false;
+    serverUnreachable = false;
     lastStatus = reading.status;
     serverPingMs = reading.pingMs;
     paintServer(reading.status, reading.pingMs);

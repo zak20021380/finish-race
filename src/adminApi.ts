@@ -60,24 +60,43 @@ export const ADMIN_TIMEOUT_MS = 15_000;
 /** Why an admin call produced no response at all. These three are not the same outage. */
 export type AdminFailure = 'no-origin' | 'timeout' | 'offline';
 
-/** An admin call that reports *why* it failed, for the routes that paint a connection state. */
+/** The shortest honest description of a caught client-side failure, fit to paint in the panel. */
+const errorText = (err: unknown): string => {
+  const text = err instanceof Error ? err.message : String(err);
+  return text.replace(/\s+/g, ' ').trim().slice(0, 200);
+};
+
+/** An admin call's answer: a response, or *why* there is none — and what the client itself threw. */
+export type AdminReply = { res: Response } | { failure: AdminFailure; detail?: string };
+
+/**
+ * One admin call. Everything that can throw lives inside the guard — including the abort
+ * plumbing itself — so a browser that lacks `AbortController` (or a patched `setTimeout`) is
+ * reported as a failed request with its own message, never as an uncaught rejection that the
+ * caller can only paint as a broken reply.
+ */
 export async function adminCall(
   path: string,
   init: RequestInit = {},
   timeoutMs = ADMIN_TIMEOUT_MS,
-): Promise<{ res: Response } | { failure: AdminFailure }> {
-  const url = workerUrl(path);
-  if (!url) return { failure: 'no-origin' };
-  const extra = (init.headers ?? {}) as Record<string, string>;
-  const ac = new AbortController();
-  const timer = window.setTimeout(() => ac.abort(), timeoutMs);
+): Promise<AdminReply> {
+  let ac: AbortController | null = null;
+  let timer = 0;
   try {
+    const url = workerUrl(path);
+    if (!url) return { failure: 'no-origin' };
+    const extra = (init.headers ?? {}) as Record<string, string>;
+    ac = new AbortController();
+    timer = window.setTimeout(() => ac?.abort(), timeoutMs);
     return { res: await fetch(url, { ...init, signal: ac.signal, headers: { ...adminHeaders(), ...extra } }) };
-  } catch {
+  } catch (err) {
     /* an abort is a slow Worker; anything else is a request that never left the device */
-    return { failure: ac.signal.aborted ? 'timeout' : 'offline' };
+    return { failure: ac?.signal.aborted ? 'timeout' : 'offline', detail: errorText(err) };
   } finally {
-    window.clearTimeout(timer);
+    /* a client that refused the timer must not be asked to clear it either */
+    try {
+      if (timer) window.clearTimeout(timer);
+    } catch { /* timer plumbing already failed; the request verdict stands */ }
   }
 }
 
@@ -106,17 +125,39 @@ export async function parseJson<T>(res: Response | null): Promise<T | null> {
 }
 
 /**
- * What a non-2xx answer actually said, in as many words as the Worker is willing to give: its own
- * `error` and `hint` when it has them, the bare status when it answered with HTML or nothing.
+ * A raw body made safe to paint: one line, and short enough for the panel's alert card. Used
+ * whenever an answer carries no `error` / `hint` of its own, so the operator still reads what the
+ * Worker actually sent instead of only a status code.
  */
-export async function reasonOfResponse(res: Response): Promise<string> {
-  const head = `HTTP ${res.status}`;
+export function bodySnippet(raw: string): string {
+  return raw.replace(/\s+/g, ' ').trim().slice(0, 200);
+}
+
+/**
+ * What a response actually said, in as many words as the Worker is willing to give: the route
+ * that was called and the HTTP status first, then its own `error`, `hint` and `code`. A body that
+ * is not JSON — an edge error page, a text refusal — is quoted back (trimmed) rather than
+ * replaced with a bare status; that is what keeps a live-but-broken route from reading as a
+ * missing one.
+ */
+export async function reasonOfResponse(res: Response, route = ''): Promise<string> {
+  const where = route ? `${route} → ` : '';
+  const head = `${where}HTTP ${res.status}${res.statusText ? ` ${res.statusText}` : ''}`;
+  let raw = '';
   try {
-    const body = (await res.json()) as { error?: string; hint?: string; code?: string };
-    const detail = [body?.error, body?.hint].filter((part) => typeof part === 'string' && part).join(' · ');
-    return detail ? `${head} ${detail}` : head;
+    raw = await res.text();
   } catch {
     return head;
+  }
+  if (!raw) return head;
+  try {
+    const body = JSON.parse(raw) as { error?: unknown; hint?: unknown; code?: unknown };
+    const detail = [body?.error, body?.hint, body?.code]
+      .filter((part): part is string => typeof part === 'string' && part !== '')
+      .join(' · ');
+    return detail ? `${head} ${detail}` : `${head} · ${bodySnippet(raw)}`;
+  } catch {
+    return `${head} · ${bodySnippet(raw)}`;
   }
 }
 

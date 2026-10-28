@@ -1745,8 +1745,7 @@ export class MatchmakerDO {
     }), { matchesCompleted: 0, matches24h: 0, minesPlaced: 0 });
     const population = guarded('population', () => this.populationReading(now), NO_POPULATION);
     const series = guarded('series', () => this.growthWindows(now), NO_SERIES);
-    const environment = this.env.WORKER_ENV?.trim()
-      || (this.env.DEV_AUTH === 'true' || isLocalhost(hostname) ? 'development' : 'production');
+    const environment = guarded('environment', () => this.envLabel(hostname), 'unknown');
     return {
       ok: true,
       timestamp: now,
@@ -1757,6 +1756,41 @@ export class MatchmakerDO {
       logsSpawned: 0,
       ...series,
       degraded,
+    };
+  }
+
+  /** `production`, `development`, or the deployment's own `WORKER_ENV` label. */
+  private envLabel(hostname: string): string {
+    try {
+      return this.env.WORKER_ENV?.trim()
+        || (this.env.DEV_AUTH === 'true' || isLocalhost(hostname) ? 'development' : 'production');
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  /**
+   * A last-resort reading for the impossible case: the fold itself threw before any section guard
+   * could catch it. It is still a complete, well-formed `ServerMetrics` — every figure an exact
+   * zero — and it names the failure in `degraded` instead of answering a 500 the panel can only
+   * paint as a broken reply. The full reason also goes to the Worker log.
+   */
+  private metricsFallback(hostname: string, err: unknown): ServerMetrics {
+    console.error('metrics_failed', reasonOf(err));
+    return {
+      ok: true,
+      timestamp: Date.now(),
+      environment: this.envLabel(hostname),
+      activeRooms: 0,
+      queueLength: 0,
+      active1v1: 0,
+      ...NO_POPULATION,
+      matchesCompleted: 0,
+      matches24h: 0,
+      minesPlaced: 0,
+      logsSpawned: 0,
+      ...NO_SERIES,
+      degraded: ['telemetry', reasonOf(err)],
     };
   }
 
@@ -1864,7 +1898,14 @@ export class MatchmakerDO {
       if (!isMetricsMark(request.headers.get(METRICS_HEADER) ?? '', this.env)) {
         return json({ error: 'unauthorized', hint: 'metrics operator required' }, 403);
       }
-      return json(this.metrics(url.hostname));
+      try {
+        return json(this.metrics(url.hostname));
+      } catch (err) {
+        /* The reading is already folded per section; this is the last line of defence. Answer a
+           complete all-zero reading that names the failure, never a 500 the panel paints as a
+           broken reply. */
+        return json(this.metricsFallback(url.hostname, err));
+      }
     }
 
     /* The edge only proved the signature; membership is this room's call, registry in hand. */
