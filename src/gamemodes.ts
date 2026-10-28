@@ -287,8 +287,8 @@ export async function copyText(text: string): Promise<boolean> {
 /* ---------- the home Play Dock (same IDs home.ts owns) ---------- */
 
 /**
- * Repaint both keys of the dock from the one selection: the left key names the mode
- * it would switch to (emblem · label · the CHANGE badge) and the right key wears the
+ * Repaint both zones of the dock from the one selection: the left zone names the mode
+ * it would switch to (emblem · label · the CHANGE chip) and the right zone wears the
  * win the launch pays. Nothing here reads the DOM as state — every value comes from
  * `getLobbyDisplay()` plus the drawer's own `REWARD` line.
  */
