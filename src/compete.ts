@@ -537,6 +537,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   document.getElementById('squad-reg-open')?.addEventListener('click', () => openSquadRegister());
+  window.addEventListener('detour:squad-register', () => openSquadRegister());
   regEls.submit?.addEventListener('click', () => { void submitSquadRegistration(); });
   regEls.back?.addEventListener('click', () => {
     clearRegisterError();

@@ -4477,7 +4477,8 @@
 
       <!-- squad: bind a Telegram channel, then the hub — a prestige crest over the
            squad's rank, your standing, and a clean TiQ roster. The crest and actions
-           stay pinned while the roster between them scrolls. -->
+           stay pinned while the roster between them scrolls. The search view is the
+           alliance board: hero + Create Squad key pinned, only the bento list scrolls. -->
       <section class="sheet tall" id="sheet-squad" hidden role="dialog" aria-modal="true" aria-labelledby="squad-title">
         <header class="sq-top">
           <h2 class="sq-title" id="squad-title">Your Squad</h2>
@@ -4486,14 +4487,28 @@
           </button>
         </header>
 
-        <div class="sheet-body sq-search-view" id="squad-search-view" data-scroll>
-          <p class="sheet-p">Bind a Telegram channel. Race points count for you and your squad.</p>
-          <label class="field">
+        <div class="sheet-body sq-search-view" id="squad-search-view">
+          <div class="sq-intro">
+            <p class="sq-kicker">Race for your clan · Ally with Telegram channels</p>
+            <p class="sq-lede">Bind a channel and every point you score banks for the squad.</p>
+          </div>
+
+          <button class="sq-create" id="squad-create" type="button">
+            <span class="sq-create-ico" aria-hidden="true"><svg class="ico"><use href="#i-plus" /></svg></span>
+            <span class="sq-create-copy">
+              <b>Create Squad</b>
+              <small>Register your own Telegram channel</small>
+            </span>
+            <svg class="ico sq-create-go" aria-hidden="true"><use href="#i-next" /></svg>
+          </button>
+
+          <label class="field sq-field">
             <svg class="ico" aria-hidden="true"><use href="#i-search" /></svg>
-            <input id="squad-q" class="input" type="search" placeholder="@channel" autocomplete="off"
-              spellcheck="false" enterkeyhint="search" aria-label="Search or enter a Telegram channel" data-input />
+            <input id="squad-q" class="input" type="search" placeholder="Search squads or @channel" autocomplete="off"
+              spellcheck="false" enterkeyhint="search" aria-label="Search squads by name or Telegram channel" data-input />
           </label>
-          <ul class="pick squad-pick" id="squad-list" role="listbox" aria-label="Telegram squads" data-scroll tabindex="0"></ul>
+
+          <ul class="sq-bento" id="squad-list" role="list" aria-label="Telegram squads" data-scroll tabindex="0"></ul>
           <p class="pick-empty" id="squad-empty" hidden role="status">No squad matches that.</p>
           <p class="pick-empty squad-err" id="squad-err" role="status" hidden></p>
         </div>

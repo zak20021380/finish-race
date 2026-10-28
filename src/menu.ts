@@ -31,7 +31,7 @@ import { flagPhoto } from './flags';
 import { cleanCode, standings, YOU } from './teams';
 import {
   bindSquad, bindSquadById, cleanHandle, getMySquad, leaveSquad,
-  onSquadChange, searchSquads, squadLetter,
+  onSquadChange, searchSquads, squadLetter, squadMark,
 } from './squads';
 import {
   ARENA_CUP, arrangeRoster, buildSquadRoster, squadTargetAvg,
@@ -845,56 +845,130 @@ export function createMenu(api: MenuApi): Menu {
       ? myTiq()
       : Math.round((squadTargetAvg(s.rank) * (s.members - 1) + myTiq()) / s.members);
 
+  interface SquadCardOpts {
+    /** null mints the "bind this handle" card instead of a ranked squad */
+    rank: number | null;
+    mark: string;
+    name: string;
+    handle: string;
+    members?: number;
+    tiq?: number;
+    note?: string;
+    action: string;
+    aria: string;
+    squadId?: string;
+    handleRef?: string;
+    joined?: boolean;
+  }
+
+  function buildSquadCard(opts: SquadCardOpts): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = `sq-card${opts.joined ? ' is-bound' : ''}`;
+    if (opts.squadId) li.dataset.squad = opts.squadId;
+    if (opts.handleRef) li.dataset.handle = opts.handleRef;
+
+    const rank = document.createElement('span');
+    rank.className = 'sq-rank';
+    rank.setAttribute('aria-hidden', 'true');
+    if (opts.rank === null) {
+      rank.dataset.rank = 'new';
+      rank.append(squadSvg('#i-plus'));
+    } else {
+      rank.dataset.rank = opts.rank === 1 ? 'gold' : opts.rank === 2 ? 'silver' : opts.rank === 3 ? 'bronze' : 'num';
+      rank.textContent = String(opts.rank);
+    }
+
+    const avatar = document.createElement('span');
+    avatar.className = 'sq-card-av';
+    avatar.setAttribute('aria-hidden', 'true');
+    const mark = document.createElement('b');
+    mark.textContent = opts.mark;
+    avatar.append(mark);
+
+    const identity = document.createElement('span');
+    identity.className = 'sq-card-id';
+    const name = document.createElement('b');
+    name.className = 'sq-card-name';
+    name.textContent = opts.name;
+    name.title = opts.name;
+    const handle = document.createElement('span');
+    handle.className = 'sq-card-handle';
+    handle.textContent = opts.handle;
+    const metrics = document.createElement('span');
+    metrics.className = 'sq-card-metrics';
+    if (opts.members !== undefined) {
+      const chip = document.createElement('span');
+      chip.className = 'sq-chip sq-chip-mem';
+      chip.append(squadSvg('#i-users'), document.createTextNode(en(opts.members)));
+      metrics.append(chip);
+    }
+    if (opts.tiq !== undefined) {
+      const chip = document.createElement('span');
+      chip.className = 'sq-chip sq-chip-tiq';
+      const amount = document.createElement('b');
+      amount.textContent = en(opts.tiq);
+      const unit = document.createElement('small');
+      unit.textContent = 'TIQ';
+      chip.append(squadSvg('#i-brain'), amount, unit);
+      metrics.append(chip);
+    }
+    if (opts.note) {
+      const note = document.createElement('span');
+      note.className = 'sq-card-note';
+      note.textContent = opts.note;
+      metrics.append(note);
+    }
+    identity.append(name, handle, metrics);
+
+    const join = document.createElement('button');
+    join.type = 'button';
+    join.className = 'sq-join';
+    join.textContent = opts.action;
+    join.setAttribute('aria-label', opts.aria);
+    if (opts.joined) join.classList.add('is-joined');
+
+    li.append(rank, avatar, identity, join);
+    return li;
+  }
+
   function paintSquadList(q: string) {
-    const rows = searchSquads(q);
+    const rows = searchSquads(q, 20);
     const me = getMySquad();
     squadList.textContent = '';
     const needle = cleanHandle(q);
     const hasExact = needle && rows.some((s) => s.handle.toLowerCase() === needle.toLowerCase());
     if (needle && !hasExact) {
-      const li = document.createElement('li');
-      li.className = 'pick-row';
-      li.setAttribute('role', 'option');
-      li.tabIndex = -1;
-      li.dataset.handle = needle;
-      li.innerHTML = '';
-      const av = document.createElement('span');
-      av.className = 'squad-avatar';
-      av.textContent = squadLetter({ handle: needle, name: needle });
-      const nm = document.createElement('span');
-      nm.className = 'pick-n';
-      nm.textContent = `Bind ${needle}`;
-      const sub = document.createElement('small');
-      sub.textContent = 'New channel · starts a fresh roster';
-      nm.append(sub);
-      li.append(av, nm);
-      squadList.append(li);
+      squadList.append(buildSquadCard({
+        rank: null,
+        mark: squadLetter({ handle: needle, name: needle }),
+        name: `Bind ${needle}`,
+        handle: 'New channel',
+        note: 'Starts a fresh roster',
+        action: 'Bind',
+        aria: `Bind ${needle} as a new squad`,
+        handleRef: needle,
+      }));
     }
     for (const s of rows) {
-      const li = document.createElement('li');
-      li.className = 'pick-row';
-      li.setAttribute('role', 'option');
-      li.tabIndex = -1;
-      li.dataset.squad = s.id;
-      li.setAttribute('aria-selected', String(me?.id === s.id));
-      const av = document.createElement('span');
-      av.className = 'squad-avatar';
-      av.textContent = squadLetter(s);
-      const nm = document.createElement('span');
-      nm.className = 'pick-n';
-      nm.textContent = `${s.handle} · ${s.name}`;
-      const sub = document.createElement('small');
-      sub.textContent = `#${s.rank} · ${en(s.members)} member${s.members === 1 ? '' : 's'} · ${en(squadPreviewAvg(s))} avg TIQ`;
-      nm.append(sub);
-      const tick = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      tick.setAttribute('class', 'ico tick');
-      tick.setAttribute('aria-hidden', 'true');
-      tick.innerHTML = '<use href="#i-check" />';
-      li.append(av, nm, tick);
-      squadList.append(li);
+      const joined = me?.id === s.id;
+      squadList.append(buildSquadCard({
+        rank: s.rank,
+        mark: squadMark(s),
+        name: s.name,
+        handle: s.handle,
+        members: s.members,
+        tiq: squadPreviewAvg(s),
+        action: joined ? 'Joined' : 'Join',
+        aria: joined
+          ? `${s.name}, ${s.handle} — your squad. Open the squad hub.`
+          : `Join ${s.name}, ${s.handle}, rank ${s.rank}`,
+        squadId: s.id,
+        joined,
+      }));
     }
     squadEmpty.hidden = squadList.childElementCount > 0;
     if (!squadList.childElementCount) squadEmpty.textContent = q.trim() ? 'No squad matches that.' : 'No squads yet.';
+    squadList.scrollTop = 0;
   }
 
   function resetSquadLeave() {
@@ -969,11 +1043,16 @@ export function createMenu(api: MenuApi): Menu {
     squadError('Type a channel like @DogeSquad.');
   });
   squadList.addEventListener('click', (e) => {
-    const row = (e.target as HTMLElement | null)?.closest<HTMLElement>('.pick-row');
-    if (!row) return;
+    const card = (e.target as HTMLElement | null)?.closest<HTMLElement>('.sq-card');
+    if (!card) return;
     impact('light');
-    if (row.dataset.squad) commitBind(row.dataset.squad, true);
-    else if (row.dataset.handle) commitBind(row.dataset.handle, false);
+    if (card.dataset.squad) commitBind(card.dataset.squad, true);
+    else if (card.dataset.handle) commitBind(card.dataset.handle, false);
+  });
+
+  $('squad-create').addEventListener('click', () => {
+    impact('light');
+    window.dispatchEvent(new CustomEvent('detour:squad-register'));
   });
 
   /* The roster is windowed: a scroll frame paints only the rows around the

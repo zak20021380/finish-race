@@ -5780,11 +5780,7 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
 }
 
 /* ---- squad picker rows inside the sheet: same press language, viewport-safe ---- */
-.squad-pick { max-height: 30vh; }
-.squad-pick .pick-row { min-height: 52px; }
-.squad-pick .pick-n small { display: block; font-size: var(--t-micro); font-weight: 600; color: var(--ink-soft); }
 .squad-err { color: var(--danger); }
-#sheet-squad .sq-search-view { max-height: 52vh; }
 /* No height / max-height caps on the boards — the screen scroll owns scrolling,
    so a row is never half-cut at the bottom of a nested overflow box. */
 
@@ -6584,10 +6580,6 @@ html.reduced-motion .mh-arc-fill { animation: none; }
 @media (max-width: 380px) {
   .squad-dock { --dock-score: 62px; --dock-act: 104px; padding: 10px 6px; column-gap: 6px; }
   .squad-dock::before { left: 6%; right: 6%; }
-}
-/* short phones give the squad picker back its viewport headroom */
-@media (max-height: 700px) {
-  .squad-pick { max-height: 26vh; }
 }
 
 /* ==========================================================================
@@ -23381,11 +23373,15 @@ html.reduced-motion #s-profile .pf-badge-sync-dot { animation: none; opacity: 1;
   padding-top: 14px;
   padding-bottom: calc(10px + env(safe-area-inset-bottom));
   gap: var(--s2);
-  border: 1px solid rgba(255, 255, 255, .07);
+  border: 1px solid rgba(148, 197, 255, .1);
   border-bottom: 0;
   background:
-    radial-gradient(120% 90% at 50% 0%, rgba(56, 189, 248, .055) 0%, rgba(56, 189, 248, 0) 60%),
-    linear-gradient(180deg, rgba(23, 32, 48, .98) 0%, rgba(12, 18, 29, .99) 100%);
+    radial-gradient(110% 72% at 4% 0%, rgba(56, 189, 248, .09) 0%, rgba(56, 189, 248, 0) 58%),
+    radial-gradient(90% 60% at 100% 0%, rgba(167, 139, 250, .08) 0%, rgba(167, 139, 250, 0) 62%),
+    linear-gradient(180deg, rgba(22, 31, 46, .98) 0%, rgba(11, 16, 26, .995) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    0 -26px 60px -34px rgba(56, 189, 248, .4);
   -webkit-backdrop-filter: blur(18px) saturate(1.06);
   backdrop-filter: blur(18px) saturate(1.06);
 }
@@ -25251,3 +25247,370 @@ html.reduced-motion .theme-toggle[aria-checked="true"] .theme-toggle-thumb { tra
 }
 .join-gate-toast[hidden] { display: none; }
 .join-gate-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ==========================================================================
+   SQUAD ALLIANCE HUB — the Join Squad search view.
+   One loud key (Create Squad) owns the top of the sheet; search sits in a
+   recessed groove below it; every squad is a bento card whose only action is a
+   quiet outline JOIN. The list is the sole scroller and keeps a slim cyan
+   rail, so the hero, CTA and search stay pinned while squads move under them.
+   ========================================================================== */
+#sheet-squad .sq-search-view {
+  gap: 10px;
+  min-height: 0;
+}
+
+.sq-intro {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0 2px;
+}
+.sq-kicker {
+  margin: 0;
+  font-size: var(--t-micro);
+  font-weight: 900;
+  line-height: 1.35;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--brand-ink);
+}
+.sq-lede {
+  margin: 0;
+  font-size: var(--t-3);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+/* The one loud action in the sheet: cyan → violet face, thin lit rim, one ambient
+   bloom. Press travels straight down like every other key in the house. */
+.sq-create {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 9px 12px;
+  border: 1px solid rgba(125, 211, 252, .46);
+  border-radius: 16px;
+  background:
+    linear-gradient(120deg, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, 0) 44%),
+    linear-gradient(135deg, #0EA5E9 0%, #4F46E5 54%, #8B5CF6 100%);
+  box-shadow:
+    0 4px 14px rgba(0, 210, 255, .25),
+    inset 0 1px 0 rgba(255, 255, 255, .32),
+    inset 0 -1px 0 rgba(6, 11, 20, .4);
+  color: #F8FAFC;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), filter var(--motion-fast);
+}
+.sq-create:hover:not(:active) { filter: brightness(1.06); }
+.sq-create:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 6px rgba(0, 210, 255, .18),
+    inset 0 2px 6px rgba(6, 11, 20, .35);
+}
+.sq-create:focus-visible { outline: 3px solid var(--brand-3); outline-offset: 2px; }
+.sq-create-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 0 0 1px rgba(255, 255, 255, .14);
+}
+.sq-create-ico .ico { width: 17px; height: 17px; }
+.sq-create-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.sq-create-copy b {
+  font-size: 12.5px;
+  font-weight: 900;
+  line-height: 1.2;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.sq-create-copy small {
+  overflow: hidden;
+  font-size: var(--t-micro);
+  font-weight: 600;
+  line-height: 1.3;
+  color: rgba(248, 250, 252, .82);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sq-create-go { flex: none; width: 16px; height: 16px; color: rgba(248, 250, 252, .78); }
+
+/* Recessed groove: the field reads as a slot cut into the clay, not a card on it. */
+#sheet-squad .sq-field {
+  flex: none;
+  min-height: 46px;
+  border-radius: 14px;
+  background: rgba(6, 11, 20, .62);
+  box-shadow:
+    inset 0 2px 7px rgba(0, 0, 0, .58),
+    inset 0 0 0 1px rgba(255, 255, 255, .07),
+    0 1px 0 rgba(255, 255, 255, .04);
+  color: var(--ink-soft);
+  transition: box-shadow var(--motion-fast), background var(--motion-fast), color var(--motion-fast);
+}
+#sheet-squad .sq-field:focus-within {
+  background: rgba(6, 11, 20, .8);
+  box-shadow:
+    inset 0 2px 8px rgba(0, 0, 0, .62),
+    inset 0 0 0 1px rgba(56, 189, 248, .58),
+    0 0 0 3px rgba(56, 189, 248, .13);
+  color: var(--brand-ink);
+}
+#sheet-squad .sq-field .ico { width: 17px; height: 17px; }
+#sheet-squad .sq-field .input::placeholder { color: var(--text-dim); }
+
+/* The list owns the gesture; the rail is a thin cyan→violet seam. */
+#sheet-squad .sq-bento {
+  flex: 1 1 auto;
+  min-height: 96px;
+  max-height: calc(100vh - 280px);
+  max-height: calc(100dvh - 280px);
+  margin: 0;
+  padding: 2px 2px 4px;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(56, 189, 248, .5) transparent;
+}
+#sheet-squad .sq-bento::-webkit-scrollbar { display: block; width: 6px; height: 6px; }
+#sheet-squad .sq-bento::-webkit-scrollbar-track { background: transparent; }
+#sheet-squad .sq-bento::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(56, 189, 248, .6) 0%, rgba(167, 139, 250, .55) 100%);
+}
+#sheet-squad .sq-bento::-webkit-scrollbar-thumb:hover { background: rgba(56, 189, 248, .75); }
+#sheet-squad .sq-bento:empty { display: none; }
+#sheet-squad .sq-bento:focus-visible { outline: 2px solid rgba(56, 189, 248, .55); outline-offset: 2px; }
+
+/* Bento squad card: rank key · crest · identity + chips · JOIN. */
+.sq-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  min-height: 74px;
+  margin: 0 0 8px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .03);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .05),
+    0 12px 20px -20px rgba(0, 0, 0, .95);
+  cursor: pointer;
+  transition: background var(--motion-fast), border-color var(--motion-fast), transform var(--motion-fast);
+}
+.sq-card:last-child { margin-bottom: 0; }
+.sq-card:hover { background: rgba(255, 255, 255, .045); border-color: rgba(255, 255, 255, .14); }
+.sq-card:active { transform: translateY(1px); }
+.sq-card:focus-within { border-color: rgba(56, 189, 248, .4); }
+.sq-card.is-bound { border-color: rgba(56, 189, 248, .34); background: rgba(56, 189, 248, .06); }
+
+/* Rank: podium metal on 1–3, quiet clay key from 4 down. */
+.sq-rank {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #28334C 0%, #1A2233 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 0 0 1px rgba(255, 255, 255, .06),
+    0 1px 0 #0A0F1A;
+  color: var(--chip-ink);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.sq-rank .ico { width: 14px; height: 14px; color: var(--brand-ink); }
+.sq-rank[data-rank="gold"] {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, .7) 0%, rgba(255, 255, 255, 0) 48%),
+    linear-gradient(160deg, #FFE9A8 0%, #F2BE4C 48%, #B7791F 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .8),
+    inset 0 -1px 0 rgba(87, 52, 8, .45),
+    0 2px 7px -3px rgba(245, 158, 11, .8);
+  color: #3B2400;
+}
+.sq-rank[data-rank="silver"] {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, .85) 0%, rgba(255, 255, 255, 0) 48%),
+    linear-gradient(160deg, #F8FAFC 0%, #CBD5E1 48%, #8798AB 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .9),
+    inset 0 -1px 0 rgba(30, 41, 59, .4),
+    0 2px 7px -3px rgba(148, 163, 184, .7);
+  color: #1E293B;
+}
+.sq-rank[data-rank="bronze"] {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, .6) 0%, rgba(255, 255, 255, 0) 48%),
+    linear-gradient(160deg, #F8D3AC 0%, #DE9A57 50%, #A15A22 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .65),
+    inset 0 -1px 0 rgba(66, 30, 6, .45),
+    0 2px 7px -3px rgba(180, 83, 9, .7);
+  color: #2B1203;
+}
+.sq-rank[data-rank="new"] { box-shadow: inset 0 0 0 1px rgba(56, 189, 248, .35); }
+
+/* Crest: squircle token with a gradient rim and a dark inner face. */
+.sq-card-av {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1.5px solid transparent;
+  border-radius: 34%;
+  background:
+    linear-gradient(180deg, #1A2334 0%, #141B29 100%) padding-box,
+    linear-gradient(145deg, rgba(56, 189, 248, .85) 0%, rgba(167, 139, 250, .75) 100%) border-box;
+  box-shadow: 0 4px 10px -6px rgba(56, 189, 248, .7);
+  color: #E0F2FE;
+}
+.sq-card-av b {
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: .04em;
+}
+
+.sq-card-id {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.sq-card-name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--ink);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sq-card-handle {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--brand-ink);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sq-card-metrics {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 3px;
+  min-width: 0;
+}
+.sq-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sq-chip .ico { flex: none; width: 11px; height: 11px; }
+.sq-chip-mem {
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
+  color: var(--ink-soft);
+}
+.sq-chip-tiq {
+  background: rgba(167, 139, 250, .13);
+  box-shadow:
+    inset 0 0 0 1px rgba(167, 139, 250, .26),
+    0 0 10px -6px rgba(167, 139, 250, .85);
+  color: var(--honey-ink);
+}
+.sq-chip-tiq .ico { color: var(--violet); }
+.sq-chip-tiq b { font-weight: 900; }
+.sq-chip-tiq small { font-size: 10px; font-weight: 800; letter-spacing: .04em; color: rgba(252, 211, 77, .8); }
+.sq-card-note { font-size: 10.5px; font-weight: 600; line-height: 1; color: var(--text-dim); }
+
+/* JOIN: quiet outline key — high contrast, no bloom, so the CTA stays the loud one. */
+.sq-join {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  min-width: 58px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(56, 189, 248, .48);
+  border-radius: 999px;
+  background: rgba(56, 189, 248, .1);
+  color: var(--brand-ink);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform var(--motion-fast), background var(--motion-fast), border-color var(--motion-fast), box-shadow var(--motion-fast);
+}
+.sq-join:hover:not(:active) { background: rgba(56, 189, 248, .18); border-color: rgba(56, 189, 248, .7); }
+.sq-join:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, .45);
+}
+.sq-join:focus-visible { outline: 3px solid var(--brand-3); outline-offset: 2px; }
+.sq-join.is-joined {
+  border-color: rgba(52, 211, 153, .45);
+  background: rgba(52, 211, 153, .12);
+  color: var(--mint-ink);
+}
+
+@media (max-width: 380px) {
+  .sq-card { gap: 8px; min-height: 70px; padding: 10px; }
+  .sq-rank { width: 26px; height: 26px; border-radius: 8px; font-size: 11px; }
+  .sq-card-av { width: 34px; height: 34px; }
+  .sq-card-name { font-size: 13px; }
+  .sq-card-handle { font-size: 10.5px; }
+  .sq-join { min-width: 52px; min-height: 32px; padding: 0 10px; }
+  .sq-create-copy b { font-size: 12px; }
+}
+@media (max-width: 340px) {
+  .sq-card { gap: 6px; }
+  .sq-chip { height: 18px; padding: 0 5px; gap: 3px; font-size: 10px; }
+  .sq-chip .ico { width: 10px; height: 10px; }
+  .sq-card-metrics { gap: 3px; margin-top: 2px; }
+}
