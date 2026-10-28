@@ -17,8 +17,11 @@ import { tgInitData } from './telegram';
  * Worker is running. Production keeps honouring `VITE_WS_URL` for a separately hosted Worker.
  */
 export function workerBase(): string {
-  if (import.meta.env.DEV && location.host) return location.origin;
-  const ws = import.meta.env?.VITE_WS_URL?.trim();
+  /* `import.meta.env` can be absent at runtime in a bundle the toolchain failed to
+     statically define; an unguarded `.DEV` then throws and the fetch below never runs. */
+  const env = import.meta.env as ImportMetaEnv | undefined;
+  if (env?.DEV && location.host) return location.origin;
+  const ws = env?.VITE_WS_URL?.trim();
   if (ws) {
     try {
       const http = ws.replace(/^wss:/i, 'https:').replace(/^ws:/i, 'http:');
