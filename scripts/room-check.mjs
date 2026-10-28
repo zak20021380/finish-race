@@ -613,24 +613,23 @@ check('lobby: the caption counts down, then reports the roster it launched with'
 /* ---------- 7. the lobby format: one knob, and everything it derives ---------- */
 
 check('lobby format: capacity, mode, teams and copy all follow the one pick', () => {
-  for (const good of ['2v2', '2v1', '3p', '4p']) assert.ok(isLobbyFormat(good), `${good} was refused`);
-  for (const bad of ['2V2', '4', '5p', '', null, undefined, 4]) assert.ok(!isLobbyFormat(bad), `${bad} was accepted`);
-  assert.deepEqual([...LOBBY_FORMATS], ['2v2', '2v1', '3p', '4p']);
+  for (const good of ['duel', '3p', '4p', '2v2']) assert.ok(isLobbyFormat(good), `${good} was refused`);
+  for (const bad of ['2v1', '2V2', '4', '5p', '', null, undefined, 4]) assert.ok(!isLobbyFormat(bad), `${bad} was accepted`);
+  assert.deepEqual([...LOBBY_FORMATS], ['duel', '3p', '4p', '2v2']);
 
-  assert.equal(FORMAT_CAPACITY['2v2'], 4);
-  assert.equal(FORMAT_CAPACITY['2v1'], 3);
+  assert.equal(FORMAT_CAPACITY['duel'], 2);
   assert.equal(FORMAT_CAPACITY['3p'], 3);
   assert.equal(FORMAT_CAPACITY['4p'], 4);
+  assert.equal(FORMAT_CAPACITY['2v2'], 4);
 
-  assert.equal(FORMAT_MODE['2v2'], 'team');
-  assert.equal(FORMAT_MODE['2v1'], 'team');
+  assert.equal(FORMAT_MODE['duel'], 'ffa');
   assert.equal(FORMAT_MODE['3p'], 'ffa');
   assert.equal(FORMAT_MODE['4p'], 'ffa');
+  assert.equal(FORMAT_MODE['2v2'], 'team');
 
+  assert.equal(teamCapacity('duel', 0), 2);
   assert.equal(teamCapacity('2v2', 0), 2);
   assert.equal(teamCapacity('2v2', 1), 2);
-  assert.equal(teamCapacity('2v1', 0), 2);
-  assert.equal(teamCapacity('2v1', 1), 1, '2v1 must keep the lone challenger alone');
   assert.equal(teamCapacity('3p', 0), 3);
   assert.equal(teamCapacity('4p', 1), 4);
 
@@ -678,8 +677,8 @@ check('lobby format: a reflow keeps every held seat, and refuses the impossible'
 
 check('lobby format: a team move respects the cap, and swaps when the team is full', () => {
   const held = [true, true, true];
-  /* 2v1: Blue is full, so the Red player who taps Blue swaps the first Blue to Red */
-  assert.deepEqual(assignTeam([0, 1, 0], held, 1, 0, '2v1'), [1, 0, 0]);
+  /* 2v2: a full Blue side swaps its first seat out rather than growing past two */
+  assert.deepEqual(assignTeam([0, 1, 0], held, 1, 0, '2v2'), [1, 0, 0]);
   /* 2v2: Red is full, so a Blue tapping Red swaps with the first Red */
   assert.deepEqual(assignTeam([0, 1, 0, 1], [true, true, true, true], 2, 1, '2v2'), [0, 0, 1, 1]);
   /* a team with room takes the seat without displacing anyone */
@@ -689,7 +688,7 @@ check('lobby format: a team move respects the cap, and swaps when the team is fu
   assert.equal(assignTeam([0, 1, 0, 1], [true, false, true, true], 1, 0, '2v2'), null);
   assert.equal(assignTeam([0, 1, 0, 1], [true, true, true, true], 0, 0, '2v2'), null);
   assert.equal(assignTeam([0, 1], [true, true], 5, 1, '2v2'), null);
-  assert.equal(assignTeam([0, 1, 0], held, 1, 1, '2v1'), null, 'a seat already on its team was moved');
+  assert.equal(assignTeam([0, 1, 0], held, 1, 1, '2v2'), null, 'a seat already on its team was moved');
 });
 
 console.log(`\n${run} room checks passed`);

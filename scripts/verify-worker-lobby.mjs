@@ -160,9 +160,10 @@ function ok(label, condition, detail = '') {
   ok('the host is told the room it just minted',
     first?.code === '9786' && first?.host === 0 && first?.you === 0 && first?.mode === 'ffa',
     JSON.stringify(first));
-  ok('a fresh room seats four and holds only the host',
-    first?.capacity === 4 && first?.seats?.length === 1 && first?.seats[0].host === true,
-    JSON.stringify(first?.seats));
+  ok('a fresh room opens on the 1v1 duel and holds only the host',
+    first?.capacity === 2 && first?.format === 'duel'
+    && first?.seats?.length === 1 && first?.seats[0].host === true,
+    JSON.stringify([first?.capacity, first?.format, first?.seats]));
 
   const guest = await open(rt, { name: 'Rune', code: '9786' });
   ok('a guest joining by code gets a socket', guest.status === 101 && !!guest.socket);
@@ -203,10 +204,10 @@ function ok(label, condition, detail = '') {
     JSON.stringify(lobbyOf(host.socket)?.seats.map((s) => s.team)));
 
   /* the size switch reflows the seated people into the smaller room, nobody dropped */
-  send(host.socket, { type: 'SET_FORMAT', format: '2v1' });
+  send(host.socket, { type: 'SET_FORMAT', format: 'duel' });
   const small = lobbyOf(guest.socket);
-  ok('a 2v1 reflow fits the room into three seats',
-    small?.format === '2v1' && small?.capacity === 3 && small?.seats?.length === 2,
+  ok('a duel reflow fits the room into two seats',
+    small?.format === 'duel' && small?.capacity === 2 && small?.seats?.length === 2,
     JSON.stringify([small?.format, small?.capacity, small?.seats?.length]));
 }
 
@@ -229,6 +230,7 @@ function ok(label, condition, detail = '') {
 {
   const rt = runtime();
   const host = await open(rt, { name: 'A', code: '3333', host: true });
+  send(host.socket, { type: 'SET_FORMAT', format: '4p' });
   const seats = [];
   for (const name of ['B', 'C', 'D']) seats.push(await open(rt, { name, code: '3333' }));
   ok('four seats fill', lobbyOf(host.socket)?.seats?.length === 4,

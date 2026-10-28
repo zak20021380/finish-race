@@ -70,7 +70,7 @@ type ClientMessage =
      pair and looked back up in the receiver's own closed table — no text crosses this wire. */
   | { type: 'PHRASE'; lang: string; index: number }
   | { type: 'RESIGN' }
-  /* The room path: the host starting early, the host's size pick (2v2 / 2v1 / 3p / 4p), and a
+  /* The room path: the host starting early, the host's format pick (1v1 / 3P / 4P / 2v2), and a
      seat's team move — any seat may move itself, the host may move anyone. Everything else a room
      seat sends is a MOVE or a RESIGN. */
   | { type: 'ROOM_START' }
@@ -145,7 +145,7 @@ interface LiveRoom {
   driver: RoomDriver | null;
   /** The seat wearing the crown. A code lobby migrates it when the host walks out. */
   hostSeat: number;
-  /** The host's size pick: 2v2 / 2v1 / 3p / 4p. `size`, `mode` and `teams` all follow it. */
+  /** The host's format pick: 1v1 / 3P / 4P / 2v2. `size`, `mode` and `teams` all follow it. */
   format: LobbyFormat;
   /** The format's race shape: everyone for themselves, or two teams. */
   mode: 'ffa' | 'team';
@@ -162,7 +162,7 @@ interface RoomRef { live: LiveRoom; seat: number }
 export interface RoomSummary { players: number; bots: number }
 
 /** The format a fixed-size auto-pair room reports. It never grows a selector; its size is the shape. */
-const formatForSize = (size: number): LobbyFormat => (size === 3 ? '3p' : '4p');
+const formatForSize = (size: number): LobbyFormat => (size === 2 ? 'duel' : size === 3 ? '3p' : '4p');
 
 /** The ordinary radius, and the number the room starts on. */
 const TIER_RADIUS = 250;
@@ -3227,7 +3227,7 @@ export class MatchmakerDO {
     if (live?.driver) { this.rejectSocket(ws, 'room_started'); return; }
     if (!live) {
       if (!host) { this.rejectSocket(ws, 'room_not_found'); return; }
-      const format: LobbyFormat = '4p';
+      const format: LobbyFormat = 'duel';
       const size = FORMAT_CAPACITY[format];
       live = {
         room: createRoom({ code, seats: size, waitMs: ROOM_WAIT_MS, botTier: tier, now: Date.now() }),
@@ -3477,11 +3477,10 @@ export class MatchmakerDO {
       if (msg.type === 'CANCEL') { this.leaveLobby(ref); return; }
       if (msg.type === 'ROOM_START') {
         if (ref.seat !== live.hostSeat) return;
-        /* A friends room needs its format's minimum before it is a race — two players, or all
-           three for the 2v1's lone challenger. The auto-pair room does not, because its whole
-           contract is that the machine fills whatever is left. */
+        /* A friends room needs two players before it is a race. The auto-pair room does not,
+           because its whole contract is that the machine fills whatever is left. */
         const held = live.members.filter((m) => m !== null).length;
-        if (!live.code || held >= (live.format === '2v1' ? 3 : 2)) this.launchRoom(live);
+        if (!live.code || held >= 2) this.launchRoom(live);
         return;
       }
       if (msg.type === 'SET_FORMAT') {

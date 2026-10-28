@@ -24,9 +24,9 @@ import { botStartLink, telegramShareLink } from '../shared/config';
 import type { Sheets } from './sheets';
 import {
   FORMAT_LINE, canStart, isHost, nextTeam, occupied, openLobby, startHint,
-  type Lobby, type LobbyHandle, type LobbyMode, type LobbyRace, type LobbyFormat,
+  type Lobby, type LobbyHandle, type LobbyRace, type LobbyFormat,
 } from './lobby';
-import { isLobbyFormat, teamCapacity } from './room';
+import { isLobbyFormat } from './room';
 
 export type GameModeId = 'duel_1v1' | 'party_2v2' | 'bot' | 'room';
 
@@ -337,9 +337,6 @@ let handle: LobbyHandle | null = null;
 let roomToken = 0;
 /** The open well whose "+" was tapped: where the picker puts a bot. */
 let pickSeat = -1;
-/** The size each mode remembers, so toggling Team ⇄ Individual returns to the last pick. */
-let lastFfaFormat: LobbyFormat = '4p';
-let lastTeamFormat: LobbyFormat = '2v2';
 /** What the last paint wrote into the grid. A rebuild only happens when this changes. */
 let slotSig = '';
 /** The drawer, kept module-level so a race arriving over the wire can close it. */
@@ -405,11 +402,11 @@ function slotMarkup(l: Lobby, seat: number, team: 0 | 1 | null): string {
   if (s.seat === l.you) cls.push('is-you');
   if (!s.connected) cls.push('is-away');
   const hint = canMove
-    ? ` title="Tap to switch ${esc(s.name)} to Team ${s.team === 0 ? 'Red' : 'Blue'}"`
+    ? ` title="Tap to switch ${esc(s.name)} to Team ${s.team === 0 ? 'Orange' : 'Blue'}"`
     : '';
   const label = team === null
     ? `${s.name}, ${role}, ${FFA_COLOR[color]} badge`
-    : `${s.name}, ${role}, Team ${s.team === 0 ? 'Blue' : 'Red'}`;
+    : `${s.name}, ${role}, Team ${s.team === 0 ? 'Blue' : 'Orange'}`;
   return `<button class="${cls.join(' ')}" type="button" role="listitem" data-seat="${seat}"`
     + (team === null ? ` data-color="${color}"` : ` data-team="${s.team}"`)
     + ` aria-label="${esc(label)}"${hint}>`
@@ -419,48 +416,48 @@ function slotMarkup(l: Lobby, seat: number, team: 0 | 1 | null): string {
     + `<span class="lb-tags">${tags}</span></button>`;
 }
 
+/** The crest between the two sides of a versus layout — board furniture, never a control. */
+const vsMarkup = (): string =>
+  '<div class="lb-vs" aria-hidden="true"><span class="lb-vs-c">'
+  + '<svg class="ico lb-vs-i" focusable="false"><use href="#i-swords" /></svg><b>VS</b></span></div>';
+
+/** The duel: one prominent card a side, the crest between them. Two seats, nothing to count. */
+function duelMarkup(l: Lobby): string {
+  return slotMarkup(l, 0, null) + vsMarkup() + slotMarkup(l, 1, null);
+}
+
 /**
- * The team shape: Blue's column, the VS crest, Red's column. Both columns draw the same number of
- * rows — the fuller team sets the height — and a cell a format does not offer (Red's second in a
- * 2v1) is a visible lock rather than a silently shorter column, so 2 vs 1 reads as 2 vs 1.
+ * The 2v2 shape: Blue's column, the VS crest, Orange's column. Each side draws the seats the
+ * format assigns it, in seat order, so the two columns always read as even sides.
  */
 function teamMarkup(l: Lobby): string {
-  const cap: [number, number] = [teamCapacity(l.format, 0), teamCapacity(l.format, 1)];
-  const rows = Math.max(cap[0], cap[1]);
-  const seatsOf = (team: 0 | 1): number[] =>
-    l.seats.map((_s, i) => i).filter((i) => plannedTeam(l, i) === team).slice(0, cap[team]);
-  const lock = '<span class="lb-lock" role="listitem" aria-label="Seat locked in this format">'
-    + '<svg class="ico" aria-hidden="true" focusable="false"><use href="#i-lock" /></svg></span>';
   const column = (team: 0 | 1): string => {
-    const seats = seatsOf(team);
-    const cells: string[] = [];
-    for (let n = 0; n < rows; n++) {
-      const seat = n < cap[team] ? seats[n] : undefined;
-      cells.push(seat === undefined ? lock : slotMarkup(l, seat, team));
-    }
-    return `<div class="lb-team is-${team === 0 ? 'blue' : 'red'}" data-team="${team}">`
+    const seats = l.seats.map((_s, i) => i).filter((i) => plannedTeam(l, i) === team);
+    return `<div class="lb-team is-${team === 0 ? 'blue' : 'orange'}" data-team="${team}">`
       + `<p class="lb-team-h"><span class="lb-team-dot" aria-hidden="true"></span>`
-      + `${team === 0 ? 'Blue Team' : 'Red Team'}</p>${cells.join('')}</div>`;
+      + `${team === 0 ? 'Team Blue' : 'Team Orange'}</p>`
+      + seats.map((seat) => slotMarkup(l, seat, team)).join('')
+      + '</div>';
   };
-  return column(0)
-    + '<div class="lb-vs" aria-hidden="true"><span class="lb-vs-c">'
-    + '<svg class="ico lb-vs-i" focusable="false"><use href="#i-swords" /></svg><b>VS</b></span></div>'
-    + column(1);
+  return column(0) + vsMarkup() + column(1);
 }
 
 /** Rebuild the roster only when it actually moved: a paint must never steal a tap. */
 function paintSlots(l: Lobby): void {
-  const sig = `${l.you}|${l.hostSeat}|${l.mode}|${l.format}|`
+  const sig = `${l.you}|${l.hostSeat}|${l.format}|`
     + l.seats.map((s) => (s ? `${s.id}:${s.name}:${s.team}:${s.host}:${s.bot}:${s.connected}` : '-')).join(',');
   if (sig === slotSig) return;
   slotSig = sig;
   const grid = document.getElementById('lb-slots');
   if (!grid) return;
-  grid.className = `lb-slots ${l.mode === 'team' ? 'is-team' : 'is-ffa'}`;
+  /* the format owns the roster's shape: two cards and a crest, three compact cards, or four */
+  grid.className = `lb-slots is-${l.format}`;
   grid.dataset.format = l.format;
-  grid.innerHTML = l.mode === 'team'
+  grid.innerHTML = l.format === '2v2'
     ? teamMarkup(l)
-    : l.seats.map((_s, i) => slotMarkup(l, i, null)).join('');
+    : l.format === 'duel'
+      ? duelMarkup(l)
+      : l.seats.map((_s, i) => slotMarkup(l, i, null)).join('');
 }
 
 /** Everything the lobby screen shows, from the value alone. */
@@ -473,17 +470,10 @@ function paintLobbyPane(l: Lobby): void {
   if (count) count.textContent = `${occupied(l)}/${l.capacity} Players`;
 
   const host = isHost(l);
-  for (const b of document.querySelectorAll<HTMLButtonElement>('#lb-mode [data-mode]')) {
-    b.setAttribute('aria-pressed', String(b.dataset.mode === l.mode));
-    b.setAttribute('aria-disabled', String(!host));
-    b.classList.toggle('is-locked', !host);
-  }
-  /* the size row swaps with the mode: Team Match offers 2v2 / 2v1, Individual offers 3 / 4 players */
+  /* one row, four direct formats: the pressed chip is the room's shape, and the line under it
+     says what that shape plays. A guest sees the same bar with every key locked. */
   for (const b of document.querySelectorAll<HTMLButtonElement>('#lb-formats [data-format]')) {
-    const raw = b.dataset.format;
-    const owned = l.mode === 'team' ? raw === '2v2' || raw === '2v1' : raw === '3p' || raw === '4p';
-    b.hidden = !owned;
-    b.setAttribute('aria-pressed', String(raw === l.format));
+    b.setAttribute('aria-pressed', String(b.dataset.format === l.format));
     b.setAttribute('aria-disabled', String(!host));
     b.classList.toggle('is-locked', !host);
   }
@@ -503,16 +493,18 @@ function paintLobbyPane(l: Lobby): void {
 
   const start = document.getElementById('gm-start') as HTMLButtonElement | null;
   if (start) {
-    start.textContent = host ? 'Start Match' : 'Waiting for host to start…';
-    start.setAttribute('aria-disabled', String(!host || !canStart(l)));
+    const ready = host && canStart(l);
+    start.textContent = host ? 'Start Match' : 'Waiting for host…';
+    start.setAttribute('aria-disabled', String(!ready));
     if (host && !canStart(l)) {
-      start.setAttribute('title', l.format === '2v1' ? '2 vs 1 needs all 3 players' : 'Need at least 2 players');
+      start.setAttribute('title', 'Invite one more player to start');
     } else {
       start.removeAttribute('title');
     }
     start.classList.add('is-lobby');
     start.classList.toggle('is-waiting', !host);
     start.classList.toggle('is-idle', host && !canStart(l));
+    start.classList.toggle('is-ready', ready);
   }
 }
 
@@ -596,6 +588,9 @@ function showView(next: SheetView): void {
   /* the entry pane owns its two actions; the foot belongs to the list and the lobby */
   const foot = document.getElementById('gm-foot');
   if (foot) foot.hidden = next === 'room';
+  /* the compact Leave lives beside Start only while a room is on screen */
+  const leave = document.getElementById('lb-leave');
+  if (leave) leave.hidden = next !== 'lobby';
   const rewards = document.getElementById('gm-rewards');
   if (rewards) rewards.hidden = next !== 'modes';
   const body = document.querySelector<HTMLElement>('.gm-body');
@@ -681,7 +676,7 @@ export function paintSheetState(): void {
     start.textContent = START_LABEL[current.id];
     start.removeAttribute('aria-disabled');
     start.removeAttribute('title');
-    start.classList.remove('is-lobby', 'is-idle', 'is-waiting');
+    start.classList.remove('is-lobby', 'is-idle', 'is-waiting', 'is-ready');
   }
   if (view === 'lobby' && handle) paintLobbyPane(handle.lobby);
 }
@@ -866,7 +861,7 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
   document.getElementById('lb-invite')?.addEventListener('click', invite);
   document.getElementById('lb-pick-invite')?.addEventListener('click', () => { showPick(false); invite(); });
 
-  /* ---- lobby: the host's mode + size switches (a guest's copy is view-only) ---- */
+  /* ---- lobby: the host's one-row format pick (a guest's copy is view-only) ---- */
   const pickFormat = (format: LobbyFormat): void => {
     const l = handle?.lobby;
     if (!l) return;
@@ -874,21 +869,8 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     if (format === l.format) return;
     impact('light');
     /* the pure model refuses a pick nobody fits into; say so rather than leaving it dead */
-    if (!handle?.setFormat(format)) { notify('warning'); return; }
-    if (format === '2v2' || format === '2v1') lastTeamFormat = format;
-    else lastFfaFormat = format;
+    if (!handle?.setFormat(format)) notify('warning');
   };
-
-  for (const b of document.querySelectorAll<HTMLButtonElement>('#lb-mode [data-mode]')) {
-    b.addEventListener('click', () => {
-      const l = handle?.lobby;
-      if (!l) return;
-      if (!isHost(l)) { notify('warning'); return; }
-      const mode: LobbyMode = b.dataset.mode === 'team' ? 'team' : 'ffa';
-      if (mode === l.mode) return;
-      pickFormat(mode === 'team' ? lastTeamFormat : lastFfaFormat);
-    });
-  }
 
   for (const b of document.querySelectorAll<HTMLButtonElement>('#lb-formats [data-format]')) {
     b.addEventListener('click', () => {
@@ -897,7 +879,7 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     });
   }
 
-  /* ---- lobby: seats. An open well invites; a held one flips teams (2v2/2v1 only) ---- */
+  /* ---- lobby: seats. An open well invites; a held one flips teams (2v2 only) ---- */
   document.getElementById('lb-slots')?.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement | null)?.closest<HTMLElement>('.lb-slot');
     const l = handle?.lobby;
@@ -906,9 +888,11 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     if (!Number.isInteger(seat)) return;
     const s = l.seats[seat];
     if (!s) {
+      impact('light');
+      /* an online room has no machine to add: the open well is simply the invite door */
+      if (l.online) { invite(); return; }
       pickSeat = seat;
       showPick(true);
-      impact('light');
       return;
     }
     if (l.mode === 'team' && (isHost(l) || s.seat === l.you)) {

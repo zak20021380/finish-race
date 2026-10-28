@@ -5137,7 +5137,7 @@
                 <span class="fr-create-ic" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-plus" /></svg></span>
                 <span class="fr-create-txt">
                   <span class="fr-create-t">Create New Room</span>
-                  <span class="fr-create-s">You host · up to 4 players</span>
+                  <span class="fr-create-s">You host · pick a format</span>
                 </span>
               </button>
 
@@ -5156,7 +5156,7 @@
             </div>
           </div>
 
-          <!-- the live lobby: code bar, host format switch, four seats, one Start -->
+          <!-- the live lobby: code bar, one-row format picker, dynamic seats, one compact action row -->
           <div class="gm-view" id="gm-view-lobby" hidden>
             <div class="lb">
               <div class="lb-bar">
@@ -5168,40 +5168,38 @@
                   <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-send" /></svg>
                   <span class="lb-invite-t">Invite</span>
                 </button>
-                <span class="lb-count" id="lb-count" role="status" aria-live="polite">1/4 Players</span>
+                <span class="lb-count" id="lb-count" role="status" aria-live="polite">1/2 Players</span>
               </div>
 
               <div class="lb-mode">
-                <div class="lb-seg" role="group" aria-label="Match type" id="lb-mode">
-                  <button class="lb-seg-b" type="button" data-mode="ffa" aria-pressed="true">Individual</button>
-                  <button class="lb-seg-b" type="button" data-mode="team" aria-pressed="false">Team Match</button>
+                <!-- one row, four direct formats: the pick a host makes, and the only thing the
+                     roster derives from. `paintLobbyPane` presses the chip and rewrites the line. -->
+                <div class="lb-formats" role="group" aria-label="Match format" id="lb-formats">
+                  <button class="lb-fmt" type="button" data-format="duel" aria-pressed="true"
+                    aria-label="1v1 duel">1v1</button>
+                  <button class="lb-fmt" type="button" data-format="3p" aria-pressed="false"
+                    aria-label="3-player free-for-all">3P</button>
+                  <button class="lb-fmt" type="button" data-format="4p" aria-pressed="false"
+                    aria-label="4-player free-for-all">4P</button>
+                  <button class="lb-fmt" type="button" data-format="2v2" aria-pressed="false"
+                    aria-label="2v2 team match">2v2</button>
                 </div>
-                <!-- the host's size pick: Team Match offers 2v2 / 2v1, Individual offers 3 / 4 players.
-                     Both rows live here; `paintLobbyPane` shows the pair the mode owns. -->
-                <div class="lb-seg" role="group" aria-label="Match size" id="lb-formats">
-                  <button class="lb-seg-b" type="button" data-format="2v2" aria-pressed="false">2 vs 2</button>
-                  <button class="lb-seg-b" type="button" data-format="2v1" aria-pressed="false">2 vs 1</button>
-                  <button class="lb-seg-b" type="button" data-format="3p" aria-pressed="false">3 Players</button>
-                  <button class="lb-seg-b" type="button" data-format="4p" aria-pressed="false">4 Players</button>
-                </div>
-                <p class="lb-mode-sub" id="lb-mode-sub">4-player free-for-all · Everyone for themselves</p>
+                <p class="lb-mode-sub" id="lb-mode-sub">Head-to-head duel · First to the finish wins</p>
               </div>
 
+              <!-- exactly the slots the format fields: two + a crest, three, or four in Blue/Orange -->
               <div class="lb-slots" id="lb-slots" role="list" aria-label="Players in this room"></div>
               <p class="lb-hint" id="lb-hint" role="status" aria-live="polite">Invite one more player to start</p>
 
-              <!-- one 44px row: the invite picker swaps into the Leave key's place, so tapping a
-                   well never moves anything below it -->
-              <div class="lb-actions">
-                <div class="lb-pick" id="lb-pick" hidden>
-                  <button class="lb-pick-b" type="button" id="lb-pick-invite">
-                    <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-send" /></svg><span>Invite</span>
-                  </button>
-                  <button class="lb-pick-b" type="button" id="lb-pick-bot">
-                    <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-bot" /></svg><span>Add bot</span>
-                  </button>
-                </div>
-                <button class="lb-leave" type="button" id="lb-leave">Leave Room</button>
+              <!-- tapping an open well in a local lobby offers the machine a seat; online the well
+                   is simply the invite door, so this picker only ever appears offline -->
+              <div class="lb-pick" id="lb-pick" hidden>
+                <button class="lb-pick-b" type="button" id="lb-pick-invite">
+                  <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-send" /></svg><span>Invite</span>
+                </button>
+                <button class="lb-pick-b" type="button" id="lb-pick-bot">
+                  <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-bot" /></svg><span>Add bot</span>
+                </button>
               </div>
             </div>
           </div>
@@ -5219,7 +5217,13 @@
               <span class="coin" data-coin aria-hidden="true"></span>
             </span>
           </p>
-          <button class="btn btn-primary gm-start" type="button" id="gm-start">Start 1v1 match</button>
+          <div class="gm-foot-row">
+            <button class="lb-leave" type="button" id="lb-leave" hidden aria-label="Leave room">
+              <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-back" /></svg>
+              <span>Leave</span>
+            </button>
+            <button class="btn btn-primary gm-start" type="button" id="gm-start">Start 1v1 match</button>
+          </div>
         </div>
       </section>
 

@@ -2685,7 +2685,6 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
   box-shadow: inset 0 0 0 1.5px rgba(125, 211, 252, .35), 0 var(--d) 0 #080C14;
 }
 .lb-pill.on .ico { color: var(--brand-ink); }
-.lb-seg { flex: none; }
 
 /* ---- Prestige medallions: a real minted coin pinned to the avatar rim --------
    The coin is the same crest the Honor sheet ships, in a dark bezel ringed by the
@@ -12312,31 +12311,21 @@ html.reduced-motion .stars-count::before { animation: none; }
   white-space: nowrap;
 }
 
-/* format: a carved track with one lit thumb — the host's, and read-only for everyone else.
-   Two stacked rows: the mode (Individual / Team Match), then the size the mode owns. */
-.lb-mode {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 8px;
-  border-radius: var(--radius-md);
-  background: #1A2232;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05), inset 0 0 0 1px rgba(255, 255, 255, .04);
-}
-.lb-seg {
+/* format: one carved track with four direct picks — 1v1 · 3P · 4P · 2v2 — and the single line
+   that explains the choice. The host owns it; a guest's copy is read-only. */
+.lb-mode { display: flex; flex-direction: column; gap: 6px; }
+.lb-formats {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 5px;
-  padding: 5px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
   border-radius: var(--radius-pill);
   background: var(--field);
   box-shadow: var(--inset);
 }
-/* a hidden size chip leaves the grid entirely: the row always shows exactly two options */
-.lb-seg-b[hidden] { display: none; }
-.lb-seg-b {
-  min-height: 40px;
-  padding: 0 8px;
+.lb-fmt {
+  min-height: 38px;
+  padding: 0 4px;
   appearance: none;
   border: 0;
   border-radius: var(--radius-pill);
@@ -12344,19 +12333,19 @@ html.reduced-motion .stars-count::before { animation: none; }
   color: var(--ink-soft);
   font: inherit;
   font-size: var(--t-micro);
-  font-weight: 800;
-  letter-spacing: .01em;
+  font-weight: 900;
+  letter-spacing: .02em;
   cursor: pointer;
   transition: background var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
 }
-.lb-seg-b[aria-pressed="true"] {
+.lb-fmt[aria-pressed="true"] {
   background: linear-gradient(180deg, #FFC53D 0%, #E09A0E 100%);
   color: #2B1B02;
   box-shadow: 0 2px 0 #8A5604, inset 0 1px 0 rgba(255, 255, 255, .5);
 }
-.lb-seg-b.is-locked { cursor: default; }
-.lb-seg-b.is-locked[aria-pressed="false"] { opacity: .55; }
-.lb-seg-b:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
+.lb-fmt.is-locked { cursor: default; }
+.lb-fmt.is-locked[aria-pressed="false"] { opacity: .55; }
+.lb-fmt:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
 .lb-mode-sub {
   margin: 0;
   min-height: 14px;
@@ -12383,7 +12372,8 @@ html.reduced-motion .stars-count::before { animation: none; }
 }
 .lb-hint.is-ready { color: var(--honey-ink); }
 
-/* the roster. Individual: a two-by-two grid of seats. Team: Blue's column, a gold VS crest, Red's.
+/* the roster. The format owns the shape: a 1v1 duel is two large cards around the crest, 3P is a
+   single row of three, 4P a two-by-two, and the 2v2 is Blue's column against Orange's.
    Raised for a person, carved and dashed for a well still open. */
 .lb-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .lb-slot {
@@ -12488,8 +12478,48 @@ html.reduced-motion .stars-count::before { animation: none; }
 .lb-color[data-color="2"] { color: #86EFAC; background: rgba(34, 197, 94, .16); box-shadow: inset 0 0 0 1px rgba(34, 197, 94, .42); }
 .lb-color[data-color="3"] { color: #FDE68A; background: rgba(234, 179, 8, .16); box-shadow: inset 0 0 0 1px rgba(234, 179, 8, .42); }
 
-/* team match: two columns with the crest between them; the column rim carries the team colour */
-.lb-slots.is-team {
+/* the 1v1 duel — the room's default, so this is the layout most lobbies ever see: two seats
+   large enough to read at a glance, and the crest doing the talking between them */
+.lb-slots.is-duel {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: stretch;
+}
+.lb-slots.is-duel .lb-slot {
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  min-height: 116px;
+  padding: 16px 10px 14px;
+  text-align: center;
+}
+.lb-slots.is-duel .lb-av { width: 46px; height: 46px; font-size: 18px; }
+.lb-slots.is-duel .lb-slot-txt { flex: 0 0 auto; align-items: center; gap: 2px; width: 100%; }
+.lb-slots.is-duel .lb-name { max-width: 100%; font-size: var(--t-2); }
+.lb-slots.is-duel .lb-tags { position: absolute; top: 8px; right: 8px; flex-direction: row; }
+.lb-slots.is-duel .lb-color { display: none; }
+.lb-slots.is-duel .lb-plus { width: 34px; height: 34px; font-size: 21px; }
+
+/* 3P — three compact cards on one row, so the roster never shows a well the format does not need */
+.lb-slots.is-3p { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.lb-slots.is-3p .lb-slot {
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  min-height: 90px;
+  padding: 12px 6px 10px;
+  text-align: center;
+}
+.lb-slots.is-3p .lb-av { width: 32px; height: 32px; font-size: 13px; }
+.lb-slots.is-3p .lb-slot-txt { flex: 0 0 auto; align-items: center; gap: 1px; width: 100%; }
+.lb-slots.is-3p .lb-name { max-width: 100%; font-size: 11px; }
+.lb-slots.is-3p .lb-role { font-size: 8px; }
+.lb-slots.is-3p .lb-tags { position: absolute; top: 6px; right: 6px; flex-direction: row; gap: 2px; }
+.lb-slots.is-3p .lb-color { display: none; }
+.lb-slots.is-3p .lb-plus { width: 28px; height: 28px; font-size: 18px; }
+
+/* 2v2: Blue's column against Orange's, the crest between them; the column rim carries the colour */
+.lb-slots.is-2v2 {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 6px;
   align-items: stretch;
@@ -12504,8 +12534,8 @@ html.reduced-motion .stars-count::before { animation: none; }
   background: rgba(0, 0, 0, .14);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .04);
 }
-.lb-team.is-blue { box-shadow: inset 0 0 0 1px rgba(59, 130, 246, .22), 0 0 16px -10px rgba(59, 130, 246, .6); }
-.lb-team.is-red { box-shadow: inset 0 0 0 1px rgba(239, 68, 68, .22), 0 0 16px -10px rgba(239, 68, 68, .6); }
+.lb-team.is-blue { box-shadow: inset 0 0 0 1px rgba(59, 130, 246, .24), 0 0 16px -10px rgba(59, 130, 246, .6); }
+.lb-team.is-orange { box-shadow: inset 0 0 0 1px rgba(249, 115, 22, .26), 0 0 16px -10px rgba(249, 115, 22, .6); }
 .lb-team-h {
   margin: 0;
   display: flex;
@@ -12520,7 +12550,7 @@ html.reduced-motion .stars-count::before { animation: none; }
   color: var(--ink-soft);
 }
 .lb-team.is-blue .lb-team-h { color: var(--blue-ink); }
-.lb-team.is-red .lb-team-h { color: #FCA5A5; }
+.lb-team.is-orange .lb-team-h { color: #FDBA74; }
 .lb-team-dot {
   width: 7px;
   height: 7px;
@@ -12529,22 +12559,17 @@ html.reduced-motion .stars-count::before { animation: none; }
   background: #3B82F6;
   box-shadow: 0 0 8px rgba(59, 130, 246, .8);
 }
-.lb-team.is-red .lb-team-dot { background: #EF4444; box-shadow: 0 0 8px rgba(239, 68, 68, .8); }
+.lb-team.is-orange .lb-team-dot { background: #F97316; box-shadow: 0 0 8px rgba(249, 115, 22, .8); }
 /* inside a column the crest already owns the height: slots sit shorter and tighter */
 .lb-team .lb-slot { min-height: 50px; padding: 7px 8px; gap: 7px; }
 .lb-team .lb-av { width: 30px; height: 30px; font-size: 13px; }
-/* a seat the format does not offer (Red's second in 2v1): shown, locked, and clearly not a tap */
-.lb-lock {
-  display: grid;
-  place-items: center;
-  min-height: 50px;
-  border-radius: var(--radius-sm);
-  border: 2px dashed rgba(255, 255, 255, .08);
-  background: rgba(0, 0, 0, .12);
-  color: var(--ink-soft);
-  opacity: .55;
+.lb-team.is-blue .lb-slot .lb-av { background: linear-gradient(180deg, #3B82F6 0%, #1D4ED8 100%); color: #EFF6FF; }
+.lb-team.is-orange .lb-slot .lb-av { background: linear-gradient(180deg, #FB923C 0%, #C2410C 100%); color: #FFF7ED; }
+/* the host keeps the gold avatar in either column — the crown reads on every seat colour */
+.lb-team .lb-slot.is-host .lb-av {
+  background: linear-gradient(180deg, #FFD468 0%, #D98E0B 100%);
+  color: #2B1B02;
 }
-.lb-lock .ico { width: 15px; height: 15px; }
 /* the crest: a polished gold medallion on a thin divider — board furniture, never a control */
 .lb-vs { position: relative; display: grid; place-items: center; width: 44px; min-width: 44px; }
 .lb-vs::before {
@@ -12580,10 +12605,12 @@ html.reduced-motion .stars-count::before { animation: none; }
 
 /* short phones (360x640): the arena compresses on the 8px grid before the sheet ever scrolls */
 @media (max-height: 660px) {
-  .lb-mode { gap: 4px; padding: 6px; }
+  .lb-mode { gap: 4px; }
+  .lb-slots.is-duel .lb-slot { min-height: 100px; padding: 12px 8px 10px; }
+  .lb-slots.is-duel .lb-av { width: 40px; height: 40px; font-size: 16px; }
+  .lb-slots.is-3p .lb-slot { min-height: 80px; }
   .lb-team .lb-slot { min-height: 46px; }
   .lb-team .lb-av { width: 28px; height: 28px; font-size: 12px; }
-  .lb-lock { min-height: 46px; }
 }
 
 /* an open well: dashed, carved, and the one thing on the grid that invites a tap */
@@ -12617,9 +12644,8 @@ html.reduced-motion .stars-count::before { animation: none; }
   letter-spacing: .01em;
 }
 
-/* one action row, always 44px: the picker swaps into the Leave key's place, never below it */
-.lb-actions { display: flex; align-items: stretch; gap: 8px; min-height: 44px; }
-.lb-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 1 1 auto; }
+/* the invite picker lives in the flow only while a well is open */
+.lb-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .lb-pick[hidden] { display: none; }
 .lb-pick-b {
   min-height: 44px;
@@ -12642,23 +12668,36 @@ html.reduced-motion .stars-count::before { animation: none; }
 .lb-pick-b .ico { width: 15px; height: 15px; }
 .lb-pick-b:active { transform: scale(.98); }
 .lb-pick-b:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
+
+/* the foot row: one compact Leave key beside the one loud Start — no second full-width slab */
+.gm-foot-row { display: flex; align-items: stretch; gap: 8px; }
+.gm-foot-row .gm-start { flex: 1 1 0; width: auto; min-width: 0; }
 .lb-leave {
-  flex: 1 1 auto;
-  min-height: 44px;
+  flex: none;
+  width: 62px;
+  min-height: 52px;
   appearance: none;
   border: 0;
   border-radius: var(--radius-sm);
-  background: transparent;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: rgba(255, 255, 255, .04);
   color: var(--ink-soft);
   font: inherit;
-  font-size: var(--t-micro);
-  font-weight: 800;
-  letter-spacing: .02em;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
   cursor: pointer;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
   transition: color var(--motion-fast), background-color var(--motion-fast);
 }
-.lb-leave:hover { color: var(--ink); background: rgba(255, 255, 255, .04); }
+.lb-leave .ico { width: 15px; height: 15px; }
+.lb-leave[hidden] { display: none; }
+.lb-leave:hover { color: var(--ink); background: rgba(255, 255, 255, .07); }
 .lb-leave:active { transform: scale(.99); }
 .lb-leave:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
 
@@ -12671,6 +12710,16 @@ html.reduced-motion .stars-count::before { animation: none; }
     0 var(--d) 0 #8A5604,
     0 calc(var(--d) + 10px) 20px -10px rgba(245, 158, 11, .5),
     inset 0 2px 3px rgba(255, 255, 255, .5),
+    inset 0 -3px 6px rgba(0, 0, 0, .18);
+}
+/* the room is ready: the one warm slab earns a live gold ring — the only glow on the screen */
+.gm-start.is-lobby.is-ready {
+  box-shadow:
+    0 var(--d) 0 #8A5604,
+    0 0 0 1px rgba(255, 226, 130, .45),
+    0 0 22px -2px rgba(245, 158, 11, .6),
+    0 0 46px -8px rgba(255, 197, 61, .45),
+    inset 0 2px 3px rgba(255, 255, 255, .55),
     inset 0 -3px 6px rgba(0, 0, 0, .18);
 }
 .gm-start[aria-disabled="true"] {
@@ -12782,7 +12831,7 @@ html.reduced-motion .gm-pick, html.reduced-motion .gm-key, html.reduced-motion .
 html.reduced-motion .gm-filters, html.reduced-motion .gm-f-tip,
 html.reduced-motion .fr-create, html.reduced-motion .fr-join-btn,
 html.reduced-motion .lb-code, html.reduced-motion .lb-invite, html.reduced-motion .lb-slot,
-html.reduced-motion .lb-seg-b, html.reduced-motion .lb-pick-b { transition: none; }
+html.reduced-motion .lb-fmt, html.reduced-motion .lb-pick-b, html.reduced-motion .lb-leave { transition: none; }
 html.reduced-motion .gm-filters.shake { animation: none; }
 
 

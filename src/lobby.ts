@@ -9,8 +9,8 @@
  *      repaints; nothing about a slot's look is stored in a closure. That is what lets the host
  *      migration below be a two-line rule instead of a screen rebuild.
  *
- *   2. **One host, one format.** The host seat owns the format — 2v2 / 2v1 / 3p / 4p — and with it
- *      the capacity, the race mode and the default Blue/Red split. A guest's copy is read-only: it
+ *   2. **One host, one format.** The host seat owns the format — 1v1 / 3P / 4P / 2v2 — and with it
+ *      the capacity, the race mode and the default Blue/Orange split. A guest's copy is read-only: it
  *      renders the same selectors, but they do nothing. A player may still move their own seat
  *      between the teams. Promotion is implicit — `vacate()` hands the crown to the lowest seat
  *      still held, so a lobby whose host walks out never becomes a room nobody can start.
@@ -24,7 +24,7 @@
  * The race itself is the worker's (`worker/matchmaker.ts` launches a `RoomDriver` and streams
  * `MOVE` frames); this module only hands `main.ts` a session shaped like the 1v1 one.
  */
-import { MAX_TEAMS, type Action } from './rules';
+import type { Action } from './rules';
 import { PHRASE_COUNT, isChatEmoteId, isChatLang, type ChatEmoteId, type ChatLang } from './data/phrases';
 import { chime, myTier, myTiq, roomSocketUrl, type MindTier, type OpponentData } from './matchmaking';
 import { profile } from './storage';
@@ -48,7 +48,7 @@ export interface LobbySeat {
   host: boolean;
   /** True when the machine holds the seat (a backfilled bot, or one the host added). */
   bot: boolean;
-  /** 0 = Team Blue, 1 = Team Red. Only read in `team` mode. */
+  /** 0 = Team Blue, 1 = Team Orange. Only read in `team` mode. */
   team: 0 | 1;
   connected: boolean;
 }
@@ -56,7 +56,7 @@ export interface LobbySeat {
 export interface Lobby {
   code: string;
   capacity: number;
-  /** The host's size pick: 2v2 / 2v1 / 3p / 4p. Capacity and mode derive from it. */
+  /** The host's pick: 1v1 / 3P / 4P / 2v2. Capacity and mode derive from it. */
   format: LobbyFormat;
   mode: LobbyMode;
   /** The seat wearing the crown. Always a held seat while the lobby is open. */
@@ -77,19 +77,14 @@ export const humans = (l: Lobby): number => l.seats.reduce((n, s) => n + (s && !
 
 export const isHost = (l: Lobby): boolean => l.you >= 0 && l.you === l.hostSeat;
 
-/**
- * How many players a format needs before it may start. Two is the smallest race the rules can
- * play, so a team battle or a free-for-all starts there — the machine fills the rest. The 2v1 is
- * the exception: its whole promise is the lone challenger, so all three seats have to be held.
- */
-export const minToStart = (l: Lobby): number => (l.format === '2v1' ? 3 : 2);
+/** How many players a room needs before it may start: the smallest race the rules can play. */
+export const MIN_START = 2;
 
-export const canStart = (l: Lobby): boolean => occupied(l) >= minToStart(l);
+export const canStart = (l: Lobby): boolean => occupied(l) >= MIN_START;
 
 /** The plain-language line under the roster: what is missing, or that the room is ready. */
 export function startHint(l: Lobby): string {
   if (canStart(l)) return isHost(l) ? 'All set — start the match' : 'Waiting for the host…';
-  if (l.format === '2v1') return '2 vs 1 needs all three players';
   return 'Invite one more player to start';
 }
 
@@ -188,8 +183,6 @@ export function setTeam(l: Lobby, seat: number, team: 0 | 1): Lobby {
 /** The format's one-line promise, printed under the selector. */
 export { FORMAT_LINE, FORMAT_MODE, type LobbyFormat };
 
-export const MODE_NAME: Record<LobbyMode, string> = { ffa: 'Individual', team: 'Team Match' };
-
 /* ---------- the race, shaped like the 1v1 session `main.ts` already plays ---------- */
 
 export interface LobbyRaceSeat {
@@ -255,7 +248,7 @@ export interface LobbyHandle {
   setFormat(format: LobbyFormat): boolean;
   /** The host may move any seat; a player may move their own. Team formats only. */
   setTeam(seat: number, team: 0 | 1): void;
-  /** Host only. False while the format's minimum player count is not met (2v1 needs all three). */
+  /** Host only. False while the format's minimum player count is not met (two players). */
   start(): boolean;
   leave(): void;
   /** The socket died mid-race: tell the board the room is gone. */
@@ -275,18 +268,18 @@ function myName(): string {
   return (el || tg?.first_name || tg?.username || 'You').slice(0, 14);
 }
 
-/** A lobby with only the host in it: seat 0 held, three wells open. */
+/** A lobby with only the host in it: a 1v1 room, the challenger's well open. */
 export function hostLobby(code: string, name: string, online: boolean): Lobby {
   const host: LobbySeat = {
     seat: 0, id: 'you', name, initial: faceOf(name), host: true, bot: false, team: 0, connected: true,
   };
   return {
     code,
-    capacity: MAX_TEAMS,
-    format: '4p',
+    capacity: 2,
+    format: 'duel',
     mode: 'ffa',
     hostSeat: 0,
-    seats: [host, null, null, null],
+    seats: [host, null],
     you: 0,
     online,
     status: online ? 'connecting' : 'solo',
@@ -299,6 +292,7 @@ function readLobby(l: Lobby, raw: Record<string, unknown>): Lobby {
      falls back to what the seats and mode imply. */
   const format: LobbyFormat = isLobbyFormat(raw.format) ? raw.format
     : raw.mode === 'team' ? '2v2'
+    : raw.capacity === 2 ? 'duel'
     : raw.capacity === 3 ? '3p' : '4p';
   const capacity = FORMAT_CAPACITY[format];
   const rows = Array.isArray(raw.seats) ? raw.seats : [];
