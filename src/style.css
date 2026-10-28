@@ -25251,8 +25251,8 @@ html.reduced-motion .theme-toggle[aria-checked="true"] .theme-toggle-thumb { tra
 /* ==========================================================================
    SQUAD ALLIANCE HUB — the Join Squad search view.
    One loud key (Create Squad) owns the top of the sheet; search sits in a
-   recessed groove below it; every squad is a bento card whose only action is a
-   quiet outline JOIN. The list is the sole scroller and keeps a slim cyan
+   recessed groove below it; every squad is a bento card whose only gesture is
+   a quiet inspect chevron. The list is the sole scroller and keeps a slim cyan
    rail, so the hero, CTA and search stay pinned while squads move under them.
    ========================================================================== */
 #sheet-squad .sq-search-view {
@@ -25403,18 +25403,19 @@ html.reduced-motion .theme-toggle[aria-checked="true"] .theme-toggle-thumb { tra
 #sheet-squad .sq-bento:empty { display: none; }
 #sheet-squad .sq-bento:focus-visible { outline: 2px solid rgba(56, 189, 248, .55); outline-offset: 2px; }
 
-/* Bento squad card: rank key · crest · identity + chips · JOIN. */
+/* Bento squad card: rank key · crest · identity + chips · inspect chevron.
+   The whole row is the door; joining is committed only inside the preview sheet. */
 .sq-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
-  min-height: 74px;
-  margin: 0 0 8px;
-  padding: 12px;
+  min-height: 84px;
+  margin: 0 0 10px;
+  padding: 13px 14px;
   border: 1px solid rgba(255, 255, 255, .08);
-  border-radius: 14px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, .03);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .05),
@@ -25425,7 +25426,7 @@ html.reduced-motion .theme-toggle[aria-checked="true"] .theme-toggle-thumb { tra
 .sq-card:last-child { margin-bottom: 0; }
 .sq-card:hover { background: rgba(255, 255, 255, .045); border-color: rgba(255, 255, 255, .14); }
 .sq-card:active { transform: translateY(1px); }
-.sq-card:focus-within { border-color: rgba(56, 189, 248, .4); }
+.sq-card:focus-visible { outline: 3px solid var(--brand-3); outline-offset: 2px; border-color: rgba(56, 189, 248, .4); }
 .sq-card.is-bound { border-color: rgba(56, 189, 248, .34); background: rgba(56, 189, 248, .06); }
 
 /* Rank: podium metal on 1–3, quiet clay key from 4 down. */
@@ -25433,9 +25434,9 @@ html.reduced-motion .theme-toggle[aria-checked="true"] .theme-toggle-thumb { tra
   flex: none;
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 9px;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
   background: linear-gradient(180deg, #28334C 0%, #1A2233 100%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .14),
@@ -25485,8 +25486,8 @@ html.reduced-motion .theme-toggle[aria-checked="true"] .theme-toggle-thumb { tra
   flex: none;
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   border: 1.5px solid transparent;
   border-radius: 34%;
   background:
@@ -25496,7 +25497,7 @@ html.reduced-motion .theme-toggle[aria-checked="true"] .theme-toggle-thumb { tra
   color: #E0F2FE;
 }
 .sq-card-av b {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 900;
   line-height: 1;
   letter-spacing: .04em;
@@ -25507,11 +25508,11 @@ html.reduced-motion .theme-toggle[aria-checked="true"] .theme-toggle-thumb { tra
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
 .sq-card-name {
   overflow: hidden;
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 800;
   line-height: 1.25;
   color: var(--ink);
@@ -25531,16 +25532,16 @@ html.reduced-motion .theme-toggle[aria-checked="true"] .theme-toggle-thumb { tra
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 3px;
+  gap: 6px;
+  margin-top: 5px;
   min-width: 0;
 }
 .sq-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 20px;
-  padding: 0 7px;
+  height: 21px;
+  padding: 0 8px;
   border-radius: 999px;
   font-size: 10.5px;
   font-weight: 800;
@@ -25566,51 +25567,472 @@ html.reduced-motion .theme-toggle[aria-checked="true"] .theme-toggle-thumb { tra
 .sq-chip-tiq small { font-size: 10px; font-weight: 800; letter-spacing: .04em; color: rgba(252, 211, 77, .8); }
 .sq-card-note { font-size: 10.5px; font-weight: 600; line-height: 1; color: var(--text-dim); }
 
-/* JOIN: quiet outline key — high contrast, no bloom, so the CTA stays the loud one. */
-.sq-join {
+/* Inspect chevron: a quiet tactical key, not a competing button. */
+.sq-card-go {
   flex: none;
-  display: inline-grid;
+  display: grid;
   place-items: center;
-  min-width: 58px;
-  min-height: 34px;
-  padding: 0 12px;
-  border: 1px solid rgba(56, 189, 248, .48);
-  border-radius: 999px;
-  background: rgba(56, 189, 248, .1);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .04);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
   color: var(--brand-ink);
-  font: inherit;
-  font-size: 10px;
-  font-weight: 900;
+  font-size: 20px;
+  font-weight: 700;
   line-height: 1;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: transform var(--motion-fast), background var(--motion-fast), border-color var(--motion-fast), box-shadow var(--motion-fast);
+  transform: translateY(-1px);
+  transition: background var(--motion-fast), box-shadow var(--motion-fast), color var(--motion-fast);
 }
-.sq-join:hover:not(:active) { background: rgba(56, 189, 248, .18); border-color: rgba(56, 189, 248, .7); }
-.sq-join:active {
-  transform: translateY(2px);
-  box-shadow: inset 0 2px 5px rgba(0, 0, 0, .45);
-}
-.sq-join:focus-visible { outline: 3px solid var(--brand-3); outline-offset: 2px; }
-.sq-join.is-joined {
-  border-color: rgba(52, 211, 153, .45);
-  background: rgba(52, 211, 153, .12);
-  color: var(--mint-ink);
+.sq-card:hover .sq-card-go {
+  background: rgba(56, 189, 248, .12);
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, .35);
+  color: #BAE6FD;
 }
 
 @media (max-width: 380px) {
-  .sq-card { gap: 8px; min-height: 70px; padding: 10px; }
-  .sq-rank { width: 26px; height: 26px; border-radius: 8px; font-size: 11px; }
-  .sq-card-av { width: 34px; height: 34px; }
-  .sq-card-name { font-size: 13px; }
+  .sq-card { gap: 9px; min-height: 76px; padding: 11px; }
+  .sq-rank { width: 27px; height: 27px; border-radius: 9px; font-size: 11px; }
+  .sq-card-av { width: 37px; height: 37px; }
+  .sq-card-name { font-size: 13.5px; }
   .sq-card-handle { font-size: 10.5px; }
-  .sq-join { min-width: 52px; min-height: 32px; padding: 0 10px; }
+  .sq-card-go { width: 25px; height: 25px; font-size: 18px; }
   .sq-create-copy b { font-size: 12px; }
 }
 @media (max-width: 340px) {
-  .sq-card { gap: 6px; }
+  .sq-card { gap: 7px; }
   .sq-chip { height: 18px; padding: 0 5px; gap: 3px; font-size: 10px; }
   .sq-chip .ico { width: 10px; height: 10px; }
-  .sq-card-metrics { gap: 3px; margin-top: 2px; }
+  .sq-card-metrics { gap: 4px; margin-top: 3px; }
+}
+
+/* ==========================================================================
+   SQUAD PREVIEW SHEET — the inspection step between discovery and joining.
+   The crest and verified identity lead, three bento tiles carry rank / TIQ /
+   members, and one full-width esports key owns the commitment. Only the body
+   scrolls; the top bar and the key stay inside the 360x640 viewport.
+   ========================================================================== */
+#sheet-squad-preview {
+  padding-top: 12px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  max-height: calc(90vh - env(safe-area-inset-top));
+  max-height: calc(90dvh - env(safe-area-inset-top));
+  gap: 8px;
+  border: 1px solid rgba(148, 197, 255, .12);
+  border-bottom: 0;
+  background:
+    radial-gradient(110% 70% at 4% 0%, rgba(56, 189, 248, .11) 0%, rgba(56, 189, 248, 0) 58%),
+    radial-gradient(90% 60% at 100% 0%, rgba(167, 139, 250, .1) 0%, rgba(167, 139, 250, 0) 62%),
+    linear-gradient(180deg, rgba(22, 31, 46, .985) 0%, rgba(11, 16, 26, .998) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    0 -26px 60px -34px rgba(56, 189, 248, .42);
+  -webkit-backdrop-filter: blur(18px) saturate(1.06);
+  backdrop-filter: blur(18px) saturate(1.06);
+}
+
+.sqp-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 42px;
+}
+.sqp-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 0 13px 0 9px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .04);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    inset 0 0 0 1px rgba(255, 255, 255, .015);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background var(--motion-fast), border-color var(--motion-fast), color var(--motion-fast), transform var(--motion-fast);
+}
+.sqp-back .ico { flex: none; width: 15px; height: 15px; color: var(--brand-ink); }
+.sqp-back:hover:not(:active) {
+  border-color: rgba(56, 189, 248, .3);
+  background: rgba(56, 189, 248, .1);
+  color: var(--ink);
+}
+.sqp-back:active { transform: translateY(1px); }
+.sqp-back:focus-visible { outline: 3px solid var(--brand-3); outline-offset: 2px; }
+.sqp-x { width: 42px; height: 42px; }
+.sqp-x .ms-x-g { font-size: 22px; }
+
+.sqp-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+/* Hero: the crest's ambient breathing room, the official title, the channel. */
+.sqp-hero {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 14px 14px 16px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 20px;
+  background:
+    radial-gradient(120% 170% at 0% 0%, rgba(56, 189, 248, .14) 0%, rgba(56, 189, 248, 0) 58%),
+    radial-gradient(100% 150% at 100% 0%, rgba(167, 139, 250, .1) 0%, rgba(167, 139, 250, 0) 62%),
+    rgba(15, 23, 42, .68);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 18px 36px -34px rgba(0, 0, 0, .95);
+}
+.sqp-crest { width: 66px; height: 66px; }
+.sqp-crest .sq-crest-t { font-size: 22px; }
+.sqp-id {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.sqp-eyebrow {
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--brand-ink);
+}
+.sqp-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.12;
+  letter-spacing: -.02em;
+  color: #FFFFFF;
+  text-shadow: 0 0 20px rgba(255, 255, 255, .1);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sqp-handle-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.sqp-verified {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #38BDF8 0%, #2563EB 100%);
+  box-shadow:
+    0 0 8px -1px rgba(56, 189, 248, .6),
+    inset 0 1px 0 rgba(255, 255, 255, .4);
+  color: #FFFFFF;
+}
+.sqp-verified .ico { width: 9px; height: 9px; }
+.sqp-handle {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #7DD3FC;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sqp-kind {
+  overflow: hidden;
+  font-size: 8.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Bento stat tiles: one metal for rank, one violet brain, one cyan headcount. */
+.sqp-tiles {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.sqp-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  min-height: 80px;
+  padding: 10px 11px;
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(30, 41, 59, .76) 0%, rgba(15, 23, 42, .66) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    0 12px 22px -24px rgba(0, 0, 0, .95);
+}
+.sqp-tile-k {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 7.5px;
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sqp-tile-k .ico { flex: none; width: 11px; height: 11px; }
+.sqp-tile-v {
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--font-numeric);
+  font-size: clamp(16px, 4.8vw, 20px);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+  color: #FFFFFF;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sqp-tile-s {
+  width: 100%;
+  overflow: hidden;
+  font-size: 7.5px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sqp-tile-rank {
+  --sqp-metal: 56, 189, 248;
+  border-color: rgba(var(--sqp-metal), .3);
+  background:
+    radial-gradient(140% 160% at 0% 0%, rgba(var(--sqp-metal), .14) 0%, rgba(15, 23, 42, .66) 68%),
+    linear-gradient(180deg, rgba(30, 41, 59, .7) 0%, rgba(15, 23, 42, .66) 100%);
+}
+.sqp-tile-rank[data-rank="gold"] { --sqp-metal: 252, 211, 77; }
+.sqp-tile-rank[data-rank="silver"] { --sqp-metal: 203, 213, 225; }
+.sqp-tile-rank[data-rank="bronze"] { --sqp-metal: 251, 146, 60; }
+.sqp-tile-rank[data-rank="new"] { --sqp-metal: 56, 189, 248; }
+.sqp-tile-rank .sqp-tile-k .ico {
+  color: rgb(var(--sqp-metal));
+  filter: drop-shadow(0 0 5px rgba(var(--sqp-metal), .55));
+}
+.sqp-tile-rank .sqp-tile-v {
+  color: rgb(var(--sqp-metal));
+  text-shadow: 0 0 16px rgba(var(--sqp-metal), .4);
+}
+.sqp-tile-tiq {
+  border-color: rgba(167, 139, 250, .22);
+  background:
+    radial-gradient(140% 160% at 0% 0%, rgba(167, 139, 250, .13) 0%, rgba(15, 23, 42, .66) 68%),
+    linear-gradient(180deg, rgba(30, 41, 59, .7) 0%, rgba(15, 23, 42, .66) 100%);
+}
+.sqp-tile-tiq .sqp-tile-k .ico {
+  color: #C4B5FD;
+  filter: drop-shadow(0 0 6px rgba(167, 139, 250, .95));
+}
+.sqp-tile-mem {
+  border-color: rgba(56, 189, 248, .18);
+  background:
+    radial-gradient(140% 160% at 0% 0%, rgba(56, 189, 248, .1) 0%, rgba(15, 23, 42, .66) 68%),
+    linear-gradient(180deg, rgba(30, 41, 59, .7) 0%, rgba(15, 23, 42, .66) 100%);
+}
+.sqp-tile-mem .sqp-tile-k .ico { color: #7DD3FC; }
+
+/* The brief lane: one line of clan incentive, never a wall of copy. */
+.sqp-lore {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(125, 211, 252, .13);
+  border-radius: 14px;
+  background: linear-gradient(100deg, rgba(56, 189, 248, .08) 0%, rgba(167, 139, 250, .07) 100%);
+}
+.sqp-lore-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: rgba(56, 189, 248, .12);
+  box-shadow:
+    inset 0 0 0 1px rgba(125, 211, 252, .2),
+    inset 0 1px 0 rgba(255, 255, 255, .08);
+  color: #7DD3FC;
+}
+.sqp-lore-ico .ico { width: 16px; height: 16px; }
+.sqp-lore p {
+  min-width: 0;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #CBD5E1;
+}
+
+/* The one commitment in the flow: full-width cyan → violet, lit rim, edge bloom. */
+.sqp-foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 2px;
+}
+.sqp-join {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 56px;
+  padding: 0 18px;
+  overflow: hidden;
+  border: 1px solid rgba(165, 243, 252, .58);
+  border-radius: 16px;
+  background:
+    linear-gradient(120deg, rgba(255, 255, 255, .2) 0%, rgba(255, 255, 255, 0) 44%),
+    linear-gradient(100deg, #06B6D4 0%, #3B82F6 46%, #8B5CF6 100%);
+  box-shadow:
+    0 12px 30px -12px rgba(34, 211, 238, .8),
+    0 0 26px -8px rgba(139, 92, 246, .8),
+    inset 0 1px 0 rgba(255, 255, 255, .38),
+    inset 0 -1px 0 rgba(6, 11, 20, .42);
+  color: #FFFFFF;
+  font: inherit;
+  cursor: pointer;
+  transition: filter var(--motion-fast), transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.sqp-join::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, rgba(255, 255, 255, .22) 0%, rgba(255, 255, 255, 0) 42%, rgba(255, 255, 255, .08) 100%);
+  pointer-events: none;
+}
+.sqp-join-ico {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .35),
+    inset 0 0 0 1px rgba(255, 255, 255, .12);
+}
+.sqp-join-ico .ico { width: 16px; height: 16px; }
+.sqp-join-t {
+  position: relative;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.sqp-join:hover:not(:active) { filter: brightness(1.07); }
+.sqp-join:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 4px 14px -10px rgba(34, 211, 238, .7),
+    0 0 18px -8px rgba(139, 92, 246, .7),
+    inset 0 2px 6px rgba(6, 11, 20, .32);
+}
+.sqp-join:focus-visible { outline: 3px solid #A5F3FC; outline-offset: 3px; }
+.sqp-join.is-joined {
+  border-color: rgba(167, 243, 208, .6);
+  background:
+    linear-gradient(120deg, rgba(255, 255, 255, .2) 0%, rgba(255, 255, 255, 0) 44%),
+    linear-gradient(100deg, #10B981 0%, #0EA5E9 52%, #3B82F6 100%);
+  box-shadow:
+    0 12px 30px -12px rgba(52, 211, 153, .7),
+    0 0 26px -8px rgba(14, 165, 233, .7),
+    inset 0 1px 0 rgba(255, 255, 255, .38),
+    inset 0 -1px 0 rgba(6, 11, 20, .42);
+}
+.sqp-fine {
+  margin: 0;
+  padding: 0 4px;
+  text-align: center;
+  font-size: 8.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--text-dim);
+}
+
+/* 360px-class phones: keep every tile legible and the key fully visible. */
+@media (max-width: 380px) {
+  .sqp-hero { gap: 12px; padding: 12px; }
+  .sqp-crest { width: 60px; height: 60px; }
+  .sqp-crest .sq-crest-t { font-size: 20px; }
+  .sqp-name { font-size: 18.5px; }
+  .sqp-handle { font-size: 11.5px; }
+  .sqp-tile { min-height: 74px; padding: 9px; border-radius: 14px; }
+  .sqp-tile-k { font-size: 7px; letter-spacing: .05em; }
+  .sqp-tile-k .ico { width: 10px; height: 10px; }
+  .sqp-tile-v { font-size: 16px; }
+  .sqp-tile-s { font-size: 7px; letter-spacing: .04em; }
+  .sqp-lore { gap: 8px; padding: 9px 10px; }
+  .sqp-lore p { font-size: 10.5px; }
+  .sqp-join { min-height: 52px; }
+  .sqp-join-t { font-size: 12px; letter-spacing: .1em; }
+}
+
+/* Short viewports: tighten the sheet, never the 44px+ touch targets. */
+@media (max-height: 680px) {
+  #sheet-squad-preview { padding-top: 10px; }
+  .sqp-hero { padding: 10px 12px; }
+  .sqp-crest { width: 56px; height: 56px; }
+  .sqp-crest .sq-crest-t { font-size: 19px; }
+  .sqp-name { font-size: 18px; }
+  .sqp-tile { min-height: 70px; padding: 8px 9px; }
+  .sqp-lore { padding: 8px 10px; }
+  .sqp-join { min-height: 50px; }
+}
+@media (max-height: 600px) {
+  .sqp-eyebrow, .sqp-kind { display: none; }
+  .sqp-hero { padding: 8px 10px; }
+  .sqp-crest { width: 50px; height: 50px; }
+  .sqp-tile { min-height: 64px; }
+  .sqp-tile-s { display: none; }
+  .sqp-lore p { font-size: 10px; }
+  .sqp-fine { display: none; }
 }

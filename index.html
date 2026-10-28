@@ -4570,6 +4570,91 @@
         </div>
       </section>
 
+      <!-- Squad preview: the inspection step between the discovery list and a join.
+           The crest and identity lead, three bento tiles carry rank / TIQ / members,
+           and the single full-width key commits the join. Back returns to the list;
+           close dismisses the flow entirely. -->
+      <section class="sheet squad-preview-sheet" id="sheet-squad-preview" hidden tabindex="-1" role="dialog"
+        aria-modal="true" aria-labelledby="sqp-name">
+        <header class="sqp-top">
+          <button class="sqp-back" type="button" id="sqp-back">
+            <svg class="ico" aria-hidden="true"><use href="#i-back" /></svg>
+            <span>Back to List</span>
+          </button>
+          <button class="ms-x sqp-x" type="button" data-sheet-close aria-label="Close squad preview" data-autofocus>
+            <span class="ms-x-g" aria-hidden="true">✕</span>
+          </button>
+        </header>
+
+        <div class="sheet-body sqp-body" data-scroll>
+          <header class="sqp-hero">
+            <span class="sq-crest sqp-crest" id="sqp-crest" data-tier="gold" aria-hidden="true">
+              <i class="sq-crest-aura"></i>
+              <span class="sq-crest-coin">
+                <span class="sq-crest-face">
+                  <b class="sq-crest-t" id="sqp-mark">S</b>
+                </span>
+              </span>
+            </span>
+            <span class="sqp-id">
+              <span class="sqp-eyebrow">Squad Intel</span>
+              <b class="sqp-name" id="sqp-name">Squad</b>
+              <span class="sqp-handle-row">
+                <span class="sqp-verified" aria-hidden="true">
+                  <svg class="ico"><use href="#i-check" /></svg>
+                </span>
+                <b class="sqp-handle" id="sqp-handle">@Squad</b>
+              </span>
+              <small class="sqp-kind" id="sqp-kind">Official Telegram channel</small>
+            </span>
+          </header>
+
+          <div class="sqp-tiles" role="list" aria-label="Squad statistics">
+            <div class="sqp-tile sqp-tile-rank" id="sqp-rank-tile" data-rank="gold" role="listitem">
+              <span class="sqp-tile-k">
+                <svg class="ico" aria-hidden="true"><use href="#i-medal" /></svg>
+                Rank
+              </span>
+              <b class="sqp-tile-v" id="sqp-rank-v">#1</b>
+              <small class="sqp-tile-s" id="sqp-rank-note">Gold Medal</small>
+            </div>
+            <div class="sqp-tile sqp-tile-tiq" role="listitem">
+              <span class="sqp-tile-k">
+                <svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg>
+                Alliance TIQ
+              </span>
+              <b class="sqp-tile-v" id="sqp-tiq">0</b>
+              <small class="sqp-tile-s">Squad power</small>
+            </div>
+            <div class="sqp-tile sqp-tile-mem" role="listitem">
+              <span class="sqp-tile-k">
+                <svg class="ico" aria-hidden="true"><use href="#i-users" /></svg>
+                Members
+              </span>
+              <b class="sqp-tile-v" id="sqp-members">0</b>
+              <small class="sqp-tile-s">Active racers</small>
+            </div>
+          </div>
+
+          <aside class="sqp-lore" aria-label="Squad incentive">
+            <span class="sqp-lore-ico" aria-hidden="true">
+              <svg class="ico"><use href="#i-bolt" /></svg>
+            </span>
+            <p>Race in Arena to earn stars &amp; rank up this squad!</p>
+          </aside>
+
+          <footer class="sqp-foot">
+            <button class="sqp-join" type="button" id="sqp-join">
+              <span class="sqp-join-ico" aria-hidden="true">
+                <svg class="ico"><use href="#i-swords" /></svg>
+              </span>
+              <span class="sqp-join-t" id="sqp-join-t">Join Squad</span>
+            </button>
+            <p class="sqp-fine" id="sqp-fine">Your TIQ banks for this squad in every Arena match.</p>
+          </footer>
+        </div>
+      </section>
+
       <!-- Register a Telegram channel or group as an official squad: step 1 verifies
            the community, step 2 names it and previews the exact ladder row. -->
       <section class="sheet squad-reg-sheet" id="sheet-squad-register" hidden tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="squad-reg-title">

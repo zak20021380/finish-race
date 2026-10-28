@@ -30,13 +30,14 @@ import { openCountryPicker } from './countrypick';
 import { flagPhoto } from './flags';
 import { cleanCode, standings, YOU } from './teams';
 import {
-  bindSquad, bindSquadById, cleanHandle, getMySquad, leaveSquad,
-  onSquadChange, searchSquads, squadLetter, squadMark,
+  bindSquad, bindSquadById, cleanHandle, displayNameOf, getMySquad, getSquadRanking, leaveSquad,
+  onSquadChange, searchSquads, squadKind, squadLetter, squadMark, type RankedSquad,
 } from './squads';
 import {
-  ARENA_CUP, arrangeRoster, buildSquadRoster, squadTargetAvg,
+  ARENA_CUP, arrangeRoster, arenaStandingOf, buildSquadRoster, squadTargetAvg,
   type SquadMember, type SquadRole, type SquadRoster,
 } from './squadRoster';
+import { showToast } from './toast';
 import { copyText } from './gamemodes';
 import { myTiq, TIER_NAME, tierOf, type MindTier } from './matchmaking';
 import { refreshReferral, referralCode, referralLink, referralShareUrl } from './referral';
@@ -528,6 +529,30 @@ export function createMenu(api: MenuApi): Menu {
   const squadCrest = $<HTMLElement>('squad-view-crest');
   const squadLeaveBtn = $<HTMLButtonElement>('squad-leave');
 
+  /* The inspection step: a card opens this sheet; the full-width key is the only
+     place a join is ever committed. */
+  const squadPreviewSheet = api.sheet('sheet-squad-preview');
+  const sqpBack = $<HTMLButtonElement>('sqp-back');
+  const sqpCrest = $<HTMLElement>('sqp-crest');
+  const sqpMark = $<HTMLElement>('sqp-mark');
+  const sqpName = $<HTMLElement>('sqp-name');
+  const sqpHandle = $<HTMLElement>('sqp-handle');
+  const sqpKind = $<HTMLElement>('sqp-kind');
+  const sqpRankTile = $<HTMLElement>('sqp-rank-tile');
+  const sqpRankV = $<HTMLElement>('sqp-rank-v');
+  const sqpRankNote = $<HTMLElement>('sqp-rank-note');
+  const sqpTiq = $<HTMLElement>('sqp-tiq');
+  const sqpMembers = $<HTMLElement>('sqp-members');
+  const sqpJoin = $<HTMLButtonElement>('sqp-join');
+  const sqpJoinT = $<HTMLElement>('sqp-join-t');
+  const sqpFine = $<HTMLElement>('sqp-fine');
+
+  let previewSquad: RankedSquad | null = null;
+  let previewHandle = '';
+  let previewJoined = false;
+  let previewQuery = '';
+  let previewScroll = 0;
+
   let squadView: SquadRoster | null = null;
   let squadRows: SquadMember[] = [];
   let squadQuery = '';
@@ -854,7 +879,6 @@ export function createMenu(api: MenuApi): Menu {
     members?: number;
     tiq?: number;
     note?: string;
-    action: string;
     aria: string;
     squadId?: string;
     handleRef?: string;
@@ -864,6 +888,10 @@ export function createMenu(api: MenuApi): Menu {
   function buildSquadCard(opts: SquadCardOpts): HTMLLIElement {
     const li = document.createElement('li');
     li.className = `sq-card${opts.joined ? ' is-bound' : ''}`;
+    li.tabIndex = 0;
+    li.setAttribute('role', 'button');
+    li.setAttribute('aria-haspopup', 'dialog');
+    li.setAttribute('aria-label', opts.aria);
     if (opts.squadId) li.dataset.squad = opts.squadId;
     if (opts.handleRef) li.dataset.handle = opts.handleRef;
 
@@ -920,15 +948,98 @@ export function createMenu(api: MenuApi): Menu {
     }
     identity.append(name, handle, metrics);
 
-    const join = document.createElement('button');
-    join.type = 'button';
-    join.className = 'sq-join';
-    join.textContent = opts.action;
-    join.setAttribute('aria-label', opts.aria);
-    if (opts.joined) join.classList.add('is-joined');
+    /* The one gesture on the row: a quiet chevron that opens the inspection sheet.
+       Joining never happens here — the detail sheet owns that commitment. */
+    const go = document.createElement('span');
+    go.className = 'sq-card-go';
+    go.setAttribute('aria-hidden', 'true');
+    go.textContent = '›';
 
-    li.append(rank, avatar, identity, join);
+    li.append(rank, avatar, identity, go);
     return li;
+  }
+
+  function paintSquadPreview(): void {
+    if (!squadPreviewSheet) return;
+    const s = previewSquad;
+    const handle = s?.handle ?? previewHandle;
+    const name = s?.name ?? displayNameOf(handle);
+    const tiq = s ? squadPreviewAvg(s) : myTiq();
+    const members = s ? s.members : 1;
+    const rank = s?.rank ?? 0;
+
+    sqpCrest.dataset.tier = arenaStandingOf(tiq).tier;
+    sqpMark.textContent = s ? squadMark(s) : squadLetter({ handle, name });
+    sqpName.textContent = name;
+    sqpName.title = name;
+    sqpHandle.textContent = handle;
+    sqpKind.textContent = s
+      ? (squadKind(s) === 'channel' ? 'Official Telegram channel' : 'Official Telegram group')
+      : 'New Telegram alliance';
+
+    sqpRankTile.dataset.rank = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : rank ? 'num' : 'new';
+    sqpRankV.textContent = rank ? `#${en(rank)}` : 'NEW';
+    sqpRankNote.textContent = rank === 1 ? 'Gold Medal' : rank === 2 ? 'Silver Medal' : rank === 3 ? 'Bronze Medal' : rank ? 'Global position' : 'Awaiting rank';
+    sqpTiq.textContent = en(tiq);
+    sqpMembers.textContent = en(members);
+
+    sqpJoin.classList.toggle('is-joined', previewJoined);
+    sqpJoinT.textContent = previewJoined ? 'Open Squad Hub' : 'Join Squad';
+    sqpJoin.setAttribute('aria-label', previewJoined
+      ? `Open the ${handle} squad hub`
+      : `Join ${name}, ${handle}`);
+    sqpFine.textContent = previewJoined
+      ? `You represent ${handle}. Every Arena point you score banks for this squad.`
+      : s
+        ? `Joining banks your Arena TIQ for ${handle} and its ${en(members)} racers.`
+        : `A fresh squad will be minted for ${handle} on this device.`;
+  }
+
+  function openSquadPreview(target: { squad?: RankedSquad; handle?: string }): void {
+    if (!squadPreviewSheet) return;
+    squadErr.hidden = true;
+    previewQuery = squadQ.value;
+    previewScroll = squadList.scrollTop;
+    previewSquad = target.squad ?? null;
+    previewHandle = target.handle ?? target.squad?.handle ?? '';
+    previewJoined = !!previewSquad && getMySquad()?.id === previewSquad.id;
+    paintSquadPreview();
+    impact('light');
+    api.sheets.open(squadPreviewSheet);
+  }
+
+  function backToSquadList(): void {
+    if (!squadSheet) return;
+    impact('light');
+    squadQ.value = previewQuery;
+    showSquadSearch();
+    api.sheets.open(squadSheet);
+    requestAnimationFrame(() => { squadList.scrollTop = previewScroll; });
+  }
+
+  function commitPreviewJoin(): void {
+    if (!previewSquad && !previewHandle) return;
+    if (previewSquad && getMySquad()?.id === previewSquad.id) {
+      impact('light');
+      if (!squadSheet) return;
+      showSquadBound();
+      api.sheets.open(squadSheet);
+      requestAnimationFrame(() => scheduleSquadWindow(true));
+      return;
+    }
+    const result = previewSquad ? bindSquadById(previewSquad.id) : bindSquad(previewHandle);
+    if (result === 'bad-handle') {
+      notify('warning');
+      showToast('That channel cannot be bound. Try @channel.', 'warning');
+      return;
+    }
+    impact('medium');
+    notify('success');
+    const joinedName = previewSquad?.name ?? displayNameOf(previewHandle);
+    const joinedHandle = previewSquad?.handle ?? previewHandle;
+    showToast(`${joinedName} joined · ${joinedHandle}`, 'success');
+    paintSquadPill();
+    api.sheets.close();
   }
 
   function paintSquadList(q: string) {
@@ -944,8 +1055,7 @@ export function createMenu(api: MenuApi): Menu {
         name: `Bind ${needle}`,
         handle: 'New channel',
         note: 'Starts a fresh roster',
-        action: 'Bind',
-        aria: `Bind ${needle} as a new squad`,
+        aria: `Inspect ${needle} and bind it as a new squad`,
         handleRef: needle,
       }));
     }
@@ -958,10 +1068,9 @@ export function createMenu(api: MenuApi): Menu {
         handle: s.handle,
         members: s.members,
         tiq: squadPreviewAvg(s),
-        action: joined ? 'Joined' : 'Join',
         aria: joined
-          ? `${s.name}, ${s.handle} — your squad. Open the squad hub.`
-          : `Join ${s.name}, ${s.handle}, rank ${s.rank}`,
+          ? `${s.name}, ${s.handle} — your squad. Inspect squad details.`
+          : `Inspect ${s.name}, ${s.handle}, rank ${s.rank}`,
         squadId: s.id,
         joined,
       }));
@@ -1021,34 +1130,42 @@ export function createMenu(api: MenuApi): Menu {
     requestAnimationFrame(() => scheduleSquadWindow(true));
   }
 
-  function commitBind(handleOrId: string, isId: boolean) {
-    const r = isId ? bindSquadById(handleOrId) : bindSquad(handleOrId);
-    if (r === 'bad-handle') return squadError('That is not a channel handle — try @channel.');
-    squadErr.hidden = true;
-    notify('success');
-    impact('medium');
-    paintSquadPill();
-    showSquadBound();
-  }
-
   squadQ.addEventListener('input', () => { squadErr.hidden = true; paintSquadList(squadQ.value); });
   squadQ.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    const q = squadQ.value;
+    const q = squadQ.value.trim();
+    if (!q) { squadError('Search a squad or type a channel like @DogeSquad.'); return; }
     const rows = searchSquads(q);
-    if (rows.length === 1 && !cleanHandle(q)) { commitBind(rows[0].id, true); return; }
-    if (cleanHandle(q)) { commitBind(q, false); return; }
-    if (rows.length) { commitBind(rows[0].id, true); return; }
+    const needle = cleanHandle(q);
+    const exact = needle ? rows.find((s) => s.handle.toLowerCase() === needle.toLowerCase()) : undefined;
+    if (exact) { openSquadPreview({ squad: exact }); return; }
+    if (needle) { openSquadPreview({ handle: needle }); return; }
+    if (rows.length) { openSquadPreview({ squad: rows[0] }); return; }
     squadError('Type a channel like @DogeSquad.');
   });
   squadList.addEventListener('click', (e) => {
     const card = (e.target as HTMLElement | null)?.closest<HTMLElement>('.sq-card');
     if (!card) return;
-    impact('light');
-    if (card.dataset.squad) commitBind(card.dataset.squad, true);
-    else if (card.dataset.handle) commitBind(card.dataset.handle, false);
+    const id = card.dataset.squad;
+    if (id) {
+      const squad = getSquadRanking().find((s) => s.id === id);
+      if (squad) openSquadPreview({ squad });
+      return;
+    }
+    const handle = card.dataset.handle;
+    if (handle) openSquadPreview({ handle });
   });
+  squadList.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const card = (e.target as HTMLElement | null)?.closest<HTMLElement>('.sq-card');
+    if (!card || e.target !== card) return;
+    e.preventDefault();
+    card.click();
+  });
+
+  sqpBack.addEventListener('click', backToSquadList);
+  sqpJoin.addEventListener('click', commitPreviewJoin);
 
   $('squad-create').addEventListener('click', () => {
     impact('light');
