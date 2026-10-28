@@ -56,6 +56,8 @@ interface TgWebApp {
   setBackgroundColor?(c: string): void;
   setColorScheme?(c: 'light' | 'dark'): void;
   disableVerticalSwipes?(): void;
+  /** Present since 6.0, so every client that can call anything can also answer this. */
+  isVersionAtLeast?(version: string): boolean;
   viewportStableHeight?: number;
   openTelegramLink?(url: string): void;
   openLink?(url: string): void;
@@ -64,6 +66,19 @@ interface TgWebApp {
 declare global { interface Window { Telegram?: { WebApp?: TgWebApp } } }
 
 const tg = window.Telegram?.WebApp;
+
+/**
+ * Whether the client actually supports an API introduced in `version`. Calling a newer method on
+ * an older client does not throw — Telegram's SDK logs an "unsupported method" warning for every
+ * call, which is what flooded a 6.0 client's console. Optional chaining alone cannot stop that:
+ * the methods exist as warning stubs. A client that predates the check itself (or a test double
+ * without one) answers by what it exposes, so nothing is switched off on it.
+ */
+function atLeast(version: string): boolean {
+  const check = tg?.isVersionAtLeast;
+  if (typeof check !== 'function') return !!tg;
+  try { return check.call(tg, version); } catch { return false; }
+}
 
 /**
  * The Mini App's bot handle: what every deep link is built on. Re-exported from the shared config
@@ -132,7 +147,11 @@ export function applyTheme() {
     r.style.removeProperty('--brand-2');
   }
 
-  try { tg?.setHeaderColor?.(CANVAS); tg?.setBackgroundColor?.(CANVAS); tg?.setColorScheme?.('light'); } catch { /* outside Telegram */ }
+  /* The header/background/scheme setters arrived in 6.1; on an older client each call is just a
+     warning in the console, and the page already paints its own light canvas. */
+  if (atLeast('6.1')) {
+    try { tg?.setHeaderColor?.(CANVAS); tg?.setBackgroundColor?.(CANVAS); tg?.setColorScheme?.('light'); } catch { /* outside Telegram */ }
+  }
   try {
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', CANVAS);
@@ -145,7 +164,8 @@ export function initTelegram() {
   try {
     tg?.ready();
     tg?.expand();
-    tg?.disableVerticalSwipes?.();
+    /* 7.7 added the swipe lock; older clients log a warning per call and simply keep swiping. */
+    if (atLeast('7.7')) tg?.disableVerticalSwipes?.();
   } catch { /* running outside Telegram */ }
 
   applyTheme();
@@ -155,26 +175,32 @@ export function initTelegram() {
     if (h) document.documentElement.style.setProperty('--app-h', `${h}px`);
   };
   setViewport();
-  tg?.onEvent?.('viewportChanged', setViewport);
-  tg?.onEvent?.('themeChanged', applyTheme);
+  /* Both events are 6.1 additions and warn one line each on every call below that. */
+  if (atLeast('6.1')) {
+    tg?.onEvent?.('viewportChanged', setViewport);
+    tg?.onEvent?.('themeChanged', applyTheme);
+  }
 }
 
 /**
  * Wire the native BackButton and hand back the visibility toggle the router needs.
- * Returns a no-op when Telegram gives us no BackButton, so callers stay unconditional.
+ * Below 6.1 the button does not exist: every touch of it (including its click event) only logs
+ * an unsupported-method warning, so the caller gets the same no-op as a browser tab. The app's
+ * own back control stays in charge there.
  */
 export function onBackPress(cb: () => void): (visible: boolean) => void {
+  if (!atLeast('6.1')) return () => {};
   const bb = tg?.BackButton;
-  if (bb) {
-    try { bb.onClick?.(cb); } catch { /* ignore */ }
-    return (visible: boolean) => { try { if (visible) bb.show(); else bb.hide(); } catch { /* ignore */ } };
-  }
-  tg?.onEvent?.('backButtonClicked', cb);   // pre-BackButton clients
-  return () => {};
+  if (!bb) return () => {};
+  try { bb.onClick?.(cb); } catch { /* ignore */ }
+  return (visible: boolean) => { try { if (visible) bb.show(); else bb.hide(); } catch { /* ignore */ } };
 }
 
+/** Haptic feedback is a 6.1 API; older clients expose warning stubs, so the version gate is the guard. */
+const haptics = (): boolean => settings.haptics && atLeast('6.1');
+
 export const impact = (s: 'light' | 'medium' | 'heavy') => {
-  if (!settings.haptics) return;
+  if (!haptics()) return;
   try { tg?.HapticFeedback?.impactOccurred(s); } catch { /* ignore */ }
 };
 
@@ -192,13 +218,13 @@ export function openLink(url: string): void {
 }
 
 export const notify = (t: 'success' | 'error' | 'warning') => {
-  if (!settings.haptics) return;
+  if (!haptics()) return;
   try { tg?.HapticFeedback?.notificationOccurred(t); } catch { /* ignore */ }
 };
 
 /** A mine going off: the hardest pattern Telegram offers, error buzz over a heavy impact, as one call. */
 export const detonation = () => {
-  if (!settings.haptics) return;
+  if (!haptics()) return;
   try {
     tg?.HapticFeedback?.notificationOccurred('error');
     tg?.HapticFeedback?.impactOccurred('heavy');

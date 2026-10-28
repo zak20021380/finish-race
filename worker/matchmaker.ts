@@ -956,6 +956,15 @@ function hash(text: string): number {
   return h >>> 0;
 }
 
+/** One query value, read so no socket ever dies on a malformed URL: missing reads as `''`. */
+function queryValue(url: URL, name: string): string {
+  try {
+    return url.searchParams.get(name) ?? '';
+  } catch {
+    return '';
+  }
+}
+
 /** `sizes=1,1` from the query: the board both seats asked for, or the plain 1v1. */
 function readSizes(raw: string | null): [number, number] {
   const parts = (raw ?? '').split(',').map((n) => Number(n.trim()));
@@ -1395,7 +1404,10 @@ export class MatchmakerDO {
         return json({ error: 'room_error', hint: reasonOf(err) }, 500);
       }
     }
-    if ((request.headers.get('Upgrade') ?? '').toLowerCase() !== 'websocket') {
+    /* The upgrade header is a token list in principle (`keep-alive, Upgrade`), so compare the
+       tokens, never the raw header. Cloudflare only hands us a WebSocket when it is present. */
+    const upgrade = (request.headers.get('Upgrade') ?? '').toLowerCase();
+    if (!upgrade.split(',').some((token) => token.trim() === 'websocket')) {
       return json({ error: 'expected_upgrade', hint: 'GET /ws/matchmake with Upgrade: websocket' }, 426);
     }
 
@@ -1432,19 +1444,34 @@ export class MatchmakerDO {
     server.accept();
 
     /* A room socket and a queue socket are two different things from the first frame: a room seat
-       is never in the pairing queue, so a 4-seat room can never be broken up into a duel. */
-    const roomCode = readRoomCode(url.searchParams.get('roomcode'));
-    const roomSize = readRoomSize(url.searchParams.get('room'));
-    if (roomCode) {
-      /* the friends lobby: a code the host minted, not a search for strangers */
-      this.joinLobby(server, identity, roomCode, url.searchParams.get('host') === '1',
-        readBotTier(url.searchParams.get('bottier')));
-    } else if (roomSize) {
-      this.joinRoom(server, identity, roomSize, readBotTier(url.searchParams.get('bottier')));
-    } else {
-      const waiter = this.enter(server, identity, url.searchParams.get('wide') === '1', readSizes(url.searchParams.get('sizes')));
-      this.attach(waiter);
-      this.pairNow();                          // the queue may already hold their match
+       is never in the pairing queue, so a 4-seat room can never be broken up into a duel. Every
+       value below defaults on its own, so an empty `flag=`/`squad=` or a partial `sizes=` can
+       never take the handshake down; the try/catch is the last line of defence for anything the
+       parsers did not anticipate. */
+    try {
+      const roomCode = readRoomCode(queryValue(url, 'roomcode'));
+      const roomSize = readRoomSize(queryValue(url, 'room'));
+      if (roomCode) {
+        /* the friends lobby: a code the host minted, not a search for strangers */
+        this.joinLobby(server, identity, roomCode, queryValue(url, 'host') === '1',
+          readBotTier(queryValue(url, 'bottier')));
+      } else if (roomSize) {
+        this.joinRoom(server, identity, roomSize, readBotTier(queryValue(url, 'bottier')));
+      } else {
+        const waiter = this.enter(server, identity, queryValue(url, 'wide') === '1',
+          readSizes(queryValue(url, 'sizes')));
+        this.attach(waiter);
+        this.pairNow();                        // the queue may already hold their match
+      }
+    } catch {
+      /* The socket is already accepted, so an HTTP error page would reach the browser as an
+         anonymous "connection failed". Answer inside the socket instead, then let it go. */
+      try {
+        server.send(JSON.stringify({ type: 'ERROR', reason: 'SERVER_ERROR' }));
+        server.close(1011, 'setup_failed');
+      } catch {
+        /* the socket is already gone */
+      }
     }
     return new Response(null, { status: 101, webSocket: client });
   }

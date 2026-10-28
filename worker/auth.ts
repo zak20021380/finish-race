@@ -12,9 +12,13 @@
  * Telegram. `tiq`, `tier`, `flag` and `name` are client-supplied — they seed the queue and the
  * console, and are only trusted on the development fallback (below).
  *
- * Development fallback: with `DEV_AUTH = "true"`, or on a loopback host with no valid `initData`,
- * a guest identity is minted so `npm run dev` works in an ordinary browser tab with no Mini App
- * and no bot token. A *valid* signature always wins, even in development.
+ * Guest fallback: a caller that offers no `initData` at all — a plain browser tab, Telegram Web
+ * without a Mini App session, Telegram Desktop before the SDK hands one over — is seated as a
+ * guest with a random id, so the same build can queue outside a Mini App. A caller that *does*
+ * offer `initData` must prove it: a forged or stale signature is refused rather than demoted to
+ * a guest, because a silent demotion would hide the breakage. `DEV_AUTH = "true"` and loopback
+ * hosts additionally let an unverifiable signature through, for local work. A valid signature
+ * always wins.
  */
 import type { Env } from './env';
 
@@ -207,8 +211,9 @@ function guestSeat(req: AuthRequest, tier: MindTier): Identity {
 }
 
 /**
- * Resolve the seat behind a socket request. Returns null when the caller must be refused (a bad
- * signature on a real host, or no credentials and no development door open).
+ * Resolve the seat behind a socket request. A valid signature names a real player; no signature
+ * at all is a guest seat; a signature that fails verification is refused (unless the development
+ * door is open). Returns null only for that refusal.
  */
 export async function authenticate(req: AuthRequest, env: Env): Promise<Identity | null> {
   const tiq = req.tiq ?? 0;
@@ -239,13 +244,13 @@ export async function authenticate(req: AuthRequest, env: Env): Promise<Identity
         squad: req.squad,
       };
     }
-    /* A signature that does not hold is a signature that does not hold — but a developer
-       running a local Worker may simply be sending a stale initData, so the dev door stays open. */
+    /* A signature that does not hold is an attack or a stale session, never a guest: a silent
+       demotion would hide the breakage. Only the development door lets it through. */
     if (!dev) return null;
-  } else if (!dev) {
-    return null;                              // nothing to verify with, and nowhere to fall back to
   }
 
+  /* No credential offered: the guest door, on every host. This is what makes Quick match work
+     from an ordinary browser tab, where there is no Telegram Mini App session to sign. */
   return guestSeat(req, tier);
 }
 

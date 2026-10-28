@@ -185,9 +185,11 @@ Quick match hands the seat to `src/matchmaking.ts`, whose transport opens a sock
 `flag` and `wide`. The client sends `{ type: 'QUEUE' | 'WIDEN' | 'CANCEL' }` and reads
 `{ type: 'MATCH_FOUND', matchId, seed, side, opponent }`; a match is then remembered as
 `{ matchId, seed, side }` for the race. When no Worker answers, the same call answers with the
-local search, so the stage is playable either way. The Worker verifies Telegram `initData` itself —
-`DEV_AUTH=true` (`wrangler.toml`) or a loopback host opens a guest door for local work. Nothing in
-`src/` imports `worker/`: wrangler bundles the backend on its own.
+local search, so the stage is playable either way. The Worker verifies Telegram `initData` itself:
+a caller with no `initData` at all — a plain browser tab — is seated as a guest, while a forged or
+stale signature is refused. `DEV_AUTH=true` (`wrangler.toml`) or a loopback host additionally lets
+an unverifiable signature through for local work. Nothing in `src/` imports `worker/`: wrangler
+bundles the backend on its own.
 
 ```bash
 npm run dev:worker                     # local workerd, http://127.0.0.1:8787

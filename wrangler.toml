@@ -51,8 +51,9 @@ tag = "v3"
 new_sqlite_classes = ["ReferralLedgerDO"]
 
 [vars]
-# `true` lets a local browser queue as a guest with no valid initData. Deployed: keep it false,
-# and put the real values in `.dev.vars` for local work:
+# `true` lets a browser carrying an unverifiable (stale or forged) initData fall back to a guest
+# seat, and opens the marked development admin door. Deployed: keep it false. A browser with no
+# initData at all is seated as a guest regardless — that is the public matchmaker's guest door.
 #
 #   TELEGRAM_BOT_TOKEN = "<token from @BotFather>"
 #   DEV_AUTH = "true"
