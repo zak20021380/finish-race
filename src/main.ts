@@ -1997,10 +1997,9 @@ tutorial = createTutorial({
   },
 });
 
-/* The permanent lobby doors: the Play Dock's help key, the first-run invitation and the rules
-   sheet all enter the same lesson. None of them depends on the completion flag, so a player can
-   replay at any time. */
-for (const id of ['home-tutorial', 'invite-tutorial', 'help-tutorial']) {
+/* The remaining lobby doors: the first-run invitation and the rules sheet both enter the same
+   lesson. Neither depends on the completion flag, so a player can replay at any time. */
+for (const id of ['invite-tutorial', 'help-tutorial']) {
   $(id).addEventListener('click', () => { impact('light'); startTutorial(); });
 }
 

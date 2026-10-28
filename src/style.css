@@ -4272,28 +4272,28 @@ html.no-flags .id-flag .flag-code { display: none; }
   box-shadow: 0 2px 0 #075985, inset 0 1px 0 rgba(255, 255, 255, .5);
 }
 
-/* ---- Play Dock: one capsule, three zones (the Supercell split action) ----
-   A single pill carries the whole lobby action area: the mode switcher holds the left
-   third, the launch holds the rest, and the help key closes the right cap. One hairline
-   seam runs down the capsule between the mode and the launch. No second box, no external
-   borders — the zones read as one deck, and the mode can never be missed or mistaken
-   for a rival CTA. */
+/* ---- Play Dock: one clay tray, two keys (mode chip · launch) ----
+   The left key names the mode and opens the switcher; the right key is the one-tap
+   launch. Both keys share one height, one 16px radius and the clay recipe, so the
+   dock reads as a single minted object instead of two buttons welded together. */
 .launcher {
-  --dock-face: #121A24;
+  --dock-face: #0E141D;
   --dock-top: #1A2431;
-  --dock-ink-1: #00B4D8;
+  --dock-ink-1: #26C8E8;
   --dock-ink-2: #0077B6;
+  /* the key height: 56-60px on every phone, while the tray keeps its own height */
+  --dock-key-h: 60px;
   flex: none;
   position: relative;
   display: grid;
-  grid-template-columns: 34% 1fr 50px;
-  align-items: stretch;
-  gap: 0;
+  grid-template-columns: minmax(0, 34%) minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
   width: 100%;
   min-height: 72px;
-  padding: 0;
+  padding: 0 4px;
   border: 0;
-  border-radius: 9999px;
+  border-radius: 22px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, 0) 42%),
     linear-gradient(180deg, var(--dock-top) 0%, var(--dock-face) 100%);
@@ -4302,56 +4302,15 @@ html.no-flags .id-flag .flag-code { display: none; }
     inset 0 -1px 0 rgba(0, 0, 0, .5),
     0 1px 0 #0A0F1A,
     0 16px 30px -18px rgba(0, 0, 0, .95);
-  overflow: hidden;
   isolation: isolate;
 }
-/* the seam: one faint hairline across the capsule, drawn above both zones so neither
-   half needs a border of its own (it fades out before the rounded caps) */
-.launcher::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 34%;
-  width: 1px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, .12) 24%, rgba(255, 255, 255, .12) 76%, rgba(255, 255, 255, 0) 100%);
-  pointer-events: none;
-}
 
-/* ---- the dock's third key: the permanent tutorial door ----
-   A small engraved help key closing the capsule's right cap. It is its own button — never a
-   second action inside the launch — so the hands-on lesson is one thumb away on every visit
-   and PLAY stays exactly where the thumb expects it. Same clay recipe as the dock, one step
-   darker, with its own hairline so the launch still ends cleanly. */
-.dock-tut {
-  appearance: none;
-  border: 0;
-  font: inherit;
-  margin: 0;
-  padding: 0;
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 100%;
-  min-height: 100%;
-  border-radius: 0 9999px 9999px 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, 0) 58%);
-  color: #9FB0C6;
-  cursor: pointer;
-  box-shadow: inset 1px 0 0 rgba(255, 255, 255, .09);
-  transition: background var(--motion-fast), color var(--motion-fast), transform var(--motion-fast);
-}
-.dock-tut .ico { width: 19px; height: 19px; }
-.dock-tut:hover:not(:active) { background: rgba(255, 255, 255, .1); color: #F8FAFC; }
-.dock-tut:active { background: rgba(0, 0, 0, .3); transform: translateY(1px); }
-.dock-tut:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -4px; }
 @media (max-width: 352px) {
-  .launcher { grid-template-columns: 34% 1fr 44px; }
-  .dock-tut .ico { width: 17px; height: 17px; }
+  .launcher { grid-template-columns: minmax(0, 35%) minmax(0, 1fr); padding: 0 3px; }
 }
 
-/* ---- left zone: the mode switcher — a whisper of light on the capsule ----
-   Emblem · the mode's name · the CHANGE badge: the whole zone opens the Game Mode
+/* ---- left key: the mode switcher, wearing the dock's clay ----
+   Emblem · the mode's name · the CHANGE badge: the whole key opens the Game Mode
    drawer. `--mode-*` is the accent the selected mode owns (set by `data-gmode`) and
    it lives only in the emblem's glow and ink — no ring, no second border. */
 .mode-hero {
@@ -4364,29 +4323,32 @@ html.no-flags .id-flag .flag-code { display: none; }
   text-align: left;
   position: relative;
   min-width: 0;
-  min-height: 72px;
-  padding: 8px 12px;
+  height: var(--dock-key-h);
+  min-height: 0;
+  padding: 0 12px;
   display: flex;
   align-items: center;
   gap: 8px;
-  border-radius: 9999px 0 0 9999px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .05) 0%, rgba(255, 255, 255, 0) 58%);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .055) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(180deg, #202C3F 0%, #141D2C 100%);
   color: var(--ink);
   cursor: pointer;
-  transition: background var(--motion-fast);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 -2px 5px rgba(0, 0, 0, .32),
+    inset 0 0 0 1px rgba(255, 255, 255, .05);
+  transition: filter var(--motion-fast), transform var(--motion-fast);
 }
 .mode-hero[data-gmode="duel_1v1"] { --mode-accent: var(--honey); --mode-ink: var(--honey-ink); --mode-glow: rgba(245, 158, 11, .34); }
 .mode-hero[data-gmode="party_2v2"] { --mode-accent: var(--brand-2); --mode-ink: var(--brand-ink); --mode-glow: rgba(14, 165, 233, .34); }
 .mode-hero[data-gmode="bot"] { --mode-accent: var(--brand-3); --mode-ink: var(--brand-ink); --mode-glow: rgba(56, 189, 248, .34); }
 .mode-hero[data-gmode="room"] { --mode-accent: var(--cta); --mode-ink: #FFB59D; --mode-glow: rgba(255, 82, 43, .3); }
-/* the left half brightens on hover: the cue that this side is a switch, not the launch */
-.mode-hero:hover:not(:active) {
-  background: linear-gradient(180deg, rgba(255, 255, 255, .11) 0%, rgba(255, 255, 255, .02) 58%);
-}
-.mode-hero:active {
-  background: linear-gradient(180deg, rgba(255, 255, 255, .02) 0%, rgba(255, 255, 255, 0) 58%);
-}
-.mode-hero:focus-visible { outline: 3px solid var(--mode-accent); outline-offset: -3px; }
+/* the left key brightens on hover: the cue that this side is a switch, not the launch */
+.mode-hero:hover:not(:active) { filter: brightness(1.08); }
+.mode-hero:active { transform: translateY(1px); filter: brightness(.96); }
+.mode-hero:focus-visible { outline: 3px solid var(--mode-accent); outline-offset: 2px; }
 /* the emblem: a soft-lit chip, its glow and ink carrying the mode's accent */
 .mode-hero-ico {
   flex: none;
@@ -4425,7 +4387,7 @@ html.no-flags .id-flag .flag-code { display: none; }
 }
 /* the tight phones: the badge gives a little room rather than ellipsing the mode name */
 @media (max-width: 400px) {
-  .mode-hero { padding: 8px 10px; gap: 6px; }
+  .mode-hero { padding: 0 10px; gap: 6px; }
   .mode-hero-ico { width: 22px; height: 22px; }
   .mode-hero-ico .ico { width: 12px; height: 12px; }
 }
@@ -4459,52 +4421,72 @@ html.no-flags .id-flag .flag-code { display: none; }
   border-top: 4px solid currentColor;
 }
 
-/* ---- right zone: the launch — electric cyan, the neon the active dock tab wears ----
-   A flush inner face on the capsule's right cap: the action word on top, the win it
-   pays right beneath it. The pill is the lip, so a press scales the whole half into
-   the deck instead of travelling out of the capsule. */
+/* ---- right key: the launch — a minted cyan clay key ----
+   The action word on top, the win it pays beneath it. One radius with the mode key,
+   a bright-top/deep-bottom cyan face, an inner bottom shadow and a soft cyan spill:
+   it sits in the tray like a pressed key, not a flat bar. */
 .btn-hero {
   position: relative;
   overflow: hidden;
   width: 100%;
   min-width: 0;
-  min-height: 72px;
-  padding: 9px 18px;
+  height: var(--dock-key-h);
+  min-height: 0;
+  padding: 6px 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  border-radius: 0;
+  gap: 3px;
+  border-radius: 16px;
   font-weight: 800;
-  background: linear-gradient(180deg, var(--dock-ink-1, #00B4D8) 0%, var(--dock-ink-2, #0077B6) 100%);
+  background: linear-gradient(180deg, var(--dock-ink-1, #26C8E8) 0%, #00A6D6 45%, var(--dock-ink-2, #0077B6) 100%);
   color: #fff;
-  /* the divider stays put on a press, so the half shrinks inwards from the seam */
-  transform-origin: 0% 50%;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .38),
-    inset 0 -3px 7px rgba(0, 0, 0, .22);
-  transition: filter var(--motion-fast), transform var(--motion-fast);
+    inset 0 1px 0 rgba(255, 255, 255, .25),
+    inset 0 -4px 7px rgba(0, 0, 0, .24),
+    inset 0 0 0 1px rgba(255, 255, 255, .07),
+    0 2px 0 #044B67,
+    0 8px 20px -6px rgba(0, 180, 216, .12);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), filter var(--motion-fast);
 }
-.btn-hero:hover:not(:active) { filter: brightness(1.07); }
-.btn-hero:active { transform: scale(.98); filter: brightness(.95); }
+.btn-hero:hover:not(:active) { filter: brightness(1.06); }
+.btn-hero:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    inset 0 -2px 4px rgba(0, 0, 0, .3),
+    inset 0 0 0 1px rgba(255, 255, 255, .05),
+    0 0 10px -2px rgba(0, 180, 216, .16);
+}
 .btn-hero:focus-visible { outline: 3px solid #7DE3F4; outline-offset: -3px; }
+/* the idle shine: one slow pass every six seconds; stilled by reduced motion */
 .btn-hero::before {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 42%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .3), rgba(255, 255, 255, 0));
+  top: -35%;
+  bottom: -35%;
+  left: -55%;
+  width: 45%;
+  z-index: 0;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, .2) 50%, rgba(255, 255, 255, 0) 100%);
+  transform: skewX(-18deg);
   pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .btn-hero::before { animation: pd-shine 6s cubic-bezier(.33, .7, .38, 1) infinite; }
+}
+@keyframes pd-shine {
+  0%, 74% { transform: translateX(0) skewX(-18deg); opacity: 0; }
+  78% { opacity: 1; }
+  94%, 100% { transform: translateX(330%) skewX(-18deg); opacity: 0; }
 }
 .btn-hero .ico { width: 1.25em; height: 1.25em; }
 /* single-line wordmark: bold white Play, punchy and centred */
 .hero-t {
   min-width: 0;
-  font-size: 22px;
-  font-weight: 900;
+  font-size: 18px;
+  font-weight: 800;
   letter-spacing: .06em;
   text-transform: uppercase;
   color: var(--on-brand);
@@ -4512,9 +4494,12 @@ html.no-flags .id-flag .flag-code { display: none; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .28);
 }
 /* the launch face: play mark + the action word, one line */
 .pd-go-face {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4522,22 +4507,48 @@ html.no-flags .id-flag .flag-code { display: none; }
   max-width: 100%;
   min-width: 0;
 }
-.pd-go-face .ico { width: 22px; height: 22px; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .3)); }
-/* the win it pays, on the button face: +30 (cup) +65 (coin), tabular and precise */
+.pd-go-face .ico { width: 17px; height: 17px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .25)); }
+/* matchmaking: the action word becomes a wait, with three pulsing dots */
+.pd-search { display: none; align-items: center; gap: 2px; min-width: 0; }
+.btn-hero.is-searching .pd-search { display: inline-flex; }
+.btn-hero.is-searching .pd-go-ico,
+.btn-hero.is-searching .pd-go-face > .hero-t { display: none; }
+.pd-dots { display: inline-flex; align-items: center; gap: 3px; padding-left: 1px; }
+.pd-dots i {
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .32;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pd-dots i { animation: pd-dot 1.1s ease-in-out infinite; }
+  .pd-dots i:nth-child(2) { animation-delay: .14s; }
+  .pd-dots i:nth-child(3) { animation-delay: .28s; }
+}
+@keyframes pd-dot {
+  0%, 72%, 100% { opacity: .3; transform: translateY(0); }
+  34% { opacity: 1; transform: translateY(-1px); }
+}
+/* the queue dims the key 10%; a found match or a cancel lifts it straight back */
+.btn-hero.is-searching,
+.btn-hero.is-searching:hover:not(:active) { filter: brightness(.9); }
+/* the win it pays, on the key face: +30 (TIQ brain) +65 (coin), gold and precise */
 .pd-rw {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   max-width: 100%;
-  padding-top: 1px;
-  font-size: var(--t-micro);
-  font-weight: 900;
-  letter-spacing: .04em;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .03em;
   line-height: 1;
-  color: #EAF9FF;
+  color: var(--tiq);
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, .22);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .3);
 }
 .pd-rw-item {
   display: inline-flex;
@@ -4545,7 +4556,7 @@ html.no-flags .id-flag .flag-code { display: none; }
   gap: 4px;
   white-space: nowrap;
 }
-.pd-rw .ico { width: 13px; height: 13px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
+.pd-rw .ico { width: 14px; height: 14px; color: var(--tiq); filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .3)); }
 .pd-rw .coin { width: 13px; height: 13px; }
 
 /* legacy Play summary slot: kept for compat, hidden — the dock owns the mode line now */
@@ -4733,11 +4744,8 @@ html.no-flags .id-flag .flag-code { display: none; }
   .screen.home { gap: var(--s2); }
   .id-card { gap: var(--s1); padding: var(--s2) var(--s4) var(--s3); }
   .id-card.user-bar { gap: 12px; padding: 16px; border-radius: 20px; }
-  .launcher { min-height: 66px; }
-  .mode-hero { min-height: 66px; }
-  .btn-hero { min-height: 66px; }
+  .launcher { min-height: 66px; --dock-key-h: 58px; }
   .car-card { padding: var(--s2) var(--s4) 30px; }
-  .hero-t { font-size: 19px; }
   .mode-pv-wrap { height: 60px; }
 }
 
@@ -4745,13 +4753,11 @@ html.no-flags .id-flag .flag-code { display: none; }
    every fixed band gives a few pixels so the highlight card keeps its title.
    user-bar keeps full padding — its 2 rows are already the compact form. */
 @media (max-height: 660px) {
-  .btn-hero { min-height: 62px; }
   .mini-rank li:not(.nations-row) { min-height: 22px; }
   .screen.home { gap: var(--s1); }
   .id-card { padding-bottom: var(--s2); }
   .id-card.user-bar { padding: 16px; gap: 12px; border-radius: 20px; }
-  .launcher { min-height: 62px; }
-  .mode-hero { min-height: 62px; }
+  .launcher { min-height: 62px; --dock-key-h: 56px; }
   .tabs { padding: 4px; min-height: 60px; }
   .tab { min-height: 48px; }
 }
@@ -4764,9 +4770,7 @@ html.no-flags .id-flag .flag-code { display: none; }
   .screen.home { gap: 2px; }
   .id-card { gap: 2px; padding-bottom: var(--s1); }
   .id-card.user-bar { gap: 12px; padding: 16px; border-radius: 20px; }
-  .launcher { min-height: 58px; }
-  .mode-hero { min-height: 58px; }
-  .btn-hero { min-height: 58px; padding: 6px 14px; }
+  .launcher { min-height: 58px; --dock-key-h: 56px; }
   .mini-rank li:not(.nations-row) { min-height: 20px; }
   .car-card { gap: 2px; padding-bottom: 30px; }
   .car-card.nations-cup { gap: 6px; }

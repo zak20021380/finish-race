@@ -287,8 +287,8 @@ export async function copyText(text: string): Promise<boolean> {
 /* ---------- the home Play Dock (same IDs home.ts owns) ---------- */
 
 /**
- * Repaint both zones of the dock from the one selection: the left zone names the mode
- * it would switch to (emblem · label · the CHANGE badge) and the right zone wears the
+ * Repaint both keys of the dock from the one selection: the left key names the mode
+ * it would switch to (emblem · label · the CHANGE badge) and the right key wears the
  * win the launch pays. Nothing here reads the DOM as state — every value comes from
  * `getLobbyDisplay()` plus the drawer's own `REWARD` line.
  */
@@ -313,7 +313,7 @@ export function paintLobby(): void {
   if (rw) {
     rw.setAttribute('aria-label', reward.trophy === null
       ? `${reward.lead} pays ${n(reward.coin)} coins`
-      : `${reward.lead} pays ${n(reward.trophy)} trophies and ${n(reward.coin)} coins`);
+      : `${reward.lead} pays ${n(reward.trophy)} TIQ and ${n(reward.coin)} coins`);
   }
   /* practice pays no trophies, so the chip leaves the face instead of reading "+0" */
   const trophy = document.getElementById('home-play-rw-trophy');

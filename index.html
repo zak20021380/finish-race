@@ -2115,10 +2115,9 @@
             </div>
           </div>
 
-          <!-- The Play Dock: one capsule, two zones. The left third is the mode
-               switcher (its own door into the Game Mode drawer), the right two thirds
-               is the one-tap launch for the mode it names. One pill, one hairline
-               seam, no second CTA competing with the launch. -->
+          <!-- The Play Dock: one clay tray, two keys. The left key names the mode and
+               opens the switcher; the right key is the one-tap launch for that mode.
+               No third key: the launch owns every pixel the help door used to hold. -->
           <div class="launcher">
             <button class="mode-hero" type="button" id="mode-hero" data-gmode="duel_1v1" aria-haspopup="dialog">
               <span class="mode-hero-ico" aria-hidden="true">
@@ -2132,25 +2131,23 @@
             </button>
             <button class="btn btn-hero" id="home-play" type="button" aria-describedby="home-play-sub">
               <span class="pd-go-face">
-                <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-play" /></svg>
+                <svg class="ico pd-go-ico" aria-hidden="true" focusable="false"><use href="#i-play" /></svg>
                 <span class="hero-t">PLAY</span>
+                <span class="pd-search" aria-hidden="true">
+                  <span class="hero-t">SEARCHING</span>
+                  <span class="pd-dots"><i></i><i></i><i></i></span>
+                </span>
               </span>
-              <span class="pd-rw" id="home-play-rw" role="img" aria-label="Win 30 trophies and 65 coins">
+              <span class="pd-rw" id="home-play-rw" role="img" aria-label="Win 30 TIQ and 65 coins">
                 <span class="pd-rw-item" id="home-play-rw-trophy">
                   <b id="home-play-rw-trophy-n">+30</b>
-                  <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-cup" /></svg>
+                  <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-brain" /></svg>
                 </span>
                 <span class="pd-rw-item">
                   <b id="home-play-rw-coin-n">+65</b>
                   <span class="coin" data-coin aria-hidden="true"></span>
                 </span>
               </span>
-            </button>
-            <!-- the permanent lesson door: a glass help key on the dock's own face, so the
-                 tutorial is one thumb away on every visit, finished or not. -->
-            <button class="dock-tut" id="home-tutorial" type="button"
-              aria-label="Tutorial — how to play, launch the hands-on lesson">
-              <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-help" /></svg>
             </button>
           </div>
 

@@ -848,13 +848,25 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   /* ---------- launcher input ---------- */
 
-  /* The dock's right zone launches whatever mode its left zone names: quick match queues on
+  /* The dock's launch key launches whatever mode its mode key names: quick match queues on
      the searching stage, practice and a private room open their roster first. `api.launch` is
      the same door the drawer's Start uses, so the label and the race can never disagree. */
   homePlay.addEventListener('click', () => {
-    impact('light');
+    impact('medium');
     api.launch();
   });
+
+  /* The queue owns the dock's second state: while the searching stage is up the label reads
+     SEARCHING, and a found match or a cancel lifts it back. The stage's own hidden flag is
+     the one source of truth, so no queue callback has to remember to repaint the dock. */
+  const mmStage = document.getElementById('overlay-matchmaking');
+  if (mmStage) {
+    const paintDockState = (): void => {
+      homePlay.classList.toggle('is-searching', !mmStage.hidden);
+    };
+    new MutationObserver(paintDockState).observe(mmStage, { attributes: true, attributeFilter: ['hidden'] });
+    paintDockState();
+  }
 
   onChange(() => {
     void loadCountries();
