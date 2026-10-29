@@ -48,7 +48,7 @@ import { createAdmin, onRuntime, recordRace, runtime, tiqFrom, type Admin } from
 import { arena, arenaLocked, onAward, startArenaSync } from './arenaState';
 import { createAnnouncements } from './broadcasts';
 import {
-  MIN_SEATS, ROOM_WAIT_MS, createRoom, difficultyFor, isAutomated, lobbyLine, rewardEligible, seatBadge,
+  MIN_SEATS, ROOM_WAIT_MS, createRoom, difficultyFor, isAutomated, isHuman, lobbyLine, rewardEligible, seatBadge,
   seatName, sizesOf, startEarly, type BotTier, type Room,
 } from './room';
 import { initSplash, splashReady } from './splash';
@@ -516,9 +516,19 @@ const waiting: (() => void)[] = [];            // bot thinks parked by the pause
  *  board itself: its stage gate decides which real tap is live. */
 let tutorialActive = false;
 let tutorial: Tutorial | null = null;
-/** Set by the lobby's own doors: the lesson opens on the next race even if it was read before. */
+/** Set by the on-demand door: the lesson opens on the next race even if it was read before. */
 let tutorialRequested = false;
+/** A lesson that replaces the launch is its own match: finishing or skipping it returns to Home. */
+let tutorialStandalone = false;
 const tutorialStage = (): TutorialStage | null => (tutorialActive ? tutorial?.stage ?? null : null);
+
+/** People actually holding seats in a room — a local practice room holds only this screen. */
+function humansIn(target: Room | null | undefined): number {
+  if (!target) return 0;
+  let count = 0;
+  for (let i = 0; i < target.seats.length; i++) if (isHuman(target, i)) count++;
+  return count;
+}
 
 /** The turn's own gate. The lesson layers on top of this through `isTutorialActionAllowed()`. */
 const canAct = () => state.winner === null && state.turn === localSide && !paused;
@@ -1218,13 +1228,19 @@ function clashRivals(): VsRival[] {
 function startGame(setup: StartSetup) {
   cancelTutorial();
   /* Only a local bot race teaches, and only until the lesson has been finished or skipped. An
-     online seat or a private room is somebody else's board: the lesson never covers it. */
-  const wantsTutorial = tutorialRequested || shouldAutoStartTutorial({
+     online seat — or a room another person is sitting in — is somebody else's board: the lesson
+     never covers it. A practice room (this player plus the machine) is still a local bot race,
+     which is what the Play Dock launches, so the lesson stays reachable there. */
+  const requested = tutorialRequested;
+  tutorialRequested = false;
+  const wantsTutorial = requested || shouldAutoStartTutorial({
     online: !!setup.online,
-    room: !!setup.room,
+    room: humansIn(setup.room) > 1,
     completed: hasCompletedTutorial(),
   });
-  tutorialRequested = false;
+  /* A lesson that replaces the launch is the whole match: its end returns to Home. Pause →
+     Replay is the one lesson that runs inside a real match and hands the board straight back. */
+  tutorialStandalone = wantsTutorial;
   /* menuState.difficulty is the single source: the Choose-mode sheet persists it live,
      so every start path (vs Bot card, Play) runs the level the sheet shows. */
   difficulty = menuState.difficulty;
@@ -1881,16 +1897,16 @@ function syncTutorialUI() {
  */
 let waitingForMineTrigger = false;
 let mineStrides = 0;
-let mineGateBall: number | null = null;
-let mineGateRow = 0;
+/** Best (lowest) row each rival ball has reached since the handoff. */
+let mineGateRows: Map<number, number> | null = null;
 
 /** The wall stands: close the overlay, release the gate, and let the match actually play. */
 function beginMineIntermission() {
   tutorialActive = false;
   document.body.classList.remove('tutorial-live');
-  const rival = tutorialRival();
-  mineGateBall = rival?.id ?? null;
-  mineGateRow = rival?.pos.r ?? state.rows - 1;
+  mineGateRows = new Map(
+    state.balls.filter((b) => b.team !== localSide).map((b) => [b.id, b.pos.r]),
+  );
   mineStrides = 0;
   waitingForMineTrigger = true;
   ui();
@@ -1898,13 +1914,20 @@ function beginMineIntermission() {
   if (wantsOpponent()) void runOpponent();
 }
 
-/** One real forward step of the gated rival, counted once per row gained. */
+/**
+ * Real forward progress of the rival, counted once per new row. Every rival ball counts, so a
+ * 2v2 board cannot stall the intermission by moving the piece the lesson did not name.
+ */
 function countMineStride() {
-  const ball = mineGateBall === null ? tutorialRival()
-    : state.balls.find((b) => b.id === mineGateBall) ?? tutorialRival();
-  if (!ball || ball.pos.r >= mineGateRow) return;
-  mineGateRow = ball.pos.r;
-  mineStrides++;
+  if (!mineGateRows) return;
+  for (const ball of state.balls) {
+    if (ball.team === localSide) continue;
+    const best = mineGateRows.get(ball.id);
+    if (best === undefined) { mineGateRows.set(ball.id, ball.pos.r); continue; }
+    if (ball.pos.r >= best) continue;
+    mineStrides += best - ball.pos.r;
+    mineGateRows.set(ball.id, ball.pos.r);
+  }
 }
 
 /**
@@ -1933,10 +1956,10 @@ function resumeMineLesson() {
 }
 
 function beginTutorial() {
-  if (!tutorial || tutorial.active || active || room) return;
+  if (!tutorial || tutorial.active || active || humansIn(room) > 1) return;
   waitingForMineTrigger = false;
   mineStrides = 0;
-  mineGateBall = null;
+  mineGateRows = null;
   tutorialActive = true;      // before stopClock: clockLive reads this flag
   stopClock();
   /* step one is the player's own pick: clear the auto-pick the race painted before the lesson */
@@ -1950,10 +1973,10 @@ function beginTutorial() {
 }
 
 /**
- * The lobby's own door into the lesson: a fresh local duel with the overlay forced on, for a
- * player who has already read it as much as for a first-timer. `beginTutorial` itself refuses a
- * live seat or a private room, so the setup is deliberately a plain 1v1 bot race — the exact
- * board the four steps were written against.
+ * The lobby's on-demand door into the lesson: a fresh local duel with the overlay forced on, for
+ * a player who has already read it as much as for a first-timer. `beginTutorial` refuses a live
+ * seat or a room with people in it, so the setup is deliberately a plain 1v1 bot race — the exact
+ * board the four steps were written against. It is a standalone lesson: `end` returns to Home.
  */
 function startTutorial() {
   if (sheets.isOpen) sheets.close();
@@ -1966,7 +1989,7 @@ function cancelTutorial() {
   if (!tutorialActive && !waitingForMineTrigger) return;
   waitingForMineTrigger = false;
   mineStrides = 0;
-  mineGateBall = null;
+  mineGateRows = null;
   tutorial?.cancel();
   tutorialActive = false;
 }
@@ -1988,8 +2011,16 @@ tutorial = createTutorial({
     setMode(BOARD_IDLE);
     mineGhost = null;
     autoPicked = null;
-    if (result === 'cancelled') return;
+    if (result === 'cancelled') { tutorialStandalone = false; return; }
     completeTutorial();       // read to the end or skipped: either way, not first-run again
+    /* A lesson that replaced the launch is its own match — finishing or skipping it drops the
+       player back on Home instead of leaving them inside a bot race they never asked for. Pause →
+       Replay is the exception: the real match under it gets the live board straight back. */
+    if (tutorialStandalone) {
+      tutorialStandalone = false;
+      quitToMenu();
+      return;
+    }
     $<HTMLElement>('s-game').focus({ preventScroll: true });
     ui();
     startClock();
@@ -1997,17 +2028,16 @@ tutorial = createTutorial({
   },
 });
 
-/* The remaining lobby doors: the first-run invitation and the rules sheet both enter the same
-   lesson. Neither depends on the completion flag, so a player can replay at any time. */
-for (const id of ['invite-tutorial', 'help-tutorial']) {
-  $(id).addEventListener('click', () => { impact('light'); startTutorial(); });
-}
+/* The rules sheet's Play tutorial key — reachable from Settings and from a live board's pause
+   sheet. It never depends on the completion flag, so a player can replay at any time. */
+$('help-tutorial').addEventListener('click', () => { impact('light'); startTutorial(); });
 
 /* The visible replay door: Pause → Replay tutorial restarts this local board with the lesson,
    without needing the console. It is hidden for online seats and private rooms. */
 $('pause-tutorial').addEventListener('click', () => {
   impact('light');
   resetTutorialState();
+  tutorialStandalone = false;   // this lesson runs inside the match already on the board
   sheets.close();
   resumeGame();
   restart();
@@ -2340,17 +2370,6 @@ const chat = createChat({
 router.start('home');
 setBackButton(false);
 menu.afterStart();
-
-/* First run: the lobby invites a new player into the lesson once. It opens behind the boot
-   screen, so it is already waiting on Home when the veil lifts. "Later" only quiets it for
-   this session — the completion flag is what retires it. */
-if (!hasCompletedTutorial()) {
-  window.setTimeout(() => {
-    if (hasCompletedTutorial() || router.current !== 'home' || sheets.isOpen) return;
-    const invite = document.getElementById('sheet-tut-invite');
-    if (invite) sheets.open(invite);
-  }, 1400);
-}
 
 /* equipping repaints the board, and the chip swatch that stands for your ball; choosing a piece
    colour repaints the whole perspective (both sides, the finish wash and every chip) */

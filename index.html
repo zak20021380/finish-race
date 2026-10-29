@@ -2488,6 +2488,16 @@
                     <button class="pcolor-b" type="button" data-pcolor="blue" aria-pressed="false" aria-label="Play blue pieces"><i class="pcolor-dot blue" aria-hidden="true"></i>BLUE</button>
                   </span>
                 </div>
+                <!-- the lesson's on-demand door: the same rules sheet the old modes screen
+                     offered, now reachable from Settings instead of auto-opening at launch. -->
+                <button class="row set-row" type="button" id="set-help" aria-haspopup="dialog">
+                  <span class="set-ico sm sky" aria-hidden="true"><svg class="ico"><use href="#i-help" /></svg></span>
+                  <span class="row-txt">
+                    <span class="row-t">How to play</span>
+                    <span class="row-s">Board basics · replay the hands-on tutorial</span>
+                  </span>
+                  <svg class="ico chev tactile" aria-hidden="true"><use href="#i-next" /></svg>
+                </button>
               </div>
             </section>
 
@@ -3044,20 +3054,6 @@
         <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-flag" /></svg>
         <span id="tut-ready-txt">YOU'RE READY! REACH THE FINISH LINE!</span>
       </div>
-
-      <!-- first-run invitation: the lobby's own door into the lesson, shown once per session
-           while the completion flag is unset. The splash owns the stage at boot, so this is
-           opened behind it and is already waiting when the veil lifts. -->
-      <section class="sheet" id="sheet-tut-invite" hidden role="dialog" aria-modal="true"
-        aria-labelledby="tut-invite-title">
-        <p class="tut-invite-kicker">First time here?</p>
-        <h2 class="sheet-t" id="tut-invite-title">Learn the board in four taps</h2>
-        <p class="sheet-p">Reach the FINISH line, wall off a rival and arm a hidden mine on a real board — about 30 seconds. You can replay it any time from the Play Dock.</p>
-        <div class="sheet-actions split">
-          <button class="btn btn-ghost" type="button" data-sheet-close data-autofocus>Later</button>
-          <button class="btn btn-primary" type="button" id="invite-tutorial">Start tutorial</button>
-        </div>
-      </section>
 
       <!-- matchmaking: the full-viewport searching stage Quick match opens (src/matchmaking.ts).
            Clay only — no backdrop-filter anywhere on it. -->

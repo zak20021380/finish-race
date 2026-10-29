@@ -271,7 +271,7 @@ export const TUTORIAL_RESUME_STAGE: TutorialStage = 'mine-arm';
 /** Forward rows the rival must take in live play before the mine lesson re-opens. */
 export const TUTORIAL_LIVE_STEPS = 2;
 
-/** Only local bot races teach; a person or a private room never sees the lesson. */
+/** Only local bot races teach; an online seat or a room another person holds never sees it. */
 export function shouldAutoStartTutorial(o: { online: boolean; room: boolean; completed: boolean }): boolean {
   return !o.online && !o.room && !o.completed;
 }

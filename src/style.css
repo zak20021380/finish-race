@@ -2397,15 +2397,6 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   color: var(--ink-soft);
 }
 .help b { font-weight: 800; color: var(--ink); }
-/* the first-run invitation's kicker: one small warm line above the sheet title */
-.tut-invite-kicker {
-  margin: 0 0 2px;
-  font-size: var(--t-micro);
-  font-weight: 900;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--honey-ink);
-}
 
 /* ---- pickers inside sheets: a field, a scrollable list, and nothing else ----
    The app itself never scrolls, so the list owns the gesture: touch-action + the `data-scroll`

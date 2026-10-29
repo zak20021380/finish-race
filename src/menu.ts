@@ -2542,10 +2542,14 @@ export function createMenu(api: MenuApi): Menu {
   for (const el of document.querySelectorAll<HTMLElement>('[data-back]')) {
     el.addEventListener('click', () => { impact('light'); api.onBack(); });
   }
-  $('help-btn').addEventListener('click', () => {
+  const openHelp = (): void => {
     const sheet = api.sheet('sheet-help');
     if (sheet) { impact('light'); api.sheets.open(sheet); }
-  });
+  };
+  $('help-btn').addEventListener('click', openHelp);
+  /* Settings carries the rules sheet now: the old modes screen has no route, and the lesson
+     must stay one explicit tap away without a launch popup. */
+  document.getElementById('set-help')?.addEventListener('click', openHelp);
 
   /* ---- tabs ---- */
   for (const t of tabs) {
