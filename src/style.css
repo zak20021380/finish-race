@@ -7616,8 +7616,12 @@ html.reduced-motion .reward-badge, html.reduced-motion .pf-toast { animation: no
 }
 .ext { color: var(--brand-ink); }
 .set-row:active .chev.tactile, .set-row:active .ext { transform: translateY(2px); box-shadow: 0 0 0 #080C14, inset 0 1px 0 rgba(255,255,255,.12); }
-html[dir="rtl"] .chev.tactile { transform: scaleX(-1); }
-html[dir="rtl"] .set-row:active .chev.tactile { transform: scaleX(-1) translateY(2px); }
+/* Persian/Arabic get a mirrored disclosure arrow, but the row itself never mirrors:
+   `data-lang` is a type signal, not a global `dir` flip. */
+html[data-lang="fa"] .chev.tactile,
+html[data-lang="ar"] .chev.tactile { transform: scaleX(-1); }
+html[data-lang="fa"] .set-row:active .chev.tactile,
+html[data-lang="ar"] .set-row:active .chev.tactile { transform: scaleX(-1) translateY(2px); }
 
 /* ---- refined clay toggle -------------------------------------------------
    The track is a groove carved INTO the card: a deep inset charcoal well with a
@@ -26316,4 +26320,141 @@ html.reduced-motion .theme-toggle[aria-checked="true"] .theme-toggle-thumb { tra
   .sqp-tile-s { display: none; }
   .sqp-lore p { font-size: 10px; }
   .sqp-fine { display: none; }
+}
+
+/* ==========================================================================
+   PERSIAN (FARSI) — surgical localisation.
+   `data-lang="fa"` rides on <html>, but the document never flips `dir`. Every
+   flex row, dock split, board coordinate, progress fill and corner control keeps
+   its LTR geometry; only the text containers take RTL. Numbers, timers, room
+   codes, handles and mode tags are pushed back to LTR tabular so they stay
+   crisp beside Persian copy.
+   ========================================================================== */
+
+/* ---- type: Vazirmatn on translated copy, no tracking, no forced caps ---- */
+html[data-lang="fa"] :is(
+  [data-i18n], [data-i18n-html],
+  .hero-t, .mode-hero-title, .mode-hero-badge,
+  .m-title, .sheet-t, .sheet-p, .set-title, .set-card-h > span,
+  .row-t, .row-s, .pick-n, .pick-empty,
+  .gm-title, .gm-sub, .gm-name, .gm-desc, .gm-f-name, .gm-f-desc, .gm-f-tip,
+  .fr-create-t, .fr-create-s, .fr-or span, .fr-join-btn,
+  .lb-mode-sub, .lb-hint, .lb-name, .lb-role, .lb-open-t, .lb-team-t,
+  .sq-title, .sq-sub, .sq-create-label, .sq-card-note, .sq-roster-title, .sq-name, .sq-role,
+  .sqp-join-t, .sqp-fine, .sqp-kind, .sqp-tile-s, .sqp-lore p,
+  .pf-chip-k, .pf-chip-v, .pf-chip-meta, .pf-coin-k, .pf-invite-t, .pf-invite-s,
+  .pf-quest-kicker, .pf-quest-title, .pf-quest-sub, .id-team-t,
+  .help li, .support-title, .cat-pill span, .send-t
+) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+html[data-lang="fa"] .sqp-tile-k { font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif; }
+html[data-lang="fa"] .sqp-tile-k > span { direction: rtl; }
+
+/* dynamic labels that are written by JS rather than data-i18n */
+html[data-lang="fa"] :is(.gm-lead, .gm-start, #squad-leave, #squad-explore-t, .sq-roster-empty, .gm-err, .pf-invite-pill) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  direction: rtl;
+}
+
+/* ---- numbers, timers, codes, handles, mode tags: isolated LTR, tabular ---- */
+html[data-lang="fa"] :is(
+  #p-coins, #p-level, #pf-coins, #pf-tiq, #pf-level, #pf-xp, #pf-games,
+  #pf-wins, #pf-losses, #pf-best, #pf-streak, #pf-badge-count,
+  #home-play-rw, .pd-rw, .gm-rw, .gm-wait, #lb-count, #lb-code, .lb-count,
+  .lb-fmt, .sq-rank, .sq-count, .sq-chip, .sq-score, .sq-meta-handle,
+  .sq-card-handle, .sq-banner-handle, .sqp-handle, .flag-code, .id-lvl,
+  .id-team-rank, .stars-count, .tour-clock, .pf-xp-lvl, .pf-xp-meta,
+  .pf-coin-pill, .pf-tiq-pill, .coin-pill
+) {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0 !important;
+}
+
+/* ---- titles keep their alignment; only their bidi base turns RTL ---- */
+html[data-lang="fa"] :is(.m-title, .sheet-t, .set-title, .sheet-p, .set-card-h > span) {
+  direction: rtl;
+}
+
+/* ---- block copy starts at the right edge ---- */
+html[data-lang="fa"] :is(
+  .gm-title, .gm-sub, .gm-name, .gm-desc, .gm-f-name, .gm-f-desc,
+  .fr-create-txt, .fr-create-t, .fr-create-s,
+  .lb-name, .lb-role,
+  .sq-title, .sq-sub, .sq-card-note, .sq-roster-title, .sq-name,
+  .sqp-id, .sqp-fine, .sqp-kind, .sqp-tile-s, .sqp-lore p,
+  .pf-chip-txt, .pf-chip-k, .pf-chip-v, .pf-chip-meta, .pf-invite-txt,
+  .pf-quest-kicker, .pf-quest-title, .pf-quest-sub, .id-team-t,
+  .row-txt, .row-t, .row-s, .pick-n, .pick-empty, .help li, .support-title
+) {
+  direction: rtl;
+  text-align: right;
+}
+
+/* centred micro-lines stay centred — they only need the RTL base */
+html[data-lang="fa"] :is(.lb-mode-sub, .lb-hint, .fr-or, .lb-team-t) {
+  direction: rtl;
+}
+html[data-lang="fa"] :is(.lb-open-t, .sq-role, .sqp-join-t, .fr-join-btn) {
+  direction: rtl;
+}
+
+/* ---- long Persian copy: wrap instead of ellipsizing the promise away ---- */
+html[data-lang="fa"] .gm-sub,
+html[data-lang="fa"] .sq-sub {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.45;
+}
+html[data-lang="fa"] .gm-name {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.3;
+}
+html[data-lang="fa"] .gm-desc { line-height: 1.5; }
+html[data-lang="fa"] .lb-mode-sub { font-size: 10px; line-height: 1.5; }
+html[data-lang="fa"] .lb-hint { line-height: 1.45; }
+html[data-lang="fa"] .hero-t { font-size: clamp(0.95rem, 4.4vw, 1.1rem); }
+html[data-lang="fa"] .mode-hero-title { font-size: clamp(9.5px, 2.8vw, 11px); }
+html[data-lang="fa"] .mode-hero-txt { align-items: flex-end; }
+html[data-lang="fa"] .set-card-h { justify-content: flex-start; direction: rtl; }
+
+/* Vazirmatn's Persian descenders need a real line box: every one of these
+   labels was built for a tight uppercase line-height of 1. */
+html[data-lang="fa"] :is(.hero-t, .mode-hero-title, .sq-create-label, .sq-title, .lb-name, .id-team-t) {
+  line-height: 1.4;
+}
+html[data-lang="fa"] .pf-chip-v > span { line-height: 1.45; }
+html[data-lang="fa"] :is(.id-team-t, .lb-name, .sq-name) { unicode-bidi: plaintext; }
+html[data-lang="fa"] .id-team-t { font-size: 10.5px; }
+
+/* the tutorial CTA is long in Persian: keep it on one line inside its half-width key */
+html[data-lang="fa"] #help-tutorial { font-size: 12px; white-space: nowrap; }
+
+/* ---- Persian placeholders read from the right; the fields stay LTR ---- */
+html[data-lang="fa"] :is(#squad-q, #squad-member-q, #gm-join-input, #support-msg)::placeholder {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  direction: rtl;
+  text-align: right;
+  letter-spacing: 0;
+}
+html[data-lang="fa"] #support-msg { direction: rtl; text-align: right; }
+
+/* Arabic keeps the translated Settings copy readable now that the shell no
+   longer flips `dir` globally. */
+html[data-lang="ar"] [data-i18n],
+html[data-lang="ar"] [data-i18n-html] {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  direction: rtl;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
 }

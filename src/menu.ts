@@ -596,7 +596,7 @@ export function createMenu(api: MenuApi): Menu {
     pill.className = 'sq-role';
     pill.dataset.role = role;
     pill.append(squadSvg(role === 'leader' ? '#i-crown' : '#i-shield'));
-    pill.append(document.createTextNode(role === 'leader' ? 'Leader' : 'Admin'));
+    pill.append(document.createTextNode(role === 'leader' ? t('leader') : t('admin')));
     return pill;
   }
 
@@ -642,7 +642,7 @@ export function createMenu(api: MenuApi): Menu {
     identity.className = 'sq-you-id';
     const name = document.createElement('b');
     name.className = 'sq-you-name';
-    name.textContent = 'You';
+    name.textContent = t('you');
     identity.append(name);
 
     const score = document.createElement('span');
@@ -813,8 +813,8 @@ export function createMenu(api: MenuApi): Menu {
     const leader = roster.members.find((m) => m.role === 'leader');
     squadLeaderEl.classList.toggle('is-on', !!leader);
     if (!leader) return;
-    squadLeaderNameEl.textContent = leader.isYou ? 'You' : leader.name;
-    squadLeaderNameEl.title = leader.isYou ? 'You' : leader.name;
+    squadLeaderNameEl.textContent = leader.isYou ? t('you') : leader.name;
+    squadLeaderNameEl.title = leader.isYou ? t('you') : leader.name;
     squadLeaderEl.setAttribute('aria-label', leader.isYou
       ? 'You founded this squad.'
       : `Founded by ${leader.name}.`);
@@ -892,11 +892,11 @@ export function createMenu(api: MenuApi): Menu {
       chip.classList.remove('bound');
       avatar.hidden = true;
       if (ico) ico.hidden = false;
-      label.textContent = 'Join Squad';
+      label.textContent = t('joinSquad');
       rank.hidden = true;
       rank.textContent = '';
-      chip.setAttribute('aria-label', 'Join Squad');
-      chip.title = 'Join Squad';
+      chip.setAttribute('aria-label', t('joinSquad'));
+      chip.title = t('joinSquad');
     }
   }
 
@@ -1029,25 +1029,26 @@ export function createMenu(api: MenuApi): Menu {
     sqpName.title = name;
     sqpHandle.textContent = handle;
     sqpKind.textContent = s
-      ? (squadKind(s) === 'channel' ? 'Official Telegram channel' : 'Official Telegram group')
-      : 'New Telegram alliance';
+      ? (squadKind(s) === 'channel' ? t('officialChannel') : t('officialGroup'))
+      : t('newAlliance');
 
     sqpRankTile.dataset.rank = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : rank ? 'num' : 'new';
     sqpRankV.textContent = rank ? `#${en(rank)}` : 'NEW';
-    sqpRankNote.textContent = rank === 1 ? 'Gold Medal' : rank === 2 ? 'Silver Medal' : rank === 3 ? 'Bronze Medal' : rank ? 'Global position' : 'Awaiting rank';
+    sqpRankNote.textContent = rank === 1 ? t('goldMedal') : rank === 2 ? t('silverMedal')
+      : rank === 3 ? t('bronzeMedal') : rank ? t('globalPosition') : t('awaitingRank');
     sqpTiq.textContent = en(tiq);
     sqpMembers.textContent = en(members);
 
     sqpJoin.classList.toggle('is-joined', previewJoined);
-    sqpJoinT.textContent = previewJoined ? 'Open Squad Hub' : 'Join Squad';
+    sqpJoinT.textContent = previewJoined ? t('openSquadHub') : t('joinSquad');
     sqpJoin.setAttribute('aria-label', previewJoined
-      ? `Open the ${handle} squad hub`
-      : `Join ${name}, ${handle}`);
+      ? `${t('openSquadHub')} · ${handle}`
+      : `${t('joinSquad')} · ${name}, ${handle}`);
     sqpFine.textContent = previewJoined
-      ? `You represent ${handle}. Every Arena point you score banks for this squad.`
+      ? t('squadFineJoined').replace('{handle}', handle)
       : s
-        ? `Joining banks your Arena TIQ for ${handle} and its ${en(members)} racers.`
-        : `A fresh squad will be minted for ${handle} on this device.`;
+        ? t('squadFineJoin').replace('{handle}', handle).replace('{n}', en(members))
+        : t('squadFineNew').replace('{handle}', handle);
   }
 
   function openSquadPreview(target: { squad?: RankedSquad; handle?: string }): void {
@@ -1085,7 +1086,7 @@ export function createMenu(api: MenuApi): Menu {
     const result = previewSquad ? bindSquadById(previewSquad.id) : bindSquad(previewHandle);
     if (result === 'bad-handle') {
       notify('warning');
-      showToast('That channel cannot be bound. Try @channel.', 'warning');
+      showToast(t('badChannel'), 'warning');
       return;
     }
     impact('medium');
@@ -1107,10 +1108,10 @@ export function createMenu(api: MenuApi): Menu {
       squadList.append(buildSquadCard({
         rank: null,
         mark: squadLetter({ handle: needle, name: needle }),
-        name: `Bind ${needle}`,
-        handle: 'New channel',
-        note: 'Starts a fresh roster',
-        aria: `Inspect ${needle} and bind it as a new squad`,
+        name: t('bindHandle').replace('{handle}', needle),
+        handle: t('newChannel'),
+        note: t('freshRoster'),
+        aria: t('bindHandle').replace('{handle}', needle),
         handleRef: needle,
       }));
     }
@@ -1131,7 +1132,7 @@ export function createMenu(api: MenuApi): Menu {
       }));
     }
     squadEmpty.hidden = squadList.childElementCount > 0;
-    if (!squadList.childElementCount) squadEmpty.textContent = q.trim() ? 'No squad matches that.' : 'No squads yet.';
+    if (!squadList.childElementCount) squadEmpty.textContent = q.trim() ? t('noSquadMatch') : t('noSquadsYet');
     squadList.scrollTop = 0;
   }
 
@@ -1139,8 +1140,8 @@ export function createMenu(api: MenuApi): Menu {
     window.clearTimeout(squadLeaveTimer);
     squadLeaveTimer = 0;
     squadLeaveBtn.classList.remove('is-armed');
-    squadLeaveBtn.textContent = 'Leave squad';
-    squadLeaveBtn.setAttribute('aria-label', 'Leave squad');
+    squadLeaveBtn.textContent = t('leaveSquad');
+    squadLeaveBtn.setAttribute('aria-label', t('leaveSquad'));
   }
 
   /* One key, both directions: from the hub it opens the field, from the field it
@@ -1151,7 +1152,7 @@ export function createMenu(api: MenuApi): Menu {
     squadExploreBtn.classList.toggle('is-on', bound);
     if (!bound) return;
     const hub = !squadBoundView.hidden;
-    squadExploreT.textContent = hub ? 'Explore Squads' : 'Your Squad';
+    squadExploreT.textContent = hub ? t('exploreSquads') : t('yourSquad');
     squadExploreIco.setAttribute('href', hub ? '#i-globe' : '#i-back');
     squadExploreBtn.setAttribute('aria-label', hub ? 'Explore all squads' : 'Back to your squad');
   }
@@ -1160,9 +1161,9 @@ export function createMenu(api: MenuApi): Menu {
     squadSearchView.hidden = false;
     squadBoundView.hidden = true;
     squadSheet?.classList.remove('is-hub');
-    $('squad-title').textContent = 'Join Squad';
+    $('squad-title').textContent = t('joinSquad');
     const sub = $('squad-sub');
-    sub.textContent = 'Join a Telegram clan or register your own';
+    sub.textContent = t('joinSquadDesc');
     sub.hidden = false;
     squadErr.hidden = true;
     squadView = null;
@@ -1180,7 +1181,7 @@ export function createMenu(api: MenuApi): Menu {
     squadSearchView.hidden = true;
     squadBoundView.hidden = false;
     squadSheet?.classList.add('is-hub');
-    $('squad-title').textContent = 'Your Squad';
+    $('squad-title').textContent = t('yourSquad');
     $('squad-sub').hidden = true;
     squadQuery = '';
     squadMemberQ.value = '';
@@ -1209,14 +1210,14 @@ export function createMenu(api: MenuApi): Menu {
     if (e.key !== 'Enter') return;
     e.preventDefault();
     const q = squadQ.value.trim();
-    if (!q) { squadError('Search a squad or type a channel like @DogeSquad.'); return; }
+    if (!q) { squadError(t('searchSquadHint')); return; }
     const rows = searchSquads(q);
     const needle = cleanHandle(q);
     const exact = needle ? rows.find((s) => s.handle.toLowerCase() === needle.toLowerCase()) : undefined;
     if (exact) { openSquadPreview({ squad: exact }); return; }
     if (needle) { openSquadPreview({ handle: needle }); return; }
     if (rows.length) { openSquadPreview({ squad: rows[0] }); return; }
-    squadError('Type a channel like @DogeSquad.');
+    squadError(t('squadChannelHint'));
   });
   squadList.addEventListener('click', (e) => {
     const card = (e.target as HTMLElement | null)?.closest<HTMLElement>('.sq-card');
@@ -1328,11 +1329,11 @@ export function createMenu(api: MenuApi): Menu {
   function paintReferral() {
     const r = profile.referral;
     const sub = document.getElementById('pf-invite-s');
-    if (sub) sub.textContent = `Earn +${en(REFERRAL_REWARD)} Coins per invite`;
+    if (sub) sub.textContent = t('inviteEarn').replace('{n}', en(REFERRAL_REWARD));
     const banner = document.getElementById('ref-banner');
     if (banner) banner.innerHTML = `Get <b>${en(REFERRAL_REWARD)} Coins</b> for you &amp; your friend upon joining!`;
     const pill = document.getElementById('pf-invite-pill');
-    if (pill) pill.textContent = r.joins > 0 ? `${en(r.joins)} Invited` : 'Invite';
+    if (pill) pill.textContent = r.joins > 0 ? `${en(r.joins)} Invited` : t('invite');
     const card = document.getElementById('pf-invite');
     if (card) {
       card.setAttribute('aria-label', r.joins > 0
@@ -2027,8 +2028,8 @@ export function createMenu(api: MenuApi): Menu {
     // Header country pill was decluttered — Profile owns country now. Guard for legacy DOM.
     document.getElementById('country-chip')?.classList.toggle('unset', !c);
     const countryName = document.getElementById('country-name');
-    if (countryName) countryName.textContent = c ? nameOf(c) : 'Add country';
-    $('pf-country-v').textContent = c ? nameOf(c) : 'Add country';
+    if (countryName) countryName.textContent = c ? nameOf(c) : t('addCountry');
+    $('pf-country-v').textContent = c ? nameOf(c) : t('addCountry');
     const pfFlag = document.getElementById('pf-flag');
     if (pfFlag && pfFlag.dataset.cc !== (c ?? '')) {
       pfFlag.textContent = '';
@@ -2048,13 +2049,12 @@ export function createMenu(api: MenuApi): Menu {
     countryCard?.classList.toggle('is-set', !!c);
     const countryMeta = document.getElementById('pf-country-meta');
     if (countryMeta) {
-      countryMeta.textContent = c
-        ? `${c} · ${profile.rewards.country ? 'National division' : 'Reward ready'}`
-        : `+${IDENTITY_REWARD} Coins when set`;
+      if (c) countryMeta.textContent = `${c} · ${profile.rewards.country ? t('nationalDivision') : t('rewardReady')}`;
+      else countryMeta.innerHTML = `<bdi dir="ltr">+${IDENTITY_REWARD}</bdi> ${t('coinsWhenSet')}`;
     }
     const countryLabel = c
-      ? `${nameOf(c)}. ${profile.rewards.country ? 'National division' : 'Completion reward ready'}. Change nation`
-      : `Choose your nation. Earn ${IDENTITY_REWARD} coins`;
+      ? `${nameOf(c)}. ${profile.rewards.country ? t('nationalDivision') : t('rewardReady')}.`
+      : `${t('addCountry')} · +${IDENTITY_REWARD} ${t('coins')}`;
     $('pf-country').setAttribute('aria-label', countryLabel);
     /* Home name flag: a real vector plate next to the name — never a regional-indicator
        pair, which Windows draws as two bare letters. The code stays in the DOM (hidden)
@@ -2094,17 +2094,17 @@ export function createMenu(api: MenuApi): Menu {
 
     paintSquadPill();
     const squad = getMySquad();
-    $('pf-team-v').textContent = squad ? squad.name : 'Join a Squad';
+    $('pf-team-v').textContent = squad ? squad.name : t('joinASquad');
     const squadMeta = document.getElementById('pf-team-meta');
     if (squadMeta) {
       squadMeta.textContent = squad
-        ? `#${squad.rank} • ${en(squad.members)} Members`
-        : 'Community squads';
+        ? `#${squad.rank} • ${en(squad.members)} ${t('members')}`
+        : t('communitySquads');
     }
     document.getElementById('pf-team')?.classList.toggle('is-set', !!squad);
     $('pf-team').setAttribute('aria-label', squad
-      ? `${squad.name}. Rank ${squad.rank}, ${en(squad.members)} members. Open squad`
-      : 'Join a Squad');
+      ? `${squad.name}. #${squad.rank}, ${en(squad.members)} ${t('members')}`
+      : t('joinASquad'));
   };
   const paintProfile = () => {
     const s = profile.stats;
@@ -2117,7 +2117,9 @@ export function createMenu(api: MenuApi): Menu {
     const fav = favouriteMode();
     const favLabel = fav === 'bot' ? `${menuState.sizes[0]}v${menuState.sizes[1]}` : '—';
     $('pf-fav').textContent = favLabel;
-    $('pf-fav-sub').textContent = s.games ? `${en(s.modes.bot ?? 0)} bot races` : 'No races yet';
+    $('pf-fav-sub').textContent = s.games
+      ? t('botRaces').replace('{n}', en(s.modes.bot ?? 0))
+      : t('noRacesYet');
     /* empty stats become an exciting quest card until the first race lands */
     const quest = document.getElementById('pf-quest');
     const empty = document.getElementById('pf-quest-empty');
@@ -2129,16 +2131,16 @@ export function createMenu(api: MenuApi): Menu {
       stats.hidden = isNew;
     }
     if (pfScreen.hidden) return;                        // a hidden canvas has no width to lay out
-    const t = theme();
+    const th = theme();
     for (const k of KINDS) {
       let pv = eqPv.get(k);
       if (!pv) {
-        pv = createPreview(document.querySelector<HTMLCanvasElement>(`canvas[data-eq=${JSON.stringify(k)}]`)!, k, t);
+        pv = createPreview(document.querySelector<HTMLCanvasElement>(`canvas[data-eq=${JSON.stringify(k)}]`)!, k, th);
         eqPv.set(k, pv);
-      } else pv.setTheme(t);
+      } else pv.setTheme(th);
       pv.resize();
       pv.settle();
-      $(`eq-${k}`).textContent = t[k].name;
+      $(`eq-${k}`).textContent = th[k].name;
     }
   };
   onChange(paintProfile);
@@ -2363,6 +2365,11 @@ export function createMenu(api: MenuApi): Menu {
       if (!key) continue;
       el.textContent = t(key);
     }
+    for (const el of document.querySelectorAll<HTMLElement>('[data-i18n-html]')) {
+      const key = el.dataset.i18nHtml;
+      if (!key) continue;
+      el.innerHTML = t(key);
+    }
     for (const el of document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-i18n-ph]')) {
       const key = el.dataset.i18nPh;
       if (!key) continue;
@@ -2549,8 +2556,13 @@ export function createMenu(api: MenuApi): Menu {
   $('admin-row')?.addEventListener('click', openSupport);
 
   /* live repaint: internal watchers + the public DOM event for external listeners */
-  onLang(paintLang);
-  window.addEventListener('detour:lang', () => paintLang());
+  const paintLangLive = () => {
+    paintLang();
+    paintSquadPill();
+    if (!pfScreen.hidden) paintProfile();
+  };
+  onLang(paintLangLive);
+  window.addEventListener('detour:lang', paintLangLive);
   paintLang();
 
   /* ---- mode cards ---- */

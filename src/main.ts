@@ -26,7 +26,7 @@ import { flagPhoto } from './flags';
 import { createShop } from './shop';
 import { createNotifications } from './notifications';
 import { mountCoins, setBalance } from './coin';
-import { appearance, menuState, motionReduced, onAppearance, toggleAppearance } from './settings';
+import { appearance, menuState, motionReduced, onAppearance, onLang, t, toggleAppearance } from './settings';
 import { audio } from './audio';
 import {
   completeTutorial, hasCompletedTutorial, onChange, pieceColor, profile, recordGame, resetTutorialState, theme,
@@ -2223,7 +2223,8 @@ function openLocalRoom(botTier: BotTier): Room {
 
 /** The Start label the seat count implies — the drawer's own label, spoken with the party size. */
 function partyLabel(): string {
-  return partySeats > 2 ? `Start ${partySeats}-player match` : 'Start practice match';
+  if (partySeats > 2) return t('startPracticeN').replace('{n}', String(partySeats));
+  return t('startPractice');
 }
 
 /** Paint the Players control, and make the Start label name the race it will actually run. */
@@ -2330,6 +2331,7 @@ initGameModes(sheets, {
   },
 });
 onGameModeChange(paintParty);
+onLang(paintParty);
 watchPartyLabel();
 paintParty();
 paintRoster();

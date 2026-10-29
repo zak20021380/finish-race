@@ -23,6 +23,7 @@
  */
 
 import type { Cell, Pos, WallSpec } from './rules';
+import { lang as appLang, onLang } from './settings';
 
 export interface TutorialRect { left: number; top: number; width: number; height: number }
 
@@ -403,7 +404,7 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   let nudgeTimer = 0;
   /** Every stage change and close bumps this, so a stale bot reply can never advance the lesson. */
   let flow = 0;
-  let lang: TutorialLang = normalizeTutLang(readStoredLang());
+  let lang: TutorialLang = normalizeTutLang(readStoredLang() ?? appLang);
   let readyTimer = 0;
 
   const stage = (): TutorialStage | null =>
@@ -752,6 +753,11 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     });
   }
   switchLang(lang, false);
+  /* the app language is the lesson's language: a switch in Settings re-reads the card in place */
+  onLang((code) => {
+    const next: TutorialLang = code === 'fa' || code === 'ru' ? code : 'en';
+    if (next !== lang) switchLang(next, true);
+  });
 
   return {
     get active() { return open; },

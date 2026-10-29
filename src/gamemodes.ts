@@ -18,13 +18,13 @@
  * sizes until netplay lands — the lobby is the contract, the starter is a stub.
  */
 import { readJson, writeJson } from './storage';
-import { menuState, saveMenu } from './settings';
+import { menuState, onLang, saveMenu, t } from './settings';
 import { impact, notify, openTelegramShare } from './telegram';
 import { showToast } from './toast';
 import { botMainAppLink, telegramShareLink } from '../shared/config';
 import type { Sheets } from './sheets';
 import {
-  FORMAT_LINE, canStart, isHost, nextTeam, occupied, openLobby, startHint,
+  canStart, isHost, nextTeam, occupied, openLobby,
   type Lobby, type LobbyHandle, type LobbyRace, type LobbyFormat,
 } from './lobby';
 import { isLobbyFormat } from './room';
@@ -70,11 +70,14 @@ const ROW_OF: Record<GameModeId, RowId> = {
 /** Estimated matchmaking wait, shown beside the size segment. */
 const WAIT: Record<QuickId, string> = { duel_1v1: '~5s', party_2v2: '~8s' };
 
-const START_LABEL: Record<GameModeId, string> = {
-  duel_1v1: 'Start 1v1 match',
-  party_2v2: 'Start 2v2 match',
-  bot: 'Start practice match',
-  room: 'Start private match',
+/** The sticky Start's label, in the player's language. */
+const startLabel = (id: GameModeId): string => {
+  switch (id) {
+    case 'duel_1v1': return t('start1v1');
+    case 'party_2v2': return t('start2v2');
+    case 'bot': return t('startPractice');
+    case 'room': return t('startPrivate');
+  }
 };
 
 /**
@@ -82,12 +85,17 @@ const START_LABEL: Record<GameModeId, string> = {
  * crisp word (or two) so the tap that changes it is unmistakable. The full title and
  * status still live on the zone's `aria-label`, which is what a screen reader reads.
  */
-const DOCK_LABEL: Record<GameModeId, string> = {
-  duel_1v1: '1v1',
-  party_2v2: '2v2',
-  bot: 'VS BOT',
-  room: 'FRIENDS',
+const dockLabel = (id: GameModeId): string => {
+  switch (id) {
+    case 'duel_1v1': return t('dockQuick');
+    case 'party_2v2': return t('dockParty');
+    case 'bot': return t('dockPractice');
+    case 'room': return t('dockFriends');
+  }
 };
+
+/** The win line, split into its translated lead and the numbers that never change. */
+const rewardLead = (id: GameModeId): string => (id === 'bot' ? t('practiceLead') : t('win'));
 
 interface RewardLine {
   lead: string;
@@ -96,12 +104,25 @@ interface RewardLine {
   coin: string;
 }
 
-const REWARD: Record<GameModeId, RewardLine> = {
-  duel_1v1: { lead: 'Win', trophy: '+30', coin: '+65' },
-  party_2v2: { lead: 'Win', trophy: '+50', coin: '+100' },
-  bot: { lead: 'Practice', trophy: null, coin: '+65' },
-  room: { lead: 'Win', trophy: '+30', coin: '+65' },
+const REWARD_AMOUNT: Record<GameModeId, { trophy: string | null; coin: string }> = {
+  duel_1v1: { trophy: '+30', coin: '+65' },
+  party_2v2: { trophy: '+50', coin: '+100' },
+  bot: { trophy: null, coin: '+65' },
+  room: { trophy: '+30', coin: '+65' },
 };
+
+const rewardFor = (id: GameModeId): RewardLine => ({ lead: rewardLead(id), ...REWARD_AMOUNT[id] });
+
+const FORMAT_KEY: Record<LobbyFormat, string> = {
+  duel: 'fmtDuel', '3p': 'fmt3p', '4p': 'fmt4p', '2v2': 'fmt2v2',
+};
+const formatLine = (format: LobbyFormat): string => t(FORMAT_KEY[format]);
+
+/** The plain-language line under the roster, in the player's language. */
+function hintText(l: Lobby): string {
+  if (canStart(l)) return isHost(l) ? t('hintReadyHost') : t('hintWaitingHost');
+  return t('hintInviteMore');
+}
 
 const isQuick = (id: GameModeId): id is QuickId => id === 'duel_1v1' || id === 'party_2v2';
 
@@ -184,18 +205,18 @@ export function setGameMode(id: GameModeId, opts?: { roomCode?: string | null })
 export function getLobbyDisplay(sel: GameModeSelection = current): LobbyDisplay {
   switch (sel.id) {
     case 'duel_1v1':
-      return { id: sel.id, title: '1v1 Duel', status: 'online', icon: '#i-swords', sub: 'Ranked · ~5s queue' };
+      return { id: sel.id, title: t('modeDuel'), status: 'online', icon: '#i-swords', sub: t('subDuel') };
     case 'party_2v2':
-      return { id: sel.id, title: '2v2 Party', status: 'online', icon: '#i-users', sub: 'Ranked · ~8s queue' };
+      return { id: sel.id, title: t('modeParty'), status: 'online', icon: '#i-users', sub: t('subParty') };
     case 'bot':
-      return { id: sel.id, title: 'vs Bot', status: 'practice', icon: '#i-bot', sub: 'Offline Practice' };
+      return { id: sel.id, title: t('modeBot'), status: 'practice', icon: '#i-bot', sub: t('subPractice') };
     case 'room':
       return {
         id: sel.id,
-        title: sel.roomCode ? `Room ${sel.roomCode}` : 'Custom Room',
+        title: sel.roomCode ? t('modeRoomCode').replace('{code}', sel.roomCode) : t('modeRoom'),
         status: 'private',
         icon: '#i-send',
-        sub: sel.roomCode ? 'Private · Friends only' : 'Private · Create or join',
+        sub: sel.roomCode ? t('subRoomCode') : t('subRoom'),
       };
   }
 }
@@ -215,7 +236,7 @@ export function createRoom(): GameModeSelection {
 
 export function joinRoomCode(raw: string): { ok: true; code: string } | { ok: false; error: string } {
   const code = cleanRoomCode(raw);
-  if (!code) return { ok: false, error: 'Enter the 4-digit room code.' };
+  if (!code) return { ok: false, error: t('errCode') };
   setGameMode('room', { roomCode: code });
   return { ok: true, code };
 }
@@ -281,23 +302,23 @@ export function paintLobby(): void {
   const card = document.getElementById('mode-hero');
   if (card) {
     card.setAttribute('data-gmode', lobby.id);
-    card.setAttribute('aria-label', `Change game mode. Currently ${lobby.title} — ${lobby.sub}`);
+    card.setAttribute('aria-label', `${t('change')} · ${lobby.title} — ${lobby.sub}`);
   }
   const titleEl = document.getElementById('home-play-title');
-  if (titleEl) titleEl.textContent = DOCK_LABEL[lobby.id];
+  if (titleEl) titleEl.textContent = dockLabel(lobby.id);
   const useEl = document.getElementById('mode-hero-use') as unknown as SVGUseElement | null;
   if (useEl) useEl.setAttribute('href', lobby.icon);
   /* the mode's own line, kept as the dock's spoken description rather than a third row */
   const subEl = document.getElementById('home-play-sub');
   if (subEl) subEl.textContent = lobby.sub;
 
-  const reward = REWARD[lobby.id];
+  const reward = rewardFor(lobby.id);
   const n = (v: string): string => v.replace('+', '');
   const rw = document.getElementById('home-play-rw');
   if (rw) {
     rw.setAttribute('aria-label', reward.trophy === null
-      ? `${reward.lead} pays ${n(reward.coin)} coins`
-      : `${reward.lead} pays ${n(reward.trophy)} TIQ and ${n(reward.coin)} coins`);
+      ? `${reward.lead} · ${n(reward.coin)} ${t('coinsUnit')}`
+      : `${reward.lead} · ${n(reward.trophy)} TIQ · ${n(reward.coin)} ${t('coinsUnit')}`);
   }
   /* practice pays no trophies, so the chip leaves the face instead of reading "+0" */
   const trophy = document.getElementById('home-play-rw-trophy');
@@ -310,7 +331,7 @@ export function paintLobby(): void {
   if (coinN) coinN.textContent = reward.coin;
 
   const play = document.getElementById('home-play') as HTMLButtonElement | null;
-  if (play) play.setAttribute('aria-label', `Play ${lobby.title} — ${lobby.sub}`);
+  if (play) play.setAttribute('aria-label', `${t('play')} · ${lobby.title} — ${lobby.sub}`);
 }
 
 /* ---------- the lobby: one socket, one roster, one Start ---------- */
@@ -331,22 +352,22 @@ let hooks: GameModeInit = {};
 const esc = (s: string): string =>
   s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
 
-/** What the screen says when the server turns us away. One line each, no jargon. */
-const LOBBY_ERROR: Record<string, string> = {
-  room_not_found: 'No room with that code.',
-  ROOM_NOT_FOUND: 'No room with that code.',
-  room_full: 'That room is already full.',
-  ROOM_FULL: 'That room is already full.',
-  room_exists: 'That code is already open. Try joining it.',
-  ROOM_EXISTS: 'That code is already open. Try joining it.',
-  MAINTENANCE: 'Matchmaking is paused. Try again soon.',
-  BANNED: 'This account cannot join rooms.',
+/** What the screen says when the server turns us away. One key each, no jargon. */
+const LOBBY_ERROR_KEY: Record<string, string> = {
+  room_not_found: 'errRoomNotFound',
+  ROOM_NOT_FOUND: 'errRoomNotFound',
+  room_full: 'errRoomFull',
+  ROOM_FULL: 'errRoomFull',
+  room_exists: 'errRoomExists',
+  ROOM_EXISTS: 'errRoomExists',
+  MAINTENANCE: 'errMaintenance',
+  BANNED: 'errBanned',
 };
 
-const errorLine = (reason: string): string => LOBBY_ERROR[reason] ?? 'Could not join that room.';
+const errorLine = (reason: string): string => t(LOBBY_ERROR_KEY[reason] ?? 'errJoinUnknown');
 
 /** The FFA badge colours, in seat order: every slot is told apart without a team label. */
-const FFA_COLOR: readonly string[] = ['Blue', 'Red', 'Green', 'Yellow'];
+const FFA_COLOR: readonly string[] = ['colorBlue', 'colorRed', 'colorGreen', 'colorYellow'];
 
 /** Where a seat would sit if a new player joined right now — how empty wells pick their column. */
 function plannedTeam(l: Lobby, index: number): 0 | 1 {
@@ -369,28 +390,30 @@ function slotMarkup(l: Lobby, seat: number, team: 0 | 1 | null): string {
   if (!s) {
     return `<button class="lb-slot is-open" type="button" role="listitem" data-seat="${seat}"`
       + (team === null ? '' : ` data-team="${team}"`)
-      + ` aria-label="Open seat ${seat + 1}: invite a friend">`
+      + ` aria-label="${t('openSeatInvite').replace('{n}', String(seat + 1))}">`
       + '<span class="lb-plus" aria-hidden="true">+</span>'
-      + '<span class="lb-open-t">Invite</span></button>';
+      + `<span class="lb-open-t">${t('inviteFriend')}</span></button>`;
   }
-  const role = s.host ? 'Host' : s.bot ? 'Bot' : s.seat === l.you ? 'You' : 'Ready';
+  const role = s.host ? t('host') : s.bot ? t('bot') : s.seat === l.you ? t('you') : t('ready');
   const color = seat % FFA_COLOR.length;
   /* the host may move any seat between the teams; a player may move their own */
   const canMove = team !== null && (isHost(l) || s.seat === l.you);
   const tags = [
-    s.host ? '<span class="lb-crown" role="img" aria-label="Host">👑</span>' : '',
-    team === null ? `<span class="lb-color" data-color="${color}">${FFA_COLOR[color]}</span>` : '',
+    s.host ? `<span class="lb-crown" role="img" aria-label="${t('host')}">👑</span>` : '',
+    team === null ? `<span class="lb-color" data-color="${color}">${t(FFA_COLOR[color])}</span>` : '',
   ].filter(Boolean).join('');
   const cls = ['lb-slot', 'is-held'];
   if (s.host) cls.push('is-host');
   if (s.seat === l.you) cls.push('is-you');
   if (!s.connected) cls.push('is-away');
   const hint = canMove
-    ? ` title="Tap to switch ${esc(s.name)} to Team ${s.team === 0 ? 'Orange' : 'Blue'}"`
+    ? ` title="${t('switchTeamTo')
+      .replace('{name}', esc(s.name))
+      .replace('{team}', s.team === 0 ? t('teamOrange') : t('teamBlue'))}"`
     : '';
   const label = team === null
-    ? `${s.name}, ${role}, ${FFA_COLOR[color]} badge`
-    : `${s.name}, ${role}, Team ${s.team === 0 ? 'Blue' : 'Orange'}`;
+    ? `${s.name}, ${role}, ${t(FFA_COLOR[color])}`
+    : `${s.name}, ${role}, ${s.team === 0 ? t('teamBlue') : t('teamOrange')}`;
   return `<button class="${cls.join(' ')}" type="button" role="listitem" data-seat="${seat}"`
     + (team === null ? ` data-color="${color}"` : ` data-team="${s.team}"`)
     + ` aria-label="${esc(label)}"${hint}>`
@@ -419,7 +442,7 @@ function teamMarkup(l: Lobby): string {
     const seats = l.seats.map((_s, i) => i).filter((i) => plannedTeam(l, i) === team);
     return `<div class="lb-team is-${team === 0 ? 'blue' : 'orange'}" data-team="${team}">`
       + `<p class="lb-team-h"><span class="lb-team-dot" aria-hidden="true"></span>`
-      + `${team === 0 ? 'Team Blue' : 'Team Orange'}</p>`
+      + `<span class="lb-team-t">${team === 0 ? t('teamBlue') : t('teamOrange')}</span></p>`
       + seats.map((seat) => slotMarkup(l, seat, team)).join('')
       + '</div>';
   };
@@ -449,11 +472,11 @@ function paintLobbyPane(l: Lobby): void {
   const codeEl = document.getElementById('lb-code');
   if (codeEl) codeEl.textContent = l.code;
   const codeTag = document.getElementById('lb-code-tag');
-  if (codeTag) codeTag.setAttribute('aria-label', `Room code ${l.code}`);
-  document.getElementById('lb-copy-link')?.setAttribute('aria-label', `Copy invite link for room ${l.code}`);
+  if (codeTag) codeTag.setAttribute('aria-label', t('roomCodeOf').replace('{code}', l.code));
+  document.getElementById('lb-copy-link')?.setAttribute('aria-label', t('copyInviteFor').replace('{code}', l.code));
 
   const count = document.getElementById('lb-count');
-  if (count) count.textContent = `${occupied(l)}/${l.capacity} Players`;
+  if (count) count.textContent = `${occupied(l)}/${l.capacity} ${t('players')}`;
 
   const host = isHost(l);
   /* one row, four direct formats: the pressed chip is the room's shape, and the line under it
@@ -464,13 +487,13 @@ function paintLobbyPane(l: Lobby): void {
     b.classList.toggle('is-locked', !host);
   }
   const sub = document.getElementById('lb-mode-sub');
-  if (sub) sub.textContent = FORMAT_LINE[l.format];
+  if (sub) sub.textContent = formatLine(l.format);
 
   paintSlots(l);
 
   const hint = document.getElementById('lb-hint');
   if (hint) {
-    hint.textContent = startHint(l);
+    hint.textContent = hintText(l);
     hint.classList.toggle('is-ready', canStart(l));
   }
 
@@ -480,10 +503,10 @@ function paintLobbyPane(l: Lobby): void {
   const start = document.getElementById('gm-start') as HTMLButtonElement | null;
   if (start) {
     const ready = host && canStart(l);
-    start.textContent = host ? 'Start Match' : 'Waiting for host…';
+    start.textContent = host ? t('startMatch') : t('waitingHost');
     start.setAttribute('aria-disabled', String(!ready));
     if (host && !canStart(l)) {
-      start.setAttribute('title', 'Invite one more player to start');
+      start.setAttribute('title', t('hintInviteMore'));
     } else {
       start.removeAttribute('title');
     }
@@ -527,7 +550,7 @@ function openRoom(code: string, host: boolean): void {
     if (token !== roomToken) return;
     handle = null;
     showView('room');
-    showRoomError('The room connection dropped. Try again.');
+    showRoomError(t('errDropped'));
   });
 }
 
@@ -552,6 +575,18 @@ function showPick(on: boolean): void {
 
 /* ---------- the drawer's panes ---------- */
 
+/** The drawer's own header copy, repainted on open and on a live language switch. */
+function paintSheetHead(next: SheetView): void {
+  const title = document.getElementById('gm-title');
+  if (title) title.textContent = next === 'modes' ? t('selectGameMode') : t('playWithFriends');
+  const sub = document.getElementById('gm-sub');
+  if (sub) {
+    sub.textContent = next === 'modes' ? t('pickHowRace')
+      : next === 'lobby' ? t('friendsLobbySub')
+      : t('friendsEntrySub');
+  }
+}
+
 /** Swap the drawer between the mode list, the friends entry and the live lobby. */
 function showView(next: SheetView): void {
   view = next;
@@ -563,14 +598,7 @@ function showView(next: SheetView): void {
   if (lobbyEl) lobbyEl.hidden = next !== 'lobby';
   const back = document.getElementById('gm-back');
   if (back) back.hidden = next === 'modes';
-  const title = document.getElementById('gm-title');
-  if (title) title.textContent = next === 'modes' ? 'Select Game Mode' : 'Play with Friends';
-  const sub = document.getElementById('gm-sub');
-  if (sub) {
-    sub.textContent = next === 'modes' ? 'Pick how you want to race'
-      : next === 'lobby' ? 'Invite friends, pick a format, start together'
-      : 'Create a room or join with a code';
-  }
+  paintSheetHead(next);
   /* the entry pane owns its two actions; the foot belongs to the list and the lobby */
   const foot = document.getElementById('gm-foot');
   if (foot) foot.hidden = next === 'room';
@@ -639,7 +667,7 @@ export function paintSheetState(): void {
   }
 
   /* one reward caption above Start, one Start label that names the mode */
-  const reward = REWARD[current.id];
+  const reward = rewardFor(current.id);
   const lead = document.getElementById('gm-lead');
   if (lead) lead.textContent = reward.lead;
   const trophy = document.getElementById('gm-rw-trophy');
@@ -648,18 +676,18 @@ export function paintSheetState(): void {
     trophy.hidden = reward.trophy === null;
     if (reward.trophy) {
       if (trophyN) trophyN.textContent = reward.trophy;
-      trophy.setAttribute('aria-label', `${reward.trophy.replace('+', '')} trophies`);
+      trophy.setAttribute('aria-label', `${reward.trophy.replace('+', '')} ${t('trophiesUnit')}`);
     }
   }
   const coinN = document.getElementById('gm-rw-coin-n');
   if (coinN) {
     coinN.textContent = reward.coin;
-    coinN.closest('.gm-rw')?.setAttribute('aria-label', `${reward.coin.replace('+', '')} coins`);
+    coinN.closest('.gm-rw')?.setAttribute('aria-label', `${reward.coin.replace('+', '')} ${t('coinsUnit')}`);
   }
   /* the lobby owns the Start key while it is on screen: it must not be renamed out from under it */
   const start = document.getElementById('gm-start');
   if (start && view === 'modes') {
-    start.textContent = START_LABEL[current.id];
+    start.textContent = startLabel(current.id);
     start.removeAttribute('aria-disabled');
     start.removeAttribute('title');
     start.classList.remove('is-lobby', 'is-idle', 'is-waiting', 'is-ready');
@@ -825,10 +853,10 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     impact('light');
     const ok = await copyText(buildInviteLink(code));
     if (ok) {
-      showToast('Invite link copied!', 'success');
+      showToast(t('inviteLinkCopied'), 'success');
       return;
     }
-    showToast('Could not copy the invite link.', 'error');
+    showToast(t('copyFailed'), 'error');
     notify('warning');
   });
 
@@ -924,6 +952,12 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
 
   onGameModeChange(() => {
     paintLobby();
+    paintSheetState();
+  });
+
+  onLang(() => {
+    paintLobby();
+    paintSheetHead(view);
     paintSheetState();
   });
 }
