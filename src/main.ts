@@ -40,8 +40,8 @@ import { PEARL_BOARD, perspectiveRamps, type Theme } from './themes';
 import { detonation, impact, initTelegram, inviteRoomCode, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
 import {
-  createRoomCode, getGameMode, gmBack, initGameModes, onGameModeChange, openInviteRoom, setGameMode,
-  takeAutoLaunch,
+  createRoomCode, getGameMode, gmBack, initGameModes, onGameModeChange, openInviteRoom, resumeRoom,
+  setGameMode, takeAutoLaunch,
 } from './gamemodes';
 import type { Lobby, LobbyRace } from './lobby';
 import {
@@ -333,6 +333,8 @@ const router = createRouter($('screens'), (id) => {
   // Telegram BackButton on every screen except Home; always functional via onBack fallback.
   setBackButton(id !== 'home');
   if (id !== 'game') { cancelTutorial(); pauseGame(); }   // the board only ticks while it is on screen
+  /* off the board, a room that was waiting in the background may finally show itself */
+  if (id !== 'game') resumeRoom();
   if (id === 'home') admin?.relayout();   // the launcher only has a height once Home is up
   syncLoop();
 });
@@ -2182,6 +2184,10 @@ onAward((award) => {
 announcements.sync();
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) announcements.sync();
+  /* A host who stepped into a Telegram chat to send the invite comes back to the room they never
+     left: the webview may have killed the socket while it was away, so the membership reconnects
+     the moment the app is on screen again. */
+  if (!document.hidden) resumeRoom();
 });
 /* the shop is the one screen that reads a switch at paint time: repaint it the moment it moves */
 onRuntime(() => shop.refresh());
@@ -2339,6 +2345,8 @@ initGameModes(sheets, {
     /* the countdown, where this client ran one, has already staged the match: no second face-off */
     startGame({ difficulty: menuState.difficulty, sizes: race.sizes, online: race, room, quiet: takeAutoLaunch() });
   },
+  /* A guest's arrival may bring the drawer up over Home — never over a board being played. */
+  canPopLobby: () => router.current !== 'game',
 });
 onGameModeChange(paintParty);
 onLang(paintParty);

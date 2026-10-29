@@ -19,21 +19,21 @@
  * sizes until netplay lands — the lobby is the contract, the starter is a stub.
  *
  * Two doors lead into a room without a single tap: the deep link (`openInviteRoom`, driven by
- * `telegram.ts`'s start-param reader) and the duel's own countdown (`armDuelCountdown`), which
- * fires the instant both seats are held by people. A room nobody had to press anything to fill
+ * `telegram.ts`'s start-param reader) and the room's own countdown (`armDuelCountdown`), which
+ * fires the instant every seat the format fields is held by people. A room nobody had to press
+ * anything to fill
  * is also a room nobody should have to press anything to start.
  */
 import { readJson, writeJson } from './storage';
 import { menuState, onLang, saveMenu, t } from './settings';
-import { impact, notify, openTelegramShare } from './telegram';
+import { impact, notify, openTelegramShare, roomInviteUrl, roomShareUrl } from './telegram';
 import { showToast } from './toast';
-import { botMainAppLink, telegramShareLink } from '../shared/config';
 import type { Sheets } from './sheets';
 import {
   canStart, humans, isHost, nextTeam, occupied, openLobby,
   type Lobby, type LobbyHandle, type LobbyRace, type LobbyFormat, type LobbySeat,
 } from './lobby';
-import { duelReady, isLobbyFormat } from './room';
+import { ROOM_IDLE_TTL_MS, isLobbyFormat, roomReady } from './room';
 
 export type GameModeId = 'duel_1v1' | 'party_2v2' | 'bot' | 'room';
 
@@ -159,6 +159,65 @@ let current: GameModeSelection = load();
 /** The drawer opens on the list every time; the friends pane is a step away. */
 let view: SheetView = 'modes';
 
+/* ---------- the room this client is holding ---------- */
+
+/**
+ * A room is a *membership*, not a drawer.
+ *
+ * The code, the crown and the socket outlive the sheet: closing the drawer to browse Home, or
+ * hopping into a Telegram chat to send the invite, must not end the room a friend is about to
+ * join. So the live membership is recorded here (and in `sessionStorage`, so a reload lands back
+ * in it) and only two things ever clear it — an explicit `LEAVE`, or the match starting.
+ */
+interface RoomSession {
+  code: string;
+  /** True when this client minted the code and owns the crown. */
+  host: boolean;
+  /** True when the room was entered through somebody else's invite link. */
+  invite: boolean;
+  /** When the membership was last touched: the idle TTL is measured from here. */
+  at: number;
+}
+
+const SESSION_KEY = 'detour.room.session.v1';
+/** The code every invite door builds its URL from. Mirrors `session`, and the painted roster. */
+let activeCode: string | null = null;
+let session: RoomSession | null = null;
+
+function readSession(): RoomSession | null {
+  try {
+    const raw = window.sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as Partial<RoomSession>;
+    const code = cleanRoomCode(v.code);
+    const at = Number(v.at);
+    if (!code || !Number.isFinite(at) || Date.now() - at > ROOM_IDLE_TTL_MS) return null;
+    return { code, host: v.host === true, invite: v.invite === true, at };
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(next: RoomSession | null): void {
+  session = next;
+  activeCode = next?.code ?? null;
+  try {
+    if (next) window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(next));
+    else window.sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* stay in memory: a webview that refuses storage still plays */
+  }
+}
+
+/** The membership is still live: refresh its clock so the TTL measures silence, not age. */
+function touchSession(): void {
+  if (!session) return;
+  saveSession({ ...session, at: Date.now() });
+}
+
+session = readSession();
+activeCode = session?.code ?? null;
+
 const watchers: Array<() => void> = [];
 
 function persist(): void {
@@ -229,9 +288,52 @@ export function getLobbyDisplay(sel: GameModeSelection = current): LobbyDisplay 
 
 /* ---------- rooms: mint, share, join ---------- */
 
+/** The codes this tab has already handed out. A session never mints the same one twice. */
+const ISSUED_KEY = 'detour.room.codes.v1';
+const ISSUED_MAX = 48;
+
+function issuedCodes(): string[] {
+  try {
+    const raw = window.sessionStorage.getItem(ISSUED_KEY);
+    if (!raw) return [];
+    const list = JSON.parse(raw) as unknown;
+    return Array.isArray(list)
+      ? list.filter((c): c is string => typeof c === 'string' && /^\d{4}$/.test(c))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberCode(code: string): void {
+  try {
+    const next = [...issuedCodes().filter((c) => c !== code), code].slice(-ISSUED_MAX);
+    window.sessionStorage.setItem(ISSUED_KEY, JSON.stringify(next));
+  } catch {
+    /* stay in memory */
+  }
+}
+
+/**
+ * A room code this session has never used.
+ *
+ * Four digits is nine thousand rooms, and the worker refuses a code another host is already
+ * holding — so the client's half of "unique" is the cheap half: never mint the same code twice in
+ * one tab, and never mint the code the room we are sitting in is already using. The walk starts
+ * at a random offset and steps through the whole space, so a collision is impossible rather than
+ * unlikely.
+ */
 export function createRoomCode(): string {
-  const n = 1000 + Math.floor(Math.random() * 9000);
-  return String(n);
+  const used = new Set(issuedCodes());
+  if (activeCode) used.add(activeCode);
+  const start = Math.floor(Math.random() * 9000);
+  for (let i = 0; i < 9000; i++) {
+    const code = String(1000 + ((start + i) % 9000));
+    if (used.has(code)) continue;
+    rememberCode(code);
+    return code;
+  }
+  return String(1000 + start);
 }
 
 /** Mint a fresh room code and select it. The lobby screen takes over from here. */
@@ -247,26 +349,46 @@ export function joinRoomCode(raw: string): { ok: true; code: string } | { ok: fa
   return { ok: true, code };
 }
 
+/**
+ * The code every invite door builds its link from: the room this client is actually sitting in,
+ * falling back to the selection's own code. One value, read by all four doors — the badge, the
+ * `Copy Link` key, the header `Invite` pill and the empty rival plate.
+ */
+function inviteCode(explicit?: string | null): string {
+  return cleanRoomCode(explicit ?? activeCode ?? handle?.lobby.code ?? current.roomCode ?? '') ?? '';
+}
+
+/**
+ * The canonical invite URL. `telegram.ts` owns the grammar (`?startapp=room_<code>`), this owns
+ * *which* code — so a room can never hand out two different links for itself.
+ */
+export function inviteUrl(code?: string | null): string {
+  return roomInviteUrl(inviteCode(code));
+}
+
 /** Display form: `t.me/<bot>?startapp=room_XXXX` (the shared config owns the handle). */
-export function buildInviteDisplay(code: string): string {
-  return botMainAppLink(`room_${code}`).replace(/^https:\/\//, '');
+export function buildInviteDisplay(code?: string | null): string {
+  return inviteUrl(code).replace(/^https:\/\//, '');
 }
 
 /** The one-tap joinable Mini App URL every invite carries. */
-export function buildInviteLink(code: string): string {
-  return botMainAppLink(`room_${code}`);
+export function buildInviteLink(code?: string | null): string {
+  return inviteUrl(code);
 }
 
 /** What the invite carries into Telegram's own share sheet. */
 const SHARE_TEXT = '⚔️ Join my duel in Tactix! Tap the link to enter the room:';
 
 /** Telegram's native share page for a room: the recipient picker opens on top of the chat. */
-export function buildShareUrl(code: string): string {
-  return telegramShareLink(buildInviteLink(code), SHARE_TEXT);
+export function buildShareUrl(code?: string | null): string {
+  return roomShareUrl(inviteCode(code), SHARE_TEXT);
 }
 
-function openInvite(code: string): void {
-  openTelegramShare(buildShareUrl(code));
+/** The header pill and the open seat's plate: the same link, through Telegram's picker. */
+function openInvite(code?: string | null): void {
+  const url = buildShareUrl(code);
+  if (!url) return;
+  openTelegramShare(url);
 }
 
 /** Clipboard write with a legacy fallback: the room invite and the referral hub share this door. */
@@ -346,6 +468,20 @@ export function paintLobby(): void {
 let handle: LobbyHandle | null = null;
 /** Bumped on every open/leave, so a late frame from a closed socket cannot repaint the new screen. */
 let roomToken = 0;
+/** Who was sitting in the room when its roster was last painted: the arrival detector's baseline. */
+let seenHumans = new Set<string>();
+/** Reconnect attempts since the last frame the server actually answered. */
+let resumeTries = 0;
+/** Fresh codes minted after a collision with another host's room. */
+let codeTries = 0;
+/** The one pending reconnect. */
+let resumeTimer = 0;
+/**
+ * A guest landed while the drawer could not come up (a board was being played). The arrival is
+ * remembered rather than dropped: the room opens the moment the player is somewhere a drawer
+ * belongs.
+ */
+let pendingReveal = false;
 /** The open well whose "+" was tapped: where the picker puts a bot. */
 let pickSeat = -1;
 /** What the last paint wrote into the grid. A rebuild only happens when this changes. */
@@ -366,11 +502,27 @@ const LOBBY_ERROR_KEY: Record<string, string> = {
   ROOM_FULL: 'errRoomFull',
   room_exists: 'errRoomExists',
   ROOM_EXISTS: 'errRoomExists',
+  /* the code is spent: the match it opened has started, or its host disbanded it */
+  room_consumed: 'errInviteExpired',
+  room_started: 'errInviteExpired',
+  ROOM_STARTED: 'errInviteExpired',
+  /* the host closed a room we were already sitting in */
+  room_closed: 'errRoomClosed',
   MAINTENANCE: 'errMaintenance',
   BANNED: 'errBanned',
 };
 
 const errorLine = (reason: string): string => t(LOBBY_ERROR_KEY[reason] ?? 'errJoinUnknown');
+
+/**
+ * The line a refused *invite* gets. A link that points at a match already under way, or at a room
+ * its host disbanded, is the same thing to the person holding it: the invite is spent. Everything
+ * else keeps its own reason.
+ */
+const inviteLine = (reason: string): string => (reason === 'room_consumed' || reason === 'room_started'
+  || reason === 'ROOM_STARTED'
+  ? t('errInviteExpired')
+  : errorLine(reason));
 
 /** The FFA badge colours, in seat order: every slot is told apart without a team label. */
 const FFA_COLOR: readonly string[] = ['colorBlue', 'colorRed', 'colorGreen', 'colorYellow'];
@@ -552,10 +704,19 @@ function paintSlots(l: Lobby): void {
 
 /** Everything the lobby screen shows, from the value alone. */
 function paintLobbyPane(l: Lobby): void {
+  /* The room on screen *is* the active room: every invite door below reads this one code, and
+     the badge prints it beside the link it would copy. */
+  if (l.code) activeCode = l.code;
+  const url = inviteUrl(l.code);
   const codeEl = document.getElementById('lb-code');
   if (codeEl) codeEl.textContent = l.code;
   const codeTag = document.getElementById('lb-code-tag');
-  if (codeTag) codeTag.setAttribute('aria-label', t('roomCodeOf').replace('{code}', l.code));
+  if (codeTag) {
+    codeTag.setAttribute('aria-label', t('roomCodeOf').replace('{code}', l.code));
+    /* the badge carries the same URL the copy key writes: one room, one link */
+    if (url) codeTag.setAttribute('data-invite', url);
+    else codeTag.removeAttribute('data-invite');
+  }
   document.getElementById('lb-copy-link')?.setAttribute('aria-label', t('copyInviteFor').replace('{code}', l.code));
 
   const count = document.getElementById('lb-count');
@@ -576,8 +737,9 @@ function paintLobbyPane(l: Lobby): void {
 
   const hint = document.getElementById('lb-hint');
   if (hint) {
-    hint.textContent = hintText(l);
-    hint.classList.toggle('is-ready', canStart(l));
+    /* a socket that dropped and is being walked back says so: the roster is stale, not empty */
+    hint.textContent = l.status === 'connecting' ? t('errReconnecting') : hintText(l);
+    hint.classList.toggle('is-ready', l.status !== 'connecting' && canStart(l));
   }
 
   const botKey = document.getElementById('lb-pick-bot');
@@ -585,7 +747,8 @@ function paintLobbyPane(l: Lobby): void {
 
   const start = document.getElementById('gm-start') as HTMLButtonElement | null;
   if (start) {
-    const ready = host && canStart(l);
+    /* a room that is reconnecting cannot start: the frame would go nowhere */
+    const ready = host && canStart(l) && l.status !== 'connecting';
     start.textContent = host ? t('startMatch') : t('waitingHost');
     start.setAttribute('aria-disabled', String(!ready));
     if (host && !canStart(l)) {
@@ -604,7 +767,7 @@ function paintLobbyPane(l: Lobby): void {
   const pane = document.getElementById('gm-view-lobby');
   if (pane) pane.dataset.state = canStart(l) ? 'ready' : 'open';
 
-  /* Last: a duel both people have taken counts itself down and starts. Everything above has
+  /* Last: a room every seat of which is held counts itself down and starts. Everything above has
      already painted, so the countdown never races the roster it is counting. */
   armDuelCountdown(l);
 }
@@ -645,9 +808,10 @@ const countKey = (l: Lobby): string =>
 
 const botsIn = (l: Lobby): number => l.seats.reduce((n, s) => n + (s && s.bot ? 1 : 0), 0);
 
-/** May this lobby count itself down? The host's own duel, both seats held by people. */
+/** May this lobby count itself down? The host's own room, every seat held by people, on screen. */
 function armedForCountdown(l: Lobby): boolean {
-  return isHost(l) && l.status !== 'closed' && duelReady(l.format, humans(l), botsIn(l));
+  return isHost(l) && l.status !== 'closed' && lobbyOnScreen()
+    && roomReady(l.format, humans(l), botsIn(l));
 }
 
 function countNodes() {
@@ -734,7 +898,7 @@ function fireCountdown(): void {
 }
 
 /**
- * Arm the countdown for a lobby that just became a full duel. Idempotent: a repaint for the same
+ * Arm the countdown for a lobby that just filled up. Idempotent: a repaint for the same
  * two players is the same countdown, and a roster that changed underneath one aborts it first —
  * a rival who leaves during the count must not be launched against.
  */
@@ -779,28 +943,75 @@ export function takeAutoLaunch(): boolean {
   return fired;
 }
 
-/** Open a room's socket and land on the lobby. `host` mints the code; guests must be expected. */
+/**
+ * Open a room's socket and land on the lobby. `host` mints the code; a guest arrives through an
+ * invite and must be expected.
+ *
+ * The membership is recorded before the socket exists, so a room is never "open" in the UI and
+ * forgotten by the session — the code survives the drawer closing, the app sleeping and a reload.
+ */
 function openRoom(code: string, host: boolean, opts?: { invite?: boolean }): void {
+  saveSession({ code, host, invite: opts?.invite === true, at: Date.now() });
+  resumeTries = 0;
+  codeTries = 0;
+  /* the socket first, the pane second: the drawer then paints the room it actually opened,
+     never the one it is replacing */
+  connect(code, host, opts?.invite === true, false);
+  showView('lobby');
+}
+
+/**
+ * The socket itself, with no opinion about the screen: `openRoom` uses it for a fresh room and
+ * `resumeRoom` for one this client already holds. Every callback is guarded by the room token, so
+ * a frame from a socket a later room replaced can never repaint the new one.
+ */
+function connect(code: string, host: boolean, invite: boolean, resume: boolean): void {
   const token = ++roomToken;
   abortCountdown();
   countdownSpent = '';
-  handle?.leave();
+  /* a previous room is walked out of explicitly: its code is disbanded on the server, not left
+     behind as a room nobody is in */
+  if (!resume) handle?.leave();
   handle = null;
   slotSig = '';
-  showView('lobby');
+  /* a resumed room keeps the roster it already knew: the guest who joined while the socket was
+     away is an arrival, not part of the scenery */
+  if (!resume) seenHumans = new Set();
+  pendingReveal = false;
   handle = openLobby({
     code,
     host,
     /* an invited guest has no solo fallback: the room exists or the invite is refused */
-    mustExist: opts?.invite === true,
-    onState: (l) => { if (token === roomToken) paintLobbyPane(l); },
+    mustExist: invite && !resume,
+    /* a resumed room is never traded for a solo race: its guests can still join it */
+    keepAlive: resume,
+    onState: (l) => {
+      if (token !== roomToken) return;
+      resumeTries = 0;
+      touchSession();
+      /* A guest landed while the drawer was closed: the room is not a secret, so it comes up —
+         and the countdown that follows starts the match without a tap. Over a board being
+         played it waits for the player to come back instead. */
+      if (noteArrival(l) && !lobbyOnScreen()) {
+        if (hooks.canPopLobby?.() ?? true) {
+          revealLobby();
+          notify('success');
+          impact('medium');
+        } else {
+          pendingReveal = true;
+        }
+      }
+      paintLobbyPane(l);
+    },
     onRace: (race) => {
       if (token !== roomToken) return;
-      /* the lobby's work is done: the board owns the socket from here */
+      /* the lobby's work is done: the board owns the socket, and the code is spent */
       handle = null;
       roomToken++;
       abortCountdown();
+      pendingReveal = false;
       sheetHost?.close();
+      saveSession(null);
       hooks.onRoomRace?.(race);
       setGameMode('room', { roomCode: null });
     },
@@ -808,22 +1019,114 @@ function openRoom(code: string, host: boolean, opts?: { invite?: boolean }): voi
       if (token !== roomToken) return;
       handle = null;
       abortCountdown();
+      /* Two hosts on one code would fight over the crown. The collision is ours to fix: mint a
+         fresh code and try again, rather than asking the player to understand a room they cannot
+         see. */
+      if ((reason === 'room_exists' || reason === 'ROOM_EXISTS') && host && codeTries < 2) {
+        codeTries++;
+        const fresh = createRoomCode();
+        saveSession({ code: fresh, host: true, invite: false, at: Date.now() });
+        setGameMode('room', { roomCode: fresh });
+        connect(fresh, true, false, false);
+        return;
+      }
+      saveSession(null);
       /* an invite that cannot be honoured hands the player back to Home with the reason on screen */
-      if (opts?.invite) { inviteRefused(errorLine(reason)); return; }
-      showView('room');
-      showRoomError(errorLine(reason));
+      if (invite) { inviteRefused(inviteLine(reason)); return; }
+      roomFailed(reason === 'room_consumed' || reason === 'room_started'
+        ? t('errRoomExpired')
+        : errorLine(reason));
     },
     /* the room could not take the host's size pick (every seat is held): a nudge, not an error */
     onNotice: () => { notify('warning'); },
+    /* The socket died on a live lobby. The room outlives it on the server, so this is a pause,
+       not an end: reconnect, and only give up after a handful of tries. */
+    onDrop: () => {
+      if (token !== roomToken) return;
+      handle = null;
+      abortCountdown();
+      scheduleResume();
+    },
   });
-  handle.closed(() => {
-    if (token !== roomToken) return;
-    handle = null;
+}
+
+/** How long to wait before walking back into a room whose socket dropped, per attempt. */
+const RESUME_STEPS = [300, 800, 1600, 3200, 5000] as const;
+
+/**
+ * Reconnect the room this client still holds. The host who stepped into a Telegram chat, or whose
+ * webview slept through a call, comes back to the same code, the same seat and the same guests —
+ * the server kept all three.
+ */
+export function resumeRoom(): void {
+  /* A guest who landed while the board was up still gets their drawer the moment the player is
+     somewhere a drawer belongs — the arrival is not lost, only postponed. */
+  if (pendingReveal && handle && (hooks.canPopLobby?.() ?? true)) {
+    pendingReveal = false;
+    revealLobby();
+    notify('success');
+    impact('medium');
+  }
+  const held = session;
+  if (!held || handle || resumeTimer) return;
+  /* an app that is not on screen has nothing to reconnect to yet: `visibilitychange` calls back */
+  if (document.hidden) return;
+  if (resumeTries >= RESUME_STEPS.length) {
+    /* the wire is gone for good: say so once, and stop holding a room nobody can reach */
+    saveSession(null);
     abortCountdown();
-    if (opts?.invite) { inviteRefused(t('errDropped')); return; }
-    showView('room');
-    showRoomError(t('errDropped'));
-  });
+    roomFailed(t('errDropped'));
+    return;
+  }
+  resumeTries++;
+  connect(held.code, held.host, held.invite, true);
+}
+
+function scheduleResume(): void {
+  if (!session || resumeTimer) return;
+  const wait = RESUME_STEPS[Math.min(resumeTries, RESUME_STEPS.length - 1)];
+  resumeTimer = window.setTimeout(() => {
+    resumeTimer = 0;
+    resumeRoom();
+  }, wait);
+}
+
+/** Is the lobby actually in front of the player? A countdown must never run behind a closed sheet. */
+function lobbyOnScreen(): boolean {
+  if (view !== 'lobby') return false;
+  const sheet = document.getElementById('sheet-game-modes');
+  return !!sheet && !sheet.hidden;
+}
+
+/**
+ * Bring the drawer up on the lobby. Called when a guest lands in a room whose host had closed the
+ * sheet: the membership never went away, so neither should the screen.
+ */
+function revealLobby(): void {
+  const sheet = document.getElementById('sheet-game-modes');
+  if (!sheetHost || !sheet) return;
+  showView('lobby');
+  if (sheet.hidden || !sheet.classList.contains('open')) sheetHost.open(sheet);
+}
+
+/**
+ * Did somebody take a seat since the last paint? The first frame of a *fresh* room is only its
+ * own roster (the host's own seat), so it sets the baseline — but a room this client is
+ * *resuming* may already hold the guests who arrived while its socket was gone, and those are
+ * exactly the arrivals the host must not miss.
+ */
+function noteArrival(l: Lobby): boolean {
+  /* Only a frame the server actually answered is a roster. The placeholder a socket paints while
+     it connects is not one, and counting it would invent an arrival on every reconnect. */
+  if (l.status !== 'live') return false;
+  const ids = new Set<string>();
+  for (const s of l.seats) if (s && !s.bot) ids.add(s.id);
+  const before = seenHumans;
+  seenHumans = ids;
+  if (!isHost(l)) return false;
+  if (!before.size) return humans(l) >= 2;
+  for (const id of ids) if (!before.has(id)) return true;
+  return false;
 }
 
 /**
@@ -831,6 +1134,7 @@ function openRoom(code: string, host: boolean, opts?: { invite?: boolean }): voi
  * on the home lobby exactly as they arrived. No half-open room, no dead-end pane.
  */
 function inviteRefused(msg: string): void {
+  saveSession(null);
   setGameMode('room', { roomCode: null });
   showView('modes');
   sheetHost?.close();
@@ -841,9 +1145,9 @@ function inviteRefused(msg: string): void {
 /**
  * The deep link's door: `?startapp=room_XXXX` lands in that room's lobby with no taps in between.
  *
- * False means the link cannot be honoured *here* — a code that is not a room code, a shell with no
- * drawer yet, or a player already sitting in a room. A room the server turns down is not a false:
- * the join is attempted, and the refusal comes back as a toast with the player at home.
+ * False means the link cannot be honoured *here* — a code that is not a room code, or a shell with
+ * no drawer yet. A room the server turns down is not a false: the join is attempted, and the
+ * refusal comes back as a toast with the player at home.
  */
 export function openInviteRoom(code: string): boolean {
   const clean = cleanRoomCode(code);
@@ -854,7 +1158,13 @@ export function openInviteRoom(code: string): boolean {
   }
   const sheet = document.getElementById('sheet-game-modes');
   if (!sheetHost || !sheet) return false;
-  if (inLobby()) return false;
+  /* already sitting in this very room: show it rather than opening a second socket on it */
+  if (handle?.lobby.code === clean && handle.lobby.status !== 'closed') {
+    revealLobby();
+    return true;
+  }
+  /* a different room is left explicitly: its code is spent, not abandoned half-open */
+  if (inLobby()) leaveRoom();
   clearRoomError();
   setGameMode('room', { roomCode: clean });
   /* the pane first, the sheet second: the drawer slides in already showing the room it was
@@ -866,19 +1176,37 @@ export function openInviteRoom(code: string): boolean {
   return true;
 }
 
-/** Walk out of the lobby (the host's exit closes it for everyone). */
+/**
+ * Walk out of the lobby for good — the one action that ends a room from this side.
+ *
+ * `LEAVE` is an explicit signal, not a dropped socket: the worker disbands a host's code (so the
+ * link is spent) and gives a guest's seat back. Closing the drawer, tapping back or backgrounding
+ * the app all go through `hideLobby` instead, which keeps every one of those alive.
+ */
 function leaveRoom(): void {
   roomToken++;
+  window.clearTimeout(resumeTimer);
+  resumeTimer = 0;
+  resumeTries = 0;
   abortCountdown();
   countdownSpent = '';
   handle?.leave();
   handle = null;
   slotSig = '';
+  seenHumans = new Set();
+  pendingReveal = false;
   pickSeat = -1;
   const pick = document.getElementById('lb-pick');
   if (pick) pick.hidden = true;
+  /* the code is spent on the server and forgotten here: a stale link must not resurrect it */
+  saveSession(null);
   /* the lobby card goes back to "Custom Room": a code nobody is in is not a room */
   setGameMode('room', { roomCode: null });
+}
+
+/** Hide the drawer without ending the room. The socket, the code and every seat stay live. */
+function hideLobby(): void {
+  sheetHost?.close();
 }
 
 function showPick(on: boolean): void {
@@ -942,17 +1270,15 @@ function inLobby(): boolean {
 }
 
 /**
- * One step of back: the lobby leaves the room, the friends pane returns to the list, and only then
- * does the drawer itself close. Returns false when there is nothing left to unwind here.
+ * One step of back. The friends entry returns to the list; the *lobby* is a live room, not a step,
+ * so back hides the drawer and leaves the socket, the code and every seat exactly where they are.
+ * Returns false when there is nothing left to unwind here — which is what makes the caller close
+ * the sheet without ending the room.
  */
 export function gmBack(): boolean {
   const sheet = document.getElementById('sheet-game-modes');
   if (view === 'modes' || !sheet || sheet.hidden) return false;
-  if (view === 'lobby') {
-    leaveRoom();
-    showView('room');
-    return true;
-  }
+  if (view === 'lobby') return false;
   showView('modes');
   return true;
 }
@@ -1019,6 +1345,21 @@ function showRoomError(msg: string): void {
   notify('warning');
 }
 
+/**
+ * A room that is gone, said where the player can actually see it: in the friends pane when the
+ * drawer is up, and as a toast when the room was living in the background. A hidden pane carrying
+ * the only copy of an error is the same as no error at all.
+ */
+function roomFailed(msg: string): void {
+  if (lobbyOnScreen()) {
+    showView('room');
+    showRoomError(msg);
+    return;
+  }
+  showToast(msg, 'error');
+  notify('warning');
+}
+
 function clearRoomError(): void {
   const el = document.getElementById('gm-err');
   if (!el) return;
@@ -1035,6 +1376,11 @@ export interface GameModeInit {
   onRoomStart?: (lobby: Lobby) => void;
   /** A synced room launched: the worker's race goes on the board. */
   onRoomRace?: (race: LobbyRace) => void;
+  /**
+   * May a guest's arrival bring the drawer up over whatever is on screen? False while a board is
+   * being played: a popup over a live race is worse than a room that waits a beat.
+   */
+  canPopLobby?: () => boolean;
 }
 
 export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
@@ -1051,7 +1397,13 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
       const raw = pick.dataset.gmode;
       if (!isGameModeId(raw)) return;
       impact('light');
-      if (raw === 'room') { showView(inLobby() ? 'lobby' : 'room'); return; }
+      if (raw === 'room') {
+        /* a room this client still holds reopens its lobby, even while it is reconnecting */
+        const held = inLobby() || !!session;
+        showView(held ? 'lobby' : 'room');
+        if (held && !handle) resumeRoom();
+        return;
+      }
       clearRoomError();
       setGameMode(raw);
     });
@@ -1059,7 +1411,8 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
 
   document.getElementById('gm-back')?.addEventListener('click', () => {
     impact('light');
-    if (view === 'lobby') { leaveRoom(); showView('room'); return; }
+    /* the lobby's back hides the drawer; it never leaves the room — only `< LEAVE` does that */
+    if (view === 'lobby') { hideLobby(); return; }
     showView('modes');
   });
 
@@ -1163,12 +1516,12 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     syncJoin();
   });
 
-  /* ---- lobby: the code bar. Copy takes the full link; Invite opens Telegram's picker ---- */
+  /* ---- lobby: the code bar. Every door reads the same active code and the same URL ---- */
   document.getElementById('lb-copy-link')?.addEventListener('click', async () => {
-    const code = handle?.lobby.code;
-    if (!code) return;
+    const url = buildInviteLink(handle?.lobby.code);
+    if (!url) return;
     impact('light');
-    const ok = await copyText(buildInviteLink(code));
+    const ok = await copyText(url);
     if (ok) {
       showToast(t('inviteLinkCopied'), 'success');
       return;
@@ -1177,12 +1530,12 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     notify('warning');
   });
 
-  const invite = (): void => {
-    const code = handle?.lobby.code;
-    if (!code) return;
-    impact('light');
-    openInvite(code);
-  };
+  /* The badge is the room's name, not a key — the copy action sits beside it, named. It prints
+     the very code `buildInviteLink` turns into the link, and carries that URL on `data-invite`,
+     so the code on screen and the link every door copies are one value by construction. */
+
+  /* the header pill and the empty rival plate: the same canonical link, through Telegram */
+  const invite = (): void => { openInvite(handle?.lobby.code); };
   document.getElementById('lb-invite')?.addEventListener('click', invite);
   document.getElementById('lb-pick-invite')?.addEventListener('click', () => { showPick(false); invite(); });
 
@@ -1260,6 +1613,9 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
       handle = null;
       roomToken++;
       sheetHost?.close();
+      /* the roster became a race: the invite code is spent here too, so a stale link cannot
+         reopen a room whose board is already running */
+      saveSession(null);
       hooks.onRoomStart?.(l);
       setGameMode('room', { roomCode: null });
       return;
@@ -1286,4 +1642,8 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     paintCountdownChrome();
     paintSheetState();
   });
+
+  /* A reload lands back in the room it left. The code is on disk and the server still holds it,
+     so the socket is reopened silently — the drawer stays closed until somebody joins it. */
+  if (session) window.setTimeout(resumeRoom, 600);
 }

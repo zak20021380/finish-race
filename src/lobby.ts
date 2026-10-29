@@ -246,6 +246,18 @@ export interface LobbyOptions {
    * race against the machine under a stranger's code. The connect window then ends in `onError`.
    */
   mustExist?: boolean;
+  /**
+   * Never trade this room for a solo race. A room this client already holds — resumed after a
+   * chat switch, a sleeping webview or a reload — is a promise made to its guests: if the wire
+   * cannot be reached, say the room is reconnecting instead of quietly playing the machine.
+   */
+  keepAlive?: boolean;
+  /**
+   * The socket died on a lobby that had already answered. Not a close: the room outlives its
+   * socket on the server for the idle TTL, so the screen keeps the roster, says it is
+   * reconnecting, and decides for itself when to try again (and when to give up).
+   */
+  onDrop?: () => void;
 }
 
 export interface LobbyHandle {
@@ -258,9 +270,12 @@ export interface LobbyHandle {
   setTeam(seat: number, team: 0 | 1): void;
   /** Host only. False while the format's minimum player count is not met (two players). */
   start(): boolean;
+  /**
+   * Walk out for good. This is the *only* thing that ends a room from this side: closing the
+   * drawer, tapping back or backgrounding the app never does. The server is told explicitly
+   * (`LEAVE`), so a host's exit disbands the code instead of leaving it to expire.
+   */
   leave(): void;
-  /** The socket died mid-race: tell the board the room is gone. */
-  closed(cb: () => void): void;
 }
 
 /** How long a lobby waits for a socket before it accepts that it is playing alone. */
@@ -365,7 +380,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   /** True once the screen has accepted that there is no socket: the close it causes is not a drop. */
   let solo = false;
   let race: LobbyRace | null = null;
-  let onClosed: (() => void) | null = null;
+  /** True once `leave()` ran: the close it causes is this screen's own doing, not a drop. */
+  let left = false;
 
   const paint = (): void => opts.onState(lobby);
   const push = (l: Lobby): void => { lobby = l; paint(); };
@@ -394,6 +410,14 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
       opts.onError('room_not_found');
       return;
     }
+    /* A resumed room is the same promise, made to the guests who can still join it: report the
+       drop and let the screen try the wire again rather than quietly playing the machine. */
+    if (opts.keepAlive) {
+      lobby = { ...lobby, status: 'connecting', online: true };
+      paint();
+      opts.onDrop?.();
+      return;
+    }
     const offline = hostLobby(opts.code, lobby.seats[0]?.name ?? myName(), false);
     lobby = setFormat(offline, lobby.format);
     paint();
@@ -411,6 +435,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
 
   /** Fold one frame from the worker into the model. */
   const onFrame = (raw: unknown): void => {
+    /* after an explicit leave nothing this socket still says matters: the screen is gone */
+    if (left) return;
     let msg: Record<string, unknown>;
     try {
       msg = JSON.parse(String(raw)) as Record<string, unknown>;
@@ -519,24 +545,45 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
     sock.addEventListener('message', (ev) => onFrame((ev as MessageEvent).data));
     sock.addEventListener('open', () => {
       if (settled || !sock) return;
-      lobby = { ...lobby, status: 'live' };
+      /* An open socket is not a roster: only a `LOBBY` frame is (`readLobby` flips the status).
+         Flipping it here would let the placeholder — one seat, minted locally — pass for a real
+         roster, and the arrival detector would read every reconnect as somebody joining. */
       paint();
     });
     sock.addEventListener('error', () => { if (!race) fallback(); });
     sock.addEventListener('close', () => {
       if (race) { for (const cb of raceEnds) cb({ win: false, why: 'drop' }); return; }
       if (!settled) { fallback(); return; }
-      /* the fallback closed this socket itself: the screen is already a solo lobby */
-      if (solo) return;
-      /* a lobby whose socket died mid-session is no longer a lobby: hand the screen back */
-      push({ ...lobby, status: 'closed', online: false });
-      onClosed?.();
+      /* the fallback, or our own `leave()`, closed this socket: the screen already knows */
+      if (solo || left) return;
+      /* A lobby whose socket died is still a lobby — the server holds the code, the seats and the
+         crown for ten minutes. Keep the roster, say we are reconnecting, and let the screen own
+         the retry: it is the one that knows whether the app is even on screen. */
+      push({ ...lobby, status: 'connecting', online: true });
+      opts.onDrop?.();
     });
   } catch {
     sock = null;
   }
 
-  const timer = globalThis.setTimeout(() => { if (!settled) fallback(); }, CONNECT_MS);
+  /**
+   * The connect window. A socket still in `CONNECTING` is a slow network, not a missing server —
+   * a webview that was suspended in a Telegram chat can take seconds to open one, and the room
+   * behind it is worth the wait. Only a socket that never even got made, or one that keeps
+   * stalling, falls back; a host's room must not become a solo race while its guests can still
+   * join it.
+   */
+  let waits = 0;
+  function watch(): void {
+    if (settled) return;
+    if (sock?.readyState === 0 && waits++ < 2) {
+      timer = globalThis.setTimeout(watch, CONNECT_MS);
+      return;
+    }
+    fallback();
+  }
+
+  let timer = globalThis.setTimeout(watch, CONNECT_MS);
 
   paint();
 
@@ -582,13 +629,15 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
     },
     leave() {
       globalThis.clearTimeout(timer);
-      if (lobby.online) send({ type: 'CANCEL' });
+      left = true;
+      /* `LEAVE`, not `CANCEL`: a host's exit disbands the code on the server so a stale link is
+         refused cleanly, while a guest's only gives their own seat back. */
+      if (lobby.online) send({ type: 'LEAVE' });
       try { sock?.close(); } catch { /* gone */ }
       sock = null;
       link = null;
       lobby = { ...lobby, status: 'closed' };
     },
-    closed(cb) { onClosed = cb; },
   };
 }
 

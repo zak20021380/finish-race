@@ -40,9 +40,10 @@ import {
   MAX_BALLS, MAX_TEAMS, apply, contendersIn, dimsFor, newGame, type Action, type GameState,
 } from '../src/rules';
 import {
-  FORMAT_CAPACITY, FORMAT_MODE, ROOM_WAIT_MS, assignTeam, backfill, createRoom, createRoomDriver,
-  defaultTeam, difficultyFor, formatOfMode, isAutomated, isLobbyFormat, launch, reflowRoom, seatHuman,
-  sizesOf, type BotTier, type LobbyFormat, type Room, type RoomDriver, type RoomEvent,
+  FORMAT_CAPACITY, FORMAT_MODE, ROOM_IDLE_TTL_MS, ROOM_SEAT_HOLD_MS, ROOM_WAIT_MS, assignTeam,
+  backfill, createRoom, createRoomDriver, defaultTeam, difficultyFor, formatOfMode, isAutomated,
+  isLobbyFormat, launch, reflowRoom, seatHuman, sizesOf, takeover, unseat,
+  type BotTier, type LobbyFormat, type Room, type RoomDriver, type RoomEvent,
 } from '../src/room';
 import {
   authenticate, authRequestFrom, identifyAdminRequest, isLocalhost, isMetricsMark, isSuperAdmin,
@@ -76,7 +77,11 @@ type ClientMessage =
   | { type: 'ROOM_START' }
   | { type: 'SET_FORMAT'; format: LobbyFormat }
   | { type: 'SET_MODE'; mode: 'ffa' | 'team' }
-  | { type: 'SET_TEAM'; side: number; team: 0 | 1 };
+  | { type: 'SET_TEAM'; side: number; team: 0 | 1 }
+  /* Walking out for good. Distinct from `CANCEL` on purpose: a lobby's socket closing is a
+     host who stepped into Telegram, while `LEAVE` is a host who is done — it disbands the code
+     (so a stale link is refused cleanly) instead of leaving it to the idle TTL. */
+  | { type: 'LEAVE' };
 
 interface Waiter {
   ws: WebSocket;
@@ -124,6 +129,14 @@ interface RoomMember {
   flag: string;
   /** The signed `user.photo_url` this seat arrived with, or `''`. Relayed to the other seats. */
   avatar: string;
+  /**
+   * False while the socket is gone but the seat is still held for its player. A code lobby keeps
+   * the seat warm for the idle TTL (the host) or the shorter hold (a guest), so the app resuming
+   * after a chat switch lands back on the same chair instead of finding somebody else in it.
+   */
+  connected: boolean;
+  /** When the socket dropped, or 0 while it is up. The hold clock reads this. */
+  droppedAt: number;
 }
 
 /**
@@ -155,6 +168,13 @@ interface LiveRoom {
   teams: number[];
   /** True for a code-based friends lobby; false for the `?room=<n>` auto-pair room. */
   code: boolean;
+  /** When a socket last held this lobby: the idle TTL is measured from here, not from `openedAt`. */
+  lastSeenAt: number;
+  /**
+   * True when a guest opened the room before its host did: the crown's seat is held for whoever
+   * arrives with `host=1`, and nobody else may sit in it. Cleared the moment the host lands.
+   */
+  hostPending: boolean;
 }
 
 /** Where a socket sits: which room, and which seat in it. */
@@ -170,6 +190,13 @@ const formatForSize = (size: number): LobbyFormat => (size === 2 ? 'duel' : size
 const TIER_RADIUS = 250;
 /** The widened radius, once either side has asked for one. */
 const WIDE_RADIUS = 600;
+
+/**
+ * A spent room code is remembered this long. Long enough that the friend who taps yesterday's
+ * link gets "already used or expired" rather than a fresh empty room under a dead code; short
+ * enough that the four-digit space does not fill with tombstones.
+ */
+const RETIRED_TTL_MS = 30 * 60 * 1000;
 
 /**
  * The three knobs the Admin Command Center can move on a running server. They live on the room
@@ -1048,6 +1075,7 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
     if (msg.type === 'QUEUE') return { type: 'QUEUE', wide: msg.wide === true };
     if (msg.type === 'WIDEN') return { type: 'WIDEN' };
     if (msg.type === 'CANCEL') return { type: 'CANCEL' };
+    if (msg.type === 'LEAVE') return { type: 'LEAVE' };
     if (msg.type === 'RESIGN') return { type: 'RESIGN' };
     if (msg.type === 'ROOM_START') return { type: 'ROOM_START' };
     if (msg.type === 'SET_FORMAT') {
@@ -1264,6 +1292,12 @@ export class MatchmakerDO {
   private openRooms: LiveRoom[] = [];
   /** Code-based friends lobbies, by their 4-digit code. A code lobby is never auto-paired. */
   private lobbies = new Map<string, LiveRoom>();
+  /**
+   * Codes that are spent, and when they were spent. A code leaves the market the moment its match
+   * launches, its host disbands it, or its room idles out — and a link that still carries it must
+   * be refused with a reason the client can say out loud, never quietly minted again.
+   */
+  private retired = new Map<string, number>();
   /** Rooms that have launched, by match id. */
   private rooms = new Map<string, LiveRoom>();
   /** Which room seat a socket is holding. A socket in here is not a queue entry. */
@@ -1484,6 +1518,10 @@ export class MatchmakerDO {
     for (const live of [...this.openRooms]) {
       if (!live.driver && now - live.room.openedAt >= live.room.waitMs) this.launchRoom(live);
     }
+    /* The friends lobbies' own clocks: a dropped guest's chair goes back on the market, and a
+       room nobody has held for ten minutes is retired so its code can be reused. */
+    this.sweepLobbies(now);
+    this.sweepRetired();
     /* The season clock is an alarm too: at the boundary the arena closes itself and tells
        everyone, rather than waiting for the next admin to notice. */
     if (this.arena.status === 'active' && this.arena.endsAt <= now) {
@@ -3197,8 +3235,9 @@ export class MatchmakerDO {
     if (this.arenaLocked()) { this.rejectSocket(ws, 'MATCHING_LOCKED'); return; }
     let live = this.openRooms.find((r) => !r.driver && r.size === size && this.freeSeat(r) >= 0);
     if (!live) {
+      const now = Date.now();
       live = {
-        room: createRoom({ code: this.mintRoomCode(), seats: size, waitMs: ROOM_WAIT_MS, botTier: tier, now: Date.now() }),
+        room: createRoom({ code: this.mintRoomCode(), seats: size, waitMs: ROOM_WAIT_MS, botTier: tier, now }),
         size,
         counted: false,
         members: Array.from({ length: size }, () => null),
@@ -3211,6 +3250,8 @@ export class MatchmakerDO {
         mode: 'ffa',
         teams: Array.from({ length: size }, (_, i) => defaultTeam(i)),
         code: false,
+        lastSeenAt: now,
+        hostPending: false,
       };
       this.openRooms.push(live);
     }
@@ -3219,6 +3260,7 @@ export class MatchmakerDO {
     live.members[seat] = {
       ws, seat, id: identity.player.id, name: identity.player.name,
       tiq: identity.tiq, tier: identity.tier, flag: identity.flag, avatar: identity.player.avatar,
+      connected: true, droppedAt: 0,
     };
     live.room = seatHuman(live.room, seat, {
       kind: 'human', id: identity.player.id, name: identity.player.name,
@@ -3244,22 +3286,37 @@ export class MatchmakerDO {
   }
 
   /**
-   * Take a seat in a code-based friends lobby. `host=1` mints the room; a guest has to be expected,
-   * because a code nobody minted is a typo, not a room. Unlike the `?room=<n>` path this one never
-   * fills on a timer: a private room waits for the people it invited, and the host decides when it
-   * is time.
+   * Take a seat in a code-based friends lobby.
+   *
+   * The code is the room, not the socket. A host who mints `room_1234` and steps into a Telegram
+   * chat to send the link still owns `room_1234` when they come back, and a friend who taps that
+   * link in the meantime is seated instead of being told the room does not exist. So:
+   *
+   *   - a missing room is opened by whoever arrives first, host or guest — a guest's copy simply
+   *     waits with the crown's seat held open for the host;
+   *   - a room whose board has already launched, or a code that is spent, is refused as
+   *     `room_consumed` (the client says "this invite has already been used or expired");
+   *   - a player returning to a seat they still hold is reattached, never turned away;
+   *   - `host=1` reclaims the crown when it is empty or held by a dropped socket, and only a
+   *     second *live* host on one code is refused (`room_exists`).
    */
   private joinLobby(ws: WebSocket, identity: Identity, code: string, host: boolean, tier: BotTier): void {
     if (this.maintenance) { this.rejectSocket(ws, 'MAINTENANCE'); return; }
     if (this.arenaLocked()) { this.rejectSocket(ws, 'MATCHING_LOCKED'); return; }
-    let live = this.lobbies.get(code) ?? null;
-    if (live?.driver) { this.rejectSocket(ws, 'room_started'); return; }
-    if (!live) {
-      if (!host) { this.rejectSocket(ws, 'room_not_found'); return; }
+    this.sweepRetired();
+    const live = this.lobbies.get(code) ?? null;
+    if (live?.driver || (!live && this.retired.has(code))) {
+      /* the match this code opened is under way, or its host is done with it */
+      this.rejectSocket(ws, 'room_consumed');
+      return;
+    }
+    let room = live;
+    if (!room) {
       const format: LobbyFormat = 'duel';
       const size = FORMAT_CAPACITY[format];
-      live = {
-        room: createRoom({ code, seats: size, waitMs: ROOM_WAIT_MS, botTier: tier, now: Date.now() }),
+      const now = Date.now();
+      room = {
+        room: createRoom({ code, seats: size, waitMs: ROOM_WAIT_MS, botTier: tier, now }),
         size,
         counted: false,
         members: Array.from({ length: size }, () => null),
@@ -3272,23 +3329,39 @@ export class MatchmakerDO {
         mode: FORMAT_MODE[format],
         teams: Array.from({ length: size }, (_, i) => defaultTeam(i)),
         code: true,
+        lastSeenAt: now,
+        /* a guest opened it: the crown waits for the host, not for the next arrival */
+        hostPending: !host,
       };
-      this.lobbies.set(code, live);
-    } else if (host) {
-      /* two hosts on one code would fight over the crown: the second one is told to join instead */
-      this.rejectSocket(ws, 'room_exists');
-      return;
+      this.lobbies.set(code, room);
     }
-    const seat = this.freeSeat(live);
-    if (seat < 0) { this.rejectSocket(ws, 'room_full'); return; }
-    live.members[seat] = {
+
+    const pick = this.seatFor(room, identity, host);
+    if (!pick.ok) { this.rejectSocket(ws, pick.reason); return; }
+    const seat = pick.seat;
+
+    /* The chair's previous socket, if any, is this same player's ghost: forget it before it can
+       settle the seat the new socket is about to take. */
+    if (pick.replaces && pick.replaces !== ws) {
+      this.refs.delete(pick.replaces);
+      try {
+        pick.replaces.close(1000, 'replaced');
+      } catch {
+        /* the socket is already gone */
+      }
+    }
+
+    room.members[seat] = {
       ws, seat, id: identity.player.id, name: identity.player.name,
       tiq: identity.tiq, tier: identity.tier, flag: identity.flag, avatar: identity.player.avatar,
+      connected: true, droppedAt: 0,
     };
-    live.room = seatHuman(live.room, seat, {
+    room.room = seatHuman(room.room, seat, {
       kind: 'human', id: identity.player.id, name: identity.player.name,
     });
-    this.refs.set(ws, { live, seat });
+    if (host && seat === room.hostSeat) room.hostPending = false;
+    room.lastSeenAt = Date.now();
+    this.refs.set(ws, { live: room, seat });
     this.markActive(identity.player.id);
 
     ws.addEventListener('message', (ev: MessageEvent) => {
@@ -3303,7 +3376,42 @@ export class MatchmakerDO {
     ws.addEventListener('close', () => this.roomLeave(this.refs.get(ws)));
     ws.addEventListener('error', () => this.roomLeave(this.refs.get(ws)));
 
-    this.broadcastLobby(live);
+    this.broadcastLobby(room);
+    this.rearm();
+  }
+
+  /**
+   * Which seat this arrival takes. A returning player gets their own seat back — the same
+   * Telegram id, sitting disconnected, is the app resuming, not a second person asking for the
+   * same chair. A host takes the crown; a guest takes the first free well that is not the
+   * crown's reserved one.
+   */
+  private seatFor(
+    live: LiveRoom,
+    identity: Identity,
+    host: boolean,
+  ): { ok: true; seat: number; replaces?: WebSocket } | { ok: false; reason: 'room_exists' | 'room_full' } {
+    /* The same account, already seated: this is that player coming back — after a chat switch, a
+       reload, or a socket the server has not noticed dying yet. The newest socket wins the chair,
+       and the old one is closed, so a reconnect can never be answered with `room_full` or
+       `room_exists` because of its own ghost. */
+    const mine = live.members.findIndex((m) => !!m && m.id === identity.player.id);
+    if (mine >= 0) {
+      const held = live.members[mine];
+      return { ok: true, seat: mine, replaces: held?.ws };
+    }
+
+    if (host) {
+      const crown = live.members[live.hostSeat];
+      /* a live host on this code is somebody else's room: two crowns would fight over the format */
+      if (crown && crown.connected) return { ok: false, reason: 'room_exists' };
+      /* a dropped crown that belonged to another account is still that account's chair */
+      if (crown && crown.id !== identity.player.id) return { ok: false, reason: 'room_exists' };
+      return { ok: true, seat: live.hostSeat };
+    }
+
+    const free = this.freeSeat(live);
+    return free >= 0 ? { ok: true, seat: free } : { ok: false, reason: 'room_full' };
   }
 
   /**
@@ -3327,7 +3435,8 @@ export class MatchmakerDO {
         host: i === live.hostSeat,
         bot: false,
         team: live.teams[i] ?? 0,
-        connected: true,
+        /* a seat held for a socket that is not here: the roster shows it as away, not as gone */
+        connected: m.connected,
       });
     }
     return JSON.stringify({
@@ -3345,7 +3454,7 @@ export class MatchmakerDO {
   /** Tell every seat what the room now looks like. The one write path for lobby state. */
   private broadcastLobby(live: LiveRoom): void {
     for (const m of live.members) {
-      if (m) this.postTo(m.ws, this.lobbyMessage(live, m.seat));
+      if (m && m.connected) this.postTo(m.ws, this.lobbyMessage(live, m.seat));
     }
   }
 
@@ -3356,13 +3465,17 @@ export class MatchmakerDO {
   private lobbyDepart(live: LiveRoom, seat: number): void {
     if (!live.members.some((m) => m !== null)) {
       this.lobbies.delete(live.room.code);
+      this.retire(live.room.code);
+      this.rearm();
       return;
     }
     if (live.hostSeat === seat) {
       const next = live.members.findIndex((m) => m !== null);
       if (next >= 0) live.hostSeat = next;
+      live.hostPending = false;
     }
     this.broadcastLobby(live);
+    this.rearm();
   }
 
   /**
@@ -3398,8 +3511,12 @@ export class MatchmakerDO {
     this.broadcastLobby(live);
   }
 
-  /** A lobby seat walked out on purpose: let the socket go, then settle the room. */
-  private leaveLobby(ref: RoomRef): void {
+  /**
+   * A lobby seat walked out on purpose (`LEAVE`, or a legacy `CANCEL`): let the socket go, free
+   * the chair, then settle the room. A host's exit disbands the code for everybody; a guest's
+   * only gives their own seat back.
+   */
+  private leaveLobby(ref: RoomRef, disband = false): void {
     const live = ref.live;
     const member = live.members[ref.seat];
     if (member) {
@@ -3410,8 +3527,73 @@ export class MatchmakerDO {
         /* the socket is already gone */
       }
       live.members[ref.seat] = null;
+      /* the room's own model has to let the chair go too, or the next arrival finds it taken */
+      live.room = unseat(live.room, ref.seat);
     }
+    /* only a code lobby has a code to spend: an auto-pair room has no invite to revoke */
+    if (disband && live.code && ref.seat === live.hostSeat) { this.disbandLobby(live); return; }
     this.lobbyDepart(live, ref.seat);
+  }
+
+  /**
+   * The host is done with the room: the code is spent, every guest is told why, and the sockets
+   * are let go. From here on the invite link answers `room_consumed`, which is the cleanest thing
+   * a stale link can be told — it is not a room any more, and it is never coming back.
+   */
+  private disbandLobby(live: LiveRoom): void {
+    const code = live.room.code;
+    this.lobbies.delete(code);
+    this.retire(code);
+    for (const m of live.members) {
+      if (!m) continue;
+      this.refs.delete(m.ws);
+      this.postTo(m.ws, JSON.stringify({ type: 'ERROR', reason: 'room_closed' }));
+      try {
+        m.ws.close(1000, 'disbanded');
+      } catch {
+        /* the socket is already gone */
+      }
+    }
+    live.members = live.members.map(() => null);
+    this.rearm();
+  }
+
+  /** A code is spent: remember it for a while so a link that carries it is answered, not revived. */
+  private retire(code: string): void {
+    this.retired.set(code, Date.now());
+    this.sweepRetired();
+  }
+
+  private sweepRetired(): void {
+    const now = Date.now();
+    for (const [code, at] of this.retired) if (now - at >= RETIRED_TTL_MS) this.retired.delete(code);
+  }
+
+  /**
+   * The idle clock. A dropped guest's seat is held for `ROOM_SEAT_HOLD_MS` and then goes back on
+   * the market; a lobby nobody is connected to is retired after `ROOM_IDLE_TTL_MS`, which is the
+   * ten minutes a host gets for sharing the invite in another app.
+   */
+  private sweepLobbies(now: number): void {
+    for (const live of [...this.lobbies.values()]) {
+      if (live.driver) continue;
+      let changed = false;
+      for (let i = 0; i < live.members.length; i++) {
+        const m = live.members[i];
+        if (!m || m.connected || i === live.hostSeat) continue;
+        if (now - m.droppedAt < ROOM_SEAT_HOLD_MS) continue;
+        live.members[i] = null;
+        live.room = unseat(live.room, i);
+        changed = true;
+      }
+      const held = live.members.some((m) => !!m && m.connected);
+      if (!held && now - live.lastSeenAt >= ROOM_IDLE_TTL_MS) {
+        this.lobbies.delete(live.room.code);
+        this.retire(live.room.code);
+        continue;
+      }
+      if (changed) this.broadcastLobby(live);
+    }
   }
 
   /** A refusal is a decision, not a dead socket: say why, then let the socket go. */
@@ -3424,9 +3606,10 @@ export class MatchmakerDO {
     }
   }
 
-  /** The lowest seat nobody is holding. */
+  /** The lowest seat nobody is holding. The crown's seat is not free while it is being held open. */
   private freeSeat(live: LiveRoom): number {
-    return live.members.findIndex((m) => m === null);
+    return live.members.findIndex((m, i) => m === null
+      && !(live.code && live.hostPending && i === live.hostSeat));
   }
 
   /** A room's 4-digit invite code, minted from the pairing counter so two rooms never collide. */
@@ -3447,6 +3630,19 @@ export class MatchmakerDO {
       if (live.driver) continue;
       soonest = Math.min(soonest, live.room.openedAt + live.room.waitMs);
     }
+    /* A code lobby has two clocks: the idle TTL that retires it, and the shorter hold that frees
+       a dropped guest's chair. Both are alarms, because a Durable Object can be evicted between
+       messages and a `setTimeout` would die with the instance. */
+    for (const live of this.lobbies.values()) {
+      if (live.driver) continue;
+      soonest = Math.min(soonest, live.lastSeenAt + ROOM_IDLE_TTL_MS);
+      for (let i = 0; i < live.members.length; i++) {
+        const m = live.members[i];
+        if (m && !m.connected && i !== live.hostSeat) {
+          soonest = Math.min(soonest, m.droppedAt + ROOM_SEAT_HOLD_MS);
+        }
+      }
+    }
     if (this.arena.status === 'active') soonest = Math.min(soonest, this.arena.endsAt);
     if (soonest === Infinity) storage.deleteAlarm();
     else storage.setAlarm(soonest);
@@ -3459,6 +3655,12 @@ export class MatchmakerDO {
    */
   private launchRoom(live: LiveRoom): void {
     if (live.driver) return;
+    /* A chair held for a socket that is not here is the machine's for the race: a human seat
+       nobody is sitting in would stall the board waiting for a turn that never comes. */
+    for (let i = 0; i < live.members.length; i++) {
+      const m = live.members[i];
+      if (m && !m.connected) live.room = takeover(live.room, i);
+    }
     live.room = launch(backfill(live.room));
     live.seed = hash(`${live.room.code}|${live.members.map((m) => m?.id ?? 'bot').join('|')}|${this.paired}`);
     live.matchId = `r${hash(`${live.room.code}|${++this.paired}`).toString(36)}`;
@@ -3466,11 +3668,14 @@ export class MatchmakerDO {
     live.driver = createRoomDriver(live.room);
     this.openRooms = this.openRooms.filter((r) => r !== live);
     this.lobbies.delete(live.room.code);
+    /* the code did its job: the board is running, so the invite is spent from this moment on */
+    if (live.code) this.retire(live.room.code);
     this.rooms.set(live.matchId, live);
     this.rearm();
 
     for (const m of live.members) {
       if (!m) continue;
+      if (!m.connected) continue;                // a chair held for an absent socket gets no board
       this.setInMatch(m.id, true);
       this.postTo(m.ws, this.roomFoundMessage(live, m.seat));
     }
@@ -3511,12 +3716,13 @@ export class MatchmakerDO {
     if (!live.driver) {
       /* Before the launch the only vocabulary a lobby has is the host's start and size pick, and
          a seat's own team move. Any seat may leave at any time. */
-      if (msg.type === 'CANCEL') { this.leaveLobby(ref); return; }
+      if (msg.type === 'CANCEL' || msg.type === 'LEAVE') { this.leaveLobby(ref, true); return; }
       if (msg.type === 'ROOM_START') {
         if (ref.seat !== live.hostSeat) return;
         /* A friends room needs two players before it is a race. The auto-pair room does not,
-           because its whole contract is that the machine fills whatever is left. */
-        const held = live.members.filter((m) => m !== null).length;
+           because its whole contract is that the machine fills whatever is left. A chair held
+           for a dropped socket is not a player: it becomes the machine's at launch. */
+        const held = live.members.filter((m) => !!m && m.connected).length;
         if (!live.code || held >= 2) this.launchRoom(live);
         return;
       }
@@ -3589,7 +3795,8 @@ export class MatchmakerDO {
     this.completeRoom(live);
     for (let i = 0; i < live.members.length; i++) {
       const m = live.members[i];
-      if (m) this.verdict(m.id, i === winner);
+      /* a chair held for an absent socket was the machine's race, not that player's */
+      if (m && m.connected) this.verdict(m.id, i === winner);
     }
   }
 
@@ -3601,7 +3808,7 @@ export class MatchmakerDO {
   private pushRoomEvents(live: LiveRoom, events: readonly RoomEvent[]): void {
     if (!events.length) return;
     for (const m of live.members) {
-      if (!m) continue;
+      if (!m || !m.connected) continue;
       for (const ev of events) {
         if (ev.seat === m.seat) continue;
         this.postTo(m.ws, JSON.stringify({ type: 'MOVE', side: ev.seat, action: ev.action }));
@@ -3649,18 +3856,27 @@ export class MatchmakerDO {
   /** A socket went away. In a room that means the machine finishes the seat; in the queue, goodbye. */
   private roomLeave(ref: RoomRef | undefined): void {
     if (!ref) return;
-    const member = ref.live.members[ref.seat];
+    const live = ref.live;
+    const member = live.members[ref.seat];
     if (member) this.markActive(member.id);
-    if (ref.live.driver) { this.takeSeatOver(ref); return; }
-    if (member) this.refs.delete(member.ws);
-    ref.live.members[ref.seat] = null;
-    if (ref.live.code) {
-      /* a friends lobby survives its host: the crown moves, and everyone is told */
-      this.lobbyDepart(ref.live, ref.seat);
+    if (live.driver) { this.takeSeatOver(ref); return; }
+    if (!member) return;
+    this.refs.delete(member.ws);
+    if (live.code) {
+      /* The room outlives its socket. The chair is held — the crown for the whole idle TTL, a
+         guest for the shorter hold — so the host who stepped into Telegram, or the friend whose
+         webview slept through a chat switch, walks back into the same seat. The alarm retires
+         the room if nobody ever does. */
+      member.connected = false;
+      member.droppedAt = Date.now();
+      live.lastSeenAt = Date.now();
+      this.broadcastLobby(live);
+      this.rearm();
       return;
     }
-    if (ref.live.members.every((m) => m === null)) {
-      this.openRooms = this.openRooms.filter((r) => r !== ref.live);
+    live.members[ref.seat] = null;
+    if (live.members.every((m) => m === null)) {
+      this.openRooms = this.openRooms.filter((r) => r !== live);
     }
     this.rearm();
   }

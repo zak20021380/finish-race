@@ -3,6 +3,7 @@
  * no-op, so the same build plays in a plain browser tab.
  */
 import { settings } from './settings';
+import { botMainAppLink, telegramShareLink } from '../shared/config';
 
 export interface TgUser {
   /** Telegram's numeric user id — the key the admin allowlist matches on. */
@@ -85,6 +86,26 @@ function atLeast(version: string): boolean {
  * so the client, the Worker and the harnesses can never drift apart.
  */
 export { BOT_HANDLE } from '../shared/config';
+
+/**
+ * The one invite URL a room ever has: `https://t.me/<bot>?startapp=room_<code>`.
+ *
+ * This is the single source of truth for a room invite. The code badge, the `Copy Link` key, the
+ * header `Invite` pill and the empty rival plate all read the same active code and hand it to this
+ * one function, so the four doors can never print four different links for one room. The code is
+ * stripped to the alphabet `telegram.ts`'s own reader accepts (`ROOM_PARAM`), which is what makes
+ * a round trip through Telegram land back on the same room.
+ */
+export function roomInviteUrl(code: string): string {
+  const clean = String(code ?? '').replace(/[^A-Za-z0-9_-]/g, '');
+  return clean ? botMainAppLink(`room_${clean}`) : '';
+}
+
+/** The same invite URL, wrapped in Telegram's native share page. '' when the code is unusable. */
+export function roomShareUrl(code: string, text: string): string {
+  const url = roomInviteUrl(code);
+  return url ? telegramShareLink(url, text) : '';
+}
 
 export const tgUser = (): TgUser | undefined => tg?.initDataUnsafe?.user;
 

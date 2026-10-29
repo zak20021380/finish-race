@@ -34,6 +34,24 @@ export const BOT_TIERS: readonly BotTier[] = ['mixed', 'easy', 'normal', 'hard']
 
 /** How long a lobby holds open for more people before it fills the rest with bots. */
 export const ROOM_WAIT_MS = 8000;
+
+/**
+ * How long a code lobby outlives its last socket.
+ *
+ * A host who taps "Copy Link" and steps into a Telegram chat to send it is not gone: the webview
+ * may suspend the socket, or drop it outright, and the friend who taps the link twenty seconds
+ * later must still land in the room. So the room, its code and every seat stay put for ten
+ * minutes of silence — only then does the worker retire the code, and only an explicit host
+ * `LEAVE` (or a launch) closes it sooner.
+ */
+export const ROOM_IDLE_TTL_MS = 10 * 60 * 1000;
+
+/**
+ * How long a dropped guest's seat is held for them. Long enough for a webview that slept through
+ * a chat switch, short enough that a room does not stay full for ten minutes because somebody
+ * walked away. The host's own seat is never released this way — it waits out the whole TTL.
+ */
+export const ROOM_SEAT_HOLD_MS = 60 * 1000;
 /** The level a room falls back on when nothing else is set. */
 export const DEFAULT_BOT_TIER: BotTier = 'mixed';
 /** The smallest and largest room the rules can play. */
@@ -88,15 +106,15 @@ export const FORMAT_LINE: Record<LobbyFormat, string> = {
 };
 
 /**
- * Is this room a duel both people have taken? The single question the auto-launch asks.
+ * Is this room ready to start itself? The single question the auto-launch asks.
  *
- * A head-to-head is the one format with nothing left to arrange once the second person sits: the
- * seats are the whole roster, so the room is ready the moment the rival lands. `bots` must be zero
- * — a well the machine filled is not somebody joining, and a solo host must never be auto-launched
- * into a board they did not ask for. `held` is the number of people actually sitting.
+ * Every seat the format fields is held by a person — the duel's 2/2, a 3P's 3/3, a 4P's or a
+ * 2v2's 4/4 — so there is nothing left to arrange and the room can count itself down. `bots` must
+ * be zero: a well the machine filled is not somebody joining, and a solo host must never be
+ * auto-launched into a board they did not ask for. `held` is the number of people actually sitting.
  */
-export const duelReady = (format: LobbyFormat, held: number, bots: number): boolean =>
-  format === 'duel' && bots === 0 && held >= FORMAT_CAPACITY.duel;
+export const roomReady = (format: LobbyFormat, held: number, bots: number): boolean =>
+  bots === 0 && held >= FORMAT_CAPACITY[format];
 
 /**
  * Reflow a set of held seat indices into a room of `capacity` seats. A seat that still fits keeps
@@ -334,6 +352,22 @@ export function seatHuman(room: Room, index: number, spec: SeatSpec): Room {
 
 /** Freeze the seats: the race is on and the roster stops changing. */
 export const launch = (room: Room): Room => (room.launched ? room : { ...room, launched: true });
+
+/**
+ * Give a seat back to the market: the person holding it is gone and their hold has run out. The
+ * seat keeps the room's difficulty, loses the name and the id, and is open again — which is the
+ * only way a room that filled up and emptied can take a new guest without being rebuilt.
+ *
+ * A launched room is frozen and a machine seat is not a person's to release, so both are no-ops.
+ */
+export function unseat(room: Room, index: number): Room {
+  const seat = room.seats[index];
+  if (!seat || seat.kind === 'bot' || room.launched) return room;
+  const seats: Seat[] = room.seats.map((s, i) => (i === index
+    ? { index: i, kind: 'human' as const, id: '', name: '', difficulty: s.difficulty, takenOver: false, connected: false }
+    : s));
+  return { ...room, seats };
+}
 
 /**
  * Fill every seat still empty with a bot. Idempotent — a room that is already full comes back
