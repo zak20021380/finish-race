@@ -4521,34 +4521,32 @@
 
         <div class="sheet-body sq-hub" id="squad-bound-view" hidden>
           <header class="sq-banner">
-            <span class="sq-crest" id="squad-view-crest" data-tier="bronze" aria-hidden="true">
-              <i class="sq-crest-aura"></i>
-              <span class="sq-crest-coin">
-                <span class="sq-crest-face">
-                  <b class="sq-crest-t" id="squad-view-avatar">S</b>
-                </span>
+            <span class="sq-hero-av" id="squad-view-crest" role="img">
+              <span class="sq-hero-frame" id="squad-view-frame">
+                <b class="sq-hero-mark" id="squad-view-avatar" aria-hidden="true">S</b>
+                <img class="sq-hero-photo" id="squad-view-photo" alt="" decoding="async" referrerpolicy="no-referrer" />
               </span>
+              <span class="sq-hero-rank" id="squad-view-badge" data-rank="num" aria-hidden="true">#1</span>
             </span>
             <span class="sq-banner-id">
-              <b class="sq-handle" id="squad-view-name">@Squad</b>
-              <span class="sq-banner-pills">
-                <span class="sq-global" id="squad-view-rank">#1 GLOBAL SQUAD</span>
-                <span class="sq-leader" id="squad-view-leader">
+              <b class="sq-banner-name" id="squad-view-name">Squad</b>
+              <span class="sq-meta">
+                <span class="sq-meta-handle" id="squad-view-handle">@Squad</span>
+                <span class="sq-meta-leader" id="squad-view-leader">
                   <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
-                  <b>Leader</b>
-                  <span class="sq-leader-name" id="squad-view-leader-name">—</span>
+                  <span class="sq-meta-leader-name" id="squad-view-leader-name">—</span>
                 </span>
               </span>
               <span class="sq-banner-stats">
                 <span class="sq-stat sq-stat-avg">
+                  <span class="sr-only">Average TIQ</span>
                   <svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg>
                   <b id="squad-view-avg">0</b>
-                  <small>AVG TIQ</small>
                 </span>
                 <span class="sq-stat sq-stat-mem">
+                  <span class="sr-only">Members</span>
                   <svg class="ico" aria-hidden="true"><use href="#i-users" /></svg>
                   <b id="squad-view-members">0</b>
-                  <small id="squad-view-members-label">Members</small>
                 </span>
               </span>
             </span>

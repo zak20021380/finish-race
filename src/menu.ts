@@ -527,6 +527,9 @@ export function createMenu(api: MenuApi): Menu {
   const squadRosterEmpty = $<HTMLElement>('squad-roster-empty');
   const squadYouEl = $<HTMLElement>('squad-you');
   const squadCrest = $<HTMLElement>('squad-view-crest');
+  const squadCrestFrame = $<HTMLElement>('squad-view-frame');
+  const squadCrestPhoto = $<HTMLImageElement>('squad-view-photo');
+  const squadCrestBadge = $<HTMLElement>('squad-view-badge');
   const squadLeaderEl = $<HTMLElement>('squad-view-leader');
   const squadLeaderNameEl = $<HTMLElement>('squad-view-leader-name');
   const squadExploreBtn = $<HTMLButtonElement>('squad-explore');
@@ -568,6 +571,7 @@ export function createMenu(api: MenuApi): Menu {
   let squadRange = { start: -1, end: -1, rows: -1 };
   let squadFrame = 0;
   let squadForce = false;
+  let squadPhotoSeq = 0;
   let squadSearchTimer = 0;
 
   function squadError(msg: string) {
@@ -628,48 +632,27 @@ export function createMenu(api: MenuApi): Menu {
     if (!member) return;
     squadYouEl.textContent = '';
 
-    const avatar = squadAvatar(member, 'sq-you-av');
+    const rank = document.createElement('span');
+    rank.className = `sq-you-rank${roster.yourRank >= 100000 ? ' is-wide' : ''}`;
+    rank.textContent = `#${en(roster.yourRank)}`;
+
+    const avatar = squadAvatar(member);
 
     const identity = document.createElement('span');
     identity.className = 'sq-you-id';
-
-    const rankBox = document.createElement('span');
-    rankBox.className = 'sq-you-rank';
-    const rankCap = document.createElement('small');
-    rankCap.textContent = 'Your rank';
-    const rank = document.createElement('b');
-    rank.textContent = `#${en(roster.yourRank)}`;
-    rankBox.append(rankCap, rank);
-
-    const nameWrap = document.createElement('span');
-    nameWrap.className = 'sq-you-namewrap';
-    const name = document.createElement('span');
+    const name = document.createElement('b');
     name.className = 'sq-you-name';
-    name.textContent = roster.youName;
-    name.title = roster.youName;
-    nameWrap.append(name);
-    const role = squadRolePill(roster.yourRole);
-    if (role) nameWrap.append(role);
-    if (roster.yourMedal && roster.yourMedal.serial !== null) {
-      const serial = document.createElement('span');
-      serial.className = 'medal-serial sq-you-serial';
-      serial.dataset.accent = roster.yourMedal.def.accent;
-      serial.textContent = editionSerialLabel(roster.yourMedal.serial);
-      serial.title = `${roster.yourMedal.def.name} · ${editionSerialLabel(roster.yourMedal.serial)} of ${roster.yourMedal.def.cap}`;
-      nameWrap.append(serial);
-    }
-    identity.append(rankBox, nameWrap);
+    name.textContent = 'You';
+    identity.append(name);
 
     const score = document.createElement('span');
-    score.className = `sq-you-score${roster.yourTiq <= 0 ? ' is-zero' : ''}`;
+    score.className = `sq-score${roster.yourTiq <= 0 ? ' is-zero' : ''}`;
     score.append(squadSvg('#i-brain'));
     const amount = document.createElement('b');
     amount.textContent = en(roster.yourTiq);
-    const unit = document.createElement('small');
-    unit.textContent = 'TIQ';
-    score.append(amount, unit);
+    score.append(amount);
 
-    squadYouEl.append(avatar, identity, score);
+    squadYouEl.append(rank, avatar, identity, score);
 
     const honor = roster.yourMedal
       ? `, wearing ${roster.yourMedal.def.name}${roster.yourMedal.serial !== null ? ` edition ${roster.yourMedal.serial}` : ''}`
@@ -837,19 +820,51 @@ export function createMenu(api: MenuApi): Menu {
       : `Founded by ${leader.name}.`);
   }
 
+  /* Real channel photo over the monogram crest. The CDN can answer with an error
+     or a 1x1 placeholder, so the monogram stays underneath until a real frame lands. */
+  function paintSquadCrestPhoto(handle: string): void {
+    const seq = ++squadPhotoSeq;
+    squadCrestFrame.classList.remove('has-photo');
+    const src = telegramAvatarUrl(handle);
+    if (!src) {
+      squadCrestPhoto.removeAttribute('src');
+      return;
+    }
+    squadCrestPhoto.onload = () => {
+      if (seq !== squadPhotoSeq) return;
+      if (squadCrestPhoto.naturalWidth <= 2 || squadCrestPhoto.naturalHeight <= 2) {
+        squadCrestPhoto.removeAttribute('src');
+        return;
+      }
+      squadCrestFrame.classList.add('has-photo');
+    };
+    squadCrestPhoto.onerror = () => {
+      if (seq !== squadPhotoSeq) return;
+      squadCrestFrame.classList.remove('has-photo');
+      squadCrestPhoto.removeAttribute('src');
+    };
+    if (squadCrestPhoto.getAttribute('src') === src) {
+      if (squadCrestPhoto.complete && squadCrestPhoto.naturalWidth > 2 && squadCrestPhoto.naturalHeight > 2) {
+        squadCrestFrame.classList.add('has-photo');
+      }
+      return;
+    }
+    squadCrestPhoto.src = src;
+  }
+
   function paintSquadHub(): void {
     const me = getMySquad();
     if (!me) { showSquadSearch(); return; }
     squadView = buildSquadRoster(me);
-    $<HTMLElement>('squad-view-avatar').textContent = squadLetter(me);
-    $<HTMLElement>('squad-view-name').textContent = me.handle;
-    const global = $<HTMLElement>('squad-view-rank');
-    global.textContent = `#${en(me.rank)} GLOBAL SQUAD`;
-    global.dataset.rank = String(me.rank);
+    $<HTMLElement>('squad-view-avatar').textContent = squadMark(me);
+    $<HTMLElement>('squad-view-name').textContent = me.name;
+    $<HTMLElement>('squad-view-handle').textContent = me.handle;
+    squadCrestBadge.textContent = `#${en(me.rank)}`;
+    squadCrestBadge.dataset.rank = me.rank === 1 ? 'gold' : me.rank === 2 ? 'silver' : me.rank === 3 ? 'bronze' : 'num';
+    squadCrest.setAttribute('aria-label', `${me.name} crest, global squad rank ${me.rank}`);
+    paintSquadCrestPhoto(me.handle);
     $<HTMLElement>('squad-view-avg').textContent = en(squadView.avgTiq);
     $<HTMLElement>('squad-view-members').textContent = en(squadView.count);
-    $<HTMLElement>('squad-view-members-label').textContent = squadView.count === 1 ? 'Member' : 'Members';
-    squadCrest.dataset.tier = squadView.squadArena.tier;
     paintSquadLeader(squadView);
     paintSquadYou();
     paintSquadRoster();
