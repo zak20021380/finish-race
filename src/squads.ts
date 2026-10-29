@@ -70,7 +70,7 @@ function fresh(): SquadSave {
 function squadOk(s: unknown): s is Squad {
   const x = s as Partial<Squad> | undefined;
   return !!x && typeof x.id === 'string' && x.id.length > 0 && x.id.length <= 48
-    && typeof x.handle === 'string' && /^@[A-Za-z0-9_]{4,32}$/.test(x.handle)
+    && typeof x.handle === 'string' && /^@[A-Za-z0-9_]{3,32}$/.test(x.handle)
     && typeof x.name === 'string' && x.name.length > 0 && x.name.length <= 32
     && typeof x.members === 'number' && Number.isFinite(x.members) && x.members >= 0
     && typeof x.trophies === 'number' && Number.isFinite(x.trophies) && x.trophies >= 0
@@ -119,7 +119,7 @@ export function cleanHandle(raw: string): string {
   let h = (raw ?? '').trim().replace(/\s+/g, '');
   if (!h) return '';
   if (!h.startsWith('@')) h = `@${h}`;
-  if (!/^@[A-Za-z0-9_]{4,32}$/.test(h)) return '';
+  if (!/^@[A-Za-z0-9_]{3,32}$/.test(h)) return '';
   return h;
 }
 
@@ -133,7 +133,7 @@ export function cleanChatReference(raw: string): string {
   const direct = cleanHandle(raw);
   if (direct) return direct;
   let value = (raw ?? '').trim().split(/[?#]/)[0].replace(/\/+$/, '');
-  const link = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/([A-Za-z0-9_]{4,32})$/i.exec(value);
+  const link = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/([A-Za-z0-9_]{3,32})$/i.exec(value);
   if (!link) return '';
   value = link[1];
   return cleanHandle(value);
@@ -212,6 +212,48 @@ export function bindSquad(rawHandle: string): BindResult {
   save.boundId = id;
   flush();
   return was;
+}
+
+export type EnlistResult =
+  | { ok: true; squad: RankedSquad; created: boolean }
+  | { ok: false; reason: 'bad-handle' };
+
+/**
+ * The Channel War enlistment door: an admin pastes anything Telegram-shaped
+ * (`@name`, `name`, `t.me/name`), we normalise it, bind the squad when it already
+ * ranks, and otherwise mint a local one carrying the chosen community kind. Unlike
+ * `claimRegisteredSquad` this never refuses an existing handle — enlisting the
+ * reigning champion simply binds you to it.
+ */
+export function enlistSquad(rawHandle: string, kind: SquadKind = 'channel'): EnlistResult {
+  const handle = cleanChatReference(rawHandle);
+  if (!handle) return { ok: false, reason: 'bad-handle' };
+  const existing = getSquadRanking().find((s) => s.handle.toLowerCase() === handle.toLowerCase());
+  if (existing) {
+    if (save.boundId !== existing.id) {
+      save.boundId = existing.id;
+      flush();
+    }
+    return { ok: true, squad: getMySquad() ?? existing, created: false };
+  }
+  const id = `sq-${Date.now().toString(36)}-${handle.slice(1, 6).toLowerCase()}`;
+  const created: Squad = {
+    id,
+    handle,
+    name: displayNameOf(handle),
+    members: 1,
+    trophies: 0,
+    trend: 'same',
+    kind: kind === 'group' ? 'group' : 'channel',
+  };
+  save.custom = [...save.custom, created].slice(-20);
+  save.boundId = id;
+  flush();
+  return {
+    ok: true,
+    squad: getMySquad() ?? { ...created, rank: getSquadRanking().length, owned: true },
+    created: true,
+  };
 }
 
 export interface RegisteredSquadInput {

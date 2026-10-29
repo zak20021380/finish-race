@@ -24,15 +24,14 @@ import { getCountryRanking, type CountryRow } from './data';
 import { fetchMindLadder, type MindFeed, type MindRowData } from './minds';
 import { myTiq } from './matchmaking';
 import { onChange, profile, theme } from './storage';
-import { impact, openLink } from './telegram';
-import { botChannelAdminLink } from '../shared/config';
+import { impact } from './telegram';
 import { flagPhoto } from './flags';
 import { getSquadRanking } from './squads';
 import { newGame } from './rules';
 import { createRenderer, type View } from './render';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
-import type { RaceSetup } from './menu';
+import { openEnlistSquad, type RaceSetup } from './menu';
 import { onGameModeChange, paintLobby as paintGameLobby, paintSheetState as paintGameSheet, resetSheetView } from './gamemodes';
 import starsImg from './assets/images/telegram_stars.png';
 
@@ -567,13 +566,12 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   if (tourStar) tourStar.src = starsImg;
 
   /* The enlistment pod: the channel-admin growth door. It fires a light haptic and
-     hands off to Telegram's own bot-admin deeplink (`?startchannel`), where the
-     admin picks the channel and grants the rights — inside the client when the SDK
-     is there, the system browser otherwise. */
+     raises the Enlist Squad modal — the registration path that previews the
+     community and writes the squad locally, no bot-chat hop in the way. */
   document.getElementById('home-tournament-admin')?.addEventListener('click', () => {
     impact('light');
     poke();
-    openLink(botChannelAdminLink());
+    openEnlistSquad();
   });
 
   document.getElementById('home-tournament-cta')?.addEventListener('click', () => {

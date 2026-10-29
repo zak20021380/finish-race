@@ -5252,6 +5252,77 @@
         </div>
       </section>
 
+      <!-- Enlist Squad — the Channel War registration door. A centered luxury-glass
+           modal (not a bottom sheet: this is a commitment, not a browse) with its own
+           scrim, ESC / backdrop / close-box dismissal and a live community preview.
+           Above the sheets (900/901), below an urgent dispatch (1000). -->
+      <div class="enlist-scrim" id="enlist-scrim" hidden aria-hidden="true"></div>
+      <section class="enlist" id="enlist-modal" hidden role="dialog" aria-modal="true"
+        aria-labelledby="enlist-title" aria-describedby="enlist-sub">
+        <div class="enlist-panel">
+          <button class="enlist-close" id="enlist-close" type="button" aria-label="Close enlist squad">
+            <span aria-hidden="true">×</span>
+          </button>
+
+          <header class="enlist-head">
+            <h2 class="enlist-title" id="enlist-title">
+              <span class="enlist-title-t">Enlist Squad</span>
+              <span class="enlist-badge">
+                <svg class="enlist-badge-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-swords" /></svg>
+                Channel &amp; Group
+              </span>
+            </h2>
+            <p class="enlist-sub" id="enlist-sub">Register your Telegram community to compete for the 200 Stars prize pool and climb the global leaderboard.</p>
+          </header>
+
+          <div class="enlist-fieldrow">
+            <label class="enlist-label" for="enlist-input">Community handle</label>
+            <div class="enlist-kind" role="group" aria-label="Community type">
+              <button class="enlist-kind-b is-on" type="button" data-enlist-kind="channel" aria-pressed="true">Channel</button>
+              <button class="enlist-kind-b" type="button" data-enlist-kind="group" aria-pressed="false">Group</button>
+            </div>
+          </div>
+
+          <div class="enlist-field" id="enlist-field">
+            <span class="enlist-at" aria-hidden="true">@</span>
+            <input class="enlist-input" id="enlist-input" type="text" placeholder="channel_or_group_username"
+              autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="go"
+              aria-label="Channel or group username" aria-describedby="enlist-help" />
+            <span class="enlist-tick" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="#i-check" /></svg></span>
+          </div>
+          <p class="enlist-help" id="enlist-help" role="status">Paste a t.me link or type the username — the @ is stripped for you.</p>
+
+          <div class="enlist-preview" id="enlist-preview" hidden>
+            <span class="enlist-av">
+              <span class="enlist-av-mono" id="enlist-av-mono" aria-hidden="true">D</span>
+              <img class="enlist-av-img" id="enlist-av-img" alt="" hidden decoding="async" referrerpolicy="no-referrer" />
+            </span>
+            <span class="enlist-pv">
+              <span class="enlist-pv-k">Community</span>
+              <b class="enlist-pv-h" id="enlist-pv-h">@channel</b>
+            </span>
+            <span class="enlist-ready"><i aria-hidden="true"></i>Ready to Enlist</span>
+          </div>
+
+          <div class="enlist-perks">
+            <span class="enlist-perk">
+              <svg class="enlist-perk-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-cup" /></svg>
+              <span>200 Stars Pool Eligibility</span>
+            </span>
+            <span class="enlist-perk">
+              <svg class="enlist-perk-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-bolt" /></svg>
+              <span>Squad Point Multiplier for Members</span>
+            </span>
+          </div>
+
+          <button class="enlist-cta" id="enlist-submit" type="button" aria-disabled="true">
+            <span class="enlist-spin" id="enlist-spin" hidden aria-hidden="true"></span>
+            <span class="enlist-cta-t" id="enlist-cta-t">Enlist in Channel War</span>
+          </button>
+          <p class="enlist-fine">By enlisting you confirm you own or administer this community.</p>
+        </div>
+      </section>
+
       <!-- the Command Dispatch overlay: an urgent broadcast raises a full-viewport scrim and the
            Dark-Clay transmission modal over it. Dismiss is remembered per device
            (`seen_broadcast_ids`), so it comes back only until it has actually been read. -->

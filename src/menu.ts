@@ -30,8 +30,9 @@ import { openCountryPicker } from './countrypick';
 import { flagPhoto } from './flags';
 import { cleanCode, standings, YOU } from './teams';
 import {
-  bindSquad, bindSquadById, cleanHandle, displayNameOf, getMySquad, getSquadRanking, leaveSquad,
-  onSquadChange, searchSquads, squadKind, squadLetter, squadMark, telegramAvatarUrl, type RankedSquad,
+  bindSquad, bindSquadById, cleanChatReference, cleanHandle, displayNameOf, enlistSquad,
+  getMySquad, getSquadRanking, leaveSquad, onSquadChange, searchSquads, squadKind, squadLetter,
+  squadMark, telegramAvatarUrl, type RankedSquad, type SquadKind,
 } from './squads';
 import {
   ARENA_CUP, arrangeRoster, arenaStandingOf, buildSquadRoster, squadTargetAvg,
@@ -2647,4 +2648,232 @@ export function createMenu(api: MenuApi): Menu {
       if (invite && !profile.teamId) openTeam();
     },
   };
+}
+
+/* ---------------------------------------------------------------------------
+   ENLIST SQUAD — the Channel War registration door.
+
+   A centered luxury-glass modal (deliberately not a sheet: this is a
+   commitment, not a browse) opened by Home's "Channel admin? Enlist here" key.
+   It normalises whatever the admin pastes, previews the community live — the
+   public Telegram photo over a monogram, so a private or missing photo never
+   leaves an empty crest — and writes the squad through `enlistSquad`.
+
+   Bound once, on first open: the modal is a singleton in the markup, so every
+   listener below is attached exactly once for the life of the app.
+   --------------------------------------------------------------------------- */
+interface EnlistModal { open(): void }
+
+let enlistModal: EnlistModal | null = null;
+
+export function openEnlistSquad(): void {
+  if (!enlistModal) enlistModal = createEnlistModal();
+  enlistModal?.open();
+}
+
+function createEnlistModal(): EnlistModal | null {
+  const modalRoot = document.getElementById('enlist-modal');
+  const scrimRoot = document.getElementById('enlist-scrim');
+  if (!modalRoot || !scrimRoot) return null;
+  /* re-bound as non-null so the listeners below close over a settled element */
+  const modal: HTMLElement = modalRoot;
+  const scrim: HTMLElement = scrimRoot;
+
+  const input = $<HTMLInputElement>('enlist-input');
+  const field = $<HTMLElement>('enlist-field');
+  const help = $<HTMLElement>('enlist-help');
+  const preview = $<HTMLElement>('enlist-preview');
+  const pvHandle = $<HTMLElement>('enlist-pv-h');
+  const avMono = $<HTMLElement>('enlist-av-mono');
+  const avImg = $<HTMLImageElement>('enlist-av-img');
+  const submit = $<HTMLButtonElement>('enlist-submit');
+  const spin = $<HTMLElement>('enlist-spin');
+  const ctaLabel = $<HTMLElement>('enlist-cta-t');
+  const closeBtn = $<HTMLButtonElement>('enlist-close');
+  const kindBtns = [...modal.querySelectorAll<HTMLElement>('[data-enlist-kind]')];
+
+  const HELP = 'Paste a t.me link or type the username — the @ is stripped for you.';
+  const HELP_BAD = 'Use 3–32 letters, numbers or underscores.';
+  const CTA = 'Enlist in Channel War';
+  const CTA_BUSY = 'Enlisting…';
+
+  let kind: SquadKind = 'channel';
+  let isOpen = false;
+  let busy = false;
+  let touched = false;
+  let closeTimer = 0;
+  let restore: HTMLElement | null = null;
+  let lastAvatar = '';
+
+  const handleOf = (): string => cleanChatReference(input.value);
+
+  /* The photo is a bonus, never the crest: the monogram is already painted
+     underneath, so a blocked or missing userpic costs nothing. */
+  function paintAvatar(handle: string): void {
+    if (handle === lastAvatar) return;
+    lastAvatar = handle;
+    avMono.textContent = handle.slice(1, 2).toUpperCase() || '?';
+    avImg.hidden = true;
+    avImg.onload = () => { avImg.hidden = false; };
+    avImg.onerror = () => { avImg.hidden = true; };
+    const url = telegramAvatarUrl(handle);
+    if (url) avImg.src = url;
+    else avImg.removeAttribute('src');
+  }
+
+  function paint(): void {
+    const handle = handleOf();
+    const valid = !!handle;
+    const bad = !valid && touched;
+    field.classList.toggle('is-valid', valid);
+    field.classList.toggle('is-bad', bad);
+    help.textContent = bad ? HELP_BAD : HELP;
+    help.classList.toggle('is-bad', bad);
+    preview.hidden = !valid;
+    if (valid) {
+      pvHandle.textContent = handle;
+      paintAvatar(handle);
+    }
+    submit.setAttribute('aria-disabled', valid && !busy ? 'false' : 'true');
+  }
+
+  /* A refused submit explains itself in place: the field shakes, the helper turns
+     red and focus lands where the fix is. */
+  function nudge(): void {
+    touched = true;
+    paint();
+    field.classList.remove('is-shake');
+    void field.offsetWidth;
+    field.classList.add('is-shake');
+    input.focus({ preventScroll: true });
+    notify('warning');
+  }
+
+  async function submitNow(): Promise<void> {
+    if (busy) return;
+    const handle = handleOf();
+    if (!handle) { nudge(); return; }
+
+    busy = true;
+    submit.classList.add('is-busy');
+    submit.setAttribute('aria-disabled', 'true');
+    spin.hidden = false;
+    ctaLabel.textContent = CTA_BUSY;
+    impact('medium');
+
+    /* The write is instant, but a modal that blinks shut reads like a mis-tap:
+       the key holds one honest beat so the spinner actually means something. */
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, motionReduced() ? 140 : 720);
+    });
+
+    const result = enlistSquad(handle, kind);
+    busy = false;
+    submit.classList.remove('is-busy');
+    spin.hidden = true;
+    ctaLabel.textContent = CTA;
+
+    if (!result.ok) {
+      nudge();
+      return;
+    }
+
+    input.value = '';
+    touched = false;
+    notify('success');
+    close();
+    /* The veil lifts first, then the confirmation lands: a toast behind a fading
+       scrim reads as a glitch, and the beat makes the close feel deliberate. */
+    window.setTimeout(
+      () => showToast('Squad enlisted successfully!', 'success'),
+      motionReduced() ? 0 : 200,
+    );
+  }
+
+  function close(): void {
+    if (!isOpen) return;
+    isOpen = false;
+    modal.classList.remove('is-open');
+    scrim.classList.remove('is-open');
+    window.clearTimeout(closeTimer);
+    closeTimer = window.setTimeout(() => {
+      modal.hidden = true;
+      scrim.hidden = true;
+      lastAvatar = '';
+      const back = restore;
+      restore = null;
+      try { back?.focus({ preventScroll: true }); } catch { /* gone already */ }
+    }, motionReduced() ? 0 : 200);
+  }
+
+  function show(): void {
+    window.clearTimeout(closeTimer);
+    restore = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    touched = false;
+    busy = false;
+    submit.classList.remove('is-busy');
+    spin.hidden = true;
+    ctaLabel.textContent = CTA;
+    modal.hidden = false;
+    scrim.hidden = false;
+    void modal.offsetWidth;                 // lay the panel out at its closed scale first
+    modal.classList.add('is-open');
+    scrim.classList.add('is-open');
+    isOpen = true;
+    paint();
+    impact('light');
+    window.setTimeout(() => {
+      if (isOpen) input.focus({ preventScroll: true });
+    }, motionReduced() ? 0 : 170);
+  }
+
+  input.addEventListener('input', () => {
+    touched = false;
+    paint();
+  });
+  /* Blur is the normaliser: the @ lives in the pod, so the field keeps the bare
+     username — even when a full t.me link was pasted in. */
+  input.addEventListener('blur', () => {
+    const handle = handleOf();
+    if (handle) input.value = handle.slice(1);
+    paint();
+  });
+  input.addEventListener('paste', () => {
+    window.setTimeout(() => {
+      const handle = handleOf();
+      if (handle) input.value = handle.slice(1);
+      paint();
+    }, 0);
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    void submitNow();
+  });
+
+  for (const btn of kindBtns) {
+    btn.addEventListener('click', () => {
+      const next: SquadKind = btn.dataset.enlistKind === 'group' ? 'group' : 'channel';
+      if (next === kind) return;
+      kind = next;
+      for (const other of kindBtns) {
+        const on = other === btn;
+        other.classList.toggle('is-on', on);
+        other.setAttribute('aria-pressed', on ? 'true' : 'false');
+      }
+      impact('light');
+    });
+  }
+
+  submit.addEventListener('click', () => { void submitNow(); });
+  closeBtn.addEventListener('click', () => { impact('light'); close(); });
+  scrim.addEventListener('click', () => { impact('light'); close(); });
+  modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+  document.addEventListener('keydown', (e) => {
+    if (!isOpen || e.key !== 'Escape') return;
+    e.preventDefault();
+    close();
+  });
+
+  return { open: show };
 }

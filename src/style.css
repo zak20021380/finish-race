@@ -20645,6 +20645,510 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
 }
 
 /* ==========================================================================
+   ENLIST SQUAD — the Channel War registration modal (src/menu.ts
+   `openEnlistSquad`). A centered luxury-glass chassis over its own scrim,
+   above the sheets (900/901) and below an urgent dispatch (1000). Gold rim,
+   obsidian handle field, live community preview, one high-energy enlist key.
+   ========================================================================== */
+.enlist-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: rgba(4, 7, 14, .74);
+  -webkit-backdrop-filter: blur(6px) saturate(1.05);
+  backdrop-filter: blur(6px) saturate(1.05);
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+.enlist-scrim[hidden] { display: none; }
+.enlist-scrim.is-open { opacity: 1; }
+
+.enlist {
+  position: fixed;
+  inset: 0;
+  z-index: 901;
+  display: grid;
+  place-items: center;
+  padding:
+    max(14px, env(safe-area-inset-top))
+    max(14px, env(safe-area-inset-right))
+    max(14px, env(safe-area-inset-bottom))
+    max(14px, env(safe-area-inset-left));
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+}
+.enlist[hidden] { display: none; }
+.enlist.is-open { opacity: 1; }
+
+/* the chassis: deep frosted glass, gold hairline, a warm bloom spilling from the crown */
+.enlist-panel {
+  position: relative;
+  width: min(352px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 22px;
+  border: 1px solid rgba(255, 215, 0, .18);
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(14, 22, 38, .95) 0%, rgba(8, 12, 22, .98) 100%);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, .7),
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    0 0 44px -14px rgba(245, 158, 11, .34);
+  opacity: 0;
+  transform: scale(.9) translateY(12px);
+  transition: transform .34s var(--bounce), opacity 180ms ease-out;
+}
+.enlist-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 130px;
+  border-radius: 24px 24px 0 0;
+  background: radial-gradient(120% 100% at 50% 0%, rgba(251, 191, 36, .17) 0%, rgba(251, 191, 36, 0) 72%);
+  pointer-events: none;
+}
+@keyframes enlist-pop {
+  0% { transform: scale(.9) translateY(14px); opacity: 0; }
+  70% { transform: scale(1.015) translateY(-2px); opacity: 1; }
+  100% { transform: none; opacity: 1; }
+}
+.enlist.is-open .enlist-panel {
+  opacity: 1;
+  transform: none;
+  animation: enlist-pop .4s cubic-bezier(.22, 1.2, .36, 1) both;
+}
+
+/* ---- the close box: a quiet slate key pinned to the top-right corner ---- */
+.enlist-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, .2);
+  border-radius: 10px;
+  background: rgba(148, 163, 184, .08);
+  color: #94A3B8;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease, transform 90ms ease;
+}
+.enlist-close:hover {
+  color: #F8FAFC;
+  border-color: rgba(226, 232, 240, .34);
+  background: rgba(148, 163, 184, .16);
+}
+.enlist-close:active { transform: scale(.94); }
+.enlist-close:focus-visible { outline: 2px solid #FCD34D; outline-offset: 2px; }
+
+/* ---- header: the title carries a glowing authority badge ---- */
+.enlist-head { position: relative; padding-right: 34px; }
+.enlist-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -.015em;
+  line-height: 1.15;
+  color: #F8FAFC;
+}
+.enlist-title-t { text-shadow: 0 1px 0 rgba(0, 0, 0, .5); }
+.enlist-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border: 1px solid rgba(252, 211, 77, .38);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(251, 191, 36, .2) 0%, rgba(245, 158, 11, .07) 100%);
+  color: #FCD34D;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow:
+    0 0 14px rgba(245, 158, 11, .26),
+    inset 0 1px 0 rgba(255, 255, 255, .18);
+  animation: enlist-badge-glow 3.6s ease-in-out infinite;
+}
+@keyframes enlist-badge-glow {
+  0%, 100% { box-shadow: 0 0 12px rgba(245, 158, 11, .2), inset 0 1px 0 rgba(255, 255, 255, .16); }
+  50% { box-shadow: 0 0 22px rgba(245, 158, 11, .46), inset 0 1px 0 rgba(255, 255, 255, .24); }
+}
+.enlist-badge-ico { width: 10px; height: 10px; flex: none; }
+.enlist-sub {
+  margin: 7px 0 0;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: #94A3B8;
+}
+
+/* ---- the field head: label on the left, the community kind on the right ---- */
+.enlist-fieldrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 2px 0 -3px;
+}
+.enlist-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #7D8CA3;
+}
+.enlist-kind {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid rgba(148, 163, 184, .16);
+  border-radius: 9px;
+  background: rgba(8, 12, 20, .7);
+}
+.enlist-kind-b {
+  min-height: 22px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #7D8CA3;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  line-height: 1;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+.enlist-kind-b.is-on {
+  background: linear-gradient(180deg, rgba(251, 191, 36, .22) 0%, rgba(245, 158, 11, .09) 100%);
+  color: #FCD34D;
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .3);
+}
+.enlist-kind-b:focus-visible { outline: 2px solid #FCD34D; outline-offset: 1px; }
+
+/* ---- the obsidian handle field: a gold @ pod, one lit focus ring ---- */
+.enlist-field {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 50px;
+  padding: 0 10px 0 9px;
+  border: 1px solid rgba(148, 163, 184, .18);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #0A101C 0%, #070B13 100%);
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .03);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.enlist-field:focus-within {
+  border-color: rgba(252, 211, 77, .5);
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, .5),
+    0 0 0 3px rgba(245, 158, 11, .13);
+}
+.enlist-field.is-valid { border-color: rgba(252, 211, 77, .42); }
+.enlist-field.is-bad {
+  border-color: rgba(248, 113, 113, .55);
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, .5),
+    0 0 0 3px rgba(248, 113, 113, .1);
+}
+@keyframes enlist-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  45% { transform: translateX(4px); }
+  70% { transform: translateX(-2px); }
+}
+.enlist-field.is-shake { animation: enlist-shake .3s ease-in-out; }
+.enlist-at {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, .12);
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .28);
+  color: #FCD34D;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+}
+.enlist-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #F8FAFC;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+.enlist-input::placeholder { color: #4A5A72; font-weight: 500; letter-spacing: .02em; }
+.enlist-tick {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: #34D399;
+  opacity: 0;
+  transform: scale(.6);
+  transition: opacity 160ms ease, transform .2s var(--bounce);
+}
+.enlist-tick svg { display: block; width: 100%; height: 100%; }
+.enlist-field.is-valid .enlist-tick { opacity: 1; transform: none; }
+
+.enlist-help {
+  margin: -5px 0 0;
+  font-size: 9.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #64748B;
+  transition: color 140ms ease;
+}
+.enlist-help.is-bad { color: #F87171; }
+
+/* ---- the live preview: squircle crest, clean handle, ready badge ---- */
+.enlist-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(252, 211, 77, .2);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, .1) 0%, rgba(15, 23, 42, .55) 62%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07);
+  animation: enlist-preview-in .26s ease-out both;
+}
+.enlist-preview[hidden] { display: none; }
+@keyframes enlist-preview-in {
+  from { opacity: 0; transform: translateY(-4px) scale(.99); }
+  to { opacity: 1; transform: none; }
+}
+.enlist-av {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 13px;
+  background: radial-gradient(120% 120% at 30% 0%, #FDE68A 0%, #F59E0B 46%, #B45309 100%);
+  box-shadow:
+    0 0 0 1px rgba(252, 211, 77, .35),
+    0 4px 10px rgba(0, 0, 0, .45);
+}
+.enlist-av-mono { font-size: 17px; font-weight: 900; line-height: 1; color: #2A1902; }
+.enlist-av-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.enlist-av-img[hidden] { display: none; }
+.enlist-pv { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.enlist-pv-k {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: #8FA0B8;
+}
+.enlist-pv-h {
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #F8FAFC;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.enlist-ready {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  border: 1px solid rgba(16, 185, 129, .3);
+  border-radius: 999px;
+  background: rgba(16, 185, 129, .1);
+  color: #6EE7B7;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.enlist-ready i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #34D399;
+  box-shadow: 0 0 6px rgba(52, 211, 153, .8);
+  animation: enlist-ready-pulse 1.8s ease-in-out infinite;
+}
+@keyframes enlist-ready-pulse {
+  0%, 100% { opacity: .55; }
+  50% { opacity: 1; }
+}
+
+/* ---- perks: a compact bento pair, gold glyph + promise ---- */
+.enlist-perks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.enlist-perk {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 1px solid rgba(148, 163, 184, .13);
+  border-radius: 11px;
+  background: rgba(148, 163, 184, .05);
+  color: #C3CFE0;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.32;
+}
+.enlist-perk-ico { flex: none; width: 11px; height: 11px; margin-top: 1px; color: #FCD34D; }
+
+/* ---- the enlist key: gold face, specular rim, dark type ---- */
+.enlist-cta {
+  position: relative;
+  width: 100%;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 2px 0 0;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 15px;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #221302;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow:
+    0 12px 26px -8px rgba(245, 158, 11, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .5),
+    inset 0 -2px 0 rgba(146, 64, 14, .4);
+  transition: transform 90ms ease, box-shadow 140ms ease, filter 140ms ease, opacity 140ms ease;
+}
+.enlist-cta::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: 1px;
+  height: 46%;
+  border-radius: 12px 12px 40% 40%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .42) 0%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+}
+.enlist-cta-t,
+.enlist-spin { position: relative; }
+.enlist-cta:not([aria-disabled="true"]):hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  box-shadow:
+    0 16px 30px -8px rgba(245, 158, 11, .62),
+    inset 0 1px 0 rgba(255, 255, 255, .55),
+    inset 0 -2px 0 rgba(146, 64, 14, .4);
+}
+.enlist-cta:not([aria-disabled="true"]):active {
+  transform: translateY(1px) scale(.99);
+  filter: none;
+  box-shadow:
+    0 5px 12px rgba(245, 158, 11, .3),
+    inset 0 1px 0 rgba(255, 255, 255, .28),
+    inset 0 -1px 0 rgba(146, 64, 14, .3);
+}
+.enlist-cta:focus-visible { outline: 3px solid #FCD34D; outline-offset: 2px; }
+.enlist-cta[aria-disabled="true"] {
+  opacity: .6;
+  filter: saturate(.3) brightness(.66);
+  cursor: not-allowed;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    0 4px 12px rgba(0, 0, 0, .3);
+}
+.enlist-spin {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(34, 19, 2, .25);
+  border-top-color: #221302;
+  border-radius: 50%;
+  animation: enlist-spin .7s linear infinite;
+}
+.enlist-spin[hidden] { display: none; }
+@keyframes enlist-spin { to { transform: rotate(360deg); } }
+.enlist-cta.is-busy .enlist-cta-t { opacity: .85; }
+.enlist-fine {
+  margin: 0;
+  text-align: center;
+  font-size: 8.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #6F819B;
+}
+
+html.reduced-motion .enlist-scrim,
+html.reduced-motion .enlist { transition: none; }
+html.reduced-motion .enlist-panel { transition: none; }
+html.reduced-motion .enlist.is-open .enlist-panel { animation: none; }
+html.reduced-motion .enlist-badge { animation: none; }
+html.reduced-motion .enlist-ready i { animation: none; opacity: 1; }
+html.reduced-motion .enlist-preview { animation: none; }
+html.reduced-motion .enlist-field.is-shake { animation: none; }
+
+/* the 320px floor: the badge drops under the title and the perks go full width */
+@media (max-width: 350px) {
+  .enlist-panel { padding: 18px; border-radius: 22px; }
+  .enlist-title { font-size: 18px; }
+  .enlist-sub { font-size: 11px; }
+  .enlist-perks { grid-template-columns: 1fr; }
+  .enlist-cta { font-size: 12px; letter-spacing: .05em; }
+}
+
+/* the short-phone floor: the panel scrolls inside its own chassis */
+@media (max-height: 620px) {
+  .enlist-panel { gap: 8px; padding: 18px; }
+  .enlist-sub { margin-top: 5px; }
+}
+
+/* ==========================================================================
    COMMAND DISPATCH — the urgent broadcast overlay (src/broadcasts.ts). A
    full-viewport frosted scrim (1000) under the centered Dark-Clay transmission
    modal (1001); the admin stage (1002) alone stays in front. Amber rim, spring
