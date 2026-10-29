@@ -1294,6 +1294,20 @@ export function createMenu(api: MenuApi): Menu {
     else paintSquadList(squadQ.value);
   });
 
+  /* A completed enlistment lands here: the modal is a singleton outside this
+     scope, so it announces the new squad on the window and the lobby answers by
+     opening its dashboard. The registration is already written — this is only
+     the hand-off, never a second write. */
+  window.addEventListener('detour:squad-enlisted', () => {
+    if (!squadSheet) return;
+    squadQ.value = '';
+    squadQuery = '';
+    squadMemberQ.value = '';
+    showSquadBound();
+    api.sheets.open(squadSheet);
+    requestAnimationFrame(() => scheduleSquadWindow(true));
+  });
+
   /* ---- the entry points: country now lives only in Profile (header pill removed) ---- */
   document.getElementById('country-chip')?.addEventListener('click', () => { impact('light'); api.router.go('profile'); });
   $('pf-country').addEventListener('click', () => {
@@ -2654,10 +2668,17 @@ export function createMenu(api: MenuApi): Menu {
    ENLIST SQUAD — the Channel War registration door.
 
    A centered luxury-glass modal (deliberately not a sheet: this is a
-   commitment, not a browse) opened by Home's "Channel admin? Enlist here" key.
-   It normalises whatever the admin pastes, previews the community live — the
-   public Telegram photo over a monogram, so a private or missing photo never
-   leaves an empty crest — and writes the squad through `enlistSquad`.
+   commitment, not a browse) opened by Home's channel-admin pod. It normalises
+   whatever the admin pastes — a `t.me` link, a typed `@name` or the bare
+   username — and answers while they type: from three characters on, the live
+   plate carries the community's public photo over a monogram and the ready
+   badge.
+
+   Enlisting is one write. `enlistSquad` mints (or binds) the squad with its
+   handle, kind, avatar, opening stats and the Channel War stamp, and binds the
+   device to it — which is what seats the local player as its leader. The modal
+   then lifts and announces `detour:squad-enlisted`, so the lobby opens on the
+   new squad's dashboard instead of leaving the player on Home.
 
    Bound once, on first open: the modal is a singleton in the markup, so every
    listener below is attached exactly once for the life of the app.
@@ -2681,7 +2702,7 @@ function createEnlistModal(): EnlistModal | null {
 
   const input = $<HTMLInputElement>('enlist-input');
   const field = $<HTMLElement>('enlist-field');
-  const help = $<HTMLElement>('enlist-help');
+  const err = $<HTMLElement>('enlist-err');
   const preview = $<HTMLElement>('enlist-preview');
   const pvHandle = $<HTMLElement>('enlist-pv-h');
   const avMono = $<HTMLElement>('enlist-av-mono');
@@ -2692,10 +2713,10 @@ function createEnlistModal(): EnlistModal | null {
   const closeBtn = $<HTMLButtonElement>('enlist-close');
   const kindBtns = [...modal.querySelectorAll<HTMLElement>('[data-enlist-kind]')];
 
-  const HELP = 'Paste a t.me link or type the username — the @ is stripped for you.';
-  const HELP_BAD = 'Use 3–32 letters, numbers or underscores.';
-  const CTA = 'Enlist in Channel War';
-  const CTA_BUSY = 'Enlisting…';
+  /* A full t.me link is folded down the instant it lands. The tail needs at
+     least one character, so typing `t.me/` is never a match — the field can not
+     be wiped out from under someone who is halfway through a link. */
+  const LINK = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/([A-Za-z0-9_]{1,32})/i;
 
   let kind: SquadKind = 'channel';
   let isOpen = false;
@@ -2707,14 +2728,34 @@ function createEnlistModal(): EnlistModal | null {
 
   const handleOf = (): string => cleanChatReference(input.value);
 
+  /* The sigil lives in the pod, so the field only ever holds the bare username:
+     a pasted link or a typed `@` is folded down the moment it arrives, with the
+     caret put back where the typing actually was. */
+  function normalise(): void {
+    const raw = input.value;
+    if (!raw) return;
+    const link = LINK.exec(raw.trimStart());
+    let next = link ? link[1] : raw;
+    next = next.replace(/^@+/, '').replace(/\s+/g, '');
+    if (next === raw) return;
+    const caret = link
+      ? next.length
+      : Math.max(0, (input.selectionStart ?? raw.length) - (raw.length - next.length));
+    input.value = next;
+    try { input.setSelectionRange(caret, caret); } catch { /* not focused yet */ }
+  }
+
   /* The photo is a bonus, never the crest: the monogram is already painted
-     underneath, so a blocked or missing userpic costs nothing. */
+     underneath, and the CDN answers private communities with a 404 or a 1x1
+     placeholder — both of which must leave the monogram showing. */
   function paintAvatar(handle: string): void {
     if (handle === lastAvatar) return;
     lastAvatar = handle;
     avMono.textContent = handle.slice(1, 2).toUpperCase() || '?';
     avImg.hidden = true;
-    avImg.onload = () => { avImg.hidden = false; };
+    avImg.onload = () => {
+      avImg.hidden = avImg.naturalWidth <= 2 || avImg.naturalHeight <= 2;
+    };
     avImg.onerror = () => { avImg.hidden = true; };
     const url = telegramAvatarUrl(handle);
     if (url) avImg.src = url;
@@ -2727,21 +2768,25 @@ function createEnlistModal(): EnlistModal | null {
     const bad = !valid && touched;
     field.classList.toggle('is-valid', valid);
     field.classList.toggle('is-bad', bad);
-    help.textContent = bad ? HELP_BAD : HELP;
-    help.classList.toggle('is-bad', bad);
+    input.setAttribute('aria-invalid', bad ? 'true' : 'false');
     preview.hidden = !valid;
     if (valid) {
       pvHandle.textContent = handle;
       paintAvatar(handle);
+      err.hidden = true;
     }
     submit.setAttribute('aria-disabled', valid && !busy ? 'false' : 'true');
+    if (!busy) ctaLabel.textContent = t('enlistCta');
   }
 
-  /* A refused submit explains itself in place: the field shakes, the helper turns
-     red and focus lands where the fix is. */
+  /* A refused submit explains itself in place: the field shakes, one line of
+     red appears under it and focus lands where the fix is. That line is the only
+     copy under the field — there is no standing hint to compete with it. */
   function nudge(): void {
     touched = true;
     paint();
+    err.textContent = t('enlistErrHandle');
+    err.hidden = false;
     field.classList.remove('is-shake');
     void field.offsetWidth;
     field.classList.add('is-shake');
@@ -2758,36 +2803,42 @@ function createEnlistModal(): EnlistModal | null {
     submit.classList.add('is-busy');
     submit.setAttribute('aria-disabled', 'true');
     spin.hidden = false;
-    ctaLabel.textContent = CTA_BUSY;
+    ctaLabel.textContent = t('enlistCtaBusy');
     impact('medium');
 
     /* The write is instant, but a modal that blinks shut reads like a mis-tap:
        the key holds one honest beat so the spinner actually means something. */
     await new Promise<void>((resolve) => {
-      window.setTimeout(resolve, motionReduced() ? 140 : 720);
+      window.setTimeout(resolve, motionReduced() ? 140 : 620);
     });
 
     const result = enlistSquad(handle, kind);
     busy = false;
     submit.classList.remove('is-busy');
     spin.hidden = true;
-    ctaLabel.textContent = CTA;
+    ctaLabel.textContent = t('enlistCta');
 
     if (!result.ok) {
       nudge();
       return;
     }
 
+    const squad = result.squad;
     input.value = '';
     touched = false;
+    err.hidden = true;
+    restore = null;                 // the squad hub takes focus, not Home's pod
     notify('success');
     close();
-    /* The veil lifts first, then the confirmation lands: a toast behind a fading
-       scrim reads as a glitch, and the beat makes the close feel deliberate. */
-    window.setTimeout(
-      () => showToast('Squad enlisted successfully!', 'success'),
-      motionReduced() ? 0 : 200,
-    );
+    /* The veil lifts first, then the lobby takes over: the squad hub rises on
+       the community that was just registered while the confirmation lands on
+       top of it. A toast behind a fading scrim reads as a glitch. */
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('detour:squad-enlisted', {
+        detail: { id: squad.id, handle: squad.handle, created: result.created },
+      }));
+      showToast(t('enlistToast'), 'success');
+    }, motionReduced() ? 0 : 200);
   }
 
   function close(): void {
@@ -2811,9 +2862,11 @@ function createEnlistModal(): EnlistModal | null {
     restore = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     touched = false;
     busy = false;
+    err.hidden = true;
     submit.classList.remove('is-busy');
     spin.hidden = true;
-    ctaLabel.textContent = CTA;
+    ctaLabel.textContent = t('enlistCta');
+    input.setAttribute('aria-label', t('enlistPlaceholder').replace(/_/g, ' '));
     modal.hidden = false;
     scrim.hidden = false;
     void modal.offsetWidth;                 // lay the panel out at its closed scale first
@@ -2829,21 +2882,9 @@ function createEnlistModal(): EnlistModal | null {
 
   input.addEventListener('input', () => {
     touched = false;
+    err.hidden = true;
+    normalise();
     paint();
-  });
-  /* Blur is the normaliser: the @ lives in the pod, so the field keeps the bare
-     username — even when a full t.me link was pasted in. */
-  input.addEventListener('blur', () => {
-    const handle = handleOf();
-    if (handle) input.value = handle.slice(1);
-    paint();
-  });
-  input.addEventListener('paste', () => {
-    window.setTimeout(() => {
-      const handle = handleOf();
-      if (handle) input.value = handle.slice(1);
-      paint();
-    }, 0);
   });
   input.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
@@ -2873,6 +2914,15 @@ function createEnlistModal(): EnlistModal | null {
     if (!isOpen || e.key !== 'Escape') return;
     e.preventDefault();
     close();
+  });
+
+  /* The chassis is translated in place: `data-i18n` covers the static labels,
+     and the two strings this controller owns are re-read here. */
+  window.addEventListener('detour:lang', () => {
+    if (!isOpen) return;
+    input.setAttribute('aria-label', t('enlistPlaceholder').replace(/_/g, ' '));
+    paint();
+    if (!err.hidden) err.textContent = t('enlistErrHandle');
   });
 
   return { open: show };

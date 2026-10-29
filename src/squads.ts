@@ -32,6 +32,14 @@ export interface Squad {
   avatar?: string;
   /** 2–3 character call sign stamped on the squad crest */
   tag?: string;
+  /**
+   * ms epoch this community enlisted in the Channel War — the tournament's own
+   * enrollment mark, written once when the squad is minted and never edited.
+   * Absent on the seeded field and on every squad saved before enlistment
+   * existed, so a legacy save still validates; the stamp records intent and is
+   * never a ranking input (trophies alone move the board).
+   */
+  enlistedAt?: number;
 }
 
 export interface RankedSquad extends Squad {
@@ -77,7 +85,8 @@ function squadOk(s: unknown): s is Squad {
     && (x.trend === 'up' || x.trend === 'down' || x.trend === 'same')
     && (x.kind === undefined || x.kind === 'channel' || x.kind === 'group')
     && (x.avatar === undefined || (typeof x.avatar === 'string' && x.avatar.length <= 160))
-    && (x.tag === undefined || (typeof x.tag === 'string' && /^[A-Z0-9]{2,3}$/.test(x.tag)));
+    && (x.tag === undefined || (typeof x.tag === 'string' && /^[A-Z0-9]{2,3}$/.test(x.tag)))
+    && (x.enlistedAt === undefined || (typeof x.enlistedAt === 'number' && Number.isFinite(x.enlistedAt) && x.enlistedAt > 0));
 }
 
 /** Resolve the community type, defaulting deterministically for legacy saves. */
@@ -221,9 +230,14 @@ export type EnlistResult =
 /**
  * The Channel War enlistment door: an admin pastes anything Telegram-shaped
  * (`@name`, `name`, `t.me/name`), we normalise it, bind the squad when it already
- * ranks, and otherwise mint a local one carrying the chosen community kind. Unlike
- * `claimRegisteredSquad` this never refuses an existing handle — enlisting the
- * reigning champion simply binds you to it.
+ * ranks, and otherwise mint a local one carrying the chosen community kind.
+ * Unlike `claimRegisteredSquad` this never refuses an existing handle — enlisting
+ * the reigning champion simply binds you to it.
+ *
+ * A freshly minted squad is a complete registration in one write: handle, kind,
+ * public avatar, opening stats, the Channel War stamp and the device binding that
+ * makes the local player its leader. The board, the cup and the hub all read the
+ * same record, so nothing else has to be told the community exists.
  */
 export function enlistSquad(rawHandle: string, kind: SquadKind = 'channel'): EnlistResult {
   const handle = cleanChatReference(rawHandle);
@@ -245,6 +259,8 @@ export function enlistSquad(rawHandle: string, kind: SquadKind = 'channel'): Enl
     trophies: 0,
     trend: 'same',
     kind: kind === 'group' ? 'group' : 'channel',
+    avatar: telegramAvatarUrl(handle),
+    enlistedAt: Date.now(),
   };
   save.custom = [...save.custom, created].slice(-20);
   save.boundId = id;

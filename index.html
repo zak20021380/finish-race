@@ -5292,7 +5292,12 @@
       <!-- Enlist Squad — the Channel War registration door. A centered luxury-glass
            modal (not a bottom sheet: this is a commitment, not a browse) with its own
            scrim, ESC / backdrop / close-box dismissal and a live community preview.
-           Above the sheets (900/901), below an urgent dispatch (1000). -->
+           Above the sheets (900/901), below an urgent dispatch (1000).
+
+           Deliberately quiet: a title, one promise, one switch, one field, and the
+           live plate that answers as you type. No helper line under the input and no
+           fine print under the key — the promise is the whole subtitle, and every
+           other line here is something the player can act on. -->
       <div class="enlist-scrim" id="enlist-scrim" hidden aria-hidden="true"></div>
       <section class="enlist" id="enlist-modal" hidden role="dialog" aria-modal="true"
         aria-labelledby="enlist-title" aria-describedby="enlist-sub">
@@ -5303,60 +5308,48 @@
 
           <header class="enlist-head">
             <h2 class="enlist-title" id="enlist-title">
-              <span class="enlist-title-t">Enlist Squad</span>
-              <span class="enlist-badge">
-                <svg class="enlist-badge-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-swords" /></svg>
-                Channel &amp; Group
+              <span class="enlist-title-t" data-i18n="enlistTitle">Enlist Squad</span>
+              <span class="enlist-type">
+                <svg class="enlist-type-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-send" /></svg>
+                <span data-i18n="enlistType">Telegram</span>
               </span>
             </h2>
-            <p class="enlist-sub" id="enlist-sub">Register your Telegram community to compete for the 200 Stars prize pool and climb the global leaderboard.</p>
+            <p class="enlist-sub" id="enlist-sub" data-i18n="enlistSub">Enter your community handle to compete for the 200 Stars pool.</p>
           </header>
 
-          <div class="enlist-fieldrow">
-            <label class="enlist-label" for="enlist-input">Community handle</label>
-            <div class="enlist-kind" role="group" aria-label="Community type">
-              <button class="enlist-kind-b is-on" type="button" data-enlist-kind="channel" aria-pressed="true">Channel</button>
-              <button class="enlist-kind-b" type="button" data-enlist-kind="group" aria-pressed="false">Group</button>
-            </div>
+          <div class="enlist-kind" role="group" aria-label="Community type">
+            <button class="enlist-kind-b is-on" type="button" data-enlist-kind="channel" aria-pressed="true" data-i18n="enlistChannel">Channel</button>
+            <button class="enlist-kind-b" type="button" data-enlist-kind="group" aria-pressed="false" data-i18n="enlistGroup">Group</button>
           </div>
 
           <div class="enlist-field" id="enlist-field">
             <span class="enlist-at" aria-hidden="true">@</span>
             <input class="enlist-input" id="enlist-input" type="text" placeholder="channel_or_group_username"
               autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="go"
-              aria-label="Channel or group username" aria-describedby="enlist-help" />
+              aria-label="Channel or group username" aria-describedby="enlist-err"
+              data-i18n-ph="enlistPlaceholder" />
             <span class="enlist-tick" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="#i-check" /></svg></span>
           </div>
-          <p class="enlist-help" id="enlist-help" role="status">Paste a t.me link or type the username — the @ is stripped for you.</p>
+          <p class="enlist-err" id="enlist-err" role="status" hidden></p>
 
           <div class="enlist-preview" id="enlist-preview" hidden>
             <span class="enlist-av">
               <span class="enlist-av-mono" id="enlist-av-mono" aria-hidden="true">D</span>
               <img class="enlist-av-img" id="enlist-av-img" alt="" hidden decoding="async" referrerpolicy="no-referrer" />
             </span>
-            <span class="enlist-pv">
-              <span class="enlist-pv-k">Community</span>
-              <b class="enlist-pv-h" id="enlist-pv-h">@channel</b>
-            </span>
-            <span class="enlist-ready"><i aria-hidden="true"></i>Ready to Enlist</span>
+            <b class="enlist-pv-h" id="enlist-pv-h">@channel</b>
+            <span class="enlist-ready"><i aria-hidden="true"></i><span data-i18n="enlistReady">Ready to Enlist</span></span>
           </div>
 
           <div class="enlist-perks">
-            <span class="enlist-perk">
-              <svg class="enlist-perk-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-cup" /></svg>
-              <span>200 Stars Pool Eligibility</span>
-            </span>
-            <span class="enlist-perk">
-              <svg class="enlist-perk-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-bolt" /></svg>
-              <span>Squad Point Multiplier for Members</span>
-            </span>
+            <span class="enlist-perk" data-i18n="enlistPerkPool">🏆 200 Stars Pool</span>
+            <span class="enlist-perk" data-i18n="enlistPerkBoost">⚡ Squad Point Boost</span>
           </div>
 
           <button class="enlist-cta" id="enlist-submit" type="button" aria-disabled="true">
             <span class="enlist-spin" id="enlist-spin" hidden aria-hidden="true"></span>
             <span class="enlist-cta-t" id="enlist-cta-t">Enlist in Channel War</span>
           </button>
-          <p class="enlist-fine">By enlisting you confirm you own or administer this community.</p>
         </div>
       </section>
 

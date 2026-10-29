@@ -21233,6 +21233,12 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
    `openEnlistSquad`). A centered luxury-glass chassis over its own scrim,
    above the sheets (900/901) and below an urgent dispatch (1000). Gold rim,
    obsidian handle field, live community preview, one high-energy enlist key.
+
+   The composition is deliberately short: title + type pill, one promise, the
+   channel/group switch, the field, the live plate and two micro-badges. Every
+   line that used to explain the field (the paste hint, the ownership fine
+   print) is gone — the field's own behaviour teaches it, and the key states
+   the commitment on its face.
    ========================================================================== */
 .enlist-scrim {
   position: fixed;
@@ -21338,97 +21344,82 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
 .enlist-close:active { transform: scale(.94); }
 .enlist-close:focus-visible { outline: 2px solid #FCD34D; outline-offset: 2px; }
 
-/* ---- header: the title carries a glowing authority badge ---- */
-.enlist-head { position: relative; padding-right: 34px; }
+/* ---- header: the title and one frosted type pill, then the single promise ---- */
+.enlist-head { position: relative; padding-right: 30px; }
 .enlist-title {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 7px;
   margin: 0;
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 900;
-  letter-spacing: -.015em;
+  letter-spacing: -.02em;
   line-height: 1.15;
   color: #F8FAFC;
 }
 .enlist-title-t { text-shadow: 0 1px 0 rgba(0, 0, 0, .5); }
-.enlist-badge {
+.enlist-type {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 8px;
-  border: 1px solid rgba(252, 211, 77, .38);
-  border-radius: 8px;
-  background: linear-gradient(180deg, rgba(251, 191, 36, .2) 0%, rgba(245, 158, 11, .07) 100%);
-  color: #FCD34D;
-  font-size: 8px;
+  gap: 4px;
+  padding: 3px 7px 3px 6px;
+  border: 1px solid rgba(148, 163, 184, .22);
+  border-radius: 7px;
+  background: rgba(148, 163, 184, .09);
+  color: #C7D2E0;
+  font-size: 7.5px;
   font-weight: 900;
-  letter-spacing: .12em;
+  letter-spacing: .1em;
   line-height: 1;
   text-transform: uppercase;
   white-space: nowrap;
-  box-shadow:
-    0 0 14px rgba(245, 158, 11, .26),
-    inset 0 1px 0 rgba(255, 255, 255, .18);
-  animation: enlist-badge-glow 3.6s ease-in-out infinite;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
 }
-@keyframes enlist-badge-glow {
-  0%, 100% { box-shadow: 0 0 12px rgba(245, 158, 11, .2), inset 0 1px 0 rgba(255, 255, 255, .16); }
-  50% { box-shadow: 0 0 22px rgba(245, 158, 11, .46), inset 0 1px 0 rgba(255, 255, 255, .24); }
-}
-.enlist-badge-ico { width: 10px; height: 10px; flex: none; }
+.enlist-type-ico { width: 9px; height: 9px; flex: none; color: #FCD34D; }
 .enlist-sub {
-  margin: 7px 0 0;
+  margin: 6px 0 0;
   font-size: 11.5px;
   font-weight: 500;
   line-height: 1.5;
   color: #94A3B8;
+  text-wrap: pretty;
 }
 
-/* ---- the field head: label on the left, the community kind on the right ---- */
-.enlist-fieldrow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 2px 0 -3px;
-}
-.enlist-label {
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: #7D8CA3;
-}
+/* ---- the community switch: an obsidian glass pill, gold under the live choice ---- */
 .enlist-kind {
-  display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid rgba(148, 163, 184, .16);
-  border-radius: 9px;
-  background: rgba(8, 12, 20, .7);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid rgba(148, 163, 184, .13);
+  border-radius: 12px;
+  background: rgba(6, 10, 18, .72);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .5);
 }
 .enlist-kind-b {
-  min-height: 22px;
-  padding: 0 9px;
+  height: 30px;
+  padding: 0 8px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 9px;
   background: transparent;
-  color: #7D8CA3;
+  color: #7E8DA4;
   font: inherit;
-  font-size: 9px;
+  font-size: 9.5px;
   font-weight: 800;
-  letter-spacing: .06em;
+  letter-spacing: .1em;
   line-height: 1;
   text-transform: uppercase;
   cursor: pointer;
-  transition: color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+  transition: color 150ms ease, background 150ms ease, box-shadow 150ms ease;
 }
+.enlist-kind-b:hover { color: #B6C2D4; }
 .enlist-kind-b.is-on {
-  background: linear-gradient(180deg, rgba(251, 191, 36, .22) 0%, rgba(245, 158, 11, .09) 100%);
-  color: #FCD34D;
-  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .3);
+  background: linear-gradient(180deg, #FCD34D 0%, #F59E0B 100%);
+  color: #2A1902;
+  box-shadow:
+    0 2px 8px -1px rgba(245, 158, 11, .45),
+    inset 0 1px 0 rgba(255, 255, 255, .5);
 }
 .enlist-kind-b:focus-visible { outline: 2px solid #FCD34D; outline-offset: 1px; }
 
@@ -21437,8 +21428,8 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
   display: flex;
   align-items: center;
   gap: 9px;
-  height: 50px;
-  padding: 0 10px 0 9px;
+  height: 52px;
+  padding: 0 11px 0 9px;
   border: 1px solid rgba(148, 163, 184, .18);
   border-radius: 14px;
   background: linear-gradient(180deg, #0A101C 0%, #070B13 100%);
@@ -21469,15 +21460,15 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
 .enlist-field.is-shake { animation: enlist-shake .3s ease-in-out; }
 .enlist-at {
   flex: none;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
-  background: rgba(245, 158, 11, .12);
-  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .28);
+  border-radius: 9px;
+  background: linear-gradient(180deg, rgba(252, 211, 77, .22) 0%, rgba(245, 158, 11, .1) 100%);
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .34);
   color: #FCD34D;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   line-height: 1;
 }
@@ -21508,26 +21499,31 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
 .enlist-tick svg { display: block; width: 100%; height: 100%; }
 .enlist-field.is-valid .enlist-tick { opacity: 1; transform: none; }
 
-.enlist-help {
-  margin: -5px 0 0;
-  font-size: 9.5px;
-  font-weight: 500;
-  line-height: 1.4;
-  color: #64748B;
-  transition: color 140ms ease;
+/* The only line under the field, and only when a submit was actually refused:
+   the hint that used to live here is gone, so this can never read as clutter. */
+.enlist-err {
+  margin: -4px 2px 0;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: #F87171;
 }
-.enlist-help.is-bad { color: #F87171; }
+.enlist-err[hidden] { display: none; }
 
-/* ---- the live preview: squircle crest, clean handle, ready badge ---- */
+/* ---- the live plate: a 48px squircle crest, the handle, one ready badge ---- */
 .enlist-preview {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 10px;
+  gap: 11px;
+  padding: 9px 11px 9px 9px;
   border: 1px solid rgba(252, 211, 77, .2);
   border-radius: 16px;
-  background: linear-gradient(135deg, rgba(245, 158, 11, .1) 0%, rgba(15, 23, 42, .55) 62%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07);
+  background:
+    linear-gradient(135deg, rgba(245, 158, 11, .12) 0%, rgba(12, 19, 32, .66) 58%),
+    rgba(10, 16, 28, .6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    0 8px 20px -14px rgba(0, 0, 0, .9);
   animation: enlist-preview-in .26s ease-out both;
 }
 .enlist-preview[hidden] { display: none; }
@@ -21538,31 +21534,26 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
 .enlist-av {
   position: relative;
   flex: none;
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   display: grid;
   place-items: center;
   overflow: hidden;
-  border-radius: 13px;
+  border-radius: 15px;
   background: radial-gradient(120% 120% at 30% 0%, #FDE68A 0%, #F59E0B 46%, #B45309 100%);
   box-shadow:
-    0 0 0 1px rgba(252, 211, 77, .35),
-    0 4px 10px rgba(0, 0, 0, .45);
+    0 0 0 1px rgba(252, 211, 77, .34),
+    0 5px 12px rgba(0, 0, 0, .5);
 }
-.enlist-av-mono { font-size: 17px; font-weight: 900; line-height: 1; color: #2A1902; }
+.enlist-av-mono { font-size: 19px; font-weight: 900; line-height: 1; color: #2A1902; }
 .enlist-av-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .enlist-av-img[hidden] { display: none; }
-.enlist-pv { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.enlist-pv-k {
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-  color: #8FA0B8;
-}
 .enlist-pv-h {
-  font-size: 12.5px;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
   font-weight: 800;
+  letter-spacing: 0;
   line-height: 1.2;
   color: #F8FAFC;
   overflow: hidden;
@@ -21575,7 +21566,7 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
   align-items: center;
   gap: 4px;
   padding: 4px 7px;
-  border: 1px solid rgba(16, 185, 129, .3);
+  border: 1px solid rgba(52, 211, 153, .32);
   border-radius: 999px;
   background: rgba(16, 185, 129, .1);
   color: #6EE7B7;
@@ -21585,13 +21576,16 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
   line-height: 1;
   text-transform: uppercase;
   white-space: nowrap;
+  box-shadow: 0 0 16px -6px rgba(52, 211, 153, .7);
 }
 .enlist-ready i {
   width: 4px;
   height: 4px;
   border-radius: 50%;
   background: #34D399;
-  box-shadow: 0 0 6px rgba(52, 211, 153, .8);
+  box-shadow:
+    0 0 6px rgba(52, 211, 153, .85),
+    0 0 10px rgba(252, 211, 77, .35);
   animation: enlist-ready-pulse 1.8s ease-in-out infinite;
 }
 @keyframes enlist-ready-pulse {
@@ -21599,137 +21593,205 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
   50% { opacity: 1; }
 }
 
-/* ---- perks: a compact bento pair, gold glyph + promise ---- */
+/* ---- the two promises: frosted micro-badges, glyph + words, nothing else ---- */
 .enlist-perks {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  gap: 7px;
 }
 .enlist-perk {
   display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 7px 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 7px 6px;
   border: 1px solid rgba(148, 163, 184, .13);
   border-radius: 11px;
-  background: rgba(148, 163, 184, .05);
+  background: rgba(148, 163, 184, .055);
   color: #C3CFE0;
-  font-size: 9px;
+  font-size: 9.5px;
   font-weight: 700;
-  line-height: 1.32;
+  line-height: 1.3;
+  text-align: center;
 }
-.enlist-perk-ico { flex: none; width: 11px; height: 11px; margin-top: 1px; color: #FCD34D; }
 
-/* ---- the enlist key: gold face, specular rim, dark type ---- */
+/* ---- the enlist key ----
+   One element, two faces. The base is the resting state — a translucent gold
+   wash with gold type, so a closed door still reads as gold and not as mud. The
+   live face is the `::after` metal plate; it cross-fades in the instant a handle
+   is ready, which is why the key lights up instead of snapping colour. */
 .enlist-cta {
   position: relative;
+  isolation: isolate;
   width: 100%;
   min-height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin: 2px 0 0;
+  margin: 1px 0 0;
   padding: 0 14px;
   border: 0;
   border-radius: 15px;
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: #221302;
+  background: linear-gradient(180deg, rgba(245, 158, 11, .2) 0%, rgba(245, 158, 11, .09) 100%);
+  color: rgba(252, 211, 77, .78);
   font: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 900;
-  letter-spacing: .07em;
+  letter-spacing: .075em;
   text-transform: uppercase;
   white-space: nowrap;
-  cursor: pointer;
+  cursor: not-allowed;
   overflow: hidden;
   box-shadow:
-    0 12px 26px -8px rgba(245, 158, 11, .55),
-    inset 0 1px 0 rgba(255, 255, 255, .5),
-    inset 0 -2px 0 rgba(146, 64, 14, .4);
-  transition: transform 90ms ease, box-shadow 140ms ease, filter 140ms ease, opacity 140ms ease;
+    inset 0 0 0 1px rgba(252, 211, 77, .26),
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    inset 0 0 22px -6px rgba(245, 158, 11, .4),
+    0 0 30px -14px rgba(245, 158, 11, .7);
+  transition:
+    color 200ms ease,
+    box-shadow 200ms ease,
+    transform 90ms ease;
 }
+/* the metal plate: warm champagne at the crown, amber through the body */
+.enlist-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #FDE68A 0%, #FBBF24 32%, #F59E0B 62%, #D97706 100%);
+  opacity: 0;
+  transition: opacity 220ms ease;
+  pointer-events: none;
+}
+/* the specular sweep across the top third */
 .enlist-cta::before {
   content: "";
   position: absolute;
   left: 6px;
   right: 6px;
   top: 1px;
+  z-index: 1;
   height: 46%;
   border-radius: 12px 12px 40% 40%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .42) 0%, rgba(255, 255, 255, 0) 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .45) 0%, rgba(255, 255, 255, 0) 100%);
+  opacity: .12;
+  transition: opacity 220ms ease;
   pointer-events: none;
 }
 .enlist-cta-t,
-.enlist-spin { position: relative; }
-.enlist-cta:not([aria-disabled="true"]):hover {
-  transform: translateY(-1px);
-  filter: brightness(1.05);
+.enlist-spin { position: relative; z-index: 2; }
+.enlist-cta[aria-disabled="false"] {
+  color: #241402;
+  cursor: pointer;
   box-shadow:
-    0 16px 30px -8px rgba(245, 158, 11, .62),
-    inset 0 1px 0 rgba(255, 255, 255, .55),
-    inset 0 -2px 0 rgba(146, 64, 14, .4);
+    0 14px 30px -10px rgba(245, 158, 11, .62),
+    inset 0 1px 0 rgba(255, 255, 255, .5),
+    inset 0 -2px 0 rgba(146, 64, 14, .34);
 }
-.enlist-cta:not([aria-disabled="true"]):active {
-  transform: translateY(1px) scale(.99);
-  filter: none;
+.enlist-cta[aria-disabled="false"]::after { opacity: 1; }
+.enlist-cta[aria-disabled="false"]::before { opacity: 1; }
+.enlist-cta[aria-disabled="false"]:hover {
+  transform: translateY(-1px);
   box-shadow:
-    0 5px 12px rgba(245, 158, 11, .3),
-    inset 0 1px 0 rgba(255, 255, 255, .28),
+    0 18px 34px -10px rgba(245, 158, 11, .68),
+    inset 0 1px 0 rgba(255, 255, 255, .55),
+    inset 0 -2px 0 rgba(146, 64, 14, .34);
+}
+.enlist-cta[aria-disabled="false"]:active {
+  transform: translateY(1px) scale(.99);
+  box-shadow:
+    0 6px 14px rgba(245, 158, 11, .34),
+    inset 0 1px 0 rgba(255, 255, 255, .3),
     inset 0 -1px 0 rgba(146, 64, 14, .3);
 }
 .enlist-cta:focus-visible { outline: 3px solid #FCD34D; outline-offset: 2px; }
-.enlist-cta[aria-disabled="true"] {
-  opacity: .6;
-  filter: saturate(.3) brightness(.66);
-  cursor: not-allowed;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .16),
-    0 4px 12px rgba(0, 0, 0, .3);
-}
 .enlist-spin {
   flex: none;
   width: 15px;
   height: 15px;
-  border: 2px solid rgba(34, 19, 2, .25);
-  border-top-color: #221302;
+  border: 2px solid rgba(36, 20, 2, .25);
+  border-top-color: #241402;
   border-radius: 50%;
   animation: enlist-spin .7s linear infinite;
 }
 .enlist-spin[hidden] { display: none; }
 @keyframes enlist-spin { to { transform: rotate(360deg); } }
 .enlist-cta.is-busy .enlist-cta-t { opacity: .85; }
-.enlist-fine {
-  margin: 0;
-  text-align: center;
-  font-size: 8.5px;
-  font-weight: 500;
-  line-height: 1.4;
-  color: #6F819B;
-}
 
 html.reduced-motion .enlist-scrim,
 html.reduced-motion .enlist { transition: none; }
 html.reduced-motion .enlist-panel { transition: none; }
 html.reduced-motion .enlist.is-open .enlist-panel { animation: none; }
-html.reduced-motion .enlist-badge { animation: none; }
 html.reduced-motion .enlist-ready i { animation: none; opacity: 1; }
 html.reduced-motion .enlist-preview { animation: none; }
 html.reduced-motion .enlist-field.is-shake { animation: none; }
+html.reduced-motion .enlist-cta,
+html.reduced-motion .enlist-cta::after,
+html.reduced-motion .enlist-cta::before { transition: none; }
 
-/* the 320px floor: the badge drops under the title and the perks go full width */
+/* the 320px floor: the perks go full width, the key loses a step of tracking */
 @media (max-width: 350px) {
   .enlist-panel { padding: 18px; border-radius: 22px; }
   .enlist-title { font-size: 18px; }
   .enlist-sub { font-size: 11px; }
+  .enlist-input,
+  .enlist-input::placeholder { font-size: 12px; letter-spacing: 0; }
   .enlist-perks { grid-template-columns: 1fr; }
-  .enlist-cta { font-size: 12px; letter-spacing: .05em; }
+  .enlist-perk { min-height: 30px; }
+  .enlist-preview { gap: 9px; }
+  .enlist-ready { font-size: 7.5px; padding: 3px 6px; }
+  .enlist-cta { font-size: 11.5px; letter-spacing: .05em; }
 }
 
 /* the short-phone floor: the panel scrolls inside its own chassis */
 @media (max-height: 620px) {
-  .enlist-panel { gap: 8px; padding: 18px; }
+  .enlist-panel { gap: 9px; padding: 18px; }
   .enlist-sub { margin-top: 5px; }
+  .enlist-av { width: 42px; height: 42px; border-radius: 13px; }
+}
+
+/* ---- Persian: RTL copy, no tracking, no forced caps, handles stay LTR ----
+   The chassis never mirrors — the close box, the @ pod and the avatar keep
+   their geometry. Only the text containers turn, and the handle line stays a
+   Latin run so a username is never reordered by the bidi algorithm. */
+html[data-lang="fa"] :is(.enlist-title-t, .enlist-type, .enlist-sub, .enlist-kind-b, .enlist-perk, .enlist-cta-t, .enlist-err, .enlist-ready) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+html[data-lang="fa"] .enlist-title { direction: rtl; }
+html[data-lang="fa"] .enlist-sub {
+  direction: rtl;
+  text-align: right;
+  line-height: 1.7;
+}
+html[data-lang="fa"] .enlist-kind { direction: rtl; }
+html[data-lang="fa"] .enlist-kind-b { font-size: 10.5px; }
+html[data-lang="fa"] .enlist-perk {
+  direction: rtl;
+  font-size: 10px;
+  line-height: 1.45;
+}
+html[data-lang="fa"] .enlist-cta-t { font-size: 11.5px; line-height: 1.3; white-space: normal; }
+html[data-lang="fa"] .enlist-err { direction: rtl; text-align: right; font-size: 10.5px; line-height: 1.6; }
+html[data-lang="fa"] .enlist-ready {
+  direction: rtl;
+  font-size: 8.5px;
+  line-height: 1.4;
+}
+html[data-lang="fa"] .enlist-pv-h {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-numeric);
+  text-align: left;
+}
+html[data-lang="fa"] #enlist-input::placeholder {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  direction: rtl;
+  text-align: right;
+  letter-spacing: 0;
 }
 
 /* ==========================================================================
