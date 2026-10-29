@@ -4486,7 +4486,10 @@
            alliance board: hero + Create Squad key pinned, only the bento list scrolls. -->
       <section class="sheet tall" id="sheet-squad" hidden role="dialog" aria-modal="true" aria-labelledby="squad-title">
         <header class="sq-top">
-          <h2 class="sq-title" id="squad-title">Your Squad</h2>
+          <div class="sq-head">
+            <h2 class="sq-title" id="squad-title">Join Squad</h2>
+            <p class="sq-sub" id="squad-sub">Join a Telegram clan or register your own</p>
+          </div>
           <div class="sq-top-actions">
             <button class="sq-explore" type="button" id="squad-explore" aria-label="Explore all squads">
               <svg class="ico" aria-hidden="true"><use id="squad-explore-ico" href="#i-globe" /></svg>
@@ -4499,17 +4502,9 @@
         </header>
 
         <div class="sheet-body sq-search-view" id="squad-search-view">
-          <div class="sq-intro">
-            <p class="sq-kicker">Race for your clan · Ally with Telegram channels</p>
-            <p class="sq-lede">Bind a channel and every point you score banks for the squad.</p>
-          </div>
-
           <button class="sq-create" id="squad-create" type="button">
-            <span class="sq-create-ico" aria-hidden="true"><svg class="ico"><use href="#i-plus" /></svg></span>
-            <span class="sq-create-copy">
-              <b>Create Squad</b>
-              <small>Register your own Telegram channel</small>
-            </span>
+            <svg class="ico sq-create-plus" aria-hidden="true"><use href="#i-plus" /></svg>
+            <b class="sq-create-label">Create Squad</b>
             <svg class="ico sq-create-go" aria-hidden="true"><use href="#i-next" /></svg>
           </button>
 

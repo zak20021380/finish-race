@@ -144,6 +144,16 @@ export const displayNameOf = (handle: string): string => {
   return base.split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ').slice(0, 32);
 };
 
+/**
+ * Public profile photo for a Telegram channel/group. Returns '' for malformed
+ * handles; the CDN may still answer with an error or a 1x1 placeholder, so
+ * callers must keep a monogram underneath.
+ */
+export function telegramAvatarUrl(handle: string): string {
+  const clean = cleanHandle(handle);
+  return clean ? `https://t.me/i/userpic/320/${clean.slice(1)}.jpg` : '';
+}
+
 /** The glyph on a squad crest: its call sign when registered, else the name's initial. */
 export function squadMark(s: Pick<Squad, 'name' | 'handle' | 'tag'>): string {
   const tag = typeof s.tag === 'string' ? cleanTag(s.tag) : '';

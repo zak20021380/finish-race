@@ -31,7 +31,7 @@ import { flagPhoto } from './flags';
 import { cleanCode, standings, YOU } from './teams';
 import {
   bindSquad, bindSquadById, cleanHandle, displayNameOf, getMySquad, getSquadRanking, leaveSquad,
-  onSquadChange, searchSquads, squadKind, squadLetter, squadMark, type RankedSquad,
+  onSquadChange, searchSquads, squadKind, squadLetter, squadMark, telegramAvatarUrl, type RankedSquad,
 } from './squads';
 import {
   ARENA_CUP, arrangeRoster, arenaStandingOf, buildSquadRoster, squadTargetAvg,
@@ -924,7 +924,7 @@ export function createMenu(api: MenuApi): Menu {
       rank.append(squadSvg('#i-plus'));
     } else {
       rank.dataset.rank = opts.rank === 1 ? 'gold' : opts.rank === 2 ? 'silver' : opts.rank === 3 ? 'bronze' : 'num';
-      rank.textContent = String(opts.rank);
+      rank.textContent = `#${opts.rank}`;
     }
 
     const avatar = document.createElement('span');
@@ -933,6 +933,27 @@ export function createMenu(api: MenuApi): Menu {
     const mark = document.createElement('b');
     mark.textContent = opts.mark;
     avatar.append(mark);
+
+    /* Real Telegram profile photo layered over the monogram crest. The photo is
+       hidden until it loads and is dropped on error or a 1x1 placeholder, so a
+       channel without a public picture keeps the polished monogram instead. */
+    const avatarSrc = telegramAvatarUrl(opts.handleRef ?? opts.handle);
+    if (avatarSrc) {
+      const img = document.createElement('img');
+      img.className = 'sq-card-img';
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      const drop = () => img.remove();
+      img.addEventListener('error', drop, { once: true });
+      img.addEventListener('load', () => {
+        if (img.naturalWidth <= 2 || img.naturalHeight <= 2) { drop(); return; }
+        avatar.classList.add('has-photo');
+      }, { once: true });
+      img.src = avatarSrc;
+      avatar.append(img);
+    }
 
     const identity = document.createElement('span');
     identity.className = 'sq-card-id';
@@ -956,9 +977,7 @@ export function createMenu(api: MenuApi): Menu {
       chip.className = 'sq-chip sq-chip-tiq';
       const amount = document.createElement('b');
       amount.textContent = en(opts.tiq);
-      const unit = document.createElement('small');
-      unit.textContent = 'TIQ';
-      chip.append(squadSvg('#i-brain'), amount, unit);
+      chip.append(squadSvg('#i-brain'), amount);
       metrics.append(chip);
     }
     if (opts.note) {
@@ -974,7 +993,7 @@ export function createMenu(api: MenuApi): Menu {
     const go = document.createElement('span');
     go.className = 'sq-card-go';
     go.setAttribute('aria-hidden', 'true');
-    go.textContent = '›';
+    go.append(squadSvg('#i-next'));
 
     li.append(rank, avatar, identity, go);
     return li;
@@ -1127,6 +1146,9 @@ export function createMenu(api: MenuApi): Menu {
     squadBoundView.hidden = true;
     squadSheet?.classList.remove('is-hub');
     $('squad-title').textContent = 'Join Squad';
+    const sub = $('squad-sub');
+    sub.textContent = 'Join a Telegram clan or register your own';
+    sub.hidden = false;
     squadErr.hidden = true;
     squadView = null;
     squadRows = [];
@@ -1144,6 +1166,7 @@ export function createMenu(api: MenuApi): Menu {
     squadBoundView.hidden = false;
     squadSheet?.classList.add('is-hub');
     $('squad-title').textContent = 'Your Squad';
+    $('squad-sub').hidden = true;
     squadQuery = '';
     squadMemberQ.value = '';
     resetSquadLeave();
