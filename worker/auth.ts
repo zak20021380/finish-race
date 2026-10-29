@@ -8,9 +8,11 @@
  *   signature = HMAC_SHA256(key = secret, data = <every field except `hash`, sorted, joined by \n>)
  *   signature must equal `hash` (hex, lowercase)
  *
- * Verified fields beat anything the client claims, so `user.id` and `user.first_name` come from
- * Telegram. `tiq`, `tier`, `flag` and `name` are client-supplied — they seed the queue and the
- * console, and are only trusted on the development fallback (below).
+ * Verified fields beat anything the client claims, so `user.id`, `user.first_name` and
+ * `user.photo_url` come from Telegram — the last of which the room relays to every seat in a
+ * lobby, which is why it is cleaned on arrival rather than on the way out. `tiq`, `tier`, `flag`
+ * and `name` are client-supplied — they seed the queue and the console, and are only trusted on
+ * the development fallback (below).
  *
  * Guest fallback: a caller that offers no `initData` at all — a plain browser tab, Telegram Web
  * without a Mini App session, Telegram Desktop before the SDK hands one over — is seated as a
@@ -43,6 +45,12 @@ export interface Player {
   username: string;
   /** ISO 3166-1 alpha-2 as declared in the app's profile, or `''`. */
   flag: string;
+  /**
+   * Telegram's profile photo for this player, or `''`. It comes from the signed `user.photo_url`
+   * field and nowhere else, so a client cannot claim somebody else's face — which is the whole
+   * reason the room relays it from here rather than trusting a socket parameter.
+   */
+  avatar: string;
 }
 
 export interface Identity {
@@ -99,6 +107,23 @@ const whole = (value: string | null): number | null => {
 const flagOf = (raw: string): string => (/^[a-z]{2}$/i.test(raw) ? raw.toUpperCase() : '');
 
 const cleanName = (raw: string): string => raw.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 20);
+
+/** A profile photo URL is relayed to other players' browsers, so it is bounded before it is stored. */
+const AVATAR_MAX = 512;
+
+/**
+ * `user.photo_url`, made safe to hand to somebody else's `<img>`: an absolute `https:` URL, no
+ * whitespace, quotes or angle brackets, capped in length. Telegram signs this field, so the value
+ * is already trustworthy — the cleaning is about what a URL *becomes* once it is written into
+ * markup by another client, not about doubting the sender. Anything that does not look like a URL
+ * is dropped rather than escaped: an avatar is decoration, and a player without one gets a monogram.
+ */
+function avatarOf(raw: string | undefined): string {
+  if (typeof raw !== 'string' || !raw) return '';
+  const url = raw.replace(/[\u0000-\u0020\u007f"'<>\\]/g, '');
+  if (!url || url.length > AVATAR_MAX) return '';
+  return /^https:\/\/[^\s/]+(\/[^\s]*)?$/i.test(url) ? url : '';
+}
 
 /** A telemetry figure, clamped to its sane ceiling — a query string can say anything. */
 const capped = (value: string | null, hi: number): number => Math.min(hi, whole(value) ?? 0);
@@ -171,6 +196,8 @@ interface TgUser {
   first_name?: string;
   last_name?: string;
   username?: string;
+  /** Telegram's own profile photo URL — present only when the account has a public one. */
+  photo_url?: string;
 }
 
 function parseUser(raw: string | null): TgUser | null {
@@ -197,7 +224,8 @@ function randomHex(bytes: number): string {
 /** The development door: a distinct, throwaway seat per connection. */
 function guestSeat(req: AuthRequest, tier: MindTier): Identity {
   return {
-    player: { id: `guest-${randomHex(4)}`, name: req.name || 'Guest', username: '', flag: req.flag },
+    /* a guest has no signed user object, so it has no face: the client paints its monogram */
+    player: { id: `guest-${randomHex(4)}`, name: req.name || 'Guest', username: '', flag: req.flag, avatar: '' },
     tiq: req.tiq ?? 0,
     tier,
     flag: req.flag,
@@ -232,6 +260,7 @@ export async function authenticate(req: AuthRequest, env: Env): Promise<Identity
           name: displayName(user, req.name),
           username: cleanName(user?.username ?? ''),
           flag: req.flag,
+          avatar: avatarOf(user?.photo_url),
         },
         tiq,
         tier,

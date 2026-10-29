@@ -525,8 +525,12 @@ function teamMarkup(l: Lobby): string {
 
 /** Rebuild the roster only when it actually moved: a paint must never steal a tap. */
 function paintSlots(l: Lobby): void {
+  /* the face is part of the signature: a frame that swaps a monogram for a relayed photo has to
+     rebuild the plate it belongs to, even when every other field on the seat is unchanged */
   const sig = `${l.you}|${l.hostSeat}|${l.format}|`
-    + l.seats.map((s) => (s ? `${s.id}:${s.name}:${s.team}:${s.host}:${s.bot}:${s.connected}` : '-')).join(',');
+    + l.seats.map((s) => (s
+      ? `${s.id}:${s.name}:${s.avatarUrl ?? ''}:${s.team}:${s.host}:${s.bot}:${s.connected}`
+      : '-')).join(',');
   if (sig === slotSig) return;
   slotSig = sig;
   const grid = document.getElementById('lb-slots');

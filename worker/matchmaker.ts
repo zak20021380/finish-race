@@ -122,6 +122,8 @@ interface RoomMember {
   tiq: number;
   tier: MindTier;
   flag: string;
+  /** The signed `user.photo_url` this seat arrived with, or `''`. Relayed to the other seats. */
+  avatar: string;
 }
 
 /**
@@ -3216,7 +3218,7 @@ export class MatchmakerDO {
     if (seat < 0) return;                        // unreachable: the search only picks rooms with one
     live.members[seat] = {
       ws, seat, id: identity.player.id, name: identity.player.name,
-      tiq: identity.tiq, tier: identity.tier, flag: identity.flag,
+      tiq: identity.tiq, tier: identity.tier, flag: identity.flag, avatar: identity.player.avatar,
     };
     live.room = seatHuman(live.room, seat, {
       kind: 'human', id: identity.player.id, name: identity.player.name,
@@ -3281,7 +3283,7 @@ export class MatchmakerDO {
     if (seat < 0) { this.rejectSocket(ws, 'room_full'); return; }
     live.members[seat] = {
       ws, seat, id: identity.player.id, name: identity.player.name,
-      tiq: identity.tiq, tier: identity.tier, flag: identity.flag,
+      tiq: identity.tiq, tier: identity.tier, flag: identity.flag, avatar: identity.player.avatar,
     };
     live.room = seatHuman(live.room, seat, {
       kind: 'human', id: identity.player.id, name: identity.player.name,
@@ -3304,7 +3306,14 @@ export class MatchmakerDO {
     this.broadcastLobby(live);
   }
 
-  /** One `LOBBY` frame, per seat: the roster, the crown, the format, and which seat is yours. */
+  /**
+   * One `LOBBY` frame, per seat: the roster, the crown, the format, and which seat is yours.
+   *
+   * Every seat carries its `avatar` — the signed `user.photo_url` it authenticated with, or `''`.
+   * It is relayed from the member record rather than from anything a socket said, so a seat can
+   * only ever show the face its own Telegram account signed for. The client treats a missing or
+   * refused URL as a monogram, which is why `''` is a complete answer rather than an omission.
+   */
   private lobbyMessage(live: LiveRoom, seat: number): string {
     const seats: unknown[] = [];
     for (let i = 0; i < live.members.length; i++) {
@@ -3314,6 +3323,7 @@ export class MatchmakerDO {
         side: i,
         id: m.id,
         name: m.name,
+        avatar: m.avatar,
         host: i === live.hostSeat,
         bot: false,
         team: live.teams[i] ?? 0,

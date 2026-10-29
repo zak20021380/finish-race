@@ -318,6 +318,10 @@ function readLobby(l: Lobby, raw: Record<string, unknown>): Lobby {
   const capacity = FORMAT_CAPACITY[format];
   const rows = Array.isArray(raw.seats) ? raw.seats : [];
   const seats: (LobbySeat | null)[] = Array.from({ length: capacity }, () => null);
+  /* Which seat is mine is read before the roster, because my own face is the one thing this
+     client already knows: a frame from a worker that predates the avatar relay must not blank it. */
+  const mine = typeof raw.you === 'number' ? raw.you : l.you;
+  const localFace = mine >= 0 ? l.seats[mine]?.avatarUrl ?? null : null;
   for (const r of rows) {
     const s = r as Record<string, unknown>;
     const at = typeof s.side === 'number' ? s.side : -1;
@@ -329,7 +333,7 @@ function readLobby(l: Lobby, raw: Record<string, unknown>): Lobby {
       id: typeof s.id === 'string' ? s.id : `seat:${at}`,
       name,
       initial: faceOf(name),
-      avatarUrl: avatar,
+      avatarUrl: avatar ?? (at === mine ? localFace : null),
       host: s.host === true,
       bot: s.bot === true,
       team: s.team === 1 ? 1 : 0,
@@ -337,7 +341,7 @@ function readLobby(l: Lobby, raw: Record<string, unknown>): Lobby {
     };
   }
   const hostSeat = typeof raw.host === 'number' ? raw.host : seats.findIndex((s) => !!s?.host);
-  const you = typeof raw.you === 'number' ? raw.you : l.you;
+  const you = mine;
   return {
     ...l,
     capacity,
