@@ -18,7 +18,7 @@
  * button whose label updates live.
  */
 import type { Difficulty } from './bot';
-import { menuState, motionReduced, onSettings, saveMenu } from './settings';
+import { menuState, motionReduced, onLang, onSettings, saveMenu, t } from './settings';
 import { nameOf } from './countries';
 import { getCountryRanking, type CountryRow } from './data';
 import { fetchMindLadder, type MindFeed, type MindRowData } from './minds';
@@ -224,6 +224,9 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
      table and no monogram guesswork. */
 
   const PODIUM_CLASS = ['gold', 'silver', 'bronze'] as const;
+  /** The last nation board read — kept so a language switch can repaint the standing
+   *  bar's labels without another round-trip. */
+  let countryRows: CountryRow[] = [];
 
   const monogramOf = (name: string): string => {
     const parts = name.trim().split(/\s+/).filter((p) => p.length > 0);
@@ -305,21 +308,58 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     return li;
   };
 
-  /** The player's own national contribution, under the top three. */
+  /** The player's own national standing, painted into the 3-zone HUD bar.
+   *  LEFT = flag + nation · CENTER = the percentile the nation sits in · RIGHT = the
+   *  contribution, ending in the same brain token the rows above wear. Every zone is a
+   *  separate node, so a long country name ellipsizes instead of shoving the pill or
+   *  the score out of the bar. */
   const paintNationMine = (rows: CountryRow[]): void => {
-    const el = document.getElementById('home-nation-mine');
-    if (!el) return;
+    countryRows = rows;
+    const bar = document.getElementById('home-nation-mine');
+    if (!bar) return;
+    const flag = document.getElementById('home-nation-flag');
+    const name = document.getElementById('home-nation-name');
+    const pill = document.getElementById('home-nation-pill');
+    const pillK = document.getElementById('home-nation-pill-k');
+    const pct = document.getElementById('home-nation-pct');
+    const pts = document.getElementById('home-nation-pts');
+    const contributed = profile.stats.wins * 140;
+    const ptsText = `+${contributed.toLocaleString('en-US')}`;
+    if (pts) pts.textContent = ptsText;
     const code = profile.country;
     if (!code) {
-      el.textContent = 'Your nation: not set · Pick in Profile';
-      el.removeAttribute('title');
+      if (flag) { flag.textContent = ''; flag.classList.add('is-off'); }
+      if (name) { name.textContent = t('hudPickNation'); name.removeAttribute('title'); }
+      if (pillK) pillK.textContent = t('hudYourNation');
+      if (pct) { pct.hidden = true; pct.textContent = ''; }
+      pill?.classList.add('is-off');
+      bar.setAttribute('aria-label', `${t('hudYourNation')}: ${t('hudPickNation')}`);
+      bar.removeAttribute('title');
       return;
     }
     const mine = rows.find((c) => c.code === code);
-    const contributed = profile.stats.wins * 140;
-    const rank = mine ? `#${mine.rank}` : 'Unranked';
-    el.textContent = `Your nation: ${rank} · +${contributed.toLocaleString('en-US')} pts contributed`;
-    el.setAttribute('title', `You fight for ${nameOf(code)}`);
+    const label = nameOf(code);
+    if (flag) {
+      flag.textContent = '';
+      flag.classList.remove('is-off');
+      flag.append(flagPhoto(code, 'hm-flag-plate'));
+    }
+    if (name) { name.textContent = label; name.title = label; }
+    const share = mine && rows.length > 0
+      ? Math.max(1, Math.round((mine.rank / rows.length) * 100))
+      : 0;
+    if (pillK) pillK.textContent = mine ? t('hudTop') : t('hudUnranked');
+    if (pct) {
+      pct.hidden = !mine;
+      pct.textContent = mine ? `${share}%` : '';
+    }
+    pill?.classList.toggle('is-off', !mine);
+    bar.setAttribute('aria-label', mine
+      ? `${label} · #${mine.rank} · ${t('hudTop')} ${share}% · ${ptsText}`
+      : `${label} · ${t('hudUnranked')} · ${ptsText}`);
+    bar.setAttribute('title', mine
+      ? `You fight for ${label} — rank #${mine.rank} of ${rows.length}`
+      : `You fight for ${label}`);
   };
 
   const loadCountries = async (): Promise<void> => {
@@ -338,8 +378,9 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       li.className = 'nations-row is-error';
       li.textContent = 'Rankings unavailable';
       list.append(li);
-      const el = document.getElementById('home-nation-mine');
-      if (el) el.textContent = 'Your nation: —';
+      /* the bar is a structure of zones, never a text node: repaint the last board we
+         hold instead of overwriting it with a sentence. */
+      paintNationMine(countryRows);
     }
   };
 
@@ -486,22 +527,38 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     }
   };
 
+  /** The player's own global standing, painted into the same 3-zone HUD bar:
+   *  LEFT = the glowing rank badge + YOU · CENTER = the percentile · RIGHT = the TIQ,
+   *  right-aligned under the score column of rows #1–#5. */
   const paintMindMine = (feed: MindFeed | null): void => {
-    const el = document.getElementById('home-mind-mine');
-    if (!el) return;
-    const tiq = myTiq().toLocaleString('en-US');
-    if (feed?.live && feed.standing) {
-      el.textContent = `You: Rank #${feed.standing.rank} · TIQ ${tiq} · Top ${feed.standing.pct}% Global Mind`;
-      el.title = `Rank ${feed.standing.rank} of ${feed.standing.total.toLocaleString('en-US')} minds`;
+    const bar = document.getElementById('home-mind-mine');
+    if (!bar) return;
+    const name = document.getElementById('home-mind-name');
+    const rankEl = document.getElementById('home-mind-rank');
+    const pill = document.getElementById('home-mind-pill');
+    const pillK = document.getElementById('home-mind-pill-k');
+    const pct = document.getElementById('home-mind-pct');
+    const tiqEl = document.getElementById('home-mind-tiq');
+    const tiqText = myTiq().toLocaleString('en-US');
+    if (name) name.textContent = t('hudYou');
+    if (tiqEl) tiqEl.textContent = tiqText;
+    const st = feed?.live ? feed.standing : null;
+    if (st) {
+      if (rankEl) { rankEl.textContent = `#${st.rank}`; rankEl.classList.remove('is-off'); }
+      if (pillK) pillK.textContent = t('hudTop');
+      if (pct) { pct.hidden = false; pct.textContent = `${st.pct}%`; }
+      pill?.classList.remove('is-off');
+      bar.setAttribute('aria-label', `${t('hudYou')} · #${st.rank} · ${tiqText} TIQ · ${t('hudTop')} ${st.pct}%`);
+      bar.setAttribute('title', `Rank ${st.rank} of ${st.total.toLocaleString('en-US')} minds`);
       return;
     }
-    if (feed?.live) {
-      el.textContent = `You: Unranked · TIQ ${tiq} · Win a live race to rank`;
-      el.title = 'Your TIQ enters the ladder after your first live TIQ';
-      return;
-    }
-    el.textContent = `You: Unranked · TIQ ${tiq} · Live ladder offline`;
-    el.removeAttribute('title');
+    if (rankEl) { rankEl.textContent = '—'; rankEl.classList.add('is-off'); }
+    if (pillK) pillK.textContent = t('hudUnranked');
+    if (pct) { pct.hidden = true; pct.textContent = ''; }
+    pill?.classList.add('is-off');
+    bar.setAttribute('aria-label', `${t('hudYou')} · ${t('hudUnranked')} · ${tiqText} TIQ`);
+    if (feed?.live) bar.setAttribute('title', 'Your TIQ enters the ladder after your first live TIQ');
+    else bar.removeAttribute('title');
   };
 
   const paintMinds = (feed: MindFeed | null): void => {
@@ -872,6 +929,13 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     paintLauncher();
     paintSheet();
     paintPreviews();
+  });
+
+  /* A language switch repaints the two standing bars from the data already on screen:
+     their labels are painted by JS, not by a `data-i18n` pass. */
+  onLang(() => {
+    paintNationMine(countryRows);
+    paintMindMine(mindFeed);
   });
 
   onGameModeChange(() => {

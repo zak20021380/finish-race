@@ -40,6 +40,11 @@ Durable index; dated logs beside this file hold the history.
   so the title stays whole. ONE 200★ vault — no 2nd/3rd pods. Hero = `#i-star-3d` 52px over
   crossed blades + dark shield; ticker leader hydrates from `getSquadRanking()[0]`.
   `#home-tournament-cta` → `arena` → knocks `#stars-cta` until the seat drawer opens.
+- Leaderboard slides (1 + 2) close with `.hud-mine` — one 3-zone bar `[badge/flag+name][pill][score]`
+  inside `.slide-foot` (flow only: no absolute, no negative margins). The five rows are
+  `flex:1 1 0; min-height:0` so the band can NEVER overflow onto the bar; rows carry `padding-right:13px`
+  to align the score column with the bar's 12px padding + 1px border. `paintMindMine`/`paintNationMine`
+  paint zones, never `textContent` on the bar.
 
 ## Design system
 - One theme "Dark Clay": opaque slabs, no live blur. Reduced motion is `html.reduced-motion`,

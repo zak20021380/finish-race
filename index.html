@@ -2089,7 +2089,26 @@
                     <li><span class="skel w20"></span><span class="skel w60"></span><span class="skel w20"></span></li>
                   </ol>
                   <div class="slide-foot">
-                    <p class="nations-mine" id="home-nation-mine"><span class="skel w60"></span></p>
+                    <!-- the personal standing bar: one structured 3-zone HUD row, a plain
+                         flow item of the foot — [ flag + nation ] [ standing pill ] [ score ].
+                         It sits under row #5, never over it. -->
+                    <div class="hud-mine nations-mine" id="home-nation-mine" role="group" aria-label="Your national standing">
+                      <span class="hm-l">
+                        <span class="hm-flag" id="home-nation-flag" aria-hidden="true"></span>
+                        <span class="hm-name" id="home-nation-name">Your nation</span>
+                      </span>
+                      <span class="hm-c">
+                        <span class="hm-pill" id="home-nation-pill">
+                          <span class="hm-pill-k" id="home-nation-pill-k">Top</span>
+                          <b id="home-nation-pct">—</b>
+                        </span>
+                      </span>
+                      <span class="hm-r">
+                        <b class="hm-v" id="home-nation-pts">0</b>
+                        <span class="hm-u" aria-hidden="true">PTS</span>
+                        <span class="mind-brain" aria-hidden="true"><svg class="mind-brain-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-brain" /></svg></span>
+                      </span>
+                    </div>
                     <button class="btn card-cta nations-hold" type="button" id="home-cup-table">View Cup Table</button>
                   </div>
                 </div>
@@ -2109,7 +2128,25 @@
                     <li class="mind-row"><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
                   </ol>
                   <div class="slide-foot">
-                    <p class="mind-mine" id="home-mind-mine"><span class="skel w60"></span></p>
+                    <!-- the personal standing bar: the same 3-zone HUD as Nations Cup, with the
+                         glowing rank badge in the left zone. Flow item, never an overlay. -->
+                    <div class="hud-mine mind-mine" id="home-mind-mine" role="group" aria-label="Your global standing">
+                      <span class="hm-l">
+                        <span class="hm-badge" id="home-mind-rank">—</span>
+                        <span class="hm-name" id="home-mind-name">You</span>
+                      </span>
+                      <span class="hm-c">
+                        <span class="hm-pill" id="home-mind-pill">
+                          <span class="hm-pill-k" id="home-mind-pill-k">Top</span>
+                          <b id="home-mind-pct">—</b>
+                        </span>
+                      </span>
+                      <span class="hm-r">
+                        <b class="hm-v" id="home-mind-tiq">0</b>
+                        <span class="hm-u" aria-hidden="true">TIQ</span>
+                        <span class="mind-brain" aria-hidden="true"><svg class="mind-brain-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-brain" /></svg></span>
+                      </span>
+                    </div>
                     <button class="btn card-cta mind-cta" type="button" id="home-mind-cta">View Full Ladder</button>
                   </div>
                 </div>

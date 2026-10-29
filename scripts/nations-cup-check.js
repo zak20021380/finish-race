@@ -369,7 +369,13 @@ function checkHomeCarousel() {
       if (wrap && !/tabular-nums/.test(getComputedStyle(wrap).fontVariantNumeric || '')) fails.push(`nation row ${i + 1} score must use tabular numbers`);
     });
     const mine = document.getElementById('home-nation-mine');
-    if (!mine || !/^your nation:/i.test((mine.textContent || '').trim())) fails.push('cup missing the "Your nation" contribution strip');
+    if (!mine || !mine.classList.contains('hud-mine')) fails.push('cup missing the "Your nation" standing bar');
+    else {
+      if (!mine.querySelector('.hm-l .hm-flag')) fails.push('cup standing bar missing the flag plate');
+      if (!(mine.querySelector('.hm-l .hm-name')?.textContent || '').trim()) fails.push('cup standing bar missing the nation label');
+      if (!mine.querySelector('.hm-c .hm-pill')) fails.push('cup standing bar missing the standing pill');
+      if (!/^\+?[\d,]+$/.test((mine.querySelector('.hm-r .hm-v')?.textContent || '').trim())) fails.push('cup standing bar missing a numeric score');
+    }
     const btn = document.getElementById('home-cup-table');
     if (!btn) fails.push('cup missing #home-cup-table');
     else {
@@ -406,8 +412,13 @@ function checkHomeCarousel() {
       if (!/rgb\(252,\s*211,\s*77\)/.test(col)) fails.push(`podium row ${i + 1} TIQ score not gold (${col})`);
     });
     const mine = document.getElementById('home-mind-mine');
-    if (!/^you: rank #\d+ · tiq [\d,]+ · top \d+% global mind$/i.test((mine?.textContent || '').trim())) {
-      fails.push(`ladder standing bar "${(mine?.textContent || '').trim()}" — want "You: Rank #N · TIQ N · Top N% Global Mind"`);
+    if (!mine || !mine.classList.contains('hud-mine')) fails.push('ladder missing the personal standing bar');
+    else {
+      if (!/^#\d+$/.test((mine.querySelector('.hm-l .hm-badge')?.textContent || '').trim())) fails.push('ladder standing bar missing the rank badge');
+      if (!(mine.querySelector('.hm-l .hm-name')?.textContent || '').trim()) fails.push('ladder standing bar missing the YOU label');
+      if (!mine.querySelector('.hm-c .hm-pill')) fails.push('ladder standing bar missing the standing pill');
+      if (!/^[\d,]+$/.test((mine.querySelector('.hm-r .hm-v')?.textContent || '').trim())) fails.push('ladder standing bar missing a numeric TIQ');
+      if (!mine.querySelector('.hm-r .mind-brain')) fails.push('ladder standing bar missing the brain token');
     }
     const btn = document.getElementById('home-mind-cta');
     if (!btn) fails.push('ladder missing #home-mind-cta');

@@ -19129,23 +19129,178 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
 .car-card.nations-cup .nations-hold { color: var(--honey-ink); }
 .car-card.mind-ladder .mind-cta { color: #C4B5FD; }
 
-/* ---- Nations Cup: the player's own national contribution strip ---- */
-.nations-mine {
+/* ---- the personal standing bar: one structured 3-zone esports HUD row ----
+   Shared by both leaderboard slides (Nations Cup + The Mind Ladder) and rendered by
+   home.ts into three fixed zones:
+
+     · LEFT   — the compact glowing rank badge (global slide) or the flag plate plus
+                the nation name (national slide);
+     · CENTER — the translucent standing pill: the percentile the player sits in;
+     · RIGHT  — the tabular score readout, ending in the same brain token the rows
+                above wear, so the numbers stack into one column.
+
+   It is a plain flow item inside `.slide-foot`: no absolute positioning, no negative
+   margins, no fixed height. The only rule that keeps it off row #5 lives on the list
+   above it (the rows share their band exactly — see the leaderboard block below). */
+.hud-mine {
   flex: none;
-  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  box-sizing: border-box;
   min-width: 0;
-  display: block;
-  padding: 4px 10px;
-  border-radius: 10px;
-  background: var(--field);
-  box-shadow: var(--inset);
+  min-height: 32px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: linear-gradient(90deg, rgba(0, 210, 255, .14) 0%, rgba(14, 24, 42, .85) 50%, rgba(245, 158, 11, .14) 100%);
+  border: 1px solid rgba(0, 210, 255, .3);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .35);
+  font-variant-numeric: tabular-nums;
+}
+/* LEFT zone: never shrinks below the badge, the label ellipsizes instead of pushing
+   the pill or the score out of the bar */
+.hm-l {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.hm-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(56, 189, 248, .62) 0%, rgba(14, 116, 233, .4) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .45),
+    inset 0 0 0 1px rgba(125, 232, 255, .55),
+    0 0 10px rgba(0, 210, 255, .38);
+  color: #EAF6FF;
+  font-size: 11.5px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 8px rgba(186, 240, 255, .6);
+}
+/* no standing yet: the badge keeps its footprint, the glow goes out */
+.hm-badge.is-off {
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12);
+  color: rgba(233, 240, 252, .55);
+  text-shadow: none;
+}
+/* the flag plate: the same 22px photo chip the rows use, one size down */
+.hm-flag {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  overflow: hidden;
+}
+.hm-flag .fp { --fp-d: 22px; }
+.hm-flag .fp-chip { border-radius: 50%; font-size: 7px; letter-spacing: 0; }
+.hm-flag.is-off { background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12); }
+.hm-name {
+  min-width: 0;
+  flex: 0 1 auto;
   font-size: 12px;
-  font-weight: 700;
-  color: var(--ink-soft);
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #E8F1FF;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* CENTER zone: the standing tag — a quiet glass pill, never the loudest thing */
+.hm-c {
+  flex: none;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.hm-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .07);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
+  color: #AFC0D8;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.hm-pill b {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0;
+  color: #F4F8FF;
   font-variant-numeric: tabular-nums;
+}
+.hm-pill.is-off b { display: none; }
+/* RIGHT zone: the tabular score, hugging the right edge so it lands under the
+   score column of rows #1–#5 */
+.hm-r {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  white-space: nowrap;
+}
+.hm-v {
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.01em;
+  color: var(--honey-ink);
+  font-variant-numeric: tabular-nums;
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, .5),
+    0 0 10px rgba(252, 211, 77, .16);
+}
+.hm-u {
+  font-size: 8.5px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: .1em;
+  color: var(--violet);
+  text-shadow: 0 0 8px rgba(167, 139, 250, .35);
+}
+/* each slide keeps its own accent on the unit: violet minds, cyan nations */
+.nations-mine .hm-u { color: #22D3EE; text-shadow: 0 0 8px rgba(34, 211, 238, .45); }
+
+/* the narrowest phone (320px): the bar gives back padding, the name keeps the slack */
+@media (max-width: 344px) {
+  .hud-mine { gap: 6px; padding: 7px 10px; }
+  .hm-l { gap: 6px; }
+  .hm-name { font-size: 11px; letter-spacing: .03em; }
+  .hm-pill { padding: 2px 6px; font-size: 8.5px; gap: 3px; }
+  .hm-pill b { font-size: 9.5px; }
+  .hm-v { font-size: 13px; }
+  .hm-badge { min-width: 24px; height: 20px; padding: 0 5px; font-size: 11px; }
+  .hm-flag, .hm-flag .fp { --fp-d: 20px; width: 20px; height: 20px; }
+  /* the trend delta is the one column a 320px row can live without: the nation name
+     keeps its full width instead of collapsing to three letters. `:not(.is-error)`
+     keeps this ahead of the compact-height grid, whatever order the queries land in. */
+  .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) { grid-template-columns: 19px 22px minmax(0, 1fr) 92px; }
+  .car-card.nations-cup .mini-rank.nations-rank .tr { display: none; }
+  .car-card.nations-cup .mini-rank.nations-rank .rk { width: 19px; height: 19px; font-size: 11px; }
+  .car-card.nations-cup .mini-rank.nations-rank .fl { width: 22px; height: 22px; }
 }
 
 /* ---- The Mind Ladder: TIQ hero card ----
@@ -19414,41 +19569,29 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   color: #A9B6CC;
 }
 .mind-flag-ico { display: block; width: 9px; height: 9px; }
-/* your own standing: one recessed strip, the psychological hook */
-.mind-mine {
-  flex: none;
-  margin: 0;
-  min-width: 0;
-  padding: 4px 10px;
-  border-radius: 10px;
-  background: var(--field);
-  box-shadow: var(--inset);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-variant-numeric: tabular-nums;
-}
+/* your own standing: the shared 3-zone HUD row above (`.hud-mine`), worn with the
+   violet unit and the glowing rank badge instead of the flag plate */
+.mind-mine .hm-name { letter-spacing: .1em; }
 
 /* ============================================================================================
    LEADERBOARD SLIDES — Nations Cup + The Mind Ladder.
 
-   Both cards are the same pinned box (the track's content box), so they now run one
-   shared column instead of two hand-tuned stacks:
+   Both cards are the same pinned box (the track's content box), so they run one shared
+   column instead of two hand-tuned stacks:
 
-     · `.slide-inner` owns the padding and splits the height three ways — the header
-       on the top edge, the five standings rows across the upper-to-mid band, and the
-       standing strip + the one CTA pinned to the bottom edge;
-     · the rows keep their own air (a 40px floor, 6-8px gaps) and grow into the band,
-       so the list reads tactile and legible instead of squished;
-     · the CTA is a full-width key that sits just above the card's bottom edge with
-       the pager dots below it — the dead void under the button is gone.
+     · `.slide-inner` owns the padding and splits the height three ways — the header on
+       the top edge, the five standings rows across the upper-to-mid band, and the
+       personal standing bar + the one CTA on the bottom edge;
+     · the five rows SHARE the band exactly (`flex: 1 1 0`, `min-height: 0`): a row can
+       never be taller than its share, so the band can never overflow its own box and
+       the foot below it can never be covered. This is the whole overlap fix — the
+       personal bar is a flow item, and the list above it is now incapable of spilling;
+     · the personal bar is a structured 3-zone HUD row (`.hud-mine`) sitting directly
+       under row #5 with a hairline rule above it, then the one CTA, then the dots.
    ============================================================================================ */
 
 /* the card is a frame for that column: it keeps only the bottom reserve the pager
-   dots live in (16px here + the column's 14px = 30px of air under the CTA) */
+   dots live in (16px here + the column's 8px = 24px of air under the CTA) */
 #home-carousel > .car-card.nations-cup,
 #home-carousel > .car-card.mind-ladder {
   justify-content: stretch;
@@ -19464,11 +19607,11 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   justify-content: space-between;
   height: 100%;
   box-sizing: border-box;
-  padding: 14px 16px;
-  gap: 8px;
+  padding: 12px 14px 8px;
+  gap: 6px;
 }
 
-/* the standings band: five rows that grow into the space they are given */
+/* the standings band: five rows that share the space they are given — never more */
 .mini-rank.nations-rank,
 .mind-podium {
   flex: 1 1 auto;
@@ -19476,18 +19619,47 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   justify-content: space-between;
 }
 .mini-rank.nations-rank { gap: 6px; }
-.mind-podium { gap: 7px; }
+.mind-podium { gap: 6px; }
+/* one row = one equal slice of the band. `flex-basis: 0` + `min-height: 0` is what
+   stops the 40px floor from overflowing the band and painting over the foot.
+   The 13px right inset is the bar's 12px padding plus its 1px border, so the score
+   column above and the score inside the standing bar end on the same pixel. */
+.car-card.mind-ladder .mind-podium > .mind-row,
+.car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 64px;
+  padding-right: 13px;
+}
 
-/* the foot: standing strip + the one CTA, pinned to the bottom edge */
+/* the foot: hairline rule → personal standing bar → the one CTA, in that order,
+   pinned to the bottom edge of the column */
 .car-card.nations-cup .slide-foot,
 .car-card.mind-ladder .slide-foot {
   flex: none;
   margin-top: auto;
   margin-bottom: 0;
-  padding-bottom: 12px;
+  padding-bottom: 8px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
+}
+/* the divider between the ladder and the player's own standing: a zero-weight
+   hairline that fades at both ends, so the footer reads as its own band */
+.car-card.nations-cup .slide-foot::before,
+.car-card.mind-ladder .slide-foot::before {
+  content: "";
+  display: block;
+  flex: none;
+  height: 1px;
+  margin: 0 2px;
+  border-radius: 1px;
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, .13) 14%,
+    rgba(255, 255, 255, .13) 86%,
+    rgba(255, 255, 255, 0) 100%);
 }
 
 /* the CTA: a full-width key with a comfortable face */
@@ -19497,28 +19669,44 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   padding: 12px 16px;
 }
 
-/* short columns: the chrome gives up first, the five rows keep their floor. The
-   slogan costs ~14px, so the foot and the standing strip give the same back. */
+/* short columns: the chrome gives up first, the rows keep their share. Nothing here
+   sets a row floor — a floor is exactly what used to push the list over the foot. */
 @media (max-height: 700px) {
   .car-card.nations-cup > .slide-inner,
-  .car-card.mind-ladder > .slide-inner { padding: 10px 14px 14px; gap: 6px; }
+  .car-card.mind-ladder > .slide-inner { padding: 10px 14px 6px; gap: 5px; }
   .mini-rank.nations-rank,
-  .mind-podium { gap: 6px; }
-  .mini-rank.nations-rank > li,
-  .mind-podium .mind-row { min-height: 34px; padding: 4px 10px; }
+  .mind-podium { gap: 5px; }
   .nations-head { row-gap: 0; }
   .nations-cup-subtitle { font-size: .68rem; }
-  .car-card.nations-cup .slide-foot { gap: 6px; }
-  .nations-mine { padding: 3px 10px; }
+  .car-card.nations-cup .slide-foot,
+  .car-card.mind-ladder .slide-foot { gap: 7px; padding-bottom: 6px; }
 }
-/* the floor: 600px of height is a card that still has four lines to show, so the
-   Top-5 list sheds its tail row by height — the card itself never grows and never
-   clips a row or the CTA. */
-@media (max-height: 600px) {
+/* compact rows: a 24–28px slice needs a 22px portrait, or the row clips its own face.
+   The card is short here, so the list trades portrait size for five legible lines. */
+@media (max-height: 680px) {
+  .car-card.mind-ladder .mind-row { padding-top: 1px; padding-bottom: 1px; }
+  .car-card.mind-ladder .mind-av { width: 22px; height: 22px; }
+  .car-card.mind-ladder .mind-ini { font-size: 10px; }
+  .car-card.mind-ladder .mind-rank { width: 19px; height: 19px; font-size: 10px; border-radius: 6px; }
+  .car-card.mind-ladder .mind-nm { font-size: 12.5px; }
+  .car-card.mind-ladder .mind-score { font-size: 13.5px; }
+  .car-card.mind-ladder .mind-trend { min-width: 24px; font-size: 10px; padding: 2px 3px 3px; }
+  .car-card.mind-ladder .mind-av .mind-flag { --fp-d: 11px; width: 11px; height: 11px; }
+  .car-card.nations-cup .mini-rank.nations-rank > li.nations-row { padding-top: 1px; padding-bottom: 1px; }
+  .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) { grid-template-columns: 19px 22px minmax(0, 1fr) 24px 90px; column-gap: 6px; }
+  .car-card.nations-cup .mini-rank.nations-rank .fl { width: 22px; height: 22px; }
+  .car-card.nations-cup .mini-rank.nations-rank .rk { width: 19px; height: 19px; font-size: 11px; }
+  .car-card.nations-cup .mini-rank.nations-rank .nm { font-size: 12.5px; }
+  .car-card.nations-cup .mini-rank.nations-rank .score-val { font-size: 13.5px; }
+  .car-card.nations-cup .mini-rank.nations-rank .score-brain-icon { width: 15px; height: 15px; }
+}
+/* the floor: only a window this short cannot carry five full rows — the tail row
+   steps aside rather than letting the list squeeze into a smear */
+@media (max-height: 560px) {
   .mini-rank.nations-rank li.nations-row:nth-child(5),
   .mind-podium .mind-row:nth-child(5) { display: none; }
 }
-@media (max-height: 550px) {
+@media (max-height: 520px) {
   .mini-rank.nations-rank li.nations-row:nth-child(4),
   .mind-podium .mind-row:nth-child(4) { display: none; }
 }
@@ -27348,6 +27536,35 @@ html[data-lang="fa"] :is(#squad-q, #squad-member-q, #gm-join-input, #support-msg
   letter-spacing: 0;
 }
 html[data-lang="fa"] #support-msg { direction: rtl; text-align: right; }
+
+/* ---- the personal standing bar (both leaderboard slides) ----
+   Three zones, three independent jobs: the label may ellipsize, the pill and the score
+   never move. Persian copy is wider than the tracked uppercase it replaces, so the
+   label drops its tracking, takes Vazirmatn, and gets a hair less size — the score and
+   the percentile stay Latin tabular, isolated, so the columns above never shift. */
+html[data-lang="fa"] .hud-mine { font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif; }
+html[data-lang="fa"] :is(.hm-name, .hm-pill, .hm-pill-k) {
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+html[data-lang="fa"] .hm-name {
+  font-size: 12px;
+  line-height: 1.5;
+  direction: rtl;
+  text-align: right;
+  unicode-bidi: plaintext;
+}
+html[data-lang="fa"] .hm-pill { direction: rtl; }
+html[data-lang="fa"] :is(.hm-pill b, .hm-v, .hm-badge) {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-numeric);
+}
+html[data-lang="fa"] .hm-pill b { letter-spacing: 0 !important; }
+@media (max-width: 344px) {
+  html[data-lang="fa"] .hm-name { font-size: 11px; }
+  html[data-lang="fa"] .hm-pill { font-size: 8.5px; }
+}
 
 /* Arabic keeps the translated Settings copy readable now that the shell no
    longer flips `dir` globally. */
