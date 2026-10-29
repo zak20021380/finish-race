@@ -12480,27 +12480,13 @@ html.reduced-motion .stars-count::before { animation: none; }
 .lb-color[data-color="2"] { color: #86EFAC; background: rgba(34, 197, 94, .16); box-shadow: inset 0 0 0 1px rgba(34, 197, 94, .42); }
 .lb-color[data-color="3"] { color: #FDE68A; background: rgba(234, 179, 8, .16); box-shadow: inset 0 0 0 1px rgba(234, 179, 8, .42); }
 
-/* the 1v1 duel — the room's default, so this is the layout most lobbies ever see: two seats
-   large enough to read at a glance, and the crest doing the talking between them */
+/* the 1v1 duel — the room's default, so this is the layout most lobbies ever see. The plates and
+   the crest are dressed further down, after the open-well rules they have to outrank. */
 .lb-slots.is-duel {
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 56px minmax(0, 1fr);
+  gap: 0;
   align-items: stretch;
 }
-.lb-slots.is-duel .lb-slot {
-  flex-direction: column;
-  justify-content: center;
-  gap: 7px;
-  min-height: 116px;
-  padding: 16px 10px 14px;
-  text-align: center;
-}
-.lb-slots.is-duel .lb-av { width: 46px; height: 46px; font-size: 18px; }
-.lb-slots.is-duel .lb-slot-txt { flex: 0 0 auto; align-items: center; gap: 2px; width: 100%; }
-.lb-slots.is-duel .lb-name { max-width: 100%; font-size: var(--t-2); }
-.lb-slots.is-duel .lb-tags { position: absolute; top: 8px; right: 8px; flex-direction: row; }
-.lb-slots.is-duel .lb-color { display: none; }
-.lb-slots.is-duel .lb-plus { width: 34px; height: 34px; font-size: 21px; }
 
 /* 3P — three compact cards on one row, so the roster never shows a well the format does not need */
 .lb-slots.is-3p { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
@@ -12572,44 +12558,116 @@ html.reduced-motion .stars-count::before { animation: none; }
   background: linear-gradient(180deg, #FFD468 0%, #D98E0B 100%);
   color: #2B1B02;
 }
-/* the crest: a polished gold medallion on a thin divider — board furniture, never a control */
-.lb-vs { position: relative; display: grid; place-items: center; width: 44px; min-width: 44px; }
-.lb-vs::before {
-  content: '';
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  left: 50%;
-  width: 2px;
-  transform: translateX(-50%);
-  border-radius: 2px;
-  background: linear-gradient(180deg, transparent, rgba(252, 211, 77, .22) 20%, rgba(252, 211, 77, .22) 80%, transparent);
-}
-.lb-vs-c {
+/* the crest: a chiselled gold core riding a vertical laser thread that fades into the plates.
+   Board furniture, never a control — nothing in it is focusable, so it can never take a tap. */
+.lb-vs {
   position: relative;
-  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 56px;
+  min-width: 56px;
+  padding: 2px 0;
+}
+/* the two laser threads: a hairline that is brightest at the crest and gone by the plate edge */
+.lb-vs-thread {
+  flex: 1 1 auto;
+  width: 1px;
+  min-height: 10px;
+  border-radius: 1px;
+  background: linear-gradient(180deg,
+    rgba(252, 211, 77, 0) 0%,
+    rgba(252, 211, 77, .45) 42%,
+    rgba(255, 240, 180, 1) 100%);
+  box-shadow: 0 0 8px rgba(252, 211, 77, .75);
+}
+.lb-vs-thread:last-child {
+  background: linear-gradient(0deg,
+    rgba(252, 211, 77, 0) 0%,
+    rgba(252, 211, 77, .45) 42%,
+    rgba(255, 240, 180, 1) 100%);
+}
+/* the core: the exact crest the brief specifies — chrome gold over obsidian, 48px */
+.lb-vs-core {
+  position: relative;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
-  gap: 1px;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 32% 26%, #FFE9A8 0%, #FFC53D 40%, #D98E0B 78%, #8A5604 100%);
-  color: #2B1B02;
+  background: radial-gradient(circle at 35% 35%, #ffe066 0%, #d4af37 40%, #704214 100%);
   box-shadow:
-    0 3px 0 #6B4103,
-    inset 0 2px 2px rgba(255, 255, 255, .6),
-    inset 0 -3px 5px rgba(0, 0, 0, .28),
-    0 0 20px -6px rgba(252, 211, 77, .6);
+    0 0 20px rgba(255, 215, 0, .45),
+    inset 0 2px 3px rgba(255, 255, 255, .7);
+  isolation: isolate;
 }
-.lb-vs-i { width: 13px; height: 13px; color: #2B1B02; }
-.lb-vs-c b { font-size: 10px; font-weight: 900; letter-spacing: .08em; line-height: 1; }
+/* the outer energy rift: an ambient gold aura that breathes, and a hairline arc orbiting it.
+   The mask keeps the aura outside the crest itself, so the disc stays a clean struck gold. */
+.lb-vs-aura {
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 215, 0, .34) 0%, rgba(255, 215, 0, .12) 46%, transparent 70%);
+  -webkit-mask: radial-gradient(circle, transparent 0 23px, #000 24px);
+  mask: radial-gradient(circle, transparent 0 23px, #000 24px);
+  animation: lb-vs-breathe 2.8s ease-in-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+.lb-vs-core::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg,
+    transparent 0deg,
+    rgba(255, 244, 196, .95) 22deg,
+    transparent 54deg,
+    transparent 186deg,
+    rgba(255, 244, 196, .55) 208deg,
+    transparent 240deg);
+  -webkit-mask: radial-gradient(circle, transparent 0 24px, #000 25px 26px, transparent 27px);
+  mask: radial-gradient(circle, transparent 0 24px, #000 25px 26px, transparent 27px);
+  animation: lb-vs-rift 6s linear infinite;
+  pointer-events: none;
+}
+/* the crossed-swords micro-sigil: an embossed shadow behind the lettering, not a second icon */
+.lb-vs-swords {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  color: rgba(43, 27, 2, .34);
+  filter: drop-shadow(0 1px 0 rgba(255, 248, 214, .55));
+  pointer-events: none;
+}
+/* chiselled gold lettering: a bronze cut, a specular top edge and a shadow under it */
+.lb-vs-t {
+  position: relative;
+  z-index: 1;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: .01em;
+  line-height: 1;
+  color: #4A2E05;
+  text-shadow:
+    0 1px 0 rgba(255, 246, 214, .95),
+    0 -1px 1px rgba(52, 30, 2, .55),
+    0 0 8px rgba(255, 240, 180, .35);
+}
+@keyframes lb-vs-breathe {
+  0%, 100% { opacity: .55; transform: scale(.94); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+@keyframes lb-vs-rift { to { transform: rotate(360deg); } }
 
 /* short phones (360x640): the arena compresses on the 8px grid before the sheet ever scrolls */
 @media (max-height: 660px) {
   .lb-mode { gap: 4px; }
-  .lb-slots.is-duel .lb-slot { min-height: 100px; padding: 12px 8px 10px; }
-  .lb-slots.is-duel .lb-av { width: 40px; height: 40px; font-size: 16px; }
+  .lb-slots.is-duel .lb-plate { min-height: 112px; padding: 13px 8px 11px; gap: 6px; }
+  .lb-slots.is-duel .lb-av { width: 44px; height: 44px; font-size: 17px; }
   .lb-slots.is-3p .lb-slot { min-height: 80px; }
   .lb-team .lb-slot { min-height: 46px; }
   .lb-team .lb-av { width: 28px; height: 28px; font-size: 12px; }
@@ -12645,6 +12703,344 @@ html.reduced-motion .stars-count::before { animation: none; }
   color: var(--ink-soft);
   letter-spacing: .01em;
 }
+
+/* ---- the duel plates: holographic obsidian, a cyan laser rim, one crest between them ----
+   Written after the generic slot and the open well, so a plate wins every tie it meets: a plate
+   *is* a `.lb-slot`, and the duel is the one format that gets the full face-off treatment. */
+.lb-slot.lb-plate {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 128px;
+  padding: 18px 10px 14px;
+  border: 0;
+  border-radius: 16px;
+  text-align: center;
+  overflow: hidden;
+  cursor: default;
+  isolation: isolate;
+  /* an opaque slab: the frosted read comes from the texture layers, never from a live blur */
+  background:
+    radial-gradient(120% 92% at 50% -10%, rgba(56, 189, 248, .15) 0%, rgba(56, 189, 248, 0) 58%),
+    linear-gradient(180deg, #1B2436 0%, #0E1522 100%);
+  box-shadow:
+    0 0 0 1px rgba(56, 189, 248, .34),
+    0 0 22px -8px rgba(56, 189, 248, .7),
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    inset 0 -16px 26px -20px rgba(0, 0, 0, .95);
+}
+/* the frosted grain: one sheen at the top, one hairline scanline pair over the whole plate */
+.lb-slot.lb-plate::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .075) 0%, rgba(255, 255, 255, 0) 40%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, .022) 0 1px, transparent 1px 3px);
+}
+.lb-plate-halo {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(76% 58% at 50% 108%, rgba(56, 189, 248, .2) 0%, transparent 72%);
+}
+/* the host's plate: the same slab, lit from above with gold and rimmed a stop brighter in cyan */
+.lb-slot.lb-plate.is-host {
+  background:
+    radial-gradient(120% 92% at 50% -10%, rgba(252, 211, 77, .16) 0%, rgba(252, 211, 77, 0) 56%),
+    linear-gradient(180deg, #212C40 0%, #101724 100%);
+  box-shadow:
+    0 0 0 1px rgba(125, 211, 252, .62),
+    0 0 28px -8px rgba(56, 189, 248, .95),
+    inset 0 0 0 1px rgba(125, 211, 252, .18),
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 -16px 26px -20px rgba(0, 0, 0, .95);
+}
+/* a rival who is actually sitting: the plate slams in, then holds a mint rim */
+.lb-slot.lb-plate.is-rival.is-ready {
+  animation: lb-plate-slam 440ms cubic-bezier(.2, .9, .25, 1) both;
+  box-shadow:
+    0 0 0 1px rgba(125, 211, 252, .48),
+    0 0 26px -9px rgba(56, 189, 248, .85),
+    inset 0 0 0 1px rgba(94, 242, 176, .16),
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 -16px 26px -20px rgba(0, 0, 0, .95);
+}
+.lb-slot.lb-plate.is-rival.is-ready::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(94, 242, 176, .22);
+}
+@keyframes lb-plate-slam {
+  0% { opacity: 0; transform: translateY(-12px) scale(.9); filter: blur(3px); }
+  58% { opacity: 1; transform: translateY(0) scale(1.045); filter: blur(0); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+
+/* the plate's own type: one name at reading size, one role under it in tracked caps */
+.lb-slots.is-duel .lb-slot-txt {
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+}
+.lb-slots.is-duel .lb-name { max-width: 100%; font-size: var(--t-1); font-weight: 800; }
+.lb-slots.is-duel .lb-role { font-size: 9px; letter-spacing: .12em; }
+.lb-slots.is-duel .lb-tags { position: absolute; top: 8px; right: 8px; flex-direction: row; }
+.lb-slots.is-duel .lb-color { display: none; }
+.lb-slots.is-duel .lb-plus { width: 38px; height: 38px; font-size: 22px; }
+
+/* the plate's portrait: a 54px disc, with Telegram's photo sitting over the monogram */
+.lb-slots.is-duel .lb-av {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  font-size: 21px;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .2),
+    0 0 0 1px rgba(255, 255, 255, .1),
+    0 10px 20px -12px rgba(0, 0, 0, .95);
+}
+/* a photo avatar is a mask: the image fills the disc, and the monogram waits underneath it.
+   `position: relative` is what keeps the fill inside the disc rather than over the whole slot. */
+.lb-av-photo { position: relative; overflow: hidden; }
+.lb-av-fb { font-size: inherit; font-weight: 900; line-height: 1; }
+.lb-av-photo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* the two shoulder badges: a struck gold crown for the host, a mint neon READY for the rival */
+.lb-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.lb-badge-host {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: #3A2404;
+  background: radial-gradient(circle at 34% 28%, #FFF3C4 0%, #FFD54A 38%, #C08A12 74%, #6B4405 100%);
+  box-shadow:
+    0 1px 0 #5A3A04,
+    inset 0 1px 1px rgba(255, 255, 255, .78),
+    0 0 12px -2px rgba(255, 213, 74, .85);
+}
+.lb-badge-host .ico { width: 13px; height: 13px; }
+.lb-badge-ready {
+  height: 20px;
+  padding: 0 7px;
+  color: #5EF2B0;
+  background: linear-gradient(180deg, rgba(94, 242, 176, .22) 0%, rgba(16, 185, 129, .16) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(94, 242, 176, .48),
+    0 0 14px -4px rgba(94, 242, 176, .85);
+  text-shadow: 0 0 8px rgba(94, 242, 176, .7);
+  animation: lb-ready-pulse 2.6s ease-in-out infinite;
+}
+@keyframes lb-ready-pulse {
+  0%, 100% { box-shadow: inset 0 0 0 1px rgba(94, 242, 176, .48), 0 0 14px -4px rgba(94, 242, 176, .85); }
+  50% { box-shadow: inset 0 0 0 1px rgba(94, 242, 176, .8), 0 0 20px -2px rgba(94, 242, 176, 1); }
+}
+
+/* an open rival plate: translucent glass, a dashed ring that marches, and the invite prompt */
+.lb-slot.lb-plate.is-open {
+  border: 0;
+  gap: 6px;
+  background:
+    radial-gradient(88% 76% at 50% 50%, rgba(56, 189, 248, .1) 0%, rgba(56, 189, 248, 0) 72%),
+    rgba(255, 255, 255, .028);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+  animation: lb-well-breathe 3.4s ease-in-out infinite;
+  cursor: pointer;
+}
+.lb-slot.lb-plate.is-open::before {
+  background: radial-gradient(70% 60% at 50% 50%, rgba(56, 189, 248, .1) 0%, transparent 74%);
+}
+.lb-well-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.lb-well-ring rect {
+  fill: none;
+  stroke: rgba(125, 211, 252, .52);
+  stroke-width: 1.4;
+  stroke-dasharray: 4 4;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 3px rgba(56, 189, 248, .55));
+  animation: lb-well-dash 1.6s linear infinite;
+}
+.lb-open-s {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--ink-soft);
+  opacity: .72;
+}
+@keyframes lb-well-breathe {
+  0%, 100% { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06), 0 0 0 rgba(56, 189, 248, 0); }
+  50% { box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .3), 0 0 24px -10px rgba(56, 189, 248, .8); }
+}
+@keyframes lb-well-dash { to { stroke-dashoffset: -16; } }
+
+/* a full duel: the crest burns hotter and its threads run brighter — the room is a face-off now */
+#gm-view-lobby[data-state="ready"] .lb-vs-core {
+  box-shadow:
+    0 0 30px rgba(255, 215, 0, .7),
+    inset 0 2px 3px rgba(255, 255, 255, .8);
+}
+#gm-view-lobby[data-state="ready"] .lb-vs-aura { animation-duration: 1.5s; }
+#gm-view-lobby[data-state="ready"] .lb-vs-thread { box-shadow: 0 0 9px rgba(252, 211, 77, .85); }
+
+/* ---- the duel countdown: 3 … 2 … 1 … FIGHT, over the lobby, above every sheet but the toast ---- */
+.duel-count {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  animation: dc-veil-in 180ms ease-out both;
+}
+.duel-count[hidden] { display: none; }
+.dc-veil {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% 46%, rgba(8, 12, 20, .82) 0%, rgba(4, 6, 11, .94) 100%);
+}
+.dc-card {
+  position: relative;
+  width: min(100%, 286px);
+  padding: 20px 18px 16px;
+  border-radius: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  background: linear-gradient(180deg, #1D2739 0%, #101725 100%);
+  box-shadow:
+    0 0 0 1px rgba(125, 211, 252, .34),
+    0 24px 48px -22px rgba(0, 0, 0, .95),
+    inset 0 1px 0 rgba(255, 255, 255, .12);
+  animation: dc-card-in 260ms cubic-bezier(.2, .9, .25, 1) both;
+}
+.dc-card.is-beat { animation: dc-beat 1s cubic-bezier(.2, .9, .25, 1) both; }
+.dc-kicker {
+  margin: 0;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--honey-ink);
+}
+.dc-ring {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  display: grid;
+  place-items: center;
+}
+.dc-ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  overflow: visible;
+}
+.dc-track { fill: none; stroke: rgba(255, 255, 255, .08); stroke-width: 4; }
+.dc-arc {
+  fill: none;
+  stroke: #FFD54A;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 339.29;
+  stroke-dashoffset: 0;
+  filter: drop-shadow(0 0 5px rgba(255, 213, 74, .85));
+}
+.dc-ring.is-tick .dc-arc { animation: dc-drain 1s linear forwards; }
+.dc-n {
+  font-size: 42px;
+  font-weight: 900;
+  line-height: 1;
+  color: #FFE9A8;
+  text-shadow: 0 0 18px rgba(255, 213, 74, .55), 0 2px 0 rgba(0, 0, 0, .5);
+  font-variant-numeric: tabular-nums;
+}
+.is-fight .dc-n {
+  font-size: 27px;
+  letter-spacing: .06em;
+  color: #FFF6D2;
+  text-shadow: 0 0 26px rgba(255, 213, 74, .9), 0 2px 0 rgba(0, 0, 0, .5);
+}
+.is-fight .dc-ring svg { opacity: 0; }
+.is-fight .dc-card { box-shadow: 0 0 0 1px rgba(255, 213, 74, .6), 0 0 48px -14px rgba(255, 213, 74, .8), inset 0 1px 0 rgba(255, 255, 255, .16); }
+.dc-line {
+  margin: 0;
+  font-size: var(--t-micro);
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.dc-cancel {
+  appearance: none;
+  border: 0;
+  min-height: 40px;
+  width: 100%;
+  margin-top: 2px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, .05);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+  transition: color var(--motion-fast), background-color var(--motion-fast);
+}
+.dc-cancel:hover { color: var(--ink); background: rgba(255, 255, 255, .08); }
+.dc-cancel:active { transform: scale(.99); }
+.dc-cancel:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
+@keyframes dc-veil-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dc-card-in {
+  from { opacity: 0; transform: translateY(10px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes dc-beat {
+  0% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+@keyframes dc-drain { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 339.29; } }
 
 /* the invite picker lives in the flow only while a well is open */
 .lb-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

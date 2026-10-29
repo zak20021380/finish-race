@@ -12,10 +12,16 @@
  * party matchmaking lands, so a stored party pick falls back to the duel.
  * The room UI lives on its own sub-screen behind a back arrow, never in the list.
  *
+/**
  * Rooms are local-first: Create mints a 4-digit code and reveals a 1-tap
  * "Invite via Telegram" deep-link (`t.me/<bot>?startapp=room_XXXX`). Join validates
  * a 4-digit code. Online races still start as local bot races with matching
  * sizes until netplay lands — the lobby is the contract, the starter is a stub.
+ *
+ * Two doors lead into a room without a single tap: the deep link (`openInviteRoom`, driven by
+ * `telegram.ts`'s start-param reader) and the duel's own countdown (`armDuelCountdown`), which
+ * fires the instant both seats are held by people. A room nobody had to press anything to fill
+ * is also a room nobody should have to press anything to start.
  */
 import { readJson, writeJson } from './storage';
 import { menuState, onLang, saveMenu, t } from './settings';
@@ -24,10 +30,10 @@ import { showToast } from './toast';
 import { botMainAppLink, telegramShareLink } from '../shared/config';
 import type { Sheets } from './sheets';
 import {
-  canStart, isHost, nextTeam, occupied, openLobby,
-  type Lobby, type LobbyHandle, type LobbyRace, type LobbyFormat,
+  canStart, humans, isHost, nextTeam, occupied, openLobby,
+  type Lobby, type LobbyHandle, type LobbyRace, type LobbyFormat, type LobbySeat,
 } from './lobby';
-import { isLobbyFormat } from './room';
+import { duelReady, isLobbyFormat } from './room';
 
 export type GameModeId = 'duel_1v1' | 'party_2v2' | 'bot' | 'room';
 
@@ -384,7 +390,7 @@ function plannedTeam(l: Lobby, index: number): 0 | 1 {
   return 0;
 }
 
-/** One seat, as the roster paints it. Empty wells are the invite affordance. */
+/** One seat, as the compact roster paints it (3P, 4P, 2v2). Empty wells are the invite door. */
 function slotMarkup(l: Lobby, seat: number, team: 0 | 1 | null): string {
   const s = l.seats[seat];
   if (!s) {
@@ -417,20 +423,88 @@ function slotMarkup(l: Lobby, seat: number, team: 0 | 1 | null): string {
   return `<button class="${cls.join(' ')}" type="button" role="listitem" data-seat="${seat}"`
     + (team === null ? ` data-color="${color}"` : ` data-team="${s.team}"`)
     + ` aria-label="${esc(label)}"${hint}>`
-    + `<span class="lb-av" aria-hidden="true">${esc(s.initial)}</span>`
+    + avatarMarkup(s)
     + `<span class="lb-slot-txt"><span class="lb-name">${esc(s.name)}</span>`
     + `<span class="lb-role">${role}</span></span>`
     + `<span class="lb-tags">${tags}</span></button>`;
 }
 
-/** The crest between the two sides of a versus layout — board furniture, never a control. */
-const vsMarkup = (): string =>
-  '<div class="lb-vs" aria-hidden="true"><span class="lb-vs-c">'
-  + '<svg class="ico lb-vs-i" focusable="false"><use href="#i-swords" /></svg><b>VS</b></span></div>';
+/**
+ * The seat's face: Telegram's own photo when the seat carries one, and the monogram under it as
+ * the fallback. The `<b>` is painted first and the image sits on top, so a blocked CDN costs a
+ * photo rather than a card — the error listener that removes a broken image is wired once, after
+ * the roster is written, rather than as an inline handler (the app ships no inline script).
+ */
+function avatarMarkup(s: LobbySeat): string {
+  const initial = esc((s.initial || s.name.charAt(0) || 'P').toUpperCase());
+  if (!s.avatarUrl) return `<span class="lb-av" aria-hidden="true">${initial}</span>`;
+  return '<span class="lb-av lb-av-photo" aria-hidden="true">'
+    + `<b class="lb-av-fb">${initial}</b>`
+    + `<img src="${esc(s.avatarUrl)}" alt="" decoding="async" loading="lazy">`
+    + '</span>';
+}
 
-/** The duel: one prominent card a side, the crest between them. Two seats, nothing to count. */
+/**
+ * The duel's crest: a chiselled gold core riding a vertical laser thread that fades into the
+ * plates above and below it. Board furniture, never a control — `aria-hidden`, and nothing in it
+ * is focusable, so it can never take a tap meant for a seat.
+ */
+const vsMarkup = (): string =>
+  '<div class="lb-vs" aria-hidden="true">'
+  + '<span class="lb-vs-thread"></span>'
+  + '<span class="lb-vs-core">'
+  + '<span class="lb-vs-aura"></span>'
+  + '<svg class="lb-vs-swords" focusable="false"><use href="#i-swords" /></svg>'
+  + '<b class="lb-vs-t">VS</b>'
+  + '</span>'
+  + '<span class="lb-vs-thread"></span>'
+  + '</div>';
+
+/**
+ * One half of the duel: a holographic plate. The host's side is an obsidian slab under a cyan
+ * laser border with a gold crown on its shoulder; the rival's side is the same plate in glass
+ * until somebody takes it, and slams into place when they do. `side` is the plate's *position*,
+ * not its occupant: an empty left plate is still the host's plate, waiting for the host.
+ */
+function duelPlate(l: Lobby, seat: number, side: 'host' | 'rival'): string {
+  const s = l.seats[seat];
+  if (!s) {
+    return `<button class="lb-slot lb-plate is-open is-${side}" type="button" role="listitem"`
+      + ` data-seat="${seat}" aria-label="${esc(t('openSeatInvite').replace('{n}', String(seat + 1)))}">`
+      /* the dashed ring is drawn, not bordered: only a stroke can march its dashes */
+      + '<svg class="lb-well-ring" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">'
+      + '<rect x="1.5" y="1.5" width="97" height="97" rx="12" ry="12" /></svg>'
+      + '<span class="lb-plus" aria-hidden="true">+</span>'
+      + `<span class="lb-open-t">${esc(t('inviteFriendFull'))}</span>`
+      + `<span class="lb-open-s">${esc(t('rivalWaiting'))}</span>`
+      + '</button>';
+  }
+  const cls = ['lb-slot', 'lb-plate', 'is-held', `is-${side}`];
+  if (s.host && side !== 'host') cls.push('is-host');
+  if (s.seat === l.you) cls.push('is-you');
+  if (!s.connected) cls.push('is-away');
+  /* the rival's plate only reads "ready" once a person is actually sitting in it: a well the host
+     filled with the machine is not somebody waiting to play */
+  if (side === 'rival' && !s.bot) cls.push('is-rival', 'is-ready');
+  const role = s.host ? t('host') : s.seat === l.you ? t('you') : s.bot ? t('bot') : t('rival');
+  const label = `${s.name}, ${role}`;
+  const badge = s.host
+    ? `<span class="lb-badge lb-badge-host" role="img" aria-label="${esc(t('host'))}">`
+      + '<svg class="ico" focusable="false"><use href="#i-crown" /></svg></span>'
+    : s.bot ? '' : `<span class="lb-badge lb-badge-ready">${esc(t('ready'))}</span>`;
+  return `<button class="${cls.join(' ')}" type="button" role="listitem" data-seat="${seat}"`
+    + ` aria-label="${esc(label)}">`
+    + `<span class="lb-plate-halo" aria-hidden="true"></span>`
+    + badge
+    + avatarMarkup(s)
+    + `<span class="lb-slot-txt"><span class="lb-name">${esc(s.name)}</span>`
+    + `<span class="lb-role">${role}</span></span>`
+    + '</button>';
+}
+
+/** The duel: one prominent plate a side, the crest between them. Two seats, nothing to count. */
 function duelMarkup(l: Lobby): string {
-  return slotMarkup(l, 0, null) + vsMarkup() + slotMarkup(l, 1, null);
+  return duelPlate(l, 0, 'host') + vsMarkup() + duelPlate(l, 1, 'rival');
 }
 
 /**
@@ -457,14 +531,19 @@ function paintSlots(l: Lobby): void {
   slotSig = sig;
   const grid = document.getElementById('lb-slots');
   if (!grid) return;
-  /* the format owns the roster's shape: two cards and a crest, three compact cards, or four */
+  /* the format owns the roster's shape: two plates and a crest, three compact cards, or four */
   grid.className = `lb-slots is-${l.format}`;
   grid.dataset.format = l.format;
+  grid.dataset.state = canStart(l) ? 'ready' : 'open';
   grid.innerHTML = l.format === '2v2'
     ? teamMarkup(l)
     : l.format === 'duel'
       ? duelMarkup(l)
       : l.seats.map((_s, i) => slotMarkup(l, i, null)).join('');
+  /* a photo that never arrives leaves the monogram underneath it, never a broken frame */
+  for (const img of grid.querySelectorAll<HTMLImageElement>('.lb-av-photo img')) {
+    img.addEventListener('error', () => img.remove(), { once: true });
+  }
 }
 
 /** Everything the lobby screen shows, from the value alone. */
@@ -515,11 +594,192 @@ function paintLobbyPane(l: Lobby): void {
     start.classList.toggle('is-idle', host && !canStart(l));
     start.classList.toggle('is-ready', ready);
   }
+
+  /* The room's own state rides on the pane, so the CSS can dress a full duel differently from one
+     still waiting for its rival — and so the countdown below has one place to read it from. */
+  const pane = document.getElementById('gm-view-lobby');
+  if (pane) pane.dataset.state = canStart(l) ? 'ready' : 'open';
+
+  /* Last: a duel both people have taken counts itself down and starts. Everything above has
+     already painted, so the countdown never races the roster it is counting. */
+  armDuelCountdown(l);
+}
+
+/* ---------- the duel countdown: 3 … 2 … 1 … FIGHT ---------- */
+
+/** One beat a second, then the FIGHT flash, then the start. */
+const COUNT_STEP_MS = 1000;
+const COUNT_FIGHT_MS = 700;
+/** A start the server never answers must not leave the veil up over a lobby. */
+const COUNT_WATCHDOG_MS = 2800;
+
+interface Countdown {
+  /** Identifies *this* run, so a stale timer can never paint a room that has moved on. */
+  token: number;
+  /** The room + roster it was armed for. A changed roster is a different countdown. */
+  key: string;
+  left: number;
+  timer: number;
+}
+
+/** The one live countdown, or null. Module-level: the socket callbacks outlive `initGameModes`. */
+let countdown: Countdown | null = null;
+/** Bumped per run so a timer from a cancelled countdown is recognised and dropped. */
+let countToken = 0;
+/**
+ * The roster whose countdown is over — cancelled by the host, or already fired. Two people who
+ * have had their countdown do not get a second one from the next roster frame; a changed roster
+ * is a new key, so a rival leaving and rejoining still counts down again.
+ */
+let countdownSpent = '';
+/** True while this client's countdown is what started the race — the board skips its face-off. */
+let autoLaunched = false;
+
+/** The identity of a countdown: the room, and exactly who is sitting in it. */
+const countKey = (l: Lobby): string =>
+  `${l.code}|${l.seats.map((s) => (s ? s.id : '-')).join(',')}`;
+
+const botsIn = (l: Lobby): number => l.seats.reduce((n, s) => n + (s && s.bot ? 1 : 0), 0);
+
+/** May this lobby count itself down? The host's own duel, both seats held by people. */
+function armedForCountdown(l: Lobby): boolean {
+  return isHost(l) && l.status !== 'closed' && duelReady(l.format, humans(l), botsIn(l));
+}
+
+function countNodes() {
+  return {
+    root: document.getElementById('duel-count'),
+    ring: document.getElementById('dc-ring'),
+    stage: document.getElementById('dc-stage'),
+    kicker: document.getElementById('dc-kicker'),
+    n: document.getElementById('dc-n'),
+    line: document.getElementById('dc-line'),
+  };
+}
+
+/** The countdown's static chrome, in the player's language: painted on init and on a language switch. */
+function paintCountdownChrome(): void {
+  const kicker = document.getElementById('dc-kicker');
+  if (kicker) kicker.textContent = t('countdownKicker');
+  const cancel = document.getElementById('dc-cancel-t');
+  if (cancel) cancel.textContent = t('cancelMatch');
+}
+
+/** Show the veil on one tick: the numeral, the line under it, and the ring draining. */
+function paintCountdown(n: number, fight: boolean): void {
+  const { root, ring, stage, kicker, n: num, line } = countNodes();
+  if (!root) return;
+  root.hidden = false;
+  root.classList.add('is-on');
+  root.classList.toggle('is-fight', fight);
+  if (kicker) kicker.textContent = t('countdownKicker');
+  if (num) num.textContent = fight ? t('fight') : String(n);
+  if (line) line.textContent = fight ? t('fightLine') : t('duelStartsIn').replace('{n}', String(n));
+  /* the ring drains once per second; the numeral re-pops on the same beat */
+  if (ring && !fight) {
+    ring.classList.remove('is-tick');
+    void ring.offsetWidth;
+    ring.classList.add('is-tick');
+  }
+  if (stage) {
+    stage.classList.remove('is-beat');
+    void stage.offsetWidth;
+    stage.classList.add('is-beat');
+  }
+}
+
+function hideCountdown(): void {
+  const { root } = countNodes();
+  if (!root) return;
+  root.classList.remove('is-on', 'is-fight');
+  root.hidden = true;
+}
+
+/**
+ * Stop whatever countdown is running. `spend` remembers the roster, so neither the paint that
+ * follows a cancel nor the frame that follows a start can re-arm the countdown just refused.
+ */
+function abortCountdown(spend = false): void {
+  const state = countdown;
+  countdown = null;
+  if (state) {
+    window.clearTimeout(state.timer);
+    if (spend) countdownSpent = state.key;
+  }
+  hideCountdown();
+}
+
+/** The start itself: the host asks the room to launch, and the board takes over from the race. */
+function fireCountdown(): void {
+  const state = countdown;
+  const l = handle?.lobby;
+  countdown = null;
+  hideCountdown();
+  if (!state || !l) return;
+  /* spent either way: a frame that lands while the start is in flight must not restart the count */
+  countdownSpent = state.key;
+  if (!isHost(l) || !canStart(l)) return;
+  /* the overlay is gone, the start is on its way: this is the one path that skips the face-off */
+  autoLaunched = true;
+  impact('heavy');
+  notify('success');
+  const ok = handle?.start() ?? false;
+  if (!ok) { autoLaunched = false; return; }
+  /* a room whose answer never lands leaves the player on the roster they can still start by hand */
+  window.setTimeout(() => { hideCountdown(); autoLaunched = false; }, COUNT_WATCHDOG_MS);
+}
+
+/**
+ * Arm the countdown for a lobby that just became a full duel. Idempotent: a repaint for the same
+ * two players is the same countdown, and a roster that changed underneath one aborts it first —
+ * a rival who leaves during the count must not be launched against.
+ */
+function armDuelCountdown(l: Lobby): void {
+  const key = countKey(l);
+  if (countdown) {
+    if (countdown.key === key) return;
+    abortCountdown();
+  }
+  if (!armedForCountdown(l) || key === countdownSpent) return;
+
+  const token = ++countToken;
+  const state: Countdown = { token, key, left: 3, timer: 0 };
+  countdown = state;
+  paintCountdown(3, false);
+  impact('medium');
+
+  const step = (): void => {
+    if (countdown !== state || countdown.token !== token) return;
+    if (state.left > 1) {
+      state.left -= 1;
+      paintCountdown(state.left, false);
+      impact('medium');
+      state.timer = window.setTimeout(step, COUNT_STEP_MS);
+      return;
+    }
+    /* the "1" has had its second: FIGHT, and the start rides the flash */
+    paintCountdown(1, true);
+    impact('heavy');
+    state.timer = window.setTimeout(fireCountdown, COUNT_FIGHT_MS);
+  };
+  state.timer = window.setTimeout(step, COUNT_STEP_MS);
+}
+
+/**
+ * Did the countdown on this client start the race that is arriving now? Read once, by the one
+ * caller that decides whether the board still owes the player a face-off.
+ */
+export function takeAutoLaunch(): boolean {
+  const fired = autoLaunched;
+  autoLaunched = false;
+  return fired;
 }
 
 /** Open a room's socket and land on the lobby. `host` mints the code; guests must be expected. */
-function openRoom(code: string, host: boolean): void {
+function openRoom(code: string, host: boolean, opts?: { invite?: boolean }): void {
   const token = ++roomToken;
+  abortCountdown();
+  countdownSpent = '';
   handle?.leave();
   handle = null;
   slotSig = '';
@@ -527,12 +787,15 @@ function openRoom(code: string, host: boolean): void {
   handle = openLobby({
     code,
     host,
+    /* an invited guest has no solo fallback: the room exists or the invite is refused */
+    mustExist: opts?.invite === true,
     onState: (l) => { if (token === roomToken) paintLobbyPane(l); },
     onRace: (race) => {
       if (token !== roomToken) return;
       /* the lobby's work is done: the board owns the socket from here */
       handle = null;
       roomToken++;
+      abortCountdown();
       sheetHost?.close();
       hooks.onRoomRace?.(race);
       setGameMode('room', { roomCode: null });
@@ -540,6 +803,9 @@ function openRoom(code: string, host: boolean): void {
     onError: (reason) => {
       if (token !== roomToken) return;
       handle = null;
+      abortCountdown();
+      /* an invite that cannot be honoured hands the player back to Home with the reason on screen */
+      if (opts?.invite) { inviteRefused(errorLine(reason)); return; }
       showView('room');
       showRoomError(errorLine(reason));
     },
@@ -549,14 +815,58 @@ function openRoom(code: string, host: boolean): void {
   handle.closed(() => {
     if (token !== roomToken) return;
     handle = null;
+    abortCountdown();
+    if (opts?.invite) { inviteRefused(t('errDropped')); return; }
     showView('room');
     showRoomError(t('errDropped'));
   });
 }
 
+/**
+ * An invite that cannot be honoured: say why in one toast, close the drawer, and leave the player
+ * on the home lobby exactly as they arrived. No half-open room, no dead-end pane.
+ */
+function inviteRefused(msg: string): void {
+  setGameMode('room', { roomCode: null });
+  showView('modes');
+  sheetHost?.close();
+  showToast(msg, 'error');
+  notify('error');
+}
+
+/**
+ * The deep link's door: `?startapp=room_XXXX` lands in that room's lobby with no taps in between.
+ *
+ * False means the link cannot be honoured *here* — a code that is not a room code, a shell with no
+ * drawer yet, or a player already sitting in a room. A room the server turns down is not a false:
+ * the join is attempted, and the refusal comes back as a toast with the player at home.
+ */
+export function openInviteRoom(code: string): boolean {
+  const clean = cleanRoomCode(code);
+  if (!clean) {
+    showToast(t('errRoomNotFound'), 'error');
+    notify('error');
+    return false;
+  }
+  const sheet = document.getElementById('sheet-game-modes');
+  if (!sheetHost || !sheet) return false;
+  if (inLobby()) return false;
+  clearRoomError();
+  setGameMode('room', { roomCode: clean });
+  /* the pane first, the sheet second: the drawer slides in already showing the room it was
+     opened for, instead of flashing the mode list on its way there */
+  openRoom(clean, false, { invite: true });
+  /* a room the worker refused on the spot never gets a drawer: the toast has already said so */
+  if (!handle) return false;
+  sheetHost.open(sheet);
+  return true;
+}
+
 /** Walk out of the lobby (the host's exit closes it for everyone). */
 function leaveRoom(): void {
   roomToken++;
+  abortCountdown();
+  countdownSpent = '';
   handle?.leave();
   handle = null;
   slotSig = '';
@@ -590,6 +900,8 @@ function paintSheetHead(next: SheetView): void {
 /** Swap the drawer between the mode list, the friends entry and the live lobby. */
 function showView(next: SheetView): void {
   view = next;
+  /* the countdown belongs to the roster it is counting: leaving that pane stops it */
+  if (next !== 'lobby' && countdown) abortCountdown();
   const modes = document.getElementById('gm-view-modes');
   if (modes) modes.hidden = next !== 'modes';
   const room = document.getElementById('gm-view-room');
@@ -726,6 +1038,7 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
   hooks = init ?? {};
   paintLobby();
   paintSheetState();
+  paintCountdownChrome();
   showView('modes');
 
   /* rows: quick + practice select in place, friends open their own sub-screen */
@@ -922,6 +1235,14 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     showView('room');
   });
 
+  /* the countdown's escape hatch: the host keeps the room and the rival stays seated, and the
+     same two players are not counted down again until the roster changes */
+  document.getElementById('dc-cancel')?.addEventListener('click', () => {
+    impact('light');
+    notify('warning');
+    abortCountdown(true);
+  });
+
   /* the sticky Start: the lobby's own key while the lobby is up, the mode's otherwise */
   document.getElementById('gm-start')?.addEventListener('click', () => {
     if (view === 'lobby') {
@@ -958,6 +1279,7 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
   onLang(() => {
     paintLobby();
     paintSheetHead(view);
+    paintCountdownChrome();
     paintSheetState();
   });
 }

@@ -37,9 +37,12 @@ import {
   type TutorialTargetMine, type TutorialTargetMove, type TutorialTargetSelect, type TutorialTargetWall,
 } from './tutorial';
 import { PEARL_BOARD, perspectiveRamps, type Theme } from './themes';
-import { detonation, impact, initTelegram, notify, onBackPress, tgUser } from './telegram';
+import { detonation, impact, initTelegram, inviteRoomCode, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
-import { createRoomCode, getGameMode, gmBack, initGameModes, onGameModeChange, setGameMode } from './gamemodes';
+import {
+  createRoomCode, getGameMode, gmBack, initGameModes, onGameModeChange, openInviteRoom, setGameMode,
+  takeAutoLaunch,
+} from './gamemodes';
 import type { Lobby, LobbyRace } from './lobby';
 import {
   createMatchmaking, myTier, myTiq, onlineRace, onlineSearch, type OnlineSession, type RaceEnd,
@@ -1185,6 +1188,8 @@ interface StartSetup {
   /** The lobby this race came out of, when it came out of one: it names the seats, says which are
    *  the machine's, and pays only the seats a person actually held to the end. */
   room?: Room | null;
+  /** The countdown already staged this match: go straight to the board, no second face-off. */
+  quiet?: boolean;
 }
 
 /**
@@ -1299,7 +1304,6 @@ function startGame(setup: StartSetup) {
      its callback, so the board never ticks behind the crest — `syncLoop()` runs frames and the turn
      clock only while the game screen is up. An automated browser and the lesson both get the
      original synchronous path: the clash answers `onReveal` before it returns. */
-  const rivals = wantsTutorial ? [] : clashRivals();
   let revealed = false;
   const reveal = () => {
     if (revealed) return;
@@ -1307,6 +1311,10 @@ function startGame(setup: StartSetup) {
     router.go('game');
     if (wantsTutorial) beginTutorial();
   };
+  /* A room that already counted itself down has had its ceremony — the FIGHT flash *was* the
+     reveal — so it goes straight to the board rather than paying for a second cinematic. */
+  if (setup.quiet) { reveal(); return; }
+  const rivals = wantsTutorial ? [] : clashRivals();
   showVsClash(rivals, {
     kind: active ? 'ranked' : room ? 'room' : 'bot',
     tier: rivals.find((r) => r.bot)?.bot ?? undefined,
@@ -2321,13 +2329,15 @@ initGameModes(sheets, {
   /* The friends lobby's Start. A lobby with a socket behind it has already asked the worker to
      launch, and the race arrives on `onRoomRace`; one without a socket plays its own roster here. */
   onRoomStart: (lobby: Lobby) => {
+    takeAutoLaunch();   // a roster with no socket never counted down: drop any stale flag
     const room = roomFromRoster(lobby.code, lobby.seats);
     showNote(lobbyLine(room, Date.now()), false, 2200, true);
     startGame({ difficulty: menuState.difficulty, sizes: sizesOf(room), room });
   },
   onRoomRace: (race: LobbyRace) => {
     const room = roomFromRoster(race.code, race.seats);
-    startGame({ difficulty: menuState.difficulty, sizes: race.sizes, online: race, room });
+    /* the countdown, where this client ran one, has already staged the match: no second face-off */
+    startGame({ difficulty: menuState.difficulty, sizes: race.sizes, online: race, room, quiet: takeAutoLaunch() });
   },
 });
 onGameModeChange(paintParty);
@@ -2415,6 +2425,23 @@ themeToggle.addEventListener('click', () => {
   if (!page.startViewTransition || motionReduced()) { commit(); return; }
   page.startViewTransition(commit);
 });
+
+/* ---------- the invite door: `?startapp=room_XXXX` lands in that room, no taps ---------- */
+
+/**
+ * A shared room link is a promise: the friend who taps it is already seated. The code rides
+ * `initDataUnsafe.start_param` inside Telegram and the query string outside it (`telegram.ts`),
+ * and the drawer is opened on the live lobby before the socket even answers — so the screen a
+ * guest sees is the room, never the launcher they would have had to navigate.
+ *
+ * Deferred by a beat rather than run inline: the drawer needs the shell laid out before it can
+ * slide, and the boot veil owns the first moments of the page. A refusal — full, expired, gone —
+ * arrives as a toast from `openInviteRoom` with the player left at home.
+ */
+const invitedRoom = inviteRoomCode();
+if (invitedRoom) {
+  window.setTimeout(() => { openInviteRoom(invitedRoom); }, 420);
+}
 
 /* the arena is staged: the neural boot screen may lift on its own clock */
 splashReady();

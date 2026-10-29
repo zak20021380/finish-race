@@ -5387,6 +5387,25 @@
     </section>
     <div class="join-gate-toast" id="join-gate-toast" hidden role="status" aria-live="polite"></div>
 
+    <!-- The duel countdown: 3 … 2 … 1 … FIGHT. Raised the instant both seats of a 1v1 are held,
+         so a room that filled itself also starts itself. Every word on it is painted from
+         `gamemodes.ts` (`paintCountdown`), and the host's Cancel is the one control it carries. -->
+    <div class="duel-count" id="duel-count" hidden>
+      <span class="dc-veil" aria-hidden="true"></span>
+      <div class="dc-card" id="dc-stage" role="status" aria-live="assertive" aria-atomic="true">
+        <p class="dc-kicker" id="dc-kicker">Room ready</p>
+        <div class="dc-ring" id="dc-ring" aria-hidden="true">
+          <svg viewBox="0 0 120 120" focusable="false">
+            <circle class="dc-track" cx="60" cy="60" r="54" />
+            <circle class="dc-arc" cx="60" cy="60" r="54" />
+          </svg>
+          <b class="dc-n" id="dc-n">3</b>
+        </div>
+        <p class="dc-line" id="dc-line">Duel starts in 3…</p>
+        <button class="dc-cancel" type="button" id="dc-cancel"><span id="dc-cancel-t">Cancel match</span></button>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
     <!-- the board's own overlay: event callouts. Kept out of main.ts so the race loop, the
          renderer and the rules stay untouched by presentation. -->

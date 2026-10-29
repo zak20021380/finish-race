@@ -45,6 +45,8 @@ export interface LobbySeat {
   name: string;
   /** The avatar letter, so a slot never paints an empty circle. */
   initial: string;
+  /** Telegram's profile photo for this seat, when the client or a frame carries one. */
+  avatarUrl?: string | null;
   host: boolean;
   /** True when the machine holds the seat (a backfilled bot, or one the host added). */
   bot: boolean;
@@ -238,6 +240,12 @@ export interface LobbyOptions {
   onError: (reason: string) => void;
   /** A format change the room could not take (every seat is held): a nudge, not an error. */
   onNotice?: (reason: string) => void;
+  /**
+   * True for a room this client was *invited* to rather than one it opened. A guest cannot fall
+   * back to a solo lobby: an invite to a room that no longer exists is a refusal, not a private
+   * race against the machine under a stranger's code. The connect window then ends in `onError`.
+   */
+  mustExist?: boolean;
 }
 
 export interface LobbyHandle {
@@ -260,18 +268,31 @@ const CONNECT_MS = 1400;
 
 const faceOf = (name: string): string => (name.trim().charAt(0) || 'P').toUpperCase();
 
-/** The name this device races under — the same one the 1v1 queue sends. */
-function myName(): string {
+/** The name and the face this device races under — the same pair the 1v1 queue sends. */
+function myFace(): { name: string; avatarUrl: string | null } {
   const el = document.getElementById('p-name')?.textContent?.trim();
-  const tg = (window as unknown as { Telegram?: { WebApp?: { initDataUnsafe?: { user?: { first_name?: string; username?: string } } } } })
+  const tg = (window as unknown as { Telegram?: { WebApp?: { initDataUnsafe?: { user?: { first_name?: string; username?: string; photo_url?: string } } } } })
     .Telegram?.WebApp?.initDataUnsafe?.user;
-  return (el || tg?.first_name || tg?.username || 'You').slice(0, 14);
+  const name = (el || tg?.first_name || tg?.username || 'You').slice(0, 14);
+  const avatarUrl = typeof tg?.photo_url === 'string' && /^https?:\/\//i.test(tg.photo_url) ? tg.photo_url : null;
+  return { name, avatarUrl };
 }
+
+const myName = (): string => myFace().name;
 
 /** A lobby with only the host in it: a 1v1 room, the challenger's well open. */
 export function hostLobby(code: string, name: string, online: boolean): Lobby {
+  const face = myFace();
   const host: LobbySeat = {
-    seat: 0, id: 'you', name, initial: faceOf(name), host: true, bot: false, team: 0, connected: true,
+    seat: 0,
+    id: 'you',
+    name,
+    initial: faceOf(name),
+    avatarUrl: face.name === name ? face.avatarUrl : null,
+    host: true,
+    bot: false,
+    team: 0,
+    connected: true,
   };
   return {
     code,
@@ -302,11 +323,13 @@ function readLobby(l: Lobby, raw: Record<string, unknown>): Lobby {
     const at = typeof s.side === 'number' ? s.side : -1;
     if (at < 0 || at >= capacity) continue;
     const name = typeof s.name === 'string' ? s.name.slice(0, 14) : 'Player';
+    const avatar = typeof s.avatar === 'string' && /^https?:\/\//i.test(s.avatar) ? s.avatar : null;
     seats[at] = {
       seat: at,
       id: typeof s.id === 'string' ? s.id : `seat:${at}`,
       name,
       initial: faceOf(name),
+      avatarUrl: avatar,
       host: s.host === true,
       bot: s.bot === true,
       team: s.team === 1 ? 1 : 0,
@@ -359,6 +382,14 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
     try { sock?.close(); } catch { /* already gone */ }
     sock = null;
     link = null;
+    /* An invited guest has nowhere to fall back to: the room they were promised is the room or
+       nothing, and "nothing" has to be said out loud rather than dressed as a solo race. */
+    if (opts.mustExist) {
+      lobby = { ...lobby, status: 'closed', online: false };
+      paint();
+      opts.onError('room_not_found');
+      return;
+    }
     const offline = hostLobby(opts.code, lobby.seats[0]?.name ?? myName(), false);
     lobby = setFormat(offline, lobby.format);
     paint();

@@ -88,6 +88,17 @@ export const FORMAT_LINE: Record<LobbyFormat, string> = {
 };
 
 /**
+ * Is this room a duel both people have taken? The single question the auto-launch asks.
+ *
+ * A head-to-head is the one format with nothing left to arrange once the second person sits: the
+ * seats are the whole roster, so the room is ready the moment the rival lands. `bots` must be zero
+ * — a well the machine filled is not somebody joining, and a solo host must never be auto-launched
+ * into a board they did not ask for. `held` is the number of people actually sitting.
+ */
+export const duelReady = (format: LobbyFormat, held: number, bots: number): boolean =>
+  format === 'duel' && bots === 0 && held >= FORMAT_CAPACITY.duel;
+
+/**
  * Reflow a set of held seat indices into a room of `capacity` seats. A seat that still fits keeps
  * its index; one that does not moves to the lowest free well. Null when everyone cannot fit — a
  * four-player room cannot become a three-seat one without somebody going.

@@ -112,11 +112,55 @@ export function languageCode(): string {
   return navigator.language || '';
 }
 
-/** `t.me/<bot>/app?startapp=<x>` — what a team invite link carries, for when teams go online. */
+/** Every query key a start parameter is known to arrive on, in the order they are trusted. */
+const START_KEYS = ['startapp', 'tgWebAppStartParam', 'start_param'] as const;
+
+/**
+ * `t.me/<bot>/app?startapp=<x>` — the payload a deep link carries.
+ *
+ * The Mini App answers with `initDataUnsafe.start_param`; a plain browser tab (or a client that
+ * strips initData) has no such field, so the same value is read off the URL instead: the query
+ * string Telegram rewrites into, then the hash, then the initData query string. A room invite
+ * therefore survives being opened outside the client — which is what makes a shared link work.
+ */
 export function startParam(): string {
   const fromTg = tg?.initDataUnsafe?.start_param ?? tg?.startParam ?? tg?.start_param;
-  if (fromTg) return fromTg;
-  try { return new URLSearchParams(tg?.initData ?? '').get('startapp') ?? ''; } catch { return ''; }
+  if (typeof fromTg === 'string' && fromTg) return fromTg;
+
+  const fromQuery = (raw: string): string => {
+    try {
+      const q = new URLSearchParams(raw.replace(/^[?#]/, ''));
+      for (const k of START_KEYS) {
+        const v = q.get(k);
+        if (v) return v;
+      }
+    } catch { /* not a query string */ }
+    return '';
+  };
+
+  try {
+    const init = fromQuery(tg?.initData ?? '');
+    if (init) return init;
+  } catch { /* malformed initData */ }
+
+  try {
+    const q = fromQuery(window.location.search);
+    if (q) return q;
+    return fromQuery(window.location.hash);
+  } catch { return ''; }
+}
+
+/**
+ * The room a `room_<code>` deep link points at, or ''. `/^room_([a-zA-Z0-9_-]+)$/i` is the whole
+ * grammar: anything else in the start parameter belongs to some other feature and is left alone.
+ */
+const ROOM_PARAM = /^room_([a-zA-Z0-9_-]+)$/i;
+
+export function inviteRoomCode(): string {
+  let raw = '';
+  try { raw = startParam().trim(); } catch { return ''; }
+  const m = ROOM_PARAM.exec(raw);
+  return m ? m[1] : '';
 }
 
 /* ---------- theme ---------- */

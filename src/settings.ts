@@ -273,6 +273,15 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     errJoinUnknown: 'Could not join that room.',
     errCode: 'Enter the 4-digit room code.',
     errDropped: 'The room connection dropped. Try again.',
+    /* ---- the duel face-off ---- */
+    inviteFriendFull: 'Invite Friend',
+    rivalWaiting: 'Waiting for a rival',
+    rival: 'Rival',
+    countdownKicker: 'Room ready · Duel',
+    duelStartsIn: 'Duel starts in {n}…',
+    fight: 'FIGHT!',
+    fightLine: 'Both fighters seated — go',
+    cancelMatch: 'Cancel match',
     /* ---- squads ---- */
     joinSquad: 'Join Squad',
     joinASquad: 'Join a Squad',
@@ -460,6 +469,15 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     errJoinUnknown: 'نتونستم وارد اتاق بشم.',
     errCode: 'کد 4 رقمی اتاق رو وارد کن.',
     errDropped: 'اتصال اتاق قطع شد. دوباره تلاش کن.',
+    /* ---- the duel face-off ---- */
+    inviteFriendFull: 'دعوت دوست',
+    rivalWaiting: 'منتظر حریف…',
+    rival: 'حریف',
+    countdownKicker: 'اتاق آماده · دوئل',
+    duelStartsIn: 'شروع دوئل در {n}…',
+    fight: 'بجنگ!',
+    fightLine: 'هر دو حاضرن — برو',
+    cancelMatch: 'لغو مسابقه',
     /* ---- squads ---- */
     joinSquad: 'ورود به اسکواد',
     joinASquad: 'ورود به اسکواد',
