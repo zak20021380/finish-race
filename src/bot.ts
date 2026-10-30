@@ -14,11 +14,10 @@
  *   normal — full multi-contender evaluation, softmax over near-optimal actions.
  *   hard   — the same, plus a top-K 2-ply reply check and a tighter softmax band.
  *
- * Leaps are part of the move set, not a special case: the candidates come from `steps()`, so a hop
- * around a rival's flank is a candidate like any other, and the ground it gains is measured on
- * `stepField()` — the distance that counts a body as one action to go around rather than a wall to
- * walk around. A rival directly ahead is never jumped straight over (the engine withholds that
- * leap), which is exactly what the bot sees too: no illegal hop is ever priced.
+ * Collisions are part of the move set, not a special case: the candidates come from `steps()`, so a
+ * team-mate stepped over is a candidate like any other, and the ground it gains is measured on
+ * `stepField()` — the distance that treats an opponent as a solid obstacle and a team-mate as one
+ * action to go around. No illegal hop over a rival is ever priced.
  *
  * It is fed `view(state, seat)` by the caller, so everything here reasons only about what a real
  * player could know: the opponent's hidden mines are not in `s`, and neither is the bot's answer.
@@ -184,9 +183,9 @@ function moveCandidates(
     const after = pathOn(d, st.to, s.cols);
     if (!Number.isFinite(after)) continue;               // a sealed pocket is never a move
     const from = Number.isFinite(before) ? before : after;
-    /* Ground is measured with the rivals' bodies on the board, not on the bare one: the walk counts
-       a body as one action to go around (a rival straight ahead is never jumped), so a step that
-       walks into a spot only a rival's own square can reach the line from is not ground gained. */
+    /* Ground is measured with every body on the board, not on the bare one: an opponent is a solid
+       obstacle and a team-mate is one action to step over, so a destination reachable only by
+       hopping a rival is never counted as ground gained. */
     const oppFrom = dfOpp[b.pos.r * s.cols + b.pos.c];
     const oppTo = dfOpp[st.to.r * s.cols + st.to.c];
     let sc: number;
@@ -533,9 +532,8 @@ export function botAction(s: GameState, difficulty: Difficulty = 'normal'): Acti
   const myD = teamField(s, me, d);
   const foes = contenders(s, me, d);
   /* the board as it stands with every rival body on it — the metric the moves are judged on. It is
-     `stepField`, not a fence: a body is a square to go around (never a rival jumped straight ahead),
-     so a corridor two balls are wedged in is one action wide and the bot commits to it instead of
-     refusing. */
+     `stepField`, not a fence: an opponent is a solid obstacle, while a team-mate is one action to
+     step over, so the bot prices exactly the moves `steps()` will accept. */
   const dfOpp = stepField(s);
 
   /* Easy wanders: a plain random legal step, exactly as it always has, keeps it forgiving */

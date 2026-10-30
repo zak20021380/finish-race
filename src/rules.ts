@@ -12,19 +12,15 @@
  * of its balls one cell, places a wall from its budget of `wallBudget(contenders)`, or buries a
  * mine from its budget of `CONFIG.MINES_PER_TEAM` (see the mine section below).
  *
- * Leaps: a ball may not walk into another ball, but it may LEAP over one. A ball standing directly
- * in the way is a stepping stone, not a wall — the mover lands on the square behind it when the
- * board leaves that square open, and hops to one of the body's flanks when a wall, the perimeter or
- * a third ball closes it. That is the standard board-game leap, and it is what a one-wide corridor
- * needs: without it, two balls meeting head-on in a walled lane have nothing to do but shuffle
- * forever, because neither can pass and neither can back off without giving up the race. The leap
- * is offered over ANY other ball, not only a rival's: a team's own balls jam a corridor exactly the
- * same way, and in a four-way free-for-all "the opponent" is not a single seat.
+ * Collisions: a ball may not walk into another ball. An OPPONENT's ball is a solid obstacle, exactly
+ * like a wall: its square stops movement in that direction outright, so the mover can never jump
+ * over, phase through, or land on any square behind it. Move dots are derived from the same rule, so
+ * an occupied tile never shows a destination beyond it.
  *
- * One exception: a ball NEVER leaps straight over a rival that is between it and FINISH. The trailing
- * ball's forward path stops at the rival's square; it may sidestep around the body's flank, follow
- * when the lane opens, or take another route, but it may not jump the rival on the way up the board.
- * Own-team balls are still stepping stones.
+ * A team's own balls are stepping stones, not walls: the mover lands on the square behind one when
+ * the board leaves that square open, and hops to one of its flanks when a wall, the perimeter or a
+ * third ball closes it. That keeps a one-wide corridor from deadlocking a team against itself. The
+ * leap is never offered over a rival.
  *
  * Anti-oscillation: `repeat` is a small deterministic ledger of the boards the last few turns left
  * behind. Once a race shuffles back onto a board it has already been in `REPEAT_LIMIT` turns
@@ -338,14 +334,14 @@ function canStep(b: Blocks, c: number, r: number, dc: number, dr: number, cols: 
   return !b.v.has((c + 1) * LATTICE_R + r);
 }
 
-/** The two directions at right angles to `(dc, dr)` — the ways a leap can sidestep a body. */
+/** The two directions at right angles to `(dc, dr)` — the ways an own-team leap can sidestep. */
 function flanksOf(dc: number, dr: number): ReadonlyArray<readonly [number, number]> {
   return dc === 0
     ? [[-1, 0] as const, [1, 0] as const]
     : [[0, -1] as const, [0, 1] as const];
 }
 
-/** Is this square on the board and free of every ball? The leap's landing test, looped not closure'd. */
+/** Is this square on the board and free of every ball? The own-team leap's landing test. */
 function cellFree(s: GameState, c: number, r: number, body?: Uint8Array): boolean {
   if (c < 0 || c >= s.cols || r < 0 || r >= s.rows) return false;
   if (body) return body[r * s.cols + c] === 0;
@@ -354,14 +350,13 @@ function cellFree(s: GameState, c: number, r: number, body?: Uint8Array): boolea
 }
 
 /**
- * Where a ball leaping in direction `(dc, dr)` comes down, given the body standing on the square
- * that direction leads to. The straight leap — over the body, onto the square directly behind it —
- * is the whole rule while that square is free. When a wall, the board's edge or a third ball closes
- * it, the leap becomes a sidestep: the mover hops to one of the two squares flanking the body, so
- * long as the board leaves that flank open and no wall runs between the body and it. Nothing at all
- * when the body is hemmed in on all three sides — a body wedged in a sealed one-wide pocket is a
- * wall. `blockStraight` withholds the far landing but keeps the flank hops: a trailing ball may go
- * around the rival in front of it, never over it.
+ * Where a ball leaping over a TEAM-MATE in direction `(dc, dr)` comes down, given the body standing
+ * on the square that direction leads to. The straight leap — over the body, onto the square directly
+ * behind it — is the whole rule while that square is free. When a wall, the board's edge or a third
+ * ball closes it, the leap becomes a sidestep: the mover hops to one of the two squares flanking the
+ * body, so long as the board leaves that flank open and no wall runs between the body and it. Nothing
+ * at all when the body is hemmed in on all three sides. Rivals never reach this helper: an opponent
+ * is a solid obstacle and blocks the vector before a landing is considered.
  *
  * The landings are reported to a sink rather than collected into an array: `stepField` walks every
  * cell of the board with this, and a landing list per body was the single largest source of garbage
@@ -369,10 +364,10 @@ function cellFree(s: GameState, c: number, r: number, body?: Uint8Array): boolea
  */
 function eachLeapTarget(
   s: GameState, b: Blocks, over: Pos, dc: number, dr: number,
-  sink: (c: number, r: number) => void, blockStraight = false, body?: Uint8Array,
+  sink: (c: number, r: number) => void, body?: Uint8Array,
 ): void {
   const bc = over.c + dc, br = over.r + dr;
-  if (!blockStraight && cellFree(s, bc, br, body) && canStep(b, over.c, over.r, dc, dr, s.cols, s.rows)) {
+  if (cellFree(s, bc, br, body) && canStep(b, over.c, over.r, dc, dr, s.cols, s.rows)) {
     sink(bc, br);
     return;                                       // the straight leap lands: no sidestep is offered
   }
@@ -385,9 +380,9 @@ function eachLeapTarget(
 }
 
 /** The same rule, as a list — what `steps()` reads, where a leap is rare and clarity is worth more. */
-function leapTargets(s: GameState, b: Blocks, over: Pos, dc: number, dr: number, blockStraight = false): Pos[] {
+function leapTargets(s: GameState, b: Blocks, over: Pos, dc: number, dr: number): Pos[] {
   const out: Pos[] = [];
-  eachLeapTarget(s, b, over, dc, dr, (c, r) => out.push({ c, r }), blockStraight);
+  eachLeapTarget(s, b, over, dc, dr, (c, r) => out.push({ c, r }));
   return out;
 }
 
@@ -521,10 +516,10 @@ export interface Step { ball: number; to: Pos }
 
 /**
  * Every step a team's balls have on the bare board: each ball's 4-neighbourhood, with walls and the
- * board's edge blocking, and a ball in the way turned into a leap rather than a refusal. A rival
- * standing between the mover and FINISH is the exception: the straight leap over it is withheld,
- * while its flank hops stay as the way around. No anti-oscillation filter — this is the raw move set
- * `steps()` narrows.
+ * board's edge blocking. The walk is deliberately incremental: the adjacent tile is inspected first,
+ * and an opponent standing there stops that vector outright — no straight leap, no flank hop, and
+ * therefore no dot on the far side. Only a team-mate may be used as a stepping stone. No
+ * anti-oscillation filter — this is the raw move set `steps()` narrows.
  */
 function rawSteps(s: GameState, team: Player): Step[] {
   const b = blocks(s.walls);
@@ -539,21 +534,21 @@ function rawSteps(s: GameState, team: Player): Step[] {
         if (o.id !== ball.id && o.pos.c === to.c && o.pos.r === to.r) { blocker = o; break; }
       }
       if (!blocker) { out.push({ ball: ball.id, to }); continue; }
-      const blockStraight = dr === -1 && blocker.team !== ball.team;
-      for (const land of leapTargets(s, b, to, dc, dr, blockStraight)) out.push({ ball: ball.id, to: land });
+      /* An opponent is a solid obstacle, exactly like a wall: stop here and offer nothing beyond. */
+      if (blocker.team !== ball.team) continue;
+      for (const land of leapTargets(s, b, to, dc, dr)) out.push({ ball: ball.id, to: land });
     }
   }
   return out;
 }
 
 /**
- * Every legal step for the team: each ball's 4-neighbourhood — walls block, a ball in the way is
- * leapt (a rival directly ahead may only be gone around, never straight over) — or, while the race
- * is caught in a repetition (`REPEAT_LIMIT`), only the steps that actually gain ground on FINISH.
- * The narrowing is the anti-oscillation rule, and it lives here so that every door into the engine
- * (a tap, the bot, the blitz auto-move, a message off the wire) obeys it without having to know
- * about it. A team with no forward step keeps the plain set, so the rule can slow a shuffle but
- * never freeze a race.
+ * Every legal step for the team: each ball's 4-neighbourhood — walls and opponent balls block, a
+ * team-mate in the way may be leapt — or, while the race is caught in a repetition (`REPEAT_LIMIT`),
+ * only the steps that actually gain ground on FINISH. The narrowing is the anti-oscillation rule,
+ * and it lives here so that every door into the engine (a tap, the bot, the blitz auto-move, a
+ * message off the wire) obeys it without having to know about it. A team with no forward step keeps
+ * the plain set, so the rule can slow a shuffle but never freeze a race.
  */
 export function steps(s: GameState, team: Player = s.turn): Step[] {
   if (s.winner !== null) return [];
@@ -571,7 +566,7 @@ export function steps(s: GameState, team: Player = s.turn): Step[] {
 
 /**
  * The most predecessors one cell can have in the step graph: four plain neighbours, four cells that
- * leap straight over a body into it, and eight that sidestep into it. Nothing can exceed it.
+ * leap straight over a team-mate into it, and eight that sidestep into it. Nothing can exceed it.
  */
 const REV_CAP = 16;
 let _revOff = new Int32Array(0);
@@ -594,14 +589,13 @@ function growStepScratch(n: number): void {
 
 /**
  * Distance to FINISH measured in *actions* rather than cells, with every ball on the board standing
- * where it is: the BFS walks the same step graph `steps()` offers — one cell, or a leap over a body
- * — so a corridor two balls are wedged in is one action wide instead of sealed, which is what the
- * bot needs to judge a lane honestly. Only walls and the board's edge can shut a lane here; a body
- * is something to step over. A rival ahead of the mover is not: its square withholds the straight
- * forward leap exactly as `steps()` does, leaving only the flank hop around it. Every ball is a
- * body, the mover's own included, exactly as `steps()` treats them, and a body's own cell is a
- * source like any other — a mover looks out *from* where it stands — but never a target, because a
- * mover may not walk into a body, only over it. -1 = out of reach.
+ * where it is: the BFS walks exactly the same step graph `steps()` offers. An opponent's ball is a
+ * solid obstacle, so it seals the vector it stands on; a team-mate may be stepped over, and a
+ * corridor two team-mates are wedged in is one action wide instead of sealed. Walls, opponent balls
+ * and the board's edge are the only things that shut a lane, which is what the bot needs to judge a
+ * move honestly. Every ball is a body, the mover's own included, and a body's own cell is a source
+ * like any other — a mover looks out *from* where it stands — but never a target, because a mover
+ * may not walk into a body, only over a team-mate. -1 = out of reach.
  *
  * The graph is built backwards, one bucket per cell, because a sidestep is a one-way edge: it lands
  * the mover beside a body and nothing walks it back the same way. The field is a shared scratch
@@ -631,16 +625,18 @@ export function stepField(s: GameState, team: Player = s.turn): Int16Array {
     _revPre[to * REV_CAP + at] = from;
     _revOff[to] = at + 1;
   };
-  /** One cell's outgoing edges, filed backwards. A body is never a target — only something to leap. */
+  /**
+   * One cell's outgoing edges, filed backwards. A body is never a target — only a team-mate is
+   * something to leap. An opponent's body ends the vector: no edge, exactly as `rawSteps` refuses it.
+   */
   const edges = (from: number, c: number, r: number): void => {
     for (const [dc, dr] of DIRS) {
       if (!canStep(b, c, r, dc, dr, cols, rows)) continue;
       const nc = c + dc, nr = r + dr;
       const over = nr * cols + nc;
       if (!body[over]) { link(from, over); continue; }
-      const blockStraight = dr === -1 && bodyTeam[over] !== team;
-      eachLeapTarget(s, b, { c: nc, r: nr }, dc, dr, (lc, lr) => link(from, lr * cols + lc),
-        blockStraight, body);
+      if (bodyTeam[over] !== team) continue;      // opponent: a solid obstacle, never a bridge
+      eachLeapTarget(s, b, { c: nc, r: nr }, dc, dr, (lc, lr) => link(from, lr * cols + lc), body);
     }
   };
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) edges(r * cols + c, c, r);
