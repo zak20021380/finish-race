@@ -40,8 +40,8 @@ import { PEARL_BOARD, perspectiveRamps, type Theme } from './themes';
 import { detonation, impact, initTelegram, inviteRoomCode, notify, onBackPress, tgUser } from './telegram';
 import { applyFlagSupport } from './countries';
 import {
-  createRoomCode, getGameMode, gmBack, initGameModes, onGameModeChange, openInviteRoom, resumeRoom,
-  setGameMode, takeAutoLaunch,
+  createRoomCode, getGameMode, gmBack, initGameModes, notifyMatchBusy, onGameModeChange, openInviteRoom,
+  resumeRoom, setGameMode, takeAutoLaunch,
 } from './gamemodes';
 import type { Lobby, LobbyRace } from './lobby';
 import {
@@ -1234,6 +1234,9 @@ function clashRivals(): VsRival[] {
 
 function startGame(setup: StartSetup) {
   cancelTutorial();
+  /* A background friends lobby hears that this seat is on another board, so its countdown holds
+     instead of launching the player into a second race. Cleared by `quitToMenu`. */
+  notifyMatchBusy(true);
   /* Only a local bot race teaches, and only until the lesson has been finished or skipped. An
      online seat — or a room another person is sitting in — is somebody else's board: the lesson
      never covers it. A practice room (this player plus the machine) is still a local bot race,
@@ -1363,6 +1366,9 @@ function resumeGame() {
 
 function quitToMenu() {
   cancelTutorial();                 // leaving mid-lesson does not count as having read it
+  /* The board is leaving the screen: a waiting room can count down again, and its HUD banner
+     (if one was raised) is the only thing left to act on. */
+  notifyMatchBusy(false);
   /* a race that ended inside the goal beat still has to be paid out before the board goes away */
   if (goalBeat) { clearGoalBeat(); showOverlay(); }
   sheets.close();
@@ -2347,6 +2353,8 @@ initGameModes(sheets, {
   },
   /* A guest's arrival may bring the drawer up over Home — never over a board being played. */
   canPopLobby: () => router.current !== 'game',
+  /* JOIN NOW on the in-match arrival banner leaves the board through this same quit path. */
+  onAbandonMatch: () => quitToMenu(),
 });
 onGameModeChange(paintParty);
 onLang(paintParty);

@@ -128,8 +128,25 @@ const formatLine = (format: LobbyFormat): string => t(FORMAT_KEY[format]);
 
 /** The plain-language line under the roster, in the player's language. */
 function hintText(l: Lobby): string {
+  if (hostAway(l)) return t('hintWaitingHost');
   if (canStart(l)) return isHost(l) ? t('hintReadyHost') : t('hintWaitingHost');
   return t('hintInviteMore');
+}
+
+/**
+ * Is the crown's chair held for somebody who is not at the socket — the host who stepped into a
+ * Telegram chat to send the link, or a guest who opened the code before its host arrived? The
+ * roster keeps the plate; the screen says the room is waiting rather than pretending it is full.
+ */
+function hostAway(l: Lobby): boolean {
+  if (l.pendingHost) return true;
+  const host = l.hostSeat >= 0 ? l.seats[l.hostSeat] : null;
+  return !!host && !host.connected;
+}
+
+/** What the drawer's subtitle says while the crown's chair is reserved. */
+function hostAwayLine(l: Lobby): string {
+  return l.pendingHost ? t('lobbyHostPendingSub') : t('lobbyHostAwaySub');
 }
 
 const isQuick = (id: GameModeId): id is QuickId => id === 'duel_1v1' || id === 'party_2v2';
@@ -492,6 +509,24 @@ let slotSig = '';
 let sheetHost: Sheets | null = null;
 /** The starter hooks, likewise: the socket callbacks outlive `initGameModes`. */
 let hooks: GameModeInit = {};
+/**
+ * True while this player is on a board. The room socket stays open in the background, so this flag
+ * is what tells it to hold the countdown, and what turns a friend's arrival into the HUD banner
+ * instead of a drawer landing on top of a live race.
+ */
+let inMatch = false;
+
+/**
+ * The board took the screen, or gave it back. Called from the one start/quit pair in `main.ts`, so
+ * every match path — quick match, practice, a room race — speaks the same status to a waiting room.
+ */
+export function notifyMatchBusy(busy: boolean): void {
+  if (inMatch === busy) return;
+  inMatch = busy;
+  /* stepping onto a board cancels any countdown the lobby had started: this seat is not free */
+  if (busy) abortCountdown();
+  if (handle?.lobby.online) handle.setBusy(busy);
+}
 
 const esc = (s: string): string =>
   s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
@@ -623,6 +658,19 @@ const vsMarkup = (): string =>
 function duelPlate(l: Lobby, seat: number, side: 'host' | 'rival'): string {
   const s = l.seats[seat];
   if (!s) {
+    /* A guest opened the code before its host: seat 0 is the host's reserve, not an open well. */
+    if (side === 'host' && l.pendingHost) {
+      return '<div class="lb-slot lb-plate is-held is-host is-away is-reserved" role="listitem"'
+        + ` aria-label="${esc(t('waitingForHost'))}">`
+        + '<span class="lb-plate-halo" aria-hidden="true"></span>'
+        + `<span class="lb-badge lb-badge-away" role="status">`
+        + `<i class="lb-away-dot" aria-hidden="true"></i>${esc(t('waitingForHost'))}</span>`
+        + '<span class="lb-av lb-av-reserved" aria-hidden="true">'
+        + '<svg class="ico" focusable="false"><use href="#i-crown" /></svg></span>'
+        + `<span class="lb-slot-txt"><span class="lb-name">${esc(t('host'))}</span>`
+        + `<span class="lb-role">${esc(t('waitingForHost'))}</span></span>`
+        + '</div>';
+    }
     return `<button class="lb-slot lb-plate is-open is-${side}" type="button" role="listitem"`
       + ` data-seat="${seat}" aria-label="${esc(t('openSeatInvite').replace('{n}', String(seat + 1)))}">`
       /* the dashed ring is drawn, not bordered: only a stroke can march its dashes */
@@ -635,21 +683,33 @@ function duelPlate(l: Lobby, seat: number, side: 'host' | 'rival'): string {
   }
   const cls = ['lb-slot', 'lb-plate', 'is-held', `is-${side}`];
   if (s.host && side !== 'host') cls.push('is-host');
+  if (s.host && !s.connected) cls.push('is-waiting-host');
   if (s.seat === l.you) cls.push('is-you');
   if (!s.connected) cls.push('is-away');
   /* the rival's plate only reads "ready" once a person is actually sitting in it: a well the host
      filled with the machine is not somebody waiting to play */
   if (side === 'rival' && !s.bot) cls.push('is-rival', 'is-ready');
-  const role = s.host ? t('host') : s.seat === l.you ? t('you') : s.bot ? t('bot') : t('rival');
+  const role = s.host
+    ? (s.connected ? t('host') : t('waitingForHost'))
+    : s.seat === l.you ? t('you') : s.bot ? t('bot') : t('rival');
   const label = `${s.name}, ${role}`;
-  const badge = s.host
+  /* The crown always marks the host's chair. A host whose socket stepped away keeps it and gains the
+     amber status line; a host who is here wears only the struck-gold crown. */
+  const crown = s.host
     ? `<span class="lb-badge lb-badge-host" role="img" aria-label="${esc(t('host'))}">`
       + '<svg class="ico" focusable="false"><use href="#i-crown" /></svg></span>'
+    : '';
+  const badge = s.host
+    ? (s.connected
+      ? ''
+      : `<span class="lb-badge lb-badge-away" role="status">`
+        + `<i class="lb-away-dot" aria-hidden="true"></i>${esc(t('waitingForHost'))}</span>`)
     : s.bot ? '' : `<span class="lb-badge lb-badge-ready">${esc(t('ready'))}</span>`;
   return `<button class="${cls.join(' ')}" type="button" role="listitem" data-seat="${seat}"`
     + ` aria-label="${esc(label)}">`
     + `<span class="lb-plate-halo" aria-hidden="true"></span>`
     + badge
+    + crown
     + avatarMarkup(s)
     + `<span class="lb-slot-txt"><span class="lb-name">${esc(s.name)}</span>`
     + `<span class="lb-role">${role}</span></span>`
@@ -681,9 +741,9 @@ function teamMarkup(l: Lobby): string {
 function paintSlots(l: Lobby): void {
   /* the face is part of the signature: a frame that swaps a monogram for a relayed photo has to
      rebuild the plate it belongs to, even when every other field on the seat is unchanged */
-  const sig = `${l.you}|${l.hostSeat}|${l.format}|`
+  const sig = `${l.you}|${l.hostSeat}|${l.format}|${l.pendingHost}|`
     + l.seats.map((s) => (s
-      ? `${s.id}:${s.name}:${s.avatarUrl ?? ''}:${s.team}:${s.host}:${s.bot}:${s.connected}`
+      ? `${s.id}:${s.name}:${s.avatarUrl ?? ''}:${s.team}:${s.host}:${s.bot}:${s.connected}:${s.busy}`
       : '-')).join(',');
   if (sig === slotSig) return;
   slotSig = sig;
@@ -692,7 +752,7 @@ function paintSlots(l: Lobby): void {
   /* the format owns the roster's shape: two plates and a crest, three compact cards, or four */
   grid.className = `lb-slots is-${l.format}`;
   grid.dataset.format = l.format;
-  grid.dataset.state = canStart(l) ? 'ready' : 'open';
+  grid.dataset.state = hostAway(l) ? 'waiting' : canStart(l) ? 'ready' : 'open';
   grid.innerHTML = l.format === '2v2'
     ? teamMarkup(l)
     : l.format === 'duel'
@@ -737,11 +797,19 @@ function paintLobbyPane(l: Lobby): void {
 
   paintSlots(l);
 
+  const away = hostAway(l);
+  /* The drawer's subtitle names the room's actual state. While the host's chair is reserved the
+     guest is told what happened and what to expect, not left on a generic invitation line. */
+  if (view === 'lobby') {
+    const head = document.getElementById('gm-sub');
+    if (head) head.textContent = away ? hostAwayLine(l) : t('friendsLobbySub');
+  }
+
   const hint = document.getElementById('lb-hint');
   if (hint) {
     /* a socket that dropped and is being walked back says so: the roster is stale, not empty */
     hint.textContent = l.status === 'connecting' ? t('errReconnecting') : hintText(l);
-    hint.classList.toggle('is-ready', l.status !== 'connecting' && canStart(l));
+    hint.classList.toggle('is-ready', l.status !== 'connecting' && !away && canStart(l));
   }
 
   const botKey = document.getElementById('lb-pick-bot');
@@ -767,7 +835,7 @@ function paintLobbyPane(l: Lobby): void {
   /* The room's own state rides on the pane, so the CSS can dress a full duel differently from one
      still waiting for its rival — and so the countdown below has one place to read it from. */
   const pane = document.getElementById('gm-view-lobby');
-  if (pane) pane.dataset.state = canStart(l) ? 'ready' : 'open';
+  if (pane) pane.dataset.state = away ? 'waiting' : canStart(l) ? 'ready' : 'open';
 
   /* Last: a room every seat of which is held counts itself down and starts. Everything above has
      already painted, so the countdown never races the roster it is counting. */
@@ -810,9 +878,18 @@ const countKey = (l: Lobby): string =>
 
 const botsIn = (l: Lobby): number => l.seats.reduce((n, s) => n + (s && s.bot ? 1 : 0), 0);
 
-/** May this lobby count itself down? The host's own room, every seat held by people, on screen. */
+/** Every human seat is at its socket and not already playing somewhere else. */
+const everyoneHere = (l: Lobby): boolean =>
+  l.seats.every((s) => !s || s.bot || (s.connected && !s.busy));
+
+/**
+ * May this lobby count itself down? The host's own room, every seat held by people who are all
+ * *here* — a reserved chair waiting for its host, or a friend still finishing another board, holds
+ * the countdown rather than dragging them into a race they cannot see.
+ */
 function armedForCountdown(l: Lobby): boolean {
-  return isHost(l) && l.status !== 'closed' && lobbyOnScreen()
+  return isHost(l) && l.online && l.status === 'live' && lobbyOnScreen()
+    && !hostAway(l) && everyoneHere(l)
     && roomReady(l.format, humans(l), botsIn(l));
 }
 
@@ -907,7 +984,13 @@ function fireCountdown(): void {
 function armDuelCountdown(l: Lobby): void {
   const key = countKey(l);
   if (countdown) {
-    if (countdown.key === key) return;
+    if (countdown.key === key) {
+      /* The roster can lose its readiness without changing identity: a socket dropped, or a seat
+         stepped onto another board. Stop counting rather than launch into an empty chair. */
+      const ready = !hostAway(l) && everyoneHere(l) && roomReady(l.format, humans(l), botsIn(l));
+      if (!ready) abortCountdown();
+      return;
+    }
     abortCountdown();
   }
   if (!armedForCountdown(l) || key === countdownSpent) return;
@@ -979,7 +1062,10 @@ function connect(code: string, host: boolean, invite: boolean, resume: boolean):
   /* a resumed room keeps the roster it already knew: the guest who joined while the socket was
      away is an arrival, not part of the scenery */
   if (!resume) seenHumans = new Set();
-  pendingReveal = false;
+  /* a fresh room starts with a clean HUD; a banner already raised survives the reconnect that
+     follows a dropped lobby socket, because the friend is still there */
+  if (!resume) hideLobbyBanner();
+  if (!bannerFriend) pendingReveal = false;
   handle = openLobby({
     code,
     host,
@@ -991,16 +1077,32 @@ function connect(code: string, host: boolean, invite: boolean, resume: boolean):
       if (token !== roomToken) return;
       resumeTries = 0;
       touchSession();
-      /* A guest landed while the drawer was closed: the room is not a secret, so it comes up —
-         and the countdown that follows starts the match without a tap. Over a board being
-         played it waits for the player to come back instead. */
-      if (noteArrival(l) && !lobbyOnScreen()) {
+      /* A reconnect answers with the room's own memory of this seat: say the match status again
+         whenever the echo disagrees, so a socket that slept through it cannot strand `busy`. */
+      const mine = l.you >= 0 ? l.seats[l.you] : null;
+      if (l.status === 'live' && mine) {
+        if (inMatch && !mine.busy) handle?.setBusy(true);
+        else if (!inMatch && mine.busy) handle?.setBusy(false);
+      }
+      /* A banner naming somebody who has actually left the room is stale: the popup promised a
+         friend who is no longer in the chair. A seat merely away keeps its banner. */
+      if (bannerFriend && !l.seats.some((s) => !!s && !s.bot && s.id === bannerFriend?.id)) {
+        pendingReveal = false;
+        hideLobbyBanner();
+      }
+      /* A guest landed while the drawer was closed: the room is not a secret, so it comes up.
+         Over a board being played it becomes the HUD banner instead — the room stays alive and the
+         player decides when to take it. */
+      const arrival = noteArrival(l);
+      if (arrival && !lobbyOnScreen()) {
+        pendingReveal = true;
         if (hooks.canPopLobby?.() ?? true) {
+          pendingReveal = false;
           revealLobby();
           notify('success');
-          impact('medium');
+          impact('heavy');
         } else {
-          pendingReveal = true;
+          showLobbyBanner(arrival);
         }
       }
       paintLobbyPane(l);
@@ -1012,6 +1114,7 @@ function connect(code: string, host: boolean, invite: boolean, resume: boolean):
       roomToken++;
       abortCountdown();
       pendingReveal = false;
+      hideLobbyBanner();
       sheetHost?.close();
       saveSession(null);
       hooks.onRoomRace?.(race);
@@ -1021,6 +1124,7 @@ function connect(code: string, host: boolean, invite: boolean, resume: boolean):
       if (token !== roomToken) return;
       handle = null;
       abortCountdown();
+      hideLobbyBanner();
       /* Two hosts on one code would fight over the crown. The collision is ours to fix: mint a
          fresh code and try again, rather than asking the player to understand a room they cannot
          see. */
@@ -1065,9 +1169,10 @@ export function resumeRoom(): void {
      somewhere a drawer belongs — the arrival is not lost, only postponed. */
   if (pendingReveal && handle && (hooks.canPopLobby?.() ?? true)) {
     pendingReveal = false;
+    hideLobbyBanner();
     revealLobby();
     notify('success');
-    impact('medium');
+    impact('heavy');
   }
   const held = session;
   if (!held || handle || resumeTimer) return;
@@ -1077,6 +1182,7 @@ export function resumeRoom(): void {
     /* the wire is gone for good: say so once, and stop holding a room nobody can reach */
     saveSession(null);
     abortCountdown();
+    hideLobbyBanner();
     roomFailed(t('errDropped'));
     return;
   }
@@ -1107,28 +1213,130 @@ function lobbyOnScreen(): boolean {
 function revealLobby(): void {
   const sheet = document.getElementById('sheet-game-modes');
   if (!sheetHost || !sheet) return;
-  showView('lobby');
+  /* The sheet first, the pane second: the countdown only runs while the lobby is actually on
+     screen, so opening the pane under a still-hidden drawer would arm it against nothing. */
   if (sheet.hidden || !sheet.classList.contains('open')) sheetHost.open(sheet);
+  showView('lobby');
+}
+
+/* ---------- the in-match arrival banner: the room, without leaving the board ---------- */
+
+/** The friend named by the one HUD banner, or null while it is down. */
+let bannerFriend: LobbySeat | null = null;
+let bannerEl: HTMLElement | null = null;
+
+function bannerNode(): HTMLElement {
+  if (bannerEl?.isConnected) return bannerEl;
+  const el = document.createElement('div');
+  el.className = 'lb-hud';
+  el.id = 'lb-hud-banner';
+  el.hidden = true;
+  el.setAttribute('role', 'alert');
+  el.addEventListener('click', (e) => {
+    const action = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-hud]')?.dataset.hud;
+    if (action === 'join') joinFromBanner();
+    else if (action === 'wait') dismissBanner();
+  });
+  document.body.appendChild(el);
+  bannerEl = el;
+  return el;
+}
+
+/** Repaint the banner from the friend + the room's language. Safe to call while it is down. */
+function paintBanner(): void {
+  const friend = bannerFriend;
+  if (!friend) {
+    if (bannerEl) bannerEl.hidden = true;
+    return;
+  }
+  const el = bannerNode();
+  const code = cleanRoomCode(handle?.lobby.code ?? activeCode ?? '') ?? '';
+  el.innerHTML = '<div class="lb-hud-card">'
+    + avatarMarkup(friend)
+    + '<span class="lb-hud-txt">'
+    + `<b class="lb-hud-t">${esc(t('lobbyBannerJoined').replace('{name}', friend.name))}</b>`
+    + `<span class="lb-hud-s">${esc(t('lobbyBannerSub').replace('{code}', code))}</span>`
+    + '</span>'
+    + '<span class="lb-hud-actions">'
+    + `<button class="lb-hud-b is-join" type="button" data-hud="join">${esc(t('joinNow'))}</button>`
+    + `<button class="lb-hud-b is-wait" type="button" data-hud="wait">${esc(t('waitForNow'))}</button>`
+    + '</span>'
+    + '</div>';
+}
+
+/** Raise the banner for an arrival the drawer could not be opened over. */
+function showLobbyBanner(friend: LobbySeat): void {
+  bannerFriend = friend;
+  const el = bannerNode();
+  paintBanner();
+  el.hidden = false;
+  el.classList.remove('is-in');
+  void el.offsetWidth;                         /* restart the entrance animation */
+  el.classList.add('is-in');
+  notify('success');
+  impact('heavy');
+}
+
+function hideLobbyBanner(): void {
+  bannerFriend = null;
+  if (!bannerEl) return;
+  bannerEl.hidden = true;
+  bannerEl.classList.remove('is-in');
+}
+
+/** WAIT: the room keeps every seat exactly as it is; only the popup goes away. */
+function dismissBanner(): void {
+  pendingReveal = false;
+  impact('light');
+  hideLobbyBanner();
 }
 
 /**
- * Did somebody take a seat since the last paint? The first frame of a *fresh* room is only its
- * own roster (the host's own seat), so it sets the baseline — but a room this client is
- * *resuming* may already hold the guests who arrived while its socket was gone, and those are
- * exactly the arrivals the host must not miss.
+ * JOIN NOW: leave whatever board is up cleanly, then take the friend's lobby. The abandonment hook
+ * is `main.ts`'s own quit path, so the resign, the socket and the router unwind exactly as they do
+ * from the pause sheet's Quit — this banner never invents a second exit.
  */
-function noteArrival(l: Lobby): boolean {
+function joinFromBanner(): void {
+  if (!bannerFriend) return;
+  pendingReveal = false;
+  hideLobbyBanner();
+  impact('heavy');
+  notify('success');
+  hooks.onAbandonMatch?.();
+  if (!handle) {
+    /* a reconnect may already be queued: the tap is consent to walk back in now, not later */
+    window.clearTimeout(resumeTimer);
+    resumeTimer = 0;
+    resumeRoom();
+  }
+  if (handle) revealLobby();
+  else showToast(t('errDropped'), 'warning');
+}
+
+/**
+ * Did somebody take a seat since the last paint? Returns the arrival, or null. The first frame of a
+ * *fresh* room is only its own roster (the host's own seat), so it sets the baseline — but a room
+ * this client is *resuming* may already hold the guests who arrived while its socket was gone, and
+ * those are exactly the arrivals the host must not miss.
+ */
+function noteArrival(l: Lobby): LobbySeat | null {
   /* Only a frame the server actually answered is a roster. The placeholder a socket paints while
      it connects is not one, and counting it would invent an arrival on every reconnect. */
-  if (l.status !== 'live') return false;
+  if (l.status !== 'live') return null;
+  /* Only people who are *at* their socket count as arrived: a seat held for somebody whose
+     webview is asleep is not a friend waiting in the lobby, and a reconnect is an arrival again. */
   const ids = new Set<string>();
-  for (const s of l.seats) if (s && !s.bot) ids.add(s.id);
+  for (const s of l.seats) if (s && !s.bot && s.connected) ids.add(s.id);
   const before = seenHumans;
   seenHumans = ids;
-  if (!isHost(l)) return false;
-  if (!before.size) return humans(l) >= 2;
-  for (const id of ids) if (!before.has(id)) return true;
-  return false;
+  if (!isHost(l)) return null;
+  if (!before.size) {
+    return l.seats.find((s) => !!s && !s.bot && s.connected && s.seat !== l.you) ?? null;
+  }
+  for (const s of l.seats) {
+    if (s && !s.bot && s.connected && s.seat !== l.you && !before.has(s.id)) return s;
+  }
+  return null;
 }
 
 /**
@@ -1139,6 +1347,7 @@ function inviteRefused(msg: string): void {
   saveSession(null);
   setGameMode('room', { roomCode: null });
   showView('modes');
+  hideLobbyBanner();
   sheetHost?.close();
   showToast(msg, 'error');
   notify('error');
@@ -1169,9 +1378,13 @@ export function openInviteRoom(code: string): boolean {
   if (inLobby()) leaveRoom();
   clearRoomError();
   setGameMode('room', { roomCode: clean });
+  /* A host coming back through their own link — from the bot's push, or a share they tapped — is
+     still the host: the held session owns the crown, and re-entering as an invitee would bounce
+     their own reserved chair. */
+  const mineAgain = session?.code === clean && session.host;
   /* the pane first, the sheet second: the drawer slides in already showing the room it was
      opened for, instead of flashing the mode list on its way there */
-  openRoom(clean, false, { invite: true });
+  openRoom(clean, mineAgain, { invite: !mineAgain });
   /* a room the worker refused on the spot never gets a drawer: the toast has already said so */
   if (!handle) return false;
   sheetHost.open(sheet);
@@ -1192,6 +1405,7 @@ function leaveRoom(): void {
   resumeTries = 0;
   abortCountdown();
   countdownSpent = '';
+  hideLobbyBanner();
   handle?.leave();
   handle = null;
   slotSig = '';
@@ -1383,6 +1597,11 @@ export interface GameModeInit {
    * being played: a popup over a live race is worse than a room that waits a beat.
    */
   canPopLobby?: () => boolean;
+  /**
+   * Leave the board the player is on, through the app's one quit path (resign included). The HUD
+   * banner's JOIN NOW uses it before opening the waiting room.
+   */
+  onAbandonMatch?: () => void;
 }
 
 export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
@@ -1642,6 +1861,7 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     paintLobby();
     paintSheetHead(view);
     paintCountdownChrome();
+    paintBanner();
     paintSheetState();
   });
 

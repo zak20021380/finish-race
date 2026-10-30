@@ -52,7 +52,10 @@ export interface LobbySeat {
   bot: boolean;
   /** 0 = Team Blue, 1 = Team Orange. Only read in `team` mode. */
   team: 0 | 1;
+  /** True while this seat's socket is open; a reserved host seat reads false and can still hold. */
   connected: boolean;
+  /** True while this person is already playing another board: a launch waits for them to finish. */
+  busy: boolean;
 }
 
 export interface Lobby {
@@ -66,6 +69,8 @@ export interface Lobby {
   seats: (LobbySeat | null)[];
   /** My own seat, or -1 while the server has not answered yet. */
   you: number;
+  /** True when the code was opened by a guest and the crown's chair is still waiting for its host. */
+  pendingHost: boolean;
   /** True while a socket carries this lobby; false is the local fallback. */
   online: boolean;
   status: 'connecting' | 'live' | 'solo' | 'closed';
@@ -268,6 +273,8 @@ export interface LobbyHandle {
   setFormat(format: LobbyFormat): boolean;
   /** The host may move any seat; a player may move their own. Team formats only. */
   setTeam(seat: number, team: 0 | 1): void;
+  /** Tell the room this seat is in another board, so its countdown holds. */
+  setBusy(busy: boolean): void;
   /** Host only. False while the format's minimum player count is not met (two players). */
   start(): boolean;
   /**
@@ -308,6 +315,7 @@ export function hostLobby(code: string, name: string, online: boolean): Lobby {
     bot: false,
     team: 0,
     connected: true,
+    busy: false,
   };
   return {
     code,
@@ -317,6 +325,7 @@ export function hostLobby(code: string, name: string, online: boolean): Lobby {
     hostSeat: 0,
     seats: [host, null],
     you: 0,
+    pendingHost: false,
     online,
     status: online ? 'connecting' : 'solo',
   };
@@ -349,10 +358,12 @@ function readLobby(l: Lobby, raw: Record<string, unknown>): Lobby {
       name,
       initial: faceOf(name),
       avatarUrl: avatar ?? (at === mine ? localFace : null),
-      host: s.host === true,
+      host: s.host === true || s.isHost === true,
       bot: s.bot === true,
       team: s.team === 1 ? 1 : 0,
-      connected: s.connected !== false,
+      /* `online` is the worker's contract; `connected` is the older spelling, honoured too. */
+      connected: s.online === false ? false : s.connected !== false,
+      busy: s.busy === true,
     };
   }
   const hostSeat = typeof raw.host === 'number' ? raw.host : seats.findIndex((s) => !!s?.host);
@@ -365,6 +376,7 @@ function readLobby(l: Lobby, raw: Record<string, unknown>): Lobby {
     hostSeat,
     mode: FORMAT_MODE[format],
     you,
+    pendingHost: raw.pendingHost === true,
     online: true,
     status: 'live',
   };
@@ -597,7 +609,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         seats: lobby.seats.map((s, i) => (i === seat
           ? {
             seat, id: `bot:${i}`, name: i === 1 ? 'Bot' : `Bot ${i}`, initial: 'B',
-            host: false, bot: true, team: teamFor(lobby), connected: true,
+            host: false, bot: true, team: teamFor(lobby), connected: true, busy: false,
           }
           : s)),
       });
@@ -617,6 +629,10 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
       if (next === lobby) return;
       push(next);
       send({ type: 'SET_TEAM', side: seat, team });
+    },
+    setBusy(busy) {
+      if (!lobby.online) return;
+      send({ type: 'BUSY', busy });
     },
     start() {
       if (!isHost(lobby) || !canStart(lobby)) return false;

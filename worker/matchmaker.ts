@@ -55,6 +55,7 @@ import {
   normalizeChatHandle, readRegisteredSquad, verifyAndBuildSquad,
   type RegisteredSquad, type SquadVerification,
 } from './squads';
+import { botMainAppLink } from '../shared/config';
 import type { Env } from './env';
 
 /* ---------- protocol ---------- */
@@ -75,6 +76,9 @@ type ClientMessage =
      seat's team move — any seat may move itself, the host may move anyone. Everything else a room
      seat sends is a MOVE or a RESIGN. */
   | { type: 'ROOM_START' }
+  /* The seat is already in another board: the room still holds it, but nobody counts it down and
+     nobody launches into it until it says otherwise. Persisted on the member, echoed in `LOBBY`. */
+  | { type: 'BUSY'; busy: boolean }
   | { type: 'SET_FORMAT'; format: LobbyFormat }
   | { type: 'SET_MODE'; mode: 'ffa' | 'team' }
   | { type: 'SET_TEAM'; side: number; team: 0 | 1 }
@@ -137,6 +141,11 @@ interface RoomMember {
   connected: boolean;
   /** When the socket dropped, or 0 while it is up. The hold clock reads this. */
   droppedAt: number;
+  /**
+   * True while this person is playing another board. The room keeps the chair, but a countdown
+   * waits: launching somebody into a second race is how a stable seat becomes an abandoned one.
+   */
+  busy: boolean;
 }
 
 /**
@@ -198,6 +207,11 @@ const WIDE_RADIUS = 600;
  */
 const RETIRED_TTL_MS = 30 * 60 * 1000;
 
+/**
+ * How long one room waits before pinging the same absent player again. A guest tapping in and out
+ * of the webview must not turn one lobby into a stream of Telegram messages.
+ */
+const NOTIFY_COOLDOWN_MS = 30_000;
 /**
  * The three knobs the Admin Command Center can move on a running server. They live on the room
  * itself, so `/admin/config` changes what the *next* pairing pass does rather than what some
@@ -710,6 +724,12 @@ const percentOf = (part: number, total: number): number =>
 /** The numeric id behind a seat id, so the panel can search by the number a support ticket quotes. */
 const tgIdOf = (id: string): string => (id.startsWith('tg-') ? id.replace(/[^0-9]/g, '').slice(0, 20) : '');
 
+/** The numeric id a bot can message, or `''` for a guest/anon seat — never just the digits of a name. */
+const chatIdOf = (id: string): string => {
+  const match = /^tg-([0-9]{1,20})$/.exec(id);
+  return match ? match[1] : '';
+};
+
 /** A seat's first registry entry. */
 function freshPlayer(identity: Identity, now: number): PlayerRecord {
   return {
@@ -1070,7 +1090,7 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
   try {
     const msg = JSON.parse(raw) as {
       type?: unknown; wide?: unknown; action?: unknown; mode?: unknown; side?: unknown; team?: unknown;
-      format?: unknown; emote?: unknown; lang?: unknown; index?: unknown;
+      format?: unknown; emote?: unknown; lang?: unknown; index?: unknown; busy?: unknown;
     };
     if (msg.type === 'QUEUE') return { type: 'QUEUE', wide: msg.wide === true };
     if (msg.type === 'WIDEN') return { type: 'WIDEN' };
@@ -1078,6 +1098,7 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
     if (msg.type === 'LEAVE') return { type: 'LEAVE' };
     if (msg.type === 'RESIGN') return { type: 'RESIGN' };
     if (msg.type === 'ROOM_START') return { type: 'ROOM_START' };
+    if (msg.type === 'BUSY') return { type: 'BUSY', busy: msg.busy === true };
     if (msg.type === 'SET_FORMAT') {
       return isLobbyFormat(msg.format) ? { type: 'SET_FORMAT', format: msg.format } : null;
     }
@@ -1302,6 +1323,8 @@ export class MatchmakerDO {
   private rooms = new Map<string, LiveRoom>();
   /** Which room seat a socket is holding. A socket in here is not a queue entry. */
   private refs = new Map<WebSocket, RoomRef>();
+  /** `room:chatId` → the last time that room pinged that player. The push cooldown's ledger. */
+  private notified = new Map<string, number>();
   /** The admin's maintenance lock: nobody new gets in while it is on. */
   private maintenance = false;
   /** The tournament board: season clock, divisions, lock and the last finalized snapshot. */
@@ -3260,7 +3283,7 @@ export class MatchmakerDO {
     live.members[seat] = {
       ws, seat, id: identity.player.id, name: identity.player.name,
       tiq: identity.tiq, tier: identity.tier, flag: identity.flag, avatar: identity.player.avatar,
-      connected: true, droppedAt: 0,
+      connected: true, droppedAt: 0, busy: false,
     };
     live.room = seatHuman(live.room, seat, {
       kind: 'human', id: identity.player.id, name: identity.player.name,
@@ -3354,7 +3377,7 @@ export class MatchmakerDO {
     room.members[seat] = {
       ws, seat, id: identity.player.id, name: identity.player.name,
       tiq: identity.tiq, tier: identity.tier, flag: identity.flag, avatar: identity.player.avatar,
-      connected: true, droppedAt: 0,
+      connected: true, droppedAt: 0, busy: false,
     };
     room.room = seatHuman(room.room, seat, {
       kind: 'human', id: identity.player.id, name: identity.player.name,
@@ -3377,7 +3400,57 @@ export class MatchmakerDO {
     ws.addEventListener('error', () => this.roomLeave(this.refs.get(ws)));
 
     this.broadcastLobby(room);
+    /* A friend who walks in while the other chair is empty at the socket — but not in the room —
+       gets a Telegram nudge. It is scheduled on the object's own ctx so the socket answer never
+       waits for the Bot API round trip. */
+    this.notifyAway(room, seat);
     this.rearm();
+  }
+
+  /**
+   * The external nudge for a reserved, disconnected chair: `sendMessage` to the seated player who
+   * is not here right now, with an inline keyboard that reopens this exact room.
+   *
+   * Only a real Telegram seat can be messaged, so a guest seat is skipped rather than guessed at.
+   * The cooldown is per room *and* target, so one busy friend cannot turn a lobby into a stream of
+   * pushes while still hearing about a genuinely new arrival half a minute later.
+   */
+  private notifyAway(live: LiveRoom, arrivalSeat: number): void {
+    if (!live.code) return;
+    const arrival = live.members[arrivalSeat];
+    const token = this.env.TELEGRAM_BOT_TOKEN?.trim();
+    if (!arrival || !token) return;
+    const now = Date.now();
+    const link = botMainAppLink(`room_${live.room.code}`);
+    for (const other of live.members) {
+      if (!other || other.seat === arrivalSeat || other.connected) continue;
+      const chatId = chatIdOf(other.id);
+      if (!chatId) continue;
+      const key = `${live.room.code}:${chatId}`;
+      if (now - (this.notified.get(key) ?? 0) < NOTIFY_COOLDOWN_MS) continue;
+      this.notified.set(key, now);
+      const body = JSON.stringify({
+        chat_id: chatId,
+        text: `⚔️ ${arrival.name} is waiting for you in Lobby #${live.room.code}! Tap below to jump straight into the match!`,
+        reply_markup: {
+          inline_keyboard: [[{ text: `⚔️ Join Lobby #${live.room.code}`, url: link }]],
+        },
+      });
+      const call = fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+      }).then(() => undefined).catch(() => undefined);
+      /* The push must never hold the join frame hostage: a Bot API hiccup is not the lobby's. */
+      const ctx = this.state as unknown as { waitUntil?: (p: Promise<unknown>) => void };
+      if (ctx.waitUntil) ctx.waitUntil(call);
+      else void call;
+    }
+    if (this.notified.size > 256) {
+      for (const [key, at] of this.notified) {
+        if (now - at >= NOTIFY_COOLDOWN_MS) this.notified.delete(key);
+      }
+    }
   }
 
   /**
@@ -3432,11 +3505,16 @@ export class MatchmakerDO {
         id: m.id,
         name: m.name,
         avatar: m.avatar,
+        flag: m.flag,
         host: i === live.hostSeat,
+        isHost: i === live.hostSeat,
         bot: false,
         team: live.teams[i] ?? 0,
-        /* a seat held for a socket that is not here: the roster shows it as away, not as gone */
+        /* A seat held for a socket that is not here: the roster shows it as away, not as gone.
+           `online` is the contract; `connected` stays for clients that learned the older name. */
+        online: m.connected,
         connected: m.connected,
+        busy: m.busy,
       });
     }
     return JSON.stringify({
@@ -3447,6 +3525,9 @@ export class MatchmakerDO {
       mode: live.mode,
       you: seat,
       capacity: live.size,
+      /* A guest who landed first owns the room without owning the crown: the host's plate is
+         reserved, not offered to the next arrival. */
+      pendingHost: live.hostPending && !live.members[live.hostSeat],
       seats,
     });
   }
@@ -3561,6 +3642,10 @@ export class MatchmakerDO {
   /** A code is spent: remember it for a while so a link that carries it is answered, not revived. */
   private retire(code: string): void {
     this.retired.set(code, Date.now());
+    /* A reused code is a different room: its push cooldown must not remember this one. */
+    for (const key of this.notified.keys()) {
+      if (key.startsWith(`${code}:`)) this.notified.delete(key);
+    }
     this.sweepRetired();
   }
 
@@ -3592,6 +3677,9 @@ export class MatchmakerDO {
         this.retire(live.room.code);
         continue;
       }
+      /* A room somebody is still sitting in is not idle: move its clock so the next alarm cannot
+         fire on an already-expired instant while the lobby is plainly alive. */
+      if (held) live.lastSeenAt = now;
       if (changed) this.broadcastLobby(live);
     }
   }
@@ -3717,13 +3805,19 @@ export class MatchmakerDO {
       /* Before the launch the only vocabulary a lobby has is the host's start and size pick, and
          a seat's own team move. Any seat may leave at any time. */
       if (msg.type === 'CANCEL' || msg.type === 'LEAVE') { this.leaveLobby(ref, true); return; }
+      if (msg.type === 'BUSY') {
+        if (member) member.busy = msg.busy;
+        this.broadcastLobby(live);
+        return;
+      }
       if (msg.type === 'ROOM_START') {
         if (ref.seat !== live.hostSeat) return;
         /* A friends room needs two players before it is a race. The auto-pair room does not,
            because its whole contract is that the machine fills whatever is left. A chair held
            for a dropped socket is not a player: it becomes the machine's at launch. */
         const held = live.members.filter((m) => !!m && m.connected).length;
-        if (!live.code || held >= 2) this.launchRoom(live);
+        const busy = live.members.some((m) => !!m && m.busy);
+        if (!live.code || (held >= 2 && !busy)) this.launchRoom(live);
         return;
       }
       if (msg.type === 'SET_FORMAT') {

@@ -12912,6 +12912,76 @@ html.reduced-motion .stars-count::before { animation: none; }
   50% { box-shadow: inset 0 0 0 1px rgba(94, 242, 176, .8), 0 0 20px -2px rgba(94, 242, 176, 1); }
 }
 
+/* ---- the reserved host: the crown's chair held for a socket that stepped away ----
+   The plate stays — avatar, name, crown and all — and an amber status rides at its head. It is a
+   state, not an error: the room is alive, it is simply waiting for one person to come back. */
+.lb-badge-away {
+  gap: 4px;
+  height: 20px;
+  max-width: calc(100% - 12px);
+  padding: 0 8px;
+  color: #FDE68A;
+  background: linear-gradient(180deg, rgba(251, 191, 36, .26) 0%, rgba(180, 83, 9, .22) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(251, 191, 36, .55),
+    0 0 16px -5px rgba(251, 191, 36, .95);
+  text-transform: none;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  text-shadow: 0 0 8px rgba(251, 191, 36, .55);
+  animation: lb-away-pulse 1.8s ease-in-out infinite;
+}
+.lb-away-dot {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: 50%;
+  background: #FBBF24;
+  box-shadow: 0 0 7px #FBBF24;
+  animation: lb-away-blink 1.2s ease-in-out infinite;
+}
+@keyframes lb-away-pulse {
+  0%, 100% { box-shadow: inset 0 0 0 1px rgba(251, 191, 36, .55), 0 0 16px -5px rgba(251, 191, 36, .95); }
+  50% { box-shadow: inset 0 0 0 1px rgba(251, 191, 36, .9), 0 0 22px -2px rgba(251, 191, 36, 1); }
+}
+@keyframes lb-away-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .28; }
+}
+/* On a duel plate the status is furniture in the column, not a corner stamp: it owns a line of its
+   own above the portrait, so a long Persian phrase can never sit on the face. */
+.lb-slot.lb-plate .lb-badge-away {
+  position: relative;
+  top: auto;
+  right: auto;
+  margin-bottom: -2px;
+}
+.lb-slot.lb-plate.is-host.is-away {
+  opacity: 1;
+  background:
+    radial-gradient(120% 92% at 50% -10%, rgba(251, 191, 36, .15) 0%, rgba(251, 191, 36, 0) 56%),
+    linear-gradient(180deg, #212C40 0%, #101724 100%);
+  box-shadow:
+    0 0 0 1px rgba(251, 191, 36, .38),
+    0 0 24px -10px rgba(251, 191, 36, .8),
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 -16px 26px -20px rgba(0, 0, 0, .95);
+}
+.lb-slot.lb-plate.is-host.is-away .lb-plate-halo {
+  background: radial-gradient(76% 58% at 50% 108%, rgba(251, 191, 36, .18) 0%, transparent 72%);
+}
+/* the crown moves to the other shoulder while the status is up: both marks read at a glance */
+.lb-slot.lb-plate.is-waiting-host .lb-badge-host { right: auto; left: 8px; }
+.lb-slot.lb-plate.is-reserved { cursor: default; }
+.lb-av-reserved {
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 34% 28%, #FFF3C4 0%, #FFD54A 38%, #C08A12 74%, #6B4405 100%);
+  color: #3A2404;
+}
+.lb-av-reserved .ico { width: 24px; height: 24px; }
+
+
 /* an open rival plate: translucent glass, a dashed ring that marches, and the invite prompt */
 .lb-slot.lb-plate.is-open {
   border: 0;
@@ -12954,6 +13024,106 @@ html.reduced-motion .stars-count::before { animation: none; }
   50% { box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .3), 0 0 24px -10px rgba(56, 189, 248, .8); }
 }
 @keyframes lb-well-dash { to { stroke-dashoffset: -16; } }
+
+/* ---- the in-match arrival banner: a friend landed while this player is on a board ----
+   A frosted obsidian pill over the top of the stage, cyan rim and gold lip, mint-to-amber energy
+   kept to the action only. It never blocks the board: two compact keys and a name. */
+.lb-hud {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  left: 0;
+  right: 0;
+  z-index: 120;
+  display: flex;
+  justify-content: center;
+  padding: 0 12px;
+  pointer-events: none;
+}
+.lb-hud[hidden] { display: none; }
+.lb-hud-card {
+  pointer-events: auto;
+  width: min(100%, 440px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 140% at 8% 0%, rgba(56, 189, 248, .14) 0%, rgba(56, 189, 248, 0) 58%),
+    linear-gradient(180deg, rgba(23, 31, 47, .95) 0%, rgba(9, 13, 21, .97) 100%);
+  box-shadow:
+    0 0 0 1px rgba(56, 189, 248, .44),
+    0 0 0 2px rgba(252, 211, 77, .12),
+    0 18px 34px -18px rgba(0, 0, 0, .95),
+    inset 0 1px 0 rgba(255, 255, 255, .15),
+    inset 0 0 24px rgba(56, 189, 248, .08);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  backdrop-filter: blur(16px) saturate(1.15);
+}
+.lb-hud.is-in .lb-hud-card { animation: lb-hud-in 320ms cubic-bezier(.2, .9, .25, 1) both; }
+.lb-hud .lb-av {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  font-size: 15px;
+  border-radius: 12px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    0 0 0 1px rgba(125, 211, 252, .3),
+    0 0 18px -8px rgba(56, 189, 248, .9);
+}
+.lb-hud-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.lb-hud-t {
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.25;
+  color: var(--ink);
+  text-shadow: 0 0 14px rgba(56, 189, 248, .28);
+}
+.lb-hud-s {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lb-hud-actions { display: flex; align-items: center; gap: 5px; flex: none; }
+.lb-hud-b {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .03em;
+  line-height: 1;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), background-color var(--motion-fast);
+}
+.lb-hud-b:active { transform: translateY(1px) scale(.98); }
+.lb-hud-b:focus-visible { outline: 3px solid var(--honey-ink); outline-offset: 2px; }
+.lb-hud-b.is-join {
+  color: #2B1B02;
+  background: linear-gradient(180deg, #FFD75E 0%, #F0A70C 100%);
+  box-shadow:
+    0 2px 0 #8A5604,
+    inset 0 1px 0 rgba(255, 255, 255, .62),
+    0 0 18px -6px rgba(252, 211, 77, .95);
+}
+.lb-hud-b.is-wait {
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, .07);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
+}
+@keyframes lb-hud-in {
+  from { opacity: 0; transform: translateY(-14px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 
 /* a full duel: the crest burns hotter and its threads run brighter — the room is a face-off now */
 #gm-view-lobby[data-state="ready"] .lb-vs-core {
@@ -13274,6 +13444,8 @@ html.reduced-motion .gm-filters, html.reduced-motion .gm-f-tip,
 html.reduced-motion .fr-create, html.reduced-motion .fr-join-btn,
 html.reduced-motion .lb-code, html.reduced-motion .lb-copy-link, html.reduced-motion .lb-invite, html.reduced-motion .lb-slot,
 html.reduced-motion .lb-fmt, html.reduced-motion .lb-pick-b, html.reduced-motion .lb-leave { transition: none; }
+html.reduced-motion .lb-badge-away, html.reduced-motion .lb-away-dot, html.reduced-motion .lb-hud.is-in .lb-hud-card { animation: none; }
+html.reduced-motion .lb-hud-b { transition: none; }
 html.reduced-motion .gm-filters.shake { animation: none; }
 
 
@@ -27617,6 +27789,14 @@ html[data-lang="fa"] .gm-name {
 html[data-lang="fa"] .gm-desc { line-height: 1.5; }
 html[data-lang="fa"] .lb-mode-sub { font-size: 10px; line-height: 1.5; }
 html[data-lang="fa"] .lb-hint { line-height: 1.45; }
+/* the reserved host's status and the in-match banner read from the right too */
+html[data-lang="fa"] .lb-badge-away { letter-spacing: 0; font-size: 8.5px; }
+html[data-lang="fa"] .lb-slot.lb-plate .lb-badge-away { white-space: nowrap; }
+html[data-lang="fa"] .lb-hud-card { direction: rtl; }
+html[data-lang="fa"] .lb-hud-txt { text-align: right; }
+html[data-lang="fa"] .lb-hud-t { font-size: 10.5px; line-height: 1.5; }
+html[data-lang="fa"] .lb-hud-s { letter-spacing: 0; }
+html[data-lang="fa"] .lb-hud-b { letter-spacing: 0; font-size: 9.5px; }
 html[data-lang="fa"] .hero-t { font-size: clamp(0.95rem, 4.4vw, 1.1rem); }
 html[data-lang="fa"] .mode-hero-title { font-size: clamp(9.5px, 2.8vw, 11px); }
 html[data-lang="fa"] .mode-hero-badge { line-height: 1.5; }
