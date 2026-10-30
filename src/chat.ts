@@ -9,12 +9,12 @@
  * so it is the same tongue the next time it opens.
  *
  * The board is read, never written. A message no longer hangs off the sender's HUD card: it
- * spawns in the gameplay zone, centred over the sender's pawn. The renderer owns the only true
- * pawn position, so `pawn()` hands chat the live screen point, radius and colour family of a
- * seat's ball; chat drops the `.pawn-you` / `.pawn-bot` marker on that point and hangs the bubble
- * a tight 10px above the token's upper edge. The tail then points straight back down at the ball,
- * and the rim/aura take the same red or blue the pawn is painted in. The layer and every mark in
- * it are `pointer-events: none`, so the grid underneath keeps every tile tap.
+ * spawns in the gameplay zone, in the north-west quadrant of the sender's pawn. The renderer
+ * owns the only true pawn position, so `pawn()` hands chat the live screen point, radius, tile
+ * metric and colour family of a seat's ball; chat drops the `.pawn-you` / `.pawn-bot` marker on
+ * that point and hangs the chassis there. The chassis never crosses the four cardinal move-dot
+ * halos, and a bottom-right tail angles back toward the ball. The layer and every mark in it are
+ * `pointer-events: none`, so the grid underneath keeps every tile tap.
  */
 import './chat.css';
 import type { GameState, Player } from './rules';
@@ -26,12 +26,14 @@ import { playLaugh, playAngrySound } from './audio';
 import { impact, notify } from './telegram';
 import { readJson, writeJson } from './storage';
 
-/** A seat's pawn on screen: its animated centre in viewport px, its radius, and its colour. */
+/** A seat's pawn on screen: its animated centre, radius, tile metric and colour. */
 export interface PawnPoint {
   x: number;
   y: number;
-  /** the solid token's radius in css px: the bubble's tail stops just above this circle */
+  /** the solid token's radius in css px */
   radius: number;
+  /** the board's cell size in css px — the distance from the pawn to a cardinal move dot */
+  cell: number;
   /** the family the ball wears on this client, so the bubble can borrow the same neon */
   color: 'red' | 'blue';
 }
@@ -79,8 +81,12 @@ const MENU_W = 168;
 /** Where the sheet's tongue is remembered: the save's own wrapped door, so a webview with no
  *  localStorage still gets a working toggle (it just forgets between pages). */
 const LANG_KEY = 'detour.chat.lang.v1';
-/** The tight daylight between the bubble's chassis and the top of the solid pawn. */
-const PAWN_GAP_PX = 10;
+/** How far up-left of the pawn's centre the bubble's bottom-right corner parks, in cells. */
+const PAWN_OFFSET_CELLS = 0.55;
+const PAWN_OFFSET_MIN_PX = 18;
+/** The cardinal move-dot halo plus daylight: the chassis may never enter this radius. */
+const DOT_CLEAR_CELLS = 0.4;
+const DOT_CLEAR_MIN_PX = 15;
 /** The fallback lift when a race has no drawn pawn yet: the bubble still clears the chip it names. */
 const CHIP_GAP_PX = 44;
 
@@ -141,12 +147,12 @@ export function createChat(o: ChatOptions): Chat {
   }
 
   /**
-   * Hang a bubble over its sender's pawn. `o.pawn()` gives the live screen point, radius and
-   * colour of the seat's ball; the `.pawn-you`/`.pawn-bot` marker is dropped exactly there, the
-   * bubble is centred on it, and its chassis stops `PAWN_GAP_PX` above the token's upper edge.
-   * The tail tracks the pawn even when the capsule is nudged off centre at a board edge, and the
-   * rim adopts the same red or blue family the ball wears. A race with no drawn ball falls back
-   * to a fixed lift over the seat's HUD chip, so a message always has a mark to hang from.
+   * Hang a bubble in its sender's north-west quadrant. `o.pawn()` gives the live screen point,
+   * radius, cell and colour of the seat's ball; the `.pawn-you`/`.pawn-bot` marker is dropped
+   * exactly on the token, and the bubble's bottom-right corner parks up-left of it. Keeping that
+   * corner outside every cardinal move-dot halo leaves the upward tile and all four dots fully
+   * visible. When a board edge clamps the bubble inward, the other axis is pushed out far enough
+   * to preserve the same clearance. The rim adopts the same red or blue family the ball wears.
    */
   function place(side: Side, seat: Player) {
     const bubble = bubbles[side];
@@ -172,13 +178,51 @@ export function createChat(o: ChatOptions): Chat {
     bubble.classList.toggle('is-blue', bubbleTints[side] === 'blue');
     const ax = Number.parseFloat(anchor.style.left) || 0;
     const ay = Number.parseFloat(anchor.style.top) || 0;
-    const foot = at ? ay - at.radius - PAWN_GAP_PX : ay - CHIP_GAP_PX;
-    const left = clamp(ax - w / 2, 4, Math.max(4, laneBox.width - w - 4));
-    const top = Math.max(4, foot - h);
+    const maxLeft = Math.max(4, laneBox.width - w - 4);
+    const maxTop = Math.max(4, laneBox.height - h - 4);
+    let left: number;
+    let top: number;
+    if (at) {
+      const offset = Math.max(PAWN_OFFSET_MIN_PX, at.cell * PAWN_OFFSET_CELLS);
+      const clear = Math.max(DOT_CLEAR_MIN_PX, at.cell * DOT_CLEAR_CELLS);
+      left = clamp(ax - offset - w, 4, maxLeft);
+      top = clamp(ay - offset - h, 4, maxTop);
+      /* the four legal-move dots sit one cell out on each axis; their halos are the keep-out
+         circles the chassis must never enter */
+      const dots: Array<[number, number]> = [
+        [ax, ay - at.cell], [ax, ay + at.cell], [ax - at.cell, ay], [ax + at.cell, ay],
+      ];
+      const clearOfDots = (l: number, t: number): boolean => {
+        const r = l + w;
+        const b = t + h;
+        for (const [dx, dy] of dots) {
+          const nx = clamp(dx, l, r);
+          const ny = clamp(dy, t, b);
+          if ((nx - dx) ** 2 + (ny - dy) ** 2 < clear * clear) return false;
+        }
+        return true;
+      };
+      if (!clearOfDots(left, top)) {
+        /* an edge clamp pushed the bubble back toward the pawn: lift it clear above the up dot,
+           or, when the top edge is already there, slide it clear left of the left dot */
+        const above = clamp(ay - at.cell - clear - h, 4, maxTop);
+        const leftOf = clamp(ax - at.cell - clear - w, 4, maxLeft);
+        const candidates = [
+          { left, top: above },
+          { left: leftOf, top },
+          { left: leftOf, top: above },
+        ];
+        for (const c of candidates) {
+          if (clearOfDots(c.left, c.top)) { left = c.left; top = c.top; break; }
+        }
+      }
+    } else {
+      const foot = ay - CHIP_GAP_PX;
+      left = clamp(ax - w / 2, 4, maxLeft);
+      top = Math.max(4, foot - h);
+    }
     bubble.style.left = `${left}px`;
     bubble.style.top = `${top}px`;
-    /* the tail points at the pawn: it shifts with the capsule when a board edge pushes it */
-    bubble.style.setProperty('--tip', `${clamp(ax - left, 10, w - 10)}px`);
   }
 
   /**

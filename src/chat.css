@@ -30,6 +30,7 @@
   --pawn-glow: rgba(255, 51, 102, 0.55);
   --bubble-plate: #1C2433;
   position: absolute;
+  isolation: isolate;
   max-width: 148px;
   min-height: 30px;
   max-height: 44px;
@@ -51,8 +52,8 @@
     var(--clay-spec), var(--clay-bevel), var(--clay-ring);
   opacity: 0;
   transform: scale(.5) translateY(6px);
-  /* the tail is the hinge: the pop grows out of the point that faces the pawn */
-  transform-origin: 50% 100%;
+  /* the tail corner is the hinge: the pop grows out of the point that faces the pawn */
+  transform-origin: 100% 100%;
   transition: opacity .22s ease, transform .22s ease;
   pointer-events: none;
 }
@@ -73,24 +74,37 @@
   transform: scale(.92) translateY(-4px);
   transition: opacity .34s ease, transform .34s cubic-bezier(.22, .61, .36, 1);
 }
-/* the downward tip: a crisp diamond, outlined in the sender's neon and filled with the same dark
-   plate as the bubble. It tracks the pawn via --tip, even when a board edge nudges the capsule
-   off centre, so the point always faces the emitting ball. */
+/* the tail: a diagonal wedge parked on the bottom-right corner, its point aimed 45° down-right
+   at the pawn. Two layers give the exposed edges the same 1px neon stroke and dark plate fill
+   as the chassis while the light path above and to the right stays completely clear. */
+.chat-bubble::before,
 .chat-bubble::after {
   content: '';
   position: absolute;
-  left: var(--tip, 50%);
-  bottom: -6px;
-  width: 10px;
-  height: 10px;
-  margin-left: -5px;
-  background: var(--bubble-plate);
-  border-right: 1px solid var(--pawn-rim);
-  border-bottom: 1px solid var(--pawn-rim);
-  border-bottom-right-radius: 2px;
-  transform: rotate(45deg);
-  box-shadow: 2px 2px 6px -2px var(--pawn-glow);
+  z-index: -1;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  -webkit-clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  pointer-events: none;
 }
+.chat-bubble::before {
+  right: -8px;
+  bottom: -8px;
+  width: 24px;
+  height: 24px;
+  background: var(--pawn-rim);
+}
+.chat-bubble::after {
+  right: -7px;
+  bottom: -7px;
+  width: 22px;
+  height: 22px;
+  background: var(--bubble-plate);
+}
+/* the bubble is pure decoration: every tap lands on the tile or move dot beneath it */
+.chat-bubble,
+.chat-bubble *,
+.chat-bubble::before,
+.chat-bubble::after { pointer-events: none; }
 /* the text is what clamps; the tail may hang outside the face */
 .chat-bubble-t {
   min-width: 0;

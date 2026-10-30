@@ -2379,8 +2379,8 @@ const chat = createChat({
   state: () => state,
   localSide: () => localSide,
   /* the seat's live pawn: its animated ball centre mapped through the renderer's own layout into
-     viewport px, plus the solid radius and the red/blue family the ball is painted in — so a
-     bubble sits just above the token and glows in the same neon. */
+     viewport px, plus its radius, tile size and red/blue family — so the bubble can park in the
+     north-west quadrant, clear every cardinal move dot, and glow in the same neon. */
   pawn: (seat) => {
     const v = ballViews.find((b) => b.team === seat);
     if (!v) return null;
@@ -2392,6 +2392,7 @@ const chat = createChat({
       x: box.left + L.ox + v.pos.x * L.cell,
       y: box.top + L.oy + v.pos.y * L.cell,
       radius: pawnRadius(L.cell),
+      cell: L.cell,
       color: seat === localSide ? localColor : rivalColor,
     };
   },
