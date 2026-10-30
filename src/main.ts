@@ -25,7 +25,7 @@ import { createCompete } from './compete';
 import { flagPhoto } from './flags';
 import { createShop } from './shop';
 import { createNotifications } from './notifications';
-import { mountCoins, setBalance } from './coin';
+import { mountCoins } from './coin';
 import { appearance, menuState, motionReduced, onAppearance, onLang, t, toggleAppearance } from './settings';
 import { audio } from './audio';
 import {
@@ -37,7 +37,10 @@ import {
   type TutorialTargetMine, type TutorialTargetMove, type TutorialTargetSelect, type TutorialTargetWall,
 } from './tutorial';
 import { PEARL_BOARD, perspectiveRamps, type Theme } from './themes';
-import { detonation, impact, initTelegram, inviteRoomCode, notify, onBackPress, tgUser } from './telegram';
+import {
+  detonation, impact, initTelegram, inviteRoomCode, notify, onBackPress, openTelegramShare, tgUser,
+} from './telegram';
+import { botAppLink, telegramShareLink } from '../shared/config';
 import { applyFlagSupport } from './countries';
 import {
   createRoomCode, getGameMode, gmBack, initGameModes, notifyMatchBusy, onGameModeChange, openInviteRoom,
@@ -88,10 +91,31 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const canvas = $<HTMLCanvasElement>('board');
 const wrap = $<HTMLDivElement>('board-wrap');
 const overlay = $<HTMLDivElement>('overlay');
-const verdict = $<HTMLParagraphElement>('verdict');
+const verdict = $<HTMLHeadingElement>('verdict');
 const sub = $<HTMLParagraphElement>('sub');
 const again = $<HTMLButtonElement>('again');
 const toMenu = $<HTMLButtonElement>('to-menu');
+const resultKicker = $<HTMLParagraphElement>('result-kicker');
+const resultTopImg = $<HTMLImageElement>('result-top-img');
+const resultTopInitial = $<HTMLElement>('result-top-initial');
+const resultTopTag = $<HTMLElement>('result-top-tag');
+const resultTopName = $<HTMLElement>('result-top-name');
+const resultBottomImg = $<HTMLImageElement>('result-bottom-img');
+const resultBottomInitial = $<HTMLElement>('result-bottom-initial');
+const resultBottomTag = $<HTMLElement>('result-bottom-tag');
+const resultBottomName = $<HTMLElement>('result-bottom-name');
+const resultTiqChip = $<HTMLElement>('result-tiq-chip');
+const resultTiqN = $<HTMLElement>('result-tiq-n');
+const resultCoinChip = $<HTMLElement>('result-coin-chip');
+const resultCoinsN = $<HTMLElement>('result-coins-n');
+const resultStake = $<HTMLParagraphElement>('result-stake');
+const resultStakeK = $<HTMLElement>('result-stake-k');
+const resultStakeN = $<HTMLElement>('result-stake-n');
+const againLabel = $<HTMLSpanElement>('again-label');
+const againIco = document.getElementById('again-ico') as SVGUseElement | null;
+const shareBtn = $<HTMLButtonElement>('share');
+const shareLabel = $<HTMLSpanElement>('share-label');
+const toMenuLabel = $<HTMLSpanElement>('menu-label');
 /* every toast on the page: the board's own, and the shop's copy of it. One message goes to all of
    them, so the note speaks on whichever screen is up; the hidden one costs nothing. */
 const noteEls = [...document.querySelectorAll<HTMLParagraphElement>('.note')];
@@ -126,8 +150,6 @@ const xpNums = [0, 1, 2, 3].map((p) => xpPills[p].querySelector<HTMLElement>('.x
 const chipsEl = $<HTMLElement>('chips');
 const sheetPause = $<HTMLElement>('sheet-pause');
 const sheetQuit = $<HTMLElement>('sheet-quit');
-const reward = $<HTMLParagraphElement>('reward');
-const rewardN = $<HTMLSpanElement>('reward-n');
 
 /* walls-to-place readout on each chip: repaints only when the number changes. One slot per seat the
    rules allow, so a four-way race has somewhere to put its fourth badge. */
@@ -626,47 +648,208 @@ function armCapsules() {
   }
 }
 
-/**
- * How the race was decided: a finish line, a stalemate the engine called, or a rival who did not
- * stay to see it. A forfeit is a win that never touched the board, and an adjudication is a win the
- * board itself awarded, so each says so rather than pretending a ball crossed.
- */
-function subLine(won: boolean): string {
-  const rival = active?.opponent.name ?? 'The bot';
-  if (state.adjudicated) {
-    return won
-      ? 'Stalemate called — your ball was nearest FINISH.'
-      : 'Stalemate called — the nearest ball to FINISH took the race.';
+/* ---------- the post-match stage ---------- */
+
+/** Both defeat stingers rotate on the same clock, one per open and then every few seconds. */
+const DEFEAT_STINGERS = ['resultDefeatStinger1', 'resultDefeatStinger2'] as const;
+
+interface ResultView {
+  won: boolean;
+  coins: number;
+  /** The TIQ a rewarded win actually paid. */
+  tiq: number;
+  /** The magnitude of the crimson stake loss a defeat wears. */
+  stake: number;
+  /** Which sting the defeat copy opens on. */
+  stinger: number;
+}
+
+let resultView: ResultView | null = null;
+let resultRaf = 0;
+let resultTimers: number[] = [];
+let stingerTimer = 0;
+let defeatStingerTurn = 0;
+
+/** Stop every clock the result owns: the count-up, the haptic beats and the stinger rotation. */
+function clearResultMotion() {
+  if (resultRaf) { cancelAnimationFrame(resultRaf); resultRaf = 0; }
+  for (const id of resultTimers) window.clearTimeout(id);
+  resultTimers = [];
+  if (stingerTimer) { window.clearInterval(stingerTimer); stingerTimer = 0; }
+}
+
+const resultLater = (fn: () => void, ms: number) => {
+  resultTimers.push(window.setTimeout(fn, ms));
+};
+
+/** A count on this panel is never negative text: the sign is painted separately. */
+const resultAbs = (n: number): string => commas(Math.max(0, Math.round(n)));
+
+/** The local player's name, off the same Telegram identity the HUD wears. */
+function localPlayerName(): string {
+  const u = tgUser();
+  const full = [u?.first_name, u?.last_name].filter(Boolean).join(' ').trim();
+  return profile.displayName || full || u?.username || t('hudYou');
+}
+
+function seatLabel(seat: Player): string {
+  return seat === localSide ? localPlayerName() : TEAM_NAME[seat] || t('rival');
+}
+
+const asPhoto = (raw: string | null | undefined): string =>
+  typeof raw === 'string' && /^https?:\/\//i.test(raw) ? raw : '';
+
+/** A photo over its monogram, so a slow or blocked CDN still leaves a person, never a hole. */
+function paintResultAvatar(
+  img: HTMLImageElement, initialEl: HTMLElement, name: string, url: string,
+): void {
+  initialEl.textContent = (name.trim()[0] ?? '?').toUpperCase();
+  if (!url) {
+    img.hidden = true;
+    img.removeAttribute('src');
+    return;
   }
-  if (!forfeit) return won ? 'Your team crossed the line first.' : `${rival} reached FINISH first.`;
-  if (forfeit === 'drop') return 'Connection lost — the rival takes the win.';
-  if (!won) return `${rival} took the win.`;
-  return `${rival} ${forfeit === 'resign' ? 'resigned' : 'left the race'} — the win is yours.`;
+  img.onerror = () => { img.hidden = true; };
+  if (img.getAttribute('src') !== url) img.src = url;
+  img.hidden = false;
+}
+
+/**
+ * The podium is the emotional core: the winner always takes the lit top seat, whether that is the
+ * local player or the rival. On a defeat the rival wears the crown and the player's own avatar is
+ * the one sitting subdued beneath it — which is the whole point.
+ */
+function paintResultPodium(): void {
+  const champion = state.winner ?? localSide;
+  const fallen = champion === localSide ? rivalSide() : localSide;
+  const championName = seatLabel(champion);
+  const fallenName = seatLabel(fallen);
+  resultTopName.textContent = championName;
+  resultBottomName.textContent = fallenName;
+  resultTopTag.textContent = champion === localSide ? t('resultWinnerYou') : t('resultWinner');
+  resultBottomTag.textContent = fallen === localSide ? t('resultDefeatedYou') : t('resultDefeated');
+  resultTopName.closest('.result-seat')?.classList.toggle('is-you', champion === localSide);
+  resultBottomName.closest('.result-seat')?.classList.toggle('is-you', fallen === localSide);
+
+  const me = tgUser();
+  const rivalPhoto = active?.opponent.avatarUrl ?? null;
+  const photoFor = (seat: Player): string => {
+    if (seat === localSide) return asPhoto(me?.photo_url);
+    return seat === rivalSide() ? asPhoto(rivalPhoto) : '';
+  };
+  paintResultAvatar(resultTopImg, resultTopInitial, championName, photoFor(champion));
+  paintResultAvatar(resultBottomImg, resultBottomInitial, fallenName, photoFor(fallen));
+}
+
+/** Every word and every state class the current result owns, re-readable after a language flip. */
+function paintResultCopy(): void {
+  if (!resultView) return;
+  const { won, stake } = resultView;
+  resultKicker.textContent = t('resultKicker');
+  verdict.textContent = t(won ? 'resultVictoryTitle' : 'resultDefeatTitle');
+  sub.textContent = won ? t('resultVictorySub') : t(DEFEAT_STINGERS[resultView.stinger]);
+  againLabel.textContent = t(won ? 'resultPlayAgain' : 'resultRevenge');
+  shareLabel.textContent = t('resultShare');
+  toMenuLabel.textContent = t('resultMenu');
+  resultStakeK.textContent = t('resultStakeLost');
+  resultStakeN.textContent = `−${resultAbs(stake)} ${t('resultTiqUnit')}`;
+  resultTiqChip.hidden = !won;
+  resultCoinChip.classList.toggle('is-consolation', !won);
+  resultStake.hidden = won || stake <= 0;
+  shareBtn.hidden = !won;
+  again.classList.toggle('is-revenge', !won);
+  againIco?.setAttribute('href', won ? '#i-play' : '#i-swords');
+  paintResultPodium();
+}
+
+function rotateDefeatStinger(): void {
+  if (!overlayOpen || !resultView || resultView.won) return;
+  sub.classList.add('is-swapping');
+  resultLater(() => {
+    if (!overlayOpen || !resultView || resultView.won) return;
+    resultView.stinger = (resultView.stinger + 1) % DEFEAT_STINGERS.length;
+    sub.textContent = t(DEFEAT_STINGERS[resultView.stinger]);
+    sub.classList.remove('is-swapping');
+  }, 180);
+}
+
+/**
+ * Roll both counters up from zero and land three haptic beats under the roll. Reduced motion stills
+ * the numbers on their final values; the haptics are the user's own setting and keep their pulse.
+ */
+function rollResultValues(): void {
+  if (!resultView) return;
+  const { won, coins, tiq, stake } = resultView;
+  const coin = resultCoinChip.querySelector<SVGSVGElement>('.coin');
+  if (coin && !motionReduced()) {
+    coin.classList.remove('sweep');
+    void coin.getBoundingClientRect();
+    coin.classList.add('sweep');
+  }
+  const dur = motionReduced() ? 0 : 880;
+  const t0 = performance.now();
+  const paint = (now: number) => {
+    const k = dur > 0 ? Math.min(1, (now - t0) / dur) : 1;
+    const eased = 1 - Math.pow(1 - k, 3);
+    resultTiqN.textContent = resultAbs((won ? tiq : 0) * eased);
+    resultCoinsN.textContent = resultAbs(coins * eased);
+    if (!won) resultStakeN.textContent = `−${resultAbs(Math.max(1, stake * eased))} ${t('resultTiqUnit')}`;
+    if (k < 1) {
+      resultRaf = requestAnimationFrame(paint);
+      return;
+    }
+    resultTiqN.textContent = resultAbs(won ? tiq : 0);
+    resultCoinsN.textContent = resultAbs(coins);
+    if (!won) resultStakeN.textContent = `−${resultAbs(stake)} ${t('resultTiqUnit')}`;
+    resultRaf = 0;
+  };
+  resultRaf = requestAnimationFrame(paint);
+  impact('light');
+  resultLater(() => impact('light'), 280);
+  resultLater(() => impact('medium'), 680);
 }
 
 let overlayOpen = false;
 function showOverlay() {
   if (overlayOpen) return;
   overlayOpen = true;
+  clearResultMotion();
   const won = state.winner === localSide;
-  const built = state.walls.length;
-  const wallsNote = built ? ` ${built} wall${built === 1 ? '' : 's'} went up along the way.` : '';
-  overlay.classList.toggle('win', won);
-  overlay.classList.toggle('lose', !won);
-  verdict.textContent = `${TEAM_NAME[state.winner ?? localSide]} win${won ? '' : 's'}`;
-  sub.textContent = subLine(won) + wallsNote;
-  overlay.hidden = false;
-  if (won && !motionReduced()) confetti.burst();
   /* one credit per finished race: showOverlay only runs once per game over. The Admin Command
      Center's Double-Coins multiplier scales what the settlement pays. A seat the machine held is
      the one exception: it pays nothing and it touches no ladder, because a bot is not a person and
      neither is a seat somebody walked out of. */
   const mine = !room || rewardEligible(room, localSide);
+  const beforeTiq = tiqFrom(profile.stats.wins, profile.stats.games, profile.tiqBonus);
   const earned = mine ? recordGame({ difficulty, won }, runtime.coinMult) : 0;
   recordRace(earned);                   // the Command Center's Stats tab counts the day's duels
-  setBalance(rewardN, 0);                 // every payout counts up from zero
-  setBalance(rewardN, earned);
-  reward.hidden = false;
+  const afterTiq = tiqFrom(profile.stats.wins, profile.stats.games, profile.tiqBonus);
+  /* the HUD's XP pill reads the save, so paint it on the same beat the settlement moves it */
+  paintSeatIdentity();
+  /* The ladder's own gain on a win, and the crimson stake the defeat asks for. */
+  resultView = {
+    won,
+    coins: earned,
+    tiq: mine ? Math.max(0, afterTiq - beforeTiq) : 0,
+    stake: mine ? Math.max(5, Math.round(runtime.winTiq * 0.1)) : 0,
+    stinger: won ? 0 : defeatStingerTurn++ % DEFEAT_STINGERS.length,
+  };
+  overlay.classList.toggle('win', won);
+  overlay.classList.toggle('lose', !won);
+  paintResultCopy();
+  resultTiqN.textContent = '0';
+  resultCoinsN.textContent = '0';
+  resultStakeN.textContent = `−1 ${t('resultTiqUnit')}`;
+  overlay.hidden = false;
+  if (won && !motionReduced()) confetti.burst();
+  rollResultValues();
+  if (!won) {
+    if (!motionReduced()) stingerTimer = window.setInterval(rotateDefeatStinger, 5800);
+    /* endOnline has already buzzed a forfeit; do not repeat it under the card. */
+    if (!forfeit) notify('error');
+  } else if (!forfeit) {
+    notify('success');
+  }
   menuBtn.disabled = true;              // the panel already offers Play again and Menu
   again.focus({ preventScroll: true });
 }
@@ -748,6 +931,8 @@ function ui() {
   if (state.winner === null && overlayOpen) {
     overlayOpen = false;
     overlay.hidden = true;
+    clearResultMotion();
+    resultView = null;
     menuBtn.disabled = false;
   }
   if (state.winner !== null) armGoalBeat();
@@ -972,9 +1157,12 @@ function restart() {
   turnsPlayed = 0;
   saidTurn = '';
   clearGoalBeat();
+  clearResultMotion();
+  resultView = null;
   overlayOpen = false;
   overlay.hidden = true;
-  reward.hidden = true;
+  overlay.classList.remove('win', 'lose');
+  sub.classList.remove('is-swapping');
   menuBtn.disabled = false;
   clearNote();
   confetti.stop();
@@ -1371,6 +1559,12 @@ function quitToMenu() {
   notifyMatchBusy(false);
   /* a race that ended inside the goal beat still has to be paid out before the board goes away */
   if (goalBeat) { clearGoalBeat(); showOverlay(); }
+  if (overlayOpen) {
+    clearResultMotion();
+    resultView = null;
+    overlayOpen = false;
+    overlay.hidden = true;
+  }
   sheets.close();
   /* Walking out of a live online race is a resignation: the rival takes the win, and the socket
      goes with it — leaving it open would only hold the other player's seat hostage. */
@@ -2068,12 +2262,20 @@ $('pause-tutorial').addEventListener('click', () => {
 };
 
 again.addEventListener('click', () => {
-  impact('light');
-  /* a networked seat is not ours to restart: Play again means queue again */
+  /* the rematch key lands harder than a replay: it is the revenge trigger, not a menu hop */
+  impact(state.winner === localSide ? 'medium' : 'heavy');
+  clearResultMotion();
+  /* a networked seat is not ours to restart in place: Play again queues the next race */
   if (active) { active.close(); active = null; queueMatch(); return; }
   restart();
 });
-toMenu.addEventListener('click', () => { impact('light'); quitToMenu(); });
+shareBtn.addEventListener('click', () => {
+  if (!resultView?.won) return;
+  impact('medium');
+  const text = t('resultShareText').replace('{tiq}', resultAbs(resultView.tiq));
+  openTelegramShare(telegramShareLink(botAppLink(''), text));
+});
+toMenu.addEventListener('click', () => { impact('light'); clearResultMotion(); quitToMenu(); });
 menuBtn.addEventListener('click', () => {
   if (tutorialActive || state.winner !== null) return;
   impact('light');
@@ -2358,6 +2560,8 @@ initGameModes(sheets, {
 });
 onGameModeChange(paintParty);
 onLang(paintParty);
+/* the result is a live surface too: a language flip repaints its copy, tags and aria labels */
+onLang(() => { if (overlayOpen && resultView) paintResultCopy(); });
 watchPartyLabel();
 paintParty();
 paintRoster();

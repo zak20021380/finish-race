@@ -2994,18 +2994,78 @@
 
           <canvas class="confetti" id="confetti" aria-hidden="true"></canvas>
 
-          <div class="overlay" id="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="verdict">
-            <div class="panel">
-              <svg class="flag" aria-hidden="true"><use href="#i-flag" /></svg>
-              <p class="verdict" id="verdict">You win</p>
-              <p class="over-mode" id="over-mode">1v1 · Normal</p>
-              <p class="sub" id="sub">You reached the finish first.</p>
-              <p class="reward" id="reward" hidden>
-                <span class="coin" data-coin aria-hidden="true"></span><span id="reward-n">0</span><span>coins</span>
+          <!-- The post-match stage. One capsule, two emotional polarities: glory or a grudge.
+               The whole panel is dark obsidian glass in both finishes, so the gold/cyan win and
+               the fractured crimson loss read as the same premium object. -->
+          <div class="overlay result" id="overlay" hidden role="dialog" aria-modal="true"
+            aria-labelledby="verdict" aria-describedby="sub">
+            <div class="result-card" id="result-card" data-scroll>
+              <span class="result-aura" aria-hidden="true"><i></i><i></i><i></i></span>
+              <p class="result-kicker" id="result-kicker" data-i18n="resultKicker">MATCH COMPLETE</p>
+              <h2 class="result-title" id="verdict">VICTORY</h2>
+              <p class="over-mode result-mode" id="over-mode">1v1 · Normal</p>
+              <p class="result-sub" id="sub">Total Dominance. Outsmarted and outplayed in every turn.</p>
+
+              <!-- champion on top, the fallen seat subdued beneath -->
+              <div class="result-podium" id="result-podium">
+                <div class="result-seat is-champion">
+                  <span class="result-crown" aria-hidden="true">
+                    <svg class="ico" viewBox="0 0 24 24"><use href="#i-crown" /></svg>
+                  </span>
+                  <span class="result-avatar">
+                    <img id="result-top-img" alt="" decoding="async" referrerpolicy="no-referrer" hidden />
+                    <b id="result-top-initial" aria-hidden="true">Y</b>
+                  </span>
+                  <span class="result-id">
+                    <span class="result-tag" id="result-top-tag">WINNER · YOU</span>
+                    <strong class="result-name" id="result-top-name">You</strong>
+                  </span>
+                </div>
+                <span class="result-vs" aria-hidden="true">VS</span>
+                <div class="result-seat is-fallen">
+                  <span class="result-avatar">
+                    <img id="result-bottom-img" alt="" decoding="async" referrerpolicy="no-referrer" hidden />
+                    <b id="result-bottom-initial" aria-hidden="true">B</b>
+                  </span>
+                  <span class="result-id">
+                    <span class="result-tag" id="result-bottom-tag">DEFEATED</span>
+                    <strong class="result-name" id="result-bottom-name">Bot</strong>
+                  </span>
+                </div>
+              </div>
+
+              <div class="result-rewards" id="result-rewards">
+                <span class="result-chip is-tiq" id="result-tiq-chip">
+                  <span class="result-glyph" aria-hidden="true">
+                    <svg class="ico" viewBox="0 0 24 24"><use href="#i-brain" /></svg>
+                  </span>
+                  <span class="result-value"><span class="result-sign">+</span><b id="result-tiq-n">0</b></span>
+                  <span class="result-unit" data-i18n="resultTiqUnit">TIQ</span>
+                </span>
+                <span class="result-chip is-coin" id="result-coin-chip">
+                  <span class="result-token" aria-hidden="true"><span class="coin" data-coin></span></span>
+                  <span class="result-value"><span class="result-sign">+</span><b id="result-coins-n">0</b></span>
+                  <span class="result-unit" data-i18n="resultCoinsUnit">COINS</span>
+                </span>
+              </div>
+
+              <p class="result-stake" id="result-stake" hidden>
+                <span class="result-stake-k" id="result-stake-k">STAKES LOST</span>
+                <strong class="result-stake-n" id="result-stake-n">−0 TIQ</strong>
               </p>
-              <div class="end-actions">
-                <button class="cta" id="again" type="button">Play again</button>
-                <button class="cta ghost" id="to-menu" type="button">Menu</button>
+
+              <div class="result-actions">
+                <button class="result-btn primary" id="again" type="button">
+                  <svg class="ico" aria-hidden="true"><use id="again-ico" href="#i-play" /></svg>
+                  <span id="again-label">PLAY AGAIN</span>
+                </button>
+                <button class="result-btn ghost" id="share" type="button" hidden>
+                  <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
+                  <span id="share-label">SHARE WIN / FLEX</span>
+                </button>
+                <button class="result-btn menu" id="to-menu" type="button">
+                  <span id="menu-label">MENU</span>
+                </button>
               </div>
             </div>
           </div>
