@@ -13979,36 +13979,6 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
   color: var(--ink-soft);
 }
 
-.ms-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; min-width: 0; }
-.ms-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  padding: 8px 10px;
-  border-radius: 12px;
-  background: var(--field);
-  box-shadow: var(--inset);
-}
-.ms-stat small {
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  line-height: 1.2;
-  color: var(--ink-soft);
-}
-.ms-stat b {
-  font-size: var(--t-1);
-  font-weight: 900;
-  line-height: 1.2;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .ms-fine { flex: none; margin: 0; text-align: left; font-size: 10px; line-height: 1.4; }
 
 /* ---- foot keys: coral over slate, both 48px, both able to do what they say ---- */
@@ -14064,12 +14034,272 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
 .ms-challenge:focus-visible,
 .ms-guild:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
 
+/* ==========================================================================
+   THE SQUAD FACE OF THE MIND SHEET — real community photo, one rank badge,
+   a frosted TIQ plate and a three-zone read. The header keeps the same 54px
+   clay key; only the guild wears a photo, a metallic corner and a type tag.
+   ========================================================================== */
+
+/* the community photo sits inside the rim, so the cyan edge stays a true border */
+.ms-av-img {
+  position: absolute;
+  inset: 3px;
+  z-index: 1;
+  width: calc(100% - 6px);
+  height: calc(100% - 6px);
+  border-radius: 13px;
+  object-fit: cover;
+  background: #0B1220;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .38);
+}
+.ms-marks.is-guild .ms-av {
+  border-radius: 17px;
+  background: linear-gradient(180deg, #233049 0%, #0E1626 100%);
+  box-shadow:
+    inset 0 0 0 2px rgba(56, 189, 248, .85),
+    inset 0 0 14px rgba(14, 165, 233, .3),
+    0 0 20px -2px rgba(14, 165, 233, .55),
+    0 3px 0 #0A0F1A;
+}
+
+/* one metallic rank, layered on the avatar corner where the flag sits for a mind */
+.ms-rank {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  min-width: 27px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 7px;
+  font-size: 9.5px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+  line-height: 1;
+  color: #1B1303;
+  background: linear-gradient(180deg, #FFE9A8 0%, #E9B94C 52%, #B77A12 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .65),
+    inset 0 -1px 0 rgba(0, 0, 0, .25),
+    0 0 0 2px #1C2433,
+    0 3px 7px -2px rgba(0, 0, 0, .8);
+}
+.ms-rank[hidden] { display: none; }
+.ms-rank[data-rank="silver"] {
+  color: #121A24;
+  background: linear-gradient(180deg, #F4F8FC 0%, #C7D3E0 50%, #8B9AAC 100%);
+}
+.ms-rank[data-rank="bronze"] {
+  color: #211005;
+  background: linear-gradient(180deg, #F3C9A0 0%, #C98550 50%, #8D5424 100%);
+}
+.ms-rank[data-rank="num"] {
+  color: #DBF2FE;
+  background: linear-gradient(180deg, #3A4A67 0%, #26334B 52%, #172032 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .22),
+    inset 0 -1px 0 rgba(0, 0, 0, .35),
+    0 0 0 2px #1C2433,
+    0 3px 7px -2px rgba(0, 0, 0, .8);
+}
+
+/* the subtitle carries the community kind and its handle, never the rank again */
+#sheet-mind.is-guild .ms-tier {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+#sheet-mind.is-guild .ms-name { letter-spacing: -.015em; }
+.ms-kind { flex: none; color: var(--brand-ink); }
+.ms-tier-dot {
+  flex: none;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .45;
+}
+.ms-handle {
+  min-width: 0;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-numeric);
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* frosted plate: a cyan hairline over a deep-navy pane, with a soft corner bloom */
+.ms-hero.is-squad {
+  position: relative;
+  overflow: hidden;
+  padding: 12px;
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 150% at 0% 0%, rgba(0, 210, 255, .16) 0%, rgba(0, 210, 255, 0) 56%),
+    linear-gradient(180deg, rgba(255, 255, 255, .05) 0%, rgba(255, 255, 255, 0) 48%),
+    linear-gradient(180deg, rgba(14, 24, 42, .75) 0%, rgba(9, 16, 30, .86) 100%);
+  background-color: rgba(14, 24, 42, .75);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    inset 0 0 0 1px rgba(0, 210, 255, .2),
+    0 14px 30px -22px #000;
+}
+.ms-hero.is-squad::after {
+  content: '';
+  position: absolute;
+  top: -54px;
+  right: -34px;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 210, 255, .14) 0%, rgba(0, 210, 255, 0) 68%);
+  pointer-events: none;
+}
+.ms-hero.is-squad .ms-iq {
+  gap: 7px;
+  color: #FBBF24;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .55);
+}
+.ms-hero.is-squad .ms-iq .tiq {
+  width: 22px;
+  height: 22px;
+  color: #FBBF24;
+  filter: drop-shadow(0 0 8px rgba(251, 191, 36, .7));
+}
+.ms-hero.is-squad .ms-hero-sub { color: #8CA0B8; }
+.ms-hero.is-squad .ms-ring { width: 60px; height: 60px; }
+.ms-hero.is-squad .ms-ring .mh-arc circle { stroke-width: 3.4; }
+.ms-hero.is-squad .ms-ring .mh-arc-track { stroke: rgba(56, 189, 248, .15); }
+.ms-hero.is-squad .ms-ring .mh-arc-fill { filter: drop-shadow(0 0 4px rgba(56, 189, 248, .8)); }
+.ms-hero.is-squad .ms-ring b {
+  width: 46px;
+  height: 46px;
+  border-radius: 15px;
+  background: radial-gradient(circle at 32% 26%, #22314C 0%, #0B1322 74%);
+  color: #E0F7FF;
+  font-size: 14px;
+}
+.ms-hero.is-squad .ms-ring-c { color: #7DD3FC; }
+
+/* three focused cards: headcount · per-mind average · your slice of the pot */
+.ms-squad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+.ms-squad-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 9px 9px 10px;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .055) 0%, rgba(255, 255, 255, .012) 54%),
+    var(--field);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    inset 0 -1px 0 rgba(0, 0, 0, .4),
+    0 2px 0 #0A0F1A;
+}
+.ms-squad-top { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.ms-squad-ic {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--brand-3);
+  filter: drop-shadow(0 0 4px rgba(56, 189, 248, .4));
+}
+.ms-squad-lbl {
+  min-width: 0;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ms-squad-v {
+  font-size: var(--t-1);
+  font-weight: 900;
+  line-height: 1.15;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ms-squad-card.is-share .ms-squad-v { color: #FCD34D; }
+/* not a member yet: a quiet slate tag, never a bare dash */
+.ms-squad-card.is-empty .ms-squad-v {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #8CA0B8;
+  background: rgba(148, 163, 184, .1);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .16);
+}
+
+/* the guild door trades coral for a claymorphic emerald-cyan, matching the arena */
+.ms-challenge.is-squad {
+  background: linear-gradient(180deg, #5EEAD4 0%, #2DD4BF 46%, #0E92A8 100%);
+  color: #032027;
+  box-shadow:
+    0 4px 0 #075E6B,
+    0 12px 22px -10px rgba(45, 212, 191, .55),
+    inset 0 2px 3px rgba(255, 255, 255, .45),
+    inset 0 -2px 3px rgba(0, 0, 0, .2);
+}
+.ms-challenge.is-squad .ico { color: #053B47; }
+
 /* ---- the tight phone: the keys lose their artwork before they lose a label ---- */
 @media (max-width: 340px) {
   .ms-challenge .ico,
   .ms-guild .ico { display: none; }
+  /* the squad sheet keeps its sword / channel glyph: both labels still fit beside them */
+  #sheet-mind.is-guild .ms-challenge .ico,
+  #sheet-mind.is-guild .ms-guild .ico { display: block; }
   .ms-axis-h small { width: 56px; }
   .ms-dot { width: 24px; height: 24px; font-size: 10px; }
+}
+
+/* ---- the 320 floor: the type tag wraps before the handle is cut, and the
+        third card's quiet tag keeps its words instead of ellipsising them ---- */
+@media (max-width: 359px) {
+  #sheet-mind.is-guild .ms-tier {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    white-space: normal;
+  }
+  #sheet-mind.is-guild .ms-tier-dot { display: none; }
+  .ms-squad-lbl { font-size: 7.5px; letter-spacing: .04em; }
+  .ms-squad-card.is-empty .ms-squad-v {
+    font-size: 7.5px;
+    letter-spacing: .02em;
+    padding: 2px 4px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.3;
+  }
 }
 
 /* ---- reduced motion: the throne still glows, it just stops moving ---- */
@@ -27718,6 +27948,27 @@ html[data-lang="fa"] :is(
 }
 html[data-lang="fa"] .sqp-tile-k { font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif; }
 html[data-lang="fa"] .sqp-tile-k > span { direction: rtl; }
+
+/* ---- squad detail sheet: Persian copy from the right, figures and the handle stay LTR ---- */
+html[data-lang="fa"] :is(.ms-name, .ms-tier, .ms-h, .ms-hero-sub, .ms-ring-c, .ms-squad-lbl, .ms-kind) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+html[data-lang="fa"] .ms-id { direction: rtl; text-align: right; }
+html[data-lang="fa"] :is(.ms-h, .ms-squad-lbl, .ms-hero-sub) { direction: rtl; }
+html[data-lang="fa"] .ms-hero-id { direction: rtl; text-align: right; }
+html[data-lang="fa"] :is(.ms-iq b, .ms-ring b, .ms-squad-card:not(.is-empty) .ms-squad-v) {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-numeric);
+}
+html[data-lang="fa"] :is(.ms-squad-card.is-empty .ms-squad-v, .ms-handle) {
+  unicode-bidi: isolate;
+}
+html[data-lang="fa"] .ms-squad-card.is-empty .ms-squad-v { direction: rtl; }
+html[data-lang="fa"] .ms-handle { font-family: var(--font-numeric); direction: ltr; }
+html[data-lang="fa"] :is(.ms-challenge span, .ms-guild span) { direction: rtl; }
 
 /* dynamic labels that are written by JS rather than data-i18n */
 html[data-lang="fa"] :is(.gm-lead, .gm-start, #squad-leave, #squad-explore-t, .sq-roster-empty, .gm-err, .pf-invite-pill) {

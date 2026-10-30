@@ -57,8 +57,9 @@ import { flagPhoto } from './flags';
 import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
 import { arena, countdownPill, fullCountdown, seasonLabel } from './arenaState';
-import { bindSquadById, cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadKind, squadLetter, squadMark, type RankedSquad } from './squads';
-import { BOT_HANDLE, impact, notify, tgUser } from './telegram';
+import { bindSquadById, cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadKind, squadLetter, squadMark, telegramAvatarUrl, type RankedSquad } from './squads';
+import { BOT_HANDLE, impact, notify, openLink, tgUser } from './telegram';
+import { t } from './settings';
 import { registerSquadWithTelegram } from './squadRegister';
 import { showToast } from './toast';
 import type { Router } from './router';
@@ -1773,6 +1774,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   const msEls = {
     sheet: document.getElementById('sheet-mind'),
     av: document.getElementById('ms-av'),
+    photo: document.getElementById('ms-av-img') as HTMLImageElement | null,
+    rank: document.getElementById('ms-rank'),
+    marks: document.querySelector<HTMLElement>('#sheet-mind .ms-marks'),
     flag: document.getElementById('ms-flag'),
     name: document.getElementById('ms-name'),
     tier: document.getElementById('ms-tier'),
@@ -1784,11 +1788,30 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   /** The last field each board loaded — the percentile ring has to be a rank over something. */
   let mindsField: PlayerRow[] = [];
   let guildField: RankedSquad[] = [];
+  /** Guards the guild photo against a late load from a sheet that has since changed face. */
+  let msPhotoSeq = 0;
   /** What the two keys at the foot of the open sheet are allowed to do right now. */
   let msPending: { kind: 'mind'; name: string; tiq: number } | { kind: 'guild'; squad: RankedSquad } | null = null;
 
+  /** A guild wears a community photo and one rank badge; clearing them keeps a mind clean. */
+  function msClearGuild(): void {
+    msPhotoSeq++;
+    const img = msEls.photo;
+    if (img) {
+      img.hidden = true;
+      img.removeAttribute('src');
+    }
+    if (msEls.rank) {
+      msEls.rank.hidden = true;
+      delete msEls.rank.dataset.rank;
+    }
+    msEls.marks?.classList.remove('is-guild');
+    msEls.sheet?.classList.remove('is-guild');
+  }
+
   function msHead(letter: string, code: string | null, name: string, tier: string): void {
     const { av, flag, name: nm, tier: tr } = msEls;
+    msClearGuild();
     if (av) {
       av.textContent = letter;
       av.dataset.len = String(letter.length);
@@ -1807,9 +1830,57 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }
   }
 
-  function msHero(points: string, pct: number, sub: string): HTMLElement {
+  /**
+   * The guild face of the same header: the community's own Telegram photo over the
+   * monogram, its rank minted once as a metallic corner badge, and a type tag that
+   * carries the handle instead of repeating the rank the badge already spells out.
+   */
+  function msGuildHead(s: RankedSquad, label: string): void {
+    const kind = squadKind(s);
+    msHead(squadMark(s), null, label, '');
+    const tr = msEls.tier;
+    if (tr) {
+      const tag = document.createElement('span');
+      tag.className = 'ms-kind';
+      tag.textContent = kind === 'group' ? t('squadTgGroup') : t('squadTgChannel');
+      const dot = document.createElement('i');
+      dot.className = 'ms-tier-dot';
+      dot.setAttribute('aria-hidden', 'true');
+      const handle = document.createElement('b');
+      handle.className = 'ms-handle';
+      handle.textContent = s.handle;
+      handle.dir = 'ltr';
+      tr.replaceChildren(tag, dot, handle);
+      tr.title = `${tag.textContent} · ${s.handle}`;
+    }
+    msEls.marks?.classList.add('is-guild');
+    msEls.sheet?.classList.add('is-guild');
+    const rank = msEls.rank;
+    if (rank) {
+      rank.textContent = `#${s.rank}`;
+      rank.dataset.rank = s.rank === 1 ? 'gold' : s.rank === 2 ? 'silver' : s.rank === 3 ? 'bronze' : 'num';
+      rank.hidden = false;
+    }
+    const img = msEls.photo;
+    if (img) {
+      img.hidden = true;
+      const seq = ++msPhotoSeq;
+      const src = telegramAvatarUrl(s.handle);
+      if (src) {
+        /* the CDN answers a hidden channel with a 1x1 placeholder, so a tiny natural
+           size keeps the monogram instead of painting a broken square */
+        img.onload = () => { if (seq === msPhotoSeq) img.hidden = img.naturalWidth <= 2 || img.naturalHeight <= 2; };
+        img.onerror = () => { if (seq === msPhotoSeq) img.hidden = true; };
+        img.src = src;
+      } else {
+        img.removeAttribute('src');
+      }
+    }
+  }
+
+  function msHero(points: string, pct: number, sub: string, squad = false): HTMLElement {
     const wrap = document.createElement('div');
-    wrap.className = 'ms-hero';
+    wrap.className = squad ? 'ms-hero is-squad' : 'ms-hero';
     const col = document.createElement('span');
     col.className = 'ms-hero-id';
     const iq = document.createElement('span');
@@ -1828,7 +1899,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     ringCol.className = 'ms-ring-col';
     const cap = document.createElement('small');
     cap.className = 'ms-ring-c';
-    cap.textContent = 'Percentile';
+    cap.textContent = t('percentile');
     ringCol.append(percentRing(pct, inner, 'ms-ring'), cap);
     wrap.append(col, ringCol);
     return wrap;
@@ -1896,18 +1967,51 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return rowEl;
   }
 
-  function msStats(pairs: [string, string][]): HTMLElement {
+  /** Three focused cards: headcount, the squad's per-mind average, and your own share. */
+  function msSquadMetrics(s: RankedSquad, mine: boolean, contrib: number): HTMLElement {
     const grid = document.createElement('div');
-    grid.className = 'ms-stats';
-    for (const [k, v] of pairs) {
-      const cell = document.createElement('div');
-      cell.className = 'ms-stat';
-      const key = document.createElement('small');
-      key.textContent = k;
-      const val = document.createElement('b');
-      val.textContent = v;
-      cell.append(key, val);
-      grid.append(cell);
+    grid.className = 'ms-squad-grid';
+    grid.setAttribute('role', 'list');
+    const avg = s.members > 0 ? Math.round(s.trophies / s.members) : 0;
+    const cards: { icon: string; label: string; value: string; title: string; empty?: boolean; share?: boolean }[] = [
+      {
+        icon: '#i-users',
+        label: t('members'),
+        value: s.members.toLocaleString('en-US'),
+        title: `${s.members.toLocaleString('en-US')} ${t('members')}`,
+      },
+      {
+        icon: '#i-target',
+        label: t('squadAvgIq'),
+        value: avg.toLocaleString('en-US'),
+        title: `${avg.toLocaleString('en-US')} ${t('squadAvgIq')} · ${s.trophies.toLocaleString('en-US')} TIQ / ${s.members.toLocaleString('en-US')}`,
+      },
+      {
+        icon: '#i-brain',
+        label: t('squadYourShare'),
+        value: mine ? contrib.toLocaleString('en-US') : t('squadNotEnlisted'),
+        title: mine ? `${contrib.toLocaleString('en-US')} TIQ ${t('squadYourShare')}` : t('squadNotEnlisted'),
+        empty: !mine,
+        share: true,
+      },
+    ];
+    for (const cell of cards) {
+      const card = document.createElement('div');
+      card.className = `ms-squad-card${cell.share ? ' is-share' : ''}${cell.empty ? ' is-empty' : ''}`;
+      card.setAttribute('role', 'listitem');
+      card.title = cell.title;
+      const top = document.createElement('span');
+      top.className = 'ms-squad-top';
+      top.append(svgIcon(cell.icon, 'ms-squad-ic'));
+      const label = document.createElement('small');
+      label.className = 'ms-squad-lbl';
+      label.textContent = cell.label;
+      top.append(label);
+      const value = document.createElement('b');
+      value.className = 'ms-squad-v';
+      value.textContent = cell.value;
+      card.append(top, value);
+      grid.append(card);
     }
     return grid;
   }
@@ -1917,6 +2021,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     p.className = 'fine ms-fine';
     p.textContent = text;
     return p;
+  }
+
+  /** The sprite glyph inside a foot key — join swaps the swords for a copied invite link. */
+  function msKeyIcon(btn: HTMLButtonElement | null, href: string): void {
+    btn?.querySelector('use')?.setAttribute('href', href);
   }
 
   /** The two clay keys never change shape — only what they can honestly do changes. */
@@ -1929,7 +2038,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       ch.setAttribute('aria-label', hint);
     }
     if (gu) {
-      gu.setAttribute('aria-label', kind === 'guild' ? 'View this squad in the squad sheet' : 'View the Squad IQ board');
+      const span = gu.querySelector<HTMLElement>('span');
+      if (span) span.textContent = kind === 'guild' ? t('squadViewChannel') : 'View squad';
+      gu.setAttribute('aria-label', kind === 'guild' ? t('squadViewChannel') : 'View the Squad IQ board');
     }
   }
 
@@ -1953,6 +2064,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       msFine(`Beat ${p.name}'s ${tiq} TIQ: Challenge mind starts a race, and every win is 140 TIQ.`),
     );
     msActions('mind', 'Challenge mind', `Challenge mind: start a race against ${p.name}'s ${tiq} TIQ`);
+    msEls.challenge?.classList.remove('is-squad');
+    msKeyIcon(msEls.challenge, '#i-swords');
+    msKeyIcon(msEls.guild, '#i-users');
     impact('light');
     api.sheets.open(el);
   }
@@ -1962,33 +2076,34 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const body = msEls.body;
     if (!el || !body) return;
     const mine = getMySquad()?.id === s.id;
-    const act = squadAction(s, mine);
-    const field = guildField.length;
+    const field = guildField.length || getSquadRanking().length;
     const pct = field > 0 ? Math.max(1, Math.min(99, Math.round((s.rank / (field + 1)) * 100))) : 100;
-    const kind = squadKind(s);
+    const kindLabel = squadKind(s) === 'group' ? t('squadTgGroup') : t('squadTgChannel');
     const label = s.name || s.handle.replace(/^@/, '');
     const contrib = mine ? getMyContribution() : 0;
+    const tiq = s.trophies.toLocaleString('en-US');
     msPending = { kind: 'guild', squad: s };
     delete el.dataset.tier;
-    msHead(squadMark(s), null, label, `${kind === 'channel' ? 'Telegram channel' : 'Telegram group'} · #${s.rank}`);
-    el.setAttribute('aria-label', `Squad profile: ${label}, ${s.trophies.toLocaleString('en-US')} combined Tactical IQ`);
+    msGuildHead(s, label);
+    el.setAttribute('aria-label', `${label} · ${kindLabel} ${s.handle} · #${s.rank} · ${tiq} TIQ`);
     body.textContent = '';
     body.append(
-      msHero(s.trophies.toLocaleString('en-US'), pct, `#${s.rank} of ${field} squads`),
-      msSection(
-        'Squad read',
-        msStats([
-          ['Members', s.members.toLocaleString('en-US')],
-          ['Rank', `#${s.rank}`],
-          ['Yours', contrib > 0 ? contrib.toLocaleString('en-US') : '—'],
-          ['Handle', s.handle],
-        ]),
-      ),
-      msFine('A squad carries no mind tier — its TIQ is the sum of the minds inside it.'),
+      msHero(tiq, pct, t('squadLeague').replace('{n}', field.toLocaleString('en-US')), true),
+      msSection(t('squadRead'), msSquadMetrics(s, mine, contrib)),
     );
-    msActions('guild', act.label === 'Invite' ? 'Invite squad' : `Join ${label}`, act.hint);
-    impact('light');
-    api.sheets.open(el);
+    msActions(
+      'guild',
+      mine ? t('invite') : t('squadJoinCta'),
+      mine ? `${t('invite')} · ${s.handle}` : `${t('squadJoinCta')} · ${s.handle}`,
+    );
+    msKeyIcon(msEls.challenge, mine ? '#i-link' : '#i-swords');
+    msKeyIcon(msEls.guild, '#i-ext');
+    msEls.challenge?.classList.add('is-squad');
+    /* a join repaints this same open sheet in place — never replay the slide-in or its tap */
+    if (el.hidden) {
+      impact('light');
+      api.sheets.open(el);
+    }
   }
 
   /* ---------- the nation sheet: prestige medallion + national top players ----------
@@ -2310,14 +2425,22 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       api.router.go('home');
       return;
     }
-    squadAction(p.squad, getMySquad()?.id === p.squad.id).run();
+    const wasMine = getMySquad()?.id === p.squad.id;
+    squadAction(p.squad, wasMine).run();
+    if (!wasMine) {
+      /* the key just turned into Invite and the share became yours — repaint the open sheet */
+      const next = getSquadRanking().find((s) => s.id === p.squad.id);
+      if (next && getMySquad()?.id === next.id) openGuild(next);
+    }
   });
 
   msEls.guild?.addEventListener('click', () => {
     const p = msPending;
     impact('light');
     if (p?.kind === 'guild') {
-      openSquadSheet();
+      const handle = cleanHandle(p.squad.handle);
+      if (handle) openLink(`https://t.me/${handle.slice(1)}`);
+      else openSquadSheet();
       return;
     }
     api.sheets.close();
