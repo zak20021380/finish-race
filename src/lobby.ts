@@ -243,6 +243,13 @@ export interface LobbyOptions {
   onRace: (race: LobbyRace) => void;
   /** The server refused us (a code that does not exist, a full room, maintenance). */
   onError: (reason: string) => void;
+  /**
+   * The host asked the room to start and it could not: fewer than two people are at their
+   * sockets, or the launch frame never left. The reason is the worker's (`player_offline`,
+   * `waiting_for_players`) or `socket` when the send itself failed. The screen turns it into a
+   * toast and re-arms the countdown.
+   */
+  onStartFailed?: (reason: string) => void;
   /** A format change the room could not take (every seat is held): a nudge, not an error. */
   onNotice?: (reason: string) => void;
   /**
@@ -287,6 +294,10 @@ export interface LobbyHandle {
 
 /** How long a lobby waits for a socket before it accepts that it is playing alone. */
 const CONNECT_MS = 1400;
+/** One heartbeat: long enough to stay under every proxy's idle clock, short enough to notice death. */
+const HEARTBEAT_MS = 20_000;
+/** No frame, not even a `PONG`, for this long means the socket is half-open: walk it back. */
+const DEAD_MS = 45_000;
 
 const faceOf = (name: string): string => (name.trim().charAt(0) || 'P').toUpperCase();
 
@@ -394,6 +405,53 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   let race: LobbyRace | null = null;
   /** True once `leave()` ran: the close it causes is this screen's own doing, not a drop. */
   let left = false;
+  /** The last instant the room said anything at all: a `LOBBY`, a `PONG`, any frame. */
+  let aliveAt = Date.now();
+  let beat = 0;
+
+  const stopBeat = (): void => {
+    if (!beat) return;
+    globalThis.clearInterval(beat);
+    beat = 0;
+  };
+
+  /**
+   * The keepalive. A lobby seat is idle by nature — two people waiting for a third, a host who
+   * stepped into a chat — and an idle socket is exactly what an intermediary reaps. A `PING` every
+   * twenty seconds keeps the connection warm, and its `PONG` is the proof of life: silence past
+   * `DEAD_MS` means the socket is half-open, so it is closed on purpose and the normal close path
+   * starts the reconnect instead of leaving a phantom seat behind.
+   */
+  const startBeat = (): void => {
+    stopBeat();
+    beat = globalThis.setInterval(() => {
+      if (left || solo) { stopBeat(); return; }
+      if (!sock) { stopBeat(); return; }
+      if (sock.readyState !== 1) return;
+      if (Date.now() - aliveAt > DEAD_MS) {
+        try { sock.close(); } catch { /* already gone */ }
+        return;
+      }
+      send({ type: 'PING' });
+    }, HEARTBEAT_MS);
+  };
+
+  /**
+   * A webview that was asleep fires its timers late or not at all. Coming back to the foreground
+   * is the moment to notice a socket that died while the page could not hear it: closing it makes
+   * the close handler run, and the close handler is what reconnects.
+   */
+  const onVisible = (): void => {
+    if (document.hidden || left || solo) return;
+    if (sock?.readyState === 1 && Date.now() - aliveAt > DEAD_MS) {
+      try { sock.close(); } catch { /* already gone */ }
+    }
+  };
+
+  const teardown = (): void => {
+    stopBeat();
+    document.removeEventListener('visibilitychange', onVisible);
+  };
 
   const paint = (): void => opts.onState(lobby);
   const push = (l: Lobby): void => { lobby = l; paint(); };
@@ -411,20 +469,15 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
     if (settled) return;
     settled = true;
     solo = true;
+    teardown();
     try { sock?.close(); } catch { /* already gone */ }
     sock = null;
     link = null;
-    /* An invited guest has nowhere to fall back to: the room they were promised is the room or
-       nothing, and "nothing" has to be said out loud rather than dressed as a solo race. */
-    if (opts.mustExist) {
-      lobby = { ...lobby, status: 'closed', online: false };
-      paint();
-      opts.onError('room_not_found');
-      return;
-    }
-    /* A resumed room is the same promise, made to the guests who can still join it: report the
-       drop and let the screen try the wire again rather than quietly playing the machine. */
-    if (opts.keepAlive) {
+    /* An invited guest has nowhere to fall back to, and neither has a room this client already
+       holds. The worker opens or rehydrates any valid four-digit code, so a socket we could not
+       open is a network pause — never proof that the room does not exist. Say "reconnecting" and
+       let the screen's retry loop own the decision, instead of accusing a real room of being gone. */
+    if (opts.mustExist || opts.keepAlive) {
       lobby = { ...lobby, status: 'connecting', online: true };
       paint();
       opts.onDrop?.();
@@ -449,6 +502,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   const onFrame = (raw: unknown): void => {
     /* after an explicit leave nothing this socket still says matters: the screen is gone */
     if (left) return;
+    /* Any frame is liveness — including the heartbeat's answer — and the watchdog reads this. */
+    aliveAt = Date.now();
     let msg: Record<string, unknown>;
     try {
       msg = JSON.parse(String(raw)) as Record<string, unknown>;
@@ -456,9 +511,17 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
       return;
     }
     switch (msg.type) {
+      case 'PONG':
+        return;
       case 'LOBBY':
         settled = true;
         push(readLobby(lobby, msg));
+        return;
+      case 'START_FAILED':
+        /* The host's tap reached a room that is not ready — a friend's socket went away between
+           the paint and the press. Say why; the screen re-arms its countdown on the same news. */
+        if (race) return;
+        opts.onStartFailed?.(typeof msg.reason === 'string' ? msg.reason : 'start_failed');
         return;
       case 'FORMAT_DENIED':
         /* the room did not take the pick — usually every seat is held; the LOBBY that follows
@@ -538,6 +601,10 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
           return;
         }
         settled = true;
+        /* the room refused us: this instance is finished, and its own close must not read as a
+           dropped connection worth retrying */
+        solo = true;
+        teardown();
         try { sock?.close(); } catch { /* gone */ }
         sock = null;
         link = null;
@@ -557,6 +624,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
     sock.addEventListener('message', (ev) => onFrame((ev as MessageEvent).data));
     sock.addEventListener('open', () => {
       if (settled || !sock) return;
+      aliveAt = Date.now();
+      startBeat();
       /* An open socket is not a roster: only a `LOBBY` frame is (`readLobby` flips the status).
          Flipping it here would let the placeholder — one seat, minted locally — pass for a real
          roster, and the arrival detector would read every reconnect as somebody joining. */
@@ -564,6 +633,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
     });
     sock.addEventListener('error', () => { if (!race) fallback(); });
     sock.addEventListener('close', () => {
+      teardown();
       if (race) { for (const cb of raceEnds) cb({ win: false, why: 'drop' }); return; }
       if (!settled) { fallback(); return; }
       /* the fallback, or our own `leave()`, closed this socket: the screen already knows */
@@ -574,6 +644,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
       push({ ...lobby, status: 'connecting', online: true });
       opts.onDrop?.();
     });
+    document.addEventListener('visibilitychange', onVisible);
   } catch {
     sock = null;
   }
@@ -638,14 +709,16 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
       if (!isHost(lobby) || !canStart(lobby)) return false;
       chime();
       if (lobby.online) {
-        send({ type: 'ROOM_START' });
-        return true;
+        /* `START_MATCH` is the crisp tap the worker gates on presence; false means the frame never
+           left the device (socket closed or still connecting), and the screen says so. */
+        return send({ type: 'START_MATCH' });
       }
       return true;
     },
     leave() {
       globalThis.clearTimeout(timer);
       left = true;
+      teardown();
       /* `LEAVE`, not `CANCEL`: a host's exit disbands the code on the server so a stale link is
          refused cleanly, while a guest's only gives their own seat back. */
       if (lobby.online) send({ type: 'LEAVE' });

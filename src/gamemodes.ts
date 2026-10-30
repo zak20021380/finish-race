@@ -26,7 +26,7 @@
  */
 import { readJson, writeJson } from './storage';
 import { menuState, onLang, saveMenu, t } from './settings';
-import { impact, notify, openTelegramShare, roomInviteUrl, roomShareUrl } from './telegram';
+import { impact, inviteRoomCode, notify, openTelegramShare, roomInviteUrl, roomShareUrl } from './telegram';
 import { showToast } from './toast';
 import type { Sheets } from './sheets';
 import {
@@ -129,6 +129,8 @@ const formatLine = (format: LobbyFormat): string => t(FORMAT_KEY[format]);
 /** The plain-language line under the roster, in the player's language. */
 function hintText(l: Lobby): string {
   if (hostAway(l)) return t('hintWaitingHost');
+  /* A friend whose socket dropped is not "ready": the room says so before the host taps Start. */
+  if (l.seats.some((s) => !!s && !s.bot && !s.connected)) return t('errStartOffline');
   if (canStart(l)) return isHost(l) ? t('hintReadyHost') : t('hintWaitingHost');
   return t('hintInviteMore');
 }
@@ -551,6 +553,16 @@ const LOBBY_ERROR_KEY: Record<string, string> = {
 
 const errorLine = (reason: string): string => t(LOBBY_ERROR_KEY[reason] ?? 'errJoinUnknown');
 
+/** What the host reads when Start could not launch: who is missing, not a dead button. */
+const START_FAILURE_KEY: Record<string, string> = {
+  waiting_for_players: 'hintInviteMore',
+  player_offline: 'errStartOffline',
+  busy: 'errStartOffline',
+  socket: 'errReconnecting',
+};
+
+const startFailureLine = (reason: string): string => t(START_FAILURE_KEY[reason] ?? 'errJoinUnknown');
+
 /**
  * The line a refused *invite* gets. A link that points at a match already under way, or at a room
  * its host disbanded, is the same thing to the person holding it: the invite is spent. Everything
@@ -589,13 +601,18 @@ function slotMarkup(l: Lobby, seat: number, team: 0 | 1 | null): string {
       + '<span class="lb-plus" aria-hidden="true">+</span>'
       + `<span class="lb-open-t">${t('inviteFriend')}</span></button>`;
   }
-  const role = s.host ? t('host') : s.bot ? t('bot') : s.seat === l.you ? t('you') : t('ready');
+  const role = s.host ? t('host') : s.bot ? t('bot') : s.seat === l.you ? t('you')
+    : s.connected ? t('ready') : t('seatReconnecting');
   const color = seat % FFA_COLOR.length;
   /* the host may move any seat between the teams; a player may move their own */
   const canMove = team !== null && (isHost(l) || s.seat === l.you);
   const tags = [
     s.host ? `<span class="lb-crown" role="img" aria-label="${t('host')}">👑</span>` : '',
     team === null ? `<span class="lb-color" data-color="${color}">${t(FFA_COLOR[color])}</span>` : '',
+    !s.bot && !s.connected
+      ? `<span class="lb-badge lb-badge-away" role="status">`
+        + `<i class="lb-away-dot" aria-hidden="true"></i>${esc(t('seatReconnecting'))}</span>`
+      : '',
   ].filter(Boolean).join('');
   const cls = ['lb-slot', 'is-held'];
   if (s.host) cls.push('is-host');
@@ -691,7 +708,8 @@ function duelPlate(l: Lobby, seat: number, side: 'host' | 'rival'): string {
   if (side === 'rival' && !s.bot) cls.push('is-rival', 'is-ready');
   const role = s.host
     ? (s.connected ? t('host') : t('waitingForHost'))
-    : s.seat === l.you ? t('you') : s.bot ? t('bot') : t('rival');
+    : s.seat === l.you ? t('you') : s.bot ? t('bot')
+      : s.connected ? t('rival') : t('seatReconnecting');
   const label = `${s.name}, ${role}`;
   /* The crown always marks the host's chair. A host whose socket stepped away keeps it and gains the
      amber status line; a host who is here wears only the struck-gold crown. */
@@ -704,7 +722,11 @@ function duelPlate(l: Lobby, seat: number, side: 'host' | 'rival'): string {
       ? ''
       : `<span class="lb-badge lb-badge-away" role="status">`
         + `<i class="lb-away-dot" aria-hidden="true"></i>${esc(t('waitingForHost'))}</span>`)
-    : s.bot ? '' : `<span class="lb-badge lb-badge-ready">${esc(t('ready'))}</span>`;
+    : s.bot ? ''
+      : !s.connected
+        ? `<span class="lb-badge lb-badge-away" role="status">`
+          + `<i class="lb-away-dot" aria-hidden="true"></i>${esc(t('seatReconnecting'))}</span>`
+        : `<span class="lb-badge lb-badge-ready">${esc(t('ready'))}</span>`;
   return `<button class="${cls.join(' ')}" type="button" role="listitem" data-seat="${seat}"`
     + ` aria-label="${esc(label)}">`
     + `<span class="lb-plate-halo" aria-hidden="true"></span>`
@@ -817,12 +839,16 @@ function paintLobbyPane(l: Lobby): void {
 
   const start = document.getElementById('gm-start') as HTMLButtonElement | null;
   if (start) {
-    /* a room that is reconnecting cannot start: the frame would go nowhere */
-    const ready = host && canStart(l) && l.status !== 'connecting';
+    /* a room that is reconnecting cannot start: the frame would go nowhere; neither can one
+       holding a seat whose friend is reconnecting — there is nobody to launch yet */
+    const awaySeat = l.seats.some((s) => !!s && !s.bot && s.connected === false);
+    const ready = host && canStart(l) && l.status !== 'connecting' && !awaySeat;
     start.textContent = host ? t('startMatch') : t('waitingHost');
     start.setAttribute('aria-disabled', String(!ready));
     if (host && !canStart(l)) {
       start.setAttribute('title', t('hintInviteMore'));
+    } else if (host && awaySeat) {
+      start.setAttribute('title', t('errStartOffline'));
     } else {
       start.removeAttribute('title');
     }
@@ -971,7 +997,14 @@ function fireCountdown(): void {
   impact('heavy');
   notify('success');
   const ok = handle?.start() ?? false;
-  if (!ok) { autoLaunched = false; return; }
+  if (!ok) {
+    /* the socket is gone between the count and the start: do not leave a dead veil up, and let
+       the room count down again once it is back */
+    autoLaunched = false;
+    countdownSpent = '';
+    showToast(t('errReconnecting'), 'warning');
+    return;
+  }
   /* a room whose answer never lands leaves the player on the roster they can still start by hand */
   window.setTimeout(() => { hideCountdown(); autoLaunched = false; }, COUNT_WATCHDOG_MS);
 }
@@ -1051,6 +1084,13 @@ function openRoom(code: string, host: boolean, opts?: { invite?: boolean }): voi
  * a frame from a socket a later room replaced can never repaint the new one.
  */
 function connect(code: string, host: boolean, invite: boolean, resume: boolean): void {
+  /* One room, one socket. A deep link that lands while this screen already holds the very room
+     it names is the same membership — opening a second handshake would replace the live socket
+     on the server and knock the player out of the lobby they were already sitting in. */
+  if (!resume && handle && handle.lobby.code === code && handle.lobby.status !== 'closed') {
+    showView('lobby');
+    return;
+  }
   const token = ++roomToken;
   abortCountdown();
   countdownSpent = '';
@@ -1078,11 +1118,14 @@ function connect(code: string, host: boolean, invite: boolean, resume: boolean):
       resumeTries = 0;
       touchSession();
       /* A reconnect answers with the room's own memory of this seat: say the match status again
-         whenever the echo disagrees, so a socket that slept through it cannot strand `busy`. */
+         whenever the echo disagrees, so a socket that slept through it cannot strand `busy`.
+         `canPopLobby` is the app's own "no board is up" reading — a stale `inMatch` left behind
+         by a screen that was left without quitting must never keep a friends lobby busy. */
       const mine = l.you >= 0 ? l.seats[l.you] : null;
       if (l.status === 'live' && mine) {
-        if (inMatch && !mine.busy) handle?.setBusy(true);
-        else if (!inMatch && mine.busy) handle?.setBusy(false);
+        const busyNow = inMatch && !(hooks.canPopLobby?.() ?? true);
+        if (busyNow && !mine.busy) handle?.setBusy(true);
+        else if (!busyNow && mine.busy) handle?.setBusy(false);
       }
       /* A banner naming somebody who has actually left the room is stale: the popup promised a
          friend who is no longer in the chair. A seat merely away keeps its banner. */
@@ -1145,6 +1188,15 @@ function connect(code: string, host: boolean, invite: boolean, resume: boolean):
     },
     /* the room could not take the host's size pick (every seat is held): a nudge, not an error */
     onNotice: () => { notify('warning'); },
+    /* The host's Start reached the worker and the room was not launchable. Never a silent tap:
+       say who is missing, and let the countdown arm again once the roster is whole. */
+    onStartFailed: (reason) => {
+      if (token !== roomToken) return;
+      countdownSpent = '';
+      notify('warning');
+      showToast(startFailureLine(reason), 'warning');
+      if (handle) paintLobbyPane(handle.lobby);
+    },
     /* The socket died on a live lobby. The room outlives it on the server, so this is a pause,
        not an end: reconnect, and only give up after a handful of tries. */
     onDrop: () => {
@@ -1374,17 +1426,33 @@ export function openInviteRoom(code: string): boolean {
     revealLobby();
     return true;
   }
+  /* This client already holds that room but its socket is not up. The deep link names the same
+     membership, so walk the held seat back in — never a fresh guest handshake, which would open a
+     second socket on one room. */
+  if (session?.code === clean) {
+    clearRoomError();
+    setGameMode('room', { roomCode: clean });
+    revealLobby();
+    if (!handle) {
+      window.clearTimeout(resumeTimer);
+      resumeTimer = 0;
+      resumeRoom();
+    }
+    return true;
+  }
   /* a different room is left explicitly: its code is spent, not abandoned half-open */
   if (inLobby()) leaveRoom();
   clearRoomError();
   setGameMode('room', { roomCode: clean });
   /* A host coming back through their own link — from the bot's push, or a share they tapped — is
-     still the host: the held session owns the crown, and re-entering as an invitee would bounce
-     their own reserved chair. */
-  const mineAgain = session?.code === clean && session.host;
+     still the host: a code this tab minted owns the crown, and re-entering as an invitee would
+     bounce their own reserved chair. */
+  const mineAgain = issuedCodes().includes(clean);
   /* the pane first, the sheet second: the drawer slides in already showing the room it was
-     opened for, instead of flashing the mode list on its way there */
-  openRoom(clean, mineAgain, { invite: !mineAgain });
+     opened for, instead of flashing the mode list on its way there. Every deep link is an invite
+     — even the host's own — so a room that cannot be reached is reported, never swapped for a
+     solo race under the same code. */
+  openRoom(clean, mineAgain, { invite: true });
   /* a room the worker refused on the spot never gets a drawer: the toast has already said so */
   if (!handle) return false;
   sheetHost.open(sheet);
@@ -1827,9 +1895,24 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
       const l = handle?.lobby;
       if (!l) return;
       if (!isHost(l)) { notify('warning'); return; }
-      if (!canStart(l)) { notify('warning'); return; }
+      if (!canStart(l)) {
+        notify('warning');
+        showToast(t('hintInviteMore'), 'warning');
+        return;
+      }
+      /* A seat held for a friend whose socket is gone is not a friend who can be launched. Say
+         that instead of sending Start into a room that will refuse it. */
+      if (l.seats.some((s) => !!s && !s.bot && !s.connected)) {
+        notify('warning');
+        showToast(t('errStartOffline'), 'warning');
+        return;
+      }
       impact('medium');
-      if (!handle?.start()) return;
+      if (!handle?.start()) {
+        notify('warning');
+        showToast(t('errReconnecting'), 'warning');
+        return;
+      }
       if (l.online) return;                    // the worker answers with ROOM_FOUND
       handle = null;
       roomToken++;
@@ -1866,6 +1949,8 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
   });
 
   /* A reload lands back in the room it left. The code is on disk and the server still holds it,
-     so the socket is reopened silently — the drawer stays closed until somebody joins it. */
-  if (session) window.setTimeout(resumeRoom, 600);
+     so the socket is reopened silently — the drawer stays closed until somebody joins it.
+     A launch that carries an invite is the exception: the deep link's door owns this boot, and
+     resuming the previous room first would open a second handshake only to walk out of it. */
+  if (session && !inviteRoomCode()) window.setTimeout(resumeRoom, 600);
 }

@@ -92,13 +92,13 @@ export { BOT_HANDLE } from '../shared/config';
  *
  * This is the single source of truth for a room invite. The code badge, the `Copy Link` key, the
  * header `Invite` pill and the empty rival plate all read the same active code and hand it to this
- * one function, so the four doors can never print four different links for one room. The code is
- * stripped to the alphabet `telegram.ts`'s own reader accepts (`ROOM_PARAM`), which is what makes
- * a round trip through Telegram land back on the same room.
+ * one function, so the four doors can never print four different links for one room. Whatever
+ * spelling the caller has — `1909`, `#1909`, `room_1909` — is reduced to the four digits the
+ * reader above matches, which is what makes a round trip through Telegram land back on the room.
  */
 export function roomInviteUrl(code: string): string {
-  const clean = String(code ?? '').replace(/[^A-Za-z0-9_-]/g, '');
-  return clean ? botMainAppLink(`room_${clean}`) : '';
+  const digits = String(code ?? '').replace(/\D/g, '').slice(0, 4);
+  return digits.length === 4 ? botMainAppLink(`room_${digits}`) : '';
 }
 
 /** The same invite URL, wrapped in Telegram's native share page. '' when the code is unusable. */
@@ -172,16 +172,37 @@ export function startParam(): string {
 }
 
 /**
- * The room a `room_<code>` deep link points at, or ''. `/^room_([a-zA-Z0-9_-]+)$/i` is the whole
- * grammar: anything else in the start parameter belongs to some other feature and is left alone.
+ * The room a deep link points at, or ''. Three spellings name the same room — `room_1909` (what
+ * the app shares), `#1909` (what people type) and a bare `1909` — and a payload with trailing junk
+ * (`room_1909&ref=x`) still carries the code. Anything else in the start parameter (`ref_...`,
+ * `team-...`) belongs to another feature and is left alone: exactly four digits after the room
+ * prefix, or exactly four digits on their own.
  */
-const ROOM_PARAM = /^room_([a-zA-Z0-9_-]+)$/i;
+const ROOM_PREFIX = /^#?\s*room[\s_-]*(\d{4})(?!\d)/i;
+const BARE_ROOM = /^#?\s*(\d{4})\s*$/;
+
+/** One payload, read through the room grammar only. Junk after the digits never leaks into the code. */
+function roomCodeOf(raw: string | null | undefined): string {
+  const value = (raw ?? '').trim();
+  if (!value) return '';
+  const match = ROOM_PREFIX.exec(value) ?? BARE_ROOM.exec(value);
+  return match ? match[1] : '';
+}
 
 export function inviteRoomCode(): string {
-  let raw = '';
-  try { raw = startParam().trim(); } catch { return ''; }
-  const m = ROOM_PARAM.exec(raw);
-  return m ? m[1] : '';
+  try {
+    const fromStart = roomCodeOf(startParam());
+    if (fromStart) return fromStart;
+  } catch { /* fall through to the URL */ }
+  /* A plain browser tab (or a link opened at the worker's own address) can carry the invite in
+     the query instead: `?roomcode=1909` or `?room=1909`. Read through the same grammar, and only
+     after the start parameter, so a normal Mini App launch is never overridden by URL debris. */
+  try {
+    const query = new URLSearchParams(window.location.search);
+    return roomCodeOf(query.get('roomcode')) || roomCodeOf(query.get('room'));
+  } catch {
+    return '';
+  }
 }
 
 /* ---------- theme ---------- */

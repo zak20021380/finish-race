@@ -335,14 +335,16 @@ function socketParams(wide: boolean): string {
 
 /**
  * The friends lobby's socket: the same origin and the same identity as the 1v1 queue, but carrying
- * a room code instead of a search. `host=1` mints the room; without it the worker answers a code it
- * does not know with `room_not_found`, which is exactly what a mistyped invite should say.
+ * a room code instead of a search. The code is normalised to its four digits here, so `room_1909`,
+ * `#1909` and `1909` all put the same value on the wire; the worker resolves that one spelling to
+ * the same room every time.
  */
 export function roomSocketUrl(code: string, host: boolean): string {
   const base = socketUrl();
   if (!base) return '';
+  const digits = String(code ?? '').replace(/\D/g, '').slice(0, 4);
   const params = new URLSearchParams(socketParams(false));
-  params.set('roomcode', code);
+  params.set('roomcode', digits.length === 4 ? digits : String(code ?? ''));
   if (host) params.set('host', '1');
   params.delete('wide');
   params.delete('sizes');

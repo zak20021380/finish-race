@@ -2658,13 +2658,26 @@ themeToggle.addEventListener('click', () => {
  * and the drawer is opened on the live lobby before the socket even answers — so the screen a
  * guest sees is the room, never the launcher they would have had to navigate.
  *
+ * The door opens exactly once per launch. The retry below exists only for a shell that has not
+ * been built yet (the drawer or its host is missing, which is the one false `openInviteRoom`
+ * reports before it attempts anything); it is never a second handshake on a room already open.
+ *
  * Deferred by a beat rather than run inline: the drawer needs the shell laid out before it can
  * slide, and the boot veil owns the first moments of the page. A refusal — full, expired, gone —
  * arrives as a toast from `openInviteRoom` with the player left at home.
  */
 const invitedRoom = inviteRoomCode();
 if (invitedRoom) {
-  window.setTimeout(() => { openInviteRoom(invitedRoom); }, 420);
+  let inviteDoorDone = false;
+  const openInvite = (attempt = 0): void => {
+    if (inviteDoorDone) return;
+    if (openInviteRoom(invitedRoom)) {
+      inviteDoorDone = true;
+      return;
+    }
+    if (attempt < 12) window.setTimeout(() => openInvite(attempt + 1), 250);
+  };
+  window.setTimeout(openInvite, 420);
 }
 
 /* the arena is staged: the neural boot screen may lift on its own clock */
