@@ -195,9 +195,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     invite: 'Invite',
     inviteFriend: 'Invite',
     /* ---- play dock & mode drawer ---- */
-    dockQuick: '1v1',
+    dockQuick: 'SOLO',
     dockParty: '2v2',
-    dockPractice: 'VS BOT',
+    dockPractice: 'BOT',
     dockFriends: 'FRIENDS',
     modeDuel: '1v1 Duel',
     modeParty: '2v2 Party',

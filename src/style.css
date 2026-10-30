@@ -4262,83 +4262,90 @@ html.no-flags .id-flag .flag-code { display: none; }
   box-shadow: 0 2px 0 #075985, inset 0 1px 0 rgba(255, 255, 255, .5);
 }
 
-/* ---- Play Dock: one monolithic esports capsule ----
-   A single frosted-glass shell owns both zones: the tactical mode switcher on the
-   left, the launch core on the right. There is no inner tray and no gap — the only
-   division is a razor-thin laser seam, and the launch's rounded edge is the
-   capsule's own edge. */
+/* ---- Play Dock: two tactile clay pods on one gutter ----
+   The obsidian mode switcher and the saturated launch core are separate objects:
+   a 7px gutter replaces the old laser seam, and each pod owns its own volume
+   shadows. The mode pod sizes to its content (`auto`) so a full label can never
+   be clipped; the launch pod takes every pixel that is left. */
 .launcher {
-  --dock-face: rgba(13, 20, 34, .85);
-  --dock-ink-1: #00D2FF;
-  --dock-ink-2: #0066FF;
-  /* the capsule height: 56-72px on every phone, scaled by the height media rules */
+  --dock-gutter: 7px;
+  /* the pod height: 56-72px on every phone, scaled by the height media rules */
   --dock-key-h: 72px;
   flex: none;
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 32.5%) minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: stretch;
-  gap: 0;
+  gap: var(--dock-gutter);
   width: 100%;
   min-height: var(--dock-key-h);
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, .08);
-  border-radius: 9999px;
-  background: var(--dock-face);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
-  box-shadow:
-    0 10px 30px rgba(0, 0, 0, .5),
-    inset 0 1px 0 rgba(255, 255, 255, .1);
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
   isolation: isolate;
 }
 
-/* ---- left zone: the tactical mode/party switcher ----
-   Glyph · the mode's name · the CHANGE chip: the whole zone opens the Game Mode
-   drawer. The frosted shell shows through; only hover and press add a surface.
-   `--mode-*` is the accent the selected mode owns (set by `data-gmode`), and it
-   lives in the squircle's aura and ink — no ring, no second border. */
+/* ---- left pod: the tactical mode/party switcher ----
+   A deep obsidian clay pebble lit from above. Glyph · the mode's name · the
+   CHANGE chip: the whole pod opens the Game Mode drawer. The pod sizes to its
+   label (`auto` grid track), so FRIENDS / SOLO / BOT and the Persian labels are
+   never ellipsized. `--mode-*` is the accent the selected mode owns. */
 .mode-hero {
   --mode-accent: var(--brand-2);
   --mode-ink: var(--brand-ink);
   --mode-glow: rgba(14, 165, 233, .34);
-  --mode-glyph: clamp(24px, 7vw, 30px);
-  --mode-pad-x: 12px;
+  --mode-glyph: clamp(24px, 6.4vw, 28px);
+  --mode-pad-x: clamp(8px, 2.6vw, 12px);
   appearance: none;
   border: 0;
-  border-right: 1px solid rgba(255, 255, 255, .1);
   font: inherit;
   text-align: left;
   position: relative;
   min-width: 0;
   min-height: var(--dock-key-h);
-  padding: 0 var(--mode-pad-x);
+  padding: 5px var(--mode-pad-x);
   display: flex;
   align-items: center;
-  gap: 8px;
-  border-radius: 9999px 0 0 9999px;
-  background: transparent;
+  gap: 7px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #1b263b 0%, #0d1522 100%);
   overflow: hidden;
   color: var(--ink);
   cursor: pointer;
   isolation: isolate;
-  transition: background var(--motion-fast), filter var(--motion-fast), transform var(--motion-fast);
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, .12),
+    inset 0 -3px 6px rgba(0, 0, 0, .65),
+    0 6px 16px rgba(0, 0, 0, .45);
+  transition:
+    transform .24s cubic-bezier(.3, 1.45, .5, 1),
+    filter var(--motion-fast),
+    box-shadow var(--motion-fast);
 }
 .mode-hero[data-gmode="duel_1v1"] { --mode-accent: var(--honey); --mode-ink: var(--honey-ink); --mode-glow: rgba(245, 158, 11, .34); }
 .mode-hero[data-gmode="party_2v2"] { --mode-accent: var(--brand-2); --mode-ink: var(--brand-ink); --mode-glow: rgba(14, 165, 233, .34); }
 .mode-hero[data-gmode="bot"] { --mode-accent: var(--brand-3); --mode-ink: var(--brand-ink); --mode-glow: rgba(56, 189, 248, .34); }
 .mode-hero[data-gmode="room"] { --mode-accent: var(--cta); --mode-ink: #FFB59D; --mode-glow: rgba(255, 82, 43, .3); }
-/* the left zone warms under the thumb: the cue that this side is a switch, not the launch */
+/* the left pod warms under the thumb: the cue that this side is a switch, not the launch */
 .mode-hero:hover:not(:active) {
-  background: linear-gradient(180deg, rgba(255, 255, 255, .075) 0%, rgba(255, 255, 255, .018) 100%);
-  filter: brightness(1.04);
+  filter: brightness(1.09);
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, .16),
+    inset 0 -3px 6px rgba(0, 0, 0, .6),
+    0 8px 20px rgba(0, 0, 0, .5);
 }
 .mode-hero:active {
-  background: rgba(255, 255, 255, .09);
-  transform: scale(.992);
+  transform: scale(.975);
+  filter: brightness(.96);
+  box-shadow:
+    inset 0 3px 6px rgba(0, 0, 0, .7),
+    inset 0 -1px 2px rgba(255, 255, 255, .06),
+    0 3px 10px rgba(0, 0, 0, .4);
 }
 .mode-hero:focus-visible { outline: 3px solid var(--mode-accent); outline-offset: 2px; }
-/* the tactical ripple: one soft pulse from the glyph, only while the zone is pressed */
+/* the tactical ripple: one soft pulse from the glyph, only while the pod is pressed */
 .mode-hero::after {
   content: "";
   position: absolute;
@@ -4347,7 +4354,7 @@ html.no-flags .id-flag .flag-code { display: none; }
   width: 88px;
   height: 88px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(125, 227, 244, .38) 0%, rgba(125, 227, 244, .12) 42%, transparent 70%);
+  background: radial-gradient(circle, rgba(125, 227, 244, .28) 0%, rgba(125, 227, 244, .08) 42%, transparent 70%);
   opacity: 0;
   transform: translate(-50%, -50%) scale(.42);
   transition: opacity .3s ease, transform .48s cubic-bezier(.2, .7, .3, 1);
@@ -4370,16 +4377,16 @@ html.no-flags .id-flag .flag-code { display: none; }
   place-items: center;
   border-radius: 34%;
   background:
-    radial-gradient(120% 120% at 32% 14%, rgba(255, 255, 255, .24) 0%, rgba(255, 255, 255, 0) 48%),
+    radial-gradient(120% 120% at 32% 14%, rgba(255, 255, 255, .22) 0%, rgba(255, 255, 255, 0) 48%),
     radial-gradient(90% 90% at 50% 58%, var(--mode-glow) 0%, rgba(0, 0, 0, 0) 72%),
-    rgba(255, 255, 255, .055);
+    rgba(255, 255, 255, .06);
   color: var(--mode-ink);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .2),
     inset 0 0 0 1px rgba(255, 255, 255, .09),
-    0 0 16px var(--mode-glow);
+    0 0 14px var(--mode-glow);
 }
-.mode-hero-ico .ico { width: 52%; height: 52%; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .35)); }
+.mode-hero-ico .ico { width: 54%; height: 54%; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .35)); }
 .mode-hero-txt {
   position: relative;
   z-index: 1;
@@ -4391,20 +4398,17 @@ html.no-flags .id-flag .flag-code { display: none; }
   gap: 4px;
 }
 .mode-hero-title {
-  min-width: 0;
-  max-width: 100%;
-  font-size: clamp(11px, 3.3vw, 13px);
+  font-size: clamp(11px, 3.2vw, 12.5px);
   font-weight: 900;
-  letter-spacing: .06em;
-  line-height: 1;
+  letter-spacing: .05em;
+  line-height: 1.05;
   text-transform: uppercase;
   color: #F8FAFC;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, .42);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .5);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-/* the switch indicator: one glowing micro pill with a CSS caret — no extra icon */
+/* the switch indicator: one compact glowing micro pill with a CSS caret */
 .mode-hero-badge {
   display: inline-flex;
   align-items: center;
@@ -4412,15 +4416,16 @@ html.no-flags .id-flag .flag-code { display: none; }
   max-width: 100%;
   padding: 2px 6px;
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(34, 211, 238, .16) 0%, rgba(34, 211, 238, .05) 100%);
+  background: linear-gradient(180deg, rgba(34, 211, 238, .18) 0%, rgba(34, 211, 238, .06) 100%);
   box-shadow:
-    inset 0 0 0 1px rgba(125, 227, 244, .24),
-    0 0 10px rgba(34, 211, 238, .14);
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    inset 0 0 0 1px rgba(125, 227, 244, .26),
+    0 0 10px rgba(34, 211, 238, .16);
   color: #A5F3FC;
-  font-size: clamp(7px, 2vw, 8px);
+  font-size: clamp(7px, 2vw, 8.5px);
   font-weight: 800;
-  letter-spacing: .14em;
-  line-height: 1.35;
+  letter-spacing: .12em;
+  line-height: 1.25;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -4434,50 +4439,51 @@ html.no-flags .id-flag .flag-code { display: none; }
   filter: drop-shadow(0 0 3px rgba(125, 227, 244, .6));
 }
 
-/* ---- right zone: the esports launch core ----
-   A cyan-to-sapphire face lit from its top edge, one metallic gloss pass, and a
-   soft ambient cyan spill. The action word owns the top line; the reward micro-pill
-   sits beneath it like an etched glass tag. */
+/* ---- right pod: the launch core ----
+   One saturated cyan-to-sapphire clay pebble with a top specular and a deep
+   bottom occlusion. The action word owns the top line; two micro-clay reward
+   chips sit beneath it. */
 .btn-hero {
   position: relative;
   overflow: hidden;
   width: 100%;
   min-width: 0;
   min-height: var(--dock-key-h);
-  padding: 8px 16px;
+  padding: 7px 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  border-radius: 0 9999px 9999px 0;
+  border-radius: 9999px;
   font-weight: 900;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .3) 0%, rgba(255, 255, 255, .08) 24%, rgba(255, 255, 255, 0) 48%),
-    linear-gradient(135deg, var(--dock-ink-1, #00D2FF) 0%, var(--dock-ink-2, #0066FF) 100%);
+  background: linear-gradient(135deg, #00d2ff 0%, #0072ff 100%);
   color: #fff;
   box-shadow:
-    inset 0 1px 2px rgba(255, 255, 255, .55),
-    inset 0 -12px 22px rgba(0, 30, 90, .26),
-    0 4px 20px rgba(0, 150, 255, .4);
+    inset 0 3px 6px rgba(255, 255, 255, .45),
+    inset 0 -4px 8px rgba(0, 30, 80, .55),
+    0 8px 22px rgba(0, 114, 255, .38);
   isolation: isolate;
-  transition: transform var(--motion-fast), filter var(--motion-fast), box-shadow var(--motion-fast);
+  transition:
+    transform .24s cubic-bezier(.3, 1.45, .5, 1),
+    filter var(--motion-fast),
+    box-shadow var(--motion-fast);
 }
 .btn-hero:hover:not(:active) {
   transform: none;
-  filter: brightness(1.07) saturate(1.04);
+  filter: brightness(1.06) saturate(1.03);
   box-shadow:
-    inset 0 1px 2px rgba(255, 255, 255, .62),
-    inset 0 -12px 22px rgba(0, 30, 90, .24),
-    0 6px 26px rgba(0, 150, 255, .52);
+    inset 0 3px 6px rgba(255, 255, 255, .5),
+    inset 0 -4px 8px rgba(0, 30, 80, .5),
+    0 10px 26px rgba(0, 114, 255, .46);
 }
 .btn-hero:active {
-  transform: scale(.985);
-  filter: brightness(1.1);
+  transform: scale(.975);
+  filter: brightness(1.03);
   box-shadow:
-    inset 0 1px 2px rgba(255, 255, 255, .45),
-    inset 0 -8px 16px rgba(0, 30, 90, .3),
-    0 2px 12px rgba(0, 150, 255, .32);
+    inset 0 3px 8px rgba(0, 26, 70, .45),
+    inset 0 -2px 5px rgba(255, 255, 255, .24),
+    0 4px 12px rgba(0, 114, 255, .3);
 }
 .btn-hero:focus-visible { outline: 3px solid #7DE3F4; outline-offset: -3px; }
 /* the idle shine: one slow metallic pass every six seconds; stilled by reduced motion */
@@ -4489,7 +4495,7 @@ html.no-flags .id-flag .flag-code { display: none; }
   left: -55%;
   width: 45%;
   z-index: 0;
-  background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, .24) 50%, rgba(255, 255, 255, 0) 100%);
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, .2) 50%, rgba(255, 255, 255, 0) 100%);
   transform: skewX(-18deg);
   pointer-events: none;
 }
@@ -4502,19 +4508,19 @@ html.no-flags .id-flag .flag-code { display: none; }
   94%, 100% { transform: translateX(330%) skewX(-18deg); opacity: 0; }
 }
 .btn-hero .ico { width: 1.25em; height: 1.25em; }
-/* single-line wordmark: aggressive white Play, punchy and centred */
+/* single-line wordmark: chiselled white Play, lit from above and seated below */
 .hero-t {
   min-width: 0;
-  font-size: clamp(1rem, 4.7vw, 1.15rem);
+  font-size: clamp(1.02rem, 4.8vw, 1.18rem);
   font-weight: 900;
-  letter-spacing: .06em;
+  letter-spacing: .075em;
   text-transform: uppercase;
   color: #fff;
   line-height: 1;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .35));
+  text-shadow:
+    0 1px 0 rgba(0, 54, 120, .42),
+    0 0 6px rgba(255, 255, 255, .18);
 }
 /* the launch face: play chevron + the action word, one line */
 .pd-go-face {
@@ -4523,14 +4529,14 @@ html.no-flags .id-flag .flag-code { display: none; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 6px;
   max-width: 100%;
   min-width: 0;
 }
 .pd-go-face .ico {
   width: clamp(15px, 4.3vw, 18px);
   height: clamp(15px, 4.3vw, 18px);
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .25));
+  filter: drop-shadow(0 1px 1px rgba(0, 20, 60, .35));
 }
 /* matchmaking: the action word becomes a wait, with three pulsing dots */
 .pd-search { display: none; align-items: center; gap: 2px; min-width: 0; }
@@ -4557,65 +4563,89 @@ html.no-flags .id-flag .flag-code { display: none; }
 /* the queue dims the key 10%; a found match or a cancel lifts it straight back */
 .btn-hero.is-searching,
 .btn-hero.is-searching:hover:not(:active) { filter: brightness(.9); }
-/* the win it pays: one etched-glass micro-pill, +30 (TIQ brain) · +65 (coin) */
+/* the win it pays: two glowing micro-clay chips, never one cramped pill */
 .pd-rw {
   position: relative;
   z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0;
+  gap: 5px;
   max-width: 100%;
-  padding: 2px 9px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(2, 20, 45, .42) 0%, rgba(2, 20, 45, .62) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .18),
-    inset 0 0 0 1px rgba(255, 255, 255, .14),
-    0 1px 4px rgba(0, 0, 0, .18);
   font-size: clamp(10px, 3vw, 11.5px);
-  font-weight: 800;
-  letter-spacing: .03em;
+  font-weight: 900;
+  letter-spacing: .02em;
   line-height: 1;
-  color: var(--tiq);
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, .35);
   white-space: nowrap;
 }
 .pd-rw-item {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 0 1px;
-  white-space: nowrap;
-}
-/* practice pays no trophies: the chip leaves, and its hairline leaves with it */
-.pd-rw-item[hidden] + .pd-rw-sep { display: none; }
-.pd-rw b { font-weight: 900; letter-spacing: .02em; }
-.pd-rw-sep {
   flex: none;
-  width: 1px;
-  height: 10px;
-  margin: 0 8px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, .38) 50%, rgba(255, 255, 255, 0) 100%);
+  padding: 3px 7px 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .4);
 }
-.pd-rw .ico { width: 14px; height: 14px; color: var(--tiq); filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .3)); }
-.pd-rw .coin { width: 13px; height: 13px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .3)); }
+/* brain / TIQ: a frosted cyan-indigo pod with a live glyph */
+.pd-rw-tiq {
+  color: #E6FBFF;
+  background:
+    radial-gradient(120% 150% at 18% -10%, rgba(125, 227, 244, .42) 0%, rgba(125, 227, 244, 0) 58%),
+    linear-gradient(180deg, rgba(10, 40, 90, .66) 0%, rgba(4, 17, 45, .86) 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, .5),
+    inset 0 0 0 1px rgba(125, 227, 244, .34),
+    inset 0 -2px 4px rgba(0, 12, 35, .55),
+    0 2px 6px rgba(0, 20, 60, .32);
+}
+/* coin: a frosted amber-gold pod around the one metal token */
+.pd-rw-coin {
+  color: #FFF1C4;
+  background:
+    radial-gradient(120% 150% at 18% -10%, rgba(255, 214, 110, .4) 0%, rgba(255, 214, 110, 0) 58%),
+    linear-gradient(180deg, rgba(92, 54, 8, .7) 0%, rgba(40, 20, 3, .88) 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, .48),
+    inset 0 0 0 1px rgba(253, 211, 77, .38),
+    inset 0 -2px 4px rgba(30, 14, 2, .6),
+    0 2px 6px rgba(0, 20, 60, .32);
+}
+.pd-rw b { font-weight: 900; letter-spacing: .02em; }
+.pd-rw-tiq .ico {
+  width: 13px;
+  height: 13px;
+  color: #7DE3F4;
+  filter:
+    drop-shadow(0 0 4px rgba(125, 227, 244, .8))
+    drop-shadow(0 1px 1px rgba(0, 0, 0, .35));
+}
+.pd-rw-coin .coin {
+  width: 14px;
+  height: 14px;
+  filter:
+    drop-shadow(0 0 4px rgba(253, 211, 77, .45))
+    drop-shadow(0 1px 1px rgba(0, 0, 0, .4));
+}
 
-/* ---- the tight phones: both zones stay whole; only the gutters breathe in ---- */
+/* ---- the tight phones: both pods stay whole; only the gutters breathe in ---- */
 @media (max-width: 400px) {
-  .mode-hero { --mode-pad-x: 9px; gap: 7px; }
+  .mode-hero { --mode-pad-x: 10px; gap: 7px; }
   .btn-hero { padding: 7px 12px; }
-  .pd-rw { padding: 2px 7px; }
-  .pd-rw-sep { margin: 0 6px; }
+  .pd-rw { gap: 4px; }
+  .pd-rw-item { padding: 3px 6px 3px 7px; }
 }
 @media (max-width: 352px) {
-  .launcher { grid-template-columns: minmax(0, 35%) minmax(0, 1fr); }
-  .mode-hero { --mode-pad-x: 8px; gap: 6px; }
+  .launcher { --dock-gutter: 6px; }
+  .mode-hero { --mode-pad-x: 8px; --mode-glyph: 22px; gap: 6px; }
   .btn-hero { padding: 6px 10px; }
   .pd-go-face { gap: 5px; }
-  .pd-rw { padding: 2px 6px; }
-  .pd-rw-sep { margin: 0 5px; }
+  .pd-rw { gap: 4px; font-size: 10px; }
+  .pd-rw-item { padding: 2px 5px 2px 6px; gap: 3px; }
+  .pd-rw-tiq .ico { width: 12px; height: 12px; }
+  .pd-rw-coin .coin { width: 13px; height: 13px; }
 }
 
 /* legacy Play summary slot: kept for compat, hidden — the dock owns the mode line now */
@@ -27515,7 +27545,7 @@ html[data-lang="fa"] :is(.gm-lead, .gm-start, #squad-leave, #squad-explore-t, .s
 html[data-lang="fa"] :is(
   #p-coins, #p-level, #pf-coins, #pf-tiq, #pf-level, #pf-xp, #pf-games,
   #pf-wins, #pf-losses, #pf-best, #pf-streak, #pf-badge-count,
-  #home-play-rw, .pd-rw, .gm-rw, .gm-wait, #lb-count, #lb-code, .lb-count,
+  #home-play-rw, .pd-rw, .pd-rw-item, .pd-rw b, .gm-rw, .gm-wait, #lb-count, #lb-code, .lb-count,
   .lb-fmt, .sq-rank, .sq-count, .sq-chip, .sq-score, .sq-meta-handle,
   .sq-card-handle, .sq-banner-handle, .sqp-handle, .flag-code, .id-lvl,
   .id-team-rank, .stars-count, .tour-clock, .pf-xp-lvl, .pf-xp-meta,
@@ -27575,6 +27605,7 @@ html[data-lang="fa"] .lb-mode-sub { font-size: 10px; line-height: 1.5; }
 html[data-lang="fa"] .lb-hint { line-height: 1.45; }
 html[data-lang="fa"] .hero-t { font-size: clamp(0.95rem, 4.4vw, 1.1rem); }
 html[data-lang="fa"] .mode-hero-title { font-size: clamp(9.5px, 2.8vw, 11px); }
+html[data-lang="fa"] .mode-hero-badge { line-height: 1.5; }
 html[data-lang="fa"] .mode-hero-txt { align-items: flex-end; }
 html[data-lang="fa"] .set-card-h { justify-content: flex-start; direction: rtl; }
 
