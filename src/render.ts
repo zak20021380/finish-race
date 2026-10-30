@@ -204,6 +204,11 @@ function tint(col: string, a: number): string {
 
 /** The ball's radius in css px on a board whose cells are `cell` px across. */
 const ballR = (cell: number) => cell * BALL_R;
+/**
+ * The same on-screen radius, published for overlays that live outside the renderer. The chat
+ * bubble uses it to stop its tail just above the solid token instead of guessing a cell fraction.
+ */
+export const pawnRadius = ballR;
 /** The wall bar's thickness in css px, before the seat's own `thick` multiplier. */
 const barT = (cell: number) => cell * BAR_T;
 /**

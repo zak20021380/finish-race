@@ -8,7 +8,7 @@ import {
 } from './rules';
 import { botAction, botThinkMs, type Difficulty } from './bot';
 import {
-  createRenderer, dragWallSlot, hitTest, wallCentre,
+  createRenderer, dragWallSlot, hitTest, pawnRadius, wallCentre,
   type BallView, type CapsuleAction, type Ghost, type Hit,
   type Mark, type Perspective, type Vec, type View,
 } from './render';
@@ -2379,17 +2379,20 @@ const chat = createChat({
   state: () => state,
   localSide: () => localSide,
   /* the seat's live pawn: its animated ball centre mapped through the renderer's own layout into
-     viewport px, plus the cell the move dots are drawn from — so a bubble hangs over the token it
-     belongs to and always clears the dot ring. */
+     viewport px, plus the solid radius and the red/blue family the ball is painted in — so a
+     bubble sits just above the token and glows in the same neon. */
   pawn: (seat) => {
     const v = ballViews.find((b) => b.team === seat);
     if (!v) return null;
     const L = renderer.layout();
     const box = canvas.getBoundingClientRect();
+    const localColor = pieceColor();
+    const rivalColor = localColor === 'red' ? 'blue' : 'red';
     return {
       x: box.left + L.ox + v.pos.x * L.cell,
       y: box.top + L.oy + v.pos.y * L.cell,
-      cell: L.cell,
+      radius: pawnRadius(L.cell),
+      color: seat === localSide ? localColor : rivalColor,
     };
   },
   busy: () => mineArmed,

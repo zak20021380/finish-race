@@ -25,6 +25,10 @@
 
 /* ---- one message: a short clay bubble, tail down toward the pawn ---- */
 .chat-bubble {
+  /* the sender's pawn identity, repainted by .is-red / .is-blue on every placement */
+  --pawn-rim: #ff3366;
+  --pawn-glow: rgba(255, 51, 102, 0.55);
+  --bubble-plate: #1C2433;
   position: absolute;
   max-width: 148px;
   min-height: 30px;
@@ -32,6 +36,7 @@
   padding: 6px 10px;
   display: flex;
   align-items: center;
+  border: 1px solid var(--pawn-rim);
   border-radius: 14px;
   background: var(--clay-face);
   color: var(--ink);
@@ -41,10 +46,11 @@
   letter-spacing: .005em;
   box-shadow:
     0 2px 0 #080C14,
+    0 0 16px var(--pawn-glow),
     0 8px 16px -10px var(--shadow-soft),
     var(--clay-spec), var(--clay-bevel), var(--clay-ring);
   opacity: 0;
-  transform: scale(.3) translateY(10px);
+  transform: scale(.5) translateY(6px);
   /* the tail is the hinge: the pop grows out of the point that faces the pawn */
   transform-origin: 50% 100%;
   transition: opacity .22s ease, transform .22s ease;
@@ -53,34 +59,37 @@
 .chat-bubble.show {
   opacity: 1;
   transform: none;
-  /* 200ms spring: .3/+10px -> 1.1/-4px -> 1/0, no fill-mode, so the exit transition below can
-     take the transform back the instant the entry is over */
-  animation: chat-bubble-pop .2s cubic-bezier(.34, 1.56, .64, 1);
+  /* punchy spring: .5/+6px -> 1/0, with the bezier supplying the overshoot; no fill-mode, so the
+     exit transition below can take the transform back the instant the entry is over */
+  animation: chat-bubble-pop .24s cubic-bezier(.34, 1.56, .64, 1);
 }
 @keyframes chat-bubble-pop {
-  0% { opacity: 0; transform: scale(.3) translateY(10px); }
-  55% { opacity: 1; transform: scale(1.1) translateY(-4px); }
+  0% { opacity: 0; transform: scale(.5) translateY(6px); }
   100% { opacity: 1; transform: scale(1) translateY(0); }
 }
-/* the exit: a soft fade plus an 18px float, applied after the emote has finished performing */
+/* the exit: a soft fade plus a small settle inward, applied after the message has held its beat */
 .chat-bubble.is-out {
   opacity: 0;
-  transform: translateY(-18px);
+  transform: scale(.92) translateY(-4px);
   transition: opacity .34s ease, transform .34s cubic-bezier(.22, .61, .36, 1);
 }
-/* the downward tip: it tracks the pawn via --tip, even when a board edge nudges the capsule off
-   centre. Subtle by design — a dark clay chip, never a second focal point. */
+/* the downward tip: a crisp diamond, outlined in the sender's neon and filled with the same dark
+   plate as the bubble. It tracks the pawn via --tip, even when a board edge nudges the capsule
+   off centre, so the point always faces the emitting ball. */
 .chat-bubble::after {
   content: '';
   position: absolute;
   left: var(--tip, 50%);
-  bottom: -5px;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
   margin-left: -5px;
-  width: 0;
-  height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-top: 6px solid #1B2333;
+  background: var(--bubble-plate);
+  border-right: 1px solid var(--pawn-rim);
+  border-bottom: 1px solid var(--pawn-rim);
+  border-bottom-right-radius: 2px;
+  transform: rotate(45deg);
+  box-shadow: 2px 2px 6px -2px var(--pawn-glow);
 }
 /* the text is what clamps; the tail may hang outside the face */
 .chat-bubble-t {
@@ -91,13 +100,27 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
-/* ---- an emote: a 48x48 frosted dark-clay capsule, ringed by its team's neon ----
+/* ---- the sender's pawn identity ----
+   The local seat is not always red: the player may choose blue, in which case the rival wears red.
+   chat.ts therefore puts .is-red / .is-blue on the bubble from the live pawn (falling back to the
+   chip's own colour), and these two rules always win over the side defaults above. */
+.chat-bubble.is-mine { --pawn-rim: #ff3366; --pawn-glow: rgba(255, 51, 102, 0.55); }
+.chat-bubble.is-foe { --pawn-rim: #00d2ff; --pawn-glow: rgba(0, 210, 255, 0.55); }
+.chat-bubble.is-red {
+  --pawn-rim: #ff3366;
+  --pawn-glow: rgba(255, 51, 102, 0.55);
+}
+.chat-bubble.is-blue {
+  --pawn-rim: #00d2ff;
+  --pawn-glow: rgba(0, 210, 255, 0.55);
+}
+
+/* ---- an emote: a 48x48 frosted dark-clay capsule, ringed by its sender's neon ----
    No live blur (the design system forbids backdrop-filter): the frost is a fine diagonal grain
-   over a translucent glass gradient, lit from above and pressed in at the base. The ring is one
-   step wide, the bloom is the team's ambient neon: crimson for the player, cyan for the rival. */
-.chat-bubble.is-mine { --pawn-glow: rgba(224, 38, 79, .9); }
-.chat-bubble.is-foe { --pawn-glow: rgba(34, 211, 238, .85); }
+   over a translucent glass gradient, lit from above and pressed in at the base. The rim and the
+   16px bloom are the pawn's own ambient colour, so attribution is instant. */
 .chat-bubble.is-emote {
+  --bubble-plate: #131A29;
   width: 48px;
   height: 48px;
   min-height: 48px;
@@ -105,6 +128,7 @@
   padding: 0;
   display: grid;
   place-items: center;
+  border-color: var(--pawn-rim);
   border-radius: 15px;
   background:
     radial-gradient(120% 90% at 50% 0%, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, 0) 56%),
@@ -112,13 +136,12 @@
       rgba(255, 255, 255, .04) 0 1px, rgba(255, 255, 255, 0) 1px 3px),
     linear-gradient(180deg, rgba(43, 55, 80, .97) 0%, rgba(19, 26, 41, .98) 100%);
   box-shadow:
-    0 0 0 1px var(--pawn-glow, rgba(255, 255, 255, .16)),
-    0 0 14px -2px var(--pawn-glow, rgba(255, 255, 255, .2)),
+    0 0 16px var(--pawn-glow),
     0 6px 14px -8px rgba(0, 0, 0, .9),
     inset 0 1px 0 rgba(255, 255, 255, .18),
     inset 0 -3px 5px rgba(0, 0, 0, .45);
 }
-.chat-bubble.is-emote::after { border-top-color: #131A29; }
+.chat-bubble.is-emote::after { background: var(--bubble-plate); }
 .chat-bubble.is-emote .chat-bubble-t { display: grid; place-items: center; max-height: none; }
 .chat-emote { display: grid; place-items: center; }
 .chat-emote svg { width: 40px; height: 40px; display: block; }
