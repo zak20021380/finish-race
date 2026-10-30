@@ -1259,6 +1259,16 @@ export interface AdminUser {
   root: boolean;
 }
 
+/**
+ * The one global squad registry. Every enlistment appends here and every admin read folds it,
+ * inside the singleton `MATCHMAKER` object (`LOBBY = 'global'` in `worker/index.ts`), so the
+ * enlistment worker and the Command Center can never split across storage namespaces.
+ */
+const SQUADS_KEY = 'squads';
+
+/** The one state an admin filters on: the three audit states, with a purge collapsed into `banned`. */
+export type SquadStatus = SquadVerification | 'banned';
+
 /** One registered squad, as the Command Center's Squads tab audits it. */
 export interface SquadWarRow {
   id: string;
@@ -1284,6 +1294,18 @@ export interface SquadWarRow {
   warTiq: number;
   /** How many registered players report this squad. */
   contributors: number;
+  /* The canonical registry shape, so an admin client never has to know the storage's legacy
+     field names. Each one is the single source of truth above, under its registry name. */
+  title: string;
+  type: 'channel' | 'group';
+  /** When the squad was enlisted (the registry's `createdAt`). */
+  enlistedAt: number;
+  /** Who enlisted it: the owner's @username when resolved, else their Telegram id. */
+  enlistedBy: string;
+  membersCount: number;
+  /** War TIQ (`warTiq`, under the registry's name). */
+  tiq: number;
+  status: SquadStatus;
 }
 
 /** The Squads tab's KPI pulse: bounded counts folded from the registry rows. */
@@ -1496,7 +1518,7 @@ export class MatchmakerDO {
               if (row) this.broadcasts.set(row.id, row);
             }
           }
-          const squads = await storage.get<unknown[]>('squads');
+          const squads = await storage.get<unknown[]>(SQUADS_KEY);
           if (Array.isArray(squads)) {
             for (const raw of squads) {
               const row = readRegisteredSquad(raw);
@@ -1708,6 +1730,7 @@ export class MatchmakerDO {
     if (!requester) {
       return json({ ok: false, error: 'unauthorized', message: 'Telegram verification required.' }, 401);
     }
+    await this.syncSquadsFromStorage();
 
     const result = await verifySquadChat(
       typeof body.chatUsername === 'string' ? body.chatUsername : '',
@@ -1748,6 +1771,8 @@ export class MatchmakerDO {
         message: 'Telegram verification required.',
       }, 401);
     }
+    /* The duplicate gate reads the canonical store, not a possibly partial in-memory copy. */
+    await this.syncSquadsFromStorage();
     if (this.squadConflict('', handle)) {
       return json({ ok: false, error: 'already_registered', message: SQUAD_ALREADY_ENLISTED }, 409);
     }
@@ -1784,24 +1809,52 @@ export class MatchmakerDO {
 
       this.squads.set(result.squad.id, result.squad);
       this.squadsDirty = true;
-      this.persistSquads();
+      await this.persistSquads();
       return json({ ok: true, squad: result.squad });
     } finally {
       this.enlisting.delete(reservation);
     }
   }
 
-  private persistSquads(): void {
-    if (!this.squadsDirty || !this.state?.storage) return;
-    const storage = this.state.storage;
-    this.squadsDirty = false;
-    void Promise.resolve().then(() => {
-      try {
-        void storage.put('squads', [...this.squads.values()]);
-      } catch {
-        /* a store that refuses the write: the registry stays in memory */
+  /**
+   * Fold any registry rows the in-memory map is missing back in from the canonical key. The
+   * constructor's hydration is allowed to fail (a store that refuses a read starts the room
+   * empty), so every write and every admin read reconciles first: a later registration can then
+   * never overwrite rows this isolate did not happen to hold.
+   */
+  private async syncSquadsFromStorage(): Promise<void> {
+    const storage = this.state?.storage;
+    if (!storage) return;
+    try {
+      const rows = await storage.get<unknown[]>(SQUADS_KEY);
+      if (!Array.isArray(rows)) return;
+      for (const raw of rows) {
+        const row = readRegisteredSquad(raw);
+        if (row && !this.squads.has(row.id)) this.squads.set(row.id, row);
       }
-    });
+    } catch {
+      /* a store that refuses the read: the rows already in memory still answer */
+    }
+  }
+
+  /**
+   * Flush the whole global registry under one key. The write is awaited by every caller before
+   * its response leaves the room: a registration that answered `ok` must survive eviction, and
+   * the admin query must never read an older list than the one the enlistment just acknowledged.
+   */
+  private async persistSquads(): Promise<void> {
+    const storage = this.state?.storage;
+    if (!storage || !this.squadsDirty) return;
+    this.squadsDirty = false;
+    try {
+      await this.syncSquadsFromStorage();
+      /* The live map is read after the merge and after every await, so two enlistments that
+         overlap on storage still land in one list holding both rows. */
+      await storage.put(SQUADS_KEY, [...this.squads.values()]);
+    } catch {
+      /* a refused write stays dirty: the next mutation retries the whole registry */
+      this.squadsDirty = true;
+    }
   }
 
   /** The war contribution of each registered handle: TIQ and how many players report it. */
@@ -1835,6 +1888,7 @@ export class MatchmakerDO {
     const key = squadKeyOf(squad.handle);
     const contribution = key ? war.get(key) : undefined;
     const owner = owners.get(squad.ownerId);
+    const warTiq = contribution?.tiq ?? 0;
     return {
       id: squad.id,
       chatId: squad.chatId,
@@ -1854,8 +1908,15 @@ export class MatchmakerDO {
       revokedAt: squad.revokedAt,
       banned: squad.banned,
       bannedAt: squad.bannedAt,
-      warTiq: contribution?.tiq ?? 0,
+      warTiq: warTiq,
       contributors: contribution?.contributors ?? 0,
+      title: squad.name,
+      type: squad.kind,
+      enlistedAt: squad.createdAt,
+      enlistedBy: owner?.username ? `@${owner.username}` : squad.ownerId,
+      membersCount: squad.members,
+      tiq: warTiq,
+      status: squad.banned ? 'banned' : squad.verification,
     };
   }
 
@@ -1889,10 +1950,10 @@ export class MatchmakerDO {
   }
 
   /** Verify, revoke, purge or restore one squad. The caller is already a proven SuperAdmin. */
-  private squadAction(
+  private async squadAction(
     body: Record<string, unknown>,
     me: AdminIdentity,
-  ): { ok: boolean; error?: string; squad?: SquadWarRow } {
+  ): Promise<{ ok: boolean; error?: string; squad?: SquadWarRow }> {
     const id = typeof body.id === 'string' ? body.id.trim().slice(0, 48) : '';
     const action = typeof body.action === 'string' ? body.action.trim().toUpperCase() : '';
     const squad = id ? this.squads.get(id) : undefined;
@@ -1921,7 +1982,7 @@ export class MatchmakerDO {
       return { ok: false, error: 'invalid_action' };
     }
     this.squadsDirty = true;
-    this.persistSquads();
+    await this.persistSquads();
     return { ok: true, squad: this.squadRowOf(squad) };
   }
 
@@ -2193,6 +2254,9 @@ export class MatchmakerDO {
     if (url.pathname === '/api/admin/broadcasts') return json(this.broadcastsView());
     if (url.pathname === '/api/admin/squads') {
       if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+      /* Reconcile with the canonical key first: the admin list is the registry, not whichever
+         subset this isolate happened to hydrate. */
+      await this.syncSquadsFromStorage();
       return json(this.squadsView(), 200, { 'cache-control': 'no-store' });
     }
 
@@ -2245,7 +2309,7 @@ export class MatchmakerDO {
       if (!this.superDoor(me)) return json({ error: 'forbidden', hint: 'superadmin required' }, 403);
       if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
       const body = await readBody(request);
-      const result = this.squadAction(body, me);
+      const result = await this.squadAction(body, me);
       return json(result, result.ok ? 200 : 400);
     }
 

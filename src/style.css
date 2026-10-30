@@ -18657,6 +18657,8 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
   min-width: 0;
 }
 .adm-squad-ico {
+  position: relative;
+  overflow: hidden;
   flex: none;
   display: grid;
   place-items: center;
@@ -18665,9 +18667,23 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
   border-radius: 12px;
   background: var(--field);
   box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
-  font-size: 18px;
+  font-size: 14px;
   line-height: 1;
 }
+.adm-squad-mark {
+  font-size: 14px;
+  font-weight: 850;
+  letter-spacing: .02em;
+  color: var(--ink, currentColor);
+}
+.adm-squad-av {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.adm-squad-av[hidden] { display: none; }
 .adm-squad-txt {
   flex: 1 1 auto;
   min-width: 0;

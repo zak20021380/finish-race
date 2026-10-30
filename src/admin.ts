@@ -44,7 +44,7 @@ import {
   agoOf, onTickets, REPLY_MAX, replyTicket, tickets, toggleResolved, unreadCount,
   type Ticket, type TicketCategory,
 } from './support';
-import { getMySquad } from './squads';
+import { getMySquad, squadMark, telegramAvatarUrl } from './squads';
 import {
   directoryAction, directoryCountries, directoryPage, liveRow, PAGE_SIZE, YOU_ID,
   type AgeBand, type DirFilter, type DirPlayer, type DirSort,
@@ -988,35 +988,54 @@ const squadText = (value: unknown, max: number): string =>
 const squadCount = (value: unknown): number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 
-/** A registry row folded field by field: a missing or hand-edited entry is never trusted. */
+/**
+ * A registry row folded field by field: a missing or hand-edited entry is never trusted. The
+ * Worker's canonical registry names (`title`, `type`, `enlistedAt`, `enlistedBy`, `membersCount`,
+ * `tiq`, `status`) win; the legacy names stay readable so an older Worker deployment still paints.
+ */
 function readSquadRow(raw: unknown): SquadRow | null {
   if (!raw || typeof raw !== 'object') return null;
-  const r = raw as Partial<SquadRow>;
+  const r = raw as Partial<SquadRow> & {
+    title?: unknown;
+    type?: unknown;
+    enlistedAt?: unknown;
+    enlistedBy?: unknown;
+    membersCount?: unknown;
+    tiq?: unknown;
+    status?: unknown;
+  };
   const id = squadText(r.id, 48);
   const handle = squadText(r.handle, 64);
   if (!id || !handle) return null;
+  const status = typeof r.status === 'string' ? r.status : '';
+  const verification: SquadVerification =
+    status === 'verified' || status === 'pending' || status === 'revoked'
+      ? status
+      : r.verification === 'verified' || r.verification === 'revoked'
+        ? r.verification
+        : 'pending';
+  const enlistedBy = squadText(r.enlistedBy, 40);
+  const byHandle = enlistedBy.startsWith('@');
   return {
     id,
     chatId: squadText(r.chatId, 32),
     handle,
-    name: squadText(r.name, 64) || handle,
-    kind: r.kind === 'channel' ? 'channel' : 'group',
+    name: squadText(r.title, 64) || squadText(r.name, 64) || handle,
+    kind: r.type === 'channel' || r.kind === 'channel' ? 'channel' : 'group',
     avatar: squadText(r.avatar, 160),
     tag: squadText(r.tag, 8),
-    members: squadCount(r.members),
-    ownerId: squadText(r.ownerId, 24),
+    members: squadCount(r.membersCount) || squadCount(r.members),
+    ownerId: squadText(r.ownerId, 24) || (byHandle ? '' : enlistedBy),
     ownerName: squadText(r.ownerName, 40),
-    ownerUsername: squadText(r.ownerUsername, 40),
-    createdAt: squadCount(r.createdAt) || Date.now(),
-    verification: r.verification === 'verified' || r.verification === 'revoked'
-      ? r.verification
-      : 'pending',
+    ownerUsername: squadText(r.ownerUsername, 40) || (byHandle ? enlistedBy.slice(1, 41) : ''),
+    createdAt: squadCount(r.enlistedAt) || squadCount(r.createdAt) || Date.now(),
+    verification,
     verifiedAt: squadCount(r.verifiedAt),
     verifiedBy: squadText(r.verifiedBy, 40),
     revokedAt: squadCount(r.revokedAt),
-    banned: r.banned === true,
+    banned: status === 'banned' || r.banned === true,
     bannedAt: squadCount(r.bannedAt),
-    warTiq: squadCount(r.warTiq),
+    warTiq: squadCount(r.tiq) || squadCount(r.warTiq),
     contributors: squadCount(r.contributors),
   };
 }
@@ -1717,7 +1736,6 @@ export function createAdmin(api: AdminApi): Admin {
   let squadsStatus: 'all' | SquadVerification = 'all';
   let squadsQuery = '';
   let squadsOn = false;
-  let squadsAsked = false;
   let squadsReady = false;
   let squadsBusy = false;
 
@@ -3238,10 +3256,27 @@ export function createAdmin(api: AdminApi): Admin {
 
     const head = document.createElement('div');
     head.className = 'adm-squad-head';
+    /* A Telegram photo is a bonus: the crest mark is painted underneath and stays when the CDN
+       answers a private chat with a 404 or a 1x1 placeholder. */
     const glyph = document.createElement('span');
     glyph.className = 'adm-squad-ico';
     glyph.setAttribute('aria-hidden', 'true');
-    glyph.textContent = row.kind === 'channel' ? '📢' : '👥';
+    const mark = document.createElement('b');
+    mark.className = 'adm-squad-mark';
+    mark.textContent = squadMark({ name: row.name, handle: row.handle, tag: row.tag });
+    const photo = document.createElement('img');
+    photo.className = 'adm-squad-av';
+    photo.alt = '';
+    photo.decoding = 'async';
+    photo.referrerPolicy = 'no-referrer';
+    photo.hidden = true;
+    photo.addEventListener('load', () => {
+      photo.hidden = photo.naturalWidth <= 2 || photo.naturalHeight <= 2;
+    });
+    photo.addEventListener('error', () => { photo.hidden = true; });
+    const photoUrl = telegramAvatarUrl(row.handle);
+    if (photoUrl) photo.src = photoUrl;
+    glyph.append(mark, photo);
     const txt = document.createElement('span');
     txt.className = 'adm-squad-txt';
     const name = document.createElement('span');
@@ -3280,8 +3315,8 @@ export function createAdmin(api: AdminApi): Admin {
     ownerName.textContent = row.ownerName
       || (row.ownerUsername ? `@${row.ownerUsername}` : 'Unknown owner');
     const ownerMeta = `${row.ownerName && row.ownerUsername ? ` (@${row.ownerUsername})` : ''}`
-      + ` · ID ${row.ownerId || '—'} · ${stamp(row.createdAt)}`;
-    owner.append('Submitted by ', ownerName, ownerMeta);
+      + ` · ID ${row.ownerId || '—'} · Enlisted ${stamp(row.createdAt)}`;
+    owner.append('Enlisted by ', ownerName, ownerMeta);
 
     const cells = document.createElement('div');
     cells.className = 'adm-squad-cells';
@@ -4672,6 +4707,11 @@ export function createAdmin(api: AdminApi): Admin {
     startServerPolling();
     void refreshMetrics();                // the Stats tab reads the strict metrics door
     void refreshServer();                 // the Server tab reads `/api/admin/matchmaking`
+    /* The stage reopens on whichever tab was last selected; a registry view must not reopen on a
+       snapshot that predates the latest enlistment. */
+    if (tabs.find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.atab === 'squads') {
+      void refreshSquads();
+    }
     closeBtn?.focus({ preventScroll: true });
     api.onToggle(true);
     impact('medium');
@@ -4761,14 +4801,11 @@ export function createAdmin(api: AdminApi): Admin {
           paintUsers();
         }
       }
-      /* the squad registry is read on first sight too, then filtered entirely on this device */
+      /* The squad registry is re-read on every entry: an enlistment made after an earlier,
+         empty or refused read must appear without a manual refresh. */
       if (id === 'squads') {
-        if (!squadsAsked) {
-          squadsAsked = true;
-          void refreshSquads();
-        } else {
-          paintSquads();
-        }
+        paintSquads();
+        void refreshSquads();
       }
       /* the role registry rides the same rule: first sight of Controls reads it */
       if (id === 'controls' && !aclAsked) {
