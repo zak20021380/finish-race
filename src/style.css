@@ -4262,28 +4262,33 @@ html.no-flags .id-flag .flag-code { display: none; }
   box-shadow: 0 2px 0 #075985, inset 0 1px 0 rgba(255, 255, 255, .5);
 }
 
-/* ---- Play Dock: two tactile clay pods on one gutter ----
-   The obsidian mode switcher and the saturated launch core are separate objects:
-   a 7px gutter replaces the old laser seam, and each pod owns its own volume
-   shadows. The mode pod sizes to its content (`auto`) so a full label can never
-   be clipped; the launch pod takes every pixel that is left. */
+/* ---- Play Dock: one continuous clay capsule with a molded seam ----
+   A single outer silhouette owns the capsule radius and the exterior drop. Inside,
+   the obsidian mode selector and the saturated launch core are joined flush at a
+   zero-gap seam: a dark recessed groove on the obsidian edge and a fine specular
+   rim on the blue leading edge, like two precision-molded gamepad shells. The
+   mode section sizes to its content (`auto`) so a full label can never be clipped;
+   the launch section takes every pixel that is left. */
 .launcher {
-  --dock-gutter: 7px;
-  /* the pod height: 56-72px on every phone, scaled by the height media rules */
+  /* the capsule height: 56-72px on every phone, scaled by the height media rules */
   --dock-key-h: 72px;
   flex: none;
   position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: stretch;
-  gap: var(--dock-gutter);
+  gap: 0;
   width: 100%;
   min-height: var(--dock-key-h);
   padding: 0;
   border: 0;
-  border-radius: 0;
-  background: none;
-  box-shadow: none;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: #0d1522;
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, .46),
+    0 6px 20px rgba(0, 114, 255, .24),
+    0 0 0 1px rgba(255, 255, 255, .06);
   isolation: isolate;
 }
 
@@ -4305,11 +4310,15 @@ html.no-flags .id-flag .flag-code { display: none; }
   position: relative;
   min-width: 0;
   min-height: var(--dock-key-h);
+  transform-origin: right center;
   padding: 5px var(--mode-pad-x);
   display: flex;
   align-items: center;
   gap: 7px;
-  border-radius: 9999px;
+  border-top-left-radius: 9999px;
+  border-bottom-left-radius: 9999px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
   background: linear-gradient(135deg, #1b263b 0%, #0d1522 100%);
   overflow: hidden;
   color: var(--ink);
@@ -4318,7 +4327,8 @@ html.no-flags .id-flag .flag-code { display: none; }
   box-shadow:
     inset 0 2px 4px rgba(255, 255, 255, .12),
     inset 0 -3px 6px rgba(0, 0, 0, .65),
-    0 6px 16px rgba(0, 0, 0, .45);
+    inset -1px 0 0 rgba(0, 0, 0, .6),
+    inset -2px 0 3px rgba(0, 0, 0, .22);
   transition:
     transform .24s cubic-bezier(.3, 1.45, .5, 1),
     filter var(--motion-fast),
@@ -4334,7 +4344,8 @@ html.no-flags .id-flag .flag-code { display: none; }
   box-shadow:
     inset 0 2px 4px rgba(255, 255, 255, .16),
     inset 0 -3px 6px rgba(0, 0, 0, .6),
-    0 8px 20px rgba(0, 0, 0, .5);
+    inset -1px 0 0 rgba(0, 0, 0, .6),
+    inset -2px 0 3px rgba(0, 0, 0, .22);
 }
 .mode-hero:active {
   transform: scale(.975);
@@ -4342,9 +4353,9 @@ html.no-flags .id-flag .flag-code { display: none; }
   box-shadow:
     inset 0 3px 6px rgba(0, 0, 0, .7),
     inset 0 -1px 2px rgba(255, 255, 255, .06),
-    0 3px 10px rgba(0, 0, 0, .4);
+    inset -1px 0 0 rgba(0, 0, 0, .6);
 }
-.mode-hero:focus-visible { outline: 3px solid var(--mode-accent); outline-offset: 2px; }
+.mode-hero:focus-visible { outline: 3px solid var(--mode-accent); outline-offset: -3px; }
 /* the tactical ripple: one soft pulse from the glyph, only while the pod is pressed */
 .mode-hero::after {
   content: "";
@@ -4449,20 +4460,24 @@ html.no-flags .id-flag .flag-code { display: none; }
   width: 100%;
   min-width: 0;
   min-height: var(--dock-key-h);
+  transform-origin: left center;
   padding: 7px 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  border-radius: 9999px;
+  border-top-right-radius: 9999px;
+  border-bottom-right-radius: 9999px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
   font-weight: 900;
   background: linear-gradient(135deg, #00d2ff 0%, #0072ff 100%);
   color: #fff;
   box-shadow:
     inset 0 3px 6px rgba(255, 255, 255, .45),
     inset 0 -4px 8px rgba(0, 30, 80, .55),
-    0 8px 22px rgba(0, 114, 255, .38);
+    inset 1px 0 0 rgba(255, 255, 255, .35);
   isolation: isolate;
   transition:
     transform .24s cubic-bezier(.3, 1.45, .5, 1),
@@ -4475,7 +4490,7 @@ html.no-flags .id-flag .flag-code { display: none; }
   box-shadow:
     inset 0 3px 6px rgba(255, 255, 255, .5),
     inset 0 -4px 8px rgba(0, 30, 80, .5),
-    0 10px 26px rgba(0, 114, 255, .46);
+    inset 1px 0 0 rgba(255, 255, 255, .4);
 }
 .btn-hero:active {
   transform: scale(.975);
@@ -4483,7 +4498,7 @@ html.no-flags .id-flag .flag-code { display: none; }
   box-shadow:
     inset 0 3px 8px rgba(0, 26, 70, .45),
     inset 0 -2px 5px rgba(255, 255, 255, .24),
-    0 4px 12px rgba(0, 114, 255, .3);
+    inset 1px 0 0 rgba(255, 255, 255, .3);
 }
 .btn-hero:focus-visible { outline: 3px solid #7DE3F4; outline-offset: -3px; }
 /* the idle shine: one slow metallic pass every six seconds; stilled by reduced motion */
@@ -4630,7 +4645,7 @@ html.no-flags .id-flag .flag-code { display: none; }
     drop-shadow(0 1px 1px rgba(0, 0, 0, .4));
 }
 
-/* ---- the tight phones: both pods stay whole; only the gutters breathe in ---- */
+/* ---- the tight phones: the capsule stays whole; only its inner gutters breathe in ---- */
 @media (max-width: 400px) {
   .mode-hero { --mode-pad-x: 10px; gap: 7px; }
   .btn-hero { padding: 7px 12px; }
@@ -4638,7 +4653,6 @@ html.no-flags .id-flag .flag-code { display: none; }
   .pd-rw-item { padding: 3px 6px 3px 7px; }
 }
 @media (max-width: 352px) {
-  .launcher { --dock-gutter: 6px; }
   .mode-hero { --mode-pad-x: 8px; --mode-glyph: 22px; gap: 6px; }
   .btn-hero { padding: 6px 10px; }
   .pd-go-face { gap: 5px; }

@@ -1,9 +1,9 @@
 /**
  * gamemodes.ts — Game Mode Selector: lobby state, bottom sheet wiring, custom rooms.
  *
- * The lobby keeps one split-action Play Dock: its left clay pod is the mode card
- * (emblem · name · CHANGE badge) that opens the drawer, and its right clay pod is
- * the one-tap launch, wearing the selected mode's win. The
+ * The lobby keeps one split-action Play Dock: a single continuous clay capsule whose
+ * left section is the mode card (emblem · name · CHANGE badge) that opens the drawer,
+ * joined at a molded seam to the one-tap launch, wearing the selected mode's win. The
  * `#sheet-game-modes` drawer holds exactly three rows — Quick match, Play with
  * friends and Practice vs Bot — plus one reward caption and one sticky Start.
  * Selecting a mode updates the lobby instantly and persists to the device; the
@@ -87,11 +87,11 @@ const startLabel = (id: GameModeId): string => {
 };
 
 /**
- * The home Play Dock's left pod: the mode the capsule will launch, named in one
- * crisp word (or two) so the tap that changes it is unmistakable. The pod is sized
- * by its label, so FRIENDS, SOLO, BOT and the Persian labels never ellipsize. The
- * full title and status still live on the pod's `aria-label`, which is what a
- * screen reader reads.
+ * The home Play Dock's left section: the mode the capsule will launch, named in one
+ * crisp word (or two) so the tap that changes it is unmistakable. The section is
+ * sized by its label, so FRIENDS, SOLO, BOT and the Persian labels never ellipsize.
+ * The full title and status still live on the section's `aria-label`, which is what
+ * a screen reader reads.
  */
 const dockLabel = (id: GameModeId): string => {
   switch (id) {
