@@ -30,7 +30,7 @@ import { openCountryPicker } from './countrypick';
 import { flagPhoto } from './flags';
 import { cleanCode, standings, YOU } from './teams';
 import {
-  bindSquad, bindSquadById, cleanChatReference, cleanHandle, displayNameOf, enlistSquad,
+  bindSquad, bindSquadById, cleanChatReference, cleanHandle, displayNameOf, handleIssue,
   getMySquad, getSquadRanking, leaveSquad, onSquadChange, searchSquads, squadKind, squadLetter,
   squadMark, telegramAvatarUrl, type RankedSquad, type SquadKind,
 } from './squads';
@@ -39,6 +39,10 @@ import {
   type SquadMember, type SquadRole, type SquadRoster,
 } from './squadRoster';
 import { showToast } from './toast';
+import {
+  registerSquadWithTelegram, squadErrorMessage, verifySquadChat,
+  type SquadChatPreview, type SquadVerifyResult,
+} from './squadRegister';
 import { copyText } from './gamemodes';
 import { myTiq, TIER_NAME, tierOf, type MindTier } from './matchmaking';
 import { refreshReferral, referralCode, referralLink, referralShareUrl } from './referral';
@@ -2670,15 +2674,17 @@ export function createMenu(api: MenuApi): Menu {
    A centered luxury-glass modal (deliberately not a sheet: this is a
    commitment, not a browse) opened by Home's channel-admin pod. It normalises
    whatever the admin pastes — a `t.me` link, a typed `@name` or the bare
-   username — and answers while they type: from three characters on, the live
-   plate carries the community's public photo over a monogram and the ready
-   badge.
+   username — enforces Telegram's 5–32 character shape live, and resolves the
+   handle through the Worker's `getChat` door on blur or on the enlist key. The
+   plate only turns green with the community's real title and photo once
+   Telegram has confirmed it.
 
-   Enlisting is one write. `enlistSquad` mints (or binds) the squad with its
-   handle, kind, avatar, opening stats and the Channel War stamp, and binds the
-   device to it — which is what seats the local player as its leader. The modal
-   then lifts and announces `detour:squad-enlisted`, so the lobby opens on the
-   new squad's dashboard instead of leaving the player on Home.
+   Enlisting is one server write. The Worker re-verifies the chat, refuses a
+   type that does not match the selected tab, refuses a chat already on the
+   registry (under a per-handle reservation), then stores the row; the client
+   only claims the returned squad for this device. The modal then lifts and
+   announces `detour:squad-enlisted`, so the lobby opens on the new squad's
+   dashboard instead of leaving the player on Home.
 
    Bound once, on first open: the modal is a singleton in the markup, so every
    listener below is attached exactly once for the life of the app.
@@ -2703,39 +2709,60 @@ function createEnlistModal(): EnlistModal | null {
   const input = $<HTMLInputElement>('enlist-input');
   const field = $<HTMLElement>('enlist-field');
   const err = $<HTMLElement>('enlist-err');
-  const preview = $<HTMLElement>('enlist-preview');
+  const previewEl = $<HTMLElement>('enlist-preview');
+  const pvTitle = $<HTMLElement>('enlist-pv-title');
   const pvHandle = $<HTMLElement>('enlist-pv-h');
+  const pvMeta = $<HTMLElement>('enlist-pv-meta');
+  const readyEl = $<HTMLElement>('enlist-ready');
+  const readyLabel = $<HTMLElement>('enlist-ready-t');
   const avMono = $<HTMLElement>('enlist-av-mono');
   const avImg = $<HTMLImageElement>('enlist-av-img');
   const submit = $<HTMLButtonElement>('enlist-submit');
   const spin = $<HTMLElement>('enlist-spin');
+  const verifySpin = $<HTMLElement>('enlist-verify-spin');
+  const countEl = $<HTMLElement>('enlist-count');
   const ctaLabel = $<HTMLElement>('enlist-cta-t');
   const closeBtn = $<HTMLButtonElement>('enlist-close');
   const kindBtns = [...modal.querySelectorAll<HTMLElement>('[data-enlist-kind]')];
 
-  /* A full t.me link is folded down the instant it lands. The tail needs at
-     least one character, so typing `t.me/` is never a match — the field can not
-     be wiped out from under someone who is halfway through a link. */
-  const LINK = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/([A-Za-z0-9_]{1,32})/i;
+  /* A full t.me link is folded down the instant it lands. Only a single path
+     segment is accepted: an invite link (`t.me/joinchat/…`, `t.me/+hash`) or a
+     message link can never be mistaken for a username. The tail needs at least
+     one character, so typing `t.me/` is never a match — the field can not be
+     wiped out from under someone who is halfway through a link. */
+  const LINK = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/([A-Za-z0-9_]{1,32})\/?$/i;
+  const MAX_HANDLE = 32;
+
+  type Phase = 'verify' | 'register' | null;
 
   let kind: SquadKind = 'channel';
   let isOpen = false;
-  let busy = false;
+  let phase: Phase = null;
   let touched = false;
   let closeTimer = 0;
   let restore: HTMLElement | null = null;
   let lastAvatar = '';
+  let preview: SquadChatPreview | null = null;
+  let previewKey = '';
+  let verifyTicket = 0;
+  let verifyJob: { key: string; promise: Promise<boolean> } | null = null;
+  let errorCode = '';
+  let errorKind: SquadKind | undefined;
+  let errorFallback = '';
 
   const handleOf = (): string => cleanChatReference(input.value);
+  const keyOf = (): string => `${kind}:${handleOf().toLowerCase()}`;
 
   /* The sigil lives in the pod, so the field only ever holds the bare username:
      a pasted link or a typed `@` is folded down the moment it arrives, with the
-     caret put back where the typing actually was. */
+     caret put back where the typing actually was. Typed text is capped at the
+     Telegram ceiling, while a pasted link is read in full before the fold. */
   function normalise(): void {
     const raw = input.value;
     if (!raw) return;
-    const link = LINK.exec(raw.trimStart());
-    let next = link ? link[1] : raw;
+    const bare = raw.trim().split(/[?#]/)[0].replace(/\/+$/, '');
+    const link = LINK.exec(bare);
+    let next = link ? link[1] : raw.trim();
     next = next.replace(/^@+/, '').replace(/\s+/g, '');
     if (next === raw) return;
     const caret = link
@@ -2762,71 +2789,171 @@ function createEnlistModal(): EnlistModal | null {
     else avImg.removeAttribute('src');
   }
 
-  function paint(): void {
-    const handle = handleOf();
-    const valid = !!handle;
-    const bad = !valid && touched;
-    field.classList.toggle('is-valid', valid);
-    field.classList.toggle('is-bad', bad);
-    input.setAttribute('aria-invalid', bad ? 'true' : 'false');
-    preview.hidden = !valid;
-    if (valid) {
-      pvHandle.textContent = handle;
-      paintAvatar(handle);
-      err.hidden = true;
-    }
-    submit.setAttribute('aria-disabled', valid && !busy ? 'false' : 'true');
-    if (!busy) ctaLabel.textContent = t('enlistCta');
+  const membersLabel = (n: number): string => {
+    const count = n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(n);
+    return t('enlistMembers').replace('{n}', count);
+  };
+
+  function errorText(): string {
+    if (errorCode === 'local:empty') return t('enlistErrHandle');
+    if (errorCode === 'local:short') return t('enlistErrShort');
+    if (errorCode === 'local:long') return t('enlistErrLong');
+    if (errorCode === 'local:chars') return t('enlistErrChars');
+    if (!errorCode) return '';
+    return squadErrorMessage(errorCode, errorKind, errorFallback);
   }
 
-  /* A refused submit explains itself in place: the field shakes, one line of
-     red appears under it and focus lands where the fix is. That line is the only
-     copy under the field — there is no standing hint to compete with it. */
-  function nudge(): void {
-    touched = true;
-    paint();
-    err.textContent = t('enlistErrHandle');
+  function showError(code: string, fallback = '', actual: SquadKind | undefined = undefined, shake = true): void {
+    errorCode = code;
+    errorKind = actual;
+    errorFallback = fallback;
+    err.textContent = errorText();
     err.hidden = false;
+    field.classList.add('is-bad');
+    input.setAttribute('aria-invalid', 'true');
+    if (!shake) return;
     field.classList.remove('is-shake');
     void field.offsetWidth;
     field.classList.add('is-shake');
-    input.focus({ preventScroll: true });
-    notify('warning');
   }
 
-  async function submitNow(): Promise<void> {
-    if (busy) return;
+  function clearError(): void {
+    errorCode = '';
+    errorKind = undefined;
+    errorFallback = '';
+    err.hidden = true;
+    err.textContent = '';
+    field.classList.remove('is-bad');
+    input.setAttribute('aria-invalid', 'false');
+  }
+
+  function showIssue(issue: ReturnType<typeof handleIssue>, shake = true): void {
+    if (issue === 'empty') { showError('local:empty', '', undefined, shake); return; }
+    if (issue === 'short') { showError('local:short', '', undefined, shake); return; }
+    if (issue === 'long') { showError('local:long', '', undefined, shake); return; }
+    showError('local:chars', '', undefined, shake);
+  }
+
+  function paint(): void {
+    const issue = handleIssue(input.value);
+    const valid = issue === '';
+    const key = keyOf();
+    const verified = valid && preview !== null && previewKey === key ? preview : null;
+    const bad = !!errorCode || (touched && !!input.value && !valid);
+
+    field.classList.toggle('is-valid', valid && !errorCode);
+    field.classList.toggle('is-verified', !!verified && !errorCode);
+    field.classList.toggle('is-bad', bad);
+    input.setAttribute('aria-invalid', bad ? 'true' : 'false');
+
+    const length = input.value.replace(/^@+/, '').length;
+    countEl.hidden = length === 0;
+    countEl.textContent = `${length}/${MAX_HANDLE}`;
+
+    if (valid && verified) {
+      pvHandle.textContent = verified.handle;
+      pvTitle.textContent = verified.name;
+      pvMeta.hidden = verified.members <= 0;
+      if (verified.members > 0) pvMeta.textContent = membersLabel(verified.members);
+      readyLabel.textContent = t('enlistVerified');
+      readyEl.classList.add('is-verified');
+      paintAvatar(verified.handle);
+    } else {
+      readyLabel.textContent = t('enlistReady');
+      readyEl.classList.remove('is-verified');
+    }
+    previewEl.hidden = !verified || !!errorCode;
+    submit.setAttribute('aria-disabled', valid && !phase ? 'false' : 'true');
+    if (!phase) ctaLabel.textContent = t('enlistCta');
+  }
+
+  function setPhase(next: Phase): void {
+    phase = next;
+    input.readOnly = next !== null;
+    verifySpin.hidden = next !== 'verify';
+    spin.hidden = next !== 'register';
+    submit.classList.toggle('is-busy', next !== null);
+    submit.setAttribute('aria-disabled', next !== null || handleIssue(input.value) !== '' ? 'true' : 'false');
+    ctaLabel.textContent = next === 'verify' ? t('enlistVerifying') : next === 'register' ? t('enlistCtaBusy') : t('enlistCta');
+  }
+
+  /** Resolve the current handle with the Worker. One in-flight job per handle+tab. */
+  function verifyCurrent(): Promise<boolean> {
     const handle = handleOf();
-    if (!handle) { nudge(); return; }
+    const issue = handleIssue(input.value);
+    if (!handle || issue) {
+      touched = true;
+      showIssue(issue);
+      paint();
+      return Promise.resolve(false);
+    }
+    const key = keyOf();
+    if (preview && previewKey === key) return Promise.resolve(true);
+    if (verifyJob && verifyJob.key === key) return verifyJob.promise;
 
-    busy = true;
-    submit.classList.add('is-busy');
-    submit.setAttribute('aria-disabled', 'true');
-    spin.hidden = false;
-    ctaLabel.textContent = t('enlistCtaBusy');
-    impact('medium');
+    const ticket = ++verifyTicket;
+    const requestedKind = kind;
+    clearError();
+    setPhase('verify');
+    paint();
 
-    /* The write is instant, but a modal that blinks shut reads like a mis-tap:
-       the key holds one honest beat so the spinner actually means something. */
-    await new Promise<void>((resolve) => {
-      window.setTimeout(resolve, motionReduced() ? 140 : 620);
+    const promise = (async (): Promise<boolean> => {
+      let result: SquadVerifyResult;
+      try {
+        result = await verifySquadChat(handle, requestedKind);
+      } catch {
+        result = { ok: false, code: 'offline', message: t('enlistErrOffline') };
+      }
+      if (!isOpen || ticket !== verifyTicket) return false;
+      setPhase(null);
+      if (keyOf() !== key) { paint(); return false; }
+      if (!result.ok) {
+        preview = null;
+        previewKey = '';
+        showError(result.code, result.message, result.kind);
+        paint();
+        notify('error');
+        return false;
+      }
+      preview = result.chat;
+      previewKey = key;
+      clearError();
+      paint();
+      notify('success');
+      impact('light');
+      return true;
+    })();
+    verifyJob = { key, promise };
+    void promise.then(() => {
+      if (verifyJob?.promise === promise) verifyJob = null;
     });
+    return promise;
+  }
 
-    const result = enlistSquad(handle, kind);
-    busy = false;
-    submit.classList.remove('is-busy');
-    spin.hidden = true;
-    ctaLabel.textContent = t('enlistCta');
-
-    if (!result.ok) {
-      nudge();
+  /** The one write: the Worker re-verifies, then stores the squad under a duplicate lock. */
+  async function finishEnlist(): Promise<void> {
+    if (phase === 'register') return;
+    const handle = handleOf();
+    if (!handle) return;
+    setPhase('register');
+    impact('medium');
+    const result = await registerSquadWithTelegram(handle, { name: '', tag: '' }, kind);
+    if (!isOpen) return;
+    setPhase(null);
+    if (!result.ok || !result.squad) {
+      notify('error');
+      impact('light');
+      showError(result.error ?? 'failed', result.message);
+      paint();
       return;
     }
 
     const squad = result.squad;
     input.value = '';
     touched = false;
-    err.hidden = true;
+    clearError();
+    preview = null;
+    previewKey = '';
     restore = null;                 // the squad hub takes focus, not Home's pod
     notify('success');
     close();
@@ -2835,15 +2962,48 @@ function createEnlistModal(): EnlistModal | null {
        top of it. A toast behind a fading scrim reads as a glitch. */
     window.setTimeout(() => {
       window.dispatchEvent(new CustomEvent('detour:squad-enlisted', {
-        detail: { id: squad.id, handle: squad.handle, created: result.created },
+        detail: { id: squad.id, handle: squad.handle },
       }));
       showToast(t('enlistToast'), 'success');
     }, motionReduced() ? 0 : 200);
   }
 
+  async function submitNow(): Promise<void> {
+    if (phase === 'register') return;
+    /* The tap that follows a blur finds the verification already in flight;
+       wait for it instead of dropping the enlistment on the floor. */
+    if (phase === 'verify') {
+      const job = verifyJob;
+      if (!job || job.key !== keyOf()) return;
+      const verified = await job.promise;
+      if (!verified || !isOpen) return;
+      await finishEnlist();
+      return;
+    }
+    const issue = handleIssue(input.value);
+    if (issue) {
+      touched = true;
+      showIssue(issue);
+      paint();
+      input.focus({ preventScroll: true });
+      notify('warning');
+      return;
+    }
+    const ok = await verifyCurrent();
+    if (!ok || !isOpen) return;
+    await finishEnlist();
+  }
+
   function close(): void {
     if (!isOpen) return;
     isOpen = false;
+    verifyTicket++;
+    verifyJob = null;
+    phase = null;
+    input.readOnly = false;
+    verifySpin.hidden = true;
+    spin.hidden = true;
+    submit.classList.remove('is-busy');
     modal.classList.remove('is-open');
     scrim.classList.remove('is-open');
     window.clearTimeout(closeTimer);
@@ -2860,11 +3020,19 @@ function createEnlistModal(): EnlistModal | null {
   function show(): void {
     window.clearTimeout(closeTimer);
     restore = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    isOpen = true;
     touched = false;
-    busy = false;
-    err.hidden = true;
+    phase = null;
+    verifyTicket++;
+    verifyJob = null;
+    preview = null;
+    previewKey = '';
+    input.value = '';
+    input.readOnly = false;
+    clearError();
     submit.classList.remove('is-busy');
     spin.hidden = true;
+    verifySpin.hidden = true;
     ctaLabel.textContent = t('enlistCta');
     input.setAttribute('aria-label', t('enlistPlaceholder').replace(/_/g, ' '));
     modal.hidden = false;
@@ -2872,7 +3040,6 @@ function createEnlistModal(): EnlistModal | null {
     void modal.offsetWidth;                 // lay the panel out at its closed scale first
     modal.classList.add('is-open');
     scrim.classList.add('is-open');
-    isOpen = true;
     paint();
     impact('light');
     window.setTimeout(() => {
@@ -2881,10 +3048,32 @@ function createEnlistModal(): EnlistModal | null {
   }
 
   input.addEventListener('input', () => {
+    if (phase) return;
     touched = false;
-    err.hidden = true;
+    clearError();
     normalise();
+    const issue = handleIssue(input.value);
+    if (issue === 'chars' || issue === 'long') {
+      showError(issue === 'long' ? 'local:long' : 'local:chars', '', undefined, false);
+    }
+    if (previewKey && previewKey !== keyOf()) {
+      preview = null;
+      previewKey = '';
+    }
     paint();
+  });
+  input.addEventListener('blur', () => {
+    if (!isOpen || phase) return;
+    const value = input.value.trim();
+    if (!value) return;
+    touched = true;
+    const issue = handleIssue(value);
+    if (issue) {
+      showIssue(issue);
+      paint();
+      return;
+    }
+    void verifyCurrent();
   });
   input.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
@@ -2895,14 +3084,24 @@ function createEnlistModal(): EnlistModal | null {
   for (const btn of kindBtns) {
     btn.addEventListener('click', () => {
       const next: SquadKind = btn.dataset.enlistKind === 'group' ? 'group' : 'channel';
-      if (next === kind) return;
+      if (next === kind || phase === 'register') return;
       kind = next;
       for (const other of kindBtns) {
         const on = other === btn;
         other.classList.toggle('is-on', on);
         other.setAttribute('aria-pressed', on ? 'true' : 'false');
       }
+      preview = null;
+      previewKey = '';
+      if (phase === 'verify') {
+        verifyTicket++;
+        verifyJob = null;
+        setPhase(null);
+      }
+      clearError();
+      paint();
       impact('light');
+      if (isOpen && handleIssue(input.value) === '') void verifyCurrent();
     });
   }
 
@@ -2917,12 +3116,13 @@ function createEnlistModal(): EnlistModal | null {
   });
 
   /* The chassis is translated in place: `data-i18n` covers the static labels,
-     and the two strings this controller owns are re-read here. */
+     and every string this controller owns is re-read here. */
   window.addEventListener('detour:lang', () => {
     if (!isOpen) return;
     input.setAttribute('aria-label', t('enlistPlaceholder').replace(/_/g, ' '));
+    if (errorCode) err.textContent = errorText();
+    setPhase(phase);
     paint();
-    if (!err.hidden) err.textContent = t('enlistErrHandle');
   });
 
   return { open: show };

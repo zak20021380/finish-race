@@ -623,8 +623,9 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   if (tourStar) tourStar.src = starsImg;
 
   /* The enlistment pod: the channel-admin growth door. It fires a light haptic and
-     raises the Enlist Squad modal — the registration path that previews the
-     community and writes the squad locally, no bot-chat hop in the way. */
+     raises the Enlist Squad modal — the registration path that verifies the
+     community with Telegram (type, public status, duplicates) and writes it
+     through the Worker, no bot-chat hop in the way. */
   document.getElementById('home-tournament-admin')?.addEventListener('click', () => {
     impact('light');
     poke();

@@ -283,6 +283,12 @@ async function route(request: Request, env: Env): Promise<Response> {
     return referrals(request, env, url);
   }
 
+  if (url.pathname === '/api/squads/verify') {
+    if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    return lobby.fetch(request);
+  }
+
   if (url.pathname === '/api/squads/register') {
     if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
     const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));

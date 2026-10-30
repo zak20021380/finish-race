@@ -21678,10 +21678,10 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
    ENLIST SQUAD — the Channel War registration modal (src/menu.ts
    `openEnlistSquad`). A centered luxury-glass chassis over its own scrim,
    above the sheets (900/901) and below an urgent dispatch (1000). Gold rim,
-   obsidian handle field, live community preview, one high-energy enlist key.
+   obsidian handle field, verified community preview, one high-energy enlist key.
 
    The composition is deliberately short: title + type pill, one promise, the
-   channel/group switch, the field, the live plate and two micro-badges. Every
+   channel/group switch, the field, the verified plate and two micro-badges. Every
    line that used to explain the field (the paste hint, the ownership fine
    print) is gone — the field's own behaviour teaches it, and the key states
    the commitment on its face.
@@ -21892,10 +21892,10 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
 }
 .enlist-field.is-valid { border-color: rgba(252, 211, 77, .42); }
 .enlist-field.is-bad {
-  border-color: rgba(248, 113, 113, .55);
+  border-color: #ff3366;
   box-shadow:
-    inset 0 2px 6px rgba(0, 0, 0, .5),
-    0 0 0 3px rgba(248, 113, 113, .1);
+    0 0 12px rgba(255, 51, 102, .4),
+    inset 0 2px 6px rgba(0, 0, 0, .5);
 }
 @keyframes enlist-shake {
   0%, 100% { transform: translateX(0); }
@@ -21933,6 +21933,25 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
   letter-spacing: .01em;
 }
 .enlist-input::placeholder { color: #4A5A72; font-weight: 500; letter-spacing: .02em; }
+.enlist-count {
+  flex: none;
+  font-size: 9px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+  color: #64748B;
+}
+.enlist-count[hidden] { display: none; }
+.enlist-verify-spin {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(252, 211, 77, .22);
+  border-top-color: #FCD34D;
+  border-radius: 50%;
+  animation: enlist-spin .7s linear infinite;
+}
+.enlist-verify-spin[hidden] { display: none; }
 .enlist-tick {
   flex: none;
   width: 16px;
@@ -21943,7 +21962,7 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
   transition: opacity 160ms ease, transform .2s var(--bounce);
 }
 .enlist-tick svg { display: block; width: 100%; height: 100%; }
-.enlist-field.is-valid .enlist-tick { opacity: 1; transform: none; }
+.enlist-field.is-verified .enlist-tick { opacity: 1; transform: none; }
 
 /* The only line under the field, and only when a submit was actually refused:
    the hint that used to live here is gone, so this can never read as clutter. */
@@ -21956,7 +21975,7 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
 }
 .enlist-err[hidden] { display: none; }
 
-/* ---- the live plate: a 48px squircle crest, the handle, one ready badge ---- */
+/* ---- the verified plate: a 48px squircle crest, the real title, one badge ---- */
 .enlist-preview {
   display: flex;
   align-items: center;
@@ -21994,8 +22013,14 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
 .enlist-av-mono { font-size: 19px; font-weight: 900; line-height: 1; color: #2A1902; }
 .enlist-av-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .enlist-av-img[hidden] { display: none; }
-.enlist-pv-h {
+.enlist-pv-copy {
   flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.enlist-pv-title {
   min-width: 0;
   font-size: 13px;
   font-weight: 800;
@@ -22005,7 +22030,31 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  unicode-bidi: plaintext;
 }
+.enlist-pv-h {
+  min-width: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.25;
+  color: #94A3B8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.enlist-pv-meta {
+  min-width: 0;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  line-height: 1.25;
+  color: #6EE7B7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.enlist-pv-meta[hidden] { display: none; }
 .enlist-ready {
   flex: none;
   display: inline-flex;
@@ -22034,6 +22083,12 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
     0 0 10px rgba(252, 211, 77, .35);
   animation: enlist-ready-pulse 1.8s ease-in-out infinite;
 }
+.enlist-ready.is-verified {
+  border-color: rgba(52, 211, 153, .5);
+  background: rgba(16, 185, 129, .16);
+  color: #A7F3D0;
+}
+.enlist-ready.is-verified i { animation: none; opacity: 1; }
 @keyframes enlist-ready-pulse {
   0%, 100% { opacity: .55; }
   50% { opacity: 1; }
@@ -22171,6 +22226,7 @@ html.reduced-motion .enlist { transition: none; }
 html.reduced-motion .enlist-panel { transition: none; }
 html.reduced-motion .enlist.is-open .enlist-panel { animation: none; }
 html.reduced-motion .enlist-ready i { animation: none; opacity: 1; }
+html.reduced-motion .enlist-verify-spin { animation: none; opacity: .8; }
 html.reduced-motion .enlist-preview { animation: none; }
 html.reduced-motion .enlist-field.is-shake { animation: none; }
 html.reduced-motion .enlist-cta,
@@ -22202,7 +22258,7 @@ html.reduced-motion .enlist-cta::before { transition: none; }
    The chassis never mirrors — the close box, the @ pod and the avatar keep
    their geometry. Only the text containers turn, and the handle line stays a
    Latin run so a username is never reordered by the bidi algorithm. */
-html[data-lang="fa"] :is(.enlist-title-t, .enlist-type, .enlist-sub, .enlist-kind-b, .enlist-perk, .enlist-cta-t, .enlist-err, .enlist-ready) {
+html[data-lang="fa"] :is(.enlist-title-t, .enlist-type, .enlist-sub, .enlist-kind-b, .enlist-perk, .enlist-cta-t, .enlist-err, .enlist-ready, .enlist-pv-title, .enlist-pv-meta) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0 !important;
   text-transform: none !important;

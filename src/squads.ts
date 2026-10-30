@@ -123,12 +123,32 @@ function flush() {
 /** Called after every bind / leave / trophy award. */
 export function onSquadChange(w: () => void) { watchers.push(w); }
 
+/** Telegram usernames: 5–32 characters, letters, digits or underscores. */
+export const HANDLE_RE = /^[A-Za-z0-9_]{5,32}$/;
+
+export type HandleIssue = '' | 'empty' | 'short' | 'long' | 'chars';
+
+/**
+ * Why a typed or pasted community reference is not a Telegram username, or '' when it is.
+ * Links and a leading `@` are folded first, so the same rule applies to every entry point.
+ */
+export function handleIssue(raw: string): HandleIssue {
+  let value = (raw ?? '').trim();
+  const link = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/(.+)$/i.exec(value);
+  if (link) value = link[1].split(/[?#]/)[0].replace(/\/+$/, '');
+  value = value.replace(/^@+/, '');
+  if (!value) return 'empty';
+  if (value.length < 5) return 'short';
+  if (value.length > 32) return 'long';
+  return /^[A-Za-z0-9_]+$/.test(value) ? '' : 'chars';
+}
+
 /** Normalise free text to @Handle, or '' when it cannot be a channel username. */
 export function cleanHandle(raw: string): string {
   let h = (raw ?? '').trim().replace(/\s+/g, '');
   if (!h) return '';
   if (!h.startsWith('@')) h = `@${h}`;
-  if (!/^@[A-Za-z0-9_]{3,32}$/.test(h)) return '';
+  if (!HANDLE_RE.test(h)) return '';
   return h;
 }
 
@@ -142,7 +162,7 @@ export function cleanChatReference(raw: string): string {
   const direct = cleanHandle(raw);
   if (direct) return direct;
   let value = (raw ?? '').trim().split(/[?#]/)[0].replace(/\/+$/, '');
-  const link = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/([A-Za-z0-9_]{3,32})$/i.exec(value);
+  const link = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/([A-Za-z0-9_]{5,32})$/i.exec(value);
   if (!link) return '';
   value = link[1];
   return cleanHandle(value);
@@ -223,55 +243,6 @@ export function bindSquad(rawHandle: string): BindResult {
   return was;
 }
 
-export type EnlistResult =
-  | { ok: true; squad: RankedSquad; created: boolean }
-  | { ok: false; reason: 'bad-handle' };
-
-/**
- * The Channel War enlistment door: an admin pastes anything Telegram-shaped
- * (`@name`, `name`, `t.me/name`), we normalise it, bind the squad when it already
- * ranks, and otherwise mint a local one carrying the chosen community kind.
- * Unlike `claimRegisteredSquad` this never refuses an existing handle — enlisting
- * the reigning champion simply binds you to it.
- *
- * A freshly minted squad is a complete registration in one write: handle, kind,
- * public avatar, opening stats, the Channel War stamp and the device binding that
- * makes the local player its leader. The board, the cup and the hub all read the
- * same record, so nothing else has to be told the community exists.
- */
-export function enlistSquad(rawHandle: string, kind: SquadKind = 'channel'): EnlistResult {
-  const handle = cleanChatReference(rawHandle);
-  if (!handle) return { ok: false, reason: 'bad-handle' };
-  const existing = getSquadRanking().find((s) => s.handle.toLowerCase() === handle.toLowerCase());
-  if (existing) {
-    if (save.boundId !== existing.id) {
-      save.boundId = existing.id;
-      flush();
-    }
-    return { ok: true, squad: getMySquad() ?? existing, created: false };
-  }
-  const id = `sq-${Date.now().toString(36)}-${handle.slice(1, 6).toLowerCase()}`;
-  const created: Squad = {
-    id,
-    handle,
-    name: displayNameOf(handle),
-    members: 1,
-    trophies: 0,
-    trend: 'same',
-    kind: kind === 'group' ? 'group' : 'channel',
-    avatar: telegramAvatarUrl(handle),
-    enlistedAt: Date.now(),
-  };
-  save.custom = [...save.custom, created].slice(-20);
-  save.boundId = id;
-  flush();
-  return {
-    ok: true,
-    squad: getMySquad() ?? { ...created, rank: getSquadRanking().length, owned: true },
-    created: true,
-  };
-}
-
 export interface RegisteredSquadInput {
   id?: string;
   handle: string;
@@ -307,6 +278,7 @@ export function claimRegisteredSquad(input: RegisteredSquadInput): ClaimResult {
     kind: input.kind === 'group' ? 'group' : 'channel',
     avatar: typeof input.avatar === 'string' ? input.avatar.slice(0, 160) : '',
     ...(tag ? { tag } : {}),
+    enlistedAt: Date.now(),
   };
   save.custom = [...save.custom, created].slice(-20);
   save.boundId = id;

@@ -58,7 +58,7 @@ import {
 } from './auth';
 import { json, reasonOf } from './http';
 import {
-  normalizeChatHandle, readRegisteredSquad, verifyAndBuildSquad,
+  normalizeChatHandle, readRegisteredSquad, SQUAD_ALREADY_ENLISTED, verifyAndBuildSquad, verifySquadChat,
   type RegisteredSquad, type SquadVerification,
 } from './squads';
 import { botMainAppLink } from '../shared/config';
@@ -1317,7 +1317,7 @@ function squadKeyOf(raw: string): string {
   const normalized = normalizeChatHandle(raw);
   if (normalized) return normalized.toLowerCase();
   const plain = raw.trim().replace(/^@+/, '').toLowerCase();
-  return /^[a-z0-9_]{4,32}$/.test(plain) ? `@${plain}` : '';
+  return /^[a-z0-9_]{5,32}$/.test(plain) ? `@${plain}` : '';
 }
 
 /** Who a spread announcement is aimed at. The server stores it; the client matches it. */
@@ -1452,6 +1452,8 @@ export class MatchmakerDO {
   /** Registered Telegram channels and groups, by squad id. */
   private squads = new Map<string, RegisteredSquad>();
   private squadsDirty = false;
+  /** Handles with an enlistment in flight. Two taps cannot both pass the duplicate gate. */
+  private enlisting = new Set<string>();
   /** Durable board counters, seeded from storage and written back as they move. */
   private gameMetrics: GameMetrics = zeroGameMetrics();
   /** The bounded growth rings behind the Stats tab's trend chart. */
@@ -1549,6 +1551,7 @@ export class MatchmakerDO {
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === '/api/squads/verify') return this.verifySquad(request, url);
     if (url.pathname === '/api/squads/register') return this.registerSquad(request, url);
     /* The worker has authenticated the caller on `/admin/*` and `/api/admin/*`; the room below
        authorizes them against its registry. The one public announcement feed rides the same
@@ -1671,6 +1674,60 @@ export class MatchmakerDO {
 
   /* ---------- registered squads ---------- */
 
+  /** Any registry row already holding this chat id or username. Case-insensitive by handle. */
+  private squadConflict(chatId: string, handle: string): boolean {
+    const key = handle.toLowerCase();
+    for (const squad of this.squads.values()) {
+      if (squad.handle.toLowerCase() === key) return true;
+      if (chatId && squad.chatId === chatId) return true;
+    }
+    return false;
+  }
+
+  /** The signed Mini App user, or the dev door's reported id on a loopback/DEV_AUTH host. */
+  private async squadRequester(request: Request, url: URL, body: Record<string, unknown>): Promise<string> {
+    const initData = request.headers.get('x-telegram-init-data') ?? '';
+    const verified = await verifiedTelegramUserId(initData, this.env);
+    if (verified) return verified;
+    const dev = this.env.DEV_AUTH === 'true' || isLocalhost(url.hostname);
+    if (!dev) return '';
+    return String(body.userTelegramId ?? '').replace(/[^0-9-]/g, '').slice(0, 20);
+  }
+
+  /**
+   * The blur/tap preview: resolve the handle with `getChat`, prove its type against the selected
+   * tab and refuse a squad the registry already holds. Nothing is written here.
+   */
+  private async verifySquad(request: Request, url: URL): Promise<Response> {
+    const body = await readBody(request);
+    const requestedKind = body.kind === 'channel' || body.kind === 'group' ? body.kind : '';
+    if (!requestedKind) {
+      return json({ ok: false, error: 'invalid_kind', message: 'Choose Channel or Group.' }, 400);
+    }
+    const requester = await this.squadRequester(request, url, body);
+    if (!requester) {
+      return json({ ok: false, error: 'unauthorized', message: 'Telegram verification required.' }, 401);
+    }
+
+    const result = await verifySquadChat(
+      typeof body.chatUsername === 'string' ? body.chatUsername : '',
+      requestedKind,
+      this.env,
+    );
+    if (!result.ok) {
+      return json({
+        ok: false,
+        error: result.code,
+        message: result.message,
+        ...(result.kind ? { kind: result.kind } : {}),
+      }, result.status);
+    }
+    if (this.squadConflict(result.chat.chatId, result.chat.handle)) {
+      return json({ ok: false, error: 'already_registered', message: SQUAD_ALREADY_ENLISTED }, 409);
+    }
+    return json({ ok: true, chat: result.chat });
+  }
+
   private async registerSquad(request: Request, url: URL): Promise<Response> {
     const body = await readBody(request);
     const rawHandle = typeof body.chatUsername === 'string' ? body.chatUsername : '';
@@ -1682,22 +1739,8 @@ export class MatchmakerDO {
         message: 'Enter a channel handle or link like @your_channel.',
       }, 400);
     }
-    if ([...this.squads.values()].some((s) => s.handle.toLowerCase() === handle.toLowerCase())) {
-      return json({
-        ok: false,
-        error: 'already_registered',
-        message: 'This channel/group is already registered as a Squad.',
-      }, 409);
-    }
 
-    const initData = request.headers.get('x-telegram-init-data') ?? '';
-    let requester = await verifiedTelegramUserId(initData, this.env);
-    if (!requester) {
-      const dev = this.env.DEV_AUTH === 'true' || isLocalhost(url.hostname);
-      if (dev) {
-        requester = String(body.userTelegramId ?? '').replace(/[^0-9-]/g, '').slice(0, 20);
-      }
-    }
+    const requester = await this.squadRequester(request, url, body);
     if (!requester) {
       return json({
         ok: false,
@@ -1705,26 +1748,47 @@ export class MatchmakerDO {
         message: 'Telegram verification required.',
       }, 401);
     }
-
-    const result = await verifyAndBuildSquad(rawHandle, requester, this.env, {
-      name: typeof body.squadName === 'string' ? body.squadName : '',
-      tag: typeof body.squadTag === 'string' ? body.squadTag : '',
-    });
-    if (!result.ok) {
-      return json({ ok: false, error: result.code, message: result.message }, result.status);
+    if (this.squadConflict('', handle)) {
+      return json({ ok: false, error: 'already_registered', message: SQUAD_ALREADY_ENLISTED }, 409);
     }
-    if ([...this.squads.values()].some((s) => s.chatId === result.squad.chatId || s.handle.toLowerCase() === result.squad.handle.toLowerCase())) {
+
+    /* Checked and set in the same synchronous turn: a second enlistment of the same handle can
+       not slip between the duplicate gate and the registry write while Telegram is answering. */
+    const reservation = handle.toLowerCase();
+    if (this.enlisting.has(reservation)) {
       return json({
         ok: false,
-        error: 'already_registered',
-        message: 'This channel/group is already registered as a Squad.',
+        error: 'enlist_in_progress',
+        message: 'An enlistment for this squad is already in progress.',
       }, 409);
     }
+    this.enlisting.add(reservation);
+    try {
+      const requestedKind = body.kind === 'channel' || body.kind === 'group' ? body.kind : undefined;
+      const result = await verifyAndBuildSquad(rawHandle, requester, this.env, {
+        name: typeof body.squadName === 'string' ? body.squadName : '',
+        tag: typeof body.squadTag === 'string' ? body.squadTag : '',
+        kind: requestedKind,
+      });
+      if (!result.ok) {
+        return json({
+          ok: false,
+          error: result.code,
+          message: result.message,
+          ...(result.kind ? { kind: result.kind } : {}),
+        }, result.status);
+      }
+      if (this.squadConflict(result.squad.chatId, result.squad.handle)) {
+        return json({ ok: false, error: 'already_registered', message: SQUAD_ALREADY_ENLISTED }, 409);
+      }
 
-    this.squads.set(result.squad.id, result.squad);
-    this.squadsDirty = true;
-    this.persistSquads();
-    return json({ ok: true, squad: result.squad });
+      this.squads.set(result.squad.id, result.squad);
+      this.squadsDirty = true;
+      this.persistSquads();
+      return json({ ok: true, squad: result.squad });
+    } finally {
+      this.enlisting.delete(reservation);
+    }
   }
 
   private persistSquads(): void {

@@ -29,7 +29,7 @@ export interface RegisteredSquad {
 
 export type SquadRegistration =
   | { ok: true; squad: RegisteredSquad }
-  | { ok: false; status: number; code: string; message: string };
+  | { ok: false; status: number; code: string; message: string; kind?: SquadKind };
 
 interface TelegramChat {
   id?: number | string;
@@ -53,9 +53,13 @@ interface TelegramEnvelope<T> {
 }
 
 const TELEGRAM_BASE = 'https://api.telegram.org/bot';
-const HANDLE = /^@[A-Za-z0-9_]{4,32}$/;
+const HANDLE = /^@[A-Za-z0-9_]{5,32}$/;
 const MEMBER_TEXT = 32;
 const AVATAR_TEXT = 160;
+/** The refusal every enlistment door gives for a chat that is already on the board. */
+export const SQUAD_ALREADY_ENLISTED = 'This squad is already enlisted in the competition!';
+const KIND_MISMATCH_GROUP = 'This handle belongs to a group. Please select the GROUP tab.';
+const KIND_MISMATCH_CHANNEL = 'This handle belongs to a channel. Please select the CHANNEL tab.';
 let cachedBotId = '';
 
 class TelegramError extends Error {
@@ -90,8 +94,9 @@ const memberStatus = (value: unknown): string => {
 export function normalizeChatHandle(raw: string): string {
   let value = text(raw, 200);
   if (!value) return '';
-  value = value.split(/[?#]/)[0].replace(/\/+$/, '');
-  const link = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/([A-Za-z0-9_]{4,32})$/i.exec(value);
+  /* A link's query/fragment is not part of the username, but a bare handle with one is
+     malformed — only the link shape is allowed to carry a suffix. */
+  const link = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/([A-Za-z0-9_]{5,32})\/?(?:[?#].*)?$/i.exec(value);
   if (link) value = link[1];
   value = value.replace(/^@+/, '');
   if (!HANDLE.test(`@${value}`)) return '';
@@ -189,11 +194,132 @@ async function statusOf(token: string, chatId: string, userId: string): Promise<
   }
 }
 
+export interface SquadChatPreview {
+  chatId: string;
+  handle: string;
+  name: string;
+  kind: SquadKind;
+  avatar: string;
+  members: number;
+}
+
+export type SquadChatCheck =
+  | { ok: true; chat: SquadChatPreview }
+  | { ok: false; status: number; code: string; message: string; kind?: SquadKind };
+
+interface ResolvedChat {
+  chatId: string;
+  handle: string;
+  title: string;
+  kind: SquadKind;
+  avatar: string;
+  members: number;
+}
+
+type ChatFailure = { ok: false; status: number; code: string; message: string; kind?: SquadKind };
+
+/**
+ * `getChat` is the one source of truth for a community's existence, type, title, photo and
+ * audience. It only ever answers for the username that was asked for, and a chat without a
+ * public username is refused as private — a handle that resolves must be public by definition.
+ */
+async function resolveChat(rawHandle: string, token: string): Promise<{ ok: true; chat: ResolvedChat } | ChatFailure> {
+  const handle = normalizeChatHandle(rawHandle);
+  if (!handle) {
+    return { ok: false, status: 400, code: 'invalid_handle', message: 'Enter a channel handle or link like @your_channel.' };
+  }
+
+  let chat: TelegramChat;
+  try {
+    chat = await telegram<TelegramChat>(token, 'getChat', { chat_id: handle });
+  } catch (error) {
+    if (error instanceof TelegramError) {
+      if (error.errorCode === 400 || /chat not found|username not found|chat_id_invalid|invalid/i.test(error.description)) {
+        return { ok: false, status: 404, code: 'chat_not_found', message: 'Channel or group not found.' };
+      }
+      if (error.errorCode === 403 || /private|not enough rights|not a member|kicked|access/i.test(error.description)) {
+        return { ok: false, status: 403, code: 'chat_private', message: 'This community is private. Only public channels and groups can enlist.' };
+      }
+    }
+    return { ok: false, status: 502, code: 'telegram_error', message: 'Telegram could not verify this chat.' };
+  }
+
+  const type = text(chat.type, 20);
+  if (type !== 'channel' && type !== 'group' && type !== 'supergroup') {
+    return { ok: false, status: 400, code: 'unsupported_chat', message: 'Only Telegram channels and groups can be registered.' };
+  }
+
+  const canonical = normalizeChatHandle(chat.username ?? '');
+  if (!canonical) {
+    return { ok: false, status: 403, code: 'chat_private', message: 'This community is private. Only public channels and groups can enlist.' };
+  }
+  /* A username resolves to exactly one chat; never accept an answer for a different handle. */
+  if (canonical.toLowerCase() !== handle.toLowerCase()) {
+    return { ok: false, status: 404, code: 'chat_not_found', message: 'Channel or group not found.' };
+  }
+
+  const chatId = chat.id === undefined || chat.id === null ? handle : String(chat.id).replace(/[^0-9-]/g, '').slice(0, 32);
+  let members = 0;
+  try {
+    const count = await telegram<number>(token, 'getChatMemberCount', { chat_id: chatId });
+    if (typeof count === 'number' && Number.isFinite(count) && count >= 0) members = Math.floor(count);
+  } catch {
+    const fallback = Number(chat.members_count);
+    if (Number.isFinite(fallback) && fallback >= 0) members = Math.floor(fallback);
+  }
+
+  return {
+    ok: true,
+    chat: {
+      chatId,
+      handle: canonical,
+      title: text(chat.title, MEMBER_TEXT) || canonical,
+      kind: type === 'channel' ? 'channel' : 'group',
+      avatar: text(chat.photo?.small_file_id ?? chat.photo?.big_file_id, AVATAR_TEXT),
+      members,
+    },
+  };
+}
+
+const kindMismatch = (actual: SquadKind): ChatFailure => ({
+  ok: false,
+  status: 409,
+  code: 'kind_mismatch',
+  kind: actual,
+  message: actual === 'group' ? KIND_MISMATCH_GROUP : KIND_MISMATCH_CHANNEL,
+});
+
+/** The preview door: getChat, the chosen tab's type check, and nothing written to the registry. */
+export async function verifySquadChat(
+  rawHandle: string,
+  requestedKind: SquadKind,
+  env: Env,
+): Promise<SquadChatCheck> {
+  const token = (env.TELEGRAM_BOT_TOKEN ?? '').trim();
+  if (!token) {
+    return { ok: false, status: 503, code: 'unavailable', message: 'Squad registration is unavailable.' };
+  }
+  const resolved = await resolveChat(rawHandle, token);
+  if (!resolved.ok) return resolved;
+  if (resolved.chat.kind !== requestedKind) return kindMismatch(resolved.chat.kind);
+  return {
+    ok: true,
+    chat: {
+      chatId: resolved.chat.chatId,
+      handle: resolved.chat.handle,
+      name: resolved.chat.title,
+      kind: resolved.chat.kind,
+      avatar: resolved.chat.avatar,
+      members: resolved.chat.members,
+    },
+  };
+}
+
 export async function verifyAndBuildSquad(
   rawHandle: string,
   userId: string,
   env: Env,
-  identity?: { name?: string; tag?: string },
+  identity?: { name?: string; tag?: string; kind?: SquadKind },
 ): Promise<SquadRegistration> {
   const handle = normalizeChatHandle(rawHandle);
   if (!handle) {
@@ -213,28 +339,16 @@ export async function verifyAndBuildSquad(
     return { ok: false, status: 503, code: 'unavailable', message: 'Squad registration is unavailable.' };
   }
 
-  let chat: TelegramChat;
-  try {
-    chat = await telegram<TelegramChat>(token, 'getChat', { chat_id: handle });
-  } catch (error) {
-    if (error instanceof TelegramError && /chat not found|username not found|invalid/i.test(error.description)) {
-      return { ok: false, status: 404, code: 'chat_not_found', message: 'Channel or group not found.' };
-    }
-    return { ok: false, status: 502, code: 'telegram_error', message: 'Telegram could not verify this chat.' };
-  }
+  const resolved = await resolveChat(handle, token);
+  if (!resolved.ok) return resolved;
+  const chat = resolved.chat;
 
-  const type = text(chat.type, 20);
-  if (type !== 'channel' && type !== 'group' && type !== 'supergroup') {
-    return { ok: false, status: 400, code: 'unsupported_chat', message: 'Only Telegram channels and groups can be registered.' };
-  }
-
-  const title = text(chat.title, MEMBER_TEXT) || handle;
-  const chatId = chat.id === undefined || chat.id === null ? handle : String(chat.id).replace(/[^0-9-]/g, '').slice(0, 32);
-  const canonical = normalizeChatHandle(chat.username ?? '') || handle;
+  const expectedKind = identity?.kind === 'channel' ? 'channel' : identity?.kind === 'group' ? 'group' : '';
+  if (expectedKind && chat.kind !== expectedKind) return kindMismatch(chat.kind);
 
   let requesterStatus: string;
   try {
-    requesterStatus = await statusOf(token, chatId, requester);
+    requesterStatus = await statusOf(token, chat.chatId, requester);
   } catch {
     return { ok: false, status: 502, code: 'telegram_error', message: 'Telegram could not verify this chat.' };
   }
@@ -263,7 +377,7 @@ export async function verifyAndBuildSquad(
   }
   let botStatus: string;
   try {
-    botStatus = await statusOf(token, chatId, botId);
+    botStatus = await statusOf(token, chat.chatId, botId);
   } catch {
     return { ok: false, status: 502, code: 'telegram_error', message: 'Telegram could not verify this chat.' };
   }
@@ -276,25 +390,16 @@ export async function verifyAndBuildSquad(
     };
   }
 
-  let members = 0;
-  try {
-    const count = await telegram<number>(token, 'getChatMemberCount', { chat_id: chatId });
-    if (typeof count === 'number' && Number.isFinite(count) && count >= 0) members = Math.floor(count);
-  } catch {
-    const fallback = Number(chat.members_count);
-    if (Number.isFinite(fallback) && fallback >= 0) members = Math.floor(fallback);
-  }
-
   return {
     ok: true,
     squad: {
-      id: `sq-tg-${chatId.replace(/[^0-9]/g, '') || canonical.slice(1).toLowerCase()}`.slice(0, 48),
-      chatId,
-      handle: canonical,
-      name: text(identity?.name, MEMBER_TEXT) || title,
-      members,
-      kind: type === 'channel' ? 'channel' : 'group',
-      avatar: text(chat.photo?.small_file_id ?? chat.photo?.big_file_id, AVATAR_TEXT),
+      id: `sq-tg-${chat.chatId.replace(/[^0-9]/g, '') || chat.handle.slice(1).toLowerCase()}`.slice(0, 48),
+      chatId: chat.chatId,
+      handle: chat.handle,
+      name: text(identity?.name, MEMBER_TEXT) || chat.title,
+      members: chat.members,
+      kind: chat.kind,
+      avatar: chat.avatar,
       tag,
       ownerId: requester,
       createdAt: Date.now(),

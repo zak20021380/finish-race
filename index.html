@@ -5389,17 +5389,23 @@
               autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="go"
               aria-label="Channel or group username" aria-describedby="enlist-err"
               data-i18n-ph="enlistPlaceholder" />
+            <span class="enlist-count" id="enlist-count" hidden aria-hidden="true">0/32</span>
+            <span class="enlist-verify-spin" id="enlist-verify-spin" hidden aria-hidden="true"></span>
             <span class="enlist-tick" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="#i-check" /></svg></span>
           </div>
-          <p class="enlist-err" id="enlist-err" role="status" hidden></p>
+          <p class="enlist-err" id="enlist-err" role="status" aria-live="polite" hidden></p>
 
           <div class="enlist-preview" id="enlist-preview" hidden>
             <span class="enlist-av">
               <span class="enlist-av-mono" id="enlist-av-mono" aria-hidden="true">D</span>
               <img class="enlist-av-img" id="enlist-av-img" alt="" hidden decoding="async" referrerpolicy="no-referrer" />
             </span>
-            <b class="enlist-pv-h" id="enlist-pv-h">@channel</b>
-            <span class="enlist-ready"><i aria-hidden="true"></i><span data-i18n="enlistReady">Ready to Enlist</span></span>
+            <span class="enlist-pv-copy">
+              <b class="enlist-pv-title" id="enlist-pv-title">Squad</b>
+              <span class="enlist-pv-h" id="enlist-pv-h">@channel</span>
+              <span class="enlist-pv-meta" id="enlist-pv-meta" hidden></span>
+            </span>
+            <span class="enlist-ready" id="enlist-ready"><i aria-hidden="true"></i><span id="enlist-ready-t">Ready to Enlist</span></span>
           </div>
 
           <div class="enlist-perks">

@@ -168,7 +168,7 @@ console.log('\n-- squad registration --');
   ok('a duplicate registration is refused with 409', duplicate.status === 409, `status ${duplicate.status}`);
   ok('the duplicate is already_registered', data.error === 'already_registered', JSON.stringify(data));
   ok('the duplicate carries the already-registered message',
-    data.message === 'This channel/group is already registered as a Squad.', data.message);
+    data.message === 'This squad is already enlisted in the competition!', data.message);
 }
 
 {

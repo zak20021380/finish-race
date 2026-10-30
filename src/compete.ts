@@ -472,7 +472,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   function goToRegisterIdentity(): void {
     const handle = registerHandle();
     if (!handle) {
-      const message = 'Enter a channel handle or link like @your_channel.';
+      const message = t('enlistErrHandle');
       showRegisterError(message);
       showToast(message, 'warning');
       notify('warning');
@@ -496,7 +496,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const handle = registerHandle();
     if (!handle) {
       setRegisterStep(1, true);
-      showRegisterError('Enter a channel handle or link like @your_channel.');
+      showRegisterError(t('enlistErrHandle'));
       return;
     }
     const name = (regEls.name?.value ?? '').trim().slice(0, 32);
