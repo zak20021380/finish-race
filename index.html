@@ -17,7 +17,7 @@
     <title>Tactix</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Vazirmatn:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <!-- AdsGram V1 rewarded video. Loaded async on purpose: the first ad is minutes away, and a
          blocked CDN must never hold up the race — `src/ads.ts` answers `no_sdk` and the UI moves on. -->
@@ -1896,6 +1896,11 @@
       <symbol id="i-bolt" viewBox="0 0 24 24">
         <path d="M13.6 2.8 5.4 13.4h5.1l-.9 7.8 8.4-10.8h-5.2Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
       </symbol>
+      <!-- career streak: an asymmetric flame — the left notch is what stops it
+           reading as a water drop at the 10px the capsule can afford -->
+      <symbol id="i-flame" viewBox="0 0 24 24">
+        <path d="M13.2 2.2c.4 4.4 4.8 6 5 10.2.2 4-2.8 6.8-6.3 6.8-3.6 0-6.4-2.6-6-6.4.2-2.6 1-4.6 2.1-6.6.2 2.8 1.4 5.2 3 6.7-.8-3.7 0-7.3 2.2-10.7Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+      </symbol>
       <!-- newest joined: a clean calendar day -->
       <symbol id="i-calendar" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -2725,11 +2730,23 @@
                   </button>
                 </div>
                 <div class="pf-quest-stats" id="pf-quest-stats" hidden>
-                  <dl class="p-stats quad pf-stats pf-hud">
-                    <div class="stat"><dt>Games</dt><dd id="pf-games">0</dd></div>
-                    <div class="stat"><dt>Wins</dt><dd id="pf-wins">0</dd></div>
-                    <div class="stat"><dt>Losses</dt><dd id="pf-losses">0</dd></div>
-                    <div class="stat"><dt>Best run</dt><dd id="pf-best">0</dd></div>
+                  <dl class="p-stats quad pf-stats pf-hud pf-career">
+                    <div class="stat stat-games">
+                      <dt class="stat-h"><svg class="ico" aria-hidden="true"><use href="#i-flag" /></svg><span class="stat-lbl">Games</span></dt>
+                      <dd id="pf-games">0</dd>
+                    </div>
+                    <div class="stat stat-wins">
+                      <dt class="stat-h"><svg class="ico" aria-hidden="true"><use href="#i-cup" /></svg><span class="stat-lbl">Wins</span></dt>
+                      <dd id="pf-wins">0</dd>
+                    </div>
+                    <div class="stat stat-losses">
+                      <dt class="stat-h"><svg class="ico" aria-hidden="true"><use href="#i-swords" /></svg><span class="stat-lbl">Losses</span></dt>
+                      <dd id="pf-losses">0</dd>
+                    </div>
+                    <div class="stat stat-best">
+                      <dt class="stat-h"><svg class="ico" aria-hidden="true"><use href="#i-flame" /></svg><span class="stat-lbl">Best run</span></dt>
+                      <dd id="pf-best">0</dd>
+                    </div>
                   </dl>
                 </div>
               </div>

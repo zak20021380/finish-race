@@ -140,6 +140,9 @@
   /* readouts (a TIQ score) are set in a monospace stack so the digits sit on a
      fixed pitch and two scores of the same length stay the same width */
   --font-numeric: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+  /* career readouts: a condensed geometric face, sharp down to 20px, with a DIN-ish
+     local fallback so the capsule keeps its voice if the webfont never lands */
+  --font-stat: "Rajdhani", "Bahnschrift", "DIN Alternate", var(--font-numeric);
   --w-1: 700; --w-2: 800; --w-3: 800;
   --ls-3: .08em;
 
@@ -6771,7 +6774,9 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   padding: var(--s1) 2px;
   border-radius: 12px;
 }
-.pf-stats .stat + .stat { box-shadow: inset 1px 0 0 rgba(255, 255, 255, .06); border-radius: 0 12px 12px 0; }
+/* the seam between columns is drawn by `.pf-career .stat::before` — one faded
+   hairline, not a hard inset cut */
+.pf-stats .stat + .stat { box-shadow: none; }
 .pf-stats .stat dt {
   font-size: var(--t-micro);
   font-weight: 800;
@@ -9400,31 +9405,80 @@ html.reduced-motion .ml-pulse::after { display: none; }
 .pf-chip-action .ico { width: 11px; height: 11px; }
 .pf-chip:hover .pf-chip-action { color: #CBD5E1; border-color: rgba(255, 255, 255, .16); }
 
-/* ---- arcade HUD stats: embossed module with dividing grooves ---- */
+/* ---- career capsule: smoked obsidian, faded hairline seams, per-metric accent ----
+   Four numbers, four identities: cold metal for volume, mint for wins, a deep
+   neutral for losses so they don't read as a penalty, gold for the streak. The
+   seams are single hairlines that dissolve at both ends, so the row still reads
+   as one glass slab rather than four cut-out cells. */
 .pf-hud.p-stats.quad {
   border-radius: 20px;
-  background: linear-gradient(180deg, #0A0F1C 0%, var(--field) 100%);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .055) 0%, rgba(255, 255, 255, 0) 46%),
+    linear-gradient(180deg, rgba(9, 14, 26, .88) 0%, rgba(14, 21, 38, .94) 100%);
+  backdrop-filter: blur(8px) saturate(115%);
+  -webkit-backdrop-filter: blur(8px) saturate(115%);
   box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, .5),
-    inset 0 -1px 0 rgba(255, 255, 255, .06),
-    inset 0 0 0 1px rgba(255, 255, 255, .06),
-    0 10px 20px -14px rgba(0, 0, 0, .6);
+    inset 0 0 0 1px rgba(255, 255, 255, .085),
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 -1px 0 rgba(0, 0, 0, .45),
+    inset 0 10px 18px -16px rgba(0, 0, 0, .95),
+    0 10px 22px -16px rgba(0, 0, 0, .7);
 }
-.pf-hud .stat { position: relative; padding: var(--s2) 2px; }
-.pf-hud .stat + .stat::before {
+/* one accent per column; the numeral and its glyph both read from it */
+.pf-career .stat { position: relative; min-width: 0; padding: 7px 1px; }
+.pf-career .stat-games  { --m-ink: #F1F5F9; --m-top: #FFFFFF; --m-bot: #C4D2E5; }
+.pf-career .stat-wins   { --m-ink: var(--mint-ink); --m-top: #A7F3D0; --m-bot: #34D399; }
+.pf-career .stat-losses { --m-ink: var(--text-dim); }
+.pf-career .stat-best   { --m-ink: var(--honey-ink); --m-top: #FDE68A; --m-bot: #F0A312; }
+.pf-career .stat + .stat::before {
   content: "";
   position: absolute;
-  left: 0;
-  top: 12%;
-  bottom: 12%;
-  width: 2px;
-  border-radius: 2px;
-  background: rgba(0, 0, 0, .5);
-  box-shadow: 1px 0 0 rgba(255, 255, 255, .07);
+  left: -2px;
+  top: 11%;
+  bottom: 11%;
+  width: 1px;
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, .16) 32%,
+    rgba(255, 255, 255, .16) 68%,
+    rgba(255, 255, 255, 0) 100%);
 }
-.pf-hud .stat dd {
-  font-size: var(--t-1);
-  text-shadow: 0 2px 0 rgba(0, 0, 0, .45);
+/* label row: micro glyph + tracked caps, locked to one 13px line so the
+   capsule can never grow when a translation runs long */
+.pf-career .stat dt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  line-height: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.pf-career .stat .ico { width: 10px; height: 10px; flex: none; color: var(--m-ink, var(--ink-soft)); opacity: .72; }
+.pf-career .stat .stat-lbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pf-career .stat dd {
+  margin: 2px 0 0;
+  font-family: var(--font-stat);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 22px;
+  letter-spacing: .01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--m-ink, var(--ink));
+}
+/* the metallic pass: a top-lit fill clipped to the glyphs. `-webkit-text-fill-color`
+   is the only thing that hides the solid colour, so an unsupported engine keeps a
+   perfectly readable flat accent instead of blank numbers. */
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .pf-career .stat:not(.stat-losses) dd {
+    background-image: linear-gradient(180deg, var(--m-top) 0%, var(--m-bot) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
 }
 
 /* ---- Honor & Badges: slim horizontal tray of circular 3D medal chips ----
@@ -28154,8 +28208,8 @@ html[data-lang="fa"] :is(.gm-lead, .gm-start, #squad-leave, #squad-explore-t, .s
 
 /* ---- numbers, timers, codes, handles, mode tags: isolated LTR, tabular ---- */
 html[data-lang="fa"] :is(
-  #p-coins, #p-level, #pf-coins, #pf-tiq, #pf-level, #pf-xp, #pf-games,
-  #pf-wins, #pf-losses, #pf-best, #pf-streak, #pf-badge-count,
+  #p-coins, #p-level, #pf-coins, #pf-tiq, #pf-level, #pf-xp, #pf-streak,
+  #pf-badge-count,
   #home-play-rw, .pd-rw, .pd-rw-item, .pd-rw b, .gm-rw, #lb-count, #lb-code, .lb-count,
   .lb-fmt, .sq-rank, .sq-count, .sq-chip, .sq-score, .sq-meta-handle,
   .sq-card-handle, .sq-banner-handle, .sqp-handle, .flag-code, .id-lvl,
@@ -28168,6 +28222,19 @@ html[data-lang="fa"] :is(
   font-variant-numeric: tabular-nums;
   letter-spacing: 0 !important;
 }
+
+/* ---- career capsule: the numerals keep the capsule's own condensed voice ----
+   They are pulled out of the mono list above so Persian and English render the
+   same figures; only the bidi base of the label row mirrors. */
+html[data-lang="fa"] .pf-career .stat dd {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-stat);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
+}
+html[data-lang="fa"] .pf-career .stat dt { direction: rtl; }
+html[data-lang="fa"] .pf-career .stat .stat-lbl { direction: ltr; unicode-bidi: isolate; }
 
 /* ---- titles keep their alignment; only their bidi base turns RTL ---- */
 html[data-lang="fa"] :is(.m-title, .sheet-t, .set-title, .sheet-p, .set-card-h > span) {
