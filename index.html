@@ -19,6 +19,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- AdsGram V1 rewarded video. Loaded async on purpose: the first ad is minutes away, and a
+         blocked CDN must never hold up the race — `src/ads.ts` answers `no_sdk` and the UI moves on. -->
+    <script src="https://sad.adsgram.ai/js/sad.min.js" async></script>
     <!-- The boot screen is inlined on purpose: it must paint before the bundle, in the right
          language, even on a cold Telegram webview. `data-txs-skip` keeps headless suites free
          of an overlay they never asked for. -->

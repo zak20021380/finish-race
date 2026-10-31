@@ -451,6 +451,14 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     banterBot2: 'AI supremacy! 🤖👑',
     banterBot3: 'Try again, human! 🔥',
     banterBot4: 'Next round is mine! ⚡',
+    /* ---- rewarded video: the TIQ recovery & double-coins surfaces ---- */
+    adRecoverCta: 'RECOVER',
+    adRecoverProtected: 'PROTECTED ✓',
+    adRecoverLimit: 'LIMIT 0/3',
+    adDoubleCta: '2× COINS',
+    adDoubleClaimed: '2× CLAIMED ✓',
+    adToastSkipped: 'Watch the full video to claim your reward.',
+    adToastUnavailable: 'No ad available right now. Try again shortly.',
   },
   fa: {
     settingsTitle: 'تنظیمات',
@@ -756,6 +764,14 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     banterBot2: 'قدرت هوش مصنوعی! 🤖👑',
     banterBot3: 'دوباره تلاش کن! 🔥',
     banterBot4: 'دست بعد هم مال منه! ⚡',
+    /* ---- ویدیوی جایزه‌دار: بازیابی TIQ و دو برابر سکه ---- */
+    adRecoverCta: 'بازیابی',
+    adRecoverProtected: 'محافظت شد ✓',
+    adRecoverLimit: 'سقف ۰/۳',
+    adDoubleCta: '۲× سکه',
+    adDoubleClaimed: '۲× دریافت شد ✓',
+    adToastSkipped: 'برای دریافت پاداش، ویدیو را کامل تماشا کنید.',
+    adToastUnavailable: 'در حال حاضر تبلیغی موجود نیست. کمی بعد تلاش کنید.',
   },
   ru: {
     settingsTitle: 'Настройки',

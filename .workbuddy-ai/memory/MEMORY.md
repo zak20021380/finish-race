@@ -69,6 +69,15 @@ Durable index; dated logs beside this file hold the history.
   (`channel` vs `supergroup|group`); the modal only goes green on that answer, and BOTH phases
   spin the CTA (`#enlist-spin`), not just register.
 
+## Rewarded video (src/ads.ts)
+- ONE door: `playRewardedAd(placement)` **never rejects**; `no_sdk | no_fill | skipped | error`.
+  Mutex `isShowingAd` (racing tap → `skipped`), reward on `onReward` OR `done===true && !error`,
+  listeners removed + `destroy()` in `finally`.
+- Block ids: `VITE_ADSGRAM_{RECOVER,COINS}_BLOCK_ID || VITE_ADSGRAM_BLOCK_ID || ''` — declared in
+  `vite-env.d.ts` (undeclared `import.meta.env` keys are TS2339). SDK = async CDN tag in `<head>`.
+- Quota `fr_tiq_recovery_log_v1` (NOT `detour.*`): epoch stamps, rolling 24h, max 3, memory mirror
+  after first hydrate so refused storage still enforces it. Per-match claims are a separate `Set`.
+
 ## Design system
 - One theme "Dark Clay": opaque slabs, no live blur. Reduced motion is `html.reduced-motion`,
   `applyMotion()` the only writer. Settings uses `--set-pad-x` (never `--s3`). Toggles are amber ON —
