@@ -1,10 +1,15 @@
 /**
- * banter.ts — the post-match banter dock and its two speech bubbles.
+ * banter.ts — the post-match banter dock and its two floating bubbles.
  *
- * The dock sits above the rematch key in the Match Complete capsule: a carousel of taunts that
- * change with the outcome, six emoji beats, and a 40-character line. Every message lands on its
- * sender's own podium card: the champion's bubble is emerald/cyan, the fallen seat's is
- * crimson/violet, and each one springs in, replaces itself gracefully and leaves after 4.5s.
+ * The dock floats frameless above the rematch key in the Match Complete capsule and speaks in
+ * two rows: six circular reactions with the composer key at the inline-end, then one slot that
+ * holds either the quick-taunt strip or the 40-character line. Opening the keyboard swaps row
+ * two in place, so the dock never grows a third storey over the primary action.
+ *
+ * Every message lands on its sender's own podium card: the champion's bubble is emerald/cyan,
+ * the fallen seat's is crimson/rose. A bubble is a flex child parked at the inline-end of the
+ * card, so the avatar and the nameplate are never covered. A bare emoji drops the pill and
+ * becomes a 42px glass medal instead.
  *
  * The wire is the only difference between opponents. Online, a line rides the same socket as the
  * race, as `POST_MATCH_CHAT`, and the rival's line comes back through `onPostChat`. Against the
@@ -45,7 +50,7 @@ export interface Banter {
 
 /** One message lives this long before its graceful exit. */
 const BUBBLE_MS = 4500;
-/** The fade matches `banter-say-out` in banter.css. */
+/** The exit matches `.result-say.is-out` in banter.css. */
 const LEAVE_MS = 300;
 /** One message per player per two seconds — the anti-spam gate the brief asks for. */
 const COOLDOWN_MS = 2000;
@@ -57,12 +62,23 @@ const REACTIONS = ['🧠', '🔥', '👑', '🎲', '😤', '🤝'] as const;
 const TAUNTS = 5;
 const BOT_LINES = 4;
 
+/**
+ * A message made only of pictographs — no letters, no digits — is a reaction, not a sentence:
+ * it renders as the round glass medal instead of a pill. Joiners, variation selectors, skin
+ * tones and whitespace are allowed alongside the glyphs.
+ */
+const EMOTE_ONLY =
+  /^(?:\p{Extended_Pictographic}|[\u200D\uFE0F\u20E3\u{1F3FB}-\u{1F3FF}]|\s)+$/u;
+const HAS_PICTOGRAPH = /\p{Extended_Pictographic}/u;
+
 type Card = 'win' | 'lose';
 
 const clip = (raw: string): string => {
   const clean = raw.replace(/[\u0000-\u001F\u007F]/g, ' ').trim();
   return Array.from(clean).slice(0, MAX_CHARS).join('');
 };
+
+const isEmote = (text: string): boolean => HAS_PICTOGRAPH.test(text) && EMOTE_ONLY.test(text);
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K, cls?: string, text?: string,
@@ -88,6 +104,10 @@ export function createBanter(wiring: BanterWiring): Banter {
   const form = byId<HTMLFormElement>('banter-form');
   const input = byId<HTMLInputElement>('banter-input');
   const send = byId<HTMLButtonElement>('banter-send');
+  const toggle = byId<HTMLButtonElement>('banter-toggle');
+  /* the <use> swaps between the chat bubble and the close glyph as row two flips */
+  const toggleIco = byId<HTMLElement>('banter-toggle-ico');
+  const closeKey = byId<HTMLButtonElement>('banter-close');
 
   interface Bubble { node: HTMLElement; text: HTMLElement; timer: number }
   const bubbles: Record<Card, Bubble> = {
@@ -119,6 +139,8 @@ export function createBanter(wiring: BanterWiring): Banter {
   let view: BanterView | null = null;
   let open = false;
   let locked = false;
+  /** True while row two is showing the composer instead of the quick-taunt strip. */
+  let composing = false;
   let lastSentAt = 0;
   let coolTimer = 0;
   let botTimer = 0;
@@ -130,6 +152,24 @@ export function createBanter(wiring: BanterWiring): Banter {
   const cooling = (): boolean => Date.now() < lastSentAt + COOLDOWN_MS;
   const lockedNow = (): boolean => locked || !open || !view?.enabled;
 
+  /**
+   * Row two is one slot with two faces. Flipping it swaps the chip strip for the composer in
+   * place — the dock keeps its height, so the rematch key never jumps under the thumb.
+   */
+  function setComposing(next: boolean, focus = false): void {
+    composing = next;
+    rail.hidden = next;
+    form.hidden = !next;
+    toggle.setAttribute('aria-expanded', next ? 'true' : 'false');
+    toggleIco.setAttribute('href', next ? '#i-close' : '#i-chat');
+    toggle.setAttribute('aria-label', t(next ? 'banterComposeClose' : 'banterComposeOpen'));
+    if (next) {
+      if (focus && !locked) input.focus();
+    } else {
+      input.blur();
+    }
+  }
+
   function paintCopy(): void {
     if (!view) return;
     dock.setAttribute('aria-label', t('banterLabel'));
@@ -137,6 +177,8 @@ export function createBanter(wiring: BanterWiring): Banter {
     reacts.setAttribute('aria-label', t('banterReact'));
     input.setAttribute('aria-label', t('banterInputLabel'));
     send.setAttribute('aria-label', t('banterSendLabel'));
+    closeKey.setAttribute('aria-label', t('banterComposeClose'));
+    toggle.setAttribute('aria-label', t(composing ? 'banterComposeClose' : 'banterComposeOpen'));
     input.placeholder = locked ? t('banterLockedPlaceholder') : t('banterPlaceholder');
     alertText.textContent = t('banterOpponentLeft');
     for (let i = 0; i < pills.length; i++) {
@@ -154,6 +196,7 @@ export function createBanter(wiring: BanterWiring): Banter {
     for (const pill of pills) pill.disabled = off;
     for (const key of reacts_) key.disabled = off;
     send.disabled = off;
+    toggle.disabled = locked;
     input.disabled = locked;
     dock.classList.toggle('is-cooling', cool);
     dock.classList.toggle('is-locked', locked);
@@ -168,9 +211,10 @@ export function createBanter(wiring: BanterWiring): Banter {
   function showBubble(card: Card, text: string): void {
     const bubble = bubbles[card];
     window.clearTimeout(bubble.timer);
+    const emote = isEmote(text);
     bubble.text.textContent = text;
+    bubble.node.classList.toggle('is-emote', emote);
     bubble.node.hidden = false;
-    bubble.node.parentElement?.classList.add('is-speaking');
     bubble.node.classList.remove('is-out');
     /* re-arm the spring: dropping the live class and forcing a reflow makes a replacement pop */
     bubble.node.classList.remove('is-live');
@@ -185,19 +229,17 @@ export function createBanter(wiring: BanterWiring): Banter {
     bubble.timer = 0;
     if (bubble.node.hidden) return;
     if (immediate) {
-      bubble.node.classList.remove('is-live', 'is-out');
+      bubble.node.classList.remove('is-live', 'is-out', 'is-emote');
       bubble.node.hidden = true;
       bubble.text.textContent = '';
-      bubble.node.parentElement?.classList.remove('is-speaking');
       return;
     }
     bubble.node.classList.add('is-out');
     window.setTimeout(() => {
       if (!bubble.node.classList.contains('is-out')) return;   // a new line took the card back
-      bubble.node.classList.remove('is-live', 'is-out');
+      bubble.node.classList.remove('is-live', 'is-out', 'is-emote');
       bubble.node.hidden = true;
       bubble.text.textContent = '';
-      bubble.node.parentElement?.classList.remove('is-speaking');
     }, LEAVE_MS);
   }
 
@@ -279,6 +321,16 @@ export function createBanter(wiring: BanterWiring): Banter {
     say(input.value);
   });
 
+  toggle.addEventListener('click', () => {
+    if (locked) return;
+    setComposing(!composing, true);
+  });
+
+  closeKey.addEventListener('click', () => {
+    setComposing(false);
+    toggle.focus();
+  });
+
   onLang(() => {
     if (open) {
       paintCopy();
@@ -296,6 +348,7 @@ export function createBanter(wiring: BanterWiring): Banter {
       dock.hidden = !next.enabled;
       alert.hidden = !locked;
       input.value = '';
+      setComposing(false);
       if (locked) alertText.textContent = t('banterOpponentLeft');
       else alertText.textContent = '';
       paintCopy();
@@ -309,6 +362,7 @@ export function createBanter(wiring: BanterWiring): Banter {
       locked = false;
       pending = [];
       clearTimers();
+      setComposing(false);
       dock.hidden = true;
       dock.classList.remove('is-locked', 'is-cooling');
       alert.hidden = true;

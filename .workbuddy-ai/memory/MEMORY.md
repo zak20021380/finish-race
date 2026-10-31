@@ -46,6 +46,15 @@ Durable index; dated logs beside this file hold the history.
   to align the score column with the bar's 12px padding + 1px border. `paintMindMine`/`paintNationMine`
   paint zones, never `textContent` on the bar.
 
+## Post-match banter (src/banter.*)
+- Bubbles are FLEX CHILDREN of `.result-seat` (`fit-content`, `max-width:68%`,
+  `margin-inline-start:auto`) — never absolute, so the nameplate is never covered. A pictograph-only
+  message gets `.is-emote` → 42px round medal, not a pill.
+- The dock is frameless and TWO rows: faces+toggle, then one `.banter-row-swap` grid cell shared by
+  the chip rail and the composer (`grid-area:1/1`) — the toggle swaps them in place.
+- **An author `display` beats the UA `[hidden]` rule.** Every hidden surface here needs the
+  `display:none!important` restatement, or the dock shows for 3/4-seat parties.
+
 ## Design system
 - One theme "Dark Clay": opaque slabs, no live blur. Reduced motion is `html.reduced-motion`,
   `applyMotion()` the only writer. Settings uses `--set-pad-x` (never `--s3`). Toggles are amber ON —
