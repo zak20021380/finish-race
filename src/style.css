@@ -28632,6 +28632,197 @@ html[data-lang="ar"] [data-i18n-html] {
   font-weight: 800;
   letter-spacing: .22em;
 }
+
+/* ---- multiplayer roster: one champion card, then a dense medal board ----
+   A party swaps the VS crest and the single fallen seat for every remaining contender. Each row
+   is a 30px slab — micro-avatar, number, name, placement — so three runners-up cost less than the
+   old duel's two tall seats plus the divider. The local row is ringed in champagne, not shouted
+   at: the medal board stays obsidian, and the eye finds its own name by warmth. */
+.result-place {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid rgba(148, 163, 184, .32);
+  border-radius: 7px;
+  background: linear-gradient(180deg, rgba(100, 116, 139, .4), rgba(30, 41, 59, .55));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16);
+  color: #E2E8F0;
+  font-family: var(--font-numeric);
+  font-size: 9px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  line-height: 1;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.result-place[hidden] { display: none; }
+.result-place[data-place="1"] {
+  border-color: rgba(255, 246, 214, .55);
+  background: linear-gradient(180deg, #FFF3C4 0%, #FCD34D 46%, #B45309 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .6),
+    0 0 12px -4px rgba(252, 211, 77, .65);
+  color: #2A1A03;
+}
+.result-place[data-place="2"] {
+  border-color: rgba(226, 232, 240, .45);
+  background: linear-gradient(180deg, #F1F5F9 0%, #CBD5E1 44%, #64748B 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .65);
+  color: #111827;
+}
+.result-place[data-place="3"] {
+  border-color: rgba(240, 178, 122, .48);
+  background: linear-gradient(180deg, #F8D3AE 0%, #E0A06A 44%, #8A441C 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 244, 230, .55);
+  color: #2A1206;
+}
+.result-place[data-place="4"] {
+  border-color: rgba(148, 163, 184, .3);
+  background: linear-gradient(180deg, rgba(100, 116, 139, .5), rgba(30, 41, 59, .7));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14);
+  color: #CBD5E1;
+}
+
+.result-podium.is-party {
+  gap: 4px;
+  margin: 8px 0 9px;
+}
+.result-podium.is-party .result-vs,
+.result-podium.is-party .result-seat.is-fallen { display: none; }
+.result-podium.is-party .result-seat.is-champion { padding: 5px 10px; }
+.result-podium.is-party .is-champion .result-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 15px;
+}
+.result-podium.is-party .result-crown {
+  left: 34px;
+  top: -9px;
+  width: 23px;
+  height: 23px;
+}
+.result-podium.is-party .result-crown .ico { width: 22px; height: 22px; }
+.result-podium.is-party .is-champion .result-name { font-size: 15px; }
+.result-podium.is-party .result-seat.is-champion.is-you {
+  border-color: rgba(243, 212, 131, .5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    0 0 0 1px rgba(243, 212, 131, .16),
+    0 10px 22px -14px rgba(252, 211, 77, .55);
+}
+
+.result-rank {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.result-rank[hidden] { display: none; }
+.result-rank-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid rgba(148, 163, 184, .16);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .012)),
+    rgba(8, 12, 19, .42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 4px 10px -9px rgba(0, 0, 0, .9);
+}
+.result-rank-row.is-you {
+  border-color: rgba(243, 212, 131, .5);
+  background:
+    linear-gradient(180deg, rgba(243, 212, 131, .14), rgba(243, 212, 131, .03)),
+    rgba(24, 20, 11, .52);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 220, .22),
+    0 0 0 1px rgba(243, 212, 131, .14),
+    0 0 14px -8px rgba(243, 212, 131, .6);
+}
+.result-rank-row .result-place {
+  min-width: 24px;
+  height: 20px;
+  border-radius: 6px;
+  font-size: 8.5px;
+}
+.result-rank-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #2C3B57 0%, #151C2B 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .14),
+    0 2px 0 rgba(0, 0, 0, .4);
+  color: #E2E8F0;
+  font-size: 10px;
+  font-weight: 900;
+}
+.result-rank-avatar img {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.result-rank-avatar b {
+  position: relative;
+  z-index: 0;
+  font: inherit;
+}
+.result-rank-row[data-place="2"] .result-rank-avatar {
+  box-shadow:
+    inset 0 0 0 1px rgba(203, 213, 225, .35),
+    0 2px 0 rgba(0, 0, 0, .4);
+}
+.result-rank-row[data-place="3"] .result-rank-avatar {
+  box-shadow:
+    inset 0 0 0 1px rgba(224, 160, 106, .42),
+    0 2px 0 rgba(0, 0, 0, .4);
+}
+.result-rank-id {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.result-rank-name {
+  overflow: hidden;
+  color: #E8EEF8;
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.result-rank-tag {
+  flex: none;
+  color: #8FA0B8;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.result-rank-row[data-place="2"] .result-rank-tag { color: #CBD5E1; }
+.result-rank-row[data-place="3"] .result-rank-tag { color: #E0A06A; }
+.result-rank-row.is-you .result-rank-tag { color: #F3D483; }
 .result-id {
   display: grid;
   gap: 1px;
@@ -29211,6 +29402,34 @@ html[data-lang="fa"] .ad-toast {
   color: #CBD5E1;
 }
 
+/* ---- the party capsule: header + champion + rank rows + rewards + stake + actions ----
+   Three runners-up replace one fallen seat, so the rest of the card pays the difference: the
+   verdict tightens, the gaps between blocks halve, and the secondary doors lose a few pixels
+   of height. The 38px recovery key and the 2x-coins chip are untouched — the rewards are the
+   reason the card exists, so they are the last things allowed to shrink. */
+.overlay.result.is-party .result-card {
+  padding: 12px clamp(12px, 4.2vw, 16px) 11px;
+}
+.overlay.result.is-party .result-kicker { margin-bottom: 2px; }
+.overlay.result.is-party .result-title {
+  font-size: clamp(1.9rem, 8.4vw, 2.45rem);
+  line-height: 1;
+}
+.overlay.result.is-party .result-mode { margin: 3px 0 6px; }
+.overlay.result.is-party .result-sub {
+  max-width: 34ch;
+  margin-top: 5px;
+  font-size: clamp(.72rem, 2.5vw, .82rem);
+  line-height: 1.4;
+}
+.overlay.result.is-party .result-rewards { margin: 0 0 8px; }
+.overlay.result.is-party .result-stake { margin-bottom: 8px; padding-block: 5px; }
+.overlay.result.is-party .result-actions { gap: 6px; margin-top: 2px; }
+.overlay.result.is-party .result-btn.primary { min-height: 44px; }
+.overlay.result.is-party .result-btn.ghost { min-height: 38px; }
+.overlay.result.is-party .result-btn.menu,
+.overlay.result.is-party.lose .result-btn.menu { min-height: 34px; }
+
 /* ---- lifecycles ---- */
 @keyframes result-veil {
   from { opacity: 0; }
@@ -29335,6 +29554,8 @@ html[data-lang="fa"] .overlay.result :is(
   .result-sub,
   .result-tag,
   .result-name,
+  .result-rank-name,
+  .result-rank-tag,
   .result-stake,
   .result-unit,
   .result-stake-k,
@@ -29349,6 +29570,8 @@ html[data-lang="fa"] .overlay.result :is(
   .result-mode,
   .result-tag,
   .result-name,
+  .result-rank-name,
+  .result-rank-tag,
   .result-stake-k,
   .result-unit
 ) {
@@ -29370,6 +29593,14 @@ html[data-lang="fa"] .overlay.result .result-sub {
 }
 html[data-lang="fa"] .overlay.result .result-tag { font-size: 9px; }
 html[data-lang="fa"] .overlay.result .result-name { text-align: right; }
+/* the party card is taller than a duel: Persian keeps its line boxes but not the duel's scale */
+html[data-lang="fa"] .overlay.result.is-party .result-title {
+  font-size: clamp(1.75rem, 8vw, 2.3rem);
+  line-height: 1.3;
+}
+html[data-lang="fa"] .overlay.result.is-party .result-sub { line-height: 1.5; }
+html[data-lang="fa"] .overlay.result .result-rank-name { font-size: 12px; }
+html[data-lang="fa"] .overlay.result .result-rank-tag { font-size: 8.5px; }
 html[data-lang="fa"] .overlay.result .result-btn {
   direction: rtl;
   font-size: .9rem;
@@ -29382,6 +29613,7 @@ html[data-lang="fa"] .overlay.result .result-crown {
   transform: translateX(50%);
   animation-name: result-crown-rtl;
 }
+html[data-lang="fa"] .overlay.result .result-podium.is-party .result-crown { right: 34px; }
 @keyframes result-crown-rtl {
   0%, 100% { transform: translate(50%, 0) rotate(5deg); }
   50% { transform: translate(50%, -4px) rotate(-3deg); }
@@ -29429,4 +29661,24 @@ html[data-lang="fa"] .ad-chip-quota { font-family: var(--font-numeric); }
 }
 @media (max-height: 640px) {
   html[data-lang="fa"] .overlay.result .result-crown { right: 33px; }
+}
+
+/* ---- smallest phones: a party pays its last pixels out of gaps, never out of the reward keys ----
+   Three runner-up rows and a Persian caption are the tallest state this card can hold. The 38px
+   recovery key and the 2x-coins chip keep their geometry; the champion avatar, the rank rows and
+   the space between blocks each give up a pixel or two instead. */
+@media (max-height: 640px) {
+  .result-podium.is-party { gap: 3px; margin: 6px 0 7px; }
+  .result-podium.is-party .result-seat.is-champion { padding: 5px 9px; }
+  .result-podium.is-party .is-champion .result-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+  }
+  .result-podium.is-party .result-crown { left: 31px; top: -8px; }
+  html[data-lang="fa"] .overlay.result .result-podium.is-party .result-crown { right: 31px; }
+  .result-rank { gap: 2px; }
+  .result-rank-row { height: 29px; min-height: 29px; }
+  .overlay.result.is-party .result-sub { line-height: 1.35; }
+  html[data-lang="fa"] .overlay.result.is-party .result-sub { line-height: 1.45; }
 }

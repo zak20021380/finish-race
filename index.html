@@ -3009,9 +3009,10 @@
               <p class="over-mode result-mode" id="over-mode">1v1 · Normal</p>
               <p class="result-sub" id="sub">Total Dominance. Outsmarted and outplayed in every turn.</p>
 
-              <!-- champion on top, the fallen seat subdued beneath -->
+              <!-- A duel keeps the champion/VS/fallen podium. A party swaps the VS and the single
+                   fallen seat for a compact ranking list under the same champion card. -->
               <div class="result-podium" id="result-podium">
-                <div class="result-seat is-champion">
+                <div class="result-seat is-champion" id="result-top-seat">
                   <span class="result-crown" aria-hidden="true">
                     <svg class="ico" viewBox="0 0 24 24"><use href="#i-crown" /></svg>
                   </span>
@@ -3023,12 +3024,13 @@
                     <span class="result-tag" id="result-top-tag">WINNER · YOU</span>
                     <strong class="result-name" id="result-top-name">You</strong>
                   </span>
+                  <span class="result-place" id="result-top-place" data-place="1" dir="ltr" hidden>#1</span>
                   <span class="result-say" id="result-top-say" role="status" aria-live="polite" hidden>
                     <span class="result-say-t" id="result-top-say-t"></span>
                   </span>
                 </div>
-                <span class="result-vs" aria-hidden="true">VS</span>
-                <div class="result-seat is-fallen">
+                <span class="result-vs" id="result-vs" aria-hidden="true">VS</span>
+                <div class="result-seat is-fallen" id="result-bottom-seat">
                   <span class="result-avatar">
                     <img id="result-bottom-img" alt="" decoding="async" referrerpolicy="no-referrer" hidden />
                     <b id="result-bottom-initial" aria-hidden="true">B</b>
@@ -3041,6 +3043,7 @@
                     <span class="result-say-t" id="result-bottom-say-t"></span>
                   </span>
                 </div>
+                <ol class="result-rank" id="result-rank" aria-label="Final standings" hidden></ol>
               </div>
 
               <div class="result-rewards" id="result-rewards">

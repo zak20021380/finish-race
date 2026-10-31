@@ -103,10 +103,14 @@ const sub = $<HTMLParagraphElement>('sub');
 const again = $<HTMLButtonElement>('again');
 const toMenu = $<HTMLButtonElement>('to-menu');
 const resultKicker = $<HTMLParagraphElement>('result-kicker');
+const resultPodium = $<HTMLDivElement>('result-podium');
+const resultTopSeat = $<HTMLDivElement>('result-top-seat');
 const resultTopImg = $<HTMLImageElement>('result-top-img');
 const resultTopInitial = $<HTMLElement>('result-top-initial');
 const resultTopTag = $<HTMLElement>('result-top-tag');
 const resultTopName = $<HTMLElement>('result-top-name');
+const resultTopPlace = $<HTMLElement>('result-top-place');
+const resultRank = $<HTMLOListElement>('result-rank');
 const resultBottomImg = $<HTMLImageElement>('result-bottom-img');
 const resultBottomInitial = $<HTMLElement>('result-bottom-initial');
 const resultBottomTag = $<HTMLElement>('result-bottom-tag');
@@ -737,31 +741,123 @@ function paintResultAvatar(
   img.hidden = false;
 }
 
+/** A seat's photo, off the same identity the dock already wears. Bots and room seats have none. */
+function resultPhoto(seat: Player): string {
+  if (seat === localSide) return asPhoto(tgUser()?.photo_url);
+  return seat === rivalSide() ? asPhoto(active?.opponent.avatarUrl ?? null) : '';
+}
+
+/**
+ * Where every seat finished, champion first. A race stops the instant a ball takes the line, so
+ * the seats that never crossed are ordered by how far their leading ball climbed and then by the
+ * field behind it — a final standing the player can read straight off the board they just left.
+ */
+function finalStandings(): Player[] {
+  const winner = state.winner;
+  const progress = (seat: Player): [number, number] => {
+    const rows = state.balls.filter((ball) => ball.team === seat).map((ball) => ball.pos.r);
+    if (!rows.length) return [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
+    return [Math.min(...rows), rows.reduce((sum, row) => sum + row, 0)];
+  };
+  const rest = roster().filter((seat) => seat !== winner);
+  rest.sort((a, b) => {
+    const [aLead, aField] = progress(a);
+    const [bLead, bField] = progress(b);
+    return aLead - bLead || aField - bField || a - b;
+  });
+  return winner === null ? rest : [winner, ...rest];
+}
+
+/** One compact rank row: medal, micro-avatar, name, placement. The local seat wears the gold rim. */
+function resultRankRow(seat: Player, rank: number): HTMLLIElement {
+  const place = Math.min(rank, 4);
+  const placeKey = `resultPlace${place}`;
+  const name = seatLabel(seat);
+  const row = document.createElement('li');
+  row.className = 'result-rank-row';
+  row.dataset.place = String(place);
+  row.setAttribute('aria-label', `${name}, ${t(placeKey)}`);
+  if (seat === localSide) {
+    row.classList.add('is-you');
+    row.setAttribute('aria-current', 'true');
+  }
+
+  const badge = document.createElement('span');
+  badge.className = 'result-place';
+  badge.dataset.place = String(place);
+  badge.dir = 'ltr';
+  badge.textContent = `#${rank}`;
+  badge.setAttribute('aria-hidden', 'true');
+
+  const avatar = document.createElement('span');
+  avatar.className = 'result-rank-avatar';
+  const img = document.createElement('img');
+  img.alt = '';
+  img.decoding = 'async';
+  img.referrerPolicy = 'no-referrer';
+  const initial = document.createElement('b');
+  initial.setAttribute('aria-hidden', 'true');
+  paintResultAvatar(img, initial, name, resultPhoto(seat));
+  avatar.append(img, initial);
+
+  const id = document.createElement('span');
+  id.className = 'result-rank-id';
+  const strong = document.createElement('strong');
+  strong.className = 'result-rank-name';
+  strong.textContent = name;
+  id.append(strong);
+
+  const tag = document.createElement('span');
+  tag.className = 'result-rank-tag';
+  tag.textContent = seat === localSide
+    ? `${t(placeKey)} · ${t('hudYou')}`
+    : t(placeKey);
+
+  row.append(badge, avatar, id, tag);
+  return row;
+}
+
 /**
  * The podium is the emotional core: the winner always takes the lit top seat, whether that is the
  * local player or the rival. On a defeat the rival wears the crown and the player's own avatar is
- * the one sitting subdued beneath it — which is the whole point.
+ * the one sitting subdued beneath it — which is the whole point. A 3- or 4-seat party replaces the
+ * single fallen seat with the full ranking list, so nobody leaves the card without a placement.
  */
 function paintResultPodium(): void {
+  const party = state.teams.length > 2;
   const champion = state.winner ?? localSide;
-  const fallen = champion === localSide ? rivalSide() : localSide;
   const championName = seatLabel(champion);
-  const fallenName = seatLabel(fallen);
-  resultTopName.textContent = championName;
-  resultBottomName.textContent = fallenName;
-  resultTopTag.textContent = champion === localSide ? t('resultWinnerYou') : t('resultWinner');
-  resultBottomTag.textContent = fallen === localSide ? t('resultDefeatedYou') : t('resultDefeated');
-  resultTopName.closest('.result-seat')?.classList.toggle('is-you', champion === localSide);
-  resultBottomName.closest('.result-seat')?.classList.toggle('is-you', fallen === localSide);
 
-  const me = tgUser();
-  const rivalPhoto = active?.opponent.avatarUrl ?? null;
-  const photoFor = (seat: Player): string => {
-    if (seat === localSide) return asPhoto(me?.photo_url);
-    return seat === rivalSide() ? asPhoto(rivalPhoto) : '';
-  };
-  paintResultAvatar(resultTopImg, resultTopInitial, championName, photoFor(champion));
-  paintResultAvatar(resultBottomImg, resultBottomInitial, fallenName, photoFor(fallen));
+  overlay.classList.toggle('is-party', party);
+  resultPodium.classList.toggle('is-party', party);
+  resultTopSeat.classList.toggle('is-you', champion === localSide);
+  resultTopName.textContent = championName;
+  /* A duel speaks in win/loss; a party speaks in places, so the champion's own line names #1. */
+  resultTopTag.textContent = party
+    ? `${t('resultPlace1')}${champion === localSide ? ` · ${t('hudYou')}` : ''}`
+    : champion === localSide ? t('resultWinnerYou') : t('resultWinner');
+  resultTopPlace.hidden = !party;
+  resultTopPlace.textContent = '#1';
+  resultTopPlace.setAttribute('aria-label', t('resultPlace1'));
+  paintResultAvatar(resultTopImg, resultTopInitial, championName, resultPhoto(champion));
+
+  if (party) {
+    resultRank.setAttribute('aria-label', t('resultStandings'));
+    resultRank.replaceChildren(
+      ...finalStandings().slice(1).map((seat, index) => resultRankRow(seat, index + 2)),
+    );
+    resultRank.hidden = false;
+    return;
+  }
+
+  resultRank.hidden = true;
+  resultRank.replaceChildren();
+  const fallen = champion === localSide ? rivalSide() : localSide;
+  const fallenName = seatLabel(fallen);
+  resultBottomName.textContent = fallenName;
+  resultBottomTag.textContent = fallen === localSide ? t('resultDefeatedYou') : t('resultDefeated');
+  resultBottomName.closest('.result-seat')?.classList.toggle('is-you', fallen === localSide);
+  paintResultAvatar(resultBottomImg, resultBottomInitial, fallenName, resultPhoto(fallen));
 }
 
 /** Every word and every state class the current result owns, re-readable after a language flip. */
@@ -1446,7 +1542,11 @@ function restart() {
   banter.close();
   overlayOpen = false;
   overlay.hidden = true;
-  overlay.classList.remove('win', 'lose');
+  overlay.classList.remove('win', 'lose', 'is-party');
+  resultPodium.classList.remove('is-party');
+  resultRank.hidden = true;
+  resultRank.replaceChildren();
+  resultTopPlace.hidden = true;
   sub.classList.remove('is-swapping');
   menuBtn.disabled = false;
   clearNote();
