@@ -554,4 +554,6 @@ html[data-lang="fa"] .result-say {
 html[data-lang="fa"] .result-say.is-emote .result-say-t { line-height: 1; }
 html[data-lang="fa"] .banter-pill { font-size: 11.5px; line-height: 1.5; }
 html[data-lang="fa"] .banter-input { font-size: 12.5px; text-align: right; }
-html[data-lang="fa"] .banter-alert { font-size: 10.5px; }
+/* the alert is a single line of Persian at 10.5px: it needs the same real line box as the
+   pills, or the descenders of "حریف" clip against the capsule's own radius */
+html[data-lang="fa"] .banter-alert { font-size: 10.5px; line-height: 1.5; }

@@ -897,7 +897,10 @@ function paintStakeValue(): void {
   if (!resultView) return;
   const refunded = hasClaimedInMatch('recover_tiq');
   resultStake.classList.toggle('is-refunded', refunded);
-  resultStakeK.textContent = t(refunded ? 'adRecoverProtected' : 'resultStakeLost');
+  /* the band's header and the key beside it are two different sentences: the header reports
+     the stake ("STAKES BACK"), the key reports its own state ("PROTECTED ✓"). Reusing one
+     string for both is what made the row read twice. */
+  resultStakeK.textContent = t(refunded ? 'resultStakeReturned' : 'resultStakeLost');
   /* the refund count-down owns the number until it lands: a repaint mid-flight (a language flip,
      a second paint) must not jump the band to zero ahead of the animation already running */
   if (stakeRaf) return;

@@ -28682,7 +28682,10 @@ html[data-lang="ar"] [data-i18n-html] {
   align-items: center;
   gap: 6px;
   min-height: 40px;
-  padding: 6px 12px 6px 10px;
+  /* logical: the medallion sits at the inline-start, so it takes the tighter inset in
+     Persian (right) exactly as it does in English (left) */
+  padding-block: 6px;
+  padding-inline: 10px 12px;
   border: 1px solid rgba(255, 255, 255, .1);
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(255, 255, 255, .075), rgba(255, 255, 255, .02));
@@ -28774,41 +28777,49 @@ html[data-lang="ar"] [data-i18n-html] {
   opacity: .7;
 }
 
-/* ---- the crimson stake band: defeat has to physically cost something ---- */
+/* ---- the crimson stake band: defeat has to physically cost something ----
+   One row, two jobs: the label block reports the loss, the gold key offers to undo it. The
+   band is sized by the 38px key (38 + 7px of padding either side), so the block beside it
+   simply centres inside that height and the band never wraps. */
 .result-stake {
   display: flex;
-  /* a row now, so the recover chip can sit at the inline-end of the band — the label block
-     still stacks, and the 22px chip is shorter than the 32px block, so the band is the same
-     height it has always been */
   flex-direction: row;
   align-items: center;
   gap: 10px;
   margin: 0 0 12px;
-  padding: 8px 14px;
+  /* logical insets: the label block keeps its 14px from the reading edge and the gold key
+     keeps 12px from the far edge, in both directions */
+  padding-block: 7px;
+  padding-inline: 14px 12px;
   border: 1px solid rgba(244, 63, 94, .32);
-  border-radius: 14px;
+  border-radius: 16px;
   background: linear-gradient(180deg, rgba(225, 29, 72, .16), rgba(80, 7, 20, .12));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .06),
     0 8px 20px -14px rgba(244, 63, 94, .65);
 }
-/* `flex: 1` is what pushes the chip to the inline-end — and with the chip hidden the block
+/* `flex: 1` is what pushes the key to the inline-end — and with the key hidden the block
    spans the whole band, so the band stays exactly as centred as it was before. */
 .result-stake-main {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
   min-width: 0;
 }
 .result-stake-k {
+  max-width: 100%;
+  overflow: hidden;
   color: #FDA4AF;
   font-size: 8px;
   font-weight: 800;
   letter-spacing: .18em;
+  line-height: 1.35;
   opacity: .72;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 .result-stake-n {
   display: inline-block;
@@ -28836,13 +28847,14 @@ html[data-lang="ar"] [data-i18n-html] {
   text-shadow: 0 0 14px rgba(16, 185, 129, .5);
 }
 
-/* ---- rewarded video: smoked obsidian & burnished gold, at zero cost in height ----
+/* ---- rewarded video: burnished gold on smoked obsidian ----
 
-   Both actions live inside rows that already exist — the crimson stake band and the coin pill —
-   and both are shorter than the content beside them (22px chip vs a 32px label block / a 40px
-   pill), so the capsule measures the same with the chips hidden or live. Nothing here is a new
-   block: no margin-block, no min-height, no wrap. The gold is burnished rather than painted on:
-   a 1px champagne hairline over smoked glass, 10.5px caps so the whole pill stays under 22px.
+   The recovery key is the loudest object on a defeat card after the verdict, so it is a real
+   key and not a badge: 38px tall, a champagne hairline at 60%, a warm inner gradient, a
+   breathing outer glow and a slow sheen across the face. It still lives inside the stake band,
+   so it costs the capsule the height of ONE row — never a second storey. The double-coins key
+   wears the same finish at a size that fits inside the coin pill it shares, so neither action
+   reads as an afterthought next to the other.
    ------------------------------------------------------------------------------------ */
 
 #btn-recover-tiq,
@@ -28852,73 +28864,147 @@ html[data-lang="ar"] [data-i18n-html] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
   flex: none;
-  height: 22px;
-  padding: 0 9px;
   margin: 0;
-  background: linear-gradient(135deg, rgba(28, 24, 16, 0.88), rgba(16, 14, 10, 0.94));
-  border: 1px solid rgba(212, 175, 55, 0.42);
+  /* the sheen is clipped to the pill; the glow is a shadow on the element itself, never clipped */
+  overflow: hidden;
+  border: 1px solid rgba(243, 212, 131, .6);
   border-radius: 999px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .1),
-    0 3px 12px -7px rgba(0, 0, 0, .95);
-  color: #f3d483;
+  background:
+    linear-gradient(180deg, rgba(255, 246, 214, .2), rgba(255, 246, 214, 0) 48%),
+    linear-gradient(135deg, #3C3016 0%, #251D0F 54%, #12100A 100%);
+  color: #F7E3AC;
   font-family: inherit;
-  font-size: 10.5px;
   font-weight: 800;
-  letter-spacing: 0.5px;
+  letter-spacing: .04em;
   line-height: 1;
   text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: transform .12s ease, border-color .18s ease, color .18s ease, opacity .18s ease;
+  transition:
+    transform .12s ease,
+    border-color .18s ease,
+    color .18s ease,
+    opacity .18s ease,
+    box-shadow .18s ease;
 }
-/* the double chip is the tighter of the two: it shares a pill with the reward it doubles */
+
+/* the primary key: a thumb-sized target with a lit face */
+#btn-recover-tiq {
+  --ad-spin-x: 13.5px;
+  gap: 7px;
+  height: 38px;
+  padding-inline: 11px 13px;
+  font-size: 12px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 220, .34),
+    inset 0 -1px 0 rgba(0, 0, 0, .55),
+    0 0 0 1px rgba(0, 0, 0, .34),
+    0 8px 18px -10px rgba(0, 0, 0, .95),
+    0 0 14px -9px rgba(243, 212, 131, .42);
+  animation: recover-breathe 2.8s ease-in-out infinite;
+}
+/* one light bar crosses the face every few seconds — the "this one pays" tell */
+#btn-recover-tiq::before {
+  content: "";
+  position: absolute;
+  top: -60%;
+  bottom: -60%;
+  left: -35%;
+  width: 42%;
+  background: linear-gradient(100deg, transparent, rgba(255, 250, 230, .3), transparent);
+  transform: translateX(-180%) rotate(9deg);
+  pointer-events: none;
+  animation: recover-sheen 3.8s ease-in-out infinite;
+}
+@keyframes recover-sheen {
+  0%, 58% { transform: translateX(-180%) rotate(9deg); }
+  100% { transform: translateX(560%) rotate(9deg); }
+}
+/* the aura breathes on the element's own shadow: nothing is added to the box, so the band
+   cannot measure differently at any point of the cycle */
+@keyframes recover-breathe {
+  0%, 100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 248, 220, .3),
+      inset 0 -1px 0 rgba(0, 0, 0, .55),
+      0 0 0 1px rgba(0, 0, 0, .34),
+      0 8px 18px -10px rgba(0, 0, 0, .95),
+      0 0 14px -9px rgba(243, 212, 131, .42);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 248, 220, .42),
+      inset 0 -1px 0 rgba(0, 0, 0, .55),
+      0 0 0 1px rgba(0, 0, 0, .34),
+      0 8px 20px -10px rgba(0, 0, 0, .95),
+      0 0 24px -4px rgba(243, 212, 131, .76),
+      0 0 38px -18px rgba(245, 158, 11, .58);
+  }
+}
+
+/* the second key: same gold, sized to the pill that hosts it */
 #btn-double-coins {
-  height: 20px;
-  gap: 3px;
-  padding: 0 8px;
+  --ad-spin-x: 8.5px;
+  gap: 4px;
+  height: 26px;
+  padding-inline: 8px 9px;
+  font-size: 10.5px;
+  border-color: rgba(243, 212, 131, .46);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 220, .24),
+    0 4px 12px -8px rgba(0, 0, 0, .95),
+    0 0 14px -8px rgba(243, 212, 131, .45);
 }
 
 #btn-recover-tiq:active,
 #btn-double-coins:active { transform: scale(0.96); }
 
-/* a chip waiting on the video takes no second tap; the spinner is its own answer */
+/* a key waiting on the video takes no second tap; the spinner is its own answer */
 #btn-recover-tiq.is-busy,
 #btn-double-coins.is-busy { pointer-events: none; }
 
 /* claimed: the same smoked glass, now lit from inside with emerald. Geometry is untouched —
-   no height, no padding, no radius — so a banked reward cannot grow the capsule by a pixel. */
+   no height, no padding, no radius — so a banked reward cannot grow the capsule by a pixel.
+   The theatre stops with it: a banked reward is not still advertising itself. */
 #btn-recover-tiq.is-claimed,
 #btn-double-coins.is-claimed {
-  border-color: rgba(16, 185, 129, 0.46);
+  border-color: rgba(16, 185, 129, .5);
   background:
-    linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(6, 78, 59, 0.34));
+    linear-gradient(180deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, 0) 46%),
+    linear-gradient(135deg, rgba(16, 185, 129, .32), rgba(6, 78, 59, .5));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .14),
-    inset 0 0 12px -4px rgba(16, 185, 129, .55),
-    0 3px 12px -7px rgba(0, 0, 0, .95);
-  color: #6ee7b7;
-  text-shadow: 0 0 7px rgba(110, 231, 183, .3);
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    inset 0 0 14px -4px rgba(16, 185, 129, .55),
+    0 4px 12px -8px rgba(0, 0, 0, .95);
+  color: #A7F3D0;
+  text-shadow: 0 0 8px rgba(110, 231, 183, .35);
   pointer-events: none;
   animation: ad-chip-land .3s cubic-bezier(.22, 1, .36, 1);
 }
+#btn-recover-tiq.is-claimed::before { animation: none; opacity: 0; }
 @keyframes ad-chip-land {
   0% { transform: scale(1); }
-  38% { transform: scale(1.07); }
+  38% { transform: scale(1.06); }
   100% { transform: scale(1); }
 }
 html.reduced-motion #btn-recover-tiq.is-claimed,
 html.reduced-motion #btn-double-coins.is-claimed { animation: none; }
 
+/* the aura and the sheen are the only two things on this card that move unprompted:
+   reduced motion keeps the gold and drops the theatre */
+html.reduced-motion #btn-recover-tiq { animation: none; }
+html.reduced-motion #btn-recover-tiq::before { animation: none; opacity: 0; }
+
 #btn-recover-tiq.is-exhausted,
 #btn-double-coins.is-exhausted {
-  opacity: 0.45;
-  filter: grayscale(0.8);
+  opacity: 0.5;
+  filter: grayscale(0.75);
   pointer-events: none;
+  animation: none;
 }
+#btn-recover-tiq.is-exhausted::before { animation: none; opacity: 0; }
 
 /* an author `display` beats the UA `[hidden]` rule — restate it on every piece that has one */
 #btn-recover-tiq[hidden],
@@ -28927,58 +29013,59 @@ html.reduced-motion #btn-double-coins.is-claimed { animation: none; }
 
 #btn-recover-tiq:focus-visible,
 #btn-double-coins:focus-visible {
-  outline: 2px solid rgba(243, 212, 131, .6);
-  outline-offset: 2px;
+  outline: 2px solid rgba(243, 212, 131, .8);
+  outline-offset: 3px;
 }
 
 .ad-chip-ico {
   display: block;
   flex: none;
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
+  filter: drop-shadow(0 0 5px rgba(243, 212, 131, .4));
 }
+#btn-recover-tiq .ad-chip-ico { width: 16px; height: 16px; }
 #btn-double-coins .ad-chip-ico { width: 12px; height: 12px; }
 
 .ad-chip-label { display: block; line-height: 1; }
+#btn-recover-tiq .ad-chip-label { font-weight: 900; }
 
 /* the daily budget, as a struck-metal counter — tabular so 3/3 never jitters to 2/3 */
 .ad-chip-quota {
   display: inline-block;
   flex: none;
-  padding: 1px 4px;
+  padding: 2px 5px;
   border-radius: 999px;
-  background: rgba(212, 175, 55, .16);
-  box-shadow: inset 0 0 0 1px rgba(212, 175, 55, .22);
+  background: rgba(243, 212, 131, .16);
+  box-shadow: inset 0 0 0 1px rgba(243, 212, 131, .26);
   color: inherit;
-  font-size: 8.5px;
+  font-family: var(--font-numeric);
+  font-size: 9px;
   font-weight: 800;
-  letter-spacing: .02em;
-  line-height: 1.25;
+  letter-spacing: 0;
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
-  opacity: .92;
+  opacity: .95;
 }
 
 .ad-chip-spin {
   display: block;
   flex: none;
-  width: 10px;
-  height: 10px;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
   border: 1.5px solid rgba(243, 212, 131, .28);
   border-top-color: #f3d483;
   animation: ad-chip-spin .7s linear infinite;
-  /* the spinner borrows the icon's own slot instead of adding a box to the row: a working chip
+  /* the spinner borrows the icon's own slot instead of adding a box to the row: a working key
      measures exactly like an idle one, so the pill can never grow while a video is being fetched.
-     `margin-top` centres it — a translate would be overwritten by the rotation keyframes. */
+     The inset is LOGICAL, so the ring lands over the icon on the right in Persian without a
+     second rule. `margin-top` centres it — a translate would be overwritten by the keyframes. */
   position: absolute;
   top: 50%;
-  left: 11px;
-  margin-top: -5px;
+  inset-inline-start: var(--ad-spin-x, 8.5px);
+  margin-top: -5.5px;
 }
-#btn-double-coins .ad-chip-spin { left: 9px; }
-html[data-lang="fa"] .ad-chip-spin { left: auto; }
-html[data-lang="fa"] #btn-recover-tiq .ad-chip-spin { left: auto; right: 11px; }
-html[data-lang="fa"] #btn-double-coins .ad-chip-spin { left: auto; right: 9px; }
 /* the icon steps aside under the ring rather than beside it */
 #btn-recover-tiq.is-busy .ad-chip-ico,
 #btn-double-coins.is-busy .ad-chip-ico { opacity: 0; }
@@ -29168,33 +29255,31 @@ html[data-lang="fa"] .ad-toast {
   100% { transform: rotateY(360deg); }
 }
 
-/* ---- compact phones: the capsule fits 320x568 without clipping a word ---- */
+/* ---- compact phones: the capsule fits 320x568 without clipping a word ----
+   The gold key is the one thing that never shrinks below its 38px hitbox, so the compact
+   pass buys the height back out of the gaps around it instead of out of the target. */
 @media (max-height: 640px) {
   .result-card { padding: 14px 16px 12px; }
   .result-title { font-size: clamp(1.85rem, 8.6vw, 2.5rem); }
-  .result-podium { margin: 10px 0 8px; }
+  .result-podium { margin: 8px 0 6px; }
   .is-champion .result-avatar { width: 48px; height: 48px; border-radius: 16px; }
   .result-crown { left: 34px; top: -10px; width: 23px; height: 23px; }
   .result-crown .ico { width: 22px; height: 22px; }
   .result-sub { margin-top: 6px; }
-  .result-rewards { margin-bottom: 9px; }
+  .result-rewards { margin-bottom: 7px; }
+  .result-stake { padding-block: 6px; margin-bottom: 8px; }
+  .result-actions { gap: 6px; }
   .result-btn { min-height: 44px; }
 }
 @media (max-width: 340px) {
   .result-card { padding-left: 13px; padding-right: 13px; }
-  .result-chip { min-height: 36px; padding: 5px 9px 5px 8px; gap: 5px; }
+  .result-chip { min-height: 36px; padding-block: 5px; padding-inline: 8px 9px; gap: 5px; }
   .result-value { font-size: 1rem; }
   .result-unit { font-size: 8px; letter-spacing: .08em; }
   .result-seat { gap: 8px; }
-  /* 320px: the smallest capsule still holds two chips and one action on a single line */
-  #btn-recover-tiq { height: 21px; padding: 0 7px; gap: 3px; }
-  #btn-recover-tiq .ad-chip-spin { left: 9px; }
-  html[data-lang="fa"] #btn-recover-tiq .ad-chip-spin { left: auto; right: 9px; }
-  .ad-chip-quota { font-size: 8px; padding: 1px 3px; }
-  /* Persian's claimed labels are the longest strings either chip ever wears: two pixels of size
-     handed back at 320px keeps the pill inside the card without touching its height */
-  html[data-lang="fa"] #btn-double-coins { font-size: 10px; padding: 0 7px; }
-  html[data-lang="fa"] #btn-double-coins .ad-chip-spin { left: auto; right: 8px; }
+  /* 320px: the band is the narrowest row on the card, so the header pays for the key */
+  .result-stake { gap: 8px; padding-inline: 11px 9px; }
+  .result-stake-k { font-size: 7.5px; letter-spacing: .1em; }
 }
 
 /* an old webview without text clipping keeps readable flat titles instead of blank ones */
@@ -29225,7 +29310,20 @@ html[data-theme="light"] .screen.game .overlay.result.lose {
     rgba(3, 4, 8, .8);
 }
 
-/* ---- Persian: true RTL on the capsule, Vazirmatn, and no forced tracking ---- */
+/* ---- Persian: true RTL on the capsule, Vazirmatn, and no forced tracking ----
+
+   Persian is a JOINED script. A positive letter-spacing tears the glyphs off one another
+   (بازیابی turns into ب ا ز ی ا ب ی) and a line-height under ~1.4 clips the descenders of
+   ی / ج / چ in every small-caps label. Both bans are declared once, at the root of the
+   language, so no component can reintroduce either by accident — the `!important` is the
+   point: tracking is not a taste call in Persian, it is a rendering fault. */
+html[data-lang="fa"],
+html[data-lang="fa"] *,
+[dir="rtl"],
+[dir="rtl"] * {
+  letter-spacing: normal !important;
+}
+
 html[data-lang="fa"] .overlay.result .result-card {
   direction: rtl;
   text-align: right;
@@ -29243,29 +29341,41 @@ html[data-lang="fa"] .overlay.result :is(
   .result-btn
 ) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
-  letter-spacing: 0;
   text-transform: none;
+}
+/* a real line box for the small caps: an 8px Persian label was being clipped top and bottom */
+html[data-lang="fa"] .overlay.result :is(
+  .result-kicker,
+  .result-mode,
+  .result-tag,
+  .result-name,
+  .result-stake-k,
+  .result-unit
+) {
+  line-height: 1.45;
+}
+/* these two clip their own overflow (a nowrap label with an ellipsis), so their line box has
+   to be taller than the ink or Persian gets cut by the clip rather than by the font */
+html[data-lang="fa"] .overlay.result .result-stake-k,
+html[data-lang="fa"] .overlay.result .result-tag {
+  line-height: 1.6;
 }
 html[data-lang="fa"] .overlay.result .result-title {
   font-size: clamp(1.85rem, 8.8vw, 2.55rem);
-  line-height: 1.28;
-  letter-spacing: 0;
+  line-height: 1.4;
 }
 html[data-lang="fa"] .overlay.result .result-sub {
   font-size: clamp(.78rem, 3vw, .9rem);
-  line-height: 1.8;
+  line-height: 1.65;
 }
 html[data-lang="fa"] .overlay.result .result-tag { font-size: 9px; }
 html[data-lang="fa"] .overlay.result .result-name { text-align: right; }
 html[data-lang="fa"] .overlay.result .result-btn {
   direction: rtl;
   font-size: .9rem;
-  letter-spacing: 0;
+  line-height: 1.45;
 }
-html[data-lang="fa"] .overlay.result .result-btn.primary.is-revenge {
-  font-size: .95rem;
-  letter-spacing: 0;
-}
+html[data-lang="fa"] .overlay.result .result-btn.primary.is-revenge { font-size: .95rem; }
 html[data-lang="fa"] .overlay.result .result-crown {
   left: auto;
   right: 38px;
@@ -29276,29 +29386,47 @@ html[data-lang="fa"] .overlay.result .result-crown {
   0%, 100% { transform: translate(50%, 0) rotate(5deg); }
   50% { transform: translate(50%, -4px) rotate(-3deg); }
 }
+/* the numbers keep their own direction inside the RTL sentence: the minus, the digits and the
+   unit stay one isolated LTR run, so "−12 TIQ" never reorders to "TIQ −12" */
 html[data-lang="fa"] .overlay.result .result-value { direction: ltr; }
-html[data-lang="fa"] .overlay.result .result-stake-n { font-family: var(--font-numeric); }
+html[data-lang="fa"] .overlay.result .result-stake-n {
+  font-family: var(--font-numeric);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
 
-/* the reward chips follow the same rule: Persian keeps its own script — no caps, no tracking —
+/* the reward keys follow the same rule: Persian keeps its own script — no caps, no tracking —
    while the quota stays a Latin numeral pair so 3/3 reads the same in every language */
 html[data-lang="fa"] :is(#btn-recover-tiq, #btn-double-coins) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
-  font-size: 11px;
-  letter-spacing: 0;
   text-transform: none;
 }
-html[data-lang="fa"] .ad-chip-quota {
-  font-family: var(--font-numeric);
-  letter-spacing: 0;
-}
+html[data-lang="fa"] #btn-recover-tiq { font-size: 12px; }
+html[data-lang="fa"] #btn-double-coins { font-size: 11px; }
+html[data-lang="fa"] .ad-chip-label { line-height: 1.45; }
+html[data-lang="fa"] .ad-chip-quota { font-family: var(--font-numeric); }
 
-/* ---- narrow phones: the action chip buys its own width back ----
+/* ---- narrow phones: the action key buys its own width back ----
    The "COINS" unit steps aside the moment the action is live; below 380px the coin medallion
-   follows it, so the pill reads +120 · 2× COINS. Typography stays exactly as specified at every
-   width, and because the row is `nowrap` this can only ever cost a decoration — never a line. */
+   follows it, so the pill reads +120 · 2× COINS. The gold key keeps its 38px hitbox at every
+   width — below 360px it pays for the row in type size, never in target size. */
 @media (max-width: 380px) {
   #btn-double-coins:not([hidden]) ~ .result-token { display: none; }
 }
+@media (max-width: 360px) {
+  #btn-recover-tiq {
+    --ad-spin-x: 12.5px;
+    gap: 5px;
+    padding-inline: 10px;
+    font-size: 10.5px;
+  }
+  html[data-lang="fa"] #btn-recover-tiq { font-size: 10.5px; }
+  .ad-chip-quota { font-size: 8px; padding: 1px 4px; }
+}
+/* the crown tracks the champion avatar through both compact passes */
+@media (max-height: 760px) {
+  html[data-lang="fa"] .overlay.result.with-banter .result-crown { right: 31px; }
+}
 @media (max-height: 640px) {
-  html[data-lang="fa"] .overlay.result .result-crown { right: 34px; }
+  html[data-lang="fa"] .overlay.result .result-crown { right: 33px; }
 }

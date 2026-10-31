@@ -78,7 +78,10 @@ Durable index; dated logs beside this file hold the history.
 - Quota `fr_tiq_recovery_log_v1` (NOT `detour.*`): epoch stamps, rolling 24h, max 3, memory mirror
   after first hydrate so refused storage still enforces it. Per-match claims are a separate `Set`.
 - Chips sit INSIDE existing rows (`#btn-recover-tiq` in `.result-stake`, `#btn-double-coins` in
-  `#result-coin-chip`), 22/20px vs a 32.6px block / 40px pill → zero capsule growth.
+  `#result-coin-chip`). The recover key is the ONE thing on that card that may not shrink: 38px
+  tall, 60% gold hairline, breathing shadow + clipped `::before` sheen, 16px shield, 12px/900
+  label `RECOVER STAKE` → `PROTECTED ✓`. ≤360px it pays in type size, never in hitbox. The band's
+  header is a DIFFERENT string (`STAKES LOST` → `STAKES BACK`) — never reuse the key's label there.
   `.result-rewards` is `nowrap`; the pill retires `.result-unit` (and `.result-token` ≤380px) via
   `#btn-double-coins:not([hidden]) ~ …` — the button leads in the DOM, `order:4` renders it last.
 - Wiring: `showOverlay()` → `resetMatchClaims()`; `paintRewardButtons()`/`paintStakeValue()` hang
@@ -92,6 +95,11 @@ Durable index; dated logs beside this file hold the history.
 - One theme "Dark Clay": opaque slabs, no live blur. Reduced motion is `html.reduced-motion`,
   `applyMotion()` the only writer. Settings uses `--set-pad-x` (never `--s3`). Toggles are amber ON —
   restate both states at (0,4,0). `.stars-head` ≤ 60px. `src/admin.ts` `runtime` = `detour.admin.v1`.
+- **Persian = joined script.** One global ban in style.css: `html[data-lang="fa"], … *,
+  [dir="rtl"], [dir="rtl"] *` carry `letter-spacing: normal !important` — tracking is a rendering
+  fault, not taste. Labels that clip their own overflow (`.result-tag`, `.result-stake-k`) need
+  line-height 1.6; every other fa label 1.45, titles 1.4. Physical `left/right` insets must become
+  `inset-inline-*` (the ad spinner reads `--ad-spin-x`), or Persian puts the ring on the wrong side.
 
 ## Conventions
 - Strict TS, `noImplicitReturns`. Prefer `aria-disabled` over `disabled` when the tap must explain

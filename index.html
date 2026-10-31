@@ -3076,9 +3076,11 @@
                   <span class="result-stake-k" id="result-stake-k">STAKES LOST</span>
                   <strong class="result-stake-n" id="result-stake-n">−0 TIQ</strong>
                 </span>
-                <!-- Sits in the stake row itself: a 22px chip inside a 32px block adds no height. -->
+                <!-- The stake band's own action: a full 38px key at the inline-end of the row, so
+                     the recovery reads as the primary thing to do about the loss. The label names
+                     the reward ("RECOVER STAKE"), never the band's header, so the two never echo. -->
                 <button class="ad-chip" id="btn-recover-tiq" type="button" hidden>
-                  <svg class="ad-chip-ico" width="14" height="14" viewBox="0 0 24 24"
+                  <svg class="ad-chip-ico" width="16" height="16" viewBox="0 0 24 24"
                     aria-hidden="true" focusable="false">
                     <path d="M12 2.6 4.9 5.4v5.5c0 4.5 3 7.8 7.1 9.5 4.1-1.7 7.1-5 7.1-9.5V5.4L12 2.6Z"
                       fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
@@ -3087,7 +3089,7 @@
                     <path d="m9.1 11.4 2.9-3 2.9 3" fill="none" stroke="currentColor" stroke-width="1.9"
                       stroke-linecap="round" stroke-linejoin="round" />
                   </svg>
-                  <span class="ad-chip-label" id="recover-tiq-label">RECOVER</span>
+                  <span class="ad-chip-label" id="recover-tiq-label">RECOVER STAKE</span>
                   <span class="ad-chip-quota" id="recover-tiq-quota" dir="ltr">3/3</span>
                   <span class="ad-chip-spin" id="recover-tiq-spin" aria-hidden="true" hidden></span>
                 </button>
