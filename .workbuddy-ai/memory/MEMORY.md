@@ -60,6 +60,15 @@ Durable index; dated logs beside this file hold the history.
 - **An author `display` beats the UA `[hidden]` rule.** Every hidden surface here needs the
   `display:none!important` restatement, or the dock shows for 3/4-seat parties.
 
+## Squads / Telegram handles
+- ONE rule: `HANDLE_RE = /^[a-z0-9_]{4,32}$/i` (src/squads.ts), mirrored in the worker as
+  `/^@[a-z0-9_]{4,32}$/i`. Never lowercase a handle — capitals are part of it.
+- `bareHandle()` folds a `t.me` link, the typed `@` and outer spaces; `handleIssue`/`cleanHandle`/
+  `cleanChatReference` all read through it (no second regex anywhere).
+- Enlist verify = worker `getChat` (GET `?chat_id=`) → existence + `chat.type` vs the active tab
+  (`channel` vs `supergroup|group`); the modal only goes green on that answer, and BOTH phases
+  spin the CTA (`#enlist-spin`), not just register.
+
 ## Design system
 - One theme "Dark Clay": opaque slabs, no live blur. Reduced motion is `html.reduced-motion`,
   `applyMotion()` the only writer. Settings uses `--set-pad-x` (never `--s3`). Toggles are amber ON —

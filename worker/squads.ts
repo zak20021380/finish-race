@@ -53,13 +53,15 @@ interface TelegramEnvelope<T> {
 }
 
 const TELEGRAM_BASE = 'https://api.telegram.org/bot';
-const HANDLE = /^@[A-Za-z0-9_]{5,32}$/;
+/** A canonical handle: `@` + 4–32 ASCII letters, digits or underscores, any case. */
+const HANDLE = /^@[a-z0-9_]{4,32}$/i;
 const MEMBER_TEXT = 32;
 const AVATAR_TEXT = 160;
 /** The refusal every enlistment door gives for a chat that is already on the board. */
 export const SQUAD_ALREADY_ENLISTED = 'This squad is already enlisted in the competition!';
-const KIND_MISMATCH_GROUP = 'This handle belongs to a group. Please select the GROUP tab.';
-const KIND_MISMATCH_CHANNEL = 'This handle belongs to a channel. Please select the CHANNEL tab.';
+const KIND_MISMATCH_GROUP = 'Handle belongs to a group, not a channel. Switch to the GROUP tab.';
+const KIND_MISMATCH_CHANNEL = 'Handle belongs to a channel, not a group. Switch to the CHANNEL tab.';
+const CHAT_NOT_FOUND = 'Channel or group not found on Telegram.';
 let cachedBotId = '';
 
 class TelegramError extends Error {
@@ -96,9 +98,9 @@ export function normalizeChatHandle(raw: string): string {
   if (!value) return '';
   /* A link's query/fragment is not part of the username, but a bare handle with one is
      malformed — only the link shape is allowed to carry a suffix. */
-  const link = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/([A-Za-z0-9_]{5,32})\/?(?:[?#].*)?$/i.exec(value);
+  const link = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/([A-Za-z0-9_]{4,32})\/?(?:[?#].*)?$/i.exec(value);
   if (link) value = link[1];
-  value = value.replace(/^@+/, '');
+  value = value.replace(/^@+/, '').trim();
   if (!HANDLE.test(`@${value}`)) return '';
   return `@${value}`;
 }
@@ -137,18 +139,31 @@ export function readRegisteredSquad(raw: unknown): RegisteredSquad | null {
   };
 }
 
+/**
+ * One Bot API call. Reads ride GET with the chat id in the query string — the shape the
+ * docs publish for `getChat` (`/bot<token>/getChat?chat_id=@handle`) — while writes and
+ * membership probes stay POST/JSON. Both answer the same `{ ok, result }` envelope.
+ */
 async function telegram<T>(
   token: string,
   method: string,
   params: Record<string, string | number>,
+  verb: 'GET' | 'POST' = 'POST',
 ): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(`${TELEGRAM_BASE}${token}/${method}`, {
+  const endpoint = `${TELEGRAM_BASE}${token}/${method}`;
+  const query = new URLSearchParams(
+    Object.entries(params).map(([key, value]) => [key, String(value)] as [string, string]),
+  ).toString();
+  const init: RequestInit = verb === 'GET'
+    ? { method: 'GET', headers: { accept: 'application/json' } }
+    : {
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'application/json' },
       body: JSON.stringify(params),
-    });
+    };
+  let response: Response;
+  try {
+    response = await fetch(verb === 'GET' ? `${endpoint}?${query}` : endpoint, init);
   } catch {
     throw new TelegramError('telegram unavailable', 0);
   }
@@ -231,14 +246,18 @@ async function resolveChat(rawHandle: string, token: string): Promise<{ ok: true
 
   let chat: TelegramChat;
   try {
-    chat = await telegram<TelegramChat>(token, 'getChat', { chat_id: handle });
+    /* The single source of truth: does this username exist, what type is it, what is it
+       called, and does it have a photo. Nothing about a squad is trusted before this. */
+    chat = await telegram<TelegramChat>(token, 'getChat', { chat_id: handle }, 'GET');
   } catch (error) {
     if (error instanceof TelegramError) {
-      if (error.errorCode === 400 || /chat not found|username not found|chat_id_invalid|invalid/i.test(error.description)) {
-        return { ok: false, status: 404, code: 'chat_not_found', message: 'Channel or group not found.' };
-      }
-      if (error.errorCode === 403 || /private|not enough rights|not a member|kicked|access/i.test(error.description)) {
+      if (error.errorCode === 403 || /private|not enough rights|not a member|kicked/i.test(error.description)) {
         return { ok: false, status: 403, code: 'chat_private', message: 'This community is private. Only public channels and groups can enlist.' };
+      }
+      /* Telegram answers an unknown username with 400 `chat not found`; a missing chat id
+         answers 404. Both mean the same thing to the player. */
+      if (error.errorCode === 400 || error.errorCode === 404 || /chat not found|username not found|chat_id_invalid|invalid/i.test(error.description)) {
+        return { ok: false, status: 404, code: 'chat_not_found', message: CHAT_NOT_FOUND };
       }
     }
     return { ok: false, status: 502, code: 'telegram_error', message: 'Telegram could not verify this chat.' };
@@ -255,7 +274,7 @@ async function resolveChat(rawHandle: string, token: string): Promise<{ ok: true
   }
   /* A username resolves to exactly one chat; never accept an answer for a different handle. */
   if (canonical.toLowerCase() !== handle.toLowerCase()) {
-    return { ok: false, status: 404, code: 'chat_not_found', message: 'Channel or group not found.' };
+    return { ok: false, status: 404, code: 'chat_not_found', message: CHAT_NOT_FOUND };
   }
 
   const chatId = chat.id === undefined || chat.id === null ? handle : String(chat.id).replace(/[^0-9-]/g, '').slice(0, 32);

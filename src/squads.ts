@@ -123,33 +123,47 @@ function flush() {
 /** Called after every bind / leave / trophy award. */
 export function onSquadChange(w: () => void) { watchers.push(w); }
 
-/** Telegram usernames: 5–32 characters, letters, digits or underscores. */
-export const HANDLE_RE = /^[A-Za-z0-9_]{5,32}$/;
+/** Telegram username floor and ceiling, in characters. */
+export const HANDLE_MIN = 4;
+export const HANDLE_MAX = 32;
+
+/**
+ * Telegram usernames: 4–32 characters, letters, digits or underscores.
+ * The `i` flag is load-bearing — `computerScience55` is a legal username and
+ * must never be refused for its capitals.
+ */
+export const HANDLE_RE = /^[a-z0-9_]{4,32}$/i;
 
 export type HandleIssue = '' | 'empty' | 'short' | 'long' | 'chars';
+
+/**
+ * Fold a `t.me` link, a typed `@` and the surrounding whitespace down to the bare
+ * username. Every entry point reads a handle through this first, so the same
+ * string is judged by the same rule whether it was typed, pasted or linked.
+ */
+export function bareHandle(raw: string): string {
+  let value = (raw ?? '').trim();
+  const link = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/(.+)$/i.exec(value);
+  if (link) value = link[1].split(/[?#]/)[0].replace(/\/+$/, '');
+  return value.replace(/^@+/, '').trim();
+}
 
 /**
  * Why a typed or pasted community reference is not a Telegram username, or '' when it is.
  * Links and a leading `@` are folded first, so the same rule applies to every entry point.
  */
 export function handleIssue(raw: string): HandleIssue {
-  let value = (raw ?? '').trim();
-  const link = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/(.+)$/i.exec(value);
-  if (link) value = link[1].split(/[?#]/)[0].replace(/\/+$/, '');
-  value = value.replace(/^@+/, '');
+  const value = bareHandle(raw);
   if (!value) return 'empty';
-  if (value.length < 5) return 'short';
-  if (value.length > 32) return 'long';
-  return /^[A-Za-z0-9_]+$/.test(value) ? '' : 'chars';
+  if (value.length < HANDLE_MIN) return 'short';
+  if (value.length > HANDLE_MAX) return 'long';
+  return HANDLE_RE.test(value) ? '' : 'chars';
 }
 
 /** Normalise free text to @Handle, or '' when it cannot be a channel username. */
 export function cleanHandle(raw: string): string {
-  let h = (raw ?? '').trim().replace(/\s+/g, '');
-  if (!h) return '';
-  if (!h.startsWith('@')) h = `@${h}`;
-  if (!HANDLE_RE.test(h)) return '';
-  return h;
+  const bare = bareHandle(raw);
+  return bare && HANDLE_RE.test(bare) ? `@${bare}` : '';
 }
 
 /** Normalise a crest call sign to 2–3 uppercase alphanumerics, or '' when invalid. */
@@ -158,14 +172,9 @@ export function cleanTag(raw: string): string {
   return /^[A-Z0-9]{2,3}$/.test(tag) ? tag : '';
 }
 
+/** Accept a bare username, a typed `@name` or a `t.me` link; return the canonical @Handle. */
 export function cleanChatReference(raw: string): string {
-  const direct = cleanHandle(raw);
-  if (direct) return direct;
-  let value = (raw ?? '').trim().split(/[?#]/)[0].replace(/\/+$/, '');
-  const link = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/([A-Za-z0-9_]{5,32})$/i.exec(value);
-  if (!link) return '';
-  value = link[1];
-  return cleanHandle(value);
+  return cleanHandle(raw);
 }
 
 export const displayNameOf = (handle: string): string => {

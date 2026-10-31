@@ -31,7 +31,7 @@ import { flagPhoto } from './flags';
 import { cleanCode, standings, YOU } from './teams';
 import {
   bindSquad, bindSquadById, cleanChatReference, cleanHandle, displayNameOf, handleIssue,
-  getMySquad, getSquadRanking, leaveSquad, onSquadChange, searchSquads, squadKind, squadLetter,
+  HANDLE_MAX, getMySquad, getSquadRanking, leaveSquad, onSquadChange, searchSquads, squadKind, squadLetter,
   squadMark, telegramAvatarUrl, type RankedSquad, type SquadKind,
 } from './squads';
 import {
@@ -2674,7 +2674,7 @@ export function createMenu(api: MenuApi): Menu {
    A centered luxury-glass modal (deliberately not a sheet: this is a
    commitment, not a browse) opened by Home's channel-admin pod. It normalises
    whatever the admin pastes — a `t.me` link, a typed `@name` or the bare
-   username — enforces Telegram's 5–32 character shape live, and resolves the
+   username — enforces Telegram's 4–32 character shape live, and resolves the
    handle through the Worker's `getChat` door on blur or on the enlist key. The
    plate only turns green with the community's real title and photo once
    Telegram has confirmed it.
@@ -2731,7 +2731,7 @@ function createEnlistModal(): EnlistModal | null {
      one character, so typing `t.me/` is never a match — the field can not be
      wiped out from under someone who is halfway through a link. */
   const LINK = /^(?:https?:\/\/)?(?:www\.)?(?:t|telegram)\.me\/([A-Za-z0-9_]{1,32})\/?$/i;
-  const MAX_HANDLE = 32;
+  const MAX_HANDLE = HANDLE_MAX;
 
   type Phase = 'verify' | 'register' | null;
 
@@ -2755,15 +2755,14 @@ function createEnlistModal(): EnlistModal | null {
 
   /* The sigil lives in the pod, so the field only ever holds the bare username:
      a pasted link or a typed `@` is folded down the moment it arrives, with the
-     caret put back where the typing actually was. Typed text is capped at the
-     Telegram ceiling, while a pasted link is read in full before the fold. */
+     caret put back where the typing actually was. Case is never touched — the
+     capitals in `computerScience55` are part of the handle Telegram issued. */
   function normalise(): void {
     const raw = input.value;
     if (!raw) return;
     const bare = raw.trim().split(/[?#]/)[0].replace(/\/+$/, '');
     const link = LINK.exec(bare);
-    let next = link ? link[1] : raw.trim();
-    next = next.replace(/^@+/, '').replace(/\s+/g, '');
+    const next = (link ? link[1] : raw.trim()).replace(/^@+/, '').replace(/\s+/g, '');
     if (next === raw) return;
     const caret = link
       ? next.length
@@ -2870,9 +2869,12 @@ function createEnlistModal(): EnlistModal | null {
   function setPhase(next: Phase): void {
     phase = next;
     input.readOnly = next !== null;
+    /* Both phases are waits, so both put a spinner on the key itself: the field's
+       tick/spin is a second cue, never the only one. */
     verifySpin.hidden = next !== 'verify';
-    spin.hidden = next !== 'register';
+    spin.hidden = next === null;
     submit.classList.toggle('is-busy', next !== null);
+    submit.setAttribute('aria-busy', next === null ? 'false' : 'true');
     submit.setAttribute('aria-disabled', next !== null || handleIssue(input.value) !== '' ? 'true' : 'false');
     ctaLabel.textContent = next === 'verify' ? t('enlistVerifying') : next === 'register' ? t('enlistCtaBusy') : t('enlistCta');
   }
@@ -3004,6 +3006,7 @@ function createEnlistModal(): EnlistModal | null {
     verifySpin.hidden = true;
     spin.hidden = true;
     submit.classList.remove('is-busy');
+    submit.setAttribute('aria-busy', 'false');
     modal.classList.remove('is-open');
     scrim.classList.remove('is-open');
     window.clearTimeout(closeTimer);
@@ -3031,6 +3034,7 @@ function createEnlistModal(): EnlistModal | null {
     input.readOnly = false;
     clearError();
     submit.classList.remove('is-busy');
+    submit.setAttribute('aria-busy', 'false');
     spin.hidden = true;
     verifySpin.hidden = true;
     ctaLabel.textContent = t('enlistCta');
@@ -3050,6 +3054,8 @@ function createEnlistModal(): EnlistModal | null {
   input.addEventListener('input', () => {
     if (phase) return;
     touched = false;
+    /* Every keystroke re-judges the field from scratch, so a corrected character —
+       a capital letter included — clears the red state on that same keystroke. */
     clearError();
     normalise();
     const issue = handleIssue(input.value);

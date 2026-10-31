@@ -1417,7 +1417,7 @@ function squadKeyOf(raw: string): string {
   const normalized = normalizeChatHandle(raw);
   if (normalized) return normalized.toLowerCase();
   const plain = raw.trim().replace(/^@+/, '').toLowerCase();
-  return /^[a-z0-9_]{5,32}$/.test(plain) ? `@${plain}` : '';
+  return /^[a-z0-9_]{4,32}$/.test(plain) ? `@${plain}` : '';
 }
 
 /** Who a spread announcement is aimed at. The server stores it; the client matches it. */
