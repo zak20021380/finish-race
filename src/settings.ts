@@ -392,6 +392,11 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     enlistErrAdmin: 'You must be an administrator of this community.',
     enlistErrBot: 'Add the bot as an administrator of this community, then try again.',
     enlistErrOffline: 'Verification is unavailable right now. Try again shortly.',
+    /* ---- enlist squad: transport and deployment failures (never blamed on the handle) ---- */
+    enlistErrTimeout: 'Telegram did not answer in time. Try again shortly.',
+    enlistErrNetwork: 'Could not reach Telegram. Check your connection and try again.',
+    enlistErrToken: 'Verification is not configured on the server. Please tell the admin.',
+    enlistErrUpstream: 'Telegram could not verify this community. Try again shortly.',
     enlistToast: 'Squad successfully enlisted in Channel War!',
     /* ---- settings, help & rules ---- */
     howToPlay: 'How to play',
@@ -705,6 +710,11 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     enlistErrAdmin: 'برای ثبت، باید مدیر این جامعه باشید.',
     enlistErrBot: 'ربات را به‌عنوان مدیر این جامعه اضافه کنید و دوباره تلاش کنید.',
     enlistErrOffline: 'در حال حاضر تأیید ممکن نیست. کمی بعد دوباره تلاش کنید.',
+    /* ---- enlist squad: transport and deployment failures (never blamed on the handle) ---- */
+    enlistErrTimeout: 'تلگرام به‌موقع پاسخ نداد. کمی بعد دوباره تلاش کنید.',
+    enlistErrNetwork: 'دسترسی به تلگرام ممکن نشد. اتصال خود را بررسی کنید و دوباره تلاش کنید.',
+    enlistErrToken: 'تأیید روی سرور پیکربندی نشده است. لطفاً به مدیر اطلاع دهید.',
+    enlistErrUpstream: 'تلگرام نتوانست این جامعه را تأیید کند. کمی بعد دوباره تلاش کنید.',
     enlistToast: 'اسکواد با موفقیت در نبرد کانال‌ها ثبت شد!',
     /* ---- settings, help & rules ---- */
     howToPlay: 'آموزش بازی',

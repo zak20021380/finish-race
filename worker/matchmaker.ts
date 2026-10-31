@@ -1831,6 +1831,8 @@ export class MatchmakerDO {
       this.env,
     );
     if (!result.ok) {
+      /* The refusal the player sees is one sentence; `wrangler tail` needs the rest. */
+      console.warn(`[squad-verify] /api/squads/verify → ${result.status} ${result.code}: ${result.message}`);
       return json({
         ok: false,
         error: result.code,

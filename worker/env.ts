@@ -19,8 +19,14 @@ export interface Env {
    *  bare Node harness that drives the Worker without wrangler. */
   ASSETS?: Fetcher;
   /** Bot token used to verify Mini App initData. A secret, never a var:
-   *  `npx wrangler secret put TELEGRAM_BOT_TOKEN`. */
+   *  `npx wrangler secret put TELEGRAM_BOT_TOKEN`. This is the canonical name; the fallbacks
+   *  below exist only so a deployment that bound a shorter spinner still verifies squads. */
   TELEGRAM_BOT_TOKEN?: string;
+  /** Fallback spellings for the same secret, read in this order when `TELEGRAM_BOT_TOKEN` is
+   *  unset (see `botToken()` in `squads.ts`, which logs which binding answered). A deployment
+   *  should rename the binding rather than keep relying on them. */
+  BOT_TOKEN?: string;
+  TELEGRAM_TOKEN?: string;
   /** The bot's numeric id, used to prove it is an administrator of a registered chat. Optional:
    *  the worker asks `getMe` when it is not set. */
   TELEGRAM_BOT_ID?: string;

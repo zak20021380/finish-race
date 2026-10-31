@@ -2903,13 +2903,25 @@ function createEnlistModal(): EnlistModal | null {
       let result: SquadVerifyResult;
       try {
         result = await verifySquadChat(handle, requestedKind);
-      } catch {
+      } catch (err) {
+        /* The server's own refusal already logged itself in `squadRegister`; this is the
+           client-side throw (a rejected fetch, a broken JSON path) and names the handle. */
+        console.error('[Squad Verification Failed]', err);
         result = { ok: false, code: 'offline', message: t('enlistErrOffline') };
       }
       if (!isOpen || ticket !== verifyTicket) return false;
       setPhase(null);
       if (keyOf() !== key) { paint(); return false; }
       if (!result.ok) {
+        /* The exact payload behind the friendly sentence, for DevTools. */
+        console.error('[Squad Verification Failed]', {
+          code: result.code,
+          status: result.status,
+          detail: result.detail,
+          message: result.message,
+          handle,
+          kind: requestedKind,
+        });
         preview = null;
         previewKey = '';
         showError(result.code, result.message, result.kind);

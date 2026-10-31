@@ -29,7 +29,15 @@ export interface SquadChatPreview {
 
 export type SquadVerifyResult =
   | { ok: true; chat: SquadChatPreview }
-  | { ok: false; code: string; kind?: SquadKind; message: string };
+  | { ok: false; code: string; kind?: SquadKind; message: string; status?: number; detail?: string };
+
+/** What the Worker said, kept for DevTools after the friendly message has replaced it. */
+export interface SquadFailureDetail {
+  /** HTTP status of the refusal, `0` when the request never produced a response. */
+  status: number;
+  /** Telegram's own `description`/`error_code`, when the Worker forwarded one. */
+  detail: string;
+}
 
 interface ChatPayload {
   chatId?: string;
@@ -45,6 +53,8 @@ interface VerifyResponse {
   error?: string;
   message?: string;
   kind?: SquadKind;
+  /** The diagnostic the Worker attaches on an unexpected refusal (see `verifySquad`). */
+  detail?: string;
   chat?: ChatPayload;
 }
 
@@ -86,6 +96,12 @@ const messageFor = (code: string, kind?: SquadKind): string => {
     case 'unavailable':
     case 'telegram_error':
     case OFFLINE: return t('enlistErrOffline');
+    case 'telegram_timeout': return t('enlistErrTimeout');
+    case 'telegram_unreachable':
+    case 'telegram_bad_response': return t('enlistErrNetwork');
+    case 'telegram_unauthorized':
+    case 'bot_token_missing': return t('enlistErrToken');
+    case 'telegram_upstream': return t('enlistErrUpstream');
     default: return '';
   }
 };
@@ -108,7 +124,7 @@ function telegramUserId(): string {
   return id === undefined ? '' : String(id);
 }
 
-async function postJson<T>(path: string, payload: Record<string, unknown>): Promise<{ data: T | null; ok: boolean } | null> {
+async function postJson<T>(path: string, payload: Record<string, unknown>): Promise<{ data: T | null; ok: boolean; status: number } | null> {
   const url = workerUrl(path);
   if (!url) return null;
   const controller = new AbortController();
@@ -126,7 +142,7 @@ async function postJson<T>(path: string, payload: Record<string, unknown>): Prom
     } catch {
       data = null;
     }
-    return { data, ok: response.ok };
+    return { data, ok: response.ok, status: response.status };
   } catch {
     return null;
   } finally {
@@ -145,13 +161,43 @@ export async function verifySquadChat(handle: string, kind: SquadKind): Promise<
     kind,
     userTelegramId: telegramUserId(),
   });
-  if (!sent) return { ok: false, code: OFFLINE, message: t('enlistErrOffline') };
+  if (!sent) {
+    /* No response at all: an origin that was never resolved, an aborted request, or a dead
+       Worker. Logged with the path so the DevTools entry says which one this was. */
+    console.error('[Squad Verification Failed]', {
+      reason: 'no response',
+      path: '/api/squads/verify',
+      handle,
+      kind,
+      hint: 'worker origin missing, request aborted, or the Worker never answered',
+    });
+    return { ok: false, code: OFFLINE, message: t('enlistErrOffline'), status: 0, detail: 'no response' };
+  }
 
   const { data, ok } = sent;
   if (!ok || !data || data.ok !== true || !data.chat) {
     const code = typeof data?.error === 'string' ? data.error : 'failed';
     const actual = data?.kind;
-    return { ok: false, code, kind: actual, message: squadErrorMessage(code, actual) };
+    const detail = data?.detail ?? data?.message ?? '';
+    /* The exact server payload, before it is softened into a player-facing string. This is the
+       line to read when the modal says "try again shortly": it names the code, the status and
+       whatever Telegram answered. */
+    console.error('[Squad Verification Failed]', {
+      status: sent.status,
+      code,
+      kind: actual,
+      message: data?.message,
+      detail: data?.detail,
+      payload: data,
+    });
+    return {
+      ok: false,
+      code,
+      kind: actual,
+      message: squadErrorMessage(code, actual),
+      status: sent.status,
+      detail,
+    };
   }
 
   const chat = data.chat;
