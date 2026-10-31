@@ -81,6 +81,12 @@ Durable index; dated logs beside this file hold the history.
   `#result-coin-chip`), 22/20px vs a 32.6px block / 40px pill → zero capsule growth.
   `.result-rewards` is `nowrap`; the pill retires `.result-unit` (and `.result-token` ≤380px) via
   `#btn-double-coins:not([hidden]) ~ …` — the button leads in the DOM, `order:4` renders it last.
+- Wiring: `showOverlay()` → `resetMatchClaims()`; `paintRewardButtons()`/`paintStakeValue()` hang
+  off `paintResultCopy()` so `onLang` repaints them. Refund = `earnTiq(stake)`, double =
+  `earnCoins(coins)`. Audio hold lives in audio.ts (`holdAudio`/`releaseAudio`, never the saved
+  volume). `animateClaim()` is the one rAF clock; `stakeRaf`/`coinRaf` sit in `clearResultMotion()`.
+- `#ad-toast` (inside `.overlay.result`) is the ONLY surface that can toast above the veil —
+  `.note` is z-index 4 under the overlay's 10.
 
 ## Design system
 - One theme "Dark Clay": opaque slabs, no live blur. Reduced motion is `html.reduced-motion`,

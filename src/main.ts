@@ -28,9 +28,14 @@ import { createShop } from './shop';
 import { createNotifications } from './notifications';
 import { mountCoins } from './coin';
 import { appearance, menuState, motionReduced, onAppearance, onLang, t, toggleAppearance } from './settings';
-import { audio } from './audio';
+import { audio, holdAudio, releaseAudio } from './audio';
 import {
-  completeTutorial, hasCompletedTutorial, onChange, pieceColor, profile, recordGame, resetTutorialState, theme,
+  getRemainingTiqRecoveries, hasClaimedInMatch, markClaimedInMatch, playRewardedAd, recordTiqRecovery,
+  resetMatchClaims, TIQ_RECOVERY_MAX,
+} from './ads';
+import {
+  completeTutorial, earnCoins, earnTiq, hasCompletedTutorial, onChange, pieceColor, profile, recordGame,
+  resetTutorialState, theme,
 } from './storage';
 import {
   createTutorial, shouldAutoStartTutorial, tutorialSpotHas, TUTORIAL_LIVE_STEPS,
@@ -112,6 +117,15 @@ const resultCoinsN = $<HTMLElement>('result-coins-n');
 const resultStake = $<HTMLParagraphElement>('result-stake');
 const resultStakeK = $<HTMLElement>('result-stake-k');
 const resultStakeN = $<HTMLElement>('result-stake-n');
+/* the two rewarded-video keys: a chip in the stake band and a chip inside the coin pill */
+const recoverBtn = $<HTMLButtonElement>('btn-recover-tiq');
+const recoverLabel = $<HTMLElement>('recover-tiq-label');
+const recoverQuota = $<HTMLElement>('recover-tiq-quota');
+const recoverSpin = $<HTMLElement>('recover-tiq-spin');
+const doubleBtn = $<HTMLButtonElement>('btn-double-coins');
+const doubleLabel = $<HTMLElement>('double-coins-label');
+const doubleSpin = $<HTMLElement>('double-coins-spin');
+const adToast = $<HTMLParagraphElement>('ad-toast');
 const againLabel = $<HTMLSpanElement>('again-label');
 const againIco = document.getElementById('again-ico') as SVGUseElement | null;
 const shareBtn = $<HTMLButtonElement>('share');
@@ -667,6 +681,9 @@ interface ResultView {
 
 let resultView: ResultView | null = null;
 let resultRaf = 0;
+/** the two claim count-ups keep their own handles: claiming coins must not freeze the stake */
+let stakeRaf = 0;
+let coinRaf = 0;
 let resultTimers: number[] = [];
 let stingerTimer = 0;
 let defeatStingerTurn = 0;
@@ -676,6 +693,8 @@ let resultLocked = false;
 /** Stop every clock the result owns: the count-up, the haptic beats and the stinger rotation. */
 function clearResultMotion() {
   if (resultRaf) { cancelAnimationFrame(resultRaf); resultRaf = 0; }
+  if (stakeRaf) { cancelAnimationFrame(stakeRaf); stakeRaf = 0; }
+  if (coinRaf) { cancelAnimationFrame(coinRaf); coinRaf = 0; }
   for (const id of resultTimers) window.clearTimeout(id);
   resultTimers = [];
   if (stingerTimer) { window.clearInterval(stingerTimer); stingerTimer = 0; }
@@ -753,8 +772,7 @@ function paintResultCopy(): void {
   sub.textContent = won ? t('resultVictorySub') : t(DEFEAT_STINGERS[resultView.stinger]);
   shareLabel.textContent = t('resultShare');
   toMenuLabel.textContent = t('resultMenu');
-  resultStakeK.textContent = t('resultStakeLost');
-  resultStakeN.textContent = `−${resultAbs(stake)} ${t('resultTiqUnit')}`;
+  paintStakeValue();
   resultTiqChip.hidden = !won;
   resultCoinChip.classList.toggle('is-consolation', !won);
   resultStake.hidden = won || stake <= 0;
@@ -762,6 +780,7 @@ function paintResultCopy(): void {
   again.classList.toggle('is-revenge', !won);
   againIco?.setAttribute('href', won ? '#i-play' : '#i-swords');
   paintResultLock();
+  paintRewardButtons();
   paintResultPodium();
 }
 
@@ -833,11 +852,204 @@ function rollResultValues(): void {
   resultLater(() => impact('medium'), 680);
 }
 
+/* ---------- the rewarded-video actions ---------- */
+
+/**
+ * The two chips, painted from state: the save owns the daily budget, this match owns what it has
+ * already paid, and the settlement owns whether there is anything left to claim. Called from
+ * `paintResultCopy`, so a language flip re-reads every label it owns.
+ */
+function paintRewardButtons(): void {
+  if (!resultView) return;
+  const { won, coins, stake } = resultView;
+
+  /* ---- TIQ recovery: only a defeat that actually cost TIQ ---- */
+  const lost = !won && stake > 0;
+  const claimed = hasClaimedInMatch('recover_tiq');
+  const left = getRemainingTiqRecoveries();
+  recoverBtn.hidden = !lost;
+  recoverBtn.classList.toggle('is-claimed', claimed);
+  /* the exhausted chip wears the limit in its own label, so the badge would only repeat it */
+  recoverBtn.classList.toggle('is-exhausted', !claimed && left <= 0);
+  recoverLabel.textContent = claimed
+    ? t('adRecoverProtected')
+    : left > 0 ? t('adRecoverCta') : t('adRecoverLimit');
+  recoverQuota.textContent = `${left}/${TIQ_RECOVERY_MAX}`;
+  recoverQuota.hidden = claimed || left <= 0;
+
+  /* ---- double coins: only a settlement that actually paid coins ---- */
+  const paid = hasClaimedInMatch('double_coins');
+  doubleBtn.hidden = coins <= 0;
+  doubleBtn.classList.toggle('is-claimed', paid);
+  doubleBtn.classList.remove('is-exhausted');
+  doubleLabel.textContent = paid ? t('adDoubleClaimed') : t('adDoubleCta');
+  /* the consolation tint belongs to the reward, never to the key that doubles it */
+  resultCoinChip.classList.toggle('is-doubled', coins > 0);
+}
+
+/** The stake band reads what the match owes — or what the shield already gave back. */
+function paintStakeValue(): void {
+  if (!resultView) return;
+  const refunded = hasClaimedInMatch('recover_tiq');
+  resultStake.classList.toggle('is-refunded', refunded);
+  resultStakeK.textContent = t(refunded ? 'adRecoverProtected' : 'resultStakeLost');
+  resultStakeN.textContent = refunded
+    ? `0 ${t('resultTiqUnit')}`
+    : `−${resultAbs(resultView.stake)} ${t('resultTiqUnit')}`;
+}
+
+/** A chip's working face: spinner out, taps off, `aria-busy` on. */
+function setChipBusy(btn: HTMLButtonElement, spin: HTMLElement, busy: boolean): void {
+  btn.setAttribute('aria-busy', String(busy));
+  btn.classList.toggle('is-busy', busy);
+  spin.hidden = !busy;
+}
+
+let adToastTimer = 0;
+/** The ad's answer, over the capsule rather than inside it: the card never grows a line. */
+function showAdToast(msg: string): void {
+  adToast.textContent = msg;
+  adToast.classList.add('show');
+  clearTimeout(adToastTimer);
+  adToastTimer = window.setTimeout(() => {
+    adToast.classList.remove('show');
+    adToast.textContent = '';
+  }, 3600);
+}
+
+function hideAdToast(): void {
+  clearTimeout(adToastTimer);
+  adToast.classList.remove('show');
+  adToast.textContent = '';
+}
+
+/**
+ * One claim count-up: `paint` receives the eased fraction, so a signed stake and a bare coin total
+ * can share the same clock. Reduced motion lands on the final value in the same frame.
+ */
+function animateClaim(ms: number, paint: (eased: number) => void, store: (id: number) => void): void {
+  if (motionReduced() || ms <= 0) {
+    paint(1);
+    store(0);
+    return;
+  }
+  const t0 = performance.now();
+  const tick = (now: number) => {
+    const k = Math.min(1, (now - t0) / ms);
+    paint(1 - Math.pow(1 - k, 3));
+    if (k < 1) {
+      store(requestAnimationFrame(tick));
+      return;
+    }
+    store(0);
+  };
+  store(requestAnimationFrame(tick));
+}
+
+/** `−120 TIQ` winds down to `0 TIQ`, and the crimson band turns emerald as it lands. */
+function animateStakeRefund(from: number): void {
+  animateClaim(520, (eased) => {
+    resultStakeN.textContent = `−${resultAbs(from * (1 - eased))} ${t('resultTiqUnit')}`;
+    if (eased < 1) return;
+    resultStake.classList.add('is-refunded');
+    resultStakeN.textContent = `0 ${t('resultTiqUnit')}`;
+    resultStakeK.textContent = t('adRecoverProtected');
+  }, (id) => { stakeRaf = id; });
+}
+
+/** The pill's total climbs from `+X` to `+(2X)` in 500ms. */
+function animateCoinTotal(base: number): void {
+  animateClaim(500, (eased) => {
+    resultCoinsN.textContent = resultAbs(base * (1 + eased));
+  }, (id) => { coinRaf = id; });
+}
+
+let recoverBusy = false;
+let doubleBusy = false;
+
+/**
+ * The shield: one rewarded video buys the stake back. The refund lands in `tiqBonus`, which is the
+ * same linear term `tiqFrom` reads, so the rating the HUD shows moves by exactly the stake.
+ */
+async function claimTiqRecovery(): Promise<void> {
+  const view = resultView;
+  if (!view || view.won || view.stake <= 0) return;
+  /* one video at a time across both chips: the SDK's own mutex would answer `skipped`, which
+     reads as the player's fault rather than a tap that simply arrived too early */
+  if (recoverBusy || doubleBusy || hasClaimedInMatch('recover_tiq')) return;
+  if (getRemainingTiqRecoveries() <= 0) return;
+
+  recoverBusy = true;
+  setChipBusy(recoverBtn, recoverSpin, true);
+  holdAudio();                              // the race goes quiet under the video
+  const outcome = await playRewardedAd('recover_tiq').finally(releaseAudio);
+  recoverBusy = false;
+  setChipBusy(recoverBtn, recoverSpin, false);
+
+  /* an ad that outlived the capsule must not pay into a match that is already gone */
+  if (resultView !== view) return;
+
+  if (!outcome.rewarded) {
+    paintRewardButtons();
+    showAdToast(t(outcome.reason === 'skipped' ? 'adToastSkipped' : 'adToastUnavailable'));
+    return;
+  }
+
+  const stake = view.stake;
+  earnTiq(stake);                           // the save flushes, so every HUD reader follows
+  recordTiqRecovery();
+  markClaimedInMatch('recover_tiq');
+  paintSeatIdentity();                      // the top HUD's TIQ pill reads the save
+  paintRewardButtons();
+  animateStakeRefund(stake);
+  notify('success');
+}
+
+/** The prism: one rewarded video pays the settlement a second time, so the total is 2×. */
+async function claimDoubleCoins(): Promise<void> {
+  const view = resultView;
+  if (!view || view.coins <= 0) return;
+  if (doubleBusy || recoverBusy || hasClaimedInMatch('double_coins')) return;
+
+  doubleBusy = true;
+  setChipBusy(doubleBtn, doubleSpin, true);
+  holdAudio();
+  const outcome = await playRewardedAd('double_coins').finally(releaseAudio);
+  doubleBusy = false;
+  setChipBusy(doubleBtn, doubleSpin, false);
+
+  if (resultView !== view) return;
+
+  if (!outcome.rewarded) {
+    paintRewardButtons();
+    showAdToast(t(outcome.reason === 'skipped' ? 'adToastSkipped' : 'adToastUnavailable'));
+    return;
+  }
+
+  const bonus = view.coins;
+  earnCoins(bonus);                         // 1× extra on top of the settled 1× = 2× total
+  markClaimedInMatch('double_coins');
+  paintRewardButtons();
+  animateCoinTotal(bonus);
+  notify('success');
+}
+
+recoverBtn.addEventListener('click', () => { void claimTiqRecovery(); });
+doubleBtn.addEventListener('click', () => { void claimDoubleCoins(); });
+
 let overlayOpen = false;
 function showOverlay() {
   if (overlayOpen) return;
   overlayOpen = true;
   clearResultMotion();
+  /* a fresh settlement owns a fresh budget: last match's claims must never pay this one */
+  resetMatchClaims();
+  recoverBusy = false;
+  doubleBusy = false;
+  setChipBusy(recoverBtn, recoverSpin, false);
+  setChipBusy(doubleBtn, doubleSpin, false);
+  resultStake.classList.remove('is-refunded');
+  hideAdToast();
   const won = state.winner === localSide;
   /* A rival who walked out mid-race leaves a machine in the chair. The capsule opens with its
      rematch and banter already dead: there is nobody on the far side of that socket. */
@@ -973,6 +1185,7 @@ function ui() {
     overlayOpen = false;
     overlay.hidden = true;
     clearResultMotion();
+    hideAdToast();
     resultView = null;
     resultLocked = false;
     banter.close();

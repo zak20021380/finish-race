@@ -129,11 +129,33 @@ function readVolume(): number {
 
 let volume = readVolume();
 
+/**
+ * An ad break owns the speakers. This is a mute, not a pause of the graph: the master drops to
+ * zero and `play` refuses at the door, so no voice is scheduled under a fullscreen video. It is
+ * reversible by construction and it never touches the saved volume — nothing here can leave the
+ * game silent once `releaseAudio` has run.
+ */
+let adHold = false;
+
 function applyGain(): void {
-  if (engine) engine.master.gain.value = settings.sound ? volume : 0;
+  if (engine) engine.master.gain.value = settings.sound && !adHold ? volume : 0;
 }
 applyGain();
 onSettings(applyGain);       // the Sound row in Settings mutes the whole engine, instantly
+
+/** Silence the engine for an ad. Idempotent: two overlapping holds are one hold. */
+export function holdAudio(): void {
+  if (adHold) return;
+  adHold = true;
+  applyGain();
+}
+
+/** Hand the speakers back, honouring whatever the Sound row says right now. */
+export function releaseAudio(): void {
+  if (!adHold) return;
+  adHold = false;
+  applyGain();
+}
 
 /** Set the engine's volume (0..1), persisted for the next visit. */
 export function setVolume(v: number): void {
@@ -160,7 +182,7 @@ let lastAngryAt = -Infinity;
  */
 function play(name: SoundName, opts: PlayOptions = {}): void {
   const e = engine;
-  if (!unlocked || !settings.sound || !e) return;
+  if (!unlocked || !settings.sound || adHold || !e) return;
   if (name === 'move') {
     const now = performance.now();
     if (now - lastMoveAt < MOVE_GAP_MS) return;

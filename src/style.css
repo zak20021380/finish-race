@@ -28533,6 +28533,12 @@ html[data-lang="ar"] [data-i18n-html] {
   opacity: .62;
   filter: saturate(.6);
 }
+/* a consolation pill keeps its key lit: the reward is subdued, the action that doubles it is not */
+.result-chip.is-consolation.is-doubled { opacity: 1; filter: none; }
+.result-chip.is-consolation.is-doubled > :not(#btn-double-coins) {
+  opacity: .62;
+  filter: saturate(.6);
+}
 .result-glyph {
   display: grid;
   place-items: center;
@@ -28643,6 +28649,20 @@ html[data-lang="ar"] [data-i18n-html] {
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
   text-shadow: 0 0 14px rgba(244, 63, 94, .45);
+  transition: color .3s ease, text-shadow .3s ease;
+}
+/* the shield landed: the crimson band turns emerald and the number settles on zero */
+.result-stake.is-refunded {
+  border-color: rgba(16, 185, 129, .34);
+  background: linear-gradient(180deg, rgba(16, 185, 129, .16), rgba(6, 78, 59, .12));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    0 8px 20px -14px rgba(16, 185, 129, .55);
+}
+.result-stake.is-refunded .result-stake-k { color: #6ee7b7; opacity: .9; }
+.result-stake.is-refunded .result-stake-n {
+  color: #6ee7b7;
+  text-shadow: 0 0 14px rgba(16, 185, 129, .5);
 }
 
 /* ---- rewarded video: smoked obsidian & burnished gold, at zero cost in height ----
@@ -28692,6 +28712,10 @@ html[data-lang="ar"] [data-i18n-html] {
 
 #btn-recover-tiq:active,
 #btn-double-coins:active { transform: scale(0.96); }
+
+/* a chip waiting on the video takes no second tap; the spinner is its own answer */
+#btn-recover-tiq.is-busy,
+#btn-double-coins.is-busy { pointer-events: none; }
 
 #btn-recover-tiq.is-claimed,
 #btn-double-coins.is-claimed {
@@ -28767,6 +28791,42 @@ html.reduced-motion .ad-chip-spin { animation: none; border-top-color: rgba(243,
 #result-coin-chip > .result-unit { order: 3; }
 #btn-double-coins { order: 4; }
 #btn-double-coins:not([hidden]) ~ .result-unit { display: none; }
+
+/* ---- the ad's answer: a pill over the capsule, out of the card's flow ----
+   The board's own `.note` sits under the veil (z-index 4 against the overlay's 10), so the
+   result owns a toast of its own. It is absolutely placed against the overlay: no height, no
+   layout, and `pointer-events: none` keeps the keys underneath tappable while it speaks. */
+.ad-toast {
+  position: absolute;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 3;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  margin: 0;
+  padding: 9px 14px;
+  border: 1px solid rgba(212, 175, 55, .3);
+  border-radius: 999px;
+  background: rgba(9, 11, 17, .94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 12px 28px -16px rgba(0, 0, 0, .95);
+  color: #f3d483;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  opacity: 0;
+  transform: translate(-50%, 10px);
+  pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease;
+}
+.ad-toast.show { opacity: 1; transform: translate(-50%, 0); }
+html.reduced-motion .ad-toast { transition: none; }
+html[data-lang="fa"] .ad-toast {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+}
 
 /* ---- actions: the one loud key, then the quiet door ---- */
 .result-actions {
