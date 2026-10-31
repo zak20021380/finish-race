@@ -12,8 +12,13 @@ export const BOT_HANDLE = 'Tactix_Robot';
 /** The player-facing brand. */
 export const BOT_NAME = 'Tactix';
 
-/** The BotFather Mini App short name: the `/app` in `https://t.me/<bot>/app`. */
-export const BOT_APP_SHORT_NAME = 'app';
+/**
+ * The BotFather Mini App short name: the `/play` in `https://t.me/<bot>/play`.
+ *
+ * BotFather registers the Mini App under this exact word, so `t.me/Tactix_Robot/play?startapp=…`
+ * only resolves once the short name typed there matches what is set here.
+ */
+export const BOT_APP_SHORT_NAME = 'play';
 
 /** The official community channel behind the forced-join gate and the Settings row. */
 export const CHANNEL_HANDLE = 'detour_game';
@@ -35,7 +40,7 @@ export function cleanStartPayload(payload: string): string {
   return (payload ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
 }
 
-/** `https://t.me/Tactix_Robot/app?startapp=<payload>` — opens the Mini App directly. */
+/** `https://t.me/Tactix_Robot/play?startapp=<payload>` — opens the Mini App directly. */
 export function botAppLink(payload = ''): string {
   const clean = cleanStartPayload(payload);
   const base = `https://t.me/${BOT_HANDLE}/${BOT_APP_SHORT_NAME}`;
@@ -49,7 +54,7 @@ export function botAppLink(payload = ''): string {
  */
 export const SQUAD_PREFIX = 'squad_';
 
-/** `https://t.me/Tactix_Robot/app?startapp=squad_<id>` — one tap into the squad's join door. */
+/** `https://t.me/Tactix_Robot/play?startapp=squad_<id>` — one tap into the squad's join door. */
 export function squadAppLink(id: string): string {
   const clean = (id ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 48);
   return clean ? botAppLink(`${SQUAD_PREFIX}${clean}`) : '';
@@ -59,12 +64,6 @@ export function squadAppLink(id: string): string {
 export function botStartLink(payload = ''): string {
   const clean = cleanStartPayload(payload);
   return clean ? `https://t.me/${BOT_HANDLE}?start=${clean}` : `https://t.me/${BOT_HANDLE}`;
-}
-
-/** `https://t.me/Tactix_Robot?startapp=<payload>` — the main Mini App, one tap, no bot-chat hop. */
-export function botMainAppLink(payload = ''): string {
-  const clean = cleanStartPayload(payload);
-  return clean ? `https://t.me/${BOT_HANDLE}?startapp=${clean}` : `https://t.me/${BOT_HANDLE}`;
 }
 
 /** `https://t.me/Tactix_Robot?startchannel=true&admin=...` — the channel-admin enlistment door. */
@@ -90,7 +89,7 @@ export function referralPayload(code: string): string {
   return `${REFERRAL_PREFIX}${code}`;
 }
 
-/** The direct Mini App referral link: `https://t.me/Tactix_Robot/app?startapp=ref_<code>`. */
+/** The direct Mini App referral link: `https://t.me/Tactix_Robot/play?startapp=ref_<code>`. */
 export function referralAppLink(code: string): string {
   return botAppLink(referralPayload(code));
 }

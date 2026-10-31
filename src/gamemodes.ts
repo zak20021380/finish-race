@@ -13,7 +13,7 @@
  *
 /**
  * Rooms are local-first: Create mints a 4-digit code and reveals a 1-tap
- * "Invite via Telegram" deep-link (`t.me/<bot>?startapp=room_XXXX`). Join validates
+ * "Invite via Telegram" deep-link (`t.me/<bot>/play?startapp=room_XXXX`). Join validates
  * a 4-digit code. Online races still start as local bot races with matching
  * sizes until netplay lands — the lobby is the contract, the starter is a stub.
  *
@@ -397,7 +397,7 @@ export function inviteUrl(code?: string | null): string {
   return roomInviteUrl(inviteCode(code));
 }
 
-/** Display form: `t.me/<bot>?startapp=room_XXXX` (the shared config owns the handle). */
+/** Display form: `t.me/<bot>/play?startapp=room_XXXX` (the shared config owns the handle). */
 export function buildInviteDisplay(code?: string | null): string {
   return inviteUrl(code).replace(/^https:\/\//, '');
 }

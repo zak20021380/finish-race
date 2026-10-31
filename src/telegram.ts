@@ -3,7 +3,7 @@
  * no-op, so the same build plays in a plain browser tab.
  */
 import { settings } from './settings';
-import { botMainAppLink, telegramShareLink } from '../shared/config';
+import { botAppLink, telegramShareLink } from '../shared/config';
 
 export interface TgUser {
   /** Telegram's numeric user id — the key the admin allowlist matches on. */
@@ -88,7 +88,7 @@ function atLeast(version: string): boolean {
 export { BOT_HANDLE } from '../shared/config';
 
 /**
- * The one invite URL a room ever has: `https://t.me/<bot>?startapp=room_<code>`.
+ * The one invite URL a room ever has: `https://t.me/<bot>/play?startapp=room_<code>`.
  *
  * This is the single source of truth for a room invite. The code badge, the `Copy Link` key, the
  * header `Invite` pill and the empty rival plate all read the same active code and hand it to this
@@ -98,7 +98,7 @@ export { BOT_HANDLE } from '../shared/config';
  */
 export function roomInviteUrl(code: string): string {
   const digits = String(code ?? '').replace(/\D/g, '').slice(0, 4);
-  return digits.length === 4 ? botMainAppLink(`room_${digits}`) : '';
+  return digits.length === 4 ? botAppLink(`room_${digits}`) : '';
 }
 
 /** The same invite URL, wrapped in Telegram's native share page. '' when the code is unusable. */
@@ -137,7 +137,7 @@ export function languageCode(): string {
 const START_KEYS = ['startapp', 'tgWebAppStartParam', 'start_param'] as const;
 
 /**
- * `t.me/<bot>/app?startapp=<x>` — the payload a deep link carries.
+ * `t.me/<bot>/play?startapp=<x>` — the payload a deep link carries.
  *
  * The Mini App answers with `initDataUnsafe.start_param`; a plain browser tab (or a client that
  * strips initData) has no such field, so the same value is read off the URL instead: the query

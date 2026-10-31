@@ -293,7 +293,7 @@ export function myPlayerName(): string {
 
 /* ---------- invites ---------- */
 
-/** `https://t.me/<bot>/<app>?startapp=squad_<id>` — the one link a squad ever shares. */
+/** `https://t.me/<bot>/<short-name>?startapp=squad_<id>` — the one link a squad ever shares. */
 export function squadInviteUrl(id: string): string {
   return squadAppLink(id);
 }

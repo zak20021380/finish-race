@@ -193,7 +193,7 @@ const A = 1001;
 const inviterBefore = await me(rt, A);
 ok('the first open creates a code', inviterBefore.status === 200 && CODE_RE.test(inviterBefore.body.code ?? ''), JSON.stringify(inviterBefore.body));
 ok('the link opens the Mini App directly with ref_<code>',
-  inviterBefore.body.link === `https://t.me/Tactix_Robot/app?startapp=ref_${inviterBefore.body.code}`,
+  inviterBefore.body.link === `https://t.me/Tactix_Robot/play?startapp=ref_${inviterBefore.body.code}`,
   inviterBefore.body.link);
 ok('a fresh inviter starts at 0 friends and 0 coins',
   inviterBefore.body.joins === 0 && inviterBefore.body.earned === 0);

@@ -63,7 +63,7 @@ import {
   verifySquadChat,
   type RegisteredSquad, type SquadVerification,
 } from './squads';
-import { botMainAppLink } from '../shared/config';
+import { botAppLink } from '../shared/config';
 import countryRegistry from '../src/data/countries.json';
 import type { Env } from './env';
 
@@ -4175,7 +4175,7 @@ export class MatchmakerDO {
     const token = this.env.TELEGRAM_BOT_TOKEN?.trim();
     if (!arrival || !token) return;
     const now = Date.now();
-    const link = botMainAppLink(`room_${live.room.code}`);
+    const link = botAppLink(`room_${live.room.code}`);
     for (const other of live.members) {
       if (!other || other.seat === arrivalSeat || other.connected) continue;
       const chatId = chatIdOf(other.id);

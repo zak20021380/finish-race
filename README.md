@@ -63,7 +63,7 @@ server yet, so the registry lives in the save and ships with a handful of demo c
 see the flow — the sheet says "local mock" rather than pretending otherwise.
 
 The shape is what makes the future cheap: every team carries `startParam` and a reserved `chatId`,
-so `t.me/Tactix_Robot/app?startapp=team-<code>` is already a link the app understands — opening Tactix
+so `t.me/Tactix_Robot/play?startapp=team-<code>` is already a link the app understands — opening Tactix
 from one pre-fills the join field. Binding a team to a real Telegram group is a server change, not a
 schema change.
 
@@ -135,8 +135,12 @@ Telegram only loads **HTTPS** URLs.
    - Quick test: `npx cloudflared tunnel --url http://localhost:5173` (or `ngrok http 5173`), or
    - Deploy `dist/` to any static host (Netlify, Vercel, Cloudflare Pages, GitHub Pages).
 2. In Telegram, open [@BotFather](https://t.me/BotFather) → `/newapp`.
-3. Pick your bot, then send: title (`Tactix`), description, a 640×360 photo, (optional GIF, `/empty` to skip), and your **HTTPS URL**, then a short name.
-4. BotFather replies with a link like `https://t.me/<bot>/<short_name>`. Open it to play.
+3. Pick your bot, then send: title (`Tactix`), description, a 640×360 photo, (optional GIF, `/empty` to skip), and your **HTTPS URL**, then the short name **`play`**.
+   Every deep link the app and the bot print is built from `BOT_APP_SHORT_NAME` in `shared/config.ts`,
+   so the word typed here has to be that word — `share` it as `/play` or the links 404 in Telegram.
+4. BotFather replies with a link like `https://t.me/<bot>/play`. Open it to play.
+   - A short name equal to a bot command shadows that command only in links: `t.me/<bot>/play` now
+     opens the Mini App, while typing `/play` in the chat still reaches `worker/bot.ts`.
    - Alternative: `/mybots` → your bot → Bot Settings → Menu Button → set the URL.
 
 ## Code map
@@ -233,7 +237,7 @@ Object (`ReferralLedgerDO`). The share link is built by the shared config and op
 directly:
 
 ```text
-https://t.me/Tactix_Robot/app?startapp=ref_<code>
+https://t.me/Tactix_Robot/play?startapp=ref_<code>
 ```
 
 The bot's `/start ref_<code>` path binds the same pending row, so landing in the chat first and
@@ -249,9 +253,13 @@ An invitee credits one inviter exactly once: the row carries a `creditedFrom` st
 gate pass, a self-referral, a loop, a forged code, or a user who existed before the link credits
 nothing. The bot must be a member of `REQUIRED_CHANNEL` (default `@detour_game`) for `getChatMember`
 to answer. The inviter's `joins` and `earned` move with the gate response; the client folds the
-`earned` delta into the unclaimed pool, which keeps the existing Claim tap as the only door into
-the wallet (a refresh after a claim cannot pay the same coins twice). Deploying this build applies
-the `v3` migration that creates `ReferralLedgerDO`.
+`earned` *delta* into the unclaimed pool, so a refresh after a claim can never pay the same coins
+twice. On the settlement the gate reports, the invitee's pool is flushed into the wallet on the spot
+(`claimReferralRewards()` in `src/joinGate.ts`) — the welcome bonus is already on the coin HUD when
+the gate closes, and it pays the pool rather than a fixed bonus, so even a hypothetical second settle
+pays nothing. The inviter's half is banked by the same request but waits behind the Hub's Claim tap,
+which stays the only door into that player's own wallet. Deploying this build applies the `v3`
+migration that creates `ReferralLedgerDO`.
 
 ### The bot's chat surface
 
@@ -269,7 +277,7 @@ of the language chosen — one `web_app` PLAY button, `📖 How to Play` and `�
 side, and `🌐 Change Language` below — so no screen is ever stacked on the last. Every callback carries
 its own language (`menu:rules:fa`), which is why a menu redraws correctly on a worker that has never
 seen the player. The rules card answers with the four things a turn can be, and offers PLAY and a way
-back; the invite card prints a personal `https://t.me/Tactix_Robot/app?startapp=ref_<code>` link with
+back; the invite card prints a personal `https://t.me/Tactix_Robot/play?startapp=ref_<code>` link with
 a share-sheet button and a `switch_inline_query` button, whose inline answer is the same card dropped
 into any chat. The code is random and server-issued; the old `ref_u<id>` shape is not accepted.
 

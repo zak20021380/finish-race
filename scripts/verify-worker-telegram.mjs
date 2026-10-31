@@ -417,7 +417,7 @@ console.log('\n-- rules and invite --');
   resetApi();
   await rt.webhook(callback('menu:invite:en', { from: EN_USER }));
   const invite = last('editMessageText');
-  const personal = /https:\/\/t\.me\/Tactix_Robot\/app\?startapp=ref_([a-z0-9]{12})/.exec(invite.text)?.[0] ?? '';
+  const personal = /https:\/\/t\.me\/Tactix_Robot\/play\?startapp=ref_([a-z0-9]{12})/.exec(invite.text)?.[0] ?? '';
   ok('the invite card carries a personal direct-Mini-App link', personal !== '', invite.text.slice(-120));
   ok('with the placeholder filled in, not printed', !invite.text.includes('{link}'));
   const share = button(invite, 'Share Invite Link');
@@ -696,7 +696,7 @@ console.log('\n-- /telegram/setup-webhook --');
   resetApi();
   await rt.webhook(callback('menu:invite:en', { from: 600030 }));
   ok('a renamed bot never silently rewrites the link identity',
-    /https:\/\/t\.me\/Tactix_Robot\/app\?startapp=ref_[a-z0-9]{12}/.test(last('editMessageText').text),
+    /https:\/\/t\.me\/Tactix_Robot\/play\?startapp=ref_[a-z0-9]{12}/.test(last('editMessageText').text),
     last('editMessageText').text.slice(0, 80));
 
   /* a configured secret is registered and required */

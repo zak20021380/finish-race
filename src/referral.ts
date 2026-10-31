@@ -6,7 +6,7 @@
  * forced-join gate verifies channel membership. This module only reads and folds that ledger into
  * the save, and builds the one link both the Copy and Share keys use:
  *
- *   https://t.me/<BOT_HANDLE>/app?startapp=ref_<code>
+ *   https://t.me/<BOT_HANDLE>/play?startapp=ref_<code>
  *
  * The bot's `/start ref_<code>` path resolves to the same pending row, so a player who lands in
  * the chat first is attributed exactly like one who opens the Mini App directly.
@@ -18,7 +18,7 @@ import { profile, readJson, syncReferralLedger, writeJson } from './storage';
 import { startParam, tgInitData } from './telegram';
 import { workerUrl } from './adminApi';
 import {
-  REFERRAL_CODE_ALPHABET, REFERRAL_CODE_LENGTH, REFERRAL_CODE_RE, REFERRAL_PREFIX,
+  REFERRAL_CODE_ALPHABET, REFERRAL_CODE_LENGTH, REFERRAL_CODE_RE, REFERRAL_PREFIX, REFERRAL_REWARD,
   referralAppLink, referralPayload, telegramShareLink,
 } from '../shared/config';
 
@@ -84,7 +84,7 @@ export function referralLink(): string {
 export function referralShareUrl(): string {
   const link = referralLink();
   if (!link) return '';
-  return telegramShareLink(link, 'Race me on Tactix — we both get 500 coins when you join!');
+  return telegramShareLink(link, `Race me on Tactix — we both get ${REFERRAL_REWARD.toLocaleString('en-US')} coins when you join!`);
 }
 
 /** The inbound `ref_` code this launch carried, or null (its own code is not a referral). */

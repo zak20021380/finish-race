@@ -6,14 +6,24 @@
  * channel; Verify re-runs the same check and, the instant it passes, the Worker settles the
  * pending referral in that request — before the gate is dismissed here.
  *
+ * A settlement is paid, not just announced: the ledger credit the gate folds into the unclaimed
+ * pool is flushed into the wallet on the spot, so the newcomer's welcome bonus is already in the
+ * coin HUD when the gate closes. The inviter's half stays in the Hub's pool behind its Claim key —
+ * the Worker has banked it, but this device does not spend another player's tap for them.
+ *
  * It deliberately fails open: an unreachable Worker or a missing verification token must never
  * lock a player out of the arena. Only an explicit "not a member" answer shows the gate.
  */
+import { claimReferralRewards } from './storage';
+import { playReward } from './sound';
 import { gateReferral, inboundReferralCode, refreshReferral } from './referral';
 import { impact, notify, openLink, tgInitData, tgUser } from './telegram';
 import { CHANNEL_URL, REFERRAL_REWARD } from '../shared/config';
 
 const $ = (id: string) => document.getElementById(id);
+
+/** Coin amounts are always grouped the way the rest of the app groups them. */
+const coins = (n: number): string => n.toLocaleString('en-US');
 
 let started = false;
 let toastTimer = 0;
@@ -55,6 +65,9 @@ export function initJoinGate(): void {
   if (body && inboundReferralCode()) {
     body.textContent = 'Join the channel to lock in your invite reward and enter the arena.';
   }
+  /* The banner promise is the ledger's own payout, never a number typed into the markup. */
+  const rewardAmount = reward?.querySelector<HTMLElement>('b') ?? null;
+  if (rewardAmount) rewardAmount.textContent = `${coins(REFERRAL_REWARD)} Coins`;
   if (reward && !inboundReferralCode()) {
     reward.hidden = true;
   }
@@ -113,7 +126,14 @@ export function initJoinGate(): void {
 
     hide();
     if (result.credited) {
-      toast(`Channel verified — +${REFERRAL_REWARD.toLocaleString('en-US')} Coins added to your rewards.`);
+      /* `gateReferral` folded the settlement into the unclaimed pool; draining that pool is what
+         turns the credit into a balance. Paying the pool rather than a fixed bonus is what makes
+         this impossible to double-pay: a second settle adds nothing, so a second tap pays nothing. */
+      const paid = claimReferralRewards();
+      if (paid > 0) playReward();
+      toast(paid > 0
+        ? `Channel verified — +${coins(paid)} Coins added to your balance.`
+        : 'Channel verified — your invite reward is on its way.');
       impact('medium');
       notify('success');
     } else if (!initial) {

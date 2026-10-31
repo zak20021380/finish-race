@@ -3,7 +3,7 @@
  *
  * There is no server yet, so a team is a record in this device's save. What is *not* mock is the
  * shape: `code` is what a player types today, and `startParam` is exactly what a Telegram group link
- * will carry (`t.me/<bot>/app?startapp=<startParam>`) once teams bind to a chat — `chatId` is the
+ * will carry (`t.me/<bot>/play?startapp=<startParam>`) once teams bind to a chat — `chatId` is the
  * slot the group's id goes into. `seed` teams are demo clubs you can join to see the flow; they are
  * painted as such, so nothing here pretends to be a roster that exists somewhere else.
  */

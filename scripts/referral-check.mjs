@@ -9,7 +9,7 @@
  *      `Invite` pill, inside the pane, zero horizontal overflow, 54–70px tall;
  *   2. the sheet: engraved ✕, gold-bannered reward line fed by the REFERRAL_REWARD constant, the
  *      identity preview (`@Tactix_Robot` + `ref_<code>`), the direct-Mini-App link
- *      (`https://t.me/Tactix_Robot/app?startapp=ref_<code>`), Copy key, gold Share key, the two
+ *      (`https://t.me/Tactix_Robot/play?startapp=ref_<code>`), Copy key, gold Share key, the two
  *      counters and the disabled mint Claim key;
  *   3. Copy: label swings to "Copied! ✔" with the .copied state and lands the link on the real
  *      clipboard, then reverts after ~1.4s;
@@ -66,7 +66,7 @@ function serve() {
 
 const UID = 4242;
 const CODE = 'a1b2c3d4e5f6';
-const LINK = `https://t.me/Tactix_Robot/app?startapp=ref_${CODE}`;
+const LINK = `https://t.me/Tactix_Robot/play?startapp=ref_${CODE}`;
 
 /** Telegram WebApp stub installed BEFORE the bundle loads — src/telegram.ts binds its `tg`
  *  reference at module init, so a post-load stub would never receive the haptics. Locked so the
