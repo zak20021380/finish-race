@@ -5,16 +5,52 @@ export type SquadKind = 'channel' | 'group';
 /** The audit state the Command Center shows: confirmed admin, awaiting review, or pulled. */
 export type SquadVerification = 'verified' | 'pending' | 'revoked';
 
+/** Who a roster row is: the player who enlisted the squad, a promoted officer, or a member. */
+export type SquadMemberRole = 'leader' | 'admin' | 'member';
+
+/**
+ * One real mini-app player on a squad's roster.
+ *
+ * This is the *only* thing that makes a squad have members: there is no seeded roster, no derived
+ * ladder, and no Telegram audience folded in. `tiq` is the player's own Tactical IQ as they
+ * reported it from the game (the same reading the Mind Ladder prints), so the squad's war total is
+ * the sum of numbers real people actually earned.
+ */
+export interface SquadMemberRow {
+  /** Telegram user id — the one stable key a player has. */
+  id: string;
+  /** Display name at the time of the last sync; '' when the player never sent one. */
+  name: string;
+  tiq: number;
+  role: SquadMemberRole;
+  joinedAt: number;
+  /** ISO 3166-1 alpha-2, or '' when the player has not picked a country. */
+  country: string;
+  /** Telegram @username without the `@`, or ''. */
+  username: string;
+}
+
 export interface RegisteredSquad {
   id: string;
   chatId: string;
   handle: string;
   name: string;
+  /**
+   * The Telegram chat's own audience (`getChatMemberCount`). An external stat only: it is what the
+   * community looks like on Telegram, never how many players joined the squad in the game.
+   */
+  subscribers: number;
+  /** The real players who joined. `members` is always this array's length. */
+  roster: SquadMemberRow[];
+  /** Joined players — derived from `roster`, never from `subscribers`. */
   members: number;
   kind: SquadKind;
   avatar: string;
   /** 2–3 character call sign stamped on the squad crest. */
   tag: string;
+  /** The Telegram id of the player who enlisted the squad: its leader and only admin. */
+  creatorId: string;
+  /** `creatorId` under its legacy name; kept so older rows and admin reads agree. */
   ownerId: string;
   createdAt: number;
   /** `verified` — the bot proved the submitter is an admin; `pending` — awaits an audit. */
@@ -191,6 +227,33 @@ export function normalizeSquadTag(raw: unknown): string {
   return /^[A-Z0-9]{2,3}$/.test(tag) ? tag : '';
 }
 
+/** A roster row from untrusted storage: an id is mandatory, every other field has a safe zero. */
+export function readSquadMember(raw: unknown): SquadMemberRow | null {
+  const row = raw as Partial<SquadMemberRow> | null | undefined;
+  if (!row) return null;
+  const id = text(row.id, 24).replace(/[^0-9A-Za-z_-]/g, '');
+  if (!id) return null;
+  const role: SquadMemberRole = row.role === 'leader' || row.role === 'admin' ? row.role : 'member';
+  const tiq = Number(row.tiq);
+  const joinedAt = Number(row.joinedAt);
+  const country = text(row.country, 2).toUpperCase();
+  return {
+    id,
+    name: text(row.name, 24),
+    tiq: Number.isFinite(tiq) && tiq > 0 ? Math.floor(tiq) : 0,
+    role,
+    joinedAt: Number.isFinite(joinedAt) && joinedAt > 0 ? Math.floor(joinedAt) : 0,
+    country: /^[A-Z]{2}$/.test(country) ? country : '',
+    username: text(row.username, 32).replace(/^@+/, ''),
+  };
+}
+
+/**
+ * A stored squad, normalised. The one rule this enforces is the whole point of the model:
+ * **`members` is the roster's length**. A row written before the roster existed carries the
+ * Telegram audience in `members`; that number is moved to `subscribers` (where it belongs) and the
+ * enlisting owner is seeded as the squad's leader, because they did in fact enlist it.
+ */
 export function readRegisteredSquad(raw: unknown): RegisteredSquad | null {
   const row = raw as Partial<RegisteredSquad> | null | undefined;
   if (!row) return null;
@@ -198,18 +261,54 @@ export function readRegisteredSquad(raw: unknown): RegisteredSquad | null {
   const handle = normalizeChatHandle(text(row.handle, 64));
   const name = text(row.name, MEMBER_TEXT);
   if (!id || !handle || !name) return null;
-  const members = Number(row.members);
   const createdAt = Number(row.createdAt);
+  const ownerId = text(row.ownerId ?? row.creatorId, 24);
+  const creatorId = text(row.creatorId ?? row.ownerId, 24);
+
+  const roster: SquadMemberRow[] = [];
+  const seen = new Set<string>();
+  if (Array.isArray(row.roster)) {
+    for (const entry of row.roster) {
+      const member = readSquadMember(entry);
+      if (!member || seen.has(member.id)) continue;
+      seen.add(member.id);
+      roster.push(member);
+      if (roster.length >= MAX_ROSTER) break;
+    }
+  }
+  /* A legacy row has no roster but does have an owner: that player enlisted the squad, so the
+     roster starts at exactly one — the leader — rather than at the channel's audience. */
+  const leader = creatorId || ownerId;
+  if (!roster.length && leader) {
+    roster.push({
+      id: leader,
+      name: '',
+      tiq: 0,
+      role: 'leader',
+      joinedAt: Number.isFinite(createdAt) && createdAt > 0 ? Math.floor(createdAt) : Date.now(),
+      country: '',
+      username: '',
+    });
+  }
+  /* Exactly one leader, and it is the creator: a promoted or stale row can never hold the crown. */
+  for (const member of roster) {
+    member.role = member.id === leader ? 'leader' : member.role === 'leader' ? 'member' : member.role;
+  }
+
+  const subscribers = Number(row.subscribers ?? row.members);
   return {
     id,
     chatId: text(row.chatId, 32),
     handle,
     name,
-    members: Number.isFinite(members) && members >= 0 ? Math.floor(members) : 0,
+    subscribers: Number.isFinite(subscribers) && subscribers >= 0 ? Math.floor(subscribers) : 0,
+    roster,
+    members: roster.length,
     kind: row.kind === 'channel' ? 'channel' : 'group',
     avatar: text(row.avatar, AVATAR_TEXT),
     tag: normalizeSquadTag(row.tag),
-    ownerId: text(row.ownerId, 24),
+    creatorId: leader,
+    ownerId: leader,
     createdAt: Number.isFinite(createdAt) && createdAt > 0 ? Math.floor(createdAt) : Date.now(),
     verification: verificationOf(row.verification),
     verifiedAt: stampOf(row.verifiedAt),
@@ -219,6 +318,137 @@ export function readRegisteredSquad(raw: unknown): RegisteredSquad | null {
     bannedAt: stampOf(row.bannedAt),
   };
 }
+
+/** A roster is bounded: a Telegram supergroup can hold 200k people, a war board cannot. */
+export const MAX_ROSTER = 5_000;
+
+/** The role a player holds on a squad, or '' when they are not on it. */
+export function roleOf(squad: RegisteredSquad, playerId: string): SquadMemberRole | '' {
+  const id = text(playerId, 24);
+  if (!id) return '';
+  const hit = squad.roster.find((m) => m.id === id);
+  if (hit) return hit.role;
+  return squad.creatorId === id ? 'leader' : '';
+}
+
+/** True when this player may manage the squad (its leader, or an appointed officer). */
+export function isSquadAdmin(squad: RegisteredSquad, playerId: string): boolean {
+  const role = roleOf(squad, playerId);
+  return role === 'leader' || role === 'admin';
+}
+
+/**
+ * Put a player on the roster, or refresh the row they already have.
+ *
+ * `join` is the difference between the two doors: a join may add a row, a sync only ever touches
+ * one that exists — so opening the app can never quietly enrol someone who never tapped Join.
+ * Returns whether the row was created.
+ */
+export function upsertSquadMember(
+  squad: RegisteredSquad,
+  input: { id: string; name?: string; tiq?: number; country?: string; username?: string },
+  join: boolean,
+): boolean {
+  const id = text(input.id, 24).replace(/[^0-9A-Za-z_-]/g, '');
+  if (!id) return false;
+  const tiqRaw = Number(input.tiq);
+  const tiq = Number.isFinite(tiqRaw) && tiqRaw > 0 ? Math.min(Math.floor(tiqRaw), 9_999_999) : 0;
+  const country = text(input.country, 2).toUpperCase();
+  const name = text(input.name, 24);
+  const username = text(input.username, 32).replace(/^@+/, '');
+
+  const existing = squad.roster.find((m) => m.id === id);
+  if (existing) {
+    /* A sync is authoritative for the player's own numbers and never for their role: the crown
+       belongs to the creator and only an admin action can change that. */
+    if (name) existing.name = name;
+    existing.tiq = Math.max(existing.tiq, tiq);
+    if (country) existing.country = country;
+    if (username) existing.username = username;
+    return false;
+  }
+  if (!join) return false;
+  if (squad.roster.length >= MAX_ROSTER) return false;
+  squad.roster.push({
+    id,
+    name,
+    tiq,
+    role: id === squad.creatorId ? 'leader' : 'member',
+    joinedAt: Date.now(),
+    country: /^[A-Z]{2}$/.test(country) ? country : '',
+    username,
+  });
+  squad.members = squad.roster.length;
+  return true;
+}
+
+/** Take a player off the roster. The leader can never be removed by this door. */
+export function removeSquadMember(squad: RegisteredSquad, playerId: string): boolean {
+  const id = text(playerId, 24);
+  if (!id || id === squad.creatorId) return false;
+  const before = squad.roster.length;
+  squad.roster = squad.roster.filter((m) => m.id !== id);
+  squad.members = squad.roster.length;
+  return squad.roster.length !== before;
+}
+
+/** The squad's war score: every joined player's own TIQ, added up. */
+export function squadWarTiq(squad: RegisteredSquad): number {
+  return squad.roster.reduce((sum, m) => sum + Math.max(0, m.tiq), 0);
+}
+
+/**
+ * The public shape a client reads: identity, the real roster (leader first, then by TIQ), the
+ * derived counts, and the audience as a clearly separate stat. No chat token, no audit notes, and
+ * no Telegram @username — the roster names a player by their display name, which is all the board
+ * ever paints.
+ */
+export interface SquadView {
+  id: string;
+  chatId: string;
+  handle: string;
+  name: string;
+  kind: SquadKind;
+  avatar: string;
+  tag: string;
+  /** Joined mini-app players. Always `roster.length`. */
+  members: number;
+  /** Telegram audience — external stat, never the squad's size. */
+  subscribers: number;
+  /** Sum of the roster's TIQ. */
+  tiq: number;
+  creatorId: string;
+  createdAt: number;
+  verified: boolean;
+  roster: SquadMemberRow[];
+}
+
+export function squadViewOf(squad: RegisteredSquad): SquadView {
+  const roster = [...squad.roster]
+    .sort((a, b) =>
+      Number(b.role === 'leader') - Number(a.role === 'leader')
+      || b.tiq - a.tiq
+      || a.joinedAt - b.joinedAt)
+    /* The @username is stored for the audit trail, never published on a board. */
+    .map((member) => ({ ...member, username: '' }));
+  return {
+    id: squad.id,
+    chatId: squad.chatId,
+    handle: squad.handle,
+    name: squad.name,
+    kind: squad.kind,
+    avatar: squad.avatar,
+    tag: squad.tag,
+    members: roster.length,
+    subscribers: squad.subscribers,
+    tiq: squadWarTiq(squad),
+    creatorId: squad.creatorId,
+    createdAt: squad.createdAt,
+    verified: squad.verification === 'verified' && !squad.banned,
+    roster,
+  };
+}
+
 
 /**
  * One Bot API call. Reads ride GET with the chat id in the query string — the shape the
@@ -571,7 +801,7 @@ export async function verifyAndBuildSquad(
   rawHandle: string,
   userId: string,
   env: Env,
-  identity?: { name?: string; tag?: string; kind?: SquadKind },
+  identity?: { name?: string; tag?: string; kind?: SquadKind; memberName?: string; username?: string },
 ): Promise<SquadRegistration> {
   const handle = normalizeChatHandle(rawHandle);
   if (!handle) {
@@ -654,10 +884,22 @@ export async function verifyAndBuildSquad(
       chatId: chat.chatId,
       handle: chat.handle,
       name: text(identity?.name, MEMBER_TEXT) || chat.title,
-      members: chat.members,
+      /* The chat's audience is an external stat; the squad starts with exactly one player. */
+      subscribers: chat.members,
+      roster: [{
+        id: requester,
+        name: text(identity?.memberName, 24),
+        tiq: 0,
+        role: 'leader',
+        joinedAt: Date.now(),
+        country: '',
+        username: text(identity?.username, 32).replace(/^@+/, ''),
+      }],
+      members: 1,
       kind: chat.kind,
       avatar: chat.avatar,
       tag,
+      creatorId: requester,
       ownerId: requester,
       createdAt: Date.now(),
       /* The bot just proved both sides against Telegram, so a fresh registration starts verified. */

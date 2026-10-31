@@ -1,10 +1,15 @@
 /**
- * data/index.ts — seeded mock API behind a small async surface.
+ * data/index.ts — seeded preview data behind a small async surface.
  *
  * Everything here is local preview data: no network, no dependency. Each getter
  * awaits a short delay so skeletons and empty states can be exercised like a
  * real fetch. Timestamps are relative to `Date.now()` so countdowns stay live.
+ *
+ * One surface is *not* seeded: `getChannelRoster` reads the real squad roster, because a channel's
+ * members are the players who joined it — never a generated list.
  */
+
+import { getSquadById, squadRosterOf } from '../squads';
 
 export type Trend = 'up' | 'down' | 'same';
 
@@ -150,51 +155,33 @@ export async function getGrandCup(): Promise<GrandCup> {
 }
 
 /* ---------- channel rosters ----------
-   The Arena ranks channels, but a channel is only ever as loud as the ten
-   contributors that carry it. Their TIQ is a fixed slice of the squad's own
-   total, so a roster can never quote a top mind that outweighs the ladder it
-   came from, and the payout column is the cup's prize ladder read in order. */
-
-/** Share of the squad TIQ held by each of the top ten contributors. */
-const ROSTER_SHARE = [.14, .11, .092, .078, .066, .056, .048, .041, .035, .03];
-
-/** Name + nation pool. Purely cosmetic — the TIQ is always derived from the squad. */
-const ROSTER_MINDS: ReadonlyArray<readonly [string, string]> = [
-  ['Viktor', 'UA'], ['Lena', 'DE'], ['Mateo', 'ES'], ['Aiko', 'JP'],
-  ['Zara', 'SA'], ['Diego', 'BR'], ['Nina', 'PL'], ['Omar', 'EG'],
-  ['Yuki', 'JP'], ['Ivan', 'KZ'], ['Sara', 'IR'], ['Kwame', 'GH'],
-  ['Elif', 'TR'], ['Pavel', 'CZ'], ['Mei', 'CN'], ['Tariq', 'PK'],
-  ['Anouk', 'NL'], ['Ravi', 'IN'], ['Chloe', 'FR'], ['Bilal', 'MA'],
-  ['Hana', 'KR'], ['Nour', 'MA'], ['Marco', 'IT'], ['Dana', 'IL'],
-];
-
-/** FNV-1a. A channel's roster is stable across taps, reloads and repaints. */
-function hash32(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
-  return h >>> 0;
-}
+   The Arena ranks channels, and a channel's roster is the players who actually joined it. There
+   is no generated ladder behind these rows: each one is a real squad member, at the TIQ their own
+   games earned. The payout column is the cup's prize ladder read in order, so the top ten rows
+   are the ten people the pool actually pays. */
 
 /**
  * The contributors behind one channel, ranked by TIQ.
  *
- * Ten rows is what the sheet shows, but the local player is merged in at their
- * real personal TIQ and the full list comes back — a squad member sitting at
- * #11 has to be able to see that they are outside the paid ten, not be dropped
- * from the feed and left with a rank nobody computed.
+ * The local player is merged in at their real personal TIQ when they belong to the squad, and the
+ * full list comes back — a squad member sitting at #11 has to be able to see that they are outside
+ * the paid ten, not be dropped from the feed and left with a rank nobody computed.
  */
 export async function getChannelRoster(ch: ChannelSeed, you: RosterYou | null = null): Promise<RosterRow[]> {
   await sleep(LATENCY);
-  const h = hash32(ch.id);
-  const rows = ROSTER_SHARE.map((share, i): RosterRow => {
-    const [name, countryCode] = ROSTER_MINDS[(h + i * 7) % ROSTER_MINDS.length];
-    return {
-      rank: 0, name, countryCode,
-      tiq: Math.max(1, Math.round(ch.tiq * share)),
-      stars: 0, isYou: false,
-    };
-  });
-  if (you) {
+  const squad = getSquadById(ch.id);
+  const members = squad ? squadRosterOf(squad) : [];
+  const rows: RosterRow[] = members.map((member): RosterRow => ({
+    rank: 0,
+    name: member.name || '—',
+    countryCode: member.country,
+    tiq: Math.max(0, Math.round(member.tiq)),
+    stars: 0,
+    isYou: false,
+  }));
+  /* A player who is on the squad is already on the roster; the merge only fills a gap (an older
+     client with no roster yet) and never invents a second row for the same person. */
+  if (you && !rows.some((r) => r.name === you.name)) {
     rows.push({
       rank: 0, name: you.name, countryCode: you.countryCode,
       tiq: Math.max(0, Math.round(you.tiq)), stars: 0, isYou: true,

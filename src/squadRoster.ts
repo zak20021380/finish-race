@@ -1,29 +1,30 @@
 /**
  * squadRoster.ts — the member list behind the squad hub.
  *
- * A squad stores its handle, headcount and a legacy points pool, but no roster and no per-member
- * ratings. The hub therefore derives a deterministic ladder of individual TIQs around the squad's
- * own standing: the local player is merged in at their real TIQ (the same `myTiq()` the Mind
- * Ladder prints) and every other row is a stable read of the squad id. The average the hub quotes
- * is the mean of the rows it actually paints, never a typed number.
+ * This used to *invent* a ladder: a deterministic spread of names and TIQs around the squad's
+ * standing, so a channel with 1,240 Telegram subscribers appeared to have 1,240 players. None of
+ * those people existed. The roster is now a projection of the squad's real roster — the players
+ * who actually tapped Join — and every number on it is one of theirs.
  *
- * Arena standing is a second read of that same TIQ: a six-tier ladder with three divisions each
- * and a global place. It is presentation data for a local-first mock; a real tournament feed
- * replaces `arenaStandingOf()` without touching the roster shape.
- *
- * Only the player's own honor is worn from the real save; another row may show a medallion only
- * when the Worker's public holder index names that exact member.
+ * Arena standing stays a read of the member's own TIQ (a six-tier ladder with three divisions and
+ * a global place), so the hub and the Mind Ladder can never disagree about a player's rank.
  */
 
 import { holderEdition, wornEdition, type WornEdition } from './badges';
 import { ARENA_TIER_NAMES, arena, type ArenaTierId } from './arenaState';
 import { myTiq } from './matchmaking';
-import type { RankedSquad } from './squads';
+import {
+  myRosterId, myPlayerName, squadRosterOf, type RankedSquad, type SquadMember as SquadRow,
+  type SquadRole,
+} from './squads';
 import { profile } from './storage';
+import { t } from './settings';
 import { tgUser } from './telegram';
 
-export type SquadRole = 'leader' | 'admin' | 'member';
 export type SquadRosterSort = 'tiq' | 'arena' | 'name';
+
+/** Re-exported so a caller can name the role without reaching into the store module. */
+export type { SquadRole } from './squads';
 
 export type ArenaTier = ArenaTierId;
 export type ArenaDivision = 'I' | 'II' | 'III';
@@ -55,7 +56,7 @@ export interface SquadMember {
   arena: ArenaStanding;
   isYou: boolean;
   initials: string;
-  /** Avatar tint, picked from a restrained palette so 1,200 rows stay calm. */
+  /** Avatar tint, picked from a restrained palette so a long roster stays calm. */
   hue: number;
   /** A server-confirmed honor, or null when no ledger entry names this member. */
   medal: WornEdition | null;
@@ -63,7 +64,7 @@ export interface SquadMember {
 
 export interface SquadRoster {
   members: SquadMember[];
-  /** The headcount the hub quotes (at least one: the player). */
+  /** The headcount the hub quotes: the roster's own length, at least one (the player). */
   count: number;
   /** Sum(Member TIQ) / Total Members, read off the rows above. */
   avgTiq: number;
@@ -76,15 +77,13 @@ export interface SquadRoster {
   yourArena: ArenaStanding;
   /** The tier the whole squad wears, read off `avgTiq`. */
   squadArena: ArenaStanding;
+  /** The Telegram chat's audience, when the Worker reported one. An external stat. */
+  subscribers: number;
 }
 
 /** The championship the Arena stages; the card names it beside your place. */
 export const ARENA_CUP = 'Grand Cup';
 
-/** The #1 squad's average in the seeded field; every next rank is 85 TIQ lower. */
-const AVG_TOP = 3_420;
-const AVG_STEP = 85;
-const AVG_FLOOR = 1_800;
 const ARENA_FIELD = 250_000;
 
 interface ArenaTierSpec {
@@ -150,31 +149,7 @@ export function arenaStandingOf(tiq: number): ArenaStanding {
   };
 }
 
-/** The average a squad is built around, by its global place in the seeded field. */
-export function squadTargetAvg(rank: number): number {
-  return Math.max(AVG_FLOOR, AVG_TOP - (Math.max(1, rank) - 1) * AVG_STEP);
-}
-
-const FIRSTS = [
-  'Amara', 'Sofia', 'Kenji', 'Priya', 'Lucas', 'Noor', 'Owen', 'Hana',
-  'Viktor', 'Lena', 'Mateo', 'Aiko', 'Zara', 'Diego', 'Nina', 'Omar',
-  'Yuki', 'Ivan', 'Sara', 'Kwame', 'Elif', 'Pavel', 'Mei', 'Tariq',
-  'Anouk', 'Ravi', 'Chloe', 'Bilal', 'Nour', 'Marco', 'Dana', 'Leila',
-  'Hugo', 'Mila', 'Arjun', 'Freya', 'Rafael', 'Sana', 'Theo', 'Ines',
-] as const;
-
-const LASTS = [
-  'Okafor', 'Laurent', 'Tanaka', 'Sharma', 'Almeida', 'Haddad', 'Bennett', 'Kim',
-  'Volkov', 'Weber', 'Castillo', 'Sato', 'Rahman', 'Silva', 'Kowalski', 'Osei',
-  'Demir', 'Novak', 'Chen', 'Malik', 'Visser', 'Patel', 'Moreau', 'Toure',
-  'Rossi', 'Levi', 'Nakamura', 'Cruz', 'Ivanov', 'Green', 'Mensah', 'Kaya',
-  'Park', 'Duarte', 'Ellis', 'Yamada',
-] as const;
-
 const AVATAR_HUES = [198, 208, 218, 232, 246, 262, 278, 296, 318, 340, 24, 42, 158, 174];
-const NAME_COMBOS = FIRSTS.length * LASTS.length;
-/** Coprime with NAME_COMBOS, so the first lap of names is a permutation, not a repeat. */
-const NAME_STEP = 149;
 
 function hash32(s: string): number {
   let h = 2166136261;
@@ -192,214 +167,70 @@ const initialsOf = (name: string): string => {
 function myName(): string {
   const custom = (profile.displayName || '').trim();
   if (custom) return custom.slice(0, 24);
+  const fromTg = myPlayerName();
+  if (fromTg) return fromTg;
   const u = tgUser();
-  const full = [u?.first_name, u?.last_name].filter(Boolean).join(' ').trim();
-  if (full && full.toLowerCase() !== 'you') return full.slice(0, 24);
-  const username = (u?.username || '').trim();
-  return username ? username.slice(0, 24) : 'You';
+  return (u?.username || 'You').slice(0, 24);
 }
 
-function nameOf(seed: number, index: number): string {
-  const k = (seed + index * NAME_STEP) % NAME_COMBOS;
-  const base = `${FIRSTS[k % FIRSTS.length]} ${LASTS[Math.floor(k / FIRSTS.length) % LASTS.length]}`;
-  const lap = Math.floor(index / NAME_COMBOS);
-  return lap ? `${base} ${lap + 1}` : base;
-}
-
-/** Surnames the generator uses, mapped to the nation a global roster would plausibly show. */
-const SURNAME_COUNTRY: Record<string, string> = {
-  Okafor: 'NG', Laurent: 'FR', Tanaka: 'JP', Sharma: 'IN', Almeida: 'BR', Haddad: 'LB',
-  Bennett: 'GB', Kim: 'KR', Volkov: 'RU', Weber: 'DE', Castillo: 'ES', Sato: 'JP',
-  Rahman: 'BD', Silva: 'BR', Kowalski: 'PL', Osei: 'GH', Demir: 'TR', Novak: 'CZ',
-  Chen: 'CN', Malik: 'PK', Visser: 'NL', Patel: 'IN', Moreau: 'FR', Toure: 'ML',
-  Rossi: 'IT', Levi: 'IL', Nakamura: 'JP', Cruz: 'MX', Ivanov: 'RU', Green: 'GB',
-  Mensah: 'GH', Kaya: 'TR', Park: 'KR', Duarte: 'PT', Ellis: 'GB', Yamada: 'JP',
-};
-
-/** A spread that keeps the roster reading global even when a surname is not mapped. */
-const FLAG_POOL = [
-  'US', 'GB', 'CA', 'BR', 'MX', 'AR', 'DE', 'FR', 'ES', 'PT', 'IT', 'NL', 'SE', 'NO',
-  'FI', 'PL', 'CZ', 'RO', 'GR', 'UA', 'TR', 'IN', 'PK', 'BD', 'CN', 'JP', 'KR', 'PH',
-  'ID', 'VN', 'TH', 'AU', 'NZ', 'NG', 'GH', 'KE', 'ZA', 'EG', 'MA', 'AE', 'SA', 'IL',
-] as const;
-
-function countryFor(seed: string, name: string): string {
-  const surname = name.trim().split(/\s+/)[1] ?? '';
-  return SURNAME_COUNTRY[surname] ?? FLAG_POOL[hash32(`${seed}|flag|${name}`) % FLAG_POOL.length];
-}
-
-/** The save's own alpha-2 wins; a seeded read keeps the mock roster from showing an empty badge. */
-function playerCountry(seed: string, name: string): string {
-  const saved = profile.country;
-  return saved && /^[A-Za-z]{2}$/.test(saved) ? saved.toUpperCase() : countryFor(seed, name);
+/** The save's own alpha-2 wins for the local player; another row keeps what they reported. */
+function countryOf(row: SquadRow, isYou: boolean): string {
+  if (isYou) {
+    const saved = profile.country;
+    if (saved && /^[A-Za-z]{2}$/.test(saved)) return saved.toUpperCase();
+  }
+  return /^[A-Za-z]{2}$/.test(row.country) ? row.country.toUpperCase() : '';
 }
 
 /**
- * A two-tier split of `total` TIQ over `count` synthetic members, in descending order.
- *
- * The top ~3% are the squad's stars: a linear tail whose mean is ~1.42x the squad average,
- * from ~1.7x down to ~1.13x. Everyone else is a tight core just under the average. That is
- * the shape a real top squad has — a few carriers and a large bench — and it makes the
- * personal Arena place (a smooth read of TIQ) land coherently inside the roster. A small
- * deterministic jitter keeps 1,200 rows from reading like a printed ruler; the rounding
- * remainder is handed back so the mean is exact before the local player is merged in.
+ * The roster the hub paints. Every row is a player who joined; the local player's row reads
+ * `myTiq()` so the score they see is the one their games earned. A one-member squad is a normal,
+ * fully-supported state — it is what every squad looks like on the day it is founded.
  */
-function splitTiq(squadId: string, total: number, count: number, fullCount: number): number[] {
-  if (count <= 0 || total <= 0) return new Array<number>(Math.max(0, count)).fill(0);
-
-  const elite = Math.min(count, Math.max(1, Math.round(fullCount * 0.03)));
-  const bulk = count - elite;
-  const eliteShare = bulk <= 0 ? 1 : (elite * 1.415) / fullCount;
-  const eliteTotal = Math.round(total * eliteShare);
-  const bulkTotal = total - eliteTotal;
-  const eliteMean = eliteTotal / elite;
-  const bulkMean = bulk > 0 ? bulkTotal / bulk : 0;
-
-  const rows = new Array<number>(count).fill(0);
-  for (let i = 0; i < elite; i++) {
-    const t = elite === 1 ? 0 : i / (elite - 1);
-    const shape = elite === 1 ? 1 : 1.2 - 0.4 * t;
-    const jitter = 0.994 + ((hash32(`${squadId}|elite|${i}`) % 1000) / 1000) * 0.012;
-    rows[i] = Math.max(0, Math.round(eliteMean * shape * jitter));
-  }
-  for (let i = 0; i < bulk; i++) {
-    const t = bulk === 1 ? 0 : i / (bulk - 1);
-    const shape = bulk === 1 ? 1 : 1.025 - 0.05 * t;
-    const jitter = 0.996 + ((hash32(`${squadId}|core|${i}`) % 1000) / 1000) * 0.008;
-    rows[elite + i] = Math.max(0, Math.round(bulkMean * shape * jitter));
-  }
-  rows.sort((a, b) => b - a);
-
-  let placed = rows.reduce((sum, n) => sum + n, 0);
-  let rest = total - placed;
-  const guard = count * 3;
-  for (let i = 0, n = 0; rest > 0 && n < guard; i = (i + 1) % count, n++, rest--) rows[i] += 1;
-  for (let i = count - 1, n = 0; rest < 0 && n < guard; i = (i - 1 + count) % count, n++) {
-    if (rows[i] > 0) { rows[i] -= 1; rest += 1; }
-  }
-  return rows;
-}
-
-/**
- * Arena places are a global ladder, so two squadmates may share a rounded place.
- * Resolve ties in TIQ order; the local player keeps the place the formula quotes.
- * Then swap a deterministic set of adjacent pairs — the podium and the player are
- * never swapped — so "sort by Arena rank" is a genuinely different order from
- * "sort by TIQ", and every place shown on a row is the place it sorts by.
- */
-function settleArenaRanks(squadId: string, members: SquadMember[]): void {
-  const used = new Set<number>();
-  const you = members.find((m) => m.isYou);
-  if (you && you.arena.rank > 0) used.add(you.arena.rank);
-
-  let last = 0;
-  for (const member of members) {
-    if (member.isYou || member.arena.rank <= 0) continue;
-    let rank = Math.max(member.arena.rank, last + 1);
-    while (used.has(rank)) rank++;
-    member.arena.rank = rank;
-    used.add(rank);
-    last = rank;
-  }
-
-  for (let i = 3; i + 1 < members.length; i += 2) {
-    const a = members[i];
-    const b = members[i + 1];
-    if (a.isYou || b.isYou || a.rank <= 3 || b.rank <= 3) continue;
-    if ((hash32(`${squadId}|swap|${a.id}`) & 1) === 1) continue;
-    const rank = a.arena.rank;
-    a.arena.rank = b.arena.rank;
-    b.arena.rank = rank;
-  }
-}
-
-function roleFor(index: number, playerRole: SquadRole): SquadRole {
-  if (playerRole === 'leader') return index < 2 || index === 4 ? 'admin' : 'member';
-  if (index === 0) return 'leader';
-  return index === 1 || index === 4 ? 'admin' : 'member';
-}
-
-/** Count of synthetic TIQs strictly above the player's, in a descending table. */
-function insertionIndex(rows: number[], value: number): number {
-  let lo = 0;
-  let hi = rows.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (rows[mid] > value) lo = mid + 1;
-    else hi = mid;
-  }
-  return lo;
-}
-
 export function buildSquadRoster(squad: RankedSquad): SquadRoster {
-  const count = Math.max(1, Math.floor(squad.members) || 1);
+  const me = myRosterId();
+  const rows = squadRosterOf(squad);
   const yourTiq = Math.max(0, Math.floor(myTiq()));
-  const syntheticCount = count - 1;
-  const targetTotal = Math.round(squadTargetAvg(squad.rank) * count);
-  const syntheticTotal = Math.max(0, targetTotal - yourTiq);
-  const tiqs = splitTiq(squad.id, syntheticTotal, syntheticCount, count);
-  const youAt = insertionIndex(tiqs, yourTiq);
-  const tab = hash32(`${squad.id}|${squad.handle}`);
-  const yourRole: SquadRole = squad.owned ? 'leader' : 'member';
-  const youName = myName();
-  const youKey = youName.trim().toLowerCase();
 
-  const synthetic = tiqs.map((tiq, i): SquadMember => {
-    const generated = nameOf(tab, i);
-    // The local player is merged in separately; never print their name twice.
-    const name = generated.toLowerCase() === youKey ? `${generated} 2` : generated;
+  const members: SquadMember[] = rows.map((row, i) => {
+    const isYou = row.id === me;
+    const tiq = isYou ? yourTiq : Math.max(0, Math.floor(row.tiq));
+    /* An enlisting player who never sent a name still gets a readable row: the role is the name
+       the roster knows them by. Nothing is invented beyond that. */
+    const name = row.name || (isYou ? myName() : row.role === 'leader' ? t('squadLeader') : '');
     return {
-      rank: 0,
-      id: `${squad.id}:${i}`,
+      rank: i + 1,
+      id: row.id,
       name,
-      role: roleFor(i, yourRole),
+      role: row.role,
       tiq,
-      country: countryFor(squad.id, name),
+      country: countryOf(row, isYou),
       arena: arenaStandingOf(tiq),
-      isYou: false,
-      initials: initialsOf(name),
-      hue: AVATAR_HUES[hash32(`${squad.id}:${name}`) % AVATAR_HUES.length],
-      medal: holderEdition(name),
+      isYou,
+      initials: initialsOf(name || '?'),
+      hue: AVATAR_HUES[hash32(`${squad.id}:${row.id}`) % AVATAR_HUES.length],
+      medal: isYou ? wornEdition() : row.name ? holderEdition(row.name) : null,
     };
   });
 
-  const you: SquadMember = {
-    rank: 0,
-    id: `${squad.id}:you`,
-    name: youName,
-    role: yourRole,
-    tiq: yourTiq,
-    country: playerCountry(`${squad.id}:you`, youName),
-    arena: arenaStandingOf(yourTiq),
-    isYou: true,
-    initials: initialsOf(youName),
-    hue: 198,
-    medal: wornEdition(),
-  };
-
-  const members: SquadMember[] = [];
-  for (let i = 0; i <= synthetic.length; i++) {
-    if (i === youAt) members.push(you);
-    if (i < synthetic.length) members.push(synthetic[i]);
-  }
-  for (let i = 0; i < members.length; i++) members[i].rank = i + 1;
-  settleArenaRanks(squad.id, members);
-
+  const you = members.find((m) => m.isYou);
   const totalTiq = members.reduce((sum, m) => sum + m.tiq, 0);
-  const avgTiq = Math.round(totalTiq / Math.max(1, members.length));
+  const avgTiq = members.length ? Math.round(totalTiq / members.length) : 0;
+  const yourRole: SquadRole = you?.role ?? (squad.owned ? 'leader' : 'member');
 
   return {
     members,
-    count,
+    count: members.length,
     avgTiq,
     totalTiq,
-    yourRank: youAt + 1,
+    yourRank: you?.rank ?? 0,
     yourTiq,
     yourRole,
-    yourMedal: you.medal,
-    youName,
-    yourArena: you.arena,
+    yourMedal: you?.medal ?? wornEdition(),
+    youName: you?.name || myName(),
+    yourArena: arenaStandingOf(yourTiq),
     squadArena: arenaStandingOf(avgTiq),
+    subscribers: Math.max(0, Math.floor(squad.subscribers ?? 0)),
   };
 }
 

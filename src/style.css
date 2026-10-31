@@ -11018,6 +11018,18 @@ html.reduced-motion .pf-xp-bar.bar i, html.reduced-motion .reward-badge { animat
 }
 .stars-run:active { transform: translateY(2px); }
 .stars-run:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+/* The board with no squads on it: one quiet row, never an empty slab. */
+.stars-run.is-empty {
+  justify-content: center;
+  cursor: default;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+.stars-run.is-empty:active { transform: none; }
 /* the place is a medal circle, never a #hashtag */
 .stars-run-rank {
   flex: none;
@@ -11565,6 +11577,20 @@ html.reduced-motion .stars-count::before { animation: none; }
 
 .sr-list { flex: 1 1 auto; min-height: 0; list-style: none; margin: 0; padding: 0 2px 0 0; gap: 5px; }
 .sr-skel { display: flex; flex-direction: column; gap: 5px; }
+/* A roster with nobody on it yet — one quiet row, matching the board's own empty state. */
+.sr-empty {
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair);
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
 .sr-row {
   flex: none;
   min-width: 0;
@@ -26039,6 +26065,151 @@ html.reduced-motion .sq-crest-aura { animation: none; }
 .sq-score.is-zero { color: var(--ink-soft); text-shadow: none; }
 .sq-score.is-zero .ico { opacity: .5; }
 .sq-score.is-zero small { color: var(--ink-soft); }
+
+/* The leader's per-row remove key. It rides the score column, so a member row keeps the same
+   grid whether or not an admin is looking at it. */
+.sq-kick {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-inline-start: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(248, 113, 113, .1);
+  box-shadow: inset 0 0 0 1px rgba(248, 113, 113, .26);
+  color: #FCA5A5;
+  cursor: pointer;
+  transition: background .16s ease, color .16s ease, transform .16s ease;
+}
+.sq-kick .ico { width: 11px; height: 11px; }
+.sq-kick:hover { background: rgba(248, 113, 113, .2); color: #FECACA; }
+.sq-kick:active { transform: scale(.92); }
+.sq-kick:focus-visible { outline: 2px solid #FCA5A5; outline-offset: 2px; }
+.sq-kick.is-busy { opacity: .45; pointer-events: none; }
+
+/* The Telegram audience, quoted beside the handle as the external stat it is. */
+.sq-meta-subs {
+  display: none;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 700;
+  color: rgba(148, 163, 184, .9);
+}
+.sq-meta-subs:not([hidden]) { display: inline-flex; }
+.sq-meta-subs::before {
+  content: "·";
+  margin-right: 2px;
+  color: rgba(148, 163, 184, .72);
+}
+
+/* The leader's management bar: an ADMIN chip, the invite key, and the share key. */
+.sq-admin {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 6px 6px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(252, 211, 77, .22);
+  background:
+    radial-gradient(120% 200% at 0% 0%, rgba(252, 211, 77, .12) 0%, rgba(252, 211, 77, 0) 62%),
+    linear-gradient(180deg, rgba(41, 37, 26, .82) 0%, rgba(20, 20, 26, .86) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    inset 0 -1px 0 rgba(0, 0, 0, .45),
+    0 10px 22px -18px rgba(0, 0, 0, .9);
+}
+.sq-admin[hidden] { display: none !important; }
+.sq-admin-badge {
+  flex: none;
+  padding: 3px 7px;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #FCD34D 0%, #F59E0B 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 2px 6px -3px rgba(245, 158, 11, .8);
+  color: #3B2606;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  line-height: 1.1;
+}
+.sq-admin-copy {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(252, 211, 77, .14);
+  box-shadow: inset 0 0 0 1px rgba(252, 211, 77, .3);
+  color: #FDE68A;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  cursor: pointer;
+  transition: background .16s ease, color .16s ease, transform .12s ease;
+}
+.sq-admin-copy .ico { flex: none; width: 13px; height: 13px; }
+.sq-admin-copy-t {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sq-admin-copy:hover { background: rgba(252, 211, 77, .22); }
+.sq-admin-copy:active { transform: translateY(1px); }
+.sq-admin-copy:focus-visible { outline: 2px solid #FCD34D; outline-offset: 2px; }
+.sq-admin-copy.is-copied {
+  background: rgba(52, 211, 153, .18);
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, .4);
+  color: #A7F3D0;
+}
+.sq-admin-copy[aria-disabled="true"],
+.sq-admin-share[aria-disabled="true"] { opacity: .45; pointer-events: none; }
+.sq-admin-share {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+  color: #CBD5E1;
+  cursor: pointer;
+  transition: background .16s ease, color .16s ease;
+}
+.sq-admin-share .ico { width: 14px; height: 14px; }
+.sq-admin-share:hover { background: rgba(255, 255, 255, .12); color: #F8FAFC; }
+.sq-admin-share:focus-visible { outline: 2px solid #FCD34D; outline-offset: 2px; }
+
+/* A squad of one is a normal state, not an error: the note says what to do next. */
+.sq-solo {
+  margin: 0 0 8px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px dashed rgba(125, 211, 252, .28);
+  background: rgba(56, 189, 248, .06);
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #BAE6FD;
+}
+.sq-solo[hidden] { display: none !important; }
+
 .sq-roster-empty {
   margin: 2px 0 0;
   padding: 20px 12px;

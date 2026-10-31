@@ -44,7 +44,8 @@ import {
 } from './tutorial';
 import { PEARL_BOARD, perspectiveRamps, type Theme } from './themes';
 import {
-  detonation, impact, initTelegram, inviteRoomCode, notify, onBackPress, openTelegramShare, tgUser,
+  detonation, impact, initTelegram, inviteRoomCode, inviteSquadId, notify, onBackPress,
+  openTelegramShare, tgUser,
 } from './telegram';
 import { botAppLink, telegramShareLink } from '../shared/config';
 import { applyFlagSupport } from './countries';
@@ -3007,6 +3008,26 @@ if (invitedRoom) {
     if (attempt < 12) window.setTimeout(() => openInvite(attempt + 1), 250);
   };
   window.setTimeout(openInvite, 420);
+}
+
+/* ---------- the squad door: `?startapp=squad_<id>` opens that squad's join sheet ---------- */
+
+/**
+ * A squad invite is a *prompt*, never an enrolment: the player who taps it lands on the squad's
+ * card with its real roster and a Join key, and only that key puts them on the roster. The door
+ * is handed to `menu.ts`, which owns the sheet and the roster it paints.
+ *
+ * The event fires once per launch, after the boot veil has lifted (the sheet slides over a laid
+ * out shell, not over a skeleton), and only when the payload is exactly `squad_<id>` — a room or
+ * referral payload never opens this door.
+ */
+const invitedSquad = inviteSquadId();
+if (invitedSquad) {
+  window.setTimeout(() => {
+    try {
+      window.dispatchEvent(new CustomEvent('detour:squad-invite', { detail: { id: invitedSquad } }));
+    } catch { /* a shell without CustomEvent: the player still has the squad list */ }
+  }, 620);
 }
 
 /* the arena is staged: the neural boot screen may lift on its own clock */

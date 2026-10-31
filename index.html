@@ -2060,7 +2060,7 @@
                     <svg class="tour-leader-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-crown" /></svg>
                   </span>
                   <span class="tour-leader-k">Reigning champion</span>
-                  <b class="tour-leader-h" id="tour-leader-handle">@DogeSquad</b>
+                  <b class="tour-leader-h" id="tour-leader-handle">No squad yet</b>
                 </div>
 
                 <button class="tour-cta" type="button" id="home-tournament-cta" aria-haspopup="dialog">
@@ -4707,6 +4707,7 @@
                   <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
                   <span class="sq-meta-leader-name" id="squad-view-leader-name">—</span>
                 </span>
+                <span class="sq-meta-subs" id="squad-view-subs" hidden></span>
               </span>
               <span class="sq-banner-stats">
                 <span class="sq-stat sq-stat-avg">
@@ -4725,6 +4726,20 @@
 
           <section class="sq-you" id="squad-you" aria-label="Your standing"></section>
 
+          <!-- The leader's management bar. Only the player who enlisted the squad sees it: one
+               key copies the `?startapp=squad_<id>` invite, the other hands it to Telegram's own
+               share sheet. Members never see a control they cannot use. -->
+          <section class="sq-admin" id="squad-admin" hidden aria-label="Squad admin controls">
+            <span class="sq-admin-badge" data-i18n="adminBadge">ADMIN</span>
+            <button class="sq-admin-copy" id="squad-invite-copy" type="button">
+              <svg class="ico" aria-hidden="true"><use href="#i-link" /></svg>
+              <span class="sq-admin-copy-t" id="squad-invite-copy-t">Copy Invite Link</span>
+            </button>
+            <button class="sq-admin-share" id="squad-invite-share" type="button" aria-label="Share invite link">
+              <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
+            </button>
+          </section>
+
           <div class="sq-scroll" id="squad-hub-scroll" data-scroll tabindex="0" role="region" aria-label="Squad members">
             <div class="sq-roster-head">
               <div class="sq-roster-title-row">
@@ -4740,6 +4755,7 @@
               </div>
             </div>
 
+            <p class="sq-solo" id="squad-solo-note" hidden data-i18n="squadSoloNote">You founded this squad. Share the invite link to bring players in.</p>
             <ol class="sq-roster" id="squad-roster" aria-label="Squad leaderboard"></ol>
             <p class="sq-roster-empty" id="squad-roster-empty" hidden data-i18n="noMembersMatch">No members match that search.</p>
           </div>

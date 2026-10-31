@@ -30,17 +30,19 @@ import { openCountryPicker } from './countrypick';
 import { flagPhoto } from './flags';
 import { cleanCode, standings, YOU } from './teams';
 import {
-  bindSquad, bindSquadById, cleanChatReference, cleanHandle, displayNameOf, handleIssue,
-  HANDLE_MAX, getMySquad, getSquadRanking, leaveSquad, onSquadChange, searchSquads, squadKind, squadLetter,
+  bindSquad, cleanChatReference, cleanHandle, displayNameOf, handleIssue,
+  HANDLE_MAX, getMySquad, getSquadRanking, isSquadAdmin, leaveSquad, myPlayerId,
+  onSquadChange, searchSquads, squadInviteUrl, squadKind, squadLetter,
   squadMark, telegramAvatarUrl, type RankedSquad, type SquadKind,
 } from './squads';
 import {
-  ARENA_CUP, arrangeRoster, arenaStandingOf, buildSquadRoster, squadTargetAvg,
+  ARENA_CUP, arrangeRoster, arenaStandingOf, buildSquadRoster,
   type SquadMember, type SquadRole, type SquadRoster,
 } from './squadRoster';
 import { showToast } from './toast';
 import {
-  registerSquadWithTelegram, squadErrorMessage, verifySquadChat,
+  fetchSquad, joinSquadOnServer, kickSquadMember, leaveSquadOnServer, refreshSquadBoard,
+  refreshMySquad, registerSquadWithTelegram, squadErrorMessage, syncSquadScore, verifySquadChat,
   type SquadChatPreview, type SquadVerifyResult,
 } from './squadRegister';
 import { copyText } from './gamemodes';
@@ -51,8 +53,8 @@ import { perspectiveRamps, type CosKind, type PieceColor } from './themes';
 import { isTicketCategory, submitTicket } from './support';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
-import { BOT_HANDLE, impact, notify, startParam, tgUser } from './telegram';
-import { CHANNEL_URL } from '../shared/config';
+import { BOT_HANDLE, impact, notify, openTelegramShare, startParam, tgUser } from './telegram';
+import { CHANNEL_URL, telegramShareLink } from '../shared/config';
 
 export interface MenuApi {
   router: Router;
@@ -541,6 +543,12 @@ export function createMenu(api: MenuApi): Menu {
   const squadExploreT = $<HTMLElement>('squad-explore-t');
   const squadExploreIco = $<HTMLElement>('squad-explore-ico');
   const squadLeaveBtn = $<HTMLButtonElement>('squad-leave');
+  const squadSubsEl = $<HTMLElement>('squad-view-subs');
+  const squadAdminEl = $<HTMLElement>('squad-admin');
+  const squadInviteCopy = $<HTMLButtonElement>('squad-invite-copy');
+  const squadInviteCopyT = $<HTMLElement>('squad-invite-copy-t');
+  const squadInviteShare = $<HTMLButtonElement>('squad-invite-share');
+  const squadSoloNote = $<HTMLElement>('squad-solo-note');
 
   /* The inspection step: a card opens this sheet; the full-width key is the only
      place a join is ever committed. */
@@ -572,6 +580,10 @@ export function createMenu(api: MenuApi): Menu {
   let squadPitch = 62;
   let squadGap = 8;
   let squadLeaveTimer = 0;
+  /** True while the bound squad's leader is looking at the hub: the kick keys ride this flag. */
+  let squadAdmin = false;
+  let squadCopiedTimer = 0;
+  let squadKickBusy = '';
   const squadRowEls = new Map<number, HTMLElement>();
   let squadRange = { start: -1, end: -1, rows: -1 };
   let squadFrame = 0;
@@ -601,7 +613,7 @@ export function createMenu(api: MenuApi): Menu {
     pill.className = 'sq-role';
     pill.dataset.role = role;
     pill.append(squadSvg(role === 'leader' ? '#i-crown' : '#i-shield'));
-    pill.append(document.createTextNode(role === 'leader' ? t('leader') : t('admin')));
+    pill.append(document.createTextNode(role === 'leader' ? t('squadLeader') : t('admin')));
     return pill;
   }
 
@@ -725,6 +737,27 @@ export function createMenu(api: MenuApi): Menu {
       + (member.arena.rank > 0 ? `Arena #${en(member.arena.rank)}` : 'Arena unranked');
     right.append(score);
 
+    /* The leader's one per-row action: remove a player who is not the founder. It only exists
+       for an admin, and it is never drawn on the admin's own row. */
+    if (squadAdmin && !member.isYou && member.role !== 'leader') {
+      const kick = document.createElement('button');
+      kick.type = 'button';
+      kick.className = 'sq-kick';
+      kick.dataset.kick = member.id;
+      kick.setAttribute('aria-label', `${t('kickMember')} · ${member.name || t('member')}`);
+      kick.title = t('kickMember');
+      kick.append(squadSvg('#i-close'));
+      if (squadKickBusy === member.id) {
+        kick.classList.add('is-busy');
+        kick.setAttribute('aria-busy', 'true');
+      }
+      kick.addEventListener('click', (e) => {
+        e.stopPropagation();
+        void kickSquadRow(member.id);
+      });
+      right.append(kick);
+    }
+
     const roleSpeech = member.role === 'leader' ? ', leader' : member.role === 'admin' ? ', admin' : '';
     const honor = member.medal
       ? `, wearing ${member.medal.def.name}${member.medal.serial !== null ? ` edition ${member.medal.serial}` : ''}`
@@ -818,11 +851,12 @@ export function createMenu(api: MenuApi): Menu {
     const leader = roster.members.find((m) => m.role === 'leader');
     squadLeaderEl.classList.toggle('is-on', !!leader);
     if (!leader) return;
-    squadLeaderNameEl.textContent = leader.isYou ? t('you') : leader.name;
-    squadLeaderNameEl.title = leader.isYou ? t('you') : leader.name;
+    const label = leader.isYou ? t('you') : leader.name || t('squadLeader');
+    squadLeaderNameEl.textContent = label;
+    squadLeaderNameEl.title = label;
     squadLeaderEl.setAttribute('aria-label', leader.isYou
       ? 'You founded this squad.'
-      : `Founded by ${leader.name}.`);
+      : `Founded by ${label}.`);
   }
 
   /* Real channel photo over the monogram crest. The CDN can answer with an error
@@ -857,6 +891,27 @@ export function createMenu(api: MenuApi): Menu {
     squadCrestPhoto.src = src;
   }
 
+  /**
+   * The leader's management bar. It exists only for the player who enlisted the squad: the invite
+   * key copies the `?startapp=squad_<id>` link, and the send key hands the same link to Telegram's
+   * share sheet. A member never sees a control they cannot use.
+   */
+  function paintSquadAdmin(me: RankedSquad): void {
+    squadAdmin = isSquadAdmin(me);
+    squadAdminEl.hidden = !squadAdmin;
+    /* A squad of one is a normal state, and the note that explains it belongs to the leader who
+       can act on it — a member never sees it. */
+    squadSoloNote.hidden = !squadAdmin || squadView?.count !== 1;
+    if (!squadAdmin) return;
+    const url = squadInviteUrl(me.id);
+    squadInviteCopyT.textContent = t('copyInviteLink');
+    squadInviteCopy.classList.remove('is-copied');
+    squadInviteCopy.setAttribute('aria-disabled', url ? 'false' : 'true');
+    squadInviteShare.setAttribute('aria-disabled', url ? 'false' : 'true');
+    squadInviteCopy.setAttribute('aria-label', `${t('copyInviteLink')} · ${me.handle}`);
+    squadInviteShare.setAttribute('aria-label', `${t('shareInviteLink')} · ${me.handle}`);
+  }
+
   function paintSquadHub(): void {
     const me = getMySquad();
     if (!me) { showSquadSearch(); return; }
@@ -870,9 +925,74 @@ export function createMenu(api: MenuApi): Menu {
     paintSquadCrestPhoto(me.handle);
     $<HTMLElement>('squad-view-avg').textContent = en(squadView.avgTiq);
     $<HTMLElement>('squad-view-members').textContent = en(squadView.count);
+    /* The Telegram audience is a separate, clearly-labelled stat: it never counts as members. */
+    squadSubsEl.hidden = squadView.subscribers <= 0;
+    if (!squadSubsEl.hidden) {
+      squadSubsEl.textContent = `${en(squadView.subscribers)} ${t('subscribers')}`;
+      squadSubsEl.title = t('subscribersNote');
+    }
     paintSquadLeader(squadView);
     paintSquadYou();
+    paintSquadAdmin(me);
     paintSquadRoster();
+  }
+
+  /**
+   * Remove a member. The Worker owns the roster, so this only mirrors its answer — a local-only
+   * removal would be a player the registry still counts.
+   */
+  async function kickSquadRow(memberId: string): Promise<void> {
+    const me = getMySquad();
+    if (!me || !squadAdmin || squadKickBusy) return;
+    squadKickBusy = memberId;
+    paintSquadRoster();
+    const result = await kickSquadMember(me.id, memberId);
+    squadKickBusy = '';
+    if (!result.ok) {
+      notify('warning');
+      showToast(result.message || t('enlistErrOffline'), 'warning');
+      paintSquadRoster();
+      return;
+    }
+    notify('success');
+    impact('medium');
+    showToast(t('memberRemoved'), 'success');
+    paintSquadHub();
+  }
+
+  /** Copy the squad's one invite link. The label confirms in place, then falls back. */
+  function copySquadInvite(): void {
+    const me = getMySquad();
+    if (!me) return;
+    const url = squadInviteUrl(me.id);
+    if (!url) return;
+    void copyText(url).then((ok) => {
+      if (!ok) {
+        notify('warning');
+        showToast(t('linkCopyFailed'), 'warning');
+        return;
+      }
+      notify('success');
+      impact('light');
+      squadInviteCopyT.textContent = t('linkCopied');
+      squadInviteCopy.classList.add('is-copied');
+      window.clearTimeout(squadCopiedTimer);
+      squadCopiedTimer = window.setTimeout(() => {
+        squadInviteCopyT.textContent = t('copyInviteLink');
+        squadInviteCopy.classList.remove('is-copied');
+      }, 1800);
+      showToast(t('linkCopied'), 'success');
+    });
+  }
+
+  /** The same link, through Telegram's own recipient picker. */
+  function shareSquadInvite(): void {
+    const me = getMySquad();
+    if (!me) return;
+    const url = squadInviteUrl(me.id);
+    if (!url) return;
+    impact('light');
+    openTelegramShare(telegramShareLink(url, t('inviteShareText').replace('{squad}', me.name)));
   }
 
   function paintSquadPill(): void {
@@ -905,11 +1025,9 @@ export function createMenu(api: MenuApi): Menu {
     }
   }
 
-  /** The average a squad shows in the picker once this player is in it. */
-  const squadPreviewAvg = (s: { rank: number; members: number }): number =>
-    s.members <= 1
-      ? myTiq()
-      : Math.round((squadTargetAvg(s.rank) * (s.members - 1) + myTiq()) / s.members);
+  /** The squad's real average TIQ: the mean of the roster it actually has. */
+  const squadPreviewAvg = (s: { members: number; trophies: number }): number =>
+    s.members > 0 ? Math.round(s.trophies / s.members) : 0;
 
   interface SquadCardOpts {
     /** null mints the "bind this handle" card instead of a ranked squad */
@@ -1078,7 +1196,9 @@ export function createMenu(api: MenuApi): Menu {
     requestAnimationFrame(() => { squadList.scrollTop = previewScroll; });
   }
 
-  function commitPreviewJoin(): void {
+  let previewJoining = false;
+
+  async function commitPreviewJoin(): Promise<void> {
     if (!previewSquad && !previewHandle) return;
     if (previewSquad && getMySquad()?.id === previewSquad.id) {
       impact('light');
@@ -1088,19 +1208,50 @@ export function createMenu(api: MenuApi): Menu {
       requestAnimationFrame(() => scheduleSquadWindow(true));
       return;
     }
-    const result = previewSquad ? bindSquadById(previewSquad.id) : bindSquad(previewHandle);
-    if (result === 'bad-handle') {
+
+    /* A handle with no squad behind it is a local mint: there is nothing to join on the server
+       yet, and the squad it creates starts with exactly one member — this player. */
+    if (!previewSquad) {
+      const created = bindSquad(previewHandle);
+      if (created === 'bad-handle') {
+        notify('warning');
+        showToast(t('badChannel'), 'warning');
+        return;
+      }
+      impact('medium');
+      notify('success');
+      showToast(`${displayNameOf(previewHandle)} joined · ${previewHandle}`, 'success');
+      paintSquadPill();
+      api.sheets.close();
+      return;
+    }
+
+    if (previewJoining) return;
+    previewJoining = true;
+    sqpJoin.setAttribute('aria-busy', 'true');
+    sqpJoin.classList.add('is-busy');
+    sqpJoinT.textContent = t('joiningSquad');
+    const result = await joinSquadOnServer(previewSquad.id);
+    previewJoining = false;
+    sqpJoin.removeAttribute('aria-busy');
+    sqpJoin.classList.remove('is-busy');
+    if (!result.ok) {
+      paintSquadPreview();
       notify('warning');
-      showToast(t('badChannel'), 'warning');
+      showToast(result.message || t('enlistErrOffline'), 'warning');
       return;
     }
     impact('medium');
     notify('success');
-    const joinedName = previewSquad?.name ?? displayNameOf(previewHandle);
-    const joinedHandle = previewSquad?.handle ?? previewHandle;
-    showToast(`${joinedName} joined · ${joinedHandle}`, 'success');
+    const joined = result.squad ?? previewSquad;
+    showToast(`${joined.name} joined · ${joined.handle}`, 'success');
     paintSquadPill();
-    api.sheets.close();
+    /* The preview swaps straight to the hub: one sheet at a time, and the player lands on the
+       roster they just joined rather than back on the search field. */
+    if (!squadSheet) { api.sheets.close(); return; }
+    showSquadBound();
+    api.sheets.open(squadSheet);
+    requestAnimationFrame(() => scheduleSquadWindow(true));
   }
 
   function paintSquadList(q: string) {
@@ -1180,6 +1331,31 @@ export function createMenu(api: MenuApi): Menu {
     paintSquadExplore();
   }
 
+  /**
+   * Pull the roster the registry holds and repaint. The hub opens on the cached copy (instant,
+   * offline-safe) and corrects itself a moment later — a join that happened on another phone, a
+   * kick, a score that moved since launch.
+   */
+  function refreshSquadHub(): void {
+    const me = getMySquad();
+    if (!me) return;
+    void refreshMySquad().then((fresh) => {
+      if (!fresh) return;
+      const id = myPlayerId();
+      /* Removed from the roster while this device still had the squad bound: let it go rather
+         than paint a squad the player is no longer on. */
+      if (id && !fresh.roster.some((m) => m.id === id)) {
+        leaveSquad();
+        paintSquadPill();
+        showSquadSearch();
+        return;
+      }
+      paintSquadPill();
+      if (!squadSheet || squadSheet.hidden || squadBoundView.hidden) return;
+      paintSquadHub();
+    });
+  }
+
   function showSquadBound() {
     const me = getMySquad();
     if (!me) { showSquadSearch(); return; }
@@ -1195,6 +1371,7 @@ export function createMenu(api: MenuApi): Menu {
     squadScroll.scrollTop = 0;
     scheduleSquadWindow(true);
     paintSquadExplore();
+    refreshSquadHub();
   }
 
   function openSquad() {
@@ -1208,6 +1385,14 @@ export function createMenu(api: MenuApi): Menu {
     api.sheets.open(squadSheet);
     impact('light');
     requestAnimationFrame(() => scheduleSquadWindow(true));
+    /* Discovery is the registry's board now: read it while the sheet slides, so the list the
+       player is looking at is today's field rather than the last launch's. */
+    if (!me) {
+      void refreshSquadBoard().then(() => {
+        if (!squadSheet || squadSheet.hidden || !squadBoundView.hidden) return;
+        paintSquadList(squadQ.value);
+      });
+    }
   }
 
   squadQ.addEventListener('input', () => { squadErr.hidden = true; paintSquadList(squadQ.value); });
@@ -1279,18 +1464,30 @@ export function createMenu(api: MenuApi): Menu {
   squadLeaveBtn.addEventListener('click', () => {
     if (!squadLeaveBtn.classList.contains('is-armed')) {
       squadLeaveBtn.classList.add('is-armed');
-      squadLeaveBtn.textContent = 'Confirm leave';
-      squadLeaveBtn.setAttribute('aria-label', 'Confirm leaving squad');
+      squadLeaveBtn.textContent = t('confirmLeave');
+      squadLeaveBtn.setAttribute('aria-label', t('confirmLeaveAria'));
       squadLeaveTimer = window.setTimeout(resetSquadLeave, 4000);
       impact('light');
       return;
     }
     resetSquadLeave();
-    leaveSquad();
-    impact('medium');
-    paintSquadPill();
-    showSquadSearch();
+    const me = getMySquad();
+    if (!me) { showSquadSearch(); return; }
+    /* The Worker decides what a leader's exit means: the crown passes to the next member, or the
+       squad disbands when they were the last one. This only mirrors the answer. */
+    void leaveSquadOnServer(me.id).then((result) => {
+      if (!result.ok) {
+        notify('warning');
+        showToast(result.message || t('enlistErrOffline'), 'warning');
+        return;
+      }
+      impact('medium');
+      paintSquadPill();
+      showSquadSearch();
+    });
   });
+  squadInviteCopy.addEventListener('click', copySquadInvite);
+  squadInviteShare.addEventListener('click', shareSquadInvite);
   onSquadChange(() => {
     paintSquadPill();
     if (!squadSheet || squadSheet.hidden) return;
@@ -1311,6 +1508,44 @@ export function createMenu(api: MenuApi): Menu {
     api.sheets.open(squadSheet);
     requestAnimationFrame(() => scheduleSquadWindow(true));
   });
+
+  /**
+   * A `?startapp=squad_<id>` invite. It resolves the squad (from this device's list, else the
+   * registry) and opens its card: the invite is a prompt, and only the Join key puts the player on
+   * the roster. A squad that is gone says so instead of opening an empty hub.
+   */
+  let squadInviteBusy = false;
+  async function openSquadInvite(id: string): Promise<void> {
+    if (!id || squadInviteBusy) return;
+    squadInviteBusy = true;
+    const known = getSquadRanking().find((s) => s.id === id);
+    /* Read the registry first: an invite should show the roster as it is now, and fall back to
+       the cached card when the Worker cannot answer. */
+    const squad = await fetchSquad(id) ?? known;
+    squadInviteBusy = false;
+    if (!squad) {
+      notify('warning');
+      showToast(t('squadErrGone'), 'warning');
+      return;
+    }
+    if (!squadSheet) return;
+    openSquadPreview({ squad });
+  }
+  window.addEventListener('detour:squad-invite', (event) => {
+    const id = (event as CustomEvent<{ id?: string }>).detail?.id ?? '';
+    void openSquadInvite(id);
+  });
+
+  /* Launch sync: the registry's board fills the discovery list, and this player's own score is
+     re-reported so their squad row always carries the TIQ their games earned. */
+  void refreshSquadBoard().then(() => {
+    paintSquadPill();
+    if (squadSheet && !squadSheet.hidden) {
+      if (!squadBoundView.hidden) paintSquadHub();
+      else paintSquadList(squadQ.value);
+    }
+  });
+  void syncSquadScore().then(() => paintSquadPill());
 
   /* ---- the entry points: country now lives only in Profile (header pill removed) ---- */
   document.getElementById('country-chip')?.addEventListener('click', () => { impact('light'); api.router.go('profile'); });
@@ -2788,9 +3023,10 @@ function createEnlistModal(): EnlistModal | null {
     else avImg.removeAttribute('src');
   }
 
+  /** The chat's Telegram audience, quoted as what it is — never as the squad's member count. */
   const membersLabel = (n: number): string => {
     const count = n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(n);
-    return t('enlistMembers').replace('{n}', count);
+    return t('enlistSubscribers').replace('{n}', count);
   };
 
   function errorText(): string {
@@ -2852,8 +3088,8 @@ function createEnlistModal(): EnlistModal | null {
     if (valid && verified) {
       pvHandle.textContent = verified.handle;
       pvTitle.textContent = verified.name;
-      pvMeta.hidden = verified.members <= 0;
-      if (verified.members > 0) pvMeta.textContent = membersLabel(verified.members);
+      pvMeta.hidden = verified.subscribers <= 0;
+      if (verified.subscribers > 0) pvMeta.textContent = membersLabel(verified.subscribers);
       readyLabel.textContent = t('enlistVerified');
       readyEl.classList.add('is-verified');
       paintAvatar(verified.handle);

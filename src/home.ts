@@ -672,9 +672,9 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   });
 
   /* The leader ticker reads the same ranking feed the Arena's channel ladder
-     ranks, so Home and the cup can never disagree about who leads. The static
-     markup already holds @DogeSquad (the top seed), so this only ever repaints
-     when a custom channel has actually overtaken it. */
+     ranks, so Home and the cup can never disagree about who leads. With no seeded
+     field the board starts empty, and the static markup's neutral line stands
+     until a real squad has banked a real score. */
   const leaderHandle = document.getElementById('tour-leader-handle');
   if (leaderHandle) {
     const top = getSquadRanking()[0];

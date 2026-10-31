@@ -205,6 +205,39 @@ export function inviteRoomCode(): string {
   }
 }
 
+/**
+ * A squad invite payload: `squad_<id>`. The id is the registry's own, so the link cannot be
+ * re-pointed by a handle rename, and a payload that is not exactly this shape is left alone
+ * (`ref_...`, `room_...` and `team-...` belong to their own doors).
+ */
+const SQUAD_PAYLOAD = /^squad_([A-Za-z0-9_-]{1,48})$/i;
+
+function squadIdOf(raw: string | null | undefined): string {
+  const match = SQUAD_PAYLOAD.exec((raw ?? '').trim());
+  return match ? match[1] : '';
+}
+
+/**
+ * The squad a deep link points at, or ''. Read exactly like a room invite: the Mini App's start
+ * parameter first, then the query string a plain browser tab carries (`?squad=`), so a shared
+ * link still lands on the right squad outside Telegram.
+ */
+export function inviteSquadId(): string {
+  try {
+    const fromStart = squadIdOf(startParam());
+    if (fromStart) return fromStart;
+  } catch { /* fall through to the URL */ }
+  try {
+    /* A plain browser tab carries the same id in the query: `?squad=squad_<id>`, or the bare id
+       (`?squad=<id>`) when a hand-made link is being tested. */
+    const raw = (new URLSearchParams(window.location.search).get('squad') ?? '').trim();
+    if (!raw) return '';
+    return squadIdOf(raw) || (/^[A-Za-z0-9_-]{1,48}$/.test(raw) ? raw : '');
+  } catch {
+    return '';
+  }
+}
+
 /* ---------- theme ---------- */
 
 const hex = (v: unknown): string => (typeof v === 'string' && /^#[0-9a-f]{3,8}$/i.test(v) ? v : '');

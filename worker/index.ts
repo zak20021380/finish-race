@@ -284,14 +284,12 @@ async function route(request: Request, env: Env): Promise<Response> {
     return referrals(request, env, url);
   }
 
-  if (url.pathname === '/api/squads/verify') {
-    if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
-    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
-    return lobby.fetch(request);
-  }
-
-  if (url.pathname === '/api/squads/register') {
-    if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+  /* The squad surface: enlistment (`verify`/`register`) and membership
+     (`join`/`sync`/`leave`/`kick`/`board`/`squad`). Every one of them is answered by the
+     singleton room, which owns the one squad registry — and the roster that makes a squad have
+     members. The edge only routes; identity is proven inside the room. */
+  if (url.pathname.startsWith('/api/squads/')) {
+    if (!env.MATCHMAKER) return json({ error: 'matchmaker_unbound' }, 503);
     const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
     return lobby.fetch(request);
   }

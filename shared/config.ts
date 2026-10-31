@@ -42,6 +42,19 @@ export function botAppLink(payload = ''): string {
   return clean ? `${base}?startapp=${clean}` : base;
 }
 
+/**
+ * The `?startapp=` payload prefix a squad invite carries. `squad_<id>` is the whole grammar: the
+ * id is the registry's own, so a link lands on exactly one squad and can never be re-pointed by a
+ * handle rename.
+ */
+export const SQUAD_PREFIX = 'squad_';
+
+/** `https://t.me/Tactix_Robot/app?startapp=squad_<id>` — one tap into the squad's join door. */
+export function squadAppLink(id: string): string {
+  const clean = (id ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 48);
+  return clean ? botAppLink(`${SQUAD_PREFIX}${clean}`) : '';
+}
+
 /** `https://t.me/Tactix_Robot?start=<payload>` — opens the bot chat first. */
 export function botStartLink(payload = ''): string {
   const clean = cleanStartPayload(payload);

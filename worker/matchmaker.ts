@@ -58,7 +58,9 @@ import {
 } from './auth';
 import { json, reasonOf } from './http';
 import {
-  normalizeChatHandle, readRegisteredSquad, SQUAD_ALREADY_ENLISTED, verifyAndBuildSquad, verifySquadChat,
+  isSquadAdmin, normalizeChatHandle, readRegisteredSquad, removeSquadMember, roleOf,
+  SQUAD_ALREADY_ENLISTED, squadViewOf, squadWarTiq, upsertSquadMember, verifyAndBuildSquad,
+  verifySquadChat,
   type RegisteredSquad, type SquadVerification,
 } from './squads';
 import { botMainAppLink } from '../shared/config';
@@ -1356,7 +1358,12 @@ export interface SquadWarRow {
   kind: 'channel' | 'group';
   avatar: string;
   tag: string;
+  /** Joined mini-app players — the roster's length, never the Telegram audience. */
   members: number;
+  /** The Telegram chat's own audience, shown beside the roster as an external stat. */
+  subscribers: number;
+  /** The enlisting player: the squad's leader. */
+  creatorId: string;
   ownerId: string;
   /** Resolved from the player registry when that owner has connected; '' otherwise. */
   ownerName: string;
@@ -1368,9 +1375,9 @@ export interface SquadWarRow {
   revokedAt: number;
   banned: boolean;
   bannedAt: number;
-  /** TIQ the registry's players contribute to this squad's war effort. */
+  /** TIQ the joined players contribute to this squad's war effort. */
   warTiq: number;
-  /** How many registered players report this squad. */
+  /** How many players are on the roster (the same number as `members`). */
   contributors: number;
   /* The canonical registry shape, so an admin client never has to know the storage's legacy
      field names. Each one is the single source of truth above, under its registry name. */
@@ -1666,6 +1673,23 @@ export class MatchmakerDO {
     const url = new URL(request.url);
     if (url.pathname === '/api/squads/verify') return this.verifySquad(request, url);
     if (url.pathname === '/api/squads/register') return this.registerSquad(request, url);
+    /* Squad membership: the roster is written only here, and only by the player it names. */
+    if (url.pathname === '/api/squads/join' || url.pathname === '/api/squads/sync') {
+      if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+      return this.squadJoinOrSync(request, url, url.pathname === '/api/squads/join');
+    }
+    if (url.pathname === '/api/squads/leave') {
+      if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+      return this.squadLeave(request, url);
+    }
+    if (url.pathname === '/api/squads/kick') {
+      if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+      return this.squadKick(request, url);
+    }
+    if (url.pathname === '/api/squads/board' || url.pathname === '/api/squads/squad') {
+      if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+      return url.pathname === '/api/squads/board' ? this.squadBoard() : this.squadRead(url);
+    }
     /* The worker has authenticated the caller on `/admin/*` and `/api/admin/*`; the room below
        authorizes them against its registry. The one public announcement feed rides the same
        handler. None of these ever carry an upgrade. */
@@ -1889,6 +1913,10 @@ export class MatchmakerDO {
         name: typeof body.squadName === 'string' ? body.squadName : '',
         tag: typeof body.squadTag === 'string' ? body.squadTag : '',
         kind: requestedKind,
+        memberName: typeof body.memberName === 'string'
+          ? body.memberName
+          : typeof body.name === 'string' ? body.name : '',
+        username: typeof body.username === 'string' ? body.username : '',
       });
       if (!result.ok) {
         return json({
@@ -1905,10 +1933,168 @@ export class MatchmakerDO {
       this.squads.set(result.squad.id, result.squad);
       this.squadsDirty = true;
       await this.persistSquads();
-      return json({ ok: true, squad: result.squad });
+      /* The public view, not the storage row: the client never needs the audit fields, and this
+         is the shape every other squad answer uses. */
+      return json({ ok: true, squad: squadViewOf(result.squad) });
     } finally {
       this.enlisting.delete(reservation);
     }
+  }
+
+  /* ---------- squad membership: the roster is the only source of members ---------- */
+
+  /** The squad a request names, hydrated from the canonical store first. */
+  private async squadNamed(id: string): Promise<RegisteredSquad | undefined> {
+    await this.syncSquadsFromStorage();
+    return id ? this.squads.get(id) : undefined;
+  }
+
+  /**
+   * Join or refresh. A join is the only door that may add a row; a sync only ever updates one that
+   * exists, so simply launching the app can never enrol a player who never tapped Join.
+   *
+   * A player holds one squad at a time — the client has a single bound id — so joining removes
+   * them from every other roster in the same turn. That is what keeps every count honest: no
+   * squad can keep counting a player who moved on.
+   */
+  private async squadJoinOrSync(request: Request, url: URL, join: boolean): Promise<Response> {
+    const body = await readBody(request);
+    const requester = await this.squadRequester(request, url, body);
+    if (!requester) {
+      return json({ ok: false, error: 'unauthorized', message: 'Telegram verification required.' }, 401);
+    }
+    const id = typeof body.squadId === 'string' ? body.squadId.trim().slice(0, 48) : '';
+    const squad = await this.squadNamed(id);
+    if (!squad) {
+      return json({ ok: false, error: 'no_such_squad', message: 'That squad is no longer enlisted.' }, 404);
+    }
+    if (squad.banned) {
+      return json({ ok: false, error: 'squad_banned', message: 'This squad was removed from the competition.' }, 403);
+    }
+
+    if (join) {
+      for (const other of this.squads.values()) {
+        if (other.id === squad.id) continue;
+        if (removeSquadMember(other, requester)) this.squadsDirty = true;
+      }
+    }
+
+    const added = upsertSquadMember(squad, {
+      id: requester,
+      name: typeof body.name === 'string' ? body.name : '',
+      tiq: typeof body.tiq === 'number' ? body.tiq : Number(body.tiq),
+      country: typeof body.country === 'string' ? body.country : '',
+      username: typeof body.username === 'string' ? body.username : '',
+    }, join);
+    const role = roleOf(squad, requester);
+    if (!added && !role) {
+      return json({
+        ok: false,
+        error: 'not_a_member',
+        message: 'Join this squad before syncing your score.',
+      }, 409);
+    }
+    this.squadsDirty = true;
+    await this.persistSquads();
+    return json({ ok: true, joined: added, role, squad: squadViewOf(squad) });
+  }
+
+  /**
+   * Leave a squad.
+   *
+   * A member simply drops off the roster. A leader cannot leave a squad that still has players —
+   * there would be nobody to run it — so the crown passes to the longest-serving remaining member
+   * in the same turn; a leader who is the last player disbands the squad, and the row leaves the
+   * registry rather than lingering as an empty shell.
+   */
+  private async squadLeave(request: Request, url: URL): Promise<Response> {
+    const body = await readBody(request);
+    const requester = await this.squadRequester(request, url, body);
+    if (!requester) {
+      return json({ ok: false, error: 'unauthorized', message: 'Telegram verification required.' }, 401);
+    }
+    const id = typeof body.squadId === 'string' ? body.squadId.trim().slice(0, 48) : '';
+    const squad = await this.squadNamed(id);
+    if (!squad) return json({ ok: false, error: 'no_such_squad' }, 404);
+
+    if (squad.creatorId === requester) {
+      const others = squad.roster.filter((m) => m.id !== requester);
+      if (!others.length) {
+        this.squads.delete(squad.id);
+        this.squadsDirty = true;
+        await this.persistSquads();
+        return json({ ok: true, disbanded: true });
+      }
+      const heir = others.sort((a, b) => a.joinedAt - b.joinedAt || a.id.localeCompare(b.id))[0];
+      squad.creatorId = heir.id;
+      squad.ownerId = heir.id;
+      heir.role = 'leader';
+    }
+    if (!removeSquadMember(squad, requester)) {
+      return json({ ok: false, error: 'member_not_found', message: 'You are not on this squad.' }, 404);
+    }
+    this.squadsDirty = true;
+    await this.persistSquads();
+    return json({ ok: true, squad: squadViewOf(squad) });
+  }
+
+  /** Remove another player. Leader (or a promoted officer) only; never the leader themself. */
+  private async squadKick(request: Request, url: URL): Promise<Response> {
+    const body = await readBody(request);
+    const requester = await this.squadRequester(request, url, body);
+    if (!requester) {
+      return json({ ok: false, error: 'unauthorized', message: 'Telegram verification required.' }, 401);
+    }
+    const id = typeof body.squadId === 'string' ? body.squadId.trim().slice(0, 48) : '';
+    const squad = await this.squadNamed(id);
+    if (!squad) return json({ ok: false, error: 'no_such_squad' }, 404);
+    if (!isSquadAdmin(squad, requester)) {
+      return json({ ok: false, error: 'not_admin', message: 'Only the squad leader can remove members.' }, 403);
+    }
+    const target = typeof body.memberId === 'string' ? body.memberId.trim().slice(0, 24) : '';
+    if (!target) return json({ ok: false, error: 'invalid_member', message: 'Choose a member to remove.' }, 400);
+    if (target === requester) {
+      return json({ ok: false, error: 'cannot_kick_self', message: 'You cannot remove yourself.' }, 409);
+    }
+    if (target === squad.creatorId) {
+      return json({ ok: false, error: 'cannot_kick_leader', message: 'The squad leader cannot be removed.' }, 409);
+    }
+    if (!removeSquadMember(squad, target)) {
+      return json({ ok: false, error: 'member_not_found', message: 'That player is not on this squad.' }, 404);
+    }
+    this.squadsDirty = true;
+    await this.persistSquads();
+    return json({ ok: true, squad: squadViewOf(squad) });
+  }
+
+  /**
+   * The public board: every live squad, ranked by the TIQ its joined players actually banked.
+   *
+   * This is what discovery reads now that the seeded field is gone. It carries no chat token and
+   * no audit notes — identity, the real counts, the audience as a separate stat, and the top three
+   * names so a card can show a face before it is opened.
+   */
+  private async squadBoard(): Promise<Response> {
+    await this.syncSquadsFromStorage();
+    const squads = [...this.squads.values()]
+      .filter((squad) => !squad.banned && squad.verification !== 'revoked')
+      .map((squad) => {
+        /* The board names the community, not its Telegram chat id. */
+        const { chatId: _chatId, ...view } = squadViewOf(squad);
+        return view;
+      })
+      .sort((a, b) => b.tiq - a.tiq || b.members - a.members || a.handle.localeCompare(b.handle));
+    return json({ ok: true, timestamp: Date.now(), squads });
+  }
+
+  /** One squad's live view: identity, the full roster and the derived counts. */
+  private async squadRead(url: URL): Promise<Response> {
+    const id = (url.searchParams.get('id') ?? '').trim().slice(0, 48);
+    if (!id) return json({ ok: false, error: 'invalid_squad' }, 400);
+    const squad = await this.squadNamed(id);
+    if (!squad) return json({ ok: false, error: 'no_such_squad' }, 404);
+    if (squad.banned) return json({ ok: false, error: 'squad_banned' }, 403);
+    return json({ ok: true, squad: squadViewOf(squad) });
   }
 
   /**
@@ -1925,7 +2111,11 @@ export class MatchmakerDO {
       if (!Array.isArray(rows)) return;
       for (const raw of rows) {
         const row = readRegisteredSquad(raw);
-        if (row && !this.squads.has(row.id)) this.squads.set(row.id, row);
+        if (!row) continue;
+        const held = this.squads.get(row.id);
+        /* A row already in memory may be newer than the store (a join that has not flushed yet);
+           keep the in-memory roster, but never resurrect a row the store does not have. */
+        if (!held) this.squads.set(row.id, row);
       }
     } catch {
       /* a store that refuses the read: the rows already in memory still answer */
@@ -1952,16 +2142,19 @@ export class MatchmakerDO {
     }
   }
 
-  /** The war contribution of each registered handle: TIQ and how many players report it. */
+  /**
+   * The war contribution of each registered squad: the TIQ its joined players actually banked.
+   *
+   * This used to fold every player record that merely *reported* a squad handle, which counted
+   * people who never joined and quoted a number no roster could account for. The roster is now
+   * the only source: a squad's war total is the sum of its members' own Tactical IQ.
+   */
   private squadWarIndex(): Map<string, { tiq: number; contributors: number }> {
     const war = new Map<string, { tiq: number; contributors: number }>();
-    for (const p of this.players.values()) {
-      const key = squadKeyOf(p.squad);
+    for (const squad of this.squads.values()) {
+      const key = squadKeyOf(squad.handle);
       if (!key) continue;
-      const entry = war.get(key) ?? { tiq: 0, contributors: 0 };
-      entry.tiq += Math.max(0, Math.floor(p.tiq));
-      entry.contributors += 1;
-      war.set(key, entry);
+      war.set(key, { tiq: squadWarTiq(squad), contributors: squad.roster.length });
     }
     return war;
   }
@@ -1982,8 +2175,9 @@ export class MatchmakerDO {
   ): SquadWarRow {
     const key = squadKeyOf(squad.handle);
     const contribution = key ? war.get(key) : undefined;
-    const owner = owners.get(squad.ownerId);
-    const warTiq = contribution?.tiq ?? 0;
+    const owner = owners.get(squad.creatorId);
+    const warTiq = contribution?.tiq ?? squadWarTiq(squad);
+    const members = squad.roster.length;
     return {
       id: squad.id,
       chatId: squad.chatId,
@@ -1992,8 +2186,10 @@ export class MatchmakerDO {
       kind: squad.kind,
       avatar: squad.avatar,
       tag: squad.tag,
-      members: squad.members,
-      ownerId: squad.ownerId,
+      members,
+      subscribers: squad.subscribers,
+      creatorId: squad.creatorId,
+      ownerId: squad.creatorId,
       ownerName: owner?.name ?? '',
       ownerUsername: owner?.username ?? '',
       createdAt: squad.createdAt,
@@ -2003,13 +2199,13 @@ export class MatchmakerDO {
       revokedAt: squad.revokedAt,
       banned: squad.banned,
       bannedAt: squad.bannedAt,
-      warTiq: warTiq,
-      contributors: contribution?.contributors ?? 0,
+      warTiq,
+      contributors: contribution?.contributors ?? members,
       title: squad.name,
       type: squad.kind,
       enlistedAt: squad.createdAt,
-      enlistedBy: owner?.username ? `@${owner.username}` : squad.ownerId,
-      membersCount: squad.members,
+      enlistedBy: owner?.username ? `@${owner.username}` : squad.creatorId,
+      membersCount: members,
       tiq: warTiq,
       status: squad.banned ? 'banned' : squad.verification,
     };

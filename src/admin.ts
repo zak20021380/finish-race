@@ -928,7 +928,10 @@ export interface SquadRow {
   kind: SquadChatKind;
   avatar: string;
   tag: string;
+  /** Joined mini-app players — the roster's length, never the Telegram audience. */
   members: number;
+  /** The Telegram chat's own audience, kept as an external stat beside the roster. */
+  subscribers: number;
   ownerId: string;
   ownerName: string;
   ownerUsername: string;
@@ -1025,6 +1028,7 @@ function readSquadRow(raw: unknown): SquadRow | null {
     avatar: squadText(r.avatar, 160),
     tag: squadText(r.tag, 8),
     members: squadCount(r.membersCount) || squadCount(r.members),
+    subscribers: squadCount((r as { subscribers?: unknown }).subscribers),
     ownerId: squadText(r.ownerId, 24) || (byHandle ? '' : enlistedBy),
     ownerName: squadText(r.ownerName, 40),
     ownerUsername: squadText(r.ownerUsername, 40) || (byHandle ? enlistedBy.slice(1, 41) : ''),
@@ -3321,7 +3325,12 @@ export function createAdmin(api: AdminApi): Admin {
     const cells = document.createElement('div');
     cells.className = 'adm-squad-cells';
     cells.append(
-      squadCell(figure(row.members), 'Members', `${row.members.toLocaleString('en-US')} members`),
+      squadCell(
+        figure(row.members),
+        'Members',
+        `${row.members.toLocaleString('en-US')} joined player${row.members === 1 ? '' : 's'}`
+          + (row.subscribers > 0 ? ` · ${row.subscribers.toLocaleString('en-US')} Telegram subscribers` : ''),
+      ),
       squadCell(
         figure(row.warTiq),
         'War TIQ',

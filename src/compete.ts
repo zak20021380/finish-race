@@ -60,10 +60,10 @@ import { flagPhoto } from './flags';
 import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
 import { arena, countdownPill, fullCountdown, seasonLabel } from './arenaState';
-import { bindSquadById, cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadKind, squadLetter, squadMark, telegramAvatarUrl, type RankedSquad } from './squads';
+import { bindSquadById, cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribution, getMySquad, getSquadRanking, isSquadAdmin, onSquadChange, squadInviteUrl, squadKind, squadLetter, squadMark, telegramAvatarUrl, type RankedSquad } from './squads';
 import { BOT_HANDLE, impact, notify, openLink, tgUser } from './telegram';
 import { t } from './settings';
-import { registerSquadWithTelegram } from './squadRegister';
+import { joinSquadOnServer, registerSquadWithTelegram } from './squadRegister';
 import { showToast } from './toast';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
@@ -583,21 +583,49 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     syncRegisterPreview();
   });
 
+  /**
+   * The squad's one invite link: `?startapp=squad_<id>`. Copying it is the whole action — the
+   * leader pastes it into the channel and every tap lands on this squad's join card.
+   */
   const inviteSquad = (s: RankedSquad): void => {
-    const text = `${s.handle} — join my squad in Tactix!`;
+    const url = squadInviteUrl(s.id);
+    if (!url) {
+      notify('warning');
+      showToast(t('linkCopyFailed'), 'warning');
+      return;
+    }
+    const done = (ok: boolean): void => {
+      if (!ok) {
+        notify('warning');
+        showToast(t('linkCopyFailed'), 'warning');
+        return;
+      }
+      notify('success');
+      impact('medium');
+      showToast(t('linkCopied'), 'success');
+    };
     try {
       if (navigator.clipboard?.writeText) {
-        void navigator.clipboard.writeText(text).then(
-          () => notify('success'),
-          () => notify('warning'),
-        );
-      } else {
-        notify('success');
+        void navigator.clipboard.writeText(url).then(() => done(true), () => done(false));
+        return;
       }
     } catch {
-      notify('warning');
+      /* fall through to the legacy path below */
     }
-    impact('medium');
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.setAttribute('readonly', 'true');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      done(ok);
+    } catch {
+      done(false);
+    }
   };
 
   /** 1240 -> "1.2k", 986 -> "986" — keeps the sub line on one row. */
@@ -997,7 +1025,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   /** Fill the band from the leading channel's roster, fetching it once per leader. */
   async function paintPlayers(): Promise<void> {
     const lead = channels[0];
-    if (!lead) return;
+    if (!lead) {
+      /* No channel means no roster: clear the board rather than leave the last squad's players
+         standing under a heading that no longer has a squad. */
+      if (cupEls.podium) cupEls.podium.textContent = '';
+      if (cupEls.runners) cupEls.runners.textContent = '';
+      return;
+    }
     if (playerRowsFor !== lead.id) {
       playerRowsFor = lead.id;
       playerRows = null;
@@ -1032,6 +1066,19 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   function paintChannelBoard(): void {
     const c = cup;
     if (!c) return;
+    /* An empty registry is a real state now that the seeded field is gone: the board says so
+       instead of painting an empty slab. */
+    if (!channels.length) {
+      if (cupEls.podium) cupEls.podium.textContent = '';
+      if (cupEls.runners) {
+        cupEls.runners.textContent = '';
+        const row = document.createElement('li');
+        row.className = 'stars-run is-empty';
+        row.textContent = 'No squads on the board yet — enlist a channel to open the war.';
+        cupEls.runners.append(row);
+      }
+      return;
+    }
     if (cupEls.podium) {
       cupEls.podium.textContent = '';
       for (const s of channels.filter((x) => x.rank <= 3)) cupEls.podium.append(podChannel(s, c));
@@ -1195,6 +1242,15 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }
     if (rosterOpen !== s.id) return;
     list.textContent = '';
+    /* A squad of one is a normal squad: its roster is the founder, and a squad with no one on it
+       says so instead of showing an empty list under a populated header. */
+    if (!rows.length) {
+      const row = document.createElement('li');
+      row.className = 'sr-empty';
+      row.textContent = 'No players have joined this squad yet.';
+      list.append(row);
+      return;
+    }
     for (const r of rows.slice(0, ROSTER_ROWS)) list.append(rosterRow(r));
   }
 
@@ -2675,13 +2731,18 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       hint: `Join ${s.handle}`,
       run: () => {
         impact('light');
-        if (bindSquadById(s.id) === 'bad-handle') {
-          notify('warning');
-          return;
-        }
-        notify('success');
-        impact('medium');
-        loadSquads();
+        /* The roster is the registry's, so the join is too: this waits for the answer, then
+           repaints the board from the roster the Worker just confirmed. */
+        void joinSquadOnServer(s.id).then((result) => {
+          if (!result.ok) {
+            notify('warning');
+            showToast(result.message || t('enlistErrOffline'), 'warning');
+            return;
+          }
+          notify('success');
+          impact('medium');
+          loadSquads();
+        });
       },
     };
   }

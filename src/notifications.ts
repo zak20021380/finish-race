@@ -87,15 +87,10 @@ function writeRaw(value: string): void {
 function seed(): AppNotification[] {
   const now = Date.now();
   const min = 60_000;
+  /* No squad row here on purpose: a squad notification is only ever real news, so it is written
+     by the squad layer when something actually happens — never pre-seeded for a squad that the
+     player has not joined. */
   return [
-    {
-      id: 'seed-squad-rank',
-      kind: 'squad',
-      title: 'Squad update',
-      body: 'Your squad @DogeSquad reached Rank #12! (+50 Trophies)',
-      createdAt: now - 8 * min,
-      read: false,
-    },
     {
       id: 'seed-arena-cup',
       kind: 'tournament',
