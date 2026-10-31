@@ -2829,20 +2829,27 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
   width: 36px;
   height: 36px;
 }
-.lb-av {
+/* Col 2 — the player's own circular portrait. A dedicated class: `.lb-av`
+   already names the live-room slot, and the lobby rules load later. */
+.lb-face {
+  position: relative;
   flex: none;
   width: 36px;
   height: 36px;
   display: grid;
   place-items: center;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #2A354C 0%, #141B2A 100%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 26%, #2E3A54 0%, #141B2A 72%);
   box-shadow: inset 0 0 0 1.5px var(--brand-soft), inset 0 1px 1px rgba(255, 255, 255, .12);
   color: var(--brand-ink);
   font-size: 15px;
   font-weight: 800;
   line-height: 1;
+  --pin-d: 18px;
 }
+.lb-face[data-len="2"] { font-size: 12.5px; letter-spacing: -.02em; }
+/* the nation badge sits on the bottom-end rim; the honor coin takes the top end */
+.lb-medal { right: -4px; top: -4px; bottom: auto; }
 .lb-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 /* name line: the name shrinks first, the serial chip never does */
 .lb-nm { display: flex; align-items: center; gap: 5px; min-width: 0; }
@@ -3040,8 +3047,8 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
 @media (max-width: 380px) {
   .lb-row { --lb-rank: 30px; --lb-score: 72px; --lb-act: 56px; --lb-gap: 6px; padding: 8px 6px; }
   .lb-avwrap { width: 32px; height: 32px; }
-  .lb-av, .lb-hex, .lb-id .fp-badge { width: 32px; height: 32px; border-radius: 10px; --fp-d: 32px; }
-  .lb-av { font-size: 13px; }
+  .lb-face, .lb-hex, .lb-id .fp-badge { width: 32px; height: 32px; border-radius: 10px; --fp-d: 32px; }
+  .lb-face { border-radius: 50%; font-size: 13px; }
 }
 /* Solo boards have no action column: rank · identity · right-aligned score runs
    clean to the card edge. Declared after the width query above, which would
@@ -5503,6 +5510,8 @@ html.reduced-motion .car-card.nations-cup::before { display: none; }
   --pod-metal: #FCD34D;
   --pod-metal-soft: rgba(253, 230, 138, .5);
   --pod-glow: rgba(245, 158, 11, .42);
+  /* the nation badge's hairline follows the pedestal's own metal */
+  --pin-rim: rgba(253, 230, 138, .68);
   /* plinth defaults (rank 3 — warm bronze); the two rank blocks below re-cut
      every one of these so each pedestal is a single metal recipe. */
   --plinth-h: 22px;
@@ -5531,11 +5540,13 @@ html.reduced-motion .car-card.nations-cup::before { display: none; }
   --pod-metal: #CBD5E1;
   --pod-metal-soft: rgba(203, 213, 225, .38);
   --pod-glow: rgba(148, 163, 184, .3);
+  --pin-rim: rgba(226, 232, 240, .72);
 }
 .pod-card.bronze {
   --pod-metal: #FDBA74;
   --pod-metal-soft: rgba(253, 186, 116, .38);
   --pod-glow: rgba(217, 119, 6, .32);
+  --pin-rim: rgba(253, 186, 116, .72);
 }
 /* The three pedestals are the height ladder: 38 / 28 / 22. The card is a flex
    column with its plinth pinned to the base, so the champion's extra height
@@ -5680,8 +5691,52 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
 .pod-av .fp-badge { --fp-d: 36px; }
 .pod-card[data-rank="1"] .pod-av .fp-badge { --fp-d: 46px; }
 .pod-av .fp-chip { border-radius: 50%; font-size: 9px; }
-/* the minted coin sits on the crest's rim, one size up on the champion */
-.pod-medal { right: -4px; bottom: -4px; width: 22px; height: 22px; }
+
+/* ---- the player portrait: photo over monogram, nation on the corner --------
+   The avatar is the hero now, so the flag leaves the crest and becomes an
+   18–20px minted badge pinned to its bottom-end rim. The photo sits inside the
+   metal ring (inset 3px) and removes itself on error, leaving the monogram. */
+.pod-av { --pin-d: 18px; }
+.pod-card[data-rank="1"] .pod-av { --pin-d: 20px; }
+.av-mono { display: block; line-height: 1; }
+.pod-av .av-photo,
+.lb-face .av-photo,
+.mh-av .av-photo {
+  position: absolute;
+  inset: 3px;
+  z-index: 1;
+  width: calc(100% - 6px);
+  height: calc(100% - 6px);
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+  background: #0B1220;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .38);
+  opacity: 0;
+  transition: opacity .18s ease;
+}
+.pod-av .av-photo.is-loaded,
+.lb-face .av-photo.is-loaded,
+.mh-av .av-photo.is-loaded { opacity: 1; }
+html.reduced-motion .av-photo { transition: none; }
+.fp-pin {
+  position: absolute;
+  inset-inline-end: -4px;
+  inset-block-end: -4px;
+  z-index: 3;
+  --fp-d: var(--pin-d, 18px);
+  border-radius: 50%;
+  overflow: hidden;
+  background: #0B1220;
+  box-shadow:
+    0 0 0 1.5px var(--pin-rim, rgba(226, 232, 240, .62)),
+    0 2px 5px rgba(0, 0, 0, .6);
+}
+.fp-pin .fp-chip { border-radius: 50%; font-size: 7px; letter-spacing: 0; }
+.fp-pin .fp-img { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35); }
+
+/* the minted coin moves to the open top-end corner, so the nation owns the base */
+.pod-medal { right: -4px; top: -4px; bottom: auto; width: 22px; height: 22px; }
 .pod-medal .medal-coin,
 .pod-medal .medal-coin.badge-crest-art { width: 18px; height: 18px; }
 .pod-card[data-rank="1"] .pod-medal { width: 24px; height: 24px; }
@@ -6062,6 +6117,7 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
 }
 /* clean recessed clay avatar — the strip carries no progress arc */
 .solo-standing.mh .mh-av {
+  position: relative;
   flex: none;
   width: 36px;
   height: 36px;
@@ -6075,7 +6131,9 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
   font-size: 15px;
   font-weight: 900;
   line-height: 1;
+  --pin-d: 18px;
 }
+.solo-standing.mh .mh-av[data-len="2"] { font-size: 12.5px; letter-spacing: -.02em; }
 /* Your place, struck as a key: a crisp graphite face with a metallic rim and the
    same 900-weight tabular numerals the ladder rows use. The podium owns #1-3, so
    the strip beneath it always reads #4 or higher — never a duplicated medal. */
@@ -6157,7 +6215,7 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   line-height: 1;
 }
 .solo-standing.mh .mh-avwrap { width: 36px; height: 36px; }
-.solo-standing.mh .mh-medal { right: -4px; bottom: -4px; }
+.solo-standing.mh .mh-medal { right: -4px; top: -4px; bottom: auto; }
 .mh-id { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; }
 .mh-line {
   flex: none;
@@ -19923,10 +19981,26 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
     inset 0 2px 3px rgba(255, 255, 255, .45);
 }
 .mind-ini { font-size: 12px; font-weight: 900; letter-spacing: .01em; }
+/* the mind's own photo sits inside the sphere; the nation pin stays on top */
+.mind-av-img {
+  position: absolute;
+  inset: 2px;
+  z-index: 1;
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
+  border-radius: 50%;
+  object-fit: cover;
+  background: #0B1220;
+  opacity: 0;
+  transition: opacity .18s ease;
+}
+.mind-av-img.is-loaded { opacity: 1; }
+html.reduced-motion .mind-av-img { transition: none; }
 .mind-av .mind-flag {
   position: absolute;
   right: 0;
   bottom: 0;
+  z-index: 2;
   --fp-d: 13px;
   width: 13px;
   height: 13px;

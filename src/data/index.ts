@@ -87,6 +87,8 @@ export interface PlayerRow {
   id: string;
   name: string;
   countryCode: string;
+  /** The player's Telegram photo, or '' when they have none. */
+  avatar: string;
   points: number;
   wins: number;
   trend: Trend;

@@ -18,6 +18,8 @@ export interface MindRowData {
   id: string;
   name: string;
   countryCode: string;
+  /** The player's Telegram photo, or '' — the portrait falls back to a monogram. */
+  avatar: string;
   tiq: number;
   wins: number;
   trend: MindTrend;
@@ -50,6 +52,7 @@ interface WireRow {
   id?: unknown;
   name?: unknown;
   country?: unknown;
+  avatar?: unknown;
   tiq?: unknown;
   wins?: unknown;
   isYou?: unknown;
@@ -71,6 +74,8 @@ interface WireFeed {
 const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.slice(0, max).trim() : '');
 const whole = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0);
 const iso2 = (v: string): string => (/^[A-Za-z]{2}$/.test(v) ? v.toUpperCase() : '');
+/** A portrait is decoration: only an absolute https URL may reach another player's `<img>`. */
+const photoUrl = (v: string): string => (/^https:\/\/[^\s]+$/i.test(v) ? v : '');
 
 const offline = (): MindFeed => ({ rows: [], total: 0, standing: null, live: false });
 
@@ -139,6 +144,7 @@ function localRow(standing: MindStanding): MindRowData {
     id: 'you',
     name: myName(),
     countryCode: myCountry(),
+    avatar: photoUrl(tgUser()?.photo_url ?? ''),
     tiq: standing.tiq,
     wins: Math.max(0, Math.floor(profile.stats.wins)),
     trend: 'same',
@@ -162,6 +168,7 @@ function adopt(data: WireFeed, tiq: number, limit: number): MindFeed {
       id,
       name,
       countryCode: iso2(text(raw.country, 3)),
+      avatar: photoUrl(text(raw.avatar, 512)),
       tiq: score,
       wins: whole(raw.wins),
       trend: 'same',

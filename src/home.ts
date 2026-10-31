@@ -489,7 +489,26 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const ini = document.createElement('b');
     ini.className = 'mind-ini';
     ini.textContent = monogramOf(p.name);
-    av.append(ini, p.countryCode ? flagPhoto(p.countryCode, 'mind-flag') : globeFlag());
+    av.append(ini);
+    if (/^https:\/\//i.test(p.avatar)) {
+      const img = document.createElement('img');
+      img.className = 'mind-av-img';
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.addEventListener('error', () => img.remove());
+      img.addEventListener('load', () => {
+        if (img.naturalWidth <= 2 || img.naturalHeight <= 2) {
+          img.remove();
+          return;
+        }
+        img.classList.add('is-loaded');
+      });
+      img.src = p.avatar;
+      av.append(img);
+    }
+    av.append(p.countryCode ? flagPhoto(p.countryCode, 'mind-flag') : globeFlag());
     const nm = document.createElement('span');
     nm.className = 'mind-nm';
     nm.textContent = p.name;

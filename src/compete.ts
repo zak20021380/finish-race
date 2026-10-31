@@ -1457,6 +1457,48 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return flagPhoto(code, 'fp-badge');
   }
 
+  /** A portrait is decoration: only an absolute https URL may reach an `<img>`. */
+  function photoSrc(raw: string | null | undefined): string {
+    const url = (raw ?? '').trim();
+    return /^https:\/\/[^\s]+$/i.test(url) ? url : '';
+  }
+
+  /**
+   * A player's face is the hero: a monogram under their Telegram photo, with the
+   * nation pinned as a minted micro badge on the avatar's bottom-end corner. The
+   * photo removes itself on error, so a slow or expired CDN still leaves a person.
+   */
+  function paintFace(host: HTMLElement, name: string, code: string | null, photo: string | null): void {
+    const mark = document.createElement('b');
+    mark.className = 'av-mono';
+    mark.textContent = initials(name);
+    host.dataset.len = String(mark.textContent.length);
+    host.append(mark);
+    const src = photoSrc(photo);
+    if (src) {
+      const img = document.createElement('img');
+      img.className = 'av-photo';
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      /* stay transparent until real pixels arrive: the monogram must never be
+         covered by a slow (or 1x1 placeholder) response, only by an actual face.
+         `hidden` would deadlock a lazy image, so the face fades in instead. */
+      img.addEventListener('error', () => img.remove());
+      img.addEventListener('load', () => {
+        if (img.naturalWidth <= 2 || img.naturalHeight <= 2) {
+          img.remove();
+          return;
+        }
+        img.classList.add('is-loaded');
+      });
+      img.src = src;
+      host.append(img);
+    }
+    if (code) host.append(flagPhoto(code, 'fp-pin'));
+  }
+
   /* ---------- Top 3 clay podium ---------- */
 
   interface PodiumEntry {
@@ -1465,7 +1507,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     score: string;
     /** Nation entry: the flag photo, with the ISO chip as its own fallback. */
     code?: string;
-    /** Guild / player entry: a clay medallion carrying the squad mark. */
+    /** Player entry: the crest is their own face, with the nation pinned to its corner. */
+    person?: boolean;
+    /** Player entry only: the verified Telegram photo; '' falls back to the monogram. */
+    photo?: string;
+    /** Guild entry: a clay medallion carrying the squad mark. */
     letter?: string;
     /** Guild entry only: the member line under the name. */
     members?: number;
@@ -1526,7 +1572,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const av = document.createElement('span');
     av.className = 'pod-av';
     av.setAttribute('aria-hidden', 'true');
-    if (e.code) {
+    if (e.person) {
+      paintFace(av, e.name, e.code ?? null, e.photo ?? null);
+    } else if (e.code) {
       av.append(flagBadge(e.code));
     } else {
       const mark = (e.letter ?? e.name).replace(/^@/, '').slice(0, 3).toUpperCase();
@@ -1641,6 +1689,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     sub: string | null;
     points: string;
     me: boolean;
+    /** A player row wears their face; a nation row keeps its flag as the crest. */
+    person?: boolean;
+    /** Player row only: the verified Telegram photo, or '' for the monogram. */
+    photo?: string;
     /** A minted prestige honor this name holds, read from the ledger's holder index. */
     medal?: WornEdition;
     /** Every ladder row is a control: it opens its own detail sheet. */
@@ -1670,7 +1722,15 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     id.className = 'lb-id';
     const avWrap = document.createElement('span');
     avWrap.className = 'lb-avwrap';
-    avWrap.append(flagBadge(code));
+    if (r.person) {
+      const face = document.createElement('span');
+      face.className = 'lb-face';
+      face.setAttribute('aria-hidden', 'true');
+      paintFace(face, name, code || null, r.photo ?? null);
+      avWrap.append(face);
+    } else {
+      avWrap.append(flagBadge(code));
+    }
     if (r.medal) avWrap.append(medalPin(r.medal, 'lb-medal'));
     id.append(avWrap);
     const txt = document.createElement('span');
@@ -1761,11 +1821,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     badge.textContent = `#${myRank}`;
     badge.title = `Rank ${myRank} of ${field + 1} on Top Minds`;
 
-    /* a clean clay avatar: no arc, no glow — just the recessed circular frame */
-    const av = document.createElement('b');
+    /* the same portrait hierarchy as the ladder: your face, with your nation pinned
+       to the corner — the strip never demotes you to a bare flag or letter */
+    const av = document.createElement('span');
     av.className = 'mh-av';
-    const h = youHandle() ?? 'Y';
-    av.textContent = h.replace(/^@/, '').slice(0, 1).toUpperCase() || 'Y';
+    paintFace(av, youName(), profile.country, tgUser()?.photo_url ?? null);
 
     /* the equipped honor is pinned to the avatar rim and its real ledger serial
        rides the identity line — the same coin the Honor sheet and Profile show */
@@ -2641,6 +2701,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       name: p.name,
       score: p.points.toLocaleString('en-US'),
       code: p.countryCode,
+      person: true,
+      photo: p.avatar,
       medal: holderEdition(p.name) ?? undefined,
       onTap: () => openMind(p, i + 1),
     })));
@@ -2656,7 +2718,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         name: p.name,
         sub: `${p.wins} wins`,
         points: p.points.toLocaleString('en-US'),
-        me: false,
+        me: p.id === 'you',
+        person: true,
+        photo: p.avatar,
         medal: holderEdition(p.name) ?? undefined,
         onOpen: () => openMind(p, i + 4),
         openHint: 'open the mind profile',
@@ -2704,6 +2768,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       id: p.id,
       name: p.name,
       countryCode: p.countryCode,
+      avatar: p.avatar,
       points: p.tiq,
       wins: p.wins,
       trend: p.trend,

@@ -772,6 +772,8 @@ export interface PlayerRecord {
   username: string;
   /** ISO 3166-1 alpha-2, or ''. */
   country: string;
+  /** The signed `user.photo_url` the seat authenticated with, or ''. */
+  avatar: string;
   /** Player-declared age, or 0 when their profile has never set one. */
   age: number;
   tiq: number;
@@ -877,6 +879,7 @@ function freshPlayer(identity: Identity, now: number): PlayerRecord {
     name: identity.player.name.slice(0, 40),
     username: identity.player.username.slice(0, 40),
     country: identity.flag.slice(0, 2),
+    avatar: identity.player.avatar,
     age: Math.min(120, Math.max(0, Math.floor(identity.age))),
     tiq: Math.max(0, Math.floor(identity.tiq)),
     firstSeen: now,
@@ -898,6 +901,13 @@ function freshPlayer(identity: Identity, now: number): PlayerRecord {
   };
 }
 
+/** A stored photo is decoration: only an absolute https URL may reach another player's `<img>`. */
+function storedAvatar(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const url = raw.slice(0, 512).trim();
+  return /^https:\/\/[^\s]+$/i.test(url) ? url : '';
+}
+
 /** A hydrated record folded field by field: a hand-edited blob is clamped, never trusted. */
 function readPlayer(raw: unknown): PlayerRecord | null {
   const r = raw as Partial<PlayerRecord> | null | undefined;
@@ -909,6 +919,7 @@ function readPlayer(raw: unknown): PlayerRecord | null {
     name: text(r.name, 40) || 'Player',
     username: text(r.username, 40),
     country: text(r.country, 2).toUpperCase(),
+    avatar: storedAvatar(r.avatar),
     age: Math.min(120, whole(r.age)),
     tiq: whole(r.tiq),
     firstSeen: whole(r.firstSeen),
@@ -2892,7 +2903,8 @@ export class MatchmakerDO {
     updatedAt: number;
     total: number;
     players: Array<{
-      rank: number; id: string; name: string; country: string; tiq: number; wins: number; isYou: boolean;
+      rank: number; id: string; name: string; country: string; avatar: string;
+      tiq: number; wins: number; isYou: boolean;
     }>;
     you: { rank: number; tiq: number; total: number; inBoard: boolean } | null;
   }> {
@@ -2916,6 +2928,7 @@ export class MatchmakerDO {
         id: p.id,
         name: p.name,
         country: p.country,
+        avatar: p.avatar,
         wins: p.id === mineId ? myWins : p.wins,
         tiq: p.id === mineId ? myTiq : p.tiq,
       }))
@@ -2929,6 +2942,7 @@ export class MatchmakerDO {
       id: p.id,
       name: p.name,
       country: p.country,
+      avatar: p.avatar,
       tiq: p.tiq,
       wins: p.wins,
       isYou: !!mineId && p.id === mineId,
@@ -3293,6 +3307,7 @@ export class MatchmakerDO {
     p.name = identity.player.name || p.name;
     p.username = identity.player.username || p.username;
     p.country = identity.flag || p.country;
+    p.avatar = storedAvatar(identity.player.avatar) || p.avatar;
     if (identity.age > 0) p.age = Math.min(120, Math.floor(identity.age));
     p.tiq = Math.max(0, Math.floor(identity.tiq));
     /* A first sighting is a signup and an active player at once, and `freshPlayer` has already
