@@ -1,0 +1,398 @@
+/* ==========================================================================
+   POST-MATCH BANTER — the taunt dock and the two podium speech bubbles
+
+   Scoped to the result capsule. The bar is a compact three-row instrument:
+   a scrolling carousel of outcome-aware taunts, a six-face reaction tray, and
+   a 40-character composer. It sits directly above the rematch key, so every
+   pixel it takes is paid for by the compact rules at the bottom of this file.
+   ========================================================================== */
+
+/* ---- the speech bubbles: one per podium card, tail aimed at the avatar ---- */
+
+.result-seat { overflow: visible; }
+/* the fallen seat keeps its subdued furniture, but its bubble must stay legible */
+.result-seat.is-fallen { opacity: 1; filter: none; }
+.result-seat.is-fallen > .result-avatar,
+.result-seat.is-fallen > .result-id { opacity: .52; filter: saturate(.5); }
+/* a speaker's nameplate steps back under the bubble instead of peeking around it */
+.result-seat > .result-id { transition: opacity .22s ease; }
+.result-seat.is-speaking > .result-id { opacity: .12; }
+.result-seat.is-fallen.is-speaking > .result-id { opacity: .16; }
+
+.result-say {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  bottom: 0;
+  inset-inline-end: 8px;
+  inset-inline-start: 72px;
+  display: block;
+  height: fit-content;
+  max-height: 52px;
+  margin-block: auto;
+  padding: 5px 9px;
+  overflow: hidden;
+  border-radius: 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.32;
+  letter-spacing: .01em;
+  text-align: start;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(12px) saturate(1.25);
+  backdrop-filter: blur(12px) saturate(1.25);
+}
+.result-seat.is-fallen .result-say {
+  inset-inline-start: 56px;
+  max-height: 46px;
+  font-size: 10px;
+  line-height: 1.3;
+}
+/* the champion's rim: emerald and cyan, the same divine family as the crown */
+.is-champion .result-say {
+  border: 1px solid rgba(45, 212, 191, .46);
+  background:
+    linear-gradient(160deg, rgba(13, 58, 56, .88), rgba(5, 20, 26, .93));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .17),
+    0 0 18px -4px rgba(34, 211, 238, .62),
+    0 8px 18px -12px rgba(0, 0, 0, .85);
+  color: #E7FFFB;
+  text-shadow: 0 0 8px rgba(45, 212, 191, .35);
+}
+/* the fallen seat's rim: crimson and violet, a bruise with a glow */
+.is-fallen .result-say {
+  border: 1px solid rgba(244, 63, 94, .45);
+  background:
+    linear-gradient(160deg, rgba(58, 15, 34, .9), rgba(20, 7, 20, .94));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    0 0 18px -4px rgba(244, 63, 94, .5),
+    0 0 26px -10px rgba(167, 139, 250, .55),
+    0 8px 18px -12px rgba(0, 0, 0, .85);
+  color: #FFE9EE;
+}
+/* the tail: a rotated square parked on the avatar edge of the bubble */
+.result-say::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  inset-inline-start: -5px;
+  width: 9px;
+  height: 9px;
+  transform: translateY(-50%) rotate(45deg);
+  border-start-start-radius: 2px;
+}
+.is-champion .result-say::before {
+  border-inline-start: 1px solid rgba(45, 212, 191, .4);
+  border-block-end: 1px solid rgba(45, 212, 191, .4);
+  background: #0B2E2E;
+}
+.is-fallen .result-say::before {
+  border-inline-start: 1px solid rgba(244, 63, 94, .4);
+  border-block-end: 1px solid rgba(244, 63, 94, .4);
+  background: #2A0B1C;
+}
+.result-say.is-live {
+  animation: banter-say-in .52s cubic-bezier(.18, 1.42, .38, 1) both;
+}
+.result-say.is-out {
+  opacity: 0;
+  transform: translateY(-3px) scale(.94);
+  transition: opacity .3s ease, transform .3s ease;
+  animation: none;
+}
+
+/* ---- the dock, directly above the rematch key ---- */
+
+.result-banter {
+  display: grid;
+  gap: 6px;
+  padding: 7px;
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(56, 189, 248, .07), transparent 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .015));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    0 12px 26px -18px rgba(0, 0, 0, .9);
+  text-align: start;
+}
+.overlay.result.lose .result-banter {
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(244, 63, 94, .07), transparent 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .012));
+}
+
+/* the opponent-left badge: loud enough to be the first thing read after the verdict */
+.banter-alert {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 6px 9px;
+  border: 1px solid rgba(244, 63, 94, .42);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(225, 29, 72, .26), rgba(76, 5, 25, .22));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    0 0 18px -7px rgba(244, 63, 94, .7);
+  color: #FECDD3;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .015em;
+  line-height: 1.35;
+  animation: banter-alert-in .34s cubic-bezier(.2, 1.3, .4, 1) both;
+}
+.banter-alert .ico {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: #FB7185;
+  filter: drop-shadow(0 0 6px rgba(244, 63, 94, .75));
+}
+.overlay.result.win .banter-alert {
+  border-color: rgba(252, 211, 77, .34);
+  background: linear-gradient(180deg, rgba(180, 83, 9, .24), rgba(69, 26, 3, .2));
+  color: #FDE68A;
+}
+.overlay.result.win .banter-alert .ico { color: #FCD34D; filter: drop-shadow(0 0 6px rgba(252, 211, 77, .7)); }
+
+/* the taunt carousel: one horizontal gesture lane, its own pan exemption */
+.banter-rail {
+  display: flex;
+  gap: 5px;
+  padding-bottom: 1px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 7px, #000 calc(100% - 12px), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 7px, #000 calc(100% - 12px), transparent 100%);
+}
+.banter-rail::-webkit-scrollbar { display: none; }
+.banter-pill {
+  appearance: none;
+  flex: 0 0 auto;
+  max-width: min(238px, 88vw);
+  padding: 5px 10px;
+  border: 1px solid rgba(255, 255, 255, .13);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .075), rgba(255, 255, 255, .025));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1);
+  color: #D8E3F2;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.28;
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color .16s ease, background .16s ease, transform .16s ease;
+}
+.overlay.result.win .banter-pill:not(:disabled):hover {
+  border-color: rgba(45, 212, 191, .4);
+  background: linear-gradient(180deg, rgba(45, 212, 191, .16), rgba(45, 212, 191, .05));
+}
+.overlay.result.lose .banter-pill:not(:disabled):hover {
+  border-color: rgba(251, 113, 133, .4);
+  background: linear-gradient(180deg, rgba(244, 63, 94, .16), rgba(244, 63, 94, .05));
+}
+.banter-pill:not(:disabled):active { transform: translateY(1px); }
+
+/* the reaction tray: six faces in one locked row so muscle memory always hits */
+.banter-reacts {
+  display: flex;
+  gap: 4px;
+}
+.banter-react {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 9px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .015));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .09);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .14s ease, border-color .14s ease, background .14s ease;
+}
+.overlay.result.win .banter-react:not(:disabled):active {
+  transform: scale(.9);
+  border-color: rgba(45, 212, 191, .5);
+  background: rgba(45, 212, 191, .16);
+}
+.overlay.result.lose .banter-react:not(:disabled):active {
+  transform: scale(.9);
+  border-color: rgba(251, 113, 133, .5);
+  background: rgba(244, 63, 94, .16);
+}
+
+/* the composer: one 40-character line and its send key */
+.banter-compose {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 2px 3px 2px 10px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 11px;
+  background: rgba(2, 6, 12, .52);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, .4);
+}
+html[data-lang="fa"] .banter-compose { padding: 2px 10px 2px 3px; }
+.banter-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #EDF4FE;
+  font: inherit;
+  font-size: 11.5px;
+  outline: none;
+}
+.banter-input::placeholder { color: #66748A; }
+.banter-input:disabled::placeholder { color: #7A5B63; }
+.banter-send {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #7CF8D4, #14B8A6);
+  box-shadow: 0 3px 8px -3px rgba(20, 184, 166, .65), inset 0 1px 0 rgba(255, 255, 255, .4);
+  color: #042A25;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .14s ease, filter .14s ease;
+}
+.overlay.result.lose .banter-send {
+  background: linear-gradient(180deg, #FFC4A8, #FB7185);
+  box-shadow: 0 3px 8px -3px rgba(244, 63, 94, .65), inset 0 1px 0 rgba(255, 255, 255, .4);
+  color: #2A060A;
+}
+.banter-send .ico { width: 14px; height: 14px; }
+.banter-send:not(:disabled):active { transform: scale(.9); }
+
+/* a cooldown dims the keys, never moves them; the composer stays typeable */
+.result-banter.is-cooling .banter-rail,
+.result-banter.is-cooling .banter-reacts,
+.result-banter.is-cooling .banter-compose {
+  opacity: .6;
+}
+.banter-pill:disabled,
+.banter-react:disabled { cursor: default; }
+.result-banter.is-locked .banter-rail,
+.result-banter.is-locked .banter-reacts,
+.result-banter.is-locked .banter-compose {
+  opacity: .42;
+  filter: grayscale(.45);
+}
+
+/* ---- the rematch key in its locked state ---- */
+.result-btn.primary.is-locked,
+.result-btn.primary:disabled {
+  opacity: .5;
+  filter: grayscale(.35) saturate(.65);
+  cursor: not-allowed;
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, .18),
+    0 4px 0 #3A1218,
+    0 8px 16px -10px rgba(0, 0, 0, .6);
+  transform: none;
+}
+.result-btn.primary.is-locked:active,
+.result-btn.primary:disabled:active { transform: none; }
+
+/* ---- lifecycles ---- */
+@keyframes banter-say-in {
+  0% { opacity: 0; transform: translateY(5px) scale(.55); }
+  55% { opacity: 1; transform: translateY(0) scale(1.07); }
+  78% { transform: scale(.98); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes banter-alert-in {
+  from { opacity: 0; transform: translateY(-3px) scale(.96); }
+}
+
+/* ---- compact heights: the banter bar must never bury Rematch or Menu ---- */
+@media (max-height: 760px) {
+  .overlay.result.with-banter { padding: 6px 10px; }
+  .with-banter .result-card { padding: 12px clamp(12px, 4.6vw, 18px) 10px; }
+  .with-banter .result-title { font-size: clamp(1.85rem, 8.8vw, 2.5rem); }
+  .overlay.result.with-banter .result-mode { margin: 3px 0 6px; }
+  .with-banter .result-podium { margin: 8px 0 5px; }
+  .with-banter .result-seat.is-champion { padding: 6px 9px; }
+  .with-banter .is-champion .result-avatar { width: 44px; height: 44px; border-radius: 15px; }
+  .with-banter .result-crown { left: 31px; top: -10px; width: 23px; height: 23px; }
+  .with-banter .result-crown .ico { width: 22px; height: 22px; }
+  .with-banter .result-seat.is-fallen { padding: 3px 9px; }
+  .with-banter .result-seat.is-fallen .result-avatar { width: 34px; height: 34px; border-radius: 12px; }
+  .with-banter .result-rewards { margin-bottom: 6px; }
+  .with-banter .result-chip { min-height: 32px; }
+  .with-banter .result-stake { padding: 5px 12px; margin-bottom: 7px; }
+  .with-banter .result-btn { min-height: 44px; }
+  .with-banter .result-btn.menu { min-height: 34px; }
+  .result-banter { gap: 3px; padding: 4px; }
+  .banter-pill {
+    padding: 3px 8px;
+    font-size: 9.5px;
+    line-height: 1.3;
+    max-width: 78vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .banter-react { height: 23px; border-radius: 8px; font-size: 13px; }
+  .banter-compose { min-height: 27px; }
+  .banter-input { height: 22px; font-size: 10.5px; }
+  .banter-send { width: 23px; height: 23px; border-radius: 7px; }
+  .banter-send .ico { width: 12px; height: 12px; }
+  .banter-alert { padding: 4px 8px; font-size: 9.5px; }
+  .with-banter .result-say { max-height: 40px; font-size: 9.5px; }
+  .with-banter .result-seat.is-fallen .result-say { max-height: 36px; font-size: 9.5px; }
+  html[data-lang="fa"] .banter-pill { font-size: 9.5px; line-height: 1.7; }
+  html[data-lang="fa"] .result-say { font-size: 9.5px; line-height: 1.45; }
+  html[data-lang="fa"] .result-seat.is-fallen .result-say { font-size: 9.5px; }
+}
+@media (max-height: 620px) {
+  /* the shortest capsules trade the mood copy for the keys: the verdict and the podium stay */
+  .with-banter .result-sub,
+  .with-banter .result-mode { display: none; }
+  .with-banter .result-kicker { margin-bottom: 2px; }
+  .with-banter .result-title { font-size: clamp(1.65rem, 8.2vw, 2.2rem); }
+  .with-banter .result-podium { margin: 6px 0 4px; }
+  .with-banter .result-rewards { margin-bottom: 5px; }
+  .with-banter .result-stake { padding: 4px 10px; margin-bottom: 5px; }
+  .with-banter .result-stake-n { font-size: 1.1rem; }
+  .with-banter .result-btn.menu { min-height: 32px; }
+}
+
+/* ---- Persian: Vazirmatn, true RTL on the dock and its composed line ---- */
+html[data-lang="fa"] .result-banter,
+html[data-lang="fa"] .banter-alert,
+html[data-lang="fa"] .banter-pill,
+html[data-lang="fa"] .banter-input,
+html[data-lang="fa"] .result-say {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+}
+html[data-lang="fa"] .result-say { font-size: 10.5px; line-height: 1.55; }
+html[data-lang="fa"] .result-seat.is-fallen .result-say { font-size: 10px; }
+html[data-lang="fa"] .banter-pill { font-size: 10px; line-height: 1.5; }
+html[data-lang="fa"] .banter-input { font-size: 12px; text-align: right; }

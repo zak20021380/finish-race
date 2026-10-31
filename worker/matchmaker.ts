@@ -78,6 +78,9 @@ type ClientMessage =
   /* One of the six tactical lines, also off the sheet: a tongue plus a tile index, relayed as a
      pair and looked back up in the receiver's own closed table — no text crosses this wire. */
   | { type: 'PHRASE'; lang: string; index: number }
+  /* The result capsule's banter: one 40-character line, relayed to the seat opposite only while
+     both are still on the settled board. Never judged by the board and never counted as a turn. */
+  | { type: 'POST_MATCH_CHAT'; text: string }
   | { type: 'RESIGN' }
   /* The room path: the host starting early, the host's format pick (1v1 / 3P / 4P / 2v2), and a
      seat's team move — any seat may move itself, the host may move anyone. Everything else a room
@@ -1243,12 +1246,25 @@ const EMOTE_IDS: ReadonlySet<string> = new Set(['laugh', 'fury', 'impatient']);
 const PHRASE_LANGS: ReadonlySet<string> = new Set(['EN', 'FA']);
 const PHRASE_COUNT = 6;
 
+/** The result capsule's line: the same 40-character ceiling the composer enforces. */
+const POST_CHAT_MAX = 40;
+/** How long two settled seats may still trade taunts after the board is done. */
+const POST_CHAT_TTL_MS = 90_000;
+
+/** Clamp a post-match line to printable, single-spaced text the composer's own limit allows. */
+function readPostChatText(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const clean = raw.replace(/[\u0000-\u001F\u007F]/g, ' ').trim();
+  if (!clean) return null;
+  return Array.from(clean).slice(0, POST_CHAT_MAX).join('');
+}
+
 function readMessage(raw: unknown, side: number, cols: number, rows: number): ClientMessage | null {
   if (typeof raw !== 'string') return null;
   try {
     const msg = JSON.parse(raw) as {
       type?: unknown; wide?: unknown; action?: unknown; mode?: unknown; side?: unknown; team?: unknown;
-      format?: unknown; emote?: unknown; lang?: unknown; index?: unknown; busy?: unknown;
+      format?: unknown; emote?: unknown; lang?: unknown; index?: unknown; busy?: unknown; text?: unknown;
     };
     if (msg.type === 'QUEUE') return { type: 'QUEUE', wide: msg.wide === true };
     if (msg.type === 'WIDEN') return { type: 'WIDEN' };
@@ -1282,6 +1298,10 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
         && typeof msg.index === 'number' && Number.isInteger(msg.index)
         && msg.index >= 0 && msg.index < PHRASE_COUNT
         ? { type: 'PHRASE', lang: msg.lang, index: msg.index } : null;
+    }
+    if (msg.type === 'POST_MATCH_CHAT') {
+      const text = readPostChatText(msg.text);
+      return text ? { type: 'POST_MATCH_CHAT', text } : null;
     }
   } catch {
     /* not ours: a malformed frame is dropped, never fatal */
@@ -1506,6 +1526,13 @@ export class MatchmakerDO {
   private rooms = new Map<string, LiveRoom>();
   /** Which room seat a socket is holding. A socket in here is not a queue entry. */
   private refs = new Map<WebSocket, RoomRef>();
+  /**
+   * The post-match banter lane: a socket whose board has settled, paired with the seat opposite.
+   * It lives outside `races` because a settled race is forgotten the moment it produces a verdict,
+   * yet both result capsules stay open and still expect to be able to talk. Entries expire on
+   * their own, and either side leaving sends the rival `OPPONENT_LEFT` and drops both.
+   */
+  private postChat = new Map<WebSocket, { peer: WebSocket; side: number; at: number; lastAt: number }>();
   /** `room:chatId` → the last time that room pinged that player. The push cooldown's ledger. */
   private notified = new Map<string, number>();
   /** The admin's maintenance lock: nobody new gets in while it is on. */
@@ -3614,6 +3641,7 @@ export class MatchmakerDO {
         return;
       }
       /* a paired socket is a race, not a queue: the same connection changes what it means */
+      if (msg.type === 'POST_MATCH_CHAT') { this.relayPostChat(waiter.ws, msg.text); return; }
       if (waiter.race) this.relay(waiter, msg);
       else if (msg.type === 'QUEUE') this.enqueue(waiter, msg.wide);
       else if (msg.type === 'WIDEN') this.widen(waiter);
@@ -3681,6 +3709,8 @@ export class MatchmakerDO {
    *  way a player who was racing hands the win to the seat opposite. */
   private leave(waiter: Waiter, close: boolean): void {
     this.markActive(waiter.id);
+    /* a settled seat walking out ends the banter lane before the socket closes */
+    this.dropPostChat(waiter.ws, true);
     const at = this.queue.indexOf(waiter);
     if (at !== -1) this.queue.splice(at, 1);
     if (waiter.race) this.endRace(waiter.race, waiter.side, 'LEFT');
@@ -4513,6 +4543,11 @@ export class MatchmakerDO {
       }
       return;
     }
+    if (msg.type === 'POST_MATCH_CHAT') {
+      /* only a settled room has a lane; a live board ignores the frame like any other chat */
+      if (member) this.relayPostChat(member.ws, msg.text);
+      return;
+    }
     if (!live.driver) {
       /* Before the launch the only vocabulary a lobby has is the host's start and size pick, and
          a seat's own team move. Any seat may leave at any time. */
@@ -4606,10 +4641,21 @@ export class MatchmakerDO {
    */
   private finishRoom(live: LiveRoom, winner: number): void {
     this.completeRoom(live);
+    const humans: RoomMember[] = [];
     for (let i = 0; i < live.members.length; i++) {
       const m = live.members[i];
       /* a chair held for an absent socket was the machine's race, not that player's */
-      if (m && m.connected) this.verdict(m.id, i === winner);
+      if (m && m.connected) {
+        this.verdict(m.id, i === winner);
+        humans.push(m);
+      }
+    }
+    /* A two-seat result is the one capsule with a single rival to taunt: open the lane. */
+    if (humans.length === 2) {
+      this.armPostMatch(
+        { ws: humans[0].ws, side: humans[0].seat },
+        { ws: humans[1].ws, side: humans[1].seat },
+      );
     }
   }
 
@@ -4639,6 +4685,8 @@ export class MatchmakerDO {
     const live = ref.live;
     const member = live.members[ref.seat];
     if (member) {
+      /* a seat walking out of a settled board also closes the banter lane */
+      this.dropPostChat(member.ws, true);
       this.refs.delete(member.ws);
       try {
         member.ws.close(1000, 'left');
@@ -4705,6 +4753,46 @@ export class MatchmakerDO {
 
   /* ---------- the race ---------- */
 
+  /**
+   * Open the post-match lane between two seats whose board has settled. Only a natural finish or a
+   * resignation reaches here — an operator abort has no result capsule worth filling — and both
+   * sockets are still live, so either one may taunt while the other is still reading the verdict.
+   */
+  private armPostMatch(a: { ws: WebSocket; side: number }, b: { ws: WebSocket; side: number }): void {
+    const at = Date.now();
+    this.postChat.set(a.ws, { peer: b.ws, side: a.side, at, lastAt: 0 });
+    this.postChat.set(b.ws, { peer: a.ws, side: b.side, at, lastAt: 0 });
+  }
+
+  /** Relay one settled-board line to the seat opposite, if the lane is still open. */
+  private relayPostChat(from: WebSocket, text: string): void {
+    const box = this.postChat.get(from);
+    if (!box) return;
+    const now = Date.now();
+    if (now - box.at > POST_CHAT_TTL_MS) {
+      this.dropPostChat(from, false);
+      return;
+    }
+    /* the composer already throttles at 2s; this floor only stops a hand-rolled flood */
+    if (now - box.lastAt < 250) return;
+    box.lastAt = now;
+    this.postTo(box.peer, JSON.stringify({ type: 'POST_MATCH_CHAT', side: box.side, text }));
+  }
+
+  /**
+   * A lane is closing: the socket left the result (menu, rematch, a killed tab) or its lease ran
+   * out. The rival is told so its rematch key and taunt dock can go quiet instead of talking into
+   * an empty room; the peer's own entry is dropped with it so neither side lingers.
+   */
+  private dropPostChat(ws: WebSocket, notify: boolean): void {
+    const box = this.postChat.get(ws);
+    if (!box) return;
+    this.postChat.delete(ws);
+    const peer = this.postChat.get(box.peer);
+    if (peer?.peer === ws) this.postChat.delete(box.peer);
+    if (notify) this.postTo(box.peer, JSON.stringify({ type: 'OPPONENT_LEFT', side: box.side }));
+  }
+
   /** A frame from a player who is already racing: judged by the room, then handed to the rival. */
   private relay(seat: Waiter, msg: ClientMessage): void {
     const race = seat.race;
@@ -4717,6 +4805,12 @@ export class MatchmakerDO {
     this.markActive(seat.id);
     if (msg.type === 'RESIGN') {
       this.endRace(race, seat.side, 'RESIGN');
+      /* the resignation is a verdict too: both capsules are up, so the lane opens for as long as
+         the leaver keeps their socket around */
+      this.armPostMatch(
+        { ws: race.seats[0].ws, side: race.seats[0].side },
+        { ws: race.seats[1].ws, side: race.seats[1].side },
+      );
       return;
     }
     if (msg.type === 'EMOTE') {
@@ -4754,8 +4848,15 @@ export class MatchmakerDO {
     this.countBoard(before, next);
     this.deliver(race.seats[seat.side === 0 ? 1 : 0], JSON.stringify({ type: 'MOVE', side: seat.side, action: msg.action }));
     /* The board is decided: both clients can see the winner for themselves, so the room just
-       stops being a race rather than guessing what the loser's screen does next. */
-    if (next.winner !== null) this.settle(race, next.winner);
+       stops being a race rather than guessing what the loser's screen does next. The post-match
+       lane opens at the same beat, because both result capsules stay up and may speak. */
+    if (next.winner !== null) {
+      this.settle(race, next.winner);
+      this.armPostMatch(
+        { ws: race.seats[0].ws, side: race.seats[0].side },
+        { ws: race.seats[1].ws, side: race.seats[1].side },
+      );
+    }
   }
 
   private refuse(seat: Waiter, reason: string): void {

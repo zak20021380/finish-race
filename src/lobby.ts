@@ -220,6 +220,8 @@ export interface LobbyRace {
   sendEmote(emote: ChatEmoteId): boolean;
   /** Send one tactical line to the other seats, as its closed `(lang, index)` pair. */
   sendPhrase(lang: ChatLang, index: number): boolean;
+  /** Send one post-match line to the other seats. False when the socket is gone. */
+  sendPostMatchChat(text: string): boolean;
   resign(): void;
   close(): void;
   onMove(cb: (action: Action, side: number) => void): void;
@@ -227,6 +229,16 @@ export interface LobbyRace {
   onEmote(cb: (emote: ChatEmoteId, side: number) => void): void;
   /** A tactical line another seat sent, as the pair they tapped. */
   onPhrase(cb: (lang: ChatLang, index: number, side: number) => void): void;
+  /** A post-match line another seat sent from the result capsule. */
+  onPostChat(cb: (text: string, side: number) => void): void;
+  /** The socket is gone after the board settled: the result capsule's live keys are dead. */
+  onPostLeft(cb: () => void): void;
+  /**
+   * Seats whose person walked out and whose chair the machine finished for. On a two-seat board
+   * that is exactly the rival leaving mid-race: the result capsule opens with its banter and
+   * rematch already locked instead of talking into an empty room.
+   */
+  goneSides(): number[];
   onEnd(cb: (end: { win: boolean; why: 'resign' | 'left' | 'drop' | 'aborted' }) => void): void;
   onReject(cb: (reason: string) => void): void;
 }
@@ -461,6 +473,16 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   const raceMoves: Array<(a: Action, side: number) => void> = [];
   const raceEmotes: Array<(emote: ChatEmoteId, side: number) => void> = [];
   const racePhrases: Array<(lang: ChatLang, index: number, side: number) => void> = [];
+  const racePosts: Array<(text: string, side: number) => void> = [];
+  /** Seats a person walked out of; `SEAT_BOT` is the machine taking the chair over. */
+  const raceGone = new Set<number>();
+  const raceLefts: Array<() => void> = [];
+  let racePostGone = false;
+  const markPostGone = (): void => {
+    if (racePostGone) return;
+    racePostGone = true;
+    for (const cb of raceLefts) cb();
+  };
   const raceEnds: Array<(e: { win: boolean; why: 'resign' | 'left' | 'drop' | 'aborted' }) => void> = [];
   const raceRejects: Array<(r: string) => void> = [];
 
@@ -530,6 +552,8 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         return;
       case 'ROOM_FOUND': {
         settled = true;
+        racePostGone = false;
+        raceGone.clear();
         const seats = Array.isArray(msg.seats) ? msg.seats : [];
         const roster: LobbyRaceSeat[] = seats.map((r, i) => {
           const s = r as Record<string, unknown>;
@@ -564,11 +588,15 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
           send: (a) => send({ type: 'MOVE', action: a }),
           sendEmote: (emote) => send({ type: 'EMOTE', emote }),
           sendPhrase: (lang, index) => send({ type: 'PHRASE', lang, index }),
+          sendPostMatchChat: (text) => send({ type: 'POST_MATCH_CHAT', text }),
           resign: () => { send({ type: 'RESIGN' }); },
           close: () => { try { sock?.close(); } catch { /* gone */ } },
           onMove: (cb) => { raceMoves.push(cb); },
           onEmote: (cb) => { raceEmotes.push(cb); },
           onPhrase: (cb) => { racePhrases.push(cb); },
+          onPostChat: (cb) => { racePosts.push(cb); },
+          onPostLeft: (cb) => { raceLefts.push(cb); },
+          goneSides: () => [...raceGone],
           onEnd: (cb) => { raceEnds.push(cb); },
           onReject: (cb) => { raceRejects.push(cb); },
         };
@@ -588,15 +616,30 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         for (const cb of racePhrases) cb(msg.lang, index, Number(msg.side) || 0);
         return;
       }
+      case 'POST_MATCH_CHAT': {
+        if (typeof msg.text !== 'string') return;
+        const text = msg.text.replace(/[\u0000-\u001F\u007F]/g, ' ').trim().slice(0, 40);
+        if (!text) return;
+        for (const cb of racePosts) cb(text, Number(msg.side) || 0);
+        return;
+      }
+      case 'OPPONENT_LEFT':
+        /* the rival left the result capsule (the board itself is already settled) */
+        markPostGone();
+        for (const cb of raceEnds) cb({ win: false, why: 'left' });
+        return;
       case 'REJECT':
         for (const cb of raceRejects) cb(typeof msg.reason === 'string' ? msg.reason : 'refused');
         return;
       case 'SEAT_BOT':
-        /* a seat's person left mid-race: the machine finished it, and the board already knows */
+        /* a seat's person left mid-race: the machine finished it, and the board already knows.
+           Remember it so the result capsule can open with its rival-facing keys locked. */
+        raceGone.add(Number(msg.side) || 0);
         return;
       case 'ERROR': {
         const reason = typeof msg.reason === 'string' ? msg.reason : 'ERROR';
         if (race) {
+          markPostGone();
           for (const cb of raceEnds) cb({ win: false, why: 'aborted' });
           return;
         }
@@ -634,7 +677,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
     sock.addEventListener('error', () => { if (!race) fallback(); });
     sock.addEventListener('close', () => {
       teardown();
-      if (race) { for (const cb of raceEnds) cb({ win: false, why: 'drop' }); return; }
+      if (race) { markPostGone(); for (const cb of raceEnds) cb({ win: false, why: 'drop' }); return; }
       if (!settled) { fallback(); return; }
       /* the fallback, or our own `leave()`, closed this socket: the screen already knows */
       if (solo || left) return;

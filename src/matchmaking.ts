@@ -233,6 +233,8 @@ export interface OnlineSession extends OnlineMatch {
   sendEmote(emote: ChatEmoteId): boolean;
   /** Send one tactical line to the rival, as its closed `(lang, index)` pair. */
   sendPhrase(lang: ChatLang, index: number): boolean;
+  /** Send one post-match line to the rival. False when the socket is gone. */
+  sendPostMatchChat(text: string): boolean;
   /** Forfeit: the rival wins immediately. */
   resign(): void;
   /** Let the socket go (no forfeit): the session is done being a race. */
@@ -243,6 +245,10 @@ export interface OnlineSession extends OnlineMatch {
   onEmote(cb: (emote: ChatEmoteId, side: number) => void): void;
   /** A tactical line the rival sent, as the pair they tapped. */
   onPhrase(cb: (lang: ChatLang, index: number, side: number) => void): void;
+  /** A post-match line the rival sent from the result capsule. */
+  onPostChat(cb: (text: string, side: number) => void): void;
+  /** The rival (or the socket itself) is gone after the board settled: the result is dead. */
+  onPostLeft(cb: () => void): void;
   /** The race ended without a finish line. */
   onEnd(cb: (end: RaceEnd) => void): void;
   /** The matchmaker refused a move: the two boards have drifted apart. */
@@ -256,6 +262,8 @@ type RaceFrame =
   | { type: 'MOVE'; side: 0 | 1; action: Action }
   | { type: 'EMOTE'; side: 0 | 1; emote: ChatEmoteId }
   | { type: 'PHRASE'; side: 0 | 1; lang: ChatLang; index: number }
+  /* The result capsule's banter: a 40-character line, relayed only after the board has settled. */
+  | { type: 'POST_MATCH_CHAT'; side: 0 | 1; text: string }
   | { type: 'REJECT'; reason: string }
   | { type: 'RESIGN' | 'OPPONENT_LEFT'; side: 0 | 1 }
   /* The two the Admin Command Center's server half sends: a refused queue, and a pulled room. */
@@ -432,6 +440,11 @@ function parseFrame(raw: string, sizes?: readonly number[]): RaceFrame | null {
         && msg.index >= 0 && msg.index < PHRASE_COUNT
         ? { type: 'PHRASE', side, lang: msg.lang, index: msg.index } : null;
     }
+    if (msg.type === 'POST_MATCH_CHAT') {
+      if (typeof msg.text !== 'string') return null;
+      const text = msg.text.replace(/[\u0000-\u001F\u007F]/g, ' ').trim().slice(0, 40);
+      return text ? { type: 'POST_MATCH_CHAT', side, text } : null;
+    }
     if (msg.type === 'REJECT') return { type: 'REJECT', reason: typeof msg.reason === 'string' ? msg.reason : 'refused' };
     if (msg.type === 'RESIGN' || msg.type === 'OPPONENT_LEFT') return { type: msg.type, side };
     if (msg.type === 'ERROR') return { type: 'ERROR', reason: typeof msg.reason === 'string' ? msg.reason : 'REFUSED' };
@@ -466,12 +479,18 @@ let raceEnd: ((end: RaceEnd) => void) | null = null;
 let raceReject: ((reason: string) => void) | null = null;
 let raceEmote: ((emote: ChatEmoteId, side: number) => void) | null = null;
 let racePhrase: ((lang: ChatLang, index: number, side: number) => void) | null = null;
+let racePostChat: ((text: string, side: number) => void) | null = null;
+/** Fired once when the settled socket can no longer carry banter: the rival left, or we did. */
+let racePostLeft: (() => void) | null = null;
+let racePostGone = false;
 /** Moves that landed between the match and the race screen: replayed the moment it subscribes. */
 let raceQueue: Array<{ action: Action; side: 0 | 1 }> = [];
 /** Same for an emote: a rival can laugh at the match-found flash before the board subscribes. */
 let raceEmoteQueue: Array<{ emote: ChatEmoteId; side: number }> = [];
 /** And same for a phrase: the line waits with its pair instead of being dropped. */
 let racePhraseQueue: Array<{ lang: ChatLang; index: number; side: number }> = [];
+/** A post-match line that beat the result capsule: it waits for `onPostChat` instead of vanishing. */
+let racePostChatQueue: Array<{ text: string; side: number }> = [];
 
 /** The seat the stage just locked in, for the race that follows it. Null until there is one. */
 export const onlineRace = (): OnlineSession | null => race;
@@ -492,9 +511,13 @@ function forget(sock: WebSocket): void {
     raceReject = null;
     raceEmote = null;
     racePhrase = null;
+    racePostChat = null;
+    racePostLeft = null;
+    racePostGone = false;
     raceQueue = [];
     raceEmoteQueue = [];
     racePhraseQueue = [];
+    racePostChatQueue = [];
   }
   try {
     sock.close(1000, 'done');
@@ -503,11 +526,14 @@ function forget(sock: WebSocket): void {
   }
 }
 
-/** The race is over without a finish line: hand the reason to whoever is listening. */
+/**
+ * The race ended without a finish line, or the rival walked out of a settled result. The session
+ * object is kept so a resignation can still carry post-match banter: only `forget()` (a new
+ * search, or the player leaving) actually tears the socket down.
+ */
 function endRace(sock: WebSocket, win: boolean, why: RaceEnd['why']): void {
   if (race?.socket !== sock) return;
   const ended = raceEnd;
-  race = null;
   raceMove = null;
   raceEnd = null;
   raceReject = null;
@@ -516,7 +542,14 @@ function endRace(sock: WebSocket, win: boolean, why: RaceEnd['why']): void {
   raceQueue = [];
   raceEmoteQueue = [];
   racePhraseQueue = [];
+  racePostChatQueue = [];
   ended?.({ win, why });
+  /* Only a resignation leaves the rival in their result capsule. Every other ending — a dead
+     socket, a rival who walked out, an operator pulling the room — has nobody to taunt. */
+  if (why !== 'resign' && !racePostGone) {
+    racePostGone = true;
+    racePostLeft?.();
+  }
 }
 
 function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_FOUND' }>): OnlineSession {
@@ -554,6 +587,15 @@ function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_F
         return false;
       }
     },
+    sendPostMatchChat(text) {
+      if (race?.socket !== sock || sock.readyState !== 1) return false;
+      try {
+        sock.send(JSON.stringify({ type: 'POST_MATCH_CHAT', text }));
+        return true;
+      } catch {
+        return false;
+      }
+    },
     resign() {
       post(sock, JSON.stringify({ type: 'RESIGN' }));
     },
@@ -577,6 +619,15 @@ function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_F
       const queued = racePhraseQueue;
       racePhraseQueue = [];
       for (const p of queued) cb(p.lang, p.index, p.side);
+    },
+    onPostChat(cb) {
+      racePostChat = cb;
+      const queued = racePostChatQueue;
+      racePostChatQueue = [];
+      for (const p of queued) cb(p.text, p.side);
+    },
+    onPostLeft(cb) {
+      racePostLeft = cb;
     },
     onEnd(cb) {
       raceEnd = cb;
@@ -661,6 +712,7 @@ function wire(sock: WebSocket): void {
     if (frame.type === 'MATCH_FOUND') {
       if (race?.socket === sock) return;      // one match per socket: a repeat is not a new race
       wsMatched = true;
+      racePostGone = false;
       const session = makeSession(sock, frame);
       race = session;
       const answered = seat;
@@ -679,6 +731,9 @@ function wire(sock: WebSocket): void {
     } else if (frame.type === 'PHRASE') {
       if (racePhrase) racePhrase(frame.lang, frame.index, frame.side);
       else racePhraseQueue.push({ lang: frame.lang, index: frame.index, side: frame.side });
+    } else if (frame.type === 'POST_MATCH_CHAT') {
+      if (racePostChat) racePostChat(frame.text, frame.side);
+      else racePostChatQueue.push({ text: frame.text, side: frame.side });
     } else if (frame.type === 'REJECT') {
       raceReject?.(frame.reason);
     } else if (frame.type === 'ABORTED') {

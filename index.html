@@ -3020,6 +3020,9 @@
                     <span class="result-tag" id="result-top-tag">WINNER · YOU</span>
                     <strong class="result-name" id="result-top-name">You</strong>
                   </span>
+                  <span class="result-say" id="result-top-say" role="status" aria-live="polite" hidden>
+                    <span class="result-say-t" id="result-top-say-t"></span>
+                  </span>
                 </div>
                 <span class="result-vs" aria-hidden="true">VS</span>
                 <div class="result-seat is-fallen">
@@ -3030,6 +3033,9 @@
                   <span class="result-id">
                     <span class="result-tag" id="result-bottom-tag">DEFEATED</span>
                     <strong class="result-name" id="result-bottom-name">Bot</strong>
+                  </span>
+                  <span class="result-say" id="result-bottom-say" role="status" aria-live="polite" hidden>
+                    <span class="result-say-t" id="result-bottom-say-t"></span>
                   </span>
                 </div>
               </div>
@@ -3055,6 +3061,25 @@
               </p>
 
               <div class="result-actions">
+                <div class="result-banter" id="result-banter" role="group"
+                  aria-label="Post-match banter" hidden>
+                  <p class="banter-alert" id="banter-alert" role="status" aria-live="assertive" hidden>
+                    <svg class="ico" aria-hidden="true"><use href="#i-shield" /></svg>
+                    <span id="banter-alert-t">Opponent has left the match.</span>
+                  </p>
+                  <div class="banter-rail" id="banter-rail" data-carousel role="group"
+                    aria-label="Quick taunts"></div>
+                  <div class="banter-reacts" id="banter-reacts" role="group"
+                    aria-label="Emoji reactions"></div>
+                  <form class="banter-compose" id="banter-form">
+                    <input class="banter-input" id="banter-input" type="text" maxlength="40"
+                      autocomplete="off" enterkeyhint="send" dir="auto"
+                      placeholder="Type a quick taunt…" aria-label="Custom taunt, 40 characters max" />
+                    <button class="banter-send" id="banter-send" type="submit" aria-label="Send taunt">
+                      <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
+                    </button>
+                  </form>
+                </div>
                 <button class="result-btn primary" id="again" type="button">
                   <svg class="ico" aria-hidden="true"><use id="again-ico" href="#i-play" /></svg>
                   <span id="again-label">PLAY AGAIN</span>

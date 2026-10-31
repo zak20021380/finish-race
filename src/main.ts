@@ -14,6 +14,7 @@ import {
 } from './render';
 import { createConfetti } from './confetti';
 import { createChat } from './chat';
+import { createBanter } from './banter';
 import {
   BOARD_IDLE, holdMineKey, holdsBall, moveDots, pickBall, pickBallFromMine, previewWall, type BoardMode,
 } from './boardmode';
@@ -669,6 +670,8 @@ let resultRaf = 0;
 let resultTimers: number[] = [];
 let stingerTimer = 0;
 let defeatStingerTurn = 0;
+/** The rival walked out of the settled race: the rematch key and the banter dock are dead. */
+let resultLocked = false;
 
 /** Stop every clock the result owns: the count-up, the haptic beats and the stinger rotation. */
 function clearResultMotion() {
@@ -748,7 +751,6 @@ function paintResultCopy(): void {
   resultKicker.textContent = t('resultKicker');
   verdict.textContent = t(won ? 'resultVictoryTitle' : 'resultDefeatTitle');
   sub.textContent = won ? t('resultVictorySub') : t(DEFEAT_STINGERS[resultView.stinger]);
-  againLabel.textContent = t(won ? 'resultPlayAgain' : 'resultRevenge');
   shareLabel.textContent = t('resultShare');
   toMenuLabel.textContent = t('resultMenu');
   resultStakeK.textContent = t('resultStakeLost');
@@ -759,7 +761,29 @@ function paintResultCopy(): void {
   shareBtn.hidden = !won;
   again.classList.toggle('is-revenge', !won);
   againIco?.setAttribute('href', won ? '#i-play' : '#i-swords');
+  paintResultLock();
   paintResultPodium();
+}
+
+/**
+ * The primary key is the one action the rival shares: when they leave, it is locked and renamed
+ * instead of queueing a rematch into an empty room. The label is recomputed on every repaint, so a
+ * language flip cannot quietly unlock it.
+ */
+function paintResultLock(): void {
+  if (!resultView) return;
+  again.disabled = resultLocked;
+  again.classList.toggle('is-locked', resultLocked);
+  againLabel.textContent = resultLocked
+    ? t('resultOpponentLeft')
+    : t(resultView.won ? 'resultPlayAgain' : 'resultRevenge');
+  if (resultLocked) {
+    again.title = t('resultOpponentLeftHint');
+    again.setAttribute('aria-label', t('resultOpponentLeft'));
+  } else {
+    again.removeAttribute('title');
+    again.removeAttribute('aria-label');
+  }
 }
 
 function rotateDefeatStinger(): void {
@@ -815,6 +839,9 @@ function showOverlay() {
   overlayOpen = true;
   clearResultMotion();
   const won = state.winner === localSide;
+  /* A rival who walked out mid-race leaves a machine in the chair. The capsule opens with its
+     rematch and banter already dead: there is nobody on the far side of that socket. */
+  if (active && 'goneSides' in active && active.goneSides().includes(rivalSide())) resultLocked = true;
   /* one credit per finished race: showOverlay only runs once per game over. The Admin Command
      Center's Double-Coins multiplier scales what the settlement pays. A seat the machine held is
      the one exception: it pays nothing and it touches no ladder, because a bot is not a person and
@@ -836,11 +863,23 @@ function showOverlay() {
   };
   overlay.classList.toggle('win', won);
   overlay.classList.toggle('lose', !won);
+  /* the compact typography in banter.css only applies where the dock is paying for the space */
+  overlay.classList.toggle('with-banter', state.teams.length === 2);
   paintResultCopy();
   resultTiqN.textContent = '0';
   resultCoinsN.textContent = '0';
   resultStakeN.textContent = `−1 ${t('resultTiqUnit')}`;
   overlay.hidden = false;
+  /* The banter dock reads the same podium: bubbles land on the card of the player who spoke,
+     and a race against the machine answers on its own. A 3- or 4-seat party has no single
+     rival to taunt, so the dock stays out of that capsule. */
+  banter.open({
+    won,
+    localSide,
+    winnerSide: state.winner ?? localSide,
+    enabled: state.teams.length === 2,
+    locked: resultLocked,
+  });
   if (won && !motionReduced()) confetti.burst();
   rollResultValues();
   if (!won) {
@@ -851,7 +890,9 @@ function showOverlay() {
     notify('success');
   }
   menuBtn.disabled = true;              // the panel already offers Play again and Menu
-  again.focus({ preventScroll: true });
+  /* a locked rematch cannot take the focus it never gets: the quiet door does */
+  if (resultLocked) toMenu.focus({ preventScroll: true });
+  else again.focus({ preventScroll: true });
 }
 
 /**
@@ -933,6 +974,8 @@ function ui() {
     overlay.hidden = true;
     clearResultMotion();
     resultView = null;
+    resultLocked = false;
+    banter.close();
     menuBtn.disabled = false;
   }
   if (state.winner !== null) armGoalBeat();
@@ -1159,6 +1202,8 @@ function restart() {
   clearGoalBeat();
   clearResultMotion();
   resultView = null;
+  resultLocked = false;
+  banter.close();
   overlayOpen = false;
   overlay.hidden = true;
   overlay.classList.remove('win', 'lose');
@@ -1445,6 +1490,7 @@ function startGame(setup: StartSetup) {
   /* An online seat brings its own board and side; a local race is always seat 0 against the rest. */
   active = setup.online ?? null;
   forfeit = null;
+  resultLocked = false;
   localSide = active ? active.side : 0;
   /* A room's seats are its own — one ball per seat, however many it filled with bots. */
   room = setup.room ?? null;
@@ -1486,6 +1532,10 @@ function startGame(setup: StartSetup) {
     session.onEmote((emote) => chat.inboundEmote(emote));
     /* the rival's tactical line: their (lang, index) pair looked back up in the same closed table */
     session.onPhrase((lang, index) => chat.inboundPhrase(lang, index));
+    /* the rival's post-match taunt: it lands on whichever podium card their seat owns */
+    session.onPostChat((text, side) => banter.inbound(text, side));
+    /* the settled socket died, or the rival walked out: the result's live keys go with it */
+    session.onPostLeft(() => { if (overlayOpen || goalBeat) lockResultForLeft(); });
     session.onEnd((end) => endOnline(end));
     session.onReject(() => {
       notify('error');
@@ -1521,9 +1571,20 @@ function startGame(setup: StartSetup) {
  * left exactly as it stands — nothing is rewound, because both screens stopped on the same turn.
  */
 function endOnline(end: RaceEnd): void {
-  if (state.winner !== null) return;
+  /* The board is already settled, so this frame is the rival walking out of the result capsule —
+     by closing the tab, going back to the menu or losing the socket. Nothing is awarded twice:
+     the rematch key and the banter dock simply stop pretending somebody is still there. */
+  if (state.winner !== null) {
+    /* only the result capsule needs the guard: a socket closed on the way out of the board is
+       already past the point where a rematch could be offered */
+    if (overlayOpen || goalBeat) lockResultForLeft();
+    return;
+  }
   forfeit = end.why;
   state = { ...state, winner: end.win ? localSide : rivalSide() };
+  /* Only a resignation leaves the rival's socket open long enough to taunt. A dropped or
+     abandoned connection, or an operator abort, has nobody on the far side of a rematch. */
+  if (end.why !== 'resign') resultLocked = true;
   stopClock();
   ui();
   notify(end.win ? 'success' : 'error');
@@ -1531,6 +1592,16 @@ function endOnline(end: RaceEnd): void {
     ? (end.why === 'resign' ? 'Rival resigned — you win' : 'Rival left — you win')
     : end.why === 'aborted' ? 'Room closed by an operator' : 'Connection lost',
   !end.win, 3000);
+}
+
+/** The rival is gone: raise the badge, dead the taunt keys and lock the rematch in one beat. */
+function lockResultForLeft(): void {
+  resultLocked = true;
+  banter.opponentLeft();
+  if (!resultView) return;             // the card is still behind the goal beat: it opens locked
+  paintResultLock();
+  /* a search stage on top owns the focus; the dead capsule behind it must not steal it back */
+  if (overlayOpen && !matchmaking.isOpen) toMenu.focus({ preventScroll: true });
 }
 
 function pauseGame() {
@@ -1562,6 +1633,8 @@ function quitToMenu() {
   if (overlayOpen) {
     clearResultMotion();
     resultView = null;
+    resultLocked = false;
+    banter.close();
     overlayOpen = false;
     overlay.hidden = true;
   }
@@ -2602,6 +2675,19 @@ const chat = createChat({
   },
   busy: () => mineArmed,
   live: () => router.current === 'game' && !paused && !overlayOpen && state.winner === null,
+});
+/* Post-match banter: the dock under the podium reads the live session when there is one, and the
+   machine answers when there is not. The wire is resolved at send time, never captured, because
+   `active` changes with every race. */
+const banter = createBanter({
+  wire: () => {
+    const session = active;
+    if (!session) return null;
+    /* A room whose other seats are all the machine has no socket to answer on the far side:
+       treat it as a bot race, so the same canned reply wakes after 1.2s. */
+    if ('seats' in session && !session.seats.some((s) => s.side !== localSide && !s.bot)) return null;
+    return (text: string) => session.sendPostMatchChat(text);
+  },
 });
 router.start('home');
 setBackButton(false);
