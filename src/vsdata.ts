@@ -30,6 +30,10 @@ export interface ClashCopy {
   modeRanked: string;
   modeBot: string;
   modeRoom: string;
+  /** The crest caption under the format mark on a three-seat race. */
+  shapeTrio: string;
+  /** The crest caption under the format mark on a four-seat race. */
+  shapeQuad: string;
   mindGap: string;
   skip: string;
   /** Screen-reader announcement for the face-off. */
@@ -55,6 +59,8 @@ export const CLASH_COPY: Record<ClashLang, ClashCopy> = {
     modeRanked: 'RANKED 1V1',
     modeBot: 'BOT DUEL',
     modeRoom: 'PRIVATE ROOM',
+    shapeTrio: '3-WAY CLASH',
+    shapeQuad: 'FREE FOR ALL',
     mindGap: 'MIND GAP',
     skip: 'Tap to skip',
     versus: 'Match face-off',
@@ -73,6 +79,8 @@ export const CLASH_COPY: Record<ClashLang, ClashCopy> = {
     modeRanked: 'تک‌نبرد رنکد',
     modeBot: 'نبرد با ربات',
     modeRoom: 'اتاق خصوصی',
+    shapeTrio: 'نبرد سه‌نفره',
+    shapeQuad: 'همه علیه همه',
     mindGap: 'اختلاف ذهن',
     skip: 'برای رد شدن بزن',
     versus: 'رویارویی پیش از نبرد',
@@ -91,6 +99,8 @@ export const CLASH_COPY: Record<ClashLang, ClashCopy> = {
     modeRanked: 'مبارزة ١ضد١ مصنّفة',
     modeBot: 'مبارزة الآلة',
     modeRoom: 'غرفة خاصة',
+    shapeTrio: 'مواجهة ثلاثية',
+    shapeQuad: 'الكل ضد الكل',
     mindGap: 'فارق الذكاء',
     skip: 'اضغط للتخطي',
     versus: 'مواجهة ما قبل المباراة',
@@ -109,6 +119,8 @@ export const CLASH_COPY: Record<ClashLang, ClashCopy> = {
     modeRanked: 'РЕЙТИНГ 1×1',
     modeBot: 'ДУЭЛЬ С БОТОМ',
     modeRoom: 'ЧАСТНАЯ КОМНАТА',
+    shapeTrio: 'ТРОЙНОЕ СТОЛКНОВЕНИЕ',
+    shapeQuad: 'КАЖДЫЙ ЗА СЕБЯ',
     mindGap: 'РАЗНИЦА TIQ',
     skip: 'Нажмите, чтобы пропустить',
     versus: 'Противостояние',
@@ -127,6 +139,8 @@ export const CLASH_COPY: Record<ClashLang, ClashCopy> = {
     modeRanked: '1VS1 RANKEADO',
     modeBot: 'DUELO VS BOT',
     modeRoom: 'SALA PRIVADA',
+    shapeTrio: 'CHOQUE A TRES',
+    shapeQuad: 'TODOS CONTRA TODOS',
     mindGap: 'DISTANCIA MENTAL',
     skip: 'Toca para saltar',
     versus: 'Enfrentamiento de la partida',

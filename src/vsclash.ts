@@ -1,11 +1,15 @@
 /**
- * vsclash.ts — the pre-match face-off: two nations, two squads, one crest, ~3.5 seconds.
+ * vsclash.ts — the pre-match face-off: every seat in the race, one crest, ~3.5 seconds.
  *
  * Every start path already funnels through `startGame()` in main.ts, so this is the one place a
  * match can be announced. The overlay is a *reveal gate*, not a pause: the board is staged the
  * moment `startGame()` returns and the route to it is handed back through `onReveal`, which fires
  * exactly once — when the crest shatters, when the player taps to skip, or when the watchdog runs
  * out. Nothing about the race itself changes.
+ *
+ * The grid is shaped by the seats the race actually holds: a duel stacks two full-width cards, a
+ * three-way splits its rival row in two over a full-width local card, and a four-way balances two
+ * over two. The crest never moves — only what it says about the format.
  *
  * The psychology is the point: a flag and a squad are things you defend, so a loss stops being
  * about a board and starts being about territory. Which is also why the automated bypass is
@@ -19,14 +23,14 @@
 import './vsclash.css';
 import { flagPhoto } from './flags';
 import { nameOf } from './countries';
-import { getMySquad, squadMark } from './squads';
+import { getMySquad } from './squads';
 import { myTier, myTiq, readFace, TIER_NAME, type MindTier } from './matchmaking';
 import { profile } from './storage';
 import { impact, languageCode } from './telegram';
 import { lang, motionReduced } from './settings';
 import { playSwoosh } from './audio';
 import {
-  botPersona, clashCopy, rivalPersona, resolveNation, squadTag,
+  botPersona, clashCopy, rivalPersona, resolveNation,
   type ClashCopy, type ClashTier,
 } from './vsdata';
 
@@ -45,6 +49,10 @@ const SKIP_AFTER_MS = 1000;
 const LINE_MS = 900;
 /** If a webview throttles our timers, the race still has to start. */
 const WATCHDOG_MS = 5000;
+/** A board holds four seats, so three is the most rivals a face-off can ever paint. */
+const MAX_FOES = 3;
+/** The three shapes the grid resolves to, from the seats actually in the race. */
+type Shape = 'duel' | 'trio' | 'quad';
 
 /** A seat the local player may be facing. Bots carry their level, people carry their profile. */
 export interface VsRival {
@@ -73,20 +81,26 @@ export interface VsStakes {
   nonce?: number;
 }
 
+/** Whose card it is. Only two kinds of seat ever reach this screen. */
+type Seat = 'you' | 'rival';
+/** The local seat holds cyan; the hostile seats rotate through the obsidian end of the palette. */
+type Accent = 'cyan' | 'crimson' | 'violet' | 'obsidian';
+
+/** The order a multi-seat row wears its accents in, so no two rivals share one. */
+const FOE_ACCENTS: readonly Exclude<Accent, 'cyan'>[] = ['crimson', 'violet', 'obsidian'];
+
 interface Fighter {
+  kind: Seat;
+  accent: Accent;
   name: string;
   initial: string;
   avatarUrl: string | null;
   country: string;
   squad: string;
-  /** A real squad gets a crest plate; the lone badge is the copy's own glyph, already spoken. */
-  squadCrest: string | null;
   tier: MindTier;
   tiq: number;
   /** A rating the seat actually carries. A rival nobody announced one for prints no row at all. */
   rankKnown: boolean;
-  /** A person before a machine, then the sharper mind. Picks the headliner in a multi-seat race. */
-  score: number;
 }
 
 const el = (tag: string, cls: string, parent?: Element): HTMLElement => {
@@ -137,17 +151,17 @@ function localFighter(copy: ClashCopy): Fighter {
   const face = readFace('You');
   const bound = getMySquad();
   return {
+    kind: 'you',
+    accent: 'cyan',
     name: face.name || 'You',
     initial: face.initial || 'P',
     avatarUrl: face.avatarUrl,
     /* the saved pick wins, then the client's own locale, then the device clock, then its tongue */
     country: resolveNation(profile.country, locales(), zone()),
     squad: bound ? bound.name : copy.loneSquad,
-    squadCrest: bound ? squadMark(bound) : null,
     tier: myTier(),
     tiq: myTiq(),
     rankKnown: true,
-    score: Number.POSITIVE_INFINITY,
   };
 }
 
@@ -157,41 +171,50 @@ function localFighter(copy: ClashCopy): Fighter {
  * while "you are facing Kestrel of the Obsidian Cortex" does. Anything a real seat actually
  * broadcasts wins over the invented persona.
  */
-function rivalFighter(r: VsRival, stakes: VsStakes): Fighter {
+function rivalFighter(r: VsRival, stakes: VsStakes, seat: number): Fighter {
   const bot = r.bot ?? null;
   const realName = (r.name ?? '').trim();
   const cc = (r.country ?? '').toUpperCase();
   /** A race that never announced a rating shows no rating: an invented one would be a lie about a person. */
   const announced = Math.max(0, Math.round(r.tiq ?? 0));
+  /* the seat index offsets the persona hash, so two machines in one room never share a banner */
   const persona = bot
-    ? botPersona(`${r.id}|${stakes.nonce ?? 0}`, bot, 0)
-    : rivalPersona(r.id, realName || 'Rival', announced, 0);
+    ? botPersona(`${r.id}|${stakes.nonce ?? 0}`, bot, seat)
+    : rivalPersona(r.id, realName || 'Rival', announced, seat);
   const name = !bot && realName ? realName : persona.name;
   const squad = (!bot && (r.squad ?? '').trim()) ? (r.squad as string).trim() : persona.squad;
   const tiq = bot ? persona.tiq : announced;
   return {
+    kind: 'rival',
+    accent: FOE_ACCENTS[seat % FOE_ACCENTS.length],
     name,
     initial: name.charAt(0).toUpperCase() || '?',
     avatarUrl: r.avatarUrl ?? null,
     country: !bot && /^[A-Z]{2}$/.test(cc) ? cc : persona.country,
     squad,
-    squadCrest: squadTag(squad),
     tier: r.tier ?? persona.tier,
     tiq,
     rankKnown: !!bot || tiq > 0,
-    /* a real person is the headline rival; between two of them, the sharper mind takes the slot */
-    score: bot ? tiq : 1_000_000 + tiq,
   };
 }
 
 /**
- * One fighter as a row: portrait, then nation, squad and rating stacked beside it. A row rather than
- * a column because a 282px phone column cannot hold two side-by-side cards *and* a crest between
- * them — stacked, the rival owns the top, you own the bottom, and the crest sits on the seam.
+ * One fighter as a card: portrait with its flag pinned to the corner, then three tight lines —
+ * name and TIQ, squad, tier and nation. No role tag and no ISO code: on this screen the accent
+ * already says whose card it is, and the flag badge already says where they are from.
+ *
+ * `compact` is the half-width variant a three- or four-seat grid needs; the row is the same, just
+ * tightened, so the reading order never changes between shapes.
  */
-function paintSide(host: Element, side: 'you' | 'rival', f: Fighter, copy: ClashCopy): void {
-  const card = el('div', `vsc-side vsc-side--${side}`, host);
+function paintCard(host: Element, f: Fighter, copy: ClashCopy, compact: boolean, slam: 'l' | 'r'): void {
+  const card = el('div', `vsc-side vsc-side--${f.kind}`, host);
   card.dataset.tier = f.tier;
+  card.dataset.accent = f.accent;
+  card.dataset.compact = compact ? '1' : '0';
+  card.dataset.slam = slam;
+  /* the role is kept for a screen reader, never painted: it was the noisiest line on the card */
+  card.setAttribute('role', 'group');
+  card.setAttribute('aria-label', `${f.name} — ${f.kind === 'you' ? copy.youLabel : copy.rivalLabel}`);
 
   const orb = el('div', 'vsc-orb', card);
   el('span', 'vsc-aura', orb);
@@ -210,36 +233,44 @@ function paintSide(host: Element, side: 'you' | 'rival', f: Fighter, copy: Clash
     el('span', 'vsc-initial', face).textContent = f.initial;
   }
 
+  /* the flag is a micro-badge on the portrait's corner, not a text row: one glyph, no code */
+  const flag = el('span', 'vsc-flag', orb);
+  flag.appendChild(flagPhoto(f.country || null, 'vsc-flag-fp', 80));
+  flag.title = f.country ? nameOf(f.country) : copy.noNation;
+
   const id = el('div', 'vsc-id', card);
 
-  /* the top line carries the role, the name and the number: the rank word sits under it */
+  /* name and TIQ share the top line: the reading the ladder already prints, at a glance */
   const top = el('div', 'vsc-top', id);
-  label('vsc-role', side === 'you' ? copy.youLabel : copy.rivalLabel, top);
   el('h3', 'vsc-name', top).textContent = f.name;
   if (f.rankKnown) {
     const rank = el('div', 'vsc-rank', top);
+    rank.title = 'TIQ';
     glyph('i-brain', rank);
     label('vsc-tiq', f.tiq > 0 ? f.tiq.toLocaleString('en-US') : '0', rank);
   }
 
-  /* nation: the CDN flag with the ISO chip under it, so a blocked CDN costs a photo, not a row */
-  const nation = el('div', 'vsc-nation', id);
-  nation.appendChild(flagPhoto(f.country || null, 'vsc-flag', 80));
-  label('vsc-cc', f.country || '—', nation);
-  label('vsc-country', f.country ? nameOf(f.country) : copy.noNation, nation);
-
-  /* squad: the shield plate is the tribal bit — one of these crests is about to be beaten */
+  /* squad: one shield and a name — the tribal bit, with the crest initials stripped out */
   const squad = el('div', 'vsc-squad', id);
-  squad.dataset.kind = f.squadCrest ? 'bound' : 'lone';
-  if (f.squadCrest) {
-    const plate = el('span', 'vsc-crest', squad);
-    glyph('i-shield', plate);
-    label('vsc-crest-t', f.squadCrest, plate);
-    squad.title = f.squad;
-  }
+  squad.dataset.kind = f.squad === copy.loneSquad ? 'lone' : 'bound';
+  glyph('i-shield', squad, 'vsc-ico vsc-shield');
   el('span', 'vsc-squad-t', squad).textContent = f.squad;
+  squad.title = f.squad;
 
-  if (f.rankKnown) label('vsc-tier', TIER_NAME[f.tier], id);
+  /* the tier is a three-bar icon with its word in whisper type; the nation is a name, not a code */
+  if (f.rankKnown) {
+    const meta = el('div', 'vsc-meta', id);
+    const tier = el('span', 'vsc-tier', meta);
+    tier.dataset.tier = f.tier;
+    tier.title = TIER_NAME[f.tier];
+    tier.setAttribute('aria-hidden', 'true');
+    for (let i = 0; i < 3; i += 1) el('i', 'vsc-pip', tier);
+    label('vsc-tier-t', TIER_NAME[f.tier], meta);
+    if (f.country) {
+      el('span', 'vsc-meta-dot', meta);
+      label('vsc-country', nameOf(f.country), meta);
+    }
+  }
 }
 
 /**
@@ -252,10 +283,11 @@ export function showVsClash(rivals: readonly VsRival[], stakes: VsStakes, onReve
 
   const copy = clashCopy(lang);
   const you = localFighter(copy);
-  /* a four-seat room puts one headliner on the crest: a person before a machine, then the sharper mind */
-  const rival = rivals
-    .map((r) => rivalFighter(r, stakes))
-    .reduce((best, f) => (f.score > best.score ? f : best));
+  /* every rival a seat actually holds is shown: a four-way that prints one opponent is a lie */
+  const foes = rivals.slice(0, MAX_FOES).map((r, i) => rivalFighter(r, stakes, i));
+  /* a duel stacks two rows; a trio puts its two rivals side by side over the local seat; a
+     four-way balances two over two, with the crest on the seam between the rows */
+  const shape: Shape = foes.length >= 3 ? 'quad' : foes.length === 2 ? 'trio' : 'duel';
 
   /* full-bleed: the clash is a cinematic, not a sheet, so it owns the viewport like the boot veil */
   const stage = document.body;
@@ -279,38 +311,57 @@ export function showVsClash(rivals: readonly VsRival[], stakes: VsStakes, onReve
 
   const shake = el('div', 'vsc-shake', host);
   const grid = el('div', 'vsc-grid', shake);
+  grid.dataset.shape = shape;
 
-  /* rival on top, you underneath, the crest on the seam between them — the brief's Top-Right and
-     Bottom-Left split, turned into a stack because a phone column has no left and right to spare */
-  paintSide(grid, 'rival', rival, copy);
+  /* top row: one rival in a duel, both rivals in a trio, the first two of three in a four-way */
+  const topRow = el('div', 'vsc-row', grid);
+  topRow.dataset.cols = shape === 'duel' ? '1' : '2';
+  const topFoes = shape === 'duel' ? foes.slice(0, 1) : foes.slice(0, 2);
+  const compactTop = topFoes.length > 1;
+  topFoes.forEach((f, i) => paintCard(topRow, f, copy, compactTop, compactTop && i === 0 ? 'l' : 'r'));
 
+  /* the crest owns the seam between the rows, whatever the shape */
   const core = el('div', 'vsc-core', grid);
-  el('span', 'vsc-ring', core);
-  el('span', 'vsc-ring vsc-ring--late', core);
   const crest = el('div', 'vsc-crest-holder', core);
+  el('span', 'vsc-ring', crest);
+  el('span', 'vsc-ring vsc-ring--late', crest);
   glyph('i-bolt', crest, 'vsc-crest-bolt vsc-crest-bolt--l');
   glyph('i-bolt', crest, 'vsc-crest-bolt vsc-crest-bolt--r');
-  el('span', 'vsc-vs', crest).textContent = 'VS';
+  const mark = el('span', 'vsc-vs', crest);
+  mark.textContent = shape === 'duel' ? 'VS' : `${shape === 'trio' ? 3 : 4}P`;
+  if (shape !== 'duel') mark.dataset.shape = 'multi';
   crest.setAttribute('aria-hidden', 'true');
+  /* the format is named under the crest, so a four-way never reads as a duel to anybody */
+  if (shape !== 'duel') label('vsc-shape', shape === 'trio' ? copy.shapeTrio : copy.shapeQuad, core);
 
-  /* the stakes ride directly under the crest, which is where a wager belongs */
+  /* one glass pill for the whole wager: mode · level · seats, and the mind gap only in a duel */
   const stakesPill = el('div', 'vsc-stakes', core);
   const seatWord = stakes.kind === 'ranked' ? copy.modeRanked
     : stakes.kind === 'bot' ? copy.modeBot : copy.modeRoom;
-  label('vsc-stakes-mode', seatWord, stakesPill);
-  /* the machine's level, named: "Bot Duel · HARD" is a challenge, "Bot Duel" is a setting */
-  if (stakes.tier) label('vsc-stakes-tier', stakes.tier.toUpperCase(), stakesPill);
-  if ((stakes.seats ?? 2) > 2) label('vsc-stakes-seats', `${stakes.seats}P`, stakesPill);
-  if (rival.tiq > 0 && you.tiq > 0) {
-    el('span', 'vsc-stakes-dot', stakesPill);
-    label('vsc-stakes-gap', `${copy.mindGap} ${Math.abs(rival.tiq - you.tiq).toLocaleString('en-US')}`, stakesPill);
+  const seats = stakes.seats ?? foes.length + 1;
+  const bits: Array<[string, string]> = [[seatWord, 'vsc-stakes-mode']];
+  /* the machine's level, named: "BOT DUEL · HARD" is a challenge, "BOT DUEL" is a setting */
+  if (stakes.tier) bits.push([stakes.tier.toUpperCase(), 'vsc-stakes-tier']);
+  if (seats > 2) bits.push([`${seats}P`, 'vsc-stakes-seats']);
+  else if (foes[0] && foes[0].tiq > 0 && you.tiq > 0) {
+    const gap = Math.abs(foes[0].tiq - you.tiq).toLocaleString('en-US');
+    bits.push([`${copy.mindGap} ${gap}`, 'vsc-stakes-gap']);
   }
+  bits.forEach(([text, cls], i) => {
+    if (i) el('span', 'vsc-stakes-dot', stakesPill);
+    label(cls, text, stakesPill);
+  });
 
-  /* your side takes the bottom half, the ground you are defending */
-  paintSide(grid, 'you', you, copy);
+  /* bottom row: you alone in a duel or a trio (the ground being defended), the third rival and
+     you side by side in a four-way, which is what makes it read as two rows of two */
+  const bottomRow = el('div', 'vsc-row', grid);
+  bottomRow.dataset.cols = shape === 'quad' ? '2' : '1';
+  if (shape === 'quad' && foes[2]) paintCard(bottomRow, foes[2], copy, true, 'l');
+  paintCard(bottomRow, you, copy, shape === 'quad', shape === 'quad' ? 'r' : 'l');
 
-  /* the war cry */
-  const banner = el('div', 'vsc-banner', shake);
+  /* the war cry and the skip key hold the bottom of the screen */
+  const foot = el('div', 'vsc-foot', shake);
+  const banner = el('div', 'vsc-banner', foot);
   const line = el('p', 'vsc-line', banner);
   line.dir = copy.dir;
   line.lang = lang;
@@ -318,7 +369,7 @@ export function showVsClash(rivals: readonly VsRival[], stakes: VsStakes, onReve
   const paint = () => { line.textContent = copy.lines[index % copy.lines.length]; };
   paint();
 
-  el('p', 'vsc-skip', shake).textContent = copy.skip;
+  el('p', 'vsc-skip', foot).textContent = copy.skip;
 
   /* ---- the clock ---- */
   let fired = false;
