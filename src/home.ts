@@ -20,7 +20,7 @@
 import type { Difficulty } from './bot';
 import { menuState, motionReduced, onLang, onSettings, saveMenu, t } from './settings';
 import { nameOf } from './countries';
-import { getCountryRanking, type CountryRow } from './data';
+import { fetchNationBoard, type NationFeed, type NationRow } from './nations';
 import { fetchMindLadder, type MindFeed, type MindRowData } from './minds';
 import { myTiq } from './matchmaking';
 import { onChange, profile, theme } from './storage';
@@ -218,15 +218,14 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   /* ---------- Nations Cup: 30px rows + user row / pick-country CTA ----------
      Top 5 fill the card to the dots with no dead void (the 40px→30px row is
-     layout only — the row recipe is identical for ranks 1-5). Layout only —
-     data (getCountryRanking) and handlers (openCountryPicker) are unchanged.
-     Flags come from the shared CDN resolver in a 28px circle — no vendored SVG
-     table and no monogram guesswork. */
+     layout only — the row recipe is identical for ranks 1-5). Data is the live
+     Worker ledger (`fetchNationBoard`): only enrolled nations with real banked
+     points, never a seed. Flags come from the shared CDN resolver in a 28px circle. */
 
   const PODIUM_CLASS = ['gold', 'silver', 'bronze'] as const;
-  /** The last nation board read — kept so a language switch can repaint the standing
-   *  bar's labels without another round-trip. */
-  let countryRows: CountryRow[] = [];
+  /** The last live board read — kept so a language switch or an offline poll can repaint the
+   *  standing bar without inventing a number. */
+  let nationFeed: NationFeed | null = null;
 
   const monogramOf = (name: string): string => {
     const parts = name.trim().split(/\s+/).filter((p) => p.length > 0);
@@ -235,17 +234,9 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     return (parts[0].slice(0, 1) + parts[1].slice(0, 1)).toUpperCase();
   };
 
-  /** Display-only magnitude for the "▲ N" trend (ranking has no move size). */
-  const trendDeltaOf = (code: string): number => {
-    const up = code.toUpperCase();
-    const a: number = up.charCodeAt(0) || 65;
-    const b: number = up.charCodeAt(1) || 65;
-    return ((a + b) % 3) + 1;
-  };
-
-  const trendTextOf = (c: CountryRow): string => {
-    if (c.trend === 'up') return `▲ ${trendDeltaOf(c.code)}`;
-    if (c.trend === 'down') return `▼ ${trendDeltaOf(c.code)}`;
+  const trendTextOf = (c: NationRow): string => {
+    if (c.trend === 'up') return `▲ ${Math.abs(c.delta)}`;
+    if (c.trend === 'down') return `▼ ${Math.abs(c.delta)}`;
     return '•';
   };
 
@@ -276,14 +267,17 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     return wrap;
   };
 
-  const rowEl = (c: CountryRow, me: boolean): HTMLLIElement => {
+  const rowEl = (c: NationRow, me: boolean): HTMLLIElement => {
     const li = document.createElement('li');
     li.classList.add('nations-row');
     li.classList.add(`rank-${c.rank}`);
     if (me) li.classList.add('me');
+    const label = nameOf(c.code);
     const pts = c.points.toLocaleString('en-US');
-    const trendLabel = c.trend === 'up' ? 'rising' : c.trend === 'down' ? 'dropping' : 'steady';
-    li.setAttribute('aria-label', `#${c.rank} ${c.name} — ${pts} TIQ, ${trendLabel}`);
+    const trendLabel = c.trend === 'up'
+      ? `rising ${Math.abs(c.delta)}`
+      : c.trend === 'down' ? `dropping ${Math.abs(c.delta)}` : 'steady';
+    li.setAttribute('aria-label', `#${c.rank} ${label} — ${pts} TIQ, ${trendLabel}`);
     const rk = document.createElement('span');
     const podium = c.rank >= 1 && c.rank <= 3 ? PODIUM_CLASS[c.rank - 1] : '';
     rk.className = podium ? `rk rank-${c.rank} ${podium}` : `rk rank-${c.rank}`;
@@ -295,8 +289,8 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     fl.append(flagPhoto(c.code, 'fp-nation'));
     const nm = document.createElement('span');
     nm.className = 'nm';
-    nm.textContent = c.name;
-    nm.title = c.name;
+    nm.textContent = label;
+    nm.title = label;
     const pt = nationScore(pts);
     pt.title = `${pts} TIQ`;
     const tr = document.createElement('span');
@@ -308,13 +302,20 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     return li;
   };
 
+  /** A clean empty state: no flag, no rank, no invented score. */
+  const emptyNationRow = (message: string): HTMLLIElement => {
+    const li = document.createElement('li');
+    li.className = 'nations-row is-error';
+    li.textContent = message;
+    return li;
+  };
+
   /** The player's own national standing, painted into the 3-zone HUD bar.
    *  LEFT = flag + nation · CENTER = the percentile the nation sits in · RIGHT = the
    *  contribution, ending in the same brain token the rows above wear. Every zone is a
    *  separate node, so a long country name ellipsizes instead of shoving the pill or
    *  the score out of the bar. */
-  const paintNationMine = (rows: CountryRow[]): void => {
-    countryRows = rows;
+  const paintNationMine = (feed: NationFeed | null): void => {
     const bar = document.getElementById('home-nation-mine');
     if (!bar) return;
     const flag = document.getElementById('home-nation-flag');
@@ -323,21 +324,23 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const pillK = document.getElementById('home-nation-pill-k');
     const pct = document.getElementById('home-nation-pct');
     const pts = document.getElementById('home-nation-pts');
-    const contributed = profile.stats.wins * 140;
+    const code = profile.country;
+    const mine = code ? feed?.rows.find((c) => c.code === code) : undefined;
+    const standing = code && feed?.standing?.code === code ? feed.standing : null;
+    /* The contribution is the ledger's own record of this seat's wins — never a local formula. */
+    const contributed = standing?.points ?? 0;
     const ptsText = `+${contributed.toLocaleString('en-US')}`;
     if (pts) pts.textContent = ptsText;
-    const code = profile.country;
     if (!code) {
       if (flag) { flag.textContent = ''; flag.classList.add('is-off'); }
       if (name) { name.textContent = t('hudPickNation'); name.removeAttribute('title'); }
       if (pillK) pillK.textContent = t('hudYourNation');
       if (pct) { pct.hidden = true; pct.textContent = ''; }
       pill?.classList.add('is-off');
-      bar.setAttribute('aria-label', `${t('hudYourNation')}: ${t('hudPickNation')}`);
+      bar.setAttribute('aria-label', `${t('hudYourNation')}: ${t('hudPickNation')}, ${ptsText} PTS`);
       bar.removeAttribute('title');
       return;
     }
-    const mine = rows.find((c) => c.code === code);
     const label = nameOf(code);
     if (flag) {
       flag.textContent = '';
@@ -345,8 +348,9 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       flag.append(flagPhoto(code, 'hm-flag-plate'));
     }
     if (name) { name.textContent = label; name.title = label; }
-    const share = mine && rows.length > 0
-      ? Math.max(1, Math.round((mine.rank / rows.length) * 100))
+    const total = feed?.rows.length ?? 0;
+    const share = mine && total > 0
+      ? Math.max(1, Math.round((mine.rank / total) * 100))
       : 0;
     if (pillK) pillK.textContent = mine ? t('hudTop') : t('hudUnranked');
     if (pct) {
@@ -355,32 +359,42 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     }
     pill?.classList.toggle('is-off', !mine);
     bar.setAttribute('aria-label', mine
-      ? `${label} · #${mine.rank} · ${t('hudTop')} ${share}% · ${ptsText}`
-      : `${label} · ${t('hudUnranked')} · ${ptsText}`);
+      ? `${label} · #${mine.rank} · ${t('hudTop')} ${share}% · ${ptsText} PTS`
+      : `${label} · ${t('hudUnranked')} · ${ptsText} PTS`);
     bar.setAttribute('title', mine
-      ? `You fight for ${label} — rank #${mine.rank} of ${rows.length}`
+      ? `You fight for ${label} — rank #${mine.rank} of ${total}`
       : `You fight for ${label}`);
   };
 
   const loadCountries = async (): Promise<void> => {
     const list = $('home-countries');
     try {
-      const all = await getCountryRanking();
-      const top5 = all.slice(0, 5);
-      list.textContent = '';
-      for (const c of top5) {
-        list.append(rowEl(c, profile.country === c.code));
+      const feed = await fetchNationBoard();
+      /* A failed read keeps the last real board; a first read paints the clean empty state. */
+      if (!feed.live) {
+        if (!nationFeed) {
+          list.textContent = '';
+          list.append(emptyNationRow('Nation standings unavailable'));
+        }
+        paintNationMine(nationFeed);
+        return;
       }
-      paintNationMine(all);
-    } catch {
+      nationFeed = feed;
       list.textContent = '';
-      const li = document.createElement('li');
-      li.className = 'nations-row is-error';
-      li.textContent = 'Rankings unavailable';
-      list.append(li);
+      if (!feed.rows.length) {
+        list.append(emptyNationRow('No nations on the board yet — pick your flag and win a race.'));
+      } else {
+        for (const c of feed.rows.slice(0, 5)) list.append(rowEl(c, profile.country === c.code));
+      }
+      paintNationMine(feed);
+    } catch {
+      if (!nationFeed) {
+        list.textContent = '';
+        list.append(emptyNationRow('Nation standings unavailable'));
+      }
       /* the bar is a structure of zones, never a text node: repaint the last board we
          hold instead of overwriting it with a sentence. */
-      paintNationMine(countryRows);
+      paintNationMine(nationFeed);
     }
   };
 
@@ -935,7 +949,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   /* A language switch repaints the two standing bars from the data already on screen:
      their labels are painted by JS, not by a `data-i18n` pass. */
   onLang(() => {
-    paintNationMine(countryRows);
+    paintNationMine(nationFeed);
     paintMindMine(mindFeed);
   });
 

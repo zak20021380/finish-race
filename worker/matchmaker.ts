@@ -570,6 +570,57 @@ const MATCH_BUCKET_KEEP_HOURS = 8 * 24;
 
 const zeroGameMetrics = (): GameMetrics => ({ matchesCompleted: 0, minesPlaced: 0, matchesByHour: {} });
 
+/* ---------- the Nations Cup ledger ---------- */
+
+/** The default ladder award for a win: 120 for the win plus the 20 the race itself banks. */
+const NATION_WIN_TIQ = 140;
+
+/**
+ * One season's national war chest, persisted under `nations_s<season>_scores`. Points are only
+ * ever written by `creditNation` when the authoritative board settles with a winner, so the
+ * standings can never contain a seeded, simulated or client-supplied figure. `byPlayer` keeps
+ * each seat's own share, which is what the "your nation" strip quotes back to them.
+ */
+interface NationLedger {
+  seasonNo: number;
+  /** ISO alpha-2 → points banked by that nation's players this season. */
+  points: Record<string, number>;
+  /** Seat id → the points it earned, broken down by the nation it earned them for. */
+  byPlayer: Record<string, Record<string, number>>;
+}
+
+const nationLedgerKey = (seasonNo: number): string => `nations_s${seasonNo}_scores`;
+
+const emptyNationLedger = (seasonNo: number): NationLedger => ({ seasonNo, points: {}, byPlayer: {} });
+
+/** A stored ledger is clamped field by field; a different season never lends its points forward. */
+function readNationLedger(raw: unknown, seasonNo: number): NationLedger {
+  const r = raw as Partial<NationLedger> | null | undefined;
+  if (!r || whole(r.seasonNo) !== seasonNo) return emptyNationLedger(seasonNo);
+  const points: Record<string, number> = {};
+  if (r.points && typeof r.points === 'object' && !Array.isArray(r.points)) {
+    for (const [code, value] of Object.entries(r.points)) {
+      const cc = code.toUpperCase();
+      const pts = whole(value);
+      if (/^[A-Z]{2}$/.test(cc) && pts > 0) points[cc] = pts;
+    }
+  }
+  const byPlayer: Record<string, Record<string, number>> = {};
+  if (r.byPlayer && typeof r.byPlayer === 'object' && !Array.isArray(r.byPlayer)) {
+    for (const [id, perNation] of Object.entries(r.byPlayer)) {
+      if (!id || !perNation || typeof perNation !== 'object' || Array.isArray(perNation)) continue;
+      const shares: Record<string, number> = {};
+      for (const [code, value] of Object.entries(perNation)) {
+        const cc = code.toUpperCase();
+        const pts = whole(value);
+        if (/^[A-Z]{2}$/.test(cc) && pts > 0) shares[cc] = pts;
+      }
+      if (Object.keys(shares).length) byPlayer[id] = shares;
+    }
+  }
+  return { seasonNo, points, byPlayer };
+}
+
 /** A stored bucket map, clamped and pruned: only whole counts in the retained window survive. */
 function readMatchHours(raw: unknown): Record<string, number> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
@@ -1478,6 +1529,8 @@ export class MatchmakerDO {
   private enlisting = new Set<string>();
   /** Durable board counters, seeded from storage and written back as they move. */
   private gameMetrics: GameMetrics = zeroGameMetrics();
+  /** The current season's banked nation points, credited only by settled wins. */
+  private nations: NationLedger = emptyNationLedger(0);
   /** The bounded growth rings behind the Stats tab's trend chart. */
   private growth: GrowthSeries = zeroGrowth();
   /** The last UTC day the rings formatted a key for, and the key itself. */
@@ -1527,6 +1580,10 @@ export class MatchmakerDO {
           }
           const arena = readArena(await storage.get<unknown>('arena'));
           if (arena) this.arena = arena;
+          this.nations = readNationLedger(
+            await storage.get<unknown>(nationLedgerKey(this.arena.seasonNo)),
+            this.arena.seasonNo,
+          );
           this.gameMetrics = readGameMetrics(await storage.get<unknown>(GAME_METRICS_KEY));
           this.growth = readGrowthSeries(await storage.get<unknown>(GROWTH_KEY));
           /* The friends lobbies are durable: an eviction between "host creates a room" and "guest
@@ -1584,6 +1641,8 @@ export class MatchmakerDO {
       || url.pathname === '/api/client/announcements/active'
       || url.pathname === '/api/client/arena/state'
       || url.pathname === '/api/client/minds'
+      || url.pathname === '/api/nations/leaderboard'
+      || url.pathname === '/api/nations/roster'
     ) {
       /* A throw anywhere in this surface would otherwise reach the edge as an opaque Durable
          Object failure, and the panel can only report that as telemetry being unavailable. Answer
@@ -2218,6 +2277,15 @@ export class MatchmakerDO {
       if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
       return json(await this.mindsBoard(request, url), 200, { 'cache-control': 'no-store' });
     }
+    /* The public Nations Cup: only enrolled nations, only points the room itself banked. */
+    if (url.pathname === '/api/nations/leaderboard') {
+      if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+      return json(await this.nationsBoard(request), 200, { 'cache-control': 'no-store' });
+    }
+    if (url.pathname === '/api/nations/roster') {
+      if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+      return json(await this.nationRoster(request, url), 200, { 'cache-control': 'no-store' });
+    }
 
     /* The private telemetry route: only a request the edge marked after the operator check. The
        mark names whoever was let through, so an appointed admin reads the same door the operator
@@ -2648,6 +2716,98 @@ export class MatchmakerDO {
     return { ok: true, updatedAt: Date.now(), total, players, you };
   }
 
+  /**
+   * The Nations Cup: the registry grouped by the flag each seat chose, ranked by the points the
+   * room has actually banked for that flag this season. A nation appears only when real players
+   * are enrolled under it; a nation that has not won yet is an honest zero, never a seed.
+   */
+  private async nationsBoard(request: Request): Promise<{
+    ok: true;
+    seasonNo: number;
+    updatedAt: number;
+    total: number;
+    nations: Array<{ rank: number; code: string; points: number; players: number }>;
+    you: { code: string; rank: number; points: number; total: number } | null;
+  }> {
+    const init = request.headers.get('x-telegram-init-data') ?? '';
+    const tgId = init ? await verifiedTelegramUserId(init, this.env) : '';
+    const mineId = tgId ? `tg-${tgId}` : '';
+    const mine = mineId ? this.players.get(mineId) : undefined;
+    const selfBanned = mineId ? this.banned.has(mineId) || mine?.banned === true : false;
+
+    const seasonNo = this.arena.seasonNo;
+    const ledger = this.nations.seasonNo === seasonNo ? this.nations : emptyNationLedger(seasonNo);
+
+    const enrolled = new Map<string, number>();
+    for (const p of this.players.values()) {
+      const cc = (p.country || '').toUpperCase();
+      if (!/^[A-Z]{2}$/.test(cc) || p.banned || this.banned.has(p.id)) continue;
+      enrolled.set(cc, (enrolled.get(cc) ?? 0) + 1);
+    }
+
+    const nations = [...enrolled.entries()]
+      .map(([code, players]) => ({ code, players, points: Math.max(0, whole(ledger.points[code])) }))
+      .sort((a, b) => b.points - a.points || b.players - a.players || a.code.localeCompare(b.code))
+      .map((row, i) => ({ ...row, rank: i + 1 }));
+
+    const myCode = (mine?.country || '').toUpperCase();
+    const hit = mine && !selfBanned && /^[A-Z]{2}$/.test(myCode) && enrolled.has(myCode)
+      ? nations.find((n) => n.code === myCode) ?? null
+      : null;
+    const you = hit
+      ? {
+        code: myCode,
+        rank: hit.rank,
+        points: Math.max(0, whole(ledger.byPlayer[mineId]?.[myCode])),
+        total: nations.length,
+      }
+      : null;
+
+    return { ok: true, seasonNo, updatedAt: Date.now(), total: nations.length, nations, you };
+  }
+
+  /**
+   * The real top players behind one flag, ranked by the TIQ each has accumulated. Only registry
+   * seats are returned, so the sheet can never invent a name or a score; the caller's own seat
+   * rides along even when it sits below the top slice.
+   */
+  private async nationRoster(request: Request, url: URL): Promise<{
+    ok: true;
+    country: string;
+    total: number;
+    rows: Array<{ rank: number; id: string; name: string; tiq: number; wins: number; isYou: boolean }>;
+    you: { rank: number; id: string; name: string; tiq: number; wins: number; isYou: boolean } | null;
+  } | { ok: false; error: string }> {
+    const country = (url.searchParams.get('country') ?? '').toUpperCase();
+    if (!/^[A-Z]{2}$/.test(country)) return { ok: false, error: 'bad_country' };
+    const askedLimit = url.searchParams.get('limit');
+    const rawLimit = askedLimit === null ? 20 : Number(askedLimit);
+    const limit = Number.isFinite(rawLimit) ? clamp(Math.floor(rawLimit), 1, 50) : 20;
+
+    const init = request.headers.get('x-telegram-init-data') ?? '';
+    const tgId = init ? await verifiedTelegramUserId(init, this.env) : '';
+    const mineId = tgId ? `tg-${tgId}` : '';
+
+    const field = [...this.players.values()]
+      .filter((p) => !p.banned && !this.banned.has(p.id) && (p.country || '').toUpperCase() === country)
+      .sort((a, b) => b.tiq - a.tiq || b.wins - a.wins || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+
+    const asRow = (p: PlayerRecord, rank: number) => ({
+      rank,
+      id: p.id,
+      name: p.name,
+      tiq: Math.max(0, whole(p.tiq)),
+      wins: Math.max(0, whole(p.wins)),
+      isYou: !!mineId && p.id === mineId,
+    });
+
+    const rows = field.slice(0, limit).map((p, i) => asRow(p, i + 1));
+    const mineIndex = mineId ? field.findIndex((p) => p.id === mineId) : -1;
+    const you = mineIndex >= 0 ? asRow(field[mineIndex], mineIndex + 1) : null;
+
+    return { ok: true, country, total: field.length, rows, you };
+  }
+
   /** The Arena tab's write door: one patch, or one of the two emergency commands. */
   private arenaCommand(body: Record<string, unknown>): {
     ok: boolean;
@@ -2740,6 +2900,9 @@ export class MatchmakerDO {
       lastSnapshot: snapshot,
       awardsCount: ranked.length,
     };
+    /* The finished season keeps its own key as the audit record; the new one opens at zero. */
+    this.nations = emptyNationLedger(nextNo);
+    this.persistNations();
     this.persist();
     this.persistArena();
     this.pairNow();
@@ -2875,12 +3038,41 @@ export class MatchmakerDO {
         p.wins++;
         p.streak++;
         p.best = Math.max(p.best, p.streak);
+        this.creditNation(p);
       } else {
         p.losses++;
         p.streak = 0;
       }
     }
     this.persist();
+  }
+
+  /**
+   * Bank one settled win for the winner's chosen nation. The room is the only writer: a win the
+   * board did not judge never reaches this ledger, so a nation's points are exactly the TIQ its
+   * players earned in real online races this season.
+   */
+  private creditNation(p: PlayerRecord): void {
+    const cc = (p.country || '').toUpperCase();
+    if (!/^[A-Z]{2}$/.test(cc)) return;
+    const seasonNo = this.arena.seasonNo;
+    if (this.nations.seasonNo !== seasonNo) this.nations = emptyNationLedger(seasonNo);
+    this.nations.points[cc] = Math.max(0, whole(this.nations.points[cc])) + NATION_WIN_TIQ;
+    const shares = this.nations.byPlayer[p.id] ?? {};
+    shares[cc] = Math.max(0, whole(shares[cc])) + NATION_WIN_TIQ;
+    this.nations.byPlayer[p.id] = shares;
+    this.persistNations();
+  }
+
+  /** One win, one write: the ledger is small, and a banked point must survive eviction. */
+  private persistNations(): void {
+    const storage = this.state?.storage;
+    if (!storage) return;
+    try {
+      void storage.put(nationLedgerKey(this.nations.seasonNo), this.nations);
+    } catch {
+      /* a store that refuses the write: the ledger stays live for this object's lifetime */
+    }
   }
 
   /** Mark a seat as holding a live board (or back on the market). */

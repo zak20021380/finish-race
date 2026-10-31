@@ -17,7 +17,8 @@
  * (`GET /api/admin/roles`, `POST /api/admin/roles/grant|revoke`), the broadcast engine
  * (`GET /api/admin/broadcasts`, `POST /api/admin/broadcasts/create`, and
  * `POST /api/admin/broadcasts/:id/archive`) — plus the public routes the players read,
- * `GET /api/client/announcements/active` and the live Mind Ladder at `GET /api/client/minds`.
+ * `GET /api/client/announcements/active`, the live Mind Ladder at `GET /api/client/minds`,
+ * and the Nations Cup at `GET /api/nations/leaderboard` / `GET /api/nations/roster`.
  *
  * `GET /api/admin/metrics` is a stricter door than that surface: only an id on the operator set —
  * the metrics operator plus the deployment's `ADMIN_IDS` — proven by a credential, with no
@@ -315,6 +316,13 @@ async function route(request: Request, env: Env): Promise<Response> {
 
   /* The public Mind Ladder: the room's own TIQ registry, ranked. Read-only and never cached. */
   if (url.pathname === '/api/client/minds') {
+    if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    return lobby.fetch(request);
+  }
+
+  /* The public Nations Cup: enrolled nations ranked by the points the room banked for them. */
+  if (url.pathname === '/api/nations/leaderboard' || url.pathname === '/api/nations/roster') {
     if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
     const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
     return lobby.fetch(request);

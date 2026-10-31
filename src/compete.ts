@@ -35,20 +35,23 @@
 import {
   formatCountdown,
   getChannelRoster,
-  getCountryRanking,
   getGrandCup,
-  getNationRoster,
-  nationPlayersOf,
   paidPlaces,
   type ChannelSeed,
-  type CountryRow,
   type GrandCup,
-  type NationMember,
   type PlayerRow,
   type RosterRow,
   type RosterYou,
   type Trend,
 } from './data';
+import {
+  fetchNationBoard,
+  fetchNationRoster,
+  type NationFeed,
+  type NationPlayer,
+  type NationRoster,
+  type NationRow,
+} from './nations';
 import { fetchMindLadder, type MindFeed } from './minds';
 import { myTiq } from './matchmaking';
 import { nameOf } from './countries';
@@ -293,7 +296,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   let myRoster: RosterRow[] | null = null;
   let myRosterKey: string | null = null;
   /** The last country board, so a flag change repaints before the refetch lands. */
-  let nationRows: CountryRow[] | null = null;
+  let nationRows: NationRow[] | null = null;
+  /** The last live board, kept so a language switch never blanks the HUD or invents a score. */
+  let nationFeed: NationFeed | null = null;
   let tick = 0;
   /** Last time the public holder index was fetched, so route re-entry is not a re-fetch loop. */
   let medalsFetchedAt = 0;
@@ -2121,15 +2126,16 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     kicker: document.getElementById('nd-kicker'),
     body: document.getElementById('nd-body'),
   };
-  /** A nation's roster is immutable per points + local standing, so re-entry is instant. */
-  const nationRosters = new Map<string, NationMember[]>();
+  /** A nation's live roster is cached per board reading; re-entry is instant, a refresh is real. */
+  const nationRosters = new Map<string, NationRoster>();
   let nationSeq = 0;
 
   const nationAuraOf = (rank: number): 'gold' | 'silver' | 'bronze' | 'cobalt' =>
     rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : 'cobalt';
 
-  function nationHero(c: CountryRow): HTMLElement {
-    const total = nationPlayersOf(c.code, c.points);
+  function nationHero(c: NationRow): HTMLElement {
+    const total = c.players;
+    const label = nameOf(c.code);
     const hero = document.createElement('div');
     hero.className = 'nd-hero';
 
@@ -2180,13 +2186,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     const caption = document.createElement('p');
     caption.className = 'nd-caption';
-    caption.textContent = `Rank ${c.rank} of ${nationRows?.length ?? 10} nations worldwide`;
+    caption.textContent = `Rank ${c.rank} of ${nationRows?.length ?? 1} nations worldwide`;
 
     hero.append(aura, mark, pedestal, totals, caption);
+    hero.title = label;
     return hero;
   }
 
-  function nationRosterHead(c: CountryRow): HTMLElement {
+  function nationRosterHead(c: NationRow): HTMLElement {
     const head = document.createElement('header');
     head.className = 'nd-rhead';
     const h = document.createElement('h3');
@@ -2194,7 +2201,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     h.textContent = 'Top players';
     const count = document.createElement('span');
     count.className = 'nd-rh-count';
-    count.textContent = `${nationPlayersOf(c.code, c.points).toLocaleString('en-US')} players`;
+    count.textContent = `${c.players.toLocaleString('en-US')} players`;
     head.append(h, count);
     return head;
   }
@@ -2215,7 +2222,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   /** The row's own avatar: initials tinted from its id, with a real minted pin when held. */
-  function nationAvatar(m: NationMember): HTMLElement {
+  function nationAvatar(m: NationPlayer): HTMLElement {
     const wrap = document.createElement('span');
     wrap.className = 'nd-avwrap';
     const av = document.createElement('b');
@@ -2228,7 +2235,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return wrap;
   }
 
-  function nationRow(m: NationMember): HTMLLIElement {
+  function nationRow(m: NationPlayer): HTMLLIElement {
     const li = document.createElement('li');
     li.className = `nd-row${m.isYou ? ' is-you' : ''}`;
     li.dataset.rank = String(m.rank);
@@ -2272,7 +2279,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return li;
   }
 
-  function nationYouCard(c: CountryRow, m: NationMember, count: number): HTMLElement {
+  function nationYouCard(c: NationRow, m: NationPlayer, count: number): HTMLElement {
+    const label = nameOf(c.code);
     const card = document.createElement('div');
     card.className = 'nd-you';
     const txt = document.createElement('span');
@@ -2282,7 +2290,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     kick.textContent = `Your standing · Top ${Math.max(1, Math.round((m.rank / Math.max(1, count)) * 100))}%`;
     const line = document.createElement('b');
     line.className = 'nd-you-line';
-    line.textContent = `#${m.rank} in ${c.name}`;
+    line.textContent = `#${m.rank} in ${label}`;
     txt.append(kick, line);
     const score = document.createElement('span');
     score.className = 'nd-score nd-you-score';
@@ -2293,74 +2301,73 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     card.append(nationAvatar(m), txt, score);
     card.setAttribute(
       'aria-label',
-      `Your standing: #${m.rank} in ${c.name}, ${m.tiq.toLocaleString('en-US')} Tactical IQ, top ${Math.max(1, Math.round((m.rank / Math.max(1, count)) * 100))} percent of ${count} players`,
+      `Your standing: #${m.rank} in ${label}, ${m.tiq.toLocaleString('en-US')} Tactical IQ, top ${Math.max(1, Math.round((m.rank / Math.max(1, count)) * 100))} percent of ${count} players`,
     );
     return card;
   }
 
-  function paintNationList(c: CountryRow, list: HTMLElement, host: HTMLElement, rows: NationMember[] | null): void {
+  function paintNationList(c: NationRow, list: HTMLElement, host: HTMLElement, roster: NationRoster | null): void {
     list.textContent = '';
-    if (!rows || !rows.length) {
+    if (!roster || (!roster.rows.length && !roster.you)) {
       const empty = document.createElement('li');
       empty.className = 'nd-empty';
-      empty.textContent = 'The nation roster is unavailable right now.';
+      empty.textContent = roster?.live
+        ? 'No players have joined this nation yet.'
+        : 'The nation roster is unavailable right now.';
       list.append(empty);
       return;
     }
-    const you = rows.find((m) => m.isYou);
-    if (you) host.insertBefore(nationYouCard(c, you, rows.length), list);
+    const you = roster.you ?? roster.rows.find((m) => m.isYou);
+    if (you) host.insertBefore(nationYouCard(c, you, roster.total), list);
     const frag = document.createDocumentFragment();
-    for (const m of rows) frag.append(nationRow(m));
+    for (const m of roster.rows) frag.append(nationRow(m));
     list.append(frag);
   }
 
-  async function openNation(c: CountryRow): Promise<void> {
+  async function openNation(c: NationRow): Promise<void> {
     const el = ndEls.sheet;
     const body = ndEls.body;
     if (!el || !body) return;
-    const total = nationPlayersOf(c.code, c.points);
+    const label = nameOf(c.code);
     el.dataset.aura = nationAuraOf(c.rank);
     if (ndEls.rank) ndEls.rank.textContent = `#${c.rank}`;
     if (ndEls.name) {
-      ndEls.name.textContent = c.name;
-      ndEls.name.title = c.name;
+      ndEls.name.textContent = label;
+      ndEls.name.title = label;
     }
     if (ndEls.kicker) ndEls.kicker.textContent = `#${c.rank} worldwide`;
     el.setAttribute(
       'aria-label',
-      `Nation roster: ${c.name}, #${c.rank} worldwide, ${c.points.toLocaleString('en-US')} Tactical IQ, ${total.toLocaleString('en-US')} players`,
+      `Nation roster: ${label}, #${c.rank} worldwide, ${c.points.toLocaleString('en-US')} Tactical IQ, ${c.players.toLocaleString('en-US')} players`,
     );
 
     body.textContent = '';
     body.scrollTop = 0;
-    const roster = document.createElement('section');
-    roster.className = 'nd-roster';
+    const rosterHost = document.createElement('section');
+    rosterHost.className = 'nd-roster';
     const list = document.createElement('ol');
     list.className = 'nd-list';
-    list.setAttribute('aria-label', `Top players in ${c.name}`);
+    list.setAttribute('aria-label', `Top players in ${label}`);
     list.append(nationSkeleton(6));
-    roster.append(nationRosterHead(c), list);
-    body.append(nationHero(c), roster);
+    rosterHost.append(nationRosterHead(c), list);
+    body.append(nationHero(c), rosterHost);
     api.sheets.open(el);
     impact('light');
 
     const seq = ++nationSeq;
-    const mine = profile.country === c.code
-      ? { name: youName(), countryCode: c.code, tiq: myTrophyScore(), wins: profile.stats.wins }
-      : null;
-    const key = `${c.code}|${c.points}|${profile.country ?? '-'}|${mine ? mine.tiq : '-'}|${mine ? mine.wins : '-'}`;
-    let rows = nationRosters.get(key) ?? null;
-    if (!rows) {
+    const key = `${c.code}|${c.points}|${c.players}|${profile.country ?? '-'}`;
+    let roster = nationRosters.get(key) ?? null;
+    if (!roster) {
       try {
-        rows = await getNationRoster(c, mine);
+        roster = await fetchNationRoster(c.code);
       } catch {
-        rows = null;
+        roster = null;
       }
       if (seq !== nationSeq) return;
-      if (rows) nationRosters.set(key, rows);
+      if (roster) nationRosters.set(key, roster);
     }
     if (seq !== nationSeq) return;
-    paintNationList(c, list, roster, rows);
+    paintNationList(c, list, rosterHost, roster);
   }
 
   /** Pull the header down to dismiss, the way a native sheet moves under the thumb. */
@@ -2452,7 +2459,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
    * chosen nation's standing. Both states are the same button, so the picker
    * opens in place and switching the flag never leaves the ladder.
    */
-  function nationsHud(rows: CountryRow[]): HTMLElement {
+  function nationsHud(rows: NationRow[]): HTMLElement {
     const hud = document.createElement('button');
     hud.type = 'button';
     hud.className = 'nation-hud';
@@ -2480,7 +2487,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }
 
     const hit = rows.find((c) => c.code === code);
-    const nm = hit?.name ?? (nameOf(code) || code);
+    const nm = nameOf(code) || code;
     const rank = document.createElement('span');
     rank.className = `nh-rank${hit ? ` ${podiumOf(hit.rank)}` : ' is-new'}`.trim();
     rank.textContent = hit ? `#${hit.rank}` : 'NEW';
@@ -2498,23 +2505,23 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     name.title = nm;
     const tag = document.createElement('span');
     tag.className = 'nh-tag';
-    tag.textContent = hit ? 'Your Nation' : 'Your Contribution';
+    tag.textContent = 'Your Contribution';
     id.append(name, tag);
 
-    /* a freshly picked nation has no ladder row yet: show the player's own
-       contribution (140 TIQ per win) instead of a broken rank and a dead zero */
-    const points = hit?.points ?? profile.stats.wins * 140;
+    /* The score is this seat's own banked contribution, not the nation's aggregate and never a
+       local wins×reward formula; a seat with no settled online win honestly reads zero. */
+    const points = nationFeed?.standing?.code === code ? nationFeed.standing.points : 0;
     const score = document.createElement('span');
     score.className = 'nh-score';
     score.append(svgIcon('#i-brain', 'nh-tiq'));
     const num = document.createElement('b');
     num.textContent = points.toLocaleString('en-US');
     score.append(num);
-    score.title = `${points.toLocaleString('en-US')} Tactical IQ`;
+    score.title = `${points.toLocaleString('en-US')} Tactical IQ contributed`;
 
     hud.classList.add('is-set');
     hud.append(rank, av, id, score);
-    const seen = `${nm}, ${hit ? `rank ${hit.rank}` : 'unranked, your contribution'}, ${points.toLocaleString('en-US')} Tactical IQ`;
+    const seen = `${nm}, ${hit ? `rank ${hit.rank}` : 'unranked'}, ${points.toLocaleString('en-US')} Tactical IQ contributed`;
     hud.setAttribute('aria-label', `Your Nation: ${seen}. Activate to change your nation.`);
     hud.title = 'Tap to change your nation';
     hud.addEventListener('click', openPicker);
@@ -2522,12 +2529,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   /** The whole Nations pane from a row set: podium, HUD and ladder. */
-  function paintNations(rows: CountryRow[]): void {
+  function paintNations(rows: NationRow[]): void {
     const el = panes.nations;
     if (!el) return;
     paintPodium(rows.slice(0, 3).map((c) => ({
       rank: c.rank,
-      name: c.name,
+      name: nameOf(c.code),
       score: c.points.toLocaleString('en-US'),
       code: c.code,
       onTap: () => openNation(c),
@@ -2535,14 +2542,18 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     })));
     el.textContent = '';
     el.append(nationsHud(rows));
+    if (!rows.length) {
+      el.insertAdjacentHTML('beforeend', empty('No nations on the board yet — pick your flag and win a race.'));
+      return;
+    }
     const ol = document.createElement('ol');
     ol.className = 'rank-list';
     for (const c of rows.slice(3)) {
       ol.append(row({
         rank: c.rank,
         code: c.code,
-        name: c.name,
-        sub: `${nationPlayersOf(c.code, c.points).toLocaleString('en-US')} players`,
+        name: nameOf(c.code),
+        sub: `${c.players.toLocaleString('en-US')} players`,
         subClass: 'nd-count',
         points: c.points.toLocaleString('en-US'),
         me: profile.country === c.code,
@@ -2557,19 +2568,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const el = panes.nations;
     if (!el) return;
     if (!loadedBoard.nations && !nationRows) el.innerHTML = skel(6);
-    let rows: CountryRow[];
-    try {
-      rows = await getCountryRanking();
-    } catch {
+    const feed = await fetchNationBoard();
+    if (!feed.live) {
       if (!nationRows) el.innerHTML = empty('Rankings unavailable. Check your connection and try again.');
       return;
     }
-    if (!rows.length) {
-      if (!nationRows) el.innerHTML = empty('No countries ranked yet.');
-      return;
-    }
-    nationRows = rows;
-    paintNations(rows);
+    nationFeed = feed;
+    nationRows = feed.rows;
+    paintNations(feed.rows);
   }
 
   /** Paint the Top Minds podium, ladder and your strip from one loaded field. */

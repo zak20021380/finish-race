@@ -2902,6 +2902,7 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
   border-radius: 50%;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35);
 }
@@ -5220,18 +5221,37 @@ html.no-flags .id-flag .flag-code { display: none; }
 .mini-rank.nations-rank .rk.gold,
 .mini-rank.nations-rank .rk.silver,
 .mini-rank.nations-rank .rk.bronze { color: #10141D; }
-/* flag: 28px circle, lazy SVG cover; monogram fallback; never the 2-letter box */
+/* flag: an exact 28px circle; the image is always clipped by this box, never resized by
+   the grid column or the flag's native ratio. The 1px rim keeps white fields (JP) crisp. */
 .mini-rank.nations-rank .fl {
-  flex: none;
+  flex: 0 0 28px;
   width: 28px;
   height: 28px;
-  display: grid;
-  place-items: center;
+  display: block;
   padding: 0;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, .15);
   border-radius: 50%;
   background: rgba(255, 255, 255, .06);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .10);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
   overflow: hidden;
+}
+/* the resolver wrapper and its photo always fill the circle, so a breakpoint can never
+   leave a 28px image inside a 26px frame and clip it off-centre */
+.mini-rank.nations-rank .fl > .fp {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 50%;
+  overflow: hidden;
+}
+.mini-rank.nations-rank .fl .fp-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 50%;
 }
 .car-card.nations-cup .flag-code { display: none !important; }
 /* name: 14/600 ellipsis owns the slack */
@@ -19761,10 +19781,10 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   /* the trend delta is the one column a 320px row can live without: the nation name
      keeps its full width instead of collapsing to three letters. `:not(.is-error)`
      keeps this ahead of the compact-height grid, whatever order the queries land in. */
-  .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) { grid-template-columns: 19px 22px minmax(0, 1fr) 92px; }
+  .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) { grid-template-columns: 19px 26px minmax(0, 1fr) 92px; }
   .car-card.nations-cup .mini-rank.nations-rank .tr { display: none; }
   .car-card.nations-cup .mini-rank.nations-rank .rk { width: 19px; height: 19px; font-size: 11px; }
-  .car-card.nations-cup .mini-rank.nations-rank .fl { width: 22px; height: 22px; }
+  .car-card.nations-cup .mini-rank.nations-rank .fl { flex-basis: 26px; width: 26px; height: 26px; }
 }
 
 /* ---- The Mind Ladder: TIQ hero card ----
@@ -20157,8 +20177,8 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   .car-card.mind-ladder .mind-trend { min-width: 24px; font-size: 10px; padding: 2px 3px 3px; }
   .car-card.mind-ladder .mind-av .mind-flag { --fp-d: 11px; width: 11px; height: 11px; }
   .car-card.nations-cup .mini-rank.nations-rank > li.nations-row { padding-top: 1px; padding-bottom: 1px; }
-  .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) { grid-template-columns: 19px 22px minmax(0, 1fr) 24px 90px; column-gap: 6px; }
-  .car-card.nations-cup .mini-rank.nations-rank .fl { width: 22px; height: 22px; }
+  .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) { grid-template-columns: 19px 26px minmax(0, 1fr) 24px 90px; column-gap: 6px; }
+  .car-card.nations-cup .mini-rank.nations-rank .fl { flex-basis: 26px; width: 26px; height: 26px; }
   .car-card.nations-cup .mini-rank.nations-rank .rk { width: 19px; height: 19px; font-size: 11px; }
   .car-card.nations-cup .mini-rank.nations-rank .nm { font-size: 12.5px; }
   .car-card.nations-cup .mini-rank.nations-rank .score-val { font-size: 13.5px; }
