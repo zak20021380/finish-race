@@ -4262,13 +4262,13 @@ html.no-flags .id-flag .flag-code { display: none; }
   box-shadow: 0 2px 0 #075985, inset 0 1px 0 rgba(255, 255, 255, .5);
 }
 
-/* ---- Play Dock: one continuous clay capsule with a molded seam ----
-   A single outer silhouette owns the capsule radius and the exterior drop. Inside,
-   the obsidian mode selector and the saturated launch core are joined flush at a
-   zero-gap seam: a dark recessed groove on the obsidian edge and a fine specular
-   rim on the blue leading edge, like two precision-molded gamepad shells. The
-   mode section sizes to its content (`auto`) so a full label can never be clipped;
-   the launch section takes every pixel that is left. */
+/* ---- Play Dock: an obsidian chassis holding two separate clay capsules ----
+   The outer silhouette is one continuous dark stadium: a 6px rim of chassis all
+   around, a 10px trough between the pods, a top inner highlight and a deep
+   ambient drop. The mode selector keeps its molded pod; the launch core is now a
+   self-contained pill rounded on all four corners, so the two thumb targets read
+   as distinct objects. The mode section sizes to its content (`auto`) so a full
+   label can never be clipped; the launch section takes every pixel that is left. */
 .launcher {
   /* the capsule height: 56-72px on every phone, scaled by the height media rules */
   --dock-key-h: 72px;
@@ -4277,15 +4277,20 @@ html.no-flags .id-flag .flag-code { display: none; }
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: stretch;
-  gap: 0;
+  gap: 10px;
   width: 100%;
-  min-height: var(--dock-key-h);
-  padding: 0;
+  min-height: calc(var(--dock-key-h) + 12px);
+  padding-block: 6px;
+  padding-inline: 14px 6px;
   border: 0;
-  border-radius: 9999px;
+  border-radius: 999px;
   overflow: hidden;
-  background: #0d1522;
+  background:
+    radial-gradient(120% 160% at 0% 0%, rgba(255, 255, 255, .07) 0%, rgba(255, 255, 255, 0) 58%),
+    linear-gradient(180deg, #121b2b 0%, #0a111c 100%);
   box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 -2px 6px rgba(0, 0, 0, .55),
     0 10px 26px rgba(0, 0, 0, .46),
     0 6px 20px rgba(0, 114, 255, .24),
     0 0 0 1px rgba(255, 255, 255, .06);
@@ -4451,9 +4456,9 @@ html.no-flags .id-flag .flag-code { display: none; }
 }
 
 /* ---- right pod: the launch core ----
-   One saturated cyan-to-sapphire clay pebble with a top specular and a deep
-   bottom occlusion. The action word owns the top line; two micro-clay reward
-   chips sit beneath it. */
+   One saturated cyan-to-sapphire clay pebble, fully rounded on all four corners
+   and floating clear of the selector by the chassis trough. The action word owns
+   the top line; two micro-clay reward chips sit beneath it. */
 .btn-hero {
   position: relative;
   overflow: hidden;
@@ -4467,17 +4472,14 @@ html.no-flags .id-flag .flag-code { display: none; }
   align-items: center;
   justify-content: center;
   gap: 4px;
-  border-top-right-radius: 9999px;
-  border-bottom-right-radius: 9999px;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
+  border-radius: 999px;
   font-weight: 900;
   background: linear-gradient(135deg, #00d2ff 0%, #0072ff 100%);
   color: #fff;
   box-shadow:
     inset 0 3px 6px rgba(255, 255, 255, .45),
-    inset 0 -4px 8px rgba(0, 30, 80, .55),
-    inset 1px 0 0 rgba(255, 255, 255, .35);
+    inset 0 -4px 6px rgba(0, 40, 120, .4),
+    0 6px 18px rgba(0, 168, 255, .35);
   isolation: isolate;
   transition:
     transform .24s cubic-bezier(.3, 1.45, .5, 1),
@@ -4489,16 +4491,16 @@ html.no-flags .id-flag .flag-code { display: none; }
   filter: brightness(1.06) saturate(1.03);
   box-shadow:
     inset 0 3px 6px rgba(255, 255, 255, .5),
-    inset 0 -4px 8px rgba(0, 30, 80, .5),
-    inset 1px 0 0 rgba(255, 255, 255, .4);
+    inset 0 -4px 6px rgba(0, 40, 120, .36),
+    0 8px 22px rgba(0, 168, 255, .42);
 }
 .btn-hero:active {
-  transform: scale(.975);
+  transform: translateY(1.5px) scale(.985);
   filter: brightness(1.03);
   box-shadow:
     inset 0 3px 8px rgba(0, 26, 70, .45),
     inset 0 -2px 5px rgba(255, 255, 255, .24),
-    inset 1px 0 0 rgba(255, 255, 255, .3);
+    0 3px 10px rgba(0, 168, 255, .28);
 }
 .btn-hero:focus-visible { outline: 3px solid #7DE3F4; outline-offset: -3px; }
 /* the idle shine: one slow metallic pass every six seconds; stilled by reduced motion */
