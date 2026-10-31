@@ -11995,18 +11995,19 @@ html.reduced-motion .stars-count::before { animation: none; }
 }
 .gm-seg .seg-b.is-teaser:active { transform: none; }
 .gm-seg-label { display: block; }
-/* corner badge: a mini glow that says why the key does not move */
+/* corner badge: a mini gold glow that says why the key does not move — the same amber family as
+   the card's own "SOON" pill, so the parked row never mixes two accent hues */
 .gm-soon {
   position: absolute;
   top: 3px;
   right: 4px;
   padding: 1px 5px;
   border-radius: var(--radius-pill);
-  background: rgba(34, 211, 238, .16);
+  background: linear-gradient(135deg, rgba(245, 158, 11, .22), rgba(217, 119, 6, .14));
   box-shadow:
-    inset 0 0 0 1px rgba(34, 211, 238, .45),
-    0 0 10px -3px rgba(34, 211, 238, .9);
-  color: #A5F3FC;
+    inset 0 0 0 1px rgba(245, 158, 11, .4),
+    0 0 10px -3px rgba(245, 158, 11, .8);
+  color: #FDE68A;
   font-size: 9px;
   font-weight: 900;
   letter-spacing: .06em;
@@ -12153,6 +12154,88 @@ html.reduced-motion .stars-count::before { animation: none; }
   transition: opacity .18s ease, transform .18s ease;
 }
 .gm-f-tip.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---- QUICK MATCH: parked behind the gold lock ----
+   The row is a showcase, not a door. A frosted obsidian slab, one restrained gold hairline, the
+   cyan checkmark gone and a glass "SOON" pill in its slot. Everything inside sits at .72 so the
+   rim and the badge are the only lit things in the card: deliberate, never broken. */
+.gm-card[data-row="online"] {
+  border: 1px solid rgba(245, 158, 11, .2);
+  background-color: #141A26;
+  background-image:
+    linear-gradient(168deg, rgba(32, 40, 56, .96) 0%, rgba(14, 19, 29, .98) 58%, rgba(20, 26, 38, .97) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .05),
+    inset 0 0 36px -20px rgba(245, 158, 11, .5),
+    0 14px 30px -24px #000;
+}
+/* the row is a picture of a door: the cursor says so before the tap does */
+.gm-card[data-row="online"] .gm-pick { cursor: not-allowed; }
+/* the button's own hover dim would stack on the inner tint, so the row holds perfectly still */
+.gm-card[data-row="online"] .gm-pick:hover:not(:active),
+.gm-card[data-row="online"] .gm-pick:active {
+  opacity: 1;
+  transform: none;
+  background-color: transparent;
+}
+.gm-card[data-row="online"] .gm-pick:focus-visible {
+  outline: 3px solid rgba(245, 158, 11, .5);
+  outline-offset: 2px;
+}
+/* icon and copy step back; the badge keeps its full light */
+.gm-card[data-row="online"] .gm-pick > :not(.gm-badge-soon) {
+  opacity: .72;
+  filter: saturate(.85);
+}
+.gm-card[data-row="online"] .gm-name { color: #E9EEF6; }
+/* the checkmark slot, re-cast: a glass pill with a gold rim and a slow ambient pulse */
+.gm-badge-soon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(135deg, rgba(245, 158, 11, .25), rgba(217, 119, 6, .15));
+  border: 1px solid rgba(245, 158, 11, .4);
+  box-shadow:
+    0 0 12px rgba(245, 158, 11, .2),
+    inset 0 1px 0 rgba(255, 255, 255, .16);
+  color: #fef08a;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .5px;
+  line-height: 1.2;
+  white-space: nowrap;
+  animation: gm-soon-glow 2.8s ease-in-out infinite;
+}
+@keyframes gm-soon-glow {
+  0%, 100% { box-shadow: 0 0 12px rgba(245, 158, 11, .2), inset 0 1px 0 rgba(255, 255, 255, .16); }
+  50% { box-shadow: 0 0 20px rgba(245, 158, 11, .34), inset 0 1px 0 rgba(255, 255, 255, .22); }
+}
+/* the padlock that says why the two size keys do not move */
+.gm-lock {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #FDE68A;
+  background: linear-gradient(180deg, rgba(245, 158, 11, .2), rgba(217, 119, 6, .08));
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .32);
+}
+.gm-lock .ico { width: 12px; height: 12px; }
+/* every key inside the parked row is a picture of a key: half light, not-allowed cursor */
+.gm-card[data-row="online"] .gm-seg { filter: saturate(.85); }
+.gm-card[data-row="online"] .gm-seg .seg-b,
+.gm-card[data-row="online"] .gm-wait {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.gm-card[data-row="online"] .gm-seg .seg-b:active { transform: none; }
+/* the tap lands as one amber wiggle, exactly like the locked filters row below it */
+.gm-card[data-row="online"].shake { animation: gm-shake .42s cubic-bezier(.36, .07, .19, .97); }
 
 /* ---- FRIENDS: the entry pane ----
    Two actions and nothing else: a gold clay commitment, a hairline, a recessed well. The
@@ -13469,6 +13552,8 @@ html.reduced-motion .lb-fmt, html.reduced-motion .lb-pick-b, html.reduced-motion
 html.reduced-motion .lb-badge-away, html.reduced-motion .lb-away-dot, html.reduced-motion .lb-hud.is-in .lb-hud-card { animation: none; }
 html.reduced-motion .lb-hud-b { transition: none; }
 html.reduced-motion .gm-filters.shake { animation: none; }
+html.reduced-motion .gm-badge-soon { animation: none; }
+html.reduced-motion .gm-card[data-row="online"].shake { animation: none; }
 
 
 /* ==========================================================================

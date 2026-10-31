@@ -25,6 +25,11 @@ Durable index; dated logs beside this file hold the history.
   1400ms (set `solo` BEFORE closing its socket). Three panes `#gm-view-*`, `showView` the only
   writer; `[hidden]` must be restated on `.gm-view/.gm-foot/.gm-rewards/.lb-pick`. Unfit formats
   are BOUNCED, never half-applied.
+- **Quick match is PARKED** (`QUICK_LOCKED` in `gamemodes.ts`): `DEFAULT_SELECTION` is `bot`, saved
+  quick picks normalize to `bot`, `setGameMode` bounces quick ids, and `launchSelectedMode` refuses
+  quick instead of `queueMatch()`. Its drawer row is a permanent showcase (`showcase` in
+  `paintSheetState` keeps seg+filters visible) with `aria-disabled` pills — never `disabled`, or the
+  tap cannot toast.
 
 ## Board + HUD
 - `main.ts` owns `selected`/`ghost`/`mineArmed`; `onMouse` returns early on `holdsBall(mode())`.

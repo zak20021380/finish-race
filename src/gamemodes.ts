@@ -55,8 +55,20 @@ export interface LobbyDisplay {
 
 const KEY = 'detour.gamemode.v1';
 
-/** 1v1 is the door everyone walks through: 2v2 is still a teaser in the drawer. */
-const DEFAULT_SELECTION: GameModeSelection = { id: 'duel_1v1', roomCode: null };
+/**
+ * The online queue is parked behind the gold lock while the servers are tuned. One switch turns
+ * it back on: the drawer's teaser row, the saved-mode fallback and the Play dock's door all read
+ * this constant, so no surface can disagree about whether Quick match is open.
+ */
+const QUICK_LOCKED = true;
+
+/** The one line a tap on the parked row answers with. */
+const QUICK_LOCKED_NOTE = 'Online servers undergoing tuning • Live soon!';
+
+/** The door everyone walks through while the queue is parked: practice needs nobody else. */
+const DEFAULT_SELECTION: GameModeSelection = QUICK_LOCKED
+  ? { id: 'bot', roomCode: null }
+  : { id: 'duel_1v1', roomCode: null };
 
 /* ---- what the sheet renders: the DOM stays declarative, the labels live here ---- */
 
@@ -167,8 +179,8 @@ function load(): GameModeSelection {
   try {
     const raw = readJson<GameModeSelection>(KEY);
     if (!raw || !isGameModeId(raw.id)) return { ...DEFAULT_SELECTION };
-    /* 2v2 is parked behind a disabled key for now: land the old pick on 1v1 */
-    const id: GameModeId = raw.id === 'party_2v2' ? 'duel_1v1' : raw.id;
+    /* A saved quick pick — the parked 2v2 included — lands on an open door, never a dead queue. */
+    const id: GameModeId = QUICK_LOCKED && isQuick(raw.id) ? DEFAULT_SELECTION.id : raw.id;
     const roomCode = id === 'room' ? cleanRoomCode(raw.roomCode) : null;
     return { id, roomCode };
   } catch {
@@ -275,10 +287,12 @@ export function sizesForMode(id: GameModeId): [number, number] {
 }
 
 export function setGameMode(id: GameModeId, opts?: { roomCode?: string | null }): GameModeSelection {
-  const roomCode = id === 'room' ? cleanRoomCode(opts?.roomCode ?? current.roomCode) : null;
-  current = { id, roomCode };
+  /* the parked queue can never *become* the selection: every door lands on an open mode */
+  const target: GameModeId = QUICK_LOCKED && isQuick(id) ? DEFAULT_SELECTION.id : id;
+  const roomCode = target === 'room' ? cleanRoomCode(opts?.roomCode ?? current.roomCode) : null;
+  current = { id: target, roomCode };
   try {
-    saveMenu({ mode: 'bot', sizes: sizesForMode(id) });
+    saveMenu({ mode: 'bot', sizes: sizesForMode(target) });
   } catch {
     /* stay in memory */
   }
@@ -1574,12 +1588,15 @@ export function paintSheetState(): void {
     const on = card.dataset.row === row;
     card.classList.toggle('is-active', on);
     card.querySelector<HTMLElement>('.gm-pick')?.setAttribute('aria-checked', String(on));
+    /* The parked quick row keeps its options on show as a teaser: an empty card would read as a
+       broken one, and the locked 1v1 / 2v2 / ~5s pills are the whole point of the showcase. */
+    const showcase = QUICK_LOCKED && card.dataset.row === 'online';
     /* the options for a mode only exist while that mode is the selected one */
     const seg = card.querySelector<HTMLElement>('.gm-seg');
-    if (seg) seg.hidden = !on;
+    if (seg) seg.hidden = !on && !showcase;
     /* the locked filters row rides with the quick-match options */
     const filters = card.querySelector<HTMLElement>('.gm-filters');
-    if (filters) filters.hidden = !on;
+    if (filters) filters.hidden = !on && !showcase;
   }
 
   for (const b of document.querySelectorAll<HTMLButtonElement>('#sheet-game-modes [data-size]')) {
@@ -1619,6 +1636,20 @@ export function paintSheetState(): void {
     start.classList.remove('is-lobby', 'is-idle', 'is-waiting', 'is-ready');
   }
   if (view === 'lobby' && handle) paintLobbyPane(handle.lobby);
+}
+
+/**
+ * The parked quick row answers a tap the way the locked filters row does: one amber wiggle, one
+ * haptic tick and one line. It never changes the selection — there is no queue behind it to enter.
+ */
+function bounceLockedCard(card: HTMLElement | null): void {
+  impact('light');
+  notify('warning');
+  showToast(QUICK_LOCKED_NOTE, 'warning', 2600);
+  if (!card) return;
+  card.classList.remove('shake');
+  void card.offsetWidth; /* restart the wiggle */
+  card.classList.add('shake');
 }
 
 function showRoomError(msg: string): void {
@@ -1685,6 +1716,11 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     pick.addEventListener('click', () => {
       const raw = pick.dataset.gmode;
       if (!isGameModeId(raw)) return;
+      /* Quick match is a showcase, not a door: it explains itself instead of selecting */
+      if (QUICK_LOCKED && isQuick(raw)) {
+        bounceLockedCard(pick.closest<HTMLElement>('.gm-card'));
+        return;
+      }
       impact('light');
       if (raw === 'room') {
         /* a room this client still holds reopens its lobby, even while it is reconnecting */
@@ -1710,6 +1746,11 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
     b.addEventListener('click', () => {
       const raw = b.dataset.size;
       if (!isGameModeId(raw) || raw === 'room') return;
+      /* the keys ship aria-disabled (never `disabled`): the tap has to explain itself */
+      if (QUICK_LOCKED && isQuick(raw)) {
+        bounceLockedCard(b.closest<HTMLElement>('.gm-card'));
+        return;
+      }
       impact('light');
       if (raw === current.id) return;
       clearRoomError();
@@ -1759,6 +1800,10 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
   filters?.addEventListener('animationend', () => {
     filters.classList.remove('shake');
   });
+
+  /* the parked row's wiggle clears itself, so a second tap can ask for it again */
+  const lockedCard = document.querySelector<HTMLElement>('.gm-card[data-row="online"]');
+  lockedCard?.addEventListener('animationend', () => lockedCard.classList.remove('shake'));
 
   /* ---- entry: create mints a code and walks straight into the lobby ---- */
   document.getElementById('gm-create')?.addEventListener('click', () => {

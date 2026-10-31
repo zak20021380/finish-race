@@ -2599,7 +2599,16 @@ function roomFromRoster(
  */
 function launchSelectedMode(): void {
   const sel = getGameMode();
-  if (sel.id === 'duel_1v1' || sel.id === 'party_2v2') { queueMatch(); return; }
+  /* The online queue is parked behind the gold lock: never drop the player into a search with no
+     server behind it. Say what the card says, and open the drawer that still holds an open door. */
+  if (sel.id === 'duel_1v1' || sel.id === 'party_2v2') {
+    impact('light');
+    notify('warning');
+    showNote('Online servers undergoing tuning • Live soon!', false, 2600);
+    const drawer = sheetById('sheet-game-modes');
+    if (drawer) sheets.open(drawer);
+    return;
+  }
   const botTier: BotTier = sel.id === 'room' ? 'mixed' : menuState.difficulty;
   const lobby = openLocalRoom(botTier);
   showNote(lobbyLine(lobby, Date.now()), false, 2200, true);
