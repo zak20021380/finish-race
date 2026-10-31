@@ -28,7 +28,7 @@ import { createShop } from './shop';
 import { createNotifications } from './notifications';
 import { mountCoins } from './coin';
 import { appearance, menuState, motionReduced, onAppearance, onLang, t, toggleAppearance } from './settings';
-import { audio, holdAudio, releaseAudio } from './audio';
+import { audio, holdAudio, playVictoryFanfare, releaseAudio, stopVictoryFanfare } from './audio';
 import {
   getRemainingTiqRecoveries, hasClaimedInMatch, markClaimedInMatch, playRewardedAd, recordTiqRecovery,
   resetMatchClaims, TIQ_RECOVERY_MAX,
@@ -1104,6 +1104,9 @@ function showOverlay() {
   resultCoinsN.textContent = '0';
   resultStakeN.textContent = `−1 ${t('resultTiqUnit')}`;
   overlay.hidden = false;
+  /* the card and its podium are on screen: the one moment the fanfare belongs to. A defeat keeps
+     the screen silent — the Sound switch, the volume and any ad hold are the engine's own gate. */
+  if (won) playVictoryFanfare();
   /* The banter dock reads the same podium: bubbles land on the card of the player who spoke,
      and a race against the machine answers on its own. A 3- or 4-seat party has no single
      rival to taunt, so the dock stays out of that capsule. */
@@ -1398,6 +1401,8 @@ function timeoutMove() {
 }
 
 function restart() {
+  /* every new board is a new match: the last result's celebration cannot survive into it */
+  stopVictoryFanfare();
   cancelTutorial();
   gen++;
   /* A fresh draw per race keeps the rivals' flags and XP stable for this board; an online race
@@ -1868,6 +1873,8 @@ function quitToMenu() {
   notifyMatchBusy(false);
   /* a race that ended inside the goal beat still has to be paid out before the board goes away */
   if (goalBeat) { clearGoalBeat(); showOverlay(); }
+  /* Menu, the back button and a quit all land here: the fanfare never follows the board home */
+  stopVictoryFanfare();
   if (overlayOpen) {
     clearResultMotion();
     resultView = null;
@@ -2576,6 +2583,8 @@ again.addEventListener('click', () => {
   /* the rematch key lands harder than a replay: it is the revenge trigger, not a menu hop */
   impact(state.winner === localSide ? 'medium' : 'heavy');
   clearResultMotion();
+  /* Play again and Rematch both leave this result behind: the celebration goes with it */
+  stopVictoryFanfare();
   /* a networked seat is not ours to restart in place: Play again queues the next race */
   if (active) { active.close(); active = null; queueMatch(); return; }
   restart();

@@ -1,8 +1,8 @@
 /**
- * audio.ts — the race's sound engine. One `AudioContext`, five decoded assets (`move.wav`,
- * `explosion.mp3`, `laugh.mp3`, `angry.wav`, `swoosh.mp3`) and one master gain: every voice is a `BufferSource` on the graph,
- * scheduled against the context clock so a step, a wall or a blast lands on the frame that caused it
- * rather than the frame after.
+ * audio.ts — the race's sound engine. One `AudioContext`, six decoded assets (`move.wav`,
+ * `explosion.mp3`, `laugh.mp3`, `angry.wav`, `swoosh.mp3`, `01-victory-fan.ogg`) and one master
+ * gain: every voice is a `BufferSource` on the graph, scheduled against the context clock so a
+ * step, a wall or a blast lands on the frame that caused it rather than the frame after.
  *
  * The context is built at startup and the decodes start with it, but a mobile webview keeps it
  * suspended and silent until the page has been touched: the first `pointerdown` (the Play tap
@@ -15,6 +15,7 @@ import explosionMp3 from './assets/sounds/explosion.mp3';
 import laughMp3 from './assets/sounds/laugh.mp3';
 import angryWav from './assets/sounds/angry.wav';
 import swooshMp3 from './assets/sounds/swoosh.mp3';
+import victoryFanOgg from './assets/sounds/01-victory-fan.ogg';
 
 export type SoundName = 'move' | 'explosion' | 'laugh' | 'angry' | 'swoosh';
 
@@ -49,6 +50,14 @@ const ANGRY_GAP_MS = 150;
  */
 const SWOOSH_GAIN = 0.9;
 
+/**
+ * The victory fanfare: the result screen's one long voice. A touch under full scale so the
+ * count-up underneath it still reads, and it fades rather than cuts when the screen lets go, so
+ * the tail never clicks or bleeds under an ad.
+ */
+const VICTORY_GAIN = 0.9;
+const VICTORY_FADE_S = 0.22;
+
 /** Where the volume lives. The mute half is `settings.sound`, persisted by `settings.ts`. */
 const VOLUME_KEY = 'detour.audio.volume.v1';
 
@@ -69,6 +78,9 @@ try {
 /** Every voice, decoded once at startup and kept for the session. */
 const buffers: Partial<Record<SoundName, AudioBuffer>> = {};
 
+/** The fanfare is not fire-and-forget, so it keeps its own decoded buffer outside the voice table. */
+let victoryBuffer: AudioBuffer | null = null;
+
 /**
  * The context's own output latency, read when the context starts running and subtracted from every
  * start time so the sound leaves the speaker with the frame, not a headset's worth of milliseconds
@@ -83,7 +95,7 @@ function readLatency(ctx: AudioContext): number {
   } catch { return 0; }
 }
 
-function decode(name: SoundName, url: string): void {
+function decodeInto(url: string, store: (buf: AudioBuffer) => void): void {
   const e = engine;
   if (!e) return;
   fetch(url)
@@ -92,8 +104,12 @@ function decode(name: SoundName, url: string): void {
       return r.arrayBuffer();
     })
     .then((raw) => e.ctx.decodeAudioData(raw))
-    .then((buf) => { buffers[name] = buf; })
+    .then(store)
     .catch(() => { /* a missing or undecodable asset is a silent voice, never a broken game */ });
+}
+
+function decode(name: SoundName, url: string): void {
+  decodeInto(url, (buf) => { buffers[name] = buf; });
 }
 
 decode('move', moveWav);
@@ -101,6 +117,7 @@ decode('explosion', explosionMp3);
 decode('laugh', laughMp3);
 decode('angry', angryWav);
 decode('swoosh', swooshMp3);
+decodeInto(victoryFanOgg, (buf) => { victoryBuffer = buf; });
 
 /** The first gesture anywhere — the Play tap counts — lifts the suspension for the rest of the page. */
 let unlocked = false;
@@ -143,10 +160,15 @@ function applyGain(): void {
 applyGain();
 onSettings(applyGain);       // the Sound row in Settings mutes the whole engine, instantly
 
-/** Silence the engine for an ad. Idempotent: two overlapping holds are one hold. */
+/**
+ * Silence the engine for an ad. Idempotent: two overlapping holds are one hold. The victory
+ * fanfare is stopped, not merely muted — the master alone would hand its tail back the moment
+ * `releaseAudio` runs, after the video has already had the speakers.
+ */
 export function holdAudio(): void {
   if (adHold) return;
   adHold = true;
+  stopVictoryFanfare();
   applyGain();
 }
 
@@ -237,6 +259,90 @@ export function playSwoosh(): void {
  */
 export function playAngrySound(): void {
   play('angry', { gain: ANGRY_GAIN });
+}
+
+/* ---------- the victory fanfare: the one voice with a lifetime ---------- */
+
+/** The live fanfare voice and its own gain, or null between screens. */
+let victorySrc: AudioBufferSourceNode | null = null;
+let victoryGain: GainNode | null = null;
+/** The context time the live voice was scheduled for; a stop before it needs no fade. */
+let victoryStartsAt = 0;
+/** One fanfare per victory screen, however many repaints that screen goes through. */
+let victoryPlayed = false;
+
+/**
+ * The post-match fanfare, fired the moment the victory card and its podium land. It is the one
+ * voice that is not fire-and-forget, so it keeps its handles: the screen must be able to take it
+ * back when the player leaves or an ad takes the speakers. Gated by the Sound switch, the saved
+ * volume (through the master) and any ad hold; a screen that has already had its fanfare is not
+ * given a second one. A context the OS or the browser still holds suspended is resumed best-effort
+ * — the voice is scheduled on the graph and simply starts once the context runs.
+ */
+export function playVictoryFanfare(): void {
+  const e = engine;
+  if (victoryPlayed || victorySrc || !e) return;
+  if (!settings.sound || adHold) return;
+  const buf = victoryBuffer;
+  if (!buf) return;                    // still decoding: a late fanfare is worse than none
+  const { ctx, master } = e;
+  if (ctx.state !== 'running') void ctx.resume().catch(() => { /* still locked */ });
+  try {
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const gain = ctx.createGain();
+    gain.gain.value = VICTORY_GAIN;
+    src.connect(gain).connect(master);
+    src.onended = () => {
+      if (victorySrc === src) { victorySrc = null; victoryGain = null; }
+      src.disconnect();
+      gain.disconnect();
+    };
+    victorySrc = src;
+    victoryGain = gain;
+    victoryPlayed = true;
+    victoryStartsAt = Math.max(ctx.currentTime, ctx.currentTime + SCHEDULE_LEAD_S - OUTPUT_LATENCY_S);
+    src.start(victoryStartsAt);
+  } catch {
+    victorySrc = null;
+    victoryGain = null;
+  }
+}
+
+/**
+ * Hand the fanfare back: a short fade on its own gain, then a hard stop, so leaving the result
+ * screen cuts a tail rather than clipping one. A voice that was still ahead of its start time is
+ * stopped outright — there is nothing to fade. Idempotent, and it re-arms the next victory.
+ */
+export function stopVictoryFanfare(): void {
+  victoryPlayed = false;
+  const src = victorySrc;
+  const gain = victoryGain;
+  const startsAt = victoryStartsAt;
+  victorySrc = null;
+  victoryGain = null;
+  victoryStartsAt = 0;
+  if (!src) return;
+  const e = engine;
+  if (!e) {
+    try { src.stop(); } catch { /* already gone */ }
+    return;
+  }
+  const now = e.ctx.currentTime;
+  try {
+    if (now < startsAt) {
+      src.stop(now);
+      return;
+    }
+    if (gain) {
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(Math.max(0.0001, gain.gain.value), now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + VICTORY_FADE_S);
+    }
+    src.stop(now + VICTORY_FADE_S + 0.02);
+  } catch {
+    try { src.stop(); } catch { /* already gone */ }
+  }
 }
 
 export const audio = { play, setVolume };
