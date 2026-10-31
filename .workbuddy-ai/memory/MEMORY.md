@@ -77,6 +77,10 @@ Durable index; dated logs beside this file hold the history.
   `vite-env.d.ts` (undeclared `import.meta.env` keys are TS2339). SDK = async CDN tag in `<head>`.
 - Quota `fr_tiq_recovery_log_v1` (NOT `detour.*`): epoch stamps, rolling 24h, max 3, memory mirror
   after first hydrate so refused storage still enforces it. Per-match claims are a separate `Set`.
+- Chips sit INSIDE existing rows (`#btn-recover-tiq` in `.result-stake`, `#btn-double-coins` in
+  `#result-coin-chip`), 22/20px vs a 32.6px block / 40px pill → zero capsule growth.
+  `.result-rewards` is `nowrap`; the pill retires `.result-unit` (and `.result-token` ≤380px) via
+  `#btn-double-coins:not([hidden]) ~ …` — the button leads in the DOM, `order:4` renders it last.
 
 ## Design system
 - One theme "Dark Clay": opaque slabs, no live blur. Reduced motion is `html.reduced-motion`,

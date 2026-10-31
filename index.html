@@ -3052,6 +3052,19 @@
                   <span class="result-unit" data-i18n="resultTiqUnit">TIQ</span>
                 </span>
                 <span class="result-chip is-coin" id="result-coin-chip">
+                  <!-- The action chip leads in the DOM on purpose: that lets the sheet retire the
+                       "COINS" unit (and the coin medallion on narrow phones) with a plain sibling
+                       selector the moment the chip is live. `order` keeps it last on screen, so the
+                       visual reading is still [coin][+120][COINS] [2× COINS]. -->
+                  <button class="ad-chip" id="btn-double-coins" type="button" hidden>
+                    <svg class="ad-chip-ico" width="12" height="12" viewBox="0 0 24 24"
+                      aria-hidden="true" focusable="false">
+                      <path d="M8.6 5.4 18.8 12 8.6 18.6V5.4Z" fill="currentColor" />
+                      <path d="M8.6 5.4 13.7 12 8.6 18.6V5.4Z" fill="#fff" fill-opacity=".26" />
+                    </svg>
+                    <span class="ad-chip-label" id="double-coins-label">2× COINS</span>
+                    <span class="ad-chip-spin" id="double-coins-spin" aria-hidden="true" hidden></span>
+                  </button>
                   <span class="result-token" aria-hidden="true"><span class="coin" data-coin></span></span>
                   <span class="result-value"><span class="result-sign">+</span><b id="result-coins-n">0</b></span>
                   <span class="result-unit" data-i18n="resultCoinsUnit">COINS</span>
@@ -3059,8 +3072,25 @@
               </div>
 
               <p class="result-stake" id="result-stake" hidden>
-                <span class="result-stake-k" id="result-stake-k">STAKES LOST</span>
-                <strong class="result-stake-n" id="result-stake-n">−0 TIQ</strong>
+                <span class="result-stake-main">
+                  <span class="result-stake-k" id="result-stake-k">STAKES LOST</span>
+                  <strong class="result-stake-n" id="result-stake-n">−0 TIQ</strong>
+                </span>
+                <!-- Sits in the stake row itself: a 22px chip inside a 32px block adds no height. -->
+                <button class="ad-chip" id="btn-recover-tiq" type="button" hidden>
+                  <svg class="ad-chip-ico" width="14" height="14" viewBox="0 0 24 24"
+                    aria-hidden="true" focusable="false">
+                    <path d="M12 2.6 4.9 5.4v5.5c0 4.5 3 7.8 7.1 9.5 4.1-1.7 7.1-5 7.1-9.5V5.4L12 2.6Z"
+                      fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+                    <path d="M12 16V8.7" fill="none" stroke="currentColor" stroke-width="1.9"
+                      stroke-linecap="round" />
+                    <path d="m9.1 11.4 2.9-3 2.9 3" fill="none" stroke="currentColor" stroke-width="1.9"
+                      stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                  <span class="ad-chip-label" id="recover-tiq-label">RECOVER</span>
+                  <span class="ad-chip-quota" id="recover-tiq-quota" dir="ltr">3/3</span>
+                  <span class="ad-chip-spin" id="recover-tiq-spin" aria-hidden="true" hidden></span>
+                </button>
               </p>
 
               <div class="result-actions">

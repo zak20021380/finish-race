@@ -28499,7 +28499,9 @@ html[data-lang="ar"] [data-i18n-html] {
 /* ---- rewards: an illuminated brain and a spinning gold coin ---- */
 .result-rewards {
   display: flex;
-  flex-wrap: wrap;
+  /* One line, always: the double-coins chip rides inside the coin pill, and a wrapped row would
+     add 40px to the capsule. Nothing here is allowed to become a second storey. */
+  flex-wrap: nowrap;
   justify-content: center;
   gap: 8px;
   margin: 1px 0 12px;
@@ -28598,9 +28600,12 @@ html[data-lang="ar"] [data-i18n-html] {
 /* ---- the crimson stake band: defeat has to physically cost something ---- */
 .result-stake {
   display: flex;
-  flex-direction: column;
+  /* a row now, so the recover chip can sit at the inline-end of the band — the label block
+     still stacks, and the 22px chip is shorter than the 32px block, so the band is the same
+     height it has always been */
+  flex-direction: row;
   align-items: center;
-  gap: 1px;
+  gap: 10px;
   margin: 0 0 12px;
   padding: 8px 14px;
   border: 1px solid rgba(244, 63, 94, .32);
@@ -28609,6 +28614,16 @@ html[data-lang="ar"] [data-i18n-html] {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .06),
     0 8px 20px -14px rgba(244, 63, 94, .65);
+}
+/* `flex: 1` is what pushes the chip to the inline-end — and with the chip hidden the block
+   spans the whole band, so the band stays exactly as centred as it was before. */
+.result-stake-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
 }
 .result-stake-k {
   color: #FDA4AF;
@@ -28629,6 +28644,129 @@ html[data-lang="ar"] [data-i18n-html] {
   line-height: 1.1;
   text-shadow: 0 0 14px rgba(244, 63, 94, .45);
 }
+
+/* ---- rewarded video: smoked obsidian & burnished gold, at zero cost in height ----
+
+   Both actions live inside rows that already exist — the crimson stake band and the coin pill —
+   and both are shorter than the content beside them (22px chip vs a 32px label block / a 40px
+   pill), so the capsule measures the same with the chips hidden or live. Nothing here is a new
+   block: no margin-block, no min-height, no wrap. The gold is burnished rather than painted on:
+   a 1px champagne hairline over smoked glass, 10.5px caps so the whole pill stays under 22px.
+   ------------------------------------------------------------------------------------ */
+
+#btn-recover-tiq,
+#btn-double-coins {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: none;
+  height: 22px;
+  padding: 0 9px;
+  margin: 0;
+  background: linear-gradient(135deg, rgba(28, 24, 16, 0.88), rgba(16, 14, 10, 0.94));
+  border: 1px solid rgba(212, 175, 55, 0.42);
+  border-radius: 999px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    0 3px 12px -7px rgba(0, 0, 0, .95);
+  color: #f3d483;
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .12s ease, border-color .18s ease, color .18s ease, opacity .18s ease;
+}
+/* the double chip is the tighter of the two: it shares a pill with the reward it doubles */
+#btn-double-coins {
+  height: 20px;
+  gap: 3px;
+  padding: 0 8px;
+}
+
+#btn-recover-tiq:active,
+#btn-double-coins:active { transform: scale(0.96); }
+
+#btn-recover-tiq.is-claimed,
+#btn-double-coins.is-claimed {
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #6ee7b7;
+  pointer-events: none;
+}
+
+#btn-recover-tiq.is-exhausted,
+#btn-double-coins.is-exhausted {
+  opacity: 0.45;
+  filter: grayscale(0.8);
+  pointer-events: none;
+}
+
+/* an author `display` beats the UA `[hidden]` rule — restate it on every piece that has one */
+#btn-recover-tiq[hidden],
+#btn-double-coins[hidden],
+.ad-chip-spin[hidden] { display: none !important; }
+
+#btn-recover-tiq:focus-visible,
+#btn-double-coins:focus-visible {
+  outline: 2px solid rgba(243, 212, 131, .6);
+  outline-offset: 2px;
+}
+
+.ad-chip-ico {
+  display: block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+#btn-double-coins .ad-chip-ico { width: 12px; height: 12px; }
+
+.ad-chip-label { display: block; line-height: 1; }
+
+/* the daily budget, as a struck-metal counter — tabular so 3/3 never jitters to 2/3 */
+.ad-chip-quota {
+  display: inline-block;
+  flex: none;
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: rgba(212, 175, 55, .16);
+  box-shadow: inset 0 0 0 1px rgba(212, 175, 55, .22);
+  color: inherit;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  opacity: .92;
+}
+
+.ad-chip-spin {
+  display: block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(243, 212, 131, .28);
+  border-top-color: #f3d483;
+  animation: ad-chip-spin .7s linear infinite;
+}
+@keyframes ad-chip-spin { to { transform: rotate(360deg); } }
+/* a frozen ring is an honest "working" mark; a spinner stuck mid-turn is not */
+html.reduced-motion .ad-chip-spin { animation: none; border-top-color: rgba(243, 212, 131, .55); }
+
+/* the coin pill becomes a segmented capsule: [coin][+120][COINS] [▶ 2× COINS].
+   The action leads in the DOM (see index.html) so these two sibling rules can retire the
+   parts it makes redundant — never a `:has()`, so an old webview still lays out correctly. */
+#result-coin-chip > .result-token { order: 1; }
+#result-coin-chip > .result-value { order: 2; }
+#result-coin-chip > .result-unit { order: 3; }
+#btn-double-coins { order: 4; }
+#btn-double-coins:not([hidden]) ~ .result-unit { display: none; }
 
 /* ---- actions: the one loud key, then the quiet door ---- */
 .result-actions {
@@ -28785,6 +28923,9 @@ html[data-lang="ar"] [data-i18n-html] {
   .result-value { font-size: 1rem; }
   .result-unit { font-size: 8px; letter-spacing: .08em; }
   .result-seat { gap: 8px; }
+  /* 320px: the smallest capsule still holds two chips and one action on a single line */
+  #btn-recover-tiq { height: 21px; padding: 0 7px; gap: 3px; }
+  .ad-chip-quota { font-size: 8px; padding: 1px 3px; }
 }
 
 /* an old webview without text clipping keeps readable flat titles instead of blank ones */
@@ -28868,6 +29009,27 @@ html[data-lang="fa"] .overlay.result .result-crown {
 }
 html[data-lang="fa"] .overlay.result .result-value { direction: ltr; }
 html[data-lang="fa"] .overlay.result .result-stake-n { font-family: var(--font-numeric); }
+
+/* the reward chips follow the same rule: Persian keeps its own script — no caps, no tracking —
+   while the quota stays a Latin numeral pair so 3/3 reads the same in every language */
+html[data-lang="fa"] :is(#btn-recover-tiq, #btn-double-coins) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+html[data-lang="fa"] .ad-chip-quota {
+  font-family: var(--font-numeric);
+  letter-spacing: 0;
+}
+
+/* ---- narrow phones: the action chip buys its own width back ----
+   The "COINS" unit steps aside the moment the action is live; below 380px the coin medallion
+   follows it, so the pill reads +120 · 2× COINS. Typography stays exactly as specified at every
+   width, and because the row is `nowrap` this can only ever cost a decoration — never a line. */
+@media (max-width: 380px) {
+  #btn-double-coins:not([hidden]) ~ .result-token { display: none; }
+}
 @media (max-height: 640px) {
   html[data-lang="fa"] .overlay.result .result-crown { right: 34px; }
 }
