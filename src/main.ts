@@ -871,6 +871,9 @@ function paintRewardButtons(): void {
   recoverBtn.classList.toggle('is-claimed', claimed);
   /* the exhausted chip wears the limit in its own label, so the badge would only repeat it */
   recoverBtn.classList.toggle('is-exhausted', !claimed && left <= 0);
+  /* announced, not `disabled`: a real `disabled` key drops out of the tab order and stops
+     explaining itself, while this chip's label already says why it will not pay */
+  recoverBtn.setAttribute('aria-disabled', String(claimed || left <= 0));
   recoverLabel.textContent = claimed
     ? t('adRecoverProtected')
     : left > 0 ? t('adRecoverCta') : t('adRecoverLimit');
@@ -882,6 +885,7 @@ function paintRewardButtons(): void {
   doubleBtn.hidden = coins <= 0;
   doubleBtn.classList.toggle('is-claimed', paid);
   doubleBtn.classList.remove('is-exhausted');
+  doubleBtn.setAttribute('aria-disabled', String(paid));
   doubleLabel.textContent = paid ? t('adDoubleClaimed') : t('adDoubleCta');
   /* the consolation tint belongs to the reward, never to the key that doubles it */
   resultCoinChip.classList.toggle('is-doubled', coins > 0);
@@ -893,6 +897,9 @@ function paintStakeValue(): void {
   const refunded = hasClaimedInMatch('recover_tiq');
   resultStake.classList.toggle('is-refunded', refunded);
   resultStakeK.textContent = t(refunded ? 'adRecoverProtected' : 'resultStakeLost');
+  /* the refund count-down owns the number until it lands: a repaint mid-flight (a language flip,
+     a second paint) must not jump the band to zero ahead of the animation already running */
+  if (stakeRaf) return;
   resultStakeN.textContent = refunded
     ? `0 ${t('resultTiqUnit')}`
     : `−${resultAbs(resultView.stake)} ${t('resultTiqUnit')}`;
@@ -933,6 +940,10 @@ function animateClaim(ms: number, paint: (eased: number) => void, store: (id: nu
     store(0);
     return;
   }
+  /* the first frame is painted here, synchronously, and the handle is live before this returns:
+     a repaint on the same tick (a label flip, a second paint) must not snap the number to the
+     value the animation is still travelling toward */
+  paint(0);
   const t0 = performance.now();
   const tick = (now: number) => {
     const k = Math.min(1, (now - t0) / ms);
@@ -982,7 +993,10 @@ async function claimTiqRecovery(): Promise<void> {
   recoverBusy = true;
   setChipBusy(recoverBtn, recoverSpin, true);
   holdAudio();                              // the race goes quiet under the video
-  const outcome = await playRewardedAd('recover_tiq').finally(releaseAudio);
+  const outcome = await playRewardedAd('recover_tiq', {
+    /* a player who left the result while the tag was still loading gets no video over the menu */
+    stillWanted: () => overlayOpen && resultView === view,
+  }).finally(releaseAudio);
   recoverBusy = false;
   setChipBusy(recoverBtn, recoverSpin, false);
 
@@ -1000,8 +1014,10 @@ async function claimTiqRecovery(): Promise<void> {
   recordTiqRecovery();
   markClaimedInMatch('recover_tiq');
   paintSeatIdentity();                      // the top HUD's TIQ pill reads the save
-  paintRewardButtons();
+  /* the count-down starts first and owns the number; the repaint then only moves the chip and the
+     band's copy, so the band winds −stake → 0 instead of flashing the destination first */
   animateStakeRefund(stake);
+  paintRewardButtons();
   notify('success');
 }
 
@@ -1014,7 +1030,9 @@ async function claimDoubleCoins(): Promise<void> {
   doubleBusy = true;
   setChipBusy(doubleBtn, doubleSpin, true);
   holdAudio();
-  const outcome = await playRewardedAd('double_coins').finally(releaseAudio);
+  const outcome = await playRewardedAd('double_coins', {
+    stillWanted: () => overlayOpen && resultView === view,
+  }).finally(releaseAudio);
   doubleBusy = false;
   setChipBusy(doubleBtn, doubleSpin, false);
 
@@ -1029,8 +1047,8 @@ async function claimDoubleCoins(): Promise<void> {
   const bonus = view.coins;
   earnCoins(bonus);                         // 1× extra on top of the settled 1× = 2× total
   markClaimedInMatch('double_coins');
-  paintRewardButtons();
   animateCoinTotal(bonus);
+  paintRewardButtons();
   notify('success');
 }
 
@@ -1680,6 +1698,9 @@ function clashRivals(): VsRival[] {
 
 function startGame(setup: StartSetup) {
   cancelTutorial();
+  /* a new race owns a new reward budget: whatever the last settlement claimed is not this one's.
+     The result screen resets it again on open, so both ends of a match start clean. */
+  resetMatchClaims();
   /* A background friends lobby hears that this seat is on another board, so its countdown holds
      instead of launching the player into a second race. Cleared by `quitToMenu`. */
   notifyMatchBusy(true);

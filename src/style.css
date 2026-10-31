@@ -28677,6 +28677,7 @@ html[data-lang="ar"] [data-i18n-html] {
 #btn-recover-tiq,
 #btn-double-coins {
   appearance: none;
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -28717,12 +28718,29 @@ html[data-lang="ar"] [data-i18n-html] {
 #btn-recover-tiq.is-busy,
 #btn-double-coins.is-busy { pointer-events: none; }
 
+/* claimed: the same smoked glass, now lit from inside with emerald. Geometry is untouched —
+   no height, no padding, no radius — so a banked reward cannot grow the capsule by a pixel. */
 #btn-recover-tiq.is-claimed,
 #btn-double-coins.is-claimed {
-  border-color: rgba(16, 185, 129, 0.45);
+  border-color: rgba(16, 185, 129, 0.46);
+  background:
+    linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(6, 78, 59, 0.34));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 0 12px -4px rgba(16, 185, 129, .55),
+    0 3px 12px -7px rgba(0, 0, 0, .95);
   color: #6ee7b7;
+  text-shadow: 0 0 7px rgba(110, 231, 183, .3);
   pointer-events: none;
+  animation: ad-chip-land .3s cubic-bezier(.22, 1, .36, 1);
 }
+@keyframes ad-chip-land {
+  0% { transform: scale(1); }
+  38% { transform: scale(1.07); }
+  100% { transform: scale(1); }
+}
+html.reduced-motion #btn-recover-tiq.is-claimed,
+html.reduced-motion #btn-double-coins.is-claimed { animation: none; }
 
 #btn-recover-tiq.is-exhausted,
 #btn-double-coins.is-exhausted {
@@ -28778,7 +28796,21 @@ html[data-lang="ar"] [data-i18n-html] {
   border: 1.5px solid rgba(243, 212, 131, .28);
   border-top-color: #f3d483;
   animation: ad-chip-spin .7s linear infinite;
+  /* the spinner borrows the icon's own slot instead of adding a box to the row: a working chip
+     measures exactly like an idle one, so the pill can never grow while a video is being fetched.
+     `margin-top` centres it — a translate would be overwritten by the rotation keyframes. */
+  position: absolute;
+  top: 50%;
+  left: 11px;
+  margin-top: -5px;
 }
+#btn-double-coins .ad-chip-spin { left: 9px; }
+html[data-lang="fa"] .ad-chip-spin { left: auto; }
+html[data-lang="fa"] #btn-recover-tiq .ad-chip-spin { left: auto; right: 11px; }
+html[data-lang="fa"] #btn-double-coins .ad-chip-spin { left: auto; right: 9px; }
+/* the icon steps aside under the ring rather than beside it */
+#btn-recover-tiq.is-busy .ad-chip-ico,
+#btn-double-coins.is-busy .ad-chip-ico { opacity: 0; }
 @keyframes ad-chip-spin { to { transform: rotate(360deg); } }
 /* a frozen ring is an honest "working" mark; a spinner stuck mid-turn is not */
 html.reduced-motion .ad-chip-spin { animation: none; border-top-color: rgba(243, 212, 131, .55); }
@@ -28985,7 +29017,13 @@ html[data-lang="fa"] .ad-toast {
   .result-seat { gap: 8px; }
   /* 320px: the smallest capsule still holds two chips and one action on a single line */
   #btn-recover-tiq { height: 21px; padding: 0 7px; gap: 3px; }
+  #btn-recover-tiq .ad-chip-spin { left: 9px; }
+  html[data-lang="fa"] #btn-recover-tiq .ad-chip-spin { left: auto; right: 9px; }
   .ad-chip-quota { font-size: 8px; padding: 1px 3px; }
+  /* Persian's claimed labels are the longest strings either chip ever wears: two pixels of size
+     handed back at 320px keeps the pill inside the card without touching its height */
+  html[data-lang="fa"] #btn-double-coins { font-size: 10px; padding: 0 7px; }
+  html[data-lang="fa"] #btn-double-coins .ad-chip-spin { left: auto; right: 8px; }
 }
 
 /* an old webview without text clipping keeps readable flat titles instead of blank ones */

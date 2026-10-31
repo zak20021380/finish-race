@@ -15,8 +15,9 @@ interface ImportMetaEnv {
   readonly VITE_ADMIN_IDS?: string;
   /**
    * AdsGram rewarded-video block ids. `RECOVER` pays the TIQ recovery, `COINS` pays the
-   * double-coins claim; both fall back to the shared `VITE_ADSGRAM_BLOCK_ID` when unset.
-   * An empty id is not an error: `src/ads.ts` answers `no_sdk` and the buttons stay honest.
+   * double-coins claim; both fall back to the shared `VITE_ADSGRAM_BLOCK_ID`, which itself falls
+   * back to the production block `57100` (`DEFAULT_ADSGRAM_BLOCK_ID` in `src/ads.ts`). Naming one
+   * here is only necessary to point a staging build at different inventory.
    */
   readonly VITE_ADSGRAM_BLOCK_ID?: string;
   readonly VITE_ADSGRAM_RECOVER_BLOCK_ID?: string;

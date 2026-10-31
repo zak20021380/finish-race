@@ -3,8 +3,10 @@
  * that keep a free reward from becoming a faucet.
  *
  * The SDK is a CDN `<script async>` in `index.html`, so it may never arrive at all (ad blocker,
- * offline cold start, a build with no block id). Nothing here may assume it exists: every entry
- * point answers safely with `no_sdk` instead of hanging on a promise that will not settle.
+ * offline cold start, a blocked CDN). Nothing here may assume it exists: every entry point answers
+ * safely with `no_sdk` instead of hanging on a promise that will not settle. The block itself is
+ * always configured — `DEFAULT_ADSGRAM_BLOCK_ID` is the production fallback — so the only question
+ * the door has to answer is whether the script landed.
  *
  * The caller owns the payout. This module only says whether the view was completed — it never
  * grants TIQ or coins itself, so a reward can be granted exactly once by whoever asked for it.
@@ -74,9 +76,26 @@ export interface AdOutcome {
   reason?: AdFailReason;
 }
 
+/** What the caller can tell the door before a video opens. */
+export interface AdOptions {
+  /**
+   * Asked once, after the wait for the async tag and immediately before `show()`. A caller whose
+   * surface has already closed answers false, so a slow CDN cannot open a fullscreen video over
+   * the menu the player moved to. A refusal is `skipped`: the view never started.
+   */
+  stillWanted?: () => boolean;
+}
+
 const envText = (value: string | undefined): string => (typeof value === 'string' ? value.trim() : '');
 
-const SHARED_BLOCK_ID = envText(import.meta.env?.VITE_ADSGRAM_BLOCK_ID);
+/**
+ * The live production block, and the floor every build falls back to. Shipping it as the default
+ * rather than as a required setting is deliberate: a checkout with no `.env` still serves a real
+ * ad, and an environment file only exists when a staging build wants a different inventory.
+ */
+export const DEFAULT_ADSGRAM_BLOCK_ID = '57100';
+
+const SHARED_BLOCK_ID = envText(import.meta.env?.VITE_ADSGRAM_BLOCK_ID) || DEFAULT_ADSGRAM_BLOCK_ID;
 const RECOVER_BLOCK_ID = envText(import.meta.env?.VITE_ADSGRAM_RECOVER_BLOCK_ID) || SHARED_BLOCK_ID;
 const COINS_BLOCK_ID = envText(import.meta.env?.VITE_ADSGRAM_COINS_BLOCK_ID) || SHARED_BLOCK_ID;
 
@@ -86,11 +105,41 @@ export const ADSGRAM_DEBUG = envText(import.meta.env?.VITE_ADSGRAM_DEBUG) === 't
 /**
  * The block this placement serves. A dedicated block wins; otherwise both placements share the
  * one generic block, which is how a single-block account ships before it splits its inventory.
- * An empty string is the honest answer when nothing is configured — `playRewardedAd` reads it as
- * `no_sdk` rather than handing the SDK a nameless block.
+ * `DEFAULT_ADSGRAM_BLOCK_ID` is the floor, so this is never empty in a real build — the door
+ * still guards for it, because a build-time constant is not a runtime promise.
  */
 export function adBlockId(placement: Placement): string {
   return placement === 'double_coins' ? COINS_BLOCK_ID : RECOVER_BLOCK_ID;
+}
+
+/* ---------- waiting for the tag ---------- */
+
+/** How long one tap waits for `sad.min.js` before it answers `no_sdk`. */
+const SDK_WAIT_MS = 3000;
+
+/** The poll's beat while waiting: short enough that a script landing mid-wait feels instant. */
+const SDK_POLL_MS = 100;
+
+function sdkNow(): AdsgramSdk | undefined {
+  return typeof window === 'undefined' ? undefined : window.Adsgram;
+}
+
+/**
+ * The tag is `async`, so a player can reach the result card before the script does. A bounded wait
+ * turns "the CDN was still loading" into a played video instead of a refusal: the chip's spinner is
+ * already up, so the beat is legible, and a blocked CDN costs one wait per tap rather than a stuck
+ * screen. Never longer than `SDK_WAIT_MS`, and it settles on whatever `window.Adsgram` says.
+ */
+async function waitForSdk(ms: number): Promise<AdsgramSdk | undefined> {
+  const ready = sdkNow();
+  if (ready) return ready;
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    await new Promise<void>((resolve) => { setTimeout(resolve, SDK_POLL_MS); });
+    const sdk = sdkNow();
+    if (sdk) return sdk;
+  }
+  return sdkNow();
 }
 
 /* ---------- the one-at-a-time guard ---------- */
@@ -122,21 +171,24 @@ const readsAsNoFill = (result: AdsgramShowResult | null): boolean => {
 /**
  * Plays one rewarded video for `placement` and reports whether it was completed.
  *
- * Resolves — never rejects. A missing SDK, an empty block id, a blocked CDN, an empty inventory
- * and an early close are all ordinary outcomes here; the caller decides what to say about them.
+ * Resolves — never rejects. A missing SDK (after one bounded wait for the async tag), a blocked
+ * CDN, an empty inventory and an early close are all ordinary outcomes here; the caller decides
+ * what to say about them.
  *
  * Reward is granted on the `onReward` event OR on a `{ done: true, error: falsy }` resolution,
  * because builds differ on which one lands first. Listeners and the controller are released in
  * `finally`, so a thrown `show()` cannot leak the mutex and lock every later ad out.
  */
-export async function playRewardedAd(placement: Placement): Promise<AdOutcome> {
+export async function playRewardedAd(
+  placement: Placement,
+  options: AdOptions = {},
+): Promise<AdOutcome> {
   /* a tap that lands while a video is up is dropped, not queued: the first view is the one
      the player agreed to, and paying twice for it would be a bug in our favour */
   if (isShowingAd) return { rewarded: false, reason: 'skipped' };
 
-  const sdk = typeof window === 'undefined' ? undefined : window.Adsgram;
   const blockId = adBlockId(placement);
-  if (!sdk || !blockId) return { rewarded: false, reason: 'no_sdk' };
+  if (!blockId) return { rewarded: false, reason: 'no_sdk' };
 
   isShowingAd = true;
 
@@ -155,6 +207,12 @@ export async function playRewardedAd(placement: Placement): Promise<AdOutcome> {
   };
 
   try {
+    /* the tap may beat the async tag: wait a short beat, then answer honestly if it never lands */
+    const sdk = await waitForSdk(SDK_WAIT_MS);
+    if (!sdk) return { rewarded: false, reason: 'no_sdk' };
+    /* the wait is long enough for the player to leave: never open a video over another screen */
+    if (options.stillWanted && !options.stillWanted()) return { rewarded: false, reason: 'skipped' };
+
     controller = sdk.init({ blockId, debug: ADSGRAM_DEBUG });
     listen('onReward', onReward);
     listen('onSkip', onSkip);
