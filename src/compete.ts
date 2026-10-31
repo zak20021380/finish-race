@@ -2135,7 +2135,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   function nationHero(c: NationRow): HTMLElement {
     const total = c.players;
-    const label = nameOf(c.code);
+    const label = c.name || nameOf(c.code);
     const hero = document.createElement('div');
     hero.className = 'nd-hero';
 
@@ -2280,7 +2280,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   function nationYouCard(c: NationRow, m: NationPlayer, count: number): HTMLElement {
-    const label = nameOf(c.code);
+    const label = c.name || nameOf(c.code);
     const card = document.createElement('div');
     card.className = 'nd-you';
     const txt = document.createElement('span');
@@ -2328,7 +2328,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const el = ndEls.sheet;
     const body = ndEls.body;
     if (!el || !body) return;
-    const label = nameOf(c.code);
+    const label = c.name || nameOf(c.code);
     el.dataset.aura = nationAuraOf(c.rank);
     if (ndEls.rank) ndEls.rank.textContent = `#${c.rank}`;
     if (ndEls.name) {
@@ -2487,11 +2487,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }
 
     const hit = rows.find((c) => c.code === code);
-    const nm = nameOf(code) || code;
+    const nm = hit?.name || nameOf(code) || code;
     const rank = document.createElement('span');
     rank.className = `nh-rank${hit ? ` ${podiumOf(hit.rank)}` : ' is-new'}`.trim();
-    rank.textContent = hit ? `#${hit.rank}` : 'NEW';
-    rank.title = hit ? `Rank ${hit.rank} on Nations IQ` : 'Unranked — be the first on the board';
+    rank.textContent = hit ? `#${hit.rank}` : '#—';
+    rank.title = hit ? `Rank ${hit.rank} on Nations IQ` : 'Waiting for the nation standings';
 
     const av = document.createElement('span');
     av.className = 'nh-av';
@@ -2521,7 +2521,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     hud.classList.add('is-set');
     hud.append(rank, av, id, score);
-    const seen = `${nm}, ${hit ? `rank ${hit.rank}` : 'unranked'}, ${points.toLocaleString('en-US')} Tactical IQ contributed`;
+    const seen = `${nm}, ${hit ? `rank ${hit.rank}` : 'rank pending'}, ${points.toLocaleString('en-US')} Tactical IQ contributed`;
     hud.setAttribute('aria-label', `Your Nation: ${seen}. Activate to change your nation.`);
     hud.title = 'Tap to change your nation';
     hud.addEventListener('click', openPicker);
@@ -2534,7 +2534,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (!el) return;
     paintPodium(rows.slice(0, 3).map((c) => ({
       rank: c.rank,
-      name: nameOf(c.code),
+      name: c.name || nameOf(c.code),
       score: c.points.toLocaleString('en-US'),
       code: c.code,
       onTap: () => openNation(c),
@@ -2552,7 +2552,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       ol.append(row({
         rank: c.rank,
         code: c.code,
-        name: nameOf(c.code),
+        name: c.name || nameOf(c.code),
         sub: `${c.players.toLocaleString('en-US')} players`,
         subClass: 'nd-count',
         points: c.points.toLocaleString('en-US'),

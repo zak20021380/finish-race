@@ -4,20 +4,24 @@
  * Home and the Ranks board read this one function, so the card and the cup table can never
  * disagree about a nation's standing. The Worker owns the ledger: points exist only when a real
  * online board settled with a winner, and a nation exists only while real players are enrolled
- * under its flag. This module validates the wire and remembers each nation's previous rank, so a
+ * under its flag. A read carries the caller's profile flag, so a country picked before the first
+ * race is folded into that registry; zero-point nations stay on the board and are ranked by their
+ * real members. This module validates the wire and remembers each nation's previous rank, so a
  * rise or fall is real movement between reads rather than a seeded decoration.
  */
 import { workerUrl } from './adminApi';
-import { readJson, writeJson } from './storage';
+import { profile, readJson, writeJson } from './storage';
 import { tgInitData } from './telegram';
 
 export type NationTrend = 'up' | 'down' | 'same';
 
 export interface NationRow {
   rank: number;
-  /** ISO 3166-1 alpha-2; the name is resolved locally by `nameOf`. */
+  /** ISO 3166-1 alpha-2; `name` is the registry spelling when the wire carries it. */
   code: string;
-  /** Season TIQ the Worker banked for this nation's wins. */
+  /** The registry's display name for the flag, when the wire carried one. */
+  name: string;
+  /** Season TIQ the Worker banked for this nation's wins; an honest zero is still a row. */
   points: number;
   /** Real enrolled players under this flag. */
   players: number;
@@ -62,7 +66,13 @@ export interface NationRoster {
 }
 
 const RANK_KEY = 'detour.nations.ranks.v1';
-const WIRE_TIMEOUT = 3000;
+/**
+ * The Worker's public reads are cold sometimes: an isolate start plus the Durable Object's own
+ * registry hydration is a multi-second round trip, so a 3s leash was aborting reads the backend
+ * was still serving and painting a live cup as unavailable.
+ */
+const WIRE_TIMEOUT = 12_000;
+const WIRE_ATTEMPTS = 2;
 /** How long a rank snapshot is the baseline, so movement survives more than one poll. */
 const REBASE_MS = 10 * 60_000;
 const MAX_ROWS = 200;
@@ -70,8 +80,10 @@ const ROSTER_LIMIT = 20;
 
 interface WireNation {
   code?: unknown;
+  name?: unknown;
   points?: unknown;
   players?: unknown;
+  rank?: unknown;
 }
 
 interface WireYou {
@@ -140,7 +152,7 @@ function writeRanks(season: number, ranks: Record<string, number>): void {
   writeJson(RANK_KEY, { season, at: Date.now(), ranks });
 }
 
-/** Validate the wire, rank it locally, then stamp real movement against the last reading. */
+/** Validate the wire, rank it, then stamp real movement against the last reading. */
 function adopt(data: WireFeed): NationFeed | null {
   if (!data || data.ok !== true) return null;
   const seasonNo = whole(data.seasonNo);
@@ -154,8 +166,9 @@ function adopt(data: WireFeed): NationFeed | null {
     if (!code || seen.has(code)) continue;
     seen.add(code);
     rows.push({
-      rank: 0,
+      rank: whole(raw.rank),
       code,
+      name: text(raw.name, 40),
       points: whole(raw.points),
       players: whole(raw.players),
       trend: 'same',
@@ -165,7 +178,12 @@ function adopt(data: WireFeed): NationFeed | null {
   }
   if (!rows.length) return { rows: [], total: 0, standing: null, seasonNo, live: true };
 
-  rows.sort((a, b) => b.points - a.points || b.players - a.players || a.code.localeCompare(b.code));
+  /* The Worker ranks ties by enrolment, which the wire alone cannot reconstruct; its ranks are
+     authoritative when they form one continuous 1..N sequence, otherwise rank the field here. */
+  const ranked = rows.every((row) => row.rank >= 1)
+    && new Set(rows.map((row) => row.rank)).size === rows.length;
+  if (ranked) rows.sort((a, b) => a.rank - b.rank);
+  else rows.sort((a, b) => b.points - a.points || b.players - a.players || a.code.localeCompare(b.code));
 
   const previous = readRanks();
   const baseline = previous.season === seasonNo && previous.at > 0 ? previous.ranks : {};
@@ -184,13 +202,14 @@ function adopt(data: WireFeed): NationFeed | null {
   }
 
   const mine = data.you && typeof data.you === 'object' ? (data.you as WireYou) : null;
-  const myCode = iso2(text(mine?.code, 2));
+  const wireCode = iso2(text(mine?.code, 2));
+  const myCode = wireCode || iso2(profile.country ?? '');
   const hit = myCode ? rows.find((row) => row.code === myCode) : undefined;
   const standing = hit
     ? {
       code: hit.code,
       rank: hit.rank,
-      points: whole(mine?.points),
+      points: wireCode === hit.code ? whole(mine?.points) : 0,
       total: rows.length,
       pct: Math.max(1, Math.min(100, Math.round((hit.rank / rows.length) * 100))),
     }
@@ -199,11 +218,8 @@ function adopt(data: WireFeed): NationFeed | null {
   return { rows, total: rows.length, standing, seasonNo, live: true };
 }
 
-/** The top nations by real season points, plus the caller's own standing. Never throws. */
-export async function fetchNationBoard(): Promise<NationFeed> {
-  const base = workerUrl('/api/nations/leaderboard');
-  if (!base) return offline();
-
+/** Read the board once, carrying the caller's profile flag so a chosen nation is enrolled. */
+async function readBoard(url: string): Promise<NationFeed | null> {
   const headers: Record<string, string> = { accept: 'application/json' };
   const init = tgInitData();
   if (init) headers['x-telegram-init-data'] = init;
@@ -211,15 +227,30 @@ export async function fetchNationBoard(): Promise<NationFeed> {
   const ac = new AbortController();
   const timer = window.setTimeout(() => ac.abort(), WIRE_TIMEOUT);
   try {
-    const res = await fetch(base, { headers, signal: ac.signal, cache: 'no-store' });
-    if (!res.ok) return offline();
+    const res = await fetch(url, { headers, signal: ac.signal, cache: 'no-store' });
+    if (!res.ok) return null;
     const data = (await res.json()) as WireFeed | null;
-    return (data && adopt(data)) || offline();
+    return (data && adopt(data)) || null;
   } catch {
-    return offline();
+    return null;
   } finally {
     window.clearTimeout(timer);
   }
+}
+
+/** The top nations by real season points, plus the caller's own standing. Never throws. */
+export async function fetchNationBoard(): Promise<NationFeed> {
+  const country = iso2(profile.country ?? '');
+  const path = country ? `/api/nations/leaderboard?country=${country}` : '/api/nations/leaderboard';
+  const url = workerUrl(path);
+  if (!url) return offline();
+
+  /* A cold Worker is one slow read, not an outage: retry once before keeping the last board. */
+  for (let attempt = 0; attempt < WIRE_ATTEMPTS; attempt++) {
+    const feed = await readBoard(url);
+    if (feed) return feed;
+  }
+  return offline();
 }
 
 function readPlayer(raw: unknown): Omit<NationPlayer, 'rank'> | null {

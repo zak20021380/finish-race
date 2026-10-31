@@ -272,12 +272,12 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     li.classList.add('nations-row');
     li.classList.add(`rank-${c.rank}`);
     if (me) li.classList.add('me');
-    const label = nameOf(c.code);
+    const label = c.name || nameOf(c.code);
     const pts = c.points.toLocaleString('en-US');
     const trendLabel = c.trend === 'up'
       ? `rising ${Math.abs(c.delta)}`
       : c.trend === 'down' ? `dropping ${Math.abs(c.delta)}` : 'steady';
-    li.setAttribute('aria-label', `#${c.rank} ${label} — ${pts} TIQ, ${trendLabel}`);
+    li.setAttribute('aria-label', `#${c.rank} ${label} — ${pts} TIQ, ${c.players.toLocaleString('en-US')} players, ${trendLabel}`);
     const rk = document.createElement('span');
     const podium = c.rank >= 1 && c.rank <= 3 ? PODIUM_CLASS[c.rank - 1] : '';
     rk.className = podium ? `rk rank-${c.rank} ${podium}` : `rk rank-${c.rank}`;
@@ -311,10 +311,10 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   };
 
   /** The player's own national standing, painted into the 3-zone HUD bar.
-   *  LEFT = flag + nation · CENTER = the percentile the nation sits in · RIGHT = the
-   *  contribution, ending in the same brain token the rows above wear. Every zone is a
-   *  separate node, so a long country name ellipsizes instead of shoving the pill or
-   *  the score out of the bar. */
+   *  LEFT = flag + nation · CENTER = the nation's real position badge and the percentile it
+   *  sits in · RIGHT = the contribution, ending in the same brain token the rows above wear.
+   *  Every zone is a separate node, so a long country name ellipsizes instead of shoving the
+   *  pill or the score out of the bar. */
   const paintNationMine = (feed: NationFeed | null): void => {
     const bar = document.getElementById('home-nation-mine');
     if (!bar) return;
@@ -352,7 +352,9 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const share = mine && total > 0
       ? Math.max(1, Math.round((mine.rank / total) * 100))
       : 0;
-    if (pillK) pillK.textContent = mine ? t('hudTop') : t('hudUnranked');
+    /* The pill is the nation's real position, not a static label. Until the first live read the
+       rank is simply unknown — never painted as "unranked". */
+    if (pillK) pillK.textContent = mine ? `#${mine.rank}` : '#—';
     if (pct) {
       pct.hidden = !mine;
       pct.textContent = mine ? `${share}%` : '';
@@ -360,7 +362,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     pill?.classList.toggle('is-off', !mine);
     bar.setAttribute('aria-label', mine
       ? `${label} · #${mine.rank} · ${t('hudTop')} ${share}% · ${ptsText} PTS`
-      : `${label} · ${t('hudUnranked')} · ${ptsText} PTS`);
+      : `${label} · ${ptsText} PTS`);
     bar.setAttribute('title', mine
       ? `You fight for ${label} — rank #${mine.rank} of ${total}`
       : `You fight for ${label}`);
@@ -370,11 +372,11 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const list = $('home-countries');
     try {
       const feed = await fetchNationBoard();
-      /* A failed read keeps the last real board; a first read paints the clean empty state. */
+      /* A failed read keeps the last real board; a first read paints the clean waiting state. */
       if (!feed.live) {
         if (!nationFeed) {
           list.textContent = '';
-          list.append(emptyNationRow('Nation standings unavailable'));
+          list.append(emptyNationRow('Nations Cup is reconnecting…'));
         }
         paintNationMine(nationFeed);
         return;
@@ -390,7 +392,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     } catch {
       if (!nationFeed) {
         list.textContent = '';
-        list.append(emptyNationRow('Nation standings unavailable'));
+        list.append(emptyNationRow('Nations Cup is reconnecting…'));
       }
       /* the bar is a structure of zones, never a text node: repaint the last board we
          hold instead of overwriting it with a sentence. */
@@ -964,6 +966,8 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   window.addEventListener('resize', paintPreviews);
 
   syncDraftFromMenu();
+  /* Paint the chosen flag and a pending position badge immediately; the live read fills the rank. */
+  paintNationMine(null);
   void loadCountries();
   void loadMinds();
   /* Boot on the hero slide. Index 0 is the tournament, and a browser that

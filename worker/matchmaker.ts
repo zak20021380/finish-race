@@ -52,8 +52,8 @@ import {
   type BotTier, type LobbyFormat, type Room, type RoomDriver, type RoomEvent,
 } from '../src/room';
 import {
-  authenticate, authRequestFrom, identifyAdminRequest, isLocalhost, isMetricsMark, isSuperAdmin,
-  METRICS_HEADER, verifiedTelegramUserId,
+  authenticate, authRequestFrom, identifyAdminRequest, identifyPlayerRequest, isLocalhost, isMetricsMark,
+  isSuperAdmin, METRICS_HEADER, verifiedTelegramUserId,
   type AdminIdentity, type AdminRole, type Identity, type MindTier,
 } from './auth';
 import { json, reasonOf } from './http';
@@ -62,6 +62,7 @@ import {
   type RegisteredSquad, type SquadVerification,
 } from './squads';
 import { botMainAppLink } from '../shared/config';
+import countryRegistry from '../src/data/countries.json';
 import type { Env } from './env';
 
 /* ---------- protocol ---------- */
@@ -592,6 +593,12 @@ interface NationLedger {
 const nationLedgerKey = (seasonNo: number): string => `nations_s${seasonNo}_scores`;
 
 const emptyNationLedger = (seasonNo: number): NationLedger => ({ seasonNo, points: {}, byPlayer: {} });
+
+/** The same ISO registry the picker renders, so the wire carries the display name too. */
+const COUNTRY_NAME = new Map(
+  (countryRegistry as Array<{ code: string; name: string }>).map((c) => [c.code, c.name]),
+);
+const countryName = (code: string): string => COUNTRY_NAME.get(code) ?? code;
 
 /** A stored ledger is clamped field by field; a different season never lends its points forward. */
 function readNationLedger(raw: unknown, seasonNo: number): NationLedger {
@@ -2277,10 +2284,10 @@ export class MatchmakerDO {
       if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
       return json(await this.mindsBoard(request, url), 200, { 'cache-control': 'no-store' });
     }
-    /* The public Nations Cup: only enrolled nations, only points the room itself banked. */
+    /* The public Nations Cup: every enrolled flag, only points the room itself banked. */
     if (url.pathname === '/api/nations/leaderboard') {
       if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
-      return json(await this.nationsBoard(request), 200, { 'cache-control': 'no-store' });
+      return json(await this.nationsBoard(request, url), 200, { 'cache-control': 'no-store' });
     }
     if (url.pathname === '/api/nations/roster') {
       if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
@@ -2717,44 +2724,37 @@ export class MatchmakerDO {
   }
 
   /**
-   * The Nations Cup: the registry grouped by the flag each seat chose, ranked by the points the
-   * room has actually banked for that flag this season. A nation appears only when real players
-   * are enrolled under it; a nation that has not won yet is an honest zero, never a seed.
+   * The Nations Cup: every flag at least one registered player wears, ranked by the points the
+   * room has actually banked for that flag this season. A nation that has not won yet is an honest
+   * zero and still takes its place on the board; the tie-break reads the real member count and the
+   * first sighting of its earliest player, never a seed.
    */
-  private async nationsBoard(request: Request): Promise<{
+  private async nationsBoard(request: Request, url: URL): Promise<{
     ok: true;
     seasonNo: number;
     updatedAt: number;
     total: number;
-    nations: Array<{ rank: number; code: string; points: number; players: number }>;
+    nations: Array<{ rank: number; code: string; name: string; points: number; players: number }>;
     you: { code: string; rank: number; points: number; total: number } | null;
   }> {
-    const init = request.headers.get('x-telegram-init-data') ?? '';
-    const tgId = init ? await verifiedTelegramUserId(init, this.env) : '';
-    const mineId = tgId ? `tg-${tgId}` : '';
-    const mine = mineId ? this.players.get(mineId) : undefined;
-    const selfBanned = mineId ? this.banned.has(mineId) || mine?.banned === true : false;
-
+    /* A board read carries the caller's profile flag, so a nation chosen in Profile is enrolled
+       before the standings are cut — a player who has not queued yet still has a country. */
+    const mineId = await this.boardSeat(request, url);
     const seasonNo = this.arena.seasonNo;
     const ledger = this.nations.seasonNo === seasonNo ? this.nations : emptyNationLedger(seasonNo);
 
-    const enrolled = new Map<string, number>();
-    for (const p of this.players.values()) {
-      const cc = (p.country || '').toUpperCase();
-      if (!/^[A-Z]{2}$/.test(cc) || p.banned || this.banned.has(p.id)) continue;
-      enrolled.set(cc, (enrolled.get(cc) ?? 0) + 1);
-    }
+    const nations = this.nationStandings(ledger).map((row, i) => ({
+      rank: i + 1,
+      code: row.code,
+      name: row.name,
+      players: row.players,
+      points: row.points,
+    }));
 
-    const nations = [...enrolled.entries()]
-      .map(([code, players]) => ({ code, players, points: Math.max(0, whole(ledger.points[code])) }))
-      .sort((a, b) => b.points - a.points || b.players - a.players || a.code.localeCompare(b.code))
-      .map((row, i) => ({ ...row, rank: i + 1 }));
-
+    const mine = mineId ? this.players.get(mineId) : undefined;
     const myCode = (mine?.country || '').toUpperCase();
-    const hit = mine && !selfBanned && /^[A-Z]{2}$/.test(myCode) && enrolled.has(myCode)
-      ? nations.find((n) => n.code === myCode) ?? null
-      : null;
-    const you = hit
+    const hit = /^[A-Z]{2}$/.test(myCode) ? nations.find((n) => n.code === myCode) ?? null : null;
+    const you = hit && mineId
       ? {
         code: myCode,
         rank: hit.rank,
@@ -2764,6 +2764,85 @@ export class MatchmakerDO {
       : null;
 
     return { ok: true, seasonNo, updatedAt: Date.now(), total: nations.length, nations, you };
+  }
+
+  /**
+   * The caller's verified seat, with their profile country folded into the registry first. The
+   * profile is the one place a nation choice lives before the socket ever opens; the write is
+   * idempotent, touches only the caller's own record, and a banned seat is never enrolled.
+   */
+  private async boardSeat(request: Request, url: URL): Promise<string> {
+    const who = await identifyPlayerRequest(request, this.env);
+    if (!who || this.restricted(who.playerId)) return '';
+    const cc = (url.searchParams.get('country') ?? '').toUpperCase();
+    if (!/^[A-Z]{2}$/.test(cc)) return who.playerId;
+
+    const now = Date.now();
+    const existing = this.players.get(who.playerId);
+    if (existing) {
+      if (existing.country !== cc) {
+        existing.country = cc;
+        this.persist();
+      }
+      return existing.id;
+    }
+
+    if (this.players.size >= PLAYERS_MAX) this.trim();
+    const p = freshPlayer({
+      player: { id: who.playerId, name: who.name.slice(0, 40) || 'Player', username: '', flag: cc, avatar: '' },
+      tiq: 0,
+      tier: 'rookie',
+      flag: cc,
+      age: 0,
+      guest: who.guest,
+      coins: 0,
+      stars: 0,
+      referrals: 0,
+      squad: '',
+    }, now);
+    this.players.set(p.id, p);
+    this.creditSignup(now);
+    this.creditActive(0, now);
+    this.persist();
+    return p.id;
+  }
+
+  /**
+   * The enrolled flags, folded from the registry. Points descend first; an unbanked nation then
+   * ranks by how many real players wear its flag, and the flag whose earliest player registered
+   * first takes the remaining tie. The code is the final, deterministic tie-break.
+   */
+  private nationStandings(ledger: NationLedger): Array<{
+    code: string; name: string; points: number; players: number; since: number;
+  }> {
+    const enrolled = new Map<string, { players: number; since: number }>();
+    for (const p of this.players.values()) {
+      const cc = (p.country || '').toUpperCase();
+      if (!/^[A-Z]{2}$/.test(cc) || p.banned || this.banned.has(p.id)) continue;
+      const since = p.firstSeen > 0 ? p.firstSeen : Number.MAX_SAFE_INTEGER;
+      const row = enrolled.get(cc);
+      if (row) {
+        row.players += 1;
+        if (since < row.since) row.since = since;
+      } else {
+        enrolled.set(cc, { players: 1, since });
+      }
+    }
+
+    return [...enrolled.entries()]
+      .map(([code, row]) => ({
+        code,
+        name: countryName(code),
+        points: Math.max(0, whole(ledger.points[code])),
+        players: row.players,
+        since: row.since,
+      }))
+      .sort((a, b) => (
+        b.points - a.points
+        || b.players - a.players
+        || a.since - b.since
+        || a.code.localeCompare(b.code)
+      ));
   }
 
   /**
