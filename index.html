@@ -5184,46 +5184,18 @@
           <div class="gm-view" id="gm-view-modes">
             <div class="gm-list" role="radiogroup" aria-label="Game modes">
 
-              <!-- Quick match is parked behind the gold lock: a showcase row, never a door. The
-                   checkmark slot carries the glass "SOON" pill instead, and every key inside the
-                   card is a picture of a key — one tap answers with the tuning line. -->
+              <!-- Quick match is a locked showcase, never a door: one collapsed obsidian row with
+                   a metallic SOON chip. A tap only explains the server tuning — there is no
+                   sub-drawer, size picker or secondary key to expand. -->
               <div class="gm-card" data-row="online" role="none">
                 <button class="gm-pick" type="button" role="radio" aria-checked="false" aria-disabled="true"
                   data-gmode="duel_1v1">
                   <span class="gm-ico duel" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-swords" /></svg></span>
                   <span class="gm-txt">
                     <span class="gm-name" data-i18n="quickMatch">Quick match</span>
-                    <span class="gm-desc" data-i18n="quickDesc">Undergoing elite server tuning • Live soon ⚡</span>
+                    <span class="gm-desc" data-i18n="quickDesc">Undergoing elite server tuning · Live soon</span>
                   </span>
-                  <span class="gm-badge-soon" aria-hidden="true">✨ SOON</span>
-                </button>
-                <div class="gm-seg" hidden>
-                  <span class="gm-lock" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-lock" /></svg></span>
-                  <div class="seg" role="group" aria-label="Match size">
-                    <button class="seg-b" type="button" data-size="duel_1v1" aria-pressed="false"
-                      aria-disabled="true" aria-label="1v1, locked while the servers are tuned">1v1</button>
-                    <button class="seg-b is-teaser" type="button" data-size="party_2v2" aria-pressed="false"
-                      aria-disabled="true" aria-label="2v2, coming soon">
-                      <span class="gm-seg-label" aria-hidden="true">2v2</span>
-                      <span class="gm-soon" aria-hidden="true" data-i18n="soon">Soon</span>
-                    </button>
-                  </div>
-                  <span class="gm-wait" id="gm-wait" aria-live="polite">~5s</span>
-                </div>
-                <button class="gm-filters" type="button" id="gm-filters" hidden aria-disabled="true"
-                  aria-label="Custom Matchmaking, locked. Unlocks at Level 5">
-                  <span class="gm-f-face">
-                    <span class="gm-f-ico" aria-hidden="true"><svg class="ico" focusable="false"><use href="#i-tune" /></svg></span>
-                    <span class="gm-f-txt">
-                      <span class="gm-f-name" data-i18n="customMatchmaking">Custom Matchmaking</span>
-                      <span class="gm-f-desc" data-i18n="customMatchmakingDesc">Filter by Region &amp; Skill tier</span>
-                    </span>
-                    <span class="gm-f-badge" aria-hidden="true">
-                      <svg class="ico" focusable="false"><use href="#i-lock" /></svg>
-                      <span class="gm-f-tag">PRO</span>
-                    </span>
-                  </span>
-                  <span class="gm-f-tip" role="status" hidden data-i18n="unlocksLevel5">Unlocks at Level 5</span>
+                  <span class="gm-badge-soon" aria-hidden="true">SOON</span>
                 </button>
               </div>
 

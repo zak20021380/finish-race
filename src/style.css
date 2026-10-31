@@ -11955,7 +11955,7 @@ html.reduced-motion .stars-count::before { animation: none; }
 .gm-check .ico { width: 15px; height: 15px; }
 .gm-card.is-active .gm-check { display: grid; }
 
-/* ---- option strip inside the selected row: segmented control + wait ---- */
+/* ---- option strip inside the selected row: segmented control ---- */
 .gm-seg {
   display: flex;
   align-items: center;
@@ -11963,19 +11963,6 @@ html.reduced-motion .stars-count::before { animation: none; }
   padding: 0 6px 6px;
 }
 .gm-seg .seg { flex: 1 1 auto; min-width: 0; }
-/* queue estimate: a small neon chip, so "5 seconds" reads as a promise */
-.gm-wait {
-  flex: none;
-  padding: 5px 10px;
-  border-radius: var(--radius-pill);
-  background: rgba(34, 211, 238, .12);
-  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, .35);
-  color: #7DD3FC;
-  font-size: var(--t-micro);
-  font-weight: 800;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
 .gm-seg .seg-b { min-height: 44px; }
 /* The practice card carries two option rows — bot level and seat count — so its strip stacks
    rather than sitting side by side: three buttons across half a 360px card is not a tap target.
@@ -11985,193 +11972,34 @@ html.reduced-motion .stars-count::before { animation: none; }
   align-items: stretch;
   gap: 6px;
 }
-/* 2v2 ships as a teaser: same 44px key, dimmed face, never selectable */
-.gm-seg .seg-b.is-teaser {
-  position: relative;
-  cursor: default;
-  color: rgba(203, 213, 225, .7);
-  background: rgba(255, 255, 255, .04);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
-}
-.gm-seg .seg-b.is-teaser:active { transform: none; }
-.gm-seg-label { display: block; }
-/* corner badge: a mini gold glow that says why the key does not move — the same amber family as
-   the card's own "SOON" pill, so the parked row never mixes two accent hues */
-.gm-soon {
-  position: absolute;
-  top: 3px;
-  right: 4px;
-  padding: 1px 5px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, rgba(245, 158, 11, .22), rgba(217, 119, 6, .14));
-  box-shadow:
-    inset 0 0 0 1px rgba(245, 158, 11, .4),
-    0 0 10px -3px rgba(245, 158, 11, .8);
-  color: #FDE68A;
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  line-height: 1.4;
-  white-space: nowrap;
-}
-/* the strip loses its bottom breath when the locked row follows it */
-.gm-seg:has(+ .gm-filters) { padding-bottom: 2px; }
-
-/* ---- locked teaser row: custom opponent filters, under the size strip ----
-   A recessed pill with a dashed amber rim — the "coming soon" cue. The
-   face sits at .8 opacity; the toast above it stays fully lit. */
-.gm-filters {
-  appearance: none;
-  border: 1.5px dashed rgba(252, 211, 77, .38);
-  margin: 0 6px;
-  font: inherit;
-  cursor: pointer;
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: calc(100% - 12px);
-  min-height: 40px;
-  padding: 3px 12px;
-  border-radius: var(--radius-pill);
-  color: var(--ink);
-  text-align: left;
-  background: linear-gradient(180deg, rgba(13, 19, 31, .66), rgba(10, 15, 25, .66));
-  box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, .5),
-    inset 0 -1px 0 rgba(255, 255, 255, .06);
-  transition: transform var(--motion-fast), border-color var(--motion-fast), box-shadow var(--motion-fast);
-}
-.gm-filters:hover:not(:active) { border-color: rgba(252, 211, 77, .55); }
-.gm-filters:active { transform: scale(.98); }
-.gm-filters:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-/* the 40px face is a teaser, not a queue control, so it keeps the house 48px
-   target by borrowing the 4px of card gap above and below rather than growing */
-.gm-filters::after {
-  content: '';
-  position: absolute;
-  inset: -4px 0;
-  border-radius: inherit;
-}
-/* the locked row rides tight under the size strip: one gap step, not two */
-.gm-card:has(.gm-filters) { gap: 8px; }
-/* the whole face rides at .8: locked, but still readable */
-.gm-f-face {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  opacity: .8;
-}
-/* glowing sliders chip: the same amber halo the duel icon burns with */
-.gm-f-ico {
-  flex: none;
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  color: #FDE68A;
-  background: linear-gradient(180deg, #0A0F1C, var(--field));
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, .55),
-    inset 0 0 0 1px rgba(252, 211, 77, .42),
-    0 0 12px -3px rgba(245, 158, 11, .8);
-}
-.gm-f-ico .ico { width: 15px; height: 15px; }
-.gm-f-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.gm-f-name {
-  font-size: var(--t-3);
-  font-weight: 800;
-  letter-spacing: -.01em;
-  line-height: 1.25;
-  color: #E8EEF6;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.gm-f-desc {
-  font-size: var(--t-micro);
-  font-weight: 600;
-  line-height: 1.3;
-  color: #93A1B5;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* the locked badge: a gold pill with a glowing lock and the PRO tag */
-.gm-f-badge {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 9px;
-  border-radius: var(--radius-pill);
-  color: #FDE68A;
-  background: linear-gradient(180deg, rgba(251, 191, 36, .16), rgba(245, 158, 11, .10));
-  box-shadow:
-    inset 0 0 0 1px rgba(252, 211, 77, .45),
-    inset 0 1px 0 rgba(255, 255, 255, .12),
-    0 0 10px -3px rgba(245, 158, 11, .85);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  line-height: 1.4;
-  white-space: nowrap;
-}
-.gm-f-badge .ico { width: 11px; height: 11px; }
-/* the playful wiggle a locked key answers a tap with */
-@keyframes gm-shake {
-  0%, 100% { transform: translateX(0); }
-  18% { transform: translateX(-4px); }
-  38% { transform: translateX(4px); }
-  58% { transform: translateX(-2.5px); }
-  78% { transform: translateX(2px); }
-}
-.gm-filters.shake { animation: gm-shake .42s cubic-bezier(.36, .07, .19, .97); }
-/* the toast: a gold capsule that drops out of the row, never a layout shift */
-.gm-f-tip {
-  position: absolute;
-  top: calc(100% + 7px);
-  left: 50%;
-  z-index: 6;
-  padding: 6px 12px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
-  color: #10141D;
-  font-size: var(--t-micro);
-  font-weight: 900;
-  white-space: nowrap;
-  box-shadow:
-    0 3px 0 var(--gold-lip),
-    0 10px 20px -8px rgba(245, 158, 11, .65),
-    inset 0 1px 0 rgba(255, 255, 255, .55);
-  pointer-events: none;
-  opacity: 0;
-  transform: translateX(-50%) translateY(4px);
-  transition: opacity .18s ease, transform .18s ease;
-}
-.gm-f-tip.on { opacity: 1; transform: translateX(-50%) translateY(0); }
-
-/* ---- QUICK MATCH: parked behind the gold lock ----
-   The row is a showcase, not a door. A frosted obsidian slab, one restrained gold hairline, the
-   cyan checkmark gone and a glass "SOON" pill in its slot. Everything inside sits at .72 so the
-   rim and the badge are the only lit things in the card: deliberate, never broken. */
+/* ---- QUICK MATCH: collapsed obsidian coming-soon row ----
+   One compact row, no sub-drawer and no padlock. A smoked-glass slab holds a muted
+   titanium sword tile, two lines of copy and a single burnished champagne chip. */
 .gm-card[data-row="online"] {
-  border: 1px solid rgba(245, 158, 11, .2);
-  background-color: #141A26;
-  background-image:
-    linear-gradient(168deg, rgba(32, 40, 56, .96) 0%, rgba(14, 19, 29, .98) 58%, rgba(20, 26, 38, .97) 100%);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+  min-height: 76px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(22, 24, 33, .8), rgba(12, 14, 20, .9));
+  background-color: transparent;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .05),
-    inset 0 0 36px -20px rgba(245, 158, 11, .5),
-    0 14px 30px -24px #000;
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    0 16px 30px -24px rgba(0, 0, 0, .9);
 }
-/* the row is a picture of a door: the cursor says so before the tap does */
-.gm-card[data-row="online"] .gm-pick { cursor: not-allowed; }
-/* the button's own hover dim would stack on the inner tint, so the row holds perfectly still */
+/* the row is tappable only to explain itself: the cursor is a door, not a lock */
+.gm-card[data-row="online"] .gm-pick {
+  min-height: 0;
+  padding: 0;
+  gap: 14px;
+  cursor: pointer;
+}
+/* no dim, lift or well: the obsidian face holds perfectly still under the finger */
 .gm-card[data-row="online"] .gm-pick:hover:not(:active),
 .gm-card[data-row="online"] .gm-pick:active {
   opacity: 1;
@@ -12179,63 +12007,65 @@ html.reduced-motion .stars-count::before { animation: none; }
   background-color: transparent;
 }
 .gm-card[data-row="online"] .gm-pick:focus-visible {
-  outline: 3px solid rgba(245, 158, 11, .5);
-  outline-offset: 2px;
+  outline: 2px solid rgba(212, 175, 55, .5);
+  outline-offset: 4px;
 }
-/* icon and copy step back; the badge keeps its full light */
-.gm-card[data-row="online"] .gm-pick > :not(.gm-badge-soon) {
-  opacity: .72;
-  filter: saturate(.85);
+/* deep dark glass well; the blades are steel, never gold */
+.gm-card[data-row="online"] .gm-ico.duel {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  color: #cbd5e1;
+  background: linear-gradient(160deg, rgba(30, 34, 45, .94), rgba(8, 10, 15, .98));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
 }
-.gm-card[data-row="online"] .gm-name { color: #E9EEF6; }
-/* the checkmark slot, re-cast: a glass pill with a gold rim and a slow ambient pulse */
+.gm-card[data-row="online"] .gm-ico.duel .ico {
+  width: 22px;
+  height: 22px;
+  filter: grayscale(1) brightness(.9);
+  opacity: .75;
+}
+.gm-card[data-row="online"] .gm-txt { gap: 0; }
+.gm-card[data-row="online"] .gm-name {
+  margin-bottom: 2px;
+  color: #f1f5f9;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+.gm-card[data-row="online"] .gm-desc {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* the inline-end chip: smoked obsidian glass, a hairline champagne rim, no glow loop */
 .gm-badge-soon {
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 5px 10px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, rgba(245, 158, 11, .25), rgba(217, 119, 6, .15));
-  border: 1px solid rgba(245, 158, 11, .4);
+  padding: 4px 10px;
+  border: 1px solid rgba(212, 175, 55, .35);
+  border-radius: 999px;
+  background: rgba(26, 22, 14, .7);
   box-shadow:
-    0 0 12px rgba(245, 158, 11, .2),
-    inset 0 1px 0 rgba(255, 255, 255, .16);
-  color: #fef08a;
-  font-size: 11px;
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    0 0 10px rgba(212, 175, 55, .15);
+  color: #f3d483;
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: .5px;
+  letter-spacing: 1.5px;
   line-height: 1.2;
+  text-transform: uppercase;
   white-space: nowrap;
-  animation: gm-soon-glow 2.8s ease-in-out infinite;
 }
-@keyframes gm-soon-glow {
-  0%, 100% { box-shadow: 0 0 12px rgba(245, 158, 11, .2), inset 0 1px 0 rgba(255, 255, 255, .16); }
-  50% { box-shadow: 0 0 20px rgba(245, 158, 11, .34), inset 0 1px 0 rgba(255, 255, 255, .22); }
-}
-/* the padlock that says why the two size keys do not move */
-.gm-lock {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  color: #FDE68A;
-  background: linear-gradient(180deg, rgba(245, 158, 11, .2), rgba(217, 119, 6, .08));
-  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .32);
-}
-.gm-lock .ico { width: 12px; height: 12px; }
-/* every key inside the parked row is a picture of a key: half light, not-allowed cursor */
-.gm-card[data-row="online"] .gm-seg { filter: saturate(.85); }
-.gm-card[data-row="online"] .gm-seg .seg-b,
-.gm-card[data-row="online"] .gm-wait {
-  opacity: .5;
-  cursor: not-allowed;
-}
-.gm-card[data-row="online"] .gm-seg .seg-b:active { transform: none; }
-/* the tap lands as one amber wiggle, exactly like the locked filters row below it */
-.gm-card[data-row="online"].shake { animation: gm-shake .42s cubic-bezier(.36, .07, .19, .97); }
 
 /* ---- FRIENDS: the entry pane ----
    Two actions and nothing else: a gold clay commitment, a hairline, a recessed well. The
@@ -13522,11 +13352,9 @@ html.reduced-motion .gm-start.is-waiting { animation: none; }
   .gm-ico { width: 46px; height: 46px; border-radius: 15px; }
   .gm-ico .ico { width: 23px; height: 23px; }
 }
-/* The locked filters row added ~50px to the Quick match card, which is the
-   tallest thing in the drawer, so the row's own margins give before any control
-   does: the drawer spends its vertical slack rather than shrinking a key.
-   The cap has to be addressed by ID — the base rule is `#sheet-game-modes,
-   .gm-sheet`, so a bare `.gm-sheet` override loses on specificity. */
+/* Short columns give up drawer chrome before a control shrinks. The cap has to be
+   addressed by ID — the base rule is `#sheet-game-modes, .gm-sheet`, so a bare
+   `.gm-sheet` override loses on specificity. */
 @media (max-height: 660px) {
   #sheet-game-modes {
     --gm-gap: 10px;
@@ -13545,15 +13373,11 @@ html.reduced-motion .gm-start.is-waiting { animation: none; }
   .gm-rewards { min-height: 24px; padding: 2px var(--s3); }
 }
 html.reduced-motion .gm-pick, html.reduced-motion .gm-key, html.reduced-motion .gm-card,
-html.reduced-motion .gm-filters, html.reduced-motion .gm-f-tip,
 html.reduced-motion .fr-create, html.reduced-motion .fr-join-btn,
 html.reduced-motion .lb-code, html.reduced-motion .lb-copy-link, html.reduced-motion .lb-invite, html.reduced-motion .lb-slot,
 html.reduced-motion .lb-fmt, html.reduced-motion .lb-pick-b, html.reduced-motion .lb-leave { transition: none; }
 html.reduced-motion .lb-badge-away, html.reduced-motion .lb-away-dot, html.reduced-motion .lb-hud.is-in .lb-hud-card { animation: none; }
 html.reduced-motion .lb-hud-b { transition: none; }
-html.reduced-motion .gm-filters.shake { animation: none; }
-html.reduced-motion .gm-badge-soon { animation: none; }
-html.reduced-motion .gm-card[data-row="online"].shake { animation: none; }
 
 
 /* ==========================================================================
@@ -28112,7 +27936,7 @@ html[data-lang="fa"] :is(
   .hero-t, .mode-hero-title, .mode-hero-badge,
   .m-title, .sheet-t, .sheet-p, .set-title, .set-card-h > span,
   .row-t, .row-s, .pick-n, .pick-empty,
-  .gm-title, .gm-sub, .gm-name, .gm-desc, .gm-f-name, .gm-f-desc, .gm-f-tip,
+  .gm-title, .gm-sub, .gm-name, .gm-desc,
   .fr-create-t, .fr-create-s, .fr-or span, .fr-join-btn,
   .lb-mode-sub, .lb-hint, .lb-name, .lb-role, .lb-open-t, .lb-team-t,
   .sq-title, .sq-sub, .sq-create-label, .sq-card-note, .sq-roster-title, .sq-name, .sq-role,
@@ -28161,7 +27985,7 @@ html[data-lang="fa"] :is(.gm-lead, .gm-start, #squad-leave, #squad-explore-t, .s
 html[data-lang="fa"] :is(
   #p-coins, #p-level, #pf-coins, #pf-tiq, #pf-level, #pf-xp, #pf-games,
   #pf-wins, #pf-losses, #pf-best, #pf-streak, #pf-badge-count,
-  #home-play-rw, .pd-rw, .pd-rw-item, .pd-rw b, .gm-rw, .gm-wait, #lb-count, #lb-code, .lb-count,
+  #home-play-rw, .pd-rw, .pd-rw-item, .pd-rw b, .gm-rw, #lb-count, #lb-code, .lb-count,
   .lb-fmt, .sq-rank, .sq-count, .sq-chip, .sq-score, .sq-meta-handle,
   .sq-card-handle, .sq-banner-handle, .sqp-handle, .flag-code, .id-lvl,
   .id-team-rank, .stars-count, .tour-clock, .pf-xp-lvl, .pf-xp-meta,
@@ -28181,7 +28005,7 @@ html[data-lang="fa"] :is(.m-title, .sheet-t, .set-title, .sheet-p, .set-card-h >
 
 /* ---- block copy starts at the right edge ---- */
 html[data-lang="fa"] :is(
-  .gm-title, .gm-sub, .gm-name, .gm-desc, .gm-f-name, .gm-f-desc,
+  .gm-title, .gm-sub, .gm-name, .gm-desc,
   .fr-create-txt, .fr-create-t, .fr-create-s,
   .lb-name, .lb-role,
   .sq-title, .sq-sub, .sq-card-note, .sq-roster-title, .sq-name,

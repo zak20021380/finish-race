@@ -2604,7 +2604,7 @@ function launchSelectedMode(): void {
   if (sel.id === 'duel_1v1' || sel.id === 'party_2v2') {
     impact('light');
     notify('warning');
-    showNote('Online servers undergoing tuning • Live soon!', false, 2600);
+    showNote('Online servers undergoing tuning · Live soon', false, 2600);
     const drawer = sheetById('sheet-game-modes');
     if (drawer) sheets.open(drawer);
     return;
