@@ -26,7 +26,7 @@
  * `opponentLeft()` locks the whole surface so a taunt never flies into an empty room.
  */
 import './banter.css';
-import { onLang, t } from './settings';
+import { lang, onLang, t } from './settings';
 import { impact, notify, openLink } from './telegram';
 import { grantVipPreview, insideTelegram, isPremiumUser, vipSource } from './premium';
 import {
@@ -152,7 +152,42 @@ const isEmote = (text: string): boolean => HAS_PICTOGRAPH.test(text) && EMOTE_ON
 function presetLabel(id: PostChatPresetId): string {
   const key = PRESET_KEYS[id];
   const painted = t(key);
-  return painted === key ? postChatPresetText(id) : painted;
+  if (painted !== key) return painted;
+  /* the dictionary is the paint; the table is the floor a lagging locale lands on, so a key the
+     Persian table has not caught up on costs a translation and never the player's voice */
+  return postChatPresetText(id, lang);
+}
+
+/**
+ * A line's closing token — the one or two pictographs that end it.
+ *
+ * Splitting it off is what makes a tile survive a narrow screen: the words are the only thing
+ * allowed to give way, so a Persian sentence that outgrows a 320px tile loses its tail to an
+ * ellipsis while the ♟️ stays whole at the terminal edge. Isolating the token also stops a
+ * bidi-neutral emoji from dragging the line's final punctuation to the wrong end.
+ */
+const TRAILING_TOKEN = /^([\s\S]*?)\s*((?:\p{Extended_Pictographic}|\uFE0F|\u200D|\u20E3)+)\s*$/u;
+
+/**
+ * Paints a closed line into its tile: words in one box, token in another.
+ *
+ * The accessible name is set from the whole label rather than left to the two boxes, so a
+ * screen reader still hears one sentence and the split stays a purely visual affair.
+ */
+function paintChip(chip: HTMLButtonElement, label: string): void {
+  const words = el('span', 'banter-canned-t');
+  const match = TRAILING_TOKEN.exec(label);
+  /* a line that is nothing but a token has no words to protect: leave it in one box */
+  if (match && match[1].trim()) {
+    words.textContent = match[1];
+    const token = el('span', 'banter-canned-e', match[2]);
+    token.setAttribute('aria-hidden', 'true');
+    chip.replaceChildren(words, token);
+  } else {
+    words.textContent = label;
+    chip.replaceChildren(words);
+  }
+  chip.setAttribute('aria-label', label);
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -407,7 +442,7 @@ export function createBanter(wiring: BanterWiring): Banter {
     }
     for (const chip of cannedKeys) {
       const id = chip.dataset.preset as PostChatPresetId | undefined;
-      if (id) chip.textContent = presetLabel(id);
+      if (id) paintChip(chip, presetLabel(id));
     }
   }
 

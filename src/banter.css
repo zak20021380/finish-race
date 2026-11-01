@@ -174,6 +174,9 @@
 .result-banter {
   display: grid;
   gap: 6px;
+  /* a grid item's default `min-width: auto` lets its widest child set the floor; a long Persian
+     line must never be able to widen the capsule, so the tray opts out of that rule here */
+  min-width: 0;
   margin: 0 0 2px;
   padding: 5px 6px;
   border: 1px solid rgba(255, 255, 255, .08);
@@ -544,9 +547,14 @@
     0 0 14px -4px rgba(243, 212, 131, .7);
 }
 .banter-send:disabled { opacity: .55; cursor: default; }
-/* the refined micro-lock: a jeweller's pin, not a second button */
+/* the refined micro-lock: a jeweller's pin, not a second button.
+   Containment math: the bar is 38px, the key 28px, so the key clears the bar's top edge by 5px.
+   A -3px overhang therefore parks the 12px pin 2px INSIDE the bar in either direction — and
+   `inset-inline-end` is what flips it to the far shoulder when the document reads right-to-left.
+   `pointer-events: none` keeps the 3px it steals from the gap from swallowing a tap. */
 .banter-send-lock {
   position: absolute;
+  z-index: 2;
   inset-inline-end: -3px;
   top: -3px;
   display: grid;
@@ -598,13 +606,25 @@
 }
 .banter-canned-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* `minmax(0, 1fr)`, never a bare `1fr`: a track's implicit minimum is max-content, so one long
+     Persian sentence would widen the grid past the card and shove the whole capsule sideways.
+     This is the only reason a tile can never push the layout out, whatever the copy says. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 5px;
 }
 .banter-canned-chip {
+  /* the tile's ONE height knob. Height, min and max all read it, so no copy — Persian, a long
+     English line, a 40-character joke — can ever make a tile taller than the row it sits in. */
+  --chip-h: 30px;
   appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   min-width: 0;
-  height: 30px;
+  height: var(--chip-h);
+  min-height: var(--chip-h);
+  max-height: var(--chip-h);
   padding: 0 7px;
   border: 1px solid rgba(255, 255, 255, .1);
   border-radius: 9px;
@@ -619,10 +639,28 @@
   text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: transform .14s ease, border-color .14s ease, background .14s ease;
+}
+/* the words are the only box allowed to give way: one line, an ellipsis at the cut, never a
+   second line and never a taller tile. `line-height` is generous because a joined script hangs
+   its descenders (ج, ی) well below the baseline, and a 1.0 box would clip them. */
+.banter-canned-t {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  line-height: 1.55;
+}
+/* the token never shrinks and never ellipsizes: it is the half of the line that must survive.
+   Isolating it keeps a bidi-neutral emoji from reordering the sentence's final punctuation. */
+.banter-canned-e {
+  flex: none;
+  line-height: 1;
+  unicode-bidi: isolate;
 }
 .banter-canned-chip:not(:disabled):active {
   transform: scale(.96);
@@ -897,7 +935,7 @@
   .banter-send-lock { width: 11px; height: 11px; inset-inline-end: -2px; top: -2px; }
   .banter-send-lock .ico { width: 6px; height: 6px; }
   .banter-canned { padding: 6px; gap: 5px; }
-  .banter-canned-chip { height: 28px; font-size: 10px; padding: 0 5px; letter-spacing: .02em; }
+  .banter-canned-chip { --chip-h: 28px; font-size: 10px; padding: 0 5px; letter-spacing: .02em; }
   .banter-vip-pill { height: 30px; font-size: 9px; letter-spacing: .04em; }
   .result-say.is-emote .banter-glyph { width: 16px; height: 16px; }
   .vip-card { padding: 16px 13px 12px; }
@@ -972,7 +1010,23 @@ html.reduced-motion .vip-scrim {
 }
 html.reduced-motion .result-say.is-out { transition: opacity .2s ease; }
 
-/* ---- Persian: Vazirmatn, no tracking, real RTL on the composer ---- */
+/* ==========================================================================
+   PERSIAN — the joined-script pass.
+
+   Two things decide whether a Persian line reads or falls apart, and neither is taste:
+
+   1. TRACKING. A positive letter-spacing between two joined letters severs the ligature and the
+      word literally comes apart on screen. The ban is `!important` and it covers the whole tray,
+      every bubble and the store, so an author rule added later in this file cannot bring it back.
+   2. HEIGHT. Persian sits deeper than Latin at the same size — ج and ی hang well below the
+      baseline — so the tile keeps a taller line box while its HEIGHT stays pinned to --chip-h.
+   ========================================================================== */
+
+:lang(fa) :is(.result-banter, .result-say, .vip-sheet),
+:lang(fa) :is(.result-banter, .result-say, .vip-sheet) * {
+  letter-spacing: 0 !important;
+}
+
 html[data-lang="fa"] .result-banter,
 html[data-lang="fa"] .banter-alert,
 html[data-lang="fa"] .banter-input,
@@ -985,18 +1039,31 @@ html[data-lang="fa"] .result-say {
 html[data-lang="fa"] .banter-label { font-size: 7.5px; }
 html[data-lang="fa"] .result-say { font-size: 11.5px; line-height: 1.55; }
 html[data-lang="fa"] .result-say.is-emote .result-say-t { line-height: 1; }
-html[data-lang="fa"] .banter-input { font-size: 12.5px; text-align: right; }
+/* one bubble, one line: the sentence is its own bidi paragraph, so a leading Latin token or a
+   trailing emoji can never drag the Persian text out of order */
+html[data-lang="fa"] .result-say-t { unicode-bidi: isolate; }
+html[data-lang="fa"] .banter-input {
+  font-size: clamp(11.5px, 3vw, 12.5px);
+  text-align: right;
+}
 html[data-lang="fa"] .banter-alert { font-size: 10px; line-height: 1.5; }
 html[data-lang="fa"] .banter-canned-k { font-size: 8px; letter-spacing: 0; }
 html[data-lang="fa"] .banter-canned-chip {
+  --chip-h: 32px;
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
-  font-size: 10.5px;
+  /* the scale is viewport-bound, so a 320px phone gets the small end and a 430px phone the large
+     one: the longest taunt still fits its tile, and the tile's height never moves */
+  font-size: clamp(11px, 2.9vw, 12.5px);
   letter-spacing: 0;
-  line-height: 1.5;
+  line-height: 1.6;
   text-transform: none;
+  padding-inline: 4px;
 }
+/* the line box, not the tile: 1.7 at 11px is 18.7px of room for a 14px glyph, so no descender
+   is ever sliced by the overflow that produces the ellipsis */
+html[data-lang="fa"] .banter-canned-t { line-height: 1.7; }
 html[data-lang="fa"] .banter-vip-pill {
-  font-size: 10px;
+  font-size: clamp(10px, 2.7vw, 11px);
   letter-spacing: 0;
   text-transform: none;
   line-height: 1.6;
@@ -1017,3 +1084,18 @@ html[data-lang="fa"] .vip-cta {
   line-height: 1.5;
 }
 html[data-lang="fa"] .vip-fine { font-size: 10px; line-height: 1.6; }
+/* the store is a SIBLING of the capsule, so it inherits none of the capsule's direction: Persian
+   has to be handed it directly, or the feature rows and the close key stay on the wrong side */
+html[data-lang="fa"] .vip-card { direction: rtl; }
+
+/* the narrowest phone the app supports: the tile pays in type size and inner padding, never in
+   height and never in hitbox. 320px is the one width where the longest taunt is wider than its
+   tile, so the padding gives back the 4px it can spare before the type does. */
+@media (max-width: 344px) {
+  html[data-lang="fa"] .banter-canned-chip {
+    --chip-h: 30px;
+    font-size: 10.5px;
+    padding-inline: 2px;
+  }
+  html[data-lang="fa"] .banter-canned { padding: 5px; }
+}

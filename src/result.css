@@ -157,7 +157,10 @@
   gap: 8px;
   height: 44px;
   min-height: 44px;
-  padding: 0 9px 0 7px;
+  /* logical, so the tighter inset stays on the avatar's side and the looser one on the trailing
+     side when the capsule reads right-to-left */
+  padding-block: 0;
+  padding-inline: 7px 9px;
   border: 1px solid transparent;
   border-radius: 12px;
   text-align: start;
