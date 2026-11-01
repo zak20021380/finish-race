@@ -1,4 +1,5 @@
 import './style.css';
+import './result.css';
 import {
   CONFIG, MAX_TEAMS, apply, ballById, distField, firstBall, getAutoMove, mineCells, minesLeft, newGame,
   reachableBall, steps as teamSteps, view as fogOfWar, wallBudget, wallOk, wallsCross, wallsOverlap,
@@ -100,27 +101,16 @@ const canvas = $<HTMLCanvasElement>('board');
 const wrap = $<HTMLDivElement>('board-wrap');
 const overlay = $<HTMLDivElement>('overlay');
 const verdict = $<HTMLHeadingElement>('verdict');
-const sub = $<HTMLParagraphElement>('sub');
 const again = $<HTMLButtonElement>('again');
 const toMenu = $<HTMLButtonElement>('to-menu');
 const resultKicker = $<HTMLParagraphElement>('result-kicker');
-const resultPodium = $<HTMLDivElement>('result-podium');
-const resultTopSeat = $<HTMLDivElement>('result-top-seat');
-const resultTopImg = $<HTMLImageElement>('result-top-img');
-const resultTopInitial = $<HTMLElement>('result-top-initial');
-const resultTopTag = $<HTMLElement>('result-top-tag');
-const resultTopName = $<HTMLElement>('result-top-name');
-const resultTopPlace = $<HTMLElement>('result-top-place');
-const resultRank = $<HTMLOListElement>('result-rank');
-const resultBottomImg = $<HTMLImageElement>('result-bottom-img');
-const resultBottomInitial = $<HTMLElement>('result-bottom-initial');
-const resultBottomTag = $<HTMLElement>('result-bottom-tag');
-const resultBottomName = $<HTMLElement>('result-bottom-name');
+const resultRoster = $<HTMLOListElement>('result-roster');
+const resultBank = $<HTMLElement>('result-bank');
 const resultTiqChip = $<HTMLElement>('result-tiq-chip');
 const resultTiqN = $<HTMLElement>('result-tiq-n');
 const resultCoinChip = $<HTMLElement>('result-coin-chip');
 const resultCoinsN = $<HTMLElement>('result-coins-n');
-const resultStake = $<HTMLParagraphElement>('result-stake');
+const resultStake = $<HTMLElement>('result-stake');
 const resultStakeK = $<HTMLElement>('result-stake-k');
 const resultStakeN = $<HTMLElement>('result-stake-n');
 /* the two rewarded-video keys: a chip in the stake band and a chip inside the coin pill */
@@ -671,9 +661,6 @@ function armCapsules() {
 
 /* ---------- the post-match stage ---------- */
 
-/** Both defeat stingers rotate on the same clock, one per open and then every few seconds. */
-const DEFEAT_STINGERS = ['resultDefeatStinger1', 'resultDefeatStinger2'] as const;
-
 interface ResultView {
   won: boolean;
   coins: number;
@@ -681,8 +668,6 @@ interface ResultView {
   tiq: number;
   /** The magnitude of the crimson stake loss a defeat wears. */
   stake: number;
-  /** Which sting the defeat copy opens on. */
-  stinger: number;
 }
 
 let resultView: ResultView | null = null;
@@ -691,19 +676,16 @@ let resultRaf = 0;
 let stakeRaf = 0;
 let coinRaf = 0;
 let resultTimers: number[] = [];
-let stingerTimer = 0;
-let defeatStingerTurn = 0;
 /** The rival walked out of the settled race: the rematch key and the banter dock are dead. */
 let resultLocked = false;
 
-/** Stop every clock the result owns: the count-up, the haptic beats and the stinger rotation. */
+/** Stop every clock the result owns: the count-up and the haptic beats. */
 function clearResultMotion() {
   if (resultRaf) { cancelAnimationFrame(resultRaf); resultRaf = 0; }
   if (stakeRaf) { cancelAnimationFrame(stakeRaf); stakeRaf = 0; }
   if (coinRaf) { cancelAnimationFrame(coinRaf); coinRaf = 0; }
   for (const id of resultTimers) window.clearTimeout(id);
   resultTimers = [];
-  if (stingerTimer) { window.clearInterval(stingerTimer); stingerTimer = 0; }
 }
 
 const resultLater = (fn: () => void, ms: number) => {
@@ -769,29 +751,48 @@ function finalStandings(): Player[] {
   return winner === null ? rest : [winner, ...rest];
 }
 
-/** One compact rank row: medal, micro-avatar, name, placement. The local seat wears the gold rim. */
-function resultRankRow(seat: Player, rank: number): HTMLLIElement {
+/** The gold #1 badge: the same crown the winner used to wear over a podium portrait. */
+function crownMark(): SVGElement {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS(NS, 'use');
+  use.setAttribute('href', '#i-crown');
+  svg.append(use);
+  return svg;
+}
+
+/**
+ * One row of the standings ladder: rank medal, circular portrait, name, placement. Every seat wears
+ * the same height and rhythm; only the local seat is lit, by a gold hairline rather than a shout.
+ * The row also owns the anchor its speaker's reaction bubble lands on.
+ */
+function resultRosterRow(seat: Player, rank: number): HTMLLIElement {
   const place = Math.min(rank, 4);
   const placeKey = `resultPlace${place}`;
   const name = seatLabel(seat);
+  const local = seat === localSide;
+
   const row = document.createElement('li');
-  row.className = 'result-rank-row';
+  row.className = 'result-row';
   row.dataset.place = String(place);
-  row.setAttribute('aria-label', `${name}, ${t(placeKey)}`);
-  if (seat === localSide) {
+  row.dataset.seat = String(seat);
+  row.setAttribute('aria-label', `${name}, ${t(placeKey)}${local ? `, ${t('hudYou')}` : ''}`);
+  if (local) {
     row.classList.add('is-you');
     row.setAttribute('aria-current', 'true');
   }
 
-  const badge = document.createElement('span');
-  badge.className = 'result-place';
-  badge.dataset.place = String(place);
-  badge.dir = 'ltr';
-  badge.textContent = `#${rank}`;
-  badge.setAttribute('aria-hidden', 'true');
+  const medal = document.createElement('span');
+  medal.className = 'result-medal';
+  medal.dataset.place = String(place);
+  medal.setAttribute('aria-hidden', 'true');
+  if (place === 1) medal.append(crownMark());
+  else medal.textContent = `#${rank}`;
 
   const avatar = document.createElement('span');
-  avatar.className = 'result-rank-avatar';
+  avatar.className = 'result-avatar';
   const img = document.createElement('img');
   img.alt = '';
   img.decoding = 'async';
@@ -802,63 +803,44 @@ function resultRankRow(seat: Player, rank: number): HTMLLIElement {
   avatar.append(img, initial);
 
   const id = document.createElement('span');
-  id.className = 'result-rank-id';
+  id.className = 'result-row-id';
   const strong = document.createElement('strong');
-  strong.className = 'result-rank-name';
+  strong.className = 'result-row-name';
   strong.textContent = name;
   id.append(strong);
 
-  const tag = document.createElement('span');
-  tag.className = 'result-rank-tag';
-  tag.textContent = seat === localSide
-    ? `${t(placeKey)} · ${t('hudYou')}`
-    : t(placeKey);
+  const meta = document.createElement('span');
+  meta.className = 'result-row-meta';
+  const placeEl = document.createElement('span');
+  placeEl.className = 'result-place';
+  placeEl.textContent = t(placeKey);
+  meta.append(placeEl);
+  if (local) {
+    const you = document.createElement('span');
+    you.className = 'result-you';
+    you.textContent = t('hudYou').toUpperCase();
+    meta.append(you);
+  }
 
-  row.append(badge, avatar, id, tag);
+  const say = document.createElement('span');
+  say.className = 'result-say';
+  say.setAttribute('role', 'status');
+  say.setAttribute('aria-live', 'polite');
+  say.hidden = true;
+  const sayText = document.createElement('span');
+  sayText.className = 'result-say-t';
+  say.append(sayText);
+
+  row.append(medal, avatar, id, meta, say);
   return row;
 }
 
-/**
- * The podium is the emotional core: the winner always takes the lit top seat, whether that is the
- * local player or the rival. On a defeat the rival wears the crown and the player's own avatar is
- * the one sitting subdued beneath it — which is the whole point. A 3- or 4-seat party replaces the
- * single fallen seat with the full ranking list, so nobody leaves the card without a placement.
- */
-function paintResultPodium(): void {
-  const party = state.teams.length > 2;
-  const champion = state.winner ?? localSide;
-  const championName = seatLabel(champion);
-
-  overlay.classList.toggle('is-party', party);
-  resultPodium.classList.toggle('is-party', party);
-  resultTopSeat.classList.toggle('is-you', champion === localSide);
-  resultTopName.textContent = championName;
-  /* A duel speaks in win/loss; a party speaks in places, so the champion's own line names #1. */
-  resultTopTag.textContent = party
-    ? `${t('resultPlace1')}${champion === localSide ? ` · ${t('hudYou')}` : ''}`
-    : champion === localSide ? t('resultWinnerYou') : t('resultWinner');
-  resultTopPlace.hidden = !party;
-  resultTopPlace.textContent = '#1';
-  resultTopPlace.setAttribute('aria-label', t('resultPlace1'));
-  paintResultAvatar(resultTopImg, resultTopInitial, championName, resultPhoto(champion));
-
-  if (party) {
-    resultRank.setAttribute('aria-label', t('resultStandings'));
-    resultRank.replaceChildren(
-      ...finalStandings().slice(1).map((seat, index) => resultRankRow(seat, index + 2)),
-    );
-    resultRank.hidden = false;
-    return;
-  }
-
-  resultRank.hidden = true;
-  resultRank.replaceChildren();
-  const fallen = champion === localSide ? rivalSide() : localSide;
-  const fallenName = seatLabel(fallen);
-  resultBottomName.textContent = fallenName;
-  resultBottomTag.textContent = fallen === localSide ? t('resultDefeatedYou') : t('resultDefeated');
-  resultBottomName.closest('.result-seat')?.classList.toggle('is-you', fallen === localSide);
-  paintResultAvatar(resultBottomImg, resultBottomInitial, fallenName, resultPhoto(fallen));
+/** The whole ladder, champion first; a duel is simply the two-row case of the same list. */
+function paintResultRoster(): void {
+  resultRoster.setAttribute('aria-label', t('resultStandings'));
+  resultRoster.replaceChildren(
+    ...finalStandings().map((seat, index) => resultRosterRow(seat, index + 1)),
+  );
 }
 
 /** Every word and every state class the current result owns, re-readable after a language flip. */
@@ -867,19 +849,21 @@ function paintResultCopy(): void {
   const { won, stake } = resultView;
   resultKicker.textContent = t('resultKicker');
   verdict.textContent = t(won ? 'resultVictoryTitle' : 'resultDefeatTitle');
-  sub.textContent = won ? t('resultVictorySub') : t(DEFEAT_STINGERS[resultView.stinger]);
   shareLabel.textContent = t('resultShare');
   toMenuLabel.textContent = t('resultMenu');
   paintStakeValue();
   resultTiqChip.hidden = !won;
   resultCoinChip.classList.toggle('is-consolation', !won);
-  resultStake.hidden = won || stake <= 0;
+  const staked = !won && stake > 0;
+  resultStake.hidden = !staked;
+  /* a machine-held seat pays nothing into either ledger: the capsule becomes one column */
+  resultBank.classList.toggle('is-solo', !won && !staked);
   shareBtn.hidden = !won;
   again.classList.toggle('is-revenge', !won);
-  againIco?.setAttribute('href', won ? '#i-play' : '#i-swords');
+  againIco?.setAttribute('href', won ? '#i-play' : '#i-restart');
   paintResultLock();
   paintRewardButtons();
-  paintResultPodium();
+  paintResultRoster();
 }
 
 /**
@@ -901,17 +885,6 @@ function paintResultLock(): void {
     again.removeAttribute('title');
     again.removeAttribute('aria-label');
   }
-}
-
-function rotateDefeatStinger(): void {
-  if (!overlayOpen || !resultView || resultView.won) return;
-  sub.classList.add('is-swapping');
-  resultLater(() => {
-    if (!overlayOpen || !resultView || resultView.won) return;
-    resultView.stinger = (resultView.stinger + 1) % DEFEAT_STINGERS.length;
-    sub.textContent = t(DEFEAT_STINGERS[resultView.stinger]);
-    sub.classList.remove('is-swapping');
-  }, 180);
 }
 
 /**
@@ -1193,22 +1166,19 @@ function showOverlay() {
     coins: earned,
     tiq: mine ? Math.max(0, afterTiq - beforeTiq) : 0,
     stake: mine ? Math.max(5, Math.round(runtime.winTiq * 0.1)) : 0,
-    stinger: won ? 0 : defeatStingerTurn++ % DEFEAT_STINGERS.length,
   };
   overlay.classList.toggle('win', won);
   overlay.classList.toggle('lose', !won);
-  /* the compact typography in banter.css only applies where the dock is paying for the space */
-  overlay.classList.toggle('with-banter', state.teams.length === 2);
   paintResultCopy();
   resultTiqN.textContent = '0';
   resultCoinsN.textContent = '0';
   resultStakeN.textContent = `−1 ${t('resultTiqUnit')}`;
   overlay.hidden = false;
-  /* the card and its podium are on screen: the one moment the result fanfare belongs to. The two
-     voices are mutually exclusive by construction — a win gets the podium fanfare, a loss gets the
-     defeat sting, and whichever engine is asked, the other one is handed back first — and each voice
-     is single-shot per result. The heavy impact adds the weight under the error buzz that follows
-     below (a forfeit has already had its buzz from endOnline). */
+  /* the card and its standings ladder are on screen: the one moment the result fanfare belongs to.
+     The two voices are mutually exclusive by construction — a win gets the victory fanfare, a loss
+     gets the defeat sting, and whichever engine is asked, the other one is handed back first — and
+     each voice is single-shot per result. The heavy impact adds the weight under the error buzz that
+     follows below (a forfeit has already had its buzz from endOnline). */
   if (won) {
     stopDefeat();
     playVictoryFanfare();
@@ -1217,20 +1187,12 @@ function showOverlay() {
     playDefeat();
     impact('heavy');
   }
-  /* The banter dock reads the same podium: bubbles land on the card of the player who spoke,
-     and a race against the machine answers on its own. A 3- or 4-seat party has no single
-     rival to taunt, so the dock stays out of that capsule. */
-  banter.open({
-    won,
-    localSide,
-    winnerSide: state.winner ?? localSide,
-    enabled: state.teams.length === 2,
-    locked: resultLocked,
-  });
+  /* The reaction tray serves every capsule: a duel lands its bubbles on the speaker's row, a
+     party on whichever row they own, and a race against the machine answers on its own. */
+  banter.open({ localSide, rivalSide: rivalSide(), locked: resultLocked });
   if (won && !motionReduced()) confetti.burst();
   rollResultValues();
   if (!won) {
-    if (!motionReduced()) stingerTimer = window.setInterval(rotateDefeatStinger, 5800);
     /* endOnline has already buzzed a forfeit; do not repeat it under the card. */
     if (!forfeit) notify('error');
   } else if (!forfeit) {
@@ -1559,11 +1521,6 @@ function restart() {
   overlayOpen = false;
   overlay.hidden = true;
   overlay.classList.remove('win', 'lose', 'is-party');
-  resultPodium.classList.remove('is-party');
-  resultRank.hidden = true;
-  resultRank.replaceChildren();
-  resultTopPlace.hidden = true;
-  sub.classList.remove('is-swapping');
   menuBtn.disabled = false;
   clearNote();
   confetti.stop();
@@ -1891,7 +1848,7 @@ function startGame(setup: StartSetup) {
     session.onEmote((emote) => chat.inboundEmote(emote));
     /* the rival's tactical line: their (lang, index) pair looked back up in the same closed table */
     session.onPhrase((lang, index) => chat.inboundPhrase(lang, index));
-    /* the rival's post-match taunt: it lands on whichever podium card their seat owns */
+    /* the rival's post-match line: it lands on whichever standings row their seat owns */
     session.onPostChat((text, side) => banter.inbound(text, side));
     /* the settled socket died, or the rival walked out: the result's live keys go with it */
     session.onPostLeft(() => { if (overlayOpen || goalBeat) lockResultForLeft(); });
@@ -3050,9 +3007,9 @@ const chat = createChat({
   busy: () => mineArmed,
   live: () => router.current === 'game' && !paused && !overlayOpen && state.winner === null,
 });
-/* Post-match banter: the dock under the podium reads the live session when there is one, and the
-   machine answers when there is not. The wire is resolved at send time, never captured, because
-   `active` changes with every race. */
+/* Post-match reactions: the tray reads the live session when there is one, and the machine answers
+   when there is not. The wire is resolved at send time, never captured, because `active` changes
+   with every race. */
 const banter = createBanter({
   wire: () => {
     const session = active;
@@ -3061,6 +3018,14 @@ const banter = createBanter({
        treat it as a bot race, so the same canned reply wakes after 1.2s. */
     if ('seats' in session && !session.seats.some((s) => s.side !== localSide && !s.bot)) return null;
     return (text: string) => session.sendPostMatchChat(text);
+  },
+  /* Bubbles land on the row the speaker owns. Looked up per message: a language flip rebuilds
+     the ladder, so a cached node would go stale behind it. */
+  anchor: (side) => {
+    const row = resultRoster.querySelector<HTMLElement>(`.result-row[data-seat="${side}"]`);
+    const node = row?.querySelector<HTMLElement>('.result-say');
+    const text = node?.querySelector<HTMLElement>('.result-say-t');
+    return node && text ? { node, text } : null;
   },
 });
 router.start('home');

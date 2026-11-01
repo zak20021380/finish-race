@@ -1,48 +1,47 @@
 /**
- * banter.ts — the post-match banter dock and its two floating bubbles.
+ * banter.ts — the post-match Quick Reaction tray and its floating bubbles.
  *
- * The dock floats frameless above the rematch key in the Match Complete capsule and speaks in
- * two rows: six circular reactions with the composer key at the inline-end, then one slot that
- * holds either the quick-taunt strip or the 40-character line. Opening the keyboard swaps row
- * two in place, so the dock never grows a third storey over the primary action.
+ * The tray sits directly above the rematch key in the Match Complete capsule: five one-tap
+ * reactions on a single glass lane, with the custom-taunt composer parked behind the chat key so
+ * the idle tray never costs a second storey. A tap broadcasts the emoji through the settled match
+ * (or wakes a canned answer when the far seats are machines), pops the pressed face, and lands the
+ * message on the row of the player who sent it.
  *
- * Every message lands on its sender's own podium card: the champion's bubble is emerald/cyan,
- * the fallen seat's is crimson/rose. A bubble is a flex child parked at the inline-end of the
- * card, so the avatar and the nameplate are never covered. A bare emoji drops the pill and
- * becomes a 42px glass medal instead.
- *
- * The wire is the only difference between opponents. Online, a line rides the same socket as the
- * race, as `POST_MATCH_CHAT`, and the rival's line comes back through `onPostChat`. Against the
- * machine, the same line wakes a canned reply after 1.2s. When the rival walks out — a frame, a
- * closed socket — `opponentLeft()` locks the whole surface so a taunt never flies into an empty
- * room: the alert is raised, the pills and input go quiet, and the caller locks the rematch key.
+ * The wire is the only difference between opponents. Online, the reaction rides the same socket as
+ * the race as `POST_MATCH_CHAT`; the rival's answer comes back through `onPostChat`. Against the
+ * machine, the same emoji wakes a reply after 1.2s. When the rival walks out — a frame, a closed
+ * socket — `opponentLeft()` locks the whole surface so a taunt never flies into an empty room.
  */
 import './banter.css';
 import { onLang, t } from './settings';
 import { impact } from './telegram';
 
-/** The outcome the dock is speaking to. */
+/** The outcome the tray is speaking over. */
 export interface BanterView {
-  /** True when this screen won: the winner's taunt set is offered. */
-  won: boolean;
   localSide: number;
-  /** The seat that took the crown — bubbles are placed by card, not by sender. */
-  winnerSide: number;
-  /** False for a 3- or 4-seat party, where there is no single rival to talk to. */
-  enabled: boolean;
-  /** The rival already left: open the dock in its locked state. */
+  /** The seat a canned reply can come from when no wire answers. */
+  rivalSide: number;
+  /** The rival already left: open the tray in its locked state. */
   locked: boolean;
+}
+
+/** A row's bubble anchor, resolved at send time because a language flip rebuilds the roster. */
+export interface BanterAnchor {
+  node: HTMLElement;
+  text: HTMLElement;
 }
 
 export interface BanterWiring {
   /** The live socket's post-match sender, or null for a race against the machine. */
   wire: () => ((text: string) => boolean) | null;
+  /** The row bubble owned by a seat, or null when that seat is not on the ladder. */
+  anchor: (side: number) => BanterAnchor | null;
 }
 
 export interface Banter {
   open(view: BanterView): void;
   close(): void;
-  /** A line the rival sent, placed on the card for `side`. */
+  /** A line the rival sent, placed on the row of `side`. */
   inbound(text: string, side: number): void;
   /** The rival left the result: raise the alert and lock every control. */
   opponentLeft(): void;
@@ -57,9 +56,8 @@ const COOLDOWN_MS = 2000;
 /** The machine thinks for a beat before answering. */
 const BOT_MS = 1200;
 const MAX_CHARS = 40;
-/** The six faces the tray offers, in a fixed order that never moves under a language flip. */
-const REACTIONS = ['🧠', '🔥', '👑', '🎲', '😤', '🤝'] as const;
-const TAUNTS = 5;
+/** The five faces the tray offers, in a fixed order that never moves under a language flip. */
+const REACTIONS = ['🤝', '🔥', '😭', '😂', '🤯'] as const;
 const BOT_LINES = 4;
 
 /**
@@ -70,8 +68,6 @@ const BOT_LINES = 4;
 const EMOTE_ONLY =
   /^(?:\p{Extended_Pictographic}|[\u200D\uFE0F\u20E3\u{1F3FB}-\u{1F3FF}]|\s)+$/u;
 const HAS_PICTOGRAPH = /\p{Extended_Pictographic}/u;
-
-type Card = 'win' | 'lose';
 
 const clip = (raw: string): string => {
   const clean = raw.replace(/[\u0000-\u001F\u007F]/g, ' ').trim();
@@ -97,41 +93,28 @@ const byId = <T extends HTMLElement>(id: string): T => {
 
 export function createBanter(wiring: BanterWiring): Banter {
   const dock = byId<HTMLDivElement>('result-banter');
+  const label = byId<HTMLElement>('banter-label');
   const alert = byId<HTMLParagraphElement>('banter-alert');
   const alertText = byId<HTMLElement>('banter-alert-t');
-  const rail = byId<HTMLDivElement>('banter-rail');
   const reacts = byId<HTMLDivElement>('banter-reacts');
   const form = byId<HTMLFormElement>('banter-form');
   const input = byId<HTMLInputElement>('banter-input');
   const send = byId<HTMLButtonElement>('banter-send');
   const toggle = byId<HTMLButtonElement>('banter-toggle');
-  /* the <use> swaps between the chat bubble and the close glyph as row two flips */
+  /* the <use> swaps between the chat bubble and the close glyph as the composer flips */
   const toggleIco = byId<HTMLElement>('banter-toggle-ico');
   const closeKey = byId<HTMLButtonElement>('banter-close');
-
-  interface Bubble { node: HTMLElement; text: HTMLElement; timer: number }
-  const bubbles: Record<Card, Bubble> = {
-    win: { node: byId('result-top-say'), text: byId('result-top-say-t'), timer: 0 },
-    lose: { node: byId('result-bottom-say'), text: byId('result-bottom-say-t'), timer: 0 },
-  };
-
-  const pills: HTMLButtonElement[] = [];
-  for (let i = 0; i < TAUNTS; i++) {
-    const pill = el('button', 'banter-pill');
-    pill.type = 'button';
-    pill.dir = 'auto';
-    pill.dataset.pill = String(i);
-    pill.addEventListener('click', () => say(t(pillKey(i))));
-    rail.appendChild(pill);
-    pills.push(pill);
-  }
 
   const reacts_: HTMLButtonElement[] = [];
   for (const face of REACTIONS) {
     const key = el('button', 'banter-react', face);
     key.type = 'button';
     key.dataset.emoji = face;
-    key.addEventListener('click', () => say(face));
+    key.addEventListener('click', () => {
+      if (lockedNow() || cooling()) return;
+      pop(key);
+      say(face);
+    });
     reacts.appendChild(key);
     reacts_.push(key);
   }
@@ -139,26 +122,35 @@ export function createBanter(wiring: BanterWiring): Banter {
   let view: BanterView | null = null;
   let open = false;
   let locked = false;
-  /** True while row two is showing the composer instead of the quick-taunt strip. */
+  /** True while the composer is open under the faces. */
   let composing = false;
   let lastSentAt = 0;
   let coolTimer = 0;
   let botTimer = 0;
   let botTurn = 0;
-  /** Lines that landed between the winning move and the card: replayed when the dock opens. */
+  /** Lines that landed between the winning move and the card: replayed when the tray opens. */
   let pending: Array<{ text: string; side: number }> = [];
+  const bubbleTimers = new Map<number, number>();
+  const popTimers = new WeakMap<HTMLButtonElement, number>();
 
-  const pillKey = (i: number): string => `${view?.won ? 'banterWin' : 'banterLose'}${i + 1}`;
   const cooling = (): boolean => Date.now() < lastSentAt + COOLDOWN_MS;
-  const lockedNow = (): boolean => locked || !open || !view?.enabled;
+  const lockedNow = (): boolean => locked || !open || !view;
+
+  /** The pressed face springs once; the message itself lands on the sender's row. */
+  function pop(key: HTMLButtonElement): void {
+    window.clearTimeout(popTimers.get(key));
+    key.classList.remove('is-pop');
+    void key.offsetWidth;
+    key.classList.add('is-pop');
+    popTimers.set(key, window.setTimeout(() => key.classList.remove('is-pop'), 360));
+  }
 
   /**
-   * Row two is one slot with two faces. Flipping it swaps the chip strip for the composer in
-   * place — the dock keeps its height, so the rematch key never jumps under the thumb.
+   * The composer is one slot under the faces: opening it grows the tray by one row in place rather
+   * than replacing the reactions, so the faces stay one tap away while typing.
    */
   function setComposing(next: boolean, focus = false): void {
     composing = next;
-    rail.hidden = next;
     form.hidden = !next;
     toggle.setAttribute('aria-expanded', next ? 'true' : 'false');
     toggleIco.setAttribute('href', next ? '#i-close' : '#i-chat');
@@ -173,7 +165,7 @@ export function createBanter(wiring: BanterWiring): Banter {
   function paintCopy(): void {
     if (!view) return;
     dock.setAttribute('aria-label', t('banterLabel'));
-    rail.setAttribute('aria-label', t('banterQuick'));
+    label.textContent = t('banterTray');
     reacts.setAttribute('aria-label', t('banterReact'));
     input.setAttribute('aria-label', t('banterInputLabel'));
     send.setAttribute('aria-label', t('banterSendLabel'));
@@ -181,10 +173,6 @@ export function createBanter(wiring: BanterWiring): Banter {
     toggle.setAttribute('aria-label', t(composing ? 'banterComposeClose' : 'banterComposeOpen'));
     input.placeholder = locked ? t('banterLockedPlaceholder') : t('banterPlaceholder');
     alertText.textContent = t('banterOpponentLeft');
-    for (let i = 0; i < pills.length; i++) {
-      const line = t(pillKey(i));
-      if (pills[i].textContent !== line) pills[i].textContent = line;
-    }
     for (const key of reacts_) {
       key.setAttribute('aria-label', t('banterReactSend').replace('{emoji}', key.dataset.emoji ?? ''));
     }
@@ -193,7 +181,6 @@ export function createBanter(wiring: BanterWiring): Banter {
   function paintCool(): void {
     const cool = cooling() && !locked;
     const off = cool || locked;
-    for (const pill of pills) pill.disabled = off;
     for (const key of reacts_) key.disabled = off;
     send.disabled = off;
     toggle.disabled = locked;
@@ -208,38 +195,40 @@ export function createBanter(wiring: BanterWiring): Banter {
     coolTimer = window.setTimeout(paintCool, left + 20);
   }
 
-  function showBubble(card: Card, text: string): void {
-    const bubble = bubbles[card];
-    window.clearTimeout(bubble.timer);
-    const emote = isEmote(text);
-    bubble.text.textContent = text;
-    bubble.node.classList.toggle('is-emote', emote);
-    bubble.node.hidden = false;
-    bubble.node.classList.remove('is-out');
+  function showBubble(side: number, raw: string): void {
+    const anchor = wiring.anchor(side);
+    if (!anchor) return;
+    window.clearTimeout(bubbleTimers.get(side));
+    const emote = isEmote(raw);
+    anchor.text.textContent = raw;
+    anchor.node.classList.toggle('is-emote', emote);
+    anchor.node.hidden = false;
+    anchor.node.classList.remove('is-out');
     /* re-arm the spring: dropping the live class and forcing a reflow makes a replacement pop */
-    bubble.node.classList.remove('is-live');
-    void bubble.node.offsetWidth;
-    bubble.node.classList.add('is-live');
-    bubble.timer = window.setTimeout(() => hideBubble(card), BUBBLE_MS);
+    anchor.node.classList.remove('is-live');
+    void anchor.node.offsetWidth;
+    anchor.node.classList.add('is-live');
+    bubbleTimers.set(side, window.setTimeout(() => hideBubble(side), BUBBLE_MS));
   }
 
-  function hideBubble(card: Card, immediate = false): void {
-    const bubble = bubbles[card];
-    window.clearTimeout(bubble.timer);
-    bubble.timer = 0;
-    if (bubble.node.hidden) return;
+  function hideBubble(side: number, immediate = false): void {
+    window.clearTimeout(bubbleTimers.get(side));
+    bubbleTimers.delete(side);
+    const anchor = wiring.anchor(side);
+    if (!anchor || anchor.node.hidden) return;
     if (immediate) {
-      bubble.node.classList.remove('is-live', 'is-out', 'is-emote');
-      bubble.node.hidden = true;
-      bubble.text.textContent = '';
+      anchor.node.classList.remove('is-live', 'is-out', 'is-emote');
+      anchor.node.hidden = true;
+      anchor.text.textContent = '';
       return;
     }
-    bubble.node.classList.add('is-out');
+    anchor.node.classList.add('is-out');
     window.setTimeout(() => {
-      if (!bubble.node.classList.contains('is-out')) return;   // a new line took the card back
-      bubble.node.classList.remove('is-live', 'is-out', 'is-emote');
-      bubble.node.hidden = true;
-      bubble.text.textContent = '';
+      const live = wiring.anchor(side);
+      if (!live || !live.node.classList.contains('is-out')) return;   // a new line took the row back
+      live.node.classList.remove('is-live', 'is-out', 'is-emote');
+      live.node.hidden = true;
+      live.text.textContent = '';
     }, LEAVE_MS);
   }
 
@@ -248,8 +237,7 @@ export function createBanter(wiring: BanterWiring): Banter {
     window.clearTimeout(botTimer);
     coolTimer = 0;
     botTimer = 0;
-    hideBubble('win', true);
-    hideBubble('lose', true);
+    for (const side of [...bubbleTimers.keys()]) hideBubble(side, true);
   }
 
   function scheduleBotReply(): void {
@@ -258,22 +246,19 @@ export function createBanter(wiring: BanterWiring): Banter {
     botTimer = window.setTimeout(() => {
       botTimer = 0;
       if (!open || locked || !view) return;
-      showBubble(rivalCard(), t(`banterBot${pick}`));
+      showBubble(view.rivalSide, t(`banterBot${pick}`));
     }, BOT_MS);
   }
 
-  const localCard = (): Card => (view && view.localSide === view.winnerSide ? 'win' : 'lose');
-  const rivalCard = (): Card => (localCard() === 'win' ? 'lose' : 'win');
-
   function say(raw: string): void {
-    if (lockedNow() || cooling()) return;
+    if (lockedNow() || cooling() || !view) return;
     const text = clip(raw);
-    if (!text || !view) return;
+    if (!text) return;
     lastSentAt = Date.now();
     paintCool();
     armCool();
     impact('light');
-    showBubble(localCard(), text);
+    showBubble(view.localSide, text);
     const wire = wiring.wire();
     if (wire) {
       if (!wire(text)) opponentLeft();
@@ -299,7 +284,7 @@ export function createBanter(wiring: BanterWiring): Banter {
   }
 
   function returnPending(): void {
-    if (!pending.length || !view || !open) return;
+    if (!pending.length || !open) return;
     const queued = pending;
     pending = [];
     for (const line of queued) inbound(line.text, line.side);
@@ -313,7 +298,7 @@ export function createBanter(wiring: BanterWiring): Banter {
       return;
     }
     if (locked) return;
-    showBubble(side === view.winnerSide ? 'win' : 'lose', line);
+    showBubble(side, line);
   }
 
   form.addEventListener('submit', (e) => {
@@ -345,15 +330,14 @@ export function createBanter(wiring: BanterWiring): Banter {
       locked = next.locked;
       lastSentAt = 0;
       clearTimers();
-      dock.hidden = !next.enabled;
+      dock.hidden = false;
       alert.hidden = !locked;
       input.value = '';
       setComposing(false);
-      if (locked) alertText.textContent = t('banterOpponentLeft');
-      else alertText.textContent = '';
+      alertText.textContent = locked ? t('banterOpponentLeft') : '';
       paintCopy();
       paintCool();
-      /* a rival can taunt during the goal beat, before this capsule is on screen */
+      /* a rival can react during the goal beat, before this capsule is on screen */
       returnPending();
     },
     close() {

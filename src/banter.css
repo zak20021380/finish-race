@@ -1,15 +1,11 @@
 /* ==========================================================================
-   POST-MATCH BANTER — two floating bubbles and a frameless two-row dock
+   POST-MATCH REACTIONS — one glass tray, five faces, floating bubbles
 
-   The bubbles are flex children of their podium card, parked at the inline-end
-   with an auto start-margin: the avatar and the nameplate keep every pixel they
-   own, and the bubble is only ever as wide as the words inside it. A bare emoji
-   drops the pill entirely and becomes a 42px glass medal.
-
-   The dock is frameless — no border, no slab — and it speaks in two rows:
-   six circular reactions plus the composer key, then either the quick-taunt
-   strip or the 40-character line. Row two is a single slot, so opening the
-   keyboard replaces the chips instead of stacking a third storey on top.
+   The tray is a single horizontal lane directly above the rematch key:
+   five one-tap reactions and the chat key. The composer opens under the
+   faces in place, so the idle tray is never taller than one row. A message
+   lands on its speaker's standings row as an absolutely positioned bubble,
+   which means the ladder never reflows under a reaction.
    ========================================================================== */
 
 /* one guard for every surface this file hides by attribute: an author `display`
@@ -18,194 +14,115 @@
 .result-banter[hidden],
 .result-banter [hidden] { display: none !important; }
 
-/* ---- the speech bubbles: in flow, at the end of the card, never on the name ---- */
-
-.result-seat { overflow: visible; }
-/* the fallen seat keeps its subdued furniture, but its bubble must stay legible */
-.result-seat.is-fallen { opacity: 1; filter: none; }
-.result-seat.is-fallen > .result-avatar,
-.result-seat.is-fallen > .result-id { opacity: .52; filter: saturate(.5); }
-
+/* ---- speech bubbles: parked over the row's trailing edge, never in its flow ---- */
 .result-say {
-  position: relative;
-  z-index: 3;
-  flex: 0 1 auto;
-  width: fit-content;
-  max-width: 68%;
-  margin-inline-start: auto;
-  padding: 6px 12px;
-  border-radius: 16px;
-  font-size: 12.5px;
+  position: absolute;
+  z-index: 4;
+  inset-inline-end: 8px;
+  top: 50%;
+  max-width: 62%;
+  padding: 5px 10px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .02)),
+    rgba(8, 11, 17, .95);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    0 10px 22px -12px rgba(0, 0, 0, .95);
+  color: #F2F6FC;
+  font-size: 11px;
   font-weight: 700;
-  line-height: 1.28;
-  letter-spacing: .01em;
+  letter-spacing: .005em;
+  line-height: 1.3;
   text-align: start;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   pointer-events: none;
-  -webkit-backdrop-filter: blur(12px) saturate(1.3);
-  backdrop-filter: blur(12px) saturate(1.3);
+  transform: translateY(-50%);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  backdrop-filter: blur(12px) saturate(1.2);
+}
+.result-row.is-you .result-say {
+  border-color: rgba(243, 212, 131, .42);
+  background:
+    linear-gradient(180deg, rgba(255, 244, 214, .1), rgba(255, 244, 214, .02)),
+    rgba(23, 19, 11, .96);
+  color: #FFF3D6;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 220, .16),
+    0 10px 22px -12px rgba(0, 0, 0, .95);
 }
 .result-say-t { display: block; }
 
-/* the champion's rim: emerald and cyan, the same divine family as the crown */
-.is-champion .result-say {
-  border: 1px solid rgba(45, 212, 191, .46);
-  background:
-    linear-gradient(160deg, rgba(13, 58, 56, .82), rgba(5, 20, 26, .9));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .17),
-    0 0 18px -4px rgba(34, 211, 238, .62),
-    0 8px 18px -12px rgba(0, 0, 0, .85);
-  color: #E7FFFB;
-  text-shadow: 0 0 8px rgba(45, 212, 191, .35);
-}
-/* the fallen seat's rim: crimson and rose, a bruise with a glow */
-.is-fallen .result-say {
-  border: 1px solid rgba(244, 63, 94, .45);
-  background:
-    linear-gradient(160deg, rgba(58, 15, 34, .86), rgba(20, 7, 20, .92));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .12),
-    0 0 18px -4px rgba(244, 63, 94, .5),
-    0 0 26px -10px rgba(167, 139, 250, .55),
-    0 8px 18px -12px rgba(0, 0, 0, .85);
-  color: #FFE9EE;
-}
-
-/* the tail: a rotated square parked on the name side of the pill */
-.result-say::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  inset-inline-start: -5px;
-  width: 9px;
-  height: 9px;
-  transform: translateY(-50%) rotate(45deg);
-  border-start-start-radius: 2px;
-}
-.is-champion .result-say::before {
-  border-inline-start: 1px solid rgba(45, 212, 191, .4);
-  border-block-end: 1px solid rgba(45, 212, 191, .4);
-  background: #0B2E2E;
-}
-.is-fallen .result-say::before {
-  border-inline-start: 1px solid rgba(244, 63, 94, .4);
-  border-block-end: 1px solid rgba(244, 63, 94, .4);
-  background: #2A0B1C;
-}
-
-/* ---- emote mode: a bare reaction is a medal, never a bar ---- */
-
+/* a bare reaction is a medal, never a bar */
 .result-say.is-emote {
   display: grid;
   place-items: center;
-  flex: none;
-  width: 42px;
-  min-width: 42px;
-  height: 42px;
-  max-width: 42px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   border-radius: 50%;
-  font-size: 24px;
+  font-size: 17px;
   line-height: 1;
   text-align: center;
-  text-shadow: none;
 }
-.result-say.is-emote::before { content: none; }
 .result-say.is-emote .result-say-t {
   display: block;
-  font-size: 24px;
+  font-size: 17px;
   line-height: 1;
   transform-origin: 50% 55%;
-}
-.is-champion .result-say.is-emote {
-  background:
-    radial-gradient(circle at 50% 24%, rgba(125, 255, 232, .3), rgba(6, 30, 32, .9) 72%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .3),
-    0 0 20px -3px rgba(34, 211, 238, .7),
-    0 8px 18px -10px rgba(0, 0, 0, .85);
-}
-.is-fallen .result-say.is-emote {
-  background:
-    radial-gradient(circle at 50% 24%, rgba(255, 173, 190, .26), rgba(38, 8, 22, .92) 72%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .22),
-    0 0 20px -3px rgba(244, 63, 94, .6),
-    0 8px 18px -10px rgba(0, 0, 0, .85);
 }
 .result-say.is-emote.is-live .result-say-t {
   animation: banter-emote-pulse 2.6s ease-in-out .45s infinite;
 }
 
 /* ---- lifecycles ---- */
-
 .result-say.is-live {
-  animation: banter-say-in .52s cubic-bezier(.18, 1.42, .38, 1) both;
+  animation: banter-say-in .42s cubic-bezier(.18, 1.32, .38, 1) both;
 }
 .result-say.is-emote.is-live {
-  animation: banter-emote-in .58s cubic-bezier(.18, 1.42, .38, 1) both;
+  animation: banter-emote-in .5s cubic-bezier(.18, 1.32, .38, 1) both;
 }
 .result-say.is-out {
   opacity: 0;
-  transform: translateY(-3px) scale(.9);
-  transition: opacity .28s ease, transform .28s ease;
+  transform: translateY(-50%) translateX(4px) scale(.92);
+  transition: opacity .26s ease, transform .26s ease;
   animation: none;
 }
 
-/* ---- the dock: frameless, floating directly above the rematch key ---- */
-
+/* ---- the tray ---- */
 .result-banter {
   display: grid;
-  gap: 7px;
-  margin-block-end: 2px;
-  padding: 0;
-  border: 0;
-  background: none;
-  box-shadow: none;
+  gap: 6px;
+  margin: 0 0 2px;
+  padding: 5px 6px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .01)),
+    rgba(7, 9, 14, .38);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .055);
   text-align: start;
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
 }
 .banter-row { min-width: 0; }
-
-/* the opponent-left badge: loud enough to be the first thing read after the verdict */
-.banter-alert {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  margin: 0;
-  padding: 6px 11px;
-  border: 1px solid rgba(244, 63, 94, .34);
-  border-radius: 999px;
-  background: rgba(76, 5, 25, .34);
-  color: #FECDD3;
-  font-size: 10.5px;
-  font-weight: 800;
-  letter-spacing: .015em;
-  line-height: 1.35;
-  text-align: center;
-  animation: banter-alert-in .34s cubic-bezier(.2, 1.3, .4, 1) both;
-}
-.banter-alert .ico {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  color: #FB7185;
-  filter: drop-shadow(0 0 6px rgba(244, 63, 94, .75));
-}
-.overlay.result.win .banter-alert {
-  border-color: rgba(252, 211, 77, .3);
-  background: rgba(69, 26, 3, .34);
-  color: #FDE68A;
-}
-.overlay.result.win .banter-alert .ico { color: #FCD34D; filter: drop-shadow(0 0 6px rgba(252, 211, 77, .7)); }
-
-/* ---- row 1: six tactile faces and the composer key ---- */
-
 .banter-row-faces {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+.banter-label {
+  flex: none;
+  padding-inline-start: 4px;
+  color: #707C90;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .18em;
+  line-height: 1;
+  white-space: nowrap;
 }
 .banter-reacts {
   display: flex;
@@ -219,37 +136,37 @@
   appearance: none;
   display: grid;
   place-items: center;
-  flex: 0 0 36px;
-  width: 36px;
-  height: 36px;
+  flex: 1 1 0;
+  width: auto;
+  min-width: 30px;
+  max-width: 40px;
+  height: 34px;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, .12);
+  border: 1px solid transparent;
   border-radius: 50%;
-  background:
-    radial-gradient(circle at 50% 18%, rgba(255, 255, 255, .14), rgba(255, 255, 255, .028) 72%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .16),
-    0 4px 10px -6px rgba(0, 0, 0, .9);
+  background: radial-gradient(circle at 50% 20%, rgba(255, 255, 255, .12), rgba(255, 255, 255, .022) 74%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12);
   font-size: 17px;
   line-height: 1;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: transform .16s cubic-bezier(.2, 1.5, .4, 1), border-color .16s ease, background .16s ease;
+  transition:
+    transform .16s cubic-bezier(.2, 1.5, .4, 1),
+    border-color .16s ease,
+    background .16s ease;
 }
-.overlay.result.win .banter-react:not(:disabled):active {
-  transform: scale(.86);
-  border-color: rgba(45, 212, 191, .6);
-  background: radial-gradient(circle at 50% 18%, rgba(45, 212, 191, .3), rgba(45, 212, 191, .08) 72%);
-}
-.overlay.result.lose .banter-react:not(:disabled):active {
-  transform: scale(.86);
-  border-color: rgba(251, 113, 133, .6);
-  background: radial-gradient(circle at 50% 18%, rgba(244, 63, 94, .3), rgba(244, 63, 94, .08) 72%);
+.banter-react:not(:disabled):active {
+  transform: scale(.88);
+  border-color: rgba(243, 212, 131, .5);
+  background: radial-gradient(circle at 50% 20%, rgba(243, 212, 131, .26), rgba(243, 212, 131, .05) 74%);
 }
 @media (hover: hover) {
-  .overlay.result.win .banter-react:not(:disabled):hover { border-color: rgba(45, 212, 191, .5); }
-  .overlay.result.lose .banter-react:not(:disabled):hover { border-color: rgba(251, 113, 133, .5); }
+  .banter-react:not(:disabled):hover {
+    border-color: rgba(255, 255, 255, .22);
+    background: radial-gradient(circle at 50% 20%, rgba(255, 255, 255, .18), rgba(255, 255, 255, .035) 74%);
+  }
 }
+.banter-react.is-pop { animation: banter-react-pop .34s cubic-bezier(.2, 1.4, .4, 1); }
 
 /* the composer key: the same medal as a face, but it opens a keyboard */
 .banter-toggle {
@@ -257,113 +174,78 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, .16);
+  border: 1px solid rgba(255, 255, 255, .12);
   border-radius: 50%;
-  background: rgba(255, 255, 255, .05);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14);
-  color: #C7D3E4;
+  background: rgba(255, 255, 255, .035);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1);
+  color: #9AA8BC;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: transform .16s cubic-bezier(.2, 1.5, .4, 1), border-color .16s ease, background .16s ease, color .16s ease;
+  transition:
+    transform .16s cubic-bezier(.2, 1.5, .4, 1),
+    border-color .16s ease,
+    background .16s ease,
+    color .16s ease;
 }
-.banter-toggle .ico { width: 16px; height: 16px; }
+.banter-toggle .ico { width: 15px; height: 15px; }
 .banter-toggle:not(:disabled):active { transform: scale(.88); }
 .banter-toggle[aria-expanded="true"] {
-  border-color: rgba(45, 212, 191, .58);
-  background: rgba(45, 212, 191, .18);
-  color: #9BF7E4;
+  border-color: rgba(243, 212, 131, .5);
+  background: rgba(243, 212, 131, .14);
+  color: #FFE7A8;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .22),
-    0 0 14px -3px rgba(45, 212, 191, .8);
-}
-.overlay.result.lose .banter-toggle[aria-expanded="true"] {
-  border-color: rgba(251, 113, 133, .58);
-  background: rgba(244, 63, 94, .18);
-  color: #FFC2CC;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .2),
-    0 0 14px -3px rgba(244, 63, 94, .8);
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    0 0 12px -3px rgba(243, 212, 131, .65);
 }
 
-/* ---- row 2: one slot, two faces — the chip strip or the 40-character line ---- */
-
-.banter-row-swap { display: grid; }
-.banter-rail,
-.banter-compose {
-  grid-area: 1 / 1;
-  animation: banter-swap-in .24s cubic-bezier(.2, 1.2, .4, 1) both;
-}
-
-/* the quick-taunt strip: one gesture lane, its own pan exemption */
-.banter-rail {
+/* the opponent-left badge: the first thing read after the verdict */
+.banter-alert {
   display: flex;
+  align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding-bottom: 1px;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  touch-action: pan-x;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 5px, #000 calc(100% - 14px), transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 5px, #000 calc(100% - 14px), transparent 100%);
+  margin: 0;
+  padding: 5px 9px;
+  border: 1px solid rgba(244, 63, 94, .3);
+  border-radius: 10px;
+  background: rgba(76, 5, 25, .3);
+  color: #FECDD3;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  line-height: 1.35;
+  text-align: center;
+  animation: banter-alert-in .3s cubic-bezier(.2, 1.3, .4, 1) both;
 }
-.banter-rail::-webkit-scrollbar { display: none; }
-.banter-pill {
-  appearance: none;
-  flex: 0 0 auto;
-  padding: 6px 12px;
-  border: 1px solid rgba(255, 255, 255, .13);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .055);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1);
-  color: #D8E3F2;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.25;
-  text-align: start;
-  white-space: nowrap;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: border-color .16s ease, background .16s ease, transform .16s ease;
+.banter-alert .ico {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: #FB7185;
+  filter: drop-shadow(0 0 5px rgba(244, 63, 94, .65));
 }
-.overlay.result.win .banter-pill:not(:disabled):active {
-  transform: scale(.96);
-  border-color: rgba(45, 212, 191, .5);
-  background: rgba(45, 212, 191, .16);
+.overlay.result.win .banter-alert {
+  border-color: rgba(252, 211, 77, .28);
+  background: rgba(69, 26, 3, .3);
+  color: #FDE68A;
 }
-.overlay.result.lose .banter-pill:not(:disabled):active {
-  transform: scale(.96);
-  border-color: rgba(251, 113, 133, .5);
-  background: rgba(244, 63, 94, .16);
-}
-@media (hover: hover) {
-  .overlay.result.win .banter-pill:not(:disabled):hover {
-    border-color: rgba(45, 212, 191, .42);
-    background: rgba(45, 212, 191, .13);
-  }
-  .overlay.result.lose .banter-pill:not(:disabled):hover {
-    border-color: rgba(251, 113, 133, .42);
-    background: rgba(244, 63, 94, .13);
-  }
-}
+.overlay.result.win .banter-alert .ico { color: #FCD34D; }
 
-/* the composer: one 40-character line, a round send key and the way back */
+/* ---- the composer: one 40-character line under the faces ---- */
 .banter-compose {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 40px;
-  padding-inline: 14px 4px;
-  border: 1px solid rgba(255, 255, 255, .15);
-  border-radius: 999px;
-  background: rgba(4, 8, 14, .55);
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, .42);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  gap: 5px;
+  height: 38px;
+  padding-inline: 12px 4px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 12px;
+  background: rgba(3, 5, 9, .62);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, .4);
+  animation: banter-swap-in .22s cubic-bezier(.2, 1.2, .4, 1) both;
 }
 .banter-input {
   flex: 1 1 auto;
@@ -385,8 +267,8 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -395,35 +277,33 @@
   transition: transform .14s ease, filter .14s ease, color .14s ease;
 }
 .banter-send {
+  background: linear-gradient(180deg, #FFD29A, #F0524F);
+  box-shadow:
+    0 3px 8px -3px rgba(240, 82, 82, .65),
+    inset 0 1px 0 rgba(255, 255, 255, .4);
+  color: #2A0806;
+}
+.overlay.result.win .banter-send {
   background: linear-gradient(180deg, #7CF8D4, #14B8A6);
-  box-shadow: 0 3px 8px -3px rgba(20, 184, 166, .65), inset 0 1px 0 rgba(255, 255, 255, .4);
+  box-shadow:
+    0 3px 8px -3px rgba(20, 184, 166, .65),
+    inset 0 1px 0 rgba(255, 255, 255, .4);
   color: #042A25;
 }
-.overlay.result.lose .banter-send {
-  background: linear-gradient(180deg, #FFC4A8, #FB7185);
-  box-shadow: 0 3px 8px -3px rgba(244, 63, 94, .65), inset 0 1px 0 rgba(255, 255, 255, .4);
-  color: #2A060A;
-}
-.banter-send .ico { width: 15px; height: 15px; }
+.banter-send .ico { width: 14px; height: 14px; }
 .banter-send:not(:disabled):active { transform: scale(.88); }
 .banter-close {
   background: transparent;
   color: #7C8AA0;
 }
-.banter-close .ico { width: 14px; height: 14px; }
+.banter-close .ico { width: 13px; height: 13px; }
 .banter-close:not(:disabled):active { transform: scale(.86); color: #E2E8F0; }
 
-/* a cooldown dims the keys, never moves them; the composer stays typeable */
-.result-banter.is-cooling .banter-rail,
+/* a cooldown dims the faces, never moves them; the composer stays typeable */
 .result-banter.is-cooling .banter-reacts,
-.result-banter.is-cooling .banter-toggle,
-.result-banter.is-cooling .banter-compose {
-  opacity: .62;
-}
-.banter-pill:disabled,
+.result-banter.is-cooling .banter-toggle { opacity: .62; }
 .banter-react:disabled,
 .banter-toggle:disabled { cursor: default; }
-.result-banter.is-locked .banter-rail,
 .result-banter.is-locked .banter-reacts,
 .result-banter.is-locked .banter-toggle,
 .result-banter.is-locked .banter-compose {
@@ -431,40 +311,47 @@
   filter: grayscale(.45);
 }
 
-/* ---- the rematch key in its locked state ---- */
-.result-btn.primary.is-locked,
-.result-btn.primary:disabled {
-  opacity: .5;
-  filter: grayscale(.35) saturate(.65);
-  cursor: not-allowed;
-  box-shadow:
-    inset 0 2px 4px rgba(255, 255, 255, .18),
-    0 4px 0 #3A1218,
-    0 8px 16px -10px rgba(0, 0, 0, .6);
-  transform: none;
+/* ---- compact trays: one row stays one row ---- */
+@media (max-width: 360px) {
+  .banter-label { display: none; }
+  .banter-react { height: 32px; font-size: 16px; min-width: 28px; }
+  .banter-toggle { width: 32px; height: 32px; }
+  .result-banter { padding: 4px 5px; gap: 5px; }
+  .banter-compose { height: 36px; padding-inline: 10px 3px; }
+  .banter-input { height: 22px; font-size: 11.5px; }
+  .banter-send,
+  .banter-close { width: 26px; height: 26px; }
 }
-.result-btn.primary.is-locked:active,
-.result-btn.primary:disabled:active { transform: none; }
+@media (max-height: 600px) {
+  .result-banter { gap: 4px; padding: 4px 5px; }
+  .banter-react { height: 31px; }
+  .banter-toggle { width: 31px; height: 31px; }
+  .banter-alert { padding: 4px 8px; font-size: 9.5px; }
+}
 
 /* ---- lifecycles ---- */
 @keyframes banter-say-in {
-  0% { opacity: 0; transform: translateY(5px) scale(.55); }
-  55% { opacity: 1; transform: translateY(0) scale(1.06); }
-  78% { transform: scale(.98); }
-  100% { opacity: 1; transform: scale(1); }
+  0% { opacity: 0; transform: translateY(-50%) translateX(4px) scale(.9); }
+  60% { opacity: 1; transform: translateY(-50%) translateX(0) scale(1.03); }
+  100% { opacity: 1; transform: translateY(-50%) translateX(0) scale(1); }
 }
 @keyframes banter-emote-in {
-  0% { opacity: 0; transform: scale(.34) rotate(-14deg); }
-  58% { opacity: 1; transform: scale(1.16) rotate(4deg); }
-  80% { transform: scale(.95) rotate(-1.5deg); }
-  100% { opacity: 1; transform: scale(1) rotate(0); }
+  0% { opacity: 0; transform: translateY(-50%) scale(.4) rotate(-12deg); }
+  58% { opacity: 1; transform: translateY(-50%) scale(1.15) rotate(4deg); }
+  80% { transform: translateY(-50%) scale(.96) rotate(-1deg); }
+  100% { opacity: 1; transform: translateY(-50%) scale(1) rotate(0); }
 }
 @keyframes banter-emote-pulse {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.12); }
+  50% { transform: scale(1.1); }
+}
+@keyframes banter-react-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.2); }
+  100% { transform: scale(1); }
 }
 @keyframes banter-alert-in {
-  from { opacity: 0; transform: translateY(-3px) scale(.96); }
+  from { opacity: 0; transform: translateY(-3px) scale(.97); }
 }
 @keyframes banter-swap-in {
   from { opacity: 0; transform: translateY(3px) scale(.985); }
@@ -473,87 +360,23 @@
 /* reduced motion keeps the copy and drops the theatre */
 html.reduced-motion .result-say.is-live,
 html.reduced-motion .result-say.is-emote.is-live .result-say-t,
-html.reduced-motion .banter-rail,
+html.reduced-motion .banter-react.is-pop,
 html.reduced-motion .banter-compose,
 html.reduced-motion .banter-alert {
   animation: none;
 }
-html.reduced-motion .result-say.is-out { transition: opacity .2s ease; transform: none; }
+html.reduced-motion .result-say.is-out { transition: opacity .2s ease; }
 
-/* ---- compact heights: the banter bar must never bury Rematch or Menu ---- */
-@media (max-height: 760px) {
-  .overlay.result.with-banter { padding: 6px 10px; }
-  .with-banter .result-card { padding: 12px clamp(12px, 4.6vw, 18px) 10px; }
-  .with-banter .result-title { font-size: clamp(1.85rem, 8.8vw, 2.5rem); }
-  .overlay.result.with-banter .result-mode { margin: 3px 0 6px; }
-  .with-banter .result-podium { margin: 8px 0 5px; }
-  .with-banter .result-seat.is-champion { padding: 6px 9px; }
-  .with-banter .is-champion .result-avatar { width: 44px; height: 44px; border-radius: 15px; }
-  .with-banter .result-crown { left: 31px; top: -10px; width: 23px; height: 23px; }
-  .with-banter .result-crown .ico { width: 22px; height: 22px; }
-  .with-banter .result-seat.is-fallen { padding: 3px 9px; }
-  .with-banter .result-seat.is-fallen .result-avatar { width: 34px; height: 34px; border-radius: 12px; }
-  .with-banter .result-rewards { margin-bottom: 6px; }
-  .with-banter .result-chip { min-height: 32px; }
-  .with-banter .result-stake { padding: 5px 12px; margin-bottom: 7px; }
-  .with-banter .result-btn { min-height: 44px; }
-  .with-banter .result-btn.menu { min-height: 34px; }
-  .result-banter { gap: 5px; }
-  .banter-alert { padding: 4px 9px; font-size: 9.5px; }
-  .banter-react,
-  .banter-toggle { flex-basis: 32px; width: 32px; height: 32px; }
-  .banter-react { font-size: 15px; }
-  .banter-toggle .ico { width: 14px; height: 14px; }
-  .banter-pill { padding: 5px 10px; font-size: 11.5px; }
-  .banter-compose { height: 36px; padding-inline: 12px 3px; }
-  .banter-input { height: 22px; font-size: 11.5px; }
-  .banter-send,
-  .banter-close { width: 27px; height: 27px; }
-  .banter-send .ico,
-  .banter-close .ico { width: 13px; height: 13px; }
-  .with-banter .result-say { font-size: 11.5px; padding: 5px 10px; }
-  .with-banter .result-say.is-emote { width: 38px; min-width: 38px; height: 38px; max-width: 38px; }
-  .with-banter .result-say.is-emote .result-say-t { font-size: 21px; }
-}
-@media (max-height: 620px) {
-  /* the shortest capsules trade the mood copy for the keys: the verdict and the podium stay */
-  .with-banter .result-sub,
-  .with-banter .result-mode { display: none; }
-  .with-banter .result-kicker { margin-bottom: 2px; }
-  .with-banter .result-title { font-size: clamp(1.65rem, 8.2vw, 2.2rem); }
-  .with-banter .result-podium { margin: 6px 0 4px; }
-  .with-banter .result-rewards { margin-bottom: 5px; }
-  .with-banter .result-stake { padding: 4px 10px; margin-bottom: 5px; }
-  .with-banter .result-stake-n { font-size: 1.1rem; }
-  .with-banter .result-btn.menu { min-height: 32px; }
-  .banter-row-faces { gap: 6px; }
-}
-
-/* ---- narrow phones: the six faces lose two pixels, never a gap ---- */
-@media (max-width: 350px) {
-  .banter-react,
-  .banter-toggle { flex-basis: 32px; width: 32px; height: 32px; }
-  .banter-react { font-size: 15px; }
-  .result-say { max-width: 62%; font-size: 12px; }
-  .banter-pill { font-size: 11.5px; padding: 6px 11px; }
-}
-
-/* ---- Persian: Vazirmatn, true RTL on the dock and its composed line ---- */
+/* ---- Persian: Vazirmatn, no tracking, real RTL on the composer ---- */
 html[data-lang="fa"] .result-banter,
 html[data-lang="fa"] .banter-alert,
-html[data-lang="fa"] .banter-pill,
 html[data-lang="fa"] .banter-input,
 html[data-lang="fa"] .result-say {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0;
 }
-html[data-lang="fa"] .result-say {
-  font-size: 12px;
-  line-height: 1.55;
-}
+html[data-lang="fa"] .banter-label { font-size: 7.5px; }
+html[data-lang="fa"] .result-say { font-size: 11.5px; line-height: 1.55; }
 html[data-lang="fa"] .result-say.is-emote .result-say-t { line-height: 1; }
-html[data-lang="fa"] .banter-pill { font-size: 11.5px; line-height: 1.5; }
 html[data-lang="fa"] .banter-input { font-size: 12.5px; text-align: right; }
-/* the alert is a single line of Persian at 10.5px: it needs the same real line box as the
-   pills, or the descenders of "حریف" clip against the capsule's own radius */
-html[data-lang="fa"] .banter-alert { font-size: 10.5px; line-height: 1.5; }
+html[data-lang="fa"] .banter-alert { font-size: 10px; line-height: 1.5; }

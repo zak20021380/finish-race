@@ -1,0 +1,913 @@
+/* ==========================================================================
+   POST-MATCH RESULT — OBSIDIAN GLASS
+
+   One capsule for both polarities. The finish only decides which ambient glow
+   sits behind the verdict: emerald/champagne for a win, a crimson ember for a
+   defeat. Everything else — the standings ladder, the bank, the reaction tray,
+   the action keys — keeps one calm rhythm, so the card reads as a premium glass
+   object rather than a stack of tiles.
+   ========================================================================== */
+
+.overlay.result {
+  z-index: 10;
+  padding:
+    max(10px, env(safe-area-inset-top))
+    max(10px, env(safe-area-inset-right))
+    max(10px, env(safe-area-inset-bottom))
+    max(10px, env(safe-area-inset-left));
+  background:
+    radial-gradient(76% 46% at 50% 0%, rgba(34, 211, 238, .07), transparent 72%),
+    rgba(3, 5, 9, .76);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+  backdrop-filter: blur(16px) saturate(1.1);
+  animation: result-veil .24s ease-out both;
+}
+.overlay.result.lose {
+  background:
+    radial-gradient(68% 42% at 50% 0%, rgba(225, 29, 72, .14), transparent 72%),
+    rgba(3, 4, 7, .82);
+  animation:
+    result-veil .24s ease-out both,
+    result-quake .42s cubic-bezier(.36, .07, .19, .97) .08s both;
+}
+
+.result-card {
+  position: relative;
+  isolation: isolate;
+  width: min(100%, 376px);
+  max-height: calc(100% - 2px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: clamp(13px, 4.2vw, 19px) clamp(13px, 4.4vw, 18px) clamp(11px, 3.4vw, 15px);
+  border-radius: 26px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  background:
+    linear-gradient(168deg, rgba(22, 20, 27, .93) 0%, rgba(9, 8, 13, .97) 56%, rgba(4, 4, 8, .99) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    0 30px 68px -26px rgba(0, 0, 0, .92);
+  -webkit-backdrop-filter: blur(16px) saturate(1.12);
+  backdrop-filter: blur(16px) saturate(1.12);
+  color: var(--ink);
+  text-align: center;
+  animation: result-pop .4s cubic-bezier(.2, 1.2, .4, 1) both;
+}
+.result-card::-webkit-scrollbar { display: none; }
+/* the ambient glow lives on the card, never as a box: it costs the layout nothing */
+.result-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(64% 38% at 50% -8%, rgba(252, 211, 77, .12), transparent 68%),
+    radial-gradient(52% 30% at 50% 0%, rgba(34, 211, 238, .08), transparent 72%);
+}
+.overlay.result.lose .result-card {
+  background:
+    linear-gradient(168deg, rgba(27, 19, 24, .94) 0%, rgba(12, 8, 12, .975) 56%, rgba(5, 4, 7, .99) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    0 30px 68px -26px rgba(0, 0, 0, .94);
+}
+.overlay.result.lose .result-card::before {
+  background:
+    radial-gradient(70% 42% at 50% -6%, rgba(244, 63, 94, .24), transparent 70%),
+    radial-gradient(44% 28% at 50% 0%, rgba(255, 180, 120, .06), transparent 74%);
+}
+.result-card > * { position: relative; z-index: 1; }
+
+/* ---- verdict ---- */
+.result-kicker {
+  margin: 0;
+  color: #8B93A6;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .26em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+.result-title {
+  display: block;
+  margin: 3px 0 0;
+  font-size: clamp(2rem, 9vw, 2.6rem);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  background: linear-gradient(178deg, #FFFBEA 0%, #FDE68A 26%, #FACC15 48%, #F59E0B 68%, #22D3EE 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter:
+    drop-shadow(0 3px 0 rgba(6, 41, 47, .8))
+    drop-shadow(0 8px 18px rgba(34, 211, 238, .26));
+  animation: result-title-in .5s cubic-bezier(.2, 1.2, .4, 1) .03s both;
+}
+.overlay.result.lose .result-title {
+  background:
+    repeating-linear-gradient(114deg,
+      transparent 0 19px,
+      rgba(5, 4, 8, .92) 19px 20.2px,
+      transparent 20.2px 45px),
+    linear-gradient(178deg, #FFE7EA 0%, #FDA4AF 28%, #F43F5E 58%, #BE123C 84%, #4C0519 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter:
+    drop-shadow(0 3px 0 rgba(36, 4, 10, .9))
+    drop-shadow(0 8px 20px rgba(244, 63, 94, .35));
+}
+.result-mode {
+  margin: 7px 0 11px;
+  color: #7F8A9E;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .18em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+/* ---- the standings ladder: one glass table for every seat ---- */
+.result-roster {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 10px;
+  padding: 5px;
+  list-style: none;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .012)),
+    rgba(6, 8, 13, .42);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+.result-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 9px 0 7px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  text-align: start;
+}
+.result-row[data-place="1"] {
+  border-color: rgba(252, 211, 77, .13);
+  background: linear-gradient(90deg, rgba(252, 211, 77, .085), rgba(252, 211, 77, .015) 68%, transparent);
+}
+/* the local seat is found by warmth: a hairline and a whisper of gold, never a shout */
+.result-row.is-you {
+  border-color: rgba(243, 212, 131, .44);
+  background:
+    linear-gradient(90deg, rgba(243, 212, 131, .13), rgba(243, 212, 131, .035) 62%, rgba(243, 212, 131, .02));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 220, .16),
+    0 0 18px -11px rgba(243, 212, 131, .85);
+}
+.result-row.is-you[data-place="1"] {
+  background:
+    linear-gradient(90deg, rgba(243, 212, 131, .2), rgba(252, 211, 77, .06) 66%, rgba(243, 212, 131, .03));
+}
+
+.result-medal {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(148, 163, 184, .3);
+  border-radius: 9px;
+  background: linear-gradient(180deg, rgba(100, 116, 139, .4), rgba(30, 41, 59, .58));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14);
+  color: #D8E0EC;
+  font-family: var(--font-numeric);
+  font-size: 9px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.result-medal svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+}
+.result-medal[data-place="1"] {
+  border-color: rgba(255, 246, 214, .58);
+  background: linear-gradient(180deg, #FFF3C4 0%, #FCD34D 46%, #B45309 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .62),
+    0 0 14px -5px rgba(252, 211, 77, .7);
+  color: #2A1A03;
+}
+.result-medal[data-place="2"] {
+  border-color: rgba(226, 232, 240, .46);
+  background: linear-gradient(180deg, #F1F5F9 0%, #CBD5E1 46%, #64748B 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .66);
+  color: #111827;
+}
+.result-medal[data-place="3"] {
+  border-color: rgba(240, 178, 122, .46);
+  background: linear-gradient(180deg, #F8D3AE 0%, #E0A06A 46%, #8A441C 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 244, 230, .56);
+  color: #2A1206;
+}
+
+.result-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #2C3B57 0%, #151C2B 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .13),
+    0 2px 0 rgba(0, 0, 0, .35);
+  color: #E2E8F0;
+  font-size: 12px;
+  font-weight: 900;
+}
+.result-avatar img {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.result-avatar b {
+  position: relative;
+  z-index: 0;
+  font: inherit;
+}
+.result-row.is-you .result-avatar {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .2),
+    0 0 0 1.5px rgba(243, 212, 131, .5),
+    0 2px 6px -2px rgba(0, 0, 0, .6);
+}
+
+.result-row-id {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.result-row-name {
+  overflow: hidden;
+  color: #E9EEF7;
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.result-row.is-you .result-row-name { color: #FFF3D6; }
+
+.result-row-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: none;
+  min-width: 0;
+  margin-inline-start: auto;
+}
+.result-place {
+  overflow: hidden;
+  color: #78849A;
+  font-size: 7.5px;
+  font-weight: 800;
+  letter-spacing: .13em;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.result-row[data-place="1"] .result-place { color: #DDBE72; }
+.result-row[data-place="2"] .result-place { color: #B4BFD1; }
+.result-row[data-place="3"] .result-place { color: #D49768; }
+.result-row.is-you .result-place { color: #F3D483; }
+.result-you {
+  flex: none;
+  padding: 2px 6px;
+  border: 1px solid rgba(243, 212, 131, .44);
+  border-radius: 999px;
+  background: rgba(243, 212, 131, .12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16);
+  color: #FFE9AE;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+/* ---- bank: rewards on the left, the TIQ ledger on the right ---- */
+.result-bank {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
+  align-items: stretch;
+  min-height: 54px;
+  margin: 0 0 10px;
+  padding: 5px 7px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .01)),
+    rgba(7, 9, 14, .44);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .055);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+.result-bank.is-solo {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+}
+.result-bank.is-solo .result-bank-div { display: none; }
+.result-bank.is-solo .result-bank-col { width: 100%; justify-content: center; }
+.result-bank-div {
+  width: 1px;
+  margin-block: 8px;
+  background: linear-gradient(transparent, rgba(255, 255, 255, .13) 24%, rgba(255, 255, 255, .13) 76%, transparent);
+}
+.result-bank-col {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding-inline: 4px;
+}
+.result-bank-col.is-coins { justify-content: flex-start; }
+.result-bank-col.is-tiq { justify-content: flex-end; }
+.result-bank-col.is-stake { justify-content: flex-start; }
+#btn-double-coins,
+#btn-recover-tiq { margin-inline-start: auto; }
+.result-bank-ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+}
+.result-bank-ico .coin {
+  width: 22px;
+  height: 22px;
+  filter: drop-shadow(0 0 7px rgba(245, 158, 11, .4));
+}
+.result-bank-ico.is-tiq {
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, rgba(255, 255, 255, .32), rgba(252, 211, 77, .14) 48%, transparent 74%);
+  color: #FCD34D;
+}
+.result-bank-ico.is-tiq .ico {
+  width: 17px;
+  height: 17px;
+  filter: drop-shadow(0 0 5px rgba(252, 211, 77, .75));
+  animation: result-brain 2.6s ease-in-out infinite;
+}
+.result-bank-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+.result-bank-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
+  color: #FCD34D;
+  font-family: var(--font-numeric);
+  font-size: 1.06rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  line-height: 1.05;
+  direction: ltr;
+  white-space: nowrap;
+}
+.result-sign { font-size: .86em; opacity: .82; }
+.result-unit {
+  margin-inline-start: 2px;
+  color: inherit;
+  font-family: inherit;
+  font-size: 7.5px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  opacity: .62;
+}
+#result-coin-chip .result-bank-value { color: #FCD34D; }
+
+.result-stake-k {
+  overflow: hidden;
+  color: #E8A0AC;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .13em;
+  line-height: 1.4;
+  opacity: .85;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.result-stake-n {
+  display: inline-block;
+  color: #FB7185;
+  font-family: var(--font-numeric);
+  font-size: 1rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  direction: ltr;
+  unicode-bidi: isolate;
+  white-space: nowrap;
+  text-shadow: 0 0 12px rgba(244, 63, 94, .35);
+  transition: color .3s ease, text-shadow .3s ease;
+}
+.result-bank-col.is-stake.is-refunded .result-stake-k,
+.result-stake.is-refunded .result-stake-k { color: #6EE7B7; opacity: .9; }
+.result-bank-col.is-stake.is-refunded .result-stake-n,
+.result-stake.is-refunded .result-stake-n {
+  color: #6EE7B7;
+  text-shadow: 0 0 12px rgba(16, 185, 129, .45);
+}
+
+#result-tiq-chip[hidden],
+#result-stake[hidden],
+.result-actions [hidden] { display: none !important; }
+
+/* ---- the two rewarded-video keys: smoked gold, compact ---- */
+#btn-recover-tiq,
+#btn-double-coins {
+  appearance: none;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgba(243, 212, 131, .5);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 246, 214, .16), rgba(255, 246, 214, 0) 48%),
+    linear-gradient(135deg, #3A2E15 0%, #241C0E 56%, #100E09 100%);
+  color: #F7E3AC;
+  font-family: inherit;
+  font-weight: 800;
+  letter-spacing: .03em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform .12s ease,
+    border-color .18s ease,
+    color .18s ease,
+    opacity .18s ease,
+    box-shadow .18s ease;
+}
+#btn-recover-tiq {
+  --ad-spin-x: 10.5px;
+  gap: 5px;
+  height: 32px;
+  padding-inline: 8px 9px;
+  font-size: 9.5px;
+  text-align: start;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 220, .3),
+    inset 0 -1px 0 rgba(0, 0, 0, .5),
+    0 0 0 1px rgba(0, 0, 0, .3),
+    0 6px 14px -9px rgba(0, 0, 0, .95),
+    0 0 12px -9px rgba(243, 212, 131, .5);
+}
+#btn-recover-tiq::before {
+  content: "";
+  position: absolute;
+  top: -60%;
+  bottom: -60%;
+  left: -35%;
+  width: 42%;
+  background: linear-gradient(100deg, transparent, rgba(255, 250, 230, .26), transparent);
+  transform: translateX(-180%) rotate(9deg);
+  pointer-events: none;
+  animation: recover-sheen 4.2s ease-in-out infinite;
+}
+#btn-double-coins {
+  --ad-spin-x: 7px;
+  gap: 3px;
+  height: 24px;
+  padding-inline: 7px 8px;
+  font-size: 10px;
+  border-color: rgba(243, 212, 131, .42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 220, .2),
+    0 4px 10px -8px rgba(0, 0, 0, .95),
+    0 0 12px -8px rgba(243, 212, 131, .42);
+}
+#btn-recover-tiq:active,
+#btn-double-coins:active { transform: scale(.96); }
+#btn-recover-tiq.is-busy,
+#btn-double-coins.is-busy { pointer-events: none; }
+#btn-recover-tiq.is-claimed,
+#btn-double-coins.is-claimed {
+  border-color: rgba(16, 185, 129, .5);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, 0) 46%),
+    linear-gradient(135deg, rgba(16, 185, 129, .3), rgba(6, 78, 59, .5));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 0 12px -4px rgba(16, 185, 129, .5),
+    0 4px 12px -8px rgba(0, 0, 0, .95);
+  color: #A7F3D0;
+  pointer-events: none;
+  animation: ad-chip-land .3s cubic-bezier(.22, 1, .36, 1);
+}
+#btn-recover-tiq.is-claimed::before { animation: none; opacity: 0; }
+#btn-recover-tiq.is-exhausted,
+#btn-double-coins.is-exhausted {
+  opacity: .48;
+  filter: grayscale(.7);
+  pointer-events: none;
+  animation: none;
+}
+#btn-recover-tiq.is-exhausted::before { animation: none; opacity: 0; }
+#btn-recover-tiq[hidden],
+#btn-double-coins[hidden],
+.ad-chip-spin[hidden] { display: none !important; }
+#btn-recover-tiq:focus-visible,
+#btn-double-coins:focus-visible {
+  outline: 2px solid rgba(243, 212, 131, .8);
+  outline-offset: 2px;
+}
+.ad-chip-ico {
+  display: block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  filter: drop-shadow(0 0 4px rgba(243, 212, 131, .35));
+}
+#btn-recover-tiq .ad-chip-ico { width: 14px; height: 14px; }
+.ad-chip-label { display: block; line-height: 1; }
+/* the recover key speaks in two short lines: the action, then its daily budget */
+.ad-chip-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+}
+#btn-recover-tiq .ad-chip-label { font-size: 9px; letter-spacing: .02em; }
+.ad-chip-quota {
+  display: inline-block;
+  flex: none;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+  font-family: var(--font-numeric);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  opacity: .72;
+}
+.ad-chip-spin {
+  display: block;
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(243, 212, 131, .28);
+  border-top-color: #F3D483;
+  animation: ad-chip-spin .7s linear infinite;
+  position: absolute;
+  top: 50%;
+  inset-inline-start: var(--ad-spin-x, 8px);
+  margin-top: -5.5px;
+}
+#btn-recover-tiq.is-busy .ad-chip-ico,
+#btn-double-coins.is-busy .ad-chip-ico { opacity: 0; }
+
+/* ---- actions: one lit primary, one quiet door ---- */
+.result-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 2px;
+}
+.result-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 16px;
+  border: 0;
+  border-radius: 16px;
+  font: inherit;
+  font-size: .86rem;
+  font-weight: 900;
+  letter-spacing: .08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .16s ease, filter .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+.result-btn .ico { flex: none; width: 17px; height: 17px; }
+.result-btn.primary {
+  color: #042A25;
+  background: linear-gradient(180deg, #7CF8D4 0%, #2DD4BF 46%, #0EA5A0 100%);
+  box-shadow:
+    inset 0 2px 5px rgba(255, 255, 255, .38),
+    0 8px 22px -8px rgba(0, 210, 255, .4),
+    0 4px 0 #075E62;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .3);
+}
+.overlay.result.lose .result-btn.primary {
+  color: #2A0806;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .3), rgba(255, 255, 255, 0) 42%),
+    linear-gradient(100deg, #FFC07A 0%, #FF8A4C 24%, #F04452 64%, #B01232 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .55),
+    inset 0 -1px 0 rgba(0, 0, 0, .32),
+    0 0 0 1px rgba(255, 194, 128, .34),
+    0 10px 24px -10px rgba(240, 68, 82, .62),
+    0 4px 0 #5B0B1B;
+  text-shadow: 0 1px 0 rgba(255, 224, 196, .45);
+}
+.result-btn.primary:hover { filter: brightness(1.06); }
+.result-btn.primary:active {
+  transform: translateY(3px);
+  box-shadow:
+    inset 0 2px 6px rgba(255, 255, 255, .3),
+    0 4px 12px rgba(240, 68, 82, .28),
+    0 1px 0 #5B0B1B;
+}
+.result-btn.primary:focus-visible { outline: 3px solid #2DD4BF; outline-offset: 3px; }
+.overlay.result.lose .result-btn.primary:focus-visible { outline-color: #FB7185; }
+.result-btn.primary.is-locked,
+.result-btn.primary:disabled {
+  opacity: .5;
+  filter: grayscale(.35) saturate(.65);
+  cursor: not-allowed;
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, .16),
+    0 4px 0 #3A1218;
+  transform: none;
+}
+.result-btn.primary.is-locked:active,
+.result-btn.primary:disabled:active { transform: none; }
+.result-btn.ghost {
+  min-height: 40px;
+  padding: 9px 14px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .018));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    0 0 18px -14px rgba(255, 255, 255, .55);
+  color: #C6D0DF;
+  font-size: .72rem;
+  letter-spacing: .11em;
+}
+.result-btn.ghost .ico { width: 15px; height: 15px; color: #8FA3BE; }
+.result-btn.ghost:active { transform: translateY(2px); filter: brightness(1.06); }
+.result-btn.ghost:focus-visible { outline: 3px solid rgba(148, 163, 184, .6); outline-offset: 3px; }
+.result-btn--menu { color: #9DAABC; }
+
+/* ---- the ad's answer: a pill over the capsule, out of the card's flow ---- */
+.ad-toast {
+  position: absolute;
+  left: 50%;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  z-index: 3;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  margin: 0;
+  padding: 9px 14px;
+  border: 1px solid rgba(212, 175, 55, .3);
+  border-radius: 999px;
+  background: rgba(9, 11, 17, .94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 12px 28px -16px rgba(0, 0, 0, .95);
+  color: #F3D483;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  opacity: 0;
+  transform: translate(-50%, 10px);
+  pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease;
+}
+.ad-toast.show { opacity: 1; transform: translate(-50%, 0); }
+html.reduced-motion .ad-toast { transition: none; }
+
+/* ---- lifecycles ---- */
+@keyframes result-veil {
+  from { opacity: 0; }
+}
+@keyframes result-pop {
+  from { opacity: 0; transform: translateY(9px) scale(.94); }
+}
+@keyframes result-title-in {
+  from { opacity: 0; transform: translateY(5px) scale(.95); }
+}
+@keyframes result-quake {
+  0%, 100% { transform: translate(0, 0); }
+  22% { transform: translate(-3px, 1px); }
+  44% { transform: translate(3px, -1px); }
+  68% { transform: translate(-2px, 0); }
+  86% { transform: translate(1px, 0); }
+}
+@keyframes result-brain {
+  0%, 100% { opacity: .82; transform: scale(.96); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+@keyframes recover-sheen {
+  0%, 58% { transform: translateX(-180%) rotate(9deg); }
+  100% { transform: translateX(560%) rotate(9deg); }
+}
+@keyframes ad-chip-spin { to { transform: rotate(360deg); } }
+@keyframes ad-chip-land {
+  0% { transform: scale(1); }
+  38% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
+/* ---- compact heights: the default capusle fits 320x568 without scrolling ---- */
+@media (max-height: 700px) {
+  .overlay.result { padding: 7px; }
+  .result-card { padding: 12px 14px 10px; border-radius: 23px; }
+  .result-title { font-size: clamp(1.85rem, 8.4vw, 2.25rem); }
+  .result-mode { margin: 5px 0 8px; }
+  .result-row { height: 41px; min-height: 41px; }
+  .result-roster { gap: 3px; padding: 4px; margin-bottom: 8px; }
+  .result-bank { min-height: 50px; margin-bottom: 8px; padding: 4px 6px; }
+  .result-actions { gap: 6px; }
+  .result-btn { min-height: 44px; }
+  .result-btn.ghost { min-height: 38px; }
+}
+@media (max-height: 600px) {
+  .result-card { padding: 10px 13px 9px; }
+  .result-kicker { font-size: 8px; }
+  .result-title { font-size: clamp(1.65rem, 7.8vw, 2rem); }
+  .result-mode { margin: 4px 0 7px; }
+  .result-row { height: 39px; min-height: 39px; }
+  .result-avatar { width: 29px; height: 29px; }
+  .result-medal { width: 24px; height: 24px; }
+  .result-bank { min-height: 47px; }
+  .result-btn.primary { min-height: 42px; }
+  .result-btn.ghost { min-height: 36px; }
+}
+
+/* ---- narrow phones: names keep the room, everything else gives it up ---- */
+@media (max-width: 360px) {
+  .result-card { padding-inline: 12px; }
+  .result-row { gap: 7px; padding-inline: 7px 8px; }
+  .result-row-name { font-size: 12px; }
+  .result-place { font-size: 7px; letter-spacing: .1em; }
+  .result-you { padding: 2px 5px; font-size: 6.5px; }
+  #result-coin-chip .result-bank-ico,
+  #result-tiq-chip .result-bank-ico { display: none; }
+  .result-bank-col { gap: 5px; padding-inline: 3px; }
+  .result-bank-value { font-size: .95rem; }
+  .result-stake-n { font-size: .92rem; }
+  #btn-recover-tiq { --ad-spin-x: 9px; gap: 3px; padding-inline: 6px; }
+  #btn-recover-tiq .ad-chip-ico { width: 12px; height: 12px; }
+  #btn-recover-tiq .ad-chip-label { font-size: 8px; }
+  .ad-chip-quota { font-size: 6.5px; }
+}
+@media (max-width: 340px) {
+  /* 320px: the ledger and the shield share 250px — every glyph pays a pixel */
+  .result-bank-value,
+  .result-stake-n { font-size: .88rem; }
+  #btn-recover-tiq { gap: 2px; padding-inline: 5px; }
+  #btn-recover-tiq .ad-chip-ico { width: 10px; height: 10px; }
+  #btn-recover-tiq .ad-chip-label { font-size: 7px; letter-spacing: 0; }
+  .ad-chip-quota { font-size: 6px; }
+}
+
+/* ---- an old webview without text clipping keeps flat titles instead of blank ones ---- */
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  .result-title {
+    background: none;
+    color: #FCD34D;
+    -webkit-text-fill-color: #FCD34D;
+    filter: none;
+  }
+  .overlay.result.lose .result-title {
+    background: none;
+    color: #FB7185;
+    -webkit-text-fill-color: #FB7185;
+  }
+}
+
+/* the result stays obsidian in the pearl finish too */
+html[data-theme="light"] .screen.game .overlay.result {
+  background:
+    radial-gradient(76% 46% at 50% 0%, rgba(34, 211, 238, .06), transparent 72%),
+    rgba(3, 5, 9, .72);
+  -webkit-backdrop-filter: blur(16px) saturate(1.05) brightness(.92);
+  backdrop-filter: blur(16px) saturate(1.05) brightness(.92);
+}
+html[data-theme="light"] .screen.game .overlay.result.lose {
+  background:
+    radial-gradient(68% 42% at 50% 0%, rgba(225, 29, 72, .14), transparent 72%),
+    rgba(3, 4, 7, .82);
+}
+
+/* ---- reduced motion keeps the hierarchy and drops the theatre ---- */
+html.reduced-motion .overlay.result,
+html.reduced-motion .overlay.result.lose,
+html.reduced-motion .result-card,
+html.reduced-motion .result-title,
+html.reduced-motion .result-bank-ico.is-tiq .ico,
+html.reduced-motion #btn-recover-tiq::before,
+html.reduced-motion .ad-chip-spin { animation: none; }
+html.reduced-motion #btn-recover-tiq.is-claimed,
+html.reduced-motion #btn-double-coins.is-claimed { animation: none; }
+
+/* ---- Persian: true RTL on the capsule, Vazirmatn, no forced tracking ----
+   The global language rule already bans letter-spacing; these only hand the
+   right line boxes and font family to the new ladder and bank. */
+html[data-lang="fa"] .overlay.result .result-card {
+  direction: rtl;
+  text-align: right;
+}
+html[data-lang="fa"] .overlay.result :is(
+  .result-kicker,
+  .result-mode,
+  .result-title
+) {
+  text-align: center;
+}
+html[data-lang="fa"] .overlay.result :is(
+  .result-kicker,
+  .result-mode,
+  .result-title,
+  .result-row-name,
+  .result-place,
+  .result-you,
+  .result-stake-k,
+  .result-btn,
+  .ad-chip-label
+) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  text-transform: none;
+}
+html[data-lang="fa"] .overlay.result :is(
+  .result-kicker,
+  .result-mode,
+  .result-place,
+  .result-stake-k
+) {
+  line-height: 1.5;
+}
+html[data-lang="fa"] .overlay.result .result-title,
+html[data-lang="ar"] .overlay.result .result-title {
+  font-size: clamp(1.8rem, 8.6vw, 2.4rem);
+  line-height: 1.35;
+}
+/* a joined script is never sliced by the glitch bars: the gradient survives, the cuts do not */
+html[data-lang="fa"] .overlay.result.lose .result-title,
+html[data-lang="ar"] .overlay.result.lose .result-title {
+  background: linear-gradient(178deg, #FFE7EA 0%, #FDA4AF 28%, #F43F5E 58%, #BE123C 84%, #4C0519 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+html[data-lang="fa"] .overlay.result .result-row-name { text-align: right; }
+html[data-lang="fa"] .overlay.result .result-btn { direction: rtl; }
+html[data-lang="fa"] .overlay.result .result-place { font-size: 8px; }
+html[data-lang="fa"] .overlay.result .result-stake-k { font-size: 7.5px; }
+html[data-lang="fa"] .overlay.result .result-bank-value,
+html[data-lang="fa"] .overlay.result .result-stake-n { direction: ltr; }
+html[data-lang="fa"] .overlay.result .result-stake-n {
+  font-family: var(--font-numeric);
+  unicode-bidi: isolate;
+}

@@ -3012,113 +3012,88 @@
                The whole panel is dark obsidian glass in both finishes, so the gold/cyan win and
                the fractured crimson loss read as the same premium object. -->
           <div class="overlay result" id="overlay" hidden role="dialog" aria-modal="true"
-            aria-labelledby="verdict" aria-describedby="sub">
+            aria-labelledby="verdict">
             <div class="result-card" id="result-card" data-scroll>
-              <span class="result-aura" aria-hidden="true"><i></i><i></i><i></i></span>
               <p class="result-kicker" id="result-kicker" data-i18n="resultKicker">MATCH COMPLETE</p>
               <h2 class="result-title" id="verdict">VICTORY</h2>
               <p class="over-mode result-mode" id="over-mode">1v1 · Normal</p>
-              <p class="result-sub" id="sub">Total Dominance. Outsmarted and outplayed in every turn.</p>
 
-              <!-- A duel keeps the champion/VS/fallen podium. A party swaps the VS and the single
-                   fallen seat for a compact ranking list under the same champion card. -->
-              <div class="result-podium" id="result-podium">
-                <div class="result-seat is-champion" id="result-top-seat">
-                  <span class="result-crown" aria-hidden="true">
-                    <svg class="ico" viewBox="0 0 24 24"><use href="#i-crown" /></svg>
-                  </span>
-                  <span class="result-avatar">
-                    <img id="result-top-img" alt="" decoding="async" referrerpolicy="no-referrer" hidden />
-                    <b id="result-top-initial" aria-hidden="true">Y</b>
-                  </span>
-                  <span class="result-id">
-                    <span class="result-tag" id="result-top-tag">WINNER · YOU</span>
-                    <strong class="result-name" id="result-top-name">You</strong>
-                  </span>
-                  <span class="result-place" id="result-top-place" data-place="1" dir="ltr" hidden>#1</span>
-                  <span class="result-say" id="result-top-say" role="status" aria-live="polite" hidden>
-                    <span class="result-say-t" id="result-top-say-t"></span>
-                  </span>
-                </div>
-                <span class="result-vs" id="result-vs" aria-hidden="true">VS</span>
-                <div class="result-seat is-fallen" id="result-bottom-seat">
-                  <span class="result-avatar">
-                    <img id="result-bottom-img" alt="" decoding="async" referrerpolicy="no-referrer" hidden />
-                    <b id="result-bottom-initial" aria-hidden="true">B</b>
-                  </span>
-                  <span class="result-id">
-                    <span class="result-tag" id="result-bottom-tag">DEFEATED</span>
-                    <strong class="result-name" id="result-bottom-name">Bot</strong>
-                  </span>
-                  <span class="result-say" id="result-bottom-say" role="status" aria-live="polite" hidden>
-                    <span class="result-say-t" id="result-bottom-say-t"></span>
-                  </span>
-                </div>
-                <ol class="result-rank" id="result-rank" aria-label="Final standings" hidden></ol>
-              </div>
+              <!-- One glass ladder for every seat: a duel shows two rows, a party three or four.
+                   The list is rebuilt by main.ts from the settled board, so rank, portrait and the
+                   local gold hairline always agree with the standings. -->
+              <ol class="result-roster" id="result-roster" aria-label="Final standings"></ol>
 
-              <div class="result-rewards" id="result-rewards">
-                <span class="result-chip is-tiq" id="result-tiq-chip">
-                  <span class="result-glyph" aria-hidden="true">
-                    <svg class="ico" viewBox="0 0 24 24"><use href="#i-brain" /></svg>
+              <!-- Rewards and stakes share one obsidian capsule: a coin bank on the left, the TIQ
+                   ledger on the right. The divider keeps the two columns symmetrical while each
+                   side owns exactly one action (the prism, the shield). -->
+              <div class="result-bank" id="result-bank">
+                <div class="result-bank-col is-coins" id="result-coin-chip">
+                  <span class="result-bank-ico is-coin" aria-hidden="true">
+                    <span class="coin" data-coin></span>
                   </span>
-                  <span class="result-value"><span class="result-sign">+</span><b id="result-tiq-n">0</b></span>
-                  <span class="result-unit" data-i18n="resultTiqUnit">TIQ</span>
-                </span>
-                <span class="result-chip is-coin" id="result-coin-chip">
-                  <!-- The action chip leads in the DOM on purpose: that lets the sheet retire the
-                       "COINS" unit (and the coin medallion on narrow phones) with a plain sibling
-                       selector the moment the chip is live. `order` keeps it last on screen, so the
-                       visual reading is still [coin][+120][COINS] [2× COINS]. -->
-                  <button class="ad-chip" id="btn-double-coins" type="button" hidden>
+                  <span class="result-bank-body">
+                    <span class="result-bank-value">
+                      <span class="result-sign">+</span><b id="result-coins-n">0</b>
+                      <span class="result-unit" data-i18n="resultCoinsUnit">COINS</span>
+                    </span>
+                  </span>
+                  <button class="ad-chip ad-chip--mini" id="btn-double-coins" type="button" hidden>
                     <svg class="ad-chip-ico" width="12" height="12" viewBox="0 0 24 24"
                       aria-hidden="true" focusable="false">
                       <path d="M8.6 5.4 18.8 12 8.6 18.6V5.4Z" fill="currentColor" />
                       <path d="M8.6 5.4 13.7 12 8.6 18.6V5.4Z" fill="#fff" fill-opacity=".26" />
                     </svg>
-                    <span class="ad-chip-label" id="double-coins-label">2× COINS</span>
+                    <span class="ad-chip-label" id="double-coins-label">2×</span>
                     <span class="ad-chip-spin" id="double-coins-spin" aria-hidden="true" hidden></span>
                   </button>
-                  <span class="result-token" aria-hidden="true"><span class="coin" data-coin></span></span>
-                  <span class="result-value"><span class="result-sign">+</span><b id="result-coins-n">0</b></span>
-                  <span class="result-unit" data-i18n="resultCoinsUnit">COINS</span>
-                </span>
+                </div>
+                <span class="result-bank-div" aria-hidden="true"></span>
+                <div class="result-bank-col is-tiq" id="result-tiq-chip">
+                  <span class="result-bank-ico is-tiq" aria-hidden="true">
+                    <svg class="ico" viewBox="0 0 24 24"><use href="#i-brain" /></svg>
+                  </span>
+                  <span class="result-bank-body">
+                    <span class="result-bank-value">
+                      <span class="result-sign">+</span><b id="result-tiq-n">0</b>
+                      <span class="result-unit" data-i18n="resultTiqUnit">TIQ</span>
+                    </span>
+                  </span>
+                </div>
+                <div class="result-bank-col is-stake" id="result-stake" hidden>
+                  <span class="result-bank-body">
+                    <span class="result-stake-k sr-only" id="result-stake-k">STAKES LOST</span>
+                    <strong class="result-stake-n" id="result-stake-n">−0 TIQ</strong>
+                  </span>
+                  <button class="ad-chip ad-chip--shield" id="btn-recover-tiq" type="button" hidden>
+                    <svg class="ad-chip-ico" width="16" height="16" viewBox="0 0 24 24"
+                      aria-hidden="true" focusable="false">
+                      <path d="M12 2.6 4.9 5.4v5.5c0 4.5 3 7.8 7.1 9.5 4.1-1.7 7.1-5 7.1-9.5V5.4L12 2.6Z"
+                        fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+                      <path d="M12 16V8.7" fill="none" stroke="currentColor" stroke-width="1.9"
+                        stroke-linecap="round" />
+                      <path d="m9.1 11.4 2.9-3 2.9 3" fill="none" stroke="currentColor" stroke-width="1.9"
+                        stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <span class="ad-chip-text">
+                      <span class="ad-chip-label" id="recover-tiq-label">RECOVER</span>
+                      <span class="ad-chip-quota" id="recover-tiq-quota" dir="ltr">3/3</span>
+                    </span>
+                    <span class="ad-chip-spin" id="recover-tiq-spin" aria-hidden="true" hidden></span>
+                  </button>
+                </div>
               </div>
-
-              <p class="result-stake" id="result-stake" hidden>
-                <span class="result-stake-main">
-                  <span class="result-stake-k" id="result-stake-k">STAKES LOST</span>
-                  <strong class="result-stake-n" id="result-stake-n">−0 TIQ</strong>
-                </span>
-                <!-- The stake band's own action: a full 38px key at the inline-end of the row, so
-                     the recovery reads as the primary thing to do about the loss. The label names
-                     the reward ("RECOVER STAKE"), never the band's header, so the two never echo. -->
-                <button class="ad-chip" id="btn-recover-tiq" type="button" hidden>
-                  <svg class="ad-chip-ico" width="16" height="16" viewBox="0 0 24 24"
-                    aria-hidden="true" focusable="false">
-                    <path d="M12 2.6 4.9 5.4v5.5c0 4.5 3 7.8 7.1 9.5 4.1-1.7 7.1-5 7.1-9.5V5.4L12 2.6Z"
-                      fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
-                    <path d="M12 16V8.7" fill="none" stroke="currentColor" stroke-width="1.9"
-                      stroke-linecap="round" />
-                    <path d="m9.1 11.4 2.9-3 2.9 3" fill="none" stroke="currentColor" stroke-width="1.9"
-                      stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                  <span class="ad-chip-label" id="recover-tiq-label">RECOVER STAKE</span>
-                  <span class="ad-chip-quota" id="recover-tiq-quota" dir="ltr">3/3</span>
-                  <span class="ad-chip-spin" id="recover-tiq-spin" aria-hidden="true" hidden></span>
-                </button>
-              </p>
 
               <div class="result-actions">
                 <div class="result-banter" id="result-banter" role="group"
-                  aria-label="Post-match banter" hidden>
+                  aria-label="Quick reactions">
                   <p class="banter-alert" id="banter-alert" role="status" aria-live="assertive" hidden>
                     <svg class="ico" aria-hidden="true"><use href="#i-shield" /></svg>
                     <span id="banter-alert-t">Opponent has left the match.</span>
                   </p>
                   <div class="banter-row banter-row-faces">
+                    <span class="banter-label" id="banter-label" aria-hidden="true">REACT</span>
                     <div class="banter-reacts" id="banter-reacts" role="group"
-                      aria-label="Emoji reactions"></div>
+                      aria-label="Quick reactions"></div>
                     <button class="banter-toggle" id="banter-toggle" type="button"
                       aria-expanded="false" aria-controls="banter-form" aria-label="Write a taunt">
                       <svg class="ico" aria-hidden="true">
@@ -3126,22 +3101,18 @@
                       </svg>
                     </button>
                   </div>
-                  <div class="banter-row banter-row-swap">
-                    <div class="banter-rail" id="banter-rail" data-carousel role="group"
-                      aria-label="Quick taunts"></div>
-                    <form class="banter-compose" id="banter-form" hidden>
-                      <input class="banter-input" id="banter-input" type="text" maxlength="40"
-                        autocomplete="off" enterkeyhint="send" dir="auto"
-                        placeholder="Type a quick taunt…" aria-label="Custom taunt, 40 characters max" />
-                      <button class="banter-send" id="banter-send" type="submit" aria-label="Send taunt">
-                        <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
-                      </button>
-                      <button class="banter-close" id="banter-close" type="button"
-                        aria-label="Back to quick taunts">
-                        <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
-                      </button>
-                    </form>
-                  </div>
+                  <form class="banter-compose" id="banter-form" hidden>
+                    <input class="banter-input" id="banter-input" type="text" maxlength="40"
+                      autocomplete="off" enterkeyhint="send" dir="auto"
+                      placeholder="Type a quick taunt…" aria-label="Custom taunt, 40 characters max" />
+                    <button class="banter-send" id="banter-send" type="submit" aria-label="Send taunt">
+                      <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
+                    </button>
+                    <button class="banter-close" id="banter-close" type="button"
+                      aria-label="Close the taunt field">
+                      <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
+                    </button>
+                  </form>
                 </div>
                 <button class="result-btn primary" id="again" type="button">
                   <svg class="ico" aria-hidden="true"><use id="again-ico" href="#i-play" /></svg>
@@ -3151,8 +3122,9 @@
                   <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
                   <span id="share-label">SHARE WIN / FLEX</span>
                 </button>
-                <button class="result-btn menu" id="to-menu" type="button">
-                  <span id="menu-label">MENU</span>
+                <button class="result-btn ghost result-btn--menu" id="to-menu" type="button">
+                  <svg class="ico" aria-hidden="true"><use href="#i-menu" /></svg>
+                  <span id="menu-label">LOBBY</span>
                 </button>
               </div>
             </div>

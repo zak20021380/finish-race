@@ -1545,12 +1545,13 @@ export class MatchmakerDO {
   /** Which room seat a socket is holding. A socket in here is not a queue entry. */
   private refs = new Map<WebSocket, RoomRef>();
   /**
-   * The post-match banter lane: a socket whose board has settled, paired with the seat opposite.
-   * It lives outside `races` because a settled race is forgotten the moment it produces a verdict,
-   * yet both result capsules stay open and still expect to be able to talk. Entries expire on
-   * their own, and either side leaving sends the rival `OPPONENT_LEFT` and drops both.
+   * The post-match banter lane: a socket whose board has settled, plus the seats still reading
+   * their result capsules. It lives outside `races` because a settled race is forgotten the moment
+   * it produces a verdict, yet the capsules stay open and still expect to talk. A duel has one
+   * peer; a 3- or 4-seat party has every other human. Entries expire on their own, and a leaver
+   * removes itself from every remaining lane and tells each peer `OPPONENT_LEFT`.
    */
-  private postChat = new Map<WebSocket, { peer: WebSocket; side: number; at: number; lastAt: number }>();
+  private postChat = new Map<WebSocket, { peers: WebSocket[]; side: number; at: number; lastAt: number }>();
   /** `room:chatId` → the last time that room pinged that player. The push cooldown's ledger. */
   private notified = new Map<string, number>();
   /** The admin's maintenance lock: nobody new gets in while it is on. */
@@ -4865,12 +4866,9 @@ export class MatchmakerDO {
         humans.push(m);
       }
     }
-    /* A two-seat result is the one capsule with a single rival to taunt: open the lane. */
-    if (humans.length === 2) {
-      this.armPostMatch(
-        { ws: humans[0].ws, side: humans[0].seat },
-        { ws: humans[1].ws, side: humans[1].seat },
-      );
+    /* Every human still at the capsule gets the lane: a party's reactions reach all of them. */
+    if (humans.length > 1) {
+      this.armPostMatch(humans.map((m) => ({ ws: m.ws, side: m.seat })));
     }
   }
 
@@ -4969,17 +4967,21 @@ export class MatchmakerDO {
   /* ---------- the race ---------- */
 
   /**
-   * Open the post-match lane between two seats whose board has settled. Only a natural finish or a
-   * resignation reaches here — an operator abort has no result capsule worth filling — and both
-   * sockets are still live, so either one may taunt while the other is still reading the verdict.
+   * Open the post-match lane for the seats whose board has settled. Only a natural finish or a
+   * resignation reaches here — an operator abort has no result capsule worth filling — and every
+   * socket is still live, so any seat may react while the others are still reading the verdict.
    */
-  private armPostMatch(a: { ws: WebSocket; side: number }, b: { ws: WebSocket; side: number }): void {
+  private armPostMatch(
+    members: ReadonlyArray<{ ws: WebSocket; side: number }>,
+  ): void {
     const at = Date.now();
-    this.postChat.set(a.ws, { peer: b.ws, side: a.side, at, lastAt: 0 });
-    this.postChat.set(b.ws, { peer: a.ws, side: b.side, at, lastAt: 0 });
+    for (const member of members) {
+      const peers = members.filter((m) => m.ws !== member.ws).map((m) => m.ws);
+      this.postChat.set(member.ws, { peers, side: member.side, at, lastAt: 0 });
+    }
   }
 
-  /** Relay one settled-board line to the seat opposite, if the lane is still open. */
+  /** Relay one settled-board line to every other seat in the lane, if it is still open. */
   private relayPostChat(from: WebSocket, text: string): void {
     const box = this.postChat.get(from);
     if (!box) return;
@@ -4991,21 +4993,27 @@ export class MatchmakerDO {
     /* the composer already throttles at 2s; this floor only stops a hand-rolled flood */
     if (now - box.lastAt < 250) return;
     box.lastAt = now;
-    this.postTo(box.peer, JSON.stringify({ type: 'POST_MATCH_CHAT', side: box.side, text }));
+    const frame = JSON.stringify({ type: 'POST_MATCH_CHAT', side: box.side, text });
+    for (const peer of box.peers) this.postTo(peer, frame);
   }
 
   /**
    * A lane is closing: the socket left the result (menu, rematch, a killed tab) or its lease ran
-   * out. The rival is told so its rematch key and taunt dock can go quiet instead of talking into
-   * an empty room; the peer's own entry is dropped with it so neither side lingers.
+   * out. Every remaining seat is told so its rematch key and reaction tray can go quiet instead of
+   * talking into an empty room; the leaver is removed from each peer's own list, and a peer with
+   * nobody left loses its entry too.
    */
   private dropPostChat(ws: WebSocket, notify: boolean): void {
     const box = this.postChat.get(ws);
     if (!box) return;
     this.postChat.delete(ws);
-    const peer = this.postChat.get(box.peer);
-    if (peer?.peer === ws) this.postChat.delete(box.peer);
-    if (notify) this.postTo(box.peer, JSON.stringify({ type: 'OPPONENT_LEFT', side: box.side }));
+    for (const peerWs of box.peers) {
+      const peer = this.postChat.get(peerWs);
+      if (!peer) continue;
+      peer.peers = peer.peers.filter((p) => p !== ws);
+      if (notify) this.postTo(peerWs, JSON.stringify({ type: 'OPPONENT_LEFT', side: box.side }));
+      if (!peer.peers.length) this.postChat.delete(peerWs);
+    }
   }
 
   /** A frame from a player who is already racing: judged by the room, then handed to the rival. */
@@ -5022,10 +5030,7 @@ export class MatchmakerDO {
       this.endRace(race, seat.side, 'RESIGN');
       /* the resignation is a verdict too: both capsules are up, so the lane opens for as long as
          the leaver keeps their socket around */
-      this.armPostMatch(
-        { ws: race.seats[0].ws, side: race.seats[0].side },
-        { ws: race.seats[1].ws, side: race.seats[1].side },
-      );
+      this.armPostMatch(race.seats.map((s) => ({ ws: s.ws, side: s.side })));
       return;
     }
     if (msg.type === 'EMOTE') {
@@ -5067,10 +5072,7 @@ export class MatchmakerDO {
        lane opens at the same beat, because both result capsules stay up and may speak. */
     if (next.winner !== null) {
       this.settle(race, next.winner);
-      this.armPostMatch(
-        { ws: race.seats[0].ws, side: race.seats[0].side },
-        { ws: race.seats[1].ws, side: race.seats[1].side },
-      );
+      this.armPostMatch(race.seats.map((s) => ({ ws: s.ws, side: s.side })));
     }
   }
 
