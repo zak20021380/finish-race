@@ -12,6 +12,12 @@ export interface TgUser {
   last_name?: string;
   username?: string;
   photo_url?: string;
+  /**
+   * Telegram Premium, as Telegram itself declares it inside the signed `initData`. This is the
+   * only entitlement the VIP layer trusts: the worker reads the same field off the verified
+   * payload (`worker/auth.ts`), so client and server can never disagree about who owns it.
+   */
+  is_premium?: boolean;
 }
 
 /** Only the colours the shell actually paints from. */

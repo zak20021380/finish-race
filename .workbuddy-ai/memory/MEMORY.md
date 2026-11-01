@@ -57,13 +57,28 @@ Durable index; dated logs beside this file hold the history.
   in `#mind-top`; the YOU pill is `of N minds` in `#home-mind-field` (not a percentile).
 
 ## Post-match banter (src/banter.*)
-- Bubbles are FLEX CHILDREN of `.result-seat` (`fit-content`, `max-width:68%`,
-  `margin-inline-start:auto`) — never absolute, so the nameplate is never covered. A pictograph-only
-  message gets `.is-emote` → 42px round medal, not a pill.
-- The dock is frameless and TWO rows: faces+toggle, then one `.banter-row-swap` grid cell shared by
-  the chip rail and the composer (`grid-area:1/1`) — the toggle swaps them in place.
+- The bubble is `.result-say`, ABSOLUTE inside `.result-row` (`inset-inline-end:8px`, `top:50%`,
+  `translateY(-50%)`, `max-width:66%`, `inline-flex` + gap). A pictograph-only message gets
+  `.is-emote` → 30px round medal, not a pill. Text ellipsis lives on `.result-say-t`, not on the
+  container (a block child never inherits the container's `text-overflow`).
+- The tray is a `.result-banter` grid of stacked rows: faces, then ONE slot that holds either
+  `#banter-form` or `#banter-canned` — never both, and `hidden` removes the track entirely.
 - **An author `display` beats the UA `[hidden]` rule.** Every hidden surface here needs the
   `display:none!important` restatement, or the dock shows for 3/4-seat parties.
+
+## VIP layer (premium gate)
+- `src/premium.ts` is the ONLY entitlement door: `isPremiumUser()` = signed `user.is_premium` OR a
+  session-only preview pass. Never a second `isPremium` anywhere.
+- Server-side truth is the signature (`Identity.premium` → `Waiter`/`RoomMember`/`StoredMember`).
+  A signed seat is judged by initData's `is_premium`; only the guest door reads `?vip=1`.
+- `POST_MATCH_CHAT` carries `{preset}` or `{text}`, never both. `relayPostChat` is the gate; the
+  free seat's allowance is `POST_CHAT_FREE_REACTIONS` (the five faces) — that table is the reason a
+  free reaction is not refused by its own gate. `vip` is stamped by the room and only on text.
+- Locked stickers keep their hitbox + `aria-disabled` (never `disabled`): the tap must be able to
+  fire `notify('warning')` and open `#vip-sheet`, which is a SIBLING of `#result-card` (and sets
+  `inert` on it). Stash glyphs stay at Emoji 1.0 — 🫡 is Emoji 14 and renders as tofu.
+- `.result-row .result-say.is-vip` sits at (0,3,0) and AFTER `.result-row.is-you .result-say`;
+  that tie is the only thing that keeps a VIP's own row gold.
 
 ## Squads / Telegram handles
 - ONE rule: `HANDLE_RE = /^[a-z0-9_]{4,32}$/i` (src/squads.ts), mirrored in the worker as

@@ -35,6 +35,10 @@
  */
 import { contendersIn, dimsFor, type Action } from './rules';
 import { PHRASE_COUNT, isChatEmoteId, isChatLang, type ChatEmoteId, type ChatLang } from './data/phrases';
+import {
+  isPostChatPreset, type PostChatLine, type PostChatPresetId,
+} from './data/postchat';
+import { isPremiumUser } from './premium';
 import { menuState, motionReduced, settings } from './settings';
 import { audioContext } from './sound';
 import { payout, profile } from './storage';
@@ -228,7 +232,7 @@ export interface OnlineSession extends OnlineMatch {
   /** Send one tactical line to the rival, as its closed `(lang, index)` pair. */
   sendPhrase(lang: ChatLang, index: number): boolean;
   /** Send one post-match line to the rival. False when the socket is gone. */
-  sendPostMatchChat(text: string): boolean;
+  sendPostMatchChat(line: PostChatLine): boolean;
   /** Forfeit: the rival wins immediately. */
   resign(): void;
   /** Let the socket go (no forfeit): the session is done being a race. */
@@ -239,8 +243,12 @@ export interface OnlineSession extends OnlineMatch {
   onEmote(cb: (emote: ChatEmoteId, side: number) => void): void;
   /** A tactical line the rival sent, as the pair they tapped. */
   onPhrase(cb: (lang: ChatLang, index: number, side: number) => void): void;
-  /** A post-match line the rival sent from the result capsule. */
-  onPostChat(cb: (text: string, side: number) => void): void;
+  /**
+   * A post-match line the rival sent from the result capsule. `vip` is the room's word on the
+   * sender, never the sender's own: it is stamped from the entitlement the socket authenticated
+   * with, which is what lets a gold bubble mean something.
+   */
+  onPostChat(cb: (line: PostChatLine, side: number, vip: boolean) => void): void;
   /** The rival (or the socket itself) is gone after the board settled: the result is dead. */
   onPostLeft(cb: () => void): void;
   /** The race ended without a finish line. */
@@ -256,8 +264,9 @@ type RaceFrame =
   | { type: 'MOVE'; side: 0 | 1; action: Action }
   | { type: 'EMOTE'; side: 0 | 1; emote: ChatEmoteId }
   | { type: 'PHRASE'; side: 0 | 1; lang: ChatLang; index: number }
-  /* The result capsule's banter: a 40-character line, relayed only after the board has settled. */
-  | { type: 'POST_MATCH_CHAT'; side: 0 | 1; text: string }
+  /* The result capsule's banter: a closed preset id, or a VIP custom line relayed only after the
+     board has settled. `vip` is stamped by the room from the sender's verified entitlement. */
+  | { type: 'POST_MATCH_CHAT'; side: 0 | 1; vip: boolean; preset?: PostChatPresetId; text?: string }
   | { type: 'REJECT'; reason: string }
   | { type: 'RESIGN' | 'OPPONENT_LEFT'; side: 0 | 1 }
   /* The two the Admin Command Center's server half sends: a refused queue, and a pulled room. */
@@ -332,6 +341,9 @@ function socketParams(wide: boolean): string {
   params.set('coins', String(profile.coins));
   params.set('refs', String(profile.referral.joins));
   params.set('squad', getMySquad()?.handle ?? '');
+  /* The VIP entitlement rides as a bare flag. Only the guest door reads it — a signed session is
+     judged by the `is_premium` field inside its own signature, so a real seat cannot claim it. */
+  if (isPremiumUser()) params.set('vip', '1');
   return params.toString();
 }
 
@@ -435,9 +447,14 @@ function parseFrame(raw: string, sizes?: readonly number[]): RaceFrame | null {
         ? { type: 'PHRASE', side, lang: msg.lang, index: msg.index } : null;
     }
     if (msg.type === 'POST_MATCH_CHAT') {
+      /* A preset is the room's own vocabulary: it is relayed as the ID and painted from the
+         receiver's table. Text only ever arrives from a seat the room already cleared as VIP. */
+      if (isPostChatPreset(msg.preset)) {
+        return { type: 'POST_MATCH_CHAT', side, vip: msg.vip === true, preset: msg.preset };
+      }
       if (typeof msg.text !== 'string') return null;
       const text = msg.text.replace(/[\u0000-\u001F\u007F]/g, ' ').trim().slice(0, 40);
-      return text ? { type: 'POST_MATCH_CHAT', side, text } : null;
+      return text ? { type: 'POST_MATCH_CHAT', side, vip: msg.vip === true, text } : null;
     }
     if (msg.type === 'REJECT') return { type: 'REJECT', reason: typeof msg.reason === 'string' ? msg.reason : 'refused' };
     if (msg.type === 'RESIGN' || msg.type === 'OPPONENT_LEFT') return { type: msg.type, side };
@@ -473,7 +490,7 @@ let raceEnd: ((end: RaceEnd) => void) | null = null;
 let raceReject: ((reason: string) => void) | null = null;
 let raceEmote: ((emote: ChatEmoteId, side: number) => void) | null = null;
 let racePhrase: ((lang: ChatLang, index: number, side: number) => void) | null = null;
-let racePostChat: ((text: string, side: number) => void) | null = null;
+let racePostChat: ((line: PostChatLine, side: number, vip: boolean) => void) | null = null;
 /** Fired once when the settled socket can no longer carry banter: the rival left, or we did. */
 let racePostLeft: (() => void) | null = null;
 let racePostGone = false;
@@ -484,7 +501,7 @@ let raceEmoteQueue: Array<{ emote: ChatEmoteId; side: number }> = [];
 /** And same for a phrase: the line waits with its pair instead of being dropped. */
 let racePhraseQueue: Array<{ lang: ChatLang; index: number; side: number }> = [];
 /** A post-match line that beat the result capsule: it waits for `onPostChat` instead of vanishing. */
-let racePostChatQueue: Array<{ text: string; side: number }> = [];
+let racePostChatQueue: Array<{ line: PostChatLine; side: number; vip: boolean }> = [];
 
 /** The seat the stage just locked in, for the race that follows it. Null until there is one. */
 export const onlineRace = (): OnlineSession | null => race;
@@ -581,10 +598,12 @@ function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_F
         return false;
       }
     },
-    sendPostMatchChat(text) {
+    sendPostMatchChat(line) {
       if (race?.socket !== sock || sock.readyState !== 1) return false;
       try {
-        sock.send(JSON.stringify({ type: 'POST_MATCH_CHAT', text }));
+        /* one field or the other, never both: the room resolves a preset itself and checks a
+           text against this seat's entitlement */
+        sock.send(JSON.stringify({ type: 'POST_MATCH_CHAT', ...line }));
         return true;
       } catch {
         return false;
@@ -618,7 +637,7 @@ function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_F
       racePostChat = cb;
       const queued = racePostChatQueue;
       racePostChatQueue = [];
-      for (const p of queued) cb(p.text, p.side);
+      for (const p of queued) cb(p.line, p.side, p.vip);
     },
     onPostLeft(cb) {
       racePostLeft = cb;
@@ -726,8 +745,11 @@ function wire(sock: WebSocket): void {
       if (racePhrase) racePhrase(frame.lang, frame.index, frame.side);
       else racePhraseQueue.push({ lang: frame.lang, index: frame.index, side: frame.side });
     } else if (frame.type === 'POST_MATCH_CHAT') {
-      if (racePostChat) racePostChat(frame.text, frame.side);
-      else racePostChatQueue.push({ text: frame.text, side: frame.side });
+      const line: PostChatLine = frame.preset
+        ? { preset: frame.preset }
+        : { text: frame.text ?? '' };
+      if (racePostChat) racePostChat(line, frame.side, frame.vip);
+      else racePostChatQueue.push({ line, side: frame.side, vip: frame.vip });
     } else if (frame.type === 'REJECT') {
       raceReject?.(frame.reason);
     } else if (frame.type === 'ABORTED') {

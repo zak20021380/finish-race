@@ -3105,11 +3105,24 @@
                     <span class="banter-label" id="banter-label" aria-hidden="true">REACT</span>
                     <div class="banter-reacts" id="banter-reacts" role="group"
                       aria-label="Quick reactions"></div>
+                    <!-- the stash key flips the same lane to the five VIP stickers; a free player
+                         sees them locked and gets the store instead of a dead tap -->
+                    <button class="banter-vip-key" id="banter-vip-key" type="button"
+                      aria-pressed="false" aria-label="VIP sticker stash">
+                      <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
+                      <span class="banter-key-lock" id="banter-vip-lock" aria-hidden="true" hidden>
+                        <svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>
+                      </span>
+                    </button>
                     <button class="banter-toggle" id="banter-toggle" type="button"
-                      aria-expanded="false" aria-controls="banter-form" aria-label="Write a taunt">
+                      aria-expanded="false" aria-controls="banter-form banter-canned"
+                      aria-label="Write a taunt">
                       <svg class="ico" aria-hidden="true">
                         <use id="banter-toggle-ico" href="#i-chat" />
                       </svg>
+                      <span class="banter-key-lock" id="banter-toggle-lock" aria-hidden="true" hidden>
+                        <svg class="ico" aria-hidden="true"><use href="#i-lock" /></svg>
+                      </span>
                     </button>
                   </div>
                   <form class="banter-compose" id="banter-form" hidden>
@@ -3124,6 +3137,18 @@
                       <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
                     </button>
                   </form>
+                  <!-- the free player's row: four closed tactical lines, then the one sentence
+                       that explains what VIP adds. Same slot as the composer, never both. -->
+                  <div class="banter-canned" id="banter-canned" hidden>
+                    <span class="banter-canned-k" id="banter-canned-k">QUICK CHAT</span>
+                    <div class="banter-canned-grid" id="banter-canned-grid" role="group"
+                      aria-label="Quick chat phrases"></div>
+                    <button class="banter-vip-pill" id="banter-vip-pill" type="button">
+                      <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
+                      <span class="banter-vip-pill-t" id="banter-vip-pill-t">Unlock custom chat with VIP</span>
+                      <svg class="ico banter-vip-pill-go" aria-hidden="true"><use href="#i-next" /></svg>
+                    </button>
+                  </div>
                 </div>
                 <button class="result-btn primary" id="again" type="button">
                   <svg class="ico" aria-hidden="true"><use id="again-ico" href="#i-play" /></svg>
@@ -3137,6 +3162,30 @@
                   <svg class="ico" aria-hidden="true"><use href="#i-menu" /></svg>
                   <span id="menu-label">LOBBY</span>
                 </button>
+              </div>
+            </div>
+            <!-- The VIP store. A sibling of the capsule, not a child: it lands over the whole
+                 result stage on its own scrim, so opening it never reflows the card underneath.
+                 Every word in it is repainted by banter.ts on a language flip. -->
+            <div class="vip-sheet" id="vip-sheet" hidden role="dialog" aria-modal="true"
+              aria-labelledby="vip-sheet-title">
+              <div class="vip-scrim" id="vip-scrim" aria-hidden="true"></div>
+              <div class="vip-card">
+                <span class="vip-crest" aria-hidden="true">
+                  <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
+                </span>
+                <button class="vip-close" id="vip-close" type="button" aria-label="Close VIP">
+                  <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
+                </button>
+                <p class="vip-kicker" id="vip-kicker">OBSIDIAN VIP</p>
+                <h3 class="vip-title" id="vip-sheet-title">Own the last word</h3>
+                <p class="vip-sub" id="vip-sub"></p>
+                <ul class="vip-feats" id="vip-feats"></ul>
+                <button class="vip-cta" id="vip-cta" type="button">
+                  <svg class="ico" aria-hidden="true"><use id="vip-cta-ico" href="#i-star" /></svg>
+                  <span id="vip-cta-t">OPEN TELEGRAM PREMIUM</span>
+                </button>
+                <p class="vip-fine" id="vip-fine"></p>
               </div>
             </div>
             <!-- the ad's answer lands over the capsule, never inside it: absolutely placed, so it

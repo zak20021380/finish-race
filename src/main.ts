@@ -16,6 +16,7 @@ import {
 import { createConfetti } from './confetti';
 import { createChat } from './chat';
 import { createBanter } from './banter';
+import type { PostChatLine } from './data/postchat';
 import {
   BOARD_IDLE, holdMineKey, holdsBall, moveDots, pickBall, pickBallFromMine, previewWall, type BoardMode,
 } from './boardmode';
@@ -829,7 +830,13 @@ function resultRosterRow(seat: Player, rank: number): HTMLLIElement {
   say.hidden = true;
   const sayText = document.createElement('span');
   sayText.className = 'result-say-t';
-  say.append(sayText);
+  /* the crown a VIP line wears: painted by banter.ts, present from the first paint so a line
+     never has to reflow its own bubble to gain a badge */
+  const sayVip = document.createElement('span');
+  sayVip.className = 'result-say-vip';
+  sayVip.hidden = true;
+  sayVip.append(crownMark());
+  say.append(sayText, sayVip);
 
   row.append(medal, avatar, id, meta, say);
   return row;
@@ -1858,8 +1865,9 @@ function startGame(setup: StartSetup) {
     session.onEmote((emote) => chat.inboundEmote(emote));
     /* the rival's tactical line: their (lang, index) pair looked back up in the same closed table */
     session.onPhrase((lang, index) => chat.inboundPhrase(lang, index));
-    /* the rival's post-match line: it lands on whichever standings row their seat owns */
-    session.onPostChat((text, side) => banter.inbound(text, side));
+    /* the rival's post-match line: it lands on whichever standings row their seat owns, wearing
+       the crown only when the room vouched for that seat's VIP entitlement */
+    session.onPostChat((line, side, vip) => banter.inbound(line, side, vip));
     /* the settled socket died, or the rival walked out: the result's live keys go with it */
     session.onPostLeft(() => { if (overlayOpen || goalBeat) lockResultForLeft(); });
     session.onEnd((end) => endOnline(end));
@@ -3027,7 +3035,7 @@ const banter = createBanter({
     /* A room whose other seats are all the machine has no socket to answer on the far side:
        treat it as a bot race, so the same canned reply wakes after 1.2s. */
     if ('seats' in session && !session.seats.some((s) => s.side !== localSide && !s.bot)) return null;
-    return (text: string) => session.sendPostMatchChat(text);
+    return (line: PostChatLine) => session.sendPostMatchChat(line);
   },
   /* Bubbles land on the row the speaker owns. Looked up per message: a language flip rebuilds
      the ladder, so a cached node would go stale behind it. */
@@ -3035,7 +3043,8 @@ const banter = createBanter({
     const row = resultRoster.querySelector<HTMLElement>(`.result-row[data-seat="${side}"]`);
     const node = row?.querySelector<HTMLElement>('.result-say');
     const text = node?.querySelector<HTMLElement>('.result-say-t');
-    return node && text ? { node, text } : null;
+    const badge = node?.querySelector<HTMLElement>('.result-say-vip') ?? null;
+    return node && text ? { node, text, badge } : null;
   },
 });
 router.start('home');

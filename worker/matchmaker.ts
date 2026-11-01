@@ -64,6 +64,9 @@ import {
   type RegisteredSquad, type SquadVerification,
 } from './squads';
 import { botAppLink } from '../shared/config';
+import {
+  isPostChatFreeReaction, isPostChatPreset, postChatPresetForText, type PostChatPresetId,
+} from '../src/data/postchat';
 import countryRegistry from '../src/data/countries.json';
 import type { Env } from './env';
 
@@ -80,9 +83,11 @@ type ClientMessage =
   /* One of the six tactical lines, also off the sheet: a tongue plus a tile index, relayed as a
      pair and looked back up in the receiver's own closed table — no text crosses this wire. */
   | { type: 'PHRASE'; lang: string; index: number }
-  /* The result capsule's banter: one 40-character line, relayed to the seat opposite only while
-     both are still on the settled board. Never judged by the board and never counted as a turn. */
-  | { type: 'POST_MATCH_CHAT'; text: string }
+  /* The result capsule's banter. Two shapes reach this wire and only one of them carries text:
+     `preset` names one of the four closed lines (`src/data/postchat.ts`) and is relayed as that ID,
+     while `text` is the VIP custom line — checked against the seat's signed entitlement in
+     `relayPostChat`, so a free seat cannot type its way past the gate. */
+  | { type: 'POST_MATCH_CHAT'; text?: string; preset?: string }
   | { type: 'RESIGN' }
   /* The room path: the host starting early, the host's format pick (1v1 / 3P / 4P / 2v2), and a
      seat's team move — any seat may move itself, the host may move anyone. Everything else a room
@@ -115,6 +120,11 @@ interface Waiter {
   joinedAt: number;
   /** The board they are queuing for: both seats must be playing the same game. */
   sizes: [number, number];
+  /**
+   * The VIP entitlement this seat arrived with, decided by `authenticate` from the signed payload.
+   * The post-match lane reads it to decide whether a custom line may cross this wire at all.
+   */
+  premium: boolean;
   /** Set the moment they are paired: the race this socket now carries. */
   race: Race | null;
   side: 0 | 1;
@@ -148,6 +158,8 @@ interface RoomMember {
   flag: string;
   /** The signed `user.photo_url` this seat arrived with, or `''`. Relayed to the other seats. */
   avatar: string;
+  /** The VIP entitlement behind this seat, decided by `authenticate` from the signed payload. */
+  premium: boolean;
   /**
    * False while the socket is gone but the seat is still held for its player. A code lobby keeps
    * the seat warm for the idle TTL (the host) or the shorter hold (a guest), so the app resuming
@@ -223,6 +235,8 @@ interface StoredMember {
   tier: MindTier;
   flag: string;
   avatar: string;
+  /** The VIP entitlement this seat held: persisted so a rehydrated room keeps its gold bubbles. */
+  premium: boolean;
   busy: boolean;
   droppedAt: number;
 }
@@ -1278,6 +1292,7 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
     const msg = JSON.parse(raw) as {
       type?: unknown; wide?: unknown; action?: unknown; mode?: unknown; side?: unknown; team?: unknown;
       format?: unknown; emote?: unknown; lang?: unknown; index?: unknown; busy?: unknown; text?: unknown;
+      preset?: unknown;
     };
     if (msg.type === 'QUEUE') return { type: 'QUEUE', wide: msg.wide === true };
     if (msg.type === 'WIDEN') return { type: 'WIDEN' };
@@ -1313,8 +1328,11 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
         ? { type: 'PHRASE', lang: msg.lang, index: msg.index } : null;
     }
     if (msg.type === 'POST_MATCH_CHAT') {
-      const text = readPostChatText(msg.text);
-      return text ? { type: 'POST_MATCH_CHAT', text } : null;
+      /* Both shapes are read here and judged later: `preset` against the closed table, `text`
+         against the seat's entitlement. Neither is trusted by this parser. */
+      const preset = isPostChatPreset(msg.preset) ? msg.preset : undefined;
+      const text = readPostChatText(msg.text) ?? undefined;
+      return preset || text ? { type: 'POST_MATCH_CHAT', preset, text } : null;
     }
   } catch {
     /* not ours: a malformed frame is dropped, never fatal */
@@ -1551,7 +1569,11 @@ export class MatchmakerDO {
    * peer; a 3- or 4-seat party has every other human. Entries expire on their own, and a leaver
    * removes itself from every remaining lane and tells each peer `OPPONENT_LEFT`.
    */
-  private postChat = new Map<WebSocket, { peers: WebSocket[]; side: number; at: number; lastAt: number }>();
+  private postChat = new Map<WebSocket, {
+    peers: WebSocket[]; side: number; at: number; lastAt: number;
+    /** The sender's verified VIP entitlement: the one thing that lets a custom line cross. */
+    premium: boolean;
+  }>();
   /** `room:chatId` → the last time that room pinged that player. The push cooldown's ledger. */
   private notified = new Map<string, number>();
   /** The admin's maintenance lock: nobody new gets in while it is on. */
@@ -3037,6 +3059,8 @@ export class MatchmakerDO {
       flag: cc,
       age: 0,
       guest: who.guest,
+      /* a directory row built from a nickname has no entitlement to inherit */
+      premium: false,
       coins: 0,
       stars: 0,
       referrals: 0,
@@ -3836,6 +3860,7 @@ export class MatchmakerDO {
       wide,
       joinedAt: Date.now(),
       sizes,
+      premium: identity.premium,
       race: null,
       side: 0,
     };
@@ -3857,7 +3882,7 @@ export class MatchmakerDO {
         return;
       }
       /* a paired socket is a race, not a queue: the same connection changes what it means */
-      if (msg.type === 'POST_MATCH_CHAT') { this.relayPostChat(waiter.ws, msg.text); return; }
+      if (msg.type === 'POST_MATCH_CHAT') { this.relayPostChat(waiter.ws, msg); return; }
       if (waiter.race) this.relay(waiter, msg);
       else if (msg.type === 'QUEUE') this.enqueue(waiter, msg.wide);
       else if (msg.type === 'WIDEN') this.widen(waiter);
@@ -4050,6 +4075,7 @@ export class MatchmakerDO {
     live.members[seat] = {
       ws, seat, id: identity.player.id, name: identity.player.name,
       tiq: identity.tiq, tier: identity.tier, flag: identity.flag, avatar: identity.player.avatar,
+      premium: identity.premium,
       connected: true, droppedAt: 0, busy: false, lastPingAt: 0,
     };
     live.room = seatHuman(live.room, seat, {
@@ -4149,6 +4175,7 @@ export class MatchmakerDO {
     room.members[seat] = {
       ws, seat, id: identity.player.id, name: identity.player.name,
       tiq: identity.tiq, tier: identity.tier, flag: identity.flag, avatar: identity.player.avatar,
+      premium: identity.premium,
       connected: true, droppedAt: 0, busy: false, lastPingAt: 0,
     };
     room.room = seatHuman(room.room, seat, {
@@ -4511,6 +4538,7 @@ export class MatchmakerDO {
           tier: m.tier,
           flag: m.flag,
           avatar: m.avatar,
+          premium: m.premium,
           busy: m.busy,
           droppedAt: m.connected ? 0 : m.droppedAt,
         }] : [])),
@@ -4583,6 +4611,7 @@ export class MatchmakerDO {
             ? m.tier : 'rookie',
           flag: typeof m.flag === 'string' ? m.flag : '',
           avatar: typeof m.avatar === 'string' ? m.avatar : '',
+          premium: m.premium === true,
           connected: false,
           droppedAt: typeof m.droppedAt === 'number' && m.droppedAt > 0 ? m.droppedAt : now,
           /* Entering a friends lobby is always ready/idle: a seat that was merely away must not
@@ -4761,7 +4790,7 @@ export class MatchmakerDO {
     }
     if (msg.type === 'POST_MATCH_CHAT') {
       /* only a settled room has a lane; a live board ignores the frame like any other chat */
-      if (member) this.relayPostChat(member.ws, msg.text);
+      if (member) this.relayPostChat(member.ws, msg);
       return;
     }
     if (!live.driver) {
@@ -4868,7 +4897,7 @@ export class MatchmakerDO {
     }
     /* Every human still at the capsule gets the lane: a party's reactions reach all of them. */
     if (humans.length > 1) {
-      this.armPostMatch(humans.map((m) => ({ ws: m.ws, side: m.seat })));
+      this.armPostMatch(humans.map((m) => ({ ws: m.ws, side: m.seat, premium: m.premium })));
     }
   }
 
@@ -4972,17 +5001,28 @@ export class MatchmakerDO {
    * socket is still live, so any seat may react while the others are still reading the verdict.
    */
   private armPostMatch(
-    members: ReadonlyArray<{ ws: WebSocket; side: number }>,
+    members: ReadonlyArray<{ ws: WebSocket; side: number; premium: boolean }>,
   ): void {
     const at = Date.now();
     for (const member of members) {
       const peers = members.filter((m) => m.ws !== member.ws).map((m) => m.ws);
-      this.postChat.set(member.ws, { peers, side: member.side, at, lastAt: 0 });
+      this.postChat.set(member.ws, {
+        peers, side: member.side, at, lastAt: 0, premium: member.premium,
+      });
     }
   }
 
-  /** Relay one settled-board line to every other seat in the lane, if it is still open. */
-  private relayPostChat(from: WebSocket, text: string): void {
+  /**
+   * Relay one settled-board line to every other seat in the lane, if it is still open.
+   *
+   * This is the gate the whole VIP layer rests on, and it is deliberately the last word rather
+   * than the client's: a `preset` is resolved out of the closed table here, so the text that
+   * reaches a rival is one we chose; a custom `text` only crosses when the SENDER's seat carries a
+   * verified entitlement. A free seat that hand-rolls a frame is not refused with an error — it is
+   * folded back onto the canned vocabulary when the line happens to be one of ours, and dropped
+   * otherwise, which is exactly what a client that never shipped the gate would send anyway.
+   */
+  private relayPostChat(from: WebSocket, msg: { text?: string; preset?: string }): void {
     const box = this.postChat.get(from);
     if (!box) return;
     const now = Date.now();
@@ -4992,8 +5032,33 @@ export class MatchmakerDO {
     }
     /* the composer already throttles at 2s; this floor only stops a hand-rolled flood */
     if (now - box.lastAt < 250) return;
+
+    let line: { preset: PostChatPresetId } | { text: string };
+    if (isPostChatPreset(msg.preset)) {
+      line = { preset: msg.preset };
+    } else {
+      const text = readPostChatText(msg.text);
+      if (!text) return;
+      if (box.premium) {
+        line = { text };
+      } else {
+        /* No entitlement: the line survives only if it is something we already own — one of the
+           four canned tiles, or one of the five free faces (a bare pictograph says nothing a seat
+           has to be trusted with). Anything else is a custom line, and a custom line is the
+           thing VIP buys. */
+        const asPreset = postChatPresetForText(text);
+        if (asPreset) line = { preset: asPreset };
+        else if (isPostChatFreeReaction(text)) line = { text };
+        else return;
+      }
+    }
+
     box.lastAt = now;
-    const frame = JSON.stringify({ type: 'POST_MATCH_CHAT', side: box.side, text });
+    /* only a custom line can be gold: a canned tile is the same four words whoever sends it */
+    const vip = 'text' in line ? box.premium : false;
+    const frame = JSON.stringify({
+      type: 'POST_MATCH_CHAT', side: box.side, vip, ...line,
+    });
     for (const peer of box.peers) this.postTo(peer, frame);
   }
 
@@ -5030,7 +5095,7 @@ export class MatchmakerDO {
       this.endRace(race, seat.side, 'RESIGN');
       /* the resignation is a verdict too: both capsules are up, so the lane opens for as long as
          the leaver keeps their socket around */
-      this.armPostMatch(race.seats.map((s) => ({ ws: s.ws, side: s.side })));
+      this.armPostMatch(race.seats.map((s) => ({ ws: s.ws, side: s.side, premium: s.premium })));
       return;
     }
     if (msg.type === 'EMOTE') {
@@ -5072,7 +5137,7 @@ export class MatchmakerDO {
        lane opens at the same beat, because both result capsules stay up and may speak. */
     if (next.winner !== null) {
       this.settle(race, next.winner);
-      this.armPostMatch(race.seats.map((s) => ({ ws: s.ws, side: s.side })));
+      this.armPostMatch(race.seats.map((s) => ({ ws: s.ws, side: s.side, premium: s.premium })));
     }
   }
 

@@ -26,6 +26,7 @@
  */
 import type { Action } from './rules';
 import { PHRASE_COUNT, isChatEmoteId, isChatLang, type ChatEmoteId, type ChatLang } from './data/phrases';
+import { isPostChatPreset, type PostChatLine } from './data/postchat';
 import { chime, myTier, myTiq, roomSocketUrl, type MindTier, type OpponentData } from './matchmaking';
 import { profile } from './storage';
 import {
@@ -221,7 +222,7 @@ export interface LobbyRace {
   /** Send one tactical line to the other seats, as its closed `(lang, index)` pair. */
   sendPhrase(lang: ChatLang, index: number): boolean;
   /** Send one post-match line to the other seats. False when the socket is gone. */
-  sendPostMatchChat(text: string): boolean;
+  sendPostMatchChat(line: PostChatLine): boolean;
   resign(): void;
   close(): void;
   onMove(cb: (action: Action, side: number) => void): void;
@@ -229,8 +230,8 @@ export interface LobbyRace {
   onEmote(cb: (emote: ChatEmoteId, side: number) => void): void;
   /** A tactical line another seat sent, as the pair they tapped. */
   onPhrase(cb: (lang: ChatLang, index: number, side: number) => void): void;
-  /** A post-match line another seat sent from the result capsule. */
-  onPostChat(cb: (text: string, side: number) => void): void;
+  /** A post-match line another seat sent from the result capsule, plus the room's VIP verdict. */
+  onPostChat(cb: (line: PostChatLine, side: number, vip: boolean) => void): void;
   /** The socket is gone after the board settled: the result capsule's live keys are dead. */
   onPostLeft(cb: () => void): void;
   /**
@@ -473,7 +474,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   const raceMoves: Array<(a: Action, side: number) => void> = [];
   const raceEmotes: Array<(emote: ChatEmoteId, side: number) => void> = [];
   const racePhrases: Array<(lang: ChatLang, index: number, side: number) => void> = [];
-  const racePosts: Array<(text: string, side: number) => void> = [];
+  const racePosts: Array<(line: PostChatLine, side: number, vip: boolean) => void> = [];
   /** Seats a person walked out of; `SEAT_BOT` is the machine taking the chair over. */
   const raceGone = new Set<number>();
   const raceLefts: Array<() => void> = [];
@@ -588,7 +589,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
           send: (a) => send({ type: 'MOVE', action: a }),
           sendEmote: (emote) => send({ type: 'EMOTE', emote }),
           sendPhrase: (lang, index) => send({ type: 'PHRASE', lang, index }),
-          sendPostMatchChat: (text) => send({ type: 'POST_MATCH_CHAT', text }),
+          sendPostMatchChat: (line) => send({ type: 'POST_MATCH_CHAT', ...line }),
           resign: () => { send({ type: 'RESIGN' }); },
           close: () => { try { sock?.close(); } catch { /* gone */ } },
           onMove: (cb) => { raceMoves.push(cb); },
@@ -617,10 +618,17 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         return;
       }
       case 'POST_MATCH_CHAT': {
+        /* the room already resolved the gate: a preset arrives as its id, a custom line only from
+           a seat it cleared as VIP — and `vip` is that clearance, not the sender's claim */
+        const vip = msg.vip === true;
+        if (isPostChatPreset(msg.preset)) {
+          for (const cb of racePosts) cb({ preset: msg.preset }, Number(msg.side) || 0, vip);
+          return;
+        }
         if (typeof msg.text !== 'string') return;
         const text = msg.text.replace(/[\u0000-\u001F\u007F]/g, ' ').trim().slice(0, 40);
         if (!text) return;
-        for (const cb of racePosts) cb(text, Number(msg.side) || 0);
+        for (const cb of racePosts) cb({ text }, Number(msg.side) || 0, vip);
         return;
       }
       case 'OPPONENT_LEFT':

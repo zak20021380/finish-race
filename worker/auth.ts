@@ -62,6 +62,15 @@ export interface Identity {
   age: number;
   /** True only when the guest door was used. */
   guest: boolean;
+  /**
+   * The VIP entitlement behind this socket, decided here and nowhere else.
+   *
+   * A signed session answers with Telegram's own `user.is_premium` — a field inside the payload
+   * the bot token signs, so it cannot be claimed. The guest door answers with the client's own
+   * `vip` query flag, which is safe precisely because a guest holds nothing: no ladder position,
+   * no wallet, no standing. A signed account that is not Premium is never upgraded by a flag.
+   */
+  premium: boolean;
   /** Wallet reading the client reported for the directory, clamped. Never an authority. */
   coins: number;
   /** Telegram Stars volume the client reported, clamped. */
@@ -91,6 +100,11 @@ export interface AuthRequest {
   stars: number;
   refs: number;
   squad: string;
+  /**
+   * The browser demo's VIP claim (`?vip=1`). Read ONLY for the guest door: a signed session is
+   * judged by the `is_premium` field inside its signature, never by a query string.
+   */
+  vip: boolean;
 }
 
 /* ---------- parsing ---------- */
@@ -143,6 +157,8 @@ export function authRequestFrom(url: URL): AuthRequest {
     stars: capped(p.get('stars'), 10_000_000),
     refs: capped(p.get('refs'), 100_000),
     squad: cleanName(p.get('squad') ?? ''),
+    /* a bare flag, never a token: the guest door reads it, a signed session ignores it */
+    vip: p.get('vip') === '1',
   };
 }
 
@@ -198,6 +214,8 @@ interface TgUser {
   username?: string;
   /** Telegram's own profile photo URL — present only when the account has a public one. */
   photo_url?: string;
+  /** Telegram Premium, declared inside the signed payload. The only VIP proof a real seat has. */
+  is_premium?: boolean;
 }
 
 function parseUser(raw: string | null): TgUser | null {
@@ -231,6 +249,8 @@ function guestSeat(req: AuthRequest, tier: MindTier): Identity {
     flag: req.flag,
     age: req.age,
     guest: true,
+    /* the demo's own door: a guest has nothing to forge, so its claim is the answer */
+    premium: req.vip,
     coins: req.coins,
     stars: req.stars,
     referrals: req.refs,
@@ -267,6 +287,8 @@ export async function authenticate(req: AuthRequest, env: Env): Promise<Identity
         flag: req.flag,
         age: req.age,
         guest: false,
+        /* inside the signature, so it is a fact rather than a claim — a flag cannot upgrade it */
+        premium: user?.is_premium === true,
         coins: req.coins,
         stars: req.stars,
         referrals: req.refs,
