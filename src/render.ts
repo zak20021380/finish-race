@@ -142,12 +142,14 @@ const BLAST_MS = 700;   // the whole mine trigger, flash to last spark
 const EMBER_MS = 2600;
 /** Tooth marks behind a wounded ball: recent, previous, third gait, then the tile is clean again. */
 const TRAIL_STEPS = 3;
-/** The blast throw: a beat to step onto the charge, then the hop over whatever wall it clears. */
-const KNOCK_MS = 620;
+/** The march onto the charge: the ball is visibly standing on the mine before anything goes off. */
+const KNOCK_STEP_MS = 260;
+/** The throw after detonation: the arc over whatever wall it clears, down to the landing. */
+const KNOCK_FLY_MS = 520;
+/** The whole trigger: the step, then the throw. The rock's own fall is the end of it. */
+const KNOCK_MS = KNOCK_STEP_MS + KNOCK_FLY_MS;
 /** The hop's peak, in cells: tall enough to carry the ball over a wall bar on the line below it. */
 const KNOCK_ARC = 1.15;
-/** Share of the throw spent stepping onto the charge before the shockwave lifts the ball. */
-const KNOCK_STEP = 0.2;
 const DUST_MS = 420;    // the puff a thrown ball kicks up where it comes to rest
 const RIPPLE_MS = 380;  // a tap's ripple
 const STREAK_MS = 300;  // how long a sliding ball's trail takes to fade
@@ -835,7 +837,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   let sides: Side[] = seats(th);
   const born = new Map<number, number>();                    // wall key → first-seen time (pop-in)
   const pulses: { x: number; y: number; t0: number; p: Player }[] = []; // wall landing rings
-  const blasts: { x: number; y: number; t0: number }[] = []; // mine triggers, queued by blast()
+  /** mine triggers, queued by blast(); `t0` is the detonation, after the step onto the charge */
+  const blasts: { x: number; y: number; t0: number; c: number; r: number }[] = [];
   /**
    * The throw a trigger puts on the ball that set it off: the step onto the charge, the hop over
    * the wall it was buried under, and the landing. Renderer-owned, keyed by ball id.
@@ -856,6 +859,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   /** ball id → its logical steps, whether the blast wounded it, and the cell it last stood on. */
   const stride = new Map<number, number>();
   const wounds = new Set<number>();
+  /** ball id → the wound it is about to take and the moment the charge under it goes off. */
+  const pendingWounds = new Map<number, { at: Cell; when: number }>();
   const stood = new Map<number, { c: number; r: number }>();
   /** Blood shed on the tiles behind a wounded ball, in board units. */
   const blood: { x: number; y: number; v: number; s: number; ball: number; born: number }[] = [];
@@ -2146,6 +2151,14 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const tw = Math.max(2, c - gap);
     for (const m of v.state.mines) {
       if (!m.triggered) continue;
+      /* the rules flip the mine the moment the move is judged, but the charge only goes off when
+         the ball has stepped onto it: while its blast is queued with a future `t0`, hold the
+         crater back so the square is still intact under the approaching ball. */
+      let pending = false;
+      for (const f of blasts) {
+        if (f.c === m.cell.c && f.r === m.cell.r && now < f.t0) { pending = true; break; }
+      }
+      if (pending) continue;
       ctx.drawImage(art.scorch[decalVariant(m.cell.c, m.cell.r)],
         ox + m.cell.c * c + gap / 2, oy + m.cell.r * c + gap / 2, tw, tw);
     }
@@ -2153,6 +2166,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const e = embers[i];
       const t = (now - e.t0) / EMBER_MS;
       if (t >= 1) { embers.splice(i, 1); continue; }
+      if (t < 0) continue;                       // the blast has not gone off yet
       const anchors = art.embers[e.v];
       const x0 = ox + e.c * c + gap / 2, y0 = oy + e.r * c + gap / 2;
       const cool = (1 - t) * (1 - t);
@@ -2196,6 +2210,14 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     if (canvas.clientWidth !== lastW || canvas.clientHeight !== lastH) resize();
     const { cell: c, ox, oy } = L;
     const still = motionReduced();
+    /* a trigger's wound lands with the detonation, not with the step onto the charge: until then
+       the ball is whole, and its trail is still growing from the square the charge sits on. */
+    for (const [id, w] of pendingWounds) {
+      if (now < w.when) continue;
+      pendingWounds.delete(id);
+      wounds.add(id);
+      stood.set(id, { c: w.at.c, r: w.at.r });
+    }
     observeTrail(v);
     /*
      * The goal was crossed. The rules land a winner the moment the ball *lands*, but the ball is
@@ -2427,7 +2449,14 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     // buried mines — this seat's own only. An enemy trap is never painted, not even by accident.
     const mineK = still ? 0.5 : 0.5 + 0.5 * Math.sin(now / 520);
     for (const m of v.state.mines) {
-      if (m.triggered || m.owner !== v.human) continue;
+      if (m.owner !== v.human) continue;
+      /* a triggered mine stays in the ground until its blast's own `t0`, so the ball walks onto a
+         live charge and the charge is what disappears under the flash */
+      let pending = false;
+      if (m.triggered) {
+        for (const f of blasts) if (f.c === m.cell.c && f.r === m.cell.r && now < f.t0) { pending = true; break; }
+        if (!pending) continue;
+      }
       drawMine(ox + (m.cell.c + 0.5) * c, oy + (m.cell.r + 0.5) * c, 'buried', mineK, 1, now, still);
     }
 
@@ -2453,6 +2482,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const f = blasts[i];
       const t = (now - f.t0) / BLAST_MS;
       if (t >= 1) { blasts.splice(i, 1); continue; }
+      if (t < 0) continue;                       // Stage 1 still owns the board: the ball is walking on
       const ease = 1 - Math.pow(1 - t, 3);
       ctx.save();
       if (t < 0.18) {                                  // the flash, gone before the ring lands
@@ -2541,13 +2571,17 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const kn = still ? undefined : knocks.find((k) => k.id === b.id);
       let cx = ox + b.pos.x * c, cy = oy + b.pos.y * c;
       if (kn) {
-        const k = Math.max(0, Math.min(1, (now - kn.t0) / KNOCK_MS));
-        if (k <= KNOCK_STEP) {
-          const q = k / KNOCK_STEP;
-          cx = ox + (kn.from.c + (kn.mine.c - kn.from.c) * q + 0.5) * c;
-          cy = oy + (kn.from.r + (kn.mine.r - kn.from.r) * q + 0.5) * c;
+        const el = now - kn.t0;
+        if (el <= KNOCK_STEP_MS) {
+          /* Stage 1: a smoothstep walk from the old square into the centre of the charge, so the
+             ball is unmistakably standing on the mine before the blast is drawn. */
+          const q = clamp(el / KNOCK_STEP_MS, 0, 1);
+          const e = q * q * (3 - 2 * q);
+          cx = ox + (kn.from.c + (kn.mine.c - kn.from.c) * e + 0.5) * c;
+          cy = oy + (kn.from.r + (kn.mine.r - kn.from.r) * e + 0.5) * c;
         } else {
-          const q = (k - KNOCK_STEP) / (1 - KNOCK_STEP);
+          /* Stage 3: the throw, immediately after the flash, to the resolved landing square. */
+          const q = clamp((el - KNOCK_STEP_MS) / KNOCK_FLY_MS, 0, 1);
           const x = kn.mine.c + (kn.to.c - kn.mine.c) * q + 0.5;
           const y = kn.mine.r + (kn.to.r - kn.mine.r) * q + 0.5 - KNOCK_ARC * Math.sin(Math.PI * q);
           cx = ox + x * c;
@@ -2555,10 +2589,12 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         }
       }
       const r = ballR(c) * (b.sel ? 1.08 : 1);        // the chosen ball lifts off the clay
-      /* the tail it is dragging right now: sampled from where it stood last frame */
+      /* the tail it is dragging right now: sampled from where it stood last frame. A ball riding
+         the mine's throw draws no comet: its path is the arc, and a straight streak from the old
+         square to the landing would give the whole throw away before the blast. */
       const was = prevPos.get(b.id);
       if (was) {
-        if (!still) {
+        if (!still && !kn) {
           const dx = b.pos.x - was.x, dy = b.pos.y - was.y;
           if (dx * dx + dy * dy > 0.0004) {
             streaks.push({ x0: was.x, y0: was.y, x1: b.pos.x, y1: b.pos.y, t0: now, p: seat });
@@ -2657,7 +2693,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       born.clear(); pulses.length = 0; blasts.length = 0; knocks.length = 0;
       ripples.length = 0; streaks.length = 0; prevPos.clear(); mineGhostKey = '';
       dust.length = 0; thump.clear();
-      embers.length = 0; stride.clear(); wounds.clear(); stood.clear(); blood.length = 0;
+      embers.length = 0; stride.clear(); wounds.clear(); pendingWounds.clear(); stood.clear(); blood.length = 0;
       goalAt = -1; goalWait = -1; goalSeat = null;
     },
     /** A tap landed: a ripple where the finger was, in the seat's own colour. Board units. */
@@ -2669,27 +2705,35 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     /**
      * Queue the trigger for a mine that just went off, plus the throw it puts on the ball that set
      * it off. The caller owns the moment (only it knows a trigger happened), the frame loop owns
-     * the paint: the ball steps onto the charge, arcs over whatever wall stands under it, and the
-     * landing kicks up dust and a micro-bounce.
+     * the paint: the ball steps onto the charge, the charge goes off under it, and the throw arcs
+     * over whatever wall stands under it to the resolved landing. The flash, sparks and crater are
+     * queued for the end of the step, not the start of the move, so nothing explodes before the
+     * ball is visibly standing on the mine. Returns how long that step takes, in ms, so the caller
+     * can land the sound and the haptic buzz with the detonation itself (0 when there is no throw
+     * to wait for, or motion is reduced).
      */
-    blast(at: Cell, knock?: { id: number; from: Pos; to: Pos }) {
+    blast(at: Cell, knock?: { id: number; from: Pos; to: Pos }): number {
       const { cell: c, ox, oy } = L;
-      const t0 = performance.now();
-      blasts.push({ x: ox + (at.c + 0.5) * c, y: oy + (at.r + 0.5) * c, t0 });
+      const now = performance.now();
+      const thrown = !!knock && (knock.from.c !== knock.to.c || knock.from.r !== knock.to.r);
+      const delay = thrown && !motionReduced() ? KNOCK_STEP_MS : 0;
+      const t0 = now + delay;
+      blasts.push({ x: ox + (at.c + 0.5) * c, y: oy + (at.r + 0.5) * c, t0, c: at.c, r: at.r });
       embers.push({ c: at.c, r: at.r, t0, v: decalVariant(at.c, at.r) });
       if (knock) {
-        /* the ball that set the charge off is the one the rules threw — it stays wounded. The
-           state jumps from its last square straight to the landing, so the wound's first footprint
-           is planted on the charge itself, not on the square it stepped from before the blast. */
-        wounds.add(knock.id);
-        stood.set(knock.id, { c: at.c, r: at.r });
-        if (knock.from.c !== knock.to.c || knock.from.r !== knock.to.r) {
+        /* the ball that set the charge off is the one the rules threw — it takes its wound when
+           the charge goes off. The state jumps from its last square straight to the landing, so
+           the wound's first footprint is planted on the charge itself, not on the square it
+           stepped from before the blast. */
+        pendingWounds.set(knock.id, { at: { c: at.c, r: at.r }, when: t0 });
+        if (thrown) {
           for (let i = knocks.length - 1; i >= 0; i--) if (knocks[i].id === knock.id) knocks.splice(i, 1);
-          knocks.push({ id: knock.id, from: knock.from, mine: at, to: knock.to, t0 });
-          dust.push({ x: ox + (knock.to.c + 0.5) * c, y: oy + (knock.to.r + 0.5) * c, t0: t0 + KNOCK_MS });
-          thump.set(knock.id, t0 + KNOCK_MS);
+          knocks.push({ id: knock.id, from: knock.from, mine: at, to: knock.to, t0: now });
+          dust.push({ x: ox + (knock.to.c + 0.5) * c, y: oy + (knock.to.r + 0.5) * c, t0: t0 + KNOCK_FLY_MS });
+          thump.set(knock.id, t0 + KNOCK_FLY_MS);
         }
       }
+      return delay;
     },
     /** Equipping repaints the board and every cached gradient once; never per frame. */
     setTheme(t: Theme) {

@@ -1309,11 +1309,16 @@ async function runOpponent() {
   play(st ? { kind: 'move', ball: st.ball, to: st.to } : { kind: 'pass' });
 }
 
-/** The mine that went off across this action: triggered mines only ever flip in place. */
+/**
+ * The mine that went off across this action: triggered mines only ever flip in place. The rule
+ * rebuilds that one entry and carries every other mine through by reference, so the new charge is
+ * the triggered mine this board has never held before. Matching on identity rather than on the
+ * array index keeps the answer right under fog of war, where an opponent mine that was hidden
+ * before the move appears at the end of the list and can sit ahead of an older crater.
+ */
 function blastOf(prev: GameState, next: GameState): Mine | null {
-  for (let i = 0; i < next.mines.length; i++) {
-    const m = next.mines[i];
-    if (m.triggered && !prev.mines[i]?.triggered) return m;
+  for (const m of next.mines) {
+    if (m.triggered && !prev.mines.includes(m)) return m;
   }
   return null;
 }
@@ -1360,13 +1365,18 @@ function play(a: Action, remote = false): boolean {
   const blast = blastOf(prev, next);
   if (blast) {
     const cells = landed ? landed.r - blast.cell.r : 0;
-    /* the wave throws the ball that set it off: the renderer arcs it over whatever wall it clears */
-    renderer.blast(blast.cell, moved !== null && from && landed
+    /* Stage 1 belongs to the renderer: the pawn steps onto the charge before anything goes off.
+       It hands back that beat's length, so the jolt, the bang and the buzz land on the detonation
+       frame itself rather than on the move that walked into it. */
+    const delay = renderer.blast(blast.cell, moved !== null && from && landed
       ? { id: moved, from, to: landed }
       : undefined);
-    shake(true);
-    audio.play('explosion');
-    detonation();
+    /* the bang is scheduled on the audio clock and the jolt/buzz on the same beat, so the blast is
+       heard and felt where it is seen: under the ball standing on the charge. */
+    audio.play('explosion', delay > 0 ? { delay: delay / 1000 } : undefined);
+    const boom = () => { shake(true); detonation(); };
+    if (delay > 0) window.setTimeout(boom, delay);
+    else boom();
     showNote(`Mine! ${TEAM_NAME[by]} ${by === localSide ? 'were' : 'was'} thrown back `
       + `${cells} cell${cells === 1 ? '' : 's'}`, false, 2600);
   }

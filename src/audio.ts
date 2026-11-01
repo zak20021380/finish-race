@@ -191,6 +191,12 @@ export function setVolume(v: number): void {
 export interface PlayOptions {
   /** One voice's own level, 0..1, when full scale would not sit in the mix. Omitted is full scale. */
   gain?: number;
+  /**
+   * Seconds between now and the first sample, on the context clock. A voice that belongs to a
+   * later beat of the animation (the mine's bang, after the step onto the charge) is scheduled
+   * there rather than fired early and hoped to line up.
+   */
+  delay?: number;
 }
 
 let lastMoveAt = -Infinity;
@@ -219,7 +225,8 @@ function play(name: SoundName, opts: PlayOptions = {}): void {
   if (!buf) return;                    // still decoding: the first tap warms it, the next rings
   const { ctx, master } = e;
   if (ctx.state !== 'running') void ctx.resume().catch(() => { /* still locked */ });
-  const when = Math.max(ctx.currentTime, ctx.currentTime + SCHEDULE_LEAD_S - OUTPUT_LATENCY_S);
+  const when = Math.max(ctx.currentTime,
+    ctx.currentTime + SCHEDULE_LEAD_S + (opts.delay ?? 0) - OUTPUT_LATENCY_S);
   try {
     const src = ctx.createBufferSource();
     src.buffer = buf;

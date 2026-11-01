@@ -892,9 +892,9 @@ const TIP_MS = 4000;
  */
 const TIPS: ReadonlyArray<string> = [
   'Walls are unlimited — seal the lane your rival needs, not the one they are standing in.',
-  'A mine throws a ball straight down its column. Bury it where the rival must land.',
+  'A mine throws a ball two rows back. Bury it where the rival must land.',
   'The blitz clock runs out and its auto-move will walk you straight into a mine.',
-  'The blast is aerial: a horizontal wall never shortens it. The mine throws the ball two rows back.',
+  'The blast is aerial: walls never shorten it. A body on the landing square only shifts the ball beside it — still two rows back.',
 ];
 /** The impact animation that locks the rival in. */
 const IMPACT_MS = 300;

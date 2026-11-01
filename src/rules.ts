@@ -38,12 +38,13 @@
  * Mines are hidden traps: a team buries one on any cell that holds no ball and no live mine, never
  * in the bottom two start rows. Every row above them is legal, the finish line included — a charge
  * planted on the line can throw a ball back off it. They do not block movement — a ball that steps
- * onto one sets it off and the aerial shockwave throws it `CONFIG.KNOCKBACK` rows down the column.
- * The blast is aerial: horizontal walls are jumped, never a stop. The bottom edge clamps the throw,
- * and only a body on the landing square bends it — first to `r + 1`, then to `r + 3`, then to the
- * nearest free flank — so a detonation never leaves the ball standing on the charge. The mine is
- * spent and the blast never chains. Opponent mines are secret: clients get `view(state, team)`,
- * never the raw state.
+ * onto one sets it off and the shockwave throws it `CONFIG.KNOCKBACK` rows back toward its own
+ * baseline. The throw is aerial: walls on the way are jumped, never a stop. A body on the landing
+ * square never shortens it: the ball is set down on the free flank directly beside that body, and
+ * only when walls, bodies or the board's edge close both flanks does it settle for the nearest
+ * free square further back. So a detonation never leaves the ball standing on the charge and never
+ * stacks it on a team-mate. The mine is spent and the blast never chains. Opponent mines are
+ * secret: clients get `view(state, team)`, never the raw state.
  *
  * Multiplayer later: send an `Action` over the wire and feed whatever comes back into `apply()`.
  */
@@ -62,7 +63,7 @@ export const CONFIG = {
   WALL_LIMIT: 8,
   /** Mines each team may bury per race. */
   MINES_PER_TEAM: 2,
-  /** Rows the aerial mine blast throws a ball down its column, jumped clear over any wall. */
+  /** Rows the aerial mine blast throws a ball back toward its starting baseline, over any wall. */
   KNOCKBACK: 2,
   /**
    * Seconds a seat gets to act before `getAutoMove()` plays the turn for it. 8 is the canonical
@@ -838,15 +839,17 @@ export function doMove(s: GameState, to: Pos, ballId?: number): GameState | null
 }
 
 /**
- * Where a ball lands after the blast at `from`: the shockwave is aerial, so it throws the ball
- * `CONFIG.KNOCKBACK` rows straight down its own column — over any horizontal wall — with the bottom
- * edge clamping the throw. Only a body can bend it: when the landing square is taken the wave
- * shortens to `r + 1`, stretches to `r + 3` while the board leaves that open, then spills into the
- * nearest free square one column to either side — nearest, so `r + 1` before the landing row. A
- * detonation therefore never leaves the ball standing on the charge; the absolute backstop below
- * only lets it stay if every downward square on the board is occupied. `s` must already hold the
- * ball standing on the mine, which is exempt from the occupancy test along with its own id. The
- * landing square is never re-checked for a second mine.
+ * Where a ball lands after the blast at `from`: the throw always carries it the full
+ * `CONFIG.KNOCKBACK` rows backward, toward the starting baseline. It is aerial — walls on the way
+ * are jumped, never a stop — and the bottom edge clamps a throw that would leave the board (a
+ * legal charge never sits close enough for that to matter). Only a body on the primary square
+ * bends it: the ball is then set down on the free flank directly beside that body, `from.c - 1`
+ * first and `from.c + 1` second, so long as no wall runs between the primary square and the flank.
+ * Only when both flanks are walled, occupied or off the board does it settle for the nearest free
+ * square on the landing row, then the rows below it. A detonation therefore never leaves the ball
+ * standing on the charge and never stacks it on a team-mate. `s` must already hold the ball
+ * standing on the mine, which is exempt from the occupancy test along with its own id. The landing
+ * square is never re-checked for a second mine.
  */
 function blownTo(s: GameState, from: Pos, ballId: number): Pos {
   const last = s.rows - 1;
@@ -856,20 +859,23 @@ function blownTo(s: GameState, from: Pos, ballId: number): Pos {
 
   const target = Math.min(from.r + CONFIG.KNOCKBACK, last);
   if (free(from.c, target)) return { c: from.c, r: target };
-  if (free(from.c, from.r + 1)) return { c: from.c, r: from.r + 1 };
-  if (free(from.c, from.r + 3)) return { c: from.c, r: from.r + 3 };
-  /* the column is body-blocked: the wave spills sideways to the nearest free square below */
-  for (const r of [from.r + 1, target]) {
-    if (free(from.c - 1, r)) return { c: from.c - 1, r };
-    if (free(from.c + 1, r)) return { c: from.c + 1, r };
+
+  /* the landing row is taken: the wave still carries the ball its two rows and sets it beside the
+     body, on whichever flank the board leaves both open and unwalled. Left first, then right, so
+     every client and the server name the same square. */
+  const b = blocks(s.walls);
+  for (const dc of [-1, 1]) {
+    const c = from.c + dc;
+    if (free(c, target) && canStep(b, from.c, target, dc, 0, s.cols, s.rows)) return { c, r: target };
   }
-  /* the backstop: a legal charge is never at the bottom row, so a board that is not literally
-     full still has a square below to take — the nearest over both columns and rows */
-  for (let dr = 1; from.r + dr <= last; dr++) {
-    if (free(from.c, from.r + dr)) return { c: from.c, r: from.r + dr };
+
+  /* both flanks are closed: the nearest free square at or below the landing row, same column
+     first, then outward by column */
+  for (let r = target; r <= last; r++) {
+    if (free(from.c, r)) return { c: from.c, r };
     for (let dc = 1; dc < s.cols; dc++) {
-      if (free(from.c - dc, from.r + dr)) return { c: from.c - dc, r: from.r + dr };
-      if (free(from.c + dc, from.r + dr)) return { c: from.c + dc, r: from.r + dr };
+      if (free(from.c - dc, r)) return { c: from.c - dc, r };
+      if (free(from.c + dc, r)) return { c: from.c + dc, r };
     }
   }
   return from;
