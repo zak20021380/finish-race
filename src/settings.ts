@@ -12,7 +12,7 @@ export type ModeTab = 'solo' | 'party';
 export type Appearance = 'dark' | 'light';
 
 export interface Settings {
-  /** the engine's step, wall and blast effects and the matchmaking chime */
+  /** every engine voice — steps, walls, blasts, chimes and the post-match fanfares */
   sound: boolean;
   haptics: boolean;
   reducedMotion: boolean;

@@ -29,6 +29,7 @@ import { createNotifications } from './notifications';
 import { mountCoins } from './coin';
 import { appearance, menuState, motionReduced, onAppearance, onLang, t, toggleAppearance } from './settings';
 import { audio, holdAudio, playVictoryFanfare, releaseAudio, stopVictoryFanfare } from './audio';
+import { playDefeat, stopDefeat } from './sound';
 import {
   getRemainingTiqRecoveries, hasClaimedInMatch, markClaimedInMatch, playRewardedAd, recordTiqRecovery,
   resetMatchClaims, TIQ_RECOVERY_MAX,
@@ -1092,6 +1093,8 @@ async function claimTiqRecovery(): Promise<void> {
 
   recoverBusy = true;
   setChipBusy(recoverBtn, recoverSpin, true);
+  /* the defeat fanfare does not play under a rewarded video: stop it with the rest of the audio */
+  stopDefeat();
   holdAudio();                              // the race goes quiet under the video
   const outcome = await playRewardedAd('recover_tiq', {
     /* a player who left the result while the tag was still loading gets no video over the menu */
@@ -1129,6 +1132,7 @@ async function claimDoubleCoins(): Promise<void> {
 
   doubleBusy = true;
   setChipBusy(doubleBtn, doubleSpin, true);
+  stopDefeat();                             // no fanfare under a rewarded video
   holdAudio();
   const outcome = await playRewardedAd('double_coins', {
     stillWanted: () => overlayOpen && resultView === view,
@@ -1200,9 +1204,19 @@ function showOverlay() {
   resultCoinsN.textContent = '0';
   resultStakeN.textContent = `−1 ${t('resultTiqUnit')}`;
   overlay.hidden = false;
-  /* the card and its podium are on screen: the one moment the fanfare belongs to. A defeat keeps
-     the screen silent — the Sound switch, the volume and any ad hold are the engine's own gate. */
-  if (won) playVictoryFanfare();
+  /* the card and its podium are on screen: the one moment the result fanfare belongs to. The two
+     voices are mutually exclusive by construction — a win gets the podium fanfare, a loss gets the
+     defeat sting, and whichever engine is asked, the other one is handed back first — and each voice
+     is single-shot per result. The heavy impact adds the weight under the error buzz that follows
+     below (a forfeit has already had its buzz from endOnline). */
+  if (won) {
+    stopDefeat();
+    playVictoryFanfare();
+  } else {
+    stopVictoryFanfare();
+    playDefeat();
+    impact('heavy');
+  }
   /* The banter dock reads the same podium: bubbles land on the card of the player who spoke,
      and a race against the machine answers on its own. A 3- or 4-seat party has no single
      rival to taunt, so the dock stays out of that capsule. */
@@ -1497,8 +1511,10 @@ function timeoutMove() {
 }
 
 function restart() {
-  /* every new board is a new match: the last result's celebration cannot survive into it */
+  /* every new board is a new match: the last result's celebration (or its defeat sting) cannot
+     survive into it */
   stopVictoryFanfare();
+  stopDefeat();
   cancelTutorial();
   gen++;
   /* A fresh draw per race keeps the rivals' flags and XP stable for this board; an online race
@@ -1975,6 +1991,7 @@ function quitToMenu() {
   if (goalBeat) { clearGoalBeat(); showOverlay(); }
   /* Menu, the back button and a quit all land here: the fanfare never follows the board home */
   stopVictoryFanfare();
+  stopDefeat();
   if (overlayOpen) {
     clearResultMotion();
     resultView = null;
@@ -2683,8 +2700,10 @@ again.addEventListener('click', () => {
   /* the rematch key lands harder than a replay: it is the revenge trigger, not a menu hop */
   impact(state.winner === localSide ? 'medium' : 'heavy');
   clearResultMotion();
-  /* Play again and Rematch both leave this result behind: the celebration goes with it */
+  /* Play again and Rematch both leave this result behind: the celebration (or the defeat sting)
+     goes with it */
   stopVictoryFanfare();
+  stopDefeat();
   /* a networked seat is not ours to restart in place: Play again queues the next race */
   if (active) { active.close(); active = null; queueMatch(); return; }
   restart();
