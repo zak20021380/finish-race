@@ -9,7 +9,7 @@ import {
 } from './rules';
 import { botAction, botThinkMs, type Difficulty } from './bot';
 import {
-  createRenderer, dragWallSlot, hitTest, pawnRadius, wallCentre,
+  createRenderer, capsuleSpan, dragWallSlot, hitTest, pawnRadius, wallCentre,
   type BallView, type CapsuleAction, type Ghost, type Hit,
   type Mark, type Perspective, type Vec, type View,
 } from './render';
@@ -49,6 +49,7 @@ import {
   type TutorialTargetMine, type TutorialTargetMove, type TutorialTargetSelect, type TutorialTargetWall,
 } from './tutorial';
 import { PEARL_BOARD, perspectiveRamps, type Theme } from './themes';
+import { mineStage, setMineStage, STAGE_CLEAR } from './staging';
 import {
   detonation, impact, initTelegram, inviteRoomCode, inviteSquadId, notify, onBackPress,
   openTelegramShare, tgUser,
@@ -139,6 +140,8 @@ const toMenuLabel = $<HTMLSpanElement>('menu-label');
 /* every toast on the page: the board's own, and the shop's copy of it. One message goes to all of
    them, so the note speaks on whichever screen is up; the hidden one costs nothing. */
 const noteEls = [...document.querySelectorAll<HTMLParagraphElement>('.note')];
+/** The board's own toast: the only one that can end up over the mine pair, so the only one that moves. */
+const boardNote = $<HTMLParagraphElement>('note');
 const confettiEl = $<HTMLCanvasElement>('confetti');
 const menuBtn = $<HTMLButtonElement>('menu-btn');
 const roundLabel = $<HTMLParagraphElement>('round-label');
@@ -273,12 +276,61 @@ function showNote(msg: string, error: boolean, ttl: number, timeout = false) {
   }
   clearTimeout(noteTimer);
   if (ttl) noteTimer = window.setTimeout(() => { for (const el of noteEls) el.classList.remove('show'); }, ttl);
+  placeNote();
 }
 const clearNote = () => {
   clearTimeout(noteTimer);
   toastMsg = '';
   for (const el of noteEls) el.classList.remove('show', 'timeout');
 };
+
+/**
+ * Speak into the board's live region without raising its pill.
+ *
+ * The mine flow still has something to say once a square is staged — it is a state change, and a
+ * screen reader cannot see two discs appear on a canvas — but the pill itself must not paint: the
+ * ✓/✕ pair IS the instruction at that point, and a bubble repeating "tap again" only sits on the
+ * two keys it is describing.
+ */
+function announceNote(msg: string) {
+  boardNote.textContent = msg;
+}
+
+/**
+ * The board's toast, parked clear of a staged mine's pair.
+ *
+ * Its own place is the lower band of the board, which is exactly where a mine staged in the bottom
+ * rows draws its ✓/✕. So while a pair is live the pill takes the side of it with the most room and
+ * keeps `STAGE_CLEAR` px of daylight from the rims — under the pair when the staging is high on the
+ * board, over it when the staging is low, the same flip the event callouts make. With nothing
+ * staged the inline offsets are dropped and the CSS place applies again, so no other screen pays
+ * for this. The pill is absolutely placed either way: it can move, but it can never shift a layout.
+ */
+function placeNote() {
+  const stage = mineStage();
+  if (!stage) {
+    boardNote.style.removeProperty('top');
+    boardNote.style.removeProperty('bottom');
+    return;
+  }
+  const board = wrap.getBoundingClientRect();
+  if (board.height < 1) return;
+  const h = boardNote.offsetHeight || 30;
+  const above = stage.top - board.top - STAGE_CLEAR;
+  const below = board.top + board.height - (stage.top + stage.height) - STAGE_CLEAR;
+  /* the CSS place is `bottom: 18%`, so the side that is not being used is pinned to `auto` rather
+     than removed — leaving both would stretch the pill between the two edges */
+  if (below >= h && below >= above) {
+    boardNote.style.top = `${stage.top + stage.height - board.top + STAGE_CLEAR}px`;
+    boardNote.style.bottom = 'auto';
+  } else if (above >= h) {
+    boardNote.style.bottom = `${board.top + board.height - stage.top + STAGE_CLEAR}px`;
+    boardNote.style.top = 'auto';
+  } else {
+    boardNote.style.removeProperty('top');
+    boardNote.style.removeProperty('bottom');
+  }
+}
 
 /* ---------- screens ---------- */
 
@@ -682,6 +734,24 @@ function armCapsules() {
   } else {
     capsule = null;
   }
+  syncStage();
+}
+
+/**
+ * Publish the staged mine's ✓/✕ box to the guidance layers, and park the board's toast around it.
+ *
+ * `armCapsules()` is the one writer of `capsule`, so it is the one writer of this too: the box is
+ * live exactly as long as a live pair is, and a ghost that is buried, cancelled or reset clears it
+ * on the same frame. It is measured through `boardRect`, which maps the pair's own cells onto the
+ * canvas as it is actually laid out — a screen still sliding in publishes where the discs really
+ * are, not where the layout thinks they are.
+ */
+function syncStage() {
+  if (mineGhost && capsule?.hit.kind === 'mine-confirm') {
+    const span = capsuleSpan(renderer.layout().cell);
+    setMineStage(boardRect(capsule.ax - span, capsule.ay - span, span * 2, span * 2));
+  } else setMineStage(null);
+  placeNote();
 }
 
 /* ---------- the post-match stage ---------- */
@@ -1585,8 +1655,8 @@ function restart() {
   wallsEach = wallBudget(state.balls.length);
   ballViews.length = 0;
   syncBalls();
+  mineGhost = null;              // before the mode: `armCapsules` must not re-stage a dead square
   setMode(BOARD_IDLE);
-  mineGhost = null;
   autoPicked = null;
   /* the roster may have grown or shrunk since the last race: one mark per seat, and every seat's
      wall badge starts unread so the opening paint is not mistaken for a placement */
@@ -2187,7 +2257,10 @@ function tapMine(hit: Hit | null): boolean {
   mineGhost = hit.cell;
   armCapsules();
   impact('light');
-  showNote('Tap again to bury', false, 0);
+  /* No pill on this beat. The ✓/✕ pair is the whole instruction once a square is staged, and the
+     board's toast parks low enough to land on it — so the flow says its piece in the live region
+     alone and leaves the two discs clear. */
+  announceNote('Mine staged. Confirm to bury it, or cancel.');
   return true;
 }
 
@@ -2704,8 +2777,8 @@ tutorial = createTutorial({
   end(result) {
     tutorialActive = false;
     document.body.classList.remove('tutorial-live');
+    mineGhost = null;            // before the mode: `armCapsules` must not re-stage a dead square
     setMode(BOARD_IDLE);
-    mineGhost = null;
     autoPicked = null;
     if (result === 'cancelled') { tutorialStandalone = false; return; }
     completeTutorial();       // read to the end or skipped: either way, not first-run again
@@ -2786,8 +2859,8 @@ $('quit-yes').addEventListener('click', () => { impact('light'); quitToMenu(); }
 
 /* ---------- loop ---------- */
 
-new ResizeObserver(() => { renderer.resize(); confetti.resize(); }).observe(wrap);
-window.addEventListener('resize', () => { renderer.resize(); confetti.resize(); });
+new ResizeObserver(() => { renderer.resize(); confetti.resize(); syncStage(); }).observe(wrap);
+window.addEventListener('resize', () => { renderer.resize(); confetti.resize(); syncStage(); });
 renderer.resize();
 confetti.resize();
 

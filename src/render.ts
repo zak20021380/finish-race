@@ -296,6 +296,12 @@ const capR = (cell: number) => Math.min(CAP_R_MAX, Math.max(CAP_R, MIN_TOUCH * 0
 const capGap = (r: number) => r + 0.1;
 /** Anchor → capsule centre, in cells. Fixed: a badge never dodges whatever stands beside it. */
 const capReach = (r: number) => capGap(r) + r;
+/**
+ * Anchor → the pair's own outer rim, in cells: the half-width of the box the two discs claim
+ * around a staged square. Published so the HUD's guidance layers — the board's toast, the event
+ * callouts, the lesson's card — can keep clear of it instead of guessing at a margin.
+ */
+export const capsuleSpan = (cell: number): number => capReach(capR(cell)) + capR(cell);
 /** Breathing room between a capsule's rim and the canvas edge, in css px. */
 const CAP_EDGE = 2;
 

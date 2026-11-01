@@ -24,6 +24,7 @@
 
 import type { Cell, Pos, WallSpec } from './rules';
 import { lang as appLang, onLang } from './settings';
+import { mineStage } from './staging';
 
 export interface TutorialRect { left: number; top: number; width: number; height: number }
 
@@ -593,6 +594,19 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
 
   const place = () => {
     if (!open) return;
+    /* A staged mine's ✓/✕ pair owns the board. Those two discs are the instruction at that point,
+       so the card, the fingertip and the spotlight stand down rather than paint over them — and the
+       mask goes with them, which is also what lifts the scrim off the board. The board's own gate
+       means step 4 never stages a mine (it buries the charge in one tap), so this is the guarantee
+       that no future stage can park a bubble on the two keys it is asking the player to press. */
+    if (mineStage()) {
+      drawMask(null, 0);
+      aidEl.hidden = true;
+      pointer.style.display = 'none';
+      card.hidden = true;
+      return;
+    }
+    card.hidden = false;
     const def = TUTORIAL_STEPS[stepIndex];
     const spot = spotFor(def.stage);
     if (!spot) {

@@ -11,8 +11,15 @@
  * callout is placed it samples the painted canvas under each candidate slot and takes the first
  * patch with no saturated team body in it. Balls are the only strong red/blue discs on the grid —
  * a wall can also read as one, which only ever costs the callout a slot.
+ *
+ * NEVER OVER THE MINE PAIR EITHER. A staged mine draws its ✓/✕ discs beside the armed square, and
+ * those two are the only thing the player is being asked to tap. `staging.ts` publishes that pair's
+ * box, so a slot that would sit on it is dropped and its mirror on the other half of the board is
+ * tried instead — the flip an upper-row staging asks for — and a beat with no clear slot at all
+ * simply does not paint. A hint is never worth the turn it would cost.
  */
 import './arena.css';
+import { stageOverlaps } from './staging';
 
 /** Each callout lives for this long, then fades out. */
 const SHOW_MS = 1200;
@@ -34,6 +41,9 @@ const SPOTS: readonly Spot[] = [
   { x: 0.27, y: 0.38 },
   { x: 0.73, y: 0.38 },
 ];
+
+/** The same slot on the other half of the board: the flip a staged mine forces on the beat. */
+const flip = (s: Spot): Spot => ({ x: s.x, y: 1 - s.y });
 
 const TICK = '<svg class="co-tick" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
   + '<path d="M5.4 12.6 10 17.2l8.6-9.4" /></svg>';
@@ -103,17 +113,34 @@ function boot(): void {
     return hits;
   }
 
-  /** The first slot with no ball under it; failing that, the emptiest one. */
-  function pick(): Spot {
+  /**
+   * The first slot with no ball under it and no staged mine beside it; failing that, the emptiest
+   * one — or no slot at all.
+   *
+   * A staged mine outranks the beat. Its ✓/✕ pair stands one reach either side of the armed square,
+   * so a slot that would land on those discs is not a candidate: the mirrored slot on the other
+   * half of the board is tried in its place, which is the flip an upper-row staging asks for. If
+   * the pair has claimed both halves, the beat is skipped — a missed "MINE!" costs nothing, a hint
+   * standing on the confirm key costs the turn.
+   */
+  function pick(): Spot | null {
     const rect = boardWrap.getBoundingClientRect();
     if (rect.width < 2 || rect.height < 2) return SPOTS[0];
     const w = Math.max(80, box.offsetWidth);
     const h = Math.max(30, box.offsetHeight);
-    let best = SPOTS[0];
+    let best: Spot | null = null;
     let bestScore = Number.POSITIVE_INFINITY;
-    for (const spot of SPOTS) {
+    for (const spot of [...SPOTS, ...SPOTS.map(flip)]) {
       const cx = clamp(spot.x * rect.width, w / 2 + 4, rect.width - w / 2 - 4);
       const cy = clamp(spot.y * rect.height, h / 2 + 4, rect.height - h / 2 - 4);
+      /* the pair's own box is in viewport px; the slot's is built the same way, so one test covers
+         the 20px of daylight the two must keep between them */
+      if (stageOverlaps({
+        left: rect.left + cx - w / 2,
+        top: rect.top + cy - h / 2,
+        width: w,
+        height: h,
+      })) continue;
       const score = crowd(cx, cy, w, h);
       if (score === 0) return { x: cx / rect.width, y: cy / rect.height };
       if (score < bestScore) {
@@ -127,13 +154,15 @@ function boot(): void {
   function show(kind: Kind): void {
     const now = Date.now();
     if (now - lastAt[kind] < REPEAT_MS) return;
-    lastAt[kind] = now;
     window.clearTimeout(hideTimer);
     box.className = `callout is-${kind}`;
     box.innerHTML = MARKUP[kind];
     /* placed on the spot: the sample reads the board as it is painted, and no animation frame
        is asked for — a backgrounded WebView throttles rAF and would swallow the callout */
     const spot = pick();
+    /* no clear slot: the staged pair owns the board, so this beat does not paint at all */
+    if (!spot) return;
+    lastAt[kind] = now;
     box.style.left = `${(spot.x * 100).toFixed(2)}%`;
     box.style.top = `${(spot.y * 100).toFixed(2)}%`;
     box.classList.add('show');
