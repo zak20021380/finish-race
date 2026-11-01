@@ -1025,9 +1025,9 @@ export function createMenu(api: MenuApi): Menu {
     }
   }
 
-  /** The squad's real average TIQ: the mean of the roster it actually has. */
-  const squadPreviewAvg = (s: { members: number; trophies: number }): number =>
-    s.members > 0 ? Math.round(s.trophies / s.members) : 0;
+  /** The squad's Squad IQ — the roster average the ranking already stores. */
+  const squadPreviewAvg = (s: { trophies: number }): number =>
+    Math.max(0, Math.floor(s.trophies));
 
   interface SquadCardOpts {
     /** null mints the "bind this handle" card instead of a ranked squad */
@@ -1097,6 +1097,7 @@ export function createMenu(api: MenuApi): Menu {
     identity.className = 'sq-card-id';
     const name = document.createElement('b');
     name.className = 'sq-card-name';
+    name.dir = 'auto';
     name.textContent = opts.name;
     name.title = opts.name;
     const handle = document.createElement('span');
@@ -1148,6 +1149,7 @@ export function createMenu(api: MenuApi): Menu {
 
     sqpCrest.dataset.tier = arenaStandingOf(tiq).tier;
     sqpMark.textContent = s ? squadMark(s) : squadLetter({ handle, name });
+    sqpName.dir = 'auto';
     sqpName.textContent = name;
     sqpName.title = name;
     sqpHandle.textContent = handle;

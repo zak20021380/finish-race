@@ -60,7 +60,7 @@ import { flagPhoto } from './flags';
 import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
 import { arena, countdownPill, fullCountdown, seasonLabel } from './arenaState';
-import { bindSquadById, cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribution, getMySquad, getSquadRanking, isSquadAdmin, onSquadChange, squadInviteUrl, squadKind, squadLetter, squadMark, telegramAvatarUrl, type RankedSquad } from './squads';
+import { bindSquadById, cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribution, getMySquad, getSquadRanking, isSquadAdmin, onSquadChange, squadAvatarUrl, squadInviteUrl, squadKind, squadLetter, squadMark, squadTiqSum, type RankedSquad } from './squads';
 import { BOT_HANDLE, impact, notify, openLink, tgUser } from './telegram';
 import { t } from './settings';
 import { joinSquadOnServer, registerSquadWithTelegram } from './squadRegister';
@@ -1474,29 +1474,44 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     mark.textContent = initials(name);
     host.dataset.len = String(mark.textContent.length);
     host.append(mark);
-    const src = photoSrc(photo);
-    if (src) {
-      const img = document.createElement('img');
-      img.className = 'av-photo';
-      img.alt = '';
-      img.loading = 'lazy';
-      img.decoding = 'async';
-      img.referrerPolicy = 'no-referrer';
-      /* stay transparent until real pixels arrive: the monogram must never be
-         covered by a slow (or 1x1 placeholder) response, only by an actual face.
-         `hidden` would deadlock a lazy image, so the face fades in instead. */
-      img.addEventListener('error', () => img.remove());
-      img.addEventListener('load', () => {
-        if (img.naturalWidth <= 2 || img.naturalHeight <= 2) {
-          img.remove();
-          return;
-        }
-        img.classList.add('is-loaded');
-      });
-      img.src = src;
-      host.append(img);
-    }
+    paintPhoto(host, photo);
     if (code) host.append(flagPhoto(code, 'fp-pin'));
+  }
+
+  /**
+   * One photo layer for any crest: transparent until real pixels arrive, so the
+   * monogram underneath is never covered by a slow (or 1x1 placeholder) response.
+   * `hidden` would deadlock a lazy image, so the face fades in instead.
+   */
+  function paintPhoto(host: HTMLElement, photo: string | null | undefined): void {
+    const src = photoSrc(photo);
+    if (!src) return;
+    const img = document.createElement('img');
+    img.className = 'av-photo';
+    img.alt = '';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.referrerPolicy = 'no-referrer';
+    img.addEventListener('error', () => img.remove());
+    img.addEventListener('load', () => {
+      if (img.naturalWidth <= 2 || img.naturalHeight <= 2) {
+        img.remove();
+        return;
+      }
+      img.classList.add('is-loaded');
+    });
+    img.src = src;
+    host.append(img);
+  }
+
+  /** A guild crest: the channel photo over the call-sign monogram. */
+  function paintSquadFace(host: HTMLElement, mark: string, photo: string): void {
+    const mono = document.createElement('b');
+    mono.className = 'av-mono';
+    mono.textContent = mark;
+    host.dataset.len = String(mark.length);
+    host.append(mono);
+    paintPhoto(host, photo);
   }
 
   /* ---------- Top 3 clay podium ---------- */
@@ -1509,7 +1524,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     code?: string;
     /** Player entry: the crest is their own face, with the nation pinned to its corner. */
     person?: boolean;
-    /** Player entry only: the verified Telegram photo; '' falls back to the monogram. */
+    /** Player entry: their Telegram face. Guild entry: the channel's cached photo. */
     photo?: string;
     /** Guild entry: a clay medallion carrying the squad mark. */
     letter?: string;
@@ -1578,15 +1593,19 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       av.append(flagBadge(e.code));
     } else {
       const mark = (e.letter ?? e.name).replace(/^@/, '').slice(0, 3).toUpperCase();
-      av.textContent = mark;
-      av.dataset.len = String(mark.length);
+      paintSquadFace(av, mark, e.photo ?? '');
     }
     if (e.medal) av.append(medalPin(e.medal, 'pod-medal'));
 
     const nm = document.createElement('span');
     nm.className = 'pod-name';
+    /* a mixed English/Persian title is one bidi paragraph, isolated so the
+       surrounding rank grid never forces it into the wrong direction */
+    nm.dir = 'auto';
     nm.textContent = e.name;
     nm.title = e.name;
+    if (e.name.length > 28) nm.classList.add('is-xlong');
+    else if (e.name.length > 15) nm.classList.add('is-long');
 
     let membersEl: HTMLElement | null = null;
     if (typeof e.members === 'number') {
@@ -1642,6 +1661,40 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return card;
   }
 
+  /**
+   * An empty rung on the Squad IQ board: a frosted, dashed slot that holds the stage
+   * together while a league is still filling. The podium is a three-place struct, so a
+   * one- or two-squad league keeps all three places instead of floating a champion alone.
+   */
+  function podiumPlaceholder(rank: number): HTMLElement {
+    const card = document.createElement('div');
+    card.className = 'pod-card is-awaiting';
+    card.dataset.rank = String(rank);
+    card.setAttribute('role', 'listitem');
+    const label = t('awaitingContender');
+    card.setAttribute('aria-label', `Rank ${rank}: ${label}`);
+
+    const av = document.createElement('span');
+    av.className = 'pod-av pod-av-awaiting';
+    av.setAttribute('aria-hidden', 'true');
+    av.append(svgIcon('#i-lock', 'pod-awaiting-ico'));
+
+    const nm = document.createElement('span');
+    nm.className = 'pod-name pod-name-awaiting';
+    nm.dir = 'auto';
+    nm.textContent = label;
+
+    const step = document.createElement('span');
+    step.className = 'pod-foot pod-foot-awaiting';
+    step.setAttribute('aria-hidden', 'true');
+    const stepN = document.createElement('b');
+    stepN.textContent = String(rank);
+    step.append(stepN);
+
+    card.append(av, nm, step);
+    return card;
+  }
+
   function paintPodium(entries: PodiumEntry[]): void {
     const host = podiumEl;
     if (!host) return;
@@ -1652,8 +1705,21 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       return;
     }
     const boardName = board === 'guilds' ? 'Squad IQ' : board === 'nations' ? 'Nations IQ' : 'Top Minds';
-    host.setAttribute('aria-label', `Top ${top.length} on ${boardName}`);
-    host.append(...top.map(podiumCard));
+    /* Only the Squad IQ board stages empty rungs: a top-three nation or mind board is a
+       slice of a long field, not a league that has places left to fill. */
+    if (board === 'guilds' && top.length < 3) {
+      const byRank = new Map(top.map((e) => [e.rank, e]));
+      const cards: HTMLElement[] = [];
+      for (let rank = 1; rank <= 3; rank++) {
+        const entry = byRank.get(rank);
+        cards.push(entry ? podiumCard(entry) : podiumPlaceholder(rank));
+      }
+      host.setAttribute('aria-label', `Top 3 on ${boardName}, ${top.length} of 3 places taken`);
+      host.append(...cards);
+    } else {
+      host.setAttribute('aria-label', `Top ${top.length} on ${boardName}`);
+      host.append(...top.map(podiumCard));
+    }
     host.hidden = false;
   }
 
@@ -1889,7 +1955,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   /* ---------- the mind sheet: one ladder name's cognitive profile (bottom clay sheet) ----------
      One panel, two shapes. A *mind* gets the four-axis read; a *guild* never does, because
-     a channel's combined TIQ is not a mind — it gets density and its real join / invite key.
+     a channel's average Squad IQ is not a mind — it gets density and its real join / invite key.
      Both shapes carry only actions the local backend can actually perform. */
 
   const msEls = {
@@ -1942,6 +2008,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       if (code) flag.append(flagPhoto(code, 'fp-ms'));
     }
     if (nm) {
+      nm.dir = 'auto';
       nm.textContent = name;
       nm.title = name;
     }
@@ -1986,7 +2053,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (img) {
       img.hidden = true;
       const seq = ++msPhotoSeq;
-      const src = telegramAvatarUrl(s.handle);
+      const src = squadAvatarUrl(s);
       if (src) {
         /* the CDN answers a hidden channel with a 1x1 placeholder, so a tiny natural
            size keeps the monogram instead of painting a broken square */
@@ -2093,7 +2160,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const grid = document.createElement('div');
     grid.className = 'ms-squad-grid';
     grid.setAttribute('role', 'list');
-    const avg = s.members > 0 ? Math.round(s.trophies / s.members) : 0;
+    /* `trophies` is the roster average, so the total is read off the same rows rather
+       than re-multiplied (which would round twice). */
+    const total = squadTiqSum(s.roster);
+    const avg = s.members > 0 ? s.trophies : 0;
     const cards: { icon: string; label: string; value: string; title: string; empty?: boolean; share?: boolean }[] = [
       {
         icon: '#i-users',
@@ -2105,7 +2175,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         icon: '#i-target',
         label: t('squadAvgIq'),
         value: avg.toLocaleString('en-US'),
-        title: `${avg.toLocaleString('en-US')} ${t('squadAvgIq')} · ${s.trophies.toLocaleString('en-US')} TIQ / ${s.members.toLocaleString('en-US')}`,
+        title: `${avg.toLocaleString('en-US')} ${t('squadAvgIq')} · ${total.toLocaleString('en-US')} TIQ / ${s.members.toLocaleString('en-US')}`,
       },
       {
         icon: '#i-brain',
@@ -2827,8 +2897,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   /** Hexagonal clay crest: lip and face share one clip, two pixels apart, because
-      clip-path throws away the box-shadow the rest of the sheet uses for depth. */
-  function hexCrest(letter: string, cls: string): HTMLElement {
+      clip-path throws away the box-shadow the rest of the sheet uses for depth.
+      A guild's real channel photo rides inside the face, over the call sign. */
+  function hexCrest(letter: string, cls: string, photo = ''): HTMLElement {
     const wrap = document.createElement('span');
     wrap.className = `hex ${cls}`;
     wrap.setAttribute('aria-hidden', 'true');
@@ -2838,6 +2909,25 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     b.textContent = letter;
     b.dataset.len = String(letter.length);
     face.append(b);
+    const src = photoSrc(photo);
+    if (src) {
+      const img = document.createElement('img');
+      img.className = 'hex-photo';
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.addEventListener('error', () => img.remove());
+      img.addEventListener('load', () => {
+        if (img.naturalWidth <= 2 || img.naturalHeight <= 2) {
+          img.remove();
+          return;
+        }
+        face.classList.add('has-photo');
+      });
+      img.src = src;
+      face.append(img);
+    }
     wrap.append(face);
     return wrap;
   }
@@ -2876,7 +2966,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     host.hidden = false;
     host.textContent = '';
 
-    host.append(hexCrest(squadMark(me), 'gh-crest'));
+    host.append(hexCrest(squadMark(me), 'gh-crest', squadAvatarUrl(me)));
 
     const txt = document.createElement('span');
     txt.className = 'gh-txt';
@@ -2888,18 +2978,19 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const rank = document.createElement('b');
     rank.className = 'gh-rank';
     rank.textContent = `#${me.rank}`;
-    top.append(kick, rank);
-    const sub = document.createElement('span');
-    sub.className = 'gh-sub';
-    const nm = document.createElement('b');
-    nm.className = 'gh-name';
-    nm.textContent = me.name || me.handle.replace(/^@/, '');
-    nm.title = `${me.name} · ${me.handle}`;
     const members = document.createElement('small');
     members.className = 'gh-members';
     members.textContent = membersLine(me.members);
     members.title = `${me.members.toLocaleString('en-US')} members · ${me.handle}`;
-    sub.append(nm, members);
+    top.append(kick, rank, members);
+    const sub = document.createElement('span');
+    sub.className = 'gh-sub';
+    const nm = document.createElement('b');
+    nm.className = 'gh-name';
+    nm.dir = 'auto';
+    nm.textContent = me.name || me.handle.replace(/^@/, '');
+    nm.title = `${me.name} · ${me.handle}`;
+    sub.append(nm);
     txt.append(top, sub);
 
     const score = document.createElement('span');
@@ -2910,11 +3001,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const num = document.createElement('b');
     num.textContent = me.trophies.toLocaleString('en-US');
     line.append(num);
-    score.append(line);
-    score.title = `${me.trophies.toLocaleString('en-US')} combined Tactical IQ`;
+    const avgCap = document.createElement('small');
+    avgCap.textContent = t('squadAvgIq');
+    score.append(line, avgCap);
+    score.title = `${me.trophies.toLocaleString('en-US')} ${t('squadAvgIq')} · ${squadTiqSum(me.roster).toLocaleString('en-US')} TIQ / ${me.members.toLocaleString('en-US')} minds`;
 
     host.append(txt, score);
-    host.setAttribute('aria-label', `My squad: ${me.name}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} combined Tactical IQ, ${me.members.toLocaleString('en-US')} minds.`);
+    host.setAttribute('aria-label', `My squad: ${me.name}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} average Tactical IQ, ${me.members.toLocaleString('en-US')} minds.`);
   }
 
   function squadRow(s: RankedSquad, mine: boolean): HTMLLIElement {
@@ -2933,11 +3026,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
        move. Nothing else rides on the row. */
     const id = document.createElement('span');
     id.className = 'lb-id';
-    const av = hexCrest(squadMark(s), 'lb-hex');
+    const av = hexCrest(squadMark(s), 'lb-hex', squadAvatarUrl(s));
     const txt = document.createElement('span');
     txt.className = 'lb-txt';
     const nm = document.createElement('span');
     nm.className = 'lb-name';
+    nm.dir = 'auto';
     nm.textContent = label;
     nm.title = `${label} · ${s.handle}`;
     const sub = document.createElement('span');
@@ -3055,10 +3149,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const num = document.createElement('b');
     num.textContent = me.trophies.toLocaleString('en-US');
     score.append(num);
-    score.title = `${me.trophies.toLocaleString('en-US')} squad Tactical IQ`;
+    score.title = `${me.trophies.toLocaleString('en-US')} average Tactical IQ`;
 
     dock.append(av, txt, score);
-    dock.setAttribute('aria-label', `My Squad Standing: ${me.handle}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} Tactical IQ.`);
+    dock.setAttribute('aria-label', `My Squad Standing: ${me.handle}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} average Tactical IQ.`);
   }
 
   function loadSquads(): void {
@@ -3079,6 +3173,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       name: s.name || s.handle.replace(/^@/, ''),
       score: s.trophies.toLocaleString('en-US'),
       letter: squadMark(s),
+      photo: squadAvatarUrl(s),
       members: s.members,
     })));
     el.textContent = '';

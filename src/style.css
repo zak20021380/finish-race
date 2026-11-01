@@ -2860,6 +2860,7 @@ html.reduced-motion *, html.reduced-motion *::before, html.reduced-motion *::aft
   letter-spacing: -.01em;
   line-height: 1.2;
   color: var(--ink);
+  unicode-bidi: isolate;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5710,6 +5711,9 @@ html.reduced-motion .pod-card.gold .pod-av::after { opacity: .45; }
   border-radius: 50%;
   object-fit: cover;
   object-position: center;
+  /* circle crop is explicit as well as rounded: a JPEG's square corners never
+     leave a fringe against the metal ring */
+  clip-path: circle(50%);
   background: #0B1220;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, .38);
   opacity: 0;
@@ -5744,21 +5748,88 @@ html.reduced-motion .av-photo { transition: none; }
 .pod-card[data-rank="1"] .pod-medal .medal-coin.badge-crest-art { width: 20px; height: 20px; }
 
 .pod-name {
+  /* The rungs are narrow: spend the gutters, wrap to a second line, and shrink a
+     step for long bilingual channel titles before ever showing an ellipsis. */
+  width: calc(100% + 8px);
   min-width: 0;
-  max-width: 100%;
+  max-width: none;
   margin-top: 2px;
+  margin-inline: -4px;
   font-size: 11.5px;
   font-weight: 800;
   letter-spacing: .01em;
-  line-height: 1.15;
+  line-height: 1.18;
   text-align: center;
   color: var(--ink);
   text-shadow: 0 1px 2px rgba(0, 0, 0, .4);
-  white-space: nowrap;
+  unicode-bidi: isolate;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
+.pod-name.is-long { font-size: 10.5px; letter-spacing: 0; }
+.pod-name.is-xlong { font-size: 9.5px; letter-spacing: 0; }
 .pod-card.gold .pod-name { color: #FEF3C7; }
+
+/* ---- empty rungs: the podium keeps its shape while the league fills --------
+   One or two squads is a normal league, not a broken podium. Missing places stay
+   on stage as frosted slots — dashed stone ring, slate plinth, muted label — so
+   the champion sits in a complete three-tier structure instead of floating. */
+.pod-card.is-awaiting {
+  --pod-metal: #64748B;
+  --pod-metal-soft: rgba(148, 163, 184, .24);
+  --pod-glow: rgba(100, 116, 139, .16);
+  --plinth-bg: linear-gradient(180deg, #161C28 0%, #0C111A 100%);
+  --plinth-cap: linear-gradient(180deg, #1F2838 0%, #161C28 100%);
+  --plinth-edge: rgba(148, 163, 184, .22);
+  --plinth-lip: rgba(203, 213, 225, .16);
+  --plinth-num: #64748B;
+  --plinth-aura: rgba(100, 116, 139, .14);
+}
+.pod-av-awaiting {
+  background: radial-gradient(circle at 32% 26%, rgba(148, 163, 184, .1) 0%, rgba(11, 16, 28, .92) 72%);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(148, 163, 184, .26),
+    0 6px 14px -6px rgba(0, 0, 0, .7);
+  color: rgba(148, 163, 184, .72);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+.pod-av-awaiting::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 1px dashed rgba(148, 163, 184, .38);
+  pointer-events: none;
+}
+.pod-awaiting-ico {
+  width: 17px;
+  height: 17px;
+  opacity: .78;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5));
+}
+.pod-name-awaiting {
+  width: 100%;
+  margin-inline: 0;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  line-height: 1.3;
+  color: #7C8AA3;
+  text-shadow: none;
+}
+.pod-foot-awaiting {
+  border-style: dashed;
+  box-shadow:
+    inset 0 1px 0 var(--plinth-lip),
+    0 12px 18px -14px rgba(0, 0, 0, .8);
+}
+.pod-foot-awaiting::before,
+.pod-foot-awaiting::after { display: none; }
 
 /* the guild podium's second line: the only other fact a squad owns */
 .pod-members {
@@ -6326,6 +6397,21 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   color: var(--brand-ink);
   font-variant-numeric: tabular-nums;
 }
+/* the real channel photo fills the clipped hex face, over the call sign */
+.hex-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0;
+  transition: opacity .18s ease;
+  pointer-events: none;
+}
+.hex-face.has-photo .hex-photo { opacity: 1; }
+.hex-face.has-photo b { visibility: hidden; }
+html.reduced-motion .hex-photo { transition: none; }
 /* a registered squad stamps its 2–3 character call sign on the crest */
 .hex .hex-face b[data-len="2"] { font-size: 11px; letter-spacing: .01em; }
 .hex .hex-face b[data-len="3"] { font-size: 9px; letter-spacing: -.01em; }
@@ -6370,16 +6456,21 @@ html.reduced-motion .mh-arc-fill { animation: none; }
 .gh-rank { font-size: 9.5px; font-weight: 900; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .gh-sub { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .gh-name {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
   font-size: 13px;
   font-weight: 900;
   letter-spacing: -.01em;
-  line-height: 1.15;
+  line-height: 1.18;
   color: var(--ink);
-  white-space: nowrap;
+  unicode-bidi: isolate;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 .gh-members {
   flex: none;
@@ -6389,6 +6480,11 @@ html.reduced-motion .mh-arc-fill { animation: none; }
   color: #94A3B8;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.gh-members::before {
+  content: "·";
+  margin-inline-end: 5px;
+  opacity: .65;
 }
 .gh-score {
   flex: none;
@@ -13869,6 +13965,7 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
   letter-spacing: -.01em;
   line-height: 1.2;
   color: var(--ink);
+  unicode-bidi: isolate;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -27711,6 +27808,7 @@ html.reduced-motion .theme-toggle[aria-checked="true"] .theme-toggle-thumb { tra
   font-weight: 800;
   line-height: 1.25;
   color: var(--ink);
+  unicode-bidi: isolate;
   white-space: nowrap;
   text-overflow: ellipsis;
 }

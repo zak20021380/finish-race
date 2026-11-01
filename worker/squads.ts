@@ -13,8 +13,8 @@ export type SquadMemberRole = 'leader' | 'admin' | 'member';
  *
  * This is the *only* thing that makes a squad have members: there is no seeded roster, no derived
  * ladder, and no Telegram audience folded in. `tiq` is the player's own Tactical IQ as they
- * reported it from the game (the same reading the Mind Ladder prints), so the squad's war total is
- * the sum of numbers real people actually earned.
+ * reported it from the game (the same reading the Mind Ladder prints), so the squad's Squad IQ is
+ * the mean of numbers real people actually earned.
  */
 export interface SquadMemberRow {
   /** Telegram user id — the one stable key a player has. */
@@ -222,6 +222,16 @@ export function normalizeChatHandle(raw: string): string {
   return `@${value}`;
 }
 
+/**
+ * The public profile photo Telegram serves for a handle. `getChat` answers a file id, which a
+ * browser cannot paint; this is the same cached channel photo behind the username CDN, so the
+ * client can render it directly and fall back to a monogram when the CDN 404s.
+ */
+export function telegramPhotoUrl(rawHandle: string): string {
+  const handle = normalizeChatHandle(rawHandle);
+  return handle ? `https://t.me/i/userpic/320/${handle.slice(1)}.jpg` : '';
+}
+
 export function normalizeSquadTag(raw: unknown): string {
   const tag = text(raw, 8).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
   return /^[A-Z0-9]{2,3}$/.test(tag) ? tag : '';
@@ -392,9 +402,16 @@ export function removeSquadMember(squad: RegisteredSquad, playerId: string): boo
   return squad.roster.length !== before;
 }
 
-/** The squad's war score: every joined player's own TIQ, added up. */
+/** The squad's war total: every joined player's own TIQ, added up (admin telemetry). */
 export function squadWarTiq(squad: RegisteredSquad): number {
   return squad.roster.reduce((sum, m) => sum + Math.max(0, m.tiq), 0);
+}
+
+/** Squad IQ: the arithmetic mean of the roster's TIQ, rounded once. */
+export function squadAvgTiq(squad: RegisteredSquad): number {
+  return squad.roster.length
+    ? Math.round(squadWarTiq(squad) / squad.roster.length)
+    : 0;
 }
 
 /**
@@ -415,7 +432,7 @@ export interface SquadView {
   members: number;
   /** Telegram audience — external stat, never the squad's size. */
   subscribers: number;
-  /** Sum of the roster's TIQ. */
+  /** Squad IQ: the arithmetic mean of the roster's TIQ. */
   tiq: number;
   creatorId: string;
   createdAt: number;
@@ -441,7 +458,7 @@ export function squadViewOf(squad: RegisteredSquad): SquadView {
     tag: squad.tag,
     members: roster.length,
     subscribers: squad.subscribers,
-    tiq: squadWarTiq(squad),
+    tiq: squadAvgTiq(squad),
     creatorId: squad.creatorId,
     createdAt: squad.createdAt,
     verified: squad.verification === 'verified' && !squad.banned,
@@ -745,7 +762,9 @@ async function resolveChat(rawHandle: string, token: string): Promise<{ ok: true
       handle: canonical,
       title: text(chat.title, MEMBER_TEXT) || canonical,
       kind: type === 'channel' ? 'channel' : 'group',
-      avatar: text(chat.photo?.small_file_id ?? chat.photo?.big_file_id, AVATAR_TEXT),
+      /* `getChat` answers a photo file id, which a browser cannot paint; a chat that has
+         one gets the public CDN URL for its handle instead. */
+      avatar: chat.photo ? telegramPhotoUrl(canonical) : '',
       members,
     },
   };

@@ -383,7 +383,6 @@ export async function registerSquadWithTelegram(
     avatar: remote.avatar,
     tag: remote.tag ?? identity.tag,
     ownerId: remote.creatorId ?? remote.ownerId,
-    tiq: typeof remote.tiq === 'number' ? remote.tiq : undefined,
   });
   if (claimed.ok) return { ok: true, squad: claimed.squad, message: t('enlistToast') };
 

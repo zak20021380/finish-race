@@ -3,8 +3,8 @@
  *
  * A squad is a channel handle (@name) plus the **real players** who joined it. There is no seeded
  * field and no generated roster: the member list is the roster the Worker hands back, and a squad's
- * war score is the sum of its members' own Tactical IQ. A squad a player creates on this device
- * starts with exactly one member — them — and grows only when someone actually joins.
+ * Squad IQ is the arithmetic mean of its members' own Tactical IQ. A squad a player creates on this
+ * device starts with exactly one member — them — and grows only when someone actually joins.
  *
  * Binding is still one squad per device, persisted under `detour.squads.v1`. `getSquadRanking()`
  * ranks the squads this device knows (its own creations plus whatever the Worker's board last
@@ -53,7 +53,7 @@ export interface Squad {
    * the community looks like on Telegram, never how many players joined the squad in the game.
    */
   subscribers?: number;
-  /** Sum of the roster's TIQ: the squad's war score. */
+  /** Arithmetic mean of the roster's TIQ: the squad's Squad IQ. */
   trophies: number;
   trend: SquadTrend;
   /** community type; optional so older saves without it still validate */
@@ -130,14 +130,19 @@ export function squadKind(s: Pick<Squad, 'id' | 'kind'>): SquadKind {
   return h % 2 === 0 ? 'channel' : 'group';
 }
 
-/** The squad's war score from its roster — the one number the board ranks. */
-const warOf = (roster: SquadMember[]): number =>
+/** The roster's TIQ total — the numerator of the squad's average. */
+export const squadTiqSum = (roster: SquadMember[]): number =>
   roster.reduce((sum, m) => sum + Math.max(0, Math.floor(m.tiq)), 0);
+
+/** Squad IQ: the arithmetic mean of the roster's own TIQ, rounded once. */
+export function squadTiqOf(roster: SquadMember[]): number {
+  return roster.length ? Math.round(squadTiqSum(roster) / roster.length) : 0;
+}
 
 /**
  * Normalise a squad read from anywhere (this device's save, the Worker's board): dedupe the
- * roster by player id, keep exactly one leader, and re-derive the count and the war score so the
- * three numbers can never disagree.
+ * roster by player id, keep exactly one leader, and re-derive the count and the Squad IQ so the
+ * numbers can never disagree.
  */
 export function normalizeSquad(squad: Squad, ownerId?: string): Squad {
   const seen = new Set<string>();
@@ -154,7 +159,7 @@ export function normalizeSquad(squad: Squad, ownerId?: string): Squad {
       else if (m.role === 'leader') m.role = 'member';
     }
   }
-  return { ...squad, roster, members: roster.length, trophies: warOf(roster) };
+  return { ...squad, roster, members: roster.length, trophies: squadTiqOf(roster) };
 }
 
 function migrate(raw: Partial<SquadSave> | null): SquadSave {
@@ -255,6 +260,17 @@ export function telegramAvatarUrl(handle: string): string {
   return clean ? `https://t.me/i/userpic/320/${clean.slice(1)}.jpg` : '';
 }
 
+/**
+ * The photo a squad crest paints. A Worker-resolved https URL (the cached channel photo)
+ * wins; otherwise Telegram's public userpic for the handle is the same image by another
+ * door. Anything else falls back to the monogram.
+ */
+export function squadAvatarUrl(s: Pick<Squad, 'handle' | 'avatar'>): string {
+  const stored = (s.avatar ?? '').trim();
+  if (/^https:\/\/[^\s]+$/i.test(stored)) return stored;
+  return telegramAvatarUrl(s.handle);
+}
+
 /** The glyph on a squad crest: its call sign when registered, else the name's initial. */
 export function squadMark(s: Pick<Squad, 'name' | 'handle' | 'tag'>): string {
   const tag = typeof s.tag === 'string' ? cleanTag(s.tag) : '';
@@ -327,7 +343,7 @@ export function squadRosterOf(squad: Squad): SquadMember[] {
     || a.id.localeCompare(b.id));
 }
 
-/** Seeds + customs + earned bonus, sorted by trophies, ranked 1..n. Pure. */
+/** Customs, ranked by their roster's average TIQ, 1..n. Pure. */
 export function getSquadRanking(): RankedSquad[] {
   const me = myPlayerId();
   const all: (Squad & { owned: boolean })[] = save.custom.map((s) => {
@@ -336,7 +352,7 @@ export function getSquadRanking(): RankedSquad[] {
       ...s,
       roster,
       members: roster.length,
-      trophies: warOf(roster) + (save.bonus[s.id] ?? 0),
+      trophies: squadTiqOf(roster),
       /* A squad with no recorded owner was minted on this device, so this device founded it. */
       owned: s.ownerId ? s.ownerId === me : true,
     };
@@ -547,8 +563,6 @@ export interface RegisteredSquadInput {
   avatar?: string;
   tag?: string;
   ownerId?: string;
-  /** Sum of the roster's TIQ, when the server computed it. */
-  tiq?: number;
   /** `false` files the squad in the list without moving this device's binding (an invite look). */
   bind?: boolean;
 }
@@ -579,7 +593,7 @@ export function claimRegisteredSquad(input: RegisteredSquadInput): ClaimResult {
     name,
     roster,
     members: roster.length,
-    trophies: Math.max(0, Math.floor(input.tiq ?? warOf(roster))),
+    trophies: squadTiqOf(roster),
     trend: 'same',
     kind: input.kind === 'group' ? 'group' : 'channel',
     avatar: typeof input.avatar === 'string' ? input.avatar.slice(0, 160) : '',
