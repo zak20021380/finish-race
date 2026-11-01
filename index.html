@@ -1886,6 +1886,39 @@
         <path d="M11 5.6c.9 3.2 1.6 3.9 4.8 4.8-3.2.9-3.9 1.6-4.8 4.8-.9-3.2-1.6-3.9-4.8-4.8 3.2-.9 3.9-1.6 4.8-4.8Z" fill="#FEF3C7" opacity=".9" />
         <path d="M46.4 33.6c.6 2.2 1.1 2.7 3.3 3.3-2.2.6-2.7 1.1-3.3 3.3-.6-2.2-1.1-2.7-3.3-3.3 2.2-.6 2.7-1.1 3.3-3.3Z" fill="#FDE68A" opacity=".7" />
       </symbol>
+      <!-- ==== the VIP crown, struck from the same gold as #i-star-3d ==============
+           Three lit faces, one shaded centre facet and a separate debossed band
+           read as a cast crown at 30px. Full colour, like the Star: the store's
+           crest never inherits currentColor, so a themed surface cannot tint it. -->
+      <symbol id="i-crown-3d" viewBox="0 0 48 48">
+        <defs>
+          <linearGradient id="c3d-lit" gradientUnits="userSpaceOnUse" x1="8" y1="10" x2="40" y2="40">
+            <stop offset="0" stop-color="#FFF8D8" /><stop offset=".45" stop-color="#F6D97F" /><stop offset="1" stop-color="#B9822B" />
+          </linearGradient>
+          <linearGradient id="c3d-shade" gradientUnits="userSpaceOnUse" x1="8" y1="10" x2="40" y2="40">
+            <stop offset="0" stop-color="#E9BE5E" /><stop offset=".55" stop-color="#C2903A" /><stop offset="1" stop-color="#7E5314" />
+          </linearGradient>
+          <linearGradient id="c3d-rim" gradientUnits="userSpaceOnUse" x1="12" y1="8" x2="36" y2="42">
+            <stop offset="0" stop-color="#FFFDF0" /><stop offset=".5" stop-color="#FCD34D" stop-opacity=".45" /><stop offset="1" stop-color="#6B3E0A" stop-opacity=".65" />
+          </linearGradient>
+          <radialGradient id="c3d-spec" cx="34%" cy="24%" r="40%">
+            <stop offset="0" stop-color="#FFFDF5" stop-opacity=".9" /><stop offset="1" stop-color="#FFFDF5" stop-opacity="0" />
+          </radialGradient>
+        </defs>
+        <g stroke="#7A4A0D" stroke-opacity=".5" stroke-width=".7" stroke-linejoin="round">
+          <path d="M9 19.5 16.6 26 24 10.5 31.4 26 39 19.5 36 34H12Z" fill="url(#c3d-lit)" />
+          <path d="M24 10.5 31.4 26 24 29 16.6 26Z" fill="url(#c3d-shade)" />
+          <path d="M12 34h24l-1.8 6.5H13.8Z" fill="url(#c3d-shade)" />
+        </g>
+        <path d="M9 19.5 16.6 26 24 10.5 31.4 26 39 19.5 36 34H12Z" fill="none" stroke="url(#c3d-rim)" stroke-width="1.2" stroke-linejoin="round" />
+        <path d="M12 34h24l-1.8 6.5H13.8Z" fill="none" stroke="url(#c3d-rim)" stroke-width="1" stroke-linejoin="round" />
+        <path d="M9 19.5 16.6 26 24 10.5 31.4 26 39 19.5 36 34H12Z" fill="url(#c3d-spec)" />
+        <circle cx="24" cy="9.6" r="2.4" fill="#FFF6CF" stroke="#9A6A1C" stroke-width=".7" />
+        <circle cx="16.6" cy="26" r="1.5" fill="#FFEFB0" stroke="#8A5B14" stroke-width=".5" />
+        <circle cx="31.4" cy="26" r="1.5" fill="#FFEFB0" stroke="#8A5B14" stroke-width=".5" />
+        <path d="M20.8 37.1 24 34.6 27.2 37.1 24 39.8Z" fill="#FFF6CF" stroke="#8A5B14" stroke-width=".6" />
+        <path d="M36.6 7.2c.4 1.4.7 1.7 2.1 2.1-1.4.4-1.7.7-2.1 2.1-.4-1.4-.7-1.7-2.1-2.1 1.4-.4 1.7-.7 2.1-2.1Z" fill="#FEF3C7" opacity=".85" />
+      </symbol>
       <!-- arena telemetry: the bolt is the live seat, the target is the pairing radius -->
       <symbol id="i-bolt" viewBox="0 0 24 24">
         <path d="M13.6 2.8 5.4 13.4h5.1l-.9 7.8 8.4-10.8h-5.2Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
@@ -5686,14 +5719,14 @@
       <div class="vip-scrim" id="vip-scrim" aria-hidden="true"></div>
       <div class="vip-card" id="vip-card">
         <span class="vip-crest" aria-hidden="true">
-          <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
+          <svg class="ico" viewBox="0 0 48 48" aria-hidden="true"><use href="#i-crown-3d" /></svg>
         </span>
         <button class="vip-close" id="vip-close" type="button" aria-label="Close VIP">
           <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
         </button>
         <p class="vip-kicker" id="vip-kicker">OBSIDIAN VIP</p>
-        <h3 class="vip-title" id="vip-sheet-title">Own the last word</h3>
-        <p class="vip-sub" id="vip-sub"></p>
+        <h3 class="vip-title" id="vip-sheet-title">Own the Arena</h3>
+        <p class="vip-sub" id="vip-sub" hidden></p>
 
         <!-- three Stars plans. The hero tier is 30 days; every card is rebuilt and re-priced by
              src/premium.ts from the shared table, so a price can never drift from the invoice. -->
@@ -5701,7 +5734,7 @@
 
         <div class="vip-active" id="vip-active" hidden>
           <span class="vip-active-crown" aria-hidden="true">
-            <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
+            <svg class="ico" viewBox="0 0 48 48" aria-hidden="true"><use href="#i-crown-3d" /></svg>
           </span>
           <span class="vip-active-copy">
             <b class="vip-active-t" id="vip-active-t">VIP ACTIVE</b>
@@ -5712,10 +5745,9 @@
         <ul class="vip-feats" id="vip-feats"></ul>
         <p class="vip-status" id="vip-status" role="status" aria-live="polite" hidden></p>
         <button class="vip-cta" id="vip-cta" type="button">
-          <svg class="ico" aria-hidden="true"><use id="vip-cta-ico" href="#i-crown" /></svg>
-          <span id="vip-cta-t">UNLOCK PRO ELITE · 199 ⭐</span>
+          <span id="vip-cta-t">UNLOCK 30 DAYS · 199</span>
+          <svg class="ico vip-cta-star" viewBox="0 0 56 56" aria-hidden="true"><use id="vip-cta-ico" href="#i-star-3d" /></svg>
         </button>
-        <p class="vip-fine" id="vip-fine"></p>
       </div>
     </div>
 

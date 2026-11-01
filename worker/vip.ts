@@ -174,6 +174,8 @@ async function invoiceRoute(request: Request, env: Env): Promise<Response> {
       title: `Tactix VIP — ${plan.name}`,
       description: `${plan.days} days of unlimited post-match banter, the golden pawn aura, crown prestige and 4/4 daily TIQ recovery.`,
       payload: encodePayload(auth.tgId, plan),
+      /* Stars are priced directly in XTR: Telegram expects no payment-provider token. */
+      provider_token: '',
       currency: 'XTR',
       prices: [{ label: `${plan.name} · ${plan.days} days`, amount: plan.stars }],
     });

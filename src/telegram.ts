@@ -363,10 +363,21 @@ export function openTelegramShare(shareUrl: string): void {
 export type InvoiceStatus = 'paid' | 'cancelled' | 'failed' | 'pending';
 
 export function openInvoice(url: string, status: (result: InvoiceStatus) => void): boolean {
-  const method = tg?.openInvoice;
-  if (!url || typeof method !== 'function' || !atLeast('6.1')) return false;
+  /* Read the live SDK surface: a host that injects the script after this module loads still
+     exposes openInvoice on the shared WebApp object, and Stars must use the native sheet. */
+  const app = window.Telegram?.WebApp ?? tg;
+  const method = app?.openInvoice;
+  if (!url || !app || typeof method !== 'function') return false;
+  const check = app.isVersionAtLeast;
+  if (typeof check === 'function') {
+    try {
+      if (!check.call(app, '6.1')) return false;
+    } catch {
+      return false;
+    }
+  }
   try {
-    method.call(tg, url, (raw: string) => {
+    method.call(app, url, (raw: string) => {
       status(raw === 'paid' || raw === 'cancelled' || raw === 'failed' ? raw : 'pending');
     });
     return true;

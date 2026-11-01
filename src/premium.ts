@@ -159,27 +159,41 @@ function localWork(): boolean {
 }
 
 /**
+ * The one door to a free local pass: a loopback host, *outside* Telegram, asked for explicitly with
+ * `?vip=preview`. A Mini App never lands here, so a broken invoice can never be papered over with
+ * an entitlement the room does not hold.
+ */
+function previewCheckout(): boolean {
+  if (insideTelegram() || !localWork()) return false;
+  try {
+    return new URLSearchParams(window.location.search).get('vip') === 'preview';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Buy one plan with Telegram Stars.
  *
  * The invoice link comes from the Worker (which prices the plan from the shared table), then
  * Telegram's own payment sheet takes over. `paid` re-reads the entitlement before resolving, so
  * every surface that repaints on the change signal is showing the room's number, not an
- * optimistic one. Outside Telegram — or on a loopback dev host with no bot token — the local
- * preview pass is the frictionless stand-in; a deployed Mini App with a broken checkout never
- * gets a free pass, it gets `unavailable`.
+ * optimistic one. Outside Telegram only the explicit `?vip=preview` door grants a local pass; a
+ * deployed Mini App with a broken checkout gets `unavailable`, never a free entitlement.
  */
 export async function purchaseVip(planId: VipPlanId): Promise<VipPurchaseResult> {
   const plan = vipPlanOf(planId);
   if (!plan) return 'failed';
 
-  if (!insideTelegram() || !tgInitData()) {
-    grantVipPreview();
-    return 'preview';
+  const initData = tgInitData();
+  if (!insideTelegram() || !initData) {
+    if (previewCheckout()) { grantVipPreview(); return 'preview'; }
+    return 'unavailable';
   }
 
   const url = workerUrl('/api/vip/invoice');
   if (!url) {
-    if (localWork()) { grantVipPreview(); return 'preview'; }
+    if (previewCheckout()) { grantVipPreview(); return 'preview'; }
     return 'unavailable';
   }
 
@@ -190,23 +204,23 @@ export async function purchaseVip(planId: VipPlanId): Promise<VipPurchaseResult>
       headers: {
         accept: 'application/json',
         'content-type': 'application/json',
-        'x-telegram-init-data': tgInitData(),
+        'x-telegram-init-data': initData,
       },
-      body: JSON.stringify({ planId }),
+      body: JSON.stringify({ planId, initData }),
       cache: 'no-store',
     });
     const data = (await response.json().catch(() => null)) as
       { ok?: unknown; invoiceUrl?: unknown; code?: unknown } | null;
     if (response.ok && data?.ok === true && typeof data.invoiceUrl === 'string') {
       invoiceUrl = data.invoiceUrl;
-    } else if (localWork() || !insideTelegram()) {
+    } else if (previewCheckout()) {
       grantVipPreview();
       return 'preview';
     } else {
       return 'unavailable';
     }
   } catch {
-    if (localWork()) { grantVipPreview(); return 'preview'; }
+    if (previewCheckout()) { grantVipPreview(); return 'preview'; }
     return 'unavailable';
   }
 
@@ -237,10 +251,10 @@ export async function purchaseVip(planId: VipPlanId): Promise<VipPurchaseResult>
 /* ---------- the storefront ---------- */
 
 type SheetReason = 'sell' | 'gate';
-const PLAN_KEYS: Record<VipPlanId, { name: string; short: string; tag?: string; ribbon?: string }> = {
-  '7d': { name: 'vipPlanTacticalName', short: 'vipPlanTacticalShort', tag: 'vipPlanTacticalTag' },
-  '30d': { name: 'vipPlanProName', short: 'vipPlanProShort', ribbon: 'vipPlanProRibbon' },
-  '90d': { name: 'vipPlanGrandName', short: 'vipPlanGrandShort', tag: 'vipPlanGrandTag' },
+const PLAN_KEYS: Record<VipPlanId, { name: string; badge?: string }> = {
+  '7d': { name: 'vipPlanTacticalName' },
+  '30d': { name: 'vipPlanProName', badge: 'vipPlanProRibbon' },
+  '90d': { name: 'vipPlanGrandName', badge: 'vipPlanGrandTag' },
 };
 
 export interface VipSheetOptions {
@@ -278,13 +292,12 @@ function digits(n: number): string {
   return n.toLocaleString('en-US');
 }
 
-/** The five promises, in the order a player weighs them. */
-const VIP_FEATURES: ReadonlyArray<{ ico: string; key: string; sub: string }> = [
-  { ico: '#i-chat', key: 'vipFeatChat', sub: 'vipFeatChatSub' },
-  { ico: '#i-star', key: 'vipFeatStickers', sub: 'vipFeatStickersSub' },
-  { ico: '#i-flame', key: 'vipFeatAura', sub: 'vipFeatAuraSub' },
-  { ico: '#i-crown', key: 'vipFeatPrestige', sub: 'vipFeatPrestigeSub' },
-  { ico: '#i-shield', key: 'vipFeatRecovery', sub: 'vipFeatRecoverySub' },
+/** The four promises, in the order a player weighs them. Titles only — the bento carries no subtext. */
+const VIP_FEATURES: ReadonlyArray<{ ico: string; key: string }> = [
+  { ico: '#i-chat', key: 'vipFeatChat' },
+  { ico: '#i-rx-volt', key: 'vipFeatReactions' },
+  { ico: '#i-flame', key: 'vipFeatAura' },
+  { ico: '#i-shield', key: 'vipFeatRecovery' },
 ];
 
 interface StoreDom {
@@ -302,9 +315,7 @@ interface StoreDom {
   activeD: HTMLElement;
   status: HTMLElement;
   cta: HTMLButtonElement;
-  ctaIco: HTMLElement;
   ctaT: HTMLElement;
-  fine: HTMLElement;
   homePill: HTMLButtonElement;
   homePillT: HTMLElement;
   homePillD: HTMLElement;
@@ -364,7 +375,7 @@ function paintPlanSelection(): void {
   const plan = vipPlanOf(selected);
   if (plan) {
     dom.ctaT.textContent = t('vipCtaUnlock')
-      .replace('{plan}', t(PLAN_KEYS[plan.id].short))
+      .replace('{days}', digits(plan.days))
       .replace('{price}', digits(plan.stars));
   }
 }
@@ -379,21 +390,22 @@ function buildPlans(): void {
     button.setAttribute('role', 'radio');
     button.setAttribute('aria-checked', 'false');
     if (plan.id === VIP_HERO_PLAN) button.classList.add('is-hero');
-    button.setAttribute('aria-label', `${t(keys.name)} — ${digits(plan.stars)} ⭐`);
+    button.setAttribute(
+      'aria-label',
+      `${t(keys.name)} — ${digits(plan.days)} ${t('vipPlanUnitDays')} — ${digits(plan.stars)}`,
+    );
 
-    if (keys.ribbon) {
-      const ribbon = el('span', 'vip-plan-ribbon', t(keys.ribbon));
-      button.append(ribbon);
-    } else if (keys.tag) {
-      const tag = el('span', 'vip-plan-tag', t(keys.tag));
-      button.append(tag);
-    }
+    if (keys.badge) button.append(el('span', 'vip-plan-badge', t(keys.badge)));
 
-    button.append(el('strong', 'vip-plan-name', t(keys.name)));
+    const days = el('span', 'vip-plan-days');
+    days.append(el('b', 'vip-plan-n', digits(plan.days)), el('span', 'vip-plan-unit', t('vipPlanUnitDays')));
+    days.setAttribute('dir', 'ltr');
+
     const price = el('span', 'vip-plan-price');
-    price.append(el('b', 'vip-plan-n', digits(plan.stars)), el('i', 'vip-plan-star', '⭐'));
+    price.append(ico('#i-star-3d', 'vip-plan-star'), el('b', 'vip-plan-price-n', digits(plan.stars)));
     price.setAttribute('dir', 'ltr');
-    button.append(price);
+
+    button.append(days, price);
     button.addEventListener('click', () => {
       if (busy || selected === plan.id) return;
       selected = plan.id;
@@ -411,9 +423,7 @@ function paintFeatures(): void {
     const row = el('li', 'vip-feat');
     const mark = el('span', 'vip-feat-ico');
     mark.append(ico(feature.ico));
-    const body = el('span', 'vip-feat-body');
-    body.append(el('b', 'vip-feat-t', t(feature.key)), el('small', 'vip-feat-s', t(feature.sub)));
-    row.append(mark, body);
+    row.append(mark, el('b', 'vip-feat-t', t(feature.key)));
     return row;
   }));
 }
@@ -430,12 +440,9 @@ function paintSheet(): void {
   dom.plans.setAttribute('aria-label', t('vipPlansLabel'));
   dom.kicker.textContent = t('vipKicker');
   dom.title.textContent = t(gated ? 'vipGateTitle' : active ? 'vipActiveTitle' : 'vipTitle');
-  dom.sub.textContent = t(
-    gated ? 'vipGateSub'
-      : source === 'subscription' ? 'vipActiveSub'
-        : source === 'telegram' ? 'vipTelegramSub'
-          : source === 'preview' ? 'vipPreviewSub' : 'vipSub',
-  );
+  /* the sell state has no paragraph at all; only the gate keeps one short line of instruction */
+  dom.sub.hidden = !gated;
+  dom.sub.textContent = gated ? t('vipGateSub') : '';
 
   buildPlans();
   paintFeatures();
@@ -456,16 +463,11 @@ function paintSheet(): void {
   dom.status.classList.toggle('is-error', !!statusKey);
   dom.cta.disabled = busy;
   dom.cta.classList.toggle('is-busy', busy);
-  dom.ctaIco.setAttribute('href', '#i-crown');
   dom.ctaT.textContent = busy
     ? t('vipCtaBusy')
     : t('vipCtaUnlock')
-      .replace('{plan}', t(PLAN_KEYS[plan.id].short))
+      .replace('{days}', digits(plan.days))
       .replace('{price}', digits(plan.stars));
-  dom.fine.textContent = t(
-    active ? 'vipFineActive'
-      : insideTelegram() && tgInitData() ? 'vipFineStars' : 'vipFinePreview',
-  );
   dom.close.setAttribute('aria-label', t('vipClose'));
 }
 
@@ -599,9 +601,7 @@ export function initVipStore(): void {
   const activeD = $<HTMLElement>('vip-active-d');
   const status = $<HTMLElement>('vip-status');
   const cta = $<HTMLButtonElement>('vip-cta');
-  const ctaIco = $<HTMLElement>('vip-cta-ico');
   const ctaT = $<HTMLElement>('vip-cta-t');
-  const fine = $<HTMLElement>('vip-fine');
   const scrim = $<HTMLElement>('vip-scrim');
   const homePill = $<HTMLButtonElement>('home-vip');
   const homePillT = $<HTMLElement>('home-vip-t');
@@ -612,13 +612,13 @@ export function initVipStore(): void {
 
   if (
     !sheet || !card || !close || !kicker || !title || !sub || !plans || !feats
-    || !active || !activeT || !activeD || !status || !cta || !ctaIco || !ctaT || !fine || !scrim
+    || !active || !activeT || !activeD || !status || !cta || !ctaT || !scrim
     || !homePill || !homePillT || !homePillD || !arenaPill || !arenaPillT || !arenaPillBadge
   ) return;
 
   dom = {
     sheet, scrim, card, close, kicker, title, sub, plans, feats, active, activeT, activeD,
-    status, cta, ctaIco, ctaT, fine, homePill, homePillT, homePillD, arenaPill, arenaPillT, arenaPillBadge,
+    status, cta, ctaT, homePill, homePillT, homePillD, arenaPill, arenaPillT, arenaPillBadge,
   };
 
   close.addEventListener('click', () => closeVipSheet());
