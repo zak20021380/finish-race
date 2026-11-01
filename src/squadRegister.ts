@@ -1,7 +1,7 @@
 import { workerUrl } from './adminApi';
 import { t } from './settings';
 import {
-  applySquadRoster, bindSquadById, claimRegisteredSquad, dropSquad, getMySquad, getSquadById,
+  ACTIVE_CUP_ID, applySquadRoster, bindSquadById, claimRegisteredSquad, dropSquad, getMySquad, getSquadById,
   getSquadRanking, hydrateSquadBoard as mergeSquadBoard, joinSquadLocally, kickSquadMemberLocal,
   leaveSquad, myPlayerId, normalizeSquad, squadIdFromPayload,
   type RankedSquad, type Squad, type SquadKind, type SquadMember, type SquadRole,
@@ -61,6 +61,8 @@ interface MemberPayload {
   joinedAt?: number;
   country?: string;
   username?: string;
+  /** The player's Telegram profile photo, as their own client reported it. */
+  photo?: string;
 }
 
 interface SquadPayload {
@@ -76,6 +78,8 @@ interface SquadPayload {
   creatorId?: string;
   ownerId?: string;
   roster?: MemberPayload[];
+  /** The cup this squad registered for — the key the Arena's eligibility filter reads. */
+  cupId?: string;
 }
 
 interface VerifyResponse {
@@ -228,6 +232,7 @@ function toMember(row: MemberPayload): SquadMember | null {
   const tiq = Number(row.tiq);
   const joinedAt = Number(row.joinedAt);
   const country = typeof row.country === 'string' ? row.country.toUpperCase().slice(0, 2) : '';
+  const photo = typeof row.photo === 'string' ? row.photo.trim().slice(0, 300) : '';
   return {
     id,
     name: typeof row.name === 'string' ? row.name.trim().slice(0, 24) : '',
@@ -236,6 +241,7 @@ function toMember(row: MemberPayload): SquadMember | null {
     joinedAt: Number.isFinite(joinedAt) && joinedAt > 0 ? Math.floor(joinedAt) : 0,
     country: /^[A-Z]{2}$/.test(country) ? country : '',
     username: typeof row.username === 'string' ? row.username.replace(/^@+/, '').slice(0, 32) : '',
+    ...(/^https:\/\/[^\s]+$/i.test(photo) ? { photo } : {}),
   };
 }
 
@@ -263,6 +269,9 @@ export function toSquad(payload: SquadPayload): Squad | null {
     ...(typeof payload.tag === 'string' && payload.tag ? { tag: payload.tag } : {}),
     ...(Number.isFinite(subscribers) && subscribers >= 0 ? { subscribers: Math.floor(subscribers) } : {}),
     ...(ownerId ? { ownerId } : {}),
+    ...(typeof payload.cupId === 'string' && payload.cupId.trim()
+      ? { cupId: payload.cupId.trim().slice(0, 48) }
+      : {}),
   }, ownerId || undefined);
 }
 
@@ -270,11 +279,13 @@ export function toSquad(payload: SquadPayload): Squad | null {
 function myPayload(): Record<string, unknown> {
   const u = tgUser();
   const name = [u?.first_name, u?.last_name].filter(Boolean).join(' ').trim().slice(0, 24);
+  const photo = (u?.photo_url ?? '').trim().slice(0, 300);
   return {
     name,
     username: (u?.username ?? '').slice(0, 32),
     tiq: Math.max(0, Math.floor(myTiq())),
     country: /^[A-Za-z]{2}$/.test(profile.country ?? '') ? (profile.country as string).toUpperCase() : '',
+    ...(/^https:\/\/[^\s]+$/i.test(photo) ? { photo } : {}),
   };
 }
 
@@ -360,6 +371,9 @@ export async function registerSquadWithTelegram(
     squadName: identity.name,
     squadTag: identity.tag,
     ...(kind ? { kind } : {}),
+    /* An enlistment is filed under the running championship, never under "any cup": the
+       registry has to be able to say which field this squad is actually in. */
+    cupId: ACTIVE_CUP_ID,
     ...myPayload(),
     userTelegramId: telegramUserId(),
   });
@@ -383,6 +397,7 @@ export async function registerSquadWithTelegram(
     avatar: remote.avatar,
     tag: remote.tag ?? identity.tag,
     ownerId: remote.creatorId ?? remote.ownerId,
+    cupId: remote.cupId ?? ACTIVE_CUP_ID,
   });
   if (claimed.ok) return { ok: true, squad: claimed.squad, message: t('enlistToast') };
 

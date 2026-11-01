@@ -9,7 +9,9 @@
  * members are the players who joined it — never a generated list.
  */
 
-import { getSquadById, squadRosterOf } from '../squads';
+import {
+  ACTIVE_CUP_ID, getSquadById, myRosterId, squadCupOf, squadRosterOf, telegramAvatarUrl,
+} from '../squads';
 
 export type Trend = 'up' | 'down' | 'same';
 
@@ -59,6 +61,8 @@ export interface ChannelSeed {
 
 /** The local player, merged into the roster of the squad or nation they belong to. */
 export interface RosterYou {
+  /** The roster row this device owns, so the merge can never invent a second row for one player. */
+  id?: string;
   name: string;
   countryCode: string;
   tiq: number;
@@ -75,8 +79,17 @@ export interface RosterYou {
  */
 export interface RosterRow {
   rank: number;
+  /** The player's Telegram id — the stable key a row is merged on. */
+  id: string;
   name: string;
   countryCode: string;
+  /** The player's Telegram portrait, or '' when no photo is known. */
+  avatar: string;
+  /**
+   * The registered squad this player rides for. Every row on a cup board must carry one that is
+   * on the cup's registry — a player with no squad is not a contender at all.
+   */
+  squadId: string;
   /** TIQ this member banked for the channel. */
   tiq: number;
   stars: number;
@@ -136,7 +149,7 @@ export const paidPlaces = (c: { prizes: CupPrize[] }): number =>
 function grandCupSeed(): GrandCup {
   const t = now();
   return {
-    id: 'cup-200-stars',
+    id: ACTIVE_CUP_ID,
     name: '200 Stars Cup',
     stars: 200,
     prizes: GRAND_CUP_PRIZES.map((p) => ({ ...p })),
@@ -160,33 +173,66 @@ export async function getGrandCup(): Promise<GrandCup> {
    The Arena ranks channels, and a channel's roster is the players who actually joined it. There
    is no generated ladder behind these rows: each one is a real squad member, at the TIQ their own
    games earned. The payout column is the cup's prize ladder read in order, so the top ten rows
-   are the ten people the pool actually pays. */
+   are the ten people the pool actually pays.
+
+   The one gate in front of all of it is the cup registry. A player is a contender because a squad
+   registered for this cup carries them — never because they happen to hold a TIQ. */
+
+/**
+ * The portrait a roster row paints: the signed photo the roster reported, else Telegram's public
+ * userpic for the member's own @username. '' means the row has no photo at all, and the caller
+ * keeps its monogram.
+ */
+function portraitOf(member: { photo?: string; username?: string }): string {
+  const stored = (member.photo ?? '').trim();
+  if (/^https:\/\/[^\s]+$/i.test(stored)) return stored;
+  const user = (member.username ?? '').trim().replace(/^@+/, '');
+  return user ? telegramAvatarUrl(`@${user}`) : '';
+}
 
 /**
  * The contributors behind one channel, ranked by TIQ.
  *
+ * **Strict cup eligibility:** a squad that is not on the running cup's registry has no field to
+ * draw from, so it answers no rows at all — its players can never reach the podium or the pool.
  * The local player is merged in at their real personal TIQ when they belong to the squad, and the
- * full list comes back — a squad member sitting at #11 has to be able to see that they are outside
- * the paid ten, not be dropped from the feed and left with a rank nobody computed.
+ * full list comes back — a squad member sitting at #11 has to be able to see that they are
+ * outside the paid ten, not be dropped from the feed and left with a rank nobody computed.
  */
 export async function getChannelRoster(ch: ChannelSeed, you: RosterYou | null = null): Promise<RosterRow[]> {
   await sleep(LATENCY);
   const squad = getSquadById(ch.id);
-  const members = squad ? squadRosterOf(squad) : [];
+  /* HARD FILTER: no squad, or a squad that did not enlist for this cup, is not in the field. */
+  if (!squad || squadCupOf(squad) !== ACTIVE_CUP_ID) return [];
+
+  const mine = (you?.id ?? '').trim();
+  const members = squadRosterOf(squad);
   const rows: RosterRow[] = members.map((member): RosterRow => ({
     rank: 0,
+    id: member.id,
     name: member.name || '—',
     countryCode: member.country,
+    avatar: portraitOf(member),
+    squadId: squad.id,
     tiq: Math.max(0, Math.round(member.tiq)),
     stars: 0,
-    isYou: false,
+    /* The local player's own row is the one the device owns, matched on the id Telegram gives
+       them — never on a display name two people can share. */
+    isYou: !!mine && member.id === mine,
   }));
   /* A player who is on the squad is already on the roster; the merge only fills a gap (an older
      client with no roster yet) and never invents a second row for the same person. */
-  if (you && !rows.some((r) => r.name === you.name)) {
+  if (you && !rows.some((r) => (mine ? r.id === mine : r.name === you.name))) {
     rows.push({
-      rank: 0, name: you.name, countryCode: you.countryCode,
-      tiq: Math.max(0, Math.round(you.tiq)), stars: 0, isYou: true,
+      rank: 0,
+      id: mine || myRosterId(),
+      name: you.name,
+      countryCode: you.countryCode,
+      avatar: '',
+      squadId: squad.id,
+      tiq: Math.max(0, Math.round(you.tiq)),
+      stars: 0,
+      isYou: true,
     });
   }
   rows.sort((a, b) => b.tiq - a.tiq || Number(b.isYou) - Number(a.isYou));

@@ -63,6 +63,7 @@ import {
 } from '../shared/telemetry';
 import { extendVipUntil, vipPlanOf } from '../shared/vip';
 import {
+  ACTIVE_CUP_ID, cupField, cupPlayerBoard, cupSquadIds,
   isSquadAdmin, normalizeChatHandle, readRegisteredSquad, removeSquadMember, roleOf,
   SQUAD_ALREADY_ENLISTED, squadViewOf, squadWarTiq, telegramPhotoUrl, upsertSquadMember,
   verifyAndBuildSquad, verifySquadChat,
@@ -1893,6 +1894,11 @@ export class MatchmakerDO {
       if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
       return url.pathname === '/api/squads/board' ? this.squadBoard() : this.squadRead(url);
     }
+    /* The cup's own board: the registered field, and only the players it carries. */
+    if (url.pathname === '/api/squads/cup') {
+      if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+      return this.squadCupBoard(url);
+    }
     /* The worker has authenticated the caller on `/admin/*` and `/api/admin/*`; the room below
        authorizes them against its registry. The one public announcement feed rides the same
        handler. None of these ever carry an upgrade. */
@@ -2119,10 +2125,14 @@ export class MatchmakerDO {
         name: typeof body.squadName === 'string' ? body.squadName : '',
         tag: typeof body.squadTag === 'string' ? body.squadTag : '',
         kind: requestedKind,
+        /* An enlistment is filed under the cup it names; a client that names none is filing for
+           the championship that is running. */
+        cupId: typeof body.cupId === 'string' ? body.cupId : ACTIVE_CUP_ID,
         memberName: typeof body.memberName === 'string'
           ? body.memberName
           : typeof body.name === 'string' ? body.name : '',
         username: typeof body.username === 'string' ? body.username : '',
+        photo: typeof body.photo === 'string' ? body.photo : '',
       });
       if (!result.ok) {
         return json({
@@ -2191,6 +2201,7 @@ export class MatchmakerDO {
       tiq: typeof body.tiq === 'number' ? body.tiq : Number(body.tiq),
       country: typeof body.country === 'string' ? body.country : '',
       username: typeof body.username === 'string' ? body.username : '',
+      photo: typeof body.photo === 'string' ? body.photo : '',
     }, join);
     const role = roleOf(squad, requester);
     if (!added && !role) {
@@ -2301,6 +2312,35 @@ export class MatchmakerDO {
     if (!squad) return json({ ok: false, error: 'no_such_squad' }, 404);
     if (squad.banned) return json({ ok: false, error: 'squad_banned' }, 403);
     return json({ ok: true, squad: squadViewOf(squad) });
+  }
+
+  /**
+   * The cup's own leaderboard: the registered field, and the players it carries.
+   *
+   * This is the server's copy of the rule the Arena paints. A squad that did not enlist for the
+   * cup is not in the field; a player is only ever listed through a squad that is. The
+   * `squadIds` array is published with it so a client can apply the same test to its own rows
+   * instead of re-deriving who counts as a contender.
+   */
+  private async squadCupBoard(url: URL): Promise<Response> {
+    await this.syncSquadsFromStorage();
+    const asked = (url.searchParams.get('cup') ?? '').trim().slice(0, 48);
+    const cupId = asked || ACTIVE_CUP_ID;
+    const rawLimit = Number(url.searchParams.get('limit'));
+    const limit = Number.isFinite(rawLimit) ? clamp(Math.floor(rawLimit), 1, 100) : 10;
+    const field = cupField(this.squads.values(), cupId);
+    return json({
+      ok: true,
+      cupId,
+      timestamp: Date.now(),
+      squadIds: [...cupSquadIds(this.squads.values(), cupId)],
+      /* The board names the community, not its Telegram chat id. */
+      squads: field.map((squad) => {
+        const { chatId: _chatId, ...view } = squadViewOf(squad);
+        return view;
+      }),
+      players: cupPlayerBoard(this.squads.values(), cupId, limit),
+    });
   }
 
   /**

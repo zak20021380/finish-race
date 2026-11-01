@@ -18,6 +18,12 @@ import { squadAppLink, SQUAD_PREFIX } from '../shared/config';
 
 export type SquadTrend = 'up' | 'down' | 'same';
 
+/**
+ * The championship a squad enlists into. One cup runs at a time, so one id — and it is the only
+ * thing that decides whether a squad's players may appear on that cup's leaderboard.
+ */
+export const ACTIVE_CUP_ID = 'cup-200-stars';
+
 /** Unified community type: a Telegram Channel (broadcast) or Group (chat). */
 export type SquadKind = 'channel' | 'group';
 
@@ -37,6 +43,8 @@ export interface SquadMember {
   country: string;
   /** Telegram @username without the `@`, or ''. */
   username?: string;
+  /** The player's Telegram profile photo, when the roster reported one. */
+  photo?: string;
 }
 
 export interface Squad {
@@ -67,6 +75,11 @@ export interface Squad {
    * enrollment mark, written once when the squad is minted and never edited.
    */
   enlistedAt?: number;
+  /**
+   * The cup this squad registered for. A squad without a stamp has no place in the running
+   * championship's field, however high its Squad IQ.
+   */
+  cupId?: string;
   /** The Telegram id of the player who enlisted the squad: its leader and only admin. */
   ownerId?: string;
 }
@@ -102,7 +115,10 @@ function memberOk(m: unknown): m is SquadMember {
     && typeof x.tiq === 'number' && Number.isFinite(x.tiq) && x.tiq >= 0
     && typeof x.role === 'string' && (ROLES as readonly string[]).includes(x.role)
     && typeof x.joinedAt === 'number' && Number.isFinite(x.joinedAt) && x.joinedAt >= 0
-    && typeof x.country === 'string' && x.country.length <= 2;
+    && typeof x.country === 'string' && x.country.length <= 2
+    /* A portrait is decoration: anything longer than a URL is dropped here rather than
+       allowed to invalidate a real player's row. */
+    && (x.photo === undefined || (typeof x.photo === 'string' && x.photo.length <= 300));
 }
 
 /** A stored squad, normalised: the roster is the count, and the count is the roster. */
@@ -119,6 +135,7 @@ function squadOk(s: unknown): s is Squad {
     && (x.tag === undefined || (typeof x.tag === 'string' && /^[A-Z0-9]{2,3}$/.test(x.tag)))
     && (x.subscribers === undefined || (typeof x.subscribers === 'number' && Number.isFinite(x.subscribers) && x.subscribers >= 0))
     && (x.ownerId === undefined || (typeof x.ownerId === 'string' && x.ownerId.length <= 24))
+    && (x.cupId === undefined || (typeof x.cupId === 'string' && x.cupId.length <= 48))
     && (x.enlistedAt === undefined || (typeof x.enlistedAt === 'number' && Number.isFinite(x.enlistedAt) && x.enlistedAt > 0));
 }
 
@@ -335,7 +352,16 @@ export function squadRosterOf(squad: Squad): SquadMember[] {
   const me = myRosterId();
   const roster = squad.roster.map((m) => ({ ...m }));
   const row = roster.find((m) => m.id === me);
-  if (row) row.tiq = Math.max(0, Math.floor(myTiq()));
+  if (row) {
+    row.tiq = Math.max(0, Math.floor(myTiq()));
+    /* The portrait is this device's own fact, so it is refreshed from the live Telegram profile
+       on every read: a player who has never re-synced still shows their real face on the board
+       instead of the initials their join-day row happened to carry. */
+    const u = tgUser();
+    const photo = (u?.photo_url ?? '').trim().slice(0, 300);
+    if (photo) row.photo = photo;
+    if (!row.username) row.username = myUsername();
+  }
   return roster.sort((a, b) =>
     Number(b.role === 'leader') - Number(a.role === 'leader')
     || b.tiq - a.tiq
@@ -364,6 +390,39 @@ export function getSquadRanking(): RankedSquad[] {
 export function getSquadById(id: string): RankedSquad | null {
   if (!id) return null;
   return getSquadRanking().find((s) => s.id === id) ?? null;
+}
+
+/* ---------- the cup registry ----------
+   A cup is not "every squad this device knows". It is the set of squads that enlisted for that
+   championship, and a player only ever reaches a cup board through one of them. Everything the
+   Arena paints is filtered through these two reads. */
+
+/**
+ * The cup a squad is registered for. A row written before the stamp existed carries an
+ * enlistment mark, and every enlistment is filed under the championship that was running — so
+ * that row still counts. A squad with neither stamp is simply not in any cup.
+ */
+export function squadCupOf(s: Pick<Squad, 'cupId' | 'enlistedAt'>): string {
+  const cup = typeof s.cupId === 'string' ? s.cupId.trim() : '';
+  if (cup) return cup;
+  return typeof s.enlistedAt === 'number' && s.enlistedAt > 0 ? ACTIVE_CUP_ID : '';
+}
+
+/**
+ * The squads registered for one cup, in ranking order, re-ranked inside that field: the cup's
+ * #1 is the strongest squad that actually enlisted, not the strongest squad this device has seen.
+ */
+export function cupField(cupId: string): RankedSquad[] {
+  const id = (cupId ?? '').trim();
+  if (!id) return [];
+  return getSquadRanking()
+    .filter((s) => squadCupOf(s) === id)
+    .map((s, i) => ({ ...s, rank: i + 1 }));
+}
+
+/** The ids registered for one cup — the membership test every leaderboard row must pass. */
+export function registeredCupSquadIds(cupId: string): Set<string> {
+  return new Set(cupField(cupId).map((s) => s.id));
 }
 
 export function getMySquad(): RankedSquad | null {
@@ -410,6 +469,7 @@ export function searchSquads(q: string, limit = 6): RankedSquad[] {
 
 /** The local row for this player: their own TIQ, their own name, their own country. */
 function myRow(role: SquadRole, country: string): SquadMember {
+  const photo = (tgUser()?.photo_url ?? '').trim().slice(0, 300);
   return {
     id: myRosterId(),
     name: myPlayerName(),
@@ -418,6 +478,7 @@ function myRow(role: SquadRole, country: string): SquadMember {
     joinedAt: Date.now(),
     country: /^[A-Za-z]{2}$/.test(country) ? country.toUpperCase() : '',
     username: myUsername(),
+    ...(photo ? { photo } : {}),
   };
 }
 
@@ -433,12 +494,12 @@ export function applySquadRoster(
   const at = save.custom.findIndex((s) => s.id === id);
   if (at < 0) return null;
   const ownerId = extra.ownerId ?? save.custom[at].ownerId;
-  save.custom[at] = normalizeSquad({
+  save.custom[at] = keepUsernames(normalizeSquad({
     ...save.custom[at],
     roster,
     ...(typeof extra.subscribers === 'number' ? { subscribers: extra.subscribers } : {}),
     ...(ownerId ? { ownerId } : {}),
-  }, ownerId);
+  }, ownerId), save.custom[at]);
   flush();
   return getSquadById(id);
 }
@@ -490,6 +551,22 @@ export function kickSquadMemberLocal(id: string, memberId: string): boolean {
 }
 
 /**
+ * Keep the @username this device already knew for a row the registry does not publish one for.
+ *
+ * The Worker stores a member's handle for its audit trail but never puts it on a board, so a
+ * roster hydrated from the server comes back with empty usernames. The device learned its own
+ * player's handle at join time; dropping it would take away the one public door to that photo.
+ */
+function keepUsernames(next: Squad, prev: Squad | undefined): Squad {
+  if (!prev || !prev.roster.length) return next;
+  const known = new Map(prev.roster.map((m) => [m.id, m.username ?? '']));
+  return {
+    ...next,
+    roster: next.roster.map((m) => (m.username ? m : { ...m, username: known.get(m.id) ?? '' })),
+  };
+}
+
+/**
  * Merge the Worker's public board into this device's known squads. Rows the board names replace
  * the cached copy (its roster is authoritative); a squad this device created but the board does
  * not carry yet is kept, because an enlistment that has not reached the board is not a deletion.
@@ -504,7 +581,7 @@ export function hydrateSquadBoard(rows: Squad[]): void {
     if (at >= 0) {
       /* The board is the registry's own reading, roster included: it replaces the cached copy so
          the card and the hub can never quote two different member lists. */
-      save.custom[at] = next;
+      save.custom[at] = keepUsernames(next, save.custom[at]);
     } else {
       save.custom = [...save.custom, next].slice(-40);
     }
@@ -544,6 +621,7 @@ export function bindSquad(rawHandle: string): BindResult {
     kind: 'channel',
     ...(me ? { ownerId: me } : {}),
     enlistedAt: Date.now(),
+    cupId: ACTIVE_CUP_ID,
   };
   save.custom = [...save.custom, created].slice(-40);
   const was = save.boundId ? 'switched' : 'bound';
@@ -563,6 +641,8 @@ export interface RegisteredSquadInput {
   avatar?: string;
   tag?: string;
   ownerId?: string;
+  /** The cup this enlistment is filed under; the running championship when the caller omits it. */
+  cupId?: string;
   /** `false` files the squad in the list without moving this device's binding (an invite look). */
   bind?: boolean;
 }
@@ -603,6 +683,7 @@ export function claimRegisteredSquad(input: RegisteredSquadInput): ClaimResult {
     ...(tag ? { tag } : {}),
     ...(ownerId ? { ownerId } : {}),
     enlistedAt: Date.now(),
+    cupId: (input.cupId ?? '').trim().slice(0, 48) || ACTIVE_CUP_ID,
   }, ownerId);
   save.custom = [...save.custom, created].slice(-40);
   if (input.bind !== false) save.boundId = id;

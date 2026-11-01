@@ -1,5 +1,11 @@
 import type { Env } from './env';
 
+/**
+ * The championship a squad enlists into. The registry is per-cup: a squad is a contender in a
+ * tournament because it registered for that tournament, never because it exists.
+ */
+export const ACTIVE_CUP_ID = 'cup-200-stars';
+
 export type SquadKind = 'channel' | 'group';
 
 /** The audit state the Command Center shows: confirmed admin, awaiting review, or pulled. */
@@ -28,6 +34,11 @@ export interface SquadMemberRow {
   country: string;
   /** Telegram @username without the `@`, or ''. */
   username: string;
+  /**
+   * The player's Telegram profile photo, as their own client reported it. Published so a
+   * leaderboard paints a real face instead of a monogram; '' when the player has none.
+   */
+  photo: string;
 }
 
 export interface RegisteredSquad {
@@ -52,6 +63,11 @@ export interface RegisteredSquad {
   creatorId: string;
   /** `creatorId` under its legacy name; kept so older rows and admin reads agree. */
   ownerId: string;
+  /**
+   * The cup this squad registered for. The one field every tournament leaderboard filters on:
+   * a squad without this stamp is not in the field, so none of its players can be either.
+   */
+  cupId: string;
   createdAt: number;
   /** `verified` — the bot proved the submitter is an admin; `pending` — awaits an audit. */
   verification: SquadVerification;
@@ -237,6 +253,15 @@ export function normalizeSquadTag(raw: unknown): string {
   return /^[A-Z0-9]{2,3}$/.test(tag) ? tag : '';
 }
 
+/**
+ * A portrait is decoration: only an absolute https URL is stored, anything else is dropped so a
+ * malformed report can never reach an `<img>` — or invalidate the player's row.
+ */
+const photoOf = (value: unknown): string => {
+  const url = text(value, 300);
+  return /^https:\/\/[^\s]+$/i.test(url) ? url : '';
+};
+
 /** A roster row from untrusted storage: an id is mandatory, every other field has a safe zero. */
 export function readSquadMember(raw: unknown): SquadMemberRow | null {
   const row = raw as Partial<SquadMemberRow> | null | undefined;
@@ -255,6 +280,7 @@ export function readSquadMember(raw: unknown): SquadMemberRow | null {
     joinedAt: Number.isFinite(joinedAt) && joinedAt > 0 ? Math.floor(joinedAt) : 0,
     country: /^[A-Z]{2}$/.test(country) ? country : '',
     username: text(row.username, 32).replace(/^@+/, ''),
+    photo: photoOf(row.photo),
   };
 }
 
@@ -298,6 +324,7 @@ export function readRegisteredSquad(raw: unknown): RegisteredSquad | null {
       joinedAt: Number.isFinite(createdAt) && createdAt > 0 ? Math.floor(createdAt) : Date.now(),
       country: '',
       username: '',
+      photo: '',
     });
   }
   /* Exactly one leader, and it is the creator: a promoted or stale row can never hold the crown. */
@@ -319,6 +346,9 @@ export function readRegisteredSquad(raw: unknown): RegisteredSquad | null {
     tag: normalizeSquadTag(row.tag),
     creatorId: leader,
     ownerId: leader,
+    /* A row written before the stamp existed was enlisted into the championship that was
+       running, so it keeps its place in that field instead of being orphaned by the upgrade. */
+    cupId: text(row.cupId, 48) || ACTIVE_CUP_ID,
     createdAt: Number.isFinite(createdAt) && createdAt > 0 ? Math.floor(createdAt) : Date.now(),
     verification: verificationOf(row.verification),
     verifiedAt: stampOf(row.verifiedAt),
@@ -356,7 +386,7 @@ export function isSquadAdmin(squad: RegisteredSquad, playerId: string): boolean 
  */
 export function upsertSquadMember(
   squad: RegisteredSquad,
-  input: { id: string; name?: string; tiq?: number; country?: string; username?: string },
+  input: { id: string; name?: string; tiq?: number; country?: string; username?: string; photo?: string },
   join: boolean,
 ): boolean {
   const id = text(input.id, 24).replace(/[^0-9A-Za-z_-]/g, '');
@@ -366,6 +396,7 @@ export function upsertSquadMember(
   const country = text(input.country, 2).toUpperCase();
   const name = text(input.name, 24);
   const username = text(input.username, 32).replace(/^@+/, '');
+  const photo = photoOf(input.photo);
 
   const existing = squad.roster.find((m) => m.id === id);
   if (existing) {
@@ -375,6 +406,9 @@ export function upsertSquadMember(
     existing.tiq = Math.max(existing.tiq, tiq);
     if (country) existing.country = country;
     if (username) existing.username = username;
+    /* The portrait is refreshed only when the player's own client sent one: a client that cannot
+       read `photo_url` must not wipe the face the board already knows. */
+    if (photo) existing.photo = photo;
     return false;
   }
   if (!join) return false;
@@ -387,6 +421,7 @@ export function upsertSquadMember(
     joinedAt: Date.now(),
     country: /^[A-Z]{2}$/.test(country) ? country : '',
     username,
+    photo,
   });
   squad.members = squad.roster.length;
   return true;
@@ -437,6 +472,8 @@ export interface SquadView {
   creatorId: string;
   createdAt: number;
   verified: boolean;
+  /** The cup this squad registered for — the eligibility key its players are filtered on. */
+  cupId: string;
   roster: SquadMemberRow[];
 }
 
@@ -446,7 +483,8 @@ export function squadViewOf(squad: RegisteredSquad): SquadView {
       Number(b.role === 'leader') - Number(a.role === 'leader')
       || b.tiq - a.tiq
       || a.joinedAt - b.joinedAt)
-    /* The @username is stored for the audit trail, never published on a board. */
+    /* The @username is stored for the audit trail, never published on a board. The portrait it
+       could derive is published as `photo` instead, which is the one thing a face needs. */
     .map((member) => ({ ...member, username: '' }));
   return {
     id: squad.id,
@@ -462,8 +500,90 @@ export function squadViewOf(squad: RegisteredSquad): SquadView {
     creatorId: squad.creatorId,
     createdAt: squad.createdAt,
     verified: squad.verification === 'verified' && !squad.banned,
+    cupId: squad.cupId || ACTIVE_CUP_ID,
     roster,
   };
+}
+
+/* ---------- the cup's field, and the players it may pay ----------
+   A cup board is not "every squad the room knows". It is the squads registered for that cup,
+   and a player reaches it only through one of them. Both reads below apply that rule, so the
+   client and the server can never disagree about who is a contender. */
+
+/** The cup a registry row belongs to; a legacy row is filed under the running championship. */
+export function squadCupOf(squad: Pick<RegisteredSquad, 'cupId'>): string {
+  return text(squad.cupId, 48) || ACTIVE_CUP_ID;
+}
+
+/**
+ * The squads registered for one cup, in ranking order, re-ranked inside that field. A banned or
+ * revoked row is out of the field entirely: it is still stored, but it is not a contender.
+ */
+export function cupField(squads: Iterable<RegisteredSquad>, cupId: string): RegisteredSquad[] {
+  const id = text(cupId, 48);
+  if (!id) return [];
+  return [...squads]
+    .filter((squad) => !squad.banned && squad.verification !== 'revoked' && squadCupOf(squad) === id)
+    .sort((a, b) => squadAvgTiq(b) - squadAvgTiq(a) || b.members - a.members || a.handle.localeCompare(b.handle));
+}
+
+/** The ids registered for one cup — the membership test every player row must pass. */
+export function cupSquadIds(squads: Iterable<RegisteredSquad>, cupId: string): Set<string> {
+  return new Set(cupField(squads, cupId).map((squad) => squad.id));
+}
+
+/** One contender on the cup's player leaderboard. */
+export interface CupPlayerRow {
+  rank: number;
+  id: string;
+  name: string;
+  country: string;
+  /** The Telegram portrait, or '' when the player has none. */
+  avatar: string;
+  tiq: number;
+  /** The registered squad this player rides for — the key the hard filter tests. */
+  squadId: string;
+  squadHandle: string;
+}
+
+/**
+ * The cup's player leaderboard: every joined player of every registered squad, ranked by their
+ * own TIQ.
+ *
+ * **Hard filter:** a player is only ever listed through a squad that is on this cup's registry.
+ * Someone with no squad, or whose squad never enlisted for this cup, has no row here at all — and
+ * therefore cannot appear on the podium or claim a place in the pool.
+ */
+export function cupPlayerBoard(
+  squads: Iterable<RegisteredSquad>,
+  cupId: string,
+  limit = 10,
+): CupPlayerRow[] {
+  const field = cupField(squads, cupId);
+  const registered = new Set(field.map((squad) => squad.id));
+  const seen = new Set<string>();
+  const rows: Array<Omit<CupPlayerRow, 'rank'>> = [];
+
+  for (const squad of field) {
+    for (const member of squad.roster) {
+      if (!member.id || seen.has(member.id)) continue;
+      seen.add(member.id);
+      rows.push({
+        id: member.id,
+        name: member.name || '—',
+        country: member.country,
+        avatar: member.photo || telegramPhotoUrl(`@${member.username}`),
+        tiq: Math.max(0, Math.floor(member.tiq)),
+        squadId: squad.id,
+        squadHandle: squad.handle,
+      });
+    }
+  }
+
+  /* The one gate: a row whose squad is not on the registry is dropped, whoever it is. */
+  const eligible = rows.filter((row) => registered.has(row.squadId));
+  eligible.sort((a, b) => b.tiq - a.tiq || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  return eligible.slice(0, Math.max(0, Math.floor(limit))).map((row, i) => ({ ...row, rank: i + 1 }));
 }
 
 
@@ -820,7 +940,13 @@ export async function verifyAndBuildSquad(
   rawHandle: string,
   userId: string,
   env: Env,
-  identity?: { name?: string; tag?: string; kind?: SquadKind; memberName?: string; username?: string },
+  identity?: {
+    name?: string; tag?: string; kind?: SquadKind; memberName?: string; username?: string;
+    /** The enlisting leader's own Telegram portrait. */
+    photo?: string;
+    /** The cup this enlistment is filed under; the running championship when omitted. */
+    cupId?: string;
+  },
 ): Promise<SquadRegistration> {
   const handle = normalizeChatHandle(rawHandle);
   if (!handle) {
@@ -913,6 +1039,7 @@ export async function verifyAndBuildSquad(
         joinedAt: Date.now(),
         country: '',
         username: text(identity?.username, 32).replace(/^@+/, ''),
+        photo: photoOf(identity?.photo),
       }],
       members: 1,
       kind: chat.kind,
@@ -920,6 +1047,7 @@ export async function verifyAndBuildSquad(
       tag,
       creatorId: requester,
       ownerId: requester,
+      cupId: text(identity?.cupId, 48) || ACTIVE_CUP_ID,
       createdAt: Date.now(),
       /* The bot just proved both sides against Telegram, so a fresh registration starts verified. */
       verification: 'verified',

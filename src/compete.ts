@@ -60,7 +60,7 @@ import { flagPhoto } from './flags';
 import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
 import { arena, countdownPill, fullCountdown, seasonLabel } from './arenaState';
-import { bindSquadById, cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribution, getMySquad, getSquadRanking, isSquadAdmin, onSquadChange, squadAvatarUrl, squadInviteUrl, squadKind, squadLetter, squadMark, squadTiqSum, telegramAvatarUrl, type RankedSquad } from './squads';
+import { bindSquadById, cleanChatReference, cleanHandle, cleanTag, cupField, displayNameOf, getMyContribution, getMySquad, getSquadRanking, isSquadAdmin, myRosterId, onSquadChange, registeredCupSquadIds, squadAvatarUrl, squadInviteUrl, squadKind, squadLetter, squadMark, squadTiqSum, telegramAvatarUrl, type RankedSquad } from './squads';
 import { BOT_HANDLE, impact, notify, openLink, tgUser } from './telegram';
 import { t } from './settings';
 import { isPremiumUser, onVipChange } from './premium';
@@ -754,25 +754,63 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return img;
   }
 
-  /** One player's ball: two initials over the sphere, the nation flag on its corner. */
-  function sphere(r: { name: string; countryCode: string }, cls: string): HTMLElement {
+  /**
+   * The player's own Telegram portrait inside their ball: a circular crop ringed by a hairline
+   * of metal, fading in over the monogram. The initials are only ever the transient fallback —
+   * an error, a hidden profile or the CDN's 1x1 placeholder leaves them in place.
+   */
+  function paintPlayerPhoto(host: HTMLElement, url: string, eager = false): void {
+    const src = photoSrc(url);
+    if (!src) return;
+    const img = document.createElement('img');
+    img.className = 'stars-av-photo';
+    img.alt = '';
+    img.loading = eager ? 'eager' : 'lazy';
+    img.decoding = 'async';
+    img.referrerPolicy = 'no-referrer';
+    img.addEventListener('error', () => {
+      img.remove();
+      host.classList.remove('has-photo');
+    });
+    img.addEventListener('load', () => {
+      if (img.naturalWidth <= 2 || img.naturalHeight <= 2) {
+        img.remove();
+        host.classList.remove('has-photo');
+        return;
+      }
+      img.classList.add('is-loaded');
+      host.classList.add('has-photo');
+    });
+    img.src = src;
+    host.append(img);
+  }
+
+  /** One player's ball: their Telegram photo over the monogram, the nation flag on its corner. */
+  function sphere(r: RosterRow, cls: string, eager = false): HTMLElement {
     const av = document.createElement('span');
     av.className = cls;
     av.setAttribute('aria-hidden', 'true');
     const ini = document.createElement('b');
     ini.className = 'stars-av-t';
     ini.textContent = initials(r.name);
+    av.append(ini);
+    paintPlayerPhoto(av, r.avatar, eager);
     const flag = document.createElement('span');
     flag.className = 'stars-av-flag';
     flag.append(flagPhoto(r.countryCode, 'fp-badge'));
-    av.append(ini, flag);
+    av.append(flag);
     return av;
   }
 
   /* ---------- the channel ladder, and the roster behind each card ---------- */
 
-  /** The Cup ranks the very same squads the Intellect Guilds board ranks. */
-  const channelLadder = (): RankedSquad[] => getSquadRanking().slice(0, FIELD_ROWS);
+  /**
+   * The Cup ranks the very same squads the Intellect Guilds board ranks — but only those
+   * registered for this championship, re-ranked inside that field. A squad this device knows
+   * that never enlisted for the running cup is not a contender: it has no place, no podium and
+   * no claim on the pool.
+   */
+  const channelLadder = (cupId: string): RankedSquad[] => cupField(cupId).slice(0, FIELD_ROWS);
 
   const seedOf = (s: RankedSquad): ChannelSeed =>
     ({ id: s.id, handle: s.handle, name: s.name, tiq: s.trophies });
@@ -784,7 +822,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   function youIn(ch: ChannelSeed): RosterYou | null {
     const mine = getMySquad();
     if (!mine || mine.id !== ch.id) return null;
-    return { name: youName(), countryCode: profile.country ?? '', tiq: myTrophyScore() };
+    return {
+      id: myRosterId(),
+      name: youName(),
+      countryCode: profile.country ?? '',
+      tiq: myTrophyScore(),
+    };
   }
 
   /** A roster is fetched once per channel + TIQ pair, so re-entry never re-rolls it. */
@@ -880,8 +923,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
    * An empty rung on the Cup podium: a frosted, dashed slot that keeps the three-tier
    * stage whole while the field fills. A championship of one is a normal state, so the
    * missing places stay on stage instead of floating the champion alone against the rail.
+   *
+   * `shape` follows the board it stands on — a channel wears its squircle, a player its ball —
+   * so the two tabs read as the same stage with the same gap in it.
    */
-  function podAwaiting(rank: number): HTMLLIElement {
+  function podAwaiting(rank: number, shape: 'channel' | 'player' = 'channel'): HTMLLIElement {
     const li = document.createElement('li');
     li.className = 'stars-pod is-awaiting';
     li.dataset.rank = String(rank);
@@ -892,7 +938,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     name.dir = 'auto';
     name.title = label;
 
-    const mark = tag('stars-ch-av stars-ch-av-awaiting');
+    const mark = tag(shape === 'player'
+      ? 'stars-av stars-av-awaiting'
+      : 'stars-ch-av stars-ch-av-awaiting');
     mark.setAttribute('aria-hidden', 'true');
     mark.append(svgIcon('#i-lock', 'stars-awaiting-ico'));
 
@@ -944,7 +992,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     tiq.append(strong(num(r.tiq)), document.createTextNode(' TIQ'));
 
     if (r.rank === 1) li.append(svgIcon('#i-crown', 'stars-pod-crown'));
-    li.append(tag('stars-pod-rank', String(r.rank)), sphere(r, 'stars-av'), name, tiq);
+    /* the podium is on screen the moment it paints, so its portraits never wait for a scroll */
+    li.append(tag('stars-pod-rank', String(r.rank)), sphere(r, 'stars-av', true), name, tiq);
     if (r.stars > 0) {
       const prize = tag('stars-pod-prize');
       prize.append(starImg('stars-pod-star'), strong(num(r.stars)));
@@ -1004,14 +1053,43 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }
   }
 
+  /**
+   * The podium's visual order: silver on the left, the champion raised in the centre, bronze on
+   * the right. The cards are appended in exactly this order, so the stage is balanced even where
+   * `order` is not honoured — and the order a screen reader reads matches what the eye sees.
+   */
+  const PODIUM_SLOTS = [2, 1, 3] as const;
+
+  /**
+   * The one three-place stage both boards paint. A missing place keeps its frosted slot, so a
+   * field of one is balanced between two contenders-to-come instead of being pushed into a
+   * corner — and because the slot count never changes, the band never changes height between
+   * states.
+   */
+  function paintCupPodium(cell: (rank: number) => HTMLElement): void {
+    const host = cupEls.podium;
+    if (!host) return;
+    host.textContent = '';
+    for (const rank of PODIUM_SLOTS) host.append(cell(rank));
+  }
+
   /** Fill the band from the leading channel's roster, fetching it once per leader. */
   async function paintPlayers(): Promise<void> {
     const lead = channels[0];
     if (!lead) {
-      /* No channel means no roster: clear the board rather than leave the last squad's players
-         standing under a heading that no longer has a squad. */
-      if (cupEls.podium) cupEls.podium.textContent = '';
-      if (cupEls.runners) cupEls.runners.textContent = '';
+      /* No registered channel means no field at all: the stage stays whole and empty rather than
+         leaving the last squad's players standing under a heading that no longer has a squad. */
+      paintCupPodium((rank) => podAwaiting(rank, 'player'));
+      if (cupEls.podium) {
+        cupEls.podium.setAttribute('aria-label', 'Top three players, awaiting contenders');
+      }
+      if (cupEls.runners) {
+        cupEls.runners.textContent = '';
+        const row = document.createElement('li');
+        row.className = 'stars-run is-empty';
+        row.textContent = 'No squads on the board yet — enlist a channel to open the war.';
+        cupEls.runners.append(row);
+      }
       return;
     }
     if (playerRowsFor !== lead.id) {
@@ -1031,11 +1109,24 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }
     // A slower roster must never overwrite a board the switch has already moved on.
     if (view !== 'players' || channels[0]?.id !== lead.id) return;
-    const rows = playerRows;
+    /* HARD FILTER: a place on this board is a place on a squad that registered for this cup. The
+       roster already comes from the leading registered squad; this is the same predicate applied
+       to the rows themselves, so a roster cached before the field changed can never leak an
+       unregistered face onto the podium. It is the exact test the Worker runs. */
+    const registered = registeredCupSquadIds(cup ? cup.id : '');
+    const rows = playerRows.filter((r) => registered.has(r.squadId));
+    /* A podium is always three places, exactly as the channels board paints it: the champion
+       raised in the centre, silver left, bronze right, and a frosted ball wherever the roster is
+       still short. One player on the squad is a normal championship, not a broken board. */
+    const byRank = new Map<number, RosterRow>();
+    for (const r of rows) if (r.rank <= 3) byRank.set(r.rank, r);
+    paintCupPodium((rank) => {
+      const r = byRank.get(rank);
+      return r ? podPlayer(r) : podAwaiting(rank, 'player');
+    });
     if (cupEls.podium) {
-      cupEls.podium.textContent = '';
-      cupEls.podium.setAttribute('aria-label', `Top three players of ${lead.handle}, whose Top ${ROSTER_ROWS} split the pool`);
-      for (const r of rows.filter((x) => x.rank <= 3)) cupEls.podium.append(podPlayer(r));
+      cupEls.podium.setAttribute('aria-label',
+        `Top three players of ${lead.handle}, whose Top ${ROSTER_ROWS} split the pool`);
     }
     if (cupEls.runners) {
       cupEls.runners.textContent = '';
@@ -1051,9 +1142,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     /* An empty registry is a real state now that the seeded field is gone: the board says so
        instead of painting an empty slab. */
     if (!channels.length) {
+      paintCupPodium((rank) => podAwaiting(rank));
       if (cupEls.podium) {
-        cupEls.podium.textContent = '';
-        for (let rank = 1; rank <= 3; rank++) cupEls.podium.append(podAwaiting(rank));
         cupEls.podium.setAttribute('aria-label', 'Top three channels, awaiting contenders');
       }
       if (cupEls.runners) {
@@ -1068,15 +1158,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     /* A podium is always three places: rank 2 left, the champion raised in the centre,
        rank 3 right. Missing ranks hold frosted slots, so a lone squad is balanced
        between them instead of being pushed into a corner. */
-    if (cupEls.podium) {
-      cupEls.podium.textContent = '';
-      const byRank = new Map<number, RankedSquad>();
-      for (const s of channels.filter((x) => x.rank <= 3)) byRank.set(s.rank, s);
-      for (let rank = 1; rank <= 3; rank++) {
-        const s = byRank.get(rank);
-        cupEls.podium.append(s ? podChannel(s, c) : podAwaiting(rank));
-      }
-    }
+    const byRank = new Map<number, RankedSquad>();
+    for (const s of channels.filter((x) => x.rank <= 3)) byRank.set(s.rank, s);
+    paintCupPodium((rank) => {
+      const s = byRank.get(rank);
+      return s ? podChannel(s, c) : podAwaiting(rank);
+    });
     if (cupEls.runners) {
       cupEls.runners.textContent = '';
       for (const s of channels.filter((x) => x.rank >= 4)) cupEls.runners.append(runChannel(s));
@@ -1139,6 +1226,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     setText(cupEls.squadChip, 'YOUR SQUAD');
     setText(cupEls.squadLetter, squadLetter(mine));
     paintCrestPhoto(cupEls.squadAv, squadAvatarUrl(mine));
+    /* The cup has its own field, so the pill quotes the place among the squads that actually
+       enlisted — never a guild-board rank the championship never handed out. A squad outside the
+       field says so instead of borrowing a number that would not put it on the podium. */
+    const cupRank = cupField(c.id).find((s) => s.id === mine.id)?.rank ?? 0;
     /* name line: the handle, then its cup rank as its own pill — the handle wraps to a
        second line under its own isolation before it would ever be clipped */
     const name = cupEls.squadName;
@@ -1147,8 +1238,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       const handle = tag('stars-squad-handle', bare(mine.handle));
       handle.dir = 'auto';
       handle.title = mine.name || mine.handle;
-      const pos = tag('stars-squad-pos', `#${mine.rank}`);
-      pos.title = `Rank ${mine.rank} in the ${c.name}`;
+      const pos = tag('stars-squad-pos', `#${cupRank || mine.rank}`);
+      pos.title = cupRank
+        ? `Rank ${cupRank} in the ${c.name}`
+        : `Guilds rank ${mine.rank} — not enlisted in the ${c.name}`;
       name.append(handle, pos);
     }
 
@@ -1166,9 +1259,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         note.append(strong(num(myTrophyScore())), document.createTextNode(' TIQ · tap for the roster'));
       }
     }
+    const where = cupRank
+      ? `is rank ${cupRank} in the ${c.name}`
+      : `is not enlisted in the ${c.name}`;
     row.setAttribute('aria-label', seat?.cup === c.id
-      ? `Your squad ${mine.handle} is rank ${mine.rank} in the ${c.name}; your seat is locked. Tap to view the roster.`
-      : `Your squad ${mine.handle} is rank ${mine.rank} in the ${c.name}. Tap to view the roster.`);
+      ? `Your squad ${mine.handle} ${where}; your seat is locked. Tap to view the roster.`
+      : `Your squad ${mine.handle} ${where}. Tap to view the roster.`);
   }
 
   /** Which channel the sheet is showing: a slower fetch must not overwrite a newer tap. */
@@ -1424,7 +1520,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       // than it showed when they took it.
       if (seat?.cup === cup.id && cup.players < cup.maxPlayers) cup.players += 1;
     }
-    channels = channelLadder();
+    channels = channelLadder(cup.id);
     paintBoard();
     paintCup(cup);
     await loadMyRoster();

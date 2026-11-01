@@ -11334,7 +11334,7 @@ html.reduced-motion .stars-ch-photo { transition: none; }
 }
 /* the players board's runner mark: the same ball, shrunk to the row's squircle */
 .stars-run .stars-av { width: 30px; height: 30px; font-size: 11px; }
-.stars-run .stars-av-flag { right: -3px; bottom: -3px; }
+.stars-run .stars-av-flag { inset-inline-end: -3px; inset-block-end: -3px; }
 .stars-run .stars-av-flag .fp { --fp-d: 15px; }
 .stars-run .stars-av-flag .fp-img { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35), 0 0 0 2px #1C2433; }
 /* the score rides a warm gold pill, not a bare muted run of digits */
@@ -11733,15 +11733,58 @@ html.reduced-motion .stars-count::before { animation: none; }
   line-height: 1;
 }
 .stars-av-t { display: block; }
+/* the player's real Telegram portrait: a circular crop inside the metal ball, ringed by a
+   hairline of metal. It fades in over the monogram and removes itself on an error or a hidden
+   profile, so the initials are only ever the transient fallback — never the final face. */
+.stars-av .stars-av-photo {
+  position: absolute;
+  inset: 3px;
+  z-index: 1;
+  width: calc(100% - 6px);
+  height: calc(100% - 6px);
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+  /* circle crop is explicit as well as rounded: a JPEG's square corners never
+     leave a fringe against the metal ring */
+  clip-path: circle(50%);
+  background: #0B1220;
+  box-shadow:
+    0 0 0 1px rgba(226, 232, 240, .42),
+    0 0 0 2px rgba(4, 8, 16, .55),
+    0 2px 5px rgba(0, 0, 0, .5);
+  opacity: 0;
+  transition: opacity .18s ease;
+}
+.stars-av .stars-av-photo.is-loaded { opacity: 1; }
+.stars-av.has-photo .stars-av-t { opacity: 0; }
+html.reduced-motion .stars-av-photo { transition: none; }
 .stars-av-flag {
   position: absolute;
-  right: -4px;
-  bottom: -4px;
+  inset-inline-end: -4px;
+  inset-block-end: -4px;
+  /* the nation pin rides above the portrait, never under it */
+  z-index: 2;
   display: inline-flex;
 }
 .stars-av-flag .fp { --fp-d: 16px; }
 .stars-av-flag .fp-chip { border-radius: 50%; font-size: 7px; letter-spacing: 0; }
 .stars-av-flag .fp-img { border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35), 0 0 0 2px #141B2A; }
+/* an empty place on the players board: the same frosted slot as the channels board, cut as a
+   ball so both tabs read as one stage with the same gap in it. */
+.stars-av-awaiting {
+  background: radial-gradient(circle at 32% 26%, rgba(148, 163, 184, .12) 0%, rgba(11, 16, 28, .9) 72%);
+  box-shadow: inset 0 0 0 1.5px rgba(148, 163, 184, .3), 0 2px 0 #080C14;
+  color: rgba(148, 163, 184, .82);
+}
+.stars-av-awaiting::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px dashed rgba(148, 163, 184, .36);
+  pointer-events: none;
+}
 
 .roster-sheet {
   border-radius: 24px 24px 0 0;
@@ -11919,7 +11962,7 @@ html.reduced-motion .stars-count::before { animation: none; }
   color: #2A1005;
 }
 .sr-row .stars-av { width: 30px; height: 30px; font-size: 11px; }
-.sr-row .stars-av-flag { right: -3px; bottom: -3px; }
+.sr-row .stars-av-flag { inset-inline-end: -3px; inset-block-end: -3px; }
 .sr-row .stars-av-flag .fp { --fp-d: 15px; }
 .sr-row .stars-av-flag .fp-chip { border-radius: 50%; font-size: 7px; letter-spacing: 0; }
 .sr-row .stars-av-flag .fp-img { border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35), 0 0 0 2px #1C2433; }
