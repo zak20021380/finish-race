@@ -58,6 +58,8 @@ export interface SquadMember {
   initials: string;
   /** Avatar tint, picked from a restrained palette so a long roster stays calm. */
   hue: number;
+  /** Telegram portrait URL when the roster reported one; empty when it did not. */
+  photo: string;
   /** A server-confirmed honor, or null when no ledger entry names this member. */
   medal: WornEdition | null;
 }
@@ -198,6 +200,9 @@ export function buildSquadRoster(squad: RankedSquad): SquadRoster {
     /* An enlisting player who never sent a name still gets a readable row: the role is the name
        the roster knows them by. Nothing is invented beyond that. */
     const name = row.name || (isYou ? myName() : row.role === 'leader' ? t('squadLeader') : '');
+    /* The local player's Telegram portrait is already on the device even when the Worker's
+       roster does not publish one, so fall back to it before the monogram. */
+    const photo = (isYou ? row.photo || tgUser()?.photo_url || '' : row.photo || '').slice(0, 300);
     return {
       rank: i + 1,
       id: row.id,
@@ -209,6 +214,7 @@ export function buildSquadRoster(squad: RankedSquad): SquadRoster {
       isYou,
       initials: initialsOf(name || '?'),
       hue: AVATAR_HUES[hash32(`${squad.id}:${row.id}`) % AVATAR_HUES.length],
+      photo,
       medal: isYou ? wornEdition() : row.name ? holderEdition(row.name) : null,
     };
   });

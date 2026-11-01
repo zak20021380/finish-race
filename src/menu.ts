@@ -36,7 +36,7 @@ import {
   squadMark, telegramAvatarUrl, type RankedSquad, type SquadKind,
 } from './squads';
 import {
-  ARENA_CUP, arrangeRoster, buildSquadRoster,
+  arrangeRoster, buildSquadRoster,
   type SquadMember, type SquadRole, type SquadRoster,
 } from './squadRoster';
 import { showToast } from './toast';
@@ -530,15 +530,16 @@ export function createMenu(api: MenuApi): Menu {
   const squadScroll = $<HTMLElement>('squad-hub-scroll');
   const squadRosterEl = $<HTMLOListElement>('squad-roster');
   const squadMemberQ = $<HTMLInputElement>('squad-member-q');
+  const squadTools = $<HTMLElement>('squad-tools');
   const squadCountEl = $<HTMLElement>('squad-roster-count');
   const squadRosterEmpty = $<HTMLElement>('squad-roster-empty');
-  const squadYouEl = $<HTMLElement>('squad-you');
   const squadCrest = $<HTMLElement>('squad-view-crest');
   const squadCrestFrame = $<HTMLElement>('squad-view-frame');
   const squadCrestPhoto = $<HTMLImageElement>('squad-view-photo');
   const squadCrestBadge = $<HTMLElement>('squad-view-badge');
-  const squadLeaderEl = $<HTMLElement>('squad-view-leader');
-  const squadLeaderNameEl = $<HTMLElement>('squad-view-leader-name');
+  const squadOwnerBadge = $<HTMLElement>('squad-view-owner');
+  const squadKindBadge = $<HTMLElement>('squad-view-kind');
+  const squadTotalEl = $<HTMLElement>('squad-view-total');
   const squadExploreBtn = $<HTMLButtonElement>('squad-explore');
   const squadExploreT = $<HTMLElement>('squad-explore-t');
   const squadExploreIco = $<HTMLElement>('squad-explore-ico');
@@ -548,7 +549,6 @@ export function createMenu(api: MenuApi): Menu {
   const squadInviteCopy = $<HTMLButtonElement>('squad-invite-copy');
   const squadInviteCopyT = $<HTMLElement>('squad-invite-copy-t');
   const squadInviteShare = $<HTMLButtonElement>('squad-invite-share');
-  const squadSoloNote = $<HTMLElement>('squad-solo-note');
 
   /* The inspection step: a card opens this sheet; the full-width key is the only
      place a join is ever committed. */
@@ -613,7 +613,7 @@ export function createMenu(api: MenuApi): Menu {
     pill.className = 'sq-role';
     pill.dataset.role = role;
     pill.append(squadSvg(role === 'leader' ? '#i-crown' : '#i-shield'));
-    pill.append(document.createTextNode(role === 'leader' ? t('squadLeader') : t('admin')));
+    pill.append(document.createTextNode(role === 'leader' ? t('leader') : t('admin')));
     return pill;
   }
 
@@ -634,54 +634,29 @@ export function createMenu(api: MenuApi): Menu {
     wrap.className = `sq-avwrap${cls ? ` ${cls}` : ''}`;
     const av = document.createElement('span');
     av.className = 'sq-av';
-    av.style.setProperty('--sq-hue', String(member.hue));
     av.setAttribute('aria-hidden', 'true');
     av.textContent = member.initials;
+    /* Real Telegram portrait over the monogram. A blocked, broken or 1x1 frame is dropped so
+       the crisp initials stay; the country flag rides the container either way. */
+    if (member.photo) {
+      const img = document.createElement('img');
+      img.className = 'sq-av-photo';
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      const drop = () => img.remove();
+      img.addEventListener('error', drop, { once: true });
+      img.addEventListener('load', () => {
+        if (img.naturalWidth <= 2 || img.naturalHeight <= 2) { drop(); return; }
+        av.classList.add('has-photo');
+      }, { once: true });
+      img.src = member.photo;
+      av.append(img);
+    }
     wrap.append(av, flagPhoto(member.country, 'sq-av-flag'));
     if (member.medal) wrap.append(squadMedalPin(member.medal, 'sq-medal'));
     return wrap;
-  }
-
-  function paintSquadYou(): void {
-    const roster = squadView;
-    if (!roster) return;
-    const member = roster.members.find((m) => m.isYou);
-    if (!member) return;
-    squadYouEl.textContent = '';
-
-    const rank = document.createElement('span');
-    rank.className = `sq-you-rank${roster.yourRank >= 100000 ? ' is-wide' : ''}`;
-    rank.textContent = `#${en(roster.yourRank)}`;
-
-    const avatar = squadAvatar(member);
-
-    const identity = document.createElement('span');
-    identity.className = 'sq-you-id';
-    const name = document.createElement('b');
-    name.className = 'sq-you-name';
-    name.textContent = t('you');
-    identity.append(name);
-
-    const score = document.createElement('span');
-    score.className = `sq-score${roster.yourTiq <= 0 ? ' is-zero' : ''}`;
-    score.append(squadSvg('#i-brain'));
-    const amount = document.createElement('b');
-    amount.textContent = en(roster.yourTiq);
-    score.append(amount);
-
-    squadYouEl.append(rank, avatar, identity, score);
-
-    const honor = roster.yourMedal
-      ? `, wearing ${roster.yourMedal.def.name}${roster.yourMedal.serial !== null ? ` edition ${roster.yourMedal.serial}` : ''}`
-      : '';
-    const arenaSpeech = roster.yourArena.rank > 0
-      ? `arena rank ${roster.yourArena.rank} in the ${ARENA_CUP}`
-      : 'unranked in the arena';
-    squadYouEl.setAttribute(
-      'aria-label',
-      `Your standing: rank ${roster.yourRank} of ${roster.count}, ${roster.yourTiq} Tactical IQ, `
-      + `${arenaSpeech}, representing ${nameOf(member.country)}${honor}.`,
-    );
   }
 
   function measureSquadPitch(): number {
@@ -722,6 +697,12 @@ export function createMenu(api: MenuApi): Menu {
     nameLine.append(name);
     const role = squadRolePill(member.role);
     if (role) nameLine.append(role);
+    if (member.isYou) {
+      const you = document.createElement('span');
+      you.className = 'sq-you-tag';
+      you.textContent = t('you');
+      nameLine.append(you);
+    }
     id.append(nameLine);
 
     const right = document.createElement('span');
@@ -826,6 +807,14 @@ export function createMenu(api: MenuApi): Menu {
   function paintSquadRoster(): void {
     const roster = squadView;
     if (!roster) return;
+    /* A roster smaller than six has nothing worth filtering: the field stays out of the way
+       (and any stale query is cleared) until the list actually grows. */
+    const canSearch = roster.count >= 6;
+    if (!canSearch && squadQuery) {
+      squadQuery = '';
+      squadMemberQ.value = '';
+    }
+    squadTools.hidden = !canSearch;
     squadRows = arrangeRoster(roster, 'tiq', squadQuery);
     const filtered = squadQuery.trim().length > 0;
     const membersWord = roster.count === 1 ? 'member' : 'members';
@@ -843,20 +832,6 @@ export function createMenu(api: MenuApi): Menu {
     squadRowEls.clear();
     squadRange = { start: -1, end: -1, rows: -1 };
     scheduleSquadWindow(true);
-  }
-
-  /* The founder is the one name worth reading without scrolling, so the hero wears
-     it — the roster's leader row, or "You" when this device owns the squad. */
-  function paintSquadLeader(roster: SquadRoster): void {
-    const leader = roster.members.find((m) => m.role === 'leader');
-    squadLeaderEl.classList.toggle('is-on', !!leader);
-    if (!leader) return;
-    const label = leader.isYou ? t('you') : leader.name || t('squadLeader');
-    squadLeaderNameEl.textContent = label;
-    squadLeaderNameEl.title = label;
-    squadLeaderEl.setAttribute('aria-label', leader.isYou
-      ? 'You founded this squad.'
-      : `Founded by ${label}.`);
   }
 
   /* Real channel photo over the monogram crest. The CDN can answer with an error
@@ -892,24 +867,22 @@ export function createMenu(api: MenuApi): Menu {
   }
 
   /**
-   * The leader's management bar. It exists only for the player who enlisted the squad: the invite
-   * key copies the `?startapp=squad_<id>` link, and the send key hands the same link to Telegram's
-   * share sheet. A member never sees a control they cannot use.
+   * The leader's one invite row. It exists only for the player who can use it: the gold key hands
+   * the `?startapp=squad_<id>` link to Telegram's own share sheet, the pill copies it. The crown
+   * badge in the banner carries the role, so there is no separate admin bar.
    */
   function paintSquadAdmin(me: RankedSquad): void {
     squadAdmin = isSquadAdmin(me);
     squadAdminEl.hidden = !squadAdmin;
-    /* A squad of one is a normal state, and the note that explains it belongs to the leader who
-       can act on it — a member never sees it. */
-    squadSoloNote.hidden = !squadAdmin || squadView?.count !== 1;
+    squadOwnerBadge.hidden = squadView?.yourRole !== 'leader';
     if (!squadAdmin) return;
     const url = squadInviteUrl(me.id);
-    squadInviteCopyT.textContent = t('copyInviteLink');
+    squadInviteCopyT.textContent = t('copyLink');
     squadInviteCopy.classList.remove('is-copied');
     squadInviteCopy.setAttribute('aria-disabled', url ? 'false' : 'true');
     squadInviteShare.setAttribute('aria-disabled', url ? 'false' : 'true');
-    squadInviteCopy.setAttribute('aria-label', `${t('copyInviteLink')} · ${me.handle}`);
-    squadInviteShare.setAttribute('aria-label', `${t('shareInviteLink')} · ${me.handle}`);
+    squadInviteCopy.setAttribute('aria-label', `${t('copyLink')} · ${me.handle}`);
+    squadInviteShare.setAttribute('aria-label', `${t('invitePlayers')} · ${me.handle}`);
   }
 
   function paintSquadHub(): void {
@@ -923,16 +896,21 @@ export function createMenu(api: MenuApi): Menu {
     squadCrestBadge.dataset.rank = me.rank === 1 ? 'gold' : me.rank === 2 ? 'silver' : me.rank === 3 ? 'bronze' : 'num';
     squadCrest.setAttribute('aria-label', `${me.name} crest, global squad rank ${me.rank}`);
     paintSquadCrestPhoto(me.handle);
-    $<HTMLElement>('squad-view-avg').textContent = en(squadView.avgTiq);
+    squadTotalEl.textContent = en(squadView.totalTiq);
     $<HTMLElement>('squad-view-members').textContent = en(squadView.count);
+    /* A channel gets the compact check beside its handle; a group simply omits it. */
+    const isChannel = squadKind(me) === 'channel';
+    squadKindBadge.hidden = !isChannel;
+    if (isChannel) {
+      squadKindBadge.title = t('officialChannel');
+      squadKindBadge.setAttribute('aria-label', t('officialChannel'));
+    }
     /* The Telegram audience is a separate, clearly-labelled stat: it never counts as members. */
     squadSubsEl.hidden = squadView.subscribers <= 0;
     if (!squadSubsEl.hidden) {
       squadSubsEl.textContent = `${en(squadView.subscribers)} ${t('subscribers')}`;
       squadSubsEl.title = t('subscribersNote');
     }
-    paintSquadLeader(squadView);
-    paintSquadYou();
     paintSquadAdmin(me);
     paintSquadRoster();
   }
@@ -976,11 +954,10 @@ export function createMenu(api: MenuApi): Menu {
       impact('light');
       squadInviteCopyT.textContent = t('linkCopied');
       squadInviteCopy.classList.add('is-copied');
-      window.clearTimeout(squadCopiedTimer);
-      squadCopiedTimer = window.setTimeout(() => {
-        squadInviteCopyT.textContent = t('copyInviteLink');
-        squadInviteCopy.classList.remove('is-copied');
-      }, 1800);
+      window.clearTimeout(squadCopiedTimer);        squadCopiedTimer = window.setTimeout(() => {
+          squadInviteCopyT.textContent = t('copyLink');
+          squadInviteCopy.classList.remove('is-copied');
+        }, 1800);
       showToast(t('linkCopied'), 'success');
     });
   }

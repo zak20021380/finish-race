@@ -4985,43 +4985,46 @@
               <span class="sq-hero-rank" id="squad-view-badge" data-rank="num" aria-hidden="true">#1</span>
             </span>
             <span class="sq-banner-id">
-              <b class="sq-banner-name" id="squad-view-name">Squad</b>
+              <span class="sq-name-row">
+                <b class="sq-banner-name" id="squad-view-name">Squad</b>
+                <span class="sq-owner" id="squad-view-owner" hidden>
+                  <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
+                  <span data-i18n="leader">Leader</span>
+                </span>
+              </span>
               <span class="sq-meta">
                 <span class="sq-meta-handle" id="squad-view-handle">@Squad</span>
-                <span class="sq-meta-leader" id="squad-view-leader">
-                  <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
-                  <span class="sq-meta-leader-name" id="squad-view-leader-name">—</span>
+                <span class="sq-verified" id="squad-view-kind" hidden role="img" aria-label="Telegram channel">
+                  <svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>
                 </span>
                 <span class="sq-meta-subs" id="squad-view-subs" hidden></span>
               </span>
               <span class="sq-banner-stats">
-                <span class="sq-stat sq-stat-avg">
-                  <span class="sr-only">Average TIQ</span>
-                  <svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg>
-                  <b id="squad-view-avg">0</b>
-                </span>
                 <span class="sq-stat sq-stat-mem">
-                  <span class="sr-only">Members</span>
                   <svg class="ico" aria-hidden="true"><use href="#i-users" /></svg>
+                  <small data-i18n="members">Members</small>
                   <b id="squad-view-members">0</b>
+                </span>
+                <span class="sq-stat sq-stat-tiq">
+                  <svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg>
+                  <small data-i18n="squadTotalTiq">Total TIQ</small>
+                  <b id="squad-view-total">0</b>
                 </span>
               </span>
             </span>
           </header>
 
-          <section class="sq-you" id="squad-you" aria-label="Your standing"></section>
-
-          <!-- The leader's management bar. Only the player who enlisted the squad sees it: one
-               key copies the `?startapp=squad_<id>` invite, the other hands it to Telegram's own
-               share sheet. Members never see a control they cannot use. -->
-          <section class="sq-admin" id="squad-admin" hidden aria-label="Squad admin controls">
-            <span class="sq-admin-badge" data-i18n="adminBadge">ADMIN</span>
-            <button class="sq-admin-copy" id="squad-invite-copy" type="button">
-              <svg class="ico" aria-hidden="true"><use href="#i-link" /></svg>
-              <span class="sq-admin-copy-t" id="squad-invite-copy-t">Copy Invite Link</span>
-            </button>
-            <button class="sq-admin-share" id="squad-invite-share" type="button" aria-label="Share invite link">
+          <!-- One invite row for the leader: a gold Telegram share key and a compact copy pill.
+               Members never see a control they cannot use; the crown badge in the banner names
+               the role in place instead of a separate admin bar. -->
+          <section class="sq-invite" id="squad-admin" hidden aria-label="Squad invites">
+            <button class="sq-invite-share" id="squad-invite-share" type="button">
               <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
+              <span data-i18n="invitePlayers">Invite Players</span>
+            </button>
+            <button class="sq-invite-copy" id="squad-invite-copy" type="button">
+              <svg class="ico" aria-hidden="true"><use href="#i-link" /></svg>
+              <span class="sq-invite-copy-t" id="squad-invite-copy-t" data-i18n="copyLink">Copy Link</span>
             </button>
           </section>
 
@@ -5031,7 +5034,7 @@
                 <h3 class="sq-roster-title" data-i18n="members">Members</h3>
                 <span class="sq-count" id="squad-roster-count" aria-live="polite">0</span>
               </div>
-              <div class="sq-tools">
+              <div class="sq-tools" id="squad-tools" hidden>
                 <label class="sq-search">
                   <svg class="ico" aria-hidden="true"><use href="#i-search" /></svg>
                   <input id="squad-member-q" type="search" placeholder="Search members" data-i18n-ph="searchMembers" autocomplete="off"
@@ -5040,7 +5043,6 @@
               </div>
             </div>
 
-            <p class="sq-solo" id="squad-solo-note" hidden data-i18n="squadSoloNote">You founded this squad. Share the invite link to bring players in.</p>
             <ol class="sq-roster" id="squad-roster" aria-label="Squad leaderboard"></ol>
             <p class="sq-roster-empty" id="squad-roster-empty" hidden data-i18n="noMembersMatch">No members match that search.</p>
           </div>
