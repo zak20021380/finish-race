@@ -29,8 +29,9 @@
  * "Your Standing" module to the two IQ boards.
  * Identity: TIQ (Tactical IQ) is the hero metric — gold digits with the brain
  * glyph, on the HUD pills, the podium and the ladder. #i-cup is reserved for
- * season prizes. The four mind tiers (Rookie / Tactician / Strategist /
- * Grandmaster) are an aura colour driven off your TIQ, never a badge word.
+ * season prizes. The four mind tiers stay an aura colour on the ladder; the
+ * podium and your standing strip condense them into one esports league word
+ * (Rookie / Pro / Elite / Legend), never a second rank number.
  */
 import {
   formatCountdown,
@@ -136,6 +137,18 @@ function divisionOf(tiq: number): { tier: MindTier; label: string; next: number 
   const next = div === DIVISION.length - 1 && tier === 'grandmaster' ? 0 : lo + step * (div + 1);
   return { tier, label: `${TIER_NAME[tier]} ${DIVISION[div]}`, next: Math.ceil(next) };
 }
+
+/** The podium's esports league: the same four TIQ bands, cut down to one word. */
+type League = 'rookie' | 'pro' | 'elite' | 'legend';
+
+const LEAGUE_OF_TIER: Record<MindTier, { key: League; label: string }> = {
+  rookie: { key: 'rookie', label: 'Rookie' },
+  tactician: { key: 'pro', label: 'Pro' },
+  strategist: { key: 'elite', label: 'Elite' },
+  grandmaster: { key: 'legend', label: 'Legend' },
+};
+
+const leagueOf = (tiq: number): { key: League; label: string } => LEAGUE_OF_TIER[tierOf(tiq)];
 
 /** A win is worth 120 TIQ and it also lands a game (+20) — the same formula myTrophyScore uses. */
 const TIQ_PER_WIN = 140;
@@ -1464,24 +1477,74 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   /**
-   * A player's face is the hero: a monogram under their Telegram photo, with the
-   * nation pinned as a minted micro badge on the avatar's bottom-end corner. The
-   * photo removes itself on error, so a slow or expired CDN still leaves a person.
+   * A player's face is the hero: their Telegram photo over a generated neon
+   * operative, with the nation pinned as a minted micro badge on the avatar's
+   * bottom-end corner. A missing or expired photo still leaves a person — never
+   * a bare letter — because the generated portrait is deterministic per name.
    */
   function paintFace(host: HTMLElement, name: string, code: string | null, photo: string | null): void {
-    const mark = document.createElement('b');
-    mark.className = 'av-mono';
-    mark.textContent = initials(name);
-    host.dataset.len = String(mark.textContent.length);
-    host.append(mark);
+    host.append(agentAvatar(name));
     paintPhoto(host, photo);
     if (code) host.append(flagPhoto(code, 'fp-pin'));
   }
 
+  /* ---- generated agent portraits -------------------------------------------
+     Six neon palettes × three visor cuts, seeded from the player's own name, so
+     a squad-mate who never uploaded a photo still reads as an operator. The art
+     lives in SVG: it scales from the 36px ladder face to the 52px champion stone
+     without a raster asset, and the host's circular ring crops it cleanly. */
+  const AGENT_PALETTE = [
+    { a: '#22D3EE', aSoft: 'rgba(34, 211, 238, .26)', bSoft: 'rgba(14, 165, 233, .3)' },
+    { a: '#A78BFA', aSoft: 'rgba(167, 139, 250, .26)', bSoft: 'rgba(124, 58, 237, .3)' },
+    { a: '#FBBF24', aSoft: 'rgba(251, 191, 36, .24)', bSoft: 'rgba(245, 158, 11, .28)' },
+    { a: '#34D399', aSoft: 'rgba(52, 211, 153, .24)', bSoft: 'rgba(16, 185, 129, .28)' },
+    { a: '#FB7185', aSoft: 'rgba(251, 113, 133, .24)', bSoft: 'rgba(244, 63, 94, .28)' },
+    { a: '#93C5FD', aSoft: 'rgba(147, 197, 253, .24)', bSoft: 'rgba(96, 165, 250, .28)' },
+  ];
+
+  /** Three visor cuts: band + antenna, twin slits + grille, diagonal band + spark. */
+  const AGENT_VISORS = [
+    `<path class="ag-visor" d="M22.5 23.6c0-2 1.6-3.6 3.6-3.6h11.8c2 0 3.6 1.6 3.6 3.6v2.8c0 2-1.6 3.6-3.6 3.6H26.1c-2 0-3.6-1.6-3.6-3.6Z"/>
+     <path class="ag-glint" d="M25.2 22.6h13.6"/>
+     <path class="ag-antenna" d="M32 14.8V11"/>
+     <circle class="ag-spark" cx="32" cy="9.8" r="1.7"/>`,
+    `<path class="ag-visor" d="M23 22.4 29.4 21v3.5L23 26Z"/>
+     <path class="ag-visor" d="M41 22.4 34.6 21v3.5L41 26Z"/>
+     <path class="ag-grille" d="M25.4 31.4h13.2M27 34.3h10"/>
+     <path class="ag-glint" d="M21.6 18.6c2.6-3.5 6.2-5.2 10.4-5.2"/>`,
+    `<path class="ag-visor" d="M22.5 24.4c0-2 1.6-3.6 3.6-3.6h11.8c2 0 3.6 1.6 3.6 3.6v1.2c0 2-1.6 3.6-3.6 3.6H26.1c-2 0-3.6-1.6-3.6-3.6Z"/>
+     <path class="ag-cut" d="M24.2 29.6 40.4 21.4v2.4L26.2 32.1Z"/>
+     <circle class="ag-spark" cx="43.2" cy="19.8" r="1.4"/>`,
+  ];
+
+  function agentAvatar(seed: string): HTMLElement {
+    const wrap = document.createElement('span');
+    wrap.className = 'av-gen';
+    wrap.setAttribute('aria-hidden', 'true');
+    const h = hashOf(seed || 'agent');
+    const pal = AGENT_PALETTE[h % AGENT_PALETTE.length];
+    wrap.style.setProperty('--av-a', pal.a);
+    wrap.style.setProperty('--av-a-soft', pal.aSoft);
+    wrap.style.setProperty('--av-b-soft', pal.bSoft);
+    wrap.innerHTML = `<svg class="av-gen-art" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+      <circle class="ag-halo" cx="32" cy="31" r="29"/>
+      <circle class="ag-orbit" cx="32" cy="31" r="22.5"/>
+      <path class="ag-grid" d="M32 3v56M3 31h58"/>
+      <path class="ag-neck" d="M27.4 33.5h9.2v13h-9.2Z"/>
+      <path class="ag-body" d="M5.5 64c1.6-11 10.2-18 26.5-18s24.9 7 26.5 18Z"/>
+      <path class="ag-collar" d="M19.5 47.5 25 51.8l7 2.2 7-2.2 5.5-4.3"/>
+      <path class="ag-emblem" d="M32 52.4 35.2 55.2 32 58l-3.2-2.8Z"/>
+      <circle class="ag-head" cx="32" cy="26" r="11.2"/>
+      ${AGENT_VISORS[(h >> 3) % AGENT_VISORS.length]}
+    </svg>`;
+    return wrap;
+  }
+
   /**
    * One photo layer for any crest: transparent until real pixels arrive, so the
-   * monogram underneath is never covered by a slow (or 1x1 placeholder) response.
-   * `hidden` would deadlock a lazy image, so the face fades in instead.
+   * monogram or generated portrait underneath is never covered by a slow (or 1x1
+   * placeholder) response. `hidden` would deadlock a lazy image, so the face
+   * fades in instead.
    */
   function paintPhoto(host: HTMLElement, photo: string | null | undefined): void {
     const src = photoSrc(photo);
@@ -1520,6 +1583,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     rank: number;
     name: string;
     score: string;
+    /** Player entry: the raw TIQ behind `score`, which names the league on the card. */
+    tiq?: number;
     /** Nation entry: the flag photo, with the ISO chip as its own fallback. */
     code?: string;
     /** Player entry: the crest is their own face, with the nation pinned to its corner. */
@@ -1561,11 +1626,25 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return chip;
   }
 
+  /** The esports league read off a player's TIQ, in the slot the serial chip took. */
+  function leagueChip(l: { key: League; label: string }): HTMLElement {
+    const chip = document.createElement('span');
+    chip.className = 'pod-tier';
+    chip.dataset.tier = l.key;
+    chip.append(svgIcon('#i-gem', 'pod-tier-ico'));
+    const word = document.createElement('b');
+    word.textContent = l.label;
+    chip.append(word);
+    chip.title = `${l.label} league`;
+    return chip;
+  }
+
   /**
-   * Card order is avatar → name → serial → TIQ → plinth. The plinth stays the
+   * Card order is avatar → name → league → TIQ → plinth. The plinth stays the
    * last child because it is the card's base: appending the join key after it
-   * would float the base into the middle of the card. Only a minted honor earns
-   * the serial line, so a card without one keeps the clean two-line silhouette.
+   * would float the base into the middle of the card. Player cards wear their
+   * league word in the slot the serial chip used to fill — the pedestal already
+   * owns the rank, so a second number there read as a duplicate.
    */
   function podiumCard(e: PodiumEntry): HTMLElement {
     const card = document.createElement('div');
@@ -1576,13 +1655,17 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const honor = e.medal
       ? `, ${e.medal.def.name}${e.medal.serial !== null ? ` edition ${e.medal.serial}` : ''}`
       : '';
+    const league = typeof e.tiq === 'number' ? leagueOf(e.tiq) : null;
     const membership = typeof e.members === 'number' ? `, ${membersLine(e.members)}` : '';
     card.setAttribute(
       'aria-label',
-      `Rank ${e.rank}: ${e.name}${honor}${membership}, ${e.score} Tactical IQ${e.onTap ? `. Activate to ${e.tapHint ?? 'inspect'}.` : ''}`,
+      `Rank ${e.rank}: ${e.name}${honor}${league ? `, ${league.label} league` : ''}${membership}, ${e.score} Tactical IQ${e.onTap ? `. Activate to ${e.tapHint ?? 'inspect'}.` : ''}`,
     );
 
+    /* The champion wears the crown; the two challengers wear their metal's medal,
+       so the top three share one honor row instead of only the leader carrying it. */
     if (e.rank === 1) card.append(svgIcon('#i-crown', 'pod-crown'));
+    else card.append(svgIcon('#i-medal', `pod-rank-medal ${podiumOf(e.rank)}`));
 
     const av = document.createElement('span');
     av.className = 'pod-av';
@@ -1615,7 +1698,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       membersEl.title = `${e.members.toLocaleString('en-US')} members`;
     }
 
-    const serial = e.medal ? serialChip(e.medal, 'pod-serial') : null;
+    const serial = league ? null : e.medal ? serialChip(e.medal, 'pod-serial') : null;
 
     const iq = document.createElement('span');
     iq.className = 'pod-iq';
@@ -1645,7 +1728,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     card.append(av, nm);
     if (membersEl) card.append(membersEl);
-    if (serial) card.append(serial);
+    if (league) card.append(leagueChip(league));
+    else if (serial) card.append(serial);
     card.append(iq, step);
     if (e.onTap) {
       card.classList.add('is-tappable');
@@ -1858,8 +1942,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   /**
    * The Top Minds strip: one 48px row reading where you stand (metal rank badge),
-   * who you are (clay avatar · "You" · minted serial · percentile chip) and what
-   * you hold (TIQ). The next-division milestone is deliberately not a line of its
+   * who you are (clay avatar · "You" · minted serial · league chip) and what you
+   * hold (TIQ). The next-division milestone is deliberately not a line of its
    * own — it rides the strip's tooltip and accessible name, so the HUD stays one
    * row without losing the fact.
    */
@@ -1905,21 +1989,22 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     idWrap.className = 'mh-id';
     const line = document.createElement('b');
     line.className = 'mh-line';
-    line.textContent = 'You';
+    line.textContent = t('you');
     const serial = own ? serialChip(own, 'mh-serial', true) : null;
-    const pctText = !onBoard
+    /* The capsule names the league, never the raw percentile: the old floor
+       label leaked a data read into a label slot. Placement still rides the title. */
+    const league = leagueOf(tiq);
+    const placement = !onBoard
       ? 'Unranked'
       : pct >= 100
-        ? 'Bottom'
+        ? `Below the top ${field}`
         : `Top ${pct}%`;
+    const read = onBoard ? `${placement} of minds` : 'Play a race to take a place on the ladder';
     const chip = document.createElement('span');
     chip.className = 'mh-chip';
-    chip.textContent = pctText;
-    chip.title = !onBoard
-      ? 'Play a race to take a place on the ladder'
-      : pct >= 100
-        ? `Below the top ${field}`
-        : `Top ${pct}% of minds`;
+    if (onBoard) chip.dataset.tier = league.key;
+    chip.textContent = onBoard ? league.label : placement;
+    chip.title = onBoard ? `${read} · ${div.label}` : read;
     idWrap.append(line);
     if (serial) idWrap.append(serial);
     idWrap.append(chip);
@@ -1946,10 +2031,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const honor = own
       ? ` · ${own.def.name}${own.serial !== null ? ` edition ${own.serial} of ${own.def.cap}` : ''}`
       : '';
-    host.title = `${where} · ${div.label} · ${chip.title} · ${milestone}${honor}`;
+    host.title = `${where} · ${div.label} · ${read} · ${milestone}${honor}`;
     host.setAttribute(
       'aria-label',
-      `Your Standing: ${youLabel()}, ${where}, ${div.label}, ${tiq.toLocaleString('en-US')} Tactical IQ, ${chip.title}, ${milestone}${honor}`,
+      `Your Standing: ${youLabel()}, ${where}, ${div.label}, ${tiq.toLocaleString('en-US')} Tactical IQ, ${read}, ${milestone}${honor}`,
     );
   }
 
@@ -2770,6 +2855,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       rank: i + 1,
       name: p.name,
       score: p.points.toLocaleString('en-US'),
+      tiq: p.points,
       code: p.countryCode,
       person: true,
       photo: p.avatar,
