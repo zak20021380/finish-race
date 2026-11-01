@@ -52,7 +52,7 @@ export const CLASH_COPY: Record<ClashLang, ClashCopy> = {
       'MIND VS MIND: OUTTHINK OR BE OUTPLAYED',
       'DEFEND YOUR TERRITORY. CONTROL THE BOARD.',
     ],
-    loneSquad: '⚡ Lone Tactician',
+    loneSquad: '⚡ Lone Operative',
     noNation: 'Unranked Territory',
     youLabel: 'Player',
     rivalLabel: 'Rival',
@@ -201,14 +201,14 @@ export const BOT_HANDLES: readonly string[] = [
 ];
 
 /**
- * Elite rival squads, one pool per tier: the easy machine leads a academy side, the hard one leads
- * something with a reputation. These are the *rival* squads — the player's own squad comes from
- * the compete/squads system.
+ * Elite rival squads, one pool per machine level: the easy machine leads an academy side, the hard
+ * one leads something with a reputation. These are the *rival* squads — the player's own squad comes
+ * from the compete/squads system.
  */
 export const BOT_SQUADS: Record<ClashTier, readonly string[]> = {
   easy: ['Iron Cadets', 'Signal Recruits', 'Vector Academy'],
-  normal: ['Neural Vanguard', 'Apex Strategists', 'Cobalt Protocol'],
-  hard: ['Obsidian Cortex', 'Grandmaster Syndicate', 'Titan Directive'],
+  normal: ['Neural Vanguard', 'Apex Directive', 'Cobalt Protocol'],
+  hard: ['Obsidian Cortex', 'Sovereign Syndicate', 'Titan Directive'],
 };
 
 /** Squads an online rival carries when their seat broadcasts none. */
@@ -217,7 +217,7 @@ export const RIVAL_SQUADS: readonly string[] = [
   'Onyx Directorate', 'Blue Shift', 'Fork Patrol', 'Last Rank Alliance',
 ];
 
-/** TIQ bands per tier, so a Hard bot sits in the Strategist-to-Grandmaster range like a real one. */
+/** TIQ bands per machine level, so a Hard bot sits in the top range like a real mind would. */
 const TIQ_BAND: Record<ClashTier, [number, number]> = { easy: [420, 980], normal: [1080, 1980], hard: [2150, 3450] };
 
 export interface RivalPersona {
@@ -225,17 +225,12 @@ export interface RivalPersona {
   /** Alpha-2 ISO code, always one of `RIVAL_NATIONS`. */
   country: string;
   squad: string;
-  /** The Mind Tier word the crest wears. */
-  tier: 'rookie' | 'tactician' | 'strategist' | 'grandmaster';
   tiq: number;
   initial: string;
 }
 
-const tierOfTiq = (tiq: number): RivalPersona['tier'] =>
-  tiq >= 3000 ? 'grandmaster' : tiq >= 2000 ? 'strategist' : tiq >= 1000 ? 'tactician' : 'rookie';
-
 /**
- * A machine seat as a person: handle, banner, squad and a TIQ that matches the tier it plays at.
+ * A machine seat as a person: handle, banner, squad and a TIQ that matches the level it plays at.
  * `offset` is the seat index — it is what keeps two bots in one room from wearing the same flag.
  */
 export function botPersona(id: string, tier: ClashTier, offset = 0): RivalPersona {
@@ -246,7 +241,6 @@ export function botPersona(id: string, tier: ClashTier, offset = 0): RivalPerson
     name,
     country: RIVAL_NATIONS[(hashSeed(`${id}|bot`) + offset * 11) % RIVAL_NATIONS.length],
     squad: pickAt(BOT_SQUADS[tier], `${id}|${tier}`, offset),
-    tier: tierOfTiq(tiq),
     tiq,
     initial: name.charAt(0).toUpperCase(),
   };
@@ -258,7 +252,6 @@ export function rivalPersona(id: string, name: string, tiq: number, offset = 0):
     name,
     country: RIVAL_NATIONS[(hashSeed(`${id}|nat`) + offset * 11) % RIVAL_NATIONS.length],
     squad: pickAt(RIVAL_SQUADS, `${id}|squad`, offset),
-    tier: tierOfTiq(tiq),
     tiq,
     initial: (name.trim().charAt(0) || '?').toUpperCase(),
   };

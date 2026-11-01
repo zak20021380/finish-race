@@ -55,7 +55,7 @@ import {
 } from './gamemodes';
 import type { Lobby, LobbyRace } from './lobby';
 import {
-  createMatchmaking, myTier, myTiq, onlineRace, onlineSearch, type OnlineSession, type RaceEnd,
+  createMatchmaking, myTiq, onlineRace, onlineSearch, type OnlineSession, type RaceEnd,
 } from './matchmaking';
 import { createAdmin, onRuntime, recordRace, runtime, tiqFrom, type Admin } from './admin';
 import { arena, arenaLocked, onAward, startArenaSync } from './arenaState';
@@ -1785,7 +1785,7 @@ function clashRivals(): VsRival[] {
     }
     if (!out.length) {
       const o = active.opponent;
-      out.push({ id: o.id, name: o.name, avatarUrl: o.avatarUrl, country: o.flag ?? null, tiq: o.tiq, tier: o.tier });
+      out.push({ id: o.id, name: o.name, avatarUrl: o.avatarUrl, country: o.flag ?? null, tiq: o.tiq });
     }
     return out;
   }
@@ -2792,7 +2792,6 @@ const announcements = createAnnouncements({
 /* ---- Admin Command Center: the Home FAB and the live-ops stage (src/admin.ts) ---- */
 admin = createAdmin({
   note: showNote,
-  tier: myTier,
   /* the stage is not a router screen, so it shows the BackButton itself while it is up */
   onToggle: (open) => setBackButton(open || router.current !== 'home'),
   /* a dispatch lands on this device the same beat it lands anywhere else */

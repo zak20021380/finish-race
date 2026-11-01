@@ -36,7 +36,7 @@ import {
   squadMark, telegramAvatarUrl, type RankedSquad, type SquadKind,
 } from './squads';
 import {
-  ARENA_CUP, arrangeRoster, arenaStandingOf, buildSquadRoster,
+  ARENA_CUP, arrangeRoster, buildSquadRoster,
   type SquadMember, type SquadRole, type SquadRoster,
 } from './squadRoster';
 import { showToast } from './toast';
@@ -46,7 +46,7 @@ import {
   type SquadChatPreview, type SquadVerifyResult,
 } from './squadRegister';
 import { copyText } from './gamemodes';
-import { myTiq, TIER_NAME, tierOf, type MindTier } from './matchmaking';
+import { myTiq } from './matchmaking';
 import { refreshReferral, referralCode, referralLink, referralShareUrl } from './referral';
 import { playReward } from './sound';
 import { perspectiveRamps, type CosKind, type PieceColor } from './themes';
@@ -1147,7 +1147,6 @@ export function createMenu(api: MenuApi): Menu {
     const members = s ? s.members : 1;
     const rank = s?.rank ?? 0;
 
-    sqpCrest.dataset.tier = arenaStandingOf(tiq).tier;
     sqpMark.textContent = s ? squadMark(s) : squadLetter({ handle, name });
     sqpName.dir = 'auto';
     sqpName.textContent = name;
@@ -1710,23 +1709,8 @@ export function createMenu(api: MenuApi): Menu {
   const frameName = (id: string | null): string =>
     FRAMES.find((f) => f.id === id)?.name ?? 'Default';
 
-  /* Competitive division mirrors the Mind Ladder bands exactly:
-     0-999 Rookie, 1000-1999 Tactician, 2000-2999 Strategist, 3000+ Grandmaster,
-     each split into I / II / III. TIQ is the only source, never the XP level. */
-  const TIER_BAND: Record<MindTier, [number, number]> = {
-    rookie: [0, 1000],
-    tactician: [1000, 2000],
-    strategist: [2000, 3000],
-    grandmaster: [3000, 4000],
-  };
-  const DIVISION = ['I', 'II', 'III'] as const;
-  const divisionFor = (tiq: number): { tier: MindTier; label: string } => {
-    const tier = tierOf(tiq);
-    const [lo, hi] = TIER_BAND[tier];
-    const step = (hi - lo) / DIVISION.length;
-    const slot = Math.min(DIVISION.length - 1, Math.floor(Math.max(0, tiq - lo) / step));
-    return { tier, label: `${TIER_NAME[tier]} ${DIVISION[slot]}` };
-  };
+  /* TIQ is the only competitive reading: the league divisions were removed from the design,
+     so nothing on this card names a band any more. */
 
   const paintHeroExtras = (lv: { n: number; got: number; need: number }) => {
     /* recessed profile XP bar mirrors Home's bar (same levelInfo source). */
@@ -1738,14 +1722,13 @@ export function createMenu(api: MenuApi): Menu {
       pfBar.setAttribute('aria-valuemax', String(lv.need));
       pfBar.setAttribute('aria-valuetext', `Level ${lv.n}, ${lv.got} of ${lv.need} XP`);
     }
-    /* TIQ is the flagship stat: the number, and the real Mind Ladder division it buys. */
+    /* TIQ is the flagship stat: the number and the unit, with no league word beside it. */
     const tiq = myTiq();
-    const division = divisionFor(tiq);
     const tiqValue = document.getElementById('pf-tiq');
     if (tiqValue) tiqValue.textContent = en(tiq);
     const tiqPill = document.getElementById('pf-tiq-pill');
     if (tiqPill) {
-      const label = `${en(tiq)} Tactical IQ, ${division.label}`;
+      const label = `${en(tiq)} Tactical IQ`;
       tiqPill.setAttribute('aria-label', label);
       tiqPill.setAttribute('title', label);
     }

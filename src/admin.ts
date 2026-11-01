@@ -58,7 +58,6 @@ import {
   type AdminFailure,
 } from './adminApi';
 import type { Broadcast } from './broadcasts';
-import type { MindTier } from './matchmaking';
 import {
   ARENA_TIER_IDS, SEASON_LENGTH_MS, adoptArena, arena, arenaLocked, countdownPill,
   datetimeLocalValue, fullCountdown, nextSeasonName, onArena, parseDatetimeLocal, seasonLabel,
@@ -122,8 +121,6 @@ export interface AdminRuntime {
   radiusNormal: number;
   /** The widened radius, once a seat asks for more. */
   radiusWide: number;
-  /** Force the ladder's aura for a preview, or null to read it off the TIQ. */
-  tierOverride: MindTier | null;
 }
 
 /** The coin multiplier a Double-Coins event steps through. */
@@ -144,19 +141,9 @@ export const DEFAULT_RUNTIME: AdminRuntime = {
   blitz: CONFIG.TURN_TIME_LIMIT,
   radiusNormal: 250,
   radiusWide: 600,
-  tierOverride: null,
 };
 
 const RUNTIME_KEY = 'detour.admin.v1';
-
-/** The four mind tiers, in ladder order, and what the panel calls them. */
-const TIERS: readonly MindTier[] = ['rookie', 'tactician', 'strategist', 'grandmaster'];
-const TIER_LABEL: Record<MindTier, string> = {
-  rookie: 'Rookie',
-  tactician: 'Tactician',
-  strategist: 'Strategist',
-  grandmaster: 'Grandmaster',
-};
 
 /** Every finished race lands this much TIQ; a win adds the rest of `winTiq` on top of it. */
 export const RACE_TIQ = 20;
@@ -184,7 +171,6 @@ function loadRuntime(): AdminRuntime {
     blitz: pickOne(BLITZ_STEPS, raw.blitz, d.blitz),
     radiusNormal: Math.round(pickNum(raw.radiusNormal, d.radiusNormal, 50, 2000)),
     radiusWide: Math.round(pickNum(raw.radiusWide, d.radiusWide, 100, 4000)),
-    tierOverride: TIERS.includes(raw.tierOverride as MindTier) ? (raw.tierOverride as MindTier) : null,
   };
 }
 
@@ -1095,8 +1081,6 @@ async function pushSquadAction(id: string, action: SquadAction): Promise<SquadAc
 export interface AdminApi {
   /** The board's own toast (`showNote` in main.ts): the panel speaks in the game's voice. */
   note(msg: string, error: boolean, ttl: number): void;
-  /** The tier the ladder currently reads — the preview swatch falls back to it. */
-  tier(): MindTier;
   /** The stage opened or closed: the shell shows the Telegram BackButton while it is up. */
   onToggle(open: boolean): void;
   /** A broadcast just left the Command Center: the client engine raises it on this device at once. */
@@ -1477,8 +1461,6 @@ export function createAdmin(api: AdminApi): Admin {
   const stepRows = [...(stage?.querySelectorAll<HTMLElement>('[data-step]') ?? [])];
   const bcInput = $<HTMLInputElement>('bc-input');
   const bcLive = $<HTMLElement>('bc-live');
-  const tierRing = $<HTMLElement>('tool-tier-ring');
-  const tierLabel = $<HTMLElement>('tool-tier-label');
   const coinsNow = $<HTMLElement>('tool-coins-now');
   const tiqNow = $<HTMLElement>('tool-tiq-now');
   const resetBtn = $<HTMLButtonElement>('tool-reset');
@@ -1801,13 +1783,6 @@ export function createAdmin(api: AdminApi): Admin {
     }
   }
 
-  function paintTier() {
-    const forced = runtime.tierOverride;
-    const t = forced ?? api.tier();
-    if (tierRing) tierRing.dataset.tier = t;
-    if (tierLabel) tierLabel.textContent = `${TIER_LABEL[t]}${forced ? ' · forced' : ' · from TIQ'}`;
-  }
-
   function paintSave() {
     if (coinsNow) setBalance(coinsNow, profile.coins);
     if (tiqNow) tiqNow.textContent = String(tiqFrom(profile.stats.wins, profile.stats.games, profile.tiqBonus));
@@ -1949,7 +1924,6 @@ export function createAdmin(api: AdminApi): Admin {
     paintDot();
     paintSteps();
     paintBroadcast();
-    paintTier();
     paintSave();
     paintArena();
     paintStats();
@@ -5494,19 +5468,9 @@ export function createAdmin(api: AdminApi): Admin {
   $<HTMLButtonElement>('tool-tiq')?.addEventListener('click', () => {
     const got = earnTiq(200);
     paintSave();
-    paintTier();
     impact('medium');
     notify('success');
     api.note(`+${got} TIQ granted.`, false, 2200);
-  });
-
-  $<HTMLButtonElement>('tool-tier')?.addEventListener('click', () => {
-    const cur = runtime.tierOverride;
-    const next = TIERS[((cur ? TIERS.indexOf(cur) : -1) + 1) % TIERS.length];
-    setRuntime({ tierOverride: next });
-    paintTier();
-    impact('light');
-    api.note(`Mind tier preview: ${TIER_LABEL[next]}.`, false, 2000);
   });
 
   resetBtn?.addEventListener('click', () => {

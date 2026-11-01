@@ -3258,8 +3258,8 @@
           </div>
 
           <div class="mm-arena">
-            <!-- left contender: you, on a team-blue sphere ringed by your tier aura -->
-            <div class="mm-pod is-you" id="mm-you" data-tier="rookie">
+            <!-- left contender: you, on a team-blue sphere ringed by your own aura -->
+            <div class="mm-pod is-you" id="mm-you">
               <span class="mm-pod-role">Player</span>
               <span class="mm-orb">
                 <span class="mm-aura" aria-hidden="true"></span>
@@ -3270,7 +3270,6 @@
                 <span class="mm-flag" id="mm-you-flag" aria-hidden="true"></span>
               </span>
               <span class="mm-pod-name" id="mm-you-name">You</span>
-              <span class="mm-pod-tier" id="mm-you-tier">Rookie</span>
               <span class="mm-plaque"><svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg><b id="mm-you-tiq">0</b></span>
             </div>
 
@@ -3302,7 +3301,7 @@
             </div>
 
             <!-- right contender: a live scanner until the match locks in -->
-            <div class="mm-pod is-rival" id="mm-rival" data-tier="rookie">
+            <div class="mm-pod is-rival" id="mm-rival">
               <span class="mm-pod-role">Rival</span>
               <span class="mm-orb">
                 <span class="mm-aura" aria-hidden="true"></span>
@@ -3315,14 +3314,13 @@
                 <span class="mm-flag" id="mm-rival-flag" aria-hidden="true"></span>
               </span>
               <span class="mm-pod-name" id="mm-rival-name">Scanning...</span>
-              <span class="mm-pod-tier" id="mm-rival-tier">Unknown</span>
               <span class="mm-plaque"><svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg><b id="mm-rival-tiq">—</b></span>
             </div>
           </div>
 
           <!-- the search console: the cycling line, a segmented sweep, the elapsed clock -->
           <div class="mm-console">
-            <p class="mm-status" id="mm-status" aria-hidden="true">Scanning tactical tier...</p>
+            <p class="mm-status" id="mm-status" aria-hidden="true">Scanning tactical minds...</p>
             <div class="mm-console-row" aria-hidden="true">
               <span class="mm-seg"><i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i><i style="--i:3"></i><i style="--i:4"></i><i style="--i:5"></i><i style="--i:6"></i><i style="--i:7"></i><i style="--i:8"></i><i style="--i:9"></i><i style="--i:10"></i><i style="--i:11"></i></span>
               <p class="mm-timer">Elapsed: <b id="mm-elapsed">00:00</b></p>
@@ -3345,7 +3343,7 @@
           <!-- a quiet queue: the stage stops promising and offers two ways out -->
           <div class="mm-fallback" id="mm-fallback" hidden>
             <button class="btn btn-ghost" type="button" id="mm-expand"
-              aria-label="Widen the search radius, look beyond your tier">Widen search</button>
+              aria-label="Widen the search radius, look beyond your TIQ band">Widen search</button>
             <button class="btn btn-ghost" type="button" id="mm-practice">Practice vs Bot</button>
           </div>
         </div>
@@ -4154,15 +4152,6 @@
               </button>
             </div>
 
-            <div class="adm-tier">
-              <span class="adm-tier-ring" id="tool-tier-ring" data-tier="rookie" aria-hidden="true"></span>
-              <span class="adm-tier-txt">
-                <b id="tool-tier-label">Rookie · from TIQ</b>
-                <span class="adm-tier-s">Rookie → Grandmaster</span>
-              </span>
-              <button class="adm-btn" type="button" id="tool-tier" aria-label="Cycle the Mind tier preview">Cycle</button>
-            </div>
-
             <p class="adm-sec-h">Danger zone</p>
             <button class="adm-btn adm-btn-danger adm-btn-wide" type="button" id="tool-reset">Reset Local Save</button>
             <p class="adm-note">Two taps: the second wipes coins, items, stats, teams and settings on this device.</p>
@@ -4800,7 +4789,7 @@
 
         <div class="sheet-body sqp-body" data-scroll>
           <header class="sqp-hero">
-            <span class="sq-crest sqp-crest" id="sqp-crest" data-tier="gold" aria-hidden="true">
+            <span class="sq-crest sqp-crest" id="sqp-crest" aria-hidden="true">
               <i class="sq-crest-aura"></i>
               <span class="sq-crest-coin">
                 <span class="sq-crest-face">
@@ -4974,7 +4963,7 @@
           </span>
           <span class="ms-id">
             <b class="ms-name" id="ms-name">Mind</b>
-            <small class="ms-tier" id="ms-tier"></small>
+            <small class="ms-sub" id="ms-sub"></small>
           </span>
           <button class="ms-x" type="button" data-sheet-close aria-label="Close mind profile">
             <span class="ms-x-g" aria-hidden="true">&times;</span>

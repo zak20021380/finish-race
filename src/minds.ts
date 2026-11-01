@@ -8,6 +8,7 @@
  * inside them.
  */
 import { workerUrl } from './adminApi';
+import { telegramAvatarUrl } from './squads';
 import { profile, readJson, writeJson } from './storage';
 import { tgInitData, tgUser } from './telegram';
 
@@ -138,13 +139,20 @@ function readStanding(raw: unknown, fallbackTiq: number): MindStanding | null {
   };
 }
 
+function myPhoto(): string {
+  const u = tgUser();
+  /* the signed photo_url first; without it the same face is reachable through the public
+     userpic for the handle — a letter monogram is only the last resort, never the portrait */
+  return photoUrl(u?.photo_url ?? '') || photoUrl(telegramAvatarUrl(u?.username ?? ''));
+}
+
 function localRow(standing: MindStanding): MindRowData {
   return {
     rank: 0,
     id: 'you',
     name: myName(),
     countryCode: myCountry(),
-    avatar: photoUrl(tgUser()?.photo_url ?? ''),
+    avatar: myPhoto(),
     tiq: standing.tiq,
     wins: Math.max(0, Math.floor(profile.stats.wins)),
     trend: 'same',

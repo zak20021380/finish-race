@@ -41,21 +41,12 @@
 
   /* ---- Mind Ladder: TIQ is the hero metric, the brain is its token ----
      A TIQ reading is always gold; on the home podium the explicit "TIQ" unit and
-     the brain badge close the digits, never a trophy. The four mind tiers each own
-     one aura (ring colour + bloom) on the ladder sheet, so a Grandmaster and a
-     Rookie are separable without a badge word. Violet is the aura hue; cyan stays
-     "active", coral stays "the one loud action". */
+     the brain badge close the digits, never a trophy. The league tiers are gone
+     from the design, so a standing is a rank and a number and nothing else.
+     Violet is the aura hue; cyan stays "active", coral stays "the one loud action". */
   --tiq: #FCD34D;
   --violet: #A78BFA;
   --violet-soft: rgba(167, 139, 250, .16);
-  --tier-rookie: #94A3B8;
-  --tier-rookie-glow: rgba(148, 163, 184, .34);
-  --tier-tactician: #38BDF8;
-  --tier-tactician-glow: rgba(56, 189, 248, .42);
-  --tier-strategist: #A78BFA;
-  --tier-strategist-glow: rgba(167, 139, 250, .45);
-  --tier-grandmaster: #FCD34D;
-  --tier-grandmaster-glow: rgba(252, 211, 77, .5);
   /* Zone A and Zone B own fixed bands so the ladder's budget never drifts. */
   --ml-head-h: 56px;
   --ml-seg-h: 40px;
@@ -13912,12 +13903,7 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
     inset 0 0 0 1px rgba(255, 255, 255, .06),
     0 -20px 44px -20px var(--shadow);
 }
-/* A mind wears its aura on the ring, the tier word and the axis glyphs. A guild carries
-   no tier — openGuild() drops the attribute — so every var() below falls back to sky. */
-#sheet-mind[data-tier="rookie"]      { --ml-aura: var(--tier-rookie); }
-#sheet-mind[data-tier="tactician"]   { --ml-aura: var(--tier-tactician); }
-#sheet-mind[data-tier="strategist"]  { --ml-aura: var(--tier-strategist); }
-#sheet-mind[data-tier="grandmaster"] { --ml-aura: var(--tier-grandmaster); }
+/* One aura for every mind: the ring reads --ml-aura's own sky fallback, never a league colour. */
 
 .ms-head { flex: none; display: flex; align-items: center; gap: var(--s2); min-width: 0; }
 /* The flag rides the corner of the avatar, so the identity column keeps its width at 320. */
@@ -13958,7 +13944,7 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ms-tier {
+.ms-sub {
   font-size: 9.5px;
   font-weight: 900;
   letter-spacing: .06em;
@@ -13970,7 +13956,7 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
   text-overflow: ellipsis;
 }
 /* a mind carries no rank tier: hide the subtitle slot entirely when it is empty */
-.ms-tier:empty { display: none; }
+.ms-sub:empty { display: none; }
 /* 48px circular clay key: the house extrusion, sunk by the same travel as .gm-key */
 .ms-x {
   --d: 3px;
@@ -14277,7 +14263,7 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
 }
 
 /* the subtitle carries the community kind and its handle, never the rank again */
-#sheet-mind.is-guild .ms-tier {
+#sheet-mind.is-guild .ms-sub {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -14285,7 +14271,7 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
 }
 #sheet-mind.is-guild .ms-name { letter-spacing: -.015em; }
 .ms-kind { flex: none; color: var(--brand-ink); }
-.ms-tier-dot {
+.ms-sub-dot {
   flex: none;
   width: 3px;
   height: 3px;
@@ -14453,13 +14439,13 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
 /* ---- the 320 floor: the type tag wraps before the handle is cut, and the
         third card's quiet tag keeps its words instead of ellipsising them ---- */
 @media (max-width: 359px) {
-  #sheet-mind.is-guild .ms-tier {
+  #sheet-mind.is-guild .ms-sub {
     flex-direction: column;
     align-items: flex-start;
     gap: 0;
     white-space: normal;
   }
-  #sheet-mind.is-guild .ms-tier-dot { display: none; }
+  #sheet-mind.is-guild .ms-sub-dot { display: none; }
   .ms-squad-lbl { font-size: 7.5px; letter-spacing: .04em; }
   .ms-squad-card.is-empty .ms-squad-v {
     font-size: 7.5px;
@@ -14649,8 +14635,8 @@ html.reduced-motion .mm.is-found::after { animation: none; opacity: .34; }
 }
 
 .mm-pod {
-  --aura: var(--tier-rookie);
-  --aura-glow: var(--tier-rookie-glow);
+  --aura: #38BDF8;
+  --aura-glow: rgba(56, 189, 248, .42);
   --pod-shine: rgba(125, 211, 252, .5);
   position: relative;
   min-width: 0;
@@ -14681,11 +14667,7 @@ html.reduced-motion .mm.is-found::after { animation: none; opacity: .34; }
   border-radius: 1px;
   background: linear-gradient(90deg, rgba(255, 255, 255, 0), var(--pod-shine), rgba(255, 255, 255, 0));
 }
-.mm-pod.is-rival { --pod-shine: rgba(252, 211, 77, .46); }
-/* the tier is an aura colour, exactly as the ladder prints it */
-.mm-pod[data-tier="tactician"] { --aura: var(--tier-tactician); --aura-glow: var(--tier-tactician-glow); }
-.mm-pod[data-tier="strategist"] { --aura: var(--tier-strategist); --aura-glow: var(--tier-strategist-glow); }
-.mm-pod[data-tier="grandmaster"] { --aura: var(--tier-grandmaster); --aura-glow: var(--tier-grandmaster-glow); }
+.mm-pod.is-rival { --pod-shine: rgba(252, 211, 77, .46); --aura: #FCD34D; --aura-glow: rgba(252, 211, 77, .5); }
 
 .mm-pod-role {
   flex: none;
@@ -14807,24 +14789,6 @@ html.reduced-motion .mm.is-found::after { animation: none; opacity: .34; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* the tier word carries the aura it is ringed in */
-.mm-pod-tier {
-  flex: none;
-  max-width: 100%;
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, .05);
-  box-shadow: inset 0 0 0 1px var(--aura-glow);
-  font-size: 8.5px;
-  font-weight: 900;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  line-height: 1.5;
-  color: var(--aura);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 /* TIQ is gold + the brain glyph, on a plaque that is extruded like every key */
 .mm-plaque {
   flex: none;
@@ -14855,7 +14819,6 @@ html.reduced-motion .mm.is-found::after { animation: none; opacity: .34; }
 }
 .mm-pod.is-rival:not(.is-locked) .mm-plaque .ico { color: var(--honey-ink); }
 .mm-pod.is-rival:not(.is-locked) .mm-pod-name { color: var(--ink-soft); }
-.mm-pod.is-rival:not(.is-locked) .mm-pod-tier { color: var(--ink-soft); box-shadow: inset 0 0 0 1px var(--hair); }
 
 /* ---- the tactical core: compass ring, sweep, synapse pulses, VS medallion ---- */
 .mm-core {
@@ -17216,34 +17179,6 @@ html.reduced-motion .adm-arena-beacon { animation: none; }
   text-transform: uppercase;
   color: var(--ink-soft);
 }
-
-/* ---- mind tier preview ---- */
-.adm-tier {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  padding: 10px 11px;
-  border-radius: var(--radius-md);
-  background: var(--clay-face);
-  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
-}
-.adm-tier-ring {
-  --aura: var(--tier-rookie);
-  --aura-glow: var(--tier-rookie-glow);
-  flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 38%, rgba(255, 255, 255, .14), transparent 62%), var(--clay-face);
-  box-shadow: inset 0 0 0 3px var(--aura), 0 0 16px -2px var(--aura-glow), var(--clay-spec);
-  transition: box-shadow var(--motion-fast);
-}
-.adm-tier-ring[data-tier="tactician"] { --aura: var(--tier-tactician); --aura-glow: var(--tier-tactician-glow); }
-.adm-tier-ring[data-tier="strategist"] { --aura: var(--tier-strategist); --aura-glow: var(--tier-strategist-glow); }
-.adm-tier-ring[data-tier="grandmaster"] { --aura: var(--tier-grandmaster); --aura-glow: var(--tier-grandmaster-glow); }
-.adm-tier-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.adm-tier-txt b { font-size: var(--t-2); font-weight: 800; color: var(--ink); }
-.adm-tier-s { font-size: var(--t-micro); line-height: 1.25; color: var(--ink-soft); }
 
 /* ---- live server: one readable stack — status, counters, controls, inspector ----
    Four clay groups on the stage instead of one crowded slab: a status card that
@@ -20072,13 +20007,12 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   place-items: center;
   border-radius: 50%;
   color: #fff;
-  background:
-    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, .9) 0%, rgba(255, 255, 255, 0) 42%),
-    radial-gradient(circle at 62% 72%, #38bdf8 0%, #4338ca 70%, #1e1b4b 100%);
+  /* a quiet clay disc: the real Telegram photo is the portrait, and the letter that
+     holds its place while it loads is the only thing this surface is allowed to say */
+  background: radial-gradient(circle at 32% 26%, #2E3A54 0%, #141B2A 72%);
   box-shadow:
-    0 3px 6px rgba(0, 0, 0, .5),
-    inset 0 -3px 5px rgba(0, 0, 0, .45),
-    inset 0 2px 3px rgba(255, 255, 255, .45);
+    inset 0 0 0 1.5px rgba(148, 163, 184, .34),
+    0 2px 5px rgba(0, 0, 0, .5);
 }
 .mind-ini { font-size: 12px; font-weight: 900; letter-spacing: .01em; }
 /* the mind's own photo sits inside the sphere; the nation pin stays on top */
@@ -20098,8 +20032,8 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
 html.reduced-motion .mind-av-img { transition: none; }
 .mind-av .mind-flag {
   position: absolute;
-  right: 0;
-  bottom: 0;
+  inset-inline-end: 0;
+  inset-block-end: 0;
   z-index: 2;
   --fp-d: 13px;
   width: 13px;
@@ -25574,48 +25508,8 @@ html.reduced-motion #s-profile .pf-badge-sync-dot { animation: none; opacity: 1;
   line-height: 1;
   text-shadow: 0 1px 0 rgba(0, 0, 0, .6), 0 0 14px var(--sqc-aura);
 }
-.sq-crest[data-tier="bronze"] {
-  --sqc-hi: #FFEDD5;
-  --sqc-mid: #E8B48A;
-  --sqc-lo: #9A4A1B;
-  --sqc-deep: #3B1D06;
-  --sqc-aura: rgba(232, 180, 138, .4);
-}
-.sq-crest[data-tier="silver"] {
-  --sqc-hi: #F8FAFC;
-  --sqc-mid: #CBD5E1;
-  --sqc-lo: #64748B;
-  --sqc-deep: #1E293B;
-  --sqc-aura: rgba(203, 213, 225, .34);
-}
-.sq-crest[data-tier="gold"] {
-  --sqc-hi: #FEF3C7;
-  --sqc-mid: #FBBF24;
-  --sqc-lo: #B45309;
-  --sqc-deep: #3B1D06;
-  --sqc-aura: rgba(251, 191, 36, .46);
-}
-.sq-crest[data-tier="platinum"] {
-  --sqc-hi: #CFFAFE;
-  --sqc-mid: #67E8F9;
-  --sqc-lo: #0E7490;
-  --sqc-deep: #083344;
-  --sqc-aura: rgba(103, 232, 249, .42);
-}
-.sq-crest[data-tier="diamond"] {
-  --sqc-hi: #E0E7FF;
-  --sqc-mid: #A5B4FC;
-  --sqc-lo: #4338CA;
-  --sqc-deep: #1E1B4B;
-  --sqc-aura: rgba(129, 140, 248, .52);
-}
-.sq-crest[data-tier="challenger"] {
-  --sqc-hi: #FAE8FF;
-  --sqc-mid: #F0ABFC;
-  --sqc-lo: #A21CAF;
-  --sqc-deep: #4A044E;
-  --sqc-aura: rgba(217, 70, 239, .52);
-}
+/* One metal for every crest: the arena divisions no longer tint it, because the
+   league badges were removed from the design. */
 @keyframes sq-crest-breathe {
   0%, 100% { opacity: .72; transform: scale(.96); }
   50% { opacity: 1; transform: scale(1.06); }
@@ -28353,7 +28247,7 @@ html[data-lang="fa"] .sqp-tile-k { font-family: 'Vazirmatn', system-ui, -apple-s
 html[data-lang="fa"] .sqp-tile-k > span { direction: rtl; }
 
 /* ---- squad detail sheet: Persian copy from the right, figures and the handle stay LTR ---- */
-html[data-lang="fa"] :is(.ms-name, .ms-tier, .ms-h, .ms-hero-sub, .ms-ring-c, .ms-squad-lbl, .ms-kind) {
+html[data-lang="fa"] :is(.ms-name, .ms-sub, .ms-h, .ms-hero-sub, .ms-ring-c, .ms-squad-lbl, .ms-kind) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0 !important;
   text-transform: none !important;

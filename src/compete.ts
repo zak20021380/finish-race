@@ -95,50 +95,7 @@ function pickEl(id: string, legacy: string): HTMLElement {
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-/* ---------- Mind Ladder identity: the season clock and the TIQ tiers ---------- */
-
-/** TIQ bands. The tier is an aura colour, never a badge word on the ladder. */
-type MindTier = 'rookie' | 'tactician' | 'strategist' | 'grandmaster';
-
-const TIER_NAME: Record<MindTier, string> = {
-  rookie: 'Rookie',
-  tactician: 'Tactician',
-  strategist: 'Strategist',
-  grandmaster: 'Grandmaster',
-};
-
-/** Grandmaster tops out at 4000 rather than Infinity so its three divisions exist. */
-const TIER_BAND: Record<MindTier, [number, number]> = {
-  rookie: [0, 1000],
-  tactician: [1000, 2000],
-  strategist: [2000, 3000],
-  grandmaster: [3000, 4000],
-};
-
-const DIVISION = ['I', 'II', 'III'];
-
-function tierOf(tiq: number): MindTier {
-  if (tiq >= 3000) return 'grandmaster';
-  if (tiq >= 2000) return 'strategist';
-  if (tiq >= 1000) return 'tactician';
-  return 'rookie';
-}
-
-/**
- * Each aura is split into three visible steps, so "Tactician II" is a place you can
- * see yourself move inside the colour you already wear. `next` is 0 at the peak.
- */
-function divisionOf(tiq: number): { tier: MindTier; label: string; next: number } {
-  const tier = tierOf(tiq);
-  const [lo, hi] = TIER_BAND[tier];
-  const step = (hi - lo) / DIVISION.length;
-  const div = Math.min(DIVISION.length - 1, Math.floor(Math.max(0, tiq - lo) / step));
-  const next = div === DIVISION.length - 1 && tier === 'grandmaster' ? 0 : lo + step * (div + 1);
-  return { tier, label: `${TIER_NAME[tier]} ${DIVISION[div]}`, next: Math.ceil(next) };
-}
-
-/** A win is worth 120 TIQ and it also lands a game (+20) — the same formula myTrophyScore uses. */
-const TIQ_PER_WIN = 140;
+/* ---------- Mind Ladder identity: the season clock ---------- */
 
 /** FNV-1a over an ASCII key: stable across renders, so a seeded figure never jitters. */
 function hashOf(key: string): number {
@@ -1460,31 +1417,33 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
    * corner. The monogram only holds the shape while the real portrait loads, and
    * stays when the seat genuinely has no photo.
    */
-  function paintFace(host: HTMLElement, name: string, code: string | null, photo: string | null): void {
+  function paintFace(host: HTMLElement, name: string, code: string | null, photo: string | null, eager = false): void {
     const mono = document.createElement('b');
     mono.className = 'av-mono';
     const letter = Array.from(name.trim().replace(/^@+/, ''))[0] ?? '?';
     mono.textContent = letter.toUpperCase();
     host.dataset.len = '1';
     host.append(mono);
-    paintPhoto(host, photo);
+    paintPhoto(host, photo, eager);
     if (code) host.append(flagPhoto(code, 'fp-pin'));
   }
 
   /**
    * One photo layer for any crest: transparent until real pixels arrive, so the
    * monogram underneath is never covered by a slow (or 1x1 placeholder) response.
-   * `hidden` would deadlock a lazy image, so the face fades in instead.
+   * `hidden` would deadlock a lazy image, so the face fades in instead. The podium
+   * and the standing strip pass `eager` — they are on screen the moment they paint.
    */
-  function paintPhoto(host: HTMLElement, photo: string | null | undefined): void {
+  function paintPhoto(host: HTMLElement, photo: string | null | undefined, eager = false): void {
     const src = photoSrc(photo);
     if (!src) return;
     const img = document.createElement('img');
     img.className = 'av-photo';
     img.alt = '';
-    img.loading = 'lazy';
+    img.loading = eager ? 'eager' : 'lazy';
     img.decoding = 'async';
     img.referrerPolicy = 'no-referrer';
+    if (eager) img.setAttribute('fetchpriority', 'high');
     img.addEventListener('error', () => img.remove());
     img.addEventListener('load', () => {
       if (img.naturalWidth <= 2 || img.naturalHeight <= 2) {
@@ -1584,7 +1543,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     av.className = 'pod-av';
     av.setAttribute('aria-hidden', 'true');
     if (e.person) {
-      paintFace(av, e.name, e.code ?? null, e.photo ?? null);
+      paintFace(av, e.name, e.code ?? null, e.photo ?? null, true);
     } else if (e.code) {
       av.append(flagBadge(e.code));
     } else {
@@ -1852,9 +1811,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   /**
    * The Top Minds strip: one 48px row reading where you stand (metal rank badge),
    * who you are (clay avatar · "You" · minted serial) and what you hold (TIQ).
-   * The next-division milestone is deliberately not a line of its
-   * own — it rides the strip's tooltip and accessible name, so the HUD stays one
-   * row without losing the fact.
+   * It names no league: the strip is your place and your number, nothing else.
    */
   function paintMindsStanding(rows: PlayerRow[] | null): void {
     const host = soloStandingEl();
@@ -1864,7 +1821,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     host.hidden = false;
 
     const tiq = myTrophyScore();
-    const div = divisionOf(tiq);
     const field = rows?.length ?? 0;
     const ahead = rows ? rows.filter((p) => p.points > tiq).length : 0;
     const onBoard = profile.stats.games > 0 && field > 0;
@@ -1885,7 +1841,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const av = document.createElement('span');
     av.className = 'mh-av';
     const myPhoto = tgUser()?.photo_url || telegramAvatarUrl(tgUser()?.username ?? '');
-    paintFace(av, youName(), profile.country, myPhoto || null);
+    paintFace(av, youName(), profile.country, myPhoto || null, true);
 
     /* the equipped honor is pinned to the avatar rim and its real ledger serial
        rides the identity line — the same coin the Honor sheet and Profile show */
@@ -1922,19 +1878,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (onBoard) host.append(badge);
     host.append(avWrap, idWrap, score);
 
-    const gap = div.next > tiq ? div.next - tiq : 0;
-    const wins = gap > 0 ? Math.ceil(gap / TIQ_PER_WIN) : 0;
-    const milestone = wins
-      ? `${wins} win${wins === 1 ? '' : 's'} to ${divisionOf(div.next).label}`
-      : 'Peak division · hold it against the ladder';
     const where = onBoard ? `Rank ${myRank} of ${field + 1}` : 'Unranked';
     const honor = own
       ? ` · ${own.def.name}${own.serial !== null ? ` edition ${own.serial} of ${own.def.cap}` : ''}`
       : '';
-    host.title = `${where} · ${div.label} · ${read} · ${milestone}${honor}`;
+    host.title = `${where} · ${read}${honor}`;
     host.setAttribute(
       'aria-label',
-      `Your Standing: ${youLabel()}, ${where}, ${div.label}, ${tiq.toLocaleString('en-US')} Tactical IQ, ${read}, ${milestone}${honor}`,
+      `Your Standing: ${youLabel()}, ${where}, ${tiq.toLocaleString('en-US')} Tactical IQ, ${read}${honor}`,
     );
   }
 
@@ -1951,7 +1902,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     marks: document.querySelector<HTMLElement>('#sheet-mind .ms-marks'),
     flag: document.getElementById('ms-flag'),
     name: document.getElementById('ms-name'),
-    tier: document.getElementById('ms-tier'),
+    sub: document.getElementById('ms-sub'),
     body: document.getElementById('ms-body'),
     challenge: document.getElementById('ms-challenge') as HTMLButtonElement | null,
     guild: document.getElementById('ms-guild') as HTMLButtonElement | null,
@@ -1981,12 +1932,30 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     msEls.sheet?.classList.remove('is-guild');
   }
 
-  function msHead(letter: string, code: string | null, name: string, tier: string): void {
-    const { av, flag, name: nm, tier: tr } = msEls;
+  /**
+   * The shared head of both sheets: monogram, nation flag, name, the sub line — and the
+   * seat's own portrait. `photo` is the real Telegram image; it sits over the letter, and a
+   * 1x1 CDN placeholder leaves the monogram in place instead of painting a broken square.
+   */
+  function msHead(letter: string, code: string | null, name: string, sub: string, photo?: string | null): void {
+    const { av, flag, name: nm, sub: tr } = msEls;
     msClearGuild();
     if (av) {
       av.textContent = letter;
       av.dataset.len = String(letter.length);
+    }
+    const img = msEls.photo;
+    if (img) {
+      const seq = ++msPhotoSeq;
+      const src = photoSrc(photo);
+      img.hidden = true;
+      if (src) {
+        img.onload = () => { if (seq === msPhotoSeq) img.hidden = img.naturalWidth <= 2 || img.naturalHeight <= 2; };
+        img.onerror = () => { if (seq === msPhotoSeq) img.hidden = true; };
+        img.src = src;
+      } else {
+        img.removeAttribute('src');
+      }
     }
     if (flag) {
       flag.textContent = '';
@@ -1998,8 +1967,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       nm.title = name;
     }
     if (tr) {
-      tr.textContent = tier;
-      tr.title = tier;
+      tr.textContent = sub;
+      tr.title = sub;
     }
   }
 
@@ -2011,13 +1980,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   function msGuildHead(s: RankedSquad, label: string): void {
     const kind = squadKind(s);
     msHead(squadMark(s), null, label, '');
-    const tr = msEls.tier;
+    const tr = msEls.sub;
     if (tr) {
       const tag = document.createElement('span');
       tag.className = 'ms-kind';
       tag.textContent = kind === 'group' ? t('squadTgGroup') : t('squadTgChannel');
       const dot = document.createElement('i');
-      dot.className = 'ms-tier-dot';
+      dot.className = 'ms-sub-dot';
       dot.setAttribute('aria-hidden', 'true');
       const handle = document.createElement('b');
       handle.className = 'ms-handle';
@@ -2205,13 +2174,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const el = msEls.sheet;
     const body = msEls.body;
     if (!el || !body) return;
-    const div = divisionOf(p.points);
     const field = mindsField.length;
     const pct = field > 0 ? Math.max(1, Math.min(99, Math.round((rank / (field + 1)) * 100))) : 100;
     const tiq = p.points.toLocaleString('en-US');
     msPending = { kind: 'mind', name: p.name, tiq: p.points };
-    el.dataset.tier = div.tier;
-    msHead(p.name.slice(0, 1).toUpperCase() || '?', p.countryCode, p.name, '');
+    /* the sheet wears the same face the ladder row does: their real Telegram photo */
+    msHead(p.name.slice(0, 1).toUpperCase() || '?', p.countryCode, p.name, '', p.avatar);
     el.setAttribute('aria-label', `Mind profile: ${p.name}, ${tiq} Tactical IQ`);
     body.textContent = '';
     body.append(
@@ -2239,7 +2207,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const contrib = mine ? getMyContribution() : 0;
     const tiq = s.trophies.toLocaleString('en-US');
     msPending = { kind: 'guild', squad: s };
-    delete el.dataset.tier;
     msGuildHead(s, label);
     el.setAttribute('aria-label', `${label} · ${kindLabel} ${s.handle} · #${s.rank} · ${tiq} TIQ`);
     body.textContent = '';

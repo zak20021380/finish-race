@@ -494,9 +494,11 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       const img = document.createElement('img');
       img.className = 'mind-av-img';
       img.alt = '';
-      img.loading = 'lazy';
+      /* the top of the ladder is above the fold: the face is fetched now, not on scroll */
+      img.loading = 'eager';
       img.decoding = 'async';
       img.referrerPolicy = 'no-referrer';
+      if (p.rank <= 3) img.setAttribute('fetchpriority', 'high');
       img.addEventListener('error', () => img.remove());
       img.addEventListener('load', () => {
         if (img.naturalWidth <= 2 || img.naturalHeight <= 2) {

@@ -24,7 +24,7 @@ import './vsclash.css';
 import { flagPhoto } from './flags';
 import { nameOf } from './countries';
 import { getMySquad } from './squads';
-import { myTier, myTiq, readFace, TIER_NAME, type MindTier } from './matchmaking';
+import { myTiq, readFace } from './matchmaking';
 import { profile } from './storage';
 import { impact, languageCode } from './telegram';
 import { lang, motionReduced } from './settings';
@@ -64,8 +64,6 @@ export interface VsRival {
   country?: string | null;
   squad?: string | null;
   tiq?: number;
-  /** The Mind Tier the seat announced, when it announced one. */
-  tier?: MindTier | null;
   /** The machine's level at this seat, or null for a person. */
   bot?: ClashTier | null;
 }
@@ -97,7 +95,6 @@ interface Fighter {
   avatarUrl: string | null;
   country: string;
   squad: string;
-  tier: MindTier;
   tiq: number;
   /** A rating the seat actually carries. A rival nobody announced one for prints no row at all. */
   rankKnown: boolean;
@@ -159,7 +156,6 @@ function localFighter(copy: ClashCopy): Fighter {
     /* the saved pick wins, then the client's own locale, then the device clock, then its tongue */
     country: resolveNation(profile.country, locales(), zone()),
     squad: bound ? bound.name : copy.loneSquad,
-    tier: myTier(),
     tiq: myTiq(),
     rankKnown: true,
   };
@@ -192,7 +188,6 @@ function rivalFighter(r: VsRival, stakes: VsStakes, seat: number): Fighter {
     avatarUrl: r.avatarUrl ?? null,
     country: !bot && /^[A-Z]{2}$/.test(cc) ? cc : persona.country,
     squad,
-    tier: r.tier ?? persona.tier,
     tiq,
     rankKnown: !!bot || tiq > 0,
   };
@@ -208,7 +203,6 @@ function rivalFighter(r: VsRival, stakes: VsStakes, seat: number): Fighter {
  */
 function paintCard(host: Element, f: Fighter, copy: ClashCopy, compact: boolean, slam: 'l' | 'r'): void {
   const card = el('div', `vsc-side vsc-side--${f.kind}`, host);
-  card.dataset.tier = f.tier;
   card.dataset.accent = f.accent;
   card.dataset.compact = compact ? '1' : '0';
   card.dataset.slam = slam;
@@ -257,19 +251,11 @@ function paintCard(host: Element, f: Fighter, copy: ClashCopy, compact: boolean,
   el('span', 'vsc-squad-t', squad).textContent = f.squad;
   squad.title = f.squad;
 
-  /* the tier is a three-bar icon with its word in whisper type; the nation is a name, not a code */
+  /* the nation closes the card: a name, not a code, and no league chip beside it. The row is
+     always drawn for a ranked seat, so a country-less rival keeps the same three-line card. */
   if (f.rankKnown) {
     const meta = el('div', 'vsc-meta', id);
-    const tier = el('span', 'vsc-tier', meta);
-    tier.dataset.tier = f.tier;
-    tier.title = TIER_NAME[f.tier];
-    tier.setAttribute('aria-hidden', 'true');
-    for (let i = 0; i < 3; i += 1) el('i', 'vsc-pip', tier);
-    label('vsc-tier-t', TIER_NAME[f.tier], meta);
-    if (f.country) {
-      el('span', 'vsc-meta-dot', meta);
-      label('vsc-country', nameOf(f.country), meta);
-    }
+    if (f.country) label('vsc-country', nameOf(f.country), meta);
   }
 }
 

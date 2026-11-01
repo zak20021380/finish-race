@@ -92,6 +92,14 @@ Durable index; dated logs beside this file hold the history.
   `.note` is z-index 4 under the overlay's 10.
 
 ## Design system
+- **NO league tiers anywhere.** Tiers were removed from the design (2026-11-01): no ROOKIE /
+  LEGEND / PRO chips, no `data-tier` auras on pods, cards, sheets, crests or the admin panel.
+  `MindTier`/`tierOf`/`myTier` survive ONLY as the internal queue band (`params.set('tier', …)`);
+  never render it. `VsStakes.tier` is the bot's level, not a league. A standing is a rank + a TIQ.
+- **Portraits are real Telegram photos**, monogram only as the load/error fallback. Ladder and
+  podium fetch `loading=eager` (+`fetchpriority=high` for top 3); `photo_url` first, then
+  `telegramAvatarUrl(username)`. `.mind-av` is a clay disc (never a neon orb) so a missing face
+  is a clean letter.
 - One theme "Dark Clay": opaque slabs, no live blur. Reduced motion is `html.reduced-motion`,
   `applyMotion()` the only writer. Settings uses `--set-pad-x` (never `--s3`). Toggles are amber ON —
   restate both states at (0,4,0). `.stars-head` ≤ 60px. `src/admin.ts` `runtime` = `detour.admin.v1`.

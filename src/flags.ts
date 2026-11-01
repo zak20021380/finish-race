@@ -34,11 +34,12 @@ function makeImage(cc: string, wrap: HTMLElement, chip: HTMLElement, px: number)
   img.decoding = 'async';
   img.draggable = false;
   img.dataset.cc = cc;
-  img.dataset.tier = '0';
+  /* the flag's own two-step fallback: photo first, then the bundled SVG */
+  img.dataset.step = '0';
   img.addEventListener('error', () => {
     const cur = img.dataset.cc ?? '';
-    if (img.dataset.tier !== '1') {
-      img.dataset.tier = '1';
+    if (img.dataset.step !== '1') {
+      img.dataset.step = '1';
       img.src = flagSvgUrl(cur);
       return;
     }
@@ -113,6 +114,6 @@ export function paintFlag(host: HTMLElement | null, code: string | null | undefi
     return;
   }
   img.dataset.cc = cc;
-  img.dataset.tier = '0';
+  img.dataset.step = '0';
   img.src = flagPngUrl(cc);
 }

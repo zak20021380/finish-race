@@ -48,14 +48,8 @@ import { impact, notify, tgInitData, tgUser } from './telegram';
 
 export type MindTier = 'rookie' | 'tactician' | 'strategist' | 'grandmaster';
 
-export const TIER_NAME: Record<MindTier, string> = {
-  rookie: 'Rookie',
-  tactician: 'Tactician',
-  strategist: 'Strategist',
-  grandmaster: 'Grandmaster',
-};
-
-/** TIQ bands, matching the ladder's aura colours in `compete.ts`. */
+/** TIQ bands. Internal only: they drive the queue's match radius and the admin's preview,
+ *  never a word on screen — the league chips were removed from the design. */
 export function tierOf(tiq: number): MindTier {
   if (tiq >= 3000) return 'grandmaster';
   if (tiq >= 2000) return 'strategist';
@@ -71,9 +65,9 @@ export function myTiq(): number {
   return tiqFrom(profile.stats.wins, profile.stats.games, profile.tiqBonus);
 }
 
-/** The aura the ladder paints for you: the admin's forced preview, or read off the TIQ. */
+/** The TIQ band this seat queues in. Internal: it never reaches a chip or a label. */
 export function myTier(): MindTier {
-  return runtime.tierOverride ?? tierOf(myTiq());
+  return tierOf(myTiq());
 }
 
 export interface OpponentData {
@@ -881,7 +875,7 @@ export interface Matchmaking {
 
 /** The cycling lines under the arena; the live region only ever says one thing. */
 const STATUS: ReadonlyArray<string> = [
-  'Scanning tactical tier...',
+  'Scanning tactical minds...',
   'Matching cognitive tempo...',
   'Expanding search radius...',
 ];
@@ -935,8 +929,6 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
   const fallbackEl = document.getElementById('mm-fallback') as HTMLElement | null;
   const expandBtn = document.getElementById('mm-expand') as HTMLButtonElement | null;
   const practiceBtn = document.getElementById('mm-practice') as HTMLButtonElement | null;
-  const youTier = document.getElementById('mm-you-tier') as HTMLElement | null;
-  const rivalTier = document.getElementById('mm-rival-tier') as HTMLElement | null;
   const youFlag = document.getElementById('mm-you-flag') as HTMLElement | null;
   const rivalFlag = document.getElementById('mm-rival-flag') as HTMLElement | null;
   const rangeChip = document.getElementById('mm-range') as HTMLElement | null;
@@ -989,7 +981,6 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
   /** Back to the silhouette: the stage can be reopened without a stale rival in it. */
   function resetStage(): void {
     rival?.classList.remove('is-locked');
-    if (rival) rival.dataset.tier = 'rookie';
     if (rivalScan) rivalScan.hidden = false;
     if (rivalT) rivalT.hidden = true;
     if (rivalImg) {
@@ -997,7 +988,6 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
       rivalImg.removeAttribute('src');
     }
     if (rivalName) rivalName.textContent = 'Scanning...';
-    if (rivalTier) rivalTier.textContent = 'Unknown';
     if (rivalTiq) rivalTiq.textContent = '—';
     paintFlag(rivalFlag, null);
     rival?.setAttribute('aria-label', 'Waiting for an opponent');
@@ -1038,25 +1028,20 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
   function paintYou(): void {
     const face = readFace('You');
     const tiq = myTiq();
-    const tier = myTier();
-    if (you) you.dataset.tier = tier;
     if (youName) youName.textContent = face.name;
-    if (youTier) youTier.textContent = TIER_NAME[tier];
     if (youTiq) youTiq.textContent = tiq.toLocaleString('en-US');
     paintFace(youImg, youT, face);
     paintFlag(youFlag, profile.country);
-    you?.setAttribute('aria-label', `${face.name}, TIQ ${tiq}, ${TIER_NAME[tier]}`);
+    you?.setAttribute('aria-label', `${face.name}, TIQ ${tiq}`);
   }
 
   function paintRival(o: OpponentData): void {
-    if (rival) rival.dataset.tier = o.tier;
     if (rivalName) rivalName.textContent = o.name;
-    if (rivalTier) rivalTier.textContent = TIER_NAME[o.tier];
     if (rivalTiq) rivalTiq.textContent = o.tiq.toLocaleString('en-US');
     if (rivalScan) rivalScan.hidden = true;
     paintFace(rivalImg, rivalT, o);
     paintFlag(rivalFlag, o.flag ?? null);
-    rival?.setAttribute('aria-label', `${o.name}, TIQ ${o.tiq}, ${TIER_NAME[o.tier]}`);
+    rival?.setAttribute('aria-label', `${o.name}, TIQ ${o.tiq}`);
   }
 
   /** The radius chip is the one number on the rail a widen actually moves. */
@@ -1197,7 +1182,7 @@ export function createMatchmaking(init: MatchmakingInit = {}): Matchmaking {
     setStatus(widenings > 1 ? 'Second pass — every mind is fair game...' : 'Expanding search radius...');
     startCycling();
     startScan();
-    if (liveEl) liveEl.textContent = 'Search widened — looking beyond your tier';
+    if (liveEl) liveEl.textContent = 'Search widened — looking beyond your radius';
     const src = init.source ?? simulatedSearch(widenings > 1 ? WIDE_AGAIN_MS : WIDE_MS);
     queue(id, src, init.source ? 1 : 0, true);
     armQuiet();
