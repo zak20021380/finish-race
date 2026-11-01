@@ -28803,3 +28803,191 @@ html[data-lang="ar"] [data-i18n-html] {
   letter-spacing: 0 !important;
   text-transform: none !important;
 }
+
+/* ==========================================================================
+   VIP TOUCHPOINTS — the lobby capsule, the Arena prestige pill and the
+   standings crown. The store itself lives in banter.css because it is opened
+   by the post-match tray as well as these two doors.
+
+   Both pills are flex:none and their labels are clamped, so adding the pass
+   can never widen the header or the Arena titlebar at 320px.
+   ========================================================================== */
+.home-vip {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 17px;
+  max-width: 84px;
+  padding: 0 6px;
+  border: 1px solid rgba(243, 212, 131, .46);
+  border-radius: 999px;
+  background:
+    radial-gradient(120% 160% at 18% 40%, rgba(245, 158, 11, .26), rgba(8, 11, 18, .97) 68%),
+    #0A0E16;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 241, 198, .22),
+    inset 0 -1px 2px rgba(0, 0, 0, .55),
+    0 2px 6px -2px rgba(0, 0, 0, .6);
+  color: #F8E7B4;
+  font: inherit;
+  font-size: 7.5px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .14s ease;
+}
+.home-vip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(104deg, transparent 30%, rgba(255, 242, 196, .34) 48%, transparent 66%);
+  transform: translateX(-130%);
+  animation: home-vip-sheen 4.2s ease-in-out infinite;
+  pointer-events: none;
+}
+.home-vip.is-active {
+  border-color: rgba(255, 226, 143, .8);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 250, 228, .34),
+    inset 0 -1px 2px rgba(0, 0, 0, .5),
+    0 0 10px -2px rgba(243, 212, 131, .5);
+}
+.home-vip:not(:disabled):active { transform: scale(.96); }
+.home-vip:focus-visible { outline: 2px solid #FFE7A8; outline-offset: 2px; }
+.home-vip-crown { flex: none; width: 9px; height: 9px; }
+.home-vip-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: clip;
+}
+.home-vip-d {
+  flex: none;
+  padding-inline-start: 3px;
+  border-inline-start: 1px solid rgba(243, 212, 131, .28);
+  color: #FFE7A8;
+  font-size: 6.5px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  text-transform: none;
+}
+.home-vip-d[hidden] { display: none; }
+
+.arena-vip {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid rgba(243, 212, 131, .45);
+  border-radius: 999px;
+  background:
+    radial-gradient(130% 170% at 25% 30%, rgba(245, 158, 11, .24), rgba(8, 11, 18, .92) 70%),
+    #0A0E16;
+  box-shadow: inset 0 1px 0 rgba(255, 241, 198, .2), 0 2px 5px -2px rgba(0, 0, 0, .5);
+  color: #F5D98F;
+  font: inherit;
+  font-size: 7.5px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .14s ease;
+}
+.arena-vip.is-active {
+  border-color: rgba(255, 226, 143, .82);
+  color: #FFF1C4;
+  box-shadow: inset 0 1px 0 rgba(255, 250, 228, .3), 0 0 9px -2px rgba(243, 212, 131, .55);
+}
+.arena-vip:not(:disabled):active { transform: scale(.96); }
+.arena-vip:focus-visible { outline: 2px solid #FFE7A8; outline-offset: 2px; }
+.arena-vip-crown { flex: none; width: 10px; height: 10px; }
+.arena-vip-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* a crowned name in the Arena roster / ladder and the post-match standings */
+.vip-crown-mark {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-inline-start: 4px;
+  color: #F3D483;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .45));
+  vertical-align: -1px;
+}
+.result-vip {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  margin-inline-start: 5px;
+  color: #F3D483;
+}
+.result-vip svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .5));
+}
+
+@keyframes home-vip-sheen {
+  0%, 62% { transform: translateX(-130%); }
+  84%, 100% { transform: translateX(130%); }
+}
+
+html[data-lang="fa"] :is(.home-vip, .arena-vip) {
+  letter-spacing: 0;
+  text-transform: none;
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+}
+html[data-lang="fa"] .home-vip { font-size: 8px; max-width: 86px; }
+html[data-lang="fa"] .home-vip-d { font-size: 7px; letter-spacing: 0; }
+html[data-lang="fa"] .arena-vip { font-size: 8px; }
+
+@media (max-width: 374px) {
+  .home-vip { max-width: 58px; padding-inline: 5px; }
+  .home-vip-d { display: none; }
+}
+html.reduced-motion .home-vip::after { animation: none; }
+
+/* crown lines inside the Arena roster and runners keep their own single row */
+.stars-run-nmline,
+.sr-nmline {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.stars-run-nmline > .stars-run-nm,
+.sr-nmline > .sr-nm {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The days chip is the first thing a narrow header can spare; the full "VIP ACTIVE" label
+   still fits between 375px and 430px, and every size keeps the day count in its aria-label. */
+@media (max-width: 430px) {
+  .home-vip-d { display: none; }
+}
+
+.arena-vip-badge {
+  flex: none;
+  padding-inline-start: 4px;
+  border-inline-start: 1px solid rgba(243, 212, 131, .3);
+  color: #FFE7A8;
+  font-size: 6.5px;
+  font-weight: 900;
+  letter-spacing: .02em;
+}
+html[data-lang="fa"] .arena-vip-badge { letter-spacing: 0; font-size: 7px; }

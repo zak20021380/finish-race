@@ -68,6 +68,8 @@ interface TgWebApp {
   viewportStableHeight?: number;
   openTelegramLink?(url: string): void;
   openLink?(url: string): void;
+  /** Telegram's native Stars payment sheet (Bot API invoice link). Available since 6.1. */
+  openInvoice?(url: string, callback?: (status: string) => void): void;
   onEvent?(e: string, cb: () => void): void;
 }
 declare global { interface Window { Telegram?: { WebApp?: TgWebApp } } }
@@ -351,6 +353,26 @@ export function openTelegramShare(shareUrl: string): void {
     if (tg?.openTelegramLink) { tg.openTelegramLink(shareUrl); return; }
   } catch { /* outside Telegram */ }
   try { window.open(shareUrl, '_blank'); } catch { /* webview blocked */ }
+}
+
+/**
+ * Hand a Stars invoice link to Telegram's own payment sheet. Returns false when this client has
+ * no `openInvoice` (outside Telegram, or older than 6.1), so the caller can choose its fallback
+ * rather than opening a checkout that will never complete.
+ */
+export type InvoiceStatus = 'paid' | 'cancelled' | 'failed' | 'pending';
+
+export function openInvoice(url: string, status: (result: InvoiceStatus) => void): boolean {
+  const method = tg?.openInvoice;
+  if (!url || typeof method !== 'function' || !atLeast('6.1')) return false;
+  try {
+    method.call(tg, url, (raw: string) => {
+      status(raw === 'paid' || raw === 'cancelled' || raw === 'failed' ? raw : 'pending');
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export const notify = (t: 'success' | 'error' | 'warning') => {

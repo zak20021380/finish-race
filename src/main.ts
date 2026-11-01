@@ -34,8 +34,11 @@ import { audio, holdAudio, playVictoryFanfare, releaseAudio, stopVictoryFanfare 
 import { playDefeat, stopDefeat } from './sound';
 import {
   getRemainingTiqRecoveries, hasClaimedInMatch, markClaimedInMatch, playRewardedAd, recordTiqRecovery,
-  resetMatchClaims, TIQ_RECOVERY_MAX,
+  resetMatchClaims, tiqRecoveryLimit,
 } from './ads';
+import {
+  closeVipSheet, initVipStore, isPremiumUser, onVipChange,
+} from './premium';
 import {
   completeTutorial, earnCoins, earnTiq, hasCompletedTutorial, onChange, pieceColor, profile, recordGame,
   resetTutorialState, theme,
@@ -73,6 +76,8 @@ import { showVsClash, type VsRival, type VsStakes } from './vsclash';
 
 initSplash();
 initTelegram();
+/* The global VIP store binds after the SDK so `initDataUnsafe` is readable on its first paint. */
+initVipStore();
 applyFlagSupport();
 /* The mandatory channel check runs in the background; the neural boot screen still owns the
    first two seconds, and a gate that cannot be answered fails open. */
@@ -732,6 +737,33 @@ function resultPhoto(seat: Player): string {
 }
 
 /**
+ * Does this seat hold VIP? The local seat reads the live entitlement; the online rival is judged
+ * by the room's stamped flag on `MATCH_FOUND`, never by anything the rival's own client claims.
+ */
+function seatVip(seat: Player): boolean {
+  if (seat === localSide) return isPremiumUser();
+  if (!active || !('opponent' in active)) return false;
+  if ('seats' in active) return active.seats.find((s) => s.side === seat)?.vip === true;
+  return seat === rivalSide() && active.opponent.vip === true;
+}
+
+/** The seats the board paints with the gold aura: the local entitlement plus the room's stamps. */
+function vipBoardSeats(): Player[] {
+  const seats: Player[] = [];
+  if (isPremiumUser()) seats.push(localSide);
+  if (active && 'seats' in active) {
+    for (const s of active.seats) {
+      if (s.vip && s.side !== localSide && !seats.includes(s.side as Player)) seats.push(s.side as Player);
+    }
+    return seats;
+  }
+  if (active && 'opponent' in active && active.opponent.vip === true) seats.push(rivalSide());
+  return seats;
+}
+
+const paintVipSeats = (): void => { renderer.setVipSeats(vipBoardSeats()); };
+
+/**
  * Where every seat finished, champion first. A race stops the instant a ball takes the line, so
  * the seats that never crossed are ordered by how far their leading ball climbed and then by the
  * field behind it — a final standing the player can read straight off the board they just left.
@@ -779,7 +811,7 @@ function resultRosterRow(seat: Player, rank: number): HTMLLIElement {
   row.className = 'result-row';
   row.dataset.place = String(place);
   row.dataset.seat = String(seat);
-  row.setAttribute('aria-label', `${name}, ${t(placeKey)}${local ? `, ${t('hudYou')}` : ''}`);
+  row.setAttribute('aria-label', `${name}, ${t(placeKey)}${local ? `, ${t('hudYou')}` : ''}${seatVip(seat) ? `, ${t('vipPillActive')}` : ''}`);
   if (local) {
     row.classList.add('is-you');
     row.setAttribute('aria-current', 'true');
@@ -809,6 +841,16 @@ function resultRosterRow(seat: Player, rank: number): HTMLLIElement {
   strong.className = 'result-row-name';
   strong.textContent = name;
   id.append(strong);
+  /* the gold crown is the VIP prestige mark: it sits beside the name on every result row the
+     entitlement covers, and it is part of the same aria-label the row already announces */
+  if (seatVip(seat)) {
+    const vip = document.createElement('span');
+    vip.className = 'result-vip';
+    vip.setAttribute('role', 'img');
+    vip.setAttribute('aria-label', t('vipPillActive'));
+    vip.append(crownMark());
+    id.append(vip);
+  }
 
   const meta = document.createElement('span');
   meta.className = 'result-row-meta';
@@ -945,6 +987,7 @@ function paintRewardButtons(): void {
   const lost = !won && stake > 0;
   const claimed = hasClaimedInMatch('recover_tiq');
   const left = getRemainingTiqRecoveries();
+  const limit = tiqRecoveryLimit();
   recoverBtn.hidden = !lost;
   recoverBtn.classList.toggle('is-claimed', claimed);
   /* the exhausted chip wears the limit in its own label, so the badge would only repeat it */
@@ -954,8 +997,8 @@ function paintRewardButtons(): void {
   recoverBtn.setAttribute('aria-disabled', String(claimed || left <= 0));
   recoverLabel.textContent = claimed
     ? t('adRecoverProtected')
-    : left > 0 ? t('adRecoverCta') : t('adRecoverLimit');
-  recoverQuota.textContent = `${left}/${TIQ_RECOVERY_MAX}`;
+    : left > 0 ? t('adRecoverCta') : t(limit > 3 ? 'adRecoverLimitVip' : 'adRecoverLimit');
+  recoverQuota.textContent = `${left}/${limit}`;
   recoverQuota.hidden = claimed || left <= 0;
 
   /* ---- double coins: only a settlement that actually paid coins ---- */
@@ -1503,6 +1546,9 @@ function restart() {
   /* This screen's colours are client-side: the local seat wears the save's red/blue choice and the
      rival wears the other one. Set before the first paint of the new board. */
   renderer.setPerspective(currentPerspective());
+  /* The gold VIP halo follows the entitlement, not the client's claim: the local seat reads the
+     live pass, the rival reads the room's `MATCH_FOUND` stamp. */
+  paintVipSeats();
   /* The grid the rules picked for this race — a duel keeps 8 columns, a 3- or 4-contender race gets
      10 — and the wall budget that goes with it. Both are read off the board, never assumed, so a
      menu change between races cannot leave the canvas painting the wrong lattice. `fitBoard` hands
@@ -1534,6 +1580,7 @@ function restart() {
   clearResultMotion();
   resultView = null;
   resultLocked = false;
+  closeVipSheet();
   banter.close();
   overlayOpen = false;
   overlay.hidden = true;
@@ -3063,6 +3110,15 @@ onChange(paintTheme);
 /* a settled race writes the save, and the save is what your XP pill reads: repaint it the moment
    the wallet or the tally moves, so the chip is never one race behind. */
 onChange(paintSeatIdentity);
+/* A purchase can land while the result card (or a board) is already up: the aura, the standings
+   crown and the fourth recovery are all live surfaces, so they repaint on the same beat. */
+onVipChange(() => {
+  paintVipSeats();
+  if (resultView) {
+    paintResultRoster();
+    paintRewardButtons();
+  }
+});
 paintTheme();
 paintSeatIdentity();
 

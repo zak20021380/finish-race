@@ -199,6 +199,8 @@ export interface LobbyRaceSeat {
   name: string;
   bot: boolean;
   team: 0 | 1;
+  /** The room's verdict on this seat's VIP entitlement. */
+  vip: boolean;
 }
 
 /**
@@ -564,6 +566,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
             name: typeof s.name === 'string' ? s.name : `Seat ${i + 1}`,
             bot: s.bot === true,
             team: s.team === 1 ? 1 : 0,
+            vip: s.vip === true,
           };
         });
         const mine = typeof msg.side === 'number' ? msg.side : lobby.you;
@@ -585,6 +588,7 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
             avatarUrl: null,
             initial: faceOf(rival?.name ?? 'R'),
             flag: profile.country ?? null,
+            vip: rival?.vip === true,
           },
           send: (a) => send({ type: 'MOVE', action: a }),
           sendEmote: (emote) => send({ type: 'EMOTE', emote }),

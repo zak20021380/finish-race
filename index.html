@@ -2040,6 +2040,14 @@
                 <button class="id-name-btn" type="button" id="home-profile-btn" aria-label="Open profile">
                   <span class="player-name id-name" id="p-name">Player</span>
                 </button>
+                <!-- Touchpoint A: the obsidian-gold VIP capsule. Non-VIP wears the shimmering
+                     offer; an active pass turns it into a live status pill with days left. -->
+                <button class="home-vip is-offer" type="button" id="home-vip" aria-haspopup="dialog"
+                  aria-label="Open the VIP store">
+                  <svg class="ico home-vip-crown" aria-hidden="true"><use href="#i-crown" /></svg>
+                  <span class="home-vip-t" id="home-vip-t">VIP</span>
+                  <span class="home-vip-d" id="home-vip-d" hidden></span>
+                </button>
                 <span class="id-flag" id="home-flag" hidden aria-hidden="true"><span class="id-flag-plate" id="home-flag-glyph"></span><span class="flag-code" id="home-flag-code"></span></span>
               </div>
               <button class="id-team" type="button" id="team-chip" aria-haspopup="dialog" aria-label="Join Squad">
@@ -2374,6 +2382,14 @@
                   <button class="stars-info" type="button" id="stars-info" aria-haspopup="dialog"
                     aria-label="How the 200 Stars Cup works">
                     <span aria-hidden="true">?</span>
+                  </button>
+                  <!-- Touchpoint C: the VIP prestige pill. It opens the same global store and
+                       turns gold with the days left once a pass is live. -->
+                  <button class="arena-vip" type="button" id="arena-vip" aria-haspopup="dialog"
+                    aria-label="VIP contenders: golden leaderboard crown and 4/4 daily TIQ recovery">
+                    <svg class="ico arena-vip-crown" aria-hidden="true"><use href="#i-crown" /></svg>
+                    <span class="arena-vip-t" id="arena-vip-t">VIP</span>
+                    <span class="arena-vip-badge" id="arena-vip-badge">4/4</span>
                   </button>
                 </div>
                 <div class="stars-strip">
@@ -3215,30 +3231,8 @@
                 </button>
               </div>
             </div>
-            <!-- The VIP store. A sibling of the capsule, not a child: it lands over the whole
-                 result stage on its own scrim, so opening it never reflows the card underneath.
-                 Every word in it is repainted by banter.ts on a language flip. -->
-            <div class="vip-sheet" id="vip-sheet" hidden role="dialog" aria-modal="true"
-              aria-labelledby="vip-sheet-title">
-              <div class="vip-scrim" id="vip-scrim" aria-hidden="true"></div>
-              <div class="vip-card">
-                <span class="vip-crest" aria-hidden="true">
-                  <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
-                </span>
-                <button class="vip-close" id="vip-close" type="button" aria-label="Close VIP">
-                  <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
-                </button>
-                <p class="vip-kicker" id="vip-kicker">OBSIDIAN VIP</p>
-                <h3 class="vip-title" id="vip-sheet-title">Own the last word</h3>
-                <p class="vip-sub" id="vip-sub"></p>
-                <ul class="vip-feats" id="vip-feats"></ul>
-                <button class="vip-cta" id="vip-cta" type="button">
-                  <svg class="ico" aria-hidden="true"><use id="vip-cta-ico" href="#i-star" /></svg>
-                  <span id="vip-cta-t">OPEN TELEGRAM PREMIUM</span>
-                </button>
-                <p class="vip-fine" id="vip-fine"></p>
-              </div>
-            </div>
+            <!-- The VIP store lives at the document root (see the end of body): it is summoned
+                 from the lobby, the Arena and this result stage by the one controller. -->
             <!-- the ad's answer lands over the capsule, never inside it: absolutely placed, so it
                  costs the card no height and cannot be swallowed by the veil -->
             <p class="ad-toast" id="ad-toast" role="status" aria-live="polite"></p>
@@ -5657,6 +5651,50 @@
         </div>
         <p class="dc-line" id="dc-line">Duel starts in 3…</p>
         <button class="dc-cancel" type="button" id="dc-cancel"><span id="dc-cancel-t">Cancel match</span></button>
+      </div>
+    </div>
+
+    <!-- ---------------- the global VIP storefront ----------------
+         A direct child of <body>, never of a screen: the lobby header, the Arena prestige pill
+         and the post-match send gate all summon this one dialog. While it is up, #app is inert
+         and the controller traps Tab inside the card; Escape or the scrim closes it and focus
+         returns to the key that opened it. All copy, prices and selection state are painted by
+         src/premium.ts on open, on a language flip and on every entitlement change. -->
+    <div class="vip-sheet" id="vip-sheet" hidden role="dialog" aria-modal="true"
+      aria-labelledby="vip-sheet-title" aria-describedby="vip-sub">
+      <div class="vip-scrim" id="vip-scrim" aria-hidden="true"></div>
+      <div class="vip-card" id="vip-card">
+        <span class="vip-crest" aria-hidden="true">
+          <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
+        </span>
+        <button class="vip-close" id="vip-close" type="button" aria-label="Close VIP">
+          <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
+        </button>
+        <p class="vip-kicker" id="vip-kicker">OBSIDIAN VIP</p>
+        <h3 class="vip-title" id="vip-sheet-title">Own the last word</h3>
+        <p class="vip-sub" id="vip-sub"></p>
+
+        <!-- three Stars plans. The hero tier is 30 days; every card is rebuilt and re-priced by
+             src/premium.ts from the shared table, so a price can never drift from the invoice. -->
+        <div class="vip-plans" id="vip-plans" role="radiogroup" aria-label="Choose a VIP plan"></div>
+
+        <div class="vip-active" id="vip-active" hidden>
+          <span class="vip-active-crown" aria-hidden="true">
+            <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
+          </span>
+          <span class="vip-active-copy">
+            <b class="vip-active-t" id="vip-active-t">VIP ACTIVE</b>
+            <small class="vip-active-d" id="vip-active-d"></small>
+          </span>
+        </div>
+
+        <ul class="vip-feats" id="vip-feats"></ul>
+        <p class="vip-status" id="vip-status" role="status" aria-live="polite" hidden></p>
+        <button class="vip-cta" id="vip-cta" type="button">
+          <svg class="ico" aria-hidden="true"><use id="vip-cta-ico" href="#i-crown" /></svg>
+          <span id="vip-cta-t">UNLOCK PRO ELITE · 199 ⭐</span>
+        </button>
+        <p class="vip-fine" id="vip-fine"></p>
       </div>
     </div>
 

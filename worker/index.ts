@@ -58,6 +58,7 @@ import {
   identifyAdminRequest, identifyMetricsAdmin, identifyPlayerRequest, METRICS_HEADER,
 } from './auth';
 import { telegramSetup, telegramWebhook } from './bot';
+import { vipRoutes } from './vip';
 import { json, reasonOf } from './http';
 import { referralAppLink } from '../shared/config';
 import type { Env } from './env';
@@ -273,6 +274,10 @@ async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
 
   if (url.pathname.startsWith('/api/badges/')) return badges(request, env, url);
+
+  /* The Stars storefront: `POST /api/vip/invoice` prices a plan, `GET /api/vip/me` reads the
+     entitlement the room persisted. Both prove the caller with signed initData inside. */
+  if (url.pathname.startsWith('/api/vip/')) return vipRoutes(request, env, url);
 
   if (url.pathname === '/health') {
     return json({ ok: true, service: 'detour-matchmaking', time: Date.now() });

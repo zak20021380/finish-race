@@ -11,6 +11,7 @@
  * The caller owns the payout. This module only says whether the view was completed — it never
  * grants TIQ or coins itself, so a reward can be granted exactly once by whoever asked for it.
  */
+import { isPremiumUser } from './premium';
 
 /* ---------- the vendor surface (AdsGram V1) ---------- */
 
@@ -252,8 +253,10 @@ export async function playRewardedAd(
 
 /* ---------- the daily recovery budget ---------- */
 
-/** Three free recoveries per rolling day. The fourth is the wall. */
+/** Three free recoveries per rolling day. The fourth is the wall for a free seat. */
 export const TIQ_RECOVERY_MAX = 3;
+/** A VIP pass carries one extra shield: four recoveries in the same rolling window. */
+export const TIQ_RECOVERY_MAX_VIP = TIQ_RECOVERY_MAX + 1;
 /** The window is rolling, not midnight-to-midnight: a stamp ages out 24h after it was made. */
 export const TIQ_RECOVERY_WINDOW_MS = 24 * 60 * 60 * 1000;
 /** Its own key, outside the `detour.*` save: a rolling budget is not player progress. */
@@ -291,10 +294,16 @@ function liveLog(now: number): number[] {
   return log;
 }
 
-/** How many free TIQ recoveries are left in the rolling 24h window, 0 to 3. */
+/** How many recoveries this seat gets in a rolling day: 3 free, 4 for an active VIP. */
+export function tiqRecoveryLimit(): number {
+  return isPremiumUser() ? TIQ_RECOVERY_MAX_VIP : TIQ_RECOVERY_MAX;
+}
+
+/** How many free TIQ recoveries are left in the rolling 24h window, 0 to the seat's limit. */
 export function getRemainingTiqRecoveries(): number {
-  const left = TIQ_RECOVERY_MAX - liveLog(Date.now()).length;
-  return Math.max(0, Math.min(TIQ_RECOVERY_MAX, left));
+  const limit = tiqRecoveryLimit();
+  const left = limit - liveLog(Date.now()).length;
+  return Math.max(0, Math.min(limit, left));
 }
 
 /** Spend one recovery. Call it only after the ad actually paid — the stamp is the receipt. */

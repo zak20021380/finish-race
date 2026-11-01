@@ -27,8 +27,8 @@
  */
 import './banter.css';
 import { lang, onLang, t } from './settings';
-import { impact, notify, openLink } from './telegram';
-import { grantVipPreview, insideTelegram, isPremiumUser, vipSource } from './premium';
+import { impact, notify } from './telegram';
+import { isPremiumUser, onVipChange, openVipSheet } from './premium';
 import {
   POST_CHAT_FREE_REACTIONS, POST_CHAT_PRESETS, postChatPresetText,
   type PostChatLine, type PostChatPresetId,
@@ -122,16 +122,6 @@ const PRESET_KEYS: Record<PostChatPresetId, string> = {
   wp: 'banterCannedWp',
 };
 
-/** The store sheet's three promises, in the order a player weighs them. */
-const VIP_FEATURES: ReadonlyArray<{ ico: string; key: string; sub: string }> = [
-  { ico: '#i-chat', key: 'vipFeatChat', sub: 'vipFeatChatSub' },
-  { ico: '#i-star', key: 'vipFeatStickers', sub: 'vipFeatStickersSub' },
-  { ico: '#i-crown', key: 'vipFeatGold', sub: 'vipFeatGoldSub' },
-];
-
-/** Where Telegram itself sells the upgrade. Outside the client the sheet previews instead. */
-const TELEGRAM_PREMIUM_URL = 'https://t.me/PremiumBot';
-
 /**
  * A message made only of pictographs — no letters, no digits — is a reaction, not a sentence:
  * it renders as the round glass medal instead of a pill. Joiners, variation selectors, skin
@@ -219,8 +209,6 @@ const byId = <T extends HTMLElement>(id: string): T => {
 
 /** Which row is open under the faces: nothing, or the composer with its quick-chat vocabulary. */
 type Drawer = 'none' | 'compose';
-/** Why the store opened: the standing sell, or the send key the player just tried to use. */
-type SheetReason = 'sell' | 'gate';
 
 export function createBanter(wiring: BanterWiring): Banter {
   const dock = byId<HTMLDivElement>('result-banter');
@@ -243,19 +231,6 @@ export function createBanter(wiring: BanterWiring): Banter {
   const cannedGrid = byId<HTMLDivElement>('banter-canned-grid');
   const vipPill = byId<HTMLButtonElement>('banter-vip-pill');
   const vipPillT = byId<HTMLElement>('banter-vip-pill-t');
-  const sheet = byId<HTMLDivElement>('vip-sheet');
-  const sheetScrim = byId<HTMLElement>('vip-scrim');
-  const sheetKicker = byId<HTMLElement>('vip-kicker');
-  const sheetTitle = byId<HTMLElement>('vip-sheet-title');
-  const sheetSub = byId<HTMLElement>('vip-sub');
-  const sheetFeats = byId<HTMLUListElement>('vip-feats');
-  const sheetCta = byId<HTMLButtonElement>('vip-cta');
-  const sheetCtaIco = byId<HTMLElement>('vip-cta-ico');
-  const sheetCtaT = byId<HTMLElement>('vip-cta-t');
-  const sheetFine = byId<HTMLElement>('vip-fine');
-  const sheetClose = byId<HTMLButtonElement>('vip-close');
-  /* the capsule the sheet covers: inert while the store is up, so a tab never lands behind it */
-  const resultCard = document.getElementById('result-card');
 
   /* ---------- the rail: two pages, five slots each ---------- */
 
@@ -298,7 +273,15 @@ export function createBanter(wiring: BanterWiring): Banter {
         /* the key keeps its hitbox precisely so it can say why: a `disabled` key cannot */
         notify('warning');
         denied();
-        openSheet(key);
+        openVipSheet({
+          reason: 'gate',
+          onUnlocked: () => {
+            paintVipKeys();
+            paintCopy();
+            paintCool();
+            if (open && !locked) setVipPage(true);
+          },
+        });
         return;
       }
       if (cooling()) return;
@@ -336,9 +319,6 @@ export function createBanter(wiring: BanterWiring): Banter {
   let botTimer = 0;
   let botTurn = 0;
   let deniedTimer = 0;
-  let sheetOpen = false;
-  let sheetReason: SheetReason = 'sell';
-  let sheetReturn: HTMLElement | null = null;
   /** Lines that landed between the winning move and the card: replayed when the tray opens. */
   let pending: Array<{ line: PostChatLine; side: number; vip: boolean }> = [];
   const bubbleTimers = new Map<number, number>();
@@ -566,7 +546,6 @@ export function createBanter(wiring: BanterWiring): Banter {
     locked = true;
     window.clearTimeout(botTimer);
     botTimer = 0;
-    closeSheet();
     setDrawer('none');
     dock.classList.add('is-locked');
     alert.hidden = false;
@@ -578,89 +557,19 @@ export function createBanter(wiring: BanterWiring): Banter {
     }
   }
 
-  /* ---------- the store sheet ---------- */
+  /* ---------- the storefront gate ---------- */
 
-  function paintSheet(): void {
-    const source = vipSource();
-    const gated = sheetReason === 'gate' && source === 'none';
-    sheet.classList.toggle('is-gate', gated);
-    sheetKicker.textContent = t('vipKicker');
-    sheetTitle.textContent = t(
-      gated ? 'vipGateTitle' : source === 'none' ? 'vipTitle' : 'vipActiveTitle',
-    );
-    sheetSub.textContent = t(
-      gated ? 'vipGateSub'
-        : source === 'telegram' ? 'vipActiveSub'
-          : source === 'preview' ? 'vipPreviewSub' : 'vipSub',
-    );
-    sheetFeats.replaceChildren(...VIP_FEATURES.map((feat) => {
-      const row = el('li', 'vip-feat');
-      const mark = el('span', 'vip-feat-ico');
-      mark.append(ico(feat.ico));
-      const body = el('span', 'vip-feat-body');
-      body.append(el('b', 'vip-feat-t', t(feat.key)), el('small', 'vip-feat-s', t(feat.sub)));
-      row.append(mark, body);
-      return row;
-    }));
-    const sell = source === 'none';
-    sheetCta.hidden = !sell;
-    if (sell) {
-      const inTg = insideTelegram();
-      sheetCtaT.textContent = t(inTg ? 'vipCtaTelegram' : 'vipCtaPreview');
-      sheetCtaIco.setAttribute('href', inTg ? '#i-ext' : '#i-star');
-      sheetFine.textContent = t(inTg ? 'vipFineTelegram' : 'vipFinePreview');
-    } else {
-      sheetFine.textContent = t('vipFineActive');
-    }
-    sheetClose.setAttribute('aria-label', t('vipClose'));
-  }
-
-  function openSheet(from: HTMLElement | null, reason: SheetReason = 'sell'): void {
-    if (sheetOpen || !open) return;
-    sheetOpen = true;
-    sheetReason = reason;
-    sheetReturn = from;
-    paintSheet();
-    sheet.hidden = false;
-    resultCard?.setAttribute('inert', '');
-    /* the sell key is the reason the sheet opened; a VIP reading it has only the close */
-    if (sheetCta.hidden) sheetClose.focus({ preventScroll: true });
-    else sheetCta.focus({ preventScroll: true });
-  }
-
-  function closeSheet(): void {
-    if (!sheetOpen) return;
-    sheetOpen = false;
-    sheet.hidden = true;
-    resultCard?.removeAttribute('inert');
-    const back = sheetReturn;
-    sheetReturn = null;
-    back?.focus({ preventScroll: true });
-  }
-
-  sheetCta.addEventListener('click', () => {
-    impact('light');
-    if (insideTelegram()) {
-      openLink(TELEGRAM_PREMIUM_URL);
-      return;
-    }
-    /* the browser's door: a local preview pass, never a purchase and never stored */
-    grantVipPreview();
-    closeSheet();
+  /**
+   * The composer's gold door. The draft is never touched: after a successful unlock the same
+   * typed line is still in the field, the send key is live, and focus lands back on it so the
+   * message can leave in one tap.
+   */
+  function unlockAndSend(): void {
     paintVipKeys();
     paintCopy();
     paintCool();
-    /* the draft survived the gate; put the unlocked send key under the thumb */
-    if (drawer === 'compose') send.focus({ preventScroll: true });
-  });
-
-  sheetClose.addEventListener('click', () => closeSheet());
-  sheetScrim.addEventListener('click', () => closeSheet());
-  document.addEventListener('keydown', (e) => {
-    if (!sheetOpen || e.key !== 'Escape') return;
-    e.preventDefault();
-    closeSheet();
-  });
+    if (drawer === 'compose' && !locked) input.focus({ preventScroll: true });
+  }
 
   /* ---------- wiring ---------- */
 
@@ -670,7 +579,7 @@ export function createBanter(wiring: BanterWiring): Banter {
     if (!isPremiumUser()) {
       /* the typing trap: keep every keystroke, explain the gate, sell the transmitter */
       notify('warning');
-      openSheet(send, 'gate');
+      openVipSheet({ reason: 'gate', onUnlocked: unlockAndSend });
       return;
     }
     say({ text: input.value });
@@ -698,14 +607,19 @@ export function createBanter(wiring: BanterWiring): Banter {
   vipPill.addEventListener('click', () => {
     if (locked) return;
     impact('light');
-    openSheet(vipPill);
+    openVipSheet({ reason: 'sell' });
   });
 
   onLang(() => {
     if (!open) return;
     paintCopy();
     paintCool();
-    if (sheetOpen) paintSheet();
+  });
+  onVipChange(() => {
+    if (!open) return;
+    paintVipKeys();
+    paintCopy();
+    paintCool();
   });
 
   /** A line that beat the capsule: it waits with its author's verdict instead of vanishing. */
@@ -734,7 +648,6 @@ export function createBanter(wiring: BanterWiring): Banter {
       locked = next.locked;
       lastSentAt = 0;
       clearTimers();
-      closeSheet();
       dock.hidden = false;
       alert.hidden = !locked;
       input.value = '';
@@ -752,7 +665,6 @@ export function createBanter(wiring: BanterWiring): Banter {
       view = null;
       locked = false;
       pending = [];
-      closeSheet();
       clearTimers();
       setDrawer('none');
       setVipPage(false);

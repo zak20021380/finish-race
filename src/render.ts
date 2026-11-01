@@ -861,6 +861,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   let th: Theme = opts.theme ? opts.theme() : DEFAULT_THEME;
   /** The client-side colour perspective, or null for previews that show the authored theme. */
   let perspective: Perspective | null = null;
+  /** Seats wearing the purchased VIP halo. Server-stamped for a rival, live for the local seat. */
+  let vipSeats = new Set<Player>();
   /** seat 0 wears the equipped skin and style; every other seat keeps its fixed family. */
   let sides: Side[] = seats(th);
   const born = new Map<number, number>();                    // wall key → first-seen time (pop-in)
@@ -1769,6 +1771,42 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   }
 
   /**
+   * The VIP prestige mark: a thin metallic-gold ring outside the pawn, with a quiet warm bloom
+   * behind it. It is painted under selection and wounded states so those still read on top, and it
+   * breathes slower than the turn halo — a status, not a turn.
+   */
+  function drawVipAura(cx: number, cy: number, r: number, now: number, still: boolean) {
+    const c = L.cell;
+    const pulse = still ? 0.7 : 0.58 + 0.42 * Math.sin(now / 620);
+    ctx.save();
+    ctx.translate(cx, cy);
+    const halo = ctx.createRadialGradient(0, 0, r * 1.15, 0, 0, r * 2.2);
+    halo.addColorStop(0, `rgba(255, 214, 120, ${(0.16 * pulse).toFixed(3)})`);
+    halo.addColorStop(0.55, `rgba(255, 190, 64, ${(0.11 * pulse).toFixed(3)})`);
+    halo.addColorStop(1, 'rgba(255, 190, 64, 0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(0, 0, r * 2.2, 0, TAU); ctx.fill();
+
+    const ring = ctx.createLinearGradient(-r, -r, r, r);
+    ring.addColorStop(0, '#FFF6D0');
+    ring.addColorStop(0.32, '#F5C84E');
+    ring.addColorStop(0.62, '#A9771B');
+    ring.addColorStop(0.82, '#F3D483');
+    ring.addColorStop(1, '#FFE9A3');
+    ctx.lineWidth = Math.max(1.8, c * 0.055);
+    ctx.strokeStyle = 'rgba(12, 9, 3, .7)';
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.8, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = ring;
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.76, 0, TAU); ctx.stroke();
+    /* one short highlight arc at the crown of the ring, so the metal reads as lit rather than flat */
+    ctx.strokeStyle = 'rgba(255, 251, 228, .9)';
+    ctx.lineWidth = Math.max(1.2, c * 0.03);
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.76, -2.55, -2.05); ctx.stroke();
+    ctx.restore();
+  }
+
+  /**
    * The wide coloured pool a pawn throws across the tiles around it. Additive and kept below the
    * finish row, so red and blue light warms the grid without ever tinting the crown or its beams.
    * `k` is the active-seat beat; a resting pawn still casts a quiet version of the same light.
@@ -2657,6 +2695,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const lit = active || v.state.winner === seat;
       const beat = still ? 0.6 : 0.5 + 0.5 * Math.sin(now / 260);
       drawLamp(cx, cy, seat, lit ? beat : 0);
+      if (vipSeats.has(seat)) drawVipAura(cx, cy, r, now, still);
       if (lit) drawGlow(cx, cy, r, seat, beat);
       const hurt = wounds.has(b.id);
       if (hurt) drawWoundedRing(cx, cy, r, now, still);
@@ -2819,6 +2858,12 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       perspective = p ? { ...p } : null;
       sides = seats(th);
       buildStatic();
+    },
+    /** The seats that wear the gold VIP halo. Cheap to call: a change repaints on the next frame. */
+    setVipSeats(seatsWithVip: readonly Player[]) {
+      const next = new Set(seatsWithVip);
+      if (next.size === vipSeats.size && [...next].every((seat) => vipSeats.has(seat))) return;
+      vipSeats = next;
     },
   };
 }

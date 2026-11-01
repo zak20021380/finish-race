@@ -63,6 +63,7 @@ import { arena, countdownPill, fullCountdown, seasonLabel } from './arenaState';
 import { bindSquadById, cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribution, getMySquad, getSquadRanking, isSquadAdmin, onSquadChange, squadAvatarUrl, squadInviteUrl, squadKind, squadLetter, squadMark, squadTiqSum, telegramAvatarUrl, type RankedSquad } from './squads';
 import { BOT_HANDLE, impact, notify, openLink, tgUser } from './telegram';
 import { t } from './settings';
+import { isPremiumUser, onVipChange } from './premium';
 import { joinSquadOnServer, registerSquadWithTelegram } from './squadRegister';
 import { showToast } from './toast';
 import type { Router } from './router';
@@ -951,7 +952,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       li.append(prize);
     }
     li.setAttribute('aria-label', `Rank ${r.rank}: ${r.name}, ${num(r.tiq)} Tactical IQ contributed, `
-      + (r.stars > 0 ? `projected ${num(r.stars)} Telegram Stars` : 'outside the paid places'));
+      + (r.stars > 0 ? `projected ${num(r.stars)} Telegram Stars` : 'outside the paid places')
+      + (r.isYou && isPremiumUser() ? ', VIP' : ''));
     return li;
   }
 
@@ -965,7 +967,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     nm.className = 'stars-run-nm';
     nm.textContent = r.name;
     nm.title = r.name;
-    id.append(nm);
+    const nmLine = tag('stars-run-nmline');
+    nmLine.append(nm);
+    if (r.isYou && isPremiumUser()) nmLine.append(svgIcon('#i-crown', 'vip-crown-mark'));
+    id.append(nmLine);
 
     const tiq = tag('stars-run-tiq');
     tiq.append(strong(num(r.tiq)), document.createTextNode(' TIQ'));
@@ -978,7 +983,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       li.append(pay);
     }
     li.setAttribute('aria-label', `Rank ${r.rank}: ${r.name}, ${num(r.tiq)} Tactical IQ contributed, `
-      + (r.stars > 0 ? `projected ${num(r.stars)} Telegram Stars` : 'outside the paid places'));
+      + (r.stars > 0 ? `projected ${num(r.stars)} Telegram Stars` : 'outside the paid places')
+      + (r.isYou && isPremiumUser() ? ', VIP' : ''));
     return li;
   }
 
@@ -1179,10 +1185,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     nm.className = 'sr-nm';
     nm.textContent = r.name;
     nm.title = r.name;
+    const nmLine = tag('sr-nmline');
+    nmLine.append(nm);
+    if (r.isYou && isPremiumUser()) nmLine.append(svgIcon('#i-crown', 'vip-crown-mark'));
     const tiq = document.createElement('small');
     tiq.className = 'sr-tiq';
     tiq.append(strong(num(r.tiq)), document.createTextNode(' TIQ contributed'));
-    id.append(nm, tiq);
+    id.append(nmLine, tiq);
 
     const pay = tag('sr-pay');
     if (r.stars > 0) pay.append(starImg('sr-pay-star'), strong(num(r.stars)));
@@ -1195,7 +1204,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (r.isYou) li.append(tag('sr-you-tag', 'YOU'));
     li.append(pay);
     li.setAttribute('aria-label', `Rank ${r.rank}: ${r.name}, ${num(r.tiq)} Tactical IQ contributed, `
-      + (r.stars > 0 ? `projects ${num(r.stars)} Telegram Stars` : 'outside the paid places'));
+      + (r.stars > 0 ? `projects ${num(r.stars)} Telegram Stars` : 'outside the paid places')
+      + (r.isYou && isPremiumUser() ? ', VIP' : ''));
     return li;
   }
 
@@ -1818,7 +1828,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const honor = r.medal
       ? `, ${r.medal.def.name}${r.medal.serial !== null ? ` edition ${r.medal.serial}` : ''}`
       : '';
-    li.setAttribute('aria-label', `#${rank} ${name}${honor} — ${points} Tactical IQ. Activate to ${r.openHint}.`);
+    li.setAttribute('aria-label', `#${rank} ${name}${honor} — ${points} Tactical IQ. Activate to ${r.openHint}.`
+      + (r.me && isPremiumUser() ? ' VIP.' : ''));
     if (r.me) li.setAttribute('aria-current', 'true');
 
     const id = document.createElement('span');
@@ -3240,6 +3251,26 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     playerRowsFor = null;
     myRosterKey = null;
     if (isArenaVisible()) void loadCup();
+  });
+
+  /* A pass bought from the Arena pill repaints the same board it was bought from: the local
+     seat's gold crown appears in the roster sheet and the players ladder without a reload. */
+  onVipChange(() => {
+    if (isArenaVisible()) {
+      rosters.clear();
+      playerRows = null;
+      playerRowsFor = null;
+      myRosterKey = null;
+      paintArena();
+      void loadCup();
+    } else if (isRanksVisible() && board === 'guilds') {
+      rosters.clear();
+      playerRows = null;
+      playerRowsFor = null;
+      void loadSquads();
+    } else if (isRanksVisible() && board === 'minds' && mindsField.length) {
+      paintMinds(mindsField);
+    }
   });
 
   return {

@@ -71,6 +71,11 @@ export interface Identity {
    * no wallet, no standing. A signed account that is not Premium is never upgraded by a flag.
    */
   premium: boolean;
+  /**
+   * The end of a purchased VIP term, or 0. Filled from the room's durable player record after the
+   * signature is verified — a Stars receipt is a fact the room wrote, never a socket parameter.
+   */
+  vipUntil: number;
   /** Wallet reading the client reported for the directory, clamped. Never an authority. */
   coins: number;
   /** Telegram Stars volume the client reported, clamped. */
@@ -251,6 +256,7 @@ function guestSeat(req: AuthRequest, tier: MindTier): Identity {
     guest: true,
     /* the demo's own door: a guest has nothing to forge, so its claim is the answer */
     premium: req.vip,
+    vipUntil: 0,
     coins: req.coins,
     stars: req.stars,
     referrals: req.refs,
@@ -289,6 +295,7 @@ export async function authenticate(req: AuthRequest, env: Env): Promise<Identity
         guest: false,
         /* inside the signature, so it is a fact rather than a claim — a flag cannot upgrade it */
         premium: user?.is_premium === true,
+        vipUntil: 0,
         coins: req.coins,
         stars: req.stars,
         referrals: req.refs,

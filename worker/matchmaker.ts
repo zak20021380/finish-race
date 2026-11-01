@@ -57,6 +57,7 @@ import {
   type AdminIdentity, type AdminRole, type Identity, type MindTier,
 } from './auth';
 import { json, reasonOf } from './http';
+import { extendVipUntil, vipPlanOf } from '../shared/vip';
 import {
   isSquadAdmin, normalizeChatHandle, readRegisteredSquad, removeSquadMember, roleOf,
   SQUAD_ALREADY_ENLISTED, squadViewOf, squadWarTiq, telegramPhotoUrl, upsertSquadMember,
@@ -125,6 +126,8 @@ interface Waiter {
    * The post-match lane reads it to decide whether a custom line may cross this wire at all.
    */
   premium: boolean;
+  /** End of a purchased VIP term in ms, or 0. Relayed so a rival's board can wear the gold aura. */
+  vipUntil: number;
   /** Set the moment they are paired: the race this socket now carries. */
   race: Race | null;
   side: 0 | 1;
@@ -806,6 +809,12 @@ export interface PlayerRecord {
   referrals: number;
   /** The squad / channel handle the client reported, or ''. */
   squad: string;
+  /** End of the purchased VIP term in ms, or 0. Written only by a verified Stars receipt. */
+  vipUntil: number;
+  /** The plan id behind the current term, for the store's status copy. */
+  vipPlan: string;
+  /** Telegram charge ids already applied, so a webhook retry cannot grant a second term. */
+  vipCharges: string[];
   banned: boolean;
   muted: boolean;
   /** True while the player holds a seat on a live board or sits in a room that is filling. */
@@ -908,6 +917,9 @@ function freshPlayer(identity: Identity, now: number): PlayerRecord {
     stars: identity.stars,
     referrals: identity.referrals,
     squad: identity.squad,
+    vipUntil: 0,
+    vipPlan: '',
+    vipCharges: [],
     banned: false,
     muted: false,
     inMatch: false,
@@ -948,6 +960,11 @@ function readPlayer(raw: unknown): PlayerRecord | null {
     stars: whole(r.stars),
     referrals: whole(r.referrals),
     squad: text(r.squad, 24),
+    vipUntil: whole(r.vipUntil),
+    vipPlan: text(r.vipPlan, 12),
+    vipCharges: Array.isArray(r.vipCharges)
+      ? r.vipCharges.filter((id): id is string => typeof id === 'string' && id.length > 0).slice(-20)
+      : [],
     banned: r.banned === true,
     muted: r.muted === true,
     /* a fresh instance has no live boards: nothing can be mid-match across an eviction */
@@ -1341,14 +1358,26 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
 }
 
 /** `MATCH_FOUND` as the client reads it: the seat, the shared race, and who is opposite. */
-function foundMessage(matchId: string, seed: number, side: 0 | 1, opponent: Waiter, sizes: [number, number]): string {
+function foundMessage(
+  matchId: string, seed: number, side: 0 | 1, me: Waiter, opponent: Waiter, sizes: [number, number],
+): string {
   return JSON.stringify({
     type: 'MATCH_FOUND',
     matchId,
     seed,
     side,
     sizes,
-    opponent: { name: opponent.name, tiq: opponent.tiq, tier: opponent.tier, flag: opponent.flag },
+    /* The caller's own entitlement and the rival's, both judged by the room before it paired. */
+    isVip: me.premium,
+    vipUntil: me.vipUntil,
+    opponent: {
+      name: opponent.name,
+      tiq: opponent.tiq,
+      tier: opponent.tier,
+      flag: opponent.flag,
+      vip: opponent.premium,
+      vipUntil: opponent.vipUntil,
+    },
   });
 }
 
@@ -1571,7 +1600,9 @@ export class MatchmakerDO {
    */
   private postChat = new Map<WebSocket, {
     peers: WebSocket[]; side: number; at: number; lastAt: number;
-    /** The sender's verified VIP entitlement: the one thing that lets a custom line cross. */
+    /** The sender's seat id, so entitlement is re-read live when a line is relayed. */
+    id: string;
+    /** The sender's verified VIP entitlement at connect time; the live record may have moved. */
     premium: boolean;
   }>();
   /** `room:chatId` → the last time that room pinged that player. The push cooldown's ledger. */
@@ -1705,6 +1736,12 @@ export class MatchmakerDO {
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    /* The edge's own entitlement calls. Only this class can reach a Durable Object stub, and the
+       worker entry never forwards these two paths from the public router, so they have no outside
+       door: `/api/vip/me` is keyed by a header the edge sets after verifying initData, and the
+       grant is minted only by a Telegram receipt the bot webhook validated. */
+    if (url.pathname === '/api/vip/me' && request.method === 'GET') return this.vipMe(request);
+    if (url.pathname === '/api/vip/grant' && request.method === 'POST') return this.vipGrant(request);
     if (url.pathname === '/api/squads/verify') return this.verifySquad(request, url);
     if (url.pathname === '/api/squads/register') return this.registerSquad(request, url);
     /* Squad membership: the roster is written only here, and only by the player it names. */
@@ -1754,6 +1791,9 @@ export class MatchmakerDO {
 
     const identity = await authenticate(authRequestFrom(url), this.env);
     if (!identity) return json({ error: 'unauthorized', hint: 'valid Telegram initData required' }, 401);
+    /* A Stars receipt is durable, a socket is not: every fresh seat re-reads the term the room
+       already wrote, so a reload after checkout keeps its crown without another round trip. */
+    this.hydrateVip(identity);
     /* The moderation lock is enforced here, not in the panel: a banned account never reaches
        matchmaking at all, however fresh its socket is. */
     if (this.restricted(identity.player.id)) {
@@ -3061,6 +3101,7 @@ export class MatchmakerDO {
       guest: who.guest,
       /* a directory row built from a nickname has no entitlement to inherit */
       premium: false,
+      vipUntil: 0,
       coins: 0,
       stars: 0,
       referrals: 0,
@@ -3301,6 +3342,101 @@ export class MatchmakerDO {
   }
 
   /* ---------- the directory ---------- */
+
+  /** Is this seat's purchased VIP term still running? Read live, never from a connect-time stamp. */
+  private vipActive(id: string): boolean {
+    return (this.players.get(id)?.vipUntil ?? 0) > Date.now();
+  }
+
+  /** Fold the durable term into a fresh seat before it takes a queue or a room. */
+  private hydrateVip(identity: Identity): void {
+    const until = this.players.get(identity.player.id)?.vipUntil ?? 0;
+    if (until <= Date.now()) return;
+    identity.premium = true;
+    identity.vipUntil = until;
+  }
+
+  /** `GET /api/vip/me` from the edge: the entitlement this verified player currently holds. */
+  private vipMe(request: Request): Response {
+    const id = request.headers.get('x-detour-player') ?? '';
+    if (!/^tg-[0-9]{1,20}$/.test(id)) return json({ ok: false, error: 'player_required' }, 400);
+    const record = this.players.get(id);
+    const vipUntil = record?.vipUntil ?? 0;
+    const active = vipUntil > Date.now();
+    return json({
+      ok: true,
+      isVip: active,
+      vipUntil,
+      planId: active ? record?.vipPlan ?? '' : '',
+    });
+  }
+
+  /**
+   * `POST /api/vip/grant` from the bot webhook: one paid Stars receipt, applied once.
+   *
+   * The plan is re-read from the shared table (never the days on the wire), the extension starts
+   * at `max(now, currentVipUntil)` so a renewal stacks rather than resets, and the charge id is
+   * kept on the record so Telegram's retry of the same update is a no-op.
+   */
+  private async vipGrant(request: Request): Promise<Response> {
+    const body = await readBody(request);
+    const plan = vipPlanOf(body.planId);
+    if (!plan) return json({ ok: false, error: 'unknown_plan' }, 400);
+    const tgId = typeof body.tgId === 'string' ? body.tgId.replace(/[^0-9]/g, '').slice(0, 20) : '';
+    const playerId = typeof body.playerId === 'string' ? body.playerId.slice(0, 64) : tgId ? `tg-${tgId}` : '';
+    const chargeId = typeof body.chargeId === 'string' ? body.chargeId.slice(0, 128) : '';
+    if (!tgId || playerId !== `tg-${tgId}` || !chargeId) {
+      return json({ ok: false, error: 'invalid_grant' }, 400);
+    }
+
+    const now = Date.now();
+    let record = this.players.get(playerId);
+    if (!record) {
+      const name = typeof body.name === 'string' ? body.name.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 40) : '';
+      record = {
+        id: playerId,
+        tgId,
+        name: name || 'Player',
+        username: '',
+        country: '',
+        avatar: '',
+        age: 0,
+        tiq: 0,
+        firstSeen: now,
+        lastSeen: now,
+        lastPlayed: 0,
+        matches: 0,
+        wins: 0,
+        losses: 0,
+        streak: 0,
+        best: 0,
+        coins: 0,
+        stars: 0,
+        referrals: 0,
+        squad: '',
+        vipUntil: 0,
+        vipPlan: '',
+        vipCharges: [],
+        banned: false,
+        muted: false,
+        inMatch: false,
+        awards: [],
+      };
+      this.players.set(playerId, record);
+      this.trim();
+      this.creditSignup(now);
+      this.creditActive(0, now);
+    }
+    if (record.vipCharges.includes(chargeId)) {
+      return json({ ok: true, duplicate: true, isVip: record.vipUntil > now, vipUntil: record.vipUntil });
+    }
+    record.vipUntil = extendVipUntil(record.vipUntil, plan, now);
+    record.vipPlan = plan.id;
+    record.vipCharges = [...record.vipCharges, chargeId].slice(-20);
+    record.lastSeen = now;
+    this.persist();
+    return json({ ok: true, isVip: true, vipUntil: record.vipUntil, planId: plan.id });
+  }
 
   /** Is this seat locked out of matchmaking? */
   private restricted(id: string): boolean {
@@ -3860,7 +3996,8 @@ export class MatchmakerDO {
       wide,
       joinedAt: Date.now(),
       sizes,
-      premium: identity.premium,
+      premium: identity.premium || this.vipActive(identity.player.id),
+      vipUntil: Math.max(identity.vipUntil, this.players.get(identity.player.id)?.vipUntil ?? 0),
       race: null,
       side: 0,
     };
@@ -4017,8 +4154,8 @@ export class MatchmakerDO {
     this.setInMatch(first.id, true);
     this.setInMatch(second.id, true);
 
-    this.deliver(first, foundMessage(matchId, seed, 0, second, sizes));
-    this.deliver(second, foundMessage(matchId, seed, 1, first, sizes));
+    this.deliver(first, foundMessage(matchId, seed, 0, first, second, sizes));
+    this.deliver(second, foundMessage(matchId, seed, 1, second, first, sizes));
   }
 
   private deliver(waiter: Waiter, payload: string): void {
@@ -4075,7 +4212,7 @@ export class MatchmakerDO {
     live.members[seat] = {
       ws, seat, id: identity.player.id, name: identity.player.name,
       tiq: identity.tiq, tier: identity.tier, flag: identity.flag, avatar: identity.player.avatar,
-      premium: identity.premium,
+      premium: identity.premium || this.vipActive(identity.player.id),
       connected: true, droppedAt: 0, busy: false, lastPingAt: 0,
     };
     live.room = seatHuman(live.room, seat, {
@@ -4175,7 +4312,7 @@ export class MatchmakerDO {
     room.members[seat] = {
       ws, seat, id: identity.player.id, name: identity.player.name,
       tiq: identity.tiq, tier: identity.tier, flag: identity.flag, avatar: identity.player.avatar,
-      premium: identity.premium,
+      premium: identity.premium || this.vipActive(identity.player.id),
       connected: true, droppedAt: 0, busy: false, lastPingAt: 0,
     };
     room.room = seatHuman(room.room, seat, {
@@ -4761,6 +4898,8 @@ export class MatchmakerDO {
         bot: isAutomated(roster, i),
         team: live.teams[i] ?? 0,
         difficulty: difficultyFor(roster, i),
+        /* the seat's entitlement, as the room judged it — bots and empty chairs are never VIP */
+        vip: !!live.members[i] && (live.members[i]!.premium || this.vipActive(live.members[i]!.id)),
       })),
     });
   }
@@ -4897,7 +5036,7 @@ export class MatchmakerDO {
     }
     /* Every human still at the capsule gets the lane: a party's reactions reach all of them. */
     if (humans.length > 1) {
-      this.armPostMatch(humans.map((m) => ({ ws: m.ws, side: m.seat, premium: m.premium })));
+      this.armPostMatch(humans.map((m) => ({ ws: m.ws, side: m.seat, premium: m.premium, id: m.id })));
     }
   }
 
@@ -5001,13 +5140,13 @@ export class MatchmakerDO {
    * socket is still live, so any seat may react while the others are still reading the verdict.
    */
   private armPostMatch(
-    members: ReadonlyArray<{ ws: WebSocket; side: number; premium: boolean }>,
+    members: ReadonlyArray<{ ws: WebSocket; side: number; premium: boolean; id: string }>,
   ): void {
     const at = Date.now();
     for (const member of members) {
       const peers = members.filter((m) => m.ws !== member.ws).map((m) => m.ws);
       this.postChat.set(member.ws, {
-        peers, side: member.side, at, lastAt: 0, premium: member.premium,
+        peers, side: member.side, at, lastAt: 0, id: member.id, premium: member.premium,
       });
     }
   }
@@ -5033,13 +5172,16 @@ export class MatchmakerDO {
     /* the composer already throttles at 2s; this floor only stops a hand-rolled flood */
     if (now - box.lastAt < 250) return;
 
+    /* The receipt may have landed while the result card was open: the record is the authority,
+       so a seat that bought VIP after the board settled can still fire the draft it kept. */
+    const entitled = box.premium || this.vipActive(box.id);
     let line: { preset: PostChatPresetId } | { text: string };
     if (isPostChatPreset(msg.preset)) {
       line = { preset: msg.preset };
     } else {
       const text = readPostChatText(msg.text);
       if (!text) return;
-      if (box.premium) {
+      if (entitled) {
         line = { text };
       } else {
         /* No entitlement: the line survives only if it is something we already own — one of the
@@ -5055,7 +5197,7 @@ export class MatchmakerDO {
 
     box.lastAt = now;
     /* only a custom line can be gold: a canned tile is the same four words whoever sends it */
-    const vip = 'text' in line ? box.premium : false;
+    const vip = 'text' in line ? entitled : false;
     const frame = JSON.stringify({
       type: 'POST_MATCH_CHAT', side: box.side, vip, ...line,
     });
@@ -5095,7 +5237,7 @@ export class MatchmakerDO {
       this.endRace(race, seat.side, 'RESIGN');
       /* the resignation is a verdict too: both capsules are up, so the lane opens for as long as
          the leaver keeps their socket around */
-      this.armPostMatch(race.seats.map((s) => ({ ws: s.ws, side: s.side, premium: s.premium })));
+      this.armPostMatch(race.seats.map((s) => ({ ws: s.ws, side: s.side, premium: s.premium, id: s.id })));
       return;
     }
     if (msg.type === 'EMOTE') {
@@ -5137,7 +5279,7 @@ export class MatchmakerDO {
        lane opens at the same beat, because both result capsules stay up and may speak. */
     if (next.winner !== null) {
       this.settle(race, next.winner);
-      this.armPostMatch(race.seats.map((s) => ({ ws: s.ws, side: s.side, premium: s.premium })));
+      this.armPostMatch(race.seats.map((s) => ({ ws: s.ws, side: s.side, premium: s.premium, id: s.id })));
     }
   }
 

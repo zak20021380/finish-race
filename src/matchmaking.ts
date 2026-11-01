@@ -85,6 +85,8 @@ export interface OpponentData {
   initial: string;
   /** ISO alpha-2, when the seat carries one: the pod's corner flag. */
   flag?: string | null;
+  /** The room's word on this seat's VIP entitlement, used for the gold pawn aura. */
+  vip?: boolean;
 }
 
 /** What this attempt is asking for: `wide` is the relaxed skill filter. */
@@ -260,7 +262,7 @@ export interface OnlineSession extends OnlineMatch {
 /** One frame the room can send (`worker/matchmaker.ts` is its only producer). */
 type RaceFrame =
   | { type: 'MATCH_FOUND'; matchId: string; seed: number; side: 0 | 1; sizes: [number, number];
-      opponent: { name: string; tiq: number; tier: string; flag: string } }
+      opponent: { name: string; tiq: number; tier: string; flag: string; vip?: boolean } }
   | { type: 'MOVE'; side: 0 | 1; action: Action }
   | { type: 'EMOTE'; side: 0 | 1; emote: ChatEmoteId }
   | { type: 'PHRASE'; side: 0 | 1; lang: ChatLang; index: number }
@@ -341,8 +343,8 @@ function socketParams(wide: boolean): string {
   params.set('coins', String(profile.coins));
   params.set('refs', String(profile.referral.joins));
   params.set('squad', getMySquad()?.handle ?? '');
-  /* The VIP entitlement rides as a bare flag. Only the guest door reads it — a signed session is
-     judged by the `is_premium` field inside its own signature, so a real seat cannot claim it. */
+  /* A VIP hint for the guest door only: a signed seat is judged by its Telegram signature and by
+     the Stars receipt the room persisted, never by this flag. */
   if (isPremiumUser()) params.set('vip', '1');
   return params.toString();
 }
@@ -419,7 +421,7 @@ function parseFrame(raw: string, sizes?: readonly number[]): RaceFrame | null {
     if (!msg || typeof msg !== 'object') return null;
     const side: 0 | 1 = msg.side === 1 ? 1 : 0;
     if (msg.type === 'MATCH_FOUND') {
-      const o = msg.opponent as { name?: unknown; tiq?: unknown; tier?: unknown; flag?: unknown } | null;
+      const o = msg.opponent as { name?: unknown; tiq?: unknown; tier?: unknown; flag?: unknown; vip?: unknown } | null;
       if (typeof msg.matchId !== 'string' || typeof msg.seed !== 'number') return null;
       if (!o || typeof o.name !== 'string' || typeof o.tiq !== 'number') return null;
       return {
@@ -433,6 +435,7 @@ function parseFrame(raw: string, sizes?: readonly number[]): RaceFrame | null {
           tiq: o.tiq,
           tier: typeof o.tier === 'string' ? o.tier : '',
           flag: typeof o.flag === 'string' ? o.flag : '',
+          vip: o.vip === true,
         },
       };
     }
@@ -654,7 +657,7 @@ function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_F
 /** The matchmaker's payload, in the shape the stage paints. */
 function onlineOpponent(msg: {
   matchId: string;
-  opponent: { name: string; tiq: number; tier: string; flag: string };
+  opponent: { name: string; tiq: number; tier: string; flag: string; vip?: boolean };
 }): OpponentData {
   const name = msg.opponent.name.trim() || 'Rival';
   return {
@@ -665,6 +668,7 @@ function onlineOpponent(msg: {
     avatarUrl: null,
     initial: name.charAt(0).toUpperCase(),
     flag: msg.opponent.flag,
+    vip: msg.opponent.vip === true,
   };
 }
 

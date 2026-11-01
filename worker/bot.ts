@@ -30,6 +30,10 @@
 import type { Env } from './env';
 import { isLocalhost, verifyAdminRequest } from './auth';
 import { json } from './http';
+import {
+  answerPreCheckout, handleSuccessfulPayment,
+  type PreCheckoutQueryLike, type SuccessfulPaymentLike,
+} from './vip';
 import { BOT_HANDLE } from '../shared/config';
 import {
   ensureReferralCode, readReferralPayload, referralContact, touchReferralUser,
@@ -50,6 +54,7 @@ const LIVE_APP_URL = 'https://finish-race.deadeye-game.workers.dev';
 interface TgUserLike {
   id?: number | string;
   language_code?: string;
+  first_name?: string;
   is_bot?: boolean;
 }
 
@@ -63,6 +68,8 @@ interface TgMessageLike {
   chat?: TgChatLike;
   from?: TgUserLike;
   text?: string;
+  /** The receipt for a Stars invoice this bot issued. */
+  successful_payment?: SuccessfulPaymentLike;
 }
 
 interface TgCallbackLike {
@@ -81,6 +88,8 @@ interface TgUpdate {
   message?: TgMessageLike;
   callback_query?: TgCallbackLike;
   inline_query?: TgInlineQueryLike;
+  /** A Stars invoice sheet waiting for the bot's yes/no. */
+  pre_checkout_query?: PreCheckoutQueryLike;
 }
 
 interface TelegramEnvelope<T> {
@@ -277,9 +286,23 @@ function originOf(url: string): string {
 }
 
 async function dispatch(update: TgUpdate, token: string, origin: string, env: Env): Promise<void> {
+  /* The Stars lane opens before any conversation branch: a donation or invoice update is not a
+     chat message, and it must be answered on the same delivery Telegram is waiting on. */
+  if (update.pre_checkout_query) return answerPreCheckout(update.pre_checkout_query, token);
   if (update.callback_query) return handleCallback(update.callback_query, token, origin, env);
   if (update.inline_query) return handleInlineQuery(update.inline_query, token, origin, env);
-  if (update.message) return handleMessage(update.message, token, origin, env);
+  if (update.message) {
+    if (update.message.successful_payment) {
+      await handleSuccessfulPayment(
+        update.message.successful_payment,
+        update.message.from?.id,
+        env,
+        update.message.from?.first_name ?? '',
+      );
+      return;
+    }
+    return handleMessage(update.message, token, origin, env);
+  }
   /* Channel posts, new-chat-member notices, poll answers: none is a conversation with a player. */
 }
 
