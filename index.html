@@ -2120,7 +2120,12 @@
                 <div class="slide-inner">
                   <div class="car-head mind-head">
                     <span class="car-kicker mind-kicker"><span class="mind-ico" aria-hidden="true"><svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg></span> The Mind Ladder</span>
-                    <span class="mind-top" id="mind-top">TIQ Live</span>
+                    <!-- the seasonal crest: a live pulse + the season the ladder is running,
+                         never a raw head-count pill. The field size lives in the title. -->
+                    <span class="mind-top" id="mind-top">
+                      <i class="mind-pulse" aria-hidden="true"></i>
+                      <span class="mind-season" id="mind-season">Season 1</span>
+                    </span>
                   </div>
                   <ol class="mind-podium" id="home-minds">
                     <li class="mind-row"><span class="skel w20"></span><span class="skel w60"></span><span class="skel w15"></span></li>
@@ -2138,9 +2143,12 @@
                         <span class="hm-name" id="home-mind-name">You</span>
                       </span>
                       <span class="hm-c">
+                        <!-- the standing, stated as a fact: "#2 · OF 1,204 MINDS" — never a
+                             demotivating percentile. The rank itself lives in the badge. -->
                         <span class="hm-pill" id="home-mind-pill">
-                          <span class="hm-pill-k" id="home-mind-pill-k">Top</span>
-                          <b id="home-mind-pct">—</b>
+                          <span class="hm-pill-k" id="home-mind-pill-k">of</span>
+                          <b id="home-mind-field">—</b>
+                          <span class="hm-pill-u" id="home-mind-field-u">minds</span>
                         </span>
                       </span>
                       <span class="hm-r">
@@ -2149,7 +2157,10 @@
                         <span class="mind-brain" aria-hidden="true"><svg class="mind-brain-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-brain" /></svg></span>
                       </span>
                     </div>
-                    <button class="btn card-cta mind-cta" type="button" id="home-mind-cta">View Full Ladder</button>
+                    <button class="btn card-cta mind-cta" type="button" id="home-mind-cta">
+                      <span class="mind-cta-t">View Full Ladder</span>
+                      <span class="mind-cta-go" aria-hidden="true"><svg class="mind-cta-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-next" /></svg></span>
+                    </button>
                   </div>
                 </div>
               </article>

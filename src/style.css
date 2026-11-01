@@ -19693,7 +19693,6 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
 .car-card.nations-cup .nations-hold,
 .car-card.mind-ladder .mind-cta { margin-top: 0; }
 .car-card.nations-cup .nations-hold { color: var(--honey-ink); }
-.car-card.mind-ladder .mind-cta { color: #C4B5FD; }
 
 /* ---- the personal standing bar: one structured 3-zone esports HUD row ----
    Shared by both leaderboard slides (Nations Cup + The Mind Ladder) and rendered by
@@ -19701,7 +19700,8 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
 
      · LEFT   — the compact glowing rank badge (global slide) or the flag plate plus
                 the nation name (national slide);
-     · CENTER — the translucent standing pill: the percentile the player sits in;
+     · CENTER — the translucent standing pill: the field the rank sits inside on the
+                global slide ("of 1,204 minds"), the percentile share on the national one;
      · RIGHT  — the tabular score readout, ending in the same brain token the rows
                 above wear, so the numbers stack into one column.
 
@@ -19895,13 +19895,14 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
 .mind-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; min-height: 20px; }
 .car-card.mind-ladder .car-kicker::before { content: none; display: none; }
 .mind-kicker {
-  color: var(--ink);
+  color: #F3F7FF;
   gap: var(--s2);
   min-width: 0;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: .12em;
+  font-size: 12.5px;
+  font-weight: 900;
+  letter-spacing: .15em;
   text-transform: uppercase;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .4);
 }
 .mind-ico {
   flex: none;
@@ -19918,20 +19919,57 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
     inset 0 -2px 3px rgba(0, 0, 0, .22);
 }
 .mind-ico .ico { width: 14px; height: 14px; }
+/* the seasonal crest: an obsidian capsule with a gold hairline and a live pulse — the
+   season the ladder is running, never a raw head-count pill */
 .mind-top {
+  position: relative;
   flex: none;
-  padding: 3px 10px 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px 4px 7px;
   border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #fde68a 0%, #f59e0b 100%);
-  color: #10141D;
-  font-size: 11px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .085) 0%, rgba(255, 255, 255, .028) 100%);
+  border: 1px solid rgba(255, 215, 0, .22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .13),
+    0 2px 8px -4px rgba(0, 0, 0, .85);
+  color: #F2D79A;
+  font-size: 9.5px;
   font-weight: 900;
-  letter-spacing: .06em;
+  letter-spacing: .15em;
+  line-height: 1;
   text-transform: uppercase;
   white-space: nowrap;
-  box-shadow: 0 2px 0 #7c2d12, inset 0 1px 0 rgba(255, 255, 255, .6);
 }
-/* podium: Top-5 rows that grow into the band — rank emblem, sphere avatar + flag, trend delta, TIQ */
+.mind-season { display: block; }
+/* the live pulse: a 5px amber bead with a slow radar ping; it goes out when the
+   Worker has not answered yet, so the crest never lies about being live */
+.mind-pulse {
+  position: relative;
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #FBBF24;
+  box-shadow: 0 0 7px rgba(251, 191, 36, .85);
+}
+.mind-pulse::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1px solid rgba(251, 191, 36, .55);
+  animation: mindPing 2.6s cubic-bezier(.2, .7, .3, 1) infinite;
+}
+@keyframes mindPing {
+  0% { transform: scale(.55); opacity: .95; }
+  70%, 100% { transform: scale(2); opacity: 0; }
+}
+.mind-top:not(.is-live) .mind-pulse { background: #64748B; box-shadow: none; }
+.mind-top:not(.is-live) .mind-pulse::after { content: none; }
+html.reduced-motion .mind-pulse::after { animation: none; opacity: .3; }
+/* podium: five slabs that grow into the band — shield, ringed portrait + flag, handle, TIQ */
 .mind-podium {
   list-style: none;
   margin: 0;
@@ -19941,80 +19979,188 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   gap: 7px;
   min-height: 0;
 }
+/* one row = one unified glass slab: [ minted shield ][ ringed portrait ][ handle ][ TIQ ].
+   The trend is a bare tick on the handle, so the score column is the row's only right
+   edge and the name owns every pixel the old capsule used to eat. */
 .mind-row {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
   flex: 1 1 auto;
   height: auto;
   min-height: 40px;
   max-height: 64px;
-  padding: 7px 10px;
+  padding: 4px 10px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, .045);
-  border-top: 1px solid rgba(255, 255, 255, .06);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .055) 0%, rgba(255, 255, 255, .022) 100%);
+  border: 1px solid rgba(255, 255, 255, .07);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    0 1px 2px rgba(0, 0, 0, .28);
   overflow: hidden;
   box-sizing: border-box;
 }
-/* rank emblem: the medal itself — gold / silver / bronze on the podium, slate below it */
-.mind-rank {
-  flex: none;
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border-radius: 9px;
-  background: linear-gradient(180deg, #2B3548 0%, #1B2233 100%);
-  color: #A9B6CC;
+/* the podium's ambient wash sits INSIDE the slab (the row clips it) so #1 reads as lit
+   from behind, not as a brighter border */
+.mind-row::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: radial-gradient(120% 130% at 0% 50%, rgba(255, 196, 60, .16) 0%, rgba(255, 196, 60, 0) 62%);
+  opacity: 0;
+  pointer-events: none;
+}
+.mind-row[data-rank="1"]::before { opacity: 1; }
+.mind-row[data-rank="2"]::before {
+  opacity: 1;
+  background: radial-gradient(120% 130% at 0% 50%, rgba(203, 213, 225, .13) 0%, rgba(203, 213, 225, 0) 62%);
+}
+.mind-row[data-rank="3"]::before {
+  opacity: 1;
+  background: radial-gradient(120% 130% at 0% 50%, rgba(251, 146, 60, .14) 0%, rgba(251, 146, 60, 0) 62%);
+}
+/* every direct child rides above that wash */
+.mind-row > * { position: relative; z-index: 1; }
+/* #1 wears the gold hairline and the ambient back-glow; #2 platinum, #3 bronze */
+.mind-row[data-rank="1"] {
+  border-color: rgba(255, 215, 0, .25);
   box-shadow:
-    0 2px 0 rgba(8, 12, 20, .55),
-    inset 0 1px 0 rgba(255, 255, 255, .12),
-    inset 0 0 0 1px rgba(255, 255, 255, .08);
-  font-size: 12px;
+    inset 0 1px 0 rgba(255, 236, 180, .14),
+    0 0 18px -6px rgba(255, 200, 60, .45),
+    0 2px 4px rgba(0, 0, 0, .3);
+}
+.mind-row[data-rank="2"] {
+  border-color: rgba(203, 213, 225, .2);
+  box-shadow:
+    inset 0 1px 0 rgba(226, 232, 240, .12),
+    0 0 14px -8px rgba(203, 213, 225, .3);
+}
+.mind-row[data-rank="3"] {
+  border-color: rgba(251, 146, 60, .22);
+  box-shadow:
+    inset 0 1px 0 rgba(254, 215, 170, .12),
+    0 0 14px -8px rgba(251, 146, 60, .32);
+}
+/* rank emblem: a minted shield — flat shoulders, a rounded point, a specular top edge */
+.mind-rank {
+  position: relative;
+  flex: none;
+  width: 27px;
+  height: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border-radius: 8px 8px 13px 13px / 7px 7px 16px 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, 0) 46%),
+    linear-gradient(180deg, #2C374D 0%, #1A2130 100%);
+  color: #B6C3D8;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .1),
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    0 2px 0 rgba(6, 9, 15, .6),
+    0 3px 8px -3px rgba(0, 0, 0, .7);
+  font-size: 12.5px;
   font-weight: 900;
-  letter-spacing: -.03em;
+  letter-spacing: -.02em;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
 }
+.mind-rank-n { display: block; line-height: 1; }
+.mind-crown {
+  display: block;
+  width: 12px;
+  height: 8px;
+  color: #6B3D06;
+  filter: drop-shadow(0 1px 0 rgba(255, 244, 210, .5));
+}
 .mind-rank.gold {
-  background: linear-gradient(180deg, #fde68a 0%, #fbbf24 45%, #f59e0b 100%);
-  color: #10141D;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .62) 0%, rgba(255, 255, 255, 0) 44%),
+    linear-gradient(180deg, #FFE9A3 0%, #F6C846 38%, #DA9C1A 74%, #B9760C 100%);
+  color: #2A1B03;
   box-shadow:
-    0 2px 0 rgba(120, 53, 15, .8),
-    inset 0 1px 0 rgba(255, 255, 255, .65);
+    inset 0 0 0 1px rgba(255, 248, 214, .6),
+    inset 0 -2px 3px rgba(120, 53, 15, .32),
+    0 2px 0 #6B3D06,
+    0 4px 12px -3px rgba(245, 196, 69, .5);
 }
 .mind-rank.silver {
-  background: linear-gradient(180deg, #f1f5f9 0%, #cbd5e1 45%, #94a3b8 100%);
-  color: #10141D;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .7) 0%, rgba(255, 255, 255, 0) 46%),
+    linear-gradient(180deg, #F4F8FD 0%, #D3DCE8 40%, #A7B4C6 74%, #7E8DA2 100%);
+  color: #1B2433;
   box-shadow:
-    0 2px 0 rgba(51, 65, 85, .8),
-    inset 0 1px 0 rgba(255, 255, 255, .7);
+    inset 0 0 0 1px rgba(255, 255, 255, .62),
+    inset 0 -2px 3px rgba(51, 65, 85, .3),
+    0 2px 0 #3A4658,
+    0 4px 12px -3px rgba(203, 213, 225, .38);
 }
 .mind-rank.bronze {
-  background: linear-gradient(180deg, #fed7aa 0%, #fdba74 45%, #c2703d 100%);
-  color: #10141D;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .58) 0%, rgba(255, 255, 255, 0) 46%),
+    linear-gradient(180deg, #FFD9B0 0%, #E8A468 40%, #C4783C 76%, #96501F 100%);
+  color: #2E1503;
   box-shadow:
-    0 2px 0 rgba(124, 45, 18, .8),
-    inset 0 1px 0 rgba(255, 255, 255, .6);
+    inset 0 0 0 1px rgba(255, 226, 196, .5),
+    inset 0 -2px 3px rgba(124, 45, 18, .3),
+    0 2px 0 #4A2410,
+    0 4px 12px -3px rgba(224, 155, 98, .42);
 }
+/* the portrait: a real face inside a machined metal ring, per-medal on the podium */
 .mind-av {
   position: relative;
   flex: none;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
   border-radius: 50%;
   color: #fff;
-  /* a quiet clay disc: the real Telegram photo is the portrait, and the letter that
-     holds its place while it loads is the only thing this surface is allowed to say */
-  background: radial-gradient(circle at 32% 26%, #2E3A54 0%, #141B2A 72%);
+  background: conic-gradient(from 210deg,
+    #8A97AD 0deg, #E7EEF9 58deg, #93A1B7 126deg,
+    #6E7C93 196deg, #DCE6F4 268deg, #8A97AD 360deg);
   box-shadow:
-    inset 0 0 0 1.5px rgba(148, 163, 184, .34),
-    0 2px 5px rgba(0, 0, 0, .5);
+    0 2px 6px rgba(0, 0, 0, .5),
+    0 0 0 1px rgba(255, 255, 255, .06);
 }
-.mind-ini { font-size: 12px; font-weight: 900; letter-spacing: .01em; }
+/* the clay disc inside the ring: the letter that holds the place while a photo loads */
+.mind-av::before {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 26%, #2E3A54 0%, #141B2A 72%);
+}
+.mind-row[data-rank="1"] .mind-av {
+  background: conic-gradient(from 210deg,
+    #B8860B 0deg, #FFE9A3 56deg, #C9971C 124deg,
+    #8A5E08 194deg, #FFDF8A 266deg, #B8860B 360deg);
+  box-shadow:
+    0 2px 7px rgba(0, 0, 0, .5),
+    0 0 10px rgba(245, 196, 69, .4);
+}
+.mind-row[data-rank="2"] .mind-av {
+  background: conic-gradient(from 210deg,
+    #7E8DA2 0deg, #F8FBFF 56deg, #A7B4C6 124deg, #64748B 194deg, #E7EEF9 266deg, #7E8DA2 360deg);
+  box-shadow:
+    0 2px 7px rgba(0, 0, 0, .5),
+    0 0 9px rgba(203, 213, 225, .28);
+}
+.mind-row[data-rank="3"] .mind-av {
+  background: conic-gradient(from 210deg,
+    #96501F 0deg, #FFD9B0 56deg, #C4783C 124deg, #7A3E15 194deg, #F0B57E 266deg, #96501F 360deg);
+  box-shadow:
+    0 2px 7px rgba(0, 0, 0, .5),
+    0 0 9px rgba(224, 155, 98, .3);
+}
+.mind-ini { position: relative; z-index: 1; font-size: 12px; font-weight: 900; letter-spacing: .01em; }
 /* the mind's own photo sits inside the sphere; the nation pin stays on top */
 .mind-av-img {
   position: absolute;
@@ -20042,69 +20188,64 @@ html.reduced-motion .mind-av-img { transition: none; }
   overflow: hidden;
   box-shadow: 0 0 0 2px #1C2433;
 }
-.mind-nm {
+/* the identity cell: handle + a bare delta tick. It is the only flexible column, so the
+   handle ellipsizes instead of ever pushing the score out of the slab. */
+.mind-id {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 14px;
+}
+.mind-nm {
+  min-width: 0;
+  font-size: 13.5px;
   font-weight: 700;
-  color: var(--ink);
+  letter-spacing: .005em;
+  color: #EAF1FC;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* trend delta: a fixed-width pill so the score column never shifts between rows */
-.mind-trend {
+/* the trend: no capsule, no reserved column — a 9px tick that only exists when the rank
+   really moved, so a steady row carries nothing between the handle and the score */
+.mind-delta {
   flex: none;
-  min-width: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3px 4px 4px;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, .05);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .10);
-  color: var(--ink-soft);
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 9px;
+  font-weight: 900;
+  font-style: normal;
   line-height: 1;
-  white-space: nowrap;
+  letter-spacing: -.02em;
   font-variant-numeric: tabular-nums;
 }
-.mind-trend.up {
-  background: rgba(16, 185, 129, .16);
-  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .34);
-  color: var(--mint-ink);
-}
-.mind-trend.down {
-  background: rgba(244, 63, 94, .16);
-  box-shadow: inset 0 0 0 1px rgba(253, 164, 175, .34);
-  color: var(--red-ink);
-}
-/* score lockup: the rating, the explicit unit, then the signature brain token */
+.mind-delta.up { color: var(--mint-ink); text-shadow: 0 0 6px rgba(110, 231, 183, .35); }
+.mind-delta.down { color: #FDA4AF; text-shadow: 0 0 6px rgba(253, 164, 175, .3); }
+/* score lockup: the rating, the explicit unit, then the signature gold brain token */
 .mind-score {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 900;
   letter-spacing: -.01em;
-  color: var(--honey-ink);
+  color: #FFD86B;
   font-variant-numeric: tabular-nums;
   text-shadow:
-    0 1px 0 rgba(0, 0, 0, .5),
-    0 0 10px rgba(252, 211, 77, .16);
+    0 1px 0 rgba(0, 0, 0, .55),
+    0 0 12px rgba(252, 211, 77, .3);
   white-space: nowrap;
 }
 .mind-tiq-k {
   flex: none;
-  font-size: 8.5px;
+  font-size: 8px;
   font-weight: 900;
-  letter-spacing: .1em;
+  letter-spacing: .09em;
   line-height: 1;
   color: var(--violet);
-  text-shadow: 0 0 8px rgba(167, 139, 250, .35);
+  text-shadow: 0 0 8px rgba(167, 139, 250, .3);
 }
+/* the TIQ token: one gold brain, the same object in the rows and in your own strip */
 .mind-brain {
   flex: none;
   width: 15px;
@@ -20112,37 +20253,45 @@ html.reduced-motion .mind-av-img { transition: none; }
   display: grid;
   place-items: center;
   border-radius: 5px;
-  color: #EDE9FE;
-  background: linear-gradient(180deg, rgba(167, 139, 250, .34) 0%, rgba(124, 58, 237, .26) 100%);
+  color: #FFF3CF;
+  background: linear-gradient(180deg, rgba(255, 214, 102, .34) 0%, rgba(180, 120, 10, .24) 100%);
   box-shadow:
-    inset 0 0 0 1px rgba(196, 181, 253, .34),
-    0 0 7px rgba(139, 92, 246, .28);
+    inset 0 0 0 1px rgba(255, 214, 102, .38),
+    0 0 8px rgba(245, 180, 40, .3);
 }
 .mind-brain-ico { display: block; width: 10px; height: 10px; }
-/* an unoccupied rank: the same row skeleton, quieter clay — never a shorter row */
+/* an unoccupied rank: a frosted, dashed slot with a lock — reserved, never broken */
 .mind-row.is-empty {
-  background: rgba(255, 255, 255, .02);
-  border-top-color: transparent;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .035);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .028) 0%, rgba(255, 255, 255, .012) 100%);
+  border: 1px dashed rgba(255, 255, 255, .11);
+  box-shadow: none;
 }
-.mind-row.is-empty .mind-rank { color: rgba(169, 182, 204, .55); }
-.mind-row.is-empty .mind-nm { color: var(--ink-soft); font-weight: 600; opacity: .62; }
-.mind-row.is-empty .mind-trend { opacity: .35; }
-.mind-row.is-empty .mind-score { color: rgba(252, 211, 77, .42); text-shadow: none; }
-.mind-row.is-empty .mind-tiq-k { color: rgba(196, 181, 253, .45); text-shadow: none; }
+/* a reserved seat is never lit from behind, even when it inherits a podium rank */
+.mind-row.is-empty::before { opacity: 0; }
+.mind-row.is-empty .mind-rank {
+  color: rgba(169, 182, 204, .5);
+  background: rgba(255, 255, 255, .03);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+.mind-row.is-empty .mind-nm { color: rgba(196, 208, 226, .58); font-weight: 600; }
+.mind-row.is-empty .mind-score { color: rgba(252, 211, 77, .34); text-shadow: none; }
+.mind-row.is-empty .mind-tiq-k { color: rgba(196, 181, 253, .35); text-shadow: none; }
 .mind-row.is-empty .mind-brain {
-  color: rgba(237, 233, 254, .45);
+  color: rgba(255, 243, 207, .4);
   background: rgba(255, 255, 255, .04);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
 }
-.mind-av.mind-av-empty {
+/* an empty seat wears no metal, even when it holds a podium rank on a cold server */
+.mind-row.is-empty .mind-crown { display: none; }
+.mind-row.is-empty .mind-av {
   background: rgba(255, 255, 255, .035);
-  color: rgba(196, 181, 253, .42);
+  color: rgba(196, 208, 226, .5);
   box-shadow:
-    inset 0 0 0 1px rgba(196, 181, 253, .18),
-    inset 0 -2px 4px rgba(0, 0, 0, .28);
+    inset 0 0 0 1px rgba(255, 255, 255, .1),
+    inset 0 -2px 4px rgba(0, 0, 0, .24);
 }
-.mind-av-ico { display: block; width: 14px; height: 14px; }
+.mind-row.is-empty .mind-av::before { content: none; }
+.mind-av-ico { position: relative; z-index: 1; display: block; width: 12px; height: 12px; }
 .mind-av .mind-flag-none {
   display: grid;
   place-items: center;
@@ -20150,9 +20299,58 @@ html.reduced-motion .mind-av-img { transition: none; }
   color: #A9B6CC;
 }
 .mind-flag-ico { display: block; width: 9px; height: 9px; }
-/* your own standing: the shared 3-zone HUD row above (`.hud-mine`), worn with the
-   violet unit and the glowing rank badge instead of the flag plate */
+/* your own standing: the shared 3-zone HUD row, worn as a cyan neon-glass slab — the
+   one bar on the card that is lit from inside instead of from above */
+.mind-mine {
+  position: relative;
+  background:
+    linear-gradient(90deg, rgba(34, 211, 238, .18) 0%, rgba(11, 20, 33, .94) 46%, rgba(34, 211, 238, .12) 100%);
+  border: 1px solid rgba(34, 211, 238, .42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 0 0 1px rgba(34, 211, 238, .1),
+    0 6px 18px -9px rgba(0, 200, 255, .55),
+    0 3px 10px rgba(0, 0, 0, .4);
+}
+/* the sheen: a 1px light line across the top edge, never a wash over the type */
+.mind-mine::before {
+  content: "";
+  position: absolute;
+  inset: 0 12px auto;
+  height: 1px;
+  border-radius: 1px;
+  background: linear-gradient(90deg,
+    rgba(34, 211, 238, 0) 0%,
+    rgba(186, 240, 255, .7) 22%,
+    rgba(186, 240, 255, .28) 60%,
+    rgba(34, 211, 238, 0) 100%);
+  pointer-events: none;
+}
 .mind-mine .hm-name { letter-spacing: .1em; }
+/* the standing pill: "of 1,204 minds" — the field the rank sits inside, never a percentile */
+.mind-mine .hm-pill {
+  background: rgba(34, 211, 238, .1);
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, .3);
+  color: #9FE4F5;
+  letter-spacing: .09em;
+}
+.mind-mine .hm-pill b {
+  color: #EAFDFF;
+  text-shadow: 0 0 8px rgba(34, 211, 238, .5);
+}
+.hm-pill-u {
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  color: rgba(159, 228, 245, .7);
+}
+.mind-mine .hm-badge {
+  background: linear-gradient(180deg, rgba(56, 189, 248, .7) 0%, rgba(14, 116, 233, .46) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .5),
+    inset 0 0 0 1px rgba(125, 232, 255, .6),
+    0 0 12px rgba(0, 210, 255, .45);
+}
 
 /* ============================================================================================
    LEADERBOARD SLIDES — Nations Cup + The Mind Ladder.
@@ -20250,6 +20448,76 @@ html.reduced-motion .mind-av-img { transition: none; }
   padding: 12px 16px;
 }
 
+/* ---- the Mind Ladder command: obsidian glass, a violet edge light, one chevron ----
+   Not a flat capsule: a machined slab with a 1px specular line along its top edge, a
+   violet hairline, and a chevron chip that leans forward on hover. The press is a
+   scale-down (not a translate), so the tap reads as a key being pushed into the card. */
+.car-card.mind-ladder .mind-cta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 46px;
+  padding: 11px 14px;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .085) 0%, rgba(255, 255, 255, 0) 46%),
+    linear-gradient(180deg, #232D42 0%, #141B28 100%);
+  border: 1px solid rgba(196, 181, 253, .22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    inset 0 -1px 0 rgba(0, 0, 0, .55),
+    0 10px 22px -14px rgba(0, 0, 0, .95),
+    0 0 0 1px rgba(8, 12, 20, .5);
+  color: #E6DDFF;
+  font-size: 12.5px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .55);
+  transition: transform .12s ease, border-color .16s ease, box-shadow .16s ease;
+}
+/* the specular sheen: a soft light cap, inset so it never paints past the edge */
+.car-card.mind-ladder .mind-cta::before {
+  content: "";
+  position: absolute;
+  inset: 1px 1px auto;
+  height: 44%;
+  border-radius: 13px 13px 22px 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .1) 0%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+}
+.mind-cta-t { position: relative; display: block; min-width: 0; white-space: nowrap; }
+.mind-cta-go {
+  position: relative;
+  flex: none;
+  width: 21px;
+  height: 21px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(196, 181, 253, .14);
+  box-shadow: inset 0 0 0 1px rgba(196, 181, 253, .3);
+  color: #D9CDFF;
+  transition: transform .16s ease, background .16s ease;
+}
+.mind-cta-ico { display: block; width: 11px; height: 11px; }
+.car-card.mind-ladder .mind-cta:hover:not(:active) .mind-cta-go {
+  transform: translateX(2px);
+  background: rgba(196, 181, 253, .24);
+}
+.car-card.mind-ladder .mind-cta:active {
+  transform: scale(.985);
+  border-color: rgba(196, 181, 253, .42);
+  box-shadow:
+    inset 0 2px 7px rgba(0, 0, 0, .5),
+    0 4px 10px -9px rgba(0, 0, 0, .9);
+}
+html.reduced-motion .car-card.mind-ladder .mind-cta,
+html.reduced-motion .mind-cta-go { transition: none; }
+
 /* short columns: the chrome gives up first, the rows keep their share. Nothing here
    sets a row floor — a floor is exactly what used to push the list over the foot. */
 @media (max-height: 700px) {
@@ -20265,13 +20533,13 @@ html.reduced-motion .mind-av-img { transition: none; }
 /* compact rows: a 24–28px slice needs a 22px portrait, or the row clips its own face.
    The card is short here, so the list trades portrait size for five legible lines. */
 @media (max-height: 680px) {
-  .car-card.mind-ladder .mind-row { padding-top: 1px; padding-bottom: 1px; }
+  .car-card.mind-ladder .mind-row { padding-top: 1px; padding-bottom: 1px; gap: 7px; }
   .car-card.mind-ladder .mind-av { width: 22px; height: 22px; }
   .car-card.mind-ladder .mind-ini { font-size: 10px; }
-  .car-card.mind-ladder .mind-rank { width: 19px; height: 19px; font-size: 10px; border-radius: 6px; }
+  .car-card.mind-ladder .mind-rank { width: 22px; height: 24px; font-size: 10.5px; border-radius: 7px 7px 11px 11px / 6px 6px 13px 13px; }
+  .car-card.mind-ladder .mind-crown { width: 10px; height: 6px; }
   .car-card.mind-ladder .mind-nm { font-size: 12.5px; }
   .car-card.mind-ladder .mind-score { font-size: 13.5px; }
-  .car-card.mind-ladder .mind-trend { min-width: 24px; font-size: 10px; padding: 2px 3px 3px; }
   .car-card.mind-ladder .mind-av .mind-flag { --fp-d: 11px; width: 11px; height: 11px; }
   .car-card.nations-cup .mini-rank.nations-rank > li.nations-row { padding-top: 1px; padding-bottom: 1px; }
   .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) { grid-template-columns: 19px 26px minmax(0, 1fr) 24px 90px; column-gap: 6px; }
@@ -20290,6 +20558,23 @@ html.reduced-motion .mind-av-img { transition: none; }
 @media (max-height: 520px) {
   .mini-rank.nations-rank li.nations-row:nth-child(4),
   .mind-podium .mind-row:nth-child(4) { display: none; }
+}
+/* the narrowest phone: the standing bar drops the word "minds" (the number carries it)
+   and the row gives back a pixel of gutter, so a real handle still survives before it
+   ellipsizes. Nothing here removes a column the row needs to stay legible. */
+@media (max-width: 360px) {
+  .hm-pill-u { display: none; }
+  .car-card.mind-ladder .mind-row { gap: 6px; padding-left: 8px; }
+  /* the header keeps its whole title at 320px: the crest and the kicker both give back
+     tracking instead of letting the wordmark clip */
+  .car-card.mind-ladder .mind-kicker { font-size: 11.5px; letter-spacing: .1em; }
+  .car-card.mind-ladder .mind-ico { width: 20px; height: 20px; }
+  .car-card.mind-ladder .mind-ico .ico { width: 12px; height: 12px; }
+  .car-card.mind-ladder .mind-top { padding: 4px 7px 4px 6px; letter-spacing: .1em; }
+}
+@media (max-width: 344px) {
+  .car-card.mind-ladder .mind-tiq-k { display: none; }
+  .car-card.mind-ladder .mind-score { font-size: 14px; }
 }
 
 /* ============================================================================================

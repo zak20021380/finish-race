@@ -50,6 +50,11 @@ Durable index; dated logs beside this file hold the history.
   `flex:1 1 0; min-height:0` so the band can NEVER overflow onto the bar; rows carry `padding-right:13px`
   to align the score column with the bar's 12px padding + 1px border. `paintMindMine`/`paintNationMine`
   paint zones, never `textContent` on the bar.
+- Mind Ladder row = FOUR cells: `.mind-rank` shield → `.mind-av` (28px, conic metal ring) →
+  `.mind-id` (`.mind-nm` + optional `.mind-delta`) → `.mind-score` (gold + gold brain). Styling
+  hangs off `li[data-rank]`, never per-child classes. The old `.mind-trend` dot capsule is gone —
+  never reintroduce a fixed-width trend pill, it eats the handle. Crest = `Season ${arena().seasonNo}`
+  in `#mind-top`; the YOU pill is `of N minds` in `#home-mind-field` (not a percentile).
 
 ## Post-match banter (src/banter.*)
 - Bubbles are FLEX CHILDREN of `.result-seat` (`fit-content`, `max-width:68%`,
