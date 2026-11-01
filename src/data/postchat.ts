@@ -20,12 +20,12 @@ export interface PostChatPreset {
   en: string;
 }
 
-/** The four tiles, in the order the drawer paints them: the handshake first, the challenge last. */
+/** The four tiles, in the order the drawer paints them: control, challenge, critique, pressure. */
 export const POST_CHAT_PRESETS: readonly PostChatPreset[] = [
-  { id: 'gg', en: 'GG! 🤝' },
-  { id: 'rematch', en: 'Rematch? ⚔️' },
-  { id: 'luck', en: 'Pure Luck! 🍀' },
-  { id: 'wp', en: 'Well Played 🎩' },
+  { id: 'gg', en: 'Calculated. ♟️' },
+  { id: 'rematch', en: 'Run it back. ⚔️' },
+  { id: 'luck', en: 'Fatal error. ⚡' },
+  { id: 'wp', en: 'Close call. 🎯' },
 ];
 
 /**
@@ -49,7 +49,7 @@ const PRESET_IDS = new Set<string>(POST_CHAT_PRESETS.map((p) => p.id));
  * abuse, and the room relays it from any seat. Anything else needs an entitlement. Keeping the
  * list here is what stops the tray and the gate from drifting apart.
  */
-export const POST_CHAT_FREE_REACTIONS: readonly string[] = ['🤝', '🔥', '😭', '😂', '🤯'];
+export const POST_CHAT_FREE_REACTIONS: readonly string[] = ['🤝', '🔥', '💀', '⚡', '🧠'];
 
 /** A line that is exactly one of the free faces — the only "text" a free seat may broadcast. */
 export const isPostChatFreeReaction = (text: string): boolean =>

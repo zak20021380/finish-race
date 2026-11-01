@@ -356,7 +356,7 @@
 }
 .result-bank-col.is-coins { justify-content: flex-start; }
 .result-bank-col.is-tiq { justify-content: flex-end; }
-.result-bank-col.is-stake { justify-content: flex-start; }
+.result-bank-col.is-stake { justify-content: flex-start; gap: 4px; }
 #btn-double-coins,
 #btn-recover-tiq { margin-inline-start: auto; }
 .result-bank-ico {
@@ -428,6 +428,8 @@
 }
 .result-stake-n {
   display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
   color: #FB7185;
   font-family: var(--font-numeric);
   font-size: 1rem;
@@ -437,6 +439,7 @@
   direction: ltr;
   unicode-bidi: isolate;
   white-space: nowrap;
+  text-overflow: ellipsis;
   text-shadow: 0 0 12px rgba(244, 63, 94, .35);
   transition: color .3s ease, text-shadow .3s ease;
 }
@@ -485,18 +488,25 @@
     box-shadow .18s ease;
 }
 #btn-recover-tiq {
-  --ad-spin-x: 10.5px;
-  gap: 5px;
-  height: 32px;
-  padding-inline: 8px 9px;
-  font-size: 9.5px;
+  --ad-spin-x: 5px;
+  gap: 2px;
+  height: 28px;
+  padding-inline: 4px;
+  border-color: rgba(255, 209, 128, .62);
+  background:
+    linear-gradient(180deg, rgba(255, 246, 214, .14), rgba(255, 246, 214, 0) 46%),
+    radial-gradient(120% 180% at 50% -40%, rgba(243, 212, 131, .24), transparent 58%),
+    linear-gradient(180deg, #191510 0%, #0E0C09 58%, #070605 100%);
+  color: #FFE9B0;
+  font-size: 9px;
   text-align: start;
   box-shadow:
-    inset 0 1px 0 rgba(255, 248, 220, .3),
-    inset 0 -1px 0 rgba(0, 0, 0, .5),
-    0 0 0 1px rgba(0, 0, 0, .3),
+    inset 0 1px 0 rgba(255, 248, 220, .34),
+    inset 0 -1px 0 rgba(0, 0, 0, .72),
+    inset 0 0 0 1px rgba(255, 226, 160, .07),
+    0 0 0 1px rgba(243, 212, 131, .12),
     0 6px 14px -9px rgba(0, 0, 0, .95),
-    0 0 12px -9px rgba(243, 212, 131, .5);
+    0 0 14px -7px rgba(243, 212, 131, .55);
 }
 #btn-recover-tiq::before {
   content: "";
@@ -511,10 +521,10 @@
   animation: recover-sheen 4.2s ease-in-out infinite;
 }
 #btn-double-coins {
-  --ad-spin-x: 7px;
-  gap: 3px;
-  height: 24px;
-  padding-inline: 7px 8px;
+  --ad-spin-x: 8px;
+  gap: 4px;
+  height: 28px;
+  padding-inline: 8px 9px;
   font-size: 10px;
   border-color: rgba(243, 212, 131, .42);
   box-shadow:
@@ -564,32 +574,43 @@
   height: 12px;
   filter: drop-shadow(0 0 4px rgba(243, 212, 131, .35));
 }
-#btn-recover-tiq .ad-chip-ico { width: 14px; height: 14px; }
+#btn-recover-tiq .ad-chip-ico { width: 11px; height: 11px; }
 .ad-chip-label { display: block; line-height: 1; }
-/* the recover key speaks in two short lines: the action, then its daily budget */
+/* one baseline: shield, action, budget. The budget is a badge, never a second line. */
 .ad-chip-text {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
   min-width: 0;
 }
-#btn-recover-tiq .ad-chip-label { font-size: 9px; letter-spacing: .02em; }
+#btn-recover-tiq .ad-chip-label {
+  font-family: var(--font-stat);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
 .ad-chip-quota {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: none;
-  padding: 0;
-  border-radius: 0;
-  background: none;
-  box-shadow: none;
-  color: inherit;
+  min-width: 16px;
+  height: 11px;
+  padding: 0 2px;
+  border: 1px solid rgba(243, 212, 131, .32);
+  border-radius: 999px;
+  background: rgba(243, 212, 131, .12);
+  box-shadow: inset 0 1px 0 rgba(255, 248, 220, .12);
+  color: #FFE7A8;
   font-family: var(--font-numeric);
-  font-size: 7px;
+  font-size: 6.5px;
   font-weight: 800;
   letter-spacing: 0;
-  line-height: 1.15;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
-  opacity: .72;
+  opacity: 1;
 }
 .ad-chip-spin {
   display: block;
@@ -785,6 +806,10 @@ html.reduced-motion .ad-toast { transition: none; }
 }
 
 /* ---- narrow phones: names keep the room, everything else gives it up ---- */
+@media (max-width: 389px) {
+  /* the 375-class ledger keeps one compact step, so the shield's one-line key fits beside it */
+  .result-stake-n { font-size: .92rem; }
+}
 @media (max-width: 360px) {
   .result-card { padding-inline: 12px; }
   .result-row { gap: 7px; padding-inline: 7px 8px; }
@@ -794,21 +819,22 @@ html.reduced-motion .ad-toast { transition: none; }
   #result-coin-chip .result-bank-ico,
   #result-tiq-chip .result-bank-ico { display: none; }
   .result-bank-col { gap: 5px; padding-inline: 3px; }
+  .result-bank-col.is-stake { padding-inline: 2px; }
   .result-bank-value { font-size: .95rem; }
   .result-stake-n { font-size: .92rem; }
-  #btn-recover-tiq { --ad-spin-x: 9px; gap: 3px; padding-inline: 6px; }
-  #btn-recover-tiq .ad-chip-ico { width: 12px; height: 12px; }
-  #btn-recover-tiq .ad-chip-label { font-size: 8px; }
-  .ad-chip-quota { font-size: 6.5px; }
+  #btn-double-coins { padding-inline: 7px 8px; }
 }
 @media (max-width: 340px) {
   /* 320px: the ledger and the shield share 250px — every glyph pays a pixel */
-  .result-bank-value,
-  .result-stake-n { font-size: .88rem; }
-  #btn-recover-tiq { gap: 2px; padding-inline: 5px; }
-  #btn-recover-tiq .ad-chip-ico { width: 10px; height: 10px; }
-  #btn-recover-tiq .ad-chip-label { font-size: 7px; letter-spacing: 0; }
-  .ad-chip-quota { font-size: 6px; }
+  .result-bank-value { font-size: .88rem; }
+  .result-stake-n { font-size: .78rem; }
+  .result-bank-col { gap: 4px; }
+  .result-bank-col.is-stake { gap: 3px; }
+  #btn-recover-tiq { --ad-spin-x: 3px; gap: 2px; padding-inline: 2px; }
+  .ad-chip-text { gap: 2px; }
+  #btn-recover-tiq .ad-chip-ico { width: 9px; height: 9px; }
+  #btn-recover-tiq .ad-chip-label { font-size: 7.5px; letter-spacing: 0; }
+  .ad-chip-quota { min-width: 14px; height: 10px; padding: 0 1.5px; font-size: 6px; }
 }
 
 /* ---- an old webview without text clipping keeps flat titles instead of blank ones ---- */
@@ -905,6 +931,11 @@ html[data-lang="fa"] .overlay.result .result-row-name { text-align: right; }
 html[data-lang="fa"] .overlay.result .result-btn { direction: rtl; }
 html[data-lang="fa"] .overlay.result .result-place { font-size: 8px; }
 html[data-lang="fa"] .overlay.result .result-stake-k { font-size: 7.5px; }
+/* the label's Latin display face must yield to Vazirmatn in Persian, id rule and all */
+html[data-lang="fa"] .overlay.result #btn-recover-tiq .ad-chip-label {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+}
 html[data-lang="fa"] .overlay.result .result-bank-value,
 html[data-lang="fa"] .overlay.result .result-stake-n { direction: ltr; }
 html[data-lang="fa"] .overlay.result .result-stake-n {

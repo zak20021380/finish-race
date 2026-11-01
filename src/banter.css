@@ -1,11 +1,16 @@
 /* ==========================================================================
-   POST-MATCH REACTIONS — one glass tray, five faces, floating bubbles
+   POST-MATCH REACTIONS — one glass tray, five cut-metal tokens, floating bubbles
 
    The tray is a single horizontal lane directly above the rematch key:
-   five one-tap reactions and the chat key. The composer opens under the
-   faces in place, so the idle tray is never taller than one row. A message
-   lands on its speaker's standings row as an absolutely positioned bubble,
-   which means the ladder never reflows under a reaction.
+   five one-tap reaction tokens and the chat key. The composer opens under the
+   faces in place, with the four closed lines beneath it, so the idle tray is
+   never taller than one row. A message lands on its speaker's standings row as
+   an absolutely positioned bubble, which means the ladder never reflows under
+   a reaction.
+
+   The five reactions are drawn, not typed: each face is a vector token inside
+   a recessed obsidian disc, and the tone rule below only changes the metal.
+   The OS emoji is still the wire payload, never the paint.
    ========================================================================== */
 
 /* one guard for every surface this file hides by attribute: an author `display`
@@ -89,32 +94,63 @@
   filter: drop-shadow(0 0 4px rgba(243, 212, 131, .72));
 }
 .result-say-vip > svg { width: 12px; height: 12px; }
-/* a crowned sticker is a medal with a gold ring, never a medal with a badge stapled on */
-.result-say.is-emote.is-vip-emote {
-  border-color: rgba(243, 212, 131, .55);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 246, 220, .2),
-    0 0 0 1.5px rgba(243, 212, 131, .18),
-    0 0 16px -5px rgba(243, 212, 131, .6);
-}
 
-/* a bare reaction is a medal, never a bar */
+/* a bare reaction is a medal, never a bar — and now a token, never an OS face */
 .result-say.is-emote {
   display: grid;
   place-items: center;
   width: 30px;
   height: 30px;
   padding: 0;
+  border-color: rgba(255, 255, 255, .09);
   border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(255, 255, 255, .06), transparent 62%),
+    linear-gradient(180deg, #131924 0%, #090D13 60%, #05070A 100%);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, .5),
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    0 8px 18px -12px rgba(0, 0, 0, .95);
+  color: var(--tone, #E2E8F0);
   font-size: 17px;
   line-height: 1;
   text-align: center;
 }
+.result-say.is-emote[data-tone] {
+  border-color: var(--tone-ring);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, .5),
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    0 0 16px -8px var(--tone-glow);
+}
+.result-row.is-you .result-say.is-emote {
+  border-color: rgba(243, 212, 131, .36);
+  background:
+    radial-gradient(circle at 50% 20%, rgba(243, 212, 131, .08), transparent 62%),
+    linear-gradient(180deg, #15130D 0%, #0B0A07 60%, #050403 100%);
+  color: var(--tone, #FFF3D6);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, .55),
+    inset 0 1px 0 rgba(255, 246, 220, .08),
+    0 0 16px -9px var(--tone-glow, rgba(243, 212, 131, .5));
+}
 .result-say.is-emote .result-say-t {
-  display: block;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
   font-size: 17px;
   line-height: 1;
   transform-origin: 50% 55%;
+}
+.result-say.is-emote .banter-glyph { width: 17px; height: 17px; }
+/* the room's crown outranks the token's own metal: a VIP face keeps its gold ring */
+.result-say.is-emote.is-vip-emote {
+  border-color: rgba(243, 212, 131, .55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 246, 220, .2),
+    0 0 0 1.5px rgba(243, 212, 131, .18),
+    0 0 16px -5px rgba(243, 212, 131, .6);
 }
 .result-say.is-emote.is-live .result-say-t {
   animation: banter-emote-pulse 2.6s ease-in-out .45s infinite;
@@ -175,7 +211,12 @@
   min-width: 0;
 }
 .banter-react {
+  --tone: #A9B6C8;
+  --tone-aura: rgba(148, 163, 184, .1);
+  --tone-ring: rgba(148, 163, 184, .32);
+  --tone-glow: rgba(148, 163, 184, .4);
   appearance: none;
+  position: relative;
   display: grid;
   place-items: center;
   flex: 1 1 0;
@@ -184,10 +225,16 @@
   max-width: 40px;
   height: 34px;
   padding: 0;
-  border: 1px solid transparent;
+  border: 1px solid rgba(255, 255, 255, .075);
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 20%, rgba(255, 255, 255, .12), rgba(255, 255, 255, .022) 74%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12);
+  background:
+    radial-gradient(circle at 50% 28%, var(--tone-aura), transparent 68%),
+    linear-gradient(180deg, #111722 0%, #090D14 58%, #05070B 100%);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .55),
+    inset 0 1px 0 rgba(255, 255, 255, .065),
+    0 1px 0 rgba(255, 255, 255, .035);
+  color: var(--tone);
   font-size: 17px;
   line-height: 1;
   cursor: pointer;
@@ -195,17 +242,71 @@
   transition:
     transform .16s cubic-bezier(.2, 1.5, .4, 1),
     border-color .16s ease,
-    background .16s ease;
+    background .16s ease,
+    box-shadow .16s ease;
+}
+.banter-glyph {
+  display: block;
+  width: 17px;
+  height: 17px;
+  filter:
+    drop-shadow(0 1px 3px rgba(0, 0, 0, .55))
+    drop-shadow(0 0 5px var(--tone-aura));
+}
+/* the five metals: one recessed disc, five tempers */
+.banter-react[data-tone="alliance"],
+.result-say[data-tone="alliance"] {
+  --tone: #EBD49A;
+  --tone-aura: rgba(243, 212, 131, .14);
+  --tone-ring: rgba(243, 212, 131, .44);
+  --tone-glow: rgba(243, 212, 131, .5);
+}
+.banter-react[data-tone="heat"],
+.result-say[data-tone="heat"] {
+  --tone: #FB7185;
+  --tone-aura: rgba(244, 63, 94, .16);
+  --tone-ring: rgba(251, 113, 133, .46);
+  --tone-glow: rgba(244, 63, 94, .55);
+}
+.banter-react[data-tone="defeat"],
+.result-say[data-tone="defeat"] {
+  --tone: #C7D2E0;
+  --tone-aura: rgba(148, 163, 184, .14);
+  --tone-ring: rgba(203, 213, 225, .38);
+  --tone-glow: rgba(148, 163, 184, .45);
+}
+.banter-react[data-tone="spark"],
+.result-say[data-tone="spark"] {
+  --tone: #7DD3FC;
+  --tone-aura: rgba(56, 189, 248, .16);
+  --tone-ring: rgba(125, 211, 252, .44);
+  --tone-glow: rgba(56, 189, 248, .55);
+}
+.banter-react[data-tone="mind"],
+.result-say[data-tone="mind"] {
+  --tone: #C4B5FD;
+  --tone-aura: rgba(167, 139, 250, .16);
+  --tone-ring: rgba(196, 181, 253, .44);
+  --tone-glow: rgba(167, 139, 250, .55);
 }
 .banter-react:not(:disabled):active {
-  transform: scale(.88);
-  border-color: rgba(243, 212, 131, .5);
-  background: radial-gradient(circle at 50% 20%, rgba(243, 212, 131, .26), rgba(243, 212, 131, .05) 74%);
+  transform: scale(.9);
+  border-color: var(--tone-ring);
+  background:
+    radial-gradient(circle at 50% 30%, var(--tone-ring), transparent 70%),
+    linear-gradient(180deg, #101620 0%, #080C12 58%, #040609 100%);
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, .62),
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    0 0 0 1px var(--tone-ring),
+    0 0 16px -4px var(--tone-glow);
 }
 @media (hover: hover) {
   .banter-react:not(:disabled):hover {
-    border-color: rgba(255, 255, 255, .22);
-    background: radial-gradient(circle at 50% 20%, rgba(255, 255, 255, .18), rgba(255, 255, 255, .035) 74%);
+    border-color: rgba(255, 255, 255, .18);
+    background:
+      radial-gradient(circle at 50% 28%, var(--tone-aura), rgba(255, 255, 255, .02) 66%, transparent 74%),
+      linear-gradient(180deg, #141B26 0%, #0A0F16 58%, #05080C 100%);
   }
 }
 .banter-react.is-pop { animation: banter-react-pop .34s cubic-bezier(.2, 1.4, .4, 1); }
@@ -237,6 +338,10 @@
 .banter-sticker.is-locked:not(:disabled):active {
   border-color: rgba(243, 212, 131, .4);
   background: radial-gradient(circle at 50% 18%, rgba(243, 212, 131, .16), rgba(243, 212, 131, .03) 76%);
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, .6),
+    0 0 0 1px rgba(243, 212, 131, .3),
+    0 0 16px -4px rgba(243, 212, 131, .5);
 }
 .banter-sticker-lock {
   position: absolute;
@@ -310,7 +415,6 @@
     radial-gradient(circle at 50% 18%, rgba(243, 212, 131, .14), rgba(243, 212, 131, .02) 76%);
   color: #E7C87C;
 }
-.banter-toggle.is-gated { border-color: rgba(255, 255, 255, .1); color: #8A93A3; }
 
 /* the micro-lock: 13px, tucked into the key's shoulder, never in its flow */
 .banter-key-lock {
@@ -405,6 +509,7 @@
   transition: transform .14s ease, filter .14s ease, color .14s ease;
 }
 .banter-send {
+  position: relative;
   background: linear-gradient(180deg, #FFD29A, #F0524F);
   box-shadow:
     0 3px 8px -3px rgba(240, 82, 82, .65),
@@ -418,7 +523,47 @@
     inset 0 1px 0 rgba(255, 255, 255, .4);
   color: #042A25;
 }
+/* the free seat's send key: still live, still inviting, but wearing the VIP gate */
+.banter-send.is-gated,
+.overlay.result.win .banter-send.is-gated {
+  border: 1px solid rgba(243, 212, 131, .46);
+  background:
+    linear-gradient(180deg, rgba(255, 246, 220, .16), rgba(255, 246, 220, 0) 48%),
+    linear-gradient(180deg, #221C12 0%, #100E09 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 220, .24),
+    0 0 0 1px rgba(0, 0, 0, .32),
+    0 3px 10px -4px rgba(243, 212, 131, .42);
+  color: #F3D483;
+}
+.banter-send.is-gated:not(:disabled):active {
+  border-color: rgba(243, 212, 131, .75);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 220, .3),
+    0 0 0 1px rgba(243, 212, 131, .5),
+    0 0 14px -4px rgba(243, 212, 131, .7);
+}
+.banter-send:disabled { opacity: .55; cursor: default; }
+/* the refined micro-lock: a jeweller's pin, not a second button */
+.banter-send-lock {
+  position: absolute;
+  inset-inline-end: -3px;
+  top: -3px;
+  display: grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+  border: 1px solid rgba(243, 212, 131, .55);
+  border-radius: 50%;
+  background: #090704;
+  box-shadow:
+    0 2px 6px -3px rgba(0, 0, 0, .95),
+    0 0 8px -3px rgba(243, 212, 131, .6);
+  color: #FFE7A8;
+  pointer-events: none;
+}
 .banter-send .ico { width: 14px; height: 14px; }
+.banter-send-lock .ico { width: 7px; height: 7px; }
 .banter-send:not(:disabled):active { transform: scale(.88); }
 .banter-close {
   background: transparent;
@@ -466,11 +611,12 @@
   background: linear-gradient(180deg, rgba(255, 255, 255, .065), rgba(255, 255, 255, .015));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07);
   color: #E8EFF9;
-  font: inherit;
-  font-size: 11px;
+  font-family: var(--font-stat);
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0;
+  letter-spacing: .035em;
   line-height: 1;
+  text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -483,7 +629,7 @@
   border-color: rgba(243, 212, 131, .42);
   background: linear-gradient(180deg, rgba(243, 212, 131, .2), rgba(243, 212, 131, .04));
 }
-.banter-canned-chip:disabled { cursor: default; }
+.banter-canned-chip:disabled { cursor: default; opacity: .55; }
 /* the one key on this row that is allowed to be gold: it is the only one that sells something */
 .banter-vip-pill {
   appearance: none;
@@ -624,7 +770,11 @@
   font-weight: 900;
   letter-spacing: .005em;
   line-height: 1.22;
+  text-wrap: balance;
 }
+/* the send gate speaks a full sentence, so it gets one notch less display type */
+.vip-sheet.is-gate .vip-title { font-size: 17px; line-height: 1.34; }
+.vip-sheet.is-gate .vip-sub { color: #D8C28A; }
 .vip-sub {
   margin: 0 0 12px;
   color: #A9A08C;
@@ -736,6 +886,7 @@
 @media (max-width: 360px) {
   .banter-label { display: none; }
   .banter-react { height: 32px; font-size: 16px; min-width: 28px; }
+  .banter-glyph { width: 16px; height: 16px; }
   .banter-toggle,
   .banter-vip-key { width: 32px; height: 32px; }
   .result-banter { padding: 4px 5px; gap: 5px; }
@@ -743,11 +894,15 @@
   .banter-input { height: 22px; font-size: 11.5px; }
   .banter-send,
   .banter-close { width: 26px; height: 26px; }
+  .banter-send-lock { width: 11px; height: 11px; inset-inline-end: -2px; top: -2px; }
+  .banter-send-lock .ico { width: 6px; height: 6px; }
   .banter-canned { padding: 6px; gap: 5px; }
-  .banter-canned-chip { height: 28px; font-size: 10.5px; padding: 0 6px; }
+  .banter-canned-chip { height: 28px; font-size: 10px; padding: 0 5px; letter-spacing: .02em; }
   .banter-vip-pill { height: 30px; font-size: 9px; letter-spacing: .04em; }
+  .result-say.is-emote .banter-glyph { width: 16px; height: 16px; }
   .vip-card { padding: 16px 13px 12px; }
   .vip-title { font-size: 17.5px; }
+  .vip-sheet.is-gate .vip-title { font-size: 16px; }
   .vip-feat-s { display: none; }
 }
 @media (max-height: 600px) {
@@ -833,7 +988,13 @@ html[data-lang="fa"] .result-say.is-emote .result-say-t { line-height: 1; }
 html[data-lang="fa"] .banter-input { font-size: 12.5px; text-align: right; }
 html[data-lang="fa"] .banter-alert { font-size: 10px; line-height: 1.5; }
 html[data-lang="fa"] .banter-canned-k { font-size: 8px; letter-spacing: 0; }
-html[data-lang="fa"] .banter-canned-chip { font-size: 11px; }
+html[data-lang="fa"] .banter-canned-chip {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  font-size: 10.5px;
+  letter-spacing: 0;
+  line-height: 1.5;
+  text-transform: none;
+}
 html[data-lang="fa"] .banter-vip-pill {
   font-size: 10px;
   letter-spacing: 0;
@@ -845,6 +1006,7 @@ html[data-lang="fa"] .banter-vip-pill-go,
 [dir="rtl"] .banter-vip-pill-go { transform: scaleX(-1); }
 html[data-lang="fa"] .vip-kicker { letter-spacing: 0; font-size: 8.5px; }
 html[data-lang="fa"] .vip-title { font-size: 18px; line-height: 1.4; }
+html[data-lang="fa"] .vip-sheet.is-gate .vip-title { font-size: 16px; line-height: 1.55; }
 html[data-lang="fa"] .vip-sub { font-size: 11.5px; line-height: 1.65; }
 html[data-lang="fa"] .vip-feat-t { font-size: 12px; line-height: 1.4; }
 html[data-lang="fa"] .vip-feat-s { font-size: 10.5px; line-height: 1.55; }

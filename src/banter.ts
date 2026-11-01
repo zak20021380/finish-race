@@ -1,14 +1,18 @@
 /**
- * banter.ts — the post-match tray: quick reactions, the VIP sticker stash, the canned quick-chat
- * drawer and the composer behind them.
+ * banter.ts — the post-match tray: quick reactions, the VIP sticker stash, the quick-chat
+ * vocabulary and the composer behind them.
  *
  * The tray sits directly above the rematch key in the Match Complete capsule: five one-tap
  * reactions on a single glass lane, the VIP stash key, and the chat key. The chat key opens one
- * row in place — never a second storey — but *which* row depends on who is holding the phone:
+ * row in place — never a second storey — for everyone:
  *
- *  - a VIP gets the composer, because typing is the thing VIP buys;
- *  - everyone else gets the quick-chat drawer: the four closed tactical lines, one tap each, plus
- *    the pill that explains what VIP would add. Their voice is smaller, never absent.
+ *  - the composer is open to every seat, and the mobile keyboard is never blocked. Typing is the
+ *    hook, not the product: a free seat can write a full 40-character line and keep it;
+ *  - the send key is where VIP begins. For a free seat it wears a micro-lock, and a tap fires the
+ *    warning haptic, keeps the draft intact and opens the store with the broadcast hook. A preview
+ *    or a real Premium seat returns with the same line one tap from the wire;
+ *  - the four closed tactical lines sit under the composer while it is open, so a free seat's
+ *    voice is never smaller than a tap.
  *
  * The stash is the same lane on its second page: five elite stickers that a VIP sends like any
  * other reaction, and that everybody else can see, tap, and be sold. A locked sticker is not
@@ -79,6 +83,19 @@ const MAX_CHARS = 40;
  */
 const REACTIONS = POST_CHAT_FREE_REACTIONS;
 const BOT_LINES = 4;
+
+/**
+ * The art behind each free face. The glyph stays the wire payload — the room only relays the five
+ * pictographs it owns — while the tray and the bubble paint the vector token instead of the OS
+ * emoji. Every token shares one recessed disc; the tone only changes the metal.
+ */
+const REACTION_ART: Record<string, { icon: string; tone: string }> = {
+  '🤝': { icon: '#i-rx-alliance', tone: 'alliance' },
+  '🔥': { icon: '#i-rx-ember', tone: 'heat' },
+  '💀': { icon: '#i-rx-skull', tone: 'defeat' },
+  '⚡': { icon: '#i-rx-volt', tone: 'spark' },
+  '🧠': { icon: '#i-rx-mind', tone: 'mind' },
+};
 
 /**
  * The VIP stash: five elite badges behind the crown key. Each is a pictograph-only line, so it
@@ -165,8 +182,10 @@ const byId = <T extends HTMLElement>(id: string): T => {
   return node as T;
 };
 
-/** Which row is open under the faces: nothing, the composer, or the canned drawer. */
-type Drawer = 'none' | 'compose' | 'canned';
+/** Which row is open under the faces: nothing, or the composer with its quick-chat vocabulary. */
+type Drawer = 'none' | 'compose';
+/** Why the store opened: the standing sell, or the send key the player just tried to use. */
+type SheetReason = 'sell' | 'gate';
 
 export function createBanter(wiring: BanterWiring): Banter {
   const dock = byId<HTMLDivElement>('result-banter');
@@ -177,10 +196,10 @@ export function createBanter(wiring: BanterWiring): Banter {
   const form = byId<HTMLFormElement>('banter-form');
   const input = byId<HTMLInputElement>('banter-input');
   const send = byId<HTMLButtonElement>('banter-send');
+  const sendLock = byId<HTMLElement>('banter-send-lock');
   const toggle = byId<HTMLButtonElement>('banter-toggle');
   /* the <use> swaps between the chat bubble and the close glyph as the drawer flips */
   const toggleIco = byId<HTMLElement>('banter-toggle-ico');
-  const toggleLock = byId<HTMLElement>('banter-toggle-lock');
   const closeKey = byId<HTMLButtonElement>('banter-close');
   const stashKey = byId<HTMLButtonElement>('banter-vip-key');
   const stashLock = byId<HTMLElement>('banter-vip-lock');
@@ -209,9 +228,16 @@ export function createBanter(wiring: BanterWiring): Banter {
   const vipKeys: HTMLButtonElement[] = [];
 
   for (const face of REACTIONS) {
-    const key = el('button', 'banter-react', face);
+    const key = el('button', 'banter-react');
+    const art = REACTION_ART[face];
     key.type = 'button';
     key.dataset.emoji = face;
+    if (art) {
+      key.dataset.tone = art.tone;
+      key.append(ico(art.icon, 'banter-glyph'));
+    } else {
+      key.textContent = face;
+    }
     key.addEventListener('click', () => {
       if (lockedNow() || cooling()) return;
       pop(key);
@@ -276,6 +302,7 @@ export function createBanter(wiring: BanterWiring): Banter {
   let botTurn = 0;
   let deniedTimer = 0;
   let sheetOpen = false;
+  let sheetReason: SheetReason = 'sell';
   let sheetReturn: HTMLElement | null = null;
   /** Lines that landed between the winning move and the card: replayed when the tray opens. */
   let pending: Array<{ line: PostChatLine; side: number; vip: boolean }> = [];
@@ -304,26 +331,25 @@ export function createBanter(wiring: BanterWiring): Banter {
   }
 
   /**
-   * The row under the faces is one slot: opening the composer or the drawer grows the tray by one
-   * line in place rather than replacing the reactions, so the faces stay one tap away.
+   * The row under the faces is one slot: the composer and its quick-chat vocabulary grow the tray
+   * in place rather than replacing the reactions, so the faces stay one tap away.
    */
   function setDrawer(next: Drawer, focus = false): void {
     drawer = next;
-    form.hidden = next !== 'compose';
-    canned.hidden = next !== 'canned';
-    toggle.setAttribute('aria-expanded', next === 'none' ? 'false' : 'true');
-    toggleIco.setAttribute('href', next === 'none' ? '#i-chat' : '#i-close');
+    const composing = next === 'compose';
+    form.hidden = !composing;
+    /* the quick-chat vocabulary sits under the composer, never in place of it */
+    canned.hidden = !composing;
+    toggle.setAttribute('aria-expanded', composing ? 'true' : 'false');
+    toggleIco.setAttribute('href', composing ? '#i-close' : '#i-chat');
     toggle.setAttribute('aria-label', toggleLabel());
-    /* an open drawer turns this key into a close key: a padlock on a close key is a lie */
-    toggleLock.hidden = isPremiumUser() || next !== 'none';
-    if (next === 'compose' && focus && !locked) input.focus();
-    if (next !== 'compose') input.blur();
+    if (composing && focus && !locked) input.focus();
+    if (!composing) input.blur();
   }
 
   function toggleLabel(): string {
     if (locked) return t('banterComposeOpen');
-    if (drawer !== 'none') return t('banterComposeClose');
-    return isPremiumUser() ? t('banterComposeOpen') : t('banterQuickChat');
+    return drawer === 'compose' ? t('banterComposeClose') : t('banterComposeOpen');
   }
 
   /** Which page the rail is on, and the gold that says so. */
@@ -344,10 +370,13 @@ export function createBanter(wiring: BanterWiring): Banter {
       key.setAttribute('aria-disabled', vip ? 'false' : 'true');
       key.querySelector('.banter-sticker-lock')?.toggleAttribute('hidden', vip);
     }
-    toggle.classList.toggle('is-gated', !vip);
-    toggleLock.hidden = vip;
+    /* typing is free, so the chat key never wears the lock; the gate moved to send */
+    send.classList.toggle('is-gated', !vip);
+    sendLock.hidden = vip;
     stashKey.classList.toggle('is-gated', !vip);
     stashLock.hidden = vip;
+    /* the pill is the seller; a VIP reading the quick-chat row has nothing to buy */
+    vipPill.hidden = vip;
     dock.classList.toggle('is-vip', vip);
   }
 
@@ -357,7 +386,7 @@ export function createBanter(wiring: BanterWiring): Banter {
     label.textContent = t(vipPage ? 'banterVipTray' : 'banterTray');
     reacts.setAttribute('aria-label', t(vipPage ? 'banterVipStash' : 'banterReact'));
     input.setAttribute('aria-label', t('banterInputLabel'));
-    send.setAttribute('aria-label', t('banterSendLabel'));
+    send.setAttribute('aria-label', t(isPremiumUser() ? 'banterSendLabel' : 'banterSendLocked'));
     closeKey.setAttribute('aria-label', t('banterComposeClose'));
     toggle.setAttribute('aria-label', toggleLabel());
     stashKey.setAttribute(
@@ -411,7 +440,15 @@ export function createBanter(wiring: BanterWiring): Banter {
     if (!anchor) return;
     window.clearTimeout(bubbleTimers.get(side));
     const emote = isEmote(raw);
-    anchor.text.textContent = raw;
+    const art = emote ? REACTION_ART[raw] : undefined;
+    if (art) {
+      /* the face travels as a pictograph, but neither tray nor bubble ever hands it to the OS */
+      anchor.text.replaceChildren(ico(art.icon, 'banter-glyph'), el('span', 'sr-only', raw));
+      anchor.node.dataset.tone = art.tone;
+    } else {
+      anchor.text.textContent = raw;
+      delete anchor.node.dataset.tone;
+    }
     anchor.node.classList.toggle('is-emote', emote);
     /* the crown is the room's word on the author, so it rides the bubble rather than the row —
        and a medal carries it as a gold ring instead, because a 12px badge has no room in a 30px
@@ -435,8 +472,9 @@ export function createBanter(wiring: BanterWiring): Banter {
     if (!anchor || anchor.node.hidden) return;
     const clear = (node: HTMLElement, badge: HTMLElement | null, text: HTMLElement) => {
       node.classList.remove('is-live', 'is-out', 'is-emote', 'is-vip', 'is-vip-emote');
+      delete node.dataset.tone;
       if (badge) badge.hidden = true;
-      text.textContent = '';
+      text.replaceChildren();
       node.hidden = true;
     };
     if (immediate) {
@@ -509,10 +547,16 @@ export function createBanter(wiring: BanterWiring): Banter {
 
   function paintSheet(): void {
     const source = vipSource();
+    const gated = sheetReason === 'gate' && source === 'none';
+    sheet.classList.toggle('is-gate', gated);
     sheetKicker.textContent = t('vipKicker');
-    sheetTitle.textContent = t(source === 'none' ? 'vipTitle' : 'vipActiveTitle');
+    sheetTitle.textContent = t(
+      gated ? 'vipGateTitle' : source === 'none' ? 'vipTitle' : 'vipActiveTitle',
+    );
     sheetSub.textContent = t(
-      source === 'telegram' ? 'vipActiveSub' : source === 'preview' ? 'vipPreviewSub' : 'vipSub',
+      gated ? 'vipGateSub'
+        : source === 'telegram' ? 'vipActiveSub'
+          : source === 'preview' ? 'vipPreviewSub' : 'vipSub',
     );
     sheetFeats.replaceChildren(...VIP_FEATURES.map((feat) => {
       const row = el('li', 'vip-feat');
@@ -536,9 +580,10 @@ export function createBanter(wiring: BanterWiring): Banter {
     sheetClose.setAttribute('aria-label', t('vipClose'));
   }
 
-  function openSheet(from: HTMLElement | null): void {
+  function openSheet(from: HTMLElement | null, reason: SheetReason = 'sell'): void {
     if (sheetOpen || !open) return;
     sheetOpen = true;
+    sheetReason = reason;
     sheetReturn = from;
     paintSheet();
     sheet.hidden = false;
@@ -566,12 +611,12 @@ export function createBanter(wiring: BanterWiring): Banter {
     }
     /* the browser's door: a local preview pass, never a purchase and never stored */
     grantVipPreview();
-    paintVipKeys();
     closeSheet();
-    /* the drawer was the consolation prize; now that the composer is theirs, hand it over */
-    if (drawer === 'canned') setDrawer('compose', true);
+    paintVipKeys();
     paintCopy();
     paintCool();
+    /* the draft survived the gate; put the unlocked send key under the thumb */
+    if (drawer === 'compose') send.focus({ preventScroll: true });
   });
 
   sheetClose.addEventListener('click', () => closeSheet());
@@ -586,15 +631,22 @@ export function createBanter(wiring: BanterWiring): Banter {
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
+    if (lockedNow() || cooling()) return;
+    if (!isPremiumUser()) {
+      /* the typing trap: keep every keystroke, explain the gate, sell the transmitter */
+      notify('warning');
+      openSheet(send, 'gate');
+      return;
+    }
     say({ text: input.value });
   });
 
   toggle.addEventListener('click', () => {
     if (locked) return;
-    if (drawer !== 'none') { setDrawer('none'); return; }
     impact('light');
-    if (isPremiumUser()) setDrawer('compose', true);
-    else setDrawer('canned');
+    /* the keyboard is never behind a paywall: every seat gets the field */
+    if (drawer === 'none') setDrawer('compose', true);
+    else setDrawer('none');
   });
 
   closeKey.addEventListener('click', () => {
