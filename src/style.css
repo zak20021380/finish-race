@@ -13969,6 +13969,8 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* a mind carries no rank tier: hide the subtitle slot entirely when it is empty */
+.ms-tier:empty { display: none; }
 /* 48px circular clay key: the house extrusion, sunk by the same travel as .gm-key */
 .ms-x {
   --d: 3px;
@@ -14069,34 +14071,51 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
   text-shadow: 0 1px 0 rgba(0, 0, 0, .7);
 }
 
-.ms-axes { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
-.ms-axis { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.ms-axis-h { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.ms-axis-ico { flex: none; width: 14px; height: 14px; color: var(--ml-aura, var(--brand-ink)); }
-.ms-axis-h small {
-  flex: none;
-  width: 62px;
-  font-size: 9.5px;
-  font-weight: 900;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  line-height: 1.2;
-  color: var(--chip-ink);
-}
-.ms-axis-h b {
-  flex: 1 1 auto;
+/* one glass capsule, three cells: the scorecard reads at a glance, no RPG bars */
+.ms-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   min-width: 0;
-  text-align: right;
-  font-size: var(--t-micro);
-  font-weight: 800;
-  line-height: 1.2;
+  border-radius: 14px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, .015) 100%),
+    var(--field);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    inset 0 -1px 0 rgba(0, 0, 0, .38),
+    inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+.ms-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 6px;
+}
+.ms-stat + .ms-stat { box-shadow: inset 1px 0 0 rgba(255, 255, 255, .06); }
+.ms-stat-v {
+  font-size: var(--t-1);
+  font-weight: 900;
+  line-height: 1.1;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ms-track { height: 8px; }
+.ms-stat-l {
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .ms-form { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
 .ms-dots { flex: none; display: flex; gap: 5px; }
@@ -14110,33 +14129,24 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
   font-weight: 900;
   line-height: 1;
 }
-/* cyan won, coral lost, and an unrecorded race stays a dim dash rather than being
-   drawn as a result the save never kept */
+/* emerald won with a neon kiss, muted slate lost, and an unrecorded race stays a
+   dim dash rather than being drawn as a result the save never kept */
 .ms-dot.w {
-  background: linear-gradient(180deg, rgba(56, 189, 248, .3) 0%, rgba(2, 132, 199, .14) 100%);
-  box-shadow: inset 0 0 0 1.5px var(--brand-3), inset 0 1px 0 rgba(255, 255, 255, .16);
-  color: #E0F2FE;
+  background: linear-gradient(180deg, rgba(52, 211, 153, .34) 0%, rgba(5, 150, 105, .14) 100%);
+  box-shadow:
+    inset 0 0 0 1.5px #34D399,
+    inset 0 1px 0 rgba(255, 255, 255, .18),
+    0 0 8px -1px rgba(52, 211, 153, .5);
+  color: #D1FAE5;
 }
 .ms-dot.l {
-  background: linear-gradient(180deg, rgba(255, 82, 43, .28) 0%, rgba(184, 48, 16, .16) 100%);
-  box-shadow: inset 0 0 0 1.5px var(--cta), inset 0 1px 0 rgba(255, 255, 255, .14);
-  color: #FFE4DC;
+  background: linear-gradient(180deg, rgba(148, 163, 184, .22) 0%, rgba(71, 85, 105, .14) 100%);
+  box-shadow: inset 0 0 0 1.5px rgba(148, 163, 184, .5), inset 0 1px 0 rgba(255, 255, 255, .12);
+  color: #CBD5E1;
 }
 .ms-dot.u { background: var(--field); box-shadow: var(--inset); color: var(--ink-soft); }
-.ms-form-c {
-  flex: 1 1 auto;
-  min-width: 0;
-  text-align: right;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.3;
-  color: var(--ink-soft);
-}
-
-.ms-fine { flex: none; margin: 0; text-align: left; font-size: 10px; line-height: 1.4; }
-
-/* ---- foot keys: coral over slate, both 48px, both able to do what they say ---- */
-.ms-acts { flex: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); margin-top: var(--s1); }
+/* ---- foot keys: crimson over obsidian, both 48px, both able to do what they say ---- */
+.ms-acts { flex: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); margin-top: var(--s2); }
 .ms-challenge,
 .ms-guild {
   --d: 4px;
@@ -14164,23 +14174,29 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
 .ms-guild .ico { flex: none; width: 15px; height: 15px; }
 .ms-challenge span,
 .ms-guild span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* luxury crimson face with an amber metallic rim, lit from above */
 .ms-challenge {
-  background: linear-gradient(180deg, var(--cta-hi) 0%, var(--cta) 100%);
-  color: var(--on-brand);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .3) 0%, rgba(255, 255, 255, 0) 44%),
+    linear-gradient(180deg, #E4442E 0%, #B3201F 52%, #7E0F18 100%);
+  color: #FFF3E0;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .45);
   box-shadow:
-    0 var(--d) 0 var(--cta-lip),
-    0 calc(var(--d) + 7px) 16px -8px var(--cta-shadow),
-    inset 0 2px 3px rgba(255, 255, 255, .35),
-    inset 0 -2px 3px rgba(0, 0, 0, .18);
+    inset 0 0 0 1px rgba(255, 214, 140, .5),
+    inset 0 1px 0 rgba(255, 237, 205, .6),
+    inset 0 -2px 3px rgba(0, 0, 0, .35),
+    0 var(--d) 0 #4A0A10,
+    0 calc(var(--d) + 8px) 18px -8px rgba(228, 68, 46, .6);
 }
 .ms-guild {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, .09) 0%, rgba(255, 255, 255, .02) 100%),
-    #222C42;
+    linear-gradient(180deg, rgba(255, 255, 255, .1) 0%, rgba(255, 255, 255, .02) 100%),
+    #202A3E;
   color: var(--chip-ink);
   box-shadow:
-    inset 0 0 0 1px rgba(125, 211, 252, .26),
-    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 0 0 1px rgba(125, 211, 252, .24),
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 -2px 3px rgba(0, 0, 0, .32),
     0 var(--d) 0 #0B111C;
 }
 .ms-challenge:active,
@@ -14431,7 +14447,6 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
   /* the squad sheet keeps its sword / channel glyph: both labels still fit beside them */
   #sheet-mind.is-guild .ms-challenge .ico,
   #sheet-mind.is-guild .ms-guild .ico { display: block; }
-  .ms-axis-h small { width: 56px; }
   .ms-dot { width: 24px; height: 24px; font-size: 10px; }
 }
 

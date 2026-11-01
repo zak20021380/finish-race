@@ -147,42 +147,33 @@ function hashOf(key: string): number {
   return Math.abs(h);
 }
 
-/* ---------- mind profile: the four axes, the form strip, the percentile ring ---------- */
-
-/** One axis of the cognitive read: a bar, the number behind it, and where it came from. */
-interface MindAxis {
-  label: string;
-  icon: string;
-  pct: number;
-  value: string;
-  hint: string;
-}
+/* ---------- mind profile: the stat capsule, the form strip, the percentile ring ---------- */
 
 /** Newest on the right; `u` is a race the save genuinely does not remember. */
 type FormCell = 'w' | 'l' | 'u';
 
-const clampPct = (n: number): number => Math.max(0, Math.min(100, Math.round(n * 100)));
-
-/** Each axis is a count against a fixed cap, so the bar and the number never disagree. */
-const axisPct = (count: number, cap: number): number => clampPct(count / cap);
+/** One cell of the scorecard: a number and what it counts. */
+interface MindStat {
+  label: string;
+  value: string;
+}
 
 /**
- * A rival's axes, seeded once from their own key. The ladder holds no race log for
- * anybody but you, so these are the Preview chip's figures — stable across renders and
- * the only part of the sheet not read from real data.
+ * A rival's scorecard, seeded once from their own key. The ladder holds no race log for
+ * anybody but you, so the match count and best streak are the Preview chip's figures —
+ * stable across renders — while the wins and their rate come from the row's real wins.
  */
-function rivalAxes(p: PlayerRow): MindAxis[] {
+function rivalStats(p: PlayerRow): MindStat[] {
   const h = hashOf(p.id);
-  const blocked = 3 + (h % 8);
-  const mine = 14 + ((h >> 4) % 8);
-  const field = mine + 6 + ((h >> 8) % 9);
-  const baited = 2 + ((h >> 12) % 7);
-  const back = 2 + ((h >> 16) % 9);
+  const rate = 42 + (h % 27); /* 42–68% keeps the seeded field plausible */
+  const matches = p.wins > 0 ? Math.max(p.wins, Math.round((p.wins * 100) / rate)) : 6 + (h % 24);
+  const wins = Math.min(p.wins, matches);
+  const pct = matches > 0 ? Math.round((wins / matches) * 100) : 0;
+  const streak = 1 + ((h >> 5) % 8);
   return [
-    { label: 'Foresight', icon: '#i-brain', pct: axisPct(blocked, 12), value: `${blocked} blocked paths`, hint: 'Walls read before committing · cap 12 a race · Season preview figure' },
-    { label: 'Tempo', icon: '#i-move', pct: axisPct(field - mine, 14), value: `${mine} vs ${field} turns`, hint: `Their ${mine} turns against the field's ${field} · Season preview figure` },
-    { label: 'Traps', icon: '#i-mine', pct: axisPct(baited, 9), value: `${baited} dead-ends baited`, hint: 'Dead-ends laid for the other side · cap 9 · Season preview figure' },
-    { label: 'Compose', icon: '#i-shield', pct: axisPct(back, 12), value: `${back} comeback wins`, hint: 'Races won from behind · cap 12 · Season preview figure' },
+    { label: 'Matches', value: matches.toLocaleString('en-US') },
+    { label: 'Win rate', value: `${pct}%` },
+    { label: 'Best streak', value: streak.toLocaleString('en-US') },
   ];
 }
 
@@ -2098,38 +2089,29 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return wrap;
   }
 
-  function msAxisList(axes: MindAxis[]): HTMLElement {
-    const list = document.createElement('div');
-    list.className = 'ms-axes';
-    for (const a of axes) {
-      const line = document.createElement('div');
-      line.className = 'ms-axis';
-      line.title = a.hint;
-      const head = document.createElement('span');
-      head.className = 'ms-axis-h';
-      head.append(svgIcon(a.icon, 'ms-axis-ico'));
-      const label = document.createElement('small');
-      label.textContent = a.label;
-      const value = document.createElement('b');
-      value.textContent = a.value;
-      head.append(label, value);
-      const track = document.createElement('span');
-      track.className = 'mh-track ms-track';
-      track.setAttribute('role', 'progressbar');
-      track.setAttribute('aria-label', `${a.label}: ${a.value}`);
-      track.setAttribute('aria-valuemin', '0');
-      track.setAttribute('aria-valuemax', '100');
-      track.setAttribute('aria-valuenow', String(a.pct));
-      const fill = document.createElement('i');
-      fill.style.width = `${a.pct}%`;
-      track.append(fill);
-      line.append(head, track);
-      list.append(line);
+  /** Three glass cells in one capsule: results at a glance — no bars, no RPG axes. */
+  function msStatCapsule(stats: MindStat[]): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'ms-stats';
+    wrap.setAttribute('role', 'list');
+    for (const s of stats) {
+      const cell = document.createElement('div');
+      cell.className = 'ms-stat';
+      cell.setAttribute('role', 'listitem');
+      cell.title = `${s.label}: ${s.value}`;
+      const v = document.createElement('b');
+      v.className = 'ms-stat-v';
+      v.textContent = s.value;
+      const l = document.createElement('small');
+      l.className = 'ms-stat-l';
+      l.textContent = s.label;
+      cell.append(v, l);
+      wrap.append(cell);
     }
-    return list;
+    return wrap;
   }
 
-  function msFormStrip(form: FormCell[], caption: string): HTMLElement {
+  function msFormStrip(form: FormCell[]): HTMLElement {
     const rowEl = document.createElement('div');
     rowEl.className = 'ms-form';
     const dots = document.createElement('span');
@@ -2142,10 +2124,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       d.textContent = c === 'w' ? 'W' : c === 'l' ? 'L' : '·';
       dots.append(d);
     }
-    const cap = document.createElement('small');
-    cap.className = 'ms-form-c';
-    cap.textContent = caption;
-    rowEl.append(dots, cap);
+    rowEl.append(dots);
     return rowEl;
   }
 
@@ -2201,13 +2180,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return grid;
   }
 
-  function msFine(text: string): HTMLElement {
-    const p = document.createElement('p');
-    p.className = 'fine ms-fine';
-    p.textContent = text;
-    return p;
-  }
-
   /** The sprite glyph inside a foot key — join swaps the swords for a copied invite link. */
   function msKeyIcon(btn: HTMLButtonElement | null, href: string): void {
     btn?.querySelector('use')?.setAttribute('href', href);
@@ -2239,14 +2211,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const tiq = p.points.toLocaleString('en-US');
     msPending = { kind: 'mind', name: p.name, tiq: p.points };
     el.dataset.tier = div.tier;
-    msHead(p.name.slice(0, 1).toUpperCase() || '?', p.countryCode, p.name, div.label);
-    el.setAttribute('aria-label', `Mind profile: ${p.name}, ${div.label}, ${tiq} Tactical IQ`);
+    msHead(p.name.slice(0, 1).toUpperCase() || '?', p.countryCode, p.name, '');
+    el.setAttribute('aria-label', `Mind profile: ${p.name}, ${tiq} Tactical IQ`);
     body.textContent = '';
     body.append(
-      msHero(tiq, pct, `#${rank} of ${field} minds · ${p.wins} wins`),
-      msSection('Mind profile', msAxisList(rivalAxes(p))),
-      msSection('Form', msFormStrip(rivalForm(p.id, p.trend), 'Season preview · newest on the right')),
-      msFine(`Beat ${p.name}'s ${tiq} TIQ: Challenge mind starts a race, and every win is 140 TIQ.`),
+      msHero(tiq, pct, `${p.wins} win${p.wins === 1 ? '' : 's'}`),
+      msSection('Scorecard', msStatCapsule(rivalStats(p))),
+      msSection('Form', msFormStrip(rivalForm(p.id, p.trend))),
     );
     msActions('mind', 'Challenge mind', `Challenge mind: start a race against ${p.name}'s ${tiq} TIQ`);
     msEls.challenge?.classList.remove('is-squad');
