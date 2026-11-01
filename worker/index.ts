@@ -58,7 +58,7 @@ import {
   identifyAdminRequest, identifyMetricsAdmin, identifyPlayerRequest, METRICS_HEADER,
 } from './auth';
 import { telegramSetup, telegramWebhook } from './bot';
-import { vipRoutes } from './vip';
+import { vipAdminRoutes, vipRoutes } from './vip';
 import { json, reasonOf } from './http';
 import { referralAppLink } from '../shared/config';
 import type { Env } from './env';
@@ -350,6 +350,10 @@ async function route(request: Request, env: Env): Promise<Response> {
   /* The server telemetry route is stricter than the rest of the admin surface: the operator set,
      and no dev door. */
   if (url.pathname === '/api/admin/metrics') return serverMetrics(request, env);
+
+  /* VIP revenue management. The edge proves an admin credential here; the room keeps the plan
+     sheet and the Stars ledger, and re-checks the caller before it writes either. */
+  if (url.pathname.startsWith('/api/admin/vip/')) return vipAdminRoutes(request, env);
 
   /* The Command Center's routes: authenticated here, then handed to the room that authorizes.
      A refusal names itself, so the panel never has to guess between a door and an outage. */

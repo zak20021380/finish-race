@@ -19832,6 +19832,295 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
 }
 
 /* ==========================================================================
+   VIP STOREFRONT & REVENUE — the admin plan sheet over the record's own ledger.
+   Three revenue chips, three tier slabs with a whole-Stars price and an ON/OFF
+   storefront key, then the newest receipts. Opaque clay, fixed table columns,
+   every control >= 44px and nothing that can run past the phone column.
+   ========================================================================== */
+.vipadm { --adm-accent: var(--violet); --adm-accent-soft: rgba(167, 139, 250, .24); gap: 7px; }
+.vipadm .adm-block-s[data-tone="ok"] { color: var(--mint-ink); }
+.vipadm .adm-block-s[data-tone="bad"] { color: var(--red-ink); }
+.vipadm-kpis .adm-card { min-height: 118px; }
+.vipadm-kpis .adm-card-i { color: var(--honey-ink); }
+.vipadm-kpis .adm-card-v {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vipadm-plans { display: flex; flex-direction: column; gap: 7px; }
+.vipadm-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+  padding: 11px 12px 10px;
+  border-radius: var(--radius-md);
+  background: var(--clay-face);
+  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+  transition: opacity var(--motion-fast);
+}
+.vipadm-plan[data-on="false"] { opacity: .78; }
+.vipadm-plan-head { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.vipadm-plan-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: var(--field);
+  color: var(--honey-ink);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.vipadm-plan-ico .ico { width: 16px; height: 16px; }
+.vipadm-plan-copy { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-width: 0; }
+.vipadm-plan-t {
+  font-size: var(--t-2);
+  font-weight: 900;
+  line-height: 1.15;
+  color: var(--ink);
+}
+.vipadm-plan-s {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* the storefront key: an explicit ON / OFF word beside the sliding knob */
+.vipadm-toggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 0 5px 0 9px;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  color: var(--ink-soft);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  transition: color var(--motion-fast), box-shadow var(--motion-fast), transform var(--motion-fast);
+}
+.vipadm-toggle:active { transform: translateY(var(--press-y)); }
+.vipadm-toggle:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.vipadm-toggle-l {
+  width: 24px;
+  text-align: center;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+.vipadm-toggle-knob {
+  flex: none;
+  display: flex;
+  align-items: center;
+  width: 42px;
+  height: 26px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  transition: background var(--motion-fast), box-shadow var(--motion-fast);
+}
+.vipadm-toggle-knob i {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #64748B 0%, #475569 100%);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .25);
+  transition: transform var(--motion-fast), background var(--motion-fast);
+}
+.vipadm-toggle[aria-checked="true"] { color: var(--mint-ink); }
+.vipadm-toggle[aria-checked="true"] .vipadm-toggle-knob {
+  background: var(--mint-soft);
+  box-shadow: var(--inset), inset 0 0 0 1px rgba(16, 185, 129, .4);
+}
+.vipadm-toggle[aria-checked="true"] .vipadm-toggle-knob i {
+  transform: translateX(16px);
+  background: var(--gold-face);
+  box-shadow: 0 2px 0 var(--gold-lip), inset 0 1px 0 rgba(255, 255, 255, .5);
+}
+@media (prefers-reduced-motion: reduce) { .vipadm-toggle-knob i { transition: none; } }
+
+/* price + one save key: the input holds whole XTR, the key commits this tier */
+.vipadm-plan-row { display: flex; align-items: flex-end; gap: 7px; min-width: 0; }
+.vipadm-price { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; }
+.vipadm-price-k {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.vipadm-price-field {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.vipadm-star { flex: none; width: 15px; height: 15px; }
+.vipadm-price-i {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  appearance: none;
+  border: 0;
+  background: none;
+  outline: none;
+  font: inherit;
+  font-size: var(--t-2);
+  font-weight: 800;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.vipadm-price-i::-webkit-outer-spin-button,
+.vipadm-price-i::-webkit-inner-spin-button { appearance: none; margin: 0; }
+.vipadm-price-i { -moz-appearance: textfield; }
+.vipadm-price-u {
+  flex: none;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  color: var(--honey-ink);
+}
+.vipadm-save { flex: none; min-height: 48px; padding: 0 14px; }
+.vipadm-save.is-busy { cursor: progress; filter: saturate(.7) brightness(.9); }
+.vipadm-plan-stat {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.vipadm-plan-stat b { color: var(--honey-ink); }
+
+/* the receipts audit: fixed columns and ellipsis, so a long Telegram name never widens it */
+.vipadm-audit { gap: 8px; padding: 11px 10px 9px; }
+.vipadm-audit-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.vipadm-audit-t {
+  min-width: 0;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.vipadm-audit-s {
+  flex: none;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.vipadm-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+.vipadm-table th {
+  padding: 0 4px 6px;
+  text-align: left;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.vipadm-table th:nth-child(1) { width: 32%; }
+.vipadm-table th:nth-child(2) { width: 17%; }
+.vipadm-table th:nth-child(3) { width: 14%; }
+.vipadm-table th:nth-child(4) { width: 17%; }
+.vipadm-table th:nth-child(5) { width: 20%; }
+.vipadm-table td {
+  padding: 7px 4px;
+  border-top: 1px solid var(--hair-off);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.vipadm-user { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.vipadm-mono {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--honey-ink);
+}
+.vipadm-user-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; }
+.vipadm-num { text-align: right; color: var(--honey-ink); font-weight: 900; }
+.vipadm-date { color: var(--ink-soft); }
+.vipadm-status {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.vipadm-status[data-state="on"] {
+  color: var(--mint-ink);
+  background: var(--mint-soft);
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .32);
+}
+.vipadm-status[data-state="off"] {
+  color: var(--ink-soft);
+  background: var(--field);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+}
+.vipadm-empty { margin: 4px 0 0; font-size: var(--t-micro); line-height: 1.4; color: var(--ink-soft); }
+.vipadm-empty[hidden] { display: none; }
+
+/* a 320 phone: tighter cells keep all five columns, date included, inside the slab */
+@media (max-width: 359px) {
+  .vipadm-plan { padding: 10px; }
+  .vipadm-table th, .vipadm-table td { padding-left: 3px; padding-right: 3px; }
+  .vipadm-table th:nth-child(1) { width: 30%; }
+  .vipadm-table th:nth-child(2) { width: 16%; }
+  .vipadm-table th:nth-child(3) { width: 13%; }
+  .vipadm-table th:nth-child(4) { width: 18%; }
+  .vipadm-table th:nth-child(5) { width: 23%; }
+  .vipadm-status { padding: 2px 4px; font-size: 7px; }
+}
+
+/* ==========================================================================
    HOME CAROUSEL — the two authentic slides
    Nations Cup (slide 0) is a national-standings showcase; The Mind Ladder
    (slide 1) is the individual TIQ prestige card. Both are opaque Dark Clay

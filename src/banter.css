@@ -848,6 +848,9 @@
   padding-top: 9px;
   text-align: start;
 }
+/* the admin may take a tier off the store: the live cards fill the row instead of leaving a gap */
+.vip-plans[data-count="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.vip-plans[data-count="1"] { grid-template-columns: minmax(0, 1fr); }
 .vip-plan {
   appearance: none;
   position: relative;

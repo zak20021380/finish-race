@@ -61,7 +61,11 @@ import {
   MATCH_MODES, durationSeconds, matchModeFilterOf, matchModeOf, playerCountOf,
   type MatchMode, type MatchModeFilter, type PlayerCount,
 } from '../shared/telemetry';
-import { extendVipUntil, vipPlanOf } from '../shared/vip';
+import {
+  VIP_PLAN_IDS, VIP_STARS_MAX, VIP_STARS_MIN, extendVipUntil, readVipPlanConfig, vipPlanOf,
+  vipPlanSettingsOf, type VipPlanConfig, type VipPlanId, type VipPurchase, type VipRevenueSummary,
+  type VipTierRevenue,
+} from '../shared/vip';
 import {
   ACTIVE_CUP_ID, cupField, cupPlayerBoard, cupSquadIds,
   isSquadAdmin, normalizeChatHandle, readRegisteredSquad, removeSquadMember, roleOf,
@@ -285,6 +289,13 @@ interface StoredLobbyState {
 
 /** The storage key the lobby state survives an eviction under. */
 const ROOM_STATE_KEY = 'room_state';
+
+/** The admin's live storefront, and the Stars receipts the revenue tab audits. */
+const VIP_CONFIG_KEY = 'vip-config';
+const VIP_SALES_KEY = 'vip-sales';
+/** How many receipts the ledger keeps; the audit table reads the newest fifteen. */
+const VIP_RECENT_MAX = 60;
+const VIP_RECENT_REPORT = 15;
 
 /** The canonical map key for a code lobby: `room_1909`, never `1909` and never `#1909`. */
 const lobbyKey = (code: string): string => canonicalRoomId(code);
@@ -1097,6 +1108,64 @@ function readPlayer(raw: unknown): PlayerRecord | null {
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
+/* ---------- the VIP revenue ledger ---------- */
+
+interface VipSalesLedger {
+  totalPurchases: number;
+  totalStars: number;
+  tiers: Record<VipPlanId, VipTierRevenue>;
+  /** Newest first, bounded: the audit table never asks the store for an unbounded row set. */
+  recent: VipPurchase[];
+}
+
+function emptyVipTiers(): Record<VipPlanId, VipTierRevenue> {
+  return {
+    '7d': { count: 0, starsGrossed: 0 },
+    '30d': { count: 0, starsGrossed: 0 },
+    '90d': { count: 0, starsGrossed: 0 },
+  };
+}
+
+function emptyVipSales(): VipSalesLedger {
+  return { totalPurchases: 0, totalStars: 0, tiers: emptyVipTiers(), recent: [] };
+}
+
+/** A stored ledger folded field by field: counters are whole numbers, never a trusted blob. */
+function readVipSales(raw: unknown): VipSalesLedger {
+  const ledger = emptyVipSales();
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return ledger;
+  const source = raw as Record<string, unknown>;
+  ledger.totalPurchases = whole(source.totalPurchases);
+  ledger.totalStars = whole(source.totalStars);
+  const tiers = source.tiers && typeof source.tiers === 'object'
+    ? source.tiers as Record<string, unknown>
+    : {};
+  for (const id of VIP_PLAN_IDS) {
+    const row = tiers[id] as Record<string, unknown> | null | undefined;
+    if (!row || typeof row !== 'object') continue;
+    ledger.tiers[id] = { count: whole(row.count), starsGrossed: whole(row.starsGrossed) };
+  }
+  const recent = Array.isArray(source.recent) ? source.recent : [];
+  for (const rawRow of recent) {
+    const row = rawRow as Partial<VipPurchase> | null;
+    if (!row || typeof row !== 'object') continue;
+    const plan = vipPlanOf(row.planId);
+    const userId = typeof row.userId === 'string' ? row.userId.slice(0, 64) : '';
+    const stars = whole(row.stars);
+    if (!plan || !userId || stars <= 0) continue;
+    ledger.recent.push({
+      userId,
+      username: typeof row.username === 'string' ? row.username.slice(0, 40) : '',
+      planId: plan.id,
+      stars,
+      purchasedAt: whole(row.purchasedAt),
+      expiresAt: whole(row.expiresAt),
+    });
+    if (ledger.recent.length >= VIP_RECENT_MAX) break;
+  }
+  return ledger;
+}
+
 /** A request body, or an empty object when there is none / it is not JSON. Never throws. */
 async function readBody(request: Request): Promise<Record<string, unknown>> {
   try {
@@ -1759,6 +1828,10 @@ export class MatchmakerDO {
   private enlisting = new Set<string>();
   /** Durable board counters, seeded from storage and written back as they move. */
   private gameMetrics: GameMetrics = zeroGameMetrics();
+  /** The admin's live plan sheet: prices and which tiers the storefront offers. */
+  private vipConfig: VipPlanConfig = readVipPlanConfig(null);
+  /** Lifetime VIP sales, folded into the Command Center's revenue tab. */
+  private vipSales: VipSalesLedger = emptyVipSales();
   /** The current season's banked nation points, credited only by settled wins. */
   private nations: NationLedger = emptyNationLedger(0);
   /** The bounded growth rings behind the Stats tab's trend chart. */
@@ -1816,6 +1889,8 @@ export class MatchmakerDO {
           );
           this.gameMetrics = readGameMetrics(await storage.get<unknown>(GAME_METRICS_KEY));
           this.growth = readGrowthSeries(await storage.get<unknown>(GROWTH_KEY));
+          this.vipConfig = readVipPlanConfig(await storage.get<unknown>(VIP_CONFIG_KEY));
+          this.vipSales = readVipSales(await storage.get<unknown>(VIP_SALES_KEY));
           /* The friends lobbies are durable: an eviction between "host creates a room" and "guest
              taps the link" must not turn a valid code into "no room with this code". */
           this.restoreLobbies(await storage.get<unknown>(ROOM_STATE_KEY));
@@ -1866,6 +1941,11 @@ export class MatchmakerDO {
        grant is minted only by a Telegram receipt the bot webhook validated. */
     if (url.pathname === '/api/vip/me' && request.method === 'GET') return this.vipMe(request);
     if (url.pathname === '/api/vip/grant' && request.method === 'POST') return this.vipGrant(request);
+    /* The edge's storefront reads this path to price invoices and paint `/api/vip/plans`.
+       The worker entry never forwards it, so the config has no outside door. */
+    if (url.pathname === '/internal/vip/config' && request.method === 'GET') {
+      return json({ ok: true, config: this.vipConfig }, 200, { 'cache-control': 'no-store' });
+    }
     /* Match and heartbeat telemetry from a player's own device. It is the only way a bot race the
        server never saw can reach the growth rings; the player door is proven inside. */
     if (url.pathname === '/api/client/telemetry/heartbeat' || url.pathname === '/api/client/telemetry/match') {
@@ -2934,6 +3014,24 @@ export class MatchmakerDO {
       return json(this.squadsView(), 200, { 'cache-control': 'no-store' });
     }
 
+    /* The VIP storefront: Moderators may audit sales and read the live sheet; only a SuperAdmin
+       may reprice a tier or take it off the store. */
+    if (url.pathname === '/api/admin/vip/stats') {
+      if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+      return json({ ok: true, ...this.vipStatsView() }, 200, { 'cache-control': 'no-store' });
+    }
+    if (url.pathname === '/api/admin/vip/config') {
+      if (request.method === 'GET') {
+        return json({ ok: true, config: this.vipConfig }, 200, { 'cache-control': 'no-store' });
+      }
+      if (request.method === 'POST') {
+        if (!this.superDoor(me)) return json({ error: 'forbidden', hint: 'superadmin required' }, 403);
+        const result = this.saveVipConfig(await readBody(request));
+        return json(result, result.ok ? 200 : 400);
+      }
+      return json({ error: 'method_not_allowed' }, 405);
+    }
+
     /* Everything below commands the server: SuperAdmin only. */
     if (url.pathname === '/admin/config') {
       if (!this.superDoor(me)) return json({ error: 'forbidden', hint: 'superadmin required' }, 403);
@@ -3676,7 +3774,8 @@ export class MatchmakerDO {
    *
    * The plan is re-read from the shared table (never the days on the wire), the extension starts
    * at `max(now, currentVipUntil)` so a renewal stacks rather than resets, and the charge id is
-   * kept on the record so Telegram's retry of the same update is a no-op.
+   * kept on the record so Telegram's retry of the same update is a no-op. The amount the receipt
+   * actually charged is recorded in the revenue ledger; a duplicate never earns twice.
    */
   private async vipGrant(request: Request): Promise<Response> {
     const body = await readBody(request);
@@ -3688,16 +3787,24 @@ export class MatchmakerDO {
     if (!tgId || playerId !== `tg-${tgId}` || !chargeId) {
       return json({ ok: false, error: 'invalid_grant' }, 400);
     }
+    const wireStars = typeof body.stars === 'number' && Number.isFinite(body.stars)
+      ? Math.floor(body.stars)
+      : 0;
+    const stars = wireStars >= 1 && wireStars <= VIP_STARS_MAX ? wireStars : plan.stars;
+    const clean = (value: unknown): string => (typeof value === 'string'
+      ? value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 40)
+      : '');
+    const payerName = clean(body.name);
+    const payerUsername = clean(body.username);
 
     const now = Date.now();
     let record = this.players.get(playerId);
     if (!record) {
-      const name = typeof body.name === 'string' ? body.name.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 40) : '';
       record = {
         id: playerId,
         tgId,
-        name: name || 'Player',
-        username: '',
+        name: payerName || 'Player',
+        username: payerUsername,
         country: '',
         avatar: '',
         age: 0,
@@ -3727,6 +3834,8 @@ export class MatchmakerDO {
       this.trim();
       this.creditSignup(now);
       this.creditActive(0, now);
+    } else if (payerUsername && !record.username) {
+      record.username = payerUsername;
     }
     if (record.vipCharges.includes(chargeId)) {
       return json({ ok: true, duplicate: true, isVip: record.vipUntil > now, vipUntil: record.vipUntil });
@@ -3735,8 +3844,116 @@ export class MatchmakerDO {
     record.vipPlan = plan.id;
     record.vipCharges = [...record.vipCharges, chargeId].slice(-20);
     record.lastSeen = now;
+    this.recordVipSale({
+      userId: playerId,
+      username: record.username || record.name || 'Player',
+      planId: plan.id,
+      stars,
+      purchasedAt: now,
+      expiresAt: record.vipUntil,
+    });
     this.persist();
     return json({ ok: true, isVip: true, vipUntil: record.vipUntil, planId: plan.id });
+  }
+
+  /* ---------- the VIP revenue reads and the admin's plan sheet ---------- */
+
+  private persistVipConfig(): void {
+    const storage = this.state?.storage;
+    if (!storage) return;
+    try {
+      void storage.put(VIP_CONFIG_KEY, this.vipConfig);
+    } catch {
+      /* a store that refuses the write: the config stays live in this isolate */
+    }
+  }
+
+  private persistVipSales(): void {
+    const storage = this.state?.storage;
+    if (!storage) return;
+    try {
+      void storage.put(VIP_SALES_KEY, this.vipSales);
+    } catch {
+      /* a store that refuses the write: the ledger stays live in this isolate */
+    }
+  }
+
+  /** One receipt, folded into both the lifetime counters and the newest-first audit rows. */
+  private recordVipSale(purchase: VipPurchase): void {
+    const ledger = this.vipSales;
+    ledger.totalPurchases = Math.min(Number.MAX_SAFE_INTEGER, ledger.totalPurchases + 1);
+    ledger.totalStars = Math.min(Number.MAX_SAFE_INTEGER, ledger.totalStars + purchase.stars);
+    const tier = ledger.tiers[purchase.planId];
+    tier.count += 1;
+    tier.starsGrossed += purchase.stars;
+    ledger.recent = [purchase, ...ledger.recent].slice(0, VIP_RECENT_MAX);
+    this.persistVipSales();
+  }
+
+  /** `GET /api/admin/vip/stats`: live subscribers beside the lifetime Stars ledger. */
+  private vipStatsView(): VipRevenueSummary {
+    const now = Date.now();
+    let totalSubscribers = 0;
+    for (const record of this.players.values()) {
+      if (record.vipUntil > now) totalSubscribers++;
+    }
+    return {
+      totalSubscribers,
+      allTimePurchases: this.vipSales.totalPurchases,
+      totalStarsEarned: this.vipSales.totalStars,
+      tierBreakdown: {
+        '7d': { ...this.vipSales.tiers['7d'] },
+        '30d': { ...this.vipSales.tiers['30d'] },
+        '90d': { ...this.vipSales.tiers['90d'] },
+      },
+      recentPurchases: this.vipSales.recent.slice(0, VIP_RECENT_REPORT).map((row) => ({ ...row })),
+    };
+  }
+
+  /**
+   * `POST /api/admin/vip/config`. Accepts one tier (`planId` + `stars`/`price` + `enabled`) or a
+   * map of tiers, validates every supplied tier strictly, and merges onto the stored sheet so a
+   * single row's save never resets the other two.
+   */
+  private saveVipConfig(body: Record<string, unknown>):
+  { ok: true; config: VipPlanConfig } | { ok: false; error: string; hint?: string } {
+    const invalid = {
+      ok: false as const,
+      error: 'invalid_config',
+      hint: `each plan needs stars between ${VIP_STARS_MIN} and ${VIP_STARS_MAX} and a boolean enabled`,
+    };
+    const next: VipPlanConfig = {
+      '7d': { ...this.vipConfig['7d'] },
+      '30d': { ...this.vipConfig['30d'] },
+      '90d': { ...this.vipConfig['90d'] },
+    };
+    let touched = 0;
+
+    const directId = typeof body.planId === 'string' ? body.planId : '';
+    if (directId) {
+      const plan = vipPlanOf(directId);
+      if (!plan) return { ok: false, error: 'unknown_plan' };
+      const tier = vipPlanSettingsOf({ stars: body.stars ?? body.price, enabled: body.enabled });
+      if (!tier) return invalid;
+      next[plan.id] = tier;
+      touched++;
+    } else {
+      const source = body.plans ?? body.config ?? body;
+      if (!source || typeof source !== 'object' || Array.isArray(source)) return invalid;
+      const rows = source as Record<string, unknown>;
+      for (const id of VIP_PLAN_IDS) {
+        if (!(id in rows)) continue;
+        const tier = vipPlanSettingsOf(rows[id]);
+        if (!tier) return invalid;
+        next[id] = tier;
+        touched++;
+      }
+    }
+
+    if (!touched) return { ok: false, error: 'invalid_config', hint: 'no plan settings supplied' };
+    this.vipConfig = next;
+    this.persistVipConfig();
+    return { ok: true, config: next };
   }
 
   /** Is this seat locked out of matchmaking? */

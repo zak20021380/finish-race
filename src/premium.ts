@@ -23,8 +23,9 @@ import {
   impact, notify, openInvoice, tgInitData, tgUser, type InvoiceStatus,
 } from './telegram';
 import {
-  VIP_DAY_MS, VIP_HERO_PLAN, VIP_PLANS, vipPlanOf,
-  type VipPlanId,
+  VIP_DAY_MS, VIP_HERO_PLAN, VIP_PLAN_IDS, VIP_PLANS, activeVipPlans, readVipPlanConfig,
+  vipPlanOf, vipPlanWithConfig,
+  type VipPlan, type VipPlanConfig, type VipPlanId,
 } from '../shared/vip';
 
 /* ---------- entitlement state ---------- */
@@ -175,7 +176,7 @@ function previewCheckout(): boolean {
 /**
  * Buy one plan with Telegram Stars.
  *
- * The invoice link comes from the Worker (which prices the plan from the shared table), then
+ * The invoice link comes from the Worker (which prices the plan from the admin's live sheet), then
  * Telegram's own payment sheet takes over. `paid` re-reads the entitlement before resolving, so
  * every surface that repaints on the change signal is showing the room's number, not an
  * optimistic one. Outside Telegram only the explicit `?vip=preview` door grants a local pass; a
@@ -256,6 +257,69 @@ const PLAN_KEYS: Record<VipPlanId, { name: string; badge?: string }> = {
   '30d': { name: 'vipPlanProName', badge: 'vipPlanProRibbon' },
   '90d': { name: 'vipPlanGrandName', badge: 'vipPlanGrandTag' },
 };
+
+/** The admin's live sheet; the bundled defaults until the first successful read. */
+let planConfig: VipPlanConfig = readVipPlanConfig(null);
+let plansRefreshing: Promise<boolean> | null = null;
+
+const storePlans = (): VipPlan[] => activeVipPlans(planConfig);
+
+/** The tier on screen, moved to the first live card when the admin removed the selected one. */
+function selectedPlan(): VipPlan | null {
+  const plans = storePlans();
+  if (plans.length === 0) return null;
+  const chosen = plans.find((plan) => plan.id === selected);
+  if (chosen) return chosen;
+  const next = plans.find((plan) => plan.id === VIP_HERO_PLAN) ?? plans[0];
+  selected = next.id;
+  return next;
+}
+
+/**
+ * Read `/api/vip/plans`. The route lists only the tiers on sale, so an absent tier is disabled;
+ * a failed or offline read keeps the sheet already on screen and never invents a price.
+ */
+function refreshPlans(): Promise<boolean> {
+  if (plansRefreshing) return plansRefreshing;
+  const url = workerUrl('/api/vip/plans');
+  if (!url) return Promise.resolve(false);
+
+  plansRefreshing = (async (): Promise<boolean> => {
+    const abort = new AbortController();
+    const timer = window.setTimeout(() => abort.abort(), 6000);
+    try {
+      const response = await fetch(url, {
+        headers: { accept: 'application/json' },
+        signal: abort.signal,
+        cache: 'no-store',
+      });
+      if (!response.ok) return false;
+      const data = (await response.json()) as { ok?: unknown; plans?: unknown } | null;
+      if (!data || data.ok !== true || !Array.isArray(data.plans)) return false;
+
+      const next = readVipPlanConfig(null);
+      for (const id of VIP_PLAN_IDS) next[id] = { ...next[id], enabled: false };
+      for (const item of data.plans) {
+        if (!item || typeof item !== 'object') continue;
+        const raw = item as Record<string, unknown>;
+        const base = vipPlanOf(raw.id);
+        if (!base) continue;
+        const stars = typeof raw.stars === 'number' && Number.isInteger(raw.stars) && raw.stars > 0
+          ? raw.stars
+          : next[base.id].stars;
+        next[base.id] = { stars, enabled: true };
+      }
+      planConfig = next;
+      return true;
+    } catch {
+      return false;
+    } finally {
+      window.clearTimeout(timer);
+    }
+  })().finally(() => { plansRefreshing = null; });
+
+  return plansRefreshing;
+}
 
 export interface VipSheetOptions {
   /** Why it opened: the standing sell, or the send key / stash a free seat just tried. */
@@ -366,13 +430,14 @@ function paintEntryPoints(): void {
 
 function paintPlanSelection(): void {
   if (!dom) return;
+  /* normalize first: a refresh may have taken the previously selected tier off the store */
+  const plan = selectedPlan();
   const buttons = dom.plans.querySelectorAll<HTMLButtonElement>('.vip-plan');
   for (const button of buttons) {
     const on = button.dataset.plan === selected;
     button.classList.toggle('is-selected', on);
     button.setAttribute('aria-checked', on ? 'true' : 'false');
   }
-  const plan = vipPlanOf(selected);
   if (plan) {
     dom.ctaT.textContent = t('vipCtaUnlock')
       .replace('{days}', digits(plan.days))
@@ -382,7 +447,10 @@ function paintPlanSelection(): void {
 
 function buildPlans(): void {
   if (!dom) return;
-  dom.plans.replaceChildren(...VIP_PLANS.map((plan) => {
+  const plans = storePlans();
+  /* one, two or three live tiers: the grid contracts so a hidden plan leaves no dead track */
+  dom.plans.dataset.count = String(plans.length);
+  dom.plans.replaceChildren(...plans.map((plan) => {
     const keys = PLAN_KEYS[plan.id];
     const button = el('button', 'vip-plan');
     button.type = 'button';
@@ -433,7 +501,9 @@ function paintSheet(): void {
   const source = vipSource();
   const active = source !== 'none';
   const gated = reason === 'gate' && !active;
-  const plan = vipPlanOf(selected) ?? VIP_PLANS[1];
+  const plan = selectedPlan();
+  const noPlans = !plan;
+  const fallback = plan ?? vipPlanWithConfig(VIP_HERO_PLAN, planConfig) ?? VIP_PLANS[1];
 
   dom.sheet.classList.toggle('is-gate', gated);
   dom.sheet.classList.toggle('is-active', active);
@@ -447,8 +517,8 @@ function paintSheet(): void {
   buildPlans();
   paintFeatures();
 
-  dom.plans.hidden = active;
-  dom.cta.hidden = active;
+  dom.plans.hidden = active || noPlans;
+  dom.cta.hidden = active || noPlans;
   dom.active.hidden = !active;
   if (active) {
     const days = source === 'subscription' ? vipDaysLeft() : 0;
@@ -458,16 +528,22 @@ function paintSheet(): void {
       : source === 'telegram' ? t('vipActiveTelegram') : t('vipActivePreview');
   }
 
-  dom.status.hidden = !statusKey;
-  dom.status.textContent = statusKey ? t(statusKey) : '';
-  dom.status.classList.toggle('is-error', !!statusKey);
-  dom.cta.disabled = busy;
+  if (!active && noPlans) {
+    dom.status.hidden = false;
+    dom.status.textContent = t('vipPlansEmpty');
+    dom.status.classList.remove('is-error');
+  } else {
+    dom.status.hidden = !statusKey;
+    dom.status.textContent = statusKey ? t(statusKey) : '';
+    dom.status.classList.toggle('is-error', !!statusKey);
+  }
+  dom.cta.disabled = busy || noPlans;
   dom.cta.classList.toggle('is-busy', busy);
   dom.ctaT.textContent = busy
     ? t('vipCtaBusy')
     : t('vipCtaUnlock')
-      .replace('{days}', digits(plan.days))
-      .replace('{price}', digits(plan.stars));
+      .replace('{days}', digits(fallback.days))
+      .replace('{price}', digits(fallback.stars));
   dom.close.setAttribute('aria-label', t('vipClose'));
 }
 
@@ -482,6 +558,8 @@ function focusables(): HTMLElement[] {
 export function openVipSheet(options: VipSheetOptions = {}): void {
   if (!initialised) initVipStore();
   if (!dom) return;
+  /* the admin's sheet is read on every open: a tier may have been repriced or taken down */
+  void refreshPlans().then(() => { if (open) paintSheet(); });
   if (open) {
     reason = options.reason ?? reason;
     if (options.onUnlocked) unlocked = options.onUnlocked;
@@ -505,7 +583,7 @@ export function openVipSheet(options: VipSheetOptions = {}): void {
   void refreshVip().then(() => { if (open) paintSheet(); });
   requestAnimationFrame(() => {
     if (!dom) return;
-    const target = dom.sheet.classList.contains('is-active')
+    const target = dom.sheet.classList.contains('is-active') || storePlans().length === 0
       ? dom.close
       : dom.plans.querySelector<HTMLButtonElement>('.vip-plan.is-selected') ?? dom.cta ?? dom.close;
     target?.focus({ preventScroll: true });
@@ -534,7 +612,7 @@ export const vipSheetOpen = (): boolean => open;
 
 async function buy(): Promise<void> {
   if (busy || !dom) return;
-  const plan = vipPlanOf(selected);
+  const plan = selectedPlan();
   if (!plan) return;
   busy = true;
   statusKey = '';

@@ -55,6 +55,7 @@ interface TgUserLike {
   id?: number | string;
   language_code?: string;
   first_name?: string;
+  username?: string;
   is_bot?: boolean;
 }
 
@@ -298,6 +299,7 @@ async function dispatch(update: TgUpdate, token: string, origin: string, env: En
         update.message.from?.id,
         env,
         update.message.from?.first_name ?? '',
+        update.message.from?.username ?? '',
       );
       return;
     }

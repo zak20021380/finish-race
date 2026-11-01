@@ -1,10 +1,11 @@
 /**
- * vip.ts — the three Telegram Stars plans, shared by the storefront and the Worker.
+ * vip.ts — the three Telegram Stars plans, their canonical prices, and the admin's live overrides.
  *
- * The price a button prints and the price an invoice charges must be the same number, and the
- * days a receipt grants must be the days the card promised. Keeping both on one table is what
- * makes that true: the client paints from it, `POST /api/vip/invoice` bills from it, and the
- * payment webhook extends the entitlement from it — never from a figure the client sent.
+ * The table below names each duration and product; the Stars price and whether a tier is on sale
+ * come from `VipPlanConfig`, which the room persists and the Command Center edits. The storefront
+ * paints only active plans at the configured price, `POST /api/vip/invoice` bills that same price,
+ * and the invoice payload records the amount it was minted for — so a later repricing never
+ * changes what an open payment sheet charges or what its receipt grants.
  */
 
 export type VipPlanId = '7d' | '30d' | '90d';
@@ -36,6 +37,102 @@ export const VIP_PLAN_IDS: readonly VipPlanId[] = VIP_PLANS.map((plan) => plan.i
 export function vipPlanOf(value: unknown): VipPlan | null {
   if (typeof value !== 'string') return null;
   return VIP_PLANS.find((plan) => plan.id === value) ?? null;
+}
+
+/* ---------- the admin's live storefront ---------- */
+
+/** One tier as the Command Center owns it: its Stars price and whether it is on sale. */
+export interface VipPlanSettings {
+  stars: number;
+  enabled: boolean;
+}
+
+export type VipPlanConfig = Record<VipPlanId, VipPlanSettings>;
+
+export const VIP_STARS_MIN = 1;
+export const VIP_STARS_MAX = 1_000_000;
+
+/** The canonical storefront, used until the room holds an admin's configuration. */
+export const VIP_DEFAULT_CONFIG: VipPlanConfig = {
+  '7d': { stars: 75, enabled: true },
+  '30d': { stars: 199, enabled: true },
+  '90d': { stars: 499, enabled: true },
+};
+
+export function defaultVipPlanConfig(): VipPlanConfig {
+  return {
+    '7d': { ...VIP_DEFAULT_CONFIG['7d'] },
+    '30d': { ...VIP_DEFAULT_CONFIG['30d'] },
+    '90d': { ...VIP_DEFAULT_CONFIG['90d'] },
+  };
+}
+
+/**
+ * One admin-supplied tier, read strictly: a whole Stars price above zero and an explicit
+ * boolean. `price` is accepted as the admin API's spelling of `stars`.
+ */
+export function vipPlanSettingsOf(raw: unknown): VipPlanSettings | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const row = raw as Record<string, unknown>;
+  const price = row.stars ?? row.price;
+  if (typeof price !== 'number' || !Number.isInteger(price)) return null;
+  if (price < VIP_STARS_MIN || price > VIP_STARS_MAX) return null;
+  if (typeof row.enabled !== 'boolean') return null;
+  return { stars: price, enabled: row.enabled };
+}
+
+/**
+ * A stored or wire config folded field by field. Anything missing or malformed keeps the
+ * canonical price and stays enabled, so a half-written blob can never close the store.
+ */
+export function readVipPlanConfig(raw: unknown): VipPlanConfig {
+  const config = defaultVipPlanConfig();
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return config;
+  const source = raw as Record<string, unknown>;
+  for (const id of VIP_PLAN_IDS) {
+    const tier = vipPlanSettingsOf(source[id]);
+    if (tier) config[id] = tier;
+  }
+  return config;
+}
+
+/** A plan with its current price, or null for an unknown id. */
+export function vipPlanWithConfig(id: unknown, config: VipPlanConfig): VipPlan | null {
+  const plan = vipPlanOf(id);
+  return plan ? { ...plan, stars: config[plan.id].stars } : null;
+}
+
+/** The storefront's cards, in display order: exactly the tiers the admin left on sale. */
+export function activeVipPlans(config: VipPlanConfig): VipPlan[] {
+  return VIP_PLANS
+    .filter((plan) => config[plan.id].enabled)
+    .map((plan) => ({ ...plan, stars: config[plan.id].stars }));
+}
+
+/* ---------- the revenue ledger ---------- */
+
+/** One successful Stars receipt, as the Command Center's audit table reads it. */
+export interface VipPurchase {
+  userId: string;
+  username: string;
+  planId: VipPlanId;
+  stars: number;
+  purchasedAt: number;
+  expiresAt: number;
+}
+
+export interface VipTierRevenue {
+  count: number;
+  starsGrossed: number;
+}
+
+/** What `GET /api/admin/vip/stats` answers. */
+export interface VipRevenueSummary {
+  totalSubscribers: number;
+  allTimePurchases: number;
+  totalStarsEarned: number;
+  tierBreakdown: Record<VipPlanId, VipTierRevenue>;
+  recentPurchases: VipPurchase[];
 }
 
 /** Stacking extension: a renewal starts where the current term ends, never in the past. */

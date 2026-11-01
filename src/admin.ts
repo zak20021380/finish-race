@@ -62,6 +62,10 @@ import {
 } from './adminApi';
 import type { Broadcast } from './broadcasts';
 import {
+  VIP_PLAN_IDS, readVipPlanConfig,
+  type VipPlanConfig, type VipPlanId, type VipPurchase, type VipRevenueSummary, type VipTierRevenue,
+} from '../shared/vip';
+import {
   ARENA_TIER_IDS, SEASON_LENGTH_MS, adoptArena, arena, arenaLocked, countdownPill,
   datetimeLocalValue, fullCountdown, nextSeasonName, onArena, parseDatetimeLocal, seasonLabel,
   seasonNoFrom, setArenaLocal, syncArena,
@@ -1110,6 +1114,91 @@ async function pushSquadAction(id: string, action: SquadAction): Promise<SquadAc
   }
 }
 
+/* ---------- the VIP storefront & revenue, over `/api/admin/vip/*` ---------- */
+
+const vipCount = (v: unknown): number =>
+  typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0;
+
+const emptyVipTiers = (): Record<VipPlanId, VipTierRevenue> => ({
+  '7d': { count: 0, starsGrossed: 0 },
+  '30d': { count: 0, starsGrossed: 0 },
+  '90d': { count: 0, starsGrossed: 0 },
+});
+
+function readVipStats(raw: unknown): VipRevenueSummary | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const body = raw as Record<string, unknown>;
+  if (body.ok !== true) return null;
+  const tiers = emptyVipTiers();
+  const tierRows = body.tierBreakdown && typeof body.tierBreakdown === 'object'
+    ? body.tierBreakdown as Record<string, unknown>
+    : {};
+  for (const id of VIP_PLAN_IDS) {
+    const row = tierRows[id];
+    if (!row || typeof row !== 'object') continue;
+    const fields = row as Record<string, unknown>;
+    tiers[id] = { count: vipCount(fields.count), starsGrossed: vipCount(fields.starsGrossed) };
+  }
+
+  const recentPurchases: VipPurchase[] = [];
+  const recent = Array.isArray(body.recentPurchases) ? body.recentPurchases : [];
+  for (const rawRow of recent) {
+    if (!rawRow || typeof rawRow !== 'object') continue;
+    const row = rawRow as Record<string, unknown>;
+    const planId = typeof row.planId === 'string' && (VIP_PLAN_IDS as readonly string[]).includes(row.planId)
+      ? row.planId as VipPlanId
+      : null;
+    const stars = vipCount(row.stars);
+    if (!planId || stars <= 0) continue;
+    recentPurchases.push({
+      userId: typeof row.userId === 'string' ? row.userId.slice(0, 64) : '',
+      username: typeof row.username === 'string' ? row.username.slice(0, 40) : '',
+      planId,
+      stars,
+      purchasedAt: vipCount(row.purchasedAt),
+      expiresAt: vipCount(row.expiresAt),
+    });
+    if (recentPurchases.length >= 15) break;
+  }
+
+  return {
+    totalSubscribers: vipCount(body.totalSubscribers),
+    allTimePurchases: vipCount(body.allTimePurchases),
+    totalStarsEarned: vipCount(body.totalStarsEarned),
+    tierBreakdown: tiers,
+    recentPurchases,
+  };
+}
+
+async function fetchVipConfig(): Promise<VipPlanConfig | null> {
+  const data = await parseJson<{ ok?: unknown; config?: unknown }>(
+    await adminFetch('/api/admin/vip/config', { cache: 'no-store' }),
+  );
+  if (!data || data.ok !== true || !data.config) return null;
+  return readVipPlanConfig(data.config);
+}
+
+async function fetchVipStats(): Promise<VipRevenueSummary | null> {
+  const data = await parseJson<unknown>(await adminFetch('/api/admin/vip/stats', { cache: 'no-store' }));
+  return readVipStats(data);
+}
+
+/** Save one tier. The Worker merges it onto the sheet, so the other two keep their prices. */
+async function pushVipConfig(
+  planId: VipPlanId,
+  stars: number,
+  enabled: boolean,
+): Promise<{ config: VipPlanConfig | null; detail: string }> {
+  const res = await postJson('/api/admin/vip/config', { planId, stars, enabled });
+  if (!res) return { config: null, detail: 'The Worker did not answer.' };
+  if (!res.ok) return { config: null, detail: await reasonOfResponse(res, 'POST /api/admin/vip/config') };
+  const data = await parseJson<{ ok?: unknown; config?: unknown }>(res);
+  if (!data || data.ok !== true || !data.config) {
+    return { config: null, detail: 'The Worker sent no plan configuration.' };
+  }
+  return { config: readVipPlanConfig(data.config), detail: '' };
+}
+
 /* ---------- the controller ---------- */
 
 export interface AdminApi {
@@ -1579,6 +1668,15 @@ export function createAdmin(api: AdminApi): Admin {
   const statAlertIco = $<HTMLElement>('stat-alert-ico');
   const statAlertTitle = $<HTMLElement>('stat-alert-title');
   const statAlertBody = $<HTMLElement>('stat-alert-body');
+  /* the VIP storefront: the revenue chips, the plan sheet and the receipts audit */
+  const vipKpiActive = $<HTMLElement>('vip-kpi-active');
+  const vipKpiStars = $<HTMLElement>('vip-kpi-stars');
+  const vipKpiOrders = $<HTMLElement>('vip-kpi-orders');
+  const vipAdminState = $<HTMLElement>('vip-admin-state');
+  const vipRecentBody = $<HTMLElement>('vip-recent-body');
+  const vipRecentEmpty = $<HTMLElement>('vip-recent-empty');
+  const vipRecentMeta = $<HTMLElement>('vip-recent-meta');
+  const vipPlanRows = [...(stage?.querySelectorAll<HTMLElement>('[data-vip-plan]') ?? [])];
   const navPill = $<HTMLElement>('admin-nav-pill');
   const inboxBadge = $<HTMLElement>('admin-inbox-badge');
   const inboxList = $<HTMLElement>('adm-inbox-list');
@@ -1761,6 +1859,14 @@ export function createAdmin(api: AdminApi): Admin {
   let squadsOn = false;
   let squadsReady = false;
   let squadsBusy = false;
+
+  /** The VIP storefront: the last sheet and ledger a read answered, and whether work is out. */
+  let vipConfig: VipPlanConfig = readVipPlanConfig(null);
+  let vipStats: VipRevenueSummary | null = null;
+  let vipLoading = false;
+  let vipBusy = false;
+  /** The newest read is the only one allowed to paint over a save that landed after it left. */
+  let vipSeq = 0;
 
   /** The Access Control view: the registry read, and whether this viewer may change it. */
   let aclRows: AdminRow[] = [];
@@ -1967,6 +2073,7 @@ export function createAdmin(api: AdminApi): Admin {
     paintInbox();
     paintUsers();
     paintSquads();
+    paintVipAdmin();
     paintAcl();
     paintBroadcasts();
   }
@@ -3645,6 +3752,229 @@ export function createAdmin(api: AdminApi): Admin {
     paintSquads();
   }
 
+  /* ---------- VIP Storefront & Revenue (worker/matchmaker.ts) ---------- */
+
+  const VIP_PLAN_LABEL: Record<VipPlanId, string> = {
+    '7d': '7 Days',
+    '30d': '30 Days',
+    '90d': '90 Days',
+  };
+
+  const isVipPlanId = (value: string | undefined): value is VipPlanId =>
+    value !== undefined && (VIP_PLAN_IDS as readonly string[]).includes(value);
+
+  function vipRowOf(id: VipPlanId): HTMLElement | null {
+    return vipPlanRows.find((row) => row.dataset.vipPlan === id) ?? null;
+  }
+
+  function paintVipState(text: string, tone: 'idle' | 'ok' | 'bad' = 'idle'): void {
+    if (!vipAdminState) return;
+    vipAdminState.textContent = text;
+    vipAdminState.dataset.tone = tone;
+  }
+
+  function paintVipToggle(id: VipPlanId): void {
+    const row = vipRowOf(id);
+    if (!row) return;
+    const toggle = row.querySelector<HTMLButtonElement>('[data-vip-toggle]');
+    const label = row.querySelector<HTMLElement>('[data-vip-toggle-label]');
+    const enabled = vipConfig[id].enabled;
+    row.dataset.on = String(enabled);
+    if (toggle) toggle.setAttribute('aria-checked', String(enabled));
+    if (label) label.textContent = enabled ? 'ON' : 'OFF';
+  }
+
+  function paintVipRow(id: VipPlanId): void {
+    const row = vipRowOf(id);
+    if (!row) return;
+    const input = row.querySelector<HTMLInputElement>('[data-vip-price]');
+    if (input) input.value = String(vipConfig[id].stars);
+    paintVipToggle(id);
+  }
+
+  function paintVipRows(ids: readonly VipPlanId[] = VIP_PLAN_IDS): void {
+    for (const id of ids) paintVipRow(id);
+  }
+
+  /** One transaction row: monogram + name, tier, Stars, date and whether that term still runs. */
+  function vipPurchaseRow(row: VipPurchase): HTMLTableRowElement {
+    const tr = document.createElement('tr');
+    const who = document.createElement('td');
+    const user = document.createElement('span');
+    user.className = 'vipadm-user';
+    const monogram = document.createElement('span');
+    monogram.className = 'vipadm-mono';
+    const display = row.username || row.userId;
+    monogram.textContent = (display.replace(/^@/, '').trim().charAt(0) || '?').toUpperCase();
+    const name = document.createElement('span');
+    name.className = 'vipadm-user-t';
+    name.textContent = display;
+    name.title = display;
+    user.append(monogram, name);
+    who.append(user);
+
+    const plan = document.createElement('td');
+    plan.textContent = VIP_PLAN_LABEL[row.planId];
+
+    const stars = document.createElement('td');
+    stars.className = 'vipadm-num';
+    stars.textContent = vipFigure(row.stars);
+    stars.title = figure(row.stars);
+
+    const date = document.createElement('td');
+    date.className = 'vipadm-date';
+    date.textContent = row.purchasedAt > 0
+      ? new Date(row.purchasedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      : '—';
+
+    const status = document.createElement('td');
+    const pill = document.createElement('span');
+    const active = row.expiresAt > Date.now();
+    pill.className = 'vipadm-status';
+    pill.dataset.state = active ? 'on' : 'off';
+    pill.textContent = active ? 'Active' : 'Expired';
+    status.append(pill);
+
+    tr.append(who, plan, stars, date, status);
+    return tr;
+  }
+
+  function paintVipPurchases(rows: readonly VipPurchase[]): void {
+    if (vipRecentMeta) vipRecentMeta.textContent = rows.length ? `Last ${rows.length}` : 'No receipts';
+    if (vipRecentEmpty) vipRecentEmpty.hidden = rows.length > 0;
+    if (!vipRecentBody) return;
+    vipRecentBody.replaceChildren(...rows.map(vipPurchaseRow));
+  }
+
+  /** A revenue figure that stays inside a narrow chip; the exact count rides its tooltip. */
+  const vipFigure = (n: number): string => {
+    const value = Math.max(0, Math.round(n));
+    if (value < 100_000) return figure(value);
+    if (value < 1_000_000) return `${Math.round(value / 100) / 10}k`;
+    if (value < 1_000_000_000) return `${Math.round(value / 100_000) / 10}M`;
+    return `${Math.round(value / 100_000_000) / 10}B`;
+  };
+
+  function paintVipFigure(el: HTMLElement | null, value: number): void {
+    if (!el) return;
+    el.textContent = vipFigure(value);
+    el.title = figure(value);
+  }
+
+  function paintVipStats(): void {
+    if (!vipStats) return;
+    paintVipFigure(vipKpiActive, vipStats.totalSubscribers);
+    paintVipFigure(vipKpiStars, vipStats.totalStarsEarned);
+    paintVipFigure(vipKpiOrders, vipStats.allTimePurchases);
+    for (const row of vipPlanRows) {
+      const id = row.dataset.vipPlan;
+      if (!isVipPlanId(id)) continue;
+      const tier = vipStats.tierBreakdown[id];
+      paintVipFigure(row.querySelector<HTMLElement>('[data-vip-sold]'), tier.count);
+      paintVipFigure(row.querySelector<HTMLElement>('[data-vip-gross]'), tier.starsGrossed);
+    }
+    paintVipPurchases(vipStats.recentPurchases);
+  }
+
+  function paintVipAdmin(): void {
+    paintVipRows();
+    paintVipStats();
+  }
+
+  /**
+   * Read the sheet and the ledger together. The controls stay usable during the read, and a
+   * refusal leaves the last answered values on screen rather than painting a comfortable zero.
+   */
+  async function refreshVipAdmin(announce = false): Promise<void> {
+    if (vipLoading) return;
+    vipLoading = true;
+    const seq = ++vipSeq;
+    paintVipState('Syncing…');
+    try {
+      const [config, stats] = await Promise.all([fetchVipConfig(), fetchVipStats()]);
+      if (seq !== vipSeq) return;
+      if (config) {
+        vipConfig = config;
+        paintVipRows();
+      }
+      if (stats) {
+        vipStats = stats;
+        paintVipStats();
+      }
+      if (config && stats) paintVipState('Synced · live', 'ok');
+      else if (config) paintVipState('Sheet synced · sales unavailable');
+      else if (stats) paintVipState('Sales synced · sheet unavailable');
+      else paintVipState('Unavailable', 'bad');
+      if (announce) {
+        if (config && stats) api.note('VIP revenue synced with the Worker.', false, 2000);
+        else api.note('The VIP revenue read did not answer. Nothing was changed.', true, 2600);
+      }
+    } finally {
+      vipLoading = false;
+    }
+  }
+
+  /**
+   * Persist one tier — its price and its storefront switch — and echo the room's saved sheet.
+   * A toggle-only save keeps the last saved price when the input is mid-edit, so flipping the
+   * switch can never be blocked by a half-typed number.
+   */
+  async function saveVipPlan(id: VipPlanId, toggleOnly = false): Promise<void> {
+    if (vipBusy) return;
+    const row = vipRowOf(id);
+    const input = row?.querySelector<HTMLInputElement>('[data-vip-price]');
+    const toggle = row?.querySelector<HTMLButtonElement>('[data-vip-toggle]');
+    const saveBtn = row?.querySelector<HTMLButtonElement>('[data-vip-save]');
+    if (!row || !input || !toggle) return;
+
+    const draft = Number(input.value);
+    let stars = draft;
+    if (toggleOnly) {
+      if (!Number.isInteger(draft) || draft < 1) stars = vipConfig[id].stars;
+    } else if (!Number.isInteger(stars) || stars < 1) {
+      impact('light');
+      notify('error');
+      api.note('Enter a whole Stars price of at least 1.', true, 2600);
+      input.focus({ preventScroll: true });
+      return;
+    }
+    const enabled = toggle.getAttribute('aria-checked') === 'true';
+
+    vipSeq++;
+    vipBusy = true;
+    paintVipState('Saving…');
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.classList.add('is-busy');
+    }
+    try {
+      const result = await pushVipConfig(id, stars, enabled);
+      if (!result.config) {
+        paintVipToggle(id);
+        paintVipState('Save failed', 'bad');
+        notify('error');
+        api.note(`Plan not saved — ${result.detail}`, true, 3600);
+        return;
+      }
+      vipConfig = result.config;
+      vipSeq++;
+      paintVipRow(id);
+      paintVipState('Saved · live', 'ok');
+      notify('success');
+      api.note(
+        `${VIP_PLAN_LABEL[id]} saved · ${stars} Stars · ${enabled ? 'on sale' : 'hidden from the store'}.`,
+        false,
+        2600,
+      );
+    } finally {
+      vipBusy = false;
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.classList.remove('is-busy');
+      }
+    }
+  }
+
   /* ---------- Access control: the role registry (worker/matchmaker.ts) ---------- */
 
   function paintAcl() {
@@ -4769,9 +5099,9 @@ export function createAdmin(api: AdminApi): Admin {
     void refreshServer();                 // the Server tab reads `/api/admin/matchmaking`
     /* The stage reopens on whichever tab was last selected; a registry view must not reopen on a
        snapshot that predates the latest enlistment. */
-    if (tabs.find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.atab === 'squads') {
-      void refreshSquads();
-    }
+    const lastTab = tabs.find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.atab;
+    if (lastTab === 'squads') void refreshSquads();
+    if (lastTab === 'controls') void refreshVipAdmin();
     closeBtn?.focus({ preventScroll: true });
     api.onToggle(true);
     impact('medium');
@@ -4868,10 +5198,38 @@ export function createAdmin(api: AdminApi): Admin {
         void refreshSquads();
       }
       /* the role registry rides the same rule: first sight of Controls reads it */
-      if (id === 'controls' && !aclAsked) {
-        aclAsked = true;
-        void refreshAcl();
+      if (id === 'controls') {
+        if (!aclAsked) {
+          aclAsked = true;
+          void refreshAcl();
+        }
+        void refreshVipAdmin();
       }
+    });
+  }
+
+  /* the VIP plan sheet: a price edit saves with its tier's key, the switch flips the draft */
+  for (const row of vipPlanRows) {
+    const id = row.dataset.vipPlan;
+    if (!isVipPlanId(id)) continue;
+    const toggle = row.querySelector<HTMLButtonElement>('[data-vip-toggle]');
+    toggle?.addEventListener('click', () => {
+      if (vipBusy) return;
+      const next = toggle.getAttribute('aria-checked') !== 'true';
+      toggle.setAttribute('aria-checked', String(next));
+      row.dataset.on = String(next);
+      const label = row.querySelector<HTMLElement>('[data-vip-toggle-label]');
+      if (label) label.textContent = next ? 'ON' : 'OFF';
+      impact('light');
+      void saveVipPlan(id, true);
+    });
+    row.querySelector<HTMLButtonElement>('[data-vip-save]')?.addEventListener('click', () => {
+      void saveVipPlan(id);
+    });
+    row.querySelector<HTMLInputElement>('[data-vip-price]')?.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      void saveVipPlan(id);
     });
   }
 

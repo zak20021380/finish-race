@@ -4147,6 +4147,155 @@
               </button>
             </div>
 
+            <!-- ---------- VIP storefront & revenue: the live plan sheet, its Stars prices and
+                 the receipts the room has banked. Every figure is the Worker's own ledger. ---------- -->
+            <section class="adm-block vipadm" data-accent="violet" aria-labelledby="vipadm-title">
+              <div class="adm-block-h">
+                <h3 class="adm-block-t" id="vipadm-title">VIP Storefront &amp; Revenue</h3>
+                <span class="adm-block-s" id="vip-admin-state" role="status" aria-live="polite">Sync pending</span>
+              </div>
+
+              <!-- lifetime pulse: current subscribers beside the Stars the store has grossed -->
+              <div class="adm-grid vipadm-kpis" role="list" aria-label="VIP revenue summary">
+                <div class="adm-card vipadm-kpi" role="listitem">
+                  <span class="adm-card-top">
+                    <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-crown" /></svg></span>
+                  </span>
+                  <b class="adm-card-v" id="vip-kpi-active">—</b>
+                  <span class="adm-card-l">Active VIPs</span>
+                  <span class="adm-card-s">live subscriptions</span>
+                </div>
+                <div class="adm-card vipadm-kpi" role="listitem">
+                  <span class="adm-card-top">
+                    <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-star-3d" /></svg></span>
+                  </span>
+                  <b class="adm-card-v" id="vip-kpi-stars">—</b>
+                  <span class="adm-card-l">Total Stars</span>
+                  <span class="adm-card-s">lifetime XTR</span>
+                </div>
+                <div class="adm-card vipadm-kpi" role="listitem">
+                  <span class="adm-card-top">
+                    <span class="adm-card-i" aria-hidden="true"><svg class="ico"><use href="#i-bag" /></svg></span>
+                  </span>
+                  <b class="adm-card-v" id="vip-kpi-orders">—</b>
+                  <span class="adm-card-l">Total Orders</span>
+                  <span class="adm-card-s">paid checkouts</span>
+                </div>
+              </div>
+
+              <!-- the three tiers: price in whole Stars, an ON/OFF storefront switch, one save key -->
+              <div class="vipadm-plans" aria-label="VIP plan settings">
+                <article class="vipadm-plan" data-vip-plan="7d" data-on="true">
+                  <div class="vipadm-plan-head">
+                    <span class="vipadm-plan-ico" aria-hidden="true"><svg class="ico"><use href="#i-bolt" /></svg></span>
+                    <span class="vipadm-plan-copy">
+                      <b class="vipadm-plan-t">7 Days</b>
+                      <small class="vipadm-plan-s">Tactical Pass</small>
+                    </span>
+                    <button class="vipadm-toggle" type="button" role="switch" aria-checked="true"
+                      data-vip-toggle aria-label="Tactical Pass on sale">
+                      <span class="vipadm-toggle-l" data-vip-toggle-label>ON</span>
+                      <span class="vipadm-toggle-knob" aria-hidden="true"><i></i></span>
+                    </button>
+                  </div>
+                  <div class="vipadm-plan-row">
+                    <label class="vipadm-price">
+                      <span class="vipadm-price-k">Price</span>
+                      <span class="vipadm-price-field">
+                        <svg class="ico vipadm-star" aria-hidden="true"><use href="#i-star-3d" /></svg>
+                        <input class="vipadm-price-i" type="number" inputmode="numeric" min="1" max="1000000" step="1"
+                          value="75" data-vip-price aria-label="Tactical Pass price in Stars" />
+                        <span class="vipadm-price-u">XTR</span>
+                      </span>
+                    </label>
+                    <button class="adm-btn adm-btn-primary vipadm-save" type="button" data-vip-save
+                      aria-label="Save changes for the 7-day plan">Save Changes</button>
+                  </div>
+                  <p class="vipadm-plan-stat"><span data-vip-sold>—</span> sold · <b data-vip-gross>—</b> ⭐ grossed</p>
+                </article>
+
+                <article class="vipadm-plan" data-vip-plan="30d" data-on="true">
+                  <div class="vipadm-plan-head">
+                    <span class="vipadm-plan-ico" aria-hidden="true"><svg class="ico"><use href="#i-flame" /></svg></span>
+                    <span class="vipadm-plan-copy">
+                      <b class="vipadm-plan-t">30 Days</b>
+                      <small class="vipadm-plan-s">Pro Elite</small>
+                    </span>
+                    <button class="vipadm-toggle" type="button" role="switch" aria-checked="true"
+                      data-vip-toggle aria-label="Pro Elite on sale">
+                      <span class="vipadm-toggle-l" data-vip-toggle-label>ON</span>
+                      <span class="vipadm-toggle-knob" aria-hidden="true"><i></i></span>
+                    </button>
+                  </div>
+                  <div class="vipadm-plan-row">
+                    <label class="vipadm-price">
+                      <span class="vipadm-price-k">Price</span>
+                      <span class="vipadm-price-field">
+                        <svg class="ico vipadm-star" aria-hidden="true"><use href="#i-star-3d" /></svg>
+                        <input class="vipadm-price-i" type="number" inputmode="numeric" min="1" max="1000000" step="1"
+                          value="199" data-vip-price aria-label="Pro Elite price in Stars" />
+                        <span class="vipadm-price-u">XTR</span>
+                      </span>
+                    </label>
+                    <button class="adm-btn adm-btn-primary vipadm-save" type="button" data-vip-save
+                      aria-label="Save changes for the 30-day plan">Save Changes</button>
+                  </div>
+                  <p class="vipadm-plan-stat"><span data-vip-sold>—</span> sold · <b data-vip-gross>—</b> ⭐ grossed</p>
+                </article>
+
+                <article class="vipadm-plan" data-vip-plan="90d" data-on="true">
+                  <div class="vipadm-plan-head">
+                    <span class="vipadm-plan-ico" aria-hidden="true"><svg class="ico"><use href="#i-crown" /></svg></span>
+                    <span class="vipadm-plan-copy">
+                      <b class="vipadm-plan-t">90 Days</b>
+                      <small class="vipadm-plan-s">Grand Master</small>
+                    </span>
+                    <button class="vipadm-toggle" type="button" role="switch" aria-checked="true"
+                      data-vip-toggle aria-label="Grand Master on sale">
+                      <span class="vipadm-toggle-l" data-vip-toggle-label>ON</span>
+                      <span class="vipadm-toggle-knob" aria-hidden="true"><i></i></span>
+                    </button>
+                  </div>
+                  <div class="vipadm-plan-row">
+                    <label class="vipadm-price">
+                      <span class="vipadm-price-k">Price</span>
+                      <span class="vipadm-price-field">
+                        <svg class="ico vipadm-star" aria-hidden="true"><use href="#i-star-3d" /></svg>
+                        <input class="vipadm-price-i" type="number" inputmode="numeric" min="1" max="1000000" step="1"
+                          value="499" data-vip-price aria-label="Grand Master price in Stars" />
+                        <span class="vipadm-price-u">XTR</span>
+                      </span>
+                    </label>
+                    <button class="adm-btn adm-btn-primary vipadm-save" type="button" data-vip-save
+                      aria-label="Save changes for the 90-day plan">Save Changes</button>
+                  </div>
+                  <p class="vipadm-plan-stat"><span data-vip-sold>—</span> sold · <b data-vip-gross>—</b> ⭐ grossed</p>
+                </article>
+              </div>
+
+              <!-- the newest fifteen receipts: who paid, which tier, amount, date and whether
+                   the term that purchase bought is still running -->
+              <div class="adm-slab vipadm-audit">
+                <div class="vipadm-audit-h">
+                  <span class="vipadm-audit-t">Recent purchases</span>
+                  <span class="vipadm-audit-s" id="vip-recent-meta">Last 15</span>
+                </div>
+                <table class="vipadm-table" aria-label="Recent VIP purchases">
+                  <thead>
+                    <tr>
+                      <th scope="col">User</th>
+                      <th scope="col">Plan</th>
+                      <th scope="col">Stars</th>
+                      <th scope="col">Date</th>
+                      <th scope="col">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="vip-recent-body"></tbody>
+                </table>
+                <p class="vipadm-empty" id="vip-recent-empty" hidden>No VIP purchases yet.</p>
+              </div>
+            </section>
+
             <!-- ---------- Access control: the role registry the Worker enforces ---------- -->
             <p class="adm-sec-h">Access control<span class="adm-bc-live" id="acl-count" data-on="false">—</span></p>
             <ul class="adm-acl-list" id="adm-acl-list" aria-label="Administrators"></ul>

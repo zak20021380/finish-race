@@ -4,8 +4,10 @@
  * Two routes face the client:
  *
  *   - `POST /api/vip/invoice` proves the caller with their signed initData, prices the plan from
- *     the shared table, and asks the Bot API for `createInvoiceLink` in XTR. The payload carries
- *     the payer id, the plan and its days; nothing the client can change is trusted later.
+ *     the admin's live sheet in the room, and asks the Bot API for `createInvoiceLink` in XTR. The
+ *     payload carries the payer id, the plan, its days and the price it was minted at; nothing the
+ *     client can change is trusted later.
+ *   - `GET /api/vip/plans` lists only the tiers the admin left on sale, at their live prices.
  *   - `GET /api/vip/me` reads the entitlement the room persisted for this player.
  *
  * Two updates face Telegram, delivered to the existing bot webhook:
@@ -21,9 +23,12 @@
  * here invents an entitlement the room would honour.
  */
 import type { Env } from './env';
-import { identifyPlayerRequest } from './auth';
+import { identifyAdminRequest, identifyPlayerRequest } from './auth';
 import { json, reasonOf } from './http';
-import { vipPlanOf, type VipPlan } from '../shared/vip';
+import {
+  VIP_STARS_MAX, activeVipPlans, readVipPlanConfig, vipPlanOf,
+  type VipPlan, type VipPlanConfig,
+} from '../shared/vip';
 
 const TELEGRAM_BASE = 'https://api.telegram.org/bot';
 const LOBBY = 'global';
@@ -80,15 +85,31 @@ async function telegram<T>(token: string, method: string, params: Record<string,
 
 /* ---------- the invoice payload ---------- */
 
+/** The admin's live plan sheet, read from the singleton room; defaults while it cannot answer. */
+async function roomVipConfig(env: Env): Promise<VipPlanConfig> {
+  if (!env.MATCHMAKER) return readVipPlanConfig(null);
+  try {
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    const response = await lobby.fetch(new Request('https://vip.internal/internal/vip/config'));
+    const body = (await response.json().catch(() => null)) as { ok?: unknown; config?: unknown } | null;
+    if (!response.ok || !body || body.ok !== true) return readVipPlanConfig(null);
+    return readVipPlanConfig(body.config);
+  } catch {
+    return readVipPlanConfig(null);
+  }
+}
+
 interface InvoicePayload {
   v: 1;
   userId: string;
   planId: string;
   days: number;
+  /** The Stars amount this invoice was created for. Absent on invoices issued before pricing. */
+  stars?: number;
 }
 
 function encodePayload(userId: string, plan: VipPlan): string {
-  const payload: InvoicePayload = { v: 1, userId, planId: plan.id, days: plan.days };
+  const payload: InvoicePayload = { v: 1, userId, planId: plan.id, days: plan.days, stars: plan.stars };
   return JSON.stringify(payload);
 }
 
@@ -99,20 +120,36 @@ function readPayload(raw: string): InvoicePayload | null {
     if (!value || value.v !== 1) return null;
     if (typeof value.userId !== 'string' || !/^[0-9-]{1,20}$/.test(value.userId)) return null;
     if (typeof value.planId !== 'string' || typeof value.days !== 'number') return null;
-    return { v: 1, userId: value.userId, planId: value.planId, days: value.days };
+    let stars: number | undefined;
+    if (value.stars !== undefined) {
+      if (typeof value.stars !== 'number' || !Number.isInteger(value.stars)) return null;
+      if (value.stars < 1 || value.stars > VIP_STARS_MAX) return null;
+      stars = value.stars;
+    }
+    return { v: 1, userId: value.userId, planId: value.planId, days: value.days, ...(stars ? { stars } : {}) };
   } catch {
     return null;
   }
 }
 
-/** A paid plan, only when the receipt's own plan, amount and days all agree with the table. */
-function readPaidPlan(raw: string, currency: string, amount: number): { payload: InvoicePayload; plan: VipPlan } | null {
+/**
+ * A paid plan, only when the receipt's own plan, amount and days all agree with the invoice.
+ * The amount is read from the signed-here payload, so an admin repricing the store later never
+ * invalidates an invoice already in a payer's sheet; an older payload without a price is checked
+ * against the canonical table it was minted from.
+ */
+function readPaidPlan(
+  raw: string,
+  currency: string,
+  amount: number,
+): { payload: InvoicePayload; plan: VipPlan; stars: number } | null {
   const payload = readPayload(raw);
   if (!payload) return null;
   const plan = vipPlanOf(payload.planId);
   if (!plan || plan.days !== payload.days) return null;
-  if (currency !== 'XTR' || amount !== plan.stars) return null;
-  return { payload, plan };
+  const stars = payload.stars ?? plan.stars;
+  if (currency !== 'XTR' || amount !== stars) return null;
+  return { payload, plan, stars };
 }
 
 /* ---------- the room's entitlement write ---------- */
@@ -125,7 +162,7 @@ interface GrantResult {
 
 async function grantVip(
   env: Env,
-  args: { userId: string; plan: VipPlan; chargeId: string; name: string },
+  args: { userId: string; plan: VipPlan; stars: number; chargeId: string; name: string; username: string },
 ): Promise<GrantResult | null> {
   if (!env.MATCHMAKER) return null;
   const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
@@ -137,8 +174,10 @@ async function grantVip(
         playerId: `tg-${args.userId}`,
         tgId: args.userId,
         name: args.name,
+        username: args.username,
         planId: args.plan.id,
         days: args.plan.days,
+        stars: args.stars,
         chargeId: args.chargeId,
       }),
     }));
@@ -163,8 +202,14 @@ async function invoiceRoute(request: Request, env: Env): Promise<Response> {
   } catch {
     body = {};
   }
-  const plan = vipPlanOf(body.planId);
-  if (!plan) return vipJson({ ok: false, error: 'unknown_plan' }, 400);
+  const base = vipPlanOf(body.planId);
+  if (!base) return vipJson({ ok: false, error: 'unknown_plan' }, 400);
+
+  /* The admin's live sheet decides both the price and whether this tier is on sale at all. */
+  const config = await roomVipConfig(env);
+  const tier = config[base.id];
+  if (!tier.enabled) return vipJson({ ok: false, error: 'plan_disabled' }, 409);
+  const plan: VipPlan = { ...base, stars: tier.stars };
 
   const token = (env.TELEGRAM_BOT_TOKEN ?? '').trim();
   if (!token) return vipJson({ ok: false, error: 'stars_unavailable', code: 'preview' }, 503);
@@ -220,8 +265,35 @@ async function meRoute(request: Request, env: Env): Promise<Response> {
   }
 }
 
+/** `GET /api/vip/plans` — the cards the player's store paints, exactly as the admin left them. */
+async function plansRoute(request: Request, env: Env): Promise<Response> {
+  if (request.method !== 'GET') return vipJson({ ok: false, error: 'method_not_allowed' }, 405);
+  const config = await roomVipConfig(env);
+  const plans = activeVipPlans(config).map(({ id, days, stars, name }) => ({ id, days, stars, name }));
+  return vipJson({ ok: true, plans });
+}
+
+/**
+ * `/api/admin/vip/*` — the edge proves the admin credential, then hands the request to the
+ * singleton room, which owns the plan sheet and the revenue ledger and re-checks the caller.
+ */
+export async function vipAdminRoutes(request: Request, env: Env): Promise<Response> {
+  const admin = await identifyAdminRequest(request, env);
+  if (!admin) {
+    return vipJson({ ok: false, error: 'forbidden', hint: 'admin credentials required', code: 'admin_unauthorized' }, 403);
+  }
+  if (!env.MATCHMAKER) return vipJson({ ok: false, error: 'matchmaker_unbound' }, 503);
+  const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+  try {
+    return await lobby.fetch(request);
+  } catch (err) {
+    return vipJson({ ok: false, error: 'vip_admin_unavailable', hint: reasonOf(err) }, 503);
+  }
+}
+
 export async function vipRoutes(request: Request, env: Env, url: URL): Promise<Response> {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: VIP_CORS });
+  if (url.pathname === '/api/vip/plans') return plansRoute(request, env);
   if (url.pathname === '/api/vip/invoice') return invoiceRoute(request, env);
   if (url.pathname === '/api/vip/me') return meRoute(request, env);
   return vipJson({ ok: false, error: 'not_found' }, 404);
@@ -286,6 +358,7 @@ export async function handleSuccessfulPayment(
   payerId: number | string | undefined,
   env: Env,
   payerName = '',
+  payerUsername = '',
 ): Promise<void> {
   const payer = numericId(payerId);
   if (!payer) return;
@@ -299,10 +372,13 @@ export async function handleSuccessfulPayment(
     ? payment.telegram_payment_charge_id.slice(0, 128)
     : '';
   if (!chargeId) return;
+  const clean = (value: string): string => value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 40);
   await grantVip(env, {
     userId: payer,
     plan: paid.plan,
+    stars: paid.stars,
     chargeId,
-    name: payerName.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 40),
+    name: clean(payerName),
+    username: clean(payerUsername),
   });
 }
