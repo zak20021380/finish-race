@@ -932,21 +932,33 @@
   line-height: 1;
   text-transform: uppercase;
 }
+/* the price pill: the Star is the currency mark, so it rides in the same inline-flex run as
+   the digits — never a block that pushes them off the pill's optical centre */
 .vip-plan-price {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
   margin-top: auto;
-  padding: 4px 7px;
+  padding: 4px 8px;
   border: 1px solid rgba(243, 212, 131, .14);
   border-radius: 9px;
   background: rgba(0, 0, 0, .32);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, .45);
   color: #F3D483;
+  line-height: 1;
   white-space: nowrap;
 }
-.vip-plan-star { flex: none; width: 13px; height: 13px; }
+/* the canonical #i-star-3d gem at 14px: block display kills the inline baseline gap, a fixed
+   flex basis stops the digits from ever squeezing it, and one cast shadow seats the gold on
+   the dark pill the way the tournament's star pod does */
+.vip-plan-star {
+  display: block;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .5));
+}
 .vip-plan-price-n {
   color: #FFE7A8;
   font-size: 13px;
@@ -1079,7 +1091,16 @@
   transition: transform .14s ease, filter .14s ease;
 }
 .vip-cta .ico { flex: none; width: 15px; height: 15px; }
-.vip-cta .vip-cta-star { width: 18px; height: 18px; filter: drop-shadow(0 1px 1px rgba(80, 46, 0, .35)); }
+/* the same gem that crowns the Cup header, one notch above the label's caps. Block display
+   plus a fixed flex basis mean the label can never resize or baseline-shift it: the star sits
+   dead on the button's text line at every width, and only the busy spinner animates it. */
+.vip-cta .vip-cta-star {
+  display: block;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  filter: drop-shadow(0 1px 1px rgba(80, 46, 0, .35));
+}
 .vip-cta:not(:disabled):active { transform: scale(.975); filter: brightness(1.05); }
 .vip-cta:disabled { cursor: default; filter: saturate(.72) brightness(.94); }
 .vip-cta.is-busy .ico { animation: vip-busy 1.1s linear infinite; }
