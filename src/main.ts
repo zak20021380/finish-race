@@ -2102,7 +2102,7 @@ function tapMine(hit: Hit | null): boolean {
   /* your own pawn is the board's way out of placement mode: the key lets go, the pawn is picked */
   if (hit?.kind === 'ball') { impact('light'); pickFromMine(hit.id); return true; }
   // board background, or the [✕] cap: disarm the mine ghost and its caps
-  if (!hit || hit.kind === 'cancel') { mineGhost = null; capsule = null; return true; }
+  if (!hit || hit.kind === 'cancel') { mineGhost = null; armCapsules(); return true; }
   if (hit.kind === 'mine-confirm') {
     if (mineGhost) play({ kind: 'mine', cell: mineGhost });
     return true;

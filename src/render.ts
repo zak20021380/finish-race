@@ -294,17 +294,37 @@ const CAP_R_MAX = 0.34;
 const capR = (cell: number) => Math.min(CAP_R_MAX, Math.max(CAP_R, MIN_TOUCH * 0.36 / cell));
 /** Half the distance between the two capsule centres, in cells: one radius plus a hair of daylight. */
 const capGap = (r: number) => r + 0.1;
+/** Anchor → capsule centre, in cells. Fixed: a badge never dodges whatever stands beside it. */
+const capReach = (r: number) => capGap(r) + r;
+/** Breathing room between a capsule's rim and the canvas edge, in css px. */
+const CAP_EDGE = 2;
 
 /**
- * A floating capsule's centre beside a board anchor, clamped so both chips stay wholly inside the
- * canvas: the whole 2·capR disc is kept within a half-cell margin of every edge.
+ * A floating capsule's centre beside a board anchor.
+ *
+ * The offsets are fixed: whatever stands on the neighbouring square — an opponent pawn, a friendly
+ * one, a wall post — the ✓ and ✕ keep their own distance from the anchor and may sit straight over
+ * that tile. The pair is only ever moved by the canvas, and then as ONE unit: both discs slide
+ * together and keep the gap between them, so an armed square on the board's right edge can no
+ * longer fold the confirm key back onto the cancel key (or onto the square they belong to). A
+ * capsule is chrome rather than board furniture, so the bound is the canvas, not the slab rim.
  */
 function capsulePos(L: Layout, ax: number, ay: number, side: 'confirm' | 'cancel'): Vec {
   const dir = side === 'confirm' ? 1 : -1;
-  const r = capR(L.cell);
+  const c = L.cell;
+  const r = capR(c);
+  const reach = capReach(r);
+  /* where a disc's own box may sit, in board units */
+  const loX = (CAP_EDGE - L.ox) / c + r;
+  const hiX = (L.w - CAP_EDGE - L.ox) / c - r;
+  const loY = (CAP_EDGE - L.oy) / c + r;
+  const hiY = (L.h - CAP_EDGE - L.oy) / c - r;
+  /* the pair's footprint either side of the anchor: the unit slides by whatever it overflows */
+  const span = reach + r;
+  const shift = Math.max(0, loX - (ax - span)) - Math.max(0, (ax + span) - hiX);
   return {
-    x: clamp(ax + dir * (capGap(r) + r), 0.5 + r, L.cols - 0.5 - r),
-    y: clamp(ay, 0.5 + r, L.rows - 0.5 - r),
+    x: clamp(ax + dir * reach + shift, loX, Math.max(loX, hiX)),
+    y: clamp(ay, loY, Math.max(loY, hiY)),
   };
 }
 
@@ -420,7 +440,6 @@ export function hitTest(L: Layout, px: number, py: number, o: {
   const c = L.cell;
   if (c <= 0) return null;
   const bx = (px - L.ox) / c, by = (py - L.oy) / c;
-  if (bx < -0.5 || by < -0.5 || bx > L.cols + 0.5 || by > L.rows + 0.5) return null;
 
   const cand: { hit: Hit; pri: number; d: number }[] = [];
   const reach = Math.max(0.5, MIN_TOUCH / 2 / c);   // 44px target, in cells
@@ -430,6 +449,14 @@ export function hitTest(L: Layout, px: number, py: number, o: {
     key === 'confirm' ? o.capsule!.hit
       : key === 'rotate' ? { kind: 'rotate', from: 'capsule' }
         : { kind: 'cancel' };
+  /** The floating key this tap lands on, if any — chrome, so it is resolved before the board is. */
+  const cap = o.capsule ? capsuleHit(L, px, py, o.capsule) : null;
+  /* A badge may ride the slab rim, half of it past the last cell: it answers even a hair outside
+     the grid, so the outer edge of the ✓/✕ pair is never a dead zone. The board's own bounds still
+     refuse a tap on the card around it — but only for taps no control wanted. */
+  if (bx < -0.5 || by < -0.5 || bx > L.cols + 0.5 || by > L.rows + 0.5) {
+    return cap ? capHit(cap) : null;
+  }
   /** the nearest of these cells to the tap, with the distance. `maxD` gates what counts as the aim. */
   const nearest = (cells: readonly Pos[], maxD: number) => {
     let best: Pos | null = null, d = Infinity;
@@ -442,8 +469,10 @@ export function hitTest(L: Layout, px: number, py: number, o: {
 
   if (o.mode === 'mine') {
     // mines for empty squares, but your own ball is always a ball: the caller lets the key go
-    const cap = o.capsule ? capsuleHit(L, px, py, o.capsule) : null;
-    if (cap) cand.push({ hit: capHit(cap), pri: 0, d: 0 });
+    /* `pri: -1` is the whole touch contract of the ✓/✕ pair: the badge is drawn ON TOP of whatever
+       tile it lands on, so it must also answer first — a tap on a badge that overlaps a pawn is the
+       badge, never the pawn underneath it. */
+    if (cap) cand.push({ hit: capHit(cap), pri: -1, d: 0 });
     /* Containment, not the 44px reach: tapping a square beside the pawn must still arm a mine
        there, while every tap inside the pawn's own square means "give me my piece back". */
     let ballId: number | null = null, db = Infinity;
@@ -462,8 +491,7 @@ export function hitTest(L: Layout, px: number, py: number, o: {
     /* Priority order (lower number wins): the floating keys and your own ball, the ghost's centre
        (rotate), a move dot inside 0.15 cells, then a groove, then a far move fallback. A dot within
        the move zone is pushed on its own, so no groove can ever be offered there. */
-    const cap = o.capsule ? capsuleHit(L, px, py, o.capsule) : null;
-    if (cap) cand.push({ hit: capHit(cap), pri: 0, d: 0 });
+    if (cap) cand.push({ hit: capHit(cap), pri: -1, d: 0 });
 
     let ballId: number | null = null, db = Infinity;
     for (const b of o.balls) {
@@ -1890,22 +1918,42 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   }
 
   /**
-   * A mine ghost's compact action capsule: a dark disc so it reads on any board, a coloured inner
-   * chip, a bevel rim and a white glyph. The chip's own ramp decides its colour — emerald for
-   * confirm, crimson for cancel (OK_RAMP / NO_RAMP) — so the pair says yes/no the same way for
-   * every seat and on every board.
+   * A mine ghost's compact action capsule: a near-opaque obsidian disc, a 1.5px high-contrast
+   * hairline on its rim, a coloured inner chip, a bevel rim and a white glyph. The chip's own ramp
+   * decides its colour — emerald for confirm, crimson for cancel (OK_RAMP / NO_RAMP) — so the pair
+   * says yes/no the same way for every seat and on every board.
+   *
+   * The pair is painted over whatever tile it lands on, which may be a pawn wearing a turn halo or
+   * a goal-glow rim. Three things keep it legible there: the disc is near opaque so no light bleeds
+   * through it, the obsidian drop-shadow separates it from the tile, and the pale hairline is the
+   * edge the eye actually finds — it reads as a control against a bright pawn and against dark clay.
    */
   function drawCapsule(cx: number, cy: number, kind: 'confirm' | 'cancel', ramp: Ramp, c: number, still: boolean) {
     const r = capR(c) * c;
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.fillStyle = 'rgba(12,16,26,.62)';
+    /* obsidian drop-shadow: the badge has to lift off a glowing pawn, never dissolve into it */
+    ctx.shadowColor = 'rgba(2,5,12,.8)';
+    ctx.shadowBlur = Math.max(6, r * 0.6);
+    ctx.shadowOffsetY = Math.max(1.5, r * 0.14);
+    ctx.fillStyle = 'rgba(8,12,20,.93)';
     ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    /* the 1.5px high-contrast hairline: the disc's own border, pale enough to cut a dark tile and
+       riding the shadow on a bright one — the chip's bevel below never reaches it */
+    ctx.strokeStyle = 'rgba(238,243,250,.9)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(0, 0, r - 0.75, 0, TAU); ctx.stroke();
+    /* the chip sits inside the rim with its own dark bevel, and the two never touch: the hairline
+       is the edge the eye reads, so nothing is allowed to overpaint it */
+    const chip = Math.max(2, r - Math.max(2.6, r * 0.22));
     ctx.fillStyle = ramp.mid;
-    ctx.beginPath(); ctx.arc(0, 0, r * 0.82, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, chip, 0, TAU); ctx.fill();
     ctx.strokeStyle = ramp.dark;
-    ctx.lineWidth = Math.max(1.5, c * 0.045);
-    ctx.beginPath(); ctx.arc(0, 0, r * 0.82, 0, TAU); ctx.stroke();
+    ctx.lineWidth = Math.max(1.2, c * 0.04);
+    ctx.beginPath(); ctx.arc(0, 0, chip, 0, TAU); ctx.stroke();
     ctx.strokeStyle = 'rgba(255,255,255,.96)';
     ctx.lineWidth = Math.max(1.6, c * 0.05);
     ctx.lineCap = 'round';
@@ -1919,10 +1967,11 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     }
     ctx.stroke();
     if (!still) {                                   // a slow breath, so the pair reads as live controls
-      ctx.globalAlpha = 0.18 + 0.12 * Math.sin(performance.now() / 420);
+      /* outside the disc, never on the hairline: the border stays crisp while the badge breathes */
+      ctx.globalAlpha = 0.16 + 0.1 * Math.sin(performance.now() / 420);
       ctx.strokeStyle = ramp.mid;
       ctx.lineWidth = Math.max(1, c * 0.03);
-      ctx.beginPath(); ctx.arc(0, 0, r * 0.95, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, r + 2.5, 0, TAU); ctx.stroke();
     }
     ctx.restore();
   }
@@ -2429,7 +2478,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const gp = sides[v.state.turn].ramp;
       cellRing(v.mineGhost, gp.os, Math.max(1.5, c * 0.045), dash.armed, still ? 0 : -now / 26);
       drawMine(ox + (v.mineGhost.c + 0.5) * c, oy + (v.mineGhost.r + 0.5) * c, 'ghost', pulse, drop, now, still);
-      drawMineCapsules(v.mineGhost.c + 0.5, v.mineGhost.r + 0.5, still);
+      /* the square and its mine stay board furniture; the ✓/✕ pair is chrome, painted once the
+         clip has closed, so an adjacent pawn can never be drawn over it */
     } else mineGhostKey = '';
 
     // placed walls (pop-in + landing pulse); walls are never removed mid-game
@@ -2671,6 +2721,20 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     if (v.ghost?.armed) {
       const centre = wallCentre(v.ghost.spec);
       drawWallToolbar(centre.x, centre.y, v.ghost.spec.o, v.ghost.ok, still);
+    }
+
+    /*
+     * The mine ghost's ✓/✕ pair is chrome as well, and it is the LAST pass of the frame. The badges
+     * stand one reach either side of the armed square, so on a busy board the confirm key lands on
+     * a pawn's own tile — and a control the player is being told to tap must never be buried under
+     * the piece standing beside it. Painting them here, after the slab clip and after every ball,
+     * is what guarantees that: the overlay outranks pawns, aura rings, wall posts and the fog.
+     *
+     * The pair is only painted while its own hit target is armed (`capsule`), so a drawn badge is
+     * always a live one — never a disc the tap falls through.
+     */
+    if (v.mineGhost && v.capsule?.hit.kind === 'mine-confirm') {
+      drawMineCapsules(v.mineGhost.c + 0.5, v.mineGhost.r + 0.5, still);
     }
   }
 
