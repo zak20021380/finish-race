@@ -59,8 +59,8 @@ import {
 import { json, reasonOf } from './http';
 import {
   isSquadAdmin, normalizeChatHandle, readRegisteredSquad, removeSquadMember, roleOf,
-  SQUAD_ALREADY_ENLISTED, squadViewOf, squadWarTiq, upsertSquadMember, verifyAndBuildSquad,
-  verifySquadChat,
+  SQUAD_ALREADY_ENLISTED, squadViewOf, squadWarTiq, telegramPhotoUrl, upsertSquadMember,
+  verifyAndBuildSquad, verifySquadChat,
   type RegisteredSquad, type SquadVerification,
 } from './squads';
 import { botAppLink } from '../shared/config';
@@ -2928,7 +2928,9 @@ export class MatchmakerDO {
         id: p.id,
         name: p.name,
         country: p.country,
-        avatar: p.avatar,
+        /* The seat's signed `photo_url` wins; a seat cached before that field existed
+           still gets Telegram's public userpic derived from its own username. */
+        avatar: p.avatar || telegramPhotoUrl(p.username),
         wins: p.id === mineId ? myWins : p.wins,
         tiq: p.id === mineId ? myTiq : p.tiq,
       }))
