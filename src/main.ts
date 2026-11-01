@@ -61,7 +61,7 @@ import {
 } from './gamemodes';
 import type { Lobby, LobbyRace } from './lobby';
 import {
-  createMatchmaking, myTiq, onlineRace, onlineSearch, type OnlineSession, type RaceEnd,
+  createMatchmaking, myTiq, onlineRace, onlineSearch, setQueueMode, type OnlineSession, type RaceEnd,
 } from './matchmaking';
 import { createAdmin, onRuntime, recordRace, runtime, tiqFrom, type Admin } from './admin';
 import { arena, arenaLocked, onAward, startArenaSync } from './arenaState';
@@ -73,8 +73,11 @@ import {
 import { initSplash, splashReady } from './splash';
 import { initJoinGate } from './joinGate';
 import { showVsClash, type VsRival, type VsStakes } from './vsclash';
+import { beginMatch, finishMatch, initTelemetry, setIdle } from './telemetry';
+import type { MatchMode } from '../shared/telemetry';
 
 initSplash();
+initTelemetry();
 initTelegram();
 /* The global VIP store binds after the SDK so `initDataUnsafe` is readable on its first paint. */
 initVipStore();
@@ -339,7 +342,8 @@ const matchmaking = createMatchmaking({
  * in front of it: with the lock on, a new queue is refused with the reason rather than silently
  * doing nothing. `matchmaking.open()` is never called directly.
  */
-function queueMatch() {
+function queueMatch(mode: 'pvp' | 'arena' = 'pvp') {
+  setQueueMode(mode);
   if (runtime.maintenance) {
     impact('light');
     notify('warning');
@@ -419,6 +423,21 @@ let active: OnlineSession | LobbyRace | null = null;
 /** Why an online race ended without a finish line, for the panel's own caption. */
 let forfeit: RaceEnd['why'] | null = null;
 const rivalSide = (): Player => (localSide === 0 ? 1 : 0);
+/**
+ * How this board is counted: an Arena cup race carries the tag the room announced; every other
+ * online board is PvP, and a board with no live seat is a practice race against the machine.
+ */
+const matchMode = (): MatchMode => {
+  if (!active) return 'bot';
+  if (active.mode === 'arena') return 'arena';
+  /* A friends room can launch with one person and a backfilled seat; that board is practice,
+     exactly as the room counts it. A seat the machine took over does not make the room PvP. */
+  if ('seats' in active) {
+    const humans = active.seats.reduce((n, seat) => n + (seat.bot ? 0 : 1), 0);
+    return humans >= 2 ? 'pvp' : 'bot';
+  }
+  return 'pvp';
+};
 /** The two sides this screen actually paints: the player's chosen colour, the rival in the other. */
 const currentPerspective = (): Perspective => ({ local: localSide, rival: rivalSide(), color: pieceColor() });
 /** `You`, and the name on each other chip: local names in a bot race, the player's in an online one. */
@@ -1186,6 +1205,9 @@ let overlayOpen = false;
 function showOverlay() {
   if (overlayOpen) return;
   overlayOpen = true;
+  /* The board reached its result: one match report, measured from `restart()`. A lesson has no
+     clock open, so this is a no-op there. */
+  finishMatch();
   clearResultMotion();
   /* a fresh settlement owns a fresh budget: last match's claims must never pay this one */
   resetMatchClaims();
@@ -1538,6 +1560,11 @@ function restart() {
   stopVictoryFanfare();
   stopDefeat();
   cancelTutorial();
+  /* A lesson is not a match; a real board starts a fresh telemetry clock even when the player
+     replayed it from the pause sheet. */
+  if (!tutorialStandalone) {
+    beginMatch({ mode: matchMode(), players: sizes.length, matchId: active?.matchId });
+  }
   gen++;
   /* A fresh draw per race keeps the rivals' flags and XP stable for this board; an online race
      uses the seed the matchmaker handed both sides. */
@@ -2006,6 +2033,8 @@ function resumeGame() {
 
 function quitToMenu() {
   cancelTutorial();                 // leaving mid-lesson does not count as having read it
+  /* A board abandoned before its verdict is not a match: drop the open clock without reporting. */
+  setIdle();
   /* The board is leaving the screen: a waiting room can count down again, and its HUD banner
      (if one was raised) is the only thing left to act on. */
   notifyMatchBusy(false);
@@ -2727,7 +2756,13 @@ again.addEventListener('click', () => {
   stopVictoryFanfare();
   stopDefeat();
   /* a networked seat is not ours to restart in place: Play again queues the next race */
-  if (active) { active.close(); active = null; queueMatch(); return; }
+  if (active) {
+    const mode: 'pvp' | 'arena' = active.mode === 'arena' ? 'arena' : 'pvp';
+    active.close();
+    active = null;
+    queueMatch(mode);
+    return;
+  }
   restart();
 });
 shareBtn.addEventListener('click', () => {
@@ -2809,7 +2844,9 @@ const shop = createShop({
   sheets, sheet: sheetById, note: showNote, salesOpen: () => runtime.salesOpen,
 });
 home = createHome({ router, sheets, start: startGame, launch: launchSelectedMode });
-compete = createCompete({ router, sheets, sheet: sheetById, queue: () => queueMatch() });
+compete = createCompete({
+  router, sheets, sheet: sheetById, queue: (mode) => queueMatch(mode),
+});
 createNotifications({ sheets });
 
 /* ---- the announcement engine: urgent broadcasts raise the popup, feed ones the inbox ----

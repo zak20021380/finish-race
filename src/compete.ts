@@ -74,8 +74,8 @@ export interface CompeteApi {
   router: Router;
   sheets: Sheets;
   sheet(id: string): HTMLElement | null;
-  /** The one door every queue goes through — the Arena's PLAY MATCH key opens it. */
-  queue(): void;
+  /** The one door every queue goes through — the Arena's PLAY MATCH key opens it in cup mode. */
+  queue(mode?: 'pvp' | 'arena'): void;
 }
 
 type Board = 'minds' | 'guilds' | 'nations';
@@ -1360,13 +1360,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       notify('success');
     }
     api.sheets.close();
-    api.queue();
+    api.queue('arena');
   }
 
   cupEls.cta?.addEventListener('click', () => {
     impact('light');
     // Already entered: the key means play, so it does not route through a drawer first.
-    if (cup && seat?.cup === cup.id) api.queue();
+    if (cup && seat?.cup === cup.id) api.queue('arena');
     else openSeatSheet();
   });
   elOf('stars-sheet-yes')?.addEventListener('click', lockSeat);

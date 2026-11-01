@@ -54,9 +54,13 @@ import {
 import {
   authenticate, authRequestFrom, identifyAdminRequest, identifyPlayerRequest, isLocalhost, isMetricsMark,
   isSuperAdmin, METRICS_HEADER, verifiedTelegramUserId,
-  type AdminIdentity, type AdminRole, type Identity, type MindTier,
+  type AdminIdentity, type AdminRole, type Identity, type MindTier, type PlayerAuth,
 } from './auth';
 import { json, reasonOf } from './http';
+import {
+  MATCH_MODES, durationSeconds, matchModeFilterOf, matchModeOf, playerCountOf,
+  type MatchMode, type MatchModeFilter, type PlayerCount,
+} from '../shared/telemetry';
 import { extendVipUntil, vipPlanOf } from '../shared/vip';
 import {
   isSquadAdmin, normalizeChatHandle, readRegisteredSquad, removeSquadMember, roleOf,
@@ -72,6 +76,14 @@ import countryRegistry from '../src/data/countries.json';
 import type { Env } from './env';
 
 /* ---------- protocol ---------- */
+
+/** The telemetry door is token-authenticated, so a wildcard origin is enough for a split host. */
+const TELEMETRY_CORS: Record<string, string> = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'POST, OPTIONS',
+  'access-control-allow-headers': 'content-type, x-telegram-init-data, x-detour-dev-player',
+  'access-control-max-age': '86400',
+};
 
 type ClientMessage =
   | { type: 'QUEUE'; wide: boolean }
@@ -121,6 +133,8 @@ interface Waiter {
   joinedAt: number;
   /** The board they are queuing for: both seats must be playing the same game. */
   sizes: [number, number];
+  /** The queue they entered from: `arena` when the cup's PLAY MATCH key opened it. */
+  mode: 'pvp' | 'arena';
   /**
    * The VIP entitlement this seat arrived with, decided by `authenticate` from the signed payload.
    * The post-match lane reads it to decide whether a custom line may cross this wire at all.
@@ -138,6 +152,8 @@ interface Race {
   matchId: string;
   seed: number;
   sizes: [number, number];
+  /** How this pairing is counted: a cup race when either seat entered from the Arena. */
+  mode: 'pvp' | 'arena';
   /** Indexed by side: `seats[0]` opened the race. */
   seats: [Waiter, Waiter];
   /** The real state — every relayed move has been through it. */
@@ -462,10 +478,18 @@ export interface ServerMetrics {
   totalUsers: number;
   /** Distinct verified Telegram user ids in that registry. */
   telegramUsers: number;
-  /** Boards that reached a winner since this counter was introduced. */
+  /** The match-type slice this reading was folded for. */
+  mode: MatchModeFilter;
+  /** Boards that reached a winner since this counter was introduced, every type included. */
   matchesCompleted: number;
-  /** Matches that settled in the rolling last 24 hours. */
+  /** Matches that settled in the rolling last 24 hours, filtered by `mode`. */
   matches24h: number;
+  /** Matches inside the rolling 24 hours, one count per match type. */
+  matchesByMode24h: Record<MatchMode, number>;
+  /** Matches inside the rolling 24 hours, one count per seat count. */
+  matchesByPlayers24h: Record<'2' | '3' | '4', number>;
+  /** Distinct players active inside the requested slice in the rolling last 24 hours. */
+  active24h: number;
   /** Mine actions accepted by the authoritative board. */
   minesPlaced: number;
   /** Retired rolling-log counter; always 0. */
@@ -584,6 +608,16 @@ interface GameMetrics {
    * rather than a single "today" counter that forgets the previous afternoon.
    */
   matchesByHour: Record<string, number>;
+  /** The same hourly buckets, cut by the match type that was played. */
+  matchesByModeHour: Record<MatchMode, Record<string, number>>;
+  /** The same hourly buckets again, cut by how many seats the board fielded. */
+  matchesByPlayersHour: Record<'2' | '3' | '4', Record<string, number>>;
+}
+
+/** The two tags every completed match carries into the bucket counters. */
+interface MatchTag {
+  mode: MatchMode;
+  players: PlayerCount;
 }
 
 const GAME_METRICS_KEY = 'game-metrics.v1';
@@ -591,7 +625,13 @@ const GAME_METRICS_KEY = 'game-metrics.v1';
 const HOUR_MS = 3_600_000;
 const MATCH_BUCKET_KEEP_HOURS = 8 * 24;
 
-const zeroGameMetrics = (): GameMetrics => ({ matchesCompleted: 0, minesPlaced: 0, matchesByHour: {} });
+const zeroGameMetrics = (): GameMetrics => ({
+  matchesCompleted: 0,
+  minesPlaced: 0,
+  matchesByHour: {},
+  matchesByModeHour: { bot: {}, pvp: {}, arena: {} },
+  matchesByPlayersHour: { '2': {}, '3': {}, '4': {} },
+});
 
 /* ---------- the Nations Cup ledger ---------- */
 
@@ -669,10 +709,24 @@ function readMatchHours(raw: unknown): Record<string, number> {
 /** A stored counter blob, clamped field by field; anything missing is zero. */
 function readGameMetrics(raw: unknown): GameMetrics {
   const r = raw as Partial<GameMetrics> | null | undefined;
+  const byMode = (mode: MatchMode): Record<string, number> =>
+    readMatchHours(r?.matchesByModeHour?.[mode]);
+  const byPlayers = (key: '2' | '3' | '4'): Record<string, number> =>
+    readMatchHours(r?.matchesByPlayersHour?.[key]);
   return {
     matchesCompleted: whole(r?.matchesCompleted),
     minesPlaced: whole(r?.minesPlaced),
     matchesByHour: readMatchHours(r?.matchesByHour),
+    matchesByModeHour: {
+      bot: byMode('bot'),
+      pvp: byMode('pvp'),
+      arena: byMode('arena'),
+    },
+    matchesByPlayersHour: {
+      '2': byPlayers('2'),
+      '3': byPlayers('3'),
+      '4': byPlayers('4'),
+    },
   };
 }
 
@@ -685,16 +739,27 @@ function readGameMetrics(raw: unknown): GameMetrics {
  */
 type GrowthBucket = [number, number, number];
 
+/** One match-type bucket as two counts: `[active, matches]`. Signups are never mode-specific. */
+type ModeGrowthBucket = [number, number];
+
 /**
- * The room's entire plotted history: 24 hourly rows plus 30 daily rows and nothing else. Both maps
- * are pruned on every write, so the blob is bounded by construction — it cannot grow with the
- * playerbase, and it stays well under 2 KB however many years the object lives.
+ * The room's entire plotted history: 24 hourly rows plus 30 daily rows for the aggregate, and the
+ * same window again for each of the three match types. Every ring is pruned on write, so the blob
+ * is bounded by construction — it cannot grow with the playerbase, however many years the object
+ * lives.
  */
 interface GrowthSeries {
   /** Keyed by UTC hour index (`Math.floor(ms / HOUR_MS)`); at most `HOURLY_KEEP` rows. */
   hourly: Record<string, GrowthBucket>;
   /** Keyed by UTC calendar day (`YYYY-MM-DD`); at most `DAILY_KEEP` rows. */
   daily: Record<string, GrowthBucket>;
+  /** The same two windows, one ring per match type. */
+  modes: Record<MatchMode, ModeGrowthSeries>;
+}
+
+interface ModeGrowthSeries {
+  hourly: Record<string, ModeGrowthBucket>;
+  daily: Record<string, ModeGrowthBucket>;
 }
 
 const GROWTH_KEY = 'growth-series.v1';
@@ -703,7 +768,13 @@ const DAY_MS = 86_400_000;
 const HOURLY_KEEP = 24;
 const DAILY_KEEP = 30;
 
-const zeroGrowth = (): GrowthSeries => ({ hourly: {}, daily: {} });
+const zeroModeGrowth = (): ModeGrowthSeries => ({ hourly: {}, daily: {} });
+
+const zeroGrowth = (): GrowthSeries => ({
+  hourly: {},
+  daily: {},
+  modes: { bot: zeroModeGrowth(), pvp: zeroModeGrowth(), arena: zeroModeGrowth() },
+});
 
 /** A UTC day index as the `YYYY-MM-DD` key the daily ring is stored under. */
 const dayKeyOf = (index: number): string => new Date(index * DAY_MS).toISOString().slice(0, 10);
@@ -724,13 +795,19 @@ function readBucket(raw: unknown): GrowthBucket | null {
   return [whole(raw[0]), whole(raw[1]), whole(raw[2])];
 }
 
+/** A stored match-type bucket: `[active, matches]`, clamped the same way. */
+function readModeBucket(raw: unknown): ModeGrowthBucket | null {
+  if (!Array.isArray(raw) || raw.length !== 2) return null;
+  return [whole(raw[0]), whole(raw[1])];
+}
+
 /**
  * Drop every row outside `[oldest, newest]`, then cap the map at `keep` rows by evicting the
  * oldest. The window check is what prunes in normal operation; the cap is the backstop that stops
  * a hand-edited or clock-skewed blob from ever outgrowing the ring.
  */
-function trimRing(
-  map: Record<string, GrowthBucket>,
+function trimRing<T>(
+  map: Record<string, T>,
   indexOf: (key: string) => number,
   oldest: number,
   newest: number,
@@ -758,17 +835,46 @@ function readGrowthSeries(raw: unknown, now = Date.now()): GrowthSeries {
     }
     return out;
   };
-  const growth: GrowthSeries = { hourly: read(r?.hourly), daily: read(r?.daily) };
+  const readMode = (source: unknown): ModeGrowthSeries => {
+    const s = source as Partial<ModeGrowthSeries> | null | undefined;
+    const rows = (value: unknown): Record<string, ModeGrowthBucket> => {
+      const out: Record<string, ModeGrowthBucket> = {};
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
+      for (const [key, stored] of Object.entries(value as Record<string, unknown>)) {
+        const bucket = readModeBucket(stored);
+        if (bucket && (bucket[0] || bucket[1])) out[key.slice(0, 12)] = bucket;
+      }
+      return out;
+    };
+    return { hourly: rows(s?.hourly), daily: rows(s?.daily) };
+  };
+  const modes = (r?.modes ?? {}) as Partial<Record<MatchMode, unknown>>;
+  const growth: GrowthSeries = {
+    hourly: read(r?.hourly),
+    daily: read(r?.daily),
+    modes: {
+      bot: readMode(modes.bot),
+      pvp: readMode(modes.pvp),
+      arena: readMode(modes.arena),
+    },
+  };
   pruneGrowth(growth, now);
   return growth;
 }
 
-/** Both rings trimmed against one clock reading, so a load and a write prune identically. */
+/** Every ring trimmed against one clock reading, so a load and a write prune identically. */
 function pruneGrowth(growth: GrowthSeries, now: number): void {
   const hour = Math.floor(now / HOUR_MS);
-  trimRing(growth.hourly, Number, hour - HOURLY_KEEP + 1, hour, HOURLY_KEEP);
   const day = dayIndexOf(now);
-  trimRing(growth.daily, dayKeyIndex, day - DAILY_KEEP + 1, day, DAILY_KEEP);
+  const oldestHour = hour - HOURLY_KEEP + 1;
+  const oldestDay = day - DAILY_KEEP + 1;
+  trimRing(growth.hourly, Number, oldestHour, hour, HOURLY_KEEP);
+  trimRing(growth.daily, dayKeyIndex, oldestDay, day, DAILY_KEEP);
+  for (const mode of MATCH_MODES) {
+    const ring = growth.modes[mode];
+    trimRing(ring.hourly, Number, oldestHour, hour, HOURLY_KEEP);
+    trimRing(ring.daily, dayKeyIndex, oldestDay, day, DAILY_KEEP);
+  }
 }
 
 /* ---------- the player directory: who the room has seen ---------- */
@@ -821,6 +927,12 @@ export interface PlayerRecord {
   inMatch: boolean;
   /** Seasonal honors the Command Center pushed, newest last (at most six). */
   awards?: SeasonAward[];
+  /**
+   * When this seat was last counted active in each match type, in ms. The per-type trend needs its
+   * own dedupe clock: playing a bot race and a PvP race in the same hour is two active slices, but
+   * one read of `lastSeen`.
+   */
+  modeSeen: Record<MatchMode, number>;
 }
 
 /** The directory views the Users tab's filter chips select. */
@@ -894,6 +1006,8 @@ const chatIdOf = (id: string): string => {
   return match ? match[1] : '';
 };
 
+const zeroModeSeen = (): Record<MatchMode, number> => ({ bot: 0, pvp: 0, arena: 0 });
+
 /** A seat's first registry entry. */
 function freshPlayer(identity: Identity, now: number): PlayerRecord {
   return {
@@ -924,6 +1038,7 @@ function freshPlayer(identity: Identity, now: number): PlayerRecord {
     muted: false,
     inMatch: false,
     awards: [],
+    modeSeen: zeroModeSeen(),
   };
 }
 
@@ -939,6 +1054,7 @@ function readPlayer(raw: unknown): PlayerRecord | null {
   const r = raw as Partial<PlayerRecord> | null | undefined;
   if (!r || typeof r.id !== 'string' || !r.id) return null;
   const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.slice(0, max) : '');
+  const seen = (r.modeSeen && typeof r.modeSeen === 'object' ? r.modeSeen : {}) as Partial<Record<MatchMode, unknown>>;
   return {
     id: r.id.slice(0, 64),
     tgId: text(r.tgId, 20).replace(/[^0-9-]/g, ''),
@@ -970,6 +1086,11 @@ function readPlayer(raw: unknown): PlayerRecord | null {
     /* a fresh instance has no live boards: nothing can be mid-match across an eviction */
     inMatch: false,
     awards: readAwards(r.awards),
+    modeSeen: {
+      bot: whole(seen.bot),
+      pvp: whole(seen.pvp),
+      arena: whole(seen.arena),
+    },
   };
 }
 
@@ -1359,7 +1480,8 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
 
 /** `MATCH_FOUND` as the client reads it: the seat, the shared race, and who is opposite. */
 function foundMessage(
-  matchId: string, seed: number, side: 0 | 1, me: Waiter, opponent: Waiter, sizes: [number, number],
+  matchId: string, seed: number, side: 0 | 1, me: Waiter, opponent: Waiter,
+  sizes: [number, number], mode: 'pvp' | 'arena',
 ): string {
   return JSON.stringify({
     type: 'MATCH_FOUND',
@@ -1367,6 +1489,7 @@ function foundMessage(
     seed,
     side,
     sizes,
+    mode,
     /* The caller's own entitlement and the rival's, both judged by the room before it paired. */
     isVip: me.premium,
     vipUntil: me.vipUntil,
@@ -1742,6 +1865,15 @@ export class MatchmakerDO {
        grant is minted only by a Telegram receipt the bot webhook validated. */
     if (url.pathname === '/api/vip/me' && request.method === 'GET') return this.vipMe(request);
     if (url.pathname === '/api/vip/grant' && request.method === 'POST') return this.vipGrant(request);
+    /* Match and heartbeat telemetry from a player's own device. It is the only way a bot race the
+       server never saw can reach the growth rings; the player door is proven inside. */
+    if (url.pathname === '/api/client/telemetry/heartbeat' || url.pathname === '/api/client/telemetry/match') {
+      try {
+        return await this.telemetry(request, url);
+      } catch (err) {
+        return json({ ok: false, error: 'telemetry_failed', hint: reasonOf(err) }, 500, TELEMETRY_CORS);
+      }
+    }
     if (url.pathname === '/api/squads/verify') return this.verifySquad(request, url);
     if (url.pathname === '/api/squads/register') return this.registerSquad(request, url);
     /* Squad membership: the roster is written only here, and only by the player it names. */
@@ -1847,7 +1979,7 @@ export class MatchmakerDO {
         this.joinRoom(server, identity, roomSize, readBotTier(queryValue(url, 'bottier')));
       } else {
         const waiter = this.enter(server, identity, queryValue(url, 'wide') === '1',
-          readSizes(queryValue(url, 'sizes')));
+          readSizes(queryValue(url, 'sizes')), queryValue(url, 'mode') === 'arena' ? 'arena' : 'pvp');
         this.attach(waiter);
         this.pairNow();                        // the queue may already hold their match
       }
@@ -2415,7 +2547,7 @@ export class MatchmakerDO {
    * report it as telemetry being unavailable. A section that cannot be read reports its own exact
    * zeroes and names itself in `degraded`, so the panel still shows the rest of the truth.
    */
-  private metrics(hostname: string): ServerMetrics {
+  private metrics(hostname: string, mode: MatchModeFilter = 'all'): ServerMetrics {
     const now = Date.now();
     const degraded: string[] = [];
     const guarded = <T>(name: string, build: () => T, empty: T): T => {
@@ -2433,16 +2565,35 @@ export class MatchmakerDO {
     }), { activeRooms: 0, queueLength: 0, active1v1: 0 });
     const counters = guarded('counters', () => ({
       matchesCompleted: this.gameMetrics.matchesCompleted,
-      matches24h: this.matchesInWindow(ACTIVE_MS, now),
+      matches24h: this.matchesInWindow(ACTIVE_MS, now, mode === 'all' ? undefined : mode),
+      matchesByMode24h: {
+        bot: this.matchesInWindow(ACTIVE_MS, now, 'bot'),
+        pvp: this.matchesInWindow(ACTIVE_MS, now, 'pvp'),
+        arena: this.matchesInWindow(ACTIVE_MS, now, 'arena'),
+      },
+      matchesByPlayers24h: {
+        '2': this.matchesInWindowForPlayers(ACTIVE_MS, now, '2'),
+        '3': this.matchesInWindowForPlayers(ACTIVE_MS, now, '3'),
+        '4': this.matchesInWindowForPlayers(ACTIVE_MS, now, '4'),
+      },
       minesPlaced: this.gameMetrics.minesPlaced,
-    }), { matchesCompleted: 0, matches24h: 0, minesPlaced: 0 });
+      active24h: mode === 'all' ? this.activeInWindow(now) : this.activeInWindow(now, mode),
+    }), {
+      matchesCompleted: 0,
+      matches24h: 0,
+      matchesByMode24h: { bot: 0, pvp: 0, arena: 0 },
+      matchesByPlayers24h: { '2': 0, '3': 0, '4': 0 },
+      minesPlaced: 0,
+      active24h: 0,
+    });
     const population = guarded('population', () => this.populationReading(now), NO_POPULATION);
-    const series = guarded('series', () => this.growthWindows(now), NO_SERIES);
+    const series = guarded('series', () => this.growthWindows(now, mode), NO_SERIES);
     const environment = guarded('environment', () => this.envLabel(hostname), 'unknown');
     return {
       ok: true,
       timestamp: now,
       environment,
+      mode,
       ...live,
       ...population,
       ...counters,
@@ -2450,6 +2601,17 @@ export class MatchmakerDO {
       ...series,
       degraded,
     };
+  }
+
+  /** Distinct players whose last sighting falls inside the rolling day, for one slice. */
+  private activeInWindow(now: number, mode?: MatchMode): number {
+    const since = now - ACTIVE_MS;
+    let total = 0;
+    for (const p of this.players.values()) {
+      const at = mode ? p.modeSeen[mode] : p.lastSeen;
+      if (at >= since) total++;
+    }
+    return total;
   }
 
   /** `production`, `development`, or the deployment's own `WORKER_ENV` label. */
@@ -2468,18 +2630,22 @@ export class MatchmakerDO {
    * zero — and it names the failure in `degraded` instead of answering a 500 the panel can only
    * paint as a broken reply. The full reason also goes to the Worker log.
    */
-  private metricsFallback(hostname: string, err: unknown): ServerMetrics {
+  private metricsFallback(hostname: string, err: unknown, mode: MatchModeFilter = 'all'): ServerMetrics {
     console.error('metrics_failed', reasonOf(err));
     return {
       ok: true,
       timestamp: Date.now(),
       environment: this.envLabel(hostname),
+      mode,
       activeRooms: 0,
       queueLength: 0,
       active1v1: 0,
       ...NO_POPULATION,
       matchesCompleted: 0,
       matches24h: 0,
+      matchesByMode24h: { bot: 0, pvp: 0, arena: 0 },
+      matchesByPlayers24h: { '2': 0, '3': 0, '4': 0 },
+      active24h: 0,
       minesPlaced: 0,
       logsSpawned: 0,
       ...NO_SERIES,
@@ -2570,6 +2736,99 @@ export class MatchmakerDO {
     };
   }
 
+  /**
+   * The player telemetry surface. A heartbeat keeps the seat inside the ACTIVE window; a match
+   * report buckets one completed board under its type and seat count. A board with a `matchId`
+   * was settled by the room already, so that report only refreshes the seat's activity clocks;
+   * a client-only bot race carries no id and is counted here.
+   */
+  private async telemetry(request: Request, url: URL): Promise<Response> {
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: TELEMETRY_CORS });
+    if (request.method !== 'POST') {
+      return json({ ok: false, error: 'method_not_allowed' }, 405, TELEMETRY_CORS);
+    }
+    const who = await identifyPlayerRequest(request, this.env);
+    if (!who) return json({ ok: false, error: 'unauthorized' }, 401, TELEMETRY_CORS);
+    if (this.restricted(who.playerId)) {
+      return json({ ok: false, error: 'banned' }, 403, TELEMETRY_CORS);
+    }
+
+    const now = Date.now();
+    const body = await readBody(request);
+
+    if (url.pathname === '/api/client/telemetry/heartbeat') {
+      const mode = matchModeOf(body.matchType);
+      this.telemetryPlayer(who, now);
+      this.markActive(who.playerId, mode ?? undefined);
+      return json({
+        ok: true,
+        active: true,
+        matchType: mode,
+        timestamp: new Date(now).toISOString(),
+      }, 200, TELEMETRY_CORS);
+    }
+
+    const matchType = matchModeOf(body.matchType);
+    if (!matchType) {
+      return json({ ok: false, error: 'invalid_match_type' }, 400, TELEMETRY_CORS);
+    }
+    this.telemetryPlayer(who, now);
+    const players = playerCountOf(body.playersCount);
+    const durationSec = durationSeconds(body.durationSec);
+    /* A report that names a match the room itself settled must not be counted twice: the
+       authoritative board already bucketed it, whatever the client called the mode. */
+    const settledByRoom = typeof body.matchId === 'string' && body.matchId.trim() !== '';
+    const counted = matchType === 'bot' && !settledByRoom;
+
+    this.markActive(who.playerId, matchType);
+    if (counted) this.bumpMetrics({ matchesCompleted: 1 }, { mode: matchType, players }, now);
+
+    return json({
+      ok: true,
+      recorded: true,
+      counted,
+      matchType,
+      playersCount: players,
+      durationSec,
+      timestamp: new Date(now).toISOString(),
+    }, 200, TELEMETRY_CORS);
+  }
+
+  /** The registry row behind a telemetry report, created on the first bot-only session. */
+  private telemetryPlayer(who: PlayerAuth, now: number): PlayerRecord {
+    const existing = this.players.get(who.playerId);
+    if (existing) {
+      const name = who.name.slice(0, 40);
+      if (name && existing.name !== name) {
+        existing.name = name;
+        this.persist();
+      }
+      return existing;
+    }
+    if (this.players.size >= PLAYERS_MAX) this.trim();
+    const record = freshPlayer({
+      player: {
+        id: who.playerId, name: who.name.slice(0, 40) || 'Player', username: '', flag: '', avatar: '',
+      },
+      tiq: 0,
+      tier: 'rookie',
+      flag: '',
+      age: 0,
+      guest: who.guest,
+      premium: false,
+      vipUntil: 0,
+      coins: 0,
+      stars: 0,
+      referrals: 0,
+      squad: '',
+    }, now);
+    this.players.set(record.id, record);
+    this.creditSignup(now);
+    this.creditActive(0, now);
+    this.persist();
+    return record;
+  }
+
   /** Every Command Center route: the public feed first, then the registry decides who is in. */
   private async admin(request: Request, url: URL): Promise<Response> {
     /* The two public routes in the set: the announcement popup, and the tournament clock. */
@@ -2600,13 +2859,14 @@ export class MatchmakerDO {
       if (!isMetricsMark(request.headers.get(METRICS_HEADER) ?? '', this.env)) {
         return json({ error: 'unauthorized', hint: 'metrics operator required' }, 403);
       }
+      const mode = matchModeFilterOf(url.searchParams.get('mode'));
       try {
-        return json(this.metrics(url.hostname));
+        return json(this.metrics(url.hostname, mode), 200, { 'cache-control': 'no-store' });
       } catch (err) {
         /* The reading is already folded per section; this is the last line of defence. Answer a
            complete all-zero reading that names the failure, never a 500 the panel paints as a
            broken reply. */
-        return json(this.metricsFallback(url.hostname, err));
+        return json(this.metricsFallback(url.hostname, err, mode));
       }
     }
 
@@ -3421,6 +3681,7 @@ export class MatchmakerDO {
         muted: false,
         inMatch: false,
         awards: [],
+        modeSeen: zeroModeSeen(),
       };
       this.players.set(playerId, record);
       this.trim();
@@ -3500,11 +3761,21 @@ export class MatchmakerDO {
    * ago" in the Command Center. Every queue move, room join, board move and finish comes through
    * here, and the write rides the same debounced flush as the rest of the registry.
    */
-  private markActive(id: string): void {
+  private markActive(id: string, mode?: MatchMode): void {
     const p = this.players.get(id);
     if (!p) return;
-    this.stampSeen(p, Date.now());
+    const now = Date.now();
+    this.stampSeen(p, now);
+    if (mode) this.stampModeSeen(p, mode, now);
     this.persist();
+  }
+
+  /** Move one match-type clock forward, crediting its ring for a bucket the seat had not entered. */
+  private stampModeSeen(p: PlayerRecord, mode: MatchMode, at: number): void {
+    const prev = p.modeSeen[mode] ?? 0;
+    if (at <= prev) return;
+    p.modeSeen[mode] = at;
+    this.creditModeActive(mode, prev > 0 ? prev : -1, at);
   }
 
   /** The seat's board came to rest: count it. `winner` null means nobody won — an admin abort. */
@@ -3573,26 +3844,52 @@ export class MatchmakerDO {
   }
 
   /**
-   * Stamp completed matches into their UTC-hour buckets. Only the retained window is kept, so the
-   * blob stays small while the rolling 24-hour figure stays exact.
+   * Stamp completed matches into their UTC-hour buckets, once for the aggregate and once for each
+   * tag it carries. Only the retained window is kept, so the blob stays small while the rolling
+   * 24-hour figures stay exact.
    */
-  private stampMatchesByHour(matches: number, now = Date.now()): void {
+  private stampMatchesByHour(matches: number, tag?: MatchTag, now = Date.now()): void {
     if (matches <= 0) return;
     const hour = Math.floor(now / HOUR_MS);
     const key = String(hour);
-    this.gameMetrics.matchesByHour[key] = whole(this.gameMetrics.matchesByHour[key]) + matches;
-    const oldest = hour - MATCH_BUCKET_KEEP_HOURS;
-    for (const stored of Object.keys(this.gameMetrics.matchesByHour)) {
-      if (Number(stored) < oldest) delete this.gameMetrics.matchesByHour[stored];
+    const add = (map: Record<string, number>): void => {
+      map[key] = whole(map[key]) + matches;
+    };
+    add(this.gameMetrics.matchesByHour);
+    if (tag) {
+      add(this.gameMetrics.matchesByModeHour[tag.mode]);
+      add(this.gameMetrics.matchesByPlayersHour[String(tag.players) as '2' | '3' | '4']);
     }
+    const oldest = hour - MATCH_BUCKET_KEEP_HOURS;
+    const prune = (map: Record<string, number>): void => {
+      for (const stored of Object.keys(map)) {
+        if (Number(stored) < oldest) delete map[stored];
+      }
+    };
+    prune(this.gameMetrics.matchesByHour);
+    for (const mode of MATCH_MODES) prune(this.gameMetrics.matchesByModeHour[mode]);
+    for (const seats of ['2', '3', '4'] as const) prune(this.gameMetrics.matchesByPlayersHour[seats]);
   }
 
-  /** Matches stamped inside a rolling window, read back from the hourly buckets. */
-  private matchesInWindow(windowMs: number, now = Date.now()): number {
+  /** Matches stamped inside a rolling window for one slice, read back from hourly buckets. */
+  private matchesInWindow(windowMs: number, now = Date.now(), mode?: MatchMode): number {
+    const oldest = Math.floor((now - windowMs) / HOUR_MS);
+    const newest = Math.floor(now / HOUR_MS);
+    const buckets = mode ? this.gameMetrics.matchesByModeHour[mode] : this.gameMetrics.matchesByHour;
+    let total = 0;
+    for (const [key, value] of Object.entries(buckets)) {
+      const hour = Number(key);
+      if (hour >= oldest && hour <= newest) total += value;
+    }
+    return total;
+  }
+
+  /** Matches inside a rolling window for one seat count. */
+  private matchesInWindowForPlayers(windowMs: number, now: number, players: '2' | '3' | '4'): number {
     const oldest = Math.floor((now - windowMs) / HOUR_MS);
     const newest = Math.floor(now / HOUR_MS);
     let total = 0;
-    for (const [key, value] of Object.entries(this.gameMetrics.matchesByHour)) {
+    for (const [key, value] of Object.entries(this.gameMetrics.matchesByPlayersHour[players])) {
       const hour = Number(key);
       if (hour >= oldest && hour <= newest) total += value;
     }
@@ -3647,6 +3944,38 @@ export class MatchmakerDO {
     return this.memoDayKey;
   }
 
+  /**
+   * The same fold for one match-type ring. `slot` is 0 active or 1 matches; the signup count is
+   * never repeated here because a registration belongs to the whole app, not to a game mode.
+   */
+  private creditModeGrowth(
+    slot: 0 | 1, mode: MatchMode, at: number, by = 1, dedupeFrom = -1,
+  ): void {
+    if (by <= 0) return;
+    const ring = this.growth.modes[mode];
+    const hour = Math.floor(at / HOUR_MS);
+    const day = dayIndexOf(at);
+    const freshHour = dedupeFrom < 0 || Math.floor(dedupeFrom / HOUR_MS) !== hour;
+    const freshDay = dedupeFrom < 0 || dayIndexOf(dedupeFrom) !== day;
+    if (!freshHour && !freshDay) return;
+    let opened = false;
+    const stamp = (map: Record<string, ModeGrowthBucket>, key: string): void => {
+      const bucket = map[key];
+      if (bucket) {
+        bucket[slot] = whole(bucket[slot]) + by;
+        return;
+      }
+      const row: ModeGrowthBucket = [0, 0];
+      row[slot] = by;
+      map[key] = row;
+      opened = true;
+    };
+    if (freshHour) stamp(ring.hourly, String(hour));
+    if (freshDay) stamp(ring.daily, this.growthDayKey(day));
+    if (opened) pruneGrowth(this.growth, at);
+    this.persistMetrics();
+  }
+
   /** A first-time registration, counted in the bucket it actually landed in. */
   private creditSignup(at: number): void {
     this.creditGrowth(0, at);
@@ -3657,16 +3986,27 @@ export class MatchmakerDO {
     this.creditGrowth(1, at, 1, prevSeen > 0 ? prevSeen : -1);
   }
 
+  /** A seat's match-type clock moving forward: one active player in that slice. */
+  private creditModeActive(mode: MatchMode, prevSeen: number, at: number): void {
+    this.creditModeGrowth(0, mode, at, 1, prevSeen);
+  }
+
   /** Boards that reached a verdict. Every one of them counts, so there is nothing to dedupe. */
   private creditMatches(matches: number, at = Date.now()): void {
     this.creditGrowth(2, at, matches);
   }
 
+  /** The same verdict, credited to the match type it was played in. */
+  private creditModeMatches(mode: MatchMode, matches: number, at = Date.now()): void {
+    this.creditModeGrowth(1, mode, at, matches);
+  }
+
   /** Matches settled on one UTC day, summed from the eight-day-deep hourly match buckets. */
-  private matchesOnDay(dayIndex: number): number {
+  private matchesOnDay(dayIndex: number, mode?: MatchMode): number {
+    const buckets = mode ? this.gameMetrics.matchesByModeHour[mode] : this.gameMetrics.matchesByHour;
     let total = 0;
     for (let hour = 0; hour < 24; hour++) {
-      total += whole(this.gameMetrics.matchesByHour[String(dayIndex * 24 + hour)]);
+      total += whole(buckets[String(dayIndex * 24 + hour)]);
     }
     return total;
   }
@@ -3678,7 +4018,7 @@ export class MatchmakerDO {
    * a floor the ring buffers build on. A seat the room has already trimmed contributes nothing —
    * there is no estimate anywhere in here.
    */
-  private foldRegistry(hour: number, day: number): {
+  private foldRegistry(hour: number, day: number, mode?: MatchMode): {
     hourly: Map<number, GrowthBucket>;
     daily: Map<number, GrowthBucket>;
   } {
@@ -3699,9 +4039,10 @@ export class MatchmakerDO {
         credit(hourly, Math.floor(p.firstSeen / HOUR_MS), oldestHour, hour, 0);
         credit(daily, dayIndexOf(p.firstSeen), oldestDay, day, 0);
       }
-      if (p.lastSeen > 0) {
-        credit(hourly, Math.floor(p.lastSeen / HOUR_MS), oldestHour, hour, 1);
-        credit(daily, dayIndexOf(p.lastSeen), oldestDay, day, 1);
+      const activeAt = mode ? p.modeSeen[mode] : p.lastSeen;
+      if (activeAt > 0) {
+        credit(hourly, Math.floor(activeAt / HOUR_MS), oldestHour, hour, 1);
+        credit(daily, dayIndexOf(activeAt), oldestDay, day, 1);
       }
     }
     return { hourly, daily };
@@ -3713,35 +4054,55 @@ export class MatchmakerDO {
    * timestamps (plus the hourly match buckets) fold back for the same span. Taking the larger
    * invents nothing — both sides are measured — and it is what lets the chart carry real history
    * on the very first reading after a deploy, before the rings have had any time to fill.
+   *
+   * A mode slice replaces the active and match columns with that mode's own rings and buckets;
+   * signups stay aggregate because a registration is not a match type.
    */
-  private growthWindows(now: number): Pick<ServerMetrics, 'series24h' | 'series7d' | 'series30d'> {
+  private growthWindows(
+    now: number, mode: MatchModeFilter = 'all',
+  ): Pick<ServerMetrics, 'series24h' | 'series7d' | 'series30d'> {
     const hour = Math.floor(now / HOUR_MS);
     const day = dayIndexOf(now);
-    const folded = this.foldRegistry(hour, day);
+    const slice = mode === 'all' ? null : mode;
+    const folded = this.foldRegistry(hour, day, slice ?? undefined);
+    const modeHourly = slice ? this.growth.modes[slice].hourly : null;
+    const modeDaily = slice ? this.growth.modes[slice].daily : null;
 
     const series24h: SeriesPoint[] = [];
     for (let back = HOURLY_KEEP - 1; back >= 0; back--) {
       const index = hour - back;
-      const stamped = this.growth.hourly[String(index)];
+      const key = String(index);
+      const stamped = this.growth.hourly[key];
+      const sliceStamped = modeHourly?.[key];
       const registry = folded.hourly.get(index);
       series24h.push({
         t: index * HOUR_MS,
         signups: Math.max(stamped?.[0] ?? 0, registry?.[0] ?? 0),
-        active: Math.max(stamped?.[1] ?? 0, registry?.[1] ?? 0),
-        matches: Math.max(stamped?.[2] ?? 0, whole(this.gameMetrics.matchesByHour[String(index)])),
+        active: slice
+          ? Math.max(sliceStamped?.[0] ?? 0, registry?.[1] ?? 0)
+          : Math.max(stamped?.[1] ?? 0, registry?.[1] ?? 0),
+        matches: slice
+          ? Math.max(sliceStamped?.[1] ?? 0, whole(this.gameMetrics.matchesByModeHour[slice][key]))
+          : Math.max(stamped?.[2] ?? 0, whole(this.gameMetrics.matchesByHour[key])),
       });
     }
 
     const series30d: SeriesPoint[] = [];
     for (let back = DAILY_KEEP - 1; back >= 0; back--) {
       const index = day - back;
-      const stamped = this.growth.daily[dayKeyOf(index)];
+      const key = dayKeyOf(index);
+      const stamped = this.growth.daily[key];
+      const sliceStamped = modeDaily?.[key];
       const registry = folded.daily.get(index);
       series30d.push({
         t: index * DAY_MS,
         signups: Math.max(stamped?.[0] ?? 0, registry?.[0] ?? 0),
-        active: Math.max(stamped?.[1] ?? 0, registry?.[1] ?? 0),
-        matches: Math.max(stamped?.[2] ?? 0, this.matchesOnDay(index)),
+        active: slice
+          ? Math.max(sliceStamped?.[0] ?? 0, registry?.[1] ?? 0)
+          : Math.max(stamped?.[1] ?? 0, registry?.[1] ?? 0),
+        matches: slice
+          ? Math.max(sliceStamped?.[1] ?? 0, this.matchesOnDay(index, slice))
+          : Math.max(stamped?.[2] ?? 0, this.matchesOnDay(index)),
       });
     }
 
@@ -3749,24 +4110,44 @@ export class MatchmakerDO {
   }
 
   /** Add to the durable gameplay counters; a missing or negative delta is exactly zero. */
-  private bumpMetrics(delta: Partial<GameMetrics>): void {
+  private bumpMetrics(delta: Partial<GameMetrics>, tag?: MatchTag, now = Date.now()): void {
     const matches = whole(delta.matchesCompleted);
     const mines = whole(delta.minesPlaced);
     if (!matches && !mines) return;
     this.gameMetrics.matchesCompleted += matches;
     this.gameMetrics.minesPlaced += mines;
     if (matches) {
-      this.stampMatchesByHour(matches);
-      this.creditMatches(matches);
+      this.stampMatchesByHour(matches, tag, now);
+      this.creditMatches(matches, now);
+      if (tag) this.creditModeMatches(tag.mode, matches, now);
     }
     this.persistMetrics();
+  }
+
+  /**
+   * How a room's board is counted: a real PvP match once two people were ever seated, else a bot
+   * race. A seat the machine took over mid-match still belongs to the person who started in it.
+   */
+  private roomModeOf(live: LiveRoom): MatchMode {
+    const roster = live.driver?.room ?? live.room;
+    let humans = 0;
+    for (const seat of roster.seats) {
+      if (seat && seat.kind === 'human' && seat.id) humans++;
+    }
+    return humans >= 2 ? 'pvp' : 'bot';
   }
 
   /** One completed room credits the match counter once, however it reached its winner. */
   private completeRoom(live: LiveRoom): void {
     if (live.counted) return;
     live.counted = true;
-    this.bumpMetrics({ matchesCompleted: 1 });
+    const roster = live.driver?.room ?? live.room;
+    const mode = this.roomModeOf(live);
+    for (const member of live.members) if (member) this.markActive(member.id, mode);
+    this.bumpMetrics(
+      { matchesCompleted: 1 },
+      { mode, players: playerCountOf(roster.seats.length) },
+    );
   }
 
   /** Schedule a counter write; many moves in one turn still cost one flush. */
@@ -3985,7 +4366,9 @@ export class MatchmakerDO {
 
   /* ---------- the queue ---------- */
 
-  private enter(ws: WebSocket, identity: Identity, wide: boolean, sizes: [number, number]): Waiter {
+  private enter(
+    ws: WebSocket, identity: Identity, wide: boolean, sizes: [number, number], mode: 'pvp' | 'arena',
+  ): Waiter {
     const waiter: Waiter = {
       ws,
       id: identity.player.id,
@@ -3996,6 +4379,7 @@ export class MatchmakerDO {
       wide,
       joinedAt: Date.now(),
       sizes,
+      mode,
       premium: identity.premium || this.vipActive(identity.player.id),
       vipUntil: Math.max(identity.vipUntil, this.players.get(identity.player.id)?.vipUntil ?? 0),
       race: null,
@@ -4062,7 +4446,7 @@ export class MatchmakerDO {
       return;
     }
     /* a queue frame is live activity: stamp before pairing so a long queued seat reads fresh */
-    this.markActive(waiter.id);
+    this.markActive(waiter.id, waiter.mode);
     const at = this.queue.indexOf(waiter);
     if (at === -1) {
       waiter.wide = wide;
@@ -4078,7 +4462,7 @@ export class MatchmakerDO {
   private widen(waiter: Waiter): void {
     const at = this.queue.indexOf(waiter);
     if (at === -1) return;
-    this.markActive(waiter.id);
+    this.markActive(waiter.id, waiter.mode);
     this.queue[at].wide = true;
     this.pairNow();
   }
@@ -4086,7 +4470,7 @@ export class MatchmakerDO {
   /** Out of the room. A CANCEL closes the socket; a dead socket is just forgotten — and either
    *  way a player who was racing hands the win to the seat opposite. */
   private leave(waiter: Waiter, close: boolean): void {
-    this.markActive(waiter.id);
+    this.markActive(waiter.id, waiter.race?.mode ?? waiter.mode);
     /* a settled seat walking out ends the banter lane before the socket closes */
     this.dropPostChat(waiter.ws, true);
     const at = this.queue.indexOf(waiter);
@@ -4143,6 +4527,7 @@ export class MatchmakerDO {
       matchId,
       seed,
       sizes,
+      mode: first.mode === 'arena' || second.mode === 'arena' ? 'arena' : 'pvp',
       seats: [first, second],
       state: newGame(sizes),
       startedAt: Date.now(),
@@ -4154,8 +4539,8 @@ export class MatchmakerDO {
     this.setInMatch(first.id, true);
     this.setInMatch(second.id, true);
 
-    this.deliver(first, foundMessage(matchId, seed, 0, first, second, sizes));
-    this.deliver(second, foundMessage(matchId, seed, 1, second, first, sizes));
+    this.deliver(first, foundMessage(matchId, seed, 0, first, second, sizes, race.mode));
+    this.deliver(second, foundMessage(matchId, seed, 1, second, first, sizes, race.mode));
   }
 
   private deliver(waiter: Waiter, payload: string): void {
@@ -4219,6 +4604,7 @@ export class MatchmakerDO {
       kind: 'human', id: identity.player.id, name: identity.player.name,
     });
     this.refs.set(ws, { live, seat });
+    /* A lobby is presence, not a mode yet: the board's own frames and its completion carry the tag. */
     this.markActive(identity.player.id);
 
     ws.addEventListener('message', (ev: MessageEvent) => {
@@ -4908,7 +5294,7 @@ export class MatchmakerDO {
   private roomFrame(ref: RoomRef, msg: ClientMessage): void {
     const live = ref.live;
     const member = live.members[ref.seat];
-    if (member) this.markActive(member.id);
+    if (member) this.markActive(member.id, live.driver ? this.roomModeOf(live) : undefined);
     /* The seat may have been marked away by the heartbeat sweep while its webview was merely
        throttled in the background. Any frame proves the socket is still here, so the player is
        back in the chair before the frame is handled — no reconnect, no lost seat. */
@@ -5100,7 +5486,7 @@ export class MatchmakerDO {
     if (!ref) return;
     const live = ref.live;
     const member = live.members[ref.seat];
-    if (member) this.markActive(member.id);
+    if (member) this.markActive(member.id, live.driver ? this.roomModeOf(live) : undefined);
     if (live.driver) { this.takeSeatOver(ref); return; }
     if (!member) return;
     this.refs.delete(member.ws);
@@ -5232,7 +5618,7 @@ export class MatchmakerDO {
     }
     if (!race || race.over) return;
 
-    this.markActive(seat.id);
+    this.markActive(seat.id, race.mode);
     if (msg.type === 'RESIGN') {
       this.endRace(race, seat.side, 'RESIGN');
       /* the resignation is a verdict too: both capsules are up, so the lane opens for as long as
@@ -5307,9 +5693,12 @@ export class MatchmakerDO {
     race.over = true;
     this.races.delete(race.matchId);
     /* An abort has no winner and is not a completed match; every other settle is. */
-    if (winner !== null) this.bumpMetrics({ matchesCompleted: 1 });
+    if (winner !== null) {
+      this.bumpMetrics({ matchesCompleted: 1 }, { mode: race.mode, players: 2 });
+    }
     for (const seat of race.seats) {
       if (seat.race === race) seat.race = null;
+      this.markActive(seat.id, race.mode);
       this.verdict(seat.id, winner === null ? null : seat.side === winner);
     }
   }

@@ -279,6 +279,14 @@ async function route(request: Request, env: Env): Promise<Response> {
      entitlement the room persisted. Both prove the caller with signed initData inside. */
   if (url.pathname.startsWith('/api/vip/')) return vipRoutes(request, env, url);
 
+  /* Player telemetry: the heartbeat that keeps ACTIVE honest, and the match report that carries a
+     bot race into the growth rings. The room proves the caller's identity itself. */
+  if (url.pathname === '/api/client/telemetry/heartbeat' || url.pathname === '/api/client/telemetry/match') {
+    if (!env.MATCHMAKER) return json({ ok: false, error: 'matchmaker_unbound' }, 503);
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    return lobby.fetch(request);
+  }
+
   if (url.pathname === '/health') {
     return json({ ok: true, service: 'detour-matchmaking', time: Date.now() });
   }

@@ -53,6 +53,9 @@ import { nameOf } from './countries';
 import { detonation, impact, notify, tgInitData, tgUser } from './telegram';
 import { telegramChatLink } from '../shared/config';
 import {
+  MATCH_MODE_LABEL, matchModeFilterOf, type MatchMode, type MatchModeFilter,
+} from '../shared/telemetry';
+import {
   adminCall, adminFetch, bodySnippet, parseJson, postJson, reasonOfResponse,
   ADMIN_TIMEOUT_MS,
   type AdminFailure,
@@ -458,14 +461,22 @@ export interface ServerMetrics {
   environment: string;
   /** The real round trip through the Durable Object, added by the Worker edge. */
   pingMs?: number;
+  /** The match-type slice this reading was folded for. */
+  mode: MatchModeFilter;
   activeRooms: number;
   queueLength: number;
   active1v1: number;
   totalUsers: number;
   telegramUsers: number;
   matchesCompleted: number;
-  /** Matches that settled in the rolling last 24 hours. */
+  /** Matches that settled in the rolling last 24 hours, filtered by `mode`. */
   matches24h: number;
+  /** Matches inside the rolling 24 hours, one count per match type. */
+  matchesByMode24h: Record<MatchMode, number>;
+  /** Matches inside the rolling 24 hours, one count per seat count. */
+  matchesByPlayers24h: Record<'2' | '3' | '4', number>;
+  /** Distinct players active in the requested slice in the rolling last 24 hours. */
+  active24h: number;
   minesPlaced: number;
   /** Retired rolling-log counter; the Worker always reports 0. */
   logsSpawned: number;
@@ -549,6 +560,18 @@ const metricSeries = (value: unknown): SeriesPoint[] =>
       }))
     : [];
 
+/** The three match-type counters, reconciled one key at a time. */
+const metricModeCounts = (value: unknown): Record<MatchMode, number> => {
+  const row = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return { bot: metricCount(row.bot), pvp: metricCount(row.pvp), arena: metricCount(row.arena) };
+};
+
+/** The three seat-count counters, reconciled the same way. */
+const metricPlayerCounts = (value: unknown): Record<'2' | '3' | '4', number> => {
+  const row = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return { '2': metricCount(row['2']), '3': metricCount(row['3']), '4': metricCount(row['4']) };
+};
+
 /** The fields a genuine reading always carries; at least one must be present to accept a body. */
 const METRIC_FIELDS = ['timestamp', 'activeRooms', 'totalUsers', 'matchesCompleted', 'series24h'] as const;
 
@@ -568,6 +591,7 @@ function normalizeMetrics(raw: unknown): ServerMetrics | null {
     timestamp: metricCount(row.timestamp) || Date.now(),
     environment: typeof row.environment === 'string' && row.environment ? row.environment : 'unknown',
     pingMs: typeof row.pingMs === 'number' && Number.isFinite(row.pingMs) ? row.pingMs : undefined,
+    mode: matchModeFilterOf(row.mode),
     activeRooms: metricCount(row.activeRooms),
     queueLength: metricCount(row.queueLength),
     active1v1: metricCount(row.active1v1),
@@ -575,6 +599,9 @@ function normalizeMetrics(raw: unknown): ServerMetrics | null {
     telegramUsers: metricCount(row.telegramUsers),
     matchesCompleted: metricCount(row.matchesCompleted),
     matches24h: metricCount(row.matches24h),
+    matchesByMode24h: metricModeCounts(row.matchesByMode24h),
+    matchesByPlayers24h: metricPlayerCounts(row.matchesByPlayers24h),
+    active24h: metricCount(row.active24h),
     minesPlaced: metricCount(row.minesPlaced),
     logsSpawned: metricCount(row.logsSpawned),
     referrals: metricCount(row.referrals),
@@ -617,25 +644,32 @@ function normalizeMetrics(raw: unknown): ServerMetrics | null {
  * "the panel could not complete the reading".
  */
 const METRICS_ROUTE = 'GET /api/admin/metrics';
+const METRICS_PATH = '/api/admin/metrics';
 const METRICS_TIMEOUT_MS = 20_000;
 
-async function fetchMetrics(): Promise<MetricsResult> {
+/** The route as the error card names it: the slice is part of what was called. */
+const metricsRoute = (mode: MatchModeFilter): string =>
+  mode === 'all' ? METRICS_ROUTE : `${METRICS_ROUTE}?mode=${mode}`;
+
+async function fetchMetrics(mode: MatchModeFilter = 'all'): Promise<MetricsResult> {
+  const route = metricsRoute(mode);
+  const path = mode === 'all' ? METRICS_PATH : `${METRICS_PATH}?mode=${mode}`;
   try {
-    const called = await adminCall('/api/admin/metrics', { cache: 'no-store' }, METRICS_TIMEOUT_MS);
+    const called = await adminCall(path, { cache: 'no-store' }, METRICS_TIMEOUT_MS);
     if ('failure' in called) {
       return {
         state: 'error',
         reason: called.failure,
-        detail: routeFailure(METRICS_ROUTE, called.failure, called.detail),
+        detail: routeFailure(route, called.failure, called.detail),
       };
     }
     const res = called.res;
     /* Reading the body consumes it, so each branch reads it exactly once. */
     if (res.status === 401 || res.status === 403) {
-      return { state: 'unauthorized', detail: await reasonOfResponse(res, METRICS_ROUTE) };
+      return { state: 'unauthorized', detail: await reasonOfResponse(res, route) };
     }
     if (res.status !== 200) {
-      return { state: 'error', reason: 'http', detail: await reasonOfResponse(res, METRICS_ROUTE) };
+      return { state: 'error', reason: 'http', detail: await reasonOfResponse(res, route) };
     }
     let text = '';
     try {
@@ -650,7 +684,7 @@ async function fetchMetrics(): Promise<MetricsResult> {
       return {
         state: 'error',
         reason: 'bad-body',
-        detail: `${METRICS_ROUTE} → HTTP 200 · the body is not JSON${text ? ` · ${bodySnippet(text)}` : ' (empty body)'}`,
+        detail: `${route} → HTTP 200 · the body is not JSON${text ? ` · ${bodySnippet(text)}` : ' (empty body)'}`,
       };
     }
     const metrics = normalizeMetrics(raw);
@@ -659,14 +693,14 @@ async function fetchMetrics(): Promise<MetricsResult> {
       : {
         state: 'error',
         reason: 'bad-body',
-        detail: `${METRICS_ROUTE} → HTTP 200 · the body carries no metrics payload${text ? ` · ${bodySnippet(text)}` : ' (empty body)'}`,
+        detail: `${route} → HTTP 200 · the body carries no metrics payload${text ? ` · ${bodySnippet(text)}` : ' (empty body)'}`,
       };
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     return {
       state: 'error',
       reason: 'bad-body',
-      detail: `${METRICS_ROUTE} → the panel could not complete the reading (${bodySnippet(reason)})`,
+      detail: `${route} → the panel could not complete the reading (${bodySnippet(reason)})`,
     };
   }
 }
@@ -1528,6 +1562,7 @@ export function createAdmin(api: AdminApi): Admin {
   const statTrendWindow = $<HTMLElement>('stat-trend-window');
   const statTrendKeys = [...(stage?.querySelectorAll<HTMLButtonElement>('[data-grange]') ?? [])];
   const statTrendSeries = [...(stage?.querySelectorAll<HTMLButtonElement>('[data-gseries]') ?? [])];
+  const statTrendModes = [...(stage?.querySelectorAll<HTMLButtonElement>('[data-gmode]') ?? [])];
   const statTrendSvg = document.getElementById('stat-trend-svg') as unknown as SVGSVGElement | null;
   const statTrendRead = $<HTMLElement>('stat-trend-read');
   const statTrendEmpty = $<HTMLElement>('stat-trend-empty');
@@ -1687,6 +1722,8 @@ export function createAdmin(api: AdminApi): Admin {
   /** And which kind of failure that was, so the lamp never has to guess between slow and gone. */
   let metricsReason: FailureReason = 'offline';
   let metricsBusy = false;
+  /** A read asked for while one was already in flight: the filter moved, so run it once after. */
+  let metricsQueued = false;
   let metricsTimer = 0;
   /** Text typed into a reply box survives the list being rebuilt for any reason. */
   const drafts = new Map<string, string>();
@@ -1974,6 +2011,8 @@ export function createAdmin(api: AdminApi): Admin {
   };
 
   let trendRange: TrendRange = '24h';
+  /** The match-type slice on screen: aggregate, or one of the three tagged modes. */
+  let trendMode: MatchModeFilter = 'all';
   /** The bucket under the pointer, or -1 while nothing is being inspected. */
   let trendFocus = -1;
   /** The window actually on screen, kept so a pointer move can price it without a repaint. */
@@ -2086,7 +2125,7 @@ export function createAdmin(api: AdminApi): Admin {
 
   /** The window's own array, or an empty one: a Worker that predates the series must not throw. */
   function trendPoints(m: ServerMetrics | null): SeriesPoint[] {
-    if (!m) return [];
+    if (!m || m.mode !== trendMode) return [];
     const list = trendRange === '24h' ? m.series24h : trendRange === '7d' ? m.series7d : m.series30d;
     if (!Array.isArray(list)) return [];
     /** A missing, null or non-finite count is a measured zero, never a reason to break the chart. */
@@ -2110,7 +2149,11 @@ export function createAdmin(api: AdminApi): Admin {
   /** What the empty plot says instead of a line: the reason there is nothing to draw. */
   function trendEmptyText(m: ServerMetrics | null): string {
     if (metricsPhase === 'unauthorized') return 'The metrics door refused this session — no trend to plot.';
-    if (m) return 'The Worker reported no buckets for this window yet.';
+    if (m && m.mode === trendMode) {
+      return trendMode === 'all'
+        ? 'The Worker reported no buckets for this window yet.'
+        : `The Worker reported no ${MATCH_MODE_LABEL[trendMode]} buckets for this window yet.`;
+    }
     if (metricsPhase === 'error') {
       return metricsReason === 'offline' || metricsReason === 'no-origin'
         ? 'The Worker never answered — no trend to plot.'
@@ -2118,6 +2161,7 @@ export function createAdmin(api: AdminApi): Admin {
           ? 'The Worker did not answer in time — no trend to plot.'
           : 'The Worker answered without a reading — no trend to plot.';
     }
+    if (m) return `Reading the ${MATCH_MODE_LABEL[trendMode]} slice…`;
     return "Awaiting the Worker's first reading.";
   }
 
@@ -2139,7 +2183,14 @@ export function createAdmin(api: AdminApi): Admin {
       const on = trendOn[chip.dataset.gseries as TrendSeries] ?? false;
       chip.setAttribute('aria-pressed', String(on));
     }
-    if (statTrendWindow) statTrendWindow.textContent = TREND_WINDOW[trendRange];
+    for (const key of statTrendModes) {
+      key.setAttribute('aria-pressed', String(key.dataset.gmode === trendMode));
+    }
+    if (statTrendWindow) {
+      statTrendWindow.textContent = trendMode === 'all'
+        ? TREND_WINDOW[trendRange]
+        : `${TREND_WINDOW[trendRange]} · ${MATCH_MODE_LABEL[trendMode]}`;
+    }
     if (trendFocus >= points.length) trendFocus = -1;
 
     const drawn = points.length > 0;
@@ -2267,7 +2318,8 @@ export function createAdmin(api: AdminApi): Admin {
 
   const trendTotalsText = (points: readonly SeriesPoint[]): string => {
     const t = trendTotals(points);
-    return `${figure(t.signups)} signups, ${figure(t.active)} active, ${figure(t.matches)} matches`;
+    const slice = trendMode === 'all' ? '' : `${MATCH_MODE_LABEL[trendMode]} · `;
+    return `${slice}${figure(t.signups)} signups, ${figure(t.active)} active, ${figure(t.matches)} matches`;
   };
 
   /** The legend chips: each series' own sum across the window that is on screen. */
@@ -2357,6 +2409,20 @@ export function createAdmin(api: AdminApi): Admin {
     trendFocus = -1;
     impact('light');
     paintTrend();
+  }
+
+  /**
+   * The match-type filter. The Worker folds the series for one slice per reading, so the pill
+   * starts a fresh read; the old reading is deliberately not relabelled, and the plot says it is
+   * waiting rather than showing another mode's numbers under this one's name.
+   */
+  function setTrendMode(mode: MatchModeFilter): void {
+    if (mode === trendMode) return;
+    trendMode = mode;
+    trendFocus = -1;
+    impact('light');
+    paintTrend();
+    void refreshMetrics();
   }
 
   /**
@@ -2509,15 +2575,22 @@ export function createAdmin(api: AdminApi): Admin {
    * busy flag is released in `finally`, so no timeout or render fault can leave the tab syncing.
    */
   async function refreshMetrics(): Promise<void> {
-    if (metricsBusy) return;
+    if (metricsBusy) {
+      /* the filter can move while a read is in flight: one more read, for the newest slice */
+      metricsQueued = true;
+      return;
+    }
     metricsBusy = true;
+    const asked = trendMode;
     try {
       paintStats();
     } catch {
       /* a render fault must not prevent the fetch below from running */
     }
     try {
-      const result = await fetchMetrics();
+      const result = await fetchMetrics(asked);
+      /* a reply for a slice the operator already left is stale: the queued read owns the panel */
+      if (asked !== trendMode) return;
       metricsDetail = result.state === 'ok' ? '' : result.detail;
       if (result.state === 'ok') {
         lastMetrics = result.metrics;
@@ -2534,13 +2607,17 @@ export function createAdmin(api: AdminApi): Admin {
       metricsPhase = 'error';
       metricsReason = 'bad-body';
       const thrown = err instanceof Error ? err.message : String(err);
-      metricsDetail = `${METRICS_ROUTE} → the panel could not complete the reading (${bodySnippet(thrown)})`;
+      metricsDetail = `${metricsRoute(asked)} → the panel could not complete the reading (${bodySnippet(thrown)})`;
     } finally {
       metricsBusy = false;
       try {
         paintStats();
       } catch {
         /* never leave SYNCING / READING THE WORKER... pinned by a paint failure */
+      }
+      if (metricsQueued) {
+        metricsQueued = false;
+        void refreshMetrics();
       }
     }
   }
@@ -5050,6 +5127,13 @@ export function createAdmin(api: AdminApi): Admin {
       trendOn[series] = !trendOn[series];
       impact('light');
       paintTrend();
+    });
+  }
+  for (const key of statTrendModes) {
+    key.addEventListener('click', () => {
+      const raw = key.dataset.gmode;
+      if (raw !== 'all' && raw !== 'pvp' && raw !== 'bot' && raw !== 'arena') return;
+      setTrendMode(raw);
     });
   }
   statTrendSvg?.addEventListener('pointerdown', (e) => setTrendFocus(trendIndexAt(e.clientX)));

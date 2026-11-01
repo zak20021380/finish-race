@@ -210,6 +210,8 @@ export interface OnlineMatch {
    * `[1, 1, 1, 1]` — the same shape `newGame()` takes, so both transports start the same game.
    */
   sizes: number[];
+  /** The queue this pairing came from: the Arena's cup, or an ordinary match. */
+  mode: 'pvp' | 'arena';
 }
 
 /** Why a race ended before anyone reached FINISH. */
@@ -262,6 +264,7 @@ export interface OnlineSession extends OnlineMatch {
 /** One frame the room can send (`worker/matchmaker.ts` is its only producer). */
 type RaceFrame =
   | { type: 'MATCH_FOUND'; matchId: string; seed: number; side: 0 | 1; sizes: [number, number];
+      mode: 'pvp' | 'arena';
       opponent: { name: string; tiq: number; tier: string; flag: string; vip?: boolean } }
   | { type: 'MOVE'; side: 0 | 1; action: Action }
   | { type: 'EMOTE'; side: 0 | 1; emote: ChatEmoteId }
@@ -315,6 +318,17 @@ const asTier = (value: string, tiq: number): MindTier =>
 /** `VITE_WS_URL`, or same-origin `/ws/matchmake`. '' means there is no origin to hang one off. */
 const WS_URL = import.meta.env?.VITE_WS_URL?.trim() ?? '';
 
+/**
+ * The queue the Arena's cup key opens, carried on the socket's query string. The room tags the
+ * resulting race, so a cup match is counted as an Arena match even when the pairing itself is the
+ * same shared queue. Every other entry point sets it back to `pvp` before it opens.
+ */
+let queueMode: 'pvp' | 'arena' = 'pvp';
+
+export function setQueueMode(mode: 'pvp' | 'arena'): void {
+  queueMode = mode;
+}
+
 function socketUrl(): string {
   if (WS_URL) {
     if (WS_URL.startsWith('ws://') || WS_URL.startsWith('wss://')) return WS_URL;
@@ -336,6 +350,7 @@ function socketParams(wide: boolean): string {
   params.set('age', String(profile.age ?? 0));
   params.set('name', readFace('Player').name);
   params.set('wide', wide ? '1' : '0');
+  params.set('mode', queueMode);
   /* the board this search is for: the matchmaker only pairs two seats playing the same game */
   params.set('sizes', menuState.sizes.join(','));
   /* economy / social telemetry for the Admin Command Center's directory. The room clamps every
@@ -364,6 +379,7 @@ export function roomSocketUrl(code: string, host: boolean): string {
   if (host) params.set('host', '1');
   params.delete('wide');
   params.delete('sizes');
+  params.delete('mode');
   return `${base}?${params.toString()}`;
 }
 
@@ -430,6 +446,7 @@ function parseFrame(raw: string, sizes?: readonly number[]): RaceFrame | null {
         seed: msg.seed,
         side,
         sizes: readBoard(msg.sizes),
+        mode: msg.mode === 'arena' ? 'arena' : 'pvp',
         opponent: {
           name: o.name,
           tiq: o.tiq,
@@ -572,6 +589,7 @@ function makeSession(sock: WebSocket, found: Extract<RaceFrame, { type: 'MATCH_F
     seed: found.seed,
     side: found.side,
     sizes: found.sizes,
+    mode: found.mode,
     opponent: onlineOpponent(found),
     socket: sock,
     send(action) {
