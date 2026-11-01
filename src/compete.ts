@@ -208,6 +208,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     runners: document.getElementById('stars-runners'),
     squad: document.getElementById('stars-squad') as HTMLButtonElement | null,
     squadChip: document.getElementById('stars-squad-chip'),
+    squadAv: document.getElementById('stars-squad-av'),
     squadLetter: document.getElementById('stars-squad-letter'),
     squadName: document.getElementById('stars-squad-name'),
     squadNote: document.getElementById('stars-squad-note'),
@@ -817,10 +818,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   function channelAv(s: RankedSquad, cls: string): HTMLElement {
     const av = tag(`stars-ch-av${cls ? ` ${cls}` : ''}`);
     av.setAttribute('aria-hidden', 'true');
-    const t = document.createElement('b');
-    t.className = 'stars-ch-t';
-    t.textContent = squadLetter(s);
-    av.append(t);
+    const mark = document.createElement('b');
+    mark.className = 'stars-ch-t';
+    mark.textContent = squadLetter(s);
+    av.append(mark);
+    /* the real channel photo over the call-sign; the monogram stays until it lands */
+    paintCrestPhoto(av, squadAvatarUrl(s));
     return av;
   }
 
@@ -869,6 +872,31 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     openable(li, s, `${kindLabel(s)} ${s.handle}, rank ${s.rank} with ${num(s.trophies)} squad `
       + `Tactical IQ and ${s.members.toLocaleString('en-US')} members. Tap to view the Top ${ROSTER_ROWS} roster.`);
+    return li;
+  }
+
+  /**
+   * An empty rung on the Cup podium: a frosted, dashed slot that keeps the three-tier
+   * stage whole while the field fills. A championship of one is a normal state, so the
+   * missing places stay on stage instead of floating the champion alone against the rail.
+   */
+  function podAwaiting(rank: number): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = 'stars-pod is-awaiting';
+    li.dataset.rank = String(rank);
+    li.setAttribute('role', 'listitem');
+
+    const label = t('awaitingContender');
+    const name = tag('stars-pod-name stars-pod-name-awaiting', label);
+    name.dir = 'auto';
+    name.title = label;
+
+    const mark = tag('stars-ch-av stars-ch-av-awaiting');
+    mark.setAttribute('aria-hidden', 'true');
+    mark.append(svgIcon('#i-lock', 'stars-awaiting-ico'));
+
+    li.append(tag('stars-pod-rank', String(rank)), mark, name);
+    li.setAttribute('aria-label', `Rank ${rank}: ${label}`);
     return li;
   }
 
@@ -1017,7 +1045,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     /* An empty registry is a real state now that the seeded field is gone: the board says so
        instead of painting an empty slab. */
     if (!channels.length) {
-      if (cupEls.podium) cupEls.podium.textContent = '';
+      if (cupEls.podium) {
+        cupEls.podium.textContent = '';
+        for (let rank = 1; rank <= 3; rank++) cupEls.podium.append(podAwaiting(rank));
+        cupEls.podium.setAttribute('aria-label', 'Top three channels, awaiting contenders');
+      }
       if (cupEls.runners) {
         cupEls.runners.textContent = '';
         const row = document.createElement('li');
@@ -1027,9 +1059,17 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       }
       return;
     }
+    /* A podium is always three places: rank 2 left, the champion raised in the centre,
+       rank 3 right. Missing ranks hold frosted slots, so a lone squad is balanced
+       between them instead of being pushed into a corner. */
     if (cupEls.podium) {
       cupEls.podium.textContent = '';
-      for (const s of channels.filter((x) => x.rank <= 3)) cupEls.podium.append(podChannel(s, c));
+      const byRank = new Map<number, RankedSquad>();
+      for (const s of channels.filter((x) => x.rank <= 3)) byRank.set(s.rank, s);
+      for (let rank = 1; rank <= 3; rank++) {
+        const s = byRank.get(rank);
+        cupEls.podium.append(s ? podChannel(s, c) : podAwaiting(rank));
+      }
     }
     if (cupEls.runners) {
       cupEls.runners.textContent = '';
@@ -1080,6 +1120,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       row.removeAttribute('aria-haspopup');
       setText(cupEls.squadChip, 'JOIN ONE');
       setText(cupEls.squadLetter, '?');
+      paintCrestPhoto(cupEls.squadAv, '');
       setText(cupEls.squadName, 'No channel bound');
       setText(cupEls.squadNote, 'Tap to join a squad');
       row.setAttribute('aria-label',
@@ -1091,15 +1132,18 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     row.setAttribute('aria-haspopup', 'dialog');
     setText(cupEls.squadChip, 'YOUR SQUAD');
     setText(cupEls.squadLetter, squadLetter(mine));
-    /* name line: the handle, then its cup rank as its own pill — the two facts sit
-       side by side instead of running together into one ellipsised string */
+    paintCrestPhoto(cupEls.squadAv, squadAvatarUrl(mine));
+    /* name line: the handle, then its cup rank as its own pill — the handle wraps to a
+       second line under its own isolation before it would ever be clipped */
     const name = cupEls.squadName;
     if (name) {
       name.textContent = '';
-      name.append(document.createTextNode(bare(mine.handle)));
+      const handle = tag('stars-squad-handle', bare(mine.handle));
+      handle.dir = 'auto';
+      handle.title = mine.name || mine.handle;
       const pos = tag('stars-squad-pos', `#${mine.rank}`);
       pos.title = `Rank ${mine.rank} in the ${c.name}`;
-      name.append(pos);
+      name.append(handle, pos);
     }
 
     const note = cupEls.squadNote;
@@ -1168,6 +1212,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     else delete sheet.dataset.metal;
 
     setText(sheet.querySelector<HTMLElement>('#sr-letter'), squadLetter(s));
+    paintCrestPhoto(sheet.querySelector<HTMLElement>('#sr-letter')?.parentElement ?? null, squadAvatarUrl(s));
     setText(sheet.querySelector<HTMLElement>('#sr-rank'), String(s.rank));
     setText(sheet.querySelector<HTMLElement>('#sr-name'), s.handle);
     const sub = sheet.querySelector<HTMLElement>('#sr-sub');
@@ -1451,6 +1496,46 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         return;
       }
       img.classList.add('is-loaded');
+    });
+    img.src = src;
+    host.append(img);
+  }
+
+  /**
+   * The channel's verified Telegram photo, cropped to a circle inside any crest well.
+   * The monogram underneath holds the shape until real pixels arrive; a hidden channel
+   * (the CDN's 1x1 placeholder) or an error keeps the monogram alone. Idempotent, so a
+   * repaint that quotes the same URL never thrashes the node.
+   */
+  function paintCrestPhoto(host: HTMLElement | null, url: string): void {
+    if (!host) return;
+    const src = photoSrc(url);
+    const existing = host.querySelector<HTMLImageElement>(':scope > .stars-ch-photo');
+    if (existing?.dataset.src === src) return;
+    if (existing) existing.remove();
+    if (!src) {
+      host.classList.remove('has-photo');
+      return;
+    }
+    const img = document.createElement('img');
+    img.className = 'stars-ch-photo';
+    img.alt = '';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.referrerPolicy = 'no-referrer';
+    img.dataset.src = src;
+    img.addEventListener('error', () => {
+      img.remove();
+      host.classList.remove('has-photo');
+    });
+    img.addEventListener('load', () => {
+      if (img.naturalWidth <= 2 || img.naturalHeight <= 2) {
+        img.remove();
+        host.classList.remove('has-photo');
+        return;
+      }
+      img.classList.add('is-loaded');
+      host.classList.add('has-photo');
     });
     img.src = src;
     host.append(img);

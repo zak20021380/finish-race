@@ -10999,6 +10999,30 @@ html.reduced-motion .pf-xp-bar.bar i, html.reduced-motion .reward-badge { animat
   line-height: 1;
 }
 .stars-ch-t { font-size: 14px; font-weight: 900; letter-spacing: -.02em; }
+/* the channel's real Telegram photo: a circular crop inside the crest well, ringed by
+   a hairline of metal. It fades in over the call-sign monogram and removes itself on a
+   hidden channel or an error, leaving the monogram as the one fallback. */
+.stars-ch-av .stars-ch-photo {
+  position: absolute;
+  inset: 3px;
+  z-index: 1;
+  width: calc(100% - 6px);
+  height: calc(100% - 6px);
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+  clip-path: circle(50%);
+  background: #0B1220;
+  box-shadow:
+    0 0 0 1px rgba(226, 232, 240, .42),
+    0 0 0 2px rgba(4, 8, 16, .55),
+    0 2px 5px rgba(0, 0, 0, .5);
+  opacity: 0;
+  transition: opacity .18s ease;
+}
+.stars-ch-av .stars-ch-photo.is-loaded { opacity: 1; }
+.stars-ch-av.has-photo .stars-ch-t { opacity: 0; }
+html.reduced-motion .stars-ch-photo { transition: none; }
 
 /* ---- the Top-3 podium: three clay channel cards, the champion raised with the
        one gold rim. This band is the card's only flexible block, so it holds the
@@ -11109,15 +11133,24 @@ html.reduced-motion .pf-xp-bar.bar i, html.reduced-motion .reward-badge { animat
   color: #FFF7ED;
 }
 .stars-pod-name {
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
   font-size: var(--t-3);
   font-weight: 800;
   letter-spacing: -.02em;
-  line-height: 1.2;
+  line-height: 1.18;
   color: var(--ink);
-  white-space: nowrap;
+  text-align: center;
+  /* a mixed Persian/English handle is one isolated paragraph that wraps to a second
+     line before it is ever cut with an ellipsis */
+  unicode-bidi: isolate;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 .stars-pod[data-rank="1"] .stars-pod-name { color: #FEF3C7; }
 .stars-pod-tiq {
@@ -11172,6 +11205,55 @@ html.reduced-motion .pf-xp-bar.bar i, html.reduced-motion .reward-badge { animat
 }
 .stars-pod[data-metal="bronze"] .stars-av {
   --av-hi: #FED7AA; --av-mid: #C2410C; --av-lo: #5C1B08; --av-ink: #FFF7ED;
+}
+/* ---- empty rungs on the Cup podium: the stage stays whole while the field fills ----
+   One squad is a normal championship, not a broken podium. The missing places hold
+   frosted, dashed slots — muted squircle, dashed ring, lock glyph and a quiet label —
+   so the champion sits inside a complete three-tier structure instead of floating. */
+.stars-pod.is-awaiting {
+  cursor: default;
+  background:
+    linear-gradient(180deg, rgba(148, 163, 184, .07) 0%, rgba(148, 163, 184, 0) 72%),
+    rgba(20, 26, 38, .55);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(148, 163, 184, .22),
+    0 2px 0 #080C14;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.stars-pod.is-awaiting:active { transform: none; }
+.stars-pod.is-awaiting .stars-pod-name { color: #7C8AA3; }
+.stars-pod.is-awaiting .stars-pod-rank {
+  background: linear-gradient(180deg, #232C3C 0%, #141A26 100%);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .18), 0 2px 0 #080C14;
+  color: #6B7A93;
+}
+.stars-ch-av-awaiting {
+  background: radial-gradient(circle at 32% 26%, rgba(148, 163, 184, .12) 0%, rgba(11, 16, 28, .9) 72%);
+  box-shadow: inset 0 0 0 1.5px rgba(148, 163, 184, .3), 0 2px 0 #080C14;
+  color: rgba(148, 163, 184, .82);
+}
+.stars-ch-av-awaiting::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 17px;
+  border: 1px dashed rgba(148, 163, 184, .36);
+  pointer-events: none;
+}
+.stars-awaiting-ico {
+  width: 16px;
+  height: 16px;
+  opacity: .8;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5));
+}
+.stars-pod-name-awaiting {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  line-height: 1.25;
+  color: #7C8AA3;
+  text-shadow: none;
 }
 
 /* ---- the runners: places four and five, each row a chevron-cued door ---- */
@@ -11239,6 +11321,7 @@ html.reduced-motion .pf-xp-bar.bar i, html.reduced-motion .reward-badge { animat
 .stars-run-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .stars-run-nm {
   min-width: 0;
+  unicode-bidi: isolate;
   font-size: var(--t-2);
   font-weight: 800;
   letter-spacing: -.02em;
@@ -11378,10 +11461,22 @@ html.reduced-motion .pf-xp-bar.bar i, html.reduced-motion .reward-badge { animat
   line-height: 1.2;
   color: #FDE68A;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  unicode-bidi: isolate;
   text-shadow: 0 1px 0 #05070C;
+}
+/* the handle wraps to a second line under its own isolation, so a long bilingual
+   squad name is never clipped to "Computer_Scien…" */
+.stars-squad-handle {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+  unicode-bidi: isolate;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 /* the squad's cup rank: a quiet slate pill beside the gold handle, so the two
    facts never run together in one ellipsised string */
