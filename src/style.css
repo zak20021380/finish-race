@@ -16313,62 +16313,140 @@ html.reduced-motion .adm-live-dot { animation: none; }
   .adm-trend-mode b { font-size: 8.5px; letter-spacing: .04em; }
 }
 
-/* ---- retention: the returning-veteran row over two measured bars ---- */
-.adm-ret-return {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--hair-off);
-}
-.adm-ret-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+/* ---- engagement: three at-a-glance tiles, a returning count and two measured shares ---- */
+.adm-ret-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 7px;
   min-width: 0;
 }
-.adm-ret-l {
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: .05em;
-  text-transform: uppercase;
+.adm-ret-tile {
+  --tone: var(--violet);
+  --tone-soft: rgba(167, 139, 250, .16);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 11px 12px 12px;
+  border-radius: 12px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, var(--tone-soft), transparent 58%),
+    var(--field);
+  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+}
+.adm-ret-tile[data-tone="mint"] {
+  --tone: #34d399;
+  --tone-soft: rgba(16, 185, 129, .14);
+}
+.adm-ret-tile[data-tone="honey"] {
+  --tone: #fbbf24;
+  --tone-soft: rgba(245, 158, 11, .13);
+}
+.adm-ret-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  line-height: 1.3;
   color: var(--ink);
 }
-.adm-ret-note {
-  font-size: 8px;
+.adm-ret-label::before {
+  content: '';
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--tone);
+  box-shadow: 0 0 6px var(--tone-soft);
+}
+.adm-ret-sub {
+  min-width: 0;
+  font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: .02em;
+  letter-spacing: .01em;
   line-height: 1.35;
   color: var(--ink-soft);
 }
 .adm-ret-fig {
-  flex: none;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
+  margin-top: 7px;
 }
+/* the figure is the whole story: chrome-white falling into the tile's own tone */
 .adm-ret-fig b {
-  font-size: clamp(1.3rem, 1.1rem + 1.3vw, 1.7rem);
+  font-size: clamp(1.85rem, 1.5rem + 1.6vw, 2.4rem);
   font-weight: 900;
   line-height: 1;
+  letter-spacing: -.015em;
   font-variant-numeric: tabular-nums;
-  color: var(--violet);
-  text-shadow: 0 1px 0 rgba(0, 0, 0, .5);
+  color: var(--tone);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .55);
 }
-.adm-ret-pct {
-  padding: 2px 7px;
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .adm-ret-fig b {
+    background: linear-gradient(178deg, #ffffff 4%, #cbd5e1 44%, var(--tone) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: none;
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .5));
+  }
+}
+.adm-ret-pill {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 3px 8px;
   border-radius: 999px;
-  font-size: 8px;
+  font-size: 8.5px;
   font-weight: 900;
-  letter-spacing: .04em;
-  text-transform: uppercase;
+  letter-spacing: .03em;
+  line-height: 1.3;
+  text-overflow: ellipsis;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   color: var(--violet);
   background: var(--violet-soft);
   box-shadow: inset 0 0 0 1px rgba(167, 139, 250, .34);
+}
+.adm-ret-bar {
+  height: 4px;
+  margin-top: 9px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(7, 11, 18, .55);
+  box-shadow: inset 0 0 0 1px var(--hair-off);
+}
+.adm-ret-bar i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  transition: width .34s var(--bounce);
+}
+.adm-ret-bar[data-tone="mint"] i {
+  background: linear-gradient(90deg, #10b981, #34d399);
+  box-shadow: 0 0 8px rgba(16, 185, 129, .5);
+}
+.adm-ret-bar[data-tone="honey"] i {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  box-shadow: 0 0 8px rgba(245, 158, 11, .45);
+}
+.adm-ret-bar[data-empty="true"] i { visibility: hidden; }
+html.reduced-motion .adm-ret-bar i { transition: none; }
+
+/* wide screens read the three tiles across; phones keep the calm stack */
+@media (min-width: 560px) {
+  .adm-ret-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
 }
 
 /* ---- system footer: one quiet latency badge under the dashboard ---- */
@@ -16410,77 +16488,6 @@ html.reduced-motion .adm-live-dot { animation: none; }
     box-shadow: 0 0 0 2px var(--tone-soft), 0 0 6px var(--tone);
   }
 }
-
-/* ---- growth & retention health: three measured progress bars ---- */
-.adm-prog-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.adm-prog-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s2);
-  min-width: 0;
-}
-.adm-prog-l {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-.adm-prog-v {
-  flex: none;
-  font-size: 11px;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  color: var(--honey-ink);
-}
-.adm-prog {
-  height: 8px;
-  border-radius: 999px;
-  overflow: hidden;
-  background: var(--field);
-  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
-}
-.adm-prog i {
-  display: block;
-  width: 0;
-  height: 100%;
-  border-radius: inherit;
-  transition: width .34s var(--bounce);
-}
-.adm-prog[data-tone="mint"] i {
-  background: linear-gradient(90deg, #10b981, #34d399);
-  box-shadow: 0 0 10px rgba(16, 185, 129, .55);
-}
-.adm-prog[data-tone="honey"] i {
-  background: linear-gradient(90deg, #f59e0b, #fbbf24);
-  box-shadow: 0 0 10px rgba(245, 158, 11, .5);
-}
-.adm-prog[data-tone="sky"] i {
-  background: linear-gradient(90deg, #0ea5e9, #38bdf8);
-  box-shadow: 0 0 10px rgba(14, 165, 233, .5);
-}
-.adm-prog[data-empty="true"] i { visibility: hidden; }
-.adm-prog-note {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 8.5px;
-  font-weight: 800;
-  letter-spacing: .04em;
-  line-height: 1.35;
-  text-transform: uppercase;
-  color: var(--brand-ink);
-}
-html.reduced-motion .adm-prog i { transition: none; }
 
 /* ---- bento metric tiles: shared by the player card's mini readouts ---- */
 .adm-cells {

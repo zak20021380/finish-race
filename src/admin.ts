@@ -1645,7 +1645,6 @@ export function createAdmin(api: AdminApi): Admin {
   const statD1 = $<HTMLElement>('stat-d1');
   const statD1Bar = $<HTMLElement>('stat-d1-bar');
   const statD1Fill = $<HTMLElement>('stat-d1-fill');
-  const statD1Note = $<HTMLElement>('stat-d1-note');
   const statGrowthMeta = $<HTMLElement>('stat-growth-meta');
   /* the trend chart: the Worker's bounded growth rings, drawn as native inline SVG */
   const statTrendWindow = $<HTMLElement>('stat-trend-window');
@@ -1658,7 +1657,6 @@ export function createAdmin(api: AdminApi): Admin {
   const statCore = $<HTMLElement>('stat-core');
   const statCoreBar = $<HTMLElement>('stat-core-bar');
   const statCoreFill = $<HTMLElement>('stat-core-fill');
-  const statCoreNote = $<HTMLElement>('stat-core-note');
   const statLat = $<HTMLElement>('stat-lat');
   const statEnv = $<HTMLElement>('stat-env');
   const statConn = $<HTMLElement>('stat-conn');
@@ -2567,7 +2565,7 @@ export function createAdmin(api: AdminApi): Admin {
     if (statNewWeek) statNewWeek.textContent = metric(m?.signupsWeek);
     if (statNewMonth) statNewMonth.textContent = metric(m?.signupsMonth);
 
-    /* ---- retention: returning veterans, D1 cohort retention, core stickiness ---- */
+    /* ---- engagement: today's returners, next-day return, hooked share ---- */
     if (statReturning) statReturning.textContent = metric(m?.returningUsersToday);
     if (statReturningPct) {
       statReturningPct.textContent = m && m.returningShare != null
@@ -2579,9 +2577,8 @@ export function createAdmin(api: AdminApi): Admin {
       value: HTMLElement | null,
       bar: HTMLElement | null,
       fill: HTMLElement | null,
-      note: HTMLElement | null,
       pct: number | undefined,
-      noteText: string,
+      readText: string,
     ): void => {
       const live = m != null && pct != null && Number.isFinite(pct);
       const clipped = live ? Math.max(0, Math.min(100, pct)) : 0;
@@ -2589,18 +2586,17 @@ export function createAdmin(api: AdminApi): Admin {
       if (bar) {
         bar.dataset.empty = String(!live || clipped <= 0);
         bar.setAttribute('aria-valuenow', String(Math.round(clipped)));
-        bar.setAttribute('aria-valuetext', live ? `${rateText(clipped)} — ${noteText}` : 'No reading yet');
+        bar.setAttribute('aria-valuetext', live ? `${rateText(clipped)} — ${readText}` : 'No reading yet');
       }
       if (fill) fill.style.width = `${clipped}%`;
-      if (note) note.textContent = noteText;
     };
     paintRate(
-      statD1, statD1Bar, statD1Fill, statD1Note,
-      m?.retentionRateD1, 'players signed up 24h+ ago · returned a day later',
+      statD1, statD1Bar, statD1Fill,
+      m?.retentionRateD1, 'share of new players returning the next day',
     );
     paintRate(
-      statCore, statCoreBar, statCoreFill, statCoreNote,
-      m?.coreRetention, 'registered players · 3+ matches played',
+      statCore, statCoreBar, statCoreFill,
+      m?.coreRetention, 'share of players with three or more matches',
     );
 
     if (statLat) {

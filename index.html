@@ -3656,46 +3656,46 @@
               </div>
             </section>
 
-            <!-- C. retention: returning veterans, the D1 cohort bar and core stickiness -->
+            <!-- C. engagement: today's returners, next-day return and the hooked share, one tile each -->
             <section class="adm-block" data-accent="violet" aria-labelledby="stat-retain-title">
               <div class="adm-block-h">
-                <h3 class="adm-block-t" id="stat-retain-title">Player Retention &amp; Loyalty</h3>
-                <span class="adm-block-s">Cohort health</span>
+                <h3 class="adm-block-t" id="stat-retain-title">Player Engagement</h3>
+                <span class="adm-block-s">Retention at a glance</span>
               </div>
               <div class="adm-slab">
-                <div class="adm-ret-return">
-                  <span class="adm-ret-copy">
-                    <span class="adm-ret-l">Returning Players (24h)</span>
-                    <span class="adm-ret-note">Veterans active today, first seen before the window</span>
-                  </span>
-                  <span class="adm-ret-fig">
-                    <b id="stat-returning">—</b>
-                    <span class="adm-ret-pct" id="stat-returning-pct">— of today's active</span>
-                  </span>
-                </div>
-                <div class="adm-prog-row">
-                  <div class="adm-prog-head">
-                    <span class="adm-prog-l">Day-1 Retention Rate</span>
-                    <b class="adm-prog-v" id="stat-d1">—</b>
+                <div class="adm-ret-grid">
+                  <div class="adm-ret-tile" data-tone="violet">
+                    <span class="adm-ret-label">Returning Players</span>
+                    <span class="adm-ret-sub">Active players from previous days</span>
+                    <span class="adm-ret-fig">
+                      <b id="stat-returning">—</b>
+                      <span class="adm-ret-pill" id="stat-returning-pct">— of today's active</span>
+                    </span>
                   </div>
-                  <div class="adm-prog" id="stat-d1-bar" data-tone="mint" role="progressbar"
-                    aria-label="Day-1 retention: new players who came back a full day after signing up"
-                    aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-                    <i id="stat-d1-fill"></i>
+                  <div class="adm-ret-tile" data-tone="mint">
+                    <span class="adm-ret-label">Next-Day Return</span>
+                    <span class="adm-ret-sub">% of new players coming back tomorrow</span>
+                    <span class="adm-ret-fig">
+                      <b id="stat-d1">—</b>
+                    </span>
+                    <div class="adm-ret-bar" id="stat-d1-bar" data-tone="mint" data-empty="true" role="progressbar"
+                      aria-label="Next-day return: new players who come back the day after signing up"
+                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                      <i id="stat-d1-fill"></i>
+                    </div>
                   </div>
-                  <span class="adm-prog-note" id="stat-d1-note">players signed up 24h+ ago · returned a day later</span>
-                </div>
-                <div class="adm-prog-row">
-                  <div class="adm-prog-head">
-                    <span class="adm-prog-l">Core Stickiness</span>
-                    <b class="adm-prog-v" id="stat-core">—</b>
+                  <div class="adm-ret-tile" data-tone="honey">
+                    <span class="adm-ret-label">Hooked (3+ Matches)</span>
+                    <span class="adm-ret-sub">% of players with 3+ games played</span>
+                    <span class="adm-ret-fig">
+                      <b id="stat-core">—</b>
+                    </span>
+                    <div class="adm-ret-bar" id="stat-core-bar" data-tone="honey" data-empty="true" role="progressbar"
+                      aria-label="Hooked: registered players who completed at least three matches"
+                      aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                      <i id="stat-core-fill"></i>
+                    </div>
                   </div>
-                  <div class="adm-prog" id="stat-core-bar" data-tone="honey" role="progressbar"
-                    aria-label="Core stickiness: registered players who completed at least three matches"
-                    aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-                    <i id="stat-core-fill"></i>
-                  </div>
-                  <span class="adm-prog-note" id="stat-core-note">registered players · 3+ matches played</span>
                 </div>
               </div>
             </section>
