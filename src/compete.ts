@@ -2472,12 +2472,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
     const totals = document.createElement('div');
     totals.className = 'nd-totals';
-    totals.setAttribute('aria-label', `${c.points.toLocaleString('en-US')} nation Tactical IQ · ${total.toLocaleString('en-US')} players`);
+    totals.setAttribute('aria-label', `${c.avg.toLocaleString('en-US')} average nation Tactical IQ · ${total.toLocaleString('en-US')} players`);
     const tiq = document.createElement('span');
     tiq.className = 'nd-total is-tiq';
     tiq.append(svgIcon('#i-brain', 'nd-total-ico nd-total-tiq'));
     const tiqN = document.createElement('b');
-    tiqN.textContent = c.points.toLocaleString('en-US');
+    tiqN.textContent = c.avg.toLocaleString('en-US');
     const tiqK = document.createElement('small');
     tiqK.textContent = 'TIQ';
     tiq.append(tiqN, tiqK);
@@ -2648,7 +2648,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (ndEls.kicker) ndEls.kicker.textContent = `#${c.rank} worldwide`;
     el.setAttribute(
       'aria-label',
-      `Nation roster: ${label}, #${c.rank} worldwide, ${c.points.toLocaleString('en-US')} Tactical IQ, ${c.players.toLocaleString('en-US')} players`,
+      `Nation roster: ${label}, #${c.rank} worldwide, ${c.avg.toLocaleString('en-US')} average Tactical IQ across ${c.players.toLocaleString('en-US')} players`,
     );
 
     body.textContent = '';
@@ -2665,7 +2665,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     impact('light');
 
     const seq = ++nationSeq;
-    const key = `${c.code}|${c.points}|${c.players}|${profile.country ?? '-'}`;
+    const key = `${c.code}|${c.avg}|${c.players}|${profile.country ?? '-'}`;
     let roster = nationRosters.get(key) ?? null;
     if (!roster) {
       try {
@@ -2773,7 +2773,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const hud = document.createElement('button');
     hud.type = 'button';
     hud.className = 'nation-hud';
-    const code = profile.country;
+    /* The save is the only place a nation lives before the socket opens; fold it to the same
+       uppercase ISO key the board is cut on, so a stored 'ir' still finds Iran. */
+    const code = (profile.country ?? '').trim().toUpperCase();
     const openPicker = (): void => {
       impact('light');
       openCountryPicker(api.sheets);
@@ -2807,8 +2809,19 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     av.className = 'nh-av';
     av.append(flagPhoto(code, 'fp-nation'));
 
+    /* The badge is this seat's own TIQ as the room holds it — the score its nation's average is
+       built from. A guest read carries no verified seat, so the save's own ladder TIQ stands in
+       rather than an empty zero. */
+    const standing = nationFeed?.standing?.code?.toUpperCase() === code
+      ? nationFeed.standing
+      : null;
+    const mine = standing?.tiq || myTrophyScore();
+    const average = standing?.avg ?? hit?.avg ?? 0;
+
     const id = document.createElement('span');
     id.className = 'nh-id';
+    const idLine = document.createElement('span');
+    idLine.className = 'nh-idline';
     const name = document.createElement('b');
     name.className = 'nh-name';
     name.textContent = nm;
@@ -2816,22 +2829,28 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const tag = document.createElement('span');
     tag.className = 'nh-tag';
     tag.textContent = 'Your Contribution';
-    id.append(name, tag);
+    idLine.append(name, tag);
+    /* The national average rides on the identity tier, under the flag's name, the way a ladder
+       row wears its player count. Out of the score column, so a longer national figure can never
+       squeeze the country name off a 320px screen. */
+    const avgCap = document.createElement('small');
+    avgCap.className = 'nh-avg';
+    avgCap.textContent = `${t('nationAverageTiq')} ${average.toLocaleString('en-US')}`;
+    id.append(idLine, avgCap);
 
-    /* The score is this seat's own banked contribution, not the nation's aggregate and never a
-       local wins×reward formula; a seat with no settled online win honestly reads zero. */
-    const points = nationFeed?.standing?.code === code ? nationFeed.standing.points : 0;
     const score = document.createElement('span');
     score.className = 'nh-score';
     score.append(svgIcon('#i-brain', 'nh-tiq'));
     const num = document.createElement('b');
-    num.textContent = points.toLocaleString('en-US');
+    num.textContent = mine.toLocaleString('en-US');
     score.append(num);
-    score.title = `${points.toLocaleString('en-US')} Tactical IQ contributed`;
+    score.title = `${mine.toLocaleString('en-US')} Tactical IQ earned · `
+      + `${average.toLocaleString('en-US')} ${t('nationAverageTiq')}`;
 
     hud.classList.add('is-set');
     hud.append(rank, av, id, score);
-    const seen = `${nm}, ${hit ? `rank ${hit.rank}` : 'rank pending'}, ${points.toLocaleString('en-US')} Tactical IQ contributed`;
+    const seen = `${nm}, ${hit ? `rank ${hit.rank}` : 'rank pending'}, `
+      + `${mine.toLocaleString('en-US')} Tactical IQ earned, ${average.toLocaleString('en-US')} national average`;
     hud.setAttribute('aria-label', `Your Nation: ${seen}. Activate to change your nation.`);
     hud.title = 'Tap to change your nation';
     hud.addEventListener('click', openPicker);
@@ -2845,7 +2864,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     paintPodium(rows.slice(0, 3).map((c) => ({
       rank: c.rank,
       name: c.name || nameOf(c.code),
-      score: c.points.toLocaleString('en-US'),
+      score: c.avg.toLocaleString('en-US'),
       code: c.code,
       onTap: () => openNation(c),
       tapHint: 'open the nation roster',
@@ -2853,7 +2872,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     el.textContent = '';
     el.append(nationsHud(rows));
     if (!rows.length) {
-      el.insertAdjacentHTML('beforeend', empty('No nations on the board yet — pick your flag and win a race.'));
+      el.insertAdjacentHTML('beforeend', empty('No nations on the board yet — pick your flag to put yours on it.'));
       return;
     }
     const ol = document.createElement('ol');
@@ -2865,8 +2884,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         name: c.name || nameOf(c.code),
         sub: `${c.players.toLocaleString('en-US')} players`,
         subClass: 'nd-count',
-        points: c.points.toLocaleString('en-US'),
-        me: profile.country === c.code,
+        points: c.avg.toLocaleString('en-US'),
+        me: (profile.country ?? '').trim().toUpperCase() === c.code,
         onOpen: () => openNation(c),
         openHint: 'open the nation roster',
       }));
@@ -2878,7 +2897,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const el = panes.nations;
     if (!el) return;
     if (!loadedBoard.nations && !nationRows) el.innerHTML = skel(6);
-    const feed = await fetchNationBoard();
+    const feed = await fetchNationBoard(myTrophyScore());
     if (!feed.live) {
       if (!nationRows) el.innerHTML = empty('Rankings unavailable. Check your connection and try again.');
       return;

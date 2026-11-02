@@ -1,12 +1,13 @@
 /**
- * nations.ts — the live Nations Cup feed.
+ * nations.ts — the live Nations IQ feed.
  *
  * Home and the Ranks board read this one function, so the card and the cup table can never
- * disagree about a nation's standing. The Worker owns the ledger: points exist only when a real
- * online board settled with a winner, and a nation exists only while real players are enrolled
- * under its flag. A read carries the caller's profile flag, so a country picked before the first
- * race is folded into that registry; zero-point nations stay on the board and are ranked by their
- * real members. This module validates the wire and remembers each nation's previous rank, so a
+ * disagree about a nation's standing. The Worker owns the ledger: a flag's score is the average
+ * TIQ of the real players enrolled under it — `round(total TIQ / players)` — so a nation whose
+ * players hold TIQ is never painted at zero for want of a settled race. The season's banked win
+ * points ride along as a separate award. A read carries the caller's profile flag, so a country
+ * picked before the first race is folded into that registry, and their own TIQ, so their seat is
+ * averaged live. This module validates the wire and remembers each nation's previous rank, so a
  * rise or fall is real movement between reads rather than a seeded decoration.
  */
 import { workerUrl } from './adminApi';
@@ -25,6 +26,10 @@ export interface NationRow {
   points: number;
   /** Real enrolled players under this flag. */
   players: number;
+  /** The TIQ every one of those players carries, added up. */
+  totalTiq: number;
+  /** `round(totalTiq / players)` — the number the board is actually ranked by. */
+  avg: number;
   trend: NationTrend;
   /** Positive = climbed, negative = slipped, 0 without a previous reading. */
   delta: number;
@@ -35,6 +40,10 @@ export interface NationStanding {
   rank: number;
   /** What the caller personally earned for this flag this season. */
   points: number;
+  /** The caller's own TIQ, which is what the contribution badge quotes back. */
+  tiq: number;
+  /** The nation's average TIQ, so a seat can see its own score against the flag's. */
+  avg: number;
   total: number;
   pct: number;
 }
@@ -84,12 +93,16 @@ interface WireNation {
   points?: unknown;
   players?: unknown;
   rank?: unknown;
+  totalTiq?: unknown;
+  averageTiq?: unknown;
 }
 
 interface WireYou {
   code?: unknown;
   points?: unknown;
   total?: unknown;
+  tiq?: unknown;
+  averageTiq?: unknown;
 }
 
 interface WireFeed {
@@ -165,12 +178,21 @@ function adopt(data: WireFeed): NationFeed | null {
     const code = iso2(text(raw.code, 2));
     if (!code || seen.has(code)) continue;
     seen.add(code);
+    const players = whole(raw.players);
+    const totalTiq = whole(raw.totalTiq);
+    /* The Worker owns the average. A reply from before it carried one is still never painted at
+       zero while its players hold TIQ, so the same formula is applied to the totals on the wire. */
+    const avg = raw.averageTiq !== undefined
+      ? whole(raw.averageTiq)
+      : Math.round(totalTiq / Math.max(1, players));
     rows.push({
       rank: whole(raw.rank),
       code,
       name: text(raw.name, 40),
       points: whole(raw.points),
-      players: whole(raw.players),
+      players,
+      totalTiq,
+      avg,
       trend: 'same',
       delta: 0,
     });
@@ -178,12 +200,12 @@ function adopt(data: WireFeed): NationFeed | null {
   }
   if (!rows.length) return { rows: [], total: 0, standing: null, seasonNo, live: true };
 
-  /* The Worker ranks ties by enrolment, which the wire alone cannot reconstruct; its ranks are
+  /* The Worker ranks ties by head-count, which the wire alone cannot reconstruct; its ranks are
      authoritative when they form one continuous 1..N sequence, otherwise rank the field here. */
   const ranked = rows.every((row) => row.rank >= 1)
     && new Set(rows.map((row) => row.rank)).size === rows.length;
   if (ranked) rows.sort((a, b) => a.rank - b.rank);
-  else rows.sort((a, b) => b.points - a.points || b.players - a.players || a.code.localeCompare(b.code));
+  else rows.sort((a, b) => b.avg - a.avg || b.totalTiq - a.totalTiq || b.players - a.players || a.code.localeCompare(b.code));
 
   const previous = readRanks();
   const baseline = previous.season === seasonNo && previous.at > 0 ? previous.ranks : {};
@@ -210,6 +232,10 @@ function adopt(data: WireFeed): NationFeed | null {
       code: hit.code,
       rank: hit.rank,
       points: wireCode === hit.code ? whole(mine?.points) : 0,
+      /* The seat's own TIQ as the room holds it. A guest read has no verified seat, so this stays
+         0 here and the caller substitutes the save's TIQ rather than showing an empty badge. */
+      tiq: wireCode === hit.code ? whole(mine?.tiq) : 0,
+      avg: hit.avg,
       total: rows.length,
       pct: Math.max(1, Math.min(100, Math.round((hit.rank / rows.length) * 100))),
     }
@@ -238,10 +264,19 @@ async function readBoard(url: string): Promise<NationFeed | null> {
   }
 }
 
-/** The top nations by real season points, plus the caller's own standing. Never throws. */
-export async function fetchNationBoard(): Promise<NationFeed> {
+/**
+ * The nations ladder, ranked by the average TIQ each flag's own players carry, plus the caller's
+ * standing. The read carries the caller's flag so a chosen nation is enrolled, and their own TIQ so
+ * the flag is averaged with their live score rather than last session's. Never throws.
+ */
+export async function fetchNationBoard(tiq: number): Promise<NationFeed> {
   const country = iso2(profile.country ?? '');
-  const path = country ? `/api/nations/leaderboard?country=${country}` : '/api/nations/leaderboard';
+  const mine = Math.max(0, Math.floor(tiq) || 0);
+  const params = new URLSearchParams();
+  if (country) params.set('country', country);
+  if (mine > 0) params.set('tiq', String(mine));
+  const query = params.toString();
+  const path = query ? `/api/nations/leaderboard?${query}` : '/api/nations/leaderboard';
   const url = workerUrl(path);
   if (!url) return offline();
 

@@ -680,6 +680,71 @@ const COUNTRY_NAME = new Map(
 );
 const countryName = (code: string): string => COUNTRY_NAME.get(code) ?? code;
 
+/** Names and case carry no meaning in a country: fold both before any lookup. */
+const foldCountryName = (s: string): string =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+/** Reverse registry index: every display name, folded, back to its ISO alpha-2 code. */
+const COUNTRY_BY_NAME = new Map(
+  (countryRegistry as Array<{ code: string; name: string }>).map((c) => [foldCountryName(c.name), c.code]),
+);
+
+/** Spellings the ISO dataset does not publish under `name`, so a hand-typed nation still resolves. */
+const COUNTRY_NAME_ALIASES: Record<string, string> = {
+  turkey: 'TR',
+  burma: 'MM',
+  holland: 'NL',
+  'czech republic': 'CZ',
+  'cape verde': 'CV',
+  'east timor': 'TL',
+  'republic of korea': 'KR',
+  'korea, south': 'KR',
+  'republic of moldova': 'MD',
+  'syrian arab republic': 'SY',
+  'viet nam': 'VN',
+  'russian federation': 'RU',
+  'united states of america': 'US',
+  usa: 'US',
+  uk: 'GB',
+  'great britain': 'GB',
+  uae: 'AE',
+  macedonia: 'MK',
+  swaziland: 'SZ',
+  'ivory coast': 'CI',
+  congo: 'CG',
+};
+
+/** Regional indicators ("🇮🇷") → the code they spell, for a flag that arrives as a glyph. */
+function codeFromFlagGlyph(raw: string): string {
+  const marks = [...raw];
+  if (marks.length !== 2) return '';
+  let out = '';
+  for (const mark of marks) {
+    const offset = mark.codePointAt(0) ?? 0;
+    if (offset < 0x1f1e6 || offset > 0x1f1ff) return '';
+    out += String.fromCharCode(65 + (offset - 0x1f1e6));
+  }
+  return out;
+}
+
+/**
+ * The one country normaliser the ledger and every board read pass through. A seat's nation is
+ * stored as two letters, so an identity that arrives as a code in either case, a flag glyph or a
+ * full name has to be resolved before the standings are cut — anything unrecognised is '' and the
+ * player is left off the board rather than folded into a neighbour on a lucky prefix.
+ */
+export function normalizeCountry(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const value = raw.trim();
+  if (!value) return '';
+  if (/^[A-Za-z]{2}$/.test(value)) return value.toUpperCase();
+  const glyph = codeFromFlagGlyph(value);
+  if (glyph) return glyph;
+  const folded = foldCountryName(value);
+  const code = COUNTRY_NAME_ALIASES[folded] ?? COUNTRY_BY_NAME.get(folded) ?? '';
+  return /^[A-Z]{2}$/.test(code) ? code : '';
+}
+
 /** A stored ledger is clamped field by field; a different season never lends its points forward. */
 function readNationLedger(raw: unknown, seasonNo: number): NationLedger {
   const r = raw as Partial<NationLedger> | null | undefined;
@@ -1033,7 +1098,7 @@ function freshPlayer(identity: Identity, now: number): PlayerRecord {
     tgId: tgIdOf(identity.player.id),
     name: identity.player.name.slice(0, 40),
     username: identity.player.username.slice(0, 40),
-    country: identity.flag.slice(0, 2),
+    country: normalizeCountry(identity.flag),
     avatar: identity.player.avatar,
     age: Math.min(120, Math.max(0, Math.floor(identity.age))),
     tiq: Math.max(0, Math.floor(identity.tiq)),
@@ -1078,7 +1143,7 @@ function readPlayer(raw: unknown): PlayerRecord | null {
     tgId: text(r.tgId, 20).replace(/[^0-9-]/g, ''),
     name: text(r.name, 40) || 'Player',
     username: text(r.username, 40),
-    country: text(r.country, 2).toUpperCase(),
+    country: normalizeCountry(r.country),
     avatar: storedAvatar(r.avatar),
     age: Math.min(120, whole(r.age)),
     tiq: whole(r.tiq),
@@ -2986,7 +3051,7 @@ export class MatchmakerDO {
       if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
       return json(await this.mindsBoard(request, url), 200, { 'cache-control': 'no-store' });
     }
-    /* The public Nations Cup: every enrolled flag, only points the room itself banked. */
+    /* The public Nations IQ board: every enrolled flag, ranked by the average TIQ its own players carry. */
     if (url.pathname === '/api/nations/leaderboard') {
       if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
       return json(await this.nationsBoard(request, url), 200, { 'cache-control': 'no-store' });
@@ -3530,18 +3595,26 @@ export class MatchmakerDO {
   }
 
   /**
-   * The Nations Cup: every flag at least one registered player wears, ranked by the points the
-   * room has actually banked for that flag this season. A nation that has not won yet is an honest
-   * zero and still takes its place on the board; the tie-break reads the real member count and the
-   * first sighting of its earliest player, never a seed.
+   * The Nations Cup: every flag at least one registered player wears, ranked by the average TIQ
+   * those players actually carry. The season's banked win points ride along as a separate award,
+   * so a nation whose players hold real TIQ is never painted at zero for want of a settled race.
+   * The caller's own row quotes both their personal TIQ and the nation's average back to them.
    */
   private async nationsBoard(request: Request, url: URL): Promise<{
     ok: true;
     seasonNo: number;
     updatedAt: number;
     total: number;
-    nations: Array<{ rank: number; code: string; name: string; points: number; players: number }>;
-    you: { code: string; rank: number; points: number; total: number } | null;
+    nations: Array<{
+      rank: number;
+      code: string;
+      name: string;
+      points: number;
+      players: number;
+      totalTiq: number;
+      averageTiq: number;
+    }>;
+    you: { code: string; rank: number; points: number; tiq: number; averageTiq: number; total: number } | null;
   }> {
     /* A board read carries the caller's profile flag, so a nation chosen in Profile is enrolled
        before the standings are cut — a player who has not queued yet still has a country. */
@@ -3549,22 +3622,33 @@ export class MatchmakerDO {
     const seasonNo = this.arena.seasonNo;
     const ledger = this.nations.seasonNo === seasonNo ? this.nations : emptyNationLedger(seasonNo);
 
-    const nations = this.nationStandings(ledger).map((row, i) => ({
+    /* The same fold the Top Minds ladder makes: the caller's own seat may report a TIQ ahead of
+       the one the room last stored, and the higher figure wins. It lifts only their own row and
+       is never written back, so a read cannot move anybody else's nation. */
+    const mine = mineId ? this.players.get(mineId) : undefined;
+    const rawTiq = Number(url.searchParams.get('tiq'));
+    const myTiq = Math.max(0, Math.floor(mine?.tiq ?? 0), Number.isFinite(rawTiq) ? Math.floor(rawTiq) : 0);
+    const seat = mineId ? { id: mineId, tiq: myTiq } : null;
+
+    const nations = this.nationStandings(ledger, seat).map((row, i) => ({
       rank: i + 1,
       code: row.code,
       name: row.name,
       players: row.players,
       points: row.points,
+      totalTiq: row.totalTiq,
+      averageTiq: row.averageTiq,
     }));
 
-    const mine = mineId ? this.players.get(mineId) : undefined;
-    const myCode = (mine?.country || '').toUpperCase();
-    const hit = /^[A-Z]{2}$/.test(myCode) ? nations.find((n) => n.code === myCode) ?? null : null;
+    const myCode = normalizeCountry(mine?.country);
+    const hit = myCode ? nations.find((n) => n.code === myCode) ?? null : null;
     const you = hit && mineId
       ? {
         code: myCode,
         rank: hit.rank,
         points: Math.max(0, whole(ledger.byPlayer[mineId]?.[myCode])),
+        tiq: myTiq,
+        averageTiq: hit.averageTiq,
         total: nations.length,
       }
       : null;
@@ -3580,8 +3664,8 @@ export class MatchmakerDO {
   private async boardSeat(request: Request, url: URL): Promise<string> {
     const who = await identifyPlayerRequest(request, this.env);
     if (!who || this.restricted(who.playerId)) return '';
-    const cc = (url.searchParams.get('country') ?? '').toUpperCase();
-    if (!/^[A-Z]{2}$/.test(cc)) return who.playerId;
+    const cc = normalizeCountry(url.searchParams.get('country'));
+    if (!cc) return who.playerId;
 
     const now = Date.now();
     const existing = this.players.get(who.playerId);
@@ -3617,24 +3701,34 @@ export class MatchmakerDO {
   }
 
   /**
-   * The enrolled flags, folded from the registry. Points descend first; an unbanked nation then
-   * ranks by how many real players wear its flag, and the flag whose earliest player registered
-   * first takes the remaining tie. The code is the final, deterministic tie-break.
+   * The enrolled flags, folded from the registry. A nation's standing is the TIQ its own players
+   * carry: the average per head leads, because a flag with three grandmasters outranks a flag with
+   * three hundred rookies even when the raw pile is smaller. Total TIQ breaks an equal average,
+   * then head-count, then the flag whose earliest player registered first. The season's banked
+   * win points ride along underneath, but they are an award, not the ranking metric — a nation
+   * whose players hold real TIQ has never been able to fall to zero here. The code is the final,
+   * deterministic tie-break.
    */
-  private nationStandings(ledger: NationLedger): Array<{
-    code: string; name: string; points: number; players: number; since: number;
+  private nationStandings(
+    ledger: NationLedger,
+    seat: { id: string; tiq: number } | null,
+  ): Array<{
+    code: string; name: string; points: number; players: number; totalTiq: number; averageTiq: number; since: number;
   }> {
-    const enrolled = new Map<string, { players: number; since: number }>();
+    const enrolled = new Map<string, { players: number; totalTiq: number; since: number }>();
     for (const p of this.players.values()) {
-      const cc = (p.country || '').toUpperCase();
-      if (!/^[A-Z]{2}$/.test(cc) || p.banned || this.banned.has(p.id)) continue;
+      const cc = normalizeCountry(p.country);
+      if (!cc || p.banned || this.banned.has(p.id)) continue;
+      const base = Math.max(0, whole(p.tiq));
+      const tiq = seat && p.id === seat.id ? Math.max(base, Math.max(0, whole(seat.tiq))) : base;
       const since = p.firstSeen > 0 ? p.firstSeen : Number.MAX_SAFE_INTEGER;
       const row = enrolled.get(cc);
       if (row) {
         row.players += 1;
+        row.totalTiq += tiq;
         if (since < row.since) row.since = since;
       } else {
-        enrolled.set(cc, { players: 1, since });
+        enrolled.set(cc, { players: 1, totalTiq: tiq, since });
       }
     }
 
@@ -3642,12 +3736,15 @@ export class MatchmakerDO {
       .map(([code, row]) => ({
         code,
         name: countryName(code),
-        points: Math.max(0, whole(ledger.points[code])),
         players: row.players,
+        totalTiq: row.totalTiq,
+        averageTiq: Math.round(row.totalTiq / Math.max(1, row.players)),
+        points: Math.max(0, whole(ledger.points[code])),
         since: row.since,
       }))
       .sort((a, b) => (
-        b.points - a.points
+        b.averageTiq - a.averageTiq
+        || b.totalTiq - a.totalTiq
         || b.players - a.players
         || a.since - b.since
         || a.code.localeCompare(b.code)
@@ -3666,8 +3763,8 @@ export class MatchmakerDO {
     rows: Array<{ rank: number; id: string; name: string; tiq: number; wins: number; isYou: boolean }>;
     you: { rank: number; id: string; name: string; tiq: number; wins: number; isYou: boolean } | null;
   } | { ok: false; error: string }> {
-    const country = (url.searchParams.get('country') ?? '').toUpperCase();
-    if (!/^[A-Z]{2}$/.test(country)) return { ok: false, error: 'bad_country' };
+    const country = normalizeCountry(url.searchParams.get('country'));
+    if (!country) return { ok: false, error: 'bad_country' };
     const askedLimit = url.searchParams.get('limit');
     const rawLimit = askedLimit === null ? 20 : Number(askedLimit);
     const limit = Number.isFinite(rawLimit) ? clamp(Math.floor(rawLimit), 1, 50) : 20;
@@ -3677,7 +3774,7 @@ export class MatchmakerDO {
     const mineId = tgId ? `tg-${tgId}` : '';
 
     const field = [...this.players.values()]
-      .filter((p) => !p.banned && !this.banned.has(p.id) && (p.country || '').toUpperCase() === country)
+      .filter((p) => !p.banned && !this.banned.has(p.id) && normalizeCountry(p.country) === country)
       .sort((a, b) => b.tiq - a.tiq || b.wins - a.wins || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 
     const asRow = (p: PlayerRecord, rank: number) => ({
@@ -4091,7 +4188,7 @@ export class MatchmakerDO {
     const p = this.players.get(id) ?? freshPlayer(identity, now);
     p.name = identity.player.name || p.name;
     p.username = identity.player.username || p.username;
-    p.country = identity.flag || p.country;
+    p.country = normalizeCountry(identity.flag) || p.country;
     p.avatar = storedAvatar(identity.player.avatar) || p.avatar;
     if (identity.age > 0) p.age = Math.min(120, Math.floor(identity.age));
     p.tiq = Math.max(0, Math.floor(identity.tiq));
@@ -4167,8 +4264,8 @@ export class MatchmakerDO {
    * players earned in real online races this season.
    */
   private creditNation(p: PlayerRecord): void {
-    const cc = (p.country || '').toUpperCase();
-    if (!/^[A-Z]{2}$/.test(cc)) return;
+    const cc = normalizeCountry(p.country);
+    if (!cc) return;
     const seasonNo = this.arena.seasonNo;
     if (this.nations.seasonNo !== seasonNo) this.nations = emptyNationLedger(seasonNo);
     this.nations.points[cc] = Math.max(0, whole(this.nations.points[cc])) + NATION_WIN_TIQ;

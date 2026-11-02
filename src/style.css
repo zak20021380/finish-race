@@ -5379,7 +5379,7 @@ html.no-flags .id-flag .flag-code { display: none; }
 .nations-cta-label {
   flex: 1 1 auto;
   min-width: 0;
-  text-align: left;
+  text-align: start;
   font-size: 14px;
   font-weight: 700;
   letter-spacing: -.01em;
@@ -6511,7 +6511,7 @@ html.reduced-motion .hex-photo { transition: none; }
     0 18px 32px -14px rgba(0, 0, 0, .85);
   color: var(--ink);
   font: inherit;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   transition: transform var(--motion-fast), border-color var(--motion-fast);
 }
@@ -6625,8 +6625,28 @@ html.reduced-motion .hex-photo { transition: none; }
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
+}
+/* The name and the contribution chip share the first tier; the national average takes the
+   second, the same two-tier read every ladder row uses. */
+.nh-idline {
+  display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+}
+.nh-avg {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  line-height: 1.25;
+  color: var(--ink-soft);
 }
 .nh-name {
   min-width: 0;
@@ -6653,6 +6673,8 @@ html.reduced-motion .hex-photo { transition: none; }
   text-transform: uppercase;
   white-space: nowrap;
 }
+/* The score column stays one tier: the seat's own TIQ. The national average rides on the
+   identity tier instead, where the flexible zone can give it room without taxing the name. */
 .nh-score {
   flex: none;
   display: flex;
@@ -13159,7 +13181,7 @@ html.reduced-motion .stars-av-photo { transition: none; }
   appearance: none;
   border: 0;
   border-radius: var(--radius-sm);
-  text-align: left;
+  text-align: start;
   cursor: default;
   background: linear-gradient(180deg, #242F45 0%, #1D2636 100%);
   box-shadow:

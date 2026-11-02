@@ -283,11 +283,11 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     li.classList.add(`rank-${c.rank}`);
     if (me) li.classList.add('me');
     const label = c.name || nameOf(c.code);
-    const pts = localDigits(c.points.toLocaleString('en-US'), lang);
+    const pts = localDigits(c.avg.toLocaleString('en-US'), lang);
     const trendLabel = c.trend === 'up'
       ? `rising ${Math.abs(c.delta)}`
       : c.trend === 'down' ? `dropping ${Math.abs(c.delta)}` : 'steady';
-    li.setAttribute('aria-label', `#${c.rank} ${label} — ${c.points.toLocaleString('en-US')} TIQ, ${c.players.toLocaleString('en-US')} players, ${trendLabel}`);
+    li.setAttribute('aria-label', `#${c.rank} ${label} — ${c.avg.toLocaleString('en-US')} average TIQ, ${c.players.toLocaleString('en-US')} players, ${trendLabel}`);
     const rk = document.createElement('span');
     const podium = c.rank >= 1 && c.rank <= 3 ? PODIUM_CLASS[c.rank - 1] : '';
     rk.className = podium ? `rk rank-${c.rank} ${podium}` : `rk rank-${c.rank}`;
@@ -342,11 +342,12 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const pillK = document.getElementById('home-nation-pill-k');
     const pct = document.getElementById('home-nation-pct');
     const pts = document.getElementById('home-nation-pts');
-    const code = profile.country;
+    const code = (profile.country ?? '').trim().toUpperCase();
     const mine = code ? feed?.rows.find((c) => c.code === code) : undefined;
     const standing = code && feed?.standing?.code === code ? feed.standing : null;
-    /* The contribution is the ledger's own record of this seat's wins — never a local formula. */
-    const contributed = standing?.points ?? 0;
+    /* The badge is the seat's own TIQ — the very number its nation's average is built from. A
+       guest read carries no verified seat, so the save's ladder TIQ stands in rather than zero. */
+    const contributed = standing?.tiq || myTiq();
     const ptsText = `+${localDigits(contributed.toLocaleString('en-US'), lang)}`;
     if (pts) pts.textContent = ptsText;
     if (!code) {
@@ -406,12 +407,12 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       list.append(emptyNationRow(t('countryBoardEmpty')));
       return;
     }
-    for (const c of nationFeed.rows.slice(0, 5)) list.append(rowEl(c, profile.country === c.code));
+    for (const c of nationFeed.rows.slice(0, 5)) list.append(rowEl(c, (profile.country ?? '').trim().toUpperCase() === c.code));
   };
 
   const loadCountries = async (): Promise<void> => {
     try {
-      const feed = await fetchNationBoard();
+      const feed = await fetchNationBoard(myTiq());
       /* A failed read keeps the last real board; a first read paints the clean waiting state. */
       if (feed.live) nationFeed = feed;
       paintNationList();
