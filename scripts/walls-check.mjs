@@ -181,7 +181,7 @@ check('the wide board opens two more columns, and the duel still refuses them', 
   assert.equal(duel.cols, 8);
   assert.equal(duel.rows, 12);
   assert.equal(wide.cols, 10);
-  assert.equal(wide.rows, 12);
+  assert.equal(wide.rows, 14);                        // the expanded runway: two rows longer than the duel
   /* a horizontal wall over the last pair of columns */
   assert.equal(wallOk(duel, h(7, 5)), false, 'x=7 runs off an eight-column board');
   assert.equal(wallOk(wide, h(7, 5)), true, 'but it fits the wide board');

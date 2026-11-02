@@ -3,9 +3,11 @@
  *
  * Coordinates: cell (c, r); c = 0..cols-1 left→right, r = 0..rows-1 top→bottom. Row 0 is FINISH.
  * `cols` and `rows` are NOT constants: the board grows with the race. Two contenders keep the
- * classic 8x12 duel board; three or four play the wider 10x12 one, which is what gives the extra
- * balls room to spread without traffic-jamming on turn 1. Every helper that walks the board takes
- * the dimensions it should walk (`s.cols` / `s.rows`), never a module constant — see `dimsFor`.
+ * classic 8x12 duel board; three or four play the wider 10x14 one — two columns for the extra
+ * balls to spread across, and two rows of extra runway so a full four-ball field can work its way
+ * around walls instead of queueing up the middle. Every helper that walks the board takes the
+ * dimensions it should walk (`s.cols` / `s.rows`), never a module constant — see
+ * `getBoardDimensions`.
  *
  * Teams: 1 to 4 teams of 1 to 4 balls each. Every team starts spread across the bottom rows and
  * races any one of its balls to the top. Teams alternate turns; on its turn a team moves ANY ONE
@@ -51,9 +53,15 @@
 /** The classic duel board: 8 columns, 12 rows, FINISH on row 0. */
 export const COLS = 8;
 export const ROWS = 12;
-/** The board three or more contenders race on: two columns wider, same height, same pacing. */
+/**
+ * The board three or more contenders race on: two columns wider, and — the expanded runway — two
+ * rows longer. The width is what lets the extra balls spread on turn 1 without traffic-jamming;
+ * the height is what gives a full four-ball field somewhere to go once walls go up. Four balls on
+ * the duel's twelve rows spent the mid-game shuffling in a single corridor; fourteen rows is the
+ * breathing room that makes wall play strategic rather than a dead end.
+ */
 export const WIDE_COLS = 10;
-export const WIDE_ROWS = 12;
+export const WIDE_ROWS = ROWS + 2;
 /** Team and ball counts the rules accept; the start-layout helper fills the bottom rows. */
 export const MAX_TEAMS = 4;
 export const MAX_BALLS = 3;
@@ -163,13 +171,25 @@ export const contendersIn = (sizes: readonly number[]): number =>
   sizes.slice(0, MAX_TEAMS).reduce((n, size) => n + clampSize(size), 0);
 
 /**
- * The board a race is played on. Two contenders keep the classic duel board, so 1v1 pacing is
- * exactly what it always was; three or more move to the wider one, which is the breathing room
- * that lets the extra balls spread out instead of queueing behind each other on turn 1.
+ * The board a race is played on, resolved from how many players contend for it. Two keep the
+ * classic duel board, so 1v1 pacing is exactly what it always was; three or more move to the
+ * wider, longer one — the breathing room that lets the extra balls spread out instead of queueing
+ * behind each other on turn 1, and the runway that keeps a four-way a race rather than a scrum.
+ *
+ * `playerCount` is the crowd on the grid — `contendersIn(sizes)`, i.e. the balls, not the seats:
+ * it is the balls that traffic-jam, so a 2v2 needs the room a four-way does. The two dimensions
+ * travel together as one `Dims`, so no caller can pair the wide columns with the duel's height.
  */
-export function dimsFor(contenders: number): Dims {
-  return contenders >= 3 ? { cols: WIDE_COLS, rows: WIDE_ROWS } : { cols: COLS, rows: ROWS };
+export function getBoardDimensions(playerCount: number): Dims {
+  return playerCount >= 3 ? { cols: WIDE_COLS, rows: WIDE_ROWS } : { cols: COLS, rows: ROWS };
 }
+
+/**
+ * The historical name for `getBoardDimensions`, kept because the race screen, the matchmaker, the
+ * socket's frame reader and the rules' own `newGame` all import it. One resolver, two names, and
+ * no second source of truth for the grid.
+ */
+export const dimsFor = getBoardDimensions;
 
 /** Walls each seat may place, by contenders on the board: 2 → 8, 3 → 6, 4 or more → 5. */
 const WALL_TIERS: readonly number[] = [CONFIG.WALL_LIMIT, CONFIG.WALL_LIMIT, 6, 5];

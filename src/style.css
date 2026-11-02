@@ -357,7 +357,8 @@ html, body {
 /* The slot takes the free height and the wrap fits the largest board of the *active* grid inside
    it, so the board shrinks on 360x640 instead of pushing the chips off. Nothing else claims a lane:
    the finish crown is painted inside row 0, so the canvas gets every pixel of the card above the
-   chips. The grid is not always 8x12: three or four contenders move to the wider 10x12 board, and a
+   chips. The grid is not always 8x12: three or four contenders move to the wider, longer 10x14
+   board, and a
    2:3 box would then letterbox it — the slab would float in a box taller than itself, and the goal
    crown would sit further from the card's top edge than the board it belongs to. So the box's own
    aspect is driven by `--board-cols` / `--board-rows`, which main.ts republishes on every

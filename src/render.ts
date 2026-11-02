@@ -284,8 +284,11 @@ function tint(col: string, a: number): string {
 
 /* ---------- the board's metrics ----------
  * One cell is the whole unit system: `computeLayout` fits the grid the rules picked (8x12 for a
- * duel, 10x12 for three or four contenders) into whatever box the stage hands it, and every size
- * below is a fraction of the cell that comes out. That is what makes the board scale from a
+ * duel, 10x14 for three or four contenders) into whatever box the stage hands it, and every size
+ * below is a fraction of the cell that comes out. The cell is the smaller of the two axis fits —
+ * `min(width / cols, height / rows)` — so the taller party board buys its extra runway by drawing
+ * slightly smaller cells rather than by spilling out of the viewport: nothing is ever clipped,
+ * vertically or horizontally, on a 320px phone. That is also what makes the board scale from a
  * 430x932 phone down to a 360x640 one without a single media query — and what makes the *touch*
  * targets scale with it, which is the part a purely visual fit would get wrong.
  */
@@ -650,8 +653,14 @@ const CORNER = 0.4;              // board corner radius, in cells
  * the one thing on the slab that has always been set in Latin.
  */
 const CREST_WORD = 'FINISH';
-/** Below this cell the inscription is mush rather than type, so the crown wears no word at all. */
-const CREST_MIN = 24;
+/**
+ * Below this cell the inscription is mush rather than type, so the crown wears no word at all.
+ * The floor is the *duel's* cell, not the party board's: a 10x14 grid fits the same phone by
+ * drawing smaller cells, and at 24 a four-way on a 320px screen would lose the word the finish bar
+ * is named for. `fs < 6` below is the real legibility guard; this one only keeps the crest off a
+ * board that has collapsed to a thumbnail.
+ */
+const CREST_MIN = 20;
 /** Heavy enough to survive being nine pixels tall, on the stack the app already ships. */
 const crestFont = (px: number) =>
   `900 ${px}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif`;

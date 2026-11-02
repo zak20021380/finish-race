@@ -578,7 +578,7 @@ const boardCard = wrap.closest<HTMLElement>('.card') ?? wrap;
 
 /**
  * Hand the grid the rules picked to CSS, which is what lets the board box size itself to the
- * board's own aspect instead of a hard-coded 2:3. Without it a 10x12 board letterboxes inside a
+ * board's own aspect instead of a hard-coded 2:3. Without it a 10x14 board letterboxes inside a
  * 2:3 box — the slab floats away from the box's top edge, and the goal crown that sits on it lands
  * further from the card's edge than the board it belongs to. Called on every `setBoard`, so a duel
  * and a party get their own box.
@@ -3033,10 +3033,10 @@ onRuntime(() => shop.refresh());
 /* ---- the local party: 2, 3 or 4 seats on the board the rules pick for them ----
    The mode drawer's Practice card carries one segmented control, and it is the whole of the
    three- and four-player entry: pick 3 or 4 and Start runs a race of that many one-ball seats,
-   which `dimsFor` lays out on the wide 10x12 board with the wall budget that goes with it. Two
-   keeps the classic duel shapes the drawer already persists. It is a local-only setting — quick
-   match and the private room hand the board to whoever is at the other end of the socket — so it
-   is stored on its own key rather than in the menu's two-seat `sizes` tuple. */
+   which `getBoardDimensions` lays out on the wide, long 10x14 board with the wall budget that goes
+   with it. Two keeps the classic duel shapes the drawer already persists. It is a local-only
+   setting — quick match and the private room hand the board to whoever is at the other end of the
+   socket — so it is stored on its own key rather than in the menu's two-seat `sizes` tuple. */
 const PARTY_KEY = 'detour.party.v1';
 function loadPartySeats(): number {
   try {

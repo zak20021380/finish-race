@@ -2767,8 +2767,12 @@ export function createMenu(api: MenuApi): Menu {
     if (!teamPv) teamPv = createRenderer(customPv, { theme });
     teamPv.setTheme(theme());
     teamPv.setPerspective({ local: 0, rival: 1, color: pieceColor() });
-    teamPv.resize();
+    /* the preview is drawn from the same `newGame` the race will run, so it has to be pointed at
+       that board before it lays itself out: a three- or four-contender field is the wider, longer
+       grid, and a renderer left on the duel's 8x12 would paint the balls off their own squares. */
     const s = newGame(custom);
+    teamPv.setBoard(s.cols, s.rows);
+    teamPv.resize();
     const v: View = {
       state: s,
       balls: s.balls.map((b) => ({ pos: { x: b.pos.c + 0.5, y: b.pos.r + 0.5 }, team: b.team, id: b.id, sel: false })),
