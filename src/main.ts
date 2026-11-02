@@ -68,7 +68,6 @@ import {
 } from './matchmaking';
 import { createAdmin, onRuntime, recordRace, runtime, tiqFrom, type Admin } from './admin';
 import { arena, arenaLocked, onAward, startArenaSync } from './arenaState';
-import { createAnnouncements } from './broadcasts';
 import {
   MIN_SEATS, ROOM_WAIT_MS, createRoom, difficultyFor, isAutomated, isHuman, lobbyLine, rewardEligible, seatBadge,
   seatName, sizesOf, startEarly, type BotTier, type Room,
@@ -381,7 +380,7 @@ const matchmaking = createMatchmaking({
     impact('light');
     notify('warning');
     if (reason === 'MAINTENANCE') {
-      announcements.maintenance();
+      showNote(t('maintenanceBody'), false, 3200);
     } else {
       showNote(reason === 'MATCHING_LOCKED'
         ? 'The arena is locked — new matches are paused.'
@@ -404,7 +403,7 @@ function queueMatch(mode: 'pvp' | 'arena' = 'pvp') {
   if (runtime.maintenance) {
     impact('light');
     notify('warning');
-    announcements.maintenance();
+    showNote(t('maintenanceBody'), false, 3200);
     return;
   }
   /* the Command Center's own lock, mirrored from the server: new entries stop, live races play out */
@@ -2990,34 +2989,11 @@ compete = createCompete({
 });
 createNotifications({ sheets });
 
-/* ---- the announcement engine: urgent broadcasts raise the popup, feed ones the inbox ----
-   The command center hands it every broadcast it dispatches; the same engine syncs the public
-   feed on boot and whenever the app comes back to the foreground. */
-const announcements = createAnnouncements({
-  identity: () => ({
-    country: profile.country,
-    tiq: tiqFrom(profile.stats.wins, profile.stats.games, profile.tiqBonus),
-  }),
-  /* a target that names a screen goes there; anything else the engine treats as a link out */
-  openRoute: (id) => {
-    const target = id === 'compete' ? 'arena' : id;
-    if (!/^[a-z-]{1,24}$/.test(target)) return false;
-    if (!document.querySelector(`.screen[data-screen="${target}"]`)) return false;
-    router.go(target);
-    return true;
-  },
-});
-
 /* ---- Admin Command Center: the Home FAB and the live-ops stage (src/admin.ts) ---- */
 admin = createAdmin({
   note: showNote,
   /* the stage is not a router screen, so it shows the BackButton itself while it is up */
   onToggle: (open) => setBackButton(open || router.current !== 'home'),
-  /* a dispatch lands on this device the same beat it lands anywhere else */
-  onBroadcast: (b) => announcements.receive(b),
-  onBroadcastArchived: (id) => announcements.retract(id),
-  /* the Controls tab's pinned one-liner raises the Command Dispatch modal on this device */
-  onDispatch: (text) => announcements.dispatch(text),
 });
 admin.mount();
 startArenaSync();
@@ -3027,9 +3003,7 @@ onAward((award) => {
   const label = award.badge.toLowerCase().startsWith('season ') ? award.badge : `Season ${award.seasonNo} ${award.badge}`;
   showNote(`${label} — +${award.tiq} TIQ.`, false, 3600);
 });
-announcements.sync();
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) announcements.sync();
   /* A host who stepped into a Telegram chat to send the invite comes back to the room they never
      left: the webview may have killed the socket while it was away, so the membership reconnects
      the moment the app is on screen again. */
@@ -3206,7 +3180,7 @@ initGameModes(sheets, {
   onAbandonMatch: () => quitToMenu(),
   /* The live mirror closes room entry the same way it closes the queue. */
   maintenance: () => runtime.maintenance,
-  onMaintenance: () => announcements.maintenance(),
+  onMaintenance: () => showNote(t('maintenanceBody'), false, 3200),
 });
 onGameModeChange(paintParty);
 onLang(paintParty);

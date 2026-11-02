@@ -60,7 +60,6 @@ import {
   ADMIN_TIMEOUT_MS,
   type AdminFailure,
 } from './adminApi';
-import type { Broadcast } from './broadcasts';
 import {
   VIP_PLAN_IDS, readVipPlanConfig,
   type VipPlanConfig, type VipPlanId, type VipPurchase, type VipRevenueSummary, type VipTierRevenue,
@@ -116,8 +115,6 @@ export interface AdminRuntime {
   salesOpen: boolean;
   /** Blocks new match queues with a maintenance toast. */
   maintenance: boolean;
-  /** The live announcement raised as the Command Dispatch modal on this device. '' means none. */
-  broadcast: string;
   /** TIQ a win is worth, race credit included. */
   winTiq: number;
   /** 1.0x / 1.5x / 2.0x — the coin payout scale. */
@@ -142,7 +139,6 @@ export const BLITZ_STEPS: readonly number[] = [6, 8, 10, 12];
 export const DEFAULT_RUNTIME: AdminRuntime = {
   salesOpen: false,
   maintenance: false,
-  broadcast: '',
   winTiq: 140,
   coinMult: 1,
   blitz: CONFIG.TURN_TIME_LIMIT,
@@ -172,7 +168,6 @@ function loadRuntime(): AdminRuntime {
   return {
     salesOpen: pickBool(raw.salesOpen, d.salesOpen),
     maintenance: pickBool(raw.maintenance, d.maintenance),
-    broadcast: typeof raw.broadcast === 'string' ? raw.broadcast.slice(0, 140) : d.broadcast,
     winTiq: Math.round(pickNum(raw.winTiq, d.winTiq, 0, 1000)),
     coinMult: pickOne(COIN_STEPS, raw.coinMult, d.coinMult),
     blitz: pickOne(BLITZ_STEPS, raw.blitz, d.blitz),
@@ -215,7 +210,7 @@ export function resetRuntime(): void {
 
 /**
  * What the Economy & Rules tab's "Reset to Defaults" restores: the tunables that tab owns, and
- * nothing else — the switches and the pinned broadcast are somebody else's decision.
+ * nothing else — the switches are somebody else's decision.
  */
 const ECONOMY_DEFAULTS: Partial<AdminRuntime> = {
   winTiq: DEFAULT_RUNTIME.winTiq,
@@ -845,7 +840,7 @@ async function fetchPlayers(
   return data && data.ok === true && Array.isArray(data.players) ? data : null;
 }
 
-/* ---------- the role registry & the broadcast engine, over `/api/admin/*` ---------- */
+/* ---------- the role registry, over `/api/admin/*` ---------- */
 
 /** The two levels the Command Center appoints. */
 export type AdminRole = 'superadmin' | 'moderator';
@@ -882,18 +877,16 @@ async function fetchRoles(): Promise<RolesPage | null> {
 interface MutationResult {
   ok: boolean;
   error?: string;
-  broadcast?: Broadcast;
 }
 
 async function adminMutation(path: string, body: unknown): Promise<MutationResult | null> {
   const res = await postJson(path, body);
   if (!res) return null;
   try {
-    const data = (await res.json()) as { ok?: boolean; error?: string; broadcast?: Broadcast };
+    const data = (await res.json()) as { ok?: boolean; error?: string };
     return {
       ok: data.ok === true,
       error: typeof data.error === 'string' ? data.error : undefined,
-      broadcast: data.broadcast,
     };
   } catch {
     return { ok: res.ok };
@@ -908,37 +901,6 @@ const grantRole = (id: string, role: AdminRole): Promise<MutationResult | null> 
 const revokeRole = (id: string): Promise<MutationResult | null> =>
   adminMutation('/api/admin/roles/revoke', { id });
 
-interface HistoryPage {
-  ok: true;
-  broadcasts: Broadcast[];
-  active: number;
-}
-
-/** The broadcast history, newest first, or null when the Worker is not answering. */
-async function fetchBroadcasts(): Promise<HistoryPage | null> {
-  const data = await parseJson<HistoryPage>(await adminFetch('/api/admin/broadcasts'));
-  return data && data.ok === true && Array.isArray(data.broadcasts) ? data : null;
-}
-
-/** What the composer hands the Worker; the server clamps every field again. */
-export interface BroadcastDraft {
-  title: string;
-  body: string;
-  ctaLabel: string;
-  ctaTarget: string;
-  audienceKind: 'all' | 'country' | 'minLevel';
-  audienceValue: string;
-  priority: 'urgent' | 'feed';
-}
-
-/** Dispatch one announcement. A `broadcast` in the answer is the stored row, already live. */
-const dispatchBroadcast = (draft: BroadcastDraft): Promise<MutationResult | null> =>
-  adminMutation('/api/admin/broadcasts/create', draft);
-
-/** Archive or restore one announcement. */
-const flipBroadcast = (id: string, archived: boolean): Promise<MutationResult | null> =>
-  adminMutation(`/api/admin/broadcasts/${encodeURIComponent(id)}/archive`, { archived });
-
 /** The Worker's refusal codes, in the panel's voice. */
 const ROLE_ERROR: Record<string, string> = {
   invalid_id: 'That is neither a Telegram id nor an @handle.',
@@ -949,25 +911,8 @@ const ROLE_ERROR: Record<string, string> = {
   forbidden: 'SuperAdmin access required.',
 };
 
-const BROADCAST_ERROR: Record<string, string> = {
-  missing_title: 'Give the broadcast a title first.',
-  missing_body: 'Give the broadcast a message first.',
-  invalid_country: 'Country must be a two-letter code, like US.',
-  invalid_level: 'Level must be a whole number from 1 to 999.',
-  incomplete_cta: 'A button needs both a label and a target.',
-  no_such_broadcast: 'That broadcast is no longer on the server.',
-  forbidden: 'SuperAdmin access required.',
-};
-
 /** `SuperAdmin` / `Moderator`, the way the badges read. */
 const ROLE_LABEL = (r: AdminRole): string => (r === 'superadmin' ? 'SuperAdmin' : 'Moderator');
-
-/** `Everyone` / `Country US` / `Level 10+` — one rendering for the history and the preview both. */
-function audienceText(kind: Broadcast['audience']['kind'], value: string): string {
-  if (kind === 'country') return `Country ${value.toUpperCase()}`;
-  if (kind === 'minLevel') return `Level ${value}+`;
-  return 'Everyone';
-}
 
 /** One moderation action on the Worker's registry. The row as the server now holds it, or null. */
 async function pushPlayerAction(
@@ -1258,12 +1203,6 @@ export interface AdminApi {
   note(msg: string, error: boolean, ttl: number): void;
   /** The stage opened or closed: the shell shows the Telegram BackButton while it is up. */
   onToggle(open: boolean): void;
-  /** A broadcast just left the Command Center: the client engine raises it on this device at once. */
-  onBroadcast?(b: Broadcast): void;
-  /** A broadcast was archived: the client engine pulls it from this device's store. */
-  onBroadcastArchived?(id: string): void;
-  /** The Controls tab's one-liner: raise it as the Command Dispatch modal on this device. */
-  onDispatch?(text: string): void;
 }
 
 export interface Admin {
@@ -1636,8 +1575,6 @@ export function createAdmin(api: AdminApi): Admin {
      `data-step` ball counters, and a bare `[data-step]` would drag them in with it */
   const stepBtns = [...(stage?.querySelectorAll<HTMLButtonElement>('[data-step] [data-dir]') ?? [])];
   const stepRows = [...(stage?.querySelectorAll<HTMLElement>('[data-step]') ?? [])];
-  const bcInput = $<HTMLInputElement>('bc-input');
-  const bcLive = $<HTMLElement>('bc-live');
   const coinsNow = $<HTMLElement>('tool-coins-now');
   const tiqNow = $<HTMLElement>('tool-tiq-now');
   const resetBtn = $<HTMLButtonElement>('tool-reset');
@@ -1804,43 +1741,6 @@ export function createAdmin(api: AdminApi): Admin {
   const aclRoles = $<HTMLElement>('adm-acl-role');
   const aclRoleBtns = [...(aclRoles?.querySelectorAll<HTMLButtonElement>('[data-role]') ?? [])];
   const aclGrant = $<HTMLButtonElement>('adm-acl-grant');
-  /* The broadcast engine: the compose key, the history, the composer drawer */
-  const bcCompose = $<HTMLButtonElement>('adm-bc-compose');
-  const bcList = $<HTMLElement>('adm-bc-list');
-  const bcEmpty = $<HTMLElement>('adm-bc-empty');
-  const bcCount = $<HTMLElement>('adm-bc-count');
-  const bcDrawer = $<HTMLElement>('adm-bc-drawer');
-  const bcDrawerX = $<HTMLButtonElement>('adm-bc-drawer-x');
-  const bcCancel = $<HTMLButtonElement>('adm-bc-cancel');
-  const bcSend = $<HTMLButtonElement>('adm-bc-send');
-  const bcTitle = $<HTMLInputElement>('adm-bc-title');
-  const bcBody = $<HTMLTextAreaElement>('adm-bc-body');
-  const bcCtaLabel = $<HTMLInputElement>('adm-bc-cta-label');
-  const bcCtaTarget = $<HTMLInputElement>('adm-bc-cta-target');
-  const bcAudWrap = $<HTMLElement>('adm-bc-audience');
-  const bcAudBtns = [...(bcAudWrap?.querySelectorAll<HTMLButtonElement>('[data-aud]') ?? [])];
-  const bcAudValueWrap = $<HTMLElement>('adm-bc-aud-value-wrap');
-  const bcAudValueL = $<HTMLElement>('adm-bc-aud-value-l');
-  const bcAudValue = $<HTMLInputElement>('adm-bc-aud-value');
-  const bcPriWrap = $<HTMLElement>('adm-bc-priority');
-  const bcPriBtns = [...(bcPriWrap?.querySelectorAll<HTMLButtonElement>('[data-pri]') ?? [])];
-  const bcPvKicker = $<HTMLElement>('adm-bc-pv-kicker');
-  const bcPvTitle = $<HTMLElement>('adm-bc-pv-title');
-  const bcPvBody = $<HTMLElement>('adm-bc-pv-body');
-  const bcPvCta = $<HTMLElement>('adm-bc-pv-cta');
-  const bcCtaPanel = $<HTMLElement>('adm-bc-cta-panel');
-  const bcCtaToggle = $<HTMLButtonElement>('adm-bc-cta-toggle');
-  const bcCtaHint = $<HTMLElement>('adm-bc-cta-hint');
-  const bcCtaGrid = $<HTMLElement>('adm-bc-cta-grid');
-  /* Dispatch feedback: the sticky Dark-Clay banner and the spinner that rides the send key */
-  const bcToast = $<HTMLElement>('adm-bc-toast');
-  const bcToastTxt = $<HTMLElement>('adm-bc-toast-txt');
-  const bcToastOk = $<HTMLElement>('adm-bc-toast-ok');
-  const bcToastBad = $<HTMLElement>('adm-bc-toast-bad');
-  const bcToastDone = $<HTMLButtonElement>('adm-bc-toast-done');
-  const bcSendIco = $<HTMLElement>('adm-bc-send-ico');
-  const bcSendSpin = $<HTMLElement>('adm-bc-spin');
-  const bcSendLabel = $<HTMLElement>('adm-bc-send-label');
   /* The confirm dialog, shared by every destructive key in the stage */
   const confirmEl = $<HTMLElement>('adm-confirm');
   const confirmTitle = $<HTMLElement>('adm-confirm-title');
@@ -1952,17 +1852,6 @@ export function createAdmin(api: AdminApi): Admin {
   let arenaBusy = false;
   /** Every arena edit gets a ticket: an older reply never walks a newer edit backwards. */
   let arenaSeq = 0;
-  /** The broadcast history: the read, and the composer's working state. */
-  let bcRows: Broadcast[] = [];
-  let bcOn = false;
-  let bcAsked = false;
-  let bcAud: Broadcast['audience']['kind'] = 'all';
-  let bcPri: 'urgent' | 'feed' = 'urgent';
-  let bcBusy = false;
-  /** The optional action panel: on by default, and switching it off drops the pair for good. */
-  let bcCtaOn = true;
-  /** The dispatch banner's auto-close timer, so a success sweeps the drawer shut by itself. */
-  let bcToastId = 0;
   /** What the confirm dialog's destructive key will run, when it is up. */
   let pendingConfirm: (() => void) | null = null;
   /** One close timer per drawer, so a reopen mid-fade never strands a hidden panel. */
@@ -1987,14 +1876,6 @@ export function createAdmin(api: AdminApi): Admin {
       if (!k) continue;
       const out = row.querySelector<HTMLElement>('[data-val]');
       if (out) out.textContent = k.label(k.get());
-    }
-  }
-
-  function paintBroadcast() {
-    const text = runtime.broadcast;
-    if (bcLive) {
-      bcLive.textContent = text || 'Nothing dispatched';
-      bcLive.dataset.on = String(!!text);
     }
   }
 
@@ -2139,7 +2020,6 @@ export function createAdmin(api: AdminApi): Admin {
     paintToggles();
     paintDot();
     paintSteps();
-    paintBroadcast();
     paintSave();
     paintArena();
     paintStats();
@@ -2148,7 +2028,6 @@ export function createAdmin(api: AdminApi): Admin {
     paintSquads();
     paintVipAdmin();
     paintAcl();
-    paintBroadcasts();
   }
 
   /* ---------- the Stats tab ---------- */
@@ -4527,277 +4406,6 @@ export function createAdmin(api: AdminApi): Admin {
     paintAcl();
   }
 
-  /* ---------- the broadcast engine: composer, history, archive ---------- */
-
-  /** `Urgent` / `Feed`, and the audience, as one kicker line. */
-  const bcKicker = (): string =>
-    `${bcPri === 'urgent' ? 'Urgent' : 'Feed'} · ${audienceText(bcAud, (bcAudValue?.value ?? '').trim())}`;
-
-  /** The dispatch banner: an emerald check on the way out, a crimson shield on the way back. */
-  function showBcToast(state: 'ok' | 'bad', msg: string, done: boolean) {
-    if (bcToastId) {
-      window.clearTimeout(bcToastId);
-      bcToastId = 0;
-    }
-    if (!bcToast) return;
-    bcToast.dataset.state = state;
-    if (bcToastTxt) bcToastTxt.textContent = msg;
-    if (bcToastOk) bcToastOk.hidden = state !== 'ok';
-    if (bcToastBad) bcToastBad.hidden = state !== 'bad';
-    if (bcToastDone) bcToastDone.hidden = !done;
-    bcToast.hidden = false;                  /* display:none -> flex also restarts the pop-in */
-  }
-
-  /** The banner leaves, and any auto-close it had queued with it. */
-  function hideBcToast() {
-    if (bcToastId) {
-      window.clearTimeout(bcToastId);
-      bcToastId = 0;
-    }
-    if (bcToast) bcToast.hidden = true;
-  }
-
-  /** The Dispatch key while the Worker is being asked: spinner in, label forward, taps swallowed. */
-  function setBcBusy(busy: boolean) {
-    bcBusy = busy;
-    if (bcSend) {
-      bcSend.dataset.busy = String(busy);
-      bcSend.setAttribute('aria-disabled', 'true');   /* paintBcPreview() recomputes it after the wait */
-    }
-    if (bcSendIco) bcSendIco.hidden = busy;
-    if (bcSendSpin) bcSendSpin.hidden = !busy;
-    if (bcSendLabel) bcSendLabel.textContent = busy ? 'Dispatching...' : 'Dispatch';
-  }
-
-  /** The optional action button: off clears the pair, so a half-written CTA never ships. */
-  function setCtaOn(on: boolean) {
-    bcCtaOn = on;
-    if (bcCtaPanel) bcCtaPanel.dataset.on = String(on);
-    if (bcCtaToggle) bcCtaToggle.setAttribute('aria-checked', String(on));
-    if (bcCtaGrid) bcCtaGrid.hidden = !on;
-    if (bcCtaHint) {
-      bcCtaHint.textContent = on
-        ? 'Optional — leave both blanks and the player only gets a plain Dismiss key.'
-        : 'Off — no action button; the player gets a plain Dismiss key.';
-    }
-    if (!on) {
-      if (bcCtaLabel) bcCtaLabel.value = '';
-      if (bcCtaTarget) bcCtaTarget.value = '';
-    }
-    paintBcPreview();
-  }
-
-  function paintBcPreview() {
-    const title = (bcTitle?.value ?? '').trim();
-    const body = (bcBody?.value ?? '').trim();
-    const label = (bcCtaLabel?.value ?? '').trim();
-    const target = (bcCtaTarget?.value ?? '').trim();
-    if (bcPvKicker) bcPvKicker.textContent = bcKicker();
-    if (bcPvTitle) bcPvTitle.textContent = title || 'Your title here';
-    if (bcPvBody) bcPvBody.textContent = body || 'Your message here.';
-    if (bcPvCta) {
-      const has = !!label && !!target;
-      bcPvCta.hidden = !has;
-      bcPvCta.textContent = has ? label : '';
-    }
-    if (bcSend) bcSend.setAttribute('aria-disabled', String(bcBusy || !bcDraftValid()));
-  }
-
-  /** The composer's shape check, mirroring the Worker's own guards. */
-  function bcDraftValid(): boolean {
-    const title = (bcTitle?.value ?? '').trim();
-    const body = (bcBody?.value ?? '').trim();
-    const label = (bcCtaLabel?.value ?? '').trim();
-    const target = (bcCtaTarget?.value ?? '').trim();
-    if (!title || !body) return false;
-    if (!!label !== !!target) return false;
-    const value = (bcAudValue?.value ?? '').trim();
-    if (bcAud === 'country' && !/^[A-Za-z]{2}$/.test(value)) return false;
-    if (bcAud === 'minLevel') {
-      const n = Number(value);
-      if (!Number.isInteger(n) || n < 1 || n > 999) return false;
-    }
-    return true;
-  }
-
-  function paintBroadcasts() {
-    const active = bcRows.filter((b) => b.status === 'active').length;
-    if (bcCount) {
-      bcCount.textContent = bcOn ? `${active} live / ${bcRows.length}` : '—';
-      bcCount.dataset.on = String(active > 0);
-    }
-    if (!bcList) return;
-    bcList.textContent = '';
-    for (const b of bcRows) {
-      const li = document.createElement('li');
-      li.className = b.status === 'archived' ? 'adm-bc-card is-archived' : 'adm-bc-card';
-      li.dataset.bcid = b.id;
-
-      const top = document.createElement('div');
-      top.className = 'adm-bc-top';
-      const pri = document.createElement('span');
-      pri.className = 'adm-bc-chip';
-      pri.dataset.pri = b.priority;
-      pri.textContent = b.priority === 'urgent' ? 'Urgent' : 'Feed';
-      const aud = document.createElement('span');
-      aud.className = 'adm-bc-chip';
-      aud.textContent = audienceText(b.audience.kind, b.audience.value);
-      if (b.status === 'archived') {
-        const state = document.createElement('span');
-        state.className = 'adm-bc-chip';
-        state.dataset.state = 'archived';
-        state.textContent = 'Archived';
-        top.append(pri, aud, state);
-      } else {
-        top.append(pri, aud);
-      }
-      const title = document.createElement('span');
-      title.className = 'adm-bc-title';
-      title.textContent = b.title;
-      top.append(title);
-      li.append(top);
-
-      const snip = document.createElement('span');
-      snip.className = 'adm-bc-snip';
-      snip.textContent = b.body;
-      li.append(snip);
-
-      const meta = document.createElement('p');
-      meta.className = 'adm-bc-meta';
-      meta.textContent = `${stamp(b.createdAt)} · by ${b.createdBy}${b.archivedAt ? ` · archived ${stamp(b.archivedAt)}` : ''}`;
-      li.append(meta);
-
-      const actions = document.createElement('div');
-      actions.className = 'adm-bc-actions';
-      const flip = document.createElement('button');
-      flip.type = 'button';
-      flip.className = b.status === 'archived' ? 'adm-btn is-restore' : 'adm-btn';
-      flip.dataset.bcflip = b.id;
-      flip.textContent = b.status === 'archived' ? 'Reactivate' : 'Archive';
-      actions.append(flip);
-      li.append(actions);
-      bcList.append(li);
-    }
-    if (bcEmpty) bcEmpty.hidden = bcRows.length > 0;
-  }
-
-  /** Read the history; the rail keeps its last paint when nothing answers. */
-  async function refreshBroadcasts(): Promise<void> {
-    const page = await fetchBroadcasts();
-    bcOn = !!page;
-    bcRows = page?.broadcasts ?? [];
-    paintBroadcasts();
-  }
-
-  /** Clear the composer back to its defaults, ready for the next dispatch. */
-  function resetComposer() {
-    if (bcTitle) bcTitle.value = '';
-    if (bcBody) bcBody.value = '';
-    if (bcCtaLabel) bcCtaLabel.value = '';
-    if (bcCtaTarget) bcCtaTarget.value = '';
-    if (bcAudValue) bcAudValue.value = '';
-    if (bcAudValueWrap) bcAudValueWrap.hidden = true;
-    if (bcAudValueL) bcAudValueL.textContent = 'Value';
-    if (bcAudValue) bcAudValue.placeholder = '';
-    bcAud = 'all';
-    for (const b of bcAudBtns) b.setAttribute('aria-pressed', String(b.dataset.aud === 'all'));
-    bcPri = 'urgent';
-    for (const b of bcPriBtns) b.setAttribute('aria-pressed', String(b.dataset.pri === 'urgent'));
-    setCtaOn(true);
-    paintBcPreview();
-  }
-
-  /** Dispatch the composer's draft; on success, the client engine raises it right here too. */
-  async function sendBroadcast(): Promise<void> {
-    if (bcBusy || !bcDraftValid()) {
-      impact('light');
-      notify('error');
-      showBcToast('bad', 'Failed to send: title and message are required — a button needs both halves.', false);
-      return;
-    }
-    if (!bcOn) {
-      impact('light');
-      notify('error');
-      showBcToast('bad', 'Failed to send: no Worker answering — the broadcast did not leave this device.', false);
-      return;
-    }
-    hideBcToast();
-    setBcBusy(true);
-    const draft: BroadcastDraft = {
-      title: (bcTitle?.value ?? '').trim(),
-      body: (bcBody?.value ?? '').trim(),
-      ctaLabel: (bcCtaLabel?.value ?? '').trim(),
-      ctaTarget: (bcCtaTarget?.value ?? '').trim(),
-      audienceKind: bcAud,
-      audienceValue: (bcAudValue?.value ?? '').trim(),
-      priority: bcPri,
-    };
-    const res = await dispatchBroadcast(draft);
-    setBcBusy(false);
-    if (!res) {
-      markBcLocal();
-      notify('error');
-      showBcToast('bad', 'Failed to send: no answer — nothing was dispatched. Retry when you like.', false);
-      paintBcPreview();
-      return;
-    }
-    if (!res.ok) {
-      notify('error');
-      showBcToast('bad', `Failed to send: ${BROADCAST_ERROR[res.error ?? ''] ?? 'the Worker refused that broadcast.'}`, false);
-      paintBcPreview();
-      return;                            /* the draft is untouched, so a retry costs one tap */
-    }
-    impact('medium');
-    notify('success');
-    showBcToast('ok', 'Broadcast Dispatched Successfully! Delivered to online players.', true);
-    resetComposer();
-    await refreshBroadcasts();
-    if (res.broadcast) api.onBroadcast?.(res.broadcast);
-    bcToastId = window.setTimeout(() => {
-      hideBcToast();
-      hideDrawer(bcDrawer);
-    }, 1200);                            /* the banner reads, then the composer sweeps itself away */
-  }
-
-  /** Archive or restore one announcement, and tell the client engine which way it went. */
-  async function flipOne(id: string): Promise<void> {
-    const b = bcRows.find((r) => r.id === id);
-    if (!b) return;
-    if (!bcOn) {
-      notify('error');
-      api.note('No Worker answering.', true, 2200);
-      return;
-    }
-    impact('light');
-    const archived = b.status !== 'archived';
-    const res = await flipBroadcast(id, archived);
-    if (!res) {
-      markBcLocal();
-      notify('error');
-      api.note('No answer — the broadcast did not move.', true, 2400);
-      return;
-    }
-    if (!res.ok) {
-      notify('error');
-      api.note(BROADCAST_ERROR[res.error ?? ''] ?? 'The Worker refused that change.', true, 2600);
-      return;
-    }
-    notify('success');
-    api.note(archived ? 'Broadcast archived.' : 'Broadcast is live again.', false, 2000);
-    await refreshBroadcasts();
-    if (res.broadcast) {
-      if (res.broadcast.status === 'archived') api.onBroadcastArchived?.(id);
-      else api.onBroadcast?.(res.broadcast);
-    }
-  }
-
-  /** Nothing answered: the history steps back and says so. */
-  function markBcLocal() {
-    bcOn = false;
-    bcRows = [];
-    paintBroadcasts();
-  }
-
   /* ---------- the overlays: drawers and the confirm dialog ---------- */
 
   function showDrawer(el: HTMLElement | null) {
@@ -5616,17 +5224,8 @@ export function createAdmin(api: AdminApi): Admin {
         paintStats();
         void refreshMetrics();
       }
-      /* the Inbox is device-local: a repaint keeps the relative timestamps honest, and the
-         broadcast history is read on first sight like the directory */
-      if (id === 'inbox') {
-        paintInbox();
-        if (!bcAsked) {
-          bcAsked = true;
-          void refreshBroadcasts();
-        } else {
-          paintBroadcasts();
-        }
-      }
+      /* the Inbox is device-local: a repaint keeps the relative timestamps honest */
+      if (id === 'inbox') paintInbox();
       /* the directory is read on first sight, not at mount: a panel nobody opened never calls out */
       if (id === 'users') {
         if (!usersAsked) {
@@ -6158,10 +5757,6 @@ export function createAdmin(api: AdminApi): Admin {
       hideDrawer(aclDrawer);
       return;
     }
-    if (bcDrawer && !bcDrawer.hidden) {
-      hideDrawer(bcDrawer);
-      return;
-    }
     closeStage();
   });
 
@@ -6198,29 +5793,6 @@ export function createAdmin(api: AdminApi): Admin {
     impact('medium');
     notify('success');
     api.note('Economy reset to defaults.', false, 2000);
-  });
-
-  $<HTMLButtonElement>('bc-publish')?.addEventListener('click', () => {
-    const text = (bcInput?.value ?? '').trim().slice(0, 140);
-    if (!text) {
-      api.note('Type a message before publishing.', true, 2200);
-      notify('error');
-      return;
-    }
-    setRuntime({ broadcast: text });
-    paintBroadcast();
-    api.onDispatch?.(text);
-    impact('medium');
-    notify('success');
-    api.note('Command Dispatch raised on this device.', false, 2000);
-  });
-
-  $<HTMLButtonElement>('bc-clear')?.addEventListener('click', () => {
-    setRuntime({ broadcast: '' });
-    if (bcInput) bcInput.value = '';
-    paintBroadcast();
-    impact('light');
-    api.note('Broadcast cleared.', false, 1800);
   });
 
   /* ---------- Access control: the add key, the drawer, the grant and the revoke ---------- */
@@ -6275,76 +5847,6 @@ export function createAdmin(api: AdminApi): Admin {
   aclList?.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-revoke]');
     if (btn && !btn.disabled) askRevoke(btn.dataset.revoke ?? '');
-  });
-
-  /* ---------- the broadcast engine: compose, preview, dispatch, archive ---------- */
-
-  bcCompose?.addEventListener('click', () => {
-    impact('light');
-    hideBcToast();
-    showDrawer(bcDrawer);
-    paintBcPreview();
-  });
-  bcDrawerX?.addEventListener('click', () => {
-    hideBcToast();
-    hideDrawer(bcDrawer);
-  });
-  bcCancel?.addEventListener('click', () => {
-    hideBcToast();
-    hideDrawer(bcDrawer);
-  });
-  bcCtaToggle?.addEventListener('click', () => {
-    impact('light');
-    setCtaOn(!bcCtaOn);
-  });
-  bcToastDone?.addEventListener('click', () => {
-    impact('light');
-    hideBcToast();
-    hideDrawer(bcDrawer);
-  });
-  for (const el of [bcTitle, bcBody, bcCtaLabel, bcCtaTarget, bcAudValue]) {
-    el?.addEventListener('input', () => paintBcPreview());
-  }
-  for (const b of bcAudBtns) {
-    b.addEventListener('click', () => {
-      const next = (b.dataset.aud ?? 'all') as Broadcast['audience']['kind'];
-      if (next === bcAud) return;
-      bcAud = next;
-      for (const x of bcAudBtns) x.setAttribute('aria-pressed', String(x === b));
-      if (bcAudValueWrap) bcAudValueWrap.hidden = next === 'all';
-      if (bcAudValueL) bcAudValueL.textContent = next === 'country' ? 'Country code' : 'Minimum level';
-      if (bcAudValue) {
-        bcAudValue.value = '';
-        bcAudValue.placeholder = next === 'country' ? 'US' : next === 'minLevel' ? '10' : '';
-        if (next !== 'all') bcAudValue.focus({ preventScroll: true });
-      }
-      impact('light');
-      paintBcPreview();
-    });
-  }
-  for (const b of bcPriBtns) {
-    b.addEventListener('click', () => {
-      const next: 'urgent' | 'feed' = b.dataset.pri === 'feed' ? 'feed' : 'urgent';
-      if (next === bcPri) return;
-      bcPri = next;
-      for (const x of bcPriBtns) x.setAttribute('aria-pressed', String(x === b));
-      impact('light');
-      paintBcPreview();
-    });
-  }
-  bcSend?.addEventListener('click', () => {
-    if (bcBusy) return;                    /* the spinner is up: this tap belongs to the Worker */
-    if (bcSend.getAttribute('aria-disabled') === 'true') {
-      impact('light');
-      notify('error');
-      showBcToast('bad', 'Failed to send: title and message are required — a button needs both halves.', false);
-      return;
-    }
-    void sendBroadcast();
-  });
-  bcList?.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-bcflip]');
-    if (btn) void flipOne(btn.dataset.bcflip ?? '');
   });
 
   confirmNo?.addEventListener('click', () => closeConfirm());
@@ -6419,7 +5921,6 @@ export function createAdmin(api: AdminApi): Admin {
     else paintInboxBadge();
   });
   onRuntime(() => {
-    paintBroadcast();
     paintDot();
     /* Maintenance Lock and both radii are the server's too: the same flip that repaints the panel
        pushes the new values to `POST /admin/config`. Offline, `syncConfig` is a no-op. */

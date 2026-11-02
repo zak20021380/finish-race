@@ -1,9 +1,8 @@
 /**
- * adminApi.ts — the wire the Command Center and the announcement engine share.
+ * adminApi.ts — the wire the Command Center talks over.
  *
  * One Worker base, one set of admin headers, one short-leash fetch, one JSON reader. Kept in its
- * own module so the broadcast engine (`src/broadcasts.ts`) can read the public announcement feed
- * without importing the whole panel — which imports it back the moment it dispatches one.
+ * own module so the panel's transport sits apart from its UI, and the two can be read on their own.
  */
 import { tgInitData } from './telegram';
 

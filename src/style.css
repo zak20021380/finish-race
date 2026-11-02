@@ -15760,7 +15760,7 @@ html.reduced-motion .mm-seg i { opacity: .55; transform: none; }
 html.reduced-motion .mm-blip { opacity: .5; }
 
 /* ==========================================================================
-   ADMIN COMMAND CENTER — the Home FAB, the live broadcast strip and the
+   ADMIN COMMAND CENTER — the Home FAB and the
    full-viewport Dark Clay stage (src/admin.ts).
    Same one palette: opaque slabs, a real 0-blur extrusion under every key, a
    metallic top hairline, translateY press-sink. No backdrop-filter anywhere,
@@ -15820,7 +15820,7 @@ html.reduced-motion .admin-fab-dot { animation: none; }
 .admin {
   position: absolute;
   inset: 0;
-  z-index: 1002;                       /* over the dock, the sheets, matchmaking, and the broadcast overlay (1000/1001) */
+  z-index: 1002;                       /* over the dock, the sheets and matchmaking */
   display: flex;
   flex-direction: column;
   gap: var(--s3);
@@ -17318,7 +17318,7 @@ html.reduced-motion .adm-ret-bar i { transition: none; }
 .adm-nat-empty { color: var(--ink-soft); font-size: var(--t-3); font-weight: 800; }
 
 /* ==========================================================================
-   CONTROLS — a 48px row per switch, one broadcast line, the tuning grid.
+   CONTROLS — a 48px row per switch, the tuning grid.
    ========================================================================== */
 .adm-list { display: flex; flex-direction: column; gap: 6px; }
 .adm-sw {
@@ -17478,8 +17478,8 @@ html.reduced-motion .adm-ret-bar i { transition: none; }
 .fjadm .adm-block-s[data-tone="warn"] { color: #FCD34D; }
 .fjadm .adm-block-s[data-tone="off"] { color: var(--ink-soft); }
 
-/* ---- the broadcast: one line — field, Send, Clear ---- */
-.adm-bc-live {
+/* ---- the section-header chip: ellipsised, right-aligned, one line ---- */
+.adm-sec-chip {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -17492,9 +17492,7 @@ html.reduced-motion .adm-ret-bar i { transition: none; }
   text-transform: none;
   color: var(--ink-soft);
 }
-.adm-bc-live[data-on="true"] { color: var(--honey-ink); }
-.adm-bc { display: flex; gap: var(--s2); }
-.adm-bc .adm-btn { flex: none; padding: 0 13px; }
+.adm-sec-chip[data-on="true"] { color: var(--honey-ink); }
 .adm-field {
   flex: 1 1 auto;
   min-width: 0;
@@ -19919,12 +19917,11 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
 }
 
 /* ==========================================================================
-   ACCESS CONTROL & BROADCASTS — the role registry, the dispatch history, and
-   the two drawers that ride over the stage with a confirm dialog above them.
+   ACCESS CONTROL — the role registry and the drawer that rides over the stage
+   with a confirm dialog above it.
    Same one palette: opaque clay slabs, no backdrop-filter, 44px+ targets.
    ========================================================================== */
-.adm-acl-list,
-.adm-bc-list {
+.adm-acl-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -20029,66 +20026,6 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
 .adm-admin-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .adm-admin-x[disabled] { opacity: .35; cursor: default; filter: saturate(.4); }
 .adm-admin-x[disabled]:active { transform: none; }
-
-/* ---- one broadcast: chips over the title, the body, when it went, the flip ---- */
-.adm-bc-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 11px;
-  border-radius: var(--radius-md);
-  background: var(--clay-face);
-  box-shadow: var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring);
-}
-.adm-bc-card.is-archived { opacity: .6; }
-.adm-bc-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.adm-bc-chip {
-  flex: none;
-  padding: 3px 7px;
-  border-radius: var(--radius-pill);
-  background: var(--field);
-  color: var(--ink-soft);
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  box-shadow: inset 0 0 0 1px var(--hair-off);
-}
-.adm-bc-chip[data-pri="urgent"] {
-  background: var(--honey-soft);
-  color: var(--honey-ink);
-  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .4);
-}
-.adm-bc-chip[data-state="archived"] { color: var(--red-ink); }
-.adm-bc-title {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--t-2);
-  font-weight: 800;
-  color: var(--ink);
-}
-.adm-bc-snip {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  font-size: var(--t-micro);
-  line-height: 1.45;
-  color: var(--ink-soft);
-}
-.adm-bc-meta {
-  margin: 0;
-  font-size: 10px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-soft);
-}
-.adm-bc-actions { display: flex; gap: var(--s2); margin-top: 2px; }
-.adm-bc-actions .adm-btn { flex: 1 1 0; min-height: 44px; padding: 0 10px; font-size: var(--t-micro); }
-.adm-bc-actions .adm-btn.is-restore { color: var(--mint-ink); }
 
 /* ---- the shared segmented key row: recessed track, raised gold key ---- */
 .adm-seg {
@@ -20233,360 +20170,6 @@ html.reduced-motion .adm-drawer { transition: none; }
 .adm-hint { margin: 0; font-size: var(--t-micro); line-height: 1.4; color: var(--ink-soft); }
 .adm-hint[data-state="ok"] { color: var(--mint-ink); }
 .adm-hint[data-state="bad"] { color: var(--red-ink); }
-
-/* ==========================================================================
-   NEW BROADCAST COMPOSER — the Dark-Clay form overhaul: a 16px header over an
-   obsidian-welled form, the optional CTA sub-panel with its micro-switch, the
-   amber capsule segments, the 1:1 Frosted Dark-Clay mini popup, and the
-   dispatch feedback (inline spinner plus the success / error banner).
-   ========================================================================== */
-#bc-drawer-title { font-size: 16px; font-weight: 800; letter-spacing: -.01em; }
-
-/* ---- labels: 9.5px bold, wide-tracked, slate; the well sits 6px under them ---- */
-#adm-bc-drawer .adm-fld { gap: 0; }
-#adm-bc-drawer .adm-fld-l {
-  margin: 0 0 6px;
-  font-size: 9.5px;
-  font-weight: 800;
-  letter-spacing: 1.2px;
-  color: #94A3B8;
-}
-
-/* ---- the wells: deep obsidian, one hairline, 12px radius, recessed ---- */
-#adm-bc-drawer .adm-fld .adm-input {
-  min-height: 46px;
-  padding: 10px 14px;
-  border: 1px solid rgba(255, 255, 255, .08);
-  border-radius: 12px;
-  background: #0F172A;
-  color: #F8FAFC;
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, .45);
-  transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
-}
-#adm-bc-drawer .adm-input::placeholder { color: #64748B; opacity: 1; }
-#adm-bc-drawer .adm-fld .adm-input:focus,
-#adm-bc-drawer .adm-fld .adm-input:focus-visible {
-  outline: none;
-  border-color: rgba(245, 158, 11, .5);
-  box-shadow:
-    inset 0 2px 6px rgba(0, 0, 0, .45),
-    0 0 10px rgba(245, 158, 11, .15);
-}
-#adm-bc-drawer .adm-area { min-height: 104px; line-height: 1.5; resize: vertical; }
-
-/* ---- the optional CTA sub-panel: a distinct slab, opened by its own switch ---- */
-#adm-bc-drawer .adm-bc-cta {
-  display: flex;
-  flex-direction: column;
-  padding: 11px 12px 12px;
-  border: 1px solid rgba(245, 158, 11, .28);
-  border-radius: 14px;
-  background:
-    radial-gradient(120% 100% at 50% -40%, rgba(245, 158, 11, .08), rgba(245, 158, 11, 0) 62%),
-    rgba(15, 23, 42, .7);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
-  transition: border-color var(--motion-fast), background var(--motion-fast), opacity var(--motion-fast);
-}
-#adm-bc-drawer .adm-bc-cta[data-on="false"] {
-  border-color: rgba(255, 255, 255, .05);
-  background: rgba(11, 17, 32, .55);
-}
-#adm-bc-drawer .adm-bc-cta-h {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 24px;
-  padding: 0;
-  margin: 0;
-  appearance: none;
-  border: 0;
-  background: none;
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-}
-#adm-bc-drawer .adm-bc-cta-h:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 4px; border-radius: 6px; }
-#adm-bc-drawer .adm-bc-cta-t {
-  flex: 1 1 auto;
-  font-size: 9.5px;
-  font-weight: 800;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  transition: color var(--motion-fast);
-}
-#adm-bc-drawer .adm-bc-cta[data-on="true"] .adm-bc-cta-t { color: var(--honey-ink); }
-#adm-bc-drawer .adm-bc-cta-hint {
-  margin: 5px 0 0;
-  font-size: 9.5px;
-  line-height: 1.45;
-  color: #64748B;
-}
-#adm-bc-drawer .adm-bc-cta-grid { margin-top: 12px; }
-
-/* the micro switch: a recessed graphite rail with a gold key that lights it */
-.adm-micro-sw {
-  position: relative;
-  flex: none;
-  width: 34px;
-  height: 20px;
-  border-radius: var(--radius-pill);
-  background: #0B1120;
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, .6),
-    inset 0 0 0 1px rgba(255, 255, 255, .07);
-  transition: background var(--motion-fast), box-shadow var(--motion-fast);
-}
-.adm-micro-sw-k {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: linear-gradient(180deg, #334155 0%, #1E293B 100%);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .6);
-  transition: transform var(--motion-fast), background var(--motion-fast), box-shadow var(--motion-fast);
-}
-#adm-bc-drawer .adm-bc-cta[data-on="true"] .adm-micro-sw {
-  background: rgba(245, 158, 11, .22);
-  box-shadow:
-    inset 0 0 0 1px rgba(245, 158, 11, .5),
-    inset 0 2px 4px rgba(0, 0, 0, .4),
-    0 0 10px rgba(245, 158, 11, .2);
-}
-#adm-bc-drawer .adm-bc-cta[data-on="true"] .adm-micro-sw .adm-micro-sw-k {
-  transform: translateX(14px);
-  background: linear-gradient(180deg, #FBBF24 0%, #F59E0B 100%);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 0 8px rgba(245, 158, 11, .6);
-}
-
-/* ---- audience & priority: tactile clay capsules, one gold-lit choice ---- */
-#adm-bc-drawer .adm-seg {
-  gap: 4px;
-  padding: 4px;
-  border-radius: 16px;
-  background: #0B1120;
-  box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, .55),
-    inset 0 0 0 1px rgba(255, 255, 255, .06);
-}
-#adm-bc-drawer .adm-seg-b {
-  min-height: 42px;
-  border-radius: var(--radius-pill);
-  color: #64748B;
-  letter-spacing: .02em;
-}
-#adm-bc-drawer .adm-seg-b:active {
-  transform: translateY(2px);
-  background: rgba(255, 255, 255, .05);
-  box-shadow: inset 0 2px 5px rgba(0, 0, 0, .5);
-}
-#adm-bc-drawer .adm-seg-b[aria-pressed="true"] {
-  background: linear-gradient(180deg, #2C2517 0%, #1D1A14 100%);
-  color: #FDE68A;
-  box-shadow:
-    0 2px 0 #0A0E15,
-    inset 0 1px 0 rgba(255, 255, 255, .14),
-    inset 0 0 0 1px rgba(245, 158, 11, .55),
-    inset 0 0 14px rgba(245, 158, 11, .22),
-    0 8px 16px -10px rgba(245, 158, 11, .7);
-  text-shadow: 0 1px 1px rgba(0, 0, 0, .5);
-}
-
-/* ---- the live preview: a 1:1 scaled Frosted Dark-Clay transmission modal ---- */
-.adm-bc-pv {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 14px;
-  border: 1px solid rgba(245, 158, 11, .3);
-  border-radius: 14px;
-  background: rgba(17, 24, 39, .95);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .14),
-    0 16px 30px -20px rgba(0, 0, 0, .95),
-    0 0 18px rgba(245, 158, 11, .12);
-}
-.adm-bc-pv-crest {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: 11px;
-  background:
-    radial-gradient(120% 100% at 50% -20%, rgba(255, 255, 255, .12), rgba(255, 255, 255, 0) 55%),
-    linear-gradient(180deg, #161D2C 0%, #0C111B 100%);
-  box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, .65),
-    inset 0 0 0 1px rgba(251, 191, 36, .3),
-    0 0 14px rgba(245, 158, 11, .25),
-    0 1px 0 rgba(255, 255, 255, .06);
-}
-.adm-bc-pv-crest-ico { width: 20px; height: 20px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .7)); }
-.adm-bc-pv-badge {
-  padding: 3px 9px;
-  border-radius: var(--radius-pill);
-  background: rgba(245, 158, 11, .09);
-  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, .22);
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 1.6px;
-  text-transform: uppercase;
-  color: #FBBF24;
-}
-.adm-bc-pv-kicker {
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, .05);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 1.4px;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-.adm-bc-pv-title {
-  margin-top: 4px;
-  font-size: 15px;
-  font-weight: 800;
-  color: #F8FAFC;
-  text-align: center;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, .6);
-  overflow-wrap: anywhere;
-}
-.adm-bc-pv-body {
-  margin: 0 0 6px;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: #CBD5E1;
-  text-align: center;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.adm-bc-pv-actions { display: flex; flex-direction: column; gap: 6px; width: 100%; }
-.adm-bc-pv-cta,
-.adm-bc-pv-dismiss {
-  display: block;
-  width: 100%;
-  padding: 9px 14px;
-  border-radius: 11px;
-  background: linear-gradient(180deg, #F59E0B 0%, #D97706 100%);
-  color: #2A1602;
-  font-size: 11.5px;
-  font-weight: 800;
-  letter-spacing: .4px;
-  text-align: center;
-  text-transform: uppercase;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, .3);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .5),
-    inset 0 -2px 0 rgba(120, 53, 15, .5),
-    0 2px 0 #8A5304;
-}
-/* a custom action leads, so the acknowledge key steps back to clay */
-.adm-bc-pv-cta:not([hidden]) ~ .adm-bc-pv-dismiss {
-  background: linear-gradient(180deg, #263248 0%, #151C2B 100%);
-  color: #CBD5E1;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, .5);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .12),
-    0 2px 0 #0A0E15;
-}
-.adm-bc-pv-cta[hidden] { display: none; }
-
-/* ---- dispatch: the busy spinner, and the success / error banner ---- */
-#adm-bc-send {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-#adm-bc-send .ico { width: 15px; height: 15px; }
-#adm-bc-send[aria-disabled="true"]:not([data-busy="true"]) {
-  opacity: .5;
-  filter: saturate(.5);
-  box-shadow: 0 var(--lip) 0 var(--brand-lip);
-}
-#adm-bc-send[data-busy="true"] { cursor: progress; filter: saturate(.8) brightness(.88); }
-#adm-bc-send[data-busy="true"]:active { transform: none; }
-.adm-bc-spin {
-  width: 15px;
-  height: 15px;
-  flex: none;
-  animation: bc-spin .72s linear infinite;
-}
-@keyframes bc-spin { to { transform: rotate(360deg); } }
-html.reduced-motion .adm-bc-spin { animation-duration: 1.6s; }
-
-.adm-bc-toast {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 10px 12px;
-  border: 1px solid rgba(16, 185, 129, .4);
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(19, 34, 30, .98) 0%, rgba(13, 21, 24, .98) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .1),
-    0 16px 30px -18px rgba(0, 0, 0, .95),
-    0 0 18px rgba(16, 185, 129, .18);
-  animation: bc-toast-in .32s var(--bounce) both;
-}
-.adm-bc-toast[data-state="bad"] {
-  border-color: rgba(224, 38, 79, .45);
-  background: linear-gradient(180deg, rgba(43, 20, 30, .98) 0%, rgba(23, 15, 22, .98) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .09),
-    0 16px 30px -18px rgba(0, 0, 0, .95),
-    0 0 18px rgba(224, 38, 79, .2);
-}
-.adm-bc-toast-ico {
-  flex: none;
-  width: 20px;
-  height: 20px;
-  color: var(--mint-ink);
-  filter: drop-shadow(0 0 6px rgba(16, 185, 129, .55));
-}
-.adm-bc-toast[data-state="bad"] .adm-bc-toast-ico {
-  color: var(--red);
-  filter: drop-shadow(0 0 6px rgba(224, 38, 79, .55));
-}
-.adm-bc-toast-txt {
-  flex: 1 1 auto;
-  font-size: var(--t-micro);
-  font-weight: 700;
-  line-height: 1.4;
-  color: var(--ink);
-  overflow-wrap: anywhere;
-}
-.adm-bc-toast-done {
-  flex: none;
-  appearance: none;
-  border: 0;
-  cursor: pointer;
-  min-height: 32px;
-  padding: 0 12px;
-  border-radius: var(--radius-pill);
-  background: var(--clay-face);
-  color: var(--ink);
-  font: inherit;
-  font-size: 11px;
-  font-weight: 800;
-  box-shadow: 0 2px 0 #0A0E15, inset 0 0 0 1px rgba(255, 255, 255, .08);
-}
-.adm-bc-toast-done:active { transform: translateY(2px); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
-.adm-bc-toast-done:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
-@keyframes bc-toast-in {
-  from { opacity: 0; transform: translateY(-8px) scale(.97); }
-  to { opacity: 1; transform: none; }
-}
-html.reduced-motion .adm-bc-toast { animation: none; }
 
 /* ---- the confirm dialog: one question above the drawer that asked it ---- */
 .adm-confirm {
@@ -23441,7 +23024,7 @@ html.reduced-motion .chat-key.is-ping .chat-ping { animation: none; }
 /* ==========================================================================
    ENLIST SQUAD — the Channel War registration modal (src/menu.ts
    `openEnlistSquad`). A centered luxury-glass chassis over its own scrim,
-   above the sheets (900/901) and below an urgent dispatch (1000). Gold rim,
+   above the sheets (900/901). Gold rim,
    obsidian handle field, verified community preview, one high-energy enlist key.
 
    The composition is deliberately short: title + type pill, one promise, the
@@ -24058,296 +23641,6 @@ html[data-lang="fa"] #enlist-input::placeholder {
   direction: rtl;
   text-align: right;
   letter-spacing: 0;
-}
-
-/* ==========================================================================
-   COMMAND DISPATCH — the urgent broadcast overlay (src/broadcasts.ts). A
-   full-viewport frosted scrim (1000) under the centered Dark-Clay transmission
-   modal (1001); the admin stage (1002) alone stays in front. Amber rim, spring
-   pop-in, one tactile acknowledge key.
-   ========================================================================== */
-.announce-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: rgba(8, 12, 20, .82);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  opacity: 0;
-  transition: opacity 180ms ease-out;
-}
-.announce-scrim[hidden] { display: none; }
-.announce-scrim.is-open { opacity: 1; }
-
-.announce {
-  position: fixed;
-  inset: 0;
-  z-index: 1001;
-  display: grid;
-  place-items: center;
-  padding:
-    max(var(--s4), env(safe-area-inset-top))
-    max(var(--s4), env(safe-area-inset-right))
-    max(var(--s4), env(safe-area-inset-bottom))
-    max(var(--s4), env(safe-area-inset-left));
-  opacity: 0;
-  transition: opacity 180ms ease-out;
-}
-.announce[hidden] { display: none; }
-.announce.is-open { opacity: 1; }
-
-/* the transmission surface: an obsidian slab, hairline gold-rimmed and centered */
-.announce-panel {
-  position: relative;
-  width: min(340px, 100%);
-  max-height: 100%;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
-  padding: 20px 18px;
-  border: 1px solid rgba(251, 191, 36, .22);
-  border-radius: 20px;
-  background:
-    radial-gradient(130% 76% at 50% 0%, rgba(245, 158, 11, .11), rgba(245, 158, 11, 0) 62%),
-    linear-gradient(180deg, #131824 0%, #0A0D14 100%);
-  box-shadow:
-    0 26px 60px -22px rgba(0, 0, 0, .92),
-    inset 0 1px 0 rgba(255, 255, 255, .07),
-    inset 0 0 0 1px rgba(255, 255, 255, .02);
-  opacity: 0;
-  transform: scale(.85) translateY(10px);
-  transition: transform .34s var(--bounce), opacity 180ms ease-out;
-}
-@keyframes modal-spring {
-  0% { transform: scale(0.82) translateY(16px); opacity: 0; }
-  70% { transform: scale(1.03) translateY(-2px); opacity: 1; }
-  100% { transform: scale(1) translateY(0); opacity: 1; }
-}
-.announce.is-open .announce-panel {
-  transform: none;
-  opacity: 1;
-  animation: modal-spring .42s cubic-bezier(.22, 1.2, .36, 1) both;
-}
-html.reduced-motion .announce-scrim,
-html.reduced-motion .announce { transition: none; }
-html.reduced-motion .announce-panel { transition: none; }
-html.reduced-motion .announce.is-open .announce-panel { animation: none; }
-
-/* the engraved crest: a 48px circular obsidian medallion with an ambient gold backlight */
-.announce-badge {
-  position: relative;
-  flex: none;
-  width: 48px;
-  height: 48px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background:
-    radial-gradient(78% 66% at 50% 14%, rgba(255, 255, 255, .1), rgba(255, 255, 255, 0) 62%),
-    linear-gradient(180deg, #171D2B 0%, #0A0E16 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(251, 191, 36, .28),
-    inset 0 2px 6px rgba(0, 0, 0, .55),
-    0 0 0 6px rgba(245, 158, 11, .05),
-    0 0 30px -6px rgba(245, 158, 11, .45);
-}
-/* the ambient halo: a soft amber bloom behind the medallion, never a hard ring.
-   It sits at z-index 0 over the slab and under the crest, which lifts to 1 — nothing
-   here needs a negative index, so no ancestor has to open a stacking context. */
-.announce-badge::before {
-  content: "";
-  position: absolute;
-  inset: -14px;
-  z-index: 0;
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 40%, rgba(245, 158, 11, .26), rgba(245, 158, 11, 0) 68%);
-  pointer-events: none;
-}
-.announce-badge-ico {
-  position: relative;
-  z-index: 1;
-  width: 24px;
-  height: 24px;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .7));
-}
-
-/* the authority pill: a slim frosted capsule in muted gold, letterspaced */
-.announce-pill {
-  margin: 10px 0 0;
-  padding: 4px 11px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .04);
-  box-shadow:
-    inset 0 0 0 1px rgba(251, 191, 36, .2),
-    inset 0 1px 0 rgba(255, 255, 255, .05);
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 1.9px;
-  line-height: 1.4;
-  text-transform: uppercase;
-  color: rgba(252, 211, 77, .72);
-  text-align: center;
-}
-.announce-title {
-  margin: 10px 0 0;
-  max-width: 100%;
-  font-size: 17px;
-  font-weight: 800;
-  letter-spacing: -.01em;
-  line-height: 1.3;
-  color: #FFFFFF;
-  text-align: center;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, .55);
-  overflow-wrap: anywhere;
-}
-.announce-body {
-  margin: 10px 0 0;
-  max-width: 30ch;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.6;
-  color: #94A3B8;
-  text-align: center;
-  overflow-wrap: anywhere;
-}
-.announce-body strong { color: #F1F5F9; font-weight: 800; }
-.announce-body code {
-  padding: 1px 5px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, .07);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .09);
-  font-size: .92em;
-}
-.announce-body a { color: #FCD34D; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
-
-/* the dual action bar: leading CTA and trailing ghost, side by side, never stacked */
-.announce-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  width: 100%;
-  margin-top: 16px;
-}
-.announce-cta[hidden] { display: none; }
-/* a lone Dismiss on a plain notice takes the whole row */
-.announce-cta[hidden] ~ .announce-dismiss,
-.announce-dismiss:only-child { grid-column: 1 / -1; }
-
-.announce-dismiss,
-.announce-cta {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  min-width: 0;
-  min-height: 44px;
-  padding: 8px 12px;
-  border: 0;
-  border-radius: 12px;
-  cursor: pointer;
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 800;
-  letter-spacing: .02em;
-  line-height: 1.35;
-  text-align: center;
-  overflow-wrap: anywhere;
-  transition: transform .14s ease, box-shadow .14s ease, filter .14s ease;
-}
-
-/* the primary CTA: a slender gold-metallic plate with crisp dark type, no blocky extrusion.
-   The markup lists it first, so the grid's inline axis leads with it — right in LTR,
-   left in RTL — and no explicit order rule is needed either way. */
-.announce-cta {
-  color: #241402;
-  background: linear-gradient(180deg, #FFE7A8 0%, #F3D483 48%, #C9A75E 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, .42),
-    inset 0 1px 0 rgba(255, 255, 255, .6),
-    0 10px 22px -14px rgba(243, 212, 131, .95);
-}
-.announce-cta:active { transform: scale(.975); filter: brightness(1.05); }
-
-/* the secondary action: an obsidian ghost pill — quiet, glassy, never competing */
-.announce-dismiss {
-  color: #94A3B8;
-  background: rgba(255, 255, 255, .05);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
-}
-.announce-dismiss:active {
-  transform: scale(.975);
-  color: #CBD5E1;
-  background: rgba(255, 255, 255, .08);
-}
-.announce-dismiss:focus-visible,
-.announce-cta:focus-visible { outline: 2px solid #FCD34D; outline-offset: 2px; }
-html.reduced-motion .announce-dismiss,
-html.reduced-motion .announce-cta { transition: none; }
-
-/* A maintenance lockout is a notice, not a dispatch: the CTA is absent from the flow even if a
-   future caller forgets the blank label, and the one acknowledge key takes the full gold row. */
-.announce.is-maintenance .announce-cta { display: none; }
-.announce.is-maintenance .announce-actions { grid-template-columns: minmax(0, 1fr); }
-.announce.is-maintenance .announce-dismiss {
-  grid-column: 1 / -1;
-  color: #241402;
-  background: linear-gradient(180deg, #FFE7A8 0%, #F3D483 48%, #C9A75E 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, .42),
-    inset 0 1px 0 rgba(255, 255, 255, .6),
-    0 10px 22px -14px rgba(243, 212, 131, .95);
-}
-.announce.is-maintenance .announce-dismiss:active {
-  color: #241402;
-  background: linear-gradient(180deg, #FFE7A8 0%, #F3D483 48%, #C9A75E 100%);
-  filter: brightness(1.05);
-}
-.announce.is-maintenance .announce-dismiss:focus-visible { outline-color: #FFF7E0; }
-
-/* ---- Persian & Arabic: the dual bar mirrors naturally, copy turns RTL ----
-   The grid's inline axis owns the mirror, so the leading CTA lands on the right
-   in RTL exactly as it lands on the left in LTR. Only type geometry is restated:
-   no tracking (Persian is joined script), no forced caps, a taller line box. */
-html:lang(fa) :is(.announce-pill, .announce-title, .announce-body, .announce-dismiss, .announce-cta),
-html:lang(ar) :is(.announce-pill, .announce-title, .announce-body, .announce-dismiss, .announce-cta),
-html[data-lang="fa"] :is(.announce-pill, .announce-title, .announce-body, .announce-dismiss, .announce-cta),
-html[data-lang="ar"] :is(.announce-pill, .announce-title, .announce-body, .announce-dismiss, .announce-cta) {
-  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
-  letter-spacing: 0;
-  text-transform: none;
-}
-html:lang(fa) .announce-pill,
-html[data-lang="fa"] .announce-pill { font-size: 8.5px; line-height: 1.5; }
-html:lang(fa) .announce-title,
-html[data-lang="fa"] .announce-title { font-size: 16.5px; line-height: 1.45; }
-html:lang(fa) .announce-body,
-html[data-lang="fa"] .announce-body { max-width: 32ch; line-height: 1.75; }
-html:lang(fa) :is(.announce-dismiss, .announce-cta),
-html[data-lang="fa"] :is(.announce-dismiss, .announce-cta) { font-size: 12px; line-height: 1.45; }
-
-/* the compact phone: 320px wide and short viewports keep the whole card in one screen */
-@media (max-width: 359px) {
-  .announce-panel { padding: 18px 15px; border-radius: 18px; }
-  .announce-badge { width: 44px; height: 44px; }
-  .announce-badge-ico { width: 22px; height: 22px; }
-  .announce-title { font-size: 16px; }
-  .announce-body { font-size: 12.5px; }
-  .announce-actions { gap: 8px; margin-top: 14px; }
-  .announce-dismiss,
-  .announce-cta { min-height: 42px; padding: 7px 9px; font-size: 12px; }
-}
-@media (max-height: 560px) {
-  .announce-panel { padding: 16px 15px; }
-  .announce-badge { width: 42px; height: 42px; }
-  .announce-badge-ico { width: 21px; height: 21px; }
-  .announce-pill { margin-top: 8px; }
-  .announce-title { margin-top: 8px; font-size: 15.5px; }
-  .announce-body { margin-top: 8px; line-height: 1.55; }
-  .announce-actions { margin-top: 12px; }
 }
 
 /* ==========================================================================

@@ -2916,7 +2916,7 @@
                   <span class="pf-tile-ico" aria-hidden="true"><svg class="ico"><use href="#i-shield" /></svg></span>
                   <span class="row-txt">
                     <span class="row-t">Admin Command Center</span>
-                    <span class="row-s">Live ops, players, broadcasts &amp; server</span>
+                    <span class="row-s">Live ops, players &amp; server</span>
                   </span>
                   <span class="row-v">Open</span>
                   <svg class="ico chev" aria-hidden="true"><use href="#i-next" /></svg>
@@ -3924,7 +3924,7 @@
             <div class="adm-ctrl-view" id="ctrl-panel-arena" data-ctrl-view="arena" role="tabpanel"
               aria-labelledby="actrl-tab-arena" hidden>
               <!-- ---------- Arena & matchmaking: the master state and the queue lock ---------- -->
-              <p class="adm-sec-h">Arena &amp; tournament<span class="adm-bc-live" id="arena-head-chip" data-on="true">OPEN</span></p>
+              <p class="adm-sec-h">Arena &amp; tournament<span class="adm-sec-chip" id="arena-head-chip" data-on="true">OPEN</span></p>
               <section class="adm-arena" id="adm-arena" data-state="active" data-lock="false"
                 aria-label="Arena and tournament management">
 
@@ -4186,18 +4186,6 @@
               </div>
             </section>
 
-            <p class="adm-sec-h">Broadcast<span class="adm-bc-live" id="bc-live" data-on="false">Nothing dispatched</span></p>
-            <div class="adm-bc">
-              <label class="adm-field">
-                <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
-                <input id="bc-input" class="adm-input" type="text" maxlength="140" autocomplete="off"
-                  spellcheck="false" placeholder="Season 4 starts at 20:00 UTC"
-                  aria-label="Broadcast message" />
-              </label>
-              <button class="adm-btn adm-btn-primary" type="button" id="bc-publish">Send</button>
-              <button class="adm-btn" type="button" id="bc-clear">Clear</button>
-            </div>
-
             <p class="adm-sec-h">Economy &amp; rules</p>
             <div class="adm-tunes">
               <div class="adm-tune" data-step="tiq">
@@ -4392,7 +4380,7 @@
             </section>
 
             <!-- ---------- Access control: the role registry the Worker enforces ---------- -->
-            <p class="adm-sec-h">Access control<span class="adm-bc-live" id="acl-count" data-on="false">—</span></p>
+            <p class="adm-sec-h">Access control<span class="adm-sec-chip" id="acl-count" data-on="false">—</span></p>
             <ul class="adm-acl-list" id="adm-acl-list" aria-label="Administrators"></ul>
             <p class="adm-inbox-empty" id="adm-acl-empty" hidden>The server owns the role registry —
               with no Worker answering, only this device's dev door opens.</p>
@@ -4533,17 +4521,9 @@
             <p class="adm-note">Two taps: the second wipes coins, items, stats, teams and settings on this device.</p>
           </div>
 
-          <!-- ---------- Inbox: the broadcast engine, then the support desk ---------- -->
+          <!-- ---------- Inbox: the support desk ---------- -->
           <div class="admin-panel" data-apanel="inbox" id="apanel-inbox" role="tabpanel"
             aria-labelledby="atab-inbox" hidden>
-            <p class="adm-sec-h">Broadcasts<span class="adm-bc-live" id="adm-bc-count" data-on="false">—</span></p>
-            <button class="adm-btn adm-btn-primary adm-btn-wide" type="button" id="adm-bc-compose">
-              <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg><span>New Broadcast</span>
-            </button>
-            <ul class="adm-bc-list" id="adm-bc-list" aria-label="Broadcast history"></ul>
-            <p class="adm-inbox-empty" id="adm-bc-empty" hidden>Nothing dispatched yet — the first
-              broadcast lands here, and on every player's device.</p>
-
             <p class="adm-sec-h">Support tickets</p>
             <div class="adm-inbox-filters" role="group" aria-label="Filter support tickets">
               <button class="adm-chip" type="button" data-ifilter="all" aria-pressed="true">All</button>
@@ -4621,142 +4601,11 @@
               <button class="adm-seg-b" type="button" data-role="moderator" aria-pressed="true">Moderator</button>
             </div>
             <p class="adm-note">Moderators read the panel and the directory. SuperAdmins also appoint
-              admins, dispatch broadcasts and command the server.</p>
+              admins and command the server.</p>
           </div>
           <footer class="adm-drawer-foot">
             <button class="adm-btn" type="button" id="adm-acl-cancel">Cancel</button>
             <button class="adm-btn adm-btn-primary" type="button" id="adm-acl-grant" aria-disabled="true">Grant Access</button>
-          </footer>
-        </div>
-
-        <!-- the broadcast composer: title, body, CTA, audience, priority, live preview -->
-        <div class="adm-drawer" id="adm-bc-drawer" hidden role="dialog" aria-modal="true"
-          aria-labelledby="bc-drawer-title">
-          <header class="adm-drawer-head">
-            <h3 class="adm-drawer-t" id="bc-drawer-title">New Broadcast</h3>
-            <button class="adm-drawer-x" type="button" id="adm-bc-drawer-x" aria-label="Close broadcast composer">
-              <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
-            </button>
-          </header>
-          <div class="adm-drawer-body" data-scroll tabindex="0">
-            <!-- dispatch feedback: the Dark-Clay success / error banner, sticky over the form -->
-            <div class="adm-bc-toast" id="adm-bc-toast" hidden data-state="ok" role="status"
-              aria-live="polite">
-              <svg class="adm-bc-toast-ico" id="adm-bc-toast-ok" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 2.6a9.4 9.4 0 1 0 0 18.8 9.4 9.4 0 0 0 0-18.8Z" fill="rgba(16,185,129,.16)"
-                  stroke="currentColor" stroke-width="1.4" />
-                <path d="m7.8 12.3 2.9 2.9 5.5-6" fill="none" stroke="currentColor" stroke-width="2.1"
-                  stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-              <svg class="adm-bc-toast-ico" id="adm-bc-toast-bad" viewBox="0 0 24 24" aria-hidden="true"
-                hidden>
-                <path d="M12 2.7 4.4 5.6v6.1c0 4.4 3.1 8.4 7.6 9.6 4.5-1.2 7.6-5.2 7.6-9.6V5.6L12 2.7Z"
-                  fill="rgba(224,38,79,.16)" stroke="currentColor" stroke-width="1.4"
-                  stroke-linejoin="round" />
-                <path d="M12 8v4.6M12 15.7v.1" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" />
-              </svg>
-              <span class="adm-bc-toast-txt" id="adm-bc-toast-txt"></span>
-              <button class="adm-bc-toast-done" type="button" id="adm-bc-toast-done" hidden>Done</button>
-            </div>
-
-            <label class="adm-fld">
-              <span class="adm-fld-l">Title</span>
-              <input id="adm-bc-title" class="adm-input" type="text" maxlength="80" autocomplete="off"
-                spellcheck="false" placeholder="Server maintenance at 22:00 UTC" />
-            </label>
-            <label class="adm-fld">
-              <span class="adm-fld-l">Message</span>
-              <textarea id="adm-bc-body" class="adm-input adm-area" maxlength="600" rows="4"
-                placeholder="The room restarts for a hotfix. Races in progress are saved."></textarea>
-            </label>
-
-            <!-- the optional action CTA: strictly opt-in, blank means a plain Dismiss button -->
-            <section class="adm-bc-cta" id="adm-bc-cta-panel" data-on="true">
-              <button class="adm-bc-cta-h" type="button" id="adm-bc-cta-toggle" role="switch"
-                aria-checked="true" aria-controls="adm-bc-cta-grid">
-                <span class="adm-bc-cta-t">Attach action button (optional)</span>
-                <span class="adm-micro-sw" aria-hidden="true"><span class="adm-micro-sw-k"></span></span>
-              </button>
-              <p class="adm-bc-cta-hint" id="adm-bc-cta-hint">Off by choice, blank by choice — the player
-                gets a plain Dismiss key.</p>
-              <div class="adm-fld-row" id="adm-bc-cta-grid">
-                <label class="adm-fld">
-                  <span class="adm-fld-l">Button label</span>
-                  <input id="adm-bc-cta-label" class="adm-input" type="text" maxlength="24"
-                    autocomplete="off" spellcheck="false" placeholder="Join Event" />
-                </label>
-                <label class="adm-fld">
-                  <span class="adm-fld-l">Button target</span>
-                  <input id="adm-bc-cta-target" class="adm-input" type="text" maxlength="200"
-                    autocomplete="off" spellcheck="false" placeholder="shop or https://t.me/…" />
-                </label>
-              </div>
-            </section>
-
-            <p class="adm-fld-l">Audience</p>
-            <div class="adm-seg" role="group" aria-label="Audience" id="adm-bc-audience">
-              <button class="adm-seg-b" type="button" data-aud="all" aria-pressed="true">Everyone</button>
-              <button class="adm-seg-b" type="button" data-aud="country" aria-pressed="false">Country</button>
-              <button class="adm-seg-b" type="button" data-aud="minLevel" aria-pressed="false">Min Level</button>
-            </div>
-            <label class="adm-fld" id="adm-bc-aud-value-wrap" hidden>
-              <span class="adm-fld-l" id="adm-bc-aud-value-l">Country code</span>
-              <input id="adm-bc-aud-value" class="adm-input" type="text" maxlength="8"
-                autocomplete="off" spellcheck="false" placeholder="US" />
-            </label>
-            <p class="adm-fld-l">Priority</p>
-            <div class="adm-seg" role="group" aria-label="Priority" id="adm-bc-priority">
-              <button class="adm-seg-b" type="button" data-pri="urgent" aria-pressed="true">Urgent modal</button>
-              <button class="adm-seg-b" type="button" data-pri="feed" aria-pressed="false">Notification feed</button>
-            </div>
-
-            <p class="adm-fld-l">Preview</p>
-            <!-- a 1:1 scaled mockup of the Frosted Dark-Clay announcement the player receives -->
-            <div class="adm-bc-pv" aria-hidden="true">
-              <span class="adm-bc-pv-crest">
-                <svg class="adm-bc-pv-crest-ico" viewBox="0 0 24 24" focusable="false">
-                  <defs>
-                    <linearGradient id="bcCrest" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0" stop-color="#FDE68A" />
-                      <stop offset=".45" stop-color="#F59E0B" />
-                      <stop offset="1" stop-color="#B45309" />
-                    </linearGradient>
-                    <linearGradient id="bcCrestRim" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0" stop-color="#FEF3C7" />
-                      <stop offset="1" stop-color="#92400E" />
-                    </linearGradient>
-                  </defs>
-                  <path d="M3.6 9.9v4.2c0 .8.6 1.4 1.4 1.4h1.9l7 4.5c.7.4 1.6-.1 1.6-.9V4.9c0-.8-.9-1.3-1.6-.9l-7 4.5H5c-.8 0-1.4.6-1.4 1.4Z"
-                    fill="url(#bcCrest)" stroke="url(#bcCrestRim)" stroke-width="1" />
-                  <path d="M8.8 15.5l1 3.6c.1.4-.2.8-.6.8h-1c-.3 0-.6-.2-.7-.5l-1.1-3.7"
-                    fill="none" stroke="url(#bcCrestRim)" stroke-width="1.4" stroke-linecap="round" />
-                  <path d="M17.6 9.4a3.6 3.6 0 0 1 0 5.2M19.6 7.4a6.4 6.4 0 0 1 0 9.2"
-                    fill="none" stroke="#FCD34D" stroke-width="1.3" stroke-linecap="round" opacity=".85" />
-                  <path d="M5.4 10.6h4.2" stroke="#FEF3C7" stroke-width=".9" stroke-linecap="round"
-                    opacity=".7" />
-                </svg>
-              </span>
-              <span class="adm-bc-pv-badge">Official broadcast</span>
-              <span class="adm-bc-pv-kicker" id="adm-bc-pv-kicker">Urgent · Everyone</span>
-              <b class="adm-bc-pv-title" id="adm-bc-pv-title">Your title here</b>
-              <span class="adm-bc-pv-body" id="adm-bc-pv-body">Your message here.</span>
-              <span class="adm-bc-pv-actions">
-                <span class="adm-bc-pv-cta" id="adm-bc-pv-cta" hidden>Open</span>
-                <span class="adm-bc-pv-dismiss">Confirm &amp; Dismiss</span>
-              </span>
-            </div>
-          </div>
-          <footer class="adm-drawer-foot">
-            <button class="adm-btn" type="button" id="adm-bc-cancel">Cancel</button>
-            <button class="adm-btn adm-btn-primary" type="button" id="adm-bc-send" aria-disabled="true">
-              <svg class="ico" id="adm-bc-send-ico" aria-hidden="true"><use href="#i-send" /></svg>
-              <svg class="adm-bc-spin" id="adm-bc-spin" viewBox="0 0 24 24" aria-hidden="true" hidden>
-                <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="3"
-                  stroke-linecap="round" stroke-dasharray="34 20" />
-              </svg>
-              <span id="adm-bc-send-label">Dispatch</span>
-            </button>
           </footer>
         </div>
 
@@ -5928,7 +5777,7 @@
       <!-- Enlist Squad — the Channel War registration door. A centered luxury-glass
            modal (not a bottom sheet: this is a commitment, not a browse) with its own
            scrim, ESC / backdrop / close-box dismissal and a live community preview.
-           Above the sheets (900/901), below an urgent dispatch (1000).
+           Above the sheets (900/901).
 
            Deliberately quiet: a title, one promise, one switch, one field, and the
            live plate that answers as you type. No helper line under the input and no
@@ -5992,45 +5841,6 @@
             <span class="enlist-spin" id="enlist-spin" hidden aria-hidden="true"></span>
             <span class="enlist-cta-t" id="enlist-cta-t">Enlist in Channel War</span>
           </button>
-        </div>
-      </section>
-
-      <!-- the Command Dispatch overlay: an urgent broadcast raises a full-viewport scrim and the
-           Dark-Clay transmission modal over it. Dismiss is remembered per device
-           (`seen_broadcast_ids`), so it comes back only until it has actually been read. -->
-      <div class="announce-scrim" id="admin-broadcast-scrim" hidden aria-hidden="true"></div>
-      <section class="announce" id="modal-announcement" hidden role="dialog" aria-modal="true"
-        aria-labelledby="announce-title">
-        <div class="announce-panel" id="admin-broadcast-modal">
-          <span class="announce-badge" aria-hidden="true">
-            <svg class="announce-badge-ico" viewBox="0 0 24 24" focusable="false">
-              <defs>
-                <linearGradient id="dispatchCrest" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stop-color="#FFEFC2" />
-                  <stop offset=".45" stop-color="#F5C661" />
-                  <stop offset="1" stop-color="#C99322" />
-                </linearGradient>
-                <linearGradient id="dispatchCrestRim" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stop-color="#FFF7E0" />
-                  <stop offset="1" stop-color="#A96F12" />
-                </linearGradient>
-              </defs>
-              <path d="M3.6 9.9v4.2c0 .8.6 1.4 1.4 1.4h1.9l7 4.5c.7.4 1.6-.1 1.6-.9V4.9c0-.8-.9-1.3-1.6-.9l-7 4.5H5c-.8 0-1.4.6-1.4 1.4Z"
-                fill="url(#dispatchCrest)" stroke="url(#dispatchCrestRim)" stroke-width="1" />
-              <path d="M8.8 15.5l1 3.6c.1.4-.2.8-.6.8h-1c-.3 0-.6-.2-.7-.5l-1.1-3.7"
-                fill="none" stroke="url(#dispatchCrestRim)" stroke-width="1.4" stroke-linecap="round" />
-              <path d="M17.6 9.4a3.6 3.6 0 0 1 0 5.2M19.6 7.4a6.4 6.4 0 0 1 0 9.2"
-                fill="none" stroke="#FCD34D" stroke-width="1.3" stroke-linecap="round" opacity=".9" />
-              <path d="M5.4 10.6h4.2" stroke="#FFF7E0" stroke-width=".9" stroke-linecap="round" opacity=".65" />
-            </svg>
-          </span>
-          <p class="announce-pill">OFFICIAL DISPATCH · SYSTEM ADMIN</p>
-          <h2 class="announce-title" id="announce-title">Announcement</h2>
-          <p class="announce-body" id="announce-body"></p>
-          <div class="announce-actions">
-            <button class="announce-cta" type="button" id="announce-cta" hidden>Open</button>
-            <button class="announce-dismiss" type="button" id="announce-dismiss" data-i18n="dispatchDismiss">Dismiss</button>
-          </div>
         </div>
       </section>
     </div>
