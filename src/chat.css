@@ -52,7 +52,8 @@
     var(--clay-spec), var(--clay-bevel), var(--clay-ring);
   opacity: 0;
   transform: scale(.5) translateY(6px);
-  /* the tail corner is the hinge: the pop grows out of the point that faces the pawn */
+  /* the tail's root is the hinge: the pop grows out of the point that faces the pawn, and chat.ts
+     writes that point here as an inline origin every time it re-aims the wedge */
   transform-origin: 100% 100%;
   transition: opacity .22s ease, transform .22s ease;
   pointer-events: none;
@@ -74,37 +75,49 @@
   transform: scale(.92) translateY(-4px);
   transition: opacity .34s ease, transform .34s cubic-bezier(.22, .61, .36, 1);
 }
-/* the tail: a diagonal wedge parked on the bottom-right corner, its point aimed 45° down-right
-   at the pawn. Two layers give the exposed edges the same 1px neon stroke and dark plate fill
-   as the chassis while the light path above and to the right stays completely clear. */
-.chat-bubble::before,
-.chat-bubble::after {
-  content: '';
+/* ---- the tail: a wedge rooted on the face and aimed at the sender's token ----
+   chat.ts writes four properties every frame. `--tail-x`/`--tail-y` drop the root on the point of
+   the face nearest the pawn, pulled inside the rounded corners; `--tail-rot` swings the wedge onto
+   the line to that pawn; `--tail-len` stops its tip on the token's crown — its radius plus 4px from
+   the centre. So an edge clamp slides the root along the face and re-angles the wedge instead of
+   letting a fixed corner point drift onto a neighbour's ball. Two layers give the exposed edges the
+   same 1px neon stroke and dark plate fill as the chassis, and the root hides behind the face. */
+.chat-bubble-tail {
   position: absolute;
   z-index: -1;
-  clip-path: polygon(100% 0, 100% 100%, 0 100%);
-  -webkit-clip-path: polygon(100% 0, 100% 100%, 0 100%);
-  pointer-events: none;
+  left: var(--tail-x, 100%);
+  top: var(--tail-y, 100%);
+  width: 0;
+  height: 0;
+  transform: rotate(var(--tail-rot, 45deg));
+  transform-origin: 0 0;
 }
-.chat-bubble::before {
-  right: -8px;
-  bottom: -8px;
-  width: 24px;
-  height: 24px;
+.chat-bubble:not(.has-tail) .chat-bubble-tail { display: none; }
+.chat-bubble-tail::before,
+.chat-bubble-tail::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+  -webkit-clip-path: polygon(50% 100%, 0 0, 100% 0);
+}
+.chat-bubble-tail::before {
+  left: -9px;
+  width: 18px;
+  height: var(--tail-len, 14px);
   background: var(--pawn-rim);
 }
-.chat-bubble::after {
-  right: -7px;
-  bottom: -7px;
-  width: 22px;
-  height: 22px;
+.chat-bubble-tail::after {
+  left: -8px;
+  width: 16px;
+  height: calc(var(--tail-len, 14px) - 1px);
   background: var(--bubble-plate);
 }
 /* the bubble is pure decoration: every tap lands on the tile or move dot beneath it */
 .chat-bubble,
 .chat-bubble *,
-.chat-bubble::before,
-.chat-bubble::after { pointer-events: none; }
+.chat-bubble-tail::before,
+.chat-bubble-tail::after { pointer-events: none; }
 /* the text is what clamps; the tail may hang outside the face */
 .chat-bubble-t {
   min-width: 0;
@@ -114,10 +127,23 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
+/* the Persian tongue in the arena: its own base direction, so a line's closing mark — the `!` of
+   `نقشه بود داداش!`, the `...` of a taunt — ends the sentence at the left the way it reads instead
+   of being resolved against the English document and thrown to the far edge. chat.ts sets `dir` on
+   the span as well; this keeps the flow, the alignment and the letterforms together in one place. */
+.chat-bubble-t.is-rtl {
+  direction: rtl;
+  unicode-bidi: isolate;
+  text-align: right;
+  font-family: 'Vazirmatn', 'Vazir', 'Segoe UI', Tahoma, 'Noto Naskh Arabic', system-ui, sans-serif;
+  letter-spacing: 0;
+}
 /* ---- the sender's pawn identity ----
-   The local seat is not always red: the player may choose blue, in which case the rival wears red.
-   chat.ts therefore puts .is-red / .is-blue on the bubble from the live pawn (falling back to the
-   chip's own colour), and these two rules always win over the side defaults above. */
+   The local seat is not always red: the player may choose blue, in which case the rival wears red,
+   and a party race adds the two fixed families after them. chat.ts therefore puts .is-red / .is-blue
+   / .is-gold / .is-green on the bubble from the live pawn (falling back to the chip's own colour),
+   and these four rules always win over the side defaults above. Each one is the ball's own neon, so
+   the ring, the bloom and the tail read as the token they point at. */
 .chat-bubble.is-mine { --pawn-rim: #ff3366; --pawn-glow: rgba(255, 51, 102, 0.55); }
 .chat-bubble.is-foe { --pawn-rim: #00d2ff; --pawn-glow: rgba(0, 210, 255, 0.55); }
 .chat-bubble.is-red {
@@ -127,6 +153,14 @@
 .chat-bubble.is-blue {
   --pawn-rim: #00d2ff;
   --pawn-glow: rgba(0, 210, 255, 0.55);
+}
+.chat-bubble.is-gold {
+  --pawn-rim: #ffc233;
+  --pawn-glow: rgba(232, 168, 12, 0.55);
+}
+.chat-bubble.is-green {
+  --pawn-rim: #2fd08a;
+  --pawn-glow: rgba(23, 145, 92, 0.55);
 }
 
 /* ---- an emote: a 48x48 frosted dark-clay capsule, ringed by its sender's neon ----
@@ -155,7 +189,8 @@
     inset 0 1px 0 rgba(255, 255, 255, .18),
     inset 0 -3px 5px rgba(0, 0, 0, .45);
 }
-.chat-bubble.is-emote::after { background: var(--bubble-plate); }
+/* its tail dips into the same plate: --bubble-plate is the one value both the wedge and the face
+   read, so the emote capsule and its pointer can never disagree */
 .chat-bubble.is-emote .chat-bubble-t { display: grid; place-items: center; max-height: none; }
 .chat-emote { display: grid; place-items: center; }
 .chat-emote svg { width: 40px; height: 40px; display: block; }

@@ -14,7 +14,7 @@ import {
   type Mark, type Perspective, type Vec, type View,
 } from './render';
 import { createConfetti } from './confetti';
-import { createChat } from './chat';
+import { createChat, type PawnTint } from './chat';
 import { createBanter } from './banter';
 import type { PostChatLine } from './data/postchat';
 import {
@@ -1758,6 +1758,20 @@ function restart() {
 }
 
 /**
+ * The colour family a seat wears on THIS screen: the local seat gets the player's chosen one, the
+ * rival the opposite, then the fixed gold / green order for the extra seats a party adds. The chip's
+ * class, the chat bubble's neon and the sphere all read this plan, so the three can never disagree
+ * about who is who — which is the whole point when four balls share one tile.
+ */
+function seatTint(p: Player): PawnTint {
+  const chosen = pieceColor();
+  if (p === localSide) return chosen;
+  if (p === rivalSide()) return chosen === 'red' ? 'blue' : 'red';
+  const extras = [0, 1, 2, 3].filter((x) => x !== localSide && x !== rivalSide());
+  return extras.indexOf(p) === 0 ? 'gold' : 'green';
+}
+
+/**
  * Reveal exactly the chips this race fields. Two seats is the duel the dock was built for; three
  * and four reveal the extra seats the markup already carries. `data-seats` goes with them, because
  * the dock has to reflow — four 64px chips across a 360px card would leave 84px each and the ball
@@ -1772,16 +1786,12 @@ function paintRoster(): void {
   /* The chip's class is the colour it wears on THIS screen: the local seat gets the player's
      chosen family, its rival the opposite, then the fixed gold / green order for extra seats.
      Online, the local seat can be seat 1 — the class follows the perspective, not the index. */
-  const rivals = rivalSide();
-  const extras = [0, 1, 2, 3].filter((p) => p !== localSide && p !== rivals);
   for (let p = 0; p < chips.length; p++) {
     const el = chips[p];
     if (!el) continue;
     const on = p < n;
     el.hidden = !on;
-    const color = p === localSide ? pieceColor()
-      : p === rivals ? (pieceColor() === 'red' ? 'blue' : 'red')
-      : extras.indexOf(p) === 0 ? 'gold' : 'green';
+    const color = seatTint(p);
     el.classList.toggle('red', color === 'red');
     el.classList.toggle('blue', color === 'blue');
     el.classList.toggle('gold', color === 'gold');
@@ -2072,10 +2082,11 @@ function startGame(setup: StartSetup) {
     session.onMove((action, side) => {
       if (state.winner === null && side === state.turn) play(action, true);
     });
-    /* the rival's emote: the same bubble and the same "Haha!" as a local tap, over their own pawn */
-    session.onEmote((emote) => chat.inboundEmote(emote));
+    /* the rival's emote: the same bubble and the same "Haha!" as a local tap, over their own pawn —
+       and `side` is whose pawn that is, so a party race points at the seat who sent it */
+    session.onEmote((emote, side) => chat.inboundEmote(emote, side));
     /* the rival's tactical line: their (lang, index) pair looked back up in the same closed table */
-    session.onPhrase((lang, index) => chat.inboundPhrase(lang, index));
+    session.onPhrase((lang, index, side) => chat.inboundPhrase(lang, index, side));
     /* the rival's post-match line: it lands on whichever standings row their seat owns, wearing
        the crown only when the room vouched for that seat's VIP entitlement */
     session.onPostChat((line, side, vip) => banter.inbound(line, side, vip));
@@ -3207,21 +3218,20 @@ const chat = createChat({
   state: () => state,
   localSide: () => localSide,
   /* the seat's live pawn: its animated ball centre mapped through the renderer's own layout into
-     viewport px, plus its radius, tile size and red/blue family — so the bubble can park in the
-     north-west quadrant, clear every cardinal move dot, and glow in the same neon. */
+     viewport px, plus its radius, tile size and colour family — so the bubble can park in the
+     quadrant the board has room for, clear every cardinal move dot, aim its tail at this ball alone,
+     and glow in the same neon. */
   pawn: (seat) => {
     const v = ballViews.find((b) => b.team === seat);
     if (!v) return null;
     const L = renderer.layout();
     const box = canvas.getBoundingClientRect();
-    const localColor = pieceColor();
-    const rivalColor = localColor === 'red' ? 'blue' : 'red';
     return {
       x: box.left + L.ox + v.pos.x * L.cell,
       y: box.top + L.oy + v.pos.y * L.cell,
       radius: pawnRadius(L.cell),
       cell: L.cell,
-      color: seat === localSide ? localColor : rivalColor,
+      color: seatTint(seat),
     };
   },
   busy: () => mineArmed,

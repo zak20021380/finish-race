@@ -9,12 +9,14 @@
  * so it is the same tongue the next time it opens.
  *
  * The board is read, never written. A message no longer hangs off the sender's HUD card: it
- * spawns in the gameplay zone, in the north-west quadrant of the sender's pawn. The renderer
- * owns the only true pawn position, so `pawn()` hands chat the live screen point, radius, tile
- * metric and colour family of a seat's ball; chat drops the `.pawn-you` / `.pawn-bot` marker on
- * that point and hangs the chassis there. The chassis never crosses the four cardinal move-dot
- * halos, and a bottom-right tail angles back toward the ball. The layer and every mark in it are
- * `pointer-events: none`, so the grid underneath keeps every tile tap.
+ * spawns in the gameplay zone, in the quadrant of the sender's pawn that the board still has room
+ * for. The renderer owns the only true pawn position, so `pawn()` hands chat the live screen point,
+ * radius, tile metric and colour family of a seat's ball; chat drops the `.pawn-you` / `.pawn-bot`
+ * marker on that point and hangs the chassis near it. The chassis never crosses the four cardinal
+ * move-dot halos, and its tail is aimed, not bolted to a corner: chat recomputes the wedge's root
+ * on the face and its angle every frame, so the tip lands on that one token's crown however an edge
+ * clamp slid the box. The layer and every mark in it are `pointer-events: none`, so the grid
+ * underneath keeps every tile tap.
  */
 import './chat.css';
 import type { GameState, Player } from './rules';
@@ -26,6 +28,13 @@ import { playLaugh, playAngrySound } from './audio';
 import { impact, notify } from './telegram';
 import { readJson, writeJson } from './storage';
 
+/**
+ * The neon family a seat wears on THIS client, out of the same plan that tints the board and the
+ * HUD chip: the two chosen families for the duel, then solar gold and emerald for the seats a
+ * party adds.
+ */
+export type PawnTint = 'red' | 'blue' | 'gold' | 'green';
+
 /** A seat's pawn on screen: its animated centre, radius, tile metric and colour. */
 export interface PawnPoint {
   x: number;
@@ -35,7 +44,7 @@ export interface PawnPoint {
   /** the board's cell size in css px — the distance from the pawn to a cardinal move dot */
   cell: number;
   /** the family the ball wears on this client, so the bubble can borrow the same neon */
-  color: 'red' | 'blue';
+  color: PawnTint;
 }
 
 export interface ChatOptions {
@@ -60,10 +69,14 @@ export interface ChatOptions {
 }
 
 export interface Chat {
-  /** An emote the rival sent over the wire: pop their bubble over their pawn, and give it a voice. */
-  inboundEmote(id: ChatEmoteId): void;
+  /**
+   * An emote the rival sent over the wire: pop their bubble over their pawn, and give it a voice.
+   * `seat` is the sender's own seat as the room reported it — without it a party race would have to
+   * guess, and the guess lands the bubble on whichever rival chip comes first.
+   */
+  inboundEmote(id: ChatEmoteId, seat?: Player): void;
   /** A phrase the rival sent: the closed table turns `(lang, index)` back into a line and pops it. */
-  inboundPhrase(lang: ChatLang, index: number): void;
+  inboundPhrase(lang: ChatLang, index: number, seat?: Player): void;
   destroy(): void;
 }
 
@@ -81,7 +94,7 @@ const MENU_W = 168;
 /** Where the sheet's tongue is remembered: the save's own wrapped door, so a webview with no
  *  localStorage still gets a working toggle (it just forgets between pages). */
 const LANG_KEY = 'detour.chat.lang.v1';
-/** How far up-left of the pawn's centre the bubble's bottom-right corner parks, in cells. */
+/** How far up-left of the pawn's centre the bubble's nearest corner parks, in cells. */
 const PAWN_OFFSET_CELLS = 0.55;
 const PAWN_OFFSET_MIN_PX = 18;
 /** The cardinal move-dot halo plus daylight: the chassis may never enter this radius. */
@@ -89,6 +102,19 @@ const DOT_CLEAR_CELLS = 0.4;
 const DOT_CLEAR_MIN_PX = 15;
 /** The fallback lift when a race has no drawn pawn yet: the bubble still clears the chip it names. */
 const CHIP_GAP_PX = 44;
+/** The lane's own margin: a clamped bubble keeps this much board between its box and the frame. */
+const LANE_EDGE_PX = 8;
+/** The tail's tip stands this far off the token's skin, measured from its centre. */
+const TAIL_TIP_GAP_PX = 4;
+/** The wedge's exposed length. The floor keeps a stub readable; the ceiling is the spike guard for
+ *  the rare box an edge clamped far from its pawn. A root sits inside the face, so a big board puts
+ *  the token about 30px away and the tip still has to reach it. */
+const TAIL_MIN_PX = 5;
+const TAIL_MAX_PX = 30;
+/** How far inside the face the tail's root sits, so it never rests on a rounded corner. */
+const TAIL_FACE_INSET_PX = 9;
+/** The neon families a seat can wear, in the order the bubble paints its classes. */
+const TINTS: readonly PawnTint[] = ['red', 'blue', 'gold', 'green'];
 
 type Side = 'me' | 'foe';
 
@@ -124,8 +150,13 @@ export function createChat(o: ChatOptions): Chat {
   const bubbleTimers: Record<Side, number> = { me: 0, foe: 0 };
   /* the last seat each slot spoke for, so a live placement tick can follow that pawn as it moves */
   const bubbleSeats: Record<Side, Player> = { me: 0, foe: 1 };
-  /* the pawn family last seen for each slot; the chip's own red/blue class is the no-ball fallback */
-  const bubbleTints: Record<Side, 'red' | 'blue'> = { me: 'red', foe: 'blue' };
+  /* the pawn family last seen for each slot; the chip's own colour class is the no-ball fallback */
+  const bubbleTints: Record<Side, PawnTint> = { me: 'red', foe: 'blue' };
+  /* the wedge that points at the sender's token: chat.ts aims it, chat.css draws it */
+  const bubbleTails: Record<Side, HTMLElement> = {
+    me: el('i', 'chat-bubble-tail'),
+    foe: el('i', 'chat-bubble-tail'),
+  };
   /* the pawn markers: invisible points the bubbles hang from, one per side. They carry no box at
      all, so the layer can map them without the renderer ever knowing chat exists. */
   const pawnAnchors: Record<Side, HTMLElement> = {
@@ -134,8 +165,9 @@ export function createChat(o: ChatOptions): Chat {
   };
   for (const side of ['me', 'foe'] as const) {
     pawnAnchors[side].setAttribute('aria-hidden', 'true');
+    bubbleTails[side].setAttribute('aria-hidden', 'true');
     bubbles[side].hidden = true;
-    bubbles[side].appendChild(bubbleText[side]);
+    bubbles[side].append(bubbleTails[side], bubbleText[side]);
     o.lane.append(pawnAnchors[side], bubbles[side]);
   }
 
@@ -147,12 +179,13 @@ export function createChat(o: ChatOptions): Chat {
   }
 
   /**
-   * Hang a bubble in its sender's north-west quadrant. `o.pawn()` gives the live screen point,
-   * radius, cell and colour of the seat's ball; the `.pawn-you`/`.pawn-bot` marker is dropped
-   * exactly on the token, and the bubble's bottom-right corner parks up-left of it. Keeping that
-   * corner outside every cardinal move-dot halo leaves the upward tile and all four dots fully
-   * visible. When a board edge clamps the bubble inward, the other axis is pushed out far enough
-   * to preserve the same clearance. The rim adopts the same red or blue family the ball wears.
+   * Hang a bubble beside its sender. `o.pawn()` gives the live screen point, radius, cell and colour
+   * of the seat's ball; the `.pawn-you`/`.pawn-bot` marker is dropped exactly on the token, and the
+   * box parks in the quadrant nearest it — north-west first, the corner the board was always read
+   * from. A quadrant only counts when the whole box fits the lane and its corner stays outside every
+   * cardinal move-dot halo, which leaves the upward tile and all four dots fully visible. When the
+   * edges leave no clean quadrant, the north-west intent is clamped in and pushed clear. Either way
+   * `aimTail` re-points the wedge afterward, so the tip still lands on this token's crown.
    */
   function place(side: Side, seat: Player) {
     const bubble = bubbles[side];
@@ -161,32 +194,30 @@ export function createChat(o: ChatOptions): Chat {
     const w = bubble.offsetWidth || 120;
     const h = bubble.offsetHeight || 32;
     const at = o.pawn(seat);
+    let radius = 0;
     if (at) {
       anchor.style.left = `${at.x - laneBox.left}px`;
       anchor.style.top = `${at.y - laneBox.top}px`;
       bubbleTints[side] = at.color;
+      radius = at.radius;
     } else {
       const chip = o.chips[seat];
       if (!chip) return;
       const chipBox = chip.getBoundingClientRect();
       anchor.style.left = `${chipBox.left + Math.min(30, chipBox.width / 2) - laneBox.left}px`;
       anchor.style.top = `${chipBox.top - laneBox.top}px`;
-      if (chip.classList.contains('blue')) bubbleTints[side] = 'blue';
-      else if (chip.classList.contains('red')) bubbleTints[side] = 'red';
+      for (const tint of TINTS) if (chip.classList.contains(tint)) bubbleTints[side] = tint;
     }
-    bubble.classList.toggle('is-red', bubbleTints[side] === 'red');
-    bubble.classList.toggle('is-blue', bubbleTints[side] === 'blue');
+    for (const tint of TINTS) bubble.classList.toggle(`is-${tint}`, bubbleTints[side] === tint);
     const ax = Number.parseFloat(anchor.style.left) || 0;
     const ay = Number.parseFloat(anchor.style.top) || 0;
-    const maxLeft = Math.max(4, laneBox.width - w - 4);
-    const maxTop = Math.max(4, laneBox.height - h - 4);
+    const maxLeft = Math.max(LANE_EDGE_PX, laneBox.width - w - LANE_EDGE_PX);
+    const maxTop = Math.max(LANE_EDGE_PX, laneBox.height - h - LANE_EDGE_PX);
     let left: number;
     let top: number;
     if (at) {
       const offset = Math.max(PAWN_OFFSET_MIN_PX, at.cell * PAWN_OFFSET_CELLS);
       const clear = Math.max(DOT_CLEAR_MIN_PX, at.cell * DOT_CLEAR_CELLS);
-      left = clamp(ax - offset - w, 4, maxLeft);
-      top = clamp(ay - offset - h, 4, maxTop);
       /* the four legal-move dots sit one cell out on each axis; their halos are the keep-out
          circles the chassis must never enter */
       const dots: Array<[number, number]> = [
@@ -202,27 +233,85 @@ export function createChat(o: ChatOptions): Chat {
         }
         return true;
       };
-      if (!clearOfDots(left, top)) {
-        /* an edge clamp pushed the bubble back toward the pawn: lift it clear above the up dot,
-           or, when the top edge is already there, slide it clear left of the left dot */
-        const above = clamp(ay - at.cell - clear - h, 4, maxTop);
-        const leftOf = clamp(ax - at.cell - clear - w, 4, maxLeft);
-        const candidates = [
-          { left, top: above },
-          { left: leftOf, top },
-          { left: leftOf, top: above },
-        ];
-        for (const c of candidates) {
-          if (clearOfDots(c.left, c.top)) { left = c.left; top = c.top; break; }
+      const fits = (l: number, t: number): boolean => l >= LANE_EDGE_PX && t >= LANE_EDGE_PX
+        && l + w <= laneBox.width - LANE_EDGE_PX && t + h <= laneBox.height - LANE_EDGE_PX;
+      /* The quadrants in preference order. Taking the next corner when an edge is in the way keeps
+         the box off the token — and off the pawn parked beside it — instead of clamping the bubble
+         back onto the cluster, which is what let a fixed corner tail point at the wrong ball. */
+      const corners: Array<[number, number]> = [
+        [ax - offset - w, ay - offset - h],
+        [ax + offset, ay - offset - h],
+        [ax - offset - w, ay + offset],
+        [ax + offset, ay + offset],
+      ];
+      const clean = corners.find(([l, t]) => fits(l, t) && clearOfDots(l, t));
+      if (clean) {
+        left = clean[0];
+        top = clean[1];
+      } else {
+        left = clamp(ax - offset - w, LANE_EDGE_PX, maxLeft);
+        top = clamp(ay - offset - h, LANE_EDGE_PX, maxTop);
+        if (!clearOfDots(left, top)) {
+          /* an edge clamp pushed the bubble back toward the pawn: lift it clear above the up dot,
+             or, when the top edge is already there, slide it clear of the left, down and right dots */
+          const above = clamp(ay - at.cell - clear - h, LANE_EDGE_PX, maxTop);
+          const below = clamp(ay + at.cell + clear, LANE_EDGE_PX, maxTop);
+          const leftOf = clamp(ax - at.cell - clear - w, LANE_EDGE_PX, maxLeft);
+          const rightOf = clamp(ax + at.cell + clear, LANE_EDGE_PX, maxLeft);
+          const candidates = [
+            { left, top: above },
+            { left: leftOf, top },
+            { left: leftOf, top: above },
+            { left, top: below },
+            { left: rightOf, top },
+            { left: rightOf, top: above },
+          ];
+          for (const c of candidates) {
+            if (clearOfDots(c.left, c.top)) { left = c.left; top = c.top; break; }
+          }
         }
       }
     } else {
       const foot = ay - CHIP_GAP_PX;
-      left = clamp(ax - w / 2, 4, maxLeft);
-      top = Math.max(4, foot - h);
+      left = clamp(ax - w / 2, LANE_EDGE_PX, maxLeft);
+      top = clamp(foot - h, LANE_EDGE_PX, maxTop);
     }
     bubble.style.left = `${left}px`;
     bubble.style.top = `${top}px`;
+    aimTail(side, left, top, w, h, ax, ay, radius);
+  }
+
+  /**
+   * Aim the tail at the sender's token and at nothing else. Its root is the point of the face
+   * closest to the pawn, pulled inside the rounded corners; its tip stops on that token's crown —
+   * `radius + 4` from the centre — on the straight line between the two. Both are recomputed from
+   * the pawn *after* the box is clamped, so an edge that slides the bubble sideways moves the root
+   * along the face and re-angles the wedge rather than letting the tip drift onto a neighbour. The
+   * root doubles as the pop's hinge, so the bubble still grows out of the point facing its sender.
+   */
+  function aimTail(
+    side: Side, left: number, top: number, w: number, h: number,
+    px: number, py: number, radius: number,
+  ) {
+    const bubble = bubbles[side];
+    const inset = Math.min(TAIL_FACE_INSET_PX, w / 2, h / 2);
+    const dx = px - clamp(px, left + inset, left + w - inset);
+    const dy = py - clamp(py, top + inset, top + h - inset);
+    const len = Math.hypot(dx, dy) - radius - TAIL_TIP_GAP_PX;
+    if (len < TAIL_MIN_PX) {
+      /* the face is already on the token: a wedge here would point through the ball it names */
+      bubble.classList.remove('has-tail');
+      return;
+    }
+    const rx = (px - dx - left).toFixed(2);
+    const ry = (py - dy - top).toFixed(2);
+    bubble.style.setProperty('--tail-x', `${rx}px`);
+    bubble.style.setProperty('--tail-y', `${ry}px`);
+    bubble.style.setProperty('--tail-len', `${Math.min(len, TAIL_MAX_PX).toFixed(2)}px`);
+    /* the wedge is drawn pointing down; swinging the down vector onto (dx, dy) is atan2(-dx, dy) */
+    bubble.style.setProperty('--tail-rot', `${(Math.atan2(-dx, dy) * (180 / Math.PI)).toFixed(2)}deg`);
+    bubble.style.transformOrigin = `${rx}px ${ry}px`;
+    bubble.classList.add('has-tail');
   }
 
   /**
@@ -243,15 +332,26 @@ export function createChat(o: ChatOptions): Chat {
     }, LEAVE_MS);
   }
 
-  function setBubble(side: Side, content: Node, emote = false) {
+  /** Whose pawn a rival bubble belongs over: the seat the wire named, else the first rival chip. */
+  function senderSeat(from?: Player): Player {
+    return from !== undefined && o.chips[from] ? from : rivalSide();
+  }
+
+  function setBubble(side: Side, content: Node, emote = false, lang: ChatLang = 'EN', from?: Player) {
     if (side === 'foe' && muted) return;
     const node = bubbles[side];
-    const seat = side === 'me' ? o.localSide() : rivalSide();
+    const seat = side === 'me' ? o.localSide() : senderSeat(from);
     bubbleSeats[side] = seat;
     window.clearTimeout(bubbleTimers[side]);
     node.classList.remove('is-out');     // a new message cancels a fade in flight
     node.classList.toggle('is-emote', emote);
-    bubbleText[side].replaceChildren(content);
+    /* the tongue gives the line its own base direction: a Persian one needs `rtl`, or its closing
+       mark — the `!` of `نقشه بود داداش!` — is resolved against the English document and thrown to
+       the far edge of the sentence instead of ending it */
+    const text = bubbleText[side];
+    text.dir = lang === 'FA' ? 'rtl' : 'ltr';
+    text.classList.toggle('is-rtl', lang === 'FA');
+    text.replaceChildren(content);
     if (!node.isConnected) o.lane.appendChild(node);
     node.hidden = false;                 // measurable before it is placed
     place(side, seat);
@@ -277,25 +377,26 @@ export function createChat(o: ChatOptions): Chat {
    * their pawn on this frame, and the two faces with a voice — the laugh and the growl — ring with
    * it. A muted opponent is as silent as they are invisible, so the whole call is dropped while muted.
    */
-  function inboundEmote(id: ChatEmoteId): void {
+  function inboundEmote(id: ChatEmoteId, seat?: Player): void {
     if (!o.live() || muted) return;
     const emote = EMOTES.find((e) => e.id === id);
     if (!emote) return;
     if (id === 'laugh') playLaugh();
     else if (id === 'fury') playAngrySound();
-    setBubble('foe', emoteNode(emote), true);
+    setBubble('foe', emoteNode(emote), true, 'EN', seat);
   }
 
   /**
    * The rival's phrase, arrived over the wire: their `(lang, index)` pair is looked back up in the
-   * same closed table — no text ever crosses the socket — and popped over their pawn. A muted
-   * opponent is as silent as they are invisible, so the whole call is dropped while muted.
+   * same closed table — no text ever crosses the socket — and popped over their pawn, in the tongue
+   * *they* chose. A muted opponent is as silent as they are invisible, so the whole call is dropped
+   * while muted.
    */
-  function inboundPhrase(lang: ChatLang, index: number): void {
+  function inboundPhrase(lang: ChatLang, index: number, seat?: Player): void {
     if (!o.live() || muted) return;
     const line = phraseLine(lang, index);
     if (!line) return;
-    setBubble('foe', document.createTextNode(line));
+    setBubble('foe', document.createTextNode(line), false, lang, seat);
   }
 
   /* ---------- the sheet (built from the closed vocabulary) ---------- */
@@ -473,7 +574,7 @@ export function createChat(o: ChatOptions): Chat {
     if (!line) return;
     lastSentAt = Date.now();
     impact('light');                     // a soft tap: the line is short, the jolt should be too
-    setBubble('me', document.createTextNode(line));
+    setBubble('me', document.createTextNode(line), false, activeChatLang);
     o.onPhrase?.(activeChatLang, index); // the wire, when there is one
     closeSheet(false);
     paintCool();
@@ -504,7 +605,7 @@ export function createChat(o: ChatOptions): Chat {
     if (muted || !o.live()) return;
     if (now - lastBotAt < BOT_GAP_MS) return;
     lastBotAt = now;
-    setBubble('foe', document.createTextNode(line));
+    setBubble('foe', document.createTextNode(line), false, activeChatLang);
   }
 
   /**
