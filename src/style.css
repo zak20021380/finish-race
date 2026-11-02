@@ -30119,6 +30119,49 @@ html[data-lang="fa"] .hm-pill b { letter-spacing: 0 !important; }
   html[data-lang="fa"] .hm-pill { font-size: 8.5px; }
 }
 
+/* The standing pill can now carry a two-word fact ("LEADING NATION" / "کشور صدرنشین").
+   It has to take its slack from the nation name, never from the score column: a nowrap
+   pill that cannot shrink would push the tabular PTS out of the bar on a 320px card. */
+.car-card.nations-cup .hm-c { flex: 0 1 auto; }
+.car-card.nations-cup .hm-pill { min-width: 0; }
+.car-card.nations-cup .hm-pill-k { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- Persian: the two leaderboard slides. ----
+   The same surgical rule the Channel War card already follows — the header, the season
+   crest and the command mirror and drop their tracking, while the standings grid keeps
+   its columns so a row's score still lands on the score column of the bar below it.
+   Nothing numeric is mirrored: the rank shields, the TIQ lockups and the nation names
+   stay on their Latin axis and are isolated per token instead. */
+html[data-lang="fa"] :is(.mind-head, .nations-head) { direction: rtl; }
+html[data-lang="fa"] :is(
+  .mind-kicker, .mind-cta, .nations-kicker, .nations-cup-subtitle, .cup-live, .mind-top,
+  .mind-cta-t, .nations-hold
+) {
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+}
+html[data-lang="fa"] :is(.nations-cup-subtitle, .cup-live, .mind-top) { direction: rtl; }
+html[data-lang="fa"] .mind-top { padding: 4px 7px 4px 9px; }
+/* a handle or a nation is one Latin token sitting inside Persian copy: let the bidi
+   algorithm read it on its own terms, so a leading @ or a trailing digit never swaps */
+html[data-lang="fa"] :is(.mind-nm, .mini-rank.nations-rank .nm) { unicode-bidi: plaintext; }
+/* the command mirrors as a whole; only its chevron turns, because it points the way
+   forward and forward is left in a right-to-left card */
+html[data-lang="fa"] :is(.car-card.mind-ladder .mind-cta, .car-card.nations-cup .nations-hold) {
+  direction: rtl;
+}
+html[data-lang="fa"] .mind-cta-go { transform: scaleX(-1); }
+html[data-lang="fa"] .car-card.mind-ladder .mind-cta:hover:not(:active) .mind-cta-go {
+  transform: scaleX(-1) translateX(2px);
+}
+/* "از ۴ نابغه" is the whole fact. Dropping the unit the way the English card does on the
+   narrowest phone would leave "از ۴" hanging, so Persian keeps it and gives size instead. */
+@media (max-width: 360px) {
+  html[data-lang="fa"] .hm-pill:not(.is-off) .hm-pill-u { display: inline; font-size: 8px; }
+}
+
 /* Arabic keeps the translated Settings copy readable now that the shell no
    longer flips `dir` globally. */
 html[data-lang="ar"] [data-i18n],

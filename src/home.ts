@@ -49,6 +49,10 @@ const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
 const localDigits = (value: string, code: string): string =>
   code === 'fa' ? value.replace(/\d/g, (d) => FA_DIGITS[Number(d)]) : value;
 
+/** Persian sets its own percent sign, so a share is built with the digits and the sign together. */
+const localPct = (value: number, code: string): string =>
+  code === 'fa' ? `${localDigits(String(value), code)}٪` : `${value}%`;
+
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 const cap = (d: Difficulty): string => d.charAt(0).toUpperCase() + d.slice(1);
@@ -241,8 +245,8 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   };
 
   const trendTextOf = (c: NationRow): string => {
-    if (c.trend === 'up') return `▲ ${Math.abs(c.delta)}`;
-    if (c.trend === 'down') return `▼ ${Math.abs(c.delta)}`;
+    if (c.trend === 'up') return `▲ ${localDigits(String(Math.abs(c.delta)), lang)}`;
+    if (c.trend === 'down') return `▼ ${localDigits(String(Math.abs(c.delta)), lang)}`;
     return '•';
   };
 
@@ -279,15 +283,15 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     li.classList.add(`rank-${c.rank}`);
     if (me) li.classList.add('me');
     const label = c.name || nameOf(c.code);
-    const pts = c.points.toLocaleString('en-US');
+    const pts = localDigits(c.points.toLocaleString('en-US'), lang);
     const trendLabel = c.trend === 'up'
       ? `rising ${Math.abs(c.delta)}`
       : c.trend === 'down' ? `dropping ${Math.abs(c.delta)}` : 'steady';
-    li.setAttribute('aria-label', `#${c.rank} ${label} — ${pts} TIQ, ${c.players.toLocaleString('en-US')} players, ${trendLabel}`);
+    li.setAttribute('aria-label', `#${c.rank} ${label} — ${c.points.toLocaleString('en-US')} TIQ, ${c.players.toLocaleString('en-US')} players, ${trendLabel}`);
     const rk = document.createElement('span');
     const podium = c.rank >= 1 && c.rank <= 3 ? PODIUM_CLASS[c.rank - 1] : '';
     rk.className = podium ? `rk rank-${c.rank} ${podium}` : `rk rank-${c.rank}`;
-    rk.textContent = String(c.rank);
+    rk.textContent = localDigits(String(c.rank), lang);
     rk.setAttribute('aria-hidden', 'true');
     const fl = document.createElement('span');
     fl.className = 'fl';
@@ -295,6 +299,9 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     fl.append(flagPhoto(c.code, 'fp-nation'));
     const nm = document.createElement('span');
     nm.className = 'nm';
+    /* the nation is a Latin token on this board: isolate it so it never reorders
+       against the Persian copy around it */
+    nm.dir = 'ltr';
     nm.textContent = label;
     nm.title = label;
     const pt = nationScore(pts);
@@ -323,6 +330,11 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
    *  pill or the score out of the bar. */
   const paintNationMine = (feed: NationFeed | null): void => {
     const bar = document.getElementById('home-nation-mine');
+    /* The card's one door reads the seat, not the board: a flagless player is asked to
+       represent, a player who already represents is asked to read the standings. Both land
+       on the Nations board, where the flag picker already lives. */
+    const cta = document.getElementById('home-cup-table');
+    if (cta) cta.textContent = profile.country ? t('countryViewNations') : t('countryCtaFlyFlag');
     if (!bar) return;
     const flag = document.getElementById('home-nation-flag');
     const name = document.getElementById('home-nation-name');
@@ -335,7 +347,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const standing = code && feed?.standing?.code === code ? feed.standing : null;
     /* The contribution is the ledger's own record of this seat's wins — never a local formula. */
     const contributed = standing?.points ?? 0;
-    const ptsText = `+${contributed.toLocaleString('en-US')}`;
+    const ptsText = `+${localDigits(contributed.toLocaleString('en-US'), lang)}`;
     if (pts) pts.textContent = ptsText;
     if (!code) {
       if (flag) { flag.textContent = ''; flag.classList.add('is-off'); }
@@ -359,11 +371,17 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       ? Math.max(1, Math.round((mine.rank / total) * 100))
       : 0;
     /* The pill is the nation's real position, not a static label. Until the first live read the
-       rank is simply unknown — never painted as "unranked". */
-    if (pillK) pillK.textContent = mine ? `#${mine.rank}` : '#—';
+       rank is simply unknown — never painted as "unranked". A nation that leads the board is
+       stated as the fact it is: the percentile is already implied by "leading". */
+    const leading = mine?.rank === 1;
+    if (pillK) {
+      pillK.textContent = mine
+        ? (leading ? t('countryTopNation') : `#${localDigits(String(mine.rank), lang)}`)
+        : '#—';
+    }
     if (pct) {
-      pct.hidden = !mine;
-      pct.textContent = mine ? `${share}%` : '';
+      pct.hidden = !mine || leading;
+      pct.textContent = mine && !leading ? localPct(share, lang) : '';
     }
     pill?.classList.toggle('is-off', !mine);
     bar.setAttribute('aria-label', mine
@@ -374,32 +392,32 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       : `You fight for ${label}`);
   };
 
-  const loadCountries = async (): Promise<void> => {
+  /** Paint the standings band from the last board we hold — five rows, or the honest
+   *  empty line. One painter for both the poll and a language switch, so the digits and
+   *  the empty-state copy always match the language on screen. */
+  const paintNationList = (): void => {
     const list = $('home-countries');
+    list.textContent = '';
+    if (!nationFeed) {
+      list.append(emptyNationRow(t('countryBoardOffline')));
+      return;
+    }
+    if (!nationFeed.rows.length) {
+      list.append(emptyNationRow(t('countryBoardEmpty')));
+      return;
+    }
+    for (const c of nationFeed.rows.slice(0, 5)) list.append(rowEl(c, profile.country === c.code));
+  };
+
+  const loadCountries = async (): Promise<void> => {
     try {
       const feed = await fetchNationBoard();
       /* A failed read keeps the last real board; a first read paints the clean waiting state. */
-      if (!feed.live) {
-        if (!nationFeed) {
-          list.textContent = '';
-          list.append(emptyNationRow('Nations Cup is reconnecting…'));
-        }
-        paintNationMine(nationFeed);
-        return;
-      }
-      nationFeed = feed;
-      list.textContent = '';
-      if (!feed.rows.length) {
-        list.append(emptyNationRow('No nations on the board yet — pick your flag and win a race.'));
-      } else {
-        for (const c of feed.rows.slice(0, 5)) list.append(rowEl(c, profile.country === c.code));
-      }
-      paintNationMine(feed);
+      if (feed.live) nationFeed = feed;
+      paintNationList();
+      paintNationMine(nationFeed);
     } catch {
-      if (!nationFeed) {
-        list.textContent = '';
-        list.append(emptyNationRow('Nations Cup is reconnecting…'));
-      }
+      paintNationList();
       /* the bar is a structure of zones, never a text node: repaint the last board we
          hold instead of overwriting it with a sentence. */
       paintNationMine(nationFeed);
@@ -466,9 +484,10 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   const scoreCell = (score: string, empty: boolean): HTMLElement => {
     const sc = document.createElement('span');
     sc.className = 'mind-score';
+    sc.dir = 'ltr';
     sc.title = empty ? 'No TIQ yet' : `${score} TIQ`;
     const num = document.createElement('b');
-    num.textContent = score;
+    num.textContent = localDigits(score, lang);
     const unit = document.createElement('span');
     unit.className = 'mind-tiq-k';
     unit.textContent = 'TIQ';
@@ -495,7 +514,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     }
     const n = document.createElement('b');
     n.className = 'mind-rank-n';
-    n.textContent = String(rank);
+    n.textContent = localDigits(String(rank), lang);
     rk.append(n);
     return rk;
   };
@@ -545,13 +564,19 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     id.className = 'mind-id';
     const nm = document.createElement('span');
     nm.className = 'mind-nm';
+    /* a handle is a Latin token: isolated so a leading @ or a trailing digit never
+       swaps sides when the card is read in Persian */
+    nm.dir = 'ltr';
     nm.textContent = p.name;
     nm.title = p.name;
     id.append(nm);
     if (p.trend !== 'same' && p.delta !== 0) {
       const d = document.createElement('i');
       d.className = `mind-delta ${p.trend}`;
-      d.textContent = p.trend === 'up' ? `▲${p.delta}` : `▼${Math.abs(p.delta)}`;
+      d.dir = 'ltr';
+      d.textContent = p.trend === 'up'
+        ? `▲${localDigits(String(p.delta), lang)}`
+        : `▼${localDigits(String(Math.abs(p.delta)), lang)}`;
       d.title = trendWord;
       d.setAttribute('aria-hidden', 'true');
       id.append(d);
@@ -581,7 +606,8 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     id.className = 'mind-id';
     const nm = document.createElement('span');
     nm.className = 'mind-nm';
-    nm.textContent = 'Awaiting Challenger';
+    nm.textContent = t('ladderAwaitingChallenger');
+    nm.title = nm.textContent;
     id.append(nm);
     li.append(rankShield(rank), av, id, scoreCell('—', true));
     return li;
@@ -591,15 +617,15 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const el = document.getElementById('mind-top');
     if (!el) return;
     const season = document.getElementById('mind-season');
-    const label = `Season ${arena().seasonNo}`;
-    if (season && season.textContent !== label) season.textContent = label;
+    const label = t('ladderSeason').replace('{season}', localDigits(String(arena().seasonNo), lang));
+    if (season) season.textContent = label;
     const live = Boolean(feed?.live && feed.total > 0);
     el.classList.toggle('is-live', live);
     const total = feed?.total ?? 0;
     if (live) {
-      const minds = `${total.toLocaleString('en-US')} ${total === 1 ? 'mind' : 'minds'}`;
-      el.setAttribute('title', `${label} · ${minds} ranked`);
-      el.setAttribute('aria-label', `${label} — ${minds} ranked`);
+      const minds = t('ladderOfMinds').replace('{count}', localDigits(total.toLocaleString('en-US'), lang));
+      el.setAttribute('title', `${label} · ${minds}`);
+      el.setAttribute('aria-label', `${label} — ${minds}`);
       return;
     }
     el.setAttribute('title', `${label} · ladder offline`);
@@ -619,27 +645,30 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const field = document.getElementById('home-mind-field');
     const fieldU = document.getElementById('home-mind-field-u');
     const tiqEl = document.getElementById('home-mind-tiq');
-    const tiqText = myTiq().toLocaleString('en-US');
-    if (name) name.textContent = t('hudYou');
+    const tiqText = localDigits(myTiq().toLocaleString('en-US'), lang);
+    if (name) name.textContent = t('ladderYouLabel');
     if (tiqEl) tiqEl.textContent = tiqText;
     const st = feed?.live ? feed.standing : null;
     if (st) {
-      const total = st.total.toLocaleString('en-US');
-      if (rankEl) { rankEl.textContent = `#${st.rank}`; rankEl.classList.remove('is-off'); }
-      if (pillK) pillK.textContent = 'of';
+      const total = localDigits(st.total.toLocaleString('en-US'), lang);
+      if (rankEl) { rankEl.textContent = `#${localDigits(String(st.rank), lang)}`; rankEl.classList.remove('is-off'); }
+      /* the field pill is one translated sentence split around the number, so the
+         numeral keeps its own emphasized node whatever order the language puts it in */
+      const parts = t('ladderOfMinds').split('{count}');
+      if (pillK) pillK.textContent = (parts[0] ?? '').trim();
       if (field) { field.hidden = false; field.textContent = total; }
-      if (fieldU) fieldU.hidden = false;
+      if (fieldU) { fieldU.hidden = false; fieldU.textContent = (parts[1] ?? '').trim(); }
       pill?.classList.remove('is-off');
-      bar.setAttribute('aria-label', `${t('hudYou')} · rank ${st.rank} of ${total} · ${tiqText} TIQ`);
+      bar.setAttribute('aria-label', `${t('ladderYouLabel')} · rank ${st.rank} of ${total} · ${tiqText} TIQ`);
       bar.setAttribute('title', `Rank ${st.rank} of ${total} minds`);
       return;
     }
     if (rankEl) { rankEl.textContent = '—'; rankEl.classList.add('is-off'); }
     if (pillK) pillK.textContent = t('hudUnranked');
     if (field) { field.hidden = true; field.textContent = ''; }
-    if (fieldU) fieldU.hidden = true;
+    if (fieldU) { fieldU.hidden = true; fieldU.textContent = ''; }
     pill?.classList.add('is-off');
-    bar.setAttribute('aria-label', `${t('hudYou')} · ${t('hudUnranked')} · ${tiqText} TIQ`);
+    bar.setAttribute('aria-label', `${t('ladderYouLabel')} · ${t('hudUnranked')} · ${tiqText} TIQ`);
     if (feed?.live) bar.setAttribute('title', 'Your TIQ enters the ladder after your first live TIQ');
     else bar.removeAttribute('title');
   };
@@ -1030,11 +1059,14 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     paintPreviews();
   });
 
-  /* A language switch repaints the two standing bars from the data already on screen:
-     their labels are painted by JS, not by a `data-i18n` pass. */
+  /* A language switch repaints both cards from the data already on screen: their figures,
+     empty seats and standing labels are painted by JS, not by a `data-i18n` pass, so the
+     Persian digits have to follow the switch rather than wait for the next poll. */
   onLang(() => {
+    paintNationList();
     paintNationMine(nationFeed);
-    paintMindMine(mindFeed);
+    if (mindFeed) paintMinds(mindFeed);
+    else paintMindTop(null);
   });
 
   onGameModeChange(() => {
