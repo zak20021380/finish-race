@@ -1755,7 +1755,7 @@ export function createMenu(api: MenuApi): Menu {
         const ed = badgeEdition(eq.id);
         eqWrap.setAttribute(
           'aria-label',
-          `Equipped badge: ${eq.name}. ${editionSpeech(ed)} ${eq.archetype}, ${eq.pillar}. Spotlight it.`,
+          `Equipped badge: ${eq.name}. ${editionSpeech(ed)} ${eq.archetype}, ${eq.pillar}. View its certificate.`,
         );
         eqWrap.title = `${eq.name} · ${badgeStatus(eq.id, true).text} · ${eq.archetype}`;
         /* the pin's serial tag is the server-confirmed number, not a local best guess */
@@ -1847,32 +1847,6 @@ export function createMenu(api: MenuApi): Menu {
     });
     return btn;
   };
-
-  let spotlightTimer = 0;
-  function spotlightBadge(id: string): void {
-    const rack = document.getElementById('honor-badges-rack');
-    const note = document.getElementById('pf-badge-note');
-    const tile = rack?.querySelector<HTMLButtonElement>(`[data-badge="${id}"]`);
-    const b = BADGES.find((x) => x.id === id);
-    if (!rack || !tile || !b) return;
-    if (note) {
-      note.textContent = `${b.archetype} · ${b.pillar} — ${b.description}`;
-      note.dataset.accent = b.accent;
-      note.hidden = false;
-      note.classList.remove('is-lit');
-    }
-    tile.classList.remove('is-spotlit');
-    void tile.offsetWidth;
-    tile.classList.add('is-spotlit');
-    note?.classList.add('is-lit');
-    rack.scrollIntoView({ behavior: motionReduced() ? 'auto' : 'smooth', block: 'center' });
-    tile.focus({ preventScroll: true });
-    window.clearTimeout(spotlightTimer);
-    spotlightTimer = window.setTimeout(() => {
-      tile.classList.remove('is-spotlit');
-      note?.classList.remove('is-lit');
-    }, 1800);
-  }
 
   /* The only thing the shelf says about the network: a quiet line under the rack. While a
      refresh is in flight, or after it failed and the cached counts are all we have, it stays
@@ -2209,20 +2183,23 @@ export function createMenu(api: MenuApi): Menu {
     return source.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 2) || 'P';
   };
 
-  /** The mint stamp this device holds, in the player's own calendar; '' when the ledger never said. */
-  function holderDate(iso: string): string {
+  /** The mint stamp this device holds, in the player's own calendar and on the app's own clock:
+   *  Persian reads it Jalali, every other locale reads the Tehran date. '' when the ledger never said. */
+  function mintStamp(iso: string): string {
     if (!iso) return '';
     const ms = Date.parse(iso);
     if (!Number.isFinite(ms)) return '';
     try {
-      return new Date(ms).toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-US',
-        { year: 'numeric', month: 'short', day: 'numeric' });
+      return new Intl.DateTimeFormat(lang === 'fa' ? 'fa-IR' : 'en-GB', {
+        timeZone: 'Asia/Tehran',
+        year: 'numeric', month: 'short', day: 'numeric',
+      }).format(new Date(ms));
     } catch { return ''; }
   }
 
   /** One registry row: monogram, name, and the serial plate the ledger minted for it. */
   function holderRow(def: BadgeDef, holder: EditionHolder, mine: boolean): HTMLElement {
-    const when = mine ? holderDate(claimMintedAt(def.id)) : '';
+    const when = mine ? mintStamp(claimMintedAt(def.id)) : '';
     const serial = t('badgeSerialLabel').replace('#{num}', editionSerialLabel(holder.serial));
 
     const av = document.createElement('span');
@@ -2331,18 +2308,24 @@ export function createMenu(api: MenuApi): Menu {
     if (owners.list) owners.list.scrollTop = 0;
   }
 
-  /* The registry is a child of the collector card, and the sheet manager holds one panel:
-     handing back re-opens the parent rather than unwinding the whole flow to the shelf. */
-  function backToBadge(): void {
-    const sheet = api.sheet('sheet-badge');
-    if (!badgeDraft || !sheet) { api.sheets.close(); return; }
+  /* The registry is a child of whichever card opened it — the collector sheet or the
+     certificate — and the sheet manager holds one panel: handing back re-opens that parent
+     rather than unwinding the whole flow to the shelf. */
+  let ownersParent: 'badge' | 'cert' = 'badge';
+  function backFromOwners(): void {
+    const id = badgeDraft;
+    const parent = ownersParent === 'cert'
+      ? api.sheet('equipped-badge-modal')
+      : api.sheet('sheet-badge');
+    if (!id || !parent) { api.sheets.close(); return; }
     impact('light');
-    paintBadgeSheet(badgeDraft);
-    api.sheets.open(sheet);
+    if (ownersParent === 'cert') paintCertificate(id);
+    else paintBadgeSheet(id);
+    api.sheets.open(parent);
   }
   ownersBackStep = () => {
     if (!ownersOpen()) return false;
-    backToBadge();
+    backFromOwners();
     return true;
   };
 
@@ -2354,16 +2337,17 @@ export function createMenu(api: MenuApi): Menu {
       void refreshBadgeEditions();          // the retry is what turns this toast into a registry
       return;
     }
+    ownersParent = 'badge';
     openOwners();
   });
-  document.getElementById('badge-owners-back')?.addEventListener('click', backToBadge);
-  document.getElementById('badge-owners-close')?.addEventListener('click', backToBadge);
+  document.getElementById('badge-owners-back')?.addEventListener('click', backFromOwners);
+  document.getElementById('badge-owners-close')?.addEventListener('click', backFromOwners);
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !ownersOpen()) return;
     e.stopPropagation();
     e.preventDefault();
-    backToBadge();
+    backFromOwners();
   }, true);
   document.addEventListener('click', (e) => {
     if (!ownersOpen()) return;
@@ -2371,8 +2355,136 @@ export function createMenu(api: MenuApi): Menu {
     if (!target || !target.closest('#scrim')) return;
     e.stopPropagation();
     e.preventDefault();
-    backToBadge();
+    backFromOwners();
   }, true);
+
+  /** A Latin token kept upright inside RTL text. */
+  const isolate = (raw: string): HTMLElement => {
+    const bdi = document.createElement('bdi');
+    bdi.dir = 'ltr';
+    bdi.textContent = raw;
+    return bdi;
+  };
+
+  /* ---- Medallion Certificate: the ownership deed the avatar pin and its serial tag open ----
+     Every reading is one the ledger already gave us. A serial that has not arrived prints an
+     em dash and the mint stamp reads "not recorded" — the deed never invents its own numbers. */
+
+  const cert = {
+    sheet: api.sheet('equipped-badge-modal'),
+    body: $<HTMLElement>('badge-cert-body'),
+    crest: $<HTMLElement>('badge-cert-crest'),
+    ribbon: $<HTMLElement>('badge-cert-ribbon'),
+    honor: $<HTMLElement>('badge-cert-honor'),
+    arch: $<HTMLElement>('badge-cert-archetype'),
+    holder: $<HTMLElement>('badge-cert-holder'),
+    verified: $<HTMLElement>('badge-cert-verified'),
+    serial: $<HTMLElement>('badge-cert-serial'),
+    minted: $<HTMLElement>('badge-cert-minted'),
+    supply: $<HTMLElement>('badge-cert-supply'),
+    perks: $<HTMLUListElement>('badge-cert-perks'),
+  };
+  const certOpen = (): boolean => cert.sheet?.classList.contains('open') === true;
+
+  function paintCertificate(id: string): void {
+    const def = BADGES.find((b) => b.id === id);
+    if (!def || !cert.sheet) return;
+    const edition = badgeEdition(id);
+
+    cert.sheet.dataset.accent = def.accent;
+    if (cert.crest && cert.crest.dataset.badge !== def.id) {
+      cert.crest.dataset.badge = def.id;
+      cert.crest.dataset.accent = def.accent;
+      cert.crest.innerHTML = badgeCrestHtml(def);
+    }
+    if (cert.honor) cert.honor.textContent = def.name;
+    if (cert.arch) cert.arch.textContent = `${def.archetype} · ${def.pillar}`;
+    cert.sheet.setAttribute('aria-label', `${t('badgeCertTitle')} — ${def.name}`);
+    document.getElementById('badge-cert-close')?.setAttribute('aria-label', t('badgeCertClose'));
+
+    const serialTag = edition.serial !== null ? editionSerialLabel(edition.serial) : '—';
+    if (cert.ribbon) {
+      /* the serial and its cap each ride an LTR isolate: in Persian a bare "#" is otherwise
+         claimed by the RTL run and prints between the word and its digits */
+      const parts = t('badgeCertRibbon').split(/\{serial\}|\{cap\}/);
+      cert.ribbon.textContent = '';
+      cert.ribbon.append(
+        parts[0] ?? '', isolate(serialTag),
+        parts[1] ?? '', isolate(en(edition.cap)),
+        parts[2] ?? '',
+      );
+    }
+    if (cert.serial) {
+      cert.serial.textContent = edition.serial !== null ? serialTag : t('badgeCertSerialPending');
+      cert.serial.dataset.state = edition.serial !== null ? 'live' : 'pending';
+    }
+    /* the tick means the ledger has this name against this serial, not that a display name
+       was typed carefully — so it rides the claim, never the player */
+    if (cert.holder) cert.holder.textContent = playerName();
+    if (cert.verified) cert.verified.hidden = edition.serial === null;
+
+    if (cert.minted) {
+      const stamp = mintStamp(claimMintedAt(id));
+      cert.minted.textContent = stamp || t('badgeCertNotRecorded');
+      cert.minted.dataset.state = stamp ? 'live' : 'pending';
+    }
+    if (cert.supply) {
+      cert.supply.textContent = t('badgeCertSupplyCap').replace('{cap}', en(def.cap));
+    }
+
+    if (cert.perks) {
+      cert.perks.textContent = '';
+      for (const perk of def.perks) {
+        const li = document.createElement('li');
+        li.className = 'ct-perk';
+        const ico = document.createElement('span');
+        ico.className = 'ct-perk-ico';
+        ico.setAttribute('aria-hidden', 'true');
+        ico.textContent = perk.icon;
+        const txt = document.createElement('p');
+        txt.className = 'ct-perk-t';
+        txt.textContent = badgeText(perk.text, lang);
+        li.append(ico, txt);
+        cert.perks.append(li);
+      }
+    }
+  }
+
+  function openCertificate(): void {
+    const eq = equippedBadge();
+    if (!eq || !cert.sheet) return;
+    badgeDraft = eq.id;
+    ownersParent = 'cert';
+    paintCertificate(eq.id);
+    void refreshBadgeEditions();
+    impact('light');
+    api.sheets.open(cert.sheet);
+    /* laid out only after the swap, so the deed opens on its seal and not mid-scroll */
+    if (cert.body) cert.body.scrollTop = 0;
+  }
+
+  document.getElementById('badge-cert-owners')?.addEventListener('click', () => {
+    const id = badgeDraft;
+    if (!id) return;
+    if (badgeHolders(id) === null) {
+      notify('warning');
+      showToast(t('badgeOwnersSyncing'), 'warning');
+      void refreshBadgeEditions();
+      return;
+    }
+    ownersParent = 'cert';
+    openOwners();
+  });
+
+  document.getElementById('badge-cert-unequip')?.addEventListener('click', () => {
+    const id = badgeDraft;
+    if (!id || profile.badge !== id) { api.sheets.close(); return; }
+    setBadge(null);
+    impact('medium');
+    notify('success');
+    api.sheets.close();
+    showPfToast(t('badgeCertUnequipped'), true);
+  });
 
   const paintIdentity = (): void => {
     paintFaces();
@@ -2533,6 +2645,7 @@ export function createMenu(api: MenuApi): Menu {
     paintBadges();
     if (badgeDraft) paintBadgeSheet(badgeDraft);
     if (ownersOpen()) paintOwners();
+    if (certOpen() && badgeDraft) paintCertificate(badgeDraft);
     if (squadSheet && !squadSheet.hidden && !squadBoundView.hidden) paintSquadHub();
   });
 
@@ -2573,14 +2686,15 @@ export function createMenu(api: MenuApi): Menu {
     impact('light');
     notify('success');
   });
-  /* the pin itself is the shortcut to the honor: scroll the shelf into place,
-     pulse the equipped tile and name its archetype in the note below */
-  document.getElementById('pf-equipped-badge')?.addEventListener('click', () => {
-    const eq = equippedBadge();
-    if (!eq) return;
-    spotlightBadge(eq.id);
-    impact('light');
-  });
+  /* the pin and the serial tag hanging under it are two doors to one place: the honor's
+     certificate. The shelf is still reachable — it is the tile that equips, and the
+     certificate's registry button is the short path to the hall. */
+  const openWornCertificate = (): void => {
+    if (!equippedBadge()) return;
+    openCertificate();
+  };
+  document.getElementById('pf-equipped-badge')?.addEventListener('click', openWornCertificate);
+  document.getElementById('pf-equipped-serial')?.addEventListener('click', openWornCertificate);
   document.getElementById('badge-equip')?.addEventListener('click', () => {
     if (!badgeDraft) return;
     if (!isBadgeUnlocked(badgeDraft)) {

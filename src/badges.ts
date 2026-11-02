@@ -38,6 +38,13 @@ export interface BadgeText {
   fa: string;
 }
 
+/** One passive prestige an honor grants while it is worn, read on its certificate. */
+export interface BadgePerk {
+  /** The glyph printed in the perk row's own well. */
+  icon: string;
+  text: BadgeText;
+}
+
 /** The numeric gates behind an honor's mission, when one proof is not enough. */
 export interface BadgeRequirement {
   minTiq?: number;
@@ -69,6 +76,8 @@ export interface BadgeDef {
   criteria: BadgeText;
   /** Numeric gates behind the mission; the inspection card renders them as requirement chips. */
   requirement?: BadgeRequirement;
+  /** The passive prestige this honor grants while worn; its certificate lists them. */
+  perks: BadgePerk[];
   /** Names the sculpted crest (#i-crest-<accent>), its CSS aura, and the art fallback. */
   accent: BadgeAccent;
   /** Rendered medallion art; when set it replaces the vector crest everywhere the honor is worn. */
@@ -94,6 +103,22 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
       fa: 'نیاز به حداقل ۱۰,۰۰۰ TIQ. کسب ۷ برد پیاپی در نبرد زنده PvP با حفظ بیش از ۵۰٪ استحکامات دفاعی. خط دفاعی رو حفظ کن!',
     },
     requirement: BADGE_REQUIREMENTS.churchill_bastion,
+    perks: [
+      {
+        icon: '🛡️',
+        text: {
+          en: 'Unbroken Defense Aura in Live Arena',
+          fa: 'هالهٔ دفاع شکست‌ناپذیر در آرینای زنده',
+        },
+      },
+      {
+        icon: '⚡',
+        text: {
+          en: '+5% Coin bonus on consecutive victories',
+          fa: '+۵٪ سکهٔ اضافه روی بردهای پیاپی',
+        },
+      },
+    ],
     accent: 'titanium',
     art: churchillMedallion,
     cap: 100,
@@ -113,6 +138,22 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
       en: 'Reach 1,500 Tactical IQ. Pure calculation, zero panic—let the proof carry you.',
       fa: 'به 1,500 امتیاز هوش تاکتیکی (TIQ) برس. محاسبهٔ خالص، بدون استرس؛ بذار اثباتت کار خودش رو بکنه.',
     },
+    perks: [
+      {
+        icon: '🔭',
+        text: {
+          en: 'Board Foresight Aura in Ranked Qualifiers',
+          fa: 'هالهٔ پیش‌نگری صفحه در مقدماتی رنکد',
+        },
+      },
+      {
+        icon: '⚡',
+        text: {
+          en: '+5% Coin bonus on a zero-error run',
+          fa: '+۵٪ سکهٔ اضافه روی یک ران بی‌خطا',
+        },
+      },
+    ],
     accent: 'quantum',
     art: einsteinMedallion,
     cap: 50,
@@ -132,6 +173,22 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
       en: 'Win 60% of at least 5 competitive races. No luck, no wasted moves—just cold execution.',
       fa: 'حداقل 5 مسابقهٔ رقابتی بازی کن و 60٪شون رو ببر. نه شانس، نه حرکت هدر؛ فقط اجرای سرد و دقیق.',
     },
+    perks: [
+      {
+        icon: '🎯',
+        text: {
+          en: 'Cold Precision Marker in Live Arena',
+          fa: 'نشانگر دقت سرد در آرینای زنده',
+        },
+      },
+      {
+        icon: '⚡',
+        text: {
+          en: '+5% Coin bonus on a flawless win',
+          fa: '+۵٪ سکهٔ اضافه روی برد بی‌نقص',
+        },
+      },
+    ],
     accent: 'frost',
     art: heisenbergMedallion,
     cap: 25,

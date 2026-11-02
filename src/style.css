@@ -30316,3 +30316,463 @@ html.reduced-motion .home-vip::after { animation: none; }
   letter-spacing: .02em;
 }
 html[data-lang="fa"] .arena-vip-badge { letter-spacing: 0; font-size: 7px; }
+
+/* ============================================================================
+   Medallion Certificate — the ownership deed the avatar pin opens.
+
+   The deed is gold and the coin keeps its own metal: one brushed-gold seal line,
+   four frosted obsidian wells and a single loud control. Glow stays an ambient
+   material here — the aura breathes behind the medallion and nothing else on the
+   card is allowed to compete with the honor's name.
+   ========================================================================== */
+
+/* the pin's serial tag is a control now, so it sheds the label's pointer-events: none
+   and answers a tap the same way the pin itself does */
+#s-profile .pf-equipped-serial {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--motion-fast), filter var(--motion-fast);
+}
+#s-profile .pf-equipped-serial:hover:not(:active) { transform: translateY(-1px); filter: brightness(1.15); }
+#s-profile .pf-equipped-serial:active { transform: scale(.94); }
+#s-profile .pf-equipped-serial:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 3px; }
+
+.sheet.cert-sheet {
+  max-height: calc(94dvh - env(safe-area-inset-top));
+  gap: 8px;
+  padding: 10px max(14px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  overflow: hidden;
+  /* deeper than the standard sheet face: an obsidian plate, lit once from the seal */
+  background:
+    radial-gradient(120% 62% at 50% -8%, rgba(232, 192, 114, .08), rgba(0, 0, 0, 0) 62%),
+    linear-gradient(180deg, #131A27 0%, #080C13 100%);
+  --ct-gold: #E8C072;
+  --ct-gold-hi: #F6DFA8;
+  --ct-gold-rim: rgba(232, 192, 114, .38);
+  --ct-silver: #A9B6CB;
+  --ct-well: rgba(6, 10, 17, .66);
+  --ct-well-rim: rgba(255, 255, 255, .07);
+  --ct-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  /* the medallion is 72px on its 96px pedestal — the tokens .badge-ico-lg already reads */
+  --bd-coin: 72px;
+  --bd-pedestal: 96px;
+  --bd-accent: #E8C072;
+  --bd-metal: #F6DFA8;
+  --bd-glow: rgba(232, 192, 114, .2);
+  --bd-halo: rgba(232, 192, 114, .26);
+  --bd-halo-strong: rgba(232, 192, 114, .42);
+  /* the dismiss settles: the deed scales down as it drops instead of sliding flat */
+  transform: translate3d(0, 100%, 0) scale(.985);
+  opacity: .94;
+  transition: transform var(--motion-med), opacity var(--motion-med);
+}
+.cert-sheet[data-accent="titanium"] {
+  --bd-accent: #67E8F9; --bd-metal: #A5F3FC;
+  --bd-glow: rgba(103, 232, 249, .18);
+  --bd-halo: rgba(103, 232, 249, .24);
+  --bd-halo-strong: rgba(103, 232, 249, .4);
+}
+.cert-sheet[data-accent="quantum"] {
+  --bd-accent: #FBBF24; --bd-metal: #FDE047;
+  --bd-glow: rgba(251, 191, 36, .22);
+  --bd-halo: rgba(251, 191, 36, .3);
+  --bd-halo-strong: rgba(251, 191, 36, .48);
+}
+.cert-sheet[data-accent="frost"] {
+  --bd-accent: #34D399; --bd-metal: #A7F3D0;
+  --bd-glow: rgba(52, 211, 153, .18);
+  --bd-halo: rgba(52, 211, 153, .24);
+  --bd-halo-strong: rgba(52, 211, 153, .4);
+}
+.cert-sheet.open { transform: none; opacity: 1; }
+
+/* ---- head: the deed's own title, with the × held out of its measure ---- */
+.ct-head { position: relative; flex: none; }
+.ct-title {
+  margin: 0;
+  padding-inline: 44px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 900;
+  letter-spacing: .01em;
+  color: var(--ct-gold);
+}
+.ct-sub {
+  margin: 3px 0 0;
+  padding-inline: 44px;
+  text-align: center;
+  font-size: 8.5px;
+  line-height: 1.4;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.ct-x {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  appearance: none;
+  font: inherit;
+  font-size: 21px;
+  line-height: 1;
+  color: var(--ink-soft);
+  background: rgba(9, 14, 24, .55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07), inset 0 1px 0 rgba(255, 255, 255, .06);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--motion-fast), color var(--motion-fast);
+}
+.ct-x:active { transform: scale(.92); }
+.ct-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+.ct-body { gap: 11px; padding-bottom: 2px; }
+
+/* ---- hero stage: the coin on its pedestal, its seal ribbon across the rim ---- */
+.ct-stage {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding-top: 4px;
+}
+.ct-pedestal {
+  position: relative;
+  width: var(--bd-pedestal);
+  height: var(--bd-pedestal);
+  display: grid;
+  place-items: center;
+  margin-bottom: 11px;
+  animation: ct-float 6.4s ease-in-out infinite alternate;
+}
+.ct-aura {
+  position: absolute;
+  inset: -20px -18px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side at 50% 50%, var(--bd-glow) 0%, rgba(0, 0, 0, 0) 72%);
+  filter: blur(8px);
+  pointer-events: none;
+  animation: ct-breathe 5.2s ease-in-out infinite;
+}
+.ct-ribbon {
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  z-index: 3;
+  transform: translateX(-50%);
+  padding: 3px 10px 3.5px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #0D1320 0%, #05080D 100%);
+  box-shadow:
+    inset 0 0 0 1px var(--ct-gold-rim),
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 4px 10px -4px rgba(0, 0, 0, .9);
+  color: var(--ct-gold-hi);
+  font-family: var(--ct-mono);
+  font-size: 8.5px;
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ct-honor {
+  margin: 0;
+  padding-inline: 6px;
+  text-align: center;
+  font-size: clamp(16px, 4.4vw, 19px);
+  line-height: 1.22;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  color: var(--ct-gold-hi);
+}
+.ct-arch {
+  margin: 4px 0 0;
+  padding: 3px 10px 4px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, .04);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+  text-align: center;
+  font-size: 9.5px;
+  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ct-silver);
+}
+
+/* ---- ownership registry: four frosted wells, two across ---- */
+.ct-registry {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+.ct-cell {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 8px 9px 9px;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .05) 0%, rgba(255, 255, 255, 0) 46%),
+    var(--ct-well);
+  box-shadow:
+    inset 0 0 0 1px var(--ct-well-rim),
+    inset 0 1px 0 rgba(255, 255, 255, .05),
+    0 6px 14px -10px rgba(0, 0, 0, .9);
+  backdrop-filter: blur(4px) saturate(1.1);
+  -webkit-backdrop-filter: blur(4px) saturate(1.1);
+}
+.ct-cell-k {
+  font-size: 8px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.ct-cell-v {
+  width: 100%;
+  min-width: 0;
+  font-size: 11.5px;
+  line-height: 1.3;
+  font-weight: 800;
+  color: var(--ink);
+}
+.ct-holder { display: flex; align-items: center; gap: 4px; }
+.ct-holder-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ct-verified { flex: none; width: 13px; height: 13px; color: var(--ct-gold); }
+.ct-verified[hidden] { display: none; }
+/* the serial plate: metallic border, mono digits, the same metal as the ribbon */
+.ct-serial {
+  width: auto;
+  padding: 2px 8px 3px;
+  border-radius: 7px;
+  background: #05080D;
+  box-shadow:
+    inset 0 0 0 1px var(--ct-gold-rim),
+    inset 0 1px 0 rgba(255, 255, 255, .08);
+  color: var(--ct-gold-hi);
+  font-family: var(--ct-mono);
+  font-size: 11px;
+  letter-spacing: .04em;
+  font-variant-numeric: tabular-nums;
+}
+.ct-serial[data-state="pending"] {
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+}
+.ct-cell-v[data-state="pending"] { color: var(--text-dim); font-size: 10px; font-weight: 700; letter-spacing: 0; }
+.ct-cap { font-size: 10px; line-height: 1.4; font-weight: 700; color: var(--ct-silver); }
+
+/* ---- equipped perks: the passive prestige the honor grants while worn ---- */
+.ct-perks {
+  flex: none;
+  padding: 9px 10px 10px;
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .045) 0%, rgba(255, 255, 255, 0) 40%),
+    var(--ct-well);
+  box-shadow: inset 0 0 0 1px var(--ct-well-rim), inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+.ct-perks-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.ct-kicker {
+  font-size: 8.5px;
+  line-height: 1.3;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ct-gold);
+}
+.ct-live {
+  flex: none;
+  font-size: 7.5px;
+  line-height: 1.3;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--mint-ink);
+}
+.ct-perk-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; }
+.ct-perk { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; gap: 8px; }
+.ct-perk-ico {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: rgba(232, 192, 114, .1);
+  box-shadow: inset 0 0 0 1px rgba(232, 192, 114, .2);
+  font-size: 11px;
+  line-height: 1;
+}
+.ct-perk-t {
+  margin: 0;
+  min-width: 0;
+  font-size: 10.5px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ---- actions: one gold key, one quiet ghost ---- */
+.ct-actions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 2px;
+}
+.ct-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 14px;
+  appearance: none;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 900;
+  line-height: 1.2;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #1A1206;
+  background: linear-gradient(180deg, #F6DFA8 0%, #E3B964 54%, #C9973F 100%);
+  box-shadow:
+    0 12px 22px -14px rgba(232, 192, 114, .8),
+    inset 0 1px 0 rgba(255, 255, 255, .55),
+    inset 0 -2px 3px rgba(112, 74, 16, .34);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--motion-fast), filter var(--motion-fast);
+}
+.ct-cta .ico { width: 14px; height: 14px; }
+.ct-cta:hover:not(:active) { filter: brightness(1.05); }
+.ct-cta:active { transform: translateY(1px) scale(.995); }
+.ct-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+.ct-cta span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ct-ghost {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 13px;
+  appearance: none;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: .02em;
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, .035);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .09);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--motion-fast), color var(--motion-fast), background var(--motion-fast);
+}
+.ct-ghost .ico { width: 12px; height: 12px; }
+.ct-ghost:hover:not(:active) { color: var(--ink); background: rgba(255, 255, 255, .06); }
+.ct-ghost:active { transform: scale(.995); }
+.ct-ghost:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+.ct-ghost span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@keyframes ct-float {
+  from { transform: translate3d(0, 1px, 0); }
+  to   { transform: translate3d(0, -4px, 0); }
+}
+@keyframes ct-breathe {
+  0%, 100% { opacity: .68; transform: scale(.96); }
+  50%      { opacity: 1; transform: scale(1.04); }
+}
+
+/* ---- Persian: the deed keeps its calm, loses its tracking and reads right-to-left ----
+   Uppercase tracking is a Latin engraving convention; on Vazirmatn it only breaks the
+   word shapes, so every label here drops to its own line-height and zero letter-spacing. */
+html[data-lang="fa"] .cert-sheet :is(.ct-title, .ct-sub, .ct-arch, .ct-cell-k, .ct-kicker, .ct-live, .ct-cap, .ct-perk-t, .ct-cta, .ct-ghost) {
+  letter-spacing: 0;
+  text-transform: none;
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+}
+html[data-lang="fa"] .cert-sheet :is(.ct-title, .ct-honor) { line-height: 1.45; }
+html[data-lang="fa"] .cert-sheet :is(.ct-sub, .ct-cell-k, .ct-kicker, .ct-live, .ct-arch) { line-height: 1.6; }
+html[data-lang="fa"] .cert-sheet :is(.ct-perk-t, .ct-cap) { line-height: 1.75; }
+/* the deed mirrors: an LTR base would leave a Latin token stranded in the middle of a
+   Persian line, so every text container takes its own RTL direction (the app never flips `dir`) */
+html[data-lang="fa"] .cert-sheet :is(.ct-title, .ct-sub, .ct-arch, .ct-honor, .ct-cell-k, .ct-cell-v, .ct-kicker, .ct-live, .ct-perk-t, .ct-ribbon, .ct-cta, .ct-ghost) {
+  direction: rtl;
+}
+/* the serial plate is a Latin token and stays LTR inside the RTL deed */
+html[data-lang="fa"] .cert-sheet .ct-serial { direction: ltr; }
+html[data-lang="fa"] .cert-sheet .ct-ribbon { letter-spacing: 0; font-size: 8px; }
+html[data-lang="fa"] .cert-sheet .ct-holder { direction: rtl; }
+html[data-lang="fa"] .cert-sheet .ct-cell { align-items: flex-start; text-align: right; }
+html[data-lang="fa"] .cert-sheet .ct-perks-head { direction: rtl; }
+/* an RTL grid already places its first column at the right, so the icon well needs no reorder */
+html[data-lang="fa"] .cert-sheet .ct-perk { direction: rtl; }
+html[data-lang="fa"] .cert-sheet .ct-x { right: auto; left: 0; }
+
+/* ---- 320–390px: the deed stays one viewport, so the stage gives way first.
+   360 and up keep the certificate's own 72px medallion; only a narrower phone trades it down. */
+@media (max-width: 348px) {
+  .sheet.cert-sheet { --bd-coin: 66px; --bd-pedestal: 88px; }
+  .cert-sheet .ct-honor { font-size: 16px; }
+  .cert-sheet .ct-cell-v { font-size: 11px; }
+  .cert-sheet .ct-serial { font-size: 10.5px; }
+  .cert-sheet .ct-perk-t { font-size: 10px; }
+  .cert-sheet .ct-cta { font-size: 11px; }
+}
+@media (max-width: 322px) {
+  .sheet.cert-sheet { --bd-coin: 60px; --bd-pedestal: 80px; }
+  .cert-sheet .ct-registry { gap: 6px; }
+  .cert-sheet .ct-cell { padding: 7px 8px 8px; }
+  .cert-sheet .ct-ribbon { font-size: 8px; padding: 2.5px 8px 3px; }
+  /* the last 6px comes out of the stage and the perks head, never off the footer */
+  .cert-sheet .ct-body { gap: 9px; }
+  .cert-sheet .ct-pedestal { margin-bottom: 9px; }
+  .cert-sheet .ct-perks { padding: 9px 10px 9px; }
+  .cert-sheet .ct-perks-head { margin-bottom: 6px; }
+}
+
+html.reduced-motion .ct-pedestal,
+html.reduced-motion .ct-aura { animation: none; }
+html.reduced-motion .sheet.cert-sheet { transition: none; }

@@ -2740,11 +2740,14 @@
                     </span>
                   </button>
                   <!-- the equipped honor rides the avatar's bottom-right corner as a prestige pin.
-                       It is its own control: tapping spotlights the badge and its archetype. -->
+                       It is its own control: tapping opens the honor's certificate. -->
                   <button class="pf-equipped-badge" type="button" id="pf-equipped-badge" hidden
                     aria-label="Equipped badge"></button>
-                  <!-- the pin's server-confirmed edition number; hidden until the ledger answers -->
-                  <span class="pf-equipped-serial" id="pf-equipped-serial" aria-hidden="true" hidden></span>
+                  <!-- the pin's server-confirmed edition number; hidden until the ledger answers.
+                       It is a second door to the same certificate, so the serial is never
+                       a dead label sitting on a live pin. -->
+                  <button class="pf-equipped-serial" type="button" id="pf-equipped-serial"
+                    aria-label="View medallion certificate" hidden></button>
                 </div>
                 <div class="p-id pf-id-v2">
                   <div class="pf-name-row" id="pf-name-row">
@@ -5464,6 +5467,78 @@
         </div>
 
         <footer class="bo-foot"><span class="bo-count" id="badge-owners-count"></span></footer>
+      </section>
+
+      <!-- Medallion Certificate: the ownership deed the avatar pin opens. Every reading here is
+           one the ledger already gave us — the serial, the holder and the mint stamp are shown as
+           they arrived, and an honor the ledger has not stamped yet says so instead of guessing. -->
+      <section class="sheet tall cert-sheet" id="equipped-badge-modal" hidden tabindex="-1"
+        role="dialog" aria-modal="true" aria-labelledby="cert-title">
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <header class="ct-head">
+          <span class="ct-head-id">
+            <h2 class="sheet-t ct-title" id="cert-title" data-i18n="badgeCertTitle">Official Relic Certificate</h2>
+            <p class="sheet-p ct-sub" id="cert-sub" data-i18n="badgeCertSub">Proof of ownership</p>
+          </span>
+          <button class="ct-x" type="button" id="badge-cert-close" data-sheet-close data-autofocus
+            aria-label="Close certificate">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </header>
+
+        <div class="sheet-body ct-body" id="badge-cert-body" data-scroll>
+          <div class="ct-stage">
+            <span class="ct-pedestal">
+              <span class="ct-aura" aria-hidden="true"></span>
+              <span class="badge-ico-lg ct-coin" id="badge-cert-crest" aria-hidden="true"></span>
+              <!-- the edition ribbon floats over the rim: it is the certificate's own seal line -->
+              <span class="ct-ribbon" id="badge-cert-ribbon">Serial — / —</span>
+            </span>
+            <h3 class="ct-honor" id="badge-cert-honor">Badge</h3>
+            <p class="ct-arch" id="badge-cert-archetype">Archetype</p>
+          </div>
+
+          <section class="ct-registry" aria-label="Ownership registry">
+            <div class="ct-cell">
+              <span class="ct-cell-k" data-i18n="badgeCertHolder">Holder</span>
+              <b class="ct-cell-v ct-holder">
+                <span class="ct-holder-name" id="badge-cert-holder">Player</span>
+                <svg class="ico ct-verified" id="badge-cert-verified" aria-hidden="true"><use href="#i-check" /></svg>
+              </b>
+            </div>
+            <div class="ct-cell">
+              <span class="ct-cell-k" data-i18n="badgeCertSerial">Serial ID</span>
+              <b class="ct-cell-v ct-serial" id="badge-cert-serial">—</b>
+            </div>
+            <div class="ct-cell">
+              <span class="ct-cell-k" data-i18n="badgeCertMinted">Mint Date</span>
+              <b class="ct-cell-v" id="badge-cert-minted">—</b>
+            </div>
+            <div class="ct-cell">
+              <span class="ct-cell-k" data-i18n="badgeCertSupply">Supply Cap</span>
+              <b class="ct-cell-v ct-cap" id="badge-cert-supply">—</b>
+            </div>
+          </section>
+
+          <section class="ct-perks" aria-labelledby="cert-perks-kicker">
+            <header class="ct-perks-head">
+              <span class="ct-kicker" id="cert-perks-kicker" data-i18n="badgeCertPerksKicker">Equipped Perks</span>
+              <span class="ct-live" data-i18n="badgeCertPerksLive">Passive</span>
+            </header>
+            <ul class="ct-perk-list" id="badge-cert-perks" role="list" aria-label="Equipped perks"></ul>
+          </section>
+        </div>
+
+        <footer class="ct-actions">
+          <button class="ct-cta" type="button" id="badge-cert-owners" aria-haspopup="dialog">
+            <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
+            <span data-i18n="badgeCertViewOwners">View Hall of Owners</span>
+          </button>
+          <button class="ct-ghost" type="button" id="badge-cert-unequip">
+            <svg class="ico" aria-hidden="true"><use href="#i-close" /></svg>
+            <span data-i18n="badgeCertUnequip">Unequip Medallion</span>
+          </button>
+        </footer>
       </section>
 
       <!-- all badges: the full honor catalogue as a quiet pick list -->
