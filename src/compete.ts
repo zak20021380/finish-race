@@ -2965,7 +2965,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (!loadedBoard.minds && !mindsField.length) el.innerHTML = skel(6);
     let feed: MindFeed | null = null;
     try {
-      feed = await fetchMindLadder(100, myTrophyScore());
+      feed = await fetchMindLadder(myTrophyScore(), 100);
     } catch {
       feed = null;
     }
