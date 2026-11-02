@@ -383,6 +383,15 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     noRacesYet: 'No races yet',
     botRaces: '{n} bot races',
     inviteEarn: 'Earn +{n} Coins per invite',
+    /* ---- home carousel: the Channel War hero slide ---- */
+    carouselChannelWarTitle: 'CHANNEL WAR',
+    carouselTimeLeft: '{hours}h {mins}m left',
+    carouselWarStarsPrize: '200 STARS',
+    carouselWarSubtitle: '1st place channel wins all - pure conquest',
+    carouselReigningChampion: 'REIGNING CHAMPION',
+    carouselCtaFight: 'FIGHT FOR YOUR CHANNEL',
+    carouselCtaEnlist: 'CHANNEL ADMIN? ENLIST HERE',
+    carouselNoChampion: 'No squad yet',
     /* ---- enlist squad: the Channel War registration modal ---- */
     enlistTitle: 'Enlist Squad',
     enlistType: 'Telegram',
@@ -814,6 +823,15 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     noRacesYet: 'هنوز مسابقه‌ای نبوده',
     botRaces: '{n} مسابقه ربات',
     inviteEarn: 'هر دعوت {n} سکه',
+    /* ---- home carousel: the Channel War hero slide ---- */
+    carouselChannelWarTitle: 'نبرد کانال‌ها',
+    carouselTimeLeft: '{hours} ساعت و {mins} دقیقه تا پایان',
+    carouselWarStarsPrize: '۲۰۰ استارز',
+    carouselWarSubtitle: 'کانال اول کل جایزه رو درو می‌کنه · فتح تمام‌عیار!',
+    carouselReigningChampion: 'قهرمان فعلی',
+    carouselCtaFight: 'بجنگ واسه کانالت!',
+    carouselCtaEnlist: 'ادمین کانالی؟ ثبت‌نام از اینجا',
+    carouselNoChampion: 'هنوز قهرمانی مشخص نشده',
     /* ---- enlist squad: the Channel War registration modal ---- */
     enlistTitle: 'ثبت اسکواد',
     enlistType: 'تلگرام',

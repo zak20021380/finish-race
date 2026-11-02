@@ -18,7 +18,7 @@
  * button whose label updates live.
  */
 import type { Difficulty } from './bot';
-import { menuState, motionReduced, onLang, onSettings, saveMenu, t } from './settings';
+import { lang, menuState, motionReduced, onLang, onSettings, saveMenu, t } from './settings';
 import { nameOf } from './countries';
 import { fetchNationBoard, type NationFeed, type NationRow } from './nations';
 import { fetchMindLadder, type MindFeed, type MindRowData } from './minds';
@@ -43,6 +43,11 @@ export interface HomeApi {
   /** The Play Dock's right zone: launch whatever mode the dock is showing, in one tap. */
   launch(): void;
 }
+
+/** Persian figures for the countdown: Latin digits beside Persian copy read as an error. */
+const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+const localDigits = (value: string, code: string): string =>
+  code === 'fa' ? value.replace(/\d/g, (d) => FA_DIGITS[Number(d)]) : value;
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -742,10 +747,15 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
      field the board starts empty, and the static markup's neutral line stands
      until a real squad has banked a real score. */
   const leaderHandle = document.getElementById('tour-leader-handle');
-  if (leaderHandle) {
+  /* The placeholder is a translated sentence, so it is painted here (and on every
+     language switch) rather than left in the markup for a `data-i18n` sweep to
+     overwrite the live handle with. */
+  const paintTourLeader = (): void => {
+    if (!leaderHandle) return;
     const top = getSquadRanking()[0];
-    if (top) leaderHandle.textContent = top.handle;
-  }
+    leaderHandle.textContent = top ? top.handle : t('carouselNoChampion');
+  };
+  paintTourLeader();
 
   /* The HUD's clock. Anchored to a real deadline 02h 45m out, so the capsule
      reads exactly as authored on arrival and then ticks honestly; it is only
@@ -758,13 +768,19 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       const totalMin = Math.max(0, Math.ceil((endsAt - Date.now()) / 60_000));
       const hh = Math.floor(totalMin / 60);
       const mm = totalMin % 60;
-      tourClock.textContent = `${String(hh).padStart(2, '0')}h ${String(mm).padStart(2, '0')}m left`;
+      const hours = localDigits(String(hh).padStart(2, '0'), lang);
+      const mins = localDigits(String(mm).padStart(2, '0'), lang);
+      tourClock.textContent = t('carouselTimeLeft')
+        .replace('{hours}', hours)
+        .replace('{mins}', mins);
     };
     paintClock();
     window.setInterval(() => {
       if (!document.hidden) paintClock();
     }, 1000);
+    onLang(paintClock);
   }
+  onLang(paintTourLeader);
 
   /* ---------- launcher: one Play button + summary + sheet draft ---------- */
 

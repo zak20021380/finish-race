@@ -21771,6 +21771,79 @@ html.reduced-motion .tour-star-img { animation: none; }
   .tour-admin { min-height: 38px; }
 }
 
+/* ---- Persian: the Channel War slide. Vazirmatn wins on every Persian line, tracking
+   collapses to zero so the script is never split, and the header/HUD mirror while the
+   digits and the champion's handle stay LTR. ---- */
+html[data-lang="fa"] .tour-head { direction: rtl; }
+html[data-lang="fa"] :is(.tour-kicker, .tour-title) {
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  line-height: 1.5;
+}
+html[data-lang="fa"] .tour-vault { max-width: 100%; }
+html[data-lang="fa"] .tour-vault-v {
+  font-size: 32px;
+  line-height: 1.45;
+  letter-spacing: 0 !important;
+  padding: 0 2px 3px;
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+}
+html[data-lang="fa"] .tour-vault-sub {
+  direction: rtl;
+  gap: 5px;
+  font-size: 11px;
+  line-height: 1.55;
+  letter-spacing: 0;
+}
+html[data-lang="fa"] .tour-hud {
+  direction: rtl;
+  padding: 4px 5px 4px 12px;
+}
+html[data-lang="fa"] .tour-leader-k {
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  line-height: 1.45;
+}
+/* a handle is never mirrored by the RTL base: '@name' must keep its leading @ */
+html[data-lang="fa"] .tour-leader-h { direction: ltr; unicode-bidi: isolate; }
+html[data-lang="fa"] .tour-cta {
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  font-size: 15px;
+}
+html[data-lang="fa"] .tour-cta-t { line-height: 1.5; }
+html[data-lang="fa"] .tour-admin {
+  direction: rtl;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+html[data-lang="fa"] .tour-admin-t {
+  text-align: right;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+/* the growth key's chevron is the only glyph that mirrors: it already points forward */
+html[data-lang="fa"] .tour-admin-chev { transform: scaleX(-1); }
+html[data-lang="fa"] .tour-admin:hover .tour-admin-chev { transform: scaleX(-1) translateX(2px); }
+html[data-lang="fa"] .tour-clock {
+  direction: rtl;
+  gap: 4px;
+  padding: 0 7px;
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  font-size: 9px;
+  letter-spacing: 0;
+  font-variant-numeric: normal;
+}
+@media (max-height: 760px) {
+  html[data-lang="fa"] .tour-vault-v { font-size: 28px; }
+}
+@media (max-height: 620px) {
+  html[data-lang="fa"] .tour-vault-v { font-size: 24px; }
+}
+@media (max-height: 600px) {
+  html[data-lang="fa"] .tour-vault-v { font-size: 22px; }
+}
+
 /* ============================================================================================
    RACE DOCK, SECOND PASS — one clean row: YOUR chip | the mine key | BOT chip.
 
