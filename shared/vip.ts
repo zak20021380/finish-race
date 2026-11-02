@@ -140,3 +140,43 @@ export function extendVipUntil(currentUntil: number, plan: VipPlan, now = Date.n
   const start = Number.isFinite(currentUntil) && currentUntil > now ? currentUntil : now;
   return start + plan.days * VIP_DAY_MS;
 }
+
+/* ---------- the admin directory's plan filter ---------- */
+
+/**
+ * The Users tab's plan axis. `free` is a seat without a running term (a never-subscriber or a
+ * lapsed one), while `expired` is the narrower churn view of a term that has actually ended.
+ */
+export type VipPlanFilter = 'all' | 'free' | 'active' | VipPlanId | 'expired';
+
+export const VIP_PLAN_FILTERS: readonly VipPlanFilter[] = [
+  'all', 'free', 'active', ...VIP_PLAN_IDS, 'expired',
+];
+
+export function vipPlanFilterOf(raw: unknown): VipPlanFilter {
+  return typeof raw === 'string' && (VIP_PLAN_FILTERS as readonly string[]).includes(raw)
+    ? raw as VipPlanFilter
+    : 'all';
+}
+
+/** Whole days left on a term, measured from now; 0 once it has ended. */
+export function vipDaysLeftUntil(vipUntil: number, now = Date.now()): number {
+  const until = Number.isFinite(vipUntil) ? vipUntil : 0;
+  return until > now ? Math.max(1, Math.ceil((until - now) / VIP_DAY_MS)) : 0;
+}
+
+/** Does a seat, with its stored term and last plan id, belong in the selected plan view? */
+export function vipMatchesPlanFilter(
+  vipUntil: number,
+  vipPlan: string,
+  filter: VipPlanFilter,
+  now = Date.now(),
+): boolean {
+  if (filter === 'all') return true;
+  const until = Number.isFinite(vipUntil) ? Math.max(0, vipUntil) : 0;
+  const active = until > now;
+  if (filter === 'free') return !active;
+  if (filter === 'active') return active;
+  if (filter === 'expired') return until > 0 && !active;
+  return active && vipPlan === filter;
+}

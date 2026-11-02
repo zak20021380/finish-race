@@ -12,6 +12,7 @@
  * so the operator sees the same numbers the rest of the app shows.
  */
 import { profile, readJson, writeJson } from './storage';
+import { vipMatchesPlanFilter, type VipPlanFilter } from '../shared/vip';
 
 /** One row of the directory. Mirrors `PlayerRecord` in `worker/matchmaker.ts`. */
 export interface DirPlayer {
@@ -35,6 +36,10 @@ export interface DirPlayer {
   stars: number;
   referrals: number;
   squad: string;
+  /** End of the purchased VIP term in ms, or 0. The Worker writes this only on a paid receipt. */
+  vipUntil: number;
+  /** The duration tier behind that term ('7d' | '30d' | '90d'), or ''. */
+  vipPlan: string;
   banned: boolean;
   muted: boolean;
   inMatch: boolean;
@@ -55,6 +60,8 @@ export interface DirQuery {
   /** ISO 3166-1 alpha-2, or '' for every country. */
   country: string;
   age: AgeBand;
+  /** The Obsidian VIP view: free, active, one duration tier, or an ended term. */
+  plan: VipPlanFilter;
   sort: DirSort;
   offset: number;
   limit: number;
@@ -116,6 +123,8 @@ function readRow(raw: unknown): DirPlayer | null {
     stars: whole(r.stars),
     referrals: whole(r.referrals),
     squad: text(r.squad, 24),
+    vipUntil: whole(r.vipUntil),
+    vipPlan: text(r.vipPlan, 12),
     banned: r.banned === true,
     muted: r.muted === true,
     inMatch: r.inMatch === true,
@@ -205,6 +214,7 @@ export function directoryPage(query: DirQuery, live: DirPlayer | null): DirPage 
   const rawCountry = (query.country ?? '').trim().toUpperCase();
   const country = /^[A-Z]{2}$/.test(rawCountry) ? rawCountry : '';
   const age = query.age ?? 'all';
+  const plan = query.plan ?? 'all';
   /* the Top TIQ chip is a sort shortcut, but an explicit pick from the Sort control wins */
   const sort = query.filter === 'tiq' && query.sort === 'default' ? 'tiq' : (query.sort ?? 'default');
   let out = rows;
@@ -218,6 +228,7 @@ export function directoryPage(query: DirQuery, live: DirPlayer | null): DirPage 
   if (query.filter === 'flagged') out = out.filter((p) => p.banned || p.muted);
   if (country) out = out.filter((p) => p.country === country);
   if (age !== 'all') out = out.filter((p) => inAgeBand(p.age, age));
+  if (plan !== 'all') out = out.filter((p) => vipMatchesPlanFilter(p.vipUntil, p.vipPlan, plan, now));
   const rank = [...out];
   if (sort === 'lastPlayed') rank.sort((a, b) => b.lastPlayed - a.lastPlayed || b.lastSeen - a.lastSeen);
   else if (sort === 'joined') rank.sort((a, b) => b.firstSeen - a.firstSeen);
@@ -262,6 +273,8 @@ export function liveRow(face: { name: string; tiq: number; squad: string }): Dir
     stars: stored?.stars ?? 0,
     referrals: profile.referral.joins,
     squad: face.squad,
+    vipUntil: stored?.vipUntil ?? 0,
+    vipPlan: stored?.vipPlan ?? '',
     banned: stored?.banned === true,
     muted: stored?.muted === true,
     inMatch: false,

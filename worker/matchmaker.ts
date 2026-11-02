@@ -66,7 +66,8 @@ import {
   type MatchMode, type MatchModeFilter, type PlayerCount,
 } from '../shared/telemetry';
 import {
-  VIP_PLAN_IDS, VIP_STARS_MAX, VIP_STARS_MIN, extendVipUntil, readVipPlanConfig, vipPlanOf,
+  VIP_PLAN_IDS, VIP_STARS_MAX, VIP_STARS_MIN, extendVipUntil, readVipPlanConfig,
+  vipMatchesPlanFilter, vipPlanFilterOf, vipPlanOf,
   vipPlanSettingsOf, type VipPlanConfig, type VipPlanId, type VipPurchase, type VipRevenueSummary,
   type VipTierRevenue,
 } from '../shared/vip';
@@ -4666,6 +4667,7 @@ export class MatchmakerDO {
     const countryRaw = (params.get('country') ?? '').trim().toUpperCase();
     const country = /^[A-Z]{2}$/.test(countryRaw) ? countryRaw : '';
     const age = ageBandOf(params.get('age'));
+    const plan = vipPlanFilterOf(params.get('plan'));
     const sort = sortOf(params.get('sort')) ?? (filter === 'tiq' ? 'tiq' : 'default');
     const offset = Math.max(0, Math.floor(Number(params.get('offset')) || 0));
     const limit = Math.min(PLAYERS_LIMIT, Math.max(1, Math.floor(Number(params.get('limit')) || 40)));
@@ -4682,6 +4684,7 @@ export class MatchmakerDO {
     if (filter === 'flagged') rows = rows.filter((p) => p.banned || p.muted);
     if (country) rows = rows.filter((p) => p.country === country);
     if (age !== 'all') rows = rows.filter((p) => inAgeBand(p.age, age));
+    if (plan !== 'all') rows = rows.filter((p) => vipMatchesPlanFilter(p.vipUntil, p.vipPlan, plan, now));
     /* the default order reads like the room: flagged first when that is the view, else live boards,
        then the freshest seats. The three explicit sorts answer an audit question instead. */
     if (sort === 'lastPlayed') rows.sort((a, b) => b.lastPlayed - a.lastPlayed || b.lastSeen - a.lastSeen);

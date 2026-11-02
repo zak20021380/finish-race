@@ -61,8 +61,9 @@ import {
   type AdminFailure,
 } from './adminApi';
 import {
-  VIP_PLAN_IDS, readVipPlanConfig,
-  type VipPlanConfig, type VipPlanId, type VipPurchase, type VipRevenueSummary, type VipTierRevenue,
+  VIP_PLAN_IDS, readVipPlanConfig, vipDaysLeftUntil, vipPlanFilterOf, vipPlanOf,
+  type VipPlanConfig, type VipPlanFilter, type VipPlanId, type VipPurchase,
+  type VipRevenueSummary, type VipTierRevenue,
 } from '../shared/vip';
 import {
   ARENA_TIER_IDS, SEASON_LENGTH_MS, adoptArena, arena, arenaLocked, countdownPill,
@@ -827,11 +828,12 @@ async function fetchPlayers(
   filter: DirFilter,
   country: string,
   age: AgeBand,
+  plan: VipPlanFilter,
   sort: DirSort,
   offset: number,
   limit: number,
 ): Promise<PlayersPage | null> {
-  const params = new URLSearchParams({ q, filter, country, age, sort });
+  const params = new URLSearchParams({ q, filter, country, age, plan, sort });
   params.set('offset', String(offset));
   params.set('limit', String(limit));
   const data = await parseJson<PlayersPage>(
@@ -1693,6 +1695,9 @@ export function createAdmin(api: AdminApi): Admin {
   const usersQ = $<HTMLInputElement>('users-q');
   const usersQClear = $<HTMLButtonElement>('users-q-clear');
   const userChips = [...document.querySelectorAll<HTMLButtonElement>('[data-ufilter]')];
+  const usersVipChip = $<HTMLButtonElement>('users-vip-chip');
+  const usersPlanEl = $<HTMLSelectElement>('adm-filter-plan');
+  const usersPlanV = $<HTMLElement>('adm-filter-plan-v');
   const usersCountryTrig = $<HTMLButtonElement>('users-country-trigger');
   const usersAgeTrig = $<HTMLButtonElement>('users-age-trigger');
   const usersSortTrig = $<HTMLButtonElement>('users-sort-trigger');
@@ -1796,6 +1801,7 @@ export function createAdmin(api: AdminApi): Admin {
   let usersQuery = '';
   let usersCountry = '';
   let usersAge: AgeBand = 'all';
+  let usersPlan: VipPlanFilter = 'all';
   let usersSort: DirSort = 'default';
   let usersRows: DirPlayer[] = [];
   let usersTotal = 0;
@@ -3059,6 +3065,55 @@ export function createAdmin(api: AdminApi): Admin {
     return s;
   }
 
+  /** A row's VIP term, folded to a non-negative number; a hand-edited row never breaks a badge. */
+  const vipUntilOf = (p: DirPlayer): number =>
+    (typeof p.vipUntil === 'number' && Number.isFinite(p.vipUntil) ? Math.max(0, p.vipUntil) : 0);
+
+  /**
+   * The obsidian-gold VIP badge: the running term's duration tier, or the muted silver mark
+   * carried only by the Expired VIP view so the rest of the directory stays calm.
+   */
+  function userVipBadge(p: DirPlayer, now: number): HTMLElement | null {
+    const vipUntil = vipUntilOf(p);
+    if (vipUntil <= 0) return null;
+    const active = vipUntil > now;
+    if (!active && usersPlan !== 'expired') return null;
+    const plan = vipPlanOf(p.vipPlan);
+    const badge = document.createElement('span');
+    badge.className = 'adm-user-vip';
+    if (!active) {
+      badge.dataset.plan = 'expired';
+      badge.textContent = 'VIP Expired';
+      badge.title = `VIP term ended ${new Date(vipUntil).toLocaleDateString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
+      })}`;
+      return badge;
+    }
+    badge.dataset.plan = plan?.id ?? 'active';
+    const days = vipDaysLeftUntil(vipUntil, now);
+    const crown = document.createElement('span');
+    crown.className = 'adm-user-vip-crown';
+    crown.setAttribute('aria-hidden', 'true');
+    crown.textContent = '👑';
+    badge.append(crown, document.createTextNode(plan ? ` VIP ${plan.id.toUpperCase()}` : ' VIP'));
+    badge.title = `${plan ? `${plan.days}-day ` : ''}Obsidian VIP · ${days} ${days === 1 ? 'day' : 'days'} left`;
+    return badge;
+  }
+
+  /** The remaining-days stamp that rides the row's metadata line beside the TIQ pill. */
+  function userVipDays(p: DirPlayer, now: number): HTMLElement | null {
+    const vipUntil = vipUntilOf(p);
+    if (vipUntil <= now) return null;
+    const days = vipDaysLeftUntil(vipUntil, now);
+    const chip = document.createElement('span');
+    chip.className = 'adm-user-vip-left';
+    chip.textContent = `${days}d left`;
+    chip.title = `VIP expires ${new Date(vipUntil).toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    })}`;
+    return chip;
+  }
+
   /** One bento telemetry tile inside the expanded card: a bold readout over a micro label. */
   function userStat(v: string, l: string, glyph?: 'coin' | 'star'): HTMLElement {
     const s = document.createElement('span');
@@ -3091,6 +3146,15 @@ export function createAdmin(api: AdminApi): Admin {
   };
   const AGE_CHIP: Record<AgeBand, string> = {
     all: 'All', u18: '<18', '18-24': '18-24', '25-34': '25-34', '35p': '35+',
+  };
+  const PLAN_LABEL: Record<VipPlanFilter, string> = {
+    all: 'All Users',
+    free: 'Free (Non-VIP)',
+    active: 'All Active VIP',
+    '7d': 'VIP: 7 Days',
+    '30d': 'VIP: 30 Days',
+    '90d': 'VIP: 90 Days',
+    expired: 'Expired VIP',
   };
   const SORT_LABEL: Record<DirSort, string> = {
     default: 'Default', lastPlayed: 'Last played', joined: 'Newest', tiq: 'Top TIQ',
@@ -3132,6 +3196,11 @@ export function createAdmin(api: AdminApi): Admin {
     if (usersCountryV) usersCountryV.textContent = usersCountry || 'ALL';
     if (usersAgeV) usersAgeV.textContent = AGE_LABEL[usersAge];
     if (usersSortV) usersSortV.textContent = SORT_LABEL[usersSort];
+    if (usersPlanEl) {
+      if (usersPlanEl.value !== usersPlan) usersPlanEl.value = usersPlan;
+      usersPlanEl.setAttribute('aria-label', `Plan: ${PLAN_LABEL[usersPlan]}`);
+    }
+    if (usersPlanV) usersPlanV.textContent = PLAN_LABEL[usersPlan];
     usersCountryTrig?.setAttribute(
       'aria-label', `Country: ${usersCountry ? nameOf(usersCountry) : 'all countries'}`,
     );
@@ -3142,7 +3211,10 @@ export function createAdmin(api: AdminApi): Admin {
     usersSortSelect?.refresh();
     for (const pod of usersAdvPods) {
       const key = pod.dataset.uadv;
-      const on = key === 'country' ? !!usersCountry : key === 'age' ? usersAge !== 'all' : usersSort !== 'default';
+      const on = key === 'country' ? !!usersCountry
+        : key === 'age' ? usersAge !== 'all'
+          : key === 'plan' ? usersPlan !== 'all'
+            : usersSort !== 'default';
       pod.dataset.on = String(on);
     }
   }
@@ -3192,6 +3264,7 @@ export function createAdmin(api: AdminApi): Admin {
    * handlers outliving a repaint.
    */
   function playerCard(p: DirPlayer): HTMLLIElement {
+    const now = Date.now();
     const li = document.createElement('li');
     li.className = 'adm-user';
     li.dataset.uid = p.id;
@@ -3241,6 +3314,8 @@ export function createAdmin(api: AdminApi): Admin {
       verified.append(icon('#i-check', 'adm-user-vb-i'));
       nameRow.append(verified);
     }
+    const vipBadge = userVipBadge(p, now);
+    if (vipBadge) nameRow.append(vipBadge);
 
     const sub = document.createElement('span');
     sub.className = 'adm-user-m';
@@ -3256,6 +3331,8 @@ export function createAdmin(api: AdminApi): Admin {
     tiqValue.textContent = `TIQ ${figure(p.tiq)}`;
     tiqPill.append(tiqValue);
     sub.append(handle, document.createTextNode(' '), tiqPill);
+    const vipDays = userVipDays(p, now);
+    if (vipDays) sub.append(document.createTextNode(' '), vipDays);
 
     const activity = activityOf(p);
     const act = document.createElement('span');
@@ -3295,6 +3372,16 @@ export function createAdmin(api: AdminApi): Admin {
       ['last seen', agoOf(p.lastSeen)],
     ];
     if (age) stamps.push(['age', String(age)]);
+    const vipUntil = vipUntilOf(p);
+    if (vipUntil > 0) {
+      const vipPlan = vipPlanOf(p.vipPlan);
+      stamps.push([
+        'vip',
+        vipUntil > now
+          ? `${vipPlan ? `VIP ${vipPlan.id.toUpperCase()} · ` : ''}${vipDaysLeftUntil(vipUntil, now)}d left`
+          : 'expired',
+      ]);
+    }
     stamps.forEach(([label, value], i) => {
       const group = document.createElement('span');
       group.className = 'adm-user-id-group';
@@ -3414,8 +3501,8 @@ export function createAdmin(api: AdminApi): Admin {
       const paintLocal = () => {
         const page = directoryPage(
           {
-            q: usersQuery, filter: usersFilter, country: usersCountry, age: usersAge, sort: usersSort,
-            offset, limit: PAGE_SIZE,
+            q: usersQuery, filter: usersFilter, country: usersCountry, age: usersAge,
+            plan: usersPlan, sort: usersSort, offset, limit: PAGE_SIZE,
           },
           liveSeat(),
         );
@@ -3435,7 +3522,7 @@ export function createAdmin(api: AdminApi): Admin {
       }
 
       const live = await fetchPlayers(
-        usersQuery, usersFilter, usersCountry, usersAge, usersSort, offset, PAGE_SIZE,
+        usersQuery, usersFilter, usersCountry, usersAge, usersPlan, usersSort, offset, PAGE_SIZE,
       );
       if (run !== usersSeq) return;                 // a newer read has already been asked for
       usersProbed = true;
@@ -4932,7 +5019,7 @@ export function createAdmin(api: AdminApi): Admin {
   /** The season as the on-device directory sees it, for a reset with no Worker behind the page. */
   function localSeasonReset(): ArenaReply & { ok: true } {
     const page = directoryPage({
-      q: '', filter: 'all', country: '', age: 'all', sort: 'tiq', offset: 0, limit: 50,
+      q: '', filter: 'all', country: '', age: 'all', plan: 'all', sort: 'tiq', offset: 0, limit: 50,
     }, liveSeat());
     const order = [...page.players].sort((a, b) => b.tiq - a.tiq || b.wins - a.wins || a.id.localeCompare(b.id));
     const old = arena();
@@ -5292,8 +5379,10 @@ export function createAdmin(api: AdminApi): Admin {
   /* the Users tab: the filter chips, the advanced toolbar, the search, the cards and Load More */
   const paintChipState = () => {
     for (const c of userChips) {
-      c.setAttribute('aria-pressed', String((c.dataset.ufilter ?? 'all') === usersFilter));
+      const pressed = usersPlan === 'all' && (c.dataset.ufilter ?? 'all') === usersFilter;
+      c.setAttribute('aria-pressed', String(pressed));
     }
+    usersVipChip?.setAttribute('aria-pressed', String(usersPlan === 'active'));
   };
 
   /** A toolbar move repaints on the local index immediately; the zero-delay task only folds doubles. */
@@ -5307,6 +5396,7 @@ export function createAdmin(api: AdminApi): Admin {
     usersQuery = '';
     usersCountry = '';
     usersAge = 'all';
+    usersPlan = 'all';
     usersSort = 'default';
     openPlayer = '';
     window.clearTimeout(usersTimer);
@@ -5322,9 +5412,12 @@ export function createAdmin(api: AdminApi): Admin {
   for (const chip of userChips) {
     chip.addEventListener('click', () => {
       const next = (chip.dataset.ufilter ?? 'all') as DirFilter;
-      if (next === usersFilter) return;
+      if (next === usersFilter && usersPlan === 'all') return;
       const previous = usersFilter;
       usersFilter = next;
+      /* the standard chips are whole views: a plan left over from the VIP shortcut or the
+         dropdown clears with them, so one chip is always the view on screen */
+      usersPlan = 'all';
       if (next === 'tiq') usersSort = 'tiq';
       else if (previous === 'tiq') usersSort = 'default';
       openPlayer = '';
@@ -5334,6 +5427,31 @@ export function createAdmin(api: AdminApi): Admin {
       void refreshUsers(true);
     });
   }
+
+  /* the gold chip is the one-tap shortcut for All Active VIP: it lights while that view holds */
+  usersVipChip?.addEventListener('click', () => {
+    const next: VipPlanFilter = usersPlan === 'active' ? 'all' : 'active';
+    usersPlan = next;
+    if (next === 'active') usersFilter = 'all';
+    openPlayer = '';
+    paintChipState();
+    syncAdvanced();
+    impact('light');
+    void refreshUsers(true);
+  });
+
+  /* the native plan selector: one duration tier, active/free, or an ended term */
+  usersPlanEl?.addEventListener('change', () => {
+    const next = vipPlanFilterOf(usersPlanEl.value);
+    usersPlan = next;
+    /* the plan dropdown is a whole view: a quick activity chip yields to it */
+    if (next !== 'all') usersFilter = 'all';
+    openPlayer = '';
+    paintChipState();
+    syncAdvanced();
+    impact('light');
+    scheduleAdvRefresh();
+  });
 
   /* the three advanced pods: custom listboxes whose menus live in the stage, never in the scroll body */
   if (usersCountryTrig && usersCountryMenu) {

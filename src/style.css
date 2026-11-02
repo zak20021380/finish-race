@@ -18724,6 +18724,24 @@ html.reduced-motion .adm-server[data-state="connecting"] .adm-server-empty-i .ic
     inset 0 1px 0 rgba(255, 255, 255, .5),
     0 0 14px -4px rgba(245, 158, 11, .7);
 }
+/* the Obsidian VIP shortcut: gold ink over an obsidian face, lit but not filled until chosen */
+.adm-chip-vip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--gold-ink);
+  background: linear-gradient(180deg, rgba(38, 32, 22, .92) 0%, rgba(13, 16, 24, .94) 100%);
+  box-shadow:
+    var(--inset),
+    inset 0 0 0 1px rgba(252, 211, 77, .34),
+    0 0 16px -7px rgba(245, 158, 11, .8);
+}
+.adm-chip-vip > span[aria-hidden="true"] {
+  font-size: 11px;
+  line-height: 1;
+  filter: drop-shadow(0 0 5px rgba(245, 158, 11, .55));
+}
+.adm-chip-vip[aria-pressed="true"] > span[aria-hidden="true"] { filter: none; }
 
 .adm-inbox-list {
   display: flex;
@@ -18965,8 +18983,12 @@ html.reduced-motion .adm-server[data-state="connecting"] .adm-server-empty-i .ic
    260px scroll well of its own. */
 .adm-adv {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
+}
+/* a phone gets a calm 2x2 toolbar: four equal keys, no clipping and no horizontal scroll */
+@media (max-width: 520px) {
+  .adm-adv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .adm-fn {
   position: relative;
@@ -19056,10 +19078,42 @@ html.reduced-motion .adm-server[data-state="connecting"] .adm-server-empty-i .ic
 .adm-fn[data-on="true"] .adm-fn-chev,
 .adm-fn[data-open="true"] .adm-fn-chev { color: var(--honey-ink); }
 .adm-fn[data-open="true"] .adm-fn-chev { transform: rotate(-90deg); }
-@media (max-width: 339px) {
-  .adm-adv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .adm-fn[data-uadv="sort"] { grid-column: 1 / -1; }
+
+/* the native plan selector, dressed as the same recessed clay key as its neighbours.
+   The visible face is a mirror; the real <select> is an invisible full-pod hit target above it,
+   so the 52px key opens the native list on any phone without a cramped 18px control. */
+.adm-fn-plan {
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px 9px;
 }
+.adm-fn-plan[data-on="true"] .adm-fn-k { color: var(--honey-ink); }
+.adm-fn-plan-face { position: relative; display: flex; width: 100%; }
+.adm-fn-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  appearance: none;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
+}
+.adm-fn-select:focus { outline: none; }
+.adm-fn-select option { background: #0D131F; color: var(--ink); }
+.adm-fn-plan .adm-fn-chev {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  margin-top: -5px;
+  pointer-events: none;
+}
+.adm-fn-plan[data-on="true"] .adm-fn-chev { color: var(--honey-ink); }
 
 /* ---- the floating menu: deep frosted slate, one razor rim, one soft ambient shadow ---- */
 .custom-select-menu {
@@ -19451,6 +19505,37 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
   box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .38);
 }
 .adm-user-vb-i { width: 9px; height: 9px; }
+/* Obsidian VIP: gold ink on a black-gold face, with one quiet ambient glow for a running term */
+.adm-user-vip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px 1px 5px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #241E12 0%, #12141A 100%);
+  color: var(--gold-ink);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .05em;
+  line-height: 1.5;
+  white-space: nowrap;
+  box-shadow:
+    inset 0 0 0 1px rgba(252, 211, 77, .38),
+    0 0 12px -5px rgba(245, 158, 11, .85);
+}
+.adm-user-vip-crown {
+  flex: none;
+  font-size: 9px;
+  line-height: 1;
+  filter: drop-shadow(0 0 4px rgba(245, 158, 11, .45));
+}
+/* an ended term is a fact, not a highlight: muted silver, only shown in the Expired VIP view */
+.adm-user-vip[data-plan="expired"] {
+  background: var(--field);
+  color: var(--text-dim);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .22);
+}
 .adm-user-m {
   display: flex;
   align-items: center;
@@ -19485,6 +19570,16 @@ html.reduced-motion .adm-users-refresh[data-busy="true"] .ico { animation-durati
 }
 .adm-user-tiq-i { width: 10px; height: 10px; }
 .adm-user-tiq-v { font-variant-numeric: tabular-nums; }
+.adm-user-vip-left {
+  flex: none;
+  color: var(--gold-ink);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  line-height: 1.5;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 /* the activity audit: one dot and one relative stamp under the telemetry */
 .adm-user-act {
   display: flex;

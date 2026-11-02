@@ -3748,6 +3748,10 @@
               <button class="adm-chip" type="button" data-ufilter="active" aria-pressed="false">Active Today</button>
               <button class="adm-chip" type="button" data-ufilter="tiq" aria-pressed="false">Top TIQ</button>
               <button class="adm-chip" type="button" data-ufilter="flagged" aria-pressed="false">Flagged</button>
+              <button class="adm-chip adm-chip-vip" type="button" id="users-vip-chip" aria-pressed="false"
+                aria-label="Show all players with an active Obsidian VIP subscription">
+                <span aria-hidden="true">👑</span> Obsidian VIP
+              </button>
             </div>
             <div class="adm-adv" role="group" aria-label="Filter and sort players">
               <div class="adm-fn" data-uadv="country">
@@ -3774,6 +3778,22 @@
                   </span>
                 </button>
                 <div class="custom-select-menu" id="users-age-menu" role="listbox" aria-label="Age band" hidden></div>
+              </div>
+              <div class="adm-fn adm-fn-plan" data-uadv="plan">
+                <span class="adm-fn-k" aria-hidden="true">Plan</span>
+                <span class="adm-fn-face adm-fn-plan-face" aria-hidden="true">
+                  <span class="adm-fn-v" id="adm-filter-plan-v">All Users</span>
+                  <svg class="ico adm-fn-chev"><use href="#i-next" /></svg>
+                </span>
+                <select class="adm-fn-select" id="adm-filter-plan" aria-label="Plan: All Users">
+                  <option value="all" selected>All Users</option>
+                  <option value="free">Free (Non-VIP)</option>
+                  <option value="active">All Active VIP</option>
+                  <option value="7d">VIP: 7 Days</option>
+                  <option value="30d">VIP: 30 Days</option>
+                  <option value="90d">VIP: 90 Days</option>
+                  <option value="expired">Expired VIP</option>
+                </select>
               </div>
               <div class="adm-fn" data-uadv="sort">
                 <button class="custom-select-trigger adm-fn-trigger" type="button" id="users-sort-trigger"
@@ -3802,7 +3822,7 @@
             <div class="adm-users-empty" id="adm-users-empty" hidden>
               <span class="adm-users-empty-i" aria-hidden="true"><svg class="ico"><use href="#i-users" /></svg></span>
               <p class="adm-users-empty-t">No players match the selected criteria</p>
-              <p class="adm-users-empty-s">Widen the country, age or activity window and try again.</p>
+              <p class="adm-users-empty-s">Widen the country, age, plan or activity window and try again.</p>
               <button class="adm-btn adm-btn-primary adm-users-reset" type="button" id="users-reset">Reset Filters</button>
             </div>
             <button class="adm-btn adm-btn-wide" type="button" id="users-more" hidden>Load More</button>
