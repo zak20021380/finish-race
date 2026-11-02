@@ -15664,6 +15664,83 @@ html.reduced-motion .admin-tab[aria-selected="true"] .admin-tab-ico { animation:
 }
 .admin-panel { display: flex; flex-direction: column; gap: var(--s2); }
 
+/* ---- Controls sub-navigation: three obsidian keys over the long control stack ----
+   The wrapper is the sticky element and owns the stage-colored backdrop; the track
+   itself stays the specified translucent glass. Every key is equal-width, so the
+   bar fits a 320px phone without truncation or a horizontal scroll. */
+.adm-ctrl-tabs-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  padding: 2px 0 7px;
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg) 84%, rgba(16, 20, 29, 0) 100%);
+}
+.adm-ctrl-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, .04);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    0 12px 26px -22px rgba(0, 0, 0, .95);
+}
+.adm-ctrl-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 8px;
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--motion-fast),
+    background var(--motion-fast),
+    border-color var(--motion-fast),
+    box-shadow var(--motion-fast);
+}
+.adm-ctrl-tab .ico { width: 14px; height: 14px; flex: none; color: currentColor; }
+.adm-ctrl-tab:hover { color: var(--ink); background: rgba(255, 255, 255, .035); }
+.adm-ctrl-tab[aria-selected="true"] {
+  color: #FEF08A;
+  font-weight: 700;
+  background: linear-gradient(135deg, rgba(234, 179, 8, .2), rgba(234, 179, 8, .08));
+  border-color: rgba(234, 179, 8, .4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    0 0 18px -6px rgba(234, 179, 8, .55);
+}
+.adm-ctrl-tab:focus-visible { outline: 2px solid var(--honey-ink); outline-offset: 2px; }
+
+/* one view at a time: hidden removes it from layout, the fade makes the swap feel intentional */
+.adm-ctrl-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  opacity: 0;
+  transition: opacity .15s ease-out;
+}
+.adm-ctrl-view[hidden] { display: none; }
+.adm-ctrl-view.is-visible { opacity: 1; }
+html.reduced-motion .adm-ctrl-view { transition: none; }
+@media (max-width: 350px) {
+  .adm-ctrl-tab { min-height: 40px; gap: 4px; padding: 0 4px; font-size: 10.5px; }
+  .adm-ctrl-tab .ico { width: 13px; height: 13px; }
+}
+
 .adm-sec-h {
   display: flex;
   align-items: baseline;
@@ -17230,7 +17307,8 @@ html.reduced-motion .adm-arena-beacon { animation: none; }
   white-space: nowrap;
   overflow: hidden;
 }
-#adm-arena[data-state="maintenance"] .adm-count {
+#adm-arena[data-state="maintenance"] .adm-count,
+#adm-season[data-state="maintenance"] .adm-count {
   border-color: rgba(224, 38, 79, .28);
   color: var(--red-ink);
   text-shadow: 0 0 14px rgba(224, 38, 79, .3);

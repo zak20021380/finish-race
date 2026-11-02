@@ -1577,6 +1577,8 @@ export function createAdmin(api: AdminApi): Admin {
   const closeBtn = $<HTMLButtonElement>('admin-close');
   const tabs = [...document.querySelectorAll<HTMLButtonElement>('[data-atab]')];
   const panels = [...document.querySelectorAll<HTMLElement>('[data-apanel]')];
+  const ctrlTabs = [...(stage?.querySelectorAll<HTMLButtonElement>('[data-ctrl-tab]') ?? [])];
+  const ctrlViews = [...(stage?.querySelectorAll<HTMLElement>('[data-ctrl-view]') ?? [])];
   const sws = [...document.querySelectorAll<HTMLButtonElement>('[data-tog]')];
   /* every lookup below is scoped to the stage: the game-mode drawer carries its own
      `data-step` ball counters, and a bare `[data-step]` would drag them in with it */
@@ -1607,6 +1609,7 @@ export function createAdmin(api: AdminApi): Admin {
   const serverMeta = $<HTMLElement>('srv-meta');
   /* Arena & tournament board */
   const arenaRoot = $<HTMLElement>('adm-arena');
+  const seasonRoot = $<HTMLElement>('adm-season');
   const arenaHeadChip = $<HTMLElement>('arena-head-chip');
   const arenaStateSub = $<HTMLElement>('arena-state-sub');
   const arenaStateKeys = [...(stage?.querySelectorAll<HTMLButtonElement>('[data-arena-state]') ?? [])];
@@ -1942,9 +1945,10 @@ export function createAdmin(api: AdminApi): Admin {
     const expired = a.status === 'active' && a.endsAt <= Date.now();
     const maint = runtime.maintenance;
     const locked = arenaLocked(a) || maint;
-    if (arenaRoot) {
-      arenaRoot.dataset.state = expired ? 'finale' : a.status;
-      arenaRoot.dataset.lock = String(a.matchLocked || maint);
+    for (const root of [arenaRoot, seasonRoot]) {
+      if (!root) continue;
+      root.dataset.state = expired ? 'finale' : a.status;
+      root.dataset.lock = String(a.matchLocked || maint);
     }
     if (arenaHeadChip) {
       arenaHeadChip.textContent = maint
@@ -5143,6 +5147,69 @@ export function createAdmin(api: AdminApi): Admin {
     /* the springy gold pill rides under the active tab; its own width is one step */
     if (navPill) navPill.style.transform = `translateX(${at * 100}%)`;
   }
+
+  /* ---------- Controls sub-tabs: general, arena, season ---------- */
+
+  type CtrlTabId = 'switches' | 'arena' | 'season';
+  const CTRL_TAB_KEY = 'detour.admin.ctrl.v1';
+  const isCtrlTab = (v: string | undefined): v is CtrlTabId =>
+    v === 'switches' || v === 'arena' || v === 'season';
+
+  function readCtrlTab(): CtrlTabId {
+    try {
+      const raw = window.sessionStorage.getItem(CTRL_TAB_KEY) ?? '';
+      return isCtrlTab(raw) ? raw : 'switches';
+    } catch {
+      return 'switches';
+    }
+  }
+
+  /** One view at a time; every panel's bindings stay live because the DOM is never rebuilt. */
+  function selectCtrlTab(id: CtrlTabId): void {
+    for (const t of ctrlTabs) {
+      const on = t.dataset.ctrlTab === id;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+    }
+    for (const view of ctrlViews) {
+      const on = view.dataset.ctrlView === id;
+      if (on) {
+        view.hidden = false;
+        view.classList.remove('is-visible');
+        void view.offsetWidth;              // restart the fade on every entry
+        view.classList.add('is-visible');
+      } else {
+        view.hidden = true;
+        view.classList.remove('is-visible');
+      }
+    }
+    try {
+      window.sessionStorage.setItem(CTRL_TAB_KEY, id);
+    } catch {
+      /* storage refused: the view still switches */
+    }
+  }
+
+  for (const t of ctrlTabs) {
+    t.addEventListener('click', () => {
+      const id = t.dataset.ctrlTab;
+      if (!isCtrlTab(id)) return;
+      impact('light');
+      selectCtrlTab(id);
+    });
+    t.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      const i = ctrlTabs.indexOf(t);
+      const step = e.key === 'ArrowRight' ? 1 : -1;
+      const next = ctrlTabs[(i + step + ctrlTabs.length) % ctrlTabs.length];
+      const nextId = next?.dataset.ctrlTab;
+      if (!next || !isCtrlTab(nextId)) return;
+      next.focus();
+      selectCtrlTab(nextId);
+    });
+  }
+  selectCtrlTab(readCtrlTab());
 
   /* ---------- wiring ---------- */
 

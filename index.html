@@ -3876,29 +3876,35 @@
             </div>
           </div>
 
-          <!-- ---------- Controls: the live switches, the broadcast, the tuning ---------- -->
+          <!-- ---------- Controls: three sub-views — general, arena, season ---------- -->
           <div class="admin-panel" data-apanel="controls" id="apanel-controls" role="tabpanel"
             aria-labelledby="atab-controls" hidden>
-            <p class="adm-sec-h">Live switches</p>
-            <div class="adm-list">
-              <button class="adm-sw" type="button" role="switch" data-tog="salesOpen" aria-checked="false"
-                aria-label="Shop Store">
-                <span class="adm-sw-i" aria-hidden="true"><svg class="ico"><use href="#i-bag" /></svg></span>
-                <span class="adm-sw-t">Shop Store</span>
-                <span class="adm-knob" aria-hidden="true"><i></i></span>
-              </button>
-              <button class="adm-sw" type="button" role="switch" data-tog="maintenance" aria-checked="false"
-                aria-label="Maintenance Lock">
-                <span class="adm-sw-i" aria-hidden="true"><svg class="ico"><use href="#i-lock" /></svg></span>
-                <span class="adm-sw-t">Maintenance Lock</span>
-                <span class="adm-knob" aria-hidden="true"><i></i></span>
-              </button>
+            <div class="adm-ctrl-tabs-wrap">
+              <div class="adm-ctrl-tabs" role="tablist" aria-label="Controls sections">
+                <button class="adm-ctrl-tab" type="button" role="tab" id="actrl-tab-switches"
+                  data-ctrl-tab="switches" aria-selected="true" aria-controls="ctrl-panel-switches">
+                  <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-bolt" /></svg>
+                  <span>General</span>
+                </button>
+                <button class="adm-ctrl-tab" type="button" role="tab" id="actrl-tab-arena"
+                  data-ctrl-tab="arena" aria-selected="false" aria-controls="ctrl-panel-arena" tabindex="-1">
+                  <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-swords" /></svg>
+                  <span>Arena</span>
+                </button>
+                <button class="adm-ctrl-tab" type="button" role="tab" id="actrl-tab-season"
+                  data-ctrl-tab="season" aria-selected="false" aria-controls="ctrl-panel-season" tabindex="-1">
+                  <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-cup" /></svg>
+                  <span>Season</span>
+                </button>
+              </div>
             </div>
 
-            <!-- ---------- Arena & tournament: the season machine, clock, divisions, emergency keys ---------- -->
-            <p class="adm-sec-h">Arena &amp; tournament<span class="adm-bc-live" id="arena-head-chip" data-on="true">OPEN</span></p>
-            <section class="adm-arena" id="adm-arena" data-state="active" data-lock="false"
-              aria-label="Arena and tournament management">
+            <div class="adm-ctrl-view" id="ctrl-panel-arena" data-ctrl-view="arena" role="tabpanel"
+              aria-labelledby="actrl-tab-arena" hidden>
+              <!-- ---------- Arena & matchmaking: the master state and the queue lock ---------- -->
+              <p class="adm-sec-h">Arena &amp; tournament<span class="adm-bc-live" id="arena-head-chip" data-on="true">OPEN</span></p>
+              <section class="adm-arena" id="adm-arena" data-state="active" data-lock="false"
+                aria-label="Arena and tournament management">
 
               <!-- the master state: three tactile keys and the queue lock -->
               <div class="adm-arena-card">
@@ -3933,6 +3939,42 @@
                 <p class="adm-arena-fine">A lock refuses new entries and dismisses the queue.
                   Races already on a board play out.</p>
               </div>
+            </section>
+
+            <p class="adm-sec-h">Matchmaking queues</p>
+            <div class="adm-tunes">
+              <div class="adm-tune" data-step="radius-normal">
+                <span class="adm-tune-n">Queue Normal</span>
+                <span class="adm-steps-c">
+                  <button class="adm-step" type="button" data-dir="-1" aria-label="Narrow the normal queue radius">
+                    <svg class="ico" aria-hidden="true"><use href="#i-minus" /></svg>
+                  </button>
+                  <b class="adm-val" data-val>±250</b>
+                  <button class="adm-step" type="button" data-dir="1" aria-label="Widen the normal queue radius">
+                    <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>
+                  </button>
+                </span>
+              </div>
+              <div class="adm-tune" data-step="radius-wide">
+                <span class="adm-tune-n">Queue Wide</span>
+                <span class="adm-steps-c">
+                  <button class="adm-step" type="button" data-dir="-1" aria-label="Narrow the wide queue radius">
+                    <svg class="ico" aria-hidden="true"><use href="#i-minus" /></svg>
+                  </button>
+                  <b class="adm-val" data-val>±600</b>
+                  <button class="adm-step" type="button" data-dir="1" aria-label="Widen the wide queue radius">
+                    <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>
+                  </button>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="adm-ctrl-view" id="ctrl-panel-season" data-ctrl-view="season" role="tabpanel"
+            aria-labelledby="actrl-tab-season" hidden>
+            <p class="adm-sec-h">Season &amp; league</p>
+            <section class="adm-arena" id="adm-season" data-state="active" data-lock="false"
+              aria-label="Season and league management">
 
               <!-- season title and the Bronze → Challenger thresholds -->
               <div class="adm-arena-card">
@@ -4066,6 +4108,25 @@
                   the arena, dismisses the queue and notifies every connected client.</p>
               </div>
             </section>
+          </div>
+
+          <div class="adm-ctrl-view is-visible" id="ctrl-panel-switches" data-ctrl-view="switches"
+            role="tabpanel" aria-labelledby="actrl-tab-switches">
+            <p class="adm-sec-h">Live switches</p>
+            <div class="adm-list">
+              <button class="adm-sw" type="button" role="switch" data-tog="salesOpen" aria-checked="false"
+                aria-label="Shop Store">
+                <span class="adm-sw-i" aria-hidden="true"><svg class="ico"><use href="#i-bag" /></svg></span>
+                <span class="adm-sw-t">Shop Store</span>
+                <span class="adm-knob" aria-hidden="true"><i></i></span>
+              </button>
+              <button class="adm-sw" type="button" role="switch" data-tog="maintenance" aria-checked="false"
+                aria-label="Maintenance Lock">
+                <span class="adm-sw-i" aria-hidden="true"><svg class="ico"><use href="#i-lock" /></svg></span>
+                <span class="adm-sw-t">Maintenance Lock</span>
+                <span class="adm-knob" aria-hidden="true"><i></i></span>
+              </button>
+            </div>
 
             <p class="adm-sec-h">Broadcast<span class="adm-bc-live" id="bc-live" data-on="false">Nothing dispatched</span></p>
             <div class="adm-bc">
@@ -4113,30 +4174,6 @@
                   </button>
                   <b class="adm-val" data-val>8s</b>
                   <button class="adm-step" type="button" data-dir="1" aria-label="Lengthen blitz turn timer">
-                    <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>
-                  </button>
-                </span>
-              </div>
-              <div class="adm-tune" data-step="radius-normal">
-                <span class="adm-tune-n">Queue Normal</span>
-                <span class="adm-steps-c">
-                  <button class="adm-step" type="button" data-dir="-1" aria-label="Narrow the normal queue radius">
-                    <svg class="ico" aria-hidden="true"><use href="#i-minus" /></svg>
-                  </button>
-                  <b class="adm-val" data-val>±250</b>
-                  <button class="adm-step" type="button" data-dir="1" aria-label="Widen the normal queue radius">
-                    <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>
-                  </button>
-                </span>
-              </div>
-              <div class="adm-tune" data-step="radius-wide">
-                <span class="adm-tune-n">Queue Wide</span>
-                <span class="adm-steps-c">
-                  <button class="adm-step" type="button" data-dir="-1" aria-label="Narrow the wide queue radius">
-                    <svg class="ico" aria-hidden="true"><use href="#i-minus" /></svg>
-                  </button>
-                  <b class="adm-val" data-val>±600</b>
-                  <button class="adm-step" type="button" data-dir="1" aria-label="Widen the wide queue radius">
                     <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>
                   </button>
                 </span>
@@ -4306,6 +4343,7 @@
             </button>
             <p class="adm-note">Root admins come from the server's <code>ADMIN_IDS</code> allowlist
               and cannot be revoked here. Everyone else is appointed from this list.</p>
+          </div>
           </div>
 
           <!-- ---------- Server: live matchmaker telemetry and the room inspector ---------- -->
