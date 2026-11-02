@@ -23574,6 +23574,26 @@ html.reduced-motion .announce.is-open .announce-panel { animation: none; }
 html.reduced-motion .announce-dismiss,
 html.reduced-motion .announce-cta { transition: none; }
 
+/* A maintenance lockout is a notice, not a dispatch: the CTA is absent from the flow even if a
+   future caller forgets the blank label, and the one acknowledge key takes the full gold row. */
+.announce.is-maintenance .announce-cta { display: none; }
+.announce.is-maintenance .announce-actions { grid-template-columns: minmax(0, 1fr); }
+.announce.is-maintenance .announce-dismiss {
+  grid-column: 1 / -1;
+  color: #241402;
+  background: linear-gradient(180deg, #FFE7A8 0%, #F3D483 48%, #C9A75E 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .42),
+    inset 0 1px 0 rgba(255, 255, 255, .6),
+    0 10px 22px -14px rgba(243, 212, 131, .95);
+}
+.announce.is-maintenance .announce-dismiss:active {
+  color: #241402;
+  background: linear-gradient(180deg, #FFE7A8 0%, #F3D483 48%, #C9A75E 100%);
+  filter: brightness(1.05);
+}
+.announce.is-maintenance .announce-dismiss:focus-visible { outline-color: #FFF7E0; }
+
 /* ---- Persian & Arabic: the dual bar mirrors naturally, copy turns RTL ----
    The grid's inline axis owns the mirror, so the leading CTA lands on the right
    in RTL exactly as it lands on the left in LTR. Only type geometry is restated:

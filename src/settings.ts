@@ -181,6 +181,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     supportPlaceholder: 'Write your message or feedback here...',
     /* ---- Command Dispatch popup (src/broadcasts.ts) ---- */
     dispatchDismiss: 'Dismiss',
+    maintenanceTitle: 'Maintenance in progress',
+    maintenanceBody: 'The arena is locked for maintenance. New matches, rooms and lobbies are paused. Please check back shortly.',
+    maintenanceOk: 'OK',
     /* ---- shared tokens ---- */
     play: 'PLAY',
     searching: 'SEARCHING',
@@ -592,6 +595,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     supportPlaceholder: 'پیام یا بازخورد خود را اینجا بنویسید...',
     /* ---- پنجره اعلان رسمی (src/broadcasts.ts) ---- */
     dispatchDismiss: 'متوجه شدم',
+    maintenanceTitle: 'تعمیرات در جریان است',
+    maintenanceBody: 'آرنا برای تعمیرات قفل است. مسابقه‌ها، اتاق‌ها و لابی‌های جدید موقتاً متوقف شده‌اند. لطفاً کمی بعد دوباره تلاش کنید.',
+    maintenanceOk: 'متوجه شدم',
     /* ---- shared tokens ---- */
     play: 'شروع بازی',
     searching: 'در حال جستجو',
@@ -998,6 +1004,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     supportOk: 'Сообщение отправлено админам!',
     supportPlaceholder: 'Напишите здесь ваше сообщение или отзыв...',
     dispatchDismiss: 'Понятно',
+    maintenanceTitle: 'Идут технические работы',
+    maintenanceBody: 'Арена закрыта на время технических работ. Новые матчи, комнаты и лобби временно недоступны. Пожалуйста, загляните чуть позже.',
+    maintenanceOk: 'Понятно',
   },
   ar: {
     settingsTitle: 'الإعدادات',
@@ -1030,6 +1039,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     supportOk: 'تم إرسال الرسالة إلى الأدمن!',
     supportPlaceholder: 'اكتب رسالتك أو ملاحظاتك هنا...',
     dispatchDismiss: 'فهمت',
+    maintenanceTitle: 'جارٍ تنفيذ أعمال الصيانة',
+    maintenanceBody: 'الساحة مقفلة مؤقتًا أثناء الصيانة. المباريات والغرف والردهات الجديدة متوقفة الآن. يُرجى المحاولة بعد قليل.',
+    maintenanceOk: 'حسنًا',
   },
   es: {
     settingsTitle: 'Ajustes',
@@ -1062,6 +1074,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     supportOk: '¡Mensaje enviado a los admins!',
     supportPlaceholder: 'Escribe aquí tu mensaje o sugerencia...',
     dispatchDismiss: 'Entendido',
+    maintenanceTitle: 'Mantenimiento en curso',
+    maintenanceBody: 'La arena está bloqueada mientras se realiza el mantenimiento. Las nuevas partidas, salas y lobbies están en pausa. Vuelve a intentarlo en breve.',
+    maintenanceOk: 'Entendido',
   },
 };
 

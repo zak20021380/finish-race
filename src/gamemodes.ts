@@ -1079,6 +1079,10 @@ export function takeAutoLaunch(): boolean {
  * forgotten by the session — the code survives the drawer closing, the app sleeping and a reload.
  */
 function openRoom(code: string, host: boolean, opts?: { invite?: boolean }): void {
+  if (hooks.maintenance?.()) {
+    hooks.onMaintenance?.();
+    return;
+  }
   saveSession({ code, host, invite: opts?.invite === true, at: Date.now() });
   resumeTries = 0;
   codeTries = 0;
@@ -1178,6 +1182,14 @@ function connect(code: string, host: boolean, invite: boolean, resume: boolean):
       handle = null;
       abortCountdown();
       hideLobbyBanner();
+      /* A server that enforces the lock after this client's mirror went stale gets the same
+         single-key notice, not a second inline error on top of it. */
+      if (reason === 'MAINTENANCE') {
+        saveSession(null);
+        showView('room');
+        hooks.onMaintenance?.();
+        return;
+      }
       /* Two hosts on one code would fight over the crown. The collision is ours to fix: mint a
          fresh code and try again, rather than asking the player to understand a room they cannot
          see. */
@@ -1681,6 +1693,10 @@ export interface GameModeInit {
    * banner's JOIN NOW uses it before opening the waiting room.
    */
   onAbandonMatch?: () => void;
+  /** The live maintenance lock: true while new rooms and lobbies are closed. */
+  maintenance?: () => boolean;
+  /** A maintenance lockout: raise the single-key notice instead of opening the room. */
+  onMaintenance?: () => void;
 }
 
 export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
@@ -1742,6 +1758,10 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
 
   /* ---- entry: create mints a code and walks straight into the lobby ---- */
   document.getElementById('gm-create')?.addEventListener('click', () => {
+    if (hooks.maintenance?.()) {
+      hooks.onMaintenance?.();
+      return;
+    }
     impact('medium');
     clearRoomError();
     const sel = createRoom();
@@ -1766,6 +1786,10 @@ export function initGameModes(sheets: Sheets, init?: GameModeInit): void {
       impact('light');
       showRoomError(res.error);
       input.focus({ preventScroll: true });
+      return;
+    }
+    if (hooks.maintenance?.()) {
+      hooks.onMaintenance?.();
       return;
     }
     impact('medium');

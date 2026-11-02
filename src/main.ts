@@ -377,13 +377,15 @@ const matchmaking = createMatchmaking({
   onRefused: (reason) => {
     impact('light');
     notify('warning');
-    showNote(reason === 'MATCHING_LOCKED'
-      ? 'The arena is locked — new matches are paused.'
-      : reason === 'SEASON_ENDED'
-        ? 'The season ended — standings are final.'
-        : reason === 'MAINTENANCE'
-          ? 'Maintenance in progress — matchmaking is paused.'
+    if (reason === 'MAINTENANCE') {
+      announcements.maintenance();
+    } else {
+      showNote(reason === 'MATCHING_LOCKED'
+        ? 'The arena is locked — new matches are paused.'
+        : reason === 'SEASON_ENDED'
+          ? 'The season ended — standings are final.'
           : 'The server closed the queue. Try again in a moment.', false, 2600);
+    }
     const drawer = sheetById('sheet-game-modes');
     if (drawer) sheets.open(drawer);
   },
@@ -399,7 +401,7 @@ function queueMatch(mode: 'pvp' | 'arena' = 'pvp') {
   if (runtime.maintenance) {
     impact('light');
     notify('warning');
-    showNote('Maintenance in progress — matchmaking is paused.', false, 2600);
+    announcements.maintenance();
     return;
   }
   /* the Command Center's own lock, mirrored from the server: new entries stop, live races play out */
@@ -3136,6 +3138,9 @@ initGameModes(sheets, {
   canPopLobby: () => router.current !== 'game',
   /* JOIN NOW on the in-match arrival banner leaves the board through this same quit path. */
   onAbandonMatch: () => quitToMenu(),
+  /* The live mirror closes room entry the same way it closes the queue. */
+  maintenance: () => runtime.maintenance,
+  onMaintenance: () => announcements.maintenance(),
 });
 onGameModeChange(paintParty);
 onLang(paintParty);

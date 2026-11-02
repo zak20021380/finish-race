@@ -203,6 +203,8 @@ export interface Announcements {
   receive(b: Broadcast): void;
   /** The Controls tab's pinned one-liner: raise it on this device only, no store, no feed card. */
   dispatch(text: string): void;
+  /** A maintenance lockout: informational only, no CTA, one acknowledge key. */
+  maintenance(): void;
   /** The Command Center just archived one: pull it from the device store and close its popup. */
   retract(id: string): void;
   /** Close the open popup, if any (the admin stage stepping in front of it, for one). */
@@ -248,12 +250,16 @@ export function createAnnouncements(deps: AnnouncementsDeps): Announcements {
   let closeTimer = 0;
   /** What had focus before the popup took it, so Dismiss can hand it back. */
   let restoreFocus: HTMLElement | null = null;
+  /** Which label the acknowledge key speaks; a maintenance lockout says OK, not Dismiss. */
+  let dismissKey = 'dispatchDismiss';
+  /** Whether the open popup is a stored broadcast that should be remembered on acknowledge. */
+  let currentStored = true;
 
   /* The acknowledge key speaks the player's language. The markup ships the English
      fallback (`data-i18n="dispatchDismiss"`), which the Settings sweep also repaints;
      painting it here too keeps the popup correct even when it opens before that sweep. */
   const paintDismiss = (): void => {
-    if (dismissBtn) dismissBtn.textContent = t('dispatchDismiss');
+    if (dismissBtn) dismissBtn.textContent = t(dismissKey);
   };
   paintDismiss();
   window.addEventListener('detour:lang', paintDismiss);
@@ -267,7 +273,10 @@ export function createAnnouncements(deps: AnnouncementsDeps): Announcements {
     );
   };
 
-  const show = (b: Broadcast): void => {
+  const show = (
+    b: Broadcast,
+    opts?: { ack?: string; maintenance?: boolean; stored?: boolean },
+  ): void => {
     if (!modal || !title || !body) return;
     if (closeTimer) {
       window.clearTimeout(closeTimer);
@@ -275,6 +284,9 @@ export function createAnnouncements(deps: AnnouncementsDeps): Announcements {
     }
     current = b;
     open = true;
+    currentStored = opts?.stored !== false;
+    dismissKey = opts?.ack ?? 'dispatchDismiss';
+    paintDismiss();
     title.textContent = b.title;
     body.innerHTML = renderBody(b.body);
     if (cta) {
@@ -283,6 +295,7 @@ export function createAnnouncements(deps: AnnouncementsDeps): Announcements {
       cta.textContent = has ? b.ctaLabel : '';
     }
     restoreFocus = (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    modal.classList.toggle('is-maintenance', opts?.maintenance === true);
     modal.hidden = false;
     if (scrim) scrim.hidden = false;
     /* a forced reflow so the entry transition always runs from its start state */
@@ -311,6 +324,8 @@ export function createAnnouncements(deps: AnnouncementsDeps): Announcements {
     scrim?.classList.remove('is-open');
     const done = (): void => {
       modal.hidden = true;
+      modal.classList.remove('is-maintenance');
+      dismissKey = 'dispatchDismiss';
       if (scrim) scrim.hidden = true;
       restoreFocus?.focus?.();
       restoreFocus = null;
@@ -325,7 +340,7 @@ export function createAnnouncements(deps: AnnouncementsDeps): Announcements {
 
   /** The acknowledge path: remember the id so this device is never asked again. */
   const dismissCurrent = (): void => {
-    if (current) dismiss(current.id);
+    if (current && currentStored) dismiss(current.id);
     impact('medium');
     close();
   };
@@ -347,6 +362,27 @@ export function createAnnouncements(deps: AnnouncementsDeps): Announcements {
       createdBy: 'admin',
       archivedAt: 0,
     });
+  };
+
+  /**
+   * A maintenance lockout is not a dispatch: it carries no destination, and its one key is an
+   * acknowledgment rather than a route. Building it here keeps every entry path on the same
+   * no-CTA shape instead of trusting each caller to leave the action blank.
+   */
+  const showMaintenance = (): void => {
+    show({
+      id: `maint-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      title: t('maintenanceTitle'),
+      body: t('maintenanceBody'),
+      ctaLabel: '',
+      ctaTarget: '',
+      audience: { kind: 'all', value: '' },
+      priority: 'urgent',
+      status: 'active',
+      createdAt: Date.now(),
+      createdBy: 'system',
+      archivedAt: 0,
+    }, { ack: 'maintenanceOk', maintenance: true, stored: false });
   };
 
   const followCta = (): void => {
@@ -435,6 +471,7 @@ export function createAnnouncements(deps: AnnouncementsDeps): Announcements {
       presentNext();
     },
     dispatch: dispatchPinned,
+    maintenance: showMaintenance,
     retract(id: string): void {
       setBroadcasts(getBroadcasts().filter((x) => x.id !== id));
       if (current?.id === id) close();
