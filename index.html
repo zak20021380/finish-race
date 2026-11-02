@@ -1518,6 +1518,19 @@
         <rect x="24" y="32.5" width="4" height="15" rx="2" fill="none" stroke="#F59E0B" stroke-opacity=".45" stroke-width=".9" />
         <circle cx="26" cy="37.4" r="1.5" fill="#FDE68A" />
       </symbol>
+      <!-- the current realm's crest: an engraved chess king, struck rather than drawn —
+           one stroke weight, a faint metal fill in the crown and the foot, so it reads as
+           a seal pressed into the plate instead of a flat glyph. -->
+      <symbol id="i-chess-king" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2.3v3.7M10.1 4.15h3.8" />
+          <path d="M8.3 6.3h7.4l-1 3.1H9.3z" fill="currentColor" fill-opacity=".16" />
+          <path d="M9.4 9.4c.1 2.4-.5 3.9-1.6 5.4-.7 1-1.1 1.8-1.2 2.4h10.8c-.1-.6-.5-1.4-1.2-2.4-1.1-1.5-1.7-3-1.6-5.4" />
+          <path d="M6.4 17.2h11.2" />
+          <path d="M6.9 17.2c-1.3 1.2-2.1 2.5-2.3 3.9h14.8c-.2-1.4-1-2.7-2.3-3.9" fill="currentColor" fill-opacity=".12" />
+          <path d="M4.4 21.1h15.2" />
+        </g>
+      </symbol>
       <!-- the settings key's glyph: a chiselled 3D cog — eight machined teeth and a beveled
            race around a recessed bronze-lit hub, all sharing one userSpaceOnUse light ramp
            from the upper left so the metal reads as one turned part, never a flat decal. -->
@@ -2374,16 +2387,18 @@
           </button>
         </section>
 
-        <!-- ---------------- arena: the progression road.
-             Arena 1 is the playable crucible; the three higher arenas are TIQ-gated
-             and stamped COMING SOON. Channel War lives exclusively on Home's hero
-             slide, so no bracket, channel ladder or squad match selector is staged
-             here. The tier cards are painted by src/arena.ts from ARENA_TIERS; this
-             shell owns only the header, the live progress module and the road. ---------------- -->
+        <!-- ---------------- arena: the trophy road.
+             A showcase, never a lobby: realm I is the player's current realm, the three
+             higher realms are sealed prestige vaults behind a real TIQ gate and stamped
+             COMING SOON. No match can be started from this screen — the old ENTER BATTLE
+             CTA is gone for good. Channel War lives exclusively on Home's hero slide, so
+             no bracket, channel ladder or squad match selector is staged here.
+             The realm cards are painted by src/arena.ts from ARENA_TIERS; this shell owns
+             only the header, the live progress module and the road. ---------------- -->
         <section class="screen menu arena-road-screen" id="s-arena" data-screen="arena" tabindex="-1" hidden aria-labelledby="arena-title">
           <header class="arena-road-head">
             <div class="arena-road-head-copy">
-              <span class="arena-road-kicker" data-i18n="arenaRoadKicker">ARENA ROAD</span>
+              <span class="arena-road-kicker" data-i18n="arenaRoadKicker">THE ROAD OF REALMS</span>
               <h1 class="m-title arena-road-title" id="arena-title" data-i18n="arenaTitle">Arena</h1>
             </div>
             <span class="arena-tiq-pill" id="arena-tiq-pill" role="status" aria-live="polite" aria-label="Tactical IQ">
@@ -2399,8 +2414,8 @@
             <section class="arena-progress-card" id="arena-progress-card" aria-labelledby="arena-progress-title arena-next-name">
               <div class="arena-progress-head">
                 <span class="arena-progress-id">
-                  <small class="arena-progress-k" id="arena-progress-title" data-i18n="arenaNextTier">NEXT ARENA</small>
-                  <b class="arena-progress-name" id="arena-next-name">Molten Colosseum</b>
+                  <small class="arena-progress-k" id="arena-progress-title" data-i18n="arenaNextTier">NEXT REALM</small>
+                  <b class="arena-progress-name" id="arena-next-name">The Shadow Cabinet</b>
                 </span>
                 <span class="arena-progress-count">
                   <b class="arena-progress-now" id="arena-progress-now">0</b>
@@ -2413,7 +2428,7 @@
                 aria-valuemin="0" aria-valuemax="1200" aria-valuenow="0" aria-labelledby="arena-progress-title arena-next-name">
                 <span class="arena-progress-fill" id="arena-progress-fill" aria-hidden="true"></span>
               </div>
-              <p class="arena-progress-hint" id="arena-progress-hint">Every match banks TIQ toward the next arena.</p>
+              <p class="arena-progress-hint" id="arena-progress-hint">Every match banks TIQ toward the next realm.</p>
             </section>
 
             <div class="arena-road" id="arena-road" role="list" aria-label="Arena progression road"></div>

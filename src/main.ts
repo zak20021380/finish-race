@@ -3003,7 +3003,8 @@ home = createHome({
 compete = createCompete({
   router, sheets, sheet: sheetById,
 });
-arenaRoad = createArenaRoad({ battle: () => queueMatch('arena') });
+/* the Arena tab is a showcase, not a lobby: the road takes no match action */
+arenaRoad = createArenaRoad();
 createNotifications({ sheets });
 
 /* ---- Admin Command Center: the Home FAB and the live-ops stage (src/admin.ts) ---- */

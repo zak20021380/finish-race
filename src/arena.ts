@@ -1,38 +1,39 @@
 /**
- * arena.ts — the Arena Progression Road.
+ * arena.ts — the Arena Road, a trophy case of strategic realms.
  *
- * Arena 1 is the live, playable crucible. Arenas 2–4 are staged as prestige
- * milestones: their TIQ gates are real, but their doors stay sealed until the
- * content ships, so every one of them carries the same COMING SOON stamp.
+ * The Arena tab is a showcase, not a lobby: it paints the player's standing on a
+ * four-realm road and nothing in here can start a match. Realm I is the current
+ * realm; realms II–IV are sealed prestige vaults behind a TIQ gate, each stamped
+ * COMING SOON until its content ships.
  *
- * The road is painted from ARENA_TIERS. A single repaint covers the tier cards,
+ * The road is painted from ARENA_TIERS. A single repaint covers the realm cards,
  * the live TIQ pill and the progress module toward the next gate; it runs on
  * route entry, on a save that moved TIQ, and on a language switch.
  */
 import { myTiq } from './matchmaking';
 import { lang, onLang, t } from './settings';
 import { onChange } from './storage';
-import { impact } from './telegram';
-
-export interface ArenaRoadApi {
-  /** The current playable match flow: queue → matchmaking → race. */
-  battle(): void;
-}
 
 export interface ArenaRoad {
   setRoute(id: string): void;
 }
 
+/** The live realm carries the player; every other realm is a sealed vault. */
+type TierState = 'current' | 'locked';
+
 interface ArenaTier {
   id: string;
   rank: number;
-  /** TIQ needed to qualify. Arena 1 is always open. */
+  /** TIQ needed to qualify. The current realm is always open. */
   reqTiq: number;
-  active: boolean;
+  state: TierState;
   accent: string;
   accentAlt: string;
   soft: string;
   line: string;
+  /** The two ends of the card's gold-leaf hairline. */
+  trimA: string;
+  trimB: string;
   icon: string;
   nameKey: string;
   subKey: string;
@@ -41,56 +42,64 @@ interface ArenaTier {
 
 export const ARENA_TIERS: readonly ArenaTier[] = [
   {
-    id: 'obsidian',
+    id: 'crucible',
     rank: 1,
     reqTiq: 0,
-    active: true,
-    accent: '#22D3EE',
-    accentAlt: '#0EA5E9',
-    soft: 'rgba(34, 211, 238, .14)',
-    line: 'rgba(34, 211, 238, .42)',
+    state: 'current',
+    accent: '#06B6D4',
+    accentAlt: '#0E7490',
+    soft: 'rgba(6, 182, 212, .13)',
+    line: 'rgba(6, 182, 212, .42)',
+    trimA: 'rgba(34, 211, 238, .85)',
+    trimB: 'rgba(234, 179, 8, .5)',
     icon: '#i-swords',
     nameKey: 'arena1Name',
     subKey: 'arena1Sub',
     perkKeys: ['arena1Perk1', 'arena1Perk2'],
   },
   {
-    id: 'molten',
+    id: 'cabinet',
     rank: 2,
     reqTiq: 1200,
-    active: false,
-    accent: '#F59E0B',
-    accentAlt: '#B45309',
-    soft: 'rgba(245, 158, 11, .14)',
-    line: 'rgba(245, 158, 11, .4)',
-    icon: '#i-flame',
+    state: 'locked',
+    accent: '#D97706',
+    accentAlt: '#92400E',
+    soft: 'rgba(217, 119, 6, .13)',
+    line: 'rgba(217, 119, 6, .38)',
+    trimA: 'rgba(245, 158, 11, .8)',
+    trimB: 'rgba(120, 53, 15, .55)',
+    icon: '#i-target',
     nameKey: 'arena2Name',
     subKey: 'arena2Sub',
     perkKeys: ['arena2Perk1', 'arena2Perk2'],
   },
   {
-    id: 'citadel',
+    id: 'bastion',
     rank: 3,
     reqTiq: 2800,
-    active: false,
+    state: 'locked',
     accent: '#EAB308',
-    accentAlt: '#CBD5E1',
-    soft: 'rgba(234, 179, 8, .13)',
-    line: 'rgba(234, 179, 8, .38)',
+    accentAlt: '#CA8A04',
+    soft: 'rgba(234, 179, 8, .12)',
+    line: 'rgba(234, 179, 8, .36)',
+    trimA: 'rgba(250, 204, 21, .82)',
+    trimB: 'rgba(202, 138, 4, .55)',
     icon: '#i-shield',
     nameKey: 'arena3Name',
     subKey: 'arena3Sub',
     perkKeys: ['arena3Perk1', 'arena3Perk2'],
   },
   {
-    id: 'summit',
+    id: 'apex',
     rank: 4,
     reqTiq: 5000,
-    active: false,
-    accent: '#A855F7',
-    accentAlt: '#22D3EE',
-    soft: 'rgba(168, 85, 247, .15)',
-    line: 'rgba(168, 85, 247, .42)',
+    state: 'locked',
+    accent: '#C084FC',
+    accentAlt: '#7E22CE',
+    soft: 'rgba(192, 132, 252, .13)',
+    line: 'rgba(192, 132, 252, .38)',
+    trimA: 'rgba(233, 213, 255, .85)',
+    trimB: 'rgba(192, 132, 252, .5)',
     icon: '#i-crown',
     nameKey: 'arena4Name',
     subKey: 'arena4Sub',
@@ -116,11 +125,12 @@ function fill(key: string, vars: Record<string, string>): string {
 const $ = <T extends HTMLElement>(id: string): T | null =>
   document.getElementById(id) as T | null;
 
-/** The first arena still above the player's TIQ; past the summit, the summit itself. */
+/** The first sealed realm still above the player's TIQ; past the apex, the apex itself. */
 const gateFor = (tiq: number): ArenaTier =>
-  ARENA_TIERS.find((tier) => !tier.active && tier.reqTiq > tiq) ?? ARENA_TIERS[ARENA_TIERS.length - 1];
+  ARENA_TIERS.find((tier) => tier.state === 'locked' && tier.reqTiq > tiq) ??
+  ARENA_TIERS[ARENA_TIERS.length - 1];
 
-export function createArenaRoad(api: ArenaRoadApi): ArenaRoad {
+export function createArenaRoad(): ArenaRoad {
   const root = $('arena-road');
   if (!root) return { setRoute() { /* the Arena shell is not mounted */ } };
 
@@ -132,53 +142,55 @@ export function createArenaRoad(api: ArenaRoadApi): ArenaRoad {
   function cardMarkup(tier: ArenaTier, tiq: number): string {
     const name = t(tier.nameKey);
     const sub = t(tier.subKey);
-    const reached = tier.active || tiq >= tier.reqTiq;
-    const requirement = tier.active
-      ? `<span class="arena-req is-open"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-check" /></svg>${t('arenaOpenNow')}</span>`
-      : `<span class="arena-req${reached ? ' is-qualified' : ''}" data-req>
-          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-${reached ? 'check' : 'lock'}" /></svg>
-          ${reached ? t('arenaTiqReached') : fill('arenaRequires', { n: num(tier.reqTiq) })}
+    const locked = tier.state === 'locked';
+    const reached = !locked || tiq >= tier.reqTiq;
+
+    /* the sash owns the top-right corner on sealed realms; the live one has no sash */
+    const ribbon = locked
+      ? `<span class="arena-ribbon" aria-hidden="true">${t('arenaComingSoon')}</span>`
+      : '';
+
+    /* the foot of every card: a struck plate — the current realm's crest, or the vault seal */
+    const plate = locked
+      ? `<span class="arena-plate is-sealed">
+          <svg class="arena-plate-seal" viewBox="0 0 52 60" aria-hidden="true"><use href="#i-lock-ti" /></svg>
+          <span class="arena-plate-t">${t('arenaLocked')}</span>
+        </span>`
+      : `<span class="arena-plate is-live">
+          <svg class="ico arena-plate-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chess-king" /></svg>
+          <span class="arena-plate-t">${t('arenaCurrentRealm')}</span>
         </span>`;
 
     const perks = tier.perkKeys
       .map((key) => `<li class="arena-perk"><i class="arena-perk-dot" aria-hidden="true"></i>${t(key)}</li>`)
       .join('');
 
-    const footer = tier.active
-      ? `<button class="arena-battle" type="button" data-battle aria-label="${fill('arenaBattleAria', { name })}">
-          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-swords" /></svg>
-          <span>${t('arenaEnterBattle')}</span>
-        </button>`
-      : '';
-
-    const status = tier.active
-      ? `<span class="arena-status"><i class="arena-status-dot" aria-hidden="true"></i>${t('arenaActive')}</span>`
-      : '';
-
-    const label = tier.active
-      ? fill('arenaActiveAria', { name, n: num(tiq) })
-      : fill('arenaLockedAria', { name, n: num(tier.reqTiq) });
+    const label = locked
+      ? fill('arenaLockedAria', { name, n: num(tier.reqTiq) })
+      : fill('arenaActiveAria', { name, n: num(tiq) });
 
     return `<article class="arena-tier" role="listitem" data-tier="${tier.id}"
-        data-state="${tier.active ? 'active' : 'coming'}" data-reached="${reached}"
-        style="--tier-a:${tier.accent};--tier-a2:${tier.accentAlt};--tier-soft:${tier.soft};--tier-line:${tier.line}"
+        data-state="${tier.state}" data-reached="${reached}"
+        style="--tier-a:${tier.accent};--tier-a2:${tier.accentAlt};--tier-soft:${tier.soft};--tier-line:${tier.line};--tier-trim-a:${tier.trimA};--tier-trim-b:${tier.trimB}"
         aria-label="${label}">
       <div class="arena-tier-rail" aria-hidden="true">
         <span class="arena-tier-node">${localizeDigits(String(tier.rank).padStart(2, '0'))}</span>
       </div>
       <div class="arena-tier-card">
         <svg class="arena-tier-glyph" viewBox="0 0 24 24" aria-hidden="true"><use href="${tier.icon}" /></svg>
-        ${tier.active ? '' : '<svg class="arena-lock-mark" viewBox="0 0 52 60" aria-hidden="true"><use href="#i-lock-ti" /></svg>'}
-        ${tier.active ? '' : `<span class="arena-ribbon" aria-hidden="true">${t('arenaComingSoon')}</span>`}
+        ${ribbon}
         <div class="arena-tier-top">
           <span class="arena-tier-kicker">${fill('arenaTierKicker', { n: num(tier.rank) })}</span>
-          ${status}
         </div>
         <h2 class="arena-tier-name">${name}</h2>
         <p class="arena-tier-sub">${sub}</p>
-        ${requirement}
+        <span class="arena-milestone">
+          <svg class="ico arena-milestone-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-brain" /></svg>
+          <b class="arena-milestone-n">${num(tier.reqTiq)}</b><i class="arena-milestone-plus" aria-hidden="true">+</i>
+          <small class="arena-milestone-u">${t('arenaTiqShort')}</small>
+        </span>
         <ul class="arena-perks" aria-label="${t('arenaPerks')}">${perks}</ul>
-        ${footer}
+        ${plate}
       </div>
     </article>`;
   }
@@ -239,14 +251,6 @@ export function createArenaRoad(api: ArenaRoadApi): ArenaRoad {
     root!.innerHTML = ARENA_TIERS.map((tier) => cardMarkup(tier, tiq)).join('');
     paintProgress(tiq);
   }
-
-  /* One delegated key: repaints never leave a dead CTA behind. */
-  root.addEventListener('click', (e) => {
-    const cell = e.target instanceof Element ? e.target.closest<HTMLButtonElement>('[data-battle]') : null;
-    if (!cell || cell.disabled) return;
-    impact('medium');
-    api.battle();
-  });
 
   onChange(() => {
     if (isVisible()) paint(myTiq());

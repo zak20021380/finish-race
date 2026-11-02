@@ -30384,11 +30384,13 @@ html.reduced-motion .ct-aura { animation: none; }
 html.reduced-motion .sheet.cert-sheet { transition: none; }
 
 /* ==========================================================================
-   ARENA ROAD — the Clash-style progression track.
-   Dark obsidian luxury: the app's #10141D canvas, #1C2433 frosted cards and
-   one reserved accent per arena (teal → amber → gold → purple). The road is a
-   34px milestone rail beside a minmax(0,1fr) card, so no title, chip or button
-   can ever push the layout wider than the phone. Every string wraps or
+   ARENA ROAD — the trophy case of strategic realms.
+   Dark obsidian luxury: frosted obsidian slabs on the app's #10141D canvas, a
+   gold-leaf hairline struck around every card, and one reserved accent per
+   realm (royal teal → burnished amber → antique gold → mythic violet). The
+   Arena tab is a showcase, never a lobby: nothing in this block is a button.
+   The road is a 34px milestone rail beside a minmax(0,1fr) card, so no title,
+   chip or seal can push the layout wider than the phone. Every string wraps or
    ellipsizes inside its own box down to 320px.
    ========================================================================== */
 
@@ -30399,7 +30401,7 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   min-width: 0;
   gap: 10px;
 }
-/* one ambient breath behind the road: cold at the crown, mythic at the floor */
+/* one ambient breath behind the road: teal at the crown, gold and mythic at the floor */
 .arena-road-screen::before {
   content: '';
   position: absolute;
@@ -30407,8 +30409,9 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(82% 42% at 50% -4%, rgba(34, 211, 238, .08), transparent 62%),
-    radial-gradient(68% 34% at 88% 104%, rgba(168, 85, 247, .06), transparent 68%);
+    radial-gradient(82% 42% at 50% -4%, rgba(6, 182, 212, .09), transparent 62%),
+    radial-gradient(56% 30% at 2% 104%, rgba(234, 179, 8, .055), transparent 70%),
+    radial-gradient(64% 32% at 94% 100%, rgba(192, 132, 252, .05), transparent 70%);
 }
 
 /* ---- header: the road's name beside the live TIQ readout ---- */
@@ -30429,12 +30432,17 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   min-width: 0;
 }
 .arena-road-kicker {
+  min-width: 0;
   font-size: 8px;
   line-height: 1.3;
   font-weight: 900;
-  letter-spacing: .22em;
+  letter-spacing: .2em;
   text-transform: uppercase;
-  color: #7DD3FC;
+  color: #E7C97F;
+  text-shadow: 0 0 12px rgba(231, 201, 127, .32);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .arena-road-title {
   flex: none;
@@ -30515,25 +30523,31 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
 .arena-road-body::-webkit-scrollbar { display: none; }
 .arena-road-body > * { max-width: 100%; min-width: 0; }
 
-/* ---- the live gate: next arena, exact TIQ, one continuous bar ---- */
+/* ---- the live gate: next realm, exact TIQ, one continuous bar ---- */
 .arena-progress-card {
-  --next-a: #F59E0B;
-  --next-a2: #B45309;
-  --next-soft: rgba(245, 158, 11, .14);
-  --next-line: rgba(245, 158, 11, .4);
+  --next-a: #D97706;
+  --next-a2: #92400E;
+  --next-soft: rgba(217, 119, 6, .13);
+  --next-line: rgba(217, 119, 6, .38);
   position: relative;
   isolation: isolate;
   flex: none;
   min-width: 0;
   padding: 12px 13px 11px;
   border-radius: 17px;
-  border: 1px solid rgba(255, 255, 255, .09);
-  background:
-    radial-gradient(130% 120% at 0% -20%, var(--next-soft), transparent 58%),
-    linear-gradient(180deg, rgba(33, 44, 65, .78), rgba(18, 25, 39, .92));
+  border: 1px solid transparent;
+  background-image:
+    radial-gradient(128% 118% at 0% -18%, var(--next-soft), transparent 60%),
+    linear-gradient(180deg, rgba(30, 40, 59, .8), rgba(15, 21, 33, .93)),
+    linear-gradient(135deg,
+      rgba(234, 179, 8, .5),
+      rgba(255, 255, 255, .06) 34%,
+      rgba(255, 255, 255, .03) 64%,
+      var(--next-line));
+  background-clip: padding-box, padding-box, border-box;
+  background-origin: border-box;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .12),
-    inset 0 0 0 1px rgba(255, 255, 255, .02),
     0 16px 28px -22px rgba(0, 0, 0, .95),
     0 0 22px -16px var(--next-line);
   backdrop-filter: blur(10px);
@@ -30560,7 +30574,7 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   font-weight: 900;
   letter-spacing: .2em;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: #B9A47A;
 }
 .arena-progress-name {
   display: block;
@@ -30608,14 +30622,14 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
 }
 .arena-progress-track {
   position: relative;
-  height: 7px;
+  height: 8px;
   margin-top: 9px;
   border-radius: 999px;
   overflow: hidden;
-  background: #080C14;
+  background: #05080E;
   box-shadow:
-    inset 0 1px 3px rgba(0, 0, 0, .9),
-    inset 0 0 0 1px rgba(255, 255, 255, .05);
+    inset 0 1px 3px rgba(0, 0, 0, .95),
+    inset 0 0 0 1px rgba(234, 179, 8, .13);
 }
 .arena-progress-fill {
   position: absolute;
@@ -30623,7 +30637,7 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   width: 0;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--next-a2), var(--next-a));
-  box-shadow: 0 0 10px var(--next-line);
+  box-shadow: 0 0 12px var(--next-line);
   transition: width .7s cubic-bezier(.22, .61, .36, 1);
 }
 .arena-progress-fill::after {
@@ -30631,7 +30645,7 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .38), transparent 58%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .42), transparent 58%);
 }
 .arena-progress-hint {
   margin: 7px 0 0;
@@ -30643,7 +30657,7 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   overflow-wrap: anywhere;
 }
 
-/* ---- the road: a milestone rail beside a frosted card ---- */
+/* ---- the road: an illuminated golden lifeline beside a frosted obsidian slab ---- */
 .arena-road {
   display: flex;
   flex-direction: column;
@@ -30658,6 +30672,7 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   padding-bottom: 12px;
 }
 .arena-tier:last-child { padding-bottom: 0; }
+/* the lifeline: a 2px filament of gold leaf running node to node */
 .arena-tier:not(:last-child)::before {
   content: '';
   position: absolute;
@@ -30666,8 +30681,30 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   bottom: 0;
   width: 2px;
   border-radius: 2px;
-  background: linear-gradient(180deg, var(--tier-line), rgba(148, 163, 184, .08));
-  opacity: .72;
+  background: linear-gradient(180deg,
+    rgba(250, 204, 21, .6),
+    rgba(202, 138, 4, .28) 46%,
+    rgba(148, 163, 184, .07));
+  box-shadow: 0 0 10px rgba(234, 179, 8, .24);
+}
+/* one bead of light travelling the segment that leads out of the current realm */
+.arena-tier[data-state="current"]:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 15px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #FDE68A;
+  box-shadow: 0 0 9px 2px rgba(250, 204, 21, .5);
+  animation: arena-lifeline 4.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes arena-lifeline {
+  0%        { top: 36px; opacity: 0; }
+  16%       { opacity: 1; }
+  78%       { opacity: 1; }
+  100%      { top: calc(100% - 6px); opacity: 0; }
 }
 .arena-tier-rail {
   grid-column: 1;
@@ -30684,11 +30721,11 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   display: grid;
   place-items: center;
   border-radius: 50%;
-  border: 1px solid var(--tier-line);
+  border: 1px solid var(--tier-line, rgba(6, 182, 212, .42));
   background:
-    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, .18), transparent 40%),
-    linear-gradient(180deg, #1E293B, #0B111C);
-  color: var(--tier-a);
+    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, .2), transparent 42%),
+    linear-gradient(180deg, #1B2436, #090E18);
+  color: var(--tier-a, #22D3EE);
   font-size: 9.5px;
   line-height: 1;
   font-weight: 900;
@@ -30697,29 +30734,30 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .16),
     0 6px 12px -8px #000,
-    0 0 16px -6px var(--tier-a);
+    0 0 16px -6px var(--tier-a, #22D3EE);
 }
-.arena-tier[data-reached="true"][data-state="coming"] .arena-tier-node {
-  color: #E2E8F0;
+.arena-tier[data-reached="true"][data-state="locked"] .arena-tier-node {
+  color: #F1E4C3;
+  border-color: rgba(234, 179, 8, .46);
   background:
-    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, .22), transparent 40%),
-    linear-gradient(180deg, #293548, #111827);
+    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, .24), transparent 42%),
+    linear-gradient(180deg, #2A3548, #0D1420);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .18),
-    0 0 18px -6px var(--tier-a);
+    inset 0 1px 0 rgba(255, 255, 255, .2),
+    0 0 18px -6px var(--tier-a, #EAB308);
 }
-.arena-tier[data-state="active"] .arena-tier-node {
+.arena-tier[data-state="current"] .arena-tier-node {
   border-color: rgba(34, 211, 238, .72);
   color: #041A20;
   background:
-    radial-gradient(circle at 34% 28%, #F0FDFA, transparent 38%),
-    linear-gradient(180deg, #67E8F9, #22D3EE 58%, #0891B2);
+    radial-gradient(circle at 34% 26%, #F0FDFA, transparent 38%),
+    linear-gradient(180deg, #67E8F9, #22D3EE 58%, #0E7490);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .7),
     0 0 0 4px rgba(34, 211, 238, .1),
     0 0 20px rgba(34, 211, 238, .5);
 }
-.arena-tier[data-state="active"] .arena-tier-node::after {
+.arena-tier[data-state="current"] .arena-tier-node::after {
   content: '';
   position: absolute;
   inset: -5px;
@@ -30733,6 +30771,7 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   70%, 100% { transform: scale(1.45); opacity: 0; }
 }
 
+/* the slab: frosted obsidian, struck with a gold-leaf hairline all the way round */
 .arena-tier-card {
   grid-column: 2;
   position: relative;
@@ -30741,18 +30780,24 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   min-width: 0;
   padding: 11px 12px 12px;
   border-radius: 18px;
-  border: 1px solid var(--tier-line);
-  background:
-    radial-gradient(120% 100% at 100% 0%, var(--tier-soft), transparent 56%),
-    linear-gradient(150deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, 0) 38%),
-    linear-gradient(180deg, rgba(35, 46, 68, .82), rgba(18, 25, 38, .94));
+  border: 1px solid transparent;
+  background-image:
+    radial-gradient(118% 96% at 100% 0%, var(--tier-soft, rgba(6, 182, 212, .13)), transparent 58%),
+    linear-gradient(152deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, 0) 40%),
+    linear-gradient(180deg, rgba(32, 42, 62, .84), rgba(13, 18, 28, .95)),
+    linear-gradient(142deg,
+      var(--tier-trim-a, rgba(34, 211, 238, .85)),
+      rgba(255, 255, 255, .07) 30%,
+      rgba(255, 255, 255, .03) 62%,
+      var(--tier-trim-b, rgba(234, 179, 8, .5)));
+  background-clip: padding-box, padding-box, padding-box, border-box;
+  background-origin: border-box;
   backdrop-filter: blur(14px) saturate(1.15);
   -webkit-backdrop-filter: blur(14px) saturate(1.15);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .13),
-    inset 0 0 0 1px rgba(255, 255, 255, .02),
     0 18px 30px -24px rgba(0, 0, 0, .95),
-    0 0 24px -16px var(--tier-a);
+    0 0 24px -18px var(--tier-a, #22D3EE);
 }
 .arena-tier-card::before {
   content: '';
@@ -30760,34 +30805,37 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background: linear-gradient(115deg, rgba(255, 255, 255, .09), transparent 24%, transparent 72%, rgba(255, 255, 255, .04));
-  opacity: .55;
+  background: linear-gradient(115deg, rgba(255, 255, 255, .08), transparent 24%, transparent 74%, rgba(255, 255, 255, .035));
+  opacity: .5;
 }
-.arena-tier[data-state="coming"] .arena-tier-card {
-  background:
-    radial-gradient(130% 110% at 100% 0%, var(--tier-soft), transparent 60%),
-    linear-gradient(115deg, rgba(148, 163, 184, .1), rgba(10, 15, 24, .06) 42%, rgba(148, 163, 184, .05)),
-    linear-gradient(180deg, rgba(26, 35, 51, .9), rgba(12, 18, 29, .97));
-}
-.arena-tier[data-state="coming"] .arena-tier-card::before {
-  background: linear-gradient(118deg, rgba(148, 163, 184, .16), rgba(8, 12, 20, .34) 42%, transparent 68%, rgba(148, 163, 184, .07));
-  opacity: .9;
-}
-.arena-tier[data-state="active"] .arena-tier-card {
-  border-color: rgba(34, 211, 238, .5);
+.arena-tier[data-state="locked"] .arena-tier-card {
+  background-image:
+    radial-gradient(122% 100% at 100% 0%, var(--tier-soft, rgba(217, 119, 6, .13)), transparent 60%),
+    linear-gradient(112deg, rgba(148, 163, 184, .08), rgba(10, 15, 24, .04) 44%, rgba(148, 163, 184, .04)),
+    linear-gradient(180deg, rgba(24, 33, 48, .9), rgba(11, 16, 26, .97)),
+    linear-gradient(142deg,
+      var(--tier-trim-a, rgba(245, 158, 11, .8)),
+      rgba(255, 255, 255, .05) 30%,
+      rgba(255, 255, 255, .02) 62%,
+      var(--tier-trim-b, rgba(120, 53, 15, .55)));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .16),
-    inset 0 0 0 1px rgba(34, 211, 238, .06),
-    0 20px 34px -24px rgba(0, 0, 0, .95),
-    0 0 30px -10px rgba(34, 211, 238, .48);
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    0 18px 30px -24px rgba(0, 0, 0, .95),
+    0 0 22px -18px var(--tier-a, #D97706);
 }
-.arena-tier[data-state="active"] .arena-tier-card::after {
+.arena-tier[data-state="current"] .arena-tier-card {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .17),
+    0 20px 34px -24px rgba(0, 0, 0, .95),
+    0 0 34px -12px rgba(34, 211, 238, .5);
+}
+.arena-tier[data-state="current"] .arena-tier-card::after {
   content: '';
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background: linear-gradient(118deg, transparent 18%, rgba(34, 211, 238, .1) 44%, transparent 62%);
+  background: linear-gradient(118deg, transparent 18%, rgba(34, 211, 238, .09) 44%, transparent 62%);
   animation: arena-card-breathe 5.5s ease-in-out infinite;
 }
 @keyframes arena-card-breathe {
@@ -30801,47 +30849,35 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   right: 8px;
   width: 78px;
   height: 78px;
-  color: var(--tier-a);
-  opacity: .075;
+  color: var(--tier-a, #22D3EE);
+  opacity: .07;
   pointer-events: none;
 }
-.arena-tier[data-state="coming"] .arena-tier-glyph { display: none; }
-.arena-lock-mark {
-  position: absolute;
-  z-index: 0;
-  right: 10px;
-  bottom: 8px;
-  width: 50px;
-  height: 58px;
-  color: #CBD5E1;
-  opacity: .24;
-  filter: drop-shadow(0 0 10px rgba(226, 232, 240, .18)) drop-shadow(0 4px 8px rgba(0, 0, 0, .6));
-  pointer-events: none;
-}
+.arena-tier[data-state="locked"] .arena-tier-glyph { display: none; }
 
 /* the holographic sash: clipped by the card, never allowed to widen it */
 .arena-ribbon {
   position: absolute;
   z-index: 3;
-  top: 13px;
-  right: -37px;
-  width: 140px;
-  padding: 4px 0 4.5px;
+  top: 14px;
+  right: -38px;
+  width: 142px;
+  padding: 3.5px 0 4px;
   transform: rotate(38deg);
   text-align: center;
-  font-size: 7.5px;
+  font-size: 7px;
   line-height: 1.1;
   font-weight: 900;
-  letter-spacing: .16em;
+  letter-spacing: .15em;
   text-transform: uppercase;
-  color: #0B0E14;
-  background: linear-gradient(90deg, #A5F3FC 0%, #E0E7FF 22%, #FDE68A 46%, #E9D5FF 70%, #A5F3FC 100%);
+  color: #0A0D13;
+  background: linear-gradient(90deg, #A5F3FC 0%, #E9D5FF 26%, #FDE68A 52%, #E9D5FF 76%, #A5F3FC 100%);
   background-size: 220% 100%;
   box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, .38),
-    0 6px 14px -6px rgba(0, 0, 0, .8),
-    0 0 16px rgba(165, 243, 252, .25);
-  animation: arena-holo 7s linear infinite;
+    inset 0 1px 0 rgba(255, 255, 255, .45),
+    0 6px 14px -6px rgba(0, 0, 0, .85),
+    0 0 18px -4px rgba(165, 243, 252, .35);
+  animation: arena-holo 8s linear infinite;
   pointer-events: none;
 }
 @keyframes arena-holo {
@@ -30865,50 +30901,10 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   font-weight: 900;
   letter-spacing: .19em;
   text-transform: uppercase;
-  color: var(--tier-a);
-}
-.arena-status {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 7px;
-  border-radius: 999px;
-  font-size: 7.5px;
-  line-height: 1;
-  font-weight: 900;
-  letter-spacing: .11em;
-  text-transform: uppercase;
+  color: var(--tier-a, #22D3EE);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
-  color: #032A2E;
-  background: linear-gradient(180deg, #99F6E4, #22D3EE);
-  box-shadow:
-    0 0 14px rgba(34, 211, 238, .45),
-    inset 0 1px 0 rgba(255, 255, 255, .6);
-  animation: arena-status-glow 2.8s ease-in-out infinite;
-}
-@keyframes arena-status-glow {
-  0%, 100% {
-    box-shadow:
-      0 0 12px rgba(34, 211, 238, .35),
-      inset 0 1px 0 rgba(255, 255, 255, .6);
-  }
-  50% {
-    box-shadow:
-      0 0 22px rgba(34, 211, 238, .62),
-      inset 0 1px 0 rgba(255, 255, 255, .75);
-  }
-}
-.arena-status-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #064E3B;
-  animation: arena-pulse 1.8s ease-in-out infinite;
-}
-@keyframes arena-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%      { opacity: .35; transform: scale(.72); }
 }
 .arena-tier-name {
   position: relative;
@@ -30933,46 +30929,61 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   color: var(--ink-soft);
   overflow-wrap: anywhere;
 }
-/* the sash owns the top-right corner: locked titles wrap before they reach it */
-.arena-tier[data-state="coming"] :is(.arena-tier-name, .arena-tier-sub) { padding-right: 60px; }
-.arena-req {
+/* the sash owns the top-right corner: sealed titles wrap before they reach it */
+.arena-tier[data-state="locked"] :is(.arena-tier-name, .arena-tier-sub) { padding-right: 58px; }
+
+/* the engraved milestone: the realm's TIQ gate, recessed into the slab */
+.arena-milestone {
   position: relative;
   z-index: 1;
   display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  align-items: baseline;
+  gap: 3px;
   max-width: 100%;
   margin-top: 8px;
-  padding: 4px 8px;
+  padding: 5px 9px 5px 8px;
   border-radius: 9px;
-  border: 1px solid rgba(255, 255, 255, .09);
-  background: rgba(5, 9, 16, .55);
-  color: #CBD5E1;
-  font-size: 8.5px;
-  line-height: 1.25;
-  font-weight: 900;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  border: 1px solid rgba(255, 255, 255, .075);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, 0)),
+    rgba(4, 7, 13, .62);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    inset 0 -1px 0 rgba(0, 0, 0, .4);
+  color: var(--tier-a, #22D3EE);
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
 }
-.arena-req .ico {
+.arena-milestone-ico {
   flex: none;
-  width: 11px;
-  height: 11px;
-  color: var(--tier-a);
+  align-self: center;
+  width: 12px;
+  height: 12px;
+  margin-right: 2px;
+  opacity: .85;
+  color: var(--tier-a, #22D3EE);
 }
-.arena-req.is-open {
-  color: #A7F3D0;
-  border-color: rgba(16, 185, 129, .3);
-  background: rgba(16, 185, 129, .1);
+.arena-milestone-n {
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: .01em;
 }
-.arena-req.is-open .ico { color: #34D399; }
-.arena-req.is-qualified {
-  color: var(--tier-a);
-  border-color: var(--tier-line);
-  background: var(--tier-soft);
+.arena-milestone-plus {
+  font-style: normal;
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 900;
+  opacity: .75;
 }
+.arena-milestone-u {
+  font-size: 7px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: .12em;
+  color: var(--ink-soft);
+}
+
 .arena-perks {
   position: relative;
   z-index: 1;
@@ -31004,68 +31015,83 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: var(--tier-a);
-  box-shadow: 0 0 6px var(--tier-a);
-}
-.arena-battle {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  min-height: 44px;
-  margin-top: 11px;
-  padding: 0 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  overflow: hidden;
-  border: 0;
-  border-radius: 12px;
-  color: #03171C;
-  font: inherit;
-  font-size: 10.5px;
-  font-weight: 900;
-  letter-spacing: .13em;
-  text-transform: uppercase;
-  cursor: pointer;
-  background: linear-gradient(180deg, #A5F3FC 0%, #67E8F9 28%, #22D3EE 64%, #0891B2 100%);
-  box-shadow:
-    0 4px 0 #0E7490,
-    0 12px 20px -12px rgba(34, 211, 238, .85),
-    inset 0 1px 0 rgba(255, 255, 255, .7),
-    inset 0 -1px 0 rgba(2, 44, 58, .35);
-}
-.arena-battle::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, .35) 48%, transparent 62%);
-  transform: translateX(-120%);
-  animation: arena-sheen 4.5s ease-in-out infinite;
-}
-@keyframes arena-sheen {
-  0%, 62%   { transform: translateX(-120%); }
-  78%, 100% { transform: translateX(120%); }
-}
-.arena-battle .ico {
-  flex: none;
-  width: 14px;
-  height: 14px;
-}
-.arena-battle:active {
-  transform: translateY(2px);
-  box-shadow:
-    0 2px 0 #0E7490,
-    0 6px 12px -8px rgba(34, 211, 238, .8),
-    inset 0 1px 0 rgba(255, 255, 255, .55);
-}
-.arena-battle:focus-visible {
-  outline: 3px solid #67E8F9;
-  outline-offset: 3px;
+  background: var(--tier-a, #22D3EE);
+  box-shadow: 0 0 6px var(--tier-a, #22D3EE);
 }
 
-/* ---- 320–348px: the rail and the card give way together, never the type ---- */
+/* ---- the foot plate: the current realm's crest, or the vault's royal seal ----
+   Not a button and never was one after the purge: a struck status bar that
+   replaces the old ENTER BATTLE space, on every realm. */
+.arena-plate {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  margin-top: 11px;
+  padding: 0 11px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, .085);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .012));
+  overflow: hidden;
+}
+.arena-plate.is-live {
+  border-color: rgba(34, 211, 238, .32);
+  background:
+    radial-gradient(120% 180% at 6% 50%, rgba(34, 211, 238, .2), transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(2, 10, 16, .28));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 0 0 1px rgba(34, 211, 238, .05),
+    0 0 22px -9px rgba(34, 211, 238, .55);
+}
+.arena-plate.is-sealed {
+  border-color: rgba(245, 158, 11, .2);
+  background:
+    radial-gradient(120% 180% at 6% 50%, rgba(245, 158, 11, .13), transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(2, 6, 12, .34));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07);
+}
+.arena-plate-ico {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: #67E8F9;
+  filter: drop-shadow(0 0 7px rgba(34, 211, 238, .55));
+}
+.arena-plate-seal {
+  flex: none;
+  width: 26px;
+  height: 30px;
+  filter:
+    drop-shadow(0 0 9px rgba(245, 158, 11, .5))
+    drop-shadow(0 4px 6px rgba(0, 0, 0, .7));
+}
+.arena-plate-t {
+  min-width: 0;
+  font-size: 9.5px;
+  line-height: 1.2;
+  font-weight: 900;
+  letter-spacing: .17em;
+  text-transform: uppercase;
+  color: #E7C97F;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.arena-plate.is-live .arena-plate-t {
+  color: #EAFBFD;
+  text-shadow: 0 0 12px rgba(103, 232, 249, .5);
+}
+.arena-plate.is-sealed .arena-plate-t {
+  color: #D6BE8E;
+  text-shadow: 0 0 10px rgba(231, 201, 127, .22);
+}
+
+/* ---- 320–348px: the rail and the slab give way together, never the type ---- */
 @media (max-width: 348px) {
   .arena-road-head { gap: 8px; }
   .arena-tiq-pill { gap: 5px; min-height: 36px; padding: 6px 8px; border-radius: 12px; }
@@ -31077,53 +31103,52 @@ html.reduced-motion .sheet.cert-sheet { transition: none; }
   .arena-tier { grid-template-columns: 30px minmax(0, 1fr); column-gap: 8px; }
   .arena-tier-node { width: 30px; height: 30px; font-size: 8.5px; }
   .arena-tier:not(:last-child)::before { left: 14px; top: 30px; }
+  .arena-tier[data-state="current"]:not(:last-child)::after { left: 13px; }
   .arena-tier-card { padding: 10px 10px 11px; border-radius: 16px; }
   .arena-tier-name { font-size: 16.5px; }
-  .arena-tier[data-state="coming"] :is(.arena-tier-name, .arena-tier-sub) { padding-right: 52px; }
-  .arena-battle { min-height: 44px; font-size: 9.5px; letter-spacing: .1em; }
-  .arena-ribbon { top: 11px; right: -32px; width: 124px; font-size: 7px; }
+  .arena-tier[data-state="locked"] :is(.arena-tier-name, .arena-tier-sub) { padding-right: 50px; }
+  .arena-plate { min-height: 44px; gap: 7px; padding: 0 9px; }
+  .arena-plate-t { font-size: 8.5px; letter-spacing: .12em; }
+  .arena-plate-seal { width: 23px; height: 27px; }
+  .arena-ribbon { top: 12px; right: -34px; width: 128px; font-size: 6.5px; }
 }
 
 /* ---- Persian: RTL text inside the same unflipped shell ----
    The app never mirrors the document; each text container takes its own
    direction, the rail stays on the left, and Latin tokens (TIQ, figures) keep
    their own LTR reading. */
-html[data-lang="fa"] :is(.arena-road-kicker, .arena-road-title, .arena-progress-k, .arena-progress-name, .arena-progress-hint, .arena-tier-kicker, .arena-tier-name, .arena-tier-sub, .arena-req, .arena-perk, .arena-battle, .arena-ribbon, .arena-tiq-unit) {
+html[data-lang="fa"] :is(.arena-road-kicker, .arena-road-title, .arena-progress-k, .arena-progress-name, .arena-progress-hint, .arena-tier-kicker, .arena-tier-name, .arena-tier-sub, .arena-perk, .arena-plate-t, .arena-ribbon, .arena-tiq-unit) {
   letter-spacing: 0;
   text-transform: none;
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
 }
 html[data-lang="fa"] .arena-road-head { direction: rtl; }
-html[data-lang="fa"] :is(.arena-progress-head, .arena-tier-top, .arena-tier-name, .arena-tier-sub, .arena-req, .arena-perk, .arena-battle, .arena-progress-hint) {
+html[data-lang="fa"] :is(.arena-progress-head, .arena-tier-top, .arena-tier-name, .arena-tier-sub, .arena-perk, .arena-progress-hint, .arena-plate) {
   direction: rtl;
   text-align: right;
 }
 html[data-lang="fa"] .arena-progress-name { text-align: right; }
 html[data-lang="fa"] .arena-progress-count { direction: ltr; }
-html[data-lang="fa"] .arena-status { letter-spacing: 0; font-size: 7px; }
+html[data-lang="fa"] .arena-milestone { font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif; }
 html[data-lang="fa"] .arena-ribbon {
   right: auto;
-  left: -37px;
+  left: -38px;
   transform: rotate(-38deg);
-  letter-spacing: 0;
-  font-size: 8px;
+  font-size: 7.5px;
 }
-html[data-lang="fa"] .arena-tier[data-state="coming"] :is(.arena-tier-name, .arena-tier-sub) {
+html[data-lang="fa"] .arena-tier[data-state="locked"] :is(.arena-tier-name, .arena-tier-sub) {
   padding-right: 0;
-  padding-left: 60px;
+  padding-left: 58px;
 }
 html[data-lang="fa"] .arena-tier-glyph { right: auto; left: 8px; }
-html[data-lang="fa"] .arena-lock-mark { right: auto; left: 10px; }
-html[data-lang="fa"] .arena-battle .ico { order: 2; }
 @media (max-width: 348px) {
-  html[data-lang="fa"] .arena-tier[data-state="coming"] :is(.arena-tier-name, .arena-tier-sub) { padding-left: 52px; }
-  html[data-lang="fa"] .arena-ribbon { left: -32px; }
+  html[data-lang="fa"] .arena-tier[data-state="locked"] :is(.arena-tier-name, .arena-tier-sub) { padding-left: 50px; }
+  html[data-lang="fa"] .arena-ribbon { left: -34px; }
 }
 
 html.reduced-motion .arena-tier-node::after,
-html.reduced-motion .arena-status,
-html.reduced-motion .arena-status-dot,
+html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after,
 html.reduced-motion .arena-ribbon,
-html.reduced-motion .arena-battle::after,
-html.reduced-motion .arena-tier[data-state="active"] .arena-tier-card::after,
+html.reduced-motion .arena-tier[data-state="current"] .arena-tier-card::after,
 html.reduced-motion .arena-progress-fill { animation: none; transition: none; }
+html.reduced-motion .arena-tier[data-state="current"]:not(:last-child)::after { display: none; }
