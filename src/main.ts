@@ -52,7 +52,7 @@ import { PEARL_BOARD, perspectiveRamps, type Theme } from './themes';
 import { mineStage, setMineStage, STAGE_CLEAR } from './staging';
 import {
   detonation, impact, initTelegram, inviteRoomCode, inviteSquadId, notify, onBackPress,
-  openTelegramShare, tgUser,
+  openTelegramShare, shatterImpact, tgUser,
 } from './telegram';
 import { botAppLink, telegramShareLink } from '../shared/config';
 import { applyFlagSupport } from './countries';
@@ -1361,16 +1361,69 @@ function showOverlay() {
  * The beat the goal zone gets for itself. The rules land a winner the moment the ball touches row 0,
  * and the renderer answers with a golden light sweep along the unified finish bar — but the result
  * card lays a scrim over the whole board, so a card that lands on the same tick buries the one thing
- * the board does to mark the line being taken. The card waits for the pulse instead.
+ * the board does to mark the line being taken.
+ *
+ * The card waits for the whole endgame finisher instead: the winner is crowned, then every losing
+ * pawn overheats and detonates in sequence, and the sheet opens only after the last spark settles.
+ * The beats are the renderer's (`finishCue` hands back the plan); this side is responsible for the
+ * sound, the haptics and the one timer that opens the card.
  */
-const GOAL_BEAT_MS = 600;
+const GOAL_BEAT_MS = 600;                 // reduced motion: the old single beat, no choreography
 let goalBeat = 0;
+/** Every timer the finisher owns besides the sheet's own, so leaving the race clears them all. */
+let finishTimers: number[] = [];
+/** Bumped on every cancel: a callback that was already queued can never land in a new race. */
+let finishRun = 0;
+
 function armGoalBeat() {
   if (overlayOpen || goalBeat) return;
+  const winner = state.winner;
+  if (winner === null) return;
   menuBtn.disabled = true;               // no pause sheet opening onto a race that is already settled
-  goalBeat = window.setTimeout(() => { goalBeat = 0; showOverlay(); }, GOAL_BEAT_MS);
+  /* Reduced motion gets the goal zone's pulse and nothing else: no jitter, no debris, no wait. */
+  if (motionReduced()) {
+    goalBeat = window.setTimeout(() => { goalBeat = 0; showOverlay(); }, GOAL_BEAT_MS);
+    return;
+  }
+  /* Farthest from the line first, so the closest rival is the last one standing — and the last
+     thing heard before the card. */
+  const losers = state.balls
+    .filter((b) => b.team !== winner)
+    .sort((a, b) => b.pos.r - a.pos.r)
+    .map((b) => ({ id: b.id, cell: b.pos }));
+  /* The crowned pawn: the winning seat's leading ball, which is the one that crossed the line. */
+  let winnerBall: number | null = null;
+  let lead = Infinity;
+  for (const b of state.balls) {
+    if (b.team !== winner) continue;
+    if (b.pos.r < lead) { lead = b.pos.r; winnerBall = b.id; }
+  }
+  const plan = renderer.finishCue(winnerBall, losers);
+  if (!plan.bursts.length) {
+    goalBeat = window.setTimeout(() => { goalBeat = 0; showOverlay(); }, GOAL_BEAT_MS);
+    return;
+  }
+  const run = ++finishRun;
+  /* each burst gets its bang and its buzz on the same frame the shards leave the pawn */
+  for (let i = 0; i < plan.bursts.length; i++) {
+    finishTimers.push(window.setTimeout(() => {
+      if (run !== finishRun) return;
+      audio.play('explosion', { gain: 0.92 });
+      shatterImpact();
+      shake(true);
+    }, plan.bursts[i]));
+  }
+  goalBeat = window.setTimeout(() => { goalBeat = 0; showOverlay(); }, plan.total);
 }
-const clearGoalBeat = () => { if (goalBeat) window.clearTimeout(goalBeat); goalBeat = 0; };
+
+function clearGoalBeat() {
+  finishRun++;
+  for (const id of finishTimers) window.clearTimeout(id);
+  finishTimers = [];
+  if (goalBeat) window.clearTimeout(goalBeat);
+  goalBeat = 0;
+  renderer.cancelFinish();
+}
 
 function ui() {
   /* a pick that no longer belongs to you, or to a ball that is gone, is dropped here */

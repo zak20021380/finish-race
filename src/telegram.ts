@@ -399,3 +399,19 @@ export const detonation = () => {
     tg?.HapticFeedback?.impactOccurred('heavy');
   } catch { /* ignore */ }
 };
+
+/**
+ * A losing pawn shattering at the finish: Telegram's heaviest impact where the client has the
+ * haptic API, and a short system vibration anywhere else that still offers one. Gated by the same
+ * Haptics switch as every other buzz, so a player who turned it off hears the bang alone.
+ */
+export const shatterImpact = () => {
+  if (!settings.haptics) return;
+  if (atLeast('6.1')) {
+    try {
+      tg?.HapticFeedback?.impactOccurred('heavy');
+      return;
+    } catch { /* older clients expose warning stubs: fall through to the motor */ }
+  }
+  try { navigator.vibrate?.(26); } catch { /* no vibration motor */ }
+};

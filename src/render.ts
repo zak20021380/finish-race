@@ -64,6 +64,47 @@ export interface View {
   capsule: CapsuleAction | null;
 }
 
+/** One pawn the finisher has to take off the board: its id and the cell it stands on. */
+export interface FinishLoser {
+  id: number;
+  cell: Cell;
+}
+
+/**
+ * The timing the caller needs to stage the same sequence in sound, haptics and the result sheet.
+ * Both arrays are milliseconds measured from the `finishCue()` call.
+ */
+export interface FinishPlan {
+  /** when each loser goes off, in the order it was handed over */
+  bursts: number[];
+  /** when the last spark has died and the result sheet may open */
+  total: number;
+}
+
+/**
+ * A loser with its timing resolved: cell space, not pixels, so a resize between the cue and the
+ * burst still lands the debris on the right tile.
+ */
+interface FinishPawn {
+  id: number;
+  /** centre, in cell units */
+  cx: number;
+  cy: number;
+  /** the absolute `performance.now()` the burst starts */
+  burstAt: number;
+  /** the burst's own rotation, so two shatters never look stamped from one stencil */
+  rot: number;
+}
+
+interface FinishState {
+  /** the ball that crossed the line — the one that takes the crown */
+  winnerBall: number | null;
+  /** the cue's start, on the board's clock */
+  at: number;
+  pawns: FinishPawn[];
+  byId: Map<number, FinishPawn>;
+}
+
 export interface Layout {
   w: number; h: number; cell: number; ox: number; oy: number; dpr: number;
   cols: number; rows: number;
@@ -154,6 +195,38 @@ const DUST_MS = 420;    // the puff a thrown ball kicks up where it comes to res
 const RIPPLE_MS = 380;  // a tap's ripple
 const STREAK_MS = 300;  // how long a sliding ball's trail takes to fade
 const THUMP_MS = 300;   // a thrown ball's micro-bounce as it comes to rest
+
+/* ---------- the endgame finisher ----------
+ * A settled race is crowned first: the winning pawn takes a 1.18× lift inside a gold pulse ring.
+ * Then every losing pawn overheats and goes off, farthest from the line first so the closest rival
+ * is the last thing standing. These numbers are the whole choreography; `finishCue()` turns them
+ * into absolute times, and the caller uses the returned plan to line the bangs, the buzzes and the
+ * result card up with the frames.
+ */
+const FINISH_LEAD_MS = 250;       // the winner's own beat before the first rival starts to cook
+const FINISH_STAGGER_MS = 240;    // between one rival's shake and the next one's
+const FINISH_SHAKE_MS = 140;      // the overheat jitter before the burst
+const FINISH_BURST_MS = 380;      // flash → shockwave → shards → last spark
+const FINISH_SCORCH_MS = 600;     // the charred tile cooling off after the burst
+const FINISH_SETTLE_MS = 420;     // dust settles before the result sheet is allowed in
+const FINISH_ASCEND_MS = 420;     // the winner's lift to its crowned scale
+const FINISH_ASCEND_SCALE = 0.18; // 1 → 1.18×
+const FINISH_JITTER = 3;          // ±3 css px of pre-detonation shake
+/** 18 particles, on fixed unit vectors: no randomness and no allocation per burst. */
+const SHARD_N = 18;
+const SHARD_C = new Float32Array(SHARD_N);
+const SHARD_S = new Float32Array(SHARD_N);
+const SHARD_V = new Float32Array(SHARD_N);
+const SHARD_LIFE = new Float32Array(SHARD_N);
+const SHARD_SPIN = new Float32Array(SHARD_N);
+for (let i = 0; i < SHARD_N; i++) {
+  const a = (i / SHARD_N) * TAU + 0.31;
+  SHARD_C[i] = Math.cos(a);
+  SHARD_S[i] = Math.sin(a);
+  SHARD_V[i] = 0.55 + (((i * 29) % 13) / 13) * 0.75;      // reach, still deterministic
+  SHARD_LIFE[i] = 0.55 + (((i * 17) % 11) / 11) * 0.45;   // each fleck dies at its own pace
+  SHARD_SPIN[i] = (((i * 41) % 9) - 4) * 0.9;             // shard tumble over one burst
+}
 
 /** 14 sparks, on fixed unit vectors: a burst costs no randomness and allocates nothing. */
 const SPARK_N = 14;
@@ -932,6 +1005,12 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   let goalAt = -1;
   /** the seat the rules have crowned, and the moment they did it, while its ball finishes travelling */
   let goalWait = -1, goalSeat: Player | null = null;
+  /** The live endgame finisher, or null between races. Renderer-owned: the caller only sets the cue. */
+  let finish: FinishState | null = null;
+  /** The finisher's paint servers, struck with the board on every resize. */
+  let crownG: CanvasGradient | null = null;   // the winner's gold halo
+  let heatG: CanvasGradient | null = null;    // a losing pawn's crimson/amber overheat
+  let scorchG: CanvasGradient | null = null;  // the charred coin left on the tile
 
   /** The player's seat plus every fixed one, from one theme and the live perspective. */
   function seats(t: Theme): Side[] {
@@ -1404,6 +1483,25 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     bg2.addColorStop(0.42, 'rgba(255,90,20,.34)');
     bg2.addColorStop(1, 'rgba(255,90,20,0)');
     blastGlow = bg2;
+
+    /* the finisher's three servers: the winner's gold, a loser's overheat, and the scorched tile */
+    const fg = ctx.createRadialGradient(0, 0, 0, 0, 0, br * 2.9);
+    fg.addColorStop(0, 'rgba(255,232,164,.9)');
+    fg.addColorStop(0.32, 'rgba(255,196,84,.42)');
+    fg.addColorStop(0.72, 'rgba(255,164,40,.12)');
+    fg.addColorStop(1, 'rgba(255,148,20,0)');
+    crownG = fg;
+    const hg = ctx.createRadialGradient(0, 0, 0, 0, 0, br * 2.2);
+    hg.addColorStop(0, 'rgba(255,196,120,.9)');
+    hg.addColorStop(0.28, 'rgba(255,84,44,.62)');
+    hg.addColorStop(0.66, 'rgba(196,16,32,.22)');
+    hg.addColorStop(1, 'rgba(150,0,24,0)');
+    heatG = hg;
+    const sc = ctx.createRadialGradient(0, 0, 0, 0, 0, c * 0.62);
+    sc.addColorStop(0, 'rgba(8,5,5,.82)');
+    sc.addColorStop(0.5, 'rgba(24,12,9,.5)');
+    sc.addColorStop(1, 'rgba(24,12,9,0)');
+    scorchG = sc;
     decal = buildDecalArt(c, dpr);
     buildCrest(bw);
   }
@@ -2294,6 +2392,171 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.restore();
   }
 
+  /**
+   * The winner's crown: two gold rings running out from the pawn, a breathing halo it keeps until
+   * the result sheet lands, and a small crown struck over the ball. Pure vector paint — no layout,
+   * no DOM, and every stroke stays inside the slab clip the frame already opened.
+   */
+  function drawFinishCrown(cx: number, cy: number, r: number, now: number, at: number, still: boolean) {
+    const el = now - at;
+    if (el < 0) return;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.globalCompositeOperation = 'lighter';
+    /* the pulse: two passes of light, the second a beat behind the first */
+    for (let k = 0; k < 2; k++) {
+      const t = clamp((el - k * 180) / 780, 0, 1);
+      if (t <= 0 || t >= 1) continue;
+      const e = 1 - Math.pow(1 - t, 3);
+      ctx.globalAlpha = 0.85 * (1 - t);
+      ctx.strokeStyle = k === 0 ? 'rgba(255,226,150,.95)' : 'rgba(255,186,70,.8)';
+      ctx.lineWidth = Math.max(1.4, r * 0.1 * (1 - t));
+      ctx.beginPath(); ctx.arc(0, 0, r * (0.72 + 1.45 * e), 0, TAU); ctx.stroke();
+    }
+    /* the ring it keeps: a quiet gold ring breathing around the crowned pawn */
+    const breathe = still ? 0.55 : 0.5 + 0.5 * Math.sin(now / 240);
+    ctx.globalAlpha = 0.3 + 0.34 * breathe;
+    ctx.strokeStyle = 'rgba(255,220,140,.95)';
+    ctx.lineWidth = Math.max(1.2, r * 0.055);
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.3, 0, TAU); ctx.stroke();
+    /* the crown itself: three gold points over the ball's shoulder */
+    const q = clamp(el / 320, 0, 1);
+    const s = r * 0.6 * (0.55 + 0.45 * (1 - Math.pow(1 - q, 2)));
+    ctx.globalAlpha = 0.92 * q;
+    ctx.globalCompositeOperation = 'source-over';
+    /* seated low enough that a winner on row 0 keeps its crown inside the slab */
+    ctx.translate(0, -r * 0.7);
+    ctx.fillStyle = '#ffd97e';
+    ctx.strokeStyle = 'rgba(90,48,8,.85)';
+    ctx.lineWidth = Math.max(0.8, r * 0.035);
+    ctx.shadowColor = 'rgba(255,196,70,.9)';
+    ctx.shadowBlur = r * 0.6;
+    ctx.beginPath();
+    ctx.moveTo(-s, s * 0.5);
+    ctx.lineTo(-s, -s * 0.42);
+    ctx.lineTo(-s * 0.42, -s * 0.02);
+    ctx.lineTo(0, -s * 0.72);
+    ctx.lineTo(s * 0.42, -s * 0.02);
+    ctx.lineTo(s, -s * 0.42);
+    ctx.lineTo(s, s * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /**
+   * Every losing pawn's burst, plus the scorch it leaves. Scorch marks are painted first so the
+   * debris sits on top of its own damage; each burst is flash → expanding shockwave → obsidian
+   * shards and gold embers with drag and gravity, all inside FINISH_BURST_MS.
+   */
+  function drawFinishFx(fin: FinishState, now: number, c: number, ox: number, oy: number) {
+    const br = ballR(c);
+    /* the charred tile: a dark coin with a dull ember rim, cooling off over FINISH_SCORCH_MS */
+    for (const p of fin.pawns) {
+      const t = (now - p.burstAt) / FINISH_SCORCH_MS;
+      if (t < 0 || t >= 1) continue;
+      if (!scorchG) continue;
+      const fade = (1 - t) * (1 - t);
+      ctx.save();
+      ctx.translate(ox + p.cx * c, oy + p.cy * c);
+      ctx.globalAlpha = 0.72 * fade;
+      ctx.fillStyle = scorchG;
+      ctx.beginPath(); ctx.arc(0, 0, c * 0.63, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 0.42 * fade;
+      ctx.strokeStyle = 'rgba(255,132,54,.7)';
+      ctx.lineWidth = Math.max(1, c * 0.022);
+      ctx.beginPath(); ctx.arc(0, 0, c * (0.3 + 0.18 * (1 - t)), 0, TAU); ctx.stroke();
+      ctx.restore();
+    }
+
+    for (const p of fin.pawns) {
+      const el = now - p.burstAt;
+      if (el < 0 || el >= FINISH_BURST_MS) continue;
+      const t = el / FINISH_BURST_MS;
+      const ease = 1 - Math.pow(1 - t, 3);
+      const x = ox + p.cx * c, y = oy + p.cy * c;
+      ctx.save();
+      ctx.translate(x, y);
+
+      /* the flash: hot enough to whiten the tile, gone before the ring is halfway out */
+      if (t < 0.2) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = (1 - t / 0.2) * 0.95;
+        ctx.fillStyle = '#fff6e0';
+        ctx.beginPath(); ctx.arc(0, 0, br * (0.5 + 1.35 * ease), 0, TAU); ctx.fill();
+      }
+      /* the wide warm light a shattered pawn throws across its neighbours */
+      if (blastGlow) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.55 * (1 - t) * (1 - t);
+        ctx.fillStyle = blastGlow;
+        ctx.beginPath(); ctx.arc(0, 0, c * 1.9, 0, TAU); ctx.fill();
+      }
+      /* the shockwave: 0.2× → 2.4× of the pawn's own radius, twice, the second thinner */
+      ctx.globalCompositeOperation = 'lighter';
+      for (let k = 0; k < 2; k++) {
+        const rt = clamp((t - k * 0.13) / (1 - k * 0.13), 0, 1);
+        if (rt <= 0 || rt >= 1) continue;
+        const re = 1 - Math.pow(1 - rt, 3);
+        ctx.globalAlpha = (1 - rt) * (k === 0 ? 0.9 : 0.42);
+        ctx.strokeStyle = k === 0 ? 'rgba(255,220,140,.95)' : 'rgba(255,116,44,.9)';
+        ctx.lineWidth = Math.max(1.2, br * 0.16 * (1 - rt));
+        ctx.beginPath(); ctx.arc(0, 0, br * (0.2 + 2.2 * re), 0, TAU); ctx.stroke();
+      }
+      /* the debris: twelve tumbling obsidian shards and six embers, all on fixed vectors */
+      const ca = Math.cos(p.rot), sa = Math.sin(p.rot);
+      for (let i = 0; i < SHARD_N; i++) {
+        const q = clamp(el / (FINISH_BURST_MS * SHARD_LIFE[i]), 0, 1);
+        if (q >= 1) continue;
+        const dx = SHARD_C[i] * ca - SHARD_S[i] * sa;
+        const dy = SHARD_C[i] * sa + SHARD_S[i] * ca;
+        const reach = br * (0.45 + 1.9 * SHARD_V[i] * (1 - Math.pow(1 - q, 2)));
+        const px = dx * reach;
+        /* drag flattens the outward run; gravity takes over as the fleck cools */
+        const py = dy * reach * 0.78 + br * 1.3 * q * q;
+        if (i % 3 === 0) {
+          /* an ember: a short additive streak with a brighter head */
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = 0.95 * (1 - q);
+          ctx.strokeStyle = i % 2 === 0 ? '#ffd977' : '#ff8a3d';
+          ctx.lineCap = 'round';
+          ctx.lineWidth = Math.max(1, br * 0.09 * (1 - q));
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(px - dx * br * 0.42 * (1 - q), py - dy * br * 0.42 * (1 - q) - br * 0.1);
+          ctx.stroke();
+          ctx.fillStyle = '#ffe9ad';
+          ctx.beginPath(); ctx.arc(px, py, Math.max(1, br * 0.07 * (1 - q)), 0, TAU); ctx.fill();
+        } else {
+          /* obsidian: an angular sliver tumbling along its own outward line */
+          const len = br * 0.34 * (0.7 + SHARD_V[i] * 0.5) * (1 - q * 0.35);
+          const wid = len * 0.32;
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.globalAlpha = 0.92 * (1 - q);
+          ctx.fillStyle = '#141013';
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(p.rot + SHARD_SPIN[i] * q + Math.atan2(dy, dx));
+          ctx.beginPath();
+          ctx.moveTo(len, 0);
+          ctx.lineTo(len * 0.12, wid);
+          ctx.lineTo(-len * 0.55, wid * 0.35);
+          ctx.lineTo(-len * 0.55, -wid * 0.35);
+          ctx.lineTo(len * 0.12, -wid);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,150,70,.75)';
+          ctx.lineWidth = Math.max(0.8, br * 0.035);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+      ctx.restore();
+    }
+  }
+
   function draw(v: View, now: number) {
     /* Self-heal the fit before painting. `setBoard` re-fits on every race, but a board built while
        its screen was still hidden measures a zero box and keeps that degenerate cell forever: the
@@ -2303,6 +2566,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     if (canvas.clientWidth !== lastW || canvas.clientHeight !== lastH) resize();
     const { cell: c, ox, oy } = L;
     const still = motionReduced();
+    const fin = finish;
     /* a trigger's wound lands with the detonation, not with the step onto the charge: until then
        the ball is whole, and its trail is still growing from the square the charge sits on. */
     for (const [id, w] of pendingWounds) {
@@ -2660,6 +2924,9 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     for (const i of ORDER) {
       const b = v.balls[i];
       const seat = b.team;
+      /* the finisher's own pawn: once its burst begins, the ball is gone — the debris takes over */
+      const pawn = fin ? fin.byId.get(b.id) : undefined;
+      if (pawn && now >= pawn.burstAt) continue;
       /* a ball the mine is throwing rides its own arc: onto the charge, then up and over the wall.
          The state's own slide lands underneath it, so the takeover at either end is seamless. */
       const kn = still ? undefined : knocks.find((k) => k.id === b.id);
@@ -2682,7 +2949,24 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
           cy = oy + y * c;
         }
       }
-      const r = ballR(c) * (b.sel ? 1.08 : 1);        // the chosen ball lifts off the clay
+      /* a pawn on the way out: the last 140ms before its burst are a ±3px overheat jitter */
+      let shakeEl = -1;
+      if (pawn) {
+        shakeEl = now - (pawn.burstAt - FINISH_SHAKE_MS);
+        if (shakeEl >= 0) {
+          const ramp = Math.min(1, shakeEl / 48);
+          cx += Math.sin(shakeEl * 0.23) * FINISH_JITTER * ramp;
+          cy += Math.cos(shakeEl * 0.19) * FINISH_JITTER * ramp;
+        }
+      }
+      const crowned = fin !== null && b.id === fin.winnerBall && now >= fin.at;
+      let r = ballR(c) * (b.sel ? 1.08 : 1);          // the chosen ball lifts off the clay
+      if (pawn && shakeEl >= 0) r *= 1 + 0.06 * Math.min(1, shakeEl / FINISH_SHAKE_MS);
+      if (crowned && fin) {
+        /* the winner rises to 1.18× and stays there, under the crown */
+        const q = clamp((now - fin.at) / FINISH_ASCEND_MS, 0, 1);
+        r *= 1 + FINISH_ASCEND_SCALE * (1 - Math.pow(1 - q, 3));
+      }
       /* the tail it is dragging right now: sampled from where it stood last frame. A ball riding
          the mine's throw draws no comet: its path is the arc, and a straight streak from the old
          square to the landing would give the whole throw away before the blast. */
@@ -2701,6 +2985,27 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const lit = active || v.state.winner === seat;
       const beat = still ? 0.6 : 0.5 + 0.5 * Math.sin(now / 260);
       drawLamp(cx, cy, seat, lit ? beat : 0);
+      if (crowned && crownG) {
+        /* gold light pooled under the winner: the crown's own warmth on the goal tile */
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = still ? 0.6 : 0.55 + 0.24 * Math.sin(now / 230);
+        ctx.fillStyle = crownG;
+        ctx.beginPath(); ctx.arc(0, 0, ballR(c) * 2.9, 0, TAU); ctx.fill();
+        ctx.restore();
+      }
+      if (pawn && shakeEl >= 0 && heatG) {
+        /* the overheat: crimson from the core, amber at the rim, brightest on the last frame */
+        const heat = Math.min(1, shakeEl / FINISH_SHAKE_MS);
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.35 + 0.6 * heat;
+        ctx.fillStyle = heatG;
+        ctx.beginPath(); ctx.arc(0, 0, ballR(c) * 2.9, 0, TAU); ctx.fill();
+        ctx.restore();
+      }
       if (vipSeats.has(seat)) drawVipAura(cx, cy, r, now, still);
       if (lit) drawGlow(cx, cy, r, seat, beat);
       const hurt = wounds.has(b.id);
@@ -2725,7 +3030,11 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       }
       drawBall(cx, cy, r, seat, SEATS_N[seat] > 1 ? n : 0, hurt);
       if (sq !== 0) ctx.restore();
+      if (crowned && fin) drawFinishCrown(cx, cy, r, now, fin.at, still);
     }
+
+    /* the losers' bursts and the charred tiles they leave: the last furniture above the balls */
+    if (fin) drawFinishFx(fin, now, c, ox, oy);
 
     /* mine-blast dust: the puff a thrown ball kicks up where it comes to rest */
     if (dust.length) {
@@ -2804,7 +3113,44 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       dust.length = 0; thump.clear();
       embers.length = 0; stride.clear(); wounds.clear(); pendingWounds.clear(); stood.clear(); blood.length = 0;
       goalAt = -1; goalWait = -1; goalSeat = null;
+      finish = null;
     },
+    /**
+     * Start the endgame finisher: crown the winning pawn, then shake and shatter every losing pawn
+     * in the order it was handed over. The caller decides that order (farthest from the line
+     * first); the renderer resolves the beats against the live board clock and hands back the plan
+     * the caller schedules its bangs, buzzes and the result sheet against. A reduced-motion board
+     * runs no choreography at all, and an empty losers list never hides a pawn.
+     */
+    finishCue(winnerBall: number | null, losers: readonly FinishLoser[]): FinishPlan {
+      if (motionReduced() || !losers.length) {
+        finish = null;
+        return { bursts: [], total: 0 };
+      }
+      const now = performance.now();
+      const pawns: FinishPawn[] = [];
+      const byId = new Map<number, FinishPawn>();
+      const bursts: number[] = [];
+      for (let i = 0; i < losers.length; i++) {
+        const l = losers[i];
+        const at = FINISH_LEAD_MS + i * FINISH_STAGGER_MS + FINISH_SHAKE_MS;
+        const pawn: FinishPawn = {
+          id: l.id,
+          cx: l.cell.c + 0.5,
+          cy: l.cell.r + 0.5,
+          burstAt: now + at,
+          rot: i * 0.7 + (l.id % 7) * 0.13,
+        };
+        pawns.push(pawn);
+        byId.set(l.id, pawn);
+        bursts.push(at);
+      }
+      finish = { winnerBall, at: now, pawns, byId };
+      const last = bursts[bursts.length - 1] ?? 0;
+      return { bursts, total: last + FINISH_BURST_MS + FINISH_SETTLE_MS };
+    },
+    /** Cancel a finisher that has not finished: every pawn whole again, no debris, no crown. */
+    cancelFinish() { finish = null; },
     /** A tap landed: a ripple where the finger was, in the seat's own colour. Board units. */
     ripple(x: number, y: number, p: Player) {
       const { cell: c, ox, oy } = L;
