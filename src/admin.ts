@@ -2176,9 +2176,46 @@ export function createAdmin(api: AdminApi): Admin {
   /** The zero line: every series is a count, so nothing is ever drawn below it. */
   const TREND_BASE = TREND_PAD.t + TREND_IH;
 
-  const TREND_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const TREND_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  /**
+   * The chart reads in Tehran time (UTC+3:30), the operator's own clock, rather than the UTC days
+   * the Worker keys its buckets by. One zone-aware formatter is built once and reused: the
+   * inspector repaints on every pointer move, and building an `Intl` object per frame is a real
+   * cost on a phone.
+   */
+  const TREND_ZONE = 'Asia/Tehran';
+  /** The suffix the inspector prints after a timestamp, instead of the old hardcoded `UTC`. */
+  const TREND_ZONE_LABEL = 'Tehran';
+
+  const trendZoneFmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: TREND_ZONE,
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    hourCycle: 'h23',
+  });
+
+  /** Every field of `ms` exactly as `Asia/Tehran` reads it, keyed by part type, in one pass. */
+  function trendZoneParts(ms: number): Map<string, string> {
+    const out = new Map<string, string>();
+    for (const part of trendZoneFmt.formatToParts(new Date(ms))) out.set(part.type, part.value);
+    return out;
+  }
+
+  /**
+   * `Fri Oct 9` — the Tehran day a daily bucket opens on. The pieces are joined by hand so the
+   * readout never inherits whatever punctuation an engine's `en-US` pattern happens to carry.
+   */
+  function trendDayLabel(ms: number): string {
+    const parts = trendZoneParts(ms);
+    return `${parts.get('weekday') ?? ''} ${parts.get('month') ?? ''} ${parts.get('day') ?? ''}`.trim();
+  }
+
+  /** `Fri 14:00` — the Tehran hour an hourly bucket opens on, in the same 24-hour digits. */
+  function trendTimeLabel(ms: number): string {
+    const parts = trendZoneParts(ms);
+    return `${parts.get('weekday') ?? ''} ${parts.get('hour') ?? '00'}:00`.trim();
+  }
 
   const TREND_WINDOW: Record<TrendRange, string> = {
     '24h': 'Daily · last 24 hours',
@@ -2267,8 +2304,8 @@ export function createAdmin(api: AdminApi): Admin {
 
   /**
    * The X-axis ticks for the window on screen. The hourly window is labelled against the span
-   * (`-24h .. Now`); the daily windows name the buckets themselves, in the UTC days the Worker
-   * keys them by, so a label always means the same 24 hours the count was measured over.
+   * (`-24h .. Now`); the daily windows name the buckets themselves, on the Tehran calendar the
+   * operator reads the plot against.
    */
   function trendTicks(points: readonly SeriesPoint[]): { x: number; text: string; anchor: string }[] {
     const n = points.length;
@@ -2287,12 +2324,13 @@ export function createAdmin(api: AdminApi): Admin {
     const out: { x: number; text: string; anchor: string }[] = [];
     for (let k = 0; k < count; k++) {
       const f = k / (count - 1);
-      const d = new Date(points[Math.min(n - 1, Math.round(f * (n - 1)))].t);
+      const ms = points[Math.min(n - 1, Math.round(f * (n - 1)))].t;
+      const parts = trendZoneParts(ms);
       out.push({
         x: TREND_PAD.l + TREND_IW * f,
         text: trendRange === '7d'
-          ? TREND_WEEKDAYS[d.getUTCDay()]
-          : `${TREND_MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`,
+          ? parts.get('weekday') ?? ''
+          : `${parts.get('month') ?? ''} ${parts.get('day') ?? ''}`.trim(),
         anchor: anchorAt(k, count),
       });
     }
@@ -2553,10 +2591,11 @@ export function createAdmin(api: AdminApi): Admin {
       return;
     }
     statTrendRead.dataset.focused = 'true';
-    const d = new Date(p.t);
+    /* the bucket's opening edge is an epoch stamp, so the zone conversion happens at format
+       time alone: no manual offset arithmetic, and no day-shift around midnight Tehran. */
     const when = trendRange === '24h'
-      ? `${TREND_WEEKDAYS[d.getUTCDay()]} ${String(d.getUTCHours()).padStart(2, '0')}:00 UTC`
-      : `${TREND_WEEKDAYS[d.getUTCDay()]} ${TREND_MONTHS[d.getUTCMonth()]} ${d.getUTCDate()} UTC`;
+      ? `${trendTimeLabel(p.t)} ${TREND_ZONE_LABEL}`
+      : `${trendDayLabel(p.t)} ${TREND_ZONE_LABEL}`;
     statTrendRead.textContent = `${when} · ${figure(p.signups)} signups ·`
       + ` ${figure(p.active)} active · ${figure(p.matches)} matches`;
   }
