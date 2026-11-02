@@ -77,6 +77,12 @@ export interface RaceSetup { difficulty: Difficulty; sizes: [number, number] }
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const en = (n: number) => n.toLocaleString('en-US');
+/** A chip has ~80px on the narrowest phone: 46,794 subscribers reads as 46.8K. */
+const compact = (n: number): string => {
+  if (n >= 999_500) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
+  return en(n);
+};
 
 export function createMenu(api: MenuApi): Menu {
   const tabs = [...document.querySelectorAll<HTMLElement>('.tab[data-tab]')];
@@ -538,7 +544,6 @@ export function createMenu(api: MenuApi): Menu {
   const squadCrestFrame = $<HTMLElement>('squad-view-frame');
   const squadCrestPhoto = $<HTMLImageElement>('squad-view-photo');
   const squadCrestBadge = $<HTMLElement>('squad-view-badge');
-  const squadOwnerBadge = $<HTMLElement>('squad-view-owner');
   const squadKindBadge = $<HTMLElement>('squad-view-kind');
   const squadTotalEl = $<HTMLElement>('squad-view-total');
   const squadExploreBtn = $<HTMLButtonElement>('squad-explore');
@@ -869,13 +874,12 @@ export function createMenu(api: MenuApi): Menu {
 
   /**
    * The leader's one invite row. It exists only for the player who can use it: the gold key hands
-   * the `?startapp=squad_<id>` link to Telegram's own share sheet, the pill copies it. The crown
-   * badge in the banner carries the role, so there is no separate admin bar.
+   * the `?startapp=squad_<id>` link to Telegram's own share sheet, the pill copies it. The hero
+   * names no role: the captain's roster row already wears the LEADER pill.
    */
   function paintSquadAdmin(me: RankedSquad): void {
     squadAdmin = isSquadAdmin(me);
     squadAdminEl.hidden = !squadAdmin;
-    squadOwnerBadge.hidden = squadView?.yourRole !== 'leader';
     if (!squadAdmin) return;
     const url = squadInviteUrl(me.id);
     squadInviteCopyT.textContent = t('copyLink');
@@ -906,12 +910,11 @@ export function createMenu(api: MenuApi): Menu {
       squadKindBadge.title = t('officialChannel');
       squadKindBadge.setAttribute('aria-label', t('officialChannel'));
     }
-    /* The Telegram audience is a separate, clearly-labelled stat: it never counts as members. */
-    squadSubsEl.hidden = squadView.subscribers <= 0;
-    if (!squadSubsEl.hidden) {
-      squadSubsEl.textContent = `${en(squadView.subscribers)} ${t('subscribers')}`;
-      squadSubsEl.title = t('subscribersNote');
-    }
+    /* The Telegram audience is a separate, clearly-labelled chip: it never counts as members.
+       An unreported audience stays a quiet dash rather than collapsing the 3-up grid. */
+    const subs = squadView.subscribers;
+    squadSubsEl.textContent = subs > 0 ? compact(subs) : '—';
+    squadSubsEl.title = subs > 0 ? `${en(subs)} ${t('subscribers')}` : t('subscribersNote');
     paintSquadAdmin(me);
     paintSquadRoster();
   }

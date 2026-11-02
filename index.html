@@ -5056,41 +5056,47 @@
                 <b class="sq-hero-mark" id="squad-view-avatar" aria-hidden="true">S</b>
                 <img class="sq-hero-photo" id="squad-view-photo" alt="" decoding="async" referrerpolicy="no-referrer" />
               </span>
-              <span class="sq-hero-rank" id="squad-view-badge" data-rank="num" aria-hidden="true">#1</span>
             </span>
             <span class="sq-banner-id">
-              <span class="sq-name-row">
-                <b class="sq-banner-name" id="squad-view-name">Squad</b>
-                <span class="sq-owner" id="squad-view-owner" hidden>
-                  <svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>
-                  <span data-i18n="leader">Leader</span>
-                </span>
-              </span>
+              <b class="sq-banner-name" id="squad-view-name">Squad</b>
               <span class="sq-meta">
                 <span class="sq-meta-handle" id="squad-view-handle">@Squad</span>
                 <span class="sq-verified" id="squad-view-kind" hidden role="img" aria-label="Telegram channel">
                   <svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>
                 </span>
-                <span class="sq-meta-subs" id="squad-view-subs" hidden></span>
               </span>
-              <span class="sq-banner-stats">
-                <span class="sq-stat sq-stat-mem">
+            </span>
+            <span class="sq-hero-rank" id="squad-view-badge" data-rank="num" aria-hidden="true">#1</span>
+            <!-- Three balanced metrics: Telegram audience, the real in-game roster, and the
+                 squad's war score. The captain's role lives on their roster row, never here. -->
+            <span class="sq-banner-stats">
+              <span class="sq-stat sq-stat-subs">
+                <span class="sq-stat-v">
                   <svg class="ico" aria-hidden="true"><use href="#i-users" /></svg>
-                  <small data-i18n="members">Members</small>
+                  <b id="squad-view-subs">—</b>
+                </span>
+                <small data-i18n="squadHeroSubs">Subscribers</small>
+              </span>
+              <span class="sq-stat sq-stat-mem">
+                <span class="sq-stat-v">
+                  <svg class="ico" aria-hidden="true"><use href="#i-headset" /></svg>
                   <b id="squad-view-members">0</b>
                 </span>
-                <span class="sq-stat sq-stat-tiq">
-                  <svg class="ico" aria-hidden="true"><use href="#i-brain" /></svg>
-                  <small data-i18n="squadTotalTiq">Total TIQ</small>
+                <small data-i18n="squadHeroMembers">Members</small>
+              </span>
+              <span class="sq-stat sq-stat-tiq">
+                <span class="sq-stat-v">
+                  <svg class="ico" aria-hidden="true"><use href="#i-cup" /></svg>
                   <b id="squad-view-total">0</b>
                 </span>
+                <small data-i18n="squadHeroTiq">Total TIQ</small>
               </span>
             </span>
           </header>
 
           <!-- One invite row for the leader: a gold Telegram share key and a compact copy pill.
-               Members never see a control they cannot use; the crown badge in the banner names
-               the role in place instead of a separate admin bar. -->
+               Members never see a control they cannot use; the captain's roster row already
+               carries the LEADER pill, so the hero never repeats it. -->
           <section class="sq-invite" id="squad-admin" hidden aria-label="Squad invites">
             <button class="sq-invite-share" id="squad-invite-share" type="button">
               <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
