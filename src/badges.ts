@@ -32,6 +32,12 @@ import heisenbergMedallion from './assets/images/Heisenberg Chrome Medallion.png
 
 export type BadgeAccent = 'titanium' | 'quantum' | 'frost';
 
+/** Collector copy written for each supported language; other locales read English. */
+export interface BadgeText {
+  en: string;
+  fa: string;
+}
+
 export interface BadgeDef {
   id: string;
   name: string;
@@ -41,12 +47,12 @@ export interface BadgeDef {
   archetype: string;
   /** The psychological pillar the archetype represents. */
   pillar: string;
-  /** One sentence of archetype copy, used by the pin spotlight and detail sheet. */
+  /** One sentence of archetype copy, used by the pin spotlight and shelf tiles. */
   description: string;
-  /** Flavor — the legend the detail sheet prints under the title. */
-  lore: string;
-  /** The unlock requirement in player-facing words. */
-  criteria: string;
+  /** The collector's story: who the figure was and who wears this honor. */
+  story: BadgeText;
+  /** The unlock mission in plain player-facing words. */
+  criteria: BadgeText;
   /** Names the sculpted crest (#i-crest-<accent>), its CSS aura, and the art fallback. */
   accent: BadgeAccent;
   /** Rendered medallion art; when set it replaces the vector crest everywhere the honor is worn. */
@@ -63,8 +69,14 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
     archetype: 'The Bastion',
     pillar: 'Resilience',
     description: 'Unyielding defence and comeback mastery. Holds the line until the board breaks.',
-    lore: 'Never surrender. The wall is not a tactic; it is a promise.',
-    criteria: 'Reach a 3-win streak. High-resilience runs and clutch comebacks forge the Bastion.',
+    story: {
+      en: "Winston Churchill stood unbreakable against impossible odds. Players who wear this medallion are pure iron walls—masters of defense who lock down the board and turn the tide when everyone else would fold.",
+      fa: 'چرچیل نماد ایستادگی توی غیرممکن‌ترین نبردهاست! کسی که این مدال رو به سینه می‌زنه، توی بازی مثل یک سد فولادی عمل می‌کنه؛ استادی که با دیوارچینی‌های هوشمندانه راه نفس حریف رو می‌بنده و حتی توی بدترین شرایط هم تسلیم نمی‌شه!',
+    },
+    criteria: {
+      en: 'Win 3 races in a row. Hold the line, make every wall count, and refuse to fold.',
+      fa: 'سه مسابقهٔ پیاپی رو ببر؛ خط دفاعی رو نگه دار، هر دیوار رو حساب‌شده بچین و تسلیم نشو.',
+    },
     accent: 'titanium',
     art: churchillMedallion,
     cap: 100,
@@ -76,8 +88,14 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
     archetype: 'The Singularity',
     pillar: 'Pure Intellect',
     description: 'Spatial foresight and zero-error calculation. Sees the whole board before the first move.',
-    lore: 'The board is not a race. It is a proof.',
-    criteria: 'Bank 1,500 Tactical IQ. Pure calculation bends the board into a single answer.',
+    story: {
+      en: 'Albert Einstein rebuilt reality by refusing to accept the obvious. This medallion belongs to players who see three moves ahead—calm, surgical minds that solve the board like a proof and leave nothing to luck.',
+      fa: 'اینشتین با رد کردن بدیهیات، واقعیت رو از نو نوشت! این مدال مال بازیکنیه که سه قدم جلوتر رو می‌بینه؛ مغزی آروم و دقیق که صفحه رو مثل یک اثبات ریاضی حل می‌کنه و هیچ چیزی رو به شانس واگذار نمی‌کنه!',
+    },
+    criteria: {
+      en: 'Reach 1,500 Tactical IQ. Pure calculation, zero panic—let the proof carry you.',
+      fa: 'به 1,500 امتیاز هوش تاکتیکی (TIQ) برس. محاسبهٔ خالص، بدون استرس؛ بذار اثباتت کار خودش رو بکنه.',
+    },
     accent: 'quantum',
     art: einsteinMedallion,
     cap: 50,
@@ -89,8 +107,14 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
     archetype: 'The Formula',
     pillar: 'Calculated Precision',
     description: 'Flawless tactical execution and cold dominance. Wins before the race begins.',
-    lore: "No wasted moves. No reliance on luck. Pure, cold chemical dominance. You don't just win the board; you claim territory before the first move is made.",
-    criteria: 'Win 60% of at least 5 competitive matches.',
+    story: {
+      en: 'Werner Heisenberg mastered uncertainty and turned it into a weapon. Wear this medallion if you win with cold precision—wasting nothing, forcing the board into your formula, and claiming the race before your rival even moves.',
+      fa: 'هایزنبرگ عدم‌قطعیت رو رام کرد و ازش سلاح ساخت! این مدال مال کسیه که با دقتِ سردش می‌بره؛ نه یک حرکت هدر می‌ده، نه به شانس تکیه می‌کنه؛ صفحه رو به فرمول خودش مجبور می‌کنه و قبل از اینکه حریف بجنبه، برد رو مال خودش کرده!',
+    },
+    criteria: {
+      en: 'Win 60% of at least 5 competitive races. No luck, no wasted moves—just cold execution.',
+      fa: 'حداقل 5 مسابقهٔ رقابتی بازی کن و 60٪شون رو ببر. نه شانس، نه حرکت هدر؛ فقط اجرای سرد و دقیق.',
+    },
     accent: 'frost',
     art: heisenbergMedallion,
     cap: 25,
@@ -102,6 +126,10 @@ export const BADGES = GENIUS_TRIAD;
 
 export const badgeById = (id: string | null | undefined): BadgeDef | null =>
   BADGES.find((b) => b.id === id) ?? null;
+
+/** The catalogue copy in the active language; unsupported locales read the English edition. */
+export const badgeText = (text: BadgeText, code: string): string =>
+  (code === 'fa' ? text.fa : text.en);
 
 /**
  * The honor's crest as markup: its rendered medallion when one ships, else the
@@ -171,32 +199,54 @@ export function isBadgeUnlocked(id: string): boolean {
   return badgeById(id) !== null && badgeProgress(id).met;
 }
 
-/** The next step in the requirement's own unit — "Needs 3 more wins in a row". */
-export function badgeDelta(id: string): string {
+/** The requirement's progress in the detail sheet's own words, localized. */
+export function badgeProgressText(id: string, code: string = 'en'): string {
+  const fa = code === 'fa';
   const p = badgeProgress(id);
-  if (p.met) return 'Requirement met';
+  switch (id) {
+    case 'churchill_bastion':
+      return fa ? `${p.got} از 3 برد پیاپی` : `${p.got} of 3 win streak`;
+    case 'einstein_singularity':
+      return fa ? `${en(p.got)} از 1,500 هوش تاکتیکی` : `${en(p.got)} of 1,500 Tactical IQ`;
+    case 'heisenberg_formula': {
+      if (profile.stats.games < 5) {
+        return fa ? `${p.got} از 5 مسابقه` : `${p.got} of 5 races`;
+      }
+      return fa ? `${p.got}٪ از 60٪ نرخ برد` : `${p.got}% of 60% wins`;
+    }
+    default:
+      return fa ? 'قفل' : 'Locked';
+  }
+}
+
+/** The next step in the requirement's own unit — "3 more wins in a row". */
+export function badgeDelta(id: string, code: string = 'en'): string {
+  const fa = code === 'fa';
+  const p = badgeProgress(id);
+  if (p.met) return fa ? 'شرط تکمیل شده' : 'Requirement met';
   switch (id) {
     case 'churchill_bastion': {
       const n = Math.max(1, 3 - Math.max(0, profile.stats.best));
-      return `Needs ${n} more consecutive win${n === 1 ? '' : 's'}`;
+      return fa ? `${n} برد پیاپی دیگه` : `${n} more consecutive win${n === 1 ? '' : 's'}`;
     }
     case 'einstein_singularity': {
       const n = Math.max(1, 1500 - Math.max(0, myTiq()));
-      return `Needs ${en(n)} more TIQ`;
+      return fa ? `${en(n)} امتیاز هوش تاکتیکی دیگه` : `${en(n)} more TIQ`;
     }
     case 'heisenberg_formula': {
       const games = Math.max(0, profile.stats.games);
       const wins = Math.max(0, Math.min(games, profile.stats.wins));
       if (games < 5) {
         const n = 5 - games;
-        return `Needs ${n} more race${n === 1 ? '' : 's'} to qualify`;
+        return fa ? `${n} مسابقهٔ دیگه برای احراز شرایط` : `${n} more race${n === 1 ? '' : 's'} to qualify`;
       }
       /* A win without a loss closes the rate gap fastest: (wins+k)/(games+k) >= .6. */
       const k = Math.max(0, Math.ceil(games * 1.5 - wins * 2.5));
-      return k > 0 ? `Needs ${k} more win${k === 1 ? '' : 's'} in a row` : 'Requirement met';
+      if (k > 0) return fa ? `${k} برد پیاپی دیگه` : `${k} more win${k === 1 ? '' : 's'} in a row`;
+      return fa ? 'شرط تکمیل شده' : 'Requirement met';
     }
     default:
-      return 'Locked';
+      return fa ? 'قفل' : 'Locked';
   }
 }
 
@@ -265,11 +315,6 @@ function editionChanged(): void {
 }
 
 export const editionSyncState = (): EditionSyncState => syncState;
-
-/** The last live hall of fame for an honor, or null when this session has not read it. */
-export function editionHolders(id: string): readonly EditionHolder[] | null {
-  return liveHolders.get(id) ?? null;
-}
 
 function readHolders(raw: unknown, cap: number): EditionHolder[] | null {
   if (!Array.isArray(raw)) return null;

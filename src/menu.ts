@@ -18,9 +18,10 @@ import {
   REFERRAL_REWARD, setBadge, setDisplayName, setDob, setFrame, setPieceColor, theme, validDob,
 } from './storage';
 import {
-  BADGES, badgeCrestHtml, badgeDelta, badgeEdition, badgeProgress, badgeStatus, editionHolders,
-  editionSerialLabel, editionSpeech, editionSyncState, equippedBadge, hasEditionClaim, isBadgeUnlocked,
-  onEditionChange, refreshBadgeEditions, unlockedCount, type BadgeDef, type BadgeEdition, type WornEdition,
+  BADGES, badgeCrestHtml, badgeDelta, badgeEdition, badgeProgress, badgeProgressText, badgeStatus,
+  badgeText, editionSerialLabel, editionSpeech, editionSyncState, equippedBadge, hasEditionClaim,
+  isBadgeUnlocked, onEditionChange, refreshBadgeEditions, unlockedCount, type BadgeDef,
+  type WornEdition,
 } from './badges';
 import { MAX_BALLS, newGame } from './rules';
 import { createPreview, createRenderer, type Preview, type View } from './render';
@@ -2016,83 +2017,14 @@ export function createMenu(api: MenuApi): Menu {
     }
   }
 
-  function holderRow(serial: number, name: string, opts: { open?: boolean; you?: boolean } = {}): HTMLElement {
-    const li = document.createElement('li');
-    li.className = `bd-hof-row${opts.open ? ' is-open' : ''}${opts.you ? ' is-you' : ''}`;
-    const key = document.createElement('span');
-    key.className = 'bd-hof-serial';
-    key.textContent = editionSerialLabel(serial);
-    const who = document.createElement('span');
-    who.className = 'bd-hof-name';
-    who.textContent = name;
-    li.append(key, who);
-    if (opts.you) {
-      const tag = document.createElement('span');
-      tag.className = 'bd-hof-tag';
-      tag.textContent = 'You';
-      li.append(tag);
-    }
-    return li;
-  }
-
-  /* The hall is a preview of the first serials: named holders, unlisted legacy claims, then
-     the next open slots. The player's own serial is pinned when it falls past the preview. */
-  function paintBadgeHall(def: BadgeDef, edition: BadgeEdition): void {
-    const list = document.getElementById('badge-hof-list');
-    if (!list) return;
-    list.textContent = '';
-    const live = editionHolders(def.id);
-    const named = new Map((live ?? []).map((h) => [h.serial, h.name]));
-    const minted = edition.minted ?? (edition.serial ?? 0);
-    const known = live !== null || edition.remaining !== null || edition.serial !== null;
-    const sub = document.getElementById('badge-hof-sub');
-    if (sub) {
-      sub.textContent = live !== null
-        ? `${live.length} holder${live.length === 1 ? '' : 's'}`
-        : `${edition.cap} serials`;
-    }
-
-    if (known && minted === 0 && edition.serial === null) {
-      const empty = document.createElement('li');
-      empty.className = 'bd-hof-empty';
-      const first = document.createElement('b');
-      first.textContent = 'Be the first to claim serial #001';
-      const hint = document.createElement('span');
-      hint.textContent = 'The first mint is reserved for the fastest formula.';
-      empty.append(first, hint);
-      list.append(empty);
-      for (let serial = 1; serial <= Math.min(3, def.cap); serial++) {
-        list.append(holderRow(serial, 'Available', { open: true }));
-      }
-      return;
-    }
-
-    const preview = Math.min(def.cap, 7);
-    for (let serial = 1; serial <= preview; serial++) {
-      const name = named.get(serial);
-      if (name !== undefined) {
-        list.append(holderRow(serial, name, { you: edition.serial === serial }));
-      } else if (serial <= minted) {
-        list.append(holderRow(serial, known ? 'Unlisted' : 'Claimed', { you: edition.serial === serial }));
-      } else if (known) {
-        list.append(holderRow(serial, 'Available', { open: true }));
-      } else {
-        list.append(holderRow(serial, 'Syncing…', { open: true }));
-      }
-    }
-    if (edition.serial !== null && edition.serial > preview) {
-      list.append(holderRow(edition.serial, named.get(edition.serial) ?? 'You', { you: true }));
-    }
-  }
-
   function paintBadgeSheet(id: string): void {
     const def = BADGES.find((b) => b.id === id);
     const sheet = document.getElementById('sheet-badge');
     if (!def || !sheet) return;
     const unlocked = isBadgeUnlocked(id);
+    const equipped = profile.badge === id;
     const prog = badgeProgress(id);
     const edition = badgeEdition(id);
-    const pct = Math.round(prog.pct * 100);
 
     sheet.dataset.accent = def.accent;
     const title = document.getElementById('badge-title');
@@ -2103,65 +2035,59 @@ export function createMenu(api: MenuApi): Menu {
     const state = document.getElementById('badge-state');
     if (state) {
       if (!unlocked) {
-        state.textContent = `Locked • ${prog.label}`;
+        state.textContent = t('badgeLocked');
         state.dataset.state = 'locked';
       } else if (edition.serial !== null) {
-        state.textContent = `Serial ${editionSerialLabel(edition.serial)} of ${edition.cap}`;
+        state.textContent = lang === 'fa'
+          ? `${t('badgeSerial')} ${String(edition.serial).padStart(3, '0')} ${t('badgeOf')} ${en(edition.cap)}`
+          : `${t('badgeSerial')} ${editionSerialLabel(edition.serial)} ${t('badgeOf')} ${en(edition.cap)}`;
         state.dataset.state = 'minted';
       } else if (edition.minting) {
-        state.textContent = 'Unlocked • minting';
+        state.textContent = t('badgeMinting');
         state.dataset.state = 'minting';
       } else {
-        state.textContent = 'Unlocked';
+        state.textContent = t('badgeUnlocked');
         state.dataset.state = 'open';
       }
     }
 
-    const lore = document.getElementById('badge-lore');
-    if (lore) lore.textContent = def.lore;
+    const story = document.getElementById('badge-story');
+    if (story) story.textContent = badgeText(def.story, lang);
     const crit = document.getElementById('badge-criteria');
-    if (crit) crit.textContent = def.criteria;
+    if (crit) crit.textContent = badgeText(def.criteria, lang);
 
-    const capEl = document.getElementById('badge-scar-cap');
-    if (capEl) capEl.textContent = String(def.cap);
-    const supplyTrack = document.getElementById('badge-scar-track');
-    supplyTrack?.style.setProperty('--bd-cap', String(def.cap));
-    const supplyFill = document.getElementById('badge-supply-fill');
+    /* The supply bento reads the ledger first and the last confirmed serial second;
+       before either answers it shows an em dash, never an invented count. */
     const minted = edition.minted ?? (edition.serial !== null ? edition.serial : null);
-    if (supplyFill) {
-      supplyFill.style.width = `${def.cap > 0 ? Math.min(100, ((minted ?? 0) / def.cap) * 100) : 0}%`;
+    const remaining = edition.remaining ?? (minted !== null ? Math.max(0, def.cap - minted) : null);
+    const totalEl = document.getElementById('badge-supply-total');
+    if (totalEl) totalEl.textContent = en(def.cap);
+    const claimedEl = document.getElementById('badge-supply-claimed');
+    if (claimedEl) claimedEl.textContent = minted !== null ? en(minted) : '—';
+    const availEl = document.getElementById('badge-supply-available');
+    if (availEl) availEl.textContent = remaining !== null ? en(remaining) : '—';
+    const availCell = document.getElementById('badge-supply-available-cell');
+    if (availCell) {
+      availCell.dataset.state = remaining === null ? 'syncing' : remaining <= 0 ? 'closed' : 'open';
     }
-    const edLine = document.getElementById('badge-edition');
-    if (edLine) {
-      edLine.dataset.state = edition.serial !== null ? 'mine'
-        : edition.remaining === null ? 'syncing'
-          : edition.remaining <= 0 ? 'closed' : 'open';
-      if (edition.remaining !== null && minted !== null) {
-        edLine.textContent = `${minted} / ${edition.cap} claimed • ${edition.remaining} remaining`;
-      } else if (edition.serial !== null) {
-        edLine.textContent = `${edition.serial} / ${edition.cap} claimed • syncing`;
-      } else {
-        edLine.textContent = `— / ${edition.cap} claimed • syncing`;
-      }
-    }
-    paintBadgeHall(def, edition);
 
     const req = document.getElementById('badge-req');
     req?.setAttribute('data-met', String(prog.met));
-    const fill = document.getElementById('badge-progress-fill');
-    const bar = document.getElementById('badge-progress-bar');
-    const label = document.getElementById('badge-progress-t');
-    if (fill) fill.style.width = `${unlocked ? 100 : pct}%`;
-    if (bar) {
-      bar.setAttribute('aria-valuenow', String(Math.min(prog.got, prog.need)));
-      bar.setAttribute('aria-valuemax', String(prog.need));
-      bar.setAttribute('aria-valuetext', prog.label);
-    }
-    if (label) label.textContent = unlocked ? 'Complete — ready to equip' : prog.label;
+    const chip = document.getElementById('badge-req-chip');
+    const check = document.getElementById('badge-req-check');
     const count = document.getElementById('badge-req-count');
-    if (count) count.textContent = `${en(prog.got)} / ${en(prog.need)}`;
+    if (chip && count) {
+      chip.classList.toggle('is-met', prog.met);
+      check?.toggleAttribute('hidden', !prog.met);
+      count.textContent = prog.met ? t('badgeUnlocked') : `${en(prog.got)} / ${en(prog.need)}`;
+      chip.setAttribute('aria-label', prog.met ? t('badgeUnlocked') : badgeProgressText(id, lang));
+    }
     const delta = document.getElementById('badge-req-delta');
-    if (delta) delta.textContent = badgeDelta(id);
+    if (delta) {
+      delta.textContent = prog.met
+        ? (equipped ? t('badgeEquippedNote') : t('badgeReady'))
+        : `${t('badgeNextStep')}: ${badgeDelta(id, lang)}`;
+    }
 
     const cta = document.getElementById('badge-equip') as HTMLButtonElement | null;
     const ctaLabel = document.getElementById('badge-cta-label');
@@ -2170,22 +2096,20 @@ export function createMenu(api: MenuApi): Menu {
       if (!unlocked) {
         cta.disabled = false;
         cta.dataset.mode = 'play';
-        ctaLabel.textContent = 'Play now to claim';
+        ctaLabel.textContent = t('badgeCtaPlay');
         use?.setAttribute('href', '#i-play');
-        cta.setAttribute('aria-label', `Play a race to unlock ${def.name}`);
-      } else if (profile.badge === id) {
+      } else if (equipped) {
         cta.disabled = true;
         cta.dataset.mode = 'equipped';
-        ctaLabel.textContent = 'Medallion equipped';
+        ctaLabel.textContent = t('badgeCtaEquipped');
         use?.setAttribute('href', '#i-check');
-        cta.setAttribute('aria-label', `${def.name} is equipped`);
       } else {
         cta.disabled = false;
         cta.dataset.mode = 'equip';
-        ctaLabel.textContent = 'Equip medallion';
+        ctaLabel.textContent = t('badgeCtaEquip');
         use?.setAttribute('href', '#i-check');
-        cta.setAttribute('aria-label', `Equip ${def.name} to your profile`);
       }
+      cta.setAttribute('aria-label', `${ctaLabel.textContent} — ${def.name}`);
     }
   }
 
@@ -2776,6 +2700,7 @@ export function createMenu(api: MenuApi): Menu {
     paintLang();
     paintSquadPill();
     if (!pfScreen.hidden) paintProfile();
+    if (badgeDraft && document.getElementById('sheet-badge')?.classList.contains('open')) paintBadgeSheet(badgeDraft);
   };
   onLang(paintLangLive);
   window.addEventListener('detour:lang', paintLangLive);

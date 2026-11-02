@@ -5283,7 +5283,7 @@
         <div class="sheet-body nd-body" id="nd-body" data-scroll></div>
       </section>
 
-      <!-- badge: luxury medallion hero, lore, global scarcity + hall of fame, requirement + CTA -->
+      <!-- badge: luxury collector card — supply bento, story, unlock mission + CTA -->
       <section class="sheet tall badge-sheet" id="sheet-badge" hidden role="dialog" aria-modal="true" aria-labelledby="badge-title">
         <span class="sheet-grip" aria-hidden="true"></span>
         <button class="bd-x" type="button" data-sheet-close aria-label="Close badge details">
@@ -5301,39 +5301,39 @@
         </div>
 
         <div class="sheet-body bd-body" id="badge-sheet-body" data-scroll>
-          <p class="bd-lore" id="badge-lore">Lore</p>
-
-          <section class="bd-scarcity">
-            <header class="bd-scar-head">
-              <span class="bd-kicker">Limited edition:</span>
-              <b class="bd-scar-cap"><span id="badge-scar-cap">25</span> globally</b>
-            </header>
-            <div class="bd-scar-track" id="badge-scar-track" aria-hidden="true">
-              <i class="bd-scar-fill" id="badge-supply-fill"></i>
+          <section class="bd-supply">
+            <div class="bd-supply-cell is-total">
+              <b class="bd-supply-num" id="badge-supply-total">—</b>
+              <span class="bd-supply-label" data-i18n="badgeTotalSupply">Total supply</span>
             </div>
-            <p class="bd-scar-line" id="badge-edition" data-state="syncing">— / 25 claimed • syncing</p>
-            <div class="bd-hof">
-              <div class="bd-hof-head">
-                <span class="bd-kicker">Hall of fame</span>
-                <span class="bd-hof-sub" id="badge-hof-sub">25 serials</span>
-              </div>
-              <ol class="bd-hof-list" id="badge-hof-list" aria-label="Edition holders"></ol>
+            <div class="bd-supply-cell is-claimed">
+              <b class="bd-supply-num" id="badge-supply-claimed">—</b>
+              <span class="bd-supply-label" data-i18n="badgeClaimed">Claimed</span>
+            </div>
+            <div class="bd-supply-cell is-available" id="badge-supply-available-cell" data-state="syncing">
+              <b class="bd-supply-num" id="badge-supply-available">—</b>
+              <span class="bd-supply-label" data-i18n="badgeAvailable">Available</span>
             </div>
           </section>
 
-          <section class="bd-req" id="badge-req" data-met="false">
-            <div class="bd-req-head">
-              <span class="bd-kicker">Requirement</span>
-              <span class="bd-req-count" id="badge-req-count">0 / 1</span>
-            </div>
+          <section class="bd-story" aria-labelledby="badge-story-kicker">
+            <span class="bd-kicker" id="badge-story-kicker" data-i18n="badgeStoryKicker">Who &amp; what it means</span>
+            <p class="bd-story-copy" id="badge-story">Story</p>
+          </section>
+
+          <section class="bd-req" id="badge-req" data-met="false" aria-labelledby="badge-unlock-kicker">
+            <header class="bd-req-head">
+              <span class="bd-req-ico" aria-hidden="true">
+                <svg class="ico"><use href="#i-target" /></svg>
+              </span>
+              <span class="bd-kicker" id="badge-unlock-kicker" data-i18n="badgeUnlockKicker">How to unlock</span>
+              <span class="bd-req-chip" id="badge-req-chip">
+                <svg class="ico" id="badge-req-check" aria-hidden="true" hidden><use href="#i-check" /></svg>
+                <b id="badge-req-count">0 / 1</b>
+              </span>
+            </header>
             <p class="bd-req-copy" id="badge-criteria">Criteria</p>
-            <span class="bd-req-track" role="progressbar" id="badge-progress-bar" aria-label="Badge progress" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0">
-              <i class="bd-req-fill" id="badge-progress-fill"></i>
-            </span>
-            <div class="bd-req-foot">
-              <span id="badge-progress-t"></span>
-              <em id="badge-req-delta"></em>
-            </div>
+            <p class="bd-req-foot"><em id="badge-req-delta"></em></p>
           </section>
         </div>
 
