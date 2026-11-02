@@ -179,6 +179,8 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     supportSending: 'Sending…',
     supportOk: 'Message sent to admins!',
     supportPlaceholder: 'Write your message or feedback here...',
+    /* ---- Command Dispatch popup (src/broadcasts.ts) ---- */
+    dispatchDismiss: 'Dismiss',
     /* ---- shared tokens ---- */
     play: 'PLAY',
     searching: 'SEARCHING',
@@ -585,6 +587,8 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     supportSending: 'در حال ارسال…',
     supportOk: 'پیام برای ادمین‌ها ارسال شد!',
     supportPlaceholder: 'پیام یا بازخورد خود را اینجا بنویسید...',
+    /* ---- پنجره اعلان رسمی (src/broadcasts.ts) ---- */
+    dispatchDismiss: 'متوجه شدم',
     /* ---- shared tokens ---- */
     play: 'شروع بازی',
     searching: 'در حال جستجو',
@@ -987,6 +991,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     supportSending: 'Отправка…',
     supportOk: 'Сообщение отправлено админам!',
     supportPlaceholder: 'Напишите здесь ваше сообщение или отзыв...',
+    dispatchDismiss: 'Понятно',
   },
   ar: {
     settingsTitle: 'الإعدادات',
@@ -1018,6 +1023,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     supportSending: 'جارٍ الإرسال…',
     supportOk: 'تم إرسال الرسالة إلى الأدمن!',
     supportPlaceholder: 'اكتب رسالتك أو ملاحظاتك هنا...',
+    dispatchDismiss: 'فهمت',
   },
   es: {
     settingsTitle: 'Ajustes',
@@ -1049,6 +1055,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     supportSending: 'Enviando…',
     supportOk: '¡Mensaje enviado a los admins!',
     supportPlaceholder: 'Escribe aquí tu mensaje o sugerencia...',
+    dispatchDismiss: 'Entendido',
   },
 };
 

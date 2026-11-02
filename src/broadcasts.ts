@@ -29,7 +29,7 @@
 import { readJson, writeJson } from './storage';
 import { addNotification } from './notifications';
 import { impact, tgInitData } from './telegram';
-import { motionReduced } from './settings';
+import { motionReduced, t } from './settings';
 import { workerUrl } from './adminApi';
 
 /* ---------- the wire ---------- */
@@ -248,6 +248,15 @@ export function createAnnouncements(deps: AnnouncementsDeps): Announcements {
   let closeTimer = 0;
   /** What had focus before the popup took it, so Dismiss can hand it back. */
   let restoreFocus: HTMLElement | null = null;
+
+  /* The acknowledge key speaks the player's language. The markup ships the English
+     fallback (`data-i18n="dispatchDismiss"`), which the Settings sweep also repaints;
+     painting it here too keeps the popup correct even when it opens before that sweep. */
+  const paintDismiss = (): void => {
+    if (dismissBtn) dismissBtn.textContent = t('dispatchDismiss');
+  };
+  paintDismiss();
+  window.addEventListener('detour:lang', paintDismiss);
 
   /** Urgent, in-audience, not-yet-dismissed, newest first — what may pop. */
   const eligible = (): Broadcast[] => {
