@@ -1709,6 +1709,10 @@ export function createAdmin(api: AdminApi): Admin {
   const statTrendSvg = document.getElementById('stat-trend-svg') as unknown as SVGSVGElement | null;
   const statTrendRead = $<HTMLElement>('stat-trend-read');
   const statTrendEmpty = $<HTMLElement>('stat-trend-empty');
+  /* the slab carries `data-look`, so the plot, the chips and the inspector read one shared state */
+  const statTrendSlab = statTrendRead?.closest<HTMLElement>('.adm-trend') ?? null;
+  const statTrendTs = $<HTMLElement>('stat-trend-ts');
+  const statTrendToks = [...(stage?.querySelectorAll<HTMLElement>('[data-gtok]') ?? [])];
   const statCore = $<HTMLElement>('stat-core');
   const statCoreBar = $<HTMLElement>('stat-core-bar');
   const statCoreFill = $<HTMLElement>('stat-core-fill');
@@ -2233,6 +2237,23 @@ export function createAdmin(api: AdminApi): Admin {
   /** The Y ceiling that window was scaled to; the cursor layer has to agree with the lines. */
   let trendCeil = 4;
   const trendOn: Record<TrendSeries, boolean> = { active: true, signups: true, matches: false };
+  /** The series the operator clicked into the foreground; null leaves the drawn ones equal. */
+  let trendLock: TrendSeries | null = null;
+  /** The series the pointer is over, on a chip or on the plot. A hover outranks the lock. */
+  let trendHover: TrendSeries | null = null;
+  /** Whether a lock is what first drew that series, so unlocking can put the window back. */
+  const trendLockOpened: Record<TrendSeries, boolean> = { active: false, signups: false, matches: false };
+  /** The three series, in the order the legend chips and the inspector tokens show them. */
+  const TREND_SERIES_KEYS: TrendSeries[] = ['active', 'signups', 'matches'];
+  /** How near, in viewBox units, a pointer must come to a curve for it to be read as that series. */
+  const TREND_NEAR = 30;
+
+  /** What the plot, the chips and the inspector are all pointing at: the hover, else the lock. */
+  const trendLook = (): TrendSeries | null => trendHover ?? trendLock;
+
+  /** The series a chip or token carries, or null when the markup has drifted from this list. */
+  const trendSeriesKey = (raw: string | undefined): TrendSeries | null =>
+    raw === 'active' || raw === 'signups' || raw === 'matches' ? raw : null;
 
   /** Two decimals, no trailing zeroes: small numbers keep the SVG markup small. */
   const fx = (n: number): string => String(Math.round(n * 100) / 100);
@@ -2406,6 +2427,9 @@ export function createAdmin(api: AdminApi): Admin {
         : `${TREND_WINDOW[trendRange]} · ${MATCH_MODE_LABEL[trendMode]}`;
     }
     if (trendFocus >= points.length) trendFocus = -1;
+    /* a series that is no longer drawn cannot be the one being read */
+    if (trendLock && !trendOn[trendLock]) trendLock = null;
+    if (trendHover && !trendOn[trendHover]) trendHover = null;
 
     const drawn = points.length > 0;
     if (statTrendEmpty) {
@@ -2444,8 +2468,8 @@ export function createAdmin(api: AdminApi): Admin {
     const parts: string[] = [
       '<defs>',
       '<linearGradient id="adm-trend-fill" x1="0" y1="0" x2="0" y2="1">',
-      '<stop offset="0%" stop-color="#22d3ee" stop-opacity=".30" />',
-      '<stop offset="62%" stop-color="#22d3ee" stop-opacity=".07" />',
+      '<stop offset="0%" stop-color="#22d3ee" stop-opacity=".18" />',
+      '<stop offset="62%" stop-color="#22d3ee" stop-opacity=".05" />',
       '<stop offset="100%" stop-color="#22d3ee" stop-opacity="0" />',
       '</linearGradient>',
       '</defs>',
@@ -2454,7 +2478,7 @@ export function createAdmin(api: AdminApi): Admin {
     ];
 
     if (drawn && trendOn.active) {
-      parts.push(`<path fill="url(#adm-trend-fill)" d="${trendArea(activePts)}" />`);
+      parts.push(`<path class="adm-trend-fill" fill="url(#adm-trend-fill)" d="${trendArea(activePts)}" />`);
       parts.push(`<path class="adm-trend-line" data-s="active" d="${trendPath(activePts)}" />`);
     }
     if (drawn && trendOn.matches) {
@@ -2480,7 +2504,7 @@ export function createAdmin(api: AdminApi): Admin {
 
     statTrendSvg.innerHTML = parts.join('');
     paintTrendTotals(points);
-    paintTrendCursor();
+    applyTrendLook();
   }
 
   /**
@@ -2560,62 +2584,170 @@ export function createAdmin(api: AdminApi): Admin {
     }
     const n = trendData.length;
     const x = fx(trendX(trendFocus, n));
+    const look = trendLook();
     const marks: string[] = [
       `<line class="adm-trend-guide" x1="${x}" y1="${TREND_PAD.t}" x2="${x}" y2="${fx(TREND_BASE)}" />`,
     ];
     const dot = (key: TrendSeries): string => {
       if (!trendOn[key]) return '';
+      /* the radius is an attribute, not a class: the read series grows, the rest hold their place */
       return `<circle class="adm-trend-mark" data-s="${key}" cx="${x}"`
-        + ` cy="${fx(trendY(p[key], trendCeil))}" r="3.4" />`;
+        + ` cy="${fx(trendY(p[key], trendCeil))}" r="${look === key ? 4.6 : 3.2}" />`;
     };
-    marks.push(dot('active'), dot('matches'), dot('signups'));
+    marks.push(dot('active'), dot('signups'), dot('matches'));
     cursor.innerHTML = marks.join('');
     paintTrendRead();
   }
 
   /**
-   * The one line under the plot: the window's sums while nothing is being inspected, the exact
-   * bucket under the finger the moment there is. Both readings come from the same real buckets.
+   * The inspector bar under the plot: the Tehran hour or day of the bucket being read, then one
+   * token per series carrying that bucket's own counts — or the window's sums while nothing is
+   * held. Both readings come from the same real buckets, and the token order matches the chips.
    */
   function paintTrendRead(): void {
-    if (!statTrendRead) return;
+    if (!statTrendRead || !statTrendTs) return;
     const points = trendData;
-    if (!points.length) {
-      statTrendRead.textContent = '—';
-      return;
-    }
     const p = trendFocus >= 0 ? points[trendFocus] : undefined;
-    if (!p) {
-      statTrendRead.textContent = `Window total · ${trendTotalsText(points)}`;
-      statTrendRead.dataset.focused = 'false';
-      return;
+    const totals = trendTotals(points);
+    const look = trendLook();
+    statTrendRead.dataset.focused = String(!!p);
+
+    if (!points.length) {
+      statTrendTs.textContent = 'No buckets yet';
+    } else if (p) {
+      /* the bucket's opening edge is an epoch stamp, so the zone conversion happens at format
+         time alone: no manual offset arithmetic, and no day-shift around midnight Tehran. */
+      statTrendTs.textContent = `${trendRange === '24h' ? trendTimeLabel(p.t) : trendDayLabel(p.t)}`
+        + ` ${TREND_ZONE_LABEL}`;
+    } else {
+      statTrendTs.textContent = `Window total · ${trendRange.toUpperCase()}`;
     }
-    statTrendRead.dataset.focused = 'true';
-    /* the bucket's opening edge is an epoch stamp, so the zone conversion happens at format
-       time alone: no manual offset arithmetic, and no day-shift around midnight Tehran. */
-    const when = trendRange === '24h'
-      ? `${trendTimeLabel(p.t)} ${TREND_ZONE_LABEL}`
-      : `${trendDayLabel(p.t)} ${TREND_ZONE_LABEL}`;
-    statTrendRead.textContent = `${when} · ${figure(p.signups)} signups ·`
-      + ` ${figure(p.active)} active · ${figure(p.matches)} matches`;
+
+    for (const tok of statTrendToks) {
+      const key = trendSeriesKey(tok.dataset.gtok);
+      const slot = tok.querySelector<HTMLElement>('.adm-trend-tok-v');
+      if (!key || !slot) continue;
+      const value = p ? p[key] : totals[key];
+      slot.textContent = points.length ? figure(value) : '—';
+      /* a bucket that actually moved this series takes its colour, focused or not: that is the
+         spike the operator is dragging across the plot looking for */
+      tok.classList.toggle('is-hot', !!p && value > 0);
+      tok.classList.toggle('is-focus', look === key);
+      tok.classList.toggle('is-off', !trendOn[key]);
+    }
   }
 
-  /** The bucket under a pointer, mapped back through the SVG's own uniform scale. */
-  function trendIndexAt(clientX: number): number {
+  /** A pointer in the plot's own space: the viewBox is the only system the drawn lines live in. */
+  function trendLocal(clientX: number, clientY: number): { i: number; y: number } | null {
     const svg = statTrendSvg;
     const n = trendData.length;
-    if (!svg || n < 1 || svg.classList.contains('is-blank')) return -1;
+    if (!svg || n < 1 || svg.classList.contains('is-blank')) return null;
     const rect = svg.getBoundingClientRect();
-    if (rect.width <= 0) return -1;
+    if (rect.width <= 0 || rect.height <= 0) return null;
     const x = ((clientX - rect.left) / rect.width) * TREND_W;
     const i = Math.round(((x - TREND_PAD.l) / TREND_IW) * (n - 1));
-    return i < 0 || i > n - 1 ? -1 : i;
+    return {
+      i: i < 0 || i > n - 1 ? -1 : i,
+      y: ((clientY - rect.top) / rect.height) * TREND_H,
+    };
+  }
+
+  /**
+   * The drawn series whose curve the pointer sits nearest at that bucket. Two lines crossing is
+   * exactly when this matters, so it is a distance race rather than a test of which one paints on
+   * top; a pointer further from every curve than TREND_NEAR is reading empty space.
+   */
+  function trendSeriesNear(local: { i: number; y: number } | null): TrendSeries | null {
+    if (!local || local.i < 0) return null;
+    const p = trendData[local.i];
+    if (!p) return null;
+    let best: TrendSeries | null = null;
+    let bestGap = TREND_NEAR;
+    for (const key of TREND_SERIES_KEYS) {
+      if (!trendOn[key]) continue;
+      const gap = Math.abs(trendY(p[key], trendCeil) - local.y);
+      if (gap < bestGap) {
+        bestGap = gap;
+        best = key;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Hand the series being read to the three surfaces that have to agree with each other: the slab
+   * dims every other curve through `data-look`, each chip says whether it is a hover or a lock,
+   * and the cursor layer repaints because the marker sizes are attributes rather than classes.
+   */
+  function applyTrendLook(): void {
+    const look = trendLook();
+    if (statTrendSlab) {
+      if (look) statTrendSlab.dataset.look = look;
+      else statTrendSlab.removeAttribute('data-look');
+    }
+    for (const chip of statTrendSeries) {
+      const key = trendSeriesKey(chip.dataset.gseries);
+      if (!key) continue;
+      chip.classList.toggle('is-focused', trendLock === key);
+      chip.classList.toggle('is-highlighted', look === key);
+      chip.classList.toggle('is-muted', !!look && look !== key);
+    }
+    paintTrendCursor();
+  }
+
+  function setTrendHover(series: TrendSeries | null): void {
+    if (series === trendHover) return;
+    trendHover = series;
+    applyTrendLook();
+  }
+
+  /**
+   * The lock is the series the operator asked to read, and it survives the pointer moving away.
+   * A series the lock had to draw is hidden again when the lock moves on or lifts, so the window's
+   * own set of curves is only ever borrowed, never quietly rewritten. True means the answer changed
+   * which curves are on the canvas at all, so the plot itself has to be rebuilt.
+   */
+  function setTrendLock(series: TrendSeries | null): boolean {
+    if (series === trendLock) return false;
+    let redraw = false;
+    const out = trendLock;
+    if (out && trendLockOpened[out]) {
+      trendOn[out] = false;
+      trendLockOpened[out] = false;
+      redraw = true;
+    }
+    if (series && !trendOn[series]) {
+      trendLockOpened[series] = true;
+      trendOn[series] = true;
+      redraw = true;
+    } else if (series) {
+      trendLockOpened[series] = false;
+    }
+    trendLock = series;
+    return redraw;
   }
 
   function setTrendFocus(index: number): void {
     if (index === trendFocus) return;
     trendFocus = index;
     paintTrendCursor();
+  }
+
+  /**
+   * One pass of the pointer over the plot: the bucket it is on and the curve it sits nearest to.
+   * A press also sets the lock, and a press on empty space clears it — the whole chart goes back to
+   * three equal lines without the operator having to find the chip again.
+   */
+  function trendInspect(clientX: number, clientY: number, lock: boolean): void {
+    const local = trendLocal(clientX, clientY);
+    const near = trendSeriesNear(local);
+    const index = local ? local.i : -1;
+    if (index === trendFocus && near === trendHover && (!lock || near === trendLock)) return;
+    trendFocus = index;
+    trendHover = near;
+    /* a press that only moves the read repaints the emphasis, not the whole canvas */
+    if (lock && setTrendLock(near)) paintTrend();
+    else applyTrendLook();
   }
 
   function setTrendRange(range: TrendRange): void {
@@ -5793,12 +5925,22 @@ export function createAdmin(api: AdminApi): Admin {
     });
   }
   for (const chip of statTrendSeries) {
+    /* hovering or tabbing a chip reads that series without committing to it; a press locks it */
+    const chipSeries = (): TrendSeries | null => {
+      const key = trendSeriesKey(chip.dataset.gseries);
+      return key && trendOn[key] ? key : null;
+    };
+    chip.addEventListener('pointerenter', () => setTrendHover(chipSeries()));
+    chip.addEventListener('pointerleave', () => setTrendHover(null));
+    chip.addEventListener('focus', () => setTrendHover(chipSeries()));
+    chip.addEventListener('blur', () => setTrendHover(null));
     chip.addEventListener('click', () => {
-      const series = chip.dataset.gseries;
-      if (series !== 'active' && series !== 'signups' && series !== 'matches') return;
-      trendOn[series] = !trendOn[series];
+      const key = trendSeriesKey(chip.dataset.gseries);
+      if (!key) return;
+      const redraw = setTrendLock(trendLock === key ? null : key);
       impact('light');
-      paintTrend();
+      if (redraw) paintTrend();
+      else applyTrendLook();
     });
   }
   for (const key of statTrendModes) {
@@ -5808,13 +5950,17 @@ export function createAdmin(api: AdminApi): Admin {
       setTrendMode(raw);
     });
   }
-  statTrendSvg?.addEventListener('pointerdown', (e) => setTrendFocus(trendIndexAt(e.clientX)));
-  statTrendSvg?.addEventListener('pointermove', (e) => setTrendFocus(trendIndexAt(e.clientX)));
+  statTrendSvg?.addEventListener('pointerdown', (e) => trendInspect(e.clientX, e.clientY, true));
+  statTrendSvg?.addEventListener('pointermove', (e) => trendInspect(e.clientX, e.clientY, false));
   statTrendSvg?.addEventListener('pointerleave', (e) => {
+    setTrendHover(null);
     /* a lifted finger leaves its reading on screen; only a mouse leaving the plot clears it */
     if (e.pointerType === 'mouse') setTrendFocus(-1);
   });
-  statTrendSvg?.addEventListener('pointercancel', () => setTrendFocus(-1));
+  statTrendSvg?.addEventListener('pointercancel', () => {
+    setTrendHover(null);
+    setTrendFocus(-1);
+  });
 
   /* one delegated listener: the list is rebuilt on every paint, so no handler outlives its card */
   inboxList?.addEventListener('click', (e) => {
