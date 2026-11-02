@@ -10268,6 +10268,42 @@ html.reduced-motion .ml-pulse::after { display: none; }
   color: var(--mint-ink);
   box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .28);
 }
+
+/* multi-gate missions: one compact proof chip per gate, wrapping before it ever clips */
+.bd-req-chips {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 6px;
+  margin-top: 7px;
+}
+.bd-req-metric {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 4px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, .26);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
+  color: #94A3B8;
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bd-req-metric .ico { width: 11px; height: 11px; flex: none; }
+.bd-req-metric-k { font-weight: 700; }
+.bd-req-metric-v { font-weight: 800; color: var(--bd-metal); }
+.bd-req-metric.is-met {
+  color: var(--mint-ink);
+  box-shadow: inset 0 0 0 1px rgba(110, 231, 183, .28);
+}
+.bd-req-metric.is-met .bd-req-metric-v { color: var(--mint-ink); }
+
 .bd-req-copy {
   position: relative;
   margin: 7px 0 0;
@@ -10386,7 +10422,7 @@ html.reduced-motion .bd-aura { animation: none; }
 }
 
 /* ---- Persian collector card: RTL prose, no tracking, room for descenders ---- */
-.badge-sheet:lang(fa) :is(.bd-kicker, .bd-supply-label, .bd-state, .bd-moniker, .bd-cta, .bd-req-chip) {
+.badge-sheet:lang(fa) :is(.bd-kicker, .bd-supply-label, .bd-state, .bd-moniker, .bd-cta, .bd-req-chip, .bd-req-metric) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0;
   text-transform: none;
@@ -10417,6 +10453,12 @@ html.reduced-motion .bd-aura { animation: none; }
   white-space: normal;
 }
 .badge-sheet:lang(fa) .bd-req-chip {
+  padding-top: 2px;
+  padding-bottom: 3px;
+  line-height: 1.4;
+}
+.badge-sheet:lang(fa) .bd-req-chips { direction: rtl; }
+.badge-sheet:lang(fa) .bd-req-metric {
   padding-top: 2px;
   padding-bottom: 3px;
   line-height: 1.4;

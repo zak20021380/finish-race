@@ -74,6 +74,7 @@ import {
 import { initSplash, splashReady } from './splash';
 import { initJoinGate } from './joinGate';
 import { showVsClash, type VsRival, type VsStakes } from './vsclash';
+import { BADGE_REQUIREMENTS } from './badges';
 import { beginMatch, finishMatch, initTelemetry, setIdle } from './telemetry';
 import type { MatchMode } from '../shared/telemetry';
 
@@ -1300,7 +1301,14 @@ function showOverlay() {
      neither is a seat somebody walked out of. */
   const mine = !room || rewardEligible(room, localSide);
   const beforeTiq = tiqFrom(profile.stats.wins, profile.stats.games, profile.tiqBonus);
-  const earned = mine ? recordGame({ difficulty, won }, runtime.coinMult) : 0;
+  /* Churchill's integrity gate: the share of this seat's wall budget still in hand at the
+     final turn — the same wall count the board's chips carry. */
+  const wallCap = wallBudget(sizes.reduce((n, balls) => n + balls, 0));
+  const defenseHeld = wallCap > 0
+    && state.wallsLeft[localSide] / wallCap >= BADGE_REQUIREMENTS.churchill_bastion.minDefenseHealth;
+  const earned = mine
+    ? recordGame({ difficulty, won, mode: matchMode(), defenseHeld }, runtime.coinMult)
+    : 0;
   recordRace(earned);                   // the Command Center's Stats tab counts the day's duels
   const afterTiq = tiqFrom(profile.stats.wins, profile.stats.games, profile.tiqBonus);
   /* the HUD's XP pill reads the save, so paint it on the same beat the settlement moves it */

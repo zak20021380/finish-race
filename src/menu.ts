@@ -2028,6 +2028,29 @@ export function createMenu(api: MenuApi): Menu {
     }
   }
 
+  /** The multi-gate mission as compact proof chips: TIQ first, then the live-PvP run. */
+  function paintRequirementChips(prog: ReturnType<typeof badgeProgress>): void {
+    const wrap = document.getElementById('badge-req-chips');
+    if (!wrap) return;
+    wrap.textContent = '';
+    const rows = prog.requirements ?? [];
+    wrap.hidden = rows.length === 0;
+    for (const row of rows) {
+      const chip = document.createElement('span');
+      chip.className = `bd-req-metric is-${row.kind}${row.met ? ' is-met' : ''}`;
+      chip.innerHTML = `<svg class="ico" aria-hidden="true"><use href="#${row.kind === 'tiq' ? 'i-brain' : 'i-swords'}" /></svg>`;
+      const key = document.createElement('span');
+      key.className = 'bd-req-metric-k';
+      key.textContent = `${row.kind === 'tiq' ? t('badgeReqTiq') : t('badgeReqStreak')}:`;
+      const value = document.createElement('b');
+      value.className = 'bd-req-metric-v';
+      value.dir = 'ltr';
+      value.textContent = `${en(row.got)} / ${en(row.need)}`;
+      chip.append(key, value);
+      wrap.append(chip);
+    }
+  }
+
   function paintBadgeSheet(id: string): void {
     const def = BADGES.find((b) => b.id === id);
     const sheet = document.getElementById('sheet-badge');
@@ -2066,6 +2089,7 @@ export function createMenu(api: MenuApi): Menu {
     if (story) story.textContent = badgeText(def.story, lang);
     const crit = document.getElementById('badge-criteria');
     if (crit) crit.textContent = badgeText(def.criteria, lang);
+    paintRequirementChips(prog);
 
     /* The supply bento reads the ledger first and the last confirmed serial second;
        before either answers it shows an em dash, never an invented count. */
@@ -2100,7 +2124,12 @@ export function createMenu(api: MenuApi): Menu {
     if (chip && count) {
       chip.classList.toggle('is-met', prog.met);
       check?.toggleAttribute('hidden', !prog.met);
-      count.textContent = prog.met ? t('badgeUnlocked') : `${en(prog.got)} / ${en(prog.need)}`;
+      const gates = prog.requirements;
+      count.textContent = prog.met
+        ? t('badgeUnlocked')
+        : gates?.length
+          ? `${gates.filter((r) => r.met).length} / ${gates.length}`
+          : `${en(prog.got)} / ${en(prog.need)}`;
       chip.setAttribute('aria-label', prog.met ? t('badgeUnlocked') : badgeProgressText(id, lang));
     }
     const delta = document.getElementById('badge-req-delta');
@@ -2114,11 +2143,13 @@ export function createMenu(api: MenuApi): Menu {
     const ctaLabel = document.getElementById('badge-cta-label');
     if (cta && ctaLabel) {
       const use = cta.querySelector('use');
+      cta.classList.toggle('is-locked', !unlocked);
       if (!unlocked) {
-        cta.disabled = false;
-        cta.dataset.mode = 'play';
-        ctaLabel.textContent = t('badgeCtaPlay');
-        use?.setAttribute('href', '#i-play');
+        /* the claim key never opens on an unmet gate: the mission card is the only read */
+        cta.disabled = true;
+        cta.dataset.mode = 'locked';
+        ctaLabel.textContent = t('badgeCtaLocked');
+        use?.setAttribute('href', '#i-lock');
       } else if (equipped) {
         cta.disabled = true;
         cta.dataset.mode = 'equipped';
@@ -2509,7 +2540,8 @@ export function createMenu(api: MenuApi): Menu {
      race settles, so the serial is already on the shelf when Profile opens. Cache-only flushes
      leave the stats signature unchanged and schedule nothing. */
   const statsSignature = (): string =>
-    `${myTiq()}/${profile.stats.games}/${profile.stats.wins}/${profile.stats.streak}/${profile.stats.best}`;
+    `${myTiq()}/${profile.stats.games}/${profile.stats.wins}/${profile.stats.streak}`
+    + `/${profile.stats.best}/${profile.stats.pvpStreak}/${profile.stats.pvpBest}`;
   let lastStats = statsSignature();
   let badgeRefreshTimer = 0;
   onChange(() => {

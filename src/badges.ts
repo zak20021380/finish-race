@@ -7,7 +7,7 @@
  * single-key contract storage.ts already owns.
  *
  * Each archetype answers to a different proof:
- * - Churchill's Bastion  — Resilience: a 3-win streak, holding the line.
+ * - Churchill's Bastion  — Resilience: 10,000 TIQ and a 7-win live-PvP streak, defense held.
  * - Einstein's Singularity — Pure Intellect: the 1,500 TIQ threshold.
  * - Heisenberg's Formula — Calculated Precision: a 60% win rate over 5+ races.
  *
@@ -38,6 +38,20 @@ export interface BadgeText {
   fa: string;
 }
 
+/** The numeric gates behind an honor's mission, when one proof is not enough. */
+export interface BadgeRequirement {
+  minTiq?: number;
+  /** Consecutive live-PvP wins, each one finished with defense at or above the floor. */
+  pvpStreak?: number;
+  /** Lowest share of a seat's wall budget (0..1) a win may end with and still extend the run. */
+  minDefenseHealth?: number;
+}
+
+/** Mirrored by the mint gate in worker/badges.ts; the ids are the catalogue's own. */
+export const BADGE_REQUIREMENTS = {
+  churchill_bastion: { minTiq: 10000, pvpStreak: 7, minDefenseHealth: 0.50 },
+} as const satisfies Record<string, BadgeRequirement>;
+
 export interface BadgeDef {
   id: string;
   name: string;
@@ -53,6 +67,8 @@ export interface BadgeDef {
   story: BadgeText;
   /** The unlock mission in plain player-facing words. */
   criteria: BadgeText;
+  /** Numeric gates behind the mission; the inspection card renders them as requirement chips. */
+  requirement?: BadgeRequirement;
   /** Names the sculpted crest (#i-crest-<accent>), its CSS aura, and the art fallback. */
   accent: BadgeAccent;
   /** Rendered medallion art; when set it replaces the vector crest everywhere the honor is worn. */
@@ -74,9 +90,10 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
       fa: 'چرچیل نماد ایستادگی توی غیرممکن‌ترین نبردهاست! کسی که این مدال رو به سینه می‌زنه، توی بازی مثل یک سد فولادی عمل می‌کنه؛ استادی که با دیوارچینی‌های هوشمندانه راه نفس حریف رو می‌بنده و حتی توی بدترین شرایط هم تسلیم نمی‌شه!',
     },
     criteria: {
-      en: 'Win 3 races in a row. Hold the line, make every wall count, and refuse to fold.',
-      fa: 'سه مسابقهٔ پیاپی رو ببر؛ خط دفاعی رو نگه دار، هر دیوار رو حساب‌شده بچین و تسلیم نشو.',
+      en: 'Requires 10,000+ TIQ. Win 7 consecutive live PvP battles while keeping defensive integrity above 50%. Hold the line.',
+      fa: 'نیاز به حداقل ۱۰,۰۰۰ TIQ. کسب ۷ برد پیاپی در نبرد زنده PvP با حفظ بیش از ۵۰٪ استحکامات دفاعی. خط دفاعی رو حفظ کن!',
     },
+    requirement: BADGE_REQUIREMENTS.churchill_bastion,
     accent: 'titanium',
     art: churchillMedallion,
     cap: 100,
@@ -147,6 +164,16 @@ export function badgeCrestHtml(def: BadgeDef, className = 'badge-crest'): string
 
 const en = (n: number) => n.toLocaleString('en-US');
 
+/** One row of a multi-gate mission, ready for a requirement chip. */
+export interface BadgeRequirementProgress {
+  kind: 'tiq' | 'streak';
+  got: number;
+  need: number;
+  /** 0..1, ready for a meter or an aria-valuenow ratio. */
+  pct: number;
+  met: boolean;
+}
+
 export interface BadgeProgress {
   got: number;
   need: number;
@@ -155,6 +182,8 @@ export interface BadgeProgress {
   /** The requirement's own unit, e.g. "2/3 win streak" or "62% win rate". */
   label: string;
   met: boolean;
+  /** Present when the honor gates on more than one proof, and rendered as chips. */
+  requirements?: BadgeRequirementProgress[];
 }
 
 /** Live progress against a badge's requirement — the same read the shelf and sheet use. */
@@ -162,8 +191,38 @@ export function badgeProgress(id: string): BadgeProgress {
   const s = profile.stats;
   switch (id) {
     case 'churchill_bastion': {
-      const got = Math.min(Math.max(0, s.best), 3);
-      return { got, need: 3, pct: got / 3, label: `${got}/3 win streak`, met: got >= 3 };
+      const req = BADGE_REQUIREMENTS.churchill_bastion;
+      const tiq = Math.max(0, myTiq());
+      const streak = Math.max(0, s.pvpBest);
+      const requirements: BadgeRequirementProgress[] = [
+        {
+          kind: 'tiq',
+          got: tiq,
+          need: req.minTiq,
+          pct: Math.min(1, tiq / req.minTiq),
+          met: tiq >= req.minTiq,
+        },
+        {
+          kind: 'streak',
+          got: streak,
+          need: req.pvpStreak,
+          pct: Math.min(1, streak / req.pvpStreak),
+          met: streak >= req.pvpStreak,
+        },
+      ];
+      const hold = requirements.find((r) => !r.met);
+      return {
+        got: hold?.got ?? req.pvpStreak,
+        need: hold?.need ?? req.pvpStreak,
+        pct: Math.min(...requirements.map((r) => r.pct)),
+        label: hold
+          ? hold.kind === 'tiq'
+            ? `${en(hold.got)} / ${en(hold.need)} TIQ`
+            : `${hold.got}/${hold.need} PvP streak`
+          : `${en(req.minTiq)} TIQ · ${streak} PvP streak`,
+        met: requirements.every((r) => r.met),
+        requirements,
+      };
     }
     case 'einstein_singularity': {
       const need = 1500;
@@ -204,8 +263,14 @@ export function badgeProgressText(id: string, code: string = 'en'): string {
   const fa = code === 'fa';
   const p = badgeProgress(id);
   switch (id) {
-    case 'churchill_bastion':
-      return fa ? `${p.got} از 3 برد پیاپی` : `${p.got} of 3 win streak`;
+    case 'churchill_bastion': {
+      const req = BADGE_REQUIREMENTS.churchill_bastion;
+      const tiq = Math.max(0, myTiq());
+      const streak = Math.max(0, profile.stats.pvpBest);
+      return fa
+        ? `${en(tiq)} از ${en(req.minTiq)} هوش تاکتیکی · ${streak} از ${req.pvpStreak} برد پیاپی زنده`
+        : `${en(tiq)} of ${en(req.minTiq)} Tactical IQ · ${streak} of ${req.pvpStreak} live PvP wins in a row`;
+    }
     case 'einstein_singularity':
       return fa ? `${en(p.got)} از 1,500 هوش تاکتیکی` : `${en(p.got)} of 1,500 Tactical IQ`;
     case 'heisenberg_formula': {
@@ -226,8 +291,16 @@ export function badgeDelta(id: string, code: string = 'en'): string {
   if (p.met) return fa ? 'شرط تکمیل شده' : 'Requirement met';
   switch (id) {
     case 'churchill_bastion': {
-      const n = Math.max(1, 3 - Math.max(0, profile.stats.best));
-      return fa ? `${n} برد پیاپی دیگه` : `${n} more consecutive win${n === 1 ? '' : 's'}`;
+      const req = BADGE_REQUIREMENTS.churchill_bastion;
+      const tiq = Math.max(0, myTiq());
+      if (tiq < req.minTiq) {
+        const n = Math.max(1, req.minTiq - tiq);
+        return fa ? `${en(n)} امتیاز هوش تاکتیکی دیگه` : `${en(n)} more TIQ`;
+      }
+      const n = Math.max(1, req.pvpStreak - Math.max(0, profile.stats.pvpBest));
+      return fa
+        ? `${n} برد پیاپی دیگه در PvP زنده`
+        : `${n} more consecutive live PvP win${n === 1 ? '' : 's'}`;
     }
     case 'einstein_singularity': {
       const n = Math.max(1, 1500 - Math.max(0, myTiq()));
@@ -527,6 +600,7 @@ export async function refreshBadgeEditions(): Promise<void> {
     wins: profile.stats.wins,
     streak: profile.stats.streak,
     best: profile.stats.best,
+    pvpBest: profile.stats.pvpBest,
   };
 
   inFlight = (async () => {

@@ -42,6 +42,8 @@ export interface BadgeProgress {
   wins: number;
   streak: number;
   best: number;
+  /** Best live-PvP run; the client only extends it when the seat's defense held. */
+  pvpBest: number;
 }
 
 const COUNT_MAX = 10_000_000;
@@ -63,17 +65,19 @@ export function readProgress(raw: unknown): BadgeProgress {
     wins,
     streak,
     best: Math.max(streak, Math.min(games, count(r.best))),
+    pvpBest: Math.min(games, count(r.pvpBest)),
   };
 }
 
 /**
  * The same three rules the shelf prints, evaluated here rather than by the caller:
- * a 3-win best streak, 1,500 TIQ, or a 60% win rate over at least five races.
+ * 10,000 TIQ plus a 7-win live-PvP best streak, 1,500 TIQ, or a 60% win rate over at
+ * least five races.
  */
 export function meetsCriteria(badgeId: BadgeId, p: BadgeProgress): boolean {
   switch (badgeId) {
     case 'churchill_bastion':
-      return p.best >= 3;
+      return p.tiq >= 10_000 && p.pvpBest >= 7;
     case 'einstein_singularity':
       return p.tiq >= 1500;
     case 'heisenberg_formula':
@@ -96,6 +100,7 @@ export function mergeProgress(previous: BadgeProgress, next: BadgeProgress): Bad
     wins,
     streak,
     best: Math.max(previous.best, next.best, streak),
+    pvpBest: Math.max(previous.pvpBest, next.pvpBest),
   };
 }
 

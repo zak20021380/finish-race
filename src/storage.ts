@@ -58,6 +58,12 @@ export interface Stats {
   /** current win streak, and the best one ever reached */
   streak: number;
   best: number;
+  /**
+   * The live-PvP run: only wins whose seat still held its defense count, and a low-integrity
+   * win breaks it exactly like a loss. Churchill's Bastion reads the high-water mark.
+   */
+  pvpStreak: number;
+  pvpBest: number;
   modes: Partial<Record<Mode, number>>;
 }
 
@@ -169,7 +175,7 @@ function fresh(): Save {
     coins: START_COINS,
     owned: { ball: [STARTERS.ball], wall: [STARTERS.wall], board: [STARTERS.board] },
     equipped: { ...STARTERS },
-    stats: { games: 0, wins: 0, losses: 0, streak: 0, best: 0, modes: {} },
+    stats: { games: 0, wins: 0, losses: 0, streak: 0, best: 0, pvpStreak: 0, pvpBest: 0, modes: {} },
     country: null,
     age: null,
     dob: null,
@@ -273,7 +279,7 @@ function migrate(raw: Partial<Save> | null): Save {
   }
   const st = raw.stats;
   if (st) {
-    for (const key of ['games', 'wins', 'losses', 'streak', 'best'] as const) {
+    for (const key of ['games', 'wins', 'losses', 'streak', 'best', 'pvpStreak', 'pvpBest'] as const) {
       if (whole(st[key])) s.stats[key] = Math.max(0, Math.floor(st[key] as number));
     }
     for (const m of ['bot', 'online'] as const) {
@@ -281,6 +287,7 @@ function migrate(raw: Partial<Save> | null): Save {
     }
   }
   s.stats.best = Math.max(s.stats.best, s.stats.streak);
+  s.stats.pvpBest = Math.max(s.stats.pvpBest, s.stats.pvpStreak);
 
   if (knownCountry(raw.country ?? '')) s.country = (raw.country as string).toUpperCase();
 
@@ -446,10 +453,22 @@ export function payout(r: { difficulty: Difficulty; won: boolean }, mult = 1): n
 }
 
 /** Settles one finished race: the tally, the streak and the wallet. */
-export function recordGame(r: { difficulty: Difficulty; won: boolean }, mult = 1): number {
+export function recordGame(
+  r: {
+    difficulty: Difficulty;
+    won: boolean;
+    /** The board's tag; leaving it out keeps the historical practice-race reading. */
+    mode?: 'bot' | 'pvp' | 'arena';
+    /** Did this seat still hold at least half its defense when the race was decided? */
+    defenseHeld?: boolean;
+  },
+  mult = 1,
+): number {
   const s = profile.stats;
+  const live = r.mode === 'pvp' || r.mode === 'arena';
   s.games++;
-  s.modes.bot = (s.modes.bot ?? 0) + 1;
+  const mode: Mode = live ? 'online' : 'bot';
+  s.modes[mode] = (s.modes[mode] ?? 0) + 1;
   if (r.won) {
     s.wins++;
     s.streak++;
@@ -457,6 +476,16 @@ export function recordGame(r: { difficulty: Difficulty; won: boolean }, mult = 1
   } else {
     s.losses++;
     s.streak = 0;
+  }
+  if (live) {
+    /* A live win extends the run only while the seat's defense held; a low-integrity
+       win breaks it exactly like a loss, so the badge cannot be farmed by trading walls. */
+    if (r.won && r.defenseHeld === true) {
+      s.pvpStreak++;
+      s.pvpBest = Math.max(s.pvpBest, s.pvpStreak);
+    } else {
+      s.pvpStreak = 0;
+    }
   }
   const coins = payout(r, mult);
   profile.coins += coins;
