@@ -5610,9 +5610,13 @@
           <div class="gm-view" id="gm-view-lobby" hidden>
             <div class="lb">
               <div class="lb-bar">
-                <span class="lb-code" id="lb-code-tag" aria-label="Room code">
+                <button class="lb-code" type="button" id="lb-code-tag" aria-label="Copy room code">
+                  <svg class="lb-code-check" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M4 12.5l5.2 5.2L20 6.8" fill="none" stroke="currentColor" stroke-width="3"
+                      stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
                   <span class="lb-hash" aria-hidden="true">#</span><b id="lb-code">0000</b>
-                </span>
+                </button>
                 <button class="lb-copy-link" type="button" id="lb-copy-link" aria-label="Copy invite link">
                   <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-link" /></svg>
                   <span class="lb-copy-link-t" data-i18n="copyLink">Copy Link</span>

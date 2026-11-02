@@ -2,7 +2,7 @@ export type ToastTone = 'success' | 'error' | 'warning';
 
 let host: HTMLElement | null = null;
 
-function hostEl(): HTMLElement {
+function hostEl(): HTMLElement | null {
   if (host && document.contains(host)) return host;
   host = document.getElementById('toast-host');
   if (!host) {
@@ -16,8 +16,13 @@ function hostEl(): HTMLElement {
   return host;
 }
 
-export function showToast(message: string, tone: ToastTone = 'success', ms = 3200): void {
+function markFor(tone: ToastTone): string {
+  return tone === 'success' ? '✓' : tone === 'error' ? '!' : 'i';
+}
+
+function mount(tone: ToastTone, ms: number): { el: HTMLElement; copy: HTMLElement } | null {
   const root = hostEl();
+  if (!root) return null;
   const el = document.createElement('div');
   el.className = `toast toast-${tone}`;
   el.setAttribute('role', tone === 'error' ? 'alert' : 'status');
@@ -25,11 +30,10 @@ export function showToast(message: string, tone: ToastTone = 'success', ms = 320
   const mark = document.createElement('span');
   mark.className = 'toast-mark';
   mark.setAttribute('aria-hidden', 'true');
-  mark.textContent = tone === 'success' ? '✓' : tone === 'error' ? '!' : 'i';
+  mark.textContent = markFor(tone);
 
   const copy = document.createElement('span');
   copy.className = 'toast-copy';
-  copy.textContent = message;
 
   el.append(mark, copy);
   root.append(el);
@@ -39,4 +43,45 @@ export function showToast(message: string, tone: ToastTone = 'success', ms = 320
     el.classList.remove('in');
     window.setTimeout(() => el.remove(), 220);
   }, ms);
+  return { el, copy };
+}
+
+export function showToast(message: string, tone: ToastTone = 'success', ms = 3200): void {
+  const toast = mount(tone, ms);
+  if (!toast) return;
+  toast.copy.textContent = message;
+}
+
+/**
+ * The canonical toast, with a second line of guidance under the headline. Used where the
+ * message is not just an acknowledgement but an instruction — the room code, for instance,
+ * says what to do with the number that was just copied.
+ *
+ * The copy block carries its own direction, so a Persian sentence keeps its RTL base and
+ * its punctuation while the numerals inside it stay readable. Long guidance wraps inside
+ * the toast instead of widening the shell on a 320px screen.
+ */
+export function showToastDetail(
+  title: string,
+  body: string,
+  tone: ToastTone = 'success',
+  ms = 4200,
+): void {
+  const toast = mount(tone, ms);
+  if (!toast) return;
+  toast.el.classList.add('is-rich');
+  toast.copy.classList.add('toast-detail');
+
+  const head = document.createElement('span');
+  head.className = 'toast-title';
+  head.textContent = title;
+
+  const line = document.createElement('span');
+  line.className = 'toast-body';
+  line.textContent = body;
+
+  const lang = (document.documentElement.getAttribute('data-lang') || '').toLowerCase();
+  if (lang === 'fa' || lang === 'ar') toast.copy.setAttribute('dir', 'rtl');
+
+  toast.copy.append(head, line);
 }
