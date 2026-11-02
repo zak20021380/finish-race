@@ -203,15 +203,22 @@ const THUMP_MS = 300;   // a thrown ball's micro-bounce as it comes to rest
  * into absolute times, and the caller uses the returned plan to line the bangs, the buzzes and the
  * result card up with the frames.
  */
-const FINISH_LEAD_MS = 250;       // the winner's own beat before the first rival starts to cook
-const FINISH_STAGGER_MS = 240;    // between one rival's shake and the next one's
-const FINISH_SHAKE_MS = 140;      // the overheat jitter before the burst
-const FINISH_BURST_MS = 380;      // flash → shockwave → shards → last spark
-const FINISH_SCORCH_MS = 600;     // the charred tile cooling off after the burst
-const FINISH_SETTLE_MS = 420;     // dust settles before the result sheet is allowed in
+const FINISH_LEAD_MS = 350;       // the coronation hold: the winner owns the board before the first
+                                  // rival even starts to cook
+const FINISH_STAGGER_MS = 570;    // a rival's whole beat — shake, boom, debris — before the next one
+const FINISH_SHAKE_MS = 280;      // the overheat jitter before the burst
+const FINISH_BURST_MS = 650;      // flash → shockwave → shards → last spark
+const FINISH_SCORCH_MS = 1200;    // the charred tile cooling off, outliving the debris over it
+const FINISH_SETTLE_MS = 650;     // dust settles before the result sheet is allowed in
 const FINISH_ASCEND_MS = 420;     // the winner's lift to its crowned scale
 const FINISH_ASCEND_SCALE = 0.18; // 1 → 1.18×
-const FINISH_JITTER = 3;          // ±3 css px of pre-detonation shake
+const FINISH_JITTER = 5;          // ±5 css px of violent pre-detonation shake
+/**
+ * The flash and the rings own the front of the burst, in fractions of `FINISH_BURST_MS`: the blast
+ * is over in a heartbeat, and the rest of the window belongs to the debris flying through it.
+ */
+const FINISH_FLASH = 0.16;
+const FINISH_RING = 0.52;
 /** 18 particles, on fixed unit vectors: no randomness and no allocation per burst. */
 const SHARD_N = 18;
 const SHARD_C = new Float32Array(SHARD_N);
@@ -219,14 +226,20 @@ const SHARD_S = new Float32Array(SHARD_N);
 const SHARD_V = new Float32Array(SHARD_N);
 const SHARD_LIFE = new Float32Array(SHARD_N);
 const SHARD_SPIN = new Float32Array(SHARD_N);
+const SHARD_SZ = new Float32Array(SHARD_N);
 for (let i = 0; i < SHARD_N; i++) {
   const a = (i / SHARD_N) * TAU + 0.31;
   SHARD_C[i] = Math.cos(a);
   SHARD_S[i] = Math.sin(a);
-  SHARD_V[i] = 0.55 + (((i * 29) % 13) / 13) * 0.75;      // reach, still deterministic
-  SHARD_LIFE[i] = 0.55 + (((i * 17) % 11) / 11) * 0.45;   // each fleck dies at its own pace
-  SHARD_SPIN[i] = (((i * 41) % 9) - 4) * 0.9;             // shard tumble over one burst
+  SHARD_V[i] = 0.85 + (((i * 29) % 13) / 13) * 0.95;    // reach, still deterministic
+  SHARD_LIFE[i] = 0.72 + (((i * 17) % 11) / 11) * 0.28; // each fleck dies at its own pace, near the end
+  SHARD_SPIN[i] = (((i * 41) % 9) - 4) * 1.7;           // shard tumble over one burst
+  SHARD_SZ[i] = 5 + (((i * 23) % 11) / 11) * 4;         // a 5px..9px obsidian sliver
 }
+/** Every third vector is an ember instead of a shard: a 3px..5px amber head on a long trail. */
+const EMBER_N = SHARD_N / 3;
+const EMBER_SZ = new Float32Array(EMBER_N);
+for (let i = 0; i < EMBER_N; i++) EMBER_SZ[i] = 3 + ((i * 7) % 5) * 0.5;
 
 /** 14 sparks, on fixed unit vectors: a burst costs no randomness and allocates nothing. */
 const SPARK_N = 14;
@@ -1492,9 +1505,9 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     fg.addColorStop(1, 'rgba(255,148,20,0)');
     crownG = fg;
     const hg = ctx.createRadialGradient(0, 0, 0, 0, 0, br * 2.2);
-    hg.addColorStop(0, 'rgba(255,196,120,.9)');
-    hg.addColorStop(0.28, 'rgba(255,84,44,.62)');
-    hg.addColorStop(0.66, 'rgba(196,16,32,.22)');
+    hg.addColorStop(0, 'rgba(255,226,168,1)');
+    hg.addColorStop(0.26, 'rgba(255,126,48,.86)');
+    hg.addColorStop(0.6, 'rgba(228,24,38,.44)');
     hg.addColorStop(1, 'rgba(150,0,24,0)');
     heatG = hg;
     const sc = ctx.createRadialGradient(0, 0, 0, 0, 0, c * 0.62);
@@ -2448,11 +2461,15 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
   /**
    * Every losing pawn's burst, plus the scorch it leaves. Scorch marks are painted first so the
-   * debris sits on top of its own damage; each burst is flash → expanding shockwave → obsidian
-   * shards and gold embers with drag and gravity, all inside FINISH_BURST_MS.
+   * debris sits on top of its own damage; each burst is a white-hot core inside a gold halo →
+   * two expanding shock rings → obsidian shards and amber embers with drag and gravity, all inside
+   * FINISH_BURST_MS. This is the frame's topmost board pass: a blast is never buried under a pawn,
+   * a halo, a ring or a thinking pip.
    */
   function drawFinishFx(fin: FinishState, now: number, c: number, ox: number, oy: number) {
     const br = ballR(c);
+    /* the flash's own reach, in css px: 28px on the smallest board, 34px on the largest */
+    const flashR = Math.min(34, Math.max(28, c * 0.78));
     /* the charred tile: a dark coin with a dull ember rim, cooling off over FINISH_SCORCH_MS */
     for (const p of fin.pawns) {
       const t = (now - p.burstAt) / FINISH_SCORCH_MS;
@@ -2475,66 +2492,82 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const el = now - p.burstAt;
       if (el < 0 || el >= FINISH_BURST_MS) continue;
       const t = el / FINISH_BURST_MS;
-      const ease = 1 - Math.pow(1 - t, 3);
       const x = ox + p.cx * c, y = oy + p.cy * c;
       ctx.save();
       ctx.translate(x, y);
+      ctx.globalCompositeOperation = 'lighter';
 
-      /* the flash: hot enough to whiten the tile, gone before the ring is halfway out */
-      if (t < 0.2) {
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = (1 - t / 0.2) * 0.95;
-        ctx.fillStyle = '#fff6e0';
-        ctx.beginPath(); ctx.arc(0, 0, br * (0.5 + 1.35 * ease), 0, TAU); ctx.fill();
-      }
       /* the wide warm light a shattered pawn throws across its neighbours */
       if (blastGlow) {
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = 0.55 * (1 - t) * (1 - t);
+        ctx.globalAlpha = 0.72 * (1 - t) * (1 - t);
         ctx.fillStyle = blastGlow;
-        ctx.beginPath(); ctx.arc(0, 0, c * 1.9, 0, TAU); ctx.fill();
+        ctx.beginPath(); ctx.arc(0, 0, c * 2.1, 0, TAU); ctx.fill();
       }
-      /* the shockwave: 0.2× → 2.4× of the pawn's own radius, twice, the second thinner */
-      ctx.globalCompositeOperation = 'lighter';
+      /* the flash: white hot enough to bleach the tile, seated in gold so it reads as fire.
+         It is gone before the first ring is a third of the way out. */
+      if (t < FINISH_FLASH) {
+        const ft = t / FINISH_FLASH;
+        const fe = 1 - (1 - ft) * (1 - ft);              // jumps out, then settles
+        const r = flashR * (0.42 + 0.58 * fe);
+        ctx.globalAlpha = (1 - ft) * 0.72;
+        ctx.fillStyle = '#ffcf5e';
+        ctx.beginPath(); ctx.arc(0, 0, r * 1.34, 0, TAU); ctx.fill();
+        ctx.globalAlpha = (1 - ft) * 0.98;
+        ctx.fillStyle = '#fff8e6';
+        ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
+      }
+      /* the fireball the rings peel off from, dying as they clear the tile */
+      if (t < FINISH_RING) {
+        const q = t / FINISH_RING;
+        ctx.globalAlpha = 0.44 * (1 - q);
+        ctx.fillStyle = '#ff7a2a';
+        ctx.beginPath(); ctx.arc(0, 0, br * (0.85 + 1.15 * q), 0, TAU); ctx.fill();
+      }
+      /* the shockwaves: gold out first, crimson on its heels, both to 2.8× the pawn's own radius */
       for (let k = 0; k < 2; k++) {
-        const rt = clamp((t - k * 0.13) / (1 - k * 0.13), 0, 1);
+        const rt = clamp((t - k * 0.1) / FINISH_RING, 0, 1);
         if (rt <= 0 || rt >= 1) continue;
-        const re = 1 - Math.pow(1 - rt, 3);
-        ctx.globalAlpha = (1 - rt) * (k === 0 ? 0.9 : 0.42);
-        ctx.strokeStyle = k === 0 ? 'rgba(255,220,140,.95)' : 'rgba(255,116,44,.9)';
-        ctx.lineWidth = Math.max(1.2, br * 0.16 * (1 - rt));
-        ctx.beginPath(); ctx.arc(0, 0, br * (0.2 + 2.2 * re), 0, TAU); ctx.stroke();
+        const re = 1 - Math.pow(1 - rt, 2.6);
+        ctx.globalAlpha = (1 - rt) * (k === 0 ? 1 : 0.72);
+        ctx.strokeStyle = k === 0 ? 'rgba(255,226,150,1)' : 'rgba(255,92,38,.95)';
+        ctx.lineWidth = Math.max(0.5, 3 * (1 - rt));
+        ctx.beginPath();
+        ctx.arc(0, 0, br * (0.25 + 2.55 * re) * (k === 0 ? 1 : 0.82), 0, TAU);
+        ctx.stroke();
       }
-      /* the debris: twelve tumbling obsidian shards and six embers, all on fixed vectors */
+      /* the debris: eighteen tumbling shards and six embers, all on fixed vectors */
       const ca = Math.cos(p.rot), sa = Math.sin(p.rot);
       for (let i = 0; i < SHARD_N; i++) {
         const q = clamp(el / (FINISH_BURST_MS * SHARD_LIFE[i]), 0, 1);
         if (q >= 1) continue;
         const dx = SHARD_C[i] * ca - SHARD_S[i] * sa;
         const dy = SHARD_C[i] * sa + SHARD_S[i] * ca;
-        const reach = br * (0.45 + 1.9 * SHARD_V[i] * (1 - Math.pow(1 - q, 2)));
+        const ember = i % 3 === 0;
+        /* embers are thrown hardest: they cross onto the neighbouring tiles, the shards stay near */
+        const reach = c * (0.5 + (ember ? 0.95 : 0.7) * SHARD_V[i] * (1 - Math.pow(1 - q, 2.2)));
         const px = dx * reach;
         /* drag flattens the outward run; gravity takes over as the fleck cools */
-        const py = dy * reach * 0.78 + br * 1.3 * q * q;
-        if (i % 3 === 0) {
-          /* an ember: a short additive streak with a brighter head */
+        const py = dy * reach * 0.8 + c * 0.62 * q * q;
+        if (ember) {
+          const sz = EMBER_SZ[i / 3];
+          const fade = 1 - q * q;
           ctx.globalCompositeOperation = 'lighter';
           ctx.globalAlpha = 0.95 * (1 - q);
-          ctx.strokeStyle = i % 2 === 0 ? '#ffd977' : '#ff8a3d';
+          ctx.strokeStyle = i % 2 === 0 ? '#ffe08a' : '#ff9448';
           ctx.lineCap = 'round';
-          ctx.lineWidth = Math.max(1, br * 0.09 * (1 - q));
+          ctx.lineWidth = Math.max(1.4, sz * (1 - q * 0.55) * 0.8);
           ctx.beginPath();
           ctx.moveTo(px, py);
-          ctx.lineTo(px - dx * br * 0.42 * (1 - q), py - dy * br * 0.42 * (1 - q) - br * 0.1);
+          ctx.lineTo(px - dx * c * 0.95 * fade, py - dy * c * 0.95 * fade - c * 0.16);
           ctx.stroke();
-          ctx.fillStyle = '#ffe9ad';
-          ctx.beginPath(); ctx.arc(px, py, Math.max(1, br * 0.07 * (1 - q)), 0, TAU); ctx.fill();
+          ctx.fillStyle = '#fff0c2';
+          ctx.beginPath(); ctx.arc(px, py, sz * (1 - q * 0.35), 0, TAU); ctx.fill();
         } else {
-          /* obsidian: an angular sliver tumbling along its own outward line */
-          const len = br * 0.34 * (0.7 + SHARD_V[i] * 0.5) * (1 - q * 0.35);
-          const wid = len * 0.32;
+          /* obsidian: an angular sliver tumbling along its own outward line, edge still burning */
+          const len = SHARD_SZ[i];
+          const wid = len * 0.36;
           ctx.globalCompositeOperation = 'source-over';
-          ctx.globalAlpha = 0.92 * (1 - q);
+          ctx.globalAlpha = 0.96 * (1 - q * q);
           ctx.fillStyle = '#141013';
           ctx.save();
           ctx.translate(px, py);
@@ -2547,8 +2580,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
           ctx.lineTo(len * 0.12, -wid);
           ctx.closePath();
           ctx.fill();
-          ctx.strokeStyle = 'rgba(255,150,70,.75)';
-          ctx.lineWidth = Math.max(0.8, br * 0.035);
+          ctx.strokeStyle = 'rgba(255,158,74,.95)';
+          ctx.lineWidth = Math.max(1, len * 0.14);
           ctx.stroke();
           ctx.restore();
         }
@@ -2949,19 +2982,20 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
           cy = oy + y * c;
         }
       }
-      /* a pawn on the way out: the last 140ms before its burst are a ±3px overheat jitter */
+      /* a pawn on the way out: the last 280ms before its burst are a violent ±5px overheat jitter,
+         driven by two out-of-phase harmonics so the shake never settles into a steady wobble */
       let shakeEl = -1;
       if (pawn) {
         shakeEl = now - (pawn.burstAt - FINISH_SHAKE_MS);
         if (shakeEl >= 0) {
           const ramp = Math.min(1, shakeEl / 48);
-          cx += Math.sin(shakeEl * 0.23) * FINISH_JITTER * ramp;
-          cy += Math.cos(shakeEl * 0.19) * FINISH_JITTER * ramp;
+          cx += (Math.sin(shakeEl * 0.23) + Math.sin(shakeEl * 0.61) * 0.32) * FINISH_JITTER * ramp;
+          cy += (Math.cos(shakeEl * 0.19) + Math.sin(shakeEl * 0.53) * 0.26) * FINISH_JITTER * ramp;
         }
       }
       const crowned = fin !== null && b.id === fin.winnerBall && now >= fin.at;
       let r = ballR(c) * (b.sel ? 1.08 : 1);          // the chosen ball lifts off the clay
-      if (pawn && shakeEl >= 0) r *= 1 + 0.06 * Math.min(1, shakeEl / FINISH_SHAKE_MS);
+      if (pawn && shakeEl >= 0) r *= 1 + 0.09 * Math.min(1, shakeEl / FINISH_SHAKE_MS);
       if (crowned && fin) {
         /* the winner rises to 1.18× and stays there, under the crown */
         const q = clamp((now - fin.at) / FINISH_ASCEND_MS, 0, 1);
@@ -2996,14 +3030,18 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         ctx.restore();
       }
       if (pawn && shakeEl >= 0 && heatG) {
-        /* the overheat: crimson from the core, amber at the rim, brightest on the last frame */
+        /* the overheat: burning orange through the core, crimson at the rim, and the aura is the
+           countdown — it climbs and flickers to a white-hot frame the instant before the burst */
         const heat = Math.min(1, shakeEl / FINISH_SHAKE_MS);
         ctx.save();
         ctx.translate(cx, cy);
         ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = 0.35 + 0.6 * heat;
+        ctx.globalAlpha = (0.5 + 0.5 * heat) * (0.9 + 0.1 * Math.sin(shakeEl * 0.42));
         ctx.fillStyle = heatG;
-        ctx.beginPath(); ctx.arc(0, 0, ballR(c) * 2.9, 0, TAU); ctx.fill();
+        ctx.beginPath(); ctx.arc(0, 0, ballR(c) * (2.6 + 0.7 * heat), 0, TAU); ctx.fill();
+        ctx.globalAlpha = 0.46 * heat;
+        ctx.fillStyle = 'rgba(255,166,60,.9)';
+        ctx.beginPath(); ctx.arc(0, 0, ballR(c) * 0.92, 0, TAU); ctx.fill();
         ctx.restore();
       }
       if (vipSeats.has(seat)) drawVipAura(cx, cy, r, now, still);
@@ -3032,9 +3070,6 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       if (sq !== 0) ctx.restore();
       if (crowned && fin) drawFinishCrown(cx, cy, r, now, fin.at, still);
     }
-
-    /* the losers' bursts and the charred tiles they leave: the last furniture above the balls */
-    if (fin) drawFinishFx(fin, now, c, ox, oy);
 
     /* mine-blast dust: the puff a thrown ball kicks up where it comes to rest */
     if (dust.length) {
@@ -3067,6 +3102,14 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         ctx.restore();
       }
     }
+
+    /*
+     * The losers' bursts and the charred tiles they leave are the LAST board pass, above the dust
+     * and the thinking pips: a detonation must never read as though it happened behind a pawn. It
+     * stays inside the slab clip, so the bloom and the debris can spill over the neighbouring tiles
+     * but never off the board.
+     */
+    if (fin) drawFinishFx(fin, now, c, ox, oy);
 
     ctx.restore();                     // the slab clip opened at the top of this frame
 

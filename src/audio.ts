@@ -61,6 +61,18 @@ const VICTORY_FADE_S = 0.22;
 /** Where the volume lives. The mute half is `settings.sound`, persisted by `settings.ts`. */
 const VOLUME_KEY = 'detour.audio.volume.v1';
 
+/**
+ * The synthesized detonation. A finisher cannot hang its boom on `explosion.mp3` surviving a
+ * fetch, a decode and a webview that drops assets: these two layers are built from the context
+ * itself, so every pawn that goes off is heard, deep and low, on the frame it goes off.
+ */
+const BOOM_SUB_HZ = 160;            // the sub's plunge starts here ...
+const BOOM_SUB_FLOOR_HZ = 35;       // ... and lands here
+const BOOM_SUB_S = 0.4;             // the exponential decay of the punch
+const BOOM_NOISE_S = 0.55;          // the crunch's own decay
+const BOOM_FILTER_HZ = 800;         // the lowpass the noise opens on ...
+const BOOM_FILTER_FLOOR_HZ = 100;   // ... and closes to
+
 interface Engine {
   ctx: AudioContext;
   master: GainNode;
@@ -222,11 +234,16 @@ function play(name: SoundName, opts: PlayOptions = {}): void {
     lastAngryAt = now;
   }
   const buf = buffers[name];
-  if (!buf) return;                    // still decoding: the first tap warms it, the next rings
   const { ctx, master } = e;
   if (ctx.state !== 'running') void ctx.resume().catch(() => { /* still locked */ });
   const when = Math.max(ctx.currentTime,
     ctx.currentTime + SCHEDULE_LEAD_S + (opts.delay ?? 0) - OUTPUT_LATENCY_S);
+  if (!buf) {
+    /* the blast is the one voice that may not be missing: an asset that failed to fetch, or has
+       still not decoded, is no reason for a detonation to go off silently. Synthesize it. */
+    if (name === 'explosion') detonate(ctx, master, when, opts.gain ?? 1);
+    return;
+  }
   try {
     const src = ctx.createBufferSource();
     src.buffer = buf;
@@ -239,6 +256,94 @@ function play(name: SoundName, opts: PlayOptions = {}): void {
     src.onended = () => { src.disconnect(); voice?.disconnect(); };
     src.start(when);
   } catch { /* a node graph refusal must never take a turn down with it */ }
+}
+
+/* ---------- the synthesized detonation ---------- */
+
+/**
+ * The noise bed, filled once and reused: white noise smoothed by a leaky integrator toward pink,
+ * so the low end carries the rumble instead of a hiss. One build per session keeps a burst from
+ * allocating on the audio thread.
+ */
+let noiseBed: AudioBuffer | null = null;
+
+function getNoiseBed(ctx: AudioContext): AudioBuffer | null {
+  if (noiseBed) return noiseBed;
+  try {
+    const len = Math.floor(ctx.sampleRate * (BOOM_NOISE_S + 0.2));
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < len; i++) {
+      const white = Math.random() * 2 - 1;
+      last = (last + 0.02 * white) / 1.02;
+      const s = white * 0.45 + last * 2.6;
+      data[i] = s > 1 ? 1 : s < -1 ? -1 : s;
+    }
+    noiseBed = buf;
+    return buf;
+  } catch { return null; }
+}
+
+/**
+ * The boom itself, scheduled on the context clock: a sine sub plunging 160Hz → 35Hz under a 400ms
+ * exponential decay, and the noise bed through a lowpass closing 800Hz → 100Hz for the crunch.
+ * Both hang off the master, so the Sound switch and the saved volume own the level exactly as they
+ * own every sampled voice. Nothing here is allowed to throw into the caller.
+ */
+function detonate(ctx: AudioContext, master: AudioNode, when: number, level: number): void {
+  const peak = Math.min(1, Math.max(0, level));
+  if (peak <= 0) return;
+  try {
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(BOOM_SUB_HZ, when);
+    osc.frequency.exponentialRampToValueAtTime(BOOM_SUB_FLOOR_HZ, when + BOOM_SUB_S);
+    const sub = ctx.createGain();
+    sub.gain.setValueAtTime(0.0001, when);
+    sub.gain.exponentialRampToValueAtTime(0.85 * peak, when + 0.014);
+    sub.gain.exponentialRampToValueAtTime(0.0001, when + BOOM_SUB_S);
+    osc.connect(sub).connect(master);
+    osc.onended = () => { osc.disconnect(); sub.disconnect(); };
+    osc.start(when);
+    osc.stop(when + BOOM_SUB_S + 0.03);
+  } catch { /* the ring-out is the visuals' job; the graph simply stays quiet */ }
+  const bed = getNoiseBed(ctx);
+  if (!bed) return;
+  try {
+    const src = ctx.createBufferSource();
+    src.buffer = bed;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.Q.value = 0.8;
+    lp.frequency.setValueAtTime(BOOM_FILTER_HZ, when);
+    lp.frequency.exponentialRampToValueAtTime(BOOM_FILTER_FLOOR_HZ, when + BOOM_NOISE_S);
+    const crunch = ctx.createGain();
+    crunch.gain.setValueAtTime(0.0001, when);
+    crunch.gain.exponentialRampToValueAtTime(0.6 * peak, when + 0.01);
+    crunch.gain.exponentialRampToValueAtTime(0.0001, when + BOOM_NOISE_S);
+    src.connect(lp).connect(crunch).connect(master);
+    src.onended = () => { src.disconnect(); lp.disconnect(); crunch.disconnect(); };
+    src.start(when);
+    src.stop(when + BOOM_NOISE_S + 0.03);
+  } catch { /* as above */ }
+}
+
+/**
+ * The detonation, fire-and-forget and asset-free — the finisher's boom, layer by layer, whatever
+ * the sound folder managed to ship. The context is force-resumed first: a mobile webview can still
+ * be holding it suspended at the goal, and a boom that arrives late is a boom that never lands.
+ * The Sound switch and an ad hold still win — guaranteed means guaranteed when it is allowed to
+ * make a sound at all, not a way around the player's own mute.
+ */
+export function playBoom(level = 1, delay = 0): void {
+  const e = engine;
+  if (!e || !settings.sound || adHold) return;
+  const { ctx, master } = e;
+  if (ctx.state === 'suspended') void ctx.resume().catch(() => { /* still locked */ });
+  const when = Math.max(ctx.currentTime,
+    ctx.currentTime + SCHEDULE_LEAD_S + Math.max(0, delay) - OUTPUT_LATENCY_S);
+  detonate(ctx, master, when, level);
 }
 
 /**

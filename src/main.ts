@@ -30,7 +30,9 @@ import { createShop } from './shop';
 import { createNotifications } from './notifications';
 import { mountCoins } from './coin';
 import { appearance, menuState, motionReduced, onAppearance, onLang, t, toggleAppearance } from './settings';
-import { audio, holdAudio, playVictoryFanfare, releaseAudio, stopVictoryFanfare } from './audio';
+import {
+  audio, holdAudio, playBoom, playVictoryFanfare, releaseAudio, stopVictoryFanfare,
+} from './audio';
 import { playDefeat, stopDefeat } from './sound';
 import {
   getRemainingTiqRecoveries, hasClaimedInMatch, markClaimedInMatch, playRewardedAd, recordTiqRecovery,
@@ -1404,11 +1406,13 @@ function armGoalBeat() {
     return;
   }
   const run = ++finishRun;
-  /* each burst gets its bang and its buzz on the same frame the shards leave the pawn */
+  /* Every burst is its own beat: the synthesized boom and the heavy buzz land on the same frame the
+     shards leave the pawn. Synthesized because the finisher cannot go silent on an asset that
+     failed to fetch or had not decoded yet — the deep bass hit is built on the spot, every time. */
   for (let i = 0; i < plan.bursts.length; i++) {
     finishTimers.push(window.setTimeout(() => {
       if (run !== finishRun) return;
-      audio.play('explosion', { gain: 0.92 });
+      playBoom(0.92);
       shatterImpact();
       shake(true);
     }, plan.bursts[i]));
