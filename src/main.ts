@@ -25,6 +25,7 @@ import { createSheets } from './sheets';
 import { createMenu, ownersBack, type Menu } from './menu';
 import { createHome } from './home';
 import { createCompete } from './compete';
+import { createArenaRoad } from './arena';
 import { flagPhoto } from './flags';
 import { createShop } from './shop';
 import { createNotifications } from './notifications';
@@ -421,12 +422,14 @@ function queueMatch(mode: 'pvp' | 'arena' = 'pvp') {
 
 let home: { setRoute(id: string): void } | null = null;
 let compete: { setRoute(id: string): void } | null = null;
+let arenaRoad: { setRoute(id: string): void } | null = null;
 
 const router = createRouter($('screens'), (id) => {
   menu.setRoute(id);
   shop.setRoute(id);
   home?.setRoute(id);
   compete?.setRoute(id);
+  arenaRoad?.setRoute(id);
   // the light finish is a race-stage skin: it comes and goes with the board, never with the shell
   document.documentElement.classList.toggle('light-game', appearance() === 'light' && id === 'game');
   // Telegram BackButton on every screen except Home; always functional via onBack fallback.
@@ -2994,10 +2997,13 @@ menu = createMenu({ router, sheets, sheet: sheetById, start: startGame, onBack }
 const shop = createShop({
   sheets, sheet: sheetById, note: showNote, salesOpen: () => runtime.salesOpen,
 });
-home = createHome({ router, sheets, start: startGame, launch: launchSelectedMode });
-compete = createCompete({
-  router, sheets, sheet: sheetById, queue: (mode) => queueMatch(mode),
+home = createHome({
+  router, sheets, start: startGame, launch: launchSelectedMode, queue: (mode) => queueMatch(mode),
 });
+compete = createCompete({
+  router, sheets, sheet: sheetById,
+});
+arenaRoad = createArenaRoad({ battle: () => queueMatch('arena') });
 createNotifications({ sheets });
 
 /* ---- Admin Command Center: the Home FAB and the live-ops stage (src/admin.ts) ---- */

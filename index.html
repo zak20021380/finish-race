@@ -2374,96 +2374,49 @@
           </button>
         </section>
 
-        <!-- ---------------- arena: the 200 Stars Cup, staged in full.
-             One championship, one card: hero header carrying a two-way clay
-             switch · Top-3 podium · two runners · the pinned squad row · CTA.
-             The switch re-reads the same band two ways: CHANNELS (the squad
-             ladder, each card a door into that channel's Top-10 roster sheet)
-             and TOP PLAYERS (the ten people the Stars actually go to). The
-             stage never scrolls at 360x640. Every number (countdown, channels,
-             squad TIQ, where you sit inside your own channel) is hydrated by
-             src/compete.ts; the geometry below is what keeps it inside the
-             phone. ---------------- -->
-        <section class="screen menu compete-screen arena-screen" id="s-arena" data-screen="arena" tabindex="-1" hidden aria-labelledby="arena-title">
-          <div class="m-head compete-head">
-            <h1 class="m-title" id="arena-title">Arena</h1>
-          </div>
+        <!-- ---------------- arena: the progression road.
+             Arena 1 is the playable crucible; the three higher arenas are TIQ-gated
+             and stamped COMING SOON. Channel War lives exclusively on Home's hero
+             slide, so no bracket, channel ladder or squad match selector is staged
+             here. The tier cards are painted by src/arena.ts from ARENA_TIERS; this
+             shell owns only the header, the live progress module and the road. ---------------- -->
+        <section class="screen menu arena-road-screen" id="s-arena" data-screen="arena" tabindex="-1" hidden aria-labelledby="arena-title">
+          <header class="arena-road-head">
+            <div class="arena-road-head-copy">
+              <span class="arena-road-kicker" data-i18n="arenaRoadKicker">ARENA ROAD</span>
+              <h1 class="m-title arena-road-title" id="arena-title" data-i18n="arenaTitle">Arena</h1>
+            </div>
+            <span class="arena-tiq-pill" id="arena-tiq-pill" role="status" aria-live="polite" aria-label="Tactical IQ">
+              <svg class="ico arena-tiq-ico" aria-hidden="true"><use href="#i-brain" /></svg>
+              <span class="arena-tiq-copy">
+                <b class="arena-tiq-num" id="arena-tiq-value">0</b>
+                <small class="arena-tiq-unit" data-i18n="arenaTiqShort">TIQ</small>
+              </span>
+            </span>
+          </header>
 
-          <div class="compete-body stars-stage" data-scroll id="arena-scroll">
-            <article class="stars-card" id="stars-card" aria-labelledby="stars-name">
-              <!-- hero header, two bands: the championship lockup over the control strip.
-                   Band one is the brand — the Star floating bare on the clay inside a warm
-                   amber ambient glow (no box, no rim), beside the big embossed platinum
-                   wordmark, with the round glass help key closing the right edge. Band two
-                   is a single control strip: the two-way board switch holding the left, the
-                   live bracket clock holding the right.
-
-                   WHY THE CLOCK LEFT BAND ONE: on a 360px phone the card is only ~317px
-                   wide, and a wordmark worth the name plus a three-register countdown plus
-                   a 36px Star cannot share one line at that width — the title would clip.
-                   Moving the clock into the strip buys the wordmark its size and gives the
-                   countdown the full height of the band, so both end up bigger instead of
-                   both ending up cramped. Gold is still reserved for the live and the
-                   premium — the Star's glow, the clock's numerals, the lit switch key —
-                   which leaves the CTA below as the only solid gold slab on the screen. -->
-              <div class="stars-head">
-                <div class="stars-titlebar">
-                  <span class="stars-emblem" aria-hidden="true">
-                    <img class="stars-emblem-img" id="stars-emblem-img" alt="" width="36" height="36" />
-                  </span>
-                  <h2 class="stars-name" id="stars-name">200 STARS CUP</h2>
-                  <button class="stars-info" type="button" id="stars-info" aria-haspopup="dialog"
-                    aria-label="How the 200 Stars Cup works">
-                    <span aria-hidden="true">?</span>
-                  </button>
-                  <!-- Touchpoint C: the VIP prestige pill. It opens the same global store and
-                       turns gold with the days left once a pass is live. -->
-                  <button class="arena-vip" type="button" id="arena-vip" aria-haspopup="dialog"
-                    aria-label="VIP contenders: golden leaderboard crown and 4/4 daily TIQ recovery">
-                    <svg class="ico arena-vip-crown" aria-hidden="true"><use href="#i-crown" /></svg>
-                    <span class="arena-vip-t" id="arena-vip-t">VIP</span>
-                    <span class="arena-vip-badge" id="arena-vip-badge">4/4</span>
-                  </button>
-                </div>
-                <div class="stars-strip">
-                  <div class="stars-tabs" id="stars-tabs" role="group" aria-label="Arena leaderboard" data-active="channels">
-                    <span class="stars-thumb" aria-hidden="true"></span>
-                    <button class="stars-key" type="button" data-view="channels" aria-pressed="true">
-                      <svg class="stars-key-ico" aria-hidden="true"><use href="#i-chat" /></svg>
-                      <span class="stars-key-t">Channels</span>
-                    </button>
-                    <button class="stars-key" type="button" data-view="players" aria-pressed="false">
-                      <svg class="stars-key-ico" aria-hidden="true"><use href="#i-users" /></svg>
-                      <span class="stars-key-t">Top Players</span>
-                    </button>
-                  </div>
-                  <span class="stars-count" id="stars-count" role="timer" aria-label="Bracket opens in">01:45:20</span>
-                </div>
+          <div class="arena-road-body" data-scroll id="arena-scroll">
+            <section class="arena-progress-card" id="arena-progress-card" aria-labelledby="arena-progress-title arena-next-name">
+              <div class="arena-progress-head">
+                <span class="arena-progress-id">
+                  <small class="arena-progress-k" id="arena-progress-title" data-i18n="arenaNextTier">NEXT ARENA</small>
+                  <b class="arena-progress-name" id="arena-next-name">Molten Colosseum</b>
+                </span>
+                <span class="arena-progress-count">
+                  <b class="arena-progress-now" id="arena-progress-now">0</b>
+                  <i class="arena-progress-sep" aria-hidden="true">/</i>
+                  <b class="arena-progress-goal" id="arena-progress-goal">1,200</b>
+                  <small class="arena-progress-unit" data-i18n="arenaTiqShort">TIQ</small>
+                </span>
               </div>
+              <div class="arena-progress-track" id="arena-progress-track" role="progressbar"
+                aria-valuemin="0" aria-valuemax="1200" aria-valuenow="0" aria-labelledby="arena-progress-title arena-next-name">
+                <span class="arena-progress-fill" id="arena-progress-fill" aria-hidden="true"></span>
+              </div>
+              <p class="arena-progress-hint" id="arena-progress-hint">Every match banks TIQ toward the next arena.</p>
+            </section>
 
-              <!-- the ladder head: three places on a three-column podium, #1 raised.
-                   Filled by src/compete.ts for whichever board the switch is on. -->
-              <ol class="stars-podium" id="stars-podium" aria-label="Top three channels"></ol>
-
-              <!-- places four and five, compact rows beside the podium. -->
-              <ol class="stars-runners" id="stars-runners" aria-label="Channels four and five"></ol>
-
-              <!-- the pinned local row: the channel you ride for, where it sits in the
-                   cup, and where you sit inside it. -->
-              <button class="stars-squad" type="button" id="stars-squad">
-                <span class="stars-squad-chip" id="stars-squad-chip">YOUR SQUAD</span>
-                <span class="stars-ch-av stars-squad-av" id="stars-squad-av" aria-hidden="true">
-                  <b class="stars-ch-t" id="stars-squad-letter">?</b>
-                </span>
-                <span class="stars-squad-txt">
-                  <b class="stars-squad-name" id="stars-squad-name">No channel bound</b>
-                  <span class="stars-squad-note" id="stars-squad-note">Tap to join a squad</span>
-                </span>
-                <svg class="ico stars-squad-go" aria-hidden="true"><use href="#i-next" /></svg>
-              </button>
-
-              <button class="stars-cta" type="button" id="stars-cta" aria-haspopup="dialog">PLAY FOR YOUR SQUAD</button>
-            </article>
+            <div class="arena-road" id="arena-road" role="list" aria-label="Arena progression road"></div>
           </div>
         </section>
 
@@ -3268,7 +3221,7 @@
               </div>
             </div>
             <!-- The VIP store lives at the document root (see the end of body): it is summoned
-                 from the lobby, the Arena and this result stage by the one controller. -->
+                 from the lobby, Home and this result stage by the one controller. -->
             <!-- the ad's answer lands over the capsule, never inside it: absolutely placed, so it
                  costs the card no height and cannot be swallowed by the veil -->
             <p class="ad-toast" id="ad-toast" role="status" aria-live="polite"></p>
@@ -4781,7 +4734,7 @@
         <p class="fine">Stored on this device only. Nothing leaves your phone.</p>
       </section>
 
-      <!-- arena registration: one seat in the 200 Stars Arena. Free to enter, kept on this device. -->
+      <!-- channel war registration: one seat in the 200 Stars Arena. Free to enter, kept on this device. -->
       <section class="sheet" id="sheet-stars" hidden role="dialog" aria-modal="true" aria-labelledby="stars-sheet-title">
         <h2 class="sheet-t" id="stars-sheet-title">Play for your squad?</h2>
         <p class="sheet-p" id="stars-sheet-desc">200 Stars Cup · Channels · 8s Blitz · Top 10 Paid</p>
@@ -5914,7 +5867,7 @@
     </div>
 
     <!-- ---------------- the global VIP storefront ----------------
-         A direct child of <body>, never of a screen: the lobby header, the Arena prestige pill
+         A direct child of <body>, never of a screen: the lobby header, Home's VIP pill
          and the post-match send gate all summon this one dialog. While it is up, #app is inert
          and the controller traps Tab inside the card; Escape or the scrim closes it and focus
          returns to the key that opened it. All copy, prices and selection state are painted by

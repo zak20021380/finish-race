@@ -1,49 +1,23 @@
 /**
- * compete.ts — Arena (the 200 Stars Cup) + Ranks (dedicated Leaderboard).
+ * compete.ts — Ranks: the dedicated three-board leaderboard.
  *
- * IA: Arena stages exactly ONE championship — the 200 Telegram Stars Cup — as a
- * single dark-clay showcase that fills the phone between the header and the
- * bottom dock: the faceted Star medallion with the engraved title over a two-way
- * clay switch, the live bracket clock, a Top-3 podium, two runners, the pinned
- * squad row and the 50px PLAY FOR YOUR SQUAD key.
+ * "The Mind Ladder": one three-way clay switch over Top Minds (solo champions),
+ * Intellect Guilds (Telegram channels & groups) and Nations IQ (aggregate country
+ * score). Above the ladder sits the Top 3 clay podium, so the list itself starts
+ * at #4; the guild board carries its Join keys there, and the pinned own-squad
+ * hero replaces the dock once bound. The squad dock ("My Squad Standing" / join
+ * prompt) belongs EXCLUSIVELY to the guild board, and the "Your Standing" module
+ * to the two IQ boards.
  *
- * The switch re-reads the same band two ways without leaving the screen.
- * CHANNELS ranks the squads, and each card opens that channel's Top-10 roster
- * sheet. TOP PLAYERS lists the ten people the pool actually lands on — the
- * leading channel's own Top 10, place by place — because the cup funds no
- * individual outside that ten. Both boards therefore quote one set of numbers:
- * the ladder is `getSquadRanking()` and the players are `getChannelRoster()`.
- * There is no cup feed, no archive and no coin entry fee anywhere on it: one
- * championship, staged in full.
- *
- * The channel ladder is the SAME feed the Intellect Guilds board ranks
- * (`getSquadRanking()`), so the two screens can never disagree about who leads
- * the championship; only the roster members are seeded preview data.
- *
- * Ranks is "The Mind Ladder": one three-way clay switch over Top Minds (solo
- * champions), Intellect Guilds (Telegram channels & groups) and Nations IQ
- * (aggregate country score). Above the ladder sits the Top 3 clay podium, so the
- * list itself starts at #4; the guild board carries its Join keys there, and the
- * pinned own-squad hero replaces the dock once bound. The squad dock ("My Squad
- * Standing" / join prompt) belongs EXCLUSIVELY to the guild board, and the
- * "Your Standing" module to the two IQ boards.
  * Identity: TIQ (Tactical IQ) is the hero metric — gold digits with the brain
  * glyph, on the HUD pills, the podium and the ladder. #i-cup is reserved for
  * season prizes. A player's face is their Telegram photo; a name, its TIQ and
  * the plinth carry the rank, with no league pill between them.
+ *
+ * The Arena tab is the progression road in src/arena.ts. Channel War is staged
+ * on Home's hero slide, so this controller owns no cup, bracket or channel board.
  */
-import {
-  formatCountdown,
-  getChannelRoster,
-  getGrandCup,
-  paidPlaces,
-  type ChannelSeed,
-  type GrandCup,
-  type PlayerRow,
-  type RosterRow,
-  type RosterYou,
-  type Trend,
-} from './data';
+import { type PlayerRow, type Trend } from './data';
 import {
   fetchNationBoard,
   fetchNationRoster,
@@ -60,7 +34,7 @@ import { flagPhoto } from './flags';
 import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
 import { arena, countdownPill, fullCountdown, seasonLabel } from './arenaState';
-import { bindSquadById, cleanChatReference, cleanHandle, cleanTag, cupField, displayNameOf, getMyContribution, getMySquad, getSquadRanking, isSquadAdmin, myRosterId, onSquadChange, registeredCupSquadIds, squadAvatarUrl, squadInviteUrl, squadKind, squadLetter, squadMark, squadTiqSum, telegramAvatarUrl, type RankedSquad } from './squads';
+import { cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadAvatarUrl, squadInviteUrl, squadKind, squadMark, squadTiqSum, telegramAvatarUrl, type RankedSquad } from './squads';
 import { BOT_HANDLE, impact, notify, openLink, tgUser } from './telegram';
 import { t } from './settings';
 import { isPremiumUser, onVipChange } from './premium';
@@ -68,21 +42,14 @@ import { joinSquadOnServer, registerSquadWithTelegram } from './squadRegister';
 import { showToast } from './toast';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
-import starsImg from './assets/images/telegram_stars.png';
 
 export interface CompeteApi {
   router: Router;
   sheets: Sheets;
   sheet(id: string): HTMLElement | null;
-  /** The one door every queue goes through — the Arena's PLAY MATCH key opens it in cup mode. */
-  queue(mode?: 'pvp' | 'arena'): void;
 }
 
 type Board = 'minds' | 'guilds' | 'nations';
-
-/** The Arena stages one cup but reads it two ways: by channel, or by the people
- *  the channel's Stars actually land on. */
-type ArenaView = 'channels' | 'players';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const skel = (rows: number): string =>
@@ -198,29 +165,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   const seasonText = seasonChip?.querySelector<HTMLElement>('.ml-season-t') ?? null;
   const seasonKicker = seasonChip?.querySelector<HTMLElement>('.ml-season-k') ?? null;
   const seasonSub = document.getElementById('ranks-sub');
-  /** The Cup showcase's own parts: one card, hydrated in place, never rebuilt. */
-  const cupEls = {
-    card: document.getElementById('stars-card'),
-    name: document.getElementById('stars-name'),
-    emblem: document.getElementById('stars-emblem-img') as HTMLImageElement | null,
-    tabs: document.getElementById('stars-tabs'),
-    count: document.getElementById('stars-count'),
-    podium: document.getElementById('stars-podium'),
-    runners: document.getElementById('stars-runners'),
-    squad: document.getElementById('stars-squad') as HTMLButtonElement | null,
-    squadChip: document.getElementById('stars-squad-chip'),
-    squadAv: document.getElementById('stars-squad-av'),
-    squadLetter: document.getElementById('stars-squad-letter'),
-    squadName: document.getElementById('stars-squad-name'),
-    squadNote: document.getElementById('stars-squad-note'),
-    cta: document.getElementById('stars-cta') as HTMLButtonElement | null,
-  };
-  const viewBtns = [...document.querySelectorAll<HTMLButtonElement>('#stars-tabs [data-view]')];
-  // One Star asset, two static mounts: the hero emblem and the roster's prize notice.
-  // Every other Star on the Cup is built by `starImg()` as its row is painted.
-  if (cupEls.emblem) cupEls.emblem.src = starsImg;
-  const noticeStar = document.getElementById('sr-notice-star') as HTMLImageElement | null;
-  if (noticeStar) noticeStar.src = starsImg;
   const podiumEl = document.getElementById('ranks-podium');
   const panes: Record<Board, HTMLElement | null> = {
     minds: document.getElementById('ranks-minds'),
@@ -230,21 +174,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   let board: Board = 'minds';
   let loadedBoard: Partial<Record<Board, boolean>> = {};
-  /** The staged championship. `null` until `getGrandCup()` answers — the markup
-   *  already carries the showcase skeleton, so nothing has to be rebuilt. */
-  let cup: GrandCup | null = null;
-  /** The head of the channel ladder — the same five squads the Guilds board ranks. */
-  let channels: RankedSquad[] = [];
-  /** Which ladder the header switch is showing: the squads, or the ten people they pay. */
-  let view: ArenaView = 'channels';
-  /** The paid ten, fetched once per leading channel — the players board's rows. */
-  let playerRows: RosterRow[] | null = null;
-  let playerRowsFor: string | null = null;
-  /** Rosters already fetched, keyed by channel + the TIQ they were merged against. */
-  const rosters = new Map<string, Promise<RosterRow[]>>();
-  /** The local player's row inside their own channel's roster, or null if unbound. */
-  let myRoster: RosterRow[] | null = null;
-  let myRosterKey: string | null = null;
   /** The last country board, so a flag change repaints before the refetch lands. */
   let nationRows: NationRow[] | null = null;
   /** The last live board, kept so a language switch never blanks the HUD or invents a score. */
@@ -594,15 +523,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return !!el && !el.hidden;
   };
 
-  const isArenaVisible = (): boolean => {
-    const el = document.getElementById('s-arena') ?? document.getElementById('s-compete');
-    return !!el && !el.hidden;
-  };
-
-  function paintArena(): void {
-    if (cup) paintCup(cup);
-  }
-
   function paintRanks(): void {
     paintSeason();
     for (const b of boardBtns) b.setAttribute('aria-selected', String(b.dataset.board === board));
@@ -664,874 +584,30 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     });
   }
 
-  /* ---------- arena: the 200 Stars Cup ----------
-     One championship, staged in the markup and hydrated here. The showcase is a
-     single clay card whose geometry (header with the board switch · podium ·
-     runners · squad row · CTA) is what makes it fit 360x640 with no scroll, so
-     this controller never rebuilds the card: it writes the live numbers in,
-     ticks the countdown, repaints the one band the switch moves and owns the
-     seat. */
+  /* ---------- shared row + copy helpers (Ranks boards) ---------- */
 
-  /** A seat is a device fact, like every other mock in this app. */
-  const SEAT_KEY = 'detour.arena.seat.v1';
-
-  /** The head of the channel ladder the card shows: three on the podium, two below. */
-  const FIELD_ROWS = 5;
-
-  /** How many contributors a channel's roster sheet lists — the paid places, no more. */
-  const ROSTER_ROWS = 10;
-
-  interface Seat {
-    /** the cup this device registered for */
-    cup: string;
-    /** ms epoch the seat was locked */
-    at: number;
-  }
-
-  function readSeat(): Seat | null {
-    try {
-      const raw = window.localStorage.getItem(SEAT_KEY);
-      if (!raw) return null;
-      const s = JSON.parse(raw) as Partial<Seat>;
-      if (typeof s.cup !== 'string' || typeof s.at !== 'number' || !Number.isFinite(s.at)) return null;
-      return { cup: s.cup, at: s.at };
-    } catch {
-      return null;
-    }
-  }
-
-  function writeSeat(cupId: string): Seat {
-    const s: Seat = { cup: cupId, at: Date.now() };
-    try {
-      window.localStorage.setItem(SEAT_KEY, JSON.stringify(s));
-    } catch {
-      /* in-memory only */
-    }
-    return s;
-  }
-
-  let seat: Seat | null = readSeat();
-
-  const elOf = (id: string): HTMLElement | null => document.getElementById(id);
-
-  /** Write only when it differs: a repaint must never thrash the layout. */
-  const setText = (el: HTMLElement | null, text: string): void => {
-    if (el && el.textContent !== text) el.textContent = text;
-  };
-
-  /** Grouped Latin digits, exactly the way the Mind Ladder quotes a score. */
   const num = (n: number): string => n.toLocaleString('en-US');
-
-  /** The bracket clock: `01:44:58` counting down, then the stage says so itself. */
-  const startsText = (c: GrandCup, from: number): string =>
-    c.startsAt - from <= 0 ? 'Bracket live' : formatCountdown(c.startsAt, from);
-
-  /** The format pills: the data's own, plus the paid count read off the prize ladder. */
-  const specWords = (c: GrandCup): string[] => [...c.specs, `Top ${paidPlaces(c)} Paid`];
-
-  /** Metal for a bracket place — the three that get a rim, and nothing above them. */
-  const metalOf = (place: number): string =>
-    place === 1 ? 'gold' : place === 2 ? 'silver' : place === 3 ? 'bronze' : '';
-
   /** The handle without its sigil: a card this small reads better as a name. */
   const bare = (handle: string): string => handle.replace(/^@+/, '');
-
   /** Two letters is all a 30px sphere holds without a second glyph crowding it. */
   const initials = (name: string): string => {
     const parts = name.trim().split(/\s+/).filter(Boolean);
     if (!parts.length) return '?';
     return (parts.length > 1 ? parts[0][0] + parts[1][0] : parts[0].slice(0, 2)).toUpperCase();
   };
-
-  /** The official Telegram Star, mounted wherever the Arena pays or crowns. The PNG
-   *  is RGBA gold, so `screen` blends the metal onto the clay with no box behind it. */
-  function starImg(cls: string): HTMLImageElement {
-    const img = document.createElement('img');
-    img.className = cls;
-    img.src = starsImg;
-    img.alt = '';
-    img.decoding = 'async';
-    return img;
-  }
-
-  /**
-   * The player's own Telegram portrait inside their ball: a circular crop ringed by a hairline
-   * of metal, fading in over the monogram. The initials are only ever the transient fallback —
-   * an error, a hidden profile or the CDN's 1x1 placeholder leaves them in place.
-   */
-  function paintPlayerPhoto(host: HTMLElement, url: string, eager = false): void {
-    const src = photoSrc(url);
-    if (!src) return;
-    const img = document.createElement('img');
-    img.className = 'stars-av-photo';
-    img.alt = '';
-    img.loading = eager ? 'eager' : 'lazy';
-    img.decoding = 'async';
-    img.referrerPolicy = 'no-referrer';
-    img.addEventListener('error', () => {
-      img.remove();
-      host.classList.remove('has-photo');
-    });
-    img.addEventListener('load', () => {
-      if (img.naturalWidth <= 2 || img.naturalHeight <= 2) {
-        img.remove();
-        host.classList.remove('has-photo');
-        return;
-      }
-      img.classList.add('is-loaded');
-      host.classList.add('has-photo');
-    });
-    img.src = src;
-    host.append(img);
-  }
-
-  /** One player's ball: their Telegram photo over the monogram, the nation flag on its corner. */
-  function sphere(r: RosterRow, cls: string, eager = false): HTMLElement {
-    const av = document.createElement('span');
-    av.className = cls;
-    av.setAttribute('aria-hidden', 'true');
-    const ini = document.createElement('b');
-    ini.className = 'stars-av-t';
-    ini.textContent = initials(r.name);
-    av.append(ini);
-    paintPlayerPhoto(av, r.avatar, eager);
-    const flag = document.createElement('span');
-    flag.className = 'stars-av-flag';
-    flag.append(flagPhoto(r.countryCode, 'fp-badge'));
-    av.append(flag);
-    return av;
-  }
-
-  /* ---------- the channel ladder, and the roster behind each card ---------- */
-
-  /**
-   * The Cup ranks the very same squads the Intellect Guilds board ranks — but only those
-   * registered for this championship, re-ranked inside that field. A squad this device knows
-   * that never enlisted for the running cup is not a contender: it has no place, no podium and
-   * no claim on the pool.
-   */
-  const channelLadder = (cupId: string): RankedSquad[] => cupField(cupId).slice(0, FIELD_ROWS);
-
-  const seedOf = (s: RankedSquad): ChannelSeed =>
-    ({ id: s.id, handle: s.handle, name: s.name, tiq: s.trophies });
-
-  const kindWord = (s: RankedSquad): string => (squadKind(s) === 'channel' ? 'channel' : 'group');
-  const kindLabel = (s: RankedSquad): string => `Telegram ${kindWord(s)}`;
-
-  /** The local player only ever has a place in a roster they actually belong to. */
-  function youIn(ch: ChannelSeed): RosterYou | null {
-    const mine = getMySquad();
-    if (!mine || mine.id !== ch.id) return null;
-    return {
-      id: myRosterId(),
-      name: youName(),
-      countryCode: profile.country ?? '',
-      tiq: myTrophyScore(),
-    };
-  }
-
-  /** A roster is fetched once per channel + TIQ pair, so re-entry never re-rolls it. */
-  function rosterOf(ch: ChannelSeed): Promise<RosterRow[]> {
-    const you = youIn(ch);
-    const key = `${ch.id}|${you ? you.tiq : '-'}`;
-    let hit = rosters.get(key);
-    if (!hit) {
-      hit = getChannelRoster(ch, you);
-      rosters.set(key, hit);
-    }
-    return hit;
-  }
-
   const tag = (cls: string, text?: string): HTMLElement => {
     const el = document.createElement('span');
     el.className = cls;
     if (text !== undefined) el.textContent = text;
     return el;
   };
-
-  /** A bold run inside a sentence — the digits carry the colour, the prose never does. */
-  const strong = (text: string): HTMLElement => {
-    const b = document.createElement('b');
-    b.textContent = text;
-    return b;
-  };
-
-  /** The channel's own mark: a clay squircle carrying the handle's letter. The old
-   *  per-avatar Telegram tick was pure noise on a board where every entry is a
-   *  channel — dropped, so the mark and its metal can breathe. */
-  function channelAv(s: RankedSquad, cls: string): HTMLElement {
-    const av = tag(`stars-ch-av${cls ? ` ${cls}` : ''}`);
-    av.setAttribute('aria-hidden', 'true');
-    const mark = document.createElement('b');
-    mark.className = 'stars-ch-t';
-    mark.textContent = squadLetter(s);
-    av.append(mark);
-    /* the real channel photo over the call-sign; the monogram stays until it lands */
-    paintCrestPhoto(av, squadAvatarUrl(s));
-    return av;
-  }
-
-  /** Every card on the Cup is a door: it opens that channel's Top-10 roster. */
-  function openable(el: HTMLElement, s: RankedSquad, say: string): void {
-    el.setAttribute('role', 'button');
-    el.tabIndex = 0;
-    el.setAttribute('aria-haspopup', 'dialog');
-    el.setAttribute('aria-label', say);
-    el.addEventListener('click', () => { void openRoster(s); });
-    el.addEventListener('keydown', (e) => {
-      if (e.target !== el) return;
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        void openRoster(s);
-      }
-    });
-  }
-
-  /** A podium channel: rank · mark · name · squad TIQ · the pool its Top 10 split. */
-  function podChannel(s: RankedSquad, c: GrandCup): HTMLLIElement {
-    const li = document.createElement('li');
-    li.className = 'stars-pod';
-    li.dataset.rank = String(s.rank);
-    const metal = metalOf(s.rank);
-    if (metal) li.dataset.metal = metal;
-
-    const name = tag('stars-pod-name', bare(s.handle));
-    name.title = s.name;
-
-    const tiq = tag('stars-pod-tiq');
-    tiq.append(strong(num(s.trophies)), document.createTextNode(' TIQ'));
-
-    /* the champion wears the one crown on the board, set into its raised pedestal */
-    if (s.rank === 1) li.append(svgIcon('#i-crown', 'stars-pod-crown'));
-    li.append(tag('stars-pod-rank', String(s.rank)), channelAv(s, ''), name, tiq);
-
-    if (s.rank === 1) {
-      const prize = tag('stars-pod-prize');
-      const pool = document.createElement('small');
-      pool.textContent = 'Pool';
-      prize.append(starImg('stars-pod-star'), strong(num(c.stars)), pool);
-      prize.title = `The #1 channel's Top 10 split ${num(c.stars)} Telegram Stars`;
-      li.append(prize);
-    }
-
-    openable(li, s, `${kindLabel(s)} ${s.handle}, rank ${s.rank} with ${num(s.trophies)} squad `
-      + `Tactical IQ and ${s.members.toLocaleString('en-US')} members. Tap to view the Top ${ROSTER_ROWS} roster.`);
-    return li;
-  }
-
-  /**
-   * An empty rung on the Cup podium: a frosted, dashed slot that keeps the three-tier
-   * stage whole while the field fills. A championship of one is a normal state, so the
-   * missing places stay on stage instead of floating the champion alone against the rail.
-   *
-   * `shape` follows the board it stands on — a channel wears its squircle, a player its ball —
-   * so the two tabs read as the same stage with the same gap in it.
-   */
-  function podAwaiting(rank: number, shape: 'channel' | 'player' = 'channel'): HTMLLIElement {
-    const li = document.createElement('li');
-    li.className = 'stars-pod is-awaiting';
-    li.dataset.rank = String(rank);
-    li.setAttribute('role', 'listitem');
-
-    const label = t('awaitingContender');
-    const name = tag('stars-pod-name stars-pod-name-awaiting', label);
-    name.dir = 'auto';
-    name.title = label;
-
-    const mark = tag(shape === 'player'
-      ? 'stars-av stars-av-awaiting'
-      : 'stars-ch-av stars-ch-av-awaiting');
-    mark.setAttribute('aria-hidden', 'true');
-    mark.append(svgIcon('#i-lock', 'stars-awaiting-ico'));
-
-    li.append(tag('stars-pod-rank', String(rank)), mark, name);
-    li.setAttribute('aria-label', `Rank ${rank}: ${label}`);
-    return li;
-  }
-
-  /** A runner channel: place · mark · name · the TIQ pill · a chevron. */
-  function runChannel(s: RankedSquad): HTMLLIElement {
-    const li = document.createElement('li');
-    li.className = 'stars-run';
-
-    const id = tag('stars-run-id');
-    const nm = document.createElement('b');
-    nm.className = 'stars-run-nm';
-    nm.textContent = bare(s.handle);
-    nm.title = s.name;
-    id.append(nm);
-
-    const tiq = tag('stars-run-tiq');
-    tiq.append(strong(num(s.trophies)), document.createTextNode(' TIQ'));
-
-    li.append(tag('stars-run-rank', String(s.rank)), channelAv(s, 'stars-ch-sm'), id, tiq,
-      svgIcon('#i-next', 'stars-run-go'));
-    openable(li, s, `${kindLabel(s)} ${s.handle}, rank ${s.rank} with ${num(s.trophies)} squad `
-      + `Tactical IQ and ${s.members.toLocaleString('en-US')} members. Tap to view the Top ${ROSTER_ROWS} roster.`);
-    return li;
-  }
-
-  /* ---------- the players board: the ten people the pool actually pays ----------
-     The cup funds no individual outside the leading channel's Top 10, so this is
-     not a second leaderboard with invented numbers — it is the same roster the
-     sheet shows, read place by place. TIQ, nation and payout all come from
-     `getChannelRoster`, so the two views can never disagree. */
-
-  /** A podium player: rank · ball + flag · name · TIQ banked · their own share. */
-  function podPlayer(r: RosterRow): HTMLLIElement {
-    const li = document.createElement('li');
-    li.className = 'stars-pod';
-    li.dataset.rank = String(r.rank);
-    const metal = metalOf(r.rank);
-    if (metal) li.dataset.metal = metal;
-
-    const name = tag('stars-pod-name', r.name);
-    name.title = r.name;
-
-    const tiq = tag('stars-pod-tiq');
-    tiq.append(strong(num(r.tiq)), document.createTextNode(' TIQ'));
-
-    if (r.rank === 1) li.append(svgIcon('#i-crown', 'stars-pod-crown'));
-    /* the podium is on screen the moment it paints, so its portraits never wait for a scroll */
-    li.append(tag('stars-pod-rank', String(r.rank)), sphere(r, 'stars-av', true), name, tiq);
-    if (r.stars > 0) {
-      const prize = tag('stars-pod-prize');
-      prize.append(starImg('stars-pod-star'), strong(num(r.stars)));
-      prize.title = `Projected share of the leading channel's pool: ${num(r.stars)} Telegram Stars`;
-      li.append(prize);
-    }
-    li.setAttribute('aria-label', `Rank ${r.rank}: ${r.name}, ${num(r.tiq)} Tactical IQ contributed, `
-      + (r.stars > 0 ? `projected ${num(r.stars)} Telegram Stars` : 'outside the paid places')
-      + (r.isYou && isPremiumUser() ? ', VIP' : ''));
-    return li;
-  }
-
-  /** A runner player: place · ball + flag · name · TIQ · their own share. */
-  function runPlayer(r: RosterRow): HTMLLIElement {
-    const li = document.createElement('li');
-    li.className = 'stars-run';
-
-    const id = tag('stars-run-id');
-    const nm = document.createElement('b');
-    nm.className = 'stars-run-nm';
-    nm.textContent = r.name;
-    nm.title = r.name;
-    const nmLine = tag('stars-run-nmline');
-    nmLine.append(nm);
-    if (r.isYou && isPremiumUser()) nmLine.append(svgIcon('#i-crown', 'vip-crown-mark'));
-    id.append(nmLine);
-
-    const tiq = tag('stars-run-tiq');
-    tiq.append(strong(num(r.tiq)), document.createTextNode(' TIQ'));
-
-    li.append(tag('stars-run-rank', String(r.rank)), sphere(r, 'stars-av'), id, tiq);
-    if (r.stars > 0) {
-      const pay = tag('stars-run-pay');
-      pay.append(starImg('stars-run-star'), strong(num(r.stars)));
-      pay.title = `Projected share of the pool: ${num(r.stars)} Telegram Stars`;
-      li.append(pay);
-    }
-    li.setAttribute('aria-label', `Rank ${r.rank}: ${r.name}, ${num(r.tiq)} Tactical IQ contributed, `
-      + (r.stars > 0 ? `projected ${num(r.stars)} Telegram Stars` : 'outside the paid places')
-      + (r.isYou && isPremiumUser() ? ', VIP' : ''));
-    return li;
-  }
-
-  /** The band's loading state: the real card shapes, with the type shimmering. */
-  function paintBoardSkel(): void {
-    for (const [el, cls, n] of [[cupEls.podium, 'stars-pod', 3], [cupEls.runners, 'stars-run', 2]] as const) {
-      if (!el) continue;
-      el.textContent = '';
-      for (let i = 0; i < n; i++) {
-        const li = document.createElement('li');
-        li.className = `${cls} is-skel`;
-        const s = document.createElement('span');
-        s.className = 'skel';
-        li.append(s);
-        el.append(li);
-      }
-    }
-  }
-
-  /**
-   * The podium's visual order: silver on the left, the champion raised in the centre, bronze on
-   * the right. The cards are appended in exactly this order, so the stage is balanced even where
-   * `order` is not honoured — and the order a screen reader reads matches what the eye sees.
-   */
-  const PODIUM_SLOTS = [2, 1, 3] as const;
-
-  /**
-   * The one three-place stage both boards paint. A missing place keeps its frosted slot, so a
-   * field of one is balanced between two contenders-to-come instead of being pushed into a
-   * corner — and because the slot count never changes, the band never changes height between
-   * states.
-   */
-  function paintCupPodium(cell: (rank: number) => HTMLElement): void {
-    const host = cupEls.podium;
-    if (!host) return;
-    host.textContent = '';
-    for (const rank of PODIUM_SLOTS) host.append(cell(rank));
-  }
-
-  /** Fill the band from the leading channel's roster, fetching it once per leader. */
-  async function paintPlayers(): Promise<void> {
-    const lead = channels[0];
-    if (!lead) {
-      /* No registered channel means no field at all: the stage stays whole and empty rather than
-         leaving the last squad's players standing under a heading that no longer has a squad. */
-      paintCupPodium((rank) => podAwaiting(rank, 'player'));
-      if (cupEls.podium) {
-        cupEls.podium.setAttribute('aria-label', 'Top three players, awaiting contenders');
-      }
-      if (cupEls.runners) {
-        cupEls.runners.textContent = '';
-        const row = document.createElement('li');
-        row.className = 'stars-run is-empty';
-        row.textContent = 'No squads on the board yet — enlist a channel to open the war.';
-        cupEls.runners.append(row);
-      }
-      return;
-    }
-    if (playerRowsFor !== lead.id) {
-      playerRowsFor = lead.id;
-      playerRows = null;
-      if (view === 'players') paintBoardSkel();
-    }
-    if (!playerRows) {
-      try {
-        playerRows = await rosterOf(seedOf(lead));
-      } catch {
-        playerRows = null;
-        playerRowsFor = null;
-        if (view === 'players') paintChannelBoard();
-        return;
-      }
-    }
-    // A slower roster must never overwrite a board the switch has already moved on.
-    if (view !== 'players' || channels[0]?.id !== lead.id) return;
-    /* HARD FILTER: a place on this board is a place on a squad that registered for this cup. The
-       roster already comes from the leading registered squad; this is the same predicate applied
-       to the rows themselves, so a roster cached before the field changed can never leak an
-       unregistered face onto the podium. It is the exact test the Worker runs. */
-    const registered = registeredCupSquadIds(cup ? cup.id : '');
-    const rows = playerRows.filter((r) => registered.has(r.squadId));
-    /* A podium is always three places, exactly as the channels board paints it: the champion
-       raised in the centre, silver left, bronze right, and a frosted ball wherever the roster is
-       still short. One player on the squad is a normal championship, not a broken board. */
-    const byRank = new Map<number, RosterRow>();
-    for (const r of rows) if (r.rank <= 3) byRank.set(r.rank, r);
-    paintCupPodium((rank) => {
-      const r = byRank.get(rank);
-      return r ? podPlayer(r) : podAwaiting(rank, 'player');
-    });
-    if (cupEls.podium) {
-      cupEls.podium.setAttribute('aria-label',
-        `Top three players of ${lead.handle}, whose Top ${ROSTER_ROWS} split the pool`);
-    }
-    if (cupEls.runners) {
-      cupEls.runners.textContent = '';
-      cupEls.runners.setAttribute('aria-label', `Players four and five of ${lead.handle}`);
-      for (const r of rows.filter((x) => x.rank >= 4).slice(0, 2)) cupEls.runners.append(runPlayer(r));
-    }
-  }
-
-  /** The head of the ladder, split: three channels on the podium, two runners below. */
-  function paintChannelBoard(): void {
-    const c = cup;
-    if (!c) return;
-    /* An empty registry is a real state now that the seeded field is gone: the board says so
-       instead of painting an empty slab. */
-    if (!channels.length) {
-      paintCupPodium((rank) => podAwaiting(rank));
-      if (cupEls.podium) {
-        cupEls.podium.setAttribute('aria-label', 'Top three channels, awaiting contenders');
-      }
-      if (cupEls.runners) {
-        cupEls.runners.textContent = '';
-        const row = document.createElement('li');
-        row.className = 'stars-run is-empty';
-        row.textContent = 'No squads on the board yet — enlist a channel to open the war.';
-        cupEls.runners.append(row);
-      }
-      return;
-    }
-    /* A podium is always three places: rank 2 left, the champion raised in the centre,
-       rank 3 right. Missing ranks hold frosted slots, so a lone squad is balanced
-       between them instead of being pushed into a corner. */
-    const byRank = new Map<number, RankedSquad>();
-    for (const s of channels.filter((x) => x.rank <= 3)) byRank.set(s.rank, s);
-    paintCupPodium((rank) => {
-      const s = byRank.get(rank);
-      return s ? podChannel(s, c) : podAwaiting(rank);
-    });
-    if (cupEls.runners) {
-      cupEls.runners.textContent = '';
-      for (const s of channels.filter((x) => x.rank >= 4)) cupEls.runners.append(runChannel(s));
-    }
-  }
-
-  /** Repaint the band for whichever board the header switch is on. */
-  function paintBoard(): void {
-    if (cupEls.card) cupEls.card.dataset.view = view;
-    if (view === 'players') { void paintPlayers(); return; }
-    if (cupEls.podium) cupEls.podium.setAttribute('aria-label', 'Top three channels');
-    if (cupEls.runners) cupEls.runners.setAttribute('aria-label', 'Channels four and five');
-    paintChannelBoard();
-  }
-
-  /** The switch never leaves the screen: it re-reads the same band a second way. */
-  function selectView(next: ArenaView): void {
-    if (next === view) return;
-    view = next;
-    impact('light');
-    if (cupEls.tabs) cupEls.tabs.dataset.active = next;
-    for (const b of viewBtns) b.setAttribute('aria-pressed', String(b.dataset.view === next));
-    paintBoard();
-  }
-
-  for (const b of viewBtns) {
-    b.addEventListener('click', () => {
-      const v = b.dataset.view;
-      if (v === 'channels' || v === 'players') selectView(v);
-    });
-  }
-
-  /**
-   * The pinned squad row: the channel this device rides for, where it sits in the
-   * Cup, and where the player sits inside it. Every number is read off the local
-   * squad registry and the same roster the sheet shows — an unbound device is told
-   * so, and its key goes to the real join flow rather than to a placeholder.
-   */
-  function paintSquad(c: GrandCup): void {
-    const row = cupEls.squad;
-    if (!row) return;
-    const mine = getMySquad();
-    const paid = paidPlaces(c);
-
-    if (!mine) {
-      row.classList.add('is-unbound');
-      row.removeAttribute('aria-haspopup');
-      setText(cupEls.squadChip, 'JOIN ONE');
-      setText(cupEls.squadLetter, '?');
-      paintCrestPhoto(cupEls.squadAv, '');
-      setText(cupEls.squadName, 'No channel bound');
-      setText(cupEls.squadNote, 'Tap to join a squad');
-      row.setAttribute('aria-label',
-        `No channel bound. Tap to join a Telegram squad — its Top ${paid} players share the ${c.stars}-Star pool.`);
-      return;
-    }
-
-    row.classList.remove('is-unbound');
-    row.setAttribute('aria-haspopup', 'dialog');
-    setText(cupEls.squadChip, 'YOUR SQUAD');
-    setText(cupEls.squadLetter, squadLetter(mine));
-    paintCrestPhoto(cupEls.squadAv, squadAvatarUrl(mine));
-    /* The cup has its own field, so the pill quotes the place among the squads that actually
-       enlisted — never a guild-board rank the championship never handed out. A squad outside the
-       field says so instead of borrowing a number that would not put it on the podium. */
-    const cupRank = cupField(c.id).find((s) => s.id === mine.id)?.rank ?? 0;
-    /* name line: the handle, then its cup rank as its own pill — the handle wraps to a
-       second line under its own isolation before it would ever be clipped */
-    const name = cupEls.squadName;
-    if (name) {
-      name.textContent = '';
-      const handle = tag('stars-squad-handle', bare(mine.handle));
-      handle.dir = 'auto';
-      handle.title = mine.name || mine.handle;
-      const pos = tag('stars-squad-pos', `#${cupRank || mine.rank}`);
-      pos.title = cupRank
-        ? `Rank ${cupRank} in the ${c.name}`
-        : `Guilds rank ${mine.rank} — not enlisted in the ${c.name}`;
-      name.append(handle, pos);
-    }
-
-    const note = cupEls.squadNote;
-    const you = myRoster?.find((r) => r.isYou) ?? null;
-    if (note) {
-      note.textContent = '';
-      if (you && you.stars > 0) {
-        note.append(document.createTextNode('You '), strong(`#${you.rank}`),
-          document.createTextNode(' · earn '), starImg('stars-squad-star'), strong(num(you.stars)));
-      } else if (you) {
-        note.append(document.createTextNode('You '), strong(`#${you.rank}`),
-          document.createTextNode(` · outside the paid ${paid}`));
-      } else {
-        note.append(strong(num(myTrophyScore())), document.createTextNode(' TIQ · tap for the roster'));
-      }
-    }
-    const where = cupRank
-      ? `is rank ${cupRank} in the ${c.name}`
-      : `is not enlisted in the ${c.name}`;
-    row.setAttribute('aria-label', seat?.cup === c.id
-      ? `Your squad ${mine.handle} ${where}; your seat is locked. Tap to view the roster.`
-      : `Your squad ${mine.handle} ${where}. Tap to view the roster.`);
-  }
-
-  /** Which channel the sheet is showing: a slower fetch must not overwrite a newer tap. */
-  let rosterOpen: string | null = null;
-
-  function rosterRow(r: RosterRow): HTMLLIElement {
-    const li = document.createElement('li');
-    li.className = `sr-row${r.isYou ? ' is-you' : ''}`;
-    const metal = metalOf(r.rank);
-    if (metal) li.dataset.metal = metal;
-
-    const id = tag('sr-id-col');
-    const nm = document.createElement('b');
-    nm.className = 'sr-nm';
-    nm.textContent = r.name;
-    nm.title = r.name;
-    const nmLine = tag('sr-nmline');
-    nmLine.append(nm);
-    if (r.isYou && isPremiumUser()) nmLine.append(svgIcon('#i-crown', 'vip-crown-mark'));
-    const tiq = document.createElement('small');
-    tiq.className = 'sr-tiq';
-    tiq.append(strong(num(r.tiq)), document.createTextNode(' TIQ contributed'));
-    id.append(nmLine, tiq);
-
-    const pay = tag('sr-pay');
-    if (r.stars > 0) pay.append(starImg('sr-pay-star'), strong(num(r.stars)));
-    else {
-      li.classList.add('is-outside');
-      pay.textContent = '—';
-    }
-
-    li.append(tag('sr-medal', String(r.rank)), sphere(r, 'stars-av'), id);
-    if (r.isYou) li.append(tag('sr-you-tag', 'YOU'));
-    li.append(pay);
-    li.setAttribute('aria-label', `Rank ${r.rank}: ${r.name}, ${num(r.tiq)} Tactical IQ contributed, `
-      + (r.stars > 0 ? `projects ${num(r.stars)} Telegram Stars` : 'outside the paid places')
-      + (r.isYou && isPremiumUser() ? ', VIP' : ''));
-    return li;
-  }
-
-  /** The roster sheet: one channel's head, then the ten people the Stars go to. */
-  async function openRoster(s: RankedSquad): Promise<void> {
-    const sheet = api.sheet('sheet-roster');
-    if (!sheet) return;
-    const list = sheet.querySelector<HTMLElement>('#sr-list');
-    if (!list) return;
-
-    rosterOpen = s.id;
-    const metal = metalOf(s.rank);
-    if (metal) sheet.dataset.metal = metal;
-    else delete sheet.dataset.metal;
-
-    setText(sheet.querySelector<HTMLElement>('#sr-letter'), squadLetter(s));
-    paintCrestPhoto(sheet.querySelector<HTMLElement>('#sr-letter')?.parentElement ?? null, squadAvatarUrl(s));
-    setText(sheet.querySelector<HTMLElement>('#sr-rank'), String(s.rank));
-    setText(sheet.querySelector<HTMLElement>('#sr-name'), s.handle);
-    const sub = sheet.querySelector<HTMLElement>('#sr-sub');
-    if (sub) {
-      sub.textContent = '';
-      sub.append(strong(num(s.trophies)), document.createTextNode(
-        ` TIQ · ${s.members.toLocaleString('en-US')} members · ${kindWord(s)}`));
-    }
-
-    list.innerHTML = `<li class="sr-skel">${skel(6)}</li>`;
-    impact('light');
-    api.sheets.open(sheet);
-
-    let rows: RosterRow[];
-    try {
-      rows = await rosterOf(seedOf(s));
-    } catch {
-      if (rosterOpen === s.id) list.innerHTML = empty('The roster did not load.');
-      return;
-    }
-    if (rosterOpen !== s.id) return;
-    list.textContent = '';
-    /* A squad of one is a normal squad: its roster is the founder, and a squad with no one on it
-       says so instead of showing an empty list under a populated header. */
-    if (!rows.length) {
-      const row = document.createElement('li');
-      row.className = 'sr-empty';
-      row.textContent = 'No players have joined this squad yet.';
-      list.append(row);
-      return;
-    }
-    for (const r of rows.slice(0, ROSTER_ROWS)) list.append(rosterRow(r));
-  }
-
-  /** One window of the clock: a unit of the countdown, the `44` in `01:44:58`. Units
-   *  are nodes rather than characters because the readout is an instrument — each unit
-   *  wants its own recessed face under the gold numerals. The face and the numerals are
-   *  separate boxes on purpose: the numerals are clipped out of a metal gradient, and a
-   *  text clip would otherwise clip the window's own face away with them. */
-  function countUnit(digits: string): HTMLElement {
-    const plate = document.createElement('b');
-    const ink = document.createElement('span');
-    ink.textContent = digits;
-    plate.append(ink);
-    return plate;
-  }
-
-  /** The colon between two units: still the real glyph, at the digits' own size, so it
-   *  shares their line box and lands on their baseline with no nudging. */
-  function countSep(): HTMLElement {
-    const i = document.createElement('i');
-    i.textContent = ':';
-    return i;
-  }
-
-  /** `01:44:58` → three units; `44:58` → two. Anything else — the bracket opening, or
-   *  a countdown quoted in days — is not a clock and is written as plain text. */
-  const countUnits = (text: string): string[] | null => {
-    const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(text);
-    if (!m) return null;
-    return m[3] ? [m[1], m[2], m[3]] : [m[1], m[2]];
-  };
-
-  /** The bracket clock, painted as an instrument: one plate per unit with the colon
-   *  kept between them, so `01:44:58` reads as three windows instead of one run of
-   *  eight glyphs. The shape is rebuilt only when it changes — never inside a bracket
-   *  — so the once-a-second repaint rewrites two or three short strings and nothing
-   *  else. The element's text still spells the countdown exactly as before, colons
-   *  included, which is what a screen reader and every other reader of it gets. */
-  function paintCount(c: GrandCup, from: number): void {
-    const el = cupEls.count;
-    if (!el) return;
-    const text = startsText(c, from);
-    const units = countUnits(text);
-    const shape = units ? `u${units.length}` : 'text';
-    if (el.dataset.shape !== shape) {
-      el.dataset.shape = shape;
-      el.textContent = '';
-      if (!units) el.textContent = text;
-      else units.forEach((u, i) => {
-        if (i) el.append(countSep());
-        el.append(countUnit(u));
-      });
-      return;
-    }
-    if (!units) {
-      setText(el, text);
-      return;
-    }
-    const plates = el.querySelectorAll<HTMLElement>('b > span');
-    units.forEach((u, i) => setText(plates[i] ?? null, u));
-  }
-
-  /** The key always offers the same thing; the seat's state is stated on the squad
-   *  row rather than by recolouring the one loud action on the screen. */
-  function paintCta(c: GrandCup): void {
-    const btn = cupEls.cta;
-    if (!btn) return;
-    btn.setAttribute('aria-label', seat?.cup === c.id
-      ? `${c.name}: your seat is locked. Play your match and bank TIQ for your channel.`
-      : `Enter the ${c.name} and play your match for your channel.`);
-  }
-
-  /** Write the cup's own numbers into the standing geometry. Runs on every entry. */
-  function paintCup(c: GrandCup): void {
-    setText(cupEls.name, c.name.toUpperCase());
-    paintSquad(c);
-    paintCount(c, Date.now());
-    paintCta(c);
-  }
-
-  /** The confirmation drawer, reached only from an unseated key: what a seat costs,
-   *  which seat it is, and what locking it opens. */
-  function openSeatSheet(): void {
-    if (!cup) return;
-    const sheet = api.sheet('sheet-stars');
-    if (!sheet) return;
-    setText(sheet.querySelector<HTMLElement>('#stars-sheet-title'), 'Play for your squad?');
-    setText(sheet.querySelector<HTMLElement>('#stars-sheet-desc'), `${cup.name} · ${specWords(cup).join(' · ')}`);
-    setText(sheet.querySelector<HTMLElement>('#stars-sheet-entry'), cup.entry);
-    setText(sheet.querySelector<HTMLElement>('#stars-sheet-seat'), `${cup.players} / ${cup.maxPlayers}`);
-    setText(sheet.querySelector<HTMLElement>('#stars-sheet-start'), formatCountdown(cup.startsAt));
-    impact('light');
-    api.sheets.open(sheet);
-  }
-
-  /** Locking the seat fills the room by one on this device, then enters the bracket. */
-  function lockSeat(): void {
-    if (!cup) return;
-    if (seat?.cup !== cup.id) {
-      seat = writeSeat(cup.id);
-      if (cup.players < cup.maxPlayers) cup.players += 1;
-      paintCup(cup);
-      impact('medium');
-      notify('success');
-    }
-    api.sheets.close();
-    api.queue('arena');
-  }
-
-  cupEls.cta?.addEventListener('click', () => {
-    impact('light');
-    // Already entered: the key means play, so it does not route through a drawer first.
-    if (cup && seat?.cup === cup.id) api.queue('arena');
-    else openSeatSheet();
-  });
-  elOf('stars-sheet-yes')?.addEventListener('click', lockSeat);
-
-  /** The header's round key: the cup's three rules, one dark-clay sheet. */
-  elOf('stars-info')?.addEventListener('click', () => {
-    const sheet = api.sheet('sheet-rules');
-    if (!sheet) return;
-    impact('light');
-    api.sheets.open(sheet);
-  });
-
-  /** Bound: the roster of your own channel. Unbound: the real join flow. */
-  cupEls.squad?.addEventListener('click', () => {
-    const mine = getMySquad();
-    if (mine) void openRoster(mine);
-    else openSquadSheet();
-  });
-
-  function tickCup(): void {
-    if (cup) paintCount(cup, Date.now());
-  }
-
-  /** The local player's place inside their own channel, once per TIQ change. */
-  async function loadMyRoster(): Promise<void> {
-    const mine = getMySquad();
-    if (!mine) {
-      myRoster = null;
-      myRosterKey = null;
-      return;
-    }
-    const you = youIn(seedOf(mine));
-    const key = `${mine.id}|${you ? you.tiq : '-'}`;
-    if (key === myRosterKey) return;
-    myRosterKey = key;
-    try {
-      myRoster = await rosterOf(seedOf(mine));
-    } catch {
-      myRoster = null;
-    }
-  }
-
-  /** Fetch the staged cup once, then keep repainting it: re-entry costs no rebuild. */
-  async function loadCup(): Promise<void> {
-    startTick();
-    if (!cup) {
-      try {
-        cup = await getGrandCup();
-      } catch {
-        cup = null;
-        return;
-      }
-      // A seat this device already holds is one of the contenders the seed counts
-      // out: without this, a seated player would be told the room is a seat smaller
-      // than it showed when they took it.
-      if (seat?.cup === cup.id && cup.players < cup.maxPlayers) cup.players += 1;
-    }
-    channels = channelLadder(cup.id);
-    paintBoard();
-    paintCup(cup);
-    await loadMyRoster();
-    paintSquad(cup);
-  }
+  const kindWord = (s: RankedSquad): string => (squadKind(s) === 'channel' ? 'channel' : 'group');
+  const kindLabel = (s: RankedSquad): string => `Telegram ${kindWord(s)}`;
 
   function startTick(): void {
     if (tick) return;
     tick = window.setInterval(() => {
       if (isRanksVisible()) paintSeason();
-      if (isArenaVisible()) tickCup();
     }, 1000);
   }
 
@@ -3346,9 +2422,6 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       } else {
         void loadBoard(board);
       }
-    } else if (isArenaVisible()) {
-      paintArena();
-      void loadCup();
     }
   });
 
@@ -3357,31 +2430,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (isRanksVisible() && board === 'guilds') {
       loadSquads();
     }
-    // The Cup ladder and your place in it read the same registry: bind a channel
-    // anywhere and the Arena's podium, squad row and roster all move with it. The
-    // players board reads that same roster, so its cache goes too — otherwise the
-    // two boards would quote different TIQ for the same channel.
-    rosters.clear();
-    playerRows = null;
-    playerRowsFor = null;
-    myRosterKey = null;
-    if (isArenaVisible()) void loadCup();
   });
 
-  /* A pass bought from the Arena pill repaints the same board it was bought from: the local
+  /* A pass bought from the VIP store repaints the same board it was bought from: the local
      seat's gold crown appears in the roster sheet and the players ladder without a reload. */
   onVipChange(() => {
-    if (isArenaVisible()) {
-      rosters.clear();
-      playerRows = null;
-      playerRowsFor = null;
-      myRosterKey = null;
-      paintArena();
-      void loadCup();
-    } else if (isRanksVisible() && board === 'guilds') {
-      rosters.clear();
-      playerRows = null;
-      playerRowsFor = null;
+    if (isRanksVisible() && board === 'guilds') {
       void loadSquads();
     } else if (isRanksVisible() && board === 'minds' && mindsField.length) {
       paintMinds(mindsField);
@@ -3390,12 +2444,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   return {
     setRoute(id: string) {
-      // Legacy "compete" route lands on Arena (its old default feed).
-      if (id === 'compete') id = 'arena';
-      if (id === 'arena') {
-        paintArena();
-        void loadCup();
-      } else if (id === 'ranks') {
+      if (id === 'ranks') {
         paintRanks();
         startTick();
         refreshLadderMedals();

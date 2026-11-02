@@ -23,6 +23,7 @@ import { nameOf } from './countries';
 import { fetchNationBoard, type NationFeed, type NationRow } from './nations';
 import { fetchMindLadder, type MindFeed, type MindRowData } from './minds';
 import { myTiq } from './matchmaking';
+import { formatCountdown, getGrandCup, paidPlaces, type GrandCup } from './data';
 import { arena } from './arenaState';
 import { onChange, profile, theme } from './storage';
 import { impact } from './telegram';
@@ -42,6 +43,8 @@ export interface HomeApi {
   start(setup: RaceSetup): void;
   /** The Play Dock's right zone: launch whatever mode the dock is showing, in one tap. */
   launch(): void;
+  /** The Channel War seat drawer's one door: the arena queue. */
+  queue(mode?: 'pvp' | 'arena'): void;
 }
 
 /** Persian figures for the countdown: Latin digits beside Persian copy read as an error. */
@@ -722,17 +725,86 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     if (!document.hidden && home && !home.hidden) void loadMinds();
   });
 
-  /* ---------- Channel War: the hero slide's one door ----------
-     The CTA hands the player to the Arena's own channel leaderboard and
-     registration flow — the very #stars-cta that opens the "Play for your
-     squad?" seat drawer, or jumps straight to the queue when this device
-     already holds a seat. One registration path, one source of seat truth;
-     Home never duplicates it.
+  /* ---------- Channel War: Home's hero slide is the one door ----------
+     The Arena is a progression road now, so the tournament's only entry lives
+     here. The CTA opens the same seat drawer the cup used to own and hands a
+     locked seat straight to the arena queue; the Arena screen never links back
+     to the channel bracket, a squad selector or a tournament ladder. */
 
-     The Arena hydrates its cup asynchronously and that key is a no-op until
-     the cup lands, so the hand-off knocks until it answers: it stops the
-     moment the drawer opens, the moment a locked seat takes the player out of
-     the Arena, and gives up after ~3s rather than knocking forever. */
+  const CHANNEL_SEAT_KEY = 'detour.arena.seat.v1';
+
+  const channelSeatFor = (cupId: string): boolean => {
+    try {
+      const raw = window.localStorage.getItem(CHANNEL_SEAT_KEY);
+      if (!raw) return false;
+      const seat = JSON.parse(raw) as { cup?: unknown } | null;
+      return seat?.cup === cupId;
+    } catch {
+      return false;
+    }
+  };
+
+  const seatChannelWar = (cupId: string): void => {
+    try {
+      window.localStorage.setItem(CHANNEL_SEAT_KEY, JSON.stringify({ cup: cupId, at: Date.now() }));
+    } catch {
+      /* the queue still opens */
+    }
+  };
+
+  let channelCup: GrandCup | null = null;
+  let channelCupRequest: Promise<void> | null = null;
+
+  const paintChannelSheet = (): void => {
+    if (!channelCup) return;
+    setSheetText('stars-sheet-desc', `${channelCup.name} · ${channelCup.specs.join(' · ')} · Top ${paidPlaces(channelCup)} Paid`);
+    setSheetText('stars-sheet-entry', channelCup.entry);
+    setSheetText('stars-sheet-seat', `${channelCup.players} / ${channelCup.maxPlayers}`);
+    setSheetText('stars-sheet-start', formatCountdown(channelCup.startsAt));
+  };
+
+  const loadChannelCup = (): Promise<void> => {
+    if (channelCup) return Promise.resolve();
+    if (!channelCupRequest) {
+      channelCupRequest = getGrandCup()
+        .then((cup) => {
+          channelCup = cup;
+          paintChannelSheet();
+        })
+        .catch(() => { /* the markup keeps its authored copy */ })
+        .finally(() => { channelCupRequest = null; });
+    }
+    return channelCupRequest;
+  };
+
+  function setSheetText(id: string, text: string): void {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  document.getElementById('home-tournament-cta')?.addEventListener('click', () => {
+    impact('medium');
+    poke();
+    if (channelCup && channelSeatFor(channelCup.id)) {
+      api.queue('arena');
+      return;
+    }
+    void loadChannelCup();
+    paintChannelSheet();
+    const sheet = document.getElementById('sheet-stars');
+    if (sheet) api.sheets.open(sheet);
+    else api.queue('arena');
+  });
+
+  document.getElementById('stars-sheet-yes')?.addEventListener('click', () => {
+    impact('medium');
+    if (channelCup) seatChannelWar(channelCup.id);
+    api.sheets.close();
+    api.queue('arena');
+  });
+
+  /* Warm the drawer's numbers in the background so the first tap is already live. */
+  void loadChannelCup();
 
   /* The hero's Star is the authentic Telegram Stars PNG, bundled by Vite (never a
      hotlinked URL) and mounted once; the glow, dish and levitation are pure CSS. */
@@ -749,33 +821,10 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     openEnlistSquad();
   });
 
-  document.getElementById('home-tournament-cta')?.addEventListener('click', () => {
-    impact('medium');
-    poke();
-    try {
-      api.router.go('arena');
-    } catch {
-      /* router unavailable */
-    }
-    const key = document.getElementById('stars-cta');
-    let tries = 0;
-    let landed = false;
-    const handOver = (): void => {
-      const arena = document.getElementById('s-arena');
-      const sheet = document.getElementById('sheet-stars');
-      const shown = !!arena && !arena.hidden;
-      if (shown) landed = true;
-      if ((sheet && !sheet.hidden) || (landed && !shown) || tries++ > 24) return;
-      if (shown) key?.click();
-      window.setTimeout(handOver, 125);
-    };
-    window.setTimeout(handOver, 125);
-  });
-
-  /* The leader ticker reads the same ranking feed the Arena's channel ladder
-     ranks, so Home and the cup can never disagree about who leads. With no seeded
-     field the board starts empty, and the static markup's neutral line stands
-     until a real squad has banked a real score. */
+  /* The leader ticker reads the same ranking feed Channel War ranks, so the hero
+     slide's champion and the tournament can never disagree about who leads. With
+     no seeded field the board starts empty, and the static markup's neutral line
+     stands until a real squad has banked a real score. */
   const leaderHandle = document.getElementById('tour-leader-handle');
   /* The placeholder is a translated sentence, so it is painted here (and on every
      language switch) rather than left in the markup for a `data-i18n` sweep to

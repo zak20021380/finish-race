@@ -12,10 +12,10 @@
  *    surfaces can be reviewed outside Telegram. It never persists and never reaches the server.
  *
  * The store itself is global: `#vip-sheet` is a direct child of `<body>`, so the same dialog opens
- * over the lobby, the Arena or the settled result card. Its three touchpoints (the lobby header
- * pill, the Arena prestige pill and the post-match gate) all call `openVipSheet()`; the sheet owns
- * the focus trap, the inert background and the Stars checkout, and the caller may hand it an
- * `onUnlocked` callback that runs once the pass is live.
+ * over the lobby, Home or the settled result card. Its touchpoints (the lobby header pill, Home's
+ * VIP pill and the post-match gate) all call `openVipSheet()`; the Arena road carries no VIP pill,
+ * so that mount is optional. The sheet owns the focus trap, the inert background and the Stars
+ * checkout, and the caller may hand it an `onUnlocked` callback that runs once the pass is live.
  */
 import { workerUrl } from './adminApi';
 import { lang, onLang, t } from './settings';
@@ -383,9 +383,9 @@ interface StoreDom {
   homePill: HTMLButtonElement;
   homePillT: HTMLElement;
   homePillD: HTMLElement;
-  arenaPill: HTMLButtonElement;
-  arenaPillT: HTMLElement;
-  arenaPillBadge: HTMLElement;
+  arenaPill: HTMLButtonElement | null;
+  arenaPillT: HTMLElement | null;
+  arenaPillBadge: HTMLElement | null;
 }
 
 let dom: StoreDom | null = null;
@@ -422,10 +422,12 @@ function paintEntryPoints(): void {
     days > 0 ? t('vipPillAriaActive').replace('{days}', digits(days)) : t(active ? 'vipPillAriaOn' : 'vipPillAriaOffer'),
   );
 
-  dom.arenaPill.classList.toggle('is-active', active);
-  dom.arenaPillT.textContent = days > 0 ? t('vipArenaPillDays').replace('{days}', digits(days)) : t('vipArenaPill');
-  dom.arenaPillBadge.textContent = `${digits(4)}/${digits(4)}`;
-  dom.arenaPill.setAttribute('aria-label', t('vipArenaAria'));
+  if (dom.arenaPill && dom.arenaPillT && dom.arenaPillBadge) {
+    dom.arenaPill.classList.toggle('is-active', active);
+    dom.arenaPillT.textContent = days > 0 ? t('vipArenaPillDays').replace('{days}', digits(days)) : t('vipArenaPill');
+    dom.arenaPillBadge.textContent = `${digits(4)}/${digits(4)}`;
+    dom.arenaPill.setAttribute('aria-label', t('vipArenaAria'));
+  }
 }
 
 function paintPlanSelection(): void {
@@ -691,7 +693,7 @@ export function initVipStore(): void {
   if (
     !sheet || !card || !close || !kicker || !title || !sub || !plans || !feats
     || !active || !activeT || !activeD || !status || !cta || !ctaT || !scrim
-    || !homePill || !homePillT || !homePillD || !arenaPill || !arenaPillT || !arenaPillBadge
+    || !homePill || !homePillT || !homePillD
   ) return;
 
   dom = {
@@ -708,7 +710,7 @@ export function initVipStore(): void {
     impact('light');
     openVipSheet({ reason: 'sell' });
   });
-  arenaPill.addEventListener('click', () => {
+  arenaPill?.addEventListener('click', () => {
     impact('light');
     openVipSheet({ reason: 'sell' });
   });
