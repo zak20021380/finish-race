@@ -728,6 +728,58 @@ async function pushConfig(patch: ServerConfig): Promise<ConfigPush> {
     : { state: 'error' };
 }
 
+/* ---------- the mandatory channel gate ---------- */
+
+/** The gate's durable row, as `GET/POST /api/admin/force-join` frames it. */
+export interface ForceJoinConfig {
+  forceJoinEnabled: boolean;
+  targetChannel: string;
+  /** Derived by the Worker: the public `t.me` link for `targetChannel`. */
+  channelUrl?: string;
+}
+
+function readForceJoinConfig(raw: unknown): ForceJoinConfig | null {
+  const row = raw as { forceJoinEnabled?: unknown; targetChannel?: unknown; channelUrl?: unknown } | null;
+  if (!row || typeof row.forceJoinEnabled !== 'boolean' || typeof row.targetChannel !== 'string') return null;
+  return {
+    forceJoinEnabled: row.forceJoinEnabled,
+    targetChannel: row.targetChannel,
+    channelUrl: typeof row.channelUrl === 'string' ? row.channelUrl : '',
+  };
+}
+
+/** The live row; null when nothing answered, so the card keeps what it has. */
+async function fetchForceJoin(): Promise<ForceJoinConfig | null> {
+  const res = await adminFetch('/api/admin/force-join', { cache: 'no-store' });
+  if (!res || !res.ok) return null;
+  const data = await parseJson<{ ok?: unknown; config?: unknown }>(res);
+  return data?.ok === true ? readForceJoinConfig(data.config) : null;
+}
+
+type ForceJoinPush =
+  | { state: 'ok'; config: ForceJoinConfig }
+  | { state: 'denied'; detail: string }
+  | { state: 'error'; detail: string };
+
+/** Commit the switch and the channel. Only a SuperAdmin may write; the room says so itself. */
+async function pushForceJoin(config: ForceJoinConfig): Promise<ForceJoinPush> {
+  const res = await postJson('/api/admin/force-join', {
+    forceJoinEnabled: config.forceJoinEnabled,
+    targetChannel: config.targetChannel,
+  });
+  if (!res) return { state: 'error', detail: 'The Worker did not answer.' };
+  if (res.status === 401 || res.status === 403) {
+    return { state: 'denied', detail: await reasonOfResponse(res, 'POST /api/admin/force-join') };
+  }
+  if (!res.ok) {
+    return { state: 'error', detail: await reasonOfResponse(res, 'POST /api/admin/force-join') };
+  }
+  const data = await parseJson<{ ok?: unknown; config?: unknown }>(res);
+  const next = data?.ok === true ? readForceJoinConfig(data.config) : null;
+  if (!next) return { state: 'error', detail: 'The Worker sent no gate configuration.' };
+  return { state: 'ok', config: next };
+}
+
 /** The Arena tab's answer: the board as the room now holds it, or the refusal code. */
 interface ArenaReply {
   ok?: boolean;
@@ -1678,6 +1730,14 @@ export function createAdmin(api: AdminApi): Admin {
   const vipRecentEmpty = $<HTMLElement>('vip-recent-empty');
   const vipRecentMeta = $<HTMLElement>('vip-recent-meta');
   const vipPlanRows = [...(stage?.querySelectorAll<HTMLElement>('[data-vip-plan]') ?? [])];
+  /* the mandatory channel gate: the switch, the channel and its live pill */
+  const fjToggle = $<HTMLButtonElement>('fjadm-toggle');
+  const fjChannel = $<HTMLInputElement>('fjadm-channel');
+  const fjPill = $<HTMLElement>('fjadm-pill');
+  const fjPillLabel = fjPill?.querySelector<HTMLElement>('span') ?? null;
+  const fjState = $<HTMLElement>('fjadm-state');
+  const fjNote = $<HTMLElement>('fjadm-note');
+  const fjSave = $<HTMLButtonElement>('fjadm-save');
   const navPill = $<HTMLElement>('admin-nav-pill');
   const inboxBadge = $<HTMLElement>('admin-inbox-badge');
   const inboxList = $<HTMLElement>('adm-inbox-list');
@@ -1868,6 +1928,13 @@ export function createAdmin(api: AdminApi): Admin {
   let vipBusy = false;
   /** The newest read is the only one allowed to paint over a save that landed after it left. */
   let vipSeq = 0;
+
+  /** The mandatory channel gate: the last row the Worker answered, and the edit in flight. */
+  let forceJoin: ForceJoinConfig = { forceJoinEnabled: false, targetChannel: '', channelUrl: '' };
+  let forceJoinLoaded = false;
+  let forceJoinFailed = false;
+  let forceJoinBusy = false;
+  let forceJoinDirty = false;
 
   /** The Access Control view: the registry read, and whether this viewer may change it. */
   let aclRows: AdminRow[] = [];
@@ -3975,6 +4042,149 @@ export function createAdmin(api: AdminApi): Admin {
     }
   }
 
+  /* ---------- the mandatory channel gate ---------- */
+
+  function paintForceJoin(): void {
+    if (fjToggle) {
+      fjToggle.setAttribute('aria-checked', String(forceJoin.forceJoinEnabled));
+      fjToggle.disabled = forceJoinBusy;
+    }
+    /* Never clobber a channel the operator is still typing into. */
+    if (fjChannel && document.activeElement !== fjChannel) fjChannel.value = forceJoin.targetChannel;
+    if (fjPill) {
+      fjPill.dataset.on = String(forceJoin.forceJoinEnabled);
+      if (fjPillLabel) fjPillLabel.textContent = forceJoin.forceJoinEnabled ? 'ACTIVE' : 'DISABLED';
+    }
+    if (fjSave) fjSave.disabled = forceJoinBusy;
+    if (fjNote) {
+      fjNote.textContent = forceJoinBusy
+        ? 'Saving to the Worker…'
+        : forceJoinLoaded
+          ? forceJoin.forceJoinEnabled
+            ? 'Live · a player outside the channel meets the gate.'
+            : 'Off · the arena is open to everyone.'
+          : forceJoinFailed
+            ? 'The Worker did not answer — the gate state is unknown.'
+            : 'Reading the Worker…';
+    }
+  }
+
+  /** Read the Worker's row. A failed read leaves the last answered state on screen. */
+  async function refreshForceJoin(): Promise<void> {
+    if (forceJoinBusy || forceJoinDirty) return;
+    const next = await fetchForceJoin();
+    /* A draft typed while the read was in flight outranks its answer. */
+    if (forceJoinBusy || forceJoinDirty) return;
+    if (!next) {
+      forceJoinFailed = true;
+      if (fjState) {
+        fjState.textContent = 'Unavailable';
+        fjState.dataset.tone = 'off';
+      }
+      paintForceJoin();
+      return;
+    }
+    forceJoin = next;
+    forceJoinLoaded = true;
+    forceJoinFailed = false;
+    if (fjState) {
+      fjState.textContent = 'Synced · live';
+      fjState.dataset.tone = 'ok';
+    }
+    paintForceJoin();
+  }
+
+  /** Commit the draft. Only a SuperAdmin may write; the room answers the refusal itself. */
+  async function saveForceJoin(): Promise<void> {
+    if (forceJoinBusy) return;
+    const channel = (fjChannel?.value ?? forceJoin.targetChannel).trim();
+    if (!channel) {
+      notify('error');
+      api.note('Enter the target channel before saving the gate.', true, 2800);
+      fjChannel?.focus({ preventScroll: true });
+      return;
+    }
+
+    forceJoinBusy = true;
+    forceJoinDirty = true;
+    if (fjState) {
+      fjState.textContent = 'Saving…';
+      fjState.dataset.tone = '';
+    }
+    paintForceJoin();
+
+    const result = await pushForceJoin({ ...forceJoin, targetChannel: channel });
+    forceJoinBusy = false;
+
+    if (result.state === 'denied') {
+      notify('error');
+      api.note('SuperAdmin access required to change the channel gate.', true, 2800);
+      if (fjState) {
+        fjState.textContent = 'Denied';
+        fjState.dataset.tone = 'warn';
+      }
+      paintForceJoin();
+      return;
+    }
+    if (result.state === 'error') {
+      notify('error');
+      api.note(`The channel gate was not saved — ${result.detail}`, true, 3400);
+      if (fjState) {
+        fjState.textContent = 'Save failed';
+        fjState.dataset.tone = 'warn';
+      }
+      paintForceJoin();
+      return;
+    }
+
+    forceJoin = result.config;
+    forceJoinLoaded = true;
+    forceJoinFailed = false;
+    forceJoinDirty = false;
+    if (fjChannel) fjChannel.value = result.config.targetChannel;
+    if (fjState) {
+      fjState.textContent = 'Saved · live';
+      fjState.dataset.tone = 'ok';
+    }
+    paintForceJoin();
+    notify(result.config.forceJoinEnabled ? 'warning' : 'success');
+    api.note(
+      result.config.forceJoinEnabled
+        ? `Channel gate ACTIVE · ${result.config.targetChannel} is now mandatory.`
+        : 'Channel gate disabled · the arena is open.',
+      false,
+      3000,
+    );
+  }
+
+  fjToggle?.addEventListener('click', () => {
+    if (forceJoinBusy) return;
+    forceJoin = { ...forceJoin, forceJoinEnabled: !forceJoin.forceJoinEnabled };
+    forceJoinDirty = true;
+    impact('light');
+    if (fjState) {
+      fjState.textContent = 'Unsaved';
+      fjState.dataset.tone = 'warn';
+    }
+    paintForceJoin();
+  });
+  fjChannel?.addEventListener('input', () => {
+    if (forceJoinBusy) return;
+    forceJoin = { ...forceJoin, targetChannel: fjChannel.value };
+    forceJoinDirty = true;
+    if (fjState) {
+      fjState.textContent = 'Unsaved';
+      fjState.dataset.tone = 'warn';
+    }
+    paintForceJoin();
+  });
+  fjChannel?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    void saveForceJoin();
+  });
+  fjSave?.addEventListener('click', () => { void saveForceJoin(); });
+
   /* ---------- Access control: the role registry (worker/matchmaker.ts) ---------- */
 
   function paintAcl() {
@@ -5097,6 +5307,7 @@ export function createAdmin(api: AdminApi): Admin {
     startServerPolling();
     void refreshMetrics();                // the Stats tab reads the strict metrics door
     void refreshServer();                 // the Server tab reads `/api/admin/matchmaking`
+    void refreshForceJoin();              // the channel gate's durable row
     /* The stage reopens on whichever tab was last selected; a registry view must not reopen on a
        snapshot that predates the latest enlistment. */
     const lastTab = tabs.find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.atab;
@@ -5267,6 +5478,7 @@ export function createAdmin(api: AdminApi): Admin {
           void refreshAcl();
         }
         void refreshVipAdmin();
+        void refreshForceJoin();
       }
     });
   }

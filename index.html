@@ -4128,6 +4128,42 @@
               </button>
             </div>
 
+            <!-- ---------- the mandatory channel gate: master switch, target channel, live state ---------- -->
+            <section class="adm-block fjadm" data-accent="gold" aria-labelledby="fjadm-title">
+              <div class="adm-block-h">
+                <h3 class="adm-block-t" id="fjadm-title">Mandatory Channel Gate</h3>
+                <span class="adm-block-s" id="fjadm-state" role="status" aria-live="polite">Sync pending</span>
+              </div>
+              <div class="fjadm-card">
+                <div class="fjadm-head">
+                  <span class="fjadm-crest" aria-hidden="true"><svg class="ico"><use href="#i-send" /></svg></span>
+                  <span class="fjadm-copy">
+                    <b class="fjadm-t">Force subscription</b>
+                    <small class="fjadm-s">جوین اجباری · players must join before entering</small>
+                  </span>
+                  <span class="fjadm-pill" id="fjadm-pill" data-on="false">
+                    <i aria-hidden="true"></i><span>DISABLED</span>
+                  </span>
+                </div>
+                <button class="adm-sw fjadm-sw" type="button" role="switch" id="fjadm-toggle"
+                  aria-checked="false" aria-label="Require official channel membership">
+                  <span class="adm-sw-i" aria-hidden="true"><svg class="ico"><use href="#i-lock" /></svg></span>
+                  <span class="adm-sw-t">Require channel membership</span>
+                  <span class="adm-knob" aria-hidden="true"><i></i></span>
+                </button>
+                <label class="fjadm-fld">
+                  <span class="fjadm-k">Target channel</span>
+                  <input id="fjadm-channel" class="adm-input" type="text" inputmode="text" autocomplete="off"
+                    spellcheck="false" maxlength="80" placeholder="@YourChannel"
+                    aria-label="Target Telegram channel" />
+                </label>
+                <div class="fjadm-foot">
+                  <span class="fjadm-note" id="fjadm-note">Off · the arena is open to everyone.</span>
+                  <button class="adm-btn adm-btn-primary fjadm-save" type="button" id="fjadm-save">Save</button>
+                </div>
+              </div>
+            </section>
+
             <p class="adm-sec-h">Broadcast<span class="adm-bc-live" id="bc-live" data-on="false">Nothing dispatched</span></p>
             <div class="adm-bc">
               <label class="adm-field">
@@ -5858,29 +5894,34 @@
       </section>
     </div>
 
-    <!-- forced-join gate: shown only when the Worker verified the player's Telegram identity
-         and said the mandatory channel membership is missing. It covers the app until the
-         gate re-check passes; an unavailable check fails open so the arena never locks out. -->
-    <section class="join-gate" id="join-gate" hidden role="dialog" aria-modal="true"
-      aria-labelledby="join-gate-title" aria-describedby="join-gate-body">
-      <div class="join-gate-card">
-        <span class="join-gate-mark" aria-hidden="true"><svg class="ico"><use href="#i-shield" /></svg></span>
-        <p class="join-gate-kicker">One step before the arena</p>
-        <h2 class="join-gate-title" id="join-gate-title">Join the Tactix channel</h2>
-        <p class="join-gate-body" id="join-gate-body">Channel membership unlocks the arena and
-          verifies your invite rewards instantly.</p>
-        <p class="join-gate-reward" id="join-gate-reward">
-          <svg class="ico" aria-hidden="true"><use href="#i-gift" /></svg>
-          <span>Join through a friend’s link and you both get <b>500 Coins</b>.</span>
-        </p>
-        <button class="btn btn-primary join-gate-join" type="button" id="join-gate-join">Join Channel</button>
-        <button class="btn btn-ghost join-gate-verify" type="button" id="join-gate-verify">
-          <span class="join-gate-verify-t">I’ve joined — Verify</span>
+    <!-- mandatory channel gate: raised only when the Worker's force-join row is armed and this
+         signed Telegram session is not yet a member. It covers the app until a re-check passes;
+         an unanswered check fails open, so a backend fault never locks the arena out. -->
+    <section class="fj-gate" id="force-join-modal" hidden role="dialog" aria-modal="true"
+      aria-labelledby="force-join-title" aria-describedby="force-join-body">
+      <div class="fj-card">
+        <span class="fj-crest" aria-hidden="true">
+          <svg class="ico fj-crest-plane"><use href="#i-send" /></svg>
+          <span class="fj-crest-lock"><svg class="ico"><use href="#i-lock" /></svg></span>
+        </span>
+        <p class="fj-kicker" id="force-join-kicker">Tactix · Official Channel</p>
+        <h2 class="fj-title" id="force-join-title">Official Channel Required</h2>
+        <p class="fj-body" id="force-join-body">To keep the game fair and receive live rewards &amp;
+          updates, join our official channel to continue.</p>
+        <span class="fj-hair" aria-hidden="true"></span>
+        <button class="fj-cta" type="button" id="force-join-open">
+          <svg class="ico" aria-hidden="true"><use href="#i-send" /></svg>
+          <span class="fj-cta-t" id="force-join-open-t">Join Channel</span>
         </button>
-        <p class="join-gate-status" id="join-gate-status" role="status" aria-live="polite"></p>
+        <button class="fj-verify" type="button" id="force-join-verify">
+          <span class="fj-spin" aria-hidden="true"></span>
+          <svg class="ico fj-verify-ico" aria-hidden="true"><use href="#i-check" /></svg>
+          <span class="fj-verify-t" id="force-join-verify-t">I Joined · Verify</span>
+        </button>
+        <p class="fj-status" id="force-join-status" role="status" aria-live="polite"></p>
       </div>
     </section>
-    <div class="join-gate-toast" id="join-gate-toast" hidden role="status" aria-live="polite"></div>
+    <div class="fj-toast" id="force-join-toast" hidden role="status" aria-live="polite"></div>
 
     <!-- The duel countdown: 3 … 2 … 1 … FIGHT. Raised the instant both seats of a 1v1 are held,
          so a room that filled itself also starts itself. Every word on it is painted from

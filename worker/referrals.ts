@@ -409,10 +409,15 @@ export async function touchReferralUser(env: Env, userId: string): Promise<strin
 /**
  * Verify channel membership for the forced-join gate. `true`/`false` are Telegram's answer;
  * `null` means the check itself is unavailable (no token, no channel, transport error) and the
- * caller must not pretend either way.
+ * caller must not pretend either way. `targetChannel` is the operator's configured gate channel;
+ * unset, the deployment's own `REQUIRED_CHANNEL` is used.
  */
-export async function channelMembership(env: Env, userId: string): Promise<boolean | null> {
-  const channel = (env.REQUIRED_CHANNEL ?? `@${CHANNEL_HANDLE}`).trim();
+export async function channelMembership(
+  env: Env,
+  userId: string,
+  targetChannel?: string,
+): Promise<boolean | null> {
+  const channel = (targetChannel ?? env.REQUIRED_CHANNEL ?? `@${CHANNEL_HANDLE}`).trim();
   if (!channel || !TG_ID.test(userId)) return null;
   const token = (env.TELEGRAM_BOT_TOKEN ?? '').trim();
   /* Local work without a bot token cannot call Telegram. The marked dev door treats the member

@@ -54,6 +54,7 @@
 import { MatchmakerDO } from './matchmaker';
 import { BadgeMintDO } from './badges';
 import { ReferralLedgerDO, channelMembership, referralContact, referralLookup, referralMe, referralSettle } from './referrals';
+import { readForceJoin } from './forceJoin';
 import {
   identifyAdminRequest, identifyMetricsAdmin, identifyPlayerRequest, METRICS_HEADER,
 } from './auth';
@@ -83,6 +84,13 @@ const BADGE_CORS: Record<string, string> = {
 const badgeJson = (body: unknown, status = 200): Response => json(body, status, BADGE_CORS);
 
 function withBadgeCors(response: Response): Response {
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(BADGE_CORS)) headers.set(key, value);
+  return new Response(response.body, { status: response.status, headers });
+}
+
+/** The player gate reading is header-authenticated like the badge surface, so the same policy fits. */
+function withForceJoinCors(response: Response): Response {
   const headers = new Headers(response.headers);
   for (const [key, value] of Object.entries(BADGE_CORS)) headers.set(key, value);
   return new Response(response.body, { status: response.status, headers });
@@ -245,7 +253,7 @@ async function referrals(request: Request, env: Env, url: URL): Promise<Response
       return referralJson({ ...state, link: referralAppLink(state.code) });
     }
 
-    const joined = await channelMembership(env, auth.tgId);
+    const joined = await channelMembership(env, auth.tgId, (await readForceJoin(env)).targetChannel);
     if (joined !== true) {
       const unavailable = joined === null;
       return referralJson({
@@ -310,6 +318,16 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (url.pathname === '/ws/matchmake') {
     const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
     return lobby.fetch(request);
+  }
+
+  /* The force-join gate's own reading. The room verifies the signed initData (or the marked dev
+     door) and answers with the configured channel plus this player's membership. A check that
+     cannot be answered fails open inside the room, never as an error page. */
+  if (url.pathname === '/api/user/check-subscription') {
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: BADGE_CORS });
+    if (!env.MATCHMAKER) return json({ ok: false, error: 'matchmaker_unbound' }, 503, BADGE_CORS);
+    const lobby = env.MATCHMAKER.get(env.MATCHMAKER.idFromName(LOBBY));
+    return withForceJoinCors(await lobby.fetch(request));
   }
 
   /* The one public announcement feed: what a client reads to raise an urgent popup. */

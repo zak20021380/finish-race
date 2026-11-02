@@ -52,11 +52,15 @@ import {
   type BotTier, type LobbyFormat, type Room, type RoomDriver, type RoomEvent,
 } from '../src/room';
 import {
-  authenticate, authRequestFrom, identifyAdminRequest, identifyPlayerRequest, isLocalhost, isMetricsMark,
+  authenticate, authRequestFrom, identifyAdminRequest, identifyPlayerRequest, initDataOf, isLocalhost, isMetricsMark,
   isSuperAdmin, METRICS_HEADER, verifiedTelegramUserId,
   type AdminIdentity, type AdminRole, type Identity, type MindTier, type PlayerAuth,
 } from './auth';
 import { json, reasonOf } from './http';
+import {
+  checkChannelMembership, defaultForceJoinChannel, forceJoinChannelUrl, forceJoinView,
+  normalizeForceJoinChannel, readForceJoinConfig, type ForceJoinConfig,
+} from './forceJoin';
 import {
   MATCH_MODES, durationSeconds, matchModeFilterOf, matchModeOf, playerCountOf,
   type MatchMode, type MatchModeFilter, type PlayerCount,
@@ -293,6 +297,8 @@ const ROOM_STATE_KEY = 'room_state';
 /** The admin's live storefront, and the Stars receipts the revenue tab audits. */
 const VIP_CONFIG_KEY = 'vip-config';
 const VIP_SALES_KEY = 'vip-sales';
+/** The mandatory channel gate's durable row: the switch and the channel it points at. */
+const FORCE_JOIN_KEY = 'force-join.v1';
 /** How many receipts the ledger keeps; the audit table reads the newest fifteen. */
 const VIP_RECENT_MAX = 60;
 const VIP_RECENT_REPORT = 15;
@@ -1830,6 +1836,8 @@ export class MatchmakerDO {
   private gameMetrics: GameMetrics = zeroGameMetrics();
   /** The admin's live plan sheet: prices and which tiers the storefront offers. */
   private vipConfig: VipPlanConfig = readVipPlanConfig(null);
+  /** The mandatory channel gate: off until an operator arms it. */
+  private forceJoin: ForceJoinConfig;
   /** Lifetime VIP sales, folded into the Command Center's revenue tab. */
   private vipSales: VipSalesLedger = emptyVipSales();
   /** The current season's banked nation points, credited only by settled wins. */
@@ -1843,6 +1851,8 @@ export class MatchmakerDO {
   private metricsDirty = false;
 
   constructor(private state: DurableObjectState, private env: Env) {
+    /* Safe before the store answers: a disabled gate on the deployment's required channel. */
+    this.forceJoin = { forceJoinEnabled: false, targetChannel: defaultForceJoinChannel(env) };
     /* The registry rides the object's own storage, so it survives eviction. A harness that drives
        the object without a storage backend simply starts empty. */
     const storage = this.state?.storage;
@@ -1891,6 +1901,10 @@ export class MatchmakerDO {
           this.growth = readGrowthSeries(await storage.get<unknown>(GROWTH_KEY));
           this.vipConfig = readVipPlanConfig(await storage.get<unknown>(VIP_CONFIG_KEY));
           this.vipSales = readVipSales(await storage.get<unknown>(VIP_SALES_KEY));
+          this.forceJoin = readForceJoinConfig(
+            await storage.get<unknown>(FORCE_JOIN_KEY),
+            defaultForceJoinChannel(this.env),
+          );
           /* The friends lobbies are durable: an eviction between "host creates a room" and "guest
              taps the link" must not turn a valid code into "no room with this code". */
           this.restoreLobbies(await storage.get<unknown>(ROOM_STATE_KEY));
@@ -1945,6 +1959,16 @@ export class MatchmakerDO {
        The worker entry never forwards it, so the config has no outside door. */
     if (url.pathname === '/internal/vip/config' && request.method === 'GET') {
       return json({ ok: true, config: this.vipConfig }, 200, { 'cache-control': 'no-store' });
+    }
+    /* The edge reads the gate's durable row before it settles a referral. Like the VIP config,
+       the public router never forwards `/internal/*`, so there is no outside door. */
+    if (url.pathname === '/internal/force-join' && request.method === 'GET') {
+      return json({ ok: true, config: this.forceJoin }, 200, { 'cache-control': 'no-store' });
+    }
+    /* The player's own gate reading: the signed initData (or the marked dev door) names the
+       caller; a query-string id may never speak for somebody else. */
+    if (url.pathname === '/api/user/check-subscription') {
+      return this.checkSubscription(request, url);
     }
     /* Match and heartbeat telemetry from a player's own device. It is the only way a bot race the
        server never saw can reach the growth rings; the player door is proven inside. */
@@ -3032,6 +3056,20 @@ export class MatchmakerDO {
       return json({ error: 'method_not_allowed' }, 405);
     }
 
+    /* The mandatory channel gate. A Moderator may read the live row; only a SuperAdmin may arm
+       it, re-point it, or turn it off. */
+    if (url.pathname === '/api/admin/force-join') {
+      if (request.method === 'GET') {
+        return json({ ok: true, config: forceJoinView(this.forceJoin) }, 200, { 'cache-control': 'no-store' });
+      }
+      if (request.method === 'POST') {
+        if (!this.superDoor(me)) return json({ error: 'forbidden', hint: 'superadmin required' }, 403);
+        const result = await this.saveForceJoin(await readBody(request));
+        return json(result, result.ok ? 200 : 400);
+      }
+      return json({ error: 'method_not_allowed' }, 405);
+    }
+
     /* Everything below commands the server: SuperAdmin only. */
     if (url.pathname === '/admin/config') {
       if (!this.superDoor(me)) return json({ error: 'forbidden', hint: 'superadmin required' }, 403);
@@ -3279,6 +3317,72 @@ export class MatchmakerDO {
         /* a store that refuses the write: the history stays in memory */
       }
     });
+  }
+
+  /* ---------- the mandatory channel gate ---------- */
+
+  /**
+   * The player's own reading. A signed session may only ask about itself; `userId` is accepted as
+   * a convenience for the dev door, where there is no signature to name the caller. No identity at
+   * all fails open: a browser outside the Mini App has no gate to meet.
+   */
+  private async checkSubscription(request: Request, url: URL): Promise<Response> {
+    if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+    const base = {
+      ok: true,
+      forceJoinEnabled: this.forceJoin.forceJoinEnabled,
+      targetChannel: this.forceJoin.targetChannel,
+      channelUrl: forceJoinChannelUrl(this.forceJoin.targetChannel),
+    };
+    if (!this.forceJoin.forceJoinEnabled) {
+      return json({ ...base, isMember: true }, 200, { 'cache-control': 'no-store' });
+    }
+
+    const init = initDataOf(request);
+    const signedId = init ? await verifiedTelegramUserId(init, this.env) : '';
+    const asked = (url.searchParams.get('userId') ?? '').replace(/[^0-9]/g, '').slice(0, 20);
+    if (signedId && asked && asked !== signedId) {
+      return json({ ok: false, error: 'user_mismatch', hint: 'userId does not match the signed session' }, 403);
+    }
+    const dev = this.env.DEV_AUTH === 'true' || isLocalhost(url.hostname);
+    const userId = signedId || (dev ? asked : '');
+
+    if (!userId) {
+      /* Nothing to check against: fail open rather than pretend the player is outside. */
+      return json({ ...base, isMember: true, unavailable: true }, 200, { 'cache-control': 'no-store' });
+    }
+    const check = await checkChannelMembership(this.env, userId, this.forceJoin.targetChannel);
+    return json({
+      ...base,
+      isMember: check.member,
+      ...(check.unavailable ? { unavailable: true } : {}),
+    }, 200, { 'cache-control': 'no-store' });
+  }
+
+  /**
+   * One config write. The channel is normalized to the spelling `getChatMember` accepts, and a
+   * gate cannot be armed while pointing at nothing. The row is awaited before the answer leaves,
+   * so the next read (and the gate itself) sees exactly what the operator saved.
+   */
+  private async saveForceJoin(
+    body: Record<string, unknown>,
+  ): Promise<{ ok: boolean; error?: string; config?: ReturnType<typeof forceJoinView> }> {
+    const next: ForceJoinConfig = {
+      forceJoinEnabled: typeof body.forceJoinEnabled === 'boolean'
+        ? body.forceJoinEnabled
+        : this.forceJoin.forceJoinEnabled,
+      targetChannel: this.forceJoin.targetChannel,
+    };
+    if (body.targetChannel !== undefined) {
+      const channel = normalizeForceJoinChannel(body.targetChannel);
+      if (!channel) return { ok: false, error: 'invalid_channel' };
+      next.targetChannel = channel.targetChannel;
+    }
+    if (next.forceJoinEnabled && !next.targetChannel) return { ok: false, error: 'channel_required' };
+    this.forceJoin = next;
+    const storage = this.state?.storage;
+    if (storage) await storage.put(FORCE_JOIN_KEY, this.forceJoin);
+    return { ok: true, config: forceJoinView(this.forceJoin) };
   }
 
   /**
