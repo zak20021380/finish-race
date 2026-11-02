@@ -18,10 +18,10 @@ import {
   REFERRAL_REWARD, setBadge, setDisplayName, setDob, setFrame, setPieceColor, theme, validDob,
 } from './storage';
 import {
-  BADGES, badgeCrestHtml, badgeDelta, badgeEdition, badgeProgress, badgeProgressText, badgeStatus,
-  badgeText, editionSerialLabel, editionSpeech, editionSyncState, equippedBadge, hasEditionClaim,
-  isBadgeUnlocked, onEditionChange, refreshBadgeEditions, unlockedCount, type BadgeDef,
-  type WornEdition,
+  BADGES, badgeCrestHtml, badgeDelta, badgeEdition, badgeHolders, badgeProgress, badgeProgressText,
+  badgeStatus, badgeText, claimMintedAt, editionSerialLabel, editionSpeech, editionSyncState,
+  equippedBadge, hasEditionClaim, isBadgeUnlocked, onEditionChange, refreshBadgeEditions, unlockedCount,
+  type BadgeDef, type EditionHolder, type WornEdition,
 } from './badges';
 import { MAX_BALLS, newGame } from './rules';
 import { createPreview, createRenderer, type Preview, type View } from './render';
@@ -77,6 +77,14 @@ export interface RaceSetup { difficulty: Difficulty; sizes: [number, number] }
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const en = (n: number) => n.toLocaleString('en-US');
+
+/** Installed by the menu while it can answer a back step; main.ts unwinds through it. */
+let ownersBackStep: (() => boolean) | null = null;
+
+/** True when the Hall of Owners was open and has been handed back to its collector card. */
+export function ownersBack(): boolean {
+  return ownersBackStep?.() === true;
+}
 /** A chip has ~80px on the narrowest phone: 46,794 subscribers reads as 46.8K. */
 const compact = (n: number): string => {
   if (n >= 999_500) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
@@ -2073,6 +2081,16 @@ export function createMenu(api: MenuApi): Menu {
     if (availCell) {
       availCell.dataset.state = remaining === null ? 'syncing' : remaining <= 0 ? 'closed' : 'open';
     }
+    /* the claimed cell is the door to the registry: it warms to gold only once the ledger
+       has published holders, so the hint never promises a hall that is still syncing */
+    const claimedCell = document.getElementById('badge-supply-claimed-cell');
+    if (claimedCell) {
+      const published = badgeHolders(id)?.length ?? 0;
+      claimedCell.dataset.state = (minted !== null && minted > 0) || published > 0 ? 'live' : 'quiet';
+      const hint = t('badgeOwnersHint');
+      claimedCell.title = hint;
+      claimedCell.setAttribute('aria-label', `${t('badgeClaimed')} — ${hint}`);
+    }
 
     const req = document.getElementById('badge-req');
     req?.setAttribute('data-met', String(prog.met));
@@ -2136,6 +2154,194 @@ export function createMenu(api: MenuApi): Menu {
     if (body) body.scrollTop = 0;
     impact('light');
   }
+
+  /* ---- Hall of Owners: the registry the claimed chip opens ---- */
+
+  const owners = {
+    sheet: api.sheet('badge-owners-modal'),
+    list: $<HTMLUListElement>('badge-owners-list'),
+    empty: $<HTMLElement>('badge-owners-empty'),
+    note: $<HTMLElement>('badge-owners-note'),
+    count: $<HTMLElement>('badge-owners-count'),
+    name: $<HTMLElement>('badge-owners-name'),
+    crest: $<HTMLElement>('badge-owners-empty-crest'),
+    emptyCopy: $<HTMLElement>('badge-owners-empty-copy'),
+    emptyFirst: $<HTMLElement>('badge-owners-first'),
+  };
+  const ownersOpen = (): boolean => owners.sheet?.classList.contains('open') === true;
+
+  /** Two letters off the ledger's own name, in its own script — the ladder monogram would
+   *  flatten a Persian display name to a placeholder. */
+  const holderMonogram = (raw: string): string => {
+    const words = raw.trim().split(/\s+/).filter(Boolean);
+    const source = words.length > 1 ? words.map((w) => w.charAt(0)).join('') : raw.trim().slice(0, 2);
+    return source.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 2) || 'P';
+  };
+
+  /** The mint stamp this device holds, in the player's own calendar; '' when the ledger never said. */
+  function holderDate(iso: string): string {
+    if (!iso) return '';
+    const ms = Date.parse(iso);
+    if (!Number.isFinite(ms)) return '';
+    try {
+      return new Date(ms).toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-US',
+        { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch { return ''; }
+  }
+
+  /** One registry row: monogram, name, and the serial plate the ledger minted for it. */
+  function holderRow(def: BadgeDef, holder: EditionHolder, mine: boolean): HTMLElement {
+    const when = mine ? holderDate(claimMintedAt(def.id)) : '';
+    const serial = t('badgeSerialLabel').replace('#{num}', editionSerialLabel(holder.serial));
+
+    const av = document.createElement('span');
+    av.className = 'bo-av';
+    av.textContent = holderMonogram(holder.name);
+    if (holder.serial === 1) {
+      const pin = document.createElement('span');
+      pin.className = 'bo-pin';
+      pin.title = t('badgeOwnersFounder');
+      pin.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-crown" /></svg>';
+      av.append(pin);
+    }
+
+    const who = document.createElement('span');
+    who.className = 'bo-id';
+    const nm = document.createElement('b');
+    nm.className = 'bo-name';
+    nm.textContent = holder.name;
+    const meta = document.createElement('small');
+    meta.className = 'bo-meta';
+    const handle = mine ? (tgUser()?.username ?? '') : '';
+    meta.textContent = handle ? `@${handle} · ${t('badgeOwnersYou')}`
+      : (mine ? t('badgeOwnersYou') : t('badgeOwnersVerified'));
+    who.append(nm, meta);
+
+    const plate = document.createElement('span');
+    plate.className = 'bo-right';
+    const serialEl = document.createElement('b');
+    serialEl.className = 'bo-serial';
+    /* the "#042" rides in its own isolate: in Persian the bare "#" would otherwise be claimed by
+       the RTL run and print between the word and its digits */
+    const [head, tail] = t('badgeSerialLabel').split('#{num}');
+    serialEl.textContent = head;
+    const token = document.createElement('bdi');
+    token.dir = 'ltr';
+    token.textContent = editionSerialLabel(holder.serial);
+    serialEl.append(token);
+    if (tail) serialEl.append(tail);
+    plate.append(serialEl);
+    /* the ledger stamps a date for this device's own mint and publishes none for anyone else,
+       so a row says when it was claimed only when that is actually known */
+    if (when) {
+      const date = document.createElement('small');
+      date.className = 'bo-date';
+      date.textContent = when;
+      plate.append(date);
+    }
+
+    const li = document.createElement('li');
+    li.className = 'bo-row' + (mine ? ' is-you' : '');
+    li.setAttribute('aria-label', `${holder.name} — ${serial}${when ? ` · ${when}` : ''}`);
+    li.append(av, who, plate);
+    return li;
+  }
+
+  /** Redraw the registry from what the ledger has actually published for the open honor. */
+  function paintOwners(): void {
+    const id = badgeDraft;
+    const def = id ? BADGES.find((b) => b.id === id) : undefined;
+    if (!def || !id || !owners.sheet || !owners.list || !owners.empty || !owners.note) return;
+
+    const holders = badgeHolders(id);
+    const edition = badgeEdition(id);
+
+    if (owners.name) owners.name.textContent = def.name;
+    owners.sheet.dataset.accent = def.accent;
+    if (owners.crest && owners.crest.dataset.badge !== def.id) {
+      owners.crest.dataset.badge = def.id;
+      owners.crest.innerHTML = badgeCrestHtml(def, 'badge-crest');
+    }
+    if (owners.emptyCopy) owners.emptyCopy.textContent = t('badgeOwnersEmpty');
+    if (owners.emptyFirst) owners.emptyFirst.textContent = t('badgeOwnersFirst');
+
+    owners.list.textContent = '';
+    owners.list.hidden = true;
+    owners.empty.hidden = true;
+    owners.note.hidden = true;
+
+    const rows = holders ?? [];
+    if (rows.length > 0) {
+      for (const holder of rows) owners.list.append(holderRow(def, holder, holder.serial === edition.serial));
+      owners.list.hidden = false;
+    } else if (holders === null) {
+      /* the ledger has published no name for this honor: say so rather than
+         presenting an empty hall as if nobody had ever claimed it */
+      owners.note.textContent = t('badgeOwnersSyncing');
+      owners.note.hidden = false;
+    } else {
+      owners.empty.hidden = false;
+    }
+
+    if (owners.count) {
+      owners.count.hidden = holders === null;
+      owners.count.textContent = t('badgeOwnersCount')
+        .replace('{n}', en(rows.length))
+        .replace('{cap}', en(def.cap));
+    }
+  }
+
+  function openOwners(): void {
+    if (!owners.sheet) return;
+    paintOwners();
+    impact('light');
+    api.sheets.open(owners.sheet);
+    /* laid out only after the swap, so this is where the registry starts back at serial one */
+    if (owners.list) owners.list.scrollTop = 0;
+  }
+
+  /* The registry is a child of the collector card, and the sheet manager holds one panel:
+     handing back re-opens the parent rather than unwinding the whole flow to the shelf. */
+  function backToBadge(): void {
+    const sheet = api.sheet('sheet-badge');
+    if (!badgeDraft || !sheet) { api.sheets.close(); return; }
+    impact('light');
+    paintBadgeSheet(badgeDraft);
+    api.sheets.open(sheet);
+  }
+  ownersBackStep = () => {
+    if (!ownersOpen()) return false;
+    backToBadge();
+    return true;
+  };
+
+  document.getElementById('badge-supply-claimed-cell')?.addEventListener('click', () => {
+    if (!badgeDraft) return;
+    if (badgeHolders(badgeDraft) === null) {
+      notify('warning');
+      showToast(t('badgeOwnersSyncing'), 'warning');
+      void refreshBadgeEditions();          // the retry is what turns this toast into a registry
+      return;
+    }
+    openOwners();
+  });
+  document.getElementById('badge-owners-back')?.addEventListener('click', backToBadge);
+  document.getElementById('badge-owners-close')?.addEventListener('click', backToBadge);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !ownersOpen()) return;
+    e.stopPropagation();
+    e.preventDefault();
+    backToBadge();
+  }, true);
+  document.addEventListener('click', (e) => {
+    if (!ownersOpen()) return;
+    const target = e.target as HTMLElement | null;
+    if (!target || !target.closest('#scrim')) return;
+    e.stopPropagation();
+    e.preventDefault();
+    backToBadge();
+  }, true);
 
   const paintIdentity = (): void => {
     paintFaces();
@@ -2295,6 +2501,7 @@ export function createMenu(api: MenuApi): Menu {
     paintHeroExtras(levelInfo());
     paintBadges();
     if (badgeDraft) paintBadgeSheet(badgeDraft);
+    if (ownersOpen()) paintOwners();
     if (squadSheet && !squadSheet.hidden && !squadBoundView.hidden) paintSquadHub();
   });
 
@@ -2704,6 +2911,7 @@ export function createMenu(api: MenuApi): Menu {
     paintSquadPill();
     if (!pfScreen.hidden) paintProfile();
     if (badgeDraft && document.getElementById('sheet-badge')?.classList.contains('open')) paintBadgeSheet(badgeDraft);
+    if (badgeDraft && ownersOpen()) paintOwners();
   };
   onLang(paintLangLive);
   window.addEventListener('detour:lang', paintLangLive);

@@ -369,6 +369,23 @@ function supplyOf(def: BadgeDef): EditionSupply | null {
 
 export const hasEditionClaim = (id: string): boolean => claimOf(id) !== null;
 
+/** When this device's own serial was minted, as the ledger reported it; '' when it never said. */
+export function claimMintedAt(id: string): string {
+  return claimOf(id)?.mintedAt ?? '';
+}
+
+/**
+ * The public hall of fame for one honor, in serial order.
+ *
+ * Null means the ledger has never answered for this badge in this page's life — an empty array
+ * is a different fact: the edition is confirmed unclaimed. Callers must not draw a conclusion
+ * the supply reading did not give them.
+ */
+export function badgeHolders(id: string): EditionHolder[] | null {
+  const holders = liveHolders.get(id);
+  return holders ? [...holders] : null;
+}
+
 /** A live supply payload, folded to the catalogue; null when it held none of our three ids. */
 function readSupply(raw: unknown): Record<string, EditionSupply> | null {
   const badges = raw && typeof raw === 'object' ? (raw as { badges?: unknown }).badges : null;

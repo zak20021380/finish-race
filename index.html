@@ -5386,10 +5386,16 @@
               <b class="bd-supply-num" id="badge-supply-total">—</b>
               <span class="bd-supply-label" data-i18n="badgeTotalSupply">Total supply</span>
             </div>
-            <div class="bd-supply-cell is-claimed">
+            <!-- the claimed count is the door to the registry: a real button, so the ledger's
+                 public hall of fame is one tap away without adding a second control to the card -->
+            <button class="bd-supply-cell is-claimed" type="button" id="badge-supply-claimed-cell"
+              data-state="quiet" aria-haspopup="dialog">
+              <span class="bd-supply-crown" aria-hidden="true">
+                <svg class="ico"><use href="#i-crown" /></svg>
+              </span>
               <b class="bd-supply-num" id="badge-supply-claimed">—</b>
               <span class="bd-supply-label" data-i18n="badgeClaimed">Claimed</span>
-            </div>
+            </button>
             <div class="bd-supply-cell is-available" id="badge-supply-available-cell" data-state="syncing">
               <b class="bd-supply-num" id="badge-supply-available">—</b>
               <span class="bd-supply-label" data-i18n="badgeAvailable">Available</span>
@@ -5423,6 +5429,40 @@
             <span id="badge-cta-label">Play now to claim</span>
           </button>
         </div>
+      </section>
+
+      <!-- Hall of Owners: the ledger's public registry for the honor under inspection.
+           Opened from the claimed chip and handed back to the collector card, so the sheet
+           manager still holds exactly one panel at a time. -->
+      <section class="sheet tall owners-sheet" id="badge-owners-modal" hidden tabindex="-1"
+        role="dialog" aria-modal="true" aria-labelledby="bo-title">
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <header class="bo-head">
+          <button class="bo-back" type="button" id="badge-owners-back" aria-label="Back to badge details">
+            <svg class="ico" aria-hidden="true"><use href="#i-back" /></svg>
+          </button>
+          <span class="bo-head-id">
+            <h2 class="sheet-t bo-title" id="bo-title" data-i18n="badgeOwnersTitle">Hall of Owners</h2>
+            <p class="sheet-p bo-sub" id="bo-sub" data-i18n="badgeOwnersSub">Verified owners registry</p>
+          </span>
+          <button class="bo-x" type="button" id="badge-owners-close" data-autofocus aria-label="Close holders list">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </header>
+
+        <p class="bo-honor"><bdi class="bo-honor-name" id="badge-owners-name">Badge</bdi></p>
+
+        <div class="bo-stage">
+          <ul class="bo-list" id="badge-owners-list" role="list" aria-labelledby="bo-title" data-scroll tabindex="0" hidden></ul>
+          <div class="bo-note" id="badge-owners-note" role="status" hidden></div>
+          <div class="bo-empty" id="badge-owners-empty" hidden>
+            <span class="bo-empty-crest" id="badge-owners-empty-crest" aria-hidden="true"></span>
+            <p class="bo-empty-copy" id="badge-owners-empty-copy">No players have claimed this medallion yet.</p>
+            <p class="bo-empty-first" id="badge-owners-first">Be the first to claim this legacy.</p>
+          </div>
+        </div>
+
+        <footer class="bo-foot"><span class="bo-count" id="badge-owners-count"></span></footer>
       </section>
 
       <!-- all badges: the full honor catalogue as a quiet pick list -->

@@ -10083,6 +10083,7 @@ html.reduced-motion .ml-pulse::after { display: none; }
   gap: 8px;
 }
 .bd-supply-cell {
+  position: relative;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -10480,6 +10481,333 @@ html.reduced-motion .bd-aura { animation: none; }
   .bd-supply-cell { padding: 10px 8px 9px; }
   .bd-supply-num { font-size: 26px; }
   .bd-cta { min-height: 50px; }
+}
+
+/* ---- the claimed cell is a door: glass button, gold only when the ledger has holders ---- */
+button.bd-supply-cell {
+  appearance: none;
+  margin: 0;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast);
+}
+.bd-supply-crown {
+  position: absolute;
+  top: 5px;
+  inset-inline-end: 6px;
+  display: grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+  color: var(--gold-ink);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-fast);
+}
+.bd-supply-crown .ico { width: 11px; height: 11px; }
+.bd-supply-cell.is-claimed[data-state="live"] {
+  background:
+    linear-gradient(180deg, rgba(252, 211, 77, .085), rgba(255, 255, 255, 0) 58%),
+    var(--field);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    inset 0 0 0 1px rgba(245, 158, 11, .3);
+}
+.bd-supply-cell.is-claimed[data-state="live"] .bd-supply-crown { opacity: .92; }
+.bd-supply-cell.is-claimed[data-state="live"]:hover:not(:active) { transform: scale(1.02); }
+.bd-supply-cell.is-claimed:active { transform: scale(.98); }
+.bd-supply-cell.is-claimed:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+/* an unpopulated registry keeps the cell neutral: the crown stays lit only for a real hall */
+.bd-supply-cell.is-claimed[data-state="quiet"] { cursor: default; }
+html.reduced-motion .bd-supply-cell.is-claimed { transition: none; }
+
+/* ---- Hall of Owners: an obsidian registry plate with gold serial stamps ---- */
+.sheet.owners-sheet {
+  max-height: calc(92dvh - env(safe-area-inset-top));
+  gap: 7px;
+  padding: 10px max(14px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  overflow: hidden;
+  --bo-accent: #22D3EE;
+  --bo-metal: #A5F3FC;
+}
+.owners-sheet[data-accent="quantum"] { --bo-accent: #FBBF24; --bo-metal: #FDE68A; }
+.owners-sheet[data-accent="frost"] { --bo-accent: #34D399; --bo-metal: #A7F3D0; }
+
+.bo-head {
+  flex: none;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: start;
+  gap: 6px;
+}
+.bo-head-id { min-width: 0; }
+.bo-back, .bo-x {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  appearance: none;
+  font: inherit;
+  color: var(--ink-soft);
+  background: rgba(9, 14, 24, .55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07), inset 0 1px 0 rgba(255, 255, 255, .06);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--motion-fast), color var(--motion-fast);
+}
+.bo-back:active, .bo-x:active { transform: scale(.94); }
+.bo-back:focus-visible, .bo-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+.bo-back .ico { width: 18px; height: 18px; }
+.bo-x { font-size: 22px; line-height: 1; }
+.bo-title {
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: .02em;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bo-sub {
+  margin: 3px 0 0;
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.bo-honor {
+  flex: none;
+  margin: 0;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--bo-metal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bo-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.bo-list {
+  list-style: none;
+  margin: 0;
+  padding: 1px 1px 0 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 55vh;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(245, 158, 11, .34) transparent;
+}
+/* the app hides chrome everywhere; this registry earns a visible gold thread instead */
+#badge-owners-modal .bo-list::-webkit-scrollbar { display: block; width: 5px; height: 5px; }
+#badge-owners-modal .bo-list::-webkit-scrollbar-track { background: transparent; }
+#badge-owners-modal .bo-list::-webkit-scrollbar-thumb { background: rgba(245, 158, 11, .34); border-radius: 99px; }
+#badge-owners-modal .bo-list::-webkit-scrollbar-thumb:hover { background: rgba(245, 158, 11, .55); }
+
+.bo-row {
+  flex: none;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, 0) 60%),
+    var(--field);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .05),
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+.bo-row.is-you {
+  background:
+    linear-gradient(180deg, rgba(252, 211, 77, .07), rgba(255, 255, 255, 0) 62%),
+    var(--field);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    inset 0 0 0 1px rgba(245, 158, 11, .34);
+}
+.bo-av {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-family: var(--font-stat);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  unicode-bidi: isolate;
+  color: #0B1120;
+  background: linear-gradient(180deg, var(--bo-metal) 0%, var(--bo-accent) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 2px 6px rgba(0, 0, 0, .45);
+}
+.bo-pin {
+  position: absolute;
+  inset-block-end: -3px;
+  inset-inline-end: -3px;
+  width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--gold-ink);
+  background: #0E1526;
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .55);
+}
+.bo-pin .ico { width: 9px; height: 9px; }
+
+.bo-id { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bo-name {
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1.3;
+  color: #E7EDF7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bo-meta {
+  font-size: 10px;
+  line-height: 1.3;
+  color: #7D8DA5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bo-right { min-width: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.bo-serial {
+  max-width: 100%;
+  padding: 3px 7px 4px;
+  border-radius: 8px;
+  font-family: var(--font-stat);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  unicode-bidi: isolate;
+  color: #1A1205;
+  background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 1px 0 rgba(0, 0, 0, .35);
+}
+.bo-date {
+  font-size: 9.5px;
+  line-height: 1.25;
+  color: #8496AE;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bo-note {
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+  padding: 20px 16px;
+  text-align: center;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+.bo-empty {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 14px 14px 18px;
+  text-align: center;
+}
+.bo-empty-crest {
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  border-radius: 26%;
+  opacity: .42;
+  filter: saturate(.3) brightness(.9);
+  background: linear-gradient(180deg, #263248 0%, #121A29 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08), 0 6px 16px rgba(0, 0, 0, .4);
+}
+.bo-empty-crest .badge-crest { width: 56px; height: 56px; display: block; }
+.bo-empty-copy { margin: 0; max-width: 32ch; font-size: 11.5px; line-height: 1.6; color: var(--ink-soft); }
+.bo-empty-first { margin: 0; max-width: 32ch; font-size: 12px; font-weight: 800; line-height: 1.6; color: var(--gold-ink); }
+
+.bo-foot { flex: none; padding-top: 5px; border-top: 1px solid rgba(255, 255, 255, .05); }
+.bo-count {
+  display: block;
+  text-align: center;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: #66748B;
+}
+
+/* ---- Persian registry: RTL columns, no tracking, room for descenders ---- */
+.owners-sheet:lang(fa) :is(.bo-title, .bo-sub, .bo-honor, .bo-meta, .bo-date, .bo-count, .bo-note, .bo-empty-copy, .bo-empty-first) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.owners-sheet:lang(fa) :is(.bo-head, .bo-honor, .bo-id, .bo-right, .bo-note, .bo-empty, .bo-foot) {
+  direction: rtl;
+  line-height: 1.6;
+}
+.owners-sheet:lang(fa) .bo-back .ico { transform: scaleX(-1); }
+.owners-sheet:lang(fa) .bo-serial { letter-spacing: 0; }
+
+/* short phones: the registry keeps its rows, the frame gives way */
+@media (max-height: 700px) {
+  .sheet.owners-sheet { gap: 5px; padding-top: 8px; }
+  .bo-head { grid-template-columns: 40px minmax(0, 1fr) 40px; }
+  .bo-back, .bo-x { width: 40px; height: 40px; }
+  .bo-title { font-size: 13px; }
+  .bo-row { padding: 7px 9px; gap: 8px; }
+  .bo-av { width: 31px; height: 31px; font-size: 11px; }
+  .bo-empty-crest { width: 62px; height: 62px; }
+  .bo-empty-crest .badge-crest { width: 48px; height: 48px; }
+}
+@media (max-height: 600px) {
+  .bo-list { max-height: 46vh; }
+  .bo-sub { display: none; }
+  .bo-empty { gap: 6px; padding: 8px 12px 12px; }
+}
+@media (min-height: 780px) {
+  .sheet.owners-sheet { gap: 9px; }
+  .bo-row { padding: 9px 11px; }
+}
+/* 320px: the plate is the fixed cost, the name gives first */
+@media (max-width: 360px) {
+  .bo-row { grid-template-columns: 30px minmax(0, 1fr) auto; gap: 7px; padding: 7px 8px; }
+  .bo-av { width: 30px; height: 30px; }
+  .bo-name { font-size: 12px; }
+  .bo-serial { font-size: 9.5px; padding: 3px 6px 4px; }
 }
 
 /* ---- "View All" drawer: the full catalogue as a quiet pick list ---- */

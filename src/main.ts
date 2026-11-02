@@ -22,7 +22,7 @@ import {
 } from './boardmode';
 import { createRouter } from './router';
 import { createSheets } from './sheets';
-import { createMenu, type Menu } from './menu';
+import { createMenu, ownersBack, type Menu } from './menu';
 import { createHome } from './home';
 import { createCompete } from './compete';
 import { flagPhoto } from './flags';
@@ -450,7 +450,8 @@ function onBack() {
   if (matchmaking.isOpen) { matchmaking.cancel(); return; }
   if (sheets.isOpen) {
     // the game-mode drawer's friends pane unwinds one step before the drawer does
-    if (!gmBack()) sheets.close();
+    // and the Hall of Owners hands back to its collector card before the flow closes
+    if (!gmBack() && !ownersBack()) sheets.close();
     return;
   }
   if (router.current === 'game') {
