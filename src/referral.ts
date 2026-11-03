@@ -17,12 +17,14 @@
 import { profile, readJson, syncReferralLedger, writeJson } from './storage';
 import { startParam, tgInitData } from './telegram';
 import { workerUrl } from './adminApi';
+import { lang, referralInvites } from './settings';
 import {
   REFERRAL_CODE_ALPHABET, REFERRAL_CODE_LENGTH, REFERRAL_CODE_RE, REFERRAL_PREFIX, REFERRAL_REWARD,
   referralAppLink, referralPayload, telegramShareLink,
 } from '../shared/config';
 
 const DEVICE_KEY = 'detour.device.v1';
+const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
 
 interface LedgerReading {
   ok?: boolean;
@@ -84,7 +86,23 @@ export function referralLink(): string {
 export function referralShareUrl(): string {
   const link = referralLink();
   if (!link) return '';
-  return telegramShareLink(link, `Race me on Tactix — we both get ${REFERRAL_REWARD.toLocaleString('en-US')} coins when you join!`);
+  return telegramShareLink(link, inviteLine());
+}
+
+/**
+ * The line that rides the link into a friend's chat, in the language the player reads in.
+ *
+ * Random by design, like the duel taunts: the same invite twice in a row reads as a script, and a
+ * friend who has already seen it taps nothing. `{coins}` is filled last so a variant can never
+ * carry a reward the campaign does not pay.
+ */
+function inviteLine(): string {
+  const pool = referralInvites();
+  const raw = (pool[Math.floor(Math.random() * pool.length)] ?? '').replace(/\s+/g, ' ').trim();
+  const coins = REFERRAL_REWARD.toLocaleString('en-US');
+  /* Persian copy reads with Persian figures; the share text is copy, not a form field. */
+  const bonus = lang === 'fa' ? coins.replace(/\d/g, (d) => FA_DIGITS[Number(d)]) : coins;
+  return raw.replace(/\{coins\}/g, bonus);
 }
 
 /** The inbound `ref_` code this launch carried, or null (its own code is not a referral). */

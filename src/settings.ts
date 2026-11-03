@@ -1456,6 +1456,52 @@ export function duelTaunts(): string[] {
   return pool.length ? pool : DUEL_TAUNTS.en;
 }
 
+/**
+ * The referral invite copy, three egos per language — the line that rides the personal link into
+ * a friend's chat. `t()` cannot carry a pool for the same reason as the taunts: the share sheet
+ * wants one line picked at random, not a fixed string.
+ *
+ * `{coins}` is the join bonus (`REFERRAL_REWARD`), so a reward that moves never leaves a stale
+ * number in a line that promised it. Persian gets Persian figures: ۵۰۰ beside فارسی reads right,
+ * 500 reads like a receipt from another app.
+ *
+ * The invite is an ego, not a form letter. It names a duel, doubts the reader's own, and pays them
+ * for answering — the three things that make a tap feel like their idea.
+ */
+export const REFERRAL_INVITES: Record<LangCode, string[]> = {
+  en: [
+    'Think your brain can outplay mine? Claim your {coins} bonus coins and prove your tactical IQ in Tactix 🧠⚔️',
+    'This arena runs on brains, not luck. Think you qualify? Tap in, take your {coins} coins and come find me 😎🔥',
+    'I pick opponents, not just matches. Enough conviction to test yours? Enter, grab {coins} coins and step into the ring ♟️⚡',
+  ],
+  fa: [
+    'فکر کردی فقط خودت مغز متفکری؟ روی لینک بزن ببینم تو زمین تاکتیکس چند مرده حلاجی! {coins} تا سکه ورودی هم هدیه من به تو 🧠⚔️',
+    'جرئت داری یه دست با من بازی کنی یا می‌ترسی مغزت قفل کنه؟ وارد شو، {coins} سکه رایگانت رو بگیر و بیا رو در رو مسابقه بدیم! 😎🔥',
+    'اینجا میدون نبرد باهوش‌هاست؛ فکر می‌کنی حریف تاکتیک من میشی؟ روی لینک بزن، {coins} سکه غنیمت بگیر و بیا تو رینگ ♟️⚡',
+  ],
+  ru: [
+    'Думаешь, только у тебя голова работает? Открой ссылку — посмотрим, чего ты стоишь на поле Tactix! {coins} монеты на вход — мой тебе подарок 🧠⚔️',
+    'Хватит смелости на одну партию, или боишься, что мозг зависнет? Заходи, забирай свои {coins} монет и играем лицом к лицу! 😎🔥',
+    'Здесь арена тактических умов. Считаешь, сможешь навязать мне борьбу? Жми по ссылке, бери {coins} монет и выходи на ринг ♟️⚡',
+  ],
+  ar: [
+    'تظنّ أنك العقل الوحيد المفكّر هنا؟ افتح الرابط ولنر كم تساوي في ساحة تاكتيكس! {coins} عملة هديّة لك عند الانضمام 🧠⚔️',
+    'هل تملك الشجاعة لجولة معي، أم تخشى أن يتجمّد عقلك؟ ادخل، خذ {coins} عملة ولنلعب وجهًا لوجه! 😎🔥',
+    'هنا ساحة العقول التكتيكية. تظنّ أنك خصم يليق بتكتيكاتي؟ اضغط الرابط، خذ {coins} عملة وادخل الحلبة ♟️⚡',
+  ],
+  es: [
+    '¿Crees que solo tú tienes la mente despierta? Abre el enlace y a ver cuánto vales en la arena de Tactix. ¡{coins} monedas de regalo al entrar! 🧠⚔️',
+    '¿Te atreves con una partida conmigo o temes que tu cerebro se quede bloqueado? Entra, recoge tus {coins} monedas y jugamos cara a cara 😎🔥',
+    'Aquí se combate con la cabeza. ¿Crees que podrás con mi táctica? Toca el enlace, toma tus {coins} monedas y sube al ring ♟️⚡',
+  ],
+};
+
+/** The invite lines for the language the player is reading in. */
+export function referralInvites(): string[] {
+  const pool = REFERRAL_INVITES[lang] ?? REFERRAL_INVITES.en;
+  return pool.length ? pool : REFERRAL_INVITES.en;
+}
+
 const watchers: ((s: Settings) => void)[] = [];
 
 /** The system preference is the only switch for motion now: the OS speaks for the user. */
