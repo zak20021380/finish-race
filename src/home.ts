@@ -757,11 +757,37 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   const paintChannelSheet = (): void => {
     if (!channelCup) return;
-    setSheetText('stars-sheet-desc', `${channelCup.name} · ${channelCup.specs.join(' · ')} · Top ${paidPlaces(channelCup)} Paid`);
-    setSheetText('stars-sheet-entry', channelCup.entry);
-    setSheetText('stars-sheet-seat', `${channelCup.players} / ${channelCup.maxPlayers}`);
-    setSheetText('stars-sheet-start', formatCountdown(channelCup.startsAt));
+    const cup = channelCup;
+    const paid = paidPlaces(cup);
+    const taken = Math.max(0, Math.min(cup.players, cup.maxPlayers));
+    const pct = Math.round((taken / cup.maxPlayers) * 100);
+    const format = cup.specs[cup.specs.length - 1] || '8s Blitz';
+    setSheetText('stars-sheet-desc', `Represent your channel in the ${format} championship`);
+    setSheetText('stars-sheet-prize', `${cup.stars} Stars reward`);
+    setSheetText('stars-sheet-prize-note', `Top ${paid} contributors`);
+    setSheetText('stars-sheet-entry', cup.entry);
+    setSheetText('stars-sheet-start', formatCountdown(cup.startsAt));
+    setSheetText('stars-sheet-seat', `${taken} / ${cup.maxPlayers}`);
+    setSheetText('stars-sheet-pct', `${pct}% full`);
+    setSheetText('stars-sheet-perk', `Top ${paid} contributors share the Star pool`);
+    const left = cup.maxPlayers - taken;
+    setSheetText('stars-sheet-seat-note', left > 0
+      ? `${left} seats left before the field closes`
+      : 'The field is full — wait for the next bracket');
+    const meter = document.getElementById('stars-sheet-meter');
+    if (meter) meter.style.width = `${pct}%`;
+    const gauge = document.querySelector('#sheet-stars .tp-meter');
+    if (gauge) gauge.setAttribute('aria-valuenow', String(pct));
   };
+
+  /* The pass keeps its own clock: the countdown is the one figure on the card that
+     moves, so it ticks once a second while the pass is raised and the tab is visible. */
+  window.setInterval(() => {
+    if (!channelCup || document.hidden) return;
+    const sheet = document.getElementById('sheet-stars');
+    if (!sheet || sheet.hidden) return;
+    setSheetText('stars-sheet-start', formatCountdown(channelCup.startsAt));
+  }, 1000);
 
   const loadChannelCup = (): Promise<void> => {
     if (channelCup) return Promise.resolve();
