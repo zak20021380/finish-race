@@ -55,14 +55,14 @@ import { PEARL_BOARD, perspectiveRamps, type Theme } from './themes';
 import { mineStage, setMineStage, STAGE_CLEAR } from './staging';
 import {
   detonation, impact, initTelegram, inviteRoomCode, inviteSquadId, notify, onBackPress,
-  openTelegramShare, shatterImpact, tgUser,
+  shatterImpact, tgUser,
 } from './telegram';
-import { botAppLink, telegramShareLink } from '../shared/config';
 import { applyFlagSupport } from './countries';
 import {
   createRoomCode, getGameMode, gmBack, initGameModes, notifyMatchBusy, onGameModeChange, openInviteRoom,
   resumeRoom, setGameMode, takeAutoLaunch,
 } from './gamemodes';
+import { dismissDuelVeil, noteDuelLobby, openDuelDoor, throwDuelChallenge } from './duelInvite';
 import type { Lobby, LobbyRace } from './lobby';
 import {
   createMatchmaking, myTiq, onlineRace, onlineSearch, setQueueMode, type OnlineSession, type RaceEnd,
@@ -2021,6 +2021,9 @@ function clashRivals(): VsRival[] {
 
 function startGame(setup: StartSetup) {
   cancelTutorial();
+  /* A board on screen outranks a challenge that is still being read: the duel veil steps aside
+     instead of covering the race it was offering. */
+  dismissDuelVeil();
   /* a new race owns a new reward budget: whatever the last settlement claimed is not this one's.
      The result screen resets it again on open, so both ends of a match start clean. */
   resetMatchClaims();
@@ -2922,8 +2925,11 @@ again.addEventListener('click', () => {
 shareBtn.addEventListener('click', () => {
   if (!resultView?.won) return;
   impact('medium');
-  const text = t('resultShareText').replace('{tiq}', resultAbs(resultView.tiq));
-  openTelegramShare(telegramShareLink(botAppLink(''), text));
+  /* The board goes home first: the duel is armed in the lobby, and a drawer opened over a finished
+     board would be closed again by the quit path it just took. A refusal is already voiced — the
+     maintenance lock raises its own notice from inside the drawer. */
+  quitToMenu();
+  throwDuelChallenge();
 });
 toMenu.addEventListener('click', () => { impact('light'); clearResultMotion(); quitToMenu(); });
 menuBtn.addEventListener('click', () => {
@@ -3192,6 +3198,9 @@ initGameModes(sheets, {
     /* the countdown, where this client ran one, has already staged the match: no second face-off */
     startGame({ difficulty: menuState.difficulty, sizes: race.sizes, online: race, room, quiet: takeAutoLaunch() });
   },
+  /* The armed duel reads the same roster the drawer paints, for one line: the wait ends the moment
+     the challenged seat is held by a person. */
+  onLobbyState: noteDuelLobby,
   /* A guest's arrival may bring the drawer up over Home — never over a board being played. */
   canPopLobby: () => router.current !== 'game',
   /* JOIN NOW on the in-match arrival banner leaves the board through this same quit path. */
@@ -3321,6 +3330,19 @@ themeToggle.addEventListener('click', () => {
   if (!page.startViewTransition || motionReduced()) { commit(); return; }
   page.startViewTransition(commit);
 });
+
+/* ---------- the duel door: `?startapp=duel_XXXX` is answered before it is entered ---------- */
+
+/**
+ * A challenge link is not an invite to a room, it is a dare — so the rival meets it on a veil of its
+ * own instead of a lobby they have to work out. Accepting *is* the join: no seat is taken while the
+ * player has not agreed to play, which also holds the challenger's countdown until they do.
+ *
+ * Deferred by the same beat the room door waits for, so the veil lands over a laid-out shell rather
+ * than over the boot screen. The payload grammar (`duel_`) never collides with the room door's
+ * (`room_`), so a plain room invite still goes straight in with no tap at all.
+ */
+window.setTimeout(openDuelDoor, 620);
 
 /* ---------- the invite door: `?startapp=room_XXXX` lands in that room, no taps ---------- */
 

@@ -54,6 +54,19 @@ export function botAppLink(payload = ''): string {
  */
 export const SQUAD_PREFIX = 'squad_';
 
+/**
+ * The `?startapp=` payload prefix a duel challenge carries. `duel_<code>` names the same four-digit
+ * room the `room_` invite does — the payload only says *how* it was shared: a challenge thrown at
+ * somebody, so the app greets the reader with the duel instead of a plain room.
+ */
+export const DUEL_PREFIX = 'duel_';
+
+/** `https://t.me/Tactix_Robot/play?startapp=duel_<code>` — one tap into the challenged duel. */
+export function duelAppLink(code: string): string {
+  const digits = (code ?? '').replace(/\D/g, '').slice(0, 4);
+  return digits.length === 4 ? botAppLink(`${DUEL_PREFIX}${digits}`) : '';
+}
+
 /** `https://t.me/Tactix_Robot/play?startapp=squad_<id>` — one tap into the squad's join door. */
 export function squadAppLink(id: string): string {
   const clean = (id ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 48);

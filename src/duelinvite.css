@@ -1,0 +1,192 @@
+/* ==========================================================================
+   DUEL INVITATION — THE CHALLENGE VEIL
+
+   One card, one headline, one key. The veil is the rival's first frame after the
+   boot screen: it says *a duel is waiting*, and the only way through it is to take
+   the seat. Everything the room itself knows — roster, code, countdown — stays in
+   the lobby underneath, so the veil adds no second room UI and steals no decision
+   from the drawer that already owns one.
+
+   The finish is the post-match capsule's: obsidian glass, a single champagne
+   hairline, type doing the work. The gold sits on the one action and nowhere else.
+
+   `.is-quiet` switches the cinema off under reduced motion and leaves the
+   information up. Widths are clamped and every string breaks inside its box, so
+   the veil holds at 320px with no horizontal overflow anywhere.
+   ========================================================================== */
+
+.dv {
+  --dv-gold: #FCD34D;
+  --dv-champagne: #E8D9A8;
+  --dv-crimson: #FF3D6E;
+  --dv-ink: #F8FAFC;
+  --dv-ink-2: rgba(226, 232, 240, .74);
+  --dv-ink-3: rgba(203, 213, 225, .52);
+  --dv-hair: rgba(255, 255, 255, .08);
+
+  position: fixed;
+  inset: 0;
+  /* over every sheet, scrim and stage — the boot veil has already lifted by the time this is built */
+  z-index: 2300;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  overflow: hidden;
+  background:
+    radial-gradient(74% 44% at 50% 4%, rgba(179, 18, 60, .16), transparent 74%),
+    radial-gradient(60% 38% at 50% 98%, rgba(252, 211, 77, .09), transparent 76%),
+    rgba(3, 4, 8, .84);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  backdrop-filter: blur(14px) saturate(1.1);
+  color: var(--dv-ink);
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+  contain: layout paint;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.dv.is-in { opacity: 1; }
+
+.dv-card {
+  position: relative;
+  isolation: isolate;
+  width: min(100%, 356px);
+  padding: clamp(20px, 6vw, 28px) clamp(17px, 5vw, 23px) clamp(18px, 5vw, 22px);
+  border-radius: 26px;
+  border: 1px solid var(--dv-hair);
+  background:
+    linear-gradient(168deg, rgba(22, 20, 27, .94) 0%, rgba(9, 8, 13, .97) 56%, rgba(4, 4, 8, .99) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    0 30px 68px -26px rgba(0, 0, 0, .92);
+  text-align: center;
+  translate: 0 10px;
+  scale: .97;
+  opacity: 0;
+  transition: translate 320ms cubic-bezier(.2, 1.2, .4, 1), scale 320ms cubic-bezier(.2, 1.2, .4, 1),
+    opacity 220ms ease-out;
+}
+
+.dv.is-in .dv-card { translate: 0 0; scale: 1; opacity: 1; }
+
+/* the one hard line on the card: a champagne edge across the top, never a box around everything */
+.dv-card::before {
+  content: "";
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(232, 217, 168, .5), transparent);
+}
+
+.dv-kicker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: 0 0 clamp(11px, 3.4vw, 15px);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .19em;
+  text-transform: uppercase;
+  color: var(--dv-champagne);
+}
+
+/* `i-swords` carries its own stroke, so the host only sizes it */
+.dv-ico { width: 14px; height: 14px; flex: none; display: block; }
+.dv-kicker .dv-ico { color: var(--dv-gold); }
+
+.dv-title {
+  margin: 0;
+  font-size: clamp(19px, 5.6vw, 23px);
+  font-weight: 800;
+  line-height: 1.26;
+  letter-spacing: -.01em;
+  /* a long name or a Persian line wraps inside the card; it never widens the shell */
+  overflow-wrap: break-word;
+}
+
+.dv-sub {
+  margin: 9px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--dv-ink-2);
+  overflow-wrap: break-word;
+}
+
+.dv-room {
+  margin: clamp(13px, 4vw, 17px) 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--dv-ink-3);
+  overflow-wrap: break-word;
+}
+
+.dv-accept {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  margin: clamp(17px, 5vw, 22px) 0 0;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #F7D98B 0%, var(--dv-gold) 52%, #E4A93F 100%);
+  color: #1A1205;
+  font-size: 13.5px;
+  font-weight: 900;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .42), 0 12px 26px -12px rgba(252, 211, 77, .5);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: filter 120ms ease-out, transform 120ms ease-out;
+}
+
+.dv-accept .dv-ico { width: 16px; height: 16px; }
+.dv-accept:active { transform: scale(.985); filter: brightness(.96); }
+.dv-accept:focus-visible { outline: 2px solid var(--dv-champagne); outline-offset: 3px; }
+
+/* ---- the script the veil is read in ---- */
+
+/* Persian and Arabic get their own base direction on the text, the same way the toast does it:
+   the card keeps its geometry, only the reading order turns. */
+html[data-lang="fa"] .dv-card,
+html[data-lang="ar"] .dv-card { direction: rtl; }
+
+html[data-lang="fa"] .dv-kicker,
+html[data-lang="fa"] .dv-room,
+html[data-lang="ar"] .dv-kicker,
+html[data-lang="ar"] .dv-room { letter-spacing: 0; }
+
+html[data-lang="fa"] .dv-title,
+html[data-lang="fa"] .dv-sub,
+html[data-lang="ar"] .dv-title,
+html[data-lang="ar"] .dv-sub { line-height: 1.7; }
+
+/* ---- motion ---- */
+
+/* three doors to the same stillness: the flag the veil is built with when `motionReduced()` already
+   answers true, the app's own kill-switch, and the system preference */
+.dv.is-quiet,
+.dv.is-quiet .dv-card,
+html.reduced-motion .dv,
+html.reduced-motion .dv-card { transition: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dv,
+  .dv .dv-card { transition: none; }
+  .dv-accept { transition: none; }
+}
+
+/* a short viewport (landscape phone, split view) drops the padding before it drops the type */
+@media (max-height: 560px) {
+  .dv-card { padding-block: clamp(14px, 4vw, 18px); }
+  .dv-sub { display: none; }
+}

@@ -493,7 +493,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     resultStandings: 'Final standings',
     resultPlayAgain: 'PLAY AGAIN',
     resultRevenge: 'REMATCH',
-    resultShare: 'SHARE WIN / FLEX',
+    resultShare: 'CHALLENGE TO A DUEL',
     resultMenu: 'LOBBY',
     resultStakeLost: 'STAKES LOST',
     /* the band's own header once the shield lands: the key beside it already says "PROTECTED",
@@ -501,7 +501,14 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     resultStakeReturned: 'STAKES BACK',
     resultTiqUnit: 'TIQ',
     resultCoinsUnit: 'COINS',
-    resultShareText: 'I just outsmarted a rival on Tactix — {tiq} TIQ. Think you can beat me?',
+    /* ---- the duel challenge: thrown from the result capsule, answered by the invitee ---- */
+    duelArmed: 'Duel armed — send the link and your rival takes the far seat.',
+    duelWaitingRival: 'Waiting for your rival to accept the duel…',
+    duelKicker: 'PRIVATE DUEL',
+    duelChallenged: 'You have been challenged to a 1v1 duel!',
+    duelSub: 'One board. Two minds. The winner takes the crown.',
+    duelAccept: 'ACCEPT DUEL',
+    duelAccepted: 'Your rival accepted the duel — fight!',
     /* ---- post-match banter: taunts, reactions and the dead-action guard ---- */
     banterLabel: 'Quick reactions',
     banterTray: 'REACT',
@@ -1016,13 +1023,20 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     resultStandings: 'رده‌بندی نهایی',
     resultPlayAgain: 'بازی مجدد',
     resultRevenge: 'بازی مجدد',
-    resultShare: 'افتخار / اشتراک برد',
+    resultShare: 'دعوت به دوئل',
     resultMenu: 'لابی',
     resultStakeLost: 'امتیاز از دست رفته',
     resultStakeReturned: 'امتیاز بازگشت',
     resultTiqUnit: 'TIQ',
     resultCoinsUnit: 'سکه',
-    resultShareText: 'توی Tactix حریفم رو کیش‌ومات کردم — {tiq} TIQ. جرئت داری تو هم امتحان کنی؟',
+    /* ---- دعوت به دوئل: از پنجره نتیجه شروع می‌شود، حریف با پذیرش وارد می‌شود ---- */
+    duelArmed: 'دوئل آماده شد؛ لینک را بفرست تا حریف صندلی روبه‌رو را بگیرد.',
+    duelWaitingRival: 'در انتظار پذیرش حریف برای دوئل...',
+    duelKicker: 'دوئل خصوصی',
+    duelChallenged: 'یک حریف تو را به دوئل ۱ به ۱ دعوت کرده!',
+    duelSub: 'یک صفحه، دو ذهن. برنده تاج را می‌گیرد.',
+    duelAccept: 'پذیرفتن دوئل',
+    duelAccepted: 'حریف دوئلت را پذیرفت — شروع!',
     /* ---- طعنه‌های پایان مسابقه و قفل حریف خارج‌شده ---- */
     banterLabel: 'واکنش‌های سریع',
     banterTray: 'واکنش',
@@ -1396,6 +1410,51 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     arena4Perk2: 'Remates exclusivos',
   },
 };
+
+/**
+ * The duel challenge copy, three egos per language. `t()` cannot carry a pool — the share sheet
+ * wants one line picked at random, not a fixed string — so the variants live beside the tables they
+ * belong to and the player's own language decides which set is read.
+ *
+ * `{name}` is the challenger's face and `{tiq}` their ladder number; a variant that gets neither
+ * still reads, so a name the app cannot resolve never leaves a hole in the taunt.
+ *
+ * All five shell languages carry their own set: a challenge shared in the wrong tongue is an
+ * invitation nobody answers.
+ */
+export const DUEL_TAUNTS: Record<LangCode, string[]> = {
+  en: [
+    'Think you\'re smarter than me? My last rival left in tears. Step up and prove your brain is worth a damn 🧠⚔️ — {name}',
+    'My tactical IQ just hit {tiq}. You claim you know strategy? Tap the link and face me head-on 😎🔥',
+    'I just forked my last victim — now it\'s your turn. One tap and you\'re straight into my arena ♟️⚡',
+  ],
+  fa: [
+    'فکر می‌کنی از من باهوش‌تری؟ حریف قبلی گریه‌ش دراومد! اگه جربزه‌شو داری بیا تا ثابت کنی مغزت چند مرده حلاجه 🧠⚔️ — {name}',
+    'هوش تاکتیکی (TIQ) من رسید به {tiq}! ادعات می‌شه استراتژی بلدی؟ مستقیم وارد این لینک شو تا رو در رو بزنمت 😎🔥',
+    'قربانی قبلی رو کیش‌ومات کردم؛ حالا نوبت توئه! روی لینک بزن مستقیم وارد زمین اختصاصی من بشی ♟️⚡',
+  ],
+  ru: [
+    'Думаешь, ты умнее меня? Последний соперник ушёл в слезах. Докажи, что голова у тебя работает 🧠⚔️ — {name}',
+    'Мой тактический IQ достиг {tiq}. Говоришь, умеешь строить стратегию? Заходи по ссылке — сыграем один на один 😎🔥',
+    'Я только что поставил шах своей последней жертве. Теперь твоя очередь: один тап — и ты в моей арене ♟️⚡',
+  ],
+  ar: [
+    'تظنّ نفسك أذكى منّي؟ خصمي السابق غادر باكيًا. تعال وأثبت أنّ لعقلك قيمة 🧠⚔️ — {name}',
+    'وصل مؤشّر ذكائي التكتيكي (TIQ) إلى {tiq}. تدّعي أنّك تعرف الاستراتيجية؟ ادخل من الرابط لنلتقي وجهًا لوجه 😎🔥',
+    'كشختُ ضحيّتي الأخيرة، والدور عليك الآن. ضغطة واحدة وتدخل ملعبي مباشرة ♟️⚡',
+  ],
+  es: [
+    '¿Crees que eres más listo que yo? Mi último rival se fue llorando. Demuestra que tu cabeza sirve 🧠⚔️ — {name}',
+    'Mi IQ táctico (TIQ) llegó a {tiq}. ¿Dices que sabes de estrategia? Entra por el enlace y pelea conmigo cara a cara 😎🔥',
+    'Acabo de hacer jaque a mi última víctima; ahora te toca a ti. Un toque y estarás dentro de mi arena ♟️⚡',
+  ],
+};
+
+/** The challenge lines for the language the player is reading in. */
+export function duelTaunts(): string[] {
+  const pool = DUEL_TAUNTS[lang] ?? DUEL_TAUNTS.en;
+  return pool.length ? pool : DUEL_TAUNTS.en;
+}
 
 const watchers: ((s: Settings) => void)[] = [];
 

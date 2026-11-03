@@ -3,7 +3,7 @@
  * no-op, so the same build plays in a plain browser tab.
  */
 import { settings } from './settings';
-import { botAppLink, telegramShareLink } from '../shared/config';
+import { botAppLink, duelAppLink, telegramShareLink } from '../shared/config';
 
 export interface TgUser {
   /** Telegram's numeric user id — the key the admin allowlist matches on. */
@@ -115,6 +115,16 @@ export function roomShareUrl(code: string, text: string): string {
   return url ? telegramShareLink(url, text) : '';
 }
 
+/**
+ * The challenge link, wrapped in Telegram's own share page: the same room `roomInviteUrl` points
+ * at, carried as `?startapp=duel_<code>` so the reader is greeted with the duel rather than a lobby
+ * they have to read. '' when the code is not a room code.
+ */
+export function duelShareUrl(code: string, text: string): string {
+  const url = duelAppLink(code);
+  return url ? telegramShareLink(url, text) : '';
+}
+
 export const tgUser = (): TgUser | undefined => tg?.initDataUnsafe?.user;
 
 /**
@@ -208,6 +218,30 @@ export function inviteRoomCode(): string {
   try {
     const query = new URLSearchParams(window.location.search);
     return roomCodeOf(query.get('roomcode')) || roomCodeOf(query.get('room'));
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * The duel a challenge link points at, or ''. `duel_1909` is the same room code wearing a
+ * challenge: the payload decides only whether the reader is greeted with a duel banner, so a
+ * hand-typed `room_1909` and a shared `duel_1909` reach one and the same seat.
+ */
+const DUEL_PAYLOAD = /^duel[\s_-]*(\d{4})(?!\d)/i;
+
+function duelCodeOf(raw: string | null | undefined): string {
+  const match = DUEL_PAYLOAD.exec((raw ?? '').trim());
+  return match ? match[1] : '';
+}
+
+export function inviteDuelCode(): string {
+  try {
+    const fromStart = duelCodeOf(startParam());
+    if (fromStart) return fromStart;
+  } catch { /* fall through to the URL */ }
+  try {
+    return duelCodeOf(new URLSearchParams(window.location.search).get('duel'));
   } catch {
     return '';
   }

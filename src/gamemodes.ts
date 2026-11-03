@@ -134,8 +134,24 @@ const FORMAT_KEY: Record<LobbyFormat, string> = {
 };
 const formatLine = (format: LobbyFormat): string => t(FORMAT_KEY[format]);
 
+/**
+ * The caption an armed duel puts under the roster, or '' for the room's own reading. Set by the
+ * challenge key in the result capsule (`duelInvite.ts`) and dropped whenever a new room is opened
+ * or this one is walked out of — a line about a challenge nobody threw is a lie about the room.
+ */
+let armedDuelHint = '';
+
+/** Arm (or clear) the duel caption on the lobby screen. A live lobby repaints on the spot. */
+export function setLobbyHint(text: string): void {
+  armedDuelHint = text;
+  if (handle && view === 'lobby') paintLobbyPane(handle.lobby);
+}
+
 /** The plain-language line under the roster, in the player's language. */
 function hintText(l: Lobby): string {
+  /* An armed duel owns this caption until the challenged seat is filled: the room is not short
+     "one more player", it is waiting for somebody to accept a challenge. */
+  if (armedDuelHint && !canStart(l)) return armedDuelHint;
   if (hostAway(l)) return t('hintWaitingHost');
   /* A friend whose socket dropped is not "ready": the room says so before the host taps Start. */
   if (l.seats.some((s) => !!s && !s.bot && !s.connected)) return t('errStartOffline');
@@ -875,6 +891,7 @@ function paintLobbyPane(l: Lobby): void {
 
   /* Last: a room every seat of which is held counts itself down and starts. Everything above has
      already painted, so the countdown never races the roster it is counting. */
+  hooks.onLobbyState?.(l);
   armDuelCountdown(l);
 }
 
@@ -1083,6 +1100,8 @@ function openRoom(code: string, host: boolean, opts?: { invite?: boolean }): voi
     hooks.onMaintenance?.();
     return;
   }
+  /* a fresh room is a fresh promise: the caption belongs to the challenge that opened this one */
+  armedDuelHint = '';
   saveSession({ code, host, invite: opts?.invite === true, at: Date.now() });
   resumeTries = 0;
   codeTries = 0;
@@ -1490,6 +1509,7 @@ export function openInviteRoom(code: string): boolean {
  */
 function leaveRoom(): void {
   roomToken++;
+  armedDuelHint = '';
   window.clearTimeout(resumeTimer);
   resumeTimer = 0;
   resumeTries = 0;
@@ -1683,6 +1703,12 @@ export interface GameModeInit {
   onRoomStart?: (lobby: Lobby) => void;
   /** A synced room launched: the worker's race goes on the board. */
   onRoomRace?: (race: LobbyRace) => void;
+  /**
+   * Every repaint of a live roster, from whoever joined to whoever dropped. The screen paints the
+   * lobby itself; this is the door a feature outside the drawer reads the room through — a duel
+   * challenge waits on the rival's seat, and only the roster knows when it filled.
+   */
+  onLobbyState?: (lobby: Lobby) => void;
   /**
    * May a guest's arrival bring the drawer up over whatever is on screen? False while a board is
    * being played: a popup over a live race is worse than a room that waits a beat.
