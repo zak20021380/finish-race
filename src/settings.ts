@@ -937,7 +937,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     countryLive: 'زنده',
     countryTopNation: 'کشور صدرنشین',
     countryCtaFlyFlag: 'پرچمت رو ببر بالا!',
-    countryViewNations: 'مشاهده جدول ملل',
+    countryViewNations: 'مشاهده جدول کشورها',
     countryBoardOffline: 'جدول ملل دوباره وصل می‌شه…',
     countryBoardEmpty: 'هنوز کشوری توی جدول نیست — پرچمت رو انتخاب کن و یه مسابقه ببر.',
     /* ---- enlist squad: the Channel War registration modal ---- */
