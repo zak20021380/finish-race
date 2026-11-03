@@ -2238,22 +2238,25 @@
                   <div class="tour-vault">
                     <span class="tour-vault-v" data-i18n="carouselWarStarsPrize">200 STARS</span>
                     <span class="tour-vault-sub">
-                      <svg class="tour-cup-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-cup" /></svg>
-                      <span data-i18n="carouselWarSubtitle">1st place channel wins all - pure conquest</span>
+                      <span data-i18n="carouselWarSubtitle">🏆 Winner-takes-all · Top 10 squad heroes share the bounty</span>
                     </span>
                   </div>
                 </div>
 
-                <!-- the reigning channel: one tactical glass pill, no hairline rule -->
-                <div class="tour-hud">
+                <!-- the reigning channel: an engraved obsidian-brass war plaque. With no
+                     holder the kicker and the dare swap in from the same two nodes, so the
+                     live handle never disagrees with the ranking feed. -->
+                <div class="tour-hud is-unclaimed" id="tour-champion-plaque">
                   <span class="tour-leader-medal" aria-hidden="true">
                     <svg class="tour-leader-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-crown" /></svg>
                   </span>
-                  <span class="tour-leader-k" data-i18n="carouselReigningChampion">REIGNING CHAMPION</span>
-                  <b class="tour-leader-h" id="tour-leader-handle">No squad yet</b>
+                  <span class="tour-leader-k" id="tour-leader-kicker">UNCLAIMED THRONE</span>
+                  <span class="tour-leader-sep" aria-hidden="true">·</span>
+                  <b class="tour-leader-h" id="tour-leader-handle">Seize First Blood</b>
                 </div>
 
                 <button class="tour-cta" type="button" id="home-tournament-cta" aria-haspopup="dialog">
+                  <svg class="tour-cta-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-swords" /></svg>
                   <span class="tour-cta-t" data-i18n="carouselCtaFight">FIGHT FOR YOUR CHANNEL</span>
                 </button>
 
@@ -2261,7 +2264,9 @@
                      its members can compete — a Telegram bot-admin deeplink, not a route.
                      A quiet glass key: one primary action per card. -->
                 <button class="tour-admin" type="button" id="home-tournament-admin">
-                  <svg class="tour-admin-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-send" /></svg>
+                  <span class="tour-admin-pod" aria-hidden="true">
+                    <svg class="tour-admin-ico" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><use href="#i-send" /></svg>
+                  </span>
                   <span class="tour-admin-t" data-i18n="carouselCtaEnlist">CHANNEL ADMIN? ENLIST HERE</span>
                   <span class="tour-admin-chev" aria-hidden="true">›</span>
                 </button>

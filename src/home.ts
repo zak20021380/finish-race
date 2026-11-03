@@ -847,16 +847,23 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   /* The leader ticker reads the same ranking feed Channel War ranks, so the hero
      slide's champion and the tournament can never disagree about who leads. With
-     no seeded field the board starts empty, and the static markup's neutral line
-     stands until a real squad has banked a real score. */
+     no seeded field the board starts empty, so the plaque flips to its war-dare
+     state instead of standing as a neutral placeholder. */
+  const leaderPlaque = document.getElementById('tour-champion-plaque');
+  const leaderKicker = document.getElementById('tour-leader-kicker');
   const leaderHandle = document.getElementById('tour-leader-handle');
-  /* The placeholder is a translated sentence, so it is painted here (and on every
-     language switch) rather than left in the markup for a `data-i18n` sweep to
-     overwrite the live handle with. */
+  /* Both lines are painted here (and on every language switch) rather than left
+     in the markup for a `data-i18n` sweep to overwrite the live handle with. */
   const paintTourLeader = (): void => {
-    if (!leaderHandle) return;
     const top = getSquadRanking()[0];
-    leaderHandle.textContent = top ? top.handle : t('carouselNoChampion');
+    leaderPlaque?.classList.toggle('is-reigning', Boolean(top));
+    leaderPlaque?.classList.toggle('is-unclaimed', !top);
+    if (leaderKicker) {
+      leaderKicker.textContent = t(top ? 'carouselReigningChampion' : 'carouselUnclaimedThrone');
+    }
+    if (leaderHandle) {
+      leaderHandle.textContent = top ? top.handle : t('carouselSeizeThrone');
+    }
   };
   paintTourLeader();
 
