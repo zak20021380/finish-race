@@ -22730,11 +22730,13 @@ html[data-lang="fa"] :is(.tour-kicker, .tour-title) {
 }
 html[data-lang="fa"] .tour-vault { max-width: 100%; }
 html[data-lang="fa"] .tour-vault-v {
+  direction: rtl;
   font-size: 32px;
   line-height: 1.35;
   letter-spacing: 0 !important;
   padding: 0 2px 3px;
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  font-variant-numeric: tabular-nums;
 }
 html[data-lang="fa"] .tour-vault-sub {
   direction: rtl;
@@ -22754,13 +22756,16 @@ html[data-lang="fa"] .tour-leader-k {
 }
 html[data-lang="fa"] .tour-leader-sep { line-height: 1.4; }
 /* a handle is never mirrored by the RTL base: '@name' must keep its leading @ */
-html[data-lang="fa"] .tour-leader-h { direction: ltr; unicode-bidi: isolate; }
+html[data-lang="fa"] .tour-leader-h { direction: ltr; unicode-bidi: isolate; display: inline-block; }
+/* the button itself mirrors, so the swords sit at the reading start and the
+   exclamation lands after the last letter instead of before the first */
 html[data-lang="fa"] .tour-cta {
+  direction: rtl;
   letter-spacing: 0 !important;
   text-transform: none !important;
   font-size: 15px;
 }
-html[data-lang="fa"] .tour-cta-t { line-height: 1.5; }
+html[data-lang="fa"] .tour-cta-t { direction: rtl; unicode-bidi: isolate; line-height: 1.5; }
 html[data-lang="fa"] .tour-admin {
   direction: rtl;
   letter-spacing: 0 !important;
@@ -22781,8 +22786,11 @@ html[data-lang="fa"] .tour-clock {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   font-size: 9px;
   letter-spacing: 0;
-  font-variant-numeric: normal;
+  font-variant-numeric: tabular-nums;
 }
+/* every number keeps its own isolate, so the bidi algorithm can never lift the hour
+   off its unit and drop it at the far end of the phrase */
+html[data-lang="fa"] .tour-clock bdi { direction: ltr; unicode-bidi: isolate; }
 @media (max-height: 760px) {
   html[data-lang="fa"] .tour-vault-v { font-size: 28px; }
 }
@@ -30285,7 +30293,7 @@ html[data-lang="fa"] :is(
   #home-play-rw, .pd-rw, .pd-rw-item, .pd-rw b, .gm-rw, #lb-count, #lb-code, .lb-count,
   .lb-fmt, .sq-rank, .sq-count, .sq-chip, .sq-score, .sq-meta-handle,
   .sq-card-handle, .sq-banner-handle, .sqp-handle, .flag-code, .id-lvl,
-  .id-team-rank, .stars-count, .tour-clock, .pf-xp-lvl, .pf-xp-meta,
+  .id-team-rank, .stars-count, .pf-xp-lvl, .pf-xp-meta,
   .pf-coin-pill, .pf-tiq-pill, .coin-pill
 ) {
   direction: ltr;

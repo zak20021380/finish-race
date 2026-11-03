@@ -53,6 +53,34 @@ const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
 const localDigits = (value: string, code: string): string =>
   code === 'fa' ? value.replace(/\d/g, (d) => FA_DIGITS[Number(d)]) : value;
 
+/** Persian prose never zero-pads: "۰۲ ساعت" reads as a glitch, "۲ ساعت" reads as Farsi.
+ *  The Latin clock keeps its padding because "02h 45m" is a code, not a sentence. */
+const localNumber = (value: number, code: string): string =>
+  localDigits(code === 'fa' ? String(value) : String(value).padStart(2, '0'), code);
+
+/**
+ * Paints a translated template that carries `{placeholders}` inside a right-to-left
+ * sentence. Each substituted value gets its own `<bdi>`: a single flat text run lets
+ * the bidi algorithm promote the digits to their own level and reorder them against
+ * the prose, which is what stranded the hour at the far end of the countdown.
+ */
+const paintBidi = (host: HTMLElement, template: string, vars: Record<string, string>): void => {
+  host.textContent = '';
+  let cut = 0;
+  for (const found of template.matchAll(/\{\w+\}/g)) {
+    const at = found.index ?? 0;
+    if (at > cut) host.append(template.slice(cut, at));
+    const value = vars[found[0].slice(1, -1)];
+    if (value) {
+      const iso = document.createElement('bdi');
+      iso.textContent = value;
+      host.append(iso);
+    }
+    cut = at + found[0].length;
+  }
+  if (cut < template.length) host.append(template.slice(cut));
+};
+
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 const cap = (d: Difficulty): string => d.charAt(0).toUpperCase() + d.slice(1);
@@ -876,13 +904,10 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const paintClock = (): void => {
       // Round up: 02h 45m out reads "02h 45m left", not "02h 44m left", on arrival.
       const totalMin = Math.max(0, Math.ceil((endsAt - Date.now()) / 60_000));
-      const hh = Math.floor(totalMin / 60);
-      const mm = totalMin % 60;
-      const hours = localDigits(String(hh).padStart(2, '0'), lang);
-      const mins = localDigits(String(mm).padStart(2, '0'), lang);
-      tourClock.textContent = t('carouselTimeLeft')
-        .replace('{hours}', hours)
-        .replace('{mins}', mins);
+      paintBidi(tourClock, t('carouselTimeLeft'), {
+        hours: localNumber(Math.floor(totalMin / 60), lang),
+        mins: localNumber(totalMin % 60, lang),
+      });
     };
     paintClock();
     window.setInterval(() => {
