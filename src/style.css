@@ -21049,8 +21049,9 @@ html.reduced-motion .adm-confirm, html.reduced-motion .adm-confirm-panel { trans
   .hm-badge { min-width: 24px; height: 20px; padding: 0 5px; font-size: 11px; }
   .hm-flag, .hm-flag .fp { --fp-d: 20px; width: 20px; height: 20px; }
   /* the trend delta is the one column a 320px row can live without: the nation name
-     keeps its full width instead of collapsing to three letters. `:not(.is-error)`
-     keeps this ahead of the compact-height grid, whatever order the queries land in. */
+     keeps its full width instead of collapsing to three letters. The four tracks here
+     match the four children that remain — the compact-height grid only re-adds the
+     trend track from 345px up, where `.tr` is still rendered. */
   .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) { grid-template-columns: 19px 26px minmax(0, 1fr) 92px; }
   .car-card.nations-cup .mini-rank.nations-rank .tr { display: none; }
   .car-card.nations-cup .mini-rank.nations-rank .rk { width: 19px; height: 19px; font-size: 11px; }
@@ -21726,12 +21727,21 @@ html.reduced-motion .slide-cta-go { transition: none; }
   .car-card.mind-ladder .mind-score { font-size: 13.5px; }
   .car-card.mind-ladder .mind-av .mind-flag { --fp-d: 11px; width: 11px; height: 11px; }
   .car-card.nations-cup .mini-rank.nations-rank > li.nations-row { padding-top: 1px; padding-bottom: 1px; }
-  .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) { grid-template-columns: 19px 26px minmax(0, 1fr) 24px 90px; column-gap: 6px; }
+  .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) { column-gap: 6px; }
   .car-card.nations-cup .mini-rank.nations-rank .fl { flex-basis: 26px; width: 26px; height: 26px; }
   .car-card.nations-cup .mini-rank.nations-rank .rk { width: 19px; height: 19px; font-size: 11px; }
   .car-card.nations-cup .mini-rank.nations-rank .nm { font-size: 12.5px; }
   .car-card.nations-cup .mini-rank.nations-rank .score-val { font-size: 13.5px; }
   .car-card.nations-cup .mini-rank.nations-rank .score-brain-icon { width: 15px; height: 15px; }
+}
+/* the compact-height grid above keeps a trend column, but the ≤344px query hands that
+   column's track to the score, because `.tr` is not rendered there at all — the score
+   would then sit in a 24px track and paint backwards over the nation name. The five
+   tracks therefore only apply where the trend column actually survives. */
+@media (min-width: 345px) and (max-height: 680px) {
+  .car-card.nations-cup .mini-rank.nations-rank > li:not(.is-error) {
+    grid-template-columns: 19px 26px minmax(0, 1fr) 24px 90px;
+  }
 }
 /* the floor: only a window this short cannot carry five full rows — the tail row
    steps aside rather than letting the list squeeze into a smear */
