@@ -5,8 +5,8 @@
  * Two halves, on purpose.
  *
  * **The runtime config** (`runtime`, below) is the one live source every other module reads:
- * whether the shop is selling, the blitz allowance, the
- * TIQ win reward, the coin payout multiplier and the two queue radii. It persists to the device
+ * the blitz allowance, the TIQ win reward, the coin payout multiplier and the two queue radii.
+ * It persists to the device
  * through the same wrapped door as the save, and `setRuntime` is the only writer — so a toggle
  * takes effect everywhere the instant it flips, with no reload and no second source of truth.
  *
@@ -112,10 +112,6 @@ export function isAdmin(): boolean {
 /* ---------- the live runtime config ---------- */
 
 export interface AdminRuntime {
-  /** Shop sales: off parks every card in the inert "Not for sale" showcase state. */
-  salesOpen: boolean;
-  /** Blocks new match queues with a maintenance toast. */
-  maintenance: boolean;
   /** TIQ a win is worth, race credit included. */
   winTiq: number;
   /** 1.0x / 1.5x / 2.0x — the coin payout scale. */
@@ -138,8 +134,6 @@ export const COIN_STEPS: readonly number[] = [1, 1.5, 2];
 export const BLITZ_STEPS: readonly number[] = [6, 8, 10, 12];
 
 export const DEFAULT_RUNTIME: AdminRuntime = {
-  salesOpen: false,
-  maintenance: false,
   winTiq: 140,
   coinMult: 1,
   blitz: CONFIG.TURN_TIME_LIMIT,
@@ -157,7 +151,6 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const pickNum = (v: unknown, fallback: number, lo: number, hi: number): number =>
   isNum(v) ? clamp(v, lo, hi) : fallback;
-const pickBool = (v: unknown, fallback: boolean): boolean => (typeof v === 'boolean' ? v : fallback);
 const pickOne = (list: readonly number[], v: unknown, fallback: number): number =>
   isNum(v) && list.includes(v) ? v : fallback;
 
@@ -167,8 +160,6 @@ function loadRuntime(): AdminRuntime {
   const d = DEFAULT_RUNTIME;
   if (!raw) return { ...d };
   return {
-    salesOpen: pickBool(raw.salesOpen, d.salesOpen),
-    maintenance: pickBool(raw.maintenance, d.maintenance),
     winTiq: Math.round(pickNum(raw.winTiq, d.winTiq, 0, 1000)),
     coinMult: pickOne(COIN_STEPS, raw.coinMult, d.coinMult),
     blitz: pickOne(BLITZ_STEPS, raw.blitz, d.blitz),
@@ -1556,12 +1547,8 @@ const KNOBS: Record<string, Knob> = {
   },
 };
 
-const TOGGLES = ['salesOpen', 'maintenance'] as const;
-type ToggleKey = (typeof TOGGLES)[number];
-
 export function createAdmin(api: AdminApi): Admin {
   const fab = $<HTMLButtonElement>('btn-admin-fab');
-  const dot = $<HTMLElement>('admin-fab-dot');
   const stage = $<HTMLElement>('overlay-admin');
   const home = $<HTMLElement>('s-home');
   /* the Profile tab's own door to the stage, so the Command Center is reachable off Home too */
@@ -1572,7 +1559,6 @@ export function createAdmin(api: AdminApi): Admin {
   const panels = [...document.querySelectorAll<HTMLElement>('[data-apanel]')];
   const ctrlTabs = [...(stage?.querySelectorAll<HTMLButtonElement>('[data-ctrl-tab]') ?? [])];
   const ctrlViews = [...(stage?.querySelectorAll<HTMLElement>('[data-ctrl-view]') ?? [])];
-  const sws = [...document.querySelectorAll<HTMLButtonElement>('[data-tog]')];
   /* every lookup below is scoped to the stage: the game-mode drawer carries its own
      `data-step` ball counters, and a bare `[data-step]` would drag them in with it */
   const stepBtns = [...(stage?.querySelectorAll<HTMLButtonElement>('[data-step] [data-dir]') ?? [])];
@@ -1865,17 +1851,6 @@ export function createAdmin(api: AdminApi): Admin {
 
   /* ---------- painting ---------- */
 
-  function paintToggles() {
-    for (const el of sws) {
-      const key = el.dataset.tog as ToggleKey;
-      if (TOGGLES.includes(key)) el.setAttribute('aria-checked', String(runtime[key]));
-    }
-  }
-
-  function paintDot() {
-    if (dot) dot.dataset.state = runtime.maintenance ? 'lock' : 'live';
-  }
-
   function paintSteps() {
     for (const row of stepRows) {
       const k = KNOBS[row.dataset.step ?? ''];
@@ -1901,31 +1876,26 @@ export function createAdmin(api: AdminApi): Admin {
   /** The beacon, chip and subtitle; also called by the tick so an expiring clock flips live. */
   function paintArenaStatus(a: ArenaState) {
     const expired = a.status === 'active' && a.endsAt <= Date.now();
-    const maint = runtime.maintenance;
-    const locked = arenaLocked(a) || maint;
+    const locked = arenaLocked(a);
     for (const root of [arenaRoot, seasonRoot]) {
       if (!root) continue;
       root.dataset.state = expired ? 'finale' : a.status;
-      root.dataset.lock = String(a.matchLocked || maint);
+      root.dataset.lock = String(a.matchLocked);
     }
     if (arenaHeadChip) {
-      arenaHeadChip.textContent = maint
-        ? 'MAINTENANCE'
-        : expired
-          ? 'CLOSED'
-          : locked
-            ? a.status === 'finale' ? 'FINALE' : 'LOCKED'
-            : 'OPEN';
+      arenaHeadChip.textContent = expired
+        ? 'CLOSED'
+        : locked
+          ? a.status === 'finale' ? 'FINALE' : 'LOCKED'
+          : 'OPEN';
       arenaHeadChip.dataset.on = String(!locked);
     }
     if (arenaStateSub) {
-      arenaStateSub.textContent = maint
-        ? 'Room maintenance · all queues paused'
-        : expired
-          ? 'Season closed · reset or extend'
-          : a.matchLocked && a.status === 'active'
-            ? 'Open · matchmaking locked'
-            : ARENA_STATE_COPY[a.status];
+      arenaStateSub.textContent = expired
+        ? 'Season closed · reset or extend'
+        : a.matchLocked && a.status === 'active'
+          ? 'Open · matchmaking locked'
+          : ARENA_STATE_COPY[a.status];
     }
   }
 
@@ -2023,8 +1993,6 @@ export function createAdmin(api: AdminApi): Admin {
   }
 
   function paintAll() {
-    paintToggles();
-    paintDot();
     paintSteps();
     paintSave();
     paintArena();
@@ -4539,9 +4507,13 @@ export function createAdmin(api: AdminApi): Admin {
 
   /* ---------- the live server ---------- */
 
-  /** The local runtime, in the three fields the Worker also enforces. */
+  /** The values to push: the Worker's current maintenance state and this device's queue radii. */
   function serverConfig(): ServerConfig {
-    return { maintenance: runtime.maintenance, normalRadius: runtime.radiusNormal, wideRadius: runtime.radiusWide };
+    return {
+      maintenance: lastStatus?.config.maintenance ?? false,
+      normalRadius: runtime.radiusNormal,
+      wideRadius: runtime.radiusWide,
+    };
   }
 
   const sameConfig = (a: ServerConfig | null, b: ServerConfig): boolean =>
@@ -4674,7 +4646,7 @@ export function createAdmin(api: AdminApi): Admin {
     const denied = !live && !serverBusy && serverDenied;
     /* A Worker that answered at all - even to refuse or to fail - is a live Worker. */
     const gone = !live && !denied && !serverBusy && serverUnreachable;
-    const maint = status ? status.config.maintenance : runtime.maintenance;
+    const maint = status ? status.config.maintenance : false;
     if (serverCard) {
       serverCard.dataset.state = live ? 'live' : denied ? 'denied' : serverBusy ? 'connecting' : 'offline';
       serverCard.dataset.maint = String(maint);
@@ -4867,9 +4839,9 @@ export function createAdmin(api: AdminApi): Admin {
     serverTimer = 0;
   }
 
-  /** Pause or resume the matchmaker. Offline, the same switch parks this device's own queue. */
+  /** Pause or resume the Worker's matchmaker. This is a server-only control. */
   async function toggleServerMaintenance(): Promise<void> {
-    const current = lastStatus?.config.maintenance ?? runtime.maintenance;
+    const current = lastStatus?.config.maintenance ?? false;
     const next = !current;
     if (!serverOn && serverDenied) {
       notify('error');
@@ -4877,13 +4849,9 @@ export function createAdmin(api: AdminApi): Admin {
       return;
     }
     if (!serverOn) {
-      setRuntime({ maintenance: next });
-      paintToggles();
-      paintDot();
-      paintArena();
+      notify('error');
+      api.note('The Worker is offline — the maintenance lock is unchanged.', true, 2800);
       paintServer(lastStatus, serverPingMs);
-      notify(next ? 'warning' : 'success');
-      api.note(`Maintenance ${next ? 'ON' : 'OFF'} on this device — the Worker is offline.`, false, 2600);
       return;
     }
     if (serverBusy) return;
@@ -4906,10 +4874,6 @@ export function createAdmin(api: AdminApi): Admin {
       return;
     }
     lastPushed = applied.config;
-    setRuntime({ maintenance: applied.config.maintenance });
-    paintToggles();
-    paintDot();
-    paintArena();
     if (lastStatus) lastStatus = { ...lastStatus, config: applied.config };
     paintServer(lastStatus, serverPingMs);
     notify(applied.config.maintenance ? 'warning' : 'success');
@@ -5878,21 +5842,6 @@ export function createAdmin(api: AdminApi): Admin {
     closeStage();
   });
 
-  for (const el of sws) {
-    const key = el.dataset.tog as ToggleKey;
-    if (!TOGGLES.includes(key)) continue;
-    el.addEventListener('click', () => {
-      impact('light');
-      setRuntime({ [key]: !runtime[key] } as Partial<AdminRuntime>);
-      paintToggles();
-      paintDot();
-      paintArena();
-      const label = key === 'salesOpen' ? 'Shop Store' : 'Maintenance Lock';
-      api.note(`${label}: ${runtime[key] ? 'on' : 'off'}`, false, 1800);
-      notify(runtime[key] ? 'success' : 'warning');
-    });
-  }
-
   for (const btn of stepBtns) {
     btn.addEventListener('click', () => {
       const row = btn.closest<HTMLElement>('[data-step]');
@@ -6039,9 +5988,8 @@ export function createAdmin(api: AdminApi): Admin {
     else paintInboxBadge();
   });
   onRuntime(() => {
-    paintDot();
-    /* Maintenance Lock and both radii are the server's too: the same flip that repaints the panel
-       pushes the new values to `POST /admin/config`. Offline, `syncConfig` is a no-op. */
+    /* Both queue radii are the server's too: a local change pushes the new values to
+       `POST /admin/config`. Offline, `syncConfig` is a no-op. */
     void syncConfig();
   });
 

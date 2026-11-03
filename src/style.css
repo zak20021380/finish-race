@@ -2172,8 +2172,6 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   box-shadow: 0 10px 20px -12px var(--brand-glow);
   transition: transform var(--motion-fast), opacity var(--motion-fast);
 }
-/* the padlock only exists for the locked capsule, so it ships hidden */
-.cos-lock { display: none; width: 1.05em; height: 1.05em; }
 .cos-btn:active { transform: var(--motion-press); opacity: .9; }
 .cos-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 .cos[data-state="owned"] .cos-btn {
@@ -2195,21 +2193,6 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
   cursor: not-allowed;
 }
 .cos[data-state="short"] .cos-price { color: var(--danger); }
-/* showcase mode: the buy key becomes an inert clay capsule that only explains itself.
-   It takes its own line, because a padlock plus "Not for sale" never fits beside a price inside a
-   160px card — and the 48px tap target it buys back is worth more than the row it costs. */
-.cos[data-state="locked"] .cos-foot { flex-direction: column; align-items: stretch; gap: var(--s1); }
-.cos[data-state="locked"] .cos-price { opacity: .4; }
-.cos[data-state="locked"] .cos-btn {
-  width: 100%;
-  min-height: 48px;
-  background: var(--field);
-  color: var(--ink-soft);
-  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
-  cursor: not-allowed;
-}
-.cos[data-state="locked"] .cos-btn:active { transform: none; opacity: 1; }
-.cos[data-state="locked"] .cos-btn .cos-lock { display: block; opacity: .85; }
 .cos-note { margin: 0; font-size: var(--t-micro); font-weight: 700; color: var(--danger); }
 /* an odd last card takes the row and lies on its side, so the grid never leaves a hole */
 .cos.wide { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: var(--s3); }
@@ -16069,10 +16052,6 @@ html.reduced-motion .mm-blip { opacity: .5; }
   background: var(--mint);
   box-shadow: 0 0 0 2px #1C2433, 0 0 8px 1px rgba(16, 185, 129, .8);
 }
-.admin-fab-dot[data-state="lock"] {
-  background: var(--red);
-  box-shadow: 0 0 0 2px #1C2433, 0 0 8px 1px var(--red-glow);
-}
 @keyframes adm-dot { 0%, 100% { opacity: 1 } 50% { opacity: .4 } }
 @media (prefers-reduced-motion: no-preference) {
   .admin-fab-dot[data-state="live"] { animation: adm-dot 2.4s ease-in-out infinite; }
@@ -17583,7 +17562,6 @@ html.reduced-motion .adm-ret-bar i { transition: none; }
 /* ==========================================================================
    CONTROLS — a 48px row per switch, the tuning grid.
    ========================================================================== */
-.adm-list { display: flex; flex-direction: column; gap: 6px; }
 .adm-sw {
   display: flex;
   align-items: center;

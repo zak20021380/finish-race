@@ -67,7 +67,7 @@ import type { Lobby, LobbyRace } from './lobby';
 import {
   createMatchmaking, myTiq, onlineRace, onlineSearch, setQueueMode, type OnlineSession, type RaceEnd,
 } from './matchmaking';
-import { createAdmin, onRuntime, recordRace, runtime, tiqFrom, type Admin } from './admin';
+import { createAdmin, recordRace, runtime, tiqFrom, type Admin } from './admin';
 import { arena, arenaLocked, onAward, startArenaSync } from './arenaState';
 import {
   MIN_SEATS, ROOM_WAIT_MS, createRoom, difficultyFor, isAutomated, isHuman, lobbyLine, rewardEligible, seatBadge,
@@ -374,9 +374,9 @@ const matchmaking = createMatchmaking({
     setGameMode('bot');
     startGame({ difficulty: menuState.difficulty, sizes: [...menuState.sizes] });
   },
-  /* The Worker refused the queue itself. The local Maintenance Lock normally catches this before a
-     socket is ever opened, so this is the server's own enforcement arriving late — say the same
-     thing the lock does, and hand the player back to the drawer they came from. */
+  /* The Worker refused the queue itself. There is no client-side lock in front of it any more,
+     so this is the server's enforcement arriving as the answer — say what it means and hand the
+     player back to the drawer they came from. */
   onRefused: (reason) => {
     impact('light');
     notify('warning');
@@ -395,19 +395,13 @@ const matchmaking = createMatchmaking({
 });
 
 /**
- * The one door every queue goes through, so the Admin Command Center's Maintenance Lock can stand
- * in front of it: with the lock on, a new queue is refused with the reason rather than silently
- * doing nothing. `matchmaking.open()` is never called directly.
+ * The one door every queue goes through, so the arena's own lock can stand in front of it: when
+ * entries are closed, a new queue is refused with the reason rather than silently doing nothing.
+ * `matchmaking.open()` is never called directly.
  */
 function queueMatch(mode: 'pvp' | 'arena' = 'pvp') {
   setQueueMode(mode);
-  if (runtime.maintenance) {
-    impact('light');
-    notify('warning');
-    showNote(t('maintenanceBody'), false, 3200);
-    return;
-  }
-  /* the Command Center's own lock, mirrored from the server: new entries stop, live races play out */
+  /* the arena lock is mirrored from the server: new entries stop, live races play out */
   const board = arena();
   if (arenaLocked(board)) {
     impact('light');
@@ -3034,10 +3028,7 @@ document.addEventListener('visibilitychange', syncLoop);
 
 mountCoins();                              // every [data-coin] slot gets the shared gold coin
 menu = createMenu({ router, sheets, sheet: sheetById, start: startGame, onBack });
-/* the till reads the live sales switch, so the Command Center's toggle lands without a reload */
-const shop = createShop({
-  sheets, sheet: sheetById, note: showNote, salesOpen: () => runtime.salesOpen,
-});
+const shop = createShop({ sheets, sheet: sheetById });
 home = createHome({
   router, sheets, start: startGame, launch: launchSelectedMode, queue: (mode) => queueMatch(mode),
 });
@@ -3068,9 +3059,6 @@ document.addEventListener('visibilitychange', () => {
      the moment the app is on screen again. */
   if (!document.hidden) resumeRoom();
 });
-/* the shop is the one screen that reads a switch at paint time: repaint it the moment it moves */
-onRuntime(() => shop.refresh());
-
 /* ---- the local party: 2, 3 or 4 seats on the board the rules pick for them ----
    The mode drawer's Practice card carries one segmented control, and it is the whole of the
    three- and four-player entry: pick 3 or 4 and Start runs a race of that many one-ball seats,
@@ -3240,8 +3228,7 @@ initGameModes(sheets, {
   canPopLobby: () => router.current !== 'game',
   /* JOIN NOW on the in-match arrival banner leaves the board through this same quit path. */
   onAbandonMatch: () => quitToMenu(),
-  /* The live mirror closes room entry the same way it closes the queue. */
-  maintenance: () => runtime.maintenance,
+  /* A server-side maintenance refusal still raises the one-key notice. */
   onMaintenance: () => showNote(t('maintenanceBody'), false, 3200),
 });
 onGameModeChange(paintParty);
