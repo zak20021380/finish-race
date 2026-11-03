@@ -2025,6 +2025,13 @@ export function createAdmin(api: AdminApi): Admin {
   /** The series the legend can switch on. Active and Signups start on: that is the dual line. */
   type TrendSeries = 'active' | 'signups' | 'matches';
 
+  /**
+   * The slices the filter can actually ask for. `MatchModeFilter` also carries `arena`, but the
+   * cup has no segment on this card any more: narrowing the type here means no code path can
+   * start an arena read from the chart, whatever the markup says.
+   */
+  type TrendMode = Exclude<MatchModeFilter, 'arena'>;
+
   const TREND_W = 320;
   const TREND_H = 154;
   const TREND_PAD = { l: 28, r: 8, t: 10, b: 20 };
@@ -2049,6 +2056,7 @@ export function createAdmin(api: AdminApi): Admin {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
+    minute: '2-digit',
     hourCycle: 'h23',
   });
 
@@ -2068,10 +2076,24 @@ export function createAdmin(api: AdminApi): Admin {
     return `${parts.get('weekday') ?? ''} ${parts.get('month') ?? ''} ${parts.get('day') ?? ''}`.trim();
   }
 
-  /** `Fri 14:00` — the Tehran hour an hourly bucket opens on, in the same 24-hour digits. */
+  /** `14:05` — the Tehran wall clock of an instant, minutes included, from one parsed stamp. */
+  const trendClockOf = (parts: Map<string, string>): string =>
+    `${parts.get('hour') ?? '00'}:${parts.get('minute') ?? '00'}`;
+
+  /**
+   * `Fri 14:05` — the Tehran instant an hourly bucket opens on. The minutes are read off the
+   * stamp, never assumed: the Worker keys its buckets to UTC hours, and Tehran runs at +03:30, so
+   * every real bucket edge lands on `:30`. Printing a hardcoded `:00` silently shifted the whole
+   * axis half an hour behind the data it was labelling.
+   */
   function trendTimeLabel(ms: number): string {
     const parts = trendZoneParts(ms);
-    return `${parts.get('weekday') ?? ''} ${parts.get('hour') ?? '00'}:00`.trim();
+    return `${parts.get('weekday') ?? ''} ${trendClockOf(parts)}`.trim();
+  }
+
+  /** `Fri 14:05 – 15:05` — the bucket's own span, for the tooltip rather than the narrow pill. */
+  function trendTimeSpan(ms: number, spanMs: number): string {
+    return `${trendTimeLabel(ms)} – ${trendClockOf(trendZoneParts(ms + spanMs))}`;
   }
 
   const TREND_WINDOW: Record<TrendRange, string> = {
@@ -2080,9 +2102,16 @@ export function createAdmin(api: AdminApi): Admin {
     '30d': 'Monthly · last 30 days',
   };
 
+  /** How wide one bucket is, so the inspector can name the span it actually covers. */
+  const TREND_BUCKET_MS: Record<TrendRange, number> = {
+    '24h': 3_600_000,
+    '7d': 86_400_000,
+    '30d': 86_400_000,
+  };
+
   let trendRange: TrendRange = '24h';
-  /** The match-type slice on screen: aggregate, or one of the three tagged modes. */
-  let trendMode: MatchModeFilter = 'all';
+  /** The match-type slice on screen: aggregate, the people, or the practice board. */
+  let trendMode: TrendMode = 'all';
   /** The bucket under the pointer, or -1 while nothing is being inspected. */
   let trendFocus = -1;
   /** The window actually on screen, kept so a pointer move can price it without a repaint. */
@@ -2321,8 +2350,8 @@ export function createAdmin(api: AdminApi): Admin {
     const parts: string[] = [
       '<defs>',
       '<linearGradient id="adm-trend-fill" x1="0" y1="0" x2="0" y2="1">',
-      '<stop offset="0%" stop-color="#22d3ee" stop-opacity=".18" />',
-      '<stop offset="62%" stop-color="#22d3ee" stop-opacity=".05" />',
+      '<stop offset="0%" stop-color="#22d3ee" stop-opacity=".26" />',
+      '<stop offset="46%" stop-color="#22d3ee" stop-opacity=".10" />',
       '<stop offset="100%" stop-color="#22d3ee" stop-opacity="0" />',
       '</linearGradient>',
       '</defs>',
@@ -2331,8 +2360,12 @@ export function createAdmin(api: AdminApi): Admin {
     ];
 
     if (drawn && trendOn.active) {
+      const activePath = trendPath(activePts);
       parts.push(`<path class="adm-trend-fill" fill="url(#adm-trend-fill)" d="${trendArea(activePts)}" />`);
-      parts.push(`<path class="adm-trend-line" data-s="active" d="${trendPath(activePts)}" />`);
+      /* the ambient glow is the same curve laid down as one wide, faint stroke rather than an SVG
+         blur: a filter would be re-rasterised on every pointer move over the plot, a stroke is not. */
+      parts.push(`<path class="adm-trend-halo" d="${activePath}" />`);
+      parts.push(`<path class="adm-trend-line" data-s="active" d="${activePath}" />`);
     }
     if (drawn && trendOn.matches) {
       parts.push(`<path class="adm-trend-line" data-s="matches" d="${trendPath(matchPts)}" />`);
@@ -2464,6 +2497,7 @@ export function createAdmin(api: AdminApi): Admin {
     const totals = trendTotals(points);
     const look = trendLook();
     statTrendRead.dataset.focused = String(!!p);
+    statTrendTs.title = '';
 
     if (!points.length) {
       statTrendTs.textContent = 'No buckets yet';
@@ -2472,6 +2506,10 @@ export function createAdmin(api: AdminApi): Admin {
          time alone: no manual offset arithmetic, and no day-shift around midnight Tehran. */
       statTrendTs.textContent = `${trendRange === '24h' ? trendTimeLabel(p.t) : trendDayLabel(p.t)}`
         + ` ${TREND_ZONE_LABEL}`;
+      /* the pill has room for one instant; the tooltip carries the whole bucket it opens */
+      statTrendTs.title = trendRange === '24h'
+        ? `${trendTimeSpan(p.t, TREND_BUCKET_MS[trendRange])} ${TREND_ZONE_LABEL}`
+        : `${trendDayLabel(p.t)} · 24h bucket · ${TREND_ZONE_LABEL}`;
     } else {
       statTrendTs.textContent = `Window total · ${trendRange.toUpperCase()}`;
     }
@@ -2614,9 +2652,10 @@ export function createAdmin(api: AdminApi): Admin {
   /**
    * The match-type filter. The Worker folds the series for one slice per reading, so the pill
    * starts a fresh read; the old reading is deliberately not relabelled, and the plot says it is
-   * waiting rather than showing another mode's numbers under this one's name.
+   * waiting rather than showing another mode's numbers under this one's name. Only the two tagged
+   * modes the card still offers can arrive here — the arena slice has no control to reach it.
    */
-  function setTrendMode(mode: MatchModeFilter): void {
+  function setTrendMode(mode: TrendMode): void {
     if (mode === trendMode) return;
     trendMode = mode;
     trendFocus = -1;
@@ -5626,8 +5665,10 @@ export function createAdmin(api: AdminApi): Admin {
   }
   for (const key of statTrendModes) {
     key.addEventListener('click', () => {
+      /* the group carries three segments; anything else in `data-gmode` is markup drift, not a
+         slice this card can read */
       const raw = key.dataset.gmode;
-      if (raw !== 'all' && raw !== 'pvp' && raw !== 'bot' && raw !== 'arena') return;
+      if (raw !== 'all' && raw !== 'pvp' && raw !== 'bot') return;
       setTrendMode(raw);
     });
   }

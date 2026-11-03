@@ -17074,14 +17074,15 @@ html.reduced-motion .adm-live-dot { animation: none; }
 }
 .adm-trend-key[aria-pressed="true"] span { opacity: 1; }
 
-/* the match-type slice: four quiet obsidian segments, the selected one carrying a warm rim */
+/* the match-type slice: three equal obsidian segments — one lane each, so ALL, PVP and VS BOT
+   land on the same width and the same 36px touch target whatever the label's letter count */
 .adm-trend-modes {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 3px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
   min-width: 0;
-  padding: 3px;
-  border-radius: 11px;
+  padding: 4px;
+  border-radius: 12px;
   background: #070b12;
   box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
 }
@@ -17094,9 +17095,9 @@ html.reduced-motion .adm-live-dot { animation: none; }
   align-items: center;
   justify-content: center;
   min-width: 0;
-  min-height: 32px;
-  padding: 0 4px;
-  border-radius: 8px;
+  min-height: 36px;
+  padding: 0 6px;
+  border-radius: 9px;
   background: transparent;
   color: var(--ink-soft);
   transition: background var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
@@ -17104,7 +17105,7 @@ html.reduced-motion .adm-live-dot { animation: none; }
 .adm-trend-mode b {
   font-size: 9px;
   font-weight: 900;
-  letter-spacing: .07em;
+  letter-spacing: .08em;
   line-height: 1;
   white-space: nowrap;
 }
@@ -17112,18 +17113,25 @@ html.reduced-motion .adm-live-dot { animation: none; }
 .adm-trend-mode:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
 /* the one selected segment: a gold rim and a restrained halo, never a floodlight */
 .adm-trend-mode[aria-pressed="true"] {
-  background: rgba(251, 191, 36, .10);
+  background:
+    linear-gradient(180deg, rgba(251, 191, 36, .14) 0%, rgba(251, 191, 36, .05) 100%);
   color: #fde68a;
-  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, .40), 0 0 10px rgba(251, 191, 36, .12);
+  box-shadow:
+    inset 0 0 0 1px rgba(251, 191, 36, .42),
+    inset 0 1px 0 rgba(255, 255, 255, .10),
+    0 0 12px rgba(251, 191, 36, .12);
 }
 
-/* the plot: a recessed band the SVG fills edge to edge, scaling its own viewBox uniformly */
+/* the plot: a recessed obsidian band the SVG fills edge to edge, scaling its own viewBox
+   uniformly. The wash at the top is a 6% sky bloom — enough to seat the grid, not a spotlight. */
 .adm-trend-plot {
   position: relative;
   min-height: 96px;
   padding: 4px 2px 2px;
   border-radius: 13px;
-  background: var(--field);
+  background:
+    radial-gradient(124% 92% at 50% -12%, rgba(56, 189, 248, .07) 0%, rgba(56, 189, 248, 0) 62%),
+    var(--field);
   box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
 }
 .adm-trend-svg {
@@ -17185,6 +17193,19 @@ html.reduced-motion .adm-live-dot { animation: none; }
   stroke-dasharray: 5 3;
 }
 .adm-trend-fill { transition: opacity var(--motion-fast); }
+/* the ambient glow under the cyan line: the same path as one wide, faint stroke. A stroke is a
+   paint, not a rasterised filter, so a pointer dragged across the plot never pays for a blur. */
+.adm-trend-halo {
+  fill: none;
+  stroke: var(--s-active);
+  stroke-width: 5.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: .16;
+  vector-effect: non-scaling-stroke;
+  transition: opacity var(--motion-fast);
+  pointer-events: none;
+}
 .adm-trend-dots circle {
   fill: var(--s-signups);
   stroke: var(--field);
@@ -17216,6 +17237,8 @@ html.reduced-motion .adm-live-dot { animation: none; }
 .adm-trend[data-look] .adm-trend-dots,
 .adm-trend[data-look] .adm-trend-fill { opacity: .32; }
 .adm-trend[data-look] .adm-trend-mark { opacity: .28; }
+.adm-trend[data-look] .adm-trend-halo { opacity: .04; }
+.adm-trend[data-look="active"] .adm-trend-halo { opacity: .2; }
 .adm-trend[data-look="active"] .adm-trend-line[data-s="active"],
 .adm-trend[data-look="active"] .adm-trend-fill,
 .adm-trend[data-look="signups"] .adm-trend-line[data-s="signups"],
@@ -17231,11 +17254,14 @@ html.reduced-motion .adm-live-dot { animation: none; }
   filter: drop-shadow(0 0 4px var(--tone-soft));
 }
 
-/* the legend: three quiet chips, each carrying its own sum across the window on screen */
+/* the legend: three obsidian pods, each carrying its own sum across the window on screen.
+   Frosted glass here is a 6% white face over the recess, a 1px hairline rim and a single
+   specular line at the top edge — no live `backdrop-filter`, which would blur the chart behind
+   it on every scroll frame of a phone. */
 .adm-trend-legend {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 5px;
+  gap: 6px;
 }
 .adm-trend-chip {
   appearance: none;
@@ -17244,26 +17270,34 @@ html.reduced-motion .adm-live-dot { animation: none; }
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
-  min-height: 30px;
-  padding: 5px 8px;
-  border-radius: 11px;
-  background: var(--field);
-  box-shadow: var(--inset), inset 0 0 0 1px var(--hair-off);
+  min-height: 38px;
+  padding: 7px 9px;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .055) 0%, rgba(255, 255, 255, .014) 46%, rgba(255, 255, 255, 0) 100%),
+    var(--field);
+  box-shadow:
+    inset 0 0 0 1px var(--hair-off),
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    0 1px 2px rgba(0, 0, 0, .45);
   transition: opacity var(--motion-fast), box-shadow var(--motion-fast),
     background var(--motion-fast), transform var(--motion-fast);
 }
 .adm-trend-chip:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
 .adm-trend-chip[aria-pressed="false"] { opacity: .45; }
 .adm-trend-chip[aria-pressed="false"] .adm-trend-dot { background: var(--ink-soft); box-shadow: none; }
+/* the status dot: a 7px core inside a 3px tinted ring, so the three hues read at arm's length */
 .adm-trend-dot {
   flex: none;
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: var(--tone, var(--ink-soft));
-  box-shadow: 0 0 6px var(--tone-soft, transparent);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--tone, var(--ink-soft)) 15%, transparent),
+    0 0 8px color-mix(in srgb, var(--tone, var(--ink-soft)) 45%, transparent);
 }
 .adm-trend-chip[data-gseries="active"] { --tone: var(--s-active); --tone-soft: var(--s-active-soft); }
 .adm-trend-chip[data-gseries="signups"] { --tone: var(--s-signups); --tone-soft: var(--s-signups-soft); }
@@ -17281,28 +17315,42 @@ html.reduced-motion .adm-live-dot { animation: none; }
   color: var(--ink-soft);
   transition: color var(--motion-fast);
 }
+/* the figure: pure LTR digits inside whatever direction the panel is laid out in, so a Persian
+   UI can mirror the pod without ever reordering `11` into `1 1` */
 .adm-trend-chip-v {
   flex: none;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 900;
   line-height: 1;
+  letter-spacing: -.01em;
   font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
   color: var(--tone, var(--ink));
+  text-shadow: 0 0 12px var(--tone-soft, transparent);
 }
 
 /* the chip that is being read: a rim in its own hue, a tinted glass face and a one-pixel lift.
    `.is-highlighted` is the pointer, `.is-focused` is the lock the operator clicked into place. */
 .adm-trend-chip.is-highlighted,
 .adm-trend-chip.is-focused {
-  background: color-mix(in srgb, var(--tone) 12%, var(--field));
-  box-shadow: var(--inset), inset 0 0 0 1.5px color-mix(in srgb, var(--tone) 70%, transparent),
-    0 0 12px color-mix(in srgb, var(--tone) 20%, transparent);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .07) 0%, rgba(255, 255, 255, 0) 55%),
+    color-mix(in srgb, var(--tone) 13%, var(--field));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--tone) 62%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    0 0 14px color-mix(in srgb, var(--tone) 20%, transparent);
   transform: translateY(-1px);
 }
 .adm-trend-chip.is-focused {
-  background: color-mix(in srgb, var(--tone) 18%, var(--field));
-  box-shadow: var(--inset), inset 0 0 0 1.5px color-mix(in srgb, var(--tone) 88%, transparent),
-    0 0 14px color-mix(in srgb, var(--tone) 26%, transparent);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .09) 0%, rgba(255, 255, 255, 0) 55%),
+    color-mix(in srgb, var(--tone) 19%, var(--field));
+  box-shadow:
+    inset 0 0 0 1.5px color-mix(in srgb, var(--tone) 84%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, .10),
+    0 0 16px color-mix(in srgb, var(--tone) 26%, transparent);
 }
 .adm-trend-chip.is-highlighted .adm-trend-chip-t,
 .adm-trend-chip.is-focused .adm-trend-chip-t { color: var(--ink); }
@@ -17329,21 +17377,30 @@ html.reduced-motion .adm-live-dot { animation: none; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding: 3px 8px;
+  padding: 4px 9px;
   border-radius: var(--radius-pill);
-  background: var(--field);
-  box-shadow: inset 0 0 0 1px var(--hair-off);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .05) 0%, rgba(255, 255, 255, 0) 100%),
+    var(--field);
+  box-shadow: inset 0 0 0 1px var(--hair-off), inset 0 1px 0 rgba(255, 255, 255, .06);
   font-size: 8px;
   font-weight: 900;
   letter-spacing: .06em;
-  line-height: 1.25;
+  line-height: 1.3;
   text-transform: uppercase;
+  /* `TUE 19:30 TEHRAN` is one LTR run: equal-width digits, and no bidi reordering inside it */
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
   color: var(--ink-soft);
   transition: color var(--motion-fast), box-shadow var(--motion-fast);
 }
 .adm-trend-read[data-focused="true"] .adm-trend-ts {
   color: var(--ink);
-  box-shadow: inset 0 0 0 1px rgba(226, 232, 240, .22);
+  box-shadow:
+    inset 0 0 0 1px rgba(125, 211, 252, .34),
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 0 10px rgba(56, 189, 248, .12);
 }
 .adm-trend-toks {
   flex: 1 1 240px;
@@ -17388,10 +17445,14 @@ html.reduced-motion .adm-live-dot { animation: none; }
 }
 .adm-trend-tok-v {
   flex: none;
-  margin-left: auto;
-  font-size: 9.5px;
+  /* logical, not physical: in an RTL panel the figure still lands on the trailing edge */
+  margin-inline-start: auto;
+  font-size: 10px;
   font-weight: 900;
   line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
   color: var(--ink-soft);
   transition: color var(--motion-fast);
 }
@@ -17417,14 +17478,27 @@ html.reduced-motion .adm-live-dot { animation: none; }
   .adm-trend-copy { flex: 1 1 100%; }
   .adm-trend-keys { margin-left: auto; }
   .adm-trend-key { padding: 4px 7px; }
-  .adm-trend-mode { min-height: 34px; padding: 0 3px; }
-  .adm-trend-mode b { font-size: 8.5px; letter-spacing: .04em; }
+  /* three lanes still hold a full 36px target at 320px; only the type steps down */
+  .adm-trend-mode { min-height: 36px; padding: 0 4px; }
+  .adm-trend-mode b { font-size: 8.5px; letter-spacing: .05em; }
   /* the hour pill keeps its own row so the three readings never have to abbreviate */
   .adm-trend-toks { flex: 1 1 100%; }
-  /* three chips in 280px only fit their full words if the chip itself stops breathing first */
-  .adm-trend-chip { gap: 4px; padding: 5px 6px; }
+  /* three pods in 264px: the pod stops breathing before its label has to truncate */
+  .adm-trend-chip { gap: 5px; padding: 6px 6px; min-height: 36px; }
   .adm-trend-chip-t { font-size: 8px; letter-spacing: .02em; }
-  .adm-trend-chip-v { font-size: 10px; }
+  .adm-trend-chip-v { font-size: 12px; }
+  .adm-trend-dot {
+    width: 6px;
+    height: 6px;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--tone, var(--ink-soft)) 16%, transparent);
+  }
+}
+
+/* the narrowest phones: the label gives up a half-pixel of tracking, never a letter */
+@media (max-width: 340px) {
+  .adm-trend-chip { gap: 4px; padding: 6px 5px; }
+  .adm-trend-chip-t { font-size: 7.5px; letter-spacing: .01em; }
+  .adm-trend-chip-v { font-size: 11.5px; }
 }
 
 /* ---- engagement: three at-a-glance tiles, a returning count and two measured shares ---- */
