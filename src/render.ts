@@ -71,8 +71,10 @@ export interface FinishLoser {
 }
 
 /**
- * The timing the caller needs to stage the same sequence in sound, haptics and the result sheet.
- * Both arrays are milliseconds measured from the `finishCue()` call.
+ * The timing the caller needs to stage the same sequence in sound and haptics. Both arrays are
+ * milliseconds measured from the first frame the finisher is painted — the renderer starts its
+ * own clock there, so a slow first draw moves the bangs with the picture instead of eating the
+ * opening beat.
  */
 export interface FinishPlan {
   /** when each loser goes off, in the order it was handed over */
@@ -90,7 +92,7 @@ interface FinishPawn {
   /** centre, in cell units */
   cx: number;
   cy: number;
-  /** the absolute `performance.now()` the burst starts */
+  /** the finisher-clock time the burst starts */
   burstAt: number;
   /** the burst's own rotation, so two shatters never look stamped from one stencil */
   rot: number;
@@ -99,8 +101,14 @@ interface FinishPawn {
 interface FinishState {
   /** the ball that crossed the line — the one that takes the crown */
   winnerBall: number | null;
-  /** the cue's start, on the board's clock */
-  at: number;
+  /** milliseconds elapsed on the finisher's own clock; 0 on its first painted frame */
+  clock: number;
+  /** `performance.now()` of the previous painted frame, -1 before the first */
+  lastFrame: number;
+  /** when the last spark has settled, on the finisher clock */
+  total: number;
+  /** the completion callback has already run for this cue */
+  settled: boolean;
   pawns: FinishPawn[];
   byId: Map<number, FinishPawn>;
 }
@@ -127,6 +135,11 @@ export interface RendererOptions {
   rows?: number;
   /** asked for on `setTheme`; never polled per frame */
   theme?: () => Theme;
+  /**
+   * Fired once, from the frame that ends the current endgame finisher. The caller uses it to open
+   * the result sheet: the sheet then lands after the last spark, not on a wall-clock guess.
+   */
+  onFinishSettled?: () => void;
 }
 
 /**
@@ -213,6 +226,13 @@ const FINISH_SETTLE_MS = 650;     // dust settles before the result sheet is all
 const FINISH_ASCEND_MS = 420;     // the winner's lift to its crowned scale
 const FINISH_ASCEND_SCALE = 0.18; // 1 → 1.18×
 const FINISH_JITTER = 5;          // ±5 css px of violent pre-detonation shake
+/**
+ * The most one frame may advance the finisher clock, in ms. A settled match is exactly when the
+ * main thread spikes — socket traffic, save writes, the result prep — and a raw delta of 300ms
+ * would skip the flash, the rings and half the shards. Capping the step at 33ms keeps every
+ * visible beat on screen; the sequence runs a little longer after a stall, never faster.
+ */
+const FINISH_DT_CAP = 33;
 /**
  * The flash and the rings own the front of the burst, in fractions of `FINISH_BURST_MS`: the blast
  * is over in a heartbeat, and the rest of the window belongs to the debris flying through it.
@@ -995,7 +1015,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   const stood = new Map<number, { c: number; r: number }>();
   /** Blood shed on the tiles behind a wounded ball, in board units. */
   const blood: { x: number; y: number; v: number; s: number; ball: number; born: number }[] = [];
-  let bg: HTMLCanvasElement | null = null;                   // static board layer, rebuilt on resize
+  let boardBufferCanvas: HTMLCanvasElement | null = null;    // static board layer, rebuilt on resize
   let mineBody: CanvasGradient | null = null;                // the mine's dim warm sphere
   let mineGlow: CanvasGradient | null = null;                // …and the glow it casts
   let blastGlow: CanvasGradient | null = null;               // the wide light a trigger throws
@@ -1012,6 +1032,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   const glowG: CanvasGradient[] = [];
   /** The wide, soft light each pawn pools on the tiles around it, in the seat's own colour. */
   const lampG: CanvasGradient[] = [];
+  /** Legal-move dots: the halo each one sits in, struck once per seat and layout. */
+  const dotG: CanvasGradient[] = [];
+  /** Wall-ghost end caps: the glow struck once per seat instead of a gradient per frame. */
+  const capG: CanvasGradient[] = [];
   /** Light sweep over the finish strip: one gradient per resize, moved with the canvas transform. */
   const sweep = { grad: null as CanvasGradient | null, band: 0 };
   /**
@@ -1055,8 +1079,21 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     return out;
   }
 
+  /**
+   * The canvas's device-pixel ratio, capped for the board. A 3x phone draws nine device pixels for
+   * every css pixel; past 2x the slab, its glows and the debris gain nothing the eye can find, and
+   * a small touch viewport tops out at 1.75 — still crisp, a third less fill. On a budget Android
+   * WebView that fill is what the GPU runs out of first.
+   */
+  function canvasDpr(): number {
+    const raw = window.devicePixelRatio || 1;
+    const touch = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+    const small = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 520;
+    return Math.min(raw, touch || small ? 1.75 : 2);
+  }
+
   function resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const dpr = canvasDpr();
     const w = canvas.clientWidth, h = canvas.clientHeight;
     if (w === lastW && h === lastH && dpr === lastDpr) return;
     lastW = w; lastH = h; lastDpr = dpr;
@@ -1070,7 +1107,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   function buildStatic() {
     const { w, h, cell: c, ox, oy, dpr } = L;
     const b = th.board;
-    const cv = bg || (bg = document.createElement('canvas'));
+    /* The static half of the board — slab, every tile, the grid grooves, the finish bar and its
+       beams — is struck once per layout and blitted whole every frame. A frame therefore never
+       rebuilds a tile gradient or re-strokes 140 squares. */
+    const cv = boardBufferCanvas || (boardBufferCanvas = document.createElement('canvas'));
     cv.width = Math.max(1, Math.round(w * dpr));
     cv.height = Math.max(1, Math.round(h * dpr));
     const g = cv.getContext('2d')!;
@@ -1454,6 +1494,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ballFx.length = 0;
     glowG.length = 0;
     lampG.length = 0;
+    dotG.length = 0;
+    capG.length = 0;
     sweep.band = c * 2.4;
     const sg = ctx.createLinearGradient(0, 0, sweep.band, 0);
     sg.addColorStop(0, `rgba(255,236,178,0)`);
@@ -1485,6 +1527,18 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       lamp.addColorStop(0.8, withAlpha(s.ramp.glow, 0.05));
       lamp.addColorStop(1, 'rgba(255,255,255,0)');
       lampG.push(lamp);
+      /* the dot's halo: a radial falloff instead of a `shadowBlur` on every legal-move dot */
+      const dot = ctx.createRadialGradient(0, 0, 0, 0, 0, c * 0.62);
+      dot.addColorStop(0, s.ramp.glow);
+      dot.addColorStop(0.42, withAlpha(s.ramp.glow, 0.42));
+      dot.addColorStop(1, 'rgba(255,255,255,0)');
+      dotG.push(dot);
+      /* the wall ghost's end caps: one gradient per seat, moved to each end at paint time */
+      const cap = ctx.createRadialGradient(0, 0, 0, 0, 0, c * 0.26);
+      cap.addColorStop(0, 'rgba(255,255,255,.95)');
+      cap.addColorStop(0.3, s.ramp.light);
+      cap.addColorStop(1, 'rgba(255,255,255,0)');
+      capG.push(cap);
     }
 
     /* the mine's two paint servers: a dim warm sphere and the glow that goes with it */
@@ -1526,6 +1580,9 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     scorchG = sc;
     decal = buildDecalArt(c, dpr);
     buildCrest(bw);
+    /* The inscription is board furniture, not animation: strike it into the buffer once. Only the
+       arrival flare layered over it in `draw()` stays live paint. */
+    if (crestArt) g.drawImage(crestArt, crestGeo.x, crestGeo.y, crestGeo.w, crestGeo.h);
   }
 
   /**
@@ -1649,7 +1706,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
    * wall it touches instead of bulging over it.
    */
   function drawBar(w: WallSpec, pi: number, alpha: number, grow: number, glow: boolean) {
-    const { cell: c, ox, oy, dpr } = L;
+    const { cell: c, ox, oy } = L;
     const s = sides[pi];
     const st = s.wall;
     const t = barT(c) * st.thick * (0.62 + 0.38 * grow);
@@ -1661,22 +1718,27 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.lineCap = st.caps;
     ctx.globalAlpha = alpha * st.alpha;
     const pearl = !!th.board.pearl;
+    /* The lift a lit bar throws onto the clay, as three wide alpha strokes. `shadowBlur` makes
+       the GPU re-rasterise the stroke through a gaussian blur every frame; flat passes cost a
+       fraction of that and read the same at phone size. */
+    if (glow && st.glow > 0) {
+      const spread = Math.max(2, c * (pearl ? 0.2 : 0.16) * st.glow);
+      const glowA = Math.min(0.55, (pearl ? 0.34 : 0.3) * st.glow);
+      ctx.strokeStyle = pearl ? `rgba(${s.ramp.shade},.62)` : s.ramp.glow;
+      for (let k = 3; k >= 1; k--) {
+        ctx.globalAlpha = alpha * st.alpha * (glowA / k);
+        ctx.lineWidth = t + spread * k;
+        ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 + len, 0); ctx.stroke();
+      }
+      ctx.globalAlpha = alpha * st.alpha;
+    }
     /* a dark contact outline keeps the bar's silhouette crisp on the bright tiles */
     ctx.lineWidth = t + Math.max(1.5, c * (pearl ? 0.072 : 0.05));
     ctx.strokeStyle = `rgba(${s.ramp.shade},${pearl ? 0.6 : 0.42})`;
     ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 + len, 0); ctx.stroke();
     ctx.lineWidth = t;
     ctx.strokeStyle = barGrad(pi, t);
-    if (glow && st.glow > 0) {
-      ctx.shadowColor = pearl ? `rgba(${s.ramp.shade},.62)` : s.ramp.glow;
-      ctx.shadowBlur = c * (pearl ? 0.2 : 0.16) * st.glow * dpr;
-      if (pearl) ctx.shadowOffsetY = c * 0.05 * dpr;
-    }
     ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 + len, 0); ctx.stroke();
-
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetY = 0;
-    ctx.shadowColor = 'transparent';
     if (st.gloss > 0) {                                       // highlight, by default on the lit (upper) side
       ctx.strokeStyle = `rgba(255,255,255,${st.gloss})`;
       ctx.lineWidth = Math.max(1, t * (st.glossAt === 0 ? 0.34 : 0.26));
@@ -1766,24 +1828,24 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ? [{ x: ox + w.x * c, y: oy + w.y * c }, { x: ox + (w.x + 2) * c, y: oy + w.y * c }]
       : [{ x: ox + w.x * c, y: oy + w.y * c }, { x: ox + w.x * c, y: oy + (w.y + 2) * c }];
     const breath = still ? 0.6 : 0.6 + 0.4 * Math.sin(performance.now() / 420);
+    const cap = capG[pi];
     ctx.save();
     for (const e of ends) {
-      const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, c * 0.26);
-      g.addColorStop(0, 'rgba(255,255,255,.95)');
-      g.addColorStop(0.3, s.ramp.light);
-      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.save();
+      ctx.translate(e.x, e.y);
       ctx.globalAlpha = alpha * 0.8;
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(e.x, e.y, c * 0.26, 0, TAU); ctx.fill();
+      ctx.fillStyle = cap;
+      ctx.beginPath(); ctx.arc(0, 0, c * 0.26, 0, TAU); ctx.fill();
       if (!still) {
         ctx.globalAlpha = alpha * 0.26 * breath;
         ctx.strokeStyle = s.ramp.light;
         ctx.lineWidth = Math.max(1, c * 0.035);
-        ctx.beginPath(); ctx.arc(e.x, e.y, c * (0.16 + 0.035 * breath), 0, TAU); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, c * (0.16 + 0.035 * breath), 0, TAU); ctx.stroke();
       }
       ctx.globalAlpha = alpha;
       ctx.fillStyle = 'rgba(255,255,255,.96)';
-      ctx.beginPath(); ctx.arc(e.x, e.y, Math.max(1.4, c * 0.045), 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, Math.max(1.4, c * 0.045), 0, TAU); ctx.fill();
+      ctx.restore();
     }
     ctx.restore();
   }
@@ -2096,15 +2158,15 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const r = capR(c) * c;
     ctx.save();
     ctx.translate(cx, cy);
-    /* obsidian drop-shadow: the badge has to lift off a glowing pawn, never dissolve into it */
-    ctx.shadowColor = 'rgba(2,5,12,.8)';
-    ctx.shadowBlur = Math.max(6, r * 0.6);
-    ctx.shadowOffsetY = Math.max(1.5, r * 0.14);
+    /* the badge's lift: two soft obsidian passes under the disc instead of a shadow filter, so the
+       control still separates from a glowing pawn without a per-frame gaussian on the GPU */
+    const lift = Math.max(1.5, r * 0.14);
+    ctx.fillStyle = 'rgba(2,5,12,.42)';
+    ctx.beginPath(); ctx.arc(0, lift, r * 1.16, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(2,5,12,.2)';
+    ctx.beginPath(); ctx.arc(0, lift, r * 1.34, 0, TAU); ctx.fill();
     ctx.fillStyle = 'rgba(8,12,20,.93)';
     ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetY = 0;
     /* the 1.5px high-contrast hairline: the disc's own border, pale enough to cut a dark tile and
        riding the shadow on a bright one — the chip's bevel below never reaches it */
     ctx.strokeStyle = 'rgba(238,243,250,.9)';
@@ -2165,18 +2227,17 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.save();
     ctx.translate(cx, cy);
     if (dim) ctx.globalAlpha = 0.42;
-    ctx.shadowColor = 'rgba(2,6,14,.62)';
-    ctx.shadowBlur = 4;
-    ctx.shadowOffsetY = 1.5;
+    /* the lens's drop: two dark passes, no per-frame blur */
+    ctx.fillStyle = 'rgba(2,6,14,.62)';
+    ctx.beginPath(); ctx.arc(0, 1.5, r + 1, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(2,6,14,.26)';
+    ctx.beginPath(); ctx.arc(0, 1.5, r + 2.5, 0, TAU); ctx.fill();
     const body = ctx.createRadialGradient(-r * 0.38, -r * 0.48, r * 0.08, 0, 0, r * 1.12);
     body.addColorStop(0, pal.light);
     body.addColorStop(0.46, pal.mid);
     body.addColorStop(1, pal.dark);
     ctx.fillStyle = body;
     ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetY = 0;
     ctx.strokeStyle = 'rgba(255,255,255,.34)';
     ctx.lineWidth = 0.8;
     ctx.beginPath(); ctx.arc(0, 0, r - 0.4, 0, TAU); ctx.stroke();
@@ -2238,10 +2299,14 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const b = toolbarBox(L, ax, ay, o);
     const left = b.x - b.w / 2, top = b.y - b.h / 2;
     ctx.save();
-    /* the glass is dark and translucent; a soft shadow separates it from the clay tiles */
-    ctx.shadowColor = 'rgba(3,7,15,.58)';
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetY = 4;
+    /* the glass is dark and translucent; two soft obsidian passes separate it from the clay tiles
+       without asking the GPU for a blur every frame the ghost is up */
+    ctx.fillStyle = 'rgba(3,7,15,.34)';
+    rr(ctx, left - 1, top + 2, b.w + 2, b.h + 2, (b.h + 2) / 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(3,7,15,.16)';
+    rr(ctx, left - 3, top + 4, b.w + 6, b.h + 6, (b.h + 6) / 2);
+    ctx.fill();
     const glass = ctx.createLinearGradient(0, top, 0, top + b.h);
     glass.addColorStop(0, 'rgba(36,44,64,.78)');
     glass.addColorStop(0.52, 'rgba(17,23,38,.78)');
@@ -2249,9 +2314,6 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.fillStyle = glass;
     rr(ctx, left, top, b.w, b.h, b.h / 2);
     ctx.fill();
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetY = 0;
     /* a frosted rim: bright catch-light above, cool hairline below */
     ctx.strokeStyle = 'rgba(255,255,255,.26)';
     ctx.lineWidth = 0.8;
@@ -2419,8 +2481,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
    * the result sheet lands, and a small crown struck over the ball. Pure vector paint — no layout,
    * no DOM, and every stroke stays inside the slab clip the frame already opened.
    */
-  function drawFinishCrown(cx: number, cy: number, r: number, now: number, at: number, still: boolean) {
-    const el = now - at;
+  function drawFinishCrown(cx: number, cy: number, r: number, clock: number, still: boolean) {
+    const el = clock;
     if (el < 0) return;
     ctx.save();
     ctx.translate(cx, cy);
@@ -2436,7 +2498,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.beginPath(); ctx.arc(0, 0, r * (0.72 + 1.45 * e), 0, TAU); ctx.stroke();
     }
     /* the ring it keeps: a quiet gold ring breathing around the crowned pawn */
-    const breathe = still ? 0.55 : 0.5 + 0.5 * Math.sin(now / 240);
+    const breathe = still ? 0.55 : 0.5 + 0.5 * Math.sin(clock / 240);
     ctx.globalAlpha = 0.3 + 0.34 * breathe;
     ctx.strokeStyle = 'rgba(255,220,140,.95)';
     ctx.lineWidth = Math.max(1.2, r * 0.055);
@@ -2448,11 +2510,19 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.globalCompositeOperation = 'source-over';
     /* seated low enough that a winner on row 0 keeps its crown inside the slab */
     ctx.translate(0, -r * 0.7);
+    /* the metal's warm bloom as its own radial pass — a shadow filter here re-blurs the glyph on
+       every frame, which is exactly the cost the finisher cannot afford on a phone */
+    if (crownG) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.45 * q;
+      ctx.fillStyle = crownG;
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
     ctx.fillStyle = '#ffd97e';
     ctx.strokeStyle = 'rgba(90,48,8,.85)';
     ctx.lineWidth = Math.max(0.8, r * 0.035);
-    ctx.shadowColor = 'rgba(255,196,70,.9)';
-    ctx.shadowBlur = r * 0.6;
     ctx.beginPath();
     ctx.moveTo(-s, s * 0.5);
     ctx.lineTo(-s, -s * 0.42);
@@ -2463,7 +2533,6 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.lineTo(s, s * 0.5);
     ctx.closePath();
     ctx.fill();
-    ctx.shadowBlur = 0;
     ctx.stroke();
     ctx.restore();
   }
@@ -2609,6 +2678,22 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const { cell: c, ox, oy } = L;
     const still = motionReduced();
     const fin = finish;
+    /*
+     * The finisher runs on its own clock, advanced by this frame's CLAMPED delta. A settled match
+     * is exactly when the main thread spikes — socket traffic, save writes, DOM prep — and a raw
+     * 300ms gap would jump the explosion past its flash, its rings and half its shards. At most
+     * 33ms per frame, every visible beat is painted; after a stall the sequence simply runs longer.
+     * The first painted frame owns t=0, so the caller's sound beats line up with the picture.
+     */
+    let finNow = now;
+    if (fin) {
+      if (fin.lastFrame < 0) fin.lastFrame = now;
+      else {
+        fin.clock += Math.min(Math.max(0, now - fin.lastFrame), FINISH_DT_CAP);
+        fin.lastFrame = now;
+      }
+      finNow = fin.clock;
+    }
     /* a trigger's wound lands with the detonation, not with the step onto the charge: until then
        the ball is whole, and its trail is still growing from the square the charge sits on. */
     for (const [id, w] of pendingWounds) {
@@ -2632,7 +2717,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (bg) ctx.drawImage(bg, 0, 0);
+    if (boardBufferCanvas) ctx.drawImage(boardBufferCanvas, 0, 0);
     ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
 
     /*
@@ -2666,14 +2751,12 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.restore();
     }
 
-    if (crestArt) {
+    /* the inscription itself is baked into the board buffer; only the arrival flare is live paint */
+    if (goal > 0 && crestArt) {
       ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = goal * 0.85;
       ctx.drawImage(crestArt, crestGeo.x, crestGeo.y, crestGeo.w, crestGeo.h);
-      if (goal > 0) {                                   // the metal catches the line as it is taken
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = goal * 0.85;
-        ctx.drawImage(crestArt, crestGeo.x, crestGeo.y, crestGeo.w, crestGeo.h);
-      }
       ctx.restore();
     }
 
@@ -2777,12 +2860,17 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.save();
     ctx.strokeStyle = th.board.pearl ? 'rgba(24,30,40,.78)' : 'rgba(255,255,255,.96)';
     ctx.lineWidth = Math.max(1.75, c * 0.045);
-    ctx.fillStyle = side.ramp.mid;
-    ctx.shadowColor = side.ramp.glow;                 // the dots carry a little glow of their own
-    ctx.shadowBlur = c * 0.4 * (0.6 + 0.4 * pulse);
+    /* the dots' glow: one radial pass struck with the board, not a shadow on every dot */
+    const halo = dotG[v.state.turn];
     for (let i = 0; i < v.hints.length; i++) {
       const h = v.hints[i];
       const x = ox + (h.c + 0.5) * c, y = oy + (h.r + 0.5) * c;
+      if (halo) {
+        ctx.globalAlpha = 0.42 + 0.22 * pulse;
+        ctx.fillStyle = halo;
+        ctx.beginPath(); ctx.arc(x, y, c * 0.62, 0, TAU); ctx.fill();
+      }
+      ctx.fillStyle = side.ramp.mid;
       ctx.globalAlpha = 0.1 + 0.06 * pulse;
       ctx.beginPath(); ctx.arc(x, y, dotR * 1.75, 0, TAU); ctx.fill();
       ctx.globalAlpha = 0.9 + 0.1 * pulse;
@@ -2968,7 +3056,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const seat = b.team;
       /* the finisher's own pawn: once its burst begins, the ball is gone — the debris takes over */
       const pawn = fin ? fin.byId.get(b.id) : undefined;
-      if (pawn && now >= pawn.burstAt) continue;
+      if (pawn && finNow >= pawn.burstAt) continue;
       /* a ball the mine is throwing rides its own arc: onto the charge, then up and over the wall.
          The state's own slide lands underneath it, so the takeover at either end is seamless. */
       const kn = still ? undefined : knocks.find((k) => k.id === b.id);
@@ -2995,19 +3083,19 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
          driven by two out-of-phase harmonics so the shake never settles into a steady wobble */
       let shakeEl = -1;
       if (pawn) {
-        shakeEl = now - (pawn.burstAt - FINISH_SHAKE_MS);
+        shakeEl = finNow - (pawn.burstAt - FINISH_SHAKE_MS);
         if (shakeEl >= 0) {
           const ramp = Math.min(1, shakeEl / 48);
           cx += (Math.sin(shakeEl * 0.23) + Math.sin(shakeEl * 0.61) * 0.32) * FINISH_JITTER * ramp;
           cy += (Math.cos(shakeEl * 0.19) + Math.sin(shakeEl * 0.53) * 0.26) * FINISH_JITTER * ramp;
         }
       }
-      const crowned = fin !== null && b.id === fin.winnerBall && now >= fin.at;
+      const crowned = fin !== null && b.id === fin.winnerBall;
       let r = ballR(c) * (b.sel ? 1.08 : 1);          // the chosen ball lifts off the clay
       if (pawn && shakeEl >= 0) r *= 1 + 0.09 * Math.min(1, shakeEl / FINISH_SHAKE_MS);
       if (crowned && fin) {
         /* the winner rises to 1.18× and stays there, under the crown */
-        const q = clamp((now - fin.at) / FINISH_ASCEND_MS, 0, 1);
+        const q = clamp(finNow / FINISH_ASCEND_MS, 0, 1);
         r *= 1 + FINISH_ASCEND_SCALE * (1 - Math.pow(1 - q, 3));
       }
       /* the tail it is dragging right now: sampled from where it stood last frame. A ball riding
@@ -3033,7 +3121,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         ctx.save();
         ctx.translate(cx, cy);
         ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = still ? 0.6 : 0.55 + 0.24 * Math.sin(now / 230);
+        ctx.globalAlpha = still ? 0.6 : 0.55 + 0.24 * Math.sin(finNow / 230);
         ctx.fillStyle = crownG;
         ctx.beginPath(); ctx.arc(0, 0, ballR(c) * 2.9, 0, TAU); ctx.fill();
         ctx.restore();
@@ -3077,7 +3165,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       }
       drawBall(cx, cy, r, seat, SEATS_N[seat] > 1 ? n : 0, hurt);
       if (sq !== 0) ctx.restore();
-      if (crowned && fin) drawFinishCrown(cx, cy, r, now, fin.at, still);
+      if (crowned && fin) drawFinishCrown(cx, cy, r, finNow, still);
     }
 
     /* mine-blast dust: the puff a thrown ball kicks up where it comes to rest */
@@ -3118,7 +3206,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
      * stays inside the slab clip, so the bloom and the debris can spill over the neighbouring tiles
      * but never off the board.
      */
-    if (fin) drawFinishFx(fin, now, c, ox, oy);
+    if (fin) drawFinishFx(fin, finNow, c, ox, oy);
 
     ctx.restore();                     // the slab clip opened at the top of this frame
 
@@ -3141,6 +3229,13 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
      */
     if (v.mineGhost && v.capsule?.hit.kind === 'mine-confirm') {
       drawMineCapsules(v.mineGhost.c + 0.5, v.mineGhost.r + 0.5, still);
+    }
+
+    /* The picture is finished: only now may the caller open the result sheet. The finisher clock
+       is authoritative, so a wall-clock hiccup can never cut the last explosion short. */
+    if (fin && !fin.settled && fin.clock >= fin.total) {
+      fin.settled = true;
+      opts.onFinishSettled?.();
     }
   }
 
@@ -3170,16 +3265,19 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     /**
      * Start the endgame finisher: crown the winning pawn, then shake and shatter every losing pawn
      * in the order it was handed over. The caller decides that order (farthest from the line
-     * first); the renderer resolves the beats against the live board clock and hands back the plan
-     * the caller schedules its bangs, buzzes and the result sheet against. A reduced-motion board
-     * runs no choreography at all, and an empty losers list never hides a pawn.
+     * first); the renderer resolves the beats on its own clock and hands back the plan the caller
+     * schedules its bangs and buzzes against.
+     *
+     * The choreography plays under every motion setting — a battery saver on Android flips the OS
+     * reduced-motion flag as a side effect, and the end of a race is gameplay feedback, not
+     * decoration. An empty losers list is the only thing that cancels it, because there is no
+     * explosion to stage.
      */
     finishCue(winnerBall: number | null, losers: readonly FinishLoser[]): FinishPlan {
-      if (motionReduced() || !losers.length) {
+      if (!losers.length) {
         finish = null;
         return { bursts: [], total: 0 };
       }
-      const now = performance.now();
       const pawns: FinishPawn[] = [];
       const byId = new Map<number, FinishPawn>();
       const bursts: number[] = [];
@@ -3190,16 +3288,18 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
           id: l.id,
           cx: l.cell.c + 0.5,
           cy: l.cell.r + 0.5,
-          burstAt: now + at,
+          /* relative to the finisher's clock, which starts on its first painted frame */
+          burstAt: at,
           rot: i * 0.7 + (l.id % 7) * 0.13,
         };
         pawns.push(pawn);
         byId.set(l.id, pawn);
         bursts.push(at);
       }
-      finish = { winnerBall, at: now, pawns, byId };
       const last = bursts[bursts.length - 1] ?? 0;
-      return { bursts, total: last + FINISH_BURST_MS + FINISH_SETTLE_MS };
+      const total = last + FINISH_BURST_MS + FINISH_SETTLE_MS;
+      finish = { winnerBall, clock: 0, lastFrame: -1, total, settled: false, pawns, byId };
+      return { bursts, total };
     },
     /** Cancel a finisher that has not finished: every pawn whole again, no debris, no crown. */
     cancelFinish() { finish = null; },

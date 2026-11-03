@@ -568,7 +568,7 @@ const liveTheme = (): Theme => {
   return appearance() === 'light' ? { ...base, board: PEARL_BOARD } : base;
 };
 
-const renderer = createRenderer(canvas, { theme: liveTheme });
+const renderer = createRenderer(canvas, { theme: liveTheme, onFinishSettled: finishSettled });
 const confetti = createConfetti(confettiEl);
 const toVec = (p: Pos): Vec => ({ x: p.c + 0.5, y: p.r + 0.5 });
 
@@ -1370,25 +1370,27 @@ function showOverlay() {
  * The card waits for the whole endgame finisher instead: the winner is crowned, then every losing
  * pawn overheats and detonates in sequence, and the sheet opens only after the last spark settles.
  * The beats are the renderer's (`finishCue` hands back the plan); this side is responsible for the
- * sound, the haptics and the one timer that opens the card.
+ * sound and the haptics, and the renderer's own completion callback owns opening the sheet.
  */
-const GOAL_BEAT_MS = 600;                 // reduced motion: the old single beat, no choreography
+const GOAL_BEAT_MS = 600;                 // a winner with no rival to shatter: the goal pulse alone
 let goalBeat = 0;
+/** A finisher is on the board: the result sheet now belongs to the renderer's completion callback. */
+let finishPending = false;
 /** Every timer the finisher owns besides the sheet's own, so leaving the race clears them all. */
 let finishTimers: number[] = [];
 /** Bumped on every cancel: a callback that was already queued can never land in a new race. */
 let finishRun = 0;
 
+/** Is the endgame in flight (finisher playing or its fallback beat ticking)? */
+function finishUnderway(): boolean {
+  return goalBeat !== 0 || finishPending;
+}
+
 function armGoalBeat() {
-  if (overlayOpen || goalBeat) return;
+  if (overlayOpen || finishUnderway()) return;
   const winner = state.winner;
   if (winner === null) return;
   menuBtn.disabled = true;               // no pause sheet opening onto a race that is already settled
-  /* Reduced motion gets the goal zone's pulse and nothing else: no jitter, no debris, no wait. */
-  if (motionReduced()) {
-    goalBeat = window.setTimeout(() => { goalBeat = 0; showOverlay(); }, GOAL_BEAT_MS);
-    return;
-  }
   /* Farthest from the line first, so the closest rival is the last one standing — and the last
      thing heard before the card. */
   const losers = state.balls
@@ -1402,28 +1404,53 @@ function armGoalBeat() {
     if (b.team !== winner) continue;
     if (b.pos.r < lead) { lead = b.pos.r; winnerBall = b.id; }
   }
+  /* The finisher plays under every motion setting: an Android battery saver flips the OS
+     reduced-motion flag on its own, and the end-of-race explosion is gameplay feedback, not
+     decoration. Only a race with nobody left to shatter falls back to the plain goal pulse. */
   const plan = renderer.finishCue(winnerBall, losers);
   if (!plan.bursts.length) {
     goalBeat = window.setTimeout(() => { goalBeat = 0; showOverlay(); }, GOAL_BEAT_MS);
     return;
   }
   const run = ++finishRun;
-  /* Every burst is its own beat: the synthesized boom and the heavy buzz land on the same frame the
-     shards leave the pawn. Synthesized because the finisher cannot go silent on an asset that
-     failed to fetch or had not decoded yet — the deep bass hit is built on the spot, every time. */
-  for (let i = 0; i < plan.bursts.length; i++) {
-    finishTimers.push(window.setTimeout(() => {
-      if (run !== finishRun) return;
-      playBoom(0.92);
-      shatterImpact();
-      shake(true);
-    }, plan.bursts[i]));
-  }
-  goalBeat = window.setTimeout(() => { goalBeat = 0; showOverlay(); }, plan.total);
+  finishPending = true;
+  /* The renderer starts its finisher clock on the first frame it paints. Two rAFs are the
+     guarantee that frame has happened (the loop's own callback is always registered ahead of
+     these), so the detonation beats are armed against the picture, not against the cue call. */
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (run !== finishRun || !finishPending) return;
+    /* Every burst is its own beat: the synthesized boom and the heavy buzz land on the same frame
+       the shards leave the pawn. Synthesized because the finisher cannot go silent on an asset that
+       failed to fetch or had not decoded yet — the deep bass hit is built on the spot, every time. */
+    for (let i = 0; i < plan.bursts.length; i++) {
+      finishTimers.push(window.setTimeout(() => {
+        if (run !== finishRun) return;
+        playBoom(0.92);
+        shatterImpact();
+        shake(true);
+      }, plan.bursts[i]));
+    }
+  }));
+}
+
+/**
+ * The renderer painted the finisher's final settle frame. The match result is heavy — save writes,
+ * standings, the sheet's whole DOM — and it belongs after the explosion, never on top of it. The
+ * zero-delay task lets the last frame present before that work begins.
+ */
+function finishSettled() {
+  window.setTimeout(() => {
+    if (!finishPending) return;
+    /* `showOverlay` flips `overlayOpen` on its first line, so no `ui()` repaint can re-arm the
+       finisher between this call and the sheet taking the stage. */
+    showOverlay();
+    finishPending = false;
+  }, 0);
 }
 
 function clearGoalBeat() {
   finishRun++;
+  finishPending = false;
   for (const id of finishTimers) window.clearTimeout(id);
   finishTimers = [];
   if (goalBeat) window.clearTimeout(goalBeat);
@@ -2097,7 +2124,7 @@ function startGame(setup: StartSetup) {
        the crown only when the room vouched for that seat's VIP entitlement */
     session.onPostChat((line, side, vip) => banter.inbound(line, side, vip));
     /* the settled socket died, or the rival walked out: the result's live keys go with it */
-    session.onPostLeft(() => { if (overlayOpen || goalBeat) lockResultForLeft(); });
+    session.onPostLeft(() => { if (overlayOpen || finishUnderway()) lockResultForLeft(); });
     session.onEnd((end) => endOnline(end));
     session.onReject(() => {
       notify('error');
@@ -2139,7 +2166,7 @@ function endOnline(end: RaceEnd): void {
   if (state.winner !== null) {
     /* only the result capsule needs the guard: a socket closed on the way out of the board is
        already past the point where a rematch could be offered */
-    if (overlayOpen || goalBeat) lockResultForLeft();
+    if (overlayOpen || finishUnderway()) lockResultForLeft();
     return;
   }
   forfeit = end.why;
@@ -2193,7 +2220,7 @@ function quitToMenu() {
      (if one was raised) is the only thing left to act on. */
   notifyMatchBusy(false);
   /* a race that ended inside the goal beat still has to be paid out before the board goes away */
-  if (goalBeat) { clearGoalBeat(); showOverlay(); }
+  if (finishUnderway()) { clearGoalBeat(); showOverlay(); }
   /* Menu, the back button and a quit all land here: the fanfare never follows the board home */
   stopVictoryFanfare();
   stopDefeat();
@@ -2977,7 +3004,10 @@ function frame(now: number) {
   view.capsule = capsule;
   view.last = marks;
   view.thinking = wantsOpponent() && !paused && !tutorialActive ? state.turn : null;
-  renderer.draw(view, now);
+  /* The result capsule lays a full-screen blurred scrim over the board. Repainting the canvas
+     behind it would make the compositor re-blur a board nobody can see, every frame — so once the
+     sheet is up only the confetti (drawn above it) keeps ticking. */
+  if (!overlayOpen) renderer.draw(view, now);
   confetti.tick(dt, now);
   raf = requestAnimationFrame(frame);
 }
@@ -2987,7 +3017,12 @@ function frame(now: number) {
  *  leaving the board stops it, coming back hands the seat a full allowance again. */
 let raf = 0;
 function syncLoop() {
-  const want = !document.hidden && !paused && router.current === 'game';
+  const onBoard = !document.hidden && router.current === 'game';
+  /* The race stage is the one screen that repaints a canvas every frame. `game-live` parks the
+     drifting mesh and every off-screen sheet's loop underneath it, so the compositor's only
+     moving layer is the board itself. */
+  document.documentElement.classList.toggle('game-live', onBoard);
+  const want = onBoard && !paused;
   if (want && !raf) { last = performance.now(); raf = requestAnimationFrame(frame); }
   else if (!want && raf) { cancelAnimationFrame(raf); raf = 0; }
   if (!want) stopClock();

@@ -274,6 +274,27 @@ html, body {
   background: radial-gradient(120% 88% at 50% 36%, rgba(255, 255, 255, 0) 42%, var(--vig) 100%);
 }
 
+/* ---- the live board: park every layer that is not the canvas ----
+   A race repaints its canvas every frame. The drifting mesh underneath is three full-viewport
+   composited layers that bring nothing a player can see there, and an off-screen sheet's infinite
+   keyframes keep ticking for a surface nobody is looking at. `game-live` (set by main.ts from the
+   router) freezes the mesh; the sheet loop is parked until the sheet opens. The wash itself is
+   untouched, so the screen looks exactly the same — it just stops spending frames. */
+html.game-live .blob { animation-play-state: paused; will-change: auto; }
+html.game-live .screen.game .card {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.sheet:not(.open) *,
+.sheet:not(.open) *::before,
+.sheet:not(.open) *::after,
+.scrim:not(.open),
+[hidden] *,
+[hidden] *::before,
+[hidden] *::after {
+  animation-play-state: paused !important;
+}
+
 #app {
   position: relative;                 /* anchor for the overlay, sheets + confetti */
   height: var(--app-h);
