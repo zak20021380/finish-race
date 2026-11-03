@@ -2604,19 +2604,6 @@
                 <span data-i18n="gameplayAudio">Gameplay &amp; Audio</span>
               </h2>
               <div class="set-rows">
-                <button class="row set-row" type="button" id="lang-row" aria-haspopup="dialog">
-                  <span class="set-ico sm sky" aria-hidden="true"><svg class="ico"><use href="#i-globe" /></svg></span>
-                  <span class="row-txt">
-                    <span class="row-t" data-i18n="language">Language</span>
-                    <span class="row-s" data-i18n="languageSub">App language · applies instantly</span>
-                  </span>
-                  <span class="lang-pill" aria-hidden="true">
-                    <span class="flag" id="lang-flag">🇬🇧</span>
-                    <span class="flag-code" id="lang-code">EN</span>
-                    <span id="lang-name">English</span>
-                  </span>
-                  <svg class="ico chev tactile" aria-hidden="true"><use href="#i-next" /></svg>
-                </button>
                 <button class="row" type="button" role="switch" aria-checked="true" data-set="sound">
                   <span class="row-txt"><span class="row-t" data-i18n="sound">Sound</span></span>
                   <span class="switch" aria-hidden="true"></span>
@@ -2648,30 +2635,6 @@
                     <span class="row-s" data-i18n="howToPlaySub">Board basics · replay the hands-on tutorial</span>
                   </span>
                   <svg class="ico chev tactile" aria-hidden="true"><use href="#i-next" /></svg>
-                </button>
-              </div>
-            </section>
-
-            <section class="set-card" aria-labelledby="set-h-comm">
-              <h2 class="set-card-h" id="set-h-comm">
-                <span data-i18n="communitySupport">Community &amp; Support</span>
-              </h2>
-              <div class="set-rows">
-                <button class="row set-row" type="button" id="tg-channel">
-                  <span class="set-ico sm sky" aria-hidden="true"><svg class="ico"><use href="#i-send" /></svg></span>
-                  <span class="row-txt">
-                    <span class="row-t" data-i18n="tgChannel">Official Telegram Channel</span>
-                    <span class="row-s" data-i18n="tgChannelSub">News, cups and squad events</span>
-                  </span>
-                  <svg class="ico ext" aria-hidden="true"><use href="#i-ext" /></svg>
-                </button>
-                <button class="row set-row" type="button" id="admin-row" aria-haspopup="dialog">
-                  <span class="set-ico sm gold" aria-hidden="true"><svg class="ico"><use href="#i-headset" /></svg></span>
-                  <span class="row-txt">
-                    <span class="row-t" data-i18n="contactAdmin">Contact Admin</span>
-                    <span class="row-s" data-i18n="contactAdminSub">Direct help, inquiries &amp; feedback</span>
-                  </span>
-                  <span class="admin-pill" aria-hidden="true"><svg class="ico"><use href="#i-chat" /></svg></span>
                 </button>
               </div>
             </section>
@@ -2907,6 +2870,57 @@
                   <span class="row-txt"><span class="row-t">Favourite mode</span><span class="row-s" id="pf-fav-sub">No races yet</span></span>
                   <span class="row-v" id="pf-fav">—</span>
                 </div>
+              </div>
+            </div>
+            <!-- Preferences & Support: the three doors the old Settings menu held — language,
+                 the official channel, the admin desk — rebuilt as one module on the screen the
+                 player actually owns. The channel leaves the app, so it answers with the foreign
+                 open key; the admin desk stays inside, so it answers with the app's own chat
+                 pill. Persian and Arabic mirror the whole row: key to the right, arrow to the
+                 left, text right-aligned. -->
+            <div class="pf-sec pf-prefs-sec">
+              <h2 class="eq-h pf-sec-h">
+                <span data-i18n="prefsSupport">Preferences &amp; Support</span>
+                <span class="pf-sec-sub" data-i18n="prefsSupportSub">Language · channel · help</span>
+              </h2>
+              <div class="pf-prefs">
+                <button class="pf-pref" type="button" id="profile-lang-btn" aria-haspopup="dialog"
+                        aria-label="Language">
+                  <span class="pf-pref-key" aria-hidden="true"><svg class="ico"><use href="#i-globe" /></svg></span>
+                  <span class="pf-pref-txt">
+                    <span class="pf-pref-t" data-i18n="language">Language</span>
+                    <span class="pf-pref-s" data-i18n="languageSub">App language · applies instantly</span>
+                  </span>
+                  <span class="pf-pref-slot">
+                    <span class="lang-pill" aria-hidden="true">
+                      <span class="flag" id="lang-flag">🇬🇧</span>
+                      <span class="flag-code" id="lang-code">EN</span>
+                      <span id="lang-name">English</span>
+                    </span>
+                  </span>
+                  <svg class="ico pf-pref-chev" aria-hidden="true"><use href="#i-next" /></svg>
+                </button>
+                <button class="pf-pref" type="button" id="profile-tg-channel">
+                  <span class="pf-pref-key" aria-hidden="true"><svg class="ico"><use href="#i-send" /></svg></span>
+                  <span class="pf-pref-txt">
+                    <span class="pf-pref-t" data-i18n="tgChannel">Official Telegram Channel</span>
+                    <span class="pf-pref-s" data-i18n="tgChannelSub">News, cups and squad events</span>
+                  </span>
+                  <span class="pf-pref-slot">
+                    <span class="pf-pref-open" aria-hidden="true"><svg class="ico"><use href="#i-ext" /></svg></span>
+                  </span>
+                </button>
+                <button class="pf-pref" type="button" id="profile-admin-contact" aria-haspopup="dialog">
+                  <span class="pf-pref-key gold" aria-hidden="true"><svg class="ico"><use href="#i-headset" /></svg></span>
+                  <span class="pf-pref-txt">
+                    <span class="pf-pref-t" data-i18n="contactAdmin">Contact Admin</span>
+                    <span class="pf-pref-s" data-i18n="contactAdminSub">Direct help, inquiries &amp; feedback</span>
+                  </span>
+                  <span class="pf-pref-slot">
+                    <span class="pf-pref-chat" aria-hidden="true"><svg class="ico"><use href="#i-chat" /></svg></span>
+                  </span>
+                  <svg class="ico pf-pref-chev" aria-hidden="true"><use href="#i-next" /></svg>
+                </button>
               </div>
             </div>
             <!-- live-ops door: allowlisted admins get this row (and the Home FAB); everyone

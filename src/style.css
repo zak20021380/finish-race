@@ -31484,3 +31484,205 @@ html.reduced-motion .pass-sheet .tp-cta::after { animation: none; opacity: 0; }
 html.reduced-motion .pass-sheet.open .tp-meter-fill,
 html.reduced-motion .tp-meter-fill { animation: none; transition: none; }
 
+/* ==========================================================================
+   PROFILE — PREFERENCES & SUPPORT.
+   Language, the official channel and the admin desk moved out of Settings and
+   onto the screen the player owns. They ride the invite card's recipe — one
+   raised clay face, one 40px carved key, one press — so the module reads as
+   Profile, not as Settings transplanted. Colour does the sorting: sky for the
+   door that leaves the app, gold for the desk that stays inside.
+   ========================================================================== */
+.pf-prefs { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; max-width: 100%; }
+.pf-prefs-sec { gap: var(--pf-rhythm-tight, var(--s2)); }
+.pf-pref {
+  --d: 3px;
+  --pf-pref-hair: rgba(255, 255, 255, .06);
+  appearance: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: var(--pf-card-pad-dense) var(--pf-card-pad);
+  border-radius: 18px;
+  text-align: left;
+  color: var(--ink);
+  background: var(--clay-face);
+  box-shadow:
+    0 var(--d) 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    inset 0 0 0 1px var(--pf-pref-hair);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.pf-pref:hover:not(:active) { transform: translateY(-1px); }
+.pf-pref:active { transform: translateY(var(--press-y)); --d: 1px; }
+.pf-pref:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+/* the module's own doors keep their own hairline: teal out, gold in */
+#profile-tg-channel { --pf-pref-hair: rgba(125, 211, 252, .2); }
+#profile-admin-contact { --pf-pref-hair: rgba(252, 211, 77, .2); }
+
+/* the carved key: a dark well the glyph lights from inside, same recipe as the
+   invite card's gift well, so no row on this screen invents its own depth */
+.pf-pref-key {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: linear-gradient(180deg, #0B111E 0%, var(--field) 100%);
+  color: var(--brand-ink);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, .6),
+    inset 0 -1px 0 rgba(255, 255, 255, .06),
+    inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+.pf-pref-key .ico { width: 20px; height: 20px; }
+.pf-pref-key.gold { color: var(--gold-ink); }
+
+.pf-pref-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pf-pref-t {
+  font-size: var(--t-2);
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pf-pref-s {
+  font-size: var(--t-micro);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* the answer end: the pill or key sits flush right, the chevron trails it */
+.pf-pref-slot { flex: none; display: flex; align-items: center; justify-content: flex-end; min-width: 0; }
+.pf-pref-chev { flex: none; width: 15px; height: 15px; color: var(--ink-soft); opacity: .7; }
+
+/* the language read-out reuses the Settings pill, one notch quieter here so the
+   row never competes with the value it reports */
+.pf-pref .lang-pill { max-width: none; padding: 5px 9px; font-size: var(--t-micro); }
+.pf-pref .lang-pill #lang-name { max-width: 22vw; }
+
+/* ---- the channel's open key: a teal lip that answers the tap --------------
+   The ring pings once as the screen lands, the glyph leans out under a pointer.
+   The ping rides a pseudo-element because the glyph's own transform is already
+   spoken for: RTL mirrors it, and a press drops it. */
+.pf-pref-open {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: linear-gradient(180deg, rgba(125, 211, 252, .14) 0%, rgba(14, 165, 233, .04) 100%);
+  color: var(--brand-ink);
+  box-shadow:
+    0 2px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 0 0 1px rgba(125, 211, 252, .3);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.pf-pref-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 11px;
+  box-shadow: 0 0 0 1px rgba(125, 211, 252, .55);
+  opacity: 0;
+}
+.pf-pref-open .ico { width: 15px; height: 15px; transition: transform var(--motion-fast); }
+.pf-pref:hover:not(:active) .pf-pref-open .ico { transform: translate(1px, -1px); }
+.pf-pref:active .pf-pref-open { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), inset 0 0 0 1px rgba(125, 211, 252, .3); }
+@keyframes pf-open-ping { from { opacity: .7; transform: scale(1); } to { opacity: 0; transform: scale(1.38); } }
+#s-profile.in-fwd .pf-pref-open::after,
+#s-profile.in-back .pf-pref-open::after { animation: pf-open-ping .9s cubic-bezier(.22, .61, .36, 1) .12s both; }
+@media (prefers-reduced-motion: reduce) {
+  #s-profile.in-fwd .pf-pref-open::after,
+  #s-profile.in-back .pf-pref-open::after { animation: none; }
+}
+html.reduced-motion #s-profile.in-fwd .pf-pref-open::after,
+html.reduced-motion #s-profile.in-back .pf-pref-open::after { animation: none; }
+
+/* ---- the admin desk's chat pill: the Settings pill, gold-rimmed ---------- */
+.pf-pref-chat {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #2E3A55 0%, #1D2736 100%);
+  color: var(--gold-ink);
+  box-shadow:
+    0 2px 0 #080C14,
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 0 0 1px rgba(252, 211, 77, .26);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.pf-pref-chat .ico { width: 15px; height: 15px; }
+.pf-pref:active .pf-pref-chat {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 #080C14, inset 0 1px 0 rgba(255, 255, 255, .14), inset 0 0 0 1px rgba(252, 211, 77, .26);
+}
+
+/* ---- Persian / Arabic: the whole row mirrors -----------------------------
+   Key to the right, answer to the left, arrow pointing back the other way.
+   The flag-and-code pill is pinned LTR — it is a Latin token, not a sentence. */
+html[data-lang="fa"] .pf-pref,
+html[data-lang="ar"] .pf-pref { flex-direction: row-reverse; text-align: right; }
+html[data-lang="fa"] .pf-pref-txt,
+html[data-lang="ar"] .pf-pref-txt { direction: rtl; }
+html[data-lang="fa"] .pf-pref-txt .pf-pref-s,
+html[data-lang="ar"] .pf-pref-txt .pf-pref-s { line-height: 1.6; }
+html[data-lang="fa"] .pf-pref-chev,
+html[data-lang="ar"] .pf-pref-chev { transform: scaleX(-1); }
+html[data-lang="fa"] .pf-pref-open .ico,
+html[data-lang="ar"] .pf-pref-open .ico { transform: scaleX(-1); }
+html[data-lang="fa"] .pf-pref:hover:not(:active) .pf-pref-open .ico,
+html[data-lang="ar"] .pf-pref:hover:not(:active) .pf-pref-open .ico { transform: scaleX(-1) translate(1px, -1px); }
+html[data-lang="fa"] .lang-pill,
+html[data-lang="ar"] .lang-pill { direction: ltr; unicode-bidi: isolate; }
+html[data-lang="fa"] .pf-prefs-sec .pf-sec-h,
+html[data-lang="ar"] .pf-prefs-sec .pf-sec-h { flex-direction: row-reverse; }
+html[data-lang="fa"] .pf-prefs-sec .pf-sec-h > span,
+html[data-lang="ar"] .pf-prefs-sec .pf-sec-h > span { direction: rtl; letter-spacing: 0; }
+
+/* ---- 360px and under: the answer end gives ground first, the label never does.
+   The language row carries a pill and a chevron, so its caption is the first
+   thing to run out of room — it wraps onto a second line instead of ellipsizing
+   mid-word. ---- */
+@media (max-width: 360px) {
+  .pf-pref { gap: 10px; }
+  /* long locales (ru «Официальный Telegram-канал») get a second line rather
+     than an ellipsis in the middle of the door's name */
+  .pf-pref-t,
+  .pf-pref-s {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .pf-pref-t { line-height: 1.3; }
+  .pf-pref-key { width: 36px; height: 36px; border-radius: 12px; }
+  .pf-pref-key .ico { width: 18px; height: 18px; }
+  .pf-pref .lang-pill { padding: 4px 8px; }
+  .pf-pref .lang-pill .flag { font-size: 14px; }
+  .pf-pref .lang-pill #lang-name { max-width: 17vw; }
+  .pf-pref-open { width: 31px; height: 31px; }
+  .pf-pref-chat { min-width: 40px; height: 28px; }
+}
+
+

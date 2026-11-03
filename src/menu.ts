@@ -2885,7 +2885,7 @@ export function createMenu(api: MenuApi): Menu {
     if (flag) flag.textContent = d.flag;
     if (code) code.textContent = d.code.toUpperCase();
     if (nm) nm.textContent = d.native;
-    const row = $('lang-row');
+    const row = $('profile-lang-btn');
     if (row) row.setAttribute('aria-label', `${t('language')}: ${d.native}`);
   };
 
@@ -2955,7 +2955,7 @@ export function createMenu(api: MenuApi): Menu {
     try { window.open(url, '_blank', 'noopener'); } catch { /* webview blocked */ }
   }
 
-  $('lang-row')?.addEventListener('click', openLang);
+  $('profile-lang-btn')?.addEventListener('click', openLang);
   $('lang-list')?.addEventListener('click', (e) => {
     const row = (e.target as HTMLElement | null)?.closest<HTMLElement>('.lang-row');
     if (!row?.dataset.lang) return;
@@ -2969,7 +2969,7 @@ export function createMenu(api: MenuApi): Menu {
     e.preventDefault();
     chooseLang(row.dataset.lang);
   });
-  $('tg-channel')?.addEventListener('click', () => { impact('light'); openExternal(CHANNEL_URL); });
+  $('profile-tg-channel')?.addEventListener('click', () => { impact('light'); openExternal(CHANNEL_URL); });
 
   /* ---- Contact Admin: the in-app support drawer -----------------------------------------------
      The row opens a Dark-Clay bottom sheet — category pills, a recessed 300-char textarea and
@@ -3053,7 +3053,7 @@ export function createMenu(api: MenuApi): Menu {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendSupport(); }
   });
   supportSend?.addEventListener('click', sendSupport);
-  $('admin-row')?.addEventListener('click', openSupport);
+  $('profile-admin-contact')?.addEventListener('click', openSupport);
 
   /* live repaint: internal watchers + the public DOM event for external listeners */
   const paintLangLive = () => {
