@@ -14754,7 +14754,14 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
 }
 /* One aura for every mind: the ring reads --ml-aura's own sky fallback, never a league colour. */
 
-.ms-head { flex: none; display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+.ms-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--s2);
+  min-width: 0;
+}
 /* The flag rides the corner of the avatar, so the identity column keeps its width at 320. */
 .ms-marks { position: relative; flex: none; width: 54px; height: 54px; }
 .ms-av {
@@ -14776,13 +14783,43 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
 }
 .ms-av[data-len="2"] { font-size: 16px; }
 .ms-av[data-len="3"] { font-size: 12px; letter-spacing: -.01em; }
-.ms-flag { position: absolute; right: -3px; bottom: -3px; }
+/* the nation badge sits above the portrait (z 1) and the guild rank (z 2), never under them */
+.ms-flag {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #0b0f19;
+  background: #0b0f19;
+  box-shadow: 0 5px 10px -3px rgba(0, 0, 0, .8);
+  pointer-events: none;
+}
+.ms-flag:empty { display: none; }
+.ms-flag .fp-ms { --fp-d: 22px; }
+.ms-flag .fp-ms .fp-chip { border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .4); }
+.ms-flag .fp-ms .fp-img { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35); }
 .fp-ms { --fp-d: 24px; }
 .fp-ms .fp-chip { border-radius: 9px; font-size: 8px; box-shadow: inset 0 0 0 1px #0A0F1A, 0 0 0 2px #1C2433; }
 .fp-ms .fp-img { border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .35), 0 0 0 2px #1C2433; }
 
-.ms-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+/* the identity column hugs its copy instead of stretching, so RTL text can never
+   drift across the header into the close key */
+.ms-id {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: start;
+}
 .ms-name {
+  max-width: 100%;
   font-size: var(--t-1);
   font-weight: 900;
   letter-spacing: -.01em;
@@ -14794,6 +14831,7 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
   text-overflow: ellipsis;
 }
 .ms-sub {
+  max-width: 100%;
   font-size: 9.5px;
   font-weight: 900;
   letter-spacing: .06em;
@@ -14811,6 +14849,7 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
   --d: 3px;
   position: relative;
   flex: none;
+  margin-left: auto;
   appearance: none;
   border: 0;
   font: inherit;
@@ -14837,63 +14876,128 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
 /* ---- body ---- */
 .ms-body { gap: var(--s3); padding-right: 2px; }
 
+/* ---- the TIQ plaque: two balanced columns over one obsidian pane ----
+   Start side carries the reading (label · digits · wins/rank pill), the end side
+   the percentile gauge, split by one lit hairline. Radial gold and cyan bloom
+   under the glass; the rim stays a single quiet line. */
 .ms-hero {
+  position: relative;
   flex: none;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1px auto;
   align-items: center;
-  gap: var(--s2);
+  gap: 12px;
   min-width: 0;
-  padding: 10px 12px;
-  border-radius: 16px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  overflow: hidden;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, 0) 46%),
-    var(--clay-face);
-  background-color: #1E2739;
+    radial-gradient(120% 170% at 0% 0%, rgba(245, 158, 11, .16) 0%, rgba(245, 158, 11, 0) 54%),
+    radial-gradient(95% 150% at 100% 100%, rgba(56, 189, 248, .14) 0%, rgba(56, 189, 248, 0) 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, .055) 0%, rgba(255, 255, 255, 0) 48%),
+    linear-gradient(180deg, #182134 0%, #0D1422 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .16),
-    inset 0 -1px 0 rgba(0, 0, 0, .34),
-    inset 0 0 0 1px var(--ml-aura, var(--hair)),
-    0 1px 0 #0A0F1A;
-  transition: transform var(--motion-fast);
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    inset 0 0 0 1px rgba(245, 158, 11, .18),
+    inset 0 -1px 0 rgba(0, 0, 0, .5),
+    0 1px 0 #080D16,
+    0 16px 30px -26px #000;
 }
-.ms-hero:active { transform: translateY(2px); }
-.ms-hero-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ms-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0 16% auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(251, 191, 36, .6) 32%, rgba(56, 189, 248, .42) 70%, transparent);
+  pointer-events: none;
+}
+.ms-hero-id { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.ms-hero-k {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: #93A4BA;
+}
+.ms-hero-k::before {
+  content: '';
+  flex: none;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #FBBF24;
+  box-shadow: 0 0 6px rgba(251, 191, 36, .85);
+}
 .ms-iq {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
   color: var(--tiq);
-  font-size: var(--t-hd);
+  font-size: clamp(1.6rem, 1.35rem + 2.4vw, 2.1rem);
   font-weight: 900;
   font-variant-numeric: tabular-nums;
-  line-height: 1.1;
+  letter-spacing: -.02em;
+  line-height: 1.05;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .55);
 }
-.ms-iq .tiq { flex: none; width: 18px; height: 18px; color: var(--honey); filter: drop-shadow(0 0 5px rgba(245, 158, 11, .45)); }
+.ms-iq .tiq {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: var(--honey);
+  filter: drop-shadow(0 0 7px rgba(245, 158, 11, .55));
+}
 .ms-iq b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* wins · rank ride one quiet pill under the score */
 .ms-hero-sub {
-  font-size: 9.5px;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 3px 8px;
+  border-radius: 7px;
+  font-size: 8.5px;
   font-weight: 800;
   letter-spacing: .05em;
   text-transform: uppercase;
   line-height: 1.3;
-  color: var(--ink-soft);
+  color: #B8C6D8;
+  background: rgba(148, 163, 184, .08);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .16);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.ms-hero-split {
+  align-self: stretch;
+  width: 1px;
+  min-height: 52px;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, .16) 22%, rgba(255, 255, 255, .16) 78%, transparent);
+}
 /* the shared ring, one size up so the percentile is the first thing you read */
-.ms-ring-col { flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.ms-ring-col { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-width: 72px; }
 .ms-ring-c {
-  font-size: 8.5px;
+  font-size: 8px;
   font-weight: 900;
   letter-spacing: .1em;
   text-transform: uppercase;
   line-height: 1.1;
   color: var(--ink-soft);
+  text-align: center;
 }
-.ms-ring { width: 56px; height: 56px; }
-.ms-ring b { width: 44px; height: 44px; border-radius: 14px; font-size: 13px; letter-spacing: -.02em; }
+.ms-ring { width: 60px; height: 60px; }
+.ms-ring b {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  font-size: 14px;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
 
 .ms-block { flex: none; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .ms-h {
@@ -14906,36 +15010,47 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
   text-shadow: 0 1px 0 rgba(0, 0, 0, .7);
 }
 
-/* one glass capsule, three cells: the scorecard reads at a glance, no RPG bars */
+/* three recessed obsidian micro-cards: a hairline rim, a lit top edge and one
+   gold tick over each figure — no capsule, no RPG bars */
 .ms-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
   min-width: 0;
-  border-radius: 14px;
-  overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, .015) 100%),
-    var(--field);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .09),
-    inset 0 -1px 0 rgba(0, 0, 0, .38),
-    inset 0 0 0 1px rgba(255, 255, 255, .05);
 }
 .ms-stat {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
-  padding: 10px 6px;
+  padding: 12px 6px 11px;
+  border-radius: 13px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .045) 0%, rgba(255, 255, 255, .008) 58%),
+    #0C1321;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    inset 0 -1px 0 rgba(0, 0, 0, .55),
+    inset 0 0 0 1px rgba(255, 255, 255, .055),
+    0 2px 0 #080D16;
 }
-.ms-stat + .ms-stat { box-shadow: inset 1px 0 0 rgba(255, 255, 255, .06); }
+.ms-stat::before {
+  content: '';
+  position: absolute;
+  inset: 0 22% auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(251, 191, 36, .38), transparent);
+  pointer-events: none;
+}
 .ms-stat-v {
-  font-size: var(--t-1);
+  font-size: clamp(1.05rem, .95rem + .9vw, 1.35rem);
   font-weight: 900;
   line-height: 1.1;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -14946,41 +15061,55 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
   letter-spacing: .08em;
   text-transform: uppercase;
   line-height: 1.2;
-  color: var(--ink-soft);
+  color: #8697AD;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* Form + chips share one baseline row; the caption can never drift to the far edge */
+.ms-block.is-inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+.ms-block.is-inline .ms-h { flex: none; }
 .ms-form { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
 .ms-dots { flex: none; display: flex; gap: 5px; }
 .ms-dot {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
-  border-radius: 50%;
+  border-radius: 9px;
   font-size: 11px;
   font-weight: 900;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
 }
-/* emerald won with a neon kiss, muted slate lost, and an unrecorded race stays a
-   dim dash rather than being drawn as a result the save never kept */
+/* emerald won with a bevel and a neon kiss; a lost race keeps the muted slate face */
 .ms-dot.w {
-  background: linear-gradient(180deg, rgba(52, 211, 153, .34) 0%, rgba(5, 150, 105, .14) 100%);
+  background: linear-gradient(180deg, #43E0AC 0%, #10A97A 52%, #077452 100%);
   box-shadow:
-    inset 0 0 0 1.5px #34D399,
-    inset 0 1px 0 rgba(255, 255, 255, .18),
-    0 0 8px -1px rgba(52, 211, 153, .5);
-  color: #D1FAE5;
+    inset 0 1px 0 rgba(255, 255, 255, .4),
+    inset 0 -2px 2px rgba(0, 0, 0, .3),
+    0 2px 0 #043D2C,
+    0 0 10px -2px rgba(52, 211, 153, .7);
+  color: #E9FFF7;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .3);
 }
 .ms-dot.l {
-  background: linear-gradient(180deg, rgba(148, 163, 184, .22) 0%, rgba(71, 85, 105, .14) 100%);
-  box-shadow: inset 0 0 0 1.5px rgba(148, 163, 184, .5), inset 0 1px 0 rgba(255, 255, 255, .12);
-  color: #CBD5E1;
+  background: linear-gradient(180deg, #334155 0%, #1E293B 58%, #131C2B 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .13),
+    inset 0 -2px 2px rgba(0, 0, 0, .36),
+    0 2px 0 #080D16;
+  color: #C3CEDD;
 }
 .ms-dot.u { background: var(--field); box-shadow: var(--inset); color: var(--ink-soft); }
-/* ---- foot keys: crimson over obsidian, both 48px, both able to do what they say ---- */
+/* ---- foot keys: one locked obsidian plate, one luminous squad door ---- */
 .ms-acts { flex: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); margin-top: var(--s2); }
 .ms-challenge,
 .ms-guild {
@@ -15009,35 +15138,77 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
 .ms-guild .ico { flex: none; width: 15px; height: 15px; }
 .ms-challenge span,
 .ms-guild span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-/* luxury crimson face with an amber metallic rim, lit from above */
+/* the locked key: a frozen frosted-obsidian plate — no fill, no lift, no press */
 .ms-challenge {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, .3) 0%, rgba(255, 255, 255, 0) 44%),
-    linear-gradient(180deg, #E4442E 0%, #B3201F 52%, #7E0F18 100%);
-  color: #FFF3E0;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, .45);
+    linear-gradient(180deg, rgba(255, 255, 255, .07) 0%, rgba(255, 255, 255, .015) 100%),
+    #151D2C;
+  color: #93A4BA;
+  text-shadow: none;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 214, 140, .5),
-    inset 0 1px 0 rgba(255, 237, 205, .6),
-    inset 0 -2px 3px rgba(0, 0, 0, .35),
-    0 var(--d) 0 #4A0A10,
-    0 calc(var(--d) + 8px) 18px -8px rgba(228, 68, 46, .6);
+    inset 0 0 0 1px rgba(255, 255, 255, .09),
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    inset 0 -2px 3px rgba(0, 0, 0, .34),
+    0 var(--d) 0 #090E17;
 }
+.ms-challenge:disabled,
+.ms-challenge[aria-disabled="true"] {
+  opacity: .55;
+  cursor: not-allowed;
+  color: #8C9BB0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .05) 0%, rgba(255, 255, 255, .01) 100%),
+    #131A28;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .07),
+    inset 0 1px 0 rgba(255, 255, 255, .06),
+    inset 0 -2px 3px rgba(0, 0, 0, .3),
+    0 4px 0 #090E17;
+  transform: none;
+}
+.ms-ico-lock { display: none; }
+.ms-challenge:disabled .ms-ico-key { display: none; }
+.ms-challenge:disabled .ms-ico-lock { display: block; color: #A9B7C9; }
+/* the hero squad door: obsidian depth with a gold-cyan aura and a lit rim */
 .ms-guild {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, .1) 0%, rgba(255, 255, 255, .02) 100%),
-    #202A3E;
-  color: var(--chip-ink);
+    radial-gradient(120% 170% at 12% 0%, rgba(251, 191, 36, .26) 0%, rgba(251, 191, 36, 0) 52%),
+    radial-gradient(120% 170% at 88% 100%, rgba(56, 189, 248, .3) 0%, rgba(56, 189, 248, 0) 58%),
+    linear-gradient(180deg, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, .02) 46%),
+    linear-gradient(180deg, #22314C 0%, #121A2B 100%);
+  color: #F1F8FF;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .5);
   box-shadow:
-    inset 0 0 0 1px rgba(125, 211, 252, .24),
-    inset 0 1px 0 rgba(255, 255, 255, .16),
-    inset 0 -2px 3px rgba(0, 0, 0, .32),
-    0 var(--d) 0 #0B111C;
+    inset 0 0 0 1px rgba(251, 191, 36, .38),
+    inset 0 1px 0 rgba(255, 255, 255, .24),
+    inset 0 -2px 3px rgba(0, 0, 0, .34),
+    0 var(--d) 0 #070C15,
+    0 calc(var(--d) + 10px) 22px -10px rgba(56, 189, 248, .55);
 }
-.ms-challenge:active,
-.ms-guild:active { transform: translateY(var(--press-y)); --d: 1px; }
-.ms-challenge:focus-visible,
-.ms-guild:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+.ms-guild .ico { color: #FCD34D; filter: drop-shadow(0 0 4px rgba(251, 191, 36, .55)); }
+/* no squad to open: the hero door rests as a muted obsidian plate, never a live key */
+.ms-guild:disabled,
+.ms-guild[aria-disabled="true"] {
+  opacity: .55;
+  cursor: not-allowed;
+  color: #93A4BA;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .06) 0%, rgba(255, 255, 255, .012) 100%),
+    #151D2C;
+  text-shadow: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .08),
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    inset 0 -2px 3px rgba(0, 0, 0, .32),
+    0 4px 0 #090E17;
+  transform: none;
+}
+.ms-guild:disabled .ico,
+.ms-guild[aria-disabled="true"] .ico { color: #8C9BB0; filter: none; }
+.ms-challenge:not(:disabled):active,
+.ms-guild:not(:disabled):active { transform: translateY(var(--press-y)); --d: 1px; }
+.ms-challenge:not(:disabled):focus-visible,
+.ms-guild:not(:disabled):focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
 
 /* ==========================================================================
    THE SQUAD FACE OF THE MIND SHEET — real community photo, one rank badge,
@@ -15146,10 +15317,11 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
 .ms-hero.is-squad {
   position: relative;
   overflow: hidden;
-  padding: 12px;
+  padding: 12px 14px;
   border-radius: 18px;
   background:
     radial-gradient(120% 150% at 0% 0%, rgba(0, 210, 255, .16) 0%, rgba(0, 210, 255, 0) 56%),
+    radial-gradient(100% 150% at 100% 100%, rgba(251, 191, 36, .12) 0%, rgba(251, 191, 36, 0) 58%),
     linear-gradient(180deg, rgba(255, 255, 255, .05) 0%, rgba(255, 255, 255, 0) 48%),
     linear-gradient(180deg, rgba(14, 24, 42, .75) 0%, rgba(9, 16, 30, .86) 100%);
   background-color: rgba(14, 24, 42, .75);
@@ -15158,17 +15330,8 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
     inset 0 0 0 1px rgba(0, 210, 255, .2),
     0 14px 30px -22px #000;
 }
-.ms-hero.is-squad::after {
-  content: '';
-  position: absolute;
-  top: -54px;
-  right: -34px;
-  width: 132px;
-  height: 132px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(0, 210, 255, .14) 0%, rgba(0, 210, 255, 0) 68%);
-  pointer-events: none;
-}
+.ms-hero.is-squad .ms-hero-k { color: #8FB4CC; }
+.ms-hero.is-squad .ms-hero-k::before { background: #67E8F9; box-shadow: 0 0 6px rgba(103, 232, 249, .8); }
 .ms-hero.is-squad .ms-iq {
   gap: 7px;
   color: #FBBF24;
@@ -15180,7 +15343,7 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
   color: #FBBF24;
   filter: drop-shadow(0 0 8px rgba(251, 191, 36, .7));
 }
-.ms-hero.is-squad .ms-hero-sub { color: #8CA0B8; }
+.ms-hero.is-squad .ms-hero-sub { color: #9FC3D8; }
 .ms-hero.is-squad .ms-ring { width: 60px; height: 60px; }
 .ms-hero.is-squad .ms-ring .mh-arc circle { stroke-width: 3.4; }
 .ms-hero.is-squad .ms-ring .mh-arc-track { stroke: rgba(56, 189, 248, .15); }
@@ -15188,7 +15351,7 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
 .ms-hero.is-squad .ms-ring b {
   width: 46px;
   height: 46px;
-  border-radius: 15px;
+  border-radius: 50%;
   background: radial-gradient(circle at 32% 26%, #22314C 0%, #0B1322 74%);
   color: #E0F7FF;
   font-size: 14px;
@@ -15279,15 +15442,25 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
 @media (max-width: 340px) {
   .ms-challenge .ico,
   .ms-guild .ico { display: none; }
+  /* the lock is the whole message on a locked key, so it survives the tight phone */
+  .ms-challenge:disabled .ms-ico-lock { display: block; }
   /* the squad sheet keeps its sword / channel glyph: both labels still fit beside them */
   #sheet-mind.is-guild .ms-challenge .ico,
   #sheet-mind.is-guild .ms-guild .ico { display: block; }
-  .ms-dot { width: 24px; height: 24px; font-size: 10px; }
+  .ms-dot { width: 25px; height: 25px; font-size: 10px; }
 }
 
 /* ---- the 320 floor: the type tag wraps before the handle is cut, and the
         third card's quiet tag keeps its words instead of ellipsising them ---- */
 @media (max-width: 359px) {
+  .ms-hero { gap: 9px; padding: 11px 12px; }
+  .ms-hero-k { letter-spacing: .1em; }
+  .ms-hero-sub { font-size: 8px; padding: 3px 6px; }
+  .ms-ring-col { min-width: 62px; }
+  .ms-ring { width: 54px; height: 54px; }
+  .ms-ring b { width: 42px; height: 42px; font-size: 12.5px; }
+  .ms-hero.is-squad .ms-ring { width: 56px; height: 56px; }
+  .ms-hero.is-squad .ms-ring b { width: 44px; height: 44px; font-size: 13px; }
   #sheet-mind.is-guild .ms-sub {
     flex-direction: column;
     align-items: flex-start;
@@ -29758,15 +29931,19 @@ html[data-lang="fa"] .sqp-tile-k { font-family: 'Vazirmatn', system-ui, -apple-s
 html[data-lang="fa"] .sqp-tile-k > span { direction: rtl; }
 
 /* ---- squad detail sheet: Persian copy from the right, figures and the handle stay LTR ---- */
-html[data-lang="fa"] :is(.ms-name, .ms-sub, .ms-h, .ms-hero-sub, .ms-ring-c, .ms-squad-lbl, .ms-kind) {
+html[data-lang="fa"] :is(.ms-name, .ms-sub, .ms-h, .ms-hero-k, .ms-hero-sub, .ms-ring-c, .ms-stat-l, .ms-squad-lbl, .ms-kind) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0 !important;
   text-transform: none !important;
 }
-html[data-lang="fa"] .ms-id { direction: rtl; text-align: right; }
-html[data-lang="fa"] :is(.ms-h, .ms-squad-lbl, .ms-hero-sub) { direction: rtl; }
+html[data-lang="fa"] .ms-id { direction: rtl; text-align: right; align-items: flex-end; }
+html[data-lang="fa"] :is(.ms-h, .ms-sub, .ms-stat-l, .ms-hero-k, .ms-squad-lbl, .ms-hero-sub) { direction: rtl; }
 html[data-lang="fa"] .ms-hero-id { direction: rtl; text-align: right; }
-html[data-lang="fa"] :is(.ms-iq b, .ms-ring b, .ms-squad-card:not(.is-empty) .ms-squad-v) {
+/* the plaque mirrors as one card: the reading takes the right column, the gauge the left */
+html[data-lang="fa"] .ms-hero { direction: rtl; }
+/* form reads from the right: the caption leads and the chips follow it */
+html[data-lang="fa"] .ms-block.is-inline { flex-direction: row-reverse; }
+html[data-lang="fa"] :is(.ms-iq b, .ms-ring b, .ms-stat-v, .ms-squad-card:not(.is-empty) .ms-squad-v) {
   direction: ltr;
   unicode-bidi: isolate;
   font-family: var(--font-numeric);

@@ -96,9 +96,9 @@ function rivalStats(p: PlayerRow): MindStat[] {
   const pct = matches > 0 ? Math.round((wins / matches) * 100) : 0;
   const streak = 1 + ((h >> 5) % 8);
   return [
-    { label: 'Matches', value: matches.toLocaleString('en-US') },
-    { label: 'Win rate', value: `${pct}%` },
-    { label: 'Best streak', value: streak.toLocaleString('en-US') },
+    { label: t('msMatches'), value: matches.toLocaleString('en-US') },
+    { label: t('msWinRate'), value: `${pct}%` },
+    { label: t('msBestStreak'), value: streak.toLocaleString('en-US') },
   ];
 }
 
@@ -1158,9 +1158,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   /* ---------- the mind sheet: one ladder name's cognitive profile (bottom clay sheet) ----------
-     One panel, two shapes. A *mind* gets the four-axis read; a *guild* never does, because
-     a channel's average Squad IQ is not a mind — it gets density and its real join / invite key.
-     Both shapes carry only actions the local backend can actually perform. */
+     One panel, two shapes. A *mind* is a read-only dossier: its challenge key is parked, and
+     the primary key opens that player's own squad when the local registry knows one. A *guild*
+     never gets the four-axis read — a channel's average Squad IQ is not a mind — it gets density
+     and its real join / invite key. */
 
   const msEls = {
     sheet: document.getElementById('sheet-mind'),
@@ -1182,7 +1183,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   /** Guards the guild photo against a late load from a sheet that has since changed face. */
   let msPhotoSeq = 0;
   /** What the two keys at the foot of the open sheet are allowed to do right now. */
-  let msPending: { kind: 'mind'; name: string; tiq: number } | { kind: 'guild'; squad: RankedSquad } | null = null;
+  let msPending: { kind: 'mind'; name: string; tiq: number; squad: RankedSquad | null } | { kind: 'guild'; squad: RankedSquad } | null = null;
 
   /** A guild wears a community photo and one rank badge; clearing them keeps a mind clean. */
   function msClearGuild(): void {
@@ -1293,6 +1294,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     wrap.className = squad ? 'ms-hero is-squad' : 'ms-hero';
     const col = document.createElement('span');
     col.className = 'ms-hero-id';
+    const kick = document.createElement('small');
+    kick.className = 'ms-hero-k';
+    kick.textContent = squad ? t('squadAvgIq') : t('arenaTiqLabel');
     const iq = document.createElement('span');
     iq.className = 'ms-iq';
     iq.append(svgIcon('#i-brain', 'tiq'));
@@ -1302,7 +1306,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const line = document.createElement('small');
     line.className = 'ms-hero-sub';
     line.textContent = sub;
-    col.append(iq, line);
+    line.title = sub;
+    col.append(kick, iq, line);
+    const split = document.createElement('i');
+    split.className = 'ms-hero-split';
+    split.setAttribute('aria-hidden', 'true');
     const inner = document.createElement('b');
     inner.textContent = `${pct}%`;
     const ringCol = document.createElement('span');
@@ -1311,7 +1319,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     cap.className = 'ms-ring-c';
     cap.textContent = t('percentile');
     ringCol.append(percentRing(pct, inner, 'ms-ring'), cap);
-    wrap.append(col, ringCol);
+    wrap.append(col, split, ringCol);
     return wrap;
   }
 
@@ -1326,7 +1334,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return wrap;
   }
 
-  /** Three glass cells in one capsule: results at a glance — no bars, no RPG axes. */
+  /** Three recessed obsidian cells: results at a glance — no bars, no RPG axes. */
   function msStatCapsule(stats: MindStat[]): HTMLElement {
     const wrap = document.createElement('div');
     wrap.className = 'ms-stats';
@@ -1363,6 +1371,17 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }
     rowEl.append(dots);
     return rowEl;
+  }
+
+  /** Form reads as one row: the caption sits beside the five chips, never across from them. */
+  function msFormBlock(form: FormCell[]): HTMLElement {
+    const wrap = document.createElement('section');
+    wrap.className = 'ms-block is-inline';
+    const h = document.createElement('h3');
+    h.className = 'ms-h';
+    h.textContent = t('msForm');
+    wrap.append(h, msFormStrip(form));
+    return wrap;
   }
 
   /** Three focused cards: headcount, the squad's per-mind average, and your own share. */
@@ -1422,7 +1441,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     btn?.querySelector('use')?.setAttribute('href', href);
   }
 
-  /** The two clay keys never change shape — only what they can honestly do changes. */
+  /** Two fixed keys: a mind's challenge stays locked, a squad's join/invite key stays live. */
   function msActions(kind: 'mind' | 'guild', label: string, hint: string): void {
     const ch = msEls.challenge;
     const gu = msEls.guild;
@@ -1430,12 +1449,31 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       const span = ch.querySelector<HTMLElement>('span');
       if (span) span.textContent = label;
       ch.setAttribute('aria-label', hint);
+      ch.disabled = kind === 'mind';
+      if (ch.disabled) ch.setAttribute('aria-disabled', 'true');
+      else ch.removeAttribute('aria-disabled');
     }
     if (gu) {
       const span = gu.querySelector<HTMLElement>('span');
-      if (span) span.textContent = kind === 'guild' ? t('squadViewChannel') : 'View squad';
-      gu.setAttribute('aria-label', kind === 'guild' ? t('squadViewChannel') : 'View the Squad IQ board');
+      gu.disabled = false;
+      gu.removeAttribute('aria-disabled');
+      if (span) span.textContent = kind === 'guild' ? t('squadViewChannel') : t('msViewSquad');
+      gu.setAttribute('aria-label', kind === 'guild' ? t('squadViewChannel') : t('msViewSquad'));
     }
+  }
+
+  /** The squad a ladder name rides for, when the local registry knows one. */
+  function squadOfPlayer(p: PlayerRow): RankedSquad | null {
+    if (p.id === 'you') return getMySquad();
+    const field = getSquadRanking();
+    /* the ladder keys a seat `tg-<id>`, a roster key is the bare Telegram id — fold both */
+    const key = (id: string): string => id.trim().replace(/^tg-/, '').toLowerCase();
+    const wanted = key(p.id);
+    const byId = field.find((s) => s.roster.some((m) => key(m.id) === wanted));
+    if (byId) return byId;
+    const name = p.name.trim().toLowerCase();
+    if (!name) return null;
+    return field.find((s) => s.roster.some((m) => m.name.trim().toLowerCase() === name)) ?? null;
   }
 
   function openMind(p: PlayerRow, rank: number): void {
@@ -1445,17 +1483,32 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const field = mindsField.length;
     const pct = field > 0 ? Math.max(1, Math.min(99, Math.round((rank / (field + 1)) * 100))) : 100;
     const tiq = p.points.toLocaleString('en-US');
-    msPending = { kind: 'mind', name: p.name, tiq: p.points };
+    const squad = squadOfPlayer(p);
+    const squadName = squad ? squad.name || squad.handle.replace(/^@/, '') : '';
+    const wins = p.wins === 1 ? t('msWinOne') : t('msWins').replace('{n}', p.wins.toLocaleString('en-US'));
+    /* LRI…PDI keeps "#4" reading as a rank inside the RTL pill */
+    const rankTag = `\u2066#${rank}\u2069`;
+    msPending = { kind: 'mind', name: p.name, tiq: p.points, squad };
     /* the sheet wears the same face the ladder row does: their real Telegram photo */
-    msHead(p.name.slice(0, 1).toUpperCase() || '?', p.countryCode, p.name, '', p.avatar);
+    msHead(p.name.slice(0, 1).toUpperCase() || '?', p.countryCode, p.name, `#${rank} · ${squadName || t('msNoSquad')}`, p.avatar);
     el.setAttribute('aria-label', `Mind profile: ${p.name}, ${tiq} Tactical IQ`);
     body.textContent = '';
     body.append(
-      msHero(tiq, pct, `${p.wins} win${p.wins === 1 ? '' : 's'}`),
-      msSection('Scorecard', msStatCapsule(rivalStats(p))),
-      msSection('Form', msFormStrip(rivalForm(p.id, p.trend))),
+      msHero(tiq, pct, `${wins} · ${rankTag}`),
+      msSection(t('msScorecard'), msStatCapsule(rivalStats(p))),
+      msFormBlock(rivalForm(p.id, p.trend)),
     );
-    msActions('mind', 'Challenge mind', `Challenge mind: start a race against ${p.name}'s ${tiq} TIQ`);
+    msActions('mind', t('msChallengeMind'), `${t('msChallengeMind')} · ${t('msChallengeSoon')}`);
+    const gu = msEls.guild;
+    if (gu && squad) {
+      gu.setAttribute('aria-label', `${t('msViewSquad')} · ${squadName}`);
+    } else if (gu) {
+      const span = gu.querySelector<HTMLElement>('span');
+      gu.disabled = true;
+      gu.setAttribute('aria-disabled', 'true');
+      if (span) span.textContent = t('msNoSquad');
+      gu.setAttribute('aria-label', `${t('msNoSquad')} · ${p.name}`);
+    }
     msEls.challenge?.classList.remove('is-squad');
     msKeyIcon(msEls.challenge, '#i-swords');
     msKeyIcon(msEls.guild, '#i-users');
@@ -1811,13 +1864,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   msEls.challenge?.addEventListener('click', () => {
     const p = msPending;
-    if (!p) return;
-    if (p.kind === 'mind') {
-      impact('medium');
-      api.sheets.close();
-      api.router.go('home');
-      return;
-    }
+    if (!p || p.kind === 'mind') return;
     const wasMine = getMySquad()?.id === p.squad.id;
     squadAction(p.squad, wasMine).run();
     if (!wasMine) {
@@ -1829,15 +1876,19 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   msEls.guild?.addEventListener('click', () => {
     const p = msPending;
-    impact('light');
-    if (p?.kind === 'guild') {
+    if (!p) return;
+    if (p.kind === 'guild') {
+      impact('light');
       const handle = cleanHandle(p.squad.handle);
       if (handle) openLink(`https://t.me/${handle.slice(1)}`);
       else openSquadSheet();
       return;
     }
-    api.sheets.close();
+    if (!p.squad) return;
+    /* the mind sheet yields the stage: the guild board loads behind and that
+       player's own squad profile takes its place in the same panel */
     selectBoard('guilds');
+    openGuild(p.squad);
   });
 
   /**
