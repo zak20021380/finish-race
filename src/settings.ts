@@ -494,7 +494,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     resultPlayAgain: 'PLAY AGAIN',
     resultRevenge: 'REMATCH',
     resultShare: 'CHALLENGE TO A DUEL',
-    resultMenu: 'LOBBY',
+    resultMenu: 'Main Menu',
     resultStakeLost: 'STAKES LOST',
     /* the band's own header once the shield lands: the key beside it already says "PROTECTED",
        so the header reports the stake, not the button state — two labels, two jobs */
@@ -1024,7 +1024,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     resultPlayAgain: 'بازی مجدد',
     resultRevenge: 'بازی مجدد',
     resultShare: 'دعوت به دوئل',
-    resultMenu: 'لابی',
+    resultMenu: 'منوی اصلی',
     resultStakeLost: 'امتیاز از دست رفته',
     resultStakeReturned: 'امتیاز بازگشت',
     resultTiqUnit: 'TIQ',
@@ -1239,6 +1239,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     supportPlaceholder: 'Напишите здесь ваше сообщение или отзыв...',
     maintenanceBody: 'Арена закрыта на время технических работ. Новые матчи, комнаты и лобби временно недоступны. Пожалуйста, загляните чуть позже.',
     /* ---- arena progression road: a trophy case of strategic realms ---- */
+    /* ---- match result: the return key ---- */
+    resultMenu: 'Главное меню',
+    /* ---- arena progression road: a trophy case of strategic realms ---- */
     arenaTitle: 'Арена',
     arenaRoadKicker: 'ПУТЬ ЦАРСТВ',
     arenaRoadAria: 'Путь развития арены',
@@ -1307,6 +1310,9 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     supportPlaceholder: 'اكتب رسالتك أو ملاحظاتك هنا...',
     maintenanceBody: 'الساحة مقفلة مؤقتًا أثناء الصيانة. المباريات والغرف والردهات الجديدة متوقفة الآن. يُرجى المحاولة بعد قليل.',
     /* ---- arena progression road: a trophy case of strategic realms ---- */
+    /* ---- match result: the return key ---- */
+    resultMenu: 'القائمة الرئيسية',
+    /* ---- arena progression road: a trophy case of strategic realms ---- */
     arenaTitle: 'الساحة',
     arenaRoadKicker: 'طريق العوالم',
     arenaRoadAria: 'طريق تقدم الساحة',
@@ -1374,6 +1380,8 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     supportOk: '¡Mensaje enviado a los admins!',
     supportPlaceholder: 'Escribe aquí tu mensaje o sugerencia...',
     maintenanceBody: 'La arena está bloqueada mientras se realiza el mantenimiento. Las nuevas partidas, salas y lobbies están en pausa. Vuelve a intentarlo en breve.',
+    /* ---- match result: the return key ---- */
+    resultMenu: 'Menú principal',
     /* ---- arena progression road: a trophy case of strategic realms ---- */
     arenaTitle: 'Arena',
     arenaRoadKicker: 'CAMINO DE REINOS',

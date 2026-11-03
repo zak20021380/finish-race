@@ -997,6 +997,8 @@ function paintResultCopy(): void {
   verdict.textContent = t(won ? 'resultVictoryTitle' : 'resultDefeatTitle');
   shareLabel.textContent = t('resultShare');
   toMenuLabel.textContent = t('resultMenu');
+  shareBtn.setAttribute('aria-label', t('resultShare'));
+  toMenu.setAttribute('aria-label', t('resultMenu'));
   paintStakeValue();
   resultTiqChip.hidden = !won;
   resultCoinChip.classList.toggle('is-consolation', !won);
@@ -1021,16 +1023,14 @@ function paintResultLock(): void {
   if (!resultView) return;
   again.disabled = resultLocked;
   again.classList.toggle('is-locked', resultLocked);
-  againLabel.textContent = resultLocked
+  const againText = resultLocked
     ? t('resultOpponentLeft')
     : t(resultView.won ? 'resultPlayAgain' : 'resultRevenge');
-  if (resultLocked) {
-    again.title = t('resultOpponentLeftHint');
-    again.setAttribute('aria-label', t('resultOpponentLeft'));
-  } else {
-    again.removeAttribute('title');
-    again.removeAttribute('aria-label');
-  }
+  againLabel.textContent = againText;
+  /* the key's spoken name follows the visible one in every language, locked or not */
+  again.setAttribute('aria-label', againText);
+  if (resultLocked) again.title = t('resultOpponentLeftHint');
+  else again.removeAttribute('title');
 }
 
 /**

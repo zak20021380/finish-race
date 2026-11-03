@@ -1197,6 +1197,23 @@
       <symbol id="i-menu" viewBox="0 0 24 24">
         <path d="M4.6 7.4h14.8M4.6 12h14.8M4.6 16.6h14.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
       </symbol>
+      <!-- the Royal Portal: a noble gate under a pointed arch, its portcullis and keystone struck
+           in warm champagne over the current ink — the engraved doorway home, never a hamburger -->
+      <symbol id="i-castle-gate" viewBox="0 0 24 24">
+        <defs>
+          <linearGradient id="i-gate-gold" x1="12" y1="3.2" x2="12" y2="20.8" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#FFF6DC" />
+            <stop offset=".52" stop-color="#F2D397" />
+            <stop offset="1" stop-color="#B1853F" />
+          </linearGradient>
+        </defs>
+        <path d="M4.4 20.8V9.9L12 3.4l7.6 6.5v10.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+        <path d="M8.1 20.8v-6.2a3.9 3.9 0 0 1 7.8 0v6.2" fill="none" stroke="url(#i-gate-gold)" stroke-width="1.7" stroke-linejoin="round" />
+        <path d="M12 20.8v-6.1M10.1 14.8v6M13.9 14.8v6" fill="none" stroke="url(#i-gate-gold)" stroke-width=".8" stroke-linecap="round" opacity=".62" />
+        <path d="M3.1 20.9h17.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        <path d="M12 3.4v2.2M10.9 4.5h2.2" fill="none" stroke="url(#i-gate-gold)" stroke-width=".9" stroke-linecap="round" />
+        <circle cx="12" cy="9.2" r="1.05" fill="url(#i-gate-gold)" />
+      </symbol>
       <!-- the finish switch: a warm sun for the pearl board, a cool crescent for the midnight one -->
       <symbol id="i-sun" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="4.1" fill="currentColor" />
@@ -1434,6 +1451,41 @@
           <path d="M19 4l-9 9" />
           <path d="M12 16l4-4M14 14l4.5 4.5M10 14l-4.5 4.5M12 16l-4-4" />
         </g>
+      </symbol>
+      <!-- the duel crest: two tempered blades meeting at a lit diamond, their guards and pommels
+           struck in gold-leaf. Drawn as filled steel, so the banner's insignia reads metallic at
+           23px rather than as a flat line icon. -->
+      <symbol id="i-duel-crest" viewBox="0 0 24 24">
+        <defs>
+          <linearGradient id="i-duel-steel-a" x1="3.4" y1="3.2" x2="16.4" y2="16.2" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#F2F7FF" />
+            <stop offset=".46" stop-color="#A9B9CF" />
+            <stop offset="1" stop-color="#48566B" />
+          </linearGradient>
+          <linearGradient id="i-duel-steel-b" x1="20.6" y1="3.2" x2="7.6" y2="16.2" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#D3DEEE" />
+            <stop offset=".48" stop-color="#8697AE" />
+            <stop offset="1" stop-color="#394456" />
+          </linearGradient>
+          <linearGradient id="i-duel-gold" x1="4" y1="13" x2="20" y2="20.6" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#FFF6DC" />
+            <stop offset=".5" stop-color="#F2D397" />
+            <stop offset="1" stop-color="#A8792F" />
+          </linearGradient>
+        </defs>
+        <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3.6 3.4 15.6 15.4" stroke="#0A0C12" stroke-width="3.1" opacity=".5" />
+          <path d="M20.4 3.4 8.4 15.4" stroke="#0A0C12" stroke-width="3.1" opacity=".5" />
+          <path d="M3.6 3.4 15.6 15.4" stroke="url(#i-duel-steel-a)" stroke-width="2.2" />
+          <path d="M20.4 3.4 8.4 15.4" stroke="url(#i-duel-steel-b)" stroke-width="2.2" />
+          <path d="M4.6 4.4 14.9 14.7" stroke="#FFFFFF" stroke-opacity=".36" stroke-width=".55" />
+          <path d="M19.4 4.4 9.1 14.7" stroke="#FFFFFF" stroke-opacity=".2" stroke-width=".55" />
+          <path d="m15 13.6 2.9 2.9M9 13.6l-2.9 2.9" stroke="url(#i-duel-gold)" stroke-width="1.5" />
+          <path d="M17.2 15.8 20.6 19.2M6.8 15.8 3.4 19.2" stroke="url(#i-duel-gold)" stroke-width="1.8" />
+          <circle cx="21" cy="19.6" r="1.15" fill="url(#i-duel-gold)" stroke="#0A0C12" stroke-width=".5" />
+          <circle cx="3" cy="19.6" r="1.15" fill="url(#i-duel-gold)" stroke="#0A0C12" stroke-width=".5" />
+        </g>
+        <path d="M12 10.35 13.65 12 12 13.65 10.35 12Z" fill="#FFF9E8" stroke="#A8792F" stroke-width=".5" stroke-linejoin="round" />
       </symbol>
       <symbol id="i-crown" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -3269,17 +3321,26 @@
                     </button>
                   </div>
                 </div>
-                <button class="result-btn primary" id="again" type="button">
-                  <svg class="ico" aria-hidden="true"><use id="again-ico" href="#i-play" /></svg>
-                  <span id="again-label">PLAY AGAIN</span>
+                <button class="result-btn primary btn-play-again" id="again" type="button"
+                  aria-label="Play again">
+                  <span class="result-btn-ico" aria-hidden="true">
+                    <svg class="ico" focusable="false"><use id="again-ico" href="#i-play" /></svg>
+                  </span>
+                  <span class="result-btn-label" id="again-label" dir="auto">PLAY AGAIN</span>
                 </button>
-                <button class="result-btn ghost" id="share" type="button" hidden>
-                  <svg class="ico" aria-hidden="true"><use href="#i-swords" /></svg>
-                  <span id="share-label">CHALLENGE TO A DUEL</span>
+                <button class="result-btn duel btn-challenge" id="share" type="button" hidden
+                  aria-label="Challenge to a duel">
+                  <span class="result-btn-ico" aria-hidden="true">
+                    <svg class="ico" focusable="false"><use href="#i-duel-crest" /></svg>
+                  </span>
+                  <span class="result-btn-label" id="share-label" dir="auto">CHALLENGE TO A DUEL</span>
                 </button>
-                <button class="result-btn ghost result-btn--menu" id="to-menu" type="button">
-                  <svg class="ico" aria-hidden="true"><use href="#i-menu" /></svg>
-                  <span id="menu-label">LOBBY</span>
+                <button class="result-btn menu btn-main-menu" id="to-menu" type="button"
+                  aria-label="Main menu">
+                  <span class="result-btn-ico" aria-hidden="true">
+                    <svg class="ico" focusable="false"><use href="#i-castle-gate" /></svg>
+                  </span>
+                  <span class="result-btn-label" id="menu-label" dir="auto">MAIN MENU</span>
                 </button>
               </div>
             </div>

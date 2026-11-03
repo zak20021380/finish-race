@@ -632,94 +632,287 @@
 #btn-recover-tiq.is-busy .ad-chip-ico,
 #btn-double-coins.is-busy .ad-chip-ico { opacity: 0; }
 
-/* ---- actions: one lit primary, one quiet door ---- */
+/* ==========================================================================
+   RESULT ACTIONS — THE THRONE ROOM
+   Three ranks, one hierarchy: a gold-rimmed hero, a lit combat banner, and a
+   quiet frosted return plate. Every key is a 50px+ target; labels are bidi
+   isolated, so a Persian row never flips its glyph away from its word.
+   ========================================================================== */
 .result-actions {
   display: grid;
-  gap: 8px;
+  gap: 9px;
   margin-top: 2px;
+  min-width: 0;
 }
 .result-btn {
   appearance: none;
+  position: relative;
+  isolation: isolate;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
-  min-height: 46px;
+  min-width: 0;
+  min-height: 50px;
+  margin: 0;
   padding: 11px 16px;
+  overflow: hidden;
   border: 0;
   border-radius: 16px;
   font: inherit;
-  font-size: .86rem;
+  font-size: .84rem;
   font-weight: 900;
-  letter-spacing: .08em;
+  letter-spacing: .1em;
   line-height: 1.2;
   text-transform: uppercase;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: transform .16s ease, filter .16s ease, box-shadow .16s ease, border-color .16s ease;
+  transition:
+    transform .16s cubic-bezier(.22, 1, .36, 1),
+    filter .18s ease,
+    box-shadow .18s ease,
+    border-color .18s ease,
+    color .18s ease;
 }
-.result-btn .ico { flex: none; width: 17px; height: 17px; }
-.result-btn.primary {
-  color: #042A25;
-  background: linear-gradient(180deg, #7CF8D4 0%, #2DD4BF 46%, #0EA5A0 100%);
-  box-shadow:
-    inset 0 2px 5px rgba(255, 255, 255, .38),
-    0 8px 22px -8px rgba(0, 210, 255, .4),
-    0 4px 0 #075E62;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, .3);
+/* a 1px engraved hairline: white at the crown, gold-leaf at the shoulder */
+@supports (mask-composite: exclude) {
+  .result-btn::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(118deg,
+      rgba(255, 255, 255, .24) 0%,
+      rgba(243, 212, 131, .48) 38%,
+      rgba(243, 212, 131, .06) 64%,
+      rgba(255, 255, 255, .12) 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+  }
 }
-.overlay.result.lose .result-btn.primary {
-  color: #2A0806;
+.result-btn > * {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+.result-btn .ico { flex: none; width: 18px; height: 18px; }
+.result-btn-ico {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+}
+.result-btn-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  unicode-bidi: isolate;
+}
+
+/* ---- 1. the hero: deep royal cyan under a gold-leaf crown ---- */
+.btn-play-again {
+  min-height: 52px;
+  color: #032B2B;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, .3), rgba(255, 255, 255, 0) 42%),
-    linear-gradient(100deg, #FFC07A 0%, #FF8A4C 24%, #F04452 64%, #B01232 100%);
+    radial-gradient(120% 200% at 50% -60%, rgba(255, 248, 220, .8) 0%, rgba(255, 236, 176, .26) 40%, transparent 68%),
+    radial-gradient(80% 140% at 50% 132%, rgba(3, 58, 61, .6), transparent 72%),
+    linear-gradient(180deg, #8CF9E3 0%, #3EE6D2 32%, #16BCB4 68%, #0A8C8D 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .55),
-    inset 0 -1px 0 rgba(0, 0, 0, .32),
-    0 0 0 1px rgba(255, 194, 128, .34),
-    0 10px 24px -10px rgba(240, 68, 82, .62),
+    inset 0 1px 0 rgba(255, 253, 240, .8),
+    inset 0 -2px 0 rgba(2, 54, 58, .45),
+    inset 0 0 0 1px rgba(243, 212, 131, .3),
+    0 12px 28px -12px rgba(20, 230, 208, .6),
+    0 4px 0 #065A5F;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .45);
+}
+/* the breathing specular sweep: a narrow blade of light crossing the gold crown */
+.btn-play-again::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: -60%;
+  bottom: -60%;
+  left: -30%;
+  width: 44%;
+  background: linear-gradient(100deg,
+    transparent 0%,
+    rgba(255, 255, 255, .12) 24%,
+    rgba(255, 255, 255, .58) 50%,
+    rgba(255, 255, 255, .12) 76%,
+    transparent 100%);
+  transform: translateX(-170%) rotate(9deg);
+  opacity: .55;
+  pointer-events: none;
+  animation: sheen-sweep 4.8s cubic-bezier(.42, 0, .58, 1) 1.2s infinite;
+}
+.btn-play-again .result-btn-ico {
+  width: 30px;
+  height: 30px;
+  background: radial-gradient(circle at 50% 28%, rgba(255, 255, 255, .6), rgba(255, 255, 255, .08) 62%, transparent 74%);
+  box-shadow: inset 0 0 0 1px rgba(3, 70, 66, .18);
+  color: #033B3C;
+}
+.btn-play-again .ico { filter: drop-shadow(0 1px 0 rgba(255, 255, 255, .4)); }
+@media (hover: hover) {
+  .btn-play-again:hover { filter: brightness(1.055) saturate(1.04); transform: translateY(-1px); }
+}
+.btn-play-again:active {
+  transform: scale(.97);
+  filter: brightness(.99);
+  box-shadow:
+    inset 0 2px 9px rgba(2, 40, 42, .4),
+    inset 0 0 0 1px rgba(243, 212, 131, .26),
+    0 4px 12px -8px rgba(20, 230, 208, .5),
+    0 1px 0 #065A5F;
+}
+.btn-play-again:focus-visible { outline: 3px solid #8CF9E3; outline-offset: 3px; }
+.overlay.result.lose .btn-play-again {
+  color: #2B0805;
+  background:
+    radial-gradient(120% 200% at 50% -60%, rgba(255, 245, 220, .86) 0%, rgba(255, 214, 170, .24) 40%, transparent 68%),
+    radial-gradient(80% 140% at 50% 132%, rgba(82, 6, 20, .6), transparent 72%),
+    linear-gradient(180deg, #FFD9A3 0%, #FF9F63 32%, #F45A54 66%, #B31232 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .62),
+    inset 0 -2px 0 rgba(58, 5, 12, .4),
+    inset 0 0 0 1px rgba(243, 212, 131, .3),
+    0 12px 28px -12px rgba(240, 68, 82, .55),
     0 4px 0 #5B0B1B;
-  text-shadow: 0 1px 0 rgba(255, 224, 196, .45);
+  text-shadow: 0 1px 0 rgba(255, 224, 196, .5);
 }
-.result-btn.primary:hover { filter: brightness(1.06); }
-.result-btn.primary:active {
-  transform: translateY(3px);
-  box-shadow:
-    inset 0 2px 6px rgba(255, 255, 255, .3),
-    0 4px 12px rgba(240, 68, 82, .28),
-    0 1px 0 #5B0B1B;
-}
-.result-btn.primary:focus-visible { outline: 3px solid #2DD4BF; outline-offset: 3px; }
-.overlay.result.lose .result-btn.primary:focus-visible { outline-color: #FB7185; }
-.result-btn.primary.is-locked,
-.result-btn.primary:disabled {
-  opacity: .5;
-  filter: grayscale(.35) saturate(.65);
+.overlay.result.lose .btn-play-again:focus-visible { outline-color: #FB7185; }
+.btn-play-again.is-locked,
+.btn-play-again:disabled {
+  opacity: .52;
+  filter: grayscale(.4) saturate(.6);
   cursor: not-allowed;
-  box-shadow:
-    inset 0 2px 4px rgba(255, 255, 255, .16),
-    0 4px 0 #3A1218;
   transform: none;
-}
-.result-btn.primary.is-locked:active,
-.result-btn.primary:disabled:active { transform: none; }
-.result-btn.ghost {
-  min-height: 40px;
-  padding: 9px 14px;
-  border: 1px solid rgba(255, 255, 255, .12);
-  background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .018));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .09),
-    0 0 18px -14px rgba(255, 255, 255, .55);
-  color: #C6D0DF;
-  font-size: .72rem;
-  letter-spacing: .11em;
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    0 4px 0 #3A1218;
 }
-.result-btn.ghost .ico { width: 15px; height: 15px; color: #8FA3BE; }
-.result-btn.ghost:active { transform: translateY(2px); filter: brightness(1.06); }
-.result-btn.ghost:focus-visible { outline: 3px solid rgba(148, 163, 184, .6); outline-offset: 3px; }
-.result-btn--menu { color: #9DAABC; }
+.btn-play-again.is-locked::after,
+.btn-play-again:disabled::after { display: none; }
+.btn-play-again.is-locked:active,
+.btn-play-again:disabled:active { transform: none; }
+
+/* ---- 2. the duel banner: obsidian glass with a lit crest ---- */
+.btn-challenge {
+  min-height: 50px;
+  gap: 11px;
+  padding-inline: 16px;
+  color: #EADFC2;
+  background:
+    radial-gradient(92% 170% at 50% 128%, rgba(124, 58, 237, .3), transparent 70%),
+    radial-gradient(64% 120% at 12% -10%, rgba(244, 63, 94, .12), transparent 62%),
+    linear-gradient(168deg, rgba(38, 31, 52, .92) 0%, rgba(18, 15, 27, .96) 56%, rgba(8, 7, 12, .98) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    inset 0 -1px 0 rgba(0, 0, 0, .62),
+    inset 0 0 0 1px rgba(167, 139, 250, .14),
+    0 10px 26px -16px rgba(0, 0, 0, .95),
+    0 0 28px -14px rgba(139, 92, 246, .6);
+  font-size: .78rem;
+  letter-spacing: .13em;
+}
+.btn-challenge .result-btn-ico {
+  width: 32px;
+  height: 32px;
+  background: radial-gradient(circle, rgba(243, 212, 131, .22), rgba(139, 92, 246, .14) 54%, transparent 74%);
+  color: #F2D397;
+  filter: drop-shadow(0 0 7px rgba(243, 212, 131, .42));
+}
+.btn-challenge .ico { width: 23px; height: 23px; }
+.btn-challenge .result-btn-label { color: #F4E4BD; text-shadow: 0 1px 0 rgba(0, 0, 0, .7); }
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .btn-challenge .result-btn-label {
+    background: linear-gradient(180deg, #FFF6DC 0%, #F2D397 46%, #C9B79C 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .8));
+  }
+}
+@media (hover: hover) {
+  .btn-challenge:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.09);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .14),
+      inset 0 -1px 0 rgba(0, 0, 0, .62),
+      inset 0 0 0 1px rgba(190, 160, 255, .26),
+      0 12px 30px -16px rgba(0, 0, 0, .95),
+      0 0 32px -12px rgba(139, 92, 246, .8);
+  }
+  .btn-challenge:hover .result-btn-ico { animation: duel-crest-flare .9s ease both; }
+}
+.btn-challenge:active { transform: scale(.98); filter: brightness(1.12); }
+.btn-challenge:focus-visible { outline: 3px solid #F2D397; outline-offset: 3px; }
+
+/* ---- 3. the return plate: frosted obsidian, no theatre ---- */
+.btn-main-menu {
+  min-height: 50px;
+  gap: 9px;
+  color: #C8C0B0;
+  border: 1px solid rgba(255, 255, 255, .08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .012)),
+    rgba(18, 24, 38, .7);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    0 6px 16px -14px rgba(0, 0, 0, .92);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  backdrop-filter: blur(14px) saturate(1.15);
+  font-size: .72rem;
+  letter-spacing: .17em;
+}
+.btn-main-menu::before {
+  background: linear-gradient(112deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, .02) 56%, rgba(243, 212, 131, .1));
+}
+.btn-main-menu .result-btn-ico { width: 26px; height: 26px; }
+.btn-main-menu .ico {
+  width: 18px;
+  height: 18px;
+  color: #CBBB97;
+  transition: color .18s ease, filter .18s ease;
+}
+.btn-main-menu .result-btn-label {
+  color: #C6BEB0;
+  transition: color .18s ease;
+}
+@media (hover: hover) {
+  .btn-main-menu:hover {
+    color: #F6EFDF;
+    border-color: rgba(243, 212, 131, .26);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .02)),
+      rgba(22, 28, 44, .76);
+  }
+  .btn-main-menu:hover .ico { color: #F2D397; }
+  .btn-main-menu:hover .result-btn-label { color: #F6EFDF; }
+}
+.btn-main-menu:active {
+  transform: scale(.98);
+  color: #FFFFFF;
+  border-color: rgba(255, 255, 255, .2);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, .035)),
+    rgba(26, 33, 50, .82);
+}
+.btn-main-menu:active .ico { color: #FFF6DE; filter: drop-shadow(0 0 6px rgba(243, 212, 131, .55)); }
+.btn-main-menu:active .result-btn-label { color: #FFFFFF; }
+.btn-main-menu:focus-visible { outline: 3px solid rgba(226, 232, 240, .7); outline-offset: 3px; }
 
 /* ---- the ad's answer: a pill over the capsule, out of the card's flow ---- */
 .ad-toast {
@@ -775,6 +968,14 @@ html.reduced-motion .ad-toast { transition: none; }
   0%, 58% { transform: translateX(-180%) rotate(9deg); }
   100% { transform: translateX(560%) rotate(9deg); }
 }
+@keyframes sheen-sweep {
+  0%, 14% { transform: translateX(-170%) rotate(9deg); }
+  54%, 100% { transform: translateX(430%) rotate(9deg); }
+}
+@keyframes duel-crest-flare {
+  0%, 100% { filter: drop-shadow(0 0 7px rgba(243, 212, 131, .42)); }
+  45% { filter: drop-shadow(0 0 13px rgba(255, 243, 210, .9)); }
+}
 @keyframes ad-chip-spin { to { transform: rotate(360deg); } }
 @keyframes ad-chip-land {
   0% { transform: scale(1); }
@@ -791,9 +992,8 @@ html.reduced-motion .ad-toast { transition: none; }
   .result-row { height: 41px; min-height: 41px; }
   .result-roster { gap: 3px; padding: 4px; margin-bottom: 8px; }
   .result-bank { min-height: 50px; margin-bottom: 8px; padding: 4px 6px; }
-  .result-actions { gap: 6px; }
-  .result-btn { min-height: 44px; }
-  .result-btn.ghost { min-height: 38px; }
+  .result-actions { gap: 7px; }
+  .result-btn { padding-block: 10px; }
 }
 @media (max-height: 600px) {
   .result-card { padding: 10px 13px 9px; }
@@ -804,8 +1004,8 @@ html.reduced-motion .ad-toast { transition: none; }
   .result-avatar { width: 29px; height: 29px; }
   .result-medal { width: 24px; height: 24px; }
   .result-bank { min-height: 47px; }
-  .result-btn.primary { min-height: 42px; }
-  .result-btn.ghost { min-height: 36px; }
+  .result-actions { gap: 6px; }
+  .result-btn { padding-block: 9px; }
 }
 
 /* ---- narrow phones: names keep the room, everything else gives it up ---- */
@@ -815,6 +1015,10 @@ html.reduced-motion .ad-toast { transition: none; }
 }
 @media (max-width: 360px) {
   .result-card { padding-inline: 12px; }
+  .btn-challenge { gap: 9px; padding-inline: 12px; font-size: .72rem; letter-spacing: .1em; }
+  .btn-challenge .result-btn-ico { width: 28px; height: 28px; }
+  .btn-challenge .ico { width: 20px; height: 20px; }
+  .btn-main-menu { letter-spacing: .13em; }
   .result-row { gap: 7px; padding-inline: 7px 8px; }
   .result-row-name { font-size: 12px; }
   .result-place { font-size: 7px; letter-spacing: .1em; }
@@ -879,6 +1083,14 @@ html.reduced-motion #btn-recover-tiq::before,
 html.reduced-motion .ad-chip-spin { animation: none; }
 html.reduced-motion #btn-recover-tiq.is-claimed,
 html.reduced-motion #btn-double-coins.is-claimed { animation: none; }
+html.reduced-motion .btn-play-again::after,
+html.reduced-motion .btn-challenge .result-btn-ico { animation: none; }
+html.reduced-motion .btn-play-again::after { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .btn-play-again::after,
+  .btn-challenge .result-btn-ico { animation: none; }
+  .btn-play-again::after { opacity: 0; }
+}
 
 /* ---- Persian: true RTL on the capsule, Vazirmatn, no forced tracking ----
    The global language rule already bans letter-spacing; these only hand the
