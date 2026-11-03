@@ -45,6 +45,17 @@ export interface BadgePerk {
   text: BadgeText;
 }
 
+/**
+ * A privilege the relic's owner holds while it is worn. Unlike `perks`, these are the collector's
+ * charter — profile aura, chat sigil, hall record — and only the honors that actually carry one
+ * print the module. `{serial}` is stamped from the same ledger reading as the plaque.
+ */
+export interface BadgePrivilege {
+  /** The shared glyph id painted in the privilege's own well, without the leading #. */
+  icon: string;
+  text: BadgeText;
+}
+
 /** The numeric gates behind an honor's mission, when one proof is not enough. */
 export interface BadgeRequirement {
   minTiq?: number;
@@ -78,6 +89,8 @@ export interface BadgeDef {
   requirement?: BadgeRequirement;
   /** The passive prestige this honor grants while worn; its certificate lists them. */
   perks: BadgePerk[];
+  /** The owner's charter, printed on the collector card while the honor is held. */
+  privileges?: BadgePrivilege[];
   /** Names the sculpted crest (#i-crest-<accent>), its CSS aura, and the art fallback. */
   accent: BadgeAccent;
   /** Rendered medallion art; when set it replaces the vector crest everywhere the honor is worn. */
@@ -151,6 +164,29 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
         text: {
           en: '+5% Coin bonus on a zero-error run',
           fa: '+۵٪ سکهٔ اضافه روی یک ران بی‌خطا',
+        },
+      },
+    ],
+    privileges: [
+      {
+        icon: 'i-crown',
+        text: {
+          en: 'Amber profile halo — an exclusive light around your avatar on the global ladder.',
+          fa: 'هاله کهربایی پروفایل: جلوه نور اختصاصی دور آواتار در جدول رده‌بندی جهانی.',
+        },
+      },
+      {
+        icon: 'i-chat',
+        text: {
+          en: 'Elite chat sigil — plaque {serial} rides beside your name in messages and emotes.',
+          fa: 'نشان نخبگان در چت: ثبت پلاک {serial} در کنار نام هنگام ارسال پیام و ایموت‌ها.',
+        },
+      },
+      {
+        icon: 'i-medal',
+        text: {
+          en: 'Eternal hall record — your name remains in the Top 50 Minds registry.',
+          fa: 'ثبت ابدی در تالار افتخار: حضور دائمی نام در فهرست ۵۰ متفکر برتر.',
         },
       },
     ],

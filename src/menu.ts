@@ -13,8 +13,8 @@ import {
 } from './settings';
 import {
   ageLocked, claimIdentityReward, claimReferralRewards, cleanDisplayName, createTeam, daysInMonth,
-  DISPLAY_NAME_MAX, DISPLAY_NAME_MIN, DOB_MIN_YEAR, dobMaxYear, dobValue, favouriteMode,
-  IDENTITY_REWARD, joinTeam, KINDS, leaveTeam, levelInfo, myTeam, onChange, pieceColor, profile,
+  DISPLAY_NAME_MAX, DISPLAY_NAME_MIN, DOB_MIN_YEAR, dobMaxYear, dobValue,
+  IDENTITY_REWARD, joinTeam, leaveTeam, levelInfo, myTeam, onChange, pieceColor, profile,
   REFERRAL_REWARD, setBadge, setDisplayName, setDob, setFrame, setPieceColor, theme, validDob,
 } from './storage';
 import {
@@ -24,7 +24,7 @@ import {
   type BadgeDef, type EditionHolder, type WornEdition,
 } from './badges';
 import { MAX_BALLS, newGame } from './rules';
-import { createPreview, createRenderer, type Preview, type View } from './render';
+import { createRenderer, type View } from './render';
 import { setBalance } from './coin';
 import { nameOf } from './countries';
 import { openCountryPicker } from './countrypick';
@@ -50,7 +50,7 @@ import { copyText } from './gamemodes';
 import { myTiq } from './matchmaking';
 import { refreshReferral, referralCode, referralLink, referralShareUrl } from './referral';
 import { playReward } from './sound';
-import { perspectiveRamps, type CosKind, type PieceColor } from './themes';
+import { perspectiveRamps, type PieceColor } from './themes';
 import { isTicketCategory, submitTicket } from './support';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
@@ -1687,7 +1687,6 @@ export function createMenu(api: MenuApi): Menu {
 
   /* ---- the record, and what is worn: re-painted whenever the save changes ---- */
   const pfScreen = $<HTMLElement>('s-profile');
-  const eqPv = new Map<CosKind, Preview>();
 
   /* Avatar frames for the hero slot: persisted as profile.frame (default | auric | neon). */
   const FRAMES: { id: string; name: string }[] = [
@@ -2025,6 +2024,37 @@ export function createMenu(api: MenuApi): Menu {
     }
   }
 
+  /**
+   * The owner's charter: privileges this honor grants while it is worn. The copy is data, not
+   * markup, so the Singularity's three privileges never appear on a badge that does not carry
+   * them. `{serial}` is stamped from the same ledger reading the plaque uses.
+   */
+  function paintBadgePrivileges(def: BadgeDef, unlocked: boolean): void {
+    const section = document.getElementById('badge-privileges');
+    const list = document.getElementById('badge-privilege-list');
+    if (!section || !list) return;
+    const rows = def.privileges ?? [];
+    const show = unlocked && rows.length > 0;
+    section.hidden = !show;
+    list.replaceChildren();
+    if (!show) return;
+    const serial = badgeEdition(def.id).serial;
+    const serialLabel = serial !== null ? editionSerialLabel(serial) : '—';
+    for (const row of rows) {
+      const li = document.createElement('li');
+      li.className = 'bd-privilege';
+      const well = document.createElement('span');
+      well.className = 'bd-privilege-ico';
+      well.setAttribute('aria-hidden', 'true');
+      well.innerHTML = `<svg class="ico"><use href="#${row.icon}" /></svg>`;
+      const copy = document.createElement('p');
+      copy.className = 'bd-privilege-text';
+      copy.textContent = badgeText(row.text, lang).split('{serial}').join(serialLabel);
+      li.append(well, copy);
+      list.append(li);
+    }
+  }
+
   function paintBadgeSheet(id: string): void {
     const def = BADGES.find((b) => b.id === id);
     const sheet = document.getElementById('sheet-badge');
@@ -2038,18 +2068,31 @@ export function createMenu(api: MenuApi): Menu {
     const title = document.getElementById('badge-title');
     if (title) title.textContent = def.name;
     const arch = document.getElementById('badge-archetype');
-    if (arch) arch.textContent = `${def.archetype} • ${def.pillar}`;
+    if (arch) arch.textContent = `${def.archetype} · ${def.pillar}`;
 
     const state = document.getElementById('badge-state');
     if (state) {
+      state.removeAttribute('aria-label');
       if (!unlocked) {
         state.textContent = t('badgeLocked');
         state.dataset.state = 'locked';
       } else if (edition.serial !== null) {
-        state.textContent = lang === 'fa'
-          ? `${t('badgeSerial')} ${String(edition.serial).padStart(3, '0')} ${t('badgeOf')} ${en(edition.cap)}`
-          : `${t('badgeSerial')} ${editionSerialLabel(edition.serial)} ${t('badgeOf')} ${en(edition.cap)}`;
+        /* the engraved plaque: № 002 OF 050 · HISTORIC MINT. The serial rides in its own LTR
+           isolate, so a Persian sheet can never reverse the digits or the № mark. */
+        const no = document.createElement('bdi');
+        no.className = 'bd-plaque-no';
+        no.dir = 'ltr';
+        no.textContent = `№ ${String(edition.serial).padStart(3, '0')} OF ${String(edition.cap).padStart(3, '0')}`;
+        const sep = document.createElement('span');
+        sep.className = 'bd-plaque-sep';
+        sep.setAttribute('aria-hidden', 'true');
+        sep.textContent = '·';
+        const tag = document.createElement('span');
+        tag.className = 'bd-plaque-tag';
+        tag.textContent = t('badgeHistoricMint');
+        state.replaceChildren(no, sep, tag);
         state.dataset.state = 'minted';
+        state.setAttribute('aria-label', `${no.textContent} ${tag.textContent}`);
       } else if (edition.minting) {
         state.textContent = t('badgeMinting');
         state.dataset.state = 'minting';
@@ -2064,6 +2107,7 @@ export function createMenu(api: MenuApi): Menu {
     const crit = document.getElementById('badge-criteria');
     if (crit) crit.textContent = badgeText(def.criteria, lang);
     paintRequirementChips(prog);
+    paintBadgePrivileges(def, unlocked);
 
     /* The supply bento reads the ledger first and the last confirmed serial second;
        before either answers it shows an em dash, never an invented count. */
@@ -2136,6 +2180,8 @@ export function createMenu(api: MenuApi): Menu {
         use?.setAttribute('href', '#i-check');
       }
       cta.setAttribute('aria-label', `${ctaLabel.textContent} — ${def.name}`);
+      if (equipped) cta.title = t('badgeEquippedNote');
+      else cta.removeAttribute('title');
     }
   }
 
@@ -2606,12 +2652,6 @@ export function createMenu(api: MenuApi): Menu {
     $('pf-losses').textContent = en(s.losses);
     $('pf-best').textContent = en(s.best);
     $('pf-streak').textContent = en(s.streak);
-    const fav = favouriteMode();
-    const favLabel = fav === 'bot' ? `${menuState.sizes[0]}v${menuState.sizes[1]}` : '—';
-    $('pf-fav').textContent = favLabel;
-    $('pf-fav-sub').textContent = s.games
-      ? t('botRaces').replace('{n}', en(s.modes.bot ?? 0))
-      : t('noRacesYet');
     /* empty stats become an exciting quest card until the first race lands */
     const quest = document.getElementById('pf-quest');
     const empty = document.getElementById('pf-quest-empty');
@@ -2621,18 +2661,6 @@ export function createMenu(api: MenuApi): Menu {
       quest.dataset.empty = String(isNew);
       empty.hidden = !isNew;
       stats.hidden = isNew;
-    }
-    if (pfScreen.hidden) return;                        // a hidden canvas has no width to lay out
-    const th = theme();
-    for (const k of KINDS) {
-      let pv = eqPv.get(k);
-      if (!pv) {
-        pv = createPreview(document.querySelector<HTMLCanvasElement>(`canvas[data-eq=${JSON.stringify(k)}]`)!, k, th);
-        eqPv.set(k, pv);
-      } else pv.setTheme(th);
-      pv.resize();
-      pv.settle();
-      $(`eq-${k}`).textContent = th[k].name;
     }
   };
   onChange(paintProfile);
@@ -2668,14 +2696,6 @@ export function createMenu(api: MenuApi): Menu {
 
   paintProfile();
   new ResizeObserver(() => { if (!pfScreen.hidden) paintProfile(); }).observe(pfScreen);
-
-  /* the equipped loadouts stay locked until the cosmetic inventory ships: the cards are
-     pointer-events: none, so the slab itself takes the tap and answers with a warning
-     nudge and a clay toast — nothing here can ever equip, focus or toggle a loadout. */
-  document.getElementById('pf-eq-lock')?.addEventListener('click', () => {
-    notify('warning');
-    showPfToast('Cosmetic loadouts unlock soon!', true);
-  });
 
   /* frame cycle: tapping the avatar steps Default → Auric → Neon; the name reads out via aria-label. */
   document.getElementById('pf-avatar-wrap')?.addEventListener('click', () => {

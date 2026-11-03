@@ -6914,8 +6914,8 @@ html.reduced-motion .hex-photo { transition: none; }
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  /* the identity grid must clear the bottom dock with room to spare */
-  padding-bottom: calc(var(--dock-height) + 16px);
+  /* clear the floating dock with a deliberate 24px of breathing room */
+  padding-bottom: calc(var(--dock-height, var(--nav-height, 68px)) + 24px);
 }
 /* no document-level sideways drift: every direct child is width-capped */
 .pf-pane > * { max-width: 100%; min-width: 0; }
@@ -7083,122 +7083,6 @@ html.reduced-motion .hex-photo { transition: none; }
     inset 0 0 0 1px rgba(148, 163, 184, .12);
 }
 .pf-set-btn.icon-btn:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
-
-/* ---- equipped: neat previews with proper aspect ratio ---- */
-.pf-equips { flex: none; display: flex; flex-direction: column; gap: var(--pf-rhythm-tight, var(--s2)); min-width: 0; }
-.pf-eq-row { gap: var(--s2); }
-.pf-eq.eq {
-  margin: 0;
-  min-width: 0;
-  padding: var(--s2);
-  border-radius: 20px;
-  background: var(--clay-face);
-  box-shadow: var(--clay), var(--clay-ring);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-  overflow: hidden;
-}
-.pf-cos-pv.cos-pv {
-  display: block;
-  width: 100%;
-  aspect-ratio: 3 / 2;
-  height: auto;
-  border-radius: 12px;
-  background: var(--field);
-  box-shadow: var(--inset);
-  object-fit: cover;
-}
-.pf-eq figcaption {
-  margin: 0;
-  padding: 0 var(--s1) var(--s1);
-  font-size: var(--t-micro);
-  font-weight: 800;
-  color: var(--ink);
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ---- equipped LOCKED: frosted obsidian scrim + titanium lock crest ----
-   The three worn previews stay in flow (zero layout shift) but read through 1.5px of
-   frost; an absolute scrim owns the section's own radius so nothing bleeds its corners.
-   The crest rides on top: a recessed 42px Dark-Clay pod holding the chiselled titanium
-   padlock (26x30) over a smoked graphite micro-plate that only whispers "COMING SOON".
-   Everything under the scrim is inert — the slab takes the tap (a warning nudge + clay
-   toast), never the cards. */
-.pf-eq-lock {
-  position: relative;
-  min-width: 0;
-  border-radius: 20px;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.pf-eq-lock .pf-eq-row {
-  opacity: .45;
-  filter: saturate(.6) blur(1.5px);
-}
-.pf-eq-lock .pf-eq-row,
-.pf-eq-scrim,
-.pf-eq-crest { pointer-events: none; }
-.pf-eq-scrim {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(circle at center, rgba(17, 24, 39, .75) 0%, rgba(10, 14, 23, .92) 100%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
-}
-.pf-eq-crest {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-/* the pod: a recessed clay well, its only warmth the hairline amber the keyhole leaks */
-.pf-eq-pod {
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #232B3B 0%, #131A27 100%);
-  box-shadow:
-    inset 0 2px 6px rgba(0, 0, 0, .62),
-    inset 0 -1px 0 rgba(255, 255, 255, .07),
-    inset 0 0 0 1px rgba(148, 163, 184, .16),
-    0 6px 16px rgba(0, 0, 0, .45);
-}
-.pf-eq-pod .ico {
-  width: 26px;
-  height: 30px;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .55));
-}
-/* the micro-plate: smoked graphite, hairline bronze border, tight tracked type */
-.pf-eq-chip {
-  display: inline-flex;
-  align-items: center;
-  height: 19px;
-  padding: 0 10px;
-  border: 1px solid rgba(245, 158, 11, .35);
-  border-radius: 6px;
-  background: rgba(15, 23, 42, .85);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  color: #F3F4F6;
-  font-size: 8.5px;
-  font-weight: 800;
-  letter-spacing: 1.8px;
-  line-height: 1;
-  text-transform: uppercase;
-  white-space: nowrap;
-  box-shadow:
-    0 2px 8px rgba(0, 0, 0, .5),
-    inset 0 1px 0 rgba(255, 255, 255, .06);
-}
 
 /* ---- toast: animated coin reward confirmation ---- */
 .pf-toast {
@@ -9990,6 +9874,24 @@ html.reduced-motion .ml-pulse::after { display: none; }
   animation: bd-aura-breathe 5.2s ease-in-out infinite;
   pointer-events: none;
 }
+/* the Singularity's pedestal burns warmer and wears a slow amber orbit */
+.badge-sheet[data-accent="quantum"] .bd-aura {
+  background:
+    radial-gradient(closest-side at 50% 50%, rgba(245, 158, 11, .44) 0%, rgba(243, 212, 131, .16) 46%, transparent 74%);
+  filter: blur(12px);
+}
+.badge-sheet[data-accent="quantum"] .bd-hero-art::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 1px solid rgba(243, 212, 131, .28);
+  box-shadow:
+    0 0 24px -8px rgba(243, 212, 131, .75),
+    inset 0 0 18px -10px rgba(243, 212, 131, .9);
+  animation: bd-relic-halo 6.8s ease-in-out infinite;
+  pointer-events: none;
+}
 .badge-ico-lg {
   position: relative;
   width: var(--bd-pedestal);
@@ -10051,6 +9953,18 @@ html.reduced-motion .ml-pulse::after { display: none; }
   0%, 100% { opacity: .75; transform: scale(.96); }
   50% { opacity: 1; transform: scale(1.05); }
 }
+@keyframes bd-relic-halo {
+  0%, 100% { opacity: .42; transform: scale(.97); }
+  50% { opacity: .95; transform: scale(1.03); }
+}
+@keyframes bd-live-blink {
+  0%, 100% { opacity: .35; }
+  50% { opacity: 1; }
+}
+@keyframes bd-seal-glow {
+  0%, 100% { opacity: .35; }
+  50% { opacity: .85; }
+}
 
 .bd-state {
   max-width: 100%;
@@ -10080,6 +9994,67 @@ html.reduced-motion .ml-pulse::after { display: none; }
     inset 0 1px 0 rgba(255, 255, 255, .06),
     0 0 16px -6px var(--bd-glow);
 }
+/* the minted state is not a pill: it is a struck plaque, № 002 OF 050 · HISTORIC MINT */
+.bd-state[data-state="minted"] {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 5px 12px 6px;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, 0) 46%),
+    linear-gradient(180deg, rgba(32, 26, 16, .92), rgba(12, 10, 7, .96));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 246, 220, .22),
+    inset 0 -1px 0 rgba(0, 0, 0, .65),
+    inset 0 0 0 1px rgba(243, 212, 131, .24),
+    0 6px 18px -12px rgba(0, 0, 0, .95),
+    0 0 18px -10px rgba(243, 212, 131, .5);
+  color: #E8D2A2;
+  text-shadow: none;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.bd-plaque-no {
+  font-family: var(--font-numeric);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: .09em;
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+  color: #F8E7BE;
+}
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .bd-plaque-no {
+    background-image: linear-gradient(180deg, #FFF8E4 0%, #F2D397 38%, #C79A4E 72%, #8A6127 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+.bd-plaque-sep {
+  color: rgba(243, 212, 131, .55);
+  font-size: 10px;
+  line-height: 1;
+}
+.bd-plaque-tag {
+  font-size: 8.5px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: #B99B66;
+  unicode-bidi: isolate;
+}
 .bd-title {
   margin: 1px 0 0;
   font-size: clamp(17px, 4.7vw, 20px);
@@ -10090,23 +10065,41 @@ html.reduced-motion .ml-pulse::after { display: none; }
   text-align: center;
 }
 .bd-moniker {
+  position: relative;
   max-width: 100%;
-  margin: 1px 0 0;
-  padding: 4px 10px 5px;
-  border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, .18);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+  margin: 2px 0 0;
+  padding: 5px 14px 6px;
+  border-radius: 7px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .01)),
+    rgba(12, 16, 26, .72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 246, 220, .08),
+    inset 0 0 0 1px rgba(255, 255, 255, .06),
+    0 8px 18px -16px #000;
   color: var(--bd-metal);
-  font-size: 10px;
-  line-height: 1.2;
+  font-size: 9.5px;
+  line-height: 1.3;
   font-weight: 800;
-  letter-spacing: .11em;
+  letter-spacing: .17em;
   text-transform: uppercase;
   text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
+.bd-moniker::before,
+.bd-moniker::after {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(243, 212, 131, .45), transparent);
+  pointer-events: none;
+}
+.bd-moniker::before { top: 0; }
+.bd-moniker::after { bottom: 0; }
 
 /* the compact middle: supply bento -> story -> unlock mission */
 .bd-body {
@@ -10120,70 +10113,125 @@ html.reduced-motion .ml-pulse::after { display: none; }
    card instead of letting the body scroll on an unusually short screen. */
 .bd-body > * { flex: 0 0 auto; }
 
-/* ---- supply bento: three calm obsidian cells with metallic numerals ---- */
+/* ---- collector ledger: three frosted vault cells with illuminated hairlines ---- */
 .bd-supply {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 7px;
 }
 .bd-supply-cell {
+  --vault-ring: rgba(255, 255, 255, .06);
   position: relative;
+  isolation: isolate;
   min-width: 0;
+  min-height: 70px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 8px 6px 7px;
-  border-radius: 14px;
+  gap: 4px;
+  padding: 10px 6px 9px;
+  overflow: hidden;
+  border-radius: 13px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, 0) 55%),
-    var(--field);
+    radial-gradient(110% 80% at 50% -20%, rgba(255, 246, 220, .07), transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, .038), rgba(255, 255, 255, .008) 58%),
+    rgba(16, 22, 36, .75);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .05),
-    inset 0 0 0 1px rgba(255, 255, 255, .055);
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    inset 0 -1px 0 rgba(0, 0, 0, .5);
+  -webkit-backdrop-filter: blur(12px) saturate(1.15);
+  backdrop-filter: blur(12px) saturate(1.15);
   text-align: center;
 }
+/* the illuminated hairline: one seam per vault, warm on the claimed cell */
+.bd-supply-cell::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 14%;
+  right: 14%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 246, 220, .42), transparent);
+  opacity: .62;
+  pointer-events: none;
+}
+.bd-supply-cell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--vault-ring);
+  pointer-events: none;
+}
+.bd-supply-cell.is-total { --vault-ring: rgba(226, 232, 240, .1); }
+.bd-supply-cell.is-claimed { --vault-ring: rgba(243, 212, 131, .24); }
+.bd-supply-cell.is-claimed::before {
+  background: linear-gradient(90deg, transparent, rgba(252, 211, 77, .85), transparent);
+  opacity: .9;
+}
+.bd-supply-cell.is-available { --vault-ring: rgba(110, 231, 183, .17); }
+.bd-supply-cell.is-available::before {
+  background: linear-gradient(90deg, transparent, rgba(110, 231, 183, .48), transparent);
+}
 .bd-supply-num {
+  position: relative;
+  z-index: 1;
   display: block;
   max-width: 100%;
   font-family: var(--font-stat);
-  font-size: clamp(20px, 5.8vw, 24px);
+  font-size: clamp(22px, 6.2vw, 26px);
   font-weight: 700;
   line-height: 1;
-  letter-spacing: .01em;
+  letter-spacing: .02em;
   font-variant-numeric: tabular-nums;
-  color: #E2E8F0;
-  background-image: linear-gradient(180deg, #F8FAFC 0%, #94A3B8 100%);
+  direction: ltr;
+  color: #E6EDF7;
+  background-image: linear-gradient(180deg, #FFFFFF 0%, #D7E1EE 42%, #7C8DA6 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .72));
 }
 .bd-supply-cell.is-claimed .bd-supply-num {
-  background-image: linear-gradient(180deg, #FDE68A 0%, #F59E0B 100%);
+  background-image: linear-gradient(180deg, #FFF8E4 0%, #F2D397 38%, #C08A32 100%);
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .72)) drop-shadow(0 0 8px rgba(243, 212, 131, .22));
 }
 .bd-supply-cell.is-available .bd-supply-num {
-  background-image: linear-gradient(180deg, #A7F3D0 0%, #10B981 100%);
+  background-image: linear-gradient(180deg, #E9FFF7 0%, #A7F3D0 38%, #10B981 100%);
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .72)) drop-shadow(0 0 8px rgba(16, 185, 129, .2));
 }
 .bd-supply-cell.is-available[data-state="closed"] .bd-supply-num {
   background-image: linear-gradient(180deg, #FECDD3 0%, #FB7185 100%);
 }
 .bd-supply-cell.is-available[data-state="syncing"] .bd-supply-num {
   background-image: linear-gradient(180deg, #CBD5E1 0%, #64748B 100%);
+  filter: none;
 }
 .bd-supply-label {
+  position: relative;
+  z-index: 1;
   display: block;
   max-width: 100%;
-  font-size: 10px;
-  line-height: 1.2;
+  min-height: 2.5em;
+  font-size: 9px;
+  line-height: 1.25;
   font-weight: 800;
-  letter-spacing: .04em;
+  letter-spacing: .12em;
   text-transform: uppercase;
-  color: #7D8DA5;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: #8492A6;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
+.bd-supply-cell.is-claimed .bd-supply-label { color: #C6A96B; }
+.bd-supply-cell.is-available .bd-supply-label { color: #7FA99A; }
+/* the crown is a minted seal, never a hover surprise */
+.bd-supply-cell.is-claimed .bd-supply-crown {
+  opacity: .82;
+  color: #F2D397;
+  filter: drop-shadow(0 0 5px rgba(243, 212, 131, .4));
+}
+.bd-supply-cell.is-claimed[data-state="quiet"] .bd-supply-crown { opacity: .45; }
 
 .bd-kicker {
   display: inline-flex;
@@ -10375,6 +10423,119 @@ html.reduced-motion .ml-pulse::after { display: none; }
 }
 .bd-req[data-met="true"] .bd-req-foot em { color: var(--mint-ink); }
 
+/* ---- the owner's charter: three illuminated privileges on one obsidian plate ---- */
+.bd-privileges {
+  position: relative;
+  padding: 10px 11px 11px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background:
+    radial-gradient(92% 120% at 100% 0%, rgba(243, 212, 131, .075), transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, .028), rgba(255, 255, 255, 0) 52%),
+    rgba(16, 22, 36, .72);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, .4),
+    inset 0 -1px 0 rgba(255, 255, 255, .04),
+    inset 0 0 0 1px rgba(243, 212, 131, .14);
+}
+.bd-privileges[hidden] { display: none; }
+.bd-privileges::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #F6E7B8, #B1853F);
+  opacity: .74;
+  pointer-events: none;
+}
+.bd-privileges-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.bd-privileges-head .bd-kicker { color: #E2C58C; }
+.bd-privileges-head .bd-kicker::before { display: none; }
+.bd-privileges-live {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px 4px;
+  border-radius: var(--radius-pill);
+  background: rgba(243, 212, 131, .08);
+  box-shadow: inset 0 0 0 1px rgba(243, 212, 131, .18);
+  color: #D9BC80;
+  font-size: 8px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.bd-privileges-live::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  flex: none;
+  border-radius: 50%;
+  background: #6EE7B7;
+  box-shadow: 0 0 6px rgba(110, 231, 183, .9);
+  animation: bd-live-blink 2.8s ease-in-out infinite;
+}
+.bd-privilege-list {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.bd-privilege {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 7px 6px 6px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, .18);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .045),
+    inset 0 1px 0 rgba(255, 255, 255, .035);
+}
+.bd-privilege-ico {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(255, 246, 220, .16), rgba(243, 212, 131, .04) 60%, transparent 80%),
+    rgba(0, 0, 0, .24);
+  box-shadow:
+    inset 0 0 0 1px rgba(243, 212, 131, .16),
+    0 0 12px -8px rgba(243, 212, 131, .5);
+  color: #F2D397;
+}
+.bd-privilege-ico .ico {
+  width: 14px;
+  height: 14px;
+  filter: drop-shadow(0 0 5px rgba(243, 212, 131, .35));
+}
+.bd-privilege-text {
+  min-width: 0;
+  margin: 0;
+  font-size: clamp(10.5px, 3.1vw, 11.5px);
+  line-height: 1.5;
+  font-weight: 500;
+  color: #C7D2E0;
+  text-align: start;
+  overflow-wrap: break-word;
+}
+
 .bd-actions { flex: none; padding-top: 2px; }
 .bd-cta {
   position: relative;
@@ -10456,13 +10617,67 @@ html.reduced-motion .ml-pulse::after { display: none; }
   color: #8FA0B8;
   opacity: .72;
 }
-.bd-cta[data-mode="equipped"]::before { opacity: .26; }
-.bd-cta[data-mode="equipped"] .ico { filter: none; }
+/* the equipped state is a living seal, not a disabled key */
+.bd-cta[data-mode="equipped"] {
+  cursor: default;
+  opacity: 1;
+  color: #F4F1E3;
+  background:
+    radial-gradient(90% 150% at 50% 120%, rgba(16, 185, 129, .3) 0%, transparent 68%),
+    linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, 0) 42%),
+    linear-gradient(180deg, #173A32 0%, #0B1E1A 62%, #060F0D 100%);
+  box-shadow:
+    0 5px 0 #04110E,
+    0 16px 28px -16px rgba(16, 185, 129, .55),
+    inset 0 1px 0 rgba(255, 246, 220, .22),
+    inset 0 -2px 0 rgba(0, 0, 0, .5),
+    inset 0 0 0 1px rgba(243, 212, 131, .24);
+  text-shadow: 0 0 14px rgba(110, 231, 183, .38);
+}
+.bd-cta[data-mode="equipped"]::before {
+  opacity: .9;
+  background: linear-gradient(112deg, rgba(255, 246, 220, .62), rgba(243, 212, 131, .42) 34%, rgba(110, 231, 183, .48) 70%, rgba(255, 255, 255, .2));
+}
+.bd-cta[data-mode="equipped"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  box-shadow:
+    0 0 18px rgba(110, 231, 183, .35),
+    0 0 26px -8px rgba(243, 212, 131, .35);
+  opacity: .55;
+  pointer-events: none;
+  animation: bd-seal-glow 4.6s ease-in-out infinite;
+}
+.bd-cta[data-mode="equipped"] .ico {
+  color: #F6E7B8;
+  filter: drop-shadow(0 0 7px rgba(243, 212, 131, .55));
+}
+.bd-cta[data-mode="equipped"] #badge-cta-label {
+  color: #F6F1DF;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .55);
+}
+.bd-cta[data-mode="equipped"] #badge-cta-label::before {
+  content: "✦";
+  margin-inline-end: 6px;
+  color: #F2D397;
+  font-size: .9em;
+  text-shadow: 0 0 8px rgba(243, 212, 131, .7);
+}
 
 html.reduced-motion .bd-hero-art,
-html.reduced-motion .bd-aura { animation: none; }
+html.reduced-motion .bd-aura,
+html.reduced-motion .bd-hero-art::after,
+html.reduced-motion .bd-privileges-live::before,
+html.reduced-motion .bd-cta[data-mode="equipped"]::after { animation: none; }
 @media (prefers-reduced-motion: reduce) {
-  .bd-hero-art, .bd-aura { animation: none; }
+  .bd-hero-art,
+  .bd-aura,
+  .bd-hero-art::after,
+  .bd-privileges-live::before,
+  .bd-cta[data-mode="equipped"]::after { animation: none; }
 }
 
 /* ---- Persian collector card: RTL prose, no tracking, room for descenders ---- */
@@ -10507,6 +10722,18 @@ html.reduced-motion .bd-aura { animation: none; }
   padding-bottom: 3px;
   line-height: 1.4;
 }
+.badge-sheet:lang(fa) :is(.bd-plaque-tag, .bd-privileges-live, .bd-privilege-text) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.badge-sheet:lang(fa) .bd-state[data-state="minted"] { direction: ltr; }
+.badge-sheet:lang(fa) .bd-plaque-tag { direction: rtl; unicode-bidi: isolate; }
+.badge-sheet:lang(fa) .bd-privileges { direction: rtl; }
+.badge-sheet:lang(fa) .bd-privileges::before { inset-inline-start: auto; inset-inline-end: 0; }
+.badge-sheet:lang(fa) .bd-privilege { direction: rtl; }
+.badge-sheet:lang(fa) .bd-privilege-text { text-align: right; line-height: 1.7; }
+.badge-sheet:lang(fa) .bd-supply-label { letter-spacing: 0; }
 
 /* short phones: tighten the frame, never the type */
 @media (max-height: 700px) {
@@ -10569,6 +10796,17 @@ html.reduced-motion .bd-aura { animation: none; }
   .bd-cta { min-height: 50px; }
 }
 
+@media (max-width: 360px) {
+  .bd-state[data-state="minted"] { gap: 4px; padding-inline: 9px; }
+  .bd-plaque-no { font-size: 10px; letter-spacing: .06em; }
+  .bd-plaque-tag { font-size: 8px; letter-spacing: .1em; }
+  .bd-supply { gap: 6px; }
+  .bd-supply-cell { padding-inline: 4px; }
+  .bd-supply-label { font-size: 8.5px; letter-spacing: .08em; }
+  .bd-privilege { grid-template-columns: 26px minmax(0, 1fr); gap: 7px; padding: 6px; }
+  .bd-privilege-ico { width: 26px; height: 26px; }
+}
+
 /* ---- the claimed cell is a door: glass button, gold only when the ledger has holders ---- */
 button.bd-supply-cell {
   appearance: none;
@@ -10597,11 +10835,14 @@ button.bd-supply-cell {
 .bd-supply-crown .ico { width: 11px; height: 11px; }
 .bd-supply-cell.is-claimed[data-state="live"] {
   background:
-    linear-gradient(180deg, rgba(252, 211, 77, .085), rgba(255, 255, 255, 0) 58%),
-    var(--field);
+    radial-gradient(110% 80% at 50% -20%, rgba(255, 246, 220, .1), transparent 62%),
+    linear-gradient(180deg, rgba(252, 211, 77, .09), rgba(255, 255, 255, 0) 58%),
+    rgba(18, 24, 38, .78);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .07),
-    inset 0 0 0 1px rgba(245, 158, 11, .3);
+    inset 0 1px 0 rgba(255, 246, 220, .12),
+    inset 0 -1px 0 rgba(0, 0, 0, .5),
+    0 8px 20px -16px rgba(0, 0, 0, .95),
+    0 0 18px -12px rgba(243, 212, 131, .55);
 }
 .bd-supply-cell.is-claimed[data-state="live"] .bd-supply-crown { opacity: .92; }
 .bd-supply-cell.is-claimed[data-state="live"]:hover:not(:active) { transform: scale(1.02); }
@@ -25203,8 +25444,6 @@ html[data-lang="fa"] #enlist-input::placeholder {
 #s-profile .pf-tile.row { padding: var(--pf-card-pad-dense) var(--pf-card-pad); }
 #s-profile .badge-rack { padding: var(--pf-card-pad-dense); }
 #s-profile .pf-stats.p-stats.quad { padding: var(--pf-card-pad-dense); }
-#s-profile .pf-eq-lock { border-radius: 20px; }
-#s-profile .pf-eq-row { padding: 0; }
 
 /* ---- identity tier: name + pencil, one wrapped line, never an ellipsis ---- */
 #s-profile .pf-name-row {

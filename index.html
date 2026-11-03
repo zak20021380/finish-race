@@ -2917,11 +2917,6 @@
                   <span class="row-txt"><span class="row-t">Win streak</span><span class="row-s">Bot races only</span></span>
                   <span class="row-v" id="pf-streak">0</span>
                 </div>
-                <div class="pf-tile row">
-                  <span class="pf-tile-ico" aria-hidden="true"><svg class="ico"><use href="#i-bot" /></svg></span>
-                  <span class="row-txt"><span class="row-t">Favourite mode</span><span class="row-s" id="pf-fav-sub">No races yet</span></span>
-                  <span class="row-v" id="pf-fav">—</span>
-                </div>
               </div>
             </div>
             <!-- Preferences & Support: the three doors the old Settings menu held — language,
@@ -2989,26 +2984,6 @@
                   <span class="row-v">Open</span>
                   <svg class="ico chev" aria-hidden="true"><use href="#i-next" /></svg>
                 </button>
-              </div>
-            </div>
-            <div class="equips pf-equips">
-              <h2 class="eq-h">Equipped</h2>
-              <!-- locked until the cosmetic inventory ships: the three worn previews stay in
-                   place under a frosted obsidian scrim, sealed by the bronze crest. The whole
-                   slab is the target (the cards themselves are pointer-events: none), and a
-                   tap only nudges — no loadout can be focused, toggled or equipped here. -->
-              <div class="pf-eq-lock" id="pf-eq-lock" role="group" aria-disabled="true"
-                aria-label="Equipped cosmetics are locked — coming soon">
-                <div class="eq-row pf-eq-row" aria-hidden="true">
-                  <figure class="eq pf-eq"><canvas class="cos-pv pf-cos-pv" data-eq="ball" aria-hidden="true"></canvas><figcaption id="eq-ball">Classic</figcaption></figure>
-                  <figure class="eq pf-eq"><canvas class="cos-pv pf-cos-pv" data-eq="wall" aria-hidden="true"></canvas><figcaption id="eq-wall">Classic</figcaption></figure>
-                  <figure class="eq pf-eq"><canvas class="cos-pv pf-cos-pv" data-eq="board" aria-hidden="true"></canvas><figcaption id="eq-board">Lavender</figcaption></figure>
-                </div>
-                <span class="pf-eq-scrim" aria-hidden="true"></span>
-                <span class="pf-eq-crest" aria-hidden="true">
-                  <span class="pf-eq-pod"><svg class="ico" focusable="false"><use href="#i-lock-ti" /></svg></span>
-                  <span class="pf-eq-chip">Coming Soon</span>
-                </span>
               </div>
             </div>
             <div class="pf-toast" id="pf-toast" role="status" aria-live="polite" hidden>
@@ -5390,16 +5365,16 @@
             <span class="bd-aura" aria-hidden="true"></span>
             <span class="badge-ico-lg" id="badge-sheet-ico-wrap" aria-hidden="true"></span>
           </span>
-          <span class="bd-state" id="badge-state" data-state="locked">Locked</span>
+          <span class="bd-state" id="badge-state" data-state="locked" aria-live="polite">Locked</span>
           <h2 class="bd-title" id="badge-title">Badge</h2>
-          <p class="bd-moniker" id="badge-archetype">The Bastion • Resilience</p>
+          <p class="bd-moniker" id="badge-archetype">The Bastion · Resilience</p>
         </div>
 
         <div class="sheet-body bd-body" id="badge-sheet-body" data-scroll>
-          <section class="bd-supply">
+          <section class="bd-supply" aria-label="Collector ledger">
             <div class="bd-supply-cell is-total">
               <b class="bd-supply-num" id="badge-supply-total">—</b>
-              <span class="bd-supply-label" data-i18n="badgeTotalSupply">Total supply</span>
+              <span class="bd-supply-label" data-i18n="badgeTotalSupply">EVER MINTED</span>
             </div>
             <!-- the claimed count is the door to the registry: a real button, so the ledger's
                  public hall of fame is one tap away without adding a second control to the card -->
@@ -5409,17 +5384,30 @@
                 <svg class="ico"><use href="#i-crown" /></svg>
               </span>
               <b class="bd-supply-num" id="badge-supply-claimed">—</b>
-              <span class="bd-supply-label" data-i18n="badgeClaimed">Claimed</span>
+              <span class="bd-supply-label" data-i18n="badgeClaimed">ASCENDED</span>
             </button>
             <div class="bd-supply-cell is-available" id="badge-supply-available-cell" data-state="syncing">
               <b class="bd-supply-num" id="badge-supply-available">—</b>
-              <span class="bd-supply-label" data-i18n="badgeAvailable">Available</span>
+              <span class="bd-supply-label" data-i18n="badgeAvailable">IN VAULT</span>
             </div>
           </section>
 
           <section class="bd-story" aria-labelledby="badge-story-kicker">
             <span class="bd-kicker" id="badge-story-kicker" data-i18n="badgeStoryKicker">Who &amp; what it means</span>
             <p class="bd-story-copy" id="badge-story">Story</p>
+          </section>
+
+          <!-- the owner's charter: privileges the honor grants while it is worn. The list is
+               painted from the badge model, so the Singularity's charter never follows another
+               honor into the card. -->
+          <section class="bd-privileges" id="badge-privileges" hidden
+            aria-labelledby="badge-privileges-kicker">
+            <header class="bd-privileges-head">
+              <span class="bd-kicker" id="badge-privileges-kicker"
+                data-i18n="badgePrivilegesKicker">ACTIVE RELIC PERKS</span>
+              <span class="bd-privileges-live" data-i18n="badgePrivilegesLive">WHILE WORN</span>
+            </header>
+            <ul class="bd-privilege-list" id="badge-privilege-list"></ul>
           </section>
 
           <section class="bd-req" id="badge-req" data-met="false" aria-labelledby="badge-unlock-kicker">
