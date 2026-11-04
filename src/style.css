@@ -10788,9 +10788,16 @@ html.reduced-motion .bd-supply-cell.is-claimed { transition: none; }
   border-radius: 50%;
   appearance: none;
   font: inherit;
-  color: var(--ink-soft);
-  background: rgba(9, 14, 24, .55);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07), inset 0 1px 0 rgba(255, 255, 255, .06);
+  color: #C6D2E4;
+  background:
+    radial-gradient(120% 130% at 50% 0%, rgba(255, 255, 255, .10), rgba(255, 255, 255, 0) 64%),
+    rgba(9, 14, 24, .62);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 158, 11, .17),
+    inset 0 1px 0 rgba(255, 255, 255, .10),
+    0 2px 6px rgba(0, 0, 0, .42);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: transform var(--motion-fast), color var(--motion-fast);
@@ -10806,7 +10813,7 @@ html.reduced-motion .bd-supply-cell.is-claimed { transition: none; }
   font-weight: 800;
   line-height: 1.25;
   letter-spacing: .02em;
-  color: var(--ink);
+  color: #F4E9CE;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -10818,10 +10825,37 @@ html.reduced-motion .bd-supply-cell.is-claimed { transition: none; }
   line-height: 1.45;
   color: var(--ink-soft);
 }
+/* The honor under inspection wears its own gold-leaf cartouche: the sheet names the office
+   first and the relic second, and the gem keeps the plate from reading as a plain caption. */
 .bo-honor {
   flex: none;
+  align-self: center;
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   margin: 0;
-  text-align: center;
+  padding: 5px 12px 6px;
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(253, 230, 138, .15), rgba(245, 158, 11, .04) 58%, rgba(0, 0, 0, .26)),
+    rgba(12, 17, 28, .82);
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 158, 11, .32),
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    0 1px 0 rgba(0, 0, 0, .4);
+}
+.bo-honor-gem {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--bo-metal);
+  filter: drop-shadow(0 0 3px rgba(245, 158, 11, .45));
+}
+.bo-honor-name {
+  min-width: 0;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: .08em;
@@ -10858,32 +10892,77 @@ html.reduced-motion .bd-supply-cell.is-claimed { transition: none; }
 #badge-owners-modal .bo-list::-webkit-scrollbar-thumb:hover { background: rgba(245, 158, 11, .55); }
 
 .bo-row {
+  position: relative;
   flex: none;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
   align-items: center;
   gap: 9px;
-  padding: 8px 10px;
-  border-radius: 14px;
+  padding: 9px 10px;
+  border-radius: 15px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, 0) 60%),
-    var(--field);
+    linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, 0) 58%),
+    rgba(14, 20, 32, .85);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .05),
-    inset 0 0 0 1px rgba(255, 255, 255, .06);
+    inset 0 0 0 1px rgba(255, 215, 0, .15),
+    0 2px 6px rgba(0, 0, 0, .34);
 }
+/* The player's own plate is a deed, not a rival: emerald rather than gold, and lit from inside. */
 .bo-row.is-you {
   background:
-    linear-gradient(180deg, rgba(252, 211, 77, .07), rgba(255, 255, 255, 0) 62%),
-    var(--field);
+    linear-gradient(180deg, rgba(16, 185, 129, .08), rgba(255, 255, 255, 0) 60%),
+    rgba(14, 20, 32, .85);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .06),
-    inset 0 0 0 1px rgba(245, 158, 11, .34);
+    inset 0 0 0 1px rgba(16, 185, 129, .35),
+    0 0 14px rgba(16, 185, 129, .12),
+    0 2px 6px rgba(0, 0, 0, .34);
 }
+/* Serial one is the only plate the edition will never strike again: gold hairline, ambient burn. */
+.bo-row.is-genesis {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    inset 0 0 0 1px rgba(245, 158, 11, .42),
+    inset 0 0 0 2px rgba(4, 8, 16, .6),
+    0 2px 10px rgba(0, 0, 0, .42);
+}
+.bo-row.is-you.is-genesis {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    inset 0 0 0 1px rgba(16, 185, 129, .38),
+    inset 0 0 0 2px rgba(245, 158, 11, .16),
+    0 0 14px rgba(16, 185, 129, .12),
+    0 2px 10px rgba(0, 0, 0, .42);
+}
+.bo-row.is-genesis::after {
+  content: "";
+  position: absolute;
+  inset-inline: 12px;
+  inset-block-start: 0;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(253, 230, 138, .7), transparent);
+}
+.bo-row.is-genesis::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 20px rgba(245, 158, 11, .26);
+  animation: bo-genesis-breathe 3.8s ease-in-out infinite;
+}
+@keyframes bo-genesis-breathe {
+  0%, 100% { opacity: .4; }
+  50% { opacity: 1; }
+}
+html.reduced-motion .bo-row.is-genesis::before { animation: none; opacity: .85; }
+
 .bo-av {
   position: relative;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -10892,27 +10971,44 @@ html.reduced-motion .bd-supply-cell.is-claimed { transition: none; }
   font-weight: 800;
   letter-spacing: 0;
   unicode-bidi: isolate;
-  color: #0B1120;
-  background: linear-gradient(180deg, var(--bo-metal) 0%, var(--bo-accent) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 2px 6px rgba(0, 0, 0, .45);
+  color: #F2E4BE;
+  background: radial-gradient(125% 125% at 50% 14%, #2C3B56 0%, #131C2C 58%, #080E1B 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 158, 11, .38),
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 -1px 0 rgba(0, 0, 0, .55),
+    0 2px 6px rgba(0, 0, 0, .48);
 }
+/* A real portrait sits inside the gold rim; the monogram stays underneath until it lands. */
+.bo-av-img {
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #0A1120;
+}
+.bo-av.has-photo { color: transparent; }
 .bo-pin {
   position: absolute;
   inset-block-end: -3px;
   inset-inline-end: -3px;
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  color: var(--gold-ink);
-  background: #0E1526;
-  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .55);
+  color: #FCD34D;
+  background: linear-gradient(180deg, #1C2537 0%, #0A1120 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 158, 11, .6),
+    inset 0 1px 0 rgba(255, 255, 255, .2),
+    0 1px 3px rgba(0, 0, 0, .6);
 }
 .bo-pin .ico { width: 9px; height: 9px; }
 
 .bo-id { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .bo-name {
+  min-width: 0;
   font-size: 12.5px;
   font-weight: 800;
   line-height: 1.3;
@@ -10921,39 +11017,74 @@ html.reduced-motion .bd-supply-cell.is-claimed { transition: none; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Each fact keeps its own direction, so an RTL sheet never reorders a handle or a mint stamp. */
 .bo-meta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: 10px;
-  line-height: 1.3;
+  line-height: 1.35;
   color: #7D8DA5;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
+.bo-part { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bo-handle { unicode-bidi: isolate; color: #93A6C2; }
+.bo-when { font-variant-numeric: tabular-nums; }
+.bo-dot { flex: none; color: rgba(245, 158, 11, .55); }
+.bo-row.is-you .bo-role { color: #86C9AE; }
 
-.bo-right { min-width: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
-.bo-serial {
+.bo-right { min-width: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+/* The plaque is a struck brass tag: `№ 001` is a code, so it reads LTR in every language and
+   carries tabular figures. No localized word rides here — the row's aria-label keeps the prose. */
+.serial-plaque {
   max-width: 100%;
-  padding: 3px 7px 4px;
-  border-radius: 8px;
+  padding: 3px 8px 4px;
+  border-radius: 7px;
+  direction: ltr;
+  unicode-bidi: isolate;
   font-family: var(--font-stat);
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 800;
-  letter-spacing: .04em;
+  letter-spacing: .03em;
+  font-variant-numeric: tabular-nums;
   line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #2A1C05;
+  background: linear-gradient(180deg, #FCE9A8 0%, #E9B949 46%, #C0821B 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .7),
+    inset 0 -1px 0 rgba(112, 66, 8, .5),
+    inset 0 0 0 1px rgba(255, 255, 255, .2),
+    0 1px 0 rgba(0, 0, 0, .45);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .32);
+}
+.bo-row.is-genesis .serial-plaque {
+  background: linear-gradient(180deg, #FFF3C4 0%, #F5C542 44%, #A9690F 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .8),
+    inset 0 -1px 0 rgba(96, 55, 6, .55),
+    inset 0 0 0 1px rgba(255, 255, 255, .26),
+    0 1px 0 rgba(0, 0, 0, .45),
+    0 0 8px rgba(245, 158, 11, .35);
+}
+.bo-yours {
+  max-width: 100%;
+  padding: 2px 7px 3px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   unicode-bidi: isolate;
-  color: #1A1205;
-  background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 1px 0 rgba(0, 0, 0, .35);
-}
-.bo-date {
-  font-size: 9.5px;
-  line-height: 1.25;
-  color: #8496AE;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  color: #A7F3D0;
+  background: linear-gradient(180deg, rgba(16, 185, 129, .2), rgba(16, 185, 129, .07));
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .4), inset 0 1px 0 rgba(255, 255, 255, .1);
 }
 
 .bo-note {
@@ -10991,29 +11122,71 @@ html.reduced-motion .bd-supply-cell.is-claimed { transition: none; }
 .bo-empty-copy { margin: 0; max-width: 32ch; font-size: 11.5px; line-height: 1.6; color: var(--ink-soft); }
 .bo-empty-first { margin: 0; max-width: 32ch; font-size: 12px; font-weight: 800; line-height: 1.6; color: var(--gold-ink); }
 
-.bo-foot { flex: none; padding-top: 5px; border-top: 1px solid rgba(255, 255, 255, .05); }
-.bo-count {
-  display: block;
-  text-align: center;
+/* ---- the vault meter: how much of the edition is struck, how much stays locked away ---- */
+.bo-foot { flex: none; padding-top: 7px; border-top: 1px solid rgba(255, 215, 0, .1); }
+.bo-vault { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.bo-vault-legend {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 9.5px;
   font-weight: 800;
   letter-spacing: .05em;
   text-transform: uppercase;
-  color: #66748B;
 }
+.bo-vault-struck, .bo-vault-held { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bo-vault-struck { color: #FCD34D; }
+.bo-vault-held { color: #66748B; }
+/* One bead per serial, struck or waiting, at any cap and any width: the fill carries the count. */
+.bo-vault-track {
+  position: relative;
+  height: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, .08) 0 1px, rgba(0, 0, 0, 0) 1px 6px),
+    linear-gradient(180deg, rgba(0, 0, 0, .5), rgba(14, 20, 32, .92));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06), inset 0 1px 2px rgba(0, 0, 0, .6);
+}
+.bo-vault-fill {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  display: block;
+  border-radius: 999px;
+  background:
+    repeating-linear-gradient(90deg, rgba(72, 38, 4, .4) 0 1px, rgba(0, 0, 0, 0) 1px 6px),
+    linear-gradient(180deg, #FDE68A 0%, #F59E0B 55%, #B45309 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 0 10px rgba(245, 158, 11, .5);
+  transition: width var(--motion-med);
+}
+/* A drained vault is a closed book: the meter turns emerald, the same green the deed rows wear. */
+.bo-vault[data-state="full"] .bo-vault-fill {
+  background:
+    repeating-linear-gradient(90deg, rgba(4, 47, 36, .4) 0 1px, rgba(0, 0, 0, 0) 1px 6px),
+    linear-gradient(180deg, #A7F3D0 0%, #10B981 55%, #047857 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 0 10px rgba(16, 185, 129, .45);
+}
+.bo-vault[data-state="full"] .bo-vault-held { color: #4B6A5E; }
 
 /* ---- Persian registry: RTL columns, no tracking, room for descenders ---- */
-.owners-sheet:lang(fa) :is(.bo-title, .bo-sub, .bo-honor, .bo-meta, .bo-date, .bo-count, .bo-note, .bo-empty-copy, .bo-empty-first) {
+.owners-sheet:lang(fa) :is(
+  .bo-title, .bo-sub, .bo-honor-name, .bo-meta, .bo-role, .bo-when, .bo-yours,
+  .bo-note, .bo-empty-copy, .bo-empty-first, .bo-vault-struck, .bo-vault-held
+) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0;
   text-transform: none;
 }
-.owners-sheet:lang(fa) :is(.bo-head, .bo-honor, .bo-id, .bo-right, .bo-note, .bo-empty, .bo-foot) {
+.owners-sheet:lang(fa) :is(.bo-head, .bo-honor, .bo-id, .bo-right, .bo-note, .bo-empty, .bo-foot, .bo-vault-legend) {
   direction: rtl;
   line-height: 1.6;
 }
 .owners-sheet:lang(fa) .bo-back .ico { transform: scaleX(-1); }
-.owners-sheet:lang(fa) .bo-serial { letter-spacing: 0; }
+/* the plaque and the handle are codes, not prose: they keep their own Latin face and tracking */
+.owners-sheet:lang(fa) :is(.serial-plaque, .bo-handle) { font-family: var(--font-stat); }
 
 /* short phones: the registry keeps its rows, the frame gives way */
 @media (max-height: 700px) {
@@ -11037,10 +11210,15 @@ html.reduced-motion .bd-supply-cell.is-claimed { transition: none; }
 }
 /* 320px: the plate is the fixed cost, the name gives first */
 @media (max-width: 360px) {
-  .bo-row { grid-template-columns: 30px minmax(0, 1fr) auto; gap: 7px; padding: 7px 8px; }
-  .bo-av { width: 30px; height: 30px; }
+  .bo-row { grid-template-columns: 32px minmax(0, 1fr) auto; gap: 7px; padding: 7px 8px; }
+  .bo-av { width: 32px; height: 32px; }
+  .bo-pin { width: 14px; height: 14px; }
   .bo-name { font-size: 12px; }
-  .bo-serial { font-size: 9.5px; padding: 3px 6px 4px; }
+  .bo-meta { gap: 4px; }
+  .serial-plaque { font-size: 9.5px; padding: 3px 6px 4px; }
+  .bo-yours { font-size: 8.5px; padding: 2px 6px 3px; }
+  .bo-vault-legend { gap: 6px; font-size: 9px; letter-spacing: 0; }
+  .bo-vault-track { height: 6px; }
 }
 
 /* ---- the shelter a rival's serial is standing under ----

@@ -1493,6 +1493,13 @@
           <path d="M6.5 18.5h11" />
         </g>
       </symbol>
+      <symbol id="i-gem" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 3.5h8l4 5.3-8 11.7-8-11.7Z" />
+          <path d="M4 8.8h16" />
+          <path d="M8 3.5 10.2 8.8 12 20.5l1.8-11.7L16 3.5" />
+        </g>
+      </symbol>
       <symbol id="i-ext" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14 4.5h5.5V10" />
@@ -5435,7 +5442,10 @@
           </button>
         </header>
 
-        <p class="bo-honor"><bdi class="bo-honor-name" id="badge-owners-name">Badge</bdi></p>
+        <p class="bo-honor">
+          <svg class="ico bo-honor-gem" aria-hidden="true"><use href="#i-gem" /></svg>
+          <bdi class="bo-honor-name" id="badge-owners-name">Badge</bdi>
+        </p>
 
         <div class="bo-stage">
           <ul class="bo-list" id="badge-owners-list" role="list" aria-labelledby="bo-title" data-scroll tabindex="0" hidden></ul>
@@ -5447,7 +5457,19 @@
           </div>
         </div>
 
-        <footer class="bo-foot"><span class="bo-count" id="badge-owners-count"></span></footer>
+        <!-- The vault ledger: how much of this edition is struck and how much still sits
+             unminted. Both halves read from the same supply the serial plates are minted from. -->
+        <footer class="bo-foot">
+          <div class="bo-vault" id="badge-owners-vault" hidden>
+            <div class="bo-vault-legend">
+              <span class="bo-vault-struck" id="badge-owners-struck"></span>
+              <span class="bo-vault-held" id="badge-owners-held"></span>
+            </div>
+            <div class="bo-vault-track" role="progressbar" aria-valuemin="0">
+              <span class="bo-vault-fill" id="badge-owners-fill"></span>
+            </div>
+          </div>
+        </footer>
       </section>
 
       <!-- Seize Relic confrontation: the ladder dossier's key and a Hall of Owners row both hand

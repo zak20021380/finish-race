@@ -2255,11 +2255,15 @@ export function createMenu(api: MenuApi): Menu {
     list: $<HTMLUListElement>('badge-owners-list'),
     empty: $<HTMLElement>('badge-owners-empty'),
     note: $<HTMLElement>('badge-owners-note'),
-    count: $<HTMLElement>('badge-owners-count'),
     name: $<HTMLElement>('badge-owners-name'),
     crest: $<HTMLElement>('badge-owners-empty-crest'),
     emptyCopy: $<HTMLElement>('badge-owners-empty-copy'),
     emptyFirst: $<HTMLElement>('badge-owners-first'),
+    vault: $<HTMLElement>('badge-owners-vault'),
+    track: document.querySelector<HTMLElement>('#badge-owners-vault .bo-vault-track'),
+    fill: $<HTMLElement>('badge-owners-fill'),
+    struck: $<HTMLElement>('badge-owners-struck'),
+    held: $<HTMLElement>('badge-owners-held'),
   };
   const ownersOpen = (): boolean => owners.sheet?.classList.contains('open') === true;
 
@@ -2309,15 +2313,45 @@ export function createMenu(api: MenuApi): Menu {
     return key;
   }
 
-  /** One registry row: monogram, name, and the serial plate the ledger minted for it. */
+  /** The brass plaque a serial rides. `№ 001` is a ledger code, not a sentence: it keeps its
+   *  Latin digits and its own left-to-right run in every language, so no RTL sheet can split it. */
+  const serialPlaque = (serial: number): string => `№ ${String(serial).padStart(3, '0')}`;
+
+  /** Persian prose reads with Persian figures. The vault counts are prose; the serial is a code. */
+  const FA_FIGURES = '۰۱۲۳۴۵۶۷۸۹';
+  const faDigits = (value: string): string =>
+    lang === 'fa' ? value.replace(/\d/g, (d) => FA_FIGURES[Number(d)]) : value;
+
+  /** One registry row: medallion, name, and the serial plate the ledger minted for it. */
   function holderRow(def: BadgeDef, holder: EditionHolder, mine: boolean): HTMLElement {
     const when = mine ? mintStamp(claimMintedAt(def.id)) : '';
+    const genesis = holder.serial === 1;
     const serial = t('badgeSerialLabel').replace('#{num}', editionSerialLabel(holder.serial));
 
     const av = document.createElement('span');
     av.className = 'bo-av';
     av.textContent = holderMonogram(holder.name);
-    if (holder.serial === 1) {
+    /* Only this device's own row can name a photo — the ledger publishes a display name and
+       never a player id, so every other plate keeps its monogram. */
+    if (mine) {
+      const src = tgUser()?.photo_url || telegramAvatarUrl(tgUser()?.username ?? '');
+      if (src) {
+        const img = document.createElement('img');
+        img.className = 'bo-av-img';
+        img.alt = '';
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.referrerPolicy = 'no-referrer';
+        img.addEventListener('error', () => img.remove(), { once: true });
+        img.addEventListener('load', () => {
+          if (img.naturalWidth > 2 && img.naturalHeight > 2) av.classList.add('has-photo');
+          else img.remove();
+        }, { once: true });
+        img.src = src;
+        av.append(img);
+      }
+    }
+    if (genesis) {
       const pin = document.createElement('span');
       pin.className = 'bo-pin';
       pin.title = t('badgeOwnersFounder');
@@ -2329,42 +2363,75 @@ export function createMenu(api: MenuApi): Menu {
     who.className = 'bo-id';
     const nm = document.createElement('b');
     nm.className = 'bo-name';
+    nm.dir = 'auto';
     nm.textContent = holder.name;
+    nm.title = holder.name;
+
+    /* The sub-line is three facts in three directions, so it is built from parts rather than one
+       concatenated string: an RTL sheet can no longer reorder an @handle or a mint stamp, and the
+       dots between them are decoration the reader never hears. */
     const meta = document.createElement('small');
     meta.className = 'bo-meta';
+    const parts: HTMLElement[] = [];
     const handle = mine ? (tgUser()?.username ?? '') : '';
-    meta.textContent = handle ? `@${handle} · ${t('badgeOwnersYou')}`
-      : (mine ? t('badgeOwnersYou') : t('badgeOwnersVerified'));
+    if (handle) {
+      const h = document.createElement('span');
+      h.className = 'bo-part bo-handle';
+      h.dir = 'ltr';
+      h.textContent = `@${handle}`;
+      parts.push(h);
+    }
+    if (when) {
+      const d = document.createElement('span');
+      d.className = 'bo-part bo-when';
+      d.textContent = when;
+      parts.push(d);
+    }
+    if (!mine) {
+      const r = document.createElement('span');
+      r.className = 'bo-part bo-role';
+      r.textContent = t('badgeOwnersVerified');
+      parts.push(r);
+    }
+    if (parts.length === 0) {
+      const r = document.createElement('span');
+      r.className = 'bo-part bo-role';
+      r.textContent = t('badgeOwnersYou');
+      parts.push(r);
+    }
+    parts.forEach((part, i) => {
+      if (i > 0) {
+        const dot = document.createElement('span');
+        dot.className = 'bo-dot';
+        dot.setAttribute('aria-hidden', 'true');
+        dot.textContent = '·';
+        meta.append(dot);
+      }
+      meta.append(part);
+    });
     who.append(nm, meta);
 
     const plate = document.createElement('span');
     plate.className = 'bo-right';
-    const serialEl = document.createElement('b');
-    serialEl.className = 'bo-serial';
-    /* the "#042" rides in its own isolate: in Persian the bare "#" would otherwise be claimed by
-       the RTL run and print between the word and its digits */
-    const [head, tail] = t('badgeSerialLabel').split('#{num}');
-    serialEl.textContent = head;
-    const token = document.createElement('bdi');
-    token.dir = 'ltr';
-    token.textContent = editionSerialLabel(holder.serial);
-    serialEl.append(token);
-    if (tail) serialEl.append(tail);
-    plate.append(serialEl);
-    /* the ledger stamps a date for this device's own mint and publishes none for anyone else,
-       so a row says when it was claimed only when that is actually known */
-    if (when) {
-      const date = document.createElement('small');
-      date.className = 'bo-date';
-      date.textContent = when;
-      plate.append(date);
-    }
+    const plaque = document.createElement('b');
+    plaque.className = 'serial-plaque';
+    plaque.dir = 'ltr';
+    plaque.textContent = serialPlaque(holder.serial);
+    plaque.title = serial;
+    plate.append(plaque);
     /* A rival's row carries its shelter: an exposed serial offers the duel, a guarded one says
-       why it does not. The player's own row stays a record, never a door into a challenge. */
-    if (!mine) plate.append(shelterAction(def, holder));
+       why it does not. The player's own row is a deed, never a door into a challenge. */
+    if (mine) {
+      const yours = document.createElement('span');
+      yours.className = 'bo-yours';
+      yours.textContent = t('badgeOwnersYours');
+      plate.append(yours);
+    } else {
+      plate.append(shelterAction(def, holder));
+    }
 
     const li = document.createElement('li');
-    li.className = 'bo-row' + (mine ? ' is-you' : '');
+    li.className = `bo-row${mine ? ' is-you' : ''}${genesis ? ' is-genesis' : ''}`;
     li.setAttribute('aria-label', `${holder.name} — ${serial}${when ? ` · ${when}` : ''}`);
     li.append(av, who, plate);
     return li;
@@ -2406,11 +2473,29 @@ export function createMenu(api: MenuApi): Menu {
       owners.empty.hidden = false;
     }
 
-    if (owners.count) {
-      owners.count.hidden = holders === null;
-      owners.count.textContent = t('badgeOwnersCount')
-        .replace('{n}', en(rows.length))
-        .replace('{cap}', en(def.cap));
+    /* The vault meter reads the same supply the plates are minted from: struck on one side,
+       still locked away on the other. An unread ledger hides the meter rather than invent one. */
+    if (owners.vault) {
+      const live = holders !== null;
+      owners.vault.hidden = !live;
+      if (live) {
+        const cap = def.cap;
+        const struck = Math.max(0, Math.min(cap, edition.minted ?? rows.length));
+        const left = cap - struck;
+        const readout = faDigits(t('badgeOwnersStruck')
+          .replace('{n}', String(struck))
+          .replace('{cap}', String(cap)));
+        if (owners.fill) owners.fill.style.width = `${cap > 0 ? (struck / cap) * 100 : 0}%`;
+        if (owners.track) {
+          owners.track.setAttribute('aria-valuemax', String(cap));
+          owners.track.setAttribute('aria-valuenow', String(struck));
+          owners.track.setAttribute('aria-label', t('badgeOwnersVaultAria'));
+          owners.track.setAttribute('aria-valuetext', readout);
+        }
+        if (owners.struck) owners.struck.textContent = readout;
+        if (owners.held) owners.held.textContent = faDigits(t('badgeOwnersVault').replace('{n}', String(left)));
+        owners.vault.dataset.state = left === 0 ? 'full' : struck === 0 ? 'empty' : 'open';
+      }
     }
   }
 
