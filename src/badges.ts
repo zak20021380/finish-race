@@ -81,8 +81,6 @@ export interface BadgeDef {
   pillar: string;
   /** One sentence of archetype copy, used by the pin spotlight and shelf tiles. */
   description: string;
-  /** The collector's story: who the figure was and who wears this honor. */
-  story: BadgeText;
   /** The unlock mission in plain player-facing words. */
   criteria: BadgeText;
   /** Numeric gates behind the mission; the inspection card renders them as requirement chips. */
@@ -107,10 +105,6 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
     archetype: 'The Bastion',
     pillar: 'Resilience',
     description: 'Unyielding defence and comeback mastery. Holds the line until the board breaks.',
-    story: {
-      en: "Winston Churchill stood unbreakable against impossible odds. Players who wear this medallion are pure iron walls—masters of defense who lock down the board and turn the tide when everyone else would fold.",
-      fa: 'چرچیل نماد ایستادگی توی غیرممکن‌ترین نبردهاست! کسی که این مدال رو به سینه می‌زنه، توی بازی مثل یک سد فولادی عمل می‌کنه؛ استادی که با دیوارچینی‌های هوشمندانه راه نفس حریف رو می‌بنده و حتی توی بدترین شرایط هم تسلیم نمی‌شه!',
-    },
     criteria: {
       en: 'Requires 10,000+ TIQ. Win 7 consecutive live PvP battles while keeping defensive integrity above 50%. Hold the line.',
       fa: 'نیاز به حداقل ۱۰,۰۰۰ TIQ. کسب ۷ برد پیاپی در نبرد زنده PvP با حفظ بیش از ۵۰٪ استحکامات دفاعی. خط دفاعی رو حفظ کن!',
@@ -143,10 +137,6 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
     archetype: 'The Singularity',
     pillar: 'Pure Intellect',
     description: 'Spatial foresight and zero-error calculation. Sees the whole board before the first move.',
-    story: {
-      en: 'Albert Einstein rebuilt reality by refusing to accept the obvious. This medallion belongs to players who see three moves ahead—calm, surgical minds that solve the board like a proof and leave nothing to luck.',
-      fa: 'اینشتین با رد کردن بدیهیات، واقعیت رو از نو نوشت! این مدال مال بازیکنیه که سه قدم جلوتر رو می‌بینه؛ مغزی آروم و دقیق که صفحه رو مثل یک اثبات ریاضی حل می‌کنه و هیچ چیزی رو به شانس واگذار نمی‌کنه!',
-    },
     criteria: {
       en: 'Reach 1,500 Tactical IQ. Pure calculation, zero panic—let the proof carry you.',
       fa: 'به 1,500 امتیاز هوش تاکتیکی (TIQ) برس. محاسبهٔ خالص، بدون استرس؛ بذار اثباتت کار خودش رو بکنه.',
@@ -171,22 +161,15 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
       {
         icon: 'i-crown',
         text: {
-          en: 'Amber profile halo — an exclusive light around your avatar on the global ladder.',
-          fa: 'هاله کهربایی پروفایل: جلوه نور اختصاصی دور آواتار در جدول رده‌بندی جهانی.',
-        },
-      },
-      {
-        icon: 'i-chat',
-        text: {
-          en: 'Elite chat sigil — plaque {serial} rides beside your name in messages and emotes.',
-          fa: 'نشان نخبگان در چت: ثبت پلاک {serial} در کنار نام هنگام ارسال پیام و ایموت‌ها.',
+          en: 'Amber avatar aura on the global leaderboard.',
+          fa: 'هالهٔ کهربایی آواتار در جدول رده‌بندی جهانی.',
         },
       },
       {
         icon: 'i-medal',
         text: {
-          en: 'Eternal hall record — your name remains in the Top 50 Minds registry.',
-          fa: 'ثبت ابدی در تالار افتخار: حضور دائمی نام در فهرست ۵۰ متفکر برتر.',
+          en: 'Numbered profile serial badge ({serial}).',
+          fa: 'نشان سریال روی پروفایل ({serial}).',
         },
       },
     ],
@@ -201,10 +184,6 @@ export const GENIUS_TRIAD: readonly BadgeDef[] = [
     archetype: 'The Formula',
     pillar: 'Calculated Precision',
     description: 'Flawless tactical execution and cold dominance. Wins before the race begins.',
-    story: {
-      en: 'Werner Heisenberg mastered uncertainty and turned it into a weapon. Wear this medallion if you win with cold precision—wasting nothing, forcing the board into your formula, and claiming the race before your rival even moves.',
-      fa: 'هایزنبرگ عدم‌قطعیت رو رام کرد و ازش سلاح ساخت! این مدال مال کسیه که با دقتِ سردش می‌بره؛ نه یک حرکت هدر می‌ده، نه به شانس تکیه می‌کنه؛ صفحه رو به فرمول خودش مجبور می‌کنه و قبل از اینکه حریف بجنبه، برد رو مال خودش کرده!',
-    },
     criteria: {
       en: 'Win 60% of at least 5 competitive races. No luck, no wasted moves—just cold execution.',
       fa: 'حداقل 5 مسابقهٔ رقابتی بازی کن و 60٪شون رو ببر. نه شانس، نه حرکت هدر؛ فقط اجرای سرد و دقیق.',

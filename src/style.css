@@ -9775,13 +9775,13 @@ html.reduced-motion .ml-pulse::after { display: none; }
 }
 .pf-id-card.claimed { box-shadow: 0 var(--d) 0 #080C14, var(--clay-drop), var(--clay-spec), var(--clay-bevel), var(--clay-ring), inset 0 0 0 1px rgba(110,231,183,.14); }
 
-/* ---- badge sheet: a collector's card — supply bento, story, unlock mission, CTA ----
+/* ---- badge sheet: a collector's card — supply bento, unlock mission, CTA ----
    The coin is never dimmed: a locked honor still shows its chrome in full, and the
    state lives in the pill. Accent tokens feed the aura, the mission card and the CTA. */
 .sheet.badge-sheet {
   max-height: calc(94dvh - env(safe-area-inset-top));
   gap: 8px;
-  padding: 10px max(14px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  padding: 10px max(14px, env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
   overflow: hidden;
   --bd-accent: #22D3EE;
   --bd-metal: #A5F3FC;
@@ -10047,44 +10047,8 @@ html.reduced-motion .ml-pulse::after { display: none; }
   color: var(--ink);
   text-align: center;
 }
-.bd-moniker {
-  position: relative;
-  max-width: 100%;
-  margin: 2px 0 0;
-  padding: 5px 14px 6px;
-  border-radius: 7px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .01)),
-    rgba(12, 16, 26, .72);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 246, 220, .08),
-    inset 0 0 0 1px rgba(255, 255, 255, .06),
-    0 8px 18px -16px #000;
-  color: var(--bd-metal);
-  font-size: 9.5px;
-  line-height: 1.3;
-  font-weight: 800;
-  letter-spacing: .17em;
-  text-transform: uppercase;
-  text-align: center;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-}
-.bd-moniker::before,
-.bd-moniker::after {
-  content: "";
-  position: absolute;
-  left: 12%;
-  right: 12%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(243, 212, 131, .45), transparent);
-  pointer-events: none;
-}
-.bd-moniker::before { top: 0; }
-.bd-moniker::after { bottom: 0; }
 
-/* the compact middle: supply bento -> story -> unlock mission */
+/* the compact middle: supply bento -> unlock mission */
 .bd-body {
   gap: 8px;
   margin: 0;
@@ -10107,13 +10071,13 @@ html.reduced-motion .ml-pulse::after { display: none; }
   position: relative;
   isolation: isolate;
   min-width: 0;
-  min-height: 70px;
+  min-height: 58px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 10px 6px 9px;
+  gap: 3px;
+  padding: 9px 6px 8px;
   overflow: hidden;
   border-radius: 13px;
   background:
@@ -10196,7 +10160,7 @@ html.reduced-motion .ml-pulse::after { display: none; }
   z-index: 1;
   display: block;
   max-width: 100%;
-  min-height: 2.5em;
+  min-height: 1.25em;
   font-size: 9px;
   line-height: 1.25;
   font-weight: 800;
@@ -10235,28 +10199,6 @@ html.reduced-motion .ml-pulse::after { display: none; }
   border-radius: 2px;
   background: var(--bd-metal);
   opacity: .75;
-}
-
-/* ---- the collector's story: who the figure was, who wears the honor ---- */
-.bd-story {
-  position: relative;
-  padding: 9px 11px 10px;
-  border-radius: var(--radius-md);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .025), rgba(255, 255, 255, 0) 46%),
-    var(--field);
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, .4),
-    inset 0 -1px 0 rgba(255, 255, 255, .04),
-    inset 0 0 0 1px rgba(255, 255, 255, .05);
-}
-.bd-story-copy {
-  margin: 5px 0 0;
-  font-size: clamp(11px, 3.25vw, 12px);
-  line-height: 1.55;
-  font-weight: 500;
-  color: #CBD5E1;
-  text-align: start;
 }
 
 /* ---- unlock mission: target icon, one clear instruction, live next step ---- */
@@ -10519,7 +10461,7 @@ html.reduced-motion .ml-pulse::after { display: none; }
   overflow-wrap: break-word;
 }
 
-.bd-actions { flex: none; padding-top: 2px; }
+.bd-actions { flex: none; padding-top: 6px; }
 .bd-cta {
   position: relative;
   isolation: isolate;
@@ -10642,13 +10584,6 @@ html.reduced-motion .ml-pulse::after { display: none; }
   color: #F6F1DF;
   text-shadow: 0 1px 0 rgba(0, 0, 0, .55);
 }
-.bd-cta[data-mode="equipped"] #badge-cta-label::before {
-  content: "✦";
-  margin-inline-end: 6px;
-  color: #F2D397;
-  font-size: .9em;
-  text-shadow: 0 0 8px rgba(243, 212, 131, .7);
-}
 
 html.reduced-motion .bd-hero-art,
 html.reduced-motion .bd-aura,
@@ -10664,25 +10599,19 @@ html.reduced-motion .bd-cta[data-mode="equipped"]::after { animation: none; }
 }
 
 /* ---- Persian collector card: RTL prose, no tracking, room for descenders ---- */
-.badge-sheet:lang(fa) :is(.bd-kicker, .bd-supply-label, .bd-state, .bd-moniker, .bd-cta, .bd-req-chip, .bd-req-metric) {
+.badge-sheet:lang(fa) :is(.bd-kicker, .bd-supply-label, .bd-state, .bd-cta, .bd-req-chip, .bd-req-metric) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   letter-spacing: 0;
   text-transform: none;
 }
-.badge-sheet:lang(fa) :is(.bd-story-copy, .bd-req-copy, .bd-req-foot) {
+.badge-sheet:lang(fa) :is(.bd-req-copy, .bd-req-foot) {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   direction: rtl;
   text-align: right;
   line-height: 1.65;
 }
-.badge-sheet:lang(fa) :is(.bd-state, .bd-moniker, .bd-cta) { direction: rtl; }
+.badge-sheet:lang(fa) :is(.bd-state, .bd-cta) { direction: rtl; }
 .badge-sheet:lang(fa) .bd-supply-label { line-height: 1.5; }
-.badge-sheet:lang(fa) .bd-story .bd-kicker {
-  display: flex;
-  direction: rtl;
-  justify-content: flex-start;
-  white-space: normal;
-}
 .badge-sheet:lang(fa) .bd-req-head { direction: rtl; }
 .badge-sheet:lang(fa) .bd-req::before { inset-inline-start: auto; inset-inline-end: 0; }
 .badge-sheet:lang(fa) .bd-req-chip b {
@@ -10729,10 +10658,8 @@ html.reduced-motion .bd-cta[data-mode="equipped"]::after { animation: none; }
   .bd-hero { gap: 3px; }
   .bd-state { padding: 2px 8px 3px; }
   .bd-title { font-size: 17px; }
-  .bd-moniker { padding: 3px 8px 4px; }
   .bd-supply-cell { padding: 7px 5px 6px; gap: 2px; }
   .bd-supply-num { font-size: 20px; }
-  .bd-story { padding: 8px 10px 9px; }
   .bd-req { padding: 8px 10px 9px; }
   .bd-req-ico { width: 24px; height: 24px; }
   .bd-req-copy { margin-top: 6px; }
@@ -10750,11 +10677,9 @@ html.reduced-motion .bd-cta[data-mode="equipped"]::after { animation: none; }
   }
   .bd-hero { gap: 2px; }
   .bd-title { font-size: 16px; }
-  .bd-moniker { padding: 2px 7px 3px; }
   .bd-body { gap: 6px; }
   .bd-supply-cell { padding: 6px 4px 5px; }
   .bd-supply-num { font-size: 19px; }
-  .bd-story,
   .bd-req { padding: 7px 9px 8px; }
   .bd-req-ico { width: 22px; height: 22px; }
   .bd-req-copy { margin-top: 5px; }
@@ -10770,9 +10695,7 @@ html.reduced-motion .bd-cta[data-mode="equipped"]::after { animation: none; }
     --bd-pedestal: calc(var(--bd-coin) + 20px);
   }
   .bd-body { gap: 10px; }
-  .bd-story,
   .bd-req { padding: 11px 13px 12px; }
-  .bd-story-copy { font-size: 12.5px; }
   .bd-req-copy { font-size: 13px; }
   .bd-supply-cell { padding: 10px 8px 9px; }
   .bd-supply-num { font-size: 26px; }

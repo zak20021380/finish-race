@@ -2080,8 +2080,6 @@ export function createMenu(api: MenuApi): Menu {
     sheet.dataset.accent = def.accent;
     const title = document.getElementById('badge-title');
     if (title) title.textContent = def.name;
-    const arch = document.getElementById('badge-archetype');
-    if (arch) arch.textContent = `${def.archetype} · ${def.pillar}`;
 
     const state = document.getElementById('badge-state');
     if (state) {
@@ -2090,12 +2088,12 @@ export function createMenu(api: MenuApi): Menu {
         state.textContent = t('badgeLocked');
         state.dataset.state = 'locked';
       } else if (edition.serial !== null) {
-        /* the engraved plaque: № 002 OF 050 · HISTORIC MINT. The serial rides in its own LTR
+        /* the engraved plaque: № 002 / 50 · LIMITED RELIC. The serial rides in its own LTR
            isolate, so a Persian sheet can never reverse the digits or the № mark. */
         const no = document.createElement('bdi');
         no.className = 'bd-plaque-no';
         no.dir = 'ltr';
-        no.textContent = `№ ${String(edition.serial).padStart(3, '0')} OF ${String(edition.cap).padStart(3, '0')}`;
+        no.textContent = `№ ${String(edition.serial).padStart(3, '0')} / ${String(edition.cap)}`;
         const sep = document.createElement('span');
         sep.className = 'bd-plaque-sep';
         sep.setAttribute('aria-hidden', 'true');
@@ -2115,8 +2113,6 @@ export function createMenu(api: MenuApi): Menu {
       }
     }
 
-    const story = document.getElementById('badge-story');
-    if (story) story.textContent = badgeText(def.story, lang);
     const crit = document.getElementById('badge-criteria');
     if (crit) crit.textContent = badgeText(def.criteria, lang);
     paintRequirementChips(prog);
