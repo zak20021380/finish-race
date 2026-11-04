@@ -48,6 +48,7 @@ import {
 } from './squadRegister';
 import { copyText } from './gamemodes';
 import { myTiq } from './matchmaking';
+import { openSeize, relicShelter, seizeTargetOf } from './seize';
 import { refreshReferral, referralCode, referralLink, referralShareUrl } from './referral';
 import { playReward } from './sound';
 import { perspectiveRamps, type PieceColor } from './themes';
@@ -2288,6 +2289,30 @@ export function createMenu(api: MenuApi): Menu {
     } catch { return ''; }
   }
 
+  /** The shelter this serial is standing under. An exposed one offers the duel; a guarded one
+   *  says why it does not, in the same clock the dossier reads. */
+  function shelterAction(def: BadgeDef, holder: EditionHolder): HTMLElement {
+    const shelter = relicShelter(def.id, holder.serial);
+    if (shelter.sheltered) {
+      const guard = document.createElement('span');
+      guard.className = 'bo-shelter is-guarded';
+      guard.dir = 'ltr';
+      guard.textContent = `🛡️ ${shelter.hoursLeft}h`;
+      guard.title = t('seizeShieldAria');
+      return guard;
+    }
+    const key = document.createElement('button');
+    key.type = 'button';
+    key.className = 'btn-seize-relic';
+    key.setAttribute('aria-label', t('seizeAria'));
+    key.innerHTML = '<svg class="ico" aria-hidden="true"><use href="#i-swords" /></svg>';
+    key.addEventListener('click', () => {
+      impact('medium');
+      openSeize(seizeTargetOf(def, holder.serial, holder.name));
+    });
+    return key;
+  }
+
   /** One registry row: monogram, name, and the serial plate the ledger minted for it. */
   function holderRow(def: BadgeDef, holder: EditionHolder, mine: boolean): HTMLElement {
     const when = mine ? mintStamp(claimMintedAt(def.id)) : '';
@@ -2338,6 +2363,9 @@ export function createMenu(api: MenuApi): Menu {
       date.textContent = when;
       plate.append(date);
     }
+    /* A rival's row carries its shelter: an exposed serial offers the duel, a guarded one says
+       why it does not. The player's own row stays a record, never a door into a challenge. */
+    if (!mine) plate.append(shelterAction(def, holder));
 
     const li = document.createElement('li');
     li.className = 'bo-row' + (mine ? ' is-you' : '');

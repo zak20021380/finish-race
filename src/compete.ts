@@ -29,8 +29,9 @@ import {
 import { fetchMindLadder, type MindFeed } from './minds';
 import { myTiq } from './matchmaking';
 import { nameOf } from './countries';
-import { BADGES, badgeCrestHtml, badgeEdition, badgeHolders, editionSerialLabel, holderEdition, isBadgeUnlocked, refreshBadgeEditions, wornEdition, type WornEdition } from './badges';
+import { BADGES, type BadgeDef, badgeCrestHtml, badgeEdition, badgeHolders, editionSerialLabel, holderEdition, isBadgeUnlocked, refreshBadgeEditions, wornEdition, type WornEdition } from './badges';
 import { openRelicCard } from './menu';
+import { isSeizable, openSeize, relicShelter, seizeTargetOf } from './seize';
 import { flagPhoto } from './flags';
 import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
@@ -1183,8 +1184,11 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   let guildField: RankedSquad[] = [];
   /** Guards the guild photo against a late load from a sheet that has since changed face. */
   let msPhotoSeq = 0;
+  /** The medallion a rival stands on that is not under its shield — the dossier's one live offer. */
+  interface SeizeOffer { def: BadgeDef; serial: number }
+
   /** What the two keys at the foot of the open sheet are allowed to do right now. */
-  let msPending: { kind: 'mind'; name: string; tiq: number; squad: RankedSquad | null } | { kind: 'guild'; squad: RankedSquad } | null = null;
+  let msPending: { kind: 'mind'; name: string; tiq: number; squad: RankedSquad | null; seize: SeizeOffer | null } | { kind: 'guild'; squad: RankedSquad } | null = null;
 
   /** A guild wears a community photo and one rank badge; clearing them keeps a mind clean. */
   function msClearGuild(): void {
@@ -1386,12 +1390,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return held.sort((a, b) => a.def.cap - b.def.cap).slice(0, 3);
   }
 
-  /** One minted honor: a metallic frame over its own aura, engraved with the serial it carries. */
-  function msRelicPedestal(w: WornEdition, onBack: () => void): HTMLElement {
+  /** One minted honor: a metallic frame over its own aura, engraved with the serial it carries.
+      On a rival's shelf it also wears its shelter, so the clock says which pedestals can be called out. */
+  function msRelicPedestal(w: WornEdition, onBack: () => void, guardedHours: number | null): HTMLElement {
     const key = document.createElement('button');
     key.type = 'button';
     key.className = 'relic-socket is-owned';
     key.dataset.accent = w.def.accent;
+    if (guardedHours !== null) key.dataset.shelter = guardedHours > 0 ? 'guarded' : 'open';
 
     const halo = document.createElement('i');
     halo.className = 'relic-halo';
@@ -1425,14 +1431,37 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return socket;
   }
 
-  function msRelicVault(relics: WornEdition[], onBack: () => void): HTMLElement {
+  /** One line under the shelf: the soonest this rival's guard comes off, or that it is already off. */
+  function msShelterNote(relics: WornEdition[]): HTMLElement {
+    const note = document.createElement('p');
+    note.className = 'ms-shelter';
+    const read = relics
+      .filter((w): w is WornEdition & { serial: number } => w.serial !== null)
+      .map((w) => relicShelter(w.def.id, w.serial));
+    if (read.length === 0) { note.hidden = true; return note; }
+    if (read.some((s) => !s.sheltered)) {
+      note.dataset.state = 'open';
+      note.textContent = t('seizeExposed');
+      return note;
+    }
+    const soonest = read.reduce((a, b) => (b.hoursLeft < a.hoursLeft ? b : a));
+    note.dataset.state = 'guarded';
+    note.textContent = t('seizeSheltered').replace('{h}', soonest.hoursLeft.toLocaleString('en-US'));
+    return note;
+  }
+
+  function msRelicVault(relics: WornEdition[], onBack: () => void, rival: boolean): HTMLElement {
     const shelf = document.createElement('div');
     shelf.className = 'relic-showcase-row';
     for (let i = 0; i < 3; i++) {
       const w = relics[i];
-      shelf.append(w ? msRelicPedestal(w, onBack) : msRelicSocket());
+      const hours = w && rival && w.serial !== null ? relicShelter(w.def.id, w.serial).hoursLeft : null;
+      shelf.append(w ? msRelicPedestal(w, onBack, hours) : msRelicSocket());
     }
-    return msSection(t('msRelicVault'), shelf);
+    const block = msSection(t('msRelicVault'), shelf);
+    /* a player's own shelf needs no verdict — only a rival's says whether it can be called out */
+    if (rival) block.append(msShelterNote(relics));
+    return block;
   }
 
   function msFormStrip(form: FormCell[]): HTMLElement {
@@ -1520,15 +1549,18 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     btn?.querySelector('use')?.setAttribute('href', href);
   }
 
-  /** Two fixed keys: a mind's challenge stays locked, a squad's join/invite key stays live. */
-  function msActions(kind: 'mind' | 'guild', label: string, hint: string): void {
+  /** Two fixed keys: a mind's challenge stays parked unless one of its relics stands exposed,
+      and a squad's join/invite key stays live. */
+  function msActions(kind: 'mind' | 'guild', label: string, hint: string, seize?: SeizeOffer | null): void {
     const ch = msEls.challenge;
     const gu = msEls.guild;
     if (ch) {
       const span = ch.querySelector<HTMLElement>('span');
       if (span) span.textContent = label;
       ch.setAttribute('aria-label', hint);
-      ch.disabled = kind === 'mind';
+      ch.disabled = kind === 'mind' && !seize;
+      /* the parked key and the live one are the same plate: only the aura and the lock change */
+      ch.classList.toggle('is-seize', kind === 'mind' && !!seize);
       if (ch.disabled) ch.setAttribute('aria-disabled', 'true');
       else ch.removeAttribute('aria-disabled');
     }
@@ -1567,20 +1599,39 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const wins = p.wins === 1 ? t('msWinOne') : t('msWins').replace('{n}', p.wins.toLocaleString('en-US'));
     /* LRI…PDI keeps "#4" reading as a rank inside the RTL pill */
     const rankTag = `\u2066#${rank}\u2069`;
-    msPending = { kind: 'mind', name: p.name, tiq: p.points, squad };
     /* the sheet wears the same face the ladder row does: their real Telegram photo */
     msHead(p.name.slice(0, 1).toUpperCase() || '?', p.countryCode, p.name, `#${rank} · ${squadName || t('msNoSquad')}`, p.avatar);
     el.setAttribute('aria-label', `Mind profile: ${p.name}, ${tiq} Tactical IQ`);
     body.textContent = '';
     const relics = relicsOf(p);
+    const rival = p.id !== 'you';
+    /* rarest first, so the offer on the line is the honor that actually costs something */
+    const seize = relics && rival
+      ? relics.find((w): w is WornEdition & { serial: number } =>
+        w.serial !== null && isSeizable(w.def, w.serial)) ?? null
+      : null;
+    msPending = {
+      kind: 'mind',
+      name: p.name,
+      tiq: p.points,
+      squad,
+      seize: seize ? { def: seize.def, serial: seize.serial } : null,
+    };
     const panels = [msHero(tiq, pct, `${wins} · ${rankTag}`)];
-    if (relics) panels.push(msRelicVault(relics, () => openMind(p, rank)));
+    if (relics) panels.push(msRelicVault(relics, () => openMind(p, rank), rival));
     panels.push(
       msSection(t('msScorecard'), msStatCapsule(rivalStats(p))),
       msFormBlock(rivalForm(p.id, p.trend)),
     );
     body.append(...panels);
-    msActions('mind', t('msChallengeMind'), `${t('msChallengeMind')} · ${t('msChallengeSoon')}`);
+    msActions(
+      'mind',
+      seize ? t('seizeCta') : t('msChallengeMind'),
+      seize
+        ? `${t('seizeCta')} · ${seize.def.name} · ${editionSerialLabel(seize.serial)}`
+        : `${t('msChallengeMind')} · ${t('msChallengeSoon')}`,
+      seize,
+    );
     const gu = msEls.guild;
     if (gu && squad) {
       gu.setAttribute('aria-label', `${t('msViewSquad')} · ${squadName}`);
@@ -1946,7 +1997,13 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
 
   msEls.challenge?.addEventListener('click', () => {
     const p = msPending;
-    if (!p || p.kind === 'mind') return;
+    if (!p) return;
+    if (p.kind === 'mind') {
+      /* a mind's key only answers when a medallion is actually standing exposed */
+      if (!p.seize) return;
+      openSeize(seizeTargetOf(p.seize.def, p.seize.serial, p.name));
+      return;
+    }
     const wasMine = getMySquad()?.id === p.squad.id;
     squadAction(p.squad, wasMine).run();
     if (!wasMine) {

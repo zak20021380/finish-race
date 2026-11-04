@@ -3,7 +3,7 @@
  * no-op, so the same build plays in a plain browser tab.
  */
 import { settings } from './settings';
-import { botAppLink, duelAppLink, telegramShareLink } from '../shared/config';
+import { botAppLink, duelAppLink, relicDuelAppLink, telegramShareLink } from '../shared/config';
 
 export interface TgUser {
   /** Telegram's numeric user id — the key the admin allowlist matches on. */
@@ -125,6 +125,16 @@ export function duelShareUrl(code: string, text: string): string {
   return url ? telegramShareLink(url, text) : '';
 }
 
+/**
+ * The Seize Relic challenge link: the same duel door, reached through the `duel_relic_<code>`
+ * spelling so a duel thrown over a medallion is distinguishable from one thrown after a race.
+ * '' when the code is not a room code.
+ */
+export function relicDuelShareUrl(code: string, text: string): string {
+  const url = relicDuelAppLink(code);
+  return url ? telegramShareLink(url, text) : '';
+}
+
 export const tgUser = (): TgUser | undefined => tg?.initDataUnsafe?.user;
 
 /**
@@ -228,11 +238,30 @@ export function inviteRoomCode(): string {
  * challenge: the payload decides only whether the reader is greeted with a duel banner, so a
  * hand-typed `room_1909` and a shared `duel_1909` reach one and the same seat.
  */
-const DUEL_PAYLOAD = /^duel[\s_-]*(\d{4})(?!\d)/i;
+const DUEL_PAYLOAD = /^duel[\s_-]*(?:relic[\s_-]*)?(\d{4})(?!\d)/i;
 
 function duelCodeOf(raw: string | null | undefined): string {
   const match = DUEL_PAYLOAD.exec((raw ?? '').trim());
   return match ? match[1] : '';
+}
+
+/** True when this launch carries a relic duel specifically, rather than a post-race challenge. */
+const RELIC_DUEL_PAYLOAD = /^duel[\s_-]*relic[\s_-]*(\d{4})(?!\d)/i;
+
+function isRelicDuelPayload(raw: string | null | undefined): boolean {
+  return RELIC_DUEL_PAYLOAD.test((raw ?? '').trim());
+}
+
+/** Whether the duel this device was invited into was thrown over a medallion. */
+export function inviteDuelIsRelic(): boolean {
+  try {
+    if (isRelicDuelPayload(startParam())) return true;
+  } catch { /* fall through to the URL */ }
+  try {
+    return isRelicDuelPayload(new URLSearchParams(window.location.search).get('duel'));
+  } catch {
+    return false;
+  }
 }
 
 export function inviteDuelCode(): string {

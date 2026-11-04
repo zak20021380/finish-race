@@ -5456,6 +5456,62 @@
         <footer class="bo-foot"><span class="bo-count" id="badge-owners-count"></span></footer>
       </section>
 
+      <!-- Seize Relic confrontation: the ladder dossier's key and a Hall of Owners row both hand
+           this one panel the medallion in play. The entry and the risk are printed, never charged,
+           and the shelter clock is read from the same hash every other surface reads — so the two
+           doors can never disagree about whether this serial is standing exposed. -->
+      <section class="sheet seize-sheet" id="sheet-seize" hidden tabindex="-1"
+        role="dialog" aria-modal="true" aria-labelledby="sz-title">
+        <span class="sheet-grip" aria-hidden="true"></span>
+        <header class="sz-head">
+          <span class="sz-head-id">
+            <h2 class="sheet-t sz-title" id="sz-title" data-i18n="seizeTitle">Seize Relic</h2>
+            <p class="sheet-p sz-sub" id="sz-sub" data-i18n="seizeSub">A duel for the medallion</p>
+          </span>
+          <button class="sz-x" type="button" data-sheet-close data-autofocus aria-label="Close challenge">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </header>
+
+        <div class="sheet-body sz-body" data-scroll>
+          <div class="sz-relic">
+            <span class="sz-crest" id="sz-crest" aria-hidden="true"></span>
+            <span class="sz-relic-id">
+              <b class="sz-honor" id="sz-honor">Badge</b>
+              <small class="sz-serial" id="sz-serial"></small>
+            </span>
+          </div>
+
+          <p class="sz-holder">
+            <span class="sz-holder-lbl" data-i18n="seizeHolder">Held by</span>
+            <bdi class="sz-holder-name" id="sz-holder"></bdi>
+          </p>
+
+          <p class="sz-shelter" id="sz-shelter" role="status"></p>
+
+          <div class="sz-stakes" role="list">
+            <div class="sz-stake is-entry" role="listitem">
+              <span class="sz-stake-l" data-i18n="seizeEntry">Entry stake</span>
+              <span class="sz-stake-v"><b id="sz-entry">0</b><i class="sz-unit" data-i18n="seizeCoinsUnit">coins</i></span>
+            </div>
+            <div class="sz-stake is-risk" role="listitem">
+              <span class="sz-stake-l" data-i18n="seizeRiskLabel">Your TIQ forward</span>
+              <span class="sz-stake-v"><b id="sz-risk">0</b><i class="sz-unit">TIQ</i></span>
+            </div>
+          </div>
+
+          <p class="sz-bounty" id="sz-bounty"></p>
+          <p class="sz-note" id="sz-note" data-i18n="seizeNote"></p>
+        </div>
+
+        <footer class="sz-foot">
+          <button class="sz-cta" type="button" id="sz-cta">
+            <svg class="ico" aria-hidden="true"><use href="#i-swords" /></svg>
+            <span data-i18n="seizeConfirm">Confirm &amp; send the duel invite</span>
+          </button>
+        </footer>
+      </section>
+
       <!-- Medallion Certificate: the ownership deed the avatar pin opens. Every reading here is
            one the ledger already gave us — the serial, the holder and the mint stamp are shown as
            they arrived, and an honor the ledger has not stamped yet says so instead of guessing. -->

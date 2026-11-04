@@ -63,6 +63,7 @@ import {
   resumeRoom, setGameMode, takeAutoLaunch,
 } from './gamemodes';
 import { dismissDuelVeil, noteDuelLobby, openDuelDoor, throwDuelChallenge } from './duelInvite';
+import { initSeize } from './seize';
 import type { Lobby, LobbyRace } from './lobby';
 import {
   createMatchmaking, myTiq, onlineRace, onlineSearch, setQueueMode, type OnlineSession, type RaceEnd,
@@ -3027,6 +3028,8 @@ document.addEventListener('visibilitychange', syncLoop);
 /* ---------- boot ---------- */
 
 mountCoins();                              // every [data-coin] slot gets the shared gold coin
+/* the confrontation card is one panel shared by the ladder dossier and the Hall of Owners */
+initSeize({ sheets });
 menu = createMenu({ router, sheets, sheet: sheetById, start: startGame, onBack });
 const shop = createShop({ sheets, sheet: sheetById });
 home = createHome({

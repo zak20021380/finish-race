@@ -67,6 +67,19 @@ export function duelAppLink(code: string): string {
   return digits.length === 4 ? botAppLink(`${DUEL_PREFIX}${digits}`) : '';
 }
 
+/**
+ * The payload prefix a relic duel carries: `duel_relic_<code>`. It names the same four-digit room as
+ * `duel_`, and the `relic` step only records *why* the seat was challenged — so a rival who opens it
+ * lands in the duel door that already exists rather than a second matchmaking path nobody maintains.
+ */
+export const RELIC_DUEL_INFIX = 'relic_';
+
+/** `https://t.me/Tactix_Robot/play?startapp=duel_relic_<code>` — the seat a Seize Relic duel holds. */
+export function relicDuelAppLink(code: string): string {
+  const digits = (code ?? '').replace(/\D/g, '').slice(0, 4);
+  return digits.length === 4 ? botAppLink(`${DUEL_PREFIX}${RELIC_DUEL_INFIX}${digits}`) : '';
+}
+
 /** `https://t.me/Tactix_Robot/play?startapp=squad_<id>` — one tap into the squad's join door. */
 export function squadAppLink(id: string): string {
   const clean = (id ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 48);

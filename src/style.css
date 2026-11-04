@@ -11120,6 +11120,53 @@ html.reduced-motion .bd-supply-cell.is-claimed { transition: none; }
   .bo-serial { font-size: 9.5px; padding: 3px 6px 4px; }
 }
 
+/* ---- the shelter a rival's serial is standing under ----
+   An exposed row offers the duel with the same swords the dossier key wears; a guarded row prints
+   its clock instead, muted and inert, so the registry never dangles a door that would only refuse
+   the tap. Both ride under the serial plate, never beside it: the row's third column is `auto`, so
+   a second fixed width there is what would push a 320px phone into a sideways scroll. */
+.btn-seize-relic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  background:
+    radial-gradient(130% 170% at 50% 0%, rgba(224, 38, 79, .38) 0%, rgba(224, 38, 79, 0) 64%),
+    linear-gradient(180deg, #241A28 0%, #121A2B 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(224, 38, 79, .5),
+    inset 0 1px 0 rgba(255, 255, 255, .14),
+    0 2px 0 #070C15;
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.btn-seize-relic .ico { width: 12px; height: 12px; color: var(--red-ink); filter: drop-shadow(0 0 3px rgba(224, 38, 79, .6)); }
+.btn-seize-relic:hover:not(:active) { transform: translateY(-1px); }
+.btn-seize-relic:active { transform: translateY(2px); box-shadow: inset 0 0 0 1px rgba(224, 38, 79, .6), 0 0 0 #070C15; }
+.btn-seize-relic:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+.bo-shelter {
+  flex: none;
+  align-self: flex-end;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-family: var(--font-stat);
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1.3;
+  white-space: nowrap;
+  unicode-bidi: isolate;
+  color: #7484A0;
+  background: rgba(148, 163, 184, .08);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .15);
+}
+@media (max-width: 360px) {
+  .bo-shelter { font-size: 9px; padding: 2px 5px; }
+}
+
 /* ---- "View All" drawer: the full catalogue as a quiet pick list ---- */
 .badges-sheet .pick { max-height: none; }
 .badge-pick-row {
@@ -15368,6 +15415,335 @@ html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none
 .ms-guild:not(:disabled):active { transform: translateY(var(--press-y)); --d: 1px; }
 .ms-challenge:not(:disabled):focus-visible,
 .ms-guild:not(:disabled):focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+
+/* ==========================================================================
+   THE SEIZE RELIC KEY AND THE CONFRONTATION CARD — when the mind under
+   inspection stands on a serial that is not under its shield, the parked
+   challenge plate wakes as a combat key. Same 48px geometry, same foot slot:
+   the sheet never shifts when the offer appears. The card it opens keeps the
+   certificate's centered obsidian head and puts one medallion on the table.
+   ========================================================================== */
+
+.ms-challenge.is-seize {
+  background:
+    radial-gradient(120% 170% at 10% 0%, rgba(224, 38, 79, .44) 0%, rgba(224, 38, 79, 0) 55%),
+    radial-gradient(120% 170% at 90% 100%, rgba(251, 191, 36, .3) 0%, rgba(251, 191, 36, 0) 58%),
+    linear-gradient(180deg, rgba(255, 255, 255, .15) 0%, rgba(255, 255, 255, .02) 46%),
+    linear-gradient(180deg, #3B1B28 0%, #1A1020 52%, #121A2B 100%);
+  color: #FFEDD5;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .58);
+  box-shadow:
+    inset 0 0 0 1px rgba(251, 191, 36, .44),
+    inset 0 1px 0 rgba(255, 255, 255, .2),
+    inset 0 -2px 3px rgba(0, 0, 0, .4),
+    0 var(--d) 0 #0A0710;
+}
+/* the breath rides an overlay's opacity, not the shadow stack: animating box-shadow
+   repaints the whole plate every frame, and a key this large is on screen while reading */
+.ms-challenge.is-seize::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 10px 26px -8px rgba(224, 38, 79, .8), 0 0 0 1px rgba(251, 191, 36, .3);
+  animation: ms-seize-breathe 2.6s ease-in-out infinite;
+}
+@keyframes ms-seize-breathe {
+  0%, 100% { opacity: .3; }
+  50% { opacity: 1; }
+}
+.ms-challenge.is-seize .ico { color: #FCA5A5; filter: drop-shadow(0 0 5px rgba(224, 38, 79, .75)); }
+.ms-challenge.is-seize:hover:not(:active) { transform: translateY(-1px); }
+.ms-challenge.is-seize:active { transform: translateY(var(--press-y)); }
+
+/* ---- the shelf's own verdict: one line, never a second panel ---- */
+.ms-shelter {
+  margin: 0;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 4px 9px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.4;
+  color: #8394AC;
+  background: rgba(148, 163, 184, .07);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .14);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ms-shelter[data-state="open"] {
+  color: #FECACA;
+  background: linear-gradient(180deg, rgba(224, 38, 79, .2), rgba(224, 38, 79, .08));
+  box-shadow: inset 0 0 0 1px rgba(224, 38, 79, .46);
+}
+/* an exposed pedestal takes the rim the shield no longer carries; a guarded one steps back */
+.relic-socket[data-shelter="open"] { box-shadow: inset 0 0 0 1px rgba(224, 38, 79, .5), 0 4px 14px -6px rgba(224, 38, 79, .55); }
+.relic-socket[data-shelter="guarded"] { opacity: .78; }
+
+/* ---- the confrontation card ---- */
+.sheet.seize-sheet {
+  gap: 10px;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(224, 38, 79, .16) 0%, rgba(224, 38, 79, 0) 58%),
+    linear-gradient(180deg, var(--solid-a) 0%, var(--solid-b) 100%);
+}
+.sz-head { position: relative; flex: none; }
+.sz-title {
+  margin: 0;
+  padding-inline: 42px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.3;
+  font-weight: 900;
+  color: #FFE4E6;
+}
+.sz-sub {
+  margin: 3px 0 0;
+  padding-inline: 42px;
+  text-align: center;
+  font-size: 8.5px;
+  line-height: 1.4;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #9B7A86;
+}
+.sz-x {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  color: #C6B3B8;
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+}
+.sz-x:active { transform: scale(.92); }
+.sz-x:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+
+.sz-body { gap: 10px; padding-bottom: 2px; }
+
+/* the medallion on the table: crest left, its name and serial beside it */
+.sz-relic {
+  flex: none;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  padding: 10px;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, 0) 60%),
+    var(--field);
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, .22), inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+.sz-crest { display: grid; place-items: center; width: 58px; height: 58px; }
+.sz-crest .sz-crest-ico { width: 58px; height: 58px; display: block; filter: drop-shadow(0 3px 8px rgba(0, 0, 0, .6)); }
+.sz-relic-id { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.sz-honor {
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.3;
+  color: #F1F8FF;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sz-serial {
+  align-self: flex-start;
+  max-width: 100%;
+  font-family: var(--font-stat);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  line-height: 1.3;
+  color: var(--gold-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sz-holder {
+  flex: none;
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.sz-holder-lbl { color: #7D8DA5; }
+.sz-holder-name {
+  min-width: 0;
+  font-weight: 900;
+  color: #E7EDF7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sz-shelter {
+  flex: none;
+  margin: 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.5;
+  color: #8FA0B8;
+}
+.sz-shelter[data-state="open"] { color: #FCA5A5; }
+.sz-shelter[data-state="guarded"] { color: #93A4BA; }
+
+/* the two figures the seat costs: one slab each, equal, never a running total */
+.sz-stakes {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.sz-stake {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, 0) 62%), var(--field);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
+}
+.sz-stake.is-entry { box-shadow: inset 0 0 0 1px rgba(224, 38, 79, .3); }
+.sz-stake-l {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  line-height: 1.3;
+  color: #72829A;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sz-stake-v { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+.sz-stake-v b {
+  font-family: var(--font-stat);
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  color: #F1F8FF;
+}
+.sz-stake.is-entry .sz-stake-v b { color: #FECACA; }
+.sz-unit { font-style: normal; font-size: 9px; font-weight: 700; color: #7D8DA5; }
+
+.sz-bounty {
+  flex: none;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.4;
+  color: var(--gold-ink);
+  background: linear-gradient(180deg, rgba(251, 191, 36, .12), rgba(251, 191, 36, .04));
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, .26);
+}
+
+.sz-note {
+  flex: none;
+  margin: 0;
+  font-size: 9.5px;
+  line-height: 1.6;
+  text-align: center;
+  color: #6E7E96;
+}
+
+.sz-foot { flex: none; padding-top: 2px; }
+.sz-cta {
+  --d: 4px;
+  position: relative;
+  appearance: none;
+  border: 0;
+  font: inherit;
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  height: 50px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  font-size: var(--t-micro);
+  font-weight: 900;
+  letter-spacing: .01em;
+  line-height: 1.1;
+  cursor: pointer;
+  color: #FFEDD5;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .58);
+  background:
+    radial-gradient(120% 170% at 12% 0%, rgba(224, 38, 79, .46) 0%, rgba(224, 38, 79, 0) 54%),
+    radial-gradient(120% 170% at 88% 100%, rgba(251, 191, 36, .32) 0%, rgba(251, 191, 36, 0) 58%),
+    linear-gradient(180deg, rgba(255, 255, 255, .15) 0%, rgba(255, 255, 255, .02) 46%),
+    linear-gradient(180deg, #3B1B28 0%, #1A1020 52%, #121A2B 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(251, 191, 36, .44),
+    inset 0 1px 0 rgba(255, 255, 255, .2),
+    inset 0 -2px 3px rgba(0, 0, 0, .4),
+    0 var(--d) 0 #0A0710,
+    0 calc(var(--d) + 10px) 24px -10px rgba(224, 38, 79, .6);
+  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+}
+.sz-cta .ico { flex: none; width: 15px; height: 15px; color: #FCA5A5; filter: drop-shadow(0 0 5px rgba(224, 38, 79, .75)); }
+.sz-cta span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sz-cta:active { transform: translateY(var(--press-y)); --d: 1px; }
+.sz-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
+.sz-cta:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+  color: #93A4BA;
+  text-shadow: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .01)), #151D2C;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08), 0 4px 0 #090E17;
+  transform: none;
+}
+
+/* ---- Persian: the card reads right-to-left, the numbers stay upright ---- */
+.seize-sheet:lang(fa) :is(.sz-title, .sz-sub, .sz-honor, .sz-holder, .sz-shelter, .sz-bounty, .sz-note, .sz-stake-l, .sz-unit, .sz-cta) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.seize-sheet:lang(fa) :is(.sz-head, .sz-body, .sz-relic-id, .sz-holder, .sz-stakes, .sz-foot) { direction: rtl; }
+.seize-sheet:lang(fa) .sz-x { right: auto; left: 0; }
+
+/* 320px: the crest gives first, then the stakes go stacked rather than squeezed */
+@media (max-width: 360px) {
+  .sz-relic { grid-template-columns: 50px minmax(0, 1fr); gap: 9px; padding: 9px; }
+  .sz-crest, .sz-crest .sz-crest-ico { width: 50px; height: 50px; }
+  .sz-honor { font-size: 12.5px; }
+  .sz-stake-v b { font-size: 15.5px; }
+  .sz-stake { padding: 8px 9px; }
+}
+@media (max-height: 640px) {
+  .sz-note { display: none; }
+  .sz-body { gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ms-challenge.is-seize::after { animation: none; opacity: .55; }
+  .ms-challenge.is-seize, .sz-cta, .btn-seize-relic { transition: none; }
+}
 
 /* ==========================================================================
    THE SQUAD FACE OF THE MIND SHEET — real community photo, one rank badge,

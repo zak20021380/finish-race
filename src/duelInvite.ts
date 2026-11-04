@@ -71,7 +71,7 @@ const text = (value: string, parent: HTMLElement): void => {
 };
 
 /** The face the challenge is signed with: the same name the roster and the HUD print. */
-function senderName(): string {
+export function senderName(): string {
   const u = tgUser();
   const name = (u?.first_name ?? '').trim() || (u?.username ?? '').trim();
   return name || t('you');
@@ -85,24 +85,40 @@ function tauntLine(): string {
 }
 
 /**
+ * How a duel is thrown. The room, the armed seat and the waiting lobby are one path for every
+ * challenge; a caller that hands out a different link or a different line still reuses them, so a
+ * second surface can never orphan a challenge already sitting in a friend's chat.
+ */
+export interface DuelThrow {
+  /** The share link for this room. Defaults to the post-race `duel_<code>` door. */
+  link?: (code: string, text: string) => string;
+  /** The line the challenge is signed with. Defaults to a random taunt. */
+  text?: string;
+  /** What the lobby says while the rival seat stays empty. */
+  waiting?: string;
+  /** What the challenger is told once the link has left the device. */
+  armed?: string;
+}
+
+/**
  * Throw the duel: hold the seat, arm the lobby's waiting caption, hand the link to Telegram's own
  * picker. False when there is no room to invite anybody to, which leaves the player where they were.
  */
-export function throwDuelChallenge(): boolean {
+export function throwDuelChallenge(over?: DuelThrow): boolean {
   /* A duel already armed on this device is reused, not replaced: a link that has already landed in a
      friend's chat must not die because the challenger tapped the key twice. The selection is what
      says whether that room still stands — leaving it, or launching it into a race, clears it. */
   const code = armedCode && getGameMode().roomCode === armedCode ? armedCode : createRoomCode();
-  const url = duelShareUrl(code, tauntLine());
+  const url = (over?.link ?? duelShareUrl)(code, over?.text || tauntLine());
   if (!url) return false;
   /* The chair exists before the link leaves the device: a rival who taps twenty seconds later lands
      on a room that is already holding its host, not on a code nobody opened. */
   if (!openInviteRoom(code)) return false;
   armedCode = code;
   armedRivalWaiting = true;
-  setLobbyHint(t('duelWaitingRival'));
+  setLobbyHint(over?.waiting || t('duelWaitingRival'));
   openTelegramShare(url);
-  showToast(t('duelArmed'), 'success');
+  showToast(over?.armed || t('duelArmed'), 'success');
   return true;
 }
 
