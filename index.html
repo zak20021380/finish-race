@@ -1275,6 +1275,14 @@
           <path d="M4.9 20.2c0-3.6 3.1-5.9 7.1-5.9s7.1 2.3 7.1 5.9" />
         </g>
       </symbol>
+      <!-- the new-member node: the same silhouette with a lit arrival spark at its shoulder -->
+      <symbol id="i-user-join" viewBox="0 0 24 24">
+        <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="10.4" cy="8.2" r="3.4" />
+          <path d="M3.6 19.8c0-3.3 3-5.5 6.8-5.5 1.2 0 2.3.2 3.2.6" />
+          <path d="M17.6 13.4v5.6M14.8 16.2h5.6" />
+        </g>
+      </symbol>
       <symbol id="i-search" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <circle cx="10.6" cy="10.6" r="6.4" />
@@ -2457,7 +2465,11 @@
           <button class="admin-fab" id="btn-admin-fab" type="button" hidden aria-haspopup="dialog"
             aria-label="Open Admin Command Center">
             <svg class="admin-fab-ico" aria-hidden="true"><use href="#i-shield" /></svg>
-            <span class="admin-fab-dot" id="admin-fab-dot" data-state="live" aria-hidden="true"></span>
+            <!-- the live-unread counter: src/admin.ts owns data-count / data-state / hidden.
+                 It stays inside the key's box, so the Home screen's overflow:hidden never
+                 clips the rim, and inset-inline-end docks it at the top-end in every language. -->
+            <span class="admin-fab-badge" id="admin-fab-badge" data-count="0"
+              data-state="empty" aria-label="اعلانات ادمین" hidden></span>
           </button>
 
           <!-- the same toast the board and the shop use, so a refusal on Home is actually seen
@@ -4640,9 +4652,27 @@
             <p class="adm-note">Two taps: the second wipes coins, items, stats, teams and settings on this device.</p>
           </div>
 
-          <!-- ---------- Inbox: the support desk ---------- -->
+          <!-- ---------- Inbox: the live activity feed, then the support desk ---------- -->
           <div class="admin-panel" data-apanel="inbox" id="apanel-inbox" role="tabpanel"
             aria-labelledby="atab-inbox" hidden>
+            <!-- LIVE ACTIVITY: the two-tier incoming event stream the Home FAB counts.
+                 Cards are built in src/admin.ts from the real player directory and the
+                 Stars ledger — a cyan New Member card and an Imperial Gold VIP card. -->
+            <section class="admin-activity" aria-labelledby="admin-activity-h">
+              <div class="admin-events-head">
+                <p class="adm-sec-h admin-events-h" id="admin-activity-h">LIVE ACTIVITY</p>
+                <span class="admin-events-live" aria-hidden="true">
+                  <i class="admin-events-live-dot"></i>
+                  <span id="admin-events-live-t">LIVE</span>
+                </span>
+                <span class="admin-events-unread" id="admin-events-unread" role="status"
+                  aria-live="polite" hidden>0 new</span>
+              </div>
+              <ul class="admin-events" id="admin-event-feed" role="list"
+                aria-label="Live activity events"></ul>
+              <p class="admin-events-empty" id="admin-events-empty" hidden>No live events yet.</p>
+            </section>
+            <div class="admin-activity-rule" aria-hidden="true"></div>
             <p class="adm-sec-h">Support tickets</p>
             <div class="adm-inbox-filters" role="group" aria-label="Filter support tickets">
               <button class="adm-chip" type="button" data-ifilter="all" aria-pressed="true">All</button>

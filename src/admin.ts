@@ -35,7 +35,7 @@
  * authenticates every `/admin/*` call and the room authorizes it against the registry it owns,
  * so the panel's door is never the server's door.
  */
-import { motionReduced } from './settings';
+import { motionReduced, onLang, t } from './settings';
 import { earnCoins, earnTiq, onChange, profile, readJson, writeJson } from './storage';
 import { coinText, mountCoins, setBalance } from './coin';
 import { CONFIG } from './rules';
@@ -1189,6 +1189,40 @@ async function pushVipConfig(
   return { config: readVipPlanConfig(data.config), detail: '' };
 }
 
+/* ---------- the Live Activity feed: the FAB's counter and its two card tiers ---------- */
+
+/**
+ * One incoming event. Both tiers are folded from readings the Command Center already trusts:
+ * a New Member is a directory row's `firstSeen`, and a VIP purchase is a row from the Worker's
+ * Stars ledger. Nothing here is seeded — an empty feed is an honest empty feed.
+ */
+export interface AdminActivityEvent {
+  /** A stable dedupe key; the read watermark is a set of these, never a drifting timestamp. */
+  id: string;
+  kind: 'join' | 'vip';
+  at: number;
+  /** An LTR-isolated @handle (or #id when the player has no handle). */
+  handle: string;
+  /** VIP only: the plan's display name and the Stars paid. */
+  plan?: string;
+  stars?: number;
+}
+
+const ACTIVITY_KEY = 'detour.admin.events.v1';
+/** The feed shows the newest dozen; the counter counts unread rows within that window. */
+const ACTIVITY_MAX = 12;
+/** A bounded watermark: old ids are dropped before the save grows without limit. */
+const SEEN_MAX = 240;
+
+function readSeenEvents(): Set<string> {
+  const raw = readJson<string[]>(ACTIVITY_KEY);
+  const list = Array.isArray(raw) ? raw : [];
+  return new Set(
+    list.filter((v): v is string => typeof v === 'string' && v.length > 0 && v.length < 160)
+      .slice(-SEEN_MAX),
+  );
+}
+
 /* ---------- the controller ---------- */
 
 export interface AdminApi {
@@ -1672,6 +1706,14 @@ export function createAdmin(api: AdminApi): Admin {
   const inboxList = $<HTMLElement>('adm-inbox-list');
   const inboxEmpty = $<HTMLElement>('adm-inbox-empty');
   const inboxChips = [...document.querySelectorAll<HTMLButtonElement>('[data-ifilter]')];
+  /* the live activity hub: the Home key's counter, and the feed at the head of the Inbox */
+  const fabBadge = $<HTMLElement>('admin-fab-badge');
+  const inboxPanel = stage?.querySelector<HTMLElement>('[data-apanel="inbox"]') ?? null;
+  const activityHead = $<HTMLElement>('admin-activity-h');
+  const activityLive = $<HTMLElement>('admin-events-live-t');
+  const activityUnread = $<HTMLElement>('admin-events-unread');
+  const activityFeed = $<HTMLElement>('admin-event-feed');
+  const activityEmpty = $<HTMLElement>('admin-events-empty');
   const usersList = $<HTMLElement>('adm-users-list');
   const usersEmpty = $<HTMLElement>('adm-users-empty');
   const usersTotalEl = $<HTMLElement>('users-total');
@@ -1764,6 +1806,11 @@ export function createAdmin(api: AdminApi): Admin {
   /** The Inbox view: which filter chip is lit, and which card is expanded. */
   let inboxFilter = 'all';
   let openTicket = '';
+  /* Live Activity: two real sources, one folded feed, and one persisted read watermark. */
+  let activityPlayers: DirPlayer[] = [];
+  let activityPurchases: readonly VipPurchase[] = [];
+  let activityEvents: AdminActivityEvent[] = [];
+  const seenEvents = readSeenEvents();
   /**
    * The live telemetry: the last completed reading, the latest attempt's verdict, and the slow
    * beat that keeps the Stats tab honest while it is open. `lastMetrics` is only ever a payload
@@ -1998,6 +2045,7 @@ export function createAdmin(api: AdminApi): Admin {
     paintArena();
     paintStats();
     paintInbox();
+    paintActivity();
     paintUsers();
     paintSquads();
     paintVipAdmin();
@@ -3045,6 +3093,281 @@ export function createAdmin(api: AdminApi): Admin {
     notify(t.status === 'resolved' ? 'success' : 'warning');
     api.note(t.status === 'resolved' ? 'Ticket resolved.' : 'Ticket reopened.', false, 1800);
     paintInbox();
+  }
+
+  /* ---------- Live Activity: the FAB's unread counter and the dual-tier event feed ---------- */
+
+  /** A wall-clock stamp, always LTR-isolated so a joined script never reflows the digits. */
+  const activityClock = (ms: number): string => {
+    if (!Number.isFinite(ms) || ms <= 0) return '—';
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime())
+      ? '—'
+      : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+  };
+
+  /** `{n}` is the only interpolation the activity copy needs. */
+  const activityText = (key: string, n: number): string => t(key).replace('{n}', String(n));
+
+  const activityVisible = (): boolean => !!open && !!inboxPanel && !inboxPanel.hidden;
+  const unreadActivity = (): AdminActivityEvent[] =>
+    activityEvents.filter((e) => !seenEvents.has(e.id));
+
+  function saveSeenEvents(): void {
+    const kept = [...seenEvents].slice(-SEEN_MAX);
+    seenEvents.clear();
+    for (const id of kept) seenEvents.add(id);
+    writeJson(ACTIVITY_KEY, kept);
+  }
+
+  /** Watching the feed is what reads it: a row that lands on screen never returns as unread. */
+  function markActivityRead(): void {
+    let changed = false;
+    for (const e of activityEvents) {
+      if (!seenEvents.has(e.id)) { seenEvents.add(e.id); changed = true; }
+    }
+    if (changed) saveSeenEvents();
+  }
+
+  /**
+   * The badge's whole state is one read of the unread set: `data-count` carries the figure,
+   * `data-state` picks the rim (cyan, or Solar Gold when a VIP purchase is in the set), and
+   * `hidden` collapses zero outright. An author `display` would beat `[hidden]`, so the CSS
+   * kills it with `display: none !important`.
+   */
+  function paintFabBadge(): void {
+    const unread = unreadActivity();
+    const n = unread.length;
+    const hasVip = unread.some((e) => e.kind === 'vip');
+    if (fabBadge) {
+      fabBadge.textContent = n > 99 ? '99+' : String(n);
+      fabBadge.dataset.count = String(n);
+      fabBadge.dataset.state = n === 0 ? 'empty' : hasVip ? 'vip' : 'normal';
+      fabBadge.hidden = n === 0;
+      fabBadge.setAttribute('aria-label', t('adminFabBadgeAria'));
+    }
+    fab?.setAttribute('aria-label', n > 0 ? activityText('adminFabUnread', n) : t('adminFabAria'));
+    if (activityUnread) {
+      activityUnread.hidden = n === 0;
+      activityUnread.textContent = activityText('adminActivityUnread', n);
+    }
+  }
+
+  /** One LTR-isolated token: handles, amounts and timestamps each own their run. */
+  function activityToken(text: string, cls: string): HTMLElement {
+    const el = document.createElement('span');
+    el.className = cls;
+    el.setAttribute('dir', 'ltr');
+    el.textContent = text;
+    return el;
+  }
+
+  function activityLabel(text: string): HTMLElement {
+    const el = document.createElement('span');
+    el.className = 'event-k';
+    el.textContent = text;
+    return el;
+  }
+
+  /** A label/value pair stays welded together when a narrow meta row wraps. */
+  function activityPair(label: string, value: HTMLElement): HTMLElement {
+    const wrap = document.createElement('span');
+    wrap.className = 'event-pair';
+    wrap.append(activityLabel(label), value);
+    return wrap;
+  }
+
+  function activityIcon(href: string): SVGSVGElement {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'ico');
+    svg.setAttribute('aria-hidden', 'true');
+    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    use.setAttribute('href', href);
+    svg.append(use);
+    return svg;
+  }
+
+  /** Tier A — New User Joined: a cyan/mint minimal card with a user-node medallion. */
+  function joinCard(ev: AdminActivityEvent): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = `event-card event-card-join${seenEvents.has(ev.id) ? '' : ' is-unread'}`;
+
+    const medal = document.createElement('span');
+    medal.className = 'event-medallion';
+    medal.setAttribute('aria-hidden', 'true');
+    medal.append(activityIcon('#i-user-join'));
+
+    const body = document.createElement('div');
+    body.className = 'event-body';
+    const top = document.createElement('div');
+    top.className = 'event-top';
+    const title = document.createElement('p');
+    title.className = 'event-title';
+    title.textContent = t('adminEventJoinTitle');
+    const tier = document.createElement('span');
+    tier.className = 'event-tier';
+    tier.textContent = t('adminEventJoinTier');
+    top.append(title, tier);
+
+    const meta = document.createElement('div');
+    meta.className = 'event-meta';
+    meta.append(
+      activityToken(ev.handle, 'event-ltr event-handle'),
+      activityLabel('·'),
+      activityToken(activityClock(ev.at), 'event-ltr event-time'),
+    );
+    body.append(top, meta);
+    li.append(medal, body);
+    return li;
+  }
+
+  /** Tier B — VIP Purchase: beveled crown, a gold monetary pill, jewel and sheen. */
+  function vipCard(ev: AdminActivityEvent): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = `event-card event-card-vip${seenEvents.has(ev.id) ? '' : ' is-unread'}`;
+
+    const jewel = document.createElement('span');
+    jewel.className = 'event-jewel';
+    jewel.setAttribute('aria-hidden', 'true');
+
+    const medal = document.createElement('span');
+    medal.className = 'event-medallion';
+    medal.setAttribute('aria-hidden', 'true');
+    medal.textContent = '👑';
+
+    const body = document.createElement('div');
+    body.className = 'event-body';
+    const top = document.createElement('div');
+    top.className = 'event-top';
+    const title = document.createElement('p');
+    title.className = 'event-title';
+    title.textContent = t('adminEventVipTitle');
+    const tier = document.createElement('span');
+    tier.className = 'event-tier';
+    tier.textContent = t('adminEventVipTier');
+    top.append(title, tier);
+
+    const amount = document.createElement('span');
+    amount.className = 'event-amount event-ltr';
+    amount.setAttribute('dir', 'ltr');
+    const value = document.createElement('b');
+    value.textContent = figure(ev.stars ?? 0);
+    const unit = document.createElement('span');
+    unit.className = 'event-amount-u';
+    unit.textContent = `★ ${t('adminEventStars')}`;
+    amount.append(value, unit);
+
+    const meta = document.createElement('div');
+    meta.className = 'event-meta';
+    meta.append(
+      activityPair(t('adminEventPlan'), activityToken(ev.plan ?? 'VIP', 'event-ltr event-handle')),
+      activityPair(t('adminEventPaid'), amount),
+      activityPair(t('adminEventBuyer'), activityToken(ev.handle, 'event-ltr event-handle')),
+      activityPair(t('adminEventActivated'), activityToken(activityClock(ev.at), 'event-ltr event-time')),
+    );
+    body.append(top, meta);
+    li.append(jewel, medal, body);
+    return li;
+  }
+
+  function paintActivity(): void {
+    if (activityHead) activityHead.textContent = t('adminActivityKicker');
+    if (activityLive) activityLive.textContent = t('adminActivityLive');
+    if (activityEmpty) activityEmpty.textContent = t('adminActivityEmpty');
+    if (activityFeed) {
+      activityFeed.replaceChildren(
+        ...activityEvents.map((e) => (e.kind === 'vip' ? vipCard(e) : joinCard(e))),
+      );
+      activityFeed.setAttribute('aria-label', t('adminActivityKicker'));
+    }
+    if (activityEmpty) activityEmpty.hidden = activityEvents.length > 0;
+    paintFabBadge();
+  }
+
+  /** Fold the two real readings into one newest-first window. No row is invented. */
+  function foldActivity(): void {
+    const out: AdminActivityEvent[] = [];
+    for (const p of activityPlayers) {
+      if (!Number.isFinite(p.firstSeen) || p.firstSeen <= 0) continue;
+      out.push({ id: `join:${p.id}`, kind: 'join', at: p.firstSeen, handle: userWho(p) });
+    }
+    for (const r of activityPurchases) {
+      if (!Number.isFinite(r.purchasedAt) || r.purchasedAt <= 0) continue;
+      const handle = r.username
+        ? `@${r.username.replace(/^@/, '')}`
+        : r.userId ? `#${r.userId}` : '—';
+      out.push({
+        id: `vip:${r.userId}:${r.purchasedAt}:${r.stars}`,
+        kind: 'vip',
+        at: r.purchasedAt,
+        handle,
+        plan: VIP_PLAN_LABEL[r.planId],
+        stars: r.stars,
+      });
+    }
+    const ids = new Set<string>();
+    activityEvents = out
+      .filter((e) => {
+        if (ids.has(e.id)) return false;
+        ids.add(e.id);
+        return true;
+      })
+      .sort((a, b) => b.at - a.at)
+      .slice(0, ACTIVITY_MAX);
+    /* events that land while the feed is on screen are already seen */
+    if (activityVisible()) markActivityRead();
+    paintActivity();
+  }
+
+  /** The operator's own verified term is a real local receipt when the Worker has no ledger. */
+  function localVipPurchase(): VipPurchase | null {
+    const seat = liveSeat();
+    const plan = vipPlanOf(seat.vipPlan);
+    if (!plan || seat.vipUntil <= 0) return null;
+    return {
+      userId: 'you',
+      username: tgUser()?.username ?? '',
+      planId: plan.id,
+      stars: vipConfig[plan.id].stars,
+      purchasedAt: Math.max(0, seat.vipUntil - plan.days * 86_400_000),
+      expiresAt: seat.vipUntil,
+    };
+  }
+
+  /**
+   * One live read of both sources. A refusal never invents a figure: the on-device directory
+   * and this device's own VIP term are the honest fallbacks, exactly as the Users tab falls back.
+   */
+  async function refreshActivity(): Promise<void> {
+    let players: DirPlayer[] = [];
+    try {
+      const page = await fetchPlayers('', 'all', '', 'all', 'all', 'joined', 0, ACTIVITY_MAX);
+      if (page && Array.isArray(page.players)) players = page.players;
+    } catch { /* no Worker answering */ }
+    if (players.length === 0) {
+      players = directoryPage(
+        {
+          q: '', filter: 'all', country: '', age: 'all', plan: 'all',
+          sort: 'joined', offset: 0, limit: ACTIVITY_MAX,
+        },
+        liveSeat(),
+      ).players;
+    }
+    activityPlayers = players;
+
+    let purchases: readonly VipPurchase[] = vipStats?.recentPurchases ?? [];
+    if (purchases.length === 0) {
+      try {
+        const stats = await fetchVipStats();
+        if (stats) { vipStats = stats; purchases = stats.recentPurchases; }
+      } catch { /* no ledger: fall through to the device's own term */ }
+    }
+    if (purchases.length === 0) {
+      const own = localVipPurchase();
+      purchases = own ? [own] : [];
+    }
+    activityPurchases = purchases;
+    foldActivity();
   }
 
   /* ---------- the Users tab: the player directory ---------- */
@@ -4111,6 +4434,11 @@ export function createAdmin(api: AdminApi): Admin {
       if (stats) {
         vipStats = stats;
         paintVipStats();
+        /* a receipt that lands while the stage is up refreshes the live feed as well */
+        if (stats.recentPurchases.length > 0) {
+          activityPurchases = stats.recentPurchases;
+          foldActivity();
+        }
       }
       if (config && stats) paintVipState('Synced · live', 'ok');
       else if (config) paintVipState('Sheet synced · sales unavailable');
@@ -5143,6 +5471,8 @@ export function createAdmin(api: AdminApi): Admin {
     if (!page) return;
     elevated = true;
     paintDoor();
+    /* the registry just opened the door: the counter starts reading from this moment */
+    void refreshActivity();
   }
 
   /**
@@ -5177,6 +5507,7 @@ export function createAdmin(api: AdminApi): Admin {
     void refreshMetrics();                // the Stats tab reads the strict metrics door
     void refreshServer();                 // the Server tab reads `/api/admin/matchmaking`
     void refreshForceJoin();              // the channel gate's durable row
+    void refreshActivity();               // the directory + Stars ledger behind the FAB counter
     /* The stage reopens on whichever tab was last selected; a registry view must not reopen on a
        snapshot that predates the latest enlistment. */
     const lastTab = tabs.find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.atab;
@@ -5315,7 +5646,12 @@ export function createAdmin(api: AdminApi): Admin {
         void refreshMetrics();
       }
       /* the Inbox is device-local: a repaint keeps the relative timestamps honest */
-      if (id === 'inbox') paintInbox();
+      if (id === 'inbox') {
+        paintInbox();
+        /* opening the activity feed is what reads its rows */
+        markActivityRead();
+        paintActivity();
+      }
       /* the directory is read on first sight, not at mount: a panel nobody opened never calls out */
       if (id === 'users') {
         if (!usersAsked) {
@@ -6028,6 +6364,9 @@ export function createAdmin(api: AdminApi): Admin {
     if (open) paintInbox();
     else paintInboxBadge();
   });
+  /* every activity string is built from t(): a language change rebuilds the cards and
+     the FAB's spoken label rather than leaving one translated surface behind */
+  onLang(() => paintActivity());
   onRuntime(() => {
     /* Both queue radii are the server's too: a local change pushes the new values to
        `POST /admin/config`. Offline, `syncConfig` is a no-op. */
@@ -6063,6 +6402,9 @@ export function createAdmin(api: AdminApi): Admin {
       if (stage) mountCoins(stage);
       recordVisit();                       // the day's first sighting of this device
       paintAll();
+      /* Only an entitled viewer reads the admin routes: a player who never sees the FAB
+         must never fire `/admin/players` or `/api/admin/vip/stats` at app boot. */
+      if (isAdmin()) void refreshActivity();
       void probeDoor();                    // an appointed admin's device learns it here
       // the launcher only has a height once the home screen has been laid out
       requestAnimationFrame(() => {

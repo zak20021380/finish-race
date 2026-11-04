@@ -17263,21 +17263,74 @@ html.reduced-motion .mm-blip { opacity: .5; }
 .admin-fab:active { transform: translateY(var(--press-y)); --d: 1px; }
 .admin-fab:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
 .admin-fab-ico { width: 26px; height: 26px; color: var(--tiq); }
-.admin-fab-dot {
+/* ---- the Home key's live-unread counter: an obsidian pill with a lit rim ----
+   src/admin.ts owns `data-count`, `data-state` and `hidden`. Three states:
+   cyan/emerald for ordinary unread, Solar Gold breathing when the unread set
+   holds a VIP purchase, and completely gone at zero. The pill stays INSIDE the
+   52px key: Home clips overflow, so a hanging badge would lose its rim. */
+.admin-fab-badge {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--mint);
-  box-shadow: 0 0 0 2px #1C2433, 0 0 8px 1px rgba(16, 185, 129, .8);
+  top: 2px;
+  inset-inline-end: 2px;               /* logical: top-end in RTL, top-right in LTR */
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-width: 22px;
+  max-width: 36px;
+  height: 19px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background:
+    radial-gradient(120% 100% at 32% -10%, rgba(255, 255, 255, .14), transparent 62%),
+    linear-gradient(180deg, #131C29 0%, #080C14 100%);
+  color: #D9FFF4;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(0, 210, 255, .82),
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    0 0 0 1.5px #0B1019,
+    0 0 10px -1px rgba(0, 210, 255, .72),
+    0 0 20px -5px rgba(16, 185, 129, .6);
 }
-@keyframes adm-dot { 0%, 100% { opacity: 1 } 50% { opacity: .4 } }
+.admin-fab-badge[data-state="vip"] {
+  color: #FFE9AE;
+  box-shadow:
+    inset 0 0 0 1.5px #FFB800,
+    inset 0 1px 0 rgba(255, 255, 255, .22),
+    0 0 0 1.5px #0B1019,
+    0 0 12px 0 rgba(255, 184, 0, .6),
+    0 0 24px -4px rgba(255, 184, 0, .7);
+}
+@keyframes pulse-gold {
+  0%, 100% {
+    box-shadow:
+      inset 0 0 0 1.5px #FFB800, inset 0 1px 0 rgba(255, 255, 255, .22),
+      0 0 0 1.5px #0B1019,
+      0 0 8px 0 rgba(255, 184, 0, .42), 0 0 18px -6px rgba(255, 184, 0, .5);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 1.5px #FFD466, inset 0 1px 0 rgba(255, 255, 255, .3),
+      0 0 0 1.5px #0B1019,
+      0 0 16px 2px rgba(255, 184, 0, .78), 0 0 30px -2px rgba(255, 184, 0, .85);
+  }
+}
 @media (prefers-reduced-motion: no-preference) {
-  .admin-fab-dot[data-state="live"] { animation: adm-dot 2.4s ease-in-out infinite; }
+  .admin-fab-badge[data-state="vip"] { animation: pulse-gold 2.8s ease-in-out infinite; }
 }
-html.reduced-motion .admin-fab-dot { animation: none; }
+html.reduced-motion .admin-fab-badge[data-state="vip"] { animation: none !important; }
+/* an author `display` beats the UA [hidden] rule — the zero state must really vanish */
+.admin-fab-badge[hidden],
+.admin-fab-badge[data-state="empty"] { display: none !important; }
+/* still used by the Server tab's live lamp (`.adm-server[data-state="live"] .adm-srv-lamp`) */
+@keyframes adm-dot { 0%, 100% { opacity: 1 } 50% { opacity: .4 } }
 
 /* ---- the stage: one full-viewport clay slab ---- */
 .admin {
@@ -20222,6 +20275,350 @@ html.reduced-motion .adm-server[data-state="connecting"] .adm-server-empty-i .ic
   color: var(--honey-ink);
   font-size: .95em;
   white-space: nowrap;
+}
+
+/* ==========================================================================
+   ADMIN LIVE ACTIVITY — the dual-tier incoming event feed at the head of the
+   Inbox. Two materials, one geometry: an opaque obsidian card, a 42px
+   medallion and a minmax(0, 1fr) text column that can never widen a 320px
+   admin column. Tier A is cyan/mint; Tier B is Imperial Gold with a bevel,
+   a linear highlight, a corner jewel and a diagonal sheen. Every handle,
+   amount and timestamp carries dir="ltr" + unicode-bidi: isolate.
+   ========================================================================== */
+.admin-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+  max-width: 100%;
+}
+.admin-events-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+.admin-events-h { flex: 0 1 auto; min-width: 0; margin: 0; }
+.admin-events-live {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 210, 255, .09);
+  box-shadow: inset 0 0 0 1px rgba(0, 210, 255, .32);
+  color: #7FE7FF;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  line-height: 1;
+}
+.admin-events-live-dot {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: 50%;
+  background: #39E6B4;
+  box-shadow: 0 0 7px 1px rgba(16, 185, 129, .9);
+}
+@keyframes event-live-breathe { 0%, 100% { opacity: 1 } 50% { opacity: .42 } }
+@media (prefers-reduced-motion: no-preference) {
+  .admin-events-live-dot { animation: event-live-breathe 2.4s ease-in-out infinite; }
+}
+html.reduced-motion .admin-events-live-dot { animation: none !important; }
+.admin-events-unread {
+  flex: none;
+  margin-inline-start: auto;          /* logical: the far edge in RTL too */
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--gold-face);
+  color: #10141D;
+  font-size: 9.5px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  box-shadow:
+    0 2px 0 var(--gold-lip),
+    inset 0 1px 0 rgba(255, 255, 255, .5),
+    0 0 12px -3px rgba(245, 158, 11, .8);
+}
+.admin-events-unread[hidden] { display: none !important; }
+.admin-activity-rule {
+  flex: none;
+  height: 1px;
+  margin: 2px 0 4px;
+  background: linear-gradient(90deg, transparent, rgba(148, 163, 184, .28) 18%,
+    rgba(148, 163, 184, .28) 82%, transparent);
+}
+.admin-events {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+  max-width: 100%;
+}
+.admin-events-empty {
+  margin: 0;
+  padding: 14px 12px;
+  border-radius: var(--radius-md);
+  background: var(--clay-face);
+  box-shadow: var(--clay-drop), var(--clay-bevel), inset 0 0 0 1px var(--hair-off);
+  color: var(--ink-soft);
+  font-size: var(--t-micro);
+  line-height: 1.5;
+  text-align: center;
+}
+.admin-events-empty[hidden] { display: none !important; }
+
+/* ---- shared chassis: the medallion never grows, the text column always shrinks ---- */
+.event-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 11px 11px 12px;
+  border-radius: var(--radius-md);
+  isolation: isolate;
+  overflow: hidden;
+}
+.event-medallion,
+.event-body { position: relative; z-index: 1; }
+.event-medallion {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  font-size: 21px;
+  line-height: 1;
+}
+.event-medallion .ico { display: block; width: 22px; height: 22px; }
+.event-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+.event-top { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.event-title {
+  margin: 0;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.event-tier {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  line-height: 1.2;
+}
+.event-card.is-unread .event-top::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #39E6B4;
+  box-shadow: 0 0 7px 1px rgba(16, 185, 129, .8);
+}
+.event-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+.event-meta > * { min-width: 0; max-width: 100%; }
+/* a label and its value stay welded together when the meta row wraps on a 320px phone */
+.event-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+.event-pair > * { min-width: 0; }
+.event-k { opacity: .72; font-weight: 700; letter-spacing: .04em; }
+.event-handle {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+  font-weight: 800;
+}
+.event-time { color: var(--ink-soft); }
+/* handles, currency and timestamps keep their own LTR run inside an RTL sentence */
+.event-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+/* Persian/Arabic are joined scripts: tracking would tear the words apart */
+html[data-lang="fa"] :is(.event-body, .admin-events-head, .admin-events-empty),
+html[data-lang="ar"] :is(.event-body, .admin-events-head, .admin-events-empty) { direction: rtl; }
+html[data-lang="fa"] :is(.event-title, .event-tier, .event-k, .admin-events-live),
+html[data-lang="ar"] :is(.event-title, .event-tier, .event-k, .admin-events-live) { letter-spacing: 0; }
+
+/* ---- Tier 1: New Member — cyan / mint, cyan hairline, quiet node medallion ---- */
+.event-card-join {
+  background: linear-gradient(135deg, rgba(0, 210, 255, .15) 0%,
+    rgba(12, 21, 31, .94) 62%, rgba(12, 21, 31, .96) 100%);
+  box-shadow:
+    var(--clay-drop),
+    inset 0 0 0 1px rgba(0, 210, 255, .38),
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    0 0 18px -10px rgba(0, 210, 255, .8);
+}
+.event-card-join .event-medallion {
+  color: #8DEBFF;
+  background: linear-gradient(160deg, rgba(0, 210, 255, .22), rgba(6, 16, 24, .9));
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 210, 255, .5),
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    0 0 14px -6px rgba(0, 210, 255, .85);
+}
+.event-card-join .event-title { color: #9DEFFF; }
+.event-card-join .event-tier {
+  color: #06232B;
+  background: linear-gradient(180deg, #7CF0D0, #22BFA8);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5);
+}
+.event-card-join .event-handle { color: #A7F3E4; }
+
+/* ---- Tier 2: VIP Purchase — Imperial Gold obsidian, beveled, lit ---- */
+.event-card-vip {
+  background: linear-gradient(135deg, rgba(255, 184, 0, .12) 0%,
+    rgba(18, 24, 38, .9) 58%, rgba(11, 15, 24, .96) 100%);
+  border: 1px solid rgba(255, 215, 0, .4);
+  box-shadow:
+    var(--clay-drop),
+    inset 0 1px 0 rgba(255, 233, 168, .22),
+    inset 0 -1px 0 rgba(92, 56, 8, .6),
+    0 0 22px -10px rgba(255, 184, 0, .8);
+}
+/* the linear highlight bar across the crown of the card */
+.event-card-vip::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255, 215, 0, .18) 12%,
+    rgba(255, 236, 160, .9) 42%, rgba(255, 215, 0, .28) 72%, transparent);
+  pointer-events: none;
+}
+/* a diagonal sheen: translucent, untappable, and clipped by the card itself */
+.event-card-vip::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(112deg, transparent 34%, rgba(255, 236, 170, .085) 49%,
+    rgba(255, 255, 255, .045) 54%, transparent 68%);
+  pointer-events: none;
+}
+.event-card-vip > .event-jewel {
+  position: absolute;
+  top: 9px;
+  inset-inline-end: 9px;
+  width: 8px;
+  height: 8px;
+  transform: rotate(45deg);
+  border-radius: 2px;
+  background: linear-gradient(135deg, #FFF8DC 0%, #FCD34D 45%, #A46A12 100%);
+  box-shadow: 0 0 9px rgba(255, 184, 0, .85), inset 0 0 0 1px rgba(255, 255, 255, .5);
+  pointer-events: none;
+}
+.event-card-vip .event-medallion {
+  color: #FFE9AE;
+  background: linear-gradient(160deg, #3A2A12 0%, #17120B 55%, #0C1019 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 215, 0, .6),
+    inset 0 1px 0 rgba(255, 246, 200, .3),
+    inset 0 -2px 3px rgba(0, 0, 0, .6),
+    0 3px 0 #0A0E15,
+    0 0 16px -3px rgba(255, 184, 0, .7);
+  filter: drop-shadow(0 0 7px rgba(255, 184, 0, .55));
+  text-shadow: 0 0 12px rgba(255, 184, 0, .8);
+}
+.event-card-vip .event-title {
+  color: #F6D97F;
+  text-shadow: 0 0 10px rgba(255, 184, 0, .32);
+}
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .event-card-vip .event-title {
+    background: linear-gradient(100deg, #FFF3C4 0%, #FFD75E 38%, #E8A72B 72%, #FFF0B8 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    text-shadow: none;
+  }
+}
+.event-card-vip .event-tier {
+  color: #211603;
+  background: linear-gradient(180deg, #FFE9A8, #E9A62C);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .65), 0 0 10px -3px rgba(255, 184, 0, .8);
+}
+.event-card-vip.is-unread .event-top::before {
+  background: #FFB800;
+  box-shadow: 0 0 8px 1px rgba(255, 184, 0, .9);
+}
+.event-card-vip .event-handle { color: #FFE9AE; }
+.event-amount {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  max-width: 100%;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, rgba(255, 184, 0, .16), rgba(255, 184, 0, .05));
+  box-shadow: inset 0 0 0 1px rgba(255, 215, 0, .42);
+  color: #FFE29A;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.event-amount b { font-size: 12px; }
+.event-amount-u { font-size: 8.5px; letter-spacing: .06em; opacity: .82; }
+
+/* ---- 320px–390px phones: everything still fits one column, no h-scroll ---- */
+@media (max-width: 390px) {
+  .admin-events-head { gap: 6px; }
+  .admin-events-live, .admin-events-unread { padding: 3px 6px; font-size: 8.5px; }
+  .event-card { grid-template-columns: 38px minmax(0, 1fr); gap: 8px; padding: 10px 9px 11px; }
+  .event-medallion { width: 38px; height: 38px; border-radius: 11px; font-size: 19px; }
+  .event-medallion .ico { width: 20px; height: 20px; }
+  .event-title { font-size: 10.5px; letter-spacing: .06em; }
+  .event-meta { gap: 3px 6px; font-size: 9.5px; }
+  .event-amount b { font-size: 11px; }
 }
 
 /* ==========================================================================
