@@ -18086,7 +18086,7 @@ html.reduced-motion .adm-live-dot { animation: none; }
 
 /* ---- trends: one bounded window of the Worker's growth rings, drawn as inline SVG ---- */
 /* The three series, in hues that stay separable on obsidian: sky, mint and amber. Every surface
-   that has to agree with the plot — line, marker, chip dot, inspector token — reads these two
+   that has to agree with the plot — line, marker, pod dot, inspector token — reads these two
    variables through --tone / --tone-soft, so a series can only disagree with itself once. */
 .adm-trend {
   --s-active: #22d3ee;
@@ -18097,6 +18097,12 @@ html.reduced-motion .adm-live-dot { animation: none; }
   --s-matches-soft: rgba(245, 158, 11, .20);
   gap: 9px;
 }
+/* The plot has exactly one curve, and `data-metric` is the only thing that decides its hue: the
+   line, its area gradient, its halo and its nodes all resolve to the pod that is pressed, so a
+   single-series chart can never be drawn in the previous metric's colour. */
+.adm-trend[data-metric="active"] { --plot-tone: var(--s-active); }
+.adm-trend[data-metric="signups"] { --plot-tone: var(--s-signups); }
+.adm-trend[data-metric="matches"] { --plot-tone: var(--s-matches); }
 .adm-trend-h {
   display: flex;
   align-items: flex-start;
@@ -18277,43 +18283,37 @@ html.reduced-motion .adm-live-dot { animation: none; }
 .adm-trend-x { letter-spacing: .02em; }
 .adm-trend-line {
   fill: none;
-  stroke: var(--tone);
-  stroke-width: 2;
+  stroke: var(--plot-tone);
+  stroke-width: 2.25;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
-  transition: opacity var(--motion-fast), stroke-width var(--motion-fast);
+  transition: stroke var(--motion-fast);
 }
-.adm-trend-line[data-s="active"] { --tone: var(--s-active); --tone-soft: var(--s-active-soft); }
-.adm-trend-line[data-s="signups"] { --tone: var(--s-signups); --tone-soft: var(--s-signups-soft); }
-/* the match line keeps its dashes as well as its own hue: three channels of difference, so an
-   overlap at a spike is never decided by colour alone */
-.adm-trend-line[data-s="matches"] {
-  --tone: var(--s-matches);
-  --tone-soft: var(--s-matches-soft);
-  stroke-dasharray: 5 3;
-}
+/* the area under the single curve: the gradient's own stops take --plot-tone, so the fill and the
+   line above it are the same hue by construction rather than by two places agreeing */
+.adm-trend-stop { stop-color: var(--plot-tone); }
 .adm-trend-fill { transition: opacity var(--motion-fast); }
-/* the ambient glow under the cyan line: the same path as one wide, faint stroke. A stroke is a
-   paint, not a rasterised filter, so a pointer dragged across the plot never pays for a blur. */
+/* the ambient glow is the same curve laid down as one wide, faint stroke rather than an SVG
+   blur: a filter would be re-rasterised on every pointer move over the plot, a stroke is not. */
 .adm-trend-halo {
   fill: none;
-  stroke: var(--s-active);
+  stroke: var(--plot-tone);
   stroke-width: 5.5;
   stroke-linecap: round;
   stroke-linejoin: round;
   opacity: .16;
   vector-effect: non-scaling-stroke;
-  transition: opacity var(--motion-fast);
+  transition: stroke var(--motion-fast);
   pointer-events: none;
 }
+/* the nodes make a flat zero stretch read as measured rather than as a missing series */
 .adm-trend-dots circle {
-  fill: var(--s-signups);
+  fill: var(--plot-tone);
   stroke: var(--field);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
-.adm-trend-dots { transition: opacity var(--motion-fast); }
 .adm-trend-guide {
   stroke: rgba(226, 232, 240, .34);
   stroke-width: 1;
@@ -18321,48 +18321,57 @@ html.reduced-motion .adm-live-dot { animation: none; }
   vector-effect: non-scaling-stroke;
 }
 .adm-trend-mark {
-  fill: var(--tone);
+  fill: var(--plot-tone);
   stroke: var(--field);
   stroke-width: 1.6;
   vector-effect: non-scaling-stroke;
-  transition: opacity var(--motion-fast);
 }
-.adm-trend-mark[data-s="active"] { --tone: var(--s-active); }
-.adm-trend-mark[data-s="signups"] { --tone: var(--s-signups); }
-.adm-trend-mark[data-s="matches"] { --tone: var(--s-matches); }
 .adm-trend-hit { fill: transparent; }
-
-/* one series being read: the rest step back, and the read one takes the weight and a tight glow.
-   `data-look` lives on the slab, so the plot, the chips and the inspector all answer to it. */
-.adm-trend[data-look] .adm-trend-line,
-.adm-trend[data-look] .adm-trend-dots,
-.adm-trend[data-look] .adm-trend-fill { opacity: .32; }
-.adm-trend[data-look] .adm-trend-mark { opacity: .28; }
-.adm-trend[data-look] .adm-trend-halo { opacity: .04; }
-.adm-trend[data-look="active"] .adm-trend-halo { opacity: .2; }
-.adm-trend[data-look="active"] .adm-trend-line[data-s="active"],
-.adm-trend[data-look="active"] .adm-trend-fill,
-.adm-trend[data-look="signups"] .adm-trend-line[data-s="signups"],
-.adm-trend[data-look="signups"] .adm-trend-dots,
-.adm-trend[data-look="matches"] .adm-trend-line[data-s="matches"] { opacity: 1; }
-.adm-trend[data-look="active"] .adm-trend-mark[data-s="active"],
-.adm-trend[data-look="signups"] .adm-trend-mark[data-s="signups"],
-.adm-trend[data-look="matches"] .adm-trend-mark[data-s="matches"] { opacity: 1; }
-.adm-trend[data-look="active"] .adm-trend-line[data-s="active"],
-.adm-trend[data-look="signups"] .adm-trend-line[data-s="signups"],
-.adm-trend[data-look="matches"] .adm-trend-line[data-s="matches"] {
-  stroke-width: 2.75;
-  filter: drop-shadow(0 0 4px var(--tone-soft));
-}
 
 /* the legend: three obsidian pods, each carrying its own sum across the window on screen.
    Frosted glass here is a 6% white face over the recess, a 1px hairline rim and a single
    specular line at the top edge — no live `backdrop-filter`, which would blur the chart behind
    it on every scroll frame of a phone. */
+/* the pods' own header: what the figures under them are summed over. It takes the place of the
+   footer row that used to print those same three sums a second time. */
+.adm-trend-metric-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 2px;
+}
+.adm-trend-metric-k {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.adm-trend-metric-r {
+  flex: none;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  direction: ltr;
+  unicode-bidi: isolate;
+  color: var(--ink);
+}
 .adm-trend-legend {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
+}
+/* the two tagged slices have no signup series to offer, so their row is two equal pods rather than
+   three lanes with a hole where the hidden one used to be */
+.adm-trend[data-mode="pvp"] .adm-trend-legend,
+.adm-trend[data-mode="bot"] .adm-trend-legend {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .adm-trend-chip {
   appearance: none;
@@ -18387,9 +18396,10 @@ html.reduced-motion .adm-live-dot { animation: none; }
     background var(--motion-fast), transform var(--motion-fast);
 }
 .adm-trend-chip:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
-.adm-trend-chip[aria-pressed="false"] { opacity: .45; }
-.adm-trend-chip[aria-pressed="false"] .adm-trend-dot { background: var(--ink-soft); box-shadow: none; }
-/* the status dot: a 7px core inside a 3px tinted ring, so the three hues read at arm's length */
+/* a pod this slice cannot answer with is taken away, not greyed out */
+.adm-trend-chip[hidden] { display: none; }
+/* the status dot: a 7px core inside a 3px tinted ring, so the three hues read at arm's length.
+   Only the pod holding the curve keeps its halo — the others still say which hue is theirs. */
 .adm-trend-dot {
   flex: none;
   width: 7px;
@@ -18399,7 +18409,9 @@ html.reduced-motion .adm-live-dot { animation: none; }
   box-shadow:
     0 0 0 3px color-mix(in srgb, var(--tone, var(--ink-soft)) 15%, transparent),
     0 0 8px color-mix(in srgb, var(--tone, var(--ink-soft)) 45%, transparent);
+  transition: opacity var(--motion-fast), box-shadow var(--motion-fast);
 }
+.adm-trend-chip[aria-pressed="false"] .adm-trend-dot { opacity: .5; box-shadow: none; }
 .adm-trend-chip[data-gseries="active"] { --tone: var(--s-active); --tone-soft: var(--s-active-soft); }
 .adm-trend-chip[data-gseries="signups"] { --tone: var(--s-signups); --tone-soft: var(--s-signups-soft); }
 .adm-trend-chip[data-gseries="matches"] { --tone: var(--s-matches); --tone-soft: var(--s-matches-soft); }
@@ -18431,20 +18443,9 @@ html.reduced-motion .adm-live-dot { animation: none; }
   text-shadow: 0 0 12px var(--tone-soft, transparent);
 }
 
-/* the chip that is being read: a rim in its own hue, a tinted glass face and a one-pixel lift.
-   `.is-highlighted` is the pointer, `.is-focused` is the lock the operator clicked into place. */
-.adm-trend-chip.is-highlighted,
-.adm-trend-chip.is-focused {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, .07) 0%, rgba(255, 255, 255, 0) 55%),
-    color-mix(in srgb, var(--tone) 13%, var(--field));
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--tone) 62%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, .09),
-    0 0 14px color-mix(in srgb, var(--tone) 20%, transparent);
-  transform: translateY(-1px);
-}
-.adm-trend-chip.is-focused {
+/* the pod holding the one curve on screen: a rim in its own hue and a tinted glass face. Its
+   figure keeps the hue either way, because that is what ties the number to the series. */
+.adm-trend-chip[aria-pressed="true"] {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .09) 0%, rgba(255, 255, 255, 0) 55%),
     color-mix(in srgb, var(--tone) 19%, var(--field));
@@ -18453,15 +18454,10 @@ html.reduced-motion .adm-live-dot { animation: none; }
     inset 0 1px 0 rgba(255, 255, 255, .10),
     0 0 16px color-mix(in srgb, var(--tone) 26%, transparent);
 }
-.adm-trend-chip.is-highlighted .adm-trend-chip-t,
-.adm-trend-chip.is-focused .adm-trend-chip-t { color: var(--ink); }
-/* everything else waits, but only while one series actually holds the read */
-.adm-trend-chip.is-muted { opacity: .55; }
-.adm-trend-chip.is-muted.is-highlighted,
-.adm-trend-chip.is-muted.is-focused { opacity: 1; }
+.adm-trend-chip[aria-pressed="true"] .adm-trend-chip-t { color: var(--ink); }
 .adm-trend-chip:active { transform: translateY(1px); }
 
-/* the inspector: the bucket's own hour, then one colour-coded reading per series */
+/* the inspector: the bucket's own hour, then the plotted series' count inside it */
 .adm-trend-read {
   display: flex;
   flex-wrap: wrap;
@@ -18472,6 +18468,8 @@ html.reduced-motion .adm-live-dot { animation: none; }
   border-top: 1px solid var(--hair-off);
   font-variant-numeric: tabular-nums;
 }
+/* at rest there is nothing here that the pods do not already say, so the row goes away */
+.adm-trend-read[hidden] { display: none; }
 .adm-trend-ts {
   flex: 0 1 auto;
   min-width: 0;
@@ -18483,7 +18481,10 @@ html.reduced-motion .adm-live-dot { animation: none; }
   background:
     linear-gradient(180deg, rgba(255, 255, 255, .05) 0%, rgba(255, 255, 255, 0) 100%),
     var(--field);
-  box-shadow: inset 0 0 0 1px var(--hair-off), inset 0 1px 0 rgba(255, 255, 255, .06);
+  box-shadow:
+    inset 0 0 0 1px rgba(125, 211, 252, .34),
+    inset 0 1px 0 rgba(255, 255, 255, .08),
+    0 0 10px rgba(56, 189, 248, .12);
   font-size: 8px;
   font-weight: 900;
   letter-spacing: .06em;
@@ -18493,33 +18494,21 @@ html.reduced-motion .adm-live-dot { animation: none; }
   font-variant-numeric: tabular-nums;
   direction: ltr;
   unicode-bidi: isolate;
-  color: var(--ink-soft);
-  transition: color var(--motion-fast), box-shadow var(--motion-fast);
-}
-.adm-trend-read[data-focused="true"] .adm-trend-ts {
   color: var(--ink);
-  box-shadow:
-    inset 0 0 0 1px rgba(125, 211, 252, .34),
-    inset 0 1px 0 rgba(255, 255, 255, .08),
-    0 0 10px rgba(56, 189, 248, .12);
 }
-.adm-trend-toks {
-  flex: 1 1 240px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
-  min-width: 0;
-}
+/* the one reading, in the plotted series' own hue: the bucket's count, not the window's sum */
 .adm-trend-tok {
   display: flex;
   align-items: center;
   gap: 3px;
+  flex: 0 1 auto;
   min-width: 0;
-  padding: 3px 5px;
+  margin-inline-start: auto;
+  padding: 3px 6px;
   border-radius: 8px;
-  background: transparent;
-  box-shadow: inset 0 0 0 1px transparent;
-  transition: opacity var(--motion-fast), background var(--motion-fast), box-shadow var(--motion-fast);
+  background: color-mix(in srgb, var(--tone) 16%, var(--field));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 52%, transparent);
+  transition: background var(--motion-fast), box-shadow var(--motion-fast);
 }
 .adm-trend-tok[data-gtok="active"] { --tone: var(--s-active); }
 .adm-trend-tok[data-gtok="signups"] { --tone: var(--s-signups); }
@@ -18542,7 +18531,7 @@ html.reduced-motion .adm-live-dot { animation: none; }
   letter-spacing: .05em;
   line-height: 1.2;
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: var(--ink);
 }
 .adm-trend-tok-v {
   flex: none;
@@ -18554,23 +18543,8 @@ html.reduced-motion .adm-live-dot { animation: none; }
   font-variant-numeric: tabular-nums;
   direction: ltr;
   unicode-bidi: isolate;
-  color: var(--ink-soft);
-  transition: color var(--motion-fast);
+  color: var(--tone);
 }
-/* the bucket actually moved this series, so its number takes the series' own colour */
-.adm-trend-tok.is-hot .adm-trend-tok-v { color: var(--tone); }
-/* the series under the pointer or under the lock: the eye lands here first */
-.adm-trend-tok.is-focus {
-  background: color-mix(in srgb, var(--tone) 16%, var(--field));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 52%, transparent);
-}
-.adm-trend-tok.is-focus .adm-trend-tok-l { color: var(--ink); }
-.adm-trend-tok.is-focus .adm-trend-tok-v { color: var(--tone); }
-.adm-trend[data-look] .adm-trend-tok:not(.is-focus) { opacity: .5; }
-/* a series that is not drawn has no line to read, and says so here rather than going quiet */
-.adm-trend-tok.is-off { opacity: .4; }
-.adm-trend-tok.is-off .adm-trend-tok-dot { background: var(--ink-soft); }
-.adm-trend[data-look] .adm-trend-tok.is-off { opacity: .3; }
 
 /* the copy column takes the whole row when the switch cannot sit beside it, rather than
    squeezing the title into a two-word column */
@@ -18582,8 +18556,6 @@ html.reduced-motion .adm-live-dot { animation: none; }
   /* three lanes still hold a full 36px target at 320px; only the type steps down */
   .adm-trend-mode { min-height: 36px; padding: 0 4px; }
   .adm-trend-mode b { font-size: 8.5px; letter-spacing: .05em; }
-  /* the hour pill keeps its own row so the three readings never have to abbreviate */
-  .adm-trend-toks { flex: 1 1 100%; }
   /* three pods in 264px: the pod stops breathing before its label has to truncate */
   .adm-trend-chip { gap: 5px; padding: 6px 6px; min-height: 36px; }
   .adm-trend-chip-t { font-size: 8px; letter-spacing: .02em; }
