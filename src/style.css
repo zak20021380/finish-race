@@ -10979,12 +10979,20 @@ html.reduced-motion .bo-row.is-genesis::before { animation: none; opacity: .85; 
     inset 0 -1px 0 rgba(0, 0, 0, .55),
     0 2px 6px rgba(0, 0, 0, .48);
 }
-/* A real portrait sits inside the gold rim; the monogram stays underneath until it lands. */
+/* A real portrait sits inside the gold rim; the monogram stays underneath until it lands.
+   An abspos <img> is a replaced element, so `inset` alone never stretches it: with `width: auto`
+   it keeps its intrinsic size and a 1254px Telegram photo paints a 1254px dome over the ledger.
+   The medallion must therefore state the box, not just the offsets. */
 .bo-av-img {
   position: absolute;
   inset: 2px;
-  border-radius: 50%;
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
+  max-width: calc(100% - 4px);
+  max-height: calc(100% - 4px);
   object-fit: cover;
+  display: block;
+  border-radius: 50%;
   background: #0A1120;
 }
 .bo-av.has-photo { color: transparent; }
