@@ -163,6 +163,12 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     contactAdmin: 'Contact Admin',
     contactAdminSub: 'Direct help, inquiries & feedback',
     versionBadge: 'Tactix v1.0.0 · Local Save',
+    /* ---- sealed royal vault: the shop is a showcase, never a till (src/shop.ts) ---- */
+    shopVaultKicker: 'ROYAL DECREE',
+    shopVaultTitle: 'ROYAL VAULT TEMPORARILY SEALED',
+    shopVaultSub: 'Exclusive skins and legendary relics are being forged. Grand reopening soon.',
+    shopVaultLocked: '🔒 Locked',
+    shopVaultStatus: 'SEALED',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'You',
     hudTop: 'Top',
@@ -733,6 +739,12 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     contactAdmin: 'ارتباط با ادمین',
     contactAdminSub: 'کمک مستقیم، پرسش‌ها و بازخورد',
     versionBadge: 'Tactix v1.0.0 · ذخیره محلی',
+    /* ---- پیام پلمپ گاوصندوق سلطنتی (src/shop.ts) ---- */
+    shopVaultKicker: 'فرمان سلطنتی',
+    shopVaultTitle: 'پلمپ موقت گاوصندوق سلطنتی',
+    shopVaultSub: 'آیتمها و پوستههای انحصاری در دست آمادهسازی هستند. بهزودی بازگشایی خواهد شد.',
+    shopVaultLocked: '🔒 قفل',
+    shopVaultStatus: 'پلمپ شده',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'تو',
     hudTop: 'برتر',
@@ -1299,6 +1311,12 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     contactAdmin: 'Связаться с админом',
     contactAdminSub: 'Прямая помощь, вопросы и отзывы',
     versionBadge: 'Tactix v1.0.0 · Локальное сохранение',
+    /* ---- запечатанное королевское хранилище (src/shop.ts) ---- */
+    shopVaultKicker: 'ЦАРСКИЙ УКАЗ',
+    shopVaultTitle: 'КОРОЛЕВСКОЕ ХРАНИЛИЩЕ ВРЕМЕННО ОПЕЧАТАНО',
+    shopVaultSub: 'Эксклюзивные облики и легендарные реликвии уже создаются. Торжественное открытие скоро.',
+    shopVaultLocked: '🔒 Закрыто',
+    shopVaultStatus: 'ОПЕЧАТАНО',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'Вы',
     hudTop: 'Топ',
@@ -1370,6 +1388,12 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     contactAdmin: 'تواصل مع الأدمن',
     contactAdminSub: 'مساعدة مباشرة واستفسارات وملاحظات',
     versionBadge: 'Tactix v1.0.0 · حفظ محلي',
+    /* ---- الخزنة الملكية المختومة (src/shop.ts) ---- */
+    shopVaultKicker: 'مرسوم ملكي',
+    shopVaultTitle: 'الخزنة الملكية مختومة مؤقتًا',
+    shopVaultSub: 'يجري صياغة الأزياء الحصرية والآثار الأسطورية. الافتتاح الكبير قريبًا.',
+    shopVaultLocked: '🔒 مقفل',
+    shopVaultStatus: 'مختوم',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'أنت',
     hudTop: 'الأفضل',
@@ -1441,6 +1465,12 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     contactAdmin: 'Contactar al admin',
     contactAdminSub: 'Ayuda directa, consultas y comentarios',
     versionBadge: 'Tactix v1.0.0 · Guardado local',
+    /* ---- cámara real sellada (src/shop.ts) ---- */
+    shopVaultKicker: 'DECRETO REAL',
+    shopVaultTitle: 'LA CÁMARA REAL ESTÁ SELLADA TEMPORALMENTE',
+    shopVaultSub: 'Se están forjando aspectos exclusivos y reliquias legendarias. Gran reapertura próximamente.',
+    shopVaultLocked: '🔒 Bloqueado',
+    shopVaultStatus: 'SELLADO',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'Tú',
     hudTop: 'Top',

@@ -1577,6 +1577,47 @@
         <rect x="24" y="32.5" width="4" height="15" rx="2" fill="none" stroke="#F59E0B" stroke-opacity=".45" stroke-width=".9" />
         <circle cx="26" cy="37.4" r="1.5" fill="#FDE68A" />
       </symbol>
+      <!-- The royal vault seal: a gold-struck padlock inside a machined vault dial. Full-colour
+           like #i-lock-ti so the frosted medallion needs no CSS tint. One upper-left light ramp
+           runs across the dial, the shackle and the body; the only emissive part is the keyhole. -->
+      <symbol id="i-vault-seal" viewBox="0 0 64 64">
+        <defs>
+          <linearGradient id="vs-gold" gradientUnits="userSpaceOnUse" x1="8" y1="4" x2="54" y2="60">
+            <stop offset="0" stop-color="#FFF6DC" /><stop offset=".24" stop-color="#F2D397" />
+            <stop offset=".52" stop-color="#D6A03D" /><stop offset=".76" stop-color="#8A5A1B" />
+            <stop offset="1" stop-color="#F7DFA4" />
+          </linearGradient>
+          <linearGradient id="vs-body" gradientUnits="userSpaceOnUse" x1="18" y1="28" x2="46" y2="50">
+            <stop offset="0" stop-color="#FBE7B0" /><stop offset=".38" stop-color="#D7A647" />
+            <stop offset=".72" stop-color="#95611E" /><stop offset="1" stop-color="#573611" />
+          </linearGradient>
+          <radialGradient id="vs-amber" cx="50%" cy="50%" r="50%">
+            <stop offset="0" stop-color="#FFE9A8" stop-opacity=".95" />
+            <stop offset=".55" stop-color="#F59E0B" stop-opacity=".36" />
+            <stop offset="1" stop-color="#F59E0B" stop-opacity="0" />
+          </radialGradient>
+        </defs>
+        <!-- vault dial: two rims and eight engraved ticks -->
+        <circle cx="32" cy="32" r="28.5" fill="none" stroke="url(#vs-gold)" stroke-width="2.2" />
+        <circle cx="32" cy="32" r="24.5" fill="none" stroke="#F2D397" stroke-opacity=".38" stroke-width="1" />
+        <g stroke="url(#vs-gold)" stroke-width="2" stroke-linecap="round" opacity=".85">
+          <path d="M32 5.5v4" /><path d="M32 54.5v4" />
+          <path d="M5.5 32h4" /><path d="M54.5 32h4" />
+          <path d="M13.3 13.3l2.8 2.8" /><path d="M47.9 47.9l2.8 2.8" />
+          <path d="M50.7 13.3l-2.8 2.8" /><path d="M16.1 47.9l-2.8 2.8" />
+        </g>
+        <!-- raised shackle: a dark machined shadow under the gold arch -->
+        <path d="M23 30v-6.5a9 9 0 0 1 18 0V30" fill="none" stroke="#1A1206" stroke-opacity=".8" stroke-width="7" stroke-linecap="round" />
+        <path d="M23 30v-6.5a9 9 0 0 1 18 0V30" fill="none" stroke="url(#vs-gold)" stroke-width="4.6" stroke-linecap="round" />
+        <path d="M25 21.5v-2a7 7 0 0 1 3.2-5.9" fill="none" stroke="#FFF6DC" stroke-opacity=".7" stroke-width="1" stroke-linecap="round" />
+        <!-- chamfered lock body, specular lip, amber-lit keyhole -->
+        <rect x="18" y="29" width="28" height="21" rx="5.4" fill="url(#vs-body)" stroke="url(#vs-gold)" stroke-width="1.4" />
+        <path d="M20.5 31h23" fill="none" stroke="#FFF6DC" stroke-opacity=".5" stroke-width="1" stroke-linecap="round" />
+        <circle cx="32" cy="38" r="7" fill="url(#vs-amber)" />
+        <circle cx="32" cy="37" r="2.6" fill="#120C04" />
+        <rect x="30.9" y="38" width="4.2" height="6" rx="1.6" fill="#120C04" />
+        <circle cx="32" cy="36.3" r=".9" fill="#FFE9A8" />
+      </symbol>
       <!-- the current realm's crest: an engraved chess king, struck rather than drawn —
            one stroke weight, a faint metal fill in the crown and the foot, so it reads as
            a seal pressed into the plate instead of a flat glyph. -->
@@ -2710,8 +2751,10 @@
           </div>
         </section>
 
-        <!-- ---------------- shop ---------------- -->
-        <section class="screen menu" id="s-shop" data-screen="shop" tabindex="-1" hidden aria-labelledby="shop-title">
+        <!-- ---------------- shop · SEALED ROYAL VAULT ----------------
+             The catalogue is a still-life showcase. The head (back key + wallet) is the only
+             live chrome; every tab, card and button beneath it is frozen behind the veil. -->
+        <section class="screen menu is-sealed" id="s-shop" data-screen="shop" tabindex="-1" hidden aria-labelledby="shop-title">
           <div class="m-head">
             <button class="icon-btn" type="button" data-back aria-label="Back to home">
               <svg class="ico" aria-hidden="true"><use href="#i-back" /></svg>
@@ -2722,25 +2765,37 @@
             </p>
           </div>
 
-          <div class="seg" role="tablist" aria-label="Cosmetic type">
-            <button class="seg-b" type="button" role="tab" id="tab-ball" data-shop="ball" aria-selected="true" aria-controls="shop-grid">Balls</button>
-            <button class="seg-b" type="button" role="tab" id="tab-wall" data-shop="wall" aria-selected="false" aria-controls="shop-grid">Walls</button>
-            <button class="seg-b" type="button" role="tab" id="tab-board" data-shop="board" aria-selected="false" aria-controls="shop-grid">Boards</button>
+          <!-- Category pills: kept for context, inert by policy. `aria-disabled` announces them
+               as unavailable without leaving a dead tap that has to explain itself. -->
+          <div class="seg shop-seg" role="tablist" aria-label="Cosmetic type" aria-disabled="true">
+            <button class="seg-b" type="button" role="tab" id="tab-ball" data-shop="ball" aria-selected="true" aria-disabled="true" tabindex="-1" aria-controls="shop-grid">Balls</button>
+            <button class="seg-b" type="button" role="tab" id="tab-wall" data-shop="wall" aria-selected="false" aria-disabled="true" tabindex="-1" aria-controls="shop-grid">Walls</button>
+            <button class="seg-b" type="button" role="tab" id="tab-board" data-shop="board" aria-selected="false" aria-disabled="true" tabindex="-1" aria-controls="shop-grid">Boards</button>
           </div>
 
-          <!-- showcase mode: the catalogue is open and the till is shut, so the notice sits
-               between the tabs and the grid where it explains every card below it -->
-          <div class="shop-closed">
-            <svg class="ico shop-closed-ico" aria-hidden="true"><use href="#i-lock" /></svg>
-            <div class="shop-closed-txt">
-              <p class="shop-closed-t">Shop Temporarily Closed</p>
-              <p class="shop-closed-s">Items are for preview only and not for sale right now.</p>
+          <!-- The seal: a recessed obsidian plate with a 1px gold hairline, a frosted circular
+               medallion struck with the gold vault lock, and an ambient amber back-glow. -->
+          <div class="vault-seal">
+            <span class="vault-medallion" aria-hidden="true">
+              <svg class="vault-emblem" aria-hidden="true"><use href="#i-vault-seal" /></svg>
+            </span>
+            <p class="vault-kicker" data-i18n="shopVaultKicker">ROYAL DECREE</p>
+            <h2 class="vault-title" data-i18n="shopVaultTitle">ROYAL VAULT TEMPORARILY SEALED</h2>
+            <p class="vault-sub" data-i18n="shopVaultSub">Exclusive skins and legendary relics are being forged. Grand reopening soon.</p>
+            <span class="vault-rule" aria-hidden="true"><i></i><b></b><i></i></span>
+          </div>
+
+          <!-- The grid still scrolls (it is a showcase), but a frosted-obsidian veil sits over
+               it: blurred, darkened and desaturated, with a faint SEALED stamp. The veil and
+               every card are pointer-transparent, so no tap can reach the old till. -->
+          <div class="shop-catalog">
+            <div class="shop-grid" id="shop-grid" role="tabpanel" aria-labelledby="tab-ball" data-scroll></div>
+            <div class="shop-veil" aria-hidden="true">
+              <span class="shop-veil-mark" data-i18n="shopVaultStatus">SEALED</span>
             </div>
           </div>
 
-          <div class="shop-grid" id="shop-grid" role="tabpanel" aria-labelledby="tab-ball" data-scroll></div>
-
-          <!-- the same toast the board uses, so a locked card refuses on this screen too -->
+          <!-- the same toast the board uses; the sealed vault never fires it -->
           <p class="note" role="status" aria-live="polite"></p>
         </section>
 

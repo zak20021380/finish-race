@@ -1,19 +1,18 @@
 /**
- * shop.ts — the cosmetics screen: three tabs, one card per item, and a live miniature board on
- * each card painted by the race's own renderer rather than a picture of one.
+ * shop.ts — the cosmetics screen: three tabs, one card per item, and a miniature board on each
+ * card painted by the race's own renderer rather than a picture of one.
  *
- * Coins here are mock and local: the only gate on a purchase is the balance in the header, which is
- * the same number Home shows and the same save the board reads. Buying spends, takes ownership and
- * puts the item on in one tap, so the card you just paid for is wearing it when the sheet closes.
- *
- * The till is always open: there is no client-side sales gate to park the cards or refuse a
- * purchase. Every card previews the real thing, and the wallet is the only limit.
+ * SEALED ROYAL VAULT: this build is a showcase, not a till. The cards still render exactly what
+ * the renderer draws (one settled frame each), but no tab, card, pill or buy sheet answers a tap.
+ * The header — the back key and the live coin balance — is deliberately outside the lockdown.
+ * The purchase path is retained behind `sealed()` rather than deleted, so reopening the vault is
+ * a one-line change and the wallet/ownership code stays the single source of truth.
  */
 import { ITEMS, themeOf, type CosKind, type Item, type Theme } from './themes';
 import { createPreview, type Preview } from './render';
 import { buy, equip, isEquipped, onChange, owns, profile } from './storage';
 import { coinText, mountCoins, setBalance } from './coin';
-import { motionReduced, onSettings } from './settings';
+import { motionReduced, onLang, onSettings, t } from './settings';
 import { impact, notify } from './telegram';
 import type { Sheets } from './sheets';
 
@@ -28,6 +27,13 @@ export interface Shop {
 }
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
+/**
+ * A one-way policy, not a sales flag: the vault is sealed for this build. It lives behind a
+ * function so every guard stays a real runtime check and no branch is folded away by the
+ * compiler — flipping this one line is the whole grand reopening.
+ */
+const sealed = (): boolean => true;
 
 /** One card: preview, name, price, and the single button whose label carries the state. */
 const CARD = `<article class="cos"><canvas class="cos-pv" aria-hidden="true"></canvas>`
@@ -74,7 +80,7 @@ export function createShop(api: ShopApi): Shop {
         : themeOf(e.ball, e.wall, it.id);
   };
 
-  /** The card's state: the worn item is never locked, and while the till is shut nothing else answers. */
+  /** The card's state: kept for the previews and the reopened vault; the seal paints over it. */
   const stateOf = (it: Item): State => {
     if (isEquipped(it.kind, it.id)) return 'equipped';
     if (owns(it.kind, it.id)) return 'owned';
@@ -90,7 +96,8 @@ export function createShop(api: ShopApi): Shop {
   }
 
   function sync() {
-    const want = shown && !motionReduced() && !document.hidden;
+    // a sealed showcase gets one settled frame per card, never a running animation loop
+    const want = shown && !sealed() && !motionReduced() && !document.hidden;
     if (want && !raf) raf = requestAnimationFrame(loop);
     else if (!want && raf) { cancelAnimationFrame(raf); raf = 0; }
   }
@@ -133,17 +140,23 @@ export function createShop(api: ShopApi): Shop {
   }
 
   function paint() {
+    const shut = sealed();
     for (const c of cards) {
       const s = stateOf(c.item);
       c.el.dataset.state = s;
-      c.label.textContent = s === 'equipped' ? 'Equipped' : s === 'owned' ? 'Equip' : 'Buy';
-      c.btn.setAttribute('aria-label', `${c.label.textContent}: ${c.item.name} ${c.item.kind}`);
-      c.btn.disabled = s === 'short' || s === 'equipped';
-      c.btn.setAttribute('aria-disabled', String(s === 'short' || s === 'equipped'));
-      if (s === 'equipped') c.btn.setAttribute('aria-current', 'true');
+      // Every state — Buy, Equip and the Equipped pill alike — wears the same localised lock.
+      const label = shut
+        ? t('shopVaultLocked')
+        : s === 'equipped' ? 'Equipped' : s === 'owned' ? 'Equip' : 'Buy';
+      c.label.textContent = label;
+      c.btn.setAttribute('aria-label', `${label}: ${c.item.name} ${c.item.kind}`);
+      const dead = shut || s === 'short' || s === 'equipped';
+      c.btn.disabled = dead;
+      c.btn.setAttribute('aria-disabled', String(dead));
+      if (s === 'equipped' && !shut) c.btn.setAttribute('aria-current', 'true');
       else c.btn.removeAttribute('aria-current');
-      c.note.hidden = s !== 'short';
-      if (s === 'short') c.note.textContent = `${coinText(c.item.price - profile.coins)} coins short`;
+      c.note.hidden = shut || s !== 'short';
+      if (s === 'short' && !shut) c.note.textContent = `${coinText(c.item.price - profile.coins)} coins short`;
       c.pv.setTheme(themeFor(c.item));
     }
     setBalance(coins, profile.coins);
@@ -154,6 +167,7 @@ export function createShop(api: ShopApi): Shop {
   }
 
   function act(it: Item) {
+    if (sealed()) return;                                  // the vault answers no card at all
     if (isEquipped(it.kind, it.id)) return;               // the worn item: nothing to do, same as ever
     if (owns(it.kind, it.id)) { impact('light'); equip(it.kind, it.id); return; }
     ask(it);
@@ -162,6 +176,7 @@ export function createShop(api: ShopApi): Shop {
   /* ---------- buying ---------- */
 
   function ask(it: Item) {
+    if (sealed()) return;                                 // no buy sheet can open while sealed
     if (!sheet || profile.coins < it.price) return;      // the card is already disabled; this is the second gate
     pending = it;
     $<HTMLElement>('buy-title').textContent = it.name;
@@ -181,7 +196,7 @@ export function createShop(api: ShopApi): Shop {
   }
 
   yes.addEventListener('click', () => {
-    if (!pending) return;
+    if (sealed() || !pending) return;                    // third gate: the confirm key is cold too
     const it = pending;
     pending = null;
     api.sheets.close();
@@ -196,6 +211,7 @@ export function createShop(api: ShopApi): Shop {
   /* ---------- tabs and sizing ---------- */
 
   function select(k: CosKind) {
+    if (sealed()) return;                                 // the category pills are a still life
     if (k === kind && cards.length) return;
     kind = k;
     for (const t of tabs) t.setAttribute('aria-selected', String(t.dataset.shop === k));
@@ -215,6 +231,7 @@ export function createShop(api: ShopApi): Shop {
   new ResizeObserver(size).observe(grid);
   document.addEventListener('visibilitychange', sync);
   onSettings(sync);
+  onLang(() => paint());                                 // the lock glyph follows the live language
   onChange(() => {
     paint();
     chip.classList.remove('bump');

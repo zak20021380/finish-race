@@ -2103,23 +2103,375 @@ button.m-card:focus-visible, article.m-card:focus-within { outline: none; }
 .balance-l { font-size: var(--t-micro); font-weight: 700; letter-spacing: .02em; }
 .balance.bump { animation: coin-pop .4s cubic-bezier(.2, 1.3, .5, 1); }
 
-/* ---- showcase mode: one inset plaque between the tabs and the grid ----
-   Recessed into the slab rather than lifted off it, with the coin gold as its only edge, so it
-   reads as a notice stamped into the screen instead of a card competing with the items. */
-.shop-closed {
+/* ==========================================================================
+   SEALED ROYAL VAULT — the shop is a showcase, never a till.
+   Everything here is scoped to #s-shop.is-sealed, so the header chrome (the back
+   key and the coin balance) keeps its own bright, fully interactive layer while
+   the catalogue beneath is frozen behind frosted obsidian.
+   ========================================================================== */
+#s-shop.is-sealed {
+  max-width: 100%;
+  /* clip only the inline axis: a full `overflow: hidden` would shear the back key's
+     focus ring off at the screen edge, and this header must stay accessible. */
+  overflow-x: clip;
+}
+#s-shop.is-sealed .m-head {
+  position: relative;
+  z-index: 5;                          /* above every veil, always the live layer */
   flex: none;
+  pointer-events: auto;
+}
+#s-shop.is-sealed .m-head .m-title { color: var(--ink); opacity: 1; }
+#s-shop.is-sealed .m-head .icon-btn,
+#s-shop.is-sealed .m-head .balance { opacity: 1; filter: none; }
+#s-shop.is-sealed .m-head .balance {
+  color: var(--coin-ink);
+  background: var(--coin);
+  box-shadow: inset 0 0 0 1px var(--coin-line), 0 0 20px -12px rgba(245, 158, 11, .8);
+}
+
+/* ---- category pills: muted obsidian, dimmed, completely inert ---- */
+#s-shop.is-sealed .shop-seg {
+  flex: none;
+  opacity: .45;
+  cursor: not-allowed;
+  user-select: none;
+  -webkit-user-select: none;
+  background: rgba(13, 19, 31, .72);
+  box-shadow: inset 0 0 0 1px rgba(243, 212, 131, .1);
+}
+#s-shop.is-sealed .shop-seg .seg-b {
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: not-allowed;
+  color: #7C8AA0;
+}
+#s-shop.is-sealed .shop-seg .seg-b[aria-selected="true"] {
+  background: rgba(38, 49, 70, .85);
+  color: #A9B6C9;
+  box-shadow: inset 0 0 0 1px rgba(243, 212, 131, .16);
+}
+
+/* ---- the imperial seal: recessed obsidian plate, gold hairline, amber back-glow ---- */
+#s-shop.is-sealed .vault-seal {
+  position: relative;
+  isolation: isolate;
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 14px 16px;
+  border-radius: 20px;
+  text-align: center;
+  background:
+    linear-gradient(180deg, rgba(30, 39, 58, .55) 0%, rgba(13, 19, 31, 0) 44%),
+    rgba(13, 19, 31, .85);
+  box-shadow:
+    inset 0 0 0 1px rgba(243, 212, 131, .34),
+    inset 0 1px 0 rgba(255, 246, 220, .06),
+    inset 0 -20px 34px -28px rgba(0, 0, 0, .95),
+    0 18px 42px -26px rgba(0, 0, 0, .95),
+    0 0 50px -20px rgba(245, 158, 11, .34);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+#s-shop.is-sealed .vault-seal::before,
+#s-shop.is-sealed .vault-seal::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+}
+/* ambient amber pool behind the medallion */
+#s-shop.is-sealed .vault-seal::before {
+  inset: -46% -12% auto -12%;
+  height: 96%;
+  background: radial-gradient(60% 100% at 50% 0%, rgba(245, 158, 11, .26), rgba(245, 158, 11, .06) 48%, transparent 78%);
+}
+/* dark vignette pressing the plate back into the slab */
+#s-shop.is-sealed .vault-seal::after {
+  inset: 0;
+  background: radial-gradient(120% 92% at 50% 18%, transparent 38%, rgba(4, 7, 12, .58) 100%);
+}
+#s-shop.is-sealed .vault-seal > * { position: relative; z-index: 1; }
+
+#s-shop.is-sealed .vault-medallion {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 66px;
+  height: 66px;
+  margin: 2px 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 24%, rgba(255, 246, 220, .16), transparent 54%),
+    linear-gradient(180deg, rgba(38, 48, 68, .78), rgba(10, 15, 25, .92));
+  box-shadow:
+    inset 0 0 0 1px rgba(243, 212, 131, .48),
+    inset 0 0 0 6px rgba(243, 212, 131, .06),
+    inset 0 -10px 18px -12px rgba(0, 0, 0, .95),
+    0 0 0 5px rgba(245, 158, 11, .07),
+    0 0 28px -4px rgba(245, 158, 11, .36);
+  -webkit-backdrop-filter: blur(8px) saturate(1.15);
+  backdrop-filter: blur(8px) saturate(1.15);
+}
+#s-shop.is-sealed .vault-medallion::before,
+#s-shop.is-sealed .vault-medallion::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  border-radius: 50%;
+  pointer-events: none;
+}
+#s-shop.is-sealed .vault-medallion::before {
+  inset: 7px;
+  box-shadow: inset 0 0 0 1px rgba(243, 212, 131, .2);
+}
+#s-shop.is-sealed .vault-medallion::after {
+  inset: -9px;
+  background: radial-gradient(circle, rgba(245, 158, 11, .22), transparent 68%);
+  animation: vault-glow-pulse 4.8s ease-in-out infinite;
+}
+@keyframes vault-glow-pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+html.reduced-motion #s-shop.is-sealed .vault-medallion::after { animation: none; opacity: .8; }
+@media (prefers-reduced-motion: reduce) {
+  #s-shop.is-sealed .vault-medallion::after { animation: none; opacity: .8; }
+}
+#s-shop.is-sealed .vault-emblem {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 48px;
+  height: 48px;
+  filter: drop-shadow(0 0 10px rgba(245, 158, 11, .6));
+}
+#s-shop.is-sealed .vault-kicker {
   display: flex;
   align-items: center;
-  gap: var(--s2);
-  padding: var(--s2) var(--s3);
-  border-radius: var(--radius-md);
-  background: var(--field);
-  box-shadow: var(--inset), inset 0 0 0 1px var(--coin-line);
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+  margin: 2px 0 0;
+  font-family: var(--font-stat);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: #D8B365;
 }
-.shop-closed-ico { width: 20px; height: 20px; color: var(--coin-ink); }
-.shop-closed-txt { min-width: 0; }
-.shop-closed-t { margin: 0; font-size: var(--t-2); font-weight: 800; color: var(--ink); }
-.shop-closed-s { margin: 2px 0 0; font-size: var(--t-micro); line-height: 1.35; font-weight: 600; color: var(--ink-soft); }
+#s-shop.is-sealed .vault-kicker::before,
+#s-shop.is-sealed .vault-kicker::after {
+  content: "";
+  flex: none;
+  width: 16px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(243, 212, 131, .65));
+}
+#s-shop.is-sealed .vault-kicker::after { transform: scaleX(-1); }
+#s-shop.is-sealed .vault-title {
+  max-width: 100%;
+  margin: 0;
+  font-size: clamp(13px, 3.9vw, 16.5px);
+  font-weight: 900;
+  line-height: 1.35;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  color: #F2D397;
+}
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  #s-shop.is-sealed .vault-title {
+    background: linear-gradient(180deg, #FFF6DC 0%, #F2D397 44%, #C58F32 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+#s-shop.is-sealed .vault-sub {
+  max-width: 34ch;
+  margin: 1px 0 0;
+  font-size: clamp(10.5px, 2.9vw, 12px);
+  font-weight: 500;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  color: #A9B6C9;
+}
+#s-shop.is-sealed .vault-rule {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: min(72%, 200px);
+  margin-top: 3px;
+}
+#s-shop.is-sealed .vault-rule i {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(243, 212, 131, .42), transparent);
+}
+#s-shop.is-sealed .vault-rule b {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  transform: rotate(45deg);
+  background: #E3BC67;
+  box-shadow: 0 0 8px rgba(245, 158, 11, .7);
+}
+
+/* ---- the frozen catalogue: desaturated, dimmed, and veiled in frosted obsidian ---- */
+#s-shop.is-sealed .shop-catalog {
+  position: relative;
+  isolation: isolate;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-md);
+  cursor: not-allowed;
+}
+#s-shop.is-sealed .shop-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-width: 100%;
+  filter: grayscale(.5) contrast(.9);
+  opacity: .4;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: not-allowed;
+}
+#s-shop.is-sealed .cos,
+#s-shop.is-sealed .cos * {
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* every purchase state becomes the same muted dark-slate frosted pill */
+#s-shop.is-sealed .cos-btn,
+#s-shop.is-sealed .cos[data-state="buy"] .cos-btn,
+#s-shop.is-sealed .cos[data-state="owned"] .cos-btn,
+#s-shop.is-sealed .cos[data-state="equipped"] .cos-btn,
+#s-shop.is-sealed .cos[data-state="short"] .cos-btn {
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 8px;
+  cursor: not-allowed;
+  color: #A9B6C9;
+  background: linear-gradient(180deg, rgba(44, 55, 75, .74), rgba(20, 28, 43, .82));
+  box-shadow: inset 0 0 0 1px rgba(243, 212, 131, .14), inset 0 1px 0 rgba(255, 255, 255, .04);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  opacity: .82;
+}
+#s-shop.is-sealed .cos-btn:active { transform: none; opacity: .82; }
+#s-shop.is-sealed .cos-lb {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0;
+  white-space: nowrap;
+  unicode-bidi: isolate;
+}
+html[data-lang="fa"] #s-shop.is-sealed .cos-lb,
+html[data-lang="ar"] #s-shop.is-sealed .cos-lb { direction: rtl; }
+#s-shop.is-sealed .cos-price,
+#s-shop.is-sealed .cos[data-state="short"] .cos-price { color: #8A97AC; }
+#s-shop.is-sealed .cos-price b {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+#s-shop.is-sealed .cos-note { display: none; }
+#s-shop.is-sealed .shop-veil {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 78% at 50% 26%, rgba(10, 15, 25, .2) 0%, rgba(6, 9, 16, .6) 70%, rgba(3, 5, 9, .82) 100%),
+    linear-gradient(180deg, rgba(13, 19, 31, .34), rgba(4, 7, 12, .5));
+  box-shadow: inset 0 0 0 1px rgba(243, 212, 131, .1), inset 0 0 60px 12px rgba(3, 6, 11, .55);
+  -webkit-backdrop-filter: blur(2.6px) saturate(.62);
+  backdrop-filter: blur(2.6px) saturate(.62);
+}
+#s-shop.is-sealed .shop-veil::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(243, 212, 131, .4), transparent);
+}
+#s-shop.is-sealed .shop-veil-mark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: calc(100% - 24px);
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-stat);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .26em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  text-align: center;
+  color: rgba(243, 212, 131, .62);
+  box-shadow: inset 0 0 0 1px rgba(243, 212, 131, .18);
+  background: rgba(9, 13, 22, .4);
+}
+
+/* ---- joined scripts: no tracking, real RTL, Vazirmatn's taller line box ---- */
+.vault-seal:lang(fa) :is(.vault-kicker, .vault-title, .vault-sub),
+.vault-seal:lang(ar) :is(.vault-kicker, .vault-title, .vault-sub) {
+  direction: rtl;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.vault-seal:lang(fa) :is(.vault-title, .vault-sub),
+.vault-seal:lang(ar) :is(.vault-title, .vault-sub) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  line-height: 1.75;
+}
+.vault-seal:lang(fa) .vault-kicker,
+.vault-seal:lang(ar) .vault-kicker { font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif; font-size: 10px; }
+html[data-lang="fa"] .shop-veil-mark,
+html[data-lang="ar"] .shop-veil-mark {
+  direction: rtl;
+  letter-spacing: 0;
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+}
+
+/* ---- 320–390px phones: the seal compresses, the catalogue keeps its scroll ---- */
+@media (max-width: 360px) {
+  #s-shop.is-sealed .vault-seal { gap: 4px; padding: 10px 10px 12px; border-radius: 16px; }
+  #s-shop.is-sealed .vault-medallion { width: 54px; height: 54px; }
+  #s-shop.is-sealed .vault-emblem { width: 40px; height: 40px; }
+  #s-shop.is-sealed .vault-kicker { font-size: 9px; }
+  #s-shop.is-sealed .vault-title { font-size: 12.5px; }
+  #s-shop.is-sealed .vault-sub { font-size: 10px; line-height: 1.45; }
+  #s-shop.is-sealed .vault-rule { margin-top: 1px; }
+}
+@media (max-height: 700px) {
+  #s-shop.is-sealed .vault-seal { gap: 4px; padding: 10px 14px 12px; }
+  #s-shop.is-sealed .vault-medallion { width: 52px; height: 52px; }
+  #s-shop.is-sealed .vault-emblem { width: 38px; height: 38px; }
+  #s-shop.is-sealed .vault-rule { display: none; }
+}
+@media (max-height: 600px) {
+  #s-shop.is-sealed .vault-kicker { display: none; }
+}
 
 .shop-grid {
   flex: 1 1 auto;
