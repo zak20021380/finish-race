@@ -7,7 +7,7 @@
 const MAX = 120;
 const GRAV = 1500;      // css px / s²
 const DRAG = 0.55;
-const COLORS = ['#e0264f', '#3057db', '#2fa86f', '#ffffff', '#b9b5d6', '#ff8aa3'];
+const COLORS = ['#ff2a55', '#00d2ff', '#ffb800', '#ffffff', '#b9b5d6', '#b845ff'];
 
 interface P {
   x: number; y: number; vx: number; vy: number;

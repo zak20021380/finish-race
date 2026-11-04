@@ -1793,7 +1793,7 @@ function seatTint(p: Player): PawnTint {
   if (p === localSide) return chosen;
   if (p === rivalSide()) return chosen === 'red' ? 'blue' : 'red';
   const extras = [0, 1, 2, 3].filter((x) => x !== localSide && x !== rivalSide());
-  return extras.indexOf(p) === 0 ? 'gold' : 'green';
+  return extras.indexOf(p) === 0 ? 'gold' : 'amethyst';
 }
 
 /**
@@ -1809,7 +1809,7 @@ function paintRoster(): void {
   chipsEl.dataset.players = String(n);
   chipsEl.dataset.seats = String(n);
   /* The chip's class is the colour it wears on THIS screen: the local seat gets the player's
-     chosen family, its rival the opposite, then the fixed gold / green order for extra seats.
+     chosen family, its rival the opposite, then the fixed gold / amethyst order for extra seats.
      Online, the local seat can be seat 1 — the class follows the perspective, not the index. */
   for (let p = 0; p < chips.length; p++) {
     const el = chips[p];
@@ -1820,7 +1820,7 @@ function paintRoster(): void {
     el.classList.toggle('red', color === 'red');
     el.classList.toggle('blue', color === 'blue');
     el.classList.toggle('gold', color === 'gold');
-    el.classList.toggle('green', color === 'green');
+    el.classList.toggle('amethyst', color === 'amethyst');
     /* and it says who is holding it: `bot` for a seat the machine was backfilled into, `takeover`
        for one a person walked out of and the machine finished. Both are machine-controlled seats,
        and the dock never lets one read as a person. */

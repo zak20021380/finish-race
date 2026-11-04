@@ -120,7 +120,7 @@ export interface Layout {
 
 /**
  * How this client paints the two sides of a duel. `local` wears the player's chosen family, the
- * `rival` seat wears the opposite one, and every other seat keeps the fixed gold / emerald order.
+ * `rival` seat wears the opposite one, and every other seat keeps the fixed gold / amethyst order.
  * It is presentation only — the rules keep their own `turn`, seats and colours.
  */
 export interface Perspective {

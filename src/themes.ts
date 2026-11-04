@@ -141,14 +141,20 @@ export type CosKind = 'ball' | 'wall' | 'board';
 
 /** Yours, with the Classic skin: the look the app shipped with. */
 export const RED_RAMP: Ramp = {
-  light: '#ffa3b7', mid: '#e0264f', dark: '#80092a', glow: 'rgba(224,38,79,.55)', shade: '90,20,50',
-  wl: '#ff6f8d', wd: '#b4113b', edge: 'rgba(90,20,50,.28)', ol: 'rgba(224,38,79,.5)', os: 'rgba(224,38,79,.95)',
+  light: '#ffb0c2', mid: '#ff2a55', dark: '#8f0e2c', glow: 'rgba(255,42,85,.45)', shade: '120,20,45',
+  wl: '#ff6f8d', wd: '#c2143f', edge: 'rgba(120,20,45,.28)', ol: 'rgba(255,42,85,.5)', os: 'rgba(255,42,85,.95)',
 };
 
-/** Theirs. Never themed, never for sale. */
+/**
+ * Theirs. Never themed, never for sale.
+ *
+ * Electric cyan, not the cobalt this ramp used to be: the default Indigo arena lays its tiles over
+ * a `rgba(17,28,66)` navy, and a navy ball on a navy tile cleared only 2.1:1. Cyan clears 7:1 on
+ * the lit tile and 8:1 on the shaded one, so the rival stays findable on every board.
+ */
 export const BOT_RAMP: Ramp = {
-  light: '#a6bbff', mid: '#3057db', dark: '#122770', glow: 'rgba(48,87,219,.55)', shade: '20,30,100',
-  wl: '#7794ff', wd: '#2142b0', edge: 'rgba(20,30,100,.28)', ol: 'rgba(48,87,219,.5)', os: 'rgba(48,87,219,.95)',
+  light: '#a8f0ff', mid: '#00d2ff', dark: '#046a86', glow: 'rgba(0,210,255,.45)', shade: '6,70,95',
+  wl: '#6fe8ff', wd: '#0090c4', edge: 'rgba(6,70,95,.28)', ol: 'rgba(0,210,255,.5)', os: 'rgba(0,210,255,.95)',
 };
 
 /**
@@ -157,22 +163,24 @@ export const BOT_RAMP: Ramp = {
  * four-way reads at a glance even on a 24px sphere. Never for sale.
  */
 export const GOLD_RAMP: Ramp = {
-  light: '#ffe9a8', mid: '#e8a80c', dark: '#6b4203', glow: 'rgba(232,168,12,.6)', shade: '95,62,6',
-  wl: '#ffd166', wd: '#a06f08', edge: 'rgba(107,66,3,.3)', ol: 'rgba(232,168,12,.5)', os: 'rgba(232,168,12,.95)',
+  light: '#ffe9a8', mid: '#ffb800', dark: '#7a4d02', glow: 'rgba(255,184,0,.45)', shade: '110,68,4',
+  wl: '#ffd166', wd: '#c98208', edge: 'rgba(110,68,4,.28)', ol: 'rgba(255,184,0,.5)', os: 'rgba(255,184,0,.95)',
 };
 
-/** The rules allow a third team, so a third fixed family exists for it. Also never for sale. */
+/** The rules allow a third team, so a third fixed family exists for it. Also never for sale.
+ *  Emerald is the alternate for seat 3 now that the live order runs cyan → gold → amethyst: against
+ *  a cyan rival its hue sits only ~40° away, which is how close two balls may read as one. */
 export const TEAM2_RAMP: Ramp = {
   light: '#8fe3b4', mid: '#17915c', dark: '#0a4d30', glow: 'rgba(23,145,92,.55)', shade: '10,70,50',
   wl: '#4fc98d', wd: '#0c6b41', edge: 'rgba(10,70,50,.28)', ol: 'rgba(23,145,92,.5)', os: 'rgba(23,145,92,.95)',
 };
 
 /** …and a fourth team is one more seat than the rules used to allow, so it gets a family too.
- *  Royal violet: unused by the live seat order (which runs cobalt → gold → emerald), kept as the
- *  alternate for seat 3 — a board that needs to read cold can wear this instead of the green. */
+ *  Vivid amethyst, and now the live seat 3: it holds 87° from the cyan and 71° from the ruby, so a
+ *  four-way stays four-way once the rival turns cyan. Emerald would have sat 40° off that cyan. */
 export const TEAM3_RAMP: Ramp = {
-  light: '#c9b6ff', mid: '#7c3aed', dark: '#2e1065', glow: 'rgba(124,58,237,.55)', shade: '45,16,100',
-  wl: '#a78bfa', wd: '#5b21b6', edge: 'rgba(45,16,100,.28)', ol: 'rgba(124,58,237,.5)', os: 'rgba(124,58,237,.95)',
+  light: '#e0b8ff', mid: '#b845ff', dark: '#4a0e86', glow: 'rgba(184,69,255,.45)', shade: '74,14,134',
+  wl: '#d18aff', wd: '#8a1fe0', edge: 'rgba(74,14,134,.28)', ol: 'rgba(184,69,255,.5)', os: 'rgba(184,69,255,.95)',
 };
 
 /**
@@ -181,7 +189,7 @@ export const TEAM3_RAMP: Ramp = {
  * and walls from `SEAT_RAMPS[i]`, and `main.ts` tints HUD chip `i + 1` from the very same entry, so
  * the sphere a player sees on the board and the swatch on their chip can never drift apart.
  */
-export const SEAT_RAMPS: readonly Ramp[] = [BOT_RAMP, GOLD_RAMP, TEAM2_RAMP];
+export const SEAT_RAMPS: readonly Ramp[] = [BOT_RAMP, GOLD_RAMP, TEAM3_RAMP];
 
 /**
  * The two colours a player may call their own. The choice is local to this device: it decides how
@@ -200,7 +208,7 @@ export const oppositeColor = (color: PieceColor): PieceColor => (color === 'red'
 
 /**
  * The ramps each logical seat wears on THIS client. The local seat gets the player's chosen family,
- * its opponent gets the opposite one, and any further seats keep the fixed gold / emerald order.
+ * its opponent gets the opposite one, and any further seats keep the fixed gold / amethyst order.
  * Both the canvas and the HUD read this same plan, so a sphere and its chip can never disagree.
  *
  * Index 4 is the refusal palette that owns no side. Four is the rules' team ceiling; it is spelled
@@ -209,7 +217,7 @@ export const oppositeColor = (color: PieceColor): PieceColor => (color === 'red'
 export function perspectiveRamps(localSeat: number, rivalSeat: number, color: PieceColor): Ramp[] {
   const chosen = PIECE_RAMPS[color];
   const foe = PIECE_RAMPS[oppositeColor(color)];
-  const spare = [GOLD_RAMP, TEAM2_RAMP, TEAM3_RAMP];
+  const spare = [GOLD_RAMP, TEAM3_RAMP, TEAM2_RAMP];
   const out: Ramp[] = [];
   let k = 0;
   for (let seat = 0; seat < 4; seat++) {
@@ -445,12 +453,12 @@ export const themeOf = (ball: string, wall: string, board: string): Theme =>
 
 /* ---------- the red / blue guarantee ---------- */
 
-const BOT_HUE = 224;         // BOT_RAMP.mid
-const TEAM2_HUE = 154;       // TEAM2_RAMP.mid
+const BOT_HUE = 191;         // BOT_RAMP.mid, electric cyan
+const SEAT3_HUE = 277;       // TEAM3_RAMP.mid, the live seat 3 (vivid amethyst)
 const MIN_GAP = 68;          // degrees of hue that count as "clearly not another side"
 const MIN_CHROMA = 0.22;     // below this a colour is a grey, and a grey never reads as blue
-/** Every seat a skin can never be mistaken for: the opponent and the third team. */
-const FOE_HUES = [BOT_HUE, TEAM2_HUE];
+/** Every seat a skin can never be mistaken for: the opponent and the live third family. */
+const FOE_HUES = [BOT_HUE, SEAT3_HUE];
 
 interface Col {
   r: number; g: number; b: number;

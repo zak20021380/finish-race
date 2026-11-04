@@ -141,26 +141,26 @@
 /* ---- the sender's pawn identity ----
    The local seat is not always red: the player may choose blue, in which case the rival wears red,
    and a party race adds the two fixed families after them. chat.ts therefore puts .is-red / .is-blue
-   / .is-gold / .is-green on the bubble from the live pawn (falling back to the chip's own colour),
+   / .is-gold / .is-amethyst on the bubble from the live pawn (falling back to the chip's own colour),
    and these four rules always win over the side defaults above. Each one is the ball's own neon, so
    the ring, the bloom and the tail read as the token they point at. */
-.chat-bubble.is-mine { --pawn-rim: #ff3366; --pawn-glow: rgba(255, 51, 102, 0.55); }
+.chat-bubble.is-mine { --pawn-rim: #ff2a55; --pawn-glow: rgba(255, 42, 85, 0.55); }
 .chat-bubble.is-foe { --pawn-rim: #00d2ff; --pawn-glow: rgba(0, 210, 255, 0.55); }
 .chat-bubble.is-red {
-  --pawn-rim: #ff3366;
-  --pawn-glow: rgba(255, 51, 102, 0.55);
+  --pawn-rim: #ff2a55;
+  --pawn-glow: rgba(255, 42, 85, 0.55);
 }
 .chat-bubble.is-blue {
   --pawn-rim: #00d2ff;
   --pawn-glow: rgba(0, 210, 255, 0.55);
 }
 .chat-bubble.is-gold {
-  --pawn-rim: #ffc233;
-  --pawn-glow: rgba(232, 168, 12, 0.55);
+  --pawn-rim: #ffb800;
+  --pawn-glow: rgba(255, 184, 0, 0.55);
 }
-.chat-bubble.is-green {
-  --pawn-rim: #2fd08a;
-  --pawn-glow: rgba(23, 145, 92, 0.55);
+.chat-bubble.is-amethyst {
+  --pawn-rim: #b845ff;
+  --pawn-glow: rgba(184, 69, 255, 0.55);
 }
 
 /* ---- an emote: a 48x48 frosted dark-clay capsule, ringed by its sender's neon ----

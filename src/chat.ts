@@ -30,10 +30,10 @@ import { readJson, writeJson } from './storage';
 
 /**
  * The neon family a seat wears on THIS client, out of the same plan that tints the board and the
- * HUD chip: the two chosen families for the duel, then solar gold and emerald for the seats a
+ * HUD chip: the two chosen families for the duel, then solar gold and amethyst for the seats a
  * party adds.
  */
-export type PawnTint = 'red' | 'blue' | 'gold' | 'green';
+export type PawnTint = 'red' | 'blue' | 'gold' | 'amethyst';
 
 /** A seat's pawn on screen: its animated centre, radius, tile metric and colour. */
 export interface PawnPoint {
@@ -114,7 +114,7 @@ const TAIL_MAX_PX = 30;
 /** How far inside the face the tail's root sits, so it never rests on a rounded corner. */
 const TAIL_FACE_INSET_PX = 9;
 /** The neon families a seat can wear, in the order the bubble paints its classes. */
-const TINTS: readonly PawnTint[] = ['red', 'blue', 'gold', 'green'];
+const TINTS: readonly PawnTint[] = ['red', 'blue', 'gold', 'amethyst'];
 
 type Side = 'me' | 'foe';
 
