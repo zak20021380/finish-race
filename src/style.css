@@ -402,7 +402,16 @@ html.game-live .screen.game .card {
   container-type: size;
   overflow: hidden;
 }
-.board-wrap { position: relative; width: 100%; height: 100%; }
+.board-wrap { position: relative; width: 100%; height: 100%; box-sizing: border-box; max-width: 100%; }
+/* ---- board action chrome: inscribed, never bleeding ----
+   The mine confirmation pair is painted on the canvas, so its `border-box` / 2px inset contract
+   lives in the renderer's own cell metrics (`CAP_INSET`): one disc per tile, with 2px of daylight
+   from every edge — including a boundary wall. These rules hold the DOM chrome that shares the
+   board to the same box, so no overlay can claim a negative margin and widen the board past a
+   320px phone. */
+.board-wrap > * {
+  box-sizing: border-box;
+}
 /* the mine trigger: a 4px micro-shake of the board alone, over in half a second.
    prefers-reduced-motion flattens it along with every other animation in the sheet. */
 @keyframes board-shake {

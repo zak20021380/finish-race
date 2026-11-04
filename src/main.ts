@@ -9,7 +9,7 @@ import {
 } from './rules';
 import { botAction, botThinkMs, type Difficulty } from './bot';
 import {
-  createRenderer, capsuleSpan, dragWallSlot, hitTest, pawnRadius, wallCentre,
+  capsuleLayout, createRenderer, dragWallSlot, hitTest, pawnRadius, wallCentre,
   type BallView, type CapsuleAction, type Ghost, type Hit,
   type Mark, type Perspective, type Vec, type View,
 } from './render';
@@ -750,9 +750,12 @@ function armCapsules() {
  * are, not where the layout thinks they are.
  */
 function syncStage() {
-  if (mineGhost && capsule?.hit.kind === 'mine-confirm') {
-    const span = capsuleSpan(renderer.layout().cell);
-    setMineStage(boardRect(capsule.ax - span, capsule.ay - span, span * 2, span * 2));
+  const cap = capsule;
+  if (mineGhost && cap && cap.hit.kind === 'mine-confirm') {
+    /* the pair's own box, resolved against the live pawns exactly as the renderer draws it:
+       a horizontal pair on a roomy square, a vertical stack in a boundary column */
+    const lay = capsuleLayout(renderer.layout(), cap.ax, cap.ay, state.balls.map((b) => b.pos));
+    setMineStage(lay ? boardRect(lay.box.left, lay.box.top, lay.box.width, lay.box.height) : null);
   } else setMineStage(null);
   placeNote();
 }
