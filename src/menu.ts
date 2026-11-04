@@ -85,6 +85,18 @@ let ownersBackStep: (() => boolean) | null = null;
 export function ownersBack(): boolean {
   return ownersBackStep?.() === true;
 }
+
+/** Installed by the menu once it owns the collector card, so another sheet can hand it a relic. */
+let relicOpenStep: ((id: string, returnTo: () => void) => void) | null = null;
+
+/**
+ * Open one honor's collector card from outside the menu, and call `returnTo` when the card is
+ * dismissed. The sheet manager holds a single panel, so a card reached from a dossier has to be
+ * handed back to it rather than unwound to the ladder behind it.
+ */
+export function openRelicCard(id: string, returnTo: () => void): void {
+  relicOpenStep?.(id, returnTo);
+}
 /** A chip has ~80px on the narrowest phone: 46,794 subscribers reads as 46.8K. */
 const compact = (n: number): string => {
   if (n >= 999_500) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
@@ -2205,6 +2217,39 @@ export function createMenu(api: MenuApi): Menu {
     if (body) body.scrollTop = 0;
     impact('light');
   }
+
+  /* A relic tapped inside another sheet: the collector card borrows the one panel, and the
+     sheet that lent it gets its own panel back the moment the card is dismissed. */
+  let relicReturnTo: (() => void) | null = null;
+  const relicCardOpen = (): boolean =>
+    relicReturnTo !== null && api.sheet('sheet-badge')?.classList.contains('open') === true;
+  function handBackToRelicOwner(): void {
+    const back = relicReturnTo;
+    relicReturnTo = null;
+    impact('light');
+    back?.();
+  }
+  relicOpenStep = (id, returnTo) => {
+    if (!BADGES.some((b) => b.id === id) || !api.sheet('sheet-badge')) return;
+    relicReturnTo = returnTo;
+    openBadge(id);
+  };
+
+  /* every close path of the card, taken in capture so the sheet manager never sees it */
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !relicCardOpen()) return;
+    e.stopPropagation();
+    e.preventDefault();
+    handBackToRelicOwner();
+  }, true);
+  document.addEventListener('click', (e) => {
+    if (!relicCardOpen()) return;
+    const target = e.target as HTMLElement | null;
+    if (!target || (!target.closest('#scrim') && !target.closest('[data-sheet-close]'))) return;
+    e.stopPropagation();
+    e.preventDefault();
+    handBackToRelicOwner();
+  }, true);
 
   /* ---- Hall of Owners: the registry the claimed chip opens ---- */
 

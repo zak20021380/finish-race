@@ -29,7 +29,8 @@ import {
 import { fetchMindLadder, type MindFeed } from './minds';
 import { myTiq } from './matchmaking';
 import { nameOf } from './countries';
-import { badgeCrestHtml, editionSerialLabel, holderEdition, refreshBadgeEditions, wornEdition, type WornEdition } from './badges';
+import { BADGES, badgeCrestHtml, badgeEdition, badgeHolders, editionSerialLabel, holderEdition, isBadgeUnlocked, refreshBadgeEditions, wornEdition, type WornEdition } from './badges';
+import { openRelicCard } from './menu';
 import { flagPhoto } from './flags';
 import { openCountryPicker } from './countrypick';
 import { onChange, profile } from './storage';
@@ -1356,6 +1357,84 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return wrap;
   }
 
+  /* ---------- the relic vault: the three honors this seat holds, on lit pedestals ----------
+     A rival's shelf is read from the ledger's own holder index, so a supply reading that has
+     not landed says nothing at all rather than printing three empty sockets as a verdict.
+     Every pedestal is a door into that honor's collector card, and the card hands the
+     dossier back when it is dismissed. */
+
+  /** The honors this dossier seat holds — rarest edition first — or null while the ledger is silent. */
+  function relicsOf(p: PlayerRow): WornEdition[] | null {
+    if (p.id === 'you') {
+      return BADGES
+        .filter((def) => isBadgeUnlocked(def.id))
+        .map((def) => ({ def, serial: badgeEdition(def.id).serial }))
+        .sort((a, b) => a.def.cap - b.def.cap)
+        .slice(0, 3);
+    }
+    const wanted = p.name.trim().toLowerCase();
+    let read = false;
+    const held: WornEdition[] = [];
+    for (const def of BADGES) {
+      const holders = badgeHolders(def.id);
+      if (holders === null) continue;
+      read = true;
+      const hit = holders.find((h) => h.name.trim().toLowerCase() === wanted);
+      if (hit) held.push({ def, serial: hit.serial });
+    }
+    if (!read) return null;
+    return held.sort((a, b) => a.def.cap - b.def.cap).slice(0, 3);
+  }
+
+  /** One minted honor: a metallic frame over its own aura, engraved with the serial it carries. */
+  function msRelicPedestal(w: WornEdition, onBack: () => void): HTMLElement {
+    const key = document.createElement('button');
+    key.type = 'button';
+    key.className = 'relic-socket is-owned';
+    key.dataset.accent = w.def.accent;
+
+    const halo = document.createElement('i');
+    halo.className = 'relic-halo';
+    halo.setAttribute('aria-hidden', 'true');
+
+    const frame = document.createElement('span');
+    frame.className = 'relic-frame';
+    frame.innerHTML = badgeCrestHtml(w.def, 'badge-crest relic-coin');
+
+    const tag = document.createElement('small');
+    tag.className = 'relic-tag';
+    /* the serial is Latin digits behind a № mark: isolated, a Persian sheet cannot reorder it */
+    tag.dir = 'ltr';
+    tag.textContent = w.serial !== null ? `№ ${String(w.serial).padStart(3, '0')}` : 'LIMITED';
+
+    key.append(halo, frame, tag);
+    key.title = w.serial !== null ? `${w.def.name} · ${editionSerialLabel(w.serial)}` : w.def.name;
+    key.setAttribute('aria-label', `${w.def.name} — ${t('msRelicView')}`);
+    key.addEventListener('click', () => openRelicCard(w.def.id, onBack));
+    return key;
+  }
+
+  /** An unfilled socket: a recessed silhouette, decorative — it promises nothing. */
+  function msRelicSocket(): HTMLElement {
+    const socket = document.createElement('span');
+    socket.className = 'relic-socket is-empty';
+    socket.setAttribute('aria-hidden', 'true');
+    const ghost = document.createElement('i');
+    ghost.className = 'relic-ghost';
+    socket.append(ghost);
+    return socket;
+  }
+
+  function msRelicVault(relics: WornEdition[], onBack: () => void): HTMLElement {
+    const shelf = document.createElement('div');
+    shelf.className = 'relic-showcase-row';
+    for (let i = 0; i < 3; i++) {
+      const w = relics[i];
+      shelf.append(w ? msRelicPedestal(w, onBack) : msRelicSocket());
+    }
+    return msSection(t('msRelicVault'), shelf);
+  }
+
   function msFormStrip(form: FormCell[]): HTMLElement {
     const rowEl = document.createElement('div');
     rowEl.className = 'ms-form';
@@ -1493,11 +1572,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     msHead(p.name.slice(0, 1).toUpperCase() || '?', p.countryCode, p.name, `#${rank} · ${squadName || t('msNoSquad')}`, p.avatar);
     el.setAttribute('aria-label', `Mind profile: ${p.name}, ${tiq} Tactical IQ`);
     body.textContent = '';
-    body.append(
-      msHero(tiq, pct, `${wins} · ${rankTag}`),
+    const relics = relicsOf(p);
+    const panels = [msHero(tiq, pct, `${wins} · ${rankTag}`)];
+    if (relics) panels.push(msRelicVault(relics, () => openMind(p, rank)));
+    panels.push(
       msSection(t('msScorecard'), msStatCapsule(rivalStats(p))),
       msFormBlock(rivalForm(p.id, p.trend)),
     );
+    body.append(...panels);
     msActions('mind', t('msChallengeMind'), `${t('msChallengeMind')} · ${t('msChallengeSoon')}`);
     const gu = msEls.guild;
     if (gu && squad) {
