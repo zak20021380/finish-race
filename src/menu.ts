@@ -2769,10 +2769,14 @@ export function createMenu(api: MenuApi): Menu {
     const age = profile.age;
     const locked = ageLocked();
     const dob = dobValue();
-    $('pf-age-v').textContent = age !== null ? `${age} yrs` : 'Not set';
+    $('pf-age-v').textContent = age !== null
+      ? t('profileAgeYears').replace('{n}', String(age))
+      : t('profileAgeNotSet');
     $('pf-age-s').textContent = locked && dob
-      ? `Born ${dob.d} ${MONTH_LABELS[dob.m - 1]} ${dob.y}`
-      : locked ? 'Permanent entry' : 'Complete your profile';
+      ? t('profileBornOn').replace('{date}', lang === 'fa'
+        ? `${dob.y}/${String(dob.m).padStart(2, '0')}/${String(dob.d).padStart(2, '0')}`
+        : `${dob.d} ${MONTH_LABELS[dob.m - 1]} ${dob.y}`)
+      : locked ? t('profilePermanentEntry') : t('profileComplete');
     const aReward = $('pf-age-reward');
     const aDone = $('pf-age-done');
     if (aReward) aReward.hidden = profile.rewards.age;

@@ -2462,6 +2462,42 @@ html[data-lang="ar"] .shop-veil-mark {
   font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
 }
 
+/* ---- joined Persian/Arabic: force the tracking off, dashes out ----
+   The seal's Latin tracking is struck by ID-scoped rules (.22em kicker, .055em title), so a
+   plain reset loses the cascade even when `:lang(fa)` matches. `!important` is deliberate here:
+   a Persian word must never be forced apart. The app publishes `data-lang` and removes a global
+   `dir`, so both markers are honoured — `dir` for any host that sets it, `data-lang` here. */
+html[dir="rtl"] .vault-seal,
+html[dir="rtl"] .vault-seal *,
+html[dir="rtl"] .shop-veil,
+html[dir="rtl"] .shop-veil *,
+html[data-lang="fa"] .vault-seal,
+html[data-lang="fa"] .vault-seal *,
+html[data-lang="fa"] .shop-veil,
+html[data-lang="fa"] .shop-veil *,
+html[data-lang="ar"] .vault-seal,
+html[data-lang="ar"] .vault-seal *,
+html[data-lang="ar"] .shop-veil,
+html[data-lang="ar"] .shop-veil * {
+  letter-spacing: 0 !important;
+  word-spacing: normal !important;
+}
+/* the casual copy drops the flanking rules and the forced capitals, too */
+html[data-lang="fa"] #s-shop.is-sealed .vault-kicker::before,
+html[data-lang="fa"] #s-shop.is-sealed .vault-kicker::after,
+html[data-lang="ar"] #s-shop.is-sealed .vault-kicker::before,
+html[data-lang="ar"] #s-shop.is-sealed .vault-kicker::after { display: none; }
+html[data-lang="fa"] #s-shop.is-sealed .vault-seal :is(.vault-kicker, .vault-title, .vault-sub),
+html[data-lang="ar"] #s-shop.is-sealed .vault-seal :is(.vault-kicker, .vault-title, .vault-sub) {
+  direction: rtl;
+  text-transform: none;
+}
+html[data-lang="fa"] #s-shop.is-sealed .shop-veil-mark,
+html[data-lang="ar"] #s-shop.is-sealed .shop-veil-mark {
+  direction: rtl;
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+}
+
 /* ---- 320–390px phones: the seal compresses, the catalogue keeps its scroll ---- */
 @media (max-width: 360px) {
   #s-shop.is-sealed .vault-seal { gap: 4px; padding: 10px 10px 12px; border-radius: 16px; }
@@ -33413,6 +33449,73 @@ html[data-lang="fa"] .pf-prefs-sec .pf-sec-h,
 html[data-lang="ar"] .pf-prefs-sec .pf-sec-h { flex-direction: row-reverse; }
 html[data-lang="fa"] .pf-prefs-sec .pf-sec-h > span,
 html[data-lang="ar"] .pf-prefs-sec .pf-sec-h > span { direction: rtl; letter-spacing: 0; }
+
+/* ---- Persian / Arabic: the identity tiles mirror exactly like the preference rows.
+   Key to the right, copy right-aligned, value + reward + disclosure to the left. The
+   trailing chevron points back the other way, so it reads as "open" in RTL. ---- */
+html[dir="rtl"] .pf-identity-sec .pf-tile.row,
+html[data-lang="fa"] .pf-identity-sec .pf-tile.row,
+html[data-lang="ar"] .pf-identity-sec .pf-tile.row {
+  flex-direction: row-reverse;
+  text-align: right;
+  gap: 8px;
+  min-width: 0;
+}
+html[dir="rtl"] .pf-identity-sec .pf-tile.row .row-txt,
+html[data-lang="fa"] .pf-identity-sec .pf-tile.row .row-txt,
+html[data-lang="ar"] .pf-identity-sec .pf-tile.row .row-txt {
+  direction: rtl;
+  text-align: right;
+  min-width: 0;
+}
+html[dir="rtl"] .pf-identity-sec .pf-tile.row :is(.row-t, .row-s),
+html[data-lang="fa"] .pf-identity-sec .pf-tile.row :is(.row-t, .row-s),
+html[data-lang="ar"] .pf-identity-sec .pf-tile.row :is(.row-t, .row-s) {
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+html[dir="rtl"] .pf-identity-sec .pf-tile.row .row-v,
+html[data-lang="fa"] .pf-identity-sec .pf-tile.row .row-v,
+html[data-lang="ar"] .pf-identity-sec .pf-tile.row .row-v {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 38%;
+  direction: rtl;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+html[dir="rtl"] .pf-identity-sec .pf-tile.row .pf-chip-reward,
+html[data-lang="fa"] .pf-identity-sec .pf-tile.row .pf-chip-reward,
+html[data-lang="ar"] .pf-identity-sec .pf-tile.row .pf-chip-reward {
+  flex: none;
+}
+html[dir="rtl"] .pf-identity-sec .pf-tile.row .chev,
+html[data-lang="fa"] .pf-identity-sec .pf-tile.row .chev,
+html[data-lang="ar"] .pf-identity-sec .pf-tile.row .chev {
+  transform: scaleX(-1);
+}
+html[dir="rtl"] :is(.pf-identity-sec, .pf-prefs-sec) .pf-sec-h,
+html[data-lang="fa"] .pf-identity-sec .pf-sec-h,
+html[data-lang="ar"] .pf-identity-sec .pf-sec-h {
+  flex-direction: row-reverse;
+}
+html[data-lang="fa"] .pf-identity-sec .pf-sec-h > span,
+html[data-lang="ar"] .pf-identity-sec .pf-sec-h > span {
+  direction: rtl;
+  letter-spacing: 0;
+}
+html[data-lang="fa"] .pf-identity-sec .pf-sec-sub,
+html[data-lang="ar"] .pf-identity-sec .pf-sec-sub {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 55%;
+  white-space: normal;
+  text-align: left;
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  line-height: 1.45;
+}
 
 /* ---- 360px and under: the answer end gives ground first, the label never does.
    The language row carries a pill and a chevron, so its caption is the first
