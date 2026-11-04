@@ -952,6 +952,18 @@ function startBoard(s: GameState): { c: number; r: number; t: Player }[] {
  */
 const LAYOUT_PAD = 2;
 const layoutPad = (cell: number) => Math.max(LAYOUT_PAD, Math.min(6, cell * 0.06));
+/**
+ * The bevel band struck along the slab's inner edge. It is the board's own rim, so anything that
+ * lands on it reads as cut off by the border rather than as sitting in a tile.
+ */
+const bevelBand = (cell: number) => Math.max(2, cell * 0.13);
+/**
+ * How far a box of `size` starting at `v` has to slide to fit inside `[lo, hi]`, negative when it
+ * overflows the far end. An indicator that does fit never moves, so only the outer rows and columns
+ * feel it — and they move as one piece, which keeps the square a square.
+ */
+const slideInto = (v: number, size: number, lo: number, hi: number) =>
+  Math.max(0, lo - v) - Math.max(0, v + size - hi);
 
 /**
  * Fit the grid into the box the stage handed us: one cell size that satisfies both axes, quantised
@@ -1143,7 +1155,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const px = (n: number) => Math.round(n * dpr) / dpr;
 
     /* the inner bevel that makes it read as clay: lit along the top edge, shaded into the bottom */
-    const bevelW = Math.max(2, c * 0.13);
+    const bevelW = bevelBand(c);
     const bev = g.createLinearGradient(0, oy, 0, oy + bh);
     bev.addColorStop(0, b.bevel[0]);
     bev.addColorStop(0.1, clear(b.bevel[0]));
@@ -2130,15 +2142,27 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.restore();
   }
 
-  /** Marching ants around a whole cell — "this is the square you are about to use". */
+  /**
+   * Marching ants around a whole cell — "this is the square you are about to use".
+   *
+   * The ring is board furniture, so the slab clip cuts everything that reaches past the slab, and on
+   * an outer column or row the cell's own edge *is* the border: the ring's stroke landed on the
+   * bevel and grazed the rounded corner, which read as a ring sawn in half. It now slides inward,
+   * as one piece, just far enough for its whole stroke to sit on tile. Interior cells never move.
+   */
   function cellRing(cell: Cell, color: string, width: number, dashes: number[], phase = 0) {
-    const c = L.cell;
+    const { cell: c, ox, oy, cols, rows } = L;
+    const side = c * 0.84;
+    const clear = bevelBand(c) + width / 2;
+    const x0 = ox + cell.c * c + c * 0.08, y0 = oy + cell.r * c + c * 0.08;
+    const dx = slideInto(x0, side, ox + clear, ox + cols * c - clear);
+    const dy = slideInto(y0, side, oy + clear, oy + rows * c - clear);
     ctx.save();
     ctx.strokeStyle = color;
     ctx.lineWidth = width;
     ctx.setLineDash(dashes);
     ctx.lineDashOffset = phase;
-    rr(ctx, L.ox + cell.c * c + c * 0.08, L.oy + cell.r * c + c * 0.08, c * 0.84, c * 0.84, c * 0.2);
+    rr(ctx, x0 + dx, y0 + dy, side, side, c * 0.2);
     ctx.stroke();
     ctx.restore();
   }
