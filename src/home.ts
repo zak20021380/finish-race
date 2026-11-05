@@ -10,12 +10,12 @@
  * Three slides, in this order: Channel War (index 0, the hero the Play tab
  * opens on), Nations Cup, The Mind Ladder.
  *
- * Mode selection is one split-action Play Dock: the left zone opens the "Select
- * Game Mode" drawer, the right zone launches whatever that zone names, in one tap
- * (see gamemodes.ts / main.ts `launchSelectedMode`). The legacy "Choose mode" sheet
- * is still wired for the team presets: a 2-column grid of preset cards with live
- * renderer previews, a Custom entry that opens the team builder and a sticky Start
- * button whose label updates live.
+ * The PLAY key opens the "Select Game Mode" drawer on the Practice card, already
+ * expanded to its difficulty and seat pills; the drawer's bottom Start is the one
+ * key that launches (see gamemodes.ts / main.ts `launchSelectedMode`). The legacy
+ * "Choose mode" sheet is still wired for the team presets: a 2-column grid of
+ * preset cards with live renderer previews, a Custom entry that opens the team
+ * builder and a sticky Start button whose label updates live.
  */
 import type { Difficulty } from './bot';
 import { lang, menuState, motionReduced, onLang, onSettings, saveMenu, t } from './settings';
@@ -34,15 +34,16 @@ import { createRenderer, type View } from './render';
 import type { Router } from './router';
 import type { Sheets } from './sheets';
 import { openEnlistSquad, type RaceSetup } from './menu';
-import { onGameModeChange, paintLobby as paintGameLobby, paintSheetState as paintGameSheet, resetSheetView } from './gamemodes';
+import {
+  onGameModeChange, paintLobby as paintGameLobby, paintSheetState as paintGameSheet,
+  resetSheetView, setGameMode,
+} from './gamemodes';
 import starsImg from './assets/images/telegram_stars.png';
 
 export interface HomeApi {
   router: Router;
   sheets: Sheets;
   start(setup: RaceSetup): void;
-  /** The Play Dock's right zone: launch whatever mode the dock is showing, in one tap. */
-  launch(): void;
   /** The Channel War seat drawer's one door: the arena queue. */
   queue(mode?: 'pvp' | 'arena'): void;
 }
@@ -920,7 +921,6 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   /* ---------- launcher: one Play button + summary + sheet draft ---------- */
 
   const homePlay = $('home-play') as HTMLButtonElement;
-  const modeHero = document.getElementById('mode-hero') as HTMLButtonElement | null;
   const sheetMode = document.getElementById('sheet-mode') as HTMLElement | null;
   const modeCards = [...document.querySelectorAll<HTMLButtonElement>('.mode-card[data-mode]')];
   const diffBtns = [...document.querySelectorAll<HTMLButtonElement>('.seg-b[data-mdiff]')];
@@ -1044,7 +1044,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     });
   };
 
-  /** Game Mode Selector sheet: the whole mode card's one door (see gamemodes.ts). */
+  /** Game Mode Selector sheet: PLAY's one door (see gamemodes.ts). */
   const openGameModes = (): void => {
     const el = document.getElementById('sheet-game-modes') as HTMLElement | null;
     if (!el) {
@@ -1058,6 +1058,12 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       /* paint on open anyway */
     }
     api.sheets.open(el);
+    /* The Practice card is the selected one, so bring its difficulty and seat pills into
+       view even on the shortest phones, where the three rows outgrow the drawer. */
+    requestAnimationFrame(() => {
+      el.querySelector<HTMLElement>('.gm-card[data-row="bot"]')
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
   };
 
   for (const b of modeCards) {
@@ -1115,11 +1121,6 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     api.start({ difficulty: draftDiff, sizes: [...sizes] as [number, number] });
   });
 
-  modeHero?.addEventListener('click', () => {
-    impact('light');
-    openGameModes();
-  });
-
   /* ---------- identity shortcuts ---------- */
 
   const goProfile = (): void => {
@@ -1137,12 +1138,12 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   /* ---------- launcher input ---------- */
 
-  /* The dock's launch key launches whatever mode its mode key names: quick match queues on
-     the searching stage, practice and a private room open their roster first. `api.launch` is
-     the same door the drawer's Start uses, so the label and the race can never disagree. */
+  /* PLAY is the drawer's front door, never a direct launch: Practice is selected and
+     expanded first, and only the drawer's bottom Start can put a race on the board. */
   homePlay.addEventListener('click', () => {
     impact('medium');
-    api.launch();
+    setGameMode('bot');
+    openGameModes();
   });
 
   /* The queue owns the dock's second state: while the searching stage is up the label reads

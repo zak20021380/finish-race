@@ -4684,26 +4684,24 @@ html.no-flags .id-flag .flag-code { display: none; }
   box-shadow: 0 2px 0 #075985, inset 0 1px 0 rgba(255, 255, 255, .5);
 }
 
-/* ---- Play Dock: an obsidian chassis holding two separate clay capsules ----
-   The outer silhouette is one continuous dark stadium: a 6px rim of chassis all
-   around, a 10px trough between the pods, a top inner highlight and a deep
-   ambient drop. The mode selector keeps its molded pod; the launch core is now a
-   self-contained pill rounded on all four corners, so the two thumb targets read
-   as distinct objects. The mode section sizes to its content (`auto`) so a full
-   label can never be clipped; the launch section takes every pixel that is left. */
+/* ---- Play CTA: one obsidian chassis holding a single clay launch pill ----
+   The outer silhouette is one continuous dark stadium with a 6px rim of chassis
+   all around, a top inner highlight and a deep ambient drop. The launch core is a
+   full-width, self-contained pill rounded on all four corners, so the screen has
+   exactly one primary target: PLAY. */
 .launcher {
   /* the capsule height: 56-72px on every phone, scaled by the height media rules */
   --dock-key-h: 72px;
   flex: none;
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
-  gap: 10px;
+  gap: 0;
   width: 100%;
   min-height: calc(var(--dock-key-h) + 12px);
   padding-block: 6px;
-  padding-inline: 14px 6px;
+  padding-inline: 6px;
   border: 0;
   border-radius: 999px;
   overflow: hidden;
@@ -4719,175 +4717,17 @@ html.no-flags .id-flag .flag-code { display: none; }
   isolation: isolate;
 }
 
-/* ---- left pod: the tactical mode/party switcher ----
-   A deep obsidian clay pebble lit from above. Glyph · the mode's name · the
-   CHANGE chip: the whole pod opens the Game Mode drawer. The pod sizes to its
-   label (`auto` grid track), so FRIENDS / SOLO / BOT and the Persian labels are
-   never ellipsized. `--mode-*` is the accent the selected mode owns. */
-.mode-hero {
-  --mode-accent: var(--brand-2);
-  --mode-ink: var(--brand-ink);
-  --mode-glow: rgba(14, 165, 233, .34);
-  --mode-glyph: clamp(24px, 6.4vw, 28px);
-  --mode-pad-x: clamp(8px, 2.6vw, 12px);
-  appearance: none;
-  border: 0;
-  font: inherit;
-  text-align: left;
-  position: relative;
-  min-width: 0;
-  min-height: var(--dock-key-h);
-  transform-origin: right center;
-  padding: 5px var(--mode-pad-x);
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  border-top-left-radius: 9999px;
-  border-bottom-left-radius: 9999px;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-  background: linear-gradient(135deg, #1b263b 0%, #0d1522 100%);
-  overflow: hidden;
-  color: var(--ink);
-  cursor: pointer;
-  isolation: isolate;
-  box-shadow:
-    inset 0 2px 4px rgba(255, 255, 255, .12),
-    inset 0 -3px 6px rgba(0, 0, 0, .65),
-    inset -1px 0 0 rgba(0, 0, 0, .6),
-    inset -2px 0 3px rgba(0, 0, 0, .22);
-  transition:
-    transform .24s cubic-bezier(.3, 1.45, .5, 1),
-    filter var(--motion-fast),
-    box-shadow var(--motion-fast);
-}
-.mode-hero[data-gmode="duel_1v1"] { --mode-accent: var(--honey); --mode-ink: var(--honey-ink); --mode-glow: rgba(245, 158, 11, .34); }
-.mode-hero[data-gmode="party_2v2"] { --mode-accent: var(--brand-2); --mode-ink: var(--brand-ink); --mode-glow: rgba(14, 165, 233, .34); }
-.mode-hero[data-gmode="bot"] { --mode-accent: var(--brand-3); --mode-ink: var(--brand-ink); --mode-glow: rgba(56, 189, 248, .34); }
-.mode-hero[data-gmode="room"] { --mode-accent: var(--cta); --mode-ink: #FFB59D; --mode-glow: rgba(255, 82, 43, .3); }
-/* the left pod warms under the thumb: the cue that this side is a switch, not the launch */
-.mode-hero:hover:not(:active) {
-  filter: brightness(1.09);
-  box-shadow:
-    inset 0 2px 4px rgba(255, 255, 255, .16),
-    inset 0 -3px 6px rgba(0, 0, 0, .6),
-    inset -1px 0 0 rgba(0, 0, 0, .6),
-    inset -2px 0 3px rgba(0, 0, 0, .22);
-}
-.mode-hero:active {
-  transform: scale(.975);
-  filter: brightness(.96);
-  box-shadow:
-    inset 0 3px 6px rgba(0, 0, 0, .7),
-    inset 0 -1px 2px rgba(255, 255, 255, .06),
-    inset -1px 0 0 rgba(0, 0, 0, .6);
-}
-.mode-hero:focus-visible { outline: 3px solid var(--mode-accent); outline-offset: -3px; }
-/* the tactical ripple: one soft pulse from the glyph, only while the pod is pressed */
-.mode-hero::after {
-  content: "";
-  position: absolute;
-  left: calc(var(--mode-pad-x) + var(--mode-glyph) / 2);
-  top: 50%;
-  width: 88px;
-  height: 88px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(125, 227, 244, .28) 0%, rgba(125, 227, 244, .08) 42%, transparent 70%);
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(.42);
-  transition: opacity .3s ease, transform .48s cubic-bezier(.2, .7, .3, 1);
-  pointer-events: none;
-  z-index: 0;
-}
-.mode-hero:active::after {
-  opacity: 1;
-  transform: translate(-50%, -50%) scale(1.35);
-  transition-duration: .08s, .16s;
-}
-/* the emblem: a micro-squircle with a soft ambient aura in the mode's accent */
-.mode-hero-ico {
-  flex: none;
-  position: relative;
-  z-index: 1;
-  width: var(--mode-glyph);
-  height: var(--mode-glyph);
-  display: grid;
-  place-items: center;
-  border-radius: 34%;
-  background:
-    radial-gradient(120% 120% at 32% 14%, rgba(255, 255, 255, .22) 0%, rgba(255, 255, 255, 0) 48%),
-    radial-gradient(90% 90% at 50% 58%, var(--mode-glow) 0%, rgba(0, 0, 0, 0) 72%),
-    rgba(255, 255, 255, .06);
-  color: var(--mode-ink);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .2),
-    inset 0 0 0 1px rgba(255, 255, 255, .09),
-    0 0 14px var(--mode-glow);
-}
-.mode-hero-ico .ico { width: 54%; height: 54%; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .35)); }
-.mode-hero-txt {
-  position: relative;
-  z-index: 1;
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-}
-.mode-hero-title {
-  font-size: clamp(11px, 3.2vw, 12.5px);
-  font-weight: 900;
-  letter-spacing: .05em;
-  line-height: 1.05;
-  text-transform: uppercase;
-  color: #F8FAFC;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, .5);
-  white-space: nowrap;
-}
-/* the switch indicator: one compact glowing micro pill with a CSS caret */
-.mode-hero-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  max-width: 100%;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(34, 211, 238, .18) 0%, rgba(34, 211, 238, .06) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .18),
-    inset 0 0 0 1px rgba(125, 227, 244, .26),
-    0 0 10px rgba(34, 211, 238, .16);
-  color: #A5F3FC;
-  font-size: clamp(7px, 2vw, 8.5px);
-  font-weight: 800;
-  letter-spacing: .12em;
-  line-height: 1.25;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.mode-hero-badge::after {
-  content: "";
-  width: 0;
-  height: 0;
-  border-left: 3px solid transparent;
-  border-right: 3px solid transparent;
-  border-top: 3.5px solid currentColor;
-  filter: drop-shadow(0 0 3px rgba(125, 227, 244, .6));
-}
-
-/* ---- right pod: the launch core ----
+/* ---- the launch core: one full-width clay pill ----
    One saturated cyan-to-sapphire clay pebble, fully rounded on all four corners
-   and floating clear of the selector by the chassis trough. The action word owns
-   the top line; two micro-clay reward chips sit beneath it. */
+   and sized by the chassis. The action word owns the top line; two micro-clay
+   reward chips sit beneath it, both centred. */
 .btn-hero {
   position: relative;
   overflow: hidden;
   width: 100%;
   min-width: 0;
   min-height: var(--dock-key-h);
-  transform-origin: left center;
+  transform-origin: center center;
   padding: 7px 14px;
   display: flex;
   flex-direction: column;
@@ -5071,13 +4911,11 @@ html.no-flags .id-flag .flag-code { display: none; }
 
 /* ---- the tight phones: the capsule stays whole; only its inner gutters breathe in ---- */
 @media (max-width: 400px) {
-  .mode-hero { --mode-pad-x: 10px; gap: 7px; }
   .btn-hero { padding: 7px 12px; }
   .pd-rw { gap: 4px; }
   .pd-rw-item { padding: 3px 6px 3px 7px; }
 }
 @media (max-width: 352px) {
-  .mode-hero { --mode-pad-x: 8px; --mode-glyph: 22px; gap: 6px; }
   .btn-hero { padding: 6px 10px; }
   .pd-go-face { gap: 5px; }
   .pd-rw { gap: 4px; font-size: 10px; }
@@ -5289,7 +5127,7 @@ html.no-flags .id-flag .flag-code { display: none; }
   .tab { min-height: 48px; }
 }
 
-/* The floor: 600px of height with the split-action Play Dock is a ~58px launcher,
+/* The floor: 600px of height with the single-action Play Dock is a ~58px launcher,
    inside dots (no extra row) and a card that still has four lines to show.
    Everything here is chrome — no control drops below its 44px target. user-bar
    never collapses below 12px gaps. */
@@ -17249,7 +17087,7 @@ html.reduced-motion .mm-blip { opacity: .5; }
   --d: 4px;
   position: absolute;
   right: 0;
-  bottom: 168px;                       /* refined in JS: clears the mode card + PLAY */
+  bottom: 168px;                       /* refined in JS: clears the PLAY dock */
   z-index: 6;
   width: 52px;
   height: 52px;
@@ -31661,7 +31499,7 @@ html[data-lang="fa"] .fj-crest-lock { right: auto; left: -2px; }
 /* ---- type: Vazirmatn on translated copy, no tracking, no forced caps ---- */
 html[data-lang="fa"] :is(
   [data-i18n], [data-i18n-html],
-  .hero-t, .mode-hero-title, .mode-hero-badge,
+  .hero-t,
   .m-title, .sheet-t, .sheet-p, .set-title, .set-card-h > span,
   .row-t, .row-s, .pick-n, .pick-empty,
   .gm-title, .gm-sub, .gm-name, .gm-desc,
@@ -31797,14 +31635,11 @@ html[data-lang="fa"] .lb-hud-t { font-size: 10.5px; line-height: 1.5; }
 html[data-lang="fa"] .lb-hud-s { letter-spacing: 0; }
 html[data-lang="fa"] .lb-hud-b { letter-spacing: 0; font-size: 9.5px; }
 html[data-lang="fa"] .hero-t { font-size: clamp(0.95rem, 4.4vw, 1.1rem); }
-html[data-lang="fa"] .mode-hero-title { font-size: clamp(9.5px, 2.8vw, 11px); }
-html[data-lang="fa"] .mode-hero-badge { line-height: 1.5; }
-html[data-lang="fa"] .mode-hero-txt { align-items: flex-end; }
 html[data-lang="fa"] .set-card-h { justify-content: flex-start; direction: rtl; }
 
 /* Vazirmatn's Persian descenders need a real line box: every one of these
    labels was built for a tight uppercase line-height of 1. */
-html[data-lang="fa"] :is(.hero-t, .mode-hero-title, .sq-create-label, .sq-title, .lb-name, .id-team-t) {
+html[data-lang="fa"] :is(.hero-t, .sq-create-label, .sq-title, .lb-name, .id-team-t) {
   line-height: 1.4;
 }
 html[data-lang="fa"] .pf-chip-v > span { line-height: 1.45; }

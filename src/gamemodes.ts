@@ -1,15 +1,14 @@
 /**
  * gamemodes.ts — Game Mode Selector: lobby state, bottom sheet wiring, custom rooms.
  *
- * The lobby keeps one split-action Play Dock: a single continuous clay capsule whose
- * left section is the mode card (emblem · name · CHANGE badge) that opens the drawer,
- * joined at a molded seam to the one-tap launch, wearing the selected mode's win. The
- * `#sheet-game-modes` drawer holds exactly three rows — a collapsed Quick match
- * showcase, Play with friends and Practice vs Bot — plus one reward caption and one
- * sticky Start. Selecting a mode updates the lobby instantly and persists to the
- * device; the bot row shows its level in place. Quick match stays parked: tapping it
- * only explains the server tuning, and every saved quick pick falls back to practice.
- * The room UI lives on its own sub-screen behind a back arrow, never in the list.
+ * The lobby's PLAY key opens the `#sheet-game-modes` drawer with Practice selected and
+ * expanded, so the race launch is always a deliberate two-step: pick, then Start. The
+ * drawer holds exactly three rows — a collapsed Quick match showcase, Play with friends
+ * and Practice vs Bot — plus one reward caption and one sticky Start. Selecting a mode
+ * updates the dock instantly and persists to the device; the bot row shows its level in
+ * place. Quick match stays parked: tapping it only explains the server tuning, and every
+ * saved quick pick falls back to practice. The room UI lives on its own sub-screen behind
+ * a back arrow, never in the list.
  *
 /**
  * Rooms are local-first: Create mints a 4-digit code and reveals a 1-tap
@@ -91,22 +90,6 @@ const startLabel = (id: GameModeId): string => {
     case 'party_2v2': return t('start2v2');
     case 'bot': return t('startPractice');
     case 'room': return t('startPrivate');
-  }
-};
-
-/**
- * The home Play Dock's left section: the mode the capsule will launch, named in one
- * crisp word (or two) so the tap that changes it is unmistakable. The section is
- * sized by its label, so FRIENDS, SOLO, BOT and the Persian labels never ellipsize.
- * The full title and status still live on the section's `aria-label`, which is what
- * a screen reader reads.
- */
-const dockLabel = (id: GameModeId): string => {
-  switch (id) {
-    case 'duel_1v1': return t('dockQuick');
-    case 'party_2v2': return t('dockParty');
-    case 'bot': return t('dockPractice');
-    case 'room': return t('dockFriends');
   }
 };
 
@@ -467,25 +450,12 @@ export async function copyText(text: string): Promise<boolean> {
 /* ---------- the home Play Dock (same IDs home.ts owns) ---------- */
 
 /**
- * Repaint both zones of the dock from the one selection: the left zone names the mode
- * it would switch to (emblem · label · the CHANGE chip) and the right zone wears the
- * win the launch pays. Nothing here reads the DOM as state — every value comes from
- * `getLobbyDisplay()` plus the drawer's own `REWARD` line.
+ * Repaint the PLAY key from the one selection: it wears the win the launch pays and
+ * names the mode the drawer will open on. Nothing here reads the DOM as state — every
+ * value comes from `getLobbyDisplay()` plus the drawer's own `REWARD` line.
  */
 export function paintLobby(): void {
   const lobby = getLobbyDisplay();
-  const card = document.getElementById('mode-hero');
-  if (card) {
-    card.setAttribute('data-gmode', lobby.id);
-    card.setAttribute('aria-label', `${t('change')} · ${lobby.title} — ${lobby.sub}`);
-  }
-  const titleEl = document.getElementById('home-play-title');
-  if (titleEl) titleEl.textContent = dockLabel(lobby.id);
-  const useEl = document.getElementById('mode-hero-use') as unknown as SVGUseElement | null;
-  if (useEl) useEl.setAttribute('href', lobby.icon);
-  /* the mode's own line, kept as the dock's spoken description rather than a third row */
-  const subEl = document.getElementById('home-play-sub');
-  if (subEl) subEl.textContent = lobby.sub;
 
   const reward = rewardFor(lobby.id);
   const n = (v: string): string => v.replace('+', '');
@@ -506,7 +476,7 @@ export function paintLobby(): void {
   if (coinN) coinN.textContent = reward.coin;
 
   const play = document.getElementById('home-play') as HTMLButtonElement | null;
-  if (play) play.setAttribute('aria-label', `${t('play')} · ${lobby.title} — ${lobby.sub}`);
+  if (play) play.setAttribute('aria-label', `${t('play')} · ${t('selectGameMode')} — ${lobby.title}`);
 }
 
 /* ---------- the lobby: one socket, one roster, one Start ---------- */

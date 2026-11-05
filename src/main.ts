@@ -3163,7 +3163,7 @@ initSeize({ sheets });
 menu = createMenu({ router, sheets, sheet: sheetById, start: startGame, onBack });
 const shop = createShop({ sheets, sheet: sheetById });
 home = createHome({
-  router, sheets, start: startGame, launch: launchSelectedMode, queue: (mode) => queueMatch(mode),
+  router, sheets, start: startGame, queue: (mode) => queueMatch(mode),
 });
 compete = createCompete({
   router, sheets, sheet: sheetById,
@@ -3309,12 +3309,11 @@ function roomFromRoster(
 }
 
 /**
- * The one launch both the Play Dock's right zone and the drawer's Start run: the selection
- * decides the door. Quick match is online, so it queues on the searching stage first;
- * practice and a private room have nobody to wait for, so they open their roster and start
- * right away — on the seat count the Practice card is showing. Practice plays the level the
- * drawer shows on every seat; a private room ladders its machine seats instead, which is the
- * dynamic difficulty a room setting buys.
+ * The one launch the drawer's Start runs: the selection decides the door. Quick match is
+ * online, so it queues on the searching stage first; practice and a private room have nobody
+ * to wait for, so they open their roster and start right away — on the seat count the Practice
+ * card is showing. Practice plays the level the drawer shows on every seat; a private room
+ * ladders its machine seats instead, which is the dynamic difficulty a room setting buys.
  */
 function launchSelectedMode(): void {
   const sel = getGameMode();

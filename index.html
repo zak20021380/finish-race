@@ -2424,21 +2424,12 @@
             </div>
           </div>
 
-          <!-- The Play Dock: one dark chassis capsule holding two separate clay pods.
-               The obsidian mode/party selector keeps its own face; the launch core is a
-               fully rounded pill floating clear of it by the chassis trough. -->
+          <!-- The Play CTA: one full-width launch pill on the obsidian chassis. It opens
+               the Game Mode drawer, where Practice is pre-selected and its difficulty and
+               seat pills are already expanded; the drawer's bottom Start is the only key
+               that actually begins a race. -->
           <div class="launcher">
-            <button class="mode-hero" type="button" id="mode-hero" data-gmode="bot" aria-haspopup="dialog">
-              <span class="mode-hero-ico" aria-hidden="true">
-                <svg class="ico" aria-hidden="true" focusable="false"><use id="mode-hero-use" href="#i-bot" /></svg>
-              </span>
-              <span class="mode-hero-txt">
-                <span class="mode-hero-title" id="home-play-title">BOT</span>
-                <span class="mode-hero-badge" data-i18n="change">Change</span>
-              </span>
-              <span class="sr-only" id="home-play-sub" aria-live="polite">Offline Practice</span>
-            </button>
-            <button class="btn btn-hero" id="home-play" type="button" aria-describedby="home-play-sub">
+            <button class="btn btn-hero" id="home-play" type="button" aria-haspopup="dialog">
               <span class="pd-go-face">
                 <svg class="ico pd-go-ico" aria-hidden="true" focusable="false"><use href="#i-play" /></svg>
                 <span class="hero-t" data-i18n="play">PLAY</span>
@@ -2461,7 +2452,7 @@
           </div>
 
           <!-- Admin Command Center key: shown only to an allowlisted Telegram id (or a dev door),
-               and anchored above the launcher so it never covers the mode card or PLAY. -->
+               and anchored above the launcher so it never covers PLAY. -->
           <button class="admin-fab" id="btn-admin-fab" type="button" hidden aria-haspopup="dialog"
             aria-label="Open Admin Command Center">
             <svg class="admin-fab-ico" aria-hidden="true"><use href="#i-shield" /></svg>
