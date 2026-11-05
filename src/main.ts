@@ -2,8 +2,8 @@ import './style.css';
 import './result.css';
 import {
   CONFIG, MAX_TEAMS, apply, ballById, distField, firstBall, getAutoMove, mineCells, minesLeft, newGame,
-  reachableBall, steps as teamSteps, view as fogOfWar, wallBudget, wallOk, wallsCross, wallsOverlap,
-  wallsRemaining, rotateWall,
+  reachableBall, rivalMineAt, steps as teamSteps, view as fogOfWar, wallBudget, wallOk, wallsCross,
+  wallsOverlap, wallsRemaining, rotateWall,
   type Action, type Ball, type Cell, type GameState, type Mine, type Player,
   type Pos, type Wall, type WallSpec,
 } from './rules';
@@ -1588,8 +1588,10 @@ async function runOpponent() {
   const a = await opponent.think(fogOfWar(state, state.turn));
   if (token !== gen) return;
   if (play(a)) return;
-  /* a bot only sees its own side of the fog, so a mine it buries can sit on a square the human
-     already mined, which the rules refuse: carry on racing rather than throw the turn away */
+  /* a bot only sees its own side of the fog, so it can pick a square the human already mined —
+     which the rules now settle as a dual detonation rather than refusing. A pick the board still
+     rejects (a budget already spent, a pawn in the way) falls back to a plain step, so the turn is
+     never thrown away */
   const st = teamSteps(state, state.turn)[0];
   play(st ? { kind: 'move', ball: st.ball, to: st.to } : { kind: 'pass' });
 }
@@ -1599,7 +1601,8 @@ async function runOpponent() {
  * rebuilds that one entry and carries every other mine through by reference, so the new charge is
  * the triggered mine this board has never held before. Matching on identity rather than on the
  * array index keeps the answer right under fog of war, where an opponent mine that was hidden
- * before the move appears at the end of the list and can sit ahead of an older crater.
+ * before the move appears at the end of the list and can sit ahead of an older crater. A dual
+ * detonation rebuilds two entries; they share a square, so the first one names it just as well.
  */
 function blastOf(prev: GameState, next: GameState): Mine | null {
   for (const m of next.mines) {
@@ -1615,6 +1618,11 @@ function blastOf(prev: GameState, next: GameState): Mine | null {
 function play(a: Action, remote = false): boolean {
   const prev = state;
   const by = state.turn;
+  /* A charge committed onto a rival's buried charge. Read BEFORE the action is applied, because
+     afterwards the two craters are indistinguishable from a trigger a ball walked into — and this
+     seat's copy, its sound and the weight of its jolt all key off the difference. Both replicas of
+     a race hold the same board, so both seats reach the same verdict here. */
+  const duel = a.kind === 'mine' && rivalMineAt(prev, a.cell, by) !== null;
   /* which ball is about to move, so the trail can start under it */
   let from: Pos | null = null;
   let moved: number | null = null;
@@ -1659,11 +1667,15 @@ function play(a: Action, remote = false): boolean {
     /* the bang is scheduled on the audio clock and the jolt/buzz on the same beat, so the blast is
        heard and felt where it is seen: under the ball standing on the charge. */
     audio.play('explosion', delay > 0 ? { delay: delay / 1000 } : undefined);
-    const boom = () => { shake(true); detonation(); };
+    /* a collision is two charges going off at once, so it takes the board's heavy jolt; a single
+       trigger keeps the micro-shake it has always had */
+    const boom = () => { shake(!duel); detonation(); };
     if (delay > 0) window.setTimeout(boom, delay);
     else boom();
-    showNote(`Mine! ${TEAM_NAME[by]} ${by === localSide ? 'were' : 'was'} thrown back `
-      + `${cells} cell${cells === 1 ? '' : 's'}`, false, 2600);
+    showNote(duel
+      ? 'Dual detonation — both charges neutralized'
+      : `Mine! ${TEAM_NAME[by]} ${by === localSide ? 'were' : 'was'} thrown back `
+        + `${cells} cell${cells === 1 ? '' : 's'}`, false, 2600);
   }
   ui();
   startClock();          // the turn has moved on: the next seat gets its own allowance

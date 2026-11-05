@@ -736,6 +736,16 @@ export const liveMines = (s: GameState): Mine[] => s.mines.filter((m) => !m.trig
 export const mineAt = (s: GameState, cell: Cell): Mine | null =>
   s.mines.find((m) => !m.triggered && m.cell.c === cell.c && m.cell.r === cell.r) ?? null;
 
+/**
+ * The RIVAL charge buried on a cell — the one a placement may land on top of. A separate reader
+ * from `mineAt` because the two have different audiences: the placement gate (`mineOk`) may NEVER
+ * consult this one, since a hidden trap that refused its square would sweep the board for a radar,
+ * while the confirmation that actually commits to the square must (`doMine`).
+ */
+export const rivalMineAt = (s: GameState, cell: Cell, owner: Player): Mine | null =>
+  s.mines.find((m) => !m.triggered && m.owner !== owner
+    && m.cell.c === cell.c && m.cell.r === cell.r) ?? null;
+
 /** Mines a side still has to bury: the budget minus what it has spent, never below zero. */
 export function minesLeft(s: GameState, team: Player): number {
   let used = 0;
@@ -753,13 +763,23 @@ export function mineCells(s: GameState, owner: Player = s.turn): Cell[] {
   return out;
 }
 
-/** Is this mine legal? Within budget, on the board (the finish row included), on an empty cell. */
+/**
+ * Is this mine legal? Within budget, on the board (the finish row included), on an empty cell —
+ * and clear of the team's OWN charges.
+ *
+ * A RIVAL's buried charge is deliberately NOT an obstacle. This is the gate the placement band
+ * paints its selectable squares from, and it runs on the same board the owner can already see: a
+ * hidden trap that refused its square would turn one tap of the mine key into a free radar sweep
+ * over the whole grid. Overlap is settled at the confirmation instead (`doMine`), which is the
+ * only place a hidden charge may be consulted — and only by spending a charge on it.
+ */
 export function mineOk(s: GameState, cell: Cell, owner: Player = s.turn): boolean {
   if (s.winner !== null) return false;
   if (minesLeft(s, owner) <= 0) return false;
   if (cell.c < 0 || cell.c >= s.cols || cell.r < 0 || cell.r >= s.rows - MINE_ZONE) return false;
   if (s.balls.some((b) => b.pos.c === cell.c && b.pos.r === cell.r)) return false;
-  return mineAt(s, cell) === null;
+  return !s.mines.some((m) => !m.triggered && m.owner === owner
+    && m.cell.c === cell.c && m.cell.r === cell.r);
 }
 
 /* ---------- transitions (return a new state, or null if illegal) ---------- */
@@ -907,10 +927,24 @@ export function doWall(s: GameState, w: Wall): GameState | null {
   return endTurn({ ...s, walls: [...s.walls, { ...w }], wallsLeft }, w.owner);
 }
 
-/** Bury a mine for the team on turn. The cell is the whole payload; the seat comes from the state. */
+/**
+ * Bury a mine for the team on turn. The cell is the whole payload; the seat comes from the state.
+ *
+ * A charge committed onto a RIVAL's buried charge is a DUAL DETONATION: both go off where they lie
+ * and the square comes up empty. Neither seat is warned beforehand — the collision is only ever
+ * discovered by confirming it — so a blind overlap is a tactical neutralizer instead of the free
+ * reconnaissance the placement gate used to hand out. Both entries stay in the ledger as SPENT, so
+ * the budget is never refunded and a mined square cannot be farmed for free placements. The turn
+ * ends normally either way: the charge was the seat's action.
+ */
 export function doMine(s: GameState, cell: Cell, owner: Player = s.turn): GameState | null {
   if (owner !== s.turn || !mineOk(s, cell, owner)) return null;
-  return endTurn({ ...s, mines: [...s.mines, { cell: { ...cell }, owner, triggered: false }] }, owner);
+  const rival = rivalMineAt(s, cell, owner);
+  const mines: Mine[] = rival
+    ? [...s.mines.map((m) => (m === rival ? { ...m, triggered: true } : m)),
+       { cell: { ...cell }, owner, triggered: true }]
+    : [...s.mines, { cell: { ...cell }, owner, triggered: false }];
+  return endTurn({ ...s, mines }, owner);
 }
 
 /** Single entry point for local input, the bot, or (later) messages from the network. */
