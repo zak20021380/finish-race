@@ -72,13 +72,13 @@ import {
   type VipTierRevenue,
 } from '../shared/vip';
 import {
-  ACTIVE_CUP_ID, cupField, cupPlayerBoard, cupSquadIds,
+  ACTIVE_CUP_ID, applicantFromRequest, cupField, cupPlayerBoard, cupSquadIds,
   isSquadAdmin, normalizeChatHandle, readRegisteredSquad, removeSquadMember, roleOf,
   SQUAD_ALREADY_ENLISTED, squadViewOf, squadWarTiq, telegramPhotoUrl, upsertSquadMember,
   verifyAndBuildSquad, verifySquadChat,
-  type RegisteredSquad, type SquadVerification,
+  type RegisteredSquad, type SquadAnnouncementRow, type SquadVerification,
 } from './squads';
-import { botAppLink } from '../shared/config';
+import { botAppLink, squadAppLink } from '../shared/config';
 import {
   isPostChatFreeReaction, isPostChatPreset, postChatPresetForText, type PostChatPresetId,
 } from '../src/data/postchat';
@@ -2060,6 +2060,24 @@ export class MatchmakerDO {
       if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
       return this.squadKick(request, url);
     }
+    /* Leader administration: the join-approval lock, the pending queue and squad announcements.
+       The edge only routes these — the room proves the caller is this squad's leader first. */
+    if (url.pathname === '/api/squads/request') {
+      if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+      return this.squadRequestJoin(request, url);
+    }
+    if (url.pathname === '/api/squads/admin/requests') {
+      if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
+      return this.squadAdminRequests(request, url);
+    }
+    if (
+      url.pathname === '/api/squads/admin/lock'
+      || url.pathname === '/api/squads/admin/decide'
+      || url.pathname === '/api/squads/admin/broadcast'
+    ) {
+      if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+      return this.squadAdminAction(request, url);
+    }
     if (url.pathname === '/api/squads/board' || url.pathname === '/api/squads/squad') {
       if (request.method !== 'GET') return json({ error: 'method_not_allowed' }, 405);
       return url.pathname === '/api/squads/board' ? this.squadBoard() : this.squadRead(url);
@@ -2357,6 +2375,14 @@ export class MatchmakerDO {
     if (squad.banned) {
       return json({ ok: false, error: 'squad_banned', message: 'This squad was removed from the competition.' }, 403);
     }
+    /* The leader's lock is enforced here too, not only in the client: a join that slipped past
+       an older app version still becomes a request, never a roster row. The applicant keeps
+       their current squad until the leader actually approves them. */
+    if (join && squad.requireApproval && !squad.roster.some((m) => m.id === requester)) {
+      this.squadQueueRequest(squad, requester, body);
+      await this.persistSquads();
+      return json({ ok: true, joined: false, pending: true, role: '', squad: squadViewOf(squad) });
+    }
 
     if (join) {
       for (const other of this.squads.values()) {
@@ -2452,6 +2478,184 @@ export class MatchmakerDO {
     this.squadsDirty = true;
     await this.persistSquads();
     return json({ ok: true, squad: squadViewOf(squad) });
+  }
+
+  /* ---------- leader administration: the lock, the queue and squad announcements ---------- */
+
+  /** File one join request. Idempotent by player id; a roster member never becomes an applicant. */
+  private squadQueueRequest(
+    squad: RegisteredSquad,
+    requester: string,
+    body: Record<string, unknown>,
+  ): void {
+    if (squad.pending.some((a) => a.id === requester)) return;
+    const applicant = applicantFromRequest({
+      id: requester,
+      name: typeof body.name === 'string' ? body.name : '',
+      tiq: typeof body.tiq === 'number' ? body.tiq : Number(body.tiq),
+      country: typeof body.country === 'string' ? body.country : '',
+      username: typeof body.username === 'string' ? body.username : '',
+      photo: typeof body.photo === 'string' ? body.photo : '',
+    });
+    squad.pending = [applicant, ...squad.pending].slice(0, 60);
+    this.squadsDirty = true;
+  }
+
+  /** `POST /api/squads/request` — the cross-device twin of the client's local queue. */
+  private async squadRequestJoin(request: Request, url: URL): Promise<Response> {
+    const body = await readBody(request);
+    const requester = await this.squadRequester(request, url, body);
+    if (!requester) {
+      return json({ ok: false, error: 'unauthorized', message: 'Telegram verification required.' }, 401);
+    }
+    const id = typeof body.squadId === 'string' ? body.squadId.trim().slice(0, 48) : '';
+    const squad = await this.squadNamed(id);
+    if (!squad) return json({ ok: false, error: 'no_such_squad' }, 404);
+    if (squad.banned) return json({ ok: false, error: 'squad_banned' }, 403);
+    if (squad.roster.some((m) => m.id === requester)) {
+      return json({ ok: true, joined: true, squad: squadViewOf(squad) });
+    }
+    this.squadQueueRequest(squad, requester, body);
+    await this.persistSquads();
+    return json({ ok: true, pending: true, squad: squadViewOf(squad) });
+  }
+
+  /** A dev-origin read has no JSON body to carry the reported id, so the query may hold it. */
+  private async squadAdminRequester(
+    request: Request,
+    url: URL,
+    body: Record<string, unknown>,
+  ): Promise<string> {
+    const signed = await this.squadRequester(request, url, body);
+    if (signed) return signed;
+    const dev = this.env.DEV_AUTH === 'true' || isLocalhost(url.hostname);
+    return dev
+      ? (url.searchParams.get('userTelegramId') ?? '').replace(/[^0-9-]/g, '').slice(0, 20)
+      : '';
+  }
+
+  /** Every leader action passes the same gate: signed caller, known squad, actual leader. */
+  private async squadAdminGate(
+    request: Request,
+    url: URL,
+    body: Record<string, unknown>,
+  ): Promise<{ requester: string; squad: RegisteredSquad } | { response: Response }> {
+    const requester = await this.squadAdminRequester(request, url, body);
+    if (!requester) {
+      return { response: json({ ok: false, error: 'unauthorized', message: 'Telegram verification required.' }, 401) };
+    }
+    const id = typeof body.squadId === 'string'
+      ? body.squadId.trim().slice(0, 48)
+      : (url.searchParams.get('squadId') ?? '').trim().slice(0, 48);
+    const squad = await this.squadNamed(id);
+    if (!squad) return { response: json({ ok: false, error: 'no_such_squad' }, 404) };
+    if (!isSquadAdmin(squad, requester)) {
+      return { response: json({ ok: false, error: 'not_admin', message: 'Only the squad leader can manage this squad.' }, 403) };
+    }
+    return { requester, squad };
+  }
+
+  /** The leader's pending queue — never published on the board or in a public squad read. */
+  private async squadAdminRequests(request: Request, url: URL): Promise<Response> {
+    const gate = await this.squadAdminGate(request, url, {});
+    if ('response' in gate) return gate.response;
+    const requests = [...gate.squad.pending].sort((a, b) => b.requestedAt - a.requestedAt);
+    return json({ ok: true, requests });
+  }
+
+  /** Lock toggle, approve/reject, or a broadcast. One authenticated door, three actions. */
+  private async squadAdminAction(request: Request, url: URL): Promise<Response> {
+    const body = await readBody(request);
+    const gate = await this.squadAdminGate(request, url, body);
+    if ('response' in gate) return gate.response;
+    const { requester, squad } = gate;
+
+    if (url.pathname === '/api/squads/admin/lock') {
+      const on = body.requireApproval === true;
+      squad.requireApproval = on;
+      this.squadsDirty = true;
+      await this.persistSquads();
+      return json({ ok: true, requireApproval: on, squad: squadViewOf(squad) });
+    }
+
+    if (url.pathname === '/api/squads/admin/decide') {
+      const applicantId = typeof body.applicantId === 'string' ? body.applicantId.trim().slice(0, 24) : '';
+      const decision = body.decision === 'approve' ? 'approve' : body.decision === 'reject' ? 'reject' : '';
+      if (!applicantId || !decision) {
+        return json({ ok: false, error: 'invalid_member', message: 'Choose a request and a decision.' }, 400);
+      }
+      const at = squad.pending.findIndex((a) => a.id === applicantId);
+      if (at < 0) return json({ ok: false, error: 'member_not_found' }, 404);
+      const applicant = squad.pending[at];
+      squad.pending.splice(at, 1);
+      if (decision === 'approve') {
+        /* An approved player holds one squad at a time, exactly like a direct join. */
+        for (const other of this.squads.values()) {
+          if (other.id === squad.id) continue;
+          if (removeSquadMember(other, applicant.id)) this.squadsDirty = true;
+        }
+        upsertSquadMember(squad, {
+          id: applicant.id,
+          name: applicant.name,
+          tiq: applicant.tiq,
+          country: applicant.country,
+          username: applicant.username,
+          photo: applicant.photo,
+        }, true);
+      }
+      this.squadsDirty = true;
+      await this.persistSquads();
+      return json({ ok: true, decision, squad: squadViewOf(squad) });
+    }
+
+    const message = (typeof body.text === 'string' ? body.text : '')
+      .replace(/[\u0000-\u001f\u007f]/g, '')
+      .trim()
+      .slice(0, 280);
+    if (!message) return json({ ok: false, error: 'invalid_message', message: 'Write a message first.' }, 400);
+    const row: SquadAnnouncementRow = {
+      id: `cast-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      text: message,
+      authorId: requester,
+      createdAt: Date.now(),
+      recipients: 0,
+    };
+    row.recipients = this.notifySquadMembers(squad, message);
+    squad.announcements = [row, ...squad.announcements].slice(0, 20);
+    this.squadsDirty = true;
+    await this.persistSquads();
+    return json({ ok: true, recipients: row.recipients, announcement: row, squad: squadViewOf(squad) });
+  }
+
+  /**
+   * Deliver one announcement through @Tactix_Robot. Only real Telegram ids can be messaged, and
+   * a Bot API hiccup is fire-and-forget: the announcement is already stored and the leader's own
+   * in-app notification already landed, so a slow push never holds the response hostage.
+   */
+  private notifySquadMembers(squad: RegisteredSquad, message: string): number {
+    const token = this.env.TELEGRAM_BOT_TOKEN?.trim() || this.env.BOT_TOKEN?.trim() || '';
+    if (!token) return 0;
+    const targets = squad.roster
+      .filter((m) => m.id !== squad.creatorId && /^[0-9]{1,20}$/.test(m.id))
+      .map((m) => m.id);
+    if (!targets.length) return 0;
+    const link = squadAppLink(squad.id);
+    const text = `📢 ${squad.name}\n\n${message}`;
+    for (const chatId of targets) {
+      const call = fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          ...(link ? { reply_markup: { inline_keyboard: [[{ text: 'Open Squad', url: link }]] } } : {}),
+        }),
+      }).then(() => undefined).catch(() => undefined);
+      const ctx = this.state as unknown as { waitUntil?: (p: Promise<unknown>) => void };
+      if (ctx.waitUntil) ctx.waitUntil(call);
+      else void call;
+    }
+    return targets.length;
   }
 
   /**

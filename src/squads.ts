@@ -47,6 +47,26 @@ export interface SquadMember {
   photo?: string;
 }
 
+/**
+ * One player waiting for the leader's answer. A request is *not* a member: it never enters the
+ * roster, never moves the member count and never raises the squad's TIQ until it is approved.
+ */
+export interface SquadApplicant {
+  /** Telegram user id — the same stable key a roster row carries. */
+  id: string;
+  name: string;
+  tiq: number;
+  country: string;
+  requestedAt: number;
+  username?: string;
+  photo?: string;
+}
+
+export interface SquadAdminState {
+  requireApproval: boolean;
+  requests: SquadApplicant[];
+}
+
 export interface Squad {
   id: string;
   /** canonical handle with leading @, e.g. @DogeSquad */
@@ -82,6 +102,12 @@ export interface Squad {
   cupId?: string;
   /** The Telegram id of the player who enlisted the squad: its leader and only admin. */
   ownerId?: string;
+  /**
+   * Registry flag: an invite link files a join request instead of adding the player to the
+   * roster. The leader's own device keeps the authoritative switch in `SquadSave.admin`; this
+   * field is the Worker's copy, used to seed a device that has never flipped the switch.
+   */
+  requireApproval?: boolean;
 }
 
 export interface RankedSquad extends Squad {
@@ -99,10 +125,24 @@ interface SquadSave {
   boundId: string | null;
   custom: Squad[];
   bonus: Record<string, number>;
+  /** Leader-only controls, keyed by squad id. Absent = never touched on this device. */
+  admin: Record<string, SquadAdminState>;
 }
 
 function fresh(): SquadSave {
-  return { boundId: null, custom: [], bonus: {} };
+  return { boundId: null, custom: [], bonus: {}, admin: {} };
+}
+
+/** A stored join request, normalised so a stale or hostile row cannot break a roster write. */
+function applicantOk(a: unknown): a is SquadApplicant {
+  const x = a as Partial<SquadApplicant> | undefined;
+  return !!x && typeof x.id === 'string' && x.id.length > 0 && x.id.length <= 24
+    && typeof x.name === 'string' && x.name.length <= 24
+    && typeof x.tiq === 'number' && Number.isFinite(x.tiq) && x.tiq >= 0
+    && typeof x.country === 'string' && x.country.length <= 2
+    && typeof x.requestedAt === 'number' && Number.isFinite(x.requestedAt) && x.requestedAt >= 0
+    && (x.username === undefined || (typeof x.username === 'string' && x.username.length <= 32))
+    && (x.photo === undefined || (typeof x.photo === 'string' && x.photo.length <= 300));
 }
 
 const ROLES: readonly SquadRole[] = ['leader', 'admin', 'member'];
@@ -135,6 +175,7 @@ function squadOk(s: unknown): s is Squad {
     && (x.tag === undefined || (typeof x.tag === 'string' && /^[A-Z0-9]{2,3}$/.test(x.tag)))
     && (x.subscribers === undefined || (typeof x.subscribers === 'number' && Number.isFinite(x.subscribers) && x.subscribers >= 0))
     && (x.ownerId === undefined || (typeof x.ownerId === 'string' && x.ownerId.length <= 24))
+    && (x.requireApproval === undefined || typeof x.requireApproval === 'boolean')
     && (x.cupId === undefined || (typeof x.cupId === 'string' && x.cupId.length <= 48))
     && (x.enlistedAt === undefined || (typeof x.enlistedAt === 'number' && Number.isFinite(x.enlistedAt) && x.enlistedAt > 0));
 }
@@ -192,6 +233,34 @@ function migrate(raw: Partial<SquadSave> | null): SquadSave {
   if (raw.bonus && typeof raw.bonus === 'object') {
     for (const [k, v] of Object.entries(raw.bonus)) {
       if (typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= 1_000_000) s.bonus[k] = Math.floor(v);
+    }
+  }
+  if (raw.admin && typeof raw.admin === 'object') {
+    for (const [k, v] of Object.entries(raw.admin)) {
+      const entry = v as Partial<SquadAdminState> | undefined;
+      if (!entry || typeof k !== 'string' || k.length > 48) continue;
+      s.admin[k] = {
+        requireApproval: entry.requireApproval === true,
+        /* A saved request may predate one of its optional fields. Fill the safe zeros first,
+           then validate, so a partial row is repaired instead of silently dropped. */
+        requests: (Array.isArray(entry.requests) ? entry.requests : [])
+          .map((raw) => {
+            const x = (raw ?? {}) as Partial<SquadApplicant>;
+            return {
+              id: typeof x.id === 'string' ? x.id : '',
+              name: typeof x.name === 'string' ? x.name : '',
+              tiq: typeof x.tiq === 'number' && Number.isFinite(x.tiq) ? x.tiq : 0,
+              country: typeof x.country === 'string' ? x.country : '',
+              requestedAt: typeof x.requestedAt === 'number' && Number.isFinite(x.requestedAt)
+                ? x.requestedAt : Date.now(),
+              ...(typeof x.username === 'string' ? { username: x.username } : {}),
+              ...(typeof x.photo === 'string' ? { photo: x.photo } : {}),
+            };
+          })
+          .filter(applicantOk)
+          .map((a) => ({ ...a }))
+          .slice(0, 60),
+      };
     }
   }
   return s;
@@ -643,6 +712,8 @@ export interface RegisteredSquadInput {
   ownerId?: string;
   /** The cup this enlistment is filed under; the running championship when the caller omits it. */
   cupId?: string;
+  /** Registry copy of the leader's join-approval gate. */
+  requireApproval?: boolean;
   /** `false` files the squad in the list without moving this device's binding (an invite look). */
   bind?: boolean;
 }
@@ -684,6 +755,7 @@ export function claimRegisteredSquad(input: RegisteredSquadInput): ClaimResult {
     ...(ownerId ? { ownerId } : {}),
     enlistedAt: Date.now(),
     cupId: (input.cupId ?? '').trim().slice(0, 48) || ACTIVE_CUP_ID,
+    ...(typeof input.requireApproval === 'boolean' ? { requireApproval: input.requireApproval } : {}),
   }, ownerId);
   save.custom = [...save.custom, created].slice(-40);
   if (input.bind !== false) save.boundId = id;
@@ -715,6 +787,7 @@ export function dropSquad(id: string): boolean {
   save.custom = save.custom.filter((s) => s.id !== id);
   if (save.boundId === id) save.boundId = null;
   delete save.bonus[id];
+  delete save.admin[id];
   flush();
   return true;
 }
@@ -748,6 +821,117 @@ export function getChannelCup(): ChannelCup {
   const end = new Date();
   end.setHours(23, 59, 59, 999);
   return { prizePool: 12500, players, endsAt: end.getTime(), top: ranking[0] ?? null };
+}
+
+/* ---------- leader admin: the approval gate and the pending join queue ----------
+   A squad's leader settings live in their own save bucket, keyed by squad id. They are kept out
+   of `custom` so a registry hydration (which replaces the cached squad wholesale) can never
+   silently reset the leader's lock or throw away the requests waiting for an answer. */
+
+const MAX_REQUESTS = 60;
+
+/** The device's own switch for one squad, seeded from the registry's copy on first read. */
+function adminEntry(id: string): SquadAdminState {
+  const held = save.admin[id];
+  if (held) return held;
+  const squad = save.custom.find((s) => s.id === id);
+  const made: SquadAdminState = { requireApproval: squad?.requireApproval === true, requests: [] };
+  save.admin[id] = made;
+  return made;
+}
+
+/** A copy of the leader's controls; callers may sort or filter it without touching the save. */
+export function getSquadAdminState(id: string): SquadAdminState {
+  const entry = adminEntry(id);
+  return { requireApproval: entry.requireApproval, requests: entry.requests.map((a) => ({ ...a })) };
+}
+
+/** The one gate the invite/join door reads: a locked squad files a request instead of entering. */
+export function squadRequiresApproval(squad: Pick<Squad, 'id' | 'requireApproval'>): boolean {
+  const held = save.admin[squad.id];
+  return held ? held.requireApproval : squad.requireApproval === true;
+}
+
+/** Flip the lock. Both the local switch and the cached registry copy move in the same turn. */
+export function setSquadRequireApproval(id: string, on: boolean): boolean {
+  const at = save.custom.findIndex((s) => s.id === id);
+  if (at < 0) return false;
+  adminEntry(id).requireApproval = on;
+  save.custom[at] = { ...save.custom[at], requireApproval: on };
+  flush();
+  return true;
+}
+
+/** This player's own request row, built from the same live facts a roster row uses. */
+export function mySquadApplicant(): SquadApplicant {
+  const photo = (tgUser()?.photo_url ?? '').trim().slice(0, 300);
+  return {
+    id: myRosterId(),
+    name: myPlayerName().slice(0, 24),
+    tiq: Math.max(0, Math.floor(myTiq())),
+    country: '',
+    requestedAt: Date.now(),
+    username: myUsername(),
+    ...(photo ? { photo } : {}),
+  };
+}
+
+export type QueueResult = 'queued' | 'duplicate' | 'already-member' | 'no-squad';
+
+/** File a join request. A squad member and a repeat request never enter the queue twice. */
+export function queueSquadRequest(id: string, applicant: SquadApplicant): QueueResult {
+  const squad = save.custom.find((s) => s.id === id);
+  if (!squad || !applicantOk(applicant)) return 'no-squad';
+  if (squad.roster.some((m) => m.id === applicant.id)) return 'already-member';
+  const entry = adminEntry(id);
+  if (entry.requests.some((a) => a.id === applicant.id)) return 'duplicate';
+  entry.requests = [{ ...applicant }, ...entry.requests].slice(0, MAX_REQUESTS);
+  flush();
+  return 'queued';
+}
+
+/** Fold the registry's queue in, keeping a request this device filed while it was offline. */
+export function mergeSquadRequests(id: string, rows: SquadApplicant[]): void {
+  const clean = rows.filter(applicantOk).map((a) => ({ ...a })).slice(0, MAX_REQUESTS);
+  const entry = adminEntry(id);
+  const seen = new Set(clean.map((a) => a.id));
+  entry.requests = [...clean, ...entry.requests.filter((a) => !seen.has(a.id))].slice(0, MAX_REQUESTS);
+  flush();
+}
+
+/** Approve: the request leaves the queue and becomes a real, counted roster row. */
+export function approveSquadRequestLocal(id: string, applicantId: string): boolean {
+  const at = save.custom.findIndex((s) => s.id === id);
+  if (at < 0) return false;
+  const entry = adminEntry(id);
+  const applicant = entry.requests.find((a) => a.id === applicantId);
+  if (!applicant) return false;
+  const squad = save.custom[at];
+  if (!squad.roster.some((m) => m.id === applicant.id)) {
+    const member: SquadMember = {
+      id: applicant.id,
+      name: applicant.name,
+      tiq: Math.max(0, Math.floor(applicant.tiq)),
+      role: 'member',
+      joinedAt: Date.now(),
+      country: /^[A-Za-z]{2}$/.test(applicant.country) ? applicant.country.toUpperCase() : '',
+      ...(applicant.username ? { username: applicant.username } : {}),
+      ...(applicant.photo ? { photo: applicant.photo } : {}),
+    };
+    save.custom[at] = normalizeSquad({ ...squad, roster: [...squad.roster, member] }, squad.ownerId);
+  }
+  entry.requests = entry.requests.filter((a) => a.id !== applicantId);
+  flush();
+  return true;
+}
+
+/** Reject: dismiss the request cleanly. Nothing about the roster changes. */
+export function rejectSquadRequestLocal(id: string, applicantId: string): boolean {
+  const entry = adminEntry(id);
+  if (!entry.requests.some((a) => a.id === applicantId)) return false;
+  entry.requests = entry.requests.filter((a) => a.id !== applicantId);
+  flush();
+  return true;
 }
 
 /** One-letter avatar snippet for a clay badge — no network, no image. */

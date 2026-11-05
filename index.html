@@ -5179,9 +5179,44 @@
             </button>
           </section>
 
+          <!-- LEADER ONLY. Every control in this panel is hidden from ordinary members: a
+               regular member never sees the lock, the requests tab or the broadcast key. The
+               panel sits under the invite row so the squad's three metrics keep their own row. -->
+          <section class="sq-admin" id="squad-admin-panel" hidden aria-label="Squad leader controls">
+            <div class="sq-lock-row">
+              <span class="sq-lock-glyph" aria-hidden="true">🔒</span>
+              <span class="sq-lock-copy">
+                <b class="sq-lock-label" id="squad-lock-label" data-i18n="squadRequireApproval">Require Leader Approval</b>
+                <small class="sq-lock-sub" id="squad-lock-sub" data-i18n="squadLockSub">Invite links become requests until you approve them.</small>
+              </span>
+              <button class="sq-switch" id="squad-approval-toggle" type="button" role="switch"
+                aria-checked="false" aria-labelledby="squad-lock-label" aria-describedby="squad-lock-sub">
+                <span class="sq-switch-knob" aria-hidden="true"></span>
+              </button>
+            </div>
+            <button class="sq-broadcast-btn" id="squad-broadcast-btn" type="button"
+              aria-haspopup="dialog" aria-controls="squad-broadcast-drawer">
+              <span class="sq-broadcast-t" data-i18n="squadBroadcastBtn">📢 Broadcast Message</span>
+              <svg class="ico" aria-hidden="true"><use href="#i-next" /></svg>
+            </button>
+          </section>
+
           <div class="sq-scroll" id="squad-hub-scroll" data-scroll tabindex="0" role="region" aria-label="Squad members">
             <div class="sq-roster-head">
-              <div class="sq-roster-title-row">
+              <!-- Leaders get the two-way segmented switch; the plain title is the member's view. -->
+              <div class="sq-tabs" id="squad-tabs" hidden role="tablist" aria-label="Squad roster and join requests">
+                <button class="sq-tab is-active" id="squad-tab-members" type="button" role="tab"
+                  aria-selected="true" aria-controls="squad-roster" data-tab="members">
+                  <span class="sq-tab-t" data-i18n="squadMembersTab">Members</span>
+                  <span class="sq-tab-n" id="squad-tab-members-n">0</span>
+                </button>
+                <button class="sq-tab" id="squad-tab-requests" type="button" role="tab"
+                  aria-selected="false" aria-controls="squad-requests" data-tab="requests">
+                  <span class="sq-tab-t" data-i18n="squadPendingRequests">Requests</span>
+                  <span class="sq-tab-n sq-tab-badge" id="squad-tab-requests-n" hidden>0</span>
+                </button>
+              </div>
+              <div class="sq-roster-title-row" id="squad-roster-title-row">
                 <h3 class="sq-roster-title" data-i18n="members">Members</h3>
                 <span class="sq-count" id="squad-roster-count" aria-live="polite">0</span>
               </div>
@@ -5196,11 +5231,42 @@
 
             <ol class="sq-roster" id="squad-roster" aria-label="Squad leaderboard"></ol>
             <p class="sq-roster-empty" id="squad-roster-empty" hidden data-i18n="noMembersMatch">No members match that search.</p>
+            <ol class="sq-requests" id="squad-requests" aria-label="Pending join requests" hidden></ol>
+            <p class="sq-requests-empty" id="squad-requests-empty" hidden data-i18n="squadRequestsEmpty">No pending join requests.</p>
           </div>
 
           <footer class="sq-foot">
             <button class="sq-leave" type="button" id="squad-leave" aria-live="polite">Leave squad</button>
           </footer>
+        </div>
+
+        <!-- The broadcast composer is a drawer INSIDE the squad sheet, not a second sheet: the
+             sheets system owns one panel at a time, so stacking another would dismiss the hub. -->
+        <div class="sq-cast" id="squad-broadcast-drawer" hidden role="dialog" aria-modal="true"
+          aria-labelledby="squad-broadcast-heading">
+          <div class="sq-cast-scrim" id="squad-broadcast-scrim"></div>
+          <div class="sq-cast-panel" role="document">
+            <header class="sq-cast-top">
+              <span class="sq-cast-head">
+                <b class="sq-cast-title" id="squad-broadcast-heading" data-i18n="squadBroadcastTitle">Squad Announcement</b>
+                <small class="sq-cast-sub" data-i18n="squadBroadcastSub">One message to every member of the squad.</small>
+              </span>
+              <button class="sq-cast-x" id="squad-broadcast-close" type="button" aria-label="Close announcement composer">
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </header>
+            <label class="sq-cast-field">
+              <textarea id="squad-broadcast-text" maxlength="280" rows="4" enterkeyhint="send"
+                spellcheck="false" autocomplete="off" data-i18n-ph="squadBroadcastPlaceholder"
+                placeholder="Write your announcement…" aria-labelledby="squad-broadcast-heading"></textarea>
+              <span class="sq-cast-count" id="squad-broadcast-count" aria-live="polite">0/280</span>
+            </label>
+            <p class="sq-cast-note" data-i18n="squadBroadcastNote">Delivered through @Tactix_Robot and the in-app inbox.</p>
+            <div class="sq-cast-actions">
+              <button class="sq-cast-cancel" id="squad-broadcast-cancel" type="button" data-i18n="squadBroadcastCancel">Cancel</button>
+              <button class="sq-cast-send" id="squad-broadcast-send" type="button" data-i18n="squadBroadcastSend">Send Broadcast</button>
+            </div>
+          </div>
         </div>
       </section>
 

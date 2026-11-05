@@ -31,10 +31,10 @@ import { openCountryPicker } from './countrypick';
 import { flagPhoto } from './flags';
 import { cleanCode, standings, YOU } from './teams';
 import {
-  bindSquad, cleanChatReference, cleanHandle, displayNameOf, handleIssue,
-  HANDLE_MAX, getMySquad, getSquadRanking, isSquadAdmin, leaveSquad, myPlayerId,
-  onSquadChange, searchSquads, squadInviteUrl, squadKind, squadLetter,
-  squadMark, telegramAvatarUrl, type RankedSquad, type SquadKind,
+  bindSquad, cleanChatReference, cleanHandle, displayNameOf, getSquadAdminState, handleIssue,
+  HANDLE_MAX, getMySquad, getSquadRanking, isSquadAdmin, leaveSquad, myPlayerId, mySquadRole,
+  onSquadChange, searchSquads, squadInviteUrl, squadKind, squadLetter, squadMark,
+  squadRequiresApproval, telegramAvatarUrl, type RankedSquad, type SquadApplicant, type SquadKind,
 } from './squads';
 import {
   arrangeRoster, buildSquadRoster,
@@ -42,9 +42,10 @@ import {
 } from './squadRoster';
 import { showToast } from './toast';
 import {
-  fetchSquad, joinSquadOnServer, kickSquadMember, leaveSquadOnServer, refreshSquadBoard,
-  refreshMySquad, registerSquadWithTelegram, squadErrorMessage, syncSquadScore, verifySquadChat,
-  type SquadChatPreview, type SquadVerifyResult,
+  decideSquadRequest, fetchSquad, joinSquadOnServer, kickSquadMember, leaveSquadOnServer,
+  refreshSquadBoard, refreshMySquad, refreshSquadRequests, registerSquadWithTelegram,
+  sendSquadBroadcast, setSquadApprovalOnServer, squadErrorMessage, syncSquadScore, verifySquadChat,
+  type RequestDecision, type SquadChatPreview, type SquadVerifyResult,
 } from './squadRegister';
 import { copyText } from './gamemodes';
 import { myTiq } from './matchmaking';
@@ -577,6 +578,27 @@ export function createMenu(api: MenuApi): Menu {
   const squadInviteCopyT = $<HTMLElement>('squad-invite-copy-t');
   const squadInviteShare = $<HTMLButtonElement>('squad-invite-share');
 
+  /* Leader administration. These surfaces stay `hidden` until a leader's role is proven, so a
+     regular member's DOM never exposes a control they cannot use. */
+  const squadAdminPanel = $<HTMLElement>('squad-admin-panel');
+  const squadApprovalToggle = $<HTMLButtonElement>('squad-approval-toggle');
+  const squadBroadcastBtn = $<HTMLButtonElement>('squad-broadcast-btn');
+  const squadTabs = $<HTMLElement>('squad-tabs');
+  const squadTabMembers = $<HTMLButtonElement>('squad-tab-members');
+  const squadTabRequests = $<HTMLButtonElement>('squad-tab-requests');
+  const squadTabMembersN = $<HTMLElement>('squad-tab-members-n');
+  const squadTabRequestsN = $<HTMLElement>('squad-tab-requests-n');
+  const squadRosterTitleRow = $<HTMLElement>('squad-roster-title-row');
+  const squadRequestsEl = $<HTMLOListElement>('squad-requests');
+  const squadRequestsEmpty = $<HTMLElement>('squad-requests-empty');
+  const squadCastDrawer = $<HTMLElement>('squad-broadcast-drawer');
+  const squadCastScrim = $<HTMLElement>('squad-broadcast-scrim');
+  const squadCastText = $<HTMLTextAreaElement>('squad-broadcast-text');
+  const squadCastCount = $<HTMLElement>('squad-broadcast-count');
+  const squadCastSend = $<HTMLButtonElement>('squad-broadcast-send');
+  const squadCastClose = $<HTMLButtonElement>('squad-broadcast-close');
+  const squadCastCancel = $<HTMLButtonElement>('squad-broadcast-cancel');
+
   /* The inspection step: a card opens this sheet; the full-width key is the only
      place a join is ever committed. */
   const squadPreviewSheet = api.sheet('sheet-squad-preview');
@@ -611,6 +633,14 @@ export function createMenu(api: MenuApi): Menu {
   let squadAdmin = false;
   let squadCopiedTimer = 0;
   let squadKickBusy = '';
+  /** Only the player wearing the LEADER pill gets the lock, the requests tab and the megaphone. */
+  let squadLeader = false;
+  let squadTab: 'members' | 'requests' = 'members';
+  let squadRequests: SquadApplicant[] = [];
+  let squadSearchable = false;
+  let squadApprovalBusy = false;
+  let squadDecisionBusy = '';
+  let squadCastBusy = false;
   const squadRowEls = new Map<number, HTMLElement>();
   let squadRange = { start: -1, end: -1, rows: -1 };
   let squadFrame = 0;
@@ -841,7 +871,7 @@ export function createMenu(api: MenuApi): Menu {
       squadQuery = '';
       squadMemberQ.value = '';
     }
-    squadTools.hidden = !canSearch;
+    squadSearchable = canSearch;
     squadRows = arrangeRoster(roster, 'tiq', squadQuery);
     const filtered = squadQuery.trim().length > 0;
     const membersWord = roster.count === 1 ? 'member' : 'members';
@@ -851,14 +881,205 @@ export function createMenu(api: MenuApi): Menu {
       : `${en(roster.count)} ${membersWord}`);
     squadRosterEl.setAttribute('aria-label', 'Squad members sorted by TIQ');
 
-    squadRosterEmpty.hidden = squadRows.length > 0;
-    squadRosterEl.hidden = squadRows.length === 0;
     const pitch = measureSquadPitch();
     squadRosterEl.style.height = `${Math.max(0, squadRows.length * pitch - squadGap)}px`;
     squadRosterEl.textContent = '';
     squadRowEls.clear();
     squadRange = { start: -1, end: -1, rows: -1 };
     scheduleSquadWindow(true);
+    applySquadTabVisibility();
+  }
+
+  /* ---------- leader administration: lock, requests tab, broadcast composer ----------
+     `squadLeader` is the only door. Every one of these surfaces stays hidden for a regular
+     member, and the visibility of all four lists is owned by one function so the segmented
+     tabs can never paint two lists at once. */
+
+  function applySquadTabVisibility(): void {
+    const onRequests = squadLeader && squadTab === 'requests';
+    squadRosterEl.hidden = onRequests || squadRows.length === 0;
+    squadRosterEmpty.hidden = onRequests || squadRows.length > 0;
+    squadTools.hidden = onRequests || !squadSearchable;
+    squadRequestsEl.hidden = !onRequests || squadRequests.length === 0;
+    squadRequestsEmpty.hidden = !onRequests || squadRequests.length > 0;
+  }
+
+  /** Telegram portrait over initials, exactly as the roster rows do it. */
+  function squadApplicantAvatar(a: SquadApplicant): HTMLElement {
+    const wrap = document.createElement('span');
+    wrap.className = 'sq-req-av';
+    wrap.setAttribute('aria-hidden', 'true');
+    const label = (a.name || a.username || '?').trim();
+    wrap.textContent = label.slice(0, 2).toUpperCase();
+    if (a.photo && /^https:\/\/[^\s]+$/i.test(a.photo)) {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.addEventListener('error', () => img.remove(), { once: true });
+      img.addEventListener('load', () => {
+        if (img.naturalWidth <= 2 || img.naturalHeight <= 2) img.remove();
+      }, { once: true });
+      img.src = a.photo;
+      wrap.append(img);
+    }
+    return wrap;
+  }
+
+  function squadRequestRow(a: SquadApplicant): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = 'sq-req';
+    const display = a.name || (a.username ? `@${a.username}` : t('member'));
+
+    const identity = document.createElement('span');
+    identity.className = 'sq-req-id';
+    const name = document.createElement('span');
+    name.className = 'sq-req-name';
+    name.textContent = display;
+    name.title = display;
+    const score = document.createElement('span');
+    score.className = 'sq-req-tiq';
+    score.textContent = `${en(Math.max(0, Math.floor(a.tiq)))} TIQ`;
+    identity.append(name, score);
+
+    const actions = document.createElement('span');
+    actions.className = 'sq-req-actions';
+    const approve = document.createElement('button');
+    approve.type = 'button';
+    approve.className = 'sq-req-btn yes';
+    approve.textContent = '✓';
+    approve.setAttribute('aria-label', `${t('squadApprove')} · ${display}`);
+    approve.title = t('squadApprove');
+    const reject = document.createElement('button');
+    reject.type = 'button';
+    reject.className = 'sq-req-btn no';
+    reject.textContent = '✕';
+    reject.setAttribute('aria-label', `${t('squadReject')} · ${display}`);
+    reject.title = t('squadReject');
+    for (const el of [approve, reject]) {
+      if (squadDecisionBusy === a.id) {
+        el.setAttribute('aria-disabled', 'true');
+        el.setAttribute('aria-busy', 'true');
+      }
+      actions.append(el);
+    }
+    approve.addEventListener('click', () => { void decideSquadApplicant(a.id, 'approve'); });
+    reject.addEventListener('click', () => { void decideSquadApplicant(a.id, 'reject'); });
+
+    li.append(squadApplicantAvatar(a), identity, actions);
+    return li;
+  }
+
+  function paintSquadRequests(): void {
+    squadRequestsEl.textContent = '';
+    for (const a of squadRequests) squadRequestsEl.append(squadRequestRow(a));
+  }
+
+  function paintSquadTabs(): void {
+    squadAdminPanel.hidden = !squadLeader;
+    squadTabs.hidden = !squadLeader;
+    squadRosterTitleRow.hidden = squadLeader;
+    if (!squadLeader) squadTab = 'members';
+    const onRequests = squadLeader && squadTab === 'requests';
+    squadTabMembers.classList.toggle('is-active', !onRequests);
+    squadTabRequests.classList.toggle('is-active', onRequests);
+    squadTabMembers.setAttribute('aria-selected', String(!onRequests));
+    squadTabRequests.setAttribute('aria-selected', String(onRequests));
+    squadTabMembers.tabIndex = onRequests ? -1 : 0;
+    squadTabRequests.tabIndex = squadLeader && onRequests ? 0 : -1;
+    squadTabMembersN.textContent = en(squadView?.count ?? 0);
+    squadTabRequestsN.textContent = en(squadRequests.length);
+    /* The amber/red counter only exists when somebody is actually waiting. */
+    squadTabRequestsN.hidden = squadRequests.length === 0;
+    squadRequestsEl.setAttribute('aria-label', `${t('squadPendingRequests')} · ${en(squadRequests.length)}`);
+    applySquadTabVisibility();
+  }
+
+  function setSquadTab(next: 'members' | 'requests'): void {
+    if (!squadLeader || squadTab === next) return;
+    squadTab = next;
+    impact('light');
+    paintSquadTabs();
+    if (squadTab === 'members') paintSquadRoster();
+    else paintSquadRequests();
+    squadScroll.scrollTop = 0;
+  }
+
+  async function decideSquadApplicant(applicantId: string, decision: RequestDecision): Promise<void> {
+    const me = getMySquad();
+    if (!me || !squadLeader || squadDecisionBusy) return;
+    squadDecisionBusy = applicantId;
+    paintSquadRequests();
+    const result = await decideSquadRequest(me.id, applicantId, decision);
+    squadDecisionBusy = '';
+    squadRequests = getSquadAdminState(me.id).requests;
+    if (!result.ok) {
+      notify('warning');
+      showToast(result.message || t('enlistErrOffline'), 'warning');
+    } else {
+      notify('success');
+      impact('medium');
+      showToast(t(decision === 'approve' ? 'squadApproved' : 'squadRejected'), 'success');
+    }
+    /* Approval adds a real roster row: rebuild the whole hub so the member count and the
+       tab's own counter move together. */
+    const fresh = getMySquad();
+    if (fresh) {
+      squadView = buildSquadRoster(fresh);
+      paintSquadRoster();
+      paintSquadRequests();
+      paintSquadTabs();
+      $<HTMLElement>('squad-view-members').textContent = en(squadView.count);
+      squadTotalEl.textContent = en(squadView.totalTiq);
+    }
+  }
+
+  /* The composer is a drawer within the sheet, so it never enters the sheets singleton. */
+  function updateSquadCastCount(): void {
+    squadCastCount.textContent = t('squadBroadcastChars').replace('{n}', en(squadCastText.value.length));
+  }
+
+  function openSquadCast(): void {
+    if (!squadLeader || squadCastBusy) return;
+    squadCastText.value = '';
+    updateSquadCastCount();
+    squadCastDrawer.hidden = false;
+    impact('light');
+    requestAnimationFrame(() => { try { squadCastText.focus({ preventScroll: true }); } catch { /* headless */ } });
+  }
+
+  function closeSquadCast(): void {
+    squadCastDrawer.hidden = true;
+    try { squadBroadcastBtn.focus({ preventScroll: true }); } catch { /* headless */ }
+  }
+
+  async function submitSquadCast(): Promise<void> {
+    const me = getMySquad();
+    if (!me || !squadLeader || squadCastBusy) return;
+    const text = squadCastText.value.trim();
+    if (!text) {
+      notify('warning');
+      showToast(t('squadBroadcastEmpty'), 'warning');
+      squadCastText.focus();
+      return;
+    }
+    squadCastBusy = true;
+    squadCastSend.setAttribute('aria-busy', 'true');
+    squadCastSend.setAttribute('aria-disabled', 'true');
+    const result = await sendSquadBroadcast(me.id, text);
+    squadCastBusy = false;
+    squadCastSend.removeAttribute('aria-busy');
+    squadCastSend.removeAttribute('aria-disabled');
+    if (!result.ok) {
+      notify('warning');
+      showToast(result.message || t('squadBroadcastFailed'), 'warning');
+      return;
+    }
+    closeSquadCast();
+    notify('success');
+    impact('medium');
+    showToast(t('squadBroadcastSent'), 'success');
   }
 
   /* Real channel photo over the monogram crest. The CDN can answer with an error
@@ -900,7 +1121,12 @@ export function createMenu(api: MenuApi): Menu {
    */
   function paintSquadAdmin(me: RankedSquad): void {
     squadAdmin = isSquadAdmin(me);
+    /* The three management features belong to the LEADER alone. An officer keeps the invite
+       row and the kick keys, but never sees the lock, the requests tab or the megaphone. */
+    squadLeader = mySquadRole(me) === 'leader';
     squadAdminEl.hidden = !squadAdmin;
+    squadApprovalToggle.setAttribute('aria-checked', String(getSquadAdminState(me.id).requireApproval));
+    squadApprovalToggle.setAttribute('aria-label', `${t('squadRequireApproval')} · ${me.handle}`);
     if (!squadAdmin) return;
     const url = squadInviteUrl(me.id);
     squadInviteCopyT.textContent = t('copyLink');
@@ -937,7 +1163,10 @@ export function createMenu(api: MenuApi): Menu {
     squadSubsEl.textContent = subs > 0 ? compact(subs) : '—';
     squadSubsEl.title = subs > 0 ? `${en(subs)} ${t('subscribers')}` : t('subscribersNote');
     paintSquadAdmin(me);
+    squadRequests = getSquadAdminState(me.id).requests;
     paintSquadRoster();
+    paintSquadRequests();
+    paintSquadTabs();
   }
 
   /**
@@ -1165,11 +1394,15 @@ export function createMenu(api: MenuApi): Menu {
     sqpTiq.textContent = en(tiq);
     sqpMembers.textContent = en(members);
 
+    /* A locked squad never promises direct entry: the same key asks to join instead. */
+    const locked = !!s && !previewJoined && squadRequiresApproval(s);
     sqpJoin.classList.toggle('is-joined', previewJoined);
-    sqpJoinT.textContent = previewJoined ? t('openSquadHub') : t('joinSquad');
+    sqpJoinT.textContent = previewJoined
+      ? t('openSquadHub')
+      : locked ? t('squadRequestJoin') : t('joinSquad');
     sqpJoin.setAttribute('aria-label', previewJoined
       ? `${t('openSquadHub')} · ${handle}`
-      : `${t('joinSquad')} · ${name}, ${handle}`);
+      : `${locked ? t('squadRequestJoin') : t('joinSquad')} · ${name}, ${handle}`);
     sqpFine.textContent = previewJoined
       ? t('squadFineJoined').replace('{handle}', handle)
       : s
@@ -1242,6 +1475,15 @@ export function createMenu(api: MenuApi): Menu {
       paintSquadPreview();
       notify('warning');
       showToast(result.message || t('enlistErrOffline'), 'warning');
+      return;
+    }
+    /* The squad is locked: the join became a request for the leader, so this player stays on
+       the preview instead of landing on a roster they are not on. */
+    if (result.pending) {
+      paintSquadPreview();
+      impact('light');
+      notify('success');
+      showToast(t('squadRequestSent'), 'success');
       return;
     }
     impact('medium');
@@ -1327,6 +1569,12 @@ export function createMenu(api: MenuApi): Menu {
     squadErr.hidden = true;
     squadView = null;
     squadRows = [];
+    squadRequests = [];
+    squadTab = 'members';
+    squadLeader = false;
+    squadCastDrawer.hidden = true;
+    squadAdminPanel.hidden = true;
+    squadTabs.hidden = true;
     squadQuery = '';
     squadMemberQ.value = '';
     resetSquadLeave();
@@ -1342,6 +1590,16 @@ export function createMenu(api: MenuApi): Menu {
   function refreshSquadHub(): void {
     const me = getMySquad();
     if (!me) return;
+    /* The registry is the cross-device copy of the leader's queue: a request filed on another
+       phone must reach this leader's badge. The local queue already painted instantly. */
+    if (squadLeader) {
+      void refreshSquadRequests(me.id).then((rows) => {
+        if (!squadSheet || squadSheet.hidden || squadBoundView.hidden || !squadLeader) return;
+        squadRequests = rows;
+        paintSquadRequests();
+        paintSquadTabs();
+      });
+    }
     void refreshMySquad().then((fresh) => {
       if (!fresh) return;
       const id = myPlayerId();
@@ -1382,6 +1640,8 @@ export function createMenu(api: MenuApi): Menu {
     squadQ.value = '';
     squadQuery = '';
     squadMemberQ.value = '';
+    squadCastDrawer.hidden = true;
+    squadTab = 'members';
     const me = getMySquad();
     if (me) showSquadBound();
     else showSquadSearch();
@@ -1491,6 +1751,76 @@ export function createMenu(api: MenuApi): Menu {
   });
   squadInviteCopy.addEventListener('click', copySquadInvite);
   squadInviteShare.addEventListener('click', shareSquadInvite);
+
+  /* ---- leader control wiring: every handler re-checks `squadLeader` before it acts ---- */
+  squadApprovalToggle.addEventListener('click', () => {
+    const me = getMySquad();
+    if (!me || !squadLeader || squadApprovalBusy) return;
+    const next = squadApprovalToggle.getAttribute('aria-checked') !== 'true';
+    squadApprovalBusy = true;
+    squadApprovalToggle.setAttribute('aria-busy', 'true');
+    squadApprovalToggle.setAttribute('aria-checked', String(next));
+    impact('light');
+    /* The bridge writes locally before its first await, so the switch lands on the very frame
+       the thumb lifts; a Worker refusal is the only thing that can put it back. */
+    void setSquadApprovalOnServer(me.id, next).then((result) => {
+      squadApprovalBusy = false;
+      squadApprovalToggle.removeAttribute('aria-busy');
+      const fresh = getMySquad();
+      if (fresh) paintSquadAdmin(fresh);
+      if (!result.ok) {
+        notify('warning');
+        showToast(result.message || t('enlistErrOffline'), 'warning');
+        return;
+      }
+      notify('success');
+      showToast(t(next ? 'squadLockOn' : 'squadLockOff'), 'success');
+    });
+  });
+  squadTabMembers.addEventListener('click', () => setSquadTab('members'));
+  squadTabRequests.addEventListener('click', () => setSquadTab('requests'));
+  /* Roving tabindex needs the arrow keys to move between the two segments. */
+  squadTabs.addEventListener('keydown', (e) => {
+    if (!squadLeader || (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft')) return;
+    e.preventDefault();
+    setSquadTab(squadTab === 'members' ? 'requests' : 'members');
+    const focus = squadTab === 'members' ? squadTabMembers : squadTabRequests;
+    try { focus.focus({ preventScroll: true }); } catch { /* headless */ }
+  });
+  squadBroadcastBtn.addEventListener('click', openSquadCast);
+  squadCastClose.addEventListener('click', closeSquadCast);
+  squadCastCancel.addEventListener('click', closeSquadCast);
+  squadCastScrim.addEventListener('click', closeSquadCast);
+  squadCastText.addEventListener('input', updateSquadCastCount);
+  squadCastSend.addEventListener('click', () => { void submitSquadCast(); });
+  /* Escape belongs to the drawer while it is open, not to the sheets singleton: capture it
+     before the sheet's own keydown listener can dismiss the whole hub. */
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || squadCastDrawer.hidden) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    closeSquadCast();
+  }, true);
+  /* A tap that dismisses the squad sheet must dismiss its composer with it, so reopening the
+     hub never lands on a half-written announcement. */
+  document.addEventListener('click', (e) => {
+    if (squadCastDrawer.hidden) return;
+    const target = e.target as HTMLElement | null;
+    if (target && (target.closest('[data-sheet-close]') || target.id === 'scrim')) {
+      squadCastDrawer.hidden = true;
+    }
+  }, true);
+  /* The static labels are swept by the global i18n pass; these are the strings this block
+     paints itself, so a language switch has to rebuild them too. */
+  window.addEventListener('detour:lang', () => {
+    if (squadBoundView.hidden) return;
+    const me = getMySquad();
+    if (me) paintSquadAdmin(me);
+    paintSquadRequests();
+    paintSquadTabs();
+    updateSquadCastCount();
+  });
+
   onSquadChange(() => {
     paintSquadPill();
     if (!squadSheet || squadSheet.hidden) return;

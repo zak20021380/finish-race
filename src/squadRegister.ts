@@ -1,11 +1,14 @@
 import { workerUrl } from './adminApi';
 import { t } from './settings';
 import {
-  ACTIVE_CUP_ID, applySquadRoster, bindSquadById, claimRegisteredSquad, dropSquad, getMySquad, getSquadById,
-  getSquadRanking, hydrateSquadBoard as mergeSquadBoard, joinSquadLocally, kickSquadMemberLocal,
-  leaveSquad, myPlayerId, normalizeSquad, squadIdFromPayload,
-  type RankedSquad, type Squad, type SquadKind, type SquadMember, type SquadRole,
+  ACTIVE_CUP_ID, applySquadRoster, approveSquadRequestLocal, bindSquadById, claimRegisteredSquad,
+  dropSquad, getMySquad, getSquadAdminState, getSquadById, getSquadRanking,
+  hydrateSquadBoard as mergeSquadBoard, joinSquadLocally, kickSquadMemberLocal, leaveSquad,
+  mergeSquadRequests, myPlayerId, mySquadApplicant, normalizeSquad, queueSquadRequest,
+  rejectSquadRequestLocal, setSquadRequireApproval, squadIdFromPayload, squadRequiresApproval,
+  type RankedSquad, type Squad, type SquadApplicant, type SquadKind, type SquadMember, type SquadRole,
 } from './squads';
+import { addNotification } from './notifications';
 import { myTiq } from './matchmaking';
 import { profile } from './storage';
 import { tgInitData, tgUser } from './telegram';
@@ -80,6 +83,20 @@ interface SquadPayload {
   roster?: MemberPayload[];
   /** The cup this squad registered for — the key the Arena's eligibility filter reads. */
   cupId?: string;
+  /** Leader's join-approval gate, as the registry holds it. */
+  requireApproval?: boolean;
+  /** Leader-only: the join requests waiting for an answer. */
+  requests?: ApplicantPayload[];
+}
+
+interface ApplicantPayload {
+  id?: string;
+  name?: string;
+  tiq?: number;
+  country?: string;
+  username?: string;
+  photo?: string;
+  requestedAt?: number;
 }
 
 interface VerifyResponse {
@@ -105,8 +122,19 @@ interface MemberResponse {
   error?: string;
   message?: string;
   joined?: boolean;
+  /** The squad is locked: the join became a pending request instead of a roster row. */
+  pending?: boolean;
   role?: string;
   squad?: SquadPayload;
+}
+
+interface AdminResponse {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  squad?: SquadPayload;
+  requests?: ApplicantPayload[];
+  recipients?: number;
 }
 
 interface BoardResponse {
@@ -133,6 +161,8 @@ const messageFor = (code: string, kind?: SquadKind): string => {
     case 'enlist_in_progress': return t('enlistErrBusySquad');
     case 'unauthorized': return t('enlistErrUnauthorized');
     case 'not_admin': return t('enlistErrAdmin');
+    case 'invalid_message': return t('squadBroadcastEmpty');
+    case 'broadcast_failed': return t('squadBroadcastFailed');
     case 'bot_not_admin': return t('enlistErrBot');
     case 'no_such_squad': return t('squadErrGone');
     case 'telegram_required': return t('squadErrTelegram');
@@ -199,15 +229,25 @@ async function postJson<T>(path: string, payload: Record<string, unknown>): Prom
   }
 }
 
-async function getJson<T>(path: string): Promise<{ data: T | null; ok: boolean; status: number } | null> {
+async function getJson<T>(
+  path: string,
+  withIdentity = false,
+): Promise<{ data: T | null; ok: boolean; status: number } | null> {
   const url = workerUrl(path);
   if (!url) return null;
+  const headers: Record<string, string> = { accept: 'application/json' };
+  /* A leader-only read must carry the signed Mini App identity, or the Worker cannot prove
+     which squad the caller is allowed to see requests for. */
+  if (withIdentity) {
+    const initData = tgInitData();
+    if (initData) headers['x-telegram-init-data'] = initData;
+  }
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), 12_000);
   try {
     const response = await fetch(url, {
       method: 'GET',
-      headers: { accept: 'application/json' },
+      headers,
       signal: controller.signal,
     });
     let data: T | null = null;
@@ -245,6 +285,24 @@ function toMember(row: MemberPayload): SquadMember | null {
   };
 }
 
+/** A Worker join request, folded into the leader's queue shape. */
+function toApplicant(row: ApplicantPayload): SquadApplicant | null {
+  const id = typeof row.id === 'string' ? row.id.replace(/[^0-9A-Za-z_-]/g, '').slice(0, 24) : '';
+  if (!id) return null;
+  const tiq = Number(row.tiq);
+  const at = Number(row.requestedAt);
+  const photo = typeof row.photo === 'string' ? row.photo.trim().slice(0, 300) : '';
+  return {
+    id,
+    name: typeof row.name === 'string' ? row.name.trim().slice(0, 24) : '',
+    tiq: Number.isFinite(tiq) && tiq > 0 ? Math.floor(tiq) : 0,
+    country: typeof row.country === 'string' ? row.country.toUpperCase().slice(0, 2) : '',
+    requestedAt: Number.isFinite(at) && at > 0 ? Math.floor(at) : Date.now(),
+    username: typeof row.username === 'string' ? row.username.replace(/^@+/, '').slice(0, 32) : '',
+    ...(/^https:\/\/[^\s]+$/i.test(photo) ? { photo } : {}),
+  };
+}
+
 /** A Worker squad payload, folded into a squad this device can store and paint. */
 export function toSquad(payload: SquadPayload): Squad | null {
   const id = typeof payload.id === 'string' ? payload.id.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 48) : '';
@@ -272,6 +330,7 @@ export function toSquad(payload: SquadPayload): Squad | null {
     ...(typeof payload.cupId === 'string' && payload.cupId.trim()
       ? { cupId: payload.cupId.trim().slice(0, 48) }
       : {}),
+    ...(typeof payload.requireApproval === 'boolean' ? { requireApproval: payload.requireApproval } : {}),
   }, ownerId || undefined);
 }
 
@@ -398,6 +457,7 @@ export async function registerSquadWithTelegram(
     tag: remote.tag ?? identity.tag,
     ownerId: remote.creatorId ?? remote.ownerId,
     cupId: remote.cupId ?? ACTIVE_CUP_ID,
+    requireApproval: remote.requireApproval,
   });
   if (claimed.ok) return { ok: true, squad: claimed.squad, message: t('enlistToast') };
 
@@ -429,6 +489,10 @@ export interface SquadActionResult {
   code?: string;
   message?: string;
   squad?: RankedSquad;
+  /** A locked squad filed a join request instead of adding this player to the roster. */
+  pending?: boolean;
+  /** The Worker never answered; the local write still landed. */
+  offline?: boolean;
 }
 
 const actionFailure = (code: string, message?: string): SquadActionResult =>
@@ -458,6 +522,13 @@ function absorb(payload: SquadPayload | undefined): RankedSquad | null {
 export async function joinSquadOnServer(id: string): Promise<SquadActionResult> {
   const local = getSquadRanking().find((s) => s.id === id);
   if (!local) return actionFailure('no_such_squad');
+  /* A locked squad never takes a direct join: the invite files a request and stops here, before
+     a single roster row is written. The registry's own copy of the flag lands on this device
+     through `fetchSquad`, so a link opened on another phone sees the same gate. */
+  const me = myPlayerId();
+  const alreadyOn = !!me && local.roster.some((m) => m.id === me);
+  if (squadRequiresApproval(local) && !alreadyOn) return fileSquadJoinRequest(id);
+
   if (!telegramUserId()) {
     /* No Telegram identity means no roster row the registry can key on. The local squad (minted
        on this device) is still joinable, which is what keeps a browser tab playable. */
@@ -467,6 +538,11 @@ export async function joinSquadOnServer(id: string): Promise<SquadActionResult> 
   }
 
   const sent = await postJson<MemberResponse>('/api/squads/join', { squadId: id, ...myPayload() });
+  /* The Worker may answer "pending" when its own gate is newer than this device's cached flag. */
+  if (sent?.ok && sent.data?.ok === true && sent.data.pending === true) {
+    queueSquadRequest(id, mySquadApplicant());
+    return { ok: true, pending: true, squad: local };
+  }
   if (!sent) return actionFailure(OFFLINE);
   const { data, ok } = sent;
   if (!ok || !data || data.ok !== true) {
@@ -476,6 +552,24 @@ export async function joinSquadOnServer(id: string): Promise<SquadActionResult> 
   const squad = absorb(data.squad);
   if (!squad) return actionFailure('no_such_squad');
   return { ok: true, squad };
+}
+
+/**
+ * File a join request on the leader's queue. The local queue is the interactive source of truth
+ * so the flow still works with the Worker unreachable; the POST is the cross-device replication
+ * that lets a leader reviewing on another phone see the very same applicant.
+ */
+async function fileSquadJoinRequest(id: string): Promise<SquadActionResult> {
+  const local = getSquadById(id);
+  const queued = queueSquadRequest(id, mySquadApplicant());
+  if (queued === 'no-squad') return actionFailure('no_such_squad');
+  const sent = await postJson<AdminResponse>('/api/squads/request', { squadId: id, ...myPayload() });
+  return {
+    ok: true,
+    pending: true,
+    squad: local ?? undefined,
+    offline: !sent,
+  };
 }
 
 /**
@@ -591,6 +685,7 @@ export async function fetchSquad(id: string): Promise<RankedSquad | null> {
       avatar: squad.avatar,
       tag: squad.tag,
       ownerId: squad.ownerId,
+      requireApproval: squad.requireApproval,
       bind: false,
     });
   }
@@ -630,4 +725,95 @@ export async function refreshMySquad(): Promise<RankedSquad | null> {
   if (!fresh) return mine;
   bindSquadById(fresh.id);
   return getMySquad() ?? fresh;
+}
+
+/* ---------- leader admin: lock, requests, broadcast ----------
+   Every one of these is local-first: the modal paints the answer immediately from this device's
+   store, and the Worker call replicates it (and, for the broadcast, wakes the bot). A Worker that
+   never answers leaves the local control usable; one that explicitly refuses is reported. */
+
+/** Flip the leader's join-approval gate, locally first and then on the registry. */
+export async function setSquadApprovalOnServer(id: string, on: boolean): Promise<SquadActionResult> {
+  if (!setSquadRequireApproval(id, on)) return actionFailure('no_such_squad');
+  const sent = await postJson<AdminResponse>('/api/squads/admin/lock', {
+    squadId: id, requireApproval: on, ...myPayload(),
+  });
+  const squad = getSquadById(id) ?? undefined;
+  if (!sent) return { ok: true, squad, offline: true };
+  if (!sent.ok || !sent.data || sent.data.ok !== true) {
+    /* An explicit refusal (a non-leader, a vanished squad) must not leave a false switch: put
+       this device back where the registry says it belongs. */
+    setSquadRequireApproval(id, !on);
+    const code = typeof sent.data?.error === 'string' ? sent.data.error : 'failed';
+    return actionFailure(code, sent.data?.message);
+  }
+  return { ok: true, squad };
+}
+
+/** Read the leader's queue, folding the registry's rows into the device's own copy. */
+export async function refreshSquadRequests(id: string): Promise<SquadApplicant[]> {
+  const sent = await getJson<AdminResponse>(
+    `/api/squads/admin/requests?squadId=${encodeURIComponent(id)}`
+    + `&userTelegramId=${encodeURIComponent(telegramUserId())}`,
+    true,
+  );
+  if (sent?.ok && sent.data?.ok === true && Array.isArray(sent.data.requests)) {
+    const rows = sent.data.requests
+      .map(toApplicant)
+      .filter((a): a is SquadApplicant => a !== null);
+    mergeSquadRequests(id, rows);
+  }
+  return getSquadAdminState(id).requests;
+}
+
+export type RequestDecision = 'approve' | 'reject';
+
+/** Approve a request into the roster, or dismiss it; then tell the registry and the applicant. */
+export async function decideSquadRequest(
+  id: string,
+  applicantId: string,
+  decision: RequestDecision,
+): Promise<SquadActionResult> {
+  const done = decision === 'approve'
+    ? approveSquadRequestLocal(id, applicantId)
+    : rejectSquadRequestLocal(id, applicantId);
+  if (!done) return actionFailure('member_not_found');
+  const sent = await postJson<AdminResponse>('/api/squads/admin/decide', {
+    squadId: id, applicantId, decision, ...myPayload(),
+  });
+  /* Only a roster that actually carries the newly approved player may replace this device's
+     copy: an older answer must never un-approve someone the leader just admitted. */
+  if (decision === 'approve' && sent?.ok && sent.data?.ok === true && sent.data.squad) {
+    const remote = toSquad(sent.data.squad);
+    if (remote && remote.roster.some((m) => m.id === applicantId)) {
+      applySquadRoster(remote.id, remote.roster, {
+        subscribers: remote.subscribers,
+        ownerId: remote.ownerId,
+      });
+    }
+  }
+  return { ok: true, squad: getSquadById(id) ?? undefined, offline: !sent };
+}
+
+/** The one message that goes to every member, through the bot and the in-app inbox. */
+export async function sendSquadBroadcast(id: string, text: string): Promise<SquadActionResult> {
+  const body = text.trim().slice(0, 280);
+  if (!body) return actionFailure('invalid_message');
+  const squad = getSquadById(id);
+  const sent = await postJson<AdminResponse>('/api/squads/admin/broadcast', {
+    squadId: id, text: body, ...myPayload(),
+  });
+  if (sent && (!sent.ok || !sent.data || sent.data.ok !== true)) {
+    const code = typeof sent.data?.error === 'string' ? sent.data.error : 'broadcast_failed';
+    return actionFailure(code, sent.data?.message);
+  }
+  /* The leader's own device keeps a copy in the notification centre, so the announcement is
+     visible even when the bot is unreachable. Members receive theirs from @Tactix_Robot. */
+  addNotification({
+    kind: 'announcement',
+    title: t('squadBroadcastTitle'),
+    body: `${squad?.name ?? ''}${squad?.name ? ' · ' : ''}${body}`.slice(0, 220),
+    id: `squad-cast-${id}-${Date.now().toString(36)}`,
+  });
+  return { ok: true, squad: squad ?? undefined, offline: !sent };
 }

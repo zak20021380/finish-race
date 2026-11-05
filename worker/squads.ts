@@ -41,6 +41,29 @@ export interface SquadMemberRow {
   photo: string;
 }
 
+/**
+ * A player waiting for the leader to answer an invite. Deliberately *not* a `SquadMemberRow`:
+ * until the leader approves, this player is nowhere on the roster and moves no count.
+ */
+export interface SquadApplicantRow {
+  id: string;
+  name: string;
+  tiq: number;
+  country: string;
+  username: string;
+  photo: string;
+  requestedAt: number;
+}
+
+/** One leader announcement, kept for the audit trail and the notification centre. */
+export interface SquadAnnouncementRow {
+  id: string;
+  text: string;
+  authorId: string;
+  createdAt: number;
+  recipients: number;
+}
+
 export interface RegisteredSquad {
   id: string;
   chatId: string;
@@ -77,6 +100,12 @@ export interface RegisteredSquad {
   /** Pulled from the Channel War by an admin. The row stays for the audit trail. */
   banned: boolean;
   bannedAt: number;
+  /** Leader's lock: an invite through the shared link files a request, not a membership. */
+  requireApproval: boolean;
+  /** Leader-only queue of join requests awaiting a decision. */
+  pending: SquadApplicantRow[];
+  /** The last announcements this leader dispatched, newest first. */
+  announcements: SquadAnnouncementRow[];
 }
 
 export type SquadRegistration =
@@ -284,6 +313,57 @@ export function readSquadMember(raw: unknown): SquadMemberRow | null {
   };
 }
 
+/** A join request from untrusted storage, folded field by field. */
+export function readSquadApplicant(raw: unknown): SquadApplicantRow | null {
+  const row = raw as Partial<SquadApplicantRow> | null | undefined;
+  if (!row) return null;
+  const id = text(row.id, 24).replace(/[^0-9A-Za-z_-]/g, '');
+  if (!id) return null;
+  const tiq = Number(row.tiq);
+  const at = Number(row.requestedAt);
+  const country = text(row.country, 2).toUpperCase();
+  return {
+    id,
+    name: text(row.name, 24),
+    tiq: Number.isFinite(tiq) && tiq > 0 ? Math.floor(tiq) : 0,
+    country: /^[A-Z]{2}$/.test(country) ? country : '',
+    username: text(row.username, 32).replace(/^@+/, ''),
+    photo: photoOf(row.photo),
+    requestedAt: Number.isFinite(at) && at > 0 ? Math.floor(at) : 0,
+  };
+}
+
+/** Build one applicant from a join request the room just authenticated. */
+export function applicantFromRequest(raw: {
+  id: string; name?: unknown; tiq?: unknown; country?: unknown; username?: unknown; photo?: unknown;
+}): SquadApplicantRow {
+  const tiq = Number(raw.tiq);
+  const country = text(raw.country, 2).toUpperCase();
+  return {
+    id: text(raw.id, 24).replace(/[^0-9A-Za-z_-]/g, ''),
+    name: text(raw.name, 24),
+    tiq: Number.isFinite(tiq) && tiq > 0 ? Math.floor(tiq) : 0,
+    country: /^[A-Z]{2}$/.test(country) ? country : '',
+    username: text(raw.username, 32).replace(/^@+/, ''),
+    photo: photoOf(raw.photo),
+    requestedAt: Date.now(),
+  };
+}
+
+function readAnnouncement(raw: unknown): SquadAnnouncementRow | null {
+  const row = raw as Partial<SquadAnnouncementRow> | null | undefined;
+  if (!row) return null;
+  const at = Number(row.createdAt);
+  const sent = Number(row.recipients);
+  return {
+    id: text(row.id, 48),
+    text: text(row.text, 280),
+    authorId: text(row.authorId, 24),
+    createdAt: Number.isFinite(at) && at > 0 ? Math.floor(at) : 0,
+    recipients: Number.isFinite(sent) && sent > 0 ? Math.floor(sent) : 0,
+  };
+}
+
 /**
  * A stored squad, normalised. The one rule this enforces is the whole point of the model:
  * **`members` is the roster's length**. A row written before the roster existed carries the
@@ -356,6 +436,16 @@ export function readRegisteredSquad(raw: unknown): RegisteredSquad | null {
     revokedAt: stampOf(row.revokedAt),
     banned: row.banned === true,
     bannedAt: stampOf(row.bannedAt),
+    requireApproval: row.requireApproval === true,
+    pending: (Array.isArray(row.pending) ? row.pending : [])
+      .map(readSquadApplicant)
+      .filter((a): a is SquadApplicantRow => a !== null)
+      .filter((a, i, all) => all.findIndex((x) => x.id === a.id) === i)
+      .slice(0, 60),
+    announcements: (Array.isArray(row.announcements) ? row.announcements : [])
+      .map(readAnnouncement)
+      .filter((a): a is SquadAnnouncementRow => a !== null && !!a.text)
+      .slice(0, 20),
   };
 }
 
@@ -475,6 +565,8 @@ export interface SquadView {
   /** The cup this squad registered for — the eligibility key its players are filtered on. */
   cupId: string;
   roster: SquadMemberRow[];
+  /** Public: an invitee needs to know the squad is locked before they tap Join. */
+  requireApproval: boolean;
 }
 
 export function squadViewOf(squad: RegisteredSquad): SquadView {
@@ -502,6 +594,7 @@ export function squadViewOf(squad: RegisteredSquad): SquadView {
     verified: squad.verification === 'verified' && !squad.banned,
     cupId: squad.cupId || ACTIVE_CUP_ID,
     roster,
+    requireApproval: squad.requireApproval === true,
   };
 }
 
@@ -1056,6 +1149,9 @@ export async function verifyAndBuildSquad(
       revokedAt: 0,
       banned: false,
       bannedAt: 0,
+      requireApproval: false,
+      pending: [],
+      announcements: [],
     },
   };
 }
