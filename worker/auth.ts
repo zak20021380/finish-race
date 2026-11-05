@@ -581,17 +581,29 @@ export async function verifyAdminRequest(request: AdminRequestLike, env: Env): P
   return adminIds(env).includes(door.userId) ? door : null;
 }
 
-/* ---------- the metrics door: the operator set, however it signed in ---------- */
+/* ---------- the metrics door: the operator set, or a room-appointed role ---------- */
 
-/** Who may read server telemetry: the operator id, plus every id the deployment calls an admin. */
+/**
+ * Who the deployment itself vouches for: the historic operator id, plus every id on `ADMIN_IDS`.
+ * This is the master failsafe, and it never consults the room — a wiped, cold or unreachable role
+ * registry can never lock the server's own owners out of their telemetry.
+ */
 function isMetricsOperator(id: string, env: Env): boolean {
   return id === METRICS_ADMIN_ID || adminIds(env).includes(id);
 }
 
 /**
- * The server metrics door. The operator key opens it directly; otherwise the caller needs a
- * credential naming an id on the operator set. There is deliberately no development fallback —
- * but there is also no longer a door that shuts the operator out because a signature is missing.
+ * The server metrics door at the edge: authentication, not the final authorization.
+ *
+ * The env allowlist is checked first and short-circuits — that is the failsafe above, and it is
+ * what keeps the owner in when the thing that broke is the registry itself. A caller it does not
+ * name is still forwarded, because the Command Center appoints SuperAdmins and Moderators, and
+ * that registry lives with the room (`MatchmakerDO`), which is the only place that can answer for
+ * it. The room reads its own role rows and refuses with `403` when the caller holds none, so an
+ * unappointed player is still turned away — just by the door that actually knows them.
+ *
+ * The development door is deliberately absent: metrics has no loopback fallback, and a marked dev
+ * request is dropped here rather than forwarded to the room's stricter check.
  */
 export async function identifyMetricsAdmin(
   request: AdminRequestLike,
@@ -601,7 +613,9 @@ export async function identifyMetricsAdmin(
   if (key) return key;
   const door = await identifyAdminRequest(request, env);
   if (!door || door.door === 'dev') return null;
-  return isMetricsOperator(door.userId, env) ? door : null;
+  /* A verified Telegram identity — or the no-secret reading, which is itself allowlist-gated —
+     travels to the room as a candidate. Membership is decided there, against the registry. */
+  return door;
 }
 
 /** Does this `METRICS_HEADER` value name someone the room may serve telemetry to? */

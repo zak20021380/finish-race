@@ -624,8 +624,9 @@ function normalizeMetrics(raw: unknown): ServerMetrics | null {
 
 /**
  * Read the Worker's measured telemetry. `adminHeaders` already carries the Mini App's signed
- * `initData` (and the dev marker, which this route ignores). A 401/403 is the operator door
- * refusing this account — never a cue to fall back to a device-local or demo reading.
+ * `initData` (and the dev marker, which this route ignores), and every call goes through
+ * `adminCall`, so the credential rides this route exactly as it rides the rest of the panel. A
+ * 401/403 is the admin door refusing this account — never a cue to fall back to a demo reading.
  *
  * The ways this call fails are separate facts and the panel says which one happened: a Worker that
  * answered 500 is live and broken, a Worker that answered 404 has no such route, a Worker that took
@@ -2770,8 +2771,8 @@ export function createAdmin(api: AdminApi): Admin {
               : 'Worker Answered With An Error';
         const body = denied
           ? (tgInitData()
-            ? `The metrics door refused this session (${metricsDetail || 'no reason given'}). Live telemetry is restricted to the operator Telegram account — open the Mini App as that account. The live counters stay blank; no demo or modelled figures are substituted.`
-            : 'Telegram initData is missing. Open this Command Center inside Telegram as the metrics operator to read live telemetry; no demo or modelled figures are substituted.')
+            ? `The metrics door refused this session (${metricsDetail || 'no reason given'}). Live telemetry is restricted to the operator allowlist and to the SuperAdmins and Moderators appointed in this Command Center — open the Mini App as one of those accounts. The live counters stay blank; no demo or modelled figures are substituted.`
+            : 'Telegram initData is missing. Open this Command Center inside Telegram as an appointed admin to read live telemetry; no demo or modelled figures are substituted.')
           : failed
             ? `${capFirst(metricsDetail || 'the call produced no answer')}. ${
                 isGone

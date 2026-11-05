@@ -20,10 +20,10 @@
  * `GET /api/client/announcements/active`, the live Mind Ladder at `GET /api/client/minds`,
  * and the Nations Cup at `GET /api/nations/leaderboard` / `GET /api/nations/roster`.
  *
- * `GET /api/admin/metrics` is a stricter door than that surface: only an id on the operator set —
- * the metrics operator plus the deployment's `ADMIN_IDS` — proven by a credential, with no
- * development fallback. It reads the room's live counts and durable counters and answers exact
- * zeroes for empty state.
+ * `GET /api/admin/metrics` is a stricter door than that surface: a credential first, then either
+ * the deployment's operator set — the metrics operator plus `ADMIN_IDS`, its master failsafe — or
+ * a role this room appointed (`superadmin`, `moderator`). There is no development fallback. It
+ * reads the room's live counts and durable counters and answers exact zeroes for empty state.
  *
  * Both admin prefixes are only *authenticated* here. Authorization is the room's, because the role
  * registry lives there: the DO admits exactly the ids on its registry (or the dev and operator-key
@@ -101,14 +101,16 @@ const unreachable = (err: unknown, extra: Record<string, unknown> = {}): Respons
   json({ error: 'matchmaker_unreachable', hint: reasonOf(err), code: 'do_unreachable', ...extra }, 503);
 
 /**
- * The server telemetry door. Unlike `/admin/*`, this route has no development fallback: only an id
- * on the operator set may read it, proven by whatever credential opens the door — the initData
- * signature while the deployment holds a bot token, the operator key, or (only when there is no
- * secret left to sign with) a declared id the `ADMIN_IDS` allowlist recognises. The room re-checks
- * the internal marker before it hands anything back.
+ * The server telemetry door. Unlike `/admin/*`, this route has no development fallback.
+ *
+ * The edge proves who is calling — the initData signature while the deployment holds a bot token,
+ * the operator key, or (only when there is no secret left to sign with) a declared id the
+ * `ADMIN_IDS` allowlist recognises — and marks the forward with that id. The room makes the final
+ * call on its own registry: the mark passes when the id is on the operator allowlist (the env
+ * failsafe) or when this room has appointed it `superadmin` or `moderator`.
  *
  * Every answer carries a reason, and the room's own refusals keep their status: a credential the
- * operator set does not recognise has to read as a refusal, never as an outage.
+ * door does not recognise has to read as a refusal, never as an outage.
  */
 async function serverMetrics(request: Request, env: Env): Promise<Response> {
   const admin = await identifyMetricsAdmin(request, env);

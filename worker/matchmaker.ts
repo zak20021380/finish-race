@@ -3266,11 +3266,12 @@ export class MatchmakerDO {
       return json(await this.nationRoster(request, url), 200, { 'cache-control': 'no-store' });
     }
 
-    /* The private telemetry route: only a request the edge marked after the operator check. The
-       mark names whoever was let through, so an appointed admin reads the same door the operator
-       does - and a call the edge never marked stays shut here, whatever the client sent. */
+    /* The private telemetry route: only a request the edge marked after proving a credential.
+       The mark names whoever was let through, and the door is the union the Command Center
+       promises — the deployment's operator set, or a role this room appointed. A call the edge
+       never marked stays shut here, whatever the client sent. */
     if (url.pathname === '/api/admin/metrics') {
-      if (!isMetricsMark(request.headers.get(METRICS_HEADER) ?? '', this.env)) {
+      if (!this.metricsMarked(request.headers.get(METRICS_HEADER) ?? '')) {
         return json({ error: 'unauthorized', hint: 'metrics operator required' }, 403);
       }
       const mode = matchModeFilterOf(url.searchParams.get('mode'));
@@ -3412,6 +3413,25 @@ export class MatchmakerDO {
   }
 
   /* ---------- the role registry ---------- */
+
+  /**
+   * May this edge-verified mark read server telemetry?
+   *
+   * Two doors, unioned. The deployment's operator set (`ADMIN_IDS` plus the historic operator id)
+   * always wins, so a cold, reset or unreadable registry can never lock the owners out of their
+   * own counters — that is the env failsafe. Failing that, the id must hold a role this room
+   * appointed: `superadmin` or `moderator`, the two lanes the Command Center hands out, both of
+   * which are documented to read metrics and users.
+   *
+   * The mark is never a credential on its own: the edge only writes it after proving an initData
+   * signature, the operator key, or the allowlist reading that is itself allowlist-gated.
+   */
+  private metricsMarked(mark: string): boolean {
+    if (!mark) return false;
+    if (isMetricsMark(mark, this.env)) return true;
+    const row = this.admins.get(mark);
+    return row?.role === 'superadmin' || row?.role === 'moderator';
+  }
 
   /**
    * Who is behind this request: the credential is re-proven here (the room enforces its own
