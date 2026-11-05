@@ -2789,6 +2789,16 @@ html[data-lang="ar"] #s-shop.is-sealed .shop-veil-mark {
 .sheet-actions { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s3); }
 .sheet-actions.split { flex-direction: row; gap: var(--s3); }
 .sheet-actions .btn { flex: 1 1 0; min-width: 0; }
+/* Pause → the lesson's own door: the same obsidian clay pill as its siblings, wearing the
+   tutorial's cyan ring and a soft sky bloom so the teaching key reads as part of the lesson. */
+#pause-tutorial {
+  box-shadow:
+    0 var(--d) 0 var(--btn-lip),
+    0 calc(var(--d) + 6px) 14px -9px rgba(56, 189, 248, .30),
+    inset 0 0 0 1px rgba(56, 189, 248, .34),
+    var(--clay-spec), var(--clay-bevel), var(--clay-ring);
+}
+#pause-tutorial .ico { color: #7DD3FC; }
 .help {
   margin: var(--s3) 0 var(--s4);
   padding-left: 1.2em;

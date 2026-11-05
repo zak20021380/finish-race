@@ -545,6 +545,8 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     howToPlay: 'How to play',
     howToPlaySub: 'Board basics · replay the hands-on tutorial',
     playTutorial: 'Play tutorial',
+    /* the pause sheet's teaching door — the lesson's own key, cyan-ringed inside the sheet */
+    pauseTutorial: '📖 How to play / Tutorial',
     gotIt: 'Got it',
     helpMove: "<b>Move</b> — tap one of your balls, then tap a glowing dot beside it. One step per turn; teams alternate and each may move any one of their balls.",
     helpWall: "<b>Wall</b> — tap a grid line, then tap the ghost wall again to place it. Each side brings 8 walls to a race; the counters under the board show what is left.",
@@ -1150,6 +1152,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     howToPlay: 'آموزش بازی',
     howToPlaySub: 'اصول بازی · آموزش تعاملی رو دوباره ببین',
     playTutorial: 'شروع آموزش تعاملی',
+    pauseTutorial: '📖 آموزش بازی',
     gotIt: 'فهمیدم',
     helpMove: '<b>حرکت</b> — یکی از مهره‌هات رو بزن، بعد روی نقطه نورانی کنارش بزن. هر نوبت یک قدم؛ تیم‌ها یکی‌یکی بازی می‌کنن و هر تیم می‌تونه هر کدوم از مهره‌هاش رو حرکت بده.',
     helpWall: '<b>دیوار</b> — روی خط شبکه بزن، بعد دوباره روی دیوار شبح‌وار بزن تا ساخته بشه. هر طرف 8 دیوار داره؛ شمارنده زیر صفحه نشون می‌ده چقدر مونده.',
