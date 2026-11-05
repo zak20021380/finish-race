@@ -3416,12 +3416,18 @@
       </nav>
 
       <!-- ---------------- first-match hands-on tutorial ----------------
-           Four steps, all performed on the REAL board: see the GOAL, pick and move the
-           pawn, place a wall in ONE tap, then (after two live turns) plant a mine. The
-           scrim and the .tut-block guard share one SVG cut-out, so the live target is sharp
-           AND receives the tap; everything outside the hole is swallowed. Only step 1 has a
-           Next key. The top bar carries a live EN / فارسی / RU switcher; copy and RTL live
-           in src/tutorial.ts. Geometry and the action gate are handed in by main.ts. -->
+           Four steps, all performed on the REAL board: see the GOAL / FINISH line, pick and
+           move the pawn, place a wall in ONE tap, then (after two live turns) ARM and PLANT
+           a mine. The mine step is fully interactive: step 4A spotlights the mine key and its
+           inventory counter, 4B spotlights one legal tile ahead of the rival, STAGES a real mine
+           so the board's ✓/✕ confirm/cancel pair takes over, and carries the exploding/respawning
+           tooltip (#tut-tip); a confirmed plant answers with the gold confirmation ring + checkmark
+           (#tut-confirm) on that very tile. The scrim and the
+           .tut-block guard share one SVG cut-out, so the live target is sharp AND receives
+           the tap; everything outside the hole is swallowed. Only step 1 has a Next key. The
+           top bar carries a live EN / فارسی / RU switcher; copy lives in src/tutorial.ts and
+           the localised guidance strings in src/settings.ts. Geometry and the action gate
+           are handed in by main.ts. -->
       <div class="tutorial" id="tutorial" role="dialog"
         aria-labelledby="tut-title" aria-describedby="tut-body" hidden>
         <svg class="tut-svg" aria-hidden="true" focusable="false">
@@ -3458,6 +3464,8 @@
             </div>
           </div>
           <p class="tut-body" id="tut-body">First player to reach the FINISH line at the top wins! Tap the FINISH line or Next to start.</p>
+          <!-- the mine lesson's concise explanation tooltip: hidden on every other stage -->
+          <p class="tut-tip" id="tut-tip" hidden></p>
           <button class="tut-next" id="tut-next" type="button">
             <span id="tut-next-label">Next</span>
             <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-next" /></svg>
@@ -3474,6 +3482,14 @@
       <div class="tut-ready" id="tut-ready" data-lang="en" dir="ltr" role="status" aria-live="polite" hidden>
         <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-flag" /></svg>
         <span id="tut-ready-txt">YOU'RE READY! REACH THE FINISH LINE!</span>
+      </div>
+      <!-- placement confirmation: a gold ring + checkmark anchored to the planted tile. A sibling
+           of the overlay (not a child), so the lesson can close the instant the mine is buried. -->
+      <div class="tut-confirm" id="tut-confirm" data-lang="en" dir="ltr" role="status" aria-live="polite" hidden>
+        <span class="tut-confirm-ring" aria-hidden="true">
+          <svg class="ico" focusable="false"><use href="#i-check" /></svg>
+        </span>
+        <span class="tut-confirm-t" id="tut-confirm-t">MINE PLANTED</span>
       </div>
 
       <!-- matchmaking: the full-viewport searching stage Quick match opens (src/matchmaking.ts).

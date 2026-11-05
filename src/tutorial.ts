@@ -1,20 +1,29 @@
 /**
  * tutorial.ts — the first-match hands-on lesson.
  *
- * Six stages over four visible steps. Step 1 shows the GOAL: the FINISH banner is the live target,
- * so the player sees where the race ends before touching a pawn. Step 2 is the pick and the forward
- * step, step 3 the single-tap wall: one tap anywhere in the highlighted groove commits it. Then the
- * lesson deliberately steps OUT of the way: the wall stands, the overlay closes, and the board is
- * normal live play for two rival steps. When the rival has gained those two rows and the local seat
- * is up again, the lesson re-opens on its own for step 4 — the mine — and gets out of the way for
- * good the instant the charge is planted.
+ * Six stages over four visible steps, and the full curriculum is present: Movement (step 2),
+ * Placing Walls (step 3), Placing Mines (step 4) and Finishing the Race (the live FINISH banner
+ * that opens the loop and the ready line that closes it). Step 1 shows the GOAL: the FINISH banner
+ * is the live target, so the player sees where the race ends before touching a pawn. Step 2 is the
+ * pick and the forward step, step 3 the single-tap wall: one tap anywhere in the highlighted groove
+ * commits it. Then the lesson deliberately steps OUT of the way: the wall stands, the overlay
+ * closes, and the board is normal live play for two rival steps. When the rival has gained those
+ * two rows and the local seat is up again, the lesson re-opens on its own for step 4 — the
+ * interactive MINE placement step — and gets out of the way for good the instant the charge is
+ * planted. Step 4A spotlights the mine key and its inventory counter; 4B spotlights one legal tile
+ * ahead of the rival, STAGES a real mine there so the board's ✓/✕ confirm/cancel pair takes over,
+ * carries a short exploding/respawning tooltip, and answers a confirmed plant with a gold
+ * confirmation ring + checkmark on that very tile. Cancelling puts the tile spotlight straight
+ * back. Step 4 then sends the player on to the FINISH line.
  *
  * The module never mutates the game itself — `main.ts` performs the action, then calls `notify()`;
  * the action gate here is what told it the tap was the right one.
  *
- * Copy ships in English, Persian and Russian. The segmented switcher in the top bar repaints the
- * current step in place, persists the choice as `tactix_tut_lang`, and flips the card + ready toast
- * to RTL with Vazirmatn for Persian.
+ * Copy ships in English, Persian and Russian. The lesson's own guidance lines live in the
+ * settings.ts dictionaries (EN / FA / RU / AR / ES), so the strings the Settings screen and the
+ * lesson speak cannot drift apart. The segmented switcher in the top bar repaints the current step
+ * in place, persists the choice as `tactix_tut_lang`, and flips the card + ready toast to RTL with
+ * Vazirmatn for Persian.
  *
  * The scrim and the input blocker share one SVG cut-out, so the spotlight is sharp and — just as
  * important — the blocker is physically absent inside it. Taps land on the real canvas or the real
@@ -23,7 +32,7 @@
  */
 
 import type { Cell, Pos, WallSpec } from './rules';
-import { lang as appLang, onLang } from './settings';
+import { STRINGS, lang as appLang, onLang } from './settings';
 import { mineStage } from './staging';
 
 export interface TutorialRect { left: number; top: number; width: number; height: number }
@@ -44,6 +53,72 @@ export type TutorialLang = 'en' | 'fa' | 'ru';
 
 export const TUTORIAL_LANGS: readonly TutorialLang[] = ['en', 'fa', 'ru'];
 export const TUT_LANG_KEY = 'tactix_tut_lang';
+
+/**
+ * The COMPLETE curriculum, as a catalogue of lessons rather than a second state machine. Every
+ * topic is backed by real, action-gated board stages — Movement → Placing Walls → Placing Mines →
+ * Finishing the Race — so no lesson is a slide the player merely reads. FINISHING THE RACE is the
+ * live gold banner that opens the loop and the ready line that closes it; it is a topic with a
+ * stage, not an extra overlay step. `key` names the settings.ts dictionary line that localises it.
+ */
+export type TutorialLesson = 'movement' | 'walls' | 'mines' | 'finishing';
+export const TUTORIAL_CURRICULUM: readonly {
+  topic: TutorialLesson;
+  stages: readonly TutorialStage[];
+  key: string;
+}[] = [
+  { topic: 'movement', stages: ['select', 'move'], key: 'tutorialLessonMove' },
+  { topic: 'walls', stages: ['wall'], key: 'tutorialLessonWall' },
+  { topic: 'mines', stages: ['mine-arm', 'mine-place'], key: 'tutorialMineStep' },
+  { topic: 'finishing', stages: ['goal'], key: 'tutorialLessonFinish' },
+];
+
+/** The two interactive mine stages, in order: arm the counter, then plant on a legal tile. */
+export const TUTORIAL_MINE_STAGES: readonly TutorialStage[] = ['mine-arm', 'mine-place'];
+
+/** One localised curriculum line. An unknown locale falls back to English, never to a raw key. */
+export function tutorialLessonLine(topic: TutorialLesson, code: TutorialLang): string {
+  const row = TUTORIAL_CURRICULUM.find((c) => c.topic === topic);
+  if (!row) return '';
+  const table = STRINGS[code] ?? STRINGS.en;
+  return table[row.key] ?? STRINGS.en[row.key] ?? '';
+}
+
+/**
+ * The mine step's concise explanation tooltip, from the same settings.ts dictionaries the rest of
+ * the app reads. 4A names the trap (and highlights the mine key + its inventory counter); 4B says
+ * what the charge does: the first rival token onto it explodes and respawns two rows back.
+ */
+export const TUTORIAL_MINE_TIPS: Readonly<Record<'mine-arm' | 'mine-place', Readonly<Record<TutorialLang, string>>>> = {
+  'mine-arm': {
+    en: tutorialLessonLine('mines', 'en'),
+    fa: tutorialLessonLine('mines', 'fa'),
+    ru: tutorialLessonLine('mines', 'ru'),
+  },
+  'mine-place': {
+    en: STRINGS.en.tutorialMineTip,
+    fa: STRINGS.fa.tutorialMineTip,
+    ru: STRINGS.ru.tutorialMineTip,
+  },
+};
+
+/**
+ * Step 4B's SECOND beat: the charge is staged and the board's real ✓/✕ pair is up. The card swaps
+ * to this line so the player knows the tap that planted it is still to come — and that the ✕ key
+ * is a real way back to the tile. Same settings.ts dictionaries as every other lesson line.
+ */
+export const TUTORIAL_MINE_STAGED: Readonly<Record<TutorialLang, string>> = {
+  en: STRINGS.en.tutorialMineStaged,
+  fa: STRINGS.fa.tutorialMineStaged,
+  ru: STRINGS.ru.tutorialMineStaged,
+};
+
+/** The placement confirmation ring's caption, in the step's own language. */
+export const TUTORIAL_MINE_CONFIRM: Readonly<Record<TutorialLang, string>> = {
+  en: STRINGS.en.tutorialMinePlaced,
+  fa: STRINGS.fa.tutorialMinePlaced,
+  ru: STRINGS.ru.tutorialMinePlaced,
+};
 
 /** Every word the lesson speaks, in one language, for one stage. */
 export interface TutorialStepCopy {
@@ -132,6 +207,8 @@ export interface Tutorial {
   cancel(): void;
   allows(action: TutorialAction): boolean;
   notify(action: TutorialAction): void;
+  /** Step 4B staged (or dropped) a real charge: move the spotlight onto the ✓/✕ pair. */
+  staged(on: boolean): void;
   nudge(): void;
 }
 
@@ -241,16 +318,17 @@ export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
     copy: {
       en: {
         step: 'STEP 4 OF 4', title: 'PLANT THE MINE',
-        body: 'Tap the glowing tile ahead of your opponent to hide the mine in their path!',
+        body: 'Tap the glowing tile ahead of your rival, then ✓ to bury the mine '
+          + '(✕ cancels). Step on it and they blast back!',
       },
       fa: {
         step: 'قدم ۴ از ۴', title: 'کاشتن مین!',
-        body: 'حالا رو خونه جلوی حریف بزن تا مین رو سر راهش قایم کنی! '
+        body: 'رو خونه جلوی حریف بزن، بعد ✓ رو بزن تا مین کار گذاشته بشه (✕ لغوش می‌کنه)! '
           + 'بره روش حسابی عقب می‌افته!',
       },
       ru: {
         step: 'ШАГ 4 ИЗ 4', title: 'УСТАНОВИ МИНУ',
-        body: 'Нажми на клетку перед соперником, чтобы спрятать мину на его пути!',
+        body: 'Нажми на клетку перед соперником, затем ✓, чтобы заложить мину (✕ — отмена)!',
       },
     },
   },
@@ -273,9 +351,15 @@ export const TUTORIAL_RESUME_STAGE: TutorialStage = 'mine-arm';
 /** Forward rows the rival must take in live play before the mine lesson re-opens. */
 export const TUTORIAL_LIVE_STEPS = 2;
 
-/** Only local bot races teach; an online seat or a room another person holds never sees it. */
-export function shouldAutoStartTutorial(o: { online: boolean; room: boolean; completed: boolean }): boolean {
-  return !o.online && !o.room && !o.completed;
+/**
+ * STRICT FIRST-TIME-ONLY rule. Only a local, single-human bot race may auto-route into the lesson,
+ * and only when the persistent completion flag is NOT true. `completed` is optional on purpose: a
+ * missing flag (an older save, a refused storage backend, a fresh install) IS a first launch, while
+ * only the literal `true` written by `completeTutorial()` on finish or Skip closes the door for
+ * good. An online seat or a room another person holds never sees the lesson.
+ */
+export function shouldAutoStartTutorial(o: { online: boolean; room: boolean; completed?: boolean }): boolean {
+  return !o.online && !o.room && o.completed !== true;
 }
 
 export const sameCell = (a: Cell | null, b: Cell | null): boolean =>
@@ -394,6 +478,9 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const langBtns = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-tut-lang]'));
   const readyEl = byId<HTMLElement>('tut-ready');
   const readyTxt = byId<HTMLElement>('tut-ready-txt');
+  const tipEl = byId<HTMLElement>('tut-tip');
+  const confirmEl = byId<HTMLElement>('tut-confirm');
+  const confirmTxt = byId<HTMLElement>('tut-confirm-t');
 
   let open = false;
   /** The wall is up and the board is being played for real: no overlay, no gate, step held. */
@@ -407,6 +494,12 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   let flow = 0;
   let lang: TutorialLang = normalizeTutLang(readStoredLang() ?? appLang);
   let readyTimer = 0;
+  let confirmTimer = 0;
+  /** Step 4B has staged a real charge: the ✓/✕ pair is the live target, not the tile. */
+  let mineStaged = false;
+  /** The tile box from step 4B's LAST good spotlight, kept for the confirmation ring. `play()`
+      hands the turn to the rival, which makes `hooks.minePlace()` answer null a beat later. */
+  let mineTileRect: TutorialRect | null = null;
 
   const stage = (): TutorialStage | null =>
     open ? TUTORIAL_STEPS[stepIndex].stage : null;
@@ -466,13 +559,28 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
   const paintCopy = (animate = false) => {
     const def = TUTORIAL_STEPS[stepIndex];
     const copy = def.copy[lang];
+    /* Only the two mine stages carry the concise explanation tooltip: 4A explains the trap on the
+       mine key / counter, 4B explains the exploding + respawning rival token on the tile. */
+    const s = def.stage;
+    const tip = s === 'mine-arm' || s === 'mine-place' ? TUTORIAL_MINE_TIPS[s][lang] : '';
+    /* A staged charge changes ONE line only: the card now names the ✓/✕ pair the player must
+       press. The kicker, title, tooltip, language pill and skip key all stay exactly as they were. */
+    const body = mineStaged && s === 'mine-place' ? TUTORIAL_MINE_STAGED[lang] : copy.body;
     stepEl.textContent = copy.step;
     titleEl.textContent = copy.title;
-    bodyEl.textContent = copy.body;
+    bodyEl.textContent = body;
     nextLabel.textContent = copy.action ?? 'Next';
     skipBtn.textContent = TUTORIAL_CHROME[lang].skip;
     readyTxt.textContent = TUTORIAL_CHROME[lang].ready;
-    liveEl.textContent = `${copy.step}. ${copy.title}. ${copy.body}`;
+    tipEl.hidden = !tip;
+    if (tip) {
+      tipEl.textContent = tip;
+      tipEl.dir = tutorialDir(lang);
+      tipEl.lang = lang;
+    }
+    liveEl.textContent = tip
+      ? `${copy.step}. ${copy.title}. ${body}. ${tip}`
+      : `${copy.step}. ${copy.title}. ${body}`;
     if (!animate) return;
     card.classList.remove('lang-swap');
     root.classList.remove('lang-swap');
@@ -513,6 +621,45 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       readyEl.classList.remove('show');
       readyEl.hidden = true;
     }, 3200);
+  };
+
+  /** The confirmation ring is a fixed 132x96 badge: clamp it so 320px phones never overflow. */
+  const CONFIRM_W = 132;
+  const CONFIRM_H = 96;
+
+  const hideConfirm = () => {
+    if (confirmTimer) { window.clearTimeout(confirmTimer); confirmTimer = 0; }
+    confirmEl.classList.remove('show');
+    confirmEl.hidden = true;
+  };
+
+  /**
+   * Step 4B succeeded: ring the exact tile the spotlight was pointing at with a gold checkmark.
+   * The badge is a SIBLING of the overlay, not a child, so hiding `#tutorial` closes the lesson
+   * immediately while the ring still reads for a beat. It is clamped and never takes a tap.
+   */
+  const showConfirm = (rect: TutorialRect | null = null) => {
+    const r: { left: number; top: number; width: number; height: number } | null =
+      rect ?? (spotEl.hidden ? null : spotEl.getBoundingClientRect());
+    if (!r || r.width < 1 || r.height < 1) return;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const cx = clamp(r.left + r.width / 2, CONFIRM_W / 2 + 8, vw - CONFIRM_W / 2 - 8);
+    const cy = clamp(r.top + r.height / 2, CONFIRM_H / 2 + 8, vh - CONFIRM_H / 2 - 8);
+    confirmEl.style.left = `${cx - CONFIRM_W / 2}px`;
+    confirmEl.style.top = `${cy - CONFIRM_H / 2}px`;
+    confirmEl.dataset.lang = lang;
+    confirmEl.dir = tutorialDir(lang);
+    confirmEl.lang = lang;
+    confirmTxt.textContent = TUTORIAL_MINE_CONFIRM[lang];
+    confirmEl.hidden = false;
+    confirmEl.classList.remove('show');
+    void confirmEl.offsetWidth;
+    confirmEl.classList.add('show');
+    if (confirmTimer) window.clearTimeout(confirmTimer);
+    confirmTimer = window.setTimeout(() => {
+      confirmTimer = 0;
+      hideConfirm();
+    }, 1400);
   };
 
   const fullPath = (): string =>
@@ -594,12 +741,24 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
 
   const place = () => {
     if (!open) return;
-    /* A staged mine's ✓/✕ pair owns the board. Those two discs are the instruction at that point,
-       so the card, the fingertip and the spotlight stand down rather than paint over them — and the
-       mask goes with them, which is also what lifts the scrim off the board. The board's own gate
-       means step 4 never stages a mine (it buries the charge in one tap), so this is the guarantee
-       that no future stage can park a bubble on the two keys it is asking the player to press. */
-    if (mineStage()) {
+    const def = TUTORIAL_STEPS[stepIndex];
+    const staged = mineStage();
+    /* STEP 4B — a real charge is staged and the board's own ✓/✕ pair is up. That pair is now the
+       live target: the cut-out moves onto IT (so the input blocker lets the confirm and cancel
+       taps through to the canvas), the fingertip stands down, and the card stays up one line
+       longer with the confirm/cancel instruction. No bubble is ever parked on the two keys. */
+    if (staged && def.stage === 'mine-place' && mineStaged) {
+      const hole = clampRect(atLeast(padRect(staged, 8), 48, 48));
+      drawMask(hole, 14);
+      aidEl.hidden = true;
+      pointer.style.display = 'none';
+      card.hidden = false;
+      placeCard(hole);
+      return;
+    }
+    /* A pair staged outside the lesson's mine step still owns the board: stand everything down so
+       no guidance surface can cover the keys the player is being asked to press. */
+    if (staged) {
       drawMask(null, 0);
       aidEl.hidden = true;
       pointer.style.display = 'none';
@@ -607,7 +766,6 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       return;
     }
     card.hidden = false;
-    const def = TUTORIAL_STEPS[stepIndex];
     const spot = spotFor(def.stage);
     if (!spot) {
       drawMask(null, 0);
@@ -618,6 +776,9 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     }
     const pad = def.stage === 'mine-arm' ? 8 : TUTORIAL_SPOT_PAD;
     const hole = clampRect(atLeast(padRect(spot.rect, pad), 48, 48));
+    /* remember the tile while its target is still live: after the plant the turn has passed and
+       `hooks.minePlace()` goes null, but the confirmation ring must still land on THAT square. */
+    if (def.stage === 'mine-place') mineTileRect = hole;
     drawMask(hole, spot.radius ?? 16);
     placeAid(def.stage, aidFor(def.stage));
     pointer.style.display = '';
@@ -685,6 +846,8 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     if (!open) return;
     const at = TUTORIAL_STEPS.findIndex((s) => s.stage === next);
     if (at < 0) { close('finished'); return; }
+    mineStaged = false;               // a new stage always starts from its own target
+    mineTileRect = null;
     stepIndex = at;
     render();
   };
@@ -718,6 +881,8 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     if (!open) return;
     open = false;
     suspended = true;
+    mineStaged = false;
+    mineTileRect = null;
     flow++;
     clearTimers();
     if (trackId) { cancelAnimationFrame(trackId); trackId = 0; }
@@ -739,6 +904,8 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     if (!open && !suspended) return;
     open = false;
     suspended = false;
+    mineStaged = false;
+    mineTileRect = null;
     flow++;
     clearTimers();
     if (trackId) { cancelAnimationFrame(trackId); trackId = 0; }
@@ -750,8 +917,14 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
     root.classList.remove('lang-swap');
     document.body.classList.remove('tutorial-live');
     detach();
-    if (result === 'finished') showReady();
-    else hideReady();
+    if (result === 'finished') {
+      /* the mine's confirmation ring outlives the overlay for one beat; only the ready toast
+         joins it. Any other ending (Skip, Escape, leaving) takes the ring down at once. */
+      showReady();
+    } else {
+      hideReady();
+      hideConfirm();
+    }
     hooks.refresh(null);
     hooks.end(result);
   }
@@ -781,8 +954,11 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       if (open) return;
       open = true;
       suspended = false;
+      mineStaged = false;
+      mineTileRect = null;
       stepIndex = 0;
       hideReady();
+      hideConfirm();
       root.hidden = false;
       document.body.classList.add('tutorial-live');
       attach();
@@ -794,8 +970,11 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
       if (open || !suspended) return;
       suspended = false;
       open = true;
+      mineStaged = false;
+      mineTileRect = null;
       const at = TUTORIAL_STEPS.findIndex((s) => s.stage === TUTORIAL_RESUME_STAGE);
       if (at >= 0) stepIndex = at;
+      hideConfirm();
       root.hidden = false;
       document.body.classList.add('tutorial-live');
       attach();
@@ -826,8 +1005,12 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
         return;
       }
       if (now === 'mine-place') {
-        /* The mine is buried: the overlay and the lesson are done, immediately and for good. The
-           rival walks onto the charge as part of the live match, not a scripted watch beat. */
+        /* The mine is buried. `play()` already handed the turn to the rival, so do NOT re-place:
+           the tile target is gone by now. Ring the saved tile box instead, then the overlay and
+           the lesson are done, immediately and for good. The rival walks onto the charge as part
+           of the live match, not a scripted watch beat. */
+        mineStaged = false;
+        showConfirm(mineTileRect);
         close('finished');
         return;
       }
@@ -847,6 +1030,18 @@ export function createTutorial(hooks: TutorialHooks): Tutorial {
             go(next);
           });
       }, REPLY_BEAT_MS);
+    },
+    staged(on) {
+      if (!open || stage() !== 'mine-place') return;
+      /* main.ts publishes the pair's box through `armCapsules()` before calling here. `place()`
+         still reads that box live — if the renderer found no room for a pair, the tile spotlight
+         simply stays up and the player can pick the square again. */
+      const next = !!on;
+      if (next === mineStaged) return;
+      mineStaged = next;
+      paintCopy();
+      place();
+      trackFor(420);       // the pair may still be sliding into place: follow its real box
     },
     nudge() {
       if (!open) return;

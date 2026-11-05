@@ -43,8 +43,8 @@ import {
   closeVipSheet, initVipStore, isPremiumUser, onVipChange,
 } from './premium';
 import {
-  completeTutorial, earnCoins, earnTiq, hasCompletedTutorial, onChange, pieceColor, profile, recordGame,
-  resetTutorialState, theme,
+  completeTutorial, earnCoins, earnTiq, hasCompletedTutorial, isFirstTimePlayer, onChange, pieceColor,
+  profile, reconcileTutorialFromHistory, recordGame, resetTutorialState, theme,
 } from './storage';
 import {
   createTutorial, shouldAutoStartTutorial, tutorialSpotHas, TUTORIAL_LIVE_STEPS,
@@ -54,13 +54,13 @@ import {
 import { PEARL_BOARD, perspectiveRamps, type Theme } from './themes';
 import { mineStage, setMineStage, STAGE_CLEAR } from './staging';
 import {
-  detonation, impact, initTelegram, inviteRoomCode, inviteSquadId, notify, onBackPress,
-  shatterImpact, tgUser,
+  detonation, impact, initTelegram, inviteDuelCode, inviteRoomCode, inviteSquadId, notify,
+  onBackPress, shatterImpact, startParam, tgUser,
 } from './telegram';
 import { applyFlagSupport } from './countries';
 import {
-  createRoomCode, getGameMode, gmBack, initGameModes, notifyMatchBusy, onGameModeChange, openInviteRoom,
-  resumeRoom, setGameMode, takeAutoLaunch,
+  autoTutorialForLaunch, createRoomCode, getGameMode, gmBack, initGameModes, notifyMatchBusy,
+  onGameModeChange, openInviteRoom, resumeRoom, setGameMode, takeAutoLaunch,
 } from './gamemodes';
 import { dismissDuelVeil, noteDuelLobby, openDuelDoor, throwDuelChallenge } from './duelInvite';
 import { initSeize } from './seize';
@@ -645,6 +645,14 @@ let tutorial: Tutorial | null = null;
 let tutorialRequested = false;
 /** A lesson that replaces the launch is its own match: finishing or skipping it returns to Home. */
 let tutorialStandalone = false;
+/**
+ * ACTION-FIRST FIRST OPEN. True only while a true first-time player is inside the lesson that
+ * boot launched for them: no Home screen was ever shown on the way in. Cleared the moment the
+ * lesson ends, so a later race or replay can never be mistaken for a cold boot.
+ */
+let firstRunBoot = false;
+/** The boot lesson is done and the flag is saved; the player is sprinting to the FINISH line. */
+let firstRunSprint = false;
 const tutorialStage = (): TutorialStage | null => (tutorialActive ? tutorial?.stage ?? null : null);
 
 /** People actually holding seats in a room — a local practice room holds only this screen. */
@@ -1388,6 +1396,15 @@ function showOverlay() {
   /* a locked rematch cannot take the focus it never gets: the quiet door does */
   if (resultLocked) toMenu.focus({ preventScroll: true });
   else again.focus({ preventScroll: true });
+  /* The first open's tutorial match has now reached the FINISH line. Give the result card one
+     beat to be read, then route the new player cleanly to #s-home — the main menu they never saw
+     on the way in. If they already left, or hit Play again, the guards make this a no-op. */
+  if (firstRunSprint) {
+    firstRunSprint = false;
+    window.setTimeout(() => {
+      if (overlayOpen && router.current === 'game') quitToMenu();
+    }, 3600);
+  }
 }
 
 /**
@@ -2099,11 +2116,23 @@ function startGame(setup: StartSetup) {
      which is what the Play Dock launches, so the lesson stays reachable there. */
   const requested = tutorialRequested;
   tutorialRequested = false;
-  const wantsTutorial = requested || shouldAutoStartTutorial({
-    online: !!setup.online,
-    room: humansIn(setup.room) > 1,
-    completed: hasCompletedTutorial(),
-  });
+  /* STRICT FIRST-TIME-ONLY. A late server/profile hydrate can restore match history after boot,
+     so stamp the lesson flag before ANY launch decision: a returning player on a fresh cache is
+     never auto-routed into onboarding. The persistent flag is then read once here and again at the
+     mode-selection door; the pure rule refuses online seats and rooms held by other people. A
+     returning player who finished OR skipped the lesson therefore NEVER auto-routes into it:
+     `wantsTutorial` stays false and the requested mode (Practice, 1v1, private room) launches
+     directly. A manual replay (`requested`) is the ONLY thing that may override the flag. */
+  reconcileTutorialFromHistory();
+  const completed = hasCompletedTutorial();
+  const autoLesson = !completed
+    && autoTutorialForLaunch()
+    && shouldAutoStartTutorial({
+      online: !!setup.online,
+      room: humansIn(setup.room) > 1,
+      completed,
+    });
+  const wantsTutorial = requested || autoLesson;
   /* A lesson that replaces the launch is the whole match: its end returns to Home. Pause →
      Replay is the one lesson that runs inside a real match and hands the board straight back. */
   tutorialStandalone = wantsTutorial;
@@ -2192,7 +2221,9 @@ function startGame(setup: StartSetup) {
     syncLoop();
     /* `hidden` was cleared a line ago: re-fit now, then verify once after the DOM settles. */
     settleBoard();
-    if (wantsTutorial) beginTutorial();
+    /* `autoLesson` asks for one last storage read at the moment the overlay opens, so a save that
+       became complete during the face-off cinematic can never resurrect the lesson. */
+    if (wantsTutorial) beginTutorial(autoLesson);
   };
   /* A room that already counted itself down has had its ceremony — the FIGHT flash *was* the
      reveal — so it goes straight to the board rather than paying for a second cinematic. */
@@ -2281,6 +2312,10 @@ function resumeAfterSheetClose(el: HTMLElement): void {
 }
 
 function quitToMenu() {
+  /* Any exit ends the first-open session: the sprint's deferred Home hop must not outlive a
+     player who already left the board, and a later race is never a cold boot. */
+  firstRunBoot = false;
+  firstRunSprint = false;
   cancelTutorial();                 // leaving mid-lesson does not count as having read it
   /* A board abandoned before its verdict is not a match: drop the open clock without reporting. */
   setIdle();
@@ -2487,7 +2522,17 @@ function tutorialTap(p: Vec) {
     return;
   }
   const stage = tutorialStage();
-  let action = tutorialHitAction(at(p));
+  const hit = at(p);
+  /* STEP 4B's ✕ key: drop the staged charge, put the tile spotlight back and let the player
+     choose again. The ✕ is a real cancel, never a nudge, and the lesson stays on step 4. */
+  if (stage === 'mine-place' && hit?.kind === 'cancel' && mineGhost) {
+    impact('light');
+    mineGhost = null;
+    armCapsules();
+    tutorial?.staged(false);
+    return;
+  }
+  let action = tutorialHitAction(hit);
   /* Step 3 is forgiving by design: one tap anywhere in the spotlight — not only the hairline
      groove — commits the wall, so the lesson is a single decisive action. */
   if (stage === 'wall') {
@@ -2516,6 +2561,18 @@ function tutorialTap(p: Vec) {
       break;
     }
     case 'mine':
+      /* STEP 4B, first tap: STAGE the charge on the exact tile the lesson is pointing at. That
+         raises the board's real ✓/✕ confirmation pair, and the spotlight moves onto it. The mine
+         is NOT buried yet: the lesson only advances when the player confirms with ✓. */
+      if (stage === 'mine-place' && hit?.kind === 'mine') {
+        mineGhost = action.cell;
+        armCapsules();
+        impact('light');
+        tutorial?.staged(true);
+        return;
+      }
+      /* The ✓ tap (or any other confirmed mine door): bury it through the same `play()` every
+         real race uses, then let the lesson close with the gold confirmation ring. */
       if (!play({ kind: 'mine', cell: action.cell })) { tutorial?.nudge(); return; }
       break;
     case 'mine-arm':
@@ -2827,9 +2884,12 @@ async function tutorialReply(): Promise<void> {
 
 /**
  * Stage change from the lesson: clear every hover preview so the board stays bare behind the card,
- * then let `ui()` re-derive the dots and the mine key's state.
+ * then let `ui()` re-derive the dots and the mine key's state. On the mine's 4A stage the pod AND
+ * its inventory counter are ringed — the player must see both the action button and the charges
+ * it spends. `refresh(null)` takes that ring down when the lesson closes or suspends.
  */
-function syncTutorialUI() {
+function syncTutorialUI(stage: TutorialStage | null = null) {
+  mineBtn.classList.toggle('tut-arm-target', stage === 'mine-arm');
   if (!tutorialActive) return;
   if (ghost) setMode({ ...mode(), preview: null });
   ui();
@@ -2903,8 +2963,14 @@ function resumeMineLesson() {
   tutorial?.resume();         // render() refreshes the board through syncTutorialUI -> ui()
 }
 
-function beginTutorial() {
+function beginTutorial(auto = false) {
   if (!tutorial || tutorial.active || active || humansIn(room) > 1) return;
+  /* The late guard: an AUTO lesson is refused the instant the save says it was completed or
+     skipped. Manual replays (Pause / Settings) pass `auto === false` and always run. */
+  if (auto && hasCompletedTutorial()) {
+    tutorialStandalone = false;   // nothing replaces this race: it plays as an ordinary match
+    return;
+  }
   waitingForMineTrigger = false;
   mineStrides = 0;
   mineGateRows = null;
@@ -2932,6 +2998,51 @@ function startTutorial() {
   startGame({ difficulty: menuState.difficulty, sizes: [1, 1] });
 }
 
+/**
+ * A shared link owns the first screen. A room, duel or squad invite — or any other start payload —
+ * is a promise to take the reader somewhere specific, so first-open onboarding must never cover it.
+ * The query-string fallbacks matter outside Telegram, where the payload arrives as `?room=1909`.
+ */
+function hasLaunchDeepLink(): boolean {
+  try {
+    if (startParam().trim()) return true;
+    return !!(inviteRoomCode() || inviteDuelCode() || inviteSquadId());
+  } catch {
+    return false;   /* a webview that refuses the URL still boots normally */
+  }
+}
+
+/**
+ * ACTION-FIRST FIRST OPEN — the FTUE router.
+ *
+ * A brand-new profile does NOT see Home/Lobby first. Boot drops it straight onto a fresh 1v1 local
+ * board with the interactive lesson already running; the main menu is discovered AFTER that first
+ * playable experience. Three gates stand in front of that door, in this order:
+ *
+ *   1. A server/profile hydrate can restore match history onto an empty local cache. That player is
+ *      RETURNING even without the lesson flag, so the flag is stamped before any decision is made.
+ *   2. `isFirstTimePlayer()` — no completed lesson AND zero recorded matches. A returning player
+ *      (`hasCompletedTutorial() === true`) always boots on #s-home and is never auto-routed again.
+ *   3. A deep link keeps its own destination; onboarding never hijacks an invite.
+ *
+ * When the lesson is skipped (or Escape / Back is pressed) `end()` routes straight Home. When it
+ * is finished, the completion flag is persisted at once and the player sprints to the FINISH line;
+ * `showOverlay()` then lands them on #s-home once that first match is settled.
+ */
+function bootFirstRunTutorial(): void {
+  reconcileTutorialFromHistory();
+  if (!isFirstTimePlayer()) return;      // returning users ALWAYS boot on #s-home
+  if (hasLaunchDeepLink()) return;
+  firstRunBoot = true;
+  /* A fresh local duel, not a room and not an online seat. `quiet` skips the VS cinematic: the
+     board itself is the first thing a new player sees. `tutorialRequested` forces the standalone
+     lesson, so `reveal()` calls `beginTutorial()` on the same turn the screen goes live. */
+  tutorialRequested = true;
+  startGame({ difficulty: menuState.difficulty, sizes: [1, 1], quiet: true });
+  /* Cold boot: re-anchor and re-measure across animation frames (see settleColdBootBoard). */
+  settleColdBootBoard();
+}
+
 /** Leaving the race, or starting another one, ends the lesson without marking it read. */
 function cancelTutorial() {
   if (!tutorialActive && !waitingForMineTrigger) return;
@@ -2954,18 +3065,33 @@ tutorial = createTutorial({
   handoff: beginMineIntermission,
   refresh: syncTutorialUI,
   end(result) {
+    const bootLesson = firstRunBoot;
+    firstRunBoot = false;
     tutorialActive = false;
     document.body.classList.remove('tutorial-live');
     mineGhost = null;            // before the mode: `armCapsules` must not re-stage a dead square
     setMode(BOARD_IDLE);
     autoPicked = null;
     if (result === 'cancelled') { tutorialStandalone = false; return; }
-    completeTutorial();       // read to the end or skipped: either way, not first-run again
-    /* A lesson that replaced the launch is its own match — finishing or skipping it drops the
-       player back on Home instead of leaving them inside a bot race they never asked for. Pause →
-       Replay is the exception: the real match under it gets the live board straight back. */
+    /* Finishing the confirmed mine placement OR explicitly tapping Skip writes
+       `tutorialCompleted = true` to the save immediately (completeTutorial flushes). This is the
+       only place the flag is earned, so a returning profile can never be auto-routed into the
+       lesson again — on this launch or on any later one. */
+    completeTutorial();
+    /* A lesson that replaced the launch is its own match. Skip (or Escape) goes straight Home;
+       a booted first-timer who FINISHED keeps the live board for the fourth pillar — sprinting to
+       the FINISH line — and `showOverlay()` returns them to #s-home once the race is settled.
+       Pause → Replay is the exception: the real match under it gets the board straight back. */
     if (tutorialStandalone) {
       tutorialStandalone = false;
+      if (result === 'finished' && bootLesson) {
+        firstRunSprint = true;
+        $<HTMLElement>('s-game').focus({ preventScroll: true });
+        ui();
+        startClock();
+        if (wantsOpponent()) void runOpponent();
+        return;
+      }
       quitToMenu();
       return;
     }
@@ -2984,7 +3110,9 @@ $('help-tutorial').addEventListener('click', () => { impact('light'); startTutor
    without needing the console. It is hidden for online seats and private rooms. */
 $('pause-tutorial').addEventListener('click', () => {
   impact('light');
-  resetTutorialState();
+  /* A manual replay is an explicit request, NOT a return to first-run. Do NOT clear the saved
+     completion flag: doing so would make a returning player auto-see the lesson on their next
+     launch if they walked out of this replay mid-way. `beginTutorial()` runs with auto = false. */
   tutorialStandalone = false;   // this lesson runs inside the match already on the board
   sheets.close();
   resumeGame();
@@ -3073,6 +3201,23 @@ function settleBoard() {
       syncStage();
     }
     syncLoop();       // a degenerate first pass must not leave the loop asleep
+  });
+}
+
+/**
+ * COLD BOOT only. On a first open the game screen has never been visible before: its container
+ * queries, the WebView chrome and the boot veil all settle over a few frames, so a single
+ * synchronous measure can read a stale (or 0x0) box. Snap the pawns onto their spawn centres NOW,
+ * re-measure on the next animation frame, and let `settleBoard()` run its own deferred
+ * verification frame after that. Result: frame zero shows every pawn at 100% visibility on its
+ * exact tile centre, on a canvas whose geometry is real.
+ */
+function settleColdBootBoard(): void {
+  snapBalls();
+  refitBoard();
+  requestAnimationFrame(() => {
+    snapBalls();
+    settleBoard();          // re-measures + verifies on one more rAF
   });
 }
 
@@ -3316,6 +3461,9 @@ function roomFromRoster(
  * ladders its machine seats instead, which is the dynamic difficulty a room setting buys.
  */
 function launchSelectedMode(): void {
+  /* Onboarding is NOT decided here. `startGame` is the single launch door, and it gates
+     `beginTutorial()` on `hasCompletedTutorial()` + `autoTutorialForLaunch()`. A returning
+     profile goes straight into the mode it picked; only a brand-new save is auto-routed. */
   const sel = getGameMode();
   /* The online queue is parked behind the gold lock: never drop the player into a search with no
      server behind it. Say what the card says, and open the drawer that still holds an open door. */
@@ -3432,6 +3580,21 @@ const banter = createBanter({
 router.start('home');
 setBackButton(false);
 menu.afterStart();
+/* Home is the ROOT of the screen stack, so `quitToMenu()` can always pop back to #s-home after
+   the first playable experience. A true first-timer is routed onto #s-game in the same tick —
+   under the boot veil, so the Home/Lobby screen is never actually shown on a first open. Every
+   returning user stays right here. */
+bootFirstRunTutorial();
+/* A CloudStorage hydrate can resolve AFTER boot and reveal that this is really a returning player
+   (match history, no lesson flag). `hydrate()` stamps the flag; this watcher ends the first-open
+   lesson at once and puts them on Home instead of holding them in onboarding. */
+onChange(() => {
+  if (!firstRunBoot || !hasCompletedTutorial()) return;
+  firstRunBoot = false;
+  tutorialStandalone = false;
+  tutorial?.cancel();
+  quitToMenu();
+});
 
 /* equipping repaints the board, and the chip swatch that stands for your ball; choosing a piece
    colour repaints the whole perspective (both sides, the finish wash and every chip) */

@@ -22,7 +22,7 @@
  * anything to fill
  * is also a room nobody should have to press anything to start.
  */
-import { readJson, writeJson } from './storage';
+import { hasCompletedTutorial, readJson, writeJson } from './storage';
 import { menuState, onLang, saveMenu, t } from './settings';
 import { impact, inviteRoomCode, notify, openTelegramShare, roomInviteUrl, roomShareUrl } from './telegram';
 import { showToast, showToastDetail } from './toast';
@@ -273,6 +273,21 @@ export function onGameModeChange(w: () => void): () => void {
 
 export function getGameMode(): GameModeSelection {
   return { ...current };
+}
+
+/**
+ * STRICT FIRST-TIME-ONLY onboarding gate for the launcher. The persistent save is the ONLY truth
+ * about "brand new": finishing OR skipping the lesson writes `tutorialCompleted = true` to storage
+ * immediately, and from that moment every Start goes straight to the mode the player picked
+ * (Practice, 1v1, a private room) — the tutorial is NEVER auto-triggered again.
+ *
+ * `main.ts` ANDs this with `shouldAutoStartTutorial()`'s pure local-race rule before it may call
+ * `beginTutorial()`. Replaying the lesson is a manual door (Pause → Replay / Settings) and never
+ * passes through this gate. Reading the save again here keeps a returning player safe even if a
+ * late cloud hydrate or a stale in-memory flag lands between mode selection and launch.
+ */
+export function autoTutorialForLaunch(): boolean {
+  return !hasCompletedTutorial();
 }
 
 /** Sizes the local race starter uses until online play arrives. */

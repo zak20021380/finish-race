@@ -547,6 +547,18 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     playTutorial: 'Play tutorial',
     /* the pause sheet's teaching door — the lesson's own key, cyan-ringed inside the sheet */
     pauseTutorial: '📖 How to play / Tutorial',
+    /* ---- hands-on lesson: the four-step curriculum and the interactive mine step ----
+       These are the guidance lines the tutorial overlay speaks. `tutorialMineStep` leads the
+       mine key step, `tutorialMineTip` is the exploding/respawning tooltip on the tile step,
+       `tutorialMineStaged` names the ✓/✕ placement confirmation pair, and
+       `tutorialMinePlaced` labels the placement confirmation ring. */
+    tutorialLessonMove: 'Movement — pick your pawn and step toward the FINISH row.',
+    tutorialLessonWall: 'Placing Walls — set a wall across the path ahead of your rival.',
+    tutorialMineStep: '💣 Mines: plant a charge ahead of the rival and confirm it — step on it and they blast back!',
+    tutorialLessonFinish: 'Finishing the Race — the first pawn onto the gold FINISH row wins.',
+    tutorialMineTip: '💥 The first rival token to step on it blows up and respawns two rows back.',
+    tutorialMineStaged: '✓ Confirm to bury the mine, or ✕ to cancel and pick another tile.',
+    tutorialMinePlaced: 'MINE PLANTED',
     gotIt: 'Got it',
     helpMove: "<b>Move</b> — tap one of your balls, then tap a glowing dot beside it. One step per turn; teams alternate and each may move any one of their balls.",
     helpWall: "<b>Wall</b> — tap a grid line, then tap the ghost wall again to place it. Each side brings 8 walls to a race; the counters under the board show what is left.",
@@ -1153,6 +1165,14 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     howToPlaySub: 'اصول بازی · آموزش تعاملی رو دوباره ببین',
     playTutorial: 'شروع آموزش تعاملی',
     pauseTutorial: '📖 آموزش بازی',
+    /* ---- آموزش تعاملی: چهار درس و مرحله مین‌گذاری ---- */
+    tutorialLessonMove: 'حرکت — مهره‌ات رو انتخاب کن و به سمت ردیف FINISH حرکت بده.',
+    tutorialLessonWall: 'دیوارگذاری — سر راه حریفت یه دیوار بذار.',
+    tutorialMineStep: '💣 کاشتن مین: یک مین سر راه حریف بکار و تاییدش کن تا با رفتن روش منفجر بشه!',
+    tutorialLessonFinish: 'پایان مسابقه — اولین مهره‌ای که به ردیف طلایی FINISH برسه برنده است.',
+    tutorialMineTip: '💥 اولین مهره حریف که پاش به مین برسه منفجر می‌شه و دو ردیف عقب‌تر دوباره ظاهر می‌شه.',
+    tutorialMineStaged: '✓ بزن تا مین کار گذاشته بشه، یا ✕ بزن تا لغو کنی و خونه دیگه‌ای انتخاب کنی.',
+    tutorialMinePlaced: 'مین کار گذاشته شد',
     gotIt: 'فهمیدم',
     helpMove: '<b>حرکت</b> — یکی از مهره‌هات رو بزن، بعد روی نقطه نورانی کنارش بزن. هر نوبت یک قدم؛ تیم‌ها یکی‌یکی بازی می‌کنن و هر تیم می‌تونه هر کدوم از مهره‌هاش رو حرکت بده.',
     helpWall: '<b>دیوار</b> — روی خط شبکه بزن، بعد دوباره روی دیوار شبح‌وار بزن تا ساخته بشه. هر طرف 8 دیوار داره؛ شمارنده زیر صفحه نشون می‌ده چقدر مونده.',
@@ -1359,6 +1379,14 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     arena4Perk2: 'پایان‌بندی‌های اختصاصی',
   },
   ru: {
+    /* ---- интерактивный урок: четыре темы и шаг с миной ---- */
+    tutorialLessonMove: 'Движение — выбери фишку и шагни к линии FINISH.',
+    tutorialLessonWall: 'Стены — поставь стену на пути соперника.',
+    tutorialMineStep: '💣 Мины: спрячь заряд на клетке перед соперником, чтобы поймать его в ловушку.',
+    tutorialLessonFinish: 'Финиш — первая фишка на золотой линии FINISH побеждает.',
+    tutorialMineTip: '💥 Первая фишка соперника, наступившая на мину, взрывается и возрождается на две строки назад.',
+    tutorialMineStaged: '✓ Подтверди, чтобы заложить мину, или ✕, чтобы отменить и выбрать другую клетку.',
+    tutorialMinePlaced: 'МИНА УСТАНОВЛЕНА',
     /* ---- живой счётчик кнопки админа и лента событий двух уровней (src/admin.ts) ---- */
     adminFabAria: 'Открыть центр управления',
     adminFabUnread: 'Открыть центр управления, {n} непрочитанных событий',
@@ -1453,6 +1481,14 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     arena4Perk2: 'Особые финальные удары',
   },
   ar: {
+    /* ---- الدرس التفاعلي: أربع مراحل وخطوة الألغام ---- */
+    tutorialLessonMove: 'الحركة — اختر قطعتك وتقدّم نحو صف FINISH.',
+    tutorialLessonWall: 'وضع الجدران — ضع جداراً في طريق الخصم.',
+    tutorialMineStep: '💣 الألغام: ازرع لغماً في مربع أمام الخصم لتوقعه في الفخ.',
+    tutorialLessonFinish: 'إنهاء السباق — أول قطعة تصل إلى صف FINISH الذهبي تفوز.',
+    tutorialMineTip: '💥 أول قطعة للخصم تخطو على اللغم تنفجر وتعود صفّين إلى الخلف.',
+    tutorialMineStaged: '✓ لتأكيد زرع اللغم، أو ✕ للإلغاء واختيار مربع آخر.',
+    tutorialMinePlaced: 'تم زرع اللغم',
     /* ---- عدّاد زر الأدمن المباشر وموجّه الأحداث بمستويين (src/admin.ts) ---- */
     adminFabAria: 'فتح مركز القيادة',
     adminFabUnread: 'فتح مركز القيادة، {n} إشعارات غير مقروءة',
@@ -1547,6 +1583,14 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     arena4Perk2: 'لمسات ختامية مخصصة',
   },
   es: {
+    /* ---- lección interactiva: cuatro temas y el paso de las minas ---- */
+    tutorialLessonMove: 'Movimiento — elige tu ficha y avanza hacia la fila FINISH.',
+    tutorialLessonWall: 'Colocar muros — levanta un muro en el camino del rival.',
+    tutorialMineStep: '💣 Minas: entierra una carga en una casilla delante del rival para tenderle una trampa.',
+    tutorialLessonFinish: 'Llegar a la meta — la primera ficha en la fila dorada FINISH gana.',
+    tutorialMineTip: '💥 La primera ficha rival que pise la mina estalla y reaparece dos filas atrás.',
+    tutorialMineStaged: '✓ Confirma para enterrar la mina, o ✕ para cancelar y elegir otra casilla.',
+    tutorialMinePlaced: 'MINA COLOCADA',
     /* ---- contador en vivo del botón de admin y el feed de dos niveles (src/admin.ts) ---- */
     adminFabAria: 'Abrir el Centro de Mando',
     adminFabUnread: 'Abrir el Centro de Mando, {n} eventos sin leer',

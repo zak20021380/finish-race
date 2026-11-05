@@ -1288,6 +1288,42 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
   font-weight: 600;
   line-height: 1.4;
   color: var(--ink-soft);
+  /* joined scripts and the ✓/✕ guidance must wrap, never widen the card past 320px */
+  overflow-wrap: anywhere;
+}
+
+/* ---- the interactive mine step's concise explanation tooltip (EN / FA / RU) ----
+   A compact opaque obsidian chip, never a live blur. `border-inline-start` is logical so the
+   gold rule lands on the reading edge in Persian RTL without a physical left/right override. */
+.tut-tip {
+  display: block;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 8px 0 0;
+  padding: 6px 8px;
+  border: 1px solid rgba(245, 158, 11, .38);
+  border-inline-start: 2px solid rgba(252, 211, 77, .8);
+  border-radius: 9px;
+  background: rgba(12, 16, 24, .78);
+  color: var(--honey-ink);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: .01em;
+  overflow-wrap: anywhere;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+/* the author `display: flex` above outranks the UA [hidden] rule: hide it outright elsewhere */
+.tut-tip[hidden] { display: none !important; }
+.tut-card[data-lang="fa"] .tut-tip {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+  line-height: 1.65;
+  text-align: right;
+}
+.tut-card[data-lang="ru"] .tut-tip {
+  font-family: 'Inter', 'Rubik', system-ui, sans-serif;
+  line-height: 1.5;
 }
 
 /* ---- step 1's door: one compact gold key inside the card, never a floating overlay ---- */
@@ -1411,7 +1447,8 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
 .tut-card[data-lang="fa"] { text-align: right; }
 .tut-card[data-lang="fa"] .tut-kicker,
 .tut-card[data-lang="fa"] .tut-title,
-.tut-card[data-lang="fa"] .tut-body { letter-spacing: 0; }
+.tut-card[data-lang="fa"] .tut-body,
+.tut-card[data-lang="fa"] .tut-tip { letter-spacing: 0; }
 .tut-card[data-lang="fa"] .tut-kicker {
   font-weight: 700;
   text-transform: none;
@@ -1432,6 +1469,7 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
 /* switching language is a 180ms re-read of the same card, never a stage transition */
 .tut-card.lang-swap .tut-head-txt,
 .tut-card.lang-swap .tut-body,
+.tut-card.lang-swap .tut-tip,
 .tut-card.lang-swap .tut-next,
 .tutorial.lang-swap .tut-skip { animation: tut-lang-swap .18s ease-out both; }
 @keyframes tut-lang-swap {
@@ -1475,12 +1513,83 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
 .tut-ready.show { opacity: 1; transform: translate(-50%, 0); }
 .tut-ready .ico { width: 17px; height: 17px; flex: none; color: var(--gold-ink); }
 
+/* ---- mine placement confirmation: a gold ring + checkmark on the planted tile ----
+   Fixed, opaque obsidian, clamped in tutorial.ts to 132x96 inside the viewport, so 320px
+   phones get zero horizontal overflow. It never takes a tap and never blurs the board. */
+.tut-confirm {
+  position: fixed;
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 132px;
+  height: 96px;
+  padding: 7px 6px;
+  box-sizing: border-box;
+  border: 1px solid rgba(252, 211, 77, .48);
+  border-radius: 18px;
+  background: rgba(12, 16, 24, .96);
+  color: var(--gold-ink);
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(.9);
+  transition: opacity .2s ease, transform .24s cubic-bezier(.2, 1.2, .4, 1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .1),
+    0 18px 38px -20px rgba(0, 0, 0, .95),
+    0 0 28px -10px rgba(245, 158, 11, .5);
+}
+.tut-confirm[hidden] { display: none !important; }
+.tut-confirm.show { opacity: 1; transform: scale(1); }
+.tut-confirm-ring {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 2px solid rgba(252, 211, 77, .9);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%, rgba(245, 158, 11, .34), rgba(245, 158, 11, .05) 72%);
+  box-shadow: 0 0 0 5px rgba(252, 211, 77, .12), 0 0 20px rgba(245, 158, 11, .5);
+  color: #fcd34d;
+}
+.tut-confirm-ring .ico { width: 24px; height: 24px; }
+.tut-confirm-t {
+  max-width: 100%;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: .1em;
+  text-align: center;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.tut-confirm[data-lang="fa"] { font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif; }
+.tut-confirm[data-lang="fa"] .tut-confirm-t { font-size: 10px; letter-spacing: 0; text-transform: none; }
+.tut-confirm[data-lang="ru"] { font-family: 'Inter', 'Rubik', system-ui, sans-serif; }
+html.reduced-motion .tut-confirm { transition: none; }
+@media (prefers-reduced-motion: reduce) { .tut-confirm { transition: none; } }
+
+/* ---- tutorial 4A: ring the mine key AND its inventory counter together. The ID keeps this
+   ahead of the later HUD pod rules, and a glow adds no layout box (no horizontal overflow). ---- */
+#mine-btn.tut-arm-target {
+  border-color: rgba(252, 211, 77, .8);
+  box-shadow: 0 0 0 2px rgba(252, 211, 77, .9), 0 0 22px rgba(245, 158, 11, .55);
+}
+#mine-btn.tut-arm-target .mine-n {
+  color: var(--gold-ink);
+  text-shadow: 0 0 10px rgba(252, 211, 77, .75);
+}
+
 /* the shortest phones: the same card, a tighter vertical rhythm */
 @media (max-width: 380px) {
   .tut-card { width: calc(100vw - 24px); padding: 10px 12px 11px; border-radius: 15px; }
   .tut-title { font-size: 13px; }
   .tut-body { margin-top: 6px; font-size: 12px; line-height: 1.38; }
   .tut-card[data-lang="fa"] .tut-body { line-height: 1.65; }
+  .tut-tip { margin-top: 6px; padding: 5px 7px; font-size: 10px; }
   .tut-tap {
     left: -15.333px;          /* 11.5 / 24 × 32 */
     top: -6.667px;            /* 5 / 24 × 32 */
@@ -1497,6 +1606,7 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {
   .tut-card.lang-swap .tut-head-txt,
   .tut-card.lang-swap .tut-body,
+  .tut-card.lang-swap .tut-tip,
   .tut-card.lang-swap .tut-next,
   .tutorial.lang-swap .tut-skip { animation: none; }
 }
@@ -1504,6 +1614,7 @@ body.tutorial-live #chat-toggle { pointer-events: none; }
   .tut-card { padding-top: 9px; padding-bottom: 10px; }
   .tut-ico { width: 24px; height: 24px; border-radius: 8px; }
   .tut-body { margin-top: 5px; line-height: 1.35; }
+  .tut-tip { margin-top: 5px; }
   .tut-next { min-height: 36px; margin-top: 8px; }
 }
 

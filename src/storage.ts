@@ -403,9 +403,18 @@ export function onChange(w: () => void) { watchers.push(w); }
 
 /** Replace the live save from raw JSON — the seam a CloudStorage read resolves into. */
 export function hydrate(raw: string | null) {
+  /* First-run onboarding is monotonic. An older cloud blob that still says `false` must never
+     push a player who already finished or skipped the lesson back into the tutorial. Only the
+     explicit dev door, resetTutorialState(), is allowed to clear the flag. */
+  const wasCompleted = profile.tutorialCompleted === true;
   try {
     const next = migrate(raw ? (JSON.parse(raw) as Partial<Save>) : null);
     Object.assign(profile, next);
+    if (wasCompleted) profile.tutorialCompleted = true;
+    /* A cloud save can carry a whole match history onto a device whose own cache is empty. That
+       player has raced before, so stamp the lesson flag here too: a hydrate that lands AFTER boot
+       must never leave a returning profile eligible for first-open onboarding. */
+    reconcileTutorialFromHistory();
   } catch {
     /* keep what we already had */
     return;
@@ -493,8 +502,44 @@ export function recordGame(
   return coins;
 }
 
-/** Read the saved lesson flag. A refused storage backend simply answers false. */
+/**
+ * Read the saved lesson flag. STRICT: only the literal `true` counts as "returning player". A
+ * missing or false flag (fresh install, older save, refused storage backend) is a first launch.
+ */
 export const hasCompletedTutorial = (): boolean => profile.tutorialCompleted === true;
+
+/**
+ * Every race this profile has ever settled, across the tally, the win/loss pair and the per-mode
+ * counters. The three are cross-checked because a partial or older server blob may restore only
+ * one of them — any one of them proves the player has been here before.
+ */
+export function totalMatchesPlayed(): number {
+  const s = profile.stats;
+  const n = (v: unknown): number => typeof v === 'number' && Number.isFinite(v) ? Math.max(0, v) : 0;
+  const byMode = Object.values(s.modes ?? {}).reduce<number>((sum, v) => sum + n(v), 0);
+  return Math.max(n(s.games), n(s.wins) + n(s.losses), byMode);
+}
+
+/**
+ * A TRUE first-time player: the lesson has never been finished or skipped AND not a single race
+ * has been recorded. `main.ts` boot-reads this once to decide between a direct playable tutorial
+ * and the ordinary Home/Lobby screen. Anything else — including a completed flag alone — is a
+ * returning player and always boots on Home.
+ */
+export function isFirstTimePlayer(): boolean {
+  return !hasCompletedTutorial() && totalMatchesPlayed() <= 0;
+}
+
+/**
+ * Returning players on a fresh cache: a server/profile hydrate may restore match history without
+ * the newer `tutorialCompleted` flag. Mark the lesson complete at once so they are NEVER forced
+ * into onboarding. Returns true when this call promoted the profile to "returning".
+ */
+export function reconcileTutorialFromHistory(): boolean {
+  if (hasCompletedTutorial() || totalMatchesPlayed() <= 0) return false;
+  completeTutorial();
+  return true;
+}
 
 /**
  * The colour this device paints its own pieces in. Kept beside the cosmetics because it is a
@@ -512,8 +557,10 @@ export function setPieceColor(color: PieceColor): boolean {
 }
 
 /**
- * Persist completion in the one save. Called when the lesson is finished or skipped — a skip is
- * still a decision to play, and re-showing the lesson on the next race would be a nag, not help.
+ * Persist completion in the one save. Called the INSTANT the lesson is finished or explicitly
+ * skipped — a skip is still a decision to play, and re-showing the lesson on the next race would
+ * be a nag, not help. The flush is immediate, so a reload or a fresh launch can never auto-trigger
+ * the lesson for this profile. A manual replay (Pause / Settings) never clears the flag.
  */
 export function completeTutorial(): void {
   if (profile.tutorialCompleted) return;
