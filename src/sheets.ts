@@ -12,9 +12,20 @@ export interface Sheets {
   readonly isOpen: boolean;
 }
 
+/** Host hooks the sheets system reports back to. */
+export interface SheetsOptions {
+  /**
+   * A sheet finished going away through `close()` — the scrim, Escape, a `[data-sheet-close]`
+   * key or an explicit call — and nothing else has taken its place. Fired once the slide-out
+   * has settled, so `isOpen` already reads false. The swap `open()` performs over the sheet
+   * on screen never reports here: that sheet was replaced, not closed.
+   */
+  onClose?: (el: HTMLElement) => void;
+}
+
 const MS = 260;
 
-export function createSheets(scrim: HTMLElement): Sheets {
+export function createSheets(scrim: HTMLElement, opts: SheetsOptions = {}): Sheets {
   let panel: HTMLElement | null = null;
   let opener: HTMLElement | null = null;
   let timer = 0;
@@ -51,10 +62,14 @@ export function createSheets(scrim: HTMLElement): Sheets {
     },
     close() {
       if (!panel) return;
+      const closing = panel;                 // reported back once the slide-out has settled
       panel.classList.remove('open');
       scrim.classList.remove('open');
       panel.style.pointerEvents = 'none';   // the slide-out must not swallow taps
-      timer = window.setTimeout(() => settle(true), motionReduced() ? 0 : MS);
+      timer = window.setTimeout(() => {
+        settle(true);
+        opts.onClose?.(closing);
+      }, motionReduced() ? 0 : MS);
     },
     get isOpen() { return panel !== null; },
   };

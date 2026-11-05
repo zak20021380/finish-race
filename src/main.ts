@@ -340,7 +340,10 @@ function placeNote() {
 
 let menu: Menu;
 let admin: Admin | null = null;
-const sheets = createSheets($('scrim'));
+/* The close hook is the pause family's safety net: see `resumeAfterSheetClose` — every way the
+   pause sheet (or the quit confirm it opens) can go away ends in a live board again, never a
+   silently paused one. */
+const sheets = createSheets($('scrim'), { onClose: resumeAfterSheetClose });
 const sheetById = (id: string) => document.getElementById(id);
 
 /**
@@ -2103,8 +2106,12 @@ function startGame(setup: StartSetup) {
   paintSeatIdentity();
   /* a networked board cannot be restarted into the same seat: the pause sheet only offers leaving */
   $('pause-restart').hidden = !!active;
-  /* replaying the lesson is a local-bot privilege only; a person or a private room owns the board */
-  $('pause-tutorial').hidden = !!active || !!room;
+  /* Replay runs on the board it is clicked from, so the key rides wherever the lesson itself can
+     run: never on an online seat, never on a room another person is sitting in. Every local race
+     — 1v1, 2-, 3- and 4-player practice alike — launches as a practice room of this player plus
+     the machine, so the test is the people in the room, not the room itself. Mirrors the guard
+     in `beginTutorial()`, so the key is visible exactly where clicking it starts the lesson. */
+  $('pause-tutorial').hidden = !!active || humansIn(room) > 1;
 
   if (active) {
     const session = active;
@@ -2208,6 +2215,23 @@ function resumeGame() {
   syncLoop();
   ui();
   for (const go of parked) go();
+}
+
+/**
+ * However the pause family goes away — Resume, Restart, Replay tutorial, the scrim, Escape, the
+ * system back key, or the quit sheet's Stay — a live board must never be left silently paused:
+ * with the flag stuck the loop stays cancelled, `canAct()` swallows every tap and a parked bot
+ * promise never resolves, which is the whole board freezing. The wired keys call `resumeGame()`
+ * themselves; this is the net the sheets' close hook holds under every other door out. It only
+ * answers the pause family, only on the game screen with no sheet left above the board, and
+ * never over a lesson or a settled race. `resumeGame()` is itself a no-op unless a pause is
+ * actually holding the board, so the wired keys passing through here change nothing.
+ */
+function resumeAfterSheetClose(el: HTMLElement): void {
+  if (el !== sheetPause && el !== sheetQuit) return;       // only the pause family pauses the board
+  if (router.current !== 'game' || sheets.isOpen) return;  // off the board, or another sheet owns it
+  if (tutorialActive || state.winner !== null) return;     // a lesson or a settled race owns it
+  resumeGame();
 }
 
 function quitToMenu() {
