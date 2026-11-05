@@ -44,6 +44,31 @@ export function writeJson(key: string, value: unknown) {
   backend.set(key, JSON.stringify(value));
 }
 
+/* ---------- the operator's own read state ---------- */
+
+/**
+ * The moment this device's admin last opened the Command Center. `admin.ts` stamps it on the tap
+ * that opens the stage and never rewrites it on close, so a cleared counter stays cleared: only a
+ * row whose id the read set does not hold can raise it again. Stored as a bare epoch-ms scalar
+ * (not JSON) and read back through a floor, so a half-written value can only ever mean "never
+ * opened", which counts every pending row rather than hiding one.
+ */
+const ADMIN_VIEWED_KEY = 'detour.admin.viewed.v1';
+
+/** 0 means this device has never opened the panel. */
+export function adminViewedAt(): number {
+  const raw = backend.get(ADMIN_VIEWED_KEY);
+  const n = raw ? Number(raw) : 0;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
+/** Move the watermark and hand the stamp back, so the caller never re-reads the key it wrote. */
+export function markAdminViewed(at: number = Date.now()): number {
+  const stamp = Number.isFinite(at) && at > 0 ? Math.floor(at) : Date.now();
+  backend.set(ADMIN_VIEWED_KEY, String(stamp));
+  return stamp;
+}
+
 /* ---------- the schema ---------- */
 
 const KEY = 'detour.save.v2';

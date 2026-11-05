@@ -2456,9 +2456,10 @@
           <button class="admin-fab" id="btn-admin-fab" type="button" hidden aria-haspopup="dialog"
             aria-label="Open Admin Command Center">
             <svg class="admin-fab-ico" aria-hidden="true"><use href="#i-shield" /></svg>
-            <!-- the live-unread counter: src/admin.ts owns data-count / data-state / hidden.
-                 It stays inside the key's box, so the Home screen's overflow:hidden never
-                 clips the rim, and inset-inline-end docks it at the top-end in every language. -->
+            <!-- the live-unread counter: src/admin.ts owns data-count / data-state /
+                 is-in / is-out / hidden. It rides the key's top-end corner; the 4px right
+                 inset on .admin-fab is what keeps its rim inside Home's overflow:hidden
+                 clip, and inset-inline-end docks it at the top-end in every language. -->
             <span class="admin-fab-badge" id="admin-fab-badge" data-count="0"
               data-state="empty" aria-label="اعلانات ادمین" hidden></span>
           </button>

@@ -17197,7 +17197,7 @@ html.reduced-motion .mm-blip { opacity: .5; }
 .admin-fab {
   --d: 4px;
   position: absolute;
-  right: 0;
+  right: 4px;                          /* the badge rides 3px past this edge: clip room */
   bottom: 168px;                       /* refined in JS: clears the PLAY dock */
   z-index: 6;
   width: 52px;
@@ -17222,72 +17222,74 @@ html.reduced-motion .mm-blip { opacity: .5; }
 .admin-fab:active { transform: translateY(var(--press-y)); --d: 1px; }
 .admin-fab:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 3px; }
 .admin-fab-ico { width: 26px; height: 26px; color: var(--tiq); }
-/* ---- the Home key's live-unread counter: an obsidian pill with a lit rim ----
-   src/admin.ts owns `data-count`, `data-state` and `hidden`. Three states:
-   cyan/emerald for ordinary unread, Solar Gold breathing when the unread set
-   holds a VIP purchase, and completely gone at zero. The pill stays INSIDE the
-   52px key: Home clips overflow, so a hanging badge would lose its rim. */
+/* ---- the Home key's live-unread counter: a luxury obsidian micro-badge ----
+   src/admin.ts owns `data-count`, `data-state`, `is-in` / `is-out` and `hidden`.
+   One compact tabular pill perched on the key's top-end corner: a deep crimson
+   gradient for ordinary unread, royal amber over obsidian ink when the set holds
+   a VIP purchase. The 1.5px slate hairline is what separates it from the shield's
+   rim; zero is an EXIT, not a blink — JS keeps the pill in the layout for one
+   220ms scale-out, then takes it out for real. */
 .admin-fab-badge {
   position: absolute;
-  top: 2px;
-  inset-inline-end: 2px;               /* logical: top-end in RTL, top-right in LTR */
+  top: -3px;
+  inset-inline-end: -3px;              /* logical: the top-end corner in every language */
   z-index: 2;
   display: grid;
   place-items: center;
   box-sizing: border-box;
-  min-width: 22px;
-  max-width: 36px;
-  height: 19px;
-  padding: 0 4px;
-  border-radius: var(--radius-pill);
-  background:
-    radial-gradient(120% 100% at 32% -10%, rgba(255, 255, 255, .14), transparent 62%),
-    linear-gradient(180deg, #131C29 0%, #080C14 100%);
-  color: #D9FFF4;
+  min-width: 18px;
+  max-width: 40px;
+  height: 18px;
+  padding: 0 5px;
+  border: 1.5px solid #0f172a;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  color: #ffffff;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 10px;
-  font-weight: 900;
+  font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  text-align: center;
+  letter-spacing: 0;
   white-space: nowrap;
   overflow: hidden;
   pointer-events: none;
+  opacity: 1;
+  transform: scale(1);
   box-shadow:
-    inset 0 0 0 1.5px rgba(0, 210, 255, .82),
-    inset 0 1px 0 rgba(255, 255, 255, .16),
-    0 0 0 1.5px #0B1019,
-    0 0 10px -1px rgba(0, 210, 255, .72),
-    0 0 20px -5px rgba(16, 185, 129, .6);
+    0 0 10px rgba(239, 68, 68, .45),
+    inset 0 1px 0 rgba(255, 255, 255, .22);
+  transition:
+    opacity .2s cubic-bezier(.16, 1, .3, 1),
+    transform .2s cubic-bezier(.16, 1, .3, 1);
 }
+/* the amber variant: a VIP purchase in the unread set, gold over obsidian ink */
 .admin-fab-badge[data-state="vip"] {
-  color: #FFE9AE;
+  background: linear-gradient(135deg, #fbbf24, #b45309);
+  color: #1c1206;
   box-shadow:
-    inset 0 0 0 1.5px #FFB800,
-    inset 0 1px 0 rgba(255, 255, 255, .22),
-    0 0 0 1.5px #0B1019,
-    0 0 12px 0 rgba(255, 184, 0, .6),
-    0 0 24px -4px rgba(255, 184, 0, .7);
+    0 0 10px rgba(251, 191, 36, .45),
+    inset 0 1px 0 rgba(255, 255, 255, .38);
 }
-@keyframes pulse-gold {
-  0%, 100% {
-    box-shadow:
-      inset 0 0 0 1.5px #FFB800, inset 0 1px 0 rgba(255, 255, 255, .22),
-      0 0 0 1.5px #0B1019,
-      0 0 8px 0 rgba(255, 184, 0, .42), 0 0 18px -6px rgba(255, 184, 0, .5);
-  }
-  50% {
-    box-shadow:
-      inset 0 0 0 1.5px #FFD466, inset 0 1px 0 rgba(255, 255, 255, .3),
-      0 0 0 1.5px #0B1019,
-      0 0 16px 2px rgba(255, 184, 0, .78), 0 0 30px -2px rgba(255, 184, 0, .85);
-  }
+/* the arrival: one crisp pop, never a bounce that outlives the count */
+@keyframes badge-pop {
+  from { opacity: 0; transform: scale(.55); }
+  to   { opacity: 1; transform: scale(1); }
 }
-@media (prefers-reduced-motion: no-preference) {
-  .admin-fab-badge[data-state="vip"] { animation: pulse-gold 2.8s ease-in-out infinite; }
+.admin-fab-badge.is-in { animation: badge-pop .24s cubic-bezier(.16, 1, .3, 1) both; }
+/* the clear: scale down and fade; `hidden` follows once the exit has played */
+.admin-fab-badge.is-out {
+  opacity: 0;
+  transform: scale(.4);
 }
-html.reduced-motion .admin-fab-badge[data-state="vip"] { animation: none !important; }
-/* an author `display` beats the UA [hidden] rule — the zero state must really vanish */
-.admin-fab-badge[hidden],
-.admin-fab-badge[data-state="empty"] { display: none !important; }
+html.reduced-motion .admin-fab-badge,
+html.reduced-motion .admin-fab-badge.is-in {
+  animation: none !important;
+  transition: none !important;
+}
+/* an author `display` beats the UA [hidden] rule — the rest state must really vanish */
+.admin-fab-badge[hidden] { display: none !important; }
 /* still used by the Server tab's live lamp (`.adm-server[data-state="live"] .adm-srv-lamp`) */
 @keyframes adm-dot { 0%, 100% { opacity: 1 } 50% { opacity: .4 } }
 

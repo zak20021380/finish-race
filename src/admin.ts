@@ -36,7 +36,9 @@
  * so the panel's door is never the server's door.
  */
 import { motionReduced, onLang, t } from './settings';
-import { earnCoins, earnTiq, onChange, profile, readJson, writeJson } from './storage';
+import {
+  adminViewedAt, earnCoins, earnTiq, markAdminViewed, onChange, profile, readJson, writeJson,
+} from './storage';
 import { coinText, mountCoins, setBalance } from './coin';
 import { CONFIG } from './rules';
 import { flagPhoto } from './flags';
@@ -1814,6 +1816,9 @@ export function createAdmin(api: AdminApi): Admin {
   let activityPurchases: readonly VipPurchase[] = [];
   let activityEvents: AdminActivityEvent[] = [];
   const seenEvents = readSeenEvents();
+  /** The last open of this stage: a row stamped at or before it was already in front of the
+   *  operator, so the counter must not come back wearing it. Persisted, never reset on close. */
+  let viewedAt = adminViewedAt();
   /**
    * The live telemetry: the last completed reading, the latest attempt's verdict, and the slow
    * beat that keeps the Stats tab honest while it is open. `lastMetrics` is only ever a payload
@@ -3043,8 +3048,16 @@ export function createAdmin(api: AdminApi): Admin {
   const activityText = (key: string, n: number): string => t(key).replace('{n}', String(n));
 
   const activityVisible = (): boolean => !!open && !!inboxPanel && !inboxPanel.hidden;
+  /**
+   * A row is unread until the read set holds its id — and never while the feed that shows it is
+   * on screen, because the open watermark already covers everything a fetch lands with. The
+   * stage marks the whole feed read on the tap (see `openStage`), so nothing here can restore a
+   * cleared count on close: only a row id the set has not seen can raise it again.
+   */
   const unreadActivity = (): AdminActivityEvent[] =>
-    activityEvents.filter((e) => !seenEvents.has(e.id));
+    activityEvents.filter((e) =>
+      !seenEvents.has(e.id)
+      && !(activityVisible() && viewedAt > 0 && e.at > 0 && e.at <= viewedAt));
 
   function saveSeenEvents(): void {
     const kept = [...seenEvents].slice(-SEEN_MAX);
@@ -3062,22 +3075,48 @@ export function createAdmin(api: AdminApi): Admin {
     if (changed) saveSeenEvents();
   }
 
+  /** How long the pill takes to scale away: the CSS exit transition, plus a frame of slack. */
+  const BADGE_OUT_MS = 220;
+  /** The exit's own handle, so a count that arrives mid-fade cancels the collapse. */
+  let badgeOutId = 0;
+
   /**
    * The badge's whole state is one read of the unread set: `data-count` carries the figure,
-   * `data-state` picks the rim (cyan, or Solar Gold when a VIP purchase is in the set), and
-   * `hidden` collapses zero outright. An author `display` would beat `[hidden]`, so the CSS
-   * kills it with `display: none !important`.
+   * `data-state` picks the pill (obsidian crimson, or royal amber when a VIP purchase is in the
+   * set), and `hidden` is the rest state at zero. Clearing is an EXIT, not a blink: the count
+   * drops to zero on the very frame the stage opens, the pill scales away, and only then does it
+   * leave the layout — so opening the panel visibly dismisses the counter instead of snapping it
+   * out. An author `display` would beat `[hidden]`, so the CSS kills the rest state outright.
    */
   function paintFabBadge(): void {
     const unread = unreadActivity();
     const n = unread.length;
     const hasVip = unread.some((e) => e.kind === 'vip');
+    window.clearTimeout(badgeOutId);
     if (fabBadge) {
       fabBadge.textContent = n > 99 ? '99+' : String(n);
       fabBadge.dataset.count = String(n);
       fabBadge.dataset.state = n === 0 ? 'empty' : hasVip ? 'vip' : 'normal';
-      fabBadge.hidden = n === 0;
       fabBadge.setAttribute('aria-label', t('adminFabBadgeAria'));
+      if (n > 0) {
+        const wasHidden = fabBadge.hidden;
+        fabBadge.hidden = false;
+        fabBadge.classList.remove('is-out');
+        /* the pop belongs to an arrival: a repaint at the same count must not re-bounce */
+        if (wasHidden) {
+          fabBadge.classList.remove('is-in');
+          void fabBadge.offsetWidth;             // restarting the animation needs a reflow
+          fabBadge.classList.add('is-in');
+        }
+      } else if (!fabBadge.hidden) {
+        fabBadge.classList.remove('is-in');
+        fabBadge.classList.add('is-out');
+        badgeOutId = window.setTimeout(() => {
+          if (fabBadge.dataset.count !== '0') return;   // a new row arrived during the exit
+          fabBadge.hidden = true;
+          fabBadge.classList.remove('is-out');
+        }, motionReduced() ? 0 : BADGE_OUT_MS);
+      }
     }
     fab?.setAttribute('aria-label', n > 0 ? activityText('adminFabUnread', n) : t('adminFabAria'));
     if (activityUnread) {
@@ -3248,7 +3287,9 @@ export function createAdmin(api: AdminApi): Admin {
       .sort((a, b) => b.at - a.at)
       .slice(0, ACTIVITY_MAX);
     /* events that land while the feed is on screen are already seen */
-    if (activityVisible()) markActivityRead();
+    /* rows that land while the stage is up are already in front of the operator: reading them
+       here is what keeps a cleared counter cleared once the stage closes again */
+    if (open) markActivityRead();
     paintActivity();
   }
 
@@ -5428,6 +5469,10 @@ export function createAdmin(api: AdminApi): Admin {
   function openStage() {
     if (!stage || open) return;
     open = true;
+    /* Opening the Command Center IS reading it: the watermark moves and the counter drops to
+       zero on the tap itself, before a single fetch lands. Nothing restores it on close. */
+    viewedAt = markAdminViewed();
+    markActivityRead();
     window.clearTimeout(hideId);
     stage.hidden = false;
     void stage.offsetWidth;               // lay the stage out at its closed position first
