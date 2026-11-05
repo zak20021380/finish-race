@@ -34438,3 +34438,34 @@ html[data-lang="ar"] .pf-identity-sec .pf-sec-sub {
 }
 
 
+
+/* ---- Mind Ladder: Persian / Arabic typography guards -----------------------------
+   The tabs, the wordmark, the season plate and its capsule are the ladder's smallest
+   runs. A fractional tracking value that reads as refinement in Latin detaches the
+   joins of a connected script, and text-transform uppercases nothing in Persian while
+   still widening the line box — so every translated run here takes zero tracking and
+   no forced caps. The three-up switch keeps its 3 x 1fr geometry: each label refuses
+   to shrink, so it can only ellipsise inside its own key and can never push the bar
+   past a 320px column. */
+html[data-lang="fa"] :is(.ranks-tabs, .ml-title, .ml-sub, .ml-season, .ml-season-k, .ml-season-t),
+html[data-lang="ar"] :is(.ranks-tabs, .ml-title, .ml-sub, .ml-season, .ml-season-k, .ml-season-t) {
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+/* the season plate is the one translated pill on the header: a touch more size keeps
+   the Vazirmatn copy legible without widening the plate past the crest */
+html[data-lang="fa"] .ml-sub,
+html[data-lang="ar"] .ml-sub { font-size: 10.5px; }
+html[data-lang="fa"] .ranks-tabs .seg-t,
+html[data-lang="ar"] .ranks-tabs .seg-t {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  letter-spacing: 0 !important;
+}
+/* 320px budget: the glyph and the padding give the label the room it needs */
+@media (max-width: 359px) {
+  html[data-lang="fa"] .ranks-tabs .mode-seg,
+  html[data-lang="ar"] .ranks-tabs .mode-seg { gap: 4px; padding: 0 3px; }
+  html[data-lang="fa"] .ranks-tabs .seg-t,
+  html[data-lang="ar"] .ranks-tabs .seg-t { font-size: 11px; }
+}

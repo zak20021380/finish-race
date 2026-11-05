@@ -3383,6 +3383,13 @@ export function createMenu(api: MenuApi): Menu {
       if (!key) continue;
       el.setAttribute('placeholder', t(key));
     }
+    /* The spoken name of a key whose visible label is translated too: an aria-label
+       written in the markup would otherwise stay English under every language. */
+    for (const el of document.querySelectorAll<HTMLElement>('[data-i18n-aria]')) {
+      const key = el.dataset.i18nAria;
+      if (!key) continue;
+      el.setAttribute('aria-label', t(key));
+    }
   };
 
   const paintLangPill = () => {

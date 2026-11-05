@@ -38,7 +38,7 @@ import { onChange, profile } from './storage';
 import { arena, countdownPill, fullCountdown, seasonLabel } from './arenaState';
 import { cleanChatReference, cleanHandle, cleanTag, displayNameOf, getMyContribution, getMySquad, getSquadRanking, onSquadChange, squadAvatarUrl, squadInviteUrl, squadKind, squadMark, squadTiqSum, telegramAvatarUrl, type RankedSquad } from './squads';
 import { BOT_HANDLE, impact, notify, openLink, tgUser } from './telegram';
-import { t } from './settings';
+import { lang, onLang, t } from './settings';
 import { isPremiumUser, onVipChange } from './premium';
 import { joinSquadOnServer, registerSquadWithTelegram } from './squadRegister';
 import { showToast } from './toast';
@@ -525,6 +525,54 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     return !!el && !el.hidden;
   };
 
+  /** The arena's reading, as the season capsule and its plate need it. */
+  type Season = ReturnType<typeof arena>;
+
+  /** Persian digits inside a translated sentence. A Latin clock keeps its own numerals. */
+  const langDigits = (value: string): string =>
+    lang === 'fa' ? value.replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]) : value;
+
+  /**
+   * The season line under the wordmark. The built-in season is translated
+   * (`فصل ۵: نبرد ذهن‌ها`), while a title the operator typed in the Command Center is shown
+   * exactly as typed — the panel owns that copy, not the dictionary.
+   */
+  function seasonTitle(a: Season): string {
+    const typed = (a.seasonName || '').trim();
+    const named = /^season\s+\d+\s*[:\-·]?\s*(.*)$/i.exec(typed)?.[1]?.trim() ?? typed;
+    if (!named || /^mind\s*clash$/i.test(named)) {
+      return t('ranksSeasonTitle').replace('{season}', langDigits(String(a.seasonNo)));
+    }
+    return seasonLabel(a);
+  }
+
+  /**
+   * The capsule in the player's language. The day count is a sentence (`{d} روز مانده`), so its
+   * figure takes the language's own digits; the h/m code inside the last two days is an
+   * instrument reading and stays Latin, exactly as the app's other clocks do.
+   */
+  function seasonCountdown(
+    a: Season,
+    now: number,
+    pill: { value: string },
+  ): { kicker: string; value: string } {
+    const left = a.endsAt - now;
+    if (a.status === 'finale' || left <= 0) {
+      return {
+        kicker: t(a.status === 'finale' ? 'ranksFinale' : 'ranksSeasonK'),
+        value: t('ranksLocked'),
+      };
+    }
+    if (left >= 48 * 3600_000) {
+      const days = Math.max(1, Math.ceil(left / 86400_000));
+      return {
+        kicker: t('ranksEndsIn'),
+        value: t('ranksDaysLeft').replace('{d}', langDigits(String(days))),
+      };
+    }
+    return { kicker: t('ranksClosingIn'), value: pill.value };
+  }
+
   function paintRanks(): void {
     paintSeason();
     for (const b of boardBtns) b.setAttribute('aria-selected', String(b.dataset.board === board));
@@ -552,14 +600,15 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
    */
   function paintSeason(): void {
     const a = arena();
-    const t = Date.now();
-    const pill = countdownPill(a, t);
-    if (seasonText) seasonText.textContent = pill.value;
-    if (seasonKicker) seasonKicker.textContent = pill.kicker;
-    if (seasonSub) seasonSub.textContent = seasonLabel(a);
+    const now = Date.now();
+    const pill = countdownPill(a, now);
+    const copy = seasonCountdown(a, now, pill);
+    if (seasonText) seasonText.textContent = copy.value;
+    if (seasonKicker) seasonKicker.textContent = copy.kicker;
+    if (seasonSub) seasonSub.textContent = seasonTitle(a);
     if (seasonChip) {
       seasonChip.dataset.tone = pill.tone;
-      seasonChip.setAttribute('title', `${seasonLabel(a)} — ${fullCountdown(a, t)}`);
+      seasonChip.setAttribute('title', `${seasonTitle(a)} — ${fullCountdown(a, now)}`);
     }
   }
 
@@ -585,6 +634,19 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       if (v === 'minds' || v === 'guilds' || v === 'nations') selectBoard(v);
     });
   }
+
+  /*
+   * A language flip repaints the plate and the capsule in place (the static labels are the
+   * markup's own `data-i18n` sweep), then re-reads the visible board so the copy only its rows
+   * carry — the contribution tag, the empty states, the podium's spoken labels — moves with it.
+   * The cached rows are dropped first: a repaint from cache would leave the old language inside
+   * rows the sweep cannot reach.
+   */
+  onLang(() => {
+    paintRanks();
+    loadedBoard = {};
+    if (isRanksVisible()) void loadBoard(board);
+  });
 
   /* ---------- shared row + copy helpers (Ranks boards) ---------- */
 
@@ -925,7 +987,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       host.hidden = true;
       return;
     }
-    const boardName = board === 'guilds' ? 'Squad IQ' : board === 'nations' ? 'Nations IQ' : 'Top Minds';
+    const boardName = t(board === 'guilds'
+      ? 'ranksBoardSquads'
+      : board === 'nations' ? 'ranksBoardNations' : 'ranksBoardMinds');
     /* Only the Squad IQ board stages empty rungs: a top-three nation or mind board is a
        slice of a long field, not a league that has places left to fill. */
     if (board === 'guilds' && top.length < 3) {
@@ -2094,7 +2158,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     name.title = nm;
     const tag = document.createElement('span');
     tag.className = 'nh-tag';
-    tag.textContent = 'Your Contribution';
+    tag.textContent = t('ranksYourContribution');
     idLine.append(name, tag);
     /* The national average rides on the identity tier, under the flag's name, the way a ladder
        row wears its player count. Out of the score column, so a longer national figure can never
