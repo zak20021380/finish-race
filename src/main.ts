@@ -433,6 +433,10 @@ const router = createRouter($('screens'), (id) => {
   // Telegram BackButton on every screen except Home; always functional via onBack fallback.
   setBackButton(id !== 'home');
   if (id !== 'game') { cancelTutorial(); pauseGame(); }   // the board only ticks while it is on screen
+  /* Returning to a live board by a route (not just a fresh `startGame`) must not inherit the
+     pause that was raised on the way out. The pause family is sheet-owned, so a sheet still above
+     the board keeps its own stop. */
+  else if (!sheets.isOpen) paused = false;
   /* off the board, a room that was waiting in the background may finally show itself */
   if (id !== 'game') resumeRoom();
   if (id === 'home') admin?.relayout();   // the launcher only has a height once Home is up
@@ -689,15 +693,39 @@ function armMine(next: boolean) {
   ui();
 }
 
+/** The exact centre of a logical pawn's tile, in cell units — its spawn position on frame zero. */
+const spawnCentre = (b: Ball): Vec => toVec(b.pos);
+
 /** Brings the drawn ball list into step with the state; existing entries are reused as they are. */
 function syncBalls() {
   while (ballViews.length > state.balls.length) ballViews.pop();
   for (let i = 0; i < state.balls.length; i++) {
     const b = state.balls[i];
     const v = ballViews[i];
-    if (v) { v.team = b.team; v.id = b.id; }
-    else ballViews.push({ pos: toVec(b.pos), team: b.team, id: b.id, sel: false });
+    if (!v) { ballViews.push({ pos: spawnCentre(b), team: b.team, id: b.id, sel: false }); continue; }
+    v.team = b.team; v.id = b.id;
+    /* A missing or non-finite visual coordinate would survive the lerp forever (NaN propagates),
+       so heal it here instead of letting the pawn quietly vanish off the canvas. */
+    if (!v.pos || !Number.isFinite(v.pos.x) || !Number.isFinite(v.pos.y)) v.pos = spawnCentre(b);
   }
+}
+
+/**
+ * Frame-zero synchronisation. A race must open with every animated pawn sitting EXACTLY on its
+ * logical spawn tile — no interpolation from the previous board, no half-finished tween, no
+ * stale selection ring. Called on restart and again at the reveal, which can be a cinematic later.
+ */
+function snapBalls() {
+  while (ballViews.length > state.balls.length) ballViews.pop();
+  for (let i = 0; i < state.balls.length; i++) {
+    const b = state.balls[i];
+    const at = spawnCentre(b);
+    const v = ballViews[i];
+    if (!v) { ballViews.push({ pos: at, team: b.team, id: b.id, sel: false }); continue; }
+    v.pos.x = at.x; v.pos.y = at.y;
+    v.team = b.team; v.id = b.id; v.sel = false;
+  }
+  view.balls = ballViews;
 }
 
 /**
@@ -1734,6 +1762,10 @@ function restart() {
     beginMatch({ mode: matchMode(), players: sizes.length, matchId: active?.matchId });
   }
   gen++;
+  /* Release bot thinks parked by the pause sheet on the PREVIOUS board. Their `token !== gen`
+     check drops them as soon as they resume, so a stale reply cannot move a fresh pawn — and no
+     awaiting promise is left stranded to hold the next race's dispatcher. */
+  for (const go of waiting.splice(0, waiting.length)) go();
   /* A fresh draw per race keeps the rivals' flags and XP stable for this board; an online race
      uses the seed the matchmaker handed both sides. */
   raceSeed = active ? active.seed : (Math.random() * 0x7fffffff) | 0;
@@ -1751,8 +1783,11 @@ function restart() {
   renderer.setBoard(state.cols, state.rows);
   fitBoard(state.cols, state.rows);
   wallsEach = wallBudget(state.balls.length);
+  /* The visual coordinates are born ON the spawn tile, never interpolated from the old board.
+     `snapBalls()` is also the writer of `view.balls`, so the very first frame already has every
+     token at its logical cell centre. */
   ballViews.length = 0;
-  syncBalls();
+  snapBalls();
   mineGhost = null;              // before the mode: `armCapsules` must not re-stage a dead square
   setMode(BOARD_IDLE);
   autoPicked = null;
@@ -2145,7 +2180,18 @@ function startGame(setup: StartSetup) {
   const reveal = () => {
     if (revealed) return;
     revealed = true;
+    /* The face-off is asynchronous: a route event or a late sheet close during the cinematic can
+       leave `paused` set. With that flag up `syncLoop()` cancels every frame and the board shows
+       a grid with no pawns, so entering a race always clears it. */
+    paused = false;
+    /* The reveal can be several frames after `restart()`. Re-snap here too, so the first visible
+       frame is guaranteed to hold every pawn on its exact spawn tile centre. */
+    snapBalls();
     router.go('game');
+    /* Kick the loop immediately — do not wait for another route or visibility event. */
+    syncLoop();
+    /* `hidden` was cleared a line ago: re-fit now, then verify once after the DOM settles. */
+    settleBoard();
     if (wantsTutorial) beginTutorial();
   };
   /* A room that already counted itself down has had its ceremony — the FIGHT flash *was* the
@@ -2995,43 +3041,99 @@ $('quit-yes').addEventListener('click', () => { impact('light'); quitToMenu(); }
 
 /* ---------- loop ---------- */
 
-new ResizeObserver(() => { renderer.resize(); confetti.resize(); syncStage(); }).observe(wrap);
-window.addEventListener('resize', () => { renderer.resize(); confetti.resize(); syncStage(); });
-renderer.resize();
-confetti.resize();
+/** One re-fit of everything measured off the board box: canvas, confetti and staged chrome. */
+function refitBoard() {
+  /* `settle()` measures now and verifies on the next frame; a 0x0 container is never turned into
+     geometry, so no pawn can be placed with a zero/NaN coordinate during the reveal. */
+  renderer.settle();
+  confetti.resize();
+  syncStage();
+}
+
+/**
+ * Match entry. The reveal clears `hidden` synchronously, but a container-query reflow, a font swap
+ * or a WebView toolbar can change the box on the frame AFTER that — so measure now and once more
+ * on the next animation frame, re-anchoring the pawn centres both times.
+ */
+let settleFrame = 0;
+function settleBoard() {
+  snapBalls();
+  refitBoard();
+  if (settleFrame) cancelAnimationFrame(settleFrame);
+  settleFrame = requestAnimationFrame(() => {
+    settleFrame = 0;
+    if (!renderer.hasLayout()) {
+      /* Still a 0x0 container: re-anchor and measure again rather than paint a stale fit. */
+      snapBalls();
+      refitBoard();
+    } else {
+      /* Cheap verification: `resize()` rebuilds only if the box actually changed. */
+      renderer.resize();
+      confetti.resize();
+      syncStage();
+    }
+    syncLoop();       // a degenerate first pass must not leave the loop asleep
+  });
+}
+
+/* A dedicated observer on the board container owns every re-fit: the reveal, a WebView chrome
+   collapse, a rotation and a container-query reflow all change this box. A wrap that was already
+   sized can stay silent, which is why `settleBoard()` also verifies after a deferred frame. */
+const boardObserver = new ResizeObserver(() => refitBoard());
+boardObserver.observe(wrap);
+window.addEventListener('resize', () => refitBoard());
+refitBoard();
 
 let last = performance.now();
+/** Mirrors `want` in `syncLoop()`: the frame re-arms itself from this flag, never from a guess. */
+let loopWanted = false;
 function frame(now: number) {
-  const dt = Math.min(0.05, (now - last) / 1000);
-  last = now;
-  const k = motionReduced() ? 1 : 1 - Math.exp(-dt * 14); // frame-rate independent lerp
-  if (ballViews.length !== state.balls.length) syncBalls();
-  /* one mode value per frame: the ring rides the dots, so a previewing board shows no ball as picked */
-  const m = mode(), dots = moveDots(m);
-  for (let i = 0; i < state.balls.length; i++) {
-    const b = state.balls[i], v = ballViews[i];
-    const tx = b.pos.c + 0.5, ty = b.pos.r + 0.5;
-    v.pos.x += (tx - v.pos.x) * k;
-    v.pos.y += (ty - v.pos.y) * k;
-    if (Math.abs(tx - v.pos.x) < 0.002) v.pos.x = tx;
-    if (Math.abs(ty - v.pos.y) < 0.002) v.pos.y = ty;
-    v.sel = dots && v.id === m.selected;
+  try {
+    /* The rAF timestamp can be a hair behind the `performance.now()` taken when the loop was
+       armed; a negative delta produced a negative lerp factor before this clamp. */
+    const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+    last = now;
+    const k = motionReduced() ? 1 : 1 - Math.exp(-dt * 14); // frame-rate independent lerp
+    if (ballViews.length !== state.balls.length) syncBalls();
+    /* one mode value per frame: the ring rides the dots, so a previewing board shows no ball as picked */
+    const m = mode(), dots = moveDots(m);
+    for (let i = 0; i < state.balls.length; i++) {
+      const b = state.balls[i];
+      let v = ballViews[i];
+      if (!v) { syncBalls(); v = ballViews[i]; if (!v) continue; }
+      const tx = b.pos.c + 0.5, ty = b.pos.r + 0.5;
+      /* Per-frame fallback guard: a missing, NaN, Infinity or out-of-bounds visual coordinate is
+         snapped straight to the logical tile centre. No pawn is ever dropped from the queue. */
+      if (!v.pos || !Number.isFinite(v.pos.x) || !Number.isFinite(v.pos.y)
+        || v.pos.x < -0.5 || v.pos.y < -0.5
+        || v.pos.x > state.cols + 0.5 || v.pos.y > state.rows + 0.5) {
+        v.pos = { x: tx, y: ty };
+      }
+      v.pos.x += (tx - v.pos.x) * k;
+      v.pos.y += (ty - v.pos.y) * k;
+      if (Math.abs(tx - v.pos.x) < 0.002) v.pos.x = tx;
+      if (Math.abs(ty - v.pos.y) < 0.002) v.pos.y = ty;
+      v.sel = dots && v.id === m.selected;
+    }
+    view.state = state;
+    view.balls = ballViews;
+    view.hints = hints;
+    view.ghost = ghost;
+    view.mineHints = mineHints;
+    view.mineGhost = mineGhost;
+    view.capsule = capsule;
+    view.last = marks;
+    view.thinking = wantsOpponent() && !paused && !tutorialActive ? state.turn : null;
+    /* The result capsule lays a full-screen blurred scrim over the board. Repainting the canvas
+       behind it would make the compositor re-blur a board nobody can see, every frame — so once the
+       sheet is up only the confetti (drawn above it) keeps ticking. */
+    if (!overlayOpen) renderer.draw(view, now);
+    confetti.tick(dt, now);
+  } finally {
+    /* A frame that throws used to strand `raf` at a stale id: `syncLoop()` then believed the loop
+       was running while nothing painted, which is a grid with no pawns and no way to recover. */
+    raf = loopWanted ? requestAnimationFrame(frame) : 0;
   }
-  view.state = state;
-  view.balls = ballViews;
-  view.hints = hints;
-  view.ghost = ghost;
-  view.mineHints = mineHints;
-  view.mineGhost = mineGhost;
-  view.capsule = capsule;
-  view.last = marks;
-  view.thinking = wantsOpponent() && !paused && !tutorialActive ? state.turn : null;
-  /* The result capsule lays a full-screen blurred scrim over the board. Repainting the canvas
-     behind it would make the compositor re-blur a board nobody can see, every frame — so once the
-     sheet is up only the confetti (drawn above it) keeps ticking. */
-  if (!overlayOpen) renderer.draw(view, now);
-  confetti.tick(dt, now);
-  raf = requestAnimationFrame(frame);
 }
 
 /** The webview keeps a hidden Mini App running, and the pause sheet is a real stop: no frames
@@ -3045,6 +3147,7 @@ function syncLoop() {
      moving layer is the board itself. */
   document.documentElement.classList.toggle('game-live', onBoard);
   const want = onBoard && !paused;
+  loopWanted = want;
   if (want && !raf) { last = performance.now(); raf = requestAnimationFrame(frame); }
   else if (!want && raf) { cancelAnimationFrame(raf); raf = 0; }
   if (!want) stopClock();

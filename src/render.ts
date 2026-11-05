@@ -1007,6 +1007,13 @@ function startBoard(s: GameState): { c: number; r: number; t: Player }[] {
 const LAYOUT_PAD = 2;
 const layoutPad = (cell: number) => Math.max(LAYOUT_PAD, Math.min(6, cell * 0.06));
 /**
+ * A sane stand-in box for the one moment the DOM cannot be measured (the race screen is still
+ * `display:none` during the launch cinematic, or a WebView reports a 0x0 container mid-reflow).
+ * It is never painted for long — `settle()` re-measures on the next frame — but it keeps `layout()`
+ * finite and positive so no caller can ever derive a zero/NaN pawn coordinate from it.
+ */
+const FALLBACK_W = 320, FALLBACK_H = 420;
+/**
  * The bevel band struck along the slab's inner edge. It is the board's own rim, so anything that
  * lands on it reads as cut off by the border rather than as sitting in a tile.
  */
@@ -1027,16 +1034,23 @@ const slideInto = (v: number, size: number, lo: number, hi: number) =>
  * a pad expressed in cells cannot be known before the cell is.
  */
 function computeLayout(w: number, h: number, dpr: number, cols: number, rows: number): Layout {
+  /* Never derive geometry from an unmounted or zero-size container. A 0x0 box fits a negative
+     cell, which floors to 1 and pushes `ox`/`oy` NEGATIVE — every pawn is then drawn off the
+     canvas and stays invisible until something re-fits. Clamp the inputs here as well as at the
+     `resize()` door, so a caller that reaches this directly still gets a usable, positive layout. */
+  const bw = Number.isFinite(w) && w > 0 ? w : FALLBACK_W;
+  const bh = Number.isFinite(h) && h > 0 ? h : FALLBACK_H;
+  const bd = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
   const fit = (m: number) => {
-    const raw = Math.min((w - 2 * m) / cols, (h - 2 * m) / rows);
-    return Math.max(1, Math.floor(Math.max(0, raw) * dpr) / dpr);
+    const raw = Math.min((bw - 2 * m) / cols, (bh - 2 * m) / rows);
+    return Math.max(1, Math.floor(Math.max(0, raw) * bd) / bd);
   };
   let cell = fit(LAYOUT_PAD);
   const m = layoutPad(cell);
   if (m !== LAYOUT_PAD) cell = fit(m);
-  const ox = Math.round(((w - cols * cell) / 2) * dpr) / dpr;
-  const oy = Math.round(((h - rows * cell) / 2) * dpr) / dpr;
-  return { w, h, cell, ox, oy, dpr, cols, rows };
+  const ox = Math.max(0, Math.round(((bw - cols * cell) / 2) * bd) / bd);
+  const oy = Math.max(0, Math.round(((bh - rows * cell) / 2) * bd) / bd);
+  return { w: bw, h: bh, cell, ox, oy, dpr: bd, cols, rows };
 }
 
 export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions = {}) {
@@ -1044,7 +1058,13 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   /* The board can change size between races (`setBoard`): a duel is 8 columns, a 3- or 4-contender
      race 10. Everything below reads these, never a module constant. */
   let cols = opts.cols ?? COLS, rows = opts.rows ?? ROWS;
-  let L = computeLayout(1, 1, 1, cols, rows);
+  /* A finite, positive layout from the first line. The old `computeLayout(1,1,1,…)` handed every
+     early caller a 1px cell and a negative origin before the first real resize. */
+  let L = computeLayout(FALLBACK_W, FALLBACK_H, 1, cols, rows);
+  /** False until at least one measurement came from a mounted, non-zero container. */
+  let layoutReady = false;
+  /** One deferred verification frame, armed by `settle()`; never a polling loop. */
+  let settleRaf = 0;
   let th: Theme = opts.theme ? opts.theme() : DEFAULT_THEME;
   /** The client-side colour perspective, or null for previews that show the authored theme. */
   let perspective: Perspective | null = null;
@@ -1160,15 +1180,73 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     return Math.min(raw, touch || small ? 1.75 : 2);
   }
 
-  function resize() {
+  /**
+   * Measure the board and rebuild its paint servers. Returns true only when the geometry came from
+   * a mounted, non-zero container. A zero-size box is never turned into a layout: a 0x0 fit floors
+   * the cell at 1px and pushes the origin negative, which paints every pawn outside the canvas.
+   * Instead the last good layout is kept and the cache is invalidated, so the deferred rAF pass or
+   * the board's ResizeObserver is guaranteed to re-fit the moment the DOM settles.
+   */
+  function resize(): boolean {
     const dpr = canvasDpr();
     const w = canvas.clientWidth, h = canvas.clientHeight;
-    if (w === lastW && h === lastH && dpr === lastDpr) return;
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w < 1 || h < 1) {
+      layoutReady = false;
+      lastW = -1; lastH = -1; lastDpr = -1;
+      /* Strike the paint servers once against the finite fallback layout, never the degenerate
+         0x0 box: a frame drawn before the first real fit must still find its gradients. */
+      if (!ballFx.length) buildStatic();
+      return false;
+    }
+    if (layoutReady && w === lastW && h === lastH && dpr === lastDpr) return true;
     lastW = w; lastH = h; lastDpr = dpr;
     canvas.width = Math.max(1, Math.round(w * dpr));
     canvas.height = Math.max(1, Math.round(h * dpr));
     L = computeLayout(w, h, dpr, cols, rows);
+    if (!(L.cell > 0) || !Number.isFinite(L.cell) || !Number.isFinite(L.ox) || !Number.isFinite(L.oy)) {
+      layoutReady = false;
+      lastW = -1; lastH = -1; lastDpr = -1;
+      return false;
+    }
+    layoutReady = true;
     buildStatic();
+    return true;
+  }
+
+  /** The canvas-pixel centre of a logical tile — the one source of truth for a pawn's spawn. */
+  function tileToCanvas(c: number, r: number): Vec {
+    return { x: L.ox + (c + 0.5) * L.cell, y: L.oy + (r + 0.5) * L.cell };
+  }
+
+  /** Arm ONE deferred verification frame. Never polls: a further change is the observer's job. */
+  function scheduleSettle() {
+    if (settleRaf) return;
+    settleRaf = requestAnimationFrame(() => {
+      settleRaf = 0;
+      if (!layoutReady || canvas.clientWidth !== lastW || canvas.clientHeight !== lastH) {
+        lastW = -1; lastH = -1; lastDpr = -1;
+        resize();
+      }
+    });
+  }
+
+  /**
+   * Force a fresh measurement now and verify it on the next frame. Clearing `hidden`, a
+   * container-query reflow and a WebView toolbar collapse can all change this box one frame after
+   * the reveal, and the wrap's ResizeObserver stays silent if its own size never changed.
+   */
+  function settle(): boolean {
+    /* An observer notification does not always mean the box moved. Skip the rebuild when the
+       cached fit is already live, but still arm the deferred verification frame. */
+    if (!layoutReady || canvas.clientWidth !== lastW || canvas.clientHeight !== lastH
+      || canvasDpr() !== lastDpr) {
+      lastW = -1; lastH = -1; lastDpr = -1;
+      const ok = resize();
+      scheduleSettle();
+      return ok;
+    }
+    scheduleSettle();
+    return true;
   }
 
   /** Everything that only depends on the layout or the theme: the board layer + every paint server. */
@@ -1945,8 +2023,22 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   }
 
   function drawBall(cx: number, cy: number, r: number, i: number, badge = 0, wounded = false) {
-    const s = sides[i], fx = ballFx[i];
+    if (!ballFx.length) buildStatic();
+    const seat = i >= 0 && i < sides.length ? i : 0;
+    const s = sides[seat], fx = ballFx[seat] ?? ballFx[0];
+    if (!s || !fx) return;                    // no paint servers to draw with (draw() prevents this)
+    /* Recover rather than drop: a bad coordinate is snapped back onto the board, and a zero or
+       NaN radius is replaced with a strictly positive one. Nothing here can hide a pawn. */
+    if (!(r > 0) || !Number.isFinite(r)) r = Math.max(1, ballR(L.cell));
+    if (!Number.isFinite(cx) || !Number.isFinite(cy)) {
+      const at = tileToCanvas(0, 0);
+      cx = at.x; cy = at.y;
+    }
+    /* Each token owns its own context: no aborted spawn tween or leaked pass can strand this
+       pawn at alpha 0, at scale 0, or under an additive composite. */
     ctx.save();
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
     ctx.translate(cx, cy);
 
     ctx.save();                        // soft elliptical shadow
@@ -2760,10 +2852,18 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
        stage's ResizeObserver catches the reveal only when the *wrap* changes size, and a wrap that
        was already sized can stay silent. Two property reads per frame buy a board that can never
        paint at a stale size — the bug was a ball drawn at cell 1.08 (a negative `r - 0.5` throw). */
-    if (canvas.clientWidth !== lastW || canvas.clientHeight !== lastH) resize();
+    if (!layoutReady || canvas.clientWidth !== lastW || canvas.clientHeight !== lastH) {
+      if (!resize()) scheduleSettle();
+    }
+    /* The paint servers always exist, even before the first successful measurement: drawing a
+       pawn must never dereference an undefined gradient and abort the whole frame. */
+    if (!ballFx.length) buildStatic();
     const { cell: c, ox, oy } = L;
     const still = motionReduced();
-    const fin = finish;
+    /* A finisher can only belong to a settled board. If a cue ever survived a restart, its
+       "burst" would `continue` past a live pawn and drop it from the render queue entirely — the
+       exact symptom of a board that shows its grid but no tokens on frame zero. */
+    const fin = v.state.winner === null ? null : finish;
     /*
      * The finisher runs on its own clock, advanced by this frame's CLAMPED delta. A settled match
      * is exactly when the main thread spikes — socket traffic, save writes, DOM prep — and a raw
@@ -2802,6 +2902,11 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       goalAt = now;
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    /* A frame aborted mid-paint (or a stale tween) must never leave globalAlpha at 0 or a
+       `lighter` composite behind: reset the two states that can make a whole pawn disappear,
+       once per frame, before any furniture is drawn. */
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (boardBufferCanvas) ctx.drawImage(boardBufferCanvas, 0, 0);
     ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
@@ -3132,6 +3237,29 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
     // every ball on the board, the nearer one (further down) drawn last so it sits on top
     for (let i = knocks.length - 1; i >= 0; i--) if (now - knocks[i].t0 >= KNOCK_MS) knocks.splice(i, 1);
+    /* ---- per-frame fallback guard: never let a pawn leave the render queue ----
+       A visual coordinate can desynchronise from the rules when a race is restarted mid-tween, a
+       resize lands between two frames, or an interpolated value goes non-finite. Heal it from the
+       LOGICAL ball (by id, not index) before the depth sort, so a NaN can neither scramble the
+       paint order nor reach `continue`. The cell-space centre below is exactly what
+       `tileToCanvas()` converts to pixels when the ball is drawn. */
+    const logical = v.state.balls;
+    for (let i = 0; i < v.balls.length; i++) {
+      const b = v.balls[i];
+      if (!b) {
+        const src = logical[i];
+        if (src) v.balls[i] = { pos: { x: src.pos.c + 0.5, y: src.pos.r + 0.5 }, team: src.team, id: src.id, sel: false };
+        continue;
+      }
+      const p = b.pos;
+      const bad = !p || !Number.isFinite(p.x) || !Number.isFinite(p.y)
+        || p.x < -0.5 || p.y < -0.5 || p.x > L.cols + 0.5 || p.y > L.rows + 0.5;
+      if (!bad) continue;
+      const src = logical.find((s) => s.id === b.id) ?? logical[i];
+      b.pos = src
+        ? { x: src.pos.c + 0.5, y: src.pos.r + 0.5 }
+        : { x: 0.5, y: 0.5 };
+    }
     SEATS_N.fill(0);
     for (const b of v.balls) if (b.team < SEAT_COUNT) SEATS_N[b.team]++;
     ORDER.length = 0;
@@ -3176,6 +3304,21 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
           cy += (Math.cos(shakeEl * 0.19) + Math.sin(shakeEl * 0.53) * 0.26) * FINISH_JITTER * ramp;
         }
       }
+      /* Last line of defence: a stale knock tween, a finisher jitter or an aborted interpolation
+         can still push the drawn centre to NaN or off the canvas. Snap it back to the logical
+         tile's canvas centre (and heal the view for the next frame) rather than skipping the pawn. */
+      if (!Number.isFinite(cx) || !Number.isFinite(cy)
+        || cx < -c || cy < -c || cx > L.w + c || cy > L.h + c) {
+        const src = logical.find((s) => s.id === b.id);
+        if (src) {
+          const at = tileToCanvas(src.pos.c, src.pos.r);
+          cx = at.x; cy = at.y;
+          b.pos.x = src.pos.c + 0.5; b.pos.y = src.pos.r + 0.5;
+        } else {
+          const at = tileToCanvas(0, 0);
+          cx = at.x; cy = at.y;
+        }
+      }
       const crowned = fin !== null && b.id === fin.winnerBall;
       let r = ballR(c) * (b.sel ? 1.08 : 1);          // the chosen ball lifts off the clay
       if (pawn && shakeEl >= 0) r *= 1 + 0.09 * Math.min(1, shakeEl / FINISH_SHAKE_MS);
@@ -3184,6 +3327,9 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         const q = clamp(finNow / FINISH_ASCEND_MS, 0, 1);
         r *= 1 + FINISH_ASCEND_SCALE * (1 - Math.pow(1 - q, 3));
       }
+      /* A zero or NaN radius is an invisible pawn. No spawn tween, stale scale lock or degenerate
+         cell is allowed to take a token off the board: clamp to a strictly positive base radius. */
+      if (!Number.isFinite(r) || r <= 0) r = Math.max(1, ballR(c));
       /* the tail it is dragging right now: sampled from where it stood last frame. A ball riding
          the mine's throw draws no comet: its path is the arc, and a straight streak from the old
          square to the landing would give the whole throw away before the blast. */
@@ -3249,6 +3395,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         ctx.scale(1 + sq, 1 - sq);
         ctx.translate(-cx, -cy);
       }
+      /* Full opacity for every token, whatever the furniture painted before it left behind. */
+      ctx.globalAlpha = 1;
       drawBall(cx, cy, r, seat, SEATS_N[seat] > 1 ? n : 0, hurt);
       if (sq !== 0) ctx.restore();
       if (crowned && fin) drawFinishCrown(cx, cy, r, finNow, still);
@@ -3329,20 +3477,39 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
   return {
     resize,
+    /** Force a re-fit now plus one deferred verification frame (match entry / container resize). */
+    settle,
+    /** Canvas-pixel centre of a logical tile; the fallback guard's single source of truth. */
+    tileToCanvas,
+    /** True only after a measurement came from a mounted, non-zero container. */
+    hasLayout: () => layoutReady,
     draw,
     layout: () => L,
     /**
      * Point the renderer at a board of a different size. The rules pick the grid from the number of
-     * contenders, so the race screen hands the board over on every `restart()`; nothing is repainted
-     * until the next frame, and a board that has not moved size costs nothing.
+     * contenders, so the race screen hands the board over on every `restart()`. Every call also
+     * re-measures (the container may have changed while hidden) and arms one deferred verification
+     * frame; a genuinely unchanged, visible box costs one rebuild per race, not per frame.
      */
     setBoard(c: number, r: number) {
-      if (c === cols && r === rows) return;
       cols = c; rows = r;
-      lastW = -1;                    // force the next resize() past its "nothing changed" early-out
-      resize();
+      /* Keep `layout()`'s own grid in step even while the container is unmeasurable: every caller
+         that reads it between `restart()` and the reveal must see THIS race's columns and rows. */
+      L = computeLayout(L.w, L.h, L.dpr, cols, rows);
+      /* A new race is a new measurement, even when the grid did not change: the previous race's
+         cached size may have been taken from a hidden or mid-reflow container. The deferred pass
+         catches the reveal, which can land several frames after `restart()`. */
+      lastW = -1; lastH = -1; lastDpr = -1;
+      const ok = resize();
+      scheduleSettle();
+      return ok;
     },
     resetFx: () => {
+      /* No tween, alpha or composite from the previous match may greet the first frame of this
+         one. Context state is reset here as well as at the top of draw(). */
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
       born.clear(); pulses.length = 0; blasts.length = 0; knocks.length = 0;
       ripples.length = 0; streaks.length = 0; prevPos.clear(); mineGhostKey = '';
       dust.length = 0; thump.clear();
