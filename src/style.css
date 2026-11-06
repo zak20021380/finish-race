@@ -3960,34 +3960,32 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   white-space: nowrap;
 }
 
-/* ---- identity card (compact): the Dark Clay arcade HUD pill ----
-   One horizontal row — avatar hero · identity · wallet. The slab is lit from above
-   (1px top edge + a sheen that dies by 46%), pools to near-black along its base, and
-   floats on a soft ambient drop. No backdrop-filter anywhere: the tile is opaque clay,
-   so the GPU never has to re-sample what sits behind it. */
-/* 58px elevated Dark Clay command chassis: a sculpted shell, not a flat bar.
-   Lit from the top-left (ambient wash), hard 1px bevel on top, deep inner pool below. */
+/* ---- identity card (compact): the obsidian glass HUD dock ----
+   One horizontal row — avatar hero · identity · wallet. Every sub-surface on the dock
+   (wallet capsule, bell key, squad bar, VIP pill, rank tag) now shares one frosted-glass
+   recipe so the row reads as a single object instead of five competing boxes.
+   No backdrop-filter anywhere: the face is opaque, so the GPU never re-samples behind it. */
+/* 58px obsidian glass dock: one calm surface, three columns, no competing boxes.
+   Flat frosted face + a single hairline rim; depth comes from one soft ambient drop. */
 .id-card.id-compact {
   position: relative;
   flex: none;
   display: flex;
   flex-direction: row;
   align-items: center;
-  column-gap: 10px;
+  justify-content: space-between;
+  column-gap: 8px;
   height: 58px;
   min-height: 58px;
   box-sizing: border-box;
-  padding: 6px 10px;
-  /* the clay dock: a generous radius over a matte slate face lit from the top-left,
-     with a thick bottom pool instead of a flat bar */
-  border-radius: 24px;
-  background: linear-gradient(145deg, #1B2636 0%, #141D2A 100%);
-  background-color: #141D2A;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 7px 8px;
+  border-radius: 16px;
+  background: linear-gradient(163deg, #161F2E 0%, #101825 100%);
+  background-color: #101825;
+  border: 1px solid rgba(255, 255, 255, 0.07);
   box-shadow:
-    0 10px 24px -4px rgba(0, 0, 0, 0.5),
-    inset 0 2px 3px rgba(255, 255, 255, 0.12),
-    inset 0 -3px 6px rgba(0, 0, 0, 0.4);
+    0 8px 20px -8px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   overflow: visible;                   /* the shield crest may overhang the face */
   min-width: 0;
   max-width: 100%;
@@ -3997,11 +3995,10 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  /* the clay read: a cool wash pooling in from the top-left, a soft shade gathering
-     under the bottom-right — the same two lights the avatar rim and the dock share */
+  /* a single cool key light from the top-left, held at low alpha so the face stays matte */
   background:
-    radial-gradient(130% 170% at 6% -30%, rgba(148, 197, 255, 0.18) 0%, rgba(148, 197, 255, 0) 58%),
-    radial-gradient(120% 150% at 104% 150%, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0) 62%);
+    radial-gradient(120% 150% at 4% -40%, rgba(148, 197, 255, 0.08) 0%, rgba(148, 197, 255, 0) 55%),
+    radial-gradient(110% 140% at 102% 150%, rgba(0, 0, 0, 0.28) 0%, rgba(0, 0, 0, 0) 60%);
   pointer-events: none;
 }
 /* legacy two-row scaffolding is gone with the old markup — never show it */
@@ -4076,7 +4073,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   stroke-linecap: round;
   stroke-dasharray: 138.23;
   stroke-dashoffset: 138.23;
-  filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.55));
+  filter: drop-shadow(0 0 2px rgba(16, 185, 129, 0.35));
   transition: stroke-dashoffset var(--motion-med);
 }
 .id-card .id-avatar.avatar {
@@ -4121,8 +4118,8 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   border-radius: 0;
   background: none;
   pointer-events: none;
-  /* embossed token: a hard drop that seats it on the rim, plus a bloom off the face */
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .7)) drop-shadow(0 0 6px rgba(56, 189, 248, .45));
+  /* embossed token: a hard drop that seats it on the rim, with a restrained face bloom */
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgba(56, 189, 248, .28));
 }
 .id-lvl-crest {
   position: absolute;
@@ -4148,7 +4145,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: #fff;
-  text-shadow: 0 1px 1px rgba(2, 6, 23, .95), 0 0 7px rgba(125, 211, 252, .55);
+  text-shadow: 0 1px 1px rgba(2, 6, 23, .95), 0 0 4px rgba(125, 211, 252, .3);
 }
 /* COL 2, TEXT — name on top, squad badge underneath.
    No overflow on the column itself: both rows carry vertical tap bands that reach
@@ -4160,7 +4157,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 3px;
+  gap: 6px;
 }
 .id-name-row {
   display: flex;
@@ -4168,7 +4165,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   gap: 6px;
   min-width: 0;
   max-width: 100%;
-  height: 16px;
+  height: 17px;
 }
 .id-name-btn {
   appearance: none;
@@ -4187,7 +4184,7 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
   margin: 0;
   cursor: pointer;
   border-radius: 6px;
-  text-align: left;
+  text-align: start;
 }
 .id-name-btn::after {
   content: "";
@@ -4201,28 +4198,28 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 .id-name {
   flex: 0 1 auto;
   min-width: 0;
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: -0.005em;
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
   line-height: 1.15;
   color: #F8FAFC;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, .6);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .45);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Real vector flag plate: 22x15, rounded 3.5, metallic rim + glass sheen painted in the SVG. */
+/* Real vector flag plate: 22x15, unified with the glass row by one hairline ring. */
 .id-flag {
   flex: none;
   width: 22px;
   height: 15px;
-  border-radius: 3.5px;
+  border-radius: 4px;
   overflow: visible;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: none;
-  box-shadow: none;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 .id-flag[hidden] { display: none; }
 /* The plate is its own class, never `.flag`: html.no-flags hides emoji glyphs on Windows,
@@ -4231,11 +4228,11 @@ button.rank-pinned.hint:focus-visible { outline: 3px solid var(--brand-2); outli
 /* the code stays in the DOM for state/aria only — html.no-flags would otherwise reveal it */
 .id-flag .flag-code,
 html.no-flags .id-flag .flag-code { display: none; }
-/* Squad: a sleek recessed badge, not a bare caption. Content-sized (align-self) so the
-   pill hugs its emblem, capped at 100% so a long handle still ellipsises. */
+/* Squad: one frosted micro-bar on the dock's own glass recipe. Content-sized (align-self)
+   so the pill hugs its emblem, capped at 100% so a long handle still ellipsises. */
 .id-team {
   appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   font: inherit;
   position: relative;
   z-index: 1;
@@ -4243,31 +4240,27 @@ html.no-flags .id-flag .flag-code { display: none; }
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
   max-width: 100%;
-  min-height: 22px;
-  height: 22px;
-  padding: 0 9px;
+  min-height: 21px;
+  height: 21px;
+  padding: 0 8px;
   margin: 0;
   cursor: pointer;
-  /* a mini clay pill: same radius family and the same two lights as the dock above it */
   border-radius: 9999px;
-  text-align: left;
+  text-align: start;
   color: #A9B7CA;
   font-size: 11px;
   font-weight: 600;
-  background: linear-gradient(145deg, #202B3C 0%, #161E2C 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .09),
-    inset 0 -2px 4px rgba(0, 0, 0, .45),
-    0 2px 6px rgba(0, 0, 0, .35);
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: none;
+  transition: transform var(--motion-fast), border-color var(--motion-fast), background var(--motion-fast);
 }
 .id-team::after {
   content: "";
   position: absolute;
-  inset: -5px 0 -8px 0;
+  inset: -5px 0 -6px 0;
 }
 .id-team:focus-visible {
   outline: 3px solid var(--brand-2);
@@ -4275,19 +4268,13 @@ html.no-flags .id-flag .flag-code { display: none; }
 }
 .id-team:hover:not(:active) {
   transform: translateY(-1px);
-  border-color: rgba(255, 255, 255, .14);
-  background: linear-gradient(145deg, #253145 0%, #18202F 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .12),
-    inset 0 -2px 4px rgba(0, 0, 0, .4),
-    0 4px 10px rgba(0, 0, 0, .42);
+  border-color: rgba(255, 255, 255, .16);
+  background: rgba(255, 255, 255, 0.07);
 }
-/* the pill sinks into the clay rather than fading out */
+/* the bar lifts its rim instead of sinking into clay */
 .id-team:active {
   transform: translateY(1px) scale(.98);
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, .55),
-    inset 0 1px 0 rgba(255, 255, 255, .04);
+  background: rgba(255, 255, 255, 0.02);
 }
 /* mini clan emblem: a 13px cyan-beveled chip, lit from above, so it reads as a crest */
 .id-team-av.squad-avatar {
@@ -4337,67 +4324,58 @@ html.no-flags .id-flag .flag-code { display: none; }
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
-/* Warm gold micro-tag: the rank is a reward chip, not a second caption. */
+/* Warm gold hairline micro-pill: the rank is a reward tag, not a second caption. */
 .id-team-rank {
   flex: none;
   display: inline-flex;
   align-items: center;
-  margin-left: 3px;
-  padding: 1px 4px;
-  border-left: 0;
-  border-radius: 4px;
-  background: rgba(245, 158, 11, .14);
-  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, .22);
+  margin-inline-start: 2px;
+  padding: 0 4px;
+  border: 1px solid rgba(245, 158, 11, .2);
+  border-radius: 9999px;
+  background: rgba(245, 158, 11, .08);
+  box-shadow: none;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.3;
   color: #FBBF24;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  text-shadow: 0 0 6px rgba(245, 158, 11, .4);
 }
 .id-team-rank[hidden] { display: none; }
 .id-team.bound .id-team-ico { display: none; }
 .id-team:not(.bound) .id-team-av { display: none; }
 .id-team:not(.bound) .id-team-t { color: var(--ink-soft); }
-.id-team:not(.bound) { padding-left: 9px; }
+.id-team:not(.bound) { padding-inline-start: 9px; }
 /* COL 3, ACTIONS */
 .id-side {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
-/* The vault: deep obsidian lit from the coin side by a warm golden radial wash, a thin
-   metallic gold rim, an inner drop and a cream-gold balance. Rich, not a yellow blob. */
+/* The purse: a compact obsidian capsule. Flat frosted face, one gold hairline rim,
+   tabular gold numerals — the glow disc is gone, so the wallet stops eating the row. */
 .id-coin.coin-pill {
   --d: 0px;
-  height: 38px;
-  min-height: 38px;
-  max-height: 38px;
-  padding: 0 12px 0 5px;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 800;
-  /* golden-amber clay capsule: a pill, so it reads as pressed clay and not a chip */
+  height: 34px;
+  min-height: 34px;
+  max-height: 34px;
+  padding: 0 6px;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 700;
   border-radius: 9999px;
-  background:
-    radial-gradient(118% 145% at 14% 50%, rgba(245, 158, 11, .3) 0%, rgba(15, 23, 42, .96) 66%),
-    #0C111B;
-  color: #FEF3C7;
+  background: rgba(255, 255, 255, 0.04);
+  color: #F5D98F;
   font-variant-numeric: tabular-nums;  /* Latin digits, fixed advance, no jitter */
-  letter-spacing: .02em;
+  letter-spacing: 0;
   flex: none;
-  max-width: 108px;
+  max-width: 92px;
   overflow: visible;                   /* its own box clips the ::after tap band otherwise */
   position: relative;
-  border: 1px solid rgba(251, 191, 36, .42);
-  /* dual-tone clay inset: gold light trapped along the top, shadow pooling below,
-     then one ambient drop so the capsule floats off the dock */
-  box-shadow:
-    inset 0 2px 4px rgba(255, 215, 0, .2),
-    inset 0 -2px 4px rgba(0, 0, 0, .6),
-    0 4px 10px rgba(0, 0, 0, .35);
+  border: 1px solid rgba(245, 158, 11, .2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
 }
 .id-coin.coin-pill::after {
   content: "";
@@ -4405,18 +4383,12 @@ html.no-flags .id-flag .flag-code { display: none; }
   inset: -6px 0;
 }
 .id-coin.coin-pill:hover:not(:active) {
-  border-color: rgba(251, 191, 36, .58);
-  box-shadow:
-    inset 0 2px 4px rgba(255, 215, 0, .28),
-    inset 0 -2px 4px rgba(0, 0, 0, .55),
-    0 6px 14px rgba(0, 0, 0, .4),
-    0 0 16px -4px rgba(245, 158, 11, .5);
+  border-color: rgba(245, 158, 11, .34);
+  background: rgba(255, 255, 255, 0.06);
 }
 .id-coin.coin-pill:active {
   transform: translateY(1px) scale(.98);
-  box-shadow:
-    inset 0 3px 7px rgba(0, 0, 0, .72),
-    inset 0 1px 0 rgba(254, 243, 199, .14);
+  background: rgba(255, 255, 255, 0.02);
 }
 .id-coin.coin-pill #p-coins {
   min-width: 0;
@@ -4424,63 +4396,54 @@ html.no-flags .id-flag .flag-code { display: none; }
   overflow: hidden;
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
-  /* crisp, warm-lit numerals: hard seat plus the faintest gold bloom */
-  text-shadow: 0 1px 2px rgba(0, 0, 0, .85), 0 0 10px rgba(251, 191, 36, .25);
+  /* crisp warm numerals: one soft seat, no bloom */
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .5);
 }
-/* 3D milled coin: warm halo, then a crisp drop so it lifts off the obsidian. */
+/* 3D milled coin: a crisp seat under the face, no halo. */
 .id-coin.coin-pill .coin {
-  width: 26px;
-  height: 26px;
+  width: 16px;
+  height: 16px;
   flex: none;
-  /* glowing 3D coin: a warm halo under the milled face */
-  filter: drop-shadow(0 2px 5px rgba(245, 158, 11, .5)) drop-shadow(0 0 9px rgba(251, 191, 36, .4));
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .5));
 }
-/* Bell: a 38px sculpted squircle, silver-blue 3D bell with a clapper, sunk socket press. */
+/* Bell: a 34px circular dark-glass key on the avatar's radius family, unread pip on the rim. */
 .id-bell.icon-btn.xs {
   --d: 0px;
-  width: 38px;
-  height: 38px;
-  min-width: 38px;
-  min-height: 38px;
-  /* squircle clay key: the dock's own face recipe, one step lighter */
-  border-radius: 13px;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, .08);
-  background: linear-gradient(145deg, #26313F 0%, #151C2C 100%);
-  box-shadow:
-    0 5px 12px rgba(0, 0, 0, .45),
-    inset 0 2px 3px rgba(255, 255, 255, .14),
-    inset 0 -3px 6px rgba(0, 0, 0, .4);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
   color: #C7D3E8;
-  transition: transform .2s var(--bounce), box-shadow var(--motion-fast), border-color var(--motion-fast);
+  transition: transform .2s var(--bounce), background var(--motion-fast), border-color var(--motion-fast);
 }
 .id-bell.icon-btn.xs::after { content: ""; position: absolute; inset: -5px; }
-.id-bell.icon-btn.xs .ico { width: 18px; height: 18px; }
+.id-bell.icon-btn.xs .ico { width: 17px; height: 17px; }
 .id-bell.icon-btn.xs:hover:not(:active) {
   transform: translateY(-1px);
   border-color: rgba(255, 255, 255, .16);
-  box-shadow:
-    0 7px 15px rgba(0, 0, 0, .5),
-    inset 0 2px 3px rgba(255, 255, 255, .22),
-    inset 0 -3px 6px rgba(0, 0, 0, .38);
+  background: rgba(255, 255, 255, 0.07);
 }
-/* puffy press: the key sinks and squashes, then bounces back on the dock's curve */
+/* the key sinks under the glass rather than pooling clay */
 .id-bell.icon-btn.xs:active {
-  transform: translateY(2px) scale(.96);
-  box-shadow:
-    inset 0 3px 7px rgba(0, 0, 0, .75),
-    inset 0 1px 0 rgba(255, 255, 255, .06);
+  transform: translateY(1px) scale(.96);
+  background: rgba(255, 255, 255, 0.02);
 }
 /* Unread state now paints warm: the numeric badge + amber glow live with the
    other notification styles (see NOTIFICATIONS below), not as a flat dot. */
 /* profile header owns the settings gear now */
 #profile-settings { flex: none; }
-/* 320px is a real floor. Below 380 the columns close in to one grid step, which buys the
-   squad handle back the ~8px the 38px bell costs it, and the capsule cap rises to fit a
-   6-digit balance — max-width only binds when the number is genuinely long, so the common
-   1,850 wallet is untouched. */
+/* 320px is a real floor. Below 380 the columns and the action pair close in one step and
+   the capsule drops a point — that is what buys the identity column its breathing room.
+   max-width only binds when the balance is genuinely long, so a 6-digit wallet still fits. */
 @media (max-width: 380px) {
-  .id-card.id-compact { column-gap: 8px; padding: 6px 8px; }
-  .id-coin.coin-pill { max-width: 100px; font-size: 12.5px; padding-right: 9px; }
+  .id-card.id-compact { column-gap: 6px; }
+  .id-side { gap: 6px; }
+  .id-coin.coin-pill { max-width: 86px; font-size: 12px; height: 32px; min-height: 32px; max-height: 32px; }
+  .id-bell.icon-btn.xs { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
 }
 
 /* ---- highlights: single contained slide, no peek ----
@@ -8668,28 +8631,24 @@ html.reduced-motion .support-send.sending .send-spin { animation: none; }
    Motion stays on transform/opacity so the compositor does all of it.
    ========================================================================== */
 
-/* ---- header bell: a sculpted clay key whose counter wears warm amber/red ----
-   The bell key itself ships from .icon-btn.xs (Dark Clay raise + travel). */
+/* ---- header bell: a circular dark-glass key whose pip wears warm amber ----
+   The bell key itself ships from .id-bell.icon-btn.xs (obsidian glass + travel). */
 .notif-bell { position: relative; }
 .notif-bell:active { transform: translateY(2px); }
 .notif-bell .ico { color: var(--chip-ink); }
 .notif-bell.has-unread .ico { color: var(--ink); }
-/* unread state: the squircle warms — an amber halo held inside its own rim */
+/* unread state: the rim warms to gold-amber, held inside the same flat glass face */
 .icon-btn.xs.notif-bell.has-unread {
-  border-color: rgba(251, 146, 60, .38);
-  box-shadow:
-    0 5px 12px rgba(0, 0, 0, .45),
-    0 0 18px -2px rgba(251, 146, 60, .4),
-    inset 0 2px 3px rgba(255, 255, 255, .18),
-    inset 0 -3px 6px rgba(0, 0, 0, .4);
+  border-color: rgba(251, 146, 60, .34);
+  background: rgba(251, 146, 60, .07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
 }
-.icon-btn.xs.notif-bell.has-unread:active { transform: translateY(2px) scale(.96); }
+.icon-btn.xs.notif-bell.has-unread:active { transform: translateY(1px) scale(.96); }
 .icon-btn.xs.notif-bell.has-unread .notif-badge {
   background: radial-gradient(circle at 34% 30%, #FED7AA 0%, #F97316 50%, #EA580C 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .55),
-    0 0 8px rgba(249, 115, 22, .95),
-    0 0 16px -2px rgba(249, 115, 22, .6);
+    inset 0 1px 0 rgba(255, 255, 255, .5),
+    0 0 6px rgba(249, 115, 22, .6);
 }
 /* the fresh-unread chime: one gentle idle wiggle on mount, 3 beats, then still */
 .notif-bell.ring .ico {
@@ -8703,12 +8662,13 @@ html.reduced-motion .support-send.sending .send-spin { animation: none; }
   70% { transform: rotate(-4deg); }
   100% { transform: rotate(0deg); }
 }
-/* 7px coral-amber orb with a 2px dark cutout ring: the count still lives in the DOM
-   (and in the bell's aria-label), but the squircle only wears a glowing dot. */
+/* 7px coral-amber orb with a 2px cutout ring matched to the dock face: the count still
+   lives in the DOM (and in the bell's aria-label), but the key only wears a quiet pip.
+   Anchored on the circular key's top-right rim, and mirrors with the row in RTL. */
 .notif-badge {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 0;
+  inset-inline-end: 0;
   z-index: 2;
   display: block;
   box-sizing: content-box;
@@ -8717,8 +8677,8 @@ html.reduced-motion .support-send.sending .send-spin { animation: none; }
   min-width: 7px;
   padding: 0;
   border-radius: 50%;
-  /* the pip is lit clay too: a hot core, a falloff, and a hairline of top light */
-  border: 2px solid #151C2C;
+  /* the pip seats into the glass with a dark cutout, then one soft warm falloff */
+  border: 2px solid #101825;
   background: radial-gradient(circle at 34% 30%, #FDBA74 0%, #F97316 52%, #EA580C 100%);
   color: transparent;
   font-size: 0;
@@ -8727,8 +8687,7 @@ html.reduced-motion .support-send.sending .send-spin { animation: none; }
   overflow: hidden;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, .5),
-    0 0 8px rgba(249, 115, 22, .8),
-    0 0 14px -2px rgba(249, 115, 22, .5);
+    0 0 6px rgba(249, 115, 22, .55);
   animation: notif-dot-pulse 1.8s ease-out infinite;
   pointer-events: none;
 }
@@ -8737,23 +8696,20 @@ html.reduced-motion .support-send.sending .send-spin { animation: none; }
   0% {
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, .5),
-      0 0 0 0 rgba(249, 115, 22, .55),
-      0 0 8px rgba(249, 115, 22, .8),
-      0 0 14px -2px rgba(249, 115, 22, .5);
+      0 0 0 0 rgba(249, 115, 22, .4),
+      0 0 6px rgba(249, 115, 22, .55);
   }
   70% {
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, .5),
-      0 0 0 5px rgba(249, 115, 22, 0),
-      0 0 8px rgba(249, 115, 22, .8),
-      0 0 14px -2px rgba(249, 115, 22, .5);
+      0 0 0 4px rgba(249, 115, 22, 0),
+      0 0 6px rgba(249, 115, 22, .55);
   }
   100% {
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, .5),
       0 0 0 0 rgba(249, 115, 22, 0),
-      0 0 8px rgba(249, 115, 22, .8),
-      0 0 14px -2px rgba(249, 115, 22, .5);
+      0 0 6px rgba(249, 115, 22, .55);
   }
 }
 
@@ -27213,11 +27169,11 @@ html[data-lang="fa"] #enlist-input::placeholder {
   --fp-d: 15px;
   width: 22px;
   height: 15px;
-  border-radius: 3.5px;
+  border-radius: 4px;
   overflow: hidden;
 }
-.id-flag .fp-home .fp-img { border-radius: 3.5px; }
-.id-flag .fp-home .fp-chip { border-radius: 3.5px; font-size: 7px; }
+.id-flag .fp-home .fp-img { border-radius: 4px; }
+.id-flag .fp-home .fp-chip { border-radius: 4px; font-size: 7px; }
 
 /* the Nations Cup rows wear the same circular 28px flag */
 .fp-nation { --fp-d: 28px; }
@@ -32468,47 +32424,40 @@ html[data-lang="ar"] [data-i18n-html] {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  height: 17px;
+  height: 16px;
   max-width: 84px;
   padding: 0 6px;
-  border: 1px solid rgba(243, 212, 131, .46);
-  border-radius: 999px;
-  background:
-    radial-gradient(120% 160% at 18% 40%, rgba(245, 158, 11, .26), rgba(8, 11, 18, .97) 68%),
-    #0A0E16;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 241, 198, .22),
-    inset 0 -1px 2px rgba(0, 0, 0, .55),
-    0 2px 6px -2px rgba(0, 0, 0, .6);
-  color: #F8E7B4;
+  border: 1px solid rgba(245, 158, 11, .2);
+  border-radius: 9999px;
+  background: rgba(245, 158, 11, .06);
+  box-shadow: none;
+  color: #F3D98F;
   font: inherit;
-  font-size: 7.5px;
-  font-weight: 900;
-  letter-spacing: .08em;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .06em;
   line-height: 1;
   text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: border-color .16s ease, box-shadow .16s ease, transform .14s ease;
+  transition: border-color .16s ease, background .16s ease, transform .14s ease;
 }
 .home-vip::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(104deg, transparent 30%, rgba(255, 242, 196, .34) 48%, transparent 66%);
+  background: linear-gradient(104deg, transparent 30%, rgba(255, 242, 196, .16) 48%, transparent 66%);
   transform: translateX(-130%);
   animation: home-vip-sheen 4.2s ease-in-out infinite;
   pointer-events: none;
 }
 .home-vip.is-active {
-  border-color: rgba(255, 226, 143, .8);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 250, 228, .34),
-    inset 0 -1px 2px rgba(0, 0, 0, .5),
-    0 0 10px -2px rgba(243, 212, 131, .5);
+  border-color: rgba(245, 158, 11, .42);
+  background: rgba(245, 158, 11, .12);
+  box-shadow: none;
 }
 .home-vip:not(:disabled):active { transform: scale(.96); }
 .home-vip:focus-visible { outline: 2px solid #FFE7A8; outline-offset: 2px; }
@@ -32521,10 +32470,10 @@ html[data-lang="ar"] [data-i18n-html] {
 .home-vip-d {
   flex: none;
   padding-inline-start: 3px;
-  border-inline-start: 1px solid rgba(243, 212, 131, .28);
+  border-inline-start: 1px solid rgba(245, 158, 11, .24);
   color: #FFE7A8;
   font-size: 6.5px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: .02em;
   text-transform: none;
 }
