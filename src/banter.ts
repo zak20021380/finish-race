@@ -1,37 +1,23 @@
 /**
- * banter.ts — the post-match tray: quick reactions, the VIP sticker stash, the quick-chat
- * vocabulary and the composer behind them.
+ * banter.ts — the post-match reaction tray: five calibrated quick-chat pills and the VIP line.
  *
- * The tray sits directly above the rematch key in the Match Complete capsule: five one-tap
- * reactions on a single glass lane, the VIP stash key, and the chat key. The chat key opens one
- * row in place — never a second storey — for everyone:
+ * Every seat can broadcast the five pills. They travel as preset IDs, so the receiver paints its
+ * own language from the closed table and no free-form text crosses the wire. The custom capsule is
+ * the VIP door: a free seat sees a frosted lock that opens #vip-sheet instead of a keyboard, while
+ * an entitled seat gets a 40-character field whose sanitized line lands as a gold bubble.
  *
- *  - the composer is open to every seat, and the mobile keyboard is never blocked. Typing is the
- *    hook, not the product: a free seat can write a full 40-character line and keep it;
- *  - the send key is where VIP begins. For a free seat it wears a micro-lock, and a tap fires the
- *    warning haptic, keeps the draft intact and opens the store with the broadcast hook. A preview
- *    or a real Premium seat returns with the same line one tap from the wire;
- *  - the four closed tactical lines sit under the composer while it is open, so a free seat's
- *    voice is never smaller than a tap.
- *
- * The stash is the same lane on its second page: five elite stickers that a VIP sends like any
- * other reaction, and that everybody else can see, tap, and be sold. A locked sticker is not
- * `disabled` — a dead key cannot explain itself — so it keeps its hitbox, fires the warning
- * haptic and opens the store.
- *
- * The wire is the only difference between opponents. Online, a line rides the same socket as the
- * race as `POST_MATCH_CHAT`; the rival's answer comes back through `onPostChat`, carrying the
- * room's verdict on whether its author is VIP (never the author's own claim). Against the machine,
- * the same tap wakes a reply after 1.2s. When the rival walks out — a frame, a closed socket —
- * `opponentLeft()` locks the whole surface so a taunt never flies into an empty room.
+ * A tapped pill or a sent line lands on the speaker's standings row as an absolutely positioned
+ * bubble, so the ladder never reflows. The bubble expires after 4.5s and the next one restarts the
+ * spring. When the rival walks out — a frame, a closed socket — `opponentLeft()` locks the whole
+ * surface so a quick chat never flies into an empty room.
  */
 import './banter.css';
-import { lang, onLang, t } from './settings';
+import { lang, langDef, onLang, t } from './settings';
 import { impact, notify } from './telegram';
 import { isPremiumUser, onVipChange, openVipSheet } from './premium';
 import {
-  POST_CHAT_FREE_REACTIONS, POST_CHAT_PRESETS, postChatPresetText,
-  type PostChatLine, type PostChatPresetId,
+  POST_CHAT_QUICK_CHATS, postChatPresetText,
+  type PostChatLine, type PostChatPresetId, type PostChatQuickId,
 } from './data/postchat';
 
 /** The outcome the tray is speaking over. */
@@ -76,73 +62,29 @@ const COOLDOWN_MS = 2000;
 /** The machine thinks for a beat before answering. */
 const BOT_MS = 1200;
 const MAX_CHARS = 40;
-/**
- * The five faces the tray offers, in a fixed order that never moves under a language flip. The
- * list lives beside the canned phrases because the room reads it too: a face is the one "text"
- * a seat without VIP is allowed to broadcast.
- */
-const REACTIONS = POST_CHAT_FREE_REACTIONS;
 const BOT_LINES = 4;
 
-/**
- * The art behind each free face. The glyph stays the wire payload — the room only relays the five
- * pictographs it owns — while the tray and the bubble paint the vector token instead of the OS
- * emoji. Every token shares one recessed disc; the tone only changes the metal.
- */
-const REACTION_ART: Record<string, { icon: string; tone: string }> = {
-  '🤝': { icon: '#i-rx-alliance', tone: 'alliance' },
-  '🔥': { icon: '#i-rx-ember', tone: 'heat' },
-  '💀': { icon: '#i-rx-skull', tone: 'defeat' },
-  '⚡': { icon: '#i-rx-volt', tone: 'spark' },
-  '🧠': { icon: '#i-rx-mind', tone: 'mind' },
+/** The i18n key each active pill paints from, in carousel order. */
+const QUICK_KEYS: Record<PostChatQuickId, string> = {
+  rematch: 'banterQuickRematch',
+  respect: 'banterQuickRespect',
+  banter: 'banterQuickBanter',
+  vengeance: 'banterQuickVengeance',
+  admire: 'banterQuickAdmire',
 };
-
-/**
- * The VIP stash: five elite badges behind the crown key. Each is a pictograph-only line, so it
- * lands as the round medal rather than a pill — a sticker, in the same visual grammar as a
- * reaction, which is exactly what makes the locked ones legible as "the good ones".
- *
- * Every glyph here is Emoji 1.0. A salute (🫡) was the brief's example, but it is Emoji 14 and
- * renders as an empty box on any client older than 2021 — in the one row that has to look
- * expensive. The medal says the same thing and renders everywhere.
- */
-const VIP_STICKERS: ReadonlyArray<{ id: string; glyph: string; key: string }> = [
-  { id: 'skull', glyph: '💀', key: 'banterStickerSkull' },
-  { id: 'crown', glyph: '👑', key: 'banterStickerCrown' },
-  { id: 'bolt', glyph: '⚡', key: 'banterStickerBolt' },
-  { id: 'salute', glyph: '🎖️', key: 'banterStickerSalute' },
-  { id: 'trophy', glyph: '🏆', key: 'banterStickerTrophy' },
-];
-
-/** The i18n key each closed preset paints from, in drawer order. */
-const PRESET_KEYS: Record<PostChatPresetId, string> = {
-  gg: 'banterCannedGg',
-  rematch: 'banterCannedRematch',
-  luck: 'banterCannedLuck',
-  wp: 'banterCannedWp',
-};
-
-/**
- * A message made only of pictographs — no letters, no digits — is a reaction, not a sentence:
- * it renders as the round glass medal instead of a pill. Joiners, variation selectors, skin
- * tones and whitespace are allowed alongside the glyphs.
- */
-const EMOTE_ONLY =
-  /^(?:\p{Extended_Pictographic}|[\u200D\uFE0F\u20E3\u{1F3FB}-\u{1F3FF}]|\s)+$/u;
-const HAS_PICTOGRAPH = /\p{Extended_Pictographic}/u;
 
 const clip = (raw: string): string => {
   const clean = raw.replace(/[\u0000-\u001F\u007F]/g, ' ').trim();
   return Array.from(clean).slice(0, MAX_CHARS).join('');
 };
 
-const isEmote = (text: string): boolean => HAS_PICTOGRAPH.test(text) && EMOTE_ONLY.test(text);
-
-/** The drawer's copy for a preset, with the canonical line as the fallback. */
+/** A preset's copy, with the canonical line as the fallback. */
 function presetLabel(id: PostChatPresetId): string {
-  const key = PRESET_KEYS[id];
-  const painted = t(key);
-  if (painted !== key) return painted;
+  const key = QUICK_KEYS[id as PostChatQuickId];
+  if (key) {
+    const painted = t(key);
+    if (painted !== key) return painted;
+  }
   /* the dictionary is the paint; the table is the floor a lagging locale lands on, so a key the
      Persian table has not caught up on costs a translation and never the player's voice */
   return postChatPresetText(id, lang);
@@ -151,26 +93,26 @@ function presetLabel(id: PostChatPresetId): string {
 /**
  * A line's closing token — the one or two pictographs that end it.
  *
- * Splitting it off is what makes a tile survive a narrow screen: the words are the only thing
- * allowed to give way, so a Persian sentence that outgrows a 320px tile loses its tail to an
- * ellipsis while the ♟️ stays whole at the terminal edge. Isolating the token also stops a
+ * Splitting it off is what makes a pill survive a narrow screen: the words are the only thing
+ * allowed to give way, so a Persian sentence that outgrows the capsule loses its tail to an
+ * ellipsis while the emoji stays whole at the terminal edge. Isolating the token also stops a
  * bidi-neutral emoji from dragging the line's final punctuation to the wrong end.
  */
 const TRAILING_TOKEN = /^([\s\S]*?)\s*((?:\p{Extended_Pictographic}|\uFE0F|\u200D|\u20E3)+)\s*$/u;
 
 /**
- * Paints a closed line into its tile: words in one box, token in another.
+ * Paints a closed line into its pill: words in one box, token in another.
  *
  * The accessible name is set from the whole label rather than left to the two boxes, so a
  * screen reader still hears one sentence and the split stays a purely visual affair.
  */
 function paintChip(chip: HTMLButtonElement, label: string): void {
-  const words = el('span', 'banter-canned-t');
+  const words = el('span', 'banter-chip-t');
   const match = TRAILING_TOKEN.exec(label);
   /* a line that is nothing but a token has no words to protect: leave it in one box */
   if (match && match[1].trim()) {
     words.textContent = match[1];
-    const token = el('span', 'banter-canned-e', match[2]);
+    const token = el('span', 'banter-chip-e', match[2]);
     token.setAttribute('aria-hidden', 'true');
     chip.replaceChildren(words, token);
   } else {
@@ -189,131 +131,44 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-/** An inline sprite reference, never an interpolated string: the art is first-party markup. */
-function ico(href: string, cls = 'ico'): SVGSVGElement {
-  const NS = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(NS, 'svg');
-  svg.setAttribute('class', cls);
-  svg.setAttribute('aria-hidden', 'true');
-  const use = document.createElementNS(NS, 'use');
-  use.setAttribute('href', href);
-  svg.append(use);
-  return svg;
-}
-
 const byId = <T extends HTMLElement>(id: string): T => {
   const node = document.getElementById(id);
   if (!node) throw new Error(`banter: #${id} is missing`);
   return node as T;
 };
 
-/** Which row is open under the faces: nothing, or the composer with its quick-chat vocabulary. */
-type Drawer = 'none' | 'compose';
-
 export function createBanter(wiring: BanterWiring): Banter {
   const dock = byId<HTMLDivElement>('result-banter');
   const label = byId<HTMLElement>('banter-label');
   const alert = byId<HTMLParagraphElement>('banter-alert');
   const alertText = byId<HTMLElement>('banter-alert-t');
-  const reacts = byId<HTMLDivElement>('banter-reacts');
+  const quick = byId<HTMLDivElement>('banter-quick');
   const form = byId<HTMLFormElement>('banter-form');
   const input = byId<HTMLInputElement>('banter-input');
   const send = byId<HTMLButtonElement>('banter-send');
-  const sendLock = byId<HTMLElement>('banter-send-lock');
-  const toggle = byId<HTMLButtonElement>('banter-toggle');
-  /* the <use> swaps between the chat bubble and the close glyph as the drawer flips */
-  const toggleIco = byId<HTMLElement>('banter-toggle-ico');
-  const closeKey = byId<HTMLButtonElement>('banter-close');
-  const stashKey = byId<HTMLButtonElement>('banter-vip-key');
-  const stashLock = byId<HTMLElement>('banter-vip-lock');
-  const canned = byId<HTMLDivElement>('banter-canned');
-  const cannedK = byId<HTMLElement>('banter-canned-k');
-  const cannedGrid = byId<HTMLDivElement>('banter-canned-grid');
-  const vipPill = byId<HTMLButtonElement>('banter-vip-pill');
-  const vipPillT = byId<HTMLElement>('banter-vip-pill-t');
+  const gate = byId<HTMLButtonElement>('banter-gate');
+  const gateText = byId<HTMLElement>('banter-gate-t');
 
-  /* ---------- the rail: two pages, five slots each ---------- */
+  /* ---------- the pills: five closed lines, one tap each ---------- */
 
-  const freeKeys: HTMLButtonElement[] = [];
-  const vipKeys: HTMLButtonElement[] = [];
-
-  for (const face of REACTIONS) {
-    const key = el('button', 'banter-react');
-    const art = REACTION_ART[face];
-    key.type = 'button';
-    key.dataset.emoji = face;
-    if (art) {
-      key.dataset.tone = art.tone;
-      key.append(ico(art.icon, 'banter-glyph'));
-    } else {
-      key.textContent = face;
-    }
-    key.addEventListener('click', () => {
-      if (lockedNow() || cooling()) return;
-      pop(key);
-      say({ text: face });
-    });
-    reacts.appendChild(key);
-    freeKeys.push(key);
-  }
-
-  for (const sticker of VIP_STICKERS) {
-    const key = el('button', 'banter-react banter-sticker');
-    key.type = 'button';
-    key.dataset.glyph = sticker.glyph;
-    key.dataset.vip = '1';
-    key.hidden = true;
-    key.append(el('span', 'banter-sticker-g', sticker.glyph));
-    const lock = el('span', 'banter-sticker-lock');
-    lock.append(ico('#i-lock'));
-    key.append(lock);
-    key.addEventListener('click', () => {
-      if (lockedNow()) return;
-      if (!isPremiumUser()) {
-        /* the key keeps its hitbox precisely so it can say why: a `disabled` key cannot */
-        notify('warning');
-        denied();
-        openVipSheet({
-          reason: 'gate',
-          onUnlocked: () => {
-            paintVipKeys();
-            paintCopy();
-            paintCool();
-            if (open && !locked) setVipPage(true);
-          },
-        });
-        return;
-      }
-      if (cooling()) return;
-      pop(key);
-      say({ text: sticker.glyph });
-    });
-    reacts.appendChild(key);
-    vipKeys.push(key);
-  }
-
-  /* ---------- the canned drawer: four tiles and the pill ---------- */
-
-  const cannedKeys: HTMLButtonElement[] = [];
-  for (const preset of POST_CHAT_PRESETS) {
-    const chip = el('button', 'banter-canned-chip');
+  const chips: HTMLButtonElement[] = [];
+  for (const preset of POST_CHAT_QUICK_CHATS) {
+    const chip = el('button', 'banter-chip');
     chip.type = 'button';
     chip.dataset.preset = preset.id;
     chip.addEventListener('click', () => {
       if (lockedNow() || cooling()) return;
+      pop(chip);
       impact('light');
       say({ preset: preset.id });
     });
-    cannedGrid.appendChild(chip);
-    cannedKeys.push(chip);
+    quick.appendChild(chip);
+    chips.push(chip);
   }
 
   let view: BanterView | null = null;
   let open = false;
   let locked = false;
-  /** True while the rail shows the VIP page. */
-  let vipPage = false;
-  let drawer: Drawer = 'none';
   let lastSentAt = 0;
   let coolTimer = 0;
   let botTimer = 0;
@@ -327,7 +182,7 @@ export function createBanter(wiring: BanterWiring): Banter {
   const cooling = (): boolean => Date.now() < lastSentAt + COOLDOWN_MS;
   const lockedNow = (): boolean => locked || !open || !view;
 
-  /** The pressed face springs once; the message itself lands on the sender's row. */
+  /** The pressed pill springs once; the message itself lands on the sender's row. */
   function pop(key: HTMLButtonElement): void {
     window.clearTimeout(popTimers.get(key));
     key.classList.remove('is-pop');
@@ -336,7 +191,7 @@ export function createBanter(wiring: BanterWiring): Banter {
     popTimers.set(key, window.setTimeout(() => key.classList.remove('is-pop'), 360));
   }
 
-  /** A refused tap: one gold pulse across the stash key, so the eye lands on the door. */
+  /** A refused tap: one gold pulse across the locked capsule, so the eye lands on the door. */
   function denied(): void {
     window.clearTimeout(deniedTimer);
     dock.classList.remove('is-denied');
@@ -345,103 +200,49 @@ export function createBanter(wiring: BanterWiring): Banter {
     deniedTimer = window.setTimeout(() => dock.classList.remove('is-denied'), 520);
   }
 
-  /**
-   * The row under the faces is one slot: the composer and its quick-chat vocabulary grow the tray
-   * in place rather than replacing the reactions, so the faces stay one tap away.
-   */
-  function setDrawer(next: Drawer, focus = false): void {
-    drawer = next;
-    const composing = next === 'compose';
-    form.hidden = !composing;
-    /* the quick-chat vocabulary sits under the composer, never in place of it */
-    canned.hidden = !composing;
-    toggle.setAttribute('aria-expanded', composing ? 'true' : 'false');
-    toggleIco.setAttribute('href', composing ? '#i-close' : '#i-chat');
-    toggle.setAttribute('aria-label', toggleLabel());
-    if (composing && focus && !locked) input.focus();
-    if (!composing) input.blur();
-  }
-
-  function toggleLabel(): string {
-    if (locked) return t('banterComposeOpen');
-    return drawer === 'compose' ? t('banterComposeClose') : t('banterComposeOpen');
-  }
-
-  /** Which page the rail is on, and the gold that says so. */
-  function setVipPage(next: boolean): void {
-    vipPage = next;
-    for (const key of freeKeys) key.hidden = next;
-    for (const key of vipKeys) key.hidden = !next;
-    stashKey.setAttribute('aria-pressed', next ? 'true' : 'false');
-    stashKey.classList.toggle('is-on', next);
-    paintCopy();
-    paintCool();
-  }
-
-  function paintVipKeys(): void {
+  /** The transmitter is the entitlement: a free seat gets a locked preview, a VIP gets the field. */
+  function paintVipState(): void {
     const vip = isPremiumUser();
-    for (const key of vipKeys) {
-      key.classList.toggle('is-locked', !vip);
-      key.setAttribute('aria-disabled', vip ? 'false' : 'true');
-      key.querySelector('.banter-sticker-lock')?.toggleAttribute('hidden', vip);
-    }
-    /* typing is free, so the chat key never wears the lock; the gate moved to send */
-    send.classList.toggle('is-gated', !vip);
-    sendLock.hidden = vip;
-    stashKey.classList.toggle('is-gated', !vip);
-    stashLock.hidden = vip;
-    /* the pill is the seller; a VIP reading the quick-chat row has nothing to buy */
-    vipPill.hidden = vip;
+    form.hidden = !vip;
+    gate.hidden = vip;
     dock.classList.toggle('is-vip', vip);
   }
 
   function paintCopy(): void {
     if (!view) return;
+    const dir = langDef(lang).dir;
+    dock.dir = dir;
     dock.setAttribute('aria-label', t('banterLabel'));
-    label.textContent = t(vipPage ? 'banterVipTray' : 'banterTray');
-    reacts.setAttribute('aria-label', t(vipPage ? 'banterVipStash' : 'banterReact'));
+    label.textContent = t('banterTray');
+    quick.setAttribute('aria-label', t('banterQuickChat'));
+    quick.dir = dir;
+    form.dir = dir;
+    gate.dir = dir;
     input.setAttribute('aria-label', t('banterInputLabel'));
-    send.setAttribute('aria-label', t(isPremiumUser() ? 'banterSendLabel' : 'banterSendLocked'));
-    closeKey.setAttribute('aria-label', t('banterComposeClose'));
-    toggle.setAttribute('aria-label', toggleLabel());
-    stashKey.setAttribute(
-      'aria-label',
-      t(!isPremiumUser() ? 'banterVipLocked' : vipPage ? 'banterVipBack' : 'banterVipStash'),
-    );
     input.placeholder = locked ? t('banterLockedPlaceholder') : t('banterPlaceholder');
+    send.setAttribute('aria-label', t('banterSendLabel'));
+    gateText.textContent = t('banterCustomLocked');
+    gate.setAttribute('aria-label', t('banterCustomLockedAria'));
     alertText.textContent = t('banterOpponentLeft');
-    cannedK.textContent = t('banterCannedK');
-    vipPillT.textContent = t('banterVipPill');
-    cannedGrid.setAttribute('aria-label', t('banterCannedK'));
-    for (const key of freeKeys) {
-      key.setAttribute('aria-label', t('banterReactSend').replace('{emoji}', key.dataset.emoji ?? ''));
-    }
-    for (const [index, key] of vipKeys.entries()) {
-      const sticker = VIP_STICKERS[index];
-      key.setAttribute('aria-label', isPremiumUser() ? t(sticker.key) : t('banterVipLocked'));
-    }
-    for (const chip of cannedKeys) {
-      const id = chip.dataset.preset as PostChatPresetId | undefined;
-      if (id) paintChip(chip, presetLabel(id));
+    for (const chip of chips) {
+      const id = chip.dataset.preset as PostChatQuickId | undefined;
+      if (!id) continue;
+      const text = presetLabel(id);
+      paintChip(chip, text);
+      chip.setAttribute('aria-label', t('banterQuickSend').replace('{text}', text));
     }
   }
 
   function paintCool(): void {
     const cool = cooling() && !locked;
     const off = cool || locked;
-    const vip = isPremiumUser();
-    for (const key of freeKeys) key.disabled = off;
-    /* a locked sticker must stay tappable (it is the upsell); a VIP one dims like a face */
-    for (const key of vipKeys) key.disabled = locked || (vip && cool);
-    for (const chip of cannedKeys) chip.disabled = off;
+    for (const chip of chips) chip.disabled = off;
     send.disabled = off;
-    toggle.disabled = locked;
     input.disabled = locked;
-    vipPill.disabled = locked;
-    stashKey.disabled = locked;
+    /* the locked capsule stays tappable while the tray is live: it is the storefront */
+    gate.disabled = locked;
     dock.classList.toggle('is-cooling', cool);
     dock.classList.toggle('is-locked', locked);
-    dock.classList.toggle('is-vip-page', vipPage);
   }
 
   function armCool(): void {
@@ -454,23 +255,12 @@ export function createBanter(wiring: BanterWiring): Banter {
     const anchor = wiring.anchor(side);
     if (!anchor) return;
     window.clearTimeout(bubbleTimers.get(side));
-    const emote = isEmote(raw);
-    const art = emote ? REACTION_ART[raw] : undefined;
-    if (art) {
-      /* the face travels as a pictograph, but neither tray nor bubble ever hands it to the OS */
-      anchor.text.replaceChildren(ico(art.icon, 'banter-glyph'), el('span', 'sr-only', raw));
-      anchor.node.dataset.tone = art.tone;
-    } else {
-      anchor.text.textContent = raw;
-      delete anchor.node.dataset.tone;
-    }
-    anchor.node.classList.toggle('is-emote', emote);
-    /* the crown is the room's word on the author, so it rides the bubble rather than the row —
-       and a medal carries it as a gold ring instead, because a 12px badge has no room in a 30px
-       circle */
-    anchor.node.classList.toggle('is-vip', vip && !emote);
-    anchor.node.classList.toggle('is-vip-emote', vip && emote);
-    if (anchor.badge) anchor.badge.hidden = !vip || emote;
+    anchor.text.textContent = raw;
+    anchor.text.setAttribute('dir', 'auto');
+    /* the bubble's own direction drives the logical tail, not the document's */
+    anchor.node.setAttribute('dir', langDef(lang).dir);
+    anchor.node.classList.toggle('is-vip', vip);
+    if (anchor.badge) anchor.badge.hidden = !vip;
     anchor.node.hidden = false;
     anchor.node.classList.remove('is-out');
     /* re-arm the spring: dropping the live class and forcing a reflow makes a replacement pop */
@@ -486,8 +276,7 @@ export function createBanter(wiring: BanterWiring): Banter {
     const anchor = wiring.anchor(side);
     if (!anchor || anchor.node.hidden) return;
     const clear = (node: HTMLElement, badge: HTMLElement | null, text: HTMLElement) => {
-      node.classList.remove('is-live', 'is-out', 'is-emote', 'is-vip', 'is-vip-emote');
-      delete node.dataset.tone;
+      node.classList.remove('is-live', 'is-out', 'is-vip');
       if (badge) badge.hidden = true;
       text.replaceChildren();
       node.hidden = true;
@@ -538,7 +327,7 @@ export function createBanter(wiring: BanterWiring): Banter {
     } else {
       scheduleBotReply();
     }
-    if (input.value) input.value = '';
+    input.value = '';
   }
 
   function opponentLeft(): void {
@@ -546,12 +335,11 @@ export function createBanter(wiring: BanterWiring): Banter {
     locked = true;
     window.clearTimeout(botTimer);
     botTimer = 0;
-    setDrawer('none');
     dock.classList.add('is-locked');
     alert.hidden = false;
-    if (!alertText.textContent) alertText.textContent = t('banterOpponentLeft');
     if (open) {
       input.value = '';
+      input.blur();
       paintCopy();
       paintCool();
     }
@@ -560,15 +348,15 @@ export function createBanter(wiring: BanterWiring): Banter {
   /* ---------- the storefront gate ---------- */
 
   /**
-   * The composer's gold door. The draft is never touched: after a successful unlock the same
-   * typed line is still in the field, the send key is live, and focus lands back on it so the
-   * message can leave in one tap.
+   * The composer's gold door. The locked preview never focuses a field, so no keyboard can open
+   * behind the store; after a successful unlock the same seat lands in the live field, one tap
+   * from the wire.
    */
-  function unlockAndSend(): void {
-    paintVipKeys();
+  function unlockAndFocus(): void {
+    paintVipState();
     paintCopy();
     paintCool();
-    if (drawer === 'compose' && !locked) input.focus({ preventScroll: true });
+    if (!locked) input.focus({ preventScroll: true });
   }
 
   /* ---------- wiring ---------- */
@@ -577,37 +365,19 @@ export function createBanter(wiring: BanterWiring): Banter {
     e.preventDefault();
     if (lockedNow() || cooling()) return;
     if (!isPremiumUser()) {
-      /* the typing trap: keep every keystroke, explain the gate, sell the transmitter */
       notify('warning');
-      openVipSheet({ reason: 'gate', onUnlocked: unlockAndSend });
+      denied();
+      openVipSheet({ reason: 'gate', onUnlocked: unlockAndFocus });
       return;
     }
     say({ text: input.value });
   });
 
-  toggle.addEventListener('click', () => {
-    if (locked) return;
-    impact('light');
-    /* the keyboard is never behind a paywall: every seat gets the field */
-    if (drawer === 'none') setDrawer('compose', true);
-    else setDrawer('none');
-  });
-
-  closeKey.addEventListener('click', () => {
-    setDrawer('none');
-    toggle.focus();
-  });
-
-  stashKey.addEventListener('click', () => {
-    if (locked) return;
-    impact('light');
-    setVipPage(!vipPage);
-  });
-
-  vipPill.addEventListener('click', () => {
-    if (locked) return;
-    impact('light');
-    openVipSheet({ reason: 'sell' });
+  gate.addEventListener('click', () => {
+    if (lockedNow()) return;
+    notify('warning');
+    denied();
+    openVipSheet({ reason: 'gate', onUnlocked: unlockAndFocus });
   });
 
   onLang(() => {
@@ -617,7 +387,7 @@ export function createBanter(wiring: BanterWiring): Banter {
   });
   onVipChange(() => {
     if (!open) return;
-    paintVipKeys();
+    paintVipState();
     paintCopy();
     paintCool();
   });
@@ -651,10 +421,8 @@ export function createBanter(wiring: BanterWiring): Banter {
       dock.hidden = false;
       alert.hidden = !locked;
       input.value = '';
-      setDrawer('none');
-      setVipPage(false);
       alertText.textContent = locked ? t('banterOpponentLeft') : '';
-      paintVipKeys();
+      paintVipState();
       paintCopy();
       paintCool();
       /* a rival can react during the goal beat, before this capsule is on screen */
@@ -666,12 +434,11 @@ export function createBanter(wiring: BanterWiring): Banter {
       locked = false;
       pending = [];
       clearTimers();
-      setDrawer('none');
-      setVipPage(false);
+      input.value = '';
+      input.blur();
       dock.hidden = true;
       dock.classList.remove('is-locked', 'is-cooling', 'is-denied', 'is-vip');
       alert.hidden = true;
-      input.value = '';
     },
     inbound,
     opponentLeft,

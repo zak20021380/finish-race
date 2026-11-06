@@ -107,9 +107,9 @@ type ClientMessage =
      pair and looked back up in the receiver's own closed table — no text crosses this wire. */
   | { type: 'PHRASE'; lang: string; index: number }
   /* The result capsule's banter. Two shapes reach this wire and only one of them carries text:
-     `preset` names one of the four closed lines (`src/data/postchat.ts`) and is relayed as that ID,
-     while `text` is the VIP custom line — checked against the seat's signed entitlement in
-     `relayPostChat`, so a free seat cannot type its way past the gate. */
+     `preset` names one of the closed quick-chat lines (`src/data/postchat.ts`) and is relayed as
+     that ID, while `text` is the VIP custom line — checked against the seat's signed entitlement
+     in `relayPostChat`, so a free seat cannot type its way past the gate. */
   | { type: 'POST_MATCH_CHAT'; text?: string; preset?: string }
   | { type: 'RESIGN' }
   /* The room path: the host starting early, the host's format pick (1v1 / 3P / 4P / 2v2), and a
@@ -6256,9 +6256,9 @@ export class MatchmakerDO {
         line = { text };
       } else {
         /* No entitlement: the line survives only if it is something we already own — one of the
-           four canned tiles, or one of the five free faces (a bare pictograph says nothing a seat
-           has to be trusted with). Anything else is a custom line, and a custom line is the
-           thing VIP buys. */
+           closed quick-chat lines, or one of the five free faces a shipped client may still send
+           (a bare pictograph says nothing a seat has to be trusted with). Anything else is a
+           custom line, and a custom line is the thing VIP buys. */
         const asPreset = postChatPresetForText(text);
         if (asPreset) line = { preset: asPreset };
         else if (isPostChatFreeReaction(text)) line = { text };
