@@ -837,6 +837,18 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     arena3Perk2: 'Sovereign Relic Drop Access',
     arena4Perk1: 'Apex Honors',
     arena4Perk2: 'Bespoke Shatter Finishers',
+
+    /* ---- viral duel invite onboarding: micro-coach, welcome bonus, training upsell ---- */
+    inviteCoachKicker: 'COACH',
+    inviteCoachGoal: '🎯 Goal: Reach the opposite baseline! Tap a glowing circle to move.',
+    inviteCoachTraps: '🧱💣 Tip: Use the bottom bar to place walls or hidden mines in your rival\'s path!',
+    firstDuelBonusKicker: 'WELCOME GIFT',
+    firstDuelBonusLine: '🎁 First Duel Bonus: +200 Coins added to your vault!',
+    trainingUpsellKicker: '30s TACTICAL TRAINING · BONUS',
+    trainingUpsellTitle: 'Ready for Revenge? ⚔️',
+    trainingUpsellBody: 'Master hidden mines and wall traps in a 30-second tactical training to outsmart your friend next round!',
+    trainingUpsellStart: 'Start 30s Training 🎯',
+    trainingUpsellSkip: 'I Know the Rules',
   },
   fa: {
     /* ---- کنترل‌های مدیریتی رهبر اسکواد: تایید عضویت، درخواست‌ها، پیام همگانی ---- */
@@ -1517,6 +1529,18 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     arena3Perk2: 'دسترسی به یادگارهای شهریاری',
     arena4Perk1: 'افتخارات قله',
     arena4Perk2: 'پایان‌بندی‌های اختصاصی',
+
+    /* ---- آنبوردینگ دعوت دوئل: مربی درون مسابقه، هدیه خوشامد، پیشنهاد آموزش ---- */
+    inviteCoachKicker: 'مربی',
+    inviteCoachGoal: '🎯 هدف: رسیدن به خط پایان روبرو! یکی از دایره‌های روشن را لمس کن.',
+    inviteCoachTraps: '🧱💣 نکته: از نوار پایین می‌توانی جلوی حریفت دیوار بکشی یا مین مخفی بکاری!',
+    firstDuelBonusKicker: 'هدیه خوشامدگویی',
+    firstDuelBonusLine: '🎁 هدیه اولین دوئل: ۲۰۰+ سکه به خزانه تو اضافه شد!',
+    trainingUpsellKicker: 'آموزش تاکتیکی ۳۰ ثانیه‌ای · جایزه',
+    trainingUpsellTitle: 'آماده انتقام هستی؟ ⚔️',
+    trainingUpsellBody: 'در یک آموزش تاکتیکی ۳۰ ثانیه‌ای، قلق مین‌های مخفی و تله‌ها رو یاد بگیر تا دست بعد رفیقت رو غافلگیر کنی!',
+    trainingUpsellStart: 'شروع آموزش ۳۰ ثانیه‌ای 🎯',
+    trainingUpsellSkip: 'قوانین رو بلدم',
   },
   ru: {
     /* ---- управление отрядом: одобрение вступления, заявки, рассылка ---- */
@@ -1673,6 +1697,18 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     arena3Perk2: 'Доступ к реликвиям государя',
     arena4Perk1: 'Почести вершины',
     arena4Perk2: 'Особые финальные удары',
+
+    /* ---- онбординг приглашения на дуэль: микро-подсказки, бонус, обучение ---- */
+    inviteCoachKicker: 'ТРЕНЕР',
+    inviteCoachGoal: '🎯 Цель: дойти до линии финиша напротив! Коснись светящегося кружка, чтобы сделать ход.',
+    inviteCoachTraps: '🧱💣 Подсказка: нижняя панель ставит стены и скрытые мины на пути соперника!',
+    firstDuelBonusKicker: 'ПРИВЕТСТВЕННЫЙ ПОДАРОК',
+    firstDuelBonusLine: '🎁 Бонус первого дуэля: +200 монет в твою сокровищницу!',
+    trainingUpsellKicker: '30-СЕКУНДНОЕ ОБУЧЕНИЕ · БОНУС',
+    trainingUpsellTitle: 'Готов к реваншу? ⚔️',
+    trainingUpsellBody: 'Освой скрытые мины и ловушки со стенами за 30 секунд и перехитри друга в следующем раунде!',
+    trainingUpsellStart: 'Начать обучение за 30 с 🎯',
+    trainingUpsellSkip: 'Я знаю правила',
   },
   ar: {
     /* ---- إدارة الفريق: موافقة الانضمام والطلبات والرسائل ---- */
@@ -1829,6 +1865,18 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     arena3Perk2: 'الوصول إلى آثار السيادة',
     arena4Perk1: 'أوسمة القمة',
     arena4Perk2: 'لمسات ختامية مخصصة',
+
+    /* ---- تأهيل دعوة المبارزة: مدرب داخل المباراة، هدية، عرض التدريب ---- */
+    inviteCoachKicker: 'المدرب',
+    inviteCoachGoal: '🎯 الهدف: الوصول إلى خط النهاية المقابل! المس إحدى الدوائر المتوهجة للتحرك.',
+    inviteCoachTraps: '🧱💣 نصيحة: استخدم الشريط السفلي لوضع الجدران أو الألغام المخفية في طريق خصمك!',
+    firstDuelBonusKicker: 'هدية الترحيب',
+    firstDuelBonusLine: '🎁 هدية أول مبارزة: أُضيفت +200 عملة إلى خزنتك!',
+    trainingUpsellKicker: 'تدريب تكتيكي 30 ثانية · مكافأة',
+    trainingUpsellTitle: 'جاهز للثأر؟ ⚔️',
+    trainingUpsellBody: 'أتقن الألغام المخفية وفخاخ الجدران في تدريب تكتيكي مدته 30 ثانية لتتفوق على صديقك في الجولة القادمة!',
+    trainingUpsellStart: 'ابدأ تدريب الـ30 ثانية 🎯',
+    trainingUpsellSkip: 'أعرف القواعد',
   },
   es: {
     /* ---- administración del escuadrón: aprobación, solicitudes, difusión ---- */
@@ -1984,6 +2032,18 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     arena3Perk2: 'Acceso a reliquias soberanas',
     arena4Perk1: 'Honores del vértice',
     arena4Perk2: 'Remates exclusivos',
+
+    /* ---- onboarding por invitación a duelo: micro-entrenador, bono, oferta de entrenamiento ---- */
+    inviteCoachKicker: 'ENTRENADOR',
+    inviteCoachGoal: '🎯 Objetivo: ¡llega a la línea de meta de enfrente! Toca un círculo brillante para mover.',
+    inviteCoachTraps: '🧱💣 Consejo: ¡usa la barra inferior para colocar muros o minas ocultas en el camino de tu rival!',
+    firstDuelBonusKicker: 'REGALO DE BIENVENIDA',
+    firstDuelBonusLine: '🎁 Bono del primer duelo: ¡+200 monedas añadidas a tu cofre!',
+    trainingUpsellKicker: 'ENTRENAMIENTO 30 S · BONO',
+    trainingUpsellTitle: '¿Listo para la revancha? ⚔️',
+    trainingUpsellBody: 'Domina las minas ocultas y las trampas de muros en un entrenamiento táctico de 30 segundos para superar a tu amigo en la próxima ronda.',
+    trainingUpsellStart: 'Empezar entrenamiento 30 s 🎯',
+    trainingUpsellSkip: 'Ya conozco las reglas',
   },
 };
 

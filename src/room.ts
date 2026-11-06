@@ -306,6 +306,21 @@ export const vacantSeats = (room: Room): number[] =>
 export const humanCount = (room: Room): number =>
   room.seats.reduce((n, _s, i) => n + (isHuman(room, i) ? 1 : 0), 0);
 
+/**
+ * Is there a real person on the far side of this board? An invited duel is the one match where a
+ * brand-new player needs in-context coaching, so the onboarding layer asks this rather than
+ * guessing from the mode label: a solo practice room (this seat + the machine) is NOT a duel, and
+ * neither is a seat whose rival walked out and the machine took over. Pure, like the rest of the
+ * room model — no socket, no saved state, no clock.
+ */
+export function hasHumanRival(room: Room | null | undefined, localSeat: number): boolean {
+  if (!room) return false;
+  for (let i = 0; i < room.seats.length; i++) {
+    if (i !== localSeat && isHuman(room, i)) return true;
+  }
+  return false;
+}
+
 /** Seats the machine is holding: backfilled bots, plus every seat a person walked out of. */
 export const botCount = (room: Room): number =>
   room.seats.reduce((n, _s, i) => n + (isAutomated(room, i) ? 1 : 0), 0);

@@ -22,7 +22,7 @@ import {
 } from './boardmode';
 import { createRouter } from './router';
 import { createSheets } from './sheets';
-import { createMenu, ownersBack, type Menu } from './menu';
+import { createMenu, openTrainingUpsell, ownersBack, type Menu } from './menu';
 import { createHome } from './home';
 import { createCompete } from './compete';
 import { createArenaRoad } from './arena';
@@ -30,7 +30,7 @@ import { flagPhoto } from './flags';
 import { createShop } from './shop';
 import { createNotifications } from './notifications';
 import { mountCoins } from './coin';
-import { appearance, lang, menuState, motionReduced, onAppearance, onLang, t, toggleAppearance } from './settings';
+import { appearance, lang, langDef, menuState, motionReduced, onAppearance, onLang, t, toggleAppearance } from './settings';
 import {
   audio, holdAudio, playBoom, playVictoryFanfare, releaseAudio, stopVictoryFanfare,
 } from './audio';
@@ -43,8 +43,9 @@ import {
   closeVipSheet, initVipStore, isPremiumUser, onVipChange,
 } from './premium';
 import {
-  completeTutorial, earnCoins, earnTiq, hasCompletedTutorial, isFirstTimePlayer, onChange, pieceColor,
-  profile, reconcileTutorialFromHistory, recordGame, resetTutorialState, theme,
+  claimFirstDuelBonus, completeTutorial, earnCoins, earnTiq, hasClaimedFirstDuelBonus,
+  hasCompletedTutorial, isFirstTimePlayer, onChange, pieceColor, profile,
+  reconcileTutorialFromHistory, recordGame, resetTutorialState, theme,
 } from './storage';
 import {
   createTutorial, shouldAutoStartTutorial, tutorialSpotHas, TUTORIAL_LIVE_STEPS,
@@ -71,8 +72,8 @@ import {
 import { createAdmin, recordRace, runtime, tiqFrom, type Admin } from './admin';
 import { arena, arenaLocked, onAward, startArenaSync } from './arenaState';
 import {
-  MIN_SEATS, ROOM_WAIT_MS, createRoom, difficultyFor, isAutomated, isHuman, lobbyLine, rewardEligible, seatBadge,
-  seatName, sizesOf, startEarly, type BotTier, type Room,
+  MIN_SEATS, ROOM_WAIT_MS, createRoom, difficultyFor, hasHumanRival, isAutomated, isHuman,
+  lobbyLine, rewardEligible, seatBadge, seatName, sizesOf, startEarly, type BotTier, type Room,
 } from './room';
 import { initSplash, splashReady } from './splash';
 import { initJoinGate } from './joinGate';
@@ -87,9 +88,21 @@ initTelegram();
 /* The global VIP store binds after the SDK so `initDataUnsafe` is readable on its first paint. */
 initVipStore();
 applyFlagSupport();
+
+/* ---------- invite-first boot ----------
+   A friend's duel link is a promise to land in that room immediately. `detectInviteDuelLaunch()`
+   is a hoisted declaration below; reading it here, before any router or sheet is created, is what
+   lets the whole invited session stay free of the two boot blockers. */
+const INVITE_DUEL_LAUNCH = detectInviteDuelLaunch();
+/** The mandatory channel check is HELD for the invited duel and re-armed on the first Home return. */
+let inviteGateDeferred = INVITE_DUEL_LAUNCH;
+
 /* The mandatory channel check runs in the background; the neural boot screen still owns the
-   first two seconds, and a gate that cannot be answered fails open. */
-initJoinGate();
+   first two seconds, and a gate that cannot be answered fails open. On an invited launch it is
+   deliberately NOT started: a join sheet in front of a waiting friend is the whole drop-off this
+   flow exists to remove. `initJoinGate()` is called from the router the moment the player exits
+   back to #s-home instead. */
+if (!inviteGateDeferred) initJoinGate();
 
 /* ---------- no zoom / no scroll ---------- */
 
@@ -295,6 +308,75 @@ const clearNote = () => {
   for (const el of noteEls) el.classList.remove('show', 'timeout');
 };
 
+/* ---------- invite-first onboarding: the two live surfaces ----------
+   Built here rather than in index.html so the markup stays the single source of truth and an
+   ordinary launch pays for nothing but two invisible nodes. Both are width-capped, logically
+   inset (`inset-inline`) and use `min-width: 0` + `overflow-wrap`, so a 320px RTL viewport can
+   never gain a horizontal scrollbar. Neither one takes a pointer or owns a turn. */
+const gameScreen = $<HTMLElement>('s-game');
+const coachPill = document.createElement('div');
+coachPill.className = 'iv-coach';
+coachPill.id = 'iv-coach';
+coachPill.setAttribute('role', 'status');
+coachPill.setAttribute('aria-live', 'polite');
+coachPill.innerHTML = '<span class="iv-coach-k" id="iv-coach-k"></span>'
+  + '<p class="iv-coach-t" id="iv-coach-t"></p>';
+gameScreen.appendChild(coachPill);
+
+const bonusBadge = document.createElement('div');
+bonusBadge.className = 'iv-bonus';
+bonusBadge.id = 'iv-bonus';
+bonusBadge.setAttribute('role', 'status');
+bonusBadge.hidden = true;
+bonusBadge.innerHTML = '<span class="iv-bonus-ico" aria-hidden="true">🎁</span>'
+  + '<span class="iv-bonus-copy">'
+  + '<span class="iv-bonus-k" id="iv-bonus-k"></span>'
+  + '<span class="iv-bonus-t" id="iv-bonus-t"></span>'
+  + '</span>';
+$('over-mode').insertAdjacentElement('afterend', bonusBadge);
+
+const coachKicker = $<HTMLElement>('iv-coach-k');
+const coachText = $<HTMLElement>('iv-coach-t');
+const bonusKicker = $<HTMLElement>('iv-bonus-k');
+const bonusText = $<HTMLElement>('iv-bonus-t');
+
+/** The step painted on the pill (1, 2 or 0 for none): a live language flip re-reads it. */
+let coachShownStep: 0 | 1 | 2 = 0;
+let coachTimer = 0;
+
+const renderCoach = (): void => {
+  coachKicker.textContent = coachShownStep
+    ? `${t('inviteCoachKicker')} · ${coachShownStep}/2`
+    : t('inviteCoachKicker');
+  coachText.textContent = coachShownStep === 2 ? t('inviteCoachTraps')
+    : coachShownStep === 1 ? t('inviteCoachGoal') : '';
+};
+
+/** One repaint for every new string: copy AND direction, on every live surface. */
+const paintInviteSurfaces = (): void => {
+  const dir = langDef(lang).dir;
+  coachPill.setAttribute('dir', dir);
+  bonusBadge.setAttribute('dir', dir);
+  renderCoach();
+  bonusKicker.textContent = t('firstDuelBonusKicker');
+  bonusText.textContent = t('firstDuelBonusLine');
+};
+onLang(paintInviteSurfaces);
+paintInviteSurfaces();
+
+/** Non-blocking: no pointer events, no board freeze, and it fades on its own clock. */
+function showMicroCoach(step: 1 | 2): void {
+  coachShownStep = step;
+  renderCoach();
+  coachPill.classList.add('is-on');
+  window.clearTimeout(coachTimer);
+  coachTimer = window.setTimeout(() => coachPill.classList.remove('is-on'), 5200);
+}
+const hideMicroCoach = (): void => {
+  window.clearTimeout(coachTimer);
+  coachPill.classList.remove('is-on');
+};
+
 /**
  * Speak into the board's live region without raising its pill.
  *
@@ -429,7 +511,7 @@ let home: { setRoute(id: string): void } | null = null;
 let compete: { setRoute(id: string): void } | null = null;
 let arenaRoad: { setRoute(id: string): void } | null = null;
 
-const router = createRouter($('screens'), (id) => {
+const router = createRouter($('screens'), (id, prev) => {
   menu.setRoute(id);
   shop.setRoute(id);
   home?.setRoute(id);
@@ -447,6 +529,16 @@ const router = createRouter($('screens'), (id) => {
   /* off the board, a room that was waiting in the background may finally show itself */
   if (id !== 'game') resumeRoom();
   if (id === 'home') admin?.relayout();   // the launcher only has a height once Home is up
+  /* `prev === null` is the cold boot's OWN Home render, not an exit back to it. A genuine return
+     to Home re-arms the channel gate that an invite launch held back, and is the one moment the
+     optional tactical-training upsell belongs: the friend has been played and nobody is waiting. */
+  if (id === 'home' && prev !== null) {
+    if (inviteGateDeferred) {
+      inviteGateDeferred = false;
+      initJoinGate();
+    }
+    maybeOfferTraining();
+  }
   syncLoop();
 });
 
@@ -674,6 +766,21 @@ let firstRunBoot = false;
 /** The boot lesson is done and the flag is saved; the player is sprinting to the FINISH line. */
 let firstRunSprint = false;
 const tutorialStage = (): TutorialStage | null => (tutorialActive ? tutorial?.stage ?? null : null);
+
+/* ---- invite-first onboarding: per-match session state ----
+   All four are reset by `restart()`, so "first two turns" means the first two turns of THIS
+   duel, not of the app's lifetime. Nothing here is persisted: the micro-coach is a live hint,
+   never a state machine, and it is deliberately absent from src/tutorial.ts. */
+let myTurnCount = 0;
+let coachWasMyTurn = false;
+/** A hint counted while #s-game was still hidden, waiting for `reveal()` to raise it. */
+let pendingCoachStep: 0 | 1 | 2 = 0;
+/** After turn 2 the coach goes quiet for the rest of the match. */
+let microCoachQuiet = false;
+/** The first duel has actually reached a verdict in this session. */
+let inviteDuelSettled = false;
+/** The optional training prompt is offered at most once per session. */
+let trainingPromptShown = false;
 
 /** People actually holding seats in a room — a local practice room holds only this screen. */
 function humansIn(target: Room | null | undefined): number {
@@ -1346,6 +1453,9 @@ let overlayOpen = false;
 function showOverlay() {
   if (overlayOpen) return;
   overlayOpen = true;
+  /* The invited duel has genuinely settled. This is the flag that separates a real "return to
+     Home after the duel" from a stray tab hop during an invite launch that never reached a board. */
+  inviteDuelSettled = true;
   /* The board reached its result: one match report, measured from `restart()`. A lesson has no
      clock open, so this is a no-op there. */
   finishMatch();
@@ -1377,6 +1487,13 @@ function showOverlay() {
     ? recordGame({ difficulty, won, mode: matchMode(), defenseHeld }, runtime.coinMult)
     : 0;
   recordRace(earned);                   // the Command Center's Stats tab counts the day's duels
+  /* FIRST-DUEL WELCOME CUSHION. The debut is the likeliest churn moment — and a new invitee
+     usually loses to the experienced friend who sent the link — so the +200 lands on a defeat as
+     surely as on a win. `claimFirstDuelBonus()` stamps the flag and credits the wallet in ONE
+     flush, so a reload or a second result can never mint it twice. It is deliberately OUTSIDE
+     `earned`/`resultView`: the double-coins chip must still multiply only the race payout. */
+  const welcomeBonus = claimFirstDuelBonus();
+  bonusBadge.hidden = welcomeBonus <= 0;
   const afterTiq = tiqFrom(profile.stats.wins, profile.stats.games, profile.tiqBonus);
   /* the HUD's XP pill reads the save, so paint it on the same beat the settlement moves it */
   paintSeatIdentity();
@@ -1530,6 +1647,40 @@ function clearGoalBeat() {
   renderer.cancelFinish();
 }
 
+/**
+ * A real duel, not a practice board: a networked seat, or a room with a person on the far side.
+ * The invited first-timer's micro-coach belongs here and nowhere else — a solo bot race already
+ * has the standalone lesson, and a bot-backfilled seat is not a friend waiting on the other end.
+ */
+const isLiveDuel = (): boolean => !!active || hasHumanRival(room, localSide);
+
+/**
+ * FIRST-TWO-TURNS MICRO-COACH. Called from `ui()` on every repaint, but it counts only the
+ * TRANSITION into one of this seat's turns (a pause, a hover or a re-paint cannot double-count).
+ * Nothing here freezes the board, disables an input, or touches the tutorial's stage machine:
+ * it raises a fading, pointer-transparent obsidian/gold pill and nothing else.
+ */
+function maybeMicroCoach(): void {
+  const myTurn = state.winner === null && state.turn === localSide;
+  if (!myTurn) { coachWasMyTurn = false; return; }
+  if (coachWasMyTurn) return;
+  coachWasMyTurn = true;
+  if (microCoachQuiet) return;
+  if (hasCompletedTutorial()) return;
+  if (tutorialActive || tutorialStandalone || firstRunBoot) return;
+  if (!isLiveDuel()) return;
+  myTurnCount++;
+  if (myTurnCount <= 2) {
+    const step: 1 | 2 = myTurnCount === 1 ? 1 : 2;
+    /* `restart()` paints its first `ui()` while #s-game can still be hidden behind the face-off.
+       Hold the hint for `reveal()` in that case; on a rematch the board is already up, so raise it
+       at once. Either way each turn gets exactly ONE hint and the fade starts when it is readable. */
+    if (router.current === 'game') showMicroCoach(step);
+    else pendingCoachStep = step;
+  }
+  if (myTurnCount >= 2) microCoachQuiet = true;   // quiet for the rest of the match
+}
+
 function ui() {
   /* a pick that no longer belongs to you, or to a ball that is gone, is dropped here */
   if (selected !== null && (state.winner !== null || state.turn !== localSide
@@ -1603,6 +1754,8 @@ function ui() {
   /* the wall's live-play intermission ends on the board's own terms: two real rival rows, then
      this seat's turn. Called last so a resumed lesson's own repaint is the final word. */
   if (waitingForMineTrigger) resumeMineLesson();
+  /* a hint is a repaint, not a state machine: it never changes `state`, the mode or any input */
+  maybeMicroCoach();
 }
 
 async function runOpponent() {
@@ -1870,6 +2023,15 @@ function restart() {
   stopVictoryFanfare();
   stopDefeat();
   cancelTutorial();
+  /* A new match owns a fresh pair of turns. Resetting BEFORE `ui()` at the end of this function
+     is what makes turn 1 of the invited duel count as turn 1 rather than inheriting a stale
+     counter from the boot's idle board. */
+  myTurnCount = 0;
+  coachWasMyTurn = false;
+  pendingCoachStep = 0;
+  microCoachQuiet = false;
+  hideMicroCoach();
+  bonusBadge.hidden = true;
   /* A lesson is not a match; a real board starts a fresh telemetry clock even when the player
      replayed it from the pause sheet. */
   if (!tutorialStandalone) {
@@ -2251,7 +2413,14 @@ function startGame(setup: StartSetup) {
      directly. A manual replay (`requested`) is the ONLY thing that may override the flag. */
   reconcileTutorialFromHistory();
   const completed = hasCompletedTutorial();
+  /* An invite launch owns its first race. Even a room that lost its host to a bot backfill (so the
+     pure rule below would see a "local" board) must NOT be replaced by the standalone lesson: the
+     friend's room is where this player was promised to land. The window closes as soon as that
+     first duel settles, so the normal first-time rule is unchanged afterwards. A MANUAL request
+     (`requested`, from the lobby training card) is never gated by this. */
+  const inviteBootWindow = INVITE_DUEL_LAUNCH && !inviteDuelSettled && !completed;
   const autoLesson = !completed
+    && !inviteBootWindow
     && autoTutorialForLaunch()
     && shouldAutoStartTutorial({
       online: !!setup.online,
@@ -2347,6 +2516,13 @@ function startGame(setup: StartSetup) {
     syncLoop();
     /* `hidden` was cleared a line ago: re-fit now, then verify once after the DOM settles. */
     settleBoard();
+    /* The first turn began in `restart()`, while #s-game was still hidden behind the face-off.
+       Raise its held hint on the very first frame the invited player can read the board, so the
+       fade never burns down during a cinematic nobody could see. */
+    if (pendingCoachStep) {
+      showMicroCoach(pendingCoachStep);
+      pendingCoachStep = 0;
+    }
     /* `autoLesson` asks for one last storage read at the moment the overlay opens, so a save that
        became complete during the face-off cinematic can never resurrect the lesson. */
     if (wantsTutorial) beginTutorial(autoLesson);
@@ -3161,6 +3337,47 @@ function startTutorial() {
   startGame({ difficulty: menuState.difficulty, sizes: [1, 1] });
 }
 
+/* ---------- zero-friction invite boot ---------- */
+
+/**
+ * Was this very launch opened from a friend's room/duel invite?
+ *
+ * `inviteRoomCode()` / `inviteDuelCode()` already cover Telegram's `initDataUnsafe.start_param`
+ * (`startapp=room_1909`, `duel_1909`) and the plain `?room=` / `?roomcode=` / `?duel=` query
+ * fallbacks. The extra pass below widens that to a hash-delivered payload (`#room=1909`,
+ * `#1909`, `#startapp=duel_1909`) without ever treating `squad_`, `ref_`, `team-` or a bare
+ * referral as a duel. Read exactly once at boot, before the router or any sheet exists.
+ *
+ * Every constant is FUNCTION-LOCAL on purpose: this runs from a `const` initializer at the very
+ * top of the module, so a module-level `const` here would still be in its temporal dead zone.
+ */
+function detectInviteDuelLaunch(): boolean {
+  /* `room_1909`, `duel_1909`, `duel_relic_1909`, `#1909`, a bare `1909` — one invitation. */
+  const invitePayload = /^(?:#?\s*)?(?:room|duel)[\s_-]*(?:relic[\s_-]*)?(\d{4})(?!\d)/i;
+  const bareRoomPayload = /^(?:#?\s*)?(\d{4})\s*$/;
+  const queryKeys = ['room', 'roomcode', 'duel', 'startapp', 'tgWebAppStartParam', 'start_param'];
+  const isInvite = (raw: string | null | undefined): boolean => {
+    const value = (raw ?? '').trim();
+    return !!value && (invitePayload.test(value) || bareRoomPayload.test(value));
+  };
+  try {
+    if (inviteRoomCode() || inviteDuelCode()) return true;
+    if (isInvite(startParam())) return true;
+    for (const part of [window.location.search, window.location.hash]) {
+      const body = part.replace(/^[?#]/, '');
+      if (!body) continue;
+      if (isInvite(body)) return true;
+      const query = new URLSearchParams(body);
+      for (const key of queryKeys) {
+        if (isInvite(query.get(key))) return true;
+      }
+    }
+  } catch {
+    /* a webview that refuses the URL still boots normally */
+  }
+  return false;
+}
+
 /**
  * A shared link owns the first screen. A room, duel or squad invite — or any other start payload —
  * is a promise to take the reader somewhere specific, so first-open onboarding must never cover it.
@@ -3186,7 +3403,9 @@ function hasLaunchDeepLink(): boolean {
  *      RETURNING even without the lesson flag, so the flag is stamped before any decision is made.
  *   2. `isFirstTimePlayer()` — no completed lesson AND zero recorded matches. A returning player
  *      (`hasCompletedTutorial() === true`) always boots on #s-home and is never auto-routed again.
- *   3. A deep link keeps its own destination; onboarding never hijacks an invite.
+ *   3. A deep link keeps its own destination; onboarding never hijacks an invite. In particular a
+ *      ROOM/DUEL invite is an explicit promise to land in that live seat: `INVITE_DUEL_LAUNCH`
+ *      short-circuits the standalone lesson even for a profile that has never played a move.
  *
  * When the lesson is skipped (or Escape / Back is pressed) `end()` routes straight Home. When it
  * is finished, the completion flag is persisted at once and the player sprints to the FINISH line;
@@ -3195,7 +3414,9 @@ function hasLaunchDeepLink(): boolean {
 function bootFirstRunTutorial(): void {
   reconcileTutorialFromHistory();
   if (!isFirstTimePlayer()) return;      // returning users ALWAYS boot on #s-home
-  if (hasLaunchDeepLink()) return;
+  /* ZERO-FRICTION ENTRY: a friend is already waiting in the invited room. Never hijack this boot
+     into src/tutorial.ts, and never start a replacement local race behind the invite. */
+  if (INVITE_DUEL_LAUNCH || hasLaunchDeepLink()) return;
   firstRunBoot = true;
   /* A fresh local duel, not a room and not an online seat. `quiet` skips the VS cinematic: the
      board itself is the first thing a new player sees. `tutorialRequested` forces the standalone
@@ -3204,6 +3425,37 @@ function bootFirstRunTutorial(): void {
   startGame({ difficulty: menuState.difficulty, sizes: [1, 1], quiet: true });
   /* Cold boot: re-anchor and re-measure across animation frames (see settleColdBootBoard). */
   settleColdBootBoard();
+}
+
+/**
+ * RETURN-TO-LOBBY TACTICAL TRAINING UPSELL.
+ *
+ * Offered on a genuine return to #s-home, and only to the player this flow was built for: the
+ * lesson was bypassed (`!ftueDone`) and the first duel actually finished (its one-time bonus is
+ * claimed). Once per session, after the Home transition has settled so the card never fights it.
+ *
+ * The primary CTA calls `startTutorial()` — the EXISTING, untouched on-demand door into
+ * src/tutorial.ts. Nothing in this function edits, refactors or re-implements the lesson. The
+ * secondary CTA stamps the completion flag so the offer is never repeated on a later launch.
+ */
+function maybeOfferTraining(): void {
+  if (trainingPromptShown) return;
+  if (hasCompletedTutorial()) return;
+  if (!hasClaimedFirstDuelBonus()) return;
+  /* A live invite that has not reached a verdict must stay completely frictionless. */
+  if (INVITE_DUEL_LAUNCH && !inviteDuelSettled) return;
+  if (overlayOpen || sheets.isOpen) return;
+  trainingPromptShown = true;
+  window.setTimeout(() => {
+    if (router.current !== 'home' || overlayOpen || sheets.isOpen) {
+      trainingPromptShown = false;   // not this time; a later Home return can still offer it
+      return;
+    }
+    openTrainingUpsell({
+      onStart: () => { startTutorial(); },
+      onSkip: () => { completeTutorial(); },
+    });
+  }, 380);
 }
 
 /** Leaving the race, or starting another one, ends the lesson without marking it read. */

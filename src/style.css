@@ -34451,3 +34451,242 @@ html[data-lang="ar"] .ranks-tabs .seg-t {
   html[data-lang="fa"] .ranks-tabs .seg-t,
   html[data-lang="ar"] .ranks-tabs .seg-t { font-size: 11px; }
 }
+
+/* ==========================================================================
+   VIRAL DUEL INVITE ONBOARDING — zero-friction entry surfaces
+   Three surfaces: the in-match micro-coach pill, the first-duel bonus badge on
+   the result card, and the return-to-lobby training prompt. Every one is opaque
+   obsidian with a gold hairline (no live blur), inset with LOGICAL properties,
+   width-capped, and given `overflow-x: clip` rather than `overflow: hidden` so a
+   focus ring is never shaved off on a 320px viewport.
+   ========================================================================== */
+
+/* ---- 1. in-match micro-coach: a compact floating top-HUD pill over the race stage ---- */
+.iv-coach {
+  position: absolute;
+  top: 46px;
+  inset-inline: 10px;
+  z-index: 12;
+  box-sizing: border-box;
+  width: auto;
+  max-width: calc(100% - 20px);
+  min-width: 0;
+  margin: 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid rgba(252, 211, 77, .34);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 180% at 50% 0%, rgba(212, 175, 55, .16) 0%, rgba(212, 175, 55, 0) 72%),
+    linear-gradient(180deg, #161d28 0%, #0a0d13 100%);
+  box-shadow:
+    0 16px 32px -16px rgba(0, 0, 0, .9),
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    inset 0 -2px 3px rgba(0, 0, 0, .4);
+  color: var(--ink);
+  text-align: start;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  transition: opacity .22s ease, transform .22s ease, visibility .22s;
+  pointer-events: none;      /* NON-BLOCKING: never eats a tap aimed at the board */
+  overflow-x: clip;
+}
+.iv-coach.is-on { opacity: 1; visibility: visible; transform: none; }
+.iv-coach-k {
+  flex: none;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--gold-ink);
+}
+.iv-coach-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: clamp(11px, 3.2vw, 13px);
+  font-weight: 600;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  overflow-x: clip;
+}
+
+/* ---- 2. first-duel welcome bonus: a gold-leaf badge inside the result card ---- */
+.iv-bonus {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 10px 0 2px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(252, 211, 77, .42);
+  border-radius: 16px;
+  background:
+    radial-gradient(90% 160% at 0% 0%, rgba(212, 175, 55, .18) 0%, rgba(212, 175, 55, 0) 70%),
+    linear-gradient(180deg, #1b1a19 0%, #0b0908 100%);
+  box-shadow: 0 12px 26px -14px rgba(0, 0, 0, .85), inset 0 1px 0 rgba(255, 255, 255, .08);
+  color: var(--ink);
+  text-align: start;
+  overflow-x: clip;
+}
+/* An author `display` beats the UA [hidden] rule: repeat the gate explicitly. */
+.iv-bonus[hidden] { display: none !important; }
+.iv-bonus-ico { flex: none; font-size: 20px; line-height: 1; }
+.iv-bonus-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.iv-bonus-k {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--gold-ink);
+}
+.iv-bonus-t {
+  min-width: 0;
+  font-size: clamp(11px, 3.2vw, 13px);
+  font-weight: 700;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+/* ---- 3. return-to-lobby tactical training prompt: scrim + centred card ---- */
+.tu-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: max(16px, env(safe-area-inset-top)) 14px max(16px, env(safe-area-inset-bottom));
+}
+.tu-modal[hidden] { display: none !important; }
+.tu-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(80% 60% at 50% 0%, rgba(212, 175, 55, .09), transparent 70%),
+    rgba(3, 5, 9, .78);
+}
+.tu-panel {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  width: min(100%, 340px);
+  max-width: 100%;
+  min-width: 0;
+  padding: 22px 16px 16px;
+  border: 1px solid rgba(252, 211, 77, .36);
+  border-radius: 24px;
+  background:
+    radial-gradient(110% 60% at 50% 0%, rgba(212, 175, 55, .16) 0%, rgba(212, 175, 55, 0) 68%),
+    linear-gradient(168deg, #1a1d26 0%, #0c0f16 58%, #06070b 100%);
+  box-shadow: 0 30px 64px -24px rgba(0, 0, 0, .95), inset 0 1px 0 rgba(255, 255, 255, .09);
+  color: var(--ink);
+  text-align: center;
+  overflow-x: clip;
+}
+.tu-crest {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin: 0 auto 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(252, 211, 77, .4);
+  background: linear-gradient(180deg, rgba(252, 211, 77, .16), rgba(252, 211, 77, .03));
+  font-size: 22px;
+  line-height: 1;
+}
+.tu-kicker {
+  margin: 0 0 6px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--gold-ink);
+}
+.tu-title {
+  margin: 0 0 8px;
+  font-size: clamp(17px, 5vw, 20px);
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.tu-body {
+  margin: 0 0 16px;
+  font-size: clamp(11px, 3.3vw, 13px);
+  font-weight: 500;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.tu-actions { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.tu-actions button {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 12px 10px;
+  border-radius: 14px;
+  font-size: clamp(11px, 3.2vw, 13px);
+  font-weight: 800;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.tu-primary {
+  border: 1px solid rgba(255, 220, 130, .6);
+  background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
+  color: #1a1206;
+  box-shadow: 0 8px 20px -10px rgba(251, 191, 36, .75);
+}
+.tu-secondary {
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: rgba(255, 255, 255, .045);
+  color: var(--ink-soft);
+}
+.tu-actions button:focus-visible { outline: 2px solid var(--gold-ink); outline-offset: 2px; }
+
+/* ---- RTL: joined script, zero tracking, no forced caps, logical alignment ---- */
+html[data-lang="fa"] :is(.iv-coach, .iv-bonus, .tu-panel),
+html[data-lang="ar"] :is(.iv-coach, .iv-bonus, .tu-panel) {
+  letter-spacing: 0 !important;
+}
+html[data-lang="fa"] :is(.iv-coach-k, .iv-bonus-k, .tu-kicker),
+html[data-lang="ar"] :is(.iv-coach-k, .iv-bonus-k, .tu-kicker) {
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  font-size: 10px;
+}
+html[data-lang="fa"] :is(.iv-coach-t, .iv-bonus-t, .tu-body, .tu-title),
+html[data-lang="ar"] :is(.iv-coach-t, .iv-bonus-t, .tu-body, .tu-title) {
+  letter-spacing: 0 !important;
+  line-height: 1.8;
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+}
+.iv-coach[dir="rtl"], .iv-bonus[dir="rtl"], .tu-panel[dir="rtl"] { text-align: right; }
+.iv-coach[dir="ltr"], .iv-bonus[dir="ltr"], .tu-panel[dir="ltr"] { text-align: left; }
+.tu-panel[dir="rtl"] .tu-crest { margin-inline: auto; }
+
+/* ---- 320px budget: a long Persian line or an emoji can never widen a surface ---- */
+@media (max-width: 360px) {
+  .iv-coach { inset-inline: 8px; padding: 9px 10px; max-width: calc(100% - 16px); }
+  .iv-bonus { padding: 9px 10px; gap: 8px; }
+  .tu-modal { padding-inline: 12px; }
+  .tu-panel { padding: 18px 13px 14px; }
+  .tu-actions button { padding: 11px 8px; }
+}

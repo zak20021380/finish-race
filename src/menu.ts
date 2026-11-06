@@ -4144,3 +4144,127 @@ function createEnlistModal(): EnlistModal | null {
 
   return { open: show };
 }
+
+/* ---------------------------------------------------------------------------
+   RETURN-TO-LOBBY TACTICAL TRAINING UPSELL
+
+   The invitee who skipped first-open onboarding is offered the lesson only AFTER
+   the duel is over and they are back on Home. This controller owns just the
+   chassis: the two decisions are handed back to main.ts, which is the only place
+   that may start the untouched tutorial flow or stamp the lesson flag.
+
+   One full-viewport grid (scrim + centred panel) rather than a physical
+   left/right pair, so a 320px RTL viewport stays centred with zero horizontal
+   overflow. The whole card is [hidden]-gated: an author `display` beats the UA
+   rule, so the stylesheet repeats that gate with `display: none !important`.
+   --------------------------------------------------------------------------- */
+
+export interface TrainingUpsellActions {
+  /** Primary CTA: launch the existing, unmodified tutorial flow. */
+  onStart: () => void;
+  /** Secondary CTA: dismiss AND mark the lesson read, so this never nags again. */
+  onSkip: () => void;
+}
+
+interface TrainingUpsellModal {
+  open(actions: TrainingUpsellActions): void;
+}
+
+let trainingUpsell: TrainingUpsellModal | null = null;
+
+/** Open the optional 30-second training prompt. Idempotent: one chassis for the whole app. */
+export function openTrainingUpsell(actions: TrainingUpsellActions): void {
+  if (!trainingUpsell) trainingUpsell = createTrainingUpsell();
+  trainingUpsell?.open(actions);
+}
+
+function createTrainingUpsell(): TrainingUpsellModal | null {
+  const root = document.createElement('div');
+  root.className = 'tu-modal';
+  root.id = 'tu-modal';
+  root.hidden = true;
+  root.innerHTML = [
+    '<div class="tu-scrim" data-tu-scrim></div>',
+    '<div class="tu-panel" role="dialog" aria-modal="true" aria-labelledby="tu-title" aria-describedby="tu-body">',
+    '  <span class="tu-crest" aria-hidden="true">⚔️</span>',
+    '  <p class="tu-kicker" id="tu-kicker"></p>',
+    '  <h2 class="tu-title" id="tu-title"></h2>',
+    '  <p class="tu-body" id="tu-body"></p>',
+    '  <div class="tu-actions">',
+    '    <button class="tu-primary" id="tu-start" type="button"><span id="tu-start-t"></span></button>',
+    '    <button class="tu-secondary" id="tu-skip" type="button"><span id="tu-skip-t"></span></button>',
+    '  </div>',
+    '</div>',
+  ].join('');
+  document.body.appendChild(root);
+
+  const panel = root.querySelector<HTMLElement>('.tu-panel');
+  const scrim = root.querySelector<HTMLElement>('[data-tu-scrim]');
+  const start = root.querySelector<HTMLButtonElement>('#tu-start');
+  const skip = root.querySelector<HTMLButtonElement>('#tu-skip');
+  if (!panel || !scrim || !start || !skip) return null;
+
+  const copy: [string, string][] = [
+    ['#tu-kicker', 'trainingUpsellKicker'],
+    ['#tu-title', 'trainingUpsellTitle'],
+    ['#tu-body', 'trainingUpsellBody'],
+    ['#tu-start-t', 'trainingUpsellStart'],
+    ['#tu-skip-t', 'trainingUpsellSkip'],
+  ];
+
+  const paint = (): void => {
+    /* Persian and Arabic are joined scripts: zero tracking, and their own direction on every
+       text surface (the document itself never flips `dir`). */
+    const dir = langDef(lang).dir;
+    panel.setAttribute('dir', dir);
+    start.setAttribute('dir', dir);
+    skip.setAttribute('dir', dir);
+    for (const [selector, key] of copy) {
+      const el = root.querySelector<HTMLElement>(selector);
+      if (el) el.textContent = t(key);
+    }
+  };
+  onLang(paint);
+  paint();
+
+  let actions: TrainingUpsellActions | null = null;
+  let restore: HTMLElement | null = null;
+
+  const dismiss = (decide: (a: TrainingUpsellActions) => void): void => {
+    if (root.hidden) return;
+    const current = actions;
+    actions = null;
+    root.hidden = true;
+    const back = restore;
+    restore = null;
+    back?.focus({ preventScroll: true });
+    if (current) decide(current);
+  };
+
+  start.addEventListener('click', () => { impact('light'); dismiss((a) => a.onStart()); });
+  skip.addEventListener('click', () => { impact('light'); dismiss((a) => a.onSkip()); });
+  /* A tap on the veil is a dismissal, not a decision: the lesson flag stays untouched so the
+     offer can still be made on a later visit. */
+  scrim.addEventListener('click', () => dismiss(() => {}));
+  root.addEventListener('click', (e) => { if (e.target === root) dismiss(() => {}); });
+  document.addEventListener('keydown', (e) => {
+    if (root.hidden || e.key !== 'Escape') return;
+    /* The mandatory channel gate sits above this card at a higher layer and owns Escape while it
+       is up; never silently dismiss the optional card underneath it. */
+    const gate = document.getElementById('force-join-modal');
+    if (gate && !gate.hidden) return;
+    e.preventDefault();
+    dismiss(() => {});
+  });
+
+  return {
+    open(next: TrainingUpsellActions) {
+      if (!root.hidden) return;
+      actions = next;
+      paint();
+      restore = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      root.hidden = false;
+      window.setTimeout(() => { if (!root.hidden) start.focus({ preventScroll: true }); }, 40);
+    },
+  };
+}

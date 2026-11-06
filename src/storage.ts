@@ -171,6 +171,12 @@ export interface Save {
    */
   tutorialCompleted: boolean;
   /**
+   * The one-time "First Duel Welcome Bonus" (+200 coins) has been paid. A debut loss is the
+   * likeliest churn moment, so the cushion is credited once on the first settled race, win or
+   * lose, and never again — a late cloud hydrate must not make it payable twice.
+   */
+  firstDuelBonusClaimed: boolean;
+  /**
    * The colour this screen paints its own pieces in. Local presentation only: the opponent takes
    * the opposite family on this device, and the rules never read this field.
    */
@@ -214,6 +220,7 @@ function fresh(): Save {
     referral: { joins: 0, unclaimed: 0, earned: 0, code: null, welcome: false, via: null },
     editions: { claims: {}, supply: {}, syncedAt: 0 },
     tutorialCompleted: false,
+    firstDuelBonusClaimed: false,
     pieceColor: 'red',
   };
 }
@@ -359,6 +366,7 @@ function migrate(raw: Partial<Save> | null): Save {
   }
   if (whole(raw.tiqBonus)) s.tiqBonus = Math.max(0, Math.floor(raw.tiqBonus));
   if (raw.tutorialCompleted === true) s.tutorialCompleted = true;
+  if (raw.firstDuelBonusClaimed === true) s.firstDuelBonusClaimed = true;
   if (raw.pieceColor === 'blue' || raw.pieceColor === 'red') s.pieceColor = raw.pieceColor;
   const ref = raw.referral as Partial<ReferralState> | undefined;
   if (ref) {
@@ -432,10 +440,14 @@ export function hydrate(raw: string | null) {
      push a player who already finished or skipped the lesson back into the tutorial. Only the
      explicit dev door, resetTutorialState(), is allowed to clear the flag. */
   const wasCompleted = profile.tutorialCompleted === true;
+  const wasBonusClaimed = profile.firstDuelBonusClaimed === true;
   try {
     const next = migrate(raw ? (JSON.parse(raw) as Partial<Save>) : null);
     Object.assign(profile, next);
     if (wasCompleted) profile.tutorialCompleted = true;
+    /* An older cloud blob has no idea the welcome bonus was paid. Keep it paid, or the next
+       settled race would mint a second +200 from a save that predates the field. */
+    if (wasBonusClaimed) profile.firstDuelBonusClaimed = true;
     /* A cloud save can carry a whole match history onto a device whose own cache is empty. That
        player has raced before, so stamp the lesson flag here too: a hydrate that lands AFTER boot
        must never leave a returning profile eligible for first-open onboarding. */
@@ -619,6 +631,28 @@ export function earnCoins(n: number): number {
   profile.coins += gain;
   flush();
   return gain;
+}
+
+/* ---------- first-duel welcome cushion ---------- */
+
+/** The endowment-effect grant paid once, on the first settled race, whether it was won or lost. */
+export const FIRST_DUEL_BONUS = 200;
+
+/** Read the one-time grant's flag. Only the literal `true` counts, exactly like the lesson flag. */
+export const hasClaimedFirstDuelBonus = (): boolean => profile.firstDuelBonusClaimed === true;
+
+/**
+ * Stamp the flag and credit the wallet in ONE flush. Returns the coins actually paid (0 when the
+ * bonus was already claimed), so the caller can decide whether to raise the celebratory badge.
+ * Persisting the flag in the same write as the credit makes a reload mid-animation harmless: the
+ * coins are already in the save and a second payout is impossible.
+ */
+export function claimFirstDuelBonus(): number {
+  if (profile.firstDuelBonusClaimed) return 0;
+  profile.firstDuelBonusClaimed = true;
+  profile.coins += FIRST_DUEL_BONUS;
+  flush();
+  return FIRST_DUEL_BONUS;
 }
 
 /** Tournament prizes, event grants and the Admin Command Center move TIQ the same way. */
