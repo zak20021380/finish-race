@@ -4779,28 +4779,29 @@
 
       <!-- pause sheet -->
       <section class="sheet" id="sheet-pause" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
-        <h2 class="sheet-t" id="pause-title">Paused<span class="pause-mode" id="pause-mode"> · 1v1 · Normal</span></h2>
+        <h2 class="sheet-t" id="pause-title"><span data-i18n="pauseTitle">Paused</span><span class="pause-mode" id="pause-mode"> · 1V1 · NORMAL</span></h2>
         <div class="sheet-actions">
           <button class="btn btn-primary" type="button" id="pause-resume" data-autofocus>
-            <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg><span>Resume</span>
+            <svg class="ico" aria-hidden="true"><use href="#i-play" /></svg><span data-i18n="pauseResume">Resume</span>
           </button>
           <button class="btn btn-ghost" type="button" id="pause-restart">
-            <svg class="ico" aria-hidden="true"><use href="#i-restart" /></svg><span>Restart race</span>
+            <svg class="ico" aria-hidden="true"><use href="#i-restart" /></svg><span data-i18n="pauseRestart">Restart race</span>
           </button>
           <button class="btn btn-ghost" type="button" id="pause-tutorial">
-            <svg class="ico" aria-hidden="true"><use href="#i-help" /></svg><span data-i18n="pauseTutorial">📖 How to play / Tutorial</span>
+            <svg class="ico" aria-hidden="true"><use href="#i-help" /></svg><span data-i18n="pauseTutorial">How to play / Tutorial</span>
           </button>
           <button class="btn btn-ghost warn" type="button" id="pause-quit">Quit to menu</button>
         </div>
       </section>
 
-      <!-- quit confirmation -->
+      <!-- quit confirmation: practice, ranked forfeit and friend duel each wear their own copy,
+           painted by main.ts from the live seat — so none of these four carries data-i18n -->
       <section class="sheet" id="sheet-quit" hidden role="dialog" aria-modal="true" aria-labelledby="quit-title">
-        <h2 class="sheet-t" id="quit-title">Leave the race?</h2>
-        <p class="sheet-p">The board resets and every ball goes back to the start.</p>
+        <h2 class="sheet-t" id="quit-title">Quit Practice Match?</h2>
+        <p class="sheet-p" id="quit-body">Your progress in this race will not be saved.</p>
         <div class="sheet-actions split">
-          <button class="btn btn-ghost" type="button" data-sheet-close data-autofocus>Stay</button>
-          <button class="btn btn-danger" type="button" id="quit-yes">Quit</button>
+          <button class="btn btn-primary" type="button" id="quit-stay" data-sheet-close data-autofocus>Keep Playing</button>
+          <button class="btn btn-danger" type="button" id="quit-yes">Quit to Menu</button>
         </div>
       </section>
 

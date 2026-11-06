@@ -32232,6 +32232,39 @@ html[data-lang="fa"] :is(.gm-lead, .gm-start, #squad-leave, #squad-explore-t, .s
   direction: rtl;
 }
 
+/* ---- the pause family: race tags, the quit key and the confirmation's two keys ----
+   `main.ts` paints these from the live seat, so they never pass through the data-i18n
+   sweep and need their own joined-script voice. The tracking and the forced caps both
+   have to go: .08em between Persian letters breaks the joining, and `uppercase` is a
+   no-op on an alphabet that has no case. */
+html[data-lang="fa"] :is(.pause-mode, .over-mode, #pause-quit, #quit-stay, #quit-yes),
+html[data-lang="ar"] :is(.pause-mode, .over-mode, #pause-quit, #quit-stay, #quit-yes) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+/* The two race tags are micro captions in Latin and unreadably small in Persian: they step
+   up to the description size and take the leading joined script needs. Both stay centred —
+   only their bidi base turns, so "توقف بازی · ۱ به ۱ · سخت" reads right to left in order. */
+html[data-lang="fa"] :is(.pause-mode, .over-mode),
+html[data-lang="ar"] :is(.pause-mode, .over-mode) {
+  direction: rtl;
+  font-size: var(--t-3);
+  line-height: 1.6;
+}
+/* The confirmation reads from the right: the safe key leads and the crimson one follows,
+   which is the same reading order the two keys already have in English. */
+html[data-lang="fa"] #sheet-quit .sheet-actions.split,
+html[data-lang="ar"] #sheet-quit .sheet-actions.split { flex-direction: row-reverse; }
+/* Play / restart / tutorial sit on the right of their label in RTL. The button's own bidi
+   base turns the row, and the spacing goes logical — inline-end is the gap between the icon
+   and the text whichever way the row reads, so it replaces the flex gap rather than adding
+   to it. */
+html[data-lang="fa"] :is(#sheet-pause, #sheet-quit) .btn,
+html[data-lang="ar"] :is(#sheet-pause, #sheet-quit) .btn { direction: rtl; gap: 0; }
+html[data-lang="fa"] :is(#sheet-pause, #sheet-quit) .btn .ico,
+html[data-lang="ar"] :is(#sheet-pause, #sheet-quit) .btn .ico { margin-inline-end: var(--s2); }
+
 /* ---- numbers, timers, codes, handles, mode tags: isolated LTR, tabular ---- */
 html[data-lang="fa"] :is(
   #p-coins, #p-level, #pf-coins, #pf-tiq, #pf-level, #pf-xp, #pf-streak,

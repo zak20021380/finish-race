@@ -30,7 +30,7 @@ import { flagPhoto } from './flags';
 import { createShop } from './shop';
 import { createNotifications } from './notifications';
 import { mountCoins } from './coin';
-import { appearance, menuState, motionReduced, onAppearance, onLang, t, toggleAppearance } from './settings';
+import { appearance, lang, menuState, motionReduced, onAppearance, onLang, t, toggleAppearance } from './settings';
 import {
   audio, holdAudio, playBoom, playVictoryFanfare, releaseAudio, stopVictoryFanfare,
 } from './audio';
@@ -177,6 +177,13 @@ const xpNums = [0, 1, 2, 3].map((p) => xpPills[p].querySelector<HTMLElement>('.x
 const chipsEl = $<HTMLElement>('chips');
 const sheetPause = $<HTMLElement>('sheet-pause');
 const sheetQuit = $<HTMLElement>('sheet-quit');
+/* The quit sheet's four strings are painted from the live seat, not swept from `data-i18n`:
+   one dialog is a practice exit, a ranked forfeit or a friend-duel leave. */
+const pauseQuitBtn = $<HTMLButtonElement>('pause-quit');
+const quitTitle = $<HTMLElement>('quit-title');
+const quitBody = $<HTMLElement>('quit-body');
+const quitStay = $<HTMLButtonElement>('quit-stay');
+const quitYes = $<HTMLButtonElement>('quit-yes');
 
 /* walls-to-place readout on each chip: repaints only when the number changes. One slot per seat the
    rules allow, so a four-way race has somewhere to put its fourth badge. */
@@ -463,9 +470,7 @@ function onBack() {
   }
   if (router.current === 'game') {
     if (state.winner !== null) { quitToMenu(); return; }
-    pauseGame();
-    sheets.open(sheetPause);
-    ui();
+    openPause();
     return;
   }
   // Tabs push, so back normally unwinds; if already at root, land on Home.
@@ -500,6 +505,19 @@ const matchMode = (): MatchMode => {
   }
   return 'pvp';
 };
+/**
+ * Which warning the quit sheet wears. A board with nobody on the far side — a local practice race,
+ * or a private room the machine backfilled — costs nothing to leave, which is exactly what
+ * `matchMode()` already counts as practice. A friends room with people in it hands the round to a
+ * friend; the matchmaker's queue and the Arena cup hand it to a ranked rival, ladder and stake
+ * behind it.
+ */
+type QuitKind = 'practice' | 'duel' | 'forfeit';
+function quitKind(): QuitKind {
+  if (matchMode() === 'bot') return 'practice';
+  if (active && 'seats' in active) return 'duel';
+  return 'forfeit';
+}
 /** The two sides this screen actually paints: the player's chosen colour, the rival in the other. */
 const currentPerspective = (): Perspective => ({ local: localSide, rival: rivalSide(), color: pieceColor() });
 /** `You`, and the name on each other chip: local names in a bot race, the player's in an online one. */
@@ -2097,9 +2115,37 @@ function paintNames() {
     const av = document.getElementById(`av-${p}`);
     if (av) av.textContent = (label.trim()[0] ?? '?').toUpperCase();
   }
-  /* the race names itself where a race is being stopped or judged, not on every frame of play */
-  const shape = sizes.length > 2 ? `${sizes.length}-player` : `${sizes[0]}v${sizes[1]}`;
-  const mode = `${shape} · ${active ? 'Online' : `${difficulty[0].toUpperCase()}${difficulty.slice(1)}`}`;
+  paintRaceTags();
+}
+
+/** Persian figures for the mode tag: "۳ نفره" reads as Farsi, "3 نفره" reads as a glitch. */
+const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+const tagDigits = (n: number): string => {
+  const s = String(n);
+  return lang === 'fa' ? s.replace(/\d/g, (d) => FA_DIGITS[Number(d)]) : s;
+};
+const DIFF_TAG: Record<Difficulty, string> = {
+  easy: 'pauseDiffEasy', normal: 'pauseDiffNormal', hard: 'pauseDiffHard',
+};
+
+/** The contender count in the tag's own tongue: a duel, a party of three or four, or a sized pair. */
+function raceShapeTag(): string {
+  if (sizes.length > 2) return t('pauseShapeParty').replace('{n}', tagDigits(sizes.length));
+  if (sizes[0] === 1 && sizes[1] === 1) return t('pauseShapeDuel');
+  return t('pauseShapeVs').replace('{a}', tagDigits(sizes[0])).replace('{b}', tagDigits(sizes[1]));
+}
+
+/**
+ * The race names itself where a race is being stopped or judged, not on every frame of play: the
+ * pause header and the result caption. A practice board carries the machine's level, a live seat
+ * the company it keeps — a friend's room or the ranked queue. Both are translated, so a language
+ * flip repaints them without needing a new race.
+ */
+function paintRaceTags(): void {
+  const kind = quitKind();
+  const context = kind === 'practice' ? t(DIFF_TAG[difficulty])
+    : t(kind === 'duel' ? 'pauseTagFriends' : 'pauseTagOnline');
+  const mode = `${raceShapeTag()} · ${context}`;
   pauseMode.textContent = ` · ${mode}`;
   overMode.textContent = mode;
 }
@@ -2355,6 +2401,31 @@ function lockResultForLeft(): void {
   if (overlayOpen && !matchmaking.isOpen) toMenu.focus({ preventScroll: true });
 }
 
+/** The pause sheet's quit key names its verdict before it is ever tapped: leaving a practice board
+ *  is an exit, leaving a live seat is a forfeit. */
+function paintPause(): void {
+  pauseQuitBtn.textContent = t(quitKind() === 'practice' ? 'pauseQuit' : 'pauseForfeit');
+}
+
+/** One dialog, three faces. Staying is always the primary key and leaving always the crimson one,
+ *  so the safe answer is the loud one whichever match the player is walking out of. */
+function paintQuit(): void {
+  const kind = quitKind();
+  const key = kind === 'practice' ? 'quitPractice' : kind === 'duel' ? 'quitDuel' : 'quitForfeit';
+  quitTitle.textContent = t(`${key}Title`);
+  quitBody.textContent = t(`${key}Body`);
+  quitStay.textContent = t(`${key}Stay`);
+  quitYes.textContent = t(`${key}Confirm`);
+}
+
+/** The one door into the pause sheet: the HUD's menu key and the system back key both take it. */
+function openPause(): void {
+  pauseGame();
+  paintPause();
+  sheets.open(sheetPause);
+  ui();
+}
+
 function pauseGame() {
   if (paused) return;
   /* A networked race does not pause: the rival is still playing and their clock is still theirs,
@@ -2416,10 +2487,22 @@ function quitToMenu() {
     overlay.hidden = true;
   }
   sheets.close();
-  /* Walking out of a live online race is a resignation: the rival takes the win, and the socket
-     goes with it — leaving it open would only hold the other player's seat hostage. */
+  /* Walking out of a live online race is a resignation: the rival takes the win immediately, and
+     the socket goes with it — leaving it open would only hold the other player's seat hostage. */
   if (active) {
-    if (state.winner === null) active.resign();
+    /* Only an unsettled board can be forfeited. A race that already reached its verdict was paid
+       out by `showOverlay()` above (or by the goal beat), and must not be counted twice. */
+    if (state.winner === null) {
+      active.resign();
+      /* The forfeit is a defeat on this device's ledger too, not only in the room: the tally, the
+         streak and the TIQ the ladder derives from them move exactly as a finished loss would.
+         Practice is exempt — `matchMode()` already counts a bot-backfilled room as practice, so
+         walking out of one costs no rating and no stake. */
+      const mode = matchMode();
+      if (mode !== 'bot' && (!room || rewardEligible(room, localSide))) {
+        recordGame({ difficulty, won: false, mode }, runtime.coinMult);
+      }
+    }
     active.close();
     active = null;
   }
@@ -3238,13 +3321,11 @@ toMenu.addEventListener('click', () => { impact('light'); clearResultMotion(); q
 menuBtn.addEventListener('click', () => {
   if (tutorialActive || state.winner !== null) return;
   impact('light');
-  pauseGame();
-  sheets.open(sheetPause);
-  ui();
+  openPause();
 });
 $('pause-resume').addEventListener('click', () => { impact('light'); sheets.close(); resumeGame(); });
 $('pause-restart').addEventListener('click', () => { impact('light'); sheets.close(); resumeGame(); restart(); });
-$('pause-quit').addEventListener('click', () => { impact('light'); sheets.open(sheetQuit); });
+$('pause-quit').addEventListener('click', () => { impact('light'); paintQuit(); sheets.open(sheetQuit); });
 $('quit-yes').addEventListener('click', () => { impact('light'); quitToMenu(); });
 
 /* ---------- loop ---------- */
@@ -3593,8 +3674,9 @@ initGameModes(sheets, {
 });
 onGameModeChange(paintParty);
 onLang(paintParty);
-/* the result is a live surface too: a language flip repaints its copy, tags and aria labels */
-onLang(() => { if (overlayOpen && resultView) paintResultCopy(); });
+/* the result is a live surface too: a language flip repaints its copy, tags and aria labels.
+   The race's own name rides along — it is translated copy on the pause header and this caption. */
+onLang(() => { paintRaceTags(); if (overlayOpen && resultView) paintResultCopy(); });
 watchPartyLabel();
 paintParty();
 paintRoster();
