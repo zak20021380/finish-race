@@ -223,6 +223,10 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     shopVaultSub: 'Exclusive skins and legendary relics are being forged. Grand reopening soon.',
     shopVaultLocked: '🔒 Locked',
     shopVaultStatus: 'SEALED',
+    /* ---- mine detonations: the combo chain and the two-charge placement collision.
+       `{n}` in chainDetonationNote is the number of charges that went off in one turn. ---- */
+    chainDetonationNote: 'Chain detonation ×{n} — tactical combo!',
+    dualDetonationNote: 'Dual detonation — both charges neutralized',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'You',
     hudTop: 'Top',
@@ -882,6 +886,8 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     shopVaultSub: 'فعلاً آیتمی برای فروش نداریم؛ بهزودی با دست پر برمیگردیم!',
     shopVaultLocked: '🔒 قفل',
     shopVaultStatus: 'بستهست',
+    chainDetonationNote: 'انفجار زنجیره‌ای ×{n} — کمبوی تاکتیکی!',
+    dualDetonationNote: 'انفجار دوگانه — هر دو مین خنثی شدند',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'تو',
     hudTop: 'برتر',
@@ -1528,6 +1534,8 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     shopVaultSub: 'Эксклюзивные облики и легендарные реликвии уже создаются. Торжественное открытие скоро.',
     shopVaultLocked: '🔒 Закрыто',
     shopVaultStatus: 'ОПЕЧАТАНО',
+    chainDetonationNote: 'Цепная детонация ×{n} — тактическое комбо!',
+    dualDetonationNote: 'Двойная детонация — оба заряда обезврежены',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'Вы',
     hudTop: 'Топ',
@@ -1655,6 +1663,8 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     shopVaultSub: 'يجري صياغة الأزياء الحصرية والآثار الأسطورية. الافتتاح الكبير قريبًا.',
     shopVaultLocked: '🔒 مقفل',
     shopVaultStatus: 'مختوم',
+    chainDetonationNote: 'انفجار متسلسل ×{n} — تركيبة تكتيكية!',
+    dualDetonationNote: 'انفجار مزدوج — تم تحييد الشحنتين',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'أنت',
     hudTop: 'الأفضل',
@@ -1782,6 +1792,8 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     shopVaultSub: 'Se están forjando aspectos exclusivos y reliquias legendarias. Gran reapertura próximamente.',
     shopVaultLocked: '🔒 Bloqueado',
     shopVaultStatus: 'SELLADO',
+    chainDetonationNote: 'Detonación en cadena ×{n} — ¡combo táctico!',
+    dualDetonationNote: 'Detonación doble — ambas cargas neutralizadas',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'Tú',
     hudTop: 'Top',

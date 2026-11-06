@@ -143,6 +143,16 @@ export interface RendererOptions {
 }
 
 /**
+ * One beat of a mine detonation chain. `at` is the charge's own square; `knock` is the ball it
+ * throws, from the square it stepped off (or was thrown from) to its resolved landing. The caller
+ * only names the cells — the renderer owns the clock that staggers them.
+ */
+export interface BlastBeat {
+  at: Cell;
+  knock?: { id: number; from: Pos; to: Pos };
+}
+
+/**
  * What the board is doing. `move` is direct play: every target is live at once — a ball, a legal
  * cell, a groove between two squares. `mine` is the chip's mine key being held down, which swaps
  * the whole board for the placement band. There is no wall key to reach for: a groove *is* the
@@ -200,8 +210,12 @@ const TRAIL_STEPS = 3;
 const KNOCK_STEP_MS = 260;
 /** The throw after detonation: the arc over whatever wall it clears, down to the landing. */
 const KNOCK_FLY_MS = 520;
-/** The whole trigger: the step, then the throw. The rock's own fall is the end of it. */
-const KNOCK_MS = KNOCK_STEP_MS + KNOCK_FLY_MS;
+/**
+ * The tactical gap between two detonations of a CHAIN — tight enough to read as one combo, long
+ * enough to see the pawn get thrown onto the next charge before it blows. A chain's intermediate
+ * throws take exactly this long, so beat i+1 fires the frame the ball lands on charge i+1.
+ */
+const CHAIN_STAGGER_MS = 290;
 /** The hop's peak, in cells: tall enough to carry the ball over a wall bar on the line below it. */
 const KNOCK_ARC = 1.15;
 const DUST_MS = 420;    // the puff a thrown ball kicks up where it comes to rest
@@ -1077,10 +1091,15 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   /** mine triggers, queued by blast(); `t0` is the detonation, after the step onto the charge */
   const blasts: { x: number; y: number; t0: number; c: number; r: number }[] = [];
   /**
-   * The throw a trigger puts on the ball that set it off: the step onto the charge, the hop over
-   * the wall it was buried under, and the landing. Renderer-owned, keyed by ball id.
+   * One throw a trigger puts on the ball that set it off: the step onto the charge, the hop over
+   * the wall it was buried under, and the landing. A CHAIN queues one of these per beat, with
+   * abutting windows, so the same ball can be blown off one charge straight onto the next.
+   * `stepMs` is the arrival phase (0 for every beat after the first — the ball is already there),
+   * `flyMs` the throw phase. Renderer-owned, keyed by ball id.
    */
-  const knocks: { id: number; from: Pos; mine: Pos; to: Pos; t0: number }[] = [];
+  const knocks: {
+    id: number; from: Pos; mine: Pos; to: Pos; t0: number; stepMs: number; flyMs: number;
+  }[] = [];
   /** Mine-blast dust and the micro-bounce of a thrown ball as it settles. */
   const dust: { x: number; y: number; t0: number }[] = [];
   /** ball id → the ms its throw lands, so the settle can bounce. */
@@ -3236,7 +3255,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     }
 
     // every ball on the board, the nearer one (further down) drawn last so it sits on top
-    for (let i = knocks.length - 1; i >= 0; i--) if (now - knocks[i].t0 >= KNOCK_MS) knocks.splice(i, 1);
+    for (let i = knocks.length - 1; i >= 0; i--) {
+      const k = knocks[i];
+      if (now - k.t0 >= k.stepMs + k.flyMs) knocks.splice(i, 1);
+    }
     /* ---- per-frame fallback guard: never let a pawn leave the render queue ----
        A visual coordinate can desynchronise from the rules when a race is restarted mid-tween, a
        resize lands between two frames, or an interpolated value goes non-finite. Heal it from the
@@ -3273,20 +3295,27 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       if (pawn && finNow >= pawn.burstAt) continue;
       /* a ball the mine is throwing rides its own arc: onto the charge, then up and over the wall.
          The state's own slide lands underneath it, so the takeover at either end is seamless. */
-      const kn = still ? undefined : knocks.find((k) => k.id === b.id);
+      /* A chain keeps one arc per beat in the queue: the FIRST unexpired one is the active throw,
+         because the beats were pushed in time order and their windows abut. A beat whose `t0` is a
+         hair in the future still owns the ball (the clamp below parks it on `from`), which keeps
+         the rAF timestamp — occasionally a millisecond behind performance.now() — from dropping a
+         pawn onto its final square for one frame. */
+      const kn = still ? undefined : knocks.find((k) =>
+        k.id === b.id && now - k.t0 < k.stepMs + k.flyMs);
       let cx = ox + b.pos.x * c, cy = oy + b.pos.y * c;
       if (kn) {
-        const el = now - kn.t0;
-        if (el <= KNOCK_STEP_MS) {
+        const el = Math.max(0, now - kn.t0);
+        if (el <= kn.stepMs) {
           /* Stage 1: a smoothstep walk from the old square into the centre of the charge, so the
-             ball is unmistakably standing on the mine before the blast is drawn. */
-          const q = clamp(el / KNOCK_STEP_MS, 0, 1);
+             ball is unmistakably standing on the mine before the blast is drawn. A chain's later
+             beats have `stepMs === 0`: the previous throw has ALREADY landed the ball here. */
+          const q = kn.stepMs > 0 ? clamp(el / kn.stepMs, 0, 1) : 1;
           const e = q * q * (3 - 2 * q);
           cx = ox + (kn.from.c + (kn.mine.c - kn.from.c) * e + 0.5) * c;
           cy = oy + (kn.from.r + (kn.mine.r - kn.from.r) * e + 0.5) * c;
         } else {
           /* Stage 3: the throw, immediately after the flash, to the resolved landing square. */
-          const q = clamp((el - KNOCK_STEP_MS) / KNOCK_FLY_MS, 0, 1);
+          const q = kn.flyMs > 0 ? clamp((el - kn.stepMs) / kn.flyMs, 0, 1) : 1;
           const x = kn.mine.c + (kn.to.c - kn.mine.c) * q + 0.5;
           const y = kn.mine.r + (kn.to.r - kn.mine.r) * q + 0.5 - KNOCK_ARC * Math.sin(Math.PI * q);
           cx = ox + x * c;
@@ -3590,12 +3619,77 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         pendingWounds.set(knock.id, { at: { c: at.c, r: at.r }, when: t0 });
         if (thrown) {
           for (let i = knocks.length - 1; i >= 0; i--) if (knocks[i].id === knock.id) knocks.splice(i, 1);
-          knocks.push({ id: knock.id, from: knock.from, mine: at, to: knock.to, t0: now });
+          knocks.push({
+            id: knock.id, from: knock.from, mine: at, to: knock.to, t0: now,
+            stepMs: KNOCK_STEP_MS, flyMs: KNOCK_FLY_MS,
+          });
           dust.push({ x: ox + (knock.to.c + 0.5) * c, y: oy + (knock.to.r + 0.5) * c, t0: t0 + KNOCK_FLY_MS });
           thump.set(knock.id, t0 + KNOCK_FLY_MS);
         }
       }
       return delay;
+    },
+    /**
+     * Queue a CHAIN of detonations on ONE clock, so the player actually watches the pawn get thrown
+     * off one charge onto the next and blown back again.
+     *
+     * Beat 0 keeps the classic walk-onto-the-charge — the first boom is not a jump cut. Every later
+     * charge goes off one `CHAIN_STAGGER_MS` after the previous one, EXACTLY on the frame its throw
+     * lands the ball on that square; the final throw gets the full, slower `KNOCK_FLY_MS` arc. Each
+     * cell keeps its own flash, sparks, embers, dust and permanent crater (`drawScars` holds each
+     * scar back until that beat's `t0`).
+     *
+     * Returns each detonation's offset from now in ms, in the order handed over, so the caller can
+     * land a bang, a haptic buzz and the heavy shake on every beat. Reduced motion collapses every
+     * offset to 0: all scars paint at once, no arcs and no stagger.
+     */
+    blastChain(beats: readonly BlastBeat[]): number[] {
+      const { cell: c, ox, oy } = L;
+      const now = performance.now();
+      const still = motionReduced();
+      const offsets: number[] = [];
+      if (!beats.length) return offsets;
+      const first = beats[0].knock;
+      const thrown = !!first && (first.from.c !== first.to.c || first.from.r !== first.to.r);
+      const lead = thrown && !still ? KNOCK_STEP_MS : 0;
+      const stagger = still ? 0 : CHAIN_STAGGER_MS;
+      /* One ball, one timeline: a chain replaces any throw still in flight, then owns every beat. */
+      const ids = new Set<number>();
+      for (const beat of beats) if (beat.knock) ids.add(beat.knock.id);
+      for (let i = knocks.length - 1; i >= 0; i--) if (ids.has(knocks[i].id)) knocks.splice(i, 1);
+      for (let i = 0; i < beats.length; i++) {
+        const beat = beats[i];
+        const knock = beat.knock;
+        const last = i === beats.length - 1;
+        /* beat 0 walks onto the charge; every later beat starts with the ball already there,
+           carried by the previous throw — hence `stepMs === 0` and `arcStart === boomAt`. */
+        const boomAt = now + lead + i * stagger;
+        const arcStart = i === 0 ? now : boomAt;
+        const stepMs = i === 0 ? lead : 0;
+        const flyMs = last ? (still ? 0 : KNOCK_FLY_MS) : stagger;
+        blasts.push({
+          x: ox + (beat.at.c + 0.5) * c, y: oy + (beat.at.r + 0.5) * c,
+          t0: boomAt, c: beat.at.c, r: beat.at.r,
+        });
+        embers.push({ c: beat.at.c, r: beat.at.r, t0: boomAt, v: decalVariant(beat.at.c, beat.at.r) });
+        /* The first charge wounds the pawn; the rest keep throwing an already-wounded ball, so the
+           trail's first footprint stays on the square where the chain began. */
+        if (i === 0 && knock) {
+          pendingWounds.set(knock.id, { at: { c: beat.at.c, r: beat.at.r }, when: boomAt });
+        }
+        if (knock && !still) {
+          knocks.push({
+            id: knock.id, from: knock.from, mine: beat.at, to: knock.to,
+            t0: arcStart, stepMs, flyMs,
+          });
+          dust.push({
+            x: ox + (knock.to.c + 0.5) * c, y: oy + (knock.to.r + 0.5) * c, t0: boomAt + flyMs,
+          });
+          if (last) thump.set(knock.id, boomAt + flyMs);
+        }
+        offsets.push(boomAt - now);
+      }
+      return offsets;
     },
     /** Equipping repaints the board and every cached gradient once; never per frame. */
     setTheme(t: Theme) {

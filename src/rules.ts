@@ -45,8 +45,11 @@
  * square never shortens it: the ball is set down on the free flank directly beside that body, and
  * only when walls, bodies or the board's edge close both flanks does it settle for the nearest
  * free square further back. So a detonation never leaves the ball standing on the charge and never
- * stacks it on a team-mate. The mine is spent and the blast never chains. Opponent mines are
- * secret: clients get `view(state, team)`, never the raw state.
+ * stacks it on a team-mate. The mine is spent, and the LANDING square is then checked again: a
+ * second live charge there goes off too, throwing the ball onward, and so on until it comes to
+ * rest on a mine-free cell. That chain is a bounded pure loop (`MAX_CHAIN`), so both clients and
+ * the Worker resolve the same final square from the same board. Opponent mines are secret: clients
+ * get `view(state, team)`, never the raw state.
  *
  * Multiplayer later: send an `Action` over the wire and feed whatever comes back into `apply()`.
  */
@@ -91,7 +94,19 @@ export interface Pos { c: number; r: number }
 export type Cell = Pos;
 export interface WallSpec { o: 'h' | 'v'; x: number; y: number }
 export interface Wall extends WallSpec { owner: Player }
-export interface Mine { cell: Cell; owner: Player; triggered: boolean }
+export interface Mine {
+  cell: Cell;
+  owner: Player;
+  triggered: boolean;
+  /**
+   * This charge's zero-based place in the detonation chain that spent it. Stamped by `doMove()` on
+   * the one rebuilt record, never written through to a caller's board. Purely descriptive: it lets
+   * a client replay a combo's blasts in the exact order the engine resolved them, under fog of war
+   * and from either replica of a race. Absent on charges spent before this field existed, and on
+   * the two records of a placement collision (`doMine()`), which go off together on one square.
+   */
+  chainStep?: number;
+}
 
 /** How big a board is: the only two numbers that describe the grid. */
 export interface Dims { cols: number; rows: number }
@@ -737,6 +752,29 @@ export const mineAt = (s: GameState, cell: Cell): Mine | null =>
   s.mines.find((m) => !m.triggered && m.cell.c === cell.c && m.cell.r === cell.r) ?? null;
 
 /**
+ * The live mine on a cell, ignoring the charges a chain has ALREADY spent this turn. `doMove()`
+ * resolves every blast against one private board whose ledger is only rebuilt at the end, so the
+ * loop carries the spent identities here instead of mutating a mine record. Same order as `mineAt`
+ * — the first live, unspent charge on the square — so a chain is as deterministic as a single hit.
+ */
+function mineAtIn(mines: readonly Mine[], cell: Cell, spent: ReadonlySet<Mine>): Mine | null {
+  for (const m of mines) {
+    if (m.triggered || spent.has(m)) continue;
+    if (m.cell.c === cell.c && m.cell.r === cell.r) return m;
+  }
+  return null;
+}
+
+/**
+ * The hard ceiling on one turn's detonation chain. A guard, not a rule: eight live mines is the
+ * most a four-seat race can hold (`MAX_TEAMS × CONFIG.MINES_PER_TEAM`), and every blast spends one,
+ * so a real chain can never reach ten. Bounding the loop anyway makes the transition total — a
+ * stale or corrupt ledger cannot spin a turn forever — and both replicas take the same branch from
+ * the same board, so the cap can never be the source of a desync.
+ */
+export const MAX_CHAIN = 10;
+
+/**
  * The RIVAL charge buried on a cell — the one a placement may land on top of. A separate reader
  * from `mineAt` because the two have different audiences: the placement gate (`mineOk`) may NEVER
  * consult this one, since a hidden trap that refused its square would sweep the board for a radar,
@@ -869,9 +907,10 @@ function recordTurn(s: GameState, played: Player): GameState {
  * objects, so no branch of a transition can reach back into the caller's board.
  *
  * The `mines` ARRAY is fresh, but its ENTRIES are deliberately carried over by reference.
- * `blastOf()` in main.ts names the charge that just went off by object identity: rebuilding the
+ * `blastsOf()` in main.ts names the charges that just went off by object identity: rebuilding the
  * whole ledger would make every old crater look like a new detonation on the next move. A
- * transition may only ever rebuild the ONE mine that actually fired.
+ * transition may only ever rebuild the mines that actually fired — one for a lone trap, one per
+ * beat of a chain.
  */
 function detached(s: GameState): GameState {
   const base: GameState = {
@@ -886,29 +925,58 @@ function detached(s: GameState): GameState {
   return base;
 }
 
+/**
+ * Resolve a step — and every charge that CHAIN of steps sets off.
+ *
+ * The ball steps onto `to`. A live mine there is spent and the shockwave throws the ball back; that
+ * LANDING square is then inspected again, and a second live charge there goes off too, throwing the
+ * ball onward, until it comes to rest on a mine-free cell. Each beat uses the very same `blownTo()`
+ * throw as a lone blast, so bounds, walls and occupied squares are respected identically. The loop
+ * is bounded by `MAX_CHAIN` and, because each beat spends one charge, always terminates naturally.
+ *
+ * Pure on both counts: every beat is staged on a throwaway board built from private copies, and no
+ * `m.triggered = true` ever lands on a caller's state. A bot lookahead or a room's legality check
+ * can open this door on a live board and throw the answer away without spending a single mine. Each
+ * spent charge is rebuilt in its ledger slot — quota is never refunded — and stamped with its
+ * `chainStep`, so a client can replay the combo in the order the engine resolved it.
+ */
 export function doMove(s: GameState, to: Pos, ballId?: number): GameState | null {
   const team = s.turn;
   const opts = steps(s, team).filter((st) => st.to.c === to.c && st.to.r === to.r
     && (ballId === undefined || st.ball === ballId));
   if (!opts.length) return null;
   const chosen = opts[0].ball;
-  const hit = mineAt(s, to);
   /* Every read below runs on private copies. `blownTo` needs the mover standing on the charge, so
-     it is staged on a throwaway state built from those copies — never on the caller's board. */
+     each beat is staged on a throwaway state built from those copies — never on the caller's board. */
   const base = detached(s);
-  let landed = to;
-  if (hit) {
+  /** Charges spent THIS turn, in detonation order. Identity is the key for the rebuild below. */
+  const chain: Mine[] = [];
+  const spent = new Set<Mine>();
+  let landed: Pos = { c: to.c, r: to.r };
+  let chainCount = 0;
+  while (chainCount < MAX_CHAIN) {
+    const hit = mineAtIn(base.mines, landed, spent);
+    if (!hit) break;                       // mine-free landing: the chain is over, finalise the turn
+    chain.push(hit);
+    spent.add(hit);
     const staged: GameState = {
       ...base,
-      balls: base.balls.map((b) => (b.id === chosen ? { ...b, pos: { c: to.c, r: to.r } } : b)),
+      balls: base.balls.map((b) => (b.id === chosen ? { ...b, pos: { ...landed } } : b)),
     };
-    landed = blownTo(staged, to, chosen);
+    landed = blownTo(staged, landed, chosen);
+    chainCount++;
   }
   const balls = base.balls.map((b) =>
     (b.id === chosen ? { ...b, pos: { c: landed.c, r: landed.r } } : b));
-  /* A fresh array on EVERY move, and the only rebuilt entry is the charge that fired. There is no
-     `m.triggered = true` anywhere: a dry-run apply() can never arm or spend a live mine. */
-  const mines = base.mines.map((m) => (m === hit ? { ...m, triggered: true } : m));
+  const stepOf = new Map<Mine, number>();
+  for (let i = 0; i < chain.length; i++) stepOf.set(chain[i], i);
+  /* A fresh array on EVERY move; only the charges that fired are rebuilt, each carrying its place
+     in the chain. Nothing else in the ledger changes identity, so a stale crater can never read as
+     a fresh blast and a dry-run apply() can never arm or spend a live mine. */
+  const mines = base.mines.map((m) => {
+    const chainStep = stepOf.get(m);
+    return chainStep === undefined ? m : { ...m, triggered: true, chainStep };
+  });
   return endTurn({ ...base, balls, mines, winner: landed.r === 0 ? team : null }, team);
 }
 
@@ -922,8 +990,9 @@ export function doMove(s: GameState, to: Pos, ballId?: number): GameState | null
  * Only when both flanks are walled, occupied or off the board does it settle for the nearest free
  * square on the landing row, then the rows below it. A detonation therefore never leaves the ball
  * standing on the charge and never stacks it on a team-mate. `s` must already hold the ball
- * standing on the mine, which is exempt from the occupancy test along with its own id. The landing
- * square is never re-checked for a second mine.
+ * standing on the mine, which is exempt from the occupancy test along with its own id. Re-checking
+ * the landing square for the NEXT charge is `doMove()`'s chain loop, not this helper's job: one
+ * function resolves one throw, so a chain and a lone blast can never disagree about the physics.
  */
 function blownTo(s: GameState, from: Pos, ballId: number): Pos {
   const last = s.rows - 1;

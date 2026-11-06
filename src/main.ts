@@ -10,7 +10,7 @@ import {
 import { botAction, botThinkMs, type Difficulty } from './bot';
 import {
   capsuleLayout, createRenderer, dragWallSlot, hitTest, pawnRadius, wallCentre,
-  type BallView, type CapsuleAction, type Ghost, type Hit,
+  type BallView, type BlastBeat, type CapsuleAction, type Ghost, type Hit,
   type Mark, type Perspective, type Vec, type View,
 } from './render';
 import { createConfetti } from './confetti';
@@ -630,6 +630,8 @@ const view: View = {
   human: localSide, mineHints, mineGhost, capsule,
 };
 let gen = 0; // bumps on restart so stale bot replies are dropped
+/** Bumps on restart so a combo's scheduled bangs from the OLD race never fire on a new board. */
+let blastGen = 0;
 let paused = false;
 /** Turns played since the race started: the rules keep no round clock, so the HUD counts its own. */
 let turnsPlayed = 0;
@@ -1603,20 +1605,28 @@ async function runOpponent() {
 }
 
 /**
- * The mine that went off across this action: triggered mines only ever flip in place. The rule
- * rebuilds that one entry and carries every other mine through by reference, so the new charge is
- * the triggered mine this board has never held before. Matching on identity rather than on the
- * array index keeps the answer right under fog of war, where an opponent mine that was hidden
- * before the move appears at the end of the list and can sit ahead of an older crater. A dual
- * detonation rebuilds two entries; they share a square, so the first one names it just as well.
+ * Every charge this action spent, in the order the engine set them off. Triggered mines only ever
+ * flip IN PLACE: the rule rebuilds exactly the entries that fired and carries every other mine
+ * through by reference, so a freshly triggered record is one this board has never held before.
+ * Identity rather than index keeps the answer right under fog of war, where an opponent mine that
+ * was hidden before the move appears at the end of the list and can sit ahead of an older crater.
+ *
+ * `doMove()` stamps each rebuilt record with its `chainStep`, so a combo replays in the engine's
+ * own order on both replicas of a race. A placement collision rebuilds two records on ONE square
+ * without a `chainStep`; they keep the ledger's order and are still reported here, but only a MOVE
+ * with more than one is a chain (see `play()`). No new state means no detonation — a hint, a hover
+ * or a lookahead dry-run never produces one.
  */
+function blastsOf(prev: GameState, next: GameState): Mine[] {
+  if (prev === next) return [];
+  const fresh = next.mines.filter((m) => m.triggered && !prev.mines.includes(m));
+  /* Stable sort: charges without a step (the dual collision) stay in ledger order. */
+  return fresh.sort((a, b) => (a.chainStep ?? 0) - (b.chainStep ?? 0));
+}
+
+/** The single-blast reader, kept for the lone-trap path and for callers that want one cell. */
 function blastOf(prev: GameState, next: GameState): Mine | null {
-  /* No new state, no detonation. A hint, a hover or a lookahead dry-run never produces one. */
-  if (prev === next) return null;
-  for (const m of next.mines) {
-    if (m.triggered && !prev.mines.includes(m)) return m;
-  }
-  return null;
+  return blastsOf(prev, next)[0] ?? null;
 }
 
 /**
@@ -1668,8 +1678,47 @@ function play(a: Action, remote = false): boolean {
      only ever read the board (dotsFor -> reachableBall) and never reach this door. Guarding on a
      genuinely new state also means an upstream dry-run apply() could never cue a blast here. */
   const committed = next !== prev;
-  const blast = committed ? blastOf(prev, next) : null;
-  if (blast) {
+  /* A MOVE that spent more than one charge is a combo. A `mine` placement collision also rebuilds
+     two records, but both go off together on ONE square — that is a dual detonation, not a chain. */
+  const blasts = committed && a.kind === 'move' ? blastsOf(prev, next) : [];
+  const combo = blasts.length > 1;
+  const blast = combo ? null : (committed ? blastOf(prev, next) : null);
+  if (combo) {
+    /* The rules already resolved the whole chain before this frame: `blasts[i]` IS the charge the
+       ball was thrown onto by beat i-1, so its cell doubles as that beat's landing square. The last
+       beat lands wherever the new state says the ball rests. No second simulation, no guessing. */
+    const beats: BlastBeat[] = blasts.map((m, i) => ({
+      at: m.cell,
+      knock: moved !== null && from && landed
+        ? {
+            id: moved,
+            from: i === 0 ? from : blasts[i - 1].cell,
+            to: i + 1 < blasts.length ? blasts[i + 1].cell : landed,
+          }
+        : undefined,
+    }));
+    /* Beat 0 goes off immediately at the first charge; the renderer staggers every later beat on
+       one clock and hands back each detonation's offset so the sound, the buzz and the jolt land
+       exactly where the flash and the pawn are seen. */
+    const offsets = renderer.blastChain(beats);
+    const fx = blastGen;
+    const heard = new Set<number>();
+    for (let i = 0; i < offsets.length; i++) {
+      const wait = offsets[i];
+      /* Reduced motion collapses the whole chain onto one frame: one bang, not eight at once. */
+      if (heard.has(wait)) continue;
+      heard.add(wait);
+      audio.play('explosion', wait > 0 ? { delay: wait / 1000 } : undefined);
+      const boom = () => {
+        if (fx !== blastGen) return;    // this race was restarted mid-combo
+        detonation();
+        shake(false);                   // a chain always takes the board's HEAVY jolt
+      };
+      if (wait > 0) window.setTimeout(boom, wait);
+      else boom();
+    }
+    showNote(t('chainDetonationNote').replace('{n}', String(blasts.length)), false, 3000);
+  } else if (blast) {
     const cells = landed ? landed.r - blast.cell.r : 0;
     /* Stage 1 belongs to the renderer: the pawn steps onto the charge before anything goes off.
        It hands back that beat's length, so the jolt, the bang and the buzz land on the detonation
@@ -1682,11 +1731,16 @@ function play(a: Action, remote = false): boolean {
     audio.play('explosion', delay > 0 ? { delay: delay / 1000 } : undefined);
     /* a collision is two charges going off at once, so it takes the board's heavy jolt; a single
        trigger keeps the micro-shake it has always had */
-    const boom = () => { shake(!duel); detonation(); };
+    const fx = blastGen;
+    const boom = () => {
+      if (fx !== blastGen) return;
+      shake(!duel);
+      detonation();
+    };
     if (delay > 0) window.setTimeout(boom, delay);
     else boom();
     showNote(duel
-      ? 'Dual detonation — both charges neutralized'
+      ? t('dualDetonationNote')
       : `Mine! ${TEAM_NAME[by]} ${by === localSide ? 'were' : 'was'} thrown back `
         + `${cells} cell${cells === 1 ? '' : 's'}`, false, 2600);
   }
@@ -1804,6 +1858,7 @@ function restart() {
     beginMatch({ mode: matchMode(), players: sizes.length, matchId: active?.matchId });
   }
   gen++;
+  blastGen++;      // drop any combo beats still scheduled against the previous board
   /* Release bot thinks parked by the pause sheet on the PREVIOUS board. Their `token !== gen`
      check drops them as soon as they resume, so a stale reply cannot move a fresh pawn — and no
      awaiting promise is left stranded to hold the next race's dispatcher. */
