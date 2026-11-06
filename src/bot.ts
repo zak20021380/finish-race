@@ -370,6 +370,11 @@ function wallCandidates(
     }
   }
   slots.sort((a, b) => a - b);
+  /* A PRIVATE scratch array, never `s.walls`: `botAction` is handed `view(state, seat)`, a shallow
+     projection that still SHARES the live board's wall array. Pushing onto it — even with a
+     balancing pop — is an in-place write to live game state during lookahead. One array per turn
+     keeps the old push/pop allocation discipline without ever touching the caller's board. */
+  const trial: Wall[] = s.walls.slice();
   for (const slot of slots.slice(0, WALL_SLOTS)) {
     const o: 'h' | 'v' = (slot >> 10) & 1 ? 'v' : 'h';
     const y = (slot >> 6) & 15, x = slot & 63;
@@ -377,10 +382,10 @@ function wallCandidates(
     let clash = false;
     for (const p of s.walls) if (wallsClash(p, w)) { clash = true; break; }
     if (clash) continue;
-    /* push/pop rather than a fresh array per candidate: the same loop owns both */
-    s.walls.push(w);
-    const d1 = distField(s.walls, cols, rows);
-    s.walls.pop();
+    /* push/pop on the private scratch: the same loop owns both, and no live state is ever written */
+    trial.push(w);
+    const d1 = distField(trial, cols, rows);
+    trial.pop();
     if (!allReach(s, d1)) continue;                      // the anti-stalemate guard, wall by wall
     const myD1 = teamField(s, me, d1);
     const self = myD1 - myD0;

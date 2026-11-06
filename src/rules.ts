@@ -860,22 +860,56 @@ function recordTurn(s: GameState, played: Player): GameState {
   return adjudicate({ ...s, repeat: track }, track);
 }
 
+/**
+ * A state whose every mutable container belongs to it alone. `apply()` is opened on a THROWAWAY
+ * board as often as on a real one: legal-move validation (`room.ts`), the bot's 2-ply rollout and
+ * move-hint checks all hand it the LIVE state and discard the result. A write through any shared
+ * array or object would therefore flip a live mine to `triggered` — and detonate it — before any
+ * ball ever stepped onto it. Balls, walls, team meta and the shuffle ledger are rebuilt as fresh
+ * objects, so no branch of a transition can reach back into the caller's board.
+ *
+ * The `mines` ARRAY is fresh, but its ENTRIES are deliberately carried over by reference.
+ * `blastOf()` in main.ts names the charge that just went off by object identity: rebuilding the
+ * whole ledger would make every old crater look like a new detonation on the next move. A
+ * transition may only ever rebuild the ONE mine that actually fired.
+ */
+function detached(s: GameState): GameState {
+  const base: GameState = {
+    ...s,
+    teams: s.teams.map((t) => ({ ...t })),
+    balls: s.balls.map((b) => ({ ...b, pos: { ...b.pos } })),
+    walls: s.walls.map((w) => ({ ...w })),
+    wallsLeft: s.wallsLeft.slice(),
+    mines: s.mines.slice(),
+  };
+  if (s.repeat) base.repeat = { seen: s.repeat.seen.slice(), streak: s.repeat.streak };
+  return base;
+}
+
 export function doMove(s: GameState, to: Pos, ballId?: number): GameState | null {
   const team = s.turn;
   const opts = steps(s, team).filter((st) => st.to.c === to.c && st.to.r === to.r
     && (ballId === undefined || st.ball === ballId));
   if (!opts.length) return null;
   const chosen = opts[0].ball;
-  let balls = s.balls.map((b) => (b.id === chosen ? { ...b, pos: { c: to.c, r: to.r } } : b));
-  let mines = s.mines;
-  let landed = to;
   const hit = mineAt(s, to);
+  /* Every read below runs on private copies. `blownTo` needs the mover standing on the charge, so
+     it is staged on a throwaway state built from those copies — never on the caller's board. */
+  const base = detached(s);
+  let landed = to;
   if (hit) {
-    landed = blownTo({ ...s, balls }, to, chosen);
-    balls = balls.map((b) => (b.id === chosen ? { ...b, pos: landed } : b));
-    mines = s.mines.map((m) => (m === hit ? { ...m, triggered: true } : m));
+    const staged: GameState = {
+      ...base,
+      balls: base.balls.map((b) => (b.id === chosen ? { ...b, pos: { c: to.c, r: to.r } } : b)),
+    };
+    landed = blownTo(staged, to, chosen);
   }
-  return endTurn({ ...s, balls, mines, winner: landed.r === 0 ? team : null }, team);
+  const balls = base.balls.map((b) =>
+    (b.id === chosen ? { ...b, pos: { c: landed.c, r: landed.r } } : b));
+  /* A fresh array on EVERY move, and the only rebuilt entry is the charge that fired. There is no
+     `m.triggered = true` anywhere: a dry-run apply() can never arm or spend a live mine. */
+  const mines = base.mines.map((m) => (m === hit ? { ...m, triggered: true } : m));
+  return endTurn({ ...base, balls, mines, winner: landed.r === 0 ? team : null }, team);
 }
 
 /**
@@ -923,8 +957,9 @@ function blownTo(s: GameState, from: Pos, ballId: number): Pos {
 
 export function doWall(s: GameState, w: Wall): GameState | null {
   if (w.owner !== s.turn || !wallOk(s, w)) return null;
-  const wallsLeft = s.wallsLeft.map((n, t) => (t === w.owner ? Math.max(0, n - 1) : n));
-  return endTurn({ ...s, walls: [...s.walls, { ...w }], wallsLeft }, w.owner);
+  const base = detached(s);
+  const wallsLeft = base.wallsLeft.map((n, t) => (t === w.owner ? Math.max(0, n - 1) : n));
+  return endTurn({ ...base, walls: [...base.walls, { ...w }], wallsLeft }, w.owner);
 }
 
 /**
@@ -939,21 +974,32 @@ export function doWall(s: GameState, w: Wall): GameState | null {
  */
 export function doMine(s: GameState, cell: Cell, owner: Player = s.turn): GameState | null {
   if (owner !== s.turn || !mineOk(s, cell, owner)) return null;
+  const base = detached(s);
+  /* A collision spends two charges: the rival's entry is REBUILT (`{ ...m, triggered: true }`),
+     never written through, and the new charge is born spent. Every other entry — spent or live —
+     keeps its identity, so a dry-run placement can neither arm a mine on the live board nor make a
+     stale crater read as a fresh blast. */
   const rival = rivalMineAt(s, cell, owner);
   const mines: Mine[] = rival
-    ? [...s.mines.map((m) => (m === rival ? { ...m, triggered: true } : m)),
+    ? [...base.mines.map((m) => (m === rival ? { ...m, triggered: true } : m)),
        { cell: { ...cell }, owner, triggered: true }]
-    : [...s.mines, { cell: { ...cell }, owner, triggered: false }];
-  return endTurn({ ...s, mines }, owner);
+    : [...base.mines, { cell: { ...cell }, owner, triggered: false }];
+  return endTurn({ ...base, mines }, owner);
 }
 
-/** Single entry point for local input, the bot, or (later) messages from the network. */
+/**
+ * The ONLY door into the engine — and a door that may be opened on a throwaway board. Hints,
+ * legal-move validation and bot lookahead call `apply(state, action)` and discard the result, so
+ * EVERY branch must return a new state and leave `s` untouched. A `null` answer (an illegal
+ * action) must be just as side-effect-free as a legal one: the guards run before `detached()` so a
+ * rejected dry-run allocates nothing and changes nothing.
+ */
 export function apply(s: GameState, a: Action): GameState | null {
   switch (a.kind) {
     case 'move': return doMove(s, a.to, a.ball);
     case 'wall': return doWall(s, a.wall);
     case 'mine': return doMine(s, a.cell);
-    case 'pass': return s.winner === null ? { ...s, turn: nextTeam(s, s.turn) } : null;
+    case 'pass': return s.winner === null ? { ...detached(s), turn: nextTeam(s, s.turn) } : null;
   }
 }
 

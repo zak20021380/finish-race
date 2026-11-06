@@ -674,7 +674,13 @@ const clearGhost = () => { mineGhost = null; setMode({ ...mode(), preview: null 
  * and the frame loop paints them back only if the new mode still calls for them.
  */
 const mode = (): BoardMode<Ghost> => ({ selected, preview: ghost, mine: mineArmed });
-/** The dots a mode calls for: a ball in hand draws them, a wall preview or the mine key never does. */
+/**
+ * The dots a mode calls for: a ball in hand draws them, a wall preview or the mine key never does.
+ * PURE GEOMETRY — `reachableBall()` walks board bounds, walls and pawn occupancy and returns plain
+ * coordinates. It never calls `apply()`, never reads a mine record to arm it and never cues a
+ * blast, so the four glowing circles may sit on top of a buried charge without setting it off.
+ * Detonation has exactly one owner: `play()`, after a real action has been committed.
+ */
 const dotsFor = (m: BoardMode<Ghost>): Pos[] =>
   canAct() && moveDots(m) && m.selected !== null ? reachableBall(state, m.selected) : [];
 function setMode(next: BoardMode<Ghost>) {
@@ -1605,6 +1611,8 @@ async function runOpponent() {
  * detonation rebuilds two entries; they share a square, so the first one names it just as well.
  */
 function blastOf(prev: GameState, next: GameState): Mine | null {
+  /* No new state, no detonation. A hint, a hover or a lookahead dry-run never produces one. */
+  if (prev === next) return null;
   for (const m of next.mines) {
     if (m.triggered && !prev.mines.includes(m)) return m;
   }
@@ -1655,7 +1663,12 @@ function play(a: Action, remote = false): boolean {
   setMode(BOARD_IDLE);           // the turn is over: the next pick is a fresh one
   autoPicked = null;             // ...and the next human turn auto-selects its own first ball
   clearNote();
-  const blast = blastOf(prev, next);
+  /* VFX GATE. Nothing on this board may detonate until an action has actually been COMMITTED:
+     `apply()` has returned a new state and `state = next` has landed. Hints, hover and selection
+     only ever read the board (dotsFor -> reachableBall) and never reach this door. Guarding on a
+     genuinely new state also means an upstream dry-run apply() could never cue a blast here. */
+  const committed = next !== prev;
+  const blast = committed ? blastOf(prev, next) : null;
   if (blast) {
     const cells = landed ? landed.r - blast.cell.r : 0;
     /* Stage 1 belongs to the renderer: the pawn steps onto the charge before anything goes off.
