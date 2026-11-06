@@ -23,7 +23,11 @@ export function createConfetti(canvas: HTMLCanvasElement) {
   let w = 0, h = 0, dpr = 1, live = 0;
 
   function resize() {
-    dpr = Math.min(window.devicePixelRatio || 1, 3);
+    /* Same cap as the board: a 3x phone drawing 9x the pixels for confetti is pure fill-rate
+       waste, and the burst reads identically at 1.5x. */
+    const touch = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+    const mobile = (window.innerWidth || 0) <= 600 || touch;
+    dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2);
     w = canvas.clientWidth; h = canvas.clientHeight;
     const cw = Math.max(1, Math.round(w * dpr)), ch = Math.max(1, Math.round(h * dpr));
     if (canvas.width !== cw) canvas.width = cw;

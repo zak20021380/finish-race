@@ -206,6 +206,10 @@ const BADGE_FROM = 28;  // cell size below which a number badge would be unreada
 /** The board's two metrics: the ball's radius and the wall bar's thickness, both fractions of a cell. */
 const BALL_R = 0.34;
 const BAR_T = 0.13;
+/** Sprite half-extents, in ball radii: the pawn's drop shadow reaches ~1.17r below the sphere. */
+const PAWN_PAD = 1.3;
+const GLOW_PAD = 1.52;
+const RING_PAD = 1.62;
 const SOLID: number[] = [];
 const BLAST_MS = 700;   // the whole mine trigger, flash to last spark
 /** How long the scorched tile's fracture knots keep smouldering before they are cold carbon. */
@@ -534,6 +538,10 @@ const TOOL_PAD = 3;
 const TOOL_W = TOOL_BTN * 3 + TOOL_GAP * 2 + TOOL_PAD * 2;
 const TOOL_H = TOOL_BTN + TOOL_PAD * 2;
 const TOOL_EDGE = 3;
+/** Daylight around a baked key lens: its drops reach r + 2.5, so 4px of margin keeps them whole. */
+const TOOL_SPRITE_PAD = TOOL_BTN / 2 + 4;
+/** The baked toolbar's margin, matching the two drop passes it carries (the lower ends at +10px). */
+const TOOLBAR_PAD = 10;
 /** Generous tap radius per key, resolved by nearest centre so neighbouring keys never steal a tap. */
 const TOOL_HIT = 19;
 
@@ -1151,6 +1159,22 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   const dotG: CanvasGradient[] = [];
   /** Wall-ghost end caps: the glow struck once per seat instead of a gradient per frame. */
   const capG: CanvasGradient[] = [];
+  /* ---- offscreen sprites ----
+   * The moving pieces of every frame — pawns, halos, the VIP ring, the selection ring and the
+   * legal-move dots — are baked once per layout into small canvases and then blitted with one
+   * `drawImage` each. `draw()` never allocates a gradient for them, which is what keeps a phone's
+   * fill-rate budget on the board itself instead of on a fresh radial ramp per pawn per frame. */
+  const pawnSprites: HTMLCanvasElement[] = [];
+  const glowSprites: HTMLCanvasElement[] = [];
+  const lampSprites: HTMLCanvasElement[] = [];
+  const selSprites: HTMLCanvasElement[] = [];
+  const dotSprites: HTMLCanvasElement[] = [];
+  let vipHaloSprite: HTMLCanvasElement | null = null;
+  let vipRingSprite: HTMLCanvasElement | null = null;
+  let dotSpritePad = 0;
+  /** The wall toolbar's glass and its three keys: fixed-size chrome, baked once. */
+  let toolKeySprites: Partial<Record<'cancel' | 'rotate' | 'confirm', HTMLCanvasElement>> = {};
+  let toolbarSprite: HTMLCanvasElement | null = null;
   /* No ambient light cone or drifting sweep over the finish line: both were full-width gradient
      fills repainted on every idle frame. The goal zone keeps its baked crown and its one-shot
      arrival flare, which are finite transitions the loop can sleep between. */
@@ -1197,15 +1221,17 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
   /**
    * The canvas's device-pixel ratio, capped for the board. A 3x phone draws nine device pixels for
-   * every css pixel; past 2x the slab, its glows and the debris gain nothing the eye can find, and
-   * a small touch viewport tops out at 1.75 — still crisp, a third less fill. On a budget Android
-   * WebView that fill is what the GPU runs out of first.
+   * every css pixel; every one of those is fill-rate the mobile GPU has to pay for, and past 1.5x
+   * the slab, its glows and the debris gain almost nothing the eye can find. A phone or touch
+   * viewport therefore tops out at 1.5 (a 3x panel drops to 25% of its raw pixel count); desktop
+   * keeps 2 for crisp type on large displays. Both the live canvas and the baked board layer use
+   * this one number, so the static slab and the pawns above it always share a pixel grid.
    */
   function canvasDpr(): number {
     const raw = window.devicePixelRatio || 1;
     const touch = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
-    const small = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 520;
-    return Math.min(raw, touch || small ? 1.75 : 2);
+    const mobile = (window.innerWidth || 0) <= 600 || touch;
+    return Math.min(raw, mobile ? 1.5 : 2);
   }
 
   /**
@@ -1737,6 +1763,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     sc.addColorStop(0.5, 'rgba(24,12,9,.5)');
     sc.addColorStop(1, 'rgba(24,12,9,0)');
     scorchG = sc;
+    buildSprites();
     decal = buildDecalArt(c, dpr);
     buildCrest(bw);
     /* The inscription is board furniture, not animation: strike it into the buffer once. Only the
@@ -1831,6 +1858,308 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     crestGeo.w = W; crestGeo.h = H;
     crestGeo.x = ox + (bw - W) / 2;
     crestGeo.y = oy + kh * 0.5 - H / 2;
+  }
+
+  /* ---------- offscreen sprite bakery ----------
+   * Every canvas below is minted at the board's capped dpr and in css-pixel user space, so a sprite
+   * blitted back at its own size lands on exactly the pixels a direct paint would have. */
+  function spriteOf(wCss: number, hCss: number): { cv: HTMLCanvasElement; g: CanvasRenderingContext2D } {
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil(wCss * L.dpr));
+    cv.height = Math.max(1, Math.ceil(hCss * L.dpr));
+    const g = cv.getContext('2d')!;
+    g.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
+    return { cv, g };
+  }
+
+  /**
+   * The pawn's whole material, at the origin: contact shadow, body ramp, bounce light, inner rim,
+   * silhouette edge and specular stack. It is baked into `pawnSprites` once per layout and then
+   * only scaled by the frame (selection lift, thump squash, coronation). No gradient is created
+   * while a pawn moves.
+   */
+  function paintPawn(
+    g: CanvasRenderingContext2D, s: Side,
+    fx: { shadow: CanvasGradient; body: CanvasGradient; bounce: CanvasGradient },
+    r: number, pearl: boolean,
+  ) {
+    g.save();                          // soft elliptical shadow
+    g.translate(0, r * 0.82);
+    g.scale(1, 0.3);
+    g.fillStyle = fx.shadow;
+    g.beginPath(); g.arc(0, 0, r * 1.1, 0, TAU); g.fill();
+    g.restore();
+    if (pearl) {                       // a tight dark contact shadow, so the token lifts off pearl
+      g.save();
+      g.translate(0, r * 0.9);
+      g.scale(1, 0.24);
+      g.fillStyle = 'rgba(38,31,22,.26)';
+      g.beginPath(); g.arc(0, 0, r * 1.12, 0, TAU); g.fill();
+      g.restore();
+    }
+
+    g.fillStyle = fx.body;             // body
+    g.beginPath(); g.arc(0, 0, r, 0, TAU); g.fill();
+
+    g.save();                          // bounce light from below-right, clipped to the sphere
+    g.beginPath(); g.arc(0, 0, r, 0, TAU); g.clip();
+    g.fillStyle = fx.bounce;
+    g.fillRect(-r, -r, 2 * r, 2 * r);
+    g.restore();
+
+    if (s.ball.ring > 0) {             // inner rim light (Neon, Obsidian)
+      g.save();
+      g.globalAlpha = s.ball.ring;
+      g.strokeStyle = s.ramp.light;
+      g.lineWidth = r * 0.22;
+      g.beginPath(); g.arc(0, 0, r * 0.86, 0, TAU); g.stroke();
+      g.restore();
+    }
+
+    /* the crisp edge: a stroke thick enough to silhouette the ball on the lit tiles, its
+       centre-line pulled inside the silhouette so the ring does not feather past it. */
+    const edge = Math.max(1, r * 0.09);
+    g.beginPath(); g.arc(0, 0, Math.max(0, r - edge / 2), 0, TAU);
+    g.strokeStyle = s.ramp.edge; g.lineWidth = edge; g.stroke();
+
+    paintShine(g, s, r);
+  }
+
+  /** The specular stack, which is what tells these materials apart at 34px. */
+  function paintShine(g: CanvasRenderingContext2D, s: Side, r: number) {
+    const gl = s.ball.gloss;
+    const alpha = (a: number) => Math.min(1, a * gl);
+    const blob = (x: number, y: number, rot: number, w: number, h: number, a: number) => {
+      g.save();
+      g.translate(x, y); g.rotate(rot);
+      g.fillStyle = `rgba(255,255,255,${alpha(a)})`;
+      g.beginPath(); g.ellipse(0, 0, r * w, r * h, 0, 0, TAU); g.fill();
+      g.restore();
+    };
+    if (s.ball.shine === 'metal') {
+      blob(-0.3 * r, -0.44 * r, -0.5, 0.58, 0.13, 0.3);   // brushed band
+      blob(-0.05 * r, -0.5 * r, 0, 0.2, 0.1, 0.95);       // hard sparkle
+      blob(0.25 * r, 0.55 * r, 0.3, 0.5, 0.1, 0.2);       // reflected floor
+      return;
+    }
+    if (s.ball.shine === 'glass') {
+      blob(-0.3 * r, -0.35 * r, -0.6, 0.46, 0.3, 0.16);   // wide dim sheen
+      blob(-0.38 * r, -0.45 * r, 0, 0.15, 0.11, 1);       // pin-point
+      return;
+    }
+    blob(-0.36 * r, -0.42 * r, -0.72, 0.4, 0.24, 0.22);
+    blob(-0.36 * r, -0.42 * r, -0.72, 0.26, 0.14, 0.92);
+  }
+
+  /** The chosen ball's ring, struck at full pulse and modulated by alpha when blitted. */
+  function paintSel(g: CanvasRenderingContext2D, s: Side, r: number, pearl: boolean) {
+    const c = L.cell;
+    g.lineCap = 'round';
+    g.strokeStyle = pearl ? 'rgba(28,34,44,.72)' : 'rgba(255,255,255,1)';
+    g.lineWidth = Math.max(2, c * 0.08);
+    g.beginPath(); g.arc(0, 0, r * 1.365, 0, TAU); g.stroke();
+    g.setLineDash([c * 0.15, c * 0.12]);
+    g.strokeStyle = `rgba(${s.ramp.shade},.6)`;       // dark backing keeps the dashes legible
+    g.lineWidth = Math.max(3, c * 0.085);
+    g.beginPath(); g.arc(0, 0, r * 1.42, 0, TAU); g.stroke();
+    g.strokeStyle = s.ramp.mid;
+    g.lineWidth = Math.max(1.5, c * 0.05);
+    g.beginPath(); g.arc(0, 0, r * 1.42, 0, TAU); g.stroke();
+  }
+
+  /** Bake every reusable moving piece at the layout's own cell size. */
+  function buildSprites() {
+    const c = L.cell;
+    const br = ballR(c);
+    const pearl = !!th.board.pearl;
+    pawnSprites.length = 0;
+    glowSprites.length = 0;
+    lampSprites.length = 0;
+    selSprites.length = 0;
+    dotSprites.length = 0;
+
+    const glowPad = br * GLOW_PAD;
+    const ringPad = br * RING_PAD;
+    const lampPad = c * 1.12;
+    /* The animated dot sits at pulse 0.5 when baked; the frame still gets its soft halo and its
+       white keyline, and no longer rebuilds either. */
+    const dotR = Math.max(6, c * 0.17 + c * 0.014 * 0.5);
+    dotSpritePad = Math.max(c * 0.7, dotR * 1.75 + c * 0.02);
+
+    for (let i = 0; i < MAX_TEAMS; i++) {
+      const s = sides[i];
+      const fx = ballFx[i];
+      if (!s || !fx) continue;
+
+      const pawnPad = br * PAWN_PAD;
+      const pawn = spriteOf(pawnPad * 2, pawnPad * 2);
+      pawn.g.translate(pawnPad, pawnPad);
+      paintPawn(pawn.g, s, fx, br, pearl);
+      pawnSprites.push(pawn.cv);
+
+      const glow = spriteOf(glowPad * 2, glowPad * 2);
+      glow.g.translate(glowPad, glowPad);
+      glow.g.fillStyle = glowG[i];
+      glow.g.beginPath(); glow.g.arc(0, 0, br * 1.5, 0, TAU); glow.g.fill();
+      glowSprites.push(glow.cv);
+
+      const lamp = spriteOf(lampPad * 2, lampPad * 2);
+      lamp.g.translate(lampPad, lampPad);
+      lamp.g.fillStyle = lampG[i];
+      lamp.g.beginPath(); lamp.g.arc(0, 0, c * 1.1, 0, TAU); lamp.g.fill();
+      lampSprites.push(lamp.cv);
+
+      const sel = spriteOf(ringPad * 2, ringPad * 2);
+      sel.g.translate(ringPad, ringPad);
+      paintSel(sel.g, s, br, pearl);
+      selSprites.push(sel.cv);
+
+      const dot = spriteOf(dotSpritePad * 2, dotSpritePad * 2);
+      dot.g.translate(dotSpritePad, dotSpritePad);
+      dot.g.globalAlpha = 0.42 + 0.22 * 0.5;
+      dot.g.fillStyle = dotG[i];
+      dot.g.beginPath(); dot.g.arc(0, 0, c * 0.62, 0, TAU); dot.g.fill();
+      dot.g.fillStyle = s.ramp.mid;
+      dot.g.globalAlpha = 0.1 + 0.06 * 0.5;
+      dot.g.beginPath(); dot.g.arc(0, 0, dotR * 1.75, 0, TAU); dot.g.fill();
+      dot.g.globalAlpha = 0.9 + 0.1 * 0.5;
+      dot.g.beginPath(); dot.g.arc(0, 0, dotR, 0, TAU); dot.g.fill();
+      dot.g.strokeStyle = pearl ? 'rgba(24,30,40,.78)' : 'rgba(255,255,255,.96)';
+      dot.g.lineWidth = Math.max(1.75, c * 0.045);
+      dot.g.stroke();
+      dotSprites.push(dot.cv);
+    }
+
+    /* the VIP aura: the warm halo breathes by alpha, the metal ring is constant, exactly as the
+       per-frame version painted them */
+    const haloPad = br * 1.55;
+    const halo = spriteOf(haloPad * 2, haloPad * 2);
+    halo.g.translate(haloPad, haloPad);
+    const haloG = halo.g.createRadialGradient(0, 0, br * 1.05, 0, 0, br * 1.55);
+    haloG.addColorStop(0, 'rgba(255, 214, 120, .16)');
+    haloG.addColorStop(0.55, 'rgba(255, 190, 64, .11)');
+    haloG.addColorStop(1, 'rgba(255, 190, 64, 0)');
+    halo.g.fillStyle = haloG;
+    halo.g.beginPath(); halo.g.arc(0, 0, br * 1.55, 0, TAU); halo.g.fill();
+    vipHaloSprite = halo.cv;
+
+    const vipPad = br * RING_PAD;
+    const vip = spriteOf(vipPad * 2, vipPad * 2);
+    vip.g.translate(vipPad, vipPad);
+    const ring = vip.g.createLinearGradient(-br, -br, br, br);
+    ring.addColorStop(0, '#FFF6D0');
+    ring.addColorStop(0.32, '#F5C84E');
+    ring.addColorStop(0.62, '#A9771B');
+    ring.addColorStop(0.82, '#F3D483');
+    ring.addColorStop(1, '#FFE9A3');
+    vip.g.lineWidth = Math.max(1.8, c * 0.055);
+    vip.g.strokeStyle = 'rgba(12, 9, 3, .7)';
+    vip.g.beginPath(); vip.g.arc(0, 0, br * 1.5, 0, TAU); vip.g.stroke();
+    vip.g.strokeStyle = ring;
+    vip.g.beginPath(); vip.g.arc(0, 0, br * 1.46, 0, TAU); vip.g.stroke();
+    vip.g.strokeStyle = 'rgba(255, 251, 228, .9)';
+    vip.g.lineWidth = Math.max(1.2, c * 0.03);
+    vip.g.lineCap = 'round';
+    vip.g.beginPath(); vip.g.arc(0, 0, br * 1.46, -2.55, -2.05); vip.g.stroke();
+    vipRingSprite = vip.cv;
+
+    buildToolSprites();
+  }
+
+  /**
+   * The wall toolbar's chrome — glass body, rim, sheen and all three key lenses — is a fixed-size
+   * piece of furniture. Bake it once so arming a wall costs drawImage calls, not a fresh gradient
+   * per key per frame while the ghost follows the finger.
+   */
+  function buildToolSprites() {
+    const r = TOOL_BTN / 2 - 1;
+    for (const kind of ['cancel', 'rotate', 'confirm'] as const) {
+      const pal = TOOL_COLORS[kind];
+      const { cv, g } = spriteOf(TOOL_SPRITE_PAD * 2, TOOL_SPRITE_PAD * 2);
+      g.translate(TOOL_SPRITE_PAD, TOOL_SPRITE_PAD);
+      /* the lens's drop: two dark passes, no blur */
+      g.fillStyle = 'rgba(2,6,14,.62)';
+      g.beginPath(); g.arc(0, 1.5, r + 1, 0, TAU); g.fill();
+      g.fillStyle = 'rgba(2,6,14,.26)';
+      g.beginPath(); g.arc(0, 1.5, r + 2.5, 0, TAU); g.fill();
+      const body = g.createRadialGradient(-r * 0.38, -r * 0.48, r * 0.08, 0, 0, r * 1.12);
+      body.addColorStop(0, pal.light);
+      body.addColorStop(0.46, pal.mid);
+      body.addColorStop(1, pal.dark);
+      g.fillStyle = body;
+      g.beginPath(); g.arc(0, 0, r, 0, TAU); g.fill();
+      g.strokeStyle = 'rgba(255,255,255,.34)';
+      g.lineWidth = 0.8;
+      g.beginPath(); g.arc(0, 0, r - 0.4, 0, TAU); g.stroke();
+      const sheen = g.createLinearGradient(0, -r, 0, r * 0.35);
+      sheen.addColorStop(0, 'rgba(255,255,255,.4)');
+      sheen.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = sheen;
+      g.beginPath(); g.arc(0, 0, r - 1, Math.PI, TAU); g.closePath(); g.fill();
+
+      g.strokeStyle = 'rgba(255,255,255,.97)';
+      g.fillStyle = 'rgba(255,255,255,.97)';
+      g.lineWidth = Math.max(1.45, r * 0.125);
+      g.lineCap = 'round';
+      g.lineJoin = 'round';
+      if (kind === 'cancel') {
+        const k = r * 0.34;
+        g.beginPath();
+        g.moveTo(-k, -k); g.lineTo(k, k);
+        g.moveTo(k, -k); g.lineTo(-k, k);
+        g.stroke();
+      } else if (kind === 'confirm') {
+        g.beginPath();
+        g.moveTo(-r * 0.42, r * 0.02);
+        g.lineTo(-r * 0.1, r * 0.31);
+        g.lineTo(r * 0.45, -r * 0.34);
+        g.stroke();
+      } else {
+        const rad = r * 0.5;
+        g.beginPath();
+        g.arc(0, 0, rad, Math.PI * 0.35, Math.PI * 1.8);
+        g.stroke();
+        const a = Math.PI * 1.8;
+        const ex = Math.cos(a) * rad, ey = Math.sin(a) * rad;
+        const tx = -Math.sin(a), ty = Math.cos(a);
+        const nx = Math.cos(a), ny = Math.sin(a);
+        g.beginPath();
+        g.moveTo(ex + tx * r * 0.28, ey + ty * r * 0.28);
+        g.lineTo(ex + nx * r * 0.19 - tx * r * 0.03, ey + ny * r * 0.19 - ty * r * 0.03);
+        g.lineTo(ex - nx * r * 0.19 - tx * r * 0.03, ey - ny * r * 0.19 - ty * r * 0.03);
+        g.closePath();
+        g.fill();
+      }
+      toolKeySprites[kind] = cv;
+    }
+
+    const pad = 8;
+    const { cv, g } = spriteOf(TOOL_W + pad * 2, TOOL_H + pad * 2);
+    g.translate(pad, pad);
+    g.fillStyle = 'rgba(3,7,15,.34)';
+    rr(g, -1, 2, TOOL_W + 2, TOOL_H + 2, (TOOL_H + 2) / 2);
+    g.fill();
+    g.fillStyle = 'rgba(3,7,15,.16)';
+    rr(g, -3, 4, TOOL_W + 6, TOOL_H + 6, (TOOL_H + 6) / 2);
+    g.fill();
+    const glass = g.createLinearGradient(0, 0, 0, TOOL_H);
+    glass.addColorStop(0, 'rgba(36,44,64,.78)');
+    glass.addColorStop(0.52, 'rgba(17,23,38,.78)');
+    glass.addColorStop(1, 'rgba(9,13,23,.84)');
+    g.fillStyle = glass;
+    rr(g, 0, 0, TOOL_W, TOOL_H, TOOL_H / 2);
+    g.fill();
+    g.strokeStyle = 'rgba(255,255,255,.26)';
+    g.lineWidth = 0.8;
+    rr(g, 0.4, 0.4, TOOL_W - 0.8, TOOL_H - 0.8, (TOOL_H - 0.8) / 2);
+    g.stroke();
+    const sheen = g.createLinearGradient(0, 0, 0, TOOL_H * 0.52);
+    sheen.addColorStop(0, 'rgba(255,255,255,.16)');
+    sheen.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = sheen;
+    rr(g, 1.4, 1.4, TOOL_W - 2.8, TOOL_H * 0.5, TOOL_H * 0.25);
+    g.fill();
+    toolbarSprite = cv;
   }
 
   /** Has the seat that took the race actually arrived on the line, or is its ball still gliding? */
@@ -2009,32 +2338,12 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.restore();
   }
 
-  /** The specular stack, which is what tells these materials apart at 34px. */
-  function shine(s: Side, r: number) {
-    const g = s.ball.gloss;
-    const alpha = (a: number) => Math.min(1, a * g);
-    const blob = (x: number, y: number, rot: number, w: number, h: number, a: number) => {
-      ctx.save();
-      ctx.translate(x, y); ctx.rotate(rot);
-      ctx.fillStyle = `rgba(255,255,255,${alpha(a)})`;
-      ctx.beginPath(); ctx.ellipse(0, 0, r * w, r * h, 0, 0, TAU); ctx.fill();
-      ctx.restore();
-    };
-    if (s.ball.shine === 'metal') {
-      blob(-0.3 * r, -0.44 * r, -0.5, 0.58, 0.13, 0.3);   // brushed band
-      blob(-0.05 * r, -0.5 * r, 0, 0.2, 0.1, 0.95);       // hard sparkle
-      blob(0.25 * r, 0.55 * r, 0.3, 0.5, 0.1, 0.2);       // reflected floor
-      return;
-    }
-    if (s.ball.shine === 'glass') {
-      blob(-0.3 * r, -0.35 * r, -0.6, 0.46, 0.3, 0.16);   // wide dim sheen
-      blob(-0.38 * r, -0.45 * r, 0, 0.15, 0.11, 1);       // pin-point
-      return;
-    }
-    blob(-0.36 * r, -0.42 * r, -0.72, 0.4, 0.24, 0.22);
-    blob(-0.36 * r, -0.42 * r, -0.72, 0.26, 0.14, 0.92);
-  }
-
+  /**
+   * A pawn is one blit. The whole material — shadow, sphere, bounce, rim, edge and specular — was
+   * baked into `pawnSprites` at this layout's cell size, so a moving pawn costs the GPU a scaled
+   * `drawImage` instead of five gradient fills, a clip and a specular stack. The badge and the
+   * wound are live paint: they are state, not material, and only one or two pawns ever wear one.
+   */
   function drawBall(cx: number, cy: number, r: number, i: number, badge = 0, wounded = false) {
     if (!ballFx.length) buildStatic();
     const seat = i >= 0 && i < sides.length ? i : 0;
@@ -2054,47 +2363,15 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.globalCompositeOperation = 'source-over';
     ctx.translate(cx, cy);
 
-    ctx.save();                        // soft elliptical shadow
-    ctx.translate(0, r * 0.82);
-    ctx.scale(1, 0.3);
-    ctx.fillStyle = fx.shadow;
-    ctx.beginPath(); ctx.arc(0, 0, r * 1.1, 0, TAU); ctx.fill();
-    ctx.restore();
-    if (th.board.pearl) {              // a tight dark contact shadow, so the token lifts off pearl
-      ctx.save();
-      ctx.translate(0, r * 0.9);
-      ctx.scale(1, 0.24);
-      ctx.fillStyle = 'rgba(38,31,22,.26)';
-      ctx.beginPath(); ctx.arc(0, 0, r * 1.12, 0, TAU); ctx.fill();
-      ctx.restore();
+    const sprite = pawnSprites[seat];
+    if (sprite) {
+      const side = PAWN_PAD * r;
+      ctx.drawImage(sprite, -side, -side, side * 2, side * 2);
+    } else {
+      /* A frame can precede the first successful fit; painting the material live is the fallback,
+         never the steady path. */
+      paintPawn(ctx, s, fx, r, !!th.board.pearl);
     }
-
-    ctx.fillStyle = fx.body;           // body
-    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
-
-    ctx.save();                        // bounce light from below-right, clipped to the sphere
-    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.clip();
-    ctx.fillStyle = fx.bounce;
-    ctx.fillRect(-r, -r, 2 * r, 2 * r);
-    ctx.restore();
-
-    if (s.ball.ring > 0) {             // inner rim light (Neon, Obsidian)
-      ctx.save();
-      ctx.globalAlpha = s.ball.ring;
-      ctx.strokeStyle = s.ramp.light;
-      ctx.lineWidth = r * 0.22;
-      ctx.beginPath(); ctx.arc(0, 0, r * 0.86, 0, TAU); ctx.stroke();
-      ctx.restore();
-    }
-
-    /* the crisp edge: a stroke thick enough to silhouette the ball on the lit tiles, its
-       centre-line pulled inside the silhouette so the ring does not feather past it. On a cramped
-       board `r` can fall under half a pixel, so the inset is clamped to zero. */
-    const edge = Math.max(1, r * 0.09);
-    ctx.beginPath(); ctx.arc(0, 0, Math.max(0, r - edge / 2), 0, TAU);
-    ctx.strokeStyle = s.ramp.edge; ctx.lineWidth = edge; ctx.stroke();
-
-    shine(s, r);
     if (wounded) drawWoundMark(r);
     if (badge > 0) drawBadge(r, badge);
     ctx.restore();
@@ -2133,38 +2410,23 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
   /**
    * The VIP prestige mark: a thin metallic-gold ring outside the pawn, with a quiet warm bloom
-   * behind it. It is painted under selection and wounded states so those still read on top, and it
-   * breathes slower than the turn halo — a status, not a turn.
+   * behind it. Both halves are baked sprites: the halo is blitted with its breathing alpha while
+   * the metal ring stays constant — a status, not a turn, and zero gradient work per frame.
    */
   function drawVipAura(cx: number, cy: number, r: number, now: number, still: boolean) {
-    const c = L.cell;
     const pulse = still ? 0.7 : 0.58 + 0.42 * Math.sin(now / 620);
     ctx.save();
     ctx.translate(cx, cy);
-    /* tight halo: a 1px metallic ring with a ~2px warm bloom, not a wide glow disc */
-    const halo = ctx.createRadialGradient(0, 0, r * 1.05, 0, 0, r * 1.55);
-    halo.addColorStop(0, `rgba(255, 214, 120, ${(0.16 * pulse).toFixed(3)})`);
-    halo.addColorStop(0.55, `rgba(255, 190, 64, ${(0.11 * pulse).toFixed(3)})`);
-    halo.addColorStop(1, 'rgba(255, 190, 64, 0)');
-    ctx.fillStyle = halo;
-    ctx.beginPath(); ctx.arc(0, 0, r * 1.55, 0, TAU); ctx.fill();
-
-    const ring = ctx.createLinearGradient(-r, -r, r, r);
-    ring.addColorStop(0, '#FFF6D0');
-    ring.addColorStop(0.32, '#F5C84E');
-    ring.addColorStop(0.62, '#A9771B');
-    ring.addColorStop(0.82, '#F3D483');
-    ring.addColorStop(1, '#FFE9A3');
-    ctx.lineWidth = Math.max(1.8, c * 0.055);
-    ctx.strokeStyle = 'rgba(12, 9, 3, .7)';
-    ctx.beginPath(); ctx.arc(0, 0, r * 1.5, 0, TAU); ctx.stroke();
-    ctx.strokeStyle = ring;
-    ctx.beginPath(); ctx.arc(0, 0, r * 1.46, 0, TAU); ctx.stroke();
-    /* one short highlight arc at the crown of the ring, so the metal reads as lit rather than flat */
-    ctx.strokeStyle = 'rgba(255, 251, 228, .9)';
-    ctx.lineWidth = Math.max(1.2, c * 0.03);
-    ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.arc(0, 0, r * 1.46, -2.55, -2.05); ctx.stroke();
+    if (vipHaloSprite) {
+      const side = r * 1.55;
+      ctx.globalAlpha = pulse;
+      ctx.drawImage(vipHaloSprite, -side, -side, side * 2, side * 2);
+      ctx.globalAlpha = 1;
+    }
+    if (vipRingSprite) {
+      const side = r * RING_PAD;
+      ctx.drawImage(vipRingSprite, -side, -side, side * 2, side * 2);
+    }
     ctx.restore();
   }
 
@@ -2174,6 +2436,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
    * `k` is the active-seat beat; a resting pawn still casts a quiet version of the same light.
    */
   function drawLamp(cx: number, cy: number, i: number, k: number) {
+    const sprite = lampSprites[i];
+    if (!sprite) return;
     const pearl = !!th.board.pearl;
     ctx.save();
     ctx.beginPath();
@@ -2183,22 +2447,22 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.globalCompositeOperation = pearl ? 'source-over' : 'lighter';
     ctx.globalAlpha = (1 - 0.25 * k) * sides[i].ball.halo * (pearl ? 0.42 : 1);
     ctx.translate(cx, cy);
-    ctx.fillStyle = lampG[i];
-    /* a tight pool (~1.1 cells) instead of a 2.5-cell disc: a fifth of the blended pixels per
-       pawn per frame, and the neon still reads on the dark clay. */
-    ctx.beginPath(); ctx.arc(0, 0, L.cell * 1.1, 0, TAU); ctx.fill();
+    const side = L.cell * 1.12;
+    ctx.drawImage(sprite, -side, -side, side * 2, side * 2);
     ctx.restore();
   }
 
   /** Halo under the balls of the seat to move (or of the winner) — the one light on the slab. */
   function drawGlow(cx: number, cy: number, r: number, i: number, k: number) {
+    const sprite = glowSprites[i];
+    if (!sprite) return;
     const pearl = !!th.board.pearl;
     ctx.save();
     ctx.translate(cx, cy);
     if (pearl) ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = Math.min(1, (0.42 + 0.34 * k) * sides[i].ball.halo * (pearl ? 0.72 : 1));
-    ctx.fillStyle = glowG[i];
-    ctx.beginPath(); ctx.arc(0, 0, r * 1.5, 0, TAU); ctx.fill();
+    const side = r * GLOW_PAD;
+    ctx.drawImage(sprite, -side, -side, side * 2, side * 2);
     ctx.restore();
   }
 
@@ -2229,23 +2493,13 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
   /** The chosen ball: a white ring plus a dashed team-coloured one, breathing so it stays alive. */
   function drawSel(cx: number, cy: number, r: number, i: number, now: number, still: boolean) {
-    const c = L.cell;
+    const sprite = selSprites[i];
+    if (!sprite) return;
     const pulse = still ? 1 : 0.5 + 0.5 * Math.sin(now / 300);      // the ring swells and settles
+    const side = r * RING_PAD * (1 + 0.035 * pulse);
     ctx.save();
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = th.board.pearl
-      ? `rgba(28,34,44,${0.5 + 0.22 * pulse})`
-      : `rgba(255,255,255,${0.88 + 0.12 * pulse})`;
-    ctx.lineWidth = Math.max(2, c * 0.08);
-    ctx.beginPath(); ctx.arc(cx, cy, r * 1.3 * (1 + 0.05 * pulse), 0, TAU); ctx.stroke();
-    ctx.setLineDash([c * 0.15, c * 0.12]);
-    ctx.lineDashOffset = still ? 0 : -now / 40;
-    ctx.strokeStyle = `rgba(${sides[i].ramp.shade},.6)`;   // dark backing keeps the dashes legible
-    ctx.lineWidth = Math.max(3, c * 0.085);
-    ctx.beginPath(); ctx.arc(cx, cy, r * 1.42, 0, TAU); ctx.stroke();
-    ctx.strokeStyle = sides[i].ramp.mid;
-    ctx.lineWidth = Math.max(1.5, c * 0.05);
-    ctx.beginPath(); ctx.arc(cx, cy, r * 1.42, 0, TAU); ctx.stroke();
+    ctx.globalAlpha = 0.9 + 0.1 * pulse;
+    ctx.drawImage(sprite, cx - side, cy - side, side * 2, side * 2);
     ctx.restore();
   }
 
@@ -2414,66 +2668,26 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
   type ToolKind = keyof typeof TOOL_COLORS;
 
-  /** One compact glass-toolbar key: a coloured lens, a crisp rim, and a proportional vector glyph. */
+  /**
+   * One compact glass-toolbar key. The lens, rim, sheen and glyph are one baked sprite; only the
+   * breathing outer ring is live paint, and it is a flat stroke. A ghost dragged across the board
+   * therefore costs three blits, not six gradient allocations per frame.
+   */
   function drawToolKey(cx: number, cy: number, kind: ToolKind, still: boolean, dim = false) {
     const r = TOOL_BTN / 2 - 1;
     const pal = TOOL_COLORS[kind];
+    const sprite = toolKeySprites[kind];
     ctx.save();
     ctx.translate(cx, cy);
     if (dim) ctx.globalAlpha = 0.42;
-    /* the lens's drop: two dark passes, no per-frame blur */
-    ctx.fillStyle = 'rgba(2,6,14,.62)';
-    ctx.beginPath(); ctx.arc(0, 1.5, r + 1, 0, TAU); ctx.fill();
-    ctx.fillStyle = 'rgba(2,6,14,.26)';
-    ctx.beginPath(); ctx.arc(0, 1.5, r + 2.5, 0, TAU); ctx.fill();
-    const body = ctx.createRadialGradient(-r * 0.38, -r * 0.48, r * 0.08, 0, 0, r * 1.12);
-    body.addColorStop(0, pal.light);
-    body.addColorStop(0.46, pal.mid);
-    body.addColorStop(1, pal.dark);
-    ctx.fillStyle = body;
-    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.34)';
-    ctx.lineWidth = 0.8;
-    ctx.beginPath(); ctx.arc(0, 0, r - 0.4, 0, TAU); ctx.stroke();
-    /* top lens highlight: the glass still reads as convex at this size */
-    const sheen = ctx.createLinearGradient(0, -r, 0, r * 0.35);
-    sheen.addColorStop(0, 'rgba(255,255,255,.4)');
-    sheen.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = sheen;
-    ctx.beginPath(); ctx.arc(0, 0, r - 1, Math.PI, TAU); ctx.closePath(); ctx.fill();
-
-    ctx.strokeStyle = 'rgba(255,255,255,.97)';
-    ctx.fillStyle = 'rgba(255,255,255,.97)';
-    ctx.lineWidth = Math.max(1.45, r * 0.125);
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    if (kind === 'cancel') {
-      const g = r * 0.34;
-      ctx.beginPath();
-      ctx.moveTo(-g, -g); ctx.lineTo(g, g);
-      ctx.moveTo(g, -g); ctx.lineTo(-g, g);
-      ctx.stroke();
-    } else if (kind === 'confirm') {
-      ctx.beginPath();
-      ctx.moveTo(-r * 0.42, r * 0.02);
-      ctx.lineTo(-r * 0.1, r * 0.31);
-      ctx.lineTo(r * 0.45, -r * 0.34);
-      ctx.stroke();
+    if (sprite) {
+      ctx.drawImage(sprite, -TOOL_SPRITE_PAD, -TOOL_SPRITE_PAD, TOOL_SPRITE_PAD * 2, TOOL_SPRITE_PAD * 2);
     } else {
-      const rad = r * 0.5;
-      ctx.beginPath();
-      ctx.arc(0, 0, rad, Math.PI * 0.35, Math.PI * 1.8);
-      ctx.stroke();
-      const a = Math.PI * 1.8;
-      const ex = Math.cos(a) * rad, ey = Math.sin(a) * rad;
-      const tx = -Math.sin(a), ty = Math.cos(a);
-      const nx = Math.cos(a), ny = Math.sin(a);
-      ctx.beginPath();
-      ctx.moveTo(ex + tx * r * 0.28, ey + ty * r * 0.28);
-      ctx.lineTo(ex + nx * r * 0.19 - tx * r * 0.03, ey + ny * r * 0.19 - ty * r * 0.03);
-      ctx.lineTo(ex - nx * r * 0.19 - tx * r * 0.03, ey - ny * r * 0.19 - ty * r * 0.03);
-      ctx.closePath();
-      ctx.fill();
+      /* first-frame fallback: a flat lens until the bakery has run */
+      ctx.fillStyle = 'rgba(2,6,14,.5)';
+      ctx.beginPath(); ctx.arc(0, 1.5, r + 2.5, 0, TAU); ctx.fill();
+      ctx.fillStyle = pal.mid;
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
     }
     if (!still) {                                   // the keys breathe together, never apart
       ctx.globalAlpha = (dim ? 0.16 : 0.3) + 0.14 * Math.sin(performance.now() / 480);
@@ -2493,32 +2707,21 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const b = toolbarBox(L, ax, ay, o);
     const left = b.x - b.w / 2, top = b.y - b.h / 2;
     ctx.save();
-    /* the glass is dark and translucent; two soft obsidian passes separate it from the clay tiles
-       without asking the GPU for a blur every frame the ghost is up */
-    ctx.fillStyle = 'rgba(3,7,15,.34)';
-    rr(ctx, left - 1, top + 2, b.w + 2, b.h + 2, (b.h + 2) / 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(3,7,15,.16)';
-    rr(ctx, left - 3, top + 4, b.w + 6, b.h + 6, (b.h + 6) / 2);
-    ctx.fill();
-    const glass = ctx.createLinearGradient(0, top, 0, top + b.h);
-    glass.addColorStop(0, 'rgba(36,44,64,.78)');
-    glass.addColorStop(0.52, 'rgba(17,23,38,.78)');
-    glass.addColorStop(1, 'rgba(9,13,23,.84)');
-    ctx.fillStyle = glass;
-    rr(ctx, left, top, b.w, b.h, b.h / 2);
-    ctx.fill();
-    /* a frosted rim: bright catch-light above, cool hairline below */
-    ctx.strokeStyle = 'rgba(255,255,255,.26)';
-    ctx.lineWidth = 0.8;
-    rr(ctx, left + 0.4, top + 0.4, b.w - 0.8, b.h - 0.8, (b.h - 0.8) / 2);
-    ctx.stroke();
-    const sheen = ctx.createLinearGradient(0, top, 0, top + b.h * 0.52);
-    sheen.addColorStop(0, 'rgba(255,255,255,.16)');
-    sheen.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = sheen;
-    rr(ctx, left + 1.4, top + 1.4, b.w - 2.8, b.h * 0.5, b.h * 0.25);
-    ctx.fill();
+    /* The glass — two obsidian drops, the translucent body, its frosted rim and the top sheen —
+       is one baked sprite. The pill is fixed-size chrome, so the ghost following the finger only
+       blits it, never re-strikes four gradients a frame. */
+    if (toolbarSprite) {
+      ctx.drawImage(toolbarSprite,
+        left - TOOLBAR_PAD, top - TOOLBAR_PAD,
+        TOOL_W + TOOLBAR_PAD * 2, TOOL_H + TOOLBAR_PAD * 2);
+    } else {
+      ctx.fillStyle = 'rgba(3,7,15,.45)';
+      rr(ctx, left - 3, top + 2, b.w + 6, b.h + 6, (b.h + 6) / 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(17,23,38,.86)';
+      rr(ctx, left, top, b.w, b.h, b.h / 2);
+      ctx.fill();
+    }
     /* a short, subtle stem marks which wall the strip belongs to */
     ctx.strokeStyle = 'rgba(255,255,255,.28)';
     ctx.lineWidth = Math.max(1, b.h * 0.035);
@@ -2976,9 +3179,13 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     /* A frame aborted mid-paint (or a stale tween) must never leave globalAlpha at 0 or a
        `lighter` composite behind: reset the two states that can make a whole pawn disappear,
-       once per frame, before any furniture is drawn. */
+       once per frame, before any furniture is drawn. `shadowBlur` is pinned to zero here as the
+       frame's own contract: the only blurred surfaces on this board were baked into the static
+       layer, and no dynamic pass may ask the GPU for a gaussian. */
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (boardBufferCanvas) ctx.drawImage(boardBufferCanvas, 0, 0);
     ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
@@ -3106,28 +3313,20 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     // legal-move dots: big, high contrast, at least a 44px target, tinted with the chosen ball's side
     const side = sides[v.state.turn];
     const pulse = still ? 0.5 : 0.5 + 0.5 * Math.sin(clock / 380);
-    const dotR = Math.max(6, c * 0.17 + c * 0.014 * pulse);
-    ctx.save();
-    ctx.strokeStyle = th.board.pearl ? 'rgba(24,30,40,.78)' : 'rgba(255,255,255,.96)';
-    ctx.lineWidth = Math.max(1.75, c * 0.045);
-    /* the dots' glow: one radial pass struck with the board, not a shadow on every dot */
-    const halo = dotG[v.state.turn];
-    for (let i = 0; i < v.hints.length; i++) {
-      const h = v.hints[i];
-      const x = ox + (h.c + 0.5) * c, y = oy + (h.r + 0.5) * c;
-      if (halo) {
-        ctx.globalAlpha = 0.42 + 0.22 * pulse;
-        ctx.fillStyle = halo;
-        ctx.beginPath(); ctx.arc(x, y, c * 0.62, 0, TAU); ctx.fill();
+    /* One baked dot per seat — halo, soft fill, core and white keyline — blitted per legal cell.
+       The old path rebuilt a radial halo and four vector fills for every dot on every frame. */
+    const dotSprite = dotSprites[v.state.turn];
+    if (dotSprite) {
+      ctx.save();
+      ctx.globalAlpha = 0.94 + 0.06 * pulse;
+      const d = dotSpritePad;
+      for (let i = 0; i < v.hints.length; i++) {
+        const h = v.hints[i];
+        const x = ox + (h.c + 0.5) * c, y = oy + (h.r + 0.5) * c;
+        ctx.drawImage(dotSprite, x - d, y - d, d * 2, d * 2);
       }
-      ctx.fillStyle = side.ramp.mid;
-      ctx.globalAlpha = 0.1 + 0.06 * pulse;
-      ctx.beginPath(); ctx.arc(x, y, dotR * 1.75, 0, TAU); ctx.fill();
-      ctx.globalAlpha = 0.9 + 0.1 * pulse;
-      ctx.beginPath(); ctx.arc(x, y, dotR, 0, TAU); ctx.fill();
-      ctx.stroke();
+      ctx.restore();
     }
-    ctx.restore();
 
     // placeable cells while the mine key is down: a soft fill per square, no outline — 64 outlined
     // boxes read as a wall of noise, and the armed square already gets its own marching ants
@@ -3583,6 +3782,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = 'transparent';
       born.clear(); pulses.length = 0; blasts.length = 0; knocks.length = 0;
       ripples.length = 0; streaks.length = 0; prevPos.clear(); mineGhostKey = '';
       dust.length = 0; thump.clear();

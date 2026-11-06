@@ -34905,7 +34905,7 @@ html.game-live .screen.game canvas.confetti {
   transform: translateZ(0);
 }
 html.game-live .screen.game :is(.board-wrap.shake, .board-wrap.shake.micro,
-  .tut-hand, .chip.active::after, .confetti) {
+  .tut-hand, .confetti) {
   will-change: transform, opacity;
 }
 html.game-live .screen.game :is(.card, .board-slot, .board-frame, .chips,
@@ -34923,6 +34923,55 @@ html.game-live .blob {
     max-inline-size: 100%;
   }
 }
+
+/* 6. WHILE A RACE IS LIVE, ONLY THE RACE EXISTS.
+      Home, the lobby family and every closed sheet are taken out of layout AND paint:
+      `display:none` keeps them out of the box tree, `content-visibility:hidden` keeps any
+      platform that keeps the node from ever descending into it. The two outgoing slide frames
+      are exempt for the 260ms route transition (the router hides them itself right after), so
+      the screen change still reads as a slide rather than a cut. */
+html.game-live .screen:not(.game):not(.out-fwd):not(.out-back) {
+  display: none !important;
+  content-visibility: hidden;
+}
+html.game-live .scrim:not(.open),
+html.game-live .sheet:not(.open) {
+  display: none !important;
+  content-visibility: hidden;
+}
+
+/* 7. NO LOOPING CSS ON THE BOARD SCREEN.
+      The canvas owns the compositor for the length of a match. Every HUD pulse — turn rims,
+      thinking dots, the mine key's breathe, the chat ping, the last-seconds timer, invite chrome
+      and every background pseudo-element — is parked. Feedback that lives on the board itself
+      (the mine shake, the route slide) is outside the dock and keeps its one-shot animation. */
+html.game-live #s-game .g-head *,
+html.game-live #s-game .g-head *::before,
+html.game-live #s-game .g-head *::after,
+html.game-live #s-game .chips *,
+html.game-live #s-game .chips *::before,
+html.game-live #s-game .chips *::after,
+html.game-live #s-game .iv-bonus,
+html.game-live #s-game .iv-bonus::before,
+html.game-live #s-game .iv-bonus::after,
+html.game-live #s-game .iv-coach,
+html.game-live #s-game .iv-coach::before,
+html.game-live #s-game .iv-coach::after,
+html.game-live #s-game .card::before,
+html.game-live #s-game .card::after,
+html.game-live #s-game .board-slot::before,
+html.game-live #s-game .board-slot::after,
+html.game-live #s-game .board-wrap::before,
+html.game-live #s-game .board-wrap::after {
+  animation: none !important;
+}
+
+/* 8. TOUCH ARBITRATION. The board owns the gesture outright — no scroll, no double-tap zoom
+      delay while a pawn or a wall is being dragged. The dock's keys take `manipulation` so a
+      tap fires on the first frame without waiting out the 300ms double-tap window. */
+#board { touch-action: none; }
+#s-game { touch-action: manipulation; }
+#s-game :is(button, .chat-key, .chip, .g-head, .theme-toggle) { touch-action: manipulation; }
 
 /* ============================================================================
    FIRST-TIME DUEL INVITE — the pre-lesson language gate

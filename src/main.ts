@@ -150,6 +150,35 @@ document.addEventListener('dblclick', (e) => e.preventDefault());
 /* ---------- DOM ---------- */
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
+/* ---------- diffed DOM writes ----------
+ * `ui()` runs on every committed action. A write that stores the same string or toggles a class
+ * already in its target state still invalidates style and can cost a recalc on a phone, so every
+ * write below goes through one of these guards. Each read here is a cheap in-memory DOM read —
+ * none of them touches layout.
+ */
+function setText(el: Element | null | undefined, value: string): void {
+  if (el && el.textContent !== value) el.textContent = value;
+}
+function setClass(el: Element | null | undefined, name: string, on: boolean): void {
+  if (el && el.classList.contains(name) !== on) el.classList.toggle(name, on);
+}
+function setAttr(el: Element | null | undefined, name: string, value: string): void {
+  if (el && el.getAttribute(name) !== value) el.setAttribute(name, value);
+}
+function setDisabled(el: HTMLButtonElement | null | undefined, disabled: boolean): void {
+  if (el && el.disabled !== disabled) el.disabled = disabled;
+}
+/**
+ * Restart a one-shot CSS animation without the classic `void el.offsetWidth` forced reflow.
+ * Dropping the class now and re-adding it on the next frame restarts the keyframes just the same,
+ * and keeps the input path from flushing layout between a DOM write and its measurement.
+ */
+function restartClass(el: HTMLElement, ...names: string[]): void {
+  el.classList.remove(...names);
+  requestAnimationFrame(() => el.classList.add(...names));
+}
+
 const canvas = $<HTMLCanvasElement>('board');
 const wrap = $<HTMLDivElement>('board-wrap');
 const overlay = $<HTMLDivElement>('overlay');
@@ -241,9 +270,7 @@ function setWalls(p: Player, left: number) {
   el.classList.toggle('depleted', left <= 0);
   el.setAttribute('aria-label', `Walls left: ${left} of ${wallsEach}`);
   if (first) return;               // the opening paint is not a placement: no pop
-  el.classList.remove('pop');
-  void el.offsetWidth;             // restarting the animation needs a reflow between the two class changes
-  el.classList.add('pop');
+  restartClass(el, 'pop');         // restarts the pop without a synchronous layout flush
 }
 
 /* a player with no walls taps a groove: the badge pulses in warning and a toast says why */
@@ -252,9 +279,10 @@ function warnNoWalls(p: Player) {
   const el = wallBadges[p];
   if (!el) return;
   if (motionReduced()) { el.classList.remove('depleted'); return; }
-  el.classList.remove('depleted', 'dry-warn');
-  void el.offsetWidth;
-  el.classList.add('depleted', 'dry-warn');
+  el.classList.remove('dry-warn');
+  el.classList.add('depleted');
+  /* add the warning on the next frame so the keyframes restart without a forced reflow */
+  requestAnimationFrame(() => el.classList.add('dry-warn'));
   clearTimeout(wallWarnTimer);
   wallWarnTimer = window.setTimeout(() => el.classList.remove('dry-warn'), 650);
 }
@@ -303,9 +331,11 @@ let shakeTimer = 0;
 function shake(micro = false) {
   if (motionReduced()) return;
   wrap.classList.remove('shake', 'micro');
-  void wrap.offsetWidth;                 // restarting the animation needs a reflow in between
-  if (micro) wrap.classList.add('micro');
-  wrap.classList.add('shake');
+  /* re-add on the next frame: the keyframes restart, and no layout is flushed from the input path */
+  requestAnimationFrame(() => {
+    wrap.classList.add('shake');
+    if (micro) wrap.classList.add('micro');
+  });
   clearTimeout(shakeTimer);
   shakeTimer = window.setTimeout(() => wrap.classList.remove('shake', 'micro'), micro ? 400 : 700);
 }
@@ -319,19 +349,19 @@ function showNote(msg: string, error: boolean, ttl: number, timeout = false) {
   toastMsg = msg;
   for (const el of noteEls) {
     if (el.closest<HTMLElement>('.screen')?.hidden) continue;
-    el.textContent = msg;
-    el.classList.toggle('error', error);
-    el.classList.toggle('timeout', timeout);     // the blitz verdict gets its own clay tone
-    el.classList.add('show');
+    setText(el, msg);
+    setClass(el, 'error', error);
+    setClass(el, 'timeout', timeout);            // the blitz verdict gets its own clay tone
+    setClass(el, 'show', true);
   }
   clearTimeout(noteTimer);
-  if (ttl) noteTimer = window.setTimeout(() => { for (const el of noteEls) el.classList.remove('show'); }, ttl);
+  if (ttl) noteTimer = window.setTimeout(() => { for (const el of noteEls) setClass(el, 'show', false); }, ttl);
   placeNote();
 }
 const clearNote = () => {
   clearTimeout(noteTimer);
   toastMsg = '';
-  for (const el of noteEls) el.classList.remove('show', 'timeout');
+  for (const el of noteEls) { setClass(el, 'show', false); setClass(el, 'timeout', false); }
 };
 
 /* ---------- invite-first onboarding: the two live surfaces ----------
@@ -425,29 +455,47 @@ function announceNote(msg: string) {
  * staged the inline offsets are dropped and the CSS place applies again, so no other screen pays
  * for this. The pill is absolutely placed either way: it can move, but it can never shift a layout.
  */
+let notePlaceRaf = 0;
+/**
+ * Park the toast beside the staged mine on the NEXT frame, never inside the write that raised it.
+ * `showNote`/`armCapsules` have just mutated text and classes; measuring the board or the pill's
+ * own height in that same task would force a synchronous layout on every touch. One deferred pass
+ * per frame is enough — the note is a floating pill, not layout the board follows.
+ */
 function placeNote() {
+  if (notePlaceRaf) return;
+  notePlaceRaf = requestAnimationFrame(() => {
+    notePlaceRaf = 0;
+    placeNoteNow();
+  });
+}
+
+function placeNoteNow() {
   const stage = mineStage();
-  if (!stage) {
-    boardNote.style.removeProperty('top');
-    boardNote.style.removeProperty('bottom');
-    return;
-  }
-  const board = wrap.getBoundingClientRect();
+  const clearPlace = () => {
+    if (boardNote.style.top) boardNote.style.removeProperty('top');
+    if (boardNote.style.bottom) boardNote.style.removeProperty('bottom');
+  };
+  if (!stage) { clearPlace(); return; }
+  const board = boardBox();             // the input layer's one-per-frame cached canvas box
   if (board.height < 1) return;
+  /* This read happens in a rAF, after the style invalidation has been handed to the frame — it is
+     never the write-then-measure pair that stalls a touch handler. */
   const h = boardNote.offsetHeight || 30;
   const above = stage.top - board.top - STAGE_CLEAR;
   const below = board.top + board.height - (stage.top + stage.height) - STAGE_CLEAR;
   /* the CSS place is `bottom: 18%`, so the side that is not being used is pinned to `auto` rather
      than removed — leaving both would stretch the pill between the two edges */
   if (below >= h && below >= above) {
-    boardNote.style.top = `${stage.top + stage.height - board.top + STAGE_CLEAR}px`;
-    boardNote.style.bottom = 'auto';
+    const top = `${stage.top + stage.height - board.top + STAGE_CLEAR}px`;
+    if (boardNote.style.top !== top) boardNote.style.top = top;
+    if (boardNote.style.bottom !== 'auto') boardNote.style.bottom = 'auto';
   } else if (above >= h) {
-    boardNote.style.bottom = `${board.top + board.height - stage.top + STAGE_CLEAR}px`;
-    boardNote.style.top = 'auto';
+    const bottom = `${board.top + board.height - stage.top + STAGE_CLEAR}px`;
+    if (boardNote.style.bottom !== bottom) boardNote.style.bottom = bottom;
+    if (boardNote.style.top !== 'auto') boardNote.style.top = 'auto';
   } else {
-    boardNote.style.removeProperty('top');
-    boardNote.style.removeProperty('bottom');
+    clearPlace();
   }
 }
 
@@ -1754,18 +1802,18 @@ function ui() {
   /* the rival's dots tick for a bot's think time and for a person's just the same */
   const thinking = rivalTurn() && !paused && !tutorialActive;
 
-  dots.classList.toggle('on', thinking);
+  setClass(dots, 'on', thinking);
 
-  mineBtn.setAttribute('aria-pressed', String(mineArmed));
+  setAttr(mineBtn, 'aria-pressed', String(mineArmed));
   /* the lesson leaves exactly one live key per stage: only the ARM step enables the mine pod */
-  mineBtn.disabled = tutorialActive ? stage !== 'mine-arm' : (!live || minesLeft(state, localSide) <= 0);
+  setDisabled(mineBtn, tutorialActive ? stage !== 'mine-arm' : (!live || minesLeft(state, localSide) <= 0));
   setMineCount(minesLeft(state, localSide));
 
   /* whose turn it is rides on the chips now: a clay glow, a lift, and the countdown ring */
   const seat = state.winner ?? state.turn;
   for (const p of roster()) {
-    chips[p]?.classList.toggle('active', state.winner === null && state.turn === p && !paused);
-    chips[p]?.classList.toggle('thinking', thinking && p === state.turn);
+    setClass(chips[p], 'active', state.winner === null && state.turn === p && !paused);
+    setClass(chips[p], 'thinking', thinking && p === state.turn);
     setWalls(p, wallsRemaining(state, p));
     if (p !== localSide) setFog(p);
   }
@@ -1776,7 +1824,7 @@ function ui() {
   if (spoken !== saidTurn) { saidTurn = spoken; announce.textContent = spoken; }
 
   /* one turn per seat makes a round; the counter is the UI's, the rules keep none */
-  roundLabel.textContent = `Round ${Math.floor(turnsPlayed / Math.max(1, state.teams.length)) + 1}`;
+  setText(roundLabel, `Round ${Math.floor(turnsPlayed / Math.max(1, state.teams.length)) + 1}`);
   paintClock();
 
   if (state.winner === null && overlayOpen) {
@@ -2009,25 +2057,58 @@ function startClock() {
   if (clockLive()) turnTimerId = window.setInterval(tickClock, 1000);
 }
 
+/** What the clock last painted, so a repaint that changes nothing writes nothing. */
+let shownTimerN = -1;
+let shownTimerLive: boolean | null = null;
+let shownTimerTone: string | null = null;
+let shownRingOffset = '';
+let shownRingTransition = '';
+
 /**
  * The countdown, painted on the seat that owns it: a ring around its ball and the seconds punched
  * through the middle. The number is always there, so the colour is a heads-up and never the only
  * signal — accent past 5s, amber to 5s, red to 3s (where the ring also breathes).
+ *
+ * `ui()` calls this on every action, but the clock only moves once a second: every write is
+ * diffed against the last painted value, so a tap does not re-style the ring or the chip.
  */
 function paintClock() {
   const chip = chips[localSide];
   const left = Math.max(0, turnSecondsLeft);
   /* the number is painted whether or not the clock runs: an idle seat shows the turn's length, not
      whatever the last race happened to leave in the middle of the ring */
-  timerN.textContent = String(left);
+  if (shownTimerN !== left) {
+    shownTimerN = left;
+    timerN.textContent = String(left);
+  }
   const live = clockLive();
-  chip.classList.toggle('timing', live);
-  if (!live) { chip.removeAttribute('data-timer'); return; }
+  if (shownTimerLive !== live) {
+    shownTimerLive = live;
+    setClass(chip, 'timing', live);
+    if (!live) {
+      chip.removeAttribute('data-timer');
+      shownTimerTone = null;
+      return;
+    }
+  }
+  if (!live) return;
   const frac = left / turnLimit();
-  timerFill.style.transition = frac < ringFrac ? '' : 'none';
+  const transition = frac < ringFrac ? '' : 'none';
+  if (shownRingTransition !== transition) {
+    shownRingTransition = transition;
+    timerFill.style.transition = transition;
+  }
   ringFrac = frac;
-  timerFill.style.strokeDashoffset = String(RING_C * (1 - frac));
-  chip.dataset.timer = left <= URGENT_AT ? 'red' : left <= WARN_AT ? 'amber' : 'accent';
+  const offset = String(RING_C * (1 - frac));
+  if (shownRingOffset !== offset) {
+    shownRingOffset = offset;
+    timerFill.style.strokeDashoffset = offset;
+  }
+  const tone = left <= URGENT_AT ? 'red' : left <= WARN_AT ? 'amber' : 'accent';
+  if (shownTimerTone !== tone) {
+    shownTimerTone = tone;
+    chip.dataset.timer = tone;
+  }
 }
 
 function tickClock() {
@@ -2374,6 +2455,12 @@ function seatChrome(): void {
   if (myStrip) myStrip.append(mineBtn);
   if (sealed && seat0Strip && localSide !== 0) seat0Strip.append(sealed);
   shownFog.fill(null);                    // the cells just changed hands: repaint them from scratch
+  /* the ring and its seconds now live on a different chip: forget every diffed value */
+  shownTimerN = -1;
+  shownTimerLive = null;
+  shownTimerTone = null;
+  shownRingOffset = '';
+  shownRingTransition = '';
 }
 
 /** How a race starts: the local shape, plus the live seat when the matchmaker paired one. */
@@ -2918,7 +3005,7 @@ function tutorialTap(p: Vec) {
      inside its spotlight (or the card's Next key, wired in tutorial.ts) opens step 2. */
   if (tutorialStage() === 'goal') {
     const goal = tutorialFinishTarget();
-    const box = canvas.getBoundingClientRect();
+    const box = boardBox();
     if (goal && tutorialSpotHas(goal, box.left + p.x, box.top + p.y)) {
       impact('light');
       tutorial?.advance();
@@ -2944,7 +3031,7 @@ function tutorialTap(p: Vec) {
      groove — commits the wall, so the lesson is a single decisive action. */
   if (stage === 'wall') {
     const target = tutorialWallTarget();
-    const box = canvas.getBoundingClientRect();
+    const box = boardBox();
     if (target && tutorialSpotHas(target.spot, box.left + p.x, box.top + p.y)) {
       action = { kind: 'wall', spec: target.spec };
     }
@@ -3138,7 +3225,9 @@ mineBtn.addEventListener('click', () => {
  * the spotlight welded to where the board used to be.
  */
 function boardRect(c: number, r: number, w = 1, h = 1): TutorialRect {
-  const box = canvas.getBoundingClientRect();
+  /* The cached canvas box: `armCapsules()` runs on every drag frame, and a live `getBoundingClientRect`
+     there was a forced layout between pointermove writes. `dropBoardBox()` re-primes it on refit. */
+  const box = boardBox();
   const L = renderer.layout();
   const sx = box.width / Math.max(1, L.w);
   const sy = box.height / Math.max(1, L.h);
@@ -3733,8 +3822,8 @@ function refitBoard() {
      geometry, so no pawn can be placed with a zero/NaN coordinate during the reveal. */
   renderer.settle();
   confetti.resize();
+  dropBoardBox();         // the canvas box moved: re-prime it before anything maps board cells
   syncStage();
-  dropBoardBox();         // the canvas box moved: the pointer mapping cache is stale
   /* resizing a canvas clears it. With the loop parked between transitions, a rotation or a
      WebView chrome collapse must explicitly ask for one repaint or the board stays blank. */
   invalidate();
@@ -3760,6 +3849,7 @@ function settleBoard() {
       /* Cheap verification: `resize()` rebuilds only if the box actually changed. */
       renderer.resize();
       confetti.resize();
+      dropBoardBox();
       syncStage();
     }
     syncLoop();       // a degenerate first pass must not leave the loop asleep
