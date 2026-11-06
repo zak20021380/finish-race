@@ -82,6 +82,21 @@ import { BADGE_REQUIREMENTS } from './badges';
 import { beginMatch, finishMatch, initTelemetry, setIdle } from './telemetry';
 import type { MatchMode } from '../shared/telemetry';
 
+/* ---------- render-loop state ----------
+ * Kept at the very top of the module, ahead of `initSplash()` and every boot wiring call. A
+ * resize, a language flip or an invite-first boot can wake the loop before the loop section is
+ * reached, and a `let` read from its temporal dead zone would abort the whole cold start.
+ * See `invalidate()` / `frame()` / `syncLoop()` in the loop section below.
+ */
+let last = performance.now();
+let raf = 0;
+/** External gate: the board is on screen, visible and unpaused. */
+let loopWanted = false;
+/** Dirty flag: at least one fresh frame is owed. */
+let frameNeeded = true;
+/** The last frame reported an active transition, so the next frame is owed too. */
+let animating = false;
+
 initSplash();
 initTelemetry();
 initTelegram();
@@ -680,7 +695,13 @@ const liveTheme = (): Theme => {
   return appearance() === 'light' ? { ...base, board: PEARL_BOARD } : base;
 };
 
-const renderer = createRenderer(canvas, { theme: liveTheme, onFinishSettled: finishSettled });
+const renderer = createRenderer(canvas, {
+  theme: liveTheme,
+  onFinishSettled: finishSettled,
+  /* A deferred re-fit clears the canvas. The loop is parked while the board is idle, so the
+     resize must ask for one fresh frame instead of leaving a blank slab behind. */
+  onLayoutChanged: () => invalidate(),
+});
 const confetti = createConfetti(confettiEl);
 const toVec = (p: Pos): Vec => ({ x: p.c + 0.5, y: p.r + 0.5 });
 
@@ -817,6 +838,9 @@ function setMode(next: BoardMode<Ghost>) {
   if (!next.preview) wallDrag = null;   // no bar to carry once the ghost is gone
   hints = dotsFor(next);         // derived, so it is rebuilt the moment the mode moves — never stale
   armCapsules();                 // the floating keys hang off the preview, so they follow it
+  /* A wall hover, a drag slide or a cancelled ghost changes only the canvas. With the loop parked
+     between transitions it must be woken here, or the preview would never be painted. */
+  invalidate();
 }
 
 /**
@@ -1028,7 +1052,7 @@ function vipBoardSeats(): Player[] {
   return seats;
 }
 
-const paintVipSeats = (): void => { renderer.setVipSeats(vipBoardSeats()); };
+const paintVipSeats = (): void => { renderer.setVipSeats(vipBoardSeats()); invalidate(); };
 
 /**
  * Where every seat finished, champion first. A race stops the instant a ball takes the line, so
@@ -1527,7 +1551,7 @@ function showOverlay() {
   /* The reaction tray serves every capsule: a duel lands its bubbles on the speaker's row, a
      party on whichever row they own, and a race against the machine answers on its own. */
   banter.open({ localSide, rivalSide: rivalSide(), locked: resultLocked });
-  if (won && !motionReduced()) confetti.burst();
+  if (won && !motionReduced()) { confetti.burst(); invalidate(); }
   rollResultValues();
   if (!won) {
     /* endOnline has already buzzed a forfeit; do not repeat it under the card. */
@@ -1682,6 +1706,10 @@ function maybeMicroCoach(): void {
 }
 
 function ui() {
+  /* Every state change passes through here. With an event-driven loop the board must be told to
+     paint once — a tap, a turn hand-off or a socket roster must never wait for a loop that is
+     deliberately asleep. */
+  invalidate();
   /* a pick that no longer belongs to you, or to a ball that is gone, is dropped here */
   if (selected !== null && (state.winner !== null || state.turn !== localSide
     || !state.balls.some((b) => b.id === selected))) selected = null;
@@ -2095,6 +2123,7 @@ function restart() {
   menuBtn.disabled = false;
   clearNote();
   confetti.stop();
+  invalidate();      // a restart repaints the fresh board once, then the loop parks again
   renderer.resetFx();
   ui();
   startClock();
@@ -2691,8 +2720,29 @@ function quitToMenu() {
 
 /* ---------- input ---------- */
 
+/**
+ * One layout read per frame at most. Touch events arrive at 120–240 Hz on a phone, and every
+ * `getBoundingClientRect()` issued right after a `ui()`/`setMode()` DOM write forces a
+ * synchronous layout — the classic touch-time thrash that shows up as input lag. The canvas box
+ * only changes on a resize or a screen slide (both far slower than a frame), so a short-lived
+ * cache is exact while cutting those forced layouts by an order of magnitude.
+ */
+let boardBoxCache: DOMRect | null = null;
+let boardBoxAt = -Infinity;
+const BOARD_BOX_TTL = 32;
+function boardBox(): DOMRect {
+  const now = performance.now();
+  if (!boardBoxCache || now - boardBoxAt > BOARD_BOX_TTL) {
+    boardBoxCache = canvas.getBoundingClientRect();
+    boardBoxAt = now;
+  }
+  return boardBoxCache;
+}
+/** Drop the cached box when the layout genuinely changes. */
+function dropBoardBox() { boardBoxCache = null; boardBoxAt = -Infinity; }
+
 const local = (e: PointerEvent) => {
-  const r = canvas.getBoundingClientRect();
+  const r = boardBox();
   return { x: e.clientX - r.left, y: e.clientY - r.top };
 };
 
@@ -2801,6 +2851,9 @@ function wallBranch(hit: Hit | null): boolean {
  * tap runs the two-tap flow — the first arms the square, the second buries it.
  */
 function tapMine(hit: Hit | null): boolean {
+  /* This branch stages/cancels the two-tap mine square without a full `ui()` repaint, so it must
+     wake the parked loop itself or the ✓/✕ pair would never appear on the tapped tile. */
+  invalidate();
   /* your own pawn is the board's way out of placement mode: the key lets go, the pawn is picked */
   if (hit?.kind === 'ball') { impact('light'); pickFromMine(hit.id); return true; }
   // board background, or the [✕] cap: disarm the mine ghost and its caps
@@ -2871,6 +2924,7 @@ function tutorialTap(p: Vec) {
     impact('light');
     mineGhost = null;
     armCapsules();
+    invalidate();        // the canvas owns the ✓/✕ pair: repaint it once after the cancel
     tutorial?.staged(false);
     return;
   }
@@ -2887,6 +2941,7 @@ function tutorialTap(p: Vec) {
   if (!action || !isTutorialActionAllowed(action)) { tutorial?.nudge(); return; }
   const L = renderer.layout();
   renderer.ripple((p.x - L.ox) / L.cell, (p.y - L.oy) / L.cell, localSide);
+  invalidate();           // a queued ripple is a finite transition: wake the parked loop
   switch (action.kind) {
     case 'select':
       impact('light');
@@ -3002,6 +3057,7 @@ canvas.addEventListener('pointerdown', (e) => {
   if (tutorialActive) { tutorialTap(p); return; }
   const L = renderer.layout();
   renderer.ripple((p.x - L.ox) / L.cell, (p.y - L.oy) / L.cell, localSide);   // the tap answers at once
+  invalidate();           // the ripple must paint even when the loop is asleep
   if (mineArmed) { tapMine(at(p)); return; }
   const hit = at(p);
   /* the toolbar's rotate key fires on press; the ghost's own centre waits for pointerup so the
@@ -3592,6 +3648,10 @@ function refitBoard() {
   renderer.settle();
   confetti.resize();
   syncStage();
+  dropBoardBox();         // the canvas box moved: the pointer mapping cache is stale
+  /* resizing a canvas clears it. With the loop parked between transitions, a rotation or a
+     WebView chrome collapse must explicitly ask for one repaint or the board stays blank. */
+  invalidate();
 }
 
 /**
@@ -3637,18 +3697,30 @@ function settleColdBootBoard(): void {
   });
 }
 
-/* A dedicated observer on the board container owns every re-fit: the reveal, a WebView chrome
-   collapse, a rotation and a container-query reflow all change this box. A wrap that was already
-   sized can stay silent, which is why `settleBoard()` also verifies after a deferred frame. */
-const boardObserver = new ResizeObserver(() => refitBoard());
-boardObserver.observe(wrap);
-window.addEventListener('resize', () => refitBoard());
-refitBoard();
+/* ---------- loop: dirty / event-driven ----------
+ * The old design ran requestAnimationFrame for the whole time the race screen was visible: a
+ * static board still paid for a full canvas repaint (and a full-screen re-composite) sixty times
+ * a second, which is exactly where a mid-range phone loses frames and input latency. Now a frame
+ * is only requested when something CHANGED (ui / pointer / resize / a queued effect), and the
+ * loop keeps ticking only while a transition is genuinely in flight. Once everything settles —
+ * pawns on their tiles, blasts and ripples expired, confetti landed — `raf` goes to 0 and the
+ * board costs nothing until the next tap.
+ */
 
-let last = performance.now();
-/** Mirrors `want` in `syncLoop()`: the frame re-arms itself from this flag, never from a guess. */
-let loopWanted = false;
+/**
+ * Ask for one fresh frame. Cheap, idempotent, and deliberately the ONLY way to start the loop
+ * from an event handler: it sets a flag and arms rAF only if the loop is asleep. The frame itself
+ * decides whether to keep ticking, so no caller has to know how long an animation lasts.
+ */
+function invalidate() {
+  frameNeeded = true;
+  if (loopWanted && !raf) { last = performance.now(); raf = requestAnimationFrame(frame); }
+}
+
 function frame(now: number) {
+  /* Consume the dirty flag BEFORE painting: `onFinishSettled` and friends can invalidate from
+     inside draw(), and that request must not be clobbered when this frame returns. */
+  frameNeeded = false;
   try {
     /* The rAF timestamp can be a hair behind the `performance.now()` taken when the loop was
        armed; a negative delta produced a negative lerp factor before this clamp. */
@@ -3658,6 +3730,7 @@ function frame(now: number) {
     if (ballViews.length !== state.balls.length) syncBalls();
     /* one mode value per frame: the ring rides the dots, so a previewing board shows no ball as picked */
     const m = mode(), dots = moveDots(m);
+    let settling = false;
     for (let i = 0; i < state.balls.length; i++) {
       const b = state.balls[i];
       let v = ballViews[i];
@@ -3674,6 +3747,7 @@ function frame(now: number) {
       v.pos.y += (ty - v.pos.y) * k;
       if (Math.abs(tx - v.pos.x) < 0.002) v.pos.x = tx;
       if (Math.abs(ty - v.pos.y) < 0.002) v.pos.y = ty;
+      if (v.pos.x !== tx || v.pos.y !== ty) settling = true;
       v.sel = dots && v.id === m.selected;
     }
     view.state = state;
@@ -3685,36 +3759,54 @@ function frame(now: number) {
     view.capsule = capsule;
     view.last = marks;
     view.thinking = wantsOpponent() && !paused && !tutorialActive ? state.turn : null;
-    /* The result capsule lays a full-screen blurred scrim over the board. Repainting the canvas
-       behind it would make the compositor re-blur a board nobody can see, every frame — so once the
-       sheet is up only the confetti (drawn above it) keeps ticking. */
-    if (!overlayOpen) renderer.draw(view, now);
-    confetti.tick(dt, now);
+    /* Confetti reports whether any particle is still in the air. It is drawn above the result
+       scrim, so it keeps ticking even when the board behind it is deliberately not repainted. */
+    const confettiLive = confetti.tick(dt, now);
+    /* The result capsule lays a full-screen scrim over the board: repainting the canvas behind it
+       would re-composite a board nobody can see. Only confetti keeps the loop alive up there. */
+    const fxBusy = overlayOpen ? false : renderer.draw(view, now, settling || confettiLive);
+    animating = fxBusy || settling || confettiLive;
   } finally {
-    /* A frame that throws used to strand `raf` at a stale id: `syncLoop()` then believed the loop
-       was running while nothing painted, which is a grid with no pawns and no way to recover. */
-    raf = loopWanted ? requestAnimationFrame(frame) : 0;
+    /* A frame that throws must never strand `raf` at a stale id: re-arm from the flags, not from
+       a guess, so `invalidate()` or `syncLoop()` can always restart a parked loop. */
+    raf = loopWanted && (frameNeeded || animating) ? requestAnimationFrame(frame) : 0;
   }
 }
 
 /** The webview keeps a hidden Mini App running, and the pause sheet is a real stop: no frames
  *  are burned unless the board is on screen and unpaused. The clock follows the same rule —
  *  leaving the board stops it, coming back hands the seat a full allowance again. */
-let raf = 0;
 function syncLoop() {
   const onBoard = !document.hidden && router.current === 'game';
-  /* The race stage is the one screen that repaints a canvas every frame. `game-live` parks the
-     drifting mesh and every off-screen sheet's loop underneath it, so the compositor's only
-     moving layer is the board itself. */
+  /* The race stage is the one screen that repaints a canvas. `game-live` parks the drifting mesh
+     and every off-screen sheet's loop underneath it, so the compositor's only moving layer is the
+     board itself — and now even that layer only moves during a transition. */
   document.documentElement.classList.toggle('game-live', onBoard);
   const want = onBoard && !paused;
   loopWanted = want;
-  if (want && !raf) { last = performance.now(); raf = requestAnimationFrame(frame); }
-  else if (!want && raf) { cancelAnimationFrame(raf); raf = 0; }
+  if (want) {
+    /* Re-entering the board always owes one frame: a resize may have cleared the canvas while
+       the loop was parked, and a hidden Mini App can come back to a changed roster. */
+    frameNeeded = true;
+    if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); }
+  } else if (raf) {
+    cancelAnimationFrame(raf);
+    raf = 0;
+    animating = false;
+  }
   if (!want) stopClock();
   else if (turnTimerId === null) startClock();
 }
-document.addEventListener('visibilitychange', syncLoop);
+
+/* A dedicated observer on the board container owns every re-fit: the reveal, a WebView chrome
+   collapse, a rotation and a container-query reflow all change this box. A wrap that was already
+   sized can stay silent, which is why `settleBoard()` also verifies after a deferred frame. */
+const boardObserver = new ResizeObserver(() => refitBoard());
+boardObserver.observe(wrap);
+window.addEventListener('resize', () => refitBoard());
+refitBoard();
+
+document.addEventListener('visibilitychange', () => { dropBoardBox(); syncLoop(); });
 
 /* ---------- boot ---------- */
 

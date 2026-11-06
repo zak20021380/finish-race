@@ -64,8 +64,13 @@ export function createConfetti(canvas: HTMLCanvasElement) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
-  function tick(dt: number, now: number) {
-    if (!live) return;
+  /**
+   * Advance the burst and report whether any particle is still in the air. The main loop is
+   * event-driven now: it uses this as the last reason to keep requesting frames, and parks the
+   * moment the final piece falls off screen.
+   */
+  function tick(dt: number, now: number): boolean {
+    if (!live) return false;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const k = Math.exp(-dt * DRAG);
@@ -88,6 +93,7 @@ export function createConfetti(canvas: HTMLCanvasElement) {
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
+    return live > 0;
   }
 
   return { resize, burst, stop, tick };

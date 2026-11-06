@@ -140,6 +140,12 @@ export interface RendererOptions {
    * the result sheet: the sheet then lands after the last spark, not on a wall-clock guess.
    */
   onFinishSettled?: () => void;
+  /**
+   * Fired when a deferred re-fit actually rebuilt the board layer. The render loop is parked
+   * while the board is idle, so a resize that clears the canvas must ask for one fresh frame —
+   * otherwise the screen would keep a blank board until the next transition.
+   */
+  onLayoutChanged?: () => void;
 }
 
 /**
@@ -1077,6 +1083,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   let L = computeLayout(FALLBACK_W, FALLBACK_H, 1, cols, rows);
   /** False until at least one measurement came from a mounted, non-zero container. */
   let layoutReady = false;
+  /** A reveal or resize asked the next draw to verify the fit — never a per-frame layout read. */
+  let layoutCheck = false;
   /** One deferred verification frame, armed by `settle()`; never a polling loop. */
   let settleRaf = 0;
   let th: Theme = opts.theme ? opts.theme() : DEFAULT_THEME;
@@ -1143,8 +1151,9 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   const dotG: CanvasGradient[] = [];
   /** Wall-ghost end caps: the glow struck once per seat instead of a gradient per frame. */
   const capG: CanvasGradient[] = [];
-  /** Light sweep over the finish strip: one gradient per resize, moved with the canvas transform. */
-  const sweep = { grad: null as CanvasGradient | null, band: 0 };
+  /* No ambient light cone or drifting sweep over the finish line: both were full-width gradient
+     fills repainted on every idle frame. The goal zone keeps its baked crown and its one-shot
+     arrival flare, which are finite transitions the loop can sleep between. */
   /**
    * The crown's inscription: struck once per resize into a tile of its own, then blitted every
    * frame. Offscreen and per-frame because it flares when the line is taken, and the static layer
@@ -1239,12 +1248,16 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
   /** Arm ONE deferred verification frame. Never polls: a further change is the observer's job. */
   function scheduleSettle() {
+    layoutCheck = true;
     if (settleRaf) return;
     settleRaf = requestAnimationFrame(() => {
       settleRaf = 0;
       if (!layoutReady || canvas.clientWidth !== lastW || canvas.clientHeight !== lastH) {
         lastW = -1; lastH = -1; lastDpr = -1;
         resize();
+        /* resize() clears the canvas. The main loop is parked while the board is idle, so ask
+           for one frame explicitly — a resize must never leave a blank slab behind. */
+        opts.onLayoutChanged?.();
       }
     });
   }
@@ -1272,9 +1285,9 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   function buildStatic() {
     const { w, h, cell: c, ox, oy, dpr } = L;
     const b = th.board;
-    /* The static half of the board — slab, every tile, the grid grooves, the finish bar and its
-       beams — is struck once per layout and blitted whole every frame. A frame therefore never
-       rebuilds a tile gradient or re-strokes 140 squares. */
+    /* The static half of the board — slab, every tile, the grid grooves and the finish bar — is
+       struck once per layout and blitted whole every frame. A frame therefore never rebuilds a
+       tile gradient or re-strokes 140 squares, and no ambient beam is painted at all. */
     const cv = boardBufferCanvas || (boardBufferCanvas = document.createElement('canvas'));
     cv.width = Math.max(1, Math.round(w * dpr));
     cv.height = Math.max(1, Math.round(h * dpr));
@@ -1284,11 +1297,13 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     g.clearRect(0, 0, cv.width, cv.height);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    /* the slab: one solid clay face lifted off the card by a soft outer drop shadow */
+    /* the slab: one solid clay face lifted off the card by a TIGHT 2-3px drop. A wide 18px
+       blurred shadow here used to smear a second soft edge under the whole neon rim; it is baked
+       once, but it is still the largest blurred surface on the board. */
     g.save();
     g.shadowColor = b.drop;
-    g.shadowBlur = 18 * dpr;
-    g.shadowOffsetY = 5 * dpr;
+    g.shadowBlur = 3 * dpr;
+    g.shadowOffsetY = 2 * dpr;
     rr(g, ox, oy, bw, bh, R);
     if (typeof b.surface === 'string') g.fillStyle = b.surface;
     else {
@@ -1332,8 +1347,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
     /* Three tile finishes, all painted over the same slab. The dark arenas wear polished glass:
        every square is a translucent sapphire key, its face catching the ceiling light along the
-       crown and deepening toward its foot, with a soft specular bloom where the overhead beams
-       land and a crisp 1px top/left catch. The light arena is a chessboard cut in pearl and
+       crown and deepening toward its foot, with a soft specular bloom at the top edge and a
+       crisp 1px top/left catch. The light arena is a chessboard cut in pearl and
        platinum: a gloss-ivory pad beside a cool metallic one, each its own raised piece with a
        crisp groove between, a lit top/left inset and a shaded foot. Pale shop boards keep their
        inset clay checks. */
@@ -1471,7 +1486,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const rimW = Math.max(1, c * 0.022);
       const hair = Math.max(1, c * 0.018);
       for (let r0 = 1; r0 < rows; r0++) {          // row 0 belongs to the finish bar, not the tiles
-        /* the rows under the finish sit in the beams, so their glass answers with a stronger glint */
+        /* the rows nearest the finish catch a slightly stronger baked glint */
         const glint = r0 <= 3 ? 0.38 - (r0 - 1) * 0.08 : 0.075;
         for (let c0 = 0; c0 < cols; c0++) {
           const tx = ox + c0 * c + gap / 2, ty = oy + r0 * c + gap / 2;
@@ -1616,25 +1631,9 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       g.fillRect(ox, oy + c, bw, 2.6 * c);
     }
 
-    /* three warm beams falling out of the finish, still bright on the fourth row */
-    if (b.beam) {
-      const top = oy + c, bot = oy + c * 4.6;
-      const beam = g.createLinearGradient(0, top, 0, bot);
-      beam.addColorStop(0, b.beam);
-      beam.addColorStop(0.62, clear(b.beam));
-      beam.addColorStop(1, clear(b.beam));
-      g.fillStyle = beam;
-      g.globalCompositeOperation = 'lighter';
-      for (let i = 0; i < 3; i++) {
-        const cx = ox + (bw * (i + 0.5)) / 3, w0 = c * 0.62, w1 = c * 1.9;
-        g.beginPath();
-        g.moveTo(cx - w0, top); g.lineTo(cx + w0, top);
-        g.lineTo(cx + w1, bot); g.lineTo(cx - w1, bot);
-        g.closePath();
-        g.fill();
-      }
-      g.globalCompositeOperation = 'source-over';
-    }
+    /* The overhead spotlight beams that used to fan down from the finish line are gone. Three
+       additive trapezoids plus a wide gradient per beam were the most expensive fill on the
+       board, and they were pure ambience — the crown and the kerb already say "finish". */
     g.restore();
 
     // border ring: green at the finish, easing into the board's own trim
@@ -1661,13 +1660,6 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     lampG.length = 0;
     dotG.length = 0;
     capG.length = 0;
-    sweep.band = c * 2.4;
-    const sg = ctx.createLinearGradient(0, 0, sweep.band, 0);
-    sg.addColorStop(0, `rgba(255,236,178,0)`);
-    sg.addColorStop(0.44, `rgba(255,236,178,${b.sweep})`);
-    sg.addColorStop(0.56, `rgba(255,236,178,${b.sweep})`);
-    sg.addColorStop(1, `rgba(255,236,178,0)`);
-    sweep.grad = sg;
     const br = ballR(c);
     for (let i = 0; i < MAX_TEAMS; i++) {
       const s = sides[i];
@@ -1681,11 +1673,13 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       bounce.addColorStop(0, `rgba(255,255,255,${s.ball.bounce})`);
       bounce.addColorStop(1, 'rgba(255,255,255,0)');
       ballFx.push({ shadow, body, bounce });
-      const glow = ctx.createRadialGradient(0, 0, br * 0.8, 0, 0, br * 2.3);
+      /* halo gradients are struck to the SAME tight radius the frame actually fills, so every
+         stop is used and no pawn pays for a wide transparent disc. */
+      const glow = ctx.createRadialGradient(0, 0, br * 0.8, 0, 0, br * 1.5);
       glow.addColorStop(0, s.ramp.glow);
       glow.addColorStop(1, 'rgba(255,255,255,0)');
       glowG.push(glow);
-      const lamp = ctx.createRadialGradient(0, 0, br * 0.4, 0, 0, c * 2.5);
+      const lamp = ctx.createRadialGradient(0, 0, br * 0.4, 0, 0, c * 1.1);
       lamp.addColorStop(0, s.ramp.glow);
       lamp.addColorStop(0.18, tint(s.ramp.light, 0.5));
       lamp.addColorStop(0.5, withAlpha(s.ramp.glow, 0.16));
@@ -1717,9 +1711,9 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     mg.addColorStop(0, MINE_RAMP.glow);
     mg.addColorStop(1, 'rgba(255,255,255,0)');
     mineGlow = mg;
-    /* the trigger's light: one wide soft wash the whole burst sits in, so the blast is still
-       readable half a second later, after the flash and the first sparks are gone */
-    const bg2 = ctx.createRadialGradient(0, 0, 0, 0, 0, c * 2.4);
+    /* the trigger's light: a tight soft wash under the burst. It is a finite transition, but a
+       2.4-cell disc of additive blending still costs a full tile block per frame on a phone. */
+    const bg2 = ctx.createRadialGradient(0, 0, 0, 0, 0, c * 1.4);
     bg2.addColorStop(0, 'rgba(255,150,60,.75)');
     bg2.addColorStop(0.42, 'rgba(255,90,20,.34)');
     bg2.addColorStop(1, 'rgba(255,90,20,0)');
@@ -2147,12 +2141,13 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const pulse = still ? 0.7 : 0.58 + 0.42 * Math.sin(now / 620);
     ctx.save();
     ctx.translate(cx, cy);
-    const halo = ctx.createRadialGradient(0, 0, r * 1.15, 0, 0, r * 2.2);
+    /* tight halo: a 1px metallic ring with a ~2px warm bloom, not a wide glow disc */
+    const halo = ctx.createRadialGradient(0, 0, r * 1.05, 0, 0, r * 1.55);
     halo.addColorStop(0, `rgba(255, 214, 120, ${(0.16 * pulse).toFixed(3)})`);
     halo.addColorStop(0.55, `rgba(255, 190, 64, ${(0.11 * pulse).toFixed(3)})`);
     halo.addColorStop(1, 'rgba(255, 190, 64, 0)');
     ctx.fillStyle = halo;
-    ctx.beginPath(); ctx.arc(0, 0, r * 2.2, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.55, 0, TAU); ctx.fill();
 
     const ring = ctx.createLinearGradient(-r, -r, r, r);
     ring.addColorStop(0, '#FFF6D0');
@@ -2162,20 +2157,20 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ring.addColorStop(1, '#FFE9A3');
     ctx.lineWidth = Math.max(1.8, c * 0.055);
     ctx.strokeStyle = 'rgba(12, 9, 3, .7)';
-    ctx.beginPath(); ctx.arc(0, 0, r * 1.8, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.5, 0, TAU); ctx.stroke();
     ctx.strokeStyle = ring;
-    ctx.beginPath(); ctx.arc(0, 0, r * 1.76, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.46, 0, TAU); ctx.stroke();
     /* one short highlight arc at the crown of the ring, so the metal reads as lit rather than flat */
     ctx.strokeStyle = 'rgba(255, 251, 228, .9)';
     ctx.lineWidth = Math.max(1.2, c * 0.03);
     ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.arc(0, 0, r * 1.76, -2.55, -2.05); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.46, -2.55, -2.05); ctx.stroke();
     ctx.restore();
   }
 
   /**
    * The wide coloured pool a pawn throws across the tiles around it. Additive and kept below the
-   * finish row, so red and blue light warms the grid without ever tinting the crown or its beams.
+   * finish row, so red and blue light warms the grid without ever tinting the crown.
    * `k` is the active-seat beat; a resting pawn still casts a quiet version of the same light.
    */
   function drawLamp(cx: number, cy: number, i: number, k: number) {
@@ -2189,7 +2184,9 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.globalAlpha = (1 - 0.25 * k) * sides[i].ball.halo * (pearl ? 0.42 : 1);
     ctx.translate(cx, cy);
     ctx.fillStyle = lampG[i];
-    ctx.beginPath(); ctx.arc(0, 0, L.cell * 2.5, 0, TAU); ctx.fill();
+    /* a tight pool (~1.1 cells) instead of a 2.5-cell disc: a fifth of the blended pixels per
+       pawn per frame, and the neon still reads on the dark clay. */
+    ctx.beginPath(); ctx.arc(0, 0, L.cell * 1.1, 0, TAU); ctx.fill();
     ctx.restore();
   }
 
@@ -2201,7 +2198,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     if (pearl) ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = Math.min(1, (0.42 + 0.34 * k) * sides[i].ball.halo * (pearl ? 0.72 : 1));
     ctx.fillStyle = glowG[i];
-    ctx.beginPath(); ctx.arc(0, 0, r * 2.3, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.5, 0, TAU); ctx.fill();
     ctx.restore();
   }
 
@@ -2245,10 +2242,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.lineDashOffset = still ? 0 : -now / 40;
     ctx.strokeStyle = `rgba(${sides[i].ramp.shade},.6)`;   // dark backing keeps the dashes legible
     ctx.lineWidth = Math.max(3, c * 0.085);
-    ctx.beginPath(); ctx.arc(cx, cy, r * 1.6, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, r * 1.42, 0, TAU); ctx.stroke();
     ctx.strokeStyle = sides[i].ramp.mid;
     ctx.lineWidth = Math.max(1.5, c * 0.05);
-    ctx.beginPath(); ctx.arc(cx, cy, r * 1.6, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, r * 1.42, 0, TAU); ctx.stroke();
     ctx.restore();
   }
 
@@ -2865,13 +2862,66 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     }
   }
 
-  function draw(v: View, now: number) {
-    /* Self-heal the fit before painting. `setBoard` re-fits on every race, but a board built while
-       its screen was still hidden measures a zero box and keeps that degenerate cell forever: the
-       stage's ResizeObserver catches the reveal only when the *wrap* changes size, and a wrap that
-       was already sized can stay silent. Two property reads per frame buy a board that can never
-       paint at a stale size — the bug was a ball drawn at cell 1.08 (a negative `r - 0.5` throw). */
-    if (!layoutReady || canvas.clientWidth !== lastW || canvas.clientHeight !== lastH) {
+  /**
+   * Does the board still owe the compositor a frame? Only FINITE transitions count here —
+   * a queued detonation (whose `t0` may still be in the future), a throw, a tap ripple, a wall
+   * pop-in, a scar cooling off, the arrival flare or the endgame finisher. Ambient breathing
+   * (dots, halos, thinking pips) is deliberately NOT in this list: it is the thing that used to
+   * keep a 60 fps loop burning over a completely static board.
+   *
+   * `draw()` calls this at both ends of a frame: at the start to decide whether the ambient clock
+   * may advance, and at the end — after expired cues have been spliced out — to tell the caller
+   * whether to arm another frame.
+   */
+  function fxPending(now: number): boolean {
+    for (const f of ripples) if (now < f.t0 + RIPPLE_MS) return true;
+    for (const f of pulses) if (now < f.t0 + 460) return true;
+    /* `t0` is the detonation, AFTER the ball's walk onto the charge: a future t0 must keep the
+       loop alive through that walk or the blast would never be painted. */
+    for (const f of blasts) if (now < f.t0 + BLAST_MS) return true;
+    for (const k of knocks) if (now < k.t0 + k.stepMs + k.flyMs) return true;
+    for (const f of dust) if (now < f.t0 + DUST_MS) return true;
+    for (const f of streaks) if (now < f.t0 + STREAK_MS) return true;
+    for (const f of embers) if (now < f.t0 + EMBER_MS) return true;
+    for (const [, t] of thump) if (now < t + THUMP_MS) return true;
+    for (const [, w] of pendingWounds) if (now < w.when) return true;
+    for (const [, t] of born) if (now < t + 220) return true;     // wall pop-in
+    if (mineGhostKey !== '' && now < mineGhostAt + 220) return true;
+    if (goalAt >= 0 && now < goalAt + GOAL_MS) return true;
+    /* The arrival wait is resolved by the FIRST frame past its timeout, so keep the loop alive
+       until draw() itself clears it — an off-by-one at exactly GOAL_WAIT_MS would park the loop
+       one frame too early and the crown would never fire. */
+    if (goalWait >= 0) return true;
+    if (finish && !finish.settled) return true;
+    return false;
+  }
+
+  /** Ambient pulses ride this clock, which only advances while a transition is running. */
+  let ambientT = 0;
+  let ambientLast = -1;
+
+  /**
+   * Paint one frame and report whether another is needed. `active` is the caller's own motion
+   * (a pawn lerping between tiles, confetti in the air): it keeps the ambient clock alive so the
+   * board still breathes during a move, without ever starting a loop on its own.
+   */
+  function draw(v: View, now: number, active = false): boolean {
+    const pending = fxPending(now);
+    if (pending || active) {
+      if (ambientLast >= 0) ambientT += Math.min(50, Math.max(0, now - ambientLast));
+      ambientLast = now;
+    } else {
+      ambientLast = -1;          // idle: freeze the breathing at its current phase, no jump on wake
+    }
+    /* One clock for every continuous sin()/dash pulse. When the board is idle it is frozen, so a
+       single painted frame is enough and the main loop can stop entirely. */
+    const clock = ambientT;
+    /* Self-heal the fit ONLY when a reveal or resize asked for it. `clientWidth`/`clientHeight`
+       used to be read on every frame; on a touch device that is a synchronous layout flush sixty
+       times a second. The board's ResizeObserver, `settle()` and `scheduleSettle()` own every
+       re-measure now, and `draw()` merely consumes the pending flag they raise. */
+    if (!layoutReady || layoutCheck) {
+      layoutCheck = false;
       if (!resize()) scheduleSettle();
     }
     /* The paint servers always exist, even before the first successful measurement: drawing a
@@ -2881,7 +2931,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     const still = motionReduced();
     /* A finisher can only belong to a settled board. If a cue ever survived a restart, its
        "burst" would `continue` past a live pawn and drop it from the render queue entirely — the
-       exact symptom of a board that shows its grid but no tokens on frame zero. */
+       exact symptom of a board that shows its grid but no tokens on frame zero. It would also
+       keep `fxPending()` true forever, because the finisher clock only advances while a winner
+       is on the board: clear it so an idle board can genuinely park. */
+    if (v.state.winner === null && finish) finish = null;
     const fin = v.state.winner === null ? null : finish;
     /*
      * The finisher runs on its own clock, advanced by this frame's CLAMPED delta. A settled match
@@ -2931,13 +2984,13 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
 
     /*
-     * Everything below is board furniture — the strip's sweep, the start tints, walls, mines,
+     * Everything below is board furniture — the start tints, walls, mines,
      * landing pulses, blast rings, the balls and their halos and rings, and the thinking pips. The
      * slab *is* the board, so none of it may paint outside the slab.
      *
      * This used to be free: the board filled its canvas edge to edge and the canvas clipped the
      * spill for us. Now the grid is centred inside a box of its own aspect, so a bottom-row ball's
-     * selection ring (`r * 1.6`) and turn halo (`r * 2.3`) reach past the slab and float on the card
+     * selection ring (`r * 1.42`) and turn halo (`r * 1.5`) reach past the slab and float on the card
      * as a crimson arc under the board. One clip here covers every one of them.
      */
     ctx.save();
@@ -2949,17 +3002,9 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     if (goal <= 0) goalAt = -1;
 
     const bw = cols * c;
-    /* the strip's idle light sweep, held back while the arrival pulse is running the same band */
-    if (!still && sweep.grad && goal < 0) {
-      ctx.save();
-      rr(ctx, ox, oy, bw, rows * c, CORNER * c);
-      ctx.clip();
-      ctx.beginPath(); ctx.rect(ox, oy, bw, c); ctx.clip();
-      ctx.translate(ox - sweep.band + ((now % 5200) / 5200) * (bw + sweep.band), 0);
-      ctx.fillStyle = sweep.grad;
-      ctx.fillRect(0, oy, sweep.band, c);
-      ctx.restore();
-    }
+    /* No idle light sweep over the finish strip. It translated a full-width gradient across the
+       goal band on EVERY frame forever — the single biggest reason a static board never reached
+       an idle frame. The crown below is baked into the board buffer. */
 
     /* the inscription itself is baked into the board buffer; only the arrival flare is live paint */
     if (goal > 0 && crestArt) {
@@ -2981,12 +3026,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = `rgba(255,222,142,${(0.22 * goal * goal).toFixed(3)})`;
       ctx.fillRect(ox, oy, bw, c);
-      if (!still && sweep.grad) {
-        ctx.translate(ox - sweep.band + (bw + sweep.band) * (1 - goal * goal), 0);
-        ctx.globalAlpha = 0.4 + 0.6 * goal;
-        ctx.fillStyle = sweep.grad;
-        ctx.fillRect(0, oy, sweep.band, c);
-      }
+      /* The travelling sweep is gone; the one-shot wash above is the whole arrival flare. */
       ctx.restore();
     }
 
@@ -3065,7 +3105,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
 
     // legal-move dots: big, high contrast, at least a 44px target, tinted with the chosen ball's side
     const side = sides[v.state.turn];
-    const pulse = still ? 0.5 : 0.5 + 0.5 * Math.sin(now / 380);
+    const pulse = still ? 0.5 : 0.5 + 0.5 * Math.sin(clock / 380);
     const dotR = Math.max(6, c * 0.17 + c * 0.014 * pulse);
     ctx.save();
     ctx.strokeStyle = th.board.pearl ? 'rgba(24,30,40,.78)' : 'rgba(255,255,255,.96)';
@@ -3107,7 +3147,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       if (v.ghost.ok) {
         drawBar(v.ghost.spec, v.ghost.p, v.ghost.armed ? 0.9 : 0.5, 1, true);
         outline(v.ghost.spec, v.ghost.armed ? gp.os : gp.ol,
-          Math.max(1.5, c * 0.045), v.ghost.armed ? dash.armed : dash.ghost, still ? 0 : -now / 26, v.ghost.p);
+          Math.max(1.5, c * 0.045), v.ghost.armed ? dash.armed : dash.ghost, still ? 0 : -clock / 26, v.ghost.p);
         drawGhostCaps(v.ghost.spec, v.ghost.p, v.ghost.armed ? 0.95 : 0.5, still);
       } else {
         // solid ring + cross: unmistakably "not here", unlike the dashed ghost above
@@ -3124,8 +3164,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       const p = still ? 1 : Math.min(1, (now - mineGhostAt) / 220);
       const drop = 1 + 0.55 * (1 - p) * (1 - p);        // it drops into the square and settles
       const gp = sides[v.state.turn].ramp;
-      cellRing(v.mineGhost, gp.os, Math.max(1.5, c * 0.045), dash.armed, still ? 0 : -now / 26);
-      drawMine(ox + (v.mineGhost.c + 0.5) * c, oy + (v.mineGhost.r + 0.5) * c, 'ghost', pulse, drop, now, still);
+      cellRing(v.mineGhost, gp.os, Math.max(1.5, c * 0.045), dash.armed, still ? 0 : -clock / 26);
+      drawMine(ox + (v.mineGhost.c + 0.5) * c, oy + (v.mineGhost.r + 0.5) * c, 'ghost', pulse, drop, clock, still);
       /* the square and its mine stay board furniture; the ✓/✕ pair is chrome, painted once the
          clip has closed, so an adjacent pawn can never be drawn over it */
     } else mineGhostKey = '';
@@ -3145,7 +3185,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     }
 
     // buried mines — this seat's own only. An enemy trap is never painted, not even by accident.
-    const mineK = still ? 0.5 : 0.5 + 0.5 * Math.sin(now / 520);
+    const mineK = still ? 0.5 : 0.5 + 0.5 * Math.sin(clock / 520);
     for (const m of v.state.mines) {
       if (m.owner !== v.human) continue;
       /* a triggered mine stays in the ground until its blast's own `t0`, so the ball walks onto a
@@ -3155,7 +3195,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         for (const f of blasts) if (f.c === m.cell.c && f.r === m.cell.r && now < f.t0) { pending = true; break; }
         if (!pending) continue;
       }
-      drawMine(ox + (m.cell.c + 0.5) * c, oy + (m.cell.r + 0.5) * c, 'buried', mineK, 1, now, still);
+      drawMine(ox + (m.cell.c + 0.5) * c, oy + (m.cell.r + 0.5) * c, 'buried', mineK, 1, clock, still);
     }
 
     for (let i = pulses.length - 1; i >= 0; i--) {
@@ -3196,7 +3236,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         ctx.translate(f.x, f.y);
         ctx.globalAlpha = 0.9 * (1 - t);
         ctx.fillStyle = blastGlow;
-        ctx.beginPath(); ctx.arc(0, 0, c * 2.4, 0, TAU); ctx.fill();
+        ctx.beginPath(); ctx.arc(0, 0, c * 1.4, 0, TAU); ctx.fill();
         ctx.restore();
       }
       ctx.globalAlpha = 0.85 * (1 - t);
@@ -3375,7 +3415,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       } else prevPos.set(b.id, { x: b.pos.x, y: b.pos.y });
       const active = v.state.winner === null && v.state.turn === seat;
       const lit = active || v.state.winner === seat;
-      const beat = still ? 0.6 : 0.5 + 0.5 * Math.sin(now / 260);
+      const beat = still ? 0.6 : 0.5 + 0.5 * Math.sin(clock / 260);
       drawLamp(cx, cy, seat, lit ? beat : 0);
       if (crowned && crownG) {
         /* gold light pooled under the winner: the crown's own warmth on the goal tile */
@@ -3402,12 +3442,12 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         ctx.beginPath(); ctx.arc(0, 0, ballR(c) * 0.92, 0, TAU); ctx.fill();
         ctx.restore();
       }
-      if (vipSeats.has(seat)) drawVipAura(cx, cy, r, now, still);
+      if (vipSeats.has(seat)) drawVipAura(cx, cy, r, clock, still);
       if (lit) drawGlow(cx, cy, r, seat, beat);
       const hurt = wounds.has(b.id);
-      if (hurt) drawWoundedRing(cx, cy, r, now, still);
+      if (hurt) drawWoundedRing(cx, cy, r, clock, still);
       // the chosen one stands out further than its side's turn halo does
-      if (b.sel) drawSel(cx, cy, r, seat, now, still);
+      if (b.sel) drawSel(cx, cy, r, seat, clock, still);
       let n = 1;
       for (let j = 0; j < i; j++) if (v.balls[j].team === seat) n++;
       /* a ball the mine has just thrown settles with a micro-bounce rather than simply stopping */
@@ -3455,7 +3495,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         ctx.save();
         ctx.fillStyle = sides[v.thinking].ramp.mid;
         for (let i = 0; i < 3; i++) {
-          const ph = still ? 0.6 : 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(now / 260 - i * 1.1));
+          const ph = still ? 0.6 : 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(clock / 260 - i * 1.1));
           ctx.globalAlpha = Math.min(1, ph);
           ctx.beginPath(); ctx.arc(x0 + (i - 1) * c * 0.22, y0, c * 0.06, 0, TAU); ctx.fill();
         }
@@ -3502,6 +3542,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       fin.settled = true;
       opts.onFinishSettled?.();
     }
+
+    /* Recomputed AFTER this frame's expired cues were spliced out: when the board is settled this
+       is false and the caller parks the loop immediately. No idle frame is ever requested. */
+    return fxPending(now);
   }
 
   return {

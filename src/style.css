@@ -468,6 +468,9 @@ html.game-live .screen.game .card {
   font-size: var(--t-3);
   font-weight: 700;
   letter-spacing: .01em;
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
   box-shadow: 0 10px 22px -10px var(--shadow);
   opacity: 0;
   pointer-events: none;
@@ -482,6 +485,21 @@ html.game-live .screen.game .card {
   box-shadow: var(--clay), inset 0 0 0 1px var(--honey-soft);
 }
 .note.show { opacity: 1; transform: translate(-50%, 0); }
+/* Joined Persian/Arabic script is prose, not tracked display type: zero tracking keeps the
+   glyphs connected, and plaintext lets each message pick its own base direction. The hard
+   max-width above plus `overflow-wrap` keeps the longest translation inside a 320px board. */
+html[dir="rtl"] .note,
+.note[dir="rtl"],
+html[data-lang="fa"] .note,
+html[data-lang="ar"] .note {
+  direction: rtl;
+  unicode-bidi: plaintext;
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0 !important;
+  word-spacing: normal !important;
+  text-transform: none !important;
+  line-height: 1.65;
+}
 
 /* ---- the bomb key: a tactical dark-clay key welded into the "YOU" card ----
    The board is the action dock, and this is the one key left on it. In a duel it sits inside the
@@ -34689,4 +34707,125 @@ html[data-lang="ar"] :is(.iv-coach-t, .iv-bonus-t, .tu-body, .tu-title) {
   .tu-modal { padding-inline: 12px; }
   .tu-panel { padding: 18px 13px 14px; }
   .tu-actions button { padding: 11px 8px; }
+}
+
+/* ============================================================================
+   60 FPS PERFORMANCE LAYER — the last word on the race screen
+   ----------------------------------------------------------------------------
+   Appended last so it outranks every earlier "pass" of the card/dock rules.
+   Dark obsidian stays: opaque slabs, one hairline rim, one tight 2-3px lift.
+   No live blur, no ambient spotlight cone, no wide-spread shadow. Nothing here
+   adds a width, a margin or a negative inset, and every inset is logical, so
+   full RTL compliance and zero horizontal overflow at 320-390px are preserved.
+   ============================================================================ */
+:root {
+  --perf-surface: rgba(15, 23, 42, .95);
+  --perf-hairline: rgba(148, 163, 184, .22);
+  --perf-rim: inset 0 0 0 1px var(--perf-hairline);
+  --perf-lift: var(--perf-rim), 0 2px 3px rgba(2, 6, 23, .55);
+}
+
+/* 1. NO LIVE BLUR. `backdrop-filter` makes the compositor re-sample every pixel
+      behind a surface on every frame — the single most expensive thing a mobile
+      HUD can do. A solid translucent face reads identically on an opaque slab. */
+.screen.game :is(.card, .board-slot, .board-wrap, .board-frame, .g-head,
+  .chips, .chip, .chat-key, .mine-pod, .note, .overlay, .tut-scrim,
+  .tut-card, .tut-toast, .lang-switch),
+html.game-live .screen.game *,
+html.game-live .screen.game *::before,
+html.game-live .screen.game *::after,
+html.game-live .scrim,
+html.game-live .sheet,
+html.game-live .sheet * {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* The board container, HUD and dock wear one dark opaque face instead of glass.
+   Light Mode keeps its own card rule — that selector is deliberately excluded. */
+html:not(.light-game) .screen.game .card {
+  background: var(--perf-surface) !important;
+  box-shadow: var(--perf-lift) !important;
+}
+.screen.game :is(.g-head, .chips, .note, .tut-scrim, .tut-card, .tut-toast,
+  .lang-switch, .overlay) {
+  background-color: var(--perf-surface);
+}
+
+/* 2. NO AMBIENT SPOTLIGHT CONES OVER THE FINISH LINE.
+      The three additive beams and the drifting strip sweep are removed in
+      render.ts; no pseudo-element on the board may paint a bloom over row 0. */
+.screen.game .board-slot::before,
+.screen.game .board-slot::after,
+.screen.game .board-wrap::after {
+  content: none !important;
+  display: none !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+/* 3. TIGHT RIMS ONLY. The neon mount's six wide spread shadows, the inset bevel
+      and the dock's 20px glows become a 1px hairline plus a 2-3px lift. */
+.screen.game .board-frame,
+html[data-theme="light"] .screen.game .board-frame {
+  border: 1px solid var(--perf-hairline);
+  box-shadow: var(--perf-lift) !important;
+}
+.screen.game .board-wrap::before,
+html[data-theme="light"] .screen.game .board-wrap::before {
+  box-shadow: var(--perf-rim) !important;
+}
+.screen.game :is(.stud),
+html[data-theme="light"] .screen.game .stud {
+  box-shadow: var(--perf-lift) !important;
+}
+.screen.game :is(.chip, .chat-key, .chip-ball, .mine-btn, .mine-pod),
+.screen.game .chat-key:active,
+.screen.game .chat-key.is-ping,
+.screen.game .chip-ball {
+  box-shadow: var(--perf-lift) !important;
+}
+.screen.game .chip.active {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--tint) 60%, transparent),
+    0 2px 3px rgba(2, 6, 23, .55) !important;
+}
+.screen.game .chip::after,
+.screen.game .chip.active::after {
+  box-shadow: var(--perf-rim) !important;
+}
+/* Wide, multi-layer drop-shadow() filters become one tight 1px shadow. The tutorial hand animates
+   every frame, so it carries NO filter at all — re-filtering a moving layer is pure GPU waste. */
+.screen.game :is(.mine-btn .ico, .chip .mine-pod .bomb-ico,
+  .theme-toggle .tt-sun, .theme-toggle .tt-moon) {
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .55)) !important;
+}
+.screen.game .tut-hand { filter: none !important; }
+
+/* 4. COMPOSITING: only the moving layers own a GPU layer. Pawns are painted on
+      the board canvas, so that canvas + confetti are the "moving pawns"; every
+      static slab explicitly releases its hint to avoid full-board relayout. */
+html.game-live .screen.game .board-wrap > canvas#board,
+html.game-live .screen.game canvas.confetti {
+  will-change: transform;
+  transform: translateZ(0);
+}
+html.game-live .screen.game :is(.board-wrap.shake, .board-wrap.shake.micro,
+  .tut-hand, .chip.active::after, .confetti) {
+  will-change: transform, opacity;
+}
+html.game-live .screen.game :is(.card, .board-slot, .board-frame, .chips,
+  .chip, .g-head, .note),
+html.game-live .blob {
+  will-change: auto;
+}
+
+/* 5. 320-390px BUDGET: logical sizing only, nothing may widen the column.
+      `max-inline-size` is direction-agnostic, so Persian/Arabic stay correct. */
+@media (max-width: 390px) {
+  .screen.game :is(.card, .board-slot, .board-wrap, .chips, .chip, .g-head,
+    .note, .chat-key, .mine-btn, .icon-btn) {
+    box-sizing: border-box;
+    max-inline-size: 100%;
+  }
 }
