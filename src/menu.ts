@@ -3030,6 +3030,29 @@ export function createMenu(api: MenuApi): Menu {
     const lv = levelInfo();
     setBalance($('p-coins'), profile.coins);
     setBalance($('pf-coins'), profile.coins);
+    /* The dual currency dock: the rating rides the same repaint as the wallet, so a
+       settlement that pays coins and TIQ can never leave the capsule half-updated. TIQ is a
+       derived figure (wins · games · bonus), so it is diffed and stamped with one short pulse
+       instead of counting up — the wallet already owns the count-up. */
+    const tiqText = en(myTiq());
+    const tiqEl = document.getElementById('hud-tiq');
+    if (tiqEl && tiqEl.textContent !== tiqText) {
+      tiqEl.textContent = tiqText;
+      if (!motionReduced()) {
+        tiqEl.classList.remove('is-bump');
+        void tiqEl.offsetWidth;           // reflow, so the pulse restarts on every move
+        tiqEl.classList.add('is-bump');
+      }
+    }
+    /* one capsule, one tap target: the label reads both balances, so a screen reader never
+       has to infer the rating from a bare number beside a brain glyph */
+    const dock = document.getElementById('coin-btn');
+    if (dock) {
+      dock.setAttribute(
+        'aria-label',
+        `Open profile — ${en(profile.coins)} coins, ${tiqText} TIQ rating`,
+      );
+    }
     for (const id of ['p-level', 'pf-level']) $(id).textContent = String(lv.n);
     $('pf-xp').textContent = `${lv.got} / ${lv.need} XP`;
     /* Home XP ring (r=22 in a 48 viewBox, round caps, cyan→emerald gradient on a dark track):

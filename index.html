@@ -2245,7 +2245,22 @@
               </button>
             </div>
             <div class="id-side">
-              <button class="coin-pill id-coin" type="button" id="coin-btn" aria-label="Open profile — coin balance"><span class="coin" data-coin="notched" aria-hidden="true"></span><span id="p-coins">0</span></button>
+              <!-- Dual currency dock: the wallet (warm gold) and the competitive rating
+                   (cold cyan) share one obsidian capsule, split by a single hairline, so
+                   the header reads as one balance sheet instead of two competing boxes.
+                   Both numerals are tabular and width-capped — a 6-digit wallet can never
+                   push the identity column off a 320px phone. -->
+              <button class="coin-pill id-coin hud-dock" type="button" id="coin-btn" aria-label="Open profile — coins and TIQ rating">
+                <span class="hud-dock-part" id="hud-coins">
+                  <span class="coin" data-coin="notched" aria-hidden="true"></span>
+                  <b class="hud-dock-n" id="p-coins">0</b>
+                </span>
+                <span class="hud-dock-sep" aria-hidden="true"></span>
+                <span class="hud-dock-part">
+                  <svg class="ico hud-dock-tiq-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#i-brain" /></svg>
+                  <b class="hud-dock-n" id="hud-tiq">0</b>
+                </span>
+              </button>
               <button class="icon-btn xs notif-bell id-bell" type="button" id="home-notifs" aria-label="Open notifications">
                 <svg class="ico notif-bell-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <defs>
