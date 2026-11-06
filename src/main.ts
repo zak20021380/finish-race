@@ -2583,8 +2583,8 @@ function paintPause(): void {
   pauseQuitBtn.textContent = t(quitKind() === 'practice' ? 'pauseQuit' : 'pauseForfeit');
 }
 
-/** One dialog, three faces. Staying is always the primary key and leaving always the crimson one,
- *  so the safe answer is the loud one whichever match the player is walking out of. */
+/** One dialog, three faces. Staying is always the primary key; only a ranked exit wears crimson —
+ *  a practice board or a friend's round costs no stake, so its confirm stays a quiet second key. */
 function paintQuit(): void {
   const kind = quitKind();
   const key = kind === 'practice' ? 'quitPractice' : kind === 'duel' ? 'quitDuel' : 'quitForfeit';
@@ -2592,6 +2592,9 @@ function paintQuit(): void {
   quitBody.textContent = t(`${key}Body`);
   quitStay.textContent = t(`${key}Stay`);
   quitYes.textContent = t(`${key}Confirm`);
+  const ranked = kind === 'forfeit';
+  quitYes.classList.toggle('btn-danger', ranked);
+  quitYes.classList.toggle('btn-ghost', !ranked);
 }
 
 /** The one door into the pause sheet: the HUD's menu key and the system back key both take it. */
