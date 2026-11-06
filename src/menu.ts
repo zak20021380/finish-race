@@ -72,6 +72,15 @@ export interface Menu {
   setRoute(id: string): void;
   /** first launch: land on the team a `startapp=` invite named */
   afterStart(): void;
+  /**
+   * The pre-lesson language gate a first-time invitee sees. The callback runs ONCE, after the
+   * choice has been applied and the gate has closed; main.ts starts the untouched lesson there.
+   */
+  openLanguagePicker(onPick: (code: LangCode) => void): void;
+  /** Lift the gate without a choice (a late hydrate can prove this is not a first launch). */
+  closeLanguagePicker(): void;
+  /** Is the gate still on screen? A late hydrate only hands over an invite it actually covers. */
+  isLanguagePickerOpen(): boolean;
 }
 
 /** A race to start: how sharp the opponent is and how many balls each side fields. */
@@ -3486,6 +3495,116 @@ export function createMenu(api: MenuApi): Menu {
   });
   $('profile-tg-channel')?.addEventListener('click', () => { impact('light'); openExternal(CHANNEL_URL); });
 
+  /* ---- the pre-lesson language gate ---------------------------------------------------------
+     A first-time invitee gets one decision before the board: which language to learn in. It is
+     deliberately NOT a sheet — there is nothing behind it to browse yet — so it is a full
+     viewport obsidian card over the boot shell, and it cannot be dismissed without a choice.
+     Every width is capped, every text node wraps and the grid collapses at 340px, so a 320px
+     Persian or Arabic viewport can never gain a horizontal scrollbar. */
+  const langGate = document.createElement('div');
+  langGate.className = 'lang-picker-modal';
+  langGate.id = 'lang-picker-modal';
+  langGate.hidden = true;
+  langGate.innerHTML = [
+    '<div class="lang-picker-card" data-scroll role="dialog" aria-modal="true" aria-labelledby="lang-picker-title" aria-describedby="lang-picker-sub">',
+    '  <span class="lang-picker-crest" aria-hidden="true"><svg class="ico"><use href="#i-swords" /></svg></span>',
+    '  <p class="lang-picker-kicker" id="lang-picker-kicker"></p>',
+    '  <h2 class="lang-picker-title" id="lang-picker-title"></h2>',
+    '  <p class="lang-picker-sub" id="lang-picker-sub"></p>',
+    '  <div class="lang-picker-grid" id="lang-picker-grid" role="group"></div>',
+    '</div>',
+  ].join('');
+  document.body.appendChild(langGate);
+
+  const langGateCard = langGate.querySelector<HTMLElement>('.lang-picker-card');
+  const langGateKicker = langGate.querySelector<HTMLElement>('#lang-picker-kicker');
+  const langGateTitle = langGate.querySelector<HTMLElement>('#lang-picker-title');
+  const langGateSub = langGate.querySelector<HTMLElement>('#lang-picker-sub');
+  const langGateGrid = langGate.querySelector<HTMLElement>('#lang-picker-grid');
+  const langGateButtons: HTMLButtonElement[] = [];
+  let langGatePick: ((code: LangCode) => void) | null = null;
+
+  const paintLanguageGate = (): void => {
+    const dir = langDef(lang).dir;
+    langGate.setAttribute('dir', dir);
+    langGateCard?.setAttribute('dir', dir);
+    if (langGateKicker) langGateKicker.textContent = t('language');
+    if (langGateTitle) langGateTitle.textContent = t('langPickerTitle');
+    if (langGateSub) langGateSub.textContent = t('langPickerSub');
+    for (const b of langGateButtons) {
+      const on = b.dataset.lang === lang;
+      b.classList.toggle('is-current', on);
+      b.setAttribute('aria-pressed', String(on));
+    }
+  };
+
+  function closeLanguageGate(): void {
+    if (langGate.hidden) return;
+    langGate.hidden = true;
+    langGate.classList.remove('is-in');
+    langGatePick = null;
+  }
+
+  function pickLanguageGate(code: LangCode): void {
+    if (langGate.hidden) return;
+    impact('light');
+    /* Apply the locale BEFORE the gate lifts: every surface behind it — and the lesson that is
+       about to start — paints in the chosen language from its very first frame. */
+    setLang(code);
+    paintLanguageGate();
+    const done = langGatePick;
+    closeLanguageGate();
+    done?.(code);
+  }
+
+  if (langGateGrid) {
+    for (const l of LANGS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'lang-pick';
+      btn.dataset.lang = l.code;
+      btn.setAttribute('aria-pressed', 'false');
+      const flag = document.createElement('span');
+      flag.className = 'lang-pick-flag';
+      flag.textContent = l.flag;
+      flag.setAttribute('aria-hidden', 'true');
+      const native = document.createElement('span');
+      native.className = 'lang-pick-native';
+      native.textContent = l.native;
+      native.lang = l.code;
+      native.dir = l.dir;
+      btn.append(flag, native);
+      btn.addEventListener('click', () => pickLanguageGate(l.code));
+      langGateButtons.push(btn);
+      langGateGrid.append(btn);
+    }
+  }
+
+  function openLanguageGate(onPick: (code: LangCode) => void): void {
+    langGatePick = onPick;
+    paintLanguageGate();
+    langGate.hidden = false;
+    requestAnimationFrame(() => langGate.classList.add('is-in'));
+    const current = langGateButtons.find((b) => b.dataset.lang === lang) ?? langGateButtons[0];
+    window.setTimeout(() => {
+      if (!langGate.hidden) current?.focus({ preventScroll: true });
+    }, 60);
+  }
+
+  /* Mandatory decision: Tab cycles inside the card, and there is no Escape or scrim dismissal. */
+  langGate.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab' || langGate.hidden || !langGateButtons.length) return;
+    const first = langGateButtons[0];
+    const last = langGateButtons[langGateButtons.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus({ preventScroll: true });
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus({ preventScroll: true });
+    }
+  });
+
   /* ---- Contact Admin: the in-app support drawer -----------------------------------------------
      The row opens a Dark-Clay bottom sheet — category pills, a recessed 300-char textarea and
      a gold clay send key — so the message is written and submitted inside the Mini App, never
@@ -3660,6 +3779,9 @@ export function createMenu(api: MenuApi): Menu {
         else t.removeAttribute('aria-current');
       }
     },
+    openLanguagePicker(onPick) { openLanguageGate(onPick); },
+    closeLanguagePicker() { closeLanguageGate(); },
+    isLanguagePickerOpen() { return !langGate.hidden; },
     afterStart() {
       if (invite && !profile.teamId) openTeam();
     },

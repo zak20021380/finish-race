@@ -34829,3 +34829,197 @@ html.game-live .blob {
     max-inline-size: 100%;
   }
 }
+
+/* ============================================================================
+   FIRST-TIME DUEL INVITE — the pre-lesson language gate
+   A full-viewport obsidian card shown once, before the standalone lesson, to a
+   brand-new player who arrived on a friend's room link. Gold is an accent only:
+   one hairline crest, one lit rim, one current row. Every width is capped with
+   minmax(0, …), every label wraps, and the grid tightens inside 340px, so the
+   gate can never create a horizontal scrollbar in either direction.
+   ============================================================================ */
+.lang-picker-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 960;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  padding: max(14px, env(safe-area-inset-top)) 12px max(14px, env(safe-area-inset-bottom));
+  background:
+    radial-gradient(75% 55% at 50% 0%, rgba(212, 175, 55, .10), transparent 72%),
+    rgba(3, 5, 9, .82);
+  -webkit-backdrop-filter: blur(10px) saturate(1.05);
+  backdrop-filter: blur(10px) saturate(1.05);
+  opacity: 0;
+  transition: opacity .24s ease;
+}
+.lang-picker-modal[hidden] { display: none !important; }
+.lang-picker-modal.is-in { opacity: 1; }
+
+.lang-picker-card {
+  position: relative;
+  box-sizing: border-box;
+  width: min(100%, 360px);
+  max-width: 100%;
+  max-height: calc(100dvh - 28px);
+  min-width: 0;
+  overflow-x: clip;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 24px 16px 16px;
+  border: 1px solid rgba(252, 211, 77, .30);
+  border-radius: 26px;
+  background:
+    radial-gradient(120% 64% at 50% 0%, rgba(212, 175, 55, .14) 0%, rgba(212, 175, 55, 0) 66%),
+    linear-gradient(168deg, #1a1d26 0%, #0c0f16 58%, #06070b 100%);
+  box-shadow:
+    0 30px 64px -24px rgba(0, 0, 0, .95),
+    inset 0 1px 0 rgba(255, 255, 255, .09),
+    0 0 42px -24px rgba(252, 211, 77, .55);
+  color: var(--ink);
+  text-align: center;
+  transform: translateY(10px) scale(.985);
+  transition: transform .32s cubic-bezier(.2, .9, .25, 1);
+}
+.lang-picker-modal.is-in .lang-picker-card { transform: none; }
+
+/* one gold hairline across the crown: the only bright edge on the card */
+.lang-picker-card::before {
+  content: '';
+  position: absolute;
+  inset-inline: 22%;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(252, 211, 77, .85), transparent);
+}
+
+.lang-picker-crest {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 10px;
+  border: 1px solid rgba(252, 211, 77, .38);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(252, 211, 77, .16), rgba(252, 211, 77, .03));
+  color: var(--gold-ink);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10);
+}
+.lang-picker-crest .ico { width: 21px; height: 21px; }
+
+.lang-picker-kicker {
+  margin: 0 0 6px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--gold-ink);
+}
+.lang-picker-title {
+  margin: 0 0 6px;
+  font-size: clamp(19px, 5.4vw, 23px);
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.lang-picker-sub {
+  margin: 0 0 18px;
+  font-size: clamp(11px, 3.2vw, 12.5px);
+  line-height: 1.6;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.lang-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+.lang-pick {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 15px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .015));
+  color: var(--ink);
+  font: inherit;
+  font-size: clamp(12px, 3.5vw, 13.5px);
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: start;
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, transform .16s ease, box-shadow .18s ease;
+}
+.lang-pick:active { transform: scale(.97); }
+.lang-pick.is-current,
+.lang-pick[aria-pressed="true"] {
+  border-color: rgba(252, 211, 77, .52);
+  background: linear-gradient(180deg, rgba(252, 211, 77, .14), rgba(252, 211, 77, .03));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10), 0 0 20px -12px rgba(252, 211, 77, .65);
+}
+.lang-pick:focus-visible { outline: 2px solid var(--gold-ink); outline-offset: 2px; }
+.lang-pick-flag {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .10);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10);
+  font-size: 19px;
+  line-height: 1;
+}
+.lang-pick-native {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* five options never leave a hole: the last one closes the block across both columns */
+.lang-pick:last-child:nth-child(odd) { grid-column: 1 / -1; }
+
+/* RTL: joined scripts lose the tracking; titles stay centred while rows stay logical */
+html[data-lang="fa"] .lang-picker-card,
+html[data-lang="ar"] .lang-picker-card { letter-spacing: 0; }
+html[data-lang="fa"] .lang-picker-kicker,
+html[data-lang="ar"] .lang-picker-kicker {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 10px;
+}
+html[data-lang="fa"] .lang-picker-title,
+html[data-lang="fa"] .lang-picker-sub,
+html[data-lang="ar"] .lang-picker-title,
+html[data-lang="ar"] .lang-picker-sub {
+  letter-spacing: 0;
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+}
+.lang-picker-card[dir="rtl"] { text-align: right; }
+.lang-picker-card[dir="ltr"] { text-align: left; }
+.lang-picker-card[dir="rtl"] .lang-picker-kicker,
+.lang-picker-card[dir="rtl"] .lang-picker-title,
+.lang-picker-card[dir="rtl"] .lang-picker-sub { text-align: center; }
+
+/* ---- 320px budget: tighter rows, same two columns, still no horizontal scroll ---- */
+@media (max-width: 340px) {
+  .lang-picker-modal { padding-inline: 10px; }
+  .lang-picker-card { padding: 20px 12px 13px; border-radius: 22px; }
+  .lang-picker-grid { gap: 7px; }
+  .lang-pick { gap: 7px; padding: 8px; }
+  .lang-pick-flag { width: 29px; height: 29px; font-size: 17px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lang-picker-modal,
+  .lang-picker-card { transition: none; }
+  .lang-picker-card { transform: none; }
+}

@@ -69,6 +69,45 @@ export function markAdminViewed(at: number = Date.now()): number {
   return stamp;
 }
 
+/* ---------- the friend's room, held across first-time onboarding ---------- */
+
+/**
+ * The invite a brand-new player landed on, parked for the length of the language gate and the
+ * lesson. Session storage is the right shelf for it: the promise belongs to this tab's launch,
+ * not to the save. A webview that refuses sessionStorage still gets the same behaviour from the
+ * in-memory copy underneath, so the redirect after the lesson never depends on storage at all.
+ */
+const PENDING_DUEL_KEY = 'pendingDuelRoom';
+let pendingDuelMemory = '';
+const isDuelRoomCode = (value: unknown): value is string =>
+  typeof value === 'string' && /^\d{4}$/.test(value.trim());
+
+/** Park the room code an invite named. An invalid code is ignored, never stored. */
+export function rememberPendingDuelRoom(code: string): void {
+  const clean = (code ?? '').trim();
+  if (!/^\d{4}$/.test(clean)) return;
+  pendingDuelMemory = clean;
+  try { window.sessionStorage.setItem(PENDING_DUEL_KEY, clean); } catch { /* stay in memory */ }
+}
+
+/** The pending code without consuming it: boot asks before the lesson has ended. */
+export function peekPendingDuelRoom(): string {
+  try {
+    const raw = window.sessionStorage.getItem(PENDING_DUEL_KEY);
+    if (isDuelRoomCode(raw)) return raw.trim();
+  } catch { /* stay in memory */ }
+  return pendingDuelMemory;
+}
+
+/** Read the pending code once and forget it: the lesson has ended and is handing over. */
+export function takePendingDuelRoom(): string {
+  const code = peekPendingDuelRoom();
+  pendingDuelMemory = '';
+  if (!code) return '';
+  try { window.sessionStorage.removeItem(PENDING_DUEL_KEY); } catch { /* stay in memory */ }
+  return code;
+}
+
 /* ---------- the schema ---------- */
 
 const KEY = 'detour.save.v2';

@@ -45,7 +45,8 @@ import {
 import {
   claimFirstDuelBonus, completeTutorial, earnCoins, earnTiq, hasClaimedFirstDuelBonus,
   hasCompletedTutorial, isFirstTimePlayer, onChange, pieceColor, profile,
-  reconcileTutorialFromHistory, recordGame, resetTutorialState, theme,
+  peekPendingDuelRoom, reconcileTutorialFromHistory, recordGame, rememberPendingDuelRoom,
+  resetTutorialState, takePendingDuelRoom, theme,
 } from './storage';
 import {
   createTutorial, shouldAutoStartTutorial, tutorialSpotHas, TUTORIAL_LIVE_STEPS,
@@ -109,8 +110,18 @@ applyFlagSupport();
    is a hoisted declaration below; reading it here, before any router or sheet is created, is what
    lets the whole invited session stay free of the two boot blockers. */
 const INVITE_DUEL_LAUNCH = detectInviteDuelLaunch();
+/* ---------- first-time invite onboarding ----------
+   A brand-new player who taps a friend's duel link has not met the board yet. The invite is a
+   promise, not a shortcut past onboarding: the room code is parked in session memory here, the
+   language gate takes the first screen, and the room is joined again the moment the standalone
+   lesson is finished or skipped. Read exactly once at boot, before any router or sheet exists,
+   and only for a profile that has never completed (or skipped) the lesson. */
+reconcileTutorialFromHistory();
+const INVITE_FTUE_ROOM = detectInviteRoomCode();
+const INVITE_FTUE = !!INVITE_FTUE_ROOM && !hasCompletedTutorial();
+if (INVITE_FTUE) rememberPendingDuelRoom(INVITE_FTUE_ROOM);
 /** The mandatory channel check is HELD for the invited duel and re-armed on the first Home return. */
-let inviteGateDeferred = INVITE_DUEL_LAUNCH;
+let inviteGateDeferred = INVITE_DUEL_LAUNCH || INVITE_FTUE;
 
 /* The mandatory channel check runs in the background; the neural boot screen still owns the
    first two seconds, and a gate that cannot be answered fails open. On an invited launch it is
@@ -548,11 +559,11 @@ const router = createRouter($('screens'), (id, prev) => {
      to Home re-arms the channel gate that an invite launch held back, and is the one moment the
      optional tactical-training upsell belongs: the friend has been played and nobody is waiting. */
   if (id === 'home' && prev !== null) {
-    if (inviteGateDeferred) {
+    if (inviteGateDeferred && !peekPendingDuelRoom()) {
       inviteGateDeferred = false;
       initJoinGate();
     }
-    maybeOfferTraining();
+    if (!peekPendingDuelRoom()) maybeOfferTraining();
   }
   syncLoop();
 });
@@ -3385,6 +3396,41 @@ function beginTutorial(auto = false) {
 }
 
 /**
+ * The other half of the reserved invite: take the room code the language gate parked at boot,
+ * forget it, and let the lobby join it. The short beat lets `quitToMenu()`'s Home render settle
+ * first, so the drawer slides over a real shell and the route is already Home when it opens. A
+ * shell that is still not ready is retried once through the same door.
+ */
+let pendingDuelJoinTimer = 0;
+function joinPendingDuelRoom(): void {
+  /* Keep the code in session memory through the Home route: `quitToMenu()` only re-arms the
+     channel gate when nothing is pending, and it must see this invitation. The code is consumed
+     inside the deferred join, once the route has settled and the gate decision is behind us. */
+  if (!peekPendingDuelRoom() || pendingDuelJoinTimer) return;
+  pendingDuelJoinTimer = window.setTimeout(() => {
+    pendingDuelJoinTimer = 0;
+    const code = takePendingDuelRoom();
+    if (!code) return;
+    const join = (attempt: number): void => {
+      if (openInviteRoom(code)) return;
+      if (attempt < 1) window.setTimeout(() => join(attempt + 1), 400);
+    };
+    join(0);
+  }, 300);
+}
+
+/**
+ * The first screen a brand-new invitee sees: one decision, then the untouched standalone
+ * lesson. The friend's room is already in session memory, so the lesson's own end hands the
+ * player straight to it. Nothing in src/tutorial.ts is changed; `startTutorial()` is the one
+ * existing door used here.
+ */
+function bootInviteOnboarding(): void {
+  if (!INVITE_FTUE || !peekPendingDuelRoom()) return;
+  menu.openLanguagePicker(() => { startTutorial(); });
+}
+
+/**
  * The lobby's on-demand door into the lesson: a fresh local duel with the overlay forced on, for
  * a player who has already read it as much as for a first-timer. `beginTutorial` refuses a live
  * seat or a room with people in it, so the setup is deliberately a plain 1v1 bot race — the exact
@@ -3435,6 +3481,43 @@ function detectInviteDuelLaunch(): boolean {
     /* a webview that refuses the URL still boots normally */
   }
   return false;
+}
+
+/**
+ * The room code this launch was invited into, or ''. It accepts the same grammar as the guard
+ * above but returns the FOUR DIGITS: `room_1909`, `duel_relic_1909`, `#room=1909`, a bare
+ * `#1909`, `?room=1909` and Telegram's `startapp` all name one room. `squad_`, `ref_` and
+ * `team-` payloads return '' — they belong to their own doors.
+ */
+function detectInviteRoomCode(): string {
+  const roomPayload = /^(?:#?\s*)?room[\s_-]*(\d{4})(?!\d)/i;
+  const duelPayload = /^(?:#?\s*)?duel[\s_-]*(?:relic[\s_-]*)?(\d{4})(?!\d)/i;
+  const bareRoomPayload = /^(?:#?\s*)?(\d{4})\s*$/;
+  const queryKeys = ['room', 'roomcode', 'duel', 'startapp', 'tgWebAppStartParam', 'start_param'];
+  const codeOf = (raw: string | null | undefined): string => {
+    const value = (raw ?? '').trim();
+    if (!value) return '';
+    const match = roomPayload.exec(value) ?? duelPayload.exec(value) ?? bareRoomPayload.exec(value);
+    return match ? match[1] : '';
+  };
+  try {
+    const direct = codeOf(inviteRoomCode()) || codeOf(inviteDuelCode()) || codeOf(startParam());
+    if (direct) return direct;
+    for (const part of [window.location.search, window.location.hash]) {
+      const body = part.replace(/^[?#]/, '');
+      if (!body) continue;
+      const fromBody = codeOf(body);
+      if (fromBody) return fromBody;
+      const query = new URLSearchParams(body);
+      for (const key of queryKeys) {
+        const code = codeOf(query.get(key));
+        if (code) return code;
+      }
+    }
+  } catch {
+    /* a webview that refuses the URL still boots normally */
+  }
+  return '';
 }
 
 /**
@@ -3567,6 +3650,9 @@ tutorial = createTutorial({
         return;
       }
       quitToMenu();
+      /* The invite waited through the language gate and the whole lesson: hand the player to
+         the friend's room now, so the duel begins immediately rather than on a Home screen. */
+      joinPendingDuelRoom();
       return;
     }
     $<HTMLElement>('s-game').focus({ preventScroll: true });
@@ -4093,12 +4179,22 @@ menu.afterStart();
    the first playable experience. A true first-timer is routed onto #s-game in the same tick —
    under the boot veil, so the Home/Lobby screen is never actually shown on a first open. Every
    returning user stays right here. */
-bootFirstRunTutorial();
+if (INVITE_FTUE) window.setTimeout(bootInviteOnboarding, 640);
+else bootFirstRunTutorial();
 /* A CloudStorage hydrate can resolve AFTER boot and reveal that this is really a returning player
    (match history, no lesson flag). `hydrate()` stamps the flag; this watcher ends the first-open
    lesson at once and puts them on Home instead of holding them in onboarding. */
 onChange(() => {
-  if (!firstRunBoot || !hasCompletedTutorial()) return;
+  if (!hasCompletedTutorial()) return;
+  /* A late profile hydrate can prove "returning" while the gate is still up: lift it and hand
+     the held invite over exactly as the lesson's own end would. Both calls are no-ops when the
+     gate is closed or nothing is pending. */
+  const gateWasOpen = menu.isLanguagePickerOpen();
+  menu.closeLanguagePicker();
+  /* Only a gate that was actually covering the invite hands over here. A completion that lands
+     during the lesson is the lesson's own `end()` to route, never a drawer over the tutorial. */
+  if (gateWasOpen) joinPendingDuelRoom();
+  if (!firstRunBoot) return;
   firstRunBoot = false;
   tutorialStandalone = false;
   tutorial?.cancel();
@@ -4168,7 +4264,7 @@ themeToggle.addEventListener('click', () => {
  * than over the boot screen. The payload grammar (`duel_`) never collides with the room door's
  * (`room_`), so a plain room invite still goes straight in with no tap at all.
  */
-window.setTimeout(openDuelDoor, 620);
+window.setTimeout(() => { if (!INVITE_FTUE) openDuelDoor(); }, 620);
 
 /* ---------- the invite door: `?startapp=room_XXXX` lands in that room, no taps ---------- */
 
@@ -4187,7 +4283,9 @@ window.setTimeout(openDuelDoor, 620);
  * arrives as a toast from `openInviteRoom` with the player left at home.
  */
 const invitedRoom = inviteRoomCode();
-if (invitedRoom) {
+/* A first-time invitee is held at the language gate: the room is joined by the lesson's end,
+   never behind the gate. */
+if (invitedRoom && !INVITE_FTUE) {
   let inviteDoorDone = false;
   const openInvite = (attempt = 0): void => {
     if (inviteDoorDone) return;
