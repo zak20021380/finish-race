@@ -386,6 +386,43 @@ coachPill.innerHTML = '<span class="iv-coach-k" id="iv-coach-k"></span>'
   + '<p class="iv-coach-t" id="iv-coach-t"></p>';
 gameScreen.appendChild(coachPill);
 
+/* A live friend-room status pill: the rival's reconnecting grace, without a dialog and without
+   taking a tap from the board. Built here so the static markup stays untouched. */
+const peerPill = document.createElement('div');
+peerPill.className = 'peer-pill';
+peerPill.id = 'peer-pill';
+peerPill.setAttribute('role', 'status');
+peerPill.setAttribute('aria-live', 'polite');
+peerPill.hidden = true;
+gameScreen.appendChild(peerPill);
+
+let peerPillTimer = 0;
+function hidePeerPill(): void {
+  if (peerPill.hidden && !peerPillTimer) return;
+  window.clearTimeout(peerPillTimer);
+  peerPillTimer = 0;
+  peerPill.hidden = true;
+  peerPill.classList.remove('is-warn', 'is-ok');
+}
+/** A friend-room seat's socket changed state: the pill says so, the board keeps its turn. */
+function setPeerStatus(side: number, status: 'reconnecting' | 'online' | 'bot', graceMs = 0): void {
+  if (side === localSide) return;
+  if (status === 'bot') { hidePeerPill(); return; }
+  window.clearTimeout(peerPillTimer);
+  peerPillTimer = 0;
+  peerPill.hidden = false;
+  peerPill.classList.toggle('is-warn', status === 'reconnecting');
+  peerPill.classList.toggle('is-ok', status !== 'reconnecting');
+  peerPill.textContent = t(status === 'reconnecting' ? 'peerReconnecting' : 'peerOnline');
+  if (status === 'reconnecting') {
+    /* The server's grace is also the pill's own lease: if the takeover notice is lost, the
+       promise still expires instead of sitting over a board that has moved on. */
+    peerPillTimer = window.setTimeout(hidePeerPill, Math.max(4000, graceMs + 500));
+  } else {
+    peerPillTimer = window.setTimeout(hidePeerPill, 1800);
+  }
+}
+
 const bonusBadge = document.createElement('div');
 bonusBadge.className = 'iv-bonus';
 bonusBadge.id = 'iv-bonus';
@@ -1850,7 +1887,12 @@ function ui() {
     banter.close();
     menuBtn.disabled = false;
   }
-  if (state.winner !== null) armGoalBeat();
+  if (state.winner !== null) {
+    /* A settled board has no live opponent to reconnect: the pill would be a promise with no
+       match left to keep it. */
+    hidePeerPill();
+    armGoalBeat();
+  }
   /* the wall's live-play intermission ends on the board's own terms: two real rival rows, then
      this seat's turn. Called last so a resumed lesson's own repaint is the final word. */
   if (waitingForMineTrigger) resumeMineLesson();
@@ -1924,6 +1966,13 @@ function play(a: Action, remote = false): boolean {
   if (!next) return false;
   /* where the ball actually came to rest — after a blast that is two rows further down */
   const landed = moved === null ? null : ballById(next, moved)?.pos ?? null;
+  /* The optimistic commit happens only after the wire takes it. A friend room queues the move
+     while its socket reconnects; any other session that cannot send leaves the board untouched,
+     so a failed send can never leave a pawn standing somewhere the server never approved. */
+  if (!remote && active) {
+    const sent = active.send(a);
+    if (!sent && !('seats' in active)) return false;
+  }
   if (a.kind === 'move' && from && landed) {
     marks[by] = { kind: 'step', from, to: landed };
     /* one voice per step, whoever took it; a tap in the hand rides along for the local player.
@@ -1937,8 +1986,6 @@ function play(a: Action, remote = false): boolean {
   state = next;
   /* the mine lesson's intermission gate reads real plays, never a scripted walk */
   if (waitingForMineTrigger) countMineStride();
-  /* a move this seat made is also a move the rival has to see: the matchmaker relays it */
-  if (!remote && active) active.send(a);
   turnsPlayed++;                 // one seat has acted; the round caption counts them
   mineGhost = null;
   setMode(BOARD_IDLE);           // the turn is over: the next pick is a fresh one
@@ -2044,8 +2091,13 @@ const turnLimit = (): number => {
   const n = Math.round(runtime.blitz);
   return Number.isFinite(n) && n > 0 ? n : CONFIG.TURN_TIME_LIMIT;
 };
-/** The seconds left on the live turn, reset to `turnLimit()` by every `startClock`. */
+/** The seconds left on the live turn, painted from the wall clock rather than decremented. */
 let turnSecondsLeft: number = turnLimit();
+/**
+ * The instant this turn expires on the device clock. Every turn arms it once; hiding the webview
+ * and coming back must not hand the seat a fresh allowance — the rival's clock kept running.
+ */
+let turnDeadlineAt = 0;
 /** the fraction the ring last showed, so a refill never animates backwards through 1s of easing */
 let ringFrac = -1;
 
@@ -2066,8 +2118,45 @@ function stopClock() {
 function startClock() {
   stopClock();
   turnSecondsLeft = turnLimit();
+  turnDeadlineAt = Date.now() + turnSecondsLeft * 1000;
   paintClock();
   if (clockLive()) turnTimerId = window.setInterval(tickClock, 1000);
+}
+
+/**
+ * Returning to a board that was merely hidden: the turn's deadline survived, so the ring reads
+ * what is actually left instead of resetting to a full allowance. This is the one path a
+ * backgrounded mobile webview takes, and the reason a rival cannot steal a turn by waiting.
+ */
+function resumeClock() {
+  if (!clockLive()) { paintClock(); return; }
+  if (!turnDeadlineAt) { startClock(); return; }
+  const leftMs = Math.max(0, turnDeadlineAt - Date.now());
+  turnSecondsLeft = Math.ceil(leftMs / 1000);
+  paintClock();
+  if (leftMs <= 0) {
+    turnSecondsLeft = 0;
+    stopClock();
+    paintClock();
+    timeoutMove();
+    return;
+  }
+  if (turnTimerId === null) turnTimerId = window.setInterval(tickClock, 1000);
+}
+
+/**
+ * A snapshot from the room is the authority on the turn it is running: arm the local ring with
+ * the server's remaining time (capped to this device's own allowance), so the two clocks agree.
+ */
+function armTurnClock(leftMs: number): void {
+  stopClock();
+  const cap = turnLimit() * 1000;
+  const left = Math.max(0, Math.min(cap, Math.round(Number.isFinite(leftMs) ? leftMs : cap)));
+  turnDeadlineAt = Date.now() + left;
+  turnSecondsLeft = Math.ceil(left / 1000);
+  paintClock();
+  /* A zero clock is the server's to settle: it will play the fallback and relay the move. */
+  if (left > 0 && clockLive()) turnTimerId = window.setInterval(tickClock, 1000);
 }
 
 /** What the clock last painted, so a repaint that changes nothing writes nothing. */
@@ -2125,15 +2214,19 @@ function paintClock() {
 }
 
 function tickClock() {
-  turnSecondsLeft--;
-  if (turnSecondsLeft <= 0) {
+  /* The wall clock is the countdown: a throttled interval must not lengthen a turn. */
+  const leftMs = Math.max(0, turnDeadlineAt - Date.now());
+  const left = Math.ceil(leftMs / 1000);
+  if (left <= 0) {
     turnSecondsLeft = 0;
     stopClock();
     paintClock();
     timeoutMove();
     return;
   }
-  if (turnSecondsLeft <= URGENT_AT) impact('light');
+  if (left === turnSecondsLeft) return;
+  turnSecondsLeft = left;
+  if (left <= URGENT_AT) impact('light');
   paintClock();
 }
 
@@ -2232,6 +2325,49 @@ function restart() {
   renderer.resetFx();
   ui();
   startClock();
+}
+
+/**
+ * Replace the local board with the room's authoritative snapshot, without restarting the match.
+ * Used when a reconnect lands, when a refused move carries the server's state, and when a relayed
+ * move arrived on the wrong turn. Every visual cache that could remember the stale board is
+ * dropped; the pawns are placed on their logical cells before the next paint, so a jump is a clean
+ * re-read rather than a tween across half the grid.
+ */
+function applyRoomSnapshot(next: GameState, turnLeftMs: number): void {
+  if (!active) return;
+  const dimsChanged = next.cols !== state.cols || next.rows !== state.rows;
+  state = next;
+  selected = null;
+  autoPicked = null;
+  mineGhost = null;
+  setMode(BOARD_IDLE);
+  if (dimsChanged) {
+    renderer.setBoard(state.cols, state.rows);
+    fitBoard(state.cols, state.rows);
+    wallsEach = wallBudget(state.balls.length);
+  }
+  ballViews.length = 0;
+  snapBalls();
+  marks.length = state.teams.length;
+  marks.fill(null);
+  shownWalls.fill(-1);
+  shownFlags.fill(undefined);
+  shownXp.fill(-1);
+  shownMines = -1;
+  shownFog.fill(null);
+  /* The server's deadline belongs to the seat that is up. This client only counts it when that
+     seat is its own; on a rival's turn the ring stays at the idle allowance until the hand-off. */
+  if (state.winner === null && state.turn === localSide) {
+    armTurnClock(turnLeftMs);
+  } else {
+    stopClock();
+    turnSecondsLeft = turnLimit();
+    turnDeadlineAt = 0;
+    paintClock();
+  }
+  ui();
+  syncLoop();
 }
 
 /**
@@ -2529,6 +2665,8 @@ function clashRivals(): VsRival[] {
 
 function startGame(setup: StartSetup) {
   cancelTutorial();
+  /* A status pill from the previous race is not this race's news. */
+  hidePeerPill();
   /* A board on screen outranks a challenge that is still being read: the duel veil steps aside
      instead of covering the race it was offering. */
   dismissDuelVeil();
@@ -2617,7 +2755,15 @@ function startGame(setup: StartSetup) {
     /* the rival's moves come through the same door the bot's do, so walls, mines and the blitz
        hand-off all animate exactly as they do offline */
     session.onMove((action, side) => {
-      if (state.winner === null && side === state.turn) play(action, true);
+      if (state.winner !== null) return;
+      if (side === state.turn) {
+        if (!play(action, true) && 'seats' in session) session.requestSync();
+        return;
+      }
+      /* A relayed move that names a seat which is not up means the two replicas drifted — a
+         dropped packet, a queued local move, a server-side timeout. Ask for the room's board
+         instead of applying an action the local turn does not allow. */
+      if ('seats' in session) session.requestSync();
     });
     /* the rival's emote: the same bubble and the same "Haha!" as a local tap, over their own pawn —
        and `side` is whose pawn that is, so a party race points at the seat who sent it */
@@ -2633,7 +2779,16 @@ function startGame(setup: StartSetup) {
     session.onReject(() => {
       notify('error');
       showNote('Move refused — the two boards disagree', true, 2400);
+      /* The refusal frame normally carries the authoritative board (which `onSync` applied just
+         before this). Ask again when it did not, so the repair is never left to a toast. */
+      if ('seats' in session) session.requestSync();
     });
+    if ('seats' in session) {
+      /* Friend-room only: a peer's reconnect grace, and the authoritative snapshot that repairs
+         a board after a resume, a refusal or an explicit sync request. */
+      session.onPeerStatus((side, status, graceMs) => setPeerStatus(side, status, graceMs));
+      session.onSync((next, turnLeftMs) => applyRoomSnapshot(next, turnLeftMs));
+    }
   }
 
   /* The face-off owns the reveal, and the reveal is the only thing it owns. Routing is deferred to
@@ -2652,6 +2807,9 @@ function startGame(setup: StartSetup) {
        frame is guaranteed to hold every pawn on its exact spawn tile centre. */
     snapBalls();
     router.go('game');
+    /* The first turn began in `restart()` behind the face-off (or the lobby veil). The board is
+       only now visible, so this is the instant its wall clock starts. */
+    startClock();
     /* Kick the loop immediately — do not wait for another route or visibility event. */
     syncLoop();
     /* `hidden` was cleared a line ago: re-fit now, then verify once after the DOM settles. */
@@ -2684,6 +2842,7 @@ function startGame(setup: StartSetup) {
  * left exactly as it stands — nothing is rewound, because both screens stopped on the same turn.
  */
 function endOnline(end: RaceEnd): void {
+  hidePeerPill();
   /* The board is already settled, so this frame is the rival walking out of the result capsule —
      by closing the tab, going back to the menu or losing the socket. Nothing is awarded twice:
      the rematch key and the banter dock simply stop pretending somebody is still there. */
@@ -2792,6 +2951,7 @@ function quitToMenu() {
   /* The board is leaving the screen: a waiting room can count down again, and its HUD banner
      (if one was raised) is the only thing left to act on. */
   notifyMatchBusy(false);
+  hidePeerPill();
   /* a race that ended inside the goal beat still has to be paid out before the board goes away */
   if (finishUnderway()) { clearGoalBeat(); showOverlay(); }
   /* Menu, the back button and a quit all land here: the fanfare never follows the board home */
@@ -3984,7 +4144,7 @@ function syncLoop() {
     animating = false;
   }
   if (!want) stopClock();
-  else if (turnTimerId === null) startClock();
+  else if (turnTimerId === null) resumeClock();
 }
 
 /* A dedicated observer on the board container owns every re-fit: the reveal, a WebView chrome
@@ -4195,8 +4355,11 @@ initGameModes(sheets, {
   },
   onRoomRace: (race: LobbyRace) => {
     const room = roomFromRoster(race.code, race.seats);
-    /* the countdown, where this client ran one, has already staged the match: no second face-off */
-    startGame({ difficulty: menuState.difficulty, sizes: race.sizes, online: race, room, quiet: takeAutoLaunch() });
+    /* Both seats watched the same roster fill and the same countdown stage the launch: the board
+       is already the ceremony, so neither host nor guest pays for a second face-off. Dropping the
+       stale flag keeps the next non-room launch honest. */
+    takeAutoLaunch();
+    startGame({ difficulty: menuState.difficulty, sizes: race.sizes, online: race, room, quiet: true });
   },
   /* The armed duel reads the same roster the drawer paints, for one line: the wait ends the moment
      the challenged seat is held by a person. */

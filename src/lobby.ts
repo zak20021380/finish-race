@@ -24,7 +24,7 @@
  * The race itself is the worker's (`worker/matchmaker.ts` launches a `RoomDriver` and streams
  * `MOVE` frames); this module only hands `main.ts` a session shaped like the 1v1 one.
  */
-import type { Action } from './rules';
+import type { Action, GameState } from './rules';
 import { PHRASE_COUNT, isChatEmoteId, isChatLang, type ChatEmoteId, type ChatLang } from './data/phrases';
 import { isPostChatPreset, type PostChatLine } from './data/postchat';
 import { chime, myTier, myTiq, roomSocketUrl, type MindTier, type OpponentData } from './matchmaking';
@@ -234,6 +234,12 @@ export interface LobbyRace {
   onPhrase(cb: (lang: ChatLang, index: number, side: number) => void): void;
   /** A post-match line another seat sent from the result capsule, plus the room's VIP verdict. */
   onPostChat(cb: (line: PostChatLine, side: number, vip: boolean) => void): void;
+  /** A peer's socket entered or left its reconnect grace window, or was taken over by a bot. */
+  onPeerStatus(cb: (side: number, status: 'reconnecting' | 'online' | 'bot', graceMs: number) => void): void;
+  /** The room's authoritative board, sent after a resume, a refusal or an explicit sync request. */
+  onSync(cb: (state: GameState, turnLeftMs: number) => void): void;
+  /** Ask the room to re-send its authoritative board. */
+  requestSync(): void;
   /** The socket is gone after the board settled: the result capsule's live keys are dead. */
   onPostLeft(cb: () => void): void;
   /**
@@ -454,10 +460,28 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   /**
    * A webview that was asleep fires its timers late or not at all. Coming back to the foreground
    * is the moment to notice a socket that died while the page could not hear it: closing it makes
-   * the close handler run, and the close handler is what reconnects.
+   * the close handler run, and the close handler is what reconnects. A live race also asks for a
+   * fresh snapshot here, because the moves it missed while hidden are exactly the drift this is
+   * meant to repair.
    */
   const onVisible = (): void => {
     if (document.hidden || left || solo) return;
+    if (race && !raceDead) {
+      if (!sock) {
+        if (raceTimer) {
+          globalThis.clearTimeout(raceTimer);
+          raceTimer = 0;
+        }
+        scheduleRaceResume();
+        return;
+      }
+      if (sock.readyState === 1 && Date.now() - aliveAt > DEAD_MS) {
+        try { sock.close(); } catch { /* already gone */ }
+        return;
+      }
+      if (sock.readyState === 1) send({ type: 'SYNC_REQ' });
+      return;
+    }
     if (sock?.readyState === 1 && Date.now() - aliveAt > DEAD_MS) {
       try { sock.close(); } catch { /* already gone */ }
     }
@@ -488,6 +512,21 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   };
   const raceEnds: Array<(e: { win: boolean; why: 'resign' | 'left' | 'drop' | 'aborted' }) => void> = [];
   const raceRejects: Array<(r: string) => void> = [];
+  const racePeers: Array<(side: number, status: 'reconnecting' | 'online' | 'bot', graceMs: number) => void> = [];
+  const raceSyncs: Array<(state: GameState, turnLeftMs: number) => void> = [];
+  /** Moves made while the socket is away: flushed on the authoritative snapshot, never before. */
+  const outbox: Array<Record<string, unknown>> = [];
+  /** The live race's reconnect attempts, in the order they are spaced. */
+  const RACE_RESUME_STEPS = [250, 600, 1200, 2000] as const;
+  /** The server holds the seat this long; keep trying at the last beat until it runs out. */
+  const RACE_GRACE_MS = 25_000;
+  let raceTries = 0;
+  let raceTimer = 0;
+  let raceOpenTimer = 0;
+  /** When the live race first lost its socket: the client-side mirror of the server grace. */
+  let raceDroppedAt = 0;
+  /** A refused or abandoned race must not raise another socket behind the player's back. */
+  let raceDead = false;
 
   /** Drop to the local lobby: the host is alone and may fill wells with the machine. */
   const fallback = (): void => {
@@ -514,12 +553,43 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
   };
 
   const send = (msg: Record<string, unknown>): boolean => {
-    if (!sock || sock.readyState !== 1) return false;
+    if (!sock || sock.readyState !== 1) {
+      /* A move made into a socket that is mid-reconnect is not lost: it waits for the room's
+         authoritative snapshot, which is the only proof the new socket is seated. Anything else
+         (a chat line, a resignation) is not worth replaying out of order. */
+      if (race && !raceDead && !left && !solo && msg.type === 'MOVE') {
+        outbox.push(msg);
+        if (outbox.length > 8) outbox.shift();
+        return true;
+      }
+      return false;
+    }
     try {
       sock.send(JSON.stringify(msg));
       return true;
     } catch {
+      /* The socket died between the readyState check and the write: keep the move for the next
+         seated socket instead of leaving the optimistic board to explain itself. */
+      if (race && !raceDead && !left && !solo && msg.type === 'MOVE') {
+        outbox.push(msg);
+        if (outbox.length > 8) outbox.shift();
+        return true;
+      }
       return false;
+    }
+  };
+
+  /** The new socket is seated: replay what was waiting on it, now that the server agrees. */
+  const flushOutbox = (): void => {
+    if (!sock || sock.readyState !== 1) return;
+    const queued = outbox.splice(0, outbox.length);
+    for (const msg of queued) {
+      try {
+        sock.send(JSON.stringify(msg));
+      } catch {
+        outbox.unshift(msg);
+        return;
+      }
     }
   };
 
@@ -554,7 +624,14 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         opts.onNotice?.(typeof msg.reason === 'string' ? msg.reason : 'format_denied');
         return;
       case 'ROOM_FOUND': {
+        /* A live board already owns its seat: this is the room re-announcing the chair after a
+           reconnect, not a new match. The snapshot that follows repairs any drift; restarting the
+           board here would throw away the race the player is already playing. */
+        if (race) { raceTries = 0; return; }
         settled = true;
+        raceDead = false;
+        raceDroppedAt = 0;
+        raceTries = 0;
         racePostGone = false;
         raceGone.clear();
         const seats = Array.isArray(msg.seats) ? msg.seats : [];
@@ -595,17 +672,57 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
           sendPhrase: (lang, index) => send({ type: 'PHRASE', lang, index }),
           sendPostMatchChat: (line) => send({ type: 'POST_MATCH_CHAT', ...line }),
           resign: () => { send({ type: 'RESIGN' }); },
-          close: () => { try { sock?.close(); } catch { /* gone */ } },
+          close: () => {
+            /* This is the screen walking away from the race, not a network drop: no reconnect may
+               raise a socket for a board the player has already left. */
+            left = true;
+            raceDead = true;
+            race = null;
+            if (raceTimer) {
+              globalThis.clearTimeout(raceTimer);
+              raceTimer = 0;
+            }
+            if (raceOpenTimer) {
+              globalThis.clearTimeout(raceOpenTimer);
+              raceOpenTimer = 0;
+            }
+            teardown();
+            try { sock?.close(); } catch { /* gone */ }
+            sock = null;
+            link = null;
+          },
           onMove: (cb) => { raceMoves.push(cb); },
           onEmote: (cb) => { raceEmotes.push(cb); },
           onPhrase: (cb) => { racePhrases.push(cb); },
           onPostChat: (cb) => { racePosts.push(cb); },
+          onPeerStatus: (cb) => { racePeers.push(cb); },
+          onSync: (cb) => { raceSyncs.push(cb); },
+          requestSync: () => { send({ type: 'SYNC_REQ' }); },
           onPostLeft: (cb) => { raceLefts.push(cb); },
           goneSides: () => [...raceGone],
           onEnd: (cb) => { raceEnds.push(cb); },
           onReject: (cb) => { raceRejects.push(cb); },
         };
         opts.onRace(race);
+        return;
+      }
+      case 'ROOM_SYNC': {
+        const next = msg.state as GameState | null;
+        if (!next || typeof next !== 'object' || !Array.isArray(next.balls)) return;
+        raceTries = 0;
+        raceDroppedAt = 0;
+        const leftMs = Number(msg.turnLeftMs);
+        for (const cb of raceSyncs) cb(next, Number.isFinite(leftMs) ? Math.max(0, leftMs) : 0);
+        flushOutbox();
+        return;
+      }
+      case 'PEER_STATUS': {
+        const side = Number(msg.seat);
+        if (!Number.isInteger(side) || side < 0) return;
+        const status = msg.status === 'reconnecting' ? 'reconnecting' : msg.status === 'online' ? 'online' : null;
+        if (!status) return;
+        const graceMs = Number(msg.graceMs);
+        for (const cb of racePeers) cb(side, status, Number.isFinite(graceMs) ? Math.max(0, graceMs) : 0);
         return;
       }
       case 'MOVE':
@@ -640,17 +757,40 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
         markPostGone();
         for (const cb of raceEnds) cb({ win: false, why: 'left' });
         return;
-      case 'REJECT':
+      case 'REJECT': {
+        /* A refusal carries the authoritative board: reconcile first, then let the screen say why.
+           The board is the truth, the toast is only the explanation. */
+        const next = msg.state as GameState | null;
+        if (next && typeof next === 'object' && Array.isArray(next.balls)) {
+          const leftMs = Number(msg.turnLeftMs);
+          for (const cb of raceSyncs) cb(next, Number.isFinite(leftMs) ? Math.max(0, leftMs) : 0);
+          flushOutbox();
+        }
         for (const cb of raceRejects) cb(typeof msg.reason === 'string' ? msg.reason : 'refused');
         return;
-      case 'SEAT_BOT':
+      }
+      case 'SEAT_BOT': {
         /* a seat's person left mid-race: the machine finished it, and the board already knows.
            Remember it so the result capsule can open with its rival-facing keys locked. */
-        raceGone.add(Number(msg.side) || 0);
+        const side = Number(msg.side) || 0;
+        raceGone.add(side);
+        /* The grace ran out: the pill must not keep promising a reconnect that is not coming. */
+        for (const cb of racePeers) cb(side, 'bot', 0);
         return;
+      }
       case 'ERROR': {
         const reason = typeof msg.reason === 'string' ? msg.reason : 'ERROR';
         if (race) {
+          raceDead = true;
+          if (raceTimer) {
+            globalThis.clearTimeout(raceTimer);
+            raceTimer = 0;
+          }
+          if (raceOpenTimer) {
+            globalThis.clearTimeout(raceOpenTimer);
+            raceOpenTimer = 0;
+          }
+          outbox.length = 0;
           markPostGone();
           for (const cb of raceEnds) cb({ win: false, why: 'aborted' });
           return;
@@ -672,24 +812,65 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
     }
   };
 
-  /* The frame lists are module-level so `MOVE` can reach the session `ROOM_FOUND` just built. */
-  try {
-    sock = new WebSocket(roomSocketUrl(opts.code, opts.host));
-    link = sock;
-    sock.addEventListener('message', (ev) => onFrame((ev as MessageEvent).data));
-    sock.addEventListener('open', () => {
-      if (settled || !sock) return;
+  /* One socket, reused by the lobby and by a live race. The race path never tears the view down
+     on a drop: the server holds the seat and the reconnect window is short, so the socket is
+     swapped underneath a board that keeps playing. */
+  const attachSocket = (ws: WebSocket): void => {
+    sock = ws;
+    link = ws;
+    ws.addEventListener('message', (ev) => {
+      /* Frames from a socket this seat no longer wears are stale: a reconnect may already have
+         delivered a newer snapshot, and an old MOVE must not overwrite it. */
+      if (ws !== sock) return;
+      onFrame((ev as MessageEvent).data);
+    });
+    ws.addEventListener('open', () => {
+      if (ws !== sock) return;
+      if (raceOpenTimer) {
+        globalThis.clearTimeout(raceOpenTimer);
+        raceOpenTimer = 0;
+      }
       aliveAt = Date.now();
       startBeat();
+      /* A resumed race paints from its snapshot, not from a roster placeholder. */
+      if (race || settled) return;
       /* An open socket is not a roster: only a `LOBBY` frame is (`readLobby` flips the status).
          Flipping it here would let the placeholder — one seat, minted locally — pass for a real
          roster, and the arrival detector would read every reconnect as somebody joining. */
       paint();
     });
-    sock.addEventListener('error', () => { if (!race) fallback(); });
-    sock.addEventListener('close', () => {
+    ws.addEventListener('error', () => {
+      if (ws !== sock) return;
+      if (!race) { fallback(); return; }
+      /* An error on an open race socket is a dying link: close it so the close path owns the
+         reconnect instead of leaving the board waiting on a socket that will never speak again. */
+      if (!raceDead) {
+        try { ws.close(); } catch { /* already gone */ }
+      }
+    });
+    ws.addEventListener('close', () => {
+      if (ws !== sock) return;
+      if (raceOpenTimer) {
+        globalThis.clearTimeout(raceOpenTimer);
+        raceOpenTimer = 0;
+      }
+      if (race && !raceDead) {
+        /* A live board outlives a blinking mobile link: the room keeps the seat for its grace
+           window, so retry fast instead of ending a match the rival is still playing. */
+        stopBeat();
+        sock = null;
+        link = null;
+        if (!raceDroppedAt) raceDroppedAt = Date.now();
+        scheduleRaceResume();
+        return;
+      }
       teardown();
-      if (race) { markPostGone(); for (const cb of raceEnds) cb({ win: false, why: 'drop' }); return; }
+      if (race) {
+        if (raceDead) return;      // already ended by a refusal or an exhausted reconnect
+        markPostGone();
+        for (const cb of raceEnds) cb({ win: false, why: 'drop' });
+        return;
+      }
       if (!settled) { fallback(); return; }
       /* the fallback, or our own `leave()`, closed this socket: the screen already knows */
       if (solo || left) return;
@@ -699,10 +880,61 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
       push({ ...lobby, status: 'connecting', online: true });
       opts.onDrop?.();
     });
-    document.addEventListener('visibilitychange', onVisible);
+  };
+
+  const openRaceSocket = (): void => {
+    if (left || solo || raceDead || !race) return;
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(roomSocketUrl(opts.code, opts.host));
+    } catch {
+      scheduleRaceResume();
+      return;
+    }
+    attachSocket(ws);
+    /* A dead mobile link can leave a socket in CONNECTING for far longer than the grace is worth.
+       Treat a stalled handshake as a failed attempt so the next backoff can actually run. */
+    raceOpenTimer = globalThis.setTimeout(() => {
+      raceOpenTimer = 0;
+      if (ws !== sock || ws.readyState !== 0) return;
+      sock = null;
+      link = null;
+      if (!raceDroppedAt) raceDroppedAt = Date.now();
+      try { ws.close(); } catch { /* already gone */ }
+      scheduleRaceResume();
+    }, 4000);
+  };
+
+  /** Backoff for a live race's socket: fast enough that a tunnel never reaches the board. */
+  const scheduleRaceResume = (): void => {
+    if (left || solo || raceDead || !race || raceTimer) return;
+    let wait: number;
+    if (raceTries < RACE_RESUME_STEPS.length) {
+      wait = RACE_RESUME_STEPS[raceTries++];
+    } else if (raceDroppedAt > 0 && Date.now() - raceDroppedAt < RACE_GRACE_MS) {
+      /* The fast attempts are spent but the room still holds the seat: keep a slow beat until
+         the same 25 seconds the server promised have run out. */
+      wait = 2000;
+    } else {
+      raceDead = true;
+      outbox.length = 0;
+      teardown();
+      markPostGone();
+      for (const cb of raceEnds) cb({ win: false, why: 'drop' });
+      return;
+    }
+    raceTimer = globalThis.setTimeout(() => {
+      raceTimer = 0;
+      openRaceSocket();
+    }, wait);
+  };
+
+  try {
+    attachSocket(new WebSocket(roomSocketUrl(opts.code, opts.host)));
   } catch {
     sock = null;
   }
+  document.addEventListener('visibilitychange', onVisible);
 
   /**
    * The connect window. A socket still in `CONNECTING` is a slow network, not a missing server —
@@ -772,6 +1004,14 @@ export function openLobby(opts: LobbyOptions): LobbyHandle {
     },
     leave() {
       globalThis.clearTimeout(timer);
+      if (raceTimer) {
+        globalThis.clearTimeout(raceTimer);
+        raceTimer = 0;
+      }
+      if (raceOpenTimer) {
+        globalThis.clearTimeout(raceOpenTimer);
+        raceOpenTimer = 0;
+      }
       left = true;
       teardown();
       /* `LEAVE`, not `CANCEL`: a host's exit disbands the code on the server so a stale link is

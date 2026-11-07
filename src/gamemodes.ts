@@ -882,11 +882,11 @@ function paintLobbyPane(l: Lobby): void {
 
 /* ---------- the duel countdown: 3 … 2 … 1 … FIGHT ---------- */
 
-/** One beat a second, then the FIGHT flash, then the start. */
-const COUNT_STEP_MS = 1000;
-const COUNT_FIGHT_MS = 700;
+/** Three quick beats, then the FIGHT flash and the start: a room already knows its roster. */
+const COUNT_STEP_MS = 350;
+const COUNT_FIGHT_MS = 150;
 /** A start the server never answers must not leave the veil up over a lobby. */
-const COUNT_WATCHDOG_MS = 2800;
+const COUNT_WATCHDOG_MS = 2000;
 
 interface Countdown {
   /** Identifies *this* run, so a stale timer can never paint a room that has moved on. */

@@ -43,7 +43,7 @@
  * `room_1909` are one room — and a code is only ever refused when it was genuinely spent.
  */
 import {
-  MAX_BALLS, MAX_TEAMS, apply, contendersIn, dimsFor, newGame, type Action, type GameState,
+  CONFIG, MAX_BALLS, MAX_TEAMS, apply, contendersIn, dimsFor, newGame, steps, type Action, type GameState,
 } from '../src/rules';
 import {
   FORMAT_CAPACITY, FORMAT_MODE, ROOM_IDLE_TTL_MS, ROOM_SEAT_HOLD_MS, ROOM_WAIT_MS, assignTeam,
@@ -128,7 +128,11 @@ type ClientMessage =
   /* Walking out for good. Distinct from `CANCEL` on purpose: a lobby's socket closing is a
      host who stepped into Telegram, while `LEAVE` is a host who is done — it disbands the code
      (so a stale link is refused cleanly) instead of leaving it to the idle TTL. */
-  | { type: 'LEAVE' };
+  | { type: 'LEAVE' }
+  /* A live friend-room seat asks the room to re-send its authoritative board. Sent after a
+     reconnect, after a relayed move arrived on the wrong turn, and after any refusal that could
+     have left the two replicas apart. */
+  | { type: 'SYNC_REQ' };
 
 interface Waiter {
   ws: WebSocket;
@@ -229,6 +233,13 @@ interface LiveRoom {
   startedAt: number;
   /** The authoritative race. Null until the room launches. */
   driver: RoomDriver | null;
+  /**
+   * When the seat that is up must act, on the server's wall clock; 0 when the machine is playing
+   * or the race is settled. The alarm reads it, so a stalled or disconnected human can never
+   * freeze the board — the room plays a fallback move once the limit plus its network grace
+   * has passed.
+   */
+  turnDeadlineMs: number;
   /** The seat wearing the crown. A code lobby migrates it when the host walks out. */
   hostSeat: number;
   /** The host's format pick: 1v1 / 3P / 4P / 2v2. `size`, `mode` and `teams` all follow it. */
@@ -346,6 +357,16 @@ const NOTIFY_COOLDOWN_MS = 30_000;
  * heartbeat is never mistaken for a dead one.
  */
 const SEAT_SILENCE_MS = 70_000;
+/**
+ * A live friend-room seat whose socket drops is held this long before the machine finishes it.
+ * Long enough for a phone that slept, a carrier hand-off or a brief tunnel; short enough that the
+ * surviving rival is never left staring at a frozen board. Inside the window the returning
+ * player gets their exact seat, their board and their turn back.
+ */
+const RECONNECT_GRACE_MS = 25_000;
+/** The server's own turn allowance, plus the network slack a move's last hop may need. */
+const TURN_LIMIT_MS = CONFIG.TURN_TIME_LIMIT * 1000;
+const TURN_GRACE_MS = 1_500;
 /**
  * The three knobs the Admin Command Center can move on a running server. They live on the room
  * itself, so `/admin/config` changes what the *next* pairing pass does rather than what some
@@ -1578,6 +1599,7 @@ function readMessage(raw: unknown, side: number, cols: number, rows: number): Cl
     if (msg.type === 'WIDEN') return { type: 'WIDEN' };
     if (msg.type === 'CANCEL') return { type: 'CANCEL' };
     if (msg.type === 'LEAVE') return { type: 'LEAVE' };
+    if (msg.type === 'SYNC_REQ') return { type: 'SYNC_REQ' };
     if (msg.type === 'RESIGN') return { type: 'RESIGN' };
     if (msg.type === 'PING') return { type: 'PING' };
     /* `START_MATCH` is the crisp name the lobby screen sends; `ROOM_START` is the older spelling
@@ -2199,6 +2221,7 @@ export class MatchmakerDO {
     /* The friends lobbies' own clocks: a dropped guest's chair goes back on the market, and a
        room nobody has held for ten minutes is retired so its code can be reused. */
     this.sweepLobbies(now);
+    this.sweepRacedRooms(now);
     this.sweepRetired();
     /* The season clock is an alarm too: at the boundary the arena closes itself and tells
        everyone, rather than waiting for the next admin to notice. */
@@ -5267,6 +5290,7 @@ export class MatchmakerDO {
         seed: 0,
         startedAt: 0,
         driver: null,
+        turnDeadlineMs: 0,
         hostSeat: 0,
         format: formatForSize(size),
         mode: 'ffa',
@@ -5292,17 +5316,7 @@ export class MatchmakerDO {
     /* A lobby is presence, not a mode yet: the board's own frames and its completion carry the tag. */
     this.markActive(identity.player.id);
 
-    ws.addEventListener('message', (ev: MessageEvent) => {
-      const ref = this.refs.get(ws);
-      if (!ref) return;
-      const board = ref.live.driver
-        ? ref.live.driver.state
-        : dimsFor(contendersIn(sizesOf(ref.live.room)));
-      const msg = readMessage(ev.data, ref.seat, board.cols, board.rows);
-      if (msg) this.roomFrame(ref, msg);
-    });
-    ws.addEventListener('close', () => this.roomLeave(this.refs.get(ws)));
-    ws.addEventListener('error', () => this.roomLeave(this.refs.get(ws)));
+    this.watchRoomSocket(live, ws);
 
     /* a full room starts now; anything less waits, and the alarm fills it when the wait runs out */
     if (live.members.every((m) => m !== null)) this.launchRoom(live);
@@ -5334,6 +5348,11 @@ export class MatchmakerDO {
     const key = lobbyKey(digits);
     const live = key ? this.lobbies.get(key) ?? null : null;
     if (!key) { this.rejectSocket(ws, 'room_not_found'); return; }
+    /* A launched race whose seat this socket already owns is a reconnect, not an invite. The code
+       is spent for strangers, but the player whose identity still holds a seat walks back into
+       the exact board they left — until the reconnect grace expires and the machine takes it. */
+    const running = this.launchedRoomByCode(key);
+    if (running) { this.resumeLaunchedRoom(ws, identity, running); return; }
     if (live?.driver || (!live && this.retired.has(key))) {
       /* the match this code opened is under way, or its host is done with it */
       this.rejectSocket(ws, 'room_consumed');
@@ -5353,6 +5372,7 @@ export class MatchmakerDO {
         seed: 0,
         startedAt: 0,
         driver: null,
+        turnDeadlineMs: 0,
         hostSeat: 0,
         format,
         mode: FORMAT_MODE[format],
@@ -5394,17 +5414,7 @@ export class MatchmakerDO {
     this.refs.set(ws, { live: room, seat });
     this.markActive(identity.player.id);
 
-    ws.addEventListener('message', (ev: MessageEvent) => {
-      const ref = this.refs.get(ws);
-      if (!ref) return;
-      const board = ref.live.driver
-        ? ref.live.driver.state
-        : dimsFor(contendersIn(sizesOf(ref.live.room)));
-      const msg = readMessage(ev.data, ref.seat, board.cols, board.rows);
-      if (msg) this.roomFrame(ref, msg);
-    });
-    ws.addEventListener('close', () => this.roomLeave(this.refs.get(ws)));
-    ws.addEventListener('error', () => this.roomLeave(this.refs.get(ws)));
+    this.watchRoomSocket(room, ws);
 
     this.broadcastLobby(room);
     /* A friend who walks in while the other chair is empty at the socket — but not in the room —
@@ -5492,6 +5502,91 @@ export class MatchmakerDO {
 
     const free = this.freeSeat(live);
     return free >= 0 ? { ok: true, seat: free } : { ok: false, reason: 'room_full' };
+  }
+
+  /** Wire one socket into a room's frame path. Used at seat time and again on every resume. */
+  private watchRoomSocket(live: LiveRoom, ws: WebSocket): void {
+    ws.addEventListener('message', (ev: MessageEvent) => {
+      const ref = this.refs.get(ws);
+      if (!ref) return;
+      const board = ref.live.driver
+        ? ref.live.driver.state
+        : dimsFor(contendersIn(sizesOf(ref.live.room)));
+      const msg = readMessage(ev.data, ref.seat, board.cols, board.rows);
+      if (msg) this.roomFrame(ref, msg);
+    });
+    ws.addEventListener('close', () => this.roomLeave(this.refs.get(ws), ws));
+    ws.addEventListener('error', () => this.roomLeave(this.refs.get(ws), ws));
+  }
+
+  /** The live race behind a spent code, if one is still running. */
+  private launchedRoomByCode(key: string): LiveRoom | null {
+    for (const live of this.rooms.values()) {
+      if (live.code && live.driver && lobbyKey(live.room.code) === key) return live;
+    }
+    return null;
+  }
+
+  /**
+   * Rebind a returning seat to its new socket. The identity check is the gate: only a player the
+   * room already seated may walk into a launched board, so the spent code stays spent for
+   * everybody else. The authoritative state travels with the acknowledgement, which is what makes
+   * a phone that missed a few relays land back on the exact board everyone else is playing.
+   */
+  private resumeLaunchedRoom(ws: WebSocket, identity: Identity, live: LiveRoom): void {
+    const seat = live.members.findIndex((m) => !!m && m.id === identity.player.id);
+    if (seat < 0) { this.rejectSocket(ws, 'room_consumed'); return; }
+    const member = live.members[seat];
+    if (!member) { this.rejectSocket(ws, 'room_consumed'); return; }
+    /* The chair's previous socket, if it is still around, is this same player's ghost. Forget it
+       before its close handler can settle the seat the new socket is about to hold. */
+    if (member.ws !== ws) {
+      this.refs.delete(member.ws);
+      try {
+        member.ws.close(1000, 'replaced');
+      } catch {
+        /* the socket is already gone */
+      }
+    }
+    member.ws = ws;
+    member.connected = true;
+    member.droppedAt = 0;
+    member.lastPingAt = 0;
+    live.lastSeenAt = Date.now();
+    this.refs.set(ws, { live, seat });
+    live.driver?.resume(seat);
+    this.watchRoomSocket(live, ws);
+    this.markActive(identity.player.id, this.roomModeOf(live));
+    /* The rival sees the seat come back before the board snapshot, so the pill can go quiet on
+       the same beat the first post-reconnect frame lands. */
+    this.broadcastPeerStatus(live, seat, 'online');
+    this.postTo(ws, this.roomFoundMessage(live, seat));
+    this.postTo(ws, this.roomSyncMessage(live));
+    this.rearm();
+  }
+
+  /** The authoritative board, plus the active seat's remaining wall-clock turn. */
+  private roomSyncMessage(live: LiveRoom): string {
+    return JSON.stringify({
+      type: 'ROOM_SYNC',
+      matchId: live.matchId,
+      state: live.driver?.state ?? null,
+      turnDeadlineMs: live.turnDeadlineMs,
+      turnLeftMs: live.turnDeadlineMs > 0 ? Math.max(0, live.turnDeadlineMs - Date.now()) : 0,
+    });
+  }
+
+  /** Tell every still-connected seat that one chair changed socket state. */
+  private broadcastPeerStatus(
+    live: LiveRoom,
+    seat: number,
+    status: 'reconnecting' | 'online',
+    graceMs = 0,
+  ): void {
+    const frame = JSON.stringify({ type: 'PEER_STATUS', seat, status, graceMs });
+    for (const m of live.members) {
+      if (m && m.connected) this.postTo(m.ws, frame);
+    }
   }
 
   /**
@@ -5844,6 +5939,7 @@ export class MatchmakerDO {
         seed: 0,
         startedAt: 0,
         driver: null,
+        turnDeadlineMs: 0,
         hostSeat,
         format,
         mode: FORMAT_MODE[format],
@@ -5874,6 +5970,98 @@ export class MatchmakerDO {
   /** A room's 4-digit invite code, minted from the pairing counter so two rooms never collide. */
   private mintRoomCode(): string {
     return String(1000 + ((++this.paired * 7919) % 9000));
+  }
+
+  /**
+   * Start (or clear) the active seat's clock. Called after launch, after every accepted move, and
+   * after every machine batch; a settled board or a machine turn has no deadline of its own.
+   */
+  private armRoomTurn(live: LiveRoom): void {
+    const driver = live.driver;
+    live.turnDeadlineMs = driver && driver.state.winner === null && !driver.botTurn
+      ? Date.now() + TURN_LIMIT_MS
+      : 0;
+  }
+
+  /**
+   * The alarm's room clock: one human seat past its limit plus the network grace is played for,
+   * so a stalled tab or a dropped phone can never freeze the race. The fallback is the board's
+   * own auto-move, with a pass as the last resort; either way the turn advances and the machine
+   * seats behind it are played in the same batch.
+   */
+  private enforceRoomTurn(live: LiveRoom, now: number): void {
+    const driver = live.driver;
+    if (!driver) return;
+    if (driver.state.winner !== null) { live.turnDeadlineMs = 0; return; }
+    if (driver.botTurn) {
+      const before = driver.state;
+      this.pushRoomEvents(live, driver.runBots());
+      this.countBoard(before, driver.state);
+      this.armRoomTurn(live);
+      if (driver.state.winner !== null) {
+        live.turnDeadlineMs = 0;
+        this.finishRoom(live, driver.state.winner);
+        this.rooms.delete(live.matchId);
+      }
+      return;
+    }
+    if (!live.turnDeadlineMs || now < live.turnDeadlineMs + TURN_GRACE_MS) return;
+    const seat = driver.state.turn;
+    const action = this.roomFallbackAction(driver.state, seat);
+    const before = driver.state;
+    const result = driver.submit(seat, action);
+    if (!result.ok) return;
+    this.countBoard(before, driver.state);
+    this.pushRoomEvents(live, result.events, seat);
+    this.armRoomTurn(live);
+    if (driver.state.winner !== null) {
+      live.turnDeadlineMs = 0;
+      this.finishRoom(live, driver.state.winner);
+      this.rooms.delete(live.matchId);
+    }
+  }
+
+  /** A legal action for a seat whose clock ran out: the first step the board accepts, then a pass. */
+  private roomFallbackAction(state: GameState, seat: number): Action {
+    const legal = this.legalSteps(state, seat);
+    if (legal.length) return { kind: 'move', ball: legal[0].ball, to: legal[0].to };
+    return { kind: 'pass' };
+  }
+
+  /** The engine's steps for a seat, narrowed to actions this exact board accepts. */
+  private legalSteps(state: GameState, seat: number): Array<{ ball: number; to: { c: number; r: number } }> {
+    const out: Array<{ ball: number; to: { c: number; r: number } }> = [];
+    for (const st of steps(state, seat)) {
+      if (apply(state, { kind: 'move', ball: st.ball, to: st.to })) out.push({ ball: st.ball, to: st.to });
+    }
+    return out;
+  }
+
+  /** The raced rooms' own clocks: turn deadlines, then the reconnect grace on every dropped seat. */
+  private sweepRacedRooms(now: number): void {
+    for (const live of [...this.rooms.values()]) {
+      if (!live.driver) continue;
+      /* A socket that stopped answering its heartbeat is gone even if no close frame ever came:
+         a killed webview or a mobile link that went quiet behind a proxy. Marking it away here is
+         what starts the same grace a real close would — the rival must not wait forever. */
+      for (let i = 0; i < live.members.length; i++) {
+        const m = live.members[i];
+        if (!m || !m.connected) continue;
+        if (m.lastPingAt > 0 && now - m.lastPingAt >= SEAT_SILENCE_MS) {
+          m.connected = false;
+          m.droppedAt = now;
+          this.broadcastPeerStatus(live, i, 'reconnecting', RECONNECT_GRACE_MS);
+        }
+      }
+      this.enforceRoomTurn(live, now);
+      for (let i = 0; i < live.members.length; i++) {
+        const m = live.members[i];
+        if (!m || m.connected) continue;
+        if (m.droppedAt <= 0 || now - m.droppedAt < RECONNECT_GRACE_MS) continue;
+        /* the grace is over: the machine finishes the seat and the drop is recorded */
+        this.takeSeatOver({ live, seat: i });
+      }
+    }
   }
 
   /**
@@ -5909,6 +6097,24 @@ export class MatchmakerDO {
       }
     }
     if (this.arena.status === 'active') soonest = Math.min(soonest, this.arena.endsAt);
+    /* A launched room has two clocks of its own: the active seat's turn deadline (plus the
+       network grace) and every dropped seat's reconnect window. Both must survive eviction, so
+       both live on the alarm rather than on a `setTimeout`. */
+    for (const live of this.rooms.values()) {
+      if (!live.driver) continue;
+      if (live.driver.state.winner === null && live.turnDeadlineMs > 0 && !live.driver.botTurn) {
+        soonest = Math.min(soonest, live.turnDeadlineMs + TURN_GRACE_MS);
+      }
+      for (const m of live.members) {
+        if (!m) continue;
+        if (m.connected && m.lastPingAt > 0) {
+          soonest = Math.min(soonest, m.lastPingAt + SEAT_SILENCE_MS);
+        }
+        if (!m.connected && m.droppedAt > 0) {
+          soonest = Math.min(soonest, m.droppedAt + RECONNECT_GRACE_MS);
+        }
+      }
+    }
     if (soonest === Infinity) storage.deleteAlarm();
     else storage.setAlarm(soonest);
   }
@@ -5936,6 +6142,7 @@ export class MatchmakerDO {
     /* the code did its job: the board is running, so the invite is spent from this moment on */
     if (live.code) this.retire(live.room.code);
     this.rooms.set(live.matchId, live);
+    this.armRoomTurn(live);
     this.rearm();
 
     for (const m of live.members) {
@@ -5949,6 +6156,8 @@ export class MatchmakerDO {
     const opening = live.driver.state;
     this.pushRoomEvents(live, live.driver.runBots());
     this.countBoard(opening, live.driver.state);
+    this.armRoomTurn(live);
+    this.rearm();
   }
 
   /** `ROOM_FOUND`: the seat, the shared race, and every seat's name and owner. */
@@ -5962,6 +6171,8 @@ export class MatchmakerDO {
       sizes: sizesOf(roster),
       mode: live.mode,
       teams: live.teams,
+      turnDeadlineMs: live.turnDeadlineMs,
+      turnLeftMs: live.turnDeadlineMs > 0 ? Math.max(0, live.turnDeadlineMs - Date.now()) : 0,
       seats: roster.seats.map((s, i) => ({
         side: i,
         id: s.id || `seat:${i}`,
@@ -5987,7 +6198,17 @@ export class MatchmakerDO {
       member.connected = true;
       member.droppedAt = 0;
       live.lastSeenAt = Date.now();
-      this.broadcastLobby(live);
+      /* Any frame proves the heartbeat is flowing again: without this a revived seat would be
+         marked away by the very next sweep on its old ping timestamp. */
+      if (member.lastPingAt > 0) member.lastPingAt = Date.now();
+      if (live.driver) {
+        /* The heartbeat sweep had called this seat away; the frame proves it is here. Tell the
+           rival the pill can go, and hand the seat the board it missed while it was marked away. */
+        this.broadcastPeerStatus(live, ref.seat, 'online');
+        this.postTo(member.ws, this.roomSyncMessage(live));
+      } else {
+        this.broadcastLobby(live);
+      }
     }
     if (msg.type === 'PING') {
       /* A seat that is still there is worth answering: the `PONG` is how the client tells a
@@ -6001,6 +6222,12 @@ export class MatchmakerDO {
     if (msg.type === 'POST_MATCH_CHAT') {
       /* only a settled room has a lane; a live board ignores the frame like any other chat */
       if (member) this.relayPostChat(member.ws, msg);
+      return;
+    }
+    if (msg.type === 'SYNC_REQ') {
+      /* A seat that suspects drift asks for the board; the answer is the same authoritative
+         snapshot a reconnect receives, so one repair path serves both. */
+      if (member && live.driver) this.postTo(member.ws, this.roomSyncMessage(live));
       return;
     }
     if (!live.driver) {
@@ -6078,12 +6305,26 @@ export class MatchmakerDO {
     const result = live.driver.submit(ref.seat, msg.action);
     if (!result.ok) {
       const member = live.members[ref.seat];
-      if (member) this.postTo(member.ws, JSON.stringify({ type: 'REJECT', reason: result.reason }));
+      if (member) {
+        /* A refusal means the two replicas disagreed about the turn (a queued move that crossed a
+           server timeout, a stale optimistic board). The snapshot is the repair, not the toast:
+           without it the client would keep a board nobody else is playing. */
+        this.postTo(member.ws, JSON.stringify({
+          type: 'REJECT',
+          reason: result.reason,
+          state: live.driver.state,
+          turnDeadlineMs: live.turnDeadlineMs,
+          turnLeftMs: live.turnDeadlineMs > 0 ? Math.max(0, live.turnDeadlineMs - Date.now()) : 0,
+        }));
+      }
       return;
     }
     this.countBoard(before, live.driver.state);
     this.pushRoomEvents(live, result.events);
+    this.armRoomTurn(live);
+    this.rearm();
     if (live.driver.state.winner !== null) {
+      live.turnDeadlineMs = 0;
       this.finishRoom(live, live.driver.state.winner);
       this.rooms.delete(live.matchId);
     }
@@ -6116,12 +6357,14 @@ export class MatchmakerDO {
    * action locally before it ever reached the wire. The machine's turns are in the same batch, so a
    * room of one person and three bots needs no second round trip to keep moving.
    */
-  private pushRoomEvents(live: LiveRoom, events: readonly RoomEvent[]): void {
+  private pushRoomEvents(live: LiveRoom, events: readonly RoomEvent[], includeSeat = -1): void {
     if (!events.length) return;
     for (const m of live.members) {
       if (!m || !m.connected) continue;
       for (const ev of events) {
-        if (ev.seat === m.seat) continue;
+        /* The seat that played a move applied it locally already — except an event the server
+           played FOR it (a turn-deadline fallback), which that seat has to receive too. */
+        if (ev.seat === m.seat && ev.seat !== includeSeat) continue;
         this.postTo(m.ws, JSON.stringify({ type: 'MOVE', side: ev.seat, action: ev.action }));
       }
     }
@@ -6160,20 +6403,50 @@ export class MatchmakerDO {
     const before = driver.state;
     this.pushRoomEvents(live, driver.runBots());
     this.countBoard(before, driver.state);
+    this.armRoomTurn(live);
     if (driver.state.winner !== null) {
+      live.turnDeadlineMs = 0;
       this.completeRoom(live);
       this.rooms.delete(live.matchId);
     }
+    this.rearm();
   }
 
-  /** A socket went away. In a room that means the machine finishes the seat; in the queue, goodbye. */
-  private roomLeave(ref: RoomRef | undefined): void {
+  /**
+   * A live seat's socket went away. The chair is *held* for the reconnect grace window instead of
+   * being handed to the machine on the spot: a phone changing networks is not a resignation. The
+   * room keeps the code, the identity and the board, and the rival is told exactly how long the
+   * hold lasts; only an expiry in `sweepRacedRooms` converts the seat.
+   */
+  private roomDrop(ref: RoomRef, member: RoomMember, ws?: WebSocket): void {
+    /* A close frame from a socket the seat no longer wears is a ghost: the player already
+       reconnected on a newer socket and this one must not mark them away. */
+    if (ws && member.ws !== ws) return;
+    const wasConnected = member.connected;
+    this.refs.delete(member.ws);
+    if (wasConnected) {
+      member.connected = false;
+      member.droppedAt = Date.now();
+    }
+    ref.live.lastSeenAt = Date.now();
+    if (wasConnected) {
+      this.broadcastPeerStatus(ref.live, ref.seat, 'reconnecting', RECONNECT_GRACE_MS);
+    }
+    this.rearm();
+  }
+
+  /** A socket went away. In a live race it opens the reconnect window; in the queue, goodbye. */
+  private roomLeave(ref: RoomRef | undefined, ws?: WebSocket): void {
     if (!ref) return;
     const live = ref.live;
     const member = live.members[ref.seat];
     if (member) this.markActive(member.id, live.driver ? this.roomModeOf(live) : undefined);
-    if (live.driver) { this.takeSeatOver(ref); return; }
+    if (live.driver) {
+      if (member) this.roomDrop(ref, member, ws);
+      return;
+    }
     if (!member) return;
+    if (ws && member.ws !== ws) return;
     this.refs.delete(member.ws);
     if (live.code) {
       /* The room outlives its socket. The chair is held — the crown for the whole idle TTL, a
