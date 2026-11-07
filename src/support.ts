@@ -12,7 +12,7 @@
  * backend being up, which is the same contract every other local feature keeps. The Worker can
  * own the same shape later — replacing `load` / `flush` with an async store is the whole port.
  */
-import { readJson, writeJson } from './storage';
+import { adoptUserStorageKey, readJson, writeJson } from './storage';
 
 /** The three categories the client's sheet offers. */
 export type TicketCategory = 'feedback' | 'bug' | 'stars';
@@ -42,7 +42,7 @@ export const REPLY_MAX = 400;
 /** The queue is a desk, not an archive: the oldest tickets fall off past this. */
 const MAX_TICKETS = 200;
 
-const KEY = 'detour.support.v1';
+const KEY = adoptUserStorageKey('detour.support.v1');
 
 const CATS: readonly TicketCategory[] = ['feedback', 'bug', 'stars'];
 const STATUSES: readonly TicketStatus[] = ['new', 'replied', 'resolved'];

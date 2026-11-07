@@ -22,7 +22,7 @@
  * anything to fill
  * is also a room nobody should have to press anything to start.
  */
-import { hasCompletedTutorial, readJson, writeJson } from './storage';
+import { adoptUserStorageKey, hasCompletedTutorial, readJson, userScopedKey, writeJson } from './storage';
 import { menuState, onLang, saveMenu, t } from './settings';
 import { impact, inviteRoomCode, notify, openTelegramShare, roomInviteUrl, roomShareUrl } from './telegram';
 import { showToast, showToastDetail } from './toast';
@@ -51,7 +51,7 @@ export interface LobbyDisplay {
   sub: string;
 }
 
-const KEY = 'detour.gamemode.v1';
+const KEY = adoptUserStorageKey('detour.gamemode.v1');
 
 /**
  * The online queue is parked behind the gold lock while the servers are tuned. One switch turns
@@ -207,7 +207,7 @@ interface RoomSession {
   at: number;
 }
 
-const SESSION_KEY = 'detour.room.session.v1';
+const SESSION_KEY = userScopedKey('detour.room.session.v1');
 /** The code every invite door builds its URL from. Mirrors `session`, and the painted roster. */
 let activeCode: string | null = null;
 let session: RoomSession | null = null;
@@ -334,7 +334,7 @@ export function getLobbyDisplay(sel: GameModeSelection = current): LobbyDisplay 
 /* ---------- rooms: mint, share, join ---------- */
 
 /** The codes this tab has already handed out. A session never mints the same one twice. */
-const ISSUED_KEY = 'detour.room.codes.v1';
+const ISSUED_KEY = userScopedKey('detour.room.codes.v1');
 const ISSUED_MAX = 48;
 
 function issuedCodes(): string[] {

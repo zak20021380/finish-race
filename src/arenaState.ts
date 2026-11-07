@@ -6,7 +6,7 @@
  * Command Center still has a real switchboard: an admin edit paints immediately, the ladder's
  * countdown follows, and the next successful server read wins.
  */
-import { earnTiq, readJson, writeJson } from './storage';
+import { adoptUserStorageKey, earnTiq, readJson, writeJson } from './storage';
 import { tgInitData } from './telegram';
 import { workerUrl } from './adminApi';
 
@@ -65,7 +65,7 @@ interface ArenaWire {
 }
 
 const ARENA_KEY = 'detour.arena.v1';
-const CLAIMS_KEY = 'detour.arena.claims.v1';
+const CLAIMS_KEY = adoptUserStorageKey('detour.arena.claims.v1');
 
 /** Season 4 closed 2026-10-16 14:00Z; every 28 days rolls the number without a static string. */
 const SEASON_ANCHOR = Date.UTC(2026, 9, 16, 14, 0);

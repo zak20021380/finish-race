@@ -6,6 +6,10 @@
  * because a Telegram webview can refuse storage outright (private mode, cookies off) and the race
  * still has to run: a save is a convenience, never a requirement.
  *
+ * The save is owned, not merely stored: its key is namespaced by the Telegram account and the blob
+ * names that account in `ownerTgId`, because one device can host several Telegram logins that all
+ * share this origin.
+ *
  * Swapping in Telegram CloudStorage means replacing `backend` with an async get/set and handing the
  * fetched text to `hydrate()` when it lands — `readJson`/`writeJson` below are the whole contract
  * either side has to honour, and `profile` stays the single live object either way.
@@ -31,6 +35,81 @@ const backend: Backend = {
   set: (k, v) => { try { window.localStorage.setItem(k, v); } catch { /* stay in memory */ } },
 };
 
+function drop(key: string) {
+  try { window.localStorage.removeItem(key); } catch { /* stay in memory */ }
+}
+
+/* ---------- whose save is this? ----------
+ * A Telegram webview shares one `localStorage` origin across every account logged into the device.
+ * The save therefore has to be namespaced by the account Telegram just announced, and the blob has
+ * to name its owner, or account B boots on account A's coins, TIQ and VIP record.
+ *
+ * The id is read synchronously at module evaluation: the SDK script is loaded before this module,
+ * so `initDataUnsafe.user` is already populated here. `initData` is the fallback for a client that
+ * does not expose the unsafe copy; both spellings carry the signed user id.
+ */
+const BASE_SAVE_KEY = 'detour.save.v2';
+/** The account this device last ran a save for. Device-scoped on purpose: it names the owner of
+ *  the pre-namespacing blob, never a save itself. */
+const LAST_UID_KEY = 'tactix_last_tg_uid';
+
+function telegramUserId(): string {
+  try {
+    const app = window.Telegram?.WebApp;
+    const direct = app?.initDataUnsafe?.user?.id;
+    if (typeof direct === 'number' && Number.isFinite(direct) && direct > 0) return String(Math.trunc(direct));
+    if (typeof direct === 'string' && /^\d{1,20}$/.test(direct)) return direct;
+
+    const raw = app?.initData;
+    if (raw) {
+      const user = new URLSearchParams(raw).get('user');
+      const id = user ? (JSON.parse(user) as { id?: unknown }).id : undefined;
+      if (typeof id === 'number' && Number.isFinite(id) && id > 0) return String(Math.trunc(id));
+      if (typeof id === 'string' && /^\d{1,20}$/.test(id)) return id;
+    }
+  } catch { /* no SDK, or a malformed initData */ }
+  return '';
+}
+
+/**
+ * The signed launch payload. The SDK script is loaded in ordinary browser tabs as well, so its
+ * presence alone does not mean "inside Telegram"; non-empty `initData` does.
+ */
+const hasLaunchPayload = (): boolean => {
+  try { return !!window.Telegram?.WebApp?.initData; } catch { return false; }
+};
+
+/**
+ * The account every scoped key belongs to. A plain browser tab falls back to `guest`; a Telegram
+ * client that cannot name its user gets its own bucket rather than sharing the browser's.
+ */
+export const activeTgId: string = telegramUserId() || (hasLaunchPayload() ? 'tg_unknown' : 'guest');
+
+/** The per-account spelling of any storage key, localStorage or sessionStorage. */
+export const userScopedKey = (base: string): string => `${base}_u_${activeTgId}`;
+const scopedFor = (base: string, uid: string): string => `${base}_u_${uid}`;
+
+/** A well-formed account id: Telegram's numeric id, or one of the two local buckets. */
+const cleanUid = (value: string): string =>
+  /^\d{1,20}$/.test(value) || value === 'guest' || value === 'tg_unknown' ? value : '';
+
+/**
+ * The id the previous launch recorded, read before this boot overwrites the marker. It is what
+ * decides whether an un-namespaced legacy blob may be adopted by the account opening now.
+ */
+const previousTgId = cleanUid(backend.get(LAST_UID_KEY) ?? '');
+
+/**
+ * True when the SDK now names an account other than the one this module keyed its save to. A
+ * transient missing id is not a change; only a definite different user is. The boot layer uses
+ * this to rebuild the whole storage scope rather than run the newcomer on the old in-memory save.
+ */
+export function accountChanged(): boolean {
+  const live = telegramUserId();
+  return live !== '' && live !== activeTgId;
+}
+
+/** Raw device read. Anything that belongs to a player must use `userScopedKey`/`adoptUserStorageKey`. */
 export function readJson<T>(key: string): Partial<T> | null {
   try {
     const raw = backend.get(key);
@@ -40,8 +119,31 @@ export function readJson<T>(key: string): Partial<T> | null {
   }
 }
 
+/** Raw device write, the pair to `readJson`; player-owned caches must pass a scoped key. */
 export function writeJson(key: string, value: unknown) {
   backend.set(key, JSON.stringify(value));
+}
+
+/**
+ * Adopt an un-namespaced auxiliary cache (squads, inbox, award claims, recovery budget) into the
+ * active account's slot, then remove the global key. The move follows the save's evidence rule:
+ * only the device's LAST account may inherit it; a newcomer files it under that account instead,
+ * so cache from a previous account can never appear under the one opening now.
+ */
+export function adoptUserStorageKey(base: string): string {
+  const key = userScopedKey(base);
+  const legacyRaw = backend.get(base);
+  if (legacyRaw === null) return key;
+  if (backend.get(key) === null) {
+    if (previousTgId === '' || previousTgId === activeTgId) {
+      backend.set(key, legacyRaw);
+    } else {
+      const previousKey = scopedFor(base, previousTgId);
+      if (backend.get(previousKey) === null) backend.set(previousKey, legacyRaw);
+    }
+  }
+  drop(base);
+  return key;
 }
 
 /* ---------- the operator's own read state ---------- */
@@ -77,7 +179,7 @@ export function markAdminViewed(at: number = Date.now()): number {
  * not to the save. A webview that refuses sessionStorage still gets the same behaviour from the
  * in-memory copy underneath, so the redirect after the lesson never depends on storage at all.
  */
-const PENDING_DUEL_KEY = 'pendingDuelRoom';
+const PENDING_DUEL_KEY = userScopedKey('pendingDuelRoom');
 let pendingDuelMemory = '';
 const isDuelRoomCode = (value: unknown): value is string =>
   typeof value === 'string' && /^\d{4}$/.test(value.trim());
@@ -110,7 +212,7 @@ export function takePendingDuelRoom(): string {
 
 /* ---------- the schema ---------- */
 
-const KEY = 'detour.save.v2';
+const KEY = userScopedKey(BASE_SAVE_KEY);
 const V = 2;
 
 export const KINDS: CosKind[] = ['ball', 'wall', 'board'];
@@ -171,6 +273,11 @@ export interface EditionsCache {
 
 export interface Save {
   v: number;
+  /**
+   * The Telegram account this blob belongs to, stored so a copied or mis-filed save can be
+   * rejected on its own evidence rather than trusted because of where it was found.
+   */
+  ownerTgId: string | number;
   coins: number;
   owned: Record<CosKind, string[]>;
   equipped: Record<CosKind, string>;
@@ -242,6 +349,7 @@ export const REFERRAL_WELCOME = SHARED_REFERRAL_REWARD;
 function fresh(): Save {
   return {
     v: V,
+    ownerTgId: activeTgId,
     coins: START_COINS,
     owned: { ball: [STARTERS.ball], wall: [STARTERS.wall], board: [STARTERS.board] },
     equipped: { ...STARTERS },
@@ -331,13 +439,26 @@ function parseDob(raw: unknown): Dob | null {
   return validDob(y, m, d) ? { y, m, d } : null;
 }
 
+/** The account a blob names, or '' for one written before saves carried an owner. */
+function saveOwner(blob: Partial<Save> | null): string {
+  const owner = blob?.ownerTgId;
+  return owner === undefined || owner === null ? '' : String(owner);
+}
+
+/** Only the active account's blob (or an ownerless legacy one) may be folded into the live save. */
+function ownedByActive(blob: Partial<Save> | null): boolean {
+  const owner = saveOwner(blob);
+  return owner === '' || owner === activeTgId;
+}
+
 /**
  * Anything that is not a recognised version starts clean; a v2 blob is folded field by field so a
- * half-written or hand-edited save can never smuggle an unknown item into `owned`.
+ * half-written or hand-edited save can never smuggle an unknown item into `owned`. A blob that
+ * names another Telegram account is rejected outright — no field of it is merged.
  */
 function migrate(raw: Partial<Save> | null): Save {
   const s = fresh();
-  if (!raw || raw.v !== V) return s;
+  if (!raw || raw.v !== V || !ownedByActive(raw)) return s;
 
   if (whole(raw.coins)) s.coins = Math.max(0, Math.floor(raw.coins));
   for (const k of KINDS) {
@@ -460,12 +581,56 @@ function migrate(raw: Partial<Save> | null): Save {
   return s;
 }
 
-export const profile: Save = migrate(readJson<Save>(KEY));
+/**
+ * Fold a pre-namespacing save into an account slot, then remove the global key. The blob is only
+ * adopted by the account opening now when the device's last account agrees AND the blob does not
+ * name a different owner. Otherwise it is filed under the account its owner field (or the device's
+ * last id) names — never under the newcomer — so a second Telegram account can never inherit it.
+ */
+function adoptLegacySave(): void {
+  const legacyRaw = backend.get(BASE_SAVE_KEY);
+  if (legacyRaw === null) return;
+  try {
+    const blob = JSON.parse(legacyRaw) as Partial<Save>;
+    if (!blob || typeof blob !== 'object' || blob.v !== V) return;
+    const namedOwner = saveOwner(blob);
+    const owner = cleanUid(namedOwner);
+    const currentTaken = backend.get(KEY) !== null;
+    const deviceMatches = previousTgId === '' || previousTgId === activeTgId;
+
+    if (!currentTaken && deviceMatches && ownedByActive(blob)) {
+      writeJson(KEY, { ...blob, ownerTgId: activeTgId });
+    } else if (!currentTaken && owner !== '' && owner === namedOwner && owner !== activeTgId) {
+      /* The blob names its own account. File it there, never into the account opening now. */
+      const ownerKey = scopedFor(BASE_SAVE_KEY, owner);
+      if (backend.get(ownerKey) === null) writeJson(ownerKey, { ...blob, ownerTgId: owner });
+    } else if (!currentTaken && namedOwner === '' && previousTgId !== '' && previousTgId !== activeTgId) {
+      /* No owner field, but the device remembers who last held the un-namespaced save. */
+      const previousKey = scopedFor(BASE_SAVE_KEY, previousTgId);
+      if (backend.get(previousKey) === null) writeJson(previousKey, { ...blob, ownerTgId: previousTgId });
+    }
+  } catch {
+    /* A hand-edited legacy blob is not a save: dropping it is the only safe read. */
+  } finally {
+    /* Whether it was adopted or rejected, it must never be readable by a second account. */
+    drop(BASE_SAVE_KEY);
+  }
+}
+
+adoptLegacySave();
+backend.set(LAST_UID_KEY, activeTgId);
+
+const storedSave = readJson<Save>(KEY);
+export const profile: Save = migrate(storedSave);
+/* A rejected or ownerless blob is replaced on disk in the same boot: another account's JSON must
+   not sit under this key, and every serialized save names its owner. */
+if (storedSave && (storedSave.v !== V || saveOwner(storedSave) !== activeTgId)) writeJson(KEY, profile);
 
 const watchers: (() => void)[] = [];
 
 function flush() {
   profile.v = V;
+  profile.ownerTgId = activeTgId;
   writeJson(KEY, profile);
   for (const w of watchers) w();
 }
@@ -473,29 +638,42 @@ function flush() {
 /** Called after every change to the save, and after a late cloud hydrate. */
 export function onChange(w: () => void) { watchers.push(w); }
 
-/** Replace the live save from raw JSON — the seam a CloudStorage read resolves into. */
+/**
+ * Replace the live save from raw JSON — the seam a CloudStorage read resolves into.
+ *
+ * A blob that names another Telegram account is rejected before any field is read: there is no
+ * monotonic merge across owners, because a shared device must never carry coins, TIQ or flags
+ * from the account that used it last. The account's own save is reset instead, and the server may
+ * then hydrate it from that account's record.
+ */
 export function hydrate(raw: string | null) {
-  /* First-run onboarding is monotonic. An older cloud blob that still says `false` must never
-     push a player who already finished or skipped the lesson back into the tutorial. Only the
-     explicit dev door, resetTutorialState(), is allowed to clear the flag. */
-  const wasCompleted = profile.tutorialCompleted === true;
-  const wasBonusClaimed = profile.firstDuelBonusClaimed === true;
-  try {
-    const next = migrate(raw ? (JSON.parse(raw) as Partial<Save>) : null);
-    Object.assign(profile, next);
-    if (wasCompleted) profile.tutorialCompleted = true;
-    /* An older cloud blob has no idea the welcome bonus was paid. Keep it paid, or the next
-       settled race would mint a second +200 from a save that predates the field. */
-    if (wasBonusClaimed) profile.firstDuelBonusClaimed = true;
-    /* A cloud save can carry a whole match history onto a device whose own cache is empty. That
-       player has raced before, so stamp the lesson flag here too: a hydrate that lands AFTER boot
-       must never leave a returning profile eligible for first-open onboarding. */
-    reconcileTutorialFromHistory();
-  } catch {
-    /* keep what we already had */
+  let parsed: Partial<Save> | null = null;
+  try { parsed = raw ? (JSON.parse(raw) as Partial<Save>) : null; } catch { return; }
+
+  if (parsed && !ownedByActive(parsed)) {
+    Object.assign(profile, fresh());
+    flush();
     return;
   }
-  for (const w of watchers) w();
+
+  /* First-run onboarding is monotonic, but only against local state of the SAME account. An older
+     cloud blob that still says `false` must never push a player who already finished or skipped
+     the lesson back into the tutorial. Only resetTutorialState() may clear the flag. */
+  const sameOwner = saveOwner(profile) === activeTgId;
+  const wasCompleted = sameOwner && profile.tutorialCompleted === true;
+  const wasBonusClaimed = sameOwner && profile.firstDuelBonusClaimed === true;
+  const next = migrate(parsed);
+  Object.assign(profile, next);
+  profile.ownerTgId = activeTgId;
+  if (wasCompleted) profile.tutorialCompleted = true;
+  /* An older cloud blob has no idea the welcome bonus was paid. Keep it paid, or the next
+     settled race would mint a second +200 from a save that predates the field. */
+  if (wasBonusClaimed) profile.firstDuelBonusClaimed = true;
+  /* A cloud save can carry a whole match history onto a device whose own cache is empty. That
+     player has raced before, so stamp the lesson flag here too: a hydrate that lands AFTER boot
+     must never leave a returning profile eligible for first-open onboarding. */
+  reconcileTutorialFromHistory();
+  flush();
 }
 
 /* ---------- cosmetics ---------- */

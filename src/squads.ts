@@ -6,12 +6,13 @@
  * Squad IQ is the arithmetic mean of its members' own Tactical IQ. A squad a player creates on this
  * device starts with exactly one member — them — and grows only when someone actually joins.
  *
- * Binding is still one squad per device, persisted under `detour.squads.v1`. `getSquadRanking()`
+ * Binding is still one squad per player, persisted under `detour.squads.v1`, scoped per Telegram
+ * account (`..._u_<id>`). `getSquadRanking()`
  * ranks the squads this device knows (its own creations plus whatever the Worker's board last
  * returned); nothing is invented to fill the board.
  */
 
-import { readJson, writeJson } from './storage';
+import { adoptUserStorageKey, readJson, writeJson } from './storage';
 import { myTiq } from './matchmaking';
 import { tgUser } from './telegram';
 import { squadAppLink, SQUAD_PREFIX } from '../shared/config';
@@ -119,7 +120,7 @@ export interface RankedSquad extends Squad {
   owned: boolean;
 }
 
-const KEY = 'detour.squads.v1';
+const KEY = adoptUserStorageKey('detour.squads.v1');
 
 interface SquadSave {
   boundId: string | null;

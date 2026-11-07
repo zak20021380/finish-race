@@ -43,7 +43,7 @@ import {
   closeVipSheet, initVipStore, isPremiumUser, onVipChange,
 } from './premium';
 import {
-  claimFirstDuelBonus, completeTutorial, earnCoins, earnTiq, hasClaimedFirstDuelBonus,
+  accountChanged, claimFirstDuelBonus, completeTutorial, earnCoins, earnTiq, hasClaimedFirstDuelBonus,
   hasCompletedTutorial, isFirstTimePlayer, onChange, pieceColor, profile,
   peekPendingDuelRoom, reconcileTutorialFromHistory, recordGame, rememberPendingDuelRoom,
   resetTutorialState, takePendingDuelRoom, theme,
@@ -101,6 +101,13 @@ let animating = false;
    is ready and expanded on the very first evaluation, local state hydrates synchronously from the
    save, and the target screen mounts on the first frame. Remote syncs run in the background. */
 initTelegram();
+/* SHARED-DEVICE SWITCH GUARD. Every save and cache key was bound to the account Telegram announced
+   at module init. If the SDK later names a different account — a shared phone switched users while
+   this webview stayed alive — reload so the whole scope re-binds instead of letting the newcomer
+   run on the old account's in-memory profile. A transient missing id is not a change. */
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && accountChanged()) window.location.reload();
+});
 initTelemetry();
 /* The global VIP store binds after the SDK so `initDataUnsafe` is readable on its first paint. */
 initVipStore();

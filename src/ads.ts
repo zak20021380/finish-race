@@ -12,6 +12,7 @@
  * grants TIQ or coins itself, so a reward can be granted exactly once by whoever asked for it.
  */
 import { isPremiumUser } from './premium';
+import { adoptUserStorageKey } from './storage';
 
 /* ---------- the vendor surface (AdsGram V1) ---------- */
 
@@ -259,8 +260,9 @@ export const TIQ_RECOVERY_MAX = 3;
 export const TIQ_RECOVERY_MAX_VIP = TIQ_RECOVERY_MAX + 1;
 /** The window is rolling, not midnight-to-midnight: a stamp ages out 24h after it was made. */
 export const TIQ_RECOVERY_WINDOW_MS = 24 * 60 * 60 * 1000;
-/** Its own key, outside the `detour.*` save: a rolling budget is not player progress. */
-export const TIQ_RECOVERY_KEY = 'fr_tiq_recovery_log_v1';
+/** Its own key, outside the `detour.*` save: a rolling budget is not player progress, but it is
+ *  an economy limit, so it belongs to the Telegram account that spent it. */
+export const TIQ_RECOVERY_KEY = adoptUserStorageKey('fr_tiq_recovery_log_v1');
 
 /**
  * The live log. Hydrated from storage once, then held in memory so a webview that refuses

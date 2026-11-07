@@ -25,7 +25,7 @@ import { fetchMindLadder, type MindFeed, type MindRowData } from './minds';
 import { myTiq } from './matchmaking';
 import { formatCountdown, getGrandCup, paidPlaces, type GrandCup } from './data';
 import { arena } from './arenaState';
-import { onChange, profile, theme } from './storage';
+import { adoptUserStorageKey, onChange, profile, theme } from './storage';
 import { impact } from './telegram';
 import { flagPhoto } from './flags';
 import { getSquadRanking } from './squads';
@@ -787,7 +787,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
      locked seat straight to the arena queue; the Arena screen never links back
      to the channel bracket, a squad selector or a tournament ladder. */
 
-  const CHANNEL_SEAT_KEY = 'detour.arena.seat.v1';
+  const CHANNEL_SEAT_KEY = adoptUserStorageKey('detour.arena.seat.v1');
 
   const channelSeatFor = (cupId: string): boolean => {
     try {

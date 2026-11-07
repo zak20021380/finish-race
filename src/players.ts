@@ -11,7 +11,7 @@
  * translation. The device's own player rides the directory as row `you`, folded in by the caller
  * so the operator sees the same numbers the rest of the app shows.
  */
-import { profile, readJson, writeJson } from './storage';
+import { adoptUserStorageKey, profile, readJson, writeJson } from './storage';
 import { vipMatchesPlanFilter, type VipPlanFilter } from '../shared/vip';
 
 /** One row of the directory. Mirrors `PlayerRecord` in `worker/matchmaker.ts`. */
@@ -86,7 +86,7 @@ export interface DirPage {
 /** The device's own seat id: stable across reloads, distinct from every registry id. */
 export const YOU_ID = 'you';
 
-const KEY = 'detour.players.v1';
+const KEY = adoptUserStorageKey('detour.players.v1');
 /** v2 dropped the generated roster; v1 blobs are read once to keep the live seat's flags. */
 const V = 2;
 const PAGE = 40;

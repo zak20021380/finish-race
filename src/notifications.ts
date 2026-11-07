@@ -2,8 +2,8 @@
  * notifications.ts — In-Game Notification Center (Inbox & Alerts).
  *
  * Local-first store + tactile sheet controller. One module owns the schema and
- * the only door to the device: `detour.notifications.v1` in localStorage.
- * A refused store still yields a working inbox (in-memory only), mirroring
+ * the only door to the device: `detour.notifications.v1`, scoped per Telegram account
+ * (`..._u_<id>`). A refused store still yields a working inbox (in-memory only), mirroring
  * storage.ts / squads.ts so the race never depends on persistence.
  *
  * Store API (spec): `getNotifications()`, `markAsRead(id)`,
@@ -17,7 +17,7 @@
  * Rendering uses textContent only (no innerHTML for user-adjacent strings)
  * and transform/opacity-only motion, per the Dark Clay contract.
  */
-import { earnCoins } from './storage';
+import { adoptUserStorageKey, earnCoins } from './storage';
 import { impact, notify } from './telegram';
 import { motionReduced, settings } from './settings';
 import { audioContext } from './sound';
@@ -41,7 +41,7 @@ export interface AppNotification {
 export type NewNotification = Omit<AppNotification, 'id' | 'createdAt' | 'read'> &
   Partial<Pick<AppNotification, 'id' | 'createdAt' | 'read'>>;
 
-const KEY = 'detour.notifications.v1';
+const KEY = adoptUserStorageKey('detour.notifications.v1');
 const V = 1;
 const MAX_ITEMS = 30;
 

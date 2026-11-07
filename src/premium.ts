@@ -18,6 +18,7 @@
  * checkout, and the caller may hand it an `onUnlocked` callback that runs once the pass is live.
  */
 import { workerUrl } from './adminApi';
+import { activeTgId } from './storage';
 import { lang, onLang, t } from './settings';
 import {
   impact, notify, openInvoice, tgInitData, tgUser, type InvoiceStatus,
@@ -31,7 +32,9 @@ import {
 /* ---------- entitlement state ---------- */
 
 const CACHE_PREFIX = 'detour.vip.until.v1.';
-const cacheKey = (): string => `${CACHE_PREFIX}${tgUser()?.id ?? 'guest'}`;
+/* The same account id the save is keyed by: a client that exposes `initData` without the unsafe
+   copy still gets its own VIP cache instead of sharing the browser guest's. */
+const cacheKey = (): string => `${CACHE_PREFIX}${activeTgId}`;
 
 function readCachedUntil(): number {
   try {
