@@ -920,11 +920,11 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     profileBornOn: 'متولد {date}',
     versionBadge: 'Tactix v1.0.0 · ذخیره محلی',
     /* ---- پیام بسته بودن فروشگاه (src/shop.ts) ---- */
-    shopVaultKicker: 'فروشگاه',
-    shopVaultTitle: 'فروشگاه موقتاً بستهست',
+    shopVaultKicker: 'فرمان سلطنتی',
+    shopVaultTitle: 'فروشگاه موقتاً بسته است',
     shopVaultSub: 'فعلاً آیتمی برای فروش نداریم؛ بهزودی با دست پر برمیگردیم!',
     shopVaultLocked: '🔒 قفل',
-    shopVaultStatus: 'بستهست',
+    shopVaultStatus: 'بسته است',
     chainDetonationNote: 'انفجار زنجیره‌ای ×{n} — کمبوی تاکتیکی!',
     dualDetonationNote: 'انفجار دوگانه — هر دو مین خنثی شدند',
     /* ---- کیش و مات: مهره‌ای که راهش به خط پایان بسته شده ---- */

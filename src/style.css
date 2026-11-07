@@ -2630,9 +2630,48 @@ html[data-lang="fa"] #s-shop.is-sealed .vault-kicker::after,
 html[data-lang="ar"] #s-shop.is-sealed .vault-kicker::before,
 html[data-lang="ar"] #s-shop.is-sealed .vault-kicker::after { display: none; }
 html[data-lang="fa"] #s-shop.is-sealed .vault-seal :is(.vault-kicker, .vault-title, .vault-sub),
-html[data-lang="ar"] #s-shop.is-sealed .vault-seal :is(.vault-kicker, .vault-title, .vault-sub) {
+html[data-lang="ar"] #s-shop.is-sealed .vault-seal :is(.vault-kicker, .vault-title, .vault-sub),
+.vault-seal:lang(fa) :is(.vault-kicker, .vault-title, .vault-sub),
+.vault-seal:lang(ar) :is(.vault-kicker, .vault-title, .vault-sub) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
   direction: rtl;
   text-transform: none;
+  letter-spacing: 0 !important;
+  word-spacing: normal !important;
+  font-feature-settings: normal;
+  /* a joined script wraps between words only — never mid-word */
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+/* The Persian seal is set in Vazirmatn, not the tracked Latin display face:
+   ExtraBold title on a tall line box, a balanced measure and a quiet kicker.
+   The tracking that suits royal Latin caps would pull a joined script apart. */
+html[data-lang="fa"] #s-shop.is-sealed .vault-title,
+html[data-lang="ar"] #s-shop.is-sealed .vault-title {
+  font-size: clamp(14px, 4.1vw, 17px);
+  font-weight: 800;
+  line-height: 1.72;
+  text-wrap: balance;
+}
+html[data-lang="fa"] #s-shop.is-sealed .vault-kicker,
+html[data-lang="ar"] #s-shop.is-sealed .vault-kicker {
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+html[data-lang="fa"] #s-shop.is-sealed .vault-sub,
+html[data-lang="ar"] #s-shop.is-sealed .vault-sub {
+  font-size: clamp(11px, 3vw, 12.5px);
+  font-weight: 500;
+  line-height: 1.85;
+  text-wrap: balance;
+}
+html[data-lang="fa"] #s-shop.is-sealed .shop-veil-mark,
+html[data-lang="ar"] #s-shop.is-sealed .shop-veil-mark {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.6;
 }
 html[data-lang="fa"] #s-shop.is-sealed .shop-veil-mark,
 html[data-lang="ar"] #s-shop.is-sealed .shop-veil-mark {
