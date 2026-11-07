@@ -717,8 +717,17 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   function startTick(): void {
     if (tick) return;
     tick = window.setInterval(() => {
-      if (isRanksVisible()) paintSeason();
+      if (!document.hidden && isRanksVisible()) paintSeason();
     }, 1000);
+  }
+
+  /* The season capsule is the only thing on this screen that moves. Its clock
+     exists while Ranks is on screen and is torn down the moment the route leaves,
+     so an idle app never wakes a painter every second. */
+  function stopTick(): void {
+    if (!tick) return;
+    window.clearInterval(tick);
+    tick = 0;
   }
 
   /* ---------- IQ boards (Top Minds | Nations IQ) ----------
@@ -2771,6 +2780,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
         startTick();
         refreshLadderMedals();
         void loadBoard(board);
+      } else {
+        stopTick();
       }
     },
   };

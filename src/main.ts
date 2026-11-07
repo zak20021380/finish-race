@@ -142,16 +142,10 @@ if (!inviteGateDeferred) initJoinGate();
 for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) {
   document.addEventListener(ev, (e) => e.preventDefault());
 }
-/**
- * The app never scrolls vertically — but a sheet's list, the compete body and
- * the home carousel keep their own gestures. `data-scroll` is vertical,
- * `data-carousel` is the one horizontal pan (touch-action: pan-x).
- */
-document.addEventListener('touchmove', (e) => {
-  const t = e.target as HTMLElement | null;
-  if (t?.closest('[data-scroll],[data-carousel]')) return;
-  e.preventDefault();
-}, { passive: false });
+/* Touch panning belongs to the compositor: the page itself cannot scroll
+   (`overflow: hidden` + `overscroll-behavior: none`), while every scroll surface
+   opts into its own axis with `touch-action` in style.css. A non-passive
+   `touchmove` listener here would force every flick through the main thread. */
 document.addEventListener('dblclick', (e) => e.preventDefault());
 
 /* ---------- DOM ---------- */

@@ -226,9 +226,9 @@ export const badgeText = (text: BadgeText, code: string): string =>
  */
 export function badgeCrestHtml(def: BadgeDef, className = 'badge-crest'): string {
   if (def.art) {
-    return `<img class="${className} badge-crest-art" src="${def.art}" alt="" aria-hidden="true" draggable="false" decoding="async"`
+    return `<img class="${className} badge-crest-art" src="${def.art}" alt="" aria-hidden="true" draggable="false" loading="lazy" decoding="async"`
       + ` data-badge="${def.id}" data-accent="${def.accent}" />`
-      + `<span class="medal-sheen" data-badge="${def.id}" style="--medal-mask:url('${def.art}')" aria-hidden="true"></span>`;
+      + `<span class="medal-sheen" data-badge="${def.id}" aria-hidden="true"></span>`;
   }
   return `<svg class="${className}" viewBox="0 0 56 56" aria-hidden="true">`
     + `<use href="#i-crest-${def.accent}" /></svg>`;

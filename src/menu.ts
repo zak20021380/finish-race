@@ -2213,7 +2213,11 @@ export function createMenu(api: MenuApi): Menu {
     el.title = state === 'offline' ? 'Offline — showing the last confirmed editions' : '';
   };
 
+  /* Boot never builds the rack: the medallion art is heavy, and Profile is a
+     destination the player may not visit at all. The shelf hydrates on the
+     first Profile entry; the badge sheet paints its own crest when opened. */
   const paintBadges = () => {
+    if (pfScreen.hidden) return;
     const rack = document.getElementById('honor-badges-rack');
     const count = document.getElementById('pf-badge-count');
     if (count) count.textContent = `(${unlockedCount()}/${BADGES.length})`;
@@ -3078,7 +3082,6 @@ export function createMenu(api: MenuApi): Menu {
       );
     }
     paintHeroExtras(lv);
-    paintBadges();
     paintReferral();
 
     const c = profile.country;
@@ -3092,14 +3095,6 @@ export function createMenu(api: MenuApi): Menu {
       pfFlag.textContent = '';
       if (c) pfFlag.append(flagPhoto(c, 'fp-slot'));
       pfFlag.dataset.cc = c ?? '';
-    }
-    /* the flag itself, blurred to a wash, is the nation card's ambient light —
-       repainted only when the nation changes, never on a resize */
-    const pfAura = document.getElementById('pf-country-aura');
-    if (pfAura && pfAura.dataset.cc !== (c ?? '')) {
-      pfAura.textContent = '';
-      if (c) pfAura.append(flagPhoto(c, 'fp-slot'));
-      pfAura.dataset.cc = c ?? '';
     }
     document.getElementById('pf-country-ico')?.classList.toggle('has-flag', !!c);
     const countryCard = document.getElementById('pf-country');
@@ -3218,6 +3213,9 @@ export function createMenu(api: MenuApi): Menu {
       empty.hidden = !isNew;
       stats.hidden = isNew;
     }
+    /* Equipping, earning or switching a language repaints the shelf in place.
+       `paintBadges` stays inert while the panel is hidden, so boot never mounts it. */
+    paintBadges();
   };
   onChange(() => paintProfile(true));
 
@@ -3852,6 +3850,7 @@ export function createMenu(api: MenuApi): Menu {
     refresh(id) {
       if (id === 'profile') {
         paintProfile();                           // the equipped row is only laid out once it is showing
+        paintBadges();                            // the shelf mounts on first entry, not at boot
         void refreshBadgeEditions();              // cached serials paint now; the ledger refreshes behind them
       }
       /* Home commits the strength live to menuState, so repaint whenever these screens come forward */

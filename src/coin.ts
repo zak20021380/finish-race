@@ -3,7 +3,7 @@
  *
  * Every place that shows coins mounts `coinSvg()`: a gold radial body (#ffe9a3 → #f5b82e →
  * #b8760f), an embossed rim, an inner ring, a stamped "D", a specular highlight and a soft
- * shadow, drawn in one 24-unit viewBox so it stays crisp from 16 to 48 px. Balances go through
+ * gradient shadow, drawn in one 24-unit viewBox so it stays crisp from 16 to 48 px. Balances go through
  * `setBalance()`, which formats with thousands separators and, unless motion is reduced, counts
  * up to the new value while a shine sweeps across the sibling coin.
  */
@@ -50,11 +50,13 @@ export function coinSvg(notched = false): SVGSVGElement {
         <stop offset="1" stop-color="#B45309"/>
       </linearGradient>
       <clipPath id="${id}-clip"><circle cx="12" cy="12" r="9.7"/></clipPath>
-      <filter id="${id}-soft" x="-40%" y="-40%" width="180%" height="180%">
-        <feGaussianBlur stdDeviation=".65"/>
-      </filter>
+      <radialGradient id="${id}-ground" cx="50%" cy="50%" r="50%">
+        <stop offset="0" stop-color="#8a5c06" stop-opacity=".34"/>
+        <stop offset=".62" stop-color="#8a5c06" stop-opacity=".16"/>
+        <stop offset="1" stop-color="#8a5c06" stop-opacity="0"/>
+      </radialGradient>
     </defs>
-    <ellipse cx="12" cy="13.4" rx="9.2" ry="9.2" fill="#8a5c06" opacity=".3" filter="url(#${id}-soft)"/>
+    <ellipse cx="12" cy="13.4" rx="9.2" ry="9.2" fill="url(#${id}-ground)"/>
     ${notched
       ? `<circle cx="12" cy="12" r="10.9" fill="none" stroke="url(#${id}-notch)" stroke-width="1.7" stroke-dasharray="1 1.35" stroke-linecap="butt"/>`
       : ''}

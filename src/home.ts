@@ -2,8 +2,8 @@
  * home.ts — Home: identity card, flexible highlights, then the single Play launcher.
  *
  * Home never scrolls vertically; the carousel is the one horizontal gesture
- * (CSS scroll-snap + `touch-action: pan-x`, `data-carousel` opts out of the
- * global touchmove guard in main.ts). Auto-advance is slow and pauses on touch.
+ * (CSS scroll-snap + `touch-action: pan-x`), so a swipe runs on the compositor.
+ * It only advances on direct input — no idle loop, no timer churn.
  * Each slide is 100% of the viewport width inside an overflow-hidden wrap, so
  * only the active slide shows cleanly between the paging dots. `.is-active`
  * marks the slide in focus (state binding preserved, no visual peek).
@@ -18,7 +18,7 @@
  * builder and a sticky Start button whose label updates live.
  */
 import type { Difficulty } from './bot';
-import { lang, menuState, motionReduced, onLang, onSettings, saveMenu, t } from './settings';
+import { lang, menuState, motionReduced, onLang, saveMenu, t } from './settings';
 import { nameOf } from './countries';
 import { fetchNationBoard, type NationFeed, type NationRow } from './nations';
 import { fetchMindLadder, type MindFeed, type MindRowData } from './minds';
@@ -137,32 +137,39 @@ const DIFF_HINT: Record<Difficulty, string> = {
 };
 
 export function createHome(api: HomeApi): { setRoute(id: string): void } {
+  const homeScreen = $('s-home');
   const carousel = $('home-carousel') as HTMLElement;
   const dots = [...document.querySelectorAll<HTMLButtonElement>('#home-dots .dot')];
   const slides = [...carousel.querySelectorAll<HTMLElement>('.car-card')];
 
-  /* ---------- carousel: dots + slow auto-advance that pauses on touch ---------- */
+  /* ---------- carousel: dots + direct input only ---------- */
 
   /* One card step is the distance between two slides. Slides are 100% of the
      viewport width with no gap/peek, so step === viewport width and exactly
-     one active card fills the wrap between the paging dots. */
-  const step = (): number => {
-    if (slides.length < 2) return carousel.clientWidth || 1;
-    return slides[1].offsetLeft - slides[0].offsetLeft || carousel.clientWidth || 1;
+     one active card fills the wrap between the paging dots. Measured on mount
+     and on resize only — never from the scroll path. */
+  let slideStep = 1;
+  const measureStep = (): void => {
+    slideStep = slides.length < 2
+      ? carousel.clientWidth || 1
+      : slides[1].offsetLeft - slides[0].offsetLeft || carousel.clientWidth || 1;
   };
 
   /* Index 0 is the 200 Stars Tournament: the track is authored in that order,
-     so the boot state below simply agrees with the markup. */
-  let currentSlideIndex = 0;
+     so the boot state below simply agrees with the markup. The index painted
+     into the dots is the only carousel state; a scroll inside one slide is a
+     no-op — no class writes, no measurements, no style recalc. */
+  let paintedSlide = -1;
 
   const clampIndex = (i: number): number => Math.min(slides.length - 1, Math.max(0, i));
 
   const activeSlide = (): number =>
-    clampIndex(Math.round(carousel.scrollLeft / step()));
+    clampIndex(Math.round(carousel.scrollLeft / (slideStep || 1)));
 
-  const paintDots = (): void => {
+  const paintDots = (force = false): void => {
     const a = activeSlide();
-    currentSlideIndex = a;
+    if (!force && a === paintedSlide) return;
+    paintedSlide = a;
     for (const d of dots) {
       const on = Number(d.dataset.dot) === a;
       d.classList.toggle('on', on);
@@ -199,7 +206,6 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   const goSlide = (i: number): void => {
     const n = clampIndex(i);
-    currentSlideIndex = n;
     const left = slides[n] ? slides[n].offsetLeft - slides[0].offsetLeft : 0;
     carousel.scrollTo({ left, behavior: motionReduced() ? 'auto' : 'smooth' });
   };
@@ -207,53 +213,19 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   for (const d of dots) {
     d.addEventListener('click', () => {
       impact('light');
-      poke();
       goSlide(Number(d.dataset.dot));
     });
   }
-  carousel.addEventListener('scroll', paintDots, { passive: true });
+  carousel.addEventListener('scroll', () => paintDots(), { passive: true });
 
-  let idleTimer = 0;
-  let autoTimer = 0;
-  const poke = (): void => {
-    window.clearTimeout(idleTimer);
-    window.clearInterval(autoTimer);
-    autoTimer = 0;
-    idleTimer = window.setTimeout(armAuto, 8000);
-  };
-  const armAuto = (): void => {
-    // Reduced motion: no auto-advance; the carousel only moves on direct input.
-    if (autoTimer || document.hidden || motionReduced()) return;
-    autoTimer = window.setInterval(() => {
-      if (document.hidden || motionReduced()) return;
-      const s = $('s-home');
-      if (s.hidden) return;
-      goSlide((currentSlideIndex + 1) % slides.length);
-    }, 6000);
-  };
-  onSettings(() => {
-    if (motionReduced()) {
-      window.clearInterval(autoTimer);
-      autoTimer = 0;
-      window.clearTimeout(idleTimer);
-    } else poke();
-  });
-  for (const ev of ['pointerdown', 'touchstart', 'wheel'] as const) {
-    carousel.addEventListener(ev, poke, { passive: true });
-  }
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      window.clearInterval(autoTimer);
-      autoTimer = 0;
-    } else poke();
-  });
   // Keep the inside-dots glued to the card bottom across resizes/rotations.
+  const remeasure = (): void => { measureStep(); syncDots(); };
   try {
-    new ResizeObserver(() => syncDots()).observe(carousel);
+    new ResizeObserver(remeasure).observe(carousel);
   } catch {
     /* ResizeObserver unavailable — CSS fallback + paintDots cover it */
   }
-  window.addEventListener('resize', syncDots);
+  window.addEventListener('resize', remeasure);
 
   /* ---------- Nations Cup: 30px rows + user row / pick-country CTA ----------
      Top 5 fill the card to the dots with no dead void (the 40px→30px row is
@@ -477,7 +449,6 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   document.getElementById('home-cup-table')?.addEventListener('click', () => {
     impact('light');
-    poke();
     try {
       api.router.go('ranks');
     } catch {
@@ -766,7 +737,6 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   document.getElementById('home-mind-cta')?.addEventListener('click', () => {
     impact('light');
-    poke();
     api.router.go('ranks');
   });
 
@@ -866,7 +836,6 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   document.getElementById('home-tournament-cta')?.addEventListener('click', () => {
     impact('medium');
-    poke();
     if (channelCup && channelSeatFor(channelCup.id)) {
       api.queue('arena');
       return;
@@ -899,7 +868,6 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
      through the Worker, no bot-chat hop in the way. */
   document.getElementById('home-tournament-admin')?.addEventListener('click', () => {
     impact('light');
-    poke();
     openEnlistSquad();
   });
 
@@ -940,9 +908,11 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       });
     };
     paintClock();
+    /* The clock reads in whole minutes: a 30s beat keeps it honest without a
+       wake-up every second, and a hidden Home panel paints nothing. */
     window.setInterval(() => {
-      if (!document.hidden) paintClock();
-    }, 1000);
+      if (!document.hidden && !homeScreen.hidden) paintClock();
+    }, 30_000);
     onLang(paintClock);
   }
   onLang(paintTourLeader);
@@ -1226,21 +1196,21 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
      halfway down the deck. Re-asserted once after layout, then left alone. */
   const bootHero = (): void => {
     if (carousel.scrollLeft !== 0) carousel.scrollLeft = 0;
-    paintDots();
+    measureStep();
+    paintDots(true);
   };
   bootHero();
   requestAnimationFrame(bootHero);
   paintLauncher();
   paintSheet();
-  armAuto();
 
   return {
     setRoute(id: string) {
       if (id !== 'home') return;
       /* The panel itself is already mounted; only its chrome and a stale read are
          refreshed here, and the router runs this after the tab has painted. */
-      paintDots();
-      poke();
+      measureStep();
+      paintDots(true);
       paintLauncher();
       paintSheet();
       const now = Date.now();

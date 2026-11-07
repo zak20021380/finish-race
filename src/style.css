@@ -2947,8 +2947,8 @@ html[data-lang="ar"] #s-shop.is-sealed .shop-veil-mark {
 .help b { font-weight: 800; color: var(--ink); }
 
 /* ---- pickers inside sheets: a field, a scrollable list, and nothing else ----
-   The app itself never scrolls, so the list owns the gesture: touch-action + the `data-scroll`
-   opt-out in main.ts are what let a country list be dragged on a phone. */
+   The app itself never scrolls, so the list owns the gesture: `touch-action: pan-y`
+   lets the compositor drag a country list without a main-thread listener. */
 .sheet.tall { gap: var(--s3); }
 /* a sheet with more than one screen of content: the body scrolls, the header stays */
 .sheet-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--s2); }
@@ -23645,7 +23645,7 @@ html.reduced-motion .slide-cta-go { transition: none; }
   width: 104px;
   height: 104px;
   object-fit: contain;
-  filter: drop-shadow(0 6px 20px rgba(251, 191, 36, .45)) drop-shadow(0 10px 16px rgba(0, 0, 0, .55));
+  /* the stage's gold dish is the depth: no filter on the moving image */
   animation: star-float 3.4s ease-in-out infinite;
 }
 @keyframes star-float {
@@ -23679,10 +23679,8 @@ html.reduced-motion .slide-cta-go { transition: none; }
   background-clip: text;
   color: #FCD34D;
   -webkit-text-fill-color: transparent;
-  filter:
-    drop-shadow(0 1px 0 rgba(124, 45, 18, .95))
-    drop-shadow(0 2px 2px rgba(0, 0, 0, .6))
-    drop-shadow(0 7px 18px rgba(245, 158, 11, .3));
+  /* a crisp struck contour instead of three drop-shadow passes */
+  -webkit-text-stroke: 1px rgba(124, 45, 18, .55);
 }
 /* a motivating hook: warm ivory under the jackpot, balanced over two lines when tight */
 .tour-vault-sub {
@@ -23931,7 +23929,6 @@ html.reduced-motion .slide-cta-go { transition: none; }
   width: 17px;
   height: 17px;
   color: #352106;
-  filter: drop-shadow(0 1px 0 rgba(255, 246, 200, .35));
 }
 @keyframes tour-cta-sheen {
   0%, 12% { transform: translateX(-130%) skewX(-22deg); }
@@ -24022,7 +24019,7 @@ html.reduced-motion .slide-cta-go { transition: none; }
   width: 14px;
   height: 14px;
   color: #8FE3FF;
-  filter: drop-shadow(0 0 5px rgba(56, 189, 248, .75));
+  opacity: .92;
 }
 .tour-admin-t {
   position: relative;
@@ -26791,15 +26788,11 @@ html[data-lang="fa"] #enlist-input::placeholder {
   border-radius: 50%;
   overflow: hidden;
   pointer-events: none;
-  mix-blend-mode: screen;
-  -webkit-mask-image: var(--medal-mask);
-  mask-image: var(--medal-mask);
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
+  /* one static specular wash: no art mask, no blend mode */
+  background: radial-gradient(78% 64% at 32% 22%,
+    rgba(255, 255, 255, .22) 0%,
+    rgba(255, 255, 255, .07) 42%,
+    rgba(255, 255, 255, 0) 68%);
 }
 .badge-ico-lg .medal-sheen {
   width: var(--bd-coin);
@@ -26881,7 +26874,6 @@ html[data-lang="fa"] #enlist-input::placeholder {
 
 /* Heisenberg: a cold chemical sheen crossing the chrome relief, even while unowned.
    The band is oversized and translated, so the sweep stays on the compositor. */
-#s-profile .medal-sheen[data-badge="heisenberg_formula"] { mix-blend-mode: normal; }
 #s-profile .medal-sheen[data-badge="heisenberg_formula"]::before {
   inset: -20% -110%;
   background: linear-gradient(115deg,
@@ -26907,6 +26899,14 @@ html[data-lang="fa"] #enlist-input::placeholder {
   60%  { transform: translateX(60%); opacity: 0; }
   100% { transform: translateX(60%); opacity: 0; }
 }
+
+/* The medallion finish is now one static specular gradient on the coin itself.
+   The old masked sweeps and orbit rings are retired: they forced a masked
+   compositing layer per honor and repainted it on every frame. */
+#s-profile .badge-slot-crest .medal-sheen::before,
+#s-profile .badge-slot-crest .medal-sheen::after,
+.badge-ico-lg .medal-sheen::before,
+.badge-ico-lg .medal-sheen::after { content: none; animation: none; }
 
 /* the equipped seal beside the player's name wears the same crest */
 .pf-equipped-badge .pf-equipped-crest {
@@ -27718,28 +27718,16 @@ html[data-lang="fa"] #enlist-input::placeholder {
   position: absolute;
   inset: -48% -28% 18%;
   z-index: 0;
-  display: grid;
-  place-items: center;
+  display: block;
   pointer-events: none;
-  opacity: .16;
-  filter: blur(24px) saturate(1.5);
+  opacity: .55;
+  /* national ambient light, pre-rendered: a radial wash, no blur/saturate pass */
+  background: radial-gradient(closest-side at 50% 42%,
+    rgba(125, 211, 252, .34) 0%,
+    rgba(56, 189, 248, .14) 52%,
+    rgba(56, 189, 248, 0) 78%);
   transform: scale(1.25);
 }
-#s-profile .pf-chip-aura .fp {
-  --fp-d: 74px;
-  width: 74px;
-  height: 74px;
-  overflow: hidden;
-  border-radius: 50%;
-}
-#s-profile .pf-chip-aura .fp-img {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  border: 0;
-  box-shadow: none;
-}
-#s-profile .pf-chip-aura .fp-chip { display: none; }
 #s-profile .pf-chip-nation.is-set { border-color: rgba(125, 211, 252, .13); }
 #s-profile .pf-chip-nation.is-set::after {
   box-shadow:
@@ -28137,9 +28125,11 @@ html.reduced-motion #s-profile .pf-chip { animation: none; transition: none; }
   height: 12px;
   margin-top: -6px;
   border-radius: 50%;
-  background: radial-gradient(ellipse at center, var(--badge-aura-color) 0%, transparent 70%);
+  /* a soft floor is already a gradient: the blur pass only cost a raster */
+  background: radial-gradient(ellipse at center,
+    var(--badge-aura-color) 0%,
+    transparent 70%);
   opacity: .6;
-  filter: blur(4px);
   pointer-events: none;
 }
 /* Churchill: an industrial cyan pulse on the steel rim */
@@ -35360,9 +35350,9 @@ html:not(.game-live) .screen:not(.game) *::after,
   opacity: .38 !important;
 }
 
-/* The Star keeps one static, tight seat instead of a 20px drop-shadow. */
+/* The Star keeps one static, tight seat and carries no filter pass. */
 .tour-star-img {
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .45)) !important;
+  filter: none !important;
 }
 .tour-star-stage::before {
   box-shadow: inset 0 0 0 1px rgba(255, 222, 145, .14) !important;
