@@ -1,10 +1,10 @@
 import './style.css';
 import './result.css';
 import {
-  CONFIG, MAX_TEAMS, apply, ballById, distField, firstBall, getAutoMove, mineCells, minesLeft, newGame,
-  reachableBall, rivalMineAt, steps as teamSteps, view as fogOfWar, wallBudget, wallOk, wallsCross,
-  wallsOverlap, wallsRemaining, rotateWall,
-  type Action, type Ball, type Cell, type GameState, type Mine, type Player,
+  CONFIG, MAX_TEAMS, apply, ballById, distField, firstBall, getAutoMove, isEliminated, mineCells,
+  minesLeft, newGame, reachableBall, rivalMineAt, steps as teamSteps, view as fogOfWar, wallBudget,
+  wallOk, wallsCross, wallsOverlap, wallsRemaining, rotateWall,
+  type Action, type Ball, type Cell, type Checkmate, type GameState, type Mine, type Player,
   type Pos, type Wall, type WallSpec,
 } from './rules';
 import { botAction, botThinkMs, type Difficulty } from './bot';
@@ -423,6 +423,57 @@ function setPeerStatus(side: number, status: 'reconnecting' | 'online' | 'bot', 
   }
 }
 
+/* ---------- the CHECKMATE splash ----------
+   The rules resolve a sealed pawn into a win or an elimination; this is the board's own voice for
+   that moment. One pointer-transparent overlay over the grid, one compositor-only scale-down, and
+   nothing else: the blast itself is the canvas's (`renderer.checkmate`). The copy is read from
+   `settings.ts` on every repaint, so a live language flip re-speaks the same verdict. */
+const checkmateSplash = document.createElement('div');
+checkmateSplash.className = 'cm-splash';
+checkmateSplash.id = 'checkmate-splash';
+checkmateSplash.setAttribute('role', 'status');
+checkmateSplash.setAttribute('aria-live', 'assertive');
+checkmateSplash.hidden = true;
+checkmateSplash.innerHTML = '<span class="cm-in">'
+  + '<b class="cm-title" id="cm-title"></b>'
+  + '<i class="cm-rule" aria-hidden="true"></i>'
+  + '<span class="cm-sub" id="cm-sub"></span>'
+  + '</span>';
+wrap.appendChild(checkmateSplash);
+const cmTitle = $<HTMLElement>('cm-title');
+const cmSub = $<HTMLElement>('cm-sub');
+/** How long the announcement owns the board — the CSS clock is the same length. */
+const CHECKMATE_SPLASH_MS = 1900;
+let cmTimer = 0;
+let cmVisible = false;
+
+function paintCheckmateSplash(): void {
+  setText(cmTitle, t('checkmateTitle'));
+  setText(cmSub, t('checkmateSubtitle'));
+}
+
+/** Raise the announcement over the board. It never takes a tap and it hides itself on its clock. */
+function showCheckmateSplash(): void {
+  cmVisible = true;
+  checkmateSplash.hidden = false;
+  /* the live region is visible before its copy lands, so the verdict is actually announced */
+  paintCheckmateSplash();
+  restartClass(checkmateSplash, 'is-on');
+  clearTimeout(cmTimer);
+  cmTimer = window.setTimeout(hideCheckmateSplash, CHECKMATE_SPLASH_MS);
+}
+
+function hideCheckmateSplash(): void {
+  window.clearTimeout(cmTimer);
+  cmTimer = 0;
+  if (!cmVisible && checkmateSplash.hidden) return;
+  cmVisible = false;
+  checkmateSplash.classList.remove('is-on');
+  checkmateSplash.hidden = true;
+}
+
+onLang(() => { if (cmVisible) paintCheckmateSplash(); });
+
 const bonusBadge = document.createElement('div');
 bonusBadge.className = 'iv-bonus';
 bonusBadge.id = 'iv-bonus';
@@ -790,8 +841,12 @@ function wallIssue(s: GameState, w: Wall): keyof typeof REASON {
   if (wallsRemaining(s, w.owner) <= 0) return 'dry';
   if (s.walls.some((o) => wallsCross(o, w))) return 'cross';
   if (s.walls.some((o) => wallsOverlap(o, w))) return 'overlap';
+  /* Only the placer's own live pawns can refuse a wall now: sealing a rival is a checkmate,
+     resolved by the rules the moment the bar lands. */
   const d = distField([...s.walls, w], s.cols, s.rows);
-  return s.balls.some((b) => d[b.pos.r * s.cols + b.pos.c] < 0) ? 'blocked' : 'overlap';
+  const blocked = s.balls.some((b) => b.team === w.owner && !b.isCheckmated
+    && d[b.pos.r * s.cols + b.pos.c] < 0);
+  return blocked ? 'blocked' : 'overlap';
 }
 
 /**
@@ -921,7 +976,8 @@ function humansIn(target: Room | null | undefined): number {
 }
 
 /** The turn's own gate. The lesson layers on top of this through `isTutorialActionAllowed()`. */
-const canAct = () => state.winner === null && state.turn === localSide && !paused;
+const canAct = () => state.winner === null && state.turn === localSide && !paused
+  && !isEliminated(state, localSide);
 const clearGhost = () => { mineGhost = null; setMode({ ...mode(), preview: null }); clearNote(); };
 
 /**
@@ -1059,7 +1115,8 @@ function syncStage() {
   if (mineGhost && cap && cap.hit.kind === 'mine-confirm') {
     /* the pair's own box, resolved against the live pawns exactly as the renderer draws it:
        a horizontal pair on a roomy square, a vertical stack in a boundary column */
-    const lay = capsuleLayout(renderer.layout(), cap.ax, cap.ay, state.balls.map((b) => b.pos));
+    const lay = capsuleLayout(renderer.layout(), cap.ax, cap.ay,
+      state.balls.filter((b) => !b.isCheckmated).map((b) => b.pos));
     setMineStage(lay ? boardRect(lay.box.left, lay.box.top, lay.box.width, lay.box.height) : null);
   } else setMineStage(null);
   placeNote();
@@ -1167,9 +1224,12 @@ const paintVipSeats = (): void => { renderer.setVipSeats(vipBoardSeats()); inval
  * Where every seat finished, champion first. A race stops the instant a ball takes the line, so
  * the seats that never crossed are ordered by how far their leading ball climbed and then by the
  * field behind it — a final standing the player can read straight off the board they just left.
+ * A seat checkmated out of a party fell further than any runner: it owns the bottom of the ladder,
+ * later falls ranked above earlier ones.
  */
 function finalStandings(): Player[] {
   const winner = state.winner;
+  const fallen = state.eliminated ?? [];
   const progress = (seat: Player): [number, number] => {
     const rows = state.balls.filter((ball) => ball.team === seat).map((ball) => ball.pos.r);
     if (!rows.length) return [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
@@ -1177,6 +1237,13 @@ function finalStandings(): Player[] {
   };
   const rest = roster().filter((seat) => seat !== winner);
   rest.sort((a, b) => {
+    /* a checkmated seat owns the bottom of the ladder; the later it fell, the higher it ranks */
+    const ai = fallen.indexOf(a), bi = fallen.indexOf(b);
+    if (ai >= 0 || bi >= 0) {
+      if (ai < 0) return -1;
+      if (bi < 0) return 1;
+      return bi - ai;
+    }
     const [aLead, aField] = progress(a);
     const [bLead, bField] = progress(b);
     return aLead - bLead || aField - bField || a - b;
@@ -1206,16 +1273,18 @@ function resultRosterRow(seat: Player, rank: number): HTMLLIElement {
   const placeKey = `resultPlace${place}`;
   const name = seatLabel(seat);
   const local = seat === localSide;
+  const out = isEliminated(state, seat);
 
   const row = document.createElement('li');
   row.className = 'result-row';
   row.dataset.place = String(place);
   row.dataset.seat = String(seat);
-  row.setAttribute('aria-label', `${name}, ${t(placeKey)}${local ? `, ${t('hudYou')}` : ''}${seatVip(seat) ? `, ${t('vipPillActive')}` : ''}`);
+  row.setAttribute('aria-label', `${name}, ${t(out ? 'checkmateOut' : placeKey)}${local ? `, ${t('hudYou')}` : ''}${seatVip(seat) ? `, ${t('vipPillActive')}` : ''}`);
   if (local) {
     row.classList.add('is-you');
     row.setAttribute('aria-current', 'true');
   }
+  if (out) row.classList.add('is-out');
 
   const medal = document.createElement('span');
   medal.className = 'result-medal';
@@ -1256,7 +1325,7 @@ function resultRosterRow(seat: Player, rank: number): HTMLLIElement {
   meta.className = 'result-row-meta';
   const placeEl = document.createElement('span');
   placeEl.className = 'result-place';
-  placeEl.textContent = t(placeKey);
+  placeEl.textContent = t(out ? 'checkmateOut' : placeKey);
   meta.append(placeEl);
   if (local) {
     const you = document.createElement('span');
@@ -1296,8 +1365,11 @@ function paintResultRoster(): void {
 function paintResultCopy(): void {
   if (!resultView) return;
   const { won, stake } = resultView;
-  resultKicker.textContent = t('resultKicker');
-  verdict.textContent = t(won ? 'resultVictoryTitle' : 'resultDefeatTitle');
+  /* A checkmate that ended the race is the result's own reason, not a generic victory: the card
+     says how it was won. A trap that only eliminated a party seat is already history by now. */
+  const trapped = state.checkmate?.decided === true && state.winner !== null;
+  resultKicker.textContent = t(!won && trapped ? 'checkmateKicker' : 'resultKicker');
+  verdict.textContent = t(won ? (trapped ? 'checkmateKicker' : 'resultVictoryTitle') : 'resultDefeatTitle');
   shareLabel.textContent = t('resultShare');
   toMenuLabel.textContent = t('resultMenu');
   shareBtn.setAttribute('aria-label', t('resultShare'));
@@ -1695,6 +1767,8 @@ function showOverlay() {
  * sound and the haptics, and the renderer's own completion callback owns opening the sheet.
  */
 const GOAL_BEAT_MS = 600;                 // a winner with no rival to shatter: the goal pulse alone
+/** A checkmate decision has no shattered rival to wait for: hold the card until the splash clears. */
+const CHECKMATE_BEAT_MS = 1900;
 let goalBeat = 0;
 /** A finisher is on the board: the result sheet now belongs to the renderer's completion callback. */
 let finishPending = false;
@@ -1714,16 +1788,20 @@ function armGoalBeat() {
   if (winner === null) return;
   menuBtn.disabled = true;               // no pause sheet opening onto a race that is already settled
   /* Farthest from the line first, so the closest rival is the last one standing — and the last
-     thing heard before the card. */
+     thing heard before the card. A pawn already checkmated off the board is not shattered twice;
+     the one the deciding trap just sealed is, so a duel's checkmate still ends on its explosion. */
+  const deciding = state.checkmate?.decided ? state.checkmate : null;
+  const justSealed = (b: Ball): boolean =>
+    deciding?.cells.some((cell) => cell.c === b.pos.c && cell.r === b.pos.r) ?? false;
   const losers = state.balls
-    .filter((b) => b.team !== winner)
+    .filter((b) => b.team !== winner && (!b.isCheckmated || justSealed(b)))
     .sort((a, b) => b.pos.r - a.pos.r)
     .map((b) => ({ id: b.id, cell: b.pos }));
   /* The crowned pawn: the winning seat's leading ball, which is the one that crossed the line. */
   let winnerBall: number | null = null;
   let lead = Infinity;
   for (const b of state.balls) {
-    if (b.team !== winner) continue;
+    if (b.team !== winner || b.isCheckmated) continue;
     if (b.pos.r < lead) { lead = b.pos.r; winnerBall = b.id; }
   }
   /* The finisher plays under every motion setting: an Android battery saver flips the OS
@@ -1731,7 +1809,8 @@ function armGoalBeat() {
      decoration. Only a race with nobody left to shatter falls back to the plain goal pulse. */
   const plan = renderer.finishCue(winnerBall, losers);
   if (!plan.bursts.length) {
-    goalBeat = window.setTimeout(() => { goalBeat = 0; showOverlay(); }, GOAL_BEAT_MS);
+    const beat = state.checkmate?.decided ? CHECKMATE_BEAT_MS : GOAL_BEAT_MS;
+    goalBeat = window.setTimeout(() => { goalBeat = 0; showOverlay(); }, beat);
     return;
   }
   const run = ++finishRun;
@@ -1864,6 +1943,8 @@ function ui() {
   for (const p of roster()) {
     setClass(chips[p], 'active', state.winner === null && state.turn === p && !paused);
     setClass(chips[p], 'thinking', thinking && p === state.turn);
+    /* a checkmated seat is off the board: its strip reads as struck, and it never wears the turn */
+    setClass(chips[p], 'is-out', isEliminated(state, p));
     setWalls(p, wallsRemaining(state, p));
     if (p !== localSide) setFog(p);
   }
@@ -2062,6 +2143,25 @@ function play(a: Action, remote = false): boolean {
       : `Mine! ${TEAM_NAME[by]} ${by === localSide ? 'were' : 'was'} thrown back `
         + `${cells} cell${cells === 1 ? '' : 's'}`, false, 2600);
   }
+  /* ---- CHECKMATE: the rules just sealed a pawn's last route ----
+     The canvas blows the trapped pawn off the board and the board speaks the verdict. A seat that
+     lost its last pawn is out (a duel is already decided); a pawn sealed while a team-mate still
+     runs gets the same blast and a quieter note, because the race goes on. */
+  const trap: Checkmate | null = committed && next.checkmate !== prev.checkmate
+    ? next.checkmate ?? null : null;
+  if (trap) {
+    if (trap.cells.length) {
+      renderer.checkmate(trap.cells);
+      /* the mine's own bang already owns the beat when the trap was sprung by its throw */
+      if (!combo && !blast) {
+        audio.play('explosion');
+        detonation();
+        shake(false);
+      }
+    }
+    if (trap.teams.length) showCheckmateSplash();
+    else if (trap.cells.length) showNote(t('checkmatePawnNote'), false, 2800);
+  }
   ui();
   startClock();          // the turn has moved on: the next seat gets its own allowance
   if (state.winner !== null) notify(state.winner === localSide ? 'success' : 'error');
@@ -2103,7 +2203,8 @@ let ringFrac = -1;
 
 /** Is the countdown this seat's to lose? */
 const clockLive = () => !paused && !overlayOpen && !document.hidden && router.current === 'game'
-  && state.winner === null && state.turn === localSide && !tutorialActive;
+  && state.winner === null && state.turn === localSide && !tutorialActive
+  && !isEliminated(state, localSide);
 
 /** Park the countdown: the interval is gone, and the chip stops advertising a clock it isn't running. */
 function stopClock() {
@@ -2249,6 +2350,7 @@ function restart() {
   stopVictoryFanfare();
   stopDefeat();
   cancelTutorial();
+  hideCheckmateSplash();
   /* A new match owns a fresh pair of turns. Resetting BEFORE `ui()` at the end of this function
      is what makes turn 1 of the invited duel count as turn 1 rather than inheriting a stale
      counter from the boot's idle board. */
@@ -2952,6 +3054,7 @@ function quitToMenu() {
      (if one was raised) is the only thing left to act on. */
   notifyMatchBusy(false);
   hidePeerPill();
+  hideCheckmateSplash();
   /* a race that ended inside the goal beat still has to be paid out before the board goes away */
   if (finishUnderway()) { clearGoalBeat(); showOverlay(); }
   /* Menu, the back button and a quit all land here: the fanfare never follows the board home */
@@ -3024,8 +3127,10 @@ function refuse(w: Wall) {
   notify('warning');
 }
 
-/** Every ball on the board, in cell coordinates, for the hit-test. */
-const cells = () => state.balls.map((b) => ({ id: b.id, team: b.team, c: b.pos.c, r: b.pos.r }));
+/** Every live ball on the board, in cell coordinates, for the hit-test. */
+const cells = () => state.balls
+  .filter((b) => !b.isCheckmated)
+  .map((b) => ({ id: b.id, team: b.team, c: b.pos.c, r: b.pos.r }));
 
 /** What the key that is down offers to a tap. */
 const at = (p: Vec) => hitTest(renderer.layout(), p.x, p.y, {

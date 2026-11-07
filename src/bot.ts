@@ -8,8 +8,10 @@
  * than on one deterministic line.
  *
  * Difficulty decides how the same evaluation is played, never the anti-stalemate invariant, which
- * every level obeys: it may only place a wall that leaves every ball a path to FINISH (`wallOk`), so
- * no number of walls can freeze a race.
+ * every level obeys: it prices only walls that leave every live pawn a path to FINISH, so a bot
+ * never freezes its own race — and, for the same reason, never plays the checkmating wall by
+ * accident. (A person may: `wallOk` lets a wall seal a rival, and the rules turn that into the
+ * checkmate verdict.)
  *   easy   — races greedily, walls rarely, wanders on a plain random step.
  *   normal — full multi-contender evaluation, softmax over near-optimal actions.
  *   hard   — the same, plus a top-K 2-ply reply check and a tighter softmax band.
@@ -109,9 +111,9 @@ function teamField(s: GameState, team: Player, d: Int16Array): number {
   return best;
 }
 
-/** Every ball on the board still reaches FINISH with the field `d` standing — the anti-stalemate guard. */
+/** Every pawn still in the race reaches FINISH with the field `d` standing — the anti-stalemate guard. */
 function allReach(s: GameState, d: Int16Array): boolean {
-  for (const b of s.balls) if (d[b.pos.r * s.cols + b.pos.c] < 0) return false;
+  for (const b of s.balls) if (!b.isCheckmated && d[b.pos.r * s.cols + b.pos.c] < 0) return false;
   return true;
 }
 

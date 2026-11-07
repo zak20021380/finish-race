@@ -35545,3 +35545,114 @@ html.reduced-motion .btn-hero:active::before { display: none !important; }
 [data-view][hidden] {
   display: none !important;
 }
+
+/* ============================================================================
+   CHECKMATE — the board's own verdict
+   ----------------------------------------------------------------------------
+   A sealed pawn is resolved by the rules, never left to stall a race. This is
+   the announcement that lands over the grid: an obsidian wash with crimson and
+   gold type, one scale-down entrance and one fade-out. Only transform/opacity
+   animate (compositor-only, no continuous blur) and the physical blast belongs
+   to the canvas. It never takes a tap, never widens the board, and hides
+   itself; the in-board copy is painted by main.ts from settings.ts.
+   ============================================================================ */
+.cm-splash {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: auto;
+  max-width: 100%;
+  padding: 10px;
+  overflow: hidden;
+  pointer-events: none;          /* never eats a tap aimed at the board */
+  opacity: 0;
+  visibility: hidden;
+  background:
+    radial-gradient(58% 46% at 50% 50%, rgba(255, 196, 84, .16), rgba(255, 196, 84, 0) 72%),
+    radial-gradient(120% 104% at 50% 50%, rgba(9, 7, 11, .66), rgba(9, 7, 11, .38) 58%, rgba(9, 7, 11, 0) 100%);
+}
+.cm-splash[hidden] { display: none !important; }
+.cm-splash.is-on { visibility: visible; animation: cm-veil 1.9s ease both; }
+.cm-in {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  text-align: center;
+  transform: scale(.78);
+}
+.cm-splash.is-on .cm-in { animation: cm-strike 1.9s cubic-bezier(.2, .9, .22, 1) both; }
+.cm-title {
+  display: block;
+  max-width: 100%;
+  font-size: clamp(1.55rem, 8.6vw, 2.25rem);
+  font-weight: 900;
+  line-height: 1.12;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  background: linear-gradient(180deg, #FFF8E1 0%, #FFD775 34%, #F0A21E 64%, #C81E3A 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  /* zero-blur depth: the transform animation never re-rasterises a filter */
+  text-shadow: 0 2px 0 rgba(24, 4, 8, .72);
+}
+.cm-rule {
+  display: block;
+  width: min(66%, 200px);
+  height: 1px;
+  margin: 3px 0 4px;
+  background: linear-gradient(90deg, rgba(230, 178, 68, 0), rgba(230, 178, 68, .85), rgba(230, 178, 68, 0));
+}
+.cm-sub {
+  max-width: 100%;
+  font-size: clamp(11px, 3.4vw, 13px);
+  font-weight: 700;
+  line-height: 1.55;
+  color: #FFE6E8;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  text-shadow: 0 1px 0 rgba(30, 4, 8, .8);
+}
+@keyframes cm-veil {
+  0% { opacity: 0; }
+  10% { opacity: 1; }
+  78% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes cm-strike {
+  0% { opacity: 0; transform: scale(1.28); }
+  16% { opacity: 1; transform: scale(1); }
+  80% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(.94); }
+}
+/* Persian and Arabic are joined scripts: no tracking, Vazirmatn, RTL rhythm */
+html[data-lang="fa"] .cm-splash,
+html[data-lang="ar"] .cm-splash { direction: rtl; }
+html[data-lang="fa"] :is(.cm-title, .cm-sub),
+html[data-lang="ar"] :is(.cm-title, .cm-sub) {
+  font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+  line-height: 1.5;
+}
+html[data-lang="fa"] .cm-title,
+html[data-lang="ar"] .cm-title { font-size: clamp(1.4rem, 7.8vw, 2rem); }
+/* a checkmated seat's strip is a struck record, not a live player */
+.chip.is-out { opacity: .5; }
+.chip.is-out :is(.timer, .dots) { visibility: hidden; }
+/* reduced motion keeps the verdict on screen, minus the entrance and the exit */
+@media (prefers-reduced-motion: reduce) {
+  .cm-splash.is-on { opacity: 1; animation: none; }
+  .cm-splash.is-on .cm-in { opacity: 1; transform: none; animation: none; }
+}
+html.reduced-motion .cm-splash.is-on { opacity: 1; animation: none; }
+html.reduced-motion .cm-splash.is-on .cm-in { opacity: 1; transform: none; animation: none; }

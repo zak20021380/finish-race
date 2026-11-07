@@ -93,12 +93,14 @@
 }
 .result-title {
   display: block;
+  max-width: 100%;
   margin: 3px 0 0;
   font-size: clamp(2rem, 9vw, 2.6rem);
   font-weight: 900;
   line-height: 1;
   letter-spacing: .03em;
   text-transform: uppercase;
+  overflow-wrap: anywhere;
   background: linear-gradient(178deg, #FFFBEA 0%, #FDE68A 26%, #FACC15 48%, #F59E0B 68%, #22D3EE 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -1157,3 +1159,8 @@ html[data-lang="fa"] .overlay.result .result-stake-n {
   font-family: var(--font-numeric);
   unicode-bidi: isolate;
 }
+
+/* ---- a checkmated seat: the rank is still its own, the row reads as a struck record ---- */
+.result-row.is-out { opacity: .56; }
+.result-row.is-out .result-medal { filter: saturate(.25); }
+.result-row.is-out .result-place { color: #FDA4AF; }

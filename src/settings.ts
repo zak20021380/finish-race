@@ -227,6 +227,12 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
        `{n}` in chainDetonationNote is the number of charges that went off in one turn. ---- */
     chainDetonationNote: 'Chain detonation ×{n} — tactical combo!',
     dualDetonationNote: 'Dual detonation — both charges neutralized',
+    /* ---- checkmate: a pawn sealed off from FINISH, and the verdict that follows ---- */
+    checkmateTitle: 'CHECKMATE! 👑',
+    checkmateSubtitle: 'Opponent completely trapped!',
+    checkmateKicker: 'CHECKMATE',
+    checkmateOut: 'OUT',
+    checkmatePawnNote: 'Pawn sealed — no path to the finish!',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'You',
     hudTop: 'Top',
@@ -921,6 +927,12 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     shopVaultStatus: 'بستهست',
     chainDetonationNote: 'انفجار زنجیره‌ای ×{n} — کمبوی تاکتیکی!',
     dualDetonationNote: 'انفجار دوگانه — هر دو مین خنثی شدند',
+    /* ---- کیش و مات: مهره‌ای که راهش به خط پایان بسته شده ---- */
+    checkmateTitle: 'کیش و مات! 👑',
+    checkmateSubtitle: 'حریف در بن‌بست کامل به دام افتاد!',
+    checkmateKicker: 'کیش و مات',
+    checkmateOut: 'حذف شد',
+    checkmatePawnNote: 'مهره در بن‌بست کامل ماند — راهی به خط پایان ندارد!',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'تو',
     hudTop: 'برتر',
@@ -1602,6 +1614,12 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     shopVaultStatus: 'ОПЕЧАТАНО',
     chainDetonationNote: 'Цепная детонация ×{n} — тактическое комбо!',
     dualDetonationNote: 'Двойная детонация — оба заряда обезврежены',
+    /* ---- мат: пешка, запертая без пути к финишу ---- */
+    checkmateTitle: 'МАТ! 👑',
+    checkmateSubtitle: 'Соперник полностью заперт!',
+    checkmateKicker: 'МАТ',
+    checkmateOut: 'ВЫБЫЛ',
+    checkmatePawnNote: 'Пешка заперта — пути к финишу нет!',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'Вы',
     hudTop: 'Топ',
@@ -1774,6 +1792,12 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     shopVaultStatus: 'مختوم',
     chainDetonationNote: 'انفجار متسلسل ×{n} — تركيبة تكتيكية!',
     dualDetonationNote: 'انفجار مزدوج — تم تحييد الشحنتين',
+    /* ---- كش مات: قطعة سُدّ طريقها إلى خط النهاية ---- */
+    checkmateTitle: 'كش مات! 👑',
+    checkmateSubtitle: 'الخصم محاصر تمامًا!',
+    checkmateKicker: 'كش مات',
+    checkmateOut: 'خارج',
+    checkmatePawnNote: 'قطعة محاصرة — لا طريق إلى خط النهاية!',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'أنت',
     hudTop: 'الأفضل',
@@ -1946,6 +1970,12 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     shopVaultStatus: 'SELLADO',
     chainDetonationNote: 'Detonación en cadena ×{n} — ¡combo táctico!',
     dualDetonationNote: 'Detonación doble — ambas cargas neutralizadas',
+    /* ---- jaque mate: una pieza sellada sin camino a la meta ---- */
+    checkmateTitle: '¡JAQUE MATE! 👑',
+    checkmateSubtitle: '¡Rival completamente atrapado!',
+    checkmateKicker: 'JAQUE MATE',
+    checkmateOut: 'FUERA',
+    checkmatePawnNote: '¡Pieza sellada — sin camino a la meta!',
     /* ---- personal standing bar (Nations Cup + The Mind Ladder) ---- */
     hudYou: 'Tú',
     hudTop: 'Top',

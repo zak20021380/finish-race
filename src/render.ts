@@ -212,6 +212,12 @@ const GLOW_PAD = 1.52;
 const RING_PAD = 1.62;
 const SOLID: number[] = [];
 const BLAST_MS = 700;   // the whole mine trigger, flash to last spark
+/**
+ * The CHECKMATE flare that plays where a pawn was sealed off. It is a one-shot transition, not a
+ * loop: a white core, a gold ring and a crimson shockwave, gone inside a second. The board's own
+ * title is DOM chrome (`main.ts` / `style.css`); this is only the physical blast under it.
+ */
+const CM_FX_MS = 1000;
 /** How long the scorched tile's fracture knots keep smouldering before they are cold carbon. */
 const EMBER_MS = 2600;
 /** Tooth marks behind a wounded ball: recent, previous, third gait, then the tile is clean again. */
@@ -1106,6 +1112,8 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
   const pulses: { x: number; y: number; t0: number; p: Player }[] = []; // wall landing rings
   /** mine triggers, queued by blast(); `t0` is the detonation, after the step onto the charge */
   const blasts: { x: number; y: number; t0: number; c: number; r: number }[] = [];
+  /** checkmate flares: the gold/crimson burst left where a sealed pawn was taken off the board */
+  const checkmates: { x: number; y: number; t0: number }[] = [];
   /**
    * One throw a trigger puts on the ball that set it off: the step onto the charge, the hop over
    * the wall it was buried under, and the landing. A CHAIN queues one of these per beat, with
@@ -3082,6 +3090,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
     /* `t0` is the detonation, AFTER the ball's walk onto the charge: a future t0 must keep the
        loop alive through that walk or the blast would never be painted. */
     for (const f of blasts) if (now < f.t0 + BLAST_MS) return true;
+    for (const f of checkmates) if (now < f.t0 + CM_FX_MS) return true;
     for (const k of knocks) if (now < k.t0 + k.stepMs + k.flyMs) return true;
     for (const f of dust) if (now < f.t0 + DUST_MS) return true;
     for (const f of streaks) if (now < f.t0 + STREAK_MS) return true;
@@ -3476,6 +3485,55 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.restore();
     }
 
+    /*
+     * CHECKMATE: the pawn is gone and this is what takes it off the board — a white-hot core, a
+     * gold ring running out first and a crimson shockwave on its heels. Same discipline as every
+     * other cue: one finite clock, additive light, no blur and no allocation per frame.
+     */
+    for (let i = checkmates.length - 1; i >= 0; i--) {
+      const f = checkmates[i];
+      const t = (now - f.t0) / CM_FX_MS;
+      if (t >= 1) { checkmates.splice(i, 1); continue; }
+      if (t < 0) continue;
+      const ease = 1 - Math.pow(1 - t, 3);
+      ctx.save();
+      ctx.translate(f.x, f.y);
+      ctx.globalCompositeOperation = 'lighter';
+      if (t < 0.2) {
+        const ft = t / 0.2;
+        ctx.globalAlpha = (1 - ft) * 0.95;
+        ctx.fillStyle = '#fff9e8';
+        ctx.beginPath(); ctx.arc(0, 0, c * (0.3 + 0.5 * ft), 0, TAU); ctx.fill();
+      }
+      if (blastGlow) {
+        ctx.globalAlpha = 0.7 * (1 - t) * (1 - t);
+        ctx.fillStyle = blastGlow;
+        ctx.beginPath(); ctx.arc(0, 0, c * 1.9, 0, TAU); ctx.fill();
+      }
+      ctx.globalAlpha = 0.9 * (1 - t);
+      ctx.strokeStyle = '#ffd76e';
+      ctx.lineWidth = Math.max(1.5, c * 0.09 * (1 - t));
+      ctx.beginPath(); ctx.arc(0, 0, c * (0.45 + 2 * ease), 0, TAU); ctx.stroke();
+      ctx.globalAlpha = 0.72 * (1 - t);
+      ctx.strokeStyle = '#d11f3c';
+      ctx.lineWidth = Math.max(1, c * 0.06 * (1 - t));
+      ctx.beginPath(); ctx.arc(0, 0, c * (0.32 + 1.5 * ease), 0, TAU); ctx.stroke();
+      /* four gold rays, on the same clock, so the verdict reads even under reduced motion */
+      ctx.globalAlpha = 0.55 * (1 - t);
+      ctx.strokeStyle = '#ffe6a3';
+      ctx.lineCap = 'round';
+      ctx.lineWidth = Math.max(1, c * 0.045 * (1 - t));
+      ctx.beginPath();
+      for (let n = 0; n < 4; n++) {
+        const a = Math.PI / 4 + (n * Math.PI) / 2;
+        const r0 = c * (0.5 + 0.9 * ease), r1 = r0 + c * 0.5 * (1 - t);
+        ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+        ctx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
     /* short comet tails: a sliding ball drags a fading streak of its own colour behind it */
     for (let i = streaks.length - 1; i >= 0; i--) {
       const s0 = streaks[i];
@@ -3522,7 +3580,11 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         : { x: 0.5, y: 0.5 };
     }
     SEATS_N.fill(0);
-    for (const b of v.balls) if (b.team < SEAT_COUNT) SEATS_N[b.team]++;
+    for (let i = 0; i < v.balls.length; i++) {
+      if (logical[i]?.isCheckmated) continue;         // a sealed pawn owns no badge slot
+      const b = v.balls[i];
+      if (b.team < SEAT_COUNT) SEATS_N[b.team]++;
+    }
     ORDER.length = 0;
     for (let i = 0; i < v.balls.length; i++) ORDER.push(i);
     ORDER.sort((a, b) => v.balls[a].pos.y - v.balls[b].pos.y);
@@ -3532,6 +3594,10 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       /* the finisher's own pawn: once its burst begins, the ball is gone — the debris takes over */
       const pawn = fin ? fin.byId.get(b.id) : undefined;
       if (pawn && finNow >= pawn.burstAt) continue;
+      /* A checkmated pawn is off the board the moment the rules seal it. The one exception is a
+         pawn the endgame finisher is already staging: it keeps its token until its own burst, so a
+         duel that was won by checkmate still ends on the loser's explosion. */
+      if (logical[i]?.isCheckmated && !pawn) continue;
       /* a ball the mine is throwing rides its own arc: onto the charge, then up and over the wall.
          The state's own slide lands underneath it, so the takeover at either end is seamless. */
       /* A chain keeps one arc per beat in the queue: the FIRST unexpired one is the active throw,
@@ -3648,7 +3714,9 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       // the chosen one stands out further than its side's turn halo does
       if (b.sel) drawSel(cx, cy, r, seat, clock, still);
       let n = 1;
-      for (let j = 0; j < i; j++) if (v.balls[j].team === seat) n++;
+      for (let j = 0; j < i; j++) {
+        if (!logical[j]?.isCheckmated && v.balls[j].team === seat) n++;
+      }
       /* a ball the mine has just thrown settles with a micro-bounce rather than simply stopping */
       const th = thump.get(b.id);
       let sq = 0;
@@ -3731,7 +3799,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
      */
     if (v.mineGhost && v.capsule?.hit.kind === 'mine-confirm') {
       capsuleBlocked.length = 0;
-      for (const b of v.state.balls) capsuleBlocked.push(b.pos);
+      for (const b of v.state.balls) if (!b.isCheckmated) capsuleBlocked.push(b.pos);
       drawMineCapsules(v.mineGhost.c + 0.5, v.mineGhost.r + 0.5, capsuleBlocked, still);
     }
 
@@ -3785,6 +3853,7 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
       ctx.shadowBlur = 0;
       ctx.shadowColor = 'transparent';
       born.clear(); pulses.length = 0; blasts.length = 0; knocks.length = 0;
+      checkmates.length = 0;
       ripples.length = 0; streaks.length = 0; prevPos.clear(); mineGhostKey = '';
       dust.length = 0; thump.clear();
       embers.length = 0; stride.clear(); wounds.clear(); pendingWounds.clear(); stood.clear(); blood.length = 0;
@@ -3873,6 +3942,20 @@ export function createRenderer(canvas: HTMLCanvasElement, opts: RendererOptions 
         }
       }
       return delay;
+    },
+    /**
+     * Queue the CHECKMATE flare at every pawn the rules just sealed off. The caller owns the
+     * verdict (and the DOM announcement); this owns the blast under it. One finite transition per
+     * cell, no particle state kept afterwards, and the sealed pawn itself is simply not drawn —
+     * see the `isCheckmated` gate in `draw()`.
+     */
+    checkmate(cells: readonly Cell[]) {
+      if (!cells.length) return;
+      const { cell: c, ox, oy } = L;
+      const t0 = performance.now();
+      for (const at of cells) {
+        checkmates.push({ x: ox + (at.c + 0.5) * c, y: oy + (at.r + 0.5) * c, t0 });
+      }
     },
     /**
      * Queue a CHAIN of detonations on ONE clock, so the player actually watches the pawn get thrown

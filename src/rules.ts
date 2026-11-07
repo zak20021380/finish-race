@@ -30,6 +30,12 @@
  * cycle, the race is adjudicated — the ball nearest FINISH takes it. Both are pure functions of the
  * state, so every seat and the server reach the same verdict from the same board.
  *
+ * Checkmate: a wall may seal a RIVAL's pawn (never the placer's own live pawns), and a mine's
+ * aerial throw can drop a ball into a pocket the walls had already closed. After every committed
+ * action the board is swept for pawns with no legal route to FINISH; each is flagged and taken out
+ * of the race. A duel is decided on the spot for the seat that closed the trap, while a party loses
+ * that seat from the rotation and plays on. See `resolveCheckmates`.
+ *
  * Walls sit ON grid lines and are 2 cells long:
  *   'h' wall {x, y}: horizontal, on the line above row y (y = 1..rows-1), covers columns x and x+1.
  *   'v' wall {x, y}: vertical, on the line left of column x (x = 1..cols-1), covers rows y and y+1.
@@ -117,9 +123,27 @@ export interface Ball {
   /** who controls the ball; today the team itself, a user id when play goes online */
   owner: Player;
   pos: Pos;
+  /**
+   * The pawn is sealed off from FINISH with no legal path left — walls plus a mine's throw closed
+   * every route. It has been blasted off the board and can never move, block, or score again.
+   */
+  isCheckmated?: boolean;
 }
 
 export interface TeamMeta { balls: number }
+
+/**
+ * The last trap the board sprung. `by` is the seat whose action closed the final route, `teams`
+ * are the seats that lost their last pawn to it, `cells` are the pawns it sealed (a partially
+ * sealed team contributes cells without joining `teams`), and `decided` says whether the trap
+ * itself ended the race.
+ */
+export interface Checkmate {
+  by: Player;
+  teams: Player[];
+  cells: Cell[];
+  decided: boolean;
+}
 
 export type Action =
   | { kind: 'move'; ball?: number; to: Pos }
@@ -143,6 +167,10 @@ export interface GameState {
   winner: Player | null;
   /** True when the win came from the anti-oscillation adjudication, not from a ball crossing FINISH. */
   adjudicated?: boolean;
+  /** Seats checkmated out of a party race, in the order they fell. Never holds the winner. */
+  eliminated?: Player[];
+  /** The most recent trap, and who set it — the result card's own caption reads it. */
+  checkmate?: Checkmate | null;
   /** The anti-oscillation ledger. Public to every seat — it carries no hidden information. */
   repeat?: RepeatTrack;
 }
@@ -311,10 +339,16 @@ export function newGame(sizes: readonly number[] = [1, 1]): GameState {
     mines: [],
     turn: 0,
     winner: null,
+    eliminated: [],
+    checkmate: null,
   };
   s.repeat = { seen: [boardFingerprint(s)], streak: 0 };
   return s;
 }
+
+/** A seat that has been eliminated from a party race by checkmate. */
+export const isEliminated = (s: GameState, team: Player): boolean =>
+  s.eliminated?.includes(team) ?? false;
 
 export const ballsOf = (s: GameState, team: Player): Ball[] => s.balls.filter((b) => b.team === team);
 export const ballById = (s: GameState, id: number): Ball | null => s.balls.find((b) => b.id === id) ?? null;
@@ -325,9 +359,9 @@ export const ballOf = (s: GameState, team: Player, index = 0): Ball => {
   return s.balls[0];
 };
 
-/** The team's first ball, or null when it has none on the board — the turn's default pick. */
+/** The team's first live ball, or null when none is left on the board — the turn's default pick. */
 export const firstBall = (s: GameState, team: Player): Ball | null =>
-  s.balls.find((b) => b.team === team) ?? null;
+  s.balls.find((b) => b.team === team && !b.isCheckmated) ?? null;
 
 /* ---------- edge blocking ---------- */
 
@@ -377,11 +411,14 @@ function flanksOf(dc: number, dr: number): ReadonlyArray<readonly [number, numbe
     : [[0, -1] as const, [0, 1] as const];
 }
 
-/** Is this square on the board and free of every ball? The own-team leap's landing test. */
+/** Is this square on the board and free of every live ball? The own-team leap's landing test. */
 function cellFree(s: GameState, c: number, r: number, body?: Uint8Array): boolean {
   if (c < 0 || c >= s.cols || r < 0 || r >= s.rows) return false;
   if (body) return body[r * s.cols + c] === 0;
-  for (const o of s.balls) if (o.pos.c === c && o.pos.r === r) return false;
+  for (const o of s.balls) {
+    if (o.isCheckmated) continue;             // an eliminated pawn no longer occupies a square
+    if (o.pos.c === c && o.pos.r === r) return false;
+  }
   return true;
 }
 
@@ -456,14 +493,23 @@ export const pathOn = (d: Int16Array, pos: Pos, cols: number): number => {
 };
 
 /**
- * Does every ball on the board still have a route to FINISH with `walls` standing? This is the
- * goal-path guard: a wall is only legal while this stays true, so no number of walls can ever
- * freeze a race, on either board size.
+ * Does every pawn that still matters have a route to FINISH with `walls` standing?
+ *
+ * Named `own`, only that seat's live pawns are judged: a wall may seal a RIVAL in — that is the
+ * checkmate this ruleset resolves — but never its own author, so no wall can ever freeze the seat
+ * that placed it. A pawn already flagged `isCheckmated` is out of the race and no longer has a say.
  */
-export function hasPathToFinish(s: GameState, walls: readonly Wall[] = s.walls): boolean {
+export function hasPathToFinish(
+  s: GameState, walls: readonly Wall[] = s.walls, own?: Player,
+): boolean {
   const d = distField(walls, s.cols, s.rows);
-  return s.balls.every((b) => d[b.pos.r * s.cols + b.pos.c] >= 0);
+  return s.balls.every((b) => b.isCheckmated
+    || (own !== undefined && b.team !== own)
+    || d[b.pos.r * s.cols + b.pos.c] >= 0);
 }
+
+/** The checkmate guard under the brief's own name; there is one implementation, not two. */
+export const hasPathToGoal = hasPathToFinish;
 
 /** One ball's distance to FINISH (Infinity if sealed in). */
 export function ballPath(s: GameState, ball: Ball): number {
@@ -561,13 +607,14 @@ function rawSteps(s: GameState, team: Player): Step[] {
   const b = blocks(s.walls);
   const out: Step[] = [];
   for (const ball of s.balls) {
-    if (ball.team !== team) continue;
+    if (ball.team !== team || ball.isCheckmated) continue;
     for (const [dc, dr] of DIRS) {
       if (!canStep(b, ball.pos.c, ball.pos.r, dc, dr, s.cols, s.rows)) continue;
       const to: Pos = { c: ball.pos.c + dc, r: ball.pos.r + dr };
       let blocker: Ball | null = null;
       for (const o of s.balls) {
-        if (o.id !== ball.id && o.pos.c === to.c && o.pos.r === to.r) { blocker = o; break; }
+        if (o.isCheckmated || o.id === ball.id) continue;   // flagged pawns are off the board
+        if (o.pos.c === to.c && o.pos.r === to.r) { blocker = o; break; }
       }
       if (!blocker) { out.push({ ball: ball.id, to }); continue; }
       /* An opponent is a solid obstacle, exactly like a wall: stop here and offer nothing beyond. */
@@ -587,7 +634,7 @@ function rawSteps(s: GameState, team: Player): Step[] {
  * the plain set, so the rule can slow a shuffle but never freeze a race.
  */
 export function steps(s: GameState, team: Player = s.turn): Step[] {
-  if (s.winner !== null) return [];
+  if (s.winner !== null || isEliminated(s, team)) return [];
   const all = rawSteps(s, team);
   if (!all.length || !forcing(s)) return all;
   const d = distField(s.walls, s.cols, s.rows);
@@ -648,6 +695,7 @@ export function stepField(s: GameState, team: Player = s.turn): Int16Array {
   body.fill(0, 0, n);
   bodyTeam.fill(255, 0, n);
   for (const o of s.balls) {
+    if (o.isCheckmated) continue;             // an eliminated pawn casts no body and blocks nothing
     const at = o.pos.r * cols + o.pos.c;
     body[at] = 1;
     bodyTeam[at] = o.team;
@@ -721,7 +769,9 @@ export function wallsRemaining(s: GameState, team: Player): number {
 
 /**
  * Is this wall legal? Within the owner's budget, in bounds for THIS board, clear of every wall
- * already standing (no shared edge segment, no `+` through a vertex) and every ball keeps a path.
+ * already standing (no shared edge segment, no `+` through a vertex) — and no wall of the owner's
+ * own live pawns may lose its route. A rival MAY be sealed: that is a checkmate, resolved by
+ * `resolveCheckmates` the moment the wall lands.
  */
 export function wallOk(s: GameState, w: Wall): boolean {
   if (s.winner !== null) return false;
@@ -731,7 +781,7 @@ export function wallOk(s: GameState, w: Wall): boolean {
   } else if (w.x < 1 || w.x > s.cols - 1 || w.y < 0 || w.y > s.rows - 2) return false;
 
   for (const o of s.walls) if (wallsClash(o, w)) return false;
-  return hasPathToFinish(s, [...s.walls, w]);
+  return hasPathToFinish(s, [...s.walls, w], w.owner);
 }
 
 /** Every wall position on the board (legal or not) for the given owner. */
@@ -815,7 +865,7 @@ export function mineOk(s: GameState, cell: Cell, owner: Player = s.turn): boolea
   if (s.winner !== null) return false;
   if (minesLeft(s, owner) <= 0) return false;
   if (cell.c < 0 || cell.c >= s.cols || cell.r < 0 || cell.r >= s.rows - MINE_ZONE) return false;
-  if (s.balls.some((b) => b.pos.c === cell.c && b.pos.r === cell.r)) return false;
+  if (s.balls.some((b) => !b.isCheckmated && b.pos.c === cell.c && b.pos.r === cell.r)) return false;
   return !s.mines.some((m) => !m.triggered && m.owner === owner
     && m.cell.c === cell.c && m.cell.r === cell.r);
 }
@@ -872,20 +922,34 @@ function adjudicate(s: GameState, track: RepeatTrack): GameState {
 }
 
 /**
- * Hand the turn to the next side that can act. The board the turn leaves behind goes into the
- * shuffle ledger on the way out.
+ * Hand the turn to the next side that can act. An eliminated seat is never offered the turn: the
+ * party carries on with the players still in the race. The board the turn leaves behind goes into
+ * the shuffle ledger on the way out.
  */
 function endTurn(s: GameState, played: Player): GameState {
   if (s.winner !== null) return s;
   const n = s.teams.length;
-  const canAct = (t: Player) => reachable(s, t).length > 0;
+  const canAct = (t: Player) => !isEliminated(s, t) && reachable(s, t).length > 0;
   let handoff: GameState | null = null;
   for (let i = 1; i < n; i++) {
     const next = (played + i) % n;
     if (canAct(next)) { handoff = { ...s, turn: next }; break; }
   }
-  handoff ??= { ...s, turn: canAct(played) ? played : (played + 1) % n };
+  if (!handoff) {
+    /* nobody can walk: keep a live seat that can still act, otherwise rotate to the next one */
+    handoff = { ...s, turn: canAct(played) ? played : nextLiveTeam(s, played) };
+  }
   return recordTurn(handoff, played);
+}
+
+/** The next seat still in the race — a hand-off may never land on an eliminated seat. */
+function nextLiveTeam(s: GameState, from: Player): Player {
+  const n = s.teams.length;
+  for (let i = 1; i <= n; i++) {
+    const next = (from + i) % n;
+    if (!isEliminated(s, next)) return next;
+  }
+  return nextTeam(s, from);
 }
 
 /**
@@ -896,6 +960,64 @@ function endTurn(s: GameState, played: Player): GameState {
 function recordTurn(s: GameState, played: Player): GameState {
   const track = noteBoard(s);
   return adjudicate({ ...s, repeat: track }, track);
+}
+
+/**
+ * The checkmate sweep, run once after every committed board change.
+ *
+ * A pawn with no route to FINISH — a wall may now close a rival's last lane, and a mine's aerial
+ * throw can drop a ball into a pocket the walls already built — is sealed for good, so it is
+ * flagged and removed from the race instead of being left to stall it. A seat that loses its last
+ * live pawn is out. In a duel that ends the match immediately for the seat that sprung the trap.
+ * In a party the seat is added to `eliminated`, its turn is skipped by `endTurn`, and the rest of
+ * the field plays on; the last seat standing takes the race. `by` is always the seat whose action
+ * closed the final route, so every replica attributes the checkmate the same way.
+ */
+function resolveCheckmates(s: GameState, by: Player): GameState {
+  if (s.winner !== null) return s;
+  const n = s.teams.length;
+  const d = distField(s.walls, s.cols, s.rows);
+  const sealed: number[] = [];
+  const cells: Cell[] = [];
+  for (const b of s.balls) {
+    if (b.isCheckmated) continue;
+    if (d[b.pos.r * s.cols + b.pos.c] >= 0) continue;
+    sealed.push(b.id);
+    cells.push({ c: b.pos.c, r: b.pos.r });
+  }
+  if (!sealed.length) return s;
+
+  const down = new Set(sealed);
+  const balls = s.balls.map((b) => (down.has(b.id) ? { ...b, isCheckmated: true } : b));
+  const eliminated = [...(s.eliminated ?? [])];
+  const teams: Player[] = [];
+  for (let t = 0; t < n; t++) {
+    if (eliminated.includes(t)) continue;
+    const own = balls.filter((b) => b.team === t);
+    if (!own.length || !own.every((b) => b.isCheckmated)) continue;
+    teams.push(t);
+    eliminated.push(t);
+  }
+
+  /* A pawn sealed while its team still has a runner is out, but the race is not. */
+  if (!teams.length) {
+    return { ...s, balls, checkmate: { by, teams, cells, decided: false } };
+  }
+
+  const alive: Player[] = [];
+  for (let t = 0; t < n; t++) if (!eliminated.includes(t)) alive.push(t);
+  let winner: Player | null = null;
+  if (n === 2) winner = alive[0] ?? (by === 0 ? 1 : 0);
+  else if (alive.length === 1) winner = alive[0];
+  else if (!alive.length) winner = by;
+
+  return {
+    ...s,
+    balls,
+    eliminated,
+    winner,
+    checkmate: { by, teams, cells, decided: winner !== null },
+  };
 }
 
 /**
@@ -921,6 +1043,7 @@ function detached(s: GameState): GameState {
     wallsLeft: s.wallsLeft.slice(),
     mines: s.mines.slice(),
   };
+  if (s.eliminated) base.eliminated = s.eliminated.slice();
   if (s.repeat) base.repeat = { seen: s.repeat.seen.slice(), streak: s.repeat.streak };
   return base;
 }
@@ -977,7 +1100,10 @@ export function doMove(s: GameState, to: Pos, ballId?: number): GameState | null
     const chainStep = stepOf.get(m);
     return chainStep === undefined ? m : { ...m, triggered: true, chainStep };
   });
-  return endTurn({ ...base, balls, mines, winner: landed.r === 0 ? team : null }, team);
+  return endTurn(
+    resolveCheckmates({ ...base, balls, mines, winner: landed.r === 0 ? team : null }, team),
+    team,
+  );
 }
 
 /**
@@ -998,7 +1124,7 @@ function blownTo(s: GameState, from: Pos, ballId: number): Pos {
   const last = s.rows - 1;
   const free = (c: number, r: number): boolean =>
     c >= 0 && c < s.cols && r >= 0 && r < s.rows
-    && !s.balls.some((o) => o.id !== ballId && o.pos.c === c && o.pos.r === r);
+    && !s.balls.some((o) => !o.isCheckmated && o.id !== ballId && o.pos.c === c && o.pos.r === r);
 
   const target = Math.min(from.r + CONFIG.KNOCKBACK, last);
   if (free(from.c, target)) return { c: from.c, r: target };
@@ -1028,7 +1154,10 @@ export function doWall(s: GameState, w: Wall): GameState | null {
   if (w.owner !== s.turn || !wallOk(s, w)) return null;
   const base = detached(s);
   const wallsLeft = base.wallsLeft.map((n, t) => (t === w.owner ? Math.max(0, n - 1) : n));
-  return endTurn({ ...base, walls: [...base.walls, { ...w }], wallsLeft }, w.owner);
+  return endTurn(
+    resolveCheckmates({ ...base, walls: [...base.walls, { ...w }], wallsLeft }, w.owner),
+    w.owner,
+  );
 }
 
 /**
@@ -1053,7 +1182,7 @@ export function doMine(s: GameState, cell: Cell, owner: Player = s.turn): GameSt
     ? [...base.mines.map((m) => (m === rival ? { ...m, triggered: true } : m)),
        { cell: { ...cell }, owner, triggered: true }]
     : [...base.mines, { cell: { ...cell }, owner, triggered: false }];
-  return endTurn({ ...base, mines }, owner);
+  return endTurn(resolveCheckmates({ ...base, mines }, owner), owner);
 }
 
 /**
@@ -1068,7 +1197,7 @@ export function apply(s: GameState, a: Action): GameState | null {
     case 'move': return doMove(s, a.to, a.ball);
     case 'wall': return doWall(s, a.wall);
     case 'mine': return doMine(s, a.cell);
-    case 'pass': return s.winner === null ? { ...detached(s), turn: nextTeam(s, s.turn) } : null;
+    case 'pass': return s.winner === null ? { ...detached(s), turn: nextLiveTeam(s, s.turn) } : null;
   }
 }
 
