@@ -184,6 +184,52 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   /** Last time the public holder index was fetched, so route re-entry is not a re-fetch loop. */
   let medalsFetchedAt = 0;
 
+  /* ---------- tab caching: fingerprints + windowed list construction ----------
+     A board rebuild is the one expensive thing this screen does. `boardSignature`
+     is a cheap FNV-1a digest of the rows a board would paint; an unchanged board
+     keeps every mounted node. A changed one builds only the rows a phone actually
+     shows synchronously and appends the tail on later frames. */
+  const boardSignature = (parts: ReadonlyArray<string | number | null | undefined>): string => {
+    let h = 2166136261;
+    for (const part of parts) {
+      const s = String(part ?? '');
+      for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      h ^= 124;
+    }
+    return (h >>> 0).toString(36);
+  };
+
+  const FIRST_BATCH = 20;
+  const NEXT_BATCH = 24;
+  const listQueues = new WeakMap<HTMLElement, number>();
+
+  function fillLadder<T>(
+    host: HTMLElement,
+    rows: readonly T[],
+    make: (item: T, index: number) => HTMLElement,
+  ): void {
+    /* Each list owns its queue, so a board switch never truncates another pane's
+       rows. A queue stops the moment its host is replaced (or the view is gone). */
+    const run = (listQueues.get(host) ?? 0) + 1;
+    listQueues.set(host, run);
+    let at = 0;
+    const step = (limit: number): void => {
+      if (listQueues.get(host) !== run || !host.isConnected) return;
+      const end = Math.min(rows.length, at + limit);
+      const frag = document.createDocumentFragment();
+      for (; at < end; at++) frag.append(make(rows[at], at));
+      host.append(frag);
+      if (at < rows.length) requestAnimationFrame(() => step(NEXT_BATCH));
+    };
+    step(FIRST_BATCH);
+  }
+
+  const lastLoad: Partial<Record<Board, number>> = {};
+  const BOARD_TTL = 15_000;
+
   /** Clean user handle: "@username" when Telegram provides one, else first name, else null. */
   const youHandle = (): string | null => {
     const u = tgUser();
@@ -682,6 +728,12 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
      pure list: the podium owns #1-3, so its rows start at #4. */
 
   async function loadBoard(which: Board): Promise<void> {
+    /* The mounted board is the cache. Re-entering the tab inside the freshness
+       window shows it without touching the wire; a board that is already
+       loading is never asked twice. */
+    const now = Date.now();
+    if (loadedBoard[which] && now - (lastLoad[which] ?? 0) < BOARD_TTL) return;
+    lastLoad[which] = now;
     if (which === 'guilds') loadSquads();
     else if (which === 'nations') await loadNations();
     else await loadMinds();
@@ -2188,9 +2240,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   /** The whole Nations pane from a row set: podium, HUD and ladder. */
-  function paintNations(rows: NationRow[]): void {
+  let nationsKey = '';
+  function paintNations(rows: NationRow[], force = false): void {
     const el = panes.nations;
     if (!el) return;
+    const key = `${lang}|${profile.country ?? ''}|${myTrophyScore()}|`
+      + boardSignature(rows.flatMap((c) => [c.rank, c.code, c.name, c.avg, c.players, c.trend, c.delta]));
+    if (!force && key === nationsKey) return;
+    nationsKey = key;
     paintPodium(rows.slice(0, 3).map((c) => ({
       rank: c.rank,
       name: c.name || nameOf(c.code),
@@ -2207,20 +2264,18 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     }
     const ol = document.createElement('ol');
     ol.className = 'rank-list';
-    for (const c of rows.slice(3)) {
-      ol.append(row({
-        rank: c.rank,
-        code: c.code,
-        name: c.name || nameOf(c.code),
-        sub: `${c.players.toLocaleString('en-US')} players`,
-        subClass: 'nd-count',
-        points: c.avg.toLocaleString('en-US'),
-        me: (profile.country ?? '').trim().toUpperCase() === c.code,
-        onOpen: () => openNation(c),
-        openHint: 'open the nation roster',
-      }));
-    }
     el.append(ol);
+    fillLadder(ol, rows.slice(3), (c) => row({
+      rank: c.rank,
+      code: c.code,
+      name: c.name || nameOf(c.code),
+      sub: `${c.players.toLocaleString('en-US')} players`,
+      subClass: 'nd-count',
+      points: c.avg.toLocaleString('en-US'),
+      me: (profile.country ?? '').trim().toUpperCase() === c.code,
+      onOpen: () => openNation(c),
+      openHint: 'open the nation roster',
+    }));
   }
 
   async function loadNations(): Promise<void> {
@@ -2238,7 +2293,14 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
   }
 
   /** Paint the Top Minds podium, ladder and your strip from one loaded field. */
-  function paintMinds(rows: PlayerRow[]): void {
+  let mindsKey = '';
+  function paintMinds(rows: PlayerRow[], force = false): void {
+    const own = wornEdition();
+    const key = `${lang}|${isPremiumUser() ? 1 : 0}|${myTrophyScore()}|${profile.stats.games}`
+      + `|${profile.country ?? ''}|${own ? `${own.def.id}:${own.serial ?? ''}` : ''}|`
+      + boardSignature(rows.flatMap((p) => [p.id, p.name, p.countryCode, p.avatar, p.points, p.wins, p.trend]));
+    if (!force && key === mindsKey) return;
+    mindsKey = key;
     paintPodium(rows.slice(0, 3).map((p, i) => ({
       rank: i + 1,
       name: p.name,
@@ -2254,22 +2316,20 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     el.textContent = '';
     const ol = document.createElement('ol');
     ol.className = 'rank-list';
-    rows.slice(3).forEach((p, i) => {
-      ol.append(row({
-        rank: i + 4,
-        code: p.countryCode,
-        name: p.name,
-        sub: `${p.wins} wins`,
-        points: p.points.toLocaleString('en-US'),
-        me: p.id === 'you',
-        person: true,
-        photo: p.avatar,
-        medal: holderEdition(p.name) ?? undefined,
-        onOpen: () => openMind(p, i + 4),
-        openHint: 'open the mind profile',
-      }));
-    });
     el.append(ol);
+    fillLadder(ol, rows.slice(3), (p, i) => row({
+      rank: i + 4,
+      code: p.countryCode,
+      name: p.name,
+      sub: `${p.wins} wins`,
+      points: p.points.toLocaleString('en-US'),
+      me: p.id === 'you',
+      person: true,
+      photo: p.avatar,
+      medal: holderEdition(p.name) ?? undefined,
+      onOpen: () => openMind(p, i + 4),
+      openHint: 'open the mind profile',
+    }));
     paintMindsStanding(rows);
   }
 
@@ -2283,7 +2343,7 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     if (now - medalsFetchedAt < 60_000) return;
     medalsFetchedAt = now;
     void refreshBadgeEditions().then(() => {
-      if (isRanksVisible() && board === 'minds' && mindsField.length) paintMinds(mindsField);
+      if (isRanksVisible() && board === 'minds' && mindsField.length) paintMinds(mindsField, true);
     });
   }
 
@@ -2628,18 +2688,28 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     dock.setAttribute('aria-label', `My Squad Standing: ${me.handle}, rank ${me.rank}, ${me.trophies.toLocaleString('en-US')} average Tactical IQ.`);
   }
 
+  let guildsKey = '';
   function loadSquads(): void {
     const el = panes.guilds;
     if (!el) return;
-    if (!loadedBoard.guilds) el.innerHTML = skel(5);
     const rows = getSquadRanking();
+    const me = getMySquad();
+    const key = `${lang}|${isPremiumUser() ? 1 : 0}|${me?.id ?? ''}|${me?.rank ?? ''}|${me?.trophies ?? ''}|`
+      + boardSignature(rows.flatMap((s) => [s.id, s.rank, s.name, s.handle, s.members, s.trophies]));
+    if (key === guildsKey) {
+      loadedBoard.guilds = true;
+      paintSquadDock();
+      paintGuildHero();
+      return;
+    }
+    guildsKey = key;
+    if (!loadedBoard.guilds) el.innerHTML = skel(5);
     if (!rows.length) {
       el.innerHTML = empty('No squads ranked yet.');
       paintPodium([]);
       paintSquadDock();
       return;
     }
-    const me = getMySquad();
     guildField = rows;
     paintPodium(rows.slice(0, 3).map((s) => ({
       rank: s.rank,
@@ -2652,10 +2722,8 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     el.textContent = '';
     const ol = document.createElement('ol');
     ol.className = 'squad-list';
-    for (const s of rows.slice(3)) {
-      ol.append(squadRow(s, me?.id === s.id));
-    }
     el.append(ol);
+    fillLadder(ol, rows.slice(3), (s) => squadRow(s, me?.id === s.id));
     paintSquadDock();
     paintGuildHero();
     loadedBoard.guilds = true;

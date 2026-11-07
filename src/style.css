@@ -329,10 +329,23 @@ html.game-live .screen.game .card {
   flex-direction: column;
   min-height: 0;
   outline: none;                     /* tabindex="-1" focus, but no ring on the whole screen */
+  transition: none !important;       /* route swaps are a visibility toggle, never a timed fade */
 }
 .screen.menu { gap: var(--s3); }
 .screen.menu[data-scroll] { overflow-y: auto; }
 .screen.game { justify-content: flex-start; gap: var(--gap); }
+/* ---- main tab panels: isolated, instant ----
+   The five bottom-nav destinations never slide. `contain` keeps a layout or
+   paint inside one tab from invalidating the dock or the other mounted screens,
+   so coming back to a cached panel is a visibility flip and nothing more. */
+.screen[data-screen="home"],
+.screen[data-screen="arena"],
+.screen[data-screen="ranks"],
+.screen[data-screen="shop"],
+.screen[data-screen="profile"] {
+  contain: layout style paint;
+  transition: none !important;
+}
 .spacer { flex: 1 1 auto; min-height: var(--s2); }
 /* a menu pane with more in it than the phone can show: this scrolls, the page never does */
 .pane { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--s3); }
@@ -2869,13 +2882,6 @@ html[data-lang="ar"] #s-shop.is-sealed .shop-veil-mark {
     0 var(--d) 0 var(--brand-lip),
     0 calc(var(--d) + 6px) 14px -8px var(--brand-glow),
     inset 0 2px 3px rgba(255, 255, 255, .32);
-  /* the rule only exists while the tab is current, so it replays on every switch */
-  animation: dock-pop .34s var(--bounce) both;
-}
-@keyframes dock-pop {
-  0%   { transform: translateY(2px) scale(.94); }
-  55%  { transform: translateY(-3px) scale(1.04); }
-  100% { transform: translateY(0) scale(1); }
 }
 
 /* ---- sheets over a dimming scrim: fixed, so the sheet owns its own geometry ---- */
@@ -9295,6 +9301,12 @@ html.reduced-motion .notif-dot { animation: none; }
 .dock-nav .tab:hover:not(:active) { transform: translateY(-1px); }
 .dock-nav .tab:active { transform: translateY(var(--press-y)); --d: 0px; }
 .dock-nav .tab .ico { width: 21px; height: 21px; flex: none; }
+/* An active key is state, not motion: the paint lands in the tap's own frame. */
+.tab,
+.dock-nav .tab,
+.dock-nav .tab .ico {
+  transition: none !important;
+}
 .dock-nav .tab:focus-visible { outline: 3px solid var(--brand-2); outline-offset: -3px; }
 .dock-nav .tab[aria-current="page"] {
   background: var(--brand-fill);
@@ -9303,7 +9315,6 @@ html.reduced-motion .notif-dot { animation: none; }
     0 var(--d) 0 var(--brand-lip),
     0 calc(var(--d) + 6px) 14px -8px var(--brand-glow),
     inset 0 2px 3px rgba(255, 255, 255, .32);
-  animation: dock-pop .34s var(--bounce) both;
 }
 
 /* 360px floor: tighter chrome first, targets never drop below 44px. */
@@ -15280,12 +15291,6 @@ html.reduced-motion .lb-hud-b { transition: none; }
 }
 .dock-nav .tab[aria-current="page"] .ico {
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .35));
-  animation: dock-ico-pop .42s var(--bounce) both;
-}
-@keyframes dock-ico-pop {
-  0%   { transform: translateY(1px) scale(.8); }
-  55%  { transform: translateY(-3px) scale(1.14); }
-  100% { transform: translateY(0) scale(1); }
 }
 .dock-nav .tab[aria-current="page"]::after {
   content: "";
@@ -15298,19 +15303,12 @@ html.reduced-motion .lb-hud-b { transition: none; }
   border-radius: 50%;
   background: #E0F2FE;
   box-shadow: 0 0 8px 1px rgba(224, 242, 254, .95), 0 0 14px 3px rgba(34, 211, 238, .8);
-  animation: dock-dot-in .42s var(--bounce) both;
-}
-@keyframes dock-dot-in {
-  0%   { transform: scale(0); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
 }
 
 /* ---- reduced motion: kill every new animation ---- */
 html.reduced-motion .pf-avatar-glow,
 html.reduced-motion .pf-quest-ico,
-html.reduced-motion .badge-chip[data-state="locked"]::after,
-html.reduced-motion .dock-nav .tab[aria-current="page"] .ico,
-html.reduced-motion .dock-nav .tab[aria-current="page"]::after { animation: none; }
+html.reduced-motion .badge-chip[data-state="locked"]::after { animation: none; }
 
 /* the twin tiles stay 50/50 down to the 360px floor; below it a long nation name
    borrows the whole row rather than ellipsising mid-word */

@@ -585,12 +585,11 @@ let home: { setRoute(id: string): void } | null = null;
 let compete: { setRoute(id: string): void } | null = null;
 let arenaRoad: { setRoute(id: string): void } | null = null;
 
-const router = createRouter($('screens'), (id, prev) => {
+const router = createRouter($('screens'), (id, prev, phase) => {
+  /* Phase 1: only the swap itself and the lifecycle that must answer it. Every
+     data paint below is queued for the frame after the new tab has painted, so a
+     tab tap never waits on a list rebuild or a network read. */
   menu.setRoute(id);
-  shop.setRoute(id);
-  home?.setRoute(id);
-  compete?.setRoute(id);
-  arenaRoad?.setRoute(id);
   // the light finish is a race-stage skin: it comes and goes with the board, never with the shell
   document.documentElement.classList.toggle('light-game', appearance() === 'light' && id === 'game');
   // Telegram BackButton on every screen except Home; always functional via onBack fallback.
@@ -602,7 +601,6 @@ const router = createRouter($('screens'), (id, prev) => {
   else if (!sheets.isOpen) paused = false;
   /* off the board, a room that was waiting in the background may finally show itself */
   if (id !== 'game') resumeRoom();
-  if (id === 'home') admin?.relayout();   // the launcher only has a height once Home is up
   /* `prev === null` is the cold boot's OWN Home render, not an exit back to it. A genuine return
      to Home re-arms the channel gate that an invite launch held back, and is the one moment the
      optional tactical-training upsell belongs: the friend has been played and nobody is waiting. */
@@ -613,6 +611,14 @@ const router = createRouter($('screens'), (id, prev) => {
     }
     if (!peekPendingDuelRoom()) maybeOfferTraining();
   }
+  phase.after(() => {
+    menu.refresh(id);
+    shop.setRoute(id);
+    home?.setRoute(id);
+    compete?.setRoute(id);
+    arenaRoad?.setRoute(id);
+    if (id === 'home') admin?.relayout();   // the launcher only has a height once Home is up
+  });
   syncLoop();
 });
 

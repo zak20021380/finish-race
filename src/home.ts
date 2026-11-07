@@ -357,7 +357,15 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
    *  sits in · RIGHT = the contribution, ending in the same brain token the rows above wear.
    *  Every zone is a separate node, so a long country name ellipsizes instead of shoving the
    *  pill or the score out of the bar. */
+  let nationMineKey = '';
   const paintNationMine = (feed: NationFeed | null): void => {
+    const code = (profile.country ?? '').trim().toUpperCase();
+    const mine = code ? feed?.rows.find((c) => c.code === code) : undefined;
+    const standing = code && feed?.standing?.code === code ? feed.standing : null;
+    const key = `${lang}|${profile.country ?? ''}|${myTiq()}|${feed?.live ? 1 : 0}|${feed?.rows.length ?? 0}`
+      + `|${standing ? `${standing.rank}/${standing.total}/${standing.tiq}` : ''}|${mine?.rank ?? ''}/${mine?.avg ?? ''}`;
+    if (key === nationMineKey) return;
+    nationMineKey = key;
     const bar = document.getElementById('home-nation-mine');
     /* The card's one door reads the seat, not the board: a flagless player is asked to
        represent, a player who already represents is asked to read the standings. Both land
@@ -372,9 +380,6 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const pillK = document.getElementById('home-nation-pill-k');
     const pct = document.getElementById('home-nation-pct');
     const pts = document.getElementById('home-nation-pts');
-    const code = (profile.country ?? '').trim().toUpperCase();
-    const mine = code ? feed?.rows.find((c) => c.code === code) : undefined;
-    const standing = code && feed?.standing?.code === code ? feed.standing : null;
     /* The badge is the seat's own TIQ — the very number its nation's average is built from. A
        guest read carries no verified seat, so the save's ladder TIQ stands in rather than zero. */
     const contributed = standing?.tiq || myTiq();
@@ -426,7 +431,15 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   /** Paint the standings band from the last board we hold — five rows, or the honest
    *  empty line. One painter for both the poll and a language switch, so the digits and
    *  the empty-state copy always match the language on screen. */
+  let nationListKey = '';
   const paintNationList = (): void => {
+    const rows = nationFeed?.rows.slice(0, 5) ?? [];
+    const feedKey = nationFeed
+      ? `${nationFeed.live ? 1 : 0}:${rows.map((c) => `${c.rank},${c.code},${c.avg},${c.trend},${c.delta}`).join(';')}`
+      : 'none';
+    const key = `${lang}|${profile.country ?? ''}|${feedKey}`;
+    if (key === nationListKey) return;
+    nationListKey = key;
     const list = $('home-countries');
     list.textContent = '';
     if (!nationFeed) {
@@ -440,7 +453,14 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     for (const c of nationFeed.rows.slice(0, 5)) list.append(rowEl(c, (profile.country ?? '').trim().toUpperCase() === c.code));
   };
 
+  /** Freshness gate for returning to the tab: a switch inside this window shows
+   *  the mounted board as-is. Race results and saves already reload it via onChange. */
+  const HOME_SYNC_MS = 20_000;
+  let nationsSyncedAt = 0;
+  let mindsSyncedAt = 0;
+
   const loadCountries = async (): Promise<void> => {
+    nationsSyncedAt = Date.now();
     try {
       const feed = await fetchNationBoard(myTiq());
       /* A failed read keeps the last real board; a first read paints the clean waiting state. */
@@ -572,8 +592,8 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
       const img = document.createElement('img');
       img.className = 'mind-av-img';
       img.alt = '';
-      /* the top of the ladder is above the fold: the face is fetched now, not on scroll */
-      img.loading = 'eager';
+      /* the podium is above the fold: fetched now. The rest of the band follows. */
+      img.loading = p.rank <= 3 ? 'eager' : 'lazy';
       img.decoding = 'async';
       img.referrerPolicy = 'no-referrer';
       if (p.rank <= 3) img.setAttribute('fetchpriority', 'high');
@@ -704,11 +724,19 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     else bar.removeAttribute('title');
   };
 
+  let mindKey = '';
   const paintMinds = (feed: MindFeed | null): void => {
+    const rows = feed?.rows ?? [];
+    const key = `${lang}|${myTiq()}|${arena().seasonNo}|${feed?.live ? 1 : 0}|${feed?.total ?? 0}`
+      + `|${feed?.standing ? `${feed.standing.rank}/${feed.standing.total}` : ''}`
+      + `|${rows.slice(0, MIND_SLOTS)
+        .map((p) => `${p.rank},${p.name},${p.tiq},${p.trend},${p.delta},${p.avatar},${p.countryCode}`)
+        .join(';')}`;
+    if (key === mindKey) return;
+    mindKey = key;
     const list = document.getElementById('home-minds');
     if (!list) return;
     list.textContent = '';
-    const rows = feed?.rows ?? [];
     for (let i = 0; i < MIND_SLOTS; i++) {
       const row = rows[i];
       list.append(row ? mindRow(row) : emptyMindRow(i + 1));
@@ -722,6 +750,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   paintMindTop(null);
 
   const loadMinds = async (): Promise<void> => {
+    mindsSyncedAt = Date.now();
     const seq = ++mindLoad;
     if (mindFeed) paintMindMine(mindFeed);
     const next = await fetchMindLadder(myTiq(), MIND_SLOTS);
@@ -1208,12 +1237,15 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   return {
     setRoute(id: string) {
       if (id !== 'home') return;
+      /* The panel itself is already mounted; only its chrome and a stale read are
+         refreshed here, and the router runs this after the tab has painted. */
       paintDots();
       poke();
       paintLauncher();
       paintSheet();
-      void loadCountries();
-      void loadMinds();
+      const now = Date.now();
+      if (now - nationsSyncedAt > HOME_SYNC_MS) void loadCountries();
+      if (now - mindsSyncedAt > HOME_SYNC_MS) void loadMinds();
     },
   };
 }

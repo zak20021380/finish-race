@@ -69,7 +69,10 @@ export interface MenuApi {
 }
 
 export interface Menu {
+  /** Phase 1 of a route change: nav chrome only, always synchronous. */
   setRoute(id: string): void;
+  /** Phase 2: paint the screen's data after the new panel has been shown. */
+  refresh(id: string): void;
   /** first launch: land on the team a `startapp=` invite named */
   afterStart(): void;
   /**
@@ -3039,9 +3042,9 @@ export function createMenu(api: MenuApi): Menu {
     if (tiqEl && tiqEl.textContent !== tiqText) {
       tiqEl.textContent = tiqText;
       if (!motionReduced()) {
+        /* restart on the next frame instead of flushing layout from the paint path */
         tiqEl.classList.remove('is-bump');
-        void tiqEl.offsetWidth;           // reflow, so the pulse restarts on every move
-        tiqEl.classList.add('is-bump');
+        requestAnimationFrame(() => tiqEl.classList.add('is-bump'));
       }
     }
     /* one capsule, one tap target: the label reads both balances, so a screen reader never
@@ -3164,7 +3167,40 @@ export function createMenu(api: MenuApi): Menu {
       ? `${squad.name}. #${squad.rank}, ${en(squad.members)} ${t('members')}`
       : t('joinASquad'));
   };
-  const paintProfile = () => {
+  /* One signature for the whole Profile panel. Coming back to the tab repaints
+     only when something it shows actually moved; an unchanged tab keeps every
+     node it already has. Watchers that fire on a write force the repaint. */
+  let profileKey = '';
+  let profileDrawn = false;
+  const profileSignature = (): string => {
+    const s = profile.stats;
+    const squad = getMySquad();
+    const dob = dobValue();
+    return [
+      lang,
+      profile.displayName ?? '',
+      profile.country ?? '',
+      profile.age ?? '',
+      dob ? `${dob.y}-${dob.m}-${dob.d}` : '',
+      profile.badge ?? '',
+      profile.frame ?? '',
+      profile.pieceColor,
+      profile.coins,
+      profile.tiqBonus,
+      myTiq(),
+      s.games, s.wins, s.losses, s.streak, s.best,
+      profile.referral.joins, profile.referral.unclaimed, profile.referral.code ?? '',
+      profile.rewards.country ? 1 : 0, profile.rewards.age ? 1 : 0,
+      profile.equipped.ball, profile.equipped.wall, profile.equipped.board,
+      squad?.id ?? '', squad?.rank ?? '', squad?.members ?? '',
+    ].join('|');
+  };
+
+  const paintProfile = (force = false) => {
+    const key = profileSignature();
+    if (!force && profileDrawn && key === profileKey) return;
+    profileKey = key;
+    profileDrawn = true;
     const s = profile.stats;
     paintIdentity();
     $('pf-games').textContent = en(s.games);
@@ -3183,7 +3219,7 @@ export function createMenu(api: MenuApi): Menu {
       stats.hidden = isNew;
     }
   };
-  onChange(paintProfile);
+  onChange(() => paintProfile(true));
 
   /* Cache writes already flush the whole save; this listener is for the states a flush cannot
      signal — the first "syncing" frame, each mint starting and settling, and the final offline
@@ -3760,9 +3796,31 @@ export function createMenu(api: MenuApi): Menu {
      must stay one explicit tap away without a launch popup. */
   document.getElementById('set-help')?.addEventListener('click', openHelp);
 
-  /* ---- tabs ---- */
+  /* ---- tabs ----
+     The dock's active key and the target panel move on pointerdown, in the same
+     tick as the tap. The router paints the panel's data one frame later, so the
+     switch itself never waits on it. A keyboard activation has no pointerdown,
+     so `click` still answers it (and never fires a second haptic after a tap). */
+  let tabPointer: { el: HTMLElement; at: number } | null = null;
   for (const t of tabs) {
-    t.addEventListener('click', () => { impact('light'); api.router.go(t.dataset.tab as string); });
+    const activate = (): void => {
+      const id = t.dataset.tab;
+      if (id) api.router.go(id);
+    };
+    t.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      tabPointer = { el: t, at: performance.now() };
+      impact('light');
+      activate();
+    });
+    t.addEventListener('click', () => {
+      if (tabPointer?.el === t && performance.now() - tabPointer.at < 800) {
+        tabPointer = null;
+        return;
+      }
+      impact('light');
+      activate();
+    });
   }
 
   paintDiff();
@@ -3780,7 +3838,18 @@ export function createMenu(api: MenuApi): Menu {
 
   return {
     setRoute(id) {
+      /* Only what the tap must show before the next frame: the dock's active key
+         and whether the dock belongs on this screen at all. */
       tabbar.hidden = id === 'game';
+      const raw = id === 'compete' ? 'arena' : id;
+      const active = raw === 'home' || raw === 'modes' || raw === 'custom' || raw === 'game' ? 'home' : raw;
+      for (const t of tabs) {
+        const on = t.dataset.tab === active;
+        if (on) t.setAttribute('aria-current', 'page');
+        else t.removeAttribute('aria-current');
+      }
+    },
+    refresh(id) {
       if (id === 'profile') {
         paintProfile();                           // the equipped row is only laid out once it is showing
         void refreshBadgeEditions();              // cached serials paint now; the ledger refreshes behind them
@@ -3793,13 +3862,6 @@ export function createMenu(api: MenuApi): Menu {
         custom = [...menuState.sizes];
         customDrawn = true;
         paintCustom();
-      }
-      const raw = id === 'compete' ? 'arena' : id;
-      const active = raw === 'home' || raw === 'modes' || raw === 'custom' || raw === 'game' ? 'home' : raw;
-      for (const t of tabs) {
-        const on = t.dataset.tab === active;
-        if (on) t.setAttribute('aria-current', 'page');
-        else t.removeAttribute('aria-current');
       }
     },
     openLanguagePicker(onPick) { openLanguageGate(onPick); },

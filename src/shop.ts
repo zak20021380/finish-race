@@ -71,6 +71,8 @@ export function createShop(api: ShopApi): Shop {
   let flash = '';
   let pending: Item | null = null;
   let pvBuy: Preview | null = null;
+  /** The width the card canvases were last fitted to; a same-size return needs no redraw. */
+  let sizedWidth = -1;
 
   /** The item on its own, seen through whatever else is currently worn. */
   const themeFor = (it: Item): Theme => {
@@ -223,6 +225,7 @@ export function createShop(api: ShopApi): Shop {
   for (const t of tabs) t.addEventListener('click', () => select(t.dataset.shop as CosKind));
 
   function size() {
+    sizedWidth = grid.clientWidth;
     for (const c of cards) c.pv.resize();
     pvBuy?.resize();
     still();
@@ -245,7 +248,8 @@ export function createShop(api: ShopApi): Shop {
       shown = id === 'shop';
       if (shown && !cards.length) build();
       sync();
-      if (shown) size();
+      /* The cards are already mounted; only a changed width owes them a refit. */
+      if (shown && grid.clientWidth !== sizedWidth) size();
     },
   };
 }

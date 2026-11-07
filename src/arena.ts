@@ -265,7 +265,9 @@ export function createArenaRoad(): ArenaRoad {
 
   return {
     setRoute(id: string) {
-      if (id === 'arena') paint(myTiq(), true);
+      /* The road is already mounted: repaint only when the TIQ that shapes it
+         changed. A language flip resets `lastTiq`, so translated copy still moves. */
+      if (id === 'arena') paint(myTiq());
     },
   };
 }
