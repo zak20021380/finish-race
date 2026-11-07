@@ -221,7 +221,12 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   // Keep the inside-dots glued to the card bottom across resizes/rotations.
   const remeasure = (): void => { measureStep(); syncDots(); };
   try {
-    new ResizeObserver(remeasure).observe(carousel);
+    /* The Channel War poster hugs its own content, so a font swap or a language
+       switch can change its height without resizing the track. Observing the
+       slides keeps the pager glued to the active card's bottom edge. */
+    const observer = new ResizeObserver(remeasure);
+    observer.observe(carousel);
+    for (const slide of slides) observer.observe(slide);
   } catch {
     /* ResizeObserver unavailable — CSS fallback + paintDots cover it */
   }
@@ -889,6 +894,8 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     }
     if (leaderHandle) {
       leaderHandle.textContent = top ? top.handle : t('carouselSeizeThrone');
+      /* A handle is always LTR; the unclaimed dare follows its own script. */
+      leaderHandle.dir = top ? 'ltr' : 'auto';
     }
   };
   paintTourLeader();

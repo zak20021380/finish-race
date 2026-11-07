@@ -4636,6 +4636,16 @@ html.reduced-motion .hud-dock-n.is-bump { animation: none; }
 /* One dot reserve on every slide: the pager dots sit 8px off the card edge with
    6px of air above them, so switching slides never moves the pagination row. */
 #home-carousel > .car-card { padding-bottom: 34px; }
+/* The Channel War poster hugs its own content instead of stretching to the whole
+   track: it is centred in the row, never taller than the track, and the pager
+   stays glued to its bottom edge (`home.ts` measures the active card). Siblings
+   keep the strict 100cqh footprint lock. */
+#home-carousel > .car-card.carousel-slide-tournament {
+  height: auto;
+  max-height: 100cqh;
+  align-self: center;
+  padding-bottom: 36px;
+}
 @media (max-height: 620px) {
   #home-carousel > .car-card { padding-bottom: 32px; }
 }
@@ -23465,23 +23475,22 @@ html.reduced-motion .slide-cta-go { transition: none; }
 /* ============================================================================================
    CHANNEL WAR — the winner-takes-all hero slide (carousel index 0).
 
-   Same clay slab and the same pinned card box as its siblings. The bottom reserve
-   runs a little deeper than the other two slides (36px, 44px on short columns) so
-   the pager dots and the floating admin shield both stay clear of the full-width
-   command.
+   Same clay slab as its siblings, but this poster never stretches to fill the
+   track: it hugs its own content (capped at 100cqh, centred), so no dead band can
+   open under the admin strip. The 36px bottom reserve is the pager's lane — a
+   20px dot row 8px off the card edge plus 8px of air above it.
 
    One composed poster, read top to bottom: a quiet header row, a centered reward
-   stage (the authentic Telegram Stars PNG floating over the metallic jackpot), an
-   engraved obsidian-brass throne plaque, then the royal gold command and its
-   obsidian enlistment plate. The stage is the only flexible row: head and actions
-   stay pinned to their edges while the stage absorbs the column's spare height
-   around a centered lockup.
+   stage (the authentic Telegram Stars PNG over the metallic jackpot), a compact
+   gold-rimmed throne plaque, the solid-gold command and a slim glass enlistment
+   strip. The stage can still give height back on short phones; on tall ones the
+   poster simply ends under the admin strip, with the pager 8px below it.
    ============================================================================================ */
 .car-card.carousel-slide-tournament {
   position: relative;
   isolation: isolate;
   justify-content: flex-start;
-  gap: 10px;
+  gap: 8px;
   padding: 12px 14px 36px;
   overflow: hidden;
   border-radius: var(--r-panel);
@@ -23530,9 +23539,6 @@ html.reduced-motion .slide-cta-go { transition: none; }
   mask-composite: exclude;
 }
 .car-card.carousel-slide-tournament > * { position: relative; z-index: 1; }
-/* This slide keeps a little more bottom air than its siblings: the full-width
-   command has to clear both the pager dots and the floating admin shield. */
-#home-carousel > .car-card.carousel-slide-tournament { padding-bottom: 36px; }
 
 /* ---- header: the star pod and title on the left, the live clock on the right ---- */
 .tour-head {
@@ -23701,110 +23707,65 @@ html.reduced-motion .slide-cta-go { transition: none; }
 }
 .tour-vault-sub > span { min-width: 0; overflow-wrap: break-word; }
 
-/* ---- the throne: an engraved obsidian-brass war plaque ---- */
+/* ---- the throne: a compact obsidian plaque with a gold hairline. Two segments
+   on one line — the crown and its dimmed kicker at the reading start, the
+   reigning handle at the far end in bright gold. No blur, no halo loop. ---- */
 .tour-hud {
   position: relative;
   flex: none;
   align-self: center;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  justify-content: space-between;
+  gap: 8px;
   max-width: 100%;
-  padding: 5px 12px 5px 6px;
-  border: 1px solid rgba(202, 150, 58, .34);
-  border-radius: 10px;
-  background:
-    linear-gradient(180deg, rgba(61, 47, 20, .62) 0%, rgba(20, 24, 31, .84) 52%, rgba(9, 12, 18, .9) 100%);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 238, 184, .16),
-    inset 0 0 0 1px rgba(120, 72, 16, .16),
-    inset 0 -6px 12px rgba(0, 0, 0, .22),
-    0 4px 14px rgba(0, 0, 0, .3);
+  min-width: 0;
+  padding: 6px 12px;
+  border: 1px solid rgba(245, 196, 81, 0.3);
+  border-radius: 8px;
+  background: rgba(20, 27, 45, 0.85);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .28);
   overflow: hidden;
 }
-/* the engraved sheen across the plate, catching the upper-left light */
-.tour-hud::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(112deg, rgba(255, 232, 166, .09), transparent 44%);
-  pointer-events: none;
-}
-.tour-hud > * { position: relative; z-index: 1; }
-.tour-hud.is-unclaimed { border-color: rgba(214, 160, 64, .42); }
-/* a reigning name lights the whole plate: gold rim, warm spill, provoked rivals */
-.tour-hud.is-reigning {
-  border-color: rgba(255, 206, 92, .55);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 244, 200, .22),
-    inset 0 0 0 1px rgba(251, 191, 36, .2),
-    0 0 18px rgba(251, 191, 36, .16),
-    0 4px 14px rgba(0, 0, 0, .32);
-}
-/* the crown medallion: a struck gold token with a steady light */
-.tour-leader-medal {
-  position: relative;
+.tour-hud.is-unclaimed { border-color: rgba(245, 196, 81, .2); }
+.tour-hud.is-reigning { border-color: rgba(245, 196, 81, .42); }
+/* the leading segment: a quiet crown and the label it introduces */
+.tour-leader-tag {
   flex: none;
-  width: 20px;
-  height: 20px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 213, 106, .32);
-  background:
-    radial-gradient(100% 100% at 50% 0%, rgba(254, 240, 138, .3) 0%, rgba(120, 53, 15, .24) 58%, rgba(8, 12, 20, .55) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .18),
-    0 1px 4px rgba(0, 0, 0, .35);
-}
-/* the reigning crown lifts off the plate with its own halo */
-.tour-hud.is-reigning .tour-leader-medal {
-  border-color: rgba(255, 220, 128, .62);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .22),
-    0 0 12px rgba(251, 191, 36, .55),
-    0 0 22px rgba(251, 191, 36, .25);
-  animation: tour-crown-glow 2.8s ease-in-out infinite;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
 }
 .tour-leader-ico {
   flex: none;
-  width: 11px;
-  height: 11px;
-  color: #E8DBA8;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .6));
+  width: 12px;
+  height: 12px;
+  color: #F5C451;
+  opacity: .78;
 }
-.tour-hud.is-reigning .tour-leader-ico {
-  color: #FFE9A3;
-  filter: drop-shadow(0 0 4px rgba(251, 191, 36, .85));
-}
-@keyframes tour-crown-glow {
-  0%, 100% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 0 10px rgba(251, 191, 36, .4), 0 0 18px rgba(251, 191, 36, .18); }
-  50% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 0 14px rgba(251, 191, 36, .68), 0 0 28px rgba(251, 191, 36, .32); }
-}
+.tour-hud.is-reigning .tour-leader-ico { opacity: 1; }
 .tour-leader-k {
   flex: none;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .12em;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: .14em;
   line-height: 1;
-  color: #C9BC97;
+  color: rgba(203, 213, 225, .62);
   text-transform: uppercase;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, .7);
   white-space: nowrap;
 }
 /* the separator belongs to the dare only: a reigning name needs no divider */
 .tour-leader-sep {
   display: none;
   flex: none;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   line-height: 1;
-  color: #C99A3E;
+  color: rgba(245, 196, 81, .45);
 }
 .tour-hud.is-unclaimed .tour-leader-sep { display: block; }
-/* bold glowing handle: solid gold so the warm halo lands on the letterforms */
+/* the handle is a label, never a headline: gold, LTR and clipped, never wrapped */
 .tour-leader-h {
   flex: 0 1 auto;
   min-width: 0;
@@ -23812,18 +23773,10 @@ html.reduced-motion .slide-cta-go { transition: none; }
   font-weight: 800;
   line-height: 1.1;
   letter-spacing: .01em;
-  color: #FFD76A;
-  text-shadow:
-    0 0 10px rgba(255, 199, 54, .55),
-    0 0 22px rgba(255, 199, 54, .24);
+  color: #FCD34D;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.tour-hud.is-reigning .tour-leader-h {
-  text-shadow:
-    0 0 12px rgba(255, 199, 54, .7),
-    0 0 26px rgba(255, 199, 54, .34);
 }
 /* the live deadline: a frosted dark-gold capsule with a live beacon */
 .tour-clock {
@@ -23865,211 +23818,119 @@ html.reduced-motion .slide-cta-go { transition: none; }
   0%, 100% { box-shadow: 0 0 0 0 rgba(251, 146, 60, .5), 0 0 6px rgba(251, 146, 60, .8); }
   50% { box-shadow: 0 0 0 3px rgba(251, 146, 60, 0), 0 0 10px rgba(220, 38, 38, .75); }
 }
-/* ---- the primary command: a royal gold-leaf combat bar. Lit top edge, dark
-   engraved label, one diagonal sheen and a crisp tactile press ---- */
+/* ---- the primary command: one solid metallic gold bar. No gloss overlay and no
+   moving sheen — the finish is the metal itself, with a single crisp inner
+   highlight and a deep-espresso ultra-bold label. The press is a 2% scale. ---- */
 .tour-cta {
   position: relative;
   flex: none;
   width: 100%;
-  min-height: 50px;
+  min-height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 9px;
+  gap: 8px;
   padding: 0 16px;
   border: 0;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, #FFF0B0 0%, #FFD45E 12%, #F7B32B 34%, #EE9612 58%, #D97C06 80%, #B96204 100%);
-  color: #241605;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 55%, #D97706 100%);
+  color: #1E1303;
   font: inherit;
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 900;
-  letter-spacing: .055em;
+  letter-spacing: .045em;
+  line-height: 1;
+  text-align: center;
   text-transform: uppercase;
-  text-shadow: 0 1px 0 rgba(255, 248, 210, .32), 0 -1px 0 rgba(87, 44, 3, .22);
   white-space: nowrap;
   cursor: pointer;
-  overflow: hidden;
-  isolation: isolate;
-  box-shadow:
-    0 12px 26px -8px rgba(245, 158, 11, .55),
-    0 4px 10px rgba(0, 0, 0, .3),
-    inset 0 1px 0 rgba(255, 248, 210, .65),
-    inset 0 -2px 0 rgba(120, 63, 8, .38);
-  transition: transform 90ms ease, box-shadow 120ms ease, filter 120ms ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 2px 8px rgba(0, 0, 0, 0.35);
+  transition: transform var(--motion-fast), filter var(--motion-fast);
 }
-/* the specular gold-leaf band across the top half */
-.tour-cta::before {
-  content: "";
-  position: absolute;
-  left: 6px;
-  right: 6px;
-  top: 2px;
-  height: 46%;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, rgba(255, 255, 255, .34) 0%, rgba(255, 255, 255, 0) 100%);
-  pointer-events: none;
-}
-/* the sheen: one diagonal reflection sweeping the bar on a long, calm loop */
-.tour-cta::after {
-  content: "";
-  position: absolute;
-  top: -30%;
-  bottom: -30%;
-  left: -40%;
-  width: 32%;
-  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, .48) 50%, transparent 100%);
-  transform: translateX(-130%) skewX(-22deg);
-  animation: tour-cta-sheen 4.2s cubic-bezier(.4, 0, .2, 1) infinite;
-  pointer-events: none;
-}
-.tour-cta > * { position: relative; z-index: 1; }
 .tour-cta-ico {
   flex: none;
-  width: 17px;
-  height: 17px;
-  color: #352106;
-}
-@keyframes tour-cta-sheen {
-  0%, 12% { transform: translateX(-130%) skewX(-22deg); }
-  46%, 100% { transform: translateX(560%) skewX(-22deg); }
+  width: 16px;
+  height: 16px;
+  color: #1E1303;
 }
 .tour-cta-t { position: relative; }
-.tour-cta:hover {
-  filter: brightness(1.05);
-  transform: translateY(-1px);
-  box-shadow:
-    0 14px 30px -8px rgba(245, 158, 11, .6),
-    0 5px 12px rgba(0, 0, 0, .32),
-    inset 0 1px 0 rgba(255, 250, 220, .75),
-    inset 0 -2px 0 rgba(120, 63, 8, .38);
-}
-.tour-cta:active {
-  transform: scale(.98);
-  filter: none;
-  box-shadow:
-    0 3px 8px rgba(251, 133, 0, .28),
-    inset 0 1px 0 rgba(255, 255, 255, .22),
-    inset 0 -1px 0 rgba(146, 64, 14, .24);
-}
+.tour-cta:hover { filter: brightness(1.04); }
+.tour-cta:active { transform: scale(0.98); filter: none; }
 .tour-cta:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
-/* ---- the secondary command: a frosted obsidian plate with a lit paper-plane pod,
-   quiet enough to keep exactly one primary action on the card ---- */
+/* ---- the secondary command: a slim inline glass strip. Dimmed silver copy, the
+   Telegram paper-plane in bright cyan and a quiet forward chevron — visible, but
+   never competing with the gold command above it. No live blur. ---- */
 .tour-admin {
   position: relative;
   flex: none;
   width: 100%;
-  min-height: 44px;
+  height: 38px;
+  min-height: 38px;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   margin: 0;
-  padding: 0 14px;
-  border: 1px solid rgba(148, 163, 184, .24);
-  border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, rgba(30, 40, 58, .78) 0%, rgba(12, 18, 28, .86) 100%);
-  color: #DCE6F2;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(203, 213, 225, .78);
   font: inherit;
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: .06em;
   line-height: 1;
   text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
-  -webkit-backdrop-filter: blur(12px) saturate(1.15);
-  backdrop-filter: blur(12px) saturate(1.15);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 236, 184, .12),
-    inset 0 0 0 1px rgba(251, 191, 36, .05),
-    0 3px 10px rgba(0, 0, 0, .24);
-  transition: transform 90ms ease, border-color 140ms ease, box-shadow 140ms ease, color 140ms ease;
+  box-shadow: none;
+  transition: transform var(--motion-fast), border-color var(--motion-fast),
+              background var(--motion-fast), color var(--motion-fast);
   overflow: hidden;
 }
-/* the glass catch-light: one diagonal highlight along the plate */
-.tour-admin::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(112deg, rgba(255, 255, 255, .06), transparent 46%);
-  pointer-events: none;
-}
-/* the paper-plane pod: a cyan core in a struck gold socket */
+/* the paper-plane reads as a bare glyph, not a socket */
 .tour-admin-pod {
-  position: relative;
   flex: none;
-  width: 24px;
-  height: 24px;
+  width: 16px;
+  height: 16px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
-  border: 1px solid rgba(251, 191, 36, .3);
-  background:
-    radial-gradient(100% 100% at 50% 0%, rgba(125, 211, 252, .28) 0%, rgba(14, 116, 144, .18) 52%, rgba(6, 12, 20, .75) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .16),
-    inset 0 0 0 1px rgba(251, 191, 36, .12),
-    0 0 12px rgba(56, 189, 248, .28),
-    0 1px 3px rgba(0, 0, 0, .4);
-  transition: box-shadow 140ms ease, border-color 140ms ease;
 }
 .tour-admin-ico {
   flex: none;
   width: 14px;
   height: 14px;
-  color: #8FE3FF;
-  opacity: .92;
+  color: #38BDF8;
 }
 .tour-admin-t {
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  text-align: left;
+  text-align: start;
   text-overflow: ellipsis;
 }
 .tour-admin-chev {
-  position: relative;
   flex: none;
-  margin-top: -1px;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1;
-  color: #E8C878;
-  transition: transform 140ms ease, color 140ms ease;
+  color: rgba(203, 213, 225, .55);
+  transition: transform var(--motion-fast), color var(--motion-fast);
 }
 .tour-admin:hover {
-  border-color: rgba(251, 191, 36, .42);
+  border-color: rgba(245, 196, 81, .28);
+  background: rgba(255, 255, 255, .06);
   color: #F1F5F9;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 244, 200, .18),
-    inset 0 0 0 1px rgba(251, 191, 36, .1),
-    0 4px 14px rgba(0, 0, 0, .28),
-    0 0 16px rgba(251, 191, 36, .08);
 }
-.tour-admin:hover .tour-admin-pod {
-  border-color: rgba(251, 210, 120, .5);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .2),
-    inset 0 0 0 1px rgba(251, 191, 36, .18),
-    0 0 16px rgba(56, 189, 248, .38),
-    0 1px 3px rgba(0, 0, 0, .4);
-}
-.tour-admin:hover .tour-admin-chev { transform: translateX(3px); color: #9BE7FF; }
-.tour-admin:active {
-  transform: translateY(1px) scale(.99);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .06),
-    0 1px 4px rgba(0, 0, 0, .18);
-}
+.tour-admin:hover .tour-admin-chev { transform: translateX(2px); color: #9BE7FF; }
+.tour-admin:active { transform: translateY(1px); }
 .tour-admin:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
 
 /* reduced motion: the beacon, crown and sheen hold still; the star rests in its bloom */
 html.reduced-motion .tour-clock-dot,
-html.reduced-motion .tour-star-stage::before,
-html.reduced-motion .tour-cta::after,
-html.reduced-motion .tour-hud.is-reigning .tour-leader-medal { animation: none; }
+html.reduced-motion .tour-star-stage::before { animation: none; }
 html.reduced-motion .tour-cta,
 html.reduced-motion .tour-admin,
 html.reduced-motion .tour-admin-chev,
@@ -24078,9 +23939,7 @@ html.reduced-motion .tour-star-img { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .tour-star-img,
   .tour-star-stage::before,
-  .tour-cta::after,
-  .tour-clock-dot,
-  .tour-hud.is-reigning .tour-leader-medal { animation: none; }
+  .tour-clock-dot { animation: none; }
 }
 
 /* The 320px floor: the star pod, CHANNEL WAR and the clock share the header row;
@@ -24091,21 +23950,20 @@ html.reduced-motion .tour-star-img { animation: none; }
   .tour-clock { height: 21px; padding: 0 6px; gap: 4px; font-size: 9px; }
   .tour-hero { gap: 4px; }
   .tour-vault-sub { font-size: 10px; }
-  .tour-hud { gap: 6px; padding: 4px 10px 4px 5px; }
-  .tour-leader-k { font-size: 8.5px; letter-spacing: .1em; }
+  .tour-hud { gap: 6px; padding: 6px 10px; }
+  .tour-leader-k { font-size: 8px; letter-spacing: .1em; }
   .tour-leader-h { font-size: 12px; }
   .tour-cta { gap: 6px; padding: 0 10px; font-size: 13.5px; letter-spacing: .045em; }
   .tour-cta-ico { width: 15px; height: 15px; }
-  .tour-admin { gap: 7px; padding: 0 10px; font-size: 10px; letter-spacing: .04em; }
-  .tour-admin-pod { width: 22px; height: 22px; border-radius: 7px; }
-  .tour-admin-chev { font-size: 15px; }
+  .tour-admin { gap: 7px; padding: 0 10px; font-size: 9.5px; letter-spacing: .04em; }
+  .tour-admin-pod { width: 16px; height: 16px; }
+  .tour-admin-chev { font-size: 14px; }
 }
 
 /* On shorter columns the floating admin shield rides higher into the card, so
    the glass key takes a matching extra slice of bottom air; the stage gives back
    the same pixels so nothing crowds. */
 @media (max-height: 760px) {
-  #home-carousel > .car-card.carousel-slide-tournament { padding-bottom: 44px; }
   .tour-hero { gap: 4px; }
   .tour-star-stage { width: 68px; height: 68px; }
   .tour-star-stage::before { inset: -10px; }
@@ -24138,7 +23996,6 @@ html.reduced-motion .tour-star-img { animation: none; }
   .tour-vault-sub { font-size: 10px; line-height: 1.35; }
   .tour-hud { padding-top: 4px; padding-bottom: 4px; }
   .tour-cta { min-height: 46px; }
-  .tour-admin { min-height: 40px; }
 }
 
 /* The 600px floor: the track is at its shortest here, so the stage gives another
@@ -24154,9 +24011,7 @@ html.reduced-motion .tour-star-img { animation: none; }
   .tour-vault-v { font-size: 24px; }
   .tour-vault-sub { font-size: 9.5px; line-height: 1.32; }
   .tour-hud { padding-top: 3px; padding-bottom: 3px; }
-  .tour-leader-medal { width: 18px; height: 18px; }
   .tour-cta { min-height: 44px; }
-  .tour-admin { min-height: 38px; }
   html[data-lang="fa"] .tour-vault-v { line-height: 1.35; }
 }
 
@@ -24186,9 +24041,10 @@ html[data-lang="fa"] .tour-vault-sub {
   line-height: 1.55;
   letter-spacing: 0;
 }
+html[dir="rtl"] .tour-hud { direction: rtl; }
 html[data-lang="fa"] .tour-hud {
   direction: rtl;
-  padding: 5px 6px 5px 12px;
+  padding: 6px 12px;
 }
 html[data-lang="fa"] .tour-leader-k {
   letter-spacing: 0 !important;
@@ -35295,7 +35151,6 @@ html:not(.game-live) .screen:not(.game) *::after,
 .live-dot,
 .pill.live,
 .tour-star-img,
-.tour-hud.is-reigning .tour-leader-medal,
 .tour-clock-dot,
 .pod-crown,
 .reward-badge,
@@ -35320,7 +35175,6 @@ html:not(.game-live) .screen:not(.game) *::after,
 
 .home-vip::after,
 .tour-star-stage::before,
-.tour-cta::after,
 .pod-card.gold .pod-av::after,
 #s-profile .badge-chip[data-state="locked"]::after,
 #s-profile .medal-sheen[data-badge="einstein_singularity"]::after,
