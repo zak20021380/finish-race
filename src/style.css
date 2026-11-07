@@ -35166,3 +35166,323 @@ html[data-lang="ar"] .lang-picker-sub {
   .lang-picker-card { transition: none; }
   .lang-picker-card { transform: none; }
 }
+
+/* ============================================================================
+   LOBBY PERFORMANCE LAYER — the last word on Home, the menu family and sheets
+   ----------------------------------------------------------------------------
+   The race stage already parks the compositor behind `html.game-live` (see the
+   60 FPS layer above). Off the board the same discipline applies here:
+     · no `backdrop-filter` in the lobby, a sheet, a drawer or a dialog;
+     · no decorative keyframe loops on badges, VIP pills, avatar rings, hero
+       auras, podium crowns, sheens or shimmer placeholders;
+     · every wide neon bloom becomes one 1px hairline plus a 2-4px ground lift;
+     · long lists skip layout/paint until they scroll into view.
+   Dark obsidian is unchanged: opaque slabs, one tight rim, logical insets only.
+   Nothing here adds a width or a physical inset, so RTL and the 320-390px
+   budget stay exactly as they were.
+   ============================================================================ */
+
+:root {
+  --lobby-surface: rgba(15, 23, 42, .95);
+  --lobby-surface-deep: rgba(11, 15, 25, .96);
+  --lobby-hairline: rgba(255, 255, 255, .08);
+  --lobby-lift: inset 0 0 0 1px var(--lobby-hairline), 0 4px 10px rgba(0, 0, 0, .4);
+  --lobby-lift-tight: inset 0 0 0 1px var(--lobby-hairline), 0 2px 4px rgba(0, 0, 0, .45);
+  /* the elevation family used by every clay card: tight, not a 28px haze */
+  --clay-drop: 0 4px 10px rgba(0, 0, 0, .4);
+  --elev-1: 0 2px 4px rgba(0, 0, 0, .35);
+  --elev-2: 0 4px 10px rgba(0, 0, 0, .4);
+  --elev-3: 0 4px 10px rgba(0, 0, 0, .4);
+}
+
+/* 1. NO LIVE BLUR OFF THE BOARD.
+      `backdrop-filter` re-samples every pixel behind a surface on every frame.
+      A solid obsidian face reads the same over this app's opaque slate wash. */
+html:not(.game-live) .screen:not(.game),
+html:not(.game-live) .screen:not(.game) *,
+html:not(.game-live) .screen:not(.game) *::before,
+html:not(.game-live) .screen:not(.game) *::after,
+#tabs, #tabs *, #tabs *::before, #tabs *::after,
+.sheet, .sheet::before, .sheet::after,
+.sheet *, .sheet *::before, .sheet *::after,
+.scrim,
+.vip-scrim, .vip-sheet, .vip-sheet *, .vip-sheet *::before, .vip-sheet *::after,
+.chat-scrim, .chat-sheet, .chat-sheet *, .chat-sheet *::before, .chat-sheet *::after,
+.dc-veil, .enlist, .enlist *, .enlist *::before, .enlist *::after,
+.lang-picker-modal, .tu-scrim, .tu-modal,
+.tu-modal *, .tu-modal *::before, .tu-modal *::after,
+.sq-cast-scrim, .adm-drawer, .custom-select-menu {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Opaque slab recipe for the three pieces of chrome that float over the wash. */
+.id-card.id-compact {
+  background: var(--lobby-surface) !important;
+  border-color: var(--lobby-hairline) !important;
+}
+.tabs.dock-nav,
+.dock-nav {
+  background: var(--lobby-surface-deep) !important;
+  border: 1px solid var(--lobby-hairline) !important;
+}
+.launcher {
+  background: var(--lobby-surface-deep) !important;
+  border: 1px solid var(--lobby-hairline) !important;
+}
+
+/* 2. NO CONTINUOUS LOOPS. Loading spinners and one-shot press/route frames
+      keep their animation; every decorative infinite loop below is parked. */
+.blob,
+.blob.a,
+.blob.b,
+.blob.c,
+.trophy,
+.skel {
+  animation: none !important;
+  will-change: auto !important;
+}
+
+.live-dot,
+.pill.live,
+.tour-star-img,
+.tour-hud.is-reigning .tour-leader-medal,
+.tour-clock-dot,
+.pod-crown,
+.reward-badge,
+.notif-badge,
+.notif-dot,
+#s-profile .pf-avatar-glow,
+#s-profile .pf-quest-ico,
+#s-profile .pf-badge-sync-dot,
+#s-profile .badge-slot[data-badge="churchill_bastion"] .badge-slot-crest,
+.sq-crest-aura,
+.nd-aura,
+.nd-mark,
+.ct-pedestal,
+.ct-aura,
+.bd-hero-art,
+.bd-aura,
+.arena-ribbon,
+.relic-halo,
+.lb-vs-aura {
+  animation: none !important;
+}
+
+.home-vip::after,
+.tour-star-stage::before,
+.tour-cta::after,
+.pod-card.gold .pod-av::after,
+#s-profile .badge-chip[data-state="locked"]::after,
+#s-profile .medal-sheen[data-badge="einstein_singularity"]::after,
+#s-profile .medal-sheen[data-badge="churchill_bastion"]::after,
+#s-profile .medal-sheen[data-badge="heisenberg_formula"]::before,
+.ml-pulse::after,
+.nd-gleam::before,
+.arena-tier[data-state="current"]:not(:last-child)::after,
+.arena-tier[data-state="current"] .arena-tier-node::after,
+.arena-tier[data-state="current"] .arena-tier-card::after,
+.pass-sheet .tp-cta::after,
+.badge-sheet[data-accent="quantum"] .bd-hero-art::after,
+.badge-ico-lg::after,
+.bd-privileges-live::before,
+.bd-cta[data-mode="equipped"]::after,
+.bo-row.is-genesis::before,
+.stars-count::before,
+#s-shop.is-sealed .vault-medallion::after,
+.ms-challenge.is-seize::after,
+.lb-vs-core::after {
+  animation: none !important;
+}
+
+/* The avatar halo was a blurred conic layer: make it a crisp ring, not a filter. */
+#s-profile .pf-avatar-glow {
+  filter: none !important;
+  opacity: .38 !important;
+}
+
+/* The Star keeps one static, tight seat instead of a 20px drop-shadow. */
+.tour-star-img {
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .45)) !important;
+}
+.tour-star-stage::before {
+  box-shadow: inset 0 0 0 1px rgba(255, 222, 145, .14) !important;
+}
+
+/* PLAY keeps its shine as an on-demand sweep: no 60fps loop, one tap transition. */
+.btn-hero::before {
+  animation: none !important;
+  opacity: 0;
+  transform: translateX(0) skewX(-18deg);
+  transition: transform .38s cubic-bezier(.22, .61, .36, 1), opacity .12s ease;
+}
+.btn-hero:active::before {
+  opacity: .9;
+  transform: translateX(330%) skewX(-18deg);
+}
+html.reduced-motion .btn-hero::before,
+html.reduced-motion .btn-hero:active::before { display: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .btn-hero::before,
+  .btn-hero:active::before { display: none !important; }
+}
+
+/* 3. TIGHT RIMS AND 2-4px LIFTS replace the wide, multi-layer neon stacks. */
+.id-card.id-compact,
+.car-card,
+.car-card.is-active,
+.tabs.dock-nav,
+.dock-nav,
+.launcher {
+  box-shadow: var(--lobby-lift) !important;
+}
+
+.btn-hero {
+  border: 1px solid rgba(255, 255, 255, .18) !important;
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, .32),
+    inset 0 -3px 5px rgba(0, 40, 120, .34),
+    0 4px 10px rgba(0, 0, 0, .4) !important;
+}
+.btn-hero:hover:not(:active) {
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, .36),
+    inset 0 -3px 5px rgba(0, 40, 120, .32),
+    0 4px 10px rgba(0, 0, 0, .4) !important;
+}
+.btn-hero:active {
+  box-shadow:
+    inset 0 2px 5px rgba(0, 40, 120, .45),
+    inset 0 -2px 4px rgba(255, 255, 255, .2),
+    0 2px 4px rgba(0, 0, 0, .45) !important;
+}
+
+.tab[aria-current="page"],
+.dock-nav .tab[aria-current="page"] {
+  box-shadow:
+    0 var(--d) 0 var(--brand-lip),
+    inset 0 1px 0 rgba(255, 255, 255, .3),
+    0 2px 4px rgba(0, 0, 0, .45) !important;
+}
+
+.tour-cta {
+  border: 1px solid rgba(255, 244, 200, .35) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 210, .55),
+    0 4px 10px rgba(0, 0, 0, .4) !important;
+}
+.tour-cta:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 250, 220, .7),
+    0 4px 10px rgba(0, 0, 0, .4) !important;
+}
+.tour-cta:active {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .3),
+    0 2px 4px rgba(0, 0, 0, .45) !important;
+}
+
+.sheet {
+  box-shadow: inset 0 1px 0 var(--hair-lit), 0 -4px 10px rgba(0, 0, 0, .4) !important;
+}
+
+.pf-quest,
+.pf-tile.row,
+.lb-row,
+.sr-row {
+  box-shadow: var(--lobby-lift-tight) !important;
+}
+
+/* the identity avatar: keep its clay rim, drop the 18px ambient halo */
+.id-card .avatar {
+  box-shadow:
+    0 2px 0 #080C14,
+    inset 0 0 0 2px var(--brand-soft),
+    inset 0 2px 2px rgba(255, 255, 255, .12),
+    inset 0 -3px 4px rgba(0, 0, 0, .35) !important;
+}
+
+.mind-row[data-rank="1"],
+.mind-row[data-rank="2"],
+.mind-row[data-rank="3"] {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 180, .14),
+    inset 0 0 0 1px rgba(255, 255, 255, .06),
+    0 2px 4px rgba(0, 0, 0, .3) !important;
+}
+
+.pod-av {
+  box-shadow:
+    inset 0 0 0 2px var(--aura, var(--pod-metal)),
+    0 2px 4px rgba(0, 0, 0, .5) !important;
+}
+#s-profile .pf-avatar-frame.avatar.big {
+  box-shadow:
+    0 3px 0 #080C14,
+    inset 0 0 0 2px #10141D,
+    inset 0 2px 3px rgba(255, 255, 255, .16),
+    inset 0 -3px 5px rgba(0, 0, 0, .45),
+    0 2px 4px rgba(0, 0, 0, .45) !important;
+}
+
+.lang-picker-card {
+  box-shadow:
+    inset 0 0 0 1px rgba(252, 211, 77, .18),
+    0 4px 10px rgba(0, 0, 0, .5) !important;
+}
+.enlist-panel {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 215, 0, .16),
+    0 4px 10px rgba(0, 0, 0, .5) !important;
+}
+.custom-select-menu {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, .5) !important;
+}
+
+/* badge rack + tab pip: the last two static neon blooms in the lobby chrome */
+#s-profile .badge-slot-crest,
+#s-profile .badge-slot.is-spotlit::after,
+.badge-card-crest {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .08),
+    0 2px 4px rgba(0, 0, 0, .45) !important;
+}
+.dock-nav .tab[aria-current="page"]::after {
+  box-shadow:
+    0 0 4px 1px rgba(224, 242, 254, .9),
+    0 0 7px 2px rgba(34, 211, 238, .65) !important;
+}
+.enlist-ready {
+  box-shadow:
+    inset 0 0 0 1px rgba(52, 211, 153, .3),
+    0 2px 4px rgba(0, 0, 0, .45) !important;
+}
+
+/* 4. CONTAINMENT + SCROLL: off-screen rows cost no layout or paint; every menu
+      scroller owns its gesture and never chains a flick to the page. */
+.lb-row,
+.sr-row,
+.pf-quest {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 72px;
+}
+
+:is(.screen.menu[data-scroll], .compete-body, #ranks-scroll, .pf-pane,
+  .sheet-body, [data-scroll]) {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+}
+
+#app :is(button, [role="button"], a, .tab, .btn, .link, .home-vip, .coin-pill, .icon-btn),
+.sheet :is(button, [role="button"], a, .btn, input, select, textarea) {
+  touch-action: manipulation;
+}
+
+/* Inactive screens and views never participate in layout or paint. `hidden`
+   already means `display:none` globally; this is the explicit performance guard. */
+#screens > .screen[hidden],
+.sheet[hidden],
+[data-view][hidden] {
+  display: none !important;
+}
