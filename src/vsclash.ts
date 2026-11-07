@@ -13,8 +13,8 @@
  *
  * The psychology is the point: a flag and a squad are things you defend, so a loss stops being
  * about a board and starts being about territory. Which is also why the automated bypass is
- * absolute — a browser suite gets no overlay and no delay at all, the same contract `splash.ts`
- * keeps with `data-txs-skip`, so no headless run ever waits on a cinematic or eats a stray tap.
+ * absolute — a browser suite gets no overlay and no delay at all, the same `data-txs-skip`
+ * contract the duel door keeps, so no headless run ever waits on a cinematic or eats a stray tap.
  *
  * No player string is ever interpolated into markup: names, handles and squads go through
  * `textContent`, so a rival called `<img onerror=…>` is painted as a name and nothing else.

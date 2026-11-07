@@ -31223,9 +31223,9 @@ html.reduced-motion .theme-toggle[aria-checked="true"] .theme-toggle-thumb { tra
 }
 
 /* ---- mandatory channel gate: obsidian & gold -------------------------------------------------
-   A full-viewport sheet between a signed Telegram session and the arena. It sits under the neural
-   boot screen (3000) and over every app surface, so the splash lifts on its own clock and the gate
-   is what the player meets next. An unanswered check never raises it. */
+   A full-viewport sheet between a signed Telegram session and the arena. It sits over every app
+   surface, so on a cold launch the gate is what the player meets first — there is no boot screen
+   in front of it. An unanswered check never raises it. */
 .fj-gate {
   position: fixed;
   inset: 0;

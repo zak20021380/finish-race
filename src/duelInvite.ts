@@ -38,7 +38,7 @@ let veilCode = '';
 
 /**
  * An automated run never meets the veil: no node, no timer, no tap it cannot make. The same
- * contract `splash.ts` and `vsclash.ts` keep, so a browser suite drives straight into the room.
+ * contract `vsclash.ts` keeps, so a browser suite drives straight into the room.
  */
 function bypassed(): boolean {
   if (typeof navigator !== 'undefined' && navigator.webdriver === true) return true;

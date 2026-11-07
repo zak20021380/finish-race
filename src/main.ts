@@ -76,7 +76,6 @@ import {
   MIN_SEATS, ROOM_WAIT_MS, createRoom, difficultyFor, hasHumanRival, isAutomated, isHuman,
   lobbyLine, rewardEligible, seatBadge, seatName, sizesOf, startEarly, type BotTier, type Room,
 } from './room';
-import { initSplash, splashReady } from './splash';
 import { initJoinGate } from './joinGate';
 import { showVsClash, type VsRival, type VsStakes } from './vsclash';
 import { BADGE_REQUIREMENTS } from './badges';
@@ -84,9 +83,9 @@ import { beginMatch, finishMatch, initTelemetry, setIdle } from './telemetry';
 import type { MatchMode } from '../shared/telemetry';
 
 /* ---------- render-loop state ----------
- * Kept at the very top of the module, ahead of `initSplash()` and every boot wiring call. A
- * resize, a language flip or an invite-first boot can wake the loop before the loop section is
- * reached, and a `let` read from its temporal dead zone would abort the whole cold start.
+ * Kept at the very top of the module, ahead of every boot wiring call. A resize, a language flip
+ * or an invite-first boot can wake the loop before the loop section is reached, and a `let` read
+ * from its temporal dead zone would abort the whole cold start.
  * See `invalidate()` / `frame()` / `syncLoop()` in the loop section below.
  */
 let last = performance.now();
@@ -98,9 +97,11 @@ let frameNeeded = true;
 /** The last frame reported an active transition, so the next frame is owed too. */
 let animating = false;
 
-initSplash();
-initTelemetry();
+/* INSTANT BOOT. No splash veil stands between the player and the arena: the SDK is told the app
+   is ready and expanded on the very first evaluation, local state hydrates synchronously from the
+   save, and the target screen mounts on the first frame. Remote syncs run in the background. */
 initTelegram();
+initTelemetry();
 /* The global VIP store binds after the SDK so `initDataUnsafe` is readable on its first paint. */
 initVipStore();
 applyFlagSupport();
@@ -108,7 +109,7 @@ applyFlagSupport();
 /* ---------- invite-first boot ----------
    A friend's duel link is a promise to land in that room immediately. `detectInviteDuelLaunch()`
    is a hoisted declaration below; reading it here, before any router or sheet is created, is what
-   lets the whole invited session stay free of the two boot blockers. */
+   lets the whole invited session stay clear of the boot-time channel gate. */
 const INVITE_DUEL_LAUNCH = detectInviteDuelLaunch();
 /* ---------- first-time invite onboarding ----------
    A brand-new player who taps a friend's duel link has not met the board yet. The invite is a
@@ -123,11 +124,10 @@ if (INVITE_FTUE) rememberPendingDuelRoom(INVITE_FTUE_ROOM);
 /** The mandatory channel check is HELD for the invited duel and re-armed on the first Home return. */
 let inviteGateDeferred = INVITE_DUEL_LAUNCH || INVITE_FTUE;
 
-/* The mandatory channel check runs in the background; the neural boot screen still owns the
-   first two seconds, and a gate that cannot be answered fails open. On an invited launch it is
-   deliberately NOT started: a join sheet in front of a waiting friend is the whole drop-off this
-   flow exists to remove. `initJoinGate()` is called from the router the moment the player exits
-   back to #s-home instead. */
+/* The mandatory channel check runs in the background and never blocks the first frame; a gate
+   that cannot be answered fails open. On an invited launch it is deliberately NOT started: a join
+   sheet in front of a waiting friend is the whole drop-off this flow exists to remove.
+   `initJoinGate()` is called from the router the moment the player exits back to #s-home instead. */
 if (!inviteGateDeferred) initJoinGate();
 
 /* ---------- no zoom / no scroll ---------- */
@@ -3858,7 +3858,7 @@ function settleBoard() {
 
 /**
  * COLD BOOT only. On a first open the game screen has never been visible before: its container
- * queries, the WebView chrome and the boot veil all settle over a few frames, so a single
+ * queries and the WebView chrome settle over a few frames, so a single
  * synchronous measure can read a stale (or 0x0) box. Snap the pawns onto their spawn centres NOW,
  * re-measure on the next animation frame, and let `settleBoard()` run its own deferred
  * verification frame after that. Result: frame zero shows every pawn at 100% visibility on its
@@ -4266,10 +4266,10 @@ router.start('home');
 setBackButton(false);
 menu.afterStart();
 /* Home is the ROOT of the screen stack, so `quitToMenu()` can always pop back to #s-home after
-   the first playable experience. A true first-timer is routed onto #s-game in the same tick —
-   under the boot veil, so the Home/Lobby screen is never actually shown on a first open. Every
-   returning user stays right here. */
-if (INVITE_FTUE) window.setTimeout(bootInviteOnboarding, 640);
+   the first playable experience. A true first-timer is routed onto #s-game in the same tick; every
+   returning user stays right here. An invited first-timer's language gate opens on the first frame
+   instead of behind a boot veil, so the friend's room never waits on a loading screen. */
+if (INVITE_FTUE) requestAnimationFrame(bootInviteOnboarding);
 else bootFirstRunTutorial();
 /* A CloudStorage hydrate can resolve AFTER boot and reveal that this is really a returning player
    (match history, no lesson flag). `hydrate()` stamps the flag; this watcher ends the first-open
@@ -4350,11 +4350,11 @@ themeToggle.addEventListener('click', () => {
  * own instead of a lobby they have to work out. Accepting *is* the join: no seat is taken while the
  * player has not agreed to play, which also holds the challenger's countdown until they do.
  *
- * Deferred by the same beat the room door waits for, so the veil lands over a laid-out shell rather
- * than over the boot screen. The payload grammar (`duel_`) never collides with the room door's
- * (`room_`), so a plain room invite still goes straight in with no tap at all.
+ * Opened on the first frame so the veil lands over a laid-out shell with no boot screen in front of
+ * it. The payload grammar (`duel_`) never collides with the room door's (`room_`), so a plain room
+ * invite still goes straight in with no tap at all.
  */
-window.setTimeout(() => { if (!INVITE_FTUE) openDuelDoor(); }, 620);
+requestAnimationFrame(() => { if (!INVITE_FTUE) openDuelDoor(); });
 
 /* ---------- the invite door: `?startapp=room_XXXX` lands in that room, no taps ---------- */
 
@@ -4368,9 +4368,9 @@ window.setTimeout(() => { if (!INVITE_FTUE) openDuelDoor(); }, 620);
  * been built yet (the drawer or its host is missing, which is the one false `openInviteRoom`
  * reports before it attempts anything); it is never a second handshake on a room already open.
  *
- * Deferred by a beat rather than run inline: the drawer needs the shell laid out before it can
- * slide, and the boot veil owns the first moments of the page. A refusal — full, expired, gone —
- * arrives as a toast from `openInviteRoom` with the player left at home.
+ * Opened on the first frame: the drawer needs the shell laid out before it can slide, and with no
+ * boot veil there is nothing to wait for. A refusal — full, expired, gone — arrives as a toast from
+ * `openInviteRoom` with the player left at home.
  */
 const invitedRoom = inviteRoomCode();
 /* A first-time invitee is held at the language gate: the room is joined by the lesson's end,
@@ -4385,7 +4385,7 @@ if (invitedRoom && !INVITE_FTUE) {
     }
     if (attempt < 12) window.setTimeout(() => openInvite(attempt + 1), 250);
   };
-  window.setTimeout(openInvite, 420);
+  requestAnimationFrame(() => openInvite());
 }
 
 /* ---------- the squad door: `?startapp=squad_<id>` opens that squad's join sheet ---------- */
@@ -4395,18 +4395,15 @@ if (invitedRoom && !INVITE_FTUE) {
  * card with its real roster and a Join key, and only that key puts them on the roster. The door
  * is handed to `menu.ts`, which owns the sheet and the roster it paints.
  *
- * The event fires once per launch, after the boot veil has lifted (the sheet slides over a laid
- * out shell, not over a skeleton), and only when the payload is exactly `squad_<id>` — a room or
- * referral payload never opens this door.
+ * The event fires once per launch, on the first frame (the sheet slides over a laid-out shell, not
+ * over a skeleton), and only when the payload is exactly `squad_<id>` — a room or referral payload
+ * never opens this door.
  */
 const invitedSquad = inviteSquadId();
 if (invitedSquad) {
-  window.setTimeout(() => {
+  requestAnimationFrame(() => {
     try {
       window.dispatchEvent(new CustomEvent('detour:squad-invite', { detail: { id: invitedSquad } }));
     } catch { /* a shell without CustomEvent: the player still has the squad list */ }
-  }, 620);
+  });
 }
-
-/* the arena is staged: the neural boot screen may lift on its own clock */
-splashReady();
