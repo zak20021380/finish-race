@@ -544,7 +544,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     ranksYourContribution: 'YOUR CONTRIBUTION',
     /* ---- home carousel: the Country Rankings slide ---- */
     countryRankingsTitle: 'COUNTRY RANKINGS',
-    countrySubtitle: 'World intellect clash · defend your flag',
+    countrySubtitle: 'Based on Top 10 warriors average TIQ',
     countryLive: 'Live',
     countryTopNation: 'LEADING NATION',
     countryCtaFlyFlag: 'REPRESENT YOUR FLAG',
@@ -1264,7 +1264,7 @@ export const STRINGS: Record<LangCode, Record<string, string>> = {
     ranksYourContribution: 'مشارکت شما',
     /* ---- home carousel: the Country Rankings slide ---- */
     countryRankingsTitle: 'نبرد پرچم‌ها',
-    countrySubtitle: 'نبرد ذهن‌های جهان · پرچمت رو بالا نگه دار',
+    countrySubtitle: 'بر اساس میانگین ۱۰ ذهن برتر هر کشور',
     countryLive: 'زنده',
     countryTopNation: 'کشور صدرنشین',
     countryCtaFlyFlag: 'پرچمت رو ببر بالا!',

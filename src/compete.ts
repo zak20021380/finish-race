@@ -2207,7 +2207,10 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
       ? nationFeed.standing
       : null;
     const mine = standing?.tiq || myTrophyScore();
+    /* A flag with no qualified warrior yet has no representative average. Painting it as 0
+       would be a second, false metric beside the hero card's honest dash. */
     const average = standing?.avg ?? hit?.avg ?? 0;
+    const hasAverage = Boolean(standing || hit);
 
     const id = document.createElement('span');
     id.className = 'nh-id';
@@ -2226,7 +2229,9 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
        squeeze the country name off a 320px screen. */
     const avgCap = document.createElement('small');
     avgCap.className = 'nh-avg';
-    avgCap.textContent = `${t('nationAverageTiq')} ${average.toLocaleString('en-US')}`;
+    avgCap.textContent = hasAverage
+      ? `${t('nationAverageTiq')} ${average.toLocaleString('en-US')}`
+      : `${t('nationAverageTiq')} —`;
     id.append(idLine, avgCap);
 
     const score = document.createElement('span');
@@ -2235,13 +2240,16 @@ export function createCompete(api: CompeteApi): { setRoute(id: string): void } {
     const num = document.createElement('b');
     num.textContent = mine.toLocaleString('en-US');
     score.append(num);
-    score.title = `${mine.toLocaleString('en-US')} Tactical IQ earned · `
-      + `${average.toLocaleString('en-US')} ${t('nationAverageTiq')}`;
+    score.title = hasAverage
+      ? `${mine.toLocaleString('en-US')} Tactical IQ earned · `
+        + `${average.toLocaleString('en-US')} ${t('nationAverageTiq')}`
+      : `${mine.toLocaleString('en-US')} Tactical IQ earned · ${t('nationAverageTiq')} —`;
 
     hud.classList.add('is-set');
     hud.append(rank, av, id, score);
     const seen = `${nm}, ${hit ? `rank ${hit.rank}` : 'rank pending'}, `
-      + `${mine.toLocaleString('en-US')} Tactical IQ earned, ${average.toLocaleString('en-US')} national average`;
+      + `${mine.toLocaleString('en-US')} Tactical IQ earned, `
+      + (hasAverage ? `${average.toLocaleString('en-US')} national average` : 'national average pending');
     hud.setAttribute('aria-label', `Your Nation: ${seen}. Activate to change your nation.`);
     hud.title = 'Tap to change your nation';
     hud.addEventListener('click', openPicker);

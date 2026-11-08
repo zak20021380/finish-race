@@ -289,15 +289,19 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     li.classList.add(`rank-${c.rank}`);
     if (me) li.classList.add('me');
     const label = c.name || nameOf(c.code);
-    const pts = c.avg.toLocaleString('en-US');
+    /* The board's figures are Latin integers in both languages: `en-US` grouping keeps the
+       thousands separators, and the rounded value is the Worker's own representative average. */
+    const avg = Math.round(c.avg);
+    const pts = avg.toLocaleString('en-US');
     const trendLabel = c.trend === 'up'
       ? `rising ${Math.abs(c.delta)}`
       : c.trend === 'down' ? `dropping ${Math.abs(c.delta)}` : 'steady';
-    li.setAttribute('aria-label', `#${c.rank} ${label} — ${c.avg.toLocaleString('en-US')} average TIQ, ${c.players.toLocaleString('en-US')} players, ${trendLabel}`);
+    li.setAttribute('aria-label', `#${c.rank} ${label} — ${pts} average TIQ, ${c.warriors.toLocaleString('en-US')} qualified warriors, ${trendLabel}`);
     const rk = document.createElement('span');
     const podium = c.rank >= 1 && c.rank <= 3 ? PODIUM_CLASS[c.rank - 1] : '';
     rk.className = podium ? `rk rank-${c.rank} ${podium}` : `rk rank-${c.rank}`;
     rk.textContent = String(c.rank);
+    rk.dir = 'ltr';
     rk.setAttribute('aria-hidden', 'true');
     const fl = document.createElement('span');
     fl.className = 'fl';
@@ -311,9 +315,12 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     nm.textContent = label;
     nm.title = label;
     const pt = nationScore(pts);
-    pt.title = `${pts} TIQ`;
+    pt.dir = 'ltr';
+    const sample = Math.min(10, Math.max(1, c.warriors));
+    pt.title = `${pts} average TIQ · top ${sample} ${sample === 1 ? 'warrior' : 'warriors'}`;
     const tr = document.createElement('span');
     tr.className = `tr ${c.trend}`;
+    tr.dir = 'ltr';
     tr.textContent = trendTextOf(c);
     tr.title = trendLabel;
     tr.setAttribute('aria-hidden', 'true');
@@ -331,16 +338,16 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
 
   /** The player's own national standing, painted into the 3-zone HUD bar.
    *  LEFT = flag + nation · CENTER = the nation's real position badge and the percentile it
-   *  sits in · RIGHT = the contribution, ending in the same brain token the rows above wear.
+   *  sits in · RIGHT = the flag's representative average TIQ, the exact figure the rows above
+   *  are ranked by, ending in the same brain token they wear.
    *  Every zone is a separate node, so a long country name ellipsizes instead of shoving the
    *  pill or the score out of the bar. */
   let nationMineKey = '';
   const paintNationMine = (feed: NationFeed | null): void => {
     const code = (profile.country ?? '').trim().toUpperCase();
     const mine = code ? feed?.rows.find((c) => c.code === code) : undefined;
-    const standing = code && feed?.standing?.code === code ? feed.standing : null;
-    const key = `${lang}|${profile.country ?? ''}|${myTiq()}|${feed?.live ? 1 : 0}|${feed?.rows.length ?? 0}`
-      + `|${standing ? `${standing.rank}/${standing.total}/${standing.tiq}` : ''}|${mine?.rank ?? ''}/${mine?.avg ?? ''}`;
+    const key = `${lang}|${profile.country ?? ''}|${feed?.live ? 1 : 0}|${feed?.rows.length ?? 0}`
+      + `|${mine?.rank ?? ''}/${mine?.avg ?? ''}/${mine?.warriors ?? ''}`;
     if (key === nationMineKey) return;
     nationMineKey = key;
     const bar = document.getElementById('home-nation-mine');
@@ -357,18 +364,21 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     const pillK = document.getElementById('home-nation-pill-k');
     const pct = document.getElementById('home-nation-pct');
     const pts = document.getElementById('home-nation-pts');
-    /* The badge is the seat's own TIQ — the very number its nation's average is built from. A
-       guest read carries no verified seat, so the save's ladder TIQ stands in rather than zero. */
-    const contributed = standing?.tiq || myTiq();
-    const ptsText = `+${contributed.toLocaleString('en-US')}`;
-    if (pts) pts.textContent = ptsText;
+    /* The badge quotes the same representative average the rows and the drawer read. It is
+       deliberately not the seat's own TIQ: two metrics on one card is exactly the desync this
+       bar used to show. A flag with no qualified warrior yet has no average to quote. */
+    const avg = mine ? Math.round(mine.avg) : 0;
+    const avgText = mine ? `+${avg.toLocaleString('en-US')}` : '—';
+    if (pts) pts.textContent = avgText;
+    const unit = bar.querySelector<HTMLElement>('.hm-u');
+    if (unit) unit.textContent = 'AVG TIQ';
     if (!code) {
       if (flag) { flag.textContent = ''; flag.classList.add('is-off'); }
       if (name) { name.textContent = t('hudPickNation'); name.removeAttribute('title'); }
       if (pillK) pillK.textContent = t('hudYourNation');
       if (pct) { pct.hidden = true; pct.textContent = ''; }
       pill?.classList.add('is-off');
-      bar.setAttribute('aria-label', `${t('hudYourNation')}: ${t('hudPickNation')}, ${ptsText} PTS`);
+      bar.setAttribute('aria-label', `${t('hudYourNation')}: ${t('hudPickNation')}, ${avgText} AVG TIQ`);
       bar.removeAttribute('title');
       return;
     }
@@ -398,10 +408,10 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
     }
     pill?.classList.toggle('is-off', !mine);
     bar.setAttribute('aria-label', mine
-      ? `${label} · #${mine.rank} · ${t('hudTop')} ${share}% · ${ptsText} PTS`
-      : `${label} · ${ptsText} PTS`);
+      ? `${label} · #${mine.rank} · ${t('hudTop')} ${share}% · ${avgText} AVG TIQ`
+      : `${label} · ${avgText} AVG TIQ`);
     bar.setAttribute('title', mine
-      ? `You fight for ${label} — rank #${mine.rank} of ${total}`
+      ? `You fight for ${label} — rank #${mine.rank} of ${total} · ${avg.toLocaleString('en-US')} average TIQ`
       : `You fight for ${label}`);
   };
 
@@ -412,7 +422,7 @@ export function createHome(api: HomeApi): { setRoute(id: string): void } {
   const paintNationList = (): void => {
     const rows = nationFeed?.rows.slice(0, 5) ?? [];
     const feedKey = nationFeed
-      ? `${nationFeed.live ? 1 : 0}:${rows.map((c) => `${c.rank},${c.code},${c.avg},${c.trend},${c.delta}`).join(';')}`
+      ? `${nationFeed.live ? 1 : 0}:${rows.map((c) => `${c.rank},${c.code},${c.avg},${c.warriors},${c.trend},${c.delta}`).join(';')}`
       : 'none';
     const key = `${lang}|${profile.country ?? ''}|${feedKey}`;
     if (key === nationListKey) return;
